@@ -257,12 +257,9 @@ func (m *Monitor) pollStorageWithNodes(ctx context.Context, instanceName string,
 		Msg("Starting parallel storage polling")
 
 	// Get existing storage from state to preserve data for offline nodes
-	currentState := m.state.GetSnapshot()
 	existingStorageMap := make(map[string]models.Storage)
-	for _, storage := range currentState.Storage {
-		if storage.Instance == instanceName {
-			existingStorageMap[storage.ID] = storage
-		}
+	for _, storage := range m.state.GetStorageForInstance(instanceName) {
+		existingStorageMap[storage.ID] = storage
 	}
 
 	// Track which nodes we successfully polled

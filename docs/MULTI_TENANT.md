@@ -17,7 +17,7 @@ The Community, Relay, and Pro tiers do not include the `multi_tenant` capability
 
 ## Quick Start
 
-1. Set `PULSE_MULTI_TENANT_ENABLED=true` in your environment and restart Pulse.
+1. Set `PULSE_MULTI_TENANT_ENABLED=true` through your [deployment configuration](#applying-the-feature-flag).
 2. Activate your Enterprise license in **Settings → Plans & Billing**.
 3. Create the organization with the session-authenticated `POST /api/orgs` endpoint (see [Creating an Organization](#creating-an-organization)). This build has no Create Organization button in **Settings → Organization**.
 4. Assign infrastructure to the organization.
@@ -250,7 +250,7 @@ or a token's organization binding.
 
 ### "Multi-tenant functionality is not enabled. Set PULSE_MULTI_TENANT_ENABLED=true to enable." (501)
 
-Set `PULSE_MULTI_TENANT_ENABLED=true` in your environment and restart Pulse.
+Apply the flag in your [deployment configuration](#applying-the-feature-flag).
 
 ### "Multi-tenant access requires an Enterprise license" (402)
 
@@ -314,3 +314,32 @@ just to collect a report.
 - [Plans & Entitlements](PULSE_PRO.md), multi-tenant availability by plan
 - [Pulse Cloud](CLOUD.md), hosted Pulse environment
 - [Security](../SECURITY.md), authentication and authorization model
+
+## Applying the feature flag
+
+Set `PULSE_MULTI_TENANT_ENABLED=true` in your existing deployment's environment
+configuration, not only in an interactive shell. Check
+[environment precedence](CONFIGURATION.md#common-overrides-environment-variables)
+if a managed value overrides the file you edited.
+
+Apply this deliberate setup change in a maintenance window using your
+[deployment-specific controls](DEPLOYMENT_MODELS.md#updates-by-model):
+
+- **Docker or Compose:** recreate or redeploy the existing Pulse server with
+  the changed environment. Keep the same pinned image, persistent data mount,
+  credentials and other settings. A restart alone does not apply a changed
+  container environment.
+- **systemd:** update the server's existing environment source. Reload systemd
+  if its unit or drop-in changed, then restart the actual Pulse server unit,
+  not its agents. Do not start a server that was deliberately stopped.
+- **Kubernetes:** update the existing workload controller's configuration and
+  let its normal rollout apply the environment. Restarting an old pod without
+  changing its template does not set the flag.
+
+Pulse monitoring and alerts are unavailable while its server is stopped or
+being replaced. Preserve a working administrator recovery path and check the
+running instance afterwards. Enabling the flag is not a licence or membership
+grant, and a successful restart or rollout alone does not prove organization
+access. Keep the Enterprise capability, session authentication and existing
+organization permissions intact. Do not reset data, recreate organizations or
+re-enrol agents to clear a 501 response.

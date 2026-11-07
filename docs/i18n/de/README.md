@@ -38,12 +38,12 @@ funktioniert auf dieser Download-Seite nicht.
 ## Schnellstart: Proxmox LXC
 
 Wenn du Proxmox VE verwendest, ist der offizielle LXC-Installer der
-Pulse-native Einstieg. Er installiert den Pulse-Server. Ersetze `vX.Y.Z` durch
-den exakten Release-Tag, den du installieren möchtest, prüfe die signierte
-Installer-Datei und führe den Installer auf deinem Proxmox-Host aus:
+Pulse-native Einstieg. Er installiert den Pulse-Server. Führe diesen Block auf
+deinem Proxmox-Host aus: Er prüft die signierte Installer-Datei und startet erst
+dann den Installer:
 
 ```bash
-export PULSE_VERSION=vX.Y.Z
+export PULSE_VERSION=v6.7.0
 curl -fsSLO "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh" &&
 curl -fsSLO "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh.sshsig" &&
 ssh-keygen -Y verify \
@@ -72,7 +72,7 @@ docker run -d \
   -p 7655:7655 \
   -v pulse_data:/data \
   --restart unless-stopped \
-  rcourtman/pulse:vX.Y.Z
+  rcourtman/pulse:v6.7.0
 ```
 
 Öffne danach Pulse unter `http://<your-ip>:7655`.
@@ -83,7 +83,7 @@ verwenden, wenn sie die `PULSE_IMAGE`-Variable nutzt:
 ```yaml
 services:
   pulse:
-    image: ${PULSE_IMAGE:-rcourtman/pulse:vX.Y.Z}
+    image: ${PULSE_IMAGE:-rcourtman/pulse:v6.7.0}
     container_name: pulse
     restart: unless-stopped
     ports:

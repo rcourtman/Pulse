@@ -6,8 +6,12 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
+import subprocess
 import sys
+import tempfile
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -775,6 +779,102 @@ def validate_frontier(args: argparse.Namespace) -> int:
     return 0
 
 
+def inventory_endpoint(value: str) -> str:
+    """Admit only the two paginated GitHub inventories used by this check."""
+    if not re.fullmatch(
+        r"repos/[A-Za-z0-9][A-Za-z0-9_.-]*/[A-Za-z0-9][A-Za-z0-9_.-]*/"
+        r"(?:git/matching-refs/tags/v|releases)\?per_page=100",
+        value,
+    ):
+        raise argparse.ArgumentTypeError("expected a stable-ref or release inventory endpoint")
+    return value
+
+
+def collect_inventory(args: argparse.Namespace) -> int:
+    """Publish complete pagination only; retry one exact peer CANCEL, not refusals."""
+    diagnostic: dict[str, Any] = {
+        "schema_version": 1,
+        "check": "github_inventory_collection",
+        "endpoint": args.endpoint,
+        "status": "unavailable",
+        "attempts": [],
+    }
+
+    def retain() -> None:
+        args.diagnostic.write_text(json.dumps(diagnostic, indent=2) + "\n", encoding="utf-8")
+
+    if args.output.exists():
+        diagnostic["reason"] = "output_already_exists"
+        retain()
+        return 1
+
+    command = [
+        "gh", "api", "--method", "GET", "--paginate", "--slurp",
+        "-H", "Accept: application/vnd.github+json",
+        "-H", "X-GitHub-Api-Version: 2026-03-10",
+        args.endpoint,
+    ]
+    # Same-directory replacement prevents a failed/truncated read from becoming
+    # an inventory. No earlier response is merged with a later observation.
+    with tempfile.TemporaryDirectory(prefix=".inventory-", dir=args.output.parent) as directory:
+        staged = Path(directory) / "response.json"
+        for number in (1, 2):
+            with staged.open("w+b") as response:
+                try:
+                    result = subprocess.run(command, stdout=response, stderr=subprocess.PIPE, check=False)
+                except OSError:
+                    diagnostic["reason"] = "gh_unavailable"
+                    retain()
+                    return 1
+                response.seek(0)
+                payload = response.read()
+            attempt = {
+                "number": number,
+                "exit_code": result.returncode,
+                "payload_bytes": len(payload),
+                "payload_sha256": hashlib.sha256(payload).hexdigest(),
+                "stderr_bytes": len(result.stderr),
+                "stderr_sha256": hashlib.sha256(result.stderr).hexdigest(),
+                "result": "gh_failed",
+            }
+            diagnostic["attempts"].append(attempt)
+            if result.returncode == 0 and result.stderr.strip():
+                attempt["result"] = "unexpected_diagnostic"
+            elif result.returncode == 0:
+                try:
+                    pages = json.loads(payload)
+                except (ValueError, UnicodeError):
+                    pages = None
+                if not (
+                    isinstance(pages, list) and pages
+                    and all(isinstance(page, list) for page in pages)
+                    and all(isinstance(item, dict) for page in pages for item in page)
+                ):
+                    attempt["result"] = "invalid_inventory"
+                else:
+                    attempt["result"] = "collected"
+                    os.replace(staged, args.output)
+                    diagnostic["status"] = "collected"
+                    retain()
+                    return 0
+            # Match the entire diagnostic, not a substring: an HTTP refusal,
+            # rate limit, signal, mixed error or unknown failure cannot retry.
+            elif result.returncode == 1 and re.fullmatch(
+                rb"stream error: stream ID [0-9]+; CANCEL; received from peer",
+                result.stderr.strip(),
+            ):
+                attempt["result"] = "http2_peer_cancel"
+                retain()
+                if number == 1:
+                    print("GitHub inventory peer cancellation; repeating the identical read once.", file=sys.stderr)
+                    time.sleep(2)
+                    continue
+            retain()
+            print(f"GitHub inventory unavailable: {attempt['result']}; exit {result.returncode}.", file=sys.stderr)
+            return 1
+    return 1
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -796,6 +896,11 @@ def parse_args() -> argparse.Namespace:
     frontier.add_argument("--releases-json", type=Path, required=True)
     frontier.add_argument("--registry-tags-json", type=Path, action="append", required=True)
     frontier.add_argument("--diagnostic", type=Path, required=True)
+
+    collect = commands.add_parser("collect", help="collect a complete GitHub frontier inventory")
+    collect.add_argument("--endpoint", type=inventory_endpoint, required=True)
+    collect.add_argument("--output", type=Path, required=True)
+    collect.add_argument("--diagnostic", type=Path, required=True)
     return parser.parse_args()
 
 
@@ -805,6 +910,8 @@ def main() -> int:
         return validate_release(args)
     if args.command == "activation":
         return validate_activation(args)
+    if args.command == "collect":
+        return collect_inventory(args)
     return validate_frontier(args)
 
 

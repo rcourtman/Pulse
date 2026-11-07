@@ -66,10 +66,6 @@ func TestHistoryJournalRecoversRetiredProducerOccurrenceAcrossRestart(t *testing
 		t.Fatal("resolution failed closed")
 	}
 	unsubscribe()
-	if calls.Load() != beforeCalls+1 {
-		m.Stop()
-		t.Fatalf("delivery callback invocation count=%d, want %d", calls.Load(), beforeCalls+1)
-	}
 	if len(transitions) != 2 || transitions[0].Persisted || transitions[1].Persisted {
 		m.Stop()
 		t.Fatalf("faulted lifecycle callbacks: %+v", transitions)
@@ -80,6 +76,11 @@ func TestHistoryJournalRecoversRetiredProducerOccurrenceAcrossRestart(t *testing
 		t.Fatal("unsettled history reported healthy")
 	}
 	m.Stop() // keep trigger installed through final drain
+	// Raising the alert admits an asynchronous delivery callback. Count it
+	// only after Stop has drained that owner, not after the producer returns.
+	if got := calls.Load(); got != beforeCalls+1 {
+		t.Fatalf("delivery callback invocation count=%d, want %d", got, beforeCalls+1)
+	}
 	if _, err := db.Exec(`DROP TRIGGER history_test_write_fault`); err != nil {
 		t.Fatal(err)
 	}
@@ -112,11 +113,10 @@ func TestHistoryJournalRecoversRetiredProducerOccurrenceAcrossRestart(t *testing
 			m.Stop()
 			t.Fatalf("history/health after recovery: %d %+v", found, m.EventHistoryDurability())
 		}
-		if calls.Load() != beforeCalls+1 {
-			m.Stop()
-			t.Fatal("history recovery invoked delivery callback")
+		m.Stop() // include any asynchronous startup callback in the replay check
+		if got := calls.Load(); got != beforeCalls+1 {
+			t.Fatalf("history recovery invoked delivery callback: count=%d, want %d", got, beforeCalls+1)
 		}
-		m.Stop()
 	}
 }
 

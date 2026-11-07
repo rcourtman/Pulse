@@ -169,7 +169,7 @@ class APIReferenceRoutesTest(unittest.TestCase):
     def test_token_create_explains_scope_defaults_without_widening_the_example(self) -> None:
         create = self.doc.split("### Create API Token\n", 1)[1].split("### Edit API Token\n", 1)[0]
         prose = " ".join(create.split())
-        self.assertIn("Omitting `scopes` or sending `null` requests full access (`*`)", prose)
+        self.assertIn("Missing/`null` `scopes` requests full access (`*`)", prose)
         self.assertIn("`[]` returns `400`", prose)
         example = re.search(r"```json\n(.*?)\n```", create, re.S)
         self.assertIsNotNone(example)
@@ -179,6 +179,36 @@ class APIReferenceRoutesTest(unittest.TestCase):
         self.assertIn("if raw == nil {\n\t\treturn []string{config.ScopeWildcard}, nil", handler)
         self.assertIn("if len(requested) == 0 {\n\t\treturn nil, fmt.Errorf", handler)
         self.assertEqual(read("frontend-modern/public/docs/API.md"), self.doc)
+
+    def test_token_lifetime_explains_existing_opt_in_and_non_expiring_default(self) -> None:
+        lifetime = self.doc.split("### Token lifetime\n", 1)[1].split("### List API Tokens\n", 1)[0]
+        prose = " ".join(lifetime.split())
+        for rule in (
+            '"expiresIn": "24h"',
+            "minimum of `1m`",
+            "Use hours for days (`168h`), not `7d`",
+            "Invalid or shorter durations return `400`",
+            "Omitting `expiresIn`, sending `null` or an empty string",
+            "**no expiry**",
+            "Editing a token does not change its expiry",
+            "rotation keeps the original expiry rather than starting a new lifetime",
+        ):
+            self.assertIn(rule, prose)
+        create = self.doc.split("### Create API Token\n", 1)[1].split("### Edit API Token\n", 1)[0]
+        self.assertIn("[Optional expiry](#token-lifetime)", create)
+        # Keep this option tied to creation, not a promise to extend a token.
+        handler = read("internal/api/security_tokens.go")
+        for code in (
+            'ExpiresIn *string   `json:"expiresIn,omitempty"`',
+            'if expiresIn != nil && *expiresIn != ""',
+            'dur, err := time.ParseDuration(*expiresIn)',
+            'if dur < time.Minute',
+            'record.ExpiresAt = &exp',
+            'newRecord.ExpiresAt = &t',
+        ):
+            self.assertIn(code, handler)
+        update = handler.split("type updateTokenRequest struct {", 1)[1].split("}", 1)[0]
+        self.assertNotIn("Expires", update)
 
     def test_token_edit_keeps_scope_changes_distinct_from_rename_and_rotation(self) -> None:
         edit = self.doc.split("### Edit API Token\n", 1)[1].split("### Rotate API Token\n", 1)[0]

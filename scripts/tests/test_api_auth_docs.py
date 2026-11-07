@@ -197,6 +197,19 @@ def exercise_curl(case: unittest.TestCase, home: Path, header_text: str, port: i
 
 
 class APIAuthDocsTest(unittest.TestCase):
+    def test_base_url_guidance_limits_plain_http_to_the_pulse_host(self):
+        introduction = DOC.read_text().split("## 🔐 Authentication\n", 1)[0]
+        self.assertIn("configured HTTPS origin", introduction)
+        self.assertEqual(re.findall(r"http://[^\s`]+", introduction),
+                         ["http://127.0.0.1:7655/api"])
+        self.assertRegex(" ".join(introduction.split()),
+                         r"on the Pulse host only: `http://127\.0\.0\.1:7655/api`")
+        # The lead must agree with the executable helper, not replace the
+        # existing private-header and certificate-verifying remote recipe.
+        self.assertIn("http://127.0.0.1:7655$api_path", request_helper())
+        self.assertIn("--proto '=https'", auth_section())
+        self.assertIn("never `--insecure`", auth_section())
+
     def test_credentials_are_not_documented_as_command_arguments(self):
         section = auth_section()
         bash = "\n".join(re.findall(r"```bash\n(.*?)```", section, re.DOTALL))

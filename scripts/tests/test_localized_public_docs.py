@@ -21,14 +21,14 @@ LOCALIZED_DOCS = (
 )
 
 MACHINE_FACING_STRINGS = (
-    "export PULSE_VERSION=vX.Y.Z",
+    "export PULSE_VERSION=v",
     "curl -fsSLO \"https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh\"",
     "curl -fsSLO \"https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh.sshsig\"",
     "ssh-keygen -Y verify",
     "bash install.sh --version \"${PULSE_VERSION}\"",
     "docker run -d",
-    "rcourtman/pulse:vX.Y.Z",
-    "image: ${PULSE_IMAGE:-rcourtman/pulse:vX.Y.Z}",
+    "  rcourtman/pulse:v",
+    "image: ${PULSE_IMAGE:-rcourtman/pulse:v",
     "docker exec pulse /app/pulse bootstrap-token",
     "kubectl exec -it <pod> -- /app/pulse bootstrap-token",
     "sudo pulse bootstrap-token",

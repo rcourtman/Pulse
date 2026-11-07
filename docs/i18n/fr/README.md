@@ -39,12 +39,11 @@ cette page de téléchargement.
 ## Démarrage rapide : Proxmox LXC
 
 Si vous utilisez Proxmox VE, l'installateur LXC officiel est la méthode la plus
-native pour Pulse. Il installe le serveur Pulse. Remplacez `vX.Y.Z` par le tag
-exact de la version à installer, vérifiez l'installateur signé et exécutez-le
-sur votre hôte Proxmox :
+native pour Pulse. Il installe le serveur Pulse. Exécutez ce bloc sur votre hôte
+Proxmox : il vérifie l'installateur signé et ne le lance qu'ensuite :
 
 ```bash
-export PULSE_VERSION=vX.Y.Z
+export PULSE_VERSION=v6.7.0
 curl -fsSLO "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh" &&
 curl -fsSLO "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh.sshsig" &&
 ssh-keygen -Y verify \
@@ -74,7 +73,7 @@ docker run -d \
   -p 7655:7655 \
   -v pulse_data:/data \
   --restart unless-stopped \
-  rcourtman/pulse:vX.Y.Z
+  rcourtman/pulse:v6.7.0
 ```
 
 Ouvrez ensuite Pulse sur `http://<your-ip>:7655`.
@@ -85,7 +84,7 @@ images Pro privées s'il utilise la variable `PULSE_IMAGE` :
 ```yaml
 services:
   pulse:
-    image: ${PULSE_IMAGE:-rcourtman/pulse:vX.Y.Z}
+    image: ${PULSE_IMAGE:-rcourtman/pulse:v6.7.0}
     container_name: pulse
     restart: unless-stopped
     ports:

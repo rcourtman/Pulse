@@ -174,13 +174,13 @@ func TestPVELocalStorageCarryForwardKeepsUnknownOriginsConservative(t *testing.T
 		{ID: "affected", Instance: "cluster", Storage: "local", Node: "guest-moved", StorageNode: "failed"},
 		{ID: "other", Instance: "other-cluster", Storage: "local", StorageNode: "failed"},
 	}
-	got, _ := preserveFailedStorageBackups("cluster", models.StateSnapshot{PVEBackups: models.PVEBackups{StorageBackups: previous}}, failures, nil)
+	got, _ := preserveFailedStorageBackups("cluster", previous, failures, nil)
 	if len(got) != 2 || got[0].ID != "legacy" || got[1].ID != "affected" {
 		t.Fatalf("scope/legacy fallback lost isolation: %+v", got)
 	}
 	// With no node catalog, unknown origins cannot be treated as absent.
 	failures = pveBackupReadFailures{nodes: map[string]struct{}{"failed": {}}}
-	got, _ = preserveFailedStorageBackups("cluster", models.StateSnapshot{PVEBackups: models.PVEBackups{StorageBackups: previous}}, failures, nil)
+	got, _ = preserveFailedStorageBackups("cluster", previous, failures, nil)
 	if len(got) != 2 || got[0].ID != "legacy" || got[1].ID != "affected" {
 		t.Fatalf("unread-node fallback lost isolation: %+v", got)
 	}

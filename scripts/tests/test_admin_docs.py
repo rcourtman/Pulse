@@ -385,6 +385,29 @@ class AdminDocsTest(unittest.TestCase):
                         self.assertEqual(result.returncode, expected_exit, result.stderr.decode())
                         self.assertEqual(len(requests), before + 1, "an uncertain mutation must not be repeated or redirected")
 
+    def test_org_feature_flag_setup_uses_the_installed_deployment(self):
+        guide = (DOCS / "MULTI_TENANT.md").read_text()
+        quick_start = guide.split("## Quick Start\n", 1)[1].split("## Concepts", 1)[0]
+        flag_error = guide.split('### "Multi-tenant functionality', 1)[1].split("\n### ", 1)[0]
+        for entry in (quick_start, flag_error):
+            self.assertIn("#applying-the-feature-flag", entry)
+            self.assertNotIn("in your environment and restart Pulse", entry)
+        setup = guide.split("## Applying the feature flag\n", 1)[1].split("\n## ", 1)[0]
+        readable = " ".join(setup.replace("**", "").split())
+        for boundary in (
+            "existing deployment's environment configuration", "Docker or Compose",
+            "A restart alone does not apply a changed container environment.",
+            "same pinned image, persistent data mount, credentials and other settings",
+            "systemd", "unit or drop-in changed", "Kubernetes", "existing workload controller",
+            "not its agents", "monitoring and alerts are unavailable",
+            "working administrator recovery path", "not a licence or membership grant",
+        ):
+            with self.subTest(boundary=boundary):
+                self.assertIn(boundary, readable)
+        self.assertIn("DEPLOYMENT_MODELS.md#updates-by-model", setup)
+        self.assertIn("CONFIGURATION.md#common-overrides-environment-variables", setup)
+        self.assertNotIn("```", setup, "do not add an unqualified deployment mutation command")
+
     def test_org_guidance_preserves_private_bounded_reads_and_session_mutations(self):
         guide = (DOCS / "MULTI_TENANT.md").read_text()
         for boundary in ("in the same Bash session", "not an installed Pulse command",

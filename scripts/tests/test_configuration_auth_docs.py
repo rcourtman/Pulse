@@ -156,7 +156,7 @@ class ConfigurationAuthDocsTest(unittest.TestCase):
         text = (ROOT / "docs/INSTALL.md").read_text(encoding="utf-8")
         compose = next(block for block in re.findall(r"```yaml\n(.*?)```", text, re.S)
                        if "services:" in block)
-        for expected in ("image: ${PULSE_IMAGE:-rcourtman/pulse:vX.Y.Z}",
+        for expected in ("image: ${PULSE_IMAGE:-rcourtman/pulse:v",
                          "pulse_data:/data", "PULSE_DEPLOYMENT_METHOD=docker_compose"):
             self.assertIn(expected, compose)
         self.assertNotRegex(compose, r"PULSE_AUTH_(?:USER|PASS)")

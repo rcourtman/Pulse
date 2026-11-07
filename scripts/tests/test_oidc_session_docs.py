@@ -44,6 +44,63 @@ def assert_group_claim_advice(case, guide):
         case.assertIn(marker, " ".join(guide.split()))
 
 
+def assert_login_restriction_setup(case, guide, callback):
+    section = guide.split("### Access Control\n", 1)[1].split(
+        "### Group-to-Role Mapping\n", 1)[0]
+    setup = " ".join(re.sub(r"(?m)^> ?", "", section).split())
+    for boundary in (
+        "every non-empty list must match",
+        "Entries within one list are alternatives",
+        "does not bypass the other lists",
+        "An empty group list skips only that check",
+        "any domain and email restrictions still apply",
+        "does not grant instance administrator privileges by itself",
+        "removing the local administrator",
+    ):
+        case.assertIn(boundary, setup)
+    case.assertNotIn("allows every IdP user to sign in", setup)
+    # Keep the explanation next to setup, bound to the actual independent
+    # callback gates. This is source consistency, not an IdP login proof.
+    gates = callback.split("// Apply access restrictions from SSO provider config", 1)[1].split(
+        "// RBAC:", 1)[0]
+    for condition, failure in (
+        ("if len(provider.AllowedEmails) > 0 && !matchesValue(email, provider.AllowedEmails)", "email_restricted"),
+        ("if len(provider.AllowedDomains) > 0 && !matchesDomain(email, provider.AllowedDomains)", "domain_restricted"),
+        ("if len(provider.AllowedGroups) > 0", "group_restricted"),
+    ):
+        case.assertIn(condition, gates)
+        branch = gates.split(condition, 1)[1].split("\n\t}", 1)[0]
+        case.assertIn(f'"{failure}"', branch)
+        case.assertIn("return", branch)
+    case.assertIn("if !intersects(groups, provider.AllowedGroups)", gates)
+    case.assertNotIn("else if", gates)
+
+
+def assert_configuration_sources(case, guide, configuration):
+    case.assertNotIn("locks those fields in the UI", guide)
+    case.assertNotIn("environment variables to lock the configuration", configuration)
+    case.assertNotIn("lock the corresponding UI fields", configuration)
+    setup = guide.split("### Access Control", 1)[0]
+    case.assertIn("[configuration sources](#configuration-sources)", setup)
+    section = " ".join(guide.split("### Configuration sources\n", 1)[1].split())
+    for boundary in (
+        "do not override a saved provider", "Setting `OIDC_ENABLED=false` does not disable a saved provider",
+        "`OIDC_ENABLED=true`", "provider_managed_by_environment", "HTTP 409",
+        "editable-looking form", "persisted record takes precedence", "name or ID alone",
+        "Do not delete it, add a duplicate", "active private configuration source",
+        "independent administrator recovery", "recreation/redeployment, not just a restart",
+        "Never put the client secret in a command or report", "separate browser session",
+        "does not revoke existing sessions",
+    ):
+        case.assertIn(boundary, section)
+    advanced = configuration.split("<summary><strong>Advanced: OIDC / SSO</strong></summary>", 1)[1].split("</details>", 1)[0]
+    case.assertIn("OIDC.md#configuration-sources", advanced)
+    case.assertIn("Enable the legacy provider", advanced)
+    callback = next(line for line in advanced.splitlines() if "`OIDC_REDIRECT_URL`" in line)
+    case.assertIn("<public-url>/api/oidc/callback", callback)
+    case.assertNotIn("<provider-id>", callback)
+
+
 def assert_discovery_test_scope(case, handlers):
     oidc = handlers.split("func (r *Router) testOIDCConnection(", 1)[1].split(
         "// SSO Metadata Preview", 1)[0]
@@ -128,6 +185,72 @@ def assert_refresh_source(case, auth, store):
 
 
 class OIDCSessionDocsTest(unittest.TestCase):
+    def test_configuration_sources_do_not_promise_global_field_locks(self):
+        assert_configuration_sources(self, GUIDE.read_text(),
+                                     (ROOT / "docs/CONFIGURATION.md").read_text())
+
+    def test_configuration_source_checks_reject_old_or_unsafe_advice(self):
+        guide, configuration = GUIDE.read_text(), (ROOT / "docs/CONFIGURATION.md").read_text()
+        for before, after in (
+            ("do not override a saved provider", "override every saved provider"),
+            ("persisted record\n  takes precedence", "environment record takes precedence"),
+            ("name or ID alone", "name and ID are proof"),
+            ("does not revoke existing sessions", "revokes existing sessions"),
+        ):
+            with self.subTest(regression=before):
+                self.assertIn(before, guide)
+                with self.assertRaises(AssertionError):
+                    assert_configuration_sources(self, guide.replace(before, after), configuration)
+        with self.assertRaises(AssertionError):
+            assert_configuration_sources(self, guide, configuration.replace(
+                "<public-url>/api/oidc/callback", "<public-url>/api/oidc/<provider-id>/callback"))
+
+    def test_configuration_source_advice_matches_legacy_selection_and_rejections(self):
+        oidc = (ROOT / "internal/config/oidc.go").read_text()
+        load = oidc.split("func LegacyOIDCConfigFromEnv(", 1)[1].split("// Validate", 1)[0]
+        self.assertIn('envValue("OIDC_ENABLED")', load)
+        self.assertIn("if !enabledSet || !truthyEnv(enabledRaw)", load)
+        self.assertIn('DefaultOIDCCallbackPath = "/api/oidc/callback"', oidc)
+        sources = (ROOT / "internal/config/sso.go").read_text()
+        apply = sources.split("func ApplyLegacyOIDCEnvProvider(", 1)[1].split("// GetProvider", 1)[0]
+        self.assertIn("if existing != nil {", apply)
+        self.assertIn("if existing.RuntimeManaged {\n\t\t\t*existing = *provider\n\t\t}", apply)
+        self.assertLess(apply.index("return false", apply.index("if existing != nil {")),
+                        apply.index("c.Providers = append"))
+        handlers = (ROOT / "internal/api/identity_sso_handlers.go").read_text()
+        for action in ("Update", "Delete"):
+            handler = handlers.split(f"func (r *Router) handle{action}SSOProvider(", 1)[1].split("\nfunc ", 1)[0]
+            branch = handler.split("if existing.RuntimeManaged {", 1)[1].split("\n\t}", 1)[0]
+            self.assertIn("http.StatusConflict", branch)
+            self.assertIn('"provider_managed_by_environment"', branch)
+            self.assertIn("return", branch)
+
+    def test_login_allowlists_are_not_described_as_bypasses(self):
+        callback = (ROOT / "internal/api/oidc_handlers.go").read_text()
+        assert_login_restriction_setup(self, GUIDE.read_text(), callback)
+
+    def test_login_restriction_consistency_rejects_misleading_help_or_gate_drift(self):
+        guide = GUIDE.read_text()
+        callback = (ROOT / "internal/api/oidc_handlers.go").read_text()
+        mutations = (
+            ("guide", "every non-empty list must match", "any non-empty list can match"),
+            ("guide", "An empty group list skips\n> only that check", "An empty group list allows every IdP user to sign in"),
+            ("callback", "if len(provider.AllowedDomains) > 0 && !matchesDomain(email, provider.AllowedDomains)",
+             "else if len(provider.AllowedDomains) > 0 && !matchesDomain(email, provider.AllowedDomains)"),
+            ("callback", '"email_restricted"', '"another_error"'),
+            ("callback", "if !intersects(groups, provider.AllowedGroups)", "if false"),
+        )
+        for target, before, after in mutations:
+            with self.subTest(regression=target + ":" + before):
+                original = guide if target == "guide" else callback
+                self.assertIn(before, original)
+                changed = original.replace(before, after, 1)
+                with self.assertRaises(AssertionError):
+                    assert_login_restriction_setup(
+                        self, changed if target == "guide" else guide,
+                        changed if target == "callback" else callback,
+                    )
+
     def test_unconfirmed_changes_use_a_read_without_promising_recovery(self):
         guide = GUIDE.read_text()
         recovery = " ".join(guide.split("### A provider change could not be confirmed", 1)[1].split())
