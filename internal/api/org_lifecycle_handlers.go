@@ -90,7 +90,7 @@ func (h *OrgLifecycleHandlers) HandleSuspendOrg(w http.ResponseWriter, r *http.R
 	org.SuspendReason = req.Reason
 
 	if err := h.persistence.SaveOrganization(org); err != nil {
-		writeErrorResponse(w, http.StatusInternalServerError, "update_failed", "Failed to update organization lifecycle", nil)
+		writeOrganizationSaveError(w, err, "update_failed", "Failed to update organization lifecycle")
 		return
 	}
 
@@ -134,7 +134,7 @@ func (h *OrgLifecycleHandlers) HandleUnsuspendOrg(w http.ResponseWriter, r *http
 	org.SuspendReason = ""
 
 	if err := h.persistence.SaveOrganization(org); err != nil {
-		writeErrorResponse(w, http.StatusInternalServerError, "update_failed", "Failed to update organization lifecycle", nil)
+		writeOrganizationSaveError(w, err, "update_failed", "Failed to update organization lifecycle")
 		return
 	}
 
@@ -199,7 +199,7 @@ func (h *OrgLifecycleHandlers) HandleSoftDeleteOrg(w http.ResponseWriter, r *htt
 	org.RetentionDays = retentionDays
 
 	if err := h.persistence.SaveOrganization(org); err != nil {
-		writeErrorResponse(w, http.StatusInternalServerError, "update_failed", "Failed to update organization lifecycle", nil)
+		writeOrganizationSaveError(w, err, "update_failed", "Failed to update organization lifecycle")
 		return
 	}
 

@@ -197,13 +197,22 @@ func (mtp *MultiTenantPersistence) SaveOrganization(org *models.Organization) er
 	if org == nil {
 		return fmt.Errorf("organization is required")
 	}
+	orgDir, err := resolveTenantOrgDir(mtp.baseDataDir, org.ID)
+	if err != nil {
+		return err
+	}
+	unlock := lockOrganizationFile(filepath.Join(orgDir, "org.json"))
+	defer unlock()
+	if org.PersistenceVersion != "" && !mtp.OrgExists(org.ID) {
+		return ErrOrganizationChanged
+	}
 
 	persistence, err := mtp.GetPersistence(org.ID)
 	if err != nil {
 		return fmt.Errorf("get persistence for org %s: %w", org.ID, err)
 	}
 
-	if err := persistence.SaveOrganization(org); err != nil {
+	if err := persistence.saveOrganization(org); err != nil {
 		return fmt.Errorf("save organization %s: %w", org.ID, err)
 	}
 
@@ -273,6 +282,12 @@ func (mtp *MultiTenantPersistence) DeleteOrganization(orgID string) error {
 	if !isValidOrgID(orgID) {
 		return fmt.Errorf("invalid organization ID: %s", orgID)
 	}
+	orgDir, err := resolveTenantOrgDir(mtp.baseDataDir, orgID)
+	if err != nil {
+		return err
+	}
+	unlock := lockOrganizationFile(filepath.Join(orgDir, "org.json"))
+	defer unlock()
 	if !mtp.OrgExists(orgID) {
 		return os.ErrNotExist
 	}
@@ -281,7 +296,6 @@ func (mtp *MultiTenantPersistence) DeleteOrganization(orgID string) error {
 	delete(mtp.tenants, orgID)
 	mtp.mu.Unlock()
 
-	orgDir := filepath.Join(mtp.baseDataDir, "orgs", orgID)
 	if err := os.RemoveAll(orgDir); err != nil {
 		return fmt.Errorf("failed to delete organization directory: %w", err)
 	}
