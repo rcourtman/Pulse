@@ -29,7 +29,7 @@ root = Path(os.environ["QUEUE_FIXTURE"])
 args = sys.argv[1:]
 names = ["TestPrefix%02d" % n for n in range(20)] + [
     "TestWebSocketOriginAllowsTrustedForwardedHostedOriginIPv6Loopback",
-    "TestServerInfoEndpointMethodNotAllowed", "TestTail"]
+    "TestServerInfoEndpointMethodNotAllowed", "TestTail", "FuzzSeedCorpus", "ExampleOutput"]
 if args[:1] == ["list"]:
     if "-f" in args:
         print("github.com/rcourtman/pulse-go-rewrite/internal/api")
@@ -178,7 +178,8 @@ class ReleaseBackendQueueTest(unittest.TestCase):
                 self.assertEqual(len({e["data"] for e in ordinary}), len(PACKAGES))
                 roots = [n for e in starts for n in e["selected"]]
                 self.assertEqual(len(roots), len(set(roots)))
-                self.assertEqual(len(roots), 23)
+                self.assertEqual(len(roots), 25)
+                self.assertTrue({"FuzzSeedCorpus", "ExampleOutput"} <= set(roots))
                 # Validate the parent's actual lease journal as well as the
                 # controlled children's independently recorded live widths.
                 used = peak = 0

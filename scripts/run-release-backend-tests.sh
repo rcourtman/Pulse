@@ -217,8 +217,8 @@ echo "Warming the pulse-agent build cache for tests that compile the agent..."
 go build -o /dev/null ./cmd/pulse-agent
 (
   cd internal/api
-  "$API_BINARY" -test.list '^Test'
-) | awk '/^Test[A-Za-z0-9_]+$/ { print }' > "$TEST_NAMES_FILE"
+  "$API_BINARY" -test.list '^(Test|Fuzz|Example)'
+) | awk '/^(Test|Fuzz|Example)[A-Za-z0-9_]+$/ { print }' > "$TEST_NAMES_FILE"
 
 plan_args=(
   --tests-file "$TEST_NAMES_FILE"

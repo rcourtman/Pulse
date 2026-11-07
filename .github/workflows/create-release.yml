@@ -1770,6 +1770,7 @@ jobs:
             jq -n \
               --arg pulse_ref "${TAG}" \
               --arg pulse_checkout_ref "${GITHUB_SHA}" \
+              --arg public_release_run_id "${GITHUB_RUN_ID}" \
               --arg version "${VERSION}" \
               --arg r2_prefix "${r2_prefix}" \
               --arg allow_stable_ga_publish "${allow_ga_publish}" \
@@ -1779,6 +1780,7 @@ jobs:
                 inputs: {
                   pulse_ref: $pulse_ref,
                   pulse_checkout_ref: $pulse_checkout_ref,
+                  public_release_run_id: $public_release_run_id,
                   version: $version,
                   upload_actions_artifact: "false",
                   upload_to_r2: "true",

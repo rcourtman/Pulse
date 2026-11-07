@@ -443,6 +443,8 @@ echo CONTINUED
     def test_api_shard_plan_rejects_invalid_or_duplicate_names(self) -> None:
         with self.assertRaisesRegex(ValueError, "invalid top-level"):
             build_plan(["TestGood", "BenchmarkNotATest"], 2, 10)
+        accepted = build_plan(["TestGood", "FuzzSeedCorpus", "ExampleOutput"], 1, 10)
+        self.assertEqual(sum(shard["test_count"] for shard in accepted["shards"]), 3)
         with self.assertRaisesRegex(ValueError, "duplicate top-level"):
             build_plan(["TestDuplicate", "TestDuplicate"], 2, 10)
         with self.assertRaisesRegex(ValueError, "cannot exceed"):
