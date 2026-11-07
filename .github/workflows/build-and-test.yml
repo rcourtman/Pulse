@@ -1089,7 +1089,22 @@ jobs:
       - name: Script smoke tests
         # Isolated runners preserve each recipe's deadlines and process cleanup.
         # Discover all suites in both shards; never maintain a second allowlist.
+        env:
+          PULSE_SCRIPT_TEST_RECEIPT: ${{ runner.temp }}/script-smoke-${{ matrix.shard }}-${{ github.run_attempt }}.json
+          PULSE_SCRIPT_TEST_SOURCE_SHA: ${{ github.sha }}
         run: scripts/tests/run.sh --smoke-shard ${{ matrix.shard }}
+
+      # A later interruption must not erase earlier returned suite results.
+      # Old stable-patch runners may not emit this optional receipt; absence
+      # remains missing evidence, never execution or a passing observation.
+      - name: Retain script smoke observations
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: script-smoke-${{ matrix.shard }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/script-smoke-${{ matrix.shard }}-${{ github.run_attempt }}.json
+          if-no-files-found: warn
+          retention-days: 7
 
   scripts-and-build:
     name: Script smoke tests & backend build

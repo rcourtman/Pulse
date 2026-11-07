@@ -16,6 +16,8 @@ import unittest
 
 import yaml
 
+import yaml
+
 from test_frontend_real_embed import recipe as real_embed_recipe
 from test_public_docs_workflow import job_body, step_body, workflow_fixture_environment
 
@@ -65,12 +67,27 @@ class SmokeWorkflowTest(unittest.TestCase):
             self.assertIn(required, smoke)
         self.assertNotRegex(smoke, r"(?m)^\s*(?:include|exclude|continue-on-error):")
         self.assertEqual(re.findall(r"(?m)^\s*if:.*$", smoke),
-                         ["    if: needs.changes.outputs.code == 'true'"])
+                         ["    if: needs.changes.outputs.code == 'true'", "        if: always()"])
         self.assertNotIn("continue-on-error:", job_body(self.source, "scripts-and-build"))
         self.assertIn("permissions:\n  contents: read\n", self.source)
         for shard in range(2):
             self.assertEqual(shlex.split(smoke_command(self.source, shard)),
                              ["scripts/tests/run.sh", "--smoke-shard", str(shard)])
+
+    def test_returned_suite_observations_are_bound_and_retained_after_failure(self):
+        smoke = yaml.safe_load(self.source)['jobs']['script-smoke']
+        execute = next(step for step in smoke['steps'] if step['name'] == 'Script smoke tests')
+        upload = next(step for step in smoke['steps']
+                      if step['name'] == 'Retain script smoke observations')
+        destination = '${{ runner.temp }}/script-smoke-${{ matrix.shard }}-${{ github.run_attempt }}.json'
+        self.assertEqual(execute['env'], {'PULSE_SCRIPT_TEST_RECEIPT': destination,
+                                         'PULSE_SCRIPT_TEST_SOURCE_SHA': '${{ github.sha }}'})
+        self.assertEqual(upload['if'], 'always()')
+        self.assertEqual(upload['with'], {
+            'name': 'script-smoke-${{ matrix.shard }}-${{ github.run_attempt }}',
+            'path': destination, 'if-no-files-found': 'warn', 'retention-days': 7})
+        self.assertTrue(upload['uses'].startswith('actions/upload-artifact@'))
+        self.assertNotIn('continue-on-error', upload)
 
     def test_existing_required_check_is_fail_closed(self):
         build = job_body(self.source, "scripts-and-build")
@@ -152,6 +169,7 @@ class SmokeWorkflowTest(unittest.TestCase):
             tests = root / "scripts/tests"
             tests.mkdir(parents=True)
             shutil.copyfile(ROOT / "scripts/tests/run.sh", tests / "run.sh")
+            shutil.copyfile(ROOT / "scripts/run-script-tests.py", root / "scripts/run-script-tests.py")
             shutil.copyfile(ROOT / "scripts/select-smoke-test-shard.py",
                             root / "scripts/select-smoke-test-shard.py")
             hints = root / ".github/scripts/smoke-test-seconds.txt"
