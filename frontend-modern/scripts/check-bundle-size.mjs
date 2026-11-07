@@ -23,6 +23,7 @@ import { createHash } from 'node:crypto';
 import { join, resolve } from 'node:path';
 import { gzipSync } from 'node:zlib';
 import { fileURLToPath } from 'node:url';
+import { JSDOM, VirtualConsole } from 'jsdom';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const ROOT = resolve(__dirname, '..');
@@ -112,7 +113,7 @@ function checkPreloadPosture() {
   const errors = [];
   let html;
   try {
-    html = readFileSync(join(ROOT, 'dist', 'index.html'), 'utf8');
+    html = readFileSync(join(ROOT, 'dist', 'index.html'));
   } catch {
     errors.push('dist/index.html not found. Run "npx vite build" first.');
     return errors;
@@ -158,21 +159,81 @@ function checkPreloadPosture() {
     }
   }
 
-  // This checks Vite's generated HTML, not arbitrary HTML. A comment cannot
-  // stand in for an actual import map, nor can one of several maps be selected.
-  html = html.replace(/<!--[\s\S]*?-->/g, '');
-  const importmaps = [
-    ...html.matchAll(/<script\b(?=[^>]*\stype="importmap"(?=[\s>]))[^>]*>([\s\S]*?)<\/script>/g),
-  ];
+  // Parse elements, never rewritten HTML. Deleting or masking comments can
+  // invent tags/attributes, and regexes can mistake inert text for controls.
+  // No runScripts/resources options: this is an inert, offline document, not
+  // a preview. Do not emit parser diagnostics containing build-source text.
+  // The locked jsdom/parse5 pair uses scripting-enabled tokenization with
+  // node locations, independently of execution. Verify that behavior instead
+  // of silently counting controls hidden inside noscript after a parser update.
+  const parserOptions = {
+    includeNodeLocations: true,
+    virtualConsole: new VirtualConsole(),
+  };
+  const probe = new JSDOM('<noscript><p></p></noscript>', parserOptions);
+  try {
+    if (probe.window.document.querySelector('p')) {
+      errors.push('HTML parser scripting mode is unsupported; build controls are unverified');
+      return errors;
+    }
+  } finally {
+    probe.window.close();
+  }
+  const dom = new JSDOM(html, parserOptions);
+  let importmaps;
+  let entries;
+  let preloads;
+  try {
+    const document = dom.window.document;
+    const htmlElements = (tag) =>
+      [...document.querySelectorAll(tag)].filter(
+        (element) => element.namespaceURI === 'http://www.w3.org/1999/xhtml',
+      );
+    // Declarative shadow DOM is unsupported by this parser. It is absent
+    // from Vite output: do not silently ignore potentially active controls.
+    if (document.querySelector('template[shadowrootmode]')) {
+      errors.push('index.html declarative shadow DOM controls are unverified');
+      return errors;
+    }
+    const scripts = htmlElements('script');
+    const asciiLower = (value) =>
+      (value ?? '').replace(/[A-Z]/g, (character) => character.toLowerCase());
+    importmaps = scripts
+      .filter((element) => asciiLower(element.getAttribute('type')) === 'importmap')
+      .map((element) => ({ text: element.textContent, external: element.hasAttribute('src') }));
+    entries = scripts
+      .filter(
+        (element) =>
+          asciiLower(element.getAttribute('type')) === 'module' && element.hasAttribute('src'),
+      )
+      .map((element) => ({
+        src: element.getAttribute('src'),
+        integrity: element.getAttribute('integrity'),
+      }));
+    preloads = htmlElements('link')
+      .filter((element) =>
+        asciiLower(element.getAttribute('rel'))
+          .split(/[\t\n\f\r ]+/)
+          .includes('modulepreload'),
+      )
+      .map((element) => ({
+        href: element.getAttribute('href'),
+        integrity: element.getAttribute('integrity'),
+      }));
+  } finally {
+    dom.window.close();
+  }
   let integrity = null;
   if (importmaps.length === 0) {
     errors.push('importmap script block missing from index.html (dynamic-import SRI unenforced)');
   } else if (importmaps.length !== 1) {
     errors.push('index.html must contain exactly one importmap script block');
+  } else if (importmaps[0].external) {
+    errors.push('index.html importmap must be inline, not an external script');
   } else {
     let parsed;
     try {
-      parsed = JSON.parse(importmaps[0][1]);
+      parsed = JSON.parse(importmaps[0].text);
     } catch {
       errors.push('importmap block in index.html is not valid JSON');
     }
@@ -204,9 +265,11 @@ function checkPreloadPosture() {
     }
   }
 
-  const entryMatch = html.match(
-    /<script\b(?=[^>]*\stype="module"(?=[\s>]))[^>]*\ssrc="\/assets\/([^"]+\.js)"[^>]*>/,
-  );
+  if (entries.length !== 1) {
+    errors.push('index.html must contain exactly one external module entry script');
+    return errors;
+  }
+  const entryMatch = entries[0].src.match(/^\/assets\/(.+\.js)$/);
   if (!entryMatch) {
     errors.push('module entry script not found in index.html');
     return errors;
@@ -214,7 +277,7 @@ function checkPreloadPosture() {
   const entryFile = entryMatch[1];
   checkIntegrity(
     entryFile,
-    entryMatch[0].match(/\sintegrity="([^"]*)"/)?.[1],
+    entries[0].integrity,
     `entry script /assets/${entryFile}`,
   );
 
@@ -253,10 +316,10 @@ function checkPreloadPosture() {
     queue.push(...staticImportsOf(assets.get(file).toString('utf8')));
   }
 
-  for (const tag of html.match(/<link\b(?=[^>]*\srel="modulepreload"(?=[\s>]))[^>]*>/g) ?? []) {
-    const href = tag.match(/\shref="\/assets\/([^"]+)"/);
+  for (const preload of preloads) {
+    const href = preload.href?.match(/^\/assets\/(.+)$/);
     if (!href) {
-      errors.push(`modulepreload link with unrecognized href in index.html: ${tag}`);
+      errors.push('modulepreload link with unrecognized href in index.html');
       continue;
     }
     if (!allowedPreloads.has(href[1])) {
@@ -266,7 +329,7 @@ function checkPreloadPosture() {
     }
     checkIntegrity(
       href[1],
-      tag.match(/\sintegrity="([^"]*)"/)?.[1],
+      preload.integrity,
       `modulepreload of /assets/${href[1]}`,
     );
   }
