@@ -17,6 +17,38 @@
 
 ## Purpose
 
+### Proxmox agent temperatures follow their reporting lease (7 November 2026)
+
+Direct and cluster-sibling temperature readings are current only inside the
+reporting agent's existing cadence-derived health lease, including its existing
+ten-minute maximum. A sibling reading needs both its original observation time
+and the reporter's own `SourceAgent` sighting inside that lease; a live merged
+Proxmox row or a later report that omits the sensor does not renew either fact.
+The reporter must still be linked to a node in the target's connection or its
+proven duplicate view, and the newest eligible observation wins. Unlinked,
+missing and other-site reporters supply no temperature.
+
+The shared cache retains observations no longer than the existing maximum lease,
+so unrelated reports cannot evict still-valid slow readings at five minutes.
+Reads enforce the individual shorter lease. The collector uses an admitted,
+usable agent reading without a second fixed two-minute SSH cutoff, preserving
+its original timestamp. Unavailable, unusable and expired readings retain the
+ordinary legacy-SSH fallback and existing carry rules. Reporting cadence, agent
+health grace, source identity, SSH trust, thresholds and History retention do not
+change.
+
+`TestNodeTemperatureUsesReporterCadence` drives the real node collector with an
+inert command runner across direct/sibling and short/slow/capped leases, checking
+fallback command counts and preserved source timestamps. The cluster controls
+cover old observations with fresh reporters, silent reporters behind live PVE
+rows, same-named nodes on other connections, absent reporters and unrelated
+reports. `TestApplyHostReportRetainsSiblingSensorsInsideMaximumLease` exercises
+accepted report ingestion, omitted sensors and bounded cache eviction. The
+consumer proof exports the actual node results through the canonical resource
+registry to the existing frontend adapter and Node overview at desktop/narrow
+sizes. It is not installed-estate recovery or a resolution of #4065.
+
+
 ### An agent keeps its guest when another installation reuses the name (4 November 2026)
 
 Agent-to-guest linking treats every VM and container with the agent's hostname

@@ -4586,12 +4586,13 @@ func (m *Monitor) applyClusterSensors(reporterID string, entries []agentshost.Cl
 		}
 	}
 
-	// Evict stale entries to prevent unbounded cache growth.
-	// Cluster sizes are small (3-16 nodes) so this is cheap.
-	const staleThreshold = 5 * time.Minute
+	// Cache retention must cover the longest admitted reporting lease, so an
+	// unrelated report cannot evict a still-current slow reporter's readings.
+	// Reads enforce each reporter's shorter lease and original observation time.
+	// Cluster sizes are small (3-16 nodes) so this bounded scan is cheap.
 	now := time.Now()
 	for key, entry := range m.clusterSensorsCache {
-		if now.Sub(entry.updatedAt) > staleThreshold {
+		if now.Sub(entry.updatedAt) > hostMaximumHealthWindow {
 			delete(m.clusterSensorsCache, key)
 		}
 	}
