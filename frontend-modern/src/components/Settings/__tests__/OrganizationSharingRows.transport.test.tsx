@@ -22,7 +22,12 @@ const owner = 'owner@example.test';
 const storedToken = 'synthetic-unrelated-api-token';
 const csrfToken = 'synthetic-session-csrf';
 const base = `/api/orgs/${encodeURIComponent(orgID)}`;
-const operations = ['remove outgoing', 'accept incoming', 'decline incoming'] as const;
+const operations = [
+  'remove outgoing',
+  'accept incoming',
+  'decline incoming',
+  'remove accepted incoming',
+] as const;
 type Operation = (typeof operations)[number];
 const json = (value: unknown, status = 200) =>
   new Response(JSON.stringify(value), {
@@ -86,7 +91,7 @@ function rowFor(share: OrganizationShare): HTMLElement {
 function rowAction(operation: Operation, share = selectedShare(operation)) {
   return within(rowFor(share)).getByRole('button', {
     name:
-      operation === 'remove outgoing'
+      operation === 'remove outgoing' || operation === 'remove accepted incoming'
         ? 'Remove'
         : operation === 'accept incoming'
           ? 'Accept'
@@ -96,8 +101,7 @@ function rowAction(operation: Operation, share = selectedShare(operation)) {
 function selectedShare(operation: Operation) {
   return operation === 'remove outgoing' ? outgoingRows()[1] : incomingRows()[1];
 }
-function expectBoundRequest() {
-  expect(writes()).toHaveLength(1);
+function expectBoundRequests() {
   for (const [, options] of [...sharingReads(), ...writes()]) {
     expect(options).toMatchObject({
       credentials: 'include',
@@ -106,41 +110,63 @@ function expectBoundRequest() {
     });
     expect(options?.headers).not.toHaveProperty('X-API-Token');
   }
-  expect(writes()[0][1]?.headers).toMatchObject({ 'X-CSRF-Token': csrfToken });
+  for (const [, options] of writes())
+    expect(options?.headers).toMatchObject({ 'X-CSRF-Token': csrfToken });
   expect(getOrgID()).toBe(orgID);
   expect(getApiToken()).toBe(storedToken);
 }
-async function openPanel(operation: Operation) {
+function confirmationFor(operation: Operation) {
+  if (operation === 'remove outgoing')
+    return `Remove share for vm:${selectedShare(operation).resourceId}?`;
+  if (operation === 'remove accepted incoming') return 'Remove shared access to Namesake VM?';
+  return 'Decline the share request for Namesake VM?';
+}
+async function renderPanel(operation: Operation) {
+  if (operation === 'remove accepted incoming') {
+    incoming[1] = {
+      ...incoming[1],
+      status: 'accepted',
+      acceptedAt: '2026-11-07T10:00:00Z',
+      acceptedBy: owner,
+    };
+  }
   render(() => <OrganizationSharingPanel currentUser={owner} />);
   await screen.findByRole('heading', { name: 'Outgoing Shares' });
   expect(screen.getAllByText('Namesake VM')).toHaveLength(6);
   expect(sharingReads()).toHaveLength(5);
+  expect(writes()).toHaveLength(0);
+  expect(rowAction(operation)).toBeEnabled();
+  if (operation === 'remove accepted incoming') {
+    expect(rowFor(selectedShare(operation))).toHaveTextContent('Accepted');
+    expect(
+      within(rowFor(selectedShare(operation))).queryByRole('button', { name: 'Accept' }),
+    ).not.toBeInTheDocument();
+  }
+}
+function expectWrite(operation: Operation, count = 1) {
+  expect(writes()).toHaveLength(count);
   const selected = selectedShare(operation);
-  const button = rowAction(operation);
-  expect(button).toBeEnabled();
-  fireEvent.click(button);
-  await waitFor(() => expect(writes()).toHaveLength(1));
-  const [url, options] = writes()[0];
+  const [url, options] = writes()[count - 1];
   const path = `${base}/shares${operation === 'remove outgoing' ? '' : '/incoming'}/${encodeURIComponent(selected.id)}${operation === 'accept incoming' ? '/accept' : ''}`;
   expect(url).toBe(path);
   expect(options?.method).toBe(operation === 'accept incoming' ? 'POST' : 'DELETE');
   expect(options?.body).toBeUndefined();
-  expectBoundRequest();
-  if (operation === 'remove outgoing')
-    expect(confirmMock).toHaveBeenCalledExactlyOnceWith(
-      `Remove share for vm:${selected.resourceId}?`,
-    );
-  else if (operation === 'decline incoming')
-    expect(confirmMock).toHaveBeenCalledExactlyOnceWith(
-      'Decline the share request for Namesake VM?',
-    );
+  expectBoundRequests();
+}
+async function openPanel(operation: Operation) {
+  await renderPanel(operation);
+  fireEvent.click(rowAction(operation));
+  await waitFor(() => expect(writes()).toHaveLength(1));
+  expectWrite(operation);
+  if (operation !== 'accept incoming')
+    expect(confirmMock).toHaveBeenCalledExactlyOnceWith(confirmationFor(operation));
   else expect(confirmMock).not.toHaveBeenCalled();
-  return selected;
+  return selectedShare(operation);
 }
 // Apply the actual dispatched identity, not the test's intended identity. A
 // wrong-row callback must change the namesake in the fixture, not look correct.
-function applyDispatchedWrite() {
-  const [url] = writes()[0];
+function applyDispatchedWrite(index = 0) {
+  const [url] = writes()[index];
   const path = String(url);
   const id = decodeURIComponent(path.split('/').at(path.endsWith('/accept') ? -2 : -1)!);
   if (path.includes('/incoming/')) {
@@ -169,21 +195,24 @@ function expectSavedRows(operation: Operation, applied: boolean) {
   if (isRemoved) expect(screen.queryByText(`vm:${selected.resourceId}`)).not.toBeInTheDocument();
   else {
     const row = rowFor(selected);
-    expect(row).toHaveTextContent(applied ? 'Accepted' : 'Pending approval');
-    if (operation === 'accept incoming' || operation === 'decline incoming') {
-      if (applied)
+    const accepted = operation === 'remove accepted incoming' || applied;
+    expect(row).toHaveTextContent(accepted ? 'Accepted' : 'Pending approval');
+    if (operation !== 'remove outgoing') {
+      if (accepted) {
         expect(within(row).queryByRole('button', { name: 'Accept' })).not.toBeInTheDocument();
-      else expect(within(row).getByRole('button', { name: 'Accept' })).toBeEnabled();
+        expect(within(row).getByRole('button', { name: 'Remove' })).toBeEnabled();
+      } else expect(within(row).getByRole('button', { name: 'Accept' })).toBeEnabled();
     }
   }
   const otherDirection = operation === 'remove outgoing' ? incomingRows() : outgoingRows();
   for (const share of otherDirection) expect(rowFor(share)).toHaveTextContent('Pending approval');
   expect(screen.getAllByText('Namesake VM')).toHaveLength(isRemoved ? 5 : 6);
-  expectBoundRequest();
+  expectBoundRequests();
 }
 
 beforeEach(async () => {
   vi.clearAllMocks();
+  confirmMock.mockReset().mockReturnValue(true);
   fetchMock.mockReset();
   vi.stubGlobal('fetch', fetchMock);
   vi.stubGlobal('confirm', confirmMock);
@@ -256,14 +285,89 @@ describe('rendered namesake sharing rows through the real transport', () => {
       await waitFor(() => expect(sharingReads()).toHaveLength(10));
       await screen.findByRole('heading', { name: 'Outgoing Shares' });
       expectSavedRows(operation, true);
+      expect(notices.success).toHaveBeenCalledExactlyOnceWith(
+        operation === 'remove outgoing'
+          ? 'Share has been removed.'
+          : operation === 'accept incoming'
+            ? 'Accepted shared access to Namesake VM.'
+            : operation === 'decline incoming'
+              ? 'Declined the share request for Namesake VM.'
+              : 'Removed shared access to Namesake VM.',
+      );
+      expect(notices.error).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['remove outgoing', 'decline incoming', 'remove accepted incoming'] as const)(
+    'keeps every grant when the selected %s is cancelled, then removes only the confirmed grant',
+    async (operation) => {
+      await renderPanel(operation);
+      const savedOutgoing = structuredClone(outgoing);
+      const savedIncoming = structuredClone(incoming);
+      confirmMock.mockReturnValueOnce(false);
+      fireEvent.click(rowAction(operation));
+      expect(confirmMock).toHaveBeenCalledExactlyOnceWith(confirmationFor(operation));
+      expect(rowAction(operation)).toBeEnabled();
+      expectSavedRows(operation, false);
+      expect(writes()).toHaveLength(0);
+      expect(sharingReads()).toHaveLength(5);
+      expect(outgoing).toEqual(savedOutgoing);
+      expect(incoming).toEqual(savedIncoming);
+      expect(notices.success).not.toHaveBeenCalled();
+      expect(notices.error).not.toHaveBeenCalled();
+
+      fireEvent.click(rowAction(operation));
+      await waitFor(() => expect(writes()).toHaveLength(1));
+      expectWrite(operation);
+      expect(confirmMock).toHaveBeenCalledTimes(2);
+      expect(confirmMock).toHaveBeenLastCalledWith(confirmationFor(operation));
+      applyDispatchedWrite();
+      completion.resolve(new Response(null, { status: 204 }));
+      await waitFor(() => expect(sharingReads()).toHaveLength(10));
+      await screen.findByRole('heading', { name: 'Outgoing Shares' });
+      expectSavedRows(operation, true);
+      expect(writes()).toHaveLength(1);
       expect(notices.success).toHaveBeenCalledTimes(1);
       expect(notices.error).not.toHaveBeenCalled();
     },
   );
 
+  it('removes the same accepted incoming grant through its newly rendered saved row, not a pending sibling', async () => {
+    await openPanel('accept incoming');
+    applyDispatchedWrite();
+    // Change the saved order too: a current row is not its old list index.
+    incoming = [incoming[2], incoming[0], incoming[1]];
+    completion.resolve(new Response(null, { status: 204 }));
+    await waitFor(() => expect(sharingReads()).toHaveLength(10));
+    await screen.findByRole('heading', { name: 'Incoming Shares' });
+    expectSavedRows('accept incoming', true);
+    expect(confirmMock).not.toHaveBeenCalled();
+
+    completion = deferred<Response>();
+    fireEvent.click(rowAction('remove accepted incoming'));
+    await waitFor(() => expect(writes()).toHaveLength(2));
+    expectWrite('remove accepted incoming', 2);
+    expect(confirmMock).toHaveBeenCalledExactlyOnceWith(
+      confirmationFor('remove accepted incoming'),
+    );
+    applyDispatchedWrite(1);
+    completion.resolve(new Response(null, { status: 204 }));
+    await waitFor(() => expect(sharingReads()).toHaveLength(15));
+    await screen.findByRole('heading', { name: 'Incoming Shares' });
+    expectSavedRows('remove accepted incoming', true);
+    expect(writes()).toHaveLength(2);
+    expect(notices.success.mock.calls).toEqual([
+      ['Accepted shared access to Namesake VM.'],
+      ['Removed shared access to Namesake VM.'],
+    ]);
+    expect(notices.error).not.toHaveBeenCalled();
+  });
+
   it.each([
     { operation: 'remove outgoing', applied: true },
     { operation: 'accept incoming', applied: false },
+    { operation: 'remove accepted incoming', applied: true },
+    { operation: 'remove accepted incoming', applied: false },
   ] as const)(
     'checks saved $operation after an uncertain response (applied: $applied) without replay',
     async ({ operation, applied }) => {
