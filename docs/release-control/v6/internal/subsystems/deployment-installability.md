@@ -9703,6 +9703,15 @@ of it queued behind other private CI, so the earlier two-hour limit could fail a
 release whose Pro build later succeeded. A frozen `pulse-ci` still fails the
 release. `TestCreateReleasePublishesPrivateProRuntime` pins both limits.
 
+Since 7 November 2026 `create-release.yml` passes its run id to the private
+Pro build as `public_release_run_id`. The Pro build then tests only the
+Enterprise suite against the exact pair, and its signing job waits until this
+run's `backend_tests` passes on the same commit, instead of rerunning the whole
+public suite itself (39 of its 41 test minutes on v6.8.0-beta.1). The release
+gate's `internal/api` shards now list `Fuzz` and `Example` names as well as
+`Test`, as pull-request CI does, so those seed corpora and examples still run
+at release time. `TestCreateReleasePublishesPrivateProRuntime` pins the run id.
+
 ## Release-body updater ownership (30 September 2026)
 
 Each executable `/bin/update --version` example in a published body must carry
