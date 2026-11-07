@@ -135,7 +135,7 @@ func TestOrgMutationSnapshotRegisteredRouteKeepsWithdrawal(t *testing.T) {
 	cfg := newTestConfigWithTokens(t)
 	cfg.AuthUser, cfg.AuthPass = "alice", "fixture-nonempty-hash"
 	InitSessionStore(cfg.DataPath)
-	router := newTestRouter(t, cfg, nil, nil, nil, nil, "test")
+	router := newMultiTenantRouter(t, cfg)
 	initial := &models.Organization{ID: "acme", DisplayName: "Acme", OwnerUserID: "alice", Members: []models.OrganizationMember{{UserID: "alice", Role: models.OrgRoleOwner}, {UserID: "bob", Role: models.OrgRoleViewer}}, PendingInvitations: []models.OrganizationInvitation{{UserID: "carol", Role: models.OrgRoleViewer}}}
 	if err := router.multiTenant.SaveOrganization(initial); err != nil {
 		t.Fatal(err)
@@ -213,7 +213,11 @@ func TestOrgMutationSnapshotRegisteredRouteKeepsWithdrawal(t *testing.T) {
 		t.Errorf("new explicit invitation = %d %s", invite.Code, invite.Body)
 	}
 	accept := httptest.NewRecorder()
-	handler.ServeHTTP(accept, request(http.MethodPost, "/api/org-invitations/acme/accept", viewerSession, nil))
+	acceptRequest := request(http.MethodPost, "/api/org-invitations/acme/accept", viewerSession, nil)
+	// Invitation acceptance is an existing organization-neutral bootstrap route,
+	// not a read of the workspace whose membership was withdrawn.
+	acceptRequest.Header.Set("X-Pulse-Org-ID", "default")
+	handler.ServeHTTP(accept, acceptRequest)
 	if accept.Code != http.StatusOK {
 		t.Fatalf("original session acceptance = %d %s", accept.Code, accept.Body)
 	}
