@@ -2270,9 +2270,10 @@ func TestHostReportCadenceFollowsEachResource(t *testing.T) {
 	} {
 		for _, builder := range builders {
 			t.Run(tc.name+"/"+builder.name, func(t *testing.T) {
+				numDisks := 2
 				host := models.Host{
 					ID: "cadence-host", Hostname: "cadence-host", MachineID: "cadence-machine", Status: "online", LastSeen: now, IntervalSeconds: tc.interval,
-					Unraid: &models.HostUnraidStorage{ArrayStarted: true, ArrayState: "STARTED", NumProtected: 1, NumDisks: 2},
+					Unraid: &models.HostUnraidStorage{ArrayStarted: true, ArrayState: "STARTED", NumProtected: 1, NumDisks: &numDisks},
 				}
 				resource, identity := builder.build(host)
 				wantInterval := int64(max(tc.interval, 0))
