@@ -856,6 +856,7 @@ func TestDiagnoseProfileCapabilityDriftOnlyRequiresPVEProfilesToLinkToNodes(t *t
 				subject,
 				models.StateSnapshot{PBSInstances: test.pbsInstances},
 				models.AgentProfile{Config: profileConfig},
+				newAgentFleetIdentityIndex(models.StateSnapshot{}),
 			)
 
 			found := false
