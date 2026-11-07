@@ -230,6 +230,8 @@ class APIAuthDocsTest(unittest.TestCase):
             ("GET", "/api/state/summary"),
             *((method, path) for method, path, _ in FLEET_ACTION_REQUESTS),
             ("POST", "/api/config/nodes"),
+            # Independent recovery and saved-expiry examples both use the list.
+            ("GET", "/api/security/tokens"),
             ("GET", "/api/security/tokens"),
         ]
         self.assertEqual([tuple(shlex.split(block.splitlines()[0])[1:3]) for block in requests],
@@ -532,7 +534,7 @@ class APIAuthDocsTest(unittest.TestCase):
         source = DOC.read_text()
         heading = "## When a token change times out\n"
         self.assertEqual(source.count(heading), 1, "missing token-change recovery guidance")
-        section = " ".join(source.split(heading, 1)[1].split())
+        section = " ".join(source.split(heading, 1)[1].split("\n## ", 1)[0].split())
         for boundary in (
             "Do not repeat the change", "independent administrator session",
             "metadata only", "Names are not unique", "exact record IDs",
@@ -550,29 +552,30 @@ class APIAuthDocsTest(unittest.TestCase):
         self.assertIn("do not replay a POST, PUT, PATCH or DELETE after a lost response", source)
         self.assertEqual(DOC.read_bytes(), (ROOT / "frontend-modern/public/docs/API.md").read_bytes())
 
-    def test_uncertain_token_recovery_copies_only_one_private_metadata_read(self):
-        heading = "## When a token change times out\n"
+    def test_token_recovery_and_expiry_each_copy_one_private_metadata_read(self):
         source = DOC.read_text()
-        self.assertIn(heading, source, "missing read-only recovery recipe")
-        blocks = re.findall(r"```bash\n(.*?)```", source.split(heading, 1)[1], re.DOTALL)
-        self.assertEqual(blocks, ["pulse_api GET /api/security/tokens\n"],
-                         "recovery must not replay a write or print token metadata")
-        for status, partial, expected_exit in ((200, False, 0), (401, False, 22),
-                                               (403, False, 22), (404, False, 22),
-                                               (500, False, 22), (302, False, 1),
-                                               (200, True, 18)):
-            for key, value in (("X-API-Token", TEST_TOKEN), ("Authorization", "Bearer " + TEST_TOKEN)):
-                with self.subTest(status=status, partial=partial, header=key), \
-                        private_recording_server(status, partial) as (port, requests), \
-                        tempfile.TemporaryDirectory() as temporary:
-                    home = Path(temporary)
-                    result = exercise_curl(self, home, f"{key}: {value}", port,
-                                           request_helper() + "\n" + blocks[0], private_response=True)
-                    self.assertEqual(result.returncode, expected_exit, result.stderr.decode())
-                    self.assertEqual(len(requests), 1, "never replay a write, redirect or retry")
-                    sent_path, headers, method, body = requests[0]
-                    self.assertEqual((method, sent_path, body), ("GET", "/api/security/tokens", b""))
-                    self.assertEqual(headers[key], value)
+        for heading in ("## When a token change times out\n", "## Checking a saved token’s expiry\n"):
+            self.assertEqual(source.count(heading), 1, "missing or duplicate private-read section")
+            section = source.split(heading, 1)[1].split("\n## ", 1)[0]
+            blocks = re.findall(r"```bash\n(.*?)```", section, re.DOTALL)
+            self.assertEqual(blocks, ["pulse_api GET /api/security/tokens\n"],
+                             "each section must copy one read, never a write or metadata output")
+            for status, partial, expected_exit in ((200, False, 0), (401, False, 22),
+                                                   (403, False, 22), (404, False, 22),
+                                                   (500, False, 22), (302, False, 1),
+                                                   (200, True, 18)):
+                for key, value in (("X-API-Token", TEST_TOKEN), ("Authorization", "Bearer " + TEST_TOKEN)):
+                    with self.subTest(section=heading, status=status, partial=partial, header=key), \
+                            private_recording_server(status, partial) as (port, requests), \
+                            tempfile.TemporaryDirectory() as temporary:
+                        home = Path(temporary)
+                        result = exercise_curl(self, home, f"{key}: {value}", port,
+                                               request_helper() + "\n" + blocks[0], private_response=True)
+                        self.assertEqual(result.returncode, expected_exit, result.stderr.decode())
+                        self.assertEqual(len(requests), 1, "never replay a write, redirect or retry")
+                        sent_path, headers, method, body = requests[0]
+                        self.assertEqual((method, sent_path, body), ("GET", "/api/security/tokens", b""))
+                        self.assertEqual(headers[key], value)
 
     def test_private_response_assertion_rejects_console_output_regression(self):
         request = commands()[1]
