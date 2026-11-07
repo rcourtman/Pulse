@@ -12,7 +12,6 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
-	"github.com/rcourtman/pulse-go-rewrite/pkg/pmg"
 	"github.com/rs/zerolog/log"
 )
 
