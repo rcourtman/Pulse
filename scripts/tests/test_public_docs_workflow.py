@@ -179,6 +179,7 @@ class PublicDocsWorkflowTest(unittest.TestCase):
             tests = root / "scripts/tests"
             tests.mkdir(parents=True)
             shutil.copyfile(ROOT / "scripts/tests/run.sh", tests / "run.sh")
+            shutil.copyfile(ROOT / "scripts/run-script-tests.py", root / "scripts/run-script-tests.py")
             (tests / "run.sh").chmod(0o700)
             shutil.copyfile(ROOT / "scripts/select-smoke-test-shard.py",
                             root / "scripts/select-smoke-test-shard.py")

@@ -4,12 +4,17 @@
 from __future__ import annotations
 
 import os
+import importlib.util
+import json
 from pathlib import Path
 import shlex
 import shutil
+import signal
 import subprocess
 import tempfile
+import time
 import unittest
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -25,6 +30,7 @@ class SmokeRunnerTest(unittest.TestCase):
         self.tests.mkdir(parents=True)
         self.runner = self.tests / "run.sh"
         shutil.copyfile(RUNNER, self.runner)
+        shutil.copyfile(ROOT / "scripts/run-script-tests.py", self.root / "scripts/run-script-tests.py")
         self.runner.chmod(0o700)
         self.selector = self.root / "scripts/select-smoke-test-shard.py"
         shutil.copyfile(ROOT / "scripts/select-smoke-test-shard.py", self.selector)
@@ -85,6 +91,133 @@ class SmokeRunnerTest(unittest.TestCase):
 
     def observed_calls(self):
         return self.calls.read_text(encoding="utf-8").splitlines() if self.calls.exists() else []
+
+    def enable_receipt(self):
+        git = self.bin / 'git'
+        git.write_text('#!/bin/sh\nprintf "%s\\n" "$FIXTURE_CHECKOUT_SHA"\n', encoding='utf-8')
+        git.chmod(0o700)
+        destination = self.root / 'receipt.json'
+        self.environment.update(PULSE_SCRIPT_TEST_RECEIPT=str(destination),
+                                PULSE_SCRIPT_TEST_SOURCE_SHA='a' * 40,
+                                FIXTURE_CHECKOUT_SHA='a' * 40)
+        return destination
+
+    def test_receipt_keeps_all_returned_exits_without_output_or_nested_receipt_environment(self):
+        destination = self.enable_receipt()
+        failing = self.python_fixture('test_failed.py', 9)
+        failing.write_text("import os, sys\n"
+                          "assert 'PULSE_SCRIPT_TEST_RECEIPT' not in os.environ\n"
+                          "assert 'PULSE_SCRIPT_TEST_SOURCE_SHA' not in os.environ\n"
+                          "print('private fixture stdout')\n"
+                          "print('private fixture stderr', file=sys.stderr)\n" + failing.read_text())
+        self.python_fixture('test_success.py')
+        result = self.run_runner('test_failed.py', 'test_success.py')
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        record = json.loads(destination.read_text())
+        self.assertEqual(record['source_sha'], 'a' * 40)
+        self.assertTrue(record['collection_complete'])
+        self.assertIsNone(record['pending_invocation'])
+        self.assertEqual(record['unobserved_indexes'], [])
+        self.assertEqual(record['selected_suites'], ['scripts/tests/test_failed.py',
+                                                    'scripts/tests/test_success.py'])
+        self.assertEqual([item['exit_code'] for item in record['observations']], [9, 0])
+        self.assertTrue(all(item['started'] and item['signal'] is None
+                            and item['seconds'] >= 0 for item in record['observations']))
+        self.assertIn('private fixture stdout', result.stdout)
+        self.assertIn('private fixture stderr', result.stderr)
+        self.assertNotIn('private fixture', destination.read_text())
+
+    def test_receipt_distinguishes_no_start_explicit_137_and_observed_signal(self):
+        destination = self.enable_receipt()
+        blocked = self.shell_fixture('test-blocked.sh')
+        blocked.chmod(0o600)
+        self.shell_fixture('test-exit.sh', 137)
+        signalled = self.shell_fixture('test-signal.sh')
+        signalled.write_text('#!/bin/sh\nkill -TERM "$$"\n')
+        self.python_fixture('test_later.py')
+        result = self.run_runner('test-blocked.sh', 'test-exit.sh', 'test-signal.sh', 'test_later.py')
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        record = json.loads(destination.read_text())
+        blocked, explicit, terminated, later = record['observations']
+        self.assertFalse(blocked['started'])
+        self.assertEqual((blocked['exit_code'], blocked['signal'], blocked['start_error_errno']),
+                         (None, None, 13))
+        self.assertEqual((explicit['started'], explicit['exit_code'], explicit['signal']),
+                         (True, 137, None))
+        self.assertEqual((terminated['started'], terminated['exit_code'], terminated['signal']),
+                         (True, None, 15))
+        self.assertEqual(later['exit_code'], 0)
+        self.assertTrue(record['collection_complete'])
+        self.assertNotIn('oom', result.stdout.lower())
+
+    def test_receipt_counts_duplicate_explicit_occurrences_without_collapsing_them(self):
+        destination = self.enable_receipt()
+        self.python_fixture('test_repeated.py')
+        result = self.run_runner('test_repeated.py', 'test_repeated.py')
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        record = json.loads(destination.read_text())
+        self.assertEqual([item['index'] for item in record['observations']], [0, 1])
+        self.assertEqual(record['selected_suites'], ['scripts/tests/test_repeated.py'] * 2)
+        self.assertEqual(self.observed_calls(), ['test_repeated.py'] * 2)
+
+    def test_invalid_or_unwritable_receipt_refuses_before_any_suite(self):
+        destination = self.enable_receipt()
+        self.python_fixture('test_first.py')
+        for source in ('', 'not-a-sha', 'b' * 40):
+            with self.subTest(source=source):
+                self.environment['PULSE_SCRIPT_TEST_SOURCE_SHA'] = source
+                result = self.run_runner('test_first.py')
+                self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                self.assertEqual(self.observed_calls(), [])
+                self.assertFalse(destination.exists())
+        self.environment['PULSE_SCRIPT_TEST_SOURCE_SHA'] = 'a' * 40
+        self.environment['PULSE_SCRIPT_TEST_RECEIPT'] = str(self.root / 'missing' / 'receipt.json')
+        result = self.run_runner('test_first.py')
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertEqual(self.observed_calls(), [])
+        self.environment['PULSE_SCRIPT_TEST_RECEIPT'] = str(destination)
+        destination.write_text('previous observation\n')
+        result = self.run_runner('test_first.py')
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertEqual(destination.read_text(), 'previous observation\n')
+        self.assertEqual(self.observed_calls(), [])
+
+    def test_interruption_preserves_prior_results_and_unobserved_selection_without_liveness_claim(self):
+        destination = self.enable_receipt()
+        self.python_fixture('test_first.py', 9)
+        self.python_fixture('test_second.py')
+        held = self.python_fixture('test_third.py')
+        ready = self.root / 'ready'
+        held.write_text(f"from pathlib import Path\nimport time\nPath({str(ready)!r}).touch()\n"
+                        "time.sleep(30)\n")
+        self.python_fixture('test_fourth.py')
+        process = subprocess.Popen(['bash', str(self.runner), 'test_first.py', 'test_second.py',
+                                    'test_third.py', 'test_fourth.py'], cwd=self.root,
+                                   env=self.environment, stdout=subprocess.PIPE,
+                                   stderr=subprocess.PIPE, text=True, start_new_session=True)
+        try:
+            deadline = time.monotonic() + 10
+            while not ready.exists() and process.poll() is None and time.monotonic() < deadline:
+                time.sleep(0.01)
+            self.assertTrue(ready.exists(), 'controlled suite did not reach its own hold point')
+            before = destination.read_bytes()
+            os.killpg(process.pid, signal.SIGTERM)
+            stdout, stderr = process.communicate(timeout=5)
+            self.assertNotEqual(process.returncode, 0, stdout + stderr)
+            self.assertEqual(destination.read_bytes(), before)
+            record = json.loads(before)
+            self.assertFalse(record['collection_complete'])
+            self.assertEqual([item['exit_code'] for item in record['observations']], [9, 0])
+            self.assertEqual(record['pending_invocation'], 2)
+            self.assertEqual(record['unobserved_indexes'], [2, 3])
+            self.assertNotIn('Summary:', stdout)
+            self.assertEqual(self.observed_calls(), ['test_first.py', 'test_second.py'])
+        finally:
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            process.communicate(timeout=5)
 
     def assert_discovery_rejected(self, result):
         self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -573,6 +706,22 @@ class SmokeRunnerTest(unittest.TestCase):
                     input=inventory, capture_output=True, text=True, timeout=15)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertEqual(result.stdout, "")
+
+
+class ReceiptSnapshotTest(unittest.TestCase):
+    def test_failed_atomic_replace_leaves_previous_snapshot_and_no_temporary_debris(self):
+        spec = importlib.util.spec_from_file_location('script_suites', ROOT / 'scripts/run-script-tests.py')
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        with tempfile.TemporaryDirectory() as directory:
+            destination = Path(directory) / 'receipt.json'
+            module.snapshot(destination, {'observations': [9], 'collection_complete': False})
+            before = destination.read_bytes()
+            with patch.object(Path, 'replace', side_effect=OSError('fixture interrupted replace')):
+                with self.assertRaises(OSError):
+                    module.snapshot(destination, {'observations': [9, 0], 'collection_complete': True})
+            self.assertEqual(destination.read_bytes(), before)
+            self.assertEqual(list(Path(directory).iterdir()), [destination])
 
 
 if __name__ == "__main__":
