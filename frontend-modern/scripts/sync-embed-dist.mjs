@@ -1,4 +1,4 @@
-import { cp, mkdir, rename, rm, stat } from 'node:fs/promises';
+import { cp, lstat, mkdir, readFile, rename, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -22,6 +22,60 @@ async function ensureSourceExists() {
   }
 }
 
+async function validateStagedOutput(stagingDir) {
+  const incomplete = (requirement, cause) =>
+    new Error(
+      `frontend build output incomplete: ${requirement}. Rebuild the frontend before syncing; existing embedded assets were not replaced.`,
+      { cause },
+    );
+
+  let index;
+  try {
+    const directory = await lstat(stagingDir);
+    if (!directory.isDirectory()) throw new Error('irregular stage');
+    const entry = await lstat(path.join(stagingDir, 'index.html'));
+    if (!entry.isFile() || entry.size === 0) {
+      throw new Error('missing or irregular entry');
+    }
+    index = await readFile(path.join(stagingDir, 'index.html'), 'utf8');
+  } catch (error) {
+    throw incomplete('index.html must be a nonempty regular file', error);
+  }
+
+  // Vite emits quoted /assets/ references for the entry, CSS, modulepreloads
+  // and import-map integrity keys. A surviving entry alone is not a usable
+  // build: go:embed can compile it even when its advertised chunks are gone.
+  // This is structural admission, not a replacement for bundle/SRI checks.
+  const assets = new Set(
+    [...index.matchAll(/["'](\/assets\/[^"']+)["']/g)].map((match) => match[1].slice(1)),
+  );
+  if (![...assets].some((asset) => asset.endsWith('.js'))) {
+    throw incomplete('index.html must reference a JavaScript asset under /assets/');
+  }
+  for (const asset of assets) {
+    const parts = asset.split('/');
+    if (
+      parts.some(
+        (part) =>
+          !part || part === '.' || part === '..' || part.includes('\\') || part.includes('\0'),
+      )
+    ) {
+      throw incomplete('index.html contains an invalid /assets/ reference');
+    }
+    try {
+      let parent = stagingDir;
+      for (const part of parts.slice(0, -1)) {
+        parent = path.join(parent, part);
+        if (!(await lstat(parent)).isDirectory()) throw new Error('irregular asset directory');
+      }
+      const entry = await lstat(path.join(parent, parts.at(-1)));
+      if (!entry.isFile() || entry.size === 0) throw new Error('missing or irregular asset');
+    } catch (error) {
+      throw incomplete(`referenced asset ${asset} must be a nonempty regular file`, error);
+    }
+  }
+}
+
 async function publishDirAtomically() {
   const targetParent = path.dirname(targetDir);
   const targetName = path.basename(targetDir);
@@ -32,10 +86,13 @@ async function publishDirAtomically() {
   await rm(stagingDir, { force: true, recursive: true });
   await rm(backupDir, { force: true, recursive: true });
   await mkdir(targetParent, { recursive: true });
-  await cp(sourceDir, stagingDir, { recursive: true });
 
   let replacedExistingTarget = false;
   try {
+    await cp(sourceDir, stagingDir, { recursive: true });
+    // Validate the owned copy, not the mutable dist directory checked before
+    // waiting for the lock. Do not move the usable target until it passes.
+    await validateStagedOutput(stagingDir);
     try {
       await rename(targetDir, backupDir);
       replacedExistingTarget = true;
