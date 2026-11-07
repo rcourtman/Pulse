@@ -47,6 +47,7 @@ const dataFor = (source: Source, org: string) => {
     role: 'viewer',
     addedAt: '2026-11-01T00:00:00Z',
   }));
+};
 const json = (body: unknown, status = 200, headers: Record<string, string> = {}) =>
   new Response(JSON.stringify(body), {
     status,
@@ -92,7 +93,7 @@ function expectUnknown() {
   expect(screen.queryByText('Plan Tier')).not.toBeInTheDocument();
   expect(screen.queryByText('Not configured')).not.toBeInTheDocument();
   expect(screen.queryByText(emailFor(north))).not.toBeInTheDocument();
-  expect(screen.queryByText('SYNTHETIC_PRIVATE_FAILURE')).not.toBeInTheDocument();
+  expect(document.body).not.toHaveTextContent('SYNTHETIC_PRIVATE_FAILURE');
 }
 function expectBoundReads(org = north, calls = billingReads()) {
   expect(calls.map(([url]) => url)).toEqual(sources.map((source) => pathFor(source, org)));
