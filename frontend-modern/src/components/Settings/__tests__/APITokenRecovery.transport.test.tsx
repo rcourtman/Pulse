@@ -51,6 +51,7 @@ const resources: Resource[] = (['agent', 'docker-host'] as const).map((type) => 
   id: `${type}-one`,
   type,
   name: `${type} fixture`,
+  displayName: `${type} fixture`,
   platformId: `${type}-one`,
   platformType: type === 'agent' ? 'agent' : 'docker',
   sourceType: 'agent',
