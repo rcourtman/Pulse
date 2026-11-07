@@ -1,8 +1,7 @@
 # 🔌 Pulse API Reference
 
-Pulse provides a comprehensive REST API for automation and integration.
-
-**Base URL**: `http://<your-pulse-ip>:7655/api`
+**Base URL**: your configured HTTPS origin followed by `/api`. For local
+requests on the Pulse host only: `http://127.0.0.1:7655/api`.
 
 ## 🔐 Authentication
 
