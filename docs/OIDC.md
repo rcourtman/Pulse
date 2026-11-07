@@ -65,18 +65,17 @@ sign-ins, not to the separate local password login.
 > **Note**: Setting `OIDC_*` environment variables locks those fields in the UI. See [CONFIGURATION.md](CONFIGURATION.md) for the full list of overrides.
 
 ### Access Control
-Restrict access to specific users or groups:
-- **Allowed Groups**: Only users with a matching group in the configured claim can login. Configure the IdP to include that claim; a `groups` scope is not universally supported.
-- **Allowed Domains**: Restrict to specific email domains (e.g., `example.com`).
-- **Allowed Emails**: Allow specific email addresses.
+At sign-in, every non-empty list must match. Entries within one list are alternatives:
+- **Allowed Groups**: Match a group in the configured claim. The IdP must supply it; a `groups` scope is not universally supported.
+- **Allowed Domains**: Match the email domain (e.g., `example.com`).
+- **Allowed Emails**: Match an email address. This does not bypass the other lists.
 
 > **Administrator requirement**: SSO authentication does not grant instance
-> administrator privileges by itself. Before removing the configured local
-> administrator or relying on SSO-only access, map a trusted IdP group to the
-> built-in `admin` role. Keep that administrator group in **Allowed Groups** so
-> the login and authorization boundaries describe the same trusted population.
-> An empty **Allowed Groups** list allows every IdP user to sign in, but does not
-> make those users administrators.
+> administrator privileges by itself. Before relying on SSO-only access or
+> removing the local administrator, map a trusted IdP group to the built-in
+> `admin` role and include it in **Allowed Groups**. An empty group list skips
+> only that check; any domain and email restrictions still apply. These lists
+> do not grant administrator privileges.
 
 ### Group-to-Role Mapping
 
