@@ -8,12 +8,12 @@ import (
 )
 
 // This file adds branch-coverage tests for findLikelyHostPeer in
-// agent_fleet_doctor.go. The function iterates the supplied hosts, SKIPS any
+// agent_fleet_doctor.go. The indexed lookup preserves the scan contract: it SKIPS any
 // host whose ID == subject.id (skip-self takes precedence over any identity
 // match), and returns the first host for which sameAgentIdentity is true;
 // otherwise it returns the zero models.Host and false.
 //
-// Because findLikelyHostPeer forwards host.ID as both the `id` and `agentID`
+// Because hostPeer forwards host.ID as both the `id` and `agentID`
 // arguments to sameAgentIdentity, an "agent id" match happens when
 // subject.agentID == host.ID. Each match case below isolates exactly one
 // identity signal so the branch of sameAgentIdentity being exercised is
@@ -136,7 +136,7 @@ func TestFindLikelyHostPeerBranchcov0720pm(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			got, ok := findLikelyHostPeer(tc.subject, tc.hosts)
+			got, ok := newAgentFleetIdentityIndex(models.StateSnapshot{Hosts: tc.hosts}).hostPeer(tc.subject)
 
 			if ok != tc.wantOK {
 				t.Fatalf("findLikelyHostPeer ok = %v, want %v (subject=%+v, hosts=%#v)",

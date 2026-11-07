@@ -222,9 +222,10 @@ func (m *Monitor) GetAgentFleetDiagnosticsForTarget(serverVersion, agentUpdateTa
 	assignmentByAgent := mapAssignmentsByAgent(assignments)
 	deploymentByAgentProfile := mapDeploymentsByAgentProfile(deployments)
 	subjects := buildAgentFleetSubjects(state)
+	identity := newAgentFleetIdentityIndex(state)
 
 	for i := range subjects {
-		diagnostic := diagnoseAgentFleetSubject(subjects[i], state, out.AgentUpdateTargetVersion, now, tokenInventory, profileByID, assignmentByAgent, deploymentByAgentProfile)
+		diagnostic := diagnoseAgentFleetSubject(subjects[i], state, out.AgentUpdateTargetVersion, now, tokenInventory, profileByID, assignmentByAgent, deploymentByAgentProfile, identity)
 		out.Agents = append(out.Agents, diagnostic)
 	}
 
@@ -428,6 +429,7 @@ func diagnoseAgentFleetSubject(
 	profileByID map[string]models.AgentProfile,
 	assignmentByAgent map[string]models.AgentProfileAssignment,
 	deploymentByAgentProfile map[string]models.ProfileDeploymentStatus,
+	peers agentFleetIdentityReader,
 ) AgentFleetAgentDiagnostic {
 	identity := agentFleetIdentityForSubject(subject)
 	result := AgentFleetAgentDiagnostic{
@@ -486,8 +488,8 @@ func diagnoseAgentFleetSubject(
 	result.Reasons = append(result.Reasons, diagnoseAgentVersion(subject, serverVersion)...)
 	result.Reasons = append(result.Reasons, diagnoseAgentUpdate(subject, serverVersion)...)
 	result.Reasons = append(result.Reasons, diagnoseAgentModules(subject)...)
-	result.Reasons = append(result.Reasons, diagnoseDuplicateHostAgentInstallation(subject, state)...)
-	result.Reasons = append(result.Reasons, diagnoseAgentIdentitySplit(subject, state)...)
+	result.Reasons = append(result.Reasons, diagnoseDuplicateHostAgentInstallation(subject, peers)...)
+	result.Reasons = append(result.Reasons, diagnoseAgentIdentitySplit(subject, peers)...)
 
 	assignment, hasAssignment := findAgentAssignment(subject, assignmentByAgent)
 	if hasAssignment {
@@ -497,7 +499,7 @@ func diagnoseAgentFleetSubject(
 			result.ProfileName = profile.Name
 			result.ProfileVersion = expectedProfileVersion(profile, assignment)
 			result.Reasons = append(result.Reasons, diagnoseProfileDeployment(subject, assignment, profile, deploymentByAgentProfile)...)
-			result.Reasons = append(result.Reasons, diagnoseProfileCapabilityDrift(subject, state, profile)...)
+			result.Reasons = append(result.Reasons, diagnoseProfileCapabilityDrift(subject, state, profile, peers)...)
 		} else {
 			result.Reasons = append(result.Reasons, AgentFleetDiagnosticReason{
 				Code:     "profile_missing",
@@ -713,22 +715,11 @@ func agentFleetCredentialFreshnessWindow(subject agentFleetSubject) time.Duratio
 	return window
 }
 
-func diagnoseDuplicateHostAgentInstallation(subject agentFleetSubject, state models.StateSnapshot) []AgentFleetDiagnosticReason {
+func diagnoseDuplicateHostAgentInstallation(subject agentFleetSubject, identity agentFleetIdentityReader) []AgentFleetDiagnosticReason {
 	if subject.removed || subject.host == nil {
 		return nil
 	}
-	machineID := strings.TrimSpace(subject.host.MachineID)
-	hostname := strings.TrimSpace(subject.host.Hostname)
-	if machineID == "" || hostname == "" {
-		return nil
-	}
-
-	for _, peer := range state.Hosts {
-		if strings.TrimSpace(peer.ID) == strings.TrimSpace(subject.host.ID) ||
-			strings.TrimSpace(peer.MachineID) != machineID ||
-			!unifiedresources.HostnamesEquivalent(peer.Hostname, hostname) {
-			continue
-		}
+	if peer, ok := identity.duplicateHostPeer(subject); ok {
 		evidence := []string{
 			"Peer agent ID: " + strings.TrimSpace(peer.ID),
 			"Peer hostname: " + strings.TrimSpace(peer.Hostname),
@@ -1188,18 +1179,18 @@ func cloneFleetDiagnosticTime(value *time.Time) *time.Time {
 	return &cloned
 }
 
-func diagnoseAgentIdentitySplit(subject agentFleetSubject, state models.StateSnapshot) []AgentFleetDiagnosticReason {
+func diagnoseAgentIdentitySplit(subject agentFleetSubject, identity agentFleetIdentityReader) []AgentFleetDiagnosticReason {
 	if subject.hostname == "" || subject.removed {
 		return nil
 	}
 
 	if subject.host != nil && subject.docker == nil {
-		if docker, ok := findLikelyDockerPeer(subject, state.DockerHosts); ok {
+		if docker, ok := identity.dockerPeer(subject); ok {
 			return []AgentFleetDiagnosticReason{identitySplitReason("Docker", docker.ID, docker.AgentID, docker.TokenID)}
 		}
 	}
 	if subject.docker != nil && subject.host == nil {
-		if host, ok := findLikelyHostPeer(subject, state.Hosts); ok {
+		if host, ok := identity.hostPeer(subject); ok {
 			return []AgentFleetDiagnosticReason{identitySplitReason("Host", host.ID, host.ID, host.TokenID)}
 		}
 	}
@@ -1271,12 +1262,12 @@ func diagnoseProfileDeployment(
 	return reasons
 }
 
-func diagnoseProfileCapabilityDrift(subject agentFleetSubject, state models.StateSnapshot, profile models.AgentProfile) []AgentFleetDiagnosticReason {
+func diagnoseProfileCapabilityDrift(subject agentFleetSubject, state models.StateSnapshot, profile models.AgentProfile, identity agentFleetIdentityReader) []AgentFleetDiagnosticReason {
 	reasons := []AgentFleetDiagnosticReason{}
 
 	if enabled, ok := configBool(profile.Config, "enable_docker"); ok && enabled {
 		if subject.docker == nil {
-			if _, split := findLikelyDockerPeer(subject, state.DockerHosts); split {
+			if _, split := identity.dockerPeer(subject); split {
 				reasons = append(reasons, AgentFleetDiagnosticReason{
 					Code:     "docker_profile_identity_split",
 					Severity: AgentFleetStatusWarning,
@@ -1355,30 +1346,6 @@ func identitySplitReason(peerType, peerID, peerAgentID, peerTokenID string) Agen
 		Message:  "Host and workload telemetry appear to belong to the same machine but are reporting as separate agent identities.",
 		Evidence: evidence,
 	}
-}
-
-func findLikelyDockerPeer(subject agentFleetSubject, dockerHosts []models.DockerHost) (models.DockerHost, bool) {
-	for _, docker := range dockerHosts {
-		if docker.Hidden || docker.ID == subject.id {
-			continue
-		}
-		if sameAgentIdentity(subject, docker.ID, docker.AgentID, docker.Hostname, docker.TokenID) {
-			return docker, true
-		}
-	}
-	return models.DockerHost{}, false
-}
-
-func findLikelyHostPeer(subject agentFleetSubject, hosts []models.Host) (models.Host, bool) {
-	for _, host := range hosts {
-		if host.ID == subject.id {
-			continue
-		}
-		if sameAgentIdentity(subject, host.ID, host.ID, host.Hostname, host.TokenID) {
-			return host, true
-		}
-	}
-	return models.Host{}, false
 }
 
 func sameAgentIdentity(subject agentFleetSubject, id, agentID, hostname, tokenID string) bool {
