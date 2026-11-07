@@ -1204,7 +1204,7 @@ Use hours for days (`168h`), not `7d`. Invalid or shorter durations return `400`
 
 Omitting `expiresIn`, sending `null` or an empty string creates a token
 with **no expiry**. Choose a lifetime to suit the job. Editing a token does not
-change its expiry, and rotation keeps the original expiry rather than starting
+change its expiry, and rotation keeps the original [expiry](#checking-a-saved-tokens-expiry) rather than starting
 a new lifetime.
 
 ### List API Tokens
@@ -2216,3 +2216,30 @@ If the successor or original outcome cannot be established, stop and
 or re-enrol agents. Keep tokens, private response files and inventory or audit
 exports out of reports. Give only the original action, time and relevant
 locally redacted error that you already have.
+
+## Checking a saved token’s expiry
+
+Keep a working, independent administrator session. Use the
+[private-header helper](#-authentication) with a separate, already authorised
+administrator credential for this read-only request:
+
+```bash
+pulse_api GET /api/security/tokens
+```
+
+Open the saved response privately and find the intended token by its exact
+record ID, not its name. In a complete successful record, `expiresAt` gives the
+saved expiry as an RFC 3339 timestamp. A trailing `Z` means UTC. A date in the
+past according to the Pulse server’s clock means the token no longer authenticates,
+even if it still appears in API Access or the inventory. If `expiresAt` is
+absent from that record, the token has no configured expiry. A failed, partial
+or hidden record leaves expiry unknown, not unlimited. Do not widen access
+to read it.
+
+**Created** (`createdAt`) and **Last used** (`lastUsedAt`) are not expiry dates.
+A future expiry does not prove that the token still has access. Checking it
+needs no edit, rotation or test request with that token. Keep the response
+file and token metadata out of reports.
+
+Pulse-issued `action-runner:<host>` tokens can have a short activation deadline
+that Pulse clears on activation. Leave those credentials unchanged.
