@@ -76,6 +76,31 @@ def assert_login_restriction_setup(case, guide, callback):
     case.assertNotIn("else if", gates)
 
 
+def assert_configuration_sources(case, guide, configuration):
+    case.assertNotIn("locks those fields in the UI", guide)
+    case.assertNotIn("environment variables to lock the configuration", configuration)
+    case.assertNotIn("lock the corresponding UI fields", configuration)
+    setup = guide.split("### Access Control", 1)[0]
+    case.assertIn("[configuration sources](#configuration-sources)", setup)
+    section = " ".join(guide.split("### Configuration sources\n", 1)[1].split())
+    for boundary in (
+        "do not override a saved provider", "Setting `OIDC_ENABLED=false` does not disable a saved provider",
+        "`OIDC_ENABLED=true`", "provider_managed_by_environment", "HTTP 409",
+        "editable-looking form", "persisted record takes precedence", "name or ID alone",
+        "Do not delete it, add a duplicate", "active private configuration source",
+        "independent administrator recovery", "recreation/redeployment, not just a restart",
+        "Never put the client secret in a command or report", "separate browser session",
+        "does not revoke existing sessions",
+    ):
+        case.assertIn(boundary, section)
+    advanced = configuration.split("<summary><strong>Advanced: OIDC / SSO</strong></summary>", 1)[1].split("</details>", 1)[0]
+    case.assertIn("OIDC.md#configuration-sources", advanced)
+    case.assertIn("Enable the legacy provider", advanced)
+    callback = next(line for line in advanced.splitlines() if "`OIDC_REDIRECT_URL`" in line)
+    case.assertIn("<public-url>/api/oidc/callback", callback)
+    case.assertNotIn("<provider-id>", callback)
+
+
 def assert_discovery_test_scope(case, handlers):
     oidc = handlers.split("func (r *Router) testOIDCConnection(", 1)[1].split(
         "// SSO Metadata Preview", 1)[0]
@@ -160,6 +185,46 @@ def assert_refresh_source(case, auth, store):
 
 
 class OIDCSessionDocsTest(unittest.TestCase):
+    def test_configuration_sources_do_not_promise_global_field_locks(self):
+        assert_configuration_sources(self, GUIDE.read_text(),
+                                     (ROOT / "docs/CONFIGURATION.md").read_text())
+
+    def test_configuration_source_checks_reject_old_or_unsafe_advice(self):
+        guide, configuration = GUIDE.read_text(), (ROOT / "docs/CONFIGURATION.md").read_text()
+        for before, after in (
+            ("do not override a saved provider", "override every saved provider"),
+            ("persisted record\n  takes precedence", "environment record takes precedence"),
+            ("name or ID alone", "name and ID are proof"),
+            ("does not revoke existing sessions", "revokes existing sessions"),
+        ):
+            with self.subTest(regression=before):
+                self.assertIn(before, guide)
+                with self.assertRaises(AssertionError):
+                    assert_configuration_sources(self, guide.replace(before, after), configuration)
+        with self.assertRaises(AssertionError):
+            assert_configuration_sources(self, guide, configuration.replace(
+                "<public-url>/api/oidc/callback", "<public-url>/api/oidc/<provider-id>/callback"))
+
+    def test_configuration_source_advice_matches_legacy_selection_and_rejections(self):
+        oidc = (ROOT / "internal/config/oidc.go").read_text()
+        load = oidc.split("func LegacyOIDCConfigFromEnv(", 1)[1].split("// Validate", 1)[0]
+        self.assertIn('envValue("OIDC_ENABLED")', load)
+        self.assertIn("if !enabledSet || !truthyEnv(enabledRaw)", load)
+        self.assertIn('DefaultOIDCCallbackPath = "/api/oidc/callback"', oidc)
+        sources = (ROOT / "internal/config/sso.go").read_text()
+        apply = sources.split("func ApplyLegacyOIDCEnvProvider(", 1)[1].split("// GetProvider", 1)[0]
+        self.assertIn("if existing != nil {", apply)
+        self.assertIn("if existing.RuntimeManaged {\n\t\t\t*existing = *provider\n\t\t}", apply)
+        self.assertLess(apply.index("return false", apply.index("if existing != nil {")),
+                        apply.index("c.Providers = append"))
+        handlers = (ROOT / "internal/api/identity_sso_handlers.go").read_text()
+        for action in ("Update", "Delete"):
+            handler = handlers.split(f"func (r *Router) handle{action}SSOProvider(", 1)[1].split("\nfunc ", 1)[0]
+            branch = handler.split("if existing.RuntimeManaged {", 1)[1].split("\n\t}", 1)[0]
+            self.assertIn("http.StatusConflict", branch)
+            self.assertIn('"provider_managed_by_environment"', branch)
+            self.assertIn("return", branch)
+
     def test_login_allowlists_are_not_described_as_bypasses(self):
         callback = (ROOT / "internal/api/oidc_handlers.go").read_text()
         assert_login_restriction_setup(self, GUIDE.read_text(), callback)

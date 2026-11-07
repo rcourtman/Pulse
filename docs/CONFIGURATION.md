@@ -209,19 +209,18 @@ credential mechanism. See the [Docker guide](DOCKER.md) for setup and updates.
 <details>
 <summary><strong>Advanced: OIDC / SSO</strong></summary>
 
-Configure Single Sign-On in **Settings → Security → Single Sign-On**, or use environment variables to lock the configuration.
-
-See [OIDC Documentation](OIDC.md) and [Proxy Auth](PROXY_AUTH.md) for details.
-
-Environment overrides (lock the corresponding UI fields):
+Configure saved providers in **Settings → Security → Single Sign-On**. These
+variables supply only the legacy deployment-managed provider, not per-field UI
+locks. See [OIDC configuration sources](OIDC.md#configuration-sources) and
+[Proxy Auth](PROXY_AUTH.md) for the separate authentication paths.
 
 | Variable | Description |
 | ---------- | ------------- |
-| `OIDC_ENABLED` | Enable OIDC (`true`/`false`) |
+| `OIDC_ENABLED` | Enable the legacy provider (`true`/`false`) |
 | `OIDC_ISSUER_URL` | Issuer URL from your IdP |
 | `OIDC_CLIENT_ID` | Client ID |
 | `OIDC_CLIENT_SECRET` | Client secret |
-| `OIDC_REDIRECT_URL` | Override redirect URL (defaults to `<public-url>/api/oidc/<provider-id>/callback`) |
+| `OIDC_REDIRECT_URL` | Override legacy callback (default: `<public-url>/api/oidc/callback`) |
 | `OIDC_LOGOUT_URL` | Optional logout URL |
 | `OIDC_SCOPES` | Space or comma-separated scopes |
 | `OIDC_USERNAME_CLAIM` | Claim for username (default: `preferred_username`) |

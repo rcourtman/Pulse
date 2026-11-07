@@ -62,7 +62,7 @@ sign-ins, not to the separate local password login.
 | **Scopes** | Space-separated scopes. Default: `openid profile email`. |
 | **Claim Mapping** | Map `email`, `username`, and `groups` to specific token claims. |
 
-> **Note**: Setting `OIDC_*` environment variables locks those fields in the UI. See [CONFIGURATION.md](CONFIGURATION.md) for the full list of overrides.
+> **Note**: `OIDC_*` does not override saved providers. Read [configuration sources](#configuration-sources) before editing a deployment-managed provider.
 
 ### Access Control
 At sign-in, every non-empty list must match. Entries within one list are alternatives:
@@ -284,3 +284,35 @@ or revoked sessions. Once the intended settings are confirmed, use the
 [separate-session checks in Quick Start](#-quick-start) without signing out of
 your working administrator session. Keep secrets, cookies and full responses
 private.
+
+### Configuration sources
+
+Use the source that already owns the affected provider, not a replacement:
+
+- **Saved provider:** edit its existing entry in **Settings → Security → Single
+  Sign-On**. The `OIDC_*` variables do not override a saved provider, including
+  its group-role mappings and CA bundle. Setting `OIDC_ENABLED=false` does not
+  disable a saved provider.
+- **Deployment-managed provider:** `OIDC_ENABLED=true`, with the required issuer
+  and client configuration, can supply the legacy provider. An edit, toggle or
+  deletion returns **Provider is managed by OIDC environment variables**
+  (`provider_managed_by_environment`, HTTP 409). An editable-looking form does
+  not mean a save can override that source. Use the existing private deployment
+  configuration instead. The [variable list](CONFIGURATION.md) applies to this
+  provider, not to every provider in Settings.
+- **Migrated provider:** an older saved OIDC configuration can also have the ID
+  `legacy-oidc`. If that ID already has a saved provider, the persisted record
+  takes precedence over the environment provider. Its name or ID alone does
+  not establish that it is deployment-managed. Do not delete it, add a duplicate
+  or remove configuration files to make environment settings take effect.
+
+Change only the active private configuration source during a suitable
+maintenance window. Preserve the provider identity, registered callback, access
+restrictions, credentials and data. Keep an independent administrator recovery
+path. Apply a managed environment change through the existing deployment:
+Docker needs recreation/redeployment, not just a restart. Never put the client
+secret in a command or report. Verify sign-in and permissions in a separate
+browser session as in [Quick Start](#-quick-start).
+
+Changing either source does not revoke existing sessions. Follow
+[Changing or removing access](#changing-or-removing-access) for that separate job.
