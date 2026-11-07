@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import type { APITokenRecord } from '@/api/security';
 import type { Resource } from '@/types/resource';
+import { eventBus } from '@/stores/events';
 import { notificationStore } from '@/stores/notifications';
 import { dismissTokenReveal, useTokenRevealState } from '@/stores/tokenReveal';
 import { clearAuth, getOrgID, setApiToken, setOrgID } from '@/utils/apiClient';
@@ -196,7 +197,12 @@ describe('API token recovery through the real HTTP client', () => {
       expectUnknown();
       expect(screen.getByRole('button', { name: 'Generate' })).toBeDisabled();
       fireEvent.click(screen.getByRole('button', { name: 'Check token inventory' }));
-      await waitFor(() => expect(screen.queryAllByText('Unknown')).toHaveLength(0));
+      // Loading also replaces Unknown. Wait for the completed recovery, not
+      // merely for the absence of the earlier unknown-state text.
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: 'Generate' })).not.toBeDisabled(),
+      );
+      expect(screen.queryAllByText('Unknown')).toHaveLength(0);
       expect(requests()).toEqual([
         ['GET', '/api/security/tokens'],
         [method, writePath],
@@ -254,14 +260,12 @@ describe('API token recovery through the real HTTP client', () => {
   );
 
   it('keeps a refused write refused when a CSRF response would otherwise invite replay', async () => {
-    fetchMock
-      .mockResolvedValueOnce(json({ tokens: [original] }))
-      .mockResolvedValueOnce(
-        new Response('{"error":"permission_denied"}', {
-          status: 403,
-          headers: { 'X-CSRF-Token': 'synthetic-refreshed-csrf' },
-        }),
-      );
+    fetchMock.mockResolvedValueOnce(json({ tokens: [original] })).mockResolvedValueOnce(
+      new Response('{"error":"permission_denied"}', {
+        status: 403,
+        headers: { 'X-CSRF-Token': 'synthetic-refreshed-csrf' },
+      }),
+    );
     await confirm('rename', await ready());
     await waitFor(() => expect(notificationStore.error).toHaveBeenCalledTimes(1));
     expect(requests()).toEqual([
@@ -273,6 +277,67 @@ describe('API token recovery through the real HTTP client', () => {
     expect(screen.getByRole('article', { name: `API token ${original.name}` })).toBeInTheDocument();
     expect(notificationStore.success).not.toHaveBeenCalled();
     expectNoRevocations();
+  });
+
+  it('does not replace a refused organisation with the server-selected default inventory', async () => {
+    fetchMock
+      .mockResolvedValueOnce(json({ error: 'invalid_org' }, 400))
+      .mockResolvedValueOnce(json({ tokens: [original] }));
+    render(() => <APITokenManager canManage />);
+    const retry = await screen.findByRole('button', { name: 'Retry token inventory' });
+    expectUnknown();
+    expect(getOrgID()).toBe('org-a');
+    expect(requests()).toEqual([['GET', '/api/security/tokens']]);
+    fireEvent.click(retry);
+    await screen.findByRole('article', { name: `API token ${original.name}` });
+    expect(requests()).toEqual([
+      ['GET', '/api/security/tokens'],
+      ['GET', '/api/security/tokens'],
+    ]);
+    for (const [, options] of fetchMock.mock.calls) {
+      expect(options?.headers).toMatchObject({ 'X-Pulse-Org-ID': 'org-a' });
+    }
+    expect(getOrgID()).toBe('org-a');
+    expectNoRevocations();
+  });
+
+  it('ignores a late HTTP inventory after the organisation has changed', async () => {
+    let finishOldRead!: (response: Response) => void;
+    const oldRead = new Promise<Response>((resolve) => {
+      finishOldRead = resolve;
+    });
+    const oldResponse = json({ tokens: [original] });
+    const oldText = vi.spyOn(oldResponse, 'text');
+    const other = { ...original, id: 'token/other', name: 'Org B collector' };
+    fetchMock.mockReturnValueOnce(oldRead).mockResolvedValueOnce(json({ tokens: [other] }));
+    render(() => <APITokenManager canManage />);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    setOrgID('org-b');
+    eventBus.emit('org_switched', 'org-b');
+    await screen.findByRole('article', { name: `API token ${other.name}` });
+    expect(fetchMock.mock.calls[0][1]?.signal?.aborted).toBe(true);
+    // Deliberately let the old fixture ignore abort: fetch cancellation alone
+    // is not proof that a late decoded response cannot replace the new list.
+    finishOldRead(oldResponse);
+    await waitFor(() => expect(oldText).toHaveBeenCalledTimes(1));
+    await oldText.mock.results[0].value;
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    expect(screen.getByRole('article', { name: `API token ${other.name}` })).toHaveAttribute(
+      'data-api-token-card',
+      other.id,
+    );
+    expect(
+      screen.queryByRole('article', { name: `API token ${original.name}` }),
+    ).not.toBeInTheDocument();
+    expect(requests()).toEqual([
+      ['GET', '/api/security/tokens'],
+      ['GET', '/api/security/tokens'],
+    ]);
+    expect(fetchMock.mock.calls[0][1]?.headers).toMatchObject({ 'X-Pulse-Org-ID': 'org-a' });
+    expect(fetchMock.mock.calls[1][1]?.headers).toMatchObject({ 'X-Pulse-Org-ID': 'org-b' });
+    expect(getOrgID()).toBe('org-b');
+    expect(onChanged).not.toHaveBeenCalled();
+    expect(reveal()).toBeNull();
   });
 
   it.each([
