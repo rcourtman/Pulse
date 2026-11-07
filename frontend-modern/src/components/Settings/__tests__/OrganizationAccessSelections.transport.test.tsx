@@ -327,7 +327,7 @@ describe('organization access selections through rendered controls and real tran
     fireEvent.change(screen.getByRole('combobox', { name: 'Invite role' }), {
       target: { value: 'editor' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Invite', exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Invite' }));
     await expectSavedReread();
     expectWrite(`${orgPath}/members`, 'POST', { userId, role: 'editor' });
     expect(members).toEqual(originalMembers);
@@ -392,7 +392,7 @@ describe('organization access selections through rendered controls and real tran
     ).toBeInTheDocument();
     expect(orgReads()).toHaveLength(1);
     expect(screen.queryAllByRole('combobox', { name: /^Role for / })).toHaveLength(0);
-    expect(screen.queryByRole('button', { name: 'Invite', exact: true })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Invite' })).toBeNull();
     expectWrite(`${orgPath}/members/${encodeURIComponent(selected)}`, 'DELETE');
     fireEvent.click(within(warning).getByRole('button', { name: 'Reload access' }));
     await expectSavedReread();
