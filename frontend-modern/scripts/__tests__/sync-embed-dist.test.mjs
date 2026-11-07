@@ -171,6 +171,9 @@ function prepareGatedCompiler(f, { initial, fail }) {
 const fs = require('node:fs');
 const path = require('node:path');
 const config = JSON.parse(fs.readFileSync(path.join(process.cwd(), '..', 'compiler-fixture.json')));
+// Honor the real Vite CLI's output selection, including staged producer builds.
+const outDirIndex = process.argv.indexOf('--outDir');
+config.source = outDirIndex === -1 ? config.source : process.argv[outDirIndex + 1];
 const write = (files) => {
   fs.rmSync(config.source, { recursive: true, force: true });
   for (const [name, content] of Object.entries(files)) {
@@ -181,7 +184,7 @@ const write = (files) => {
 };
 (async () => {
   write(config.initialFiles);
-  fs.writeFileSync(config.started, 'compiler holds the production build lock');
+  fs.writeFileSync(config.started, JSON.stringify({ output: config.source }));
   const deadline = Date.now() + 10000;
   while (!fs.existsSync(config.release)) {
     if (Date.now() > deadline) throw new Error('Fixture compiler gate timed out');
@@ -341,6 +344,7 @@ describe('copy failures and irregular staged output', () => {
     () => {
       const f = fixture(validFiles);
       const previous = tree(f.target);
+      const completedSource = tree(f.source);
       const unreadable = path.join(f.source, 'assets', 'unreadable.js');
       writeFileSync(unreadable, 'synthetic unreadable asset');
       chmodSync(unreadable, 0o000);
@@ -405,7 +409,9 @@ describe('standalone sync waits for its actual build producer', () => {
       let sync;
       try {
         await waitForMarker(gate.started, build);
-        expect(existsSync(f.source)).toBe(initial === 'present');
+        const { output } = JSON.parse(readFileSync(gate.started, 'utf8'));
+        expect(existsSync(output)).toBe(initial === 'present');
+        expect(tree(f.source)).toEqual(completedSource);
         sync = startNode(f.root, ['--import', pathToFileURL(gate.observer).href, gate.sync]);
         await waitForMarker(gate.blocked, sync);
         expect(sync.settled()).toBe(false);
@@ -429,7 +435,7 @@ describe('standalone sync waits for its actual build producer', () => {
   );
 
   it('retains the usable embed when the held compiler fails and leaves incomplete output', async () => {
-    const f = fixture(validFiles);
+    const f = fixture(oldFiles);
     const previous = tree(f.target);
     const gate = prepareGatedCompiler(f, { initial: 'present', fail: true });
     const build = startNode(f.root, [gate.builder]);
@@ -446,12 +452,14 @@ describe('standalone sync waits for its actual build producer', () => {
     }
     expect(build.result).toMatchObject({ code: 1, signal: null, error: null });
     expect(build.result.stderr).toContain('exited with code 17');
-    expect(sync.result).toMatchObject({ code: 1, signal: null, error: null });
-    expect(sync.result.stderr).toContain('frontend build output incomplete');
-    expect(sync.result.stderr).toContain('index.html');
+    // The failed producer never replaced dist. A waiting standalone sync may
+    // still use that last successful build, rather than failed compiler bytes.
+    expect(sync.result).toMatchObject({ code: 0, signal: null, error: null });
+    expect(sync.result.stderr).toBe('');
     expect(build.result.stdout).not.toContain('Synced frontend embed assets');
-    expect(sync.result.stdout).not.toContain('Synced frontend embed assets');
+    expect(sync.result.stdout).toContain('Synced frontend embed assets');
     expect(tree(f.target)).toEqual(previous);
+    expect(tree(f.source)).toEqual(previous);
     expectNoDebris(f);
   }, 20_000);
 });

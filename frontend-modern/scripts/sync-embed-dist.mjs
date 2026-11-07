@@ -24,7 +24,7 @@ async function ensureSourceExists() {
   }
 }
 
-async function validateStagedOutput(stagingDir) {
+export async function validateBuildOutput(stagingDir) {
   const incomplete = (requirement, cause) =>
     new Error(
       `frontend build output incomplete: ${requirement}. Rebuild the frontend before syncing; existing embedded assets were not replaced.`,
@@ -94,7 +94,7 @@ async function publishDirAtomically() {
     await cp(sourceDir, stagingDir, { recursive: true });
     // Validate the owned copy, not the mutable dist directory checked before
     // waiting for the lock. Do not move the usable target until it passes.
-    await validateStagedOutput(stagingDir);
+    await validateBuildOutput(stagingDir);
     try {
       await rename(targetDir, backupDir);
       replacedExistingTarget = true;
