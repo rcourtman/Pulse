@@ -202,6 +202,11 @@ type OrganizationShare struct {
 
 // Organization represents a distinct tenant in the system.
 type Organization struct {
+	// PersistenceVersion binds a read-modify-write save to the metadata it read.
+	// It is internal optimistic-concurrency bookkeeping, never an API field or
+	// an access grant. A newly constructed organization can only create metadata.
+	PersistenceVersion string `json:"-"`
+
 	// ID is the unique identifier for the organization (e.g., "customer-a").
 	// It is used as the directory name for data isolation.
 	ID string `json:"id"`

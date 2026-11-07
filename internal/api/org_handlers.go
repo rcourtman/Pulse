@@ -286,7 +286,7 @@ func (h *OrgHandlers) HandleCreateOrg(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.saveOrganization(org); err != nil {
-		writeErrorResponse(w, http.StatusInternalServerError, "create_failed", "Failed to create organization", nil)
+		writeOrganizationSaveError(w, err, "create_failed", "Failed to create organization")
 		return
 	}
 
@@ -370,7 +370,7 @@ func (h *OrgHandlers) HandleUpdateOrg(w http.ResponseWriter, r *http.Request) {
 
 	org.DisplayName = req.DisplayName
 	if err := h.saveOrganization(org); err != nil {
-		writeErrorResponse(w, http.StatusInternalServerError, "update_failed", "Failed to update organization", nil)
+		writeOrganizationSaveError(w, err, "update_failed", "Failed to update organization")
 		return
 	}
 
@@ -593,7 +593,7 @@ func (h *OrgHandlers) HandleInviteMember(w http.ResponseWriter, r *http.Request)
 			org.PendingInvitations = append(org.PendingInvitations, invitation)
 		}
 		if err := h.saveOrganization(org); err != nil {
-			writeErrorResponse(w, http.StatusInternalServerError, "invite_failed", "Failed to update organization members", nil)
+			writeOrganizationSaveError(w, err, "invite_failed", "Failed to update organization members")
 			return
 		}
 
@@ -605,7 +605,7 @@ func (h *OrgHandlers) HandleInviteMember(w http.ResponseWriter, r *http.Request)
 	}
 
 	if err := h.saveOrganization(org); err != nil {
-		writeErrorResponse(w, http.StatusInternalServerError, "invite_failed", "Failed to update organization members", nil)
+		writeOrganizationSaveError(w, err, "invite_failed", "Failed to update organization members")
 		return
 	}
 
@@ -672,7 +672,7 @@ func (h *OrgHandlers) HandleRemoveMember(w http.ResponseWriter, r *http.Request)
 
 	org.Members = nextMembers
 	if err := h.saveOrganization(org); err != nil {
-		writeErrorResponse(w, http.StatusInternalServerError, "member_remove_failed", "Failed to update organization members", nil)
+		writeOrganizationSaveError(w, err, "member_remove_failed", "Failed to update organization members")
 		return
 	}
 
@@ -760,7 +760,7 @@ func (h *OrgHandlers) HandleRevokeInvitation(w http.ResponseWriter, r *http.Requ
 
 	org.PendingInvitations = append(org.PendingInvitations[:index], org.PendingInvitations[index+1:]...)
 	if err := h.saveOrganization(org); err != nil {
-		writeErrorResponse(w, http.StatusInternalServerError, "invite_failed", "Failed to update organization invitations", nil)
+		writeOrganizationSaveError(w, err, "invite_failed", "Failed to update organization invitations")
 		return
 	}
 
@@ -852,7 +852,7 @@ func (h *OrgHandlers) HandleAcceptMyInvitation(w http.ResponseWriter, r *http.Re
 		if invitationIndex := findOrganizationInvitationIndex(org.PendingInvitations, username); invitationIndex >= 0 {
 			org.PendingInvitations = append(org.PendingInvitations[:invitationIndex], org.PendingInvitations[invitationIndex+1:]...)
 			if err := h.saveOrganization(org); err != nil {
-				writeErrorResponse(w, http.StatusInternalServerError, "invite_accept_failed", "Failed to update organization membership", nil)
+				writeOrganizationSaveError(w, err, "invite_accept_failed", "Failed to update organization membership")
 				return
 			}
 		}
@@ -882,7 +882,7 @@ func (h *OrgHandlers) HandleAcceptMyInvitation(w http.ResponseWriter, r *http.Re
 	})
 	org.PendingInvitations = append(org.PendingInvitations[:invitationIndex], org.PendingInvitations[invitationIndex+1:]...)
 	if err := h.saveOrganization(org); err != nil {
-		writeErrorResponse(w, http.StatusInternalServerError, "invite_accept_failed", "Failed to update organization membership", nil)
+		writeOrganizationSaveError(w, err, "invite_accept_failed", "Failed to update organization membership")
 		return
 	}
 
@@ -927,7 +927,7 @@ func (h *OrgHandlers) HandleDeclineMyInvitation(w http.ResponseWriter, r *http.R
 
 	org.PendingInvitations = append(org.PendingInvitations[:invitationIndex], org.PendingInvitations[invitationIndex+1:]...)
 	if err := h.saveOrganization(org); err != nil {
-		writeErrorResponse(w, http.StatusInternalServerError, "invite_decline_failed", "Failed to update organization invitations", nil)
+		writeOrganizationSaveError(w, err, "invite_decline_failed", "Failed to update organization invitations")
 		return
 	}
 
@@ -1067,7 +1067,7 @@ func (h *OrgHandlers) HandleAcceptIncomingShare(w http.ResponseWriter, r *http.R
 	sourceOrg.SharedResources[shareIndex] = share
 
 	if err := h.saveOrganization(sourceOrg); err != nil {
-		writeErrorResponse(w, http.StatusInternalServerError, "share_accept_failed", "Failed to accept incoming share", nil)
+		writeOrganizationSaveError(w, err, "share_accept_failed", "Failed to accept incoming share")
 		return
 	}
 
@@ -1123,7 +1123,7 @@ func (h *OrgHandlers) HandleDeclineIncomingShare(w http.ResponseWriter, r *http.
 	sourceOrg.SharedResources = nextShares
 
 	if err := h.saveOrganization(sourceOrg); err != nil {
-		writeErrorResponse(w, http.StatusInternalServerError, "share_decline_failed", "Failed to remove incoming share", nil)
+		writeOrganizationSaveError(w, err, "share_decline_failed", "Failed to remove incoming share")
 		return
 	}
 
@@ -1223,7 +1223,7 @@ func (h *OrgHandlers) HandleCreateShare(w http.ResponseWriter, r *http.Request) 
 			}
 			sourceOrg.SharedResources = normalizedShares
 			if err := h.saveOrganization(sourceOrg); err != nil {
-				writeErrorResponse(w, http.StatusInternalServerError, "share_create_failed", "Failed to save organization share", nil)
+				writeOrganizationSaveError(w, err, "share_create_failed", "Failed to save organization share")
 				return
 			}
 			writeJSON(w, http.StatusOK, normalizedShares[i])
@@ -1245,7 +1245,7 @@ func (h *OrgHandlers) HandleCreateShare(w http.ResponseWriter, r *http.Request) 
 	sourceOrg.SharedResources = append(normalizedShares, share)
 
 	if err := h.saveOrganization(sourceOrg); err != nil {
-		writeErrorResponse(w, http.StatusInternalServerError, "share_create_failed", "Failed to save organization share", nil)
+		writeOrganizationSaveError(w, err, "share_create_failed", "Failed to save organization share")
 		return
 	}
 
@@ -1302,7 +1302,7 @@ func (h *OrgHandlers) HandleDeleteShare(w http.ResponseWriter, r *http.Request) 
 
 	sourceOrg.SharedResources = nextShares
 	if err := h.saveOrganization(sourceOrg); err != nil {
-		writeErrorResponse(w, http.StatusInternalServerError, "share_delete_failed", "Failed to delete organization share", nil)
+		writeOrganizationSaveError(w, err, "share_delete_failed", "Failed to delete organization share")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -1739,7 +1739,7 @@ func (h *OrgHandlers) handleAddDefaultOrgMember(w http.ResponseWriter, r *http.R
 		org.PendingInvitations = append(org.PendingInvitations[:index], org.PendingInvitations[index+1:]...)
 	}
 	if err := h.persistence.SaveOrganization(org); err != nil {
-		writeErrorResponse(w, http.StatusInternalServerError, "invite_failed", "Failed to update organization members", nil)
+		writeOrganizationSaveError(w, err, "invite_failed", "Failed to update organization members")
 		return
 	}
 	log.Info().
@@ -1782,7 +1782,7 @@ func (h *OrgHandlers) handleRemoveDefaultOrgMember(w http.ResponseWriter, r *htt
 		org.OwnerUserID = ""
 	}
 	if err := h.persistence.SaveOrganization(org); err != nil {
-		writeErrorResponse(w, http.StatusInternalServerError, "member_remove_failed", "Failed to update organization members", nil)
+		writeOrganizationSaveError(w, err, "member_remove_failed", "Failed to update organization members")
 		return
 	}
 	log.Info().
@@ -1794,27 +1794,18 @@ func (h *OrgHandlers) handleRemoveDefaultOrgMember(w http.ResponseWriter, r *htt
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// saveOrganization saves a handler's organization snapshot. The default
-// organization's members and owner are an access grant changed only under
-// defaultOrgMembershipMu, so a save from an older snapshot, such as a share or
-// invitation change, keeps the current members instead of restoring revoked
-// ones.
+// saveOrganization refuses an obsolete complete snapshot, including the default
+// organization. Merging just its members would still overwrite newer pending
+// invitations, shares or lifecycle decisions. A conflict requires a fresh read
+// and intentional action; it never replays a write or recreates a grant.
 func (h *OrgHandlers) saveOrganization(org *models.Organization) error {
-	if org == nil || org.ID != "default" {
-		return h.persistence.SaveOrganization(org)
-	}
-	defaultOrgMembershipMu.Lock()
-	defer defaultOrgMembershipMu.Unlock()
-	current, err := h.persistence.LoadOrganizationStrict("default")
-	switch {
-	case err == nil:
-		org.Members = current.Members
-		org.OwnerUserID = current.OwnerUserID
-	case errors.Is(err, os.ErrNotExist):
-		org.Members = nil
-		org.OwnerUserID = ""
-	default:
-		return err
-	}
 	return h.persistence.SaveOrganization(org)
+}
+
+func writeOrganizationSaveError(w http.ResponseWriter, err error, code, message string) {
+	if errors.Is(err, config.ErrOrganizationChanged) {
+		writeErrorResponse(w, http.StatusConflict, "organization_changed", "Organization changed while this action was pending. Reload and review it before trying again.", nil)
+		return
+	}
+	writeErrorResponse(w, http.StatusInternalServerError, code, message, nil)
 }

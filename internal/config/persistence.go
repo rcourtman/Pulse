@@ -388,6 +388,8 @@ func (c *ConfigPersistence) GetConfigDir() string {
 
 // LoadOrganization loads the organization metadata from org.json.
 func (c *ConfigPersistence) LoadOrganization() (*models.Organization, error) {
+	unlock := lockOrganizationFile(c.orgFile)
+	defer unlock()
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -403,23 +405,52 @@ func (c *ConfigPersistence) LoadOrganization() (*models.Organization, error) {
 	if err := json.Unmarshal(data, &org); err != nil {
 		return nil, fmt.Errorf("failed to parse org file: %w", err)
 	}
+	org.PersistenceVersion = organizationVersion(c.orgFile, data)
 
 	return &org, nil
 }
 
-// SaveOrganization saves the organization metadata to org.json.
+// SaveOrganization publishes organization metadata only if the snapshot it
+// loaded is still current. New objects create metadata, never overwrite it.
 func (c *ConfigPersistence) SaveOrganization(org *models.Organization) error {
+	unlock := lockOrganizationFile(c.orgFile)
+	defer unlock()
+	return c.saveOrganization(org)
+}
+
+// saveOrganization requires the shared organization-file lock. Multi-tenant
+// saves acquire it before resolving persistence, so a late save cannot recreate
+// an organization deleted after the caller loaded its snapshot.
+func (c *ConfigPersistence) saveOrganization(org *models.Organization) error {
+	if org == nil {
+		return fmt.Errorf("organization is required")
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
+	current, err := c.fs.ReadFile(c.orgFile)
+	switch {
+	case err == nil:
+		if org.PersistenceVersion != organizationVersion(c.orgFile, current) {
+			return ErrOrganizationChanged
+		}
+	case os.IsNotExist(err):
+		if org.PersistenceVersion != "" {
+			return ErrOrganizationChanged
+		}
+	default:
+		return fmt.Errorf("read current organization: %w", err)
+	}
 
 	data, err := json.MarshalIndent(org, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to serialize org: %w", err)
 	}
 
-	if err := c.fs.WriteFile(c.orgFile, data, 0600); err != nil {
+	if err := writeConfigFileAtomic(c.fs, c.orgFile, data, 0600); err != nil {
 		return fmt.Errorf("failed to write org file: %w", err)
 	}
+	org.PersistenceVersion = organizationVersion(c.orgFile, data)
 
 	log.Debug().Str("org_id", org.ID).Msg("Saved organization metadata")
 	return nil

@@ -258,16 +258,18 @@ func TestHandlePublicMagicLinkVerifyRejectsRemovedOrganizationMember(t *testing.
 		t.Fatalf("GenerateToken: %v", err)
 	}
 
-	if err := persistence.SaveOrganization(&models.Organization{
-		ID:          "org_magic_removed",
-		DisplayName: "Magic Removed",
-		CreatedAt:   now,
-		OwnerUserID: "u_other_owner",
-		OwnerEmail:  "other@example.com",
-		Members: []models.OrganizationMember{
-			{UserID: "u_other_owner", Email: "other@example.com", Role: models.OrgRoleOwner, AddedAt: now},
-		},
-	}); err != nil {
+	// Withdrawal is an intentional edit of current saved metadata, not an
+	// unversioned replacement that the snapshot guard must refuse.
+	current, err := persistence.LoadOrganizationStrict("org_magic_removed")
+	if err != nil {
+		t.Fatalf("LoadOrganizationStrict before removal: %v", err)
+	}
+	current.OwnerUserID = "u_other_owner"
+	current.OwnerEmail = "other@example.com"
+	current.Members = []models.OrganizationMember{
+		{UserID: "u_other_owner", Email: "other@example.com", Role: models.OrgRoleOwner, AddedAt: now},
+	}
+	if err := persistence.SaveOrganization(current); err != nil {
 		t.Fatalf("SaveOrganization removed: %v", err)
 	}
 
@@ -284,5 +286,14 @@ func TestHandlePublicMagicLinkVerifyRejectsRemovedOrganizationMember(t *testing.
 		if cookie.Name == cookieNameSession {
 			t.Fatalf("did not expect session cookie for removed member")
 		}
+	}
+	saved, err := persistence.LoadOrganizationStrict("org_magic_removed")
+	if err != nil {
+		t.Fatalf("LoadOrganizationStrict after refused sign-in: %v", err)
+	}
+	if saved.OwnerUserID != current.OwnerUserID || saved.OwnerEmail != current.OwnerEmail || len(saved.Members) != 1 ||
+		saved.GetMemberRoleForPrincipal("u_other_owner", "other@example.com") != models.OrgRoleOwner ||
+		saved.GetMemberRoleForPrincipal("u_owner_magic", "owner@example.com") != "" {
+		t.Fatal("refused magic link must preserve the saved withdrawal and current owner")
 	}
 }
