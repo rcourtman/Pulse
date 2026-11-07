@@ -369,68 +369,78 @@ describe('SSO confirmation withdrawal before HTTP dispatch', () => {
         change,
       })),
     ),
-  )('never dispatches $operation after $change changes during preparation', async ({ operation, change }) => {
-    const { state, view, changed, changeUser, withdraw } = mount();
-    const selected = await prepare(state, operation);
-    const saving = submit(state, operation, selected);
-    await waitFor(() => expect(healthReads()).toHaveLength(1));
-    if (change === 'organisation') switchOrg();
-    if (change === 'user') changeUser();
-    if (change === 'permission') withdraw();
-    if (change === 'unmount') view.unmount();
-    await settle();
-    finishPreparation();
-    // An erroneous dispatch must also settle so the assertion reports the
-    // actual write, not merely a timeout waiting for the deliberately held reply.
-    reply.resolve(json({}));
-    await saving;
-    expect(writes()).toHaveLength(0);
-    expect(saved).toEqual([provider('oidc')]);
-    expect(state.showModal()).toBe(false);
-    expect(state.deleteConfirm()).toBeNull();
-    expect(state.form.oidcClientSecret).toBe('');
-    expect(state.unconfirmedChange()).toBeNull();
-    expect(state.mutating()).toBe(false);
-    expect(notices.success).not.toHaveBeenCalled();
-    expect(notices.error).not.toHaveBeenCalled();
-    expect(changed).not.toHaveBeenCalled();
-    expect(healthReads()).toHaveLength(1);
-    if (change !== 'unmount') {
-      await loaded(state);
-      expect(inventoryReads()).toHaveLength(2);
-      expect(state.canEdit()).toBe(change !== 'permission');
-    } else {
-      eventBus.emit('org_switched', 'north');
+  )(
+    'never dispatches $operation after $change changes during preparation',
+    async ({ operation, change }) => {
+      const { state, view, changed, changeUser, withdraw } = mount();
+      const selected = await prepare(state, operation);
+      const saving = submit(state, operation, selected);
+      await waitFor(() => expect(healthReads()).toHaveLength(1));
+      if (change === 'organisation') switchOrg();
+      if (change === 'user') changeUser();
+      if (change === 'permission') withdraw();
+      if (change === 'unmount') view.unmount();
       await settle();
-      expect(inventoryReads()).toHaveLength(1);
-      expect(state.providers()).toEqual([]);
-    }
-    if (change === 'organisation') {
-      expect(state.providers()[0].name).toBe('South provider');
-      expect(inventoryReads()[1][1]?.headers).toMatchObject({ 'X-Pulse-Org-ID': 'south' });
-    }
-  });
+      finishPreparation();
+      // An erroneous dispatch must also settle so the assertion reports the
+      // actual write, not merely a timeout waiting for the deliberately held reply.
+      reply.resolve(json({}));
+      await saving;
+      expect(writes()).toHaveLength(0);
+      expect(saved).toEqual([provider('oidc')]);
+      expect(state.showModal()).toBe(false);
+      expect(state.form.oidcClientSecret).toBe('');
+      expect(state.unconfirmedChange()).toBeNull();
+      expect(state.mutating()).toBe(false);
+      expect(notices.success).not.toHaveBeenCalled();
+      expect(notices.error).not.toHaveBeenCalled();
+      expect(changed).not.toHaveBeenCalled();
+      expect(healthReads()).toHaveLength(1);
+      if (change !== 'unmount') {
+        expect(state.deleteConfirm()).toBeNull();
+        await loaded(state);
+        expect(inventoryReads()).toHaveLength(2);
+        expect(state.canEdit()).toBe(change !== 'permission');
+      } else {
+        // Detached signals need not be reset, but can never readmit this owner.
+        await submit(state, operation, selected);
+        expect(state.canEdit()).toBe(false);
+        expect(writes()).toHaveLength(0);
+        eventBus.emit('org_switched', 'north');
+        await settle();
+        expect(inventoryReads()).toHaveLength(1);
+        expect(state.providers()).toEqual([]);
+      }
+      if (change === 'organisation') {
+        expect(state.providers()[0].name).toBe('South provider');
+        expect(inventoryReads()[1][1]?.headers).toMatchObject({ 'X-Pulse-Org-ID': 'south' });
+      }
+    },
+  );
 
-  it.each(operations)('rechecks the admitted org for %s even before the UI event arrives', async (operation) => {
-    const { state, changed } = mount();
-    const selected = await prepare(state, operation);
-    const saving = submit(state, operation, selected);
-    await waitFor(() => expect(healthReads()).toHaveLength(1));
-    switchOrg(false);
-    finishPreparation();
-    reply.resolve(json({}));
-    await saving;
-    expect(writes()).toHaveLength(0);
-    expect(saved).toEqual([provider('oidc')]);
-    expect(getOrgID()).toBe('south');
-    expect(state.canManage()).toBe(false);
-    expect(notices.success).not.toHaveBeenCalled();
-    expect(notices.error).not.toHaveBeenCalled();
-    expect(changed).not.toHaveBeenCalled();
-    eventBus.emit('org_switched', 'south');
-    await loaded(state);
-    expect(state.providers()[0].name).toBe('South provider');
-    expect(state.showModal()).toBe(false);
-    expect(state.canEdit()).toBe(true);
-  });
+  it.each(operations)(
+    'rechecks the admitted org for %s even before the UI event arrives',
+    async (operation) => {
+      const { state, changed } = mount();
+      const selected = await prepare(state, operation);
+      const saving = submit(state, operation, selected);
+      await waitFor(() => expect(healthReads()).toHaveLength(1));
+      switchOrg(false);
+      finishPreparation();
+      reply.resolve(json({}));
+      await saving;
+      expect(writes()).toHaveLength(0);
+      expect(saved).toEqual([provider('oidc')]);
+      expect(getOrgID()).toBe('south');
+      expect(state.canManage()).toBe(false);
+      expect(notices.success).not.toHaveBeenCalled();
+      expect(notices.error).not.toHaveBeenCalled();
+      expect(changed).not.toHaveBeenCalled();
+      eventBus.emit('org_switched', 'south');
+      await loaded(state);
+      expect(state.providers()[0].name).toBe('South provider');
+      expect(state.showModal()).toBe(false);
+      expect(state.canEdit()).toBe(true);
+    },
+  );
 });
