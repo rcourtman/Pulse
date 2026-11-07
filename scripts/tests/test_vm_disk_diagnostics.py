@@ -71,7 +71,9 @@ def bash_examples(section):
 # Record every attempted operation, including prohibited ones. The timeout
 # adapter checks the helper's real deadline arguments. Deadline controls use
 # real coreutils timeout and pidfds for only their synthetic local readers.
-TOOL = '''#!/usr/bin/env python3
+# Only the command double skips site startup. Its real response-collector exec
+# below keeps the helper's original argv, including the -I isolation control.
+TOOL = f'#!{REAL_PYTHON} -IS\n' + '''\
 import json, os, pathlib, signal, subprocess, sys, time
 name = pathlib.Path(sys.argv[0]).name
 args = sys.argv[1:]
@@ -218,10 +220,9 @@ class VMDiskDiagnosticsTest(unittest.TestCase):
                 if name == missing:
                     continue
                 tool = root / name
-                # The collector adapter is itself named python3. Pin the
-                # fixture interpreter so /usr/bin/env cannot recurse through
-                # that adapter instead of ever executing the fake qm.
-                tool.write_text(TOOL.replace("/usr/bin/env python3", f"{REAL_PYTHON} -I"))
+                # In particular, the python3 adapter cannot recurse through
+                # itself or load unrelated site hooks before running the double.
+                tool.write_text(TOOL)
                 tool.chmod(0o700)
             env = dict(os.environ, VM_FIXTURE=str(root), REAL_BASH=BASH,
                        REAL_TIMEOUT=REAL_TIMEOUT, REAL_PYTHON=REAL_PYTHON,
@@ -273,6 +274,29 @@ class VMDiskDiagnosticsTest(unittest.TestCase):
             if call["name"] == "python3":
                 self.assertEqual(call["args"][:2], ["-I", "-c"])
                 self.assertIn(call["args"][3], (str(STATUS_LIMIT), str(CONFIG_LIMIT)))
+
+    def test_fixture_adapters_use_selected_isolated_no_site_python(self):
+        # Assert from inside every generated adapter, not just its shebang.
+        # The documented sudo path exercises all five admitted command doubles.
+        checked_tool = TOOL.replace(
+            "\n", "\nimport sys\n"
+            f"assert sys.executable == {REAL_PYTHON!r}\n"
+            "assert sys.flags.isolated and sys.flags.no_site\n", 1)
+        recipe = bash_examples(guide_section(DOC.read_text(), "Passive host preflight"))[0]
+        with tempfile.TemporaryDirectory() as temporary:
+            startup = Path(temporary)
+            (startup / "python3").write_text("#!/bin/sh\nexit 29\n")
+            (startup / "python3").chmod(0o700)
+            (startup / "sitecustomize.py").write_text("raise SystemExit(29)\n")
+            environment = dict(PATH=f"{startup}{os.pathsep}{os.environ['PATH']}",
+                               PYTHONPATH=str(startup), PYTHONHOME=str(startup / "missing-home"))
+            with mock.patch(f"{__name__}.TOOL", checked_tool), \
+                    mock.patch.dict(os.environ, environment):
+                result, calls = self.exercise(recipe=recipe)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assert_passive(calls)
+        self.assertEqual({call["name"] for call in calls},
+                         {"sudo", "bash", "timeout", "qm", "python3"})
 
     def test_oversized_reads_fail_before_interpreting_partial_configuration(self):
         cases = [
@@ -523,11 +547,13 @@ class VMDiskDiagnosticsTest(unittest.TestCase):
         # Only these seven fixed, wait-bound synthetic controls overlap.
         # exercise() owns a distinct directory/environment and
         # run_owned_preflight() owns a session and exact reader pidfd per case.
+        # All seven cases are wait-bound and independent: admit one fixed wave,
+        # not three waves of three that spend 30s waiting for 10s deadlines.
         # No process-global mocks or arbitrary suites run concurrently. Keep
         # each real 10s collection deadline, 14s assertion and cleanup unchanged.
         # Collect every verdict on the test thread, even after a case raises;
         # exiting the executor drains all submitted work.
-        with ThreadPoolExecutor(max_workers=3) as pool:
+        with ThreadPoolExecutor(max_workers=7) as pool:
             pending = [(case, pool.submit(exercise_case, case)) for case in DEADLINE_CASES]
             for (operation, mode), future in pending:
                 with self.subTest(operation=operation, mode=mode):
@@ -558,9 +584,9 @@ class VMDiskDiagnosticsTest(unittest.TestCase):
                 operation = "status" if settings["blocked_limit"] == "256" else "config"
                 case = operation, "closed-pipe-reader" if settings["close_reader_pipes"] else "reader"
             calls.append(case)
-            # The first wave must coexist. Later queued cases need no sleep.
-            if case in DEADLINE_CASES[:3]:
-                barrier.wait(timeout=2)
+            # Every fixed case must coexist; a smaller worker bound deadlocks
+            # this causal scheduling witness rather than passing on timing.
+            barrier.wait(timeout=2)
             if case == error:
                 raise RuntimeError("synthetic owned preflight observation failure")
             operation = case[0]
@@ -585,14 +611,14 @@ class VMDiskDiagnosticsTest(unittest.TestCase):
         for failed in (None, *expected):
             with self.subTest(failed=failed):
                 calls = []
-                adapter = self.deadline_adapter(threading.Barrier(3), calls,
+                adapter = self.deadline_adapter(threading.Barrier(7), calls,
                                                 fail=lambda case: case == failed)
                 control = type(self)("test_real_deadlines_stop_every_owned_local_reader")
                 result = unittest.TestResult()
                 with mock.patch.object(control, "exercise", side_effect=adapter), \
                         mock.patch(__name__ + ".ThreadPoolExecutor", wraps=ThreadPoolExecutor) as executor:
                     control.run(result)
-                executor.assert_called_once_with(max_workers=3)
+                executor.assert_called_once_with(max_workers=7)
                 self.assertEqual(sorted(calls), sorted(expected))
                 self.assertEqual(result.errors, [])
                 self.assertEqual(len(result.failures), int(failed is not None))
@@ -602,7 +628,7 @@ class VMDiskDiagnosticsTest(unittest.TestCase):
 
     def test_deadline_exception_does_not_lose_later_queued_verdicts(self):
         calls = []
-        adapter = self.deadline_adapter(threading.Barrier(3), calls,
+        adapter = self.deadline_adapter(threading.Barrier(7), calls,
                                        fail=lambda case: True, error=DEADLINE_CASES[0])
         control = type(self)("test_real_deadlines_stop_every_owned_local_reader")
         result = unittest.TestResult()
