@@ -1058,7 +1058,7 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 	if clusterErr != nil || len(readBackupNodes) < len(backupNodes) {
 		var preservedBackupNodes []string
 		pmgBackups, preservedBackupNodes = preserveUnreadPMGNodeBackups(
-			instanceName, m.state.GetSnapshot().PMGBackups, pmgBackups,
+			instanceName, m.state.GetPMGBackupsForInstance(instanceName), pmgBackups,
 			clusterErr != nil, backupNodes, readBackupNodes)
 		if len(preservedBackupNodes) > 0 {
 			log.Warn().
