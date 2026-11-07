@@ -135,7 +135,9 @@ describe('User Access selection through rendered controls and real transport', (
   it('saves only the selected namesake account and role IDs, preserving an unlisted saved grant', async () => {
     await openPanel();
     const selected = originalUsers[1];
-    fireEvent.click(rowFor(selected).getByRole('button', { name: 'Manage access for Alex Example' }));
+    fireEvent.click(
+      rowFor(selected).getByRole('button', { name: 'Manage access for Alex Example' }),
+    );
     const dialog = await screen.findByRole('dialog', { name: 'Manage access: Alex Example' });
     const editor = within(dialog);
     expect(editor.getByText(selected.email!)).toBeInTheDocument();
@@ -145,7 +147,9 @@ describe('User Access selection through rendered controls and real transport', (
       expect(reads(`${userPath(sibling.username)}/permissions`)).toHaveLength(0);
 
     const reader = editor.getByRole('checkbox', { name: 'Fleet role Read saved monitoring' });
-    const operator = editor.getByRole('checkbox', { name: 'Fleet role Operate selected resources' });
+    const operator = editor.getByRole('checkbox', {
+      name: 'Fleet role Operate selected resources',
+    });
     expect(reader).toBeChecked();
     expect(operator).not.toBeChecked();
     fireEvent.click(reader);
@@ -180,7 +184,9 @@ describe('User Access selection through rendered controls and real transport', (
 
     // Reopen from the reread grid proxy: checkbox state must reflect the saved
     // IDs, not the identically named catalogue entry or an old row object.
-    fireEvent.click(rowFor(selected).getByRole('button', { name: 'Manage access for Alex Example' }));
+    fireEvent.click(
+      rowFor(selected).getByRole('button', { name: 'Manage access for Alex Example' }),
+    );
     const reopened = within(
       await screen.findByRole('dialog', { name: 'Manage access: Alex Example' }),
     );
