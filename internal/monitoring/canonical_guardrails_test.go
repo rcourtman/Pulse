@@ -6,6 +6,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strings"
 	"testing"
@@ -1475,10 +1476,23 @@ func TestTenantMonitorWiresOrgIdentityIntoNotifications(t *testing.T) {
 	mtm := NewMultiTenantMonitor(baseCfg, mtp, nil)
 	t.Cleanup(mtm.Stop)
 
-	if err := mtp.SaveOrganization(&models.Organization{
+	original := &models.Organization{
 		ID:          "org-acme",
 		DisplayName: "Acme Corp",
-	}); err != nil {
+		Status:      models.OrgStatusActive,
+		OwnerUserID: "acme-owner",
+		Members: []models.OrganizationMember{
+			{UserID: "acme-owner", Role: models.OrgRoleOwner},
+			{UserID: "acme-reader", Role: models.OrgRoleViewer},
+		},
+		PendingInvitations: []models.OrganizationInvitation{
+			{UserID: "acme-invitee", Role: models.OrgRoleViewer, InvitedBy: "acme-owner"},
+		},
+		SharedResources: []models.OrganizationShare{
+			{ID: "share-1", TargetOrgID: "peer", ResourceType: "vm", ResourceID: "vm-1", AccessRole: models.OrgRoleViewer, Status: models.OrganizationShareStatusAccepted},
+		},
+	}
+	if err := mtp.SaveOrganization(original); err != nil {
 		t.Fatalf("SaveOrganization(org-acme) error = %v", err)
 	}
 
@@ -1500,15 +1514,30 @@ func TestTenantMonitorWiresOrgIdentityIntoNotifications(t *testing.T) {
 		t.Fatalf("TenantIdentity() name = %q, want %q", tenantName, "Acme Corp")
 	}
 
-	// Display-name renames must propagate lazily without monitor restarts.
-	if err := mtp.SaveOrganization(&models.Organization{
-		ID:          "org-acme",
-		DisplayName: "Acme Corp Renamed",
-	}); err != nil {
+	// Rename the current saved snapshot, not a new partial replacement that
+	// would erase the organization's access state. The existing notification
+	// manager must pick up the name lazily without a monitor restart.
+	org, err := mtp.LoadOrganizationStrict(original.ID)
+	if err != nil {
+		t.Fatalf("LoadOrganizationStrict(org-acme) error = %v", err)
+	}
+	org.DisplayName = "Acme Corp Renamed"
+	if err := mtp.SaveOrganization(org); err != nil {
 		t.Fatalf("SaveOrganization(rename) error = %v", err)
 	}
-	if _, tenantName = nm.TenantIdentity(); tenantName != "Acme Corp Renamed" {
-		t.Fatalf("TenantIdentity() name after rename = %q, want %q", tenantName, "Acme Corp Renamed")
+	tenantID, tenantName = nm.TenantIdentity()
+	if tenantID != original.ID || tenantName != org.DisplayName {
+		t.Fatalf("TenantIdentity() after rename = (%q, %q), want (%q, %q)", tenantID, tenantName, original.ID, org.DisplayName)
+	}
+	saved, err := mtp.LoadOrganizationStrict(original.ID)
+	if err != nil {
+		t.Fatalf("LoadOrganizationStrict(after rename) error = %v", err)
+	}
+	want := *original
+	want.DisplayName = org.DisplayName
+	want.PersistenceVersion = org.PersistenceVersion
+	if !reflect.DeepEqual(saved, &want) {
+		t.Fatalf("rename changed unrelated saved organization state: got %#v, want %#v", saved, &want)
 	}
 }
 
