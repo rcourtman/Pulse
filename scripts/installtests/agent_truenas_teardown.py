@@ -14,6 +14,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
 SOURCE = Path(os.environ.get("PULSE_AGENT_TRUENAS_SOURCE", ROOT / "scripts/install.sh"))
@@ -27,6 +28,31 @@ FUNCTIONS = (
     "quiesce_truenas_agent_boot_tasks_for_removal", "confirm_truenas_agent_removal_quiescent",
     "teardown_truenas_agent_boot_tasks",
 )
+
+
+def timeout_child_stopped(pid_file):
+    """Prove absence of the recorded child on Linux and macOS, without /proc.
+
+    Signal zero observes existence without signalling the process. Only ESRCH
+    proves absence; a missing PID record, denied read or other lookup error
+    leaves cleanup unproved. Never admit a process-group or init PID.
+    """
+    try:
+        recorded = pid_file.read_text(encoding="ascii")
+        if not recorded.isascii() or not recorded.isdecimal():
+            return False
+        pid = int(recorded)
+        if pid <= 1:
+            return False
+    except (OSError, ValueError):
+        return False
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return True
+    except (OSError, OverflowError):
+        return False
+    return False
 
 
 def definitions(source):
@@ -254,7 +280,7 @@ remove_safe_profile_state_dir() { rm -rf -- "$SAFE_PROFILE_STATE_DIR"; }
             events = (root / "events").read_text() if (root / "events").exists() else ""
             after = self.snapshot(root)
             state = json.loads((root / "model.json").read_text())
-            timed_stopped = not (root / "timed-pid").exists() or not Path('/proc/' + (root / "timed-pid").read_text()).exists()
+            timed_stopped = timeout_child_stopped(root / "timed-pid")
             return result, second, events.splitlines(), before, after, state, timed_stopped
 
     @staticmethod
@@ -395,6 +421,50 @@ remove_safe_profile_state_dir() { rm -rf -- "$SAFE_PROFILE_STATE_DIR"; }
         result = self.exercise(fault='timeout-query')
         self.retained(result)
         self.assertTrue(result[6], 'timed middleware child still exists')
+
+    def test_timeout_child_only_kernel_absence_proves_cleanup(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            record = Path(temporary) / "timed-pid"
+            record.write_text("12345", encoding="ascii")
+            for error, stopped in ((None, False), (ProcessLookupError(), True),
+                                   (PermissionError(), False), (OSError(), False),
+                                   (OverflowError(), False)):
+                with self.subTest(error=type(error).__name__), \
+                        mock.patch.object(os, "kill", side_effect=error) as lookup:
+                    self.assertEqual(timeout_child_stopped(record), stopped)
+                    lookup.assert_called_once_with(12345, 0)
+
+    def test_timeout_child_missing_invalid_or_unreadable_pid_is_not_cleanup(self):
+        with tempfile.TemporaryDirectory() as temporary, \
+                mock.patch.object(os, "kill") as lookup:
+            record = Path(temporary) / "timed-pid"
+            self.assertFalse(timeout_child_stopped(record))
+            for contents in ("", "0", "1", "-1", "-12345", "12\n34", "2.0", "pid", "１２"):
+                with self.subTest(contents=contents):
+                    record.write_text(contents)
+                    self.assertFalse(timeout_child_stopped(record))
+            for error in (PermissionError(), OSError(), ProcessLookupError()):
+                with self.subTest(error=type(error).__name__), \
+                        mock.patch.object(Path, "read_text", side_effect=error):
+                    self.assertFalse(timeout_child_stopped(record))
+            lookup.assert_not_called()
+
+    def test_timeout_child_live_and_reaped_observations_do_not_need_proc(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            record = Path(temporary) / "timed-pid"
+            child = subprocess.Popen([sys.executable, "-I", "-S", "-c",
+                                      "import time; time.sleep(30)"])
+            try:
+                record.write_text(str(child.pid), encoding="ascii")
+                self.assertIsNone(child.poll())
+                # A machine without procfs must not report a live child gone.
+                with mock.patch.object(Path, "exists", return_value=False):
+                    self.assertFalse(timeout_child_stopped(record))
+            finally:
+                child.kill()
+                child.wait(timeout=5)
+            with mock.patch.object(Path, "exists", return_value=False):
+                self.assertTrue(timeout_child_stopped(record))
 
 
 if __name__ == '__main__':

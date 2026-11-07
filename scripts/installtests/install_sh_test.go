@@ -9166,6 +9166,9 @@ func TestInstallSHTrueNASScaleBootTasksRetireBeforeRecoveryErasure(t *testing.T)
 		"test_disabled_absent_missing_bootstrap_and_repeated_removal_are_observed",
 		"test_ordinary_linux_state_is_not_appliance_evidence",
 		"test_process_read_exposes_only_roles_and_real_timeout_child_is_stopped",
+		"test_timeout_child_only_kernel_absence_proves_cleanup",
+		"test_timeout_child_missing_invalid_or_unreadable_pid_is_not_cleanup",
+		"test_timeout_child_live_and_reaped_observations_do_not_need_proc",
 	}, 2*time.Minute)
 }
 
