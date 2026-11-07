@@ -332,7 +332,7 @@ describe('organization access selections through rendered controls and real tran
     expectWrite(`${orgPath}/members`, 'POST', { userId, role: 'editor' });
     expect(members).toEqual(originalMembers);
     expect(pending.filter((invitation) => invitation.userId !== userId)).toEqual(originalPending);
-    expect(within(pendingGroup(userId)).getByText('Editor')).toBeInTheDocument();
+    expect(within(pendingGroup(userId)).getByText('editor')).toBeInTheDocument();
     expect(screen.getByRole('textbox', { name: 'Invite user ID' })).toHaveValue('');
     expect(screen.getByRole('combobox', { name: 'Invite role' })).toHaveValue('viewer');
   });
