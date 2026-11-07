@@ -384,9 +384,33 @@ describe('organization save conflict recovery through real controls and transpor
       } else {
         await expectWinningSnapshot(panel);
       }
-      expect(reads()).toHaveLength(
-        originalReads + (panel === 'access' && next === 'denied' ? 1 : originalReads),
-      );
+      const recoveryPaths =
+        panel === 'overview'
+          ? [orgPath, `${orgPath}/members`]
+          : panel === 'sharing'
+            ? [
+                orgPath,
+                `${orgPath}/members`,
+                '/api/orgs',
+                `${orgPath}/shares`,
+                `${orgPath}/shares/incoming`,
+              ]
+            : next === 'denied'
+              ? [orgPath]
+              : [
+                  orgPath,
+                  `${orgPath}/members`,
+                  '/api/org-invitations',
+                  ...(next === 'viewer' ? [] : [`${orgPath}/invitations`]),
+                ];
+      // Viewer recovery must not even request the manager-only pending list.
+      // Exact paths also catch a repeated read or fallback to another tenant.
+      expect(
+        reads()
+          .slice(originalReads)
+          .map(([path]) => String(path))
+          .sort(),
+      ).toEqual(recoveryPaths.sort());
       expect(writes()).toHaveLength(1);
       expect(notices.success).not.toHaveBeenCalled();
       expectBoundRequests();
