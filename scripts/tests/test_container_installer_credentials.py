@@ -94,6 +94,7 @@ sys.exit(int(os.environ["DOWNLOAD_EXIT"]))
                 self.assert_forwarded(arguments + flags, "bash")
                 curl_args = json.loads((self.root / "curl-arguments").read_text())
                 self.assertEqual(curl_args[0], "-fsSL", "TLS verification default changed")
+                self.assert_transport_deadlines(curl_args)
                 self.assertEqual(curl_args[-2:], ["--", "https://pulse.example.invalid/install.sh"])
                 self.assertNotIn(TOKEN, " ".join(curl_args))
 
@@ -114,12 +115,31 @@ sys.exit(int(os.environ["DOWNLOAD_EXIT"]))
                 self.assertFalse((self.root / "curl-arguments").exists())
                 self.assertFalse((self.root / "arguments").exists())
 
+    def assert_transport_deadlines(self, curl_args):
+        for flag, value in (("--connect-timeout", "5"), ("--max-time", "60")):
+            self.assertEqual(curl_args.count(flag), 1)
+            self.assertEqual(curl_args[curl_args.index(flag) + 1], value)
+        self.assertNotIn("--retry", curl_args, "failed installer downloads must not be replayed")
+
+    def test_explicit_tls_opt_out_keeps_the_same_transport_deadlines(self):
+        result = self.run_wrapper("--url", "https://pulse.example.invalid", "--insecure",
+                                  "--token-file", str(self.token))
+        self.assertEqual(result.returncode, 37, result.stderr)
+        curl_args = json.loads((self.root / "curl-arguments").read_text())
+        self.assertEqual(curl_args[0], "-kfsSL")
+        self.assert_transport_deadlines(curl_args)
+        self.assert_forwarded(["--url", "https://pulse.example.invalid", "--token-file", str(self.token),
+                               "--insecure", "--enable-docker", "--enable-host"], "bash")
+
     def test_failed_transfer_still_executes_nothing_and_preserves_private_file(self):
-        self.env["DOWNLOAD_EXIT"] = "18"
-        result = self.run_wrapper("--url", "https://pulse.example.invalid", "--token-file", str(self.token))
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("nothing was executed", result.stderr)
-        self.assertFalse((self.root / "arguments").exists())
+        for status in ("6", "18", "22", "28"):
+            with self.subTest(curl_exit=status):
+                self.env["DOWNLOAD_EXIT"] = status
+                result = self.run_wrapper("--url", "https://pulse.example.invalid", "--token-file", str(self.token))
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("nothing was executed", result.stderr)
+                self.assertFalse((self.root / "arguments").exists())
+                self.assert_transport_deadlines(json.loads((self.root / "curl-arguments").read_text()))
 
     def test_inline_token_compatibility_and_private_file_precedence_are_forwarded(self):
         # Compatibility is not recommended, but existing callers must keep the
