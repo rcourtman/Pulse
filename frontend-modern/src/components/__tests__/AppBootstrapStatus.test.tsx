@@ -68,6 +68,27 @@ describe('AppBootstrapStatus', () => {
     );
   });
 
+  it('lets its fallback probe recover stale default before claiming no organization access', async () => {
+    client.apiFetch.mockImplementation(
+      async (url: string, options?: { recoverDefaultOrg?: boolean }) => {
+        if (url === '/api/state/summary' && options?.recoverDefaultOrg)
+          return jsonResponse(200, {});
+        return jsonResponse(403, { error: 'default_org_access_denied' });
+      },
+    );
+    render(() => <AppBootstrapStatus failed />);
+    await waitFor(() =>
+      expect(client.apiFetch).toHaveBeenCalledWith(
+        '/api/state/summary',
+        expect.objectContaining({ recoverDefaultOrg: true }),
+      ),
+    );
+    expect(screen.getByRole('main')).toHaveAccessibleName('Could not check your session');
+    expect(screen.queryByText('No organization access yet')).toBeNull();
+    expect(orgsApi.listMyInvitations).not.toHaveBeenCalled();
+    expect(client.clearAuth).not.toHaveBeenCalled();
+  });
+
   it('tells a user without invitations who can grant access', async () => {
     refuseEveryOrganization();
     orgsApi.listMyInvitations.mockResolvedValue([]);

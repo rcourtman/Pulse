@@ -9,6 +9,7 @@ import {
   setApiToken,
   setOrgID,
 } from '@/utils/apiClient';
+import { ChartsAPI } from '@/api/charts';
 import { ResourceActionsAPI } from '@/api/resourceActions';
 
 const mockFetch = vi.fn();
@@ -28,6 +29,174 @@ describe('apiClient org context', () => {
   afterEach(() => {
     clearApiToken();
     setOrgID(null);
+  });
+
+  it.each(['access_denied', 'default_org_access_denied'])(
+    'keeps selected History and saved authority after %s without cross-org retry',
+    async (code) => {
+      setOrgID('default');
+      setApiToken('synthetic-saved-history-token');
+      sessionStorage.setItem('pulse_auth_user', JSON.stringify({ username: 'viewer' }));
+      const before = { ...sessionStorage };
+      mockFetch.mockResolvedValue(
+        new Response(JSON.stringify({ error: code }), {
+          status: 403,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      );
+      await expect(
+        ChartsAPI.getMetricsHistory({
+          resourceType: 'disk',
+          resourceId: 'shared-disk-id',
+          range: '1h',
+        }),
+      ).rejects.toMatchObject({ status: 403 });
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(mockFetch.mock.calls[0][1].headers['X-Pulse-Org-ID']).toBe('default');
+      expect(mockFetch.mock.calls[0][1].headers['X-API-Token']).toBe(
+        'synthetic-saved-history-token',
+      );
+      expect({ ...sessionStorage }).toEqual(before);
+      expect(localStorage.getItem('just_logged_out')).toBeNull();
+      expect(getOrgID()).toBe('default');
+      expect(getApiToken()).toBe('synthetic-saved-history-token');
+    },
+  );
+
+  it.each(['GET', 'HEAD'])(
+    'recovers stale default only for an opted-in bootstrap %s, before CSRF retry',
+    async (method) => {
+      setOrgID('default');
+      setApiToken('synthetic-saved-bootstrap-token');
+      sessionStorage.setItem('pulse_auth_user', JSON.stringify({ username: 'acme-member' }));
+      document.cookie = 'pulse_csrf=synthetic-csrf; Path=/';
+      mockFetch
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify({ error: 'default_org_access_denied' }), { status: 403 }),
+        )
+        .mockResolvedValueOnce(new Response('{}', { status: 200 }));
+
+      const response = await apiFetch('/api/state/summary', { recoverDefaultOrg: true, method });
+
+      expect(response.status).toBe(200);
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+      expect(mockFetch.mock.calls[0][1].headers['X-Pulse-Org-ID']).toBe('default');
+      expect(mockFetch.mock.calls[1][1].headers['X-Pulse-Org-ID']).toBeUndefined();
+      expect(document.cookie).not.toContain('pulse_org_id=');
+      expect(getOrgID()).toBeNull();
+      expect(getApiToken()).toBe('synthetic-saved-bootstrap-token');
+      expect(sessionStorage.getItem('pulse_auth_user')).toContain('acme-member');
+      expect(localStorage.getItem('just_logged_out')).toBeNull();
+      for (const [, options] of mockFetch.mock.calls) {
+        expect(options).not.toHaveProperty('recoverDefaultOrg');
+        expect(options.headers['X-API-Token']).toBe('synthetic-saved-bootstrap-token');
+        expect(options.credentials).toBe('include');
+      }
+    },
+  );
+
+  it.each([
+    { name: 'ordinary background read', options: {}, code: 'default_org_access_denied' },
+    {
+      name: 'pending membership withdrawal',
+      options: { recoverDefaultOrg: true },
+      code: 'access_denied',
+    },
+    {
+      name: 'write',
+      options: { recoverDefaultOrg: true, method: 'POST' },
+      code: 'default_org_access_denied',
+    },
+    {
+      name: 'bound History read',
+      options: { recoverDefaultOrg: true, expectedOrgID: 'default' },
+      code: 'default_org_access_denied',
+    },
+    {
+      name: 'org-neutral probe',
+      options: { recoverDefaultOrg: true, skipOrgContext: true },
+      code: 'default_org_access_denied',
+    },
+    {
+      name: 'no retries',
+      options: { recoverDefaultOrg: true, retry: false },
+      code: 'default_org_access_denied',
+    },
+  ])('keeps saved default and authority for $name', async ({ options, code }) => {
+    setOrgID('default');
+    setApiToken('synthetic-saved-bootstrap-token');
+    sessionStorage.setItem('pulse_auth_user', JSON.stringify({ username: 'viewer' }));
+    document.cookie = 'pulse_csrf=synthetic-csrf; Path=/';
+    const before = { ...sessionStorage };
+    mockFetch.mockImplementation(
+      async () => new Response(JSON.stringify({ error: code }), { status: 403 }),
+    );
+
+    const response = await apiFetch('/api/state/summary', options);
+
+    expect(response.status).toBe(403);
+    expect({ ...sessionStorage }).toEqual(before);
+    expect(document.cookie).toContain('pulse_org_id=default');
+    expect(localStorage.getItem('just_logged_out')).toBeNull();
+    // Existing CSRF retry may resend the same org; it must not select another.
+    expect(mockFetch.mock.calls.length).toBeGreaterThanOrEqual(1);
+    expect(mockFetch.mock.calls.length).toBeLessThanOrEqual(2);
+    for (const [, request] of mockFetch.mock.calls)
+      expect(request.headers['X-Pulse-Org-ID']).toBe('default');
+  });
+
+  it('does not recover a selected default outside the bootstrap summary route', async () => {
+    setOrgID('default');
+    mockFetch.mockResolvedValue(
+      new Response(JSON.stringify({ error: 'default_org_access_denied' }), { status: 403 }),
+    );
+    expect((await apiFetch('/api/resources', { recoverDefaultOrg: true })).status).toBe(403);
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(getOrgID()).toBe('default');
+  });
+
+  it('keeps an unsaved bootstrap selection on the normal server landing path', async () => {
+    mockFetch.mockResolvedValue(new Response('{}', { status: 200 }));
+    await apiFetch('/api/state/summary', { recoverDefaultOrg: true });
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(mockFetch.mock.calls[0][1].headers['X-Pulse-Org-ID']).toBeUndefined();
+    expect(getOrgID()).toBeNull();
+  });
+
+  it('retains a real no-organization refusal after one bootstrap recovery', async () => {
+    setOrgID('default');
+    mockFetch.mockImplementation(
+      async () =>
+        new Response(JSON.stringify({ error: 'default_org_access_denied' }), { status: 403 }),
+    );
+    expect((await apiFetch('/api/state/summary', { recoverDefaultOrg: true })).status).toBe(403);
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(mockFetch.mock.calls[1][1].headers['X-Pulse-Org-ID']).toBeUndefined();
+    expect(getOrgID()).toBeNull();
+    expect(localStorage.getItem('just_logged_out')).toBeNull();
+  });
+
+  it('lets History without a saved org keep the server landing choice', async () => {
+    mockFetch.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          resourceType: 'disk',
+          resourceId: 'disk-one',
+          range: '1h',
+          start: 1,
+          end: 2,
+          metrics: {},
+          source: 'store',
+        }),
+      ),
+    );
+    await ChartsAPI.getMetricsHistory({
+      resourceType: 'disk',
+      resourceId: 'disk-one',
+      range: '1h',
+    });
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(mockFetch.mock.calls[0][1].headers['X-Pulse-Org-ID']).toBeUndefined();
   });
 
   it('propagates selected org via X-Pulse-Org-ID header', async () => {
@@ -358,29 +527,19 @@ describe('apiClient org context', () => {
     expect(getOrgID()).toBeNull();
   });
 
-  it('clears a refused default selection and retries without org context', async () => {
-    mockFetch
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            error: 'default_org_access_denied',
-            message: 'User is not a member of the default organization',
-          }),
-          { status: 403, headers: { 'Content-Type': 'application/json' } },
-        ),
-      )
-      .mockResolvedValueOnce(new Response('{}', { status: 200 }));
-
+  it('preserves a refused default selection for background reads without retargeting', async () => {
+    mockFetch.mockResolvedValue(
+      new Response(JSON.stringify({ error: 'default_org_access_denied' }), {
+        status: 403,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
     setOrgID('default');
     const response = await apiFetch('/api/state/summary');
-
-    expect(response.status).toBe(200);
-    expect(mockFetch).toHaveBeenCalledTimes(2);
-    const [, firstOptions] = mockFetch.mock.calls[0] as [string, RequestInit];
-    expect((firstOptions.headers as Record<string, string>)['X-Pulse-Org-ID']).toBe('default');
-    const [, secondOptions] = mockFetch.mock.calls[1] as [string, RequestInit];
-    expect((secondOptions.headers as Record<string, string>)['X-Pulse-Org-ID']).toBeUndefined();
-    expect(getOrgID()).toBeNull();
+    expect(response.status).toBe(403);
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(mockFetch.mock.calls[0][1].headers['X-Pulse-Org-ID']).toBe('default');
+    expect(getOrgID()).toBe('default');
   });
 
   it('does not retarget a write refused in the default organization', async () => {

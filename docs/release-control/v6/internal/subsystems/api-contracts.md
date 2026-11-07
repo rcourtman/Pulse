@@ -5838,6 +5838,48 @@ auto-register mutation boundary.
 
 ## Current State
 
+### Organization withdrawal preserves valid authentication
+
+Synchronous protected replies distinguish an invalid admitted credential (401)
+from a still-authenticated user's lost organization entitlement (403 with the
+stable `access_denied` JSON envelope). The latter never uses the stale-selection
+recovery code: a pending response cannot be retried in a different organization.
+Private response headers and bytes remain withheld; after an admitted prefix,
+withdrawal only stops further writes. Regrant admits a fresh request, never a
+previously denied response. Token identity/scope/binding denials retain401.
+
+The monitoring WebSocket writer checks credentials before organization policy
+on each frame, including queued frames and idle pings. Invalid credentials keep
+1008; a valid user's lost organization access closes with private code4403 and
+fixed reason `Organization access ended`. The client branches on the code, not
+reason text. It stops automatic reconnect/REST recovery, leaves last-known data
+disconnected rather than inventing empty success, and preserves saved auth and
+organization context. An existing warning directs the user to select another
+organization or reload after deliberate regrant; selecting the same org alone
+does not reconnect. Older clients may reconnect with backoff until reloaded.
+
+The API client does not clear/retry an established selection on403, including
+fresh background reads denied in default. Only the two unbound session-bootstrap
+summary probes opt into recovering a stale saved default on
+`default_org_access_denied`: GET/HEAD only, before activating an organization or
+acquiring its socket. They discard the summary body, clear only the org selection
+and retry once through the server's authorized landing. Generic `access_denied`,
+bound reads, writes and org-neutral requests never use this recovery. A user with
+no authorized organization still sees the existing no-access state. The recovered
+membership is activated by the ordinary organization list before the socket opens.
+History pins a saved selection even
+for invalid-org recovery, but an absent selection keeps server landing-org
+resolution. Missing non-default organization400 recovery remains unchanged.
+These are withdrawal semantics, not new grants, cancellation of independent
+work, or protection against every unrelated in-flight UI organization switch.
+Native HTTP/WS and media tests cover withdrawal, credential precedence,
+independent membership/readers and same-session fresh regrant; frontend tests
+cover saved credentials/context, background reads, explicit recovery and actual
+1008 authentication handling. Browser evidence additionally exercises the real
+History, API client, WebSocket store and existing warning at desktop/narrow
+light/dark viewports with synthetic source-bound transport data.
+
+
 ### Requested change history retains its disclosure authority
 
 `GET /api/agent/changes` retains the admitted token identity, principal,
@@ -13918,8 +13960,10 @@ deny precedence, or a proxy principal admitted with the admin role) or as an
 explicit default member. A request that names no organization lands in the
 user's first organization, and `resolveTenantOrgID` returns the authorized
 organization so handlers agree with that decision. Other refusals of the
-default organization answer `default_org_access_denied`; the browser client
-clears that stale selection and retries reads only. WebSocket and SSE reads
+default organization answer `default_org_access_denied`; only the unbound browser
+bootstrap summary probes may clear a stale saved default and retry GET/HEAD once
+before entering an organization. Established readers retain their selection and
+the refusal. WebSocket and SSE reads
 re-check the policy every 10 seconds. API-token bindings are unchanged.
 
 The hosted `402 subscription_required` payload applies to Pulse Cloud tenants. A

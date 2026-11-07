@@ -7740,7 +7740,7 @@ func (r *Router) handleWebSocket(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	r.wsHub.HandleWebSocketWithAuthorization(w, boundReq, monitoringWebSocketAuthorization(r.config, boundReq))
+	r.wsHub.HandleWebSocketWithOrganizationAuthorization(w, boundReq, monitoringWebSocketAuthorization(r.config, boundReq), orgAccessRevalidator(boundReq))
 }
 
 // handleSimpleStats serves a simple stats page

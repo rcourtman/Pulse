@@ -37,23 +37,23 @@ func retainResponseAuthority(cfg *config.Config, scope string, instanceAdmin boo
 	return func(w http.ResponseWriter, r *http.Request) {
 		revalidate := tokenStreamSnapshotRevalidator(cfg, r, scope)
 		sessionAllowed := sessionReadRevalidator(r)
-		if revalidate == nil && sessionAllowed == nil {
-			// No new authentication policy for proxy/basic/bypass requests.
+		orgAllowed := orgResponseAccessRevalidator(r)
+		if revalidate == nil && sessionAllowed == nil && orgAllowed == nil {
+			// No new authentication policy without an admitted principal or policy.
 			next(w, r)
 			return
 		}
 		allowed := func() bool {
 			if revalidate == nil {
-				return sessionAllowed()
+				return sessionAllowed == nil || sessionAllowed()
 			}
 			current, ok := revalidate()
 			return ok && (!instanceAdmin || tokenActsForInstance(current))
 		}
-		if !allowed() {
-			http.Error(w, "Authentication required", http.StatusUnauthorized)
+		writer := &tokenResponseWriter{writer: w, header: w.Header().Clone(), allowed: allowed, orgAllowed: orgAllowed, media: media}
+		if !writer.permitLocked() {
 			return
 		}
-		writer := &tokenResponseWriter{writer: w, header: w.Header().Clone(), allowed: allowed, media: media}
 		defer writer.close()
 		next(writer, r)
 		// A bodyless handler must not implicitly return 200 after withdrawal.
@@ -63,16 +63,18 @@ func retainResponseAuthority(cfg *config.Config, scope string, instanceAdmin boo
 
 // Only synchronous HTTP response operations are exposed: no Flusher, Hijacker,
 // ReaderFrom or Unwrap bypass. Payload bytes are never buffered. A denied first
-// write produces a generic 401, not false-success/empty JSON; after any admitted
+// write produces 401 for lost credentials or 403 for lost user organization
+// access, never false-success/empty JSON. After any admitted
 // response bytes, denial only stops further output, never appends an auth error.
 type tokenResponseWriter struct {
-	writer  http.ResponseWriter
-	header  http.Header
-	allowed func() bool
-	media   responseMediaPolicy
-	mu      sync.Mutex
-	started bool
-	closed  bool
+	writer     http.ResponseWriter
+	header     http.Header
+	allowed    func() bool
+	orgAllowed func() bool
+	media      responseMediaPolicy
+	mu         sync.Mutex
+	started    bool
+	closed     bool
 }
 
 func (w *tokenResponseWriter) Header() http.Header { return w.header }
@@ -81,12 +83,26 @@ func (w *tokenResponseWriter) permitLocked() bool {
 	if w.closed {
 		return false
 	}
+	// Authentication takes precedence if both credentials and membership end.
+	// Keep organization denial separate: it must not make clients erase valid
+	// saved authentication, or silently retry the result in another tenant.
+	status := http.StatusOK
 	if !w.allowed() {
+		status = http.StatusUnauthorized
+	} else if w.orgAllowed != nil && !w.orgAllowed() {
+		status = http.StatusForbidden
+	}
+	if status != http.StatusOK {
 		w.closed = true
 		if !w.started {
 			// Handler-specific headers remain private until an authorised
 			// commit; preserve only the outer middleware's existing headers.
-			http.Error(w.writer, "Authentication required", http.StatusUnauthorized)
+			if status == http.StatusForbidden {
+				w.writer.Header().Set("X-Content-Type-Options", "nosniff")
+				writeJSONError(w.writer, status, "access_denied", "Access to this organization was denied")
+			} else {
+				http.Error(w.writer, "Authentication required", status)
+			}
 		}
 		return false
 	}

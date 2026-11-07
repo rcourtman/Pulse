@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "base_sha": "7861e86a686257863abfc1120757849b4d23315f",
+  "verified_at": "2026-11-07T08:42:20Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/api/charts.ts",
+    "frontend-modern/src/stores/websocket.ts",
+    "frontend-modern/src/utils/apiClient.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/api/charts.ts": "3ec7cef0109592862db4bc877ee16255c5b1b819a4ba769243699e107ff4a23e",
+    "frontend-modern/src/stores/websocket.ts": "a33641bb9b9cf4e5539a45845d140cc14c22a7a07eb6e1778b4bd29d16451d64",
+    "frontend-modern/src/utils/apiClient.ts": "5add39decbb84529cfe6a410b766a832d939ba8b5229a7f3855ee879e7e4bb28"
+  },
+  "routes": [
+    "/?suite=access (evidence-only mount of production disk History, API client, WebSocket store, Login and Toast; no shipped route)",
+    "/?suite=cadence (production REST resource mapper, Machines table and physical-disk list/drawer; no shipped route)"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "themes": [
+    "light",
+    "dark"
+  ],
+  "states": [
+    "Four bounded before/after browser matrices passed with72 captures, no page errors or horizontal document overflow. Playwright1.56.1 matches the integration lock; Chromium141.0.7390.37. All72 images were presented through the native image tool, not accepted from hashes or DOM alone.",
+    "Access: hold actual outgoing History across declared withdrawal. Captured baseline401 plus1008 reaches real Login and erases saved user/org. Committed-producer schema403 plus4403 fixtures show permission denial and the existing organization warning without private History plot, Login, just_logged_out or changed synthetic HttpOnly session/user/default-org context. Fresh History and background403 reads retain explicit selection rather than retry another organization.",
+    "Regrant: corrected fixture reloads with the same session/context; independent reader retains its own200/37C. Regrant reuses the original primary-session200 envelope, never the independent token. Baseline mode=fresh deliberately mounts History outside Login and is not App recovery. This is a declared safe transport fixture, not new native HTTP/WS, complete App/IdP, installed-client or release proof; those results/limits are reconciled separately.",
+    "Cadence: original exact-source native before/after data at90s changes a120s host from degraded to healthy, keeps genuine missed reports degraded and recovers after resumption. Identity, inventory and37C remain unchanged. Independent fast host, live-alert styling, late-provider and SMART Replace Now/compact Replace controls stay distinct. Added controls are renderer-only REST/alert-store fixtures; no incomplete WebSocket full-state is presented as a complete estate.",
+    "Frontend contents match939dc161;7861e86a changes only a test fixture. Before access source copy is blob-checked against7a11665e. Cadence compares native producer-before/after through identical current display consumers. Source unit/type/build acceptance and original-estate recovery remain separate."
+  ],
+  "interactions": [
+    "Release pending History, exercise real API redirection/denial and WebSocket1008/4403 handling, then perform fresh History/background reads and retain requests/storage observations.",
+    "Deliberately regrant, reload corrected view without login or replacing its cookie/token, verify independent reader in another context, open/close technical details and collapse the disk.",
+    "Refresh REST cadence states at between-reports, missed and resumed times; inspect per-resource statuses, counts, health,37C and alert controls; open recovered disk, select History range, toggle details and collapse. Successful History timestamps shift together; values, IDs and status/cadence facts are unchanged."
+  ],
+  "evidence": [
+    "CAPTURES-access-before.tar.xz",
+    "CAPTURES-access-after.tar.xz",
+    "CAPTURES-cadence-before.tar.xz",
+    "CAPTURES-cadence-after.tar.xz",
+    "BROWSER-PROOF.json",
+    "PIXEL-REVIEW.md"
+  ]
+}

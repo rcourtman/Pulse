@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "base_sha": "2e4c612627f69159da70b9480f314daef8ca2d51",
+  "verified_at": "2026-11-07T09:26:51Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/utils/apiClient.ts",
+    "frontend-modern/src/useAppRuntimeState.ts",
+    "frontend-modern/src/stores/organizationAccessBootstrap.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/utils/apiClient.ts": "e47dffd3c7c17a471f27273c23f47f66c9eb514bf279484c513f917e057785fb",
+    "frontend-modern/src/useAppRuntimeState.ts": "407435b14d7273802c797cb281166b1fbdea926b141d2711ae410a7e79662184",
+    "frontend-modern/src/stores/organizationAccessBootstrap.ts": "838abcf0ef6b5919b288da827fff312dd225d372be8ba214eb5ba7a31bdb5c88"
+  },
+  "routes": [
+    "/ (evidence-only mount of real useAppRuntimeState, AppBootstrapStatus/NoOrganizationAccess, OrgSwitcher and Machines, not full App/IdP or a shipped route)",
+    "/?suite=access and /?suite=cadence (existing source consumers; evidence-only, unchanged original before matrices plus fresh final after passes)"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "themes": [
+    "light",
+    "dark"
+  ],
+  "states": [
+    "Bootstrap:8 comparable before/after pairs use the exact f6a805e1 source archive and containing2e4c6126, same safe session/CSRF/default selection, membership/estate, viewport, theme and initial interaction. All16 PNGs were opened with the native image tool. Chromium141.0.7390.37 and Playwright1.56.1 match integration lock. No page error or document horizontal overflow.",
+    "Acme-only member with stale saved Default: previous real hook/helper display No organization access yet. Corrected unbound summary GET403 clears only org selection, retries without header/cookie and gets authorized landing200. Ordinary organization enumeration then activates Acme BEFORE socket acquisition; existing OrgSwitcher and Machines show the permitted synthetic host. Original HttpOnly session and saved user remain; no Login, token replacement, just_logged_out or wider grant.",
+    "True no-organization control remains No organization access yet, with Check again, Sign out and administrator guidance, no monitoring socket and no invented empty estate. Existing CSRF same-org retry may repeat403; this is not workspace recovery.",
+    "Final API-client changes additionally received fresh20 access and16 cadence after captures through the same evidence fixtures and consumers. Original20 access and16 cadence before captures remain unchanged. All36 refreshed after PNGs were natively opened. Pending/fresh History and background403 remain selected/default-bound;4403 stops reconnect/recovery and retains saved credentials/context. Deliberate same-session regrant reload and independent200 reader remain, with37C and no borrowed control token.",
+    "Cadence keeps on-time120s native host/disk healthy at90s, genuine missed reports degraded and resumption healthy. Independent fast/provider, late-provider, live-alert and SMART controls remain distinct; added controls are declared renderer fixtures, not new native evidence. Recovered disk/current37C and ordinary controls remain.",
+    "This is synthetic real-hook/consumer proof, NOT full App, IdP, hosted/demo, cross-tab socket isolation, original installed clients or release acceptance. New native source-b_ax_1yl separately passes117 registered frontend tests and fails the intended three restored-f6-client controls. Source-n04sxz63 separately establishes403/4403 native withdrawal and real session regrant. Browser all-metric200 fixture and native single-metric200 are not claimed byte-identical."
+  ],
+  "interactions": [
+    "Load both stale-default membership cases at desktop/narrow light/dark with a CSRF cookie. Inspect real bootstrap-to-organization activation, socket request/storage sequence and existing no-access actions.",
+    "Hold outgoing History across withdrawal, exercise4403 and fresh/background denial, regrant/reload without replacing credentials, inspect independent reader, details and collapse.",
+    "Refresh between-reports, missed and resumed resource states; open recovered disk, change History range, toggle details and collapse."
+  ],
+  "evidence": [
+    "CAPTURES-bootstrap-before.tar.xz",
+    "CAPTURES-bootstrap-after.tar.xz",
+    "CAPTURES-access-before.tar.xz",
+    "CAPTURES-access-after.tar.xz",
+    "CAPTURES-cadence-before.tar.xz",
+    "CAPTURES-cadence-after.tar.xz",
+    "BROWSER-PROOF.json",
+    "PIXEL-REVIEW.md",
+    "BOOTSTRAP-PROOF.json"
+  ]
+}
