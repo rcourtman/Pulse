@@ -15,6 +15,25 @@
 
 ## Purpose
 
+### Overlapping organization edits preserve current access
+
+The saved-organization boundary refuses a complete snapshot superseded by
+another member, invitation, share, owner, name or lifecycle change. Existing
+mutations report `409 organization_changed`, without merging grants, changing
+credentials or replaying the request. Creation cannot overwrite saved metadata,
+and a loaded snapshot cannot recreate a deleted organization. The snapshot is
+internal, JSON-excluded bookkeeping, not a new client permission or API field.
+
+Overview, Access and Sharing consume that refusal through their existing
+unconfirmed-change states and explicit saved-data Reload controls. Reload reads
+current metadata; it never repeats the refused mutation. A fresh intentional
+action remains available under the existing authority rules. Normal-suite
+`TestOrgMutationSnapshot*` and `TestOrganizationSnapshot*` cover this server-side
+boundary, including real registered session/CSRF/tenant routes. Comparable
+actual-panel desktop/narrow proof consumes the native before/after response
+bytes. This is saved-state protection, not original-client/IdP recovery,
+historical impact measurement or a cross-process storage-coordination claim.
+
 ### Equal security-status values keep the User Access reader
 
 User Access compares effective runtime readiness, RBAC/user-management admission

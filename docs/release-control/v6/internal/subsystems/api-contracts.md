@@ -21,6 +21,36 @@
 
 ## Purpose
 
+### Organization edits cannot restore superseded access
+
+Organization metadata saves compare a JSON-excluded, path-bound snapshot of the
+loaded bytes with the current file before publication. Another membership,
+invitation, share, owner, name or lifecycle edit makes that snapshot obsolete;
+the complete conflicting edit is refused, not merged or automatically replayed.
+New objects can create missing metadata but cannot overwrite an existing or
+unreadable organization. This includes the default organization, superseding
+its earlier membership-only merge. A fresh read and intentional action preserve
+all current grants and the existing normal mutation behavior.
+
+Comparison and owned atomic file replacement are serialized across persistence
+instances for the same file in this server process. Deletion shares that lock,
+and late loaded saves cannot recreate the deleted tenant's grants or directory.
+Writes expose only complete owner-private files; failed preparation/replacement
+keeps the earlier bytes and caller's snapshot unchanged. No durable revision,
+wire field, grant, new route or cross-process writer coordination is introduced.
+HTTP mutations report fixed `409 organization_changed` guidance to reload and
+review before trying again. Existing auth, CSRF, paid gates and ownership-transfer
+confirmation remain; a conflict does not revoke sign-in, monitoring or data.
+
+`TestOrganizationSnapshot*` covers stale and simultaneous independent-instance
+writes, creation, path binding, deletion, unknown metadata, JSON omission and
+atomic-write failures. `TestOrgMutationSnapshotCannotRestoreWithdrawnMember`
+pauses real rename, invitation, share and lifecycle handlers after their read,
+executes an independent member removal, then checks that the old operation
+cannot restore membership or change the remaining current fields. Browser proof
+uses these safe native response bytes through the existing access controls;
+this is not installed-client recovery or measured historical exposure.
+
 ### Alert history completeness has a scoped disposition (5 November 2026)
 
 `internal/api/alerting/history_durability.go` exposes the tenant's canonical

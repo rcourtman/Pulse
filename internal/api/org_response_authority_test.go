@@ -37,7 +37,14 @@ func TestOrgResponseAuthorityWithdrawsWithoutStreamCache(t *testing.T) {
 					enableSharedMultiOrgForTest(t)
 					persistence, checker := newOrgAccessFixture(t, false)
 					const user = "response-viewer"
-					org := &models.Organization{ID: orgID, DisplayName: orgID, Members: []models.OrganizationMember{{UserID: user, Role: models.OrgRoleViewer}}}
+					// newOrgAccessFixture already seeds acme. Replacing that safe
+					// fixture is an intentional edit of its current snapshot, not
+					// authority to overwrite unknown or superseded metadata.
+					current, err := persistence.LoadOrganization(orgID)
+					if err != nil {
+						t.Fatal(err)
+					}
+					org := &models.Organization{PersistenceVersion: current.PersistenceVersion, ID: orgID, DisplayName: orgID, Members: []models.OrganizationMember{{UserID: user, Role: models.OrgRoleViewer}}}
 					if err := persistence.SaveOrganization(org); err != nil {
 						t.Fatal(err)
 					}
