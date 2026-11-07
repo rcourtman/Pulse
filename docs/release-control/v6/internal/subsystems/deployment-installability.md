@@ -9691,6 +9691,11 @@ of locking, `DOMAIN` may point at a private address, and `docs/MSP.md` describes
 renewal, including that client runtimes on v6.7.0 or earlier still lock and need a
 public address until `upgrade.sh --rollout-tenants` moves them on.
 
+GO-2026-6909 moved `github.com/crewjam/saml` to v0.5.2 on 7 November 2026, with its
+`github.com/beevik/etree` v1.8.1 and `github.com/russellhaering/goxmldsig` v1.6.1
+requirements explicit in `go.mod`. `go.sum` adds their exact checksum records. No
+toolchain, image or install path changes.
+
 ## Release-body updater ownership (30 September 2026)
 
 Each executable `/bin/update --version` example in a published body must carry
