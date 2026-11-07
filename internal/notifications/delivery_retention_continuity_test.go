@@ -732,11 +732,18 @@ func TestNotificationReceiptCommitFailureRetainsRetryObligation(t *testing.T) {
 		mu.Lock()
 		observed := count
 		mu.Unlock()
-		if observed > 0 && stats["pending"] == 1 && stats["sending"] == 0 && stats["sent"] == 0 {
+		observedCalls := calls.Load()
+		q.mu.RLock()
+		owned := len(q.processingNotifications)
+		q.mu.RUnlock()
+		// The HTTP observation can be newer than the stats snapshot. Require
+		// the actual settlement marker and the worker's return before advancing
+		// its retry clock, or an in-flight first attempt can overwrite that clock.
+		if observed == 1 && observedCalls >= 1 && stats["pending"] == 1 && stats["settlement_pending"] == 1 && stats["sending"] == 0 && stats["sent"] == 0 && owned == 0 {
 			break
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("accepted but unsettled delivery did not retain retry: %v, http=%d", stats, observed)
+			t.Fatalf("accepted but unsettled delivery did not retain retry: stats=%v http=%d calls=%d owned=%d", stats, observed, observedCalls, owned)
 		}
 		time.Sleep(time.Millisecond)
 	}
@@ -751,9 +758,10 @@ func TestNotificationReceiptCommitFailureRetainsRetryObligation(t *testing.T) {
 		t.Fatal("failed receipt commit populated cooldown")
 	}
 	for retry := 0; retry < 4; retry++ {
-		retryContinuitySettlementNow(t, q)
+		beforeRetryCalls := calls.Load()
+		deadline = time.Now().Add(5 * time.Second)
+		retryContinuitySettlementNow(t, q, deadline)
 		q.processBatch()
-		deadline := time.Now().Add(5 * time.Second)
 		for {
 			mu.Lock()
 			observed := count
@@ -762,11 +770,17 @@ func TestNotificationReceiptCommitFailureRetainsRetryObligation(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if calls.Load() >= int64(retry+2) && observed == 1 && stats["settlement_pending"] == 1 && stats["sending"] == 0 {
+			observedCalls := calls.Load()
+			q.mu.RLock()
+			owned := len(q.processingNotifications)
+			q.mu.RUnlock()
+			// A pending row is written before its worker releases ownership.
+			// Do not start the next simulated retry until this one has returned.
+			if observedCalls > beforeRetryCalls && observed == 1 && stats["pending"] == 1 && stats["settlement_pending"] == 1 && stats["sending"] == 0 && owned == 0 {
 				break
 			}
 			if time.Now().After(deadline) {
-				t.Fatalf("storage fault did not preserve repeated pending settlement: http=%d stats=%v", observed, stats)
+				t.Fatalf("storage fault did not preserve repeated pending settlement: retry=%d calls=%d before=%d owned=%d http=%d stats=%v", retry, observedCalls, beforeRetryCalls, owned, observed, stats)
 			}
 			time.Sleep(time.Millisecond)
 		}
@@ -880,13 +894,31 @@ func TestNotificationDestinationGenerationFailureDefersProvider(t *testing.T) {
 	}
 }
 
-func retryContinuitySettlementNow(t *testing.T, q *NotificationQueue) {
+func retryContinuitySettlementNow(t *testing.T, q *NotificationQueue, deadlines ...time.Time) {
 	t.Helper()
-	q.mu.Lock()
-	_, err := q.db.Exec(`UPDATE notification_queue SET next_retry_at=? WHERE status='pending' AND last_error=?`, time.Now().Add(-time.Second).Unix(), notificationSettlementPendingMessage)
-	q.mu.Unlock()
-	if err != nil {
-		t.Fatal(err)
+	deadline := time.Now().Add(5 * time.Second)
+	if len(deadlines) > 0 {
+		deadline = deadlines[0]
+	}
+	for {
+		q.mu.Lock()
+		owned := len(q.processingNotifications)
+		if owned == 0 {
+			// Check ownership and advance the clock under one lock. An idle
+			// snapshot taken earlier cannot prevent a selected worker from
+			// starting and then overwriting this clock with its final deferral.
+			_, err := q.db.Exec(`UPDATE notification_queue SET next_retry_at=? WHERE status='pending' AND last_error=?`, time.Now().Add(-time.Second).Unix(), notificationSettlementPendingMessage)
+			q.mu.Unlock()
+			if err != nil {
+				t.Fatal(err)
+			}
+			break
+		}
+		q.mu.Unlock()
+		if time.Now().After(deadline) {
+			t.Fatalf("local settlement worker did not return before retry: owned=%d", owned)
+		}
+		time.Sleep(time.Millisecond)
 	}
 	select {
 	case q.notifyChan <- struct{}{}:
