@@ -2236,3 +2236,149 @@ func TestResourceFromPBSDatastoreRaisesIncidentForFailedSync(t *testing.T) {
 		t.Fatalf("primary store must stay clean, got status %q incidents %+v", main.Status, main.Incidents)
 	}
 }
+
+func TestHostReportCadenceFollowsEachResource(t *testing.T) {
+	now := time.Now().UTC()
+	builders := []struct {
+		name  string
+		build func(models.Host) (Resource, ResourceIdentity)
+	}{
+		{"agent", resourceFromHost},
+		{"smart-disk", func(host models.Host) (Resource, ResourceIdentity) {
+			return resourceFromHostSMARTDisk(host, models.HostDiskSMART{Device: "/dev/sda", Serial: "cadence-smart", Model: "Synthetic SMART disk", Health: "PASSED", Temperature: 37})
+		}},
+		{"unraid-array", resourceFromHostUnraidStorage},
+		{"unraid-cache", func(host models.Host) (Resource, ResourceIdentity) {
+			return resourceFromHostUnraidCacheStorage(host, models.HostUnraidDisk{Name: "cache", Device: "/dev/sdb", Role: "cache", Status: "online", Serial: "cadence-cache"})
+		}},
+		{"unraid-disk", func(host models.Host) (Resource, ResourceIdentity) {
+			return resourceFromHostUnraidPhysicalDisk(host, models.HostUnraidDisk{Name: "disk1", Device: "/dev/sdc", Role: "data", Status: "online", Serial: "cadence-array", Model: "Synthetic array disk", Temperature: 35})
+		}},
+	}
+	for _, tc := range []struct {
+		name     string
+		interval int
+		floor    time.Duration
+		want     time.Duration
+	}{
+		{"slow", 120, 0, 4 * time.Minute},
+		{"long", 600, 0, 20 * time.Minute},
+		{"fast-default-floor", 10, 0, time.Minute},
+		{"missing", 0, 0, time.Minute},
+		{"invalid", -120, 0, time.Minute},
+		{"configured-floor", 120, 10 * time.Minute, 10 * time.Minute},
+	} {
+		for _, builder := range builders {
+			t.Run(tc.name+"/"+builder.name, func(t *testing.T) {
+				numDisks := 2
+				host := models.Host{
+					ID: "cadence-host", Hostname: "cadence-host", MachineID: "cadence-machine", Status: "online", LastSeen: now, IntervalSeconds: tc.interval,
+					Unraid: &models.HostUnraidStorage{ArrayStarted: true, ArrayState: "STARTED", NumProtected: 1, NumDisks: &numDisks},
+				}
+				resource, identity := builder.build(host)
+				wantInterval := int64(max(tc.interval, 0))
+				if got := resource.SourceStatus[SourceAgent].ExpectedUpdateIntervalSeconds; got != wantInterval {
+					t.Fatalf("report cadence = %d, want %d", got, wantInterval)
+				}
+				thresholds := map[DataSource]time.Duration{SourceAgent: tc.floor}
+				rr := NewRegistryWithStaleThresholds(nil, thresholds)
+				id := rr.ingest(SourceAgent, "cadence-source", resource, identity)
+				if got := sourceStaleThreshold(SourceAgent, resource.SourceStatus[SourceAgent], thresholds); got != tc.want {
+					t.Fatalf("freshness window = %s, want %s", got, tc.want)
+				}
+				rr.MarkStale(now.Add(tc.want), nil)
+				fresh, ok := rr.Get(id)
+				if !ok || fresh.SourceStatus[SourceAgent].Status != "online" || fresh.Status != resource.Status || fresh.LastSeen != host.LastSeen {
+					t.Fatalf("on-schedule observation changed: %+v", fresh)
+				}
+				// The REST registry rebuild must retain this per-source evidence,
+				// without referring back to a host row or taking a fleet-wide max.
+				encoded, err := json.Marshal(rr.List())
+				if err != nil {
+					t.Fatal(err)
+				}
+				var decoded []Resource
+				if err := json.Unmarshal(encoded, &decoded); err != nil {
+					t.Fatal(err)
+				}
+				rebuilt := NewRegistryWithStaleThresholds(nil, thresholds)
+				rebuilt.IngestResources(decoded)
+				rebuilt.MarkStale(now.Add(tc.want+time.Second), nil)
+				late, ok := rebuilt.Get(id)
+				if !ok || late.SourceStatus[SourceAgent].Status != "stale" || late.SourceStatus[SourceAgent].ExpectedUpdateIntervalSeconds != wantInterval {
+					t.Fatalf("missed reports did not become stale: %+v", late)
+				}
+				health := EvaluateResourceHealth(*late, nil, now.Add(tc.want+time.Second))
+				if health.Verdict != HealthStale {
+					t.Fatalf("late health = %+v, want telemetry_stale", health)
+				}
+				resource.LastSeen = now.Add(tc.want + 2*time.Second)
+				rebuilt.IngestRecords(SourceAgent, []IngestRecord{{SourceID: "cadence-source", Resource: resource, Identity: identity}})
+				recovered, ok := rebuilt.Get(id)
+				if !ok || recovered.SourceStatus[SourceAgent].Status != "online" || recovered.Status != resource.Status || recovered.LastSeen != resource.LastSeen {
+					t.Fatalf("new report did not recover the same resource: %+v", recovered)
+				}
+				alerts := []ResourceHealthAlert{{ResourceID: id, Level: "critical", Type: "temperature"}}
+				if health := EvaluateResourceHealth(*recovered, alerts, resource.LastSeen); health.Verdict != HealthCritical {
+					t.Fatalf("freshness hid a live alert: %+v", health)
+				}
+			})
+		}
+	}
+}
+
+func TestHostReportCadenceRemainsPerReporterAndUpdates(t *testing.T) {
+	now := time.Now().UTC()
+	slow := models.Host{
+		ID: "slow", Hostname: "slow", MachineID: "cadence-slow", Status: "online", IntervalSeconds: 120, LastSeen: now.Add(-90 * time.Second),
+		Sensors: models.HostSensorSummary{SMART: []models.HostDiskSMART{{Device: "/dev/sda", Serial: "cadence-slow-disk", Model: "Synthetic disk", Health: "PASSED", Temperature: 37}}},
+	}
+	fast := models.Host{ID: "fast", Hostname: "fast", MachineID: "cadence-fast", Status: "online", IntervalSeconds: 30, LastSeen: slow.LastSeen}
+	unknown := models.Host{ID: "unknown", Hostname: "unknown", MachineID: "cadence-unknown", Status: "online", LastSeen: slow.LastSeen}
+	rr := NewRegistry(nil)
+	snapshot := models.StateSnapshot{Hosts: []models.Host{slow, fast, unknown}, Nodes: []models.Node{{ID: "pve-source", Name: "pve-node", Status: "online", LastSeen: slow.LastSeen}}}
+	rr.IngestSnapshot(snapshot)
+	ids := map[string]string{}
+	for _, resource := range rr.List() {
+		ids[resource.Name] = resource.ID
+		switch resource.Name {
+		case "slow", "Synthetic disk":
+			if resource.SourceStatus[SourceAgent].Status != "online" || EvaluateResourceHealth(resource, nil, now).Verdict != HealthOK {
+				t.Fatalf("120-second report is stale at 90 seconds: %+v", resource)
+			}
+		case "fast", "unknown":
+			if resource.SourceStatus[SourceAgent].Status != "stale" {
+				t.Fatalf("another reporter inherited slow cadence: %+v", resource)
+			}
+		case "pve-node":
+			if resource.SourceStatus[SourceProxmox].Status != "stale" {
+				t.Fatalf("agent cadence relaxed the provider: %+v", resource)
+			}
+		default:
+			t.Fatalf("unexpected resource: %+v", resource)
+		}
+	}
+	if len(ids) != 5 {
+		t.Fatalf("inventory = %v, want host/disk and independent controls", ids)
+	}
+	// A newly reported shorter interval replaces, rather than retaining, the
+	// previous cadence on both the host and its inventory.
+	slow.IntervalSeconds = 30
+	snapshot.Hosts[0] = slow
+	rr.IngestSnapshot(snapshot)
+	for _, name := range []string{"slow", "Synthetic disk"} {
+		resource, ok := rr.Get(ids[name])
+		if !ok || resource.SourceStatus[SourceAgent].ExpectedUpdateIntervalSeconds != 30 || resource.SourceStatus[SourceAgent].Status != "stale" {
+			t.Fatalf("shorter report cadence retained old grace: %+v", resource)
+		}
+	}
+	slow.LastSeen = now
+	snapshot.Hosts[0] = slow
+	rr.IngestSnapshot(snapshot)
+	for _, name := range []string{"slow", "Synthetic disk"} {
+		resource, ok := rr.Get(ids[name])
+		if !ok || resource.SourceStatus[SourceAgent].Status != "online" || EvaluateResourceHealth(*resource, nil, now).Verdict != HealthOK {
+			t.Fatalf("current report did not restore the same inventory: %+v", resource)
+		}
+	}
+}
