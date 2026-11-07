@@ -9852,3 +9852,23 @@ hostname in `?host=` still selects every host with it. Alert Thresholds reuses t
 same qualifier through `buildThresholdsDockerHostLabels`, so the module holds no
 import of the Docker table code. `dockerHostName` lives here and the table module
 re-exports it.
+
+### Host-agent report cadence and resource freshness
+
+Each host report carries its positive `intervalSeconds` into the existing
+`sourceStatus.agent.expectedUpdateIntervalSeconds` evidence on the agent and
+its SMART/Unraid disk and storage resources. Their sightings use the existing
+per-observation freshness rule: the larger of the source floor and two expected
+report intervals. A 120-second agent therefore does not become degraded while
+waiting for its next scheduled report. Missing/non-positive cadence keeps the
+source default; other agents and providers do not inherit a slow agent's grace.
+A later report replaces the cadence, including when the interval becomes shorter.
+
+This changes neither agent online/offline leases nor polling frequency. It keeps
+real late reports stale, live alert/disk-risk precedence, source timestamps,
+identity and inventory unchanged. JSON and registry reconstruction retain the
+cadence without consulting a parent host. `TestHostReportCadenceFollowsEachResource`
+and `TestHostReportCadenceRemainsPerReporterAndUpdates` in `adapters_test.go`
+exercise all five host-backed builders, default/configured floors, exact boundary,
+missed reports, recovery, JSON rebuilding, shorter intervals and independent
+agent/Proxmox controls through the repository's normal Go test command.

@@ -36,15 +36,15 @@ const (
 func retainResponseAuthority(cfg *config.Config, scope string, instanceAdmin bool, media responseMediaPolicy, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		revalidate := tokenStreamSnapshotRevalidator(cfg, r, scope)
-		sessionAllowed := sessionReadRevalidator(r)
-		if revalidate == nil && sessionAllowed == nil {
-			// No new authentication policy for proxy/basic/bypass requests.
+		userAllowed := combineAuthorization(sessionReadRevalidator(r), orgResponseAccessRevalidator(r))
+		if revalidate == nil && userAllowed == nil {
+			// No new authentication policy without an admitted principal or policy.
 			next(w, r)
 			return
 		}
 		allowed := func() bool {
 			if revalidate == nil {
-				return sessionAllowed()
+				return userAllowed()
 			}
 			current, ok := revalidate()
 			return ok && (!instanceAdmin || tokenActsForInstance(current))
