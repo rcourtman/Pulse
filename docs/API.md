@@ -1197,11 +1197,22 @@ read, edit, delete and rotate. Only an instance-wide token (full access, bound
 only to the default organization) can create, edit, rotate or delete another
 instance-wide token. Browser sessions are not limited this way.
 
+### Token lifetime
+
+For temporary access, add `"expiresIn": "24h"` to the create request below.
+The value is a duration such as `1h` or `24h`, with a minimum of `1m`.
+Use hours for days (`168h`), not `7d`. Invalid or shorter durations return `400`.
+
+Omitting `expiresIn`, sending `null` or an empty string creates a token
+with **no expiry**. Choose a lifetime to suit the job. Editing a token does not
+change its expiry, and rotation keeps the original expiry rather than starting
+a new lifetime.
+
 ### List API Tokens
 `GET /api/security/tokens`
 
 ### Create API Token
-`POST /api/security/tokens` — Omitting `scopes` or sending `null` requests full access (`*`). `[]` returns `400`.
+`POST /api/security/tokens` — Missing/`null` `scopes` requests full access (`*`). `[]` returns `400`. [Optional expiry](#token-lifetime).
 ```json
 { "name": "ansible-script", "scopes": ["monitoring:read"] }
 ```
