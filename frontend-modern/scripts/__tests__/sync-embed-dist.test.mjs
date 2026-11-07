@@ -344,7 +344,6 @@ describe('copy failures and irregular staged output', () => {
     () => {
       const f = fixture(validFiles);
       const previous = tree(f.target);
-      const completedSource = tree(f.source);
       const unreadable = path.join(f.source, 'assets', 'unreadable.js');
       writeFileSync(unreadable, 'synthetic unreadable asset');
       chmodSync(unreadable, 0o000);
@@ -404,6 +403,7 @@ describe('standalone sync waits for its actual build producer', () => {
     async (initial) => {
       const f = fixture(validFiles);
       const previous = tree(f.target);
+      const completedSource = tree(f.source);
       const gate = prepareGatedCompiler(f, { initial, fail: false });
       const build = startNode(f.root, [gate.builder]);
       let sync;
