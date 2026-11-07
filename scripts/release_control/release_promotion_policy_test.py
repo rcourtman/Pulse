@@ -582,7 +582,9 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
             'require_result "publication trust preflight"', commit_verdict
         )
         self.assertIn("- dispatch_release_convergence", activation)
-        self.assertNotIn("- publish_release_tag", dispatch)
+        for dependency in ("publish_release_tag", "publish_docker", "publish_helm_chart"):
+            self.assertIn(f"- {dependency}", dispatch)
+            self.assertIn(f"needs.{dependency}.result == 'success'", dispatch)
         self.assertIn("- create_release", dispatch)
         self.assertIn("- stage_private_pro_runtime", dispatch)
         self.assertIn("github.event.inputs.draft_only != 'true'", dispatch)
@@ -3825,6 +3827,66 @@ class CandidatePublicationBoundaryTest(unittest.TestCase):
                         continue  # Already skipped above, by policy.
                     with self.subTest(writer=name, dependency=dependency, state=state):
                         self.assertFalse(self.condition(name, outcomes | {dependency: state}))
+
+    def test_convergence_owner_waits_for_every_candidate_and_version_surface(self) -> None:
+        # A successful dispatch is not rerun by Actions' failed-jobs retry.
+        # It must not create an owner that can die while a prerequisite fails.
+        dispatch = self.jobs["dispatch_release_convergence"]
+        prerequisites = self.CANDIDATE_CHECKS | {
+            "publish_release_tag", "publish_docker", "publish_helm_chart",
+        }
+        self.assertEqual(set(dispatch["needs"]), prerequisites)
+        good = dict.fromkeys(self.jobs, "success")
+        good["integration_tests"] = "skipped"  # Normal beta policy.
+        self.assertTrue(self.condition("dispatch_release_convergence", good))
+        self.assertFalse(self.condition("dispatch_release_convergence", good, draft=True))
+        self.assertFalse(self.condition("dispatch_release_convergence", good, cancelled=True))
+        for dependency in prerequisites:
+            for state in ("failure", "cancelled", "skipped", "in_progress", "queued"):
+                if dependency == "integration_tests" and state == "skipped":
+                    continue
+                with self.subTest(dependency=dependency, state=state):
+                    self.assertFalse(self.condition(
+                        "dispatch_release_convergence", good | {dependency: state}
+                    ))
+
+    def test_failed_jobs_retry_creates_a_fresh_convergence_owner(self) -> None:
+        # Model the actual Actions retry rule: keep successful jobs, rerun
+        # failed/skipped ones. Evaluate the workflow's own predicates, not a
+        # second dispatch-admission implementation. The old graph dispatched
+        # before backend completion; its waiter then died with attempt one's
+        # failure, leaving attempt two to reuse a terminal owner.
+        writers = ("publish_release_tag", "publish_docker", "publish_helm_chart",
+                   "dispatch_release_convergence", "activate_release")
+        for failed in self.CANDIDATE_CHECKS | {"publish_release_tag", "publish_docker",
+                                             "publish_helm_chart"}:
+            if failed == "prepare":
+                continue  # Its missing outputs already stop draft preparation.
+            with self.subTest(failed=failed):
+                first = dict.fromkeys(self.jobs, "success")
+                first["integration_tests"] = "skipped"
+                first[failed] = "failure"
+                dispatches = []
+                for writer in writers:
+                    if writer == failed:
+                        continue
+                    first[writer] = ("success" if self.condition(writer, first) else "skipped")
+                    if writer == "dispatch_release_convergence" and first[writer] == "success":
+                        dispatches.append({"attempt": 1, "owner": "terminal"})
+                self.assertEqual(dispatches, [], "failed attempt must not strand an owner")
+                self.assertEqual(first["activate_release"], "skipped")
+
+                retry = dict.fromkeys(self.jobs, "success")
+                retry["integration_tests"] = "skipped"
+                for writer in writers:
+                    if first[writer] == "success":
+                        retry[writer] = first[writer]
+                        continue
+                    retry[writer] = ("success" if self.condition(writer, retry) else "skipped")
+                    if writer == "dispatch_release_convergence" and retry[writer] == "success":
+                        dispatches.append({"attempt": 2, "owner": "waiting-for-marker"})
+                self.assertEqual(dispatches, [{"attempt": 2, "owner": "waiting-for-marker"}])
+                self.assertEqual(retry["activate_release"], "success")
 
     def test_workflow_cancellation_blocks_completed_prerequisite_writers(self) -> None:
         good = dict.fromkeys(self.jobs, "success")
