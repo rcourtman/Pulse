@@ -150,7 +150,12 @@ if ! (umask 077; : > "$download_file"); then
   echo "[ERROR] Could not prepare the installer download file." >&2
   exit 1
 fi
-if ! curl "${curl_flags[@]}" --output "$download_file" -- "$URL/install.sh"; then
+# Admit one complete response, but do not let an accepting/stalled peer hold
+# the caller and private staging directory indefinitely. These limits apply
+# to both verified TLS and the caller's existing explicit TLS opt-out; they do
+# not add a retry or change which installer is trusted/executed.
+if ! curl "${curl_flags[@]}" --connect-timeout 5 --max-time 60 \
+  --output "$download_file" -- "$URL/install.sh"; then
   echo "[ERROR] Could not download the complete install.sh; nothing was executed." >&2
   exit 1
 fi
