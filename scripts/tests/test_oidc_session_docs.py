@@ -44,6 +44,38 @@ def assert_group_claim_advice(case, guide):
         case.assertIn(marker, " ".join(guide.split()))
 
 
+def assert_login_restriction_setup(case, guide, callback):
+    section = guide.split("### Access Control\n", 1)[1].split(
+        "### Group-to-Role Mapping\n", 1)[0]
+    setup = " ".join(re.sub(r"(?m)^> ?", "", section).split())
+    for boundary in (
+        "every non-empty list must match",
+        "Entries within one list are alternatives",
+        "does not bypass the other lists",
+        "An empty group list skips only that check",
+        "any domain and email restrictions still apply",
+        "does not grant instance administrator privileges by itself",
+        "removing the local administrator",
+    ):
+        case.assertIn(boundary, setup)
+    case.assertNotIn("allows every IdP user to sign in", setup)
+    # Keep the explanation next to setup, bound to the actual independent
+    # callback gates. This is source consistency, not an IdP login proof.
+    gates = callback.split("// Apply access restrictions from SSO provider config", 1)[1].split(
+        "// RBAC:", 1)[0]
+    for condition, failure in (
+        ("if len(provider.AllowedEmails) > 0 && !matchesValue(email, provider.AllowedEmails)", "email_restricted"),
+        ("if len(provider.AllowedDomains) > 0 && !matchesDomain(email, provider.AllowedDomains)", "domain_restricted"),
+        ("if len(provider.AllowedGroups) > 0", "group_restricted"),
+    ):
+        case.assertIn(condition, gates)
+        branch = gates.split(condition, 1)[1].split("\n\t}", 1)[0]
+        case.assertIn(f'"{failure}"', branch)
+        case.assertIn("return", branch)
+    case.assertIn("if !intersects(groups, provider.AllowedGroups)", gates)
+    case.assertNotIn("else if", gates)
+
+
 def assert_discovery_test_scope(case, handlers):
     oidc = handlers.split("func (r *Router) testOIDCConnection(", 1)[1].split(
         "// SSO Metadata Preview", 1)[0]
@@ -128,6 +160,32 @@ def assert_refresh_source(case, auth, store):
 
 
 class OIDCSessionDocsTest(unittest.TestCase):
+    def test_login_allowlists_are_not_described_as_bypasses(self):
+        callback = (ROOT / "internal/api/oidc_handlers.go").read_text()
+        assert_login_restriction_setup(self, GUIDE.read_text(), callback)
+
+    def test_login_restriction_consistency_rejects_misleading_help_or_gate_drift(self):
+        guide = GUIDE.read_text()
+        callback = (ROOT / "internal/api/oidc_handlers.go").read_text()
+        mutations = (
+            ("guide", "every non-empty list must match", "any non-empty list can match"),
+            ("guide", "An empty group list skips\n> only that check", "An empty group list allows every IdP user to sign in"),
+            ("callback", "if len(provider.AllowedDomains) > 0 && !matchesDomain(email, provider.AllowedDomains)",
+             "else if len(provider.AllowedDomains) > 0 && !matchesDomain(email, provider.AllowedDomains)"),
+            ("callback", '"email_restricted"', '"another_error"'),
+            ("callback", "if !intersects(groups, provider.AllowedGroups)", "if false"),
+        )
+        for target, before, after in mutations:
+            with self.subTest(regression=target + ":" + before):
+                original = guide if target == "guide" else callback
+                self.assertIn(before, original)
+                changed = original.replace(before, after, 1)
+                with self.assertRaises(AssertionError):
+                    assert_login_restriction_setup(
+                        self, changed if target == "guide" else guide,
+                        changed if target == "callback" else callback,
+                    )
+
     def test_unconfirmed_changes_use_a_read_without_promising_recovery(self):
         guide = GUIDE.read_text()
         recovery = " ".join(guide.split("### A provider change could not be confirmed", 1)[1].split())
