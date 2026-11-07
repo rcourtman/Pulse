@@ -9,7 +9,9 @@ const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, '..', '..');
 const sourceDir = path.join(repoRoot, 'frontend-modern', 'dist');
 const targetDir = path.join(repoRoot, 'internal', 'api', 'frontend-modern', 'dist');
-const lockPath = path.join(repoRoot, 'tmp', 'locks', 'frontend-embed-sync.lock');
+// Serialize standalone copies with the producer, not just with other copies.
+// The builder skips this inner lock only while holding the same outer lock.
+const lockPath = path.join(repoRoot, 'tmp', 'locks', 'frontend-embed-build.lock');
 
 async function ensureSourceExists() {
   try {
@@ -121,8 +123,9 @@ async function publishDirAtomically() {
 }
 
 export async function syncEmbedDir({ lock = true } = {}) {
-  await ensureSourceExists();
   const action = async () => {
+    // A build holding the lock may still be creating (or emptying) dist.
+    await ensureSourceExists();
     await publishDirAtomically();
   };
 
