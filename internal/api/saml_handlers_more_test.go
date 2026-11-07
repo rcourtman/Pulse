@@ -1142,8 +1142,9 @@ func TestHandleSAMLACS_InResponseToIgnoresNamespaceDeclarations(t *testing.T) {
 // names the request, and the login completes. A signed assertion that confirms
 // no request cannot ride along with one that does: an IdP-signed assertion for
 // another user without a SubjectConfirmation, placed ahead of the victim's own
-// in an unsigned Response, is the assertion crewjam would return, and the
-// victim's request must not vouch for it.
+// in an unsigned Response, must never log in as that other user. crewjam v0.5.2
+// discards it and returns the victim's own assertion, so the login stays the
+// victim's.
 func TestHandleSAMLACS_BindsTheAssertionItReturns(t *testing.T) {
 	idp := newSAMLManualCertTestIdP(t)
 	router, service := newSAMLACSTestRouter(t, idp, false)
@@ -1160,9 +1161,36 @@ func TestHandleSAMLACS_BindsTheAssertionItReturns(t *testing.T) {
 		t.Fatalf("could not splice assertions: %s / %s", unconfirmed, victimResponse)
 	}
 	spliced := append(append(append([]byte{}, victimResponse[:at]...), unconfirmedAssertion...), victimResponse[at:]...)
-	assertSAMLLoginRefused(t, deliverSAMLTestResponse(t, router, url.Values{"SAMLResponse": {base64.StdEncoding.EncodeToString(spliced)}}, victimToken), "unconfirmed assertion ahead of the victim's")
+	splicedLogin := deliverSAMLTestResponse(t, router, url.Values{"SAMLResponse": {base64.StdEncoding.EncodeToString(spliced)}}, victimToken)
+	assertSAMLLoginSucceeded(t, splicedLogin, "/?saml=success", "unconfirmed assertion ahead of the victim's")
 
-	assertSAMLLoginSucceeded(t, deliverSAMLTestResponse(t, router, url.Values{"SAMLResponse": {base64.StdEncoding.EncodeToString(victimResponse)}}, victimToken), "/?saml=success", "assertion-only signature")
+	nextRequestID, nextToken := startSAMLTestLogin(t, router, "", "/")
+	nextResponse := samlTestUnsignedResponse(t, idp.responseXML(t, service, nextRequestID))
+	victimLogin := deliverSAMLTestResponse(t, router, url.Values{"SAMLResponse": {base64.StdEncoding.EncodeToString(nextResponse)}}, nextToken)
+	assertSAMLLoginSucceeded(t, victimLogin, "/?saml=success", "assertion-only signature")
+
+	otherRequestID, otherToken := startSAMLTestLogin(t, router, "", "/")
+	otherResponse := samlTestUnsignedResponse(t, idp.signedResponseXML(t, service, otherRequestID, "mallory", nil))
+	otherLogin := deliverSAMLTestResponse(t, router, url.Values{"SAMLResponse": {base64.StdEncoding.EncodeToString(otherResponse)}}, otherToken)
+	assertSAMLLoginSucceeded(t, otherLogin, "/?saml=success", "the other user's own login")
+
+	sessionUser := func(rec *httptest.ResponseRecorder) string {
+		t.Helper()
+		for _, cookie := range rec.Result().Cookies() {
+			if cookie.Name == cookieNameSession && cookie.Value != "" {
+				return GetSessionUsername(cookie.Value)
+			}
+		}
+		t.Fatalf("login set no session cookie: %v", rec.Result().Cookies())
+		return ""
+	}
+	victim, other := sessionUser(victimLogin), sessionUser(otherLogin)
+	if victim == "" || victim == other {
+		t.Fatalf("test users must differ: victim %q, other %q", victim, other)
+	}
+	if spliced := sessionUser(splicedLogin); spliced != victim {
+		t.Fatalf("spliced response logged in as %q, want the victim %q", spliced, victim)
+	}
 }
 
 // Logins started in several tabs of one browser share its login cookie, and

@@ -6410,6 +6410,15 @@ in `internal/api/audit_handlers_test.go` replays one user's signed response
 into another user's browser and proves the victim's session survives and the
 refusal is audited.
 
+SAML assertions are read through crewjam/saml v0.5.2, which fixes GO-2026-6909.
+It binds assertion fields to the SAML assertion namespace, discards an assertion
+with no bearer `SubjectConfirmation` or no `AudienceRestriction` naming this
+service provider, and no longer decrypts RSA PKCS#1 v1.5 key transport. An IdP
+relying on any of those now gets the existing validation-failed redirect. A
+discarded assertion cannot lend a login its identity:
+`TestHandleSAMLACS_BindsTheAssertionItReturns` places an unconfirmed assertion
+for another user ahead of the victim's and proves the session is the victim's.
+
 The SAML ACS at `/api/saml/{id}/acs` accepts a Response, at default settings,
 only as the IdP's answer to a login the presenting browser started. crewjam/saml
 refuses a Response unless its `InResponseTo`, and that of each bearer
