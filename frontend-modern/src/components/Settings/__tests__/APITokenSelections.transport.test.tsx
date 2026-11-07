@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import type { APITokenRecord } from '@/api/security';
 import type { Resource } from '@/types/resource';
@@ -86,6 +86,12 @@ const json = (body: unknown) =>
 const reads = () => fetchMock.mock.calls.filter(([, init]) => !init?.method);
 const writes = () => fetchMock.mock.calls.filter(([, init]) => init?.method);
 const hint = (token: APITokenRecord) => `${token.prefix}…${token.suffix}`;
+
+beforeAll(async () => {
+  // Transform the actual lazy dialog module before timing control assertions.
+  // Selection is under test, not the dev server's first module compilation.
+  await import('../APITokenManagerDialogs');
+});
 
 function containerFor(layout: Layout, token: APITokenRecord) {
   return screen
