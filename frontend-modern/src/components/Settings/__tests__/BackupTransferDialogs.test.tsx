@@ -488,7 +488,9 @@ describe('BackupTransferDialogs', () => {
       expect(within(dialog).getByRole('alert')).toHaveTextContent(
         'Organisation changed. Close this dialog and reopen it in the intended workspace.',
       );
-      expect(within(dialog).getByLabelText('Backup passphrase')).toHaveValue('synthetic-passphrase');
+      expect(within(dialog).getByLabelText('Backup passphrase')).toHaveValue(
+        'synthetic-passphrase',
+      );
       expect(within(dialog).getByLabelText('Confirm backup passphrase')).toHaveValue(
         'synthetic-passphrase',
       );
