@@ -5,10 +5,15 @@ package installtests
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"math/big"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -84,9 +89,22 @@ func TestAgentInstallerPreflightHealthDeadline(t *testing.T) {
 			state, tools, temporary, home := t.TempDir(), t.TempDir(), t.TempDir(), t.TempDir()
 			ca := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: server.Certificate().Raw})
 			if mode == "untrusted-ca" {
-				other := httptest.NewTLSServer(http.NotFoundHandler())
-				ca = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: other.Certificate().Raw})
-				other.Close()
+				// httptest servers share a default certificate. Generate a
+				// genuinely different trust root instead of using a second server.
+				public, private, err := ed25519.GenerateKey(rand.Reader)
+				if err != nil {
+					t.Fatal(err)
+				}
+				template := &x509.Certificate{
+					SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "unrelated preflight fixture CA"},
+					NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().Add(time.Hour),
+					IsCA: true, BasicConstraintsValid: true, KeyUsage: x509.KeyUsageCertSign,
+				}
+				der, err := x509.CreateCertificate(rand.Reader, template, template, public, private)
+				if err != nil {
+					t.Fatal(err)
+				}
+				ca = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
 			}
 			saved := map[string][]byte{
 				"ca.pem": ca, "token": []byte(bootstrapToken + "\n"),
