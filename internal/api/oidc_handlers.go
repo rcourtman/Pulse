@@ -366,7 +366,7 @@ func (r *Router) handleSSOOIDCLogin(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 	if service == nil {
-		if err := r.oidcManager.InitializeProvider(req.Context(), providerID, provider, redirectURL); err != nil {
+		if err := r.oidcManager.EnsureProvider(req.Context(), providerID, provider, redirectURL); err != nil {
 			log.Error().Err(err).Str("provider_id", providerID).Str("issuer", provider.OIDC.IssuerURL).Msg("Failed to initialize SSO OIDC provider")
 			if req.Method == http.MethodGet {
 				r.redirectOIDCError(w, req, "/", "oidc_init_failed")
@@ -489,7 +489,7 @@ func (r *Router) handleSSOOIDCCallback(w http.ResponseWriter, req *http.Request)
 		}
 	}
 	if service == nil {
-		if err := r.oidcManager.InitializeProvider(req.Context(), providerID, provider, redirectURL); err != nil {
+		if err := r.oidcManager.EnsureProvider(req.Context(), providerID, provider, redirectURL); err != nil {
 			log.Error().Err(err).Str("provider_id", providerID).Msg("Failed to initialize SSO OIDC provider for callback")
 			r.redirectOIDCError(w, req, "/", "oidc_init_failed")
 			return
