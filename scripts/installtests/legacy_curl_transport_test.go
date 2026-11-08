@@ -4,6 +4,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"testing"
 )
 
@@ -32,5 +34,46 @@ exec "$PULSE_TEST_REAL_CURL" "$@"
 	return []string{
 		"PATH=" + bin + string(os.PathListSeparator) + os.Getenv("PATH"),
 		"PULSE_TEST_REAL_CURL=" + realCurl,
+	}
+}
+
+// Keep the whole shipped call inventory visible, including both wrapper array
+// assignments. The executable cases above and their consumers exercise these
+// options; the inventory prevents a new call or merged -q option slipping by.
+func TestUnixBootstrapEveryCurlCallDisablesDefaultConfigFirst(t *testing.T) {
+	call := regexp.MustCompile(`(?:^[ \t]*(?:if[ \t]+(?:![ \t]+)?)?|\$\(|--[ \t]+)curl[ \t]+(.+)`)
+	for name, want := range map[string]int{
+		"install-container-agent.sh": 1,
+		"install-mcp.sh":             1,
+		"pulse-auto-update.sh":       2,
+	} {
+		t.Run(name, func(t *testing.T) {
+			content, err := os.ReadFile(repoFile("scripts", name))
+			if err != nil {
+				t.Fatal(err)
+			}
+			source, count := string(content), 0
+			for _, line := range strings.Split(source, "\n") {
+				if strings.HasPrefix(strings.TrimSpace(line), "#") || strings.Contains(line, "command -v curl") {
+					continue
+				}
+				match := call.FindStringSubmatch(line)
+				if match == nil {
+					continue
+				}
+				count++
+				if strings.HasPrefix(match[1], "-q ") {
+					continue
+				}
+				if name == "install-container-agent.sh" && strings.HasPrefix(match[1], `"${curl_flags[@]}"`) &&
+					strings.Contains(source, "curl_flags=(-q -fsSL)") && strings.Contains(source, "curl_flags=(-q -kfsSL)") {
+					continue
+				}
+				t.Errorf("curl must ignore default config with standalone first-option -q: %s", line)
+			}
+			if count != want {
+				t.Errorf("curl inventory incomplete: got %d want %d", count, want)
+			}
+		})
 	}
 }

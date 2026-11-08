@@ -1337,7 +1337,7 @@ get_latest_stable_version
 				t.Fatalf("transport calls: got %d, want %d: %s", len(lines), tc.calls, calls)
 			}
 			for _, line := range lines {
-				if !strings.HasPrefix(line, "--disable --fail --silent --show-error --connect-timeout 5 --max-time 20 --proto =https https://api.github.com/repos/rcourtman/Pulse/") {
+				if !strings.HasPrefix(line, "-q --fail --silent --show-error --connect-timeout 5 --max-time 20 --proto =https https://api.github.com/repos/rcourtman/Pulse/") {
 					t.Fatalf("unbounded or ambient-config transport: %s", line)
 				}
 			}

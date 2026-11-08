@@ -93,7 +93,7 @@ sys.exit(int(os.environ["DOWNLOAD_EXIT"]))
                 self.assertEqual(result.returncode, int(status), result.stderr)
                 self.assert_forwarded(arguments + flags, "bash")
                 curl_args = json.loads((self.root / "curl-arguments").read_text())
-                self.assertEqual(curl_args[:2], ["--disable", "-fsSL"],
+                self.assertEqual(curl_args[:2], ["-q", "-fsSL"],
                                  "default configuration must not override verified TLS")
                 self.assert_transport_deadlines(curl_args)
                 self.assertEqual(curl_args[-2:], ["--", "https://pulse.example.invalid/install.sh"])
@@ -127,7 +127,7 @@ sys.exit(int(os.environ["DOWNLOAD_EXIT"]))
                                   "--token-file", str(self.token))
         self.assertEqual(result.returncode, 37, result.stderr)
         curl_args = json.loads((self.root / "curl-arguments").read_text())
-        self.assertEqual(curl_args[:2], ["--disable", "-kfsSL"])
+        self.assertEqual(curl_args[:2], ["-q", "-kfsSL"])
         self.assert_transport_deadlines(curl_args)
         self.assert_forwarded(["--url", "https://pulse.example.invalid", "--token-file", str(self.token),
                                "--insecure", "--enable-docker", "--enable-host"], "bash")
