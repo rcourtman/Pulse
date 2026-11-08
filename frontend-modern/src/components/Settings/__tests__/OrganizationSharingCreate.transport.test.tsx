@@ -85,13 +85,11 @@ let healthReply: () => Promise<Response>;
 let writeReply: () => Promise<Response>;
 let unexpected: string[];
 const fetchMock = vi.fn<typeof fetch>();
-const writes = () =>
-  fetchMock.mock.calls.filter(([, init]) => (init?.method ?? 'GET') !== 'GET');
+const writes = () => fetchMock.mock.calls.filter(([, init]) => (init?.method ?? 'GET') !== 'GET');
 const inventoryReads = () =>
   fetchMock.mock.calls.filter(
     ([url, init]) =>
-      (init?.method ?? 'GET') === 'GET' &&
-      (url === '/api/orgs' || String(url).startsWith(orgPath)),
+      (init?.method ?? 'GET') === 'GET' && (url === '/api/orgs' || String(url).startsWith(orgPath)),
   );
 const healthReads = () => fetchMock.mock.calls.filter(([url]) => url === '/api/health');
 const createButton = () => screen.getByRole('button', { name: 'Create Share' });
@@ -161,7 +159,7 @@ function expectSavedGrant(entry: Entry, role: Role = 'viewer') {
   expect(row).not.toBeNull();
   expect(row).toHaveTextContent(payload.resourceName);
   expect(row).toHaveTextContent('Namesake organization');
-  expect(row).toHaveTextContent(role[0].toUpperCase() + role.slice(1));
+  expect(within(row!).getByText(role, { exact: true })).toBeInTheDocument();
   expect(row).toHaveTextContent('Pending approval');
   expect(within(row!).getByRole('button', { name: 'Remove' })).toBeEnabled();
   // This saved state comes from the actual dispatched body, not the intended
@@ -252,7 +250,9 @@ describe('rendered Create Share controls through the real transport', () => {
       await waitFor(() => expect(inventoryReads()).toHaveLength(10));
       await screen.findByRole('heading', { name: 'Outgoing Shares' });
       expectSavedGrant(entry, role);
-      expect(notices.success).toHaveBeenCalledExactlyOnceWith('Share request sent. A target organization admin must accept it before access becomes active.');
+      expect(notices.success).toHaveBeenCalledExactlyOnceWith(
+        'Share request sent. A target organization admin must accept it before access becomes active.',
+      );
       expect(notices.error).not.toHaveBeenCalled();
       expect(healthReads()).toHaveLength(0);
       expectWrite(entry, role);
@@ -275,7 +275,9 @@ describe('rendered Create Share controls through the real transport', () => {
   it('requires a current resource selection instead of silently using a removed quick pick', async () => {
     await openPanel();
     fillForm('quick pick');
-    setResources((current) => current.filter((resource) => resource.type !== 'vm' || resource.id !== selectedResourceID));
+    setResources((current) =>
+      current.filter((resource) => resource.type !== 'vm' || resource.id !== selectedResourceID),
+    );
     await screen.findByRole('status');
     expect(screen.getByText(/The selected resource is no longer available/)).toBeInTheDocument();
     expect(createButton()).toBeDisabled();
@@ -289,7 +291,10 @@ describe('rendered Create Share controls through the real transport', () => {
     await waitFor(() => expect(inventoryReads()).toHaveLength(10));
     await screen.findByText(`agent:${selectedResourceID}`);
     expect(writes()).toHaveLength(1);
-    expect(JSON.parse(String(writes()[0][1]?.body))).toEqual({ ...payloadFor('quick pick'), resourceType: 'agent' });
+    expect(JSON.parse(String(writes()[0][1]?.body))).toEqual({
+      ...payloadFor('quick pick'),
+      resourceType: 'agent',
+    });
     expectBoundRequests();
   });
 
@@ -320,14 +325,17 @@ describe('rendered Create Share controls through the real transport', () => {
     expectSavedGrant('quick pick');
   });
 
-  it.each([false, true].flatMap((applied) => [403, 429, 503].map((status) => ({ applied, status }))))(
+  it.each(
+    [false, true].flatMap((applied) => [403, 429, 503].map((status) => ({ applied, status }))),
+  )(
     'rereads uncertain creation (applied: $applied, HTTP $status) without retrying the grant',
     async ({ applied, status }) => {
       applyWrite = applied;
-      writeReply = async () => json({ error: 'Synthetic acknowledgement unavailable' }, status, {
-        'X-CSRF-Token': 'synthetic-refresh-must-not-replay',
-        'Retry-After': '0.001',
-      });
+      writeReply = async () =>
+        json({ error: 'Synthetic acknowledgement unavailable' }, status, {
+          'X-CSRF-Token': 'synthetic-refresh-must-not-replay',
+          'Retry-After': '0.001',
+        });
       await openPanel();
       fillForm('quick pick', 'editor');
       fireEvent.click(createButton());
