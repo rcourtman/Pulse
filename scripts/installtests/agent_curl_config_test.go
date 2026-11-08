@@ -279,6 +279,9 @@ func agentInstallerTransferStatements(t *testing.T, phase string) string {
 // Cover the local readiness, Docker/helper socket and dormant private-config
 // helper too, without inducing a service transition or running as another user.
 // Existing lifecycle suites exercise their consumers separately.
+// Require short -q: curl before 7.50.0 has no --disable long option.
+// This inventory prevents a modern-only spelling from breaking legacy hosts;
+// the real-curl tests establish transport behavior, not an old-binary install.
 func TestAgentInstallerEveryCurlCallDisablesDefaultConfigFirst(t *testing.T) {
 	source, err := os.ReadFile(repoFile("scripts", "install.sh"))
 	if err != nil {
@@ -297,21 +300,22 @@ func TestAgentInstallerEveryCurlCallDisablesDefaultConfigFirst(t *testing.T) {
 			continue
 		}
 		count++
-		if strings.HasPrefix(match[1], "--disable ") {
+		if strings.HasPrefix(match[1], "-q ") {
 			continue
 		}
-		// The existing passive preflight puts --disable first in these arrays.
+		// Passive preflight must use the same legacy-compatible first option.
 		array := ""
 		for _, name := range []string{"CURL_TEST_ARGS", "CURL_DOWNLOAD_CHECK_ARGS"} {
 			if strings.HasPrefix(match[1], `"${`+name+`[@]}"`) {
 				array = name
 			}
 		}
-		if array == "" || !strings.Contains(string(source), array+"=(--disable ") {
-			t.Errorf("implicit curl configuration remains enabled: %s", line)
+		if array == "" || !strings.Contains(string(source), array+"=(-q ") {
+			t.Errorf("curl must ignore default config with first-option -q, including on legacy hosts: %s", line)
 		}
 	}
 	if count != 14 {
 		t.Fatalf("curl inventory unexpectedly incomplete: %d", count)
 	}
+	t.Logf("all %d installer curl calls use first-option -q (including preflight arrays)", count)
 }
