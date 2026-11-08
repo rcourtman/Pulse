@@ -14,7 +14,7 @@ func TestBuildSSOOIDCCallbackURL(t *testing.T) {
 
 	t.Run("builds provider scoped callback when not configured", func(t *testing.T) {
 		t.Parallel()
-		got := buildSSOOIDCCallbackURL(req, "legacy-oidc", "")
+		got := buildSSOOIDCCallbackURL(req, "legacy-oidc", "", "")
 		want := "http://pulse.example.com/api/oidc/legacy-oidc/callback"
 		if got != want {
 			t.Fatalf("buildSSOOIDCCallbackURL() = %q, want %q", got, want)
@@ -23,7 +23,7 @@ func TestBuildSSOOIDCCallbackURL(t *testing.T) {
 
 	t.Run("keeps configured callback unchanged", func(t *testing.T) {
 		t.Parallel()
-		got := buildSSOOIDCCallbackURL(req, "legacy-oidc", "http://pulse.example.com/api/oidc/callback")
+		got := buildSSOOIDCCallbackURL(req, "legacy-oidc", "http://pulse.example.com/api/oidc/callback", "")
 		want := "http://pulse.example.com/api/oidc/callback"
 		if got != want {
 			t.Fatalf("buildSSOOIDCCallbackURL() = %q, want %q", got, want)

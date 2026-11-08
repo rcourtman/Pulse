@@ -335,7 +335,7 @@ func (r *Router) handleListSSOProviders(w http.ResponseWriter, req *http.Request
 	response.AllowMultipleProviders = ssoCfg.AllowMultipleProviders
 
 	for _, p := range ssoCfg.Providers {
-		response.Providers = append(response.Providers, providerToResponse(&p, r.config.PublicURL, req))
+		response.Providers = append(response.Providers, providerToResponse(&p, r.ssoPublicURL(), req))
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -354,7 +354,7 @@ func (r *Router) handleGetSSOProvider(w http.ResponseWriter, req *http.Request, 
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(providerToDetailResponse(provider, r.config.PublicURL, req).NormalizeCollections())
+	json.NewEncoder(w).Encode(providerToDetailResponse(provider, r.ssoPublicURL(), req).NormalizeCollections())
 }
 
 func (r *Router) handleCreateSSOProvider(w http.ResponseWriter, req *http.Request) {
@@ -483,7 +483,7 @@ func (r *Router) handleCreateSSOProvider(w http.ResponseWriter, req *http.Reques
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(providerToResponse(&provider, r.config.PublicURL, req))
+	json.NewEncoder(w).Encode(providerToResponse(&provider, r.ssoPublicURL(), req))
 }
 
 func (r *Router) handleUpdateSSOProvider(w http.ResponseWriter, req *http.Request, providerID string) {
@@ -640,7 +640,7 @@ func (r *Router) handleUpdateSSOProvider(w http.ResponseWriter, req *http.Reques
 	LogAuditEventForTenant(GetOrgID(req.Context()), "sso_provider_updated", "", GetClientIP(req), req.URL.Path, true, "Updated provider: "+updated.Name)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(providerToResponse(&updated, r.config.PublicURL, req))
+	json.NewEncoder(w).Encode(providerToResponse(&updated, r.ssoPublicURL(), req))
 }
 
 func (r *Router) handleDeleteSSOProvider(w http.ResponseWriter, req *http.Request, providerID string) {
@@ -719,9 +719,24 @@ func (r *Router) persistSSOConfigLocked(cfg *config.SSOConfig) error {
 // emit no URL at all rather than a localhost guess that fails at the IdP.
 func ssoResponseBaseURL(publicURL string, req *http.Request) string {
 	if configured := strings.TrimRight(strings.TrimSpace(publicURL), "/"); configured != "" {
-		return configured
+		normalized, err := normalizeSAMLBaseURL(configured)
+		if err != nil {
+			return "" // Invalid configured authority must not fall back to an inbound Host.
+		}
+		return normalized
 	}
 	return requestOriginBaseURL(req)
+}
+
+// ssoPublicURL reads the captured/configured public base without racing the
+// first authenticated request's public-URL detection.
+func (r *Router) ssoPublicURL() string {
+	if r == nil || r.config == nil {
+		return ""
+	}
+	r.publicURLMu.Lock()
+	defer r.publicURLMu.Unlock()
+	return r.config.PublicURL
 }
 
 func providerToResponse(p *config.SSOProvider, publicURL string, req *http.Request) SSOProviderResponse {
@@ -751,8 +766,8 @@ func providerToResponse(p *config.SSOProvider, publicURL string, req *http.Reque
 		resp.OIDCClientSecretSet = p.OIDC.ClientSecretSet || p.OIDC.ClientSecret != ""
 		if baseURL != "" {
 			resp.OIDCLoginURL = baseURL + "/api/oidc/" + p.ID + "/login"
-			resp.OIDCCallbackURL = baseURL + "/api/oidc/" + p.ID + "/callback"
 		}
+		resp.OIDCCallbackURL = buildSSOOIDCCallbackURL(req, p.ID, p.OIDC.RedirectURL, publicURL)
 	}
 
 	if p.Type == config.SSOProviderTypeSAML && p.SAML != nil {
@@ -761,12 +776,12 @@ func providerToResponse(p *config.SSOProvider, publicURL string, req *http.Reque
 			resp.SAMLIDPEntityID = p.SAML.IDPIssuer
 		}
 		resp.SAMLSPEntityID = p.SAML.SPEntityID
-		if resp.SAMLSPEntityID == "" && baseURL != "" {
-			resp.SAMLSPEntityID = baseURL + "/saml/" + p.ID
-		}
 		if baseURL != "" {
-			resp.SAMLMetadataURL = baseURL + "/api/saml/" + p.ID + "/metadata"
-			resp.SAMLACSURL = baseURL + "/api/saml/" + p.ID + "/acs"
+			if endpoints, err := buildSAMLSPURLs(p.ID, p.SAML, baseURL); err == nil {
+				resp.SAMLSPEntityID = endpoints.entityID
+				resp.SAMLMetadataURL = endpoints.metadata.String()
+				resp.SAMLACSURL = endpoints.acs.String()
+			}
 		}
 	}
 

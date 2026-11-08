@@ -21,6 +21,34 @@
 
 ## Purpose
 
+### SSO registration targets match native authentication endpoints
+
+OIDC collection and detail responses advertise the callback used by both login
+and code exchange: an explicit provider redirect remains byte-for-byte authoritative
+apart from existing outer-whitespace trimming; otherwise configured PublicURL,
+then the existing proxy-trusted request origin, supplies the base. Public-base
+query/fragment boundaries are not part of endpoint paths. Invalid configured
+bases do not fall back to an inbound Host, and an unresolved callback starts no
+flow. Explicit redirect query parameters remain intact. Login URLs still refer
+to Pulse rather than to the callback override.
+
+SAML setup responses and native metadata/AuthnRequests use the same entity,
+metadata and ACS construction, including saved advanced paths and explicit
+entity IDs. Before a public base has been configured or captured, HTTP flows
+use a request-local SP copy derived from the existing trusted-origin resolver;
+metadata, authentication responses and logout responses cannot rebind shared
+services or persist request-derived authority. Browser/session-bound single-use
+request stores, signature verification, audience/destination validation, IdP
+policy, credentials, TLS and configured public authority remain intact.
+
+`internal/api/sso_registration_urls_test.go` executes actual OIDC discovery,
+authorization and code exchange; compares SAML setup, metadata and requests;
+checks concurrent no-base origins and signed response/logout binding. The
+existing SSO contract/origin, CRUD, advanced-setting, service and protocol suites
+remain applicable. The existing Settings panel consumes the corrected producer
+values without frontend-source edits. This is fixture/browser correctness proof,
+not live-IdP, installed original-client recovery or measured exposure.
+
 ### Account withdrawal does not serialize unrelated session attribution on disk
 
 Session-cap eviction and account-wide revocation update tracking, live sessions

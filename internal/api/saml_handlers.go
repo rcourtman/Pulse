@@ -101,7 +101,7 @@ func (r *Router) syncSAMLPublicURL() error {
 	if r == nil || r.samlManager == nil || r.config == nil {
 		return nil
 	}
-	return r.samlManager.SetPublicURL(r.config.PublicURL)
+	return r.samlManager.SetPublicURL(r.ssoPublicURL())
 }
 
 // handleSAMLLogin initiates a SAML authentication flow
@@ -164,7 +164,7 @@ func (r *Router) handleSAMLLogin(w http.ResponseWriter, req *http.Request) {
 		writeErrorResponse(w, http.StatusInternalServerError, "saml_auth_failed", "Failed to create authentication request", nil)
 		return
 	}
-	redirectURL, err := service.MakeAuthRequest(returnTo, sessionHash(loginToken))
+	redirectURL, err := service.makeAuthRequest(req, returnTo, sessionHash(loginToken))
 	if err != nil {
 		log.Error().Err(err).Str("provider_id", providerID).Msg("Failed to create SAML auth request")
 		writeErrorResponse(w, http.StatusInternalServerError, "saml_auth_failed", "Failed to create authentication request", nil)
@@ -399,7 +399,7 @@ func (r *Router) handleSAMLMetadata(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	metadata, err := service.GetMetadata()
+	metadata, err := service.metadataForRequest(req)
 	if err != nil {
 		log.Error().Err(err).Str("provider_id", providerID).Msg("Failed to generate SAML metadata")
 		writeErrorResponse(w, http.StatusInternalServerError, "metadata_error", "Failed to generate metadata", nil)
@@ -466,7 +466,7 @@ func (r *Router) handleSAMLLogout(w http.ResponseWriter, req *http.Request) {
 	r.clearSession(w, req)
 
 	// Attempt SAML SLO
-	logoutURL, err := service.MakeLogoutRequest(session.NameID, session.SessionIndex, sessionKey)
+	logoutURL, err := service.makeLogoutRequest(req, session.NameID, session.SessionIndex, sessionKey)
 	if err != nil {
 		log.Warn().Err(err).Str("provider_id", providerID).Msg("SAML SLO not available, local logout only")
 		LogAuditEventForTenant(GetOrgID(req.Context()), "saml_logout", "", GetClientIP(req), req.URL.Path, true, "Local logout only (SLO not available)")
