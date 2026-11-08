@@ -261,4 +261,3 @@ export function checkPreloadPosture(distDir) {
 
   return errors;
 }
-
