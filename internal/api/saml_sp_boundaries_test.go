@@ -201,6 +201,50 @@ func TestSAMLSPPathChangesAreTransactional(t *testing.T) {
 				if err != nil || string(beforeBytes) != string(after) {
 					t.Fatal("invalid write changed saved bytes")
 				}
+
+				// The corresponding valid save must still work, including paths
+				// that need the uncaptured-base handling and saved private fields.
+				safe := *p.SAML
+				safe.SPACSPath = "//api/saml/setup/acs?tenant=ops%2fwest"
+				safe.SPMetadataPath = "/api/saml/setup/metadata/"
+				id := p.ID
+				if via == "private snapshot" {
+					runtime := newSSOAdminRuntime(r)
+					snapshot := runtime.GetSSOConfigSnapshot()
+					snapshot.Providers[0].SAML.SPACSPath = safe.SPACSPath
+					snapshot.Providers[0].SAML.SPMetadataPath = safe.SPMetadataPath
+					if err := runtime.SaveSSOConfigSnapshot(snapshot); err != nil {
+						t.Fatal(err)
+					}
+				} else {
+					if via == "create" {
+						id = "new-provider"
+					}
+					body, err := json.Marshal(map[string]interface{}{"id": id, "name": p.Name, "type": "saml", "enabled": false, "saml": safe})
+					if err != nil {
+						t.Fatal(err)
+					}
+					rr := httptest.NewRecorder()
+					req := httptest.NewRequest(http.MethodPost, "/api/security/sso/providers", strings.NewReader(string(body)))
+					want := http.StatusCreated
+					if via == "create" {
+						r.handleCreateSSOProvider(rr, req)
+					} else {
+						want = http.StatusOK
+						req.Method = http.MethodPut
+						r.handleUpdateSSOProvider(rr, req, id)
+					}
+					if rr.Code != want {
+						t.Fatalf("valid custom path save=%d %s", rr.Code, rr.Body.String())
+					}
+				}
+				loaded, err := r.persistence.LoadPersistedSSOConfig()
+				if err != nil || loaded == nil || loaded.GetProvider(id) == nil {
+					t.Fatalf("saved readback: %v", err)
+				}
+				if !reflect.DeepEqual(loaded.GetProvider(id).SAML, &safe) || !reflect.DeepEqual(r.getSSOProvider(id).SAML, &safe) {
+					t.Fatal("valid custom path save changed paths, entity or saved private fields")
+				}
 			})
 		}
 	}
