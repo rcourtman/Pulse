@@ -158,6 +158,9 @@ func TestSSOProviderUnrepresentedFields(t *testing.T) {
 							key = strings.ToUpper(key)
 							if field.Type.Kind() == reflect.String {
 								value = "https://replacement.example.test/value"
+								if field.Name == "SPACSPath" || field.Name == "SPMetadataPath" {
+									value = "/replacement/" + field.Name
+								}
 								want = value
 							}
 						}

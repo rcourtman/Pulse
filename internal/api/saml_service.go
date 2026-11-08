@@ -214,6 +214,10 @@ func NewSAMLService(ctx context.Context, providerID string, cfg *config.SAMLProv
 	if err != nil {
 		return nil, fmt.Errorf("invalid saml base url: %w", err)
 	}
+	// Reject malformed saved paths before contacting the IdP or loading keys.
+	if _, err := buildSAMLSPURLs(providerID, cfg, normalizedBaseURL); err != nil {
+		return nil, err
+	}
 
 	service := &SAMLService{
 		providerID: providerID,
@@ -492,6 +496,25 @@ type samlSPURLs struct {
 // Keep displayed registration targets and native SP endpoints on the same
 // rules, including advanced paths and an explicitly configured Entity ID.
 func buildSAMLSPURLs(providerID string, cfg *config.SAMLProviderConfig, baseURL string) (samlSPURLs, error) {
+	if cfg == nil {
+		return samlSPURLs{}, errors.New("saml configuration is nil")
+	}
+	normalizedBaseURL, err := normalizeSAMLBaseURL(baseURL)
+	if err != nil {
+		return samlSPURLs{}, fmt.Errorf("invalid saml base url: %w", err)
+	}
+	baseURL = normalizedBaseURL
+	// Parse paths against an absolute base even before PublicURL is captured.
+	// Otherwise a valid double-slash path would acquire a host in the shared
+	// placeholder SP. It stays a path when the request-local base is supplied.
+	parseBase := baseURL
+	if parseBase == "" {
+		parseBase = "https://saml.invalid"
+	}
+	base, err := url.Parse(parseBase)
+	if err != nil {
+		return samlSPURLs{}, fmt.Errorf("invalid saml base url: %w", err)
+	}
 	endpoints := samlSPURLs{entityID: cfg.SPEntityID}
 	if endpoints.entityID == "" {
 		endpoints.entityID = baseURL + "/saml/" + providerID
@@ -505,16 +528,29 @@ func buildSAMLSPURLs(providerID string, cfg *config.SAMLProviderConfig, baseURL 
 		metadataPath = "/api/saml/" + providerID + "/metadata"
 	}
 	for _, endpoint := range []struct {
+		name string
 		path string
 		url  *url.URL
 	}{
-		{acsPath, &endpoints.acs},
-		{metadataPath, &endpoints.metadata},
-		{"/api/saml/" + providerID + "/slo", &endpoints.slo},
+		{"ACS", acsPath, &endpoints.acs},
+		{"metadata", metadataPath, &endpoints.metadata},
+		{"SLO", "/api/saml/" + providerID + "/slo", &endpoints.slo},
 	} {
-		parsed, err := url.Parse(baseURL + endpoint.path)
+		// These are paths appended to the public base, not URL references.
+		// Never resolve them as a new authority or silently insert a slash:
+		// that would change a saved callback rather than reject a bad one.
+		if !strings.HasPrefix(endpoint.path, "/") {
+			return samlSPURLs{}, fmt.Errorf("invalid SAML SP %s path: must start with /", endpoint.name)
+		}
+		parsed, err := url.Parse(parseBase + endpoint.path)
 		if err != nil {
-			return samlSPURLs{}, fmt.Errorf("invalid SAML SP endpoint: %w", err)
+			return samlSPURLs{}, fmt.Errorf("invalid SAML SP %s path", endpoint.name)
+		}
+		if parsed.Scheme != base.Scheme || parsed.Host != base.Host || parsed.User != nil || parsed.Opaque != "" {
+			return samlSPURLs{}, fmt.Errorf("invalid SAML SP %s path: must remain on the public URL authority", endpoint.name)
+		}
+		if baseURL == "" {
+			parsed.Scheme, parsed.Host = "", ""
 		}
 		*endpoint.url = *parsed
 	}
