@@ -806,10 +806,9 @@ jobs:
 
       - name: Provide frontend embed stub
         if: needs.changes.outputs.code == 'true'
-        run: |
-          mkdir -p internal/api/frontend-modern/dist
-          [ -f internal/api/frontend-modern/dist/index.html ] || \
-            printf '<!doctype html><title>ci embed stub</title>\n' > internal/api/frontend-modern/dist/index.html
+        # Embed bytes are part of Go's build identity. Match the compile
+        # gate so its restored race objects remain reusable by this shard.
+        run: bash scripts/ensure_test_assets.sh
 
       - name: Go unit tests (shard ${{ matrix.shard }})
         if: needs.changes.outputs.code == 'true'
@@ -935,10 +934,9 @@ jobs:
 
       - name: Provide frontend embed stub
         if: needs.changes.outputs.code == 'true'
-        run: |
-          mkdir -p internal/api/frontend-modern/dist
-          [ -f internal/api/frontend-modern/dist/index.html ] || \
-            printf '<!doctype html><title>ci embed stub</title>\n' > internal/api/frontend-modern/dist/index.html
+        # Keep the exact compile-gate embed, not a different placeholder
+        # that forces every API shard to rebuild its heaviest package.
+        run: bash scripts/ensure_test_assets.sh
 
       - name: Go unit tests (internal/api shard ${{ matrix.index }})
         if: needs.changes.outputs.code == 'true'
