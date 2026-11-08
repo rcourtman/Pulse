@@ -1,0 +1,99 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "52ae8302a45519537e7e4dc32aca45de9b6f4f1e",
+  "baseline_comparison_sha": "e3e81aaf8ff4c7ba929c7e849e7cf6149cd3a4c7",
+  "verified_at": "2026-11-08T22:53:57.631631Z",
+  "changed_paths": [
+    "frontend-modern/src/utils/apiTokenPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/utils/apiTokenPresentation.ts": "f2a1b43c2c36bafb68dca9f14052a6ec0729a37ba67744c73f63197ab09cb57d"
+  },
+  "routes": [
+    "API Access / token inventory (production APIAccessPanel and real APITokenManager/state/SecurityAPI/apiClient in an isolated Router fixture)"
+  ],
+  "viewports": [
+    {
+      "width": 1720,
+      "height": 1000,
+      "color_scheme": "light"
+    },
+    {
+      "width": 1280,
+      "height": 1000,
+      "color_scheme": "dark"
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "color_scheme": "light"
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "color_scheme": "dark"
+    }
+  ],
+  "states": [
+    "Same four synthetic records: two same-name collectors distinguished by hints, future offset timestamp normalized to explicit UTC, elapsed expiry, omitted expiry, and unreadable expiry. Same frozen 2026-11-08T21:30:00Z clock, viewport, theme and interaction anchors for every before/after pair.",
+    "Full wide table keeps Name/Hint/Scopes/Usage/Created/Last used/Actions; explicit Expiry is added. Header now says Saved credentials, not Active credentials.",
+    "Compact and phone cards preserve all original data, per-record controls, connected-runtime usage and two-agent shared-token warning. All four card document tops and heights match before exactly: compact 249/249/245/245px; phone 289/285/285/285px in both themes.",
+    "No expiry and Unavailable stay distinct; Expired is text plus colour, not colour alone. New layout places expiry beside Created on phones while preserving the original full-width Usage row.",
+    "Native desktop and phone-dark scope dialogs retain the unchanged-value/expiry warning, local selection, Cancel and Save controls. No write submitted.",
+    "Shared-clock tick changes the scheduled lifetime to Expired without an additional token inventory fetch. Four extra after-tick captures."
+  ],
+  "interactions": [
+    "Real authenticated inventory GET through native state/client with exact synthetic organisation and credential binding; public capabilities manifest GET intentionally omits credential. Eight page contexts made 16 GETs total, no writes.",
+    "Scroll to the same page, inventory and individual-card anchors before and after; verify visible original fields/actions and no horizontal document overflow.",
+    "Open real lazy scope editor, verify unchanged Save disabled, select wildcard locally to verify Save enabled, then Cancel. Repeat in all four contexts, before and after; no scope mutation.",
+    "Advance the shared page clock by 90001ms; scheduled expiry changes on the tick in both DOM layouts with unchanged request count."
+  ],
+  "playwright_version": "1.56.1",
+  "browser": "Chromium 141.0.7390.37",
+  "capture_count": 38,
+  "comparable_pairs": 17,
+  "extra_after_tick_states": 4,
+  "pixel_review": "All 38 final captures opened with native view_image. Desktop adds explicit UTC expiry without losing any existing field or action. Compact and phone layouts retain original card heights and later-record positions, including the third phone token actions that the rejected draft pushed below the viewport. Shared-agent warnings, same-name hints, creation/last-used ages and creation controls remain visible at their corresponding anchors. Light/dark expiry states and unchanged scope dialogs are readable.",
+  "capture_sha256": {
+    "before-grid-page.png": "0c619f56a252510267a43146f4301e1893cb24384fd7c8337dbb9781fd480560",
+    "before-grid-inventory.png": "3dc45e96941ca0d73f61542290b07aaa5ae240f9e0c79616e5d1f4dea7fe7bd9",
+    "before-grid-scope-editor.png": "ab34b53628296047b70792d229394cbd47f7716aa61550243969f2b0e0d33c8b",
+    "before-compact-page.png": "3450126d8e3c2c8b3c44bec59a46cf85d6435a4d8b04cce4bf7d7dc66729fdf2",
+    "before-compact-scheduled.png": "3958d435dc57231b0f79200ac08d1454d278b0d3668e3b8fbfd3718b1a30bbce",
+    "before-compact-unknown.png": "38ca8ea8011728dd53fa1359095260cb65a81c8f3016c7d5601b137893b849e1",
+    "before-phone-light-page.png": "8f359560ae42ebf94e64d9dbdbcb23c41705fcee828483838c8014b6bd65da2d",
+    "before-phone-light-scheduled.png": "557daceeb8082817b25a2abcff36714f226fbcd987422892a25f3317b528aa2d",
+    "before-phone-light-expired.png": "2f3773a0355ee8985504730a6b29063eed5e5c0b546411c6e925e147408697de",
+    "before-phone-light-no-expiry.png": "c6a1c692b06bf472b8593cfc4af83aa91eb0757a8793026604f0219fa52a5d1f",
+    "before-phone-light-unknown.png": "65a2d633fd08daca828363cd4b35c9627e4da858b0b0d5e108e528612de71c6c",
+    "before-phone-dark-page.png": "d5ce7bee53be807b6f5ee21a30727ba67f4383a1b84eb679b820e35ba50c80c9",
+    "before-phone-dark-scheduled.png": "411f24ca75c22a39d8e474b73f0e0a0683bf1ef4a8c358e97e7ca33d9b870173",
+    "before-phone-dark-expired.png": "cfebad842ec9ab16155bd77ac789367bf18b22817b77977802740a142760273c",
+    "before-phone-dark-no-expiry.png": "45378db8bb6e9f38bd91d0a74f71b339923347352d7d242a8fe48e32ccf2eecb",
+    "before-phone-dark-unknown.png": "f75f19478e4510a4e5ec6ff9661c6aeed6373c358c047a6ef96f1af43513bdcc",
+    "before-phone-dark-scope-editor.png": "f488d0d940e2192621fa43230a93e57837c8b34bfd76f582a16f8e3d228a594a",
+    "after-grid-page.png": "ed78b245588752b3e4d2572c54e1e19772587df8db89e13989e971e6372fcdfa",
+    "after-grid-inventory.png": "41067ea915043b55d28f8614117a6d27b445289a0cc253a1fa33868fb81eec36",
+    "after-grid-scope-editor.png": "30d8dddc9f03183b0a206b9546370cebeae66f1b5ded407cb4c74017b9e1cf24",
+    "after-grid-expiry-crossed.png": "cf4e51b2004012852f40b395c0576f7046519caa1be42f790404d75ae710eea4",
+    "after-compact-page.png": "e4fef9778bd2a3ccbe4b5d51c6334e65f7dc499a35251f56df00ad5d7d7a080e",
+    "after-compact-scheduled.png": "8009194e1c3bbbe53a51b8c59394774d007a920dc9f5c41e3e0ca6ffe07efde4",
+    "after-compact-unknown.png": "d95f2ea5c867ff10a18fd8858da9ffb2b42cb4e00b771b6ec0d813acb18ca3c0",
+    "after-compact-expiry-crossed.png": "46f61029fbc975ca67156b495507ffae483c6d6565c87819ef947aa658c67db4",
+    "after-phone-light-page.png": "7e69142a20df4367eddf6c1be6a9846a7d91db4cc9b474bfa010e5a3b502e50d",
+    "after-phone-light-scheduled.png": "9ec517fd7e490638230beabf20a2fb6d1e245c9d489edcc3c90d141b164737f8",
+    "after-phone-light-expired.png": "23249cc77b5a936ba8cf8d12e58a2c1ee666f005e001ab254dfaf96ab40d30f7",
+    "after-phone-light-no-expiry.png": "cefef0a7dd130f65c8acefb011b79f2ba9328bd666d084deac7ba18fbd16eafb",
+    "after-phone-light-unknown.png": "bc49c6d56da1c191040faa482d7702f17d5ac4ea4ef1a039364dbc72d81e9b9c",
+    "after-phone-light-expiry-crossed.png": "2017b4ad33b84c00794764827ea8c25b5c9ed1df196b0e62c4a129881c50cc13",
+    "after-phone-dark-page.png": "d0edeae5be75bbc766fde6de2a6e83c118a02dd492d16760807afc6ce5962fba",
+    "after-phone-dark-scheduled.png": "151b5f7d2c5da4390d5e624563d7ef2535ea005dc04357ee54b7f8644a666813",
+    "after-phone-dark-expired.png": "cb085c26dd79de65aecd1c7ec70d01b786ee883d198713392e253737978964f4",
+    "after-phone-dark-no-expiry.png": "b4def221175ceca0da86b4501c37076a9b4e74aacf4c602388c56f29de886faf",
+    "after-phone-dark-unknown.png": "2cbb1de52faa194599d24a79ba4f82b74065d0d4f61a6e583301018e4c7b5625",
+    "after-phone-dark-scope-editor.png": "f488d0d940e2192621fa43230a93e57837c8b34bfd76f582a16f8e3d228a594a",
+    "after-phone-dark-expiry-crossed.png": "8ecdb6dfd08d04e0b110754ec5464fcba7e478aecf203c52aaaaa0976b057e49"
+  },
+  "limits": "Real production panel, state, client, helper and styles; synthetic read-only HTTP and runtime/resource context adapters. Not full App/IdP/native backend/authentication enforcement/original-client recovery, publication or a released result. Both baseline and final fixtures return no semantic columnheader matches; actual ordered native th text/geometry and complete DOM/aria snapshots were retained. No shared-table accessibility repair claimed."
+}
