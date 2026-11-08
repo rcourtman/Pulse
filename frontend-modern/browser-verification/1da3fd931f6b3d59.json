@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "d587c53ffc872f22d31fe6266abb7213ec3e80c3",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/APITokenManager.tsx",
+    "frontend-modern/src/components/Settings/APITokenManagerDialogs.tsx",
+    "frontend-modern/src/components/Settings/apiTokenManagerModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/APITokenManager.tsx": "37ba99aed4a796cf3068183a4829a812f67260467d3a97bcacbba0b02404eac6",
+    "frontend-modern/src/components/Settings/APITokenManagerDialogs.tsx": "4581fb11a83a2ab6952fdfa8ba875fbcda609c6c2242125c3ecba5ae99496f7d",
+    "frontend-modern/src/components/Settings/apiTokenManagerModel.ts": "b1899d24cfe2381cf17dc4b1a4c2c606ddf6a4706e819630c65d5d1268482008"
+  },
+  "routes": [
+    "/settings/security/api — native APIAccessPanel served by source-bound offline fixture /after/token-expiry.html, not full App"
+  ],
+  "viewports": [
+    {
+      "width": 1720,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Same-named Fleet collector credentials with distinct masked hints",
+    "Saved/elapsed/no/unreadable expiry retained",
+    "Long-name scope editor and unnamed-token revoke confirmation",
+    "Desktop light and phone light/dark",
+    "All inventory fields, warnings, actions and scope choices preserved"
+  ],
+  "interactions": [
+    "Use exact name plus masked-hint action to open the selected scope/rename/revoke dialog",
+    "Confirm saved masked hint and saved identity persist in each dialog",
+    "Cancel every dialog and return focus to the same record/action without writes",
+    "Compare 22 before/after pairs captured with the same fixture, clock, viewport, theme and action sequence",
+    "Inspect all 44 captures through native view_image; native Chromium AX confirms row-specific action names and already-correct headers"
+  ],
+  "verified_at": "2026-11-08T23:35:37Z",
+  "evidence": "Current lane outcome links CAPTURES.json, BROWSER-RESULT.json and BROWSER-INPUTS.tar.xz. Both browser passes exit0; synthetic GET-only HTTP; no full App/native backend/real credentials/released recovery claim."
+}

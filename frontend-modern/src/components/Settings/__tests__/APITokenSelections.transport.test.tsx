@@ -287,6 +287,20 @@ describe.each<Layout>(['desktop row', 'compact card'])(
       expect(writes()[1][1]?.method).toBe('PATCH');
       expect(JSON.parse(String(writes()[1][1]?.body))).toEqual({ name: 'North collector' });
       const renamed = { ...scoped, name: 'North collector' };
+      for (const surface of ['desktop row', 'compact card'] as const) {
+        expect(
+          controlsFor(surface, renamed).getByRole('button', {
+            name: `Rename North collector (${hint(selected)})`,
+            exact: true,
+          }),
+        ).toBeInTheDocument();
+        expect(
+          controlsFor(surface, renamed).queryByRole('button', {
+            name: `Rename ${selected.name} (${hint(selected)})`,
+            exact: true,
+          }),
+        ).not.toBeInTheDocument();
+      }
       expect(saved).toEqual([originals[0], renamed, originals[2]]);
       expectUnchangedSiblings(selected);
       expect(changed).toHaveBeenCalledTimes(2);
@@ -349,7 +363,12 @@ describe.each<Layout>(['desktop row', 'compact card'])(
         expect(containerFor(surface, selected)).toBeUndefined();
         for (const sibling of saved)
           for (const name of ['Edit scopes', 'Rename', 'Revoke'])
-            expect(controlsFor(surface, sibling).getByRole('button', { name })).toBeEnabled();
+            expect(
+              controlsFor(surface, sibling).getByRole('button', {
+                name: `${name}${name === 'Edit scopes' ? ' for' : ''} ${sibling.name} (${hint(sibling)})`,
+                exact: true,
+              }),
+            ).toBeEnabled();
       }
       expect(reads()).toHaveLength(1);
       expectBoundRequests();
