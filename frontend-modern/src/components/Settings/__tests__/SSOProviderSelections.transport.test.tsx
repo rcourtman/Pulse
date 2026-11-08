@@ -111,7 +111,7 @@ let initialSecrets: Record<string, string>;
 let unexpected: string[];
 let failListRead: boolean;
 let reply: () => Promise<Response>;
-let changed: ReturnType<typeof vi.fn>;
+const changed = vi.fn<() => void>();
 
 function cardFor(provider: SavedProvider) {
   // Locate the existing card header by its visible issuer/entity distinction,
@@ -182,7 +182,6 @@ function expectPreserved(exceptID?: string) {
   expect(secretMarkers).toEqual(initialSecrets);
 }
 async function mount() {
-  changed = vi.fn();
   render(() => <SSOProvidersPanel currentUser="admin@example.test" onConfigUpdated={changed} />);
   await waitFor(() =>
     expect(screen.getAllByRole('button', { name: 'Edit provider' })).toHaveLength(6),
