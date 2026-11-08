@@ -21,6 +21,18 @@
 
 ## Purpose
 
+### AI approval routes use existing session review authority
+
+Both `/api/ai/approvals` registrations gate non-token callers with canonical
+Actions review admission before collection/item dispatch. Configured/mapped
+administrators and explicit `approve:actions` (legacy `admin:ai`) grants retain
+access; denied or unreadable policy reaches no approval data or decision.
+Existing token/mobile scopes, response shapes, HTTP methods, tenant isolation
+and session CSRF stay unchanged. `ai_approval_review_test.go` and
+`TestContract_AIApprovalReviewAuthenticationCSRFAndMethods` execute these
+registered transport boundaries, including saved-state and compatibility controls.
+
+
 ### Organization edits cannot restore superseded access
 
 Organization metadata saves compare a JSON-excluded, path-bound snapshot of the

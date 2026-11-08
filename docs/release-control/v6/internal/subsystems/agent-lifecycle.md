@@ -17,6 +17,17 @@
 
 ## Purpose
 
+### Session approval review precedes command handoff
+
+The AI approval collection/item registrations reuse canonical Actions session
+review authority before any command approval or investigation dispatch. A denied
+or failed review check leaves the pending request untouched and does not reach
+the downstream executor/paid adapter. Existing `ai:execute` and paired-mobile
+scope compatibility, organization binding and the investigation licence gate
+remain in their established route/handler layers. Registered normal/race coverage
+is in `ai_approval_review_test.go`; no agent command runs in these fixtures.
+
+
 ### Peer-temperature cache lifetime is not reporter liveness (7 November 2026)
 
 Host-report ingestion retains cluster-sibling sensor observations only up to the

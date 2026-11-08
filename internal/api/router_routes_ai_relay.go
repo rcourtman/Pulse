@@ -267,10 +267,11 @@ func (r *Router) registerAIRelayRoutesGroup() {
 	r.mux.HandleFunc("/api/ai/sessions", RequireAuth(r.config, r.routeAISessionsCollection))
 	r.mux.HandleFunc("/api/ai/sessions/", RequireAuth(r.config, r.routeAISessions))
 
-	// AI approval endpoints - for command approval workflow
-	// Require ai:execute scope to prevent low-privilege tokens from enumerating or denying approvals
-	r.mux.HandleFunc("/api/ai/approvals", RequireAuth(r.config, requireRelayMobileRuntimeRoute(relayMobileRouteApprovalsList, r.aiAutoFixEndpoints.HandleListApprovals)))
-	r.mux.HandleFunc("/api/ai/approvals/", RequireAuth(r.config, r.routeApprovals))
+	// AI approval review uses the same session authority as canonical Actions.
+	// Keep legacy AI/mobile token scopes at their existing per-route boundaries.
+	r.mux.HandleFunc("/api/ai/approvals", RequireAuth(r.config, requireAIApprovalReview(r.config, r.authorizer,
+		requireRelayMobileRuntimeRoute(relayMobileRouteApprovalsList, r.aiAutoFixEndpoints.HandleListApprovals))))
+	r.mux.HandleFunc("/api/ai/approvals/", RequireAuth(r.config, requireAIApprovalReview(r.config, r.authorizer, r.routeApprovals)))
 
 	// Provide extension endpoints to the approval handler for investigation fix gating
 	r.aiSettingsHandler.SetAIAutoFixEndpoints(r.aiAutoFixEndpoints)

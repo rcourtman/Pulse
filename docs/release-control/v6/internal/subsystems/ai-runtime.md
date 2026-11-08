@@ -25,6 +25,30 @@ that same result. Successful reads retain their content and execution provenance
 
 ## Purpose
 
+### AI approval review shares canonical session authority
+
+The registered `/api/ai/approvals` collection and item prefix apply the
+existing Actions `approve:actions` capability (including its `admin:ai`
+compatibility grant) to non-token callers before listing, reading or deciding.
+With the Community default authorizer, the existing configured-local / mapped
+SSO / trusted-proxy administrator boundary applies. A policy denial or failed
+policy read cannot fall through to the approval store or decision dispatch.
+
+API tokens retain their existing route scopes, including unowned legacy
+`ai:execute` and paired `relay:mobile:access` clients for list/approve/deny. The mobile
+scope alone still cannot read approval detail. Authentication, session-bound
+CSRF, tenant selection/membership, record organization checks and investigation
+licence/dispatch boundaries are unchanged; a review grant does not dispatch an
+otherwise gated fix or rewrite saved approval/token authority.
+
+`ai_approval_review_test.go` exercises the registered router with local/SSO/proxy
+sessions, explicit and legacy review grants, inherited deny/read-error/withdrawal
+controls, token/mobile scopes and two isolated organizations. The registered
+`TestContract_AIApprovalReviewAuthenticationCSRFAndMethods` pins authentication,
+real CSRF and method rejection without changing saved decisions. These are safe
+source fixtures, not installed-client recovery or measured exposure.
+
+
 ### Patrol credits a backup to the guest that owns it (4 November 2026)
 
 The backup section of Patrol's seed credits guests by connection and VMID, not by

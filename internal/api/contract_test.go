@@ -26700,3 +26700,33 @@ func TestMetricHistoryWithdrawnTokenCannotDisclose(t *testing.T) {
 		}
 	}
 }
+
+func TestContract_AIApprovalReviewAuthenticationCSRFAndMethods(t *testing.T) {
+	router, store := approvalReviewFixture(t, &authpkg.DefaultAuthorizer{})
+	seedApprovalReview(t, store, "fixture-own", "default", "shell")
+	for _, tc := range []struct {
+		method, path, user string
+		csrf               bool
+		want               int
+	}{
+		{http.MethodGet, "/api/ai/approvals", "", false, 401},
+		{http.MethodGet, "/api/ai/approvals/fixture-own", "", false, 401},
+		{http.MethodPost, "/api/ai/approvals/fixture-own/approve", "", false, 401},
+		{http.MethodPost, "/api/ai/approvals/fixture-own/deny", "", false, 401},
+		{http.MethodPost, "/api/ai/approvals/fixture-own/approve", "admin", false, 403},
+		{http.MethodPost, "/api/ai/approvals/fixture-own/deny", "admin", false, 403},
+		{http.MethodPost, "/api/ai/approvals", "admin", true, 405},
+		{http.MethodGet, "/api/ai/approvals/fixture-own/approve", "admin", true, 405},
+		{http.MethodGet, "/api/ai/approvals/fixture-own/deny", "admin", true, 405},
+		{http.MethodPost, "/api/ai/approvals/fixture-own/unknown", "admin", true, 404},
+	} {
+		rec := approvalReviewRequest(t, router, tc.user, "", tc.method, tc.path, "", tc.csrf)
+		if rec.Code != tc.want {
+			t.Errorf("%s %s user=%s csrf=%v: status=%d want=%d: %s", tc.method, tc.path, tc.user, tc.csrf, rec.Code, tc.want, rec.Body.String())
+		}
+	}
+	item, _ := store.GetApproval("fixture-own")
+	if item.Status != approval.StatusPending || item.Consumed {
+		t.Fatal("rejected request mutated approval")
+	}
+}
