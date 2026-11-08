@@ -4,6 +4,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -24,6 +26,10 @@ type SessionStore struct {
 	workerDone chan struct{}
 	stopOnce   sync.Once
 	crypto     *crypto.CryptoManager
+	// A failed startup read cannot authorize replacing the unknown inventory.
+	// load sets this before workers start; later access belongs to persistMu.
+	preserveBeforeSave    bool
+	preserveFailureLogged bool
 	// Refresh ownership is transient and belongs to this store, not the global
 	// store selector or a raw-token-only process-wide guard.
 	oidcRefreshes map[string]*oidcSessionRefresh
@@ -578,9 +584,10 @@ func (s *SessionStore) DeleteSessionsForUser(username string) []string {
 		}
 	}
 	s.mu.Unlock()
-	if len(deletedKeys) > 0 {
-		s.save()
-	}
+	// An unread startup inventory cannot establish that this user has no saved
+	// sessions. Even with no live match, retire that unknown authority through
+	// the same preservation-before-publication path as every other revocation.
+	s.save()
 	return deletedKeys
 }
 
@@ -609,8 +616,67 @@ func (s *SessionStore) save() {
 	s.persistMu.Lock()
 	defer s.persistMu.Unlock()
 
+	if s.preserveBeforeSave {
+		preserved, err := s.preserveUnreadSessions()
+		if err != nil {
+			if !s.preserveFailureLogged {
+				log.Error().Err(err).Msg("Cannot preserve unread session file; disk saves are disabled until it can be preserved. New sign-ins are memory-only and session revocations are not durable. Preserve or move sessions.json before restarting; do not restore stale session authority")
+				s.preserveFailureLogged = true
+			}
+			return
+		}
+		s.preserveBeforeSave = false
+		if preserved != "" {
+			log.Warn().Str("preserved_file", preserved).Msg("Unread session file preserved outside active storage; it will not be loaded automatically. Sign in again rather than restoring stale session authority")
+		} else {
+			log.Warn().Msg("Unread session file is no longer in active storage; saving only the current authenticated sessions")
+		}
+	}
+
 	persisted := s.persistenceSnapshot()
 	s.persistSnapshot(persisted)
+}
+
+// preserveUnreadSessions retains the original inode before any fresh snapshot
+// can replace it. An exclusive owner-private directory protects even permissive
+// legacy files without opening, copying or changing their contents. Retained
+// files become owner-readable so ordinary data backup readers can retain them.
+// Only canonical sessions.json is loaded; retained bytes are not saved authority.
+// Called under persistMu, never the authentication mutex. Failure keeps the
+// original path and write hold, so a later save can recover after storage does.
+func (s *SessionStore) preserveUnreadSessions() (string, error) {
+	return preserveUnreadSessionFile(s.dataPath, os.Rename)
+}
+
+func preserveUnreadSessionFile(dataPath string, rename func(string, string) error) (string, error) {
+	path := filepath.Join(dataPath, "sessions.json")
+	info, err := os.Lstat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		// An operator may have already moved the unknown file out of active
+		// storage. Its absence grants no old sessions and need not hold saves.
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("inspect unread session file: %w", err)
+	}
+	if !info.Mode().IsRegular() {
+		return "", errors.New("unread session path is not a regular file; leaving it untouched")
+	}
+	dir, err := os.MkdirTemp(dataPath, ".sessions-unread-*")
+	if err != nil {
+		return "", fmt.Errorf("prepare private session preservation directory: %w", err)
+	}
+	preserved := filepath.Join(dir, "sessions.json")
+	if err := rename(path, preserved); err != nil {
+		return "", errors.Join(fmt.Errorf("preserve unread session file: %w", err), os.Remove(dir))
+	}
+	if err := os.Chmod(preserved, 0600); err != nil {
+		// The private directory still protects the original, and it is no
+		// longer live authority. Do not restore it or block the fresh inventory
+		// because a differently owned retained file needs filesystem repair.
+		log.Warn().Err(err).Str("preserved_file", preserved).Msg("Session file retained in a private directory but its permissions could not be normalized; backup readers may need filesystem repair")
+	}
+	return preserved, nil
 }
 
 // persistenceSnapshot owns every mutable field before mu is released. Token
@@ -700,7 +766,8 @@ func (s *SessionStore) load() {
 	data, err := os.ReadFile(sessionsFile)
 	if err != nil {
 		if !os.IsNotExist(err) {
-			log.Error().Err(err).Msg("Failed to read sessions file")
+			s.preserveBeforeSave = true
+			log.Error().Err(err).Msg("Failed to read sessions file; existing sessions were not loaded. The next save or shutdown will preserve it outside active storage, not restore it; sign in again")
 		}
 		return
 	}
@@ -718,5 +785,6 @@ func (s *SessionStore) load() {
 	if migrated, err := s.migrateLegacySessions(data, now); err == nil && migrated {
 		return
 	}
-	log.Error().Msg("Failed to decode sessions file; unsupported format")
+	s.preserveBeforeSave = true
+	log.Error().Msg("Failed to decode sessions file; existing sessions were not loaded. The next save or shutdown will preserve it outside active storage, not restore it; sign in again")
 }

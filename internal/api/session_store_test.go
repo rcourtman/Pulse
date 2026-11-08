@@ -3,11 +3,425 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
+
+func sessionPreservedFiles(t *testing.T, dir string) []string {
+	t.Helper()
+	dirs, err := filepath.Glob(filepath.Join(dir, ".sessions-unread-*"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var paths []string
+	for _, preservedDir := range dirs {
+		info, err := os.Stat(preservedDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !info.IsDir() || info.Mode().Perm()&0077 != 0 {
+			t.Fatalf("preserved session directory is not owner-private: %v", info.Mode())
+		}
+		entries, err := os.ReadDir(preservedDir)
+		if err != nil || len(entries) != 1 || entries[0].Name() != "sessions.json" {
+			t.Fatalf("preserved directory contents = %v, error = %v", entries, err)
+		}
+		paths = append(paths, filepath.Join(preservedDir, "sessions.json"))
+	}
+	return paths
+}
+
+func TestSessionStore_UnreadStartupPreservesBeforeEverySave(t *testing.T) {
+	validPrefix := fmt.Sprintf(`{"key":%q,"username":"saved-fixture","expires_at":"2099-01-01T00:00:00Z"}`, sessionHash("old-synthetic-session"))
+	inputs := map[string]string{
+		"garbage":          "not a session inventory",
+		"truncated-array":  "[" + validPrefix + ",",
+		"partial-element":  "[" + validPrefix + `,{"key":42}]`,
+		"truncated-legacy": `{"old-synthetic-session":{"expires_at":"2099-01-01T00:00:00Z"},`,
+		"scalar":           `"synthetic-session-content"`,
+		"zero-bytes":       "",
+		"whitespace":       " \n\t",
+	}
+	for name, original := range inputs {
+		for _, firstSave := range []string{"periodic", "create", "delete", "delete-user", "shutdown"} {
+			t.Run(name+"/"+firstSave, func(t *testing.T) {
+				dir := t.TempDir()
+				path := filepath.Join(dir, "sessions.json")
+				if err := os.WriteFile(path, []byte(original), 0644); err != nil {
+					t.Fatal(err)
+				}
+				before, err := os.Stat(path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				logs := captureTestLogs(t)
+				store := NewSessionStore(dir)
+				t.Cleanup(store.Shutdown)
+				if store.ValidateSession("old-synthetic-session") || len(store.sessions) != 0 {
+					t.Fatal("failed decode admitted partial saved authority")
+				}
+				switch firstSave {
+				case "periodic":
+					store.save()
+				case "create":
+					store.CreateSession("new-synthetic-session", time.Hour, "fixture", "127.0.0.1", "new-fixture")
+				case "delete":
+					store.DeleteSession("old-synthetic-session")
+				case "delete-user":
+					if keys := store.DeleteSessionsForUser("saved-fixture"); len(keys) != 0 {
+						t.Fatal("unread inventory supplied live session keys")
+					}
+				case "shutdown":
+					store.Shutdown()
+				}
+				preserved := sessionPreservedFiles(t, dir)
+				if len(preserved) != 1 {
+					t.Fatalf("preserved files = %d, want one before the first snapshot", len(preserved))
+				}
+				after, err := os.Stat(preserved[0])
+				if err != nil || !os.SameFile(before, after) {
+					t.Fatalf("original session inode was not retained: %v", err)
+				}
+				data, err := os.ReadFile(preserved[0])
+				if err != nil || string(data) != original {
+					t.Fatalf("original session bytes changed: %v", err)
+				}
+				if firstSave != "shutdown" {
+					store.CreateSession("control-session", time.Hour, "fixture", "127.0.0.1", "control-user")
+					store.CreateSession("withdrawn-session", time.Hour, "fixture", "127.0.0.1", "withdrawn-user")
+					if !store.ValidateAndExtendSession("control-session") {
+						t.Fatal("new authenticated session cannot operate after preservation")
+					}
+					store.DeleteSession("new-synthetic-session")
+					store.DeleteSessionsForUser("withdrawn-user")
+				}
+				store.Shutdown()
+				if len(sessionPreservedFiles(t, dir)) != 1 {
+					t.Fatal("subsequent saves created another preserved copy")
+				}
+				if _, err := os.Lstat(path + ".tmp"); !os.IsNotExist(err) {
+					t.Fatalf("session temporary file remained: %v", err)
+				}
+				if strings.Count(logs.String(), "Failed to decode sessions file;") != 1 || strings.Count(logs.String(), "Unread session file preserved outside active storage;") != 1 {
+					t.Fatal("startup and preservation diagnostics were not emitted once")
+				}
+				if strings.Contains(logs.String(), "old-synthetic-session") || strings.Contains(logs.String(), "synthetic-session-content") {
+					t.Fatal("startup diagnostics disclosed session contents")
+				}
+				restarted := NewSessionStore(dir)
+				defer restarted.Shutdown()
+				if restarted.ValidateSession("old-synthetic-session") || restarted.ValidateSession("withdrawn-session") || restarted.ValidateSession("new-synthetic-session") {
+					t.Fatal("restart resurrected unverified or revoked session authority")
+				}
+				if firstSave != "shutdown" && !restarted.ValidateSession("control-session") {
+					t.Fatal("new independent session did not persist")
+				}
+			})
+		}
+	}
+}
+
+func TestSessionStore_UnreadStartupPermissionFailure(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("ordinary-user permission witness; nonregular-path control also runs as root")
+	}
+	for _, firstSave := range []string{"create", "delete", "delete-user", "shutdown"} {
+		t.Run(firstSave, func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, "sessions.json")
+			original := fmt.Sprintf(`[{"key":%q,"username":"saved-user","expires_at":"2099-01-01T00:00:00Z"}]`, sessionHash("saved-session"))
+			if err := os.WriteFile(path, []byte(original), 0000); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := os.ReadFile(path); err == nil {
+				t.Fatal("permission fixture remained readable")
+			}
+			store := NewSessionStore(dir)
+			t.Cleanup(store.Shutdown)
+			if store.ValidateSession("saved-session") {
+				t.Fatal("unreadable session was admitted")
+			}
+			switch firstSave {
+			case "create":
+				store.CreateSession("new-session", time.Hour, "fixture", "127.0.0.1", "new-user")
+			case "delete":
+				store.DeleteSession("saved-session")
+			case "delete-user":
+				store.DeleteSessionsForUser("saved-user")
+			case "shutdown":
+				store.Shutdown()
+			}
+			preserved := sessionPreservedFiles(t, dir)
+			if len(preserved) != 1 {
+				t.Fatalf("preserved unread files = %d, want one", len(preserved))
+			}
+			info, err := os.Stat(preserved[0])
+			if err != nil || info.Mode().Perm() != 0600 {
+				t.Fatalf("retained mode000 input is not owner-readable for backups: %v", err)
+			}
+			data, err := os.ReadFile(preserved[0])
+			if err != nil || string(data) != original {
+				t.Fatalf("unread original was not retained byte-for-byte: %v", err)
+			}
+			store.Shutdown()
+			restarted := NewSessionStore(dir)
+			defer restarted.Shutdown()
+			if restarted.ValidateSession("saved-session") || (firstSave == "create" && !restarted.ValidateSession("new-session")) {
+				t.Fatal("restart restored unknown authority or lost the new authenticated session")
+			}
+		})
+	}
+}
+
+func TestSessionStore_UnreadStartupPreservationFailureAndRecovery(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("requires ordinary-user directory permissions")
+	}
+	dir := t.TempDir()
+	path := filepath.Join(dir, "sessions.json")
+	original := []byte("{unverified synthetic session bytes")
+	if err := os.WriteFile(path, original, 0600); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0700) })
+	logs := captureTestLogs(t)
+	store := NewSessionStore(dir)
+	t.Cleanup(store.Shutdown)
+	// Crypto initialization hardens its directory to writable owner access.
+	// Impose the storage failure only after construction has finished, then
+	// prove this process cannot prepare a preservation directory there.
+	if err := os.Chmod(dir, 0500); err != nil {
+		t.Fatal(err)
+	}
+	if probe, err := os.MkdirTemp(dir, ".blocked-preservation-probe-*"); !os.IsPermission(err) {
+		if err == nil {
+			_ = os.Remove(probe)
+		}
+		t.Fatalf("fixture did not block preservation-directory creation: %v", err)
+	}
+	store.CreateSession("live-session", time.Hour, "fixture", "127.0.0.1", "live-user")
+	store.CreateSession("withdrawn-session", time.Hour, "fixture", "127.0.0.1", "withdrawn-user")
+	store.DeleteSessionsForUser("withdrawn-user")
+	store.save()
+	data, err := os.ReadFile(path)
+	if err != nil || !bytes.Equal(data, original) {
+		t.Fatalf("failed preservation overwrote original: %v", err)
+	}
+	if len(sessionPreservedFiles(t, dir)) != 0 || !store.ValidateAndExtendSession("live-session") || store.ValidateSession("withdrawn-session") {
+		t.Fatal("failed preservation changed files or blocked live authentication/withdrawal")
+	}
+	if strings.Count(logs.String(), "Cannot preserve unread session file;") != 1 || !strings.Contains(logs.String(), "New sign-ins are memory-only") {
+		t.Fatal("persistence hold must be explicit without repeating errors on every save")
+	}
+	if err := os.Chmod(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	// A normal later save must preserve the old input before publishing the
+	// fresh live inventory. No restart or blanket revocation is required.
+	store.save()
+	preserved := sessionPreservedFiles(t, dir)
+	if len(preserved) != 1 {
+		t.Fatalf("recovered preservation count = %d, want one", len(preserved))
+	}
+	data, err = os.ReadFile(preserved[0])
+	if err != nil || !bytes.Equal(data, original) {
+		t.Fatalf("recovered storage did not retain original bytes: %v", err)
+	}
+	store.Shutdown()
+	restarted := NewSessionStore(dir)
+	defer restarted.Shutdown()
+	if !restarted.ValidateSession("live-session") || restarted.ValidateSession("withdrawn-session") {
+		t.Fatal("storage recovery lost a valid session or revived withdrawn authority")
+	}
+}
+
+func TestSessionStore_UnreadStartupNonregularPathStaysUntouched(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "sessions.json")
+	if err := os.Symlink("sessions.json", path); err != nil {
+		t.Fatal(err)
+	}
+	store := NewSessionStore(dir)
+	t.Cleanup(store.Shutdown)
+	store.CreateSession("live-session", time.Hour, "fixture", "127.0.0.1", "live-user")
+	store.DeleteSessionsForUser("unknown-user")
+	store.Shutdown()
+	target, err := os.Readlink(path)
+	if err != nil || target != "sessions.json" {
+		t.Fatalf("unread nonregular path was replaced: %v", err)
+	}
+	if len(sessionPreservedFiles(t, dir)) != 0 {
+		t.Fatal("nonregular path was moved or left a preservation placeholder")
+	}
+	if _, err := os.Lstat(path + ".tmp"); !os.IsNotExist(err) {
+		t.Fatalf("a snapshot was staged before preservation: %v", err)
+	}
+}
+
+func TestSessionStore_UnreadStartupCopiesStayDistinct(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "sessions.json")
+	var expected = map[string]bool{"first-unread-fixture": false, "second-unread-fixture": false}
+	for _, original := range []string{"first-unread-fixture", "second-unread-fixture"} {
+		if err := os.WriteFile(path, []byte(original), 0600); err != nil {
+			t.Fatal(err)
+		}
+		store := NewSessionStore(dir)
+		store.Shutdown()
+	}
+	for _, path := range sessionPreservedFiles(t, dir) {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, ok := expected[string(data)]; !ok || expected[string(data)] {
+			t.Fatal("a preserved copy was overwritten or duplicated")
+		}
+		expected[string(data)] = true
+	}
+	for _, seen := range expected {
+		if !seen {
+			t.Fatal("an earlier preservation was overwritten")
+		}
+	}
+}
+
+func TestSessionStore_UnreadStartupRenameFailureRemovesPlaceholder(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "sessions.json")
+	original := []byte("unverified fixture")
+	if err := os.WriteFile(path, original, 0600); err != nil {
+		t.Fatal(err)
+	}
+	// A fixed injected rename failure exercises the same boundary as a
+	// file-level bind mount, without requiring host mounts or process races.
+	for attempt := 0; attempt < 3; attempt++ {
+		retained, err := preserveUnreadSessionFile(dir, func(from, to string) error {
+			if from != path || filepath.Dir(filepath.Dir(to)) != dir {
+				t.Fatal("preservation escaped its source directory")
+			}
+			return fmt.Errorf("synthetic rename failure")
+		})
+		if err == nil || retained != "" {
+			t.Fatal("rename failure reported successful preservation")
+		}
+		if len(sessionPreservedFiles(t, dir)) != 0 {
+			t.Fatal("failed rename leaked a preservation directory")
+		}
+		data, err := os.ReadFile(path)
+		if err != nil || !bytes.Equal(data, original) {
+			t.Fatalf("rename failure changed original bytes: %v", err)
+		}
+	}
+}
+
+func TestSessionStore_UnreadStartupOperatorMovedOriginal(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "sessions.json")
+	original := []byte("unverified fixture")
+	if err := os.WriteFile(path, original, 0600); err != nil {
+		t.Fatal(err)
+	}
+	store := NewSessionStore(dir)
+	t.Cleanup(store.Shutdown)
+	retained := filepath.Join(dir, "manually-retained-session-fixture")
+	if err := os.Rename(path, retained); err != nil {
+		t.Fatal(err)
+	}
+	store.CreateSession("new-session", time.Hour, "fixture", "127.0.0.1", "new-user")
+	store.Shutdown()
+	data, err := os.ReadFile(retained)
+	if err != nil || !bytes.Equal(data, original) {
+		t.Fatalf("operator-retained bytes changed: %v", err)
+	}
+	restarted := NewSessionStore(dir)
+	defer restarted.Shutdown()
+	if !restarted.ValidateSession("new-session") || len(sessionPreservedFiles(t, dir)) != 0 {
+		t.Fatal("operator removal of unknown authority did not release normal saves")
+	}
+}
+
+func TestSessionStore_UnreadStartupSnapshotFailureDoesNotRequarantine(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "sessions.json")
+	original := []byte("unverified fixture")
+	if err := os.WriteFile(path, original, 0600); err != nil {
+		t.Fatal(err)
+	}
+	store := NewSessionStore(dir)
+	t.Cleanup(store.Shutdown)
+	// Preservation can succeed even when preparing the fresh snapshot fails.
+	// Its successful retirement must be recorded before persistSnapshot runs.
+	if err := os.Mkdir(path+".tmp", 0700); err != nil {
+		t.Fatal(err)
+	}
+	store.CreateSession("new-session", time.Hour, "fixture", "127.0.0.1", "new-user")
+	store.persistMu.Lock()
+	needsPreservation := store.preserveBeforeSave
+	store.persistMu.Unlock()
+	if needsPreservation || len(sessionPreservedFiles(t, dir)) != 1 {
+		t.Fatal("successful preservation was forgotten after a snapshot failure")
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("failed snapshot unexpectedly published: %v", err)
+	}
+	if err := os.Remove(path + ".tmp"); err != nil {
+		t.Fatal(err)
+	}
+	store.save()
+	store.Shutdown()
+	if len(sessionPreservedFiles(t, dir)) != 1 {
+		t.Fatal("retry quarantined a fresh snapshot")
+	}
+	restarted := NewSessionStore(dir)
+	defer restarted.Shutdown()
+	if !restarted.ValidateSession("new-session") {
+		t.Fatal("snapshot recovery did not persist the authenticated session")
+	}
+}
+
+func TestSessionStore_ValidStartupKeepsPersistence(t *testing.T) {
+	for _, initial := range []string{"missing", "[]", "null", "{}", "hashed", "legacy"} {
+		t.Run(initial, func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, "sessions.json")
+			content := initial
+			switch initial {
+			case "hashed":
+				content = fmt.Sprintf(`[{"key":%q,"username":"saved-user","expires_at":"2099-01-01T00:00:00Z"}]`, sessionHash("saved-session"))
+			case "legacy":
+				content = `{"saved-session":{"username":"saved-user","expires_at":"2099-01-01T00:00:00Z"}}`
+			}
+			if initial != "missing" {
+				if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			store := NewSessionStore(dir)
+			t.Cleanup(store.Shutdown)
+			if store.ValidateSession("saved-session") != (initial == "hashed" || initial == "legacy") {
+				t.Fatal("valid saved session loading changed")
+			}
+			store.CreateSession("new-session", time.Hour, "fixture", "127.0.0.1", "new-user")
+			store.Shutdown()
+			if len(sessionPreservedFiles(t, dir)) != 0 {
+				t.Fatal("valid or missing inventory was quarantined")
+			}
+			restarted := NewSessionStore(dir)
+			defer restarted.Shutdown()
+			if !restarted.ValidateSession("new-session") {
+				t.Fatal("valid startup no longer persists new sessions")
+			}
+			if restarted.ValidateSession("saved-session") != (initial == "hashed" || initial == "legacy") {
+				t.Fatal("valid original session did not survive restart")
+			}
+		})
+	}
+}
 
 func TestSessionHash(t *testing.T) {
 	tests := []struct {

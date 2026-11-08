@@ -2133,6 +2133,15 @@ token-free command. No copy receipt establishes installed removal or a release.
 
 ## Shared Boundaries
 
+Server browser-session persistence preserves unread input outside active storage
+before replacing it. This is not an agent-token inventory, enrollment, binding or
+capability transition: collectors retain their existing credentials and transport
+policy. Session preservation and fresh snapshot writes stay outside the shared
+authentication mutex, so that storage failure does not hold independent live
+authentication or in-memory withdrawal. The session disk-isolation/real-route
+tests and unread-startup tests exercise this boundary; retained session files are
+private backup material, never a source of agent authority.
+
 Protected progress and synchronous reads use the API-owned non-executable media
 policy. Configuration-import replay admission retains guard-keyed request
 fingerprints without retaining archives or passphrases. These transport guards
