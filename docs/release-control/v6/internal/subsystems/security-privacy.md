@@ -18,6 +18,25 @@
 
 ## Purpose
 
+### Role-detail read failures cannot masquerade as saved access
+
+The SQLite RBAC store implements a separate optional `ErrorAwareRoleReader`.
+It returns a complete role or an explicit read error; failed role-row scans,
+permission queries and permission-JSON decoding cannot return partial data.
+Only a successful no-row lookup establishes absence. Separating this interface
+from `ErrorAwareManager` preserves existing managers' error-aware list and
+assignment behavior without requiring them to implement a new method.
+
+The registered single-role GET consumes that result as the existing fixed
+`503 rbac_store_unavailable` error. Tenant selection, admin/session/licence
+gates, successful JSON, legacy manager adapters and authorization evaluation
+are unchanged. Legacy errorless methods still have their existing limitations;
+this repair does not claim to replace them or restore erased authority.
+Normal `TestSQLiteRoleDetailRead*` and `TestRBACRoleDetailRead*` cover complete,
+empty, missing, failed and subsequently corrected application data, including
+tenant isolation and non-disclosure. No SQLite driver or storage-engine changes,
+crash reproduction, migration, new route or grant are introduced.
+
 ### Organization edits cannot restore superseded access
 
 Organization metadata saves compare a JSON-excluded, path-bound snapshot of the

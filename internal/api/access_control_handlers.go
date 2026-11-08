@@ -144,7 +144,17 @@ func (h *RBACHandlers) HandleRoles(w http.ResponseWriter, r *http.Request) {
 			json.NewEncoder(w).Encode(roles)
 		} else {
 			// Get specific role
-			role, ok := manager.GetRole(roleID)
+			var role auth.Role
+			var ok bool
+			if errorAware, supportsErrors := manager.(auth.ErrorAwareRoleReader); supportsErrors {
+				role, ok, err = errorAware.GetRoleWithError(roleID)
+				if err != nil {
+					writeRBACStoreError(w, err)
+					return
+				}
+			} else {
+				role, ok = manager.GetRole(roleID)
+			}
 			if !ok {
 				writeErrorResponse(w, http.StatusNotFound, "not_found", "Role not found", nil)
 				return
