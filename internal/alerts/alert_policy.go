@@ -144,7 +144,7 @@ func (m *Manager) effectiveAlertPolicyNoLock(q alertPolicyQuery) EffectiveAlertP
 		// Polling and config-save reevaluation both resolve through here,
 		// so a relaxed guest's alert is judged by one threshold. Applied
 		// only by CheckGuest, a save re-judged it by the unrelaxed one.
-		if guest, ok := extractGuestSnapshot(q.Guest); ok && parsePulseTags(guest.Tags).Relaxed {
+		if guest, ok := extractGuestReadView(q.Guest); ok && parsePulseTags(guest.Tags).Relaxed {
 			thresholds = applyRelaxedGuestThresholds(thresholds)
 		}
 	case q.TypeKey == "storage":

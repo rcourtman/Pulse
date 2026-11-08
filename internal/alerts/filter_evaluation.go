@@ -10,11 +10,11 @@ import (
 
 // evaluateFilterCondition evaluates a single filter condition against a guest
 func (m *Manager) evaluateFilterCondition(guest any, condition FilterCondition) bool {
-	snapshot, ok := extractGuestSnapshot(guest)
+	metrics, ok := extractGuestMetrics(guest)
 	if !ok {
 		return false
 	}
-	return evaluateGuestCondition(snapshot.metrics(), condition)
+	return evaluateGuestCondition(metrics, condition)
 }
 
 // guestMetrics holds common metrics for filter evaluation
@@ -37,7 +37,7 @@ type guestMetrics struct {
 
 // extractGuestMetrics extracts common metrics from a VM or Container
 func extractGuestMetrics(guest any) (guestMetrics, bool) {
-	snapshot, ok := extractGuestSnapshot(guest)
+	snapshot, ok := extractGuestReadView(guest)
 	if !ok {
 		return guestMetrics{}, false
 	}
@@ -178,12 +178,12 @@ func numericConditionValue(raw any) (float64, bool) {
 
 // evaluateVMCondition evaluates a filter condition against a VM
 func (m *Manager) evaluateVMCondition(vm models.VM, condition FilterCondition) bool {
-	return evaluateGuestCondition(guestSnapshotFromVM(vm).metrics(), condition)
+	return evaluateGuestCondition(guestReadViewFromVM(vm).metrics(), condition)
 }
 
 // evaluateContainerCondition evaluates a filter condition against a Container
 func (m *Manager) evaluateContainerCondition(ct models.Container, condition FilterCondition) bool {
-	return evaluateGuestCondition(guestSnapshotFromContainer(ct).metrics(), condition)
+	return evaluateGuestCondition(guestReadViewFromContainer(ct).metrics(), condition)
 }
 
 // evaluateFilterStack evaluates a filter stack against a guest
