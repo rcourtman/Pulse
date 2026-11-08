@@ -280,12 +280,17 @@ func TestSSOAdminPublicURLUsesCaptureMutex(t *testing.T) {
 }
 
 func TestSSOAdminPublicURLConcurrentCapture(t *testing.T) {
+	const token = "synthetic-capture-token.12345678"
 	for i := 0; i < 20; i++ {
-		cfg := &config.Config{APIToken: "synthetic-capture-token"}
+		record, err := config.NewAPITokenRecord(token, "capture", []string{config.ScopeSettingsWrite})
+		if err != nil {
+			t.Fatal(err)
+		}
+		cfg := &config.Config{APITokens: []config.APITokenRecord{*record}}
 		r := &Router{config: cfg, samlManager: NewSAMLServiceManager("")}
 		runtime := newSSOAdminRuntime(r)
 		req := httptest.NewRequest("GET", "https://pulse.example.test/api/health", nil)
-		req.Header.Set("X-API-Token", cfg.APIToken)
+		req.Header.Set("X-API-Token", token)
 		var wg sync.WaitGroup
 		start := make(chan struct{})
 		wg.Add(2)
