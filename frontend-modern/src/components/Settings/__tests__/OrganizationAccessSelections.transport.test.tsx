@@ -13,9 +13,8 @@ import { OrganizationAccessPanel } from '../OrganizationAccessPanel';
 // Keep actual controls, grid reconciliation, ownership dialog, state owner,
 // OrgsAPI and session transport connected. Hook-only and API-mocked suites
 // cannot detect a rendered control submitting a different admitted identity.
-vi.mock('@/stores/notifications', () => ({
-  notificationStore: { success: vi.fn(), error: vi.fn() },
-}));
+const notices = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
+vi.mock('@/stores/notifications', () => ({ notificationStore: notices }));
 vi.mock('@/utils/logger', () => ({
   logger: { error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
@@ -66,10 +65,42 @@ let pending: OrganizationInvitation[];
 let personal: UserOrganizationInvitation[];
 let ownerID: string;
 let nextWriteStatus: number;
+let ownershipReplyUserID: string | undefined;
 let unexpected: string[];
 
 function roleFor(userId: string) {
   return screen.getByRole('combobox', { name: `Role for ${userId}` });
+}
+function chooseOwnership(origin: 'row' | 'form', userId: string) {
+  if (origin === 'row') {
+    fireEvent.change(roleFor(userId), { target: { value: 'owner' } });
+  } else {
+    fireEvent.input(screen.getByRole('textbox', { name: 'Invite user ID' }), {
+      target: { value: `  ${userId}  ` },
+    });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Invite role' }), {
+      target: { value: 'owner' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Invite' }));
+  }
+}
+function ownershipDialog() {
+  return within(screen.getByRole('dialog', { name: 'Transfer organization ownership' }));
+}
+function expectSavedOwnership(selected: string) {
+  expect(ownerID).toBe(selected);
+  expect(roleFor(selected)).toHaveValue('owner');
+  expect(roleFor(selected)).toBeDisabled();
+  expect(roleFor(owner)).toHaveValue('admin');
+  expect(members.filter((member) => ![owner, selected].includes(member.userId))).toEqual(
+    originalMembers.filter((member) => ![owner, selected].includes(member.userId)),
+  );
+  for (const sibling of people.filter((person) => person !== selected))
+    expect(roleFor(sibling)).toHaveValue('viewer');
+  expect(pending).toEqual(originalPending);
+  expect(personal).toEqual(originalPersonal);
+  expect(screen.queryByRole('button', { name: `Remove ${selected} from organization` })).toBeNull();
+  expect(screen.queryByRole('dialog')).toBeNull();
 }
 function pendingGroup(userId: string) {
   return screen.getByRole('group', { name: `Pending invitation for ${userId}` });
@@ -143,7 +174,10 @@ beforeEach(async () => {
   personal = structuredClone(originalPersonal);
   ownerID = owner;
   nextWriteStatus = 200;
+  ownershipReplyUserID = undefined;
   unexpected = [];
+  notices.success.mockReset();
+  notices.error.mockReset();
   confirmMock.mockReset().mockReturnValue(true);
   vi.stubGlobal('confirm', confirmMock);
   fetchMock.mockReset();
@@ -182,7 +216,16 @@ beforeEach(async () => {
                   : candidate.role,
           }));
           if (body.role === 'owner') ownerID = body.userId;
-          return reply({ kind: 'member', member: members.find((m) => m.userId === body.userId) });
+          const savedMember = members.find((m) => m.userId === body.userId)!;
+          return reply({
+            kind: 'member',
+            // A different saved member with an otherwise valid Owner reply
+            // must not acknowledge the selected successor's transfer.
+            member:
+              body.role === 'owner' && ownershipReplyUserID
+                ? { ...savedMember, userId: ownershipReplyUserID }
+                : savedMember,
+          });
         }
         const invitation: OrganizationInvitation = {
           userId: body.userId,
@@ -285,37 +328,80 @@ describe('organization access selections through rendered controls and real tran
       expect(roleFor(sibling)).toHaveValue('viewer');
   });
 
-  it('binds cancelled and confirmed ownership transfer to the selected member and reconciles both owners', async () => {
+  it.each(['row', 'form'] as const)(
+    'binds cancelled and confirmed ownership transfer from the %s to different selected members',
+    async (origin) => {
+      await openPanel();
+      const cancelled = people[0];
+      const selected = people[1];
+      chooseOwnership(origin, cancelled);
+      expect(ownershipDialog().getByText(cancelled, { selector: 'strong' })).toBeInTheDocument();
+      expect(roleFor(cancelled)).toHaveValue('viewer');
+      expect(writes()).toHaveLength(0);
+      fireEvent.click(ownershipDialog().getByRole('button', { name: 'Cancel' }));
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(members).toEqual(originalMembers);
+      expect(writes()).toHaveLength(0);
+
+      chooseOwnership(origin, selected);
+      expect(ownershipDialog().getByText(selected, { selector: 'strong' })).toBeInTheDocument();
+      expect(ownershipDialog().getByText(displayName, { selector: 'strong' })).toBeInTheDocument();
+      expect(ownershipDialog().queryByText(cancelled, { exact: false })).toBeNull();
+      expect(roleFor(selected)).toHaveValue('viewer');
+      expect(writes()).toHaveLength(0);
+      fireEvent.click(ownershipDialog().getByRole('button', { name: 'Transfer ownership' }));
+      await expectSavedReread();
+      expectWrite(`${orgPath}/members`, 'POST', { userId: selected, role: 'owner' });
+      expectSavedOwnership(selected);
+      expect(notices.success).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each(['row', 'form'] as const)(
+    'keeps a reviewed successor when a competing %s ownership intent arrives',
+    async (competingOrigin) => {
+      await openPanel();
+      const selected = people[1];
+      const competing = people[2];
+      chooseOwnership('row', selected);
+      // Deliberately dispatch past the modal overlay to exercise the state
+      // owner's admission guard, not native pointer/focus isolation.
+      chooseOwnership(competingOrigin, competing);
+      expect(ownershipDialog().getByText(selected, { selector: 'strong' })).toBeInTheDocument();
+      expect(ownershipDialog().queryByText(competing, { exact: false })).toBeNull();
+      expect(roleFor(selected)).toHaveValue('viewer');
+      expect(roleFor(competing)).toHaveValue('viewer');
+      expect(writes()).toHaveLength(0);
+      fireEvent.click(ownershipDialog().getByRole('button', { name: 'Transfer ownership' }));
+      await expectSavedReread();
+      expectWrite(`${orgPath}/members`, 'POST', { userId: selected, role: 'owner' });
+      expectSavedOwnership(selected);
+      expect(notices.success).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it('does not accept another eligible Owner acknowledgement as the selected form transfer', async () => {
     await openPanel();
     const selected = people[1];
-    const requestTransfer = () =>
-      fireEvent.change(roleFor(selected), { target: { value: 'owner' } });
-    requestTransfer();
-    const dialog = within(screen.getByRole('dialog', { name: 'Transfer organization ownership' }));
-    expect(dialog.getByText(selected, { selector: 'strong' })).toBeInTheDocument();
-    expect(dialog.getByText(displayName, { selector: 'strong' })).toBeInTheDocument();
-    expect(roleFor(selected)).toHaveValue('viewer');
-    expect(writes()).toHaveLength(0);
-    fireEvent.click(dialog.getByRole('button', { name: 'Cancel' }));
-    expect(screen.queryByRole('dialog')).toBeNull();
-    expect(members).toEqual(originalMembers);
-    expect(writes()).toHaveLength(0);
-    requestTransfer();
-    fireEvent.click(
-      within(screen.getByRole('dialog')).getByRole('button', { name: 'Transfer ownership' }),
-    );
-    await expectSavedReread();
+    ownershipReplyUserID = people[2];
+    chooseOwnership('form', selected);
+    expect(ownershipDialog().getByText(selected, { selector: 'strong' })).toBeInTheDocument();
+    fireEvent.click(ownershipDialog().getByRole('button', { name: 'Transfer ownership' }));
+
+    const warning = await screen.findByRole('alert');
+    expect(warning).toHaveTextContent('last access change could not be confirmed');
     expectWrite(`${orgPath}/members`, 'POST', { userId: selected, role: 'owner' });
     expect(ownerID).toBe(selected);
-    expect(roleFor(selected)).toHaveValue('owner');
-    expect(roleFor(selected)).toBeDisabled();
-    expect(roleFor(owner)).toHaveValue('admin');
-    for (const sibling of people.filter((person) => person !== selected))
-      expect(roleFor(sibling)).toHaveValue('viewer');
-    expect(
-      screen.queryByRole('button', { name: `Remove ${selected} from organization` }),
-    ).toBeNull();
-    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(orgReads()).toHaveLength(1);
+    expect(screen.queryAllByRole('combobox', { name: /^Role for / })).toHaveLength(0);
+    expect(screen.queryByRole('button', { name: 'Invite' })).toBeNull();
+    expect(notices.success).not.toHaveBeenCalled();
+
+    fireEvent.click(within(warning).getByRole('button', { name: 'Reload access' }));
+    await expectSavedReread();
+    expectWrite(`${orgPath}/members`, 'POST', { userId: selected, role: 'owner' });
+    expectSavedOwnership(selected);
+    expect(notices.success).not.toHaveBeenCalled();
   });
 
   it('submits the trimmed invitation draft and selected role while preserving existing access', async () => {
