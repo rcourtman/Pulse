@@ -20,6 +20,7 @@ function fixture(algorithm = 'sha384') {
   mkdirSync(path.join(root, 'dist/assets'), { recursive: true });
   const script = path.join(root, 'scripts/check-bundle-size.mjs');
   cpSync(checker, script);
+  cpSync(path.join(path.dirname(checker), 'build-integrity.mjs'), path.join(root, 'scripts/build-integrity.mjs'));
   // The copied CLI uses the same already-declared, locked parser as the real
   // build check. No dependency install or resource loading occurs in fixtures.
   symlinkSync(

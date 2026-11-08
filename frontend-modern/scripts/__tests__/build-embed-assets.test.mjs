@@ -9,25 +9,27 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
+import { completeBuild } from './build-output-fixture.mjs';
 
 const repository = fileURLToPath(new URL('../../../', import.meta.url));
 const roots = [];
-const previousFiles = {
-  'index.html': '<script type="module" src="/assets/previous.js"></script>\n',
+const previousFiles = completeBuild({
   'assets/previous.js': 'console.log("previous successful frontend");\n',
   'docs/previous.md': 'Previously usable help.\n',
-};
-const completedFiles = {
-  'index.html': '<script type="module" src="/assets/current.js"></script>\n',
-  'assets/current.js': 'console.log("new frontend from this compiler");\n',
+}, { entry: 'previous.js' });
+const completedFiles = completeBuild({
+  'assets/current.js': 'import "./vendor.js"; import("./lazy.js"); console.log("new frontend from this compiler");\n',
+  'assets/vendor.js': 'export const vendor = true;\n',
+  'assets/lazy.js': 'export const lazy = true;\n',
   'docs/current.md': 'New local help.\n',
-};
+}, { entry: 'current.js', preloads: ['vendor.js'] });
 
 function writeFiles(root, files) {
   for (const [name, bytes] of Object.entries(files)) {
@@ -55,6 +57,7 @@ function fixture({ previous = true, files = completedFiles, code = 0, signal, fa
   for (const name of [
     'frontend-modern/scripts/build-embed-assets.mjs',
     'frontend-modern/scripts/sync-embed-dist.mjs',
+    'frontend-modern/scripts/build-integrity.mjs',
     'frontend-modern/scripts/sync-public-docs.mjs',
     'scripts/exclusive-lock.mjs',
   ]) {
@@ -62,6 +65,9 @@ function fixture({ previous = true, files = completedFiles, code = 0, signal, fa
     mkdirSync(path.dirname(destination), { recursive: true });
     cpSync(path.join(repository, name), destination);
   }
+  const modules = path.join(root, 'frontend-modern', 'node_modules');
+  mkdirSync(modules, { recursive: true });
+  symlinkSync(path.join(repository, 'frontend-modern', 'node_modules', 'jsdom'), path.join(modules, 'jsdom'), 'junction');
   writeFiles(
     root,
     Object.fromEntries(
@@ -167,6 +173,16 @@ describe.each([true, false])('frontend producer with previous output: %s', (prev
     { name: 'empty nonzero output', files: {}, code: 17, reason: /exited with code 17/ },
     { name: 'signalled complete-looking output', signal: 'SIGTERM', reason: /terminated by signal SIGTERM/ },
     { name: 'incomplete zero-exit output', files: { 'index.html': completedFiles['index.html'] }, reason: /frontend build output incomplete/ },
+    ...['current.js', 'vendor.js', 'lazy.js'].map((asset) => ({
+      name: `zero-exit output with stale ${asset} integrity`,
+      files: { ...completedFiles, [`assets/${asset}`]: 'export const changedBytes = true;\n' },
+      reason: /integrity mismatch against built asset bytes/,
+    })),
+    {
+      name: 'zero-exit output without an import map',
+      files: { ...completedFiles, 'index.html': completedFiles['index.html'].replace(/<script type="importmap">.*?<\/script>/, '') },
+      reason: /importmap script block missing/,
+    },
   ])('does not admit $name to canonical dist or the embed', (compiler) => {
     const f = fixture({ previous, ...compiler });
     const sourceBefore = tree(f.source);

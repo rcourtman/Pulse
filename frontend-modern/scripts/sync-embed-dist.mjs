@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { withExclusiveLock } from '../../scripts/exclusive-lock.mjs';
+import { checkPreloadPosture } from './build-integrity.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -76,6 +77,11 @@ export async function validateBuildOutput(stagingDir) {
       throw incomplete(`referenced asset ${asset} must be a nonempty regular file`, error);
     }
   }
+  // Nonempty files can still be unusable when index.html advertises stale
+  // integrity hashes. Check the same byte-bound controls as the bundle check
+  // before either the producer or copied embed can replace usable output.
+  const integrityErrors = checkPreloadPosture(stagingDir);
+  if (integrityErrors.length) throw incomplete(integrityErrors.join('; '));
 }
 
 async function publishDirAtomically() {
