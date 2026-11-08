@@ -7141,7 +7141,10 @@ if [[ "$PREFLIGHT_ONLY" == "true" ]]; then
     if [[ -n "$PULSE_URL" ]]; then
         # A completed connection can still stall on headers, a body or a
         # redirect. Bound the entire health exchange, not just connection setup.
-        CURL_TEST_ARGS=(-sfL --connect-timeout 5 --max-time 10 -o /dev/null)
+        # Default curlrc must not inject a TLS bypass, retries, headers, traces
+        # or extra URLs. --disable is effective only as curl's first option;
+        # explicit installer trust flags and environment proxies still apply.
+        CURL_TEST_ARGS=(--disable -sfL --connect-timeout 5 --max-time 10 -o /dev/null)
         if [[ "$INSECURE" == "true" ]]; then CURL_TEST_ARGS+=(-k); fi
         if [[ -n "$CURL_CA_BUNDLE" ]]; then CURL_TEST_ARGS+=(--cacert "$CURL_CA_BUNDLE"); fi
         if curl "${CURL_TEST_ARGS[@]}" "${PULSE_URL}/api/health"; then
@@ -7153,7 +7156,7 @@ if [[ "$PREFLIGHT_ONLY" == "true" ]]; then
 
         PREFLIGHT_HEADERS=$(mktemp)
         TMP_FILES+=("$PREFLIGHT_HEADERS")
-        CURL_DOWNLOAD_CHECK_ARGS=(-fsSIL --connect-timeout 5 --max-time 30 -D "$PREFLIGHT_HEADERS" -o /dev/null)
+        CURL_DOWNLOAD_CHECK_ARGS=(--disable -fsSIL --connect-timeout 5 --max-time 30 -D "$PREFLIGHT_HEADERS" -o /dev/null)
         if [[ "$INSECURE" == "true" ]]; then CURL_DOWNLOAD_CHECK_ARGS+=(-k); fi
         if [[ -n "$CURL_CA_BUNDLE" ]]; then CURL_DOWNLOAD_CHECK_ARGS+=(--cacert "$CURL_CA_BUNDLE"); fi
 

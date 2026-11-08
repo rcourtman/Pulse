@@ -787,7 +787,8 @@ func TestInstallSHPreflightDoesNotRequireRoot(t *testing.T) {
 	required := []string{
 		`if [[ $EUID -ne 0 && "$PREFLIGHT_ONLY" != "true" ]]; then`,
 		`DOWNLOAD_CHECK_URL="${PULSE_URL}/download/${BINARY_NAME}?arch=${PF_ARCH_PARAM}"`,
-		`CURL_DOWNLOAD_CHECK_ARGS=(-fsSIL --connect-timeout 5 --max-time 30 -D "$PREFLIGHT_HEADERS" -o /dev/null)`,
+		`CURL_TEST_ARGS=(--disable -sfL --connect-timeout 5 --max-time 10 -o /dev/null)`,
+		`CURL_DOWNLOAD_CHECK_ARGS=(--disable -fsSIL --connect-timeout 5 --max-time 30 -D "$PREFLIGHT_HEADERS" -o /dev/null)`,
 		`final_response_header_value "$PREFLIGHT_HEADERS" "X-Checksum-Sha256"`,
 		`"agent_download_available"`,
 		`"agent_download_unavailable"`,
