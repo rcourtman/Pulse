@@ -7,7 +7,12 @@ import { clearAuth, getApiToken, getOrgID, setApiToken, setOrgID } from '@/utils
 import type { ProtectionPosturesResponse } from '@/types/recovery';
 import { protectionPolicy, protectionPosture } from '@/utils/__fixtures__/protectionPosture';
 import { ProxmoxBackupsTable } from '../ProxmoxBackupsTable';
-import { BACKUP_IDENTITY_NOW, identityArchive, identityGuest, identityPBS } from '../__fixtures__/backupIdentity';
+import {
+  BACKUP_IDENTITY_NOW,
+  identityArchive,
+  identityGuest,
+  identityPBS,
+} from '../__fixtures__/backupIdentity';
 
 // Keep the page, fleet batching/parser/cache, apiClient and org events real.
 // Mocked hook transports and a one-guest page cannot protect their composition
@@ -39,7 +44,9 @@ const posturePath = '/api/recovery/postures';
 const fetchMock = vi.fn<typeof fetch>();
 const fleet = (count = 801) =>
   Array.from({ length: count }, (_, index) =>
-    identityGuest(`fleet-${String(index).padStart(4, '0')}`, 'east', 'pve-1', { vmid: 100 + index }),
+    identityGuest(`fleet-${String(index).padStart(4, '0')}`, 'east', 'pve-1', {
+      vmid: 100 + index,
+    }),
   );
 const json = (body: unknown, status = 200, headers: Record<string, string> = {}) =>
   new Response(JSON.stringify(body), {
@@ -66,12 +73,15 @@ function assessment(
 ): ProtectionPosturesResponse {
   return {
     // Deliberately reverse the server's order: the page must join by subject ID.
-    data: request.ids.slice().reverse().map((id) => ({
-      ...protectionPosture(id),
-      state,
-      reason: state === 'protected' ? 'recent-verified' : 'stale',
-      evaluatedAt: new Date(BACKUP_IDENTITY_NOW).toISOString(),
-    })),
+    data: request.ids
+      .slice()
+      .reverse()
+      .map((id) => ({
+        ...protectionPosture(id),
+        state,
+        reason: state === 'protected' ? 'recent-verified' : 'stale',
+        evaluatedAt: new Date(BACKUP_IDENTITY_NOW).toISOString(),
+      })),
     policy: { ...protectionPolicy, freshnessWindowSeconds: days * 86_400 },
   };
 }
@@ -82,7 +92,9 @@ function holdBodies(status = 200) {
     held,
     reply: (request: BatchRead) => {
       let finish!: (body: string) => void;
-      const body = new Promise<string>((resolve) => { finish = resolve; });
+      const body = new Promise<string>((resolve) => {
+        finish = resolve;
+      });
       const response = json({}, status);
       // Headers have arrived. Keep body consumption pending independently of
       // abort, so a late body tests generation/queue protection as well as I/O.
@@ -100,7 +112,8 @@ const settle = () => vi.advanceTimersByTimeAsync(0);
 const verdict = () => document.querySelector('[data-backup-verdict]');
 const rule = () => document.querySelector('[data-coverage-posture-rule]');
 const restoreRows = () => document.querySelectorAll('[data-proxmox-backup-row="recoverable"]');
-const inventoryCalls = () => fetchMock.mock.calls.filter(([url]) => String(url).startsWith('/api/backups/'));
+const inventoryCalls = () =>
+  fetchMock.mock.calls.filter(([url]) => String(url).startsWith('/api/backups/'));
 const expectHealthy = (count = 801) => {
   expect(verdict()).toHaveAttribute('data-backup-verdict', 'protected');
   expect(verdict()).toHaveTextContent(`All ${count} protected`);
@@ -118,7 +131,10 @@ const expectUnavailable = (count = 801) => {
 function mount(count = 801) {
   return render(() => (
     <Router>
-      <Route path="/*" component={() => <ProxmoxBackupsTable emptyIcon={<span />} workloads={fleet(count)} />} />
+      <Route
+        path="/*"
+        component={() => <ProxmoxBackupsTable emptyIcon={<span />} workloads={fleet(count)} />}
+      />
     </Router>
   ));
 }
@@ -161,11 +177,17 @@ beforeEach(() => {
   reply = (request) => json(assessment(request));
   fetchMock.mockImplementation(async (input, options = {}) => {
     const url = new URL(String(input), 'https://pulse.invalid');
-    if (url.pathname === '/api/backups/pve') return json({ data: {
-      storageBackups: [identityArchive()], guestSnapshots: [], backupTasks: [],
-    } });
+    if (url.pathname === '/api/backups/pve')
+      return json({
+        data: {
+          storageBackups: [identityArchive()],
+          guestSnapshots: [],
+          backupTasks: [],
+        },
+      });
     if (url.pathname === '/api/backups/pbs') return json({ data: { backups: [identityPBS()] } });
-    if (url.pathname !== posturePath) throw new Error(`Unexpected synthetic fleet read: ${url.pathname}`);
+    if (url.pathname !== posturePath)
+      throw new Error(`Unexpected synthetic fleet read: ${url.pathname}`);
     const request = {
       ids: url.searchParams.getAll('resourceId'),
       org: new Headers(options.headers).get('X-Pulse-Org-ID'),
@@ -201,7 +223,7 @@ describe('fleet backup health through real HTTP and the consuming page', () => {
     expect(batches).toHaveLength(5);
     expect(batches.map((request) => request.ids.length)).toEqual([200, 200, 200, 200, 1]);
     // Completing the small queued batch must not publish a one-guest verdict.
-    pending.held[4].finish();
+    pending.held[4].finish(assessment(pending.held[4].request, 'attention'));
     pending.held[0].finish();
     pending.held[2].finish();
     await settle();
@@ -209,9 +231,23 @@ describe('fleet backup health through real HTTP and the consuming page', () => {
     expect(rule()).toBeNull();
     pending.held[1].finish();
     await settle();
-    expectHealthy();
+    expect(verdict()).toHaveAttribute('data-backup-verdict', 'attention');
+    expect(verdict()).toHaveTextContent('800 of 801 protected');
+    expect(rule()).toHaveTextContent('older than 7 days');
+    expect(restoreRows()).toHaveLength(2);
+    // The only exception came from the queued last subject, not an array
+    // position in an earlier reversed batch. Follow it into real Coverage.
+    fireEvent.click(screen.getByRole('button', { name: '1 no backup in 7 days' }));
+    await settle();
+    const coverage = document.querySelectorAll('[data-proxmox-backup-row="coverage"]');
+    expect(coverage).toHaveLength(1);
+    expect(coverage[0]).toHaveTextContent('fleet-0800');
+    expect(window.location.pathname).toBe('/proxmox/backups/coverage');
+    expect(new URLSearchParams(window.location.search).get('reason')).toBe('stale');
     expect(batches.flatMap((request) => request.ids)).toEqual(fleet().map((guest) => guest.id));
-    expect(batches.every((request) => request.org === north && request.signal === batches[0].signal)).toBe(true);
+    expect(
+      batches.every((request) => request.org === north && request.signal === batches[0].signal),
+    ).toBe(true);
     expect(batches[0].signal.aborted).toBe(false);
     expect(inventoryCalls()).toHaveLength(2);
     expectReadOnlyTransport();
@@ -259,7 +295,9 @@ describe('fleet backup health through real HTTP and the consuming page', () => {
     await settle();
     expectHealthy();
     expect(screen.queryByText(/Protection status is unavailable/)).toBeNull();
-    expect(retry.held.flatMap(({ request }) => request.ids)).toEqual(fleet().map((guest) => guest.id));
+    expect(retry.held.flatMap(({ request }) => request.ids)).toEqual(
+      fleet().map((guest) => guest.id),
+    );
     expect(inventoryCalls()).toHaveLength(4);
     reply = (request) => json(assessment(request));
     await vi.advanceTimersByTimeAsync(61_000);
@@ -281,9 +319,11 @@ describe('fleet backup health through real HTTP and the consuming page', () => {
       await settle();
       expectHealthy(201);
       const body = assessment(pending.held[1].request);
-      pending.held[1].finish(invalid === 'row'
-        ? { ...body, data: [{ ...body.data[0], state: 'synthetic-private-invalid-state' }] }
-        : { ...body, policy: { ...body.policy, freshnessWindowSeconds: 86_400 } });
+      pending.held[1].finish(
+        invalid === 'row'
+          ? { ...body, data: [{ ...body.data[0], state: 'synthetic-private-invalid-state' }] }
+          : { ...body, policy: { ...body.policy, freshnessWindowSeconds: 86_400 } },
+      );
       await settle();
       expectUnavailable(201);
       expect(document.body).not.toHaveTextContent('synthetic-private-invalid-state');
@@ -313,8 +353,10 @@ describe('fleet backup health through real HTTP and the consuming page', () => {
     'retires backoff, late bodies and the fifth queued batch on %s change',
     async (retirement) => {
       const pending = holdBodies();
-      reply = (request) => request.ids[0] === 'fleet-0000'
-        ? json({}, 429, { 'Retry-After': '61' }) : pending.reply(request);
+      reply = (request) =>
+        request.ids[0] === 'fleet-0000'
+          ? json({}, 429, { 'Retry-After': '61' })
+          : pending.reply(request);
       const view = mount();
       await settle();
       expect(batches).toHaveLength(4);
@@ -326,12 +368,16 @@ describe('fleet backup health through real HTTP and the consuming page', () => {
       await settle();
       expect(retired.every((request) => request.signal.aborted)).toBe(true);
       // Even a remount must see the replacement organisation, not late old health.
-      if (retirement === 'disposal') { mount(); await settle(); }
+      if (retirement === 'disposal') {
+        mount();
+        await settle();
+      }
       for (const body of pending.held) body.finish();
       await settle();
       expect(batches.filter((request) => request.signal === retired[0].signal)).toHaveLength(4);
-      expect(batches.filter((request) => request.org === south).flatMap((request) => request.ids))
-        .toEqual(fleet().map((guest) => guest.id));
+      expect(
+        batches.filter((request) => request.org === south).flatMap((request) => request.ids),
+      ).toEqual(fleet().map((guest) => guest.id));
       expect(verdict()).toHaveAttribute('data-backup-verdict', 'attention');
       expect(verdict()).toHaveTextContent('0 of 801 protected');
       expect(screen.getByRole('button', { name: '801 no backup in 2 days' })).toBeInTheDocument();
