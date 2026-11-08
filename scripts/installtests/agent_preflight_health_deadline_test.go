@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -30,7 +31,7 @@ import (
 // service inventory is doubled; no binary is downloaded, installed or run.
 // Stalls use the production ten-second budget, not an accelerated curl double.
 func TestAgentInstallerPreflightHealthDeadline(t *testing.T) {
-	for _, mode := range []string{"healthy", "redirect", "http-error", "untrusted-ca", "stalled-headers", "stalled-body", "redirect-budget"} {
+	for _, mode := range []string{"healthy", "redirect", "http-error", "untrusted-ca", "stalled-headers", "stalled-body", "redirect-budget", "metadata-http-error", "configured-url", "explicit-insecure", "typed-artifacts", "environment-proxy"} {
 		t.Run(mode, func(t *testing.T) {
 			t.Parallel()
 			bootstrapToken := strings.Repeat("a1", 32)
@@ -43,19 +44,24 @@ func TestAgentInstallerPreflightHealthDeadline(t *testing.T) {
 			var healthObserver *time.Timer
 			var requests []string
 			var disclosed bool
-			server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				mu.Lock()
 				requests = append(requests, r.Method+" "+r.URL.Path)
 				if r.URL.Path == "/api/health" && healthStarted.IsZero() {
 					healthStarted = time.Now()
 					healthObserver = time.AfterFunc(18*time.Second, cancel)
 				}
-				if r.URL.Path == "/download/pulse-agent" {
+				if strings.HasPrefix(r.URL.Path, "/download/") && metadataStarted.IsZero() {
 					metadataStarted = time.Now()
 				}
-				disclosed = disclosed || r.Header.Get("Authorization") != "" || strings.Contains(r.URL.String(), bootstrapToken)
+				disclosed = disclosed || r.Header.Get("Authorization") != "" || r.Header.Get("X-API-Token") != "" ||
+					r.Header.Get("X-Curlrc-Injected") != "" || strings.Contains(r.URL.String(), bootstrapToken)
 				mu.Unlock()
-				if r.URL.Path == "/download/pulse-agent" {
+				if r.URL.Path == "/download/pulse-agent" || r.URL.Path == "/download/pulse-agent-helper" || r.URL.Path == "/download/pulse-agent-runner" {
+					if mode == "metadata-http-error" {
+						http.Error(w, "fixture metadata unavailable", http.StatusServiceUnavailable)
+						return
+					}
 					if r.Method != http.MethodHead || r.URL.Query().Get("arch") != "linux-amd64" {
 						t.Errorf("unexpected metadata request: %s %s", r.Method, r.URL)
 					}
@@ -96,12 +102,30 @@ func TestAgentInstallerPreflightHealthDeadline(t *testing.T) {
 					return
 				}
 				fmt.Fprint(w, `{"status":"ok"}`)
-			}))
+			})
+			server := httptest.NewTLSServer(handler)
 			defer server.Close()
+			pulseURL := server.URL
+			var proxyRequests atomic.Int32
+			var proxyEnv []string
+			if mode == "environment-proxy" {
+				proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if r.URL.Scheme != "http" || r.URL.Host != "pulse-proxy.fixture.invalid" {
+						t.Errorf("unexpected proxy destination: %s", r.URL)
+						http.Error(w, "unexpected fixture target", http.StatusBadGateway)
+						return
+					}
+					proxyRequests.Add(1)
+					handler.ServeHTTP(w, r)
+				}))
+				defer proxy.Close()
+				pulseURL = "http://pulse-proxy.fixture.invalid"
+				proxyEnv = []string{"http_proxy=" + proxy.URL, "NO_PROXY=", "no_proxy="}
+			}
 
 			state, tools, temporary, home := t.TempDir(), t.TempDir(), t.TempDir(), t.TempDir()
 			ca := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: server.Certificate().Raw})
-			if mode == "untrusted-ca" {
+			if mode == "untrusted-ca" || mode == "explicit-insecure" {
 				// httptest servers share a default certificate. Generate a
 				// genuinely different trust root instead of using a second server.
 				public, private, err := ed25519.GenerateKey(rand.Reader)
@@ -129,6 +153,17 @@ func TestAgentInstallerPreflightHealthDeadline(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
+			// An ambient curlrc must not inject retries, TLS bypass, headers,
+			// trace files or another URL into a non-mutating availability check.
+			trace := filepath.Join(home, "ambient-trace")
+			configPath := filepath.Join(home, ".curlrc")
+			config := "insecure\nretry = 2\nretry-delay = 1\nheader = \"X-Curlrc-Injected: ambient-sentinel\"\ntrace-ascii = \"" + trace + "\"\n"
+			if mode == "configured-url" {
+				config += "url = \"" + server.URL + "/configured\"\n"
+			}
+			if err := os.WriteFile(configPath, []byte(config), 0600); err != nil {
+				t.Fatal(err)
+			}
 			// Fixed architecture keeps the HEAD assertion portable across Linux
 			// CI hosts; it does not simulate execution of a target agent binary.
 			for name, body := range map[string]string{
@@ -140,10 +175,16 @@ func TestAgentInstallerPreflightHealthDeadline(t *testing.T) {
 				}
 			}
 			cmd := exec.CommandContext(ctx, "bash", repoFile("scripts", "install.sh"),
-				"--url", server.URL, "--cacert", filepath.Join(state, "ca.pem"),
+				"--url", pulseURL, "--cacert", filepath.Join(state, "ca.pem"),
 				"--token-file", filepath.Join(state, "token"), "--state-dir", state,
 				"--preflight-only", "--output", "json", "--non-interactive",
 				"--disable-docker", "--disable-kubernetes", "--disable-proxmox")
+			if mode == "explicit-insecure" {
+				cmd.Args = append(cmd.Args, "--insecure")
+			}
+			if mode == "typed-artifacts" {
+				cmd.Args = append(cmd.Args, "--least-privilege", "--enable-privileged-helper", "--enable-action-runner")
+			}
 			// A regression must not orphan curl when the outer observer expires.
 			cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 			cmd.Cancel = func() error {
@@ -155,13 +196,14 @@ func TestAgentInstallerPreflightHealthDeadline(t *testing.T) {
 			}
 			cmd.WaitDelay = 2 * time.Second
 			for _, value := range os.Environ() {
-				if !strings.HasPrefix(value, "PULSE_") {
+				if !strings.HasPrefix(value, "PULSE_") && !strings.HasSuffix(strings.ToUpper(strings.SplitN(value, "=", 2)[0]), "_PROXY") {
 					cmd.Env = append(cmd.Env, value)
 				}
 			}
 			cmd.Env = append(cmd.Env, "PATH="+tools+string(os.PathListSeparator)+os.Getenv("PATH"),
 				"HOME="+home, "CURL_HOME="+home, "TMPDIR="+temporary, "NO_PROXY=*", "no_proxy=*",
 				"SERVICE_LOG="+filepath.Join(tools, "service.log"))
+			cmd.Env = append(cmd.Env, proxyEnv...)
 			var stdout, stderr bytes.Buffer
 			cmd.Stdout, cmd.Stderr = &stdout, &stderr
 			start := time.Now()
@@ -172,8 +214,11 @@ func TestAgentInstallerPreflightHealthDeadline(t *testing.T) {
 			if mode == "untrusted-ca" {
 				wantExit = 11 // The separate artifact probe preserves its existing failure precedence.
 			}
-			if mode == "healthy" || mode == "redirect" {
+			if mode == "healthy" || mode == "redirect" || mode == "configured-url" || mode == "explicit-insecure" || mode == "typed-artifacts" || mode == "environment-proxy" {
 				wantExit, wantHealthExit = 0, 0
+			}
+			if mode == "metadata-http-error" {
+				wantExit, wantHealthExit = 11, 0
 			}
 			exit := 0
 			if err != nil {
@@ -226,13 +271,19 @@ func TestAgentInstallerPreflightHealthDeadline(t *testing.T) {
 				events = append(events, event)
 			}
 			wantCode, wantComplete := "pulse_unreachable", "failed"
-			if wantExit == 0 {
-				wantCode, wantComplete = "pulse_reachable", "ok"
+			if wantHealthExit == 0 {
+				wantCode = "pulse_reachable"
 			}
-			foundHealth, foundDownload := false, false
+			if wantExit == 0 {
+				wantComplete = "ok"
+			}
+			foundHealth, foundDownload, foundMetadataFailure := false, false, false
 			for _, event := range events {
 				if event.Phase == "preflight" && event.Code == wantCode && event.ExitCode == wantHealthExit {
 					foundHealth = true
+				}
+				if event.Code == "agent_download_unavailable" && event.ExitCode == 11 {
+					foundMetadataFailure = true
 				}
 				if event.Code == "agent_download_available" {
 					foundDownload = true
@@ -256,11 +307,27 @@ func TestAgentInstallerPreflightHealthDeadline(t *testing.T) {
 			if mode == "untrusted-ca" {
 				wantRequests = ""
 			}
+			if mode == "typed-artifacts" {
+				wantRequests += ", HEAD /download/pulse-agent-helper, HEAD /download/pulse-agent-runner"
+			}
 			if gotRequests != wantRequests || leaked || strings.Contains(stdout.String()+stderr.String(), bootstrapToken) || strings.Contains(stdout.String()+stderr.String(), "saved-runtime-token") {
 				t.Fatalf("unexpected request inventory/retry or credential exposure: %s", gotRequests)
 			}
-			if mode != "untrusted-ca" && !foundDownload {
+			if mode == "metadata-http-error" {
+				if foundDownload || !foundMetadataFailure {
+					t.Fatalf("metadata refusal lost its own result: %s", out)
+				}
+			} else if mode != "untrusted-ca" && !foundDownload {
 				t.Fatalf("health result bypassed the separate metadata check: %s", out)
+			}
+			if mode == "environment-proxy" && proxyRequests.Load() != 2 {
+				t.Fatalf("preflight did not retain environment proxy support: %d requests", proxyRequests.Load())
+			}
+			if _, err := os.Stat(trace); !errors.Is(err, os.ErrNotExist) {
+				t.Fatalf("preflight used ambient curl tracing: %v", err)
+			}
+			if got, err := os.ReadFile(configPath); err != nil || string(got) != config {
+				t.Fatalf("preflight changed ambient config: %v", err)
 			}
 			if serviceLog, err := os.ReadFile(filepath.Join(tools, "service.log")); err == nil {
 				if string(serviceLog) != "is-active --quiet pulse-agent\n" {
