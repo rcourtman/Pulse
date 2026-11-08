@@ -907,8 +907,8 @@ func TestInstallSHPreflightDoesNotRequireRoot(t *testing.T) {
 	required := []string{
 		`if [[ $EUID -ne 0 && "$PREFLIGHT_ONLY" != "true" ]]; then`,
 		`DOWNLOAD_CHECK_URL="${PULSE_URL}/download/${BINARY_NAME}?arch=${PF_ARCH_PARAM}"`,
-		`CURL_TEST_ARGS=(--disable -sfL --connect-timeout 5 --max-time 10 -o /dev/null)`,
-		`CURL_DOWNLOAD_CHECK_ARGS=(--disable -fsSIL --connect-timeout 5 --max-time 30 -D "$PREFLIGHT_HEADERS" -o /dev/null)`,
+		`CURL_TEST_ARGS=(-q -sfL --connect-timeout 5 --max-time 10 -o /dev/null)`,
+		`CURL_DOWNLOAD_CHECK_ARGS=(-q -fsSIL --connect-timeout 5 --max-time 30 -D "$PREFLIGHT_HEADERS" -o /dev/null)`,
 		`final_response_header_value "$PREFLIGHT_HEADERS" "X-Checksum-Sha256"`,
 		`"agent_download_available"`,
 		`"agent_download_unavailable"`,
@@ -5002,6 +5002,9 @@ func TestInstallSHCurlTokenTransportKeepsSecretOutOfArgv(t *testing.T) {
 	args, err := os.ReadFile(argsPath)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if !strings.HasPrefix(string(args), "-q\n") {
+		t.Fatalf("implicit curl config could override private token transport: %s", args)
 	}
 	if strings.Contains(string(args), "feedface") || strings.Contains(string(args), "X-API-Token") {
 		t.Fatalf("curl argv leaked token material:\n%s", args)
