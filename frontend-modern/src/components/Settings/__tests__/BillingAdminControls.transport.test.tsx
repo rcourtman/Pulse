@@ -9,7 +9,14 @@ import type { BillingState, HostedOrganizationSummary } from '@/api/billingAdmin
 import { loadRuntimeCapabilities } from '@/stores/license';
 import { notificationStore } from '@/stores/notifications';
 import { syncSessionPresentationPolicy } from '@/stores/sessionPresentationPolicy';
-import { clearAuth, getApiToken, getOrgID, setApiToken, setOrgID } from '@/utils/apiClient';
+import {
+  apiClient,
+  clearAuth,
+  getApiToken,
+  getOrgID,
+  setApiToken,
+  setOrgID,
+} from '@/utils/apiClient';
 
 // Exercise actual row actions, state, policy/capability stores, API and client.
 // All HTTP is intercepted; these fixtures never contact a billing service.
@@ -22,6 +29,7 @@ const selectedID = 'org/second%opaque?#';
 const ambientOrg = 'unrelated/workspace';
 const storedToken = 'synthetic-stored-billing-token';
 const csrf = 'synthetic-billing-csrf';
+const initialWidth = window.innerWidth;
 const listURL = '/api/hosted/organizations';
 const billingURL = (id: string) => `/api/admin/orgs/${encodeURIComponent(id)}/billing-state`;
 const org = (id: string): HostedOrganizationSummary => ({
@@ -113,6 +121,7 @@ let readReply: (id: string) => Response | Promise<Response>;
 let writeReply: (id: string, init: RequestInit) => Response | Promise<Response>;
 let healthReply: () => Response | Promise<Response>;
 let success: MockInstance<typeof notificationStore.success>;
+let prepareCSRF: MockInstance<typeof apiClient.ensureCSRFToken>;
 
 const lists = () => requests.filter(({ url }) => url === listURL);
 const reads = (id: string) =>
@@ -163,6 +172,8 @@ beforeEach(async () => {
   Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1440 });
   policy();
   success = vi.spyOn(notificationStore, 'success');
+  // Observe, do not replace, the actual client's health request and post-health wait.
+  prepareCSRF = vi.spyOn(apiClient, 'ensureCSRFToken');
   inventory = [org(firstID), org(selectedID)];
   states = { [firstID]: siblingBilling(), [selectedID]: billing() };
   hosted = multi = true;
@@ -202,6 +213,7 @@ afterEach(() => {
   clearAuth();
   syncSessionPresentationPolicy(null);
   document.cookie = 'pulse_csrf=; Max-Age=0; Path=/';
+  Object.defineProperty(window, 'innerWidth', { configurable: true, value: initialWidth });
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
@@ -393,8 +405,13 @@ describe('Billing Admin rendered controls through real HTTP', () => {
         await loadRuntimeCapabilities(true);
       }
       primeCSRF();
+      expect(prepareCSRF).toHaveBeenCalledTimes(1);
+      const preparation = prepareCSRF.mock.results[0];
+      expect(preparation.type).toBe('return');
       health.resolve(json({}));
-      await settle();
+      // A healthy response still leaves the real client's 10ms preparation wait.
+      // Await it before asserting absence, including when there is no next action.
+      await preparation.value;
       await settle();
       expect(writes()).toHaveLength(0);
       expect(success).not.toHaveBeenCalled();
