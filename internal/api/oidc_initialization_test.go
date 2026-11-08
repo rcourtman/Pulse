@@ -32,6 +32,7 @@ func TestOIDCInitializationReusesMatchingService(t *testing.T) {
 		base := "http://" + req.Host
 		_ = json.NewEncoder(w).Encode(map[string]string{"issuer": base, "authorization_endpoint": base + "/authorize", "token_endpoint": base + "/token", "jwks_uri": base + "/jwks"})
 	}))
+	t.Cleanup(idp.Close)
 	p := newRecoveryTestProvider("initialization", true, "")
 	p.OIDC.IssuerURL = idp.URL
 	manager := NewOIDCServiceManager()
@@ -73,6 +74,7 @@ func TestOIDCInitializationChangedSettingsReplaceState(t *testing.T) {
 				base := "http://" + req.Host
 				_ = json.NewEncoder(w).Encode(map[string]string{"issuer": base + strings.TrimSuffix(req.URL.Path, "/.well-known/openid-configuration"), "authorization_endpoint": base + "/authorize", "token_endpoint": base + "/token", "jwks_uri": base + "/jwks"})
 			}))
+			t.Cleanup(idp.Close)
 			p := newRecoveryTestProvider("initialization", true, "")
 			p.OIDC.IssuerURL = idp.URL
 			redirect := "https://pulse.example.test/api/oidc/initialization/callback"
@@ -81,6 +83,7 @@ func TestOIDCInitializationChangedSettingsReplaceState(t *testing.T) {
 				// path equality must not keep a stale trust snapshot.
 				p.OIDC.CABundle = filepath.Join(t.TempDir(), "ca.pem")
 				certificateServer := newIPv4TLSServer(t, http.NotFoundHandler())
+				t.Cleanup(certificateServer.Close)
 				certificate := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certificateServer.Certificate().Raw})
 				if err := os.WriteFile(p.OIDC.CABundle, certificate, 0600); err != nil {
 					t.Fatal(err)
@@ -209,8 +212,10 @@ func runOIDCInitializationConcurrentLogins(t *testing.T) oidcInitializationResul
 			http.NotFound(w, req)
 		}
 	}))
+	t.Cleanup(idp.Close)
 	t.Cleanup(func() { unblock(0); unblock(1) })
 	InitPersistentAuthStores(t.TempDir())
+	t.Cleanup(idp.Close)
 	p := newRecoveryTestProvider("initialization", true, "")
 	p.OIDC.IssuerURL = idp.URL
 	router := newRecoveryTestRouter(t, []config.SSOProvider{p}, nil)
@@ -295,6 +300,7 @@ func TestOIDCInitializationFailureAndRemoval(t *testing.T) {
 		base := "http://" + req.Host
 		_ = json.NewEncoder(w).Encode(map[string]string{"issuer": base, "authorization_endpoint": base + "/authorize", "token_endpoint": base + "/token", "jwks_uri": base + "/jwks"})
 	}))
+	t.Cleanup(idp.Close)
 	p := newRecoveryTestProvider("initialization", true, "")
 	p.OIDC.IssuerURL = idp.URL
 	manager := NewOIDCServiceManager()
