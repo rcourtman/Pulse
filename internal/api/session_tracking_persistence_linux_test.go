@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -63,7 +65,36 @@ func trackingRequest(router *Router, raw, csrf string, write bool) *httptest.Res
 	return response
 }
 
-// The unchanged witness runs on the original and repaired runtime. These are
+// The FIFO's bytes are the actual completed save, but its inode is not a regular
+// restart input after rename. Replay those exact bytes alongside the other
+// store's saved file in a separate restart directory. Do not add a repair save
+// that could mask a missing/incorrect snapshot from the operation under test.
+func restartTrackingSnapshot(t *testing.T, router *Router, disk string, captured []byte) (*SessionStore, *CSRFTokenStore) {
+	t.Helper()
+	dir := t.TempDir()
+	for kind, name := range map[string]string{"session": "sessions.json", "csrf": "csrf_tokens.json"} {
+		data := captured
+		if kind != disk {
+			path := filepath.Join(router.sessionStore.dataPath, name)
+			info, err := os.Stat(path)
+			if err != nil || !info.Mode().IsRegular() {
+				t.Fatalf("restart input %s is not a regular saved file: %v", name, err)
+			}
+			data, err = os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := os.WriteFile(filepath.Join(dir, name), data, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	loaded := NewSessionStore(dir)
+	t.Cleanup(loaded.Shutdown)
+	return loaded, loadCSRFDiskStore(t, dir)
+}
+
+// The behavioral witness runs on the original and repaired runtime. These are
 // acknowledged real writes, not sleeping mocks. An unrelated registered write
 // must reach body validation while account withdrawal/oldest-session eviction
 // is waiting for either store's disk. The paused operation must not return early.
@@ -122,10 +153,7 @@ func TestSessionTrackingPersistenceDoesNotBlockUnrelatedRequests(t *testing.T) {
 				if rejected.Code != http.StatusUnauthorized {
 					t.Errorf("withdrawn registered request = %d, want 401", rejected.Code)
 				}
-				resume()
-				loaded := NewSessionStore(router.sessionStore.dataPath)
-				t.Cleanup(loaded.Shutdown)
-				csrf := loadCSRFDiskStore(t, router.csrfStore.dataPath)
+				loaded, csrf := restartTrackingSnapshot(t, router, disk, resume())
 				for raw, set := range tokens {
 					withdrawn := raw == "target-00" || (operation == "revoke" && strings.HasPrefix(raw, "target-"))
 					if raw != "legacy-only" && loaded.ValidateSession(raw) == withdrawn {
