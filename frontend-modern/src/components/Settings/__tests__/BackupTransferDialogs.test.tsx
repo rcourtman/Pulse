@@ -357,7 +357,7 @@ describe('BackupTransferDialogs', () => {
   });
 
   describe('rendered transfers keep their destination until response decoding finishes', () => {
-    const kinds = ['export', 'import'] as const;
+    type TransferKind = 'export' | 'import';
     const fetchMock = vi.fn<typeof fetch>();
     const deferred = () => {
       let resolve!: (value: string) => void;
@@ -382,7 +382,7 @@ describe('BackupTransferDialogs', () => {
       vi.spyOn(notificationStore, 'success');
     });
 
-    const start = async (kind: (typeof kinds)[number]) => {
+    const start = async (kind: TransferKind) => {
       const body = deferred();
       const response = new Response('', {
         headers: { 'Content-Type': 'application/json' },
