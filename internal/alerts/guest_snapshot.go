@@ -100,6 +100,19 @@ func (g guestSnapshot) metrics() guestMetrics {
 }
 
 func guestSnapshotFromVM(vm models.VM) guestSnapshot {
+	return guestReadViewFromVM(vm).copyCollections()
+}
+
+// copyCollections preserves the owned disk/tag boundary of model snapshots.
+// Policy reads use a short-lived view instead, since they never change or keep
+// these collections. OnBoot retains the existing pointer semantics.
+func (g guestSnapshot) copyCollections() guestSnapshot {
+	g.Disks = append([]models.Disk(nil), g.Disks...)
+	g.Tags = append([]string(nil), g.Tags...)
+	return g.normalizeCollections()
+}
+
+func guestReadViewFromVM(vm models.VM) guestSnapshot {
 	return guestSnapshot{
 		Kind:              guestKindVM,
 		ID:                vm.ID,
@@ -119,13 +132,17 @@ func guestSnapshotFromVM(vm models.VM) guestSnapshot {
 		NetworkIn:         vm.NetworkIn,
 		NetworkOut:        vm.NetworkOut,
 		IORateValidity:    vm.IORateValidity,
-		Disks:             append([]models.Disk(nil), vm.Disks...),
-		Tags:              append([]string(nil), vm.Tags...),
+		Disks:             vm.Disks,
+		Tags:              vm.Tags,
 		OnBoot:            vm.OnBoot,
 	}.normalizeCollections()
 }
 
 func guestSnapshotFromContainer(container models.Container) guestSnapshot {
+	return guestReadViewFromContainer(container).copyCollections()
+}
+
+func guestReadViewFromContainer(container models.Container) guestSnapshot {
 	return guestSnapshot{
 		Kind:              guestKindContainer,
 		ID:                container.ID,
@@ -145,8 +162,8 @@ func guestSnapshotFromContainer(container models.Container) guestSnapshot {
 		NetworkIn:         container.NetworkIn,
 		NetworkOut:        container.NetworkOut,
 		IORateValidity:    container.IORateValidity,
-		Disks:             append([]models.Disk(nil), container.Disks...),
-		Tags:              append([]string(nil), container.Tags...),
+		Disks:             container.Disks,
+		Tags:              container.Tags,
 		OnBoot:            container.OnBoot,
 	}.normalizeCollections()
 }
@@ -258,21 +275,33 @@ func guestSnapshotFromAlert(alert *Alert, resourceID string) guestSnapshot {
 }
 
 func extractGuestSnapshot(guest any) (guestSnapshot, bool) {
+	snapshot, ok := extractGuestReadView(guest)
+	switch guest.(type) {
+	case models.VM, *models.VM, models.Container, *models.Container:
+		snapshot = snapshot.copyCollections()
+	}
+	return snapshot, ok
+}
+
+// extractGuestReadView borrows disk/tag collections only for synchronous,
+// read-only policy evaluation. Do not mutate or retain them. Callers needing
+// an owned model snapshot must use extractGuestSnapshot instead.
+func extractGuestReadView(guest any) (guestSnapshot, bool) {
 	switch g := guest.(type) {
 	case models.VM:
-		return guestSnapshotFromVM(g), true
+		return guestReadViewFromVM(g), true
 	case *models.VM:
 		if g == nil {
 			return emptyGuestSnapshot(), false
 		}
-		return guestSnapshotFromVM(*g), true
+		return guestReadViewFromVM(*g), true
 	case models.Container:
-		return guestSnapshotFromContainer(g), true
+		return guestReadViewFromContainer(g), true
 	case *models.Container:
 		if g == nil {
 			return emptyGuestSnapshot(), false
 		}
-		return guestSnapshotFromContainer(*g), true
+		return guestReadViewFromContainer(*g), true
 	case guestSnapshot:
 		return g.normalizeCollections(), true
 	case *guestSnapshot:
