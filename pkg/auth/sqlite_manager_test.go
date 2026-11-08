@@ -48,7 +48,7 @@ func TestSQLiteRoleDetailReadRejectsIncompleteResults(t *testing.T) {
 				t.Fatal(err)
 			}
 			t.Cleanup(func() { _ = m.Close() })
-			role := Role{ID: "saved-reader", Name: "Reader", Permissions: []Permission{{Action: "read", Resource: "nodes"}}}
+			role := Role{ID: "saved-reader", Name: "Reader", Permissions: []Permission{{Action: "read", Resource: "nodes", Effect: EffectAllow}}}
 			if err := m.SaveRole(role); err != nil {
 				t.Fatal(err)
 			}
