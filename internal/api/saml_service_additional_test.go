@@ -38,9 +38,10 @@ func TestExtractAttribute(t *testing.T) {
 }
 
 func TestProcessResponse_InvalidResponse(t *testing.T) {
-	service := &SAMLService{
-		sp: &saml.ServiceProvider{},
-	}
+	// Request-local endpoints require the configuration a real initialized
+	// service always has. Keep testing the malformed response and relay state
+	// through that constructor rather than an incomplete hand-built SP.
+	service := newTestSAMLService(t, "setup", testSAMLMetadata)
 
 	body := strings.NewReader("RelayState=/infrastructure&SAMLResponse=")
 	req := httptest.NewRequest(http.MethodPost, "/acs", body)
