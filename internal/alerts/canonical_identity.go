@@ -25,13 +25,17 @@ func buildCanonicalStateID(resourceID, specID string) string {
 // resource ID that was cut short at the first separator.
 func splitCanonicalStateID(id, resourceID, specID string) (resource, spec string, ok bool) {
 	if specID = strings.TrimSpace(specID); specID != "" {
-		if prefix, found := strings.CutSuffix(id, canonicalStateSeparator+specID); found && prefix != "" {
-			return prefix, specID, true
+		if prefix, found := strings.CutSuffix(id, specID); found {
+			if resource, separated := strings.CutSuffix(prefix, canonicalStateSeparator); separated && resource != "" {
+				return resource, specID, true
+			}
 		}
 	}
 	if resourceID = strings.TrimSpace(resourceID); resourceID != "" {
-		if rest, found := strings.CutPrefix(id, resourceID+canonicalStateSeparator); found && rest != "" {
-			return resourceID, rest, true
+		if suffix, found := strings.CutPrefix(id, resourceID); found {
+			if spec, separated := strings.CutPrefix(suffix, canonicalStateSeparator); separated && spec != "" {
+				return resourceID, spec, true
+			}
 		}
 	}
 	return strings.Cut(id, canonicalStateSeparator)

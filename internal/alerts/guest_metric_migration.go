@@ -1,10 +1,10 @@
 package alerts
 
 import (
-	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/eventlog"
 	"strconv"
 	"strings"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/eventlog"
 	"github.com/rs/zerolog/log"
 )
 
@@ -36,12 +36,20 @@ func parseGuestAlertIdentity(resourceID string) (guestAlertIdentity, bool) {
 		return guestAlertIdentity{}, false
 	}
 
-	parts := strings.Split(resourceID, ":")
-	if len(parts) < 3 {
+	// Only the last two separators divide the node and VMID. The instance
+	// may itself contain colons. Keep views into the ID instead of splitting
+	// and rebuilding it for every candidate in an active-alert scan.
+	lastSeparator := strings.LastIndexByte(resourceID, ':')
+	if lastSeparator < 0 {
+		return guestAlertIdentity{}, false
+	}
+	parent := resourceID[:lastSeparator]
+	nodeSeparator := strings.LastIndexByte(parent, ':')
+	if nodeSeparator < 0 {
 		return guestAlertIdentity{}, false
 	}
 
-	last := strings.TrimSpace(parts[len(parts)-1])
+	last := strings.TrimSpace(resourceID[lastSeparator+1:])
 	digitCount := 0
 	for digitCount < len(last) && last[digitCount] >= '0' && last[digitCount] <= '9' {
 		digitCount++
@@ -60,8 +68,8 @@ func parseGuestAlertIdentity(resourceID string) (guestAlertIdentity, bool) {
 		return guestAlertIdentity{}, false
 	}
 
-	instance := strings.TrimSpace(strings.Join(parts[:len(parts)-2], ":"))
-	node := strings.TrimSpace(parts[len(parts)-2])
+	instance := strings.TrimSpace(parent[:nodeSeparator])
+	node := strings.TrimSpace(parent[nodeSeparator+1:])
 	if instance == "" {
 		instance = node
 	}
@@ -105,7 +113,9 @@ func guestDiskAlertBelongsToGuest(resourceID, guestID string) bool {
 	if !ok || !strings.HasPrefix(identity.resourceSuffix, "-disk-") {
 		return false
 	}
-	return guestAlertBelongsToGuest(resourceID, guestID)
+	guestIdentity, ok := parseGuestAlertIdentity(guestID)
+	return ok && guestIdentity.resourceSuffix == "" &&
+		identity.instance == guestIdentity.instance && identity.vmid == guestIdentity.vmid
 }
 
 // guestSpecIDMatchesAcrossNodes reports whether an existing alert's canonical
@@ -124,7 +134,8 @@ func guestSpecIDMatchesAcrossNodes(existingSpecID, existingResourceID, specID, r
 	if !ok || suffix == "" || existingResourceID == "" {
 		return false
 	}
-	return existingSpecID == existingResourceID+suffix
+	existingSuffix, ok := strings.CutPrefix(existingSpecID, existingResourceID)
+	return ok && existingSuffix == suffix
 }
 
 func (m *Manager) migrateGuestAlertNoLock(storageKey, specID, kind, resourceID, resourceName, node, instance, resourceType string) *Alert {
