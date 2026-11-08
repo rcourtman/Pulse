@@ -3,6 +3,7 @@
 
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -120,6 +121,46 @@ class BackendBuildCacheTest(unittest.TestCase):
                 )
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(output.read_text(), f"path={cache}\n")
+
+    def embed_step(self, job):
+        name = "Provide frontend test embed stub" if job == "test-compile" else "Provide frontend embed stub"
+        return self.step(job, name)
+
+    def test_gate_and_consumers_produce_identical_embed_bytes(self):
+        expected = (b"<!DOCTYPE html>\n<html>\n<head><title>Test Asset</title></head>\n"
+                    b"<body><h1>Pulse Test Asset</h1></body>\n</html>\n")
+        for job in ("test-compile", "backend", "backend-api"):
+            with self.subTest(job=job), tempfile.TemporaryDirectory(prefix="embed cache ") as temporary:
+                root = Path(temporary)
+                (root / "scripts").mkdir()
+                shutil.copyfile(ROOT / "scripts/ensure_test_assets.sh", root / "scripts/ensure_test_assets.sh")
+                step = self.embed_step(job)
+                self.assertEqual(step["run"], "bash scripts/ensure_test_assets.sh")
+                result = subprocess.run(["bash", "-euo", "pipefail", "-c", step["run"]],
+                                        cwd=root, capture_output=True, text=True, timeout=5)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                files = {str(path.relative_to(root)): path.read_bytes()
+                         for path in (root / "internal").rglob("*") if path.is_file()}
+                self.assertEqual(files, {"internal/api/frontend-modern/dist/index.html": expected})
+
+    def test_every_cache_participant_preserves_an_existing_real_embed(self):
+        for job in ("test-compile", "backend", "backend-api"):
+            with self.subTest(job=job), tempfile.TemporaryDirectory(prefix="real embed ") as temporary:
+                root = Path(temporary)
+                (root / "scripts").mkdir()
+                shutil.copyfile(ROOT / "scripts/ensure_test_assets.sh", root / "scripts/ensure_test_assets.sh")
+                dist = root / "internal/api/frontend-modern/dist"
+                (dist / "assets").mkdir(parents=True)
+                expected = {"index.html": b"<!DOCTYPE html><script src='/assets/current.js'></script>\n",
+                            "assets/current.js": b"console.log('existing checked production embed');\n"}
+                for name, content in expected.items():
+                    (dist / name).write_bytes(content)
+                for _ in range(2):
+                    result = subprocess.run(["bash", "-euo", "pipefail", "-c", self.embed_step(job)["run"]],
+                                            cwd=root, capture_output=True, text=True, timeout=5)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual({str(path.relative_to(dist)): path.read_bytes()
+                                      for path in dist.rglob("*") if path.is_file()}, expected)
 
 
 if __name__ == "__main__":
