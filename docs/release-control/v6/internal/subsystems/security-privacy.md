@@ -518,6 +518,34 @@ uses safe denied/failed/malformed/populated/empty responses through the real
 Settings consumer at desktop and narrow widths; it is not installed account
 recovery or a claim about the separate private authoriser repair.
 
+### OIDC discovery cannot republish an obsolete provider lifecycle
+
+An explicit OIDC management initialization starts a new per-provider lifecycle
+before discovery begins. Removal invalidates that lifecycle even when no service
+has been published yet. A discovery completing under an older lifecycle stops
+its unused candidate and reports failure; it cannot reinsert a removed service,
+replace the current service or discard its pending login state. Removing and
+re-enabling the same ID cannot reuse the removed lifecycle. Other providers are
+independent. A failed replacement still retains the previously installed service;
+its failure does not grant older in-flight discovery permission to publish.
+
+Matching native login/callback initializations share a lifecycle and retain their
+existing matching-snapshot reuse. Explicit management resets, including identical
+settings, remain resets. Discovery and CA-file reads stay outside the manager
+mutex; no pending nonce, PKCE verifier or return path is copied across resets.
+Issuer, audience, signature, expiry, replay, TLS, claim and access-policy checks,
+wire formats and routes are unchanged.
+
+`TestOIDCInitializationManagementOwnership` uses real guest-local discovery and
+channel barriers for native/management starts, removal, changed/identical resets,
+failed reset, re-enable and provider isolation. The native management-handover
+fixture saves a new client through the existing provider handler, starts its
+login, then releases the old discovery. The current signed callback must create
+a verified session, the old start must fail closed and replay must stay rejected.
+These are source fixtures, not live-IdP, full-App, installed-client recovery or
+historical-exposure proof. Broader concurrent configuration-save ordering and
+SAML lifecycle are not established by these tests.
+
 ### OIDC retains the bounded JOSE key and token verifier
 
 OIDC discovery, remote JWKS and signed ID tokens use go-oidc's real verifier

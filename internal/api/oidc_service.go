@@ -40,6 +40,10 @@ type OIDCService struct {
 type OIDCServiceManager struct {
 	mu       sync.RWMutex
 	services map[string]*OIDCService
+	// Native discoveries may share a lifecycle, but every explicit management
+	// initialization/removal fences older work, including cold discoveries.
+	generations    map[string]uint64
+	nextGeneration uint64
 }
 
 // NewOIDCServiceManager creates a new OIDC service manager.
@@ -80,6 +84,18 @@ func (m *OIDCServiceManager) initializeProvider(ctx context.Context, providerID 
 	if current := m.GetService(providerID); reuseMatching && current.Matches(cfg) {
 		return nil
 	}
+	m.mu.Lock()
+	if m.generations == nil {
+		m.generations = make(map[string]uint64)
+	}
+	generation, exists := m.generations[providerID]
+	if !exists || !reuseMatching {
+		m.nextGeneration++
+		generation = m.nextGeneration
+		m.generations[providerID] = generation
+	}
+	m.mu.Unlock()
+
 	service, err := NewOIDCService(ctx, cfg)
 	if err != nil {
 		return err
@@ -87,6 +103,10 @@ func (m *OIDCServiceManager) initializeProvider(ctx context.Context, providerID 
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if m.generations[providerID] != generation {
+		service.Stop()
+		return errors.New("oidc provider initialization superseded by management")
+	}
 	// Discovery ran without the manager lock. Another initializer may have
 	// published these same settings and issued state in the meantime. Compare
 	// the fully captured snapshots (including CA contents) without file or
@@ -144,6 +164,9 @@ func (m *OIDCServiceManager) RemoveService(providerID string) {
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	// Invalidate discoveries even when no service has been published yet. A
+	// later re-enable gets a fresh generation, never this removed lifecycle.
+	delete(m.generations, providerID)
 	if svc, ok := m.services[providerID]; ok {
 		svc.stateStore.Stop()
 		delete(m.services, providerID)
