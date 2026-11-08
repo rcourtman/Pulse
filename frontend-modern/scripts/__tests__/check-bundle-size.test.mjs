@@ -339,7 +339,7 @@ describe('built JavaScript integrity checks', () => {
 
   it('fails closed if the parser changes to scripting-disabled tokenization', () => {
     const f = fixture();
-    const script = path.join(f.root, 'scripts/check-bundle-size.mjs');
+    const script = path.join(f.root, 'scripts/build-integrity.mjs');
     const source = readFileSync(script, 'utf8');
     const changed = source.replace('includeNodeLocations: true', 'includeNodeLocations: false');
     expect(changed).not.toBe(source);
