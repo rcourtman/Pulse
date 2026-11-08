@@ -438,7 +438,8 @@ class WorkflowTest(unittest.TestCase):
                 self.assertEqual(call[:-1], ['test','-race','-timeout','50m'])
         active = {}; peak = ordinary_peak = 0
         for event in map(json.loads,events.read_text().splitlines()):
-            if event['ordinary']: self.assertEqual(event['goflags'].split()[-1],'-p=1')
+            if event['ordinary']:
+                self.assertEqual(event['goflags'].split()[-2:], ['-count=1', '-p=1'])
             if event['kind']=='start': active[event['pid']] = event['ordinary']
             else: del active[event['pid']]
             peak = max(peak,len(active)); ordinary_peak = max(ordinary_peak,sum(active.values()))
@@ -469,6 +470,28 @@ class WorkflowTest(unittest.TestCase):
             self.assertIsNone(observation['exit'])
             self.assertFalse(observation['started'])
             self.assertIn('start_error_errno', observation)
+
+    def test_ordinary_execution_overrides_ambient_result_cache_and_compiler_flags(self):
+        spec = importlib.util.spec_from_file_location('fresh_rest_shard', SHARD)
+        shard = importlib.util.module_from_spec(spec); spec.loader.exec_module(shard)
+        command = ['bash', '-euo', 'pipefail', '-c', shard.ORDINARY_COMMAND]
+        for inherited in ('', '-mod=readonly -count=0 -p=8'):
+            with self.subTest(inherited=inherited), patch.dict(os.environ, {'GOFLAGS': inherited}):
+                with patch.object(shard.subprocess, 'run',
+                                  return_value=subprocess.CompletedProcess(command, 0)) as execute:
+                    self.assertEqual(shard.run_task((runner.MODULE + 'internal/a', command))['exit'], 0)
+                environment = execute.call_args.kwargs['env']
+                self.assertEqual(environment['GOFLAGS'].split(),
+                                 inherited.split() + ['-count=1', '-p=1'])
+                self.assertEqual(environment['pkgs'], runner.MODULE + 'internal/a')
+                self.assertEqual(execute.call_args.args[0], command)
+                self.assertEqual(os.environ['GOFLAGS'], inherited)
+                # The separate source-listed executor already fixes -count=1
+                # in its argv. Do not change its environment or admission.
+                with patch.object(shard.subprocess, 'run',
+                                  return_value=subprocess.CompletedProcess(command, 0)) as execute:
+                    shard.run_task((shard.SLICED[0], command))
+                self.assertEqual(execute.call_args.kwargs['env']['GOFLAGS'], inherited)
 
     def test_completed_children_are_retained_before_a_slow_first_child_returns(self):
         spec = importlib.util.spec_from_file_location('progress_rest_shard', SHARD)
