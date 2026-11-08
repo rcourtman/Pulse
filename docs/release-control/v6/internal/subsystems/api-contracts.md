@@ -21,6 +21,24 @@
 
 ## Purpose
 
+### Saved token expiry remains visible metadata
+
+The existing API Access inventory displays the returned `expiresAt` in compact
+cards and the wide table. Explicit UTC instants distinguish a future saved expiry
+from an already elapsed one using the shared page clock. A nil/omitted expiry is
+"No expiry"; a present unreadable value is "Unavailable", never no expiry or
+active access. The inventory describes saved credentials, not authentication
+success. Scope, organisation, identity, revocation and server-clock enforcement
+remain authoritative; the display neither renews nor disables a credential.
+
+`APITokenExpiry.transport.test.tsx` keeps the real inventory/state/API client
+connected for both layouts, read-only accounts, same-name records, explicit
+UTC, absent/unreadable values, ticking lifetime and withdrawn reads without
+writes. `apiTokenExpiryPresentation.test.ts` covers zoned and fractional instants,
+calendar validity and the strict-after boundary. Existing selection, lifetime,
+preparation and unconfirmed-change transport tests remain applicable. This adds
+no API route, field, permission, expiry editor or authentication policy.
+
 ### SSO registration targets match native authentication endpoints
 
 OIDC collection and detail responses advertise the callback used by both login

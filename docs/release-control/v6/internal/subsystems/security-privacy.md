@@ -18,6 +18,23 @@
 
 ## Purpose
 
+### Saved credential lifetime is not an access guarantee
+
+API Access shows the existing saved expiry metadata in each inventory layout,
+including an explicit UTC instant and elapsed-expiry text. It never calls an
+unreadable saved value non-expiring or treats no expiry as valid authentication.
+The display uses the shared browser clock; server enforcement and current
+identity, scope, organisation and revocation still decide admission. Reading or
+ticking the display issues no token mutation, renewal or additional metadata
+request. Current withdrawal removes the displayed inventory rather than showing
+false absence or no expiry. Token hints remain hints; raw secrets are not added.
+
+The rendered/real-client `APITokenExpiry.transport.test.tsx` covers management
+and read-only accounts, sibling identity, unknown/absent values, clock updates
+and denied inventory after principal change. The companion expiry-presentation
+suite rejects impossible or unzoned dates. Existing selected-token and lifecycle
+suites continue to exercise unchanged write admission and saved metadata.
+
 ### Tracking and both live authority sets withdraw before persistence
 
 Account revocation and ten-session-cap eviction remove their live sessions,
