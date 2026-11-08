@@ -39,7 +39,12 @@ func approvalReviewFixture(t *testing.T, az auth.Authorizer, records ...config.A
 	cfg := newTestConfigWithTokens(t, records...)
 	t.Setenv("PULSE_DATA_DIR", cfg.DataPath)
 	cfg.AuthUser, cfg.AuthPass = "admin", "fixture-unused-hash"
-	router := newTestRouter(t, cfg, nil, nil, nil, nil, "fixture")
+	var router *Router
+	if IsMultiTenantEnabled() {
+		router = newMultiTenantRouter(t, cfg)
+	} else {
+		router = newTestRouter(t, cfg, nil, nil, nil, nil, "fixture")
+	}
 	store, err := approval.NewStore(approval.StoreConfig{DataDir: cfg.DataPath, DisablePersistence: true})
 	if err != nil {
 		t.Fatal(err)
