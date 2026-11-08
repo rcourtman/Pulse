@@ -10,6 +10,7 @@ import BadgeCheck from 'lucide-solid/icons/badge-check';
 import { MONITORING_READ_SCOPE } from '@/constants/apiScopes';
 import {
   API_TOKEN_NAME_PLACEHOLDER,
+  getAPITokenExpiryPresentation,
   getAPITokenDockerPodmanUsageSummary,
   getAPITokenDockerPodmanUsageTitle,
 } from '@/utils/apiTokenPresentation';
@@ -314,6 +315,32 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
     );
   };
 
+  const renderTokenExpiry = (token: APITokenRecord) => {
+    const expiry = () => getAPITokenExpiryPresentation(token.expiresAt, now());
+    const datedExpiry = () => {
+      const value = expiry();
+      return 'dateTime' in value ? value : undefined;
+    };
+    return (
+      <span
+        data-token-expiry={token.id}
+        class={
+          expiry().state === 'expired' ? 'text-red-700 dark:text-red-300' : 'text-base-content'
+        }
+      >
+        {expiry().label}
+        <Show when={datedExpiry()}>
+          {(value) => (
+            <>
+              {' '}
+              <time dateTime={value().dateTime}>{value().timestamp}</time>
+            </>
+          )}
+        </Show>
+      </span>
+    );
+  };
+
   const renderTokenActions = (token: APITokenRecord, compact = false) => (
     <div
       class={
@@ -601,7 +628,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
             <div>
               <h4 class="text-sm font-semibold text-base-content">Token inventory</h4>
               <p class="text-xs text-muted">
-                Active credentials sorted by most recent creation date.
+                Saved credentials sorted by most recent creation date.
               </p>
             </div>
             <button
@@ -644,12 +671,12 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                     </div>
                   </div>
 
-                  <dl class="grid gap-3 text-xs sm:grid-cols-2">
-                    <div class="space-y-1 sm:col-span-2">
+                  <dl class="grid grid-cols-[minmax(0,1fr)_minmax(0,2fr)] gap-3 text-xs sm:grid-cols-[minmax(0,1.25fr)_minmax(0,0.45fr)_minmax(0,1.1fr)]">
+                    <div class="col-span-2 space-y-1 sm:col-span-3">
                       <dt class="font-semibold uppercase tracking-wide text-muted">Scopes</dt>
                       <dd>{renderTokenScopes(token)}</dd>
                     </div>
-                    <div class="space-y-1">
+                    <div class="col-span-2 space-y-1 sm:col-span-1">
                       <dt class="font-semibold uppercase tracking-wide text-muted">Usage</dt>
                       <dd>{renderTokenUsage(token)}</dd>
                     </div>
@@ -658,6 +685,10 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                       <dd class="text-base-content">
                         {formatRelativeTime(new Date(token.createdAt).getTime(), { now: now() })}
                       </dd>
+                    </div>
+                    <div class="space-y-1">
+                      <dt class="font-semibold uppercase tracking-wide text-muted">Expiry</dt>
+                      <dd>{renderTokenExpiry(token)}</dd>
                     </div>
                   </dl>
 
@@ -714,6 +745,11 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                       : 'Never'}
                   </span>
                 ),
+              },
+              {
+                key: 'expiresAt',
+                label: 'Expiry',
+                render: renderTokenExpiry,
               },
               {
                 key: 'action',
