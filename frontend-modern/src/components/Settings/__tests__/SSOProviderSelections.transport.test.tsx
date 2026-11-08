@@ -216,7 +216,9 @@ async function edit(provider: SavedProvider) {
     expect(dialog.getByLabelText('IdP Metadata URL')).toHaveValue(provider.saml!.idpMetadataUrl);
     expect(dialog.getByLabelText('IdP Entity ID')).toHaveValue(provider.saml!.idpEntityId);
     expect(dialog.getByLabelText('IdP SSO URL')).toHaveValue(provider.saml!.idpSsoUrl);
-    expect(dialog.getByLabelText('IdP Certificate (PEM)')).toHaveValue(provider.saml!.idpCertificate);
+    expect(dialog.getByLabelText('IdP Certificate (PEM)')).toHaveValue(
+      provider.saml!.idpCertificate,
+    );
     expect(dialog.getByLabelText('Groups Attribute')).toHaveValue(provider.saml!.groupsAttr);
     expect(dialog.getByLabelText('Allow IdP-initiated SSO')).not.toBeChecked();
   }
