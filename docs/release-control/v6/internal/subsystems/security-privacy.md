@@ -44,6 +44,9 @@ all-or-error/legacy/evaluator consumers and corrected saved-field recovery.
 `TestRBACInheritedPolicyFailureProtectsSettings` exercises the registered
 security-status and token inventory routes, fixed non-disclosing failures,
 unchanged token state, valid RBAC administration and local-admin recovery.
+Its token-creation requests carry a real session-bound CSRF token so the
+assertions reach policy evaluation; separate missing-CSRF controls retain the
+router's earlier rejection. Normal and race runs cover both admissions.
 Comparable native-response browser fixtures exercise the existing API Access
 panel; this is not full App/IdP, installed-client or historical-exposure proof.
 No saved authority, route, permission rule, database engine or migration changes.

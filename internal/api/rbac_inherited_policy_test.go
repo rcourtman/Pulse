@@ -116,8 +116,19 @@ func TestRBACInheritedPolicyFailureProtectsSettings(t *testing.T) {
 			}
 		}
 		if state == "healthy-deny" || state == "unreadable-deny" || state == "recovered-deny" {
+			// Exercise authorization only after the real router's CSRF admission.
+			// A missing token must still be rejected before policy evaluation.
 			req := httptest.NewRequest(http.MethodPost, "/api/security/tokens", strings.NewReader(`{"name":"must-not-be-created","scopes":["*"]}`))
 			req.AddCookie(&http.Cookie{Name: cookieNameSession, Value: session})
+			missingCSRF := httptest.NewRecorder()
+			router.Handler().ServeHTTP(missingCSRF, req)
+			if missingCSRF.Code != http.StatusForbidden || !strings.Contains(missingCSRF.Body.String(), "CSRF token validation failed") {
+				t.Fatalf("missing CSRF %s: %d: %s", state, missingCSRF.Code, missingCSRF.Body.String())
+			}
+			req = httptest.NewRequest(http.MethodPost, "/api/security/tokens", strings.NewReader(`{"name":"must-not-be-created","scopes":["*"]}`))
+			req.AddCookie(&http.Cookie{Name: cookieNameSession, Value: session})
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("X-CSRF-Token", generateCSRFToken(session))
 			rec := httptest.NewRecorder()
 			router.Handler().ServeHTTP(rec, req)
 			want := http.StatusForbidden
@@ -127,8 +138,10 @@ func TestRBACInheritedPolicyFailureProtectsSettings(t *testing.T) {
 			if rec.Code != want {
 				t.Fatalf("token creation %s: %d, want %d: %s", state, rec.Code, want, rec.Body.String())
 			}
+			if strings.Contains(rec.Body.String(), "CSRF token validation failed") {
+				t.Fatalf("token creation did not reach authorization for %s", state)
+			}
 		}
-
 	}
 	if !reflect.DeepEqual(cfg.APITokens, savedTokens) {
 		t.Fatal("permission reads changed saved tokens")
