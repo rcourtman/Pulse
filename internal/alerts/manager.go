@@ -112,6 +112,9 @@ type Manager struct {
 	// linked to and the usage metrics the agent evaluates for it. The node
 	// releases only those metrics and keeps evaluating the rest itself.
 	hostAgentNodeLinks map[string]hostAgentNodeLink // Host agent ID -> node link
+	// Membership only: coverage stays in hostAgentNodeLinks. Both maps change
+	// under m.mu, so node checks need not scan agents linked to other nodes.
+	hostAgentsByNode map[string]map[string]struct{} // Node ID -> host agent IDs
 	// Ordering survives link removal so an older in-flight report cannot restore it.
 	hostAgentReportSeq   map[string]uint64
 	hostAgentLinkApplied map[string]uint64
@@ -262,6 +265,7 @@ func NewManagerWithDataDir(dataDir string, options ...ManagerOption) *Manager {
 		flappingActive:                  make(map[string]bool),
 		cleanupStop:                     make(chan struct{}),
 		hostAgentNodeLinks:              make(map[string]hostAgentNodeLink),
+		hostAgentsByNode:                make(map[string]map[string]struct{}),
 		hostAgentReportSeq:              make(map[string]uint64),
 		hostAgentLinkApplied:            make(map[string]uint64),
 		nodeDisplayNames:                make(map[string]string),

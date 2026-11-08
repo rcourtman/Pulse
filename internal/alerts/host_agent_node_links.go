@@ -65,11 +65,7 @@ func (m *Manager) applyHostAgentNodeLink(link hostAgentNodeLink, reportSeq uint6
 		link = m.revokeUnsupportedOwnershipNoLock(link)
 	}
 	previous, existed := m.hostAgentNodeLinks[link.agentID]
-	if link.nodeID == "" || !link.ownsAny() {
-		delete(m.hostAgentNodeLinks, link.agentID)
-	} else {
-		m.hostAgentNodeLinks[link.agentID] = link
-	}
+	m.setHostAgentNodeLinkNoLock(link)
 	m.mu.Unlock()
 
 	switch {
@@ -100,7 +96,7 @@ func (m *Manager) unregisterHostAgentNodeLink(hostID string) {
 	m.mu.Lock()
 	m.hostAgentLinkApplied[hostID] = m.hostAgentReportSeq[hostID]
 	link, existed := m.hostAgentNodeLinks[hostID]
-	delete(m.hostAgentNodeLinks, hostID)
+	m.setHostAgentNodeLinkNoLock(hostAgentNodeLink{agentID: hostID})
 	m.mu.Unlock()
 
 	if existed {
@@ -115,13 +111,37 @@ func (m *Manager) unregisterHostAgentNodeLink(hostID string) {
 // links straight away instead of waiting for each agent's next report. It only
 // revokes ownership the new config no longer supports. Caller holds m.mu.
 func (m *Manager) reconcileHostAgentNodeLinksNoLock() {
-	for agentID, link := range m.hostAgentNodeLinks {
-		updated := m.revokeUnsupportedOwnershipNoLock(link)
-		if updated.ownsAny() {
-			m.hostAgentNodeLinks[agentID] = updated
-		} else {
-			delete(m.hostAgentNodeLinks, agentID)
+	for _, link := range m.hostAgentNodeLinks {
+		m.setHostAgentNodeLinkNoLock(m.revokeUnsupportedOwnershipNoLock(link))
+	}
+}
+
+// setHostAgentNodeLinkNoLock keeps node membership in step with the primary
+// link record. Report ordering and policy checks happen before this write;
+// the index carries no separate ownership decision. Empty buckets are removed
+// so repeated relinks do not retain nodes with no reporting agent. Caller holds m.mu.
+func (m *Manager) setHostAgentNodeLinkNoLock(link hostAgentNodeLink) {
+	keep := link.nodeID != "" && link.ownsAny()
+	previous, existed := m.hostAgentNodeLinks[link.agentID]
+	if existed && (!keep || previous.nodeID != link.nodeID) {
+		agents := m.hostAgentsByNode[previous.nodeID]
+		delete(agents, link.agentID)
+		if len(agents) == 0 {
+			delete(m.hostAgentsByNode, previous.nodeID)
 		}
+	}
+	if !keep {
+		delete(m.hostAgentNodeLinks, link.agentID)
+		return
+	}
+	m.hostAgentNodeLinks[link.agentID] = link
+	if !existed || previous.nodeID != link.nodeID {
+		agents := m.hostAgentsByNode[link.nodeID]
+		if agents == nil {
+			agents = make(map[string]struct{})
+			m.hostAgentsByNode[link.nodeID] = agents
+		}
+		agents[link.agentID] = struct{}{}
 	}
 }
 
@@ -206,10 +226,8 @@ func (m *Manager) linkedHostAgentsForNode(nodeID string) hostAgentUsageOwners {
 	}
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	for _, link := range m.hostAgentNodeLinks {
-		if link.nodeID != nodeID {
-			continue
-		}
+	for agentID := range m.hostAgentsByNode[nodeID] {
+		link := m.hostAgentNodeLinks[agentID]
 		if link.cpu && (owners.cpu.agentID == "" || link.agentID < owners.cpu.agentID) {
 			owners.cpu = link
 		}
@@ -239,10 +257,8 @@ func (m *Manager) linkedHostAgentForNode(nodeID string) (hostAgentNodeLink, bool
 	defer m.mu.RUnlock()
 	var found hostAgentNodeLink
 	ok := false
-	for _, link := range m.hostAgentNodeLinks {
-		if link.nodeID != nodeID {
-			continue
-		}
+	for agentID := range m.hostAgentsByNode[nodeID] {
+		link := m.hostAgentNodeLinks[agentID]
 		if !ok || link.agentID < found.agentID {
 			found.agentID = link.agentID
 			found.agentName = link.agentName
