@@ -21,6 +21,25 @@
 
 ## Purpose
 
+### Unknown saved sessions retain bytes, not automatic authority
+
+After an unread or undecodable session inventory, the next session save retains
+the original regular file in a private `.sessions-unread-*` directory before
+writing a fresh canonical inventory. File-level preservation precedes snapshot
+publication, and its successful completion is retained even if the later write
+fails. Failed preservation writes no snapshot and recovers through a normal later
+save when storage permits; explicit operator removal of the unknown canonical
+file also releases the hold. Retained files never reload automatically, including
+after zero-match user revocation. Backups include these private files until they
+are deliberately removed; restoring them as active session state could revive
+stale credentials. This is not a multi-file transaction or fsync/crash guarantee.
+
+`session_store_test.go` exercises real startup, exact-byte/inode preservation,
+private/distinct copies, failure cleanup and fresh-snapshot recovery.
+`provider_msp_backup_sessions_test.go` exercises ordinary private backup traversal
+and runtime copy with an actual preserved mode-000 input; it does not exercise a
+database engine, complete estate recovery or installed restore.
+
 ### Approval admission preserves saved intent
 
 AI approval session review admission is read-only and precedes list/detail and

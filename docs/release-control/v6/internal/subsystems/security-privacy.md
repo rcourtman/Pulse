@@ -18,6 +18,49 @@
 
 ## Purpose
 
+### Unread session inventories are preserved without restoring authority
+
+A startup read or complete decode failure cannot make the unknown `sessions.json`
+inventory authoritative empty state. Before the next save, including periodic
+save, shutdown and user revocation with no live matches, the store moves the
+original regular file into an exclusive owner-private `.sessions-unread-*`
+directory beside it. Its bytes and inode are retained; the file becomes mode
+0600 inside the mode-0700 directory so ordinary private data backups can read it.
+Only then may a fresh live snapshot become canonical `sessions.json`. The loader
+never scans preservation directories or automatically restores their sessions.
+Missing input and valid hashed, legacy and empty inventories retain normal
+loading, migration, expiry, encryption and persistence behavior. Zero-byte and
+whitespace-only input are preserved too, without holding normal saves when
+preservation succeeds.
+
+Failed preservation stages no fresh snapshot and keeps the original untouched.
+The error says that new sign-ins are memory-only and revocation is not durably
+acknowledged; a later normal save can recover after filesystem repair. An original
+already moved or removed from the canonical path need not hold new saves. Unread
+nonregular paths are left untouched rather than followed or moved. Existing
+snapshot-write failures remain explicit limitations, not durable revocation or
+crash-durability guarantees. File operations remain outside the authentication
+mutex and serialized with snapshot selection by the existing persistence mutex.
+
+Logs identify the retained path, never session contents. A failed startup will
+preserve the file on the next write (also the five-minute tick or shutdown), not
+reload it after a clean restart. Operators sign in again; manually restoring a
+retained file as canonical could revive sessions revoked since it was saved.
+Preserved files are retained until deliberately removed and are included in
+ordinary private data backups, potentially alongside encryption keys. Treat them
+as private authentication material; review their recovery value before deleting
+them and never publish or automatically re-import them.
+
+`TestSessionStore_UnreadStartup*` and
+`TestSessionStore_ValidStartupKeepsPersistence` exercise real startup, every save
+trigger, partial/decode/read failures, private distinct originals, failed rename
+cleanup, snapshot failure/recovery, operator removal and restart revocation.
+Existing session I/O isolation and OIDC ownership tests retain their boundaries.
+`TestProviderMSPBackupRetainsUnreadSessionsWithoutBlockingCopy` consumes an actual
+preserved mode-000 fixture through ordinary backup traversal and runtime copy;
+it is not a complete MSP backup/restore, installed client or historical-impact
+claim. Session/CSRF APIs, credentials, grants, routes and wire formats do not change.
+
 ### AI approval review shares canonical session authority
 
 The registered `/api/ai/approvals` collection and item prefix apply the

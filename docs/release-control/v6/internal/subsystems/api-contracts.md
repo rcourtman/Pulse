@@ -21,6 +21,25 @@
 
 ## Purpose
 
+### Session startup failures do not authorize destructive persistence
+
+Session read/decode failures admit no partial saved authentication. The next save
+must retain the unknown regular file in a private, non-active directory before
+publishing only the current live sessions. Even a user revocation with zero live
+matches reaches that boundary, so unknown old sessions cannot return simply
+because an unread file later becomes readable. Failed preservation keeps a
+write hold with explicit memory-only and stale-restoration diagnostics; existing
+write failures do not establish durable revocation. Normal later saves can
+recover after storage repair. No retained directory is scanned for authentication.
+
+Missing and valid hashed/legacy/empty inputs, session encryption/expiry, detached
+save ordering, auth and HTTP/JSON behavior stay unchanged. Tests in
+`session_store_test.go` cover preservation, failure/recovery and normal persistence;
+the existing session/CSRF migration and disk-isolation tests remain applicable.
+Private backup traversal and runtime-copy compatibility are exercised by
+`provider_msp_backup_sessions_test.go`. This changes no frontend field, state or
+rendered journey and does not establish installed saved-client recovery.
+
 ### AI approval routes use existing session review authority
 
 Both `/api/ai/approvals` registrations gate non-token callers with canonical
