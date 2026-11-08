@@ -35,7 +35,10 @@ func (e *PolicyEvaluator) AuthorizeWithAttributes(ctx context.Context, action st
 	}
 
 	// Get all permissions for the user
-	permissions := e.getUserEffectivePermissions(username)
+	permissions, err := e.getUserEffectivePermissions(username)
+	if err != nil {
+		return false, err
+	}
 	if len(permissions) == 0 {
 		return false, nil // No permissions = deny
 	}
@@ -51,19 +54,32 @@ func (e *PolicyEvaluator) AuthorizeWithAttributes(ctx context.Context, action st
 }
 
 // getUserEffectivePermissions returns all permissions for a user including inherited ones.
-func (e *PolicyEvaluator) getUserEffectivePermissions(username string) []Permission {
+func (e *PolicyEvaluator) getUserEffectivePermissions(username string) ([]Permission, error) {
 	// Check if we have an extended manager with inheritance support
 	if em, ok := e.manager.(ExtendedManager); ok {
-		roles := em.GetRolesWithInheritance(username)
+		var roles []Role
+		if reader, ok := em.(ErrorAwareInheritedRoleReader); ok {
+			var err error
+			roles, err = reader.GetRolesWithInheritanceWithError(username)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			roles = em.GetRolesWithInheritance(username)
+		}
 		var allPerms []Permission
 		for _, role := range roles {
 			allPerms = append(allPerms, role.Permissions...)
 		}
-		return allPerms
+		return allPerms, nil
 	}
 
-	// Fall back to basic manager
-	return e.manager.GetUserPermissions(username)
+	// Basic managers may also preserve read errors. Never evaluate a partial
+	// result or silently downgrade a failed read to an ordinary policy denial.
+	if reader, ok := e.manager.(ErrorAwareManager); ok {
+		return reader.GetUserPermissionsWithError(username)
+	}
+	return e.manager.GetUserPermissions(username), nil
 }
 
 // filterMatching returns permissions that match the requested action and resource.

@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"os"
@@ -1157,5 +1158,197 @@ func assertSharedPageCacheBound(t *testing.T, name string, conn interface {
 	}
 	if size != -pdb.MaxPageCacheKiB {
 		t.Fatalf("%s: cache_size = %d, want %d from pdb.PageCachePragma", name, size, -pdb.MaxPageCacheKiB)
+	}
+}
+
+func newInheritedPolicyFixture(t *testing.T, inherited bool) *SQLiteManager {
+	t.Helper()
+	m, err := NewSQLiteManager(SQLiteManagerConfig{DataDir: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = m.Close() })
+	restriction := Role{ID: "policy-restriction", Name: "Saved restriction", Permissions: []Permission{{Action: "write", Resource: "nodes:production", Effect: EffectDeny}}}
+	grant := Role{ID: "policy-grant", Name: "Saved grant", Permissions: []Permission{{Action: "write", Resource: "nodes:*", Effect: EffectAllow}}}
+	if inherited {
+		grant.ParentID = restriction.ID
+	}
+	for _, role := range []Role{restriction, grant} {
+		if err := m.SaveRole(role); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ids := []string{grant.ID}
+	if !inherited {
+		ids = append(ids, restriction.ID)
+	}
+	if err := m.UpdateUserRoles("policy-user", ids); err != nil {
+		t.Fatal(err)
+	}
+	return m
+}
+
+func TestSQLiteInheritedPolicyReadPreservesCompleteChain(t *testing.T) {
+	m := newInheritedPolicyFixture(t, true)
+	var _ ErrorAwareInheritedRoleReader = m
+	other := Role{ID: "other-child", Name: "Other child", ParentID: "policy-restriction", Priority: 7, Permissions: []Permission{{Action: "read", Resource: "backups", Conditions: map[string]string{"owner": "${user}"}, Effect: EffectAllow}}}
+	if err := m.SaveRole(other); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.UpdateUserRoles("policy-user", []string{"policy-grant", other.ID, "policy-restriction"}); err != nil {
+		t.Fatal(err)
+	}
+	roles, err := m.GetRolesWithInheritanceWithError("policy-user")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(roles) != 3 {
+		t.Fatalf("expected three distinct roles, got %+v", roles)
+	}
+	ids := make(map[string]bool)
+	for i, role := range roles {
+		if ids[role.ID] {
+			t.Fatalf("duplicate role %s", role.ID)
+		}
+		ids[role.ID] = true
+		if role.ID == "policy-restriction" && i != 0 {
+			t.Fatal("parent must precede children")
+		}
+		want, found, err := m.GetRoleWithError(role.ID)
+		if err != nil || !found || !reflect.DeepEqual(role, want) {
+			t.Fatalf("partial role = %+v, want %+v (%v/%v)", role, want, found, err)
+		}
+	}
+	if !reflect.DeepEqual(roles, m.GetRolesWithInheritance("policy-user")) {
+		t.Fatal("legacy complete chain changed")
+	}
+	for _, user := range []string{"unknown", "zero-role-user"} {
+		if user == "zero-role-user" {
+			if err := m.UpdateUserRoles(user, nil); err != nil {
+				t.Fatal(err)
+			}
+		}
+		got, err := m.GetRolesWithInheritanceWithError(user)
+		if err != nil || len(got) != 0 {
+			t.Fatalf("empty policy %s: %+v/%v", user, got, err)
+		}
+	}
+	evaluator := NewPolicyEvaluator(m)
+	ctx := WithUser(context.Background(), "policy-user")
+	if allowed, err := evaluator.Authorize(ctx, "write", "nodes:production"); err != nil || allowed {
+		t.Fatalf("saved deny: %v/%v", allowed, err)
+	}
+	if allowed, err := evaluator.Authorize(ctx, "write", "nodes:development"); err != nil || !allowed {
+		t.Fatalf("saved grant: %v/%v", allowed, err)
+	}
+	if allowed, err := evaluator.AuthorizeWithAttributes(ctx, "read", "backups", map[string]string{"owner": "policy-user"}); err != nil || !allowed {
+		t.Fatalf("saved condition match: %v/%v", allowed, err)
+	}
+	if allowed, err := evaluator.AuthorizeWithAttributes(ctx, "read", "backups", map[string]string{"owner": "another-user"}); err != nil || allowed {
+		t.Fatalf("saved condition mismatch: %v/%v", allowed, err)
+	}
+}
+
+func TestSQLiteInheritedPolicyReadFailsClosed(t *testing.T) {
+	failures := []struct{ name, statement string }{
+		{"closed store", ""},
+		{"assignment query", `ALTER TABLE rbac_user_assignments RENAME TO unavailable_assignments`},
+		{"assignment scan", `UPDATE rbac_user_assignments SET updated_at = 'invalid-fixture-time' WHERE username = 'policy-user'`},
+		{"role query", `ALTER TABLE rbac_roles RENAME TO unavailable_roles`},
+		{"role scan", `UPDATE rbac_roles SET created_at = 'invalid-fixture-time' WHERE id = 'policy-restriction'`},
+		{"permission query", `ALTER TABLE rbac_permissions RENAME TO unavailable_permissions`},
+		{"permission conditions", `UPDATE rbac_permissions SET conditions = '{' WHERE role_id = 'policy-restriction'`},
+		{"inheritance cycle", `UPDATE rbac_roles SET parent_id = 'policy-restriction' WHERE id = 'policy-restriction'`},
+	}
+	for _, inherited := range []bool{false, true} {
+		kind := "direct"
+		if inherited {
+			kind = "inherited"
+		}
+		for _, failure := range failures {
+			t.Run(kind+"/"+failure.name, func(t *testing.T) {
+				m := newInheritedPolicyFixture(t, inherited)
+				ctx := WithUser(context.Background(), "policy-user")
+				evaluator := NewPolicyEvaluator(m)
+				if allowed, err := evaluator.Authorize(ctx, "write", "nodes:production"); err != nil || allowed {
+					t.Fatalf("healthy deny: %v/%v", allowed, err)
+				}
+				if failure.name == "closed store" {
+					if err := m.Close(); err != nil {
+						t.Fatal(err)
+					}
+				} else {
+					if _, err := m.db.Exec(failure.statement); err != nil {
+						t.Fatal(err)
+					}
+				}
+				roles, err := m.GetRolesWithInheritanceWithError("policy-user")
+				if err == nil || len(roles) != 0 {
+					t.Fatalf("failed read published policy: %+v/%v", roles, err)
+				}
+				if got := m.GetRolesWithInheritance("policy-user"); len(got) != 0 {
+					t.Fatalf("legacy read published partial policy: %+v", got)
+				}
+				for _, resource := range []string{"nodes:production", "nodes:development"} {
+					if allowed, err := evaluator.Authorize(ctx, "write", resource); err == nil || allowed {
+						t.Fatalf("failed policy admitted %s: %v/%v", resource, allowed, err)
+					}
+				}
+				// Reads do not repair or replace the saved restriction. Correcting this
+				// application field restores the original deny and independent grant.
+				if failure.name == "permission conditions" {
+					var stored string
+					if err := m.db.QueryRow(`SELECT conditions FROM rbac_permissions WHERE role_id = 'policy-restriction'`).Scan(&stored); err != nil || stored != "{" {
+						t.Fatalf("saved policy changed: %q/%v", stored, err)
+					}
+					if _, err := m.db.Exec(`UPDATE rbac_permissions SET conditions = NULL WHERE role_id = 'policy-restriction'`); err != nil {
+						t.Fatal(err)
+					}
+					if allowed, err := evaluator.Authorize(ctx, "write", "nodes:production"); err != nil || allowed {
+						t.Fatalf("recovered deny: %v/%v", allowed, err)
+					}
+					if allowed, err := evaluator.Authorize(ctx, "write", "nodes:development"); err != nil || !allowed {
+						t.Fatalf("recovered grant: %v/%v", allowed, err)
+					}
+				}
+			})
+		}
+	}
+}
+
+func TestSQLiteInheritedPolicyMissingReferencesFailClosed(t *testing.T) {
+	for _, fixture := range []struct{ name, statement string }{
+		{"missing parent", `UPDATE rbac_roles SET parent_id = 'missing-role' WHERE id = 'policy-grant'`},
+		{"missing assignment role", `UPDATE rbac_user_assignments SET role_id = 'missing-role' WHERE username = 'policy-user'`},
+	} {
+		t.Run(fixture.name, func(t *testing.T) {
+			m := newInheritedPolicyFixture(t, true)
+			// A disposable application fixture supplies an inconsistent reference
+			// through an independent writer, without changing any engine settings.
+			writer, err := sql.Open("sqlite", m.dbPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = writer.Close() })
+			if _, err := writer.Exec(fixture.statement); err != nil {
+				t.Fatal(err)
+			}
+			roles, err := m.GetRolesWithInheritanceWithError("policy-user")
+			if err == nil || len(roles) != 0 {
+				t.Fatalf("inconsistent policy: %+v/%v", roles, err)
+			}
+			ctx := WithUser(context.Background(), "policy-user")
+			if allowed, err := NewPolicyEvaluator(m).Authorize(ctx, "write", "nodes:production"); err == nil || allowed {
+				t.Fatalf("inconsistent policy authorization: %v/%v", allowed, err)
+			}
+			// An unrelated, complete policy in the same store remains usable.
+			if err := m.UpdateUserRoles("unrelated-admin", []string{RoleAdmin}); err != nil {
+				t.Fatal(err)
+			}
+			ctx = WithUser(context.Background(), "unrelated-admin")
+			if allowed, err := NewPolicyEvaluator(m).Authorize(ctx, "admin", "*"); err != nil || !allowed {
+				t.Fatalf("unrelated complete policy: %v/%v", allowed, err)
+			}
+		})
 	}
 }

@@ -18,6 +18,39 @@
 
 ## Purpose
 
+### Authorization requires the complete saved inherited policy
+
+The core SQLite RBAC manager exposes an optional
+`ErrorAwareInheritedRoleReader`. User-role inheritance reads either return the
+complete, deduplicated parent-before-child chain or an error with no roles.
+Assignment/role/permission query, scan and permission-JSON failures, missing
+referenced roles and cyclic chains cannot publish a partial policy. The legacy
+errorless user-role reader also drops the whole result on a read failure instead
+of retaining a readable grant while losing an unreadable restriction.
+
+`PolicyEvaluator` consumes this reader when an extended manager supports it and
+propagates read errors as denied authorization, without falling back to direct
+permissions. Its basic-manager path likewise uses the existing error-aware
+permission reader when available. Existing middleware reports its fixed
+permission-verification error; security-status capabilities and session-admin
+checks grant nothing from that failed policy. Valid inheritance, deny precedence,
+ABAC conditions, shared-parent deduplication, no-role denial and the configured
+local-administrator recovery path remain intact. Legacy third-party managers
+without the optional interfaces keep their existing compatibility limitations.
+
+Normal `TestSQLiteInheritedPolicy*` and
+`TestPolicyEvaluatorPreservesReadErrorsAndLegacyAdapters` cover the traversal,
+all-or-error/legacy/evaluator consumers and corrected saved-field recovery.
+`TestRBACInheritedPolicyFailureProtectsSettings` exercises the registered
+security-status and token inventory routes, fixed non-disclosing failures,
+unchanged token state, valid RBAC administration and local-admin recovery.
+Its token-creation requests carry a real session-bound CSRF token so the
+assertions reach policy evaluation; separate missing-CSRF controls retain the
+router's earlier rejection. Normal and race runs cover both admissions.
+Comparable native-response browser fixtures exercise the existing API Access
+panel; this is not full App/IdP, installed-client or historical-exposure proof.
+No saved authority, route, permission rule, database engine or migration changes.
+
 ### Role-detail read failures cannot masquerade as saved access
 
 The SQLite RBAC store implements a separate optional `ErrorAwareRoleReader`.
