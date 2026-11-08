@@ -26702,7 +26702,7 @@ func TestMetricHistoryWithdrawnTokenCannotDisclose(t *testing.T) {
 }
 
 func TestContract_AIApprovalReviewAuthenticationCSRFAndMethods(t *testing.T) {
-	router, store := approvalReviewFixture(t, &auth.DefaultAuthorizer{})
+	router, store := approvalReviewFixture(t, &authpkg.DefaultAuthorizer{})
 	seedApprovalReview(t, store, "fixture-own", "default", "shell")
 	for _, tc := range []struct {
 		method, path, user string
