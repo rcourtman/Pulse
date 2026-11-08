@@ -20,6 +20,7 @@ function fixture(algorithm = 'sha384') {
   mkdirSync(path.join(root, 'dist/assets'), { recursive: true });
   const script = path.join(root, 'scripts/check-bundle-size.mjs');
   cpSync(checker, script);
+  cpSync(path.join(path.dirname(checker), 'build-integrity.mjs'), path.join(root, 'scripts/build-integrity.mjs'));
   // The copied CLI uses the same already-declared, locked parser as the real
   // build check. No dependency install or resource loading occurs in fixtures.
   symlinkSync(
@@ -338,7 +339,7 @@ describe('built JavaScript integrity checks', () => {
 
   it('fails closed if the parser changes to scripting-disabled tokenization', () => {
     const f = fixture();
-    const script = path.join(f.root, 'scripts/check-bundle-size.mjs');
+    const script = path.join(f.root, 'scripts/build-integrity.mjs');
     const source = readFileSync(script, 'utf8');
     const changed = source.replace('includeNodeLocations: true', 'includeNodeLocations: false');
     expect(changed).not.toBe(source);

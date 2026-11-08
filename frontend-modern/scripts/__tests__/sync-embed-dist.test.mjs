@@ -18,23 +18,21 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
+import { completeBuild } from './build-output-fixture.mjs';
 
 const repository = fileURLToPath(new URL('../../../', import.meta.url));
 const roots = [];
-const oldFiles = {
-  'index.html': '<!doctype html><script src="/assets/previous.js"></script>\n',
+const oldFiles = completeBuild({
   'assets/previous.js': 'console.log("previous frontend");\n',
   'docs/retained.md': 'Previously usable help.\n',
-};
-const validFiles = {
-  'index.html':
-    '<!doctype html><script type="module" src="/assets/app.js"></script>\n<link rel="stylesheet" href="/assets/app.css">\n<link rel="modulepreload" href="/assets/vendor.js">\n<script type="importmap">{"integrity":{"/assets/lazy.js":"synthetic-integrity"}}</script>\n',
-  'assets/app.js': 'console.log("current frontend");\n',
+}, { entry: 'previous.js' });
+const validFiles = completeBuild({
+  'assets/app.js': 'import "./vendor.js"; import("./lazy.js"); console.log("current frontend");\n',
   'assets/vendor.js': 'export const vendor = true;\n',
   'assets/lazy.js': 'export const lazy = true;\n',
   'assets/app.css': 'body { color: black; }\n',
   'docs/current.md': 'Current help.\n',
-};
+}, { entry: 'app.js', preloads: ['vendor.js'], styles: ['app.css'] });
 
 function writeFiles(directory, files) {
   for (const [name, content] of Object.entries(files)) {
@@ -64,12 +62,18 @@ function fixture(files, { previous = true, failure } = {}) {
   // but own every file it can replace inside this disposable fixture repository.
   for (const name of [
     'frontend-modern/scripts/sync-embed-dist.mjs',
+    'frontend-modern/scripts/build-integrity.mjs',
     'scripts/exclusive-lock.mjs',
   ]) {
     const destination = path.join(root, name);
     mkdirSync(path.dirname(destination), { recursive: true });
     cpSync(path.join(repository, name), destination);
   }
+  // The production validator uses the already-locked inert HTML parser.
+  // Keep Vite's fixture path writable while resolving jsdom's real dependency graph.
+  const modules = path.join(root, 'frontend-modern', 'node_modules');
+  mkdirSync(modules, { recursive: true });
+  symlinkSync(path.join(repository, 'frontend-modern', 'node_modules', 'jsdom'), path.join(modules, 'jsdom'), 'junction');
   const source = path.join(root, 'frontend-modern', 'dist');
   const target = path.join(root, 'internal', 'api', 'frontend-modern', 'dist');
   mkdirSync(source, { recursive: true });
@@ -331,6 +335,26 @@ const invalidBuilds = [
     ),
     reason: new RegExp(asset.replace('.', '\\.')),
   })),
+  ...['app.js', 'vendor.js', 'lazy.js'].map((asset) => ({
+    name: `stale integrity for ${asset}`,
+    files: { ...validFiles, [`assets/${asset}`]: 'export const changedBytes = true;\n' },
+    reason: /integrity mismatch against built asset bytes/,
+  })),
+  {
+    name: 'missing import map',
+    files: { ...validFiles, 'index.html': validFiles['index.html'].replace(/<script type="importmap">.*?<\/script>/, '') },
+    reason: /importmap script block missing/,
+  },
+  {
+    name: 'empty entry integrity',
+    files: { ...validFiles, 'index.html': validFiles['index.html'].replace(/(src="\/assets\/app.js" integrity=")[^"]+/, '$1') },
+    reason: /entry script.*invalid or unsupported integrity/,
+  },
+  {
+    name: 'duplicate import map',
+    files: { ...validFiles, 'index.html': validFiles['index.html'] + '<script type="importmap">{}</script>' },
+    reason: /exactly one importmap/,
+  },
   ...['../outside.js', 'nested/../../outside.js', 'nested\\outside.js'].map((asset) => ({
     name: `invalid asset path ${asset}`,
     files: { ...validFiles, 'index.html': `<script src="/assets/${asset}"></script>` },
@@ -370,10 +394,12 @@ describe.each(['CLI', 'builder'])('%s embed publication preserves usable output'
   });
 
   it('accepts single-quoted and nested generated asset references', () => {
-    const f = fixture({
-      'index.html': "<script src='/assets/nested/entry.js'></script>",
-      'assets/nested/entry.js': validFiles['assets/app.js'],
-    });
+    const files = completeBuild({
+      'assets/nested/entry.js': 'import "./vendor.js"; export const nested = true;\n',
+      'assets/nested/vendor.js': 'export const nestedVendor = true;\n',
+    }, { entry: 'nested/entry.js', preloads: ['nested/vendor.js'] });
+    files['index.html'] = files['index.html'].replace('src="/assets/nested/entry.js"', "src='/assets/nested/entry.js'");
+    const f = fixture(files);
     const result = f.run(mode);
     expect(result.status, result.stderr).toBe(0);
     expect(tree(f.target)).toEqual(tree(f.source));
