@@ -184,6 +184,11 @@ func normalizeSAMLBaseURL(baseURL string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	// A public base is not a navigation target: append endpoint paths before
+	// query/fragment boundaries. Explicit OIDC redirect URLs are not bases and
+	// deliberately bypass this normalization.
+	parsed.RawQuery, parsed.Fragment, parsed.RawFragment = "", "", ""
+	parsed.ForceQuery = false
 	return strings.TrimRight(parsed.String(), "/"), nil
 }
 
@@ -433,38 +438,17 @@ func (s *SAMLService) initServiceProvider() error {
 }
 
 func (s *SAMLService) initServiceProviderLocked() error {
-	// Build SP Entity ID
-	spEntityID := s.config.SPEntityID
-	if spEntityID == "" {
-		spEntityID = fmt.Sprintf("%s/saml/%s", s.baseURL, s.providerID)
-	}
-
-	// Build ACS URL
-	acsPath := s.config.SPACSPath
-	if acsPath == "" {
-		acsPath = fmt.Sprintf("/api/saml/%s/acs", s.providerID)
-	}
-	acsURL, err := url.Parse(s.baseURL + acsPath)
+	endpoints, err := buildSAMLSPURLs(s.providerID, s.config, s.baseURL)
 	if err != nil {
-		return fmt.Errorf("failed to parse acs url: %w", err)
-	}
-
-	// Build Metadata URL
-	metadataPath := s.config.SPMetadataPath
-	if metadataPath == "" {
-		metadataPath = fmt.Sprintf("/api/saml/%s/metadata", s.providerID)
-	}
-	metadataURL, err := url.Parse(s.baseURL + metadataPath)
-	if err != nil {
-		return fmt.Errorf("failed to parse metadata url: %w", err)
+		return err
 	}
 
 	forceAuthn := s.config.ForceAuthn
 
 	sp := saml.ServiceProvider{
-		EntityID:          spEntityID,
-		AcsURL:            *acsURL,
-		MetadataURL:       *metadataURL,
+		EntityID:          endpoints.entityID,
+		AcsURL:            endpoints.acs,
+		MetadataURL:       endpoints.metadata,
 		IDPMetadata:       s.idpMetadata,
 		AllowIDPInitiated: s.config.AllowIDPInitiated,
 		ForceAuthn:        &forceAuthn,
@@ -473,10 +457,7 @@ func (s *SAMLService) initServiceProviderLocked() error {
 	// Set SLO URL if the IdP supports it
 	if len(s.idpMetadata.IDPSSODescriptors) > 0 &&
 		len(s.idpMetadata.IDPSSODescriptors[0].SingleLogoutServices) > 0 {
-		sloURL, err := url.Parse(s.baseURL + fmt.Sprintf("/api/saml/%s/slo", s.providerID))
-		if err == nil {
-			sp.SloURL = *sloURL
-		}
+		sp.SloURL = endpoints.slo
 	}
 
 	// Load SP certificate and key if signing is enabled
@@ -493,12 +474,79 @@ func (s *SAMLService) initServiceProviderLocked() error {
 
 	log.Info().
 		Str("provider_id", s.providerID).
-		Str("entity_id", spEntityID).
-		Str("acs_url", acsURL.String()).
+		Str("entity_id", endpoints.entityID).
+		Str("acs_url", endpoints.acs.String()).
 		Bool("sign_requests", s.config.SignRequests).
 		Msg("Initialized SAML Service Provider")
 
 	return nil
+}
+
+type samlSPURLs struct {
+	entityID string
+	acs      url.URL
+	metadata url.URL
+	slo      url.URL
+}
+
+// Keep displayed registration targets and native SP endpoints on the same
+// rules, including advanced paths and an explicitly configured Entity ID.
+func buildSAMLSPURLs(providerID string, cfg *config.SAMLProviderConfig, baseURL string) (samlSPURLs, error) {
+	endpoints := samlSPURLs{entityID: cfg.SPEntityID}
+	if endpoints.entityID == "" {
+		endpoints.entityID = baseURL + "/saml/" + providerID
+	}
+	acsPath := cfg.SPACSPath
+	if acsPath == "" {
+		acsPath = "/api/saml/" + providerID + "/acs"
+	}
+	metadataPath := cfg.SPMetadataPath
+	if metadataPath == "" {
+		metadataPath = "/api/saml/" + providerID + "/metadata"
+	}
+	for _, endpoint := range []struct {
+		path string
+		url  *url.URL
+	}{
+		{acsPath, &endpoints.acs},
+		{metadataPath, &endpoints.metadata},
+		{"/api/saml/" + providerID + "/slo", &endpoints.slo},
+	} {
+		parsed, err := url.Parse(baseURL + endpoint.path)
+		if err != nil {
+			return samlSPURLs{}, fmt.Errorf("invalid SAML SP endpoint: %w", err)
+		}
+		*endpoint.url = *parsed
+	}
+	return endpoints, nil
+}
+
+// Caller holds s.mu. Startup may precede configured/captured PublicURL. In
+// that case derive absolute endpoints on a request-local SP copy, using the
+// same proxy-trusted origin as setup responses. Never rebind the shared
+// service or save request-derived authority from an unauthenticated flow.
+// The service's browser-bound request stores and IdP/signing policy stay shared.
+func (s *SAMLService) serviceProviderForRequestLocked(req *http.Request) (*saml.ServiceProvider, error) {
+	if s.sp == nil {
+		return nil, errors.New("service provider not initialized")
+	}
+	if s.baseURL != "" || req == nil {
+		return s.sp, nil
+	}
+	baseURL := requestOriginBaseURL(req)
+	if baseURL == "" {
+		return nil, errors.New("SAML public URL is unavailable")
+	}
+	endpoints, err := buildSAMLSPURLs(s.providerID, s.config, baseURL)
+	if err != nil {
+		return nil, err
+	}
+	sp := *s.sp
+	sp.EntityID, sp.AcsURL, sp.MetadataURL = endpoints.entityID, endpoints.acs, endpoints.metadata
+	if sp.SloURL.String() != "" {
+		sp.SloURL = endpoints.slo
+	}
+	return &sp, nil
 }
 
 func (s *SAMLService) SetBaseURL(baseURL string) error {
@@ -602,11 +650,16 @@ func (s *SAMLService) loadSPCredentials() (*x509.Certificate, *rsa.PrivateKey, e
 // together with returnTo, so that ProcessResponse accepts the IdP's answer to
 // this request only once, only from that browser, and returns it to returnTo.
 func (s *SAMLService) MakeAuthRequest(returnTo, browserKey string) (string, error) {
+	return s.makeAuthRequest(nil, returnTo, browserKey)
+}
+
+func (s *SAMLService) makeAuthRequest(req *http.Request, returnTo, browserKey string) (string, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	if s.sp == nil {
-		return "", errors.New("service provider not initialized")
+	sp, err := s.serviceProviderForRequestLocked(req)
+	if err != nil {
+		return "", err
 	}
 	if browserKey == "" {
 		return "", errors.New("authentication request has no browser to bind")
@@ -622,14 +675,14 @@ func (s *SAMLService) MakeAuthRequest(returnTo, browserKey string) (string, erro
 
 	// This is crewjam's MakeRedirectAuthenticationRequest, unrolled to learn
 	// the request's ID.
-	authnRequest, err := s.sp.MakeAuthenticationRequest(s.sp.GetSSOBindingLocation(saml.HTTPRedirectBinding), saml.HTTPRedirectBinding, saml.HTTPPostBinding)
+	authnRequest, err := sp.MakeAuthenticationRequest(sp.GetSSOBindingLocation(saml.HTTPRedirectBinding), saml.HTTPRedirectBinding, saml.HTTPPostBinding)
 	if err != nil {
 		return "", fmt.Errorf("failed to create auth request: %w", err)
 	}
 	// Redirect appends RelayState to the query as given, so escape it: a
 	// returnTo with its own query string would otherwise split into stray
 	// parameters and come back from the IdP truncated.
-	redirectURL, err := authnRequest.Redirect(url.QueryEscape(returnTo), s.sp)
+	redirectURL, err := authnRequest.Redirect(url.QueryEscape(returnTo), sp)
 	if err != nil {
 		return "", fmt.Errorf("failed to create auth request: %w", err)
 	}
@@ -675,8 +728,9 @@ func (s *SAMLService) ProcessResponse(r *http.Request, browserKey string) (*SAML
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	if s.sp == nil {
-		return nil, "", errors.New("service provider not initialized")
+	requestSP, err := s.serviceProviderForRequestLocked(r)
+	if err != nil {
+		return nil, "", err
 	}
 
 	// Parse the form to get SAMLResponse and RelayState
@@ -691,7 +745,7 @@ func (s *SAMLService) ProcessResponse(r *http.Request, browserKey string) (*SAML
 	// this browser's.
 	now := time.Now()
 	possibleRequestIDs := []string{""}
-	if !s.sp.AllowIDPInitiated {
+	if !requestSP.AllowIDPInitiated {
 		var bound bool
 		possibleRequestIDs, bound = s.authnRequests.outstanding(browserKey, now)
 		if !bound {
@@ -702,14 +756,14 @@ func (s *SAMLService) ProcessResponse(r *http.Request, browserKey string) (*SAML
 	// Parse and validate the SAML assertion on a copy of the service provider
 	// whose signature verifier keeps what each verified signature covers.
 	signed := &samlSignedContent{}
-	sp := *s.sp
+	sp := *requestSP
 	sp.SignatureVerifier = signed
 	assertion, err := sp.ParseResponse(r, possibleRequestIDs)
 	if err != nil {
 		return nil, relayState, fmt.Errorf("failed to validate saml response: %w", err)
 	}
 
-	if !s.sp.AllowIDPInitiated {
+	if !requestSP.AllowIDPInitiated {
 		requestID, err := signed.inResponseTo(assertion.ID)
 		if err != nil {
 			return nil, relayState, fmt.Errorf("%w: %v", errSAMLResponseUnbound, err)
@@ -792,14 +846,19 @@ func (s *SAMLService) extractAttribute(attrs map[string][]string, attrName, defa
 
 // GetMetadata returns the SP metadata XML
 func (s *SAMLService) GetMetadata() ([]byte, error) {
+	return s.metadataForRequest(nil)
+}
+
+func (s *SAMLService) metadataForRequest(req *http.Request) ([]byte, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	if s.sp == nil {
-		return nil, errors.New("service provider not initialized")
+	sp, err := s.serviceProviderForRequestLocked(req)
+	if err != nil {
+		return nil, err
 	}
 
-	metadata := s.sp.Metadata()
+	metadata := sp.Metadata()
 	return xml.MarshalIndent(metadata, "", "  ")
 }
 
@@ -807,11 +866,16 @@ func (s *SAMLService) GetMetadata() ([]byte, error) {
 // as outstanding for sessionKey, the session being logged out, so that
 // ValidateLogoutResponse accepts only the IdP's answer to this request.
 func (s *SAMLService) MakeLogoutRequest(nameID, sessionIdx, sessionKey string) (string, error) {
+	return s.makeLogoutRequest(nil, nameID, sessionIdx, sessionKey)
+}
+
+func (s *SAMLService) makeLogoutRequest(request *http.Request, nameID, sessionIdx, sessionKey string) (string, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	if s.sp == nil {
-		return "", errors.New("service provider not initialized")
+	sp, err := s.serviceProviderForRequestLocked(request)
+	if err != nil {
+		return "", err
 	}
 	if sessionKey == "" {
 		return "", errors.New("logout request has no session to bind")
@@ -825,7 +889,7 @@ func (s *SAMLService) MakeLogoutRequest(nameID, sessionIdx, sessionKey string) (
 
 	sloService := s.idpMetadata.IDPSSODescriptors[0].SingleLogoutServices[0]
 
-	req, err := s.sp.MakeLogoutRequest(sloService.Location, nameID)
+	req, err := sp.MakeLogoutRequest(sloService.Location, nameID)
 	if err != nil {
 		return "", fmt.Errorf("failed to create logout request: %w", err)
 	}
@@ -862,11 +926,12 @@ func (s *SAMLService) ValidateLogoutResponse(req *http.Request, sessionKey strin
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	if s.sp == nil {
-		return errors.New("service provider not initialized")
+	sp, err := s.serviceProviderForRequestLocked(req)
+	if err != nil {
+		return err
 	}
 
-	inResponseTo, err := s.verifiedLogoutResponseInResponseTo(req)
+	inResponseTo, err := s.verifiedLogoutResponseInResponseTo(req, sp)
 	if err != nil {
 		return err
 	}
@@ -877,10 +942,10 @@ func (s *SAMLService) ValidateLogoutResponse(req *http.Request, sessionKey strin
 // crewjam/saml's ValidateLogoutResponseRequest does (the HTTP-Redirect query
 // parameter first, then the HTTP-POST form field), has crewjam verify exactly
 // that payload, and reads InResponseTo from the same bytes.
-func (s *SAMLService) verifiedLogoutResponseInResponseTo(req *http.Request) (string, error) {
+func (s *SAMLService) verifiedLogoutResponseInResponseTo(req *http.Request, sp *saml.ServiceProvider) (string, error) {
 	var raw []byte
 	if data := req.URL.Query().Get("SAMLResponse"); data != "" {
-		if err := s.sp.ValidateLogoutResponseRedirect(data); err != nil {
+		if err := sp.ValidateLogoutResponseRedirect(data); err != nil {
 			return "", err
 		}
 		compressed, err := base64.StdEncoding.DecodeString(data)
@@ -896,7 +961,7 @@ func (s *SAMLService) verifiedLogoutResponseInResponseTo(req *http.Request) (str
 			return "", fmt.Errorf("parse logout response form: %w", err)
 		}
 		data := req.PostForm.Get("SAMLResponse")
-		if err := s.sp.ValidateLogoutResponseForm(data); err != nil {
+		if err := sp.ValidateLogoutResponseForm(data); err != nil {
 			return "", err
 		}
 		var err error

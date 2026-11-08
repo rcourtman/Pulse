@@ -306,12 +306,12 @@ func isEnabledOIDCProvider(provider *config.SSOProvider) bool {
 
 // buildSSOOIDCCallbackURL constructs the callback URL for a multi-provider OIDC flow.
 // The path includes the provider ID: /api/oidc/{providerID}/callback
-func buildSSOOIDCCallbackURL(req *http.Request, providerID string, configuredURL string) string {
+func buildSSOOIDCCallbackURL(req *http.Request, providerID string, configuredURL, publicURL string) string {
 	if configured := strings.TrimSpace(configuredURL); configured != "" {
 		return configured
 	}
 
-	baseURL := requestOriginBaseURL(req)
+	baseURL := ssoResponseBaseURL(publicURL, req)
 	if baseURL == "" {
 		return ""
 	}
@@ -346,7 +346,15 @@ func (r *Router) handleSSOOIDCLogin(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	redirectURL := buildSSOOIDCCallbackURL(req, providerID, provider.OIDC.RedirectURL)
+	redirectURL := buildSSOOIDCCallbackURL(req, providerID, provider.OIDC.RedirectURL, r.ssoPublicURL())
+	if redirectURL == "" {
+		if req.Method == http.MethodGet {
+			r.redirectOIDCError(w, req, "/", "invalid_config")
+			return
+		}
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_config", "OIDC callback URL is unavailable. Configure a public URL or an explicit redirect URL.", nil)
+		return
+	}
 
 	service := r.oidcManager.GetService(providerID)
 	if service != nil {
@@ -467,7 +475,11 @@ func (r *Router) handleSSOOIDCCallback(w http.ResponseWriter, req *http.Request)
 		return
 	}
 
-	redirectURL := buildSSOOIDCCallbackURL(req, providerID, provider.OIDC.RedirectURL)
+	redirectURL := buildSSOOIDCCallbackURL(req, providerID, provider.OIDC.RedirectURL, r.ssoPublicURL())
+	if redirectURL == "" {
+		r.redirectOIDCError(w, req, "/", "invalid_config")
+		return
+	}
 
 	service := r.oidcManager.GetService(providerID)
 	if service != nil {

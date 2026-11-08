@@ -22370,6 +22370,23 @@ func TestContract_SSOProviderResponseBaseURLNeverGuessesLocalhost(t *testing.T) 
 		}
 	})
 
+	t.Run("explicit callback remains the registration target", func(t *testing.T) {
+		provider := *oidcProvider
+		oidc := *provider.OIDC
+		oidc.RedirectURL = "https://pulse.example.com/api/oidc/callback?workspace=ops"
+		provider.OIDC = &oidc
+		req := httptest.NewRequest(http.MethodGet, "http://pulse.lan:7655/api/security/sso/providers", nil)
+		for _, response := range []SSOProviderResponse{
+			providerToResponse(&provider, "https://configured.example.com", req),
+			providerToDetailResponse(&provider, "https://configured.example.com", req),
+			providerToResponse(&provider, "", nil),
+		} {
+			if response.OIDCCallbackURL != oidc.RedirectURL {
+				t.Fatalf("explicit registration callback = %q, want %q", response.OIDCCallbackURL, oidc.RedirectURL)
+			}
+		}
+	})
+
 	t.Run("falls back to the request host instead of localhost", func(t *testing.T) {
 		t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "")
 		resetTrustedProxyCIDRsForTests()
