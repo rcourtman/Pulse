@@ -472,6 +472,15 @@ func hostViewForAgent(hosts []*unifiedresources.HostView, agentID string) *unifi
 	return nil
 }
 
+// Sensor names use a fixed protocol grammar. Compile it once rather than on
+// every direct or sibling agent-temperature read. These matchers are read-only
+// and safe to share across concurrent conversions.
+var (
+	hostSensorCorePattern = regexp.MustCompile(`^cpu_core_(\d+)$`)
+	hostSensorNVMePattern = regexp.MustCompile(`^(nvme\d+)$`)
+	hostSensorGPUPattern  = regexp.MustCompile(`^gpu_(.+)$`)
+)
+
 // convertHostSensorsToTemperature converts HostSensorSummary to the Temperature model.
 // The host agent reports temperatures in a flat map with keys like:
 // - "cpu_package" -> CPU package temperature
@@ -492,9 +501,6 @@ func convertHostSensorsToTemperature(sensors models.HostSensorSummary, lastSeen 
 	}
 
 	var coreTemps []float64
-	corePattern := regexp.MustCompile(`^cpu_core_(\d+)$`)
-	nvmePattern := regexp.MustCompile(`^(nvme\d+)$`)
-	gpuPattern := regexp.MustCompile(`^gpu_(.+)$`)
 
 	for key, value := range sensors.TemperatureCelsius {
 		keyLower := strings.ToLower(key)
@@ -507,7 +513,7 @@ func convertHostSensorsToTemperature(sensors models.HostSensorSummary, lastSeen 
 		}
 
 		// CPU core temperatures
-		if matches := corePattern.FindStringSubmatch(keyLower); len(matches) == 2 {
+		if matches := hostSensorCorePattern.FindStringSubmatch(keyLower); len(matches) == 2 {
 			coreNum, err := strconv.Atoi(matches[1])
 			if err == nil {
 				temp.Cores = append(temp.Cores, models.CoreTemp{
@@ -521,7 +527,7 @@ func convertHostSensorsToTemperature(sensors models.HostSensorSummary, lastSeen 
 		}
 
 		// NVMe temperatures
-		if matches := nvmePattern.FindStringSubmatch(keyLower); len(matches) == 2 {
+		if matches := hostSensorNVMePattern.FindStringSubmatch(keyLower); len(matches) == 2 {
 			temp.NVMe = append(temp.NVMe, models.NVMeTemp{
 				Device: matches[1],
 				Temp:   value,
@@ -531,7 +537,7 @@ func convertHostSensorsToTemperature(sensors models.HostSensorSummary, lastSeen 
 		}
 
 		// GPU temperatures (gpu_edge, gpu_junction, gpu_mem, or generic gpu_<device>)
-		if matches := gpuPattern.FindStringSubmatch(keyLower); len(matches) == 2 {
+		if matches := hostSensorGPUPattern.FindStringSubmatch(keyLower); len(matches) == 2 {
 			gpuKey := matches[1]
 			// Handle specific GPU temp types
 			if gpuKey == "edge" || gpuKey == "junction" || gpuKey == "mem" {
