@@ -671,12 +671,12 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                     </div>
                   </div>
 
-                  <dl class="grid grid-cols-2 gap-3 text-xs sm:grid-cols-3">
+                  <dl class="grid grid-cols-[minmax(0,1fr)_minmax(0,2fr)] gap-3 text-xs sm:grid-cols-[minmax(0,1.25fr)_minmax(0,0.45fr)_minmax(0,1.1fr)]">
                     <div class="col-span-2 space-y-1 sm:col-span-3">
                       <dt class="font-semibold uppercase tracking-wide text-muted">Scopes</dt>
                       <dd>{renderTokenScopes(token)}</dd>
                     </div>
-                    <div class="space-y-1">
+                    <div class="col-span-2 space-y-1 sm:col-span-1">
                       <dt class="font-semibold uppercase tracking-wide text-muted">Usage</dt>
                       <dd>{renderTokenUsage(token)}</dd>
                     </div>
@@ -686,7 +686,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                         {formatRelativeTime(new Date(token.createdAt).getTime(), { now: now() })}
                       </dd>
                     </div>
-                    <div class="col-span-2 space-y-1 sm:col-span-1">
+                    <div class="space-y-1">
                       <dt class="font-semibold uppercase tracking-wide text-muted">Expiry</dt>
                       <dd>{renderTokenExpiry(token)}</dd>
                     </div>
