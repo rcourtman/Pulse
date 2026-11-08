@@ -177,6 +177,13 @@ type ErrorAwareRoleReader interface {
 	GetRoleWithError(id string) (Role, bool, error)
 }
 
+// ErrorAwareInheritedRoleReader returns a complete inherited user policy or a
+// read error. It is optional so existing ExtendedManager implementations remain
+// compatible without falling back to direct permissions and losing inheritance.
+type ErrorAwareInheritedRoleReader interface {
+	GetRolesWithInheritanceWithError(username string) ([]Role, error)
+}
+
 // AssignmentMigrator atomically moves a role assignment from a legacy
 // identity alias to its canonical principal.
 type AssignmentMigrator interface {

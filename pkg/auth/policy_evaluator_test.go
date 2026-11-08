@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"os"
 	"testing"
 )
@@ -450,4 +451,99 @@ func setupTestRoles(t *testing.T, m *SQLiteManager) {
 	if err := m.SaveRole(extraRole); err != nil {
 		t.Fatalf("Failed to create extra-role: %v", err)
 	}
+}
+
+type legacyInheritancePolicyReader struct {
+	ExtendedManager
+	roles []Role
+	calls int
+}
+
+func (m *legacyInheritancePolicyReader) GetRolesWithInheritance(string) []Role {
+	m.calls++
+	return m.roles
+}
+func (m *legacyInheritancePolicyReader) GetUserPermissions(string) []Permission {
+	panic("inherited policy must not fall back to direct permissions")
+}
+
+type failingInheritancePolicyReader struct {
+	legacyInheritancePolicyReader
+	err        error
+	errorCalls int
+}
+
+func (m *failingInheritancePolicyReader) GetRolesWithInheritanceWithError(string) ([]Role, error) {
+	m.errorCalls++
+	return m.roles, m.err
+}
+
+type basicPolicyReader struct {
+	Manager
+	permissions []Permission
+	calls       int
+}
+
+func (m *basicPolicyReader) GetUserPermissions(string) []Permission { m.calls++; return m.permissions }
+
+type failingBasicPolicyReader struct {
+	basicPolicyReader
+	ErrorAwareManager
+	err        error
+	errorCalls int
+}
+
+func (m *failingBasicPolicyReader) GetUserPermissionsWithError(string) ([]Permission, error) {
+	m.errorCalls++
+	return m.permissions, m.err
+}
+
+func TestPolicyEvaluatorPreservesReadErrorsAndLegacyAdapters(t *testing.T) {
+	readErr := errors.New("synthetic policy read failure")
+	allow := Permission{Action: "read", Resource: "nodes", Effect: EffectAllow}
+	ctx := WithUser(context.Background(), "reader")
+	t.Run("inherited error ignores partial allow", func(t *testing.T) {
+		manager := &failingInheritancePolicyReader{legacyInheritancePolicyReader: legacyInheritancePolicyReader{roles: []Role{{ID: "partial", Permissions: []Permission{allow}}}}, err: readErr}
+		allowed, err := NewPolicyEvaluator(manager).Authorize(ctx, "read", "nodes")
+		if allowed || !errors.Is(err, readErr) || manager.errorCalls != 1 || manager.calls != 0 {
+			t.Fatalf("authorization=%v/%v, reads=%d/%d", allowed, err, manager.errorCalls, manager.calls)
+		}
+	})
+	t.Run("basic error ignores partial allow", func(t *testing.T) {
+		manager := &failingBasicPolicyReader{basicPolicyReader: basicPolicyReader{permissions: []Permission{allow}}, err: readErr}
+		allowed, err := NewPolicyEvaluator(manager).Authorize(ctx, "read", "nodes")
+		if allowed || !errors.Is(err, readErr) || manager.errorCalls != 1 || manager.calls != 0 {
+			t.Fatalf("authorization=%v/%v, reads=%d/%d", allowed, err, manager.errorCalls, manager.calls)
+		}
+	})
+	t.Run("legacy inheritance retains deny precedence", func(t *testing.T) {
+		manager := &legacyInheritancePolicyReader{roles: []Role{{Permissions: []Permission{allow, {Action: "read", Resource: "nodes", Effect: EffectDeny}}}}}
+		allowed, err := NewPolicyEvaluator(manager).Authorize(ctx, "read", "nodes")
+		if allowed || err != nil || manager.calls != 1 {
+			t.Fatalf("authorization=%v/%v reads=%d", allowed, err, manager.calls)
+		}
+	})
+	t.Run("legacy basic grant remains usable", func(t *testing.T) {
+		manager := &basicPolicyReader{permissions: []Permission{allow}}
+		allowed, err := NewPolicyEvaluator(manager).Authorize(ctx, "read", "nodes")
+		if !allowed || err != nil || manager.calls != 1 {
+			t.Fatalf("authorization=%v/%v reads=%d", allowed, err, manager.calls)
+		}
+	})
+	t.Run("anonymous does not read policy", func(t *testing.T) {
+		manager := &failingInheritancePolicyReader{err: readErr}
+		allowed, err := NewPolicyEvaluator(manager).Authorize(context.Background(), "read", "nodes")
+		if allowed || err != nil || manager.errorCalls != 0 {
+			t.Fatalf("anonymous authorization=%v/%v reads=%d", allowed, err, manager.errorCalls)
+		}
+	})
+	t.Run("configured local admin bypass is unchanged", func(t *testing.T) {
+		manager := &failingInheritancePolicyReader{err: readErr}
+		authorizer := NewRBACAuthorizer(manager)
+		authorizer.SetAdminUser("reader")
+		allowed, err := authorizer.Authorize(ctx, "read", "nodes")
+		if !allowed || err != nil || manager.errorCalls != 0 {
+			t.Fatalf("local admin authorization=%v/%v reads=%d", allowed, err, manager.errorCalls)
+		}
+	})
 }

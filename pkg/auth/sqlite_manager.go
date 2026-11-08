@@ -1248,43 +1248,71 @@ func (m *SQLiteManager) checkCircularInheritanceUnsafe(roleID, parentID string) 
 	return nil
 }
 
-// GetRolesWithInheritance returns user's roles with full inheritance chain.
+// GetRolesWithInheritance returns the user's complete role inheritance chain.
+// The errorless compatibility reader must never return a partial policy.
 func (m *SQLiteManager) GetRolesWithInheritance(username string) []Role {
+	roles, err := m.GetRolesWithInheritanceWithError(username)
+	if err != nil {
+		log.Error().Err(err).Str("username", username).Msg("Failed to query inherited roles")
+		return nil
+	}
+	return roles
+}
+
+// GetRolesWithInheritanceWithError returns every assigned and inherited role,
+// or an error with no roles when any part of that saved policy is unreadable.
+func (m *SQLiteManager) GetRolesWithInheritanceWithError(username string) ([]Role, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	assignment := m.getUserAssignmentUnsafe(username)
+	assignment, _, err := m.getUserAssignmentWithErrorUnsafe(username)
+	if err != nil {
+		return nil, err
+	}
 	if len(assignment.RoleIDs) == 0 {
-		return nil
+		return nil, nil
 	}
 
 	var roles []Role
 	visited := make(map[string]bool)
-
+	visiting := make(map[string]bool)
 	for _, roleID := range assignment.RoleIDs {
-		m.collectRoleChain(roleID, &roles, visited)
+		if err := m.collectRoleChain(roleID, &roles, visited, visiting); err != nil {
+			return nil, err
+		}
 	}
 
-	return roles
+	return roles, nil
 }
 
-func (m *SQLiteManager) collectRoleChain(roleID string, roles *[]Role, visited map[string]bool) {
+func (m *SQLiteManager) collectRoleChain(roleID string, roles *[]Role, visited, visiting map[string]bool) error {
 	if visited[roleID] {
-		return // Circular reference protection
+		return nil // A shared ancestor has already been loaded completely.
 	}
-	visited[roleID] = true
+	if visiting[roleID] {
+		return fmt.Errorf("cyclic role inheritance at %s", roleID)
+	}
+	visiting[roleID] = true
+	defer delete(visiting, roleID)
 
-	role, exists := m.getRoleUnsafe(roleID)
+	role, exists, err := m.loadRoleUnsafe(roleID)
+	if err != nil {
+		return err
+	}
 	if !exists {
-		return
+		return fmt.Errorf("referenced role not found: %s", roleID)
 	}
 
 	// First collect parent
 	if role.ParentID != "" {
-		m.collectRoleChain(role.ParentID, roles, visited)
+		if err := m.collectRoleChain(role.ParentID, roles, visited, visiting); err != nil {
+			return err
+		}
 	}
 
 	*roles = append(*roles, role)
+	visited[roleID] = true
+	return nil
 }
 
 // GetChangeLogs returns recent change logs.
