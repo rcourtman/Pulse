@@ -1,4 +1,4 @@
-import { createSignal } from 'solid-js';
+import { batch, createSignal } from 'solid-js';
 import { LicenseAPI, type LicenseRuntimeCapabilities } from '@/api/license';
 import { eventBus } from '@/stores/events';
 import { logger } from '@/utils/logger';
@@ -21,32 +21,55 @@ const [loading, setLoading] = createSignal(false);
 const [loaded, setLoaded] = createSignal(false);
 const [loadError, setLoadError] = createSignal<Error | null>(null);
 
-/**
- * Load the canonical runtime capability payload from the server.
- */
-export async function loadRuntimeCapabilities(force = false): Promise<void> {
-  if (loaded() && !force) return;
+let loadGeneration = 0;
+let inFlight: Promise<void> | null = null;
 
+/**
+ * Share ordinary reads, but let an explicit refresh or organisation switch
+ * supersede them. Arrival order must never recreate withdrawn capabilities or
+ * replace a newer accepted runtime with an old response or fallback.
+ */
+export function loadRuntimeCapabilities(force = false): Promise<void> {
+  if (!force && inFlight) return inFlight;
+  if (!force && loaded()) return Promise.resolve();
+
+  const generation = ++loadGeneration;
   setLoading(true);
-  try {
-    const next = await LicenseAPI.getRuntimeCapabilities();
-    setRuntimeCapabilities(next);
-    setLoadError(null);
-    setLoaded(true);
-    logger.debug('[licenseStore] Runtime capabilities loaded', {
-      capability_count: next.capabilities.length,
-      limit_count: next.limits.length,
-      max_history_days: next.max_history_days,
-      runtime_build: next.runtime?.build,
-    });
-  } catch (err) {
-    logger.error('[licenseStore] Failed to load runtime capabilities', err);
-    setLoadError(err instanceof Error ? err : new Error(String(err)));
-    setRuntimeCapabilities(FREE_RUNTIME_CAPABILITIES_FALLBACK);
-    setLoaded(true);
-  } finally {
-    setLoading(false);
-  }
+  inFlight = (async () => {
+    try {
+      const next = await LicenseAPI.getRuntimeCapabilities();
+      if (generation !== loadGeneration) return;
+      batch(() => {
+        setRuntimeCapabilities(next);
+        setLoadError(null);
+        setLoaded(true);
+      });
+      logger.debug('[licenseStore] Runtime capabilities loaded', {
+        capability_count: next.capabilities.length,
+        limit_count: next.limits.length,
+        max_history_days: next.max_history_days,
+        runtime_build: next.runtime?.build,
+      });
+    } catch (err) {
+      if (generation !== loadGeneration) return;
+      logger.error('[licenseStore] Failed to load runtime capabilities', err);
+      batch(() => {
+        setLoadError(err instanceof Error ? err : new Error(String(err)));
+        setRuntimeCapabilities(FREE_RUNTIME_CAPABILITIES_FALLBACK);
+        setLoaded(true);
+      });
+    } finally {
+      if (generation === loadGeneration) {
+        inFlight = null;
+        setLoading(false);
+      } else {
+        // Awaiting consumers read the singleton after this promise settles.
+        // Do not release them while its current replacement is still loading.
+        await inFlight;
+      }
+    }
+  })();
+  return inFlight;
 }
 
 /**
@@ -111,10 +134,12 @@ export function isRangeLocked(range: string): boolean {
 
 // Ensure org-scoped runtime capabilities do not leak across tenant switches.
 eventBus.on('org_switched', () => {
-  setRuntimeCapabilities(null);
-  setLoaded(false);
-  setLoadError(null);
-  void loadRuntimeCapabilities(true);
+  batch(() => {
+    setRuntimeCapabilities(null);
+    setLoaded(false);
+    setLoadError(null);
+    void loadRuntimeCapabilities(true);
+  });
 });
 
 export {
