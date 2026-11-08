@@ -744,12 +744,7 @@ func newSSOAdminRuntime(router *Router) extensions.SSOAdminRuntime {
 		}
 		return saveErr
 	}
-	runtime.GetPublicURL = func() string {
-		if router == nil || router.config == nil {
-			return ""
-		}
-		return router.config.PublicURL
-	}
+	runtime.GetPublicURL = router.ssoPublicURL
 	runtime.InitializeSAMLProvider = func(ctx context.Context, id string, samlCfg *extensions.SAMLProviderConfig) error {
 		if router.isEnvironmentManagedSSOProvider(id) {
 			return extensions.ErrSSOProviderManagedByEnvironment

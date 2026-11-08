@@ -313,6 +313,25 @@ func (r *Router) commitSSOConfig(mutate func(*config.SSOConfig) error) (applyErr
 	if err := mutate(next); err != nil {
 		return err, nil
 	}
+	// Both core handlers and private SSO snapshot writes publish here. Reject
+	// unsafe new/changed paths before either persistence or live replacement.
+	// An unchanged malformed legacy entry can still be disabled, removed or
+	// left alone while another provider is edited; this is not a migration.
+	for _, provider := range next.Providers {
+		if provider.Type != config.SSOProviderTypeSAML || provider.SAML == nil {
+			continue
+		}
+		previous := current.GetProvider(provider.ID)
+		if previous != nil && previous.Type == provider.Type && previous.SAML != nil &&
+			previous.SAML.SPACSPath == provider.SAML.SPACSPath &&
+			previous.SAML.SPMetadataPath == provider.SAML.SPMetadataPath &&
+			(!provider.Enabled || previous.Enabled) {
+			continue
+		}
+		if _, err := buildSAMLSPURLs(provider.ID, provider.SAML, ""); err != nil {
+			return fmt.Errorf("invalid SAML SP paths for provider %q: %w", provider.ID, err), nil
+		}
+	}
 	if err := r.persistSSOConfigLocked(next); err != nil {
 		return nil, err
 	}
