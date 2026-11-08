@@ -284,7 +284,9 @@ func TestAgentInstallerEveryCurlCallDisablesDefaultConfigFirst(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	call := regexp.MustCompile(`\bcurl[ \t]+(.+)`)
+	// Match command positions, not a mention in help text or an inline comment:
+	// a direct/if call, command substitution, or runuser's explicit separator.
+	call := regexp.MustCompile(`(?:^[ \t]*(?:if[ \t]+(?:![ \t]+)?)?|\$\(|--[ \t]+)curl[ \t]+(.+)`)
 	count := 0
 	for _, line := range strings.Split(string(source), "\n") {
 		if strings.HasPrefix(strings.TrimSpace(line), "#") || strings.Contains(line, "command -v curl") {
@@ -309,7 +311,7 @@ func TestAgentInstallerEveryCurlCallDisablesDefaultConfigFirst(t *testing.T) {
 			t.Errorf("implicit curl configuration remains enabled: %s", line)
 		}
 	}
-	if count < 13 {
+	if count != 14 {
 		t.Fatalf("curl inventory unexpectedly incomplete: %d", count)
 	}
 }
