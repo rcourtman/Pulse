@@ -10,6 +10,7 @@ import {
   dockerActionIdForResource,
   getAPITokenDialogName,
   getAPITokenHint,
+  getAPITokenIdentityLabel,
   getAPITokenScopePresets,
   hasAgentScopeResource,
   matchesScopePreset,
@@ -45,6 +46,32 @@ const makeToken = (overrides: Partial<APITokenRecord> = {}): APITokenRecord => (
   lastUsedAt: '2026-03-12T11:00:00.000Z',
   scopes: [DOCKER_REPORT_SCOPE],
   ...overrides,
+});
+
+describe('token action identity context', () => {
+  it.each([
+    [{}, 'Runtime token (pulse…1234)'],
+    [{ name: '', id: 'saved-token-id' }, 'saved-token-id (pulse…1234)'],
+    [{ suffix: '' }, 'Runtime token (pulse…)'],
+    [{ prefix: '' }, 'Runtime token'],
+    [{ prefix: '', suffix: '', name: '', id: 'saved-token-id' }, 'saved-token-id'],
+  ])('keeps only the existing saved name/ID and masked hint: %j', (fields, expected) => {
+    const record = { ...makeToken(fields), token: 'never-render-the-credential' };
+    expect(getAPITokenIdentityLabel(record)).toBe(expected);
+    expect(getAPITokenIdentityLabel(record)).not.toContain(record.token);
+  });
+
+  it('distinguishes namesakes with different masked hints without using the ID as authority', () => {
+    const first = makeToken();
+    const second = makeToken({ id: 'another-saved-id', suffix: '5678' });
+    expect(getAPITokenIdentityLabel(first)).toBe('Runtime token (pulse…1234)');
+    expect(getAPITokenIdentityLabel(second)).toBe('Runtime token (pulse…5678)');
+    // Colliding metadata stays colliding; the action transport, not this label,
+    // must still bind the accepted record and its exact ID.
+    expect(getAPITokenIdentityLabel({ ...first, id: second.id })).toBe(
+      getAPITokenIdentityLabel(first),
+    );
+  });
 });
 
 // ---- readPlatformNumber (private) via tokenRevokedAtForResource -------------

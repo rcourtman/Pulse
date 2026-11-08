@@ -41,7 +41,9 @@ const writes = () =>
   fetchMock.mock.calls.filter(([, init]) => init?.method && init.method !== 'GET');
 const expiryIn = (root: HTMLElement) => root.querySelector(`[data-token-expiry="${original.id}"]`)!;
 const surfaces = async () => {
-  const cards = await screen.findAllByRole('article', { name: `API token ${original.name}` });
+  const cards = await screen.findAllByRole('article', {
+    name: `API token ${original.name} (${original.prefix}…${original.suffix})`,
+  });
   const row = screen
     .getAllByText('test…1234')
     .map((e) => e.closest('tr'))
@@ -100,10 +102,9 @@ describe('saved expiry through the token inventory transport', () => {
         );
         expect(within(surface).getByTitle('monitoring:read')).toBeInTheDocument();
         for (const action of ['Edit scopes', 'Rename', 'Revoke'])
-          expect(within(surface).getByRole('button', { name: action })).toHaveProperty(
-            'disabled',
-            !canManage,
-          );
+          expect(
+            within(surface).getByRole('button', { name: new RegExp(`^${action} `) }),
+          ).toHaveProperty('disabled', !canManage);
       }
       const siblingExpiries = document.querySelectorAll('[data-token-expiry="other"]');
       expect(siblingExpiries).toHaveLength(2);
@@ -155,7 +156,9 @@ describe('saved expiry through the token inventory transport', () => {
     await screen.findByRole('alert');
     await waitFor(() =>
       expect(
-        screen.queryByRole('article', { name: `API token ${original.name}` }),
+        screen.queryByRole('article', {
+          name: `API token ${original.name} (${original.prefix}…${original.suffix})`,
+        }),
       ).not.toBeInTheDocument(),
     );
     expect(document.querySelector('[data-token-expiry]')).toBeNull();

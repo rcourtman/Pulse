@@ -14068,6 +14068,15 @@ is retained evidence, not product source.
 
 ### API token panel requests retain their confirmed context
 
+Repeated token action names and compact-card names retain the saved name and
+the already-displayed masked hint. Scope, rename and revoke dialogs carry that
+same saved context in their accessible names and visibly retain the hint beside
+the heading. The ID fallback for an unnamed token remains unchanged. These are
+display labels, never write identifiers: duplicate or missing hints do not
+grant authority or change the accepted-record/ID-bound request. The existing
+namesake transport tests verify labels, cancellation, selected writes and
+unchanged sibling records through both renderers.
+
 The existing API Access token inventory and create, rename, scope-edit and revoke
 calls accept an abort signal and expected organisation. They use the ordinary
 credentials, retain backend permission/scope/owner checks, and do not automatically

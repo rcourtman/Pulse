@@ -192,11 +192,54 @@ afterEach(() => {
 describe.each<Layout>(['desktop row', 'compact card'])(
   'API token selection from the %s',
   (layout) => {
+    it('names each repeated action and dialog with the saved namesake and masked hint', async () => {
+      await openPanel();
+      for (const selected of originals) {
+        const subject = `${selected.name} (${hint(selected)})`;
+        const controls = controlsFor(layout, selected);
+        if (layout === 'compact card') {
+          expect(screen.getByRole('article', { name: `API token ${subject}` })).toBeInTheDocument();
+        }
+        for (const [action, dialogLabel] of [
+          ['Edit scopes', 'Edit API token scopes'],
+          ['Rename', 'Rename API token'],
+          ['Revoke', 'Revoke API token'],
+        ]) {
+          const name = `${action}${action === 'Edit scopes' ? ' for' : ''} ${subject}`;
+          const button = controls.getByRole('button', { name, exact: true });
+          expect(button).toHaveTextContent(action);
+          fireEvent.click(button);
+          const dialog = await screen.findByRole('dialog', {
+            name: `${dialogLabel} for ${subject}`,
+            exact: true,
+          });
+          expect(within(dialog).getByText(hint(selected), { exact: true })).toBeInTheDocument();
+          for (const sibling of originals.filter((record) => record.id !== selected.id)) {
+            expect(
+              within(dialog).queryByText(hint(sibling), { exact: true }),
+            ).not.toBeInTheDocument();
+          }
+          if (action === 'Rename') {
+            fireEvent.input(within(dialog).getByRole('textbox', { name: 'Token name' }), {
+              target: { value: 'Unsent replacement name' },
+            });
+            expect(dialog).toHaveAccessibleName(`${dialogLabel} for ${subject}`);
+          }
+          fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel', exact: true }));
+          await waitFor(() => expect(button).toHaveFocus());
+        }
+      }
+      expect(writes()).toHaveLength(0);
+      expect(saved).toEqual(originals);
+      expect(reads()).toHaveLength(1);
+      expectBoundRequests();
+    });
+
     it('edits and renames the selected namesake through reconciled controls, preserving saved metadata and siblings', async () => {
       const view = await openPanel();
       const selected = originals[1];
-      fireEvent.click(controlsFor(layout, selected).getByRole('button', { name: 'Edit scopes' }));
-      const editor = within(await screen.findByRole('dialog', { name: 'Edit API token scopes' }));
+      fireEvent.click(controlsFor(layout, selected).getByRole('button', { name: /^Edit scopes / }));
+      const editor = within(await screen.findByRole('dialog', { name: /^Edit API token scopes / }));
       const docker = editor.getByRole('checkbox', { name: /^Docker \/ Podman reporting/ });
       const agent = editor.getByRole('checkbox', { name: /^Agent reporting/ });
       const monitoring = editor.getByRole('checkbox', { name: /^Monitoring & alerts \(read\)/ });
@@ -231,8 +274,8 @@ describe.each<Layout>(['desktop row', 'compact card'])(
 
       // This is the reconciled grid proxy / replacement card, not the original
       // object passed to the dialog. Its next action must retain the saved ID.
-      fireEvent.click(controlsFor(layout, selected).getByRole('button', { name: 'Rename' }));
-      const rename = within(await screen.findByRole('dialog', { name: 'Rename API token' }));
+      fireEvent.click(controlsFor(layout, selected).getByRole('button', { name: /^Rename / }));
+      const rename = within(await screen.findByRole('dialog', { name: /^Rename API token / }));
       expect(rename.getByRole('textbox', { name: 'Token name' })).toHaveValue(selected.name);
       fireEvent.input(rename.getByRole('textbox', { name: 'Token name' }), {
         target: { value: '  North collector  ' },
@@ -256,8 +299,10 @@ describe.each<Layout>(['desktop row', 'compact card'])(
       view.unmount();
       await openPanel();
       expect(reads()).toHaveLength(2);
-      fireEvent.click(controlsFor(layout, renamed).getByRole('button', { name: 'Edit scopes' }));
-      const reopened = within(await screen.findByRole('dialog', { name: 'Edit API token scopes' }));
+      fireEvent.click(controlsFor(layout, renamed).getByRole('button', { name: /^Edit scopes / }));
+      const reopened = within(
+        await screen.findByRole('dialog', { name: /^Edit API token scopes / }),
+      );
       expect(
         reopened.getByRole('checkbox', { name: /^Monitoring & alerts \(read\)/ }),
       ).toBeChecked();
@@ -271,16 +316,18 @@ describe.each<Layout>(['desktop row', 'compact card'])(
       await openPanel();
       const cancelled = originals[2];
       const selected = originals[1];
-      fireEvent.click(controlsFor(layout, cancelled).getByRole('button', { name: 'Revoke' }));
+      fireEvent.click(controlsFor(layout, cancelled).getByRole('button', { name: /^Revoke / }));
       const cancelledDialog = within(
-        await screen.findByRole('dialog', { name: 'Revoke API token' }),
+        await screen.findByRole('dialog', { name: /^Revoke API token / }),
       );
       expect(cancelledDialog.getByText(/agents, scripts, or integrations/)).toBeInTheDocument();
       expect(writes()).toHaveLength(0);
       fireEvent.click(cancelledDialog.getByRole('button', { name: 'Cancel' }));
       expect(saved).toEqual(originals);
-      fireEvent.click(controlsFor(layout, selected).getByRole('button', { name: 'Revoke' }));
-      const confirmation = within(await screen.findByRole('dialog', { name: 'Revoke API token' }));
+      fireEvent.click(controlsFor(layout, selected).getByRole('button', { name: /^Revoke / }));
+      const confirmation = within(
+        await screen.findByRole('dialog', { name: /^Revoke API token / }),
+      );
       expect(writes()).toHaveLength(0);
       fireEvent.click(confirmation.getByRole('button', { name: 'Revoke token' }));
       await waitFor(() => expect(containerFor(layout, selected)).toBeUndefined());
@@ -311,15 +358,15 @@ describe.each<Layout>(['desktop row', 'compact card'])(
     it('discards scope and name drafts without mutating any saved namesake', async () => {
       await openPanel();
       fireEvent.click(
-        controlsFor(layout, originals[0]).getByRole('button', { name: 'Edit scopes' }),
+        controlsFor(layout, originals[0]).getByRole('button', { name: /^Edit scopes / }),
       );
-      const editor = within(await screen.findByRole('dialog', { name: 'Edit API token scopes' }));
+      const editor = within(await screen.findByRole('dialog', { name: /^Edit API token scopes / }));
       expect(editor.getByRole('checkbox', { name: /^Full access/ })).toBeChecked();
       fireEvent.click(editor.getByRole('checkbox', { name: /^Monitoring & alerts \(read\)/ }));
       expect(editor.getByRole('checkbox', { name: /^Full access/ })).not.toBeChecked();
       fireEvent.click(editor.getByRole('button', { name: 'Cancel' }));
-      fireEvent.click(controlsFor(layout, originals[1]).getByRole('button', { name: 'Rename' }));
-      const rename = within(await screen.findByRole('dialog', { name: 'Rename API token' }));
+      fireEvent.click(controlsFor(layout, originals[1]).getByRole('button', { name: /^Rename / }));
+      const rename = within(await screen.findByRole('dialog', { name: /^Rename API token / }));
       fireEvent.input(rename.getByRole('textbox', { name: 'Token name' }), {
         target: { value: 'Unsent name' },
       });
@@ -327,9 +374,11 @@ describe.each<Layout>(['desktop row', 'compact card'])(
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
       expect(screen.queryByText('Unsent name')).not.toBeInTheDocument();
       fireEvent.click(
-        controlsFor(layout, originals[0]).getByRole('button', { name: 'Edit scopes' }),
+        controlsFor(layout, originals[0]).getByRole('button', { name: /^Edit scopes / }),
       );
-      const reopened = within(await screen.findByRole('dialog', { name: 'Edit API token scopes' }));
+      const reopened = within(
+        await screen.findByRole('dialog', { name: /^Edit API token scopes / }),
+      );
       expect(reopened.getByRole('checkbox', { name: /^Full access/ })).toBeChecked();
       expect(
         reopened.getByRole('checkbox', { name: /^Monitoring & alerts \(read\)/ }),

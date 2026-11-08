@@ -4539,6 +4539,16 @@ with the exact synthetic native ZIP; it is not installed/customer recovery.
 
 ### Token values belong to the active API Access panel
 
+Repeated inventory actions and their existing dialogs identify the saved token
+with its name (the existing ID fallback when unnamed) and already-visible masked
+hint. The hint remains visible in each dialog heading, and the saved identity in
+the rename dialog's accessible name does not change with an unsaved name draft.
+No plaintext token value is read or rendered for these labels. Missing or
+colliding hints remain display metadata, not authentication or mutation
+authority. The namesake transport regressions cover both table/card layouts,
+all three dialogs, cancellation/focus and exact selected-ID writes; existing
+read-only and context-withdrawal checks remain required.
+
 API Access binds token request completion to its organisation, authenticated
 username, current management permission and mounted lifetime. An obsolete
 create response cannot open the shared token-reveal dialog, change inventory,

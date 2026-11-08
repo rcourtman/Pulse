@@ -80,7 +80,9 @@ const ready = async () => {
   render(() => (
     <APITokenManager canManage currentUser="synthetic-user" onTokensChanged={onChanged} />
   ));
-  const card = await screen.findByRole('article', { name: `API token ${original.name}` });
+  const card = await screen.findByRole('article', {
+    name: `API token ${original.name} (${original.prefix}…${original.suffix})`,
+  });
   fireEvent.input(screen.getByLabelText('Token name'), { target: { value: 'Unsent draft' } });
   fireEvent.click(screen.getByRole('button', { name: 'Kiosk / Monitoring' }));
   return card;
@@ -92,7 +94,7 @@ const confirm = async (operation: Operation, card: HTMLElement) => {
     return;
   }
   const action = { scope: 'Edit scopes', rename: 'Rename', revoke: 'Revoke' }[operation];
-  fireEvent.click(within(card).getByRole('button', { name: action }));
+  fireEvent.click(within(card).getByRole('button', { name: new RegExp(`^${action} `) }));
   const dialog = await screen.findByRole('dialog');
   if (operation === 'scope') {
     fireEvent.click(within(dialog).getByRole('checkbox', { name: /Settings \(read\)/ }));
@@ -245,15 +247,19 @@ describe('API token recovery through the real HTTP client', () => {
           screen.getAllByRole('article').map((element) => element.dataset.apiTokenCard),
         ).toEqual(expectedInventory.map((record) => record.id));
         for (const record of expectedInventory) {
-          const currentCard = screen.getByRole('article', { name: `API token ${record.name}` });
+          const currentCard = screen.getByRole('article', {
+            name: `API token ${record.name} (${record.prefix}…${record.suffix})`,
+          });
           expect(currentCard).toHaveAttribute('data-api-token-card', record.id);
-          expect(within(currentCard).getByRole('button', { name: 'Revoke' })).not.toBeDisabled();
+          expect(within(currentCard).getByRole('button', { name: /^Revoke / })).not.toBeDisabled();
         }
         if (applied && operation === 'scope') {
           expect(
-            within(screen.getByRole('article', { name: `API token ${original.name}` })).getByText(
-              'Settings (read)',
-            ),
+            within(
+              screen.getByRole('article', {
+                name: `API token ${original.name} (${original.prefix}…${original.suffix})`,
+              }),
+            ).getByText('Settings (read)'),
           ).toBeInTheDocument();
         }
       }
@@ -275,7 +281,11 @@ describe('API token recovery through the real HTTP client', () => {
     ]);
     expect(screen.getByRole('dialog')).toBeInTheDocument();
     expect(screen.queryAllByText('Unknown')).toHaveLength(0);
-    expect(screen.getByRole('article', { name: `API token ${original.name}` })).toBeInTheDocument();
+    expect(
+      screen.getByRole('article', {
+        name: `API token ${original.name} (${original.prefix}…${original.suffix})`,
+      }),
+    ).toBeInTheDocument();
     expect(notificationStore.success).not.toHaveBeenCalled();
     expectNoRevocations();
   });
@@ -290,7 +300,9 @@ describe('API token recovery through the real HTTP client', () => {
     expect(getOrgID()).toBe('org-a');
     expect(requests()).toEqual([['GET', '/api/security/tokens']]);
     fireEvent.click(retry);
-    await screen.findByRole('article', { name: `API token ${original.name}` });
+    await screen.findByRole('article', {
+      name: `API token ${original.name} (${original.prefix}…${original.suffix})`,
+    });
     expect(requests()).toEqual([
       ['GET', '/api/security/tokens'],
       ['GET', '/api/security/tokens'],
@@ -315,7 +327,9 @@ describe('API token recovery through the real HTTP client', () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     setOrgID('org-b');
     eventBus.emit('org_switched', 'org-b');
-    await screen.findByRole('article', { name: `API token ${other.name}` });
+    await screen.findByRole('article', {
+      name: `API token ${other.name} (${other.prefix}…${other.suffix})`,
+    });
     expect(fetchMock.mock.calls[0][1]?.signal?.aborted).toBe(true);
     // Deliberately let the old fixture ignore abort: fetch cancellation alone
     // is not proof that a late decoded response cannot replace the new list.
@@ -323,12 +337,15 @@ describe('API token recovery through the real HTTP client', () => {
     await waitFor(() => expect(oldText).toHaveBeenCalledTimes(1));
     await oldText.mock.results[0].value;
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
-    expect(screen.getByRole('article', { name: `API token ${other.name}` })).toHaveAttribute(
-      'data-api-token-card',
-      other.id,
-    );
     expect(
-      screen.queryByRole('article', { name: `API token ${original.name}` }),
+      screen.getByRole('article', {
+        name: `API token ${other.name} (${other.prefix}…${other.suffix})`,
+      }),
+    ).toHaveAttribute('data-api-token-card', other.id);
+    expect(
+      screen.queryByRole('article', {
+        name: `API token ${original.name} (${original.prefix}…${original.suffix})`,
+      }),
     ).not.toBeInTheDocument();
     expect(requests()).toEqual([
       ['GET', '/api/security/tokens'],
@@ -354,7 +371,9 @@ describe('API token recovery through the real HTTP client', () => {
     expectUnknown();
     expect(requests()).toEqual([['GET', '/api/security/tokens']]);
     fireEvent.click(retry);
-    await screen.findByRole('article', { name: `API token ${original.name}` });
+    await screen.findByRole('article', {
+      name: `API token ${original.name} (${original.prefix}…${original.suffix})`,
+    });
     expect(requests()).toEqual([
       ['GET', '/api/security/tokens'],
       ['GET', '/api/security/tokens'],

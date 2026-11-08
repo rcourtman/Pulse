@@ -2,6 +2,7 @@ import { Component, For, Show, type Accessor } from 'solid-js';
 import { Dialog } from '@/components/shared/Dialog';
 import type { APIScopeOption } from '@/constants/apiScopes';
 import type { APITokenRecord } from '@/types/api';
+import { getAPITokenHint, getAPITokenIdentityLabel } from './apiTokenManagerModel';
 
 interface APITokenManagerDialogsProps {
   tokenToEdit: Accessor<APITokenRecord | null>;
@@ -30,11 +31,16 @@ export const APITokenManagerDialogs: Component<APITokenManagerDialogsProps> = (p
         isOpen={true}
         onClose={props.onCloseScopeEditor}
         panelClass="max-w-2xl"
-        ariaLabel="Edit API token scopes"
+        ariaLabel={`Edit API token scopes for ${getAPITokenIdentityLabel(props.tokenToEdit()!)}`}
       >
         <div class="w-full space-y-5 p-6">
           <div>
-            <h3 class="text-lg font-semibold text-base-content">Edit token scopes</h3>
+            <h3 class="text-lg font-semibold text-base-content">
+              Edit token scopes{' '}
+              <span class="ml-2 break-all font-mono text-xs font-normal text-muted">
+                {getAPITokenHint(props.tokenToEdit())}
+              </span>
+            </h3>
             <p class="mt-1 text-sm text-muted">
               Changes to{' '}
               <span class="font-medium text-base-content">
@@ -130,7 +136,7 @@ export const APITokenManagerDialogs: Component<APITokenManagerDialogsProps> = (p
         isOpen={true}
         onClose={props.onCloseRename}
         panelClass="max-w-md"
-        ariaLabel="Rename API token"
+        ariaLabel={`Rename API token for ${getAPITokenIdentityLabel(props.tokenToRename()!)}`}
       >
         <form
           class="w-full p-6"
@@ -139,7 +145,12 @@ export const APITokenManagerDialogs: Component<APITokenManagerDialogsProps> = (p
             props.onRename();
           }}
         >
-          <h3 class="mb-2 text-lg font-semibold text-base-content">Rename API token</h3>
+          <h3 class="mb-2 text-lg font-semibold text-base-content">
+            Rename API token{' '}
+            <span class="ml-2 break-all font-mono text-xs font-normal text-muted">
+              {getAPITokenHint(props.tokenToRename())}
+            </span>
+          </h3>
           <p class="mb-4 text-sm text-muted">
             This only changes the name shown in Pulse. The token value and connected agents stay
             unchanged.
@@ -181,10 +192,15 @@ export const APITokenManagerDialogs: Component<APITokenManagerDialogsProps> = (p
         isOpen={true}
         onClose={props.onCancelRevoke}
         panelClass="max-w-md"
-        ariaLabel="Revoke API token"
+        ariaLabel={`Revoke API token for ${getAPITokenIdentityLabel(props.tokenToRevoke()!)}`}
       >
         <div class="w-full p-6">
-          <h3 class="text-lg font-semibold text-base-content mb-2">Revoke API token?</h3>
+          <h3 class="text-lg font-semibold text-base-content mb-2">
+            Revoke API token?{' '}
+            <span class="ml-2 break-all font-mono text-xs font-normal text-muted">
+              {getAPITokenHint(props.tokenToRevoke())}
+            </span>
+          </h3>
           <p class="text-sm text-muted mb-4">
             This permanently revokes{' '}
             <span class="font-medium text-base-content">
