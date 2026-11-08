@@ -206,12 +206,11 @@ describe.each<Layout>(['desktop row', 'compact card'])(
           ['Revoke', 'Revoke API token'],
         ]) {
           const name = `${action}${action === 'Edit scopes' ? ' for' : ''} ${subject}`;
-          const button = controls.getByRole('button', { name, exact: true });
+          const button = controls.getByRole('button', { name });
           expect(button).toHaveTextContent(action);
           fireEvent.click(button);
           const dialog = await screen.findByRole('dialog', {
             name: `${dialogLabel} for ${subject}`,
-            exact: true,
           });
           expect(within(dialog).getByText(hint(selected), { exact: true })).toBeInTheDocument();
           for (const sibling of originals.filter((record) => record.id !== selected.id)) {
@@ -225,7 +224,7 @@ describe.each<Layout>(['desktop row', 'compact card'])(
             });
             expect(dialog).toHaveAccessibleName(`${dialogLabel} for ${subject}`);
           }
-          fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel', exact: true }));
+          fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
           await waitFor(() => expect(button).toHaveFocus());
         }
       }
@@ -291,13 +290,11 @@ describe.each<Layout>(['desktop row', 'compact card'])(
         expect(
           controlsFor(surface, renamed).getByRole('button', {
             name: `Rename North collector (${hint(selected)})`,
-            exact: true,
           }),
         ).toBeInTheDocument();
         expect(
           controlsFor(surface, renamed).queryByRole('button', {
             name: `Rename ${selected.name} (${hint(selected)})`,
-            exact: true,
           }),
         ).not.toBeInTheDocument();
       }
@@ -366,7 +363,6 @@ describe.each<Layout>(['desktop row', 'compact card'])(
             expect(
               controlsFor(surface, sibling).getByRole('button', {
                 name: `${name}${name === 'Edit scopes' ? ' for' : ''} ${sibling.name} (${hint(sibling)})`,
-                exact: true,
               }),
             ).toBeEnabled();
       }
