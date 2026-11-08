@@ -80,9 +80,10 @@ describe('SSO editor registration authority', () => {
       expect(dialog.queryByText('https://old.example.test/metadata')).toBeNull();
       fireEvent.click(copy);
       await waitFor(() => expect(writeText).toHaveBeenCalledExactlyOnceWith(canonical));
-      expect(notices.success).toHaveBeenCalledWith(
+      expect(await dialog.findByRole('status')).toHaveTextContent(
         'Metadata URL has been copied to the clipboard.',
       );
+      expect(notices.success).not.toHaveBeenCalled();
       expect(dialog.getByRole('button', { name: 'Save Changes' })).toBeEnabled();
       fireEvent.click(dialog.getByRole('button', { name: 'Cancel' }));
       readOnlyRequests();

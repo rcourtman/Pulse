@@ -454,7 +454,10 @@ describe('SSOProvidersPanel modal feedback and recovery', () => {
     'reports clipboard completion inside the modal, rejected=%s',
     async (rejected) => {
       const callback = 'https://pulse.example.com/api/oidc/corp-oidc/callback';
-      setupFetch([{ ...corpProvider, oidcCallbackUrl: callback }]);
+      setupFetch([{ ...corpProvider, oidcCallbackUrl: callback }], {
+        ...corpProviderDetails,
+        oidcCallbackUrl: callback,
+      });
       const writeText = vi
         .fn()
         .mockImplementation(() =>
