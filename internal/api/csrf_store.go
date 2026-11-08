@@ -26,7 +26,7 @@ type CSRFToken struct {
 type CSRFTokenStore struct {
 	tokens     map[string][]*CSRFToken
 	mu         sync.RWMutex
-	saveMu     sync.Mutex // Serializes disk writes to prevent save corruption
+	saveMu     sync.Mutex // serializes snapshot selection and writes; never acquire while holding mu
 	dataPath   string
 	saveTicker *time.Ticker
 	stopChan   chan bool
@@ -89,7 +89,7 @@ func (c *CSRFTokenStore) migrateLegacyTokens(data []byte, now time.Time) (bool, 
 		Int("loaded", loaded).
 		Int("total", len(legacy)).
 		Msg("CSRF tokens loaded from disk (legacy raw-token format)")
-	c.saveUnsafe()
+	c.save()
 	return true, nil
 }
 
@@ -204,7 +204,6 @@ func (c *CSRFTokenStore) GenerateCSRFToken(sessionID string) string {
 	token := base64.URLEncoding.EncodeToString(tokenBytes)
 
 	c.mu.Lock()
-	defer c.mu.Unlock()
 
 	now := time.Now()
 	key := csrfSessionKey(sessionID)
@@ -212,9 +211,10 @@ func (c *CSRFTokenStore) GenerateCSRFToken(sessionID string) string {
 		Hash:    csrfTokenHash(token),
 		Expires: now.Add(4 * time.Hour),
 	}, now)
+	c.mu.Unlock()
 
 	// Save immediately for important operations
-	c.saveUnsafe()
+	c.save()
 
 	return token
 }
@@ -247,10 +247,10 @@ func (c *CSRFTokenStore) ValidateCSRFToken(sessionID, token string) bool {
 // DeleteCSRFToken removes a CSRF token
 func (c *CSRFTokenStore) DeleteCSRFToken(sessionID string) {
 	c.mu.Lock()
-	defer c.mu.Unlock()
 
 	delete(c.tokens, csrfSessionKey(sessionID))
-	c.saveUnsafe()
+	c.mu.Unlock()
+	c.save()
 }
 
 // DeleteCSRFSessionKeys removes records by their hashed session-storage keys.
@@ -261,18 +261,14 @@ func (c *CSRFTokenStore) DeleteCSRFSessionKeys(sessionKeys []string) {
 		return
 	}
 	c.mu.Lock()
-	defer c.mu.Unlock()
 
-	changed := false
 	for _, key := range sessionKeys {
-		if _, ok := c.tokens[key]; ok {
-			delete(c.tokens, key)
-			changed = true
-		}
+		delete(c.tokens, key)
 	}
-	if changed {
-		c.saveUnsafe()
-	}
+	c.mu.Unlock()
+	// Even when another pending revocation already removed these live keys,
+	// this caller must wait for a fresh save attempt before returning.
+	c.save()
 }
 
 func (c *CSRFTokenStore) addTokenUnsafe(sessionKey string, token *CSRFToken, now time.Time) {
@@ -340,40 +336,48 @@ func (c *CSRFTokenStore) cleanup() {
 	}
 }
 
-// save persists CSRF tokens to disk
+// save persists a detached snapshot without holding the validation/withdrawal
+// mutex during marshaling or disk I/O. Mutators still wait for their save.
+// Select the snapshot only AFTER acquiring saveMu: selecting it earlier could
+// queue stale token authority behind a newer revocation. No caller holds mu.
 func (c *CSRFTokenStore) save() {
-	// Serialize all disk writes to prevent corruption
 	c.saveMu.Lock()
 	defer c.saveMu.Unlock()
 
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	c.saveUnsafe()
+	persisted, sessions := c.persistenceSnapshot()
+	c.persistSnapshot(persisted, sessions)
 }
 
-// saveUnsafe saves without locking (caller must hold lock)
-func (c *CSRFTokenStore) saveUnsafe() {
+// persistenceSnapshot copies token values, not pointers or live slice headers.
+// Pruning and bounded replacement may mutate those slices as soon as mu is free.
+func (c *CSRFTokenStore) persistenceSnapshot() ([]CSRFTokenData, int) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	persisted := make([]CSRFTokenData, 0, c.tokenRecordCountUnsafe())
+	for sessionKey, tokens := range c.tokens {
+		for _, token := range tokens {
+			if token == nil {
+				continue
+			}
+			persisted = append(persisted, CSRFTokenData{
+				TokenHash:  token.Hash,
+				SessionKey: sessionKey,
+				ExpiresAt:  token.Expires,
+			})
+		}
+	}
+	return persisted, len(c.tokens)
+}
+
+// persistSnapshot runs under saveMu, with no token mutex held.
+func (c *CSRFTokenStore) persistSnapshot(persisted []CSRFTokenData, sessions int) {
 	csrfFile := filepath.Join(c.dataPath, "csrf_tokens.json")
 
 	// Create directory if it doesn't exist
 	if err := os.MkdirAll(c.dataPath, 0700); err != nil {
 		log.Error().Err(err).Msg("Failed to create CSRF tokens directory")
 		return
-	}
-
-	// Convert to serializable format
-	persisted := make([]*CSRFTokenData, 0, c.tokenRecordCountUnsafe())
-	for sessionKey, tokens := range c.tokens {
-		for _, token := range tokens {
-			if token == nil {
-				continue
-			}
-			persisted = append(persisted, &CSRFTokenData{
-				TokenHash:  token.Hash,
-				SessionKey: sessionKey,
-				ExpiresAt:  token.Expires,
-			})
-		}
 	}
 
 	// Marshal tokens
@@ -397,7 +401,7 @@ func (c *CSRFTokenStore) saveUnsafe() {
 	}
 
 	log.Debug().
-		Int("sessions", len(c.tokens)).
+		Int("sessions", sessions).
 		Int("tokens", len(persisted)).
 		Msg("CSRF tokens saved to disk")
 }
