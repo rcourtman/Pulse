@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "base_sha": "5b84a5a5d5fdde7d49578e32f717995e9dc817a3",
+  "verified_at": "2026-11-08T18:43:08Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/stores/license.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/stores/license.ts": "8c9e3d044966e92d3aa92bc35e128a26833dec7633ef703f2ad3b22fce792a85"
+  },
+  "routes": [
+    "/"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Actual UserAssignmentsPanel, runtime capability singleton, LicenseAPI/API client and RBAC gate mounted in an evidence-only Settings shell at /. Synthetic account, roles and HTTP responses; not full App routing, IdP or an original estate.",
+    "Identical fixture data, viewport, light/dark theme and interaction anchor in 16 before/after pairs. Before uses dfe2528d9e1f6d5170ffeb48105574d6b907b716 / source-55e1d3yv; after uses 5b84a5a5d5fdde7d49578e32f717995e9dc817a3 / source-75l7usxl. All 32 captures were opened with native view_image during comparison.",
+    "After the current withdrawal, a late old grant leaves the saved user, Manage and Remove controls withdrawn; before, it reintroduced the row and controls.",
+    "After a current enabled result, the same late old withdrawal no longer closes the current editor: both checked role choices, the saved permission, identity, Close, Cancel and Save Changes remain visible at desktop/narrow in light/dark. Before, the editor closed and the checked draft was lost.",
+    "Current admitted editor and withdrawn explanation retain their layout and information. No horizontal overflow, page errors, unexpected fixture reads or writes. Pixel review finds no information/control loss in the valid states."
+  ],
+  "interactions": [
+    "Started two actual forced capability reads and released the newer response before the older response, exercising the changed producer through the real consuming component and authenticated client.",
+    "Opened Manage access for Saved operator, waited for saved read:north-saved-nodes permissions and checked Operate nodes before releasing the retired denial. Both role choices remain checked afterwards; no role write was sent.",
+    "Repeated both response-order scenarios at 1440x1000 and 390x844 in light/dark, with Playwright 1.56.1 and Chromium 141.0.7390.37. Browser and local preview server were closed by the script.",
+    "The initial after admission was capacity-busy before execution. Only the outstanding after proof was resumed; the successful before run and completed source witness were not replayed."
+  ]
+}
