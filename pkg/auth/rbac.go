@@ -170,6 +170,13 @@ type ErrorAwareManager interface {
 	GetUserPermissionsWithError(username string) ([]Permission, error)
 }
 
+// ErrorAwareRoleReader distinguishes a missing role from a failed role or
+// permission read. It is separate from ErrorAwareManager so existing managers
+// keep their error-aware list and assignment reads without implementing it.
+type ErrorAwareRoleReader interface {
+	GetRoleWithError(id string) (Role, bool, error)
+}
+
 // AssignmentMigrator atomically moves a role assignment from a legacy
 // identity alias to its canonical principal.
 type AssignmentMigrator interface {

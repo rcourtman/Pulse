@@ -15,6 +15,22 @@
 
 ## Purpose
 
+### Single-role reads distinguish failed storage from absence
+
+The existing `GET /api/admin/roles/{id}` uses the selected tenant manager's
+optional error-aware role reader. A failed role-row or permission read returns
+the fixed `503 rbac_store_unavailable` response, never `404 not_found` or a
+successful role with incomplete permissions. The response discloses no stored
+role data or storage error details. A successfully queried missing role still
+returns 404; complete roles and deliberate empty permissions retain their JSON.
+Legacy manager implementations without the optional reader remain supported.
+
+`TestRBACRoleDetailRead*` in the normal API suite covers closed-store and invalid
+permission-JSON failures in the default and a named organization, same-ID roles
+in three tenants, empty/missing roles, error-aware partial results and legacy
+compatibility. This changes no route, gate, grant, mutation, UI or inheritance
+evaluation. It is source protection for a role read, not original-client recovery.
+
 ### Overlapping organization edits preserve current access
 
 The saved-organization boundary refuses a complete snapshot superseded by

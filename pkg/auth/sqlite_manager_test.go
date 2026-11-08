@@ -5,12 +5,96 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
 
 	pdb "github.com/rcourtman/pulse-go-rewrite/pkg/db"
 )
+
+func TestSQLiteRoleDetailReadPreservesCompleteRoles(t *testing.T) {
+	m, err := NewSQLiteManager(SQLiteManagerConfig{DataDir: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = m.Close() })
+	var _ ErrorAwareRoleReader = m
+	for _, role := range []Role{
+		{ID: "saved-reader", Name: "Reader", ParentID: RoleViewer, Priority: 12,
+			Permissions: []Permission{{Action: "read", Resource: "nodes", Effect: EffectDeny, Conditions: map[string]string{"tag": "fixture"}}}},
+		{ID: "no-permissions", Name: "No permissions"},
+	} {
+		if err := m.SaveRole(role); err != nil {
+			t.Fatal(err)
+		}
+		legacy, found := m.GetRole(role.ID)
+		got, exists, err := m.GetRoleWithError(role.ID)
+		if err != nil || !exists || !found || !reflect.DeepEqual(got, legacy) || got.Permissions == nil {
+			t.Fatalf("complete read = %+v/%v/%v, legacy = %+v/%v", got, exists, err, legacy, found)
+		}
+	}
+	got, exists, err := m.GetRoleWithError("missing")
+	if err != nil || exists || !reflect.DeepEqual(got, Role{}) {
+		t.Fatalf("missing read = %+v/%v/%v", got, exists, err)
+	}
+}
+
+func TestSQLiteRoleDetailReadRejectsIncompleteResults(t *testing.T) {
+	for _, failure := range []string{"closed store", "permission query", "permission conditions", "role scan"} {
+		t.Run(failure, func(t *testing.T) {
+			m, err := NewSQLiteManager(SQLiteManagerConfig{DataDir: t.TempDir()})
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = m.Close() })
+			role := Role{ID: "saved-reader", Name: "Reader", Permissions: []Permission{{Action: "read", Resource: "nodes"}}}
+			if err := m.SaveRole(role); err != nil {
+				t.Fatal(err)
+			}
+			switch failure {
+			case "closed store":
+				err = m.Close()
+			case "permission query":
+				_, err = m.db.Exec(`ALTER TABLE rbac_permissions RENAME TO unavailable_permissions`)
+			case "permission conditions":
+				_, err = m.db.Exec(`UPDATE rbac_permissions SET conditions = '{' WHERE role_id = ?`, role.ID)
+			case "role scan":
+				_, err = m.db.Exec(`UPDATE rbac_roles SET created_at = 'invalid-fixture-time' WHERE id = ?`, role.ID)
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, exists, err := m.GetRoleWithError(role.ID)
+			if err == nil || exists || !reflect.DeepEqual(got, Role{}) {
+				t.Fatalf("failed read published partial result: %+v/%v/%v", got, exists, err)
+			}
+			if failure == "permission query" || failure == "permission conditions" {
+				// Errorless compatibility callers still see the role's existing
+				// metadata, not a newly missing role that could prompt recreation.
+				legacy, found := m.GetRole(role.ID)
+				if !found || legacy.ID != role.ID || legacy.Name != role.Name {
+					t.Fatalf("legacy existence changed: %+v/%v", legacy, found)
+				}
+			}
+			if failure == "permission conditions" {
+				// Reading an invalid application field never rewrites it or the
+				// saved role. Correcting that fixture restores the original read.
+				var conditions string
+				if err := m.db.QueryRow(`SELECT conditions FROM rbac_permissions WHERE role_id = ?`, role.ID).Scan(&conditions); err != nil || conditions != "{" {
+					t.Fatalf("failed read changed stored conditions: %q/%v", conditions, err)
+				}
+				if _, err := m.db.Exec(`UPDATE rbac_permissions SET conditions = NULL WHERE role_id = ?`, role.ID); err != nil {
+					t.Fatal(err)
+				}
+				got, exists, err = m.GetRoleWithError(role.ID)
+				if err != nil || !exists || got.ID != role.ID || !reflect.DeepEqual(got.Permissions, role.Permissions) {
+					t.Fatalf("recovered read = %+v/%v/%v", got, exists, err)
+				}
+			}
+		})
+	}
+}
 
 func TestSQLiteManagerAddsIdentityMetadataColumnsOnUpgrade(t *testing.T) {
 	tmpDir := t.TempDir()

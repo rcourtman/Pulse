@@ -3,11 +3,14 @@ package api
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -584,5 +587,170 @@ func TestNewRouterSharesCanonicalRBACManagerWithSSOAndSettings(t *testing.T) {
 	assignment, ok := auth.GetManager().GetUserAssignment("legacy-user")
 	if !ok || len(assignment.RoleIDs) != 1 || assignment.RoleIDs[0] != "legacy-operator" {
 		t.Fatalf("upgraded legacy assignment unavailable to canonical manager: %#v, exists=%v", assignment, ok)
+	}
+}
+
+// These same fixtures witness 404/partial-200 failures on the unmodified parent.
+func TestRBACRoleDetailReadFailure(t *testing.T) {
+	for _, orgID := range []string{"default", "org-a"} {
+		for _, failure := range []string{"closed store", "invalid permission conditions"} {
+			t.Run(orgID+"/"+failure, func(t *testing.T) {
+				dir := t.TempDir()
+				dataDir := dir
+				if orgID != "default" {
+					dataDir = filepath.Join(dir, "orgs", orgID)
+					if err := os.MkdirAll(dataDir, 0700); err != nil {
+						t.Fatal(err)
+					}
+				}
+				provider := NewTenantRBACProvider(dir)
+				t.Cleanup(func() { _ = provider.Close() })
+				manager, err := provider.GetManager(orgID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				role := auth.Role{
+					ID: "saved-reader", Name: "Private fixture role",
+					Permissions: []auth.Permission{
+						{Action: "read", Resource: "nodes", Conditions: map[string]string{"tag": "private-fixture"}},
+					},
+				}
+				if err := manager.SaveRole(role); err != nil {
+					t.Fatal(err)
+				}
+				if failure == "closed store" {
+					if err := manager.(*auth.SQLiteManager).Close(); err != nil {
+						t.Fatal(err)
+					}
+				} else {
+					db, err := sql.Open("sqlite", filepath.Join(dataDir, "rbac", "rbac.db"))
+					if err != nil {
+						t.Fatal(err)
+					}
+					t.Cleanup(func() { _ = db.Close() })
+					// This is malformed application JSON in a disposable role,
+					// not a damaged SQLite file or a driver/crash investigation.
+					if _, err := db.Exec(`UPDATE rbac_permissions SET conditions = '{' WHERE role_id = ?`, role.ID); err != nil {
+						t.Fatal(err)
+					}
+				}
+				req := httptest.NewRequest(http.MethodGet, "/api/admin/roles/"+role.ID, nil)
+				req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, orgID))
+				rec := httptest.NewRecorder()
+				NewRBACHandlers(nil, provider).HandleRoles(rec, req)
+				t.Logf("role detail response: status=%d body=%s", rec.Code, rec.Body.String())
+				if rec.Code != http.StatusServiceUnavailable {
+					t.Fatalf("status = %d, want 503", rec.Code)
+				}
+				var body APIError
+				if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+					t.Fatal(err)
+				}
+				if body.Code != "rbac_store_unavailable" {
+					t.Fatalf("error code = %q", body.Code)
+				}
+				for _, private := range []string{dir, role.ID, role.Name, "private-fixture", "database is closed", "parse conditions"} {
+					if strings.Contains(rec.Body.String(), private) {
+						t.Fatalf("error response disclosed fixture or store detail %q", private)
+					}
+				}
+			})
+		}
+	}
+}
+
+func TestRBACRoleDetailReadPreservesSavedAndMissingRoles(t *testing.T) {
+	dir := t.TempDir()
+	provider := NewTenantRBACProvider(dir)
+	t.Cleanup(func() { _ = provider.Close() })
+	handler := NewRBACHandlers(nil, provider)
+	for i, orgID := range []string{"default", "org-a", "org-b"} {
+		if orgID != "default" {
+			if err := os.MkdirAll(filepath.Join(dir, "orgs", orgID), 0700); err != nil {
+				t.Fatal(err)
+			}
+		}
+		manager, err := provider.GetManager(orgID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// Identical role IDs in three stores still select only the admitted org.
+		role := auth.Role{ID: "saved-reader", Name: orgID, ParentID: auth.RoleViewer, Priority: i,
+			Permissions: []auth.Permission{{Action: "read", Resource: "nodes:" + orgID,
+				Effect: auth.EffectDeny, Conditions: map[string]string{"tag": orgID}}}}
+		if err := manager.SaveRole(role); err != nil {
+			t.Fatal(err)
+		}
+		if err := manager.SaveRole(auth.Role{ID: "no-permissions", Name: "No permissions"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, orgID := range []string{"default", "org-a", "org-b"} {
+		for _, roleID := range []string{"saved-reader", "no-permissions", "missing"} {
+			t.Run(orgID+"/"+roleID, func(t *testing.T) {
+				req := httptest.NewRequest(http.MethodGet, "/api/admin/roles/"+roleID, nil)
+				req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, orgID))
+				rec := httptest.NewRecorder()
+				handler.HandleRoles(rec, req)
+				manager, err := provider.GetManager(orgID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				want, exists := manager.GetRole(roleID)
+				if !exists {
+					var body APIError
+					if rec.Code != http.StatusNotFound || json.Unmarshal(rec.Body.Bytes(), &body) != nil || body.Code != "not_found" {
+						t.Fatalf("missing role = %d %s", rec.Code, rec.Body.String())
+					}
+					return
+				}
+				var role auth.Role
+				wantJSON, err := json.Marshal(want)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &role) != nil || strings.TrimSpace(rec.Body.String()) != string(wantJSON) {
+					t.Fatalf("saved role = %d %s; want %+v", rec.Code, rec.Body.String(), want)
+				}
+				if rec.Header().Get("Content-Type") != "application/json" || role.Permissions == nil {
+					t.Fatal("role response lost JSON or its (possibly empty) permissions array")
+				}
+			})
+		}
+	}
+}
+
+type roleDetailErrorManager struct {
+	mockRBACManager
+	err error
+}
+
+func (m *roleDetailErrorManager) GetRole(string) (auth.Role, bool) {
+	panic("error-aware role read must not fall back to the legacy reader")
+}
+
+func (m *roleDetailErrorManager) GetRoleWithError(string) (auth.Role, bool, error) {
+	// Even a different store returning partial data with an error cannot have
+	// that data published as success or translated into a missing role.
+	return auth.Role{ID: "partial-private-role"}, true, m.err
+}
+
+func TestRBACRoleDetailReadErrorAwareAndLegacyManagers(t *testing.T) {
+	original := auth.GetManager()
+	t.Cleanup(func() { auth.SetManager(original) })
+	handler := NewRBACHandlers(nil)
+	auth.SetManager(&roleDetailErrorManager{err: errors.New("private fixture failure")})
+	rec := httptest.NewRecorder()
+	handler.HandleRoles(rec, httptest.NewRequest(http.MethodGet, "/api/admin/roles/reader", nil))
+	if rec.Code != http.StatusServiceUnavailable || !strings.Contains(rec.Body.String(), `"code":"rbac_store_unavailable"`) || strings.Contains(rec.Body.String(), "private") {
+		t.Fatalf("error-aware read = %d %s", rec.Code, rec.Body.String())
+	}
+	legacy := &mockRBACManager{roles: []auth.Role{{ID: "reader", Name: "Legacy reader", Permissions: []auth.Permission{}}}}
+	auth.SetManager(legacy)
+	rec = httptest.NewRecorder()
+	handler.HandleRoles(rec, httptest.NewRequest(http.MethodGet, "/api/admin/roles/reader", nil))
+	var role auth.Role
+	if rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &role) != nil || !reflect.DeepEqual(role, legacy.roles[0]) {
+		t.Fatalf("legacy read = %d %s", rec.Code, rec.Body.String())
 	}
 }

@@ -475,6 +475,32 @@ func (m *SQLiteManager) GetRole(id string) (Role, bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
+	role, exists, err := m.loadRoleUnsafe(id)
+	if err != nil {
+		log.Error().Err(err).Str("roleId", id).Msg("Failed to query role")
+	}
+	// Preserve the legacy interface's metadata/existence result when only
+	// permissions failed. HTTP reads use GetRoleWithError instead and must
+	// never publish that incomplete role as a successful response.
+	return role, exists
+}
+
+// GetRoleWithError returns a complete role, distinguishes absence from storage
+// failure, and never returns a partial role after a permission read error.
+func (m *SQLiteManager) GetRoleWithError(id string) (Role, bool, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	role, exists, err := m.loadRoleUnsafe(id)
+	if err != nil {
+		return Role{}, false, err
+	}
+	return role, exists, nil
+}
+
+// loadRoleUnsafe reads both parts under the caller's lock. Its partial result
+// on a permission error is only for the legacy GetRole adapter above.
+func (m *SQLiteManager) loadRoleUnsafe(id string) (Role, bool, error) {
 	var role Role
 	var parentID sql.NullString
 	var createdAt, updatedAt int64
@@ -487,20 +513,19 @@ func (m *SQLiteManager) GetRole(id string) (Role, bool) {
 	`, id).Scan(&role.ID, &role.Name, &role.Description, &parentID, &isBuiltIn, &role.Priority, &createdAt, &updatedAt)
 
 	if err == sql.ErrNoRows {
-		return Role{}, false
+		return Role{}, false, nil
 	}
 	if err != nil {
-		log.Error().Err(err).Str("roleId", id).Msg("Failed to query role")
-		return Role{}, false
+		return Role{}, false, err
 	}
 
 	role.ParentID = parentID.String
 	role.IsBuiltIn = isBuiltIn == 1
 	role.CreatedAt = time.Unix(createdAt, 0)
 	role.UpdatedAt = time.Unix(updatedAt, 0)
-	role.Permissions = m.loadRolePermissions(role.ID)
+	role.Permissions, err = m.loadRolePermissionsWithError(role.ID)
 
-	return role, true
+	return role, true, err
 }
 
 // SaveRole creates or updates a role.
