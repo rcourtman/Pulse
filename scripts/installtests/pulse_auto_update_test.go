@@ -1302,6 +1302,9 @@ GITHUB_REPO=rcourtman/Pulse
 log() { printf '%s\n' "$*" >&2; }
 curl() {
   printf '%s\n' "$*" >> "$FIXTURE_DIR/calls"
+  [[ "$#" == 11 && "${*:1:10}" == '-q --fail --silent --show-error --connect-timeout 5 --max-time 20 --proto =https' ]] || {
+    echo legacy-curl-requires-exact-bounded-metadata-options >&2; return 2;
+  }
   local url="${!#}"
   case "$url" in
     */releases?per_page=30) cat "$FIXTURE_DIR/list"; return "$LIST_EXIT" ;;

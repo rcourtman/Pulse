@@ -132,9 +132,9 @@ class NativeContracts(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
                 self.assertEqual(target.read_bytes(), (root / ("installer" + suffix)).read_bytes())
                 target.unlink()
-            flags = ["--disable", "-fsSL", "--connect-timeout", "5", "--max-time", "60",
+            flags = ["-q", "-fsSL", "--connect-timeout", "5", "--max-time", "60",
                      "--proto", "=https", "--proto-redir", "=https"]
-            for changed in (flags[1:], [*flags, "--insecure"],
+            for changed in (flags[1:], ["--disable", *flags[1:]], [*flags, "--insecure"],
                             [arg if arg != "60" else "61" for arg in flags],
                             [arg if arg != "=https" else "=all" for arg in flags],
                             [*flags, "https://example.com/install.sh"],
