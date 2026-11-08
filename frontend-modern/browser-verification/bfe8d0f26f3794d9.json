@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "cd74c200dd5b47e116b50e5e4de8626aa4d0249f",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx",
+    "frontend-modern/src/components/Settings/useSSOProvidersState.ts",
+    "frontend-modern/src/utils/ssoProviderPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx": "38c08038c4683fed3b0aad7ee22b9575564d9bc7f17f0753b3c30667684161c9",
+    "frontend-modern/src/components/Settings/useSSOProvidersState.ts": "5aeea4dc3ad8100bbbddc91df3e7d4780c93918ebd010c9c3bcfef6cfa94f66a",
+    "frontend-modern/src/utils/ssoProviderPresentation.ts": "c3b921556a718467eaeb7b82a2d1404e5819ee731d98eb2f21c31874f327058d"
+  },
+  "routes": [
+    "Settings > User Access > Single Sign-On Providers (production panel/hook in isolated fixture shell, not full App/IdP)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Matched desktop/light and phone/dark card and editor states using the same safe fixtures, initial fieldset scroll and name focus; 36 individually natively inspected captures / 18 pairs.",
+    "SAML custom prefix/trailing-slash and request-derived/query URLs preserve exact server metadata and distinct ACS values. Editor no longer substitutes loopback origin.",
+    "Missing canonical SAML/OIDC endpoints stay unavailable with neutral public-URL/provider-setting guidance. Unsaved SAML uses save-first guidance without a placeholder URL.",
+    "Names, provider types, enabled/edit/delete controls, saved fields, IdP Test/Preview, restrictions, Cancel and Save/Create remain discoverable as before; no valid information hidden."
+  ],
+  "interactions": [
+    "20 exact real clipboard reads across before/after; card metadata/ACS and new editor metadata copy retain canonical strings.",
+    "Opened each saved provider detail, expanded restrictions, checked Operators and Operators=viewer, cancelled; opened/cancelled new SAML. Zero mutations, page errors or horizontal document overflow.",
+    "Pixel review shortened the first draft unavailable hint to retain the phone OIDC Redirect URL label at the same initial scroll anchor; final comparable pair confirms it."
+  ],
+  "verified_at": "2026-11-08T20:11:28Z",
+  "evidence": "Current worker output RECEIPTS.md, CAPTURES.json, BROWSER-PROOF.tar.xz and 36 linked PNGs. Original native SAML replies: Core de8c5adc30a65220bb7603f57383cd0bc1c5c4be / source-0jv4mzey; no native proof replay. Missing OIDC and unsaved fixture are synthetic."
+}

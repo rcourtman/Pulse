@@ -98,12 +98,12 @@ describe('ssoProviderPresentation', () => {
     );
   });
 
-  it('points admins at the public URL setting when an endpoint URL is unavailable', () => {
+  it('explains unavailable endpoints without diagnosing the public URL as the only cause', () => {
     expect(getSSOEndpointUnavailableHint('Callback / Redirect URL')).toBe(
-      'Set the public URL in Settings > System to generate the correct Callback / Redirect URL.',
+      'No Callback / Redirect URL available. Check Settings > System public URL and saved provider settings.',
     );
     expect(getSSOEndpointUnavailableHint('SP metadata and ACS URLs')).toBe(
-      'Set the public URL in Settings > System to generate the correct SP metadata and ACS URLs.',
+      'No SP metadata and ACS URLs available. Check Settings > System public URL and saved provider settings.',
     );
   });
 

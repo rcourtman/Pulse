@@ -86,7 +86,6 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
     setAdvancedOpen,
     deleteConfirm,
     setDeleteConfirm,
-    publicUrl,
     testing,
     testResult,
     setTestResult,
@@ -531,18 +530,29 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                       configure your Identity Provider.
                     </p>
                     <Show
-                      when={publicUrl()}
+                      when={editingProvider()?.samlMetadataUrl}
                       fallback={
                         <p class="mt-2 text-xs text-muted">
-                          {getSSOEndpointUnavailableHint('SP metadata URL')}
+                          {editingProvider()
+                            ? getSSOEndpointUnavailableHint('SP Metadata URL')
+                            : 'The SP Metadata URL is generated when the provider is saved. Save this provider, then copy it from the provider card.'}
                         </p>
                       }
                     >
                       <div class="mt-2 flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
                         <span class="text-xs text-muted">SP Metadata:</span>
-                        <code class="inline-block max-w-full break-all rounded-sm bg-surface-hover px-2 py-0.5 text-xs">
-                          {publicUrl()}/api/saml/{form.id || '{id}'}/metadata
-                        </code>
+                        <CopyValueButton
+                          value={editingProvider()?.samlMetadataUrl}
+                          onCopyValue={(value) => copyToClipboard(value, 'Metadata URL')}
+                          label="Copy SP metadata URL"
+                          variant="accent"
+                          size="sm"
+                          class="min-w-0 max-w-full justify-between gap-2 py-0.5 text-left text-xs [&>svg]:shrink-0"
+                        >
+                          <span class="min-w-0 [overflow-wrap:anywhere]">
+                            {editingProvider()?.samlMetadataUrl}
+                          </span>
+                        </CopyValueButton>
                       </div>
                     </Show>
                   </div>
