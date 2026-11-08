@@ -121,7 +121,7 @@ let readReply: (id: string) => Response | Promise<Response>;
 let writeReply: (id: string, init: RequestInit) => Response | Promise<Response>;
 let healthReply: () => Response | Promise<Response>;
 let success: MockInstance<typeof notificationStore.success>;
-let prepareCSRF: MockInstance<typeof apiClient.ensureCSRFToken>;
+let prepareRequest: MockInstance<typeof apiClient.fetch>;
 
 const lists = () => requests.filter(({ url }) => url === listURL);
 const reads = (id: string) =>
@@ -172,8 +172,8 @@ beforeEach(async () => {
   Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1440 });
   policy();
   success = vi.spyOn(notificationStore, 'success');
-  // Observe, do not replace, the actual client's health request and post-health wait.
-  prepareCSRF = vi.spyOn(apiClient, 'ensureCSRFToken');
+  // Observe the public request promise without replacing transport or private helpers.
+  prepareRequest = vi.spyOn(apiClient, 'fetch');
   inventory = [org(firstID), org(selectedID)];
   states = { [firstID]: siblingBilling(), [selectedID]: billing() };
   hosted = multi = true;
@@ -405,13 +405,23 @@ describe('Billing Admin rendered controls through real HTTP', () => {
         await loadRuntimeCapabilities(true);
       }
       primeCSRF();
-      expect(prepareCSRF).toHaveBeenCalledTimes(1);
-      const preparation = prepareCSRF.mock.results[0];
+      const requestIndex = prepareRequest.mock.calls.findIndex(
+        ([url, options]) => url === billingURL(selectedID) && options?.method === 'PUT',
+      );
+      expect(requestIndex).toBeGreaterThanOrEqual(0);
+      const preparation = prepareRequest.mock.results[requestIndex];
       expect(preparation.type).toBe('return');
+      const completion = Promise.resolve(preparation.value).then(
+        () => 'dispatched',
+        (error: unknown) => {
+          expect(error).toMatchObject({ name: 'AbortError' });
+          return 'aborted';
+        },
+      );
       health.resolve(json({}));
-      // A healthy response still leaves the real client's 10ms preparation wait.
-      // Await it before asserting absence, including when there is no next action.
-      await preparation.value;
+      // Await the actual public request, including post-health preparation,
+      // before checking absence even when there will be no subsequent action.
+      expect(await completion).toBe('aborted');
       await settle();
       expect(writes()).toHaveLength(0);
       expect(success).not.toHaveBeenCalled();
