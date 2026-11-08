@@ -5003,6 +5003,9 @@ func TestInstallSHCurlTokenTransportKeepsSecretOutOfArgv(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if !strings.HasPrefix(string(args), "--disable\n") {
+		t.Fatalf("implicit curl config could override private token transport: %s", args)
+	}
 	if strings.Contains(string(args), "feedface") || strings.Contains(string(args), "X-API-Token") {
 		t.Fatalf("curl argv leaked token material:\n%s", args)
 	}
