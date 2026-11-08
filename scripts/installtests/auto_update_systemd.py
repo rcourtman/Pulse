@@ -62,8 +62,8 @@ if pathlib.Path(sys.argv[0]).name == "mktemp":
         args[-1] = str(root / "tmp" / pathlib.Path(args[-1]).name)
     os.execv("/usr/bin/mktemp", ["mktemp", *args])
 # Admit the production downloader's exact bounded HTTPS envelope, not an
-# arbitrary curl option parser. The short form is used by isolated controls.
-flags = ["--disable", "-fsSL", "--connect-timeout", "5", "--max-time", "60",
+# arbitrary curl option parser. Both emitted helpers use legacy-compatible -q.
+flags = ["-q", "-fsSL", "--connect-timeout", "5", "--max-time", "60",
          "--proto", "=https", "--proto-redir", "=https"]
 manual_flags = ["-q", "-fsSL", "--connect-timeout", "10", "--max-time", "60",
                 "--proto", "=https", "--proto-redir", "=https"]

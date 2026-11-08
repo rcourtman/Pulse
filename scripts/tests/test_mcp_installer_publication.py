@@ -77,7 +77,7 @@ class MCPInstallerPublicationTest(unittest.TestCase):
         self.tool("curl", "#!/usr/bin/env python3\n" + r'''
 import os, pathlib, shutil, sys
 args = sys.argv[1:]
-assert args[0] == "--disable", "curlrc must not override verified transport"
+assert args[0] == "-q", "curlrc must not override verified transport"
 for flag, value in (("--connect-timeout", "5"), ("--max-time", "60"),
                     ("--retry", "3"), ("--retry-max-time", "120"),
                     ("--proto", "=https"), ("--proto-redir", "=https")):
