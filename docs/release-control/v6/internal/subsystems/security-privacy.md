@@ -26,6 +26,9 @@ save, shutdown and user revocation with no live matches, the store moves the
 original regular file into an exclusive owner-private `.sessions-unread-*`
 directory beside it. Its bytes and inode are retained; the file becomes mode
 0600 inside the mode-0700 directory so ordinary private data backups can read it.
+If host ownership prevents that normalization, the failure is logged: the private
+parent still protects the retained bytes, but backup readers may need filesystem
+repair. That exception does not restore the file as live authority.
 Only then may a fresh live snapshot become canonical `sessions.json`. The loader
 never scans preservation directories or automatically restores their sessions.
 Missing input and valid hashed, legacy and empty inventories retain normal

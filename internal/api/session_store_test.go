@@ -182,22 +182,27 @@ func TestSessionStore_UnreadStartupPreservationFailureAndRecovery(t *testing.T) 
 		t.Skip("requires ordinary-user directory permissions")
 	}
 	dir := t.TempDir()
-	// Prepare the crypto key before making the directory read-only. Key
-	// creation is independent of the session-file preservation boundary.
-	primer := NewSessionStore(dir)
-	primer.Shutdown()
 	path := filepath.Join(dir, "sessions.json")
 	original := []byte("{unverified synthetic session bytes")
 	if err := os.WriteFile(path, original, 0600); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Chmod(dir, 0500); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = os.Chmod(dir, 0700) })
 	logs := captureTestLogs(t)
 	store := NewSessionStore(dir)
 	t.Cleanup(store.Shutdown)
+	// Crypto initialization hardens its directory to writable owner access.
+	// Impose the storage failure only after construction has finished, then
+	// prove this process cannot prepare a preservation directory there.
+	if err := os.Chmod(dir, 0500); err != nil {
+		t.Fatal(err)
+	}
+	if probe, err := os.MkdirTemp(dir, ".blocked-preservation-probe-*"); !os.IsPermission(err) {
+		if err == nil {
+			_ = os.Remove(probe)
+		}
+		t.Fatalf("fixture did not block preservation-directory creation: %v", err)
+	}
 	store.CreateSession("live-session", time.Hour, "fixture", "127.0.0.1", "live-user")
 	store.CreateSession("withdrawn-session", time.Hour, "fixture", "127.0.0.1", "withdrawn-user")
 	store.DeleteSessionsForUser("withdrawn-user")
