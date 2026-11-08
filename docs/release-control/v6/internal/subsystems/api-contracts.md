@@ -21,6 +21,27 @@
 
 ## Purpose
 
+### CSRF validation does not wait for unrelated token persistence
+
+CSRF saves select a detached value snapshot under the token mutex only after
+taking the persistence mutex. Marshaling, filesystem work and save diagnostics
+run without the token mutex. Generation, individual deletion and nonempty
+hashed-session revocation still wait for their serialized save attempt before
+returning, including a revocation whose live keys were already removed by another
+pending caller. An older queued save cannot restore superseded token authority.
+
+`csrf_persistence_isolation_linux_test.go` exercises acknowledged real disk stalls,
+live validation/withdrawal, a valid-cookie request through the registered router,
+no-match revocation ordering, restart, detached values, concurrent bounded token
+replacement and write-failure recovery. `csrf_store_test.go` retains expiry,
+private storage, bounded replacement, shutdown and legacy migration coverage;
+the JSON-only CSRF continuity/migration tests remain applicable. CSRF methods,
+origin/authentication checks, token hashes, lifetime, retention bound and wire
+format do not change. Missing/invalid-token replacement still waits for its own
+save. This is not isolation from the separate account-revocation/session-eviction
+`sessionsMu` critical sections, store reconfiguration, failed-write durability or
+installed-client recovery. No frontend field, state or rendered content changes.
+
 ### Session startup failures do not authorize destructive persistence
 
 Session read/decode failures admit no partial saved authentication. The next save

@@ -18,6 +18,25 @@
 
 ## Purpose
 
+### CSRF persistence releases live validation and withdrawal
+
+The CSRF store does not hold its token mutex while marshaling, writing, renaming
+or logging a saved snapshot. Snapshot selection and publication share one
+persistence mutex, acquired only after mutators release the token mutex. The
+snapshot owns values rather than mutable token pointers or slice headers. A
+nonempty hashed-session revocation attempts a fresh serialized save even when a
+concurrent caller already removed all live matches; return cannot bypass that
+pending save boundary. Write failure still does not promise durable revocation.
+
+Real-I/O fixtures in `csrf_persistence_isolation_linux_test.go` cover unrelated
+valid-token admission, synchronous saves, complete token-set withdrawal and
+restart, repeated/no-match revocation, concurrent replacement and failure/recovery.
+The existing CSRF admission, expiry, eight-token bound, hash-only private storage,
+logout/password-change and JSON legacy-migration tests retain those policies.
+Missing/invalid-token replacement remains a synchronous mutation. The separate
+outer account-revocation/eviction lock and global-store reconfiguration are not
+covered by this isolation; no whole-runtime or original-client recovery is implied.
+
 ### Unread session inventories are preserved without restoring authority
 
 A startup read or complete decode failure cannot make the unknown `sessions.json`
