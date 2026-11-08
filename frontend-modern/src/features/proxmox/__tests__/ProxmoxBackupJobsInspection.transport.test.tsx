@@ -244,30 +244,30 @@ describe('Backup jobs through the real restore-point inspection', () => {
   it.each([
     { device: 'touch', hover: false, automaticReveals: 0 },
     { device: 'pointer', hover: true, automaticReveals: 1 },
-  ])('keeps failed-day names inspectable on $device before explicit reveal', async ({
-    hover,
-    automaticReveals,
-  }) => {
-    pointer.hover = hover;
-    const { restorePoints } = await mount();
-    await fireEvent.click(day(/Oct 2: 2 failed/));
-    await settle();
-    expect(dayParam()).toBe('2026-10-02');
-    expect(chosenDay()).toHaveTextContent('2 failed: database, mail');
-    expect(rows()).toHaveLength(0);
-    expect(screen.getByText('No restore points from Oct 2, 2026')).toBeInTheDocument();
-    expect(screen.getByText(/A failed backup usually leaves none/)).toBeInTheDocument();
-    expect(scrollIntoView).toHaveBeenCalledTimes(automaticReveals);
+  ])(
+    'keeps failed-day names inspectable on $device before explicit reveal',
+    async ({ hover, automaticReveals }) => {
+      pointer.hover = hover;
+      const { restorePoints } = await mount();
+      await fireEvent.click(day(/Oct 2: 2 failed/));
+      await settle();
+      expect(dayParam()).toBe('2026-10-02');
+      expect(chosenDay()).toHaveTextContent('2 failed: database, mail');
+      expect(rows()).toHaveLength(0);
+      expect(screen.getByText('No restore points from Oct 2, 2026')).toBeInTheDocument();
+      expect(screen.getByText(/A failed backup usually leaves none/)).toBeInTheDocument();
+      expect(scrollIntoView).toHaveBeenCalledTimes(automaticReveals);
 
-    await fireEvent.click(within(card()).getByRole('button', { name: 'View restore points' }));
-    await settle();
-    expect(scrollIntoView).toHaveBeenCalledTimes(automaticReveals + 1);
-    expect(scrollIntoView.mock.contexts.at(-1)).toBe(restorePoints);
-    expect(dayParam()).toBe('2026-10-02');
-    expect(chosenDay()).toHaveTextContent('database, mail');
-    expect(fetchMock).toHaveBeenCalledTimes(4);
-    expectReadOnlyContext();
-  });
+      await fireEvent.click(within(card()).getByRole('button', { name: 'View restore points' }));
+      await settle();
+      expect(scrollIntoView).toHaveBeenCalledTimes(automaticReveals + 1);
+      expect(scrollIntoView.mock.contexts.at(-1)).toBe(restorePoints);
+      expect(dayParam()).toBe('2026-10-02');
+      expect(chosenDay()).toHaveTextContent('database, mail');
+      expect(fetchMock).toHaveBeenCalledTimes(4);
+      expectReadOnlyContext();
+    },
+  );
 
   it('preserves saved filters and does not blame an observed day for their empty result', async () => {
     await mount('/proxmox/backups/date?q=no-such-guest&source=pbs');
@@ -291,11 +291,7 @@ describe('Backup jobs through the real restore-point inspection', () => {
     jobs = {
       ...jobs,
       last24h: { historyState: 'partial', counts: counts(91, 4), failures: [] },
-      days: [
-        { ...jobs.days[1], counts: counts(19) },
-        jobs.days[0],
-        jobs.days[2],
-      ],
+      days: [{ ...jobs.days[1], counts: counts(19) }, jobs.days[0], jobs.days[2]],
     };
     archiveTime = afterMidnight;
     await vi.advanceTimersByTimeAsync(60_000);
@@ -304,7 +300,9 @@ describe('Backup jobs through the real restore-point inspection', () => {
     expect(day(/Oct 2: 2 failed/)).toHaveAttribute('aria-pressed', 'false');
     expect(chosenDay()).toHaveTextContent('19 ok');
     expect(pills()).toEqual(['91 ok', '4 failed']);
-    expect(card().querySelector('[data-backup-jobs-incomplete]')).toHaveTextContent('incomplete data');
+    expect(card().querySelector('[data-backup-jobs-incomplete]')).toHaveTextContent(
+      'incomplete data',
+    );
     expect(rows()).toHaveLength(0);
     expect(screen.getByText('No restore points from Oct 3, 2026')).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledTimes(11);
