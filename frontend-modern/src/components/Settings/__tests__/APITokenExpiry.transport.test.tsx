@@ -105,7 +105,11 @@ describe('saved expiry through the token inventory transport', () => {
             !canManage,
           );
       }
-      expect(screen.getAllByText('Expired 2026-11-01 00:00:00 UTC')).toHaveLength(2);
+      const siblingExpiries = document.querySelectorAll('[data-token-expiry="other"]');
+      expect(siblingExpiries).toHaveLength(2);
+      for (const expiry of siblingExpiries) {
+        expect(expiry).toHaveTextContent('Expired 2026-11-01 00:00:00 UTC');
+      }
       expect(screen.queryByText(/Active credentials/)).not.toBeInTheDocument();
       expect(fetchMock).toHaveBeenCalledTimes(1);
       expect(writes()).toEqual([]);
@@ -148,6 +152,7 @@ describe('saved expiry through the token inventory transport', () => {
     await surfaces();
     deny = true;
     setUser('different-user');
+    await screen.findByRole('alert');
     await waitFor(() =>
       expect(
         screen.queryByRole('article', { name: `API token ${original.name}` }),
