@@ -233,11 +233,12 @@ get_latest_stable_version() {
         return 0
     fi
 
+    # First-option -q ignores curlrc even before the curl 7.50 --disable alias.
     # Prefer the highest stable in the list, not GitHub's creation ordering.
     # If that read is unusable, /latest is a separate metadata-confirmed path.
     # A redirect alone cannot prove draft/prerelease status and is not used.
     for endpoint in 'releases?per_page=30' 'releases/latest'; do
-        if ! release_json=$(curl --disable --fail --silent --show-error \
+        if ! release_json=$(curl -q --fail --silent --show-error \
             --connect-timeout 5 --max-time 20 --proto '=https' \
             "https://api.github.com/repos/$GITHUB_REPO/$endpoint"); then
             continue
@@ -393,10 +394,11 @@ resolve_install_script_url() {
 
 # Small signed installer assets must not consume the systemd transaction's
 # entire ten-minute budget before installation/recovery can even start. Ignore
-# ambient curl configuration and refuse a redirect that downgrades HTTPS.
+# ambient curl configuration with legacy-compatible first-option -q and
+# refuse a redirect that downgrades HTTPS.
 # Signature verification remains mandatory after both complete transfers.
 download_update_asset() {
-    curl --disable -fsSL --connect-timeout 5 --max-time 60 \
+    curl -q -fsSL --connect-timeout 5 --max-time 60 \
         --proto '=https' --proto-redir '=https' "$1" -o "$2"
 }
 

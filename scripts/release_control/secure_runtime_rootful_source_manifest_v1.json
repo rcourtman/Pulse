@@ -44,6 +44,7 @@
     "scripts/installtests/install_sh_qnap_data_volume_test.go",
     "scripts/installtests/install_sh_test.go",
     "scripts/installtests/integration_container_test.go",
+    "scripts/installtests/legacy_curl_transport_test.go",
     "scripts/installtests/lifecycle_binary_fixture_test.go",
     "scripts/installtests/manual_update_channel_test.go",
     "scripts/installtests/msp_diagnostic_guidance_test.go",

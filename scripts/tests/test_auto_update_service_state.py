@@ -274,7 +274,7 @@ class UpdateDownloads(UpdaterFixture):
     def assert_download_policy(self, calls):
         self.assertTrue(calls)
         for args in calls:
-            self.assertEqual(args[:10], ["--disable", "-fsSL", "--connect-timeout", "5",
+            self.assertEqual(args[:10], ["-q", "-fsSL", "--connect-timeout", "5",
                                          "--max-time", "60", "--proto", "=https",
                                          "--proto-redir", "=https"])
             self.assertEqual(len(args), 13)

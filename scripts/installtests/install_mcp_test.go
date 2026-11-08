@@ -137,12 +137,16 @@ func TestInstallMCPRequiresSignedChecksumEvidence(t *testing.T) {
 
 			curlStub := `#!/bin/sh
 set -eu
+# Model the legacy spelling boundary; signing/checksums/publication stay real.
+[ "${1:-}" = -q ] || { echo legacy-curl-requires-first-option-q >&2; exit 2; }
+shift
 output=''
 url=''
 while [ "$#" -gt 0 ]; do
   case "$1" in
     -o) output="$2"; shift 2 ;;
     http*) url="$1"; shift ;;
+    --disable) echo legacy-curl-unknown-option >&2; exit 2 ;;
     *) shift ;;
   esac
 done

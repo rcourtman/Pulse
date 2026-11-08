@@ -127,12 +127,12 @@ if [[ -z "$URL" ]]; then
 fi
 
 # The downloaded script will run with the caller's authority. Ignore default
-# curlrc before any other option so it cannot inject TLS bypasses, retries,
-# headers, trace files or additional URLs. Explicit flags and environment
-# proxy/CA settings still apply.
-curl_flags=(--disable -fsSL)
+# curlrc with legacy-compatible first-option -q so it cannot inject TLS
+# bypasses, retries, headers, trace files or additional URLs. Explicit flags
+# and environment proxy/CA settings still apply.
+curl_flags=(-q -fsSL)
 if [[ "$INSECURE" == "true" ]]; then
-  curl_flags=(--disable -kfsSL)
+  curl_flags=(-q -kfsSL)
 fi
 
 # A pipe can execute an installer's first commands before curl discovers a

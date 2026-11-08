@@ -205,6 +205,7 @@ func TestContainerAgentCompatibilityWrapperIgnoresAmbientCurlConfig(t *testing.T
 				url, proxyURL = "http://pulse-bootstrap.fixture.invalid", proxy.URL
 			}
 			cmd, root := containerAgentWrapperCommand(t, "--url", url)
+			cmd.Env = append(cmd.Env, legacyCurlCLIEnvironment(t, root)...)
 			token := filepath.Join(root, "private token")
 			value := strings.Repeat("a1", 32) + "\n"
 			writeTestFile(t, token, []byte(value), 0o600)
@@ -6171,7 +6172,7 @@ url=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
         -o) out="$2"; shift 2 ;;
-        --disable|-fsSL) shift ;;
+        -q|-fsSL) shift ;;
         --connect-timeout|--max-time|--proto|--proto-redir) shift 2 ;;
         *) [[ -z "$url" ]] || exit 95; url="$1"; shift ;;
     esac
@@ -6274,7 +6275,7 @@ fi
 				return
 			}
 			logContent, err := os.ReadFile(filepath.Join(tmpDir, "curl.log"))
-			policy := "--disable -fsSL --connect-timeout 5 --max-time 60 --proto =https --proto-redir =https "
+			policy := "-q -fsSL --connect-timeout 5 --max-time 60 --proto =https --proto-redir =https "
 			want := policy + "https://github.com/rcourtman/Pulse/releases/download/v9.9.9/install.sh -o "
 			wantSignature := policy + "https://github.com/rcourtman/Pulse/releases/download/v9.9.9/install.sh.sshsig -o "
 			requests := strings.Split(strings.TrimSpace(string(logContent)), "\n")

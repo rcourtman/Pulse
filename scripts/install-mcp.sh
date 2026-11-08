@@ -52,9 +52,10 @@ require_cmd() {
 # Use the same verified HTTPS transport for the binary and both trust files.
 # A stalled peer must fail before publication, not hang an adapter replacement
 # indefinitely. Keep transient retries, but bound both each transfer and the
-# retry window. Ignore curlrc so it cannot disable TLS or these limits.
+# retry window. First-option -q ignores curlrc without requiring curl 7.50's
+# --disable spelling; implicit config cannot disable TLS or these limits.
 download_asset() {
-    curl --disable -fsSL --connect-timeout 5 --max-time 60 \
+    curl -q -fsSL --connect-timeout 5 --max-time 60 \
         --retry 3 --retry-max-time 120 \
         --proto '=https' --proto-redir '=https' "$1" -o "$2"
 }

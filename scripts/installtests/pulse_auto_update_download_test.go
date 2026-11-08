@@ -65,7 +65,7 @@ func TestAutoUpdateAssetTransport(t *testing.T) {
 				t.Fatal(err)
 			}
 			// A broken ambient proxy would fail even the complete control if
-			// --disable were absent or ceased to be curl's first argument.
+			// -q were absent or ceased to be curl's first argument.
 			if err := os.WriteFile(filepath.Join(dir, ".curlrc"), []byte("proxy = http://127.0.0.1:1\n"), 0600); err != nil {
 				t.Fatal(err)
 			}
@@ -82,6 +82,7 @@ func TestAutoUpdateAssetTransport(t *testing.T) {
 				"PULSE_TEST_URL="+server.URL+tc.path, "PULSE_TEST_ASSET="+asset,
 				"CURL_HOME="+dir, "HOME="+dir, "NO_PROXY=", "no_proxy=",
 				"HTTPS_PROXY=", "https_proxy=", "ALL_PROXY=", "all_proxy=", "SSL_CERT_FILE=")
+			cmd.Env = append(cmd.Env, legacyCurlCLIEnvironment(t, dir)...)
 			if tc.trusted {
 				cmd.Env = append(cmd.Env, "CURL_CA_BUNDLE="+ca)
 			} else {
