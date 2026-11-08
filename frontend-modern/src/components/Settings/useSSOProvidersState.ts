@@ -54,7 +54,6 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
   const [form, setForm] = createStore<ProviderForm>(createEmptyProviderForm());
   const [advancedOpen, setAdvancedOpen] = createSignal(false);
   const [deleteConfirm, setDeleteConfirmValue] = createSignal<string | null>(null);
-  const [publicUrl, setPublicUrl] = createSignal('');
   const [testing, setTesting] = createSignal(false);
   const [testResult, setTestResult] = createSignal<SSOProviderTestResult | null>(null);
   const [showMetadataPreview, setShowMetadataPreviewValue] = createSignal(false);
@@ -201,18 +200,6 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
       setProviders(data.providers);
       setProvidersLoaded(true);
       setUnconfirmedChange(null);
-      setPublicUrl(window.location.origin);
-      // The optional public URL is not evidence that a provider read failed.
-      try {
-        const statusResponse = await apiFetch('/api/security/status', requestOptions(controller));
-        if (statusResponse.ok) {
-          const status = (await statusResponse.json()) as { publicUrl?: string };
-          if (isCurrent() && typeof status.publicUrl === 'string' && status.publicUrl)
-            setPublicUrl(status.publicUrl);
-        }
-      } catch {
-        /* Keep the current origin when optional status is unavailable. */
-      }
     } catch {
       if (!isCurrent()) return;
       setLoadError(true);
@@ -238,7 +225,6 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
       setProviders([]);
       setProvidersLoaded(false);
       setUnconfirmedChange(null);
-      setPublicUrl('');
       setDeleteConfirmValue(null);
       setSaving(false);
       setMutating(false);
@@ -292,7 +278,15 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
       if (!data || data.id !== provider.id || data.type !== provider.type)
         throw new Error('Mismatched provider details');
       setForm(mapProviderDetailsToForm(data));
-      setEditingProvider(provider);
+      // Registration instructions belong to this detail read, not an older
+      // inventory or a guess from the browser origin. Omitted endpoints must
+      // also replace old values when the server can no longer derive them.
+      setEditingProvider({
+        ...provider,
+        oidcCallbackUrl: data.oidcCallbackUrl,
+        samlMetadataUrl: data.samlMetadataUrl,
+        samlAcsUrl: data.samlAcsUrl,
+      });
       setShowModalValue(true);
     } catch {
       if (!isCurrent()) return;
@@ -626,7 +620,6 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
     setAdvancedOpen,
     deleteConfirm,
     setDeleteConfirm,
-    publicUrl,
     testing,
     testResult,
     setTestResult,

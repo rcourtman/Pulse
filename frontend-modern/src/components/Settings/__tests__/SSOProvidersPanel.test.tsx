@@ -297,19 +297,19 @@ describe('SSOProvidersPanel IdP endpoint URLs', () => {
     expect(fetchMock.mock.calls.every(([, options]) => !options?.method)).toBe(true);
   });
 
-  it('guides the admin to set a public URL instead of offering a copyable OIDC URL', async () => {
+  it('guides the admin to check both public and provider settings instead of guessing an OIDC URL', async () => {
     setupFetch([{ ...corpProvider, oidcCallbackUrl: '' }]);
     render(() => <SSOProvidersPanel />);
 
     expect(
       await screen.findByText(
-        'Set the public URL in Settings > System to generate the correct Callback / Redirect URL.',
+        'No Callback / Redirect URL available. Check Settings > System public URL and saved provider settings.',
       ),
     ).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Copy callback / redirect URL' })).toBeNull();
   });
 
-  it('guides the admin to set a public URL instead of offering copyable SAML URLs', async () => {
+  it('guides the admin to check both public and provider settings instead of guessing SAML URLs', async () => {
     setupFetch([
       {
         id: 'corp-saml',
@@ -325,7 +325,7 @@ describe('SSOProvidersPanel IdP endpoint URLs', () => {
 
     expect(
       await screen.findByText(
-        'Set the public URL in Settings > System to generate the correct SP metadata and ACS URLs.',
+        'No SP metadata and ACS URLs available. Check Settings > System public URL and saved provider settings.',
       ),
     ).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Copy SP metadata URL' })).toBeNull();
@@ -454,7 +454,10 @@ describe('SSOProvidersPanel modal feedback and recovery', () => {
     'reports clipboard completion inside the modal, rejected=%s',
     async (rejected) => {
       const callback = 'https://pulse.example.com/api/oidc/corp-oidc/callback';
-      setupFetch([{ ...corpProvider, oidcCallbackUrl: callback }]);
+      setupFetch([{ ...corpProvider, oidcCallbackUrl: callback }], {
+        ...corpProviderDetails,
+        oidcCallbackUrl: callback,
+      });
       const writeText = vi
         .fn()
         .mockImplementation(() =>
