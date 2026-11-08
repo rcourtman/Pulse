@@ -59,6 +59,8 @@ const json = (data: unknown) =>
   new Response(JSON.stringify(data), { headers: { 'Content-Type': 'application/json' } });
 const fetchMock = vi.fn<typeof fetch>();
 const scrollIntoView = vi.fn();
+const elementPrototype = HTMLElement.prototype as { scrollIntoView?: (arg?: unknown) => void };
+const originalScrollIntoView = elementPrototype.scrollIntoView;
 let jobs: BackupJobsPayload;
 let archiveTime: string;
 
@@ -131,7 +133,9 @@ beforeEach(() => {
   fetchMock.mockReset();
   vi.stubGlobal('fetch', fetchMock);
   vi.stubGlobal('scrollTo', vi.fn());
-  vi.spyOn(HTMLElement.prototype, 'scrollIntoView').mockImplementation(scrollIntoView);
+  // jsdom does not implement scrolling. Restore this owned test stub even if
+  // an assertion fails; no global setup or runtime behavior changes.
+  elementPrototype.scrollIntoView = scrollIntoView;
   sessionStorage.clear();
   clearAuth();
   setApiToken(token);
@@ -192,6 +196,8 @@ afterEach(() => {
   resetCreateNonSuspendingQueryCacheForTest();
   clearAuth();
   vi.restoreAllMocks();
+  if (originalScrollIntoView) elementPrototype.scrollIntoView = originalScrollIntoView;
+  else delete elementPrototype.scrollIntoView;
   vi.unstubAllGlobals();
   vi.useRealTimers();
 });
