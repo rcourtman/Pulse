@@ -38,7 +38,7 @@ func TestOIDCInitializationReusesMatchingService(t *testing.T) {
 	manager := NewOIDCServiceManager()
 	t.Cleanup(func() { manager.RemoveService(p.ID) })
 	const redirect = "https://pulse.example.test/api/oidc/initialization/callback"
-	if err := manager.InitializeProvider(t.Context(), p.ID, &p, redirect); err != nil {
+	if err := manager.EnsureProvider(t.Context(), p.ID, &p, redirect); err != nil {
 		t.Fatal(err)
 	}
 	original := manager.GetService(p.ID)
@@ -47,7 +47,7 @@ func TestOIDCInitializationReusesMatchingService(t *testing.T) {
 		t.Fatal(err)
 	}
 	for range 3 {
-		if err := manager.InitializeProvider(t.Context(), p.ID, &p, redirect); err != nil {
+		if err := manager.EnsureProvider(t.Context(), p.ID, &p, redirect); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -63,6 +63,21 @@ func TestOIDCInitializationReusesMatchingService(t *testing.T) {
 	}
 	if _, ok := current.consumeState(state); ok {
 		t.Error("reused service accepted replayed state")
+	}
+	// Management still owns an explicit reset, even for identical settings.
+	pending, _, err := current.newStateEntry(p.ID, "/alerts")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := manager.InitializeProvider(t.Context(), p.ID, &p, redirect); err != nil {
+		t.Fatal(err)
+	}
+	reset := manager.GetService(p.ID)
+	if reset == current {
+		t.Error("explicit management initialization did not replace the service")
+	}
+	if _, ok := reset.peekState(pending); ok {
+		t.Error("explicit management reset retained old pending authority")
 	}
 }
 
@@ -91,7 +106,7 @@ func TestOIDCInitializationChangedSettingsReplaceState(t *testing.T) {
 			}
 			manager := NewOIDCServiceManager()
 			t.Cleanup(func() { manager.RemoveService(p.ID) })
-			if err := manager.InitializeProvider(t.Context(), p.ID, &p, redirect); err != nil {
+			if err := manager.EnsureProvider(t.Context(), p.ID, &p, redirect); err != nil {
 				t.Fatal(err)
 			}
 			original := manager.GetService(p.ID)
@@ -120,7 +135,7 @@ func TestOIDCInitializationChangedSettingsReplaceState(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			if err := manager.InitializeProvider(t.Context(), p.ID, &p, redirect); err != nil {
+			if err := manager.EnsureProvider(t.Context(), p.ID, &p, redirect); err != nil {
 				t.Fatal(err)
 			}
 			current := manager.GetService(p.ID)
@@ -305,7 +320,7 @@ func TestOIDCInitializationFailureAndRemoval(t *testing.T) {
 	p.OIDC.IssuerURL = idp.URL
 	manager := NewOIDCServiceManager()
 	t.Cleanup(func() { manager.RemoveService(p.ID) })
-	if err := manager.InitializeProvider(t.Context(), p.ID, &p, "https://pulse.example.test/callback"); err != nil {
+	if err := manager.EnsureProvider(t.Context(), p.ID, &p, "https://pulse.example.test/callback"); err != nil {
 		t.Fatal(err)
 	}
 	original := manager.GetService(p.ID)
@@ -319,7 +334,7 @@ func TestOIDCInitializationFailureAndRemoval(t *testing.T) {
 	changed.OIDC.ClientID += "-changed"
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	if err := manager.InitializeProvider(ctx, p.ID, &changed, "https://pulse.example.test/callback"); err == nil {
+	if err := manager.EnsureProvider(ctx, p.ID, &changed, "https://pulse.example.test/callback"); err == nil {
 		t.Error("canceled discovery unexpectedly replaced the service")
 	}
 	if manager.GetService(p.ID) != original {
@@ -332,7 +347,7 @@ func TestOIDCInitializationFailureAndRemoval(t *testing.T) {
 	if manager.GetService(p.ID) != nil {
 		t.Error("removed provider still published a service")
 	}
-	if err := manager.InitializeProvider(t.Context(), p.ID, &p, "https://pulse.example.test/callback"); err != nil {
+	if err := manager.EnsureProvider(t.Context(), p.ID, &p, "https://pulse.example.test/callback"); err != nil {
 		t.Fatal(err)
 	}
 	current := manager.GetService(p.ID)

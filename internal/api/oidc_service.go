@@ -59,16 +59,25 @@ func (m *OIDCServiceManager) GetService(providerID string) *OIDCService {
 	return m.services[providerID]
 }
 
-// InitializeProvider reuses a matching service, or replaces it when the
-// effective discovery/client/redirect/trust settings change. Pending logins
-// belong to that service and must survive another initializer for the same
-// settings, including one whose discovery finishes after a login has started.
+// InitializeProvider explicitly replaces the service after a management change,
+// including policy changes and re-enabling a provider with the same client.
 func (m *OIDCServiceManager) InitializeProvider(ctx context.Context, providerID string, provider *config.SSOProvider, redirectURL string) error {
+	return m.initializeProvider(ctx, providerID, provider, redirectURL, false)
+}
+
+// EnsureProvider prepares a native login/callback service without discarding
+// another pending login using the same effective settings. It is not the
+// management lifecycle reset used by InitializeProvider.
+func (m *OIDCServiceManager) EnsureProvider(ctx context.Context, providerID string, provider *config.SSOProvider, redirectURL string) error {
+	return m.initializeProvider(ctx, providerID, provider, redirectURL, true)
+}
+
+func (m *OIDCServiceManager) initializeProvider(ctx context.Context, providerID string, provider *config.SSOProvider, redirectURL string, reuseMatching bool) error {
 	if m == nil {
 		return errors.New("oidc service manager not initialized")
 	}
 	cfg := ssoProviderToOIDCConfig(provider, redirectURL)
-	if current := m.GetService(providerID); current.Matches(cfg) {
+	if current := m.GetService(providerID); reuseMatching && current.Matches(cfg) {
 		return nil
 	}
 	service, err := NewOIDCService(ctx, cfg)
@@ -83,7 +92,7 @@ func (m *OIDCServiceManager) InitializeProvider(ctx context.Context, providerID 
 	// the fully captured snapshots (including CA contents) without file or
 	// network I/O under the lock; stop only our unused candidate. Never carry
 	// state across a genuinely different client, callback or trust snapshot.
-	if current := m.services[providerID]; current != nil && reflect.DeepEqual(current.snapshot, service.snapshot) {
+	if current := m.services[providerID]; reuseMatching && current != nil && reflect.DeepEqual(current.snapshot, service.snapshot) {
 		service.Stop()
 		return nil
 	}
