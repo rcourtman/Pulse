@@ -397,8 +397,8 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                 <div class="space-y-4">
                   <div class="bg-surface-alt border border-border rounded-md p-3">
                     <p class="text-xs text-base-content">
-                      <strong>Setup:</strong> Register the Callback / Redirect URL below with your
-                      Identity Provider so it can redirect back to Pulse after sign-in.
+                      <strong>Setup:</strong> Register this Callback / Redirect URL with your
+                      Identity Provider for Pulse sign-in.
                     </p>
                     <Show
                       when={editingProvider()?.oidcCallbackUrl}

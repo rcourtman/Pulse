@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "869d7e6726be9e62236bebac6cbfdfa7dfc42474",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx": "e2c720b311fd982157e6c534eeeb3065e49524cdf60e1edd3d3f181c9fa01dde"
+  },
+  "routes": [
+    "Settings > User Access > SSO editor, real panel/hook/styles in safe isolated shell"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Current parent869d7e67 saved OIDC editor with a newer canonical detail URL, and omitted-endpoint OIDC editor, desktop/light and phone/dark. Four existing parent screenshots and four new after screenshots individually natively inspected.",
+    "Shorter setup instruction retains Callback / Redirect URL, Identity Provider and Pulse sign-in purpose. Canonical query remains complete and copyable.",
+    "The full Client Secret input now fits above the phone fixed footer for the long canonical callback; missing-endpoint state also retains Redirect URL label at the initial scroll anchor. No controls or valid registration details removed."
+  ],
+  "interactions": [
+    "Opened current provider details; copied canonical callback byte-exactly at both viewports, then Cancel. Two added real clipboard reads. Missing endpoint offers no copy; Save/Cancel and saved name remain available.",
+    "No writes, page errors or horizontal overflow. SAML/store/helper fragments unchanged; their prior source-bound proof remains, not replayed."
+  ],
+  "verified_at": "2026-11-08T20:29:06Z",
+  "evidence": "Current output RECEIPTS.md / BROWSER-PROOF.tar.xz / CAPTURES.json. Before parent-bound states are extra-after-fresh-oidc-*-editor.png and after-missing-oidc-*-editor.png; new states layout-after-*-oidc-*-editor.png. Not full App/IdP."
+}
