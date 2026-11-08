@@ -165,6 +165,126 @@ exec "$WRAPPER_REAL_CURL" "${args[@]}"
 	}
 }
 
+// Exercise the shipped remote bootstrap, not an extracted curl expression.
+// The downloaded script is inert: it records test-owned arguments and exits.
+func TestContainerAgentCompatibilityWrapperIgnoresAmbientCurlConfig(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix installer")
+	}
+	for _, mode := range []string{"trusted-ca", "untrusted-ca", "http-error", "configured-url", "explicit-insecure", "environment-proxy"} {
+		t.Run(mode, func(t *testing.T) {
+			var mu sync.Mutex
+			var requests []string
+			var injected bool
+			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				mu.Lock()
+				requests = append(requests, r.Method+" "+r.URL.Path)
+				injected = injected || r.Header.Get("X-Curlrc-Injected") != "" ||
+					r.Header.Get("X-API-Token") != "" || r.Header.Get("Authorization") != ""
+				mu.Unlock()
+				if mode == "http-error" {
+					http.Error(w, "fixture unavailable", http.StatusServiceUnavailable)
+					return
+				}
+				_, _ = io.WriteString(w, "printf 'executed\\n' >> \"$WRAPPER_MARKER\"\nprintf '%s\\0' \"$@\" > \"$WRAPPER_ARGS\"\nprintf '%s' \"$0\" > \"$WRAPPER_SOURCE\"\nexit 37\n")
+			})
+			peer := httptest.NewTLSServer(handler)
+			defer peer.Close()
+			url := peer.URL
+			proxyURL := ""
+			if mode == "environment-proxy" {
+				proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if r.URL.Scheme != "http" || r.URL.Host != "pulse-bootstrap.fixture.invalid" {
+						t.Errorf("unexpected environment-proxy target: %s", r.URL)
+						http.Error(w, "unexpected fixture target", http.StatusBadGateway)
+						return
+					}
+					handler.ServeHTTP(w, r)
+				}))
+				defer proxy.Close()
+				url, proxyURL = "http://pulse-bootstrap.fixture.invalid", proxy.URL
+			}
+			cmd, root := containerAgentWrapperCommand(t, "--url", url)
+			token := filepath.Join(root, "private token")
+			value := strings.Repeat("a1", 32) + "\n"
+			writeTestFile(t, token, []byte(value), 0o600)
+			cmd.Args = append(cmd.Args, "--token-file", token)
+			expected := []string{"--url", url, "--token-file", token}
+			if mode == "explicit-insecure" {
+				cmd.Args = append(cmd.Args, "--insecure")
+				expected = append(expected, "--insecure")
+			}
+			expected = append(expected, "--enable-docker", "--enable-host")
+			trace := filepath.Join(root, "ambient-trace")
+			config := "insecure\nretry = 2\nretry-delay = 1\nheader = \"X-Curlrc-Injected: ambient-sentinel\"\ntrace-ascii = \"" + trace + "\"\n"
+			if mode == "configured-url" {
+				config += "url = \"" + peer.URL + "/ambient\"\n"
+			}
+			writeTestFile(t, filepath.Join(root, ".curlrc"), []byte(config), 0o600)
+			ca := filepath.Join(root, "ca.pem")
+			writeTestFile(t, ca, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: peer.Certificate().Raw}), 0o600)
+			cmd.Env = append(cmd.Env, "HOME="+root, "XDG_CONFIG_HOME="+root,
+				"HTTPS_PROXY=", "https_proxy=", "HTTP_PROXY=", "http_proxy=", "ALL_PROXY=", "all_proxy=",
+				"CURL_CA_BUNDLE=", "SSL_CERT_FILE=", "SSL_CERT_DIR=", "LC_ALL=C")
+			if mode != "untrusted-ca" && mode != "explicit-insecure" {
+				cmd.Env = append(cmd.Env, "CURL_CA_BUNDLE="+ca)
+			}
+			if mode == "environment-proxy" {
+				cmd.Env = append(cmd.Env, "http_proxy="+proxyURL, "NO_PROXY=", "no_proxy=")
+			}
+			output, runErr := cmd.CombinedOutput()
+			wantExit, wantRequests := 37, 1
+			if mode == "untrusted-ca" {
+				wantExit, wantRequests = 1, 0
+			}
+			if mode == "http-error" {
+				wantExit = 1
+			}
+			gotExit := 0
+			if runErr != nil {
+				var exit *exec.ExitError
+				if !errors.As(runErr, &exit) {
+					t.Fatalf("wrapper execution unavailable: %v", runErr)
+				}
+				gotExit = exit.ExitCode()
+			}
+			mu.Lock()
+			gotRequests, gotInjected := append([]string(nil), requests...), injected
+			mu.Unlock()
+			t.Logf("mode=%s exit=%d requests=%v injected=%t", mode, gotExit, gotRequests, gotInjected)
+			if gotExit != wantExit || len(gotRequests) != wantRequests || gotInjected {
+				t.Errorf("bootstrap admission changed: exit=%d want=%d requests=%v want=%d injected=%t\n%s", gotExit, wantExit, gotRequests, wantRequests, gotInjected, output)
+			}
+			if len(gotRequests) == 1 && gotRequests[0] != "GET /install.sh" {
+				t.Errorf("unexpected bootstrap request: %v", gotRequests)
+			}
+			if _, err := os.Stat(trace); !os.IsNotExist(err) {
+				t.Errorf("ambient trace was created: %v", err)
+			}
+			marker, markerErr := os.ReadFile(filepath.Join(root, "executed"))
+			if wantExit == 37 {
+				arguments, argumentsErr := os.ReadFile(filepath.Join(root, "arguments"))
+				identity, identityErr := os.ReadFile(filepath.Join(root, "source-identity"))
+				if markerErr != nil || string(marker) != "executed\n" || argumentsErr != nil ||
+					string(arguments) != strings.Join(expected, "\x00")+"\x00" || identityErr != nil || string(identity) != "bash" {
+					t.Errorf("downloaded installer handoff changed: marker=%q/%v arguments=%q/%v identity=%q/%v", marker, markerErr, arguments, argumentsErr, identity, identityErr)
+				}
+			} else if !os.IsNotExist(markerErr) || !strings.Contains(string(output), "nothing was executed") {
+				t.Errorf("failed transport executed or omitted its diagnostic: marker=%q/%v output=%s", marker, markerErr, output)
+			}
+			if strings.Contains(string(output), strings.TrimSpace(value)) {
+				t.Error("bootstrap printed the private token")
+			}
+			content, err := os.ReadFile(token)
+			info, statErr := os.Stat(token)
+			if err != nil || statErr != nil || string(content) != value || info.Mode().Perm() != 0o600 {
+				t.Errorf("private token file changed: read=%v stat=%v", err, statErr)
+			}
+			assertContainerWrapperDownloadRemoved(t, root)
+		})
+	}
+}
+
 func containerAgentWrapperCommand(t *testing.T, arguments ...string) (*exec.Cmd, string) {
 	t.Helper()
 	root := t.TempDir()

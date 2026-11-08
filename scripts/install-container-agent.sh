@@ -27,6 +27,9 @@ Notes:
   Prefer --token-file to keep API tokens out of history and process arguments;
   the canonical installer validates the file and the caller owns input-file cleanup.
 
+  The remote bootstrap ignores default curl configuration. Use CURL_CA_BUNDLE
+  and standard proxy environment variables when those are required.
+
   This wrapper forwards to install.sh with:
     --enable-docker --enable-host
 
@@ -123,9 +126,13 @@ if [[ -z "$URL" ]]; then
   exit 1
 fi
 
-curl_flags=(-fsSL)
+# The downloaded script will run with the caller's authority. Ignore default
+# curlrc before any other option so it cannot inject TLS bypasses, retries,
+# headers, trace files or additional URLs. Explicit flags and environment
+# proxy/CA settings still apply.
+curl_flags=(--disable -fsSL)
 if [[ "$INSECURE" == "true" ]]; then
-  curl_flags=(-kfsSL)
+  curl_flags=(--disable -kfsSL)
 fi
 
 # A pipe can execute an installer's first commands before curl discovers a
