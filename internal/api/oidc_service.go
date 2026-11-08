@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -58,12 +59,18 @@ func (m *OIDCServiceManager) GetService(providerID string) *OIDCService {
 	return m.services[providerID]
 }
 
-// InitializeProvider creates or replaces the OIDC service for a provider.
+// InitializeProvider reuses a matching service, or replaces it when the
+// effective discovery/client/redirect/trust settings change. Pending logins
+// belong to that service and must survive another initializer for the same
+// settings, including one whose discovery finishes after a login has started.
 func (m *OIDCServiceManager) InitializeProvider(ctx context.Context, providerID string, provider *config.SSOProvider, redirectURL string) error {
 	if m == nil {
 		return errors.New("oidc service manager not initialized")
 	}
 	cfg := ssoProviderToOIDCConfig(provider, redirectURL)
+	if current := m.GetService(providerID); current.Matches(cfg) {
+		return nil
+	}
 	service, err := NewOIDCService(ctx, cfg)
 	if err != nil {
 		return err
@@ -71,9 +78,17 @@ func (m *OIDCServiceManager) InitializeProvider(ctx context.Context, providerID 
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	// Stop old state store cleanup goroutine if replacing
-	if old, ok := m.services[providerID]; ok {
-		old.stateStore.Stop()
+	// Discovery ran without the manager lock. Another initializer may have
+	// published these same settings and issued state in the meantime. Compare
+	// the fully captured snapshots (including CA contents) without file or
+	// network I/O under the lock; stop only our unused candidate. Never carry
+	// state across a genuinely different client, callback or trust snapshot.
+	if current := m.services[providerID]; current != nil && reflect.DeepEqual(current.snapshot, service.snapshot) {
+		service.Stop()
+		return nil
+	}
+	if old := m.services[providerID]; old != nil {
+		old.Stop()
 	}
 	m.services[providerID] = service
 
