@@ -21,6 +21,17 @@
 
 ## Purpose
 
+### Approval admission preserves saved intent
+
+AI approval session review admission is read-only and precedes list/detail and
+approve/deny dispatch. Denied, failed-policy, unauthenticated, missing-CSRF and
+cross-organization requests cannot alter saved pending status or consumption.
+Authorized decisions keep their current attribution and dispatch semantics;
+legacy token scopes, owner/org/expiry/credential metadata are not migrated or
+recreated. `ai_approval_review_test.go` and the registered authentication/CSRF
+contract test assert these boundaries over synthetic saved approvals/tokens.
+
+
 ### Alert history replay preserves its storage boundary (5 November 2026)
 
 The alert owner's independent recovery journal retains unsettled lifecycle and

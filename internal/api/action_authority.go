@@ -215,3 +215,18 @@ func requireActionCapability(cfg *config.Config, authorizer auth.Authorizer, cap
 		handler(w, r)
 	}
 }
+
+// requireAIApprovalReview reuses canonical action review authority for browser
+// and proxy sessions. API tokens retain the existing per-route AI/mobile scopes:
+// older paired clients are not bound to the newer action-lifecycle actor model.
+// The registered routes must keep RequireAuth outside this admission.
+func requireAIApprovalReview(cfg *config.Config, authorizer auth.Authorizer, handler http.HandlerFunc) http.HandlerFunc {
+	sessionReview := requireActionCapability(cfg, authorizer, auth.ActionApprove, handler)
+	return func(w http.ResponseWriter, r *http.Request) {
+		if getAPITokenRecordFromRequest(r) != nil {
+			handler(w, r)
+			return
+		}
+		sessionReview(w, r)
+	}
+}
