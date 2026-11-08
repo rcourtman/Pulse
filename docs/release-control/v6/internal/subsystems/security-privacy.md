@@ -18,6 +18,27 @@
 
 ## Purpose
 
+### Tracking and both live authority sets withdraw before persistence
+
+Account revocation and ten-session-cap eviction remove their live sessions,
+complete CSRF sets and cached attribution before releasing `sessionsMu`. Private
+live-only store helpers do no disk work; their coordinated callers must still
+await both normal serialized saves after releasing the tracking lock. Revocation
+saves both stores even when no live keys remain, so a second caller cannot
+bypass an earlier pending withdrawal save or leave old CSRF state on disk after
+write recovery. Existing public store deletion methods retain synchronous saves.
+
+Cold username rehydration selects and caches under the tracking lock rather than
+publishing a detached pre-withdrawal copy afterward. This is attribution, not a
+new authentication grant: session validity, principal identity, CSRF/origin
+checks, expiry, limits and hash-only private storage do not change. Registered
+router fixtures cover unrelated valid admission and withdrawn-session rejection
+during acknowledged real writes in either store. Normal/race controls cover
+tracked-only and persisted-untracked state, stale pruning, concurrent eviction,
+no-match saves, restart and failure/recovery. Write failure still cannot promise
+durable revocation, nor are the two files a crash-atomic transaction. Global store
+reconfiguration, installed recovery and historical exposure remain unproved.
+
 ### CSRF persistence releases live validation and withdrawal
 
 The CSRF store does not hold its token mutex while marshaling, writing, renaming
@@ -33,9 +54,9 @@ valid-token admission, synchronous saves, complete token-set withdrawal and
 restart, repeated/no-match revocation, concurrent replacement and failure/recovery.
 The existing CSRF admission, expiry, eight-token bound, hash-only private storage,
 logout/password-change and JSON legacy-migration tests retain those policies.
-Missing/invalid-token replacement remains a synchronous mutation. The separate
-outer account-revocation/eviction lock and global-store reconfiguration are not
-covered by this isolation; no whole-runtime or original-client recovery is implied.
+Missing/invalid-token replacement remains a synchronous mutation. The outer
+account-revocation/eviction boundary is covered separately above. Global-store
+reconfiguration is not covered; no whole-runtime or original-client recovery is implied.
 
 ### Unread session inventories are preserved without restoring authority
 

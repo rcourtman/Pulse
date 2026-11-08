@@ -563,18 +563,37 @@ func (s *SessionStore) ValidateAndExtendSession(token string) bool {
 
 // DeleteSession removes a session
 func (s *SessionStore) DeleteSession(token string) {
-	s.mu.Lock()
-
-	delete(s.sessions, sessionHash(token))
-	s.mu.Unlock()
+	s.removeSessionKeys([]string{sessionHash(token)})
 	s.save()
+}
+
+// removeSessionKeys withdraws live authority without disk I/O. Coordinated
+// callers must save after releasing the session-tracking lock, before returning.
+func (s *SessionStore) removeSessionKeys(keys []string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, key := range keys {
+		delete(s.sessions, key)
+	}
 }
 
 // DeleteSessionsForUser removes every persisted session for a stable
 // principal and returns their already-hashed storage keys so the matching
 // CSRF records can be removed without access to raw session tokens.
 func (s *SessionStore) DeleteSessionsForUser(username string) []string {
+	deletedKeys := s.removeSessionsForUser(username)
+	// An unread startup inventory cannot establish that this user has no saved
+	// sessions. Even with no live match, retire that unknown authority through
+	// the same preservation-before-publication path as every other revocation.
+	s.save()
+	return deletedKeys
+}
+
+// removeSessionsForUser is the live half of account-wide withdrawal. The caller
+// must still reach a save boundary, including when no live sessions matched.
+func (s *SessionStore) removeSessionsForUser(username string) []string {
 	s.mu.Lock()
+	defer s.mu.Unlock()
 
 	deletedKeys := make([]string, 0)
 	for key, session := range s.sessions {
@@ -583,11 +602,6 @@ func (s *SessionStore) DeleteSessionsForUser(username string) []string {
 			deletedKeys = append(deletedKeys, key)
 		}
 	}
-	s.mu.Unlock()
-	// An unread startup inventory cannot establish that this user has no saved
-	// sessions. Even with no live match, retire that unknown authority through
-	// the same preservation-before-publication path as every other revocation.
-	s.save()
 	return deletedKeys
 }
 
