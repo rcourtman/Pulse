@@ -1,6 +1,7 @@
 package alerts
 
 import (
+	"bytes"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -442,14 +443,49 @@ func TestHistoryJournalCaptureNeverBindsDifferentMirrorBytes(t *testing.T) {
 	if err := m.SaveActiveAlerts(); err != nil {
 		t.Fatal(err)
 	}
-	if m.activeRecoveryCaptureBoundary().ID == "" {
-		t.Fatal("capture absent")
+	// A synchronous save does not drain the producer's queued checkpoint.
+	// Stop owns that drain and the final save, so no background writer can
+	// repair our deliberately changed mirror before the binding assertion.
+	m.Stop()
+	boundary := m.activeRecoveryCaptureBoundary()
+	if boundary.ID == "" || boundary.Sequence == 0 {
+		t.Fatalf("capture absent: %+v", boundary)
 	}
-	if err := os.WriteFile(filepath.Join(m.getAlertsDir(), "active-alerts.json"), []byte("[]"), alertsFilePerm); err != nil {
+	path := filepath.Join(m.getAlertsDir(), "active-alerts.json")
+	original, err := os.ReadFile(path)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if got := m.activeRecoveryCaptureBoundary(); got.ID != "" {
-		t.Fatalf("capture accepted different mirror bytes: %+v", got)
+	var seeded []*Alert
+	if err := json.Unmarshal(original, &seeded); err != nil || len(seeded) != 1 || seeded[0] == nil || seeded[0].Message != "active" {
+		t.Fatalf("nonempty captured seed missing: alerts=%+v error=%v", seeded, err)
+	}
+	edited := bytes.Replace(original, []byte(`"message":"active"`), []byte(`"message":"edited"`), 1)
+	if bytes.Equal(edited, original) || len(edited) != len(original) {
+		t.Fatal("same-length mirror edit did not change the seed")
+	}
+	for _, tc := range []struct {
+		name string
+		data []byte
+	}{
+		{name: "empty-set", data: []byte("[]")},
+		{name: "same-length-record", data: edited},
+		{name: "whitespace-only", data: append(append([]byte(nil), original...), '\n')},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := os.WriteFile(path, tc.data, alertsFilePerm); err != nil {
+				t.Fatal(err)
+			}
+			if got := m.activeRecoveryCaptureBoundary(); got.ID != "" {
+				t.Fatalf("capture accepted different mirror bytes: %+v", got)
+			}
+			if err := os.WriteFile(path, original, alertsFilePerm); err != nil {
+				t.Fatal(err)
+			}
+			if got := m.activeRecoveryCaptureBoundary(); got != boundary {
+				t.Fatalf("exact restored bytes lost their matching capture: got %+v, want %+v", got, boundary)
+			}
+		})
 	}
 }
 
