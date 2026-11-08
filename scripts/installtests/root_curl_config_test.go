@@ -169,6 +169,8 @@ fi
 						want = 3 // Existing script-owned attempts, not curlrc retries.
 					} else if mode == "redirect" {
 						want = 4
+					} else if mode == "bad-signature" && phase == "helper" {
+						want = 6 // Three existing signed-pair attempts, never acceptance.
 					}
 					if len(got) != want || hasInjected || strings.Contains(strings.Join(got, "\n"), "/ambient") {
 						t.Errorf("implicit requests/headers/retries: %q injected=%t, want %d requests", got, hasInjected, want)
