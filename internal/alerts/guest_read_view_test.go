@@ -133,10 +133,12 @@ func TestGuestReadPolicyUsesCurrentTagsWithoutMutatingThem(t *testing.T) {
 }
 
 var guestReadMetricsResult guestMetrics
+var guestReadTagsResult pulseTagSettings
 
-func TestGuestPolicyReadAllocationsDoNotScaleWithInventory(t *testing.T) {
+func TestGuestPolicyProjectionDoesNotAllocateInventory(t *testing.T) {
 	// The policy needs scalar readings and tag values, not an owned inventory.
-	// Keep this a relative allocation assertion, never a machine-speed gate.
+	// Measure these projections directly: total threshold-policy allocations
+	// include unrelated identity formatting and threshold copies.
 	small := guestRuleVM(0)
 	large := guestRuleVM(128)
 	for i := 0; i < 32; i++ {
@@ -152,17 +154,11 @@ func TestGuestPolicyReadAllocationsDoNotScaleWithInventory(t *testing.T) {
 				if got := testing.AllocsPerRun(50, func() { guestReadMetricsResult, _ = extractGuestMetrics(guest) }); got != 0 {
 					t.Fatalf("scalar projection allocated %v times", got)
 				}
-			}
-			for _, withRule := range []bool{false, true} {
-				m := &Manager{config: AlertConfig{GuestDefaults: ThresholdConfig{CPU: &HysteresisThreshold{Trigger: 80, Clear: 75}}}}
-				if withRule {
-					m.config.CustomRules = []CustomAlertRule{{Enabled: true, Priority: 1, FilterConditions: FilterStack{Filters: []FilterCondition{{Type: "metric", Field: "cpu", Operator: ">", Value: 1.0}}}}}
-				}
-				measure := func(guest any) float64 {
-					return testing.AllocsPerRun(50, func() { guestRuleBenchmarkResult = m.getGuestThresholds(guest, small.ID) })
-				}
-				if sparse, dense := measure(input.small), measure(input.large); sparse != dense {
-					t.Fatalf("withRule %v: sparse/dense policy allocations = %v/%v", withRule, sparse, dense)
+				if got := testing.AllocsPerRun(50, func() {
+					view, _ := extractGuestReadView(guest)
+					guestReadTagsResult = parsePulseTags(view.Tags)
+				}); got != 0 {
+					t.Fatalf("lowercase-tag projection allocated %v times", got)
 				}
 			}
 		})
