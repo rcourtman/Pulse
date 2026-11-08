@@ -21,6 +21,26 @@
 
 ## Purpose
 
+### Account withdrawal does not serialize unrelated session attribution on disk
+
+Session-cap eviction and account-wide revocation update tracking, live sessions
+and the complete selected CSRF sets inside one short `sessionsMu` section. They
+release it before awaiting both stores' serialized fresh-snapshot saves. Cold
+username lookup selects its live session and caches its principal under that same
+lock; it cannot replay a pre-revocation session copy into tracking. Concurrent
+cold lookups recheck the cache before adding the session again.
+
+Account-wide revocation still reaches both save boundaries with no live matches:
+another caller may already have removed the records while awaiting persistence.
+The existing ten-session bound, stale pruning, oldest-session order, persisted
+untracked principal sessions and tracked-only CSRF removal remain intact. Real
+session/CSRF write stalls exercise unrelated registered writes and withdrawn
+request rejection in `session_tracking_persistence_linux_test.go`; its controls
+file covers concurrent/no-match saves, cold lookup, eviction, restart and failed
+write recovery. These are source fixtures, not installed/IdP recovery. Store
+reconfiguration and failed-write/crash durability remain separate limitations.
+No frontend field, state, rendered content, route or wire format changes.
+
 ### CSRF validation does not wait for unrelated token persistence
 
 CSRF saves select a detached value snapshot under the token mutex only after
@@ -38,9 +58,9 @@ private storage, bounded replacement, shutdown and legacy migration coverage;
 the JSON-only CSRF continuity/migration tests remain applicable. CSRF methods,
 origin/authentication checks, token hashes, lifetime, retention bound and wire
 format do not change. Missing/invalid-token replacement still waits for its own
-save. This is not isolation from the separate account-revocation/session-eviction
-`sessionsMu` critical sections, store reconfiguration, failed-write durability or
-installed-client recovery. No frontend field, state or rendered content changes.
+save. Account-revocation/session-eviction isolation is covered separately above;
+store reconfiguration, failed-write durability and installed-client recovery
+remain outside this guarantee. No frontend field, state or rendered content changes.
 
 ### Session startup failures do not authorize destructive persistence
 

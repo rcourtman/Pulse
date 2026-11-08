@@ -712,11 +712,39 @@ var (
 // maxSessionsPerUser limits concurrent sessions to prevent session accumulation.
 const maxSessionsPerUser = 10
 
+// sessionWithdrawal separates the live tracking/authority boundary from disk
+// publication. Never save while holding sessionsMu: unrelated requests need it
+// for username attribution. Each store selects its fresh snapshot under its own
+// persistence mutex, so an older queued save cannot restore withdrawn state.
+type sessionWithdrawal struct {
+	sessions *SessionStore
+	csrf     *CSRFTokenStore
+}
+
+func (w sessionWithdrawal) save() {
+	if w.sessions != nil {
+		w.sessions.save()
+	}
+	if w.csrf != nil {
+		w.csrf.save()
+	}
+}
+
 // TrackUserSession tracks which sessions belong to which user.
 // When the limit is exceeded, the oldest sessions are evicted.
 func TrackUserSession(user, sessionID string) {
-	sessionsMu.Lock()
-	defer sessionsMu.Unlock()
+	withdrawal := func() sessionWithdrawal {
+		sessionsMu.Lock()
+		defer sessionsMu.Unlock()
+		return trackUserSessionLocked(user, sessionID)
+	}()
+	withdrawal.save()
+}
+
+// trackUserSessionLocked updates tracking and both live stores before releasing
+// sessionsMu. Its caller must save any withdrawal only after releasing that lock.
+func trackUserSessionLocked(user, sessionID string) sessionWithdrawal {
+	var withdrawal sessionWithdrawal
 
 	if allSessions[user] == nil {
 		allSessions[user] = []string{}
@@ -740,37 +768,57 @@ func TrackUserSession(user, sessionID string) {
 		// After pruning stale entries, evict oldest if still over the limit
 		if len(allSessions[user]) > maxSessionsPerUser {
 			excess := allSessions[user][:len(allSessions[user])-maxSessionsPerUser]
+			keys := make([]string, 0, len(excess))
 			for _, oldSID := range excess {
-				store.DeleteSession(oldSID)
-				GetCSRFStore().DeleteCSRFToken(oldSID)
+				keys = append(keys, sessionHash(oldSID))
 			}
+			withdrawal = sessionWithdrawal{sessions: store, csrf: GetCSRFStore()}
+			withdrawal.sessions.removeSessionKeys(keys)
+			withdrawal.csrf.removeSessionKeys(keys)
 			allSessions[user] = allSessions[user][len(allSessions[user])-maxSessionsPerUser:]
 		}
 	}
+	return withdrawal
 }
 
-// GetSessionUsername returns the username associated with a session ID
-func GetSessionUsername(sessionID string) string {
-	// First check in-memory map
-	sessionsMu.RLock()
+// trackedSessionUsernameLocked requires sessionsMu for reading or writing.
+func trackedSessionUsernameLocked(sessionID string) string {
 	for user, sessions := range allSessions {
 		for _, sid := range sessions {
 			if sid == sessionID {
-				sessionsMu.RUnlock()
 				return user
 			}
 		}
 	}
-	sessionsMu.RUnlock()
+	return ""
+}
 
-	// Fall back to persisted username in session store (survives restarts)
-	if session := GetSessionStore().GetSession(sessionID); session != nil && session.Username != "" {
-		// Re-populate in-memory map for faster future lookups
-		TrackUserSession(session.Username, sessionID)
-		return session.Username
+// GetSessionUsername returns the username associated with a session ID
+func GetSessionUsername(sessionID string) string {
+	sessionsMu.RLock()
+	user := trackedSessionUsernameLocked(sessionID)
+	sessionsMu.RUnlock()
+	if user != "" {
+		return user
 	}
 
-	return ""
+	var withdrawal sessionWithdrawal
+	user = func() string {
+		sessionsMu.Lock()
+		defer sessionsMu.Unlock()
+		if user := trackedSessionUsernameLocked(sessionID); user != "" {
+			return user
+		}
+		// Select and cache together: a session copied before revocation must
+		// not be reintroduced into tracking after its live authority was removed.
+		if session := GetSessionStore().GetSession(sessionID); session != nil && session.Username != "" {
+			withdrawal = trackUserSessionLocked(session.Username, sessionID)
+			return session.Username
+		}
+		return ""
+	}()
+	withdrawal.save()
+	return user
 }
 
 // GetSessionDisplayUsername returns the human-readable label associated with a
@@ -787,29 +835,34 @@ func GetSessionDisplayUsername(sessionID string) string {
 
 // InvalidateUserSessions invalidates all sessions for a user (e.g., on password change)
 func InvalidateUserSessions(user string) {
-	sessionsMu.Lock()
-	defer sessionsMu.Unlock()
-
-	sessionIDs := allSessions[user]
-	sessionKeys := GetSessionStore().DeleteSessionsForUser(user)
-	seenKeys := make(map[string]struct{}, len(sessionKeys)+len(sessionIDs))
-	for _, key := range sessionKeys {
-		seenKeys[key] = struct{}{}
-	}
-	for _, sid := range sessionIDs {
-		key := sessionHash(sid)
-		if _, ok := seenKeys[key]; !ok {
-			sessionKeys = append(sessionKeys, key)
+	withdrawal := sessionWithdrawal{sessions: GetSessionStore(), csrf: GetCSRFStore()}
+	count := func() int {
+		sessionsMu.Lock()
+		defer sessionsMu.Unlock()
+		sessionIDs := allSessions[user]
+		sessionKeys := withdrawal.sessions.removeSessionsForUser(user)
+		seenKeys := make(map[string]struct{}, len(sessionKeys)+len(sessionIDs))
+		for _, key := range sessionKeys {
 			seenKeys[key] = struct{}{}
 		}
-	}
-	GetCSRFStore().DeleteCSRFSessionKeys(sessionKeys)
-
-	delete(allSessions, user)
+		for _, sid := range sessionIDs {
+			key := sessionHash(sid)
+			if _, ok := seenKeys[key]; !ok {
+				sessionKeys = append(sessionKeys, key)
+				seenKeys[key] = struct{}{}
+			}
+		}
+		withdrawal.csrf.removeSessionKeys(sessionKeys)
+		delete(allSessions, user)
+		return len(sessionKeys)
+	}()
+	// Save BOTH stores even with no live matches: a concurrent revocation may
+	// already have withdrawn them but still be waiting for either disk save.
+	withdrawal.save()
 
 	log.Info().
 		Str("user", user).
-		Int("sessions_invalidated", len(sessionKeys)).
+		Int("sessions_invalidated", count).
 		Msg("Invalidated all user sessions")
 }
 

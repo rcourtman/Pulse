@@ -246,10 +246,7 @@ func (c *CSRFTokenStore) ValidateCSRFToken(sessionID, token string) bool {
 
 // DeleteCSRFToken removes a CSRF token
 func (c *CSRFTokenStore) DeleteCSRFToken(sessionID string) {
-	c.mu.Lock()
-
-	delete(c.tokens, csrfSessionKey(sessionID))
-	c.mu.Unlock()
+	c.removeSessionKeys([]string{csrfSessionKey(sessionID)})
 	c.save()
 }
 
@@ -260,15 +257,20 @@ func (c *CSRFTokenStore) DeleteCSRFSessionKeys(sessionKeys []string) {
 	if len(sessionKeys) == 0 {
 		return
 	}
-	c.mu.Lock()
-
-	for _, key := range sessionKeys {
-		delete(c.tokens, key)
-	}
-	c.mu.Unlock()
+	c.removeSessionKeys(sessionKeys)
 	// Even when another pending revocation already removed these live keys,
 	// this caller must wait for a fresh save attempt before returning.
 	c.save()
+}
+
+// removeSessionKeys withdraws all live tokens for the selected sessions without
+// disk I/O. Coordinated callers must save after releasing the tracking lock.
+func (c *CSRFTokenStore) removeSessionKeys(sessionKeys []string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, key := range sessionKeys {
+		delete(c.tokens, key)
+	}
 }
 
 func (c *CSRFTokenStore) addTokenUnsafe(sessionKey string, token *CSRFToken, now time.Time) {
