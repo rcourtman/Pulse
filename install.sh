@@ -12,6 +12,10 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+# Keep scripted transport independent of implicit per-user curl configuration.
+# Every curl call uses standalone first-option -q; explicit flags and CA/proxy
+# environment remain effective, including on legacy curl versions.
+
 # Configuration helpers
 default_install_dir_for_service() {
     local service_name="${1:-pulse}"
@@ -304,7 +308,7 @@ get_latest_release_from_redirect() {
     # tolerates intermediate redirects that omit /tag/ (issue #698).
     local target_url="${1:-https://github.com/$GITHUB_REPO/releases/latest}"
     local effective_url=""
-    local curl_cmd=(curl -fsSL --connect-timeout 5 --max-time 10 -o /dev/null -w '%{url_effective}' "$target_url")
+    local curl_cmd=(curl -q -fsSL --connect-timeout 5 --max-time 10 -o /dev/null -w '%{url_effective}' "$target_url")
 
     if command -v timeout >/dev/null 2>&1; then
         effective_url=$(timeout 10 "${curl_cmd[@]}" 2>/dev/null || true)
@@ -1045,7 +1049,7 @@ wait_for_pulse_ready() {
     local api_endpoint="${pulse_url%/}/api/health"
     print_info "Waiting for Pulse API at ${api_endpoint}..."
     for attempt in $(seq 1 "$retries"); do
-        if curl -fsS --max-time 2 "$api_endpoint" >/dev/null 2>&1; then
+        if curl -q -fsS --max-time 2 "$api_endpoint" >/dev/null 2>&1; then
             print_info "Pulse API is reachable"
             return 0
         fi
@@ -1188,11 +1192,11 @@ resolve_latest_release_tag_for_channel() {
 
     [[ "$channel" == stable || "$channel" == rc ]] || return 1
     if command -v timeout >/dev/null 2>&1; then
-        if ! releases_json=$(timeout 15 curl -fsSL --connect-timeout 10 --max-time 30 "https://api.github.com/repos/$GITHUB_REPO/releases" 2>/dev/null); then
+        if ! releases_json=$(timeout 15 curl -q -fsSL --connect-timeout 10 --max-time 30 "https://api.github.com/repos/$GITHUB_REPO/releases" 2>/dev/null); then
             releases_json=""
         fi
     else
-        if ! releases_json=$(curl -fsSL --connect-timeout 10 --max-time 30 "https://api.github.com/repos/$GITHUB_REPO/releases" 2>/dev/null); then
+        if ! releases_json=$(curl -q -fsSL --connect-timeout 10 --max-time 30 "https://api.github.com/repos/$GITHUB_REPO/releases" 2>/dev/null); then
             releases_json=""
         fi
     fi
@@ -2335,7 +2339,7 @@ smoke_test_pve_auto_register_token() {
     local smoke_status=0
 
     set +e
-    smoke_output=$(printf 'Authorization: PVEAPIToken=%s=%s\n' "$token_id" "$token_value" | curl --retry 2 --retry-delay 1 -kfsS -H @- "${host_url%/}/api2/json/nodes" 2>&1)
+    smoke_output=$(printf 'Authorization: PVEAPIToken=%s=%s\n' "$token_id" "$token_value" | curl -q --retry 2 --retry-delay 1 -kfsS -H @- "${host_url%/}/api2/json/nodes" 2>&1)
     smoke_status=$?
     set -e
 
@@ -2444,7 +2448,7 @@ PY
     set +xv
 
     local setup_response
-    if ! setup_response=$(curl --retry 3 --retry-delay 2 -fsS -X POST "$pulse_url/api/setup-script-url" -H "Content-Type: application/json" -d "$setup_payload"); then
+    if ! setup_response=$(curl -q --retry 3 --retry-delay 2 -fsS -X POST "$pulse_url/api/setup-script-url" -H "Content-Type: application/json" -d "$setup_payload"); then
         AUTO_NODE_REGISTER_ERROR="setup token request failed"
         print_warn "Unable to request setup token from Pulse (${pulse_url}); skipping automatic node registration"
         return
@@ -2721,7 +2725,7 @@ PY
 )
 
     local register_response
-    if ! register_response=$(printf %s "$register_payload" | curl --retry 3 --retry-delay 2 -fsS -X POST "$pulse_url/api/auto-register" -H "Content-Type: application/json" -d @-); then
+    if ! register_response=$(printf %s "$register_payload" | curl -q --retry 3 --retry-delay 2 -fsS -X POST "$pulse_url/api/auto-register" -H "Content-Type: application/json" -d @-); then
         AUTO_NODE_REGISTER_ERROR="auto-register request failed"
         print_warn "Pulse auto-registration request failed; skipping automatic node registration"
         return
@@ -3530,11 +3534,11 @@ download_container_installer() {
             sleep 2
         fi
         if command -v timeout >/dev/null 2>&1; then
-            if timeout 30 curl -fsSL --connect-timeout 10 --max-time 30 "$download_url" > "$staged_installer" 2>"$staging_dir/curl-error"; then
+            if timeout 30 curl -q -fsSL --connect-timeout 10 --max-time 30 "$download_url" > "$staged_installer" 2>"$staging_dir/curl-error"; then
                 download_success=true
                 break
             fi
-        elif curl -fsSL --connect-timeout 10 --max-time 30 "$download_url" > "$staged_installer" 2>"$staging_dir/curl-error"; then
+        elif curl -q -fsSL --connect-timeout 10 --max-time 30 "$download_url" > "$staged_installer" 2>"$staging_dir/curl-error"; then
             download_success=true
             break
         fi
@@ -3545,7 +3549,7 @@ download_container_installer() {
         [[ -z "$download_error" ]] || print_error "Error: $download_error"
         return 1
     fi
-    if ! curl -fsSL --connect-timeout 10 --max-time 30 "${download_url}.sshsig" > "$staged_signature" 2>"$staging_dir/curl-error"; then
+    if ! curl -q -fsSL --connect-timeout 10 --max-time 30 "${download_url}.sshsig" > "$staged_signature" 2>"$staging_dir/curl-error"; then
         print_error "Failed to download container installer signature; refusing to copy or run the installer"
         return 1
     fi
@@ -3565,11 +3569,11 @@ resolve_target_release() {
         print_info "Installing specific version: $LATEST_RELEASE"
 
         if command -v timeout >/dev/null 2>&1; then
-            if ! timeout 15 curl -fsS --connect-timeout 10 --max-time 30 "https://api.github.com/repos/$GITHUB_REPO/releases/tags/$LATEST_RELEASE" > /dev/null 2>&1; then
+            if ! timeout 15 curl -q -fsS --connect-timeout 10 --max-time 30 "https://api.github.com/repos/$GITHUB_REPO/releases/tags/$LATEST_RELEASE" > /dev/null 2>&1; then
                 print_warn "Could not verify version $LATEST_RELEASE, proceeding anyway..."
             fi
         else
-            if ! curl -fsS --connect-timeout 10 --max-time 30 "https://api.github.com/repos/$GITHUB_REPO/releases/tags/$LATEST_RELEASE" > /dev/null 2>&1; then
+            if ! curl -q -fsS --connect-timeout 10 --max-time 30 "https://api.github.com/repos/$GITHUB_REPO/releases/tags/$LATEST_RELEASE" > /dev/null 2>&1; then
                 print_warn "Could not verify version $LATEST_RELEASE, proceeding anyway..."
             fi
         fi
@@ -4645,13 +4649,13 @@ download_auto_update_script() {
         local signature_file=""
 
         if command -v timeout >/dev/null 2>&1; then
-            if timeout $((max_time + 10)) curl -fsSL --connect-timeout "$connect_timeout" --max-time "$max_time" -o "$dest" "$url"; then
+            if timeout $((max_time + 10)) curl -q -fsSL --connect-timeout "$connect_timeout" --max-time "$max_time" -o "$dest" "$url"; then
                 :
             else
                 curl_status=$?
             fi
         else
-            if curl -fsSL --connect-timeout "$connect_timeout" --max-time "$max_time" -o "$dest" "$url"; then
+            if curl -q -fsSL --connect-timeout "$connect_timeout" --max-time "$max_time" -o "$dest" "$url"; then
                 :
             else
                 curl_status=$?
@@ -4661,9 +4665,9 @@ download_auto_update_script() {
         if [[ $curl_status -eq 0 ]]; then
             signature_file=$(mktemp /tmp/pulse-auto-update-signature.XXXXXX)
             if command -v timeout >/dev/null 2>&1; then
-                timeout $((max_time + 10)) curl -fsSL --connect-timeout "$connect_timeout" --max-time "$max_time" -o "$signature_file" "$signature_url" || curl_status=$?
+                timeout $((max_time + 10)) curl -q -fsSL --connect-timeout "$connect_timeout" --max-time "$max_time" -o "$signature_file" "$signature_url" || curl_status=$?
             else
-                curl -fsSL --connect-timeout "$connect_timeout" --max-time "$max_time" -o "$signature_file" "$signature_url" || curl_status=$?
+                curl -q -fsSL --connect-timeout "$connect_timeout" --max-time "$max_time" -o "$signature_file" "$signature_url" || curl_status=$?
             fi
 
             if [[ $curl_status -ne 0 ]]; then
