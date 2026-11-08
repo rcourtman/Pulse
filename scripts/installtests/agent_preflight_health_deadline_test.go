@@ -34,12 +34,25 @@ func TestAgentInstallerPreflightHealthDeadline(t *testing.T) {
 		t.Run(mode, func(t *testing.T) {
 			t.Parallel()
 			bootstrapToken := strings.Repeat("a1", 32)
+			// Bound setup independently. The health observer starts only when
+			// that request arrives, rather than spending its budget on startup.
+			ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+			defer cancel()
 			var mu sync.Mutex
+			var healthStarted, metadataStarted time.Time
+			var healthObserver *time.Timer
 			var requests []string
 			var disclosed bool
 			server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				mu.Lock()
 				requests = append(requests, r.Method+" "+r.URL.Path)
+				if r.URL.Path == "/api/health" && healthStarted.IsZero() {
+					healthStarted = time.Now()
+					healthObserver = time.AfterFunc(18*time.Second, cancel)
+				}
+				if r.URL.Path == "/download/pulse-agent" {
+					metadataStarted = time.Now()
+				}
 				disclosed = disclosed || r.Header.Get("Authorization") != "" || strings.Contains(r.URL.String(), bootstrapToken)
 				mu.Unlock()
 				if r.URL.Path == "/download/pulse-agent" {
@@ -126,8 +139,6 @@ func TestAgentInstallerPreflightHealthDeadline(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			ctx, cancel := context.WithTimeout(context.Background(), 18*time.Second)
-			defer cancel()
 			cmd := exec.CommandContext(ctx, "bash", repoFile("scripts", "install.sh"),
 				"--url", server.URL, "--cacert", filepath.Join(state, "ca.pem"),
 				"--token-file", filepath.Join(state, "token"), "--state-dir", state,
@@ -173,14 +184,25 @@ func TestAgentInstallerPreflightHealthDeadline(t *testing.T) {
 				exit = failure.ExitCode()
 			}
 			mu.Lock()
-			t.Logf("full preflight elapsed=%s exit=%d observer=%v requests=%v", elapsed, exit, ctx.Err(), requests)
+			if healthObserver != nil {
+				healthObserver.Stop()
+			}
+			var startupElapsed, healthElapsed time.Duration
+			if !healthStarted.IsZero() {
+				startupElapsed = healthStarted.Sub(start)
+				healthElapsed = time.Since(healthStarted)
+				if !metadataStarted.IsZero() {
+					healthElapsed = metadataStarted.Sub(healthStarted)
+				}
+			}
+			t.Logf("full preflight elapsed=%s startup=%s health-to-metadata=%s exit=%d observer=%v requests=%v", elapsed, startupElapsed, healthElapsed, exit, ctx.Err(), requests)
 			mu.Unlock()
 			if ctx.Err() != nil || exit != wantExit {
 				t.Fatalf("preflight did not return its own result: exit=%d want=%d observer=%v\n%s", exit, wantExit, ctx.Err(), out)
 			}
 			if strings.HasPrefix(mode, "stalled-") || mode == "redirect-budget" {
-				if elapsed < 9*time.Second || elapsed >= 17*time.Second {
-					t.Fatalf("health request did not use its ten-second total budget: %s", elapsed)
+				if healthElapsed < 9*time.Second || healthElapsed >= 17*time.Second {
+					t.Fatalf("health request did not use its ten-second total budget: %s (whole preflight %s)", healthElapsed, elapsed)
 				}
 			}
 			var events []struct {
