@@ -80,6 +80,9 @@ def run_task(task: tuple[str, list[str]]) -> dict:
             # restore Go's unfiltered defaults; compiler/module flags survive.
             # Keep fail-fast off so a failed root cannot hide later assertions.
             env["GOFLAGS"] += " -run= -skip= -list= -exec= -fuzz= -short=false -failfast=false"
+            # Build-only and dry-run modes can also return success without any
+            # test execution. Keep these distinct from the compile-only gate.
+            env["GOFLAGS"] += " -c=false -n=false"
         result = subprocess.run(command, cwd=ROOT, env=env)
         observation = {"started": True, "exit": result.returncode}
     except OSError as error:
