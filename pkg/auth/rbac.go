@@ -83,9 +83,15 @@ func NormalizeUserIdentityMetadata(metadata UserIdentityMetadata) UserIdentityMe
 
 func truncateIdentityText(value string, maxRunes int) string {
 	value = strings.TrimSpace(value)
-	runes := []rune(value)
-	if len(runes) > maxRunes {
-		return string(runes[:maxRunes])
+	count := 0
+	for end := range value {
+		if count == maxRunes {
+			// Convert only the bounded prefix, not the entire IdP claim. The
+			// conversion owns its storage and preserves historical replacement
+			// of invalid UTF-8 when truncating; fitting values stay unchanged.
+			return string([]rune(value[:end]))
+		}
+		count++
 	}
 	return value
 }
