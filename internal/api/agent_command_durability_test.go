@@ -22,12 +22,20 @@ import (
 // shell command is executed: the synthetic peer only reads/signature-checks a
 // command frame and supplies a fixed result.
 func TestCommandApprovalDurabilityAtAgentDispatch(t *testing.T) {
-	for _, failPublication := range []bool{false, true} {
-		t.Run(map[bool]string{false: "saved_before_frame", true: "failed_save_no_frame"}[failPublication], func(t *testing.T) {
+	for _, scenario := range []string{"saved_before_frame", "failed_save_no_frame", "mismatched_host_target_no_frame"} {
+		t.Run(scenario, func(t *testing.T) {
+			failPublication := scenario == "failed_save_no_frame"
+			mismatchedTarget := scenario == "mismatched_host_target_no_frame"
 			parent := t.TempDir()
 			dir := filepath.Join(parent, "store")
 			require.NoError(t, os.Mkdir(dir, 0700))
 			req := commandAuthorizationApproval("fixture-durable")
+			// The native agent transport's canonical agent target has no target
+			// ID. Preserve rejection of a saved nonempty host tuple separately;
+			// do not weaken the hash to make this fixture reach persistence.
+			if !mismatchedTarget {
+				req.TargetID = ""
+			}
 			store := installCommandAuthorizationStoreAt(t, dir, req)
 			original, err := os.ReadFile(filepath.Join(dir, "ai_approvals.json"))
 			require.NoError(t, err)
@@ -36,7 +44,12 @@ func TestCommandApprovalDurabilityAtAgentDispatch(t *testing.T) {
 			server := agentexec.NewServerWithAdmissionValidator(func(raw, id, hostname string) (agentexec.AgentAdmission, bool) {
 				return agentexec.AgentAdmission{OrganizationID: "org-1", AgentID: id, Hostname: hostname}, raw == token && id == "agent-1"
 			}, func(agentexec.AgentAdmission) bool { return true })
-			server.SetCommandAuthorizationVerifier(verifyAndConsumeCommandAuthorization)
+			verified := make(chan error, 1)
+			server.SetCommandAuthorizationVerifier(func(req agentexec.CommandAuthorizationRequest) error {
+				err := verifyAndConsumeCommandAuthorization(req)
+				verified <- err
+				return err
+			})
 			ts := httptest.NewServer(http.HandlerFunc(server.HandleWebSocket))
 			t.Cleanup(ts.Close)
 			conn, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(ts.URL, "http"), http.Header{"Origin": []string{ts.URL}})
@@ -84,22 +97,33 @@ func TestCommandApprovalDurabilityAtAgentDispatch(t *testing.T) {
 			}
 			done := make(chan returned, 1)
 			go func() { result, err := server.ExecuteCommand(ctx, "agent-1", payload); done <- returned{result, err} }()
-			if failPublication {
+			if failPublication || mismatchedTarget {
 				out := <-done
 				require.Nil(t, out.result)
-				require.ErrorContains(t, out.err, "approval consumption could not be saved")
+				if failPublication {
+					require.ErrorContains(t, out.err, "approval consumption could not be saved")
+				} else {
+					require.ErrorContains(t, out.err, "approval command mismatch")
+				}
 				require.NotContains(t, out.err.Error(), parent)
 				kept, err := os.ReadFile(filepath.Join(savedDir, "ai_approvals.json"))
 				require.NoError(t, err)
 				require.Equal(t, original, kept)
 				local, found := store.GetApproval(req.ID)
 				require.True(t, found)
-				require.True(t, local.Consumed)
+				require.Equal(t, failPublication, local.Consumed, "a target mismatch must not consume authority; a failed publication must keep the local decision spent")
 			} else {
+				// Observe early rejection directly rather than hiding it behind a
+				// socket read timeout. The callback remains the real verifier.
+				require.NoError(t, <-verified)
 				msg := read()
 				require.Equal(t, agentexec.MsgTypeExecuteCmd, msg.Type)
 				var delivered agentexec.ExecuteCommandPayload
 				require.NoError(t, json.Unmarshal(msg.Payload, &delivered))
+				require.Equal(t, req.ID, delivered.ApprovalID)
+				require.Equal(t, req.Command, delivered.Command)
+				require.Equal(t, req.TargetType, delivered.TargetType)
+				require.Equal(t, req.TargetID, delivered.TargetID)
 				require.NoError(t, agentexec.VerifyCommandApprovalGrant(token, "agent-1", delivered, time.Now()))
 				// At the first command frame, a fresh store must already see the
 				// spent decision, without Flush or a debounce wait.
