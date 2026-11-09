@@ -5,7 +5,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PatrolIntelligenceSurface } from '../PatrolIntelligenceSurface';
 
-const patrolState = vi.hoisted(() => ({ setupOnly: false, enabled: true, approvalCount: () => 0 }));
+const patrolState = vi.hoisted(() => ({
+  setupOnly: false,
+  enabled: true,
+  approvalCount: (): number => 0,
+}));
 
 vi.mock('@/stores/aiIntelligence', () => ({
   aiIntelligenceStore: {

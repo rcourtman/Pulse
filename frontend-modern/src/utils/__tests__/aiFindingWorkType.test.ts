@@ -153,10 +153,35 @@ describe('getPatrolWorkTypeComposition', () => {
   });
 
   it('keeps typed action facts and ignores inactive queued outcomes during an unavailable read', () => {
-    const typed = {
+    const typed: Parameters<typeof getPatrolWorkTypeComposition>[0][number] = {
       ...makeFinding({ investigationOutcome: 'fix_queued' }),
-      investigationRecord: { action: { id: 'saved-action', state: 'pending_approval' } },
-    } as Parameters<typeof getPatrolWorkTypeComposition>[0][number];
+      investigationRecord: {
+        id: 'investigation-1',
+        finding_id: 'finding-1',
+        subject: { resource_id: 'host-1' },
+        trigger: { detected_at: '2026-11-09T12:00:00Z' },
+        status: 'completed',
+        evidence: [],
+        verification: [],
+        rollback: [],
+        tools_used: [],
+        started_at: '2026-11-09T12:00:00Z',
+        action: {
+          action_id: 'saved-action',
+          resource_id: 'host-1',
+          capability_name: 'restart',
+          state: 'pending_approval',
+          plan: {
+            actionId: 'saved-action',
+            requestId: 'request-1',
+            allowed: false,
+            requiresApproval: true,
+            approvalPolicy: 'admin',
+            rollbackAvailable: false,
+          },
+        },
+      },
+    };
     expect(hasUnavailablePatrolApprovalStatus(typed, true)).toBe(false);
     const composition = getPatrolWorkTypeComposition(
       [
