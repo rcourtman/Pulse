@@ -439,7 +439,7 @@ class WorkflowTest(unittest.TestCase):
         active = {}; peak = ordinary_peak = 0
         for event in map(json.loads,events.read_text().splitlines()):
             if event['ordinary']:
-                self.assertEqual(event['goflags'].split()[-2:], ['-count=1', '-p=1'])
+                self.assertEqual(event['goflags'].split()[-2:], ['-p=1', '-count=1'])
             if event['kind']=='start': active[event['pid']] = event['ordinary']
             else: del active[event['pid']]
             peak = max(peak,len(active)); ordinary_peak = max(ordinary_peak,sum(active.values()))
@@ -482,7 +482,7 @@ class WorkflowTest(unittest.TestCase):
                     self.assertEqual(shard.run_task((runner.MODULE + 'internal/a', command))['exit'], 0)
                 environment = execute.call_args.kwargs['env']
                 self.assertEqual(environment['GOFLAGS'].split(),
-                                 inherited.split() + ['-count=1', '-p=1'])
+                                 inherited.split() + ['-p=1', '-count=1'])
                 self.assertEqual(environment['pkgs'], runner.MODULE + 'internal/a')
                 self.assertEqual(execute.call_args.args[0], command)
                 self.assertEqual(os.environ['GOFLAGS'], inherited)
