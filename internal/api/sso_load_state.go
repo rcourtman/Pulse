@@ -37,7 +37,7 @@ func (r *Router) ssoManagementConfig(retry bool) (*config.SSOConfig, error) {
 		return nil, errSSOConfigUnavailable
 	}
 
-	r.ssoConfig = loaded
+	r.publishSSOConfigLocked(loaded)
 	// Reapply environment authority and publish the auth snapshot BEFORE
 	// clearing unknown, which also protects unauthenticated config transfer.
 	current = r.ensureSSOConfigLocked()

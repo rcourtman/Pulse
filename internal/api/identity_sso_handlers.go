@@ -283,7 +283,7 @@ func (r *Router) ensureSSOConfigLocked() *config.SSOConfig {
 		}
 	}
 
-	r.ssoConfig = current
+	r.publishSSOConfigLocked(current)
 	setSSOAuthSnapshot(r.config, current)
 	return current
 }
@@ -335,7 +335,7 @@ func (r *Router) commitSSOConfig(mutate func(*config.SSOConfig) error) (applyErr
 	if err := r.persistSSOConfigLocked(next); err != nil {
 		return nil, err
 	}
-	r.ssoConfig = next
+	r.publishSSOConfigLocked(next)
 	return nil, nil
 }
 
