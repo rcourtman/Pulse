@@ -6481,8 +6481,7 @@ printf 'Data: %s\n' "$PULSE_DATA_DIR"
 		print_success() { printf '%s\n' "$1"; }
 		print_warn() { printf 'WARN: %s\n' "$1"; }
 		print_info() { printf 'INFO: %s\n' "$1"; }
-		update_timer_exists() { return 1; }
-		update_timer_enabled() { return 1; }
+		print_auto_update_status() { :; }
 		build_printed_management_command() { printf '/bin/update\n'; }
 ` + extractRootInstallShellFunction(t, "print_completion") + `
 		print_completion
