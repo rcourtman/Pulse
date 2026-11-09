@@ -18,6 +18,22 @@
 
 ## Purpose
 
+### Authentication refresh preserves only the current reader's draft
+
+The Authentication panel labels a pending security-status read and keeps its
+last admitted controls and credential draft visible but disabled. A successful
+refresh with the same principal, masked credential hint, sorted scopes, local
+account and management admission preserves the Custom selection and unsaved
+fields. Changed reader facts, withdrawn management or an organisation switch
+close both credential forms rather than transferring or reviving their drafts.
+Missing status is unknown, not disabled authentication. The Settings shell still
+withdraws the panel after a failed access check; backend authority, credential
+generation, request payloads and persisted settings are unchanged.
+`SecurityAuthRefresh.transport.test.tsx` exercises the real toggle producer and
+status reader, pending/recovered drafts, refusal withdrawal, reader changes and
+explicit disabled/unknown states. Native panel/browser comparisons also remain
+required; these controls do not establish original-client recovery.
+
 ### Saved credential lifetime is not an access guarantee
 
 API Access shows the existing saved expiry metadata in each inventory layout,
