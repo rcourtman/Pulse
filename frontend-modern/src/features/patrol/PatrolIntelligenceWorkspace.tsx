@@ -86,7 +86,12 @@ export function PatrolIntelligenceWorkspace(props: {
     queueDisplayGroups().reduce((count, group) => count + group.affectedResourceCount, 0),
   );
   const workTypeComposition = createMemo(() =>
-    getPatrolWorkTypeComposition(queueFindings(), Boolean(aiIntelligenceStore.approvalsError)),
+    getPatrolWorkTypeComposition(
+      queueFindings(),
+      Boolean(aiIntelligenceStore.approvalsError),
+      aiIntelligenceStore.patrolPendingApprovals,
+      now(),
+    ),
   );
   // The scoped resource's findings: its work group and the approval banner
   // count and show only the approvals waiting on them.

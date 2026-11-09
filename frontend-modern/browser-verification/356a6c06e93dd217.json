@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "base_sha": "9b0d946d393c02c7e01971ed98f473c0bb91c37a",
+  "verified_at": "2026-11-09T17:57:04.128435Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/AI/FindingsPanel.tsx",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceWorkspace.tsx",
+    "frontend-modern/src/utils/aiFindingPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/AI/FindingsPanel.tsx": "1b052e904b687faff4df22a2457de3e2636ec12148311516574901680e7d2364",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceWorkspace.tsx": "76039696b62e19ba655481148bd7992806445599dd8cfc1d9abf25ae9058db26",
+    "frontend-modern/src/utils/aiFindingPresentation.ts": "dfb0e0d8e4268c93b75a7d6686787c263ecce478ad58912feabf8196c50c9046"
+  },
+  "routes": [
+    "/patrol/activity \u2192 Finding options and history \u2192 Open work \u2192 finding row expansion and close"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "browsers": [
+    "Playwright 1.56.1 / Chromium 141.0.7390.37 desktop, light and dark",
+    "Playwright 1.56.1 / WebKit 26.0 narrow, light and dark"
+  ],
+  "states": [
+    "All eight typed action states against an unchanged saved fix_queued outcome; one active finding and one affected resource remain visible.",
+    "Live matching legacy approval, successful empty legacy approval list, and unavailable legacy read.",
+    "Summary and row distinguish approval required, ready to run, approved to run, running, completed, failed, rejected, expired and genuine legacy recovery. Unavailable legacy status remains unknown. Completion of an action does not resolve its finding.",
+    "Comparable captures preserve the same issue/resource facts and review controls. All44 pairs retain non-row control text/order; History, Finding options and Review remain in viewport. Existing truncation is unchanged."
+  ],
+  "interactions": [
+    "Actual App/router/API clients/stores use the existing readonly integration fixture plus fixed synthetic typed-action responses. Same clock/data/theme/viewports and opener, panel-anchor, row expand/close interactions on both source versions.",
+    "All44 required final-source states complete across19 initial captures and25 compiler-prepared completion captures. The first final attempt stopped at Loading view after19; a finite cold completion also hit DOMContentLoaded10s. Those failures and inspected screenshots remain adverse. The existing Vite client graph was then prepared with installed warmupRequest/waitForRequestsIdle APIs before only the25 outstanding cases, with the page10s deadline unchanged. No passing case was repeated for selection. This is page-state proof, not cold-development startup qualification.",
+    "No mutation was attempted and no page exception was observed. Expanding each actual row encounters the same unprovided investigation-detail GET404 as baseline; no full investigation-history, action execution or authorization journey is claimed.",
+    "Opened all62 retained unique final-comparison PNGs through native view_image:18 unique before images represent44 states by exact-byte aliases, plus44 current after images.44 comparisons; ten pairs are byte-identical. History, Finding options and Review stay in viewport and non-row control text/order is preserved."
+  ],
+  "evidence": "Current lane RECEIPTS.md, SOURCE-CURRENT.json, CAPTURE-PAIRS.json, PIXEL-REVIEW.md, before and after capture archives, browser reports/protocols and retained adverse records bind the source and fixtures. Baseline b3fb4ebd17ac87e79a35e073c84763c8b57998f8; final runtime9b0d946d393c02c7e01971ed98f473c0bb91c37a. The affected source suite retains two default-deadline timeouts and is not an all-checks pass. No native authority, original-client/IdP recovery, hosted install, release or independent acceptance claim."
+}
