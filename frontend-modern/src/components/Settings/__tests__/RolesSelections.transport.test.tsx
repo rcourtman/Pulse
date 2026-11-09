@@ -62,7 +62,7 @@ let completion: ReturnType<typeof deferred<Response>>;
 let reload: ReturnType<typeof deferred<Response>> | undefined;
 
 function rowFor(role: Role) {
-  const row = screen.getByText(role.description).closest('tr');
+  const row = screen.getByText(role.id).closest('tr');
   expect(row).not.toBeNull();
   return within(row!);
 }
@@ -87,8 +87,12 @@ async function openPanel() {
   expectSavedRows(originalRoles);
 }
 async function openEditor(role = selected) {
-  fireEvent.click(rowFor(role).getByRole('button', { name: 'Edit role' }));
-  const dialog = await screen.findByRole('dialog', { name: 'Edit role' });
+  fireEvent.click(
+    rowFor(role).getByRole('button', { name: `Edit role ${role.name} (Role ID: ${role.id})` }),
+  );
+  const dialog = await screen.findByRole('dialog', {
+    name: `Edit role: ${role.name} (Role ID: ${role.id})`,
+  });
   const editor = within(dialog);
   expect(editor.getByLabelText('Role ID')).toHaveValue(role.id);
   expect(editor.getByLabelText('Role ID')).toBeDisabled();
@@ -104,9 +108,14 @@ async function openEditor(role = selected) {
   return dialog;
 }
 async function openDeletion(role = selected) {
-  fireEvent.click(rowFor(role).getByRole('button', { name: 'Delete role' }));
-  const dialog = await screen.findByRole('dialog', { name: `Delete role: ${role.name}` });
+  fireEvent.click(
+    rowFor(role).getByRole('button', { name: `Delete role ${role.name} (Role ID: ${role.id})` }),
+  );
+  const dialog = await screen.findByRole('dialog', {
+    name: `Delete role: ${role.name} (Role ID: ${role.id})`,
+  });
   expect(dialog).toHaveTextContent(`Are you sure you want to delete the role "${role.name}"?`);
+  expect(within(dialog).getByText(role.id)).toBeInTheDocument();
   return dialog;
 }
 async function submit(dialog: HTMLElement, operation: 'edit' | 'delete', role = selected) {
@@ -147,7 +156,10 @@ function expectSavedRows(expected: Role[]) {
   for (const role of expected) {
     const row = rowFor(role);
     expect(row.getByText(role.name)).toBeInTheDocument();
-    for (const list of row.getAllByRole('list', { name: `Permissions for ${role.name}` })) {
+    expect(row.getByText(role.id)).toBeInTheDocument();
+    for (const list of row.getAllByRole('list', {
+      name: `Permissions for ${role.name} (Role ID: ${role.id})`,
+    })) {
       expect(within(list).getAllByRole('listitem')).toHaveLength(role.permissions.length);
       for (const permission of role.permissions)
         expect(
@@ -158,8 +170,12 @@ function expectSavedRows(expected: Role[]) {
       expect(row.getByText('Read-only')).toBeInTheDocument();
       expect(row.queryByRole('button')).not.toBeInTheDocument();
     } else {
-      expect(row.getByRole('button', { name: 'Edit role' })).toBeEnabled();
-      expect(row.getByRole('button', { name: 'Delete role' })).toBeEnabled();
+      expect(
+        row.getByRole('button', { name: `Edit role ${role.name} (Role ID: ${role.id})` }),
+      ).toBeEnabled();
+      expect(
+        row.getByRole('button', { name: `Delete role ${role.name} (Role ID: ${role.id})` }),
+      ).toBeEnabled();
     }
   }
   for (const role of originalRoles)
@@ -208,6 +224,35 @@ afterEach(() => {
 });
 
 describe('saved role identities through their rendered rows and real transport', () => {
+  it('distinguishes roles differing only by saved ID before any edit or deletion', async () => {
+    saved = [
+      structuredClone(originalRoles[0]),
+      { ...structuredClone(originalRoles[0]), id: originalRoles[1].id },
+    ];
+    render(() => <RolesPanel currentUser="role-maintainer" canManage />);
+    await screen.findByText(saved[1].id);
+    expect(screen.getAllByText(saved[0].name)).toHaveLength(2);
+    expect(screen.getAllByText(saved[0].description)).toHaveLength(2);
+    for (const role of saved) {
+      expect(rowFor(role).getByText(role.id)).toBeInTheDocument();
+      expect(
+        screen.getAllByRole('button', { name: `Edit role ${role.name} (Role ID: ${role.id})` }),
+      ).toHaveLength(1);
+      expect(
+        screen.getAllByRole('button', { name: `Delete role ${role.name} (Role ID: ${role.id})` }),
+      ).toHaveLength(1);
+    }
+    const role = saved[1];
+    const editor = await openEditor(role);
+    expect(within(editor).getByText(role.id)).toBeInTheDocument();
+    fireEvent.click(within(editor).getByRole('button', { name: 'Cancel' }));
+    const confirmation = await openDeletion(role);
+    expect(within(confirmation).getByText(role.id)).toBeInTheDocument();
+    fireEvent.click(within(confirmation).getByRole('button', { name: 'Cancel' }));
+    expect(writes()).toHaveLength(0);
+    expectBoundRequests();
+  });
+
   it('edits only the selected namesake and reopens its complete saved policy after reordered reads', async () => {
     await openPanel();
     const dialog = await openEditor();
@@ -315,13 +360,17 @@ describe('saved role identities through their rendered rows and real transport',
       const check = await screen.findByRole('button', { name: 'Check saved roles' });
       const notice = screen.getByRole('alert');
       expect(notice).toHaveTextContent(
-        `The ${operation === 'edit' ? 'save' : 'deletion'} of role "${selected.name}" could not be confirmed.`,
+        `The ${operation === 'edit' ? 'save' : 'deletion'} of role ${selected.name} (Role ID: ${selected.id}) could not be confirmed.`,
       );
       expect(notice).not.toHaveTextContent('PRIVATE');
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
       expect(screen.queryByText('No roles available.')).not.toBeInTheDocument();
       expect(screen.queryByRole('status')).not.toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: 'Edit role' })).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', {
+          name: `Edit role ${selected.name} (Role ID: ${selected.id})`,
+        }),
+      ).not.toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'New Role' })).toBeDisabled();
       expect(reads()).toHaveLength(1);
       expect(writes()).toHaveLength(1);

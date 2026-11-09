@@ -22,6 +22,13 @@ interface UserIdentityPresentation {
   providerId?: string;
 }
 
+export function getRoleIdentityLabel(role: { id: string; name: string }): string {
+  // Names are mutable and need not be unique. Never normalize the saved key.
+  return role.name.trim() && role.name !== role.id
+    ? `${role.name} (Role ID: ${role.id})`
+    : `Role ID: ${role.id}`;
+}
+
 export function getUserIdentityDisplayName(user: UserIdentityPresentation): string {
   return user.displayName?.trim() || user.email?.trim() || user.username;
 }

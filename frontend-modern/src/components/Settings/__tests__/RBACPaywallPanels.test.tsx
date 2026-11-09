@@ -209,7 +209,9 @@ describe('RBAC paywall settings panels', () => {
     const auditor = within(auditorName.closest('tr')!);
     // CSS chooses the phone identity cell or desktop column; every projection
     // must retain every grant rather than a count or an editable-only summary.
-    const lists = auditor.getAllByRole('list', { name: 'Permissions for Saved auditor' });
+    const lists = auditor.getAllByRole('list', {
+      name: 'Permissions for Saved auditor (Role ID: auditor)',
+    });
     for (const list of lists) {
       expect(within(list).getAllByRole('listitem')).toHaveLength(permissions.length);
       for (const permission of permissions) {
@@ -223,8 +225,12 @@ describe('RBAC paywall settings panels', () => {
     const draft = within(screen.getByText('Draft role').closest('tr')!);
     expect(draft.getAllByText('No permissions').length).toBeGreaterThan(0);
     expect(draft.queryByRole('list')).not.toBeInTheDocument();
-    expect(draft.getByRole('button', { name: 'Edit role' })).toBeEnabled();
-    expect(draft.getByRole('button', { name: 'Delete role' })).toBeEnabled();
+    expect(
+      draft.getByRole('button', { name: 'Edit role Draft role (Role ID: draft)' }),
+    ).toBeEnabled();
+    expect(
+      draft.getByRole('button', { name: 'Delete role Draft role (Role ID: draft)' }),
+    ).toBeEnabled();
     expect(getRolesMock).toHaveBeenCalledTimes(1);
   });
 
@@ -241,7 +247,9 @@ describe('RBAC paywall settings panels', () => {
 
     render(() => <RolesPanel />);
 
-    const edit = await screen.findByRole('button', { name: 'Edit role' });
+    const edit = await screen.findByRole('button', {
+      name: 'Edit role Operator (Role ID: operator)',
+    });
     // The negative margin keeps the 44px phone target inside the row's
     // existing height, so custom roles line up with built-in ones.
     expect(edit).toHaveClass(
@@ -252,14 +260,48 @@ describe('RBAC paywall settings panels', () => {
       'sm:min-h-0',
       'sm:min-w-0',
     );
-    expect(screen.getByRole('button', { name: 'Delete role' })).toHaveClass(
-      '-my-2',
-      'sm:my-0',
-      'min-h-11',
-      'min-w-11',
-      'sm:min-h-0',
-      'sm:min-w-0',
-    );
+    expect(
+      screen.getByRole('button', { name: 'Delete role Operator (Role ID: operator)' }),
+    ).toHaveClass('-my-2', 'sm:my-0', 'min-h-11', 'min-w-11', 'sm:min-h-0', 'sm:min-w-0');
+  });
+
+  it('shows the saved ID beside same-name role choices without changing saved-permission or kept-ID meaning', async () => {
+    hasFeatureMock.mockReturnValue(true);
+    const common = {
+      name: 'Fleet auditor',
+      description: 'Saved policy',
+      permissions: [{ action: 'read', resource: 'nodes' }],
+    };
+    getRolesMock.mockResolvedValue([
+      { ...common, id: 'fleet/north' },
+      { ...common, id: 'fleet/south' },
+    ]);
+    getUsersMock.mockResolvedValue([
+      { username: 'operator', roleIds: ['fleet/north', 'fleet/south', 'saved/unlisted'] },
+    ]);
+    getUserPermissionsMock.mockResolvedValue([{ action: 'read', resource: 'nodes' }]);
+    render(() => <UserAssignmentsPanel currentUser="maintainer" canManage />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Manage access for operator' }));
+    const dialog = within(await screen.findByRole('dialog', { name: 'Manage access: operator' }));
+    for (const id of ['fleet/north', 'fleet/south']) {
+      const choices = dialog.getAllByRole('checkbox', {
+        name: `Fleet auditor (Role ID: ${id}) Saved policy`,
+      });
+      expect(choices).toHaveLength(1);
+      expect(choices[0]).toBeChecked();
+      expect(dialog.getByText(id)).toBeInTheDocument();
+    }
+    expect(await dialog.findByText('nodes')).toBeInTheDocument();
+    expect(
+      dialog.getByText(
+        'This read checks saved roles only. Unsaved role selections are not included.',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(dialog.getByRole('list', { name: 'Kept saved role IDs' })).getByText('saved/unlisted'),
+    ).toBeInTheDocument();
+    expect(dialog.getAllByRole('checkbox')).toHaveLength(2);
+    expect(updateUserRolesMock).not.toHaveBeenCalled();
   });
 
   it('fails closed with a persistent retry notice when roles cannot be read', async () => {
@@ -296,8 +338,14 @@ describe('RBAC paywall settings panels', () => {
     getRolesMock.mockResolvedValue([north]);
     deleteRoleMock.mockRejectedValueOnce(new Error('PRIVATE DETAIL'));
     render(() => <RolesPanel currentUser="reader-a" canManage={true} />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Delete role' }));
-    const dialog = await screen.findByRole('dialog', { name: `Delete role: ${north.name}` });
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: `Delete role ${north.name} (Role ID: ${north.id})`,
+      }),
+    );
+    const dialog = await screen.findByRole('dialog', {
+      name: `Delete role: ${north.name} (Role ID: ${north.id})`,
+    });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Delete Role' }));
     const notice = await screen.findByRole('alert');
     expect(notice).toHaveTextContent('could not be confirmed');

@@ -15,6 +15,33 @@
 
 ## Purpose
 
+### Saved role IDs distinguish namesake access decisions
+
+Roles and User Access display the complete saved role ID separately from its
+mutable name. Role actions, permission-list labels, edit/delete dialogs and
+save/deletion outcome messages identify that same key, including when only the
+ID distinguishes two roles. IDs are neither normalized nor inferred from names;
+long values wrap, and visible IDs use bidi isolation. The existing role editor
+still keeps its saved ID field disabled. Individual permissions, descriptions,
+built-in read-only status and all existing controls remain available.
+
+User Access shows each assigned role's ID in its inventory and role choices.
+An assigned ID absent from the current catalogue is labelled as not in the role
+list and is shown read-only in the editor as a saved ID kept on save. It gains
+no new toggle or grant authority. Saved permissions remain explicitly distinct
+from unsaved selections. Compact phone editor spacing preserves the existing
+choice/context/control visibility alongside the additional identity text.
+
+The normal frontend suite covers namesake/empty/ID-looking names, unique exact
+accessible labels, unchanged keys, both namesakes assigned, preserved unlisted
+IDs, and cancelled/confirmed decisions. Real-client transport regressions check
+the exact encoded mutation targets, saved payload/readback, sibling isolation
+and uncertain-result recovery without replaying writes. Comparable native
+Settings-shell/panel desktop and phone light/dark browser fixtures establish
+presentation and consuming-client behavior, not full App/IdP, original-client
+recovery, installed acceptance or release availability. Auth, CSRF, tenant and
+accepted-row lifetime fences and backend mutation policies are unchanged.
+
 ### Organization members keep identity and access controls together on phones
 
 The existing Organization Access member table wraps complete saved user IDs,

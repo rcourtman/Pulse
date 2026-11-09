@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  getRoleIdentityLabel,
   getRBACFeatureGateCopy,
   getRolesDeleteErrorMessage,
   getRolesEmptyState,
@@ -16,6 +17,21 @@ import {
 } from '@/utils/rbacPresentation';
 
 describe('rbacPresentation', () => {
+  it('identifies namesake roles by their unchanged saved keys, not mutable names', () => {
+    expect(getRoleIdentityLabel({ id: 'policy/north:read', name: 'Fleet auditor' })).toBe(
+      'Fleet auditor (Role ID: policy/north:read)',
+    );
+    expect(getRoleIdentityLabel({ id: 'policy/south:read', name: 'Fleet auditor' })).toBe(
+      'Fleet auditor (Role ID: policy/south:read)',
+    );
+    expect(getRoleIdentityLabel({ id: 'viewer', name: 'viewer' })).toBe('Role ID: viewer');
+    expect(getRoleIdentityLabel({ id: 'ops ', name: '' })).toBe('Role ID: ops ');
+    expect(getRoleIdentityLabel({ id: 'ops', name: '  ' })).toBe('Role ID: ops');
+    expect(getRoleIdentityLabel({ id: 'actual/key', name: 'Viewer (policy/admin)' })).toBe(
+      'Viewer (policy/admin) (Role ID: actual/key)',
+    );
+  });
+
   it('returns canonical feature gate copy', () => {
     expect(getRBACFeatureGateCopy('roles')).toMatchObject({
       title: 'Custom Roles',

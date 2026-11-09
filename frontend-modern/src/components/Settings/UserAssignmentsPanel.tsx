@@ -219,12 +219,28 @@ export const UserAssignmentsPanel: Component<UserAssignmentsPanelProps> = (props
                       <span class="text-xs text-slate-400 italic">No roles assigned</span>
                     </Show>
                     <For each={assignment.roleIds}>
-                      {(roleId) => (
-                        <span class="inline-flex max-w-full items-center gap-1 whitespace-normal [overflow-wrap:anywhere] rounded-md bg-surface-alt px-2 py-0.5 text-xs font-medium text-base-content border border-border">
-                          <Shield class="w-3 h-3 shrink-0" />
-                          {state.getRoleName(roleId)}
-                        </span>
-                      )}
+                      {(roleId) => {
+                        const role = () =>
+                          state.roles().find((candidate) => candidate.id === roleId);
+                        return (
+                          <span class="inline-flex max-w-full items-start gap-1 whitespace-normal [overflow-wrap:anywhere] rounded-md bg-surface-alt px-2 py-0.5 text-xs font-medium text-base-content border border-border">
+                            <Shield class="mt-0.5 w-3 h-3 shrink-0" />
+                            <span class="min-w-0">
+                              <Show when={role()?.name.trim() && role()?.name !== roleId}>
+                                <bdi class="block">{role()!.name}</bdi>
+                              </Show>
+                              <span class="block text-[10px] leading-4 text-muted">
+                                Role ID: <bdi class="font-mono whitespace-pre-wrap">{roleId}</bdi>
+                              </span>
+                              <Show when={!role()}>
+                                <span class="block text-[10px] leading-4 text-muted">
+                                  Not in role list
+                                </span>
+                              </Show>
+                            </span>
+                          </span>
+                        );
+                      }}
                     </For>
                   </div>
                 ),

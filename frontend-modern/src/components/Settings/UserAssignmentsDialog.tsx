@@ -7,6 +7,7 @@ import BadgeCheck from 'lucide-solid/icons/badge-check';
 import Shield from 'lucide-solid/icons/shield';
 import X from 'lucide-solid/icons/x';
 import {
+  getRoleIdentityLabel,
   getUserIdentityDisplayName,
   getUserIdentityLabel,
   getUserIdentityProviderLabel,
@@ -86,7 +87,7 @@ export const UserAssignmentsDialog: Component<UserAssignmentsDialogProps> = (pro
           </button>
         </div>
 
-        <div class="min-h-0 overflow-y-auto px-4 sm:px-6 py-6 space-y-8">
+        <div class="min-h-0 overflow-y-auto px-4 sm:px-6 py-4 space-y-4 sm:py-6 sm:space-y-8">
           <Show when={props.actionError}>
             {(message) => (
               <InlineNotice tone="danger" role="alert" aria-live="polite">
@@ -94,7 +95,7 @@ export const UserAssignmentsDialog: Component<UserAssignmentsDialogProps> = (pro
               </InlineNotice>
             )}
           </Show>
-          <div class="space-y-4">
+          <div class="space-y-2 sm:space-y-4">
             <h4 class="text-sm font-semibold text-base-content flex items-center gap-2">
               <Shield class="w-4 h-4 text-blue-500" />
               Select Roles
@@ -103,20 +104,30 @@ export const UserAssignmentsDialog: Component<UserAssignmentsDialogProps> = (pro
               <For each={props.roles}>
                 {(role) => (
                   <label
-                    class={`flex flex-col p-3 rounded-md border transition-all cursor-pointer ${props.formRoleIds.includes(role.id) ? 'bg-blue-50 border-blue-200 dark:bg-blue-900/25 dark:border-blue-800' : 'bg-surface border-border hover:border-blue-100 dark:hover:border-blue-900/25'}`}
+                    class={`flex min-w-0 flex-col p-2 sm:p-3 rounded-md border transition-all cursor-pointer [overflow-wrap:anywhere] ${props.formRoleIds.includes(role.id) ? 'bg-blue-50 border-blue-200 dark:bg-blue-900/25 dark:border-blue-800' : 'bg-surface border-border hover:border-blue-100 dark:hover:border-blue-900/25'}`}
                   >
                     <div class="flex items-start justify-between gap-2 mb-1">
-                      <div class="flex items-center gap-2 shadow-xs">
+                      <div class="flex min-w-0 items-start gap-2 shadow-xs">
                         <input
                           type="checkbox"
+                          aria-label={`${getRoleIdentityLabel(role)} ${role.description}`.trim()}
                           checked={props.formRoleIds.includes(role.id)}
                           onChange={() => props.onToggleRole(role.id)}
-                          class="w-4 h-4 text-blue-600 rounded-sm border-border focus:ring-blue-500"
+                          class="mt-0.5 w-4 h-4 shrink-0 text-blue-600 rounded-sm border-border focus:ring-blue-500"
                         />
-                        <span class="text-sm font-semibold text-base-content">{role.name}</span>
+                        <span class="min-w-0">
+                          <Show when={role.name.trim() && role.name !== role.id}>
+                            <bdi class="block text-sm font-semibold text-base-content">
+                              {role.name}
+                            </bdi>
+                          </Show>
+                          <span class="block text-[10px] leading-4 text-muted">
+                            Role ID: <bdi class="font-mono whitespace-pre-wrap">{role.id}</bdi>
+                          </span>
+                        </span>
                       </div>
                       <Show when={role.isBuiltIn}>
-                        <BadgeCheck class="w-4 h-4 text-blue-500" />
+                        <BadgeCheck class="w-4 h-4 shrink-0 text-blue-500" />
                       </Show>
                     </div>
                     <p class="text-xs text-muted line-clamp-2 leading-relaxed pl-6">
@@ -183,6 +194,26 @@ export const UserAssignmentsDialog: Component<UserAssignmentsDialogProps> = (pro
               <p class="mt-4 text-xs text-muted">
                 This read checks saved roles only. Unsaved role selections are not included.
               </p>
+              <Show
+                when={props.formRoleIds.filter((id) => !props.roles.some((role) => role.id === id))}
+              >
+                {(unlisted) => (
+                  <Show when={unlisted().length > 0}>
+                    <div class="mt-3 space-y-1 text-xs text-muted">
+                      <p>Saved role IDs not in this list are kept when you save:</p>
+                      <ul aria-label="Kept saved role IDs" class="space-y-1">
+                        <For each={unlisted()}>
+                          {(id) => (
+                            <li class="[overflow-wrap:anywhere]">
+                              Role ID: <bdi class="font-mono whitespace-pre-wrap">{id}</bdi>
+                            </li>
+                          )}
+                        </For>
+                      </ul>
+                    </div>
+                  </Show>
+                )}
+              </Show>
             </div>
           </div>
         </div>

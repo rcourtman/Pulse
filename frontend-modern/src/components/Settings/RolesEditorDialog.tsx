@@ -4,6 +4,7 @@ import { Dialog } from '@/components/shared/Dialog';
 import { FormSelect } from '@/components/shared/FormSelect';
 import type { Permission, Role } from '@/types/rbac';
 import { RBAC_PERMISSION_ACTIONS, RBAC_PERMISSION_RESOURCES } from '@/utils/rbacPermissions';
+import { getRoleIdentityLabel } from '@/utils/rbacPresentation';
 import Plus from 'lucide-solid/icons/plus';
 import Trash2 from 'lucide-solid/icons/trash-2';
 import X from 'lucide-solid/icons/x';
@@ -34,20 +35,31 @@ export const RolesEditorDialog: Component<RolesEditorDialogProps> = (props) => (
       onClose={props.onClose}
       panelClass="max-w-2xl"
       closeOnBackdrop={false}
-      ariaLabel={props.editingRole ? 'Edit role' : 'New role'}
+      ariaLabel={
+        props.editingRole ? `Edit role: ${getRoleIdentityLabel(props.editingRole)}` : 'New role'
+      }
     >
       <div class="flex min-h-0 w-full flex-col">
         <div class="flex shrink-0 items-start justify-between gap-3 px-4 sm:px-6 py-4 border-b border-border">
-          <h3 class="text-lg font-semibold text-base-content">
-            {props.editingRole ? 'Edit Role' : 'New Role'}
-          </h3>
+          <div class="min-w-0 [overflow-wrap:anywhere]">
+            <h3 class="text-lg font-semibold text-base-content">
+              {props.editingRole ? 'Edit Role' : 'New Role'}
+            </h3>
+            <Show when={props.editingRole}>
+              {(role) => (
+                <p class="text-xs text-muted">
+                  Role ID: <bdi class="font-mono whitespace-pre-wrap">{role().id}</bdi>
+                </p>
+              )}
+            </Show>
+          </div>
           <button
             type="button"
             onClick={props.onClose}
             disabled={props.saving}
             aria-label="Close role editor"
             title="Close"
-            class="p-1.5 rounded-md text-slate-500 hover:text-base-content hover:bg-surface-hover"
+            class="shrink-0 p-1.5 rounded-md text-slate-500 hover:text-base-content hover:bg-surface-hover"
           >
             <X class="w-5 h-5" />
           </button>
