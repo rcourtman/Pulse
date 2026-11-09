@@ -211,7 +211,7 @@ func (r *Router) handleSAMLACS(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	provider := r.getSSOProvider(providerID)
+	provider, policyRevision := r.currentSSOCallbackPolicy(providerID)
 	if provider == nil || provider.Type != config.SSOProviderTypeSAML || !provider.Enabled {
 		r.redirectSAMLError(w, req, "", "provider_not_found")
 		return
@@ -220,6 +220,14 @@ func (r *Router) handleSAMLACS(w http.ResponseWriter, req *http.Request) {
 	service := r.samlManager.GetService(providerID)
 	if service == nil {
 		r.redirectSAMLError(w, req, "", "provider_not_initialized")
+		return
+	}
+
+	// A saved trust/claim change may already be published while its replacement
+	// service is still initializing (or failed initialization). The old verifier
+	// cannot authorize a callback under that new saved configuration.
+	if !service.matchesConfig(provider.SAML) {
+		r.redirectSAMLError(w, req, "", "invalid_state")
 		return
 	}
 
@@ -298,46 +306,56 @@ func (r *Router) handleSAMLACS(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// RBAC Integration: Map SAML groups to Pulse roles under the stable SSO
-	// principal. When mappings are configured they are authoritative, including
-	// the case where the current assertion maps to no roles.
-	if authManager := internalauth.GetManager(); authManager != nil {
-		rolesToAssign := resolveGroupRoles(result.Groups, provider.GroupRoleMappings)
+	// Signature and browser binding prove the response, not current saved
+	// policy. Fence only local effects; body reads and validation stay outside.
+	err = r.commitSSOCallback(providerID, policyRevision, provider, func() error {
+		// RBAC Integration: Map SAML groups to Pulse roles under the stable SSO
+		// principal. When mappings are configured they are authoritative, including
+		// the case where the current assertion maps to no roles.
+		if authManager := internalauth.GetManager(); authManager != nil {
+			rolesToAssign := resolveGroupRoles(result.Groups, provider.GroupRoleMappings)
 
-		legacyCandidates := ssoLegacyPrincipalCandidates(result.Username, result.Email, result.NameID)
-		roleErr := applySSORoleAssignments(authManager, principal, legacyCandidates, rolesToAssign, len(provider.GroupRoleMappings) > 0, false)
-		if roleErr != nil {
-			log.Error().Err(roleErr).Str("user", principal).Str("display_user", result.Username).Msg("Failed to update SAML user roles")
-			if len(rolesToAssign) > 0 {
-				LogAuditEventForTenant(GetOrgID(req.Context()), "saml_role_assignment", principal, GetClientIP(req), req.URL.Path, false, "Failed to auto-assign roles: "+strings.Join(rolesToAssign, ", "))
+			legacyCandidates := ssoLegacyPrincipalCandidates(result.Username, result.Email, result.NameID)
+			roleErr := applySSORoleAssignments(authManager, principal, legacyCandidates, rolesToAssign, len(provider.GroupRoleMappings) > 0, false)
+			if roleErr != nil {
+				log.Error().Err(roleErr).Str("user", principal).Str("display_user", result.Username).Msg("Failed to update SAML user roles")
+				if len(rolesToAssign) > 0 {
+					LogAuditEventForTenant(GetOrgID(req.Context()), "saml_role_assignment", principal, GetClientIP(req), req.URL.Path, false, "Failed to auto-assign roles: "+strings.Join(rolesToAssign, ", "))
+				}
+			} else if len(rolesToAssign) > 0 {
+				log.Info().
+					Str("user", principal).
+					Str("display_user", result.Username).
+					Strs("mapped_roles", rolesToAssign).
+					Msg("Auto-assigning roles based on SAML group mapping")
+				LogAuditEventForTenant(GetOrgID(req.Context()), "saml_role_assignment", principal, GetClientIP(req), req.URL.Path, true, "Auto-assigned roles: "+strings.Join(rolesToAssign, ", "))
 			}
-		} else if len(rolesToAssign) > 0 {
-			log.Info().
-				Str("user", principal).
-				Str("display_user", result.Username).
-				Strs("mapped_roles", rolesToAssign).
-				Msg("Auto-assigning roles based on SAML group mapping")
-			LogAuditEventForTenant(GetOrgID(req.Context()), "saml_role_assignment", principal, GetClientIP(req), req.URL.Path, true, "Auto-assigned roles: "+strings.Join(rolesToAssign, ", "))
+			if err := recordSSOIdentity(authManager, principal, internalauth.UserIdentityMetadata{
+				DisplayName:  result.Username,
+				Email:        result.Email,
+				ProviderType: string(config.SSOProviderTypeSAML),
+				ProviderID:   providerID,
+				LastLoginAt:  time.Now(),
+			}); err != nil {
+				log.Error().Err(err).Str("user", principal).Str("display_user", result.Username).Msg("Failed to record SAML identity metadata")
+			}
 		}
-		if err := recordSSOIdentity(authManager, principal, internalauth.UserIdentityMetadata{
-			DisplayName:  result.Username,
-			Email:        result.Email,
-			ProviderType: string(config.SSOProviderTypeSAML),
+
+		// Store SAML session info for potential SLO
+		samlSession := &SAMLSessionInfo{
 			ProviderID:   providerID,
-			LastLoginAt:  time.Now(),
-		}); err != nil {
-			log.Error().Err(err).Str("user", principal).Str("display_user", result.Username).Msg("Failed to record SAML identity metadata")
+			NameID:       result.NameID,
+			SessionIndex: result.SessionIdx,
 		}
-	}
 
-	// Store SAML session info for potential SLO
-	samlSession := &SAMLSessionInfo{
-		ProviderID:   providerID,
-		NameID:       result.NameID,
-		SessionIndex: result.SessionIdx,
+		return r.establishSAMLSession(w, req, principal, result.Username, samlSession)
+	})
+	if errors.Is(err, errSSOCallbackPolicyChanged) {
+		LogAuditEventForTenant(GetOrgID(req.Context()), "saml_login", "", GetClientIP(req), req.URL.Path, false, "Provider policy changed during sign-in")
+		r.redirectSAMLError(w, req, relayState, "invalid_state")
+		return
 	}
-
-	if err := r.establishSAMLSession(w, req, principal, result.Username, samlSession); err != nil {
+	if err != nil {
 		log.Error().Err(err).Msg("Failed to establish session after SAML login")
 		LogAuditEventForTenant(GetOrgID(req.Context()), "saml_login", principal, GetClientIP(req), req.URL.Path, false, "Session creation failed")
 		r.redirectSAMLError(w, req, relayState, "session_failed")

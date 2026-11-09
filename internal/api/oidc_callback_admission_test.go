@@ -13,7 +13,7 @@ func TestOIDCCallbackPolicyLocalCommitOrdering(t *testing.T) {
 	if err := r.ssoConfig.AddProvider(p); err != nil {
 		t.Fatal(err)
 	}
-	provider, revision := r.currentOIDCCallbackPolicy(p.ID)
+	provider, revision := r.currentSSOCallbackPolicy(p.ID)
 	entered, release, done := make(chan struct{}), make(chan struct{}), make(chan struct{})
 	var releaseOnce sync.Once
 	unblock := func() { releaseOnce.Do(func() { close(release) }) }
@@ -21,7 +21,7 @@ func TestOIDCCallbackPolicyLocalCommitOrdering(t *testing.T) {
 	var completionErr error
 	go func() {
 		defer close(done)
-		completionErr = r.commitOIDCCallback(p.ID, revision, provider, func() error { close(entered); <-release; return nil })
+		completionErr = r.commitSSOCallback(p.ID, revision, provider, func() error { close(entered); <-release; return nil })
 	}()
 	awaitOIDCInitialization(t, entered)
 	// The final local effects own a shared publication fence, not an IdP-wide
@@ -48,7 +48,7 @@ func TestOIDCCallbackPolicyLocalCommitOrdering(t *testing.T) {
 		t.Fatalf("withdrawal: %v %v", apply, save)
 	}
 	called := false
-	if err := r.commitOIDCCallback(p.ID, revision, provider, func() error { called = true; return nil }); err != errOIDCCallbackPolicyChanged || called {
+	if err := r.commitSSOCallback(p.ID, revision, provider, func() error { called = true; return nil }); err != errSSOCallbackPolicyChanged || called {
 		t.Fatalf("superseded local completion ran: called=%v err=%v", called, err)
 	}
 }

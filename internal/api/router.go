@@ -142,7 +142,7 @@ type Router struct {
 	samlManager                     *SAMLServiceManager
 	ssoMu                           sync.RWMutex // guards ssoConfig; a published config is never mutated (see commitSSOConfig)
 	ssoConfig                       *config.SSOConfig
-	ssoPolicyRevisions              map[string]uint64 // guarded by ssoMu; only tracks observed OIDC callbacks
+	ssoPolicyRevisions              map[string]uint64 // guarded by ssoMu; only tracks observed SSO callbacks
 	ssoNextPolicyRevision           uint64
 	ssoAuthLoadFailed               atomic.Bool
 	sessionStore                    *SessionStore

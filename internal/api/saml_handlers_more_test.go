@@ -36,8 +36,11 @@ func newTestSAMLService(t *testing.T, providerID string, metadataXML string) *SA
 }
 
 func TestHandleSAMLACS_ProcessResponseError(t *testing.T) {
-	router := newSAMLRouter(t, testSAMLProvider("okta", true))
-	router.samlManager.services["okta"] = &SAMLService{}
+	provider := testSAMLProvider("okta", true)
+	router := newSAMLRouter(t, provider)
+	// Match saved policy so this still reaches the response-validation error,
+	// rather than the earlier stale-service admission rejection.
+	router.samlManager.services["okta"] = &SAMLService{config: provider.SAML}
 
 	req := httptest.NewRequest(http.MethodPost, "/api/saml/okta/acs", nil)
 	rec := httptest.NewRecorder()

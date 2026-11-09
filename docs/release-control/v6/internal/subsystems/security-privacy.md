@@ -18,6 +18,37 @@
 
 ## Purpose
 
+### SAML callback completion retains current saved-provider authority
+
+Native SAML ACS captures its immutable saved provider and policy revision before
+reading the posted body or validating an assertion. It shares OIDC's existing
+per-provider publication fence: successful saved disable/delete, type, trust,
+claim, restriction or mapping changes invalidate an admitted completion, even
+when values are reverted. Unknown saved authority refuses completion. Failed
+saves, presentation-only edits and changes to another provider preserve it.
+An initialized service must also match saved SAML trust/claim configuration; a
+slow or failed replacement cannot leave the old verifier authoritative.
+
+After unchanged signature, issuer/audience, expiry, InResponseTo and browser
+binding checks, only final local role/identity/session effects hold the shared
+configuration read lock. No body read, assertion validation, artifact HTTP or
+response-body write holds it. Superseded callbacks return existing invalid-state
+retry without cookies, role/identity writes or replacing an existing local
+session. Explicit IdP-initiated opt-in keeps its existing behavior; this is not
+a new replay gate for deliberately unsolicited responses. Already-issued
+sessions and the whole SAML service initialization lifecycle are not changed.
+
+`TestSAMLCallbackPolicyWithdrawal` uses signed synthetic SAML and a real body-read
+barrier while management/persistence publish changes; it verifies both denied
+and valid controls, saved-policy reversion, snapshot writes, session preservation
+and the existing opt-in/replay distinction. `TestSAMLCallbackRejectsMismatchedService`
+covers old verifier/new saved-policy admission. Both SAML and OIDC local-commit
+ordering tests pin publication exclusion and concurrent immutable reads.
+Available native proof does not substitute for comparable consuming Login
+browser/pixel checks, full-App/live-IdP, installed/original-client recovery or
+measured impact. Routes, wire payloads, credentials, grants and extension APIs
+remain unchanged.
+
 ### Password changes belong to their admitted settings reader
 
 The existing password dialog receives the Settings status reader, not an

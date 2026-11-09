@@ -239,6 +239,14 @@ func NewSAMLService(ctx context.Context, providerID string, cfg *config.SAMLProv
 	return service, nil
 }
 
+// matchesConfig prevents an old initialized verifier from standing in for a
+// changed saved trust/claim policy. Configurations are immutable snapshots.
+func (s *SAMLService) matchesConfig(cfg *config.SAMLProviderConfig) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return cfg != nil && reflect.DeepEqual(s.config, cfg)
+}
+
 func newSAMLHTTPClient() *http.Client {
 	return newSSOHTTPClient(30*time.Second, nil)
 }
