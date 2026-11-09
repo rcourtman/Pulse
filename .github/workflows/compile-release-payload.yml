@@ -148,6 +148,10 @@ jobs:
           set -euo pipefail
           test "$(tr -d '\n' < VERSION)" = "${VERSION}"
           test "$(git rev-parse HEAD)" = "${EXPECTED_SOURCE_SHA}"
+          # Fetch before go run/build, so only known transport failures can
+          # retry. Compilation, integrity errors and refusals stay fatal.
+          sh ./scripts/go-mod-download.sh
+          git diff --exit-code -- go.mod go.sum
           ./scripts/build-secure-runtime-qualification.sh \
             "${VERSION}" \
             "$RUNNER_TEMP/secure-runtime-qualification" \

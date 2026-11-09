@@ -1,6 +1,7 @@
 #!/bin/sh
-# Recover only the observed HTTP/2 proxy stream failure, never an access,
-# checksum, manifest or unknown error. Keep the same Go proxy and sumdb.
+# Recover only the observed HTTP/2 proxy stream failure or official-proxy TLS
+# handshake timeout, never an access, certificate, checksum, manifest or unknown
+# error. Keep the same Go proxy and sumdb.
 set -eu
 
 if [ "$#" -ne 0 ]; then
@@ -28,16 +29,17 @@ while :; do
     if [ "$status" -ne 1 ] || [ "$attempt" -eq 3 ]; then
         exit "$status"
     fi
-    # Every diagnostic must be the specific transport failure. A refusal or
+    # Every diagnostic must be a specific transport failure. A refusal or
     # integrity error alongside it takes precedence and stops this attempt.
     if ! LC_ALL=C awk '
         /^go: [^[:space:]]+@[^[:space:]]+: read "https:\/\/[^"[:space:]]+": stream error: stream ID [0-9]+; INTERNAL_ERROR; received from peer$/ { seen = 1; next }
+        /^go: [^[:space:]]+@[^[:space:]]+: Get "https:\/\/proxy\.golang\.org\/[^"[:space:]]+": net\/http: TLS handshake timeout$/ { seen = 1; next }
         { unknown = 1 }
         END { exit !(seen && !unknown) }
     ' "$log"; then
         exit "$status"
     fi
-    echo "Go module proxy stream failed; retrying the same download ($attempt/3)." >&2
+    echo "Go module proxy transport failed; retrying the same download ($attempt/3)." >&2
     sleep "$((attempt * 2))"
     attempt=$((attempt + 1))
 done
