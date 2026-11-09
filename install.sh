@@ -5174,42 +5174,65 @@ setup_auto_updates() {
         return 0
     fi
 
-    # Enable timer but don't start it yet
-    safe_systemctl enable "$update_timer_unit" || true
-
-    # Update system.json to enable auto-updates
-    if [[ -f "$config_dir/system.json" ]]; then
-        # Update existing file
-        local temp_file="/tmp/system_$$.json"
-        if command -v jq &> /dev/null; then
-            jq --arg channel "$desired_channel" '.autoUpdateEnabled = true | .updateChannel = $channel' "$config_dir/system.json" > "$temp_file" && mv "$temp_file" "$config_dir/system.json"
-        else
-            # Fallback to sed if jq not available
-            # First check if autoUpdateEnabled already exists in the file
-            if grep -q '"autoUpdateEnabled"' "$config_dir/system.json"; then
-                # Field exists, update its value
-                sed -i 's/"autoUpdateEnabled":[^,}]*/"autoUpdateEnabled":true/' "$config_dir/system.json"
-            else
-                # Field doesn't exist, add it after the opening brace
-                sed -i 's/^{/{\"autoUpdateEnabled\":true,/' "$config_dir/system.json"
-            fi
-            if grep -q '"updateChannel"' "$config_dir/system.json"; then
-                sed -i "s/\"updateChannel\":[^,}]*/\"updateChannel\":\"$desired_channel\"/" "$config_dir/system.json"
-            else
-                sed -i "s/^{/{\"updateChannel\":\"$desired_channel\",/" "$config_dir/system.json"
-            fi
-        fi
-    else
-        # Create new file with auto-updates enabled
-        printf '{"autoUpdateEnabled":true,"updateChannel":"%s","pollingInterval":5}\n' "$desired_channel" > "$config_dir/system.json"
+    # Updater setup is optional: a failure must not prevent the main flow from
+    # restarting monitoring. But a failed command is not successful enablement.
+    if ! safe_systemctl enable "$update_timer_unit"; then
+        print_warn "Automatic update setup is incomplete: could not enable $update_timer_unit. Saved update preferences were not changed."
+        print_info "Inspect the timer before retrying: systemctl status $update_timer_unit"
+        ENABLE_AUTO_UPDATES=false
+        return 0
     fi
-    
-    chown pulse:pulse "$config_dir/system.json" 2>/dev/null || true
-    
-    # Start the timer
-    safe_systemctl start "$update_timer_unit" || true
 
-    print_success "Automatic updates enabled (daily check between 02:00 and 06:00)"
+    # Stage the entire preference change beside the destination. A failed jq,
+    # sed or rename must preserve the old configuration, not start the timer
+    # against partially written preferences or report setup as complete.
+    local staged_config="" config_saved=false
+    if staged_config=$(mktemp "$config_dir/.system.json.XXXXXX"); then
+        if [[ -f "$config_dir/system.json" ]]; then
+            if command -v jq &> /dev/null; then
+                if jq --arg channel "$desired_channel" '.autoUpdateEnabled = true | .updateChannel = $channel' "$config_dir/system.json" > "$staged_config"; then
+                    config_saved=true
+                fi
+            elif cp "$config_dir/system.json" "$staged_config"; then
+                # Keep the existing no-jq fallback, but apply both edits only
+                # to the staged copy and require each edit to succeed.
+                local enable_edit='s/^{/{"autoUpdateEnabled":true,/'
+                local channel_edit="s/^{/{\"updateChannel\":\"$desired_channel\",/"
+                if grep -q '"autoUpdateEnabled"' "$staged_config"; then
+                    enable_edit='s/"autoUpdateEnabled":[^,}]*/"autoUpdateEnabled":true/'
+                fi
+                if grep -q '"updateChannel"' "$staged_config"; then
+                    channel_edit="s/\"updateChannel\":[^,}]*/\"updateChannel\":\"$desired_channel\"/"
+                fi
+                if sed -i "$enable_edit" "$staged_config" && sed -i "$channel_edit" "$staged_config"; then
+                    config_saved=true
+                fi
+            fi
+        elif printf '{"autoUpdateEnabled":true,"updateChannel":"%s","pollingInterval":5}\n' "$desired_channel" > "$staged_config"; then
+            config_saved=true
+        fi
+    fi
+    if [[ "$config_saved" != true ]] || ! mv "$staged_config" "$config_dir/system.json"; then
+        [[ -z "$staged_config" ]] || rm -f "$staged_config"
+        print_warn "Automatic update setup is incomplete: could not save update preferences. The previous configuration was preserved; the timer may already be enabled, but no start was requested."
+        print_info "Inspect the timer before retrying: systemctl status $update_timer_unit"
+        ENABLE_AUTO_UPDATES=false
+        return 0
+    fi
+
+    chown pulse:pulse "$config_dir/system.json" 2>/dev/null || true
+
+    if ! safe_systemctl start "$update_timer_unit"; then
+        print_warn "Automatic update setup is incomplete: preferences were saved, but $update_timer_unit could not be started."
+        print_info "Inspect the timer before retrying: systemctl status $update_timer_unit"
+        ENABLE_AUTO_UPDATES=false
+        return 0
+    fi
+
+    # Command success is not an observed running timer. The completion section
+    # separately reads its actual boot setting and active state.
+    print_success "Automatic update preferences saved; timer enable/start commands completed. Check the timer state in the completion summary."
+
 }
 
 # Updates and reinstalls only run setup_auto_updates when the user opts in,
