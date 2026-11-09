@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -1654,5 +1655,322 @@ func TestHandleCanonicalAutoRegister_PBSReservesDisabledVerifySSL(t *testing.T) 
 	instance := handler.defaultConfig.PBSInstances[0]
 	if instance.VerifySSL {
 		t.Fatalf("re-registration re-enabled VerifySSL on an existing node that disabled it (#2140)")
+	}
+}
+
+func agentAuthorityFixture(t *testing.T, rawToken string, metadata map[string]string) (*ConfigHandlers, *config.Config) {
+	t.Helper()
+	stubAutoRegisterNetworkDeps(t)
+	record := newTokenRecord(t, rawToken, []string{config.ScopeAgentReport, config.ScopeDockerReport}, metadata)
+	cfg := &config.Config{
+		DataPath:  t.TempDir(),
+		APITokens: []config.APITokenRecord{record},
+		PVEInstances: []config.PVEInstance{
+			{
+				Name:       "pve-real",
+				Host:       "https://pve-real.local:8006",
+				TokenName:  "pulse-monitor@pve!pulse-real",
+				TokenValue: "real-secret",
+			},
+			{
+				Name:       "homelab",
+				Host:       "https://pve1.local:8006",
+				IsCluster:  true,
+				TokenName:  "pulse-monitor@pve!pulse-cluster",
+				TokenValue: "cluster-secret",
+				ClusterEndpoints: []config.ClusterEndpoint{
+					{NodeName: "pve1", Host: "https://pve1.local:8006", IP: "pve1.local"},
+					{NodeName: "pve2", Host: "https://pve2.local:8006", IP: "pve2.local"},
+				},
+			},
+		},
+		PBSInstances: []config.PBSInstance{{
+			Name:       "pbs-real",
+			Host:       "https://pbs-real.local:8007",
+			TokenName:  "pulse-monitor@pbs!pulse-real",
+			TokenValue: "real-secret",
+		}},
+	}
+	return newTestConfigHandlers(t, cfg), cfg
+}
+
+func snapshotAutoRegisterSources(cfg *config.Config) ([]config.PVEInstance, []config.PBSInstance) {
+	pve := make([]config.PVEInstance, 0, len(cfg.PVEInstances))
+	for _, instance := range cfg.PVEInstances {
+		pve = append(pve, instance.DeepCopy())
+	}
+	return pve, append([]config.PBSInstance(nil), cfg.PBSInstances...)
+}
+
+func assertAutoRegisterSourcesUnchanged(t *testing.T, label string, cfg *config.Config, pve []config.PVEInstance, pbs []config.PBSInstance) {
+	t.Helper()
+	if !reflect.DeepEqual(cfg.PVEInstances, pve) {
+		t.Fatalf("%s changed PVE connections:\nbefore %+v\nafter  %+v", label, pve, cfg.PVEInstances)
+	}
+	if !reflect.DeepEqual(cfg.PBSInstances, pbs) {
+		t.Fatalf("%s changed PBS connections:\nbefore %+v\nafter  %+v", label, pbs, cfg.PBSInstances)
+	}
+}
+
+// An agent token sits on every monitored host. Without an install grant, it
+// may change only the connection its spent grant recorded. Nothing the agent
+// says about itself counts: not serverName, not candidate addresses, and not
+// a bound hostname, which a command-enabled agent may rebind.
+func TestAgentTokenAutoRegisterCannotChangeAnotherHostsConnection(t *testing.T) {
+	tokens := map[string]map[string]string{
+		"unregistered":    nil,
+		"bound hostname":  {"bound_hostname": "pve-real", "bound_agent_id": "agent-1"},
+		"owns pve-real":   {proxmoxInstallRegistrationTypedKey(proxmoxInstallRegistrationHostKey, "pve"): "https://pve-real.local:8006"},
+		"owns other type": {proxmoxInstallRegistrationTypeKey: "pve", proxmoxInstallRegistrationHostKey: "https://pbs-real.local:8007"},
+	}
+	cases := []struct {
+		name string
+		req  AutoRegisterRequest
+	}{
+		{"pve same host", AutoRegisterRequest{
+			Type: "pve", Host: "https://pve-real.local:8006", ServerName: "pve-real", Source: "agent",
+			TokenID: "pulse-monitor@pve!pulse-other", TokenValue: "other-secret",
+		}},
+		{"pve claimed name", AutoRegisterRequest{
+			Type: "pve", Host: "https://192.0.2.10:8006", ServerName: "pve-real", Source: "agent",
+			TokenID: "pulse-monitor@pve!pulse-real", TokenValue: "other-secret",
+		}},
+		{"cluster member address", AutoRegisterRequest{
+			Type: "pve", Host: "https://pve2.local:8006", CandidateHosts: []string{"https://pve2.local:8006"},
+			ServerName: "pve2", Source: "agent",
+			TokenID: "pulse-monitor@pve!pulse-cluster", TokenValue: "other-secret",
+		}},
+		{"pbs same host", AutoRegisterRequest{
+			Type: "pbs", Host: "https://pbs-real.local:8007", ServerName: "pbs-real", Source: "agent",
+			TokenID: "pulse-monitor@pbs!pulse-other", TokenValue: "other-secret",
+		}},
+	}
+	for tokenName, metadata := range tokens {
+		rawToken := strings.ReplaceAll(tokenName, " ", "-") + ".12345678"
+		handler, cfg := agentAuthorityFixture(t, rawToken, metadata)
+		pve, pbs := snapshotAutoRegisterSources(cfg)
+		for _, tc := range cases {
+			if tokenName == "owns pve-real" && strings.HasPrefix(tc.name, "pve ") {
+				continue // its own connection; covered by the next test
+			}
+			rec := runAgentAutoRegister(t, handler, rawToken, tc.req)
+			if rec.Code != http.StatusForbidden {
+				t.Fatalf("%s / %s: status = %d, want 403; body=%s", tokenName, tc.name, rec.Code, rec.Body.String())
+			}
+			assertAutoRegisterSourcesUnchanged(t, tokenName+" / "+tc.name, cfg, pve, pbs)
+		}
+	}
+}
+
+// The heal flow the agent-token path exists for keeps working: an agent whose
+// spent grant recorded a connection rotates that connection's token, whether
+// it is a standalone node, a cluster the node belongs to, or a PBS recorded
+// before per-type keys.
+func TestAgentTokenAutoRegisterUpdatesItsRecordedConnection(t *testing.T) {
+	rawToken := "pve-real-agent.12345678"
+	handler, cfg := agentAuthorityFixture(t, rawToken, map[string]string{
+		proxmoxInstallRegistrationTypedKey(proxmoxInstallRegistrationHostKey, "pve"): "https://pve-real.local:8006",
+	})
+	rec := runAgentAutoRegister(t, handler, rawToken, AutoRegisterRequest{
+		Type: "pve", Host: "https://pve-real.local:8006", ServerName: "pve-real", Source: "agent",
+		TokenID: "pulse-monitor@pve!pulse-rotated", TokenValue: "rotated-secret",
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("recorded connection status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	if got := cfg.PVEInstances[0]; got.TokenName != "pulse-monitor@pve!pulse-rotated" || got.TokenValue != "rotated-secret" {
+		t.Fatalf("recorded connection not updated: token=%q", got.TokenName)
+	}
+
+	clusterToken := "pve1-agent.12345678"
+	clusterHandler, clusterCfg := agentAuthorityFixture(t, clusterToken, map[string]string{
+		proxmoxInstallRegistrationTypedKey(proxmoxInstallRegistrationHostKey, "pve"): "https://pve1.local:8006",
+	})
+	rec = runAgentAutoRegister(t, clusterHandler, clusterToken, AutoRegisterRequest{
+		Type: "pve", Host: "https://pve1.local:8006", ServerName: "pve1", Source: "agent",
+		TokenID: "pulse-monitor@pve!pulse-cluster", TokenValue: "rotated-cluster-secret",
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("cluster member status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	if got := clusterCfg.PVEInstances[1]; got.TokenValue != "rotated-cluster-secret" {
+		t.Fatalf("cluster connection not refreshed by its recorded member: token value %q", got.TokenValue)
+	}
+
+	pbsToken := "pbs-real-agent.12345678"
+	pbsHandler, pbsCfg := agentAuthorityFixture(t, pbsToken, map[string]string{
+		proxmoxInstallRegistrationTypeKey: "pbs",
+		proxmoxInstallRegistrationHostKey: "https://pbs-real.local:8007",
+	})
+	rec = runAgentAutoRegister(t, pbsHandler, pbsToken, AutoRegisterRequest{
+		Type: "pbs", Host: "https://pbs-real.local:8007", ServerName: "pbs-real", Source: "agent",
+		TokenID: "pulse-monitor@pbs!pulse-rotated", TokenValue: "rotated-secret",
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("legacy PBS record status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	if got := pbsCfg.PBSInstances[0]; got.TokenValue != "rotated-secret" {
+		t.Fatalf("legacy PBS record did not authorize its own connection: token value %q", got.TokenValue)
+	}
+}
+
+// A non-primary cluster member heals the shared connection through its own
+// recorded address.
+func TestAgentTokenAutoRegisterHealsThroughItsClusterMember(t *testing.T) {
+	rawToken := "pve2-agent.12345678"
+	handler, cfg := agentAuthorityFixture(t, rawToken, map[string]string{
+		proxmoxInstallRegistrationTypedKey(proxmoxInstallRegistrationHostKey, "pve"): "https://pve2.local:8006",
+	})
+	rec := runAgentAutoRegister(t, handler, rawToken, AutoRegisterRequest{
+		Type: "pve", Host: "https://pve2.local:8006", CandidateHosts: []string{"https://pve2.local:8006"},
+		ServerName: "pve2", Source: "agent",
+		TokenID: "pulse-monitor@pve!pulse-cluster", TokenValue: "rotated-cluster-secret",
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("cluster member heal status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	cluster := cfg.PVEInstances[1]
+	if cluster.TokenValue != "rotated-cluster-secret" {
+		t.Fatalf("cluster member did not refresh the shared token: %q", cluster.TokenValue)
+	}
+	if cluster.Host != "https://pve1.local:8006" || cluster.ClusterEndpoints[1].IPOverride != "" {
+		t.Fatalf("cluster member heal moved an address: host=%q override=%q", cluster.Host, cluster.ClusterEndpoints[1].IPOverride)
+	}
+}
+
+// Without an install grant, a token rotates its own connection's credentials
+// but never moves the stored address or re-pins it to another address.
+func TestAgentTokenAutoRegisterKeepsTheRecordedAddress(t *testing.T) {
+	rawToken := "pve-real-mover.12345678"
+	handler, cfg := agentAuthorityFixture(t, rawToken, map[string]string{
+		proxmoxInstallRegistrationTypedKey(proxmoxInstallRegistrationHostKey, "pve"): "https://pve-real.local:8006",
+	})
+	// A stored pin that conflicts with the new address already stops the
+	// inferred match; an unpinned connection is the case that reaches here.
+	fetchTLSFingerprint = func(string) (string, error) { return "BB:BB", nil }
+
+	rec := runAgentAutoRegister(t, handler, rawToken, AutoRegisterRequest{
+		Type: "pve", Host: "https://192.0.2.50:8006", ServerName: "pve-real", Source: "agent",
+		TokenID: "pulse-monitor@pve!pulse-real", TokenValue: "rotated-secret",
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("own connection status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	got := cfg.PVEInstances[0]
+	if got.Host != "https://pve-real.local:8006" {
+		t.Fatalf("ungranted agent token moved its connection to %q", got.Host)
+	}
+	if got.Fingerprint != "" {
+		t.Fatalf("ungranted agent token re-pinned its connection from another address: %q", got.Fingerprint)
+	}
+	if got.TokenValue != "rotated-secret" {
+		t.Fatalf("own connection credentials not rotated: %q", got.TokenValue)
+	}
+}
+
+// The registration check reports canRegister only when completion would
+// accept the change, so an agent does not rotate a credential it then cannot
+// register.
+func TestAgentTokenRegistrationCheckMatchesCompletionAuthority(t *testing.T) {
+	check := AutoRegisterRequest{
+		Type: "pve", Host: "https://pve-real.local:8006", ServerName: "pve-real", Source: "agent",
+		CheckRegistration: true,
+	}
+	for name, tc := range map[string]struct {
+		metadata map[string]string
+		want     bool
+	}{
+		"unowned": {metadata: map[string]string{"bound_hostname": "pve-real"}, want: false},
+		"owned": {metadata: map[string]string{
+			proxmoxInstallRegistrationTypedKey(proxmoxInstallRegistrationHostKey, "pve"): "https://pve-real.local:8006",
+		}, want: true},
+	} {
+		rawToken := name + "-check.12345678"
+		handler, _ := agentAuthorityFixture(t, rawToken, tc.metadata)
+		rec := runAgentAutoRegister(t, handler, rawToken, check)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%s check status = %d, body=%s", name, rec.Code, rec.Body.String())
+		}
+		var response autoRegisterCheckResponse
+		if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+			t.Fatalf("%s decode check: %v", name, err)
+		}
+		if !response.SourceExists {
+			t.Fatalf("%s check did not find the configured source", name)
+		}
+		if response.CanRegister != tc.want {
+			t.Fatalf("%s canRegister = %v, want %v", name, response.CanRegister, tc.want)
+		}
+	}
+}
+
+// Ownership is per service: a token that owns one connection cannot reach
+// another connection on the same address but a different port.
+func TestAgentTokenOwnershipKeepsPortsDistinct(t *testing.T) {
+	rawToken := "proxy-port-agent.12345678"
+	handler, cfg := agentAuthorityFixture(t, rawToken, map[string]string{
+		proxmoxInstallRegistrationTypedKey(proxmoxInstallRegistrationHostKey, "pve"): "https://pve-real.local:8006",
+	})
+	cfg.PVEInstances = append(cfg.PVEInstances, config.PVEInstance{
+		Name:       "pve-behind-port",
+		Host:       "https://pve-real.local:18006",
+		TokenName:  "pulse-monitor@pve!pulse-behind-port",
+		TokenValue: "behind-port-secret",
+	})
+	pve, pbs := snapshotAutoRegisterSources(cfg)
+	rec := runAgentAutoRegister(t, handler, rawToken, AutoRegisterRequest{
+		Type: "pve", Host: "https://pve-real.local:18006", ServerName: "pve-behind-port", Source: "agent",
+		TokenID: "pulse-monitor@pve!pulse-other", TokenValue: "other-secret",
+	})
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("other port status = %d, want 403; body=%s", rec.Code, rec.Body.String())
+	}
+	assertAutoRegisterSourcesUnchanged(t, "other port", cfg, pve, pbs)
+}
+
+// A grant spent by the registration check on an existing source records that
+// source's own address, even when the agent reached it through a fallback
+// candidate, so the same token can heal it later without a grant.
+func TestInstallGrantCheckRecordsTheMatchedSourceAddress(t *testing.T) {
+	stubAutoRegisterNetworkDeps(t)
+	rawToken := "install-fallback.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeAgentReport}, map[string]string{
+		"install_type": "pve",
+		"issued_via":   agentInstallIssuedViaConfig,
+	})
+	cfg := &config.Config{
+		DataPath:  t.TempDir(),
+		APITokens: []config.APITokenRecord{record},
+		PVEInstances: []config.PVEInstance{{
+			Name:       "pve-real",
+			Host:       "https://pve-real.local:8006",
+			TokenName:  "pulse-monitor@pve!pulse-real",
+			TokenValue: "real-secret",
+		}},
+	}
+	handler := newTestConfigHandlers(t, cfg)
+
+	rec := runAgentAutoRegister(t, handler, rawToken, AutoRegisterRequest{
+		Type: "pve", Host: "https://10.0.0.5:8006",
+		CandidateHosts: []string{"https://10.0.0.5:8006", "https://pve-real.local:8006"},
+		ServerName:     "pve-real", Source: "agent", CheckRegistration: true,
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("check status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	key := proxmoxInstallRegistrationTypedKey(proxmoxInstallRegistrationHostKey, "pve")
+	if got := cfg.APITokens[0].Metadata[key]; got != "https://pve-real.local:8006" {
+		t.Fatalf("%s = %q, want the matched source address", key, got)
+	}
+
+	rec = runAgentAutoRegister(t, handler, rawToken, AutoRegisterRequest{
+		Type: "pve", Host: "https://pve-real.local:8006", ServerName: "pve-real", Source: "agent",
+		TokenID: "pulse-monitor@pve!pulse-real", TokenValue: "healed-secret",
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("heal status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	if got := cfg.PVEInstances[0].TokenValue; got != "healed-secret" {
+		t.Fatalf("heal did not rotate the adopted source: %q", got)
 	}
 }
