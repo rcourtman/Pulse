@@ -254,38 +254,47 @@ export function PatrolIntelligenceSurface() {
             onToggle={(event) => setFindingsOpen(event.currentTarget.open)}
           >
             <summary class="sr-only">Finding options and history</summary>
-            <div class="space-y-4 border-t border-border p-4 sm:p-5">
-              <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <p class="text-xs leading-5 text-muted">
-                  <Show
-                    when={findingResourceScope()}
-                    fallback={
-                      <>
-                        Choose Finding options on an active finding to resolve it, dismiss it,
-                        remember it as expected, or create a suppression rule. Check history remains
-                        available here for the forensic trail.
-                      </>
-                    }
-                  >
-                    {(scope) => (
-                      <>
-                        Showing Patrol findings for {scope().name}. Choose Finding options for a
-                        lasting outcome. Alert lifecycle controls remain separate from finding
-                        outcomes.
-                      </>
-                    )}
+            <div class="space-y-3 border-t border-border p-4 sm:space-y-4 sm:p-5">
+              {/* The concrete approval handoff replaces repeated generic help. The
+                  same outcome/history guidance stays in the opener above. Scoped
+                  guidance has a distinct alert-lifecycle boundary and always stays. */}
+              <Show
+                when={
+                  findingResourceScope() || aiIntelligenceStore.patrolPendingApprovals.length === 0
+                }
+              >
+                <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <p class="text-xs leading-5 text-muted">
+                    <Show
+                      when={findingResourceScope()}
+                      fallback={
+                        <>
+                          Choose Finding options on an active finding to resolve it, dismiss it,
+                          remember it as expected, or create a suppression rule. Check history
+                          remains available here for the forensic trail.
+                        </>
+                      }
+                    >
+                      {(scope) => (
+                        <>
+                          Showing Patrol findings for {scope().name}. Choose Finding options for a
+                          lasting outcome. Alert lifecycle controls remain separate from finding
+                          outcomes.
+                        </>
+                      )}
+                    </Show>
+                  </p>
+                  <Show when={findingResourceScope()}>
+                    <button
+                      type="button"
+                      class="min-h-11 shrink-0 self-start text-xs font-medium text-blue-700 hover:underline focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 dark:text-blue-300 sm:min-h-0 sm:self-auto"
+                      onClick={() => setFindingResourceScope(undefined)}
+                    >
+                      Show all finding options
+                    </button>
                   </Show>
-                </p>
-                <Show when={findingResourceScope()}>
-                  <button
-                    type="button"
-                    class="min-h-11 shrink-0 self-start text-xs font-medium text-blue-700 hover:underline focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 dark:text-blue-300 sm:min-h-0 sm:self-auto"
-                    onClick={() => setFindingResourceScope(undefined)}
-                  >
-                    Show all finding options
-                  </button>
-                </Show>
-              </div>
+                </div>
+              </Show>
               <PatrolIntelligenceWorkspace
                 state={state}
                 findingResourceId={findingResourceScope()?.id}
