@@ -113,7 +113,7 @@ describe('ApprovalBanner', () => {
     state.approvalsError = 'Approval organization is unavailable';
     state.pendingApprovals = [approvalRequest({ plan: { actionId: 'retained-action' } })];
     renderBanner();
-    expect(screen.getByRole('status')).toHaveTextContent(Showing last-known approvals.);
+    expect(screen.getByRole('status')).toHaveTextContent('Showing last-known approvals.');
     expect(screen.getByText('Single approval')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Review in Actions' })).toHaveAttribute(
       'href',
