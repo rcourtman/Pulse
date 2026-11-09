@@ -6,6 +6,7 @@ import {
   getPatrolWorkTypeCompositionClause,
   getPatrolFindingActionableState,
   getPatrolFindingQueueSummary,
+  hasUnavailablePatrolApprovalStatus,
 } from '@/utils/aiFindingPresentation';
 
 type ClassifyInput = Parameters<typeof classifyPatrolFindingWorkType>[0];
@@ -124,6 +125,78 @@ describe('getPatrolFindingQueueSummary', () => {
 });
 
 describe('getPatrolWorkTypeComposition', () => {
+  it('counts saved queued findings as unknown during a failed read, without losing other work', () => {
+    const findings = [
+      makeFinding({ investigationOutcome: 'fix_queued' }),
+      makeFinding({ investigationOutcome: 'fix_queued' }),
+      makeFinding({ investigationOutcome: 'fix_failed' }),
+      makeFinding({ investigationStatus: 'running' }),
+      makeFinding({ timesRaised: 3 }),
+    ];
+    const unavailable = getPatrolWorkTypeComposition(findings, true);
+    expect(unavailable).toEqual({
+      total: 5,
+      approval: 0,
+      approvalUnknown: 2,
+      failed: 1,
+      inProgress: 1,
+      recurring: 1,
+      newIssues: 0,
+    });
+    expect(getPatrolWorkTypeCompositionClause(unavailable)).toBe(
+      ' — 2 queued · approval status unavailable, 1 failed fix, 1 in progress, 1 recurring',
+    );
+    expect(getPatrolWorkTypeComposition(findings, false)).toMatchObject({ total: 5, approval: 2 });
+    expect(getPatrolWorkTypeCompositionClause(getPatrolWorkTypeComposition(findings))).toContain(
+      '2 need approval',
+    );
+  });
+
+  it('keeps typed action facts and ignores inactive queued outcomes during an unavailable read', () => {
+    const typed: Parameters<typeof getPatrolWorkTypeComposition>[0][number] = {
+      ...makeFinding({ investigationOutcome: 'fix_queued' }),
+      investigationRecord: {
+        id: 'investigation-1',
+        finding_id: 'finding-1',
+        subject: { resource_id: 'host-1' },
+        trigger: { detected_at: '2026-11-09T12:00:00Z' },
+        status: 'completed',
+        evidence: [],
+        verification: [],
+        rollback: [],
+        tools_used: [],
+        started_at: '2026-11-09T12:00:00Z',
+        action: {
+          action_id: 'saved-action',
+          resource_id: 'host-1',
+          capability_name: 'restart',
+          state: 'pending_approval',
+          plan: {
+            actionId: 'saved-action',
+            requestId: 'request-1',
+            allowed: false,
+            requiresApproval: true,
+            approvalPolicy: 'admin',
+            rollbackAvailable: false,
+          },
+        },
+      },
+    };
+    expect(hasUnavailablePatrolApprovalStatus(typed, true)).toBe(false);
+    const composition = getPatrolWorkTypeComposition(
+      [
+        typed,
+        makeFinding({ investigationOutcome: 'fix_queued' }),
+        makeFinding({ status: 'resolved', investigationOutcome: 'fix_queued' }),
+      ],
+      true,
+    );
+    expect(composition).toMatchObject({ total: 3, approval: 1, approvalUnknown: 1, newIssues: 1 });
+    expect(getPatrolWorkTypeCompositionClause(composition)).toBe(
+      ' — 1 needs approval, 1 queued · approval status unavailable',
+    );
+  });
+
   it('returns zero counts for an empty list', () => {
     expect(getPatrolWorkTypeComposition([])).toEqual({
       total: 0,

@@ -82,6 +82,7 @@ import {
   getInvestigationOutcomeSortOrder,
   getInvestigationStatusBadgeTone,
   getPatrolFindingActionableState,
+  hasUnavailablePatrolApprovalStatus,
   getPatrolFindingQueueSummary,
   reuseIdenticalPatrolFindingDisplayGroups,
   type PatrolFindingDisplayGroup,
@@ -896,10 +897,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       );
     const patrolActionableState = () => {
       if (
-        aiIntelligenceStore.approvalsError &&
-        finding.status === 'active' &&
-        finding.investigationOutcome === 'fix_queued' &&
-        !finding.investigationRecord?.action
+        hasUnavailablePatrolApprovalStatus(finding, Boolean(aiIntelligenceStore.approvalsError))
       ) {
         return { label: 'Approval status unavailable', tone: 'warning' as const };
       }

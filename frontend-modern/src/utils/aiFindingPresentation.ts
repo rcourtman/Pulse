@@ -706,18 +706,38 @@ export function classifyPatrolFindingWorkType(
 export interface PatrolWorkTypeComposition {
   total: number;
   approval: number;
+  approvalUnknown?: number;
   failed: number;
   inProgress: number;
   recurring: number;
   newIssues: number;
 }
 
+// A saved queued outcome is not a current approval decision. A separately
+// loaded typed action remains usable when the legacy approvals read fails.
+export function hasUnavailablePatrolApprovalStatus(
+  finding: Pick<UnifiedFinding, 'status' | 'investigationOutcome' | 'investigationRecord'>,
+  approvalsUnavailable: boolean,
+): boolean {
+  return (
+    approvalsUnavailable &&
+    finding.status === 'active' &&
+    finding.investigationOutcome === 'fix_queued' &&
+    !finding.investigationRecord?.action
+  );
+}
+
 export function getPatrolWorkTypeComposition<
   TFinding extends Pick<
     UnifiedFinding,
-    'status' | 'investigationStatus' | 'investigationOutcome' | 'regressionCount' | 'timesRaised'
+    | 'status'
+    | 'investigationStatus'
+    | 'investigationOutcome'
+    | 'regressionCount'
+    | 'timesRaised'
+    | 'investigationRecord'
   >,
->(findings: readonly TFinding[]): PatrolWorkTypeComposition {
+>(findings: readonly TFinding[], approvalsUnavailable = false): PatrolWorkTypeComposition {
   const composition: PatrolWorkTypeComposition = {
     total: findings.length,
     approval: 0,
@@ -727,6 +747,10 @@ export function getPatrolWorkTypeComposition<
     newIssues: 0,
   };
   for (const finding of findings) {
+    if (hasUnavailablePatrolApprovalStatus(finding, approvalsUnavailable)) {
+      composition.approvalUnknown = (composition.approvalUnknown ?? 0) + 1;
+      continue;
+    }
     switch (classifyPatrolFindingWorkType(finding)) {
       case 'approval':
         composition.approval++;
@@ -752,6 +776,9 @@ export function getPatrolWorkTypeCompositionClause(composition: PatrolWorkTypeCo
   const parts: string[] = [];
   if (composition.approval > 0) {
     parts.push(`${composition.approval} need${composition.approval === 1 ? 's' : ''} approval`);
+  }
+  if (composition.approvalUnknown) {
+    parts.push(`${composition.approvalUnknown} queued · approval status unavailable`);
   }
   if (composition.failed > 0) {
     parts.push(`${composition.failed} failed fix${composition.failed === 1 ? '' : 'es'}`);

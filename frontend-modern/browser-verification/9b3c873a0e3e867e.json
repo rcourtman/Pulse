@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "base_sha": "d481cda9cbd84277a61c666491dddde56d7eedbd",
+  "verified_at": "2026-11-09T14:16:06.114594Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/AI/FindingsPanel.tsx",
+    "frontend-modern/src/components/patrol/ApprovalBanner.tsx",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceWorkspace.tsx",
+    "frontend-modern/src/utils/aiFindingPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/AI/FindingsPanel.tsx": "0c494736b771b948974efb55f395c4b4731b40bd1f9d26c9573b9bd8de932906",
+    "frontend-modern/src/components/patrol/ApprovalBanner.tsx": "d18e6cad300d802393de8ca0250b791000b268e72a771043242041fc21f55a7a",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx": "2b0351089ee7239a513979443e17d13ce3b1e5414c2bd34c207d5c720afdbfc7",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceWorkspace.tsx": "8edb6483bd97a8401a775d81e4bd28f9a15251bca8b510cc77421f60f13acaa2",
+    "frontend-modern/src/utils/aiFindingPresentation.ts": "8dba79a6a5d28ad4ff0803e120307090087a0bef18952d97327aa0f512530653"
+  },
+  "routes": [
+    "/patrol/activity \u2014 actual App/router/expanded PatrolIntelligenceWorkspace with safe existing integration fixtures and retained native approval responses",
+    "/patrol \u2192 real Inbox detail \u2192 Browse Patrol findings for this resource \u2192 /patrol/activity; scoped resource and Show all return"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "browsers": [
+    "Playwright1.56.1 Chromium141.0.7390.37 desktop light/dark",
+    "Playwright1.56.1 WebKit26.0 phone light/dark"
+  ],
+  "states": [
+    "Cold503 says current approval knowledge is unavailable and counts the saved queued finding without asserting a current approval decision.",
+    "Known200, failed refresh retaining last-known request/risk/expiry/context and exact Actions target, then native Refresh recovery. Main after runtime files match containing commit; source label draft2 is retained in raw report.",
+    "Phone fixed scroll1608: primary Review799\u2192691 cold,1001\u2192741 failed, both44px high and above fixed nav799. Existing check/finding information and controls retained. Known/restored Review679\u2013723.",
+    "Duplicate approval card and repeated unscoped help removed only while the existing concrete approval handoff is present; the outcome/history guidance remains in its opener, scoped guidance remains unchanged.",
+    "Long request context wraps rather than requiring hover. During long warm/refresh states phone Review789\u2013833 still needs scrolling, versus wholly below before; no formerly visible control newly lost.",
+    "Actual Inbox scoped handoff retains resource, alert/finding boundary and broadening control. Immediate phone landing is above the actual finding both before/after (identical PNGs), not automatic-scroll recovery.",
+    "Status region excludes ticking expiry; refresh is disabled while checking and keeps its descriptive accessible name.",
+    "Page-top captures unchanged in both sizes/themes; desktop preserves request, failed-check, filters and individual finding controls."
+  ],
+  "interactions": [
+    "Native production API/client/store consumes exact retained Core503/recovered200 bytes; no native backend test replay or assigned store values. Supplemental long-context response changes only one synthetic context field and retains original/derived digests.",
+    "Visibility refresh cold\u2192known\u2192failed-retaining\u2192restored; native Refresh approvals recovery and exact Actions-link keyboard focus. No Actions decision or execution.",
+    "History opens and returns in all primary and supplemental profiles. Actual Inbox detail handoff and Show all finding options return preserve scope.",
+    "Held readonly refresh visibly disables Checking approvals\u2026 control while keeping last-known context. No mutation or external network is allowed.",
+    "Opened all72 retained current PNGs through native view_image at worker-local paths, inspected actual pixels and compared states;34 fixed-scroll pairs and2 native desktop clamp comparisons are detailed in pair index."
+  ],
+  "evidence": "72 inspected PNGs /36 state comparisons:34 same-numeric-scroll pairs and2 desktop natural-clamp handoff pairs. Exact before base d2138a57d1, after runtime d481cda9cb; all1,153 copied application files hash-match committed source. Full real App/Patrol page, not a handwritten shell. Source/read binding, full browser scripts/results, captures, rejected first phone draft, corrected proof-only path/config/resource/role-list assertions and limitations retained in RECEIPTS.md, PIXEL-REVIEW.md, BROWSER-INPUT-BINDING.json, CAPTURE-PAIRS.json and capture archives. No full IdP, installed/original-client, native authorization, release, historical-impact or independent page acceptance claim."
+}

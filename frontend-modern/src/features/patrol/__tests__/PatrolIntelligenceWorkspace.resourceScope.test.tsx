@@ -52,6 +52,7 @@ const fixture = vi.hoisted(() => {
     read: () => findings,
     attentionIds: ['web-disk', 'web-restart', 'db-backup', 'cache-evictions'],
     approvalIds: ['web-restart', 'db-backup'],
+    approvalsError: () => null as string | null,
   };
 });
 
@@ -95,6 +96,9 @@ vi.mock('@/stores/aiIntelligence', () => ({
     },
     findingsLoading: false,
     patrolFindingsLoading: false,
+    get approvalsError() {
+      return fixture.approvalsError();
+    },
     findingsError: null,
     patrolFindingsError: null,
     get findingsNeedingAttention() {
@@ -194,6 +198,35 @@ describe('PatrolIntelligenceWorkspace resource scope', () => {
   afterEach(() => {
     cleanup();
     fixture.read = () => fixture.findings;
+    fixture.approvalsError = () => null;
+  });
+
+  it('qualifies the saved queued summary through failed reads and recovery, retaining its scoped count', () => {
+    const [error, setError] = createSignal<string | null>('unavailable');
+    fixture.approvalsError = error;
+    render(() => (
+      <PatrolIntelligenceWorkspace
+        state={makeState()}
+        findingResourceId={fixture.web.resourceId}
+        findingResourceName="afs-web"
+      />
+    ));
+    expect(
+      screen.getByText(
+        /^Patrol found 2 issues on afs-web — 1 queued · approval status unavailable, 1 recurring\./,
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Patrol found.*needs approval/)).not.toBeInTheDocument();
+    expect(screen.getByText('Apply the fix for web-restart')).toBeInTheDocument();
+    expect(screen.getByText('Last known')).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: 'Review in Actions' })).toHaveLength(1);
+    expect(workGroupLabels()).toEqual(['1 recurring issue']);
+    expect(reviewRows()).toHaveLength(2);
+    setError(null);
+    expect(
+      screen.getByText(/^Patrol found 2 issues on afs-web — 1 needs approval, 1 recurring\./),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Last known')).not.toBeInTheDocument();
   });
 
   it('describes the scoped resource with the counts its rows show', () => {
@@ -210,9 +243,10 @@ describe('PatrolIntelligenceWorkspace resource scope', () => {
         'Patrol found 2 issues on afs-web — 1 needs approval, 1 recurring. Open a row to review evidence and record the outcome.',
       ),
     ).toBeInTheDocument();
-    expect(workGroupLabels()).toEqual(['1 approval waiting', '1 recurring issue']);
+    expect(workGroupLabels()).toEqual(['1 recurring issue']);
     // The banner shows the resource's own approval, not every pending approval.
     expect(screen.getByText('Action awaiting approval')).toBeInTheDocument();
+    expect(screen.queryByText('1 approval waiting')).not.toBeInTheDocument();
     expect(screen.getByText('Apply the fix for web-restart')).toBeInTheDocument();
     expect(screen.queryByText(/actions awaiting your approval/)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^Needs Attention \(2\)$/ })).toBeInTheDocument();
@@ -232,7 +266,6 @@ describe('PatrolIntelligenceWorkspace resource scope', () => {
       ),
     ).toBeInTheDocument();
     expect(workGroupLabels()).toEqual([
-      '2 approvals waiting',
       '1 failed action',
       'Latest check needs review',
       '1 recurring issue',
@@ -302,7 +335,7 @@ describe('PatrolIntelligenceWorkspace resource scope', () => {
     expect(
       screen.getByText(/^Patrol found 3 issues on afs-web — 1 needs approval, 2 recurring\./),
     ).toBeInTheDocument();
-    expect(workGroupLabels()).toEqual(['1 approval waiting', '2 recurring issues']);
+    expect(workGroupLabels()).toEqual(['2 recurring issues']);
     expect(reviewRows()).toHaveLength(3);
 
     // web-restart drops out of the loaded findings while its approval is still
@@ -317,7 +350,8 @@ describe('PatrolIntelligenceWorkspace resource scope', () => {
     // the open work stays at the two active findings.
     setFindings([...findings(), { ...fixture.findings[1], status: 'resolved' }]);
     expect(screen.getByText('Action awaiting approval')).toBeInTheDocument();
-    expect(workGroupLabels()).toEqual(['1 approval waiting', '2 recurring issues']);
+    expect(screen.queryByText('1 approval waiting')).not.toBeInTheDocument();
+    expect(workGroupLabels()).toEqual(['2 recurring issues']);
     expect(
       screen.getByText(/^Patrol found 2 issues on afs-web — 2 recurring\./),
     ).toBeInTheDocument();
@@ -331,7 +365,6 @@ describe('PatrolIntelligenceWorkspace resource scope', () => {
       ),
     ).toBeInTheDocument();
     expect(workGroupLabels()).toEqual([
-      '2 approvals waiting',
       '1 failed action',
       'Latest check needs review',
       '2 recurring issues',

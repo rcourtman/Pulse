@@ -1,11 +1,24 @@
 import { Route, Router } from '@solidjs/router';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import type { JSX } from 'solid-js';
+import { createSignal, type JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PatrolIntelligenceSurface } from '../PatrolIntelligenceSurface';
 
-const patrolState = vi.hoisted(() => ({ setupOnly: false, enabled: true }));
+const patrolState = vi.hoisted(() => ({
+  setupOnly: false,
+  enabled: true,
+  approvalCount: (): number => 0,
+}));
+
+vi.mock('@/stores/aiIntelligence', () => ({
+  aiIntelligenceStore: {
+    get patrolPendingApprovals() {
+      return Array.from({ length: patrolState.approvalCount() });
+    },
+    patrolFindings: [],
+  },
+}));
 
 vi.mock('../usePatrolIntelligenceState', () => ({
   usePatrolIntelligenceState: () => ({
@@ -98,6 +111,24 @@ describe('PatrolIntelligenceSurface finding handoff', () => {
     cleanup();
     patrolState.setupOnly = false;
     patrolState.enabled = true;
+    patrolState.approvalCount = () => 0;
+  });
+
+  it('keeps outcome guidance in the opener instead of repeating it above a concrete approval handoff', () => {
+    const [count, setCount] = createSignal(1);
+    patrolState.approvalCount = count;
+    window.history.replaceState(null, '', '/patrol/activity');
+    renderSurface();
+    fireEvent.click(screen.getByRole('button', { name: /^Finding options and history/ }));
+    expect(
+      screen.getByText(/Resolve or dismiss findings, remember expected behavior/),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/Choose Finding options on an active finding/),
+    ).not.toBeInTheDocument();
+    expect(screen.getByTestId('patrol-workspace')).toBeInTheDocument();
+    setCount(0);
+    expect(screen.getByText(/Choose Finding options on an active finding/)).toBeInTheDocument();
   });
 
   it('keeps the independent attention inbox beside the setup task when Patrol is off', () => {
