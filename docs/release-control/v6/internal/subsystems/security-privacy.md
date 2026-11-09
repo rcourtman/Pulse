@@ -66,6 +66,36 @@ status reader, pending/recovered drafts, refusal withdrawal, reader changes and
 explicit disabled/unknown states. Native panel/browser comparisons also remain
 required; these controls do not establish original-client recovery.
 
+### OIDC callback completion retains current saved-provider authority
+
+A native OIDC callback captures its immutable provider and a per-provider policy
+revision together, before token exchange or signature-key HTTP. Successful saved
+policy publication invalidates older callback revisions, even when a disable,
+removal or policy change is subsequently reverted to identical values. Initial
+load, environment application and recovered saved-config publication use the
+same fence. Failed saves, presentation-only edits and another provider's changes
+do not withdraw an otherwise valid callback.
+
+After normal code, state, signature, issuer, audience, expiry, nonce and PKCE
+checks, callback completion orders only its final local role/identity/session
+effects against policy publication under the existing configuration lock. No IdP
+request or response-body write holds that lock. A superseded completion uses the
+existing invalid-state recovery and cannot replace an existing browser session,
+assign roles or record identity metadata. Local persistence remains synchronous;
+this does not promise filesystem recovery, revocation of already-issued sessions,
+SAML lifecycle changes, full-App/live-IdP acceptance or historical impact.
+
+`TestOIDCCallbackPolicyWithdrawal` pauses the real token/key requests from a
+synthetic signed IdP while management disables, deletes, recreates, re-enables or
+changes client/claim/restriction/mapping policy. It also covers policy reversion,
+unknown saved authority, successful unchanged/presentation/independent-provider
+callbacks, failed saves, existing-session preservation and replay rejection.
+`TestOIDCCallbackPolicyLocalCommitOrdering` pins the final local publication fence
+and concurrent immutable-config reads. Existing OIDC/SSO/SAML API suites retain
+native state, trust, URL, persistence and management admission checks. Routes,
+wire formats, credentials, permissions and extension interfaces are unchanged.
+
+
 ### Saved credential lifetime is not an access guarantee
 
 API Access shows the existing saved expiry metadata in each inventory layout,

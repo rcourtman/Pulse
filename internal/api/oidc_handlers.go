@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -447,7 +448,7 @@ func (r *Router) handleSSOOIDCCallback(w http.ResponseWriter, req *http.Request)
 
 	query := req.URL.Query()
 
-	provider := r.getSSOProvider(providerID)
+	provider, policyRevision := r.currentOIDCCallbackPolicy(providerID)
 	if providerID == config.LegacyOIDCProviderID && !isEnabledOIDCProvider(provider) {
 		// The legacy v5 callback path (/api/oidc/callback) does not name a
 		// provider, so extractOIDCProviderID hard-maps it to the migrated
@@ -458,10 +459,11 @@ func (r *Router) handleSSOOIDCCallback(w http.ResponseWriter, req *http.Request)
 		// the flow from its pending authorization state. The state is only
 		// peeked here; it stays single-use for consumeState below.
 		if recoveredID, ok := r.oidcManager.LookupStateProvider(query.Get("state")); ok && validateProviderID(recoveredID) {
-			if recovered := r.getSSOProvider(recoveredID); isEnabledOIDCProvider(recovered) {
+			if recovered, revision := r.currentOIDCCallbackPolicy(recoveredID); isEnabledOIDCProvider(recovered) {
 				log.Debug().Str("provider_id", recoveredID).Msg("Resolved legacy OIDC callback path to initiating provider via pending state")
 				providerID = recoveredID
 				provider = recovered
+				policyRevision = revision
 			}
 		}
 	}
@@ -646,44 +648,55 @@ func (r *Router) handleSSOOIDCCallback(w http.ResponseWriter, req *http.Request)
 		}
 	}
 
-	// RBAC: Always call UpdateUserRoles so user appears in Users list, but key
-	// SSO users by the provider-scoped subject instead of mutable display claims.
-	if authManager := internalauth.GetManager(); authManager != nil {
-		groups := extractStringSliceClaim(claims, provider.GroupsClaim)
-		rolesToAssign := resolveGroupRoles(groups, provider.GroupRoleMappings)
-		legacyCandidates := ssoLegacyPrincipalCandidates(username, email, extractStringClaim(claims, "name"))
-		if err := applySSORoleAssignments(authManager, principal, legacyCandidates, rolesToAssign, len(provider.GroupRoleMappings) > 0, true); err != nil {
-			log.Error().Err(err).Str("user", principal).Str("display_user", username).Msg("Failed to update SSO OIDC user roles")
-		} else if len(rolesToAssign) > 0 {
-			LogAuditEventForTenant(GetOrgID(req.Context()), "sso_oidc_role_assignment", principal, GetClientIP(req), req.URL.Path, true, "Auto-assigned roles: "+strings.Join(rolesToAssign, ", "))
+	// The verified response still belongs to the provider policy captured before
+	// the IdP calls. Serialize only its final local effects with publication;
+	// stale completions cannot rewrite roles or invalidate a valid old session.
+	err = r.commitOIDCCallback(providerID, policyRevision, provider, func() error {
+		// RBAC: Always call UpdateUserRoles so user appears in Users list, but key
+		// SSO users by the provider-scoped subject instead of mutable display claims.
+		if authManager := internalauth.GetManager(); authManager != nil {
+			groups := extractStringSliceClaim(claims, provider.GroupsClaim)
+			rolesToAssign := resolveGroupRoles(groups, provider.GroupRoleMappings)
+			legacyCandidates := ssoLegacyPrincipalCandidates(username, email, extractStringClaim(claims, "name"))
+			if err := applySSORoleAssignments(authManager, principal, legacyCandidates, rolesToAssign, len(provider.GroupRoleMappings) > 0, true); err != nil {
+				log.Error().Err(err).Str("user", principal).Str("display_user", username).Msg("Failed to update SSO OIDC user roles")
+			} else if len(rolesToAssign) > 0 {
+				LogAuditEventForTenant(GetOrgID(req.Context()), "sso_oidc_role_assignment", principal, GetClientIP(req), req.URL.Path, true, "Auto-assigned roles: "+strings.Join(rolesToAssign, ", "))
+			}
+			if err := recordSSOIdentity(authManager, principal, internalauth.UserIdentityMetadata{
+				DisplayName:  username,
+				Email:        email,
+				ProviderType: string(config.SSOProviderTypeOIDC),
+				ProviderID:   providerID,
+				LastLoginAt:  time.Now(),
+			}); err != nil {
+				log.Error().Err(err).Str("user", principal).Str("display_user", username).Msg("Failed to record SSO OIDC identity metadata")
+			}
 		}
-		if err := recordSSOIdentity(authManager, principal, internalauth.UserIdentityMetadata{
-			DisplayName:  username,
-			Email:        email,
-			ProviderType: string(config.SSOProviderTypeOIDC),
-			ProviderID:   providerID,
-			LastLoginAt:  time.Now(),
-		}); err != nil {
-			log.Error().Err(err).Str("user", principal).Str("display_user", username).Msg("Failed to record SSO OIDC identity metadata")
+
+		// Stamp issuer/client on the session even when the provider issued no
+		// refresh token (e.g. offline_access not requested): the SSO-session
+		// surfaces (/api/security/status ssoSessionUsername, X-Auth-Method) key on
+		// OIDCIssuer, and without it a successful SSO login reports an empty SSO
+		// session and strands the user on the login page (issue #1574). Token
+		// refresh itself stays gated on RefreshToken being present.
+		oidcTokens := &OIDCTokenInfo{
+			Issuer:   provider.OIDC.IssuerURL,
+			ClientID: provider.OIDC.ClientID,
 		}
-	}
+		if token.RefreshToken != "" {
+			oidcTokens.RefreshToken = token.RefreshToken
+			oidcTokens.AccessTokenExp = token.Expiry
+		}
 
-	// Stamp issuer/client on the session even when the provider issued no
-	// refresh token (e.g. offline_access not requested): the SSO-session
-	// surfaces (/api/security/status ssoSessionUsername, X-Auth-Method) key on
-	// OIDCIssuer, and without it a successful SSO login reports an empty SSO
-	// session and strands the user on the login page (issue #1574). Token
-	// refresh itself stays gated on RefreshToken being present.
-	oidcTokens := &OIDCTokenInfo{
-		Issuer:   provider.OIDC.IssuerURL,
-		ClientID: provider.OIDC.ClientID,
+		return r.establishOIDCSession(w, req, principal, username, oidcTokens)
+	})
+	if err == errOIDCCallbackPolicyChanged {
+		LogAuditEventForTenant(GetOrgID(req.Context()), "sso_oidc_login", "", GetClientIP(req), req.URL.Path, false, "Provider policy changed during sign-in")
+		r.redirectOIDCError(w, req, entry.ReturnTo, "invalid_state")
+		return
 	}
-	if token.RefreshToken != "" {
-		oidcTokens.RefreshToken = token.RefreshToken
-		oidcTokens.AccessTokenExp = token.Expiry
-	}
-
-	if err := r.establishOIDCSession(w, req, principal, username, oidcTokens); err != nil {
+	if err != nil {
 		log.Error().Err(err).Msg("Failed to establish session after SSO OIDC login")
 		r.redirectOIDCError(w, req, entry.ReturnTo, "session_failed")
 		return
@@ -694,4 +707,61 @@ func (r *Router) handleSSOOIDCCallback(w http.ResponseWriter, req *http.Request)
 	http.Redirect(w, req, buildLocalRedirectTarget(entry.ReturnTo, map[string]string{
 		"oidc": "success",
 	}), http.StatusFound)
+}
+
+var errOIDCCallbackPolicyChanged = errors.New("OIDC callback provider policy changed")
+
+// publishSSOConfigLocked fences callbacks against successful policy changes.
+// Reverting a policy to identical values does not revive the old admission.
+// Presentation-only edits and changes to other providers preserve admission.
+// The caller holds ssoMu; failed persistence never reaches publication.
+func (r *Router) publishSSOConfigLocked(next *config.SSOConfig) {
+	for id := range r.ssoPolicyRevisions {
+		previous, current := r.ssoConfig.GetProvider(id), next.GetProvider(id)
+		if !isEnabledOIDCProvider(current) || current.OIDC == nil {
+			delete(r.ssoPolicyRevisions, id)
+		} else if previous == nil || !ssoPresentationOnlyUpdate(*previous, *current) {
+			r.ssoNextPolicyRevision++
+			r.ssoPolicyRevisions[id] = r.ssoNextPolicyRevision
+		}
+	}
+	r.ssoConfig = next
+}
+
+// currentOIDCCallbackPolicy captures the immutable provider and its admission
+// together, before any remote token exchange or signature-key fetch.
+func (r *Router) currentOIDCCallbackPolicy(id string) (*config.SSOProvider, uint64) {
+	r.ssoMu.Lock()
+	defer r.ssoMu.Unlock()
+	provider := r.ssoConfig.GetProvider(id)
+	if r.ssoAuthLoadFailed.Load() {
+		return nil, 0
+	}
+	if !isEnabledOIDCProvider(provider) || provider.OIDC == nil {
+		return provider, 0
+	}
+	if r.ssoPolicyRevisions == nil {
+		r.ssoPolicyRevisions = make(map[string]uint64)
+	}
+	revision := r.ssoPolicyRevisions[id]
+	if revision == 0 {
+		r.ssoNextPolicyRevision++
+		revision = r.ssoNextPolicyRevision
+		r.ssoPolicyRevisions[id] = revision
+	}
+	return provider, revision
+}
+
+// commitOIDCCallback orders local role/identity/session effects against policy
+// publication. No IdP or response-body I/O runs under the configuration lock.
+// A stale callback must not even replace the browser's existing session.
+func (r *Router) commitOIDCCallback(id string, revision uint64, provider *config.SSOProvider, complete func() error) error {
+	r.ssoMu.RLock()
+	defer r.ssoMu.RUnlock()
+	current := r.ssoConfig.GetProvider(id)
+	if revision == 0 || r.ssoPolicyRevisions[id] != revision || r.ssoAuthLoadFailed.Load() ||
+		provider == nil || current == nil || !ssoPresentationOnlyUpdate(*provider, *current) {
+		return errOIDCCallbackPolicyChanged
+	}
+	return complete()
 }

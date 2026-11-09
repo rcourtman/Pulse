@@ -28,6 +28,14 @@ func TestReportingSubjectBoundaryExemptionIsExact(t *testing.T) {
 	variants := []boundaryVariant{
 		{name: "shared subject pipeline"},
 		{
+			name: "OIDC callback admission stays in tracked implementation", file: "oidc_callback_admission.go", content: "package api\n",
+			goMarker: "untracked paid-domain file oidc_callback_admission.go",
+		},
+		{
+			name: "OIDC callback admission has no prefix exemption", file: "oidc_callback_admission.go.extra.go", content: "package api\n",
+			goMarker: "untracked paid-domain file oidc_callback_admission.go.extra.go",
+		},
+		{
 			name: "SSO configuration adapter exemption is exact", file: "sso_config_preservation_extra.go", content: "package api\n",
 			goMarker: "untracked paid-domain file sso_config_preservation_extra.go",
 		},
