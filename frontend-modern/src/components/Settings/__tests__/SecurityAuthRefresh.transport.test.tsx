@@ -128,10 +128,9 @@ const openDraft = async (setup = false) => {
   fireEvent.click(
     await screen.findByRole('button', {
       name: setup ? 'Setup' : 'Rotate credentials',
-      exact: true,
     }),
   );
-  fireEvent.click(screen.getByRole('button', { name: 'Custom', exact: true }));
+  fireEvent.click(screen.getByRole('button', { name: 'Custom' }));
   fireEvent.input(screen.getByLabelText('Username', { exact: true }), {
     target: { value: 'unsaved-draft-user' },
   });
@@ -173,7 +172,7 @@ describe('Authentication status and credential draft refresh', () => {
     const state = mountPanel(null, true);
     expect(screen.getByRole('status')).toHaveTextContent('Checking authentication status…');
     expect(screen.queryByText('Authentication disabled')).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Setup', exact: true })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Setup' })).toBeNull();
     state.setLoading(false);
     expect(screen.getByRole('status')).toHaveTextContent('Authentication status is unavailable.');
     expect(screen.queryByText('Authentication disabled')).toBeNull();
@@ -192,23 +191,21 @@ describe('Authentication status and credential draft refresh', () => {
     mountTransport();
     await openDraft();
     const username = screen.getByLabelText('Username', { exact: true });
-    const toggle = screen.getByRole('button', { name: 'Hide local login form', exact: true });
+    const toggle = screen.getByRole('button', { name: 'Hide local login form' });
     fireEvent.click(toggle);
     await waitFor(() => expect(reads).toBe(2));
     expect(screen.getByRole('status')).toHaveTextContent('Refreshing authentication status…');
     expectDraft();
     expect(username).toBeDisabled();
     expect(toggle).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Change password', exact: true })).toBeDisabled();
-    expect(screen.getAllByRole('button', { name: 'Rotate credentials', exact: true })).toHaveLength(
-      2,
-    );
-    for (const button of screen.getAllByRole('button', { name: 'Rotate credentials', exact: true }))
+    expect(screen.getByRole('button', { name: 'Change password' })).toBeDisabled();
+    expect(screen.getAllByRole('button', { name: 'Rotate credentials' })).toHaveLength(2);
+    for (const button of screen.getAllByRole('button', { name: 'Rotate credentials' }))
       expect(button).toBeDisabled();
     refresh.resolve(json({ ...savedStatus(), tokenScopes: ['settings:write', 'settings:read'] }));
     await waitFor(() => expect(username).toBeEnabled());
     expect(screen.getByLabelText('Username', { exact: true })).toBe(username);
-    expect(screen.getByRole('button', { name: 'Hide local login form', exact: true })).toBe(toggle);
+    expect(screen.getByRole('button', { name: 'Hide local login form' })).toBe(toggle);
     expectDraft();
     expect(toggle).toHaveAttribute('aria-pressed', 'true');
     expect(screen.queryByRole('status')).toBeNull();
@@ -230,7 +227,7 @@ describe('Authentication status and credential draft refresh', () => {
       expect(document.body).not.toHaveTextContent('PRIVATE_STATUS_CANARY');
       fetchMock.mockResolvedValue(json(savedStatus()));
       await reader.access().loadSecurityStatus();
-      await screen.findByRole('button', { name: 'Change password', exact: true });
+      await screen.findByRole('button', { name: 'Change password' });
       expect(screen.queryByLabelText('Username', { exact: true })).toBeNull();
       expect(writes()).toHaveLength(0);
     },
@@ -250,8 +247,8 @@ describe('Authentication status and credential draft refresh', () => {
     });
     expect(screen.queryByLabelText('Username', { exact: true })).toBeNull();
     state.setLoading(false);
-    fireEvent.click(screen.getByRole('button', { name: 'Rotate credentials', exact: true }));
-    fireEvent.click(screen.getByRole('button', { name: 'Custom', exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Rotate credentials' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Custom' }));
     expect(screen.getByLabelText('Username', { exact: true })).not.toHaveValue(
       'unsaved-draft-user',
     );
@@ -264,7 +261,7 @@ describe('Authentication status and credential draft refresh', () => {
     await openDraft();
     state.setCanManage(false);
     expect(screen.queryByLabelText('Username', { exact: true })).toBeNull();
-    expect(screen.getByRole('button', { name: 'Change password', exact: true })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Change password' })).toBeDisabled();
     expect(
       screen.getByText('Authentication settings are read-only for this account.'),
     ).toBeVisible();
@@ -291,7 +288,7 @@ describe('Authentication status and credential draft refresh', () => {
     await openDraft(true);
     state.setLoading(true);
     expect(screen.getByText('Authentication disabled')).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Setup', exact: true })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Setup' })).toBeDisabled();
     expectDraft();
     expect(screen.getByLabelText('Username', { exact: true })).toBeDisabled();
     state.setStatus({ ...status });
@@ -306,7 +303,7 @@ describe('Authentication status and credential draft refresh', () => {
     expect(screen.getByText('sudo systemctl restart pulse')).toBeVisible();
     state.setLoading(true);
     expect(screen.getByText('sudo systemctl restart pulse')).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Change password', exact: true })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Change password' })).toBeDisabled();
     expect(writes()).toHaveLength(0);
   });
 });
