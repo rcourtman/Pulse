@@ -21,6 +21,27 @@
 
 ## Purpose
 
+### Saved approval failure is not a successful empty list
+
+`GET /api/ai/approvals` returns fixed `503 approval_store_unavailable` / "Saved
+approvals are unavailable" after actual approval-store initialization failure.
+It does not expose filesystem paths, parser details, commands or partial counts.
+Unknown request organization retains its earlier independent rejection. A ready
+store keeps its existing scoped response; intentional uninitialized/disabled
+state keeps the historical 200 empty list. Detail/approve/deny and final command
+authorization retain nil-store refusal. No auth, CSRF, review, relay/mobile,
+tenant membership, dispatch, route or payload-field grant changes.
+
+`ai_approval_load_test.go` drives production initialization through corrupt
+saved files, consumes list/detail/decisions and final authorization, repairs
+only safe fixture source and verifies normal recovery with tenant isolation.
+The unchanged Patrol client/store/banner consume native before/after responses
+at desktop/phone in light/dark; a failed read shows the existing unavailable or
+last-known state instead of clearing it. Other interface-bound nil-store readers
+(resource context, legacy relay adapter and finding hydration) retain their
+existing contracts; this is not a universal saved-state availability guarantee.
+
+
 ### Approval response snapshots preserve the native wire contract
 
 The approval store returns detached request/decision snapshots, so native list and

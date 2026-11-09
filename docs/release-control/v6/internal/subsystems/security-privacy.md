@@ -18,6 +18,25 @@
 
 ## Purpose
 
+### Unknown saved approval state is never replacement authority
+
+An unreadable/invalid approval or execution file blocks approval initialization
+before either file is migrated or published. Null approval entries fail without
+panic. A failed constructor returns no mutable store; cleanup, decisions and
+saves cannot erase the original files or authorize from a partial load. Existing
+legacy shapes, hashes, organization normalization and single-use checks remain;
+this does not validate new schema, correlate cross-file generations or recreate
+missing authority. Public list failure uses a fixed generic readiness error;
+private filesystem/decoder diagnostics stay server-side.
+
+`store_load_test.go` verifies both files remain byte-identical on failed loads,
+no partial maps publish, missing/legacy controls still work and readiness is
+atomically observed. `ai_approval_load_test.go` exercises failed/read/decision/
+command-refusal and restored-source recovery with isolated tenant responses.
+No customer recovery, measured exposure, live IdP, new privilege, dependency
+change or database/crash investigation is claimed.
+
+
 ### Caller-owned approval snapshots do not rewrite decision authority
 
 An approval's stored command, tenant, action context and consumed decision are

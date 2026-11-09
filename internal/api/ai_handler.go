@@ -806,8 +806,8 @@ func (h *AIHandler) ensureApprovalStore(dataDir string) {
 	if err != nil {
 		h.approvalStore = nil
 		h.approvalStoreDir = ""
-		approval.SetStore(nil)
-		log.Warn().Err(err).Msg("Failed to create approval store, approvals will not be persisted")
+		approval.SetStoreUnavailable()
+		log.Warn().Err(err).Msg("Approval store unavailable; preserve both saved files and restore readable valid data before restarting approvals")
 		return
 	}
 
