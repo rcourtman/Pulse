@@ -115,7 +115,7 @@ describe('PatrolIntelligenceSurface finding handoff', () => {
     patrolState.approvalCount = count;
     window.history.replaceState(null, '', '/patrol/activity');
     renderSurface();
-    fireEvent.click(screen.getByRole('button', { name: 'Finding options and history' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Finding options and history/ }));
     expect(
       screen.getByText(/Resolve or dismiss findings, remember expected behavior/),
     ).toBeInTheDocument();
