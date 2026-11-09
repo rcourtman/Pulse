@@ -4,6 +4,7 @@
 import importlib.util
 import io
 import json
+import os
 from contextlib import redirect_stdout
 from pathlib import Path
 import tempfile
@@ -32,15 +33,53 @@ def samples(rss_kib, ticks_per_s, write_bytes_per_s, io=True):
 
 
 class ReleaseMemorySummaryTests(unittest.TestCase):
-    def run_summary(self, baseline, candidate):
+    def run_summary(self, baseline, candidate, estate=None, agents=None, env=None):
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(tmp)
             (out / "samples-baseline.tsv").write_text(baseline)
             (out / "samples-candidate.tsv").write_text(candidate)
             (out / "clk_tck").write_text("100\n")
-            with redirect_stdout(io.StringIO()):
-                code = summary.main(["summarize", str(out)])
+            if estate:
+                (out / "estate").write_text(estate + "\n")
+            for label, stats in (agents or {}).items():
+                (out / f"agents-{label}.json").write_text(json.dumps(stats))
+            saved = {key: os.environ.get(key) for key in (env or {})}
+            os.environ.update(env or {})
+            try:
+                with redirect_stdout(io.StringIO()):
+                    code = summary.main(["summarize", str(out)])
+            finally:
+                for key, value in saved.items():
+                    if value is None:
+                        os.environ.pop(key, None)
+                    else:
+                        os.environ[key] = value
             return code, json.loads((out / "result.json").read_text()), (out / "summary.md").read_text()
+
+    def test_agents_estate_reports_traffic_and_can_skip_the_gate(self):
+        stats = {
+            "agents": 30, "docker_agents": 6, "containers_per_docker_agent": 40, "interval_s": 30,
+            "accepted": {"host": 900, "docker": 180}, "failed": {"host": 1, "docker": 0},
+            "dashboard": {"connects": 1, "messages": 450, "bytes": 3 * 1024 * 1024},
+        }
+        code, result, text = self.run_summary(
+            samples(130000, 25, 0), samples(170000, 25, 0), estate="agents",
+            agents={"baseline": stats, "candidate": stats}, env={"PULSE_MEMORY_GATE": "0"},
+        )
+        self.assertEqual(code, 0)
+        self.assertTrue(result["exceeded"])
+        self.assertFalse(result["regressed"])
+        self.assertIn("(agents estate)", text)
+        self.assertIn("Reported only: this estate does not gate.", text)
+        self.assertIn("| Host reports accepted | 900 | 900 |", text)
+        self.assertIn("| Dashboard MiB received | 3.0 | 3.0 |", text)
+        self.assertNotIn("Mock mode keeps", text)
+
+    def test_mock_estate_is_the_default(self):
+        _, result, text = self.run_summary(samples(130000, 25, 0), samples(130000, 25, 0))
+        self.assertEqual(result["estate"], "mock")
+        self.assertIn("(mock estate)", text)
+        self.assertNotIn("Agent traffic", text)
 
     def test_reports_cpu_and_write_rates_over_the_final_third(self):
         # 25 ticks/s at 100 Hz is a quarter of a core; 1 MiB per 64 s is 1350 MiB/day.
