@@ -44,7 +44,7 @@ accepted-row lifetime fences and backend mutation policies are unchanged.
 
 The additional identity information has a declared, bounded UserAssignmentsPanel
 reference allowance of 320 gzip bytes (5,924 to 6,244), not a reset to the measured
-7,130-byte chunk. Its resulting 7,181-byte cap retains the existing 15% tolerance;
+7,125-byte final chunk. Its resulting 7,181-byte cap retains the existing 15% tolerance;
 all other chunk references, total JS/CSS limits and preload/integrity checks stay
 unchanged. Shared inventory/editor identity rendering keeps the label definition
 in one place. Source build/size checks and the consuming browser proof verify
