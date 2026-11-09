@@ -57,10 +57,10 @@ export const ApprovalBanner: Component<{ targetIds?: ReadonlySet<string> }> = (p
 
   return (
     <Show when={pending().length > 0 || aiIntelligenceStore.approvalsError}>
-      <div class="space-y-3 bg-amber-50 dark:bg-amber-900/25 border border-amber-200 dark:border-amber-800 rounded-md px-4 py-3">
+      <div class="space-y-2 bg-amber-50 dark:bg-amber-900/25 border border-amber-200 dark:border-amber-800 rounded-md px-3 py-2">
         <Show when={aiIntelligenceStore.approvalsError}>
-          <div class="flex flex-wrap items-center justify-between gap-2">
-            <div role="status" class="min-w-0 flex-1 basis-48 text-amber-900 dark:text-amber-100">
+          <div class="flex items-start justify-between gap-2">
+            <div role="status" class="min-w-0 flex-1 text-amber-900 dark:text-amber-100">
               <p class="text-sm font-medium">Approval status unavailable</p>
               <p class="mt-0.5 text-xs">
                 <Show
@@ -75,17 +75,20 @@ export const ApprovalBanner: Component<{ targetIds?: ReadonlySet<string> }> = (p
               type="button"
               variant="secondary"
               size="sm"
-              class="min-h-11"
+              class="min-h-11 shrink-0"
+              aria-label={
+                aiIntelligenceStore.approvalsLoading ? 'Checking approvals…' : 'Refresh approvals'
+              }
               disabled={aiIntelligenceStore.approvalsLoading}
               onClick={() => void aiIntelligenceStore.loadPendingApprovals()}
             >
-              {aiIntelligenceStore.approvalsLoading ? 'Checking approvals…' : 'Refresh approvals'}
+              {aiIntelligenceStore.approvalsLoading ? 'Checking…' : 'Refresh'}
             </Button>
           </div>
         </Show>
         <Show when={pending().length > 0}>
-          <div class="flex items-center justify-between gap-3 flex-wrap">
-            <div class="flex min-w-0 items-center gap-3">
+          <div class="flex items-center justify-between gap-2 flex-wrap">
+            <div class="flex min-w-0 items-center gap-2">
               <div class="shrink-0 p-1.5 border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-900/25 rounded-md">
                 <ShieldAlertIcon class="w-4 h-4 text-amber-500 dark:text-amber-400" />
               </div>
@@ -110,10 +113,7 @@ export const ApprovalBanner: Component<{ targetIds?: ReadonlySet<string> }> = (p
                       {expiryStatusLabel(firstApproval()!.expiresAt)}
                     </span>
                   </div>
-                  <p
-                    class="text-xs text-amber-700 dark:text-amber-300 mt-0.5 max-w-xl truncate"
-                    title={firstApproval()!.context}
-                  >
+                  <p class="text-xs text-amber-700 dark:text-amber-300 mt-0.5 max-w-xl break-words">
                     {firstApproval()!.context}
                   </p>
                 </Show>

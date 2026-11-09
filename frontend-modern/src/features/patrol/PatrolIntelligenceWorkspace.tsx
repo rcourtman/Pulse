@@ -85,7 +85,9 @@ export function PatrolIntelligenceWorkspace(props: {
   const queueAffectedResourceCount = createMemo(() =>
     queueDisplayGroups().reduce((count, group) => count + group.affectedResourceCount, 0),
   );
-  const workTypeComposition = createMemo(() => getPatrolWorkTypeComposition(queueFindings()));
+  const workTypeComposition = createMemo(() =>
+    getPatrolWorkTypeComposition(queueFindings(), Boolean(aiIntelligenceStore.approvalsError)),
+  );
   // The scoped resource's findings: its work group and the approval banner
   // count and show only the approvals waiting on them.
   const scopedFindingIds = createMemo(() => {
@@ -96,13 +98,6 @@ export function PatrolIntelligenceWorkspace(props: {
         .filter((finding) => finding.resourceId === resourceId)
         .map((finding) => finding.id),
     );
-  });
-  const queuePendingApprovalCount = createMemo(() => {
-    const findingIds = scopedFindingIds();
-    if (!findingIds) return state.patrolPendingApprovalCount();
-    return aiIntelligenceStore.patrolPendingApprovals.filter((approval) =>
-      findingIds.has(approval.targetId),
-    ).length;
   });
   const isHistoryOpen = () => state.activeTab() === 'history';
   // Once the operator starts the setup panel it stays until they finish:
@@ -188,7 +183,8 @@ export function PatrolIntelligenceWorkspace(props: {
     getPatrolWorkspaceWorkGroups({
       latestRun: latestCompletedRun(),
       patrolStatus: state.patrolStatus(),
-      pendingApprovalCount: queuePendingApprovalCount(),
+      // ApprovalBanner already shows this exact scoped list, count and review
+      // destination. Do not repeat it as a second card above the actual findings.
       resourceScoped: Boolean(props.findingResourceId),
       workTypeComposition: workTypeComposition(),
     }),
@@ -208,27 +204,27 @@ export function PatrolIntelligenceWorkspace(props: {
     <>
       <ApprovalBanner targetIds={scopedFindingIds()} />
 
-      <div class="flex flex-wrap items-start justify-between gap-3 border-b border-border pb-3">
-        <div class="min-w-0">
-          <div class="flex min-w-0 flex-wrap items-center gap-2">
+      <div class="border-b border-border pb-3">
+        <div class="flex items-center justify-between gap-3">
+          <div class="min-w-0">
             <h2 class="text-sm font-semibold text-base-content">{workspaceTitle()}</h2>
           </div>
-          <p class="mt-1 text-xs text-muted">{workspaceDescription()}</p>
+          <Show when={!isSetupOnly() || (state.patrolRunHistory.value()?.length ?? 0) > 0}>
+            <div class="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                class="gap-1.5"
+                onClick={() => (isHistoryOpen() ? closeHistory() : openHistory())}
+              >
+                <HistoryIcon class="h-4 w-4" />
+                {isHistoryOpen() ? PATROL_WORKSPACE_QUEUE_TITLE : 'History'}
+              </Button>
+            </div>
+          </Show>
         </div>
-        <Show when={!isSetupOnly() || (state.patrolRunHistory.value()?.length ?? 0) > 0}>
-          <div class="flex flex-wrap items-center gap-2">
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              class="gap-1.5"
-              onClick={() => (isHistoryOpen() ? closeHistory() : openHistory())}
-            >
-              <HistoryIcon class="h-4 w-4" />
-              {isHistoryOpen() ? PATROL_WORKSPACE_QUEUE_TITLE : 'History'}
-            </Button>
-          </div>
-        </Show>
+        <p class="mt-1 text-xs text-muted">{workspaceDescription()}</p>
       </div>
 
       <Show when={shouldShowWorkGroups()}>
@@ -243,9 +239,6 @@ export function PatrolIntelligenceWorkspace(props: {
                 <div class="flex min-w-0 flex-wrap items-center gap-2">
                   <MetadataBadge tone={group.tone} size="xs" shape="rounded">
                     {group.label}
-                    <Show when={group.id === 'approvals' && aiIntelligenceStore.approvalsError}>
-                      {' · last known'}
-                    </Show>
                   </MetadataBadge>
                 </div>
                 <p class="mt-1 text-xs leading-5 text-muted">{group.detail}</p>
