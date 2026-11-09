@@ -679,11 +679,11 @@ else: sys.exit(97)
             original_write = Path.write_text
             def relocate(path, data, *args, **kwargs):
                 if path.name == "installer-definitions":
-                    # Relocate only the production destination. Keep its real
-                    # private staging, checked writes and atomic publication in
-                    # this connected signature/archive/recovery control too.
+                    # Relocate both the shared admission and writer destination.
+                    # Keep real name selection, refusal, private staging, checked
+                    # writes and atomic publication in this connected control.
                     before = 'local service_path="/etc/systemd/system/$SERVICE_NAME.service"'
-                    self.assertEqual(data.count(before), 1)
+                    self.assertEqual(data.count(before), 2)
                     data = data.replace(before, 'local service_path="$PULSE_NATIVE_ROOT/pulse-source-updater.service"')
                 return original_write(path, data, *args, **kwargs)
             try:
