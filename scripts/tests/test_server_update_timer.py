@@ -387,11 +387,12 @@ class ServerUpdateTimerTest(unittest.TestCase):
         service = "pulse-" + "department-" * 12
         e = self.exercise(flow="version", state="disabled", service=service)
         self.assert_refreshed(e, False)
-        self.assertEqual(e["calls"][-2],
-                         f"list-unit-files --no-legend --no-pager --full -- {service}-update.timer {service}-update.service")
-        self.assertTrue(e["calls"][:-2])
-        self.assertTrue(all(call == f"list-unit-files --no-legend --no-pager --full -- {service}-update.timer"
-                            for call in e["calls"][:-2]))
+        timer_inventory = f"list-unit-files --no-legend --no-pager --full -- {service}-update.timer"
+        asset_inventory = f"{timer_inventory} {service}-update.service"
+        # Discover the timer first, then check both units before staging and
+        # again before publishing. Every read must keep the complete names.
+        self.assertEqual(e["calls"], [timer_inventory, timer_inventory,
+                                     asset_inventory, asset_inventory, "daemon-reload"])
 
     @unittest.skipUnless(REAL_SYSTEMCTL, "systemctl filesystem inventory is unavailable")
     def test_real_systemctl_inventory_and_complete_flow_use_only_fixture_root(self):

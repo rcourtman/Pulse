@@ -1359,3 +1359,20 @@ result=$(get_latest_stable_version)
 		t.Fatalf("missing parser must stop before discovery: %v\n%s", err, out)
 	}
 }
+
+// These controls exercise actual same-directory writes with no manager or
+// production access. Both real optional callers retain their nonfatal policy.
+func TestInstallAutoUpdateAssetPublication(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix server installer filesystem controls")
+	}
+	runParallelPythonFixtureControls(t, repoFile("scripts", "tests", "test_auto_update_service_state.py"), "UpdateAssetPublication", []string{
+		"test_nonregular_destinations_refuse_before_staging_or_helper_replacement",
+		"test_foreign_fixed_temp_paths_survive_private_staging_and_exact_renames",
+		"test_preparation_failures_preserve_all_three_assets_and_preferences",
+		"test_publication_failure_stops_without_claiming_a_three_file_rollback",
+		"test_changed_destinations_and_new_effective_masks_never_report_success",
+		"test_both_optional_callers_complete_without_enable_or_start_after_refusal",
+		"test_cleanup_failure_retains_owned_stages_and_primary_failure",
+	}, 45*time.Second, "PULSE_INSTALLER_UNDER_TEST="+repoFile("install.sh"))
+}
