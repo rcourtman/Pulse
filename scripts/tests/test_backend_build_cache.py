@@ -259,10 +259,14 @@ func TestTrailing(t *testing.T) { record(t) }
             # to fail would not be a working backend executor.
             (root / "passing").mkdir()
             (root / "passing/passing_test.go").write_text(
-                'package passing\nimport "testing"\nfunc TestPassing(t *testing.T) {}\n')
+                'package passing\nimport ("os"; "testing")\n'
+                'func TestPassing(t *testing.T) {\n'
+                ' if err := os.WriteFile(os.Getenv("FIXTURE_EVENTS"), []byte(t.Name()+"\\n"), 0600);'
+                ' err != nil { t.Fatal(err) }\n}\n')
             cases = ("", "-run=^TestPassing$", "-skip=^TestRequiredFailure$", "-list=.",
                      "-short", "-failfast", "-exec=/bin/true", "'-run=^TestPassing$'",
-                     "-test.run=^TestPassing$", "-fuzz=FuzzAbsent")
+                     "-test.run=^TestPassing$", "-fuzz=FuzzAbsent", "-c", "-n",
+                     "-c=true -n=true -run=^TestPassing$ -list=. -exec=/bin/true")
             for index, flags in enumerate(cases):
                 with self.subTest(inherited_flags=flags):
                     events = root / f"events-{index}"
@@ -294,6 +298,7 @@ func TestTrailing(t *testing.T) { record(t) }
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertTrue(json.loads(result.stdout.splitlines()[-1])["started"])
             self.assertNotIn("(cached)", result.stdout)
+            self.assertEqual(events.read_text().splitlines(), ["TestPassing"])
 
 
 if __name__ == "__main__":
