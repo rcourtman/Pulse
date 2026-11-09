@@ -1,8 +1,20 @@
-import { Component, Show, Accessor, Setter } from 'solid-js';
+import {
+  Component,
+  Show,
+  Accessor,
+  Setter,
+  createEffect,
+  createMemo,
+  on,
+  onCleanup,
+} from 'solid-js';
 import { Button } from '@/components/shared/Button';
 import { CalloutCard } from '@/components/shared/CalloutCard';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { Toggle } from '@/components/shared/Toggle';
+import { InlineNotice } from '@/components/shared/InlineNotice';
+import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
+import { eventBus } from '@/stores/events';
 import type { ToggleChangeEvent } from '@/components/shared/Toggle';
 import {
   getSecurityAuthRestartInstruction,
@@ -22,6 +34,9 @@ import type { VersionInfo } from '@/api/updates';
 
 interface SecurityStatusInfo {
   hasAuthentication: boolean;
+  currentUsername?: string;
+  apiTokenHint?: string;
+  tokenScopes?: string[];
   apiTokenConfigured?: boolean;
   authUsername?: string;
   configuredButPendingRestart?: boolean;
@@ -52,17 +67,52 @@ interface SecurityAuthPanelProps {
 export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
   const restartInstruction = () =>
     getSecurityAuthRestartInstruction(props.versionInfo()?.deploymentType);
+  // A pending read keeps the last admitted snapshot. Do not unmount the
+  // credential form and silently replace a custom draft with generated values.
   const showAuthenticationControls = () =>
-    !props.securityStatusLoading() &&
-    (props.securityStatus()?.hasAuthentication || props.securityStatus()?.apiTokenConfigured);
+    props.securityStatus()?.hasAuthentication || props.securityStatus()?.apiTokenConfigured;
+  const credentialOwner = createMemo(() =>
+    JSON.stringify([
+      props.securityStatus()?.currentUsername,
+      props.securityStatus()?.apiTokenHint,
+      props.securityStatus()?.tokenScopes?.slice().sort(),
+      props.securityStatus()?.authUsername,
+      props.canManage,
+    ]),
+  );
+  const closeCredentialForms = () => {
+    props.setShowQuickSecuritySetup(false);
+    props.setShowQuickSecurityWizard(false);
+  };
+  // Preservation is local to the same reader, not a transfer to another user,
+  // credential, permission set or organisation. A failed read also clears it.
+  createEffect(on(credentialOwner, closeCredentialForms, { defer: true }));
+  const unsubscribeOrg = eventBus.on('org_switched', closeCredentialForms);
+  onCleanup(unsubscribeOrg);
 
   return (
     <SettingsPanel
       title="Authentication"
+      action={
+        <Show when={props.securityStatusLoading()}>
+          <span role="status" aria-live="polite" class="flex items-center gap-2 text-xs text-muted">
+            <LoadingSpinner size="sm" tone="muted" />
+            {props.securityStatus()
+              ? 'Refreshing authentication status…'
+              : 'Checking authentication status…'}
+          </span>
+        </Show>
+      }
       noPadding={showAuthenticationControls()}
       bodyClass={showAuthenticationControls() ? 'divide-y divide-border' : 'space-y-6'}
     >
-      <Show when={!props.securityStatus()?.hasAuthentication}>
+      <Show when={!props.securityStatusLoading() && !props.securityStatus()}>
+        <InlineNotice tone="warning" role="status">
+          Authentication status is unavailable. Check settings access before making changes.
+        </InlineNotice>
+      </Show>
+
+      <Show when={props.securityStatus()?.hasAuthentication === false}>
         <CalloutCard
           tone="warning"
           title={SECURITY_AUTH_DISABLED_PANEL_TITLE}
@@ -81,27 +131,30 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
               size="settingsActionXs"
               class="w-full sm:w-auto"
               onClick={() => props.setShowQuickSecuritySetup(!props.showQuickSecuritySetup())}
-              disabled={!props.canManage}
+              disabled={!props.canManage || props.securityStatusLoading()}
             >
               {SECURITY_AUTH_SETUP_LABEL}
             </Button>
           </div>
 
           <Show when={props.canManage && props.showQuickSecuritySetup()}>
-            <div class="border-t border-amber-200 pt-4 dark:border-amber-700">
+            <fieldset
+              disabled={props.securityStatusLoading()}
+              class="min-w-0 border-t border-amber-200 pt-4 dark:border-amber-700"
+            >
               <QuickSecuritySetup
                 onConfigured={() => {
                   props.setShowQuickSecuritySetup(false);
                   props.loadSecurityStatus();
                 }}
               />
-            </div>
+            </fieldset>
           </Show>
         </CalloutCard>
       </Show>
 
       <Show when={showAuthenticationControls()}>
-        <div>
+        <fieldset disabled={props.securityStatusLoading()} class="min-w-0">
           <div class="p-4 sm:p-6 flex flex-col gap-3 sm:gap-4">
             <Show when={!props.canManage}>
               <div class="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800 dark:border-blue-800 dark:bg-blue-900/25 dark:text-blue-200">
@@ -166,7 +219,7 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
               />
             </div>
           </Show>
-        </div>
+        </fieldset>
       </Show>
 
       <Show when={props.securityStatus()?.configuredButPendingRestart}>

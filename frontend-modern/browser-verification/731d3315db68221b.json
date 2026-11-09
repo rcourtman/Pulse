@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "946dabba4891358d43d5434c76745860c8877ae2",
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/SecurityAuthPanel.tsx": "fc0c86c6c486f22883aeaa49ffc9bfa0c9f7442a636cadc947577a453b4768fa"
+  },
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/SecurityAuthPanel.tsx"
+  ],
+  "routes": [
+    "/settings/security/authentication (native SettingsPageShell + SecurityAuthPanel, unchanged useSettingsAccess/useSystemSettingsState/API client, safe HTTP fixtures; not full App)"
+  ],
+  "states": [
+    "enabled status",
+    "custom rotation draft",
+    "pending status GET after native hide-local-login POST",
+    "same-reader successful refresh",
+    "failed refresh withdrawal",
+    "read-only account",
+    "known disabled authentication"
+  ],
+  "interactions": [
+    "open Rotate credentials, select Custom, fill synthetic fields",
+    "toggle Hide local login form through real SettingsAPI and hold following status GET",
+    "assert controls remain disabled and Custom draft values retained during/after read",
+    "reject a later status read with 403 and confirm complete panel/draft withdrawal",
+    "verify read-only/disabled states and inspect 36 captures forming 18 comparable pairs"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "verified_at": "2026-11-09T00:32:26Z",
+  "browsers": [
+    "Playwright 1.56.1 Chromium 141 (desktop/light)",
+    "Playwright 1.56.1 WebKit 26 (390x844/light/dark)"
+  ],
+  "evidence": "Web-product invocation 20261109T002007Z: RECEIPTS.md, CAPTURES.json, BROWSER-BEFORE.json and BROWSER-AFTER.json. Pixel review completed before final candidate retention."
+}
