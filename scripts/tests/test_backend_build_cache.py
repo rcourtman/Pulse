@@ -219,6 +219,82 @@ raise SystemExit(result['exit'])
                     self.assertTrue(observation["started"])
                     self.assertEqual(observation["exit"], changed.returncode)
 
+    @unittest.skipUnless(shutil.which("go"), "native execution fixture requires Go (provided by script-smoke CI)")
+    def test_real_ordinary_worker_cannot_inherit_a_partial_or_bypassed_test_verdict(self):
+        # Exercise Go's actual flag precedence, including quoted and prefixed
+        # forms. A mocked command or flag-string assertion cannot prove that
+        # list-only output or a successful execution wrapper stopped working.
+        driver = """
+import importlib.util, json, os, sys
+from pathlib import Path
+spec = importlib.util.spec_from_file_location('ordinary_worker', sys.argv[1])
+worker = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(worker)
+worker.ROOT = Path(sys.argv[2])
+flags = os.environ['GOFLAGS']
+result = worker.run_task(('example.com/ordinaryexecution' + sys.argv[3],
+                        ['bash', '-euo', 'pipefail', '-c', worker.ORDINARY_COMMAND]))
+assert os.environ['GOFLAGS'] == flags
+print(json.dumps(result))
+raise SystemExit(result['exit'])
+"""
+        with tempfile.TemporaryDirectory(prefix="ordinary Go execution ") as temporary:
+            root = Path(temporary)
+            (root / "go.mod").write_text("module example.com/ordinaryexecution\n\ngo 1.23\n")
+            (root / "execution_test.go").write_text('''package ordinaryexecution
+import ("os"; "testing")
+func record(t *testing.T) {
+ f, err := os.OpenFile(os.Getenv("FIXTURE_EVENTS"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+ if err != nil { t.Fatal(err) }; defer f.Close()
+ if _, err = f.WriteString(t.Name()+"\\n"); err != nil { t.Fatal(err) }
+}
+func TestRequiredFailure(t *testing.T) {
+ record(t); if testing.Short() { t.Skip("short fixture") }
+ t.Error("required execution witness")
+}
+func TestPassing(t *testing.T) { record(t) }
+func TestTrailing(t *testing.T) { record(t) }
+''')
+            # Keep one deliberately passing fixture too: forcing all commands
+            # to fail would not be a working backend executor.
+            (root / "passing").mkdir()
+            (root / "passing/passing_test.go").write_text(
+                'package passing\nimport "testing"\nfunc TestPassing(t *testing.T) {}\n')
+            cases = ("", "-run=^TestPassing$", "-skip=^TestRequiredFailure$", "-list=.",
+                     "-short", "-failfast", "-exec=/bin/true", "'-run=^TestPassing$'",
+                     "-test.run=^TestPassing$", "-fuzz=FuzzAbsent")
+            for index, flags in enumerate(cases):
+                with self.subTest(inherited_flags=flags):
+                    events = root / f"events-{index}"
+                    environment = {**os.environ, "GOWORK": "off", "GOPROXY": "off",
+                                   "GOSUMDB": "off", "GOTOOLCHAIN": "local",
+                                   "GOMAXPROCS": "2", "FIXTURE_EVENTS": str(events),
+                                   "GOFLAGS": "-mod=readonly " + flags}
+                    result = subprocess.run(
+                        [sys.executable, "-I", "-c", driver,
+                         str(ROOT / "scripts/release_control/run_go_rest_shard.py"), str(root), ""],
+                        cwd=root, env=environment, capture_output=True, text=True, timeout=120,
+                    )
+                    self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+                    self.assertIn("required execution witness", result.stdout)
+                    self.assertNotIn("(cached)", result.stdout)
+                    self.assertEqual(events.read_text().splitlines(),
+                                     ["TestRequiredFailure", "TestPassing", "TestTrailing"])
+                    observation = json.loads(result.stdout.splitlines()[-1])
+                    self.assertTrue(observation["started"])
+                    self.assertEqual(observation["exit"], result.returncode)
+
+            # Use the same real worker with an all-passing package, not an
+            # alternate test command or a blanket failing adapter.
+            result = subprocess.run(
+                [sys.executable, "-I", "-c", driver,
+                 str(ROOT / "scripts/release_control/run_go_rest_shard.py"), str(root), "/passing"],
+                cwd=root, env=environment, capture_output=True, text=True, timeout=120,
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertTrue(json.loads(result.stdout.splitlines()[-1])["started"])
+            self.assertNotIn("(cached)", result.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

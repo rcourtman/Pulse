@@ -439,7 +439,9 @@ class WorkflowTest(unittest.TestCase):
         active = {}; peak = ordinary_peak = 0
         for event in map(json.loads,events.read_text().splitlines()):
             if event['ordinary']:
-                self.assertEqual(event['goflags'].split()[-2:], ['-p=1', '-count=1'])
+                self.assertEqual(event['goflags'].split()[-9:],
+                                 ['-p=1', '-count=1', '-run=', '-skip=', '-list=',
+                                  '-exec=', '-fuzz=', '-short=false', '-failfast=false'])
             if event['kind']=='start': active[event['pid']] = event['ordinary']
             else: del active[event['pid']]
             peak = max(peak,len(active)); ordinary_peak = max(ordinary_peak,sum(active.values()))
@@ -475,14 +477,18 @@ class WorkflowTest(unittest.TestCase):
         spec = importlib.util.spec_from_file_location('fresh_rest_shard', SHARD)
         shard = importlib.util.module_from_spec(spec); spec.loader.exec_module(shard)
         command = ['bash', '-euo', 'pipefail', '-c', shard.ORDINARY_COMMAND]
-        for inherited in ('', '-mod=readonly -count=0 -p=8'):
+        for inherited in ('', '-mod=readonly -count=0 -p=8',
+                          "-mod=readonly '-run=TestOnly' -skip=. -list=. -exec=/bin/true "
+                          "-fuzz=FuzzOnly -short -failfast"):
             with self.subTest(inherited=inherited), patch.dict(os.environ, {'GOFLAGS': inherited}):
                 with patch.object(shard.subprocess, 'run',
                                   return_value=subprocess.CompletedProcess(command, 0)) as execute:
                     self.assertEqual(shard.run_task((runner.MODULE + 'internal/a', command))['exit'], 0)
                 environment = execute.call_args.kwargs['env']
                 self.assertEqual(environment['GOFLAGS'].split(),
-                                 inherited.split() + ['-p=1', '-count=1'])
+                                 inherited.split() + ['-p=1', '-count=1', '-run=', '-skip=',
+                                                      '-list=', '-exec=', '-fuzz=',
+                                                      '-short=false', '-failfast=false'])
                 self.assertEqual(environment['pkgs'], runner.MODULE + 'internal/a')
                 self.assertEqual(execute.call_args.args[0], command)
                 self.assertEqual(os.environ['GOFLAGS'], inherited)
