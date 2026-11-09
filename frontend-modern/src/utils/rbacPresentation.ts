@@ -26,6 +26,11 @@ export function getUserIdentityDisplayName(user: UserIdentityPresentation): stri
   return user.displayName?.trim() || user.email?.trim() || user.username;
 }
 
+export function getUserIdentityLabel(user: UserIdentityPresentation): string {
+  const name = getUserIdentityDisplayName(user);
+  return name === user.username ? name : `${name} (${user.username})`;
+}
+
 export function getUserIdentityProviderLabel(user: UserIdentityPresentation): string {
   const providerType = user.providerType?.trim().toUpperCase();
   const providerId = user.providerId?.trim();

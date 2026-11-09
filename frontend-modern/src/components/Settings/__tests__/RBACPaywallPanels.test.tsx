@@ -403,7 +403,9 @@ describe('RBAC paywall settings panels', () => {
   it('distinguishes a filtered directory from no users and clears the filter without a request', async () => {
     getUsersMock.mockResolvedValue(searchUsers);
     render(() => <UserAssignmentsPanel />);
-    await screen.findByRole('button', { name: 'Manage access for Alice Example' });
+    await screen.findByRole('button', {
+      name: 'Manage access for Alice Example (sso:oidc:fixture:alice-001)',
+    });
     const search = screen.getByRole('textbox', { name: 'Search users...' });
     fireEvent.input(search, { target: { value: 'absent-user' } });
 
@@ -441,12 +443,18 @@ describe('RBAC paywall settings panels', () => {
   ])('searches identity metadata with a trimmed, case-insensitive query: %s', async (query) => {
     getUsersMock.mockResolvedValue(searchUsers);
     render(() => <UserAssignmentsPanel />);
-    await screen.findByRole('button', { name: 'Manage access for Alice Example' });
+    await screen.findByRole('button', {
+      name: 'Manage access for Alice Example (sso:oidc:fixture:alice-001)',
+    });
     fireEvent.input(screen.getByRole('textbox', { name: 'Search users...' }), {
       target: { value: query },
     });
     expect(screen.getAllByRole('button', { name: /Manage access for/ })).toHaveLength(1);
-    expect(screen.getByRole('button', { name: 'Manage access for Alice Example' })).toBeEnabled();
+    expect(
+      screen.getByRole('button', {
+        name: 'Manage access for Alice Example (sso:oidc:fixture:alice-001)',
+      }),
+    ).toBeEnabled();
     expect(screen.getByRole('status', { name: 'User search results' })).toHaveTextContent(
       'Showing 1 of 2 users',
     );
@@ -501,7 +509,9 @@ describe('RBAC paywall settings panels', () => {
     getUsersMock.mockResolvedValue(searchUsers);
     const [canManage, setCanManage] = createSignal(true);
     render(() => <UserAssignmentsPanel canManage={canManage()} />);
-    await screen.findByRole('button', { name: 'Manage access for Alice Example' });
+    await screen.findByRole('button', {
+      name: 'Manage access for Alice Example (sso:oidc:fixture:alice-001)',
+    });
     fireEvent.input(screen.getByRole('textbox', { name: 'Search users...' }), {
       target: { value: 'absent-user' },
     });
@@ -719,8 +729,14 @@ describe('RBAC paywall settings panels', () => {
     expect(screen.getByText('OIDC · okta')).toBeInTheDocument();
     expect(screen.getByTitle('sso:oidc:okta:opaque_subject')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Remove Alice Example' }));
-    const dialog = await screen.findByRole('dialog', { name: 'Remove user access: Alice Example' });
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Remove Alice Example (sso:oidc:okta:opaque_subject)',
+      }),
+    );
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Remove user access: Alice Example (sso:oidc:okta:opaque_subject)',
+    });
     expect(dialog).toHaveTextContent('does not disable the account at the identity provider');
 
     fireEvent.click(screen.getByRole('button', { name: 'Remove User Access' }));
@@ -734,12 +750,110 @@ describe('RBAC paywall settings panels', () => {
         }),
       );
     });
-    expect(await screen.findByText('User access removed for Alice Example')).toBeInTheDocument();
+    expect(
+      await screen.findByText(
+        'User access removed for Alice Example (sso:oidc:okta:opaque_subject)',
+      ),
+    ).toBeInTheDocument();
     expect(notificationSuccessMock).not.toHaveBeenCalled();
     await waitFor(() => {
       expect(screen.queryByText('Alice Example')).not.toBeInTheDocument();
     });
     expect(screen.getByPlaceholderText('Search users...')).toHaveFocus();
+  });
+
+  const namesakeUsers = ['subject-01', 'subject-02'].map((subject) => ({
+    username: `sso:oidc:workforce:${subject}`,
+    displayName: 'Alex Morgan',
+    email: 'alex@example.invalid',
+    providerType: 'oidc',
+    providerId: 'workforce',
+    roleIds: [],
+  }));
+
+  it('keeps the selected saved principal readable from namesake rows through editing and removal', async () => {
+    getUsersMock.mockResolvedValueOnce(namesakeUsers).mockResolvedValueOnce([namesakeUsers[0]]);
+    render(() => <UserAssignmentsPanel />);
+    await screen.findByRole('button', {
+      name: `Manage access for Alex Morgan (${namesakeUsers[1].username})`,
+    });
+    for (const user of namesakeUsers) {
+      const row = within(screen.getByText(user.username).closest('tr')!);
+      expect(row.getByText('alex@example.invalid')).toBeInTheDocument();
+      expect(row.getByText('OIDC · workforce')).toBeInTheDocument();
+      expect(row.getByText('No roles assigned')).toBeInTheDocument();
+      expect(
+        row.getByRole('button', { name: `Remove Alex Morgan (${user.username})` }),
+      ).toBeEnabled();
+      fireEvent.click(
+        row.getByRole('button', { name: `Manage access for Alex Morgan (${user.username})` }),
+      );
+      const editor = within(
+        await screen.findByRole('dialog', {
+          name: `Manage access: Alex Morgan (${user.username})`,
+        }),
+      );
+      expect(editor.getByText(user.username)).toBeInTheDocument();
+      expect(
+        editor.queryByText(namesakeUsers.find((other) => other !== user)!.username),
+      ).not.toBeInTheDocument();
+      await waitFor(() => {
+        expect(getUserPermissionsMock).toHaveBeenLastCalledWith(
+          user.username,
+          expect.objectContaining({ expectedOrgID: 'default', retry: false }),
+        );
+      });
+      fireEvent.click(editor.getByRole('button', { name: 'Cancel' }));
+    }
+
+    fireEvent.click(
+      screen.getByRole('button', { name: `Remove Alex Morgan (${namesakeUsers[1].username})` }),
+    );
+    const confirmation = within(
+      await screen.findByRole('dialog', {
+        name: `Remove user access: Alex Morgan (${namesakeUsers[1].username})`,
+      }),
+    );
+    expect(confirmation.getByText(namesakeUsers[1].username)).toBeInTheDocument();
+    expect(confirmation.queryByText(namesakeUsers[0].username)).not.toBeInTheDocument();
+    expect(confirmation.getByText('alex@example.invalid')).toBeInTheDocument();
+    expect(confirmation.getByText('OIDC · workforce')).toBeInTheDocument();
+    expect(confirmation.getByText(/revokes active Pulse sessions/)).toBeInTheDocument();
+    expect(confirmation.getByText(/does not disable the account/)).toBeInTheDocument();
+    fireEvent.click(confirmation.getByRole('button', { name: 'Remove User Access' }));
+    await screen.findByText(`User access removed for Alex Morgan (${namesakeUsers[1].username})`);
+    expect(deleteUserMock).toHaveBeenCalledExactlyOnceWith(
+      namesakeUsers[1].username,
+      expect.objectContaining({
+        expectedOrgID: 'default',
+        retry: false,
+        signal: expect.any(AbortSignal),
+      }),
+    );
+    expect(screen.getByText(namesakeUsers[0].username)).toBeInTheDocument();
+  });
+
+  it('names the attempted principal when a namesake role update cannot be confirmed', async () => {
+    getUsersMock.mockResolvedValue(namesakeUsers);
+    updateUserRolesMock.mockRejectedValue(Object.assign(new Error('unavailable'), { status: 500 }));
+    render(() => <UserAssignmentsPanel />);
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: `Manage access for Alex Morgan (${namesakeUsers[1].username})`,
+      }),
+    );
+    fireEvent.click(screen.getByRole('checkbox', { name: /Admin/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      `The role update for Alex Morgan (${namesakeUsers[1].username}) could not be confirmed.`,
+    );
+    expect(screen.getByRole('button', { name: 'Check saved access' })).toBeEnabled();
+    expect(updateUserRolesMock).toHaveBeenCalledExactlyOnceWith(
+      namesakeUsers[1].username,
+      ['admin'],
+      expect.objectContaining({ expectedOrgID: 'default', retry: false }),
+    );
+    expect(deleteUserMock).not.toHaveBeenCalled();
   });
 
   it('does not render stale user data when assignment storage is unavailable', async () => {

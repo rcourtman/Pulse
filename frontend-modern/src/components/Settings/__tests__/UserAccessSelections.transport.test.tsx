@@ -136,11 +136,16 @@ describe('User Access selection through rendered controls and real transport', (
     await openPanel();
     const selected = originalUsers[1];
     fireEvent.click(
-      rowFor(selected).getByRole('button', { name: 'Manage access for Alex Example' }),
+      rowFor(selected).getByRole('button', {
+        name: `Manage access for Alex Example (${selected.username})`,
+      }),
     );
-    const dialog = await screen.findByRole('dialog', { name: 'Manage access: Alex Example' });
+    const dialog = await screen.findByRole('dialog', {
+      name: `Manage access: Alex Example (${selected.username})`,
+    });
     const editor = within(dialog);
     expect(editor.getByText(selected.email!)).toBeInTheDocument();
+    expect(editor.getByText(selected.username)).toBeInTheDocument();
     await editor.findByText(`saved:${selected.username}`);
     expect(reads(`${userPath(selected.username)}/permissions`)).toHaveLength(1);
     for (const sibling of [originalUsers[0], originalUsers[2]])
@@ -185,10 +190,14 @@ describe('User Access selection through rendered controls and real transport', (
     // Reopen from the reread grid proxy: checkbox state must reflect the saved
     // IDs, not the identically named catalogue entry or an old row object.
     fireEvent.click(
-      rowFor(selected).getByRole('button', { name: 'Manage access for Alex Example' }),
+      rowFor(selected).getByRole('button', {
+        name: `Manage access for Alex Example (${selected.username})`,
+      }),
     );
     const reopened = within(
-      await screen.findByRole('dialog', { name: 'Manage access: Alex Example' }),
+      await screen.findByRole('dialog', {
+        name: `Manage access: Alex Example (${selected.username})`,
+      }),
     );
     await reopened.findByText(`saved:${selected.username}`);
     expect(
@@ -211,26 +220,35 @@ describe('User Access selection through rendered controls and real transport', (
       'Showing 2 of 3 users',
     );
     const cancelled = originalUsers[1];
-    fireEvent.click(rowFor(cancelled).getByRole('button', { name: 'Remove Alex Example' }));
+    fireEvent.click(
+      rowFor(cancelled).getByRole('button', {
+        name: `Remove Alex Example (${cancelled.username})`,
+      }),
+    );
     const firstConfirmation = await screen.findByRole('dialog', {
-      name: 'Remove user access: Alex Example',
+      name: `Remove user access: Alex Example (${cancelled.username})`,
     });
+    expect(within(firstConfirmation).getByText(cancelled.username)).toBeInTheDocument();
     expect(writes()).toHaveLength(0);
     fireEvent.click(within(firstConfirmation).getByRole('button', { name: 'Cancel' }));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(savedUsers).toEqual(originalUsers);
 
     const selected = originalUsers[2];
-    fireEvent.click(rowFor(selected).getByRole('button', { name: 'Remove Alex Example' }));
+    fireEvent.click(
+      rowFor(selected).getByRole('button', { name: `Remove Alex Example (${selected.username})` }),
+    );
     const confirmation = await screen.findByRole('dialog', {
-      name: 'Remove user access: Alex Example',
+      name: `Remove user access: Alex Example (${selected.username})`,
     });
-    expect(confirmation).toHaveTextContent('revokes their active Pulse sessions');
+    expect(confirmation).toHaveTextContent('revokes active Pulse sessions');
+    expect(within(confirmation).getByText(selected.username)).toBeInTheDocument();
+    expect(within(confirmation).queryByText(cancelled.username)).not.toBeInTheDocument();
     expect(confirmation).toHaveTextContent('does not disable the account at the identity provider');
     expect(writes()).toHaveLength(0);
     fireEvent.click(within(confirmation).getByRole('button', { name: 'Remove User Access' }));
     await waitFor(() => expect(reads('/api/admin/users')).toHaveLength(2));
-    await screen.findByText('User access removed for Alex Example');
+    await screen.findByText(`User access removed for Alex Example (${selected.username})`);
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(writes()).toHaveLength(1);
     const [url, init] = writes()[0];
@@ -244,7 +262,9 @@ describe('User Access selection through rendered controls and real transport', (
     fireEvent.input(screen.getByPlaceholderText('Search users...'), { target: { value: '' } });
     for (const sibling of originalUsers.slice(0, 2))
       expect(
-        rowFor(sibling).getByRole('button', { name: 'Manage access for Alex Example' }),
+        rowFor(sibling).getByRole('button', {
+          name: `Manage access for Alex Example (${sibling.username})`,
+        }),
       ).toBeEnabled();
     expect(screen.getAllByText('Alex Example')).toHaveLength(2);
     expect(reads('/api/admin/users')).toHaveLength(2);

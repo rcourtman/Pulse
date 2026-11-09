@@ -84,7 +84,10 @@ function rowFor(user: UserRoleAssignment) {
   expect(row).not.toBeNull();
   return within(row!);
 }
-const editor = () => within(screen.getByRole('dialog', { name: 'Manage access: Alex Example' }));
+const editor = () =>
+  within(
+    screen.getByRole('dialog', { name: `Manage access: Alex Example (${selected.username})` }),
+  );
 const roleChoice = (description: string) =>
   editor().getByRole('checkbox', { name: `Fleet role ${description}` });
 const search = () => screen.getByPlaceholderText('Search users...');
@@ -99,10 +102,11 @@ async function openPanel() {
 async function openEditor(waitForPermissions = true) {
   fireEvent.click(
     rowFor(selected).getByRole('button', {
-      name: 'Manage access for Alex Example',
+      name: `Manage access for Alex Example (${selected.username})`,
     }),
   );
   expect(editor().getByText(selected.email!)).toBeInTheDocument();
+  expect(editor().getByText(selected.username)).toBeInTheDocument();
   if (waitForPermissions) await editor().findByText(`saved:${selected.username}`);
 }
 async function prepare(operation: Operation) {
@@ -112,11 +116,12 @@ async function prepare(operation: Operation) {
     fireEvent.click(roleChoice('Operate nodes'));
     return editor().getByRole('button', { name: 'Save Changes' });
   }
-  fireEvent.click(rowFor(selected).getByRole('button', { name: 'Remove Alex Example' }));
-  return within(screen.getByRole('dialog', { name: 'Remove user access: Alex Example' })).getByRole(
-    'button',
-    { name: 'Remove User Access' },
+  fireEvent.click(
+    rowFor(selected).getByRole('button', { name: `Remove Alex Example (${selected.username})` }),
   );
+  return within(
+    screen.getByRole('dialog', { name: `Remove user access: Alex Example (${selected.username})` }),
+  ).getByRole('button', { name: 'Remove User Access' });
 }
 async function capabilities(kind: 'enabled' | 'withdrawn' | 'failed' | 'malformed') {
   capabilityReply = async () => {

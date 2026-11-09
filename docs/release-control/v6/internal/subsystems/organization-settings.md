@@ -15,6 +15,32 @@
 
 ## Purpose
 
+### User Access identifies the exact saved principal at every decision
+
+User Access keeps the full saved username readable alongside display name,
+email and provider in its inventory, manage dialog and access-removal
+confirmation. Mutable claims are not unique: two accounts may have identical
+names, email and provider labels. Action and dialog accessible names, uncertain
+mutation feedback and removal completion therefore also identify the saved
+username. A username already serving as the display name is not repeated.
+This presents only the existing admin inventory fields; it adds no read or
+write authority, metadata source or outbound disclosure.
+
+Long identity values wrap instead of truncating or widening the phone table.
+Every assigned role and both touch-sized actions remain visible with the user,
+not behind a tooltip, horizontal scroll or role count. The editor retains its
+saved-permissions qualifier, selected roles, Close, Cancel and Save; removal
+retains session-revocation effects and the identity-provider re-creation warning.
+The state model still admits exact accepted row objects and sends only the
+selected username with its existing reader/org fence and no automatic retry.
+
+`RBACPaywallPanels.test.tsx` exercises two namesakes through the real panel's
+selection, permission read, destructive confirmation, exact-key removal and
+uncertain role update. `rbacPresentation.test.ts` covers exact identifier labels
+and local/email fallback. Browser proof pairs the native Settings shell and
+User Access with the same HTTP fixtures on desktop and phone light/dark,
+including exact encoded PUT/DELETE targets and capability withdrawal.
+
 ### Single-role reads distinguish failed storage from absence
 
 The existing `GET /api/admin/roles/{id}` uses the selected tenant manager's
