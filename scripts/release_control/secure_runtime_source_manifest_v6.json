@@ -32,6 +32,7 @@
     "scripts/build-release.sh",
     "scripts/build-secure-runtime-qualification.sh",
     "scripts/check-github-release-immutability.sh",
+    "scripts/go-mod-download.sh",
     "scripts/package-helm-chart.sh",
     "scripts/prepare-release-container-context.sh",
     "scripts/pulse-auto-update.sh",
