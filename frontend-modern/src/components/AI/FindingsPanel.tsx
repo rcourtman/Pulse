@@ -82,7 +82,6 @@ import {
   getInvestigationOutcomeSortOrder,
   getInvestigationStatusBadgeTone,
   getPatrolFindingActionableState,
-  hasUnavailablePatrolApprovalStatus,
   getPatrolFindingQueueSummary,
   reuseIdenticalPatrolFindingDisplayGroups,
   type PatrolFindingDisplayGroup,
@@ -893,20 +892,15 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
         finding,
         aiIntelligenceStore.patrolPendingApprovals,
         Date.now(),
-        Boolean(aiIntelligenceStore.approvalsError),
+        aiIntelligenceStore.approvalsReadState,
       );
-    const patrolActionableState = () => {
-      if (
-        hasUnavailablePatrolApprovalStatus(finding, Boolean(aiIntelligenceStore.approvalsError))
-      ) {
-        return { label: 'Approval status unavailable', tone: 'warning' as const };
-      }
-      return getPatrolFindingActionableState(
+    const patrolActionableState = () =>
+      getPatrolFindingActionableState(
         finding,
         aiIntelligenceStore.patrolPendingApprovals,
         now(),
+        aiIntelligenceStore.approvalsReadState,
       );
-    };
     const patrolQueueSummary = () => getPatrolFindingQueueSummary(finding);
     const collapsedApprovalAction = () => {
       const workflow = patrolWorkflow();
@@ -1257,8 +1251,8 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                   onClick={toggleExpanded}
                   class="rounded-sm bg-amber-600 px-2 py-1 text-xs font-semibold text-white transition-colors hover:bg-amber-700"
                   classList={{
-                    'max-w-28': Boolean(aiIntelligenceStore.approvalsError),
-                    'whitespace-normal': Boolean(aiIntelligenceStore.approvalsError),
+                    'max-w-28': aiIntelligenceStore.approvalsReadState,
+                    'whitespace-normal': aiIntelligenceStore.approvalsReadState,
                   }}
                   title={action().detail}
                 >

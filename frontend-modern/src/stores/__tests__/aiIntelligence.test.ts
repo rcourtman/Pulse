@@ -1152,12 +1152,15 @@ describe('approval read freshness and organisation isolation', () => {
   });
 
   it('retains the failed-read warning and saved request throughout a shared retry', async () => {
+    expect(aiIntelligenceStore.approvalsReadState).toBe('pending');
     const saved = pending();
     vi.mocked(AIAPI.getPendingApprovals).mockResolvedValueOnce([saved]);
     await aiIntelligenceStore.loadPendingApprovals();
+    expect(aiIntelligenceStore.approvalsReadState).toBe('ready');
     vi.mocked(AIAPI.getPendingApprovals).mockRejectedValueOnce(new Error('unavailable'));
     await aiIntelligenceStore.loadPendingApprovals();
     expect(aiIntelligenceStore.approvalsError).toBe('unavailable');
+    expect(aiIntelligenceStore.approvalsReadState).toBe('unavailable');
     expect(aiIntelligenceStore.pendingApprovals[0]).toBe(saved);
     const next = deferred<(typeof saved)[]>();
     vi.mocked(AIAPI.getPendingApprovals).mockReturnValueOnce(next.promise);
@@ -1176,6 +1179,28 @@ describe('approval read freshness and organisation isolation', () => {
     await aiIntelligenceStore.loadPendingApprovals();
     expect(aiIntelligenceStore.approvalsError).toBeNull();
     expect(aiIntelligenceStore.pendingApprovals).toEqual([]);
+    expect(aiIntelligenceStore.approvalsReadState).toBe('ready');
+  });
+
+  it('distinguishes an initial value, a delayed read, success and a new-context reset', async () => {
+    expect(aiIntelligenceStore.pendingApprovals).toEqual([]);
+    expect(aiIntelligenceStore.approvalsReadState).toBe('pending');
+    const next = deferred<ReturnType<typeof pending>[]>();
+    vi.mocked(AIAPI.getPendingApprovals).mockReturnValueOnce(next.promise);
+    const read = aiIntelligenceStore.loadPendingApprovals();
+    expect(aiIntelligenceStore.approvalsReadState).toBe('pending');
+    next.resolve([]);
+    await read;
+    expect(aiIntelligenceStore.approvalsReadState).toBe('ready');
+    const refresh = deferred<ReturnType<typeof pending>[]>();
+    vi.mocked(AIAPI.getPendingApprovals).mockReturnValueOnce(refresh.promise);
+    const reread = aiIntelligenceStore.loadPendingApprovals();
+    expect(aiIntelligenceStore.approvalsReadState).toBe('pending');
+    eventBus.emit('org_switched', 'org-b');
+    refresh.resolve([pending()]);
+    await reread;
+    expect(aiIntelligenceStore.pendingApprovals).toEqual([]);
+    expect(aiIntelligenceStore.approvalsReadState).toBe('pending');
   });
 
   it.each(['success', 'failure'] as const)(

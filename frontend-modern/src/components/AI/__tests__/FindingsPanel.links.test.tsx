@@ -72,6 +72,7 @@ const mockState = vi.hoisted(() => {
     findings,
     findingsError: null as string | null,
     approvalsError: null as string | null,
+    approvalsPending: () => false,
     findingsLoading: false,
     patrolFindings,
     patrolFindingsError: null as string | null,
@@ -176,6 +177,13 @@ vi.mock('@/stores/aiIntelligence', () => ({
     get patrolPendingApprovalCount() {
       return 0;
     },
+    get approvalsReadState() {
+      return mockState.approvalsError
+        ? 'unavailable'
+        : mockState.approvalsPending()
+          ? 'pending'
+          : 'ready';
+    },
     get approvalsError() {
       return mockState.approvalsError;
     },
@@ -244,6 +252,7 @@ describe('FindingsPanel resource links', () => {
     mockState.findingsLoading = false;
     mockState.findingsError = null;
     mockState.approvalsError = null;
+    mockState.approvalsPending = () => false;
     mockState.patrolFindingsLoading = false;
     mockState.patrolFindingsError = null;
     mockState.patrolPendingApprovals = [];
@@ -1385,6 +1394,7 @@ describe('FindingsPanel approval read uncertainty', () => {
   });
   afterEach(() => {
     mockState.approvalsError = null;
+    mockState.approvalsPending = () => false;
   });
 
   it('does not tell the reader a queued action needs recovery when its approval read failed', () => {
@@ -1398,6 +1408,22 @@ describe('FindingsPanel approval read uncertainty', () => {
     expect(
       screen.getByRole('button', { name: 'Review issue for Queued request' }),
     ).toBeInTheDocument();
+  });
+
+  it('updates an existing row from checking to recovery only after a successful empty read', () => {
+    mockState.approvalsError = null;
+    const [pending, setPending] = createSignal(true);
+    mockState.approvalsPending = pending;
+    render(() => <FindingsPanel findingsSource="patrol" />);
+    expect(screen.getByText('Checking approval status')).toBeInTheDocument();
+    expect(screen.queryByText('Recover action')).not.toBeInTheDocument();
+    const review = screen.getByRole('button', { name: 'Review issue for Queued request' });
+    setPending(false);
+    expect(screen.getByText('Recover action')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Review issue for Queued request' })).toBe(review);
+    setPending(true);
+    expect(screen.queryByText('Recover action')).not.toBeInTheDocument();
+    expect(screen.getByText('Checking approval status')).toBeInTheDocument();
   });
 
   it('labels retained counts and list-derived decision handoffs as last known without hiding them', () => {

@@ -88,7 +88,7 @@ export function PatrolIntelligenceWorkspace(props: {
   const workTypeComposition = createMemo(() =>
     getPatrolWorkTypeComposition(
       queueFindings(),
-      Boolean(aiIntelligenceStore.approvalsError),
+      aiIntelligenceStore.approvalsReadState,
       aiIntelligenceStore.patrolPendingApprovals,
       now(),
     ),

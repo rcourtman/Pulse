@@ -6,7 +6,7 @@ import {
   getPatrolWorkTypeCompositionClause,
   getPatrolFindingActionableState,
   getPatrolFindingQueueSummary,
-  hasUnavailablePatrolApprovalStatus,
+  hasUnsettledPatrolApprovalStatus,
   getFindingPatrolWorkflowPresentation,
 } from '@/utils/aiFindingPresentation';
 
@@ -135,7 +135,7 @@ describe('getPatrolWorkTypeComposition', () => {
       makeFinding({ investigationStatus: 'running' }),
       makeFinding({ timesRaised: 3 }),
     ];
-    const unavailable = getPatrolWorkTypeComposition(findings, true);
+    const unavailable = getPatrolWorkTypeComposition(findings, 'unavailable');
     expect(unavailable).toEqual({
       total: 5,
       approval: 0,
@@ -148,7 +148,7 @@ describe('getPatrolWorkTypeComposition', () => {
     expect(getPatrolWorkTypeCompositionClause(unavailable)).toBe(
       ' — 2 queued · approval status unavailable, 1 failed fix, 1 in progress, 1 recurring',
     );
-    expect(getPatrolWorkTypeComposition(findings, false)).toMatchObject({
+    expect(getPatrolWorkTypeComposition(findings, 'ready')).toMatchObject({
       total: 5,
       approval: 0,
       recovery: 2,
@@ -188,14 +188,14 @@ describe('getPatrolWorkTypeComposition', () => {
         },
       },
     };
-    expect(hasUnavailablePatrolApprovalStatus(typed, true)).toBe(false);
+    expect(hasUnsettledPatrolApprovalStatus(typed, 'unavailable')).toBe(false);
     const composition = getPatrolWorkTypeComposition(
       [
         typed,
         makeFinding({ investigationOutcome: 'fix_queued' }),
         makeFinding({ status: 'resolved', investigationOutcome: 'fix_queued' }),
       ],
-      true,
+      'unavailable',
     );
     expect(composition).toMatchObject({ total: 3, approval: 1, approvalUnknown: 1, newIssues: 1 });
     expect(getPatrolWorkTypeCompositionClause(composition)).toBe(
@@ -386,6 +386,54 @@ const liveApproval = {
 } as const;
 
 describe('Patrol current action facts', () => {
+  it('waits for a successful empty read before inferring legacy recovery', () => {
+    const finding = {
+      ...makeFinding({ investigationOutcome: 'fix_queued' }),
+      id: 'finding-1',
+      source: 'ai-patrol' as const,
+      resourceId: 'host-1',
+      resourceName: 'host-1',
+      title: 'Finding',
+    };
+    for (const readState of ['pending', 'unavailable', 'ready'] as const) {
+      const label =
+        readState === 'pending'
+          ? 'Checking approval status'
+          : readState === 'unavailable'
+            ? 'Approval status unavailable'
+            : 'Recover action';
+      expect(getPatrolFindingActionableState(finding, [], approvalNow, readState)?.label).toBe(
+        label,
+      );
+      expect(getFindingPatrolWorkflowPresentation(finding, [], approvalNow, readState)?.label).toBe(
+        readState === 'unavailable' ? 'Check approval status' : label,
+      );
+      const composition = getPatrolWorkTypeComposition([finding], readState, [], approvalNow);
+      expect(composition).toMatchObject({ total: 1, approval: 0 });
+      expect(composition.recovery ?? 0).toBe(readState === 'ready' ? 1 : 0);
+      expect(getPatrolWorkTypeCompositionClause(composition)).toContain(
+        readState === 'pending'
+          ? 'checking approval status'
+          : readState === 'unavailable'
+            ? 'approval status unavailable'
+            : 'action recovery',
+      );
+    }
+    for (const readState of ['pending', 'unavailable'] as const) {
+      expect(
+        getPatrolWorkTypeComposition([finding], readState, [liveApproval], approvalNow),
+      ).toMatchObject({ total: 1, approvalLastKnown: 1 });
+      expect(
+        getPatrolFindingActionableState(finding, [liveApproval], approvalNow, readState)?.label,
+      ).toBe('Approval required · last known');
+      // An expired retained request cannot make the list current or missing.
+      expect(
+        getPatrolWorkTypeComposition([finding], readState, [liveApproval], approvalNow + 60_000)
+          .recovery,
+      ).toBeUndefined();
+    }
+  });
+
   it.each([
     ['pending_approval', 'approval', 'Approval required', '1 needs approval', 'Approve or reject'],
     ['planned', 'ready', 'Ready to run', '1 ready to run', 'Run action'],
@@ -400,14 +448,14 @@ describe('Patrol current action facts', () => {
     (state, workType, badge, clause, handoff) => {
       const finding = typedFinding(state);
       const unchanged = JSON.stringify(finding);
-      for (const unavailable of [false, true]) {
+      for (const readState of ['ready', 'pending', 'unavailable'] as const) {
         expect(classifyPatrolFindingWorkType(finding, [liveApproval], approvalNow)).toBe(workType);
-        expect(getPatrolFindingActionableState(finding, [liveApproval], approvalNow)?.label).toBe(
-          badge,
-        );
+        expect(
+          getPatrolFindingActionableState(finding, [liveApproval], approvalNow, readState)?.label,
+        ).toBe(badge);
         const composition = getPatrolWorkTypeComposition(
           [finding],
-          unavailable,
+          readState,
           [liveApproval],
           approvalNow,
         );
@@ -425,7 +473,7 @@ describe('Patrol current action facts', () => {
             },
             [liveApproval],
             approvalNow,
-            unavailable,
+            readState,
           )?.label,
         ).toBe(handoff);
       }
@@ -451,13 +499,13 @@ describe('Patrol current action facts', () => {
       );
     }
     expect(
-      getPatrolWorkTypeComposition([finding], true, [liveApproval], approvalNow),
-    ).toMatchObject({ total: 1, approval: 0, approvalUnknown: 1 });
+      getPatrolWorkTypeComposition([finding], 'unavailable', [liveApproval], approvalNow),
+    ).toMatchObject({ total: 1, approval: 0, approvalLastKnown: 1 });
     expect(
-      getPatrolWorkTypeComposition([finding], false, [liveApproval], approvalNow),
+      getPatrolWorkTypeComposition([finding], 'ready', [liveApproval], approvalNow),
     ).toMatchObject({ total: 1, approval: 1 });
     expect(
-      getPatrolWorkTypeComposition([finding], false, [liveApproval], approvalNow + 60000),
+      getPatrolWorkTypeComposition([finding], 'ready', [liveApproval], approvalNow + 60000),
     ).toMatchObject({ total: 1, approval: 0, recovery: 1 });
   });
 
@@ -513,7 +561,7 @@ describe('Unrecognized typed action state', () => {
       expect(classifyPatrolFindingWorkType(finding, [liveApproval], approvalNow)).toBe('new');
       expect(getPatrolFindingActionableState(finding)?.label).toBe('Review action');
       expect(
-        getPatrolWorkTypeComposition([finding], false, [liveApproval], approvalNow),
+        getPatrolWorkTypeComposition([finding], 'ready', [liveApproval], approvalNow),
       ).toMatchObject({ total: 1, approval: 0, newIssues: 1 });
       expect(
         getFindingPatrolWorkflowPresentation(

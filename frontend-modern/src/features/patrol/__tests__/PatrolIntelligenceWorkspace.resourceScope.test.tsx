@@ -53,6 +53,7 @@ const fixture = vi.hoisted(() => {
     attentionIds: ['web-disk', 'web-restart', 'db-backup', 'cache-evictions'],
     approvalIds: ['web-restart', 'db-backup'],
     approvalsError: () => null as string | null,
+    approvalsPending: () => false,
   };
 });
 
@@ -98,6 +99,13 @@ vi.mock('@/stores/aiIntelligence', () => ({
     patrolFindingsLoading: false,
     get approvalsError() {
       return fixture.approvalsError();
+    },
+    get approvalsReadState() {
+      return fixture.approvalsError()
+        ? 'unavailable'
+        : fixture.approvalsPending()
+          ? 'pending'
+          : 'ready';
     },
     findingsError: null,
     patrolFindingsError: null,
@@ -199,6 +207,7 @@ describe('PatrolIntelligenceWorkspace resource scope', () => {
     cleanup();
     fixture.read = () => fixture.findings;
     fixture.approvalsError = () => null;
+    fixture.approvalsPending = () => false;
   });
 
   it('qualifies the saved queued summary through failed reads and recovery, retaining its scoped count', () => {
@@ -213,10 +222,10 @@ describe('PatrolIntelligenceWorkspace resource scope', () => {
     ));
     expect(
       screen.getByText(
-        /^Patrol found 2 issues on afs-web — 1 queued · approval status unavailable, 1 recurring\./,
+        /^Patrol found 2 issues on afs-web — 1 needs approval · last known, 1 recurring\./,
       ),
     ).toBeInTheDocument();
-    expect(screen.queryByText(/Patrol found.*needs approval/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Patrol found.*action recovery/)).not.toBeInTheDocument();
     expect(screen.getByText('Apply the fix for web-restart')).toBeInTheDocument();
     expect(screen.getByText('Last known')).toBeInTheDocument();
     expect(screen.getAllByRole('link', { name: 'Review in Actions' })).toHaveLength(1);
@@ -227,6 +236,39 @@ describe('PatrolIntelligenceWorkspace resource scope', () => {
       screen.getByText(/^Patrol found 2 issues on afs-web — 1 needs approval, 1 recurring\./),
     ).toBeInTheDocument();
     expect(screen.queryByText('Last known')).not.toBeInTheDocument();
+  });
+
+  it('keeps the initial and refreshing empty read pending until it succeeds', () => {
+    const [pending, setPending] = createSignal(true);
+    fixture.approvalsPending = pending;
+    const savedApprovalIds = fixture.approvalIds;
+    fixture.approvalIds = [];
+    try {
+      render(() => (
+        <PatrolIntelligenceWorkspace
+          state={makeState()}
+          findingResourceId={fixture.web.resourceId}
+          findingResourceName="afs-web"
+        />
+      ));
+      expect(
+        screen.getByText(
+          /^Patrol found 2 issues on afs-web — 1 queued · checking approval status, 1 recurring\./,
+        ),
+      ).toBeInTheDocument();
+      expect(screen.queryByText(/Patrol found.*action recovery/)).not.toBeInTheDocument();
+      expect(reviewRows()).toHaveLength(2);
+      setPending(false);
+      expect(
+        screen.getByText(
+          /^Patrol found 2 issues on afs-web — 1 needs action recovery, 1 recurring\./,
+        ),
+      ).toBeInTheDocument();
+      setPending(true);
+      expect(screen.getByText(/1 queued · checking approval status/)).toBeInTheDocument();
+    } finally {
+      fixture.approvalIds = savedApprovalIds;
+    }
   });
 
   it('describes the scoped resource with the counts its rows show', () => {
@@ -379,6 +421,7 @@ describe('Patrol workspace current action summary', () => {
     cleanup();
     fixture.read = () => fixture.findings;
     fixture.approvalsError = () => null;
+    fixture.approvalsPending = () => false;
   });
 
   it('follows typed action transitions in the selected resource without borrowing other approvals', () => {
@@ -414,7 +457,7 @@ describe('Patrol workspace current action summary', () => {
         ),
       ).toBeInTheDocument();
       if (next !== 'pending_approval')
-        expect(screen.queryByText(/Patrol found.*needs approval/)).not.toBeInTheDocument();
+        expect(screen.queryByText(/Patrol found.*action recovery/)).not.toBeInTheDocument();
       // The legacy list remains independently reviewable; its two saved
       // requests do not overwrite a typed action or escape the resource scope.
       expect(screen.getByText('Apply the fix for web-restart')).toBeInTheDocument();
