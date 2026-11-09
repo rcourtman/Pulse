@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "base_sha": "a202c4f5d45b35cc54bf6f70377c687afa27cc1d",
+  "verified_at": "2026-11-09T10:27:34.793235Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/AI/FindingsPanel.tsx",
+    "frontend-modern/src/components/patrol/ApprovalBanner.tsx",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceWorkspace.tsx",
+    "frontend-modern/src/stores/aiIntelligence.ts",
+    "frontend-modern/src/utils/aiFindingPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/AI/FindingsPanel.tsx": "a41dd16b93f97730373a9844a95bb4db72af41a6e46cb852d7fbf374bbbb60f0",
+    "frontend-modern/src/components/patrol/ApprovalBanner.tsx": "727252c36a4647f9e7c0a255f463e088ac10ae81a8c51ba730f8216555fa2213",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceWorkspace.tsx": "bd3d4724ba729ef03e2bf994f9e19ed3443bbcb11a1c858e05001b9aca3f5ad5",
+    "frontend-modern/src/stores/aiIntelligence.ts": "47564743eb8c17d06db0cf7ce9ec4a573e47f447a946d5dfe7b4492974c30555",
+    "frontend-modern/src/utils/aiFindingPresentation.ts": "efb4a2fd27c0fc82475be6c5bc38c5d97c8a24e87ee597c58ce80429b560a7f5"
+  },
+  "routes": [
+    "/proof.html \u2014 existing native PatrolIntelligenceWorkspace, ApprovalBanner and FindingsPanel in offline evidence shell, not full App/auth",
+    "/proof.html?surface=unified \u2014 existing unified FindingsPanel consumer in the same evidence shell"
+  ],
+  "states": [
+    "Unavailable notice and read-only refresh replace silent empty-looking failure; no missing-approval recovery/attention inference. Original finding and controls remain visible.",
+    "Explicit successful native tenant reply clears warning and preserves context/risk/expiry/review.",
+    "Valid native default reply preserves the original information and controls.",
+    "Saved request remains, with last-known banner/work-group/filter qualification and unknown current approval state; individual context/risk/expiry/review remain visible.",
+    "Failure and last-known information remain while Checking approvals is disabled; concurrent refresh shares one read.",
+    "Successful empty read clears saved approval and warning, distinct from unavailable.",
+    "Successful native tenant reply restores normal approval display and keyboard-focused review navigation.",
+    "Check approval status replaces unsupported Recover action; complete title and resource/recency/manual/detail controls remain visible.",
+    "Approve-or-reject handoff is qualified last known and wraps without clipping the complete finding title."
+  ],
+  "interactions": [
+    "Real AIAPI/client/store consume identical native synthetic503/default/tenant/empty reply fixtures on both sides; no mutation request permitted.",
+    "Click native Refresh approvals to recover cold failure; hold retry in flight and verify disabled Checking approvals, persistent warning/saved request and one shared read.",
+    "Successful empty read withdraws the saved request and warning; successful corrected native tenant reply restores normal display.",
+    "Focus unchanged Actions review link, select Approvals filter and open the native finding review; exercise unified retained decision handoff.",
+    "Inspect complete finding titles and retained context/risk/expiry/recency/controls at desktop and narrow light/dark; wrap unavailable-state handoffs rather than clip information."
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "browsers": [
+    "Playwright 1.56.1 Chromium 141.0.7390.37 desktop/light",
+    "Playwright 1.56.1 WebKit 26.0 phone/light/dark"
+  ],
+  "evidence": "54 native-view_image-inspected captures /27 comparable pairs; same fixtures, themes, viewports, fixed clock, top anchor and pointer. Final before/after clients exit0, zero page errors, expected503/404 diagnostics and awaited browser/context/server closures. Original risk/context/expiry and full finding titles/controls remain at a glance. Initial unwrapped label variant clipped phone titles and was rejected; final conditional wrapping source is source-qus37egr. source-4nbnrq64 passes25,604 full tests before that presentation-only delta; final exact source passes218 affected tests, types, full lint/format/audits and production/embed/bundle gates. Full suite not replayed for the four-line wrapping delta. Dossier: RECEIPTS.md, CAPTURE-PAIRS.json, BEFORE-CAPTURES.tar.xz, AFTER-CAPTURES.tar.xz, LAYOUT-DELTA.json. Not full App/IdP/Actions destination, original-client, impact, publication or release acceptance."
+}
