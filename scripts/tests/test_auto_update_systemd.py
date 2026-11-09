@@ -679,12 +679,12 @@ else: sys.exit(97)
             original_write = Path.write_text
             def relocate(path, data, *args, **kwargs):
                 if path.name == "installer-definitions":
-                    before = "cat > /etc/systemd/system/$SERVICE_NAME.service << EOF"
+                    # Relocate only the production destination. Keep its real
+                    # private staging, checked writes and atomic publication in
+                    # this connected signature/archive/recovery control too.
+                    before = 'local service_path="/etc/systemd/system/$SERVICE_NAME.service"'
                     self.assertEqual(data.count(before), 1)
-                    append = "cat >> /etc/systemd/system/$SERVICE_NAME.service << EOF"
-                    self.assertEqual(data.count(append), 2)
-                    data = data.replace(before, 'cat > "$PULSE_NATIVE_ROOT/pulse-source-updater.service" << EOF')
-                    data = data.replace(append, 'cat >> "$PULSE_NATIVE_ROOT/pulse-source-updater.service" << EOF')
+                    data = data.replace(before, 'local service_path="$PULSE_NATIVE_ROOT/pulse-source-updater.service"')
                 return original_write(path, data, *args, **kwargs)
             try:
                 with patch.object(Path, "write_text", new=relocate), patch.object(native.time, "sleep"):
