@@ -18,17 +18,6 @@
 
 ## Purpose
 
-### SSO presentation limits also bound rune-conversion allocations
-
-Identity metadata normalization converts only the retained 128/256/320-rune
-prefix of oversized claims, not the entire claim. The truncated result owns its
-storage rather than retaining the original large string. Existing whitespace,
-Unicode, malformed-UTF-8, provider case and fitting-value behavior is unchanged;
-these display fields never become principals or grants. `rbac_metadata_test.go`
-compares the former output, fuzzes rune boundaries, bounds allocation bytes and
-reloads distinct file-backed principals with their original roles. Paired
-benchmarks measure conversion cost, not full sign-in or installed recovery.
-
 ### Password changes belong to their admitted settings reader
 
 The existing password dialog receives the Settings status reader, not an
@@ -4742,3 +4731,14 @@ host's enrollment token ID, agent ID and hostname, so that text stays on the RES
 error surfaces that already carried it. The catalog is per-tenant state like the rows
 that reference it, and the refusal pass reads session state without granting or
 widening any action.
+
+### SSO presentation limits also bound rune-conversion allocations
+
+Identity metadata normalization converts only the retained 128/256/320-rune
+prefix of oversized claims, not the entire claim. The truncated result owns its
+storage rather than retaining the original large string. Existing whitespace,
+Unicode, malformed-UTF-8, provider case and fitting-value behavior is unchanged;
+these display fields never become principals or grants. `rbac_metadata_test.go`
+compares the former output, fuzzes rune boundaries, bounds allocation bytes and
+reloads distinct file-backed principals with their original roles. Paired
+benchmarks measure conversion cost, not full sign-in or installed recovery.
