@@ -1535,3 +1535,69 @@ func formatXML(data []byte) string {
 	}
 	return string(data)
 }
+
+var errSSOCallbackPolicyChanged = errors.New("SSO callback provider policy changed")
+
+// publishSSOConfigLocked fences callbacks against successful policy changes.
+// Reverting a policy to identical values does not revive the old admission.
+// Presentation-only edits and changes to other providers preserve admission.
+// The caller holds ssoMu; failed persistence never reaches publication.
+func (r *Router) publishSSOConfigLocked(next *config.SSOConfig) {
+	for id := range r.ssoPolicyRevisions {
+		previous, current := r.ssoConfig.GetProvider(id), next.GetProvider(id)
+		if !isEnabledSSOCallbackProvider(current) {
+			delete(r.ssoPolicyRevisions, id)
+		} else if previous == nil || !ssoPresentationOnlyUpdate(*previous, *current) {
+			r.ssoNextPolicyRevision++
+			r.ssoPolicyRevisions[id] = r.ssoNextPolicyRevision
+		}
+	}
+	r.ssoConfig = next
+}
+
+// currentSSOCallbackPolicy captures the immutable provider and its admission
+// together, before response-body reads, token exchange or signature-key fetch.
+func (r *Router) currentSSOCallbackPolicy(id string) (*config.SSOProvider, uint64) {
+	r.ssoMu.Lock()
+	defer r.ssoMu.Unlock()
+	provider := r.ssoConfig.GetProvider(id)
+	if r.ssoAuthLoadFailed.Load() {
+		return nil, 0
+	}
+	if !isEnabledSSOCallbackProvider(provider) {
+		return provider, 0
+	}
+	if r.ssoPolicyRevisions == nil {
+		r.ssoPolicyRevisions = make(map[string]uint64)
+	}
+	revision := r.ssoPolicyRevisions[id]
+	if revision == 0 {
+		r.ssoNextPolicyRevision++
+		revision = r.ssoNextPolicyRevision
+		r.ssoPolicyRevisions[id] = revision
+	}
+	return provider, revision
+}
+
+// commitSSOCallback orders local role/identity/session effects against policy
+// publication. No IdP or request-body I/O runs under the configuration lock.
+// A stale callback must not even replace the browser's existing session.
+func (r *Router) commitSSOCallback(id string, revision uint64, provider *config.SSOProvider, complete func() error) error {
+	r.ssoMu.RLock()
+	defer r.ssoMu.RUnlock()
+	current := r.ssoConfig.GetProvider(id)
+	if revision == 0 || r.ssoPolicyRevisions[id] != revision || r.ssoAuthLoadFailed.Load() ||
+		provider == nil || current == nil || !ssoPresentationOnlyUpdate(*provider, *current) {
+		return errSSOCallbackPolicyChanged
+	}
+	return complete()
+}
+
+// isEnabledSSOCallbackProvider admits only complete, enabled shipped protocols.
+func isEnabledSSOCallbackProvider(provider *config.SSOProvider) bool {
+	if provider == nil || !provider.Enabled {
+		return false
+	}
+	return provider.Type == config.SSOProviderTypeOIDC && provider.OIDC != nil ||
+		provider.Type == config.SSOProviderTypeSAML && provider.SAML != nil
+}
