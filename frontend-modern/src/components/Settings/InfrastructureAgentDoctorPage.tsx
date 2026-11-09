@@ -708,7 +708,36 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                             detailFor={target().key}
                             title={target().displayName}
                             status={{ variant: status().variant, label: status().label }}
-                            summary={doctorTargetSummary(target())}
+                            summary={
+                              <>
+                                <span>{doctorTargetSummary(target())}</span>
+                                <dl
+                                  data-testid="agent-doctor-identity-summary"
+                                  class="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 sm:hidden"
+                                >
+                                  <div class="flex min-w-0 gap-1">
+                                    <dt>System</dt>
+                                    <dd class="text-base-content wrap-anywhere">
+                                      {target().contextLabel}
+                                    </dd>
+                                  </div>
+                                  <div class="flex min-w-0 gap-1">
+                                    <dt>Version</dt>
+                                    <dd class="text-base-content wrap-anywhere">
+                                      {target().currentVersion || 'Not reported'}
+                                    </dd>
+                                  </div>
+                                  <div class="flex min-w-0 basis-full gap-1">
+                                    <dt class="shrink-0">Last seen</dt>
+                                    <dd class="text-base-content wrap-anywhere">
+                                      {lastSeen()
+                                        ? `${lastSeen()} (${lastSeenRelative()})`
+                                        : 'Not reported'}
+                                    </dd>
+                                  </div>
+                                </dl>
+                              </>
+                            }
                             sections={[]}
                             onClose={() => closeTarget(target())}
                           >
