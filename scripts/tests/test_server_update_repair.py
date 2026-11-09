@@ -89,6 +89,39 @@ print_completion() { record complete; }
 if [[ "$UNIT_ERROR" == true ]]; then
     install_systemd_service() { record refused-unit; return 23; }
 fi
+unit_cat_count=0
+cat() {
+    if [[ "${FUNCNAME[1]:-}" == install_systemd_service ]]; then
+        unit_cat_count=$((unit_cat_count + 1))
+        if [[ "$UNIT_FAULT" == "write-$unit_cat_count" ]]; then
+            printf 'partial unit\n'
+            echo INJECTED_UNIT_WRITE >&2
+            return 72
+        fi
+    fi
+    command cat "$@"
+}
+mktemp() {
+    if [[ "$UNIT_FAULT" == allocation && "$1" == "$FIXTURE/units/"* ]]; then
+        echo INJECTED_UNIT_ALLOCATION >&2
+        return 71
+    fi
+    command mktemp "$@"
+}
+chmod() {
+    if [[ "$UNIT_FAULT" == mode && "${@: -1}" == "$FIXTURE/units/"*.staged.* ]]; then
+        echo INJECTED_UNIT_MODE >&2
+        return 73
+    fi
+    command chmod "$@"
+}
+mv() {
+    if [[ "$UNIT_FAULT" == rename && "${@: -1}" == "$FIXTURE/units/pulse.service" ]]; then
+        echo INJECTED_UNIT_RENAME >&2
+        return 74
+    fi
+    command mv "$@"
+}
 # Failure propagation must survive an OR-list, not depend on implicit errexit.
 status=0
 main || status=$?
@@ -97,7 +130,7 @@ exit "$status"
 
 
 class ServerUpdateRepair(unittest.TestCase):
-    def exercise(self, *, pinned, automatic, unit_error=False):
+    def exercise(self, *, pinned, automatic, unit_error=False, unit_fault="none"):
         with tempfile.TemporaryDirectory(prefix="pulse-update-repair-") as directory:
             f = Path(directory)
             for name in ["tools", "install/bin", "units"]:
@@ -109,7 +142,7 @@ class ServerUpdateRepair(unittest.TestCase):
             (f / "tools/systemctl").chmod(0o755)
             source = INSTALLER.read_text()
             functions = []
-            for name in ["install_systemd_service", "ensure_systemd_service_installed"]:
+            for name in ["preflight_systemd_service_installation", "install_systemd_service", "ensure_systemd_service_installed"]:
                 start = source.index(name + "() {")
                 end = source.index("\n}\n", start) + 3
                 functions.append(source[start:end].replace("/etc/systemd/system/", str(f / "units") + "/"))
@@ -118,6 +151,7 @@ class ServerUpdateRepair(unittest.TestCase):
             env.update(FIXTURE=str(f), INSTALLER=str(INSTALLER),
                        PIN="v6.6.0" if pinned else "",
                        AUTO_UPDATES=str(automatic).lower(), UNIT_ERROR=str(unit_error).lower(),
+                       UNIT_FAULT=unit_fault,
                        PATH=str(f / "tools") + os.pathsep + os.environ["PATH"],
                        PULSE_INSTALL_DIR=str(f / "install"), PULSE_CONFIG_DIR=str(f / "config"))
             # Config and unit are genuinely absent on entry, not pre-created.
@@ -134,6 +168,23 @@ class ServerUpdateRepair(unittest.TestCase):
                         env_mode=stat.S_IMODE(env_file.stat().st_mode) if env_file.exists() else None,
                         env=env_file.read_text() if env_file.exists() else "",
                         unit=(f / "units/pulse.service").read_text() if (f / "units/pulse.service").exists() else "")
+
+    def test_real_unit_publication_failures_stop_both_main_update_paths(self):
+        for pinned in (True, False):
+            for automatic in (True, False):
+                for fault in ("allocation", "write-1", "write-2", "mode", "rename"):
+                    with self.subTest(pinned=pinned, automatic=automatic, fault=fault):
+                        e = self.exercise(pinned=pinned, automatic=automatic, unit_fault=fault)
+                        r = e["result"]
+                        self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+                        self.assertIn("INJECTED_UNIT_", r.stderr)
+                        self.assertIn("installation is incomplete", r.stdout + r.stderr)
+                        self.assertNotIn("start pulse", e["events"])
+                        self.assertNotIn("marker", e["events"])
+                        self.assertNotIn("complete", e["events"])
+                        self.assertNotIn(["daemon-reload"], e["calls"])
+                        self.assertEqual(e["unit"], "")
+                        self.assertIn("PULSE_MOCK_MODE=false", e["env"])
 
     def test_both_update_paths_repair_config_and_unit_before_activation(self):
         for pinned in (True, False):

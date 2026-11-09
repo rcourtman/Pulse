@@ -5251,9 +5251,15 @@ refresh_auto_updates() {
     return 0
 }
 
-install_systemd_service() {
-    print_info "Installing systemd service..."
-    
+# Use the writer's exact service selection and destination admission before
+# callers stop Pulse or change its files. Ensure-only updates keep a sound
+# existing unit (including a linked unit); they do not need to rewrite it.
+preflight_systemd_service_installation() {
+    if [[ "${1:-replace}" == ensure ]]; then
+        command -v systemctl >/dev/null 2>&1 || return 0
+        [[ ! -f "/etc/systemd/system/${SERVICE_NAME}.service" ]] || return 0
+    fi
+
     # Use existing service name if found, otherwise use default
     local existing_service="$SERVICE_NAME"
     if [[ "$SERVICE_NAME_EXPLICIT" != "true" ]]; then
@@ -5265,7 +5271,32 @@ install_systemd_service() {
         print_info "Using existing service name: pulse-backend"
     fi
     
-    cat > /etc/systemd/system/$SERVICE_NAME.service << EOF
+    local service_path="/etc/systemd/system/$SERVICE_NAME.service"
+    # Atomic publication must not replace an operator mask or redirected unit.
+    # Keep non-regular destinations for deliberate manual reconciliation.
+    if [[ -L "$service_path" || ( -e "$service_path" && ! -f "$service_path" ) ]]; then
+        print_error "Cannot replace a redirected or non-regular service definition ($service_path); installation is incomplete. Inspect the unit before retrying."
+        return 1
+    fi
+    return 0
+}
+
+install_systemd_service() {
+    print_info "Installing systemd service..."
+    # Recheck at the writer as well: early caller admission is not a lock.
+    preflight_systemd_service_installation || return 1
+
+    local service_path="/etc/systemd/system/$SERVICE_NAME.service"
+    local staged_service="" render_failed=false
+    if ! staged_service=$(mktemp "${service_path}.staged.XXXXXX"); then
+        print_error "Cannot stage the systemd service ($service_path); installation is incomplete. The existing service definition was not changed."
+        return 1
+    fi
+
+    # The main callers check this function with || return 1, which suppresses
+    # errexit throughout it. Check every write, including both append phases;
+    # best-effort daemon-reload must never hide a truncated unit publication.
+    if ! cat > "$staged_service" << EOF
 [Unit]
 Description=Pulse Monitoring Server
 After=network.target
@@ -5290,15 +5321,21 @@ Environment="PULSE_DEPLOYMENT_METHOD=systemd"
 Environment="PULSE_LOG_JOURNAL_LEVEL_PREFIX=true"
 EnvironmentFile=-$CONFIG_DIR/.env
 EOF
-
-    # Add port configuration if not default
-    if [[ "${FRONTEND_PORT:-7655}" != "7655" ]]; then
-        cat >> /etc/systemd/system/$SERVICE_NAME.service << EOF
-Environment="FRONTEND_PORT=$FRONTEND_PORT"
-EOF
+    then
+        render_failed=true
     fi
 
-    cat >> /etc/systemd/system/$SERVICE_NAME.service << EOF
+    # Add port configuration if not default
+    if [[ "$render_failed" == false && "${FRONTEND_PORT:-7655}" != "7655" ]]; then
+        if ! cat >> "$staged_service" << EOF
+Environment="FRONTEND_PORT=$FRONTEND_PORT"
+EOF
+        then
+            render_failed=true
+        fi
+    fi
+
+    if [[ "$render_failed" == false ]] && ! cat >> "$staged_service" << EOF
 
 # Security hardening
 NoNewPrivileges=true
@@ -5314,6 +5351,21 @@ CapabilityBoundingSet=CAP_NET_RAW
 [Install]
 WantedBy=multi-user.target
 EOF
+    then
+        render_failed=true
+    fi
+
+    # Recheck the destination before the one same-directory atomic rename.
+    # A failed staging, mode or publication operation stops the real caller
+    # before startup/completion; no rollback or service recovery is implied.
+    if [[ "$render_failed" == true || -L "$service_path" || ( -e "$service_path" && ! -f "$service_path" ) ]] ||
+       ! chmod 0644 "$staged_service" || ! mv -fT -- "$staged_service" "$service_path"; then
+        if ! rm -f -- "$staged_service"; then
+            print_warn "Could not remove staged service definition ($staged_service); inspect the retained staging file before retrying."
+        fi
+        print_error "Could not publish the complete systemd service ($service_path); installation is incomplete. Inspect the service definition and state before retrying; no automatic restart was attempted."
+        return 1
+    fi
 
     # Reload systemd daemon
     safe_systemctl daemon-reload
@@ -5571,6 +5623,7 @@ main() {
     if [[ "$existing_install_status" -eq 0 ]]; then
         # If building from source was requested, skip the update prompt
         if [[ "$BUILD_FROM_SOURCE" == "true" ]]; then
+            preflight_systemd_service_installation || return 1
             create_user
             setup_directories || return 1
 
@@ -5617,6 +5670,7 @@ main() {
                 exit 1
             fi
             
+            preflight_systemd_service_installation ensure || return 1
             backup_existing || return 1
             create_user
             download_pulse
@@ -5823,6 +5877,7 @@ main() {
                     exit 1
                 fi
                 
+                preflight_systemd_service_installation ensure || return 1
                 backup_existing || return 1
                 create_user
                 download_pulse
@@ -5855,6 +5910,7 @@ main() {
                 LATEST_RELEASE="$CURRENT_VERSION"
                 offer_existing_auto_updates
 
+                preflight_systemd_service_installation || return 1
                 backup_existing || return 1
                 create_user
                 download_pulse
@@ -5965,6 +6021,7 @@ main() {
             fi
         fi
         
+        preflight_systemd_service_installation || return 1
         install_dependencies
         create_user
         setup_directories || return 1

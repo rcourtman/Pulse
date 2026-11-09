@@ -234,7 +234,10 @@ ENABLE_AUTO_UPDATES=true
 print_info() { printf 'INFO %s\n' "$*"; }
 print_warn() { printf 'WARN %s\n' "$*"; }
 print_success() { printf 'SUCCESS %s\n' "$*"; }
-for fn in print_header check_root detect_os check_docker_environment offer_existing_auto_updates run_upgrade_readiness_preflight backup_existing create_user download_pulse setup_directories setup_update_command ensure_systemd_service_installed create_marker_file; do
+# Server-unit admission/replacement has its own connected main/archive/source
+# controls. Keep it inert with the other server operations in this extracted-
+# main fixture, whose subject is optional updater setup and failure completion.
+for fn in print_header check_root detect_os check_docker_environment offer_existing_auto_updates run_upgrade_readiness_preflight preflight_systemd_service_installation backup_existing create_user download_pulse setup_directories setup_update_command ensure_systemd_service_installed create_marker_file; do
     eval "$fn() { :; }"
 done
 check_existing_installation() { CURRENT_VERSION=v6.5.0; return 0; }
