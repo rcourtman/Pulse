@@ -2,7 +2,7 @@ import { Component, For, Show, createEffect, on, onCleanup } from 'solid-js';
 import { Button } from '@/components/shared/Button';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { RBACFeatureGateSection } from './RBACFeatureGateSection';
-import { UserAssignmentsDialog } from './UserAssignmentsDialog';
+import { UserAccessIdentity, UserAssignmentsDialog } from './UserAssignmentsDialog';
 import { useUserAssignmentsPanelState } from './useUserAssignmentsPanelState';
 import type { UserAssignmentsPanelProps } from './useUserAssignmentsPanelState';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
@@ -12,11 +12,7 @@ import Pencil from 'lucide-solid/icons/pencil';
 import Trash2 from 'lucide-solid/icons/trash-2';
 import { SearchField } from '@/components/shared/SearchField';
 import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
-import {
-  getUserAssignmentsEmptyStateCopy,
-  getUserIdentityDisplayName,
-  getUserIdentityProviderLabel,
-} from '@/utils/rbacPresentation';
+import { getUserAssignmentsEmptyStateCopy, getUserIdentityLabel } from '@/utils/rbacPresentation';
 import { InlineNotice } from '@/components/shared/InlineNotice';
 import TriangleAlert from 'lucide-solid/icons/triangle-alert';
 import { Dialog } from '@/components/shared/Dialog';
@@ -212,42 +208,20 @@ export const UserAssignmentsPanel: Component<UserAssignmentsPanelProps> = (props
               {
                 key: 'username',
                 label: 'User',
-                render: (assignment) => (
-                  <div class="min-w-0">
-                    <div class="font-medium text-base-content">
-                      {getUserIdentityDisplayName(assignment)}
-                    </div>
-                    <Show when={assignment.email && assignment.email !== assignment.displayName}>
-                      <div class="truncate text-xs text-muted">{assignment.email}</div>
-                    </Show>
-                    <Show when={getUserIdentityProviderLabel(assignment)}>
-                      <div class="text-xs text-muted">
-                        {getUserIdentityProviderLabel(assignment)}
-                      </div>
-                    </Show>
-                    <Show when={assignment.username !== getUserIdentityDisplayName(assignment)}>
-                      <div
-                        class="max-w-md truncate font-mono text-[10px] text-muted"
-                        title={assignment.username}
-                      >
-                        {assignment.username}
-                      </div>
-                    </Show>
-                  </div>
-                ),
+                render: (assignment) => <UserAccessIdentity user={assignment} />,
               },
               {
                 key: 'assignedRoles',
                 label: 'Assigned Roles',
                 render: (assignment) => (
-                  <div class="flex flex-wrap gap-1">
+                  <div class="flex flex-wrap gap-1 whitespace-normal [overflow-wrap:anywhere]">
                     <Show when={assignment.roleIds.length === 0}>
                       <span class="text-xs text-slate-400 italic">No roles assigned</span>
                     </Show>
                     <For each={assignment.roleIds}>
                       {(roleId) => (
-                        <span class="inline-flex items-center gap-1 rounded-md bg-surface-alt px-2 py-0.5 text-xs font-medium text-base-content border border-border">
-                          <Shield class="w-3 h-3" />
+                        <span class="inline-flex max-w-full items-center gap-1 whitespace-normal [overflow-wrap:anywhere] rounded-md bg-surface-alt px-2 py-0.5 text-xs font-medium text-base-content border border-border">
+                          <Shield class="w-3 h-3 shrink-0" />
                           {state.getRoleName(roleId)}
                         </span>
                       )}
@@ -265,7 +239,7 @@ export const UserAssignmentsPanel: Component<UserAssignmentsPanelProps> = (props
                       variant="ghost"
                       size="settingsAction"
                       class="min-h-11 min-w-11 gap-2 px-2 sm:min-h-9 sm:min-w-0"
-                      aria-label={`Manage access for ${getUserIdentityDisplayName(assignment)}`}
+                      aria-label={`Manage access for ${getUserIdentityLabel(assignment)}`}
                       title="Manage access"
                       disabled={!state.canEdit()}
                       onClick={() => state.openManageAccess(assignment)}
@@ -277,7 +251,7 @@ export const UserAssignmentsPanel: Component<UserAssignmentsPanelProps> = (props
                       variant="ghost"
                       size="settingsAction"
                       class="min-h-11 min-w-11 gap-2 px-2 text-red-600 hover:text-red-700 sm:min-h-9 sm:min-w-0"
-                      aria-label={`Remove ${getUserIdentityDisplayName(assignment)}`}
+                      aria-label={`Remove ${getUserIdentityLabel(assignment)}`}
                       title="Remove user access"
                       disabled={!state.canEdit()}
                       onClick={() => state.openDeleteUser(assignment)}
@@ -290,6 +264,7 @@ export const UserAssignmentsPanel: Component<UserAssignmentsPanelProps> = (props
               },
             ]}
             keyExtractor={(assignment) => assignment.username}
+            class="[&_table]:table-fixed sm:[&_table]:table-auto [&_th]:whitespace-normal sm:[&_th]:whitespace-nowrap [&_th:first-child]:w-5/12 sm:[&_th:first-child]:w-auto [&_th:last-child]:w-24 sm:[&_th:last-child]:w-auto"
             emptyState={emptyStateCopy().title}
             desktopMinWidth="620px"
             frame="flush"
@@ -320,16 +295,18 @@ export const UserAssignmentsPanel: Component<UserAssignmentsPanelProps> = (props
             onClose={state.closeDeleteUser}
             closeOnBackdrop={false}
             panelClass="max-w-lg"
-            ariaLabel={`Remove user access: ${getUserIdentityDisplayName(user())}`}
+            ariaLabel={`Remove user access: ${getUserIdentityLabel(user())}`}
             returnFocus={() => searchInputRef}
           >
             <div class="space-y-5 p-6">
               <div>
                 <h3 class="text-lg font-semibold text-base-content">Remove user access?</h3>
                 <p class="mt-2 text-sm text-muted">
-                  This removes all role assignments for {getUserIdentityDisplayName(user())} and
-                  revokes their active Pulse sessions.
+                  This removes all role assignments and revokes active Pulse sessions for:
                 </p>
+                <div class="mt-2">
+                  <UserAccessIdentity user={user()} />
+                </div>
               </div>
               <div class="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/25 dark:text-amber-100">
                 This does not disable the account at the identity provider. A later authorized SSO

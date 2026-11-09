@@ -8,7 +8,7 @@ import {
   getUserAssignmentsDeleteErrorMessage,
   getUserAssignmentsLoadErrorMessage,
   getUserAssignmentsUpdateErrorMessage,
-  getUserIdentityDisplayName,
+  getUserIdentityLabel,
 } from '@/utils/rbacPresentation';
 import { useRBACFeatureGateState } from './useRBACFeatureGateState';
 
@@ -311,7 +311,7 @@ export function useUserAssignmentsPanelState(props: UserAssignmentsPanelProps = 
           setRoles([]);
           setInventoryLoaded(false);
           setUnconfirmedChange(
-            `The ${kind === 'save' ? 'role update' : 'access removal'} for ${getUserIdentityDisplayName(user)} could not be confirmed. It may already have been applied. Check saved access and review the user's roles before making another change.`,
+            `The ${kind === 'save' ? 'role update' : 'access removal'} for ${getUserIdentityLabel(user)} could not be confirmed. It may already have been applied. Check saved access and review the user's roles before making another change.`,
           );
         });
       }
@@ -326,7 +326,7 @@ export function useUserAssignmentsPanelState(props: UserAssignmentsPanelProps = 
             setSuccessNotice(
               kind === 'save'
                 ? `Roles updated for ${user.username}`
-                : `User access removed for ${getUserIdentityDisplayName(user)}`,
+                : `User access removed for ${getUserIdentityLabel(user)}`,
             );
           }
         }

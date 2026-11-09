@@ -6,7 +6,35 @@ import type { Permission, Role, UserRoleAssignment } from '@/types/rbac';
 import BadgeCheck from 'lucide-solid/icons/badge-check';
 import Shield from 'lucide-solid/icons/shield';
 import X from 'lucide-solid/icons/x';
-import { getUserIdentityDisplayName, getUserIdentityProviderLabel } from '@/utils/rbacPresentation';
+import {
+  getUserIdentityDisplayName,
+  getUserIdentityLabel,
+  getUserIdentityProviderLabel,
+} from '@/utils/rbacPresentation';
+
+/** The saved principal stays readable even when its mutable claims match another user. */
+export const UserAccessIdentity: Component<{
+  user: UserRoleAssignment;
+  showName?: boolean;
+}> = (props) => (
+  <div class="min-w-0 whitespace-normal [overflow-wrap:anywhere]">
+    <Show when={props.showName !== false}>
+      <div class="font-medium text-base-content">{getUserIdentityDisplayName(props.user)}</div>
+    </Show>
+    <Show when={props.user.email && props.user.email !== getUserIdentityDisplayName(props.user)}>
+      <div class="text-xs text-muted">{props.user.email}</div>
+    </Show>
+    <Show when={getUserIdentityProviderLabel(props.user)}>
+      <div class="text-xs text-muted">{getUserIdentityProviderLabel(props.user)}</div>
+    </Show>
+    <Show when={props.user.username !== getUserIdentityDisplayName(props.user)}>
+      <div class="font-mono text-[10px] leading-4 text-muted" title={props.user.username}>
+        <span class="font-sans">User ID: </span>
+        <span>{props.user.username}</span>
+      </div>
+    </Show>
+  </div>
+);
 
 interface UserAssignmentsDialogProps {
   actionError?: string | null;
@@ -31,11 +59,11 @@ export const UserAssignmentsDialog: Component<UserAssignmentsDialogProps> = (pro
       onClose={props.onClose}
       panelClass="max-w-2xl"
       closeOnBackdrop={false}
-      ariaLabel={`Manage access: ${props.editingUser ? getUserIdentityDisplayName(props.editingUser) : 'user'}`}
+      ariaLabel={`Manage access: ${props.editingUser ? getUserIdentityLabel(props.editingUser) : 'user'}`}
     >
       <div class="flex min-h-0 w-full flex-col">
         <div class="flex shrink-0 items-start justify-between gap-3 px-4 sm:px-6 py-4 border-b border-border">
-          <div>
+          <div class="min-w-0 whitespace-normal [overflow-wrap:anywhere]">
             <h3 class="text-lg font-semibold text-base-content">
               Manage Access:{' '}
               {props.editingUser ? getUserIdentityDisplayName(props.editingUser) : 'User'}
@@ -43,13 +71,8 @@ export const UserAssignmentsDialog: Component<UserAssignmentsDialogProps> = (pro
             <p class="text-xs text-muted uppercase tracking-wider font-semibold mt-0.5">
               Role Assignments
             </p>
-            <Show when={props.editingUser?.email}>
-              <p class="mt-1 text-xs text-muted">{props.editingUser?.email}</p>
-            </Show>
-            <Show when={props.editingUser && getUserIdentityProviderLabel(props.editingUser)}>
-              <p class="text-xs text-muted">
-                {props.editingUser && getUserIdentityProviderLabel(props.editingUser)}
-              </p>
+            <Show when={props.editingUser}>
+              {(user) => <UserAccessIdentity user={user()} showName={false} />}
             </Show>
           </div>
           <button
@@ -57,7 +80,7 @@ export const UserAssignmentsDialog: Component<UserAssignmentsDialogProps> = (pro
             onClick={props.onClose}
             aria-label="Close user assignments"
             title="Close"
-            class="p-1.5 rounded-md hover:text-base-content hover:bg-surface-hover"
+            class="shrink-0 p-1.5 rounded-md hover:text-base-content hover:bg-surface-hover"
           >
             <X class="w-5 h-5" />
           </button>

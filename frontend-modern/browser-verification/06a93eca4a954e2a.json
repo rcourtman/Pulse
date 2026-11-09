@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "base_sha": "28cdf3645ec5c07496a0cc155f76c3660129ae87",
+  "verified_at": "2026-11-09T06:00:45.268524Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/UserAssignmentsDialog.tsx",
+    "frontend-modern/src/components/Settings/UserAssignmentsPanel.tsx",
+    "frontend-modern/src/components/Settings/useUserAssignmentsPanelState.ts",
+    "frontend-modern/src/utils/rbacPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/UserAssignmentsDialog.tsx": "2308b40cbcafdb1828974f97505b54be460f405b0f0e6bd8c3e90b77d6b06dc1",
+    "frontend-modern/src/components/Settings/UserAssignmentsPanel.tsx": "ac8bb7651e4077bc10fccd85cfe3feb27ae8fb9d27e93b54d39d009fa8388c18",
+    "frontend-modern/src/components/Settings/useUserAssignmentsPanelState.ts": "cf22075a5f4cc54bf51743e7a0d9bc8638eb1527a03dcb1c9dea4a0149d1aeed",
+    "frontend-modern/src/utils/rbacPresentation.ts": "8f4608a75a9d549f299176dedfd1a52569f1173914c3315d6bb2ade68684a11b"
+  },
+  "routes": [
+    "/settings/security-users (native SettingsPageShell/useSettingsAccess + UserAssignmentsPanel + real RBAC API client at synthetic /identity.html; not full App or real IdP)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "two namesake users with identical display/email/provider claims and distinct saved usernames",
+    "inventory with complete IDs, every assigned role and both actions",
+    "selected second user role editor, three role options and saved-permissions qualifier",
+    "selected second user removal with session effects and IdP re-creation warning",
+    "accepted exact-key update/removal and identity-specific completion",
+    "unconfirmed update and explicit saved-access read",
+    "capability withdrawal while editing"
+  ],
+  "interactions": [
+    "Open each namesake from its saved row and verify its own exact permission-read target",
+    "Use native checkbox and Save Changes; assert one PUT to the second encoded username with exact selected roles",
+    "Cancel and reopen removal, then assert one DELETE to the second encoded username and the other namesake survives",
+    "Return a synthetic 500 to the second role update; retain its identity in the uncertain-result message and require an explicit read with no write replay",
+    "Withdraw users capability through native status refresh and verify the dialog withdraws"
+  ],
+  "browsers": [
+    "Playwright 1.56.1 Chromium 141.0.7390.37 desktop/light",
+    "Playwright 1.56.1 WebKit 26.0 phone/light/dark"
+  ],
+  "evidence": "Invocation 20261109T054548Z: RECEIPTS.md, CAPTURES.json and BROWSER-PROOFS.tar.xz. Before/after clients exit 0, browser/server cleanup reported. 18 final native view_image-inspected captures / 9 comparable pairs preserve full identities, roles, selected states, controls and warnings. Phone table is 364px within 364px rather than 661px; no detail/count/control aggregation. Both script failures and layout iterations remain in ADVERSE.md/VALIDATION-HISTORY.tar.xz. Synthetic transport/pixel evidence, not full App/IdP, original-client recovery or published availability."
+}

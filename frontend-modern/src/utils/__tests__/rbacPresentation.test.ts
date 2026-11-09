@@ -11,6 +11,7 @@ import {
   getUserAssignmentsEmptyStateCopy,
   getUserAssignmentsUpdateErrorMessage,
   getUserIdentityDisplayName,
+  getUserIdentityLabel,
   getUserIdentityProviderLabel,
 } from '@/utils/rbacPresentation';
 
@@ -62,6 +63,17 @@ describe('rbacPresentation', () => {
     expect(getUserIdentityDisplayName(user)).toBe('Alice Example');
     expect(getUserIdentityProviderLabel(user)).toBe('OIDC · okta');
     expect(getUserIdentityDisplayName({ username: 'local-admin' })).toBe('local-admin');
+  });
+
+  it('distinguishes namesake identities without duplicating a local username', () => {
+    const first = { username: 'sso:oidc:workforce:subject-01', displayName: 'Alex Morgan' };
+    const second = { ...first, username: 'sso:oidc:workforce:subject-02' };
+    expect(getUserIdentityLabel(first)).toBe('Alex Morgan (sso:oidc:workforce:subject-01)');
+    expect(getUserIdentityLabel(second)).toBe('Alex Morgan (sso:oidc:workforce:subject-02)');
+    expect(getUserIdentityLabel({ username: 'local-admin' })).toBe('local-admin');
+    expect(getUserIdentityLabel({ username: 'subject', email: '  alex@example.invalid  ' })).toBe(
+      'alex@example.invalid (subject)',
+    );
   });
 
   it('returns canonical RBAC admin error copy', () => {
