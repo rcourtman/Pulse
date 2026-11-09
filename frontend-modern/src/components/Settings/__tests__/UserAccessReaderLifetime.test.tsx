@@ -186,7 +186,7 @@ describe('User Access reader lifetime', () => {
       expect(state.successNotice()).toBe(
         kind === 'save'
           ? `Roles updated for ${alice.username}`
-          : 'User access removed for North private user',
+          : 'User access removed for North private user (old-principal)',
       );
       expect(state.showModal()).toBe(false);
       expect(state.userPendingDeletion()).toBeNull();
