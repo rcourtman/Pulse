@@ -1,6 +1,7 @@
 package config
 
 import (
+	"crypto/subtle"
 	"errors"
 	"fmt"
 	"slices"
@@ -364,12 +365,15 @@ func (c *Config) PrimaryAPITokenHint() string {
 // Callers must hold Mu for writing, not just reading. The returned record is
 // part of the live inventory; clone it before releasing the lock for later use.
 func (c *Config) ValidateAPIToken(rawToken string) (*APITokenRecord, bool) {
-	if rawToken == "" {
+	if rawToken == "" || len(c.APITokens) == 0 {
 		return nil, false
 	}
 
+	// Hash once per lookup, not once per saved token. Keep the ordered,
+	// constant-time comparisons and the first matching record's decision.
+	tokenHash := auth.HashAPIToken(rawToken)
 	for idx, record := range c.APITokens {
-		if auth.CompareAPIToken(rawToken, record.Hash) {
+		if subtle.ConstantTimeCompare([]byte(tokenHash), []byte(record.Hash)) == 1 {
 			if c.APITokens[idx].IsExpired() {
 				return nil, false
 			}
@@ -391,12 +395,13 @@ func (c *Config) ValidateAPIToken(rawToken string) (*APITokenRecord, bool) {
 // Use this for read-only checks like admin verification where you don't need
 // to update LastUsedAt or get the full record. Safe to call under RLock.
 func (c *Config) IsValidAPIToken(rawToken string) bool {
-	if rawToken == "" {
+	if rawToken == "" || len(c.APITokens) == 0 {
 		return false
 	}
 
+	tokenHash := auth.HashAPIToken(rawToken)
 	for _, record := range c.APITokens {
-		if auth.CompareAPIToken(rawToken, record.Hash) {
+		if subtle.ConstantTimeCompare([]byte(tokenHash), []byte(record.Hash)) == 1 {
 			if record.IsExpired() {
 				return false
 			}
