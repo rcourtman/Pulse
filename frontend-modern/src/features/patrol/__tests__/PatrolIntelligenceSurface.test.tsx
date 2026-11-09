@@ -254,7 +254,7 @@ describe('PatrolIntelligenceSurface finding handoff', () => {
   };
 
   it.each(['digest', 'recent work'])(
-    'aligns once both initial reads settle, with %s first',
+    'keeps the target aligned as each initial read settles, with %s first',
     async (first) => {
       const { scrollIntoView, flushFrames } = await deferHandoff();
       const finishes =
@@ -263,17 +263,17 @@ describe('PatrolIntelligenceSurface finding handoff', () => {
           : [patrolState.finishRecentWork, patrolState.finishDigest];
       finishes[0]?.();
       flushFrames();
-      expect(scrollIntoView).not.toHaveBeenCalled();
+      expect(scrollIntoView).toHaveBeenCalledTimes(1);
       finishes[1]?.();
       flushFrames();
-      expect(scrollIntoView).toHaveBeenCalledTimes(1);
+      expect(scrollIntoView).toHaveBeenCalledTimes(2);
       expect(scrollIntoView.mock.instances[0]).toBe(
         document.getElementById('patrol-operational-records'),
       );
       // Later refresh notifications cannot restart a completed handoff.
       finishes.forEach((finish) => finish?.());
       flushFrames();
-      expect(scrollIntoView).toHaveBeenCalledTimes(1);
+      expect(scrollIntoView).toHaveBeenCalledTimes(2);
     },
   );
 

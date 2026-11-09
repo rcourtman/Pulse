@@ -54,7 +54,7 @@ export function PatrolIntelligenceSurface() {
     if (focus) queueMicrotask(() => workspaceTabs[view]?.focus());
   };
   // Give the handoff an immediate target, then align it after the two panels
-  // above it finish their initial reads (including errors). Their loading
+  // above it finish each initial read (including errors). Their loading
   // placeholders are much shorter than their contents, especially on phones.
   // This is one navigation, not scroll-following: subsequent user input or a
   // view change cancels it, and background refreshes cannot restart it.
@@ -86,13 +86,12 @@ export function PatrolIntelligenceSurface() {
     if (
       activeView() !== 'activity' ||
       !pendingFindingsFocus() ||
-      !digestLoaded() ||
-      !recentWorkLoaded()
+      (!digestLoaded() && !recentWorkLoaded())
     )
       return;
     const frame = requestAnimationFrame(() => {
       findingsPanel?.scrollIntoView?.({ block: 'start' });
-      setPendingFindingsFocus(false);
+      if (digestLoaded() && recentWorkLoaded()) setPendingFindingsFocus(false);
     });
     onCleanup(() => cancelAnimationFrame(frame));
   });
