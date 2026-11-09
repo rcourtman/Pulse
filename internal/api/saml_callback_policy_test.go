@@ -30,7 +30,7 @@ type samlCallbackPolicyResult struct {
 }
 
 // Exercise actual signed SAML, request/browser binding, management publication,
-// role/identity persistence and session creation. The body barrier is in HTTP,
+// role persistence, identity-write calls and session creation. The body barrier is in HTTP,
 // not a production hook or timing guess, and publication must finish before it
 // opens. No external IdP, real identities or credentials are involved.
 func runSAMLCallbackPolicy(t *testing.T, idp *samlManualCertTestIdP, action string) samlCallbackPolicyResult {
@@ -251,7 +251,7 @@ func TestSAMLCallbackPolicyWithdrawal(t *testing.T) {
 			// Preserve that current policy, rather than inventing a replay gate
 			// on the deliberately opt-in IdP-initiated path.
 			if parsed, err := url.Parse(result.ReplayTarget); err != nil || (parsed.Query().Get("saml") == "success") != (action == "idp-initiated") {
-				t.Errorf("replay succeeded: %+v", result)
+				t.Errorf("replay/explicit IdP-initiated policy mismatch: %+v", result)
 			}
 		})
 	}

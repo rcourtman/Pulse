@@ -3,7 +3,6 @@ package api
 import (
 	"encoding/base64"
 	"net/http"
-	"net/http/httptest"
 	"net/url"
 	"strings"
 	"sync"
