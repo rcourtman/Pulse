@@ -99,10 +99,10 @@ func TestAPITokenScopesHelpers(t *testing.T) {
 
 	record = &APITokenRecord{Scopes: []string{"host-agent:report"}}
 	if !record.HasScope(ScopeAgentReport) {
-		t.Fatalf("expected ensureScopes to rewrite legacy host-agent:report to canonical agent:report")
+		t.Fatalf("expected legacy host-agent:report to match canonical agent:report")
 	}
-	if got := record.Scopes; len(got) != 1 || got[0] != ScopeAgentReport {
-		t.Fatalf("expected runtime scopes to be canonicalized in-place, got %#v", got)
+	if got := record.Scopes; len(got) != 1 || got[0] != "host-agent:report" {
+		t.Fatalf("scope read changed the record: %#v", got)
 	}
 	if record.HasScope(ScopeSettingsWrite) {
 		t.Fatalf("unexpected scope allowed through legacy scope")
