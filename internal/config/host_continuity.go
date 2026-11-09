@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -47,6 +49,13 @@ type HostContinuityEntry struct {
 	RemovedAt              time.Time `json:"removedAt,omitempty"`
 }
 
+// hostContinuityLivenessFlushDelay bounds how long a report's liveness-only
+// change waits in memory before the journal is rewritten. Every accepted or
+// rejected host report used to rewrite the whole journal, and the journal
+// grows with the fleet, so its write volume grew with the square of the host
+// count (about 1.5 GiB/day at 30 agents).
+var hostContinuityLivenessFlushDelay = 15 * time.Second
+
 // HostContinuityStore persists recent standalone host identity and report
 // ordering so licensing, grandfather-floor, and telemetry-transition
 // continuity survive process restarts.
@@ -56,6 +65,14 @@ type HostContinuityStore struct {
 	dataPath string
 	fs       FileSystem
 	loadErr  error
+
+	// dirty marks liveness-only changes held in memory but not yet written.
+	// flushGeneration invalidates a scheduled flush that Flush or Close has
+	// already covered. After Close, observations are written synchronously.
+	dirty           bool
+	flushScheduled  bool
+	flushGeneration uint64
+	closed          bool
 }
 
 func NewHostContinuityStore(dataPath string, fs FileSystem) *HostContinuityStore {
@@ -160,6 +177,7 @@ func (s *HostContinuityStore) Load() error {
 	return nil
 }
 
+// save writes the whole journal, including any pending liveness changes.
 func (s *HostContinuityStore) save() error {
 	data, err := json.Marshal(s.entries)
 	if err != nil {
@@ -168,7 +186,118 @@ func (s *HostContinuityStore) save() error {
 	if err := persistMetadata(s.fs, s.dataPath, "host_continuity.json", data); err != nil {
 		return err
 	}
+	s.dirty = false
 	return nil
+}
+
+// ObserveReport records the continuity entry derived from one host report.
+// A new host, or any change to identity, credentials, links, legacy state or
+// the report stream, is written before it returns, exactly as Upsert does. A
+// change confined to receipt times, the accepted time and the sequence within
+// the same stream updates memory at once, so ordering decisions in this
+// process see it immediately, and reaches disk within
+// hostContinuityLivenessFlushDelay, at the next synchronous write, or on
+// Flush/Close. A crash can therefore lose at most that delay of watermark
+// advance; the journal was never fsynced, so a crash could already lose the
+// latest rewrite.
+func (s *HostContinuityStore) ObserveReport(entry HostContinuityEntry) error {
+	normalized, ok := normalizeHostContinuityEntry(entry)
+	if !ok {
+		return fmt.Errorf("host continuity entry requires host ID")
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	previous, existed := s.entries[normalized.HostID]
+	if s.closed || !existed || !hostContinuityLivenessOnlyChange(previous, normalized) {
+		s.entries[normalized.HostID] = normalized
+		if err := s.save(); err != nil {
+			if existed {
+				s.entries[normalized.HostID] = previous
+			} else {
+				delete(s.entries, normalized.HostID)
+			}
+			return err
+		}
+		return nil
+	}
+
+	s.entries[normalized.HostID] = normalized
+	s.dirty = true
+	if !s.flushScheduled {
+		s.flushScheduled = true
+		generation := s.flushGeneration
+		time.AfterFunc(hostContinuityLivenessFlushDelay, func() { s.flushScheduledWrite(generation) })
+	}
+	return nil
+}
+
+func (s *HostContinuityStore) flushScheduledWrite(generation uint64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if generation != s.flushGeneration {
+		return
+	}
+	s.flushScheduled = false
+	if !s.dirty {
+		return
+	}
+	if err := s.save(); err != nil {
+		// Memory stays authoritative; the next observation schedules another
+		// attempt and Flush/Close report the failure.
+		log.Warn().Err(err).Msg("Failed to persist deferred host continuity state")
+	}
+}
+
+// Flush writes pending liveness changes now.
+func (s *HostContinuityStore) Flush() error {
+	if s == nil {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.flushLocked()
+}
+
+// Close flushes pending liveness changes and makes later observations write
+// synchronously, so no deferred write can land after shutdown.
+func (s *HostContinuityStore) Close() error {
+	if s == nil {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.closed = true
+	return s.flushLocked()
+}
+
+func (s *HostContinuityStore) flushLocked() error {
+	s.flushGeneration++
+	s.flushScheduled = false
+	if !s.dirty {
+		return nil
+	}
+	return s.save()
+}
+
+// hostContinuityLivenessOnlyChange reports whether next differs from previous
+// only in fields every report advances. A changed or newly retired report
+// stream is an ordering boundary and is never deferred.
+func hostContinuityLivenessOnlyChange(previous, next HostContinuityEntry) bool {
+	if previous.ReportStreamID != next.ReportStreamID ||
+		!slices.Equal(previous.RetiredReportStreamIDs, next.RetiredReportStreamIDs) ||
+		!slices.Equal(previous.DeniedTokenIDs, next.DeniedTokenIDs) {
+		return false
+	}
+	for _, entry := range []*HostContinuityEntry{&previous, &next} {
+		entry.LastSeen = time.Time{}
+		entry.ReportObservedAt = time.Time{}
+		entry.ReportLastReceivedAt = time.Time{}
+		entry.ReportSequence = 0
+		entry.RetiredReportStreamIDs = nil
+		entry.DeniedTokenIDs = nil
+	}
+	return reflect.DeepEqual(previous, next)
 }
 
 func (s *HostContinuityStore) Upsert(entry HostContinuityEntry) error {

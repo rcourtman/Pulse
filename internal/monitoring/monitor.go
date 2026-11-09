@@ -8530,7 +8530,7 @@ const guestMetadataDrainTimeout = 2 * time.Second
 
 func (m *Monitor) Stop() {
 	if err := m.stop(); err != nil {
-		log.Error().Err(err).Msg("monitor stopped with incomplete guest metadata persistence; data directory must be retained")
+		log.Error().Err(err).Msg("monitor stopped with incomplete guest metadata or host continuity persistence; data directory must be retained")
 	}
 }
 
@@ -8568,6 +8568,16 @@ func (m *Monitor) stop() error {
 	// stray guest_metadata.json.tmp behind.
 	drainErr := m.guestMetadataStore.Close(guestMetadataDrainTimeout)
 
+	// Write deferred host report liveness so a restart or upgrade resumes from
+	// the exact report watermark, and stop deferring before the directory can
+	// be torn down. A failed flush is a failed stop, like a failed guest
+	// metadata drain: discarding this store would lose the newest watermark
+	// and let the replacement accept a replay of an accepted report.
+	continuityErr := m.hostContinuityStore.Close()
+	if continuityErr != nil {
+		log.Error().Err(continuityErr).Msg("failed to flush host continuity state")
+	}
+
 	// Close persistent metrics store (flushes buffered data)
 	if m.metricsStore != nil {
 		if err := m.metricsStore.Close(); err != nil {
@@ -8577,8 +8587,8 @@ func (m *Monitor) stop() error {
 		}
 	}
 
-	if drainErr != nil {
-		return drainErr
+	if err := stderrors.Join(drainErr, continuityErr); err != nil {
+		return err
 	}
 	log.Info().Msg("monitor stopped")
 	return nil

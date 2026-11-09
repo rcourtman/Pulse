@@ -1812,7 +1812,10 @@ func (m *Monitor) persistHostContinuity(host models.Host, report agentshost.Repo
 	if previous, ok := m.hostContinuityStore.Get(entry.HostID); ok {
 		entry.DeniedTokenIDs = append([]string(nil), previous.DeniedTokenIDs...)
 	}
-	if err := m.hostContinuityStore.Upsert(entry); err != nil {
+	// Every report reaches here, accepted or rejected. ObserveReport writes
+	// identity and stream changes at once and defers liveness-only changes,
+	// so a steady fleet no longer rewrites the whole journal per report.
+	if err := m.hostContinuityStore.ObserveReport(entry); err != nil {
 		log.Warn().
 			Err(err).
 			Str("hostID", host.ID).
