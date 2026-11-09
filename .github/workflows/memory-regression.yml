@@ -9,6 +9,8 @@ name: Memory Regression Watch
 # file pages. Both heap profiles and their difference are uploaded, so a failure
 # names what grew. SQLite page caches only fill on large databases, which a
 # short mock run never builds; pkg/db's page cache tests guard those instead.
+# The compare-agents job repeats the comparison on a real Pulse driven by
+# synthetic agents, because mock mode never reaches the agent report path.
 on:
   schedule:
     - cron: '41 4 * * *'
@@ -86,6 +88,82 @@ jobs:
             ${{ runner.temp }}/memory/summary.md
             ${{ runner.temp }}/memory/result.json
             ${{ runner.temp }}/memory/run-*.log
+          if-no-files-found: ignore
+          retention-days: 30
+
+  # The same comparison on a real Pulse fed by synthetic Unified Agents and one
+  # connected dashboard (scripts/memory/agent_load.py). Mock mode drops pushed
+  # agent reports, so only this estate reaches the per-report registry refresh
+  # and broadcast cost #2199 measured. It reports without gating until its noise
+  # is known, and the scheduled reporter below does not read it, so its result
+  # never opens or comments on the memory watch issue.
+  compare-agents:
+    name: Compare an agent estate with the latest stable release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: candidate
+          persist-credentials: false
+
+      - name: Resolve the latest stable release
+        id: stable
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          tag="$(gh release view --json tagName,isPrerelease --jq 'select(.isPrerelease | not) | .tagName')"
+          [[ "${tag}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "No stable release tag found: '${tag}'" >&2; exit 1; }
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "Baseline: ${tag}"
+
+      - name: Checkout baseline
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ steps.stable.outputs.tag }}
+          path: baseline
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: candidate/go.mod
+          cache: false
+
+      - name: Measure both builds under agent load
+        env:
+          GOTOOLCHAIN: auto
+          PULSE_MEMORY_DURATION: '900'
+          PULSE_FOOTPRINT_ESTATE: agents
+          PULSE_MEMORY_GATE: '0'
+        run: bash candidate/scripts/memory/compare_release_memory.sh baseline candidate "$RUNNER_TEMP/memory-agents"
+
+      - name: Publish the comparison
+        if: ${{ !cancelled() }}
+        run: |
+          if [[ -f "$RUNNER_TEMP/memory-agents/summary.md" ]]; then
+            cat "$RUNNER_TEMP/memory-agents/summary.md" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "The agent estate measurement did not finish; see the run logs." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload agent estate evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: memory-regression-agents
+          path: |
+            ${{ runner.temp }}/memory-agents/*.tsv
+            ${{ runner.temp }}/memory-agents/*.pb.gz
+            ${{ runner.temp }}/memory-agents/heap-growth.txt
+            ${{ runner.temp }}/memory-agents/summary.md
+            ${{ runner.temp }}/memory-agents/result.json
+            ${{ runner.temp }}/memory-agents/agents-*.json
+            ${{ runner.temp }}/memory-agents/agents-*.log
+            ${{ runner.temp }}/memory-agents/run-*.log
           if-no-files-found: ignore
           retention-days: 30
 

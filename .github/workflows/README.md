@@ -206,6 +206,19 @@ closes it. SQLite page caches only fill on large databases, which this short run
 never builds; `pkg/db/pagecache_test.go` guards those on every pull request.
 It gates nothing.
 
+Its `compare-agents` job runs the same comparison on a second estate: a real,
+non-mock Pulse with authentication on, fed by `scripts/memory/agent_load.py`.
+That driver mints one install token per synthetic Unified Agent, posts gzip
+host reports from 30 agents every 30 seconds (6 of them also send Docker
+reports with 40 containers each), and keeps one dashboard WebSocket connected.
+It records each report's latency and counts a report as failed after the
+agent's own 15-second timeout.
+Mock mode drops pushed agent reports, so only this estate reaches the
+per-report registry refresh and state broadcast that #2199 measured. The job
+fails when the driver's reports were not accepted, reports memory, CPU and
+writes without gating, and uploads `memory-regression-agents`. The scheduled
+issue reporter reads only the mock job.
+
 `dependency-advisory-watch.yml` runs the required build-and-test frontend audit
 daily against `main` and every active `release/v<major>.<minor>` line (the
 latest stable's line and newer), because a new npm advisory against an

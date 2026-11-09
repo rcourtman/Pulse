@@ -10,6 +10,11 @@ absolute slack. Requiring both keeps small installs' noise from failing it.
 Over the same final third it also reports CPU (percent of one core) and disk
 writes extrapolated to a day (#2199, #1966). Those rates are reported, not
 gated, until measured budgets exist for them.
+
+The estate file names what was measured. For the agents estate the summary
+also shows each driver's accepted reports and dashboard traffic. Setting
+PULSE_MEMORY_GATE=0 reports memory without failing, for an estate whose noise
+is not yet known.
 """
 
 from __future__ import annotations
@@ -33,6 +38,10 @@ ACTIVITY_LABELS = {
     "cpu_pct": ("CPU", "% of one core"),
     "write_mib_per_day": ("Disk writes", "MiB/day"),
     "wchar_mib_per_day": ("Write calls", "MiB/day"),
+}
+ESTATES = {
+    "mock": "the fixed small mock estate (2 nodes, 24 guests, a Docker host with 10 containers)",
+    "agents": "a real Pulse fed by synthetic Unified Agents and one connected dashboard",
 }
 SECONDS_PER_DAY = 86400
 MIB = 1024 * 1024
@@ -84,6 +93,49 @@ def read_clk_tck(out: Path) -> float:
         return 100.0
 
 
+def read_estate(out: Path) -> str:
+    try:
+        return (out / "estate").read_text().strip() or "mock"
+    except OSError:
+        return "mock"
+
+
+def read_agent_stats(out: Path, label: str) -> dict | None:
+    try:
+        return json.loads((out / f"agents-{label}.json").read_text())
+    except (OSError, ValueError):
+        return None
+
+
+def agent_lines(baseline: dict | None, candidate: dict | None) -> list[str]:
+    shape = candidate or baseline
+    if shape is None:
+        return ["", "No agent load statistics were written."]
+    lines = [
+        "",
+        "### Agent traffic",
+        "",
+        f"{shape['agents']} agents report every {shape['interval_s']}s; {shape['docker_agents']} also send "
+        f"Docker reports with {shape['containers_per_docker_agent']} containers each.",
+        "",
+        "| | Baseline | Candidate |",
+        "|---|---:|---:|",
+    ]
+    rows = (
+        ("Host reports accepted", lambda d: d["accepted"]["host"]),
+        ("Docker reports accepted", lambda d: d["accepted"]["docker"]),
+        ("Reports failed", lambda d: sum(d["failed"].values())),
+        ("Host report p95 ms", lambda d: (d.get("latency") or {}).get("host", {}).get("p95_ms", "n/a")),
+        ("Host report max ms", lambda d: (d.get("latency") or {}).get("host", {}).get("max_ms", "n/a")),
+        ("Dashboard state messages", lambda d: d["dashboard"]["messages"]),
+        ("Dashboard MiB received", lambda d: f"{d['dashboard']['bytes'] / MIB:.1f}"),
+    )
+    for label, value in rows:
+        cells = [str(value(d)) if d else "n/a" for d in (baseline, candidate)]
+        lines.append(f"| {label} | {cells[0]} | {cells[1]} |")
+    return lines
+
+
 def format_rate(value: float | None) -> str:
     return "n/a" if value is None else f"{value:.1f}"
 
@@ -102,6 +154,8 @@ def main(argv: list[str]) -> int:
     out = Path(argv[1])
     tolerance = float(os.environ.get("PULSE_MEMORY_TOLERANCE_PCT", "15"))
     slack_kib = float(os.environ.get("PULSE_MEMORY_SLACK_MIB", "16")) * 1024
+    gated = os.environ.get("PULSE_MEMORY_GATE", "1") != "0"
+    estate = read_estate(out)
     clk_tck = read_clk_tck(out)
     baseline_rows = read_rows(out / "samples-baseline.tsv")
     candidate_rows = read_rows(out / "samples-candidate.tsv")
@@ -112,12 +166,13 @@ def main(argv: list[str]) -> int:
 
     growth = candidate["rss_kib"] - baseline["rss_kib"]
     growth_pct = 100 * growth / baseline["rss_kib"] if baseline["rss_kib"] else 0.0
-    regressed = growth > slack_kib and growth_pct > tolerance
+    exceeded = growth > slack_kib and growth_pct > tolerance
+    regressed = exceeded and gated
 
     lines = [
-        "## Pulse memory: candidate against baseline",
+        f"## Pulse memory: candidate against baseline ({estate} estate)",
         "",
-        "Steady state is the median over the final third of each run, on the fixed small mock estate.",
+        f"Steady state is the median over the final third of each run, on {ESTATES.get(estate, estate)}.",
         "",
         "| | Baseline MiB | Candidate MiB | Change |",
         "|---|---:|---:|---:|",
@@ -125,12 +180,15 @@ def main(argv: list[str]) -> int:
     for column in COLUMNS:
         base, cand = baseline[column] / 1024, candidate[column] / 1024
         lines.append(f"| {LABELS[column]} | {base:.1f} | {cand:.1f} | {cand - base:+.1f} |")
-    verdict = (
-        f"**Regression:** resident memory grew {growth / 1024:+.1f} MiB ({growth_pct:+.1f}%), "
-        f"past both {tolerance:g}% and {slack_kib / 1024:g} MiB."
-        if regressed
-        else f"No regression: resident memory changed {growth / 1024:+.1f} MiB ({growth_pct:+.1f}%)."
-    )
+    if exceeded:
+        verdict = (
+            f"**Regression:** resident memory grew {growth / 1024:+.1f} MiB ({growth_pct:+.1f}%), "
+            f"past both {tolerance:g}% and {slack_kib / 1024:g} MiB."
+        )
+        if not gated:
+            verdict += " Reported only: this estate does not gate."
+    else:
+        verdict = f"No regression: resident memory changed {growth / 1024:+.1f} MiB ({growth_pct:+.1f}%)."
     lines += ["", verdict]
     lines += [
         "",
@@ -144,15 +202,20 @@ def main(argv: list[str]) -> int:
     for key, (label, unit) in ACTIVITY_LABELS.items():
         base, cand = baseline_activity[key], candidate_activity[key]
         lines.append(f"| {label} | {unit} | {format_rate(base)} | {format_rate(cand)} | {format_change(base, cand)} |")
+    baseline_agents = read_agent_stats(out, "baseline")
+    candidate_agents = read_agent_stats(out, "candidate")
+    if estate == "agents":
+        lines += agent_lines(baseline_agents, candidate_agents)
     growth_file = out / "heap-growth.txt"
     if growth_file.exists() and growth_file.stat().st_size:
         top = growth_file.read_text().splitlines()[:30]
         lines += ["", "Heap growth by function (candidate minus baseline, in-use space):", "", "```", *top, "```"]
-    lines += [
-        "",
-        "Mock mode keeps its own fixtures in the heap, so check the growth list for `internal/mock` before",
-        "attributing a change to production code.",
-    ]
+    if estate == "mock":
+        lines += [
+            "",
+            "Mock mode keeps its own fixtures in the heap, so check the growth list for `internal/mock` before",
+            "attributing a change to production code.",
+        ]
     summary = "\n".join(lines) + "\n"
     (out / "summary.md").write_text(summary)
     (out / "result.json").write_text(json.dumps({
@@ -161,6 +224,11 @@ def main(argv: list[str]) -> int:
         "baseline_activity": baseline_activity,
         "candidate_activity": candidate_activity,
         "clk_tck": clk_tck,
+        "estate": estate,
+        "baseline_agents": baseline_agents,
+        "candidate_agents": candidate_agents,
+        "gated": gated,
+        "exceeded": exceeded,
         "rss_growth_kib": growth,
         "rss_growth_pct": growth_pct,
         "tolerance_pct": tolerance,
