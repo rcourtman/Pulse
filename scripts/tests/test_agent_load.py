@@ -29,6 +29,7 @@ class FakePulse(BaseHTTPRequestHandler):
     reports: list[tuple[str, str, dict]] = []
     pongs: list[bytes] = []
     reject_reports = False
+    dashboard_mode = "state"
     lock = threading.Lock()
 
     def log_message(self, *_):
@@ -46,7 +47,10 @@ class FakePulse(BaseHTTPRequestHandler):
         if self.path == "/api/health":
             self.reply(200, {"status": "healthy"})
         elif self.path == "/ws":
-            self.websocket()
+            if self.dashboard_mode == "reject":
+                self.reply(403, {"error": "dashboard rejected"})
+            else:
+                self.websocket()
         else:
             self.reply(404, {})
 
@@ -74,9 +78,38 @@ class FakePulse(BaseHTTPRequestHandler):
         self.send_header("Connection", "Upgrade")
         self.send_header("Sec-WebSocket-Accept", accept)
         self.end_headers()
-        self.wfile.write(bytes([0x81, 5]) + b"hello")
-        self.wfile.write(bytes([0x89, 4]) + b"ping")
-        self.wfile.write(bytes([0x81, 126]) + struct.pack("!H", 300) + b"x" * 300)
+        mode = self.dashboard_mode
+        if mode == "idle":
+            self.rfile.read(1)
+            return
+        welcome = json.dumps({"type": "welcome", "data": {"message": "connected"}}).encode()
+        initial = json.dumps({"type": "initialState", "data": {"hosts": []}}).encode()
+        update = json.dumps({"type": "rawData", "data": {"hosts": [{"id": "host-0", "padding": "x" * 300}]}}).encode()
+        if mode != "control-only":
+            self.frame(0x1, welcome)
+        if mode in ("state", "fragmented", "initial-only", "empty-update", "invalid-state"):
+            self.frame(0x1, initial)
+        if mode in ("state", "raw-only"):
+            self.frame(0x1, update)
+        elif mode == "empty-update":
+            self.frame(0x1, b'{"type":"rawData","data":{}}')
+        elif mode == "invalid-state":
+            for data in (None, [], "not state", 1):
+                self.frame(0x1, json.dumps({"type": "rawData", "data": data}).encode())
+            self.frame(0x1, b'not JSON: rawData')
+            self.frame(0x1, b'[]')
+            self.frame(0x2, update)  # Binary bytes are not Pulse's JSON text protocol.
+        elif mode == "fragmented":
+            # Exercise continuation and both extended lengths, with a ping in
+            # the middle. Count the assembled state once, not each frame.
+            update = json.dumps({"type": "rawData", "data": {"padding": "x" * 70000}}).encode()
+            self.frame(0x1, update[:10], final=False)
+            self.frame(0x9, b"ping")
+            self.frame(0x0, update[10:300], final=False)
+            self.frame(0x0, update[300:])
+        self.frame(0xA, b"pong")  # Unsolicited pong is not a state message.
+        if mode != "fragmented":
+            self.frame(0x9, b"ping")
         self.wfile.flush()
         first, second = self.rfile.read(2)
         mask = self.rfile.read(4)
@@ -85,11 +118,23 @@ class FakePulse(BaseHTTPRequestHandler):
             self.pongs.append(bytes([first]) + payload)
         self.rfile.read(1)  # hold the connection until the client closes it
 
+    def frame(self, opcode, payload, final=True):
+        first = (0x80 if final else 0) | opcode
+        size = len(payload)
+        if size < 126:
+            header = bytes([first, size])
+        elif size < 1 << 16:
+            header = bytes([first, 126]) + struct.pack("!H", size)
+        else:
+            header = bytes([first, 127]) + struct.pack("!Q", size)
+        self.wfile.write(header + payload)
+
 
 class AgentLoadTests(unittest.TestCase):
     def setUp(self):
         FakePulse.tokens, FakePulse.reports, FakePulse.pongs = [], [], []
         FakePulse.reject_reports = False
+        FakePulse.dashboard_mode = "state"
         agent_load.STOP.clear()
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), FakePulse)
         self.server.daemon_threads = True
@@ -136,11 +181,50 @@ class AgentLoadTests(unittest.TestCase):
             self.assertEqual(len(set(sequence)), len(sequence))
 
     def test_dashboard_counts_frames_and_answers_pings(self):
-        _, stats = self.drive()
+        code, stats = self.drive()
+        self.assertEqual(code, 0)
         self.assertGreaterEqual(stats["dashboard"]["connects"], 1)
-        self.assertGreaterEqual(stats["dashboard"]["messages"], 2)
-        self.assertGreaterEqual(stats["dashboard"]["bytes"], 305)
+        self.assertEqual(stats["dashboard"]["messages"], 3)
+        self.assertEqual(stats["dashboard"]["initial_states"], 1)
+        self.assertEqual(stats["dashboard"]["state_updates"], 1)
+        self.assertEqual(stats["dashboard"]["state_messages"], 2)
+        self.assertGreater(stats["dashboard"]["bytes"], stats["dashboard"]["state_bytes"])
         self.assertIn(bytes([0x8A]) + b"ping", FakePulse.pongs)
+        self.assertFalse(agent_load.DASHBOARD_SOCKETS)
+
+    def test_reports_without_live_state_traffic_fail_with_stats_preserved(self):
+        for mode in ("reject", "idle", "control-only", "welcome", "initial-only", "raw-only", "empty-update", "invalid-state"):
+            with self.subTest(mode=mode):
+                FakePulse.dashboard_mode = mode
+                agent_load.STOP.clear()
+                code, stats = self.drive("--duration", "1.2")
+                self.assertGreater(stats["accepted"]["host"], 0)
+                self.assertEqual(sum(stats["failed"].values()), 0)
+                # This is the false-success path: accepted reports alone
+                # must not turn an unexercised broadcast path green.
+                self.assertEqual(code, 1)
+                self.assertEqual(stats["dashboard"]["state_updates"], 0)
+                self.assertEqual(stats["dashboard"]["connects"], 0 if mode == "reject" else 1)
+
+    def test_fragmented_state_with_interleaved_ping_is_one_update(self):
+        FakePulse.dashboard_mode = "fragmented"
+        code, stats = self.drive()
+        self.assertEqual(code, 0)
+        self.assertEqual(stats["dashboard"]["messages"], 3)
+        self.assertEqual(stats["dashboard"]["state_messages"], 2)
+        self.assertEqual(stats["dashboard"]["state_updates"], 1)
+        self.assertGreater(stats["dashboard"]["state_bytes"], 70000)
+        self.assertIn(bytes([0x8A]) + b"ping", FakePulse.pongs)
+
+    def test_reconnect_does_not_reuse_another_connections_initial_state(self):
+        stats = agent_load.Stats()
+        initial = b'{"type":"initialState","data":{"hosts":[]}}'
+        update = b'{"type":"rawData","data":{"timestamp":"later"}}'
+        self.assertTrue(agent_load.record_ws_message(0x1, initial, stats, False))
+        self.assertFalse(agent_load.record_ws_message(0x1, update, stats, False))
+        self.assertEqual(stats.ws_state_updates, 0)
+        self.assertTrue(agent_load.record_ws_message(0x1, update, stats, True))
+        self.assertEqual(stats.ws_state_updates, 1)
 
     def test_rejected_reports_fail_the_run(self):
         FakePulse.reject_reports = True
