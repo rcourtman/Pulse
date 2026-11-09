@@ -1,3 +1,4 @@
+import { createSignal } from 'solid-js';
 import { cleanup, render, screen } from '@solidjs/testing-library';
 import { Route, Router } from '@solidjs/router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -6,10 +7,14 @@ import type { ApprovalRequest } from '@/api/ai';
 
 const state = vi.hoisted(() => ({
   pendingApprovals: [] as ApprovalRequest[],
+  approvalsError: (() => null) as () => string | null,
 }));
 
 vi.mock('@/stores/aiIntelligence', () => ({
   aiIntelligenceStore: {
+    get approvalsError() {
+      return state.approvalsError();
+    },
     get pendingApprovals() {
       return state.pendingApprovals;
     },
@@ -22,6 +27,7 @@ vi.mock('@/stores/aiIntelligence', () => ({
 describe('ApprovalBanner', () => {
   beforeEach(() => {
     state.pendingApprovals = [];
+    state.approvalsError = () => null;
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-03-01T00:00:00Z'));
   });
@@ -38,6 +44,38 @@ describe('ApprovalBanner', () => {
         <Route path="/" component={() => <ApprovalBanner />} />
       </Router>
     ));
+
+  it('distinguishes an unavailable cold read from no waiting requests', () => {
+    state.approvalsError = () => 'Approval organization is unavailable';
+    renderBanner();
+    expect(screen.getByRole('status')).toHaveTextContent('Approvals unavailable');
+    expect(screen.getByRole('status')).toHaveTextContent('There may still be requests waiting.');
+    expect(screen.queryByRole('link', { name: 'Review in Actions' })).not.toBeInTheDocument();
+  });
+
+  it('keeps last known requests and review controls visible during a refused refresh', () => {
+    state.approvalsError = () => 'Approval organization is unavailable';
+    state.pendingApprovals = [approvalRequest({ plan: { actionId: 'retained-action' } })];
+    renderBanner();
+    expect(screen.getByRole('status')).toHaveTextContent('Last known requests remain below.');
+    expect(screen.getByText('Single approval')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Review in Actions' })).toHaveAttribute(
+      'href',
+      '/actions?action=retained-action',
+    );
+    expect(screen.queryByRole('button', { name: /approve|reject/i })).not.toBeInTheDocument();
+  });
+
+  it('clears the unavailable notice after recovery without hiding retained requests', () => {
+    const [error, setError] = createSignal<string | null>('temporary failure');
+    state.approvalsError = error;
+    state.pendingApprovals = [approvalRequest()];
+    renderBanner();
+    expect(screen.getByRole('status')).toHaveTextContent('Approvals unavailable');
+    setError(null);
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Review in Actions' })).toBeInTheDocument();
+  });
 
   it('deep-links a single approval to its exact governed action review', () => {
     state.pendingApprovals = [approvalRequest({ plan: { actionId: 'action-single' } })];

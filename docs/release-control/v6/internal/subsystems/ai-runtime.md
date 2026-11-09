@@ -25,6 +25,17 @@ that same result. Successful reads retain their content and execution provenance
 
 ## Purpose
 
+### Approval read readiness remains visible in Patrol
+
+Patrol's existing approval handoff renders its store's failed-read state rather
+than treating an unavailable read as confirmation that nothing awaits review.
+A cold failure says requests may still be waiting; a failed refresh keeps and
+qualifies the last known requests and their Actions links. A corrected read
+clears the notice. No decision or execution control is added to Patrol.
+`ApprovalBanner.test.tsx` covers cold, retained and recovered states; native
+handler/production-client comparisons also cover unknown organisation and
+store readiness. This does not establish full-App or original-client recovery.
+
 ### Approval request identity is not legacy record normalization
 
 The core approval list, detail, approve and deny handlers accept the selected
