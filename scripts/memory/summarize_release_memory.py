@@ -6,6 +6,10 @@ directory, takes the median of each column over the final third of each run,
 writes summary.md and result.json, and exits 1 when the candidate's resident
 memory exceeds the baseline by more than both the percentage tolerance and the
 absolute slack. Requiring both keeps small installs' noise from failing it.
+
+Over the same final third it also reports CPU (percent of one core) and disk
+writes extrapolated to a day (#2199, #1966). Those rates are reported, not
+gated, until measured budgets exist for them.
 """
 
 from __future__ import annotations
@@ -25,16 +29,70 @@ LABELS = {
     "anon_other_kib": "Outside Go (SQLite and C allocations)",
     "file_kib": "File pages",
 }
+ACTIVITY_LABELS = {
+    "cpu_pct": ("CPU", "% of one core"),
+    "write_mib_per_day": ("Disk writes", "MiB/day"),
+    "wchar_mib_per_day": ("Write calls", "MiB/day"),
+}
+SECONDS_PER_DAY = 86400
+MIB = 1024 * 1024
 
 
-def steady_state(path: Path) -> dict[str, float]:
+def read_rows(path: Path) -> list[dict[str, str]]:
     with path.open(newline="") as handle:
         rows = [row for row in csv.DictReader(handle, delimiter="\t") if row.get("rss_kib")]
     if len(rows) < 3:
         raise SystemExit(f"{path.name}: only {len(rows)} samples; the run ended early")
+    return rows
+
+
+def final_third(rows: list[dict[str, str]]) -> list[dict[str, str]]:
     last = int(rows[-1]["elapsed_s"])
-    tail = [row for row in rows if int(row["elapsed_s"]) >= last * 2 // 3] or rows[-3:]
+    return [row for row in rows if int(row["elapsed_s"]) >= last * 2 // 3] or rows[-3:]
+
+
+def steady_state(rows: list[dict[str, str]]) -> dict[str, float]:
+    tail = final_third(rows)
     return {column: statistics.median(float(row[column]) for row in tail) for column in COLUMNS}
+
+
+def counter_rate(tail: list[dict[str, str]], column: str) -> float | None:
+    """Per-second increase of a cumulative counter across the window, or None."""
+    points = [(int(row["elapsed_s"]), float(row[column])) for row in tail if (row.get(column) or "").strip()]
+    if len(points) < 2 or points[-1][0] <= points[0][0]:
+        return None
+    (start, first), (end, last) = points[0], points[-1]
+    return max(last - first, 0.0) / (end - start)
+
+
+def activity(rows: list[dict[str, str]], clk_tck: float) -> dict[str, float | None]:
+    tail = final_third(rows)
+    ticks = counter_rate(tail, "cpu_ticks")
+    writes = counter_rate(tail, "write_bytes")
+    wchar = counter_rate(tail, "wchar_bytes")
+    return {
+        "cpu_pct": None if ticks is None else 100 * ticks / clk_tck,
+        "write_mib_per_day": None if writes is None else writes * SECONDS_PER_DAY / MIB,
+        "wchar_mib_per_day": None if wchar is None else wchar * SECONDS_PER_DAY / MIB,
+    }
+
+
+def read_clk_tck(out: Path) -> float:
+    try:
+        return float((out / "clk_tck").read_text().strip())
+    except (OSError, ValueError):
+        return 100.0
+
+
+def format_rate(value: float | None) -> str:
+    return "n/a" if value is None else f"{value:.1f}"
+
+
+def format_change(base: float | None, cand: float | None) -> str:
+    if base is None or cand is None:
+        return "n/a"
+    change = cand - base
+    return f"{0.0 if abs(change) < 0.05 else change:+.1f}"
 
 
 def main(argv: list[str]) -> int:
@@ -44,8 +102,13 @@ def main(argv: list[str]) -> int:
     out = Path(argv[1])
     tolerance = float(os.environ.get("PULSE_MEMORY_TOLERANCE_PCT", "15"))
     slack_kib = float(os.environ.get("PULSE_MEMORY_SLACK_MIB", "16")) * 1024
-    baseline = steady_state(out / "samples-baseline.tsv")
-    candidate = steady_state(out / "samples-candidate.tsv")
+    clk_tck = read_clk_tck(out)
+    baseline_rows = read_rows(out / "samples-baseline.tsv")
+    candidate_rows = read_rows(out / "samples-candidate.tsv")
+    baseline = steady_state(baseline_rows)
+    candidate = steady_state(candidate_rows)
+    baseline_activity = activity(baseline_rows, clk_tck)
+    candidate_activity = activity(candidate_rows, clk_tck)
 
     growth = candidate["rss_kib"] - baseline["rss_kib"]
     growth_pct = 100 * growth / baseline["rss_kib"] if baseline["rss_kib"] else 0.0
@@ -69,6 +132,18 @@ def main(argv: list[str]) -> int:
         else f"No regression: resident memory changed {growth / 1024:+.1f} MiB ({growth_pct:+.1f}%)."
     )
     lines += ["", verdict]
+    lines += [
+        "",
+        "### CPU and disk writes",
+        "",
+        "Rates over the same final third; writes are extrapolated to a day. Reported, not gated.",
+        "",
+        "| | Unit | Baseline | Candidate | Change |",
+        "|---|---|---:|---:|---:|",
+    ]
+    for key, (label, unit) in ACTIVITY_LABELS.items():
+        base, cand = baseline_activity[key], candidate_activity[key]
+        lines.append(f"| {label} | {unit} | {format_rate(base)} | {format_rate(cand)} | {format_change(base, cand)} |")
     growth_file = out / "heap-growth.txt"
     if growth_file.exists() and growth_file.stat().st_size:
         top = growth_file.read_text().splitlines()[:30]
@@ -83,6 +158,9 @@ def main(argv: list[str]) -> int:
     (out / "result.json").write_text(json.dumps({
         "baseline": baseline,
         "candidate": candidate,
+        "baseline_activity": baseline_activity,
+        "candidate_activity": candidate_activity,
+        "clk_tck": clk_tck,
         "rss_growth_kib": growth,
         "rss_growth_pct": growth_pct,
         "tolerance_pct": tolerance,

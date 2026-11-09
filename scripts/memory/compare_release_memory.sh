@@ -12,6 +12,10 @@
 # each run's heap profile is saved, and summarize_release_memory.py writes the
 # comparison and exits 1 when the candidate grew past the tolerance.
 #
+# Each sample also records the process's CPU ticks (/proc/<pid>/stat) and its
+# storage and write-syscall byte counters (/proc/<pid>/io), so the summary can
+# report steady-state CPU and disk-write rates beside memory (#2199, #1966).
+#
 # Mock mode keeps its own fixtures in the heap, so a fixture change shows up
 # here too. Read the heap profile diff before blaming production code.
 
@@ -26,6 +30,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 mkdir -p "${OUT_DIR}"
 OUT_DIR="$(cd "${OUT_DIR}" && pwd)"
+getconf CLK_TCK > "${OUT_DIR}/clk_tck"
 
 build_tree() {
   local label=$1 tree=$2
@@ -54,6 +59,18 @@ classify_smaps() {
   ' "$1"
 }
 
+# User plus system CPU ticks. The command name sits in parentheses and may hold
+# spaces, so count fields after the last ")": utime and stime are 12th and 13th.
+cpu_ticks() {
+  sed 's/.*) //' "$1" | awk '{ print $12 + $13 }'
+}
+
+# Bytes this process sent to storage, then bytes it passed to write calls.
+# Either is empty when the kernel has no task I/O accounting.
+io_bytes() {
+  awk '/^write_bytes:/ { w = $2 } /^wchar:/ { c = $2 } END { printf "%s\t%s", w, c }' "$1"
+}
+
 run_tree() {
   local label=$1 port=$2
   local data="${OUT_DIR}/data-${label}" log="${OUT_DIR}/run-${label}.log"
@@ -69,7 +86,7 @@ run_tree() {
     GOMAXPROCS=1 \
     "${OUT_DIR}/pulse-${label}" > "${log}" 2>&1 &
   local pid=$!
-  printf 'elapsed_s\trss_kib\tgo_heap_kib\tgo_other_kib\tanon_other_kib\tfile_kib\n' > "${samples}"
+  printf 'elapsed_s\trss_kib\tgo_heap_kib\tgo_other_kib\tanon_other_kib\tfile_kib\tcpu_ticks\twrite_bytes\twchar_bytes\n' > "${samples}"
   local start now
   start=$(date +%s)
   while kill -0 "${pid}" 2>/dev/null; do
@@ -78,7 +95,9 @@ run_tree() {
     local rss
     rss=$(awk '/^VmRSS:/ {print $2}' "/proc/${pid}/status" 2>/dev/null || true)
     if [[ -n "${rss}" ]]; then
-      printf '%s\t%s\t%s\n' "${now}" "${rss}" "$(classify_smaps "/proc/${pid}/smaps")" >> "${samples}"
+      printf '%s\t%s\t%s\t%s\t%s\n' "${now}" "${rss}" "$(classify_smaps "/proc/${pid}/smaps")" \
+        "$(cpu_ticks "/proc/${pid}/stat" 2>/dev/null || true)" \
+        "$(io_bytes "/proc/${pid}/io" 2>/dev/null || printf '\t')" >> "${samples}"
     fi
     sleep "${INTERVAL}"
   done

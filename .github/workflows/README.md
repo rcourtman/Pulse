@@ -193,8 +193,11 @@ same small mock estate (2 nodes, 24 guests, a Docker host, telemetry off, no
 licence server), and splits steady-state resident memory into the Go heap, memory
 outside Go (where the SQLite driver allocates) and file pages
 (`scripts/memory/compare_release_memory.sh`). It fails when `main` uses more than
-15% and 16 MiB more resident memory than the release. The step summary has the
-table, and the `memory-regression` artifact holds the samples, both heap profiles
+15% and 16 MiB more resident memory than the release. Over the same steady-state
+window it also reports CPU as a percentage of one core, and disk writes and
+write calls extrapolated to MiB per day, from `/proc/<pid>/stat` and
+`/proc/<pid>/io`. Those rates are reported, not gated, until measured budgets
+exist for them. The step summary has the tables, and the `memory-regression` artifact holds the samples, both heap profiles
 and `heap-growth.txt`, which lists what grew by function. Mock fixtures live in
 the heap, so a growth list led by `internal/mock` is not production memory. A
 failed scheduled run opens an issue titled "Pulse memory grew against the last
