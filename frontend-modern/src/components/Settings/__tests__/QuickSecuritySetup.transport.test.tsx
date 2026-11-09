@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { createSignal, Show } from 'solid-js';
 import { SecurityAuthPanel } from '../SecurityAuthPanel';
 import { useSettingsAccess } from '../useSettingsAccess';
@@ -319,6 +319,61 @@ describe('native Settings credential setup and rotation through real API transpo
       expect(content).toContain(generated().password);
       fireEvent.click(screen.getAllByRole('button', { name: 'Copy' })[1]);
       await waitFor(() => expect(clipboard).toHaveBeenCalledWith(generated().password));
+    },
+  );
+
+  it.each(['confirmed', 'unconfirmed'])(
+    'keeps every saved %s field and its own copy action in order through status refresh',
+    async (outcome) => {
+      await mount();
+      nextWrite = () =>
+        json(outcome === 'confirmed' ? { success: true } : {}, outcome === 'confirmed' ? 200 : 500);
+      submit();
+      await reveal();
+      const values = generated();
+      const copyButtons: HTMLButtonElement[] = [];
+      for (const [index, [label, value]] of [
+        ['Username', values.username],
+        ['Password', values.password],
+        ['API token', values.apiToken],
+      ].entries()) {
+        const row = screen.getByText(label, { exact: true }).parentElement!;
+        const code = within(row).getByText(value, { selector: 'code', exact: true });
+        expect(code.classList.contains('break-all')).toBe(label !== 'Username');
+        const button = within(row).getByRole<HTMLButtonElement>('button', {
+          name: 'Copy',
+          exact: true,
+        });
+        copyButtons.push(button);
+        fireEvent.click(button);
+        await waitFor(() => expect(clipboard).toHaveBeenNthCalledWith(index + 1, value));
+        expect(
+          await within(row).findByRole('button', { name: 'Copied!', exact: true }),
+        ).toBeVisible();
+        expect(screen.getAllByRole('button', { name: 'Copied!', exact: true })).toHaveLength(1);
+      }
+      const tokenRow = screen.getByText('API token', { exact: true }).parentElement!;
+      expect(
+        within(tokenRow).getByText('Use this token with the X-API-Token header for automation.'),
+      ).toBeVisible();
+      expect(
+        within(tokenRow).getByText('This token is only shown once. Save it now.'),
+      ).toBeVisible();
+      const pending = deferred<Response>();
+      nextStatus = () => pending.promise;
+      const refresh = access.loadSecurityStatus();
+      for (const button of copyButtons) {
+        expect(button).toBeDisabled();
+        fireEvent.click(button);
+      }
+      expect(clipboard).toHaveBeenCalledTimes(3);
+      expect(screen.getByRole('button', { name: 'Download credentials' })).toBeDisabled();
+      pending.resolve(json(savedStatus()));
+      await refresh;
+      for (const button of copyButtons) expect(button).toBeEnabled();
+      expect(document.body).toHaveTextContent(values.password);
+      expect(document.body).toHaveTextContent(values.apiToken);
+      expect(writes()).toHaveLength(1);
     },
   );
 

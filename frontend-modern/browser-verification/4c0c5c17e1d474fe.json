@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "f3360dedd126de949873de6ebf418bd60ef97b70",
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/QuickSecuritySetup.tsx": "a82b74993a12a7884bc32cad7cd4284f6b278efe29b59f5ec0c9eef480634c81"
+  },
+  "changed_paths": ["frontend-modern/src/components/Settings/QuickSecuritySetup.tsx"],
+  "routes": [
+    "/settings/security-auth (native SettingsPageShell + SecurityAuthPanel and real status/API client, synthetic HTTP at /authentication.html; not full App/IdP)"
+  ],
+  "states": [
+    "rotation impact and generated/custom draft with visible warning",
+    "single pending credential mutation and disabled competing controls",
+    "organisation/credential withdrawal before late response",
+    "local 403 refusal without replay",
+    "unconfirmed attempted credentials with three field-specific copy controls",
+    "confirmed credentials, native download and explicit saved completion/reload"
+  ],
+  "interactions": [
+    "Open real Authentication panel, fill custom inputs and submit native controls",
+    "Hold the real API-client POST; check disabled draft/controls, withdraw org and credential, and verify later authentication survives",
+    "Return 500 and verify all three saved values and their own Copy feedback without claiming success or retrying",
+    "Return 403 and assert a single write with the draft retained",
+    "Accept a current operation, copy each field independently, download and complete through existing reload"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "browsers": [
+    "Playwright 1.56.1 Chromium 141.0.7390.37 (desktop/light)",
+    "Playwright 1.56.1 WebKit 26.0 (phone/light/dark)"
+  ],
+  "verified_at": "2026-11-09T04:33:42.833335Z",
+  "evidence": "Invocation 20261109T042024Z: RECEIPTS.md, CAPTURES.json and BROWSER-PROOFS.tar.xz. Both final clients exit 0 and report cleanup. 18 native view_image-inspected captures / 9 comparable pairs preserve content, positions and controls; only existing warning/spinner glyphs are reused. Original 42 captures/21 pairs and adverse wrapper 143 are retained, not cleared, in PRIOR-ACCOUNT.tar.xz. New native proof exercises synthetic recovery/copy/withdrawal behavior; not real credential persistence, released or original-client recovery."
+}
