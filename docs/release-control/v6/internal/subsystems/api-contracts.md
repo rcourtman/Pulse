@@ -5912,7 +5912,13 @@ contract is stale.
 Proxmox runtime registration checks and completions must use the canonical
 `/api/auto-register` transport with `X-API-Token`; the admin-only
 `/api/setup-script-url` route is not a runtime probe. Ordinary
-`agent:report` tokens remain update-only. Only a server-authored config/hosted
+`agent:report` tokens remain update-only, and without an available install
+grant may change only the connection or cluster member at the address the
+token's spent grant recorded (`proxmox_registration_host_<type>`, or the
+unsuffixed record when its type matches). What the agent says about itself
+(`serverName`, candidate addresses, a rebindable `bound_hostname`, host
+reports) does not authorize a change, because every monitored host holds an
+agent token; anything else is a 403 that changes nothing. Only a server-authored config/hosted
 PVE/PBS install token may create one matching source, after durable first-host
 binding, and completion must consume that grant under the serialized
 auto-register mutation boundary.
