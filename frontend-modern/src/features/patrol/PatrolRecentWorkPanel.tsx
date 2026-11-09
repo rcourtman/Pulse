@@ -15,7 +15,7 @@ const RECEIPT_LIMIT = 6;
 const formatRecentWorkError = (error: unknown): string =>
   error instanceof Error ? error.message : 'Verified work could not be loaded.';
 
-export function PatrolRecentWorkPanel() {
+export function PatrolRecentWorkPanel(props: { onInitialLoad?: () => void } = {}) {
   const [items, setItems] = createSignal<PatrolWorkReceipt[]>([]);
   const [loading, setLoading] = createSignal(true);
   const [error, setError] = createSignal('');
@@ -37,7 +37,13 @@ export function PatrolRecentWorkPanel() {
   };
 
   onMount(() => {
-    void load();
+    let disposed = false;
+    onCleanup(() => {
+      disposed = true;
+    });
+    void load().then(() => {
+      if (!disposed) props.onInitialLoad?.();
+    });
     const refresh = () => {
       if (document.visibilityState === 'visible') void load(true);
     };

@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@solidjs/testing-library';
+import { cleanup, render, screen, waitFor } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PatrolDigest } from '@/api/patrol';
 
@@ -81,6 +81,47 @@ const digest = (overrides: Partial<PatrolDigest> = {}): PatrolDigest => ({
 describe('PatrolWeeklyDigestCard', () => {
   beforeEach(() => apiMocks.getDigest.mockReset());
   afterEach(cleanup);
+
+  it.each(['success', 'error'])(
+    'reports initial layout readiness once after %s, never on refresh',
+    async (outcome) => {
+      let finish!: (value: PatrolDigest) => void;
+      let fail!: (error: Error) => void;
+      apiMocks.getDigest.mockReturnValueOnce(
+        new Promise<PatrolDigest>((resolve, reject) => {
+          finish = resolve;
+          fail = reject;
+        }),
+      );
+      const onInitialLoad = vi.fn();
+      render(() => <PatrolWeeklyDigestCard onInitialLoad={onInitialLoad} />);
+      expect(screen.getByText('Adding up this week…')).toBeInTheDocument();
+      expect(onInitialLoad).not.toHaveBeenCalled();
+      if (outcome === 'success') finish(digest());
+      else fail(new Error('Summary unavailable'));
+      await waitFor(() => expect(onInitialLoad).toHaveBeenCalledTimes(1));
+      expect(screen.queryByText('Adding up this week…')).not.toBeInTheDocument();
+      apiMocks.getDigest.mockResolvedValue(digest());
+      document.dispatchEvent(new Event('visibilitychange'));
+      await screen.findByText('Patrol runs');
+      expect(onInitialLoad).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it('does not report readiness to an unmounted Activity view', async () => {
+    let finish!: (value: PatrolDigest) => void;
+    apiMocks.getDigest.mockReturnValueOnce(
+      new Promise<PatrolDigest>((resolve) => {
+        finish = resolve;
+      }),
+    );
+    const onInitialLoad = vi.fn();
+    render(() => <PatrolWeeklyDigestCard onInitialLoad={onInitialLoad} />);
+    cleanup();
+    finish(digest());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(onInitialLoad).not.toHaveBeenCalled();
+  });
 
   it('adds up the week in customer terms and links pending fixes to Actions', async () => {
     apiMocks.getDigest.mockResolvedValue(digest());

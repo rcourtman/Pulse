@@ -1,5 +1,5 @@
 import { useLocation, useNavigate } from '@solidjs/router';
-import { createEffect, createMemo, createSignal, Show } from 'solid-js';
+import { createEffect, createMemo, createSignal, onCleanup, Show } from 'solid-js';
 import {
   buildPatrolWorkspacePath,
   parsePatrolWorkspaceView,
@@ -53,16 +53,48 @@ export function PatrolIntelligenceSurface() {
     }
     if (focus) queueMicrotask(() => workspaceTabs[view]?.focus());
   };
-  // The finding handoff scrolls to the findings panel only once Activity has
-  // mounted, so neither the route change nor the mount can undo it.
+  // Give the handoff an immediate target, then align it after the two panels
+  // above it finish their initial reads (including errors). Their loading
+  // placeholders are much shorter than their contents, especially on phones.
+  // This is one navigation, not scroll-following: subsequent user input or a
+  // view change cancels it, and background refreshes cannot restart it.
   const [pendingFindingsFocus, setPendingFindingsFocus] = createSignal(false);
+  const [digestLoaded, setDigestLoaded] = createSignal(false);
+  const [recentWorkLoaded, setRecentWorkLoaded] = createSignal(false);
+  createEffect(() => {
+    if (activeView() === 'activity') return;
+    setPendingFindingsFocus(false);
+    setDigestLoaded(false);
+    setRecentWorkLoaded(false);
+  });
   createEffect(() => {
     if (activeView() !== 'activity' || !pendingFindingsFocus()) return;
-    setPendingFindingsFocus(false);
     queueMicrotask(() => {
+      if (!pendingFindingsFocus()) return;
       findingsPanel?.scrollIntoView?.({ block: 'start' });
       findingsPanel?.focus?.({ preventScroll: true });
     });
+    const cancel = () => setPendingFindingsFocus(false);
+    const events = ['pointerdown', 'touchstart', 'wheel', 'keydown'] as const;
+    for (const event of events)
+      document.addEventListener(event, cancel, { capture: true, passive: true });
+    onCleanup(() => {
+      for (const event of events) document.removeEventListener(event, cancel, true);
+    });
+  });
+  createEffect(() => {
+    if (
+      activeView() !== 'activity' ||
+      !pendingFindingsFocus() ||
+      !digestLoaded() ||
+      !recentWorkLoaded()
+    )
+      return;
+    const frame = requestAnimationFrame(() => {
+      findingsPanel?.scrollIntoView?.({ block: 'start' });
+      setPendingFindingsFocus(false);
+    });
+    onCleanup(() => cancelAnimationFrame(frame));
   });
   const handleWorkspaceKeyDown = (event: KeyboardEvent, currentView: PatrolWorkspaceView) => {
     const currentIndex = PATROL_WORKSPACE_VIEWS.indexOf(currentView);
@@ -159,9 +191,9 @@ export function PatrolIntelligenceSurface() {
           aria-labelledby="patrol-activity-tab"
           class="space-y-4 lg:space-y-5"
         >
-          <PatrolWeeklyDigestCard />
+          <PatrolWeeklyDigestCard onInitialLoad={() => setDigestLoaded(true)} />
 
-          <PatrolRecentWorkPanel />
+          <PatrolRecentWorkPanel onInitialLoad={() => setRecentWorkLoaded(true)} />
 
           <section
             aria-labelledby="patrol-continuity-title"
