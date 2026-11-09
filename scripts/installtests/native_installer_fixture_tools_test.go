@@ -202,7 +202,7 @@ func runNativeInstallerFixtureCommand(t *testing.T, limit time.Duration, env []s
 
 func TestNativeInstallerFixtureToolsAreRealAndStepLocal(t *testing.T) {
 	supply, preflight, installer := nativeInstallerFixtureSteps(t)
-	for _, scenario := range []string{"real tools", "symlinked fixture root", "streamed version output", "failed version producer", "install failure", "missing bash", "legacy bash", "missing stat", "non-GNU chmod", "missing cp", "non-GNU cp", "missing mv", "non-GNU mv", "missing ln", "non-GNU ln", "missing readlink", "non-GNU readlink", "missing sha256sum", "non-GNU sha256sum", "missing tar", "non-GNU tar", "missing awk", "non-GNU awk", "missing flock"} {
+	for _, scenario := range []string{"real tools", "symlinked fixture root", "streamed version output", "failed version producer", "install failure", "missing bash", "legacy bash", "missing stat", "non-GNU chmod", "missing cp", "non-GNU cp", "missing mv", "non-GNU mv", "missing ln", "non-GNU ln", "missing readlink", "non-GNU readlink", "missing sha256sum", "non-GNU sha256sum", "missing tar", "non-GNU tar", "missing awk", "non-GNU awk", "missing flock", "missing sed", "non-GNU sed"} {
 		t.Run(scenario, func(t *testing.T) {
 			root := t.TempDir()
 			if scenario == "symlinked fixture root" {
@@ -223,17 +223,17 @@ func TestNativeInstallerFixtureToolsAreRealAndStepLocal(t *testing.T) {
 			brew := `#!/bin/sh
 printf '%s\n' "$*" >> "$BREW_CALLS"
 case "$*" in
-  'install bash gnu-tar gawk flock') exit "${BREW_EXIT:-0}" ;;
+  'install bash gnu-tar gawk flock gnu-sed') exit "${BREW_EXIT:-0}" ;;
   '--prefix bash'|'--prefix coreutils') printf '%s\n' "$TOOLS_PREFIX" ;;
   '--prefix gnu-tar') printf '%s\n' "$TAR_PREFIX" ;;
-  '--prefix gawk'|'--prefix flock') printf '%s\n' "$TOOLS_PREFIX" ;;
+  '--prefix gawk'|'--prefix flock'|'--prefix gnu-sed') printf '%s\n' "$TOOLS_PREFIX" ;;
   *) exit 64 ;;
 esac
 `
 			if err := os.WriteFile(filepath.Join(bin, "brew"), []byte(brew), 0700); err != nil {
 				t.Fatal(err)
 			}
-			tools := []string{"bash", "stat", "chmod", "chown", "cp", "mv", "ln", "readlink", "sha256sum", "tar", "awk", "flock"}
+			tools := []string{"bash", "stat", "chmod", "chown", "cp", "mv", "ln", "readlink", "sha256sum", "tar", "awk", "flock", "sed"}
 			installed := make(map[string]string)
 			for _, name := range tools {
 				leaf, toolPrefix := name, prefix
@@ -277,7 +277,7 @@ esac
 			// Native macOS defaults must not be the fallback for Linux-only
 			// archive extraction, canonicalization or atomic replacement. Real
 			// GNU tools must win even when the native names are unsuitable.
-			for _, name := range []string{"cp", "mv", "readlink", "sha256sum", "tar", "awk", "flock"} {
+			for _, name := range []string{"cp", "mv", "readlink", "sha256sum", "tar", "awk", "flock", "sed"} {
 				if err := os.WriteFile(filepath.Join(bin, name), []byte("#!/bin/sh\nprintf 'native BSD utility reached\\n' >&2\nexit 64\n"), 0700); err != nil {
 					t.Fatal(err)
 				}
@@ -317,14 +317,14 @@ esac
 			}
 			entries, err := os.ReadDir(fixtureBin)
 			if err != nil || len(entries) != len(tools) {
-				t.Fatal("fixture supply must select only Bash/stat/chmod/chown/cp/mv/ln/readlink/sha256sum/tar/awk/flock")
+				t.Fatal("fixture supply must select only Bash/stat/chmod/chown/cp/mv/ln/readlink/sha256sum/tar/awk/flock/sed")
 			}
 			for _, name := range tools {
 				if target, err := os.Readlink(filepath.Join(fixtureBin, name)); err != nil || target != installed[name] {
 					t.Fatalf("%s did not bind the verified installed executable", name)
 				}
 			}
-			if data, err := os.ReadFile(calls); err != nil || string(data) != "install bash gnu-tar gawk flock\n--prefix bash\n--prefix coreutils\n--prefix gnu-tar\n--prefix gawk\n--prefix flock\n" {
+			if data, err := os.ReadFile(calls); err != nil || string(data) != "install bash gnu-tar gawk flock gnu-sed\n--prefix bash\n--prefix coreutils\n--prefix gnu-tar\n--prefix gawk\n--prefix flock\n--prefix gnu-sed\n" {
 				t.Fatal("fixture supply changed its fixed package/resource selection")
 			}
 			if scenario == "real tools" {
@@ -344,7 +344,7 @@ esac
 set -eu
 test "$*" = "scripts/installtests/run_unix_contracts.py --phase $EXPECTED_PHASE" || exit 91
 test "$(command -v bash)" = "$PULSE_INSTALLER_FIXTURE_BIN/bash" || exit 92
-for tool in stat chmod chown cp mv ln readlink sha256sum tar awk flock; do
+for tool in stat chmod chown cp mv ln readlink sha256sum tar awk flock sed; do
   test "$(command -v "$tool")" = "$PULSE_INSTALLER_FIXTURE_BIN/$tool" || exit 93
 done
 # The expected readlink result must use a physical root too. A temporary
@@ -362,6 +362,10 @@ flock --exclusive --nonblock "$fixture_lock"
 exec {fixture_lock}<&-
 # Exercise the actual Linux-only flags with real executables and file bytes.
 # Neither a filename check nor a --version double can establish these semantics.
+printf '{"autoUpdateEnabled":false,"updateChannel":"rc","marker":"preserved"}\n' > "$PROBE_ROOT/preferences"
+sed -i 's/"autoUpdateEnabled":[^,}]*/"autoUpdateEnabled":true/' "$PROBE_ROOT/preferences"
+sed -i 's/"updateChannel":[^,}]*/"updateChannel":"stable"/' "$PROBE_ROOT/preferences"
+printf '{"autoUpdateEnabled":true,"updateChannel":"stable","marker":"preserved"}\n' | cmp - "$PROBE_ROOT/preferences"
 printf 'archive bytes\n' > "$PROBE_ROOT/source"
 # Linux CI checks the complete packet with GNU-only long options. Native
 # macOS sha256sum is not a substitute, and corruption must remain terminal.

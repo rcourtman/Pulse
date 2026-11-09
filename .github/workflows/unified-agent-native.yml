@@ -395,7 +395,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          brew install bash gnu-tar gawk flock
+          brew install bash gnu-tar gawk flock gnu-sed
           linux_bash="$(brew --prefix bash)/bin/bash"
           test -x "$linux_bash"
           "$linux_bash" -c '(( BASH_VERSINFO[0] >= 5 ))'
@@ -424,6 +424,12 @@ jobs:
           fixture_flock="$(brew --prefix flock)/bin/flock"
           test -x "$fixture_flock"
           ln -s "$fixture_flock" "$fixture_bin/flock"
+          # The Linux no-jq update path uses sed -i without BSD's backup
+          # suffix argument. Keep the real GNU editor local to these fixtures.
+          gnu_sed="$(brew --prefix gnu-sed)/bin/gsed"
+          test -x "$gnu_sed"
+          "$gnu_sed" --version | grep -F 'GNU sed' > /dev/null
+          ln -s "$gnu_sed" "$fixture_bin/sed"
           printf 'PULSE_INSTALLER_FIXTURE_BIN=%s\n' "$fixture_bin" >> "$GITHUB_ENV"
 
       # Observe the existing generated NAS watchdog/collector control before
