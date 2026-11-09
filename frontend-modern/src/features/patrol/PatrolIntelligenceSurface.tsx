@@ -83,15 +83,17 @@ export function PatrolIntelligenceSurface() {
     });
   });
   createEffect(() => {
+    const digestReady = digestLoaded();
+    const recentWorkReady = recentWorkLoaded();
     if (
       activeView() !== 'activity' ||
       !pendingFindingsFocus() ||
-      (!digestLoaded() && !recentWorkLoaded())
+      (!digestReady && !recentWorkReady)
     )
       return;
     const frame = requestAnimationFrame(() => {
       findingsPanel?.scrollIntoView?.({ block: 'start' });
-      if (digestLoaded() && recentWorkLoaded()) setPendingFindingsFocus(false);
+      if (digestReady && recentWorkReady) setPendingFindingsFocus(false);
     });
     onCleanup(() => cancelAnimationFrame(frame));
   });
