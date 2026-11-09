@@ -22,7 +22,23 @@ def section():
     return re.split(r"\n#{2,3} ", text.split(marker, 1)[1], 1)[0]
 
 
+def token_validator():
+    return (ROOT / "internal/config/api_tokens.go").read_text().split(
+        "func (c *Config) ValidateAPIToken(", 1)[1].split(
+        "// IsValidAPIToken", 1)[0]
+
+
 class AgentAuthDocsTest(unittest.TestCase):
+    def assert_literal_token_validation(self, validator):
+        digest = "tokenHash := auth.HashAPIToken(rawToken)"
+        comparison = "subtle.ConstantTimeCompare([]byte(tokenHash), []byte(record.Hash)) == 1"
+        self.assertEqual(validator.count(digest), 1)
+        self.assertIn(comparison, validator)
+        self.assertIn("LastUsedAt = &now", validator)
+        self.assertLess(validator.index(digest), validator.index("for idx, record := range c.APITokens"))
+        self.assertLess(validator.index(comparison), validator.index("LastUsedAt = &now"))
+        self.assertNotRegex(validator, r"rawToken\s*=(?!=)")
+
     def test_status_explanations_match_authentication_before_scoped_lookup(self):
         text = " ".join(section().split())
         routes = (ROOT / "internal/api/router_routes_registration.go").read_text()
@@ -187,11 +203,7 @@ class AgentAuthDocsTest(unittest.TestCase):
         self.assertIn("strings.TrimSpace(string(content))", reader)
         self.assertNotIn("strings.Trim(", reader)
         self.assertNotIn("strings.TrimPrefix(", reader)
-        validator = (ROOT / "internal/config/api_tokens.go").read_text().split(
-            "func (c *Config) ValidateAPIToken(", 1)[1].split(
-            "// IsValidAPIToken", 1)[0]
-        self.assertIn("auth.CompareAPIToken(rawToken, record.Hash)", validator)
-        self.assertLess(validator.index("auth.CompareAPIToken"), validator.index("LastUsedAt = &now"))
+        self.assert_literal_token_validation(token_validator())
         for fact in ("Token-file format is not shell syntax", "not a diagnosis from `Never`",
                      "not** interpret shell syntax, strip quotes", "The quotes remain part",
                      "The prefix remains part", "does not prove it matches",
@@ -202,6 +214,28 @@ class AgentAuthDocsTest(unittest.TestCase):
                      "not proof of accepted reporting"):
             self.assertIn(fact, text)
         self.assertIn("#token-file-format-is-not-shell-syntax", DOC.read_text())
+
+    def test_literal_validator_controls_reject_damaged_comparison_or_metadata_order(self):
+        validator = token_validator()
+        digest = "tokenHash := auth.HashAPIToken(rawToken)"
+        comparison = "subtle.ConstantTimeCompare([]byte(tokenHash), []byte(record.Hash)) == 1"
+        # Mutate only in-memory excerpts, never production source or credentials.
+        mutations = {
+            "normalizes_bearer": validator.replace(
+                digest, "rawToken = strings.TrimSpace(rawToken)\n\t" + digest),
+            "compares_hint": validator.replace(
+                "auth.HashAPIToken(rawToken)", "auth.HashAPIToken(tokenPrefix(rawToken))"),
+            "non_constant_time": validator.replace(
+                comparison, "tokenHash == record.Hash"),
+            "early_last_used": validator.replace(
+                digest, "now := time.Now().UTC()\n\tc.APITokens[0].LastUsedAt = &now\n\t" + digest),
+            "hashes_per_record": validator.replace(digest, "").replace(
+                "for idx, record := range c.APITokens {",
+                "for idx, record := range c.APITokens {\n\t\t" + digest),
+        }
+        for name, changed in mutations.items():
+            with self.subTest(name=name), self.assertRaises(AssertionError):
+                self.assert_literal_token_validation(changed)
 
     def test_first_install_checks_the_whole_current_host_token_privately(self):
         guide = DOC.read_text(encoding="utf-8")
