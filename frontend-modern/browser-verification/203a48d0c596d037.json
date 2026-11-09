@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "base_sha": "d0f2b24e2b05c8c1dfe879a3c1246c71831262bb",
+  "verified_at": "2026-11-09T19:19:55.154105Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/AI/FindingsPanel.tsx",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceWorkspace.tsx",
+    "frontend-modern/src/stores/aiIntelligence.ts",
+    "frontend-modern/src/utils/aiFindingPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/AI/FindingsPanel.tsx": "a4ae791c8507394b242898dacfb07de6afe35708e528a19b7c6bc336a3b6d1c7",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceWorkspace.tsx": "c1a9ffd0309c65050a0f15edb1d1cb093718358dde32f9a375590b1a8c7fc922",
+    "frontend-modern/src/utils/aiFindingPresentation.ts": "dc99550ca430379c053ad26bd4d82fe747a879e59fd8c4d562dd6f7897c80bd9",
+    "frontend-modern/src/stores/aiIntelligence.ts": "7888c784c433a447e4066483d8f83314a780ffdf544cd61390f060c76638a2a8"
+  },
+  "routes": [
+    "/patrol/activity \u2192 Finding options and history \u2192 Open work \u2192 row expansion/close; real approval loader refresh and UI Refresh approvals retry"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "browsers": [
+    {
+      "profile": "desktop-light",
+      "version": "141.0.7390.37"
+    },
+    {
+      "profile": "desktop-dark",
+      "version": "141.0.7390.37"
+    },
+    {
+      "profile": "narrow-light",
+      "version": "26.0"
+    },
+    {
+      "profile": "narrow-dark",
+      "version": "26.0"
+    }
+  ],
+  "states": [
+    "Initially held approval GET with the independently loaded saved queued finding: checking rather than recovery.",
+    "Successful matching live request; retained request while refresh is held, fails and is retried. Summary and row keep last-known positives, warning and review controls.",
+    "Initial failure and its held UI retry stay unknown; only successful empty reads infer legacy recovery. False initial needs-attention disappears, with the same finding visible under Active; successful empty restores the filter.",
+    "Independent typed approved action remains approved before and after a delayed empty legacy read. Prior eight typed settled-state comparisons remain retained, not replayed as new final-source cases."
+  ],
+  "interactions": [
+    "Actual App/router/API clients/stores and fixed synthetic data/time. Deterministic GET release, real producer refresh (no store injection), actual UI retry, row expansion/close. No mutation or page exception.",
+    "40 comparable pairs /80 required captures, desktop Chromium and narrow WebKit, both themes. Native pixel inspection includes all current distinct PNG bytes, with identical-byte aliases of already opened captures.",
+    "Existing Vite compiler graph is prepared before each browser. Page deadlines remain 10s; no cold-start performance claim. Investigation-detail GET404 remains an unprovided fixture route on both versions; not full investigation/Actions/native recovery.",
+    "The invalid legacy discriminator fixture attempt and intermediate source type faults are retained as adverse history. Current component VM proof returned bundle-preparation-timeout, so browser success is not an affected-suite or production-build pass."
+  ],
+  "evidence": "Current lane RECEIPTS.md, BROWSER-PROTOCOL.md, SOURCE-CURRENT.json, CAPTURE-PAIRS.json, PIXEL-REVIEW.md and before/final capture archives. Before source b8f99d2cfe73410258728731ce7b80550d7ffb01; final runtime97e39e205b1397c16b49735c077edbb374aa7f7e. Original two date-formatting deadline failures remain unwaived. No delivery, release, original-client, authorization or independent-acceptance claim."
+}

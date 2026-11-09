@@ -173,13 +173,15 @@ describe('approval-list uncertainty in finding presentation', () => {
     makeFinding({ status: 'active', source: 'ai-patrol', investigationOutcome: 'fix_queued' });
   it('does not infer action recovery or attention from a failed list read', () => {
     const finding = queued();
-    expect(doesFindingNeedAttention(finding, [], true)).toBe(false);
-    expect(getFindingPatrolWorkflowPresentation(finding, [], Date.now(), true)).toMatchObject({
+    expect(doesFindingNeedAttention(finding, [], 'unavailable')).toBe(false);
+    expect(
+      getFindingPatrolWorkflowPresentation(finding, [], Date.now(), 'unavailable'),
+    ).toMatchObject({
       label: 'Check approval status',
       stage: 'approval',
     });
-    expect(doesFindingNeedAttention(finding, [], false)).toBe(true);
-    expect(getFindingPatrolWorkflowPresentation(finding, [], Date.now(), false)?.label).toBe(
+    expect(doesFindingNeedAttention(finding, [], 'ready')).toBe(true);
+    expect(getFindingPatrolWorkflowPresentation(finding, [], Date.now(), 'ready')?.label).toBe(
       'Recover action',
     );
   });
@@ -188,7 +190,7 @@ describe('approval-list uncertainty in finding presentation', () => {
       doesFindingNeedAttention(
         makeFinding({ status: 'active', investigationOutcome: 'fix_failed' }),
         [],
-        true,
+        'unavailable',
       ),
     ).toBe(true);
   });
@@ -202,12 +204,12 @@ describe('approval-list uncertainty in finding presentation', () => {
         expiresAt: '2999-01-01T00:00:00Z',
       },
     ];
-    expect(getFindingPatrolWorkflowPresentation(finding, approvals, Date.now(), true)?.label).toBe(
-      'Approve or reject · last known',
-    );
-    expect(getFindingPatrolWorkflowPresentation(finding, approvals, Date.now(), false)?.label).toBe(
-      'Approve or reject',
-    );
+    expect(
+      getFindingPatrolWorkflowPresentation(finding, approvals, Date.now(), 'unavailable')?.label,
+    ).toBe('Approve or reject · last known');
+    expect(
+      getFindingPatrolWorkflowPresentation(finding, approvals, Date.now(), 'ready')?.label,
+    ).toBe('Approve or reject');
   });
   it.each(['pending_approval', 'planned', 'approved'] as const)(
     'preserves separately read typed action %s authority',
@@ -216,8 +218,10 @@ describe('approval-list uncertainty in finding presentation', () => {
       finding.investigationRecord = { action: { state } } as NonNullable<
         UnifiedFinding['investigationRecord']
       >;
-      const current = getFindingPatrolWorkflowPresentation(finding, [], Date.now(), false);
-      expect(getFindingPatrolWorkflowPresentation(finding, [], Date.now(), true)).toEqual(current);
+      const current = getFindingPatrolWorkflowPresentation(finding, [], Date.now(), 'ready');
+      expect(getFindingPatrolWorkflowPresentation(finding, [], Date.now(), 'unavailable')).toEqual(
+        current,
+      );
     },
   );
 });

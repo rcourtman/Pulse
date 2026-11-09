@@ -32,6 +32,7 @@ import type {
 } from '@/api/ai';
 import {
   doesFindingNeedAttention,
+  type PatrolApprovalReadState,
   hasPendingInvestigationFixApproval,
   isPatrolInvestigationFixApproval,
   sortFindingsForAttentionQueue,
@@ -386,6 +387,14 @@ function reuseIdenticalFindings(
 const [pendingApprovals, setPendingApprovals] = createSignal<ApprovalRequest[]>([]);
 const [approvalsError, setApprovalsError] = createSignal<string | null>(null);
 const [approvalsLoading, setApprovalsLoading] = createSignal(false);
+const [approvalsLoaded, setApprovalsLoaded] = createSignal(false);
+
+// An empty initial value is not a successful empty read. Context reset and
+// every refresh keep negative conclusions pending; retained positives survive.
+function getApprovalReadState(): PatrolApprovalReadState {
+  if (approvalsError()) return 'unavailable';
+  return approvalsLoading() || !approvalsLoaded() ? 'pending' : 'ready';
+}
 const [pendingApprovalsNow, setPendingApprovalsNow] = createSignal(Date.now());
 
 let pendingApprovalExpiryTimer: ReturnType<typeof setTimeout> | undefined;
@@ -461,7 +470,7 @@ function getFindingsNeedingAttentionFor(findings: UnifiedFinding[]) {
   const approvals = getLivePatrolPendingApprovals();
   return sortFindingsForAttentionQueue(
     findings.filter((finding) =>
-      doesFindingNeedAttention(finding, approvals, Boolean(approvalsError())),
+      doesFindingNeedAttention(finding, approvals, getApprovalReadState()),
     ),
   );
 }
@@ -506,6 +515,7 @@ eventBus.on('org_switched', () => {
   setPendingApprovalsWithExpiryTracking([]);
   setApprovalsError(null);
   setApprovalsLoading(false);
+  setApprovalsLoaded(false);
   setIntelligenceSummary(null);
 });
 
@@ -685,6 +695,9 @@ export const aiIntelligenceStore = {
   get approvalsLoading() {
     return approvalsLoading();
   },
+  get approvalsReadState() {
+    return getApprovalReadState();
+  },
   pendingApprovalsSignal: getLivePendingApprovals,
 
   get pendingApprovalCount() {
@@ -728,6 +741,7 @@ export const aiIntelligenceStore = {
         const approvals = presentationPolicyIsDemoMode() ? [] : await AIAPI.getPendingApprovals();
         if (generation !== pendingApprovalsGeneration) return;
         setPendingApprovalsWithExpiryTracking(approvals);
+        setApprovalsLoaded(true);
         // A retry does not make last-known data current; only success does.
         setApprovalsError(null);
       } catch (e) {
