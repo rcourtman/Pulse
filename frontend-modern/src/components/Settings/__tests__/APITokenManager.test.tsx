@@ -182,7 +182,9 @@ describe('APITokenManager', () => {
     const view = render(() => <APITokenManager canManage />);
     await vi.advanceTimersByTimeAsync(0);
     const row = getTokenTableRow(token.name!);
-    const card = screen.getByRole('article', { name: `API token ${token.name}` });
+    const card = screen.getByRole('article', {
+      name: `API token ${token.name} (${token.prefix}…${token.suffix})`,
+    });
     expect(createdTokenCell(row)).toHaveTextContent('1 min ago');
     expect(within(card).getByText('Created').nextElementSibling).toHaveTextContent('1 min ago');
     const input = screen.getByLabelText('Token name');
@@ -215,7 +217,9 @@ describe('APITokenManager', () => {
     const view = render(() => <APITokenManager canManage />);
     await vi.advanceTimersByTimeAsync(0);
     const row = getTokenTableRow(token.name!);
-    const card = screen.getByRole('article', { name: `API token ${token.name}` });
+    const card = screen.getByRole('article', {
+      name: `API token ${token.name} (${token.prefix}…${token.suffix})`,
+    });
     const cardLastUsed = () => within(card).getByText('Last used').nextElementSibling;
     expect(tokenCell(row, 'Last used')).toHaveTextContent('1 min ago');
     expect(cardLastUsed()).toHaveTextContent('1 min ago');
@@ -396,9 +400,9 @@ describe('APITokenManager', () => {
       'New token',
       'Generate new',
       'Generate',
-      'Rename',
-      'Edit scopes',
-      'Revoke',
+      /^Rename /,
+      /^Edit scopes for /,
+      /^Revoke /,
     ]) {
       for (const button of screen.getAllByRole('button', { name })) {
         expect(button).toBeDisabled();
@@ -567,9 +571,9 @@ describe('APITokenManager', () => {
     render(() => <APITokenManager onTokensChanged={vi.fn()} canManage />);
 
     const row = await findTokenTableRow('Agent token');
-    fireEvent.click(within(row).getByRole('button', { name: 'Edit scopes' }));
+    fireEvent.click(within(row).getByRole('button', { name: /^Edit scopes / }));
 
-    const dialog = await screen.findByRole('dialog', { name: 'Edit API token scopes' });
+    const dialog = await screen.findByRole('dialog', { name: /^Edit API token scopes / });
     expect(
       within(dialog).getByRole('checkbox', { name: /Agent lifecycle management/i }),
     ).not.toBeChecked();
@@ -894,7 +898,7 @@ describe('APITokenManager', () => {
     expect(within(row).queryByText(/container runtime/i)).not.toBeInTheDocument();
     expect(within(row).getByText('Agent reporting')).toBeInTheDocument();
 
-    fireEvent.click(within(row).getByRole('button', { name: 'Revoke' }));
+    fireEvent.click(within(row).getByRole('button', { name: /^Revoke / }));
 
     // Confirm modal opens — click "Revoke token" to actually trigger the delete.
     const confirmBtn = await screen.findByRole('button', { name: 'Revoke token' });
@@ -947,8 +951,8 @@ describe('APITokenManager', () => {
     expect(compactCard.getByText('Usage')).toBeInTheDocument();
     expect(compactCard.getByText('Created')).toBeInTheDocument();
     expect(compactCard.getByText('Last used')).toBeInTheDocument();
-    expect(compactCard.getByRole('button', { name: 'Edit scopes' })).toBeInTheDocument();
-    expect(compactCard.getByRole('button', { name: 'Revoke' })).toBeInTheDocument();
+    expect(compactCard.getByRole('button', { name: /^Edit scopes / })).toBeInTheDocument();
+    expect(compactCard.getByRole('button', { name: /^Revoke / })).toBeInTheDocument();
   });
 
   it('keeps the reconciled desktop row actionable after a confirmed scope edit', async () => {
@@ -960,14 +964,14 @@ describe('APITokenManager', () => {
     });
     render(() => <APITokenManager canManage />);
     const row = await findTokenTableRow('Sequential token');
-    fireEvent.click(within(row).getByRole('button', { name: 'Edit scopes' }));
-    const dialog = await screen.findByRole('dialog', { name: 'Edit API token scopes' });
+    fireEvent.click(within(row).getByRole('button', { name: /^Edit scopes / }));
+    const dialog = await screen.findByRole('dialog', { name: /^Edit API token scopes / });
     fireEvent.click(within(dialog).getByRole('checkbox', { name: /^Settings \(read\)/ }));
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save scopes' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     const updatedRow = getTokenTableRow('Sequential token');
-    fireEvent.click(within(updatedRow).getByRole('button', { name: 'Revoke' }));
-    const revoke = await screen.findByRole('dialog', { name: 'Revoke API token' });
+    fireEvent.click(within(updatedRow).getByRole('button', { name: /^Revoke / }));
+    const revoke = await screen.findByRole('dialog', { name: /^Revoke API token / });
     fireEvent.click(within(revoke).getByRole('button', { name: 'Revoke token' }));
     await waitFor(() => {
       expect(deleteTokenMock).toHaveBeenCalledWith(
@@ -1000,9 +1004,9 @@ describe('APITokenManager', () => {
     render(() => <APITokenManager onTokensChanged={onTokensChanged} canManage />);
 
     const row = await findTokenTableRow('Editable token');
-    fireEvent.click(within(row).getByRole('button', { name: 'Edit scopes' }));
+    fireEvent.click(within(row).getByRole('button', { name: /^Edit scopes / }));
 
-    const dialog = await screen.findByRole('dialog', { name: 'Edit API token scopes' });
+    const dialog = await screen.findByRole('dialog', { name: /^Edit API token scopes / });
     expect(within(dialog).getByText(/take effect on its next request/i)).toBeInTheDocument();
     const dockerReport = within(dialog).getByRole('checkbox', {
       name: /Docker \/ Podman reporting/i,
@@ -1031,7 +1035,7 @@ describe('APITokenManager', () => {
 
     await waitFor(() => {
       expect(
-        screen.queryByRole('dialog', { name: 'Edit API token scopes' }),
+        screen.queryByRole('dialog', { name: /^Edit API token scopes / }),
       ).not.toBeInTheDocument();
     });
     const updatedRow = getTokenTableRow('Editable token');
@@ -1051,24 +1055,24 @@ describe('APITokenManager', () => {
     render(() => <APITokenManager onTokensChanged={vi.fn()} canManage />);
 
     const row = await findTokenTableRow('Keyboard token');
-    const trigger = within(row).getByRole('button', { name: 'Edit scopes' });
+    const trigger = within(row).getByRole('button', { name: /^Edit scopes / });
     fireEvent.click(trigger);
 
-    const dialog = await screen.findByRole('dialog', { name: 'Edit API token scopes' });
+    const dialog = await screen.findByRole('dialog', { name: /^Edit API token scopes / });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
 
     await waitFor(() => expect(trigger).toHaveFocus());
 
     fireEvent.click(trigger);
-    await screen.findByRole('dialog', { name: 'Edit API token scopes' });
+    await screen.findByRole('dialog', { name: /^Edit API token scopes / });
     fireEvent.keyDown(document, { key: 'Escape' });
 
     await waitFor(() => expect(trigger).toHaveFocus());
 
-    const revokeTrigger = within(row).getByRole('button', { name: 'Revoke' });
+    const revokeTrigger = within(row).getByRole('button', { name: /^Revoke / });
     fireEvent.click(revokeTrigger);
 
-    const revokeDialog = await screen.findByRole('dialog', { name: 'Revoke API token' });
+    const revokeDialog = await screen.findByRole('dialog', { name: /^Revoke API token / });
     fireEvent.click(within(revokeDialog).getByRole('button', { name: 'Cancel' }));
 
     await waitFor(() => expect(revokeTrigger).toHaveFocus());
@@ -1107,7 +1111,7 @@ describe('APITokenManager', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
       } else {
         const action = { scope: 'Edit scopes', rename: 'Rename', revoke: 'Revoke' }[operation];
-        fireEvent.click(within(row).getByRole('button', { name: action }));
+        fireEvent.click(within(row).getByRole('button', { name: new RegExp(`^${action} `) }));
         const dialog = await screen.findByRole('dialog');
         if (operation === 'scope') {
           fireEvent.click(
@@ -1172,9 +1176,9 @@ describe('APITokenManager', () => {
     render(() => <APITokenManager onTokensChanged={vi.fn()} canManage />);
 
     const row = await findTokenTableRow('Protected token');
-    fireEvent.click(within(row).getByRole('button', { name: 'Edit scopes' }));
+    fireEvent.click(within(row).getByRole('button', { name: /^Edit scopes / }));
 
-    const dialog = await screen.findByRole('dialog', { name: 'Edit API token scopes' });
+    const dialog = await screen.findByRole('dialog', { name: /^Edit API token scopes / });
     const save = within(dialog).getByRole('button', { name: 'Save scopes' });
     expect(save).toBeDisabled();
 
@@ -1198,7 +1202,7 @@ describe('APITokenManager', () => {
       );
     });
     expect(notificationErrorMock).toHaveBeenCalledWith('Cannot grant scope "monitoring:read"');
-    expect(screen.getByRole('dialog', { name: 'Edit API token scopes' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: /^Edit API token scopes / })).toBeInTheDocument();
   });
 
   it('keeps governed infrastructure token usage labels on local operator identity', async () => {
@@ -1256,10 +1260,10 @@ describe('APITokenManager', () => {
     render(() => <APITokenManager onTokensChanged={vi.fn()} canManage />);
 
     const row = await findTokenTableRow('proxmox-agent-pbs-1785306083');
-    const renameButton = within(row).getByRole('button', { name: 'Rename' });
+    const renameButton = within(row).getByRole('button', { name: /^Rename / });
     fireEvent.click(renameButton);
 
-    const dialog = await screen.findByRole('dialog', { name: 'Rename API token' });
+    const dialog = await screen.findByRole('dialog', { name: /^Rename API token / });
     const input = within(dialog).getByRole('textbox', { name: 'Token name' });
     fireEvent.input(input, { target: { value: 'PBS 01 telemetry' } });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));

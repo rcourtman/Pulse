@@ -277,6 +277,13 @@ export const getAPITokenHint = (record: APITokenRecord | null | undefined): stri
   return '—';
 };
 
+// This is display context, never the identity used to admit or submit a write.
+export const getAPITokenIdentityLabel = (record: APITokenRecord): string => {
+  const name = record.name || record.id;
+  const hint = getAPITokenHint(record);
+  return hint === '—' ? name : `${name} (${hint})`;
+};
+
 export const getAPITokenDialogName = (record: APITokenRecord): string => {
   if (record.name?.trim()) return record.name.trim();
   if (record.prefix && record.suffix) return `${record.prefix}…${record.suffix}`;

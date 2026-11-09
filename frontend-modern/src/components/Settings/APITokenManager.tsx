@@ -16,6 +16,7 @@ import {
 } from '@/utils/apiTokenPresentation';
 import { API_TOKEN_CREATE_ANCHOR } from '@/routing/resourceLinks';
 import { useAPITokenManagerState } from './useAPITokenManagerState';
+import { getAPITokenIdentityLabel } from './apiTokenManagerModel';
 import type { APITokenRecord } from '@/types/api';
 import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 
@@ -353,6 +354,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
         type="button"
         data-api-token-id={token.id}
         data-api-token-action="edit-scopes"
+        aria-label={`Edit scopes for ${getAPITokenIdentityLabel(token)}`}
         onClick={(event) => openScopeEditor(token, event.currentTarget)}
         disabled={!canManage() || isMutating()}
         class={`inline-flex min-h-10 items-center justify-center rounded-md px-2.5 py-1.5 text-sm font-semibold text-blue-600 transition hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-60 dark:text-blue-300 dark:hover:bg-blue-900/25 dark:hover:text-blue-200 ${
@@ -365,6 +367,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
         type="button"
         data-api-token-id={token.id}
         data-api-token-action="rename"
+        aria-label={`Rename ${getAPITokenIdentityLabel(token)}`}
         onClick={(event) => openRenameDialog(token, event.currentTarget)}
         disabled={!canManage() || isMutating()}
         class={`inline-flex min-h-10 items-center justify-center rounded-md px-2.5 py-1.5 text-sm font-semibold text-blue-600 transition hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-60 dark:text-blue-300 dark:hover:bg-blue-900/25 dark:hover:text-blue-200 ${
@@ -377,6 +380,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
         type="button"
         data-api-token-id={token.id}
         data-api-token-action="revoke"
+        aria-label={`Revoke ${getAPITokenIdentityLabel(token)}`}
         onClick={(event) => openRevokeDialog(token, event.currentTarget)}
         disabled={!canManage() || isMutating()}
         class={`inline-flex min-h-10 items-center justify-center rounded-md px-2.5 py-1.5 text-sm font-semibold text-red-600 transition hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-60 dark:text-red-400 dark:hover:bg-red-900/25 dark:hover:text-red-300 ${
@@ -648,7 +652,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
             <For each={sortedTokens()}>
               {(token) => (
                 <article
-                  aria-label={`API token ${token.name || 'Untitled'}`}
+                  aria-label={`API token ${getAPITokenIdentityLabel(token)}`}
                   class="space-y-3 bg-surface p-4 sm:p-5"
                   data-api-token-card={token.id}
                 >

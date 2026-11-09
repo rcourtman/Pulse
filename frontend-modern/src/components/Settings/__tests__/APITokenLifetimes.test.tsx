@@ -464,16 +464,19 @@ describe('API token request lifetimes', () => {
     const [allowed, allow] = createSignal(true);
     render(() => <APITokenManager canManage={allowed()} />);
     await screen.findAllByText('Known token');
-    const row = screen.getByRole('article', { name: 'API token Known token' });
-    fireEvent.click(within(row).getByRole('button', { name: 'Rename' }));
-    await screen.findByRole('dialog', { name: 'Rename API token' });
+    const row = screen.getByRole('article', { name: /^API token Known token \(/ });
+    fireEvent.click(within(row).getByRole('button', { name: /^Rename / }));
+    await screen.findByRole('dialog', { name: /^Rename API token / });
     allow(false);
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     await screen.findAllByText('Known token');
     expect(
-      within(screen.getByRole('article', { name: 'API token Known token' })).getByRole('button', {
-        name: 'Rename',
-      }),
+      within(screen.getByRole('article', { name: /^API token Known token \(/ })).getByRole(
+        'button',
+        {
+          name: /^Rename /,
+        },
+      ),
     ).toBeDisabled();
     expect(SecurityAPI.renameToken).not.toHaveBeenCalled();
   });
