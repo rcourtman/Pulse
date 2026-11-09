@@ -24,7 +24,12 @@ const displayName = 'North estate';
 const owner = 'owner/maintainer?realm=lab#saved';
 const unrelatedToken = 'synthetic-unrelated-organization-token';
 const csrf = 'synthetic-organization-selection-csrf';
-const people = ['first', 'second', 'third'].map((part) => `member/${part}?realm=lab#saved`);
+// Same-prefix saved principals must stay complete in their own row. Encoded
+// separators still distinguish JSON role targets from DELETE path segments.
+const people = ['01', '02', '03'].map(
+  (part) =>
+    `sso/oidc/workforce/alex-morgan-tenant-services-region-west-operations-account-${part}?realm=lab#saved`,
+);
 const originalMembers: OrganizationMember[] = [
   { userId: owner, role: 'owner', addedAt: '2026-11-01T00:00:00Z' },
   ...people.map<OrganizationMember>((userId) => ({
@@ -143,6 +148,15 @@ async function expectSavedMembers() {
 async function openPanel() {
   render(() => <OrganizationAccessPanel currentUser={owner} />);
   await expectSavedMembers();
+  for (const member of members) {
+    const row = roleFor(member.userId).closest('tr');
+    expect(row).not.toBeNull();
+    expect(within(row!).getByText(member.userId, { exact: true })).toBeVisible();
+    if (member.userId !== owner)
+      expect(
+        within(row!).getByRole('button', { name: `Remove ${member.userId} from organization` }),
+      ).toBeEnabled();
+  }
   for (const invitation of pending) expect(pendingGroup(invitation.userId)).toBeInTheDocument();
   for (const invitation of personal) expect(personalGroup(invitation)).toBeInTheDocument();
   expect(orgReads()).toHaveLength(1);

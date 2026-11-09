@@ -22,13 +22,17 @@ export const OrganizationAccessMembersSection: Component<OrganizationAccessMembe
   <Show when={props.state.org()}>
     {(currentOrg) => (
       <PulseDataGrid
-        class="mt-4"
+        class="mt-4 [&_table]:table-fixed sm:[&_table]:table-auto [&_td]:px-2 sm:[&_td]:px-4 [&_th]:px-2 sm:[&_th]:px-4 [&_th:nth-child(2)]:w-24 sm:[&_th:nth-child(2)]:w-auto [&_th:last-child]:w-24 sm:[&_th:last-child]:w-auto"
         data={props.state.members()}
         columns={[
           {
             key: 'userId',
             label: 'User',
-            render: (member) => <span class="text-base-content">{member.userId}</span>,
+            render: (member) => (
+              <span class="block whitespace-normal text-base-content [overflow-wrap:anywhere]">
+                {member.userId}
+              </span>
+            ),
           },
           {
             key: 'role',
@@ -56,7 +60,7 @@ export const OrganizationAccessMembersSection: Component<OrganizationAccessMembe
                       props.state.saving() ||
                       (isOwner() && props.currentUser !== currentOrg().ownerUserId)
                     }
-                    selectBaseClass="rounded-md border border-border bg-surface px-2 py-1 text-xs text-base-content shadow-xs focus:border-blue-500 focus:outline-hidden focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+                    selectBaseClass="min-h-11 w-full rounded-md border border-border bg-surface px-2 py-1 text-xs text-base-content shadow-xs focus:border-blue-500 focus:outline-hidden focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-0 sm:w-auto"
                   >
                     <For
                       each={ORGANIZATION_MEMBER_ROLE_OPTIONS.filter(
