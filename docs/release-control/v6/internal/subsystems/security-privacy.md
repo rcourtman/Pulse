@@ -4873,3 +4873,14 @@ tests exercise the real saved setup-token and least-privilege token/schedule
 consumers through refusal and deliberate original-key restoration, checking
 byte preservation. This is local source/startup proof, not installed recovery,
 key rotation, missing-key inventory completeness or a new frontend state.
+
+The file-backed billing consumer treats required-crypto initialization failure as
+an unknown read, not absent secrets or permission to migrate the signed lease.
+A save refuses crypto/encryption failure before publication or caller mutation;
+only a committed write installs normalized values and the new integrity value.
+The default and per-org original bytes, identity, lease/refresh secrets and HMAC
+remain recoverable with the original key. No-secret/missing-key compatibility,
+verified plaintext migration and current grant/signature rules are unchanged.
+`TestBillingCryptoFailurePreservesSavedLease` covers both org layouts through
+failed encrypted/legacy reads and saves, then explicit original-key restoration.
+Native errors are not reconstructed or renewed authority or installed recovery.
