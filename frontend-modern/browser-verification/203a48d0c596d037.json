@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "base_sha": "97e39e205b1397c16b49735c077edbb374aa7f7e",
-  "verified_at": "2026-11-09T19:19:55.154105+00:00",
+  "base_sha": "d0f2b24e2b05c8c1dfe879a3c1246c71831262bb",
+  "verified_at": "2026-11-09T19:19:55.154105Z",
   "result": "passed",
   "changed_paths": [
     "frontend-modern/src/components/AI/FindingsPanel.tsx",
