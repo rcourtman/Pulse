@@ -72,7 +72,7 @@ const mockState = vi.hoisted(() => {
     findings,
     findingsError: null as string | null,
     approvalsError: null as string | null,
-    approvalsPending: () => false,
+    approvalsPending: (): boolean => false,
     findingsLoading: false,
     patrolFindings,
     patrolFindingsError: null as string | null,

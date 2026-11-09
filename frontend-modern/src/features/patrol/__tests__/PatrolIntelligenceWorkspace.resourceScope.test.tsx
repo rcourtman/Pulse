@@ -53,7 +53,7 @@ const fixture = vi.hoisted(() => {
     attentionIds: ['web-disk', 'web-restart', 'db-backup', 'cache-evictions'],
     approvalIds: ['web-restart', 'db-backup'],
     approvalsError: () => null as string | null,
-    approvalsPending: () => false,
+    approvalsPending: (): boolean => false,
   };
 });
 
