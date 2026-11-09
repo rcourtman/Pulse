@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "base_sha": "340071eaa812b6499c07d27d843c79104a34a307",
+  "verified_at": "2026-11-09T15:51:33.360957Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx",
+    "frontend-modern/src/features/patrol/PatrolRecentWorkPanel.tsx",
+    "frontend-modern/src/features/patrol/PatrolWeeklyDigestCard.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx": "b589a676d15dcb38dd75c59bb05a85ec6410bb3128b255b3ffb044a1027b25f0",
+    "frontend-modern/src/features/patrol/PatrolRecentWorkPanel.tsx": "cb127697ba7dd230be05dfecd5ac22c6d3d3377df75a4b7a30bd3af0d8fab89c",
+    "frontend-modern/src/features/patrol/PatrolWeeklyDigestCard.tsx": "834204f7a181c70a38204d5f51bd628ef159c0f5765786291bede08af492741b"
+  },
+  "routes": [
+    "/patrol/activity \u2192 Inbox \u2192 actual attention detail \u2192 Browse Patrol findings for this resource \u2192 /patrol/activity",
+    "Scoped Activity \u2192 Show all finding options \u2192 History \u2192 Open work"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "browsers": [
+    "Playwright 1.56.1 / Chromium 141.0.7390.37 desktop, light and dark",
+    "Playwright 1.56.1 / WebKit 26.0 narrow, light and dark"
+  ],
+  "states": [
+    "Warm saved approval read failure with retained request/risk/expiry/context and one resource-scoped finding, actual App/router/API clients and stores.",
+    "Baseline scrollIntoView initially puts the phone panel at y0, then the initial weekly summary/receipts expansion moves it to y673 without changing scrollTop. Remains there after >1.8 seconds; trace retained.",
+    "Final phone settled landing places panel y0 and Review y654\u2013698, Finding options y606\u2013650, History y396\u2013440 and saved context/refresh/Show all above fixed navigation y799. Desktop naturally clamps at its bottom with the complete finding/context visible.",
+    "Held initial summary/receipt reads independently settle as200 or503; one completion does not trigger final alignment, both completions trigger exactly one. No repeating scroll observer or fixed settle timeout.",
+    "Actual PageUp while initial reads are held cancels deferred alignment. Source still makes only its initial scroll call after both reads complete.",
+    "All10 fixed-scroll comparison states have identical before/after PNG bytes; no page content, distinction or control is removed. No change to existing row truncation."
+  ],
+  "interactions": [
+    "Actual existing read-only fixture journey through Inbox detail, native Browse button, scoped guidance and finding filter, Show all, History and return. No callback/store injection.",
+    "Native focus reaches the details panel immediately; final alignment preserves focus without stealing it back after user input.",
+    "Held GETs, release first and then second; real keyboard PageUp while held; same interactions on baseline and final source. Writes are rejected and no write was attempted; no unknown fixture routes or page exceptions.",
+    "Opened all42 retained original PNGs through native view_image:40 paired captures/20 comparisons and2 unpaired baseline diagnostic frames. Both phone themes and desktop themes inspected."
+  ],
+  "evidence": "Current lane RECEIPTS.md, SOURCE-CURRENT.json, CAPTURE-PAIRS.json, PIXEL-REVIEW.md, BEFORE-CAPTURES.tar.xz, AFTER-CAPTURES.tar.xz, DIAGNOSTIC-CAPTURES.tar.xz and BROWSER-DETAILS.tar.xz retain exact source/fixtures/scripts/results and all42 inspected PNGs. Before source2dbad8fc0870d61b56ba7ab4a272352fc0ff3d16; final runtime340071eaa812b6499c07d27d843c79104a34a307. Synthetic readonly fixture expiry/context are comparison controls, not operator data. No native backend proof replay, original-client/IdP recovery, authorization, installed operation, release or independent acceptance claim."
+}
