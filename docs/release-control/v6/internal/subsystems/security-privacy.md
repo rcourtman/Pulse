@@ -18,6 +18,45 @@
 
 ## Purpose
 
+### Credential setup and rotation keep their owner and uncertain values
+
+The existing Authentication quick-setup and rotation forms share one pending
+operation and are mutually exclusive, including an API-only installation that
+can open either. Same-reader status verification keeps the form but disables it;
+a submission also disables its fields and competing authentication controls.
+The mounted reader fingerprint, original organisation and client credential
+bind dispatch and every later reveal, notification, copy feedback, download and
+completion. Withdrawal/disposal clears retained secrets and aborts pending work.
+A late result cannot clear a later reader's authentication. Abort is not rollback.
+
+Each submission uses the unchanged endpoint/body with `expectedOrgID`, an abort
+signal and `retry: false`; CSRF/auth recovery cannot replay this destructive
+write. Only an organisation-bound, non-replayed quick-setup confirmation returns
+a 401 to its owning form instead of clearing authentication or redirecting first.
+The existing bootstrap wizard and other endpoint policies,
+bootstrap requirements, instance-wide authority, server validation and token
+replacement remain unchanged. A confirmed accepted result drops only this
+reader's obsolete API token and preserves its selected organisation until the
+existing explicit saved-credentials completion/reload.
+
+Only `success: true` without a skipped setup establishes acceptance. A definite
+refusal retains the draft and a local error. Network, 5xx, missing or malformed
+success results retain the attempted password and token in the existing reveal
+for this reader: they may already have changed, not necessarily both persisted.
+The warning, download status and separate-sign-in/token-check guidance distinguish
+that uncertainty from active credentials and do not offer another blind write.
+Save/copy/download stay available until explicit dismissal or withdrawal.
+
+Before submission, the form explains immediate administrator-password and
+all-API-token replacement, including full token access and agents/automation;
+it no longer implies that old credentials last until a restart. Confirmed
+results say no restart is needed. `QuickSecuritySetup.transport.test.tsx` covers
+both native panel modes with the real status/API client, single writes, CSRF
+preparation/rejection, context cycles, late bodies/results and reveal controls.
+`apiClient.auth.test.ts` pins current/newer-reader 401 preservation. Native
+Settings-shell desktop/phone comparisons remain required. This is source/fixture
+maintenance, not actual persisted credentials, IdP or original-client recovery.
+
 ### Password changes belong to their admitted settings reader
 
 The existing password dialog receives the Settings status reader, not an
@@ -35,7 +74,7 @@ invented `admin` account never does. Existing cookie/token auth, backend admin
 checks and current-password verification remain unchanged. Password-route 401s
 return to the owning dialog rather than clearing another reader's auth as if a
 wrong current password proved session expiry. Other routes retain their existing
-401 behaviour. Late completions cannot notify or reload a different reader;
+401 behaviour apart from the owned quick-setup result above. Late completions cannot notify or reload a different reader;
 accepted-success reloads are cancelled by withdrawal, reopening or disposal.
 The accepted-change handoff closes without probing an intentionally invalidated
 session; ordinary cancellation/withdrawal retains the existing status refresh.

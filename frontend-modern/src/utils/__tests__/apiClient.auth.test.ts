@@ -63,9 +63,14 @@ describe('apiClient auth storage integrity', () => {
       document.cookie = 'pulse_csrf=; Max-Age=0; path=/';
     }
   });
-  it.each([false, true])(
-    'returns password refusal to its owner without clearing %s newer-reader authentication',
-    async (changedReader) => {
+  it.each([
+    ['/api/security/change-password', false],
+    ['/api/security/change-password', true],
+    ['/api/security/quick-setup', false],
+    ['/api/security/quick-setup', true],
+  ] as const)(
+    'returns %s refusal to its owner without clearing changed-reader=%s authentication',
+    async (endpoint, changedReader) => {
       const { apiFetch, getApiToken, getOrgID, setApiToken, setOrgID } =
         await import('@/utils/apiClient');
       setApiToken('synthetic-original-token');
@@ -79,7 +84,7 @@ describe('apiClient auth storage integrity', () => {
       );
       vi.stubGlobal('fetch', fetchMock);
       try {
-        const pending = apiFetch('/api/security/change-password', {
+        const pending = apiFetch(endpoint, {
           method: 'POST',
           expectedOrgID: 'synthetic-original-org',
           retry: false,

@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "d06a3837d617e6b766eb350caedc3a9b6d4db38f",
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/QuickSecuritySetup.tsx": "5cbd67ace8245b140ea2b9c05226f36d1d117d124849ee1e4c9053561db6431b",
+    "frontend-modern/src/components/Settings/SecurityAuthPanel.tsx": "664a0abe3cf87f6a8b129170d04ddecbbd1b38a5d1ed68807243ef5b5b10e76a",
+    "frontend-modern/src/utils/apiClient.ts": "9138d10cc77738d0bc2e912a98a17e68aad559501899df49af1fa158409f2c2d"
+  },
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/QuickSecuritySetup.tsx",
+    "frontend-modern/src/components/Settings/SecurityAuthPanel.tsx",
+    "frontend-modern/src/utils/apiClient.ts"
+  ],
+  "routes": [
+    "/settings/security/authentication (native SettingsPageShell + SecurityAuthPanel, real status/API client and synthetic HTTP; not full App/IdP)"
+  ],
+  "states": [
+    "rotation impact and auto/custom draft",
+    "single pending mutation",
+    "organisation withdrawal while pending",
+    "local 403 refusal without CSRF replay",
+    "uncertain partial-save 500 retaining attempted credentials",
+    "confirmed current result and saved-credentials completion",
+    "real production-mode CSRF health preparation held across withdrawal"
+  ],
+  "interactions": [
+    "Open native rotation and fill custom credential fields",
+    "Submit once and inspect disabled fields and competing authentication actions",
+    "Hold POST, switch organisation and client credential, release old result; later credential remains",
+    "Refuse POST with 403; no automatic second write",
+    "Return 500; save attempted credentials without active/success claim or blind resubmission",
+    "Accept current POST; download credentials and use existing explicit completion/reload",
+    "Hold actual /api/health before dispatch, withdraw, release; no stale POST"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "browsers": [
+    "Playwright 1.56.1 Chromium 141 (desktop/light)",
+    "Playwright 1.56.1 WebKit 26 (phone/light/dark)"
+  ],
+  "verified_at": "2026-11-09T03:06:05.756138Z",
+  "evidence": "Web-product invocation 20261109T024000Z: RECEIPTS.md, CAPTURES.json and BROWSER-PROOFS.tar.xz. 42 native-inspected captures / 21 comparable pairs. Final state script completed all three profiles and its browser/server cleanup; containing client exit 143 has unknown initiator/cause. Separate final production-mode CSRF withdrawal proof exits 0 with cleanup; it does not clear that earlier exit. Exact locked preview dependencies; source/fixture proof, not persisted or released credentials."
+}
