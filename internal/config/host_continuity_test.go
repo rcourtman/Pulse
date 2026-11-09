@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 )
@@ -353,4 +354,225 @@ func TestHostContinuityNodeLinkReplacementRollback(t *testing.T) {
 	}
 	assertOwner(s, "replacement")
 	assertOwner(NewHostContinuityStore(dir, nil), "replacement")
+}
+
+type countingContinuityFS struct {
+	FileSystem
+	mu     sync.Mutex
+	writes int
+}
+
+func (c *countingContinuityFS) WriteFile(name string, data []byte, perm os.FileMode) error {
+	c.mu.Lock()
+	c.writes++
+	c.mu.Unlock()
+	return c.FileSystem.WriteFile(name, data, perm)
+}
+
+func (c *countingContinuityFS) count() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.writes
+}
+
+func withContinuityFlushDelay(t *testing.T, delay time.Duration) {
+	t.Helper()
+	previous := hostContinuityLivenessFlushDelay
+	hostContinuityLivenessFlushDelay = delay
+	t.Cleanup(func() { hostContinuityLivenessFlushDelay = previous })
+}
+
+func observedContinuityEntry(sequence uint64, at time.Time) HostContinuityEntry {
+	return HostContinuityEntry{
+		HostID:               "host-observed",
+		AgentReportedID:      "agent-observed",
+		Hostname:             "observed.local",
+		MachineID:            "machine-observed",
+		TokenID:              "token-observed",
+		AgentVersion:         "6.7.0",
+		Platform:             "linux",
+		LastSeen:             at,
+		IntervalSeconds:      30,
+		ReportObservedAt:     at.Add(-time.Second),
+		ReportLastReceivedAt: at,
+		ReportStreamID:       "stream-a",
+		ReportSequence:       sequence,
+	}
+}
+
+func reloadedContinuitySequence(t *testing.T, dir string) uint64 {
+	t.Helper()
+	entry, ok := NewHostContinuityStore(dir, nil).Get("host-observed")
+	if !ok {
+		t.Fatal("journal has no observed host")
+	}
+	return entry.ReportSequence
+}
+
+func TestHostContinuityObserveReportDefersLivenessOnlyChanges(t *testing.T) {
+	withContinuityFlushDelay(t, time.Hour)
+	dir := t.TempDir()
+	fs := &countingContinuityFS{FileSystem: defaultFileSystem{}}
+	store := NewHostContinuityStore(dir, fs)
+	start := time.Now().UTC().Truncate(time.Second)
+
+	if err := store.ObserveReport(observedContinuityEntry(1, start)); err != nil {
+		t.Fatalf("first ObserveReport: %v", err)
+	}
+	if fs.count() != 1 {
+		t.Fatalf("a new host must be written at once; writes = %d", fs.count())
+	}
+	for sequence := uint64(2); sequence <= 6; sequence++ {
+		if err := store.ObserveReport(observedContinuityEntry(sequence, start.Add(time.Duration(sequence)*30*time.Second))); err != nil {
+			t.Fatalf("ObserveReport %d: %v", sequence, err)
+		}
+	}
+	if fs.count() != 1 {
+		t.Fatalf("liveness-only reports rewrote the journal %d times", fs.count()-1)
+	}
+	if entry, _ := store.Get("host-observed"); entry.ReportSequence != 6 {
+		t.Fatalf("in-memory watermark = %d, want 6", entry.ReportSequence)
+	}
+	if got := reloadedContinuitySequence(t, dir); got != 1 {
+		t.Fatalf("journal watermark before flush = %d, want 1", got)
+	}
+	if err := store.Flush(); err != nil {
+		t.Fatalf("Flush: %v", err)
+	}
+	if got := reloadedContinuitySequence(t, dir); got != 6 {
+		t.Fatalf("journal watermark after flush = %d, want 6", got)
+	}
+	if err := store.Flush(); err != nil || fs.count() != 2 {
+		t.Fatalf("a clean Flush wrote again: err=%v writes=%d", err, fs.count())
+	}
+}
+
+func TestHostContinuityObserveReportWritesBoundariesAtOnce(t *testing.T) {
+	withContinuityFlushDelay(t, time.Hour)
+	start := time.Now().UTC().Truncate(time.Second)
+	for name, mutate := range map[string]func(*HostContinuityEntry){
+		"new stream":    func(e *HostContinuityEntry) { e.ReportStreamID, e.ReportSequence = "stream-b", 1 },
+		"retired":       func(e *HostContinuityEntry) { e.RetiredReportStreamIDs = []string{"stream-old"} },
+		"token":         func(e *HostContinuityEntry) { e.TokenID = "token-rotated" },
+		"denied token":  func(e *HostContinuityEntry) { e.DeniedTokenIDs = []string{"token-old"} },
+		"hostname":      func(e *HostContinuityEntry) { e.Hostname = "renamed.local" },
+		"machine":       func(e *HostContinuityEntry) { e.MachineID = "machine-other" },
+		"node link":     func(e *HostContinuityEntry) { e.LinkedNodeID, e.NodeLinkSource = "node-1", "manual" },
+		"agent version": func(e *HostContinuityEntry) { e.AgentVersion = "6.8.0" },
+		"interval":      func(e *HostContinuityEntry) { e.IntervalSeconds = 60 },
+	} {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			fs := &countingContinuityFS{FileSystem: defaultFileSystem{}}
+			store := NewHostContinuityStore(dir, fs)
+			if err := store.ObserveReport(observedContinuityEntry(1, start)); err != nil {
+				t.Fatalf("seed: %v", err)
+			}
+			next := observedContinuityEntry(2, start.Add(30*time.Second))
+			mutate(&next)
+			if err := store.ObserveReport(next); err != nil {
+				t.Fatalf("ObserveReport: %v", err)
+			}
+			if fs.count() != 2 {
+				t.Fatalf("%s change was deferred; writes = %d", name, fs.count())
+			}
+			reloaded, _ := NewHostContinuityStore(dir, nil).Get("host-observed")
+			if reloaded.ReportSequence != next.ReportSequence || reloaded.ReportStreamID != next.ReportStreamID {
+				t.Fatalf("journal = %+v, want the %s change", reloaded, name)
+			}
+		})
+	}
+}
+
+func TestHostContinuityObserveReportFlushesAfterDelay(t *testing.T) {
+	withContinuityFlushDelay(t, 20*time.Millisecond)
+	dir := t.TempDir()
+	store := NewHostContinuityStore(dir, nil)
+	start := time.Now().UTC().Truncate(time.Second)
+	if err := store.ObserveReport(observedContinuityEntry(1, start)); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	if err := store.ObserveReport(observedContinuityEntry(2, start.Add(30*time.Second))); err != nil {
+		t.Fatalf("ObserveReport: %v", err)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for reloadedContinuitySequence(t, dir) != 2 {
+		if time.Now().After(deadline) {
+			t.Fatal("deferred liveness change never reached the journal")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func TestHostContinuitySynchronousWriteCarriesPendingLiveness(t *testing.T) {
+	withContinuityFlushDelay(t, time.Hour)
+	dir := t.TempDir()
+	store := NewHostContinuityStore(dir, nil)
+	start := time.Now().UTC().Truncate(time.Second)
+	if err := store.ObserveReport(observedContinuityEntry(1, start)); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	if err := store.ObserveReport(observedContinuityEntry(9, start.Add(time.Minute))); err != nil {
+		t.Fatalf("ObserveReport: %v", err)
+	}
+	if err := store.Upsert(HostContinuityEntry{HostID: "host-other", Hostname: "other.local", LastSeen: start}); err != nil {
+		t.Fatalf("Upsert: %v", err)
+	}
+	if got := reloadedContinuitySequence(t, dir); got != 9 {
+		t.Fatalf("journal watermark = %d, want the pending 9 written with the other host", got)
+	}
+}
+
+func TestHostContinuityCloseFlushesAndStopsDeferring(t *testing.T) {
+	withContinuityFlushDelay(t, time.Hour)
+	dir := t.TempDir()
+	fs := &countingContinuityFS{FileSystem: defaultFileSystem{}}
+	store := NewHostContinuityStore(dir, fs)
+	start := time.Now().UTC().Truncate(time.Second)
+	if err := store.ObserveReport(observedContinuityEntry(1, start)); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	if err := store.ObserveReport(observedContinuityEntry(2, start.Add(30*time.Second))); err != nil {
+		t.Fatalf("ObserveReport: %v", err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	if got := reloadedContinuitySequence(t, dir); got != 2 {
+		t.Fatalf("journal watermark after Close = %d, want 2", got)
+	}
+	before := fs.count()
+	if err := store.ObserveReport(observedContinuityEntry(3, start.Add(time.Minute))); err != nil {
+		t.Fatalf("ObserveReport after Close: %v", err)
+	}
+	if fs.count() != before+1 || reloadedContinuitySequence(t, dir) != 3 {
+		t.Fatalf("observation after Close was deferred; writes %d -> %d", before, fs.count())
+	}
+}
+
+func TestHostContinuityFlushReportsDeferredWriteFailure(t *testing.T) {
+	withContinuityFlushDelay(t, time.Hour)
+	dir := t.TempDir()
+	store := NewHostContinuityStore(dir, nil)
+	start := time.Now().UTC().Truncate(time.Second)
+	if err := store.ObserveReport(observedContinuityEntry(1, start)); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	if err := store.ObserveReport(observedContinuityEntry(2, start.Add(30*time.Second))); err != nil {
+		t.Fatalf("ObserveReport: %v", err)
+	}
+	store.fs = &mockFSError{FileSystem: defaultFileSystem{}, writeError: errors.New("write failed")}
+	if err := store.Flush(); err == nil {
+		t.Fatal("Flush hid a persistence failure")
+	}
+	if entry, _ := store.Get("host-observed"); entry.ReportSequence != 2 {
+		t.Fatalf("failed flush dropped the in-memory watermark: %d", entry.ReportSequence)
+	}
+	store.fs = defaultFileSystem{}
+	if err := store.Flush(); err != nil {
+		t.Fatalf("Flush after repair: %v", err)
+	}
+	if got := reloadedContinuitySequence(t, dir); got != 2 {
+		t.Fatalf("journal watermark after repaired flush = %d, want 2", got)
+	}
 }

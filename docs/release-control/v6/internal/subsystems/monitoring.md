@@ -5531,6 +5531,22 @@ named and default organizations. The custom event envelope stays unchanged.
 
 ## Current State
 
+The host continuity journal no longer rewrites itself for every host report.
+`HostContinuityStore.ObserveReport` writes a new host and any identity,
+credential, link, legacy, tombstone or report-stream change before the report
+returns, and holds steady liveness (receipt and accepted times, and the
+sequence within an unchanged stream) in memory for at most
+`hostContinuityLivenessFlushDelay` (15 seconds). Ordering decisions read
+memory, so a running process behaves as before. `Monitor.Stop` flushes through
+`Close`, so restarts and upgrades resume from the exact watermark; only a crash
+can lose up to that delay of sequence advance, and the journal was never
+fsynced. The full rewrite per report grew with the square of the host count,
+about 1.5 GiB/day at 30 agents. `TestSteadyHostReportsDeferJournalRewritesUntilStop`,
+`TestNewHostReportStreamReachesJournalAtOnce` and the
+`TestHostContinuityObserveReport*` store tests exercise it. The Docker report-order
+journal still writes per report, because a failed write deliberately rejects the
+report.
+
 PVE backup collection keeps an explicitly unclassified archive separate from
 the live occupant of its VMID. Only matching recognised guest kinds can borrow
 current placement; model date selection and recovery subject mapping cannot

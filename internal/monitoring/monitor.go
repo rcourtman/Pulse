@@ -8568,6 +8568,13 @@ func (m *Monitor) stop() error {
 	// stray guest_metadata.json.tmp behind.
 	drainErr := m.guestMetadataStore.Close(guestMetadataDrainTimeout)
 
+	// Write deferred host report liveness so a restart or upgrade resumes from
+	// the exact report watermark, and stop deferring before the directory can
+	// be torn down.
+	if err := m.hostContinuityStore.Close(); err != nil {
+		log.Error().Err(err).Msg("failed to flush host continuity state")
+	}
+
 	// Close persistent metrics store (flushes buffered data)
 	if m.metricsStore != nil {
 		if err := m.metricsStore.Close(); err != nil {

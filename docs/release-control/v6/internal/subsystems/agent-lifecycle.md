@@ -5121,6 +5121,20 @@ Agent` secondary handoff against the live setup wizard instead of relying
 
 ## Current State
 
+The host continuity journal no longer rewrites itself for every host report.
+`HostContinuityStore.ObserveReport` writes a new host and any identity,
+credential, link, legacy, tombstone or report-stream change before the report
+returns, and holds steady liveness (receipt and accepted times, and the
+sequence within an unchanged stream) in memory for at most
+`hostContinuityLivenessFlushDelay` (15 seconds). Ordering decisions read
+memory, so a running process behaves as before. `Monitor.Stop` flushes through
+`Close`, so restarts and upgrades resume from the exact watermark; only a crash
+can lose up to that delay of sequence advance, and the journal was never
+fsynced. The full rewrite per report grew with the square of the host count,
+about 1.5 GiB/day at 30 agents. `TestSteadyHostReportsDeferJournalRewritesUntilStop`,
+`TestNewHostReportStreamReachesJournalAtOnce` and the
+`TestHostContinuityObserveReport*` store tests exercise it.
+
 Versioned native profile and Windows lifecycle collector fixtures consume `scripts/release_ldflags.sh agent`, preserving their VCS settings while carrying the same runtime release identity required by updater admission. Unversioned native smoke builds remain development controls.
 
 Monitor bootstrap also installs the alerts-owned occurrence lifecycle query
