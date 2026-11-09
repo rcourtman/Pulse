@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "base_sha": "73c244c53330133ffd7a74202ff073ddea985a92",
+  "verified_at": "2026-11-09T17:17:51.037607Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/AI/FindingsPanel.tsx",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceWorkspace.tsx",
+    "frontend-modern/src/utils/aiFindingPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/AI/FindingsPanel.tsx": "1b052e904b687faff4df22a2457de3e2636ec12148311516574901680e7d2364",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceWorkspace.tsx": "76039696b62e19ba655481148bd7992806445599dd8cfc1d9abf25ae9058db26",
+    "frontend-modern/src/utils/aiFindingPresentation.ts": "97d44f5ebca576e8f8eec5543d556aa3b49bda2e39c0456f6dec251e4b0c2410"
+  },
+  "routes": [
+    "/patrol/activity \u2192 Finding options and history \u2192 Open work \u2192 finding row expansion and close"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "browsers": [
+    "Playwright 1.56.1 / Chromium 141.0.7390.37 desktop, light and dark",
+    "Playwright 1.56.1 / WebKit 26.0 narrow, light and dark"
+  ],
+  "states": [
+    "All eight typed action states against an unchanged saved fix_queued outcome; one active finding and one affected resource remain visible.",
+    "Live matching legacy approval, successful empty legacy approval list, and unavailable legacy read.",
+    "Summary and row distinguish approval required, ready to run, approved to run, running, completed, failed, rejected, expired and genuine legacy recovery. Unavailable legacy status remains unknown. Completion of an action does not resolve its finding.",
+    "Comparable captures preserve the same issue/resource facts and review controls. All44 pairs retain non-row control text/order; History, Finding options and Review remain in viewport. Existing truncation is unchanged."
+  ],
+  "interactions": [
+    "Actual App/router/API clients/stores use the existing readonly integration fixture plus fixed synthetic typed-action responses, the same clock/data/theme/viewports and panel-anchor interaction on both revisions.",
+    "Each of44 page cases opens Finding options and history, captures the queue, then expands and closes the actual finding row. No mutation was attempted; no page exception was observed.",
+    "Opened all62 retained unique PNGs through native view_image:18 unique before images represent44 states by exact-byte aliases, plus44 after images.44 comparable pairs; eight pairs are byte-identical.",
+    "Finding detail expansion encounters the same unprovided investigation GET404 on both revisions; no complete investigation-history or execution journey is claimed."
+  ],
+  "evidence": "Current lane RECEIPTS.md, CAPTURE-PAIRS.json, BEFORE-INDEX.json, AFTER-INDEX.json, PIXEL-REVIEW.md, before/after capture archives and browser reports/protocol retain exact source and fixtures. Baseline b3fb4ebd17ac87e79a35e073c84763c8b57998f8; final runtime73c244c53330133ffd7a74202ff073ddea985a92. Separate VM source-proof result is unavailable and is not established by this browser receipt. No native authority, original-client/IdP recovery, hosted install, release or independent acceptance claim."
+}
