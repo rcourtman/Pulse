@@ -733,7 +733,7 @@ const TYPED_PATROL_ACTION_PRESENTATION: Record<
     badgeLabel: 'Action completed',
     stage: 'verification',
     label: 'Review completed action',
-    detail: 'The action completed. Review its verification evidence; this finding remains open.',
+    detail: 'The action completed. Review its verification evidence. This finding remains open.',
     tone: 'info',
   },
   failed: {
