@@ -1093,5 +1093,239 @@ with patch.object(Path, 'iterdir', entries), patch.object(Path, 'stat', descript
                 self.assert_saved(f)
 
 
+class UpdateAssetPublication(unittest.TestCase):
+    """Real optional asset writes, always confined to ordinary temporary files."""
+
+    HARNESS = r'''
+source "$INSTALLER"
+record() { printf '%s\n' "$*" >> "$FIXTURE/operations"; }
+print_info() { echo "$*"; }
+print_warn() { echo "WARN: $*"; }
+print_success() { echo "SUCCESS: $*"; }
+safe_systemctl() { record "manager $*"; }
+download_auto_update_script() { record unexpected-download; return 98; }
+systemctl() { return 99; } # Presence only; inventory below never uses the host.
+unit_file_inventory() {
+    record inventory
+    if [[ "$FAULT" == inventory ]]; then return 73; fi
+    local state=disabled
+    if [[ "$FAULT" == mask || ( "$FAULT" == late-mask && -e "$FIXTURE/rendered" ) ]]; then state=masked-runtime; fi
+    printf 'pulse-update.timer %s\npulse-update.service disabled\n' "$state"
+}
+migrate_auto_update_assets_outside_sandbox() { record migration; return 1; }
+last_arg() { for last; do :; done; printf '%s' "$last"; }
+mktemp() {
+    local path; path=$(last_arg "$@")
+    record "allocate $path"
+    case "$FAULT:$path" in
+        allocate-helper:*.sh.staged.*|allocate-service:*.service.staged.*|allocate-timer:*.timer.staged.*) return 74 ;;
+    esac
+    command mktemp "$@"
+}
+cat_count=0
+cat() {
+    cat_count=$((cat_count + 1))
+    record "render $cat_count"
+    touch "$FIXTURE/rendered"
+    if [[ "$FAULT" == "render-$cat_count" || ( "$FAULT" == cleanup && "$cat_count" == 1 ) ]]; then printf 'partial unit\n'; return 75; fi
+    if [[ "$FAULT" == during-render-directory && "$cat_count" == 1 ]]; then
+        command mv "$PULSE_UPDATE_SERVICE_PATH" "$FIXTURE/displaced-service"
+        mkdir "$PULSE_UPDATE_SERVICE_PATH"
+    fi
+    command cat "$@"
+}
+chmod() {
+    local path; path=$(last_arg "$@")
+    record "mode $1 $path"
+    case "$FAULT:$path" in
+        mode-service:*.service.staged.*|mode-timer:*.timer.staged.*) return 76 ;;
+    esac
+    if [[ "$FAULT" == mode-helper && "$path" == *.sh.staged.* && "$path" != *.repo.* ]]; then return 76; fi
+    command chmod "$@"
+}
+mv() {
+    local path; path=$(last_arg "$@")
+    record "publish $path"
+    case "$FAULT:$path" in
+        publish-helper:*/pulse-auto-update.sh|publish-service:*/pulse-update.service|publish-timer:*/pulse-update.timer) return 77 ;;
+    esac
+    if [[ "$FAULT" == after-admission-directory && "$path" == "$PULSE_UPDATE_SERVICE_PATH" ]]; then
+        command mv "$path" "$FIXTURE/displaced-service"
+        mkdir "$path"
+    fi
+    # All three live swaps must be exact non-directory renames; the separate
+    # helper repository rewrite is also real but not one of these boundaries.
+    if [[ "$STRICT_SWAP" == true && ( "$path" == "$PULSE_AUTO_UPDATE_DEST" || "$path" == "$PULSE_UPDATE_SERVICE_PATH" || "$path" == "$PULSE_UPDATE_TIMER_PATH" ) ]]; then
+        [[ "$#" == 4 && "$1" == -fT && "$2" == -- && "$3" == "$4".staged.* ]] || return 96
+        local wanted=644
+        [[ "$path" != "$PULSE_AUTO_UPDATE_DEST" ]] || wanted=755
+        [[ "$(python3 -c 'import os,stat,sys; print(oct(stat.S_IMODE(os.stat(sys.argv[1]).st_mode))[2:])' "$3")" == "$wanted" ]] || return 97
+    fi
+    command mv "$@"
+}
+rm() {
+    record cleanup
+    [[ "$FAULT" != cleanup ]] || return 78
+    command rm "$@"
+}
+umask 077
+status=0
+# Real callers suppress errexit for the whole producer. Keep that context.
+if [[ "$CALLER" == setup ]]; then
+    ENABLE_AUTO_UPDATES=true
+    selected_update_channel() { echo stable; }
+    setup_auto_updates || status=$?
+elif [[ "$CALLER" == refresh ]]; then
+    refresh_auto_updates || status=$?
+else
+    install_auto_update_assets || status=$?
+fi
+printf 'RESULT=%s\n' "$status"
+exit "$status"
+'''
+
+    def exercise(self, *, fault="none", odd=None, caller="assets", strict=False, foreign=False):
+        installer = Path(os.environ.get("PULSE_INSTALLER_UNDER_TEST", ROOT / "install.sh")).resolve()
+        with tempfile.TemporaryDirectory(prefix="pulse-update-publication-") as directory:
+            f = Path(directory)
+            for name in ("install/scripts", "bin", "units", "config"):
+                (f / name).mkdir(parents=True)
+            paths = [f / "bin/pulse-auto-update.sh", f / "units/pulse-update.service", f / "units/pulse-update.timer"]
+            original = [b"#!/bin/bash\necho old helper\n", b"previous complete service\n", b"previous complete timer\n"]
+            for path, data in zip(paths, original):
+                path.write_bytes(data)
+                path.chmod(0o750 if path == paths[0] else 0o640)
+            (f / "install/scripts/pulse-auto-update.sh").write_bytes(b"#!/bin/bash\necho new helper\n")
+            saved = b'{"autoUpdateEnabled":false,"updateChannel":"beta","operatorSetting":"retained"}\n'
+            (f / "config/system.json").write_bytes(saved)
+            target = f / "unrelated"
+            target.write_bytes(b"unrelated saved bytes\n")
+            if odd:
+                index, kind = odd
+                path = paths[index]
+                path.unlink()
+                if kind == "directory": path.mkdir()
+                elif kind == "fifo": os.mkfifo(path)
+                elif kind == "file-link": path.symlink_to(target)
+                elif kind == "directory-link": path.symlink_to(f / "config", target_is_directory=True)
+                elif kind == "dangling": path.symlink_to(f / "absent")
+                elif kind == "mask": path.symlink_to("/dev/null")
+                else: raise ValueError(kind)
+            if foreign:
+                Path(str(paths[1]) + ".tmp").symlink_to(target)
+                Path(str(paths[2]) + ".tmp").write_bytes(b"another invocation's temp bytes\n")
+            env = dict(os.environ, FIXTURE=str(f), INSTALLER=str(installer), FAULT=fault, CALLER=caller,
+                       STRICT_SWAP=str(strict).lower(), PULSE_INSTALL_DIR=str(f / "install"), PULSE_CONFIG_DIR=str(f / "config"),
+                       PULSE_AUTO_UPDATE_DEST=str(paths[0]), PULSE_UPDATE_SERVICE_PATH=str(paths[1]),
+                       PULSE_UPDATE_TIMER_PATH=str(paths[2]), GITHUB_REPO="rcourtman/Pulse", PULSE_SERVICE_NAME="pulse")
+            result = subprocess.run(["bash", "-c", self.HARNESS], env=env, capture_output=True, text=True, timeout=15)
+            snapshots = []
+            for path in paths:
+                kind = "link" if path.is_symlink() else ("directory" if path.is_dir() else ("file" if path.is_file() else "other"))
+                snapshots.append(dict(kind=kind, data=path.read_bytes() if kind == "file" else None,
+                                      mode=(path.stat().st_mode & 0o777) if kind == "file" else None,
+                                      entries=sorted(p.name for p in path.iterdir()) if kind == "directory" else [],
+                                      link=os.readlink(path) if kind == "link" else None))
+            return dict(exit=result.returncode, output=result.stdout + result.stderr, snapshots=snapshots, original=original,
+                        ops=(f / "operations").read_text().splitlines() if (f / "operations").exists() else [],
+                        target=target.read_bytes(), config=(f / "config/system.json").read_bytes(), saved=saved,
+                        stages=[p.name for parent in (f / "bin", f / "units") for p in parent.iterdir() if ".staged." in p.name],
+                        displaced=(f / "displaced-service").read_bytes() if (f / "displaced-service").exists() else None,
+                        foreign_link=Path(str(paths[1]) + ".tmp").is_symlink(),
+                        foreign_data=Path(str(paths[2]) + ".tmp").read_bytes() if foreign and Path(str(paths[2]) + ".tmp").is_file() else None)
+
+    def assert_preserved(self, evidence, except_index=None):
+        for i, (snapshot, original) in enumerate(zip(evidence["snapshots"], evidence["original"])):
+            if i != except_index:
+                self.assertEqual(snapshot["data"], original, evidence)
+                self.assertEqual(snapshot["mode"], 0o750 if i == 0 else 0o640, evidence)
+        self.assertEqual(evidence["config"], evidence["saved"], evidence)
+        self.assertEqual(evidence["target"], b"unrelated saved bytes\n", evidence)
+        self.assertFalse(any(op.startswith("manager ") for op in evidence["ops"]), evidence)
+        self.assertEqual(evidence["stages"], [], evidence)
+
+    def test_nonregular_destinations_refuse_before_staging_or_helper_replacement(self):
+        for index in range(3):
+            for kind in ("directory", "fifo", "file-link", "directory-link", "dangling", "mask"):
+                with self.subTest(asset=index, kind=kind):
+                    e = self.exercise(odd=(index, kind))
+                    self.assertNotEqual(e["exit"], 0, e)
+                    self.assert_preserved(e, except_index=index)
+                    self.assertFalse(any(op.startswith(("allocate ", "publish ", "render ", "mode ")) for op in e["ops"]), e)
+                    if kind == "directory": self.assertEqual(e["snapshots"][index]["entries"], [], e)
+                    if "link" in kind or kind in ("dangling", "mask"): self.assertEqual(e["snapshots"][index]["kind"], "link", e)
+
+    def test_foreign_fixed_temp_paths_survive_private_staging_and_exact_renames(self):
+        e = self.exercise(foreign=True, strict=True)
+        self.assertEqual(e["exit"], 0, e)
+        self.assertTrue(e["foreign_link"], e)
+        self.assertEqual(e["target"], b"unrelated saved bytes\n", e)
+        self.assertEqual(e["foreign_data"], b"another invocation's temp bytes\n", e)
+        self.assertEqual([s["kind"] for s in e["snapshots"]], ["file"] * 3, e)
+        self.assertEqual([s["mode"] for s in e["snapshots"]], [0o755, 0o644, 0o644], e)
+        self.assertIn(b'GITHUB_REPO="rcourtman/Pulse"\n', e["snapshots"][0]["data"])
+        self.assertIn(b"OnCalendar=*-*-* 02:00:00\n", e["snapshots"][2]["data"])
+        self.assertEqual([line for line in e["snapshots"][2]["data"].splitlines() if line.startswith(b"OnCalendar=")], [b"OnCalendar=*-*-* 02:00:00"])
+        self.assertEqual([op for op in e["ops"] if op.startswith("manager ")], ["manager daemon-reload"], e)
+        self.assertEqual(e["config"], e["saved"], e)
+        self.assertEqual(e["stages"], [], e)
+
+    def test_preparation_failures_preserve_all_three_assets_and_preferences(self):
+        for fault in ("allocate-helper", "allocate-service", "allocate-timer", "render-1", "render-2", "mode-helper", "mode-service", "mode-timer"):
+            with self.subTest(fault=fault):
+                e = self.exercise(fault=fault)
+                self.assertNotEqual(e["exit"], 0, e)
+                self.assert_preserved(e)
+
+    def test_publication_failure_stops_without_claiming_a_three_file_rollback(self):
+        for index, fault in enumerate(("publish-helper", "publish-service", "publish-timer")):
+            with self.subTest(fault=fault):
+                e = self.exercise(fault=fault)
+                self.assertNotEqual(e["exit"], 0, e)
+                for i, s in enumerate(e["snapshots"]):
+                    if i < index: self.assertNotEqual(s["data"], e["original"][i], e)
+                    else: self.assertEqual(s["data"], e["original"][i], e)
+                self.assertEqual(e["config"], e["saved"], e)
+                managers = [op for op in e["ops"] if op.startswith("manager ")]
+                self.assertEqual(managers, ["manager daemon-reload"] if index == 2 else [], e)
+                if index > 0: self.assertIn("publication is unconfirmed", e["output"], e)
+                self.assertEqual(e["stages"], [], e)
+
+    def test_changed_destinations_and_new_effective_masks_never_report_success(self):
+        for fault in ("during-render-directory", "after-admission-directory", "late-mask"):
+            with self.subTest(fault=fault):
+                e = self.exercise(fault=fault)
+                self.assertNotEqual(e["exit"], 0, e)
+                self.assertFalse(any(op.startswith("manager ") for op in e["ops"]), e)
+                self.assertEqual(e["stages"], [], e)
+                self.assertEqual(e["config"], e["saved"], e)
+                if fault != "late-mask":
+                    self.assertEqual(e["snapshots"][1]["kind"], "directory", e)
+                    self.assertEqual(e["snapshots"][1]["entries"], [], e)
+                    self.assertEqual(e["displaced"], e["original"][1], e)
+                    self.assertEqual(e["snapshots"][2]["data"], e["original"][2], e)
+                if fault != "after-admission-directory":
+                    self.assertEqual(e["snapshots"][0]["data"], e["original"][0], e)
+
+    def test_cleanup_failure_retains_owned_stages_and_primary_failure(self):
+        e = self.exercise(fault="cleanup")
+        self.assertNotEqual(e["exit"], 0, e)
+        self.assertEqual([s["data"] for s in e["snapshots"]], e["original"], e)
+        self.assertEqual(e["config"], e["saved"], e)
+        self.assertTrue(e["stages"], e)
+        self.assertIn("Could not remove staged auto-update asset", e["output"], e)
+        self.assertFalse(any(op.startswith("manager ") for op in e["ops"]), e)
+
+    def test_both_optional_callers_complete_without_enable_or_start_after_refusal(self):
+        for caller in ("setup", "refresh"):
+            for fault, odd in (("none", (1, "directory")), ("mask", None), ("inventory", None), ("allocate-timer", None)):
+                with self.subTest(caller=caller, fault=fault, odd=odd):
+                    e = self.exercise(caller=caller, fault=fault, odd=odd)
+                    self.assertEqual(e["exit"], 0, e) # Optional setup must not strand monitoring.
+                    self.assert_preserved(e, except_index=1 if odd else None)
+                    self.assertIn("WARN:", e["output"], e)
+                    self.assertNotIn("SUCCESS:", e["output"], e)
+
+
 if __name__ == "__main__":
     unittest.main()

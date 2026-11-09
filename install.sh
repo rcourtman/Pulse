@@ -4946,6 +4946,33 @@ auto_update_units_refreshable() {
     return 0
 }
 
+# A linked/masked or non-regular destination belongs to operator reconciliation,
+# not an automatic conversion into a Pulse-owned file. Check the complete set
+# before staging and publication; each rename also rechecks its own destination.
+auto_update_asset_destinations_regular() {
+    local asset
+    for asset in "$@"; do
+        if [[ -L "$asset" || ( -e "$asset" && ! -f "$asset" ) ]]; then
+            print_warn "Cannot replace redirected or non-regular auto-update asset ($asset); inspect the destination before retrying."
+            return 1
+        fi
+    done
+    return 0
+}
+
+# Only this invocation's exclusively allocated stages are supplied here. Never
+# adopt, truncate or clean up the old fixed .tmp names or another run's files.
+cleanup_auto_update_asset_stages() {
+    local stage
+    for stage in "$@"; do
+        [[ -n "$stage" ]] || continue
+        if ! rm -f -- "$stage"; then
+            print_warn "Could not remove staged auto-update asset ($stage); inspect the retained staging file before retrying."
+        fi
+    done
+    return 0
+}
+
 # Installs the auto-update helper script and rewrites the systemd
 # service/timer units. Shared by setup_auto_updates (first-time enable) and
 # refresh_auto_updates (updates/reinstalls where the timer already exists).
@@ -4960,6 +4987,7 @@ install_auto_update_assets() {
     local update_timer_unit
     update_timer_unit="$(basename "$update_timer_path")"
     auto_update_units_refreshable "$update_timer_path" "$update_service_path" || return 1
+    auto_update_asset_destinations_regular "$auto_update_dest" "$update_service_path" "$update_timer_path" || return 1
     local auto_update_bin_dir update_unit_dir update_timer_dir
     auto_update_bin_dir="$(dirname "$auto_update_dest")"
     update_unit_dir="$(dirname "$update_service_path")"
@@ -5004,21 +5032,21 @@ install_auto_update_assets() {
         # swap a zero-byte "helper" over the working one.
         if ! cp "$install_dir/scripts/pulse-auto-update.sh" "$staged_helper"; then
             print_warn "Could not copy the bundled auto-update helper into ${auto_update_bin_dir}."
-            rm -f "$staged_helper"
+            cleanup_auto_update_asset_stages "$staged_helper"
             return 1
         fi
     else
         print_info "Downloading auto-update script..."
         if ! AUTO_UPDATE_DEST="$staged_helper" download_auto_update_script; then
             print_warn "Could not download the auto-update helper after multiple attempts."
-            rm -f "$staged_helper"
+            cleanup_auto_update_asset_stages "$staged_helper"
             return 1
         fi
     fi
 
     if ! configure_auto_update_script_repo "$staged_helper"; then
         print_warn "Could not configure the auto-update helper for the selected release repo."
-        rm -f "$staged_helper"
+        cleanup_auto_update_asset_stages "$staged_helper"
         return 1
     fi
 
@@ -5027,8 +5055,17 @@ install_auto_update_assets() {
     # half-written unit behind and still report success, because the only
     # thing left in this function is safe_systemctl daemon-reload, which
     # deliberately returns 0 even when it fails.
-    local staged_service="${update_service_path}.tmp"
-    local staged_timer="${update_timer_path}.tmp"
+    local staged_service="" staged_timer=""
+    if ! staged_service=$(mktemp "${update_service_path}.staged.XXXXXX"); then
+        print_warn "Could not stage ${update_service_path}; existing auto-update assets were not changed."
+        cleanup_auto_update_asset_stages "$staged_helper"
+        return 1
+    fi
+    if ! staged_timer=$(mktemp "${update_timer_path}.staged.XXXXXX"); then
+        print_warn "Could not stage ${update_timer_path}; existing auto-update assets were not changed."
+        cleanup_auto_update_asset_stages "$staged_helper" "$staged_service"
+        return 1
+    fi
 
     # The heredoc is unquoted so the installer substitutes paths/names; the
     # rendered unit must contain no unexpanded $ (in particular never $$,
@@ -5080,7 +5117,7 @@ WantedBy=multi-user.target
 EOF
     then
         print_warn "Could not write ${update_service_path}."
-        rm -f "$staged_helper" "$staged_service"
+        cleanup_auto_update_asset_stages "$staged_helper" "$staged_service" "$staged_timer"
         return 1
     fi
 
@@ -5105,13 +5142,13 @@ WantedBy=timers.target
 EOF
     then
         print_warn "Could not write ${update_timer_path}."
-        rm -f "$staged_helper" "$staged_service" "$staged_timer"
+        cleanup_auto_update_asset_stages "$staged_helper" "$staged_service" "$staged_timer"
         return 1
     fi
 
     if ! auto_update_helper_is_sane "$staged_helper"; then
         print_warn "The staged auto-update helper is empty or has no interpreter line; keeping the previously installed helper."
-        rm -f "$staged_helper" "$staged_service" "$staged_timer"
+        cleanup_auto_update_asset_stages "$staged_helper" "$staged_service" "$staged_timer"
         return 1
     fi
 
@@ -5119,26 +5156,49 @@ EOF
     # the installed helper should keep the 0755 a plain copy would have had.
     if ! chmod 0755 "$staged_helper"; then
         print_warn "Could not make the staged auto-update helper executable."
-        rm -f "$staged_helper" "$staged_service" "$staged_timer"
+        cleanup_auto_update_asset_stages "$staged_helper" "$staged_service" "$staged_timer"
         return 1
     fi
 
-    # Commit. Each rename is atomic and same-filesystem, so no consumer ever
-    # observes a partial file — including the timer's ExecStart, which on the
-    # unattended path is the very helper being replaced.
-    if ! mv "$staged_helper" "$auto_update_dest"; then
+    # mktemp creates private files; preserve the installed unit modes even
+    # when the installer itself runs under a private umask.
+    if ! chmod 0644 "$staged_service" || ! chmod 0644 "$staged_timer"; then
+        print_warn "Could not set auto-update unit permissions; existing assets were not changed."
+        cleanup_auto_update_asset_stages "$staged_helper" "$staged_service" "$staged_timer"
+        return 1
+    fi
+
+    # Rendering is not a lock. Reconfirm effective masks and the complete set
+    # before the first publication, then recheck each destination at its swap.
+    if ! auto_update_units_refreshable "$update_timer_path" "$update_service_path" ||
+       ! auto_update_asset_destinations_regular "$auto_update_dest" "$update_service_path" "$update_timer_path"; then
+        cleanup_auto_update_asset_stages "$staged_helper" "$staged_service" "$staged_timer"
+        return 1
+    fi
+
+    # Each same-directory rename is atomic, not the three-file set. Keep the
+    # helper -> service -> timer dependency order and never move a stage INTO
+    # an unexpected directory. A later failure reports the partial publication;
+    # it does not claim rollback or change preferences, enablement or starts.
+    if ! auto_update_asset_destinations_regular "$auto_update_dest" ||
+       ! mv -fT -- "$staged_helper" "$auto_update_dest"; then
         print_warn "Could not install the auto-update helper at ${auto_update_dest}."
-        rm -f "$staged_helper" "$staged_service" "$staged_timer"
+        cleanup_auto_update_asset_stages "$staged_helper" "$staged_service" "$staged_timer"
         return 1
     fi
-    if ! mv "$staged_service" "$update_service_path"; then
-        print_warn "Could not install ${update_service_path}."
-        rm -f "$staged_service" "$staged_timer"
+    if ! auto_update_asset_destinations_regular "$update_service_path" ||
+       ! mv -fT -- "$staged_service" "$update_service_path"; then
+        print_warn "Auto-update helper was installed, but service publication is unconfirmed (${update_service_path}); inspect the assets before retrying."
+        cleanup_auto_update_asset_stages "$staged_service" "$staged_timer"
         return 1
     fi
-    if ! mv "$staged_timer" "$update_timer_path"; then
-        print_warn "Could not install ${update_timer_path}."
-        rm -f "$staged_timer"
+    if ! auto_update_asset_destinations_regular "$update_timer_path" ||
+       ! mv -fT -- "$staged_timer" "$update_timer_path"; then
+        print_warn "Auto-update helper and service were installed, but timer publication is unconfirmed (${update_timer_path}); inspect the assets before retrying."
+        cleanup_auto_update_asset_stages "$staged_timer"
+        # The complete new service is already on disk. Reconcile its loaded
+        # definition even on partial publication, without enabling/starting it.
+        safe_systemctl daemon-reload
         return 1
     fi
 

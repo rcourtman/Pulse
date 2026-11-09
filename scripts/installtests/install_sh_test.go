@@ -3778,6 +3778,8 @@ func extractInstallAutoUpdateAssetsShellFunctions(t *testing.T) string {
 		extractRootInstallShellFunction(t, "auto_update_dir_writable") + "\n" +
 		extractRootInstallShellFunction(t, "auto_update_helper_is_sane") + "\n" +
 		extractRootInstallShellFunction(t, "migrate_auto_update_assets_outside_sandbox") + "\n" +
+		extractRootInstallShellFunction(t, "auto_update_asset_destinations_regular") + "\n" +
+		extractRootInstallShellFunction(t, "cleanup_auto_update_asset_stages") + "\n" +
 		extractRootInstallShellFunction(t, "install_auto_update_assets")
 }
 

@@ -2267,7 +2267,7 @@ func TestInstallAutoUpdateAssetsWritesUnitsAtomically(t *testing.T) {
 			// The render succeeds but the commit does not; the live unit must
 			// still hold its previous contents rather than a truncated file.
 			name: "unit commit fails",
-			stub: `mv() { if [[ "${2:-}" == "` + "SERVICE_PATH_PLACEHOLDER" + `" ]]; then return 1; fi; command mv "$@"; }`,
+			stub: `mv() { if [[ "${@: -1}" == "` + "SERVICE_PATH_PLACEHOLDER" + `" ]]; then return 1; fi; command mv "$@"; }`,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -2508,8 +2508,9 @@ esac
 		t.Fatalf("install.sh --repair-auto-update-units failed: %v\n%s", err, out)
 	}
 	calls, err := os.ReadFile(callsPath)
-	if err != nil || string(calls) != "list-unit-files --no-legend --no-pager --full -- pulse-update.timer pulse-update.service\ndaemon-reload\n" {
-		t.Fatalf("repair did not inspect both units before its only manager operation: %v\n%s", err, calls)
+	const maskInventory = "list-unit-files --no-legend --no-pager --full -- pulse-update.timer pulse-update.service\n"
+	if err != nil || string(calls) != maskInventory+maskInventory+"daemon-reload\n" {
+		t.Fatalf("repair did not inspect both units before staging and publication, followed only by reload: %v\n%s", err, calls)
 	}
 
 	helper, err := os.ReadFile(autoUpdateDest)
