@@ -66,8 +66,11 @@ export const RolesEditorDialog: Component<RolesEditorDialogProps> = (props) => (
         </div>
 
         <div class="min-h-0 overflow-y-auto">
-          <fieldset disabled={props.saving} class="px-4 sm:px-6 py-4 space-y-4">
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <fieldset
+            disabled={props.saving}
+            class="px-4 sm:px-6 py-3 space-y-3 sm:py-4 sm:space-y-4"
+          >
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <div class="space-y-1">
                 <label for="role-editor-id" class="block text-sm font-medium text-base-content">
                   Role ID
