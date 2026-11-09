@@ -504,3 +504,31 @@ describe('Patrol current action facts', () => {
     );
   });
 });
+
+describe('Unrecognized typed action state', () => {
+  it.each(['unknown', 'constructor', '__proto__', 'toString'])(
+    'keeps %s as reviewable unknown work rather than inventing an approval or recovery',
+    (state) => {
+      const finding = typedFinding(state as import('@/types/actionAudit').ActionAuditState);
+      expect(classifyPatrolFindingWorkType(finding, [liveApproval], approvalNow)).toBe('new');
+      expect(getPatrolFindingActionableState(finding)?.label).toBe('Review action');
+      expect(
+        getPatrolWorkTypeComposition([finding], false, [liveApproval], approvalNow),
+      ).toMatchObject({ total: 1, approval: 0, newIssues: 1 });
+      expect(
+        getFindingPatrolWorkflowPresentation(
+          {
+            ...finding,
+            id: 'finding-1',
+            source: 'ai-patrol',
+            resourceId: 'host-1',
+            resourceName: 'host-1',
+            title: 'Finding',
+          },
+          [liveApproval],
+          approvalNow,
+        )?.label,
+      ).toBe('Review action');
+    },
+  );
+});

@@ -767,7 +767,9 @@ function getTypedPatrolActionPresentation(
   finding: Partial<Pick<UnifiedFinding, 'investigationRecord'>>,
 ) {
   const state = finding.investigationRecord?.action?.state;
-  return state ? TYPED_PATROL_ACTION_PRESENTATION[state] : undefined;
+  return state && Object.hasOwn(TYPED_PATROL_ACTION_PRESENTATION, state)
+    ? TYPED_PATROL_ACTION_PRESENTATION[state]
+    : undefined;
 }
 
 const isFailedFixOutcome = (outcome: string | undefined): boolean =>
@@ -1335,7 +1337,10 @@ export const getFindingPatrolWorkflowPresentation = (
   }
 
   const typed = getTypedPatrolActionPresentation(finding);
-  if (typed) return { ...typed };
+  if (typed) {
+    const { stage, label, detail, tone } = typed;
+    return { stage, label, detail, tone };
+  }
   if (finding.investigationRecord?.action) {
     return {
       stage: 'attention',
