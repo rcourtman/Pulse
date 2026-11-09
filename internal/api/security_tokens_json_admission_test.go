@@ -19,8 +19,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/audit"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 )
 
 func tokenJSONFixture(t *testing.T) *orgTokenFixture {
@@ -173,10 +171,9 @@ func (r tokenJSONReadError) Read(p []byte) (int, error) {
 }
 
 func TestAPITokenJSONRejectsFailedReadsWithoutDisclosure(t *testing.T) {
-	var logs bytes.Buffer
-	previous := log.Logger
-	log.Logger = zerolog.New(&logs)
-	t.Cleanup(func() { log.Logger = previous })
+	// Earlier tests leave monitor goroutines logging, so capture through the
+	// package's synchronized sink instead of replacing the global logger.
+	logs := captureTestLogs(t)
 	for _, operation := range []string{"create", "update", "rename"} {
 		for _, body := range []string{`{"name":"private-body-marker","scopes":["*"]}`, "", " \n\t"} {
 			t.Run(operation+"/"+body, func(t *testing.T) {
@@ -184,7 +181,11 @@ func TestAPITokenJSONRejectsFailedReadsWithoutDisclosure(t *testing.T) {
 			})
 		}
 	}
-	if strings.Contains(logs.String(), "private-body-marker") {
+	captured := logs.String()
+	if !strings.Contains(captured, "Failed to decode API token") {
+		t.Fatal("decode failures were not captured")
+	}
+	if strings.Contains(captured, "private-body-marker") {
 		t.Fatal("decode log disclosed a request-reader error or body value")
 	}
 }
