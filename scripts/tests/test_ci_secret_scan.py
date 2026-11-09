@@ -5,6 +5,8 @@ The detector double inspects the exact Git patch stream, not secret heuristics.
 Normal CI still owns the pinned gitleaks detector's actual verdict.
 """
 
+import hashlib
+import http.server
 import json
 import os
 from pathlib import Path
@@ -12,6 +14,8 @@ import re
 import shutil
 import subprocess
 import tempfile
+import textwrap
+import threading
 import unittest
 
 
@@ -226,6 +230,168 @@ class SecretScanWorkflowTest(unittest.TestCase):
         self.assertIn('bash scripts/scan-ci-secrets.sh "$EXPECTED_HEAD" "$DIFF_BASE"', job)
         self.assertIn("python3 scripts/tests/test_ci_secret_scan.py", job)
         self.assertNotIn("--log-opts=-1", job)
+
+
+def install_commands(workflow):
+    step = workflow.split("      - name: Install gitleaks\n", 1)[1].split(
+        "\n      - name:", 1)[0]
+    return textwrap.dedent(step.split("        run: |\n", 1)[1])
+
+
+class SecretScanBootstrapTest(unittest.TestCase):
+    """Real curl/checksum, inert extraction/install, and no external requests.
+
+    Only the fixture transport and /tmp destination are remapped by the curl
+    shim. Retry policy is executed by curl itself, not simulated by the shim.
+    """
+
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory(prefix="pulse-secret-bootstrap-")
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name)
+        self.bin = self.root / "bin"
+        self.bin.mkdir()
+        self.payload = b"synthetic pinned detector archive\n"
+        self.statuses = [200]
+        self.requests = []
+        self.record = self.root / "commands.jsonl"
+        self.download = self.root / "archive.tar.gz"
+        fixture = self
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                fixture.requests.append(self.path)
+                status = fixture.statuses[min(len(fixture.requests) - 1,
+                                              len(fixture.statuses) - 1)]
+                body = fixture.payload if status == 200 else b"unavailable fixture\n"
+                self.send_response(status)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, *args):
+                pass
+
+        self.server = http.server.HTTPServer(("127.0.0.1", 0), Handler)
+        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+        self.thread.start()
+        self.addCleanup(self.stop_server)
+        real_curl = shutil.which("curl")
+        if not real_curl:
+            raise RuntimeError("curl is required for the bootstrap transport tests")
+        self.env = {
+            **os.environ, "PATH": f"{self.bin}:{os.environ['PATH']}",
+            "HOME": str(self.root), "FIXTURE": str(self.root),
+            "REAL_CURL": real_curl,
+            "FIXTURE_URL": f"http://127.0.0.1:{self.server.server_port}/archive",
+            "GITLEAKS_VERSION": "fixture",
+            "GITLEAKS_LINUX_X64_SHA256": hashlib.sha256(self.payload).hexdigest(),
+        }
+        self.tool("curl", r'''#!/usr/bin/env python3
+import json, os, pathlib, subprocess, sys
+root = pathlib.Path(os.environ["FIXTURE"])
+args = sys.argv[1:]
+expected = "https://github.com/gitleaks/gitleaks/releases/download/vfixture/gitleaks_fixture_linux_x64.tar.gz"
+assert [arg for arg in args if arg.startswith(("http://", "https://"))] == [expected]
+with (root / "commands.jsonl").open("a") as record:
+    record.write(json.dumps({"command": "curl", "args": args}) + "\n")
+# Test transport only: use loopback HTTP, never the production HTTPS endpoint.
+args = [os.environ["FIXTURE_URL"] if arg == expected else
+        str(root / "archive.tar.gz") if arg == "/tmp/gitleaks_fixture_linux_x64.tar.gz" else
+        "=http" if arg == "=https" else arg for arg in args]
+# Ignore host proxy variables, without changing the production retry arguments.
+args.extend(["--noproxy", "*"])
+sys.exit(subprocess.run([os.environ["REAL_CURL"], *args]).returncode)
+''')
+        for command in ("tar", "install"):
+            self.tool(command, f'''#!/usr/bin/env python3
+import json, os, pathlib, sys
+root = pathlib.Path(os.environ["FIXTURE"])
+with (root / "commands.jsonl").open("a") as record:
+    record.write(json.dumps({{"command": "{command}", "args": sys.argv[1:]}}) + "\\n")
+sys.exit(int(os.environ.get("{command.upper()}_EXIT", "0")))
+''')
+        # The exact checksum command still runs; only its fixed /tmp filename is
+        # mapped to this test's private download (parallel tests cannot collide).
+        self.commands = install_commands(WORKFLOW.read_text()).replace(
+            '"${GITLEAKS_LINUX_X64_SHA256}  /tmp/${archive}"',
+            '"${GITLEAKS_LINUX_X64_SHA256}  ${FIXTURE}/archive.tar.gz"')
+
+    def stop_server(self):
+        self.server.shutdown()
+        self.server.server_close()
+        self.thread.join(timeout=5)
+        self.assertFalse(self.thread.is_alive())
+
+    def tool(self, name, contents):
+        path = self.bin / name
+        path.write_text(contents)
+        path.chmod(0o755)
+
+    def run_install(self, statuses=(200,), env=None, commands=None):
+        self.statuses = statuses
+        return subprocess.run(["bash", "-c", commands or self.commands], cwd=self.root,
+                              env={**self.env, **(env or {})}, capture_output=True,
+                              text=True, timeout=20)
+
+    def events(self):
+        return [json.loads(line) for line in self.record.read_text().splitlines()]
+
+    def test_transient_504_recovers_before_verified_extraction_and_install(self):
+        result = self.run_install((504, 200))
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.requests, ["/archive", "/archive"])
+        self.assertEqual(self.download.read_bytes(), self.payload)
+        self.assertEqual([event["command"] for event in self.events()],
+                         ["curl", "tar", "install"])
+        self.assertIn("OK", result.stdout)
+        self.assertIn("504", result.stderr)
+
+    def test_retry_and_transfer_limits_do_not_weaken_transport_or_checksum(self):
+        result = self.run_install()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        args = self.events()[0]["args"]
+        self.assertEqual(args[:2], ["-q", "-fsSL"])
+        for option, value in (("--connect-timeout", "5"), ("--max-time", "60"),
+                              ("--retry", "3"), ("--retry-max-time", "120"),
+                              ("--proto", "=https"), ("--proto-redir", "=https")):
+            self.assertEqual(args[args.index(option) + 1], value)
+        for forbidden in ("-k", "--insecure", "--retry-all-errors", "--retry-connrefused"):
+            self.assertNotIn(forbidden, args)
+        step = WORKFLOW.read_text().split("      - name: Install gitleaks\n", 1)[1]
+        self.assertIn("        timeout-minutes: 4\n", step.split("        run:", 1)[0])
+
+    def test_access_refusal_and_missing_archive_are_not_retried(self):
+        for status in (401, 403, 404):
+            with self.subTest(status=status):
+                self.requests.clear()
+                result = self.run_install((status, 200))
+                self.assertEqual(result.returncode, 22, result.stdout + result.stderr)
+                self.assertEqual(self.requests, ["/archive"])
+        self.assertTrue(all(event["command"] == "curl" for event in self.events()))
+
+    def test_exhausted_transient_failure_is_fatal_and_never_extracts(self):
+        result = self.run_install((504,))
+        self.assertEqual(result.returncode, 22, result.stdout + result.stderr)
+        self.assertEqual(len(self.requests), 4)
+        self.assertEqual([event["command"] for event in self.events()], ["curl"])
+
+    def test_wrong_archive_digest_is_fatal_without_retry_or_extraction(self):
+        result = self.run_install(env={"GITLEAKS_LINUX_X64_SHA256": "0" * 64})
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertEqual(len(self.requests), 1)
+        self.assertIn("FAILED", result.stdout)
+        self.assertEqual([event["command"] for event in self.events()], ["curl"])
+
+    def test_extraction_and_install_failures_remain_fatal(self):
+        for variable, code, commands in (("TAR_EXIT", 41, ["curl", "tar"]),
+                                         ("INSTALL_EXIT", 42, ["curl", "tar", "install"])):
+            with self.subTest(variable=variable):
+                if self.record.exists():
+                    self.record.unlink()
+                result = self.run_install(env={variable: str(code)})
+                self.assertEqual(result.returncode, code, result.stdout + result.stderr)
+                self.assertEqual([event["command"] for event in self.events()], commands)
 
 
 if __name__ == "__main__":
