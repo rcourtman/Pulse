@@ -3957,7 +3957,7 @@ func TestAIApprovalHandlersPreserveExactRequestOrg(t *testing.T) {
 		{"opaque tenant", "opaque/é:key with space", "fixture-opaque", true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			handler, store, items := approvalOrgBoundaryFixture(t)
+			handler, store, _ := approvalOrgBoundaryFixture(t)
 			request := func(method, path string, call http.HandlerFunc) *httptest.ResponseRecorder {
 				req := newLoopbackRequest(method, path, strings.NewReader(`{"reason":"fixture"}`))
 				if tc.present {
