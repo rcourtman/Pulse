@@ -25,6 +25,29 @@ that same result. Successful reads retain their content and execution provenance
 
 ## Purpose
 
+### Failed approval initialization preserves saved data
+
+Approval initialization reads and decodes both saved files before publishing any
+in-memory state or allowing an existing migration to save. Only confirmed file
+absence is empty; unreadable or invalid JSON and null approval records fail
+initialization without a writable store or cleanup worker. A failure cannot
+rewrite either source from a partial/empty load. Existing null arrays, sparse
+legacy identities, null execution entries/collections, unknown fields and target
+normalization/removal remain compatible. No cross-file generation transaction,
+new command authority or synchronous durability guarantee is introduced.
+
+The process-global store and readiness publish atomically: failed initialization
+is distinct from intentional teardown/uninitialized AI. Normal initialization
+can recover after valid saved data is restored; no automatic quarantine, reset,
+retry or recreation of authority occurs. Preserve both original files privately,
+check the server-side read/decode diagnostic and data-directory access, and
+restore only known valid saved data before restarting approvals. The UI refresh
+rechecks readiness; it does not repair files. `store_load_test.go` and
+`ai_approval_load_test.go` cover source preservation, legacy controls, native
+readiness/recovery and unchanged nil-store command refusal. These are source
+fixtures, not installed/original-client or full-App recovery.
+
+
 ### Approval decisions and readers own separate snapshots
 
 The approval store owns a complete detached request after creation while still
