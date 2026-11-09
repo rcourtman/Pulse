@@ -68,7 +68,11 @@ def run_task(task: tuple[str, list[str]]) -> dict:
         env = dict(os.environ)
         if name not in SLICED:
             env["pkgs"] = name
-            env["GOFLAGS"] = env.get("GOFLAGS", "") + " -p=1"
+            # Reuse compiled objects, never an earlier test verdict. Go's
+            # result cache cannot see fixture bytes read by shell children.
+            # Append after ambient flags so even -count=0 cannot omit tests;
+            # the existing per-lease compiler bound still takes precedence.
+            env["GOFLAGS"] = env.get("GOFLAGS", "") + " -count=1 -p=1"
         result = subprocess.run(command, cwd=ROOT, env=env)
         observation = {"started": True, "exit": result.returncode}
     except OSError as error:

@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """Build objects accelerate CI; they must never become a test verdict."""
 
+import json
 import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -161,6 +163,61 @@ class BackendBuildCacheTest(unittest.TestCase):
                     self.assertEqual(result.returncode, 0, result.stderr)
                     self.assertEqual({str(path.relative_to(dist)): path.read_bytes()
                                       for path in dist.rglob("*") if path.is_file()}, expected)
+
+    @unittest.skipUnless(shutil.which("go"), "native cache fixture requires Go (provided by script-smoke CI)")
+    def test_real_ordinary_worker_reexecutes_tests_after_an_external_fixture_changes(self):
+        # Go cannot observe files read by shell children for result-cache
+        # invalidation. Exercise the actual worker, not a second flag recipe.
+        # Compilation may stay warm; a previous passing verdict must not hide
+        # the changed fixture. No Pulse runtime/database test is executed here.
+        driver = """
+import importlib.util, json, sys
+from pathlib import Path
+spec = importlib.util.spec_from_file_location('rest_worker', sys.argv[1])
+worker = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(worker)
+worker.ROOT = Path(sys.argv[2])
+result = worker.run_task(('example.com/ordinarycache',
+                        ['bash', '-euo', 'pipefail', '-c', worker.ORDINARY_COMMAND]))
+print(json.dumps(result))
+raise SystemExit(result['exit'])
+"""
+        with tempfile.TemporaryDirectory(prefix="ordinary Go cache ") as temporary:
+            root = Path(temporary)
+            marker = root / "external fixture"
+            (root / "go.mod").write_text("module example.com/ordinarycache\n\ngo 1.23\n")
+            (root / "fixture_test.go").write_text(
+                'package ordinarycache\nimport ("os/exec"; "testing")\n'
+                'func TestExternalFixture(t *testing.T) {\n'
+                ' b, err := exec.Command("/bin/cat", ' + json.dumps(str(marker)) + ').Output()\n'
+                ' if err != nil {t.Fatal(err)}\n'
+                ' if string(b) != "current fixture\\n" {t.Fatal("external fixture changed")}\n}\n'
+            )
+            for flags in ("-mod=readonly", "-mod=readonly -count=0 -p=8"):
+                with self.subTest(inherited_flags=flags):
+                    environment = {**os.environ, "GOWORK": "off", "GOPROXY": "off",
+                                   "GOSUMDB": "off", "GOTOOLCHAIN": "local",
+                                   "GOMAXPROCS": "2", "GOFLAGS": flags}
+
+                    def execute():
+                        return subprocess.run(
+                            [sys.executable, "-I", "-c", driver,
+                             str(ROOT / "scripts/release_control/run_go_rest_shard.py"), str(root)],
+                            cwd=root, env=environment, capture_output=True, text=True, timeout=120,
+                        )
+
+                    marker.write_text("current fixture\n")
+                    first = execute()
+                    self.assertEqual(first.returncode, 0, first.stdout + first.stderr)
+                    self.assertNotIn("(cached)", first.stdout)
+                    marker.write_text("changed fixture\n")
+                    changed = execute()
+                    self.assertNotEqual(changed.returncode, 0, changed.stdout + changed.stderr)
+                    self.assertIn("external fixture changed", changed.stdout)
+                    self.assertNotIn("(cached)", changed.stdout)
+                    observation = json.loads(changed.stdout.splitlines()[-1])
+                    self.assertTrue(observation["started"])
+                    self.assertEqual(observation["exit"], changed.returncode)
 
 
 if __name__ == "__main__":
