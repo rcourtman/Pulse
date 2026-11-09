@@ -7,12 +7,14 @@ import {
   getPatrolFindingActionableState,
   getPatrolFindingQueueSummary,
   hasUnavailablePatrolApprovalStatus,
+  getFindingPatrolWorkflowPresentation,
 } from '@/utils/aiFindingPresentation';
 
 type ClassifyInput = Parameters<typeof classifyPatrolFindingWorkType>[0];
 
 function makeFinding(overrides: Partial<ClassifyInput> = {}): ClassifyInput {
   return {
+    id: 'finding-1',
     status: 'active',
     investigationStatus: undefined,
     investigationOutcome: undefined,
@@ -27,9 +29,9 @@ describe('classifyPatrolFindingWorkType', () => {
     expect(classifyPatrolFindingWorkType(makeFinding())).toBe('new');
   });
 
-  it('classifies fix_queued as approval', () => {
+  it('classifies an unbound queued outcome as recovery, not approval', () => {
     expect(classifyPatrolFindingWorkType(makeFinding({ investigationOutcome: 'fix_queued' }))).toBe(
-      'approval',
+      'recovery',
     );
   });
 
@@ -83,12 +85,12 @@ describe('classifyPatrolFindingWorkType', () => {
     ).toBe('new');
   });
 
-  it('prioritises approval over failed when both conditions could apply', () => {
+  it('prioritises queued recovery over recurrence', () => {
     expect(
       classifyPatrolFindingWorkType(
         makeFinding({ investigationOutcome: 'fix_queued', regressionCount: 5 }),
       ),
-    ).toBe('approval');
+    ).toBe('recovery');
   });
 
   it('prioritises failed over recurring', () => {
@@ -146,9 +148,13 @@ describe('getPatrolWorkTypeComposition', () => {
     expect(getPatrolWorkTypeCompositionClause(unavailable)).toBe(
       ' — 2 queued · approval status unavailable, 1 failed fix, 1 in progress, 1 recurring',
     );
-    expect(getPatrolWorkTypeComposition(findings, false)).toMatchObject({ total: 5, approval: 2 });
+    expect(getPatrolWorkTypeComposition(findings, false)).toMatchObject({
+      total: 5,
+      approval: 0,
+      recovery: 2,
+    });
     expect(getPatrolWorkTypeCompositionClause(getPatrolWorkTypeComposition(findings))).toContain(
-      '2 need approval',
+      '2 need action recovery',
     );
   });
 
@@ -219,7 +225,8 @@ describe('getPatrolWorkTypeComposition', () => {
     ];
     expect(getPatrolWorkTypeComposition(findings)).toEqual({
       total: 6,
-      approval: 1,
+      approval: 0,
+      recovery: 1,
       failed: 1,
       inProgress: 1,
       recurring: 1,
@@ -287,10 +294,10 @@ describe('getPatrolFindingActionableState', () => {
     expect(getPatrolFindingActionableState(makeFinding())).toBeUndefined();
   });
 
-  it('returns approval required for fix_queued', () => {
+  it('returns recovery for an unbound fix_queued outcome', () => {
     expect(
       getPatrolFindingActionableState(makeFinding({ investigationOutcome: 'fix_queued' })),
-    ).toEqual({ label: 'Approval required', tone: 'warning' });
+    ).toEqual({ label: 'Recover action', tone: 'warning' });
   });
 
   it.each(['fix_failed', 'fix_verification_failed', 'cannot_fix', 'timed_out'] as const)(
@@ -336,5 +343,164 @@ describe('getPatrolFindingActionableState', () => {
         makeFinding({ status: 'resolved', investigationOutcome: 'fix_queued' }),
       ),
     ).toBeUndefined();
+  });
+});
+
+// Actual typed references must outrank a stale legacy outcome, in every
+// presentation of the same finding, even when the approval-list read fails.
+const typedFinding = (state: import('@/types/actionAudit').ActionAuditState): ClassifyInput => ({
+  ...makeFinding({ investigationOutcome: 'fix_queued', regressionCount: 3 }),
+  investigationRecord: {
+    id: 'investigation-1',
+    finding_id: 'finding-1',
+    subject: { resource_id: 'host-1' },
+    trigger: { detected_at: '2026-11-09T12:00:00Z' },
+    status: 'completed',
+    evidence: [],
+    verification: [],
+    rollback: [],
+    tools_used: [],
+    started_at: '2026-11-09T12:00:00Z',
+    action: {
+      action_id: 'action-1',
+      resource_id: 'host-1',
+      capability_name: 'restart',
+      state,
+      plan: {
+        actionId: 'action-1',
+        requestId: 'request-1',
+        allowed: false,
+        requiresApproval: true,
+        approvalPolicy: 'admin',
+        rollbackAvailable: false,
+      },
+    },
+  },
+});
+const approvalNow = Date.parse('2026-11-09T12:10:00Z');
+const liveApproval = {
+  status: 'pending',
+  toolId: 'investigation_fix',
+  targetId: 'finding-1',
+  expiresAt: '2026-11-09T12:11:00Z',
+};
+
+describe('Patrol current action facts', () => {
+  it.each([
+    ['pending_approval', 'approval', 'Approval required', '1 needs approval', 'Approve or reject'],
+    ['planned', 'ready', 'Ready to run', '1 ready to run', 'Run action'],
+    ['approved', 'approved', 'Approved to run', '1 approved to run', 'Run approved action'],
+    ['executing', 'in_progress', 'Action running', '1 in progress', 'Action running'],
+    ['completed', 'completed', 'Action completed', '1 completed action', 'Review completed action'],
+    ['failed', 'failed', 'Fix failed', '1 failed fix', 'Fix failed'],
+    ['rejected', 'rejected', 'Action rejected', '1 rejected action', 'Review rejected action'],
+    ['expired', 'expired', 'Action expired', '1 expired action', 'Review expired action'],
+  ] as const)(
+    'keeps %s consistent across counts, row and workflow',
+    (state, workType, badge, clause, handoff) => {
+      const finding = typedFinding(state);
+      const unchanged = JSON.stringify(finding);
+      for (const unavailable of [false, true]) {
+        expect(classifyPatrolFindingWorkType(finding, [liveApproval], approvalNow)).toBe(workType);
+        expect(getPatrolFindingActionableState(finding, [liveApproval], approvalNow)?.label).toBe(
+          badge,
+        );
+        const composition = getPatrolWorkTypeComposition(
+          [finding],
+          unavailable,
+          [liveApproval],
+          approvalNow,
+        );
+        expect(composition.total).toBe(1);
+        expect(getPatrolWorkTypeCompositionClause(composition)).toBe(' — ' + clause);
+        expect(
+          getFindingPatrolWorkflowPresentation(
+            {
+              ...finding,
+              id: 'finding-1',
+              source: 'ai-patrol',
+              resourceId: 'host-1',
+              resourceName: 'host-1',
+              title: 'Finding',
+            },
+            [liveApproval],
+            approvalNow,
+            unavailable,
+          )?.label,
+        ).toBe(handoff);
+      }
+      expect(JSON.stringify(finding)).toBe(unchanged);
+    },
+  );
+
+  it('uses only a live pending investigation-fix request for the same finding', () => {
+    const finding = makeFinding({ investigationOutcome: 'fix_queued' });
+    expect(classifyPatrolFindingWorkType(finding, [liveApproval], approvalNow)).toBe('approval');
+    expect(getPatrolFindingActionableState(finding, [liveApproval], approvalNow)?.label).toBe(
+      'Approval required',
+    );
+    for (const request of [
+      { ...liveApproval, targetId: 'other-finding' },
+      { ...liveApproval, toolId: 'other-tool' },
+      { ...liveApproval, status: 'approved' },
+      { ...liveApproval, expiresAt: '2026-11-09T12:10:00Z' },
+    ]) {
+      expect(classifyPatrolFindingWorkType(finding, [request], approvalNow)).toBe('recovery');
+      expect(getPatrolFindingActionableState(finding, [request], approvalNow)?.label).toBe(
+        'Recover action',
+      );
+    }
+    expect(
+      getPatrolWorkTypeComposition([finding], true, [liveApproval], approvalNow),
+    ).toMatchObject({ total: 1, approval: 0, approvalUnknown: 1 });
+    expect(
+      getPatrolWorkTypeComposition([finding], false, [liveApproval], approvalNow),
+    ).toMatchObject({ total: 1, approval: 1 });
+    expect(
+      getPatrolWorkTypeComposition([finding], false, [liveApproval], approvalNow + 60000),
+    ).toMatchObject({ total: 1, approval: 0, recovery: 1 });
+  });
+
+  it('keeps inactive typed findings out of current action counts', () => {
+    for (const status of ['resolved', 'dismissed', 'snoozed'] as const) {
+      const finding = { ...typedFinding('pending_approval'), status };
+      expect(classifyPatrolFindingWorkType(finding)).toBe('new');
+      expect(getPatrolFindingActionableState(finding)).toBeUndefined();
+      expect(getPatrolWorkTypeComposition([finding])).toMatchObject({
+        total: 1,
+        approval: 0,
+        newIssues: 1,
+      });
+    }
+  });
+
+  it('retains all mixed work and resource-independent facts without reclassifying new issues', () => {
+    const composition = getPatrolWorkTypeComposition([
+      typedFinding('planned'),
+      typedFinding('approved'),
+      typedFinding('executing'),
+      typedFinding('completed'),
+      typedFinding('rejected'),
+      typedFinding('expired'),
+      makeFinding({ investigationOutcome: 'fix_failed' }),
+      makeFinding({ timesRaised: 3 }),
+      makeFinding(),
+    ]);
+    expect(composition).toEqual({
+      total: 9,
+      approval: 0,
+      ready: 1,
+      approved: 1,
+      inProgress: 1,
+      completed: 1,
+      rejected: 1,
+      expired: 1,
+      failed: 1,
+      recurring: 1,
+      newIssues: 1,
+    });
+    expect(getPatrolWorkTypeCompositionClause(composition)).toBe(
+      ' — 1 ready to run, 1 approved to run, 1 failed fix, 1 in progress, 1 completed action, 1 rejected action, 1 expired action, 1 recurring',
+    );
   });
 });

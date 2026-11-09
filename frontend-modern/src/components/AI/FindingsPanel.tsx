@@ -901,7 +901,11 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       ) {
         return { label: 'Approval status unavailable', tone: 'warning' as const };
       }
-      return getPatrolFindingActionableState(finding);
+      return getPatrolFindingActionableState(
+        finding,
+        aiIntelligenceStore.patrolPendingApprovals,
+        now(),
+      );
     };
     const patrolQueueSummary = () => getPatrolFindingQueueSummary(finding);
     const collapsedApprovalAction = () => {

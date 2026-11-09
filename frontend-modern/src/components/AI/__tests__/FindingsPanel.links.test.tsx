@@ -1434,3 +1434,33 @@ describe('FindingsPanel approval read uncertainty', () => {
     expect(screen.queryByRole('button', { name: 'Check approval status' })).not.toBeInTheDocument();
   });
 });
+
+describe('FindingsPanel typed action row state', () => {
+  it.each([
+    ['planned', 'Ready to run'],
+    ['approved', 'Approved to run'],
+    ['executing', 'Action running'],
+    ['completed', 'Action completed'],
+    ['failed', 'Fix failed'],
+    ['rejected', 'Action rejected'],
+    ['expired', 'Action expired'],
+  ])('shows %s rather than asking for a second approval', (state, label) => {
+    mockState.patrolFindings = [
+      {
+        ...mockState.initialPatrolFindings[0],
+        id: 'typed-finding',
+        title: 'Typed action finding',
+        alertIdentifier: undefined,
+        investigationOutcome: 'fix_queued',
+        investigationRecord: { action: { state } },
+      },
+    ];
+    render(() => <FindingsPanel findingsSource="patrol" />);
+    expect(screen.getByText(label)).toBeInTheDocument();
+    expect(screen.queryByText('Approval required')).not.toBeInTheDocument();
+    expect(screen.queryByText('Recover action')).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Review issue for Typed action finding' }),
+    ).toBeInTheDocument();
+  });
+});

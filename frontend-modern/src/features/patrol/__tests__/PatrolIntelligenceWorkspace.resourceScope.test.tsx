@@ -373,3 +373,53 @@ describe('PatrolIntelligenceWorkspace resource scope', () => {
     expect(screen.getByText('2 actions awaiting your approval')).toBeInTheDocument();
   });
 });
+
+describe('Patrol workspace current action summary', () => {
+  afterEach(() => {
+    cleanup();
+    fixture.read = () => fixture.findings;
+    fixture.approvalsError = () => null;
+  });
+
+  it('follows typed action transitions in the selected resource without borrowing other approvals', () => {
+    const [state, setState] = createSignal('pending_approval');
+    fixture.read = () => [
+      fixture.finding('web-restart', 'Web container keeps restarting', fixture.web, {
+        investigationOutcome: 'fix_queued',
+        investigationRecord: { action: { state: state() } },
+      }),
+      fixture.findings[2],
+    ];
+    render(() => (
+      <PatrolIntelligenceWorkspace
+        state={makeState()}
+        findingResourceId={fixture.web.resourceId}
+        findingResourceName="afs-web"
+      />
+    ));
+    for (const [next, clause] of [
+      ['pending_approval', '1 needs approval'],
+      ['planned', '1 ready to run'],
+      ['approved', '1 approved to run'],
+      ['executing', '1 in progress'],
+      ['completed', '1 completed action'],
+      ['failed', '1 failed fix'],
+      ['rejected', '1 rejected action'],
+      ['expired', '1 expired action'],
+    ]) {
+      setState(next);
+      expect(
+        screen.getByText(
+          `Patrol found 1 issue on afs-web — ${clause}. Open a row to review evidence and record the outcome.`,
+        ),
+      ).toBeInTheDocument();
+      if (next !== 'pending_approval')
+        expect(screen.queryByText(/Patrol found.*needs approval/)).not.toBeInTheDocument();
+      // The legacy list remains independently reviewable; its two saved
+      // requests do not overwrite a typed action or escape the resource scope.
+      expect(screen.getByText('Apply the fix for web-restart')).toBeInTheDocument();
+      expect(screen.queryByText('Apply the fix for db-backup')).not.toBeInTheDocument();
+      expect(reviewRows()).toHaveLength(1);
+    }
+  });
+});
