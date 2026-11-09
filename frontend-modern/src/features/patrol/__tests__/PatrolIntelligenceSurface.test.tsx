@@ -1,6 +1,6 @@
 import { Route, Router } from '@solidjs/router';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import { createSignal, type JSX } from 'solid-js';
+import { createSignal, onMount, type JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PatrolIntelligenceSurface } from '../PatrolIntelligenceSurface';
@@ -9,6 +9,9 @@ const patrolState = vi.hoisted(() => ({
   setupOnly: false,
   enabled: true,
   approvalCount: (): number => 0,
+  deferInitialLoads: false,
+  finishDigest: undefined as (() => void) | undefined,
+  finishRecentWork: undefined as (() => void) | undefined,
 }));
 
 vi.mock('@/stores/aiIntelligence', () => ({
@@ -74,11 +77,23 @@ vi.mock('../PatrolObjectivesPanel', () => ({
 }));
 
 vi.mock('../PatrolRecentWorkPanel', () => ({
-  PatrolRecentWorkPanel: () => <div>Recent work</div>,
+  PatrolRecentWorkPanel: (props: { onInitialLoad?: () => void }) => {
+    onMount(() => {
+      patrolState.finishRecentWork = props.onInitialLoad;
+      if (!patrolState.deferInitialLoads) props.onInitialLoad?.();
+    });
+    return <div>Recent work</div>;
+  },
 }));
 
 vi.mock('../PatrolWeeklyDigestCard', () => ({
-  PatrolWeeklyDigestCard: () => <div>This week</div>,
+  PatrolWeeklyDigestCard: (props: { onInitialLoad?: () => void }) => {
+    onMount(() => {
+      patrolState.finishDigest = props.onInitialLoad;
+      if (!patrolState.deferInitialLoads) props.onInitialLoad?.();
+    });
+    return <div>This week</div>;
+  },
 }));
 
 vi.mock('@/stores/actionInbox', () => ({
@@ -112,6 +127,10 @@ describe('PatrolIntelligenceSurface finding handoff', () => {
     patrolState.setupOnly = false;
     patrolState.enabled = true;
     patrolState.approvalCount = () => 0;
+    patrolState.deferInitialLoads = false;
+    patrolState.finishDigest = undefined;
+    patrolState.finishRecentWork = undefined;
+    vi.restoreAllMocks();
   });
 
   it('keeps outcome guidance in the opener instead of repeating it above a concrete approval handoff', () => {
@@ -206,6 +225,93 @@ describe('PatrolIntelligenceSurface finding handoff', () => {
     await vi.waitFor(() => expect(scrollIntoView).toHaveBeenCalled());
     expect(scrollTo).not.toHaveBeenCalled();
     scrollTo.mockRestore();
+  });
+
+  const deferHandoff = async () => {
+    patrolState.deferInitialLoads = true;
+    const scrollIntoView = vi.fn();
+    HTMLElement.prototype.scrollIntoView = scrollIntoView;
+    const frames = new Map<number, FrameRequestCallback>();
+    let nextFrame = 0;
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      frames.set(++nextFrame, callback);
+      return nextFrame;
+    });
+    vi.spyOn(window, 'cancelAnimationFrame').mockImplementation((id) => {
+      frames.delete(id);
+    });
+    const flushFrames = () => {
+      const callbacks = [...frames.values()];
+      frames.clear();
+      callbacks.forEach((callback) => callback(0));
+    };
+    renderSurface();
+    fireEvent.click(screen.getByRole('button', { name: 'Open scoped finding options' }));
+    await vi.waitFor(() => expect(scrollIntoView).toHaveBeenCalledTimes(1));
+    expect(document.activeElement?.id).toBe('patrol-operational-records');
+    scrollIntoView.mockClear();
+    return { scrollIntoView, flushFrames };
+  };
+
+  it.each(['digest', 'recent work'])(
+    'keeps the target aligned as each initial read settles, with %s first',
+    async (first) => {
+      const { scrollIntoView, flushFrames } = await deferHandoff();
+      const finishes =
+        first === 'digest'
+          ? [patrolState.finishDigest, patrolState.finishRecentWork]
+          : [patrolState.finishRecentWork, patrolState.finishDigest];
+      finishes[0]?.();
+      flushFrames();
+      expect(scrollIntoView).toHaveBeenCalledTimes(1);
+      finishes[1]?.();
+      flushFrames();
+      expect(scrollIntoView).toHaveBeenCalledTimes(2);
+      expect(scrollIntoView.mock.instances[0]).toBe(
+        document.getElementById('patrol-operational-records'),
+      );
+      // Later refresh notifications cannot restart a completed handoff.
+      finishes.forEach((finish) => finish?.());
+      flushFrames();
+      expect(scrollIntoView).toHaveBeenCalledTimes(2);
+    },
+  );
+
+  it.each(['pointerdown', 'touchstart', 'wheel', 'keydown'])(
+    'does not reclaim scroll after %s',
+    async (event) => {
+      const { scrollIntoView, flushFrames } = await deferHandoff();
+      document.dispatchEvent(new Event(event));
+      patrolState.finishDigest?.();
+      patrolState.finishRecentWork?.();
+      flushFrames();
+      expect(scrollIntoView).not.toHaveBeenCalled();
+    },
+  );
+
+  it('cancels a ready alignment when the operator navigates away before its frame', async () => {
+    const { scrollIntoView, flushFrames } = await deferHandoff();
+    patrolState.finishDigest?.();
+    patrolState.finishRecentWork?.();
+    fireEvent.click(screen.getByRole('tab', { name: 'Protection' }));
+    await vi.waitFor(() => expect(window.location.pathname).toBe('/patrol/protection'));
+    flushFrames();
+    expect(scrollIntoView).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('tab', { name: 'Activity' }));
+    await vi.waitFor(() => expect(window.location.pathname).toBe('/patrol/activity'));
+    patrolState.finishDigest?.();
+    patrolState.finishRecentWork?.();
+    flushFrames();
+    expect(scrollIntoView).not.toHaveBeenCalled();
+  });
+
+  it('cancels pending alignment on unmount', async () => {
+    const { scrollIntoView, flushFrames } = await deferHandoff();
+    patrolState.finishDigest?.();
+    patrolState.finishRecentWork?.();
+    cleanup();
+    flushFrames();
+    expect(scrollIntoView).not.toHaveBeenCalled();
   });
 
   it('restores the live Inbox selection on return and never a closed one', async () => {

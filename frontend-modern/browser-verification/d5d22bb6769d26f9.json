@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "base_sha": "e2cfcd0380af4e20a3d3227ab029c29a25e48652",
+  "verified_at": "2026-11-09T16:10:39.244631Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx": "76d705ed70085e5e7590ef0eb4ebd8d31d5839c20b8f5a8f2afbb1294bb7654d"
+  },
+  "routes": [
+    "/patrol/activity \u2192 Inbox \u2192 actual attention detail \u2192 Browse Patrol findings for this resource \u2192 /patrol/activity",
+    "Scoped Activity \u2192 Show all finding options \u2192 History \u2192 Open work"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "browsers": [
+    "Playwright 1.56.1 / Chromium 141.0.7390.37 desktop, light and dark",
+    "Playwright 1.56.1 / WebKit 26.0 narrow, light and dark"
+  ],
+  "states": [
+    "Warm saved approval read failure preserves the request/risk/expiry/context and one scoped finding, using the real App/router/API clients and stores.",
+    "Phone native settled handoff keeps the panel at y0 rather than673, Review y654\u2013698 and all context/controls above fixed navigation y799 in light/dark. Desktop naturally clamps at its bottom with the complete finding visible.",
+    "Held initial reads demonstrate why the first both-complete barrier was insufficient. Final code realigns after each initial result, not only after both; a slower second read cannot leave the phone finding displaced. Held success661\u21920 and held error18\u21920 at the first-read state; final673\u21920 and132\u21920.",
+    "Independent200/503 initial completions make one alignment each; nearby completions are coalesced into a frame. After both initial reads settle the navigation is over, with no scroll observer or settle timeout.",
+    "Actual PageUp while reads are held cancels both deferred alignments; only the immediate native panel call remains. The source unit cases cover both completion orders, each cancellation event, leaving the view and unmount.",
+    "All10 fixed-scroll references and2 final native PageUp pairs have identical PNG bytes. No content, distinction, control or existing row truncation is altered."
+  ],
+  "interactions": [
+    "Real Inbox detail \u2192 native Browse \u2192 resource-scoped Activity, Show all finding options, History and return. No store values or callback injection; GET-only fixtures reject writes and no mutation was attempted.",
+    "Immediate details focus and reveal, independently released initial summary and receipt reads, current200 or503 result through production clients/components, then settled native landing. All expected error console messages remain in unedited reports.",
+    "Real PageUp during held reads, with no subsequent panel scroll after either completion. No refocus on read completion.",
+    "Opened all54 retained current PNGs through native view_image:48 captures/24 comparisons plus6 unpaired witnesses. Intermediate PageUp animation frames are retained but not treated as comparable anchors. Both themes at both primary viewports inspected."
+  ],
+  "evidence": "Current lane RECEIPTS.md, SOURCE-CURRENT.json, CAPTURE-PAIRS.json, PIXEL-REVIEW.md, BEFORE/AFTER/DIAGNOSTIC-CAPTURES.tar.xz and BROWSER-DETAILS.tar.xz bind base2dbad8fc0870d61b56ba7ab4a272352fc0ff3d16 to final runtime e2cfcd0380af4e20a3d3227ab029c29a25e48652. Current54 inspected PNGs/24 comparisons plus6 unpaired witnesses. The measured superseded both-complete barrier and its old proof remain in SUPERSEDED-BROWSER.tar.xz, not current-source acceptance. Unchanged card contents retain their earlier parent-bound receipt as well. No native proof replay, original-client/IdP recovery, authorization, installed operation, release or independent acceptance claim."
+}

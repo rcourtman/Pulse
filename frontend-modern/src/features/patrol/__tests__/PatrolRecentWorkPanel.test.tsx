@@ -36,6 +36,47 @@ describe('PatrolRecentWorkPanel', () => {
   beforeEach(() => apiMocks.getReceipts.mockReset());
   afterEach(cleanup);
 
+  it.each(['success', 'error'])(
+    'reports initial layout readiness once after %s, never on refresh',
+    async (outcome) => {
+      let finish!: (value: PatrolWorkReceiptListResponse) => void;
+      let fail!: (error: Error) => void;
+      apiMocks.getReceipts.mockReturnValueOnce(
+        new Promise<PatrolWorkReceiptListResponse>((resolve, reject) => {
+          finish = resolve;
+          fail = reject;
+        }),
+      );
+      const onInitialLoad = vi.fn();
+      render(() => <PatrolRecentWorkPanel onInitialLoad={onInitialLoad} />);
+      expect(screen.getByText('Loading verified work…')).toBeInTheDocument();
+      expect(onInitialLoad).not.toHaveBeenCalled();
+      if (outcome === 'success') finish(response([]));
+      else fail(new Error('Receipts unavailable'));
+      await waitFor(() => expect(onInitialLoad).toHaveBeenCalledTimes(1));
+      expect(screen.queryByText('Loading verified work…')).not.toBeInTheDocument();
+      apiMocks.getReceipts.mockResolvedValue(response([receipt()]));
+      document.dispatchEvent(new Event('visibilitychange'));
+      await screen.findByText('Jellyfin');
+      expect(onInitialLoad).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it('does not report readiness to an unmounted Activity view', async () => {
+    let finish!: (value: PatrolWorkReceiptListResponse) => void;
+    apiMocks.getReceipts.mockReturnValueOnce(
+      new Promise<PatrolWorkReceiptListResponse>((resolve) => {
+        finish = resolve;
+      }),
+    );
+    const onInitialLoad = vi.fn();
+    render(() => <PatrolRecentWorkPanel onInitialLoad={onInitialLoad} />);
+    cleanup();
+    finish(response([]));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(onInitialLoad).not.toHaveBeenCalled();
+  });
+
   it('shows server-authored verified Patrol work receipts', async () => {
     apiMocks.getReceipts.mockResolvedValue(response([receipt()]));
 

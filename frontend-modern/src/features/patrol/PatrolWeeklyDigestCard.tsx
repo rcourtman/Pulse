@@ -190,7 +190,7 @@ export function buildDigestTiles(digest: PatrolDigest): DigestTile[] {
   ];
 }
 
-export function PatrolWeeklyDigestCard() {
+export function PatrolWeeklyDigestCard(props: { onInitialLoad?: () => void } = {}) {
   const [digest, setDigest] = createSignal<PatrolDigest | null>(null);
   const [loading, setLoading] = createSignal(true);
   const [error, setError] = createSignal('');
@@ -208,7 +208,13 @@ export function PatrolWeeklyDigestCard() {
   };
 
   onMount(() => {
-    void load();
+    let disposed = false;
+    onCleanup(() => {
+      disposed = true;
+    });
+    void load().then(() => {
+      if (!disposed) props.onInitialLoad?.();
+    });
     const refresh = () => {
       if (document.visibilityState === 'visible') void load(true);
     };
