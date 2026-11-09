@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-li
 import { createSignal } from 'solid-js';
 
 import { SecurityAuthPanel } from '../SecurityAuthPanel';
+import { QuickSecuritySetup } from '../QuickSecuritySetup';
 import { RelaySettingsPanel } from '../RelaySettingsPanel';
 import { AuditWebhookPanel } from '../AuditWebhookPanel';
 
@@ -11,15 +12,12 @@ const hasFeatureMock = vi.fn();
 const getRelayConfigMock = vi.fn();
 const getRelayStatusMock = vi.fn();
 const apiFetchJSONMock = vi.fn();
+const apiFetchMock = vi.fn();
 const showSuccessMock = vi.fn();
 const showErrorMock = vi.fn();
 const showWarningMock = vi.fn();
 const loggerErrorMock = vi.fn();
 const presentationPolicyHidesUpgradePromptsMock = vi.fn();
-
-vi.mock('../QuickSecuritySetup', () => ({
-  QuickSecuritySetup: () => <div data-testid="quick-security-setup">Quick Security Setup</div>,
-}));
 
 vi.mock('@/stores/license', () => ({
   hasFeature: (...args: unknown[]) => hasFeatureMock(...args),
@@ -53,6 +51,9 @@ vi.mock('@/api/onboarding', () => ({
 
 vi.mock('@/utils/apiClient', () => ({
   getOrgID: () => null,
+  getApiToken: () => null,
+  clearApiToken: vi.fn(),
+  apiFetch: (...args: unknown[]) => apiFetchMock(...args),
   apiFetchJSON: (...args: unknown[]) => apiFetchJSONMock(...args),
 }));
 
@@ -77,6 +78,7 @@ describe('settings read-only panel states', () => {
     getRelayConfigMock.mockReset();
     getRelayStatusMock.mockReset();
     apiFetchJSONMock.mockReset();
+    apiFetchMock.mockReset();
     showSuccessMock.mockReset();
     showErrorMock.mockReset();
     showWarningMock.mockReset();
@@ -104,6 +106,48 @@ describe('settings read-only panel states', () => {
 
   afterEach(() => {
     cleanup();
+  });
+
+  it('keeps the actual credential draft disabled while its reader is being checked', () => {
+    const [checking, setChecking] = createSignal(false);
+    render(() => (
+      <QuickSecuritySetup
+        owner="synthetic-reader"
+        disabled={checking()}
+        onPendingChange={() => {}}
+      />
+    ));
+    fireEvent.click(screen.getByRole('button', { name: 'Custom' }));
+    fireEvent.input(screen.getByLabelText('Password (min 12 characters)', { exact: true }), {
+      target: { value: 'Synthetic-only-pass1!' },
+    });
+    setChecking(true);
+    expect(screen.getByLabelText('Password (min 12 characters)', { exact: true })).toHaveValue(
+      'Synthetic-only-pass1!',
+    );
+    expect(screen.getByLabelText('Password (min 12 characters)', { exact: true })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Enable Security Now' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Enable Security Now' }));
+    expect(apiFetchMock).not.toHaveBeenCalled();
+    setChecking(false);
+    expect(screen.getByLabelText('Password (min 12 characters)', { exact: true })).toBeEnabled();
+  });
+
+  it('labels attempted credentials unconfirmed rather than active after a partial-save server error', async () => {
+    apiFetchMock.mockResolvedValue(new Response('Password may have been saved', { status: 500 }));
+    render(() => (
+      <QuickSecuritySetup owner="synthetic-reader" disabled={false} onPendingChange={() => {}} />
+    ));
+    fireEvent.click(screen.getByRole('button', { name: 'Enable Security Now' }));
+    await screen.findByRole('button', { name: 'Download credentials' });
+    expect(screen.getByText('Credential change unconfirmed')).toBeVisible();
+    expect(screen.getByText('The password or token may have changed.')).toBeVisible();
+    expect(screen.queryByText('Credentials are active now')).toBeNull();
+    expect(apiFetchMock).toHaveBeenCalledOnce();
+    expect(apiFetchMock).toHaveBeenCalledWith(
+      '/api/security/quick-setup',
+      expect.objectContaining({ retry: false, expectedOrgID: 'default' }),
+    );
   });
 
   it('keeps authentication controls disabled in read-only mode', async () => {
@@ -135,7 +179,10 @@ describe('settings read-only panel states', () => {
     expect(screen.getByText(/Authentication settings are read-only/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /change password/i })).toBeDisabled();
     expect(screen.getByRole('button', { name: /rotate credentials/i })).toBeDisabled();
-    expect(screen.queryByTestId('quick-security-setup')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('heading', { name: 'Generate new admin credentials' }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Quick security setup' })).not.toBeInTheDocument();
   });
 
   it('renders relay settings as read-only when writes are not allowed', async () => {
