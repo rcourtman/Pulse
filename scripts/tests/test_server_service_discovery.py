@@ -234,10 +234,12 @@ class ServiceDiscovery(unittest.TestCase):
                 stream.addfile(entry, io.BytesIO(new))
             Path(str(archive) + ".sshsig").write_text("signature verification is a double\n")
             source = INSTALLER.read_text()
-            start = source.index("install_systemd_service() {")
-            end = source.index("\n}\n", start) + 3
-            body = source[start:end].replace("/etc/systemd/system/", str(f / "units") + "/")
-            (f / "unit-writer.sh").write_text(body)
+            functions = []
+            for name in ("preflight_systemd_service_installation", "install_systemd_service"):
+                start = source.index(name + "() {")
+                end = source.index("\n}\n", start) + 3
+                functions.append(source[start:end].replace("/etc/systemd/system/", str(f / "units") + "/"))
+            (f / "unit-writer.sh").write_text("\n".join(functions))
             unit = "[Unit]\nDescription=Fixture only\n[Service]\nExecStart=/bin/true\n"
             if units_present:
                 (f / "root/etc/systemd/system/pulse-backend.service").write_text(unit)

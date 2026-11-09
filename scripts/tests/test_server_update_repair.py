@@ -142,7 +142,7 @@ class ServerUpdateRepair(unittest.TestCase):
             (f / "tools/systemctl").chmod(0o755)
             source = INSTALLER.read_text()
             functions = []
-            for name in ["install_systemd_service", "ensure_systemd_service_installed"]:
+            for name in ["preflight_systemd_service_installation", "install_systemd_service", "ensure_systemd_service_installed"]:
                 start = source.index(name + "() {")
                 end = source.index("\n}\n", start) + 3
                 functions.append(source[start:end].replace("/etc/systemd/system/", str(f / "units") + "/"))

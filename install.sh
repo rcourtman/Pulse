@@ -5251,9 +5251,15 @@ refresh_auto_updates() {
     return 0
 }
 
-install_systemd_service() {
-    print_info "Installing systemd service..."
-    
+# Use the writer's exact service selection and destination admission before
+# callers stop Pulse or change its files. Ensure-only updates keep a sound
+# existing unit (including a linked unit); they do not need to rewrite it.
+preflight_systemd_service_installation() {
+    if [[ "${1:-replace}" == ensure ]]; then
+        command -v systemctl >/dev/null 2>&1 || return 0
+        [[ ! -f "/etc/systemd/system/${SERVICE_NAME}.service" ]] || return 0
+    fi
+
     # Use existing service name if found, otherwise use default
     local existing_service="$SERVICE_NAME"
     if [[ "$SERVICE_NAME_EXPLICIT" != "true" ]]; then
@@ -5266,13 +5272,22 @@ install_systemd_service() {
     fi
     
     local service_path="/etc/systemd/system/$SERVICE_NAME.service"
-    local staged_service="" render_failed=false
     # Atomic publication must not replace an operator mask or redirected unit.
     # Keep non-regular destinations for deliberate manual reconciliation.
     if [[ -L "$service_path" || ( -e "$service_path" && ! -f "$service_path" ) ]]; then
         print_error "Cannot replace a redirected or non-regular service definition ($service_path); installation is incomplete. Inspect the unit before retrying."
         return 1
     fi
+    return 0
+}
+
+install_systemd_service() {
+    print_info "Installing systemd service..."
+    # Recheck at the writer as well: early caller admission is not a lock.
+    preflight_systemd_service_installation || return 1
+
+    local service_path="/etc/systemd/system/$SERVICE_NAME.service"
+    local staged_service="" render_failed=false
     if ! staged_service=$(mktemp "${service_path}.staged.XXXXXX"); then
         print_error "Cannot stage the systemd service ($service_path); installation is incomplete. The existing service definition was not changed."
         return 1
@@ -5608,6 +5623,7 @@ main() {
     if [[ "$existing_install_status" -eq 0 ]]; then
         # If building from source was requested, skip the update prompt
         if [[ "$BUILD_FROM_SOURCE" == "true" ]]; then
+            preflight_systemd_service_installation || return 1
             create_user
             setup_directories || return 1
 
@@ -5654,6 +5670,7 @@ main() {
                 exit 1
             fi
             
+            preflight_systemd_service_installation ensure || return 1
             backup_existing || return 1
             create_user
             download_pulse
@@ -5860,6 +5877,7 @@ main() {
                     exit 1
                 fi
                 
+                preflight_systemd_service_installation ensure || return 1
                 backup_existing || return 1
                 create_user
                 download_pulse
@@ -5892,6 +5910,7 @@ main() {
                 LATEST_RELEASE="$CURRENT_VERSION"
                 offer_existing_auto_updates
 
+                preflight_systemd_service_installation || return 1
                 backup_existing || return 1
                 create_user
                 download_pulse
@@ -6002,6 +6021,7 @@ main() {
             fi
         fi
         
+        preflight_systemd_service_installation || return 1
         install_dependencies
         create_user
         setup_directories || return 1
