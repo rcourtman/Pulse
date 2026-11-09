@@ -736,6 +736,7 @@ jobs:
           version: 'v3.15.2'
 
       - name: Install Syft
+        timeout-minutes: 12
         run: |
           set -euo pipefail
           SYFT_VERSION="1.42.4"
@@ -743,7 +744,12 @@ jobs:
           SYFT_SHA256="590650c2743b83f327d1bf9bec64f6f83b7fec504187bb84f500c862bf8f2a0f"
           TMP_DIR="$(mktemp -d)"
           trap 'rm -rf "$TMP_DIR"' EXIT
-          curl -fsSL --retry 12 --retry-delay 5 --retry-all-errors "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/${SYFT_ARCHIVE}" \
+          # Back off across an upstream outage, but stop on access/TLS failures.
+          # The retry window is checked before each bounded transfer starts.
+          curl -q -fsSL --connect-timeout 10 --max-time 60 \
+            --retry 8 --retry-max-time 600 \
+            --proto '=https' --proto-redir '=https' \
+            "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/${SYFT_ARCHIVE}" \
             -o "${TMP_DIR}/${SYFT_ARCHIVE}"
           printf '%s  %s\n' "${SYFT_SHA256}" "${TMP_DIR}/${SYFT_ARCHIVE}" | sha256sum --check --
           tar -xzf "${TMP_DIR}/${SYFT_ARCHIVE}" -C "${TMP_DIR}" syft

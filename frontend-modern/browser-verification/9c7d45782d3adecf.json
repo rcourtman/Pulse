@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "base_sha": "29f074634ffdb9ffde8e435bab4561fb4a4c6963",
+  "verified_at": "2026-11-09T08:10:55.367947Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/patrol/ApprovalBanner.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/patrol/ApprovalBanner.tsx": "2ae9328b90c9f3a04b4e9514737966b0ed772edfedfddf92d755ac34b8f8e683"
+  },
+  "routes": [
+    "Existing Patrol approval handoff in production PatrolIntelligenceWorkspace at synthetic /; native handler bodies through production AIAPI/store; fixture /actions destination, not full App/Actions/IdP"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Default and tenant read compatibility and valid missing-store empty response",
+    "Blank and padded selected server contexts, both store states",
+    "Cold refused read explicitly unavailable rather than borrowed/false-empty approval state",
+    "Warm refused refresh preserves and qualifies last known default/tenant requests",
+    "Corrected context clears error without losing requests"
+  ],
+  "interactions": [
+    "Native handler output replay through unchanged production AIAPI/API client and aiIntelligenceStore",
+    "Preserve last known pending requests on refused refresh, then clear error after corrected read",
+    "Keyboard-focus Review in Actions and press Enter; exact default/tenant action ID reaches inert destination",
+    "No decision/execution dispatch; original auth/scope/router gates remain native-test responsibilities"
+  ],
+  "browsers": [
+    "Playwright 1.56.1 / Chromium 141.0.7390.37 desktop/light and phone/dark, matching integration lock"
+  ],
+  "evidence": "Core invocation 20261109T074013Z: RECEIPTS.md, BEFORE-BROWSER.json, AFTER-BROWSER.json, CAPTURES.md, BROWSER-PAIRS.json, PIXEL-REVIEW.json. Forty native-view_image-inspected captures / twenty comparable pairs, both browser clients exit 0 with reported browser/server close, no unexpected request or page exception. All 65 focused frontend tests, full type-check and production build pass on source-4vg_ma_j at this receipt parent. Native response proof source-fd98zj6o; retained source-rzsdthar 63-root/249-result race proof was not replayed. Static shell uses inert surrounding Patrol state and fixture routing, not full App/state-hook, real Actions review/execution, live authentication, original-client recovery, installed or released availability. Failed export/parser and fixture destination attempts remain retained."
+}
