@@ -46,6 +46,7 @@ const fetchMock = vi.fn<typeof fetch>();
 const json = (body: unknown) =>
   new Response(JSON.stringify(body), { headers: { 'Content-Type': 'application/json' } });
 let savedUsers: UserRoleAssignment[];
+let catalogue: Role[];
 const reads = (path: string) =>
   fetchMock.mock.calls.filter(([url, init]) => url === path && !init?.method);
 const writes = () =>
@@ -87,12 +88,13 @@ beforeEach(() => {
   vi.stubEnv('MODE', 'production');
   document.cookie = `pulse_csrf=${csrfToken}; Path=/`;
   savedUsers = structuredClone(originalUsers);
+  catalogue = structuredClone(roles);
   fetchMock.mockReset();
   fetchMock.mockImplementation(async (input, init = {}) => {
     const path = String(input);
     const method = init.method ?? 'GET';
     if (method === 'GET' && path === '/api/admin/users') return json(savedUsers);
-    if (method === 'GET' && path === '/api/admin/roles') return json(roles);
+    if (method === 'GET' && path === '/api/admin/roles') return json(catalogue);
     // Derive fixture mutations and permission reads from the actual dispatched
     // identity and body, never from the account the test intended to select.
     const user = savedUsers.find((candidate) =>
@@ -132,6 +134,59 @@ afterEach(() => {
 });
 
 describe('User Access selection through rendered controls and real transport', () => {
+  it('keeps both namesakes distinct and an unlisted saved key visible without making it toggleable', async () => {
+    catalogue = [
+      structuredClone(roles[0]),
+      { ...structuredClone(roles[0]), id: roles[1].id },
+      { ...structuredClone(roles[0]), id: 'known/other', name: unlistedRole },
+      { ...structuredClone(roles[0]), id: 'known/unnamed', name: '' },
+    ];
+    const selected = originalUsers[1];
+    savedUsers[1].roleIds = [roles[0].id, roles[1].id, unlistedRole];
+    await openPanel();
+    const row = rowFor(selected);
+    expect(row.getAllByText('Fleet role')).toHaveLength(2);
+    expect(row.getByText(roles[0].id)).toBeInTheDocument();
+    expect(row.getByText(roles[1].id)).toBeInTheDocument();
+    expect(row.getByText(unlistedRole)).toBeInTheDocument();
+    expect(row.getByText('Not in role list')).toBeInTheDocument();
+    fireEvent.click(
+      row.getByRole('button', {
+        name: `Manage access for Alex Example (${selected.username})`,
+      }),
+    );
+    const dialog = within(
+      await screen.findByRole('dialog', {
+        name: `Manage access: Alex Example (${selected.username})`,
+      }),
+    );
+    const labels = [
+      `Fleet role (Role ID: ${roles[0].id}) Read saved monitoring`,
+      `Fleet role (Role ID: ${roles[1].id}) Read saved monitoring`,
+      `${unlistedRole} (Role ID: known/other) Read saved monitoring`,
+      'Role ID: known/unnamed Read saved monitoring',
+    ];
+    for (const name of labels) expect(dialog.getAllByRole('checkbox', { name })).toHaveLength(1);
+    expect(dialog.getByRole('checkbox', { name: labels[0] })).toBeChecked();
+    expect(dialog.getByRole('checkbox', { name: labels[1] })).toBeChecked();
+    expect(dialog.getByRole('checkbox', { name: labels[2] })).not.toBeChecked();
+    const kept = within(dialog.getByRole('list', { name: 'Kept saved role IDs' }));
+    expect(kept.getByText(unlistedRole)).toBeInTheDocument();
+    expect(kept.queryByRole('checkbox')).not.toBeInTheDocument();
+    fireEvent.click(dialog.getByRole('checkbox', { name: labels[1] }));
+    expect(writes()).toHaveLength(0);
+    fireEvent.click(dialog.getByRole('button', { name: 'Save Changes' }));
+    await screen.findByText(`Roles updated for ${selected.username}`);
+    expect(writes()).toHaveLength(1);
+    const [url, init] = writes()[0];
+    expect(url).toBe(`${userPath(selected.username)}/roles`);
+    expect(JSON.parse(String(init?.body))).toEqual({ roleIds: [roles[0].id, unlistedRole] });
+    expect(savedUsers[0]).toEqual(originalUsers[0]);
+    expect(savedUsers[2]).toEqual(originalUsers[2]);
+    expect(rowFor(selected).getByText(unlistedRole)).toBeInTheDocument();
+    expectBoundRequests();
+  });
+
   it('saves only the selected namesake account and role IDs, preserving an unlisted saved grant', async () => {
     await openPanel();
     const selected = originalUsers[1];
@@ -151,9 +206,11 @@ describe('User Access selection through rendered controls and real transport', (
     for (const sibling of [originalUsers[0], originalUsers[2]])
       expect(reads(`${userPath(sibling.username)}/permissions`)).toHaveLength(0);
 
-    const reader = editor.getByRole('checkbox', { name: 'Fleet role Read saved monitoring' });
+    const reader = editor.getByRole('checkbox', {
+      name: `Fleet role (Role ID: ${roles[0].id}) Read saved monitoring`,
+    });
     const operator = editor.getByRole('checkbox', {
-      name: 'Fleet role Operate selected resources',
+      name: `Fleet role (Role ID: ${roles[1].id}) Operate selected resources`,
     });
     expect(reader).toBeChecked();
     expect(operator).not.toBeChecked();
@@ -201,10 +258,14 @@ describe('User Access selection through rendered controls and real transport', (
     );
     await reopened.findByText(`saved:${selected.username}`);
     expect(
-      reopened.getByRole('checkbox', { name: 'Fleet role Read saved monitoring' }),
+      reopened.getByRole('checkbox', {
+        name: `Fleet role (Role ID: ${roles[0].id}) Read saved monitoring`,
+      }),
     ).not.toBeChecked();
     expect(
-      reopened.getByRole('checkbox', { name: 'Fleet role Operate selected resources' }),
+      reopened.getByRole('checkbox', {
+        name: `Fleet role (Role ID: ${roles[1].id}) Operate selected resources`,
+      }),
     ).toBeChecked();
     expect(writes()).toHaveLength(1);
     expectBoundRequests();

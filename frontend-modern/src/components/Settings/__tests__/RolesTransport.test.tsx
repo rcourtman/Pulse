@@ -306,8 +306,16 @@ describe('role state through the real RBAC and authenticated clients', () => {
         return json({ error: 'Synthetic upstream failure' }, 503);
       };
       render(() => <RolesPanel currentUser="reader-a" canManage />);
-      fireEvent.click((await screen.findAllByRole('button', { name: 'Edit role' }))[0]);
-      const editor = within(screen.getByRole('dialog', { name: 'Edit role' }));
+      fireEvent.click(
+        await screen.findByRole('button', {
+          name: `Edit role ${originalRole.name} (Role ID: ${originalRole.id})`,
+        }),
+      );
+      const editor = within(
+        screen.getByRole('dialog', {
+          name: `Edit role: ${originalRole.name} (Role ID: ${originalRole.id})`,
+        }),
+      );
       fireEvent.input(editor.getByLabelText('Role Name'), {
         target: { value: 'Renamed constrained reader' },
       });

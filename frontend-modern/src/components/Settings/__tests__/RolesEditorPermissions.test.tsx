@@ -70,8 +70,14 @@ afterEach(() => {
 });
 
 async function openEditor() {
-  fireEvent.click(await screen.findByRole('button', { name: 'Edit role' }));
-  return screen.findByRole('dialog', { name: 'Edit role' });
+  fireEvent.click(
+    await screen.findByRole('button', {
+      name: `Edit role ${original.name} (Role ID: ${original.id})`,
+    }),
+  );
+  return screen.findByRole('dialog', {
+    name: `Edit role: ${original.name} (Role ID: ${original.id})`,
+  });
 }
 
 function expectPermissions(dialog: HTMLElement, permissions: typeof original.permissions) {

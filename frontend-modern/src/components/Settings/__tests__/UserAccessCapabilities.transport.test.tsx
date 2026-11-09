@@ -88,8 +88,12 @@ const editor = () =>
   within(
     screen.getByRole('dialog', { name: `Manage access: Alex Example (${selected.username})` }),
   );
-const roleChoice = (description: string) =>
-  editor().getByRole('checkbox', { name: `Fleet role ${description}` });
+const roleChoice = (description: string) => {
+  const role = roles.find((candidate) => candidate.description === description)!;
+  return editor().getByRole('checkbox', {
+    name: `Fleet role (Role ID: ${role.id}) ${description}`,
+  });
+};
 const search = () => screen.getByPlaceholderText('Search users...');
 
 async function openPanel() {

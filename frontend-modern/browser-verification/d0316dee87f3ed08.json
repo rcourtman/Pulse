@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "base_sha": "16fceb12fa98948234c6c135befd8048c232f8f2",
+  "verified_at": "2026-11-09T12:28:24.001619Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/RolesEditorDialog.tsx",
+    "frontend-modern/src/components/Settings/RolesPanel.tsx",
+    "frontend-modern/src/components/Settings/UserAssignmentsDialog.tsx",
+    "frontend-modern/src/components/Settings/UserAssignmentsPanel.tsx",
+    "frontend-modern/src/components/Settings/useRolesPanelState.ts",
+    "frontend-modern/src/components/Settings/useUserAssignmentsPanelState.ts",
+    "frontend-modern/src/utils/rbacPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/RolesEditorDialog.tsx": "d0e8c7b0b9029571f9fe231f8b06c1ca4909cee1859ee24ff38e23a1c841035f",
+    "frontend-modern/src/components/Settings/RolesPanel.tsx": "7774eebe25497d0473da5042cbc96b0552c731a0f73a3a4cf8b29a76f2c0b30b",
+    "frontend-modern/src/components/Settings/UserAssignmentsDialog.tsx": "983e905ac84dc0b4e423fd4f96a14c914a8a7e58ad78ececad34132ec0b9229d",
+    "frontend-modern/src/components/Settings/UserAssignmentsPanel.tsx": "8e9818c23aa2ed3a883dd541667f738032e512a2e4cf0348d1f0c6d484762e59",
+    "frontend-modern/src/components/Settings/useRolesPanelState.ts": "745219f286fb1f558f7cff216f215f9b43aaa8c8236d1ae254d60c73a7dbdee7",
+    "frontend-modern/src/components/Settings/useUserAssignmentsPanelState.ts": "15ea5e587eb90aa35f4e7d140b138668019735a51f0c87094623d763ad16cf1f",
+    "frontend-modern/src/utils/rbacPresentation.ts": "ad4fe822cb1558a641a0cc23cd50252cdc65a6d5949c89f64203e40356197938"
+  },
+  "routes": [
+    "/proof.html \u2014 native SettingsPageShell/RolesPanel with real state/RBACAPI/HTTP client in evidence-only static shell",
+    "/proof.html?users \u2014 native SettingsPageShell/UserAssignmentsPanel and native dialogs; not full App/IdP",
+    "/proof.html?long and /proof.html?users&long \u2014 same synthetic estate with long suffix-distinct saved role IDs"
+  ],
+  "states": [
+    "Roles inventory retains all per-role permissions, descriptions, built-in read-only status and touch controls while showing complete saved IDs.",
+    "Saved-role editor retains disabled ID, both permission rows and pinned controls; full ID is separately readable and dialog name identifies the saved role.",
+    "Exact-ID delete confirmation, cancelled/confirmed synthetic deletion and saved readback. Success and unconfirmed notices identify the saved target; explicit read-only recovery never repeats the write.",
+    "User Access inventory distinguishes namesake assigned grants, keeps full saved users and all individual roles/actions; unknown assigned key is marked Not in role list.",
+    "Equal-name/description role choices have unique ID-qualified accessible names; keyboard draft changes remain distinct from saved permissions.",
+    "An unlisted saved assignment is preserved in exact PUT order and is displayed read-only, with no new toggle/grant.",
+    "Long role IDs wrap, preserving all three original choices, saved permissions and their qualifier, and Close/Cancel/Save at the same phone anchor. The new kept-ID footer may require inner scroll in this long fixture; no previously visible field is moved behind it."
+  ],
+  "interactions": [
+    "Actual capability/RBAC API/client requests use the same synthetic org, auth and CSRF fixtures before/after, without extra metadata reads.",
+    "Cancel editing/deletion without a write; confirm deletion against only the chosen encoded ID, retaining siblings and built-in read-only.",
+    "Consume synthetic503 unconfirmed deletion through the native producer/notice; keep New Role disabled; Check saved roles rereads without write replay.",
+    "Keyboard-space selects the other namesake role, submit one exact username/roleIds PUT, preserve unlisted ID and sibling, then reopen saved state.",
+    "Inspect desktop and narrow light/dark native pixels, full IDs, individual grants/descriptions, selection/focus and preserved controls."
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "browsers": [
+    "Playwright1.56.1 Chromium141.0.7390.37 desktop/light",
+    "Playwright1.56.1 WebKit26.0 phone/light/dark"
+  ],
+  "evidence": "60 native-view_image-inspected captures /30 comparable pairs; both final browser clients exit0, no page errors, awaited browsers/contexts/server closures. Matching fixed clock, fixtures, theme, viewport, anchors and interactions. source-yzpvrv42 passes25,611 full tests/3 skipped plus248 affected before presentation-only reuse; source-yqw_bpxc passes248 affected and all static/build gates at this exact runtime source. Both overall commands retain the lone UserAssignmentsPanel bundle reference failure; budget decision and final containing check are separate, not hidden by browser success. Exact consuming-source hashes are bound here. Dossier: RECEIPTS.md, CAPTURE-PAIRS.json, BEFORE-CAPTURES.tar.xz, AFTER-CAPTURES.tar.xz, PIXEL-REVIEW.md. Not full App/IdP, original client, installed, historical impact, protected delivery or release acceptance."
+}

@@ -360,7 +360,7 @@ describe('Roles reader lifetime', () => {
     expect(mocks.saveRole.mock.calls[1][0]).toEqual(mocks.saveRole.mock.calls[0][0]);
     expect(state.showModal()).toBe(false);
     expect(state.formName()).toBe('');
-    expect(state.successNotice()).toBe('Role "Changed role" saved');
+    expect(state.successNotice()).toBe(`Role Changed role (Role ID: ${north.id}) saved`);
     switchOrg();
     expect(state.successNotice()).toBeNull();
   });
@@ -597,9 +597,15 @@ describe('Roles reader lifetime', () => {
         </Show>
       </ErrorBoundary>
     ));
-    fireEvent.click(await screen.findByRole('button', { name: 'Delete role' }));
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: `Delete role ${north.name} (Role ID: ${north.id})`,
+      }),
+    );
     expect(
-      await screen.findByRole('dialog', { name: 'Delete role: North private role' }),
+      await screen.findByRole('dialog', {
+        name: `Delete role: ${north.name} (Role ID: ${north.id})`,
+      }),
     ).toBeInTheDocument();
     setVisible(false);
     await pause();
@@ -613,8 +619,12 @@ describe('Roles reader lifetime', () => {
       { ...north, permissions: [{ action: 'future:read', resource: 'future/*' }] },
     ]);
     render(() => <RolesPanel currentUser="reader-a" canManage={true} />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Edit role' }));
-    const dialog = await screen.findByRole('dialog', { name: 'Edit role' });
+    fireEvent.click(
+      await screen.findByRole('button', { name: `Edit role ${north.name} (Role ID: ${north.id})` }),
+    );
+    const dialog = await screen.findByRole('dialog', {
+      name: `Edit role: ${north.name} (Role ID: ${north.id})`,
+    });
     expect(within(dialog).getByLabelText('Permission 1 action')).toHaveValue('future:read');
     expect(within(dialog).getByLabelText('Permission 1 resource')).toHaveValue('future/*');
     fireEvent.click(within(dialog).getByRole('button', { name: 'Update Role' }));
@@ -630,8 +640,12 @@ describe('Roles reader lifetime', () => {
       Object.assign(new Error('PRIVATE DETAIL'), { status: 422 }),
     );
     render(() => <RolesPanel currentUser="reader-a" canManage={allowed()} />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Edit role' }));
-    let dialog = await screen.findByRole('dialog', { name: 'Edit role' });
+    fireEvent.click(
+      await screen.findByRole('button', { name: `Edit role ${north.name} (Role ID: ${north.id})` }),
+    );
+    let dialog = await screen.findByRole('dialog', {
+      name: `Edit role: ${north.name} (Role ID: ${north.id})`,
+    });
     fireEvent.input(within(dialog).getByLabelText('Role Name'), {
       target: { value: 'Private draft' },
     });
@@ -639,11 +653,17 @@ describe('Roles reader lifetime', () => {
     expect(await within(dialog).findByRole('alert')).toHaveTextContent('Failed to save role');
     expect(within(dialog).getByLabelText('Role Name')).toHaveValue('Private draft');
     fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Delete role' }));
-    dialog = await screen.findByRole('dialog', { name: 'Delete role: North private role' });
+    fireEvent.click(
+      screen.getByRole('button', { name: `Delete role ${north.name} (Role ID: ${north.id})` }),
+    );
+    dialog = await screen.findByRole('dialog', {
+      name: `Delete role: ${north.name} (Role ID: ${north.id})`,
+    });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
     expect(mocks.deleteRole).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: 'Delete role' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: `Delete role ${north.name} (Role ID: ${north.id})` }),
+    );
     setAllowed(false);
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(screen.queryByText('North private role')).not.toBeInTheDocument();

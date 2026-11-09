@@ -2,7 +2,11 @@ import { Component, For, Show, createEffect, on, onCleanup } from 'solid-js';
 import { Button } from '@/components/shared/Button';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { RBACFeatureGateSection } from './RBACFeatureGateSection';
-import { UserAccessIdentity, UserAssignmentsDialog } from './UserAssignmentsDialog';
+import {
+  RoleAccessIdentity,
+  UserAccessIdentity,
+  UserAssignmentsDialog,
+} from './UserAssignmentsDialog';
 import { useUserAssignmentsPanelState } from './useUserAssignmentsPanelState';
 import type { UserAssignmentsPanelProps } from './useUserAssignmentsPanelState';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
@@ -219,12 +223,20 @@ export const UserAssignmentsPanel: Component<UserAssignmentsPanelProps> = (props
                       <span class="text-xs text-slate-400 italic">No roles assigned</span>
                     </Show>
                     <For each={assignment.roleIds}>
-                      {(roleId) => (
-                        <span class="inline-flex max-w-full items-center gap-1 whitespace-normal [overflow-wrap:anywhere] rounded-md bg-surface-alt px-2 py-0.5 text-xs font-medium text-base-content border border-border">
-                          <Shield class="w-3 h-3 shrink-0" />
-                          {state.getRoleName(roleId)}
-                        </span>
-                      )}
+                      {(roleId) => {
+                        const role = () =>
+                          state.roles().find((candidate) => candidate.id === roleId);
+                        return (
+                          <span class="inline-flex max-w-full items-start gap-1 whitespace-normal [overflow-wrap:anywhere] rounded-md bg-surface-alt px-2 py-0.5 text-xs font-medium text-base-content border border-border">
+                            <Shield class="mt-0.5 w-3 h-3 shrink-0" />
+                            <RoleAccessIdentity
+                              id={roleId}
+                              name={role()?.name}
+                              unlisted={!role()}
+                            />
+                          </span>
+                        );
+                      }}
                     </For>
                   </div>
                 ),

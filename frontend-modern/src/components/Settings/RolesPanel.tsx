@@ -6,7 +6,7 @@ import { RolesEditorDialog } from './RolesEditorDialog';
 import { useRolesPanelState, type RolesPanelProps } from './useRolesPanelState';
 import { Dialog } from '@/components/shared/Dialog';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
-import { getRolesEmptyState } from '@/utils/rbacPresentation';
+import { getRoleIdentityLabel, getRolesEmptyState } from '@/utils/rbacPresentation';
 import Plus from 'lucide-solid/icons/plus';
 import Pencil from 'lucide-solid/icons/pencil';
 import Trash2 from 'lucide-solid/icons/trash-2';
@@ -22,7 +22,10 @@ const RolePermissions: Component<{ role: Role }> = (props) => (
     when={props.role.permissions.length > 0}
     fallback={<span class="text-xs italic text-muted">No permissions</span>}
   >
-    <ul aria-label={`Permissions for ${props.role.name}`} class="flex min-w-0 flex-wrap gap-1">
+    <ul
+      aria-label={`Permissions for ${getRoleIdentityLabel(props.role)}`}
+      class="flex min-w-0 flex-wrap gap-1"
+    >
       <For each={props.role.permissions}>
         {(permission) => (
           <li class="max-w-full rounded-md bg-surface-alt px-2 py-0.5 text-xs font-medium text-muted border border-border whitespace-normal [overflow-wrap:anywhere]">
@@ -71,7 +74,12 @@ export const RolesPanel: Component<RolesPanelProps> = (props) => {
       >
         <Show when={state.successNotice()}>
           {(message) => (
-            <InlineNotice tone="success" role="status" aria-live="polite">
+            <InlineNotice
+              tone="success"
+              role="status"
+              aria-live="polite"
+              class="[overflow-wrap:anywhere]"
+            >
               {message()}
             </InlineNotice>
           )}
@@ -149,10 +157,13 @@ export const RolesPanel: Component<RolesPanelProps> = (props) => {
                 render: (role) => (
                   <div class="flex min-w-0 flex-col whitespace-normal [overflow-wrap:anywhere]">
                     <span class="font-medium text-base-content flex items-center gap-1">
-                      <span class="min-w-0">{role.name}</span>
+                      <bdi class="min-w-0">{role.name}</bdi>
                       <Show when={role.isBuiltIn}>
                         <BadgeCheck class="w-4 h-4 shrink-0 text-blue-500" />
                       </Show>
+                    </span>
+                    <span class="text-[10px] leading-4 text-muted">
+                      Role ID: <bdi class="font-mono whitespace-pre-wrap">{role.id}</bdi>
                     </span>
                     <span class="text-xs text-muted">{role.description}</span>
                     <div class="mt-3 space-y-1 sm:hidden">
@@ -176,7 +187,7 @@ export const RolesPanel: Component<RolesPanelProps> = (props) => {
                   <div class="inline-flex items-center gap-1">
                     <Show when={!role.isBuiltIn}>
                       <ActionIconButton
-                        label="Edit role"
+                        label={`Edit role ${getRoleIdentityLabel(role)}`}
                         tone="accent"
                         size="sm"
                         class="-my-2 min-h-11 min-w-11 sm:my-0 sm:min-h-0 sm:min-w-0"
@@ -186,7 +197,7 @@ export const RolesPanel: Component<RolesPanelProps> = (props) => {
                         <Pencil class="w-4 h-4" />
                       </ActionIconButton>
                       <ActionIconButton
-                        label="Delete role"
+                        label={`Delete role ${getRoleIdentityLabel(role)}`}
                         tone="danger"
                         size="sm"
                         class="-my-2 min-h-11 min-w-11 sm:my-0 sm:min-h-0 sm:min-w-0"
@@ -237,13 +248,16 @@ export const RolesPanel: Component<RolesPanelProps> = (props) => {
             onClose={state.closeDeleteRole}
             closeOnBackdrop={false}
             panelClass="max-w-lg"
-            ariaLabel={`Delete role: ${role.name}`}
+            ariaLabel={`Delete role: ${getRoleIdentityLabel(role)}`}
           >
             <div class="space-y-5 p-6">
               <div>
                 <h3 class="text-lg font-semibold text-base-content">Delete role?</h3>
-                <p class="mt-2 text-sm text-muted">
-                  Are you sure you want to delete the role "{role.name}"?
+                <p class="mt-2 text-sm text-muted [overflow-wrap:anywhere]">
+                  Are you sure you want to delete the role "<bdi>{role.name}</bdi>"?
+                </p>
+                <p class="mt-2 text-xs text-muted [overflow-wrap:anywhere]">
+                  Role ID: <bdi class="font-mono whitespace-pre-wrap">{role.id}</bdi>
                 </p>
               </div>
               <Show when={state.actionError()}>
