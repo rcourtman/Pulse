@@ -56,6 +56,71 @@ const targetFixture = (
 });
 
 describe('InfrastructureAgentDoctorPage updater evidence identity', () => {
+  it('keeps phone identity facts ahead of multiple warnings without replacing the detailed facts', () => {
+    const lastSeen = Date.parse('2026-11-09T19:00:00Z');
+    render(() => (
+      <InfrastructureAgentDoctorPage
+        targets={[
+          targetFixture({
+            status: 'critical',
+            currentVersion: '6.7.0',
+            lastSeen,
+            reasons: [
+              {
+                code: 'credential_invalid',
+                severity: 'critical',
+                message: 'The agent credential is missing or no longer valid on this Pulse server.',
+              },
+              {
+                code: 'command_channel_disconnected',
+                severity: 'critical',
+                message: 'The agent is reporting, but its command channel is not connected.',
+                evidence: ['No admitted command channel is connected.'],
+              },
+            ],
+          }),
+        ]}
+      />
+    ));
+
+    const identity = screen.getByTestId('agent-doctor-identity-summary');
+    const facts = screen.getByTestId('agent-doctor-facts');
+    for (const section of [identity, facts]) {
+      expect(within(section).getByText('System')).toBeInTheDocument();
+      expect(within(section).getByText('Machine')).toBeInTheDocument();
+      expect(within(section).getByText('Version')).toBeInTheDocument();
+      expect(within(section).getByText('6.7.0')).toBeInTheDocument();
+      expect(within(section).getByText('Last seen')).toBeInTheDocument();
+      expect(section).toHaveTextContent(new Date(lastSeen).toLocaleString());
+    }
+    const credentialWarning = screen.getByText(
+      'The agent credential is missing or no longer valid on this Pulse server.',
+    );
+    expect(
+      identity.compareDocumentPosition(credentialWarning) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      screen.getByText('The agent is reporting, but its command channel is not connected.'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('No admitted command channel is connected.')).toBeInTheDocument();
+    expect(screen.getByText('2 issues to look at')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Collapse host-1 details' })).toBeInTheDocument();
+  });
+
+  it('does not invent a version or last-seen time for missing and invalid reports', () => {
+    const [targets, setTargets] = createSignal([
+      targetFixture({ currentVersion: undefined, lastSeen: 'invalid timestamp' }),
+    ]);
+    render(() => <InfrastructureAgentDoctorPage targets={targets()} />);
+    const identity = within(screen.getByTestId('agent-doctor-identity-summary'));
+    expect(identity.getAllByText('Not reported')).toHaveLength(2);
+    expect(identity.queryByText(/Invalid Date/)).not.toBeInTheDocument();
+
+    setTargets([targetFixture({ currentVersion: '6.7.0-rc.1-long-version', lastSeen: null })]);
+    expect(identity.getByText('6.7.0-rc.1-long-version')).toBeInTheDocument();
+    expect(identity.getAllByText('Not reported')).toHaveLength(1);
+  });
+
   it('keeps evidence open and focused as fleet reads replace and reorder targets', async () => {
     const other = targetFixture({
       key: 'agent:host-2',
@@ -91,6 +156,9 @@ describe('InfrastructureAgentDoctorPage updater evidence identity', () => {
     await waitFor(() => expect(within(evidence).getByText('accepted-refresh')).toBeInTheDocument());
     expect(within(evidence).queryByText('before-refresh')).not.toBeInTheDocument();
     expect(within(screen.getByTestId('agent-doctor-facts')).getByText('6.7.0')).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId('agent-doctor-identity-summary')).getByText('6.7.0'),
+    ).toBeInTheDocument();
 
     setTargets([{ ...other }]);
     expect(evidence.isConnected).toBe(false);
@@ -227,9 +295,11 @@ describe('InfrastructureAgentDoctorPage action-runner enrollment', () => {
     ));
 
     expect(screen.getByText('1m ago')).toBeInTheDocument();
+    expect(screen.getByTestId('agent-doctor-identity-summary')).toHaveTextContent('(1m ago)');
     await vi.advanceTimersByTimeAsync(2 * 3_600_000);
     expect(screen.queryByText('1m ago')).not.toBeInTheDocument();
     expect(screen.getByText('2h ago')).toBeInTheDocument();
+    expect(screen.getByTestId('agent-doctor-identity-summary')).toHaveTextContent('(2h ago)');
   });
 
   it('keeps an attention row and its host-local repair guidance available through disclosure', () => {

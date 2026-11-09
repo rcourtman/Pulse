@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "base_sha": "840e099b511b5db2ec694c47a96bd59afbf99387",
+  "verified_at": "2026-11-09T21:37:43Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/InfrastructureAgentDoctorPage.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/InfrastructureAgentDoctorPage.tsx": "73804913c7a91dcf6ec5b353f0fbbe2661c16a6d774b12b889a044591f7055b8"
+  },
+  "routes": [
+    "/settings/infrastructure"
+  ],
+  "viewports": [
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 1440,
+      "height": 1000
+    }
+  ],
+  "states": [
+    "Actual App Connections entry and expanded Agent Doctor, with four synthetic agent connections and two independent warnings.",
+    "390x844, light and dark: System, Version and full Last seen visible beside both warnings; original facts, repair guidance and token controls remain.",
+    "1440x1000, light: compact mobile identity summary hidden; original table, notices, facts and controls retained."
+  ],
+  "interactions": [
+    "Open Agent Doctor from Connected systems.",
+    "Expand the selected agent, inspect its complete warnings, identity facts and existing repair controls at the same centered-row scroll anchor.",
+    "Collapse and reopen that agent without issuing a credential or executing a command."
+  ],
+  "limitations": [
+    "Six comparable before/after pairs inspected natively: overview and Doctor for phone light/dark and desktop light.",
+    "Desktop-dark baseline timed out loading Settings; no final desktop-dark acceptance or replay claimed.",
+    "Read-only safe fixtures and warmed development preview, not authentication, installed recovery or production-startup acceptance."
+  ]
+}
