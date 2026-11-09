@@ -25,7 +25,8 @@
 #           own install tokens, some with Docker, and one connected dashboard.
 #           Mock mode drops pushed agent reports, so only this estate reaches
 #           the per-report registry refresh and broadcast cost (#2199). The
-#           driver fails the run when its reports were not accepted.
+#           driver fails the run when reports were not accepted or the dashboard
+#           did not receive an initial state and a subsequent state update.
 
 set -euo pipefail
 

@@ -215,7 +215,13 @@ It records each report's latency and counts a report as failed after the
 agent's own 15-second timeout.
 Mock mode drops pushed agent reports, so only this estate reaches the
 per-report registry refresh and state broadcast that #2199 measured. The job
-fails when the driver's reports were not accepted, reports memory, CPU and
+fails when the driver's reports were not accepted or its dashboard did not
+receive an initial state followed by a nonempty state update on the same
+connection. A handshake, welcome or heartbeat is not state-traffic proof.
+The artifact keeps application-message and verified state-message/update
+counts separate; older counters without that distinction show `n/a` for state
+traffic. This establishes that the path ran, not uninterrupted delivery
+throughout the measurement or recovery of a reported estate. The job reports memory, CPU and
 writes without gating, and uploads `memory-regression-agents`. The scheduled
 issue reporter reads only the mock job.
 

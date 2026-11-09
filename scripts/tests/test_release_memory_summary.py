@@ -60,7 +60,8 @@ class ReleaseMemorySummaryTests(unittest.TestCase):
         stats = {
             "agents": 30, "docker_agents": 6, "containers_per_docker_agent": 40, "interval_s": 30,
             "accepted": {"host": 900, "docker": 180}, "failed": {"host": 1, "docker": 0},
-            "dashboard": {"connects": 1, "messages": 450, "bytes": 3 * 1024 * 1024},
+            "dashboard": {"connects": 1, "messages": 452, "bytes": 3 * 1024 * 1024,
+                          "state_messages": 450, "state_updates": 449},
         }
         code, result, text = self.run_summary(
             samples(130000, 25, 0), samples(170000, 25, 0), estate="agents",
@@ -73,7 +74,21 @@ class ReleaseMemorySummaryTests(unittest.TestCase):
         self.assertIn("Reported only: this estate does not gate.", text)
         self.assertIn("| Host reports accepted | 900 | 900 |", text)
         self.assertIn("| Dashboard MiB received | 3.0 | 3.0 |", text)
+        self.assertIn("| Dashboard application messages | 452 | 452 |", text)
+        self.assertIn("| Dashboard state messages | 450 | 450 |", text)
+        self.assertIn("| Dashboard state updates | 449 | 449 |", text)
         self.assertNotIn("Mock mode keeps", text)
+
+    def test_legacy_frame_counts_are_not_reported_as_verified_state(self):
+        stats = {
+            "agents": 30, "docker_agents": 6, "containers_per_docker_agent": 40, "interval_s": 30,
+            "accepted": {"host": 900, "docker": 180}, "failed": {"host": 0, "docker": 0},
+            "dashboard": {"connects": 1, "messages": 450, "bytes": 3 * 1024 * 1024},
+        }
+        lines = "\n".join(summary.agent_lines(stats, stats))
+        self.assertIn("| Dashboard application messages | 450 | 450 |", lines)
+        self.assertIn("| Dashboard state messages | n/a | n/a |", lines)
+        self.assertIn("| Dashboard state updates | n/a | n/a |", lines)
 
     def test_mock_estate_is_the_default(self):
         _, result, text = self.run_summary(samples(130000, 25, 0), samples(130000, 25, 0))

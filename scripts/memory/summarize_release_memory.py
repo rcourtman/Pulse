@@ -127,7 +127,11 @@ def agent_lines(baseline: dict | None, candidate: dict | None) -> list[str]:
         ("Reports failed", lambda d: sum(d["failed"].values())),
         ("Host report p95 ms", lambda d: (d.get("latency") or {}).get("host", {}).get("p95_ms", "n/a")),
         ("Host report max ms", lambda d: (d.get("latency") or {}).get("host", {}).get("max_ms", "n/a")),
-        ("Dashboard state messages", lambda d: d["dashboard"]["messages"]),
+        ("Dashboard connections", lambda d: d["dashboard"]["connects"]),
+        ("Dashboard application messages", lambda d: d["dashboard"]["messages"]),
+        # Older driver output counted arbitrary frames; it proves no state traffic.
+        ("Dashboard state messages", lambda d: d["dashboard"].get("state_messages", "n/a")),
+        ("Dashboard state updates", lambda d: d["dashboard"].get("state_updates", "n/a")),
         ("Dashboard MiB received", lambda d: f"{d['dashboard']['bytes'] / MIB:.1f}"),
     )
     for label, value in rows:

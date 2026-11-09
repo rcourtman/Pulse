@@ -17,8 +17,9 @@ started with development admin bypass and authentication configured:
 - keeps one WebSocket dashboard subscriber connected to /ws.
 
 It runs until --duration elapses or SIGTERM arrives, then writes a JSON stats
-file. It exits 1 when no report was accepted or more than 1% failed, so a run
-that never exercised the path cannot pass as a measurement.
+file. It exits 1 when no report was accepted, more than 1% failed, or the
+dashboard never received an initial state followed by a nonempty state update.
+A handshake, welcome or heartbeat alone cannot pass as broadcast workload.
 """
 
 from __future__ import annotations
@@ -60,6 +61,9 @@ class Stats:
     ws_connects: int = 0
     ws_messages: int = 0
     ws_bytes: int = 0
+    ws_initial_states: int = 0
+    ws_state_updates: int = 0
+    ws_state_bytes: int = 0
     ws_errors: list[str] = field(default_factory=list)
 
     def record(self, kind: str, status: int, error: str = "", seconds: float | None = None) -> None:
@@ -233,9 +237,35 @@ def ws_send(sock: socket.socket, opcode: int, payload: bytes) -> None:
     sock.sendall(header + mask + bytes(b ^ mask[i % 4] for i, b in enumerate(payload)))
 
 
+def record_ws_message(opcode: int, payload: bytes, stats: Stats, has_initial_state: bool) -> bool:
+    """Count complete application messages separately from usable state traffic."""
+    with stats.lock:
+        stats.ws_messages += 1
+        stats.ws_bytes += len(payload)
+    if opcode != 0x1:  # Pulse sends state as JSON text, not binary/control frames.
+        return has_initial_state
+    try:
+        message = json.loads(payload)
+    except (ValueError, UnicodeError):
+        return has_initial_state
+    if not isinstance(message, dict) or not isinstance(message.get("data"), dict) or not message["data"]:
+        return has_initial_state
+    with stats.lock:
+        if message.get("type") == "initialState":
+            stats.ws_initial_states += 1
+            has_initial_state = True
+        elif message.get("type") == "rawData" and has_initial_state:
+            stats.ws_state_updates += 1
+        else:
+            return has_initial_state
+        stats.ws_state_bytes += len(payload)
+    return has_initial_state
+
+
 def run_dashboard(host: str, port: int, deadline: float, stats: Stats) -> None:
     """One subscribed dashboard: read every frame, answer pings, reconnect."""
     while not STOP.is_set() and time.time() < deadline:
+        sock = None
         try:
             with socket.create_connection((host, port), timeout=30) as sock:
                 with DASHBOARD_LOCK:
@@ -254,9 +284,12 @@ def run_dashboard(host: str, port: int, deadline: float, stats: Stats) -> None:
                     raise ConnectionError(response.split(b"\r\n", 1)[0].decode(errors="replace"))
                 with stats.lock:
                     stats.ws_connects += 1
+                has_initial_state = False  # A reconnect needs its own baseline.
+                message_opcode = None
+                fragments = bytearray()
                 while not STOP.is_set() and time.time() < deadline:
                     first, second = ws_read_exact(sock, 2)
-                    opcode, length = first & 0x0F, second & 0x7F
+                    final, opcode, length = bool(first & 0x80), first & 0x0F, second & 0x7F
                     if length == 126:
                         length = struct.unpack("!H", ws_read_exact(sock, 2))[0]
                     elif length == 127:
@@ -266,10 +299,20 @@ def run_dashboard(host: str, port: int, deadline: float, stats: Stats) -> None:
                         ws_send(sock, 0xA, payload)
                     elif opcode == 0x8:
                         raise ConnectionError("server closed the websocket")
-                    else:
-                        with stats.lock:
-                            stats.ws_messages += 1
-                            stats.ws_bytes += length
+                    elif opcode == 0xA:
+                        continue
+                    elif opcode in (0x1, 0x2, 0x0):
+                        if opcode != 0x0:
+                            if message_opcode is not None:
+                                raise ValueError("new websocket message before final continuation")
+                            message_opcode = opcode
+                        elif message_opcode is None:
+                            raise ValueError("websocket continuation without a message")
+                        fragments.extend(payload)
+                        if final:
+                            has_initial_state = record_ws_message(message_opcode, bytes(fragments), stats, has_initial_state)
+                            message_opcode = None
+                            fragments.clear()
         except (OSError, ConnectionError, ValueError) as err:
             if STOP.is_set():
                 break
@@ -277,6 +320,9 @@ def run_dashboard(host: str, port: int, deadline: float, stats: Stats) -> None:
                 if len(stats.ws_errors) < 20:
                     stats.ws_errors.append(f"{time.strftime('%H:%M:%S')} {err}")
             STOP.wait(5)
+        finally:
+            with DASHBOARD_LOCK:
+                DASHBOARD_SOCKETS.discard(sock)
 
 
 def latency_summary(samples: list[float]) -> dict[str, float | None]:
@@ -347,6 +393,8 @@ def main(argv: list[str]) -> int:
         "accepted": stats.accepted, "failed": stats.failed, "statuses": stats.statuses, "errors": stats.errors,
         "latency": {kind: latency_summary(samples) for kind, samples in stats.latencies.items()},
         "dashboard": {"connects": stats.ws_connects, "messages": stats.ws_messages, "bytes": stats.ws_bytes,
+                      "initial_states": stats.ws_initial_states, "state_updates": stats.ws_state_updates,
+                      "state_messages": stats.ws_initial_states + stats.ws_state_updates, "state_bytes": stats.ws_state_bytes,
                       "errors": stats.ws_errors},
     }
     with open(args.stats, "w") as handle:
@@ -354,6 +402,10 @@ def main(argv: list[str]) -> int:
         handle.write("\n")
     if accepted == 0 or failed > 0.01 * (accepted + failed):
         print(f"agent load did not exercise the report path: {accepted} accepted, {failed} failed", file=sys.stderr)
+        return 1
+    if stats.ws_connects == 0 or stats.ws_initial_states == 0 or stats.ws_state_updates == 0:
+        print(f"agent load did not exercise the dashboard state path: {stats.ws_connects} connections, "
+              f"{stats.ws_initial_states} initial states, {stats.ws_state_updates} state updates", file=sys.stderr)
         return 1
     return 0
 
