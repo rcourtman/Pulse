@@ -383,7 +383,7 @@ const liveApproval = {
   toolId: 'investigation_fix',
   targetId: 'finding-1',
   expiresAt: '2026-11-09T12:11:00Z',
-};
+} as const;
 
 describe('Patrol current action facts', () => {
   it.each([
@@ -442,7 +442,7 @@ describe('Patrol current action facts', () => {
     for (const request of [
       { ...liveApproval, targetId: 'other-finding' },
       { ...liveApproval, toolId: 'other-tool' },
-      { ...liveApproval, status: 'approved' },
+      { ...liveApproval, status: 'approved' as const },
       { ...liveApproval, expiresAt: '2026-11-09T12:10:00Z' },
     ]) {
       expect(classifyPatrolFindingWorkType(finding, [request], approvalNow)).toBe('recovery');
