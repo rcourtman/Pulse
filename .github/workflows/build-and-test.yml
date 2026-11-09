@@ -39,11 +39,16 @@ jobs:
           fetch-depth: 0
 
       - name: Install gitleaks
+        timeout-minutes: 4
         run: |
           set -euo pipefail
           archive="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
           url="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/${archive}"
-          curl -fsSLo "/tmp/${archive}" "$url"
+          # Retry transient upstream failures, not authentication/TLS failures.
+          # Bound each transfer and the retry window; verify before extraction.
+          curl -q -fsSL --connect-timeout 5 --max-time 60 \
+            --retry 3 --retry-max-time 120 \
+            --proto '=https' --proto-redir '=https' -o "/tmp/${archive}" "$url"
           echo "${GITLEAKS_LINUX_X64_SHA256}  /tmp/${archive}" | sha256sum -c -
           tar -xzf "/tmp/${archive}" -C /tmp gitleaks
           install /tmp/gitleaks /usr/local/bin/gitleaks
