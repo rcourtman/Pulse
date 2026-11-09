@@ -377,26 +377,65 @@ func TestV5DataDir_MissingOptionalFiles(t *testing.T) {
 	assert.Nil(t, sysCfg)
 }
 
-// TestV5DataDir_CorruptEncryptionKey verifies that v6 refuses to generate a
-// new encryption key when encrypted data already exists with a different key.
-// This prevents silent data loss from key mismatch.
+// TestV5DataDir_CorruptEncryptionKey verifies that a damaged v5 key is not
+// replaced or allowed to change saved files. Deliberate restoration of the
+// original key must recover the original encrypted configuration.
 func TestV5DataDir_CorruptEncryptionKey(t *testing.T) {
-	dataDir, _, _, _, _ := buildV5DataDir(t)
-
 	// Isolate from host's /etc/pulse/.encryption.key to prevent false negatives
-	// if a valid legacy key happens to exist on the dev machine.
-	t.Setenv("PULSE_LEGACY_KEY_PATH", filepath.Join(dataDir, "nonexistent-legacy-key"))
+	// during both fixture creation and the damaged-key read.
+	t.Setenv("PULSE_LEGACY_KEY_PATH", filepath.Join(t.TempDir(), "nonexistent-legacy-key"))
+	dataDir, nodesJSON, aiJSON, _, _ := buildV5DataDir(t)
 
 	// Corrupt the encryption key by overwriting with invalid content
 	keyPath := filepath.Join(dataDir, ".encryption.key")
-	require.NoError(t, os.WriteFile(keyPath, []byte("not-a-valid-base64-key!!!"), 0o600))
+	originalKey, err := os.ReadFile(keyPath)
+	require.NoError(t, err)
+	invalidKey := []byte("not-a-valid-base64-key!!!")
+	require.NoError(t, os.WriteFile(keyPath, invalidKey, 0o600))
+
+	// The refusal must preserve all v5 bytes, not just produce an error.
+	entries, err := os.ReadDir(dataDir)
+	require.NoError(t, err)
+	saved := make(map[string][]byte, len(entries))
+	for _, entry := range entries {
+		raw, err := os.ReadFile(filepath.Join(dataDir, entry.Name()))
+		require.NoError(t, err)
+		saved[entry.Name()] = raw
+	}
+	assertSavedFiles := func() {
+		t.Helper()
+		after, err := os.ReadDir(dataDir)
+		require.NoError(t, err)
+		require.Len(t, after, len(entries), "initialization must not add or remove saved files")
+		for name, want := range saved {
+			got, err := os.ReadFile(filepath.Join(dataDir, name))
+			require.NoError(t, err)
+			assert.Equal(t, want, got, "saved %s must remain byte-identical", name)
+		}
+	}
 
 	// ConfigPersistence should fail (Fatal in production, error via internal)
 	// We test the underlying newConfigPersistence indirectly — NewConfigPersistence
 	// calls log.Fatal on error, so we test via CryptoManager directly.
-	_, err := crypto.NewCryptoManagerAt(dataDir)
+	cm, err := crypto.NewCryptoManagerAt(dataDir)
 	require.Error(t, err, "CryptoManager must reject invalid encryption key when enc files exist")
-	require.ErrorContains(t, err, "encrypted data exists", "should refuse to generate new key when enc files are present")
+	assert.Nil(t, cm, "a refused key must not return a usable manager")
+	assert.ErrorContains(t, err, "refusing to replace", "a damaged key is not missing-key/first-run authority")
+	assertSavedFiles()
+
+	// Restoration is deliberate fixture setup, not automatic product recovery.
+	require.NoError(t, os.WriteFile(keyPath, originalKey, 0o600))
+	saved[".encryption.key"] = originalKey
+	cm, err = crypto.NewCryptoManagerAt(dataDir)
+	require.NoError(t, err, "the original key must recover the original v5 configuration")
+	for name, want := range map[string][]byte{"nodes.enc": nodesJSON, "ai.enc": aiJSON} {
+		ciphertext, err := os.ReadFile(filepath.Join(dataDir, name))
+		require.NoError(t, err)
+		plaintext, err := cm.Decrypt(ciphertext)
+		require.NoError(t, err, "saved %s must still decrypt with the original key", name)
+		assert.JSONEq(t, string(want), string(plaintext), "saved %s configuration must recover unchanged", name)
+	}
+	assertSavedFiles()
 }
 
 // TestV5DataDir_MultiTenantMigration verifies that the multi-tenant migration

@@ -65,19 +65,15 @@ func (s *FileBillingStore) GetBillingState(orgID string) (*pkglicensing.BillingS
 	}
 
 	cryptoMgr, cryptoErr := s.billingCryptoManagerForSecrets(state.EntitlementJWT, state.EntitlementRefreshToken)
+	if cryptoErr != nil {
+		// Unavailable crypto cannot establish absent secrets or authorize a
+		// migration which overwrites the original signed lease.
+		return nil, fmt.Errorf("prepare saved billing secret decryption: %w", cryptoErr)
+	}
 	needsPersist := false
-	decodeSecret := func(fieldName, value string) string {
+	decodeSecret := func(value string) string {
 		trimmed := strings.TrimSpace(value)
 		if trimmed == "" {
-			return ""
-		}
-		if cryptoErr != nil {
-			log.Warn().
-				Err(cryptoErr).
-				Str("org_id", orgID).
-				Str("field", fieldName).
-				Msg("Dropping persisted billing secret because billing crypto is unavailable")
-			needsPersist = true
 			return ""
 		}
 		if decrypted, err := cryptoMgr.DecryptString(trimmed); err == nil {
@@ -89,8 +85,8 @@ func (s *FileBillingStore) GetBillingState(orgID string) (*pkglicensing.BillingS
 		needsPersist = true
 		return trimmed
 	}
-	state.EntitlementJWT = decodeSecret("entitlement_jwt", state.EntitlementJWT)
-	state.EntitlementRefreshToken = decodeSecret("entitlement_refresh_token", state.EntitlementRefreshToken)
+	state.EntitlementJWT = decodeSecret(state.EntitlementJWT)
+	state.EntitlementRefreshToken = decodeSecret(state.EntitlementRefreshToken)
 
 	// Integrity verification: derive HMAC key from .encryption.key.
 	// If the key is unavailable (new install, key not yet created), skip checks.
@@ -147,54 +143,38 @@ func (s *FileBillingStore) SaveBillingState(orgID string, state *pkglicensing.Bi
 		return errors.New("billing state is required")
 	}
 	normalized := pkglicensing.NormalizeBillingState(state)
-	*state = *normalized
 
 	persistedState := *normalized
 	integrityState := *normalized
 	cryptoMgr, cryptoErr := s.billingCryptoManagerForSecrets(normalized.EntitlementJWT, normalized.EntitlementRefreshToken)
-	encodeSecret := func(fieldName, value string) string {
+	if cryptoErr != nil {
+		return fmt.Errorf("prepare billing secret encryption: %w", cryptoErr)
+	}
+	encodeSecret := func(fieldName, value string) (string, error) {
 		trimmed := strings.TrimSpace(value)
 		if trimmed == "" {
-			return ""
-		}
-		if cryptoErr != nil {
-			log.Warn().
-				Err(cryptoErr).
-				Str("org_id", orgID).
-				Str("field", fieldName).
-				Msg("Dropping billing secret because billing crypto is unavailable")
-			switch fieldName {
-			case "entitlement_jwt":
-				integrityState.EntitlementJWT = ""
-			case "entitlement_refresh_token":
-				integrityState.EntitlementRefreshToken = ""
-			}
-			return ""
+			return "", nil
 		}
 		encrypted, err := cryptoMgr.EncryptString(trimmed)
 		if err != nil {
-			log.Warn().
-				Err(err).
-				Str("org_id", orgID).
-				Str("field", fieldName).
-				Msg("Dropping billing secret because billing encryption failed")
-			switch fieldName {
-			case "entitlement_jwt":
-				integrityState.EntitlementJWT = ""
-			case "entitlement_refresh_token":
-				integrityState.EntitlementRefreshToken = ""
-			}
-			return ""
+			return "", fmt.Errorf("encrypt billing %s: %w", fieldName, err)
 		}
-		return encrypted
+		return encrypted, nil
 	}
-	persistedState.EntitlementJWT = encodeSecret("entitlement_jwt", normalized.EntitlementJWT)
-	persistedState.EntitlementRefreshToken = encodeSecret("entitlement_refresh_token", normalized.EntitlementRefreshToken)
+	var err error
+	persistedState.EntitlementJWT, err = encodeSecret("entitlement_jwt", normalized.EntitlementJWT)
+	if err != nil {
+		return err
+	}
+	persistedState.EntitlementRefreshToken, err = encodeSecret("entitlement_refresh_token", normalized.EntitlementRefreshToken)
+	if err != nil {
+		return err
+	}
 
 	// Compute integrity HMAC if encryption key is available.
 	if hmacKey, err := s.loadHMACKey(); err == nil {
 		integrity := billingIntegrity(&integrityState, hmacKey)
-		state.Integrity = integrity
+		normalized.Integrity = integrity
 		persistedState.Integrity = integrity
 	}
 
@@ -219,6 +199,8 @@ func (s *FileBillingStore) SaveBillingState(orgID string, state *pkglicensing.Bi
 		return fmt.Errorf("commit billing state for org %q: %w", orgID, err)
 	}
 
+	// Publication owns the normalized caller snapshot only after it commits.
+	*state = *normalized
 	return nil
 }
 
@@ -236,7 +218,7 @@ func (s *FileBillingStore) billingCryptoManagerForSecrets(values ...string) (*cr
 			return s.billingCryptoManager()
 		}
 	}
-	return nil, errors.New("billing crypto not required")
+	return nil, nil
 }
 
 func (s *FileBillingStore) billingStatePath(orgID string) (string, error) {

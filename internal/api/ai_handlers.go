@@ -7585,7 +7585,11 @@ func (h *AISettingsHandler) HandleListApprovals(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	store := approval.GetStore()
+	store, status := approval.GetStoreWithStatus()
+	if status == approval.StoreUnavailable {
+		writeErrorResponse(w, http.StatusServiceUnavailable, "approval_store_unavailable", "Saved approvals are unavailable", nil)
+		return
+	}
 	if store == nil {
 		response := map[string]interface{}{
 			"approvals": []approval.ApprovalRequest{},

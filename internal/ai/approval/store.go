@@ -246,7 +246,7 @@ func NewStore(cfg StoreConfig) (*Store, error) {
 	// Load existing data
 	if s.persist {
 		if err := s.load(); err != nil {
-			log.Warn().Err(err).Msg("failed to load approval data, starting fresh")
+			return nil, fmt.Errorf("load approval data: %w", err)
 		}
 	}
 
@@ -815,49 +815,71 @@ func (s *Store) executionsFile() string {
 	return filepath.Join(s.dataDir, "ai_executions.json")
 }
 
+// readStoreJSON distinguishes a genuinely missing file from an unreadable saved
+// source. In particular, a dangling symlink is not a new installation.
+func readStoreJSON(path string, target any) error {
+	data, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		if _, statErr := os.Lstat(path); os.IsNotExist(statErr) {
+			return nil
+		}
+	}
+	if err != nil {
+		return fmt.Errorf("read %s: %w", filepath.Base(path), err)
+	}
+	if err := json.Unmarshal(data, target); err != nil {
+		return fmt.Errorf("decode %s: %w", filepath.Base(path), err)
+	}
+	return nil
+}
+
 func (s *Store) load() error {
+	// Stage both sources before publishing maps or running a migration save.
+	// A read/decode error in either must not overwrite the other with partial or
+	// empty state. This is not a cross-file generation/transaction guarantee.
+	var approvalRecords []*ApprovalRequest
+	if err := readStoreJSON(s.approvalsFile(), &approvalRecords); err != nil {
+		return err
+	}
+	var executionRecords []*ExecutionState
+	if err := readStoreJSON(s.executionsFile(), &executionRecords); err != nil {
+		return err
+	}
+	for i, a := range approvalRecords {
+		if a == nil {
+			return fmt.Errorf("decode ai_approvals.json: null approval at index %d", i)
+		}
+	}
+
 	shouldPersist := false
-
-	// Load approvals
-	if data, err := os.ReadFile(s.approvalsFile()); err == nil {
-		var approvals []*ApprovalRequest
-		if err := json.Unmarshal(data, &approvals); err == nil {
-			for _, a := range approvals {
-				if isUnsupportedApprovalTargetType(a.TargetType) {
-					shouldPersist = true
-					log.Warn().
-						Str("id", a.ID).
-						Str("target_type", normalizeApprovalTargetType(a.TargetType)).
-						Msg("dropping approval with unsupported target type")
-					continue
-				}
-				if canonicalizeApprovalRequest(a) {
-					shouldPersist = true
-				}
-				s.approvals[a.ID] = a
-			}
+	approvals := make(map[string]*ApprovalRequest, len(approvalRecords))
+	for _, a := range approvalRecords {
+		if isUnsupportedApprovalTargetType(a.TargetType) {
+			shouldPersist = true
+			log.Warn().Str("id", a.ID).
+				Str("target_type", normalizeApprovalTargetType(a.TargetType)).
+				Msg("dropping approval with unsupported target type")
+			continue
 		}
-	}
-
-	// Load executions
-	if data, err := os.ReadFile(s.executionsFile()); err == nil {
-		var executions []*ExecutionState
-		if err := json.Unmarshal(data, &executions); err == nil {
-			for _, e := range executions {
-				if e == nil {
-					e = emptyExecutionState()
-				} else {
-					e.normalizeCollections()
-				}
-				s.executions[e.ID] = e
-			}
+		if canonicalizeApprovalRequest(a) {
+			shouldPersist = true
 		}
+		approvals[a.ID] = a
 	}
-
+	executions := make(map[string]*ExecutionState, len(executionRecords))
+	for _, e := range executionRecords {
+		if e == nil {
+			e = emptyExecutionState()
+		} else {
+			e.normalizeCollections()
+		}
+		executions[e.ID] = e
+	}
+	s.approvals = approvals
+	s.executions = executions
 	if shouldPersist {
 		s.save()
 	}
-
 	return nil
 }
 
@@ -1163,22 +1185,53 @@ func canonicalizeApprovalRequest(req *ApprovalRequest) bool {
 	return changed
 }
 
-// Global store instance
-var (
-	globalStore *Store
-	storeMu     sync.RWMutex
+// StoreStatus distinguishes an intentionally uninitialized workflow from a
+// failed saved-state read. It is process-local readiness, not saved authority.
+type StoreStatus string
+
+const (
+	StoreUninitialized StoreStatus = "uninitialized"
+	StoreReady         StoreStatus = "ready"
+	StoreUnavailable   StoreStatus = "unavailable"
 )
 
-// SetStore sets the global approval store.
+// Global store instance and readiness are published together.
+var (
+	globalStore       *Store
+	globalStoreStatus = StoreUninitialized
+	storeMu           sync.RWMutex
+)
+
+// SetStore publishes a ready store, or explicitly clears it on workflow teardown.
 func SetStore(s *Store) {
 	storeMu.Lock()
 	defer storeMu.Unlock()
 	globalStore = s
+	globalStoreStatus = StoreUninitialized
+	if s != nil {
+		globalStoreStatus = StoreReady
+	}
 }
 
-// GetStore returns the global approval store.
-func GetStore() *Store {
+// SetStoreUnavailable records failed initialization without publishing a partial
+// writable store or the private filesystem/parser error to read consumers.
+func SetStoreUnavailable() {
+	storeMu.Lock()
+	defer storeMu.Unlock()
+	globalStore = nil
+	globalStoreStatus = StoreUnavailable
+}
+
+// GetStoreWithStatus returns one atomic store/readiness snapshot.
+func GetStoreWithStatus() (*Store, StoreStatus) {
 	storeMu.RLock()
 	defer storeMu.RUnlock()
-	return globalStore
+	return globalStore, globalStoreStatus
+}
+
+// GetStore returns the global approval store. Failed initialization and explicit
+// teardown both retain the existing nil-store command refusal boundary.
+func GetStore() *Store {
+	store, _ := GetStoreWithStatus()
+	return store
 }
