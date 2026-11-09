@@ -16,7 +16,11 @@ import (
 
 func installCommandAuthorizationStore(t *testing.T, req *approval.ApprovalRequest) *approval.Store {
 	t.Helper()
-	dir := t.TempDir()
+	return installCommandAuthorizationStoreAt(t, t.TempDir(), req)
+}
+
+func installCommandAuthorizationStoreAt(t *testing.T, dir string, req *approval.ApprovalRequest) *approval.Store {
+	t.Helper()
 	if req != nil {
 		// Final command authorization reads saved authority. Load a complete
 		// approved record, including an already-expired fixture where needed,

@@ -17,6 +17,23 @@
 
 ## Purpose
 
+### Command requests remain live after approval persistence
+
+The approval-gated arbitrary command verifier can now wait for a synchronous
+saved-consumption barrier. After it succeeds, `ExecuteCommand` rechecks the
+caller's context before minting the internal grant or sending a WebSocket frame.
+A cancellation or deadline during verification returns the original context
+error and dispatches nothing. The consumed approval is not restored merely
+because the request ended; command retry still requires current authority.
+
+`TestExecuteCommand_CanceledDuringApprovalAuthorizationNeverMintsOrDispatches`
+in `server_websocket_test.go` exercises both exits after actual verifier entry,
+asserts zero grant calls and no frame on the connected synthetic agent. The
+source API fixture in `agent_command_durability_test.go` separately couples the
+real saved store/verifier to transport, proving durable consumption before the
+first signed frame and no frame for failed publication or post-reload replay.
+No agent protocol, runtime-role grant or auto-approved/trusted path changes.
+
 ### Session approval review precedes command handoff
 
 The AI approval collection/item registrations reuse canonical Actions session

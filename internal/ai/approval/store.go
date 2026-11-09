@@ -542,12 +542,49 @@ func (s *Store) Deny(id, username, reason string) (*ApprovalRequest, error) {
 }
 
 // ConsumeApproval validates and consumes an approval for a specific command.
-// It verifies the command hash matches and marks the approval as consumed (single-use).
-// Returns the approval if valid, or an error if invalid/already consumed.
+// A persistent store must publish consumption before returning authority to
+// dispatch. A failed publication leaves the local decision spent, but returns
+// no authority; callers must not retry the command on a persistence error.
 func (s *Store) ConsumeApproval(id, command, targetType, targetID string) (*ApprovalRequest, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	// Use the same lock order as save. Otherwise an older asynchronous snapshot
+	// could publish after this barrier and revive the saved approval.
+	s.saveMu.Lock()
+	defer s.saveMu.Unlock()
 
+	s.mu.Lock()
+	req, err := s.consumeApprovalLocked(id, command, targetType, targetID)
+	if err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+	var data []byte
+	if s.persist {
+		data, err = s.marshalApprovalsLocked()
+	}
+	s.mu.Unlock()
+
+	// Keep filesystem I/O off the decision/read lock. The spent local decision
+	// prevents another consumer while publication runs or after it fails.
+	if s.persist && err == nil {
+		err = writeStoreFile(s.approvalsFile(), data)
+	}
+	if err != nil {
+		log.Error().Err(err).Str("id", id).
+			Msg("failed to persist approval consumption; command not authorized")
+		// Do not expose filesystem paths or saved context to command callers.
+		return nil, errors.New("approval consumption could not be saved; command not authorized")
+	}
+	if time.Now().After(req.ExpiresAt) {
+		return nil, fmt.Errorf("approval request %s expired while consumption was being saved", id)
+	}
+	log.Info().Str("id", id).Str("command", truncateCommand(command, 50)).
+		Msg("Approval consumed successfully")
+	return req, nil
+}
+
+// consumeApprovalLocked changes only the store-owned in-memory decision.
+// The caller holds mu and owns its publication barrier.
+func (s *Store) consumeApprovalLocked(id, command, targetType, targetID string) (*ApprovalRequest, error) {
 	req, ok := s.approvals[id]
 	if !ok {
 		return nil, fmt.Errorf("approval request not found: %s", id)
@@ -592,15 +629,9 @@ func (s *Store) ConsumeApproval(id, command, targetType, targetID string) (*Appr
 		req.CommandHash = approvedHash
 	}
 
-	// Mark as consumed (single-use)
+	// Keep the decision spent even if its subsequent publication fails. No
+	// command authority is returned until that publication succeeds.
 	req.Consumed = true
-	s.saveAsync()
-
-	log.Info().
-		Str("id", id).
-		Str("command", truncateCommand(command, 50)).
-		Msg("Approval consumed successfully")
-
 	return snapshotApproval(req), nil
 }
 
@@ -894,18 +925,13 @@ func (s *Store) save() {
 	// lock. saveMu covers both phases so snapshots cannot publish out of order.
 	s.mu.RLock()
 
-	// Save approvals
-	approvals := make([]*ApprovalRequest, 0, len(s.approvals))
-	for _, a := range s.approvals {
-		approvals = append(approvals, a)
-	}
+	approvalData, approvalErr := s.marshalApprovalsLocked()
 
 	// Save executions
 	executions := make([]*ExecutionState, 0, len(s.executions))
 	for _, e := range s.executions {
 		executions = append(executions, e)
 	}
-	approvalData, approvalErr := json.MarshalIndent(approvals, "", "  ")
 	executionData, executionErr := json.MarshalIndent(executions, "", "  ")
 	s.mu.RUnlock()
 
@@ -921,6 +947,16 @@ func (s *Store) save() {
 	if executionErr != nil {
 		log.Error().Err(executionErr).Msg("failed to save executions")
 	}
+}
+
+// marshalApprovalsLocked captures all decisions in the same format for normal
+// saves and the dispatch barrier. The caller holds mu for reading or writing.
+func (s *Store) marshalApprovalsLocked() ([]byte, error) {
+	approvals := make([]*ApprovalRequest, 0, len(s.approvals))
+	for _, a := range s.approvals {
+		approvals = append(approvals, a)
+	}
+	return json.MarshalIndent(approvals, "", "  ")
 }
 
 // Publish a complete owner-only file in the same directory. Failed writes keep

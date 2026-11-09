@@ -4903,3 +4903,24 @@ verified plaintext migration and current grant/signature rules are unchanged.
 `TestBillingCryptoFailurePreservesSavedLease` covers both org layouts through
 failed encrypted/legacy reads and saves, then explicit original-key restoration.
 Native errors are not reconstructed or renewed authority or installed recovery.
+
+
+### Single-use command approvals survive completed consumption publication
+
+The existing arbitrary-command admission boundary returns successful persistent
+approval consumption only after atomic publication of its consumed bit. Normal
+saves share the same snapshot-to-publication lock so an older pending save cannot
+revive that authority. No permission, tenant/action binding, command-target hash,
+expiry rule or agent grant is widened. A failed encode/write returns no command
+authority, keeps the local decision spent, and exposes only a generic persistence
+error to callers. Expiry and request cancellation during this barrier refuse
+late dispatch even if consumption was saved.
+
+`internal/ai/approval/store_consume_persistence_test.go` proves immediate saved
+rejection without shutdown Flush and preservation on failure;
+`internal/api/agent_command_durability_test.go` checks the real verifier and
+synthetic signed transport together. Agent transport tests separately assert
+no grant or frame after cancellation/deadline inside the verifier. In-memory
+compatibility, deferred creation/review/execution saves and all existing outer
+authentication/authorization checks remain. This is process-reload protection,
+not power-loss durability, evidence of exploitation or original-client recovery.
