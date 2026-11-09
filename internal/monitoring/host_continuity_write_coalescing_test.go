@@ -1,6 +1,7 @@
 package monitoring
 
 import (
+	"os"
 	"testing"
 	"time"
 
@@ -73,5 +74,34 @@ func TestNewHostReportStreamReachesJournalAtOnce(t *testing.T) {
 	entry, ok := config.NewHostContinuityStore(dir, nil).Get(host.ID)
 	if !ok || entry.ReportStreamID != "stream-b" || entry.ReportSequence != 1 {
 		t.Fatalf("journal after a stream change = %+v, want stream-b at 1", entry)
+	}
+}
+
+// A failed final flush must fail the stop, so tenant and full reloads keep the
+// runtime that holds the newest watermark and can retry, instead of dropping
+// it and letting the replacement accept a replay.
+func TestStopReportsFailedContinuityFlush(t *testing.T) {
+	dir := t.TempDir()
+	m := newContinuityJournalMonitor(t, dir)
+	agent := newCounterClockAgent(time.Now().Add(-10 * time.Minute))
+	host := applyCounterClockHost(t, m, agent.hostReport("stream-a", 1, 1, agent.collectedAt(1)))
+	applyCounterClockHost(t, m, agent.hostReport("stream-a", 2, 2, agent.collectedAt(2)))
+
+	if err := os.Chmod(dir, 0o500); err != nil {
+		t.Fatalf("make journal directory read-only: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
+	if err := m.stop(); err == nil {
+		t.Fatal("stop succeeded although the final continuity flush failed")
+	}
+
+	if err := os.Chmod(dir, 0o700); err != nil {
+		t.Fatalf("restore journal directory: %v", err)
+	}
+	if err := m.stop(); err != nil {
+		t.Fatalf("retried stop: %v", err)
+	}
+	if got := journalReportSequence(t, dir, host.ID); got != 2 {
+		t.Fatalf("retried stop left on-disk watermark %d, want 2", got)
 	}
 }

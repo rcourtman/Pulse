@@ -5538,11 +5538,13 @@ returns, and holds steady liveness (receipt and accepted times, and the
 sequence within an unchanged stream) in memory for at most
 `hostContinuityLivenessFlushDelay` (15 seconds). Ordering decisions read
 memory, so a running process behaves as before. `Monitor.Stop` flushes through
-`Close`, so restarts and upgrades resume from the exact watermark; only a crash
+`Close`, and a failed flush fails the stop so reloads keep that runtime, so
+restarts and upgrades resume from the exact watermark; only a crash
 can lose up to that delay of sequence advance, and the journal was never
 fsynced. The full rewrite per report grew with the square of the host count,
 about 1.5 GiB/day at 30 agents. `TestSteadyHostReportsDeferJournalRewritesUntilStop`,
-`TestNewHostReportStreamReachesJournalAtOnce` and the
+`TestNewHostReportStreamReachesJournalAtOnce`,
+`TestStopReportsFailedContinuityFlush` and the
 `TestHostContinuityObserveReport*` store tests exercise it. The Docker report-order
 journal still writes per report, because a failed write deliberately rejects the
 report.
