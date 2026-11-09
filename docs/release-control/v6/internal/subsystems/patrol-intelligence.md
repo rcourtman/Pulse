@@ -15,6 +15,29 @@
 
 ## Purpose
 
+### Unavailable approval reads are not an empty or freshly authorised queue
+
+Patrol shows a persistent, accessible approval-status warning and read-only
+Refresh approvals control when the approval list cannot be read, including a
+cold failure or expiry of the last retained request. It never renders raw
+backend error text. A retry keeps the warning until a successful read; concurrent
+same-context refreshes share one request. Switching organisation clears that
+context's display and invalidates all previous-generation success, error and
+loading responses, so an old read cannot repopulate another organisation.
+
+Same-context last-known requests retain their individual risk, context, expiry,
+counts and Actions review links. Approval-list-derived banner, filter, work-group
+and row handoffs identify that retained state; separately loaded typed action
+states keep their own meaning. A failed list read is not evidence that a queued
+finding has no approval or needs action recovery, so it cannot create that
+recovery classification or inflate its Needs Attention count. Findings and
+other independently known attention conditions remain visible. Successful empty
+and corrected-context reads replace the list and restore ordinary presentation.
+Approval expiry, backend decision authority, auth, TLS and permissions do not
+change. This is truthful display and request isolation, not original-client or
+release acceptance. Registered store, findings-link and approval-banner tests
+plus comparable desktop/narrow browser captures cover these states.
+
 ### Unread investigation history is not absent history
 
 Investigation detail and thread reads distinguish a genuine 404/empty response

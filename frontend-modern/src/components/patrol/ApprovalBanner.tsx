@@ -4,8 +4,7 @@
  * Contextual handoff from Patrol to the canonical Actions inbox.
  * Surfaces pending investigation fix approvals without creating a second
  * approval or execution surface inside Patrol.
- * - An unavailable read is distinguished from no pending approvals
- * - Last known requests remain available during a failed refresh
+ * - Hidden only when no pending approvals and no failed read
  * - Single approval: deep-links to the exact governed action when available
  * - Multiple approvals: links to the open Actions inbox
  * - Given targetIds (a findings list scoped to one resource), only the
@@ -18,7 +17,7 @@ import {
   getApprovalExpiryStatusLabel,
   getApprovalRiskPresentation,
 } from '@/utils/approvalRiskPresentation';
-import { ButtonLink } from '@/components/shared/Button';
+import { Button, ButtonLink } from '@/components/shared/Button';
 import { MetadataBadge } from '@/components/shared/MetadataBadge';
 import { buildActionReviewPath } from '@/features/actions/actionRouting';
 import ShieldAlertIcon from 'lucide-solid/icons/shield-alert';
@@ -57,25 +56,34 @@ export const ApprovalBanner: Component<{ targetIds?: ReadonlySet<string> }> = (p
   );
 
   return (
-    <>
-      <Show when={aiIntelligenceStore.approvalsError}>
-        <div
-          role="status"
-          class="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-800 dark:bg-amber-900/25"
-        >
-          <p class="text-sm font-medium text-amber-900 dark:text-amber-100">
-            Approvals unavailable
-          </p>
-          <p class="mt-0.5 text-xs text-amber-700 dark:text-amber-300">
-            Pulse could not refresh approval requests.{' '}
-            {pending().length > 0
-              ? 'Last known requests remain below.'
-              : 'There may still be requests waiting.'}
-          </p>
-        </div>
-      </Show>
-      <Show when={pending().length > 0}>
-        <div class="bg-amber-50 dark:bg-amber-900/25 border border-amber-200 dark:border-amber-800 rounded-md px-4 py-3">
+    <Show when={pending().length > 0 || aiIntelligenceStore.approvalsError}>
+      <div class="space-y-3 bg-amber-50 dark:bg-amber-900/25 border border-amber-200 dark:border-amber-800 rounded-md px-4 py-3">
+        <Show when={aiIntelligenceStore.approvalsError}>
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div role="status" class="min-w-0 flex-1 basis-48 text-amber-900 dark:text-amber-100">
+              <p class="text-sm font-medium">Approval status unavailable</p>
+              <p class="mt-0.5 text-xs">
+                <Show
+                  when={pending().length > 0}
+                  fallback="Pending approvals could not be checked. This does not mean there are none."
+                >
+                  Showing last-known approvals. Their current status could not be checked.
+                </Show>
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              class="min-h-11"
+              disabled={aiIntelligenceStore.approvalsLoading}
+              onClick={() => void aiIntelligenceStore.loadPendingApprovals()}
+            >
+              {aiIntelligenceStore.approvalsLoading ? 'Checking approvals…' : 'Refresh approvals'}
+            </Button>
+          </div>
+        </Show>
+        <Show when={pending().length > 0}>
           <div class="flex items-center justify-between gap-3 flex-wrap">
             <div class="flex min-w-0 items-center gap-3">
               <div class="shrink-0 p-1.5 border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-900/25 rounded-md">
@@ -87,6 +95,11 @@ export const ApprovalBanner: Component<{ targetIds?: ReadonlySet<string> }> = (p
                     <span class="text-sm font-medium text-amber-900 dark:text-amber-100">
                       Action awaiting approval
                     </span>
+                    <Show when={aiIntelligenceStore.approvalsError}>
+                      <MetadataBadge {...APPROVAL_BANNER_BADGE_PROPS} tone="warning">
+                        Last known
+                      </MetadataBadge>
+                    </Show>
                     <MetadataBadge
                       {...APPROVAL_BANNER_BADGE_PROPS}
                       tone={firstApprovalRisk()!.badgeTone}
@@ -107,6 +120,7 @@ export const ApprovalBanner: Component<{ targetIds?: ReadonlySet<string> }> = (p
                 <Show when={pending().length > 1}>
                   <span class="text-sm font-medium text-amber-900 dark:text-amber-100">
                     {pending().length} actions awaiting your approval
+                    <Show when={aiIntelligenceStore.approvalsError}>{' · last known'}</Show>
                   </span>
                 </Show>
               </div>
@@ -119,9 +133,9 @@ export const ApprovalBanner: Component<{ targetIds?: ReadonlySet<string> }> = (p
               </ButtonLink>
             </div>
           </div>
-        </div>
-      </Show>
-    </>
+        </Show>
+      </div>
+    </Show>
   );
 };
 

@@ -522,6 +522,9 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       label: (
         <>
           {option.label}
+          <Show when={option.value === 'approvals' && aiIntelligenceStore.approvalsError}>
+            {' · last known'}
+          </Show>
           <Show when={typeof option.count === 'number'}>{` (${option.count})`}</Show>
         </>
       ),
@@ -885,8 +888,23 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     const severityPresentation = getFindingSeverityPresentation(finding);
     const rowPrimaryAction = getFindingPrimaryActionPresentation(finding);
     const patrolWorkflow = () =>
-      getFindingPatrolWorkflowPresentation(finding, aiIntelligenceStore.patrolPendingApprovals);
-    const patrolActionableState = () => getPatrolFindingActionableState(finding);
+      getFindingPatrolWorkflowPresentation(
+        finding,
+        aiIntelligenceStore.patrolPendingApprovals,
+        Date.now(),
+        Boolean(aiIntelligenceStore.approvalsError),
+      );
+    const patrolActionableState = () => {
+      if (
+        aiIntelligenceStore.approvalsError &&
+        finding.status === 'active' &&
+        finding.investigationOutcome === 'fix_queued' &&
+        !finding.investigationRecord?.action
+      ) {
+        return { label: 'Approval status unavailable', tone: 'warning' as const };
+      }
+      return getPatrolFindingActionableState(finding);
+    };
     const patrolQueueSummary = () => getPatrolFindingQueueSummary(finding);
     const collapsedApprovalAction = () => {
       const workflow = patrolWorkflow();
@@ -1236,6 +1254,10 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                   type="button"
                   onClick={toggleExpanded}
                   class="rounded-sm bg-amber-600 px-2 py-1 text-xs font-semibold text-white transition-colors hover:bg-amber-700"
+                  classList={{
+                    'max-w-28': Boolean(aiIntelligenceStore.approvalsError),
+                    'whitespace-normal': Boolean(aiIntelligenceStore.approvalsError),
+                  }}
                   title={action().detail}
                 >
                   {action().label}

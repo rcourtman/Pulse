@@ -243,6 +243,9 @@ export function PatrolIntelligenceWorkspace(props: {
                 <div class="flex min-w-0 flex-wrap items-center gap-2">
                   <MetadataBadge tone={group.tone} size="xs" shape="rounded">
                     {group.label}
+                    <Show when={group.id === 'approvals' && aiIntelligenceStore.approvalsError}>
+                      {' · last known'}
+                    </Show>
                   </MetadataBadge>
                 </div>
                 <p class="mt-1 text-xs leading-5 text-muted">{group.detail}</p>

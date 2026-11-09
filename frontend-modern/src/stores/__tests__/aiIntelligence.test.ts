@@ -34,6 +34,7 @@ vi.mock('@/stores/sessionPresentationPolicy', () => ({
 import { AIAPI } from '@/api/ai';
 import { getPatrolFindings, reopenFinding, resolveFinding } from '@/api/patrol';
 import { aiIntelligenceStore } from '@/stores/aiIntelligence';
+import { eventBus } from '@/stores/events';
 import { presentationPolicyIsDemoMode } from '@/stores/sessionPresentationPolicy';
 
 function approvalExpiryInMinutes(minutesFromNow: number): string {
@@ -1116,5 +1117,150 @@ describe('aiIntelligenceStore', () => {
       includeResolved: true,
       limit: 200,
     });
+  });
+});
+
+describe('approval read freshness and organisation isolation', () => {
+  const pending = () => ({
+    id: 'approval-saved',
+    orgId: 'org-a',
+    toolId: 'investigation_fix',
+    command: '',
+    targetType: 'host',
+    targetId: 'finding-queued',
+    targetName: 'node-1',
+    context: 'Retained request',
+    riskLevel: 'low' as const,
+    status: 'pending' as const,
+    requestedAt: new Date().toISOString(),
+    expiresAt: approvalExpiryInMinutes(5),
+  });
+  const deferred = <T>() => {
+    let resolve!: (value: T) => void;
+    let reject!: (reason: Error) => void;
+    const promise = new Promise<T>((yes, no) => {
+      resolve = yes;
+      reject = no;
+    });
+    return { promise, resolve, reject };
+  };
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.useRealTimers();
+    vi.mocked(presentationPolicyIsDemoMode).mockReturnValue(false);
+    eventBus.emit('org_switched', 'org-a');
+  });
+
+  it('retains the failed-read warning and saved request throughout a shared retry', async () => {
+    const saved = pending();
+    vi.mocked(AIAPI.getPendingApprovals).mockResolvedValueOnce([saved]);
+    await aiIntelligenceStore.loadPendingApprovals();
+    vi.mocked(AIAPI.getPendingApprovals).mockRejectedValueOnce(new Error('unavailable'));
+    await aiIntelligenceStore.loadPendingApprovals();
+    expect(aiIntelligenceStore.approvalsError).toBe('unavailable');
+    expect(aiIntelligenceStore.pendingApprovals[0]).toBe(saved);
+    const next = deferred<(typeof saved)[]>();
+    vi.mocked(AIAPI.getPendingApprovals).mockReturnValueOnce(next.promise);
+    const retry = aiIntelligenceStore.loadPendingApprovals();
+    const appPoll = aiIntelligenceStore.loadPendingApprovals();
+    expect(AIAPI.getPendingApprovals).toHaveBeenCalledTimes(3);
+    expect(aiIntelligenceStore.approvalsLoading).toBe(true);
+    expect(aiIntelligenceStore.approvalsError).toBe('unavailable');
+    expect(aiIntelligenceStore.pendingApprovals[0]).toBe(saved);
+    next.reject(new Error('still unavailable'));
+    await Promise.all([retry, appPoll]);
+    expect(aiIntelligenceStore.approvalsLoading).toBe(false);
+    expect(aiIntelligenceStore.approvalsError).toBe('still unavailable');
+    expect(aiIntelligenceStore.pendingApprovals[0]).toBe(saved);
+    vi.mocked(AIAPI.getPendingApprovals).mockResolvedValueOnce([]);
+    await aiIntelligenceStore.loadPendingApprovals();
+    expect(aiIntelligenceStore.approvalsError).toBeNull();
+    expect(aiIntelligenceStore.pendingApprovals).toEqual([]);
+  });
+
+  it.each(['success', 'failure'] as const)(
+    'ignores an old organisation %s without ending the current read',
+    async (outcome) => {
+      const old = deferred<ReturnType<typeof pending>[]>();
+      vi.mocked(AIAPI.getPendingApprovals).mockReturnValueOnce(old.promise);
+      const previousRead = aiIntelligenceStore.loadPendingApprovals();
+      eventBus.emit('org_switched', 'org-b');
+      const current = deferred<ReturnType<typeof pending>[]>();
+      vi.mocked(AIAPI.getPendingApprovals).mockReturnValueOnce(current.promise);
+      const currentRead = aiIntelligenceStore.loadPendingApprovals();
+      if (outcome === 'success') old.resolve([pending()]);
+      else old.reject(new Error('org-a refused'));
+      await previousRead;
+      expect(aiIntelligenceStore.pendingApprovals).toEqual([]);
+      expect(aiIntelligenceStore.approvalsError).toBeNull();
+      expect(aiIntelligenceStore.approvalsLoading).toBe(true);
+      current.reject(new Error('org-b unavailable'));
+      await currentRead;
+      expect(aiIntelligenceStore.pendingApprovals).toEqual([]);
+      expect(aiIntelligenceStore.approvalsError).toBe('org-b unavailable');
+      expect(aiIntelligenceStore.approvalsLoading).toBe(false);
+    },
+  );
+
+  it('does not let an old response overwrite a successful corrected-context read', async () => {
+    const old = deferred<ReturnType<typeof pending>[]>();
+    vi.mocked(AIAPI.getPendingApprovals).mockReturnValueOnce(old.promise);
+    const previousRead = aiIntelligenceStore.loadPendingApprovals();
+    eventBus.emit('org_switched', 'org-b');
+    const current = { ...pending(), id: 'approval-b', orgId: 'org-b' };
+    vi.mocked(AIAPI.getPendingApprovals).mockResolvedValueOnce([current]);
+    await aiIntelligenceStore.loadPendingApprovals();
+    old.resolve([pending()]);
+    await previousRead;
+    expect(aiIntelligenceStore.pendingApprovals).toEqual([current]);
+    expect(aiIntelligenceStore.approvalsError).toBeNull();
+  });
+
+  it('does not infer missing approval recovery from an unavailable read', async () => {
+    const record = {
+      id: 'finding-queued',
+      source: 'ai-patrol',
+      severity: 'warning',
+      category: 'reliability',
+      resource_id: 'host-1',
+      resource_name: 'node-1',
+      resource_type: 'host',
+      title: 'Queued fix',
+      description: 'Retain evidence',
+      detected_at: new Date().toISOString(),
+      last_seen_at: new Date().toISOString(),
+      investigation_outcome: 'fix_queued',
+    };
+    vi.mocked(AIAPI.getUnifiedFindings).mockResolvedValueOnce({
+      findings: [record, { ...record, id: 'finding-failed', investigation_outcome: 'fix_failed' }],
+    } as never);
+    await aiIntelligenceStore.loadFindings();
+    vi.mocked(AIAPI.getPendingApprovals).mockRejectedValueOnce(new Error('unavailable'));
+    await aiIntelligenceStore.loadPendingApprovals();
+    expect(aiIntelligenceStore.findings.map((f) => f.id)).toEqual([
+      'finding-queued',
+      'finding-failed',
+    ]);
+    expect(aiIntelligenceStore.findingsNeedingAttention.map((f) => f.id)).toEqual([
+      'finding-failed',
+    ]);
+    vi.mocked(AIAPI.getPendingApprovals).mockResolvedValueOnce([]);
+    await aiIntelligenceStore.loadPendingApprovals();
+    expect(new Set(aiIntelligenceStore.findingsNeedingAttention.map((f) => f.id))).toEqual(
+      new Set(['finding-queued', 'finding-failed']),
+    );
+  });
+
+  it('continues to expire retained approvals without clearing the unavailable status', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-11-09T04:00:00Z'));
+    vi.mocked(AIAPI.getPendingApprovals).mockResolvedValueOnce([pending()]);
+    await aiIntelligenceStore.loadPendingApprovals();
+    vi.mocked(AIAPI.getPendingApprovals).mockRejectedValueOnce(new Error('unavailable'));
+    await aiIntelligenceStore.loadPendingApprovals();
+    await vi.advanceTimersByTimeAsync(5 * 60_000 + 1);
+    expect(aiIntelligenceStore.patrolPendingApprovals).toEqual([]);
+    expect(aiIntelligenceStore.approvalsError).toBe('unavailable');
+    vi.useRealTimers();
   });
 });

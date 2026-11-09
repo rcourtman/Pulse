@@ -385,9 +385,12 @@ function reuseIdenticalFindings(
 
 const [pendingApprovals, setPendingApprovals] = createSignal<ApprovalRequest[]>([]);
 const [approvalsError, setApprovalsError] = createSignal<string | null>(null);
+const [approvalsLoading, setApprovalsLoading] = createSignal(false);
 const [pendingApprovalsNow, setPendingApprovalsNow] = createSignal(Date.now());
 
 let pendingApprovalExpiryTimer: ReturnType<typeof setTimeout> | undefined;
+let pendingApprovalsGeneration = 0;
+let pendingApprovalsRequest: Promise<void> | null = null;
 
 function syncPendingApprovalExpiryTimer(approvals: ApprovalRequest[]) {
   if (pendingApprovalExpiryTimer) {
@@ -457,7 +460,9 @@ function getFindingsWithPendingApprovalsFor(findings: UnifiedFinding[]) {
 function getFindingsNeedingAttentionFor(findings: UnifiedFinding[]) {
   const approvals = getLivePatrolPendingApprovals();
   return sortFindingsForAttentionQueue(
-    findings.filter((finding) => doesFindingNeedAttention(finding, approvals)),
+    findings.filter((finding) =>
+      doesFindingNeedAttention(finding, approvals, Boolean(approvalsError())),
+    ),
   );
 }
 
@@ -495,8 +500,12 @@ eventBus.on('org_switched', () => {
   setPatrolFindingsLoading(false);
   setPatrolFindingsError(null);
   patrolFindingsIncludeResolvedPreference = false;
+  // A reply admitted for the previous organisation cannot repopulate this one.
+  pendingApprovalsGeneration++;
+  pendingApprovalsRequest = null;
   setPendingApprovalsWithExpiryTracking([]);
   setApprovalsError(null);
+  setApprovalsLoading(false);
   setIntelligenceSummary(null);
 });
 
@@ -673,6 +682,9 @@ export const aiIntelligenceStore = {
   get approvalsError() {
     return approvalsError();
   },
+  get approvalsLoading() {
+    return approvalsLoading();
+  },
   pendingApprovalsSignal: getLivePendingApprovals,
 
   get pendingApprovalCount() {
@@ -707,17 +719,30 @@ export const aiIntelligenceStore = {
   },
 
   async loadPendingApprovals() {
-    setApprovalsError(null);
-    if (presentationPolicyIsDemoMode()) {
-      setPendingApprovalsWithExpiryTracking([]);
-      return;
-    }
+    // Page, app-shell and explicit refreshes share a read within this context.
+    if (pendingApprovalsRequest) return pendingApprovalsRequest;
+    const generation = ++pendingApprovalsGeneration;
+    setApprovalsLoading(true);
+    const request = (async () => {
+      try {
+        const approvals = presentationPolicyIsDemoMode() ? [] : await AIAPI.getPendingApprovals();
+        if (generation !== pendingApprovalsGeneration) return;
+        setPendingApprovalsWithExpiryTracking(approvals);
+        // A retry does not make last-known data current; only success does.
+        setApprovalsError(null);
+      } catch (e) {
+        if (generation !== pendingApprovalsGeneration) return;
+        logger.error('Failed to load pending approvals:', e);
+        setApprovalsError(e instanceof Error ? e.message : 'Failed to load approvals');
+      } finally {
+        if (generation === pendingApprovalsGeneration) setApprovalsLoading(false);
+      }
+    })();
+    pendingApprovalsRequest = request;
     try {
-      const approvals = await AIAPI.getPendingApprovals();
-      setPendingApprovalsWithExpiryTracking(approvals);
-    } catch (e) {
-      logger.error('Failed to load pending approvals:', e);
-      setApprovalsError(e instanceof Error ? e.message : 'Failed to load approvals');
+      await request;
+    } finally {
+      if (pendingApprovalsRequest === request) pendingApprovalsRequest = null;
     }
   },
 

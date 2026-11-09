@@ -1,5 +1,5 @@
 import { createSignal } from 'solid-js';
-import { cleanup, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { Route, Router } from '@solidjs/router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import ApprovalBanner from '../ApprovalBanner';
@@ -7,14 +7,22 @@ import type { ApprovalRequest } from '@/api/ai';
 
 const state = vi.hoisted(() => ({
   pendingApprovals: [] as ApprovalRequest[],
-  approvalsError: (() => null) as () => string | null,
+  approvalsError: null as string | null | (() => string | null),
+  approvalsLoading: false,
+  loadPendingApprovals: vi.fn(),
 }));
 
 vi.mock('@/stores/aiIntelligence', () => ({
   aiIntelligenceStore: {
     get approvalsError() {
-      return state.approvalsError();
+      return typeof state.approvalsError === 'function'
+        ? state.approvalsError()
+        : state.approvalsError;
     },
+    get approvalsLoading() {
+      return state.approvalsLoading;
+    },
+    loadPendingApprovals: state.loadPendingApprovals,
     get pendingApprovals() {
       return state.pendingApprovals;
     },
@@ -27,7 +35,9 @@ vi.mock('@/stores/aiIntelligence', () => ({
 describe('ApprovalBanner', () => {
   beforeEach(() => {
     state.pendingApprovals = [];
-    state.approvalsError = () => null;
+    state.approvalsError = null;
+    state.approvalsLoading = false;
+    state.loadPendingApprovals.mockClear();
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-03-01T00:00:00Z'));
   });
@@ -45,19 +55,65 @@ describe('ApprovalBanner', () => {
       </Router>
     ));
 
-  it('distinguishes an unavailable cold read from no waiting requests', () => {
-    state.approvalsError = () => 'Approval organization is unavailable';
+  it('distinguishes a failed cold read from an empty inbox without rendering raw errors', () => {
+    state.approvalsError = 'private upstream details';
     renderBanner();
-    expect(screen.getByRole('status')).toHaveTextContent('Approvals unavailable');
-    expect(screen.getByRole('status')).toHaveTextContent('There may still be requests waiting.');
+    expect(screen.getByRole('status')).toHaveTextContent('Approval status unavailable');
+    expect(screen.getByRole('status')).toHaveTextContent('This does not mean there are none.');
+    expect(screen.queryByText('private upstream details')).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Review in Actions' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh approvals' }));
+    expect(state.loadPendingApprovals).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the saved risk, context, expiry and exact review target beside a last-known warning', () => {
+    state.pendingApprovals = [approvalRequest({ plan: { actionId: 'saved-action' } })];
+    state.approvalsError = 'unavailable';
+    renderBanner();
+    expect(screen.getByText('Last known')).toBeInTheDocument();
+    expect(screen.getByText('Single approval')).toBeInTheDocument();
+    expect(screen.getByText('high risk')).toBeInTheDocument();
+    expect(screen.getByText('expires 5m 0s')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Review in Actions' })).toHaveAttribute(
+      'href',
+      '/actions?action=saved-action',
+    );
+  });
+
+  it('keeps failure visible while an explicit refresh is pending', () => {
+    state.approvalsError = 'unavailable';
+    state.approvalsLoading = true;
+    renderBanner();
+    expect(screen.getByRole('status')).toHaveTextContent('Approval status unavailable');
+    expect(screen.getByRole('button', { name: 'Checking approvals…' })).toBeDisabled();
+  });
+
+  it('does not borrow another resource approval when a scoped read is unavailable', () => {
+    state.pendingApprovals = [approvalRequest()];
+    state.approvalsError = 'unavailable';
+    render(() => (
+      <Router>
+        <Route path="/" component={() => <ApprovalBanner targetIds={new Set(['elsewhere'])} />} />
+      </Router>
+    ));
+    expect(screen.getByRole('status')).toHaveTextContent('This does not mean there are none.');
+    expect(screen.queryByText('Single approval')).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Review in Actions' })).not.toBeInTheDocument();
+  });
+
+  it('distinguishes an unavailable cold read from no waiting requests', () => {
+    state.approvalsError = 'Approval organization is unavailable';
+    renderBanner();
+    expect(screen.getByRole('status')).toHaveTextContent('Approval status unavailable');
+    expect(screen.getByRole('status')).toHaveTextContent('This does not mean there are none.');
     expect(screen.queryByRole('link', { name: 'Review in Actions' })).not.toBeInTheDocument();
   });
 
   it('keeps last known requests and review controls visible during a refused refresh', () => {
-    state.approvalsError = () => 'Approval organization is unavailable';
+    state.approvalsError = 'Approval organization is unavailable';
     state.pendingApprovals = [approvalRequest({ plan: { actionId: 'retained-action' } })];
     renderBanner();
-    expect(screen.getByRole('status')).toHaveTextContent('Last known requests remain below.');
+    expect(screen.getByRole('status')).toHaveTextContent('Showing last-known approvals.');
     expect(screen.getByText('Single approval')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Review in Actions' })).toHaveAttribute(
       'href',
@@ -71,7 +127,7 @@ describe('ApprovalBanner', () => {
     state.approvalsError = error;
     state.pendingApprovals = [approvalRequest()];
     renderBanner();
-    expect(screen.getByRole('status')).toHaveTextContent('Approvals unavailable');
+    expect(screen.getByRole('status')).toHaveTextContent('Approval status unavailable');
     setError(null);
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Review in Actions' })).toBeInTheDocument();

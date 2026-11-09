@@ -71,6 +71,7 @@ const mockState = vi.hoisted(() => {
     initialPatrolFindings: patrolFindings,
     findings,
     findingsError: null as string | null,
+    approvalsError: null as string | null,
     findingsLoading: false,
     patrolFindings,
     patrolFindingsError: null as string | null,
@@ -175,6 +176,9 @@ vi.mock('@/stores/aiIntelligence', () => ({
     get patrolPendingApprovalCount() {
       return 0;
     },
+    get approvalsError() {
+      return mockState.approvalsError;
+    },
     get patrolPendingApprovals() {
       return mockState.patrolPendingApprovals;
     },
@@ -239,6 +243,7 @@ describe('FindingsPanel resource links', () => {
     vi.mocked(notificationStore.error).mockClear();
     mockState.findingsLoading = false;
     mockState.findingsError = null;
+    mockState.approvalsError = null;
     mockState.patrolFindingsLoading = false;
     mockState.patrolFindingsError = null;
     mockState.patrolPendingApprovals = [];
@@ -1359,5 +1364,73 @@ describe('FindingsPanel resource scope', () => {
     expect(screen.queryByRole('button', { name: /^Needs Attention/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^Approvals/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^Overdue commitments/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('FindingsPanel approval read uncertainty', () => {
+  beforeEach(() => {
+    mockState.approvalsError = 'unavailable';
+    mockState.patrolFindings = [
+      {
+        ...mockState.initialPatrolFindings[0],
+        id: 'queued',
+        title: 'Queued request',
+        alertIdentifier: undefined,
+        investigationOutcome: 'fix_queued',
+      },
+    ];
+    mockState.patrolPendingApprovals = [];
+    mockState.approvalFindingIds = [];
+    mockState.attentionFindingIds = [];
+  });
+  afterEach(() => {
+    mockState.approvalsError = null;
+  });
+
+  it('does not tell the reader a queued action needs recovery when its approval read failed', () => {
+    render(() => <FindingsPanel findingsSource="patrol" />);
+    expect(screen.getByText('Approval status unavailable')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Review issue for Queued request' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Recover action' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Approval required')).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Review issue for Queued request' }),
+    ).toBeInTheDocument();
+  });
+
+  it('labels retained counts and list-derived decision handoffs as last known without hiding them', () => {
+    mockState.patrolPendingApprovals = [
+      {
+        status: 'pending',
+        toolId: 'investigation_fix',
+        targetId: 'queued',
+        expiresAt: '2999-01-01T00:00:00Z',
+      },
+    ];
+    mockState.approvalFindingIds = ['queued'];
+    render(() => <FindingsPanel findingsSource="patrol" />);
+    expect(screen.getByRole('button', { name: 'Approvals · last known (1)' })).toBeInTheDocument();
+    const action = screen.getByRole('button', { name: 'Review issue for Queued request' });
+    fireEvent.click(action);
+    expect(
+      screen.getByRole('complementary', { name: 'Review Queued request' }),
+    ).toBeInTheDocument();
+  });
+
+  it('does not relabel independently loaded typed action authority as a stale list entry', () => {
+    mockState.patrolFindings = [
+      {
+        ...mockState.patrolFindings[0],
+        investigationRecord: { action: { state: 'pending_approval' } },
+      },
+    ];
+    render(() => <FindingsPanel findingsSource="patrol" />);
+    expect(screen.getByText('Approval required')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Review issue for Queued request' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Check approval status' })).not.toBeInTheDocument();
   });
 });
