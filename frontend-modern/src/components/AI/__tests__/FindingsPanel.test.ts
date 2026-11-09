@@ -88,7 +88,7 @@ describe('FindingsPanel source wiring', () => {
     // The rendered/store regressions cover unavailable and retained reads;
     // this wiring assertion only checks that their freshness reaches the model.
     expect(findingsPanelSource).toMatch(
-      /getFindingPatrolWorkflowPresentation\(\s*finding,\s*aiIntelligenceStore\.patrolPendingApprovals,\s*Date\.now\(\),\s*Boolean\(aiIntelligenceStore\.approvalsError\),?\s*\)/,
+      /getFindingPatrolWorkflowPresentation\(\s*finding,\s*aiIntelligenceStore\.patrolPendingApprovals,\s*Date\.now\(\),\s*aiIntelligenceStore\.approvalsReadState,?\s*\)/,
     );
     expect(findingsPanelSource).toContain("workflow?.stage === 'approval'");
     expect(findingsPanelSource).not.toContain("workflow.stage === 'investigating'");

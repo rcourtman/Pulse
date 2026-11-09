@@ -1,3 +1,4 @@
+import type { ActionAuditState } from '@/types/actionAudit';
 import type { UnifiedFinding } from '@/stores/aiIntelligence';
 import type { ApprovalRequest } from '@/api/ai';
 import type { InvestigationOutcome, InvestigationStatus } from '@/api/patrol';
@@ -669,7 +670,109 @@ export function reuseIdenticalPatrolFindingDisplayGroups<TFinding>(
   });
 }
 
-export type PatrolFindingWorkType = 'approval' | 'failed' | 'in_progress' | 'recurring' | 'new';
+export type PatrolApprovalReadState = 'pending' | 'ready' | 'unavailable';
+
+export type PatrolFindingWorkType =
+  | 'approval'
+  | 'ready'
+  | 'approved'
+  | 'completed'
+  | 'rejected'
+  | 'expired'
+  | 'recovery'
+  | 'failed'
+  | 'in_progress'
+  | 'recurring'
+  | 'new';
+
+type PatrolApprovalStatus = Pick<ApprovalRequest, 'status' | 'toolId' | 'targetId' | 'expiresAt'>;
+type PatrolWorkFinding = Pick<
+  UnifiedFinding,
+  'status' | 'investigationStatus' | 'investigationOutcome' | 'regressionCount' | 'timesRaised'
+> &
+  Partial<Pick<UnifiedFinding, 'id' | 'investigationRecord'>>;
+
+// The action reference is independent of the legacy fix_queued outcome and
+// approval-list read. Use the same facts in the queue, row and review handoff.
+const TYPED_PATROL_ACTION_PRESENTATION: Record<
+  ActionAuditState,
+  FindingPatrolWorkflowPresentation & { workType: PatrolFindingWorkType; badgeLabel: string }
+> = {
+  pending_approval: {
+    workType: 'approval',
+    badgeLabel: 'Approval required',
+    stage: 'approval',
+    label: 'Approve or reject',
+    detail: 'A typed governed action is waiting for an operator decision.',
+    tone: 'warning',
+  },
+  planned: {
+    workType: 'ready',
+    badgeLabel: 'Ready to run',
+    stage: 'approval',
+    label: 'Run action',
+    detail: 'The typed action plan is ready to run under its declared policy.',
+    tone: 'info',
+  },
+  approved: {
+    workType: 'approved',
+    badgeLabel: 'Approved to run',
+    stage: 'approval',
+    label: 'Run approved action',
+    detail: 'The typed action is approved. Execution remains a separate operator step.',
+    tone: 'success',
+  },
+  executing: {
+    workType: 'in_progress',
+    badgeLabel: 'Action running',
+    stage: 'verification',
+    label: 'Action running',
+    detail: 'The governed action is running and will publish its verification result.',
+    tone: 'info',
+  },
+  completed: {
+    workType: 'completed',
+    badgeLabel: 'Action completed',
+    stage: 'verification',
+    label: 'Review completed action',
+    detail: 'The action completed. Review its verification evidence. This finding remains open.',
+    tone: 'info',
+  },
+  failed: {
+    workType: 'failed',
+    badgeLabel: 'Fix failed',
+    stage: 'attention',
+    label: 'Fix failed',
+    detail: 'The typed action failed. Review its recorded result before trying another change.',
+    tone: 'danger',
+  },
+  rejected: {
+    workType: 'rejected',
+    badgeLabel: 'Action rejected',
+    stage: 'attention',
+    label: 'Review rejected action',
+    detail:
+      'The typed action was rejected. Review the finding for another option or record the result of manual work.',
+    tone: 'warning',
+  },
+  expired: {
+    workType: 'expired',
+    badgeLabel: 'Action expired',
+    stage: 'attention',
+    label: 'Review expired action',
+    detail: 'The typed action expired. Review its current record before planning another change.',
+    tone: 'warning',
+  },
+};
+
+function getTypedPatrolActionPresentation(
+  finding: Partial<Pick<UnifiedFinding, 'investigationRecord'>>,
+) {
+  const state = finding.investigationRecord?.action?.state;
+  return state && Object.hasOwn(TYPED_PATROL_ACTION_PRESENTATION, state)
+    ? TYPED_PATROL_ACTION_PRESENTATION[state]
+    : undefined;
+}
 
 const isFailedFixOutcome = (outcome: string | undefined): boolean =>
   outcome === 'fix_failed' ||
@@ -678,14 +781,21 @@ const isFailedFixOutcome = (outcome: string | undefined): boolean =>
   outcome === 'timed_out';
 
 export function classifyPatrolFindingWorkType(
-  finding: Pick<
-    UnifiedFinding,
-    'status' | 'investigationStatus' | 'investigationOutcome' | 'regressionCount' | 'timesRaised'
-  >,
+  finding: PatrolWorkFinding,
+  approvals: PatrolApprovalStatus[] = [],
+  now = Date.now(),
 ): PatrolFindingWorkType {
   if (finding.status !== 'active') return 'new';
 
-  if (finding.investigationOutcome === 'fix_queued') return 'approval';
+  const typed = getTypedPatrolActionPresentation(finding);
+  if (typed) return typed.workType;
+  if (finding.investigationRecord?.action) return 'new';
+
+  if (finding.investigationOutcome === 'fix_queued') {
+    return finding.id && hasPendingInvestigationFixApproval(finding.id, approvals, now)
+      ? 'approval'
+      : 'recovery';
+  }
 
   if (isFailedFixOutcome(finding.investigationOutcome)) return 'failed';
 
@@ -707,6 +817,14 @@ export interface PatrolWorkTypeComposition {
   total: number;
   approval: number;
   approvalUnknown?: number;
+  approvalPending?: number;
+  approvalLastKnown?: number;
+  ready?: number;
+  approved?: number;
+  completed?: number;
+  rejected?: number;
+  expired?: number;
+  recovery?: number;
   failed: number;
   inProgress: number;
   recurring: number;
@@ -714,30 +832,25 @@ export interface PatrolWorkTypeComposition {
 }
 
 // A saved queued outcome is not a current approval decision. A separately
-// loaded typed action remains usable when the legacy approvals read fails.
-export function hasUnavailablePatrolApprovalStatus(
+// loaded typed action remains usable while the legacy read is pending or unavailable.
+export function hasUnsettledPatrolApprovalStatus(
   finding: Pick<UnifiedFinding, 'status' | 'investigationOutcome' | 'investigationRecord'>,
-  approvalsUnavailable: boolean,
+  approvalReadState: PatrolApprovalReadState,
 ): boolean {
   return (
-    approvalsUnavailable &&
+    approvalReadState !== 'ready' &&
     finding.status === 'active' &&
     finding.investigationOutcome === 'fix_queued' &&
     !finding.investigationRecord?.action
   );
 }
 
-export function getPatrolWorkTypeComposition<
-  TFinding extends Pick<
-    UnifiedFinding,
-    | 'status'
-    | 'investigationStatus'
-    | 'investigationOutcome'
-    | 'regressionCount'
-    | 'timesRaised'
-    | 'investigationRecord'
-  >,
->(findings: readonly TFinding[], approvalsUnavailable = false): PatrolWorkTypeComposition {
+export function getPatrolWorkTypeComposition<TFinding extends PatrolWorkFinding>(
+  findings: readonly TFinding[],
+  approvalReadState: PatrolApprovalReadState = 'ready',
+  approvals: PatrolApprovalStatus[] = [],
+  now = Date.now(),
+): PatrolWorkTypeComposition {
   const composition: PatrolWorkTypeComposition = {
     total: findings.length,
     approval: 0,
@@ -747,11 +860,26 @@ export function getPatrolWorkTypeComposition<
     newIssues: 0,
   };
   for (const finding of findings) {
-    if (hasUnavailablePatrolApprovalStatus(finding, approvalsUnavailable)) {
-      composition.approvalUnknown = (composition.approvalUnknown ?? 0) + 1;
+    if (hasUnsettledPatrolApprovalStatus(finding, approvalReadState)) {
+      const key =
+        finding.id && hasPendingInvestigationFixApproval(finding.id, approvals, now)
+          ? 'approvalLastKnown'
+          : approvalReadState === 'pending'
+            ? 'approvalPending'
+            : 'approvalUnknown';
+      composition[key] = (composition[key] ?? 0) + 1;
       continue;
     }
-    switch (classifyPatrolFindingWorkType(finding)) {
+    const workType = classifyPatrolFindingWorkType(finding, approvals, now);
+    switch (workType) {
+      case 'ready':
+      case 'approved':
+      case 'completed':
+      case 'rejected':
+      case 'expired':
+      case 'recovery':
+        composition[workType] = (composition[workType] ?? 0) + 1;
+        break;
       case 'approval':
         composition.approval++;
         break;
@@ -777,6 +905,20 @@ export function getPatrolWorkTypeCompositionClause(composition: PatrolWorkTypeCo
   if (composition.approval > 0) {
     parts.push(`${composition.approval} need${composition.approval === 1 ? 's' : ''} approval`);
   }
+  if (composition.approvalLastKnown) {
+    const count = composition.approvalLastKnown;
+    parts.push(`${count} need${count === 1 ? 's' : ''} approval · last known`);
+  }
+  if (composition.approvalPending) {
+    parts.push(`${composition.approvalPending} queued · checking approval status`);
+  }
+  if (composition.ready) parts.push(`${composition.ready} ready to run`);
+  if (composition.approved) parts.push(`${composition.approved} approved to run`);
+  if (composition.recovery) {
+    parts.push(
+      `${composition.recovery} need${composition.recovery === 1 ? 's' : ''} action recovery`,
+    );
+  }
   if (composition.approvalUnknown) {
     parts.push(`${composition.approvalUnknown} queued · approval status unavailable`);
   }
@@ -785,6 +927,10 @@ export function getPatrolWorkTypeCompositionClause(composition: PatrolWorkTypeCo
   }
   if (composition.inProgress > 0) {
     parts.push(`${composition.inProgress} in progress`);
+  }
+  for (const state of ['completed', 'rejected', 'expired'] as const) {
+    const count = composition[state];
+    if (count) parts.push(`${count} ${state} action${count === 1 ? '' : 's'}`);
   }
   if (composition.recurring > 0) {
     parts.push(`${composition.recurring} recurring`);
@@ -847,12 +993,32 @@ export function getFindingEvidencePresentation(
 }
 
 export function getPatrolFindingActionableState(
-  finding: Pick<UnifiedFinding, 'status' | 'investigationStatus' | 'investigationOutcome'>,
+  finding: Pick<UnifiedFinding, 'status' | 'investigationStatus' | 'investigationOutcome'> &
+    Partial<Pick<UnifiedFinding, 'id' | 'investigationRecord'>>,
+  approvals: PatrolApprovalStatus[] = [],
+  now = Date.now(),
+  approvalReadState: PatrolApprovalReadState = 'ready',
 ): PatrolActionableStatePresentation | undefined {
   if (finding.status !== 'active') return undefined;
 
+  const typed = getTypedPatrolActionPresentation(finding);
+  if (typed) return { label: typed.badgeLabel, tone: typed.tone };
+  if (finding.investigationRecord?.action) return { label: 'Review action', tone: 'warning' };
+
   if (finding.investigationOutcome === 'fix_queued') {
-    return { label: 'Approval required', tone: 'warning' };
+    return {
+      label:
+        finding.id && hasPendingInvestigationFixApproval(finding.id, approvals, now)
+          ? approvalReadState === 'ready'
+            ? 'Approval required'
+            : 'Approval required · last known'
+          : approvalReadState === 'pending'
+            ? 'Checking approval status'
+            : approvalReadState === 'unavailable'
+              ? 'Approval status unavailable'
+              : 'Recover action',
+      tone: 'warning',
+    };
   }
 
   if (isFailedFixOutcome(finding.investigationOutcome)) {
@@ -1123,7 +1289,7 @@ export const isPatrolInvestigationFixApproval = (
 export const doesFindingNeedAttention = (
   finding: Pick<UnifiedFinding, 'id' | 'status' | 'investigationOutcome' | 'investigationRecord'>,
   approvals: Pick<ApprovalRequest, 'status' | 'toolId' | 'targetId' | 'expiresAt'>[] = [],
-  approvalsUnavailable = false,
+  approvalReadState: PatrolApprovalReadState = 'ready',
 ): boolean => {
   if (finding.status !== 'active' || !finding.investigationOutcome) {
     return false;
@@ -1135,7 +1301,7 @@ export const doesFindingNeedAttention = (
 
   return (
     finding.investigationOutcome === 'fix_queued' &&
-    !approvalsUnavailable &&
+    approvalReadState === 'ready' &&
     !hasPendingInvestigationFixApproval(finding.id, approvals) &&
     !finding.investigationRecord?.action
   );
@@ -1157,7 +1323,7 @@ export const getFindingPatrolWorkflowPresentation = (
   >,
   approvals: Pick<ApprovalRequest, 'status' | 'toolId' | 'targetId' | 'expiresAt'>[] = [],
   now = Date.now(),
-  approvalsUnavailable = false,
+  approvalReadState: PatrolApprovalReadState = 'ready',
 ): FindingPatrolWorkflowPresentation | undefined => {
   if (finding.source !== 'ai-patrol') {
     return undefined;
@@ -1194,37 +1360,18 @@ export const getFindingPatrolWorkflowPresentation = (
     };
   }
 
-  const typedActionState = finding.investigationRecord?.action?.state;
-  if (typedActionState === 'pending_approval') {
+  const typed = getTypedPatrolActionPresentation(finding);
+  if (typed) {
+    const { stage, label, detail, tone } = typed;
+    return { stage, label, detail, tone };
+  }
+  if (finding.investigationRecord?.action) {
     return {
-      stage: 'approval',
-      label: 'Approve or reject',
-      detail: 'A typed governed action is waiting for an operator decision.',
+      stage: 'attention',
+      label: 'Review action',
+      detail:
+        'Pulse could not classify the saved typed action. Review its current record in Actions.',
       tone: 'warning',
-    };
-  }
-  if (typedActionState === 'planned') {
-    return {
-      stage: 'approval',
-      label: 'Run action',
-      detail: 'The typed action plan is ready to run under its declared policy.',
-      tone: 'info',
-    };
-  }
-  if (typedActionState === 'approved') {
-    return {
-      stage: 'approval',
-      label: 'Run approved action',
-      detail: 'The typed action is approved. Execution remains a separate operator step.',
-      tone: 'success',
-    };
-  }
-  if (typedActionState === 'executing') {
-    return {
-      stage: 'verification',
-      label: 'Action running',
-      detail: 'The governed action is running and will publish its verification result.',
-      tone: 'info',
     };
   }
 
@@ -1232,10 +1379,13 @@ export const getFindingPatrolWorkflowPresentation = (
   if (hasLiveApproval) {
     return {
       stage: 'approval',
-      label: approvalsUnavailable ? 'Approve or reject · last known' : 'Approve or reject',
-      detail: approvalsUnavailable
-        ? 'This last-known request could not be refreshed. Review its current state in Actions.'
-        : 'A governed fix is waiting for an approve or reject decision.',
+      label: approvalReadState !== 'ready' ? 'Approve or reject · last known' : 'Approve or reject',
+      detail:
+        approvalReadState === 'pending'
+          ? 'This last-known request is being refreshed. Review its current state in Actions.'
+          : approvalReadState === 'unavailable'
+            ? 'This last-known request could not be refreshed. Review its current state in Actions.'
+            : 'A governed fix is waiting for an approve or reject decision.',
       tone: 'warning',
     };
   }
@@ -1263,7 +1413,16 @@ export const getFindingPatrolWorkflowPresentation = (
         tone: 'success',
       };
     case 'fix_queued':
-      if (approvalsUnavailable) {
+      if (approvalReadState === 'pending') {
+        return {
+          stage: 'approval',
+          label: 'Checking approval status',
+          detail:
+            'The approval read has not finished. No recovery is needed unless a successful read confirms the request is missing.',
+          tone: 'info',
+        };
+      }
+      if (approvalReadState === 'unavailable') {
         return {
           stage: 'approval',
           label: 'Check approval status',
