@@ -350,9 +350,6 @@ export function useUserAssignmentsPanelState(props: UserAssignmentsPanelProps = 
         : [...currentRoleIds, roleId],
     );
   };
-  const getRoleName = (roleId: string) =>
-    roles().find((role) => role.id === roleId)?.name || roleId;
-
   return {
     actionError,
     assignmentCount: () => assignments().length,
@@ -366,7 +363,6 @@ export function useUserAssignmentsPanelState(props: UserAssignmentsPanelProps = 
     featureGate,
     filteredAssignments,
     formRoleIds,
-    getRoleName,
     handleSaveAssignments,
     handleDeleteUser,
     loading,
