@@ -1096,6 +1096,7 @@ export const isPatrolInvestigationFixApproval = (
 export const doesFindingNeedAttention = (
   finding: Pick<UnifiedFinding, 'id' | 'status' | 'investigationOutcome' | 'investigationRecord'>,
   approvals: Pick<ApprovalRequest, 'status' | 'toolId' | 'targetId' | 'expiresAt'>[] = [],
+  approvalsUnavailable = false,
 ): boolean => {
   if (finding.status !== 'active' || !finding.investigationOutcome) {
     return false;
@@ -1107,6 +1108,7 @@ export const doesFindingNeedAttention = (
 
   return (
     finding.investigationOutcome === 'fix_queued' &&
+    !approvalsUnavailable &&
     !hasPendingInvestigationFixApproval(finding.id, approvals) &&
     !finding.investigationRecord?.action
   );
@@ -1128,6 +1130,7 @@ export const getFindingPatrolWorkflowPresentation = (
   >,
   approvals: Pick<ApprovalRequest, 'status' | 'toolId' | 'targetId' | 'expiresAt'>[] = [],
   now = Date.now(),
+  approvalsUnavailable = false,
 ): FindingPatrolWorkflowPresentation | undefined => {
   if (finding.source !== 'ai-patrol') {
     return undefined;
@@ -1202,8 +1205,10 @@ export const getFindingPatrolWorkflowPresentation = (
   if (hasLiveApproval) {
     return {
       stage: 'approval',
-      label: 'Approve or reject',
-      detail: 'A governed fix is waiting for an approve or reject decision.',
+      label: approvalsUnavailable ? 'Approve or reject · last known' : 'Approve or reject',
+      detail: approvalsUnavailable
+        ? 'This last-known request could not be refreshed. Review its current state in Actions.'
+        : 'A governed fix is waiting for an approve or reject decision.',
       tone: 'warning',
     };
   }
@@ -1231,6 +1236,15 @@ export const getFindingPatrolWorkflowPresentation = (
         tone: 'success',
       };
     case 'fix_queued':
+      if (approvalsUnavailable) {
+        return {
+          stage: 'approval',
+          label: 'Check approval status',
+          detail:
+            'Approval status is unavailable. A failed read does not mean the action needs recovery.',
+          tone: 'warning',
+        };
+      }
       return {
         stage: 'approval',
         label: 'Recover action',

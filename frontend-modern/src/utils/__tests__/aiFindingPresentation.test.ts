@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import type { UnifiedFinding } from '@/stores/aiIntelligence';
 import {
+  doesFindingNeedAttention,
+  getFindingPatrolWorkflowPresentation,
   getFindingEvidencePresentation,
   getFindingResourceCriticalitySortOrder,
   sortFindingsForAttentionQueue,
@@ -164,4 +166,58 @@ describe('sortFindingsForAttentionQueue', () => {
 
     expect(sorted.map((finding) => finding.id)).toEqual(['critical-low', 'warning-high']);
   });
+});
+
+describe('approval-list uncertainty in finding presentation', () => {
+  const queued = () =>
+    makeFinding({ status: 'active', source: 'ai-patrol', investigationOutcome: 'fix_queued' });
+  it('does not infer action recovery or attention from a failed list read', () => {
+    const finding = queued();
+    expect(doesFindingNeedAttention(finding, [], true)).toBe(false);
+    expect(getFindingPatrolWorkflowPresentation(finding, [], Date.now(), true)).toMatchObject({
+      label: 'Check approval status',
+      stage: 'approval',
+    });
+    expect(doesFindingNeedAttention(finding, [], false)).toBe(true);
+    expect(getFindingPatrolWorkflowPresentation(finding, [], Date.now(), false)?.label).toBe(
+      'Recover action',
+    );
+  });
+  it('retains independently known failed-action attention during an unavailable list read', () => {
+    expect(
+      doesFindingNeedAttention(
+        makeFinding({ status: 'active', investigationOutcome: 'fix_failed' }),
+        [],
+        true,
+      ),
+    ).toBe(true);
+  });
+  it('labels only list-derived approvals as last known, keeping the approve/reject distinction', () => {
+    const finding = queued();
+    const approvals = [
+      {
+        status: 'pending' as const,
+        toolId: 'investigation_fix',
+        targetId: finding.id,
+        expiresAt: '2999-01-01T00:00:00Z',
+      },
+    ];
+    expect(getFindingPatrolWorkflowPresentation(finding, approvals, Date.now(), true)?.label).toBe(
+      'Approve or reject · last known',
+    );
+    expect(getFindingPatrolWorkflowPresentation(finding, approvals, Date.now(), false)?.label).toBe(
+      'Approve or reject',
+    );
+  });
+  it.each(['pending_approval', 'planned', 'approved'] as const)(
+    'preserves separately read typed action %s authority',
+    (state) => {
+      const finding = queued();
+      finding.investigationRecord = { action: { state } } as NonNullable<
+        UnifiedFinding['investigationRecord']
+      >;
+      const current = getFindingPatrolWorkflowPresentation(finding, [], Date.now(), false);
+      expect(getFindingPatrolWorkflowPresentation(finding, [], Date.now(), true)).toEqual(current);
+    },
+  );
 });

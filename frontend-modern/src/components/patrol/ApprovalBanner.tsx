@@ -4,7 +4,7 @@
  * Contextual handoff from Patrol to the canonical Actions inbox.
  * Surfaces pending investigation fix approvals without creating a second
  * approval or execution surface inside Patrol.
- * - Hidden when no pending approvals
+ * - Hidden only when no pending approvals and no failed read
  * - Single approval: deep-links to the exact governed action when available
  * - Multiple approvals: links to the open Actions inbox
  * - Given targetIds (a findings list scoped to one resource), only the
@@ -17,7 +17,7 @@ import {
   getApprovalExpiryStatusLabel,
   getApprovalRiskPresentation,
 } from '@/utils/approvalRiskPresentation';
-import { ButtonLink } from '@/components/shared/Button';
+import { Button, ButtonLink } from '@/components/shared/Button';
 import { MetadataBadge } from '@/components/shared/MetadataBadge';
 import { buildActionReviewPath } from '@/features/actions/actionRouting';
 import ShieldAlertIcon from 'lucide-solid/icons/shield-alert';
@@ -56,51 +56,84 @@ export const ApprovalBanner: Component<{ targetIds?: ReadonlySet<string> }> = (p
   );
 
   return (
-    <Show when={pending().length > 0}>
-      <div class="bg-amber-50 dark:bg-amber-900/25 border border-amber-200 dark:border-amber-800 rounded-md px-4 py-3">
-        <div class="flex items-center justify-between gap-3 flex-wrap">
-          <div class="flex min-w-0 items-center gap-3">
-            <div class="shrink-0 p-1.5 border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-900/25 rounded-md">
-              <ShieldAlertIcon class="w-4 h-4 text-amber-500 dark:text-amber-400" />
-            </div>
-            <div class="min-w-0">
-              <Show when={pending().length === 1 && firstApproval()}>
-                <div class="flex items-center gap-2 flex-wrap">
-                  <span class="text-sm font-medium text-amber-900 dark:text-amber-100">
-                    Action awaiting approval
-                  </span>
-                  <MetadataBadge
-                    {...APPROVAL_BANNER_BADGE_PROPS}
-                    tone={firstApprovalRisk()!.badgeTone}
-                  >
-                    {firstApprovalRisk()!.label} risk
-                  </MetadataBadge>
-                  <span class="text-xs text-amber-700 dark:text-amber-300">
-                    {expiryStatusLabel(firstApproval()!.expiresAt)}
-                  </span>
-                </div>
-                <p
-                  class="text-xs text-amber-700 dark:text-amber-300 mt-0.5 max-w-xl truncate"
-                  title={firstApproval()!.context}
+    <Show when={pending().length > 0 || aiIntelligenceStore.approvalsError}>
+      <div class="space-y-3 bg-amber-50 dark:bg-amber-900/25 border border-amber-200 dark:border-amber-800 rounded-md px-4 py-3">
+        <Show when={aiIntelligenceStore.approvalsError}>
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div role="status" class="min-w-0 flex-1 basis-48 text-amber-900 dark:text-amber-100">
+              <p class="text-sm font-medium">Approval status unavailable</p>
+              <p class="mt-0.5 text-xs">
+                <Show
+                  when={pending().length > 0}
+                  fallback="Pending approvals could not be checked. This does not mean there are none."
                 >
-                  {firstApproval()!.context}
-                </p>
-              </Show>
-              <Show when={pending().length > 1}>
-                <span class="text-sm font-medium text-amber-900 dark:text-amber-100">
-                  {pending().length} actions awaiting your approval
-                </span>
-              </Show>
+                  Showing last-known approvals. Their current status could not be checked.
+                </Show>
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              class="min-h-11"
+              disabled={aiIntelligenceStore.approvalsLoading}
+              onClick={() => void aiIntelligenceStore.loadPendingApprovals()}
+            >
+              {aiIntelligenceStore.approvalsLoading ? 'Checking approvals…' : 'Refresh approvals'}
+            </Button>
+          </div>
+        </Show>
+        <Show when={pending().length > 0}>
+          <div class="flex items-center justify-between gap-3 flex-wrap">
+            <div class="flex min-w-0 items-center gap-3">
+              <div class="shrink-0 p-1.5 border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-900/25 rounded-md">
+                <ShieldAlertIcon class="w-4 h-4 text-amber-500 dark:text-amber-400" />
+              </div>
+              <div class="min-w-0">
+                <Show when={pending().length === 1 && firstApproval()}>
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <span class="text-sm font-medium text-amber-900 dark:text-amber-100">
+                      Action awaiting approval
+                    </span>
+                    <Show when={aiIntelligenceStore.approvalsError}>
+                      <MetadataBadge {...APPROVAL_BANNER_BADGE_PROPS} tone="warning">
+                        Last known
+                      </MetadataBadge>
+                    </Show>
+                    <MetadataBadge
+                      {...APPROVAL_BANNER_BADGE_PROPS}
+                      tone={firstApprovalRisk()!.badgeTone}
+                    >
+                      {firstApprovalRisk()!.label} risk
+                    </MetadataBadge>
+                    <span class="text-xs text-amber-700 dark:text-amber-300">
+                      {expiryStatusLabel(firstApproval()!.expiresAt)}
+                    </span>
+                  </div>
+                  <p
+                    class="text-xs text-amber-700 dark:text-amber-300 mt-0.5 max-w-xl truncate"
+                    title={firstApproval()!.context}
+                  >
+                    {firstApproval()!.context}
+                  </p>
+                </Show>
+                <Show when={pending().length > 1}>
+                  <span class="text-sm font-medium text-amber-900 dark:text-amber-100">
+                    {pending().length} actions awaiting your approval
+                    <Show when={aiIntelligenceStore.approvalsError}>{' · last known'}</Show>
+                  </span>
+                </Show>
+              </div>
+            </div>
+
+            <div class="flex items-center gap-2">
+              <ButtonLink href={reviewPath()} variant="warningSolid" size="sm" class="gap-1.5">
+                Review in Actions
+                <ArrowRightIcon class="h-3.5 w-3.5" aria-hidden="true" />
+              </ButtonLink>
             </div>
           </div>
-
-          <div class="flex items-center gap-2">
-            <ButtonLink href={reviewPath()} variant="warningSolid" size="sm" class="gap-1.5">
-              Review in Actions
-              <ArrowRightIcon class="h-3.5 w-3.5" aria-hidden="true" />
-            </ButtonLink>
-          </div>
-        </div>
+        </Show>
       </div>
     </Show>
   );
