@@ -5,10 +5,13 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -175,6 +178,9 @@ func (s *ExecutionState) normalizeCollections() {
 
 // Store manages approval requests and execution states.
 type Store struct {
+	// Serialize each snapshot through publication so an older save cannot
+	// overwrite a newer decision. Acquire before mu, never while holding mu.
+	saveMu         sync.Mutex
 	mu             sync.RWMutex
 	approvals      map[string]*ApprovalRequest
 	executions     map[string]*ExecutionState
@@ -324,7 +330,9 @@ func (s *Store) CreateApproval(req *ApprovalRequest) error {
 		req.CommandHash = ComputeCommandHash(req.Command, req.TargetType, req.TargetID)
 	}
 
-	s.approvals[req.ID] = req
+	// Keep filling in the caller's generated fields, but do not retain caller
+	// ownership of the decision or its nested action context.
+	s.approvals[req.ID] = snapshotApproval(req)
 
 	// Persist asynchronously
 	s.saveAsync()
@@ -336,18 +344,15 @@ func (s *Store) CreateApproval(req *ApprovalRequest) error {
 		Msg("Created approval request")
 
 	// Fire the post-create callback on its own goroutine. The
-	// approval is already persisted at this point, so the callback
+	// approval is already in the store at this point, so the callback
 	// is fire-and-forget — a panic or stall on the consumer side
 	// must not back up the approval hot path. Spawning a goroutine
 	// also avoids any chance of the consumer reentering the store
 	// under our held write lock.
 	if cb := s.onApprovalCreated; cb != nil {
-		// Snapshot the request struct so the consumer reads a
-		// stable view. Subsequent state mutations on the live
-		// pointer happen under s.mu and would otherwise race with
-		// a consumer that reads fields off the goroutine.
-		snapshot := *req
-		go cb(&snapshot)
+		// Callback consumers own their complete snapshot, including plan and
+		// preflight slices; neither the store nor the creator shares it.
+		go cb(snapshotApproval(req))
 	}
 
 	return nil
@@ -363,15 +368,14 @@ func (s *Store) GetApproval(id string) (*ApprovalRequest, bool) {
 		return nil, false
 	}
 
+	result := snapshotApproval(req)
 	// Check expiration
-	if req.Status == StatusPending && time.Now().After(req.ExpiresAt) {
+	if result.Status == StatusPending && time.Now().After(result.ExpiresAt) {
 		// Don't modify here, let cleanup handle it
-		reqCopy := *req
-		reqCopy.Status = StatusExpired
-		return &reqCopy, true
+		result.Status = StatusExpired
 	}
 
-	return req, true
+	return result, true
 }
 
 // GetPendingApprovals returns all pending approval requests.
@@ -384,7 +388,7 @@ func (s *Store) GetPendingApprovals() []*ApprovalRequest {
 
 	for _, req := range s.approvals {
 		if req.Status == StatusPending && now.Before(req.ExpiresAt) {
-			pending = append(pending, req)
+			pending = append(pending, snapshotApproval(req))
 		}
 	}
 	sortPendingApprovals(pending)
@@ -405,7 +409,7 @@ func (s *Store) GetPendingApprovalsForOrg(orgID string) []*ApprovalRequest {
 			continue
 		}
 		if req.Status == StatusPending && now.Before(req.ExpiresAt) {
-			pending = append(pending, req)
+			pending = append(pending, snapshotApproval(req))
 		}
 	}
 	sortPendingApprovals(pending)
@@ -458,7 +462,7 @@ func (s *Store) GetApprovalsByExecution(executionID string) []*ApprovalRequest {
 	var results []*ApprovalRequest
 	for _, req := range s.approvals {
 		if req.ExecutionID == executionID {
-			results = append(results, req)
+			results = append(results, snapshotApproval(req))
 		}
 	}
 
@@ -477,7 +481,7 @@ func (s *Store) Approve(id, username string) (*ApprovalRequest, error) {
 
 	// Idempotent: if already approved, return success (handles double-clicks, race conditions)
 	if req.Status == StatusApproved {
-		return req, nil
+		return snapshotApproval(req), nil
 	}
 
 	if req.Status != StatusPending {
@@ -503,7 +507,7 @@ func (s *Store) Approve(id, username string) (*ApprovalRequest, error) {
 		Str("command", truncateCommand(req.Command, 50)).
 		Msg("Approval request approved")
 
-	return req, nil
+	return snapshotApproval(req), nil
 }
 
 // Deny marks an approval request as denied.
@@ -534,7 +538,7 @@ func (s *Store) Deny(id, username, reason string) (*ApprovalRequest, error) {
 		Str("reason", reason).
 		Msg("Approval request denied")
 
-	return req, nil
+	return snapshotApproval(req), nil
 }
 
 // ConsumeApproval validates and consumes an approval for a specific command.
@@ -597,7 +601,54 @@ func (s *Store) ConsumeApproval(id, command, targetType, targetID string) (*Appr
 		Str("command", truncateCommand(command, 50)).
 		Msg("Approval consumed successfully")
 
-	return req, nil
+	return snapshotApproval(req), nil
+}
+
+// snapshotApproval detaches all mutable action context as well as decision
+// fields. Call with mu held when req belongs to the store. Do not JSON-roundtrip:
+// policy provenance has a custom marshaler and hashes distinguish nil/empty
+// authority slices. Preserve shared preflight identity within a single request.
+func snapshotApproval(req *ApprovalRequest) *ApprovalRequest {
+	if req == nil {
+		return nil
+	}
+	result := *req
+	if req.DecidedAt != nil {
+		decidedAt := *req.DecidedAt
+		result.DecidedAt = &decidedAt
+	}
+	if req.ContextConfidence != nil {
+		confidence := *req.ContextConfidence
+		confidence.Evidence = slices.Clone(confidence.Evidence)
+		result.ContextConfidence = &confidence
+	}
+	result.Preflight = snapshotPreflight(req.Preflight)
+	if req.Plan != nil {
+		plan := *req.Plan
+		plan.PredictedBlastRadius = slices.Clone(plan.PredictedBlastRadius)
+		plan.PolicyDecision.Authorities = slices.Clone(plan.PolicyDecision.Authorities)
+		for i := range plan.PolicyDecision.Authorities {
+			factor := &plan.PolicyDecision.Authorities[i]
+			factor.ReasonCodes = slices.Clone(factor.ReasonCodes)
+		}
+		if req.Plan.Preflight == req.Preflight {
+			plan.Preflight = result.Preflight
+		} else {
+			plan.Preflight = snapshotPreflight(req.Plan.Preflight)
+		}
+		result.Plan = &plan
+	}
+	return &result
+}
+
+func snapshotPreflight(preflight *ActionPreflight) *ActionPreflight {
+	if preflight == nil {
+		return nil
+	}
+	result := *preflight
+	result.SafetyChecks = slices.Clone(result.SafetyChecks)
+	result.VerificationSteps = slices.Clone(result.VerificationSteps)
+	return &result
 }
 
 // StoreExecution saves an execution state for later resumption.
@@ -814,18 +865,17 @@ func (s *Store) save() {
 	if !s.persist {
 		return
 	}
+	s.saveMu.Lock()
+	defer s.saveMu.Unlock()
+
+	// Encode under the store lock, but keep filesystem I/O off the decision
+	// lock. saveMu covers both phases so snapshots cannot publish out of order.
 	s.mu.RLock()
-	defer s.mu.RUnlock()
 
 	// Save approvals
 	approvals := make([]*ApprovalRequest, 0, len(s.approvals))
 	for _, a := range s.approvals {
 		approvals = append(approvals, a)
-	}
-	if data, err := json.MarshalIndent(approvals, "", "  "); err == nil {
-		if err := os.WriteFile(s.approvalsFile(), data, 0600); err != nil {
-			log.Error().Err(err).Msg("failed to save approvals")
-		}
 	}
 
 	// Save executions
@@ -833,44 +883,76 @@ func (s *Store) save() {
 	for _, e := range s.executions {
 		executions = append(executions, e)
 	}
-	if data, err := json.MarshalIndent(executions, "", "  "); err == nil {
-		if err := os.WriteFile(s.executionsFile(), data, 0600); err != nil {
-			log.Error().Err(err).Msg("failed to save executions")
-		}
+	approvalData, approvalErr := json.MarshalIndent(approvals, "", "  ")
+	executionData, executionErr := json.MarshalIndent(executions, "", "  ")
+	s.mu.RUnlock()
+
+	if approvalErr == nil {
+		approvalErr = writeStoreFile(s.approvalsFile(), approvalData)
+	}
+	if approvalErr != nil {
+		log.Error().Err(approvalErr).Msg("failed to save approvals")
+	}
+	if executionErr == nil {
+		executionErr = writeStoreFile(s.executionsFile(), executionData)
+	}
+	if executionErr != nil {
+		log.Error().Err(executionErr).Msg("failed to save executions")
 	}
 }
 
+// Publish a complete owner-only file in the same directory. Failed writes keep
+// the previous file and clean up the exclusively created temporary descriptor.
+func writeStoreFile(path string, data []byte) (retErr error) {
+	f, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".*.tmp")
+	if err != nil {
+		return err
+	}
+	tmp := f.Name()
+	closed, published := false, false
+	defer func() {
+		if !closed {
+			retErr = errors.Join(retErr, f.Close())
+		}
+		if !published {
+			if err := os.Remove(tmp); err != nil && !os.IsNotExist(err) {
+				retErr = errors.Join(retErr, err)
+			}
+		}
+	}()
+	n, err := f.Write(data)
+	if err != nil {
+		return err
+	}
+	if n != len(data) {
+		return io.ErrShortWrite
+	}
+	if err := f.Sync(); err != nil {
+		return err
+	}
+	closed = true
+	if err := f.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		return err
+	}
+	published = true
+	return nil
+}
+
 // scheduleSave debounces save operations: at most one write per 5 seconds.
-// Must be called while s.mu is held (read or write lock).
+// Must be called while s.mu is exclusively held.
 func (s *Store) scheduleSave() {
 	if !s.persist || s.savePending {
 		return
 	}
 	s.savePending = true
 	s.saveTimer = time.AfterFunc(5*time.Second, func() {
-		s.mu.RLock()
+		s.mu.Lock()
 		s.savePending = false
-
-		approvals := make([]*ApprovalRequest, 0, len(s.approvals))
-		for _, a := range s.approvals {
-			approvals = append(approvals, a)
-		}
-		executions := make([]*ExecutionState, 0, len(s.executions))
-		for _, e := range s.executions {
-			executions = append(executions, e)
-		}
-		s.mu.RUnlock()
-
-		if data, err := json.MarshalIndent(approvals, "", "  "); err == nil {
-			if err := os.WriteFile(s.approvalsFile(), data, 0600); err != nil {
-				log.Error().Err(err).Msg("failed to save approvals")
-			}
-		}
-		if data, err := json.MarshalIndent(executions, "", "  "); err == nil {
-			if err := os.WriteFile(s.executionsFile(), data, 0600); err != nil {
-				log.Error().Err(err).Msg("failed to save executions")
-			}
-		}
+		s.mu.Unlock()
+		s.save()
 	})
 }
 

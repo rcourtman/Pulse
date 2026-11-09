@@ -3880,15 +3880,12 @@ func approvalOrgBoundaryFixture(t *testing.T) (*AISettingsHandler, *approval.Sto
 		{ID: "fixture-opaque", OrgID: "opaque/é:key with space"},
 		{ID: "fixture-investigation", OrgID: "default", ToolID: "investigation_fix"},
 	}
-	for i, item := range items {
+	for _, item := range items {
 		item.Command = "printf fixture-boundary"
 		item.TargetType, item.TargetID = "agent", "fixture-host"
 		item.Context = "Fixture approval review"
 		item.ExpiresAt = time.Date(2099, 1, 1, 0, 0, 0, 0, time.UTC)
 		require.NoError(t, store.CreateApproval(item))
-		// The store owns these pointers; set stable fixture request timestamps
-		// before reads so baseline and final read bodies can be compared exactly.
-		item.RequestedAt = time.Date(2026, 1, 1, 0, 0, i, 0, time.UTC)
 	}
 	return handler, store, items
 }
@@ -3902,13 +3899,22 @@ func TestAIApprovalHandlersRejectRewrittenRequestOrg(t *testing.T) {
 	} {
 		for _, ready := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s/store=%t", org.name, ready), func(t *testing.T) {
-				handler, _, items := approvalOrgBoundaryFixture(t)
+				handler, store, items := approvalOrgBoundaryFixture(t)
+				readSavedItems := func() []*approval.ApprovalRequest {
+					saved := make([]*approval.ApprovalRequest, 0, len(items))
+					for _, item := range items {
+						current, ok := store.GetApproval(item.ID)
+						require.True(t, ok)
+						saved = append(saved, current)
+					}
+					return saved
+				}
 				delegate := &testAIAutoFixEndpoints{}
 				handler.SetAIAutoFixEndpoints(delegate)
 				if !ready {
 					approval.SetStore(nil)
 				}
-				before, err := json.Marshal(items)
+				before, err := json.Marshal(readSavedItems())
 				require.NoError(t, err)
 				for _, route := range []struct {
 					name, method, path string
@@ -3934,7 +3940,7 @@ func TestAIApprovalHandlersRejectRewrittenRequestOrg(t *testing.T) {
 						for _, private := range []string{"fixture-default", "fixture-boundary", "org-a", "opaque/", "fixture-host"} {
 							assert.NotContains(t, rec.Body.String(), private)
 						}
-						after, err := json.Marshal(items)
+						after, err := json.Marshal(readSavedItems())
 						require.NoError(t, err)
 						assert.Equal(t, string(before), string(after), "damaged request identity changed saved decisions")
 						assert.Zero(t, delegate.approveFixCalls, "damaged identity reached investigation dispatch")
@@ -3998,18 +4004,26 @@ func TestAIApprovalHandlersPreserveExactRequestOrg(t *testing.T) {
 			t.Logf("APPROVAL_READ_BODY %s detail %s", tc.name, strings.TrimSpace(rec.Body.String()))
 			for _, decision := range []struct {
 				suffix string
-				call   http.HandlerFunc
 				status approval.ApprovalStatus
 			}{
-				{"approve", handler.HandleApproveCommand, approval.StatusApproved},
-				{"deny", handler.HandleDenyCommand, approval.StatusDenied},
+				{"approve", approval.StatusApproved},
+				{"deny", approval.StatusDenied},
 			} {
-				// Restore only fixture decision state between the two independent writes.
-				item.Status, item.DecidedAt, item.DecidedBy, item.DenyReason = approval.StatusPending, nil, "", ""
-				rec = request(http.MethodPost, "/api/ai/approvals/"+tc.id+"/"+decision.suffix, decision.call)
-				require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
-				assert.Equal(t, decision.status, item.Status)
-				assert.False(t, item.Consumed)
+				t.Run(decision.suffix, func(t *testing.T) {
+					// Independent decisions start from a fresh fixture, not by
+					// mutating a previously returned approval snapshot.
+					freshHandler, freshStore, _ := approvalOrgBoundaryFixture(t)
+					call := freshHandler.HandleApproveCommand
+					if decision.suffix == "deny" {
+						call = freshHandler.HandleDenyCommand
+					}
+					rec := request(http.MethodPost, "/api/ai/approvals/"+tc.id+"/"+decision.suffix, call)
+					require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+					current, ok := freshStore.GetApproval(tc.id)
+					require.True(t, ok)
+					assert.Equal(t, decision.status, current.Status)
+					assert.False(t, current.Consumed)
+				})
 			}
 		})
 	}

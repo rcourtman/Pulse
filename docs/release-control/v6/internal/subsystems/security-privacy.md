@@ -18,6 +18,23 @@
 
 ## Purpose
 
+### Caller-owned approval snapshots do not rewrite decision authority
+
+An approval's stored command, tenant, action context and consumed decision are
+owned by the store, not its creator, read consumer, decision-result consumer or
+creation callback. Those boundaries deep-copy mutable nested context while
+preserving nil/empty provenance and the existing generated-field contract.
+Approval consumption retains its locked hash/expiry/status/single-use checks;
+no scope, grant, authentication, review or tenant-normalization rule changes.
+
+Save serialization covers encoding through atomic owner-only file publication,
+so overlapping delayed/shutdown saves cannot publish a torn or older approval
+snapshot. The existing debounce window is unchanged; this is not synchronous
+crash-durable consumption or an original-client/impact claim.
+`store_snapshot_test.go` exercises ownership isolation and persisted consumed
+rejection. `ai_approval_snapshot_test.go` and the existing native review/command
+boundary tests retain consuming HTTP and least-privilege compatibility proof.
+
 ### Credential setup and rotation keep their owner and uncertain values
 
 The existing Authentication quick-setup and rotation forms share one pending

@@ -572,9 +572,10 @@ func TestGetPendingApprovalsReturnsOperationalPriorityOrder(t *testing.T) {
 		if err := store.CreateApproval(req); err != nil {
 			t.Fatalf("CreateApproval(%s) error = %v", id, err)
 		}
-		req.ExpiresAt = expiresAt
-		req.RiskLevel = risk
-		req.RequestedAt = requestedAt
+		// Backdate the owned fixture, not the detached creation result.
+		store.mu.Lock()
+		store.approvals[req.ID].RequestedAt = requestedAt
+		store.mu.Unlock()
 	}
 
 	create("later-critical", base.Add(3*time.Minute), RiskLevel("critical"), base)
@@ -682,8 +683,6 @@ func TestGetPendingApprovalsForOrgReturnsOperationalPriorityOrder(t *testing.T) 
 		if err := store.CreateApproval(req); err != nil {
 			t.Fatalf("CreateApproval(%s) error = %v", id, err)
 		}
-		req.ExpiresAt = expiresAt
-		req.RiskLevel = risk
 	}
 
 	create("org-b-sooner", "org-b", base.Add(time.Minute), RiskHigh)
@@ -806,7 +805,9 @@ func TestConsumeApproval_LegacyWithoutCommandHash_MatchingTuple(t *testing.T) {
 		TargetID:   "host-1:web",
 	}
 	_ = store.CreateApproval(req)
-	req.CommandHash = "" // Simulate legacy persisted approval without hash
+	store.mu.Lock()
+	store.approvals[req.ID].CommandHash = "" // Simulate legacy persisted approval without hash.
+	store.mu.Unlock()
 	_, _ = store.Approve(req.ID, "admin")
 
 	consumed, err := store.ConsumeApproval(req.ID, "docker restart web", "docker", "host-1:web")
@@ -839,7 +840,9 @@ func TestConsumeApproval_LegacyWithoutCommandHash_MismatchRejected(t *testing.T)
 		TargetID:   "host-1:web",
 	}
 	_ = store.CreateApproval(req)
-	req.CommandHash = "" // Simulate legacy persisted approval without hash
+	store.mu.Lock()
+	store.approvals[req.ID].CommandHash = "" // Simulate legacy persisted approval without hash.
+	store.mu.Unlock()
 	_, _ = store.Approve(req.ID, "admin")
 
 	if _, err := store.ConsumeApproval(req.ID, "docker restart db", "docker", "host-1:db"); err == nil {
