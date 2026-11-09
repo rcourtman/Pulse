@@ -342,15 +342,12 @@ describe('native Settings credential setup and rotation through real API transpo
         expect(code.classList.contains('break-all')).toBe(label !== 'Username');
         const button = within(row).getByRole<HTMLButtonElement>('button', {
           name: 'Copy',
-          exact: true,
         });
         copyButtons.push(button);
         fireEvent.click(button);
         await waitFor(() => expect(clipboard).toHaveBeenNthCalledWith(index + 1, value));
-        expect(
-          await within(row).findByRole('button', { name: 'Copied!', exact: true }),
-        ).toBeVisible();
-        expect(screen.getAllByRole('button', { name: 'Copied!', exact: true })).toHaveLength(1);
+        expect(await within(row).findByRole('button', { name: 'Copied!' })).toBeVisible();
+        expect(screen.getAllByRole('button', { name: 'Copied!' })).toHaveLength(1);
       }
       const tokenRow = screen.getByText('API token', { exact: true }).parentElement!;
       expect(
