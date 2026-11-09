@@ -18,6 +18,30 @@
 
 ## Purpose
 
+### Approval request identity is not legacy record normalization
+
+The core approval list, detail, approve and deny handlers accept the selected
+request organization exactly. A present blank or whitespace-padded string is
+unavailable authority, not a request for the default or trimmed organization.
+They return a generic `503 organization_unavailable` before acquiring the approval
+store, including when the store is not initialized. Method checks and the
+independent relay/mobile mutation gate remain ahead of this boundary.
+
+Absent tenant context still uses the historical default. Explicit default and
+sound opaque organization IDs retain their existing reads and decisions; a
+valid list without a store still returns empty arrays and zero statistics.
+Legacy blank/padded *record* membership retains its existing normalization.
+No saved approval, token, scope, role, authentication/CSRF check, review admission
+or investigation licence/delegation rule is rewritten by the request guard.
+
+The `TestAIApprovalHandlers*RequestOrg*` tests in `ai_handlers_test.go` exercise
+blank/Unicode-padded identities with and without the store, read bodies, inert
+shell decisions, withheld investigation delegation, legacy default records,
+opaque tenants, and corrected-context recovery. The existing routed review,
+mobile, authentication and CSRF suites retain the independent admission checks.
+These are source fixtures, not evidence of routed damaged-context exposure,
+historical impact, installed-client recovery or consuming-browser acceptance.
+
 ### Password changes belong to their admitted settings reader
 
 The existing password dialog receives the Settings status reader, not an

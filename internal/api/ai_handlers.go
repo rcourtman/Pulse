@@ -7559,12 +7559,29 @@ func getAuthUsername(cfg *config.Config, r *http.Request) string {
 // Approval Workflow Handlers
 // ============================================================================
 
+// approvalRequestOrgID validates selected request authority without applying
+// the compatibility normalization used for legacy approval records. GetOrgID
+// already supplies the historical default when tenant context is absent.
+func approvalRequestOrgID(w http.ResponseWriter, r *http.Request) (string, bool) {
+	orgID := GetOrgID(r.Context())
+	if orgID == "" || orgID != strings.TrimSpace(orgID) {
+		writeErrorResponse(w, http.StatusServiceUnavailable, "organization_unavailable", "Approval organization is unavailable", nil)
+		return "", false
+	}
+	return orgID, true
+}
+
 // HandleListApprovals returns pending approval requests for the current org.
 // Pulse Assistant command approvals are a core chat workflow; investigation fix
 // approval execution remains gated by the auto-fix endpoint when approved.
 func (h *AISettingsHandler) HandleListApprovals(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	orgID, ok := approvalRequestOrgID(w, r)
+	if !ok {
 		return
 	}
 
@@ -7579,7 +7596,6 @@ func (h *AISettingsHandler) HandleListApprovals(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	orgID := approval.NormalizeOrgID(GetOrgID(r.Context()))
 	response := map[string]interface{}{
 		"approvals": store.GetPendingApprovalsForOrg(orgID),
 		"stats":     store.GetStatsForOrg(orgID),
@@ -7606,6 +7622,11 @@ func (h *AISettingsHandler) HandleGetApproval(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	orgID, ok := approvalRequestOrgID(w, r)
+	if !ok {
+		return
+	}
+
 	// Extract ID from path: /api/ai/approvals/{id}
 	approvalID := strings.TrimPrefix(r.URL.Path, "/api/ai/approvals/")
 	approvalID = strings.TrimSuffix(approvalID, "/")
@@ -7622,7 +7643,6 @@ func (h *AISettingsHandler) HandleGetApproval(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	orgID := approval.NormalizeOrgID(GetOrgID(r.Context()))
 	req, ok := store.GetApproval(approvalID)
 	if !ok || !approval.BelongsToOrg(req, orgID) {
 		writeErrorResponse(w, http.StatusNotFound, "not_found", "Approval request not found", nil)
@@ -7647,6 +7667,11 @@ func (h *AISettingsHandler) HandleApproveCommand(w http.ResponseWriter, r *http.
 		return
 	}
 
+	orgID, ok := approvalRequestOrgID(w, r)
+	if !ok {
+		return
+	}
+
 	// Extract ID from path: /api/ai/approvals/{id}/approve
 	path := strings.TrimPrefix(r.URL.Path, "/api/ai/approvals/")
 	path = strings.TrimSuffix(path, "/approve")
@@ -7662,7 +7687,6 @@ func (h *AISettingsHandler) HandleApproveCommand(w http.ResponseWriter, r *http.
 		writeErrorResponse(w, http.StatusServiceUnavailable, "not_initialized", "Approval store not initialized", nil)
 		return
 	}
-	orgID := approval.NormalizeOrgID(GetOrgID(r.Context()))
 	existingReq, ok := store.GetApproval(approvalID)
 	if !ok || !approval.BelongsToOrg(existingReq, orgID) {
 		writeErrorResponse(w, http.StatusNotFound, "not_found", "Approval request not found", nil)
@@ -7794,6 +7818,11 @@ func (h *AISettingsHandler) HandleDenyCommand(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	orgID, ok := approvalRequestOrgID(w, r)
+	if !ok {
+		return
+	}
+
 	// Extract ID from path: /api/ai/approvals/{id}/deny
 	path := strings.TrimPrefix(r.URL.Path, "/api/ai/approvals/")
 	path = strings.TrimSuffix(path, "/deny")
@@ -7819,7 +7848,6 @@ func (h *AISettingsHandler) HandleDenyCommand(w http.ResponseWriter, r *http.Req
 		writeErrorResponse(w, http.StatusServiceUnavailable, "not_initialized", "Approval store not initialized", nil)
 		return
 	}
-	orgID := approval.NormalizeOrgID(GetOrgID(r.Context()))
 	existingReq, ok := store.GetApproval(approvalID)
 	if !ok || !approval.BelongsToOrg(existingReq, orgID) {
 		writeErrorResponse(w, http.StatusNotFound, "not_found", "Approval request not found", nil)
