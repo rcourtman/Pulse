@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "b4f4aacb290aabae6a89d27d41ff9afc4b0f27c4",
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/ChangePasswordModal.tsx": "ee2d57edc37cbca6319d25e5f59ca6bf87bce4cb13be49fa2266ab8b7f0483e1",
+    "frontend-modern/src/components/Settings/Settings.tsx": "0b1dac7de949a06f9421bd49bb37b72d3bc8af5858499917055bed70b177e396",
+    "frontend-modern/src/components/Settings/SettingsDialogs.tsx": "d7e2b22cc939bbbfb95a9f990975fed518fb7170aaba30323e14d32100d48ba6",
+    "frontend-modern/src/utils/apiClient.ts": "c3fecfe6c252a4d633dda26a0782fd640b070ccb2dc4bf81e25ca7c272025071"
+  },
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/ChangePasswordModal.tsx",
+    "frontend-modern/src/components/Settings/Settings.tsx",
+    "frontend-modern/src/components/Settings/SettingsDialogs.tsx",
+    "frontend-modern/src/utils/apiClient.ts"
+  ],
+  "routes": [
+    "/settings/security/authentication (native SettingsPageShell + SecurityAuthPanel + SettingsDialogs, real useSettingsAccess/API client and synthetic HTTP; not full App/IdP)"
+  ],
+  "states": [
+    "owned password draft",
+    "same-reader status refresh pending/recovered",
+    "access refusal",
+    "organisation switch idle/pending",
+    "pending password change",
+    "wrong current password HTTP 401",
+    "unconfirmed server result",
+    "current success with following access denied"
+  ],
+  "interactions": [
+    "Open native Change password and enter synthetic fields",
+    "Hold/release native status GET; check disabled fields and unchanged draft",
+    "Reject status read and switch selected organisation; check dialog withdrawal",
+    "Hold password POST across withdrawal; check no late reload",
+    "Return 401 without clearing active saved API credential or losing dialog",
+    "Return 500 and require sign-in check rather than another blind write",
+    "Accept current password change; check actual browser reload despite following denied status"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "verified_at": "2026-11-09T01:40:47.628846Z",
+  "browsers": [
+    "Playwright 1.56.1 Chromium 141 (desktop/light)",
+    "Playwright 1.56.1 WebKit 26 (390x844/light/dark)"
+  ],
+  "evidence": "Web-product invocation 20261109T012018Z: RECEIPTS.md, CAPTURES.json and BROWSER-PROOFS.tar.xz; 48 native-inspected captures / 24 comparable pairs. Final comparison client exit 0 with explicit browser/server cleanup. Earlier exit 143 retained separately; no diagnosis or retrospective pass."
+}

@@ -1,4 +1,5 @@
 import { Accessor, Component } from 'solid-js';
+import type { SecurityStatus } from '@/types/config';
 import type { UpdateInfo, UpdatePlan, VersionInfo } from '@/api/updates';
 import { UpdateConfirmationModal } from '@/components/UpdateConfirmationModal';
 import { BackupTransferDialogs } from './BackupTransferDialogs';
@@ -36,8 +37,11 @@ interface SettingsDialogsProps {
   closeImportDialog: () => void;
   closeApiTokenModal: () => void;
   handleApiTokenAuthenticate: () => void;
+  securityStatus: Accessor<SecurityStatus | null>;
+  securityStatusLoading: Accessor<boolean>;
   showPasswordModal: Accessor<boolean>;
   closePasswordModal: () => void;
+  onPasswordChanged: () => void;
 }
 
 export const SettingsDialogs: Component<SettingsDialogsProps> = (props) => {
@@ -89,7 +93,13 @@ export const SettingsDialogs: Component<SettingsDialogsProps> = (props) => {
         handleApiTokenAuthenticate={props.handleApiTokenAuthenticate}
       />
 
-      <ChangePasswordModal isOpen={props.showPasswordModal()} onClose={props.closePasswordModal} />
+      <ChangePasswordModal
+        isOpen={props.showPasswordModal()}
+        onClose={props.closePasswordModal}
+        onChanged={props.onPasswordChanged}
+        securityStatus={props.securityStatus()}
+        securityStatusLoading={props.securityStatusLoading()}
+      />
     </>
   );
 };

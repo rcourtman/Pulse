@@ -268,7 +268,10 @@ const SettingsWorkspace: Component<SettingsProps> = (props) => {
         closeImportDialog={backupTransferFlow.closeImportDialog}
         closeApiTokenModal={backupTransferFlow.closeApiTokenModal}
         handleApiTokenAuthenticate={backupTransferFlow.handleApiTokenAuthenticate}
+        securityStatus={securityStatus}
+        securityStatusLoading={securityStatusLoading}
         showPasswordModal={showPasswordModal}
+        onPasswordChanged={() => setShowPasswordModal(false)}
         closePasswordModal={() => {
           setShowPasswordModal(false);
           void loadSecurityStatus();

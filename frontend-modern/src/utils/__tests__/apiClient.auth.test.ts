@@ -63,4 +63,49 @@ describe('apiClient auth storage integrity', () => {
       document.cookie = 'pulse_csrf=; Max-Age=0; path=/';
     }
   });
+  it.each([false, true])(
+    'returns password refusal to its owner without clearing %s newer-reader authentication',
+    async (changedReader) => {
+      const { apiFetch, getApiToken, getOrgID, setApiToken, setOrgID } =
+        await import('@/utils/apiClient');
+      setApiToken('synthetic-original-token');
+      setOrgID('synthetic-original-org');
+      document.cookie = 'pulse_csrf=synthetic-csrf; path=/';
+      let resolve!: (response: Response) => void;
+      const fetchMock = vi.fn().mockReturnValue(
+        new Promise<Response>((done) => {
+          resolve = done;
+        }),
+      );
+      vi.stubGlobal('fetch', fetchMock);
+      try {
+        const pending = apiFetch('/api/security/change-password', {
+          method: 'POST',
+          expectedOrgID: 'synthetic-original-org',
+          retry: false,
+        });
+        expect(fetchMock).toHaveBeenCalledOnce();
+        expect(fetchMock.mock.calls[0][1].headers).toMatchObject({
+          'X-API-Token': 'synthetic-original-token',
+          'X-Pulse-Org-ID': 'synthetic-original-org',
+        });
+        if (changedReader) {
+          setApiToken('synthetic-new-reader-token');
+          setOrgID('synthetic-new-reader-org');
+        }
+        resolve(new Response('{"error":"unauthorized"}', { status: 401 }));
+        expect((await pending).status).toBe(401);
+        expect(fetchMock).toHaveBeenCalledOnce();
+        expect(getApiToken()).toBe(
+          changedReader ? 'synthetic-new-reader-token' : 'synthetic-original-token',
+        );
+        expect(getOrgID()).toBe(
+          changedReader ? 'synthetic-new-reader-org' : 'synthetic-original-org',
+        );
+      } finally {
+        vi.unstubAllGlobals();
+        document.cookie = 'pulse_csrf=; Max-Age=0; path=/';
+      }
+    },
+  );
 });
