@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -3860,3 +3861,197 @@ func TestAssistantProjectedModeEchoPreservesLegacyPolicy(t *testing.T) {
 		})
 	}
 }
+
+// approvalOrgBoundaryFixture uses only inert approvals: approving changes the
+// decision record, never dispatches a command. The endpoint stub counts the
+// separate investigation delegation boundary.
+func approvalOrgBoundaryFixture(t *testing.T) (*AISettingsHandler, *approval.Store, []*approval.ApprovalRequest) {
+	t.Helper()
+	store, err := approval.NewStore(approval.StoreConfig{DataDir: t.TempDir(), DisablePersistence: true})
+	require.NoError(t, err)
+	previous := approval.GetStore()
+	t.Cleanup(func() { approval.SetStore(previous) })
+	approval.SetStore(store)
+	handler := &AISettingsHandler{defaultConfig: &config.Config{}}
+	items := []*approval.ApprovalRequest{
+		{ID: "fixture-default", OrgID: "default"},
+		{ID: "fixture-legacy"},
+		{ID: "fixture-tenant", OrgID: "org-a"},
+		{ID: "fixture-opaque", OrgID: "opaque/é:key with space"},
+		{ID: "fixture-investigation", OrgID: "default", ToolID: "investigation_fix"},
+	}
+	for i, item := range items {
+		item.Command = "printf fixture-boundary"
+		item.TargetType, item.TargetID = "agent", "fixture-host"
+		item.Context = "Fixture approval review"
+		item.ExpiresAt = time.Date(2099, 1, 1, 0, 0, 0, 0, time.UTC)
+		require.NoError(t, store.CreateApproval(item))
+		// The store owns these pointers; set stable fixture request timestamps
+		// before reads so baseline and final read bodies can be compared exactly.
+		item.RequestedAt = time.Date(2026, 1, 1, 0, 0, i, 0, time.UTC)
+	}
+	return handler, store, items
+}
+
+func TestAIApprovalHandlersRejectRewrittenRequestOrg(t *testing.T) {
+	for _, org := range []struct{ name, value string }{
+		{"blank", ""}, {"ascii whitespace", " \t\r\n"}, {"unicode whitespace", "\u00a0\u2003"},
+		{"default prefix", " default"}, {"default suffix", "default "},
+		{"tenant suffix", "org-a\t"}, {"opaque prefix", "\u2003opaque/é:key with space"},
+		{"opaque suffix", "opaque/é:key with space\u3000"},
+	} {
+		for _, ready := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/store=%t", org.name, ready), func(t *testing.T) {
+				handler, _, items := approvalOrgBoundaryFixture(t)
+				delegate := &testAIAutoFixEndpoints{}
+				handler.SetAIAutoFixEndpoints(delegate)
+				if !ready {
+					approval.SetStore(nil)
+				}
+				before, err := json.Marshal(items)
+				require.NoError(t, err)
+				for _, route := range []struct {
+					name, method, path string
+					call               func(http.ResponseWriter, *http.Request)
+				}{
+					{"list", http.MethodGet, "/api/ai/approvals", handler.HandleListApprovals},
+					{"detail", http.MethodGet, "/api/ai/approvals/fixture-default", handler.HandleGetApproval},
+					{"approve", http.MethodPost, "/api/ai/approvals/fixture-default/approve", handler.HandleApproveCommand},
+					{"deny", http.MethodPost, "/api/ai/approvals/fixture-default/deny", handler.HandleDenyCommand},
+					{"investigation", http.MethodPost, "/api/ai/approvals/fixture-investigation/approve", handler.HandleApproveCommand},
+				} {
+					t.Run(route.name, func(t *testing.T) {
+						req := newLoopbackRequest(route.method, route.path, strings.NewReader(`{"reason":"fixture"}`))
+						req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, org.value))
+						rec := httptest.NewRecorder()
+						route.call(rec, req)
+						assert.Equal(t, http.StatusServiceUnavailable, rec.Code, rec.Body.String())
+						var response struct {
+							Code string `json:"code"`
+						}
+						require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+						assert.Equal(t, "organization_unavailable", response.Code)
+						for _, private := range []string{"fixture-default", "fixture-boundary", "org-a", "opaque/", "fixture-host"} {
+							assert.NotContains(t, rec.Body.String(), private)
+						}
+						after, err := json.Marshal(items)
+						require.NoError(t, err)
+						assert.Equal(t, string(before), string(after), "damaged request identity changed saved decisions")
+						assert.Zero(t, delegate.approveFixCalls, "damaged identity reached investigation dispatch")
+					})
+				}
+			})
+		}
+	}
+}
+
+func TestAIApprovalHandlersPreserveExactRequestOrg(t *testing.T) {
+	for _, tc := range []struct {
+		name, org, id string
+		present       bool
+	}{
+		{"absent historical default", "", "fixture-default", false},
+		{"explicit default", "default", "fixture-default", true},
+		{"legacy record", "default", "fixture-legacy", true},
+		{"tenant", "org-a", "fixture-tenant", true},
+		{"opaque tenant", "opaque/é:key with space", "fixture-opaque", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			handler, store, _ := approvalOrgBoundaryFixture(t)
+			request := func(method, path string, call http.HandlerFunc) *httptest.ResponseRecorder {
+				req := newLoopbackRequest(method, path, strings.NewReader(`{"reason":"fixture"}`))
+				if tc.present {
+					req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, tc.org))
+				}
+				rec := httptest.NewRecorder()
+				call(rec, req)
+				return rec
+			}
+			rec := request(http.MethodGet, "/api/ai/approvals", handler.HandleListApprovals)
+			require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+			var list struct {
+				Approvals []*approval.ApprovalRequest `json:"approvals"`
+				Stats     map[string]int              `json:"stats"`
+			}
+			require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &list))
+			wantIDs := []string{"fixture-default", "fixture-legacy", "fixture-investigation"}
+			if tc.org == "org-a" {
+				wantIDs = []string{"fixture-tenant"}
+			}
+			if tc.org == "opaque/é:key with space" {
+				wantIDs = []string{"fixture-opaque"}
+			}
+			gotIDs := []string{}
+			for _, item := range list.Approvals {
+				gotIDs = append(gotIDs, item.ID)
+			}
+			require.ElementsMatch(t, wantIDs, gotIDs)
+			assert.Equal(t, len(wantIDs), list.Stats["pending"])
+			t.Logf("APPROVAL_READ_BODY %s list %s", tc.name, strings.TrimSpace(rec.Body.String()))
+			rec = request(http.MethodGet, "/api/ai/approvals/"+tc.id, handler.HandleGetApproval)
+			require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+			item, ok := store.GetApproval(tc.id)
+			require.True(t, ok)
+			encoded, err := json.Marshal(item)
+			require.NoError(t, err)
+			assert.JSONEq(t, string(encoded), rec.Body.String())
+			t.Logf("APPROVAL_READ_BODY %s detail %s", tc.name, strings.TrimSpace(rec.Body.String()))
+			for _, decision := range []struct {
+				suffix string
+				call   http.HandlerFunc
+				status approval.ApprovalStatus
+			}{
+				{"approve", handler.HandleApproveCommand, approval.StatusApproved},
+				{"deny", handler.HandleDenyCommand, approval.StatusDenied},
+			} {
+				// Restore only fixture decision state between the two independent writes.
+				item.Status, item.DecidedAt, item.DecidedBy, item.DenyReason = approval.StatusPending, nil, "", ""
+				rec = request(http.MethodPost, "/api/ai/approvals/"+tc.id+"/"+decision.suffix, decision.call)
+				require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+				assert.Equal(t, decision.status, item.Status)
+				assert.False(t, item.Consumed)
+			}
+		})
+	}
+}
+
+func TestAIApprovalHandlersRequestOrgRecoveryAndNoStoreCompatibility(t *testing.T) {
+	handler, store, _ := approvalOrgBoundaryFixture(t)
+	for _, tc := range []struct {
+		name  string
+		org   *string
+		ready bool
+		want  int
+	}{
+		{"unknown is not empty", approvalOrgString(""), false, http.StatusServiceUnavailable},
+		{"absent historical default without store", nil, false, http.StatusOK},
+		{"explicit default without store", approvalOrgString("default"), false, http.StatusOK},
+		{"tenant without store", approvalOrgString("org-a"), false, http.StatusOK},
+		{"unknown with store", approvalOrgString(""), true, http.StatusServiceUnavailable},
+		{"recovered default", approvalOrgString("default"), true, http.StatusOK},
+		{"damaged tenant", approvalOrgString("org-a "), true, http.StatusServiceUnavailable},
+		{"recovered tenant", approvalOrgString("org-a"), true, http.StatusOK},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			approval.SetStore(nil)
+			if tc.ready {
+				approval.SetStore(store)
+			}
+			req := newLoopbackRequest(http.MethodGet, "/api/ai/approvals", nil)
+			if tc.org != nil {
+				req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, *tc.org))
+			}
+			rec := httptest.NewRecorder()
+			handler.HandleListApprovals(rec, req)
+			require.Equal(t, tc.want, rec.Code, rec.Body.String())
+			if tc.want == http.StatusOK && !tc.ready {
+				assert.JSONEq(t, `{"approvals":[],"stats":{"pending":0,"approved":0,"denied":0,"expired":0,"executions":0}}`, rec.Body.String())
+			}
+			if tc.want == http.StatusOK && tc.ready {
+				assert.Contains(t, rec.Body.String(), "fixture-")
+			}
+		})
+	}
+}
+
+func approvalOrgString(value string) *string { return &value }
