@@ -1254,6 +1254,10 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                   type="button"
                   onClick={toggleExpanded}
                   class="rounded-sm bg-amber-600 px-2 py-1 text-xs font-semibold text-white transition-colors hover:bg-amber-700"
+                  classList={{
+                    'max-w-28': Boolean(aiIntelligenceStore.approvalsError),
+                    'whitespace-normal': Boolean(aiIntelligenceStore.approvalsError),
+                  }}
                   title={action().detail}
                 >
                   {action().label}
