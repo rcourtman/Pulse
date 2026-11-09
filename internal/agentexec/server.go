@@ -2097,6 +2097,12 @@ func (s *Server) ExecuteCommand(ctx context.Context, agentID string, cmd Execute
 			return nil, fmt.Errorf("command approval authorization rejected: %w", err)
 		}
 
+		// The verifier can wait for durable approval consumption. A deadline or
+		// cancellation during that barrier must not dispatch a late command.
+		if err := ctx.Err(); err != nil {
+			return nil, fmt.Errorf("command %q not dispatched: %w", cmd.RequestID, err)
+		}
+
 		// Approval grants are an internal transport credential. Never accept a
 		// caller-supplied grant, even if it happens to be structurally valid.
 		grant, grantErr := s.newCommandApprovalGrant(ac.approvalGrantKey, agentID, cmd, time.Now(), DefaultApprovalGrantTTL)

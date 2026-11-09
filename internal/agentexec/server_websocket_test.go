@@ -2346,3 +2346,63 @@ func TestRegistrationReservesFirstFrameBeforePublishingSession(t *testing.T) {
 func TestVMGuestExecCapabilityBoundToRegisteredSession(t *testing.T) {
 	testVMGuestExecCapabilityGate(t)
 }
+
+func TestExecuteCommand_CanceledDuringApprovalAuthorizationNeverMintsOrDispatches(t *testing.T) {
+	for _, deadline := range []bool{false, true} {
+		t.Run(fmt.Sprintf("deadline_%t", deadline), func(t *testing.T) {
+			var ctx context.Context
+			var cancel context.CancelFunc
+			verifierCalls := 0
+			s := NewServer(allowAllTestTokens)
+			s.SetCommandAuthorizationVerifier(func(CommandAuthorizationRequest) error {
+				verifierCalls++
+				if deadline {
+					<-ctx.Done()
+				} else {
+					cancel()
+				}
+				return nil // publication succeeded, but this request is now over
+			})
+			grantCalls := 0
+			s.newCommandApprovalGrant = func([]byte, string, ExecuteCommandPayload, time.Time, time.Duration) (*CommandApprovalGrant, error) {
+				grantCalls++
+				return nil, errors.New("grant must not be minted")
+			}
+			ts := newWSServer(t, s)
+			defer ts.Close()
+			conn, _, err := dialAgentExecWebSocket(t, ts.URL)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer conn.Close()
+			wsWriteMessage(t, conn, mustNewMessage(t, MsgTypeAgentRegister, "", AgentRegisterPayload{
+				AgentID: "a1", Hostname: "host1", Version: "fixture", Platform: "linux", Token: "fixture",
+			}))
+			_ = wsReadRegisteredPayload(t, conn)
+			ctx, cancel = context.WithCancel(context.Background())
+			want := context.Canceled
+			if deadline {
+				cancel()
+				ctx, cancel = context.WithTimeout(context.Background(), time.Second)
+				want = context.DeadlineExceeded
+			}
+			defer cancel()
+			payload := ExecuteCommandPayload{
+				RequestID: "canceled-consumption", Command: "echo fixture", ApprovalID: "fixture-approval", Timeout: 1,
+			}
+			payload.BindCommandAuthorization("org-1", "action-1")
+			if result, err := s.ExecuteCommand(ctx, "a1", payload); !errors.Is(err, want) || result != nil {
+				t.Fatalf("canceled dispatch returned %v, %v; want %v", result, err, want)
+			}
+			if verifierCalls != 1 {
+				t.Fatalf("authorization verifier calls = %d, want 1", verifierCalls)
+			}
+			if grantCalls != 0 {
+				t.Fatalf("canceled request minted %d grants", grantCalls)
+			}
+			if _, err := wsReadRawMessageWithTimeout(conn, 100*time.Millisecond); err == nil {
+				t.Fatal("canceled request dispatched a WebSocket command")
+			}
+		})
+	}
+}

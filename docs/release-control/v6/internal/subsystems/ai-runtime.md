@@ -33,8 +33,9 @@ absence is empty; unreadable or invalid JSON and null approval records fail
 initialization without a writable store or cleanup worker. A failure cannot
 rewrite either source from a partial/empty load. Existing null arrays, sparse
 legacy identities, null execution entries/collections, unknown fields and target
-normalization/removal remain compatible. No cross-file generation transaction,
-new command authority or synchronous durability guarantee is introduced.
+normalization/removal remain compatible. Initialization itself adds no cross-file
+generation transaction or new command authority; the consumption publication
+barrier below governs when an existing approval can authorize dispatch.
 
 The process-global store and readiness publish atomically: failed initialization
 is distinct from intentional teardown/uninitialized AI. Normal initialization
@@ -62,9 +63,10 @@ within a request are preserved without JSON re-normalization.
 Delayed and shutdown saves serialize snapshot-to-publication, encode while the
 store lock is held, and publish complete owner-only files by same-directory
 rename. Filesystem I/O does not hold the decision lock. This prevents concurrent
-encoding/writes from racing decisions or publishing torn/older snapshots; it does
-not remove the existing five-second debounce durability window or change expiry,
-consumption, permissions, JSON fields, list order or execution-state ownership.
+encoding/writes from racing decisions or publishing torn/older snapshots. Creation,
+review decisions and execution-state saves retain their five-second debounce;
+consumption uses the synchronous dispatch barrier below. Permissions, JSON fields,
+list order and execution-state ownership are unchanged.
 `store_snapshot_test.go` covers detached nested input/read/decision/callback
 ownership, concurrent JSON decisions, policy wire shape, real timer/Flush saves,
 atomic publication and persisted single-use rejection. Native handler fixtures in
@@ -72,6 +74,37 @@ atomic publication and persisted single-use rejection. Native handler fixtures i
 HTTP encoding; existing authorization, review, relay and Assistant consumers
 retain their own admission rules. No installed/original-client recovery follows
 from these source fixtures.
+
+### Approval consumption is published before command authority
+
+For a persistent store, `ConsumeApproval` serializes with normal saves, validates
+and spends the exact approval under the store lock, captures the complete approval
+snapshot, then publishes its owner-only file before returning authority. The
+filesystem write runs without the decision/read lock. A successful return must
+already survive a fresh store read, without `Flush` or a debounce wait; a later
+normal save cannot publish an older unconsumed snapshot. This repairs the prior
+five-second process-restart replay window at the existing command dispatch gate.
+
+Encoding or publication failure returns no approval and a generic persistence
+error, without filesystem paths or saved context. The in-memory decision stays
+spent rather than inviting an uncertain retry. A failed save is not command
+execution; existing saved bytes remain the source for deliberate storage recovery.
+Expiry is rechecked after publication, and the agent server rechecks its request
+context before signing or sending a command after the potentially blocking
+verifier. Cancellation may therefore spend an approval without dispatching it;
+it never creates retry authority. Existing tenant/action/hash, expiry, single-use
+and agent-admission checks remain required. In-memory-only stores remain in-memory.
+
+`store_consume_persistence_test.go` covers immediate no-Flush reload for canonical
+and legacy approvals, failed encoding/publication, unchanged saved sources and
+in-memory mode. Existing `store_snapshot_test.go` concurrency/atomic-write proofs
+continue to apply. `agent_command_durability_test.go` couples the real saved
+verifier to a synthetic WebSocket agent, checks saved consumption at the first
+signed frame, and proves no frame on failed publication or replay after reload.
+`server_websocket_test.go` checks cancellation/deadline after verifier entry
+without grant minting or dispatch. These tests execute no command on a real host.
+This is completed publication/process-reload protection, not a cross-file
+transaction, power-loss guarantee, original-client recovery or release claim.
 
 ### Approval read readiness remains visible in Patrol
 
