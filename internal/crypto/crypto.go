@@ -188,8 +188,6 @@ func getOrCreateKeyAt(dataDir string) ([]byte, error) {
 		Str("keyPath", keyPath).
 		Msg("looking for encryption key")
 
-	var keyReadErr error
-
 	// Try to read existing key from new location.
 	if key, err := loadKeyFromFile(keyPath); err == nil {
 		if err := ensureOwnerOnlyDir(filepath.Dir(keyPath)); err != nil {
@@ -203,10 +201,10 @@ func getOrCreateKeyAt(dataDir string) ([]byte, error) {
 	} else if isMissingPathError(err) {
 		log.Debug().Err(err).Str("path", keyPath).Msg("Could not read encryption key file")
 	} else if errors.Is(err, errInvalidKeyMaterial) {
-		log.Warn().
-			Err(err).
-			Str("path", keyPath).
-			Msg("Found invalid encryption key file contents, generating a replacement key")
+		// An existing key is evidence of saved authority, even if no older
+		// .enc file is present. Neither a legacy key nor newly generated
+		// material can be assumed to recover what this key protected.
+		return nil, fmt.Errorf("existing encryption key %q is invalid; refusing to replace it; restore the original key from a trusted backup: %w", keyPath, err)
 	} else if errors.Is(err, errUnsafeKeyPath) {
 		return nil, fmt.Errorf("unsafe encryption key path %q: %w", keyPath, err)
 	} else {
@@ -264,11 +262,10 @@ func getOrCreateKeyAt(dataDir string) ([]byte, error) {
 			return key, nil
 		} else if errors.Is(err, errUnsafeKeyPath) {
 			return nil, fmt.Errorf("unsafe legacy encryption key path %q: %w", oldKeyPath, err)
-		} else if !os.IsNotExist(err) && !errors.Is(err, errInvalidKeyMaterial) {
-			log.Warn().
-				Err(err).
-				Str("path", oldKeyPath).
-				Msg("Failed to read legacy encryption key during migration check")
+		} else if errors.Is(err, errInvalidKeyMaterial) {
+			return nil, fmt.Errorf("existing legacy encryption key %q is invalid; refusing to replace it or generate a new key; restore the original key from a trusted backup: %w", oldKeyPath, err)
+		} else if !isMissingPathError(err) {
+			return nil, fmt.Errorf("failed to read legacy encryption key %q; refusing to generate a new key: %w", oldKeyPath, err)
 		}
 	} else {
 		log.Debug().
@@ -276,12 +273,6 @@ func getOrCreateKeyAt(dataDir string) ([]byte, error) {
 			Str("keyPath", keyPath).
 			Bool("sameAsOldPath", resolvedDataDir == oldKeyDir).
 			Msg("skipping key migration check (legacy and current paths are equivalent)")
-	}
-
-	if keyReadErr != nil {
-		// Avoid generating a replacement key when an existing key path is unreadable;
-		// callers should resolve filesystem issues first to prevent accidental key drift.
-		return nil, keyReadErr
 	}
 
 	// Before generating a new key, check if encrypted data exists OR if there are any backup/corrupted files

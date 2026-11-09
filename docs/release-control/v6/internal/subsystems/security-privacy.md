@@ -4853,3 +4853,34 @@ these display fields never become principals or grants. `rbac_metadata_test.go`
 compares the former output, fuzzes rune boundaries, bounds allocation bytes and
 reloads distinct file-backed principals with their original roles. Paired
 benchmarks measure conversion cost, not full sign-in or installed recovery.
+
+### Invalid saved encryption keys are not first-run authority
+
+Encryption initialization refuses invalid existing primary key material before
+consulting a legacy key or generating a new one. When the primary is absent,
+an invalid or unreadable existing legacy key also stops initialization. Errors
+preserve their cause and give recovery guidance without disclosing key bytes.
+The existing key, its inode/permissions and saved ciphertext remain untouched;
+no replacement authority or writable config store is inferred from corruption.
+A valid primary still wins, and genuinely missing keys on a clean install and
+absent-primary/valid-legacy migration keep their existing behavior. Existing
+secure-path, encrypted-file discovery and live-key verification rules remain.
+
+Registered crypto key-preservation tests cover malformed/empty/truncated/wrong-
+length primary and legacy files, different valid legacy keys, valid-primary
+precedence and unreadable legacy refusal. Bootstrap, config and CLI regression
+tests exercise the real saved setup-token and least-privilege token/schedule
+consumers through refusal and deliberate original-key restoration, checking
+byte preservation. This is local source/startup proof, not installed recovery,
+key rotation, missing-key inventory completeness or a new frontend state.
+
+The file-backed billing consumer treats required-crypto initialization failure as
+an unknown read, not absent secrets or permission to migrate the signed lease.
+A save refuses crypto/encryption failure before publication or caller mutation;
+only a committed write installs normalized values and the new integrity value.
+The default and per-org original bytes, identity, lease/refresh secrets and HMAC
+remain recoverable with the original key. No-secret/missing-key compatibility,
+verified plaintext migration and current grant/signature rules are unchanged.
+`TestBillingCryptoFailurePreservesSavedLease` covers both org layouts through
+failed encrypted/legacy reads and saves, then explicit original-key restoration.
+Native errors are not reconstructed or renewed authority or installed recovery.
