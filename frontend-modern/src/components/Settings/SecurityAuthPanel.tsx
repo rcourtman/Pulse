@@ -5,6 +5,7 @@ import {
   Setter,
   createEffect,
   createMemo,
+  createSignal,
   on,
   onCleanup,
 } from 'solid-js';
@@ -80,6 +81,7 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
       props.canManage,
     ]),
   );
+  const [credentialChangePending, setCredentialChangePending] = createSignal(false);
   const closeCredentialForms = () => {
     props.setShowQuickSecuritySetup(false);
     props.setShowQuickSecurityWizard(false);
@@ -130,8 +132,13 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
               variant="warning"
               size="settingsActionXs"
               class="w-full sm:w-auto"
-              onClick={() => props.setShowQuickSecuritySetup(!props.showQuickSecuritySetup())}
-              disabled={!props.canManage || props.securityStatusLoading()}
+              onClick={() => {
+                props.setShowQuickSecurityWizard(false);
+                props.setShowQuickSecuritySetup(!props.showQuickSecuritySetup());
+              }}
+              disabled={
+                !props.canManage || props.securityStatusLoading() || credentialChangePending()
+              }
             >
               {SECURITY_AUTH_SETUP_LABEL}
             </Button>
@@ -143,6 +150,9 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
               class="min-w-0 border-t border-amber-200 pt-4 dark:border-amber-700"
             >
               <QuickSecuritySetup
+                owner={credentialOwner()}
+                disabled={props.securityStatusLoading() || credentialChangePending()}
+                onPendingChange={setCredentialChangePending}
                 onConfigured={() => {
                   props.setShowQuickSecuritySetup(false);
                   props.loadSecurityStatus();
@@ -171,7 +181,7 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
                   e.stopPropagation();
                   props.setShowPasswordModal(true);
                 }}
-                disabled={!props.canManage}
+                disabled={!props.canManage || credentialChangePending()}
               >
                 Change password
               </Button>
@@ -179,8 +189,11 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
                 variant="secondary"
                 size="settingsAction"
                 class="w-full sm:w-auto"
-                onClick={() => props.setShowQuickSecurityWizard(!props.showQuickSecurityWizard())}
-                disabled={!props.canManage}
+                onClick={() => {
+                  props.setShowQuickSecuritySetup(false);
+                  props.setShowQuickSecurityWizard(!props.showQuickSecurityWizard());
+                }}
+                disabled={!props.canManage || credentialChangePending()}
               >
                 Rotate credentials
               </Button>
@@ -200,7 +213,10 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
                 props.handleHideLocalLoginChange(e.currentTarget.checked)
               }
               disabled={
-                !props.canManage || props.hideLocalLoginLocked() || props.savingHideLocalLogin()
+                !props.canManage ||
+                props.hideLocalLoginLocked() ||
+                props.savingHideLocalLogin() ||
+                credentialChangePending()
               }
               locked={props.hideLocalLoginLocked()}
               lockedMessage="This setting is managed by the PULSE_AUTH_HIDE_LOCAL_LOGIN environment variable"
@@ -210,6 +226,9 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
           <Show when={props.canManage && props.showQuickSecurityWizard()}>
             <div class="p-4 sm:p-6">
               <QuickSecuritySetup
+                owner={credentialOwner()}
+                disabled={props.securityStatusLoading() || credentialChangePending()}
+                onPendingChange={setCredentialChangePending}
                 mode="rotate"
                 defaultUsername={props.securityStatus()?.authUsername || 'admin'}
                 onConfigured={() => {

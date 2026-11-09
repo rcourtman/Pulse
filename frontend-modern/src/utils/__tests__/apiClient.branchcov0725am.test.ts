@@ -176,41 +176,52 @@ describe('apiClient 401 handling arms', () => {
     clearSessionCookies();
   });
 
-  it('clears auth and signals logout on a 401 from a non-exempt API endpoint', async () => {
-    setApiToken('some-token');
-    const hrefSetter = vi.fn();
-    const originalDesc = Object.getOwnPropertyDescriptor(window, 'location');
-    Object.defineProperty(window, 'location', {
-      configurable: true,
-      value: {
-        set href(v: string) {
-          hrefSetter(v);
+  it.each([
+    { endpoint: '/api/dashboard', options: {} },
+    { endpoint: '/api/security/quick-setup', options: { method: 'POST' } },
+    { endpoint: '/api/security/quick-setup', options: { method: 'POST', retry: false } },
+    {
+      endpoint: '/api/security/quick-setup',
+      options: { method: 'POST', expectedOrgID: 'default' },
+    },
+  ])(
+    'clears auth on a non-owned 401 from $endpoint with $options',
+    async ({ endpoint, options }) => {
+      setApiToken('some-token');
+      const hrefSetter = vi.fn();
+      const originalDesc = Object.getOwnPropertyDescriptor(window, 'location');
+      Object.defineProperty(window, 'location', {
+        configurable: true,
+        value: {
+          set href(v: string) {
+            hrefSetter(v);
+          },
+          get href() {
+            return '/';
+          },
+          pathname: '/',
+          protocol: 'http:',
+          search: '',
+          toString: () => 'http://localhost/',
         },
-        get href() {
-          return '/';
-        },
-        pathname: '/',
-        protocol: 'http:',
-        search: '',
-        toString: () => 'http://localhost/',
-      },
-    });
+      });
 
-    try {
-      mockFetch.mockResolvedValueOnce(new Response('unauthorized', { status: 401 }));
+      try {
+        mockFetch.mockResolvedValueOnce(new Response('unauthorized', { status: 401 }));
 
-      const response = await apiFetch('/api/dashboard');
+        const response = await apiFetch(endpoint, options);
 
-      expect(response.status).toBe(401);
-      expect(hrefSetter).toHaveBeenCalledWith('/');
-      expect(window.localStorage.getItem('just_logged_out')).toBe('true');
-      expect(getApiToken()).toBeNull();
-    } finally {
-      if (originalDesc) {
-        Object.defineProperty(window, 'location', originalDesc);
+        expect(response.status).toBe(401);
+        expect(hrefSetter).toHaveBeenCalledWith('/');
+        expect(window.localStorage.getItem('just_logged_out')).toBe('true');
+        expect(getApiToken()).toBeNull();
+      } finally {
+        if (originalDesc) {
+          Object.defineProperty(window, 'location', originalDesc);
+        }
       }
-    }
-  });
+    },
+  );
 
   it('does not redirect when a 401 comes from an exempt endpoint', async () => {
     mockFetch.mockResolvedValueOnce(new Response('unauthorized', { status: 401 }));

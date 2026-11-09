@@ -755,16 +755,20 @@ class ApiClient {
       '/api/charts/infrastructure',
     ];
     const shouldSkipRedirect = skipRedirectUrls.some((path) => url.includes(path));
-    // Sign-out and password changes own their results. A wrong current password
-    // is not proof that the active session expired; nor may a late password
-    // response clear a different reader's authentication before its dialog can
-    // check ownership. Both surfaces retain their own refused/unknown outcome.
+    // Sign-out and credential changes own their results. A wrong current password
+    // is not proof that the active session expired; nor may a late credential
+    // response clear a different reader's authentication before its form can
+    // check ownership. Quick setup opts in only for an org-bound, non-replayed
+    // confirmation; the bootstrap wizard retains its existing 401 policy.
+    const ownsQuickSetupResult =
+      url === '/api/security/quick-setup' && expectedOrgID !== undefined && !retry;
     if (
       response.status === 401 &&
       !skipAuth &&
       !shouldSkipRedirect &&
       url !== '/api/logout' &&
-      url !== '/api/security/change-password'
+      url !== '/api/security/change-password' &&
+      !ownsQuickSetupResult
     ) {
       logger.warn('Authentication expired - redirecting to login');
       // Clear auth and redirect to login
