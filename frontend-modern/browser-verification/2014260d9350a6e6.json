@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "base_sha": "9c9b772bd93973194888ae49fa610faf2eb607f4",
+  "verified_at": "2026-11-09T22:51:19Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/OrganizationIncomingSharesSection.tsx",
+    "frontend-modern/src/components/Settings/OrganizationOutgoingSharesSection.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/OrganizationIncomingSharesSection.tsx": "82c1f3556f63e7ce9607665332cff69063bce46b39b28d781f1dea11b512949c",
+    "frontend-modern/src/components/Settings/OrganizationOutgoingSharesSection.tsx": "46cb9504f7abb6cccf9aefcf1cbe6e4eab10584e49e5a5b80445102772883c82"
+  },
+  "routes": [
+    "/settings/organization/sharing"
+  ],
+  "viewports": [
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 1440,
+      "height": 1000
+    }
+  ],
+  "states": [
+    "Actual App organization sharing with viewer/editor/admin, pending and accepted incoming/outgoing saved shares.",
+    "Phone light/dark: access badges beneath the existing organization names; current resource/type/ID/status and table columns retained. Desktop light/dark: mobile duplicates hidden, full original Access/Requested/actions retained.",
+    "Same fixture, clock, locale, timezone and heading-start scroll anchors; initial form, both tables, selected fixture acceptance."
+  ],
+  "interactions": [
+    "Read all three distinct access roles in each saved sharing direction.",
+    "Accept only the synthetic incoming-editor share through its actual row callback, state and HTTP client; observe Active and saved acceptance attribution on the same resource."
+  ],
+  "limitations": [
+    "16 before/after pairs /32 PNGs inspected natively, including immediate post-acceptance captures during existing row-entry/toast animation; no animation-timing claim.",
+    "Preexisting horizontal scrolling and hidden Requested column on phone remain; no native/authorization/installed-client recovery claim.",
+    "Author fixture interception, status-label and desktop-selector failures retained separately, corrected before each complete selected comparison.",
+    "All selected browser clients returned0/full selected receipts and recorded browser/server closure. Outer before-phone and after-desktop execs143 remain unexplained; no all-descendant cleanup claim."
+  ]
+}

@@ -31,7 +31,16 @@ export const OrganizationIncomingSharesSection: Component<
             key: 'sourceOrg',
             label: 'Source Org',
             render: (share) => (
-              <span class="text-base-content">{share.sourceOrgName || share.sourceOrgId}</span>
+              <div class="flex flex-col items-start gap-1">
+                <span class="text-base-content">{share.sourceOrgName || share.sourceOrgId}</span>
+                <span data-share-access class="inline-flex sm:hidden">
+                  <span class="sr-only">Access:</span>
+                  <OrganizationRoleBadge
+                    role={normalizeOrganizationShareRole(share.accessRole)}
+                    size="xs"
+                  />
+                </span>
+              </div>
             ),
           },
           {
