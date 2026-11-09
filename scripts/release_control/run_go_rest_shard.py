@@ -75,6 +75,11 @@ def run_task(task: tuple[str, list[str]]) -> dict:
             # result cache cannot see fixture bytes read by shell children.
             # Append after ambient flags so even -count=0 cannot omit tests.
             env["GOFLAGS"] += " -count=1"
+            # This worker owns complete ordinary test execution, not ambient
+            # selections, listing, wrappers or fuzz sessions. Empty selectors
+            # restore Go's unfiltered defaults; compiler/module flags survive.
+            # Keep fail-fast off so a failed root cannot hide later assertions.
+            env["GOFLAGS"] += " -run= -skip= -list= -exec= -fuzz= -short=false -failfast=false"
         result = subprocess.run(command, cwd=ROOT, env=env)
         observation = {"started": True, "exit": result.returncode}
     except OSError as error:
