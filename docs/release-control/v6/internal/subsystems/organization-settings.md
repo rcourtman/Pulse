@@ -15,6 +15,28 @@
 
 ## Purpose
 
+### Organization members keep identity and access controls together on phones
+
+The existing Organization Access member table wraps complete saved user IDs,
+including long same-prefix SSO identifiers, instead of widening the phone table
+and leaving Role and Remove offscreen. Local phone column sizing and compact
+cell padding retain native table semantics, each saved role, every role choice
+and the text-labelled removal control. Member role selectors are at least 44px
+tall on phones. Desktop keeps its Added dates and existing layout; the
+pre-existing phone date visibility is unchanged. Read-only sessions retain full
+identities and individual role badges without exposing mutation controls.
+
+Only presentation changes: accepted-row identity, owner restrictions, deliberate
+ownership confirmation, session/CSRF/organization fences, saved readback and
+no-automatic-retry requests remain unchanged. The registered
+`OrganizationAccessSelections.transport.test.tsx` uses long suffix-distinct
+principals through real rendered controls/client transport, exact-key role
+updates, cancelled/confirmed removal and ownership decisions without changing
+siblings. Comparable native Settings-shell/panel browser fixtures exercise the
+same data at desktop and phone light/dark, plus read-only policy withdrawal.
+This establishes source/presentation protection, not original-client, IdP or
+installed recovery.
+
 ### User Access identifies the exact saved principal at every decision
 
 User Access keeps the full saved username readable alongside display name,

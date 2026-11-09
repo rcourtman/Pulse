@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "base_sha": "877c89c8ea17920069f467302c57b7fcbe226cb2",
+  "verified_at": "2026-11-09T07:40:06.552561Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/OrganizationAccessMembersSection.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/OrganizationAccessMembersSection.tsx": "64bbec7b4dd6e143cc8b0534e681000220e5dc0f62e8f4c60c614064e98bee83"
+  },
+  "routes": [
+    "/settings/organization-access (native SettingsPageShell/useSettingsAccess + OrganizationAccessPanel/state + real OrgsAPI/client at synthetic /members.html, not full App/IdP)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Owner and two long same-prefix saved SSO member IDs with distinct suffixes and Viewer/Editor roles",
+    "Whole-page writable member inventory with invitation fields, each role and both text-labelled Remove controls",
+    "Read-only policy withdrawal retaining complete IDs and each individual saved role without mutation controls",
+    "Cancelled ownership review with saved Editor retained, exact-target Admin update, cancelled then confirmed removal with sibling retained"
+  ],
+  "interactions": [
+    "Native role selector opens ownership review with selected ID; Cancel sends no write and retains saved role",
+    "Select Admin on second member; exactly one session/CSRF-bound POST contains its complete ID and selected role, saved reload changes only it",
+    "Dismiss native confirmation then confirm removal; exactly one DELETE targets second encoded saved ID, first remains",
+    "Refresh native security status to read-only, verify editable member controls withdraw and role badges stay readable"
+  ],
+  "browsers": [
+    "Playwright 1.56.1 Chromium 141.0.7390.37 desktop/light",
+    "Playwright 1.56.1 WebKit 26.0 phone/light/dark"
+  ],
+  "evidence": "Invocation 20261109T072338Z: RECEIPTS.md, CAPTURES.json and BROWSER-PROOFS.tar.xz. Both final clients exit 0; each browser and server closure reported. 12 retained native-view_image-inspected viewport captures / 6 comparable pairs (writable/read-only x desktop/light, phone/light,dark), same fixtures and top anchor. Six redundant table-anchor captures are not counted or retained. Phone table342px/pane342px instead of740px/pane342px; complete suffix-distinct IDs, every role and removal action visible; role/select and Remove targets44px tall. Desktop Added, owner restrictions, invitation form and readonly warning remain. Partial dependency-copy/build/path/fixture-assertion failures and unavailable consultation retained in ADVERSE.md. No full App/IdP, original-client recovery or release availability claim."
+}
