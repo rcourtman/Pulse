@@ -12,6 +12,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import tempfile
+import time
 import unittest
 
 
@@ -398,6 +399,142 @@ class ServerUpdateTimerTest(unittest.TestCase):
             with self.subTest(state=state):
                 self.assert_discovery(self.exercise(inventory="real", state=state), True)
                 self.assert_refreshed(self.exercise(flow="version", inventory="real", state=state), enabled)
+
+
+class ServerUpdateCompletionTest(unittest.TestCase):
+    """Exercise the real completion consumer without a live systemd manager."""
+
+    def exercise(self, *, setting="enabled", active="active", load="loaded",
+                 properties=None, status=0, mode="normal", service="pulse"):
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = Path(temporary)
+            tools = fixture / "tools"
+            tools.mkdir()
+            # Saved configuration/identity and installed assets must be read-only
+            # even when timer inspection fails. The marker is not a real token.
+            settings = fixture / "system.json"
+            settings.write_text('{"autoUpdateEnabled":false,"fixtureIdentity":"keep"}')
+            settings.chmod(0o600)
+            unit = fixture / "timer.unit"
+            unit.write_text("[Timer]\nOnCalendar=daily\n")
+            before = [(p.read_bytes(), p.stat().st_mode) for p in (settings, unit)]
+            systemctl = tools / "systemctl"
+            systemctl.write_text(r'''#!/usr/bin/env bash
+set -eu
+printf '%s\n' "$*" >> "$FIXTURE/calls"
+if [[ "$MODE" == hang ]]; then
+    exec python3 -c 'import os, signal, time; from pathlib import Path; Path(os.environ["FIXTURE"], "pid").write_text(str(os.getpid())); signal.signal(signal.SIGTERM, signal.SIG_IGN); time.sleep(30)'
+fi
+# Keep the previous two-read producer executable for before/after controls.
+case "$1" in
+    list-unit-files) printf '%s enabled enabled\n' "$PULSE_SERVICE_NAME-update.timer"; exit 0 ;;
+    is-enabled)
+        [[ "$QUERY_EXIT" == 0 ]] || exit "$QUERY_EXIT"
+        [[ "$BOOT_SETTING" == enabled || "$BOOT_SETTING" == enabled-runtime ]]
+        exit $? ;;
+    show) printf '%s' "$PROPERTIES"; echo private-fixture-diagnostic >&2; exit "$QUERY_EXIT" ;;
+    *) echo UNEXPECTED_MANAGER_MUTATION; exit 97 ;;
+esac
+''')
+            systemctl.chmod(0o700)
+            if properties is None:
+                properties = f"LoadState={load}\nUnitFileState={setting}\nActiveState={active}\n"
+            env = {**os.environ, "PATH": f"{tools}:{os.environ['PATH']}",
+                   "INSTALLER": str(INSTALLER), "FIXTURE": str(fixture),
+                   "PULSE_SERVICE_NAME": service, "PULSE_CONFIG_DIR": str(fixture),
+                   "PULSE_INSTALL_DIR": str(fixture), "QUERY_EXIT": str(status),
+                   "PROPERTIES": properties, "BOOT_SETTING": setting, "MODE": mode}
+            script = r'''
+source "$INSTALLER"
+RED= GREEN= YELLOW= BLUE= NC=
+hostname() { echo 192.0.2.10; }
+current_frontend_port() { echo 7655; }
+build_printed_management_command() { echo "fixture-management $1"; }
+if [[ "$MODE" == unavailable ]]; then
+    command() {
+        [[ "$*" != '-v systemctl' ]] || return 1
+        builtin command "$@"
+    }
+fi
+print_completion
+echo COMPLETION_RETURNED
+'''
+            start = time.monotonic()
+            result = subprocess.run(["bash", "-c", script], env=env,
+                                    capture_output=True, text=True, timeout=12)
+            elapsed = time.monotonic() - start
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("COMPLETION_RETURNED", result.stdout)
+            self.assertNotIn("private-fixture", result.stdout + result.stderr)
+            self.assertNotIn("UNEXPECTED_MANAGER_MUTATION", result.stdout + result.stderr)
+            self.assertEqual(before, [(p.read_bytes(), p.stat().st_mode) for p in (settings, unit)])
+            calls = (fixture / "calls").read_text().splitlines() if (fixture / "calls").exists() else []
+            pid = fixture / "pid"
+            if pid.exists():
+                # This is only our confined manager double, never a live unit.
+                process = Path("/proc") / pid.read_text() / "stat"
+                self.assertTrue(not process.exists() or process.read_text().split(") ", 1)[1][0] == "Z",
+                                "timer-query double is still running after the deadline")
+            return result.stdout, calls, elapsed
+
+    def test_completion_separates_boot_setting_from_timer_activity(self):
+        for setting in ("enabled", "enabled-runtime", "disabled", "static", "indirect",
+                        "linked", "linked-runtime", "alias", "generated", "transient",
+                        "masked", "masked-runtime"):
+            for active in ("active", "inactive", "failed", "activating", "deactivating"):
+                with self.subTest(setting=setting, active=active):
+                    out, _, _ = self.exercise(setting=setting, active=active,
+                                              load="masked" if setting.startswith("masked") else "loaded")
+                    self.assertIn(f"Boot setting: {setting}\n", out)
+                    self.assertIn(f"Timer state:  {active}\n", out)
+                    self.assertEqual("Schedule:" in out, setting == "enabled" and active == "active")
+                    self.assertEqual("Disable:" in out, setting == "enabled" and active == "active")
+                    self.assertEqual("Enable:" in out, setting == "disabled" and active == "inactive")
+                    self.assertIn("Check:      systemctl status pulse-update.timer", out)
+
+    def test_failed_or_malformed_timer_read_remains_unknown(self):
+        valid = "LoadState=loaded\nUnitFileState=enabled\nActiveState=active\n"
+        cases = [(valid, status) for status in (1, 4, 124, 137, 143)] + [
+            (value, 0) for value in ("", "LoadState=loaded\n", valid + "LoadState=loaded\n",
+                                    valid + "UnitFileState=enabled\n", valid + "ActiveState=active\n",
+                                    valid + "Foreign=private-fixture-value\n",
+                                    valid.replace("loaded", "error"),
+                                    valid.replace("enabled", "private-fixture-value"),
+                                    valid.replace("active", "unknown"),
+                                    valid.replace("LoadState=loaded", "LoadState"),
+                                    valid.replace("loaded", "not-found"))]
+        for properties, status in cases:
+            with self.subTest(properties=properties, status=status):
+                out, _, _ = self.exercise(properties=properties, status=status)
+                self.assertIn("Unknown (could not read timer state)", out)
+                for misleading in ("Boot setting:", "Timer state:", "Schedule:", "Enable:", "Disable:"):
+                    self.assertNotIn(misleading, out)
+                self.assertIn("Check:      systemctl status pulse-update.timer", out)
+
+    def test_confirmed_absent_timer_omits_section(self):
+        out, calls, _ = self.exercise(load="not-found", setting="", active="inactive")
+        self.assertNotIn("Auto-update timer:", out)
+        self.assertEqual(len(calls), 1)
+
+    def test_missing_manager_remains_visible_without_an_attempt(self):
+        out, calls, _ = self.exercise(mode="unavailable")
+        self.assertIn("Unknown (could not read timer state)", out)
+        self.assertEqual(calls, [])
+        self.assertNotIn("Enable:", out)
+
+    def test_completion_uses_one_read_of_the_exact_custom_timer(self):
+        service = "pulse-" + "department-" * 12
+        out, calls, _ = self.exercise(service=service)
+        self.assertEqual(calls, ["show --no-pager --all --property=LoadState --property=UnitFileState "
+                                 f"--property=ActiveState -- {service}-update.timer"])
+        self.assertIn(f"Check:      systemctl status {service}-update.timer", out)
+
+    def test_hung_manager_cannot_hold_completion_open(self):
+        out, calls, elapsed = self.exercise(mode="hang")
+        self.assertIn("Unknown (could not read timer state)", out)
+        self.assertNotIn("Enable:", out)
+        self.assertEqual(len(calls), 1)
+        self.assertLess(elapsed, 10, "the five-second read plus kill grace was not bounded")
 
 
 if __name__ == "__main__":

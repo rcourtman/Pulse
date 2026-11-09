@@ -921,8 +921,56 @@ update_timer_exists() {
     awk -v unit="$UPDATE_TIMER_UNIT" '$1 == unit { found = 1 } END { exit !found }' <<< "$unit_files"
 }
 
-update_timer_enabled() {
-    command -v systemctl >/dev/null 2>&1 && systemctl is-enabled --quiet "$UPDATE_TIMER_UNIT" 2>/dev/null
+print_auto_update_status() {
+    local properties="" key="" value="" load="" setting="" active=""
+    local seen_load=0 seen_setting=0 seen_active=0 valid=false
+    # One bounded snapshot separates boot enablement from the running timer.
+    # A failed read (even with plausible partial output) is not disabled or
+    # absent, and must not suggest changing the operator's saved choice.
+    if command -v systemctl >/dev/null 2>&1 &&
+       properties=$(LC_ALL=C timeout -k 1 5 systemctl show --no-pager --all --property=LoadState --property=UnitFileState --property=ActiveState -- "$UPDATE_TIMER_UNIT" 2>/dev/null); then
+        valid=true
+        while IFS='=' read -r key value; do
+            case "$key" in
+                LoadState) load="$value"; seen_load=$((seen_load + 1)) ;;
+                UnitFileState) setting="$value"; seen_setting=$((seen_setting + 1)) ;;
+                ActiveState) active="$value"; seen_active=$((seen_active + 1)) ;;
+                *) valid=false ;;
+            esac
+        done <<< "$properties"
+        if [[ "$seen_load" != 1 || "$seen_setting" != 1 || "$seen_active" != 1 ]]; then
+            valid=false
+        fi
+        if [[ "$valid" == true && "$load" == not-found && -z "$setting" && "$active" == inactive ]]; then
+            return 0  # A confirmed absent timer needs no completion section.
+        fi
+        case "$load" in loaded|masked) ;; *) valid=false ;; esac
+        case "$setting" in
+            enabled|enabled-runtime|disabled|static|indirect|linked|linked-runtime|alias|generated|transient|masked|masked-runtime) ;;
+            *) valid=false ;;
+        esac
+        case "$active" in
+            active|reloading|inactive|failed|activating|deactivating|maintenance|refreshing) ;;
+            *) valid=false ;;
+        esac
+    fi
+
+    echo
+    echo -e "${YELLOW}Auto-update timer:${NC}"
+    if [[ "$valid" != true ]]; then
+        echo -e "  Status:     ${YELLOW}Unknown (could not read timer state)${NC}"
+    else
+        echo "  Boot setting: $setting"
+        echo "  Timer state:  $active"
+        if [[ "$load" == loaded && "$setting" == enabled && "$active" == active ]]; then
+            echo "  Schedule:   daily check between 2-6 AM"
+            echo "  Disable:    systemctl disable --now $UPDATE_TIMER_UNIT"
+        elif [[ "$load" == loaded && "$setting" == disabled && "$active" == inactive ]]; then
+            echo "  Enable:     systemctl enable --now $UPDATE_TIMER_UNIT"
+        fi
+    fi
+    # Inspection, not enable/start/unmask advice, for failed or unsettled reads.
+    echo "  Check:      systemctl status $UPDATE_TIMER_UNIT"
 }
 
 current_frontend_port() {
@@ -5395,18 +5443,7 @@ print_completion() {
     echo "  Reset:      $(build_printed_management_command reset)"
     echo "  Uninstall:  $(build_printed_management_command uninstall)"
 
-    # Show auto-update status if timer exists
-    if update_timer_exists; then
-        echo
-        echo -e "${YELLOW}Auto-updates:${NC}"
-        if update_timer_enabled; then
-            echo -e "  Status:     ${GREEN}Enabled${NC} (daily check between 2-6 AM)"
-            echo "  Disable:    systemctl disable --now $UPDATE_TIMER_UNIT"
-        else
-            echo -e "  Status:     ${YELLOW}Disabled${NC}"
-            echo "  Enable:     systemctl enable --now $UPDATE_TIMER_UNIT"
-        fi
-    fi
+    print_auto_update_status
 
     # Show bootstrap token on fresh install
     local TOKEN_DATA_DIR="${CONFIG_DIR:-/etc/pulse}"
