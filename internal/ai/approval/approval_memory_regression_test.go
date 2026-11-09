@@ -59,7 +59,9 @@ func TestApprovalStoreMemoryStability(t *testing.T) {
 			}
 			if updated != nil {
 				decidedAt := time.Now().Add(-48 * time.Hour)
-				updated.DecidedAt = &decidedAt
+				store.mu.Lock()
+				store.approvals[updated.ID].DecidedAt = &decidedAt
+				store.mu.Unlock()
 			}
 		}
 

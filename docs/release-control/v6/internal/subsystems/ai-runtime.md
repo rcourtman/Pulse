@@ -25,6 +25,31 @@ that same result. Successful reads retain their content and execution provenance
 
 ## Purpose
 
+### Approval decisions and readers own separate snapshots
+
+The approval store owns a complete detached request after creation while still
+populating the creator's generated ID, defaults and plan context. Detail, pending,
+organization and execution reads, decision results (including idempotent approval),
+and creation callbacks receive independent snapshots captured under the store
+lock. Mutable decision timestamps, confidence evidence, plan/provenance slices
+and preflight context cannot rewrite a stored command, tenant or decision through
+a caller-owned object. Nil/empty provenance slices and shared preflight identity
+within a request are preserved without JSON re-normalization.
+
+Delayed and shutdown saves serialize snapshot-to-publication, encode while the
+store lock is held, and publish complete owner-only files by same-directory
+rename. Filesystem I/O does not hold the decision lock. This prevents concurrent
+encoding/writes from racing decisions or publishing torn/older snapshots; it does
+not remove the existing five-second debounce durability window or change expiry,
+consumption, permissions, JSON fields, list order or execution-state ownership.
+`store_snapshot_test.go` covers detached nested input/read/decision/callback
+ownership, concurrent JSON decisions, policy wire shape, real timer/Flush saves,
+atomic publication and persisted single-use rejection. Native handler fixtures in
+`ai_approval_snapshot_test.go` cover fixed saved-record responses and concurrent
+HTTP encoding; existing authorization, review, relay and Assistant consumers
+retain their own admission rules. No installed/original-client recovery follows
+from these source fixtures.
+
 ### Approval read readiness remains visible in Patrol
 
 Patrol's existing approval handoff renders its store's failed-read state rather

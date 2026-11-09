@@ -21,6 +21,23 @@
 
 ## Purpose
 
+### Approval response snapshots preserve the native wire contract
+
+The approval store returns detached request/decision snapshots, so native list and
+detail encoding cannot race subsequent decisions or modify store-owned context.
+Creation still fills the caller's generated fields. Snapshotting preserves every
+wire field, nil/empty policy authority slices, ordering and existing tenant,
+authentication, CSRF, review, relay, expiry and single-use admission semantics.
+The API adds no route, field, response state or presentation change.
+
+`ai_approval_snapshot_test.go` loads fixed saved records through the production
+store and exercises list/detail bodies for default/non-default tenants, including
+nil/empty provenance. It also encodes actual HTTP responses concurrently with
+inert approval/consumption transitions. The request-identity tests re-read saved
+state rather than relying on returned object aliases, and independent decisions
+use fresh fixtures. These tests establish source compatibility, not installed
+clients or real command dispatch.
+
 ### Approval request identity is not legacy record normalization
 
 The core approval list, detail, approve and deny handlers accept the selected
