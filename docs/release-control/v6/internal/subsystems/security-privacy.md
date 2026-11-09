@@ -18,6 +18,38 @@
 
 ## Purpose
 
+### Password changes belong to their admitted settings reader
+
+The existing password dialog receives the Settings status reader, not an
+independent or guessed administrator identity. Authentication read/write must be
+explicitly admitted, with read-only/demo policy preserved. An equal status
+refresh keeps the draft but disables fields/submission while access is checked.
+A changed principal, local account, credential hint, sorted scope set, effective
+admission, organisation event or closed/disposed dialog clears secrets and
+aborts pending work. Restoring access never restores an old draft.
+
+One current submission sends the existing endpoint/payload with its original
+`expectedOrgID`, abort signal and `retry: false`. The configured local username,
+when present, supplies UTF-8 Basic credentials; a stale storage username or
+invented `admin` account never does. Existing cookie/token auth, backend admin
+checks and current-password verification remain unchanged. Password-route 401s
+return to the owning dialog rather than clearing another reader's auth as if a
+wrong current password proved session expiry. Other routes retain their existing
+401 behaviour. Late completions cannot notify or reload a different reader;
+accepted-success reloads are cancelled by withdrawal, reopening or disposal.
+The accepted-change handoff closes without probing an intentionally invalidated
+session; ordinary cancellation/withdrawal retains the existing status refresh.
+
+An abort does not roll back a dispatched change. Missing/5xx outcomes are
+unconfirmed and disable blind resubmission, with sign-in guidance rather than a
+success claim. Confirmed refusals remain explicit, using the shared bounded
+error parser. `ChangePasswordModal.transport.test.tsx` exercises real Settings
+status/API-client/dialog bindings, context cycles, pending/body completions,
+single writes, explicit refusals, uncertain results and owned reload timers.
+`apiClient.auth.test.ts` pins preservation of current and newer-reader auth on
+password refusal. Native Settings shell/panel/dialog browser comparisons remain
+required. These are source/fixture guarantees, not original-client or IdP recovery.
+
 ### Authentication refresh preserves only the current reader's draft
 
 The Authentication panel labels a pending security-status read and keeps its

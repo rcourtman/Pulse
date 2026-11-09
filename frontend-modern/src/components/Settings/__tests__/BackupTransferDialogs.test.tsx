@@ -153,8 +153,11 @@ describe('BackupTransferDialogs', () => {
             updateInfo={() => null}
             updatePlan={() => null}
             isInstallingUpdate={() => false}
+            securityStatus={securityStatus}
+            securityStatusLoading={() => false}
             showPasswordModal={() => false}
             closePasswordModal={vi.fn()}
+            onPasswordChanged={vi.fn()}
           />
           <ToastContainer />
         </>

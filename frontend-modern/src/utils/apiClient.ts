@@ -755,9 +755,17 @@ class ApiClient {
       '/api/charts/infrastructure',
     ];
     const shouldSkipRedirect = skipRedirectUrls.some((path) => url.includes(path));
-    // Sign-out owns its result: a rejected or lost withdrawal must remain
-    // visible, not become a login redirect that looks like successful logout.
-    if (response.status === 401 && !skipAuth && !shouldSkipRedirect && url !== '/api/logout') {
+    // Sign-out and password changes own their results. A wrong current password
+    // is not proof that the active session expired; nor may a late password
+    // response clear a different reader's authentication before its dialog can
+    // check ownership. Both surfaces retain their own refused/unknown outcome.
+    if (
+      response.status === 401 &&
+      !skipAuth &&
+      !shouldSkipRedirect &&
+      url !== '/api/logout' &&
+      url !== '/api/security/change-password'
+    ) {
       logger.warn('Authentication expired - redirecting to login');
       // Clear auth and redirect to login
       if (typeof window !== 'undefined') {
