@@ -457,7 +457,7 @@ describe('Patrol workspace current action summary', () => {
         ),
       ).toBeInTheDocument();
       if (next !== 'pending_approval')
-        expect(screen.queryByText(/Patrol found.*action recovery/)).not.toBeInTheDocument();
+        expect(screen.queryByText(/Patrol found.*needs approval/)).not.toBeInTheDocument();
       // The legacy list remains independently reviewable; its two saved
       // requests do not overwrite a typed action or escape the resource scope.
       expect(screen.getByText('Apply the fix for web-restart')).toBeInTheDocument();

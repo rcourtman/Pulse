@@ -1260,6 +1260,10 @@ describe('approval read freshness and organisation isolation', () => {
       findings: [record, { ...record, id: 'finding-failed', investigation_outcome: 'fix_failed' }],
     } as never);
     await aiIntelligenceStore.loadFindings();
+    expect(aiIntelligenceStore.approvalsReadState).toBe('pending');
+    expect(aiIntelligenceStore.findingsNeedingAttention.map((f) => f.id)).toEqual([
+      'finding-failed',
+    ]);
     vi.mocked(AIAPI.getPendingApprovals).mockRejectedValueOnce(new Error('unavailable'));
     await aiIntelligenceStore.loadPendingApprovals();
     expect(aiIntelligenceStore.findings.map((f) => f.id)).toEqual([
