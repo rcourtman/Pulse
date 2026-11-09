@@ -189,7 +189,7 @@ func TestRootAutoUpdateSetupCompletion(t *testing.T) {
 		return string(body)
 	}
 	for _, service := range []string{"pulse", "pulse-blue"} {
-		for _, fault := range []string{"none", "new", "no-jq", "no-jq-missing-fields", "assets", "enable", "enable-timeout", "allocation", "jq", "copy", "sed-first", "sed-second", "rename", "write", "start", "start-timeout"} {
+		for _, fault := range []string{"none", "new", "no-jq", "no-jq-missing-fields", "assets", "enable", "enable-timeout", "allocation", "jq", "cleanup", "copy", "sed-first", "sed-second", "rename", "write", "start", "start-timeout"} {
 			for _, conditional := range []bool{false, true} {
 				caller := "main"
 				if conditional {
@@ -255,7 +255,7 @@ command() {
     builtin command "$@"
 }
 jq() {
-    [[ "$FAULT" != jq ]] || return 17
+    [[ "$FAULT" != jq && "$FAULT" != cleanup ]] || return 17
     python3 - "$@" <<'PYJSON'
 import json,sys
 with open(sys.argv[-1]) as f: value=json.load(f)
@@ -272,6 +272,7 @@ sed() {
     command sed "$@"
 }
 mv() { [[ "$FAULT" != rename ]] || return 17; command mv "$@"; }
+rm() { [[ "$FAULT" != cleanup ]] || return 17; command rm "$@"; }
 printf() {
     if [[ "$FAULT" == write && "$1" == '{"autoUpdateEnabled":true'* ]]; then return 17; fi
     builtin printf "$@"
@@ -330,8 +331,15 @@ printf() {
 						t.Fatalf("failed setup changed saved configuration: %v %s", readErr, after)
 					}
 					staged, err := filepath.Glob(filepath.Join(dir, ".system.json.*"))
-					if err != nil || len(staged) != 0 {
-						t.Fatalf("setup left owned staging files: %v %v", err, staged)
+					wantStaged := 0
+					if fault == "cleanup" {
+						wantStaged = 1
+						if !strings.Contains(string(out), "Could not remove the staged update preferences") {
+							t.Fatalf("cleanup failure was not reported:\n%s", out)
+						}
+					}
+					if err != nil || len(staged) != wantStaged {
+						t.Fatalf("wrong retained staging files: %v %v, want %d", err, staged, wantStaged)
 					}
 				})
 			}

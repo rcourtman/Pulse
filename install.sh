@@ -5213,7 +5213,9 @@ setup_auto_updates() {
         fi
     fi
     if [[ "$config_saved" != true ]] || ! mv "$staged_config" "$config_dir/system.json"; then
-        [[ -z "$staged_config" ]] || rm -f "$staged_config"
+        if [[ -n "$staged_config" ]] && ! rm -f "$staged_config"; then
+            print_warn "Could not remove the staged update preferences in $config_dir; inspect retained staging files before retrying."
+        fi
         print_warn "Automatic update setup is incomplete: could not save update preferences. The previous configuration was preserved; the timer may already be enabled, but no start was requested."
         print_info "Inspect the timer before retrying: systemctl status $update_timer_unit"
         ENABLE_AUTO_UPDATES=false
@@ -5232,7 +5234,6 @@ setup_auto_updates() {
     # Command success is not an observed running timer. The completion section
     # separately reads its actual boot setting and active state.
     print_success "Automatic update preferences saved; timer enable/start commands completed. Check the timer state in the completion summary."
-
 }
 
 # Updates and reinstalls only run setup_auto_updates when the user opts in,
