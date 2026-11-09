@@ -479,11 +479,8 @@ func TestGetOrCreateKeyAt_InvalidBase64(t *testing.T) {
 	}
 
 	key, err := getOrCreateKeyAt(tmpDir)
-	if err != nil {
-		t.Fatalf("getOrCreateKeyAt() error: %v", err)
-	}
-	if len(key) != 32 {
-		t.Fatalf("expected 32-byte key, got %d", len(key))
+	if key != nil || !errors.Is(err, errInvalidKeyMaterial) {
+		t.Fatalf("expected invalid existing key to be preserved without replacement: key_returned=%t error=%v", key != nil, err)
 	}
 }
 
@@ -534,11 +531,8 @@ func TestGetOrCreateKeyAt_InvalidLength(t *testing.T) {
 	}
 
 	key, err := getOrCreateKeyAt(tmpDir)
-	if err != nil {
-		t.Fatalf("getOrCreateKeyAt() error: %v", err)
-	}
-	if len(key) != 32 {
-		t.Fatalf("expected 32-byte key, got %d", len(key))
+	if key != nil || !errors.Is(err, errInvalidKeyMaterial) {
+		t.Fatalf("expected invalid existing key to be preserved without replacement: key_returned=%t error=%v", key != nil, err)
 	}
 }
 
