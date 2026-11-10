@@ -1117,13 +1117,29 @@ func convertMetricsForChart(
 	oldestTimestamp *int64,
 	maxPoints int,
 ) VMChartData {
+	var selection chartPointSelection
+	return selection.convert(metrics, oldestTimestamp, maxPoints)
+}
+
+// chartPointSelection reuses sampling scratch within one response. It retains
+// only timestamps and indices, never resource identities, values or wire slices.
+// It must not be shared between requests or used concurrently.
+type chartPointSelection struct {
+	timeline  []int64
+	indices   []int
+	maxPoints int
+}
+
+func (s *chartPointSelection) convert(
+	metrics map[string][]monitoring.MetricPoint,
+	oldestTimestamp *int64,
+	maxPoints int,
+) VMChartData {
 	converted := make(VMChartData, len(metrics))
 	// Metrics from one observation batch commonly share a timeline. Keep only
-	// this conversion's last timeline and selected indices, not values or a
+	// this response's last timeline and selected indices, not values or a
 	// cross-request cache. Compare every timestamp: equal bounds and length
 	// alone do not establish equal interior observations.
-	var timeline []int64
-	var indices []int
 	for metricType, metricPoints := range metrics {
 		if !sparklineMetrics[metricType] {
 			continue
@@ -1142,30 +1158,31 @@ func convertMetricsForChart(
 		}
 		// Oldest-data metadata still covers every source observation, including
 		// unselected or unsorted points. Convert each timestamp only once.
-		sameTimeline := len(timeline) == len(metricPoints)
-		if cap(timeline) < len(metricPoints) {
-			timeline = make([]int64, len(metricPoints))
+		sameTimeline := s.maxPoints == maxPoints && len(s.timeline) == len(metricPoints)
+		if cap(s.timeline) < len(metricPoints) {
+			s.timeline = make([]int64, len(metricPoints))
 		} else {
-			timeline = timeline[:len(metricPoints)]
+			s.timeline = s.timeline[:len(metricPoints)]
 		}
 		for i, point := range metricPoints {
 			ts := point.Timestamp.UnixMilli()
-			if sameTimeline && timeline[i] != ts {
+			if sameTimeline && s.timeline[i] != ts {
 				sameTimeline = false
 			}
-			timeline[i] = ts
+			s.timeline[i] = ts
 			if ts < *oldestTimestamp {
 				*oldestTimestamp = ts
 			}
 		}
 		if !sameTimeline {
-			indices = chartPointIndices(len(timeline), maxPoints, func(i int) int64 {
-				return timeline[i]
+			s.indices = chartPointIndices(len(s.timeline), maxPoints, func(i int) int64 {
+				return s.timeline[i]
 			})
+			s.maxPoints = maxPoints
 		}
-		points := make([]MetricPoint, len(indices))
-		for i, index := range indices {
-			points[i] = MetricPoint{Timestamp: timeline[index], Value: metricPoints[index].Value}
+		points := make([]MetricPoint, len(s.indices))
+		for i, index := range s.indices {
+			points[i] = MetricPoint{Timestamp: s.timeline[index], Value: metricPoints[index].Value}
 		}
 		converted[metricType] = points
 	}
@@ -1183,17 +1200,17 @@ type guestLiveMetricsView interface {
 	NetOut() float64
 }
 
-// guestChartSeriesWithLiveFallback converts a guest's batched metric history
+// guestSeriesWithLiveFallback converts a guest's batched metric history
 // into chart series, substituting single live-value points when no history
 // exists yet so freshly added guests still chart.
-func guestChartSeriesWithLiveFallback(
+func (s *chartPointSelection) guestSeriesWithLiveFallback(
 	metrics map[string][]monitoring.MetricPoint,
 	guest guestLiveMetricsView,
 	oldestTimestamp *int64,
 	maxPoints int,
 	currentTime int64,
 ) VMChartData {
-	series := convertMetricsForChart(metrics, oldestTimestamp, maxPoints)
+	series := s.convert(metrics, oldestTimestamp, maxPoints)
 	if len(series["cpu"]) == 0 {
 		series["cpu"] = []MetricPoint{{Timestamp: currentTime, Value: guest.CPUPercent()}}
 		series["memory"] = []MetricPoint{{Timestamp: currentTime, Value: guest.MemoryPercent()}}
@@ -1660,23 +1677,24 @@ func (r *Service) buildWorkloadChartsResponse(
 	}()
 	workloadChartsBatchWG.Wait()
 
+	var selection chartPointSelection
 	for idx, vm := range vmList {
 		responseKey := vmResponseKeys[idx]
 		metricID := vmRequests[idx].SQLResourceID
 		guestTypes[responseKey] = "vm"
-		chartData[responseKey] = guestChartSeriesWithLiveFallback(vmBatchMetrics[metricID], vm, &oldestTimestamp, maxPoints, currentTime)
+		chartData[responseKey] = selection.guestSeriesWithLiveFallback(vmBatchMetrics[metricID], vm, &oldestTimestamp, maxPoints, currentTime)
 	}
 
 	for idx, ct := range containerList {
 		responseKey := containerResponseKeys[idx]
 		metricID := containerRequests[idx].SQLResourceID
 		guestTypes[responseKey] = "system-container"
-		chartData[responseKey] = guestChartSeriesWithLiveFallback(containerBatchMetrics[metricID], ct, &oldestTimestamp, maxPoints, currentTime)
+		chartData[responseKey] = selection.guestSeriesWithLiveFallback(containerBatchMetrics[metricID], ct, &oldestTimestamp, maxPoints, currentTime)
 	}
 
 	for _, pod := range podList {
 		metricKey := kubernetesPodMetricIDFromView(pod)
-		series := convertMetricsForChart(podBatchMetrics[metricKey], &oldestTimestamp, maxPoints)
+		series := selection.convert(podBatchMetrics[metricKey], &oldestTimestamp, maxPoints)
 		guestTypes[metricKey] = "k8s"
 
 		if len(series["cpu"]) == 0 {
@@ -1692,7 +1710,7 @@ func (r *Service) buildWorkloadChartsResponse(
 	for idx, container := range dockerContainerList {
 		responseKey := dockerContainerKeys[idx]
 		metricID := dockerContainerRequests[idx].SQLResourceID
-		series := convertMetricsForChart(dockerContainerBatchMetrics[metricID], &oldestTimestamp, maxPoints)
+		series := selection.convert(dockerContainerBatchMetrics[metricID], &oldestTimestamp, maxPoints)
 		guestTypes[responseKey] = "app-container"
 
 		if len(series["cpu"]) == 0 {
