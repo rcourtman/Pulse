@@ -373,13 +373,96 @@ class UpdateLogSinks(UpdaterFixture):
                                      "-t pulse-custom@department-auto-update -p user.info sink control\n")
                     self.assertEqual("[info] sink control" in r.stdout.decode(), not closed_stdout)
 
+    def test_real_logger_deadline_preserves_stdout_exit_and_owned_cleanup(self):
+        # Exercise the production log(), not a simulated timeout. The logger
+        # owns a pipe-holding child; both must stop even if they ignore TERM.
+        for ignore_term, expected in ((False, 124), (True, 137)):
+            with self.subTest(ignore_term=ignore_term):
+                with tempfile.TemporaryDirectory(prefix="pulse-updater-log-deadline-") as directory:
+                    f = Path(directory)
+                    (f / "tools").mkdir()
+                    logger = f / "tools/logger"
+                    logger.write_text(f"#!{sys.executable} -IS\n" + r'''import json, os, signal, subprocess, sys, time
+from pathlib import Path
+f = Path(os.environ["FIXTURE"])
+ignore = os.environ["IGNORE_TERM"] == "true"
+if ignore:
+    signal.signal(signal.SIGTERM, signal.SIG_IGN)
+child = subprocess.Popen([sys.executable, "-IS", "-c",
+    "import signal,time; " +
+    ("signal.signal(signal.SIGTERM, signal.SIG_IGN); " if ignore else "") +
+    "time.sleep(60)"])
+(f / "logger-observation.json").write_text(json.dumps({
+    "args": sys.argv[1:], "pids": [os.getpid(), child.pid], "group": os.getpgrp()}))
+child.wait()
+''')
+                    logger.chmod(0o755)
+                    env = dict(os.environ, FIXTURE=str(f), UPDATER=str(UPDATER),
+                               IGNORE_TERM=str(ignore_term).lower(),
+                               PULSE_SERVICE_NAME="pulse-custom@department",
+                               PATH=str(f / "tools") + os.pathsep + os.environ["PATH"])
+                    script = ('set -euo pipefail\nsource "$UPDATER"\nstatus=0\n'
+                              'log info "journal deadline control" || status=$?\n'
+                              'printf "OBSERVED_STATUS=%s\\n" "$status"\n')
+                    started = time.monotonic()
+                    process = subprocess.Popen(["bash", "-c", script], env=env,
+                                               stdout=subprocess.PIPE,
+                                               stderr=subprocess.PIPE, text=True, start_new_session=True)
+                    try:
+                        stdout, stderr = process.communicate(timeout=10)
+                    except subprocess.TimeoutExpired:
+                        # Only this isolated fixture's session/group is owned.
+                        # A deadline regression must fail, never leave readers.
+                        observation = f / "logger-observation.json"
+                        groups = {process.pid}
+                        if observation.exists():
+                            groups.add(json.loads(observation.read_text())["group"])
+                        for group in groups:
+                            try:
+                                os.killpg(group, signal.SIGKILL)
+                            except ProcessLookupError:
+                                pass
+                        process.communicate(timeout=3)
+                        self.fail("journal write exceeded its five-second deadline and KILL backstop")
+                    elapsed = time.monotonic() - started
+                    self.assertEqual(process.returncode, 0, stderr)
+                    self.assertIn(f"OBSERVED_STATUS={expected}\n", stdout)
+                    self.assertIn("[info] journal deadline control\n", stdout)
+                    self.assertGreaterEqual(elapsed, 4.5)
+                    self.assertLess(elapsed, 9.5)
+                    observed = json.loads((f / "logger-observation.json").read_text())
+                    self.assertEqual(observed["args"], ["-t", "pulse-custom@department-auto-update",
+                                                       "-p", "user.info", "journal deadline control"])
+                    # Pipe EOF alone is not termination. Read back both owned
+                    # readers; zombies cannot run and may await their reaper.
+                    deadline = time.monotonic() + 0.5
+                    for pid in observed["pids"]:
+                        while True:
+                            try:
+                                if sys.platform.startswith("linux"):
+                                    state = Path(f"/proc/{pid}/stat").read_text().rsplit(") ", 1)[1].split()[0]
+                                else:
+                                    probe = subprocess.run(["ps", "-p", str(pid), "-o", "stat="],
+                                                           capture_output=True, text=True, timeout=2)
+                                    if probe.returncode == 1 and not probe.stdout and not probe.stderr:
+                                        break
+                                    self.assertEqual(probe.returncode, 0, probe.stderr)
+                                    state = probe.stdout.strip()[0]
+                            except (FileNotFoundError, ProcessLookupError):
+                                break
+                            if state == "Z":
+                                break
+                            if time.monotonic() >= deadline:
+                                self.fail(f"owned journal reader {pid} remains in state {state}")
+                            time.sleep(0.01)
+
     def test_real_logger_failure_drains_installer_and_preserves_recovery(self):
         # More than a pipe buffer, plus an unterminated final line. These run
         # production log(), perform_update and its collector together: a green
         # log() double cannot establish that a real sink failure is retained.
         lines = ["opening"] + ["x" * 2048 for _ in range(64)] + ["final installer evidence"]
         for state in ("active", "inactive"):
-            for failures in ({}, {1: 73}, {1: 73, 2: 42}, {len(lines): 73}):
+            for failures in ({}, {1: 73}, {1: 73, 2: 42}, {len(lines): 73}, {1: 124}, {1: 137}):
                 with self.subTest(state=state, failures=failures):
                     r = self.run_fixture(state=state, success=True, real_log=True,
                                          installer_output="\n".join(lines), collector_failures=failures)
@@ -390,7 +473,8 @@ class UpdateLogSinks(UpdaterFixture):
                     self.assertEqual(len(installer_calls), len(lines))
                     self.assertTrue(all(args[:4] == ["-t", "pulse-custom@department-auto-update", "-p", "user.info"]
                                         for args in installer_calls))
-                    expected = ("Installer pipeline failed (installer exit: 0; log collector exit: 73)"
+                    first_failure = next(iter(failures.values()), 0)
+                    expected = (f"Installer pipeline failed (installer exit: 0; log collector exit: {first_failure})"
                                 if failures else "Installer completed; verifying update (installer exit: 0; log collector exit: 0)")
                     self.assertTrue(expected in r["output"], "real logger exit was not retained by the collector")
                     self.assertEqual(r["exit"], 1 if failures else 0)

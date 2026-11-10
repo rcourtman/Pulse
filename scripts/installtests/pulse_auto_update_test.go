@@ -234,6 +234,7 @@ func TestAutoUpdateLogSinkFailures(t *testing.T) {
 	runParallelPythonFixtureControls(t, repoFile("scripts", "tests", "test_auto_update_service_state.py"), "UpdateLogSinks", []string{
 		"test_logger_double_keeps_complete_argument_frames_and_exit_sequence",
 		"test_real_log_retains_each_sink_failure_in_conditional_calls",
+		"test_real_logger_deadline_preserves_stdout_exit_and_owned_cleanup",
 		"test_real_logger_failure_drains_installer_and_preserves_recovery",
 	}, 45*time.Second, "PULSE_AUTO_UPDATER_UNDER_TEST="+repoFile("scripts", "pulse-auto-update.sh"))
 }
