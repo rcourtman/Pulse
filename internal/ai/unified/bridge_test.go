@@ -399,3 +399,209 @@ func TestAlertBridge_NewOccurrenceTriggersWhenTheResolveWasMissed(t *testing.T) 
 	bridge.handleNewAlert(episodeTestAlert("critical", clock.Add(30*time.Minute)))
 	recorder.expect(t, "alert_fired")
 }
+
+func sustainedTestAlert(identifier, level string, startedAt time.Time) *SimpleAlertAdapter {
+	return &SimpleAlertAdapter{
+		AlertIdentifier: identifier,
+		AlertType:       "disk",
+		AlertLevel:      level,
+		ResourceID:      "resource-" + identifier,
+		ResourceName:    identifier,
+		Value:           92,
+		Threshold:       90,
+		StartTime:       startedAt,
+		LastSeen:        startedAt,
+	}
+}
+
+// criticalOnly is the default operator policy for alerts the moment they fire.
+func criticalOnly(_, alertLevel string) bool { return alertLevel == "critical" }
+
+func alwaysRunSustained(PatrolTriggerEvent, time.Time) SustainedTriggerDecision {
+	return SustainedTriggerRun
+}
+
+func TestAlertBridge_SustainedWarningWakesPatrolOnceAfterTheDelay(t *testing.T) {
+	bridge, recorder, clock := newEpisodeTestBridge(t)
+	bridge.SetPatrolTriggerPolicy(criticalOnly)
+	bridge.SetSustainedTriggerPolicy(alwaysRunSustained)
+	start := *clock
+
+	bridge.handleNewAlert(sustainedTestAlert("disk-data", "warning", start))
+	recorder.expectNone(t)
+
+	*clock = start.Add(sustainedAlertDelay - time.Minute)
+	bridge.checkSustainedAlerts()
+	recorder.expectNone(t)
+
+	*clock = start.Add(sustainedAlertDelay)
+	bridge.checkSustainedAlerts()
+	event := recorder.expect(t, "alert_fired")
+	if !event.Sustained || !event.ActiveSince.Equal(start) || event.AlertLevel != "warning" || event.AlertIdentifier != "disk-data" {
+		t.Fatalf("unexpected sustained trigger: %+v", event)
+	}
+
+	// Once per episode, however long the alert stays.
+	*clock = start.Add(6 * time.Hour)
+	bridge.checkSustainedAlerts()
+	recorder.expectNone(t)
+
+	// The next episode gets its own look.
+	bridge.handleAlertResolved("disk-data")
+	recorder.expect(t, "alert_cleared")
+	second := start.Add(7 * time.Hour)
+	*clock = second
+	bridge.handleNewAlert(sustainedTestAlert("disk-data", "warning", second))
+	*clock = second.Add(sustainedAlertDelay)
+	bridge.checkSustainedAlerts()
+	recorder.expect(t, "alert_fired")
+}
+
+func TestAlertBridge_SustainedTriggerLeavesShortAndAlreadyHandledAlertsAlone(t *testing.T) {
+	bridge, recorder, clock := newEpisodeTestBridge(t)
+	bridge.SetPatrolTriggerPolicy(criticalOnly)
+	bridge.SetSustainedTriggerPolicy(alwaysRunSustained)
+	start := *clock
+
+	// A warning that clears inside the delay never wakes Patrol.
+	bridge.handleNewAlert(sustainedTestAlert("blip", "warning", start))
+	*clock = start.Add(5 * time.Minute)
+	bridge.handleAlertResolved("blip")
+	recorder.expect(t, "alert_cleared")
+
+	// A critical alert woke Patrol when it fired. It is not looked at twice.
+	bridge.handleNewAlert(sustainedTestAlert("down", "critical", *clock))
+	recorder.expect(t, "alert_fired")
+
+	*clock = start.Add(time.Hour)
+	bridge.checkSustainedAlerts()
+	recorder.expectNone(t)
+}
+
+func TestAlertBridge_SustainedTriggerIsOffWithoutAPolicy(t *testing.T) {
+	bridge, recorder, clock := newEpisodeTestBridge(t)
+	bridge.SetPatrolTriggerPolicy(criticalOnly)
+
+	bridge.handleNewAlert(sustainedTestAlert("disk-data", "warning", *clock))
+	*clock = clock.Add(time.Hour)
+	bridge.checkSustainedAlerts()
+	recorder.expectNone(t)
+}
+
+// Seven warnings active at once, as on the maintainer's own Pulse: the
+// sustained trigger spreads them at four an hour across all alerts.
+func TestAlertBridge_SustainedTriggersAreCappedAcrossAlerts(t *testing.T) {
+	bridge, recorder, clock := newEpisodeTestBridge(t)
+	bridge.SetPatrolTriggerPolicy(criticalOnly)
+	bridge.SetSustainedTriggerPolicy(alwaysRunSustained)
+	start := *clock
+
+	names := []string{"smart-sdf", "pbs-datastore", "unraid-parity", "exited-test", "disk-data", "update-qbittorrent", "update-gluetun"}
+	for i, name := range names {
+		bridge.handleNewAlert(sustainedTestAlert(name, "warning", start.Add(time.Duration(i)*time.Second)))
+	}
+	recorder.expectNone(t)
+
+	countSustained := func() []string {
+		t.Helper()
+		var fired []string
+		deadline := time.After(300 * time.Millisecond)
+		for {
+			select {
+			case event := <-recorder.events:
+				if event.Reason == "alert_fired" && event.Sustained {
+					fired = append(fired, event.AlertIdentifier)
+				}
+			case <-deadline:
+				return fired
+			}
+		}
+	}
+
+	*clock = start.Add(sustainedAlertDelay + time.Minute)
+	bridge.checkSustainedAlerts()
+	bridge.checkSustainedAlerts()
+	if fired := countSustained(); len(fired) != maxSustainedTriggersPerHour {
+		t.Fatalf("first hour: expected %d sustained triggers, got %v", maxSustainedTriggersPerHour, fired)
+	}
+
+	*clock = start.Add(sustainedAlertDelay + 30*time.Minute)
+	bridge.checkSustainedAlerts()
+	if fired := countSustained(); len(fired) != 0 {
+		t.Fatalf("expected the cap to hold inside the hour, got %v", fired)
+	}
+
+	// The rest follow when the hour has passed, and nothing fires after that.
+	*clock = start.Add(sustainedAlertDelay + 62*time.Minute)
+	bridge.checkSustainedAlerts()
+	if fired := countSustained(); len(fired) != len(names)-maxSustainedTriggersPerHour {
+		t.Fatalf("second hour: expected %d sustained triggers, got %v", len(names)-maxSustainedTriggersPerHour, fired)
+	}
+	*clock = start.Add(24 * time.Hour)
+	bridge.checkSustainedAlerts()
+	if fired := countSustained(); len(fired) != 0 {
+		t.Fatalf("every alert was looked at once already, got %v", fired)
+	}
+}
+
+func TestAlertBridge_SustainedPolicyCanWaitOrSkip(t *testing.T) {
+	bridge, recorder, clock := newEpisodeTestBridge(t)
+	bridge.SetPatrolTriggerPolicy(criticalOnly)
+	decision := SustainedTriggerWait
+	asked := 0
+	bridge.SetSustainedTriggerPolicy(func(PatrolTriggerEvent, time.Time) SustainedTriggerDecision {
+		asked++
+		return decision
+	})
+	start := *clock
+	bridge.handleNewAlert(sustainedTestAlert("disk-data", "warning", start))
+	bridge.handleNewAlert(sustainedTestAlert("disk-media", "warning", start))
+
+	// Wait: Patrol is in Watch only, say. Asked again on every check.
+	*clock = start.Add(sustainedAlertDelay)
+	bridge.checkSustainedAlerts()
+	bridge.checkSustainedAlerts()
+	recorder.expectNone(t)
+	if asked != 4 {
+		t.Fatalf("expected both alerts to be asked about on both checks, got %d questions", asked)
+	}
+
+	// Skip: a run already looked at this episode. Never asked again.
+	decision = SustainedTriggerSkip
+	bridge.checkSustainedAlerts()
+	decision = SustainedTriggerRun
+	bridge.checkSustainedAlerts()
+	recorder.expectNone(t)
+	if asked != 6 {
+		t.Fatalf("expected skipped alerts to be left alone, got %d questions", asked)
+	}
+}
+
+// An alert that was already active when Pulse started has not woken Patrol in
+// this process. The sustained trigger looks at it once, after the same delay
+// counted from the start so the inventory has loaded.
+func TestAlertBridge_SustainedTriggerLooksAtAlertsActiveAtStart(t *testing.T) {
+	bridge, recorder, clock := newEpisodeTestBridge(t)
+	bridge.running = false
+	bridge.SetPatrolTriggerPolicy(criticalOnly)
+	bridge.SetSustainedTriggerPolicy(alwaysRunSustained)
+	start := *clock
+	old := sustainedTestAlert("local-zfs", "critical", start.Add(-17*24*time.Hour))
+	bridge.SetAlertProvider(&stubAlertProvider{alerts: []AlertAdapter{old}})
+	bridge.Start()
+	t.Cleanup(bridge.Stop)
+
+	*clock = start.Add(time.Minute)
+	bridge.checkSustainedAlerts()
+	recorder.expectNone(t)
+
+	*clock = start.Add(sustainedAlertDelay)
+	bridge.checkSustainedAlerts()
+	event := recorder.expect(t, "alert_fired")
+	if !event.Sustained || event.AlertIdentifier != "local-zfs" || event.AlertLevel != "critical" {
+		t.Fatalf("unexpected sustained trigger: %+v", event)
+	}
+	*clock = start.Add(time.Hour)
+	bridge.checkSustainedAlerts()
+	recorder.expectNone(t)
+}

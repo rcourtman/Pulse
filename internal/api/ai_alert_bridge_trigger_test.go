@@ -212,3 +212,84 @@ func TestAlertBridgeWiring_HostFilesystemAlertRunRequestsResolve(t *testing.T) {
 		})
 	}
 }
+
+// The sustained trigger is for installs where Patrol investigates findings.
+// Watch only and free installs get no runs from it, and it follows the alert
+// trigger switch and the alert-type allowlist. The minimum severity setting is
+// not consulted: this rule exists for the warnings below it.
+func TestAlertBridgeWiring_SustainedAlertPolicy(t *testing.T) {
+	since := time.Now().Add(-time.Hour)
+	event := unified.PatrolTriggerEvent{Reason: "alert_fired", AlertType: "disk", AlertLevel: "warning", AlertIdentifier: "disk-alert"}
+
+	for _, tc := range []struct {
+		name         string
+		mutate       func(cfg *config.AIConfig)
+		investigates bool
+		lookedAt     bool
+		want         unified.SustainedTriggerDecision
+	}{
+		{name: "paid mode, critical-only floor, warning alert", investigates: true, want: unified.SustainedTriggerRun},
+		{name: "watch only or free", investigates: false, want: unified.SustainedTriggerWait},
+		{name: "alert triggers switched off", investigates: true,
+			mutate: func(cfg *config.AIConfig) { cfg.PatrolAlertTriggersEnabled = false }, want: unified.SustainedTriggerWait},
+		{name: "alert type not on the allowlist", investigates: true,
+			mutate: func(cfg *config.AIConfig) { cfg.PatrolAlertTriggerTypes = []string{"cpu"} }, want: unified.SustainedTriggerWait},
+		{name: "alert type on the allowlist", investigates: true,
+			mutate: func(cfg *config.AIConfig) { cfg.PatrolAlertTriggerTypes = []string{"disk"} }, want: unified.SustainedTriggerRun},
+		{name: "a run already looked at this episode", investigates: true, lookedAt: true, want: unified.SustainedTriggerSkip},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			aiCfg := config.NewDefaultAIConfig()
+			if tc.mutate != nil {
+				tc.mutate(aiCfg)
+			}
+			wiring := alertBridgePatrolWiring{
+				aiConfig:     func() *config.AIConfig { return aiCfg },
+				investigates: func() bool { return tc.investigates },
+				lookedAtSince: func(alertIdentifier string, got time.Time) bool {
+					if alertIdentifier != "disk-alert" || !got.Equal(since) {
+						t.Errorf("run history asked about %q since %v", alertIdentifier, got)
+					}
+					return tc.lookedAt
+				},
+			}
+			if got := wiring.acceptsSustainedAlert(event, since); got != tc.want {
+				t.Fatalf("decision = %v, want %v", got, tc.want)
+			}
+		})
+	}
+
+	// Wiring that cannot tell Patrol's mode never runs the sustained trigger.
+	if got := (alertBridgePatrolWiring{}).acceptsSustainedAlert(event, since); got != unified.SustainedTriggerWait {
+		t.Fatalf("unconfigured wiring decided %v", got)
+	}
+}
+
+func TestAlertBridgeWiring_SustainedAlertRequestsAMarkedLowerPriorityRun(t *testing.T) {
+	var requested []ai.PatrolScope
+	wiring := alertBridgePatrolWiring{runScoped: func(scope ai.PatrolScope) { requested = append(requested, scope) }}
+
+	base := unified.PatrolTriggerEvent{
+		Reason: "alert_fired", ResourceID: "agent:host-1/disk:data", ResourceType: "agent-disk",
+		AlertType: "disk", AlertLevel: "warning", AlertIdentifier: "disk-alert", Value: 92, Threshold: 90,
+	}
+	sustained := base
+	sustained.Sustained = true
+	sustained.ActiveSince = time.Now().Add(-11 * time.Minute)
+	wiring.trigger(base)
+	wiring.trigger(sustained)
+
+	if len(requested) != 2 {
+		t.Fatalf("expected two run requests, got %d", len(requested))
+	}
+	fresh, stayed := requested[0], requested[1]
+	if fresh.AlertSustained || !stayed.AlertSustained {
+		t.Fatalf("only the sustained request must be marked: fresh=%v stayed=%v", fresh.AlertSustained, stayed.AlertSustained)
+	}
+	if stayed.Reason != ai.TriggerReasonAlertFired || stayed.AlertIdentifier != "disk-alert" {
+		t.Fatalf("sustained request lost its alert: %+v", stayed)
+	}
+	if stayed.Priority >= fresh.Priority {
+		t.Fatalf("a sustained alert must queue behind a freshly fired one: %d vs %d", stayed.Priority, fresh.Priority)
+	}
+}

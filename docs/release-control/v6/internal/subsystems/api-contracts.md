@@ -14224,3 +14224,5 @@ The wiring builds its scopes through the `ai` alert scope constructors, which
 mark the resource type as a hint, and on `alert_cleared` it first calls
 `PatrolService.ResolveFindingsForClearedAlert`. Still no route, request payload
 or response change.
+The wiring also sets the bridge's sustained policy (`acceptsSustainedAlert`).
+The sustained rule adds no setting, route or payload field.

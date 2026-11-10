@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/unified"
@@ -23,11 +24,19 @@ type alertBridgePatrolWiring struct {
 	runScoped func(scope ai.PatrolScope)
 	// alertCleared closes the findings tied to an alert that has resolved.
 	alertCleared func(alertIdentifier, alertResourceID, alertType string) int
+	// investigates reports whether Patrol is on and in a mode that
+	// investigates findings (Ask first or Autopilot), as opposed to Watch
+	// only. The sustained trigger is limited to those modes.
+	investigates func() bool
+	// lookedAtSince reports whether a Patrol run has already examined this
+	// alert since the given time.
+	lookedAtSince func(alertIdentifier string, since time.Time) bool
 }
 
 // attach connects the wiring to the bridge.
 func (w alertBridgePatrolWiring) attach(bridge *unified.AlertBridge) {
 	bridge.SetPatrolTriggerPolicy(w.acceptsFiringAlert)
+	bridge.SetSustainedTriggerPolicy(w.acceptsSustainedAlert)
 	bridge.SetPatrolTrigger(w.trigger)
 }
 
@@ -41,6 +50,32 @@ func (w alertBridgePatrolWiring) acceptsFiringAlert(alertType, alertLevel string
 	return aiCfg == nil || aiCfg.AlertTriggersInvestigation(alertType, alertLevel)
 }
 
+// acceptsSustainedAlert decides whether an alert that has stayed active
+// without waking Patrol may wake it now. The minimum severity setting governs
+// alerts the moment they fire and is not consulted here: this rule exists for
+// the warnings below it and for alerts that were already active when Pulse
+// started. It applies only where Patrol investigates findings, so Watch only
+// and free installs get no extra runs from it, and it respects the alert
+// trigger switch and the alert-type allowlist.
+func (w alertBridgePatrolWiring) acceptsSustainedAlert(event unified.PatrolTriggerEvent, activeSince time.Time) unified.SustainedTriggerDecision {
+	if w.aiConfig == nil || w.investigates == nil {
+		return unified.SustainedTriggerWait
+	}
+	aiCfg := w.aiConfig()
+	// Asking at the critical level leaves the master switch and the
+	// allowlist as the only things the trigger policy can refuse.
+	if aiCfg == nil || !aiCfg.AlertTriggersInvestigation(event.AlertType, config.AlertTriggerSeverityCritical) {
+		return unified.SustainedTriggerWait
+	}
+	if !w.investigates() {
+		return unified.SustainedTriggerWait
+	}
+	if w.lookedAtSince != nil && w.lookedAtSince(event.AlertIdentifier, activeSince) {
+		return unified.SustainedTriggerSkip
+	}
+	return unified.SustainedTriggerRun
+}
+
 // trigger queues a scoped Patrol run for one alert bridge event.
 func (w alertBridgePatrolWiring) trigger(event unified.PatrolTriggerEvent) {
 	// The alert constructors mark the type as a hint. The unified store's
@@ -50,7 +85,15 @@ func (w alertBridgePatrolWiring) trigger(event unified.PatrolTriggerEvent) {
 	var scope ai.PatrolScope
 	switch event.Reason {
 	case "alert_fired":
-		// The bridge asked acceptsFiringAlert before it sent this event.
+		// The bridge asked acceptsFiringAlert, or acceptsSustainedAlert for a
+		// sustained event, before it sent this.
+		if event.Sustained {
+			scope = ai.SustainedAlertPatrolScope(event.AlertIdentifier, event.ResourceID, event.ResourceType, event.AlertType)
+			if event.AlertType != "" {
+				scope.Context = fmt.Sprintf("Alert still active: %s = %.1f (threshold %.1f)", event.AlertType, event.Value, event.Threshold)
+			}
+			break
+		}
 		scope = ai.AlertTriggeredPatrolScope(event.AlertIdentifier, event.ResourceID, event.ResourceType, event.AlertType)
 		if event.AlertType != "" {
 			scope.Context = fmt.Sprintf("Alert: %s = %.1f (threshold %.1f)", event.AlertType, event.Value, event.Threshold)
@@ -131,5 +174,10 @@ func (r *Router) newAlertBridgePatrolWiring(orgID string, aiService *ai.Service,
 			patrol.TriggerScopedPatrol(orgCtx, scope)
 		},
 		alertCleared: patrol.ResolveFindingsForClearedAlert,
+		investigates: func() bool {
+			return patrol.GetConfig().Enabled &&
+				aiService.GetEffectivePatrolAutonomyLevel() != config.PatrolAutonomyMonitor
+		},
+		lookedAtSince: patrol.AlertExaminedSince,
 	}
 }

@@ -2,6 +2,7 @@
 package unified
 
 import (
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -18,6 +19,7 @@ type AlertBridge struct {
 	alertProvider   AlertProvider
 	patrolTrigger   PatrolTriggerFunc
 	triggerPolicy   PatrolTriggerPolicyFunc
+	sustainedPolicy SustainedTriggerPolicyFunc
 	enhancementFunc AIEnhancementFunc
 
 	// Configuration
@@ -29,6 +31,8 @@ type AlertBridge struct {
 	// Tracking
 	pendingEnhancements map[string]*time.Timer
 	episodes            map[string]*alertEpisode // alert identifier -> firing episode state
+	sustainedTriggers   []time.Time              // sustained triggers inside the last hour, all alerts
+	startedAt           time.Time                // when the bridge last started
 	now                 func() time.Time
 	running             bool
 	stopCh              chan struct{}
@@ -45,6 +49,19 @@ const (
 	maxAlertFiredTriggersPerDay  = 6
 )
 
+// The sustained trigger covers alerts that are active and have not woken
+// Patrol in their current episode: an alert below the operator's minimum
+// severity, or one that was already active when Pulse started. Once such an
+// alert has stayed active for sustainedAlertDelay the bridge asks the
+// sustained policy whether Patrol may look at it. It fires at most once per
+// episode, counts toward the per-identifier caps above, and is capped across
+// all alerts at maxSustainedTriggersPerHour. It is off until a policy is set.
+const (
+	sustainedAlertDelay         = 10 * time.Minute
+	maxSustainedTriggersPerHour = 4
+	sustainedCheckInterval      = 30 * time.Second
+)
+
 // alertEpisode tracks one alert identifier's current firing episode and its
 // recent alert_fired triggers.
 type alertEpisode struct {
@@ -52,6 +69,12 @@ type alertEpisode struct {
 	startedAt      time.Time   // the alert's start time for the current episode
 	triggeredLevel int         // highest level this episode has already used to wake Patrol
 	triggers       []time.Time // alert_fired triggers inside the daily window
+	// sustainedDone is set once the episode has woken Patrol or has used its
+	// sustained check, so the sustained trigger leaves it alone.
+	sustainedDone bool
+	// lastEvent is the payload of the latest dispatch. A sustained trigger
+	// fires from a timer, long after the dispatch that carried the alert.
+	lastEvent PatrolTriggerEvent
 }
 
 // AlertProvider provides access to alert data
@@ -79,6 +102,11 @@ type PatrolTriggerEvent struct {
 	Value           float64
 	Threshold       float64
 	Message         string
+	// Sustained marks an alert_fired event sent because the alert stayed
+	// active without waking Patrol, not because it just fired. ActiveSince is
+	// when its episode began.
+	Sustained   bool
+	ActiveSince time.Time
 }
 
 // PatrolTriggerFunc is called to trigger a mini-patrol for a resource
@@ -89,6 +117,25 @@ type PatrolTriggerFunc func(event PatrolTriggerEvent)
 // bridge asks before it spends an episode's trigger, so an alert that starts
 // below the minimum severity can still wake Patrol when it rises above it.
 type PatrolTriggerPolicyFunc func(alertType, alertLevel string) bool
+
+// SustainedTriggerDecision is a sustained policy's answer for one alert.
+type SustainedTriggerDecision int
+
+const (
+	// SustainedTriggerWait: not now, ask again later. Use it for conditions
+	// that can change while the alert stays active, such as Patrol's mode.
+	SustainedTriggerWait SustainedTriggerDecision = iota
+	// SustainedTriggerSkip: never for this episode, for example because a
+	// Patrol run has already looked at it.
+	SustainedTriggerSkip
+	// SustainedTriggerRun: wake Patrol for this alert now.
+	SustainedTriggerRun
+)
+
+// SustainedTriggerPolicyFunc decides whether an alert that has stayed active
+// since activeSince without waking Patrol may wake it now. It is called
+// without the bridge lock held.
+type SustainedTriggerPolicyFunc func(event PatrolTriggerEvent, activeSince time.Time) SustainedTriggerDecision
 
 // AIEnhancementFunc is called to request AI enhancement of a finding
 type AIEnhancementFunc func(findingID string) error
@@ -160,6 +207,14 @@ func (b *AlertBridge) SetPatrolTriggerPolicy(fn PatrolTriggerPolicyFunc) {
 	b.triggerPolicy = fn
 }
 
+// SetSustainedTriggerPolicy turns the sustained trigger on. With no policy
+// the bridge wakes Patrol only when an alert fires or rises.
+func (b *AlertBridge) SetSustainedTriggerPolicy(fn SustainedTriggerPolicyFunc) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.sustainedPolicy = fn
+}
+
 // SetAIEnhancement sets the function to call for AI enhancement
 func (b *AlertBridge) SetAIEnhancement(fn AIEnhancementFunc) {
 	b.mu.Lock()
@@ -175,11 +230,15 @@ func (b *AlertBridge) Start() {
 		return
 	}
 	b.running = true
+	b.startedAt = b.now()
 	b.stopCh = make(chan struct{})
+	stopCh := b.stopCh
 	b.mu.Unlock()
 
 	// Sync existing alerts
 	b.syncExistingAlerts()
+
+	go b.sustainedLoop(stopCh)
 
 	log.Info().Msg("alert bridge started")
 }
@@ -216,12 +275,13 @@ func (b *AlertBridge) syncExistingAlerts() {
 
 	alerts := provider.GetActiveAlerts()
 	for _, alert := range alerts {
-		_, isNew := b.store.AddFromAlert(alert)
+		finding, isNew := b.store.AddFromAlert(alert)
 		// An alert that was already active when the bridge started is an
 		// episode in progress, not a new firing. Record it at its current
 		// level so a later re-notification does not wake Patrol, while a rise
-		// in severity or the next episode still can.
-		b.seedEpisode(alert)
+		// in severity or the next episode still can. The sustained trigger may
+		// still look at it once.
+		b.seedEpisode(alert, alertFiredEvent(finding, alert))
 		if isNew {
 			log.Debug().
 				Str("alert_identifier", alert.GetAlertIdentifier()).
@@ -273,19 +333,10 @@ func (b *AlertBridge) handleNewAlert(alert AlertAdapter) {
 	// Trigger mini-patrol for the resource
 	if triggerPatrol && patrolFn != nil {
 		accepted := policyFn == nil || policyFn(alert.GetAlertType(), alert.GetAlertLevel())
-		switch b.claimFiredTrigger(alert, outcome != AlertRecordUpdated, accepted) {
+		event := alertFiredEvent(finding, alert)
+		switch b.claimFiredTrigger(alert, outcome != AlertRecordUpdated, accepted, event) {
 		case firedTriggerClaimed:
-			go patrolFn(PatrolTriggerEvent{
-				ResourceID:      finding.ResourceID,
-				ResourceType:    finding.ResourceType,
-				Reason:          "alert_fired",
-				AlertType:       finding.AlertType,
-				AlertIdentifier: alertIdentifier,
-				AlertLevel:      alert.GetAlertLevel(),
-				Value:           alert.GetValue(),
-				Threshold:       alert.GetThreshold(),
-				Message:         alert.GetMessage(),
-			})
+			go patrolFn(event)
 		case firedTriggerRateLimited:
 			log.Info().
 				Str("alert_identifier", alertIdentifier).
@@ -312,6 +363,21 @@ const (
 	firedTriggerRateLimited
 )
 
+// alertFiredEvent builds the alert_fired payload for an alert and its finding.
+func alertFiredEvent(finding *UnifiedFinding, alert AlertAdapter) PatrolTriggerEvent {
+	return PatrolTriggerEvent{
+		ResourceID:      finding.ResourceID,
+		ResourceType:    finding.ResourceType,
+		Reason:          "alert_fired",
+		AlertType:       finding.AlertType,
+		AlertIdentifier: alert.GetAlertIdentifier(),
+		AlertLevel:      alert.GetAlertLevel(),
+		Value:           alert.GetValue(),
+		Threshold:       alert.GetThreshold(),
+		Message:         alert.GetMessage(),
+	}
+}
+
 func alertLevelRank(level string) int {
 	if strings.EqualFold(strings.TrimSpace(level), "critical") {
 		return 2
@@ -321,7 +387,7 @@ func alertLevelRank(level string) int {
 
 // seedEpisode records an alert that is already active as an episode that has
 // used its trigger at the alert's current level.
-func (b *AlertBridge) seedEpisode(alert AlertAdapter) {
+func (b *AlertBridge) seedEpisode(alert AlertAdapter, event PatrolTriggerEvent) {
 	alertIdentifier := alert.GetAlertIdentifier()
 	if alertIdentifier == "" {
 		return
@@ -339,12 +405,14 @@ func (b *AlertBridge) seedEpisode(alert AlertAdapter) {
 	episode.active = true
 	episode.startedAt = alert.GetStartTime()
 	episode.triggeredLevel = alertLevelRank(alert.GetAlertLevel())
+	episode.sustainedDone = false
+	episode.lastEvent = event
 }
 
 // claimFiredTrigger decides whether this dispatch may wake Patrol and, if so,
 // spends the episode's trigger for the alert's level. fresh is true when the
 // store saw the alert fire for the first time or fire again after a resolve.
-func (b *AlertBridge) claimFiredTrigger(alert AlertAdapter, fresh, policyAccepts bool) firedTriggerDecision {
+func (b *AlertBridge) claimFiredTrigger(alert AlertAdapter, fresh, policyAccepts bool, event PatrolTriggerEvent) firedTriggerDecision {
 	alertIdentifier := alert.GetAlertIdentifier()
 	now := b.now()
 
@@ -368,16 +436,29 @@ func (b *AlertBridge) claimFiredTrigger(alert AlertAdapter, fresh, policyAccepts
 		episode.active = true
 		episode.startedAt = startedAt
 		episode.triggeredLevel = 0
+		episode.sustainedDone = false
 	}
+	episode.lastEvent = event
 
 	level := alertLevelRank(alert.GetAlertLevel())
 	if level <= episode.triggeredLevel || !policyAccepts {
 		return firedTriggerNone
 	}
 	// The level is spent whether or not the cap lets the trigger through, so
-	// one episode never retries by itself.
+	// one episode never retries by itself. Either way the sustained trigger
+	// has nothing left to do for it.
 	episode.triggeredLevel = level
+	episode.sustainedDone = true
 
+	if !b.spendAlertTriggerLocked(episode, now) {
+		return firedTriggerRateLimited
+	}
+	return firedTriggerClaimed
+}
+
+// spendAlertTriggerLocked applies the per-identifier caps and records the
+// trigger when they allow it. Caller holds b.mu.
+func (b *AlertBridge) spendAlertTriggerLocked(episode *alertEpisode, now time.Time) bool {
 	dayAgo := now.Add(-24 * time.Hour)
 	hourAgo := now.Add(-time.Hour)
 	kept := episode.triggers[:0]
@@ -393,10 +474,125 @@ func (b *AlertBridge) claimFiredTrigger(alert AlertAdapter, fresh, policyAccepts
 	}
 	episode.triggers = kept
 	if lastHour >= maxAlertFiredTriggersPerHour || len(kept) >= maxAlertFiredTriggersPerDay {
-		return firedTriggerRateLimited
+		return false
 	}
 	episode.triggers = append(episode.triggers, now)
-	return firedTriggerClaimed
+	return true
+}
+
+// sustainedLoop runs the sustained check until the bridge stops.
+func (b *AlertBridge) sustainedLoop(stopCh <-chan struct{}) {
+	ticker := time.NewTicker(sustainedCheckInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-stopCh:
+			return
+		case <-ticker.C:
+			b.checkSustainedAlerts()
+		}
+	}
+}
+
+// checkSustainedAlerts wakes Patrol for alerts that have stayed active for
+// sustainedAlertDelay without waking it in their current episode, when the
+// sustained policy allows and the caps have room. Critical alerts go first,
+// then the longest active.
+func (b *AlertBridge) checkSustainedAlerts() {
+	now := b.now()
+
+	type candidate struct {
+		identifier string
+		startedAt  time.Time
+		event      PatrolTriggerEvent
+	}
+	b.mu.Lock()
+	policyFn := b.sustainedPolicy
+	patrolFn := b.patrolTrigger
+	if !b.running || !b.triggerPatrolOnNew || policyFn == nil || patrolFn == nil {
+		b.mu.Unlock()
+		return
+	}
+	candidates := make([]candidate, 0)
+	for identifier, episode := range b.episodes {
+		if !episode.active || episode.sustainedDone || episode.lastEvent.AlertIdentifier == "" {
+			continue
+		}
+		// An alert that was already active at start waits the same delay
+		// from the start, so Patrol's inventory is loaded before it looks.
+		since := episode.startedAt
+		if b.startedAt.After(since) {
+			since = b.startedAt
+		}
+		if now.Sub(since) < sustainedAlertDelay {
+			continue
+		}
+		candidates = append(candidates, candidate{identifier: identifier, startedAt: episode.startedAt, event: episode.lastEvent})
+	}
+	b.mu.Unlock()
+	if len(candidates) == 0 {
+		return
+	}
+	sort.Slice(candidates, func(i, j int) bool {
+		iLevel, jLevel := alertLevelRank(candidates[i].event.AlertLevel), alertLevelRank(candidates[j].event.AlertLevel)
+		if iLevel != jLevel {
+			return iLevel > jLevel
+		}
+		if !candidates[i].startedAt.Equal(candidates[j].startedAt) {
+			return candidates[i].startedAt.Before(candidates[j].startedAt)
+		}
+		return candidates[i].identifier < candidates[j].identifier
+	})
+
+	for _, c := range candidates {
+		decision := policyFn(c.event, c.startedAt)
+		if decision == SustainedTriggerWait {
+			continue
+		}
+
+		b.mu.Lock()
+		episode := b.episodes[c.identifier]
+		// The alert may have resolved or started a new episode meanwhile.
+		if episode == nil || !episode.active || episode.sustainedDone || !episode.startedAt.Equal(c.startedAt) {
+			b.mu.Unlock()
+			continue
+		}
+		if decision == SustainedTriggerSkip {
+			episode.sustainedDone = true
+			b.mu.Unlock()
+			continue
+		}
+		hourAgo := now.Add(-time.Hour)
+		kept := b.sustainedTriggers[:0]
+		for _, at := range b.sustainedTriggers {
+			if at.After(hourAgo) {
+				kept = append(kept, at)
+			}
+		}
+		b.sustainedTriggers = kept
+		if len(kept) >= maxSustainedTriggersPerHour {
+			// Out of room this hour. The remaining alerts keep waiting.
+			b.mu.Unlock()
+			return
+		}
+		episode.sustainedDone = true
+		if !b.spendAlertTriggerLocked(episode, now) {
+			b.mu.Unlock()
+			continue
+		}
+		b.sustainedTriggers = append(b.sustainedTriggers, now)
+		event := episode.lastEvent
+		b.mu.Unlock()
+
+		event.Sustained = true
+		event.ActiveSince = c.startedAt
+		log.Info().
+			Str("alert_identifier", c.identifier).
+			Str("level", event.AlertLevel).
+			Dur("active_for", now.Sub(c.startedAt)).
+			Msg("Alert bridge: alert stayed active without a Patrol run, asking Patrol to look")
+		go patrolFn(event)
+	}
 }
 
 // endEpisode marks an alert identifier's firing episode as over.
@@ -409,6 +605,7 @@ func (b *AlertBridge) endEpisode(alertIdentifier string) {
 	}
 	episode.active = false
 	episode.triggeredLevel = 0
+	episode.sustainedDone = false
 	// Keep the entry only while it still counts toward the daily cap.
 	dayAgo := b.now().Add(-24 * time.Hour)
 	for _, at := range episode.triggers {
