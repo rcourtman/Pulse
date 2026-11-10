@@ -848,6 +848,10 @@ type FindingsStore struct {
 	// When this process last saw each finding begin a new occurrence, with the
 	// clock's monotonic reading. Never persisted: see liveRunOccurrenceLocked.
 	occurrenceStarts map[string]time.Time
+	// Findings whose investigation could not start because every
+	// investigation slot was busy, and when each was turned away. Never
+	// persisted: see DeferInvestigation.
+	deferredInvestigations map[string]time.Time
 	// Persistence layer (optional)
 	persistence FindingsPersistence
 	// A failed or still-running load cannot establish complete current absence

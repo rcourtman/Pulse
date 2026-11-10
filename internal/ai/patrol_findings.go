@@ -1464,7 +1464,15 @@ func (a *patrolFindingCreatorAdapter) getQueriedFindings() []tools.PatrolFinding
 // completed Watch stage into Pro investigation. It must be called only after
 // the Watch run record is durable and run-scoped executor state has unwound.
 func (p *PatrolService) dispatchPatrolInvestigations(result *AIAnalysisResult) {
-	if p == nil || p.findings == nil || result == nil {
+	if p == nil || p.findings == nil {
+		return
+	}
+	// A slot can also free without one of Patrol's own investigations ending,
+	// for example after a manual re-investigation. The end of a run is the
+	// backstop for findings still waiting, and they go first: they were
+	// turned away before this run's findings existed.
+	p.startDeferredInvestigations()
+	if result == nil {
 		return
 	}
 	seen := make(map[string]bool, len(result.Findings))
@@ -1843,11 +1851,15 @@ func (p *PatrolService) maybeInvestigateFinding(f *Finding) bool {
 		return false
 	}
 
-	// Check if we can start another investigation (concurrency limit)
+	// Check if we can start another investigation (concurrency limit). A
+	// finding turned away here is owed an investigation: remember it and start
+	// it when a slot frees, instead of waiting for a later run to report it.
 	if !orchestrator.CanStartInvestigation() {
-		log.Debug().
+		deferred := p.findings != nil && p.findings.DeferInvestigation(f.ID, time.Now())
+		log.Info().
 			Str("finding_id", f.ID).
-			Msg("Cannot start investigation: max concurrent investigations reached")
+			Bool("queued", deferred).
+			Msg("Investigation slot busy: finding will be investigated when a slot frees")
 		return false
 	}
 
@@ -1919,7 +1931,17 @@ func (p *PatrolService) maybeInvestigateFinding(f *Finding) bool {
 				Err(err).
 				Str("finding_id", f.ID).
 				Msg("Investigation ended with an error")
+			// The slot check above is advisory. Two findings can pass it
+			// together and the orchestrator then admits one. The other never
+			// ran, so it waits for the slot like any finding turned away.
+			if p.findings != nil && !orchestrator.CanStartInvestigation() {
+				if latest := p.findings.Get(f.ID); latest != nil && latest.ShouldInvestigate(currentAutonomy) {
+					p.findings.DeferInvestigation(f.ID, time.Now())
+				}
+			}
 		}
+		// This run's slot is free again.
+		p.startDeferredInvestigations()
 
 		// Typed remediation now flows exclusively through the action
 		// proposal channel: the investigation's ActionReference points at
