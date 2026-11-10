@@ -773,7 +773,13 @@ func renderResponseMarkdown(report RunReport) string {
 	fmt.Fprintf(&b, "| Agent profile | %s (host `%s`) |\n", agentProfileLabel(evidence.AgentProfile.Name), markdownCode(evidence.AgentProfile.HostName))
 	switch evidence.Wake.Mode {
 	case WakeSelf:
-		fmt.Fprintf(&b, "| How the run started | Patrol woke by itself, trigger `%s` |\n", markdownCode(evidence.Wake.TriggerReason))
+		if evidence.Wake.TriggerReason == "" {
+			// The harness did not ask, and Pulse listed no run for the
+			// finding. An empty trigger is not printed as if it were one.
+			fmt.Fprintf(&b, "| How the run started | Patrol woke by itself, Pulse recorded no run for the finding |\n")
+		} else {
+			fmt.Fprintf(&b, "| How the run started | Patrol woke by itself, trigger `%s` |\n", markdownCode(evidence.Wake.TriggerReason))
+		}
 	case WakeAsked:
 		fmt.Fprintf(&b, "| How the run started | Patrol had to be asked (%s) |\n", markdownCell(strings.TrimSpace(evidence.Wake.Asked+" "+evidence.Wake.AskDetail)))
 	default:

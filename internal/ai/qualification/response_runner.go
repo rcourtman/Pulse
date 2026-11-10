@@ -136,6 +136,30 @@ func (v labView) findingAlias(manifest Manifest, finding Finding) string {
 	return ""
 }
 
+// namesakeAlias names the outcome resource whose name an open finding carries
+// while being bound to a different resource, or "" when there is none. That
+// is what an earlier run on the same Pulse data leaves behind: its container
+// is gone, its finding is still open under the name. A Pulse that ties
+// findings to a resource by name files the new container's fault into that
+// old finding, and the identity check in findingAlias cannot see it. Only
+// outcome resources count, because only their findings are graded.
+func (v labView) namesakeAlias(manifest Manifest, outcome []string, finding Finding) string {
+	name := strings.TrimSpace(finding.ResourceName)
+	if finding.ResolvedAt != nil || name == "" {
+		return ""
+	}
+	for _, spec := range manifest.Resources {
+		if spec.Kind != resourceKindContainer || !contains(outcome, spec.Alias) {
+			continue
+		}
+		pulse, ok := v.resources[spec.Alias]
+		if ok && pulse.ID != "" && finding.ResourceID != pulse.ID && strings.EqualFold(name, strings.TrimSpace(pulse.Name)) {
+			return spec.Alias
+		}
+	}
+	return ""
+}
+
 func (v labView) alertAlias(manifest Manifest, lab *PreparedLab, alert PulseAlert) string {
 	for _, spec := range manifest.Resources {
 		switch spec.Kind {
@@ -287,6 +311,11 @@ func (r *QualificationRunner) runResponse(ctx context.Context, report *RunReport
 			if alias := view.findingAlias(manifest, finding); alias != "" {
 				return fmt.Errorf("Pulse already holds finding %s on lab resource %s: use a Pulse data directory with no history for this lab", finding.ID, alias)
 			}
+			// An open finding on an earlier container of the same name makes
+			// this run depend on that one.
+			if alias := view.namesakeAlias(manifest, outcome, finding); alias != "" {
+				return fmt.Errorf("Pulse holds open finding %s on another resource named %q, the name of lab resource %s: an earlier run left it, so use a fresh Pulse data directory or resolve that finding first", finding.ID, strings.TrimSpace(finding.ResourceName), alias)
+			}
 		}
 		runs, err := client.Runs(ctx)
 		if err != nil {
@@ -415,7 +444,7 @@ func (r *QualificationRunner) runResponse(ctx context.Context, report *RunReport
 
 	var findings []Finding
 	asked := false
-	if err := r.phase(report, "alert_and_wake", func() error {
+	waitForWake := func() error {
 		defer func() {
 			if len(findings) > 0 {
 				evidence.Wake.FindingAfter = time.Since(faultAt)
@@ -472,29 +501,34 @@ func (r *QualificationRunner) runResponse(ctx context.Context, report *RunReport
 			findings, _, err = readFindings()
 		}
 		return err
+	}
+	if err := r.phase(report, "alert_and_wake", func() error {
+		if err := waitForWake(); err != nil {
+			return err
+		}
+		readAlerts()
+		switch {
+		case len(manifest.Faults) == 0:
+			evidence.Wake.Mode = WakeNotApplicable
+		case len(findings) == 0:
+			evidence.Wake.Mode = WakeAsked
+		default:
+			evidence.Wake.Mode = WakeSelf
+			if run, ok := r.awaitOwningRun(ctx, findings[0].ID, runsBefore, runTimeout, poll); ok {
+				evidence.Wake.RunID, evidence.Wake.TriggerReason = run.ID, run.TriggerReason
+				if strings.EqualFold(run.TriggerReason, "manual") {
+					evidence.Wake.Mode = WakeAsked
+					if !asked {
+						evidence.Wake.AskDetail = "a manual run outside the harness reported the finding"
+					}
+				}
+			} else if asked {
+				evidence.Wake.Mode = WakeAsked
+			}
+		}
+		return ctx.Err()
 	}); err != nil {
 		return fail(err)
-	}
-	readAlerts()
-
-	switch {
-	case len(manifest.Faults) == 0:
-		evidence.Wake.Mode = WakeNotApplicable
-	case len(findings) == 0:
-		evidence.Wake.Mode = WakeAsked
-	default:
-		evidence.Wake.Mode = WakeSelf
-		if run, ok := r.owningRun(ctx, findings[0].ID, runsBefore); ok {
-			evidence.Wake.RunID, evidence.Wake.TriggerReason = run.ID, run.TriggerReason
-			if strings.EqualFold(run.TriggerReason, "manual") {
-				evidence.Wake.Mode = WakeAsked
-				if !asked {
-					evidence.Wake.AskDetail = "a manual run outside the harness reported the finding"
-				}
-			}
-		} else if asked {
-			evidence.Wake.Mode = WakeAsked
-		}
 	}
 
 	investigations := make(map[string]ResponseFinding)
@@ -672,6 +706,28 @@ func (r *QualificationRunner) owningRun(ctx context.Context, findingID string, r
 		}
 	}
 	return owner, found
+}
+
+// awaitOwningRun waits for the run record behind a finding. Pulse lists a
+// finding as soon as the model files it and writes the run record when the
+// run ends, so the record is usually missing when the finding first appears.
+// The wait ends when the record is listed, when Patrol reports no running
+// work and the record is still missing, or at the timeout.
+func (r *QualificationRunner) awaitOwningRun(ctx context.Context, findingID string, runsBefore map[string]struct{}, timeout, poll time.Duration) (PatrolRun, bool) {
+	deadline := time.Now().Add(timeout)
+	for {
+		if run, ok := r.owningRun(ctx, findingID, runsBefore); ok {
+			return run, true
+		}
+		if status, err := r.config.Client.Status(ctx); err == nil && !status.Running {
+			// Pulse writes the record before it reports idle, so one more
+			// read settles whether there is one.
+			return r.owningRun(ctx, findingID, runsBefore)
+		}
+		if time.Now().After(deadline) || sleepContext(ctx, poll) != nil {
+			return PatrolRun{}, false
+		}
+	}
 }
 
 // settleInvestigations waits for Patrol to finish investigating what it

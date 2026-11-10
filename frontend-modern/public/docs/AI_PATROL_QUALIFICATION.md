@@ -423,7 +423,8 @@ shares a `metadata.fault_set` value, in `metadata.fault_label` order.
 1. Provision the lab and confirm the baseline with the lab oracle.
 2. Wait until Pulse shows the healthy lab, matched by Docker container ID.
    Record the agent profile. Refuse to continue if Pulse already holds a
-   finding on a lab resource.
+   finding on a lab resource, or an open finding on another resource with the
+   name of a resource this scenario is graded on.
 3. Wait until Patrol is idle. Patrol has one investigation slot and declines a
    finding raised while it is busy.
 4. Inject the fault and confirm it with the lab oracle. Wait until Pulse's own
@@ -446,6 +447,16 @@ shares a `metadata.fault_set` value, in `metadata.fault_label` order.
    proposal is recorded and left alone.
 10. Grade, revert, verify the baseline, clean up.
 
+The wait in step 5 has to outlast every way Patrol can wake by itself for that
+alert. By default a critical alert wakes Patrol when it fires, and 3 minutes
+covers that. A warning does not wake it. Pulse has Patrol look at a warning
+once it has stayed active for 10 minutes, and checks for that every 30 seconds.
+D2, D3 and D6 raise warnings, so they wait 13 minutes. With 3 minutes the
+harness asked before Patrol could wake. D2 was then always graded "had to be
+asked", and its grade came from a manual run. D3 has no fault. Its wait is
+there so a false alarm from that later wake is seen. A new scenario whose
+alert is a warning needs the same wait.
+
 The harness never approves a proposal the scenario did not define, including a
 harmless one. The hand-run rig approved any restart on a fixture, which is how
 it observed Pulse reporting a wrong fix as not verified. A live run no longer
@@ -463,9 +474,12 @@ changes the agent.
 **How the run started.** `self` means a finding appeared before the harness
 asked for anything and the Patrol run that first reported it was not a manual
 one. `asked` means the harness had to ask, or someone else did. The trigger
-reason is copied from that Patrol run record (`alert_fired`, `scheduled`,
-`manual` and so on), so it is Pulse's own account. A quiet scenario records
-`not_applicable`.
+reason is copied from that Patrol run record (`alert_fired`, `alert_flapping`,
+`scheduled`, `manual` and so on), so it is Pulse's own account. Pulse lists a
+finding while the run that filed it is still going and writes the run record
+when that run ends, so the harness waits for the record before it reads the
+trigger. If Pulse never lists a run for the finding, the report says that. A
+quiet scenario records `not_applicable`.
 
 Both are in `report.json` under `response.evidence`, in `report.md`, and in
 every scorecard cell.
@@ -623,7 +637,7 @@ go run ./cmd/patrol-qualify -mode fault-set \
 Faults run one at a time, in label order. Subscription model routes serve one
 call at a time and Patrol has one investigation slot, so two faults at once
 would score a queue, not Patrol. A full set takes about an hour on such a
-route. `-faults D1,D4` runs a subset. Leave `-host-filesystem` out and name the
+route. D3 alone waits 13 minutes for nothing to happen. `-faults D1,D4` runs a subset. Leave `-host-filesystem` out and name the
 other faults to skip D6.
 
 The command prints the table and writes `scorecard.md` and `scorecard.json`
@@ -643,11 +657,19 @@ zero whatever the grades are.
 
 Things that change a score without any change to Patrol:
 
-- Pulse history. Container faults get fresh identities each run, because the
-  containers are new. The host disk does not: its alert and finding keep their
-  identity, Patrol does not investigate a finding it already concluded on, and
-  an alert that fired before does not wake it again. Use a Pulse data directory
-  with no history for the lab host when "woke by itself" for D6 matters.
+- Pulse history. Use a fresh Pulse data directory for each agent profile, and
+  for a repeat of the same fault. A container fault gets a new container each
+  run, and the last run's finding can still be open under the same name.
+  Before Pulse closed a finding whose container was replaced by a namesake, it
+  filed the new container's fault into that old finding, and the run was graded
+  on nothing. Pulse still ties a finding to a name when the finding has no
+  registry ID. The run now refuses to start in that state and names the
+  finding. Resolve it in Pulse or start from a fresh directory, then run that
+  fault again with `-faults`.
+- The host disk keeps its identity across runs. Its alert and finding are the
+  same ones, Patrol does not investigate a finding it already concluded on, and
+  an alert that fires again can wake Patrol as a flapping alert. This is one
+  more reason for the fresh directory when "woke by itself" for D6 matters.
 - An agent that was enrolled again under a new token leaves duplicate
   resources behind. The run fails at collection when a lab container maps to
   more than one Pulse resource.

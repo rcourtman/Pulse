@@ -6371,7 +6371,12 @@ shows the fault, ask for a run only after the natural wait, confirm fault and
 inventory integrity before any decision, and approve only the scenario's own
 fix bound to the exact finding, investigation and plan hash. It must never
 change an agent's command setting: the profile is observed, and a run declared
-as the other profile stops before injection. Response fixtures carry real image
+as the other profile stops before injection. A run must also stop before
+injection when Pulse holds an open finding, bound to another resource, under
+the name of a resource the scenario is graded on, because an earlier run left
+it and Pulse can file the new fault into it. The trigger reason must be read
+from the run record once that run has ended, and a finding with no run record
+must be reported as such, never as an empty trigger. Response fixtures carry real image
 and container names, so they are limited to manifests with
 `shared_host_ok=false`, their images come from an explicit build step that
 refuses to replace an image without the harness build label, and lab identity
