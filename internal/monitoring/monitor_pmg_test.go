@@ -128,6 +128,7 @@ func TestPollPMGInstancePopulatesState(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create monitor: %v", err)
 	}
+	t.Cleanup(mon.Stop)
 
 	mon.pollPMGInstance(context.Background(), "primary", client)
 
@@ -245,6 +246,7 @@ func TestPollPMGInstanceRecordsAuthFailures(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create monitor: %v", err)
 	}
+	t.Cleanup(mon.Stop)
 
 	mon.pollPMGInstance(context.Background(), "failing", client)
 
