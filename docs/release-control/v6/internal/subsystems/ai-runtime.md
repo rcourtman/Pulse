@@ -4455,9 +4455,15 @@ monitor's alert manager is not the one the organisation's wiring listens to,
 manager and starts it, which syncs the alerts already active there as at
 startup, and the flapping callback and threshold reader are set on the new
 manager. The same monitor handed over twice is not subscribed twice. Not
-moved by this: the pattern and correlation detectors' alert history hooks and
-the notification occurrence lifecycle provider, which the same startup binds.
-Proof: `internal/api/ai_alert_bridge_reload_test.go`.
+moved by this, and still read from the first monitor after a reload because
+the same startup binds them once: the pattern and correlation detectors'
+alert history hooks, the notification occurrence lifecycle provider, Patrol's
+metrics history provider and the forecast service's data adapter and resource
+iterator, and the AI service's incident store. Proof:
+`internal/api/ai_alert_bridge_reload_test.go`, which also starts Patrol through
+`Router.StartPatrol`, reloads through `ReloadableMonitor.Reload` and the
+router refresh the server runs after it, and checks that a fired, a resolved
+and a flapping alert on the new alert manager each reach Patrol.
 
 Alert scopes carry the producer's resource type only as a hint. The bridge
 wiring builds `alert_fired` and `alert_cleared` scopes through
