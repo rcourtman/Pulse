@@ -33,6 +33,9 @@ mode = os.environ["MODE"]
 after = (f / "installer-ran").exists()
 stopped = (f / "stop-ran").exists()
 state = (f / "state").read_text().strip()
+with (f / "call-observations").open("a") as out:
+    out.write(json.dumps(dict(args=args, state=state, after_install=after,
+                              after_stop=stopped, monotonic_ns=time.monotonic_ns())) + "\n")
 if args[0] == "show":
     if after and mode == "post-install-hang":
         print("LoadState=loaded\nActiveState=active", flush=True)
@@ -104,7 +107,19 @@ verify_update_running_executable() {
 detect_service_name() { printf '%s\n' "$SERVICE_NAME"; }
 # Advance the polling clock instead of waiting; manager/timeout deadlines stay
 # real. Dedicated UpdateServiceDeadlines controls below use actual time/sleep.
-sleep() { SECONDS=$((SECONDS + $1)); }
+unset SECONDS
+SECONDS=0
+printf '%s\n' "$SECONDS" > "$FIXTURE/model-clock"
+sleep() { SECONDS=$((SECONDS + $1)); printf '%s\n' "$SECONDS" >> "$FIXTURE/model-clock"; }
+if [[ "${CLOCK_PROBE:-false}" == true ]]; then
+    before=$SECONDS
+    command sleep 1.1
+    [[ "$SECONDS" == "$before" ]] || { echo 'fixture clock advanced with wall time' >&2; exit 98; }
+    sleep 3
+    [[ "$SECONDS" == "$((before + 3))" ]] || exit 98
+    printf 'FIXTURE_CLOCK=%s\n' "$SECONDS"
+    exit 0
+fi
 verify_release_signature() { :; }
 mktemp() {
     local -a args=("$@")
@@ -192,11 +207,66 @@ def read_logger_calls(path):
     return calls
 
 
+def fixture_session_processes(session):
+    """Inspect only the fixture's new session, never infer detached cleanup."""
+    if not Path("/proc/self/stat").exists():
+        return None
+    # Some ordinary source sandboxes expose an ancestor PID namespace's proc
+    # view. Its empty session match is unavailable evidence, not clean teardown.
+    if int(Path("/proc/self/stat").read_text().split(" ", 1)[0]) != os.getpid():
+        return None
+    owned = []
+    for path in Path("/proc").iterdir():
+        if not path.name.isdecimal():
+            continue
+        try:
+            fields = (path / "stat").read_text().rsplit(")", 1)[1].split()
+            if int(fields[3]) == session:
+                owned.append(dict(pid=int(path.name), group=int(fields[2]), state=fields[0]))
+        except (FileNotFoundError, ProcessLookupError):
+            pass  # A process exiting during this observation is not a live child.
+    return owned
+
+
+def capture_fixture_command(argv, env, timeout=15):
+    process = subprocess.Popen(argv, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                               start_new_session=True)
+    expired, partial, before = False, None, None
+    try:
+        stdout, stderr = process.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired as error:
+        expired = True
+        partial = dict(stdout=error.stdout, stderr=error.stderr)
+        before = fixture_session_processes(process.pid)
+        # GNU timeout owns a separate process group. Stop all observed groups
+        # in this fixture's session, not just the shell killed by run(timeout=).
+        groups = {process.pid} | {p["group"] for p in before or []}
+        for group in groups:
+            assert group > 1 and group != os.getpgrp()
+            try:
+                os.killpg(group, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+        try:
+            stdout, stderr = process.communicate(timeout=1)
+        except subprocess.TimeoutExpired:
+            for group in groups:
+                try:
+                    os.killpg(group, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+            stdout, stderr = process.communicate(timeout=3)
+    return subprocess.CompletedProcess(argv, process.returncode, stdout, stderr), dict(
+        timed_out=expired, command_deadline=timeout, partial=partial,
+        owned_before_stop=before, owned_after_drain=fixture_session_processes(process.pid),
+        leader_reaped=process.returncode is not None)
+
+
 class UpdaterFixture(unittest.TestCase):
     def run_fixture(self, *, mode="normal", state="active", load="loaded", success=False, flow="update",
                     installer_exit=None, collector_exit=0, installer_output=None, collector_failures=None,
                     real_log=False, runtime_exit=0, installer_state=None, download_fault="",
-                    observation_fault="", observation_phase="initial"):
+                    observation_fault="", observation_phase="initial", clock_probe=False):
         with tempfile.TemporaryDirectory(prefix="pulse-updater-state-") as directory:
             f = Path(directory)
             for name in ("tools", "tmp", "install/bin", "config"):
@@ -242,16 +312,22 @@ class UpdaterFixture(unittest.TestCase):
                        INSTALLER_EXIT=str(installer_exit) if installer_exit is not None else ("0" if success else "23"),
                        COLLECTOR_EXIT=str(collector_exit),
                        REAL_LOG="true" if real_log else "false", RUNTIME_EXIT=str(runtime_exit),
+                       CLOCK_PROBE="true" if clock_probe else "false",
                        DOWNLOAD_FAULT=download_fault,
                        OBSERVATION_FAULT=observation_fault, OBSERVATION_PHASE=observation_phase,
                        PATH=str(f / "tools") + os.pathsep + os.environ["PATH"])
             for line, status in (collector_failures or {}).items():
                 env[f"COLLECTOR_EXIT_{line}"] = str(status)
             start = time.monotonic()
-            result = subprocess.run(["bash", "-c", HARNESS], env=env, capture_output=True, timeout=15)
+            result, execution = capture_fixture_command(["bash", "-c", HARNESS], env)
             calls = [json.loads(line) for line in (f / "calls").read_text().splitlines()] if (f / "calls").exists() else []
             backups = list((f / "tmp").glob("pulse-backup.*"))
             observation = dict(exit=result.returncode, output=result.stdout.decode(), error=result.stderr.decode(),
+                               execution=execution,
+                               model_clock=(f / "model-clock").read_text().splitlines()
+                               if (f / "model-clock").exists() else [],
+                               call_observations=[json.loads(line) for line in (f / "call-observations").read_text().splitlines()]
+                               if (f / "call-observations").exists() else [],
                                elapsed=time.monotonic() - start, calls=calls,
                                downloaded=(f / "downloads").exists(), temporary=(f / "temp-requests").exists(),
                                installed=(f / "installer-ran").exists(), stopped=(f / "stop-ran").exists(),
@@ -266,6 +342,10 @@ class UpdaterFixture(unittest.TestCase):
                                binary=(f / "install/bin/pulse").read_bytes(), version=(f / "install/VERSION").read_text(),
                                backups=[(b / "pulse-bin").read_bytes() for b in backups],
                                settings=(f / "config/system.json").read_text(), identity=(f / "config/agent-id").read_text())
+            # Read state/calls/backup and partial output before TemporaryDirectory
+            # removes the fixture. A killed/late command remains a failed test,
+            # even if its TERM trap exits zero. This does not explain old timeouts.
+            self.assertFalse(execution["timed_out"], observation)
             self.assertEqual(observation["settings"], "operator settings\n")
             self.assertEqual(observation["identity"], "original identity\n")
             self.assertNotIn("trap leaked", observation["output"])
@@ -373,13 +453,96 @@ class UpdateLogSinks(UpdaterFixture):
                                      "-t pulse-custom@department-auto-update -p user.info sink control\n")
                     self.assertEqual("[info] sink control" in r.stdout.decode(), not closed_stdout)
 
+    def test_real_logger_deadline_preserves_stdout_exit_and_owned_cleanup(self):
+        # Exercise the production log(), not a simulated timeout. The logger
+        # owns a pipe-holding child; both must stop even if they ignore TERM.
+        for ignore_term, expected in ((False, 124), (True, 137)):
+            with self.subTest(ignore_term=ignore_term):
+                with tempfile.TemporaryDirectory(prefix="pulse-updater-log-deadline-") as directory:
+                    f = Path(directory)
+                    (f / "tools").mkdir()
+                    logger = f / "tools/logger"
+                    logger.write_text(f"#!{sys.executable} -IS\n" + r'''import json, os, signal, subprocess, sys, time
+from pathlib import Path
+f = Path(os.environ["FIXTURE"])
+ignore = os.environ["IGNORE_TERM"] == "true"
+if ignore:
+    signal.signal(signal.SIGTERM, signal.SIG_IGN)
+child = subprocess.Popen([sys.executable, "-IS", "-c",
+    "import signal,time; " +
+    ("signal.signal(signal.SIGTERM, signal.SIG_IGN); " if ignore else "") +
+    "time.sleep(60)"])
+(f / "logger-observation.json").write_text(json.dumps({
+    "args": sys.argv[1:], "pids": [os.getpid(), child.pid], "group": os.getpgrp()}))
+child.wait()
+''')
+                    logger.chmod(0o755)
+                    env = dict(os.environ, FIXTURE=str(f), UPDATER=str(UPDATER),
+                               IGNORE_TERM=str(ignore_term).lower(),
+                               PULSE_SERVICE_NAME="pulse-custom@department",
+                               PATH=str(f / "tools") + os.pathsep + os.environ["PATH"])
+                    script = ('set -euo pipefail\nsource "$UPDATER"\nstatus=0\n'
+                              'log info "journal deadline control" || status=$?\n'
+                              'printf "OBSERVED_STATUS=%s\\n" "$status"\n')
+                    started = time.monotonic()
+                    process = subprocess.Popen(["bash", "-c", script], env=env,
+                                               stdout=subprocess.PIPE,
+                                               stderr=subprocess.PIPE, text=True, start_new_session=True)
+                    try:
+                        stdout, stderr = process.communicate(timeout=10)
+                    except subprocess.TimeoutExpired:
+                        # Only this isolated fixture's session/group is owned.
+                        # A deadline regression must fail, never leave readers.
+                        observation = f / "logger-observation.json"
+                        groups = {process.pid}
+                        if observation.exists():
+                            groups.add(json.loads(observation.read_text())["group"])
+                        for group in groups:
+                            try:
+                                os.killpg(group, signal.SIGKILL)
+                            except ProcessLookupError:
+                                pass
+                        process.communicate(timeout=3)
+                        self.fail("journal write exceeded its five-second deadline and KILL backstop")
+                    elapsed = time.monotonic() - started
+                    self.assertEqual(process.returncode, 0, stderr)
+                    self.assertIn(f"OBSERVED_STATUS={expected}\n", stdout)
+                    self.assertIn("[info] journal deadline control\n", stdout)
+                    self.assertGreaterEqual(elapsed, 4.5)
+                    self.assertLess(elapsed, 9.5)
+                    observed = json.loads((f / "logger-observation.json").read_text())
+                    self.assertEqual(observed["args"], ["-t", "pulse-custom@department-auto-update",
+                                                       "-p", "user.info", "journal deadline control"])
+                    # Pipe EOF alone is not termination. Read back both owned
+                    # readers; zombies cannot run and may await their reaper.
+                    deadline = time.monotonic() + 0.5
+                    for pid in observed["pids"]:
+                        while True:
+                            try:
+                                if sys.platform.startswith("linux"):
+                                    state = Path(f"/proc/{pid}/stat").read_text().rsplit(") ", 1)[1].split()[0]
+                                else:
+                                    probe = subprocess.run(["ps", "-p", str(pid), "-o", "stat="],
+                                                           capture_output=True, text=True, timeout=2)
+                                    if probe.returncode == 1 and not probe.stdout and not probe.stderr:
+                                        break
+                                    self.assertEqual(probe.returncode, 0, probe.stderr)
+                                    state = probe.stdout.strip()[0]
+                            except (FileNotFoundError, ProcessLookupError):
+                                break
+                            if state == "Z":
+                                break
+                            if time.monotonic() >= deadline:
+                                self.fail(f"owned journal reader {pid} remains in state {state}")
+                            time.sleep(0.01)
+
     def test_real_logger_failure_drains_installer_and_preserves_recovery(self):
         # More than a pipe buffer, plus an unterminated final line. These run
         # production log(), perform_update and its collector together: a green
         # log() double cannot establish that a real sink failure is retained.
         lines = ["opening"] + ["x" * 2048 for _ in range(64)] + ["final installer evidence"]
         for state in ("active", "inactive"):
-            for failures in ({}, {1: 73}, {1: 73, 2: 42}, {len(lines): 73}):
+            for failures in ({}, {1: 73}, {1: 73, 2: 42}, {len(lines): 73}, {1: 124}, {1: 137}):
                 with self.subTest(state=state, failures=failures):
                     r = self.run_fixture(state=state, success=True, real_log=True,
                                          installer_output="\n".join(lines), collector_failures=failures)
@@ -390,7 +553,8 @@ class UpdateLogSinks(UpdaterFixture):
                     self.assertEqual(len(installer_calls), len(lines))
                     self.assertTrue(all(args[:4] == ["-t", "pulse-custom@department-auto-update", "-p", "user.info"]
                                         for args in installer_calls))
-                    expected = ("Installer pipeline failed (installer exit: 0; log collector exit: 73)"
+                    first_failure = next(iter(failures.values()), 0)
+                    expected = (f"Installer pipeline failed (installer exit: 0; log collector exit: {first_failure})"
                                 if failures else "Installer completed; verifying update (installer exit: 0; log collector exit: 0)")
                     self.assertTrue(expected in r["output"], "real logger exit was not retained by the collector")
                     self.assertEqual(r["exit"], 1 if failures else 0)
@@ -403,6 +567,30 @@ class UpdateLogSinks(UpdaterFixture):
 
 
 class UpdateServiceState(UpdaterFixture):
+    def test_fixture_timeout_retains_partial_output_and_owned_cleanup(self):
+        result, execution = capture_fixture_command(
+            ["bash", "-c", "printf 'partial stdout\\n'; printf 'partial stderr\\n' >&2; "
+             "sleep 30 & trap 'wait; exit 0' TERM; wait"], dict(os.environ), timeout=0.2)
+        self.assertTrue(execution["timed_out"], execution)
+        self.assertEqual(execution["command_deadline"], 0.2)
+        self.assertIn(b"partial stdout", result.stdout)
+        self.assertIn(b"partial stderr", result.stderr)
+        self.assertIn(b"partial stdout", execution["partial"]["stdout"])
+        self.assertIn(b"partial stderr", execution["partial"]["stderr"])
+        self.assertTrue(execution["leader_reaped"], execution)
+        if execution["owned_before_stop"] is not None:
+            self.assertTrue(execution["owned_before_stop"], execution)
+            self.assertEqual(execution["owned_after_drain"], [], execution)
+
+    def test_transaction_model_clock_is_not_advanced_by_wall_time(self):
+        result = self.run_fixture(clock_probe=True)
+        self.assertEqual(result["exit"], 0, result)
+        self.assertIn("FIXTURE_CLOCK=3\n", result["output"])
+        self.assertEqual(result["calls"], [], result)
+        self.assertFalse(result["installed"] or result["downloaded"], result)
+        self.assertEqual(result["version"], "v6.5.0\n", result)
+        self.assertEqual(result["temporary_files"], [], result)
+
     def test_poll_timeout_retains_backup_without_start_or_rollback(self):
         result = self.run_fixture(mode="post-install-hang", success=True)
         self.assertEqual(result["exit"], 1, result)
@@ -1402,9 +1590,10 @@ if mode == "error":
             function = "read_update_service_state" if read_only else "wait_for_service_active"
             script = ('set -euo pipefail\nsource "$UPDATER"\n'
                       'log() { printf "[%s] %s\\n" "$1" "${*:2}" >&2; }\n'
-                      # Only the remaining-budget argument control uses a
-                      # deterministic clock: real SECONDS has one-second
-                      # quantization and can expire before a second probe.
+                      # Logical budget/state classification controls use a
+                      # deterministic clock: real SECONDS can expire during
+                      # an otherwise complete probe. Separate real-time
+                      # controls retain late-read and child-kill deadlines.
                       + ('unset SECONDS; SECONDS=0\n'
                          'sleep() { SECONDS=$((SECONDS + $1)); }\n' if model_clock else '') +
                       'status=0\n' + function + ' pulse-deadline@fixture "$BUDGET" || status=$?\n'
@@ -1457,6 +1646,11 @@ if mode == "error":
         self.assertEqual(result["code"], 2, result)
         self.assertLess(result["elapsed"], 2.8, result)
 
+    def test_complete_inactive_response_after_deadline_is_uncertain(self):
+        result = self.exercise("1", mode="inactive", late_timer=True)
+        self.assertEqual(result["code"], 2, result)
+        self.assertLess(result["elapsed"], 2.8, result)
+
     def test_last_manager_probe_uses_only_remaining_budget(self):
         result = self.exercise(mode="remaining", model_clock=True)
         self.assertEqual(result["code"], 2, result)
@@ -1480,8 +1674,13 @@ if mode == "error":
                 self.assertLess(result["elapsed"], 3.5, result)
 
     def test_settled_inactive_timeout_is_not_manager_uncertainty(self):
-        result = self.exercise(mode="inactive")
+        # This oracle needs both reads to finish inside their granted budget.
+        # An actual late reply is uncertainty, even when its state is inactive;
+        # the real-clock control above must continue to reject that reply.
+        result = self.exercise(mode="inactive", model_clock=True)
         self.assertEqual(result["code"], 1, result)
+        self.assertEqual(len(result["calls"]), 2, result)
+        self.assertEqual([args[2] for args in result["timeouts"]], ["2", "1"], result)
         self.assertLess(result["elapsed"], 3.6, result)
 
     def test_invalid_budgets_never_query_the_manager(self):
