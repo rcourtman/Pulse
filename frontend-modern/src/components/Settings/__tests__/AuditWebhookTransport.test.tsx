@@ -81,9 +81,7 @@ const add = (draft = addedURL) => {
 const openRemove = (url = selectedURL) => {
   // Locate the actual endpoint card, not the first matching remove button.
   const card = screen.getByTitle(url).parentElement!.parentElement!;
-  fireEvent.click(
-    within(card).getByRole('button', { name: `Remove webhook endpoint ${url}`, exact: true }),
-  );
+  fireEvent.click(within(card).getByRole('button', { name: `Remove webhook endpoint ${url}` }));
   return screen.getByRole('dialog', { name: 'Remove audit webhook' });
 };
 const confirmRemove = () =>
@@ -191,24 +189,21 @@ describe('Audit Webhook rendered controls through the real HTTP client', () => {
     mount();
     await loaded();
     for (const url of [firstURL, selectedURL]) {
-      expect(
-        screen.getByRole('button', { name: `Remove webhook endpoint ${url}`, exact: true }),
-      ).toBeEnabled();
+      expect(screen.getByRole('button', { name: `Remove webhook endpoint ${url}` })).toBeEnabled();
       expect(screen.getByTitle(url)).toHaveTextContent(url);
     }
     expect(
-      screen.queryByRole('button', { name: 'Remove webhook endpoint', exact: true }),
+      screen.queryByRole('button', { name: 'Remove webhook endpoint' }),
     ).not.toBeInTheDocument();
     fireEvent.click(
       screen.getByRole('button', {
         name: `Remove webhook endpoint ${selectedURL}`,
-        exact: true,
       }),
     );
     const dialog = screen.getByRole('dialog', { name: 'Remove audit webhook' });
     expect(within(dialog).getByText(selectedURL, { exact: true })).toBeInTheDocument();
     expect(within(dialog).queryByText(firstURL, { exact: true })).not.toBeInTheDocument();
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel', exact: true }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(inventory).toEqual([firstURL, selectedURL]);
     expect(writes()).toHaveLength(0);
