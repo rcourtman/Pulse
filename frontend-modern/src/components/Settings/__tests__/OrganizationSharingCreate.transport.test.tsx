@@ -159,7 +159,10 @@ function expectSavedGrant(entry: Entry, role: Role = 'viewer') {
   expect(row).not.toBeNull();
   expect(row).toHaveTextContent(payload.resourceName);
   expect(row).toHaveTextContent('Namesake organization');
-  expect(within(row!).getByText(role, { exact: true })).toBeInTheDocument();
+  // jsdom includes both responsive presentations; each must show the saved role.
+  expect(within(row!).getByRole('cell', { name: role })).toHaveTextContent(role);
+  const mobileAccess = within(row!).getByText('Access:').parentElement!;
+  expect(within(mobileAccess).getByText(role, { exact: true })).toBeInTheDocument();
   expect(row).toHaveTextContent('Pending approval');
   expect(within(row!).getByRole('button', { name: 'Remove' })).toBeEnabled();
   // This saved state comes from the actual dispatched body, not the intended

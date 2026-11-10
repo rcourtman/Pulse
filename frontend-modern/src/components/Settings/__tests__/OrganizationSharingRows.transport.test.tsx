@@ -276,6 +276,64 @@ afterEach(() => {
 });
 
 describe('rendered namesake sharing rows through the real transport', () => {
+  it('keeps each saved access role beside its organization through a reordered refresh', async () => {
+    const roles = ['viewer', 'editor', 'admin'] as const;
+    outgoing = outgoing.map((share, index) => ({ ...share, accessRole: roles[index] }));
+    incoming = incoming.map((share, index) => ({ ...share, accessRole: roles[2 - index] }));
+    await renderPanel('accept incoming');
+
+    const expectAccessLabels = () => {
+      for (const share of [...outgoing, ...incoming]) {
+        const label = within(rowFor(share)).getByText('Access:').parentElement!;
+        expect(within(label).getByText(share.accessRole, { exact: true })).toBeInTheDocument();
+        expect(label.parentElement).toHaveTextContent('Namesake organization');
+        expect(rowFor(share)).toHaveTextContent(`${share.resourceType}:${share.resourceId}`);
+      }
+    };
+    expectAccessLabels();
+    expect(writes()).toHaveLength(0);
+
+    outgoing = [...outgoing]
+      .reverse()
+      .map((share, index) => ({ ...share, accessRole: roles[index] }));
+    incoming = [...incoming]
+      .reverse()
+      .map((share, index) => ({ ...share, accessRole: roles[index] }));
+    eventBus.emit('organizations_changed');
+    await waitFor(() => expect(sharingReads()).toHaveLength(10));
+    await screen.findByRole('heading', { name: 'Incoming Shares' });
+    expectAccessLabels();
+    expect(writes()).toHaveLength(0);
+    expectBoundRequests();
+  });
+
+  it('retains saved access labels for a read-only reader without adding actions', async () => {
+    outgoing[1].accessRole = 'admin';
+    incoming[1].accessRole = 'editor';
+    syncSessionPresentationPolicy({
+      presentationPolicy: {
+        demoMode: false,
+        readOnly: true,
+        hideCommercial: false,
+        hideUpgrade: true,
+      },
+    });
+    render(() => <OrganizationSharingPanel currentUser={owner} />);
+    await screen.findByRole('heading', { name: 'Incoming Shares' });
+
+    for (const share of [...outgoing, ...incoming]) {
+      const row = rowFor(share);
+      const label = within(row).getByText('Access:').parentElement!;
+      expect(within(label).getByText(share.accessRole, { exact: true })).toBeInTheDocument();
+      expect(within(row).queryByRole('button')).not.toBeInTheDocument();
+    }
+    expect(
+      screen.getByText('This session is read-only. Sharing changes are disabled.'),
+    ).toBeInTheDocument();
+    expect(writes()).toHaveLength(0);
+    expectBoundRequests();
+  });
+
   it.each(operations)(
     'confirms only the selected %s and renders its saved result',
     async (operation) => {

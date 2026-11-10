@@ -44,9 +44,18 @@ export const OrganizationOutgoingSharesSection: Component<
             key: 'targetOrgId',
             label: 'Target Org',
             render: (share) => (
-              <span class="text-base-content">
-                {props.state.orgNameById().get(share.targetOrgId) || share.targetOrgId}
-              </span>
+              <div class="flex flex-col items-start gap-1">
+                <span class="text-base-content">
+                  {props.state.orgNameById().get(share.targetOrgId) || share.targetOrgId}
+                </span>
+                <span data-share-access class="inline-flex sm:hidden">
+                  <span class="sr-only">Access:</span>
+                  <OrganizationRoleBadge
+                    role={normalizeOrganizationShareRole(share.accessRole)}
+                    size="xs"
+                  />
+                </span>
+              </div>
             ),
           },
           {
