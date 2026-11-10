@@ -1474,7 +1474,7 @@ has no trigger controls. Outside setup-only states it may show a one-line
 triggers, busy mode, alert or anomaly triggers off) and links to that settings
 page, unless a provider setup block puts a `Fix setup` action in place of the
 link. In the settings page's Triggers section, a
-minimum-severity selector ("Investigate alerts at or above": Critical only /
+immediate-alert severity selector ("Investigate immediately": Critical only /
 Warning and critical) sits under the `Alert-triggered Patrols` toggle and
 renders only while that toggle is on. The selector and the trigger toggles
 edit the settings form only, and nothing is written until `Save Patrol
