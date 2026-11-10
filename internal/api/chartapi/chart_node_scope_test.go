@@ -7,7 +7,12 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"os/exec"
 	"reflect"
+	"regexp"
+	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -18,9 +23,8 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
-func chartNodeScopeFixture(tb testing.TB, enriched bool) *monitoring.Monitor {
-	tb.Helper()
-	state := models.NewState()
+func chartNodeScopeNodes(enriched bool) []models.Node {
+	var nodes []models.Node
 	for i := 0; i < 32; i++ {
 		node := models.Node{ID: fmt.Sprintf("node-%02d", i), Name: fmt.Sprintf("native-%02d", i), DisplayName: "Different display name", Instance: "site", Status: "online"}
 		if enriched {
@@ -30,8 +34,15 @@ func chartNodeScopeFixture(tb testing.TB, enriched bool) *monitoring.Monitor {
 				node.NetworkInterfaces = append(node.NetworkInterfaces, models.HostNetworkInterface{Name: fmt.Sprintf("eth%d", nic), Addresses: []string{"192.0.2.1/24", "2001:db8::1/64"}})
 			}
 		}
-		state.Nodes = append(state.Nodes, node)
+		nodes = append(nodes, node)
 	}
+	return nodes
+}
+
+func chartNodeScopeFixture(tb testing.TB, enriched bool) *monitoring.Monitor {
+	tb.Helper()
+	state := models.NewState()
+	state.Nodes = chartNodeScopeNodes(enriched)
 	for i := 0; i < 25; i++ {
 		state.VMs = append(state.VMs, models.VM{ID: fmt.Sprintf("vm-%02d", i), VMID: 100 + i, Name: "same-name", Node: fmt.Sprintf("native-%02d", i%2), Instance: "site", Status: "running"})
 	}
@@ -280,15 +291,60 @@ func TestHandleWorkloadChartsNodeScopeMatchesSnapshot(t *testing.T) {
 }
 
 func TestWorkloadChartsAllocationsDoNotScaleWithNodeSensors(t *testing.T) {
+	// AllocsPerRun counts process-wide allocations, including other tests'
+	// asynchronous work. Use this same binary (and its race instrumentation)
+	// with only this guard selected, and verify that the child ran it.
+	const childEnv = "PULSE_CHART_NODE_ALLOCATION_CHILD"
+	if os.Getenv(childEnv) != t.Name() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		cmd := exec.CommandContext(ctx, os.Args[0],
+			"-test.run=^"+regexp.QuoteMeta(t.Name())+"$",
+			"-test.count=1", "-test.v", "-test.timeout=20s",
+			"-test.cpu="+strconv.Itoa(runtime.GOMAXPROCS(0)))
+		cmd.Env = append(os.Environ(), childEnv+"="+t.Name())
+		output, err := cmd.CombinedOutput()
+		t.Logf("isolated chart node allocation check:\n%s", output)
+		if err != nil {
+			t.Fatalf("isolated chart node allocation check: %v", err)
+		}
+		if !strings.Contains(string(output), "--- PASS: "+t.Name()+" ") ||
+			!strings.Contains(string(output), "snapshot copy positive control:") {
+			t.Fatal("isolated chart node allocation check did not complete the guard and positive control")
+		}
+		return
+	}
+
 	setMockModeForTest(t, false)
-	lean, enriched := chartNodeScopeFixture(t, false), chartNodeScopeFixture(t, true)
+	// Keep the same 32-node sensor/network inventories, but no workload
+	// series: unrelated map growth and JSON pools in a 42,000-point response
+	// cannot establish whether the builder copied node inventories. The full
+	// populated handler/benchmark fixtures above still exercise that payload.
+	fixture := func(enriched bool) *monitoring.Monitor {
+		monitor, state, _ := newTestMonitor(t)
+		state.Nodes = chartNodeScopeNodes(enriched)
+		syncTestResourceStore(t, monitor, state)
+		return monitor
+	}
+	lean, enriched := fixture(false), fixture(true)
 	for _, selected := range []string{"", "node-00", "missing"} {
 		plain := testing.AllocsPerRun(5, func() { chartNodeScopeBuild(t, lean, selected) })
 		sensors := testing.AllocsPerRun(5, func() { chartNodeScopeBuild(t, enriched, selected) })
 		t.Logf("selected=%q: lean=%.0f enriched=%.0f allocations", selected, plain, sensors)
-		// Allow small runtime/JSON-pool variation, not per-node inventory copies.
+		// Keep the original sample count and +10 budget. The real builder is
+		// measured, so reverting it to NodesSnapshot cannot bypass the guard.
 		if sensors > plain+10 {
 			t.Fatalf("irrelevant node sensor inventory increased chart allocations: lean=%.0f enriched=%.0f", plain, sensors)
 		}
+	}
+
+	// The original snapshot conversion is a positive control: this fixture
+	// must expose sensor copying, rather than pass with empty node views.
+	var snapshot []models.Node
+	plain := testing.AllocsPerRun(5, func() { snapshot = lean.NodesSnapshot() })
+	sensors := testing.AllocsPerRun(5, func() { snapshot = enriched.NodesSnapshot() })
+	t.Logf("snapshot copy positive control: lean=%.0f enriched=%.0f allocations", plain, sensors)
+	if len(snapshot) != 32 || sensors <= plain+10 {
+		t.Fatal("fixture did not expose copying the retained node inventories")
 	}
 }
