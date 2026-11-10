@@ -223,7 +223,10 @@ func issueAndPersistReplacing(
 		}
 	}
 
-	return rawToken, record, replaced, nil
+	// The caller may keep this result after Mu is released. Later agent binding
+	// edits the live metadata, not the issuance snapshot (and vice versa).
+	snapshot := record.Clone()
+	return rawToken, &snapshot, replaced, nil
 }
 
 // IssueActionRunnerAndPersist mints the host-bound credential used by the
@@ -320,7 +323,10 @@ func IssueActionRunnerAndPersistDetailed(cfg *config.Config, persistence *config
 		}
 	}
 
-	return ActionRunnerIssueResult{Token: rawToken, Record: record, Replaced: replaced}, nil
+	// Activation changes the inventory's pending metadata and deadline. Keep
+	// this prepare result independent before releasing the inventory writer.
+	snapshot := record.Clone()
+	return ActionRunnerIssueResult{Token: rawToken, Record: &snapshot, Replaced: replaced}, nil
 }
 
 // ActivateActionRunnerAndPersist commits a prepared credential and revokes the
