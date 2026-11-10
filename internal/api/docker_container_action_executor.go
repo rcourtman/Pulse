@@ -398,7 +398,9 @@ func (e dockerContainerActionExecutor) CheckActionAvailable(ctx context.Context,
 		// No command session can mean two things with two fixes. An agent that
 		// reports commands off was installed for monitoring only: nothing is
 		// broken, and the refusal carries the step that enables them.
-		readiness := unavailableDockerActionReadiness(operation, actionlifecycle.ReasonCodeCommandAgentDisconnected, "Docker / Podman command agent is not connected.")
+		// The update recovery docs test reads the disconnected code and reason
+		// from this line, so both stay literal here.
+		readiness := unavailableDockerActionReadiness(operation, "command_agent_disconnected", "Docker / Podman command agent is not connected.")
 		if e.dockerHostCommandsDisabled(ctx, resource) {
 			readiness = unavailableDockerActionReadiness(operation, actionlifecycle.ReasonCodeHostCommandsDisabled, actionlifecycle.HostCommandsDisabledRefusal(dockerContainerHostName(resource)))
 		}
