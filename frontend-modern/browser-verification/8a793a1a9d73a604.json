@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "base_sha": "dcd9f90d51927e8315035a64a6218329f65ecac4",
+  "verified_at": "2026-11-10T00:55:19Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/OrganizationOverviewMembersSection.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/OrganizationOverviewMembersSection.tsx": "044c73d9ffbb172b4784507df384cbd285804e688b15cca37cb04f874f45726a"
+  },
+  "routes": [
+    "/settings/organization (OrganizationOverviewPanel, mounted production panel)"
+  ],
+  "viewports": [
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 1440,
+      "height": 1000
+    }
+  ],
+  "states": [
+    "Four complete saved SSO/local user IDs with owner/admin/viewer/editor role badges, plus original organization summary and rename controls.",
+    "Initial overview, Membership heading-start scroll, saved fixture rename and policy-read-only reader; each in light/dark at phone and desktop.",
+    "Phone membership fits322px frame with no horizontal scrolling; desktop keeps original User/Role/Added columns and row density."
+  ],
+  "interactions": [
+    "Read each complete saved member ID beside its own distinct role without hovering or expanding.",
+    "Rename only the synthetic organization through actual panel/state/OrgsAPI/HTTP client, verify saved readback and exactly one PUT with CSRF per viewport/theme.",
+    "Reload as policy-read-only, verify disabled Save and unchanged membership without another write."
+  ],
+  "limitations": [
+    "16 comparable before/final pairs, all32 PNGs inspected with the native image tool. Same fixtures, viewport/theme/locale/timezone and actions; scroll clamps to available page extent.",
+    "Mounted production panel fixture, not full-App/SSO/native authorization or original-client recovery. No live service used.",
+    "Added stays in its existing desktop-only column. Larger inventories and other browser engines are not claimed.",
+    "Initial fixture route glob exception returned1 with no completed receipt; unknown first-attempt cleanup retained. First unshipped layout was pixel-reviewed and refined to preserve narrow read-only heading visibility. Final browser client0, script browser/server closure observed."
+  ]
+}

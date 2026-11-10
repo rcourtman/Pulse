@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { OrganizationOverviewPanel } from '../OrganizationOverviewPanel';
 
 const orgGetMock = vi.fn();
@@ -124,6 +124,67 @@ afterEach(() => {
 });
 
 describe('OrganizationOverviewPanel', () => {
+  it('keeps each full saved member ID paired with its own role and added date', async () => {
+    const members = [
+      {
+        userId: 'oidc:operations-north:platform-owner@example.test',
+        role: 'owner',
+        addedAt: '2026-10-01T10:00:00Z',
+      },
+      {
+        userId: 'oidc:operations-north:alex-administrator@example.test',
+        role: 'admin',
+        addedAt: '2026-10-03T10:00:00Z',
+      },
+      {
+        userId: 'oidc:operations-north:alex-observer@example.test',
+        role: 'viewer',
+        addedAt: '2026-10-05T10:00:00Z',
+      },
+      {
+        userId: 'local:automation-support:night-shift-editor@example.test',
+        role: 'editor',
+        addedAt: '2026-10-07T10:00:00Z',
+      },
+    ];
+    listMembersMock.mockResolvedValue(members);
+    renderPanel();
+    const table = await screen.findByRole('table');
+
+    const expectSavedMembership = async (expected: typeof members) => {
+      await waitFor(() => {
+        const rows = within(screen.getByRole('table')).getAllByRole('row').slice(1);
+        expect(rows).toHaveLength(expected.length);
+        expected.forEach((member, index) => {
+          const cells = within(rows[index]).getAllByRole('cell');
+          expect(cells).toHaveLength(3);
+          expect(cells[0]).toHaveTextContent(member.userId);
+          expect(cells[1]).toHaveTextContent(member.role);
+          expect(cells[2]).toHaveTextContent(new Date(member.addedAt).toLocaleDateString());
+        });
+      });
+    };
+
+    expect(
+      within(table)
+        .getAllByRole('columnheader')
+        .map((header) => header.textContent),
+    ).toEqual(['User', 'Role', 'Added']);
+    await expectSavedMembership(members);
+
+    // Keyed rows must keep the returned identity/role pairing after refresh,
+    // rather than attaching a new role to a previous row's long display text.
+    const refreshed = [...members].reverse().map((member) => ({
+      ...member,
+      role: member.role === 'viewer' ? 'editor' : member.role,
+    }));
+    listMembersMock.mockResolvedValue(refreshed);
+    eventBusEmitMock('organizations_changed');
+    await expectSavedMembership(refreshed);
+    expect(listMembersMock).toHaveBeenCalledTimes(2);
+    expect(updateOrgMock).not.toHaveBeenCalled();
+  });
+
   it('renders loading skeleton first, then loaded content', async () => {
     const orgDeferred = deferred<typeof baseOrg>();
     orgGetMock.mockReturnValueOnce(orgDeferred.promise);
