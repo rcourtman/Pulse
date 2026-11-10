@@ -77,6 +77,7 @@ const sharingReads = () =>
   );
 let outgoing: OrganizationShare[];
 let incoming: IncomingOrganizationShare[];
+let directory: { id: string; displayName: string }[];
 let completion: ReturnType<typeof deferred<Response>>;
 let reload: ReturnType<typeof deferred<Response>> | undefined;
 
@@ -92,10 +93,10 @@ function rowAction(operation: Operation, share = selectedShare(operation)) {
   return within(rowFor(share)).getByRole('button', {
     name:
       operation === 'remove outgoing' || operation === 'remove accepted incoming'
-        ? 'Remove'
+        ? /^Remove share of /
         : operation === 'accept incoming'
-          ? 'Accept'
-          : 'Decline',
+          ? /^Accept share of /
+          : /^Decline share of /,
   });
 }
 function selectedShare(operation: Operation) {
@@ -139,7 +140,7 @@ async function renderPanel(operation: Operation) {
   if (operation === 'remove accepted incoming') {
     expect(rowFor(selectedShare(operation))).toHaveTextContent('Accepted');
     expect(
-      within(rowFor(selectedShare(operation))).queryByRole('button', { name: 'Accept' }),
+      within(rowFor(selectedShare(operation))).queryByRole('button', { name: /^Accept share of / }),
     ).not.toBeInTheDocument();
   }
 }
@@ -187,7 +188,7 @@ function expectSavedRows(operation: Operation, applied: boolean) {
     expect(rowFor(sibling)).toHaveTextContent('Namesake VM');
     expect(
       within(rowFor(sibling)).getByRole('button', {
-        name: operation === 'remove outgoing' ? 'Remove' : 'Accept',
+        name: operation === 'remove outgoing' ? /^Remove share of / : /^Accept share of /,
       }),
     ).toBeEnabled();
   }
@@ -199,9 +200,11 @@ function expectSavedRows(operation: Operation, applied: boolean) {
     expect(row).toHaveTextContent(accepted ? 'Accepted' : 'Pending approval');
     if (operation !== 'remove outgoing') {
       if (accepted) {
-        expect(within(row).queryByRole('button', { name: 'Accept' })).not.toBeInTheDocument();
-        expect(within(row).getByRole('button', { name: 'Remove' })).toBeEnabled();
-      } else expect(within(row).getByRole('button', { name: 'Accept' })).toBeEnabled();
+        expect(
+          within(row).queryByRole('button', { name: /^Accept share of / }),
+        ).not.toBeInTheDocument();
+        expect(within(row).getByRole('button', { name: /^Remove share of / })).toBeEnabled();
+      } else expect(within(row).getByRole('button', { name: /^Accept share of / })).toBeEnabled();
     }
   }
   const otherDirection = operation === 'remove outgoing' ? incomingRows() : outgoingRows();
@@ -225,6 +228,10 @@ beforeEach(async () => {
   document.cookie = `pulse_csrf=${csrfToken}; Path=/`;
   outgoing = outgoingRows();
   incoming = incomingRows();
+  directory = ['first', 'second', 'third'].map((id) => ({
+    id: `peer/${id}`,
+    displayName: 'Namesake organization',
+  }));
   completion = deferred<Response>();
   reload = undefined;
   fetchMock.mockImplementation(async (input, options = {}) => {
@@ -250,12 +257,7 @@ beforeEach(async () => {
       return json({ id: orgID, displayName: 'East operations', ownerUserId: owner });
     }
     if (url === '/api/orgs')
-      return json([
-        { id: orgID, displayName: 'East operations' },
-        { id: 'peer/first', displayName: 'Namesake organization' },
-        { id: 'peer/second', displayName: 'Namesake organization' },
-        { id: 'peer/third', displayName: 'Namesake organization' },
-      ]);
+      return json([{ id: orgID, displayName: 'East operations' }, ...directory]);
     if (url === `${base}/members`) return json([{ userId: owner, role: 'owner', addedAt: '' }]);
     if (url === `${base}/shares`) return json(outgoing);
     if (url === `${base}/shares/incoming`) return json(incoming);
@@ -276,6 +278,85 @@ afterEach(() => {
 });
 
 describe('rendered namesake sharing rows through the real transport', () => {
+  it('keeps organization-specific action names with namesake rows after a renamed, reordered read', async () => {
+    await renderPanel('accept incoming');
+    const expectIdentities = () => {
+      for (const share of outgoing) {
+        const row = rowFor(share);
+        const name = directory.find((org) => org.id === share.targetOrgId)!.displayName;
+        expect(within(row).getByText(name, { exact: true })).toBeInTheDocument();
+        expect(
+          within(row).getByRole('button', {
+            name: `Remove share of vm:${share.resourceId} to ${name} (${share.targetOrgId})`,
+            exact: true,
+          }),
+        ).toBeEnabled();
+      }
+      for (const share of incoming) {
+        const row = rowFor(share);
+        expect(within(row).getByText(share.sourceOrgName, { exact: true })).toBeInTheDocument();
+        for (const action of ['Accept', 'Decline'])
+          expect(
+            within(row).getByRole('button', {
+              name: `${action} share of vm:${share.resourceId} from ${share.sourceOrgName} (${share.sourceOrgId})`,
+              exact: true,
+            }),
+          ).toBeEnabled();
+      }
+    };
+    expectIdentities();
+    directory = [...directory]
+      .reverse()
+      .map((org) => ({ ...org, displayName: 'Renamed organization' }));
+    incoming = [...incoming]
+      .reverse()
+      .map((share) => ({ ...share, sourceOrgName: 'Renamed organization' }));
+    outgoing = [...outgoing].reverse();
+    eventBus.emit('organizations_changed');
+    await waitFor(() => expect(sharingReads()).toHaveLength(10));
+    await screen.findByRole('heading', { name: 'Incoming Shares' });
+    expectIdentities();
+    expect(screen.queryByText('Namesake organization')).not.toBeInTheDocument();
+    expect(writes()).toHaveLength(0);
+    expectBoundRequests();
+  });
+
+  it('shows saved IDs once when a party is unlisted, unnamed or already named by its ID', async () => {
+    directory = directory
+      .slice(0, 2)
+      .map((org, index) => ({ ...org, displayName: index ? org.id : '' }));
+    incoming = incoming.map((share, index) => ({
+      ...share,
+      sourceOrgName: index ? share.sourceOrgId : '',
+    }));
+    incoming[2].status = 'accepted';
+    await renderPanel('accept incoming');
+    for (const share of outgoing) {
+      const row = rowFor(share);
+      expect(within(row).getAllByText(share.targetOrgId, { exact: true })).toHaveLength(1);
+      expect(
+        within(row).getByRole('button', {
+          name: `Remove share of vm:${share.resourceId} to ${share.targetOrgId}`,
+          exact: true,
+        }),
+      ).toBeEnabled();
+    }
+    for (const share of incoming) {
+      const row = rowFor(share);
+      expect(within(row).getAllByText(share.sourceOrgId, { exact: true })).toHaveLength(1);
+      const actions = share.status === 'accepted' ? ['Remove'] : ['Accept', 'Decline'];
+      for (const action of actions)
+        expect(
+          within(row).getByRole('button', {
+            name: `${action} share of vm:${share.resourceId} from ${share.sourceOrgId}`,
+            exact: true,
+          }),
+        ).toBeEnabled();
+    }
+    expect(writes()).toHaveLength(0);
+    expectBoundRequests();
+  });
+
   it('keeps each saved access role beside its organization through a reordered refresh', async () => {
     const roles = ['viewer', 'editor', 'admin'] as const;
     outgoing = outgoing.map((share, index) => ({ ...share, accessRole: roles[index] }));
