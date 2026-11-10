@@ -43,7 +43,7 @@ const listCalls = () =>
 const writes = () =>
   fetchMock.mock.calls.filter(([, options]) => options?.method && options.method !== 'GET');
 const edit = async (index = 0) => {
-  fireEvent.click((await screen.findAllByRole('button', { name: 'Edit provider' }))[index]);
+  fireEvent.click((await screen.findAllByRole('button', { name: /^Edit provider / }))[index]);
   return within(await screen.findByRole('dialog', { name: 'Edit OIDC provider' }));
 };
 const settle = async () => {
@@ -108,7 +108,7 @@ describe('SSO provider read and editor ownership', () => {
     expect(screen.queryByText('No SSO providers configured')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
     await screen.findByText('first provider');
-    expect(screen.getAllByRole('button', { name: 'Edit provider' })[0]).toBeDisabled();
+    expect(screen.getAllByRole('button', { name: /^Edit provider / })[0]).toBeDisabled();
     expect(listCalls()).toHaveLength(2);
     expect(writes()).toHaveLength(0);
     expect(notices.error).not.toHaveBeenCalled();
@@ -121,7 +121,7 @@ describe('SSO provider read and editor ownership', () => {
       url.endsWith('/first') ? old.promise : base(url, options),
     );
     render(() => <SSOProvidersPanel />);
-    fireEvent.click((await screen.findAllByRole('button', { name: 'Edit provider' }))[0]);
+    fireEvent.click((await screen.findAllByRole('button', { name: /^Edit provider / }))[0]);
     await waitFor(() =>
       expect(screen.getByRole('status')).toHaveTextContent('Loading provider details'),
     );
@@ -142,7 +142,7 @@ describe('SSO provider read and editor ownership', () => {
       url.endsWith('/first') ? old.promise : base(url, options),
     );
     render(() => <SSOProvidersPanel />);
-    fireEvent.click((await screen.findAllByRole('button', { name: 'Edit provider' }))[0]);
+    fireEvent.click((await screen.findAllByRole('button', { name: /^Edit provider / }))[0]);
     fireEvent.click(screen.getByRole('button', { name: 'Add SAML' }));
     old.resolve(json(details()));
     await settle();
@@ -157,7 +157,7 @@ describe('SSO provider read and editor ownership', () => {
       url.endsWith('/first') ? json(details('second')) : base(url, options),
     );
     render(() => <SSOProvidersPanel />);
-    fireEvent.click((await screen.findAllByRole('button', { name: 'Edit provider' }))[0]);
+    fireEvent.click((await screen.findAllByRole('button', { name: /^Edit provider / }))[0]);
     await waitFor(() =>
       expect(notices.error).toHaveBeenCalledWith('Unable to load SSO provider details.'),
     );
@@ -175,7 +175,7 @@ describe('SSO provider read and editor ownership', () => {
       const [user, setUser] = createSignal('admin-a');
       const [manage, setManage] = createSignal(true);
       render(() => <SSOProvidersPanel currentUser={user()} canManage={manage()} />);
-      fireEvent.click((await screen.findAllByRole('button', { name: 'Edit provider' }))[0]);
+      fireEvent.click((await screen.findAllByRole('button', { name: /^Edit provider / }))[0]);
       await waitFor(() =>
         expect(fetchMock.mock.calls.some(([url]) => url.endsWith('/first'))).toBe(true),
       );
@@ -317,7 +317,7 @@ describe('SSO provider read and editor ownership', () => {
       } else {
         await screen.findByText('first provider');
         if (kind === 'delete') {
-          fireEvent.click(screen.getAllByRole('button', { name: 'Delete provider' })[0]);
+          fireEvent.click(screen.getAllByRole('button', { name: /^Delete provider / })[0]);
           const confirm = within(screen.getByRole('dialog')).getByRole('button', {
             name: 'Delete Provider',
           });
@@ -350,7 +350,7 @@ describe('SSO provider read and editor ownership', () => {
       url.endsWith('/first') ? pending.promise : base(url, options),
     );
     const { unmount } = render(() => <SSOProvidersPanel />);
-    fireEvent.click((await screen.findAllByRole('button', { name: 'Edit provider' }))[0]);
+    fireEvent.click((await screen.findAllByRole('button', { name: /^Edit provider / }))[0]);
     await waitFor(() =>
       expect(fetchMock.mock.calls.some(([url]) => url.endsWith('/first'))).toBe(true),
     );

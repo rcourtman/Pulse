@@ -117,7 +117,11 @@ function cardFor(provider: SavedProvider) {
   // Locate the existing card header by its visible issuer/entity distinction,
   // never by namesake index, a fixture ID attribute or intended request URL.
   const header = screen.getByText(summary(provider)).parentElement!.parentElement!.parentElement!;
-  expect(within(header).getAllByRole('button', { name: 'Edit provider' })).toHaveLength(1);
+  for (const action of ['Edit', 'Delete']) {
+    expect(
+      within(header).getByRole('button', { name: `${action} provider ${provider.name}` }),
+    ).toHaveAccessibleDescription(summary(provider));
+  }
   return within(header);
 }
 function expectClientBinding() {
@@ -184,10 +188,10 @@ function expectPreserved(exceptID?: string) {
 async function mount() {
   render(() => <SSOProvidersPanel currentUser="admin@example.test" onConfigUpdated={changed} />);
   await waitFor(() =>
-    expect(screen.getAllByRole('button', { name: 'Edit provider' })).toHaveLength(6),
+    expect(screen.getAllByRole('button', { name: /^Edit provider / })).toHaveLength(6),
   );
   await waitFor(() =>
-    expect(screen.getAllByRole('button', { name: 'Edit provider' })[0]).toBeEnabled(),
+    expect(screen.getAllByRole('button', { name: /^Edit provider / })[0]).toBeEnabled(),
   );
   expect(screen.getAllByText(name, { exact: true })).toHaveLength(6);
   expect(listReads()).toHaveLength(1);
@@ -195,7 +199,7 @@ async function mount() {
   expectClientBinding();
 }
 async function edit(provider: SavedProvider) {
-  fireEvent.click(cardFor(provider).getByRole('button', { name: 'Edit provider' }));
+  fireEvent.click(cardFor(provider).getByRole('button', { name: /^Edit provider / }));
   const dialog = within(
     await screen.findByRole('dialog', { name: `Edit ${provider.type.toUpperCase()} provider` }),
   );
@@ -236,7 +240,7 @@ async function checkReconciled(readCount: number, writeCount: number) {
   await waitFor(() => expect(listReads()).toHaveLength(readCount));
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   await waitFor(() =>
-    expect(screen.getAllByRole('button', { name: 'Edit provider' })[0]).toBeEnabled(),
+    expect(screen.getAllByRole('button', { name: /^Edit provider / })[0]).toBeEnabled(),
   );
   expect(writes()).toHaveLength(writeCount);
   expectClientBinding();
@@ -433,14 +437,20 @@ describe.each(types)(
 
     it('cancels a sibling deletion then removes only the confirmed selected namesake', async () => {
       await mount();
-      fireEvent.click(cardFor(sibling(type)).getByRole('button', { name: 'Delete provider' }));
+      fireEvent.click(cardFor(sibling(type)).getByRole('button', { name: /^Delete provider / }));
       const cancelled = within(await screen.findByRole('dialog', { name: 'Delete provider' }));
+      expect(cancelled.getByText(sibling(type).name, { exact: true })).toBeVisible();
+      expect(cancelled.getByText(summary(sibling(type)), { exact: true })).toBeVisible();
+      expect(cancelled.queryByText(summary(selected(type)), { exact: true })).toBeNull();
       fireEvent.click(cancelled.getByRole('button', { name: 'Cancel' }));
       expect(writes()).toHaveLength(0);
       expectPreserved();
       const provider = selected(type);
-      fireEvent.click(cardFor(provider).getByRole('button', { name: 'Delete provider' }));
+      fireEvent.click(cardFor(provider).getByRole('button', { name: /^Delete provider / }));
       const confirmation = within(await screen.findByRole('dialog', { name: 'Delete provider' }));
+      expect(confirmation.getByText(provider.name, { exact: true })).toBeVisible();
+      expect(confirmation.getByText(summary(provider), { exact: true })).toBeVisible();
+      expect(confirmation.queryByText(summary(sibling(type)), { exact: true })).toBeNull();
       const completion = deferred<Response>();
       reply = () => completion.promise;
       const remove = confirmation.getByRole('button', { name: 'Delete Provider' });
@@ -457,7 +467,7 @@ describe.each(types)(
       expect(saved).toHaveLength(5);
       expectPreserved(provider.id);
       for (const kept of saved)
-        expect(cardFor(kept).getByRole('button', { name: 'Edit provider' })).toBeEnabled();
+        expect(cardFor(kept).getByRole('button', { name: /^Edit provider / })).toBeEnabled();
       expect(notices.success).toHaveBeenCalledExactlyOnceWith('SSO provider has been removed.');
       expect(changed).toHaveBeenCalledOnce();
     });
@@ -497,5 +507,37 @@ describe.each(types)(
       expect(notices.success).not.toHaveBeenCalled();
       expect(changed).not.toHaveBeenCalled();
     });
+  },
+);
+
+it.each(types)(
+  'keeps the selected %s name in confirmation when no summary was saved',
+  async (type) => {
+    const provider = selected(type);
+    const longName = 'Corporate infrastructure administrators — disaster recovery';
+    saved = [
+      {
+        ...provider,
+        name: longName,
+        ...(provider.oidc
+          ? { oidc: { ...provider.oidc, issuerUrl: '' } }
+          : { saml: { ...provider.saml!, idpEntityId: '', idpMetadataUrl: '' } }),
+      },
+    ];
+    render(() => <SSOProvidersPanel currentUser="admin@example.test" />);
+    const remove = await screen.findByRole('button', { name: `Delete provider ${longName}` });
+    await waitFor(() => expect(remove).toBeEnabled());
+    fireEvent.click(remove);
+    const dialog = within(await screen.findByRole('dialog', { name: 'Delete provider' }));
+    expect(dialog.getByText(longName, { exact: true })).toBeVisible();
+    expect(dialog.queryByText('Issuer URL')).toBeNull();
+    expect(dialog.queryByText('IdP entity / metadata')).toBeNull();
+    expect(
+      dialog.getByText(/Users will no longer be able to sign in using this provider/),
+    ).toBeVisible();
+    fireEvent.click(dialog.getByRole('button', { name: 'Cancel' }));
+    expect(writes()).toHaveLength(0);
+    expect(saved).toHaveLength(1);
+    expectClientBinding();
   },
 );

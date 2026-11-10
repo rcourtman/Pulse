@@ -139,7 +139,7 @@ describe.each([false, true])('SAML metadata preview recovery (editing=%s)', (edi
       });
       render(() => <SSOProvidersPanel />);
       const editorOpener = await screen.findByRole('button', {
-        name: editing ? 'Edit provider' : 'Add SAML',
+        name: editing ? /^Edit provider / : 'Add SAML',
       });
       await waitFor(() => expect(editorOpener).toBeEnabled());
       fireEvent.click(editorOpener);
@@ -200,7 +200,7 @@ describe.each([false, true])('SAML metadata preview recovery (editing=%s)', (edi
     });
     render(() => <SSOProvidersPanel />);
     const editorOpener = await screen.findByRole('button', {
-      name: editing ? 'Edit provider' : 'Add SAML',
+      name: editing ? /^Edit provider / : 'Add SAML',
     });
     await waitFor(() => expect(editorOpener).toBeEnabled());
     fireEvent.click(editorOpener);
@@ -229,7 +229,7 @@ describe.each([false, true])('SAML metadata preview recovery (editing=%s)', (edi
     );
     render(() => <SSOProvidersPanel />);
     const editorOpener = await screen.findByRole('button', {
-      name: editing ? 'Edit provider' : 'Add SAML',
+      name: editing ? /^Edit provider / : 'Add SAML',
     });
     await waitFor(() => expect(editorOpener).toBeEnabled());
     fireEvent.click(editorOpener);
