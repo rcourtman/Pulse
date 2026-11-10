@@ -107,11 +107,15 @@ func TestPMGBackupReadProjectionPreservesPollEvidence(t *testing.T) {
 	}
 }
 
-func TestPMGBackupReadsAvoidUnrelatedFleetCopy(t *testing.T) {
+func pmgPollingReadContext() context.Context {
 	// Only this poll owns the quiet output. Alert persistence and other
 	// background workers may still be using the process logger.
 	logger := zerolog.New(io.Discard)
-	ctx := logger.WithContext(context.Background())
+	return logger.WithContext(context.Background())
+}
+
+func TestPMGBackupReadsAvoidUnrelatedFleetCopy(t *testing.T) {
+	ctx := pmgPollingReadContext()
 	for _, scenario := range []string{"cluster-unread", "all-nodes-unread", "partial", "complete"} {
 		t.Run(scenario, func(t *testing.T) {
 			small, sc := pmgPollingReadFixture(0, scenario)
@@ -141,8 +145,7 @@ func TestPMGBackupReadsAvoidUnrelatedFleetCopy(t *testing.T) {
 var pmgPollingSnapshotSink models.StateSnapshot
 
 func BenchmarkPMGBackupReadPoll(b *testing.B) {
-	logger := zerolog.New(io.Discard)
-	ctx := logger.WithContext(context.Background())
+	ctx := pmgPollingReadContext()
 	for _, scenario := range []string{"cluster-unread", "all-nodes-unread", "partial", "complete"} {
 		for _, size := range []int{0, 1000} {
 			b.Run(fmt.Sprintf("%s/unrelated-%d", scenario, size), func(b *testing.B) {

@@ -69,9 +69,10 @@ func TestPMGPollUsesCallerLogger(t *testing.T) {
 	}
 }
 
-func TestPMGPollAllocationGuardDoesNotReplaceProcessLogger(t *testing.T) {
+func TestPMGPollMeasurementsDoNotReplaceProcessLogger(t *testing.T) {
 	// Reproduce the shared resource in the containing-suite failure without
-	// timers, persistence or background allocations contaminating AllocsPerRun.
+	// timers or persistence. Keep this concurrency proof separate from the
+	// strict AllocsPerRun oracle, which counts allocations process-wide.
 	// Reading a level is allocation-free but races with replacing log.Logger,
 	// just as the alert manager's background log reads did in the original job.
 	var observedLevel atomic.Int32
@@ -97,7 +98,16 @@ func TestPMGPollAllocationGuardDoesNotReplaceProcessLogger(t *testing.T) {
 		close(stop)
 		<-done
 	}()
-	t.Run("real-allocation-guard", TestPMGBackupReadsAvoidUnrelatedFleetCopy)
+	for _, scenario := range []string{"cluster-unread", "all-nodes-unread", "partial", "complete"} {
+		m, f := pmgPollingReadFixture(0, scenario)
+		for i := 0; i < 20; i++ {
+			// Exercise the same output owner used by the allocation test and
+			// benchmark, then its real poll consumer, while another worker reads.
+			ctx := pmgPollingReadContext()
+			m.pollPMGInstance(ctx, "gateway", f)
+			runtime.Gosched()
+		}
+	}
 	if reads.Load() == 0 {
 		t.Fatal("concurrent process logger reader did not run")
 	}
