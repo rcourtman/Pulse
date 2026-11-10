@@ -22,8 +22,11 @@ import (
 
 func TestDefaultConfigUsesLargerWriteBuffer(t *testing.T) {
 	cfg := DefaultConfig("/tmp/pulse")
-	if cfg.WriteBufferSize != 500 {
-		t.Fatalf("WriteBufferSize = %d, want 500", cfg.WriteBufferSize)
+	if cfg.WriteBufferSize != 10000 {
+		t.Fatalf("WriteBufferSize = %d, want 10000", cfg.WriteBufferSize)
+	}
+	if cfg.FlushInterval != 60*time.Second {
+		t.Fatalf("FlushInterval = %v, want 60s", cfg.FlushInterval)
 	}
 	if cfg.RollupInterval != defaultRollupInterval {
 		t.Fatalf("RollupInterval = %v, want %v", cfg.RollupInterval, defaultRollupInterval)
@@ -1850,5 +1853,218 @@ func TestEstimateQueryAllBatchSeriesCapacityCapsPreallocation(t *testing.T) {
 	}
 	if got := estimateQueryAllBatchSeriesCapacity(start, start.Add(10*time.Minute), 5); got != 122 {
 		t.Fatalf("10 minutes at 5s step: capacity = %d, want 122", got)
+	}
+}
+
+// Raw samples wait in the write buffer for up to one flush interval, and the
+// minute rollup never revisits a minute it has processed. A flush interval
+// near rawRollupMinAge would roll minutes up before their samples are written
+// and leave the minute tier permanently short.
+func TestDefaultFlushStaysWellInsideRawRollupAge(t *testing.T) {
+	cfg := DefaultConfig("/tmp/pulse")
+	if cfg.FlushInterval <= 0 || 3*cfg.FlushInterval > rawRollupMinAge {
+		t.Fatalf("FlushInterval %v leaves less than two intervals of margin before raw rollup at %v", cfg.FlushInterval, rawRollupMinAge)
+	}
+}
+
+func newReadFreshnessStore(t *testing.T, freshness time.Duration) *Store {
+	t.Helper()
+	previous := storeReadFreshness
+	storeReadFreshness = freshness
+	t.Cleanup(func() { storeReadFreshness = previous })
+	cfg := DefaultConfig(t.TempDir())
+	cfg.FlushInterval = time.Hour
+	store, err := NewStore(cfg)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	return store
+}
+
+// Raw samples wait in the buffer to batch page rewrites, but readers keep the
+// freshness a 5-second flush gave them: a read commits samples older than
+// storeReadFreshness before it queries.
+func TestReadCommitsBufferedSamplesOlderThanFreshness(t *testing.T) {
+	store := newReadFreshnessStore(t, 20*time.Millisecond)
+	now := time.Now()
+	store.Write("vm", "v1", "cpu", 42, now)
+	time.Sleep(50 * time.Millisecond)
+
+	points, err := store.Query("vm", "v1", "cpu", now.Add(-time.Minute), now.Add(time.Minute), 0)
+	if err != nil {
+		t.Fatalf("Query: %v", err)
+	}
+	if len(points) != 1 || points[0].Value != 42 {
+		t.Fatalf("Query = %+v, want the buffered sample", points)
+	}
+	values, err := store.QueryMetricValues("vm", "v1", now.Add(-time.Minute), now.Add(time.Minute), 0)
+	if err != nil || len(values["cpu"]) != 1 {
+		t.Fatalf("QueryMetricValues = %+v, %v; want the committed sample", values, err)
+	}
+}
+
+// Samples newer than the freshness bound stay batched: a read does not force a
+// commit for them, so steady polling readers do not undo the batching.
+func TestReadLeavesFreshBufferedSamplesBatched(t *testing.T) {
+	store := newReadFreshnessStore(t, time.Hour)
+	now := time.Now()
+	store.Write("vm", "v1", "cpu", 42, now)
+
+	points, err := store.Query("vm", "v1", "cpu", now.Add(-time.Minute), now.Add(time.Minute), 0)
+	if err != nil {
+		t.Fatalf("Query: %v", err)
+	}
+	if len(points) != 0 {
+		t.Fatalf("a fresh sample was committed by a read: %+v", points)
+	}
+	store.Flush()
+	points, err = store.Query("vm", "v1", "cpu", now.Add(-time.Minute), now.Add(time.Minute), 0)
+	if err != nil || len(points) != 1 {
+		t.Fatalf("after Flush Query = %+v, %v; want the sample", points, err)
+	}
+}
+
+// QueryCommitted serves hot callers that merge their own in-memory tail, such
+// as alert metric windows. It must never commit the buffer, or every alert
+// evaluation would restore per-sample commits.
+func TestQueryCommittedLeavesBufferAlone(t *testing.T) {
+	store := newReadFreshnessStore(t, 20*time.Millisecond)
+	now := time.Now()
+	store.Write("vm", "v1", "cpu", 42, now)
+	time.Sleep(50 * time.Millisecond)
+
+	points, err := store.QueryCommitted("vm", "v1", "cpu", now.Add(-time.Minute), now.Add(time.Minute), 0)
+	if err != nil {
+		t.Fatalf("QueryCommitted: %v", err)
+	}
+	if len(points) != 0 {
+		t.Fatalf("QueryCommitted committed the buffer: %+v", points)
+	}
+	points, err = store.Query("vm", "v1", "cpu", now.Add(-time.Minute), now.Add(time.Minute), 0)
+	if err != nil || len(points) != 1 {
+		t.Fatalf("Query after QueryCommitted = %+v, %v; want the buffered sample", points, err)
+	}
+}
+
+// A read only commits the buffer for the series it reads. Charts that poll
+// other series, such as disk temperatures written synchronously, must not
+// restore per-sample commits for everything else.
+func TestReadOfOtherSeriesLeavesBufferBatched(t *testing.T) {
+	store := newReadFreshnessStore(t, 20*time.Millisecond)
+	now := time.Now()
+	store.Write("vm", "v1", "cpu", 42, now)
+	time.Sleep(50 * time.Millisecond)
+
+	if _, err := store.Query("vm", "v2", "cpu", now.Add(-time.Minute), now.Add(time.Minute), 0); err != nil {
+		t.Fatalf("Query other resource: %v", err)
+	}
+	if _, err := store.QueryMetricTypesBatch("vm", []string{"v1"}, []string{"memory"}, now.Add(-time.Minute), now.Add(time.Minute), 0); err != nil {
+		t.Fatalf("Query other metric: %v", err)
+	}
+	points, err := store.QueryCommitted("vm", "v1", "cpu", now.Add(-time.Minute), now.Add(time.Minute), 0)
+	if err != nil {
+		t.Fatalf("QueryCommitted: %v", err)
+	}
+	if len(points) != 0 {
+		t.Fatalf("a read of another series committed the buffer: %+v", points)
+	}
+}
+
+// Close drains the buffer on the ingestion worker, so samples still waiting
+// for the minute flush survive a clean stop.
+func TestCloseKeepsBufferedSamples(t *testing.T) {
+	dir := t.TempDir()
+	cfg := DefaultConfig(dir)
+	cfg.FlushInterval = time.Hour
+	store, err := NewStore(cfg)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	now := time.Now()
+	store.Write("vm", "v1", "cpu", 42, now)
+	if err := store.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	reopened, err := NewStore(cfg)
+	if err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	defer reopened.Close()
+	points, err := reopened.QueryCommitted("vm", "v1", "cpu", now.Add(-time.Minute), now.Add(time.Minute), 0)
+	if err != nil || len(points) != 1 {
+		t.Fatalf("after Close and reopen = %+v, %v; want the buffered sample", points, err)
+	}
+}
+
+// A fresh sample of the read's series does not trigger a drain just because
+// another series has waited long: staleness is judged per buffered sample.
+func TestReadJudgesStalenessPerSeries(t *testing.T) {
+	store := newReadFreshnessStore(t, 100*time.Millisecond)
+	now := time.Now()
+	store.Write("vm", "old", "cpu", 1, now)
+	time.Sleep(150 * time.Millisecond)
+	store.Write("vm", "new", "cpu", 2, now)
+
+	if _, err := store.Query("vm", "new", "cpu", now.Add(-time.Minute), now.Add(time.Minute), 0); err != nil {
+		t.Fatalf("Query: %v", err)
+	}
+	points, err := store.QueryCommitted("vm", "old", "cpu", now.Add(-time.Minute), now.Add(time.Minute), 0)
+	if err != nil {
+		t.Fatalf("QueryCommitted: %v", err)
+	}
+	if len(points) != 0 {
+		t.Fatalf("a fresh read drained the buffer for another series: %+v", points)
+	}
+}
+
+// A read that arrives while another read's flush is in flight waits for that
+// commit instead of reading between its detach and its commit.
+func TestReadWaitsForInFlightReadFlush(t *testing.T) {
+	store := newReadFreshnessStore(t, time.Hour)
+	inflight := make(chan struct{})
+	store.bufferMu.Lock()
+	store.readFlush = inflight
+	store.bufferMu.Unlock()
+
+	returned := make(chan struct{})
+	go func() {
+		_, _ = store.Query("vm", "v1", "cpu", time.Now().Add(-time.Minute), time.Now(), 0)
+		close(returned)
+	}()
+	select {
+	case <-returned:
+		t.Fatal("read did not wait for the in-flight flush")
+	case <-time.After(100 * time.Millisecond):
+	}
+	close(inflight)
+	select {
+	case <-returned:
+	case <-time.After(syncWriteWaitTimeout):
+		t.Fatal("read kept waiting after the in-flight flush committed")
+	}
+}
+
+// Minute-sized flush batches are up to 20 times larger than the old 500-row
+// ones, so the write queue is bounded by samples, not only by requests: over
+// the budget an asynchronous batch is dropped as a full queue drops it.
+func TestWriteQueueSampleBudgetDropsAsyncBatch(t *testing.T) {
+	store := newReadFreshnessStore(t, time.Hour)
+	store.queuedSamples.Store(maxQueuedSamples)
+	done := make(chan struct{})
+	now := time.Now().Truncate(time.Second)
+	store.enqueueWrite(writeRequest{
+		metrics: []bufferedMetric{{resourceType: "vm", resourceID: "v1", metricType: "cpu", value: 1, timestamp: now, tier: TierRaw}},
+		done:    done,
+	})
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("an over-budget batch was queued instead of dropped")
+	}
+	store.queuedSamples.Store(0)
+	points, err := store.QueryCommitted("vm", "v1", "cpu", now.Add(-time.Minute), now.Add(time.Minute), 0)
+	if err != nil || len(points) != 0 {
+		t.Fatalf("over-budget batch reached the store: %+v, %v", points, err)
 	}
 }

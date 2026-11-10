@@ -107,6 +107,13 @@ type StoreConfig struct {
 	RetentionDaily  time.Duration // How long to keep daily data
 }
 
+// rawRollupMinAge is how old raw samples must be before they are rolled up
+// into the minute tier. The rollup checkpoint moves past each processed minute
+// and inserts with OR IGNORE, so a minute rolled up before all its buffered
+// samples are written stays incomplete: the buffered flush interval must stay
+// well inside this age.
+const rawRollupMinAge = 5 * time.Minute
+
 const (
 	minRollupInterval     = 5 * time.Minute
 	defaultRollupInterval = 15 * time.Minute
@@ -145,11 +152,19 @@ func DefaultConfig(dataDir string) StoreConfig {
 
 	return StoreConfig{
 		DBPath: dbPath,
-		// Large installs can enqueue hundreds of metric points per poll cycle.
-		// A larger buffer keeps those writes inside a single SQLite transaction
-		// more often, which materially reduces WAL churn on SSD-backed setups.
-		WriteBufferSize: 500,
-		FlushInterval:   5 * time.Second,
+		// The table is clustered by resource, so every commit rewrites the
+		// newest leaf page of each resource it touches: write volume follows
+		// commits per resource, not data size. A 5-second flush committed each
+		// 30-second agent sample on its own, about 1.9 WAL pages per sample
+		// (34x the row data). Holding raw samples for a minute amortizes those
+		// page rewrites over more samples; on an agent-fed install total writes
+		// fell about 70%. Reads stay as fresh as before (see awaitFreshRead).
+		// The buffer bounds memory (about 1 MB) and forces an early flush on
+		// very large fleets. The flush must stay well inside rawRollupMinAge
+		// so a minute is never rolled up before its samples land; Close still
+		// drains the buffer, so only a crash loses at most one interval.
+		WriteBufferSize: 10000,
+		FlushInterval:   60 * time.Second,
 		RollupInterval:  defaultRollupInterval,
 		RetentionRaw:    2 * time.Hour,
 		RetentionMinute: 24 * time.Hour,
@@ -207,6 +222,9 @@ type bufferedMetric struct {
 	value        float64
 	timestamp    time.Time
 	tier         Tier
+	// arrivedNano is when Write buffered the sample; zero for synchronous
+	// batches, which never wait in the buffer.
+	arrivedNano int64
 }
 
 type writeRequest struct {
@@ -283,12 +301,20 @@ type Store struct {
 	queryMu         sync.Mutex
 	readQueryShapes map[retainedQueryShape]string
 
-	// Write buffer
-	bufferMu sync.Mutex
-	buffer   []bufferedMetric
+	// Write buffer. bufferedSince is when the oldest buffered sample arrived;
+	// zero while the buffer is empty. readFlush is the completion channel of
+	// a read-triggered flush still in flight, so concurrent readers wait for
+	// it instead of reading between its detach and its commit.
+	bufferMu      sync.Mutex
+	buffer        []bufferedMetric
+	bufferedSince time.Time
+	readFlush     chan struct{}
 
 	// Background workers
-	writeCh                    chan writeRequest
+	writeCh chan writeRequest
+	// queuedSamples counts metrics reserved for or sent to writeCh and not yet
+	// processed; senders reserve before sending and release on failure.
+	queuedSamples              atomic.Int64
 	maintenanceCh              chan maintenanceRequest
 	stopCh                     chan struct{}
 	doneCh                     chan struct{}
@@ -955,6 +981,10 @@ func (s *Store) WriteWithTier(resourceType, resourceID, metricType string, value
 		return
 	}
 
+	arrived := time.Now()
+	if len(s.buffer) == 0 {
+		s.bufferedSince = arrived
+	}
 	s.buffer = append(s.buffer, bufferedMetric{
 		resourceType: normalizedType,
 		resourceID:   normalizedID,
@@ -962,6 +992,7 @@ func (s *Store) WriteWithTier(resourceType, resourceID, metricType string, value
 		value:        value,
 		timestamp:    timestamp,
 		tier:         tier,
+		arrivedNano:  arrived.UnixNano(),
 	})
 
 	// Flush if buffer is full
@@ -1148,6 +1179,7 @@ func (s *Store) detachBufferLocked() []bufferedMetric {
 	toWrite := make([]bufferedMetric, len(s.buffer))
 	copy(toWrite, s.buffer)
 	s.buffer = s.buffer[:0]
+	s.bufferedSince = time.Time{}
 
 	return toWrite
 }
@@ -1157,14 +1189,35 @@ func (s *Store) flushLocked() {
 	s.enqueueWrite(writeRequest{metrics: s.detachBufferLocked()})
 }
 
+// maxQueuedSamples bounds the metric samples waiting in writeCh. A minute's
+// buffer makes each queued batch up to 20 times larger than the old 500-row
+// flush, so a long SQLite stall could otherwise queue about a million samples.
+// The budget matches the old worst case of 100 requests of 500 samples.
+const maxQueuedSamples = 100 * 500
+
 func (s *Store) enqueueWrite(req writeRequest) {
 	if len(req.metrics) == 0 && len(req.availability) == 0 && len(req.availabilityDeletes) == 0 && req.done == nil {
+		return
+	}
+	n := int64(len(req.metrics))
+	if n > 0 && s.queuedSamples.Add(n) > maxQueuedSamples {
+		s.queuedSamples.Add(-n)
+		log.Warn().
+			Str("component", "metrics_store").
+			Str("action", "drop_write_batch").
+			Int("batch_size", len(req.metrics)).
+			Int64("queued_samples", s.queuedSamples.Load()).
+			Msg("Metrics write queue over its sample budget, dropping batch")
+		if req.done != nil {
+			close(req.done)
+		}
 		return
 	}
 
 	select {
 	case s.writeCh <- req:
 	default:
+		s.queuedSamples.Add(-n)
 		log.Warn().
 			Str("component", "metrics_store").
 			Str("action", "drop_write_batch").
@@ -1196,9 +1249,12 @@ func (s *Store) enqueueAndWait(req writeRequest) {
 		req.done = make(chan struct{})
 	}
 
+	n := int64(len(req.metrics))
+	s.queuedSamples.Add(n)
 	select {
 	case s.writeCh <- req:
 	case <-s.stopCh:
+		s.queuedSamples.Add(-n)
 		return
 	}
 
@@ -1221,11 +1277,15 @@ func (s *Store) boundedEnqueueAndWait(req writeRequest) {
 	timer := time.NewTimer(syncWriteWaitTimeout)
 	defer timer.Stop()
 
+	n := int64(len(req.metrics))
+	s.queuedSamples.Add(n)
 	select {
 	case s.writeCh <- req:
 	case <-s.stopCh:
+		s.queuedSamples.Add(-n)
 		return
 	case <-timer.C:
+		s.queuedSamples.Add(-n)
 		log.Warn().
 			Str("component", "metrics_store").
 			Str("action", "drop_sync_write_batch").
@@ -1281,6 +1341,7 @@ func (s *Store) processWriteRequests(requests []writeRequest) {
 	for _, req := range requests {
 		if len(req.metrics) > 0 {
 			combined = append(combined, req.metrics...)
+			s.queuedSamples.Add(-int64(len(req.metrics)))
 		}
 		if req.done != nil {
 			doneChans = append(doneChans, req.done)
@@ -1457,6 +1518,17 @@ func (s *Store) coalesceQueuedRequests(initial writeRequest) []writeRequest {
 
 // Query retrieves one metric using the same tier reconciliation as fleet reads.
 func (s *Store) Query(resourceType, resourceID, metricType string, start, end time.Time, stepSecs int64) ([]MetricPoint, error) {
+	s.awaitFreshRead(resourceType, []string{resourceID}, []string{metricType})
+	return s.QueryCommitted(resourceType, resourceID, metricType, start, end, stepSecs)
+}
+
+// QueryCommitted is Query without the read-freshness flush: it returns only
+// committed samples and never flushes the write buffer. It is for callers
+// that merge their own fresher in-memory tail, such as alert metric windows,
+// or that read spans where the newest minute cannot matter. Calling Query
+// from those hot paths would flush the buffer on every evaluation and undo
+// the write batching.
+func (s *Store) QueryCommitted(resourceType, resourceID, metricType string, start, end time.Time, stepSecs int64) ([]MetricPoint, error) {
 	result, err := s.queryBatch(resourceType, []string{resourceID}, []string{metricType}, start, end, stepSecs)
 	if err != nil {
 		return nil, err
@@ -1467,6 +1539,7 @@ func (s *Store) Query(resourceType, resourceID, metricType string, start, end ti
 // QueryAll retrieves all metric types, filling observation times missing from
 // the preferred tier before applying optional downsampling.
 func (s *Store) QueryAll(resourceType, resourceID string, start, end time.Time, stepSecs int64) (map[string][]MetricPoint, error) {
+	s.awaitFreshRead(resourceType, []string{resourceID}, nil)
 	result, err := s.queryBatch(resourceType, []string{resourceID}, nil, start, end, stepSecs)
 	if err != nil {
 		return nil, err
@@ -1492,6 +1565,7 @@ const maxRetainedNumberedSeries = 4096
 // This avoids N+1 query patterns when loading charts for many resources.
 // Resource IDs are deduplicated and chunked to stay within SQLite limits.
 func (s *Store) QueryAllBatch(resourceType string, resourceIDs []string, start, end time.Time, stepSecs int64) (map[string]map[string][]MetricPoint, error) {
+	s.awaitFreshRead(resourceType, resourceIDs, nil)
 	return s.queryBatch(resourceType, resourceIDs, nil, start, end, stepSecs)
 }
 
@@ -1505,12 +1579,14 @@ func (s *Store) QueryMetricTypesBatch(
 	start, end time.Time,
 	stepSecs int64,
 ) (map[string]map[string][]MetricPoint, error) {
+	s.awaitFreshRead(resourceType, resourceIDs, metricTypes)
 	return s.queryBatch(resourceType, resourceIDs, metricTypes, start, end, stepSecs)
 }
 
 // QueryMetricValues retrieves detached timestamp/value observations for one
 // resource. It uses the same tier reconciliation and display buckets as QueryAll.
 func (s *Store) QueryMetricValues(resourceType, resourceID string, start, end time.Time, stepSecs int64) (map[string][]models.MetricPoint, error) {
+	s.awaitFreshRead(resourceType, []string{resourceID}, nil)
 	result, err := queryBatch(s, resourceType, []string{resourceID}, nil, start, end, stepSecs, retainedMetricValues)
 	if err != nil {
 		return nil, err
@@ -1526,6 +1602,7 @@ func (s *Store) QueryMetricValues(resourceType, resourceID string, start, end ti
 // canonical shared points and the same scope, filters, tiers and chunk limits as
 // QueryMetricTypesBatch. Callers that need retained extrema use the full reader.
 func (s *Store) QueryMetricValuesBatch(resourceType string, resourceIDs, metricTypes []string, start, end time.Time, stepSecs int64) (map[string]map[string][]models.MetricPoint, error) {
+	s.awaitFreshRead(resourceType, resourceIDs, metricTypes)
 	return queryBatch(s, resourceType, resourceIDs, metricTypes, start, end, stepSecs, retainedMetricValues)
 }
 
@@ -1547,6 +1624,86 @@ var retainedMetricValues = retainedProjection[models.MetricPoint]{
 		return models.MetricPoint{Value: p.Value, Timestamp: p.Timestamp}
 	},
 	compare: func(a, b models.MetricPoint) int { return a.Timestamp.Compare(b.Timestamp) },
+}
+
+// storeReadFreshness bounds how stale a metrics read may be. The write buffer
+// holds raw samples for up to FlushInterval so each resource's newest page is
+// rewritten less often. A public read (every Query* method except
+// QueryCommitted) whose own series has a buffered sample that arrived longer
+// ago than this flushes the buffer first, exactly as Flush does, and a read
+// that arrives while such a flush is in flight waits for it. Readers therefore
+// see what a 5-second flush gave them, a read never causes more than one
+// commit, and reads of other series leave the batching alone.
+var storeReadFreshness = 5 * time.Second
+
+// awaitFreshRead makes the read's stale buffered samples visible before it
+// queries, waiting no longer than the monitoring pipeline's bounded write so a
+// slow disk cannot stall readers. An empty metricTypes means every metric.
+func (s *Store) awaitFreshRead(resourceType string, resourceIDs, metricTypes []string) {
+	resourceType = normalizeMetricResourceType(resourceType)
+	ids := make(map[string]struct{}, len(resourceIDs))
+	for _, id := range resourceIDs {
+		ids[normalizeMetricIdentifier(id)] = struct{}{}
+	}
+	var metricSet map[string]struct{}
+	if len(metricTypes) > 0 {
+		metricSet = make(map[string]struct{}, len(metricTypes))
+		for _, metric := range metricTypes {
+			metricSet[storedObservationMetric(resourceType, normalizeMetricType(metric))] = struct{}{}
+		}
+	}
+	cutoff := time.Now().Add(-storeReadFreshness)
+
+	s.bufferMu.Lock()
+	// Over the queue budget the disk is already behind: read what is
+	// committed rather than queue another buffer-sized batch.
+	if !s.stopping.Load() && s.queuedSamples.Load()+int64(len(s.buffer)) <= maxQueuedSamples &&
+		!s.bufferedSince.IsZero() && !s.bufferedSince.After(cutoff) &&
+		bufferHoldsStaleSeries(s.buffer, cutoff.UnixNano(), resourceType, ids, metricSet) {
+		batch := s.detachBufferLocked()
+		done := make(chan struct{})
+		s.readFlush = done
+		s.bufferMu.Unlock()
+		s.boundedEnqueueAndWait(writeRequest{metrics: batch, done: done})
+		s.bufferMu.Lock()
+		if s.readFlush == done {
+			s.readFlush = nil
+		}
+		s.bufferMu.Unlock()
+		return
+	}
+	inflight := s.readFlush
+	s.bufferMu.Unlock()
+	if inflight == nil {
+		return
+	}
+	timer := time.NewTimer(syncWriteWaitTimeout)
+	defer timer.Stop()
+	select {
+	case <-inflight:
+	case <-s.stopCh:
+	case <-timer.C:
+	}
+}
+
+// bufferHoldsStaleSeries reports whether the buffer holds a sample of the
+// read's series that arrived at or before cutoffNano.
+func bufferHoldsStaleSeries(buffer []bufferedMetric, cutoffNano int64, resourceType string, ids, metrics map[string]struct{}) bool {
+	for _, m := range buffer {
+		if m.arrivedNano == 0 || m.arrivedNano > cutoffNano || m.resourceType != resourceType {
+			continue
+		}
+		if _, ok := ids[m.resourceID]; !ok {
+			continue
+		}
+		if metrics == nil {
+			return true
+		}
+		if _, ok := metrics[m.metricType]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Store) queryBatch(
@@ -2288,6 +2445,8 @@ func (s *Store) backgroundWorker() {
 		case <-s.stopCh:
 			var remaining []writeRequest
 			if batch := s.drainBuffer(); len(batch) > 0 {
+				// Counted like a queued request so processing balances it.
+				s.queuedSamples.Add(int64(len(batch)))
 				remaining = append(remaining, writeRequest{metrics: batch})
 			}
 			// Do NOT close writeCh. Concurrent writers (WriteWithTier after
@@ -2367,7 +2526,7 @@ func (s *Store) runRollup() {
 	start := time.Now()
 
 	// Rollup raw -> minute (for data older than 5 minutes)
-	s.rollupTier(TierRaw, TierMinute, time.Minute, 5*time.Minute)
+	s.rollupTier(TierRaw, TierMinute, time.Minute, rawRollupMinAge)
 
 	// Rollup minute -> hourly (for data older than 1 hour)
 	s.rollupTier(TierMinute, TierHourly, time.Hour, time.Hour)

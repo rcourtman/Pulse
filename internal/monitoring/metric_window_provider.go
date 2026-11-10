@@ -175,7 +175,10 @@ func (m *Monitor) persistentMetricWindow(history *MetricsHistory, resourceType, 
 
 	var best []MetricPoint
 	for _, candidate := range monitorStoreResourceTypeCandidates(resourceType) {
-		stored, err := m.metricsStore.Query(candidate, resourceID, metric, start, end, 0)
+		// metricWindowPoints merges the fresh in-memory tail over these rows,
+		// so committed samples suffice; a flushing read here would commit the
+		// write buffer on every alert evaluation.
+		stored, err := m.metricsStore.QueryCommitted(candidate, resourceID, metric, start, end, 0)
 		if err != nil {
 			log.Debug().Err(err).Str("resource", resourceID).Str("metric", metric).Msg("Rolling alert history unavailable")
 			continue

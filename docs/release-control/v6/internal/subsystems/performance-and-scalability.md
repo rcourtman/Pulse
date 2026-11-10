@@ -2904,6 +2904,34 @@ There is no redundant legacy index rebuild before the copy. A database with
 no unique identity index still deduplicates and establishes identity
 synchronously before ingestion starts.
 
+Under the
+time-major layout each commit still rewrites the newest leaf page of every resource
+it touches, so WAL volume follows commits per resource rather than data size:
+with a 5-second buffered flush, an agent-fed install wrote about 1.9 WAL pages
+per 30-second sample. The default buffered flush is therefore 60 seconds with
+a 10,000-row buffer ceiling (`TestDefaultConfigUsesLargerWriteBuffer`); with
+the nightly watch's agent estate on pulse-dev, total process writes fell from
+about 4.9 to 1.4 GiB/day.
+The flush must stay well inside `rawRollupMinAge`, because the minute rollup
+never revisits a processed minute (`TestDefaultFlushStaysWellInsideRawRollupAge`).
+Readers keep 5-second freshness: a public `Query*` read whose own series has a
+buffered sample that arrived longer ago than `storeReadFreshness` flushes the
+buffer first exactly as `Flush` does, bounded by `syncWriteWaitTimeout`, and a
+read that arrives while such a flush is in flight waits for it
+(`TestReadCommitsBufferedSamplesOlderThanFreshness`,
+`TestReadLeavesFreshBufferedSamplesBatched`, `TestReadJudgesStalenessPerSeries`,
+`TestReadOfOtherSeriesLeavesBufferBatched`, `TestReadWaitsForInFlightReadFlush`).
+The buffer, its full-buffer detach, the flush tick, `Flush` and the shutdown
+drain keep their existing ordering, and because minute batches are up to 20
+times larger, the write queue is bounded by `maxQueuedSamples` (the old worst
+case of 100 requests of 500 samples) as well as by request count
+(`TestWriteQueueSampleBudgetDropsAsyncBatch`), and `Close` still drains
+buffered samples (`TestCloseKeepsBufferedSamples`). Hot readers that merge
+their own in-memory tail, such as alert metric windows and the storage capacity
+trend, use `QueryCommitted`, which never flushes
+(`TestQueryCommittedLeavesBufferAlone`); routing them through a flushing read
+restores per-sample commits.
+
 Each retained read fixes its index choice for its snapshot. A stale legacy
 index error may retry once with a new snapshot only after inspecting the
 clustered primary key. This covers another Store committing the upgrade while
