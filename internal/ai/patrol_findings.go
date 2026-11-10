@@ -31,6 +31,49 @@ func patrolFindingUsesSyntheticRuntimeResource(f *Finding) bool {
 	return f != nil && (f.Key == patrolRuntimeFindingKey || f.ResourceID == patrolRuntimeResourceID)
 }
 
+// patrolRegistryMintedResourceID reports whether id has the form of an ID the
+// unified resource registry mints: a resource type, a dash and 16 hex digits
+// (unifiedresources.SourceSpecificID and the other buildHashID callers).
+func patrolRegistryMintedResourceID(id string) bool {
+	id = strings.TrimSpace(id)
+	dash := strings.LastIndexByte(id, '-')
+	if dash <= 0 || len(id)-dash-1 != 16 {
+		return false
+	}
+	for _, c := range id[dash+1:] {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
+			return false
+		}
+	}
+	return true
+}
+
+// findingResourceInInventory reports whether the resource a finding is about
+// is still collected. known holds every current resource's IDs, the earlier
+// IDs the registry says it superseded, and its names.
+//
+// A registry ID is the resource's identity. When no current resource carries
+// it, the resource is gone, whatever now has its name: a container recreated
+// by an image update keeps the name and gets a new ID, and the registry does
+// not treat the new one as a continuation of the old. Left open by the shared
+// name, the old finding took in every report about the new container, and its
+// finished investigation meant the new container was never investigated.
+//
+// A finding whose ID has another form (a source ID, a rollup key, a name used
+// as the ID) is still tied to its resource by name.
+func findingResourceInInventory(f *Finding, known map[string]bool) bool {
+	if f == nil {
+		return false
+	}
+	if known[f.ResourceID] {
+		return true
+	}
+	if patrolRegistryMintedResourceID(f.ResourceID) {
+		return false
+	}
+	return known[f.ResourceName]
+}
+
 func patrolRuntimeFindingManualActionError(action string) error {
 	return fmt.Errorf(
 		"Patrol runtime findings cannot be %s manually; fix Patrol provider configuration in Pulse Intelligence settings and rerun Patrol",
@@ -741,7 +784,12 @@ func (a *patrolFindingCreatorAdapter) canonicalizeUnknownFindingResource(input t
 		return input, false
 	}
 	if a.findingInCurrentScope(&Finding{ResourceID: input.ResourceID, ResourceName: input.ResourceName}) {
-		return input, false
+		// The name alone can admit a report. A registry ID that names nothing
+		// is still a miscopy then, and a finding filed under it would be closed
+		// as removed by the next run (findingResourceInInventory).
+		if !patrolRegistryMintedResourceID(input.ResourceID) || a.findingInCurrentScope(&Finding{ResourceID: input.ResourceID}) {
+			return input, false
+		}
 	}
 
 	resourceIDToken := canonicalPatrolScopeToken(input.ResourceID)
