@@ -199,6 +199,19 @@ class NativeContracts(unittest.TestCase):
             root = Path(directory)
             lab = native.NativeLab(root, ROOT, root / "a", root / "b", "a" * 40)
             (root / "signer").mkdir()
+            # NativeLab deliberately excludes ambient PATH. macOS supplies GNU
+            # timeout outside /usr/bin, so carry only that real command into
+            # this fixture; never broaden the hosted lab's command search.
+            tools = root / "tools"; tools.mkdir()
+            timeout = shutil.which("timeout")
+            self.assertIsNotNone(timeout, "native signature fixture requires supplied GNU timeout")
+            (tools / "timeout").symlink_to(timeout)
+            # Real OpenSSH verification needs no host journal. A successful
+            # private sink also prevents logger exit1 from masquerading as the
+            # verifier's explicit cryptographic refusal under errexit.
+            logger = tools / "logger"
+            logger.write_text('#!/bin/sh\nset -eu\nprintf \'%s\\0\' "$@" >> "$PULSE_NATIVE_ROOT/logger-calls"\nexit 0\n')
+            logger.chmod(0o700)
             lab.run("ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", str(root / "signer/key"))
             installer = root / "installer"; installer.write_text(native.INSTALLER)
             lab.sign(installer)
@@ -206,10 +219,15 @@ class NativeContracts(unittest.TestCase):
                      'PINNED_RELEASE_SSH_PUBLIC_KEY=$(cat "$PULSE_NATIVE_ROOT/signer/key.pub"); '
                      'verify_release_signature "$PULSE_NATIVE_ROOT/installer" "$PULSE_NATIVE_ROOT/installer.sshsig" fixture')
             self.assertEqual(lab.shell(shell).returncode, 0)
+            self.assertFalse((root / "logger-calls").exists())
             installer.write_text(native.INSTALLER + "# tampered\n")
             result = subprocess.run(["/bin/bash", "-c", shell], env=lab.env, capture_output=True)
             self.assertEqual(result.returncode, 1)
             self.assertIn(b"Cryptographic signature verification failed", result.stdout)
+            self.assertEqual((root / "logger-calls").read_bytes().split(b"\0"), [
+                b"-t", b"pulse-source-updater-auto-update", b"-p", b"user.error",
+                b"Cryptographic signature verification failed for fixture", b"",
+            ])
 
     def test_signer_failure_retains_operation_and_metadata_not_private_output(self):
         with tempfile.TemporaryDirectory() as directory:
