@@ -4366,6 +4366,26 @@ router-side bridge wiring consults that policy and skips queuing the scoped
 patrol when the alert does not qualify; an unknown alert level is treated as
 critical so it is never silently dropped.
 
+The bridge wakes Patrol once per firing episode of an alert, not once per alert
+identifier. Identifiers are stable per resource and alert type, so the earlier
+rule (trigger only when the unified store had never seen the identifier) left
+every repeat of an alert silent. An episode starts when the alert manager
+dispatches an alert whose unified finding is new or had resolved
+(`UnifiedStore.RecordAlert` reports created, reopened or updated), or whose
+start time is later than the episode the bridge holds, and it ends on the
+resolved callback. A dispatch inside an episode wakes Patrol only when the
+alert has risen to a level the trigger policy accepts and the episode has not
+used that level yet, so an alert that starts as a warning under a critical
+floor still wakes Patrol when it turns critical. The bridge asks the policy
+through `SetPatrolTriggerPolicy` before it counts a trigger. `alert_fired`
+triggers are capped per alert identifier at 3 in an hour and 6 in 24 hours
+(`maxAlertFiredTriggersPerHour`, `maxAlertFiredTriggersPerDay`), whatever the
+alert manager's flapping and rate-limit settings are. Alerts already active
+when the bridge starts are episodes in progress and do not trigger until they
+change. Proofs: `internal/ai/unified/bridge_test.go`,
+`internal/ai/unified/bridge_alert_manager_test.go` and
+`internal/api/ai_alert_bridge_trigger_test.go`.
+
 The route-backed Proxmox platform tab is app-shell navigation only. Adding the
 tab through `frontend-modern/src/App.tsx` and
 `frontend-modern/src/AppLayout.tsx` must not fork Assistant or Patrol shell

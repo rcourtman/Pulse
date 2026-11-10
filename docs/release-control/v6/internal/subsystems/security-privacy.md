@@ -2548,6 +2548,13 @@ the API boundary before it reaches persisted AI config: the settings handler
 `warning` or `critical` and canonicalizes the alert-type allowlist (lowercase,
 trim, drop blanks, de-duplicate) so untrusted request bodies cannot widen the
 alert-driven investigation surface beyond the validated shape.
+The alert bridge now consults that validated policy before it counts an
+`alert_fired` trigger (`alertBridgePatrolWiring.acceptsFiringAlert` in
+`internal/api/ai_alert_bridge_trigger.go`). A repeat firing of one alert can
+wake Patrol again, at most 3 times an hour and 6 times a day per alert
+identifier, so the policy still decides which alerts reach the model and the
+cap bounds how often. No authentication, authorization or data-exposure
+surface changes.
 That same governed home now also owns the single customer-facing "usage data"
 vocabulary for outbound usage telemetry. Local commercial activation and
 license-recovery runtime records must stay out of ordinary Settings, support

@@ -2,6 +2,7 @@
 package unified
 
 import (
+	"strings"
 	"sync"
 	"time"
 
@@ -16,6 +17,7 @@ type AlertBridge struct {
 	store           *UnifiedStore
 	alertProvider   AlertProvider
 	patrolTrigger   PatrolTriggerFunc
+	triggerPolicy   PatrolTriggerPolicyFunc
 	enhancementFunc AIEnhancementFunc
 
 	// Configuration
@@ -26,8 +28,30 @@ type AlertBridge struct {
 
 	// Tracking
 	pendingEnhancements map[string]*time.Timer
+	episodes            map[string]*alertEpisode // alert identifier -> firing episode state
+	now                 func() time.Time
 	running             bool
 	stopCh              chan struct{}
+}
+
+// Bounds on alert_fired Patrol triggers for one alert identifier. A firing
+// episode is one stretch of an alert being active: it starts when the alert
+// fires (or fires again after resolving) and ends when it resolves. Each
+// episode can wake Patrol once, plus once more if it later rises to a level
+// the trigger policy accepts after starting below it. A flapping alert starts
+// a new episode on every flap, so the count is capped per identifier.
+const (
+	maxAlertFiredTriggersPerHour = 3
+	maxAlertFiredTriggersPerDay  = 6
+)
+
+// alertEpisode tracks one alert identifier's current firing episode and its
+// recent alert_fired triggers.
+type alertEpisode struct {
+	active         bool
+	startedAt      time.Time   // the alert's start time for the current episode
+	triggeredLevel int         // highest level this episode has already used to wake Patrol
+	triggers       []time.Time // alert_fired triggers inside the daily window
 }
 
 // AlertProvider provides access to alert data
@@ -59,6 +83,12 @@ type PatrolTriggerEvent struct {
 
 // PatrolTriggerFunc is called to trigger a mini-patrol for a resource
 type PatrolTriggerFunc func(event PatrolTriggerEvent)
+
+// PatrolTriggerPolicyFunc reports whether a firing alert of this type and
+// level may wake Patrol under the operator's alert-trigger settings. The
+// bridge asks before it spends an episode's trigger, so an alert that starts
+// below the minimum severity can still wake Patrol when it rises above it.
+type PatrolTriggerPolicyFunc func(alertType, alertLevel string) bool
 
 // AIEnhancementFunc is called to request AI enhancement of a finding
 type AIEnhancementFunc func(findingID string) error
@@ -94,6 +124,8 @@ func NewAlertBridge(store *UnifiedStore, config BridgeConfig) *AlertBridge {
 		triggerPatrolOnNew:   config.TriggerPatrolOnNew,
 		triggerPatrolOnClear: config.TriggerPatrolOnClear,
 		pendingEnhancements:  make(map[string]*time.Timer),
+		episodes:             make(map[string]*alertEpisode),
+		now:                  time.Now,
 		stopCh:               make(chan struct{}),
 	}
 }
@@ -118,6 +150,14 @@ func (b *AlertBridge) SetPatrolTrigger(fn PatrolTriggerFunc) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.patrolTrigger = fn
+}
+
+// SetPatrolTriggerPolicy sets the alert-trigger policy consulted before an
+// alert_fired trigger. With no policy every firing level is accepted.
+func (b *AlertBridge) SetPatrolTriggerPolicy(fn PatrolTriggerPolicyFunc) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.triggerPolicy = fn
 }
 
 // SetAIEnhancement sets the function to call for AI enhancement
@@ -177,6 +217,11 @@ func (b *AlertBridge) syncExistingAlerts() {
 	alerts := provider.GetActiveAlerts()
 	for _, alert := range alerts {
 		_, isNew := b.store.AddFromAlert(alert)
+		// An alert that was already active when the bridge started is an
+		// episode in progress, not a new firing. Record it at its current
+		// level so a later re-notification does not wake Patrol, while a rise
+		// in severity or the next episode still can.
+		b.seedEpisode(alert)
 		if isNew {
 			log.Debug().
 				Str("alert_identifier", alert.GetAlertIdentifier()).
@@ -186,12 +231,15 @@ func (b *AlertBridge) syncExistingAlerts() {
 	}
 }
 
-// handleNewAlert handles a new alert from the alert system
+// handleNewAlert handles an alert dispatch from the alert system: a new
+// firing, a re-firing after a resolve, or a repeat for an alert that is still
+// active (for example a severity change).
 func (b *AlertBridge) handleNewAlert(alert AlertAdapter) {
 	b.mu.RLock()
 	running := b.running
 	triggerPatrol := b.triggerPatrolOnNew
 	patrolFn := b.patrolTrigger
+	policyFn := b.triggerPolicy
 	autoEnhance := b.autoEnhance
 	enhanceFn := b.enhancementFunc
 	enhanceDelay := b.enhanceDelay
@@ -202,37 +250,173 @@ func (b *AlertBridge) handleNewAlert(alert AlertAdapter) {
 	}
 
 	// Add to unified store
-	finding, isNew := b.store.AddFromAlert(alert)
+	finding, outcome := b.store.RecordAlert(alert)
+	alertIdentifier := alert.GetAlertIdentifier()
 
-	if isNew {
+	switch outcome {
+	case AlertRecordCreated:
 		log.Info().
 			Str("finding_id", finding.ID).
-			Str("alert_identifier", alert.GetAlertIdentifier()).
+			Str("alert_identifier", alertIdentifier).
 			Str("resource", finding.ResourceName).
 			Str("category", string(finding.Category)).
 			Str("severity", string(finding.Severity)).
 			Msg("Created unified finding from new alert")
+	case AlertRecordReopened:
+		log.Info().
+			Str("finding_id", finding.ID).
+			Str("alert_identifier", alertIdentifier).
+			Str("resource", finding.ResourceName).
+			Msg("Reopened unified finding: alert fired again")
+	}
 
-		// Trigger mini-patrol for the resource
-		if triggerPatrol && patrolFn != nil {
+	// Trigger mini-patrol for the resource
+	if triggerPatrol && patrolFn != nil {
+		accepted := policyFn == nil || policyFn(alert.GetAlertType(), alert.GetAlertLevel())
+		switch b.claimFiredTrigger(alert, outcome != AlertRecordUpdated, accepted) {
+		case firedTriggerClaimed:
 			go patrolFn(PatrolTriggerEvent{
 				ResourceID:      finding.ResourceID,
 				ResourceType:    finding.ResourceType,
 				Reason:          "alert_fired",
 				AlertType:       finding.AlertType,
-				AlertIdentifier: alert.GetAlertIdentifier(),
+				AlertIdentifier: alertIdentifier,
 				AlertLevel:      alert.GetAlertLevel(),
 				Value:           alert.GetValue(),
 				Threshold:       alert.GetThreshold(),
 				Message:         alert.GetMessage(),
 			})
-		}
-
-		// Schedule AI enhancement
-		if autoEnhance && enhanceFn != nil {
-			b.scheduleEnhancement(finding.ID, enhanceDelay, enhanceFn)
+		case firedTriggerRateLimited:
+			log.Info().
+				Str("alert_identifier", alertIdentifier).
+				Str("resource", finding.ResourceName).
+				Int("max_per_hour", maxAlertFiredTriggersPerHour).
+				Int("max_per_day", maxAlertFiredTriggersPerDay).
+				Msg("Alert bridge: alert fired again but this alert has used its Patrol triggers for now")
 		}
 	}
+
+	// Schedule AI enhancement
+	if outcome == AlertRecordCreated && autoEnhance && enhanceFn != nil {
+		b.scheduleEnhancement(finding.ID, enhanceDelay, enhanceFn)
+	}
+}
+
+type firedTriggerDecision int
+
+const (
+	// firedTriggerNone: nothing new to wake Patrol for (same episode at a
+	// level it already used, or the trigger policy does not accept the level).
+	firedTriggerNone firedTriggerDecision = iota
+	firedTriggerClaimed
+	firedTriggerRateLimited
+)
+
+func alertLevelRank(level string) int {
+	if strings.EqualFold(strings.TrimSpace(level), "critical") {
+		return 2
+	}
+	return 1
+}
+
+// seedEpisode records an alert that is already active as an episode that has
+// used its trigger at the alert's current level.
+func (b *AlertBridge) seedEpisode(alert AlertAdapter) {
+	alertIdentifier := alert.GetAlertIdentifier()
+	if alertIdentifier == "" {
+		return
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	episode := b.episodes[alertIdentifier]
+	if episode == nil {
+		episode = &alertEpisode{}
+		b.episodes[alertIdentifier] = episode
+	}
+	if episode.active {
+		return
+	}
+	episode.active = true
+	episode.startedAt = alert.GetStartTime()
+	episode.triggeredLevel = alertLevelRank(alert.GetAlertLevel())
+}
+
+// claimFiredTrigger decides whether this dispatch may wake Patrol and, if so,
+// spends the episode's trigger for the alert's level. fresh is true when the
+// store saw the alert fire for the first time or fire again after a resolve.
+func (b *AlertBridge) claimFiredTrigger(alert AlertAdapter, fresh, policyAccepts bool) firedTriggerDecision {
+	alertIdentifier := alert.GetAlertIdentifier()
+	now := b.now()
+
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	episode := b.episodes[alertIdentifier]
+	if episode == nil {
+		episode = &alertEpisode{}
+		b.episodes[alertIdentifier] = episode
+		fresh = true
+	}
+	// A resolve can be missed or arrive late, because fired and resolved
+	// callbacks run on separate goroutines. A later start time is then the
+	// only sign that the alert manager began a new occurrence.
+	startedAt := alert.GetStartTime()
+	if !fresh && (!episode.active || startedAt.After(episode.startedAt)) {
+		fresh = true
+	}
+	if fresh {
+		episode.active = true
+		episode.startedAt = startedAt
+		episode.triggeredLevel = 0
+	}
+
+	level := alertLevelRank(alert.GetAlertLevel())
+	if level <= episode.triggeredLevel || !policyAccepts {
+		return firedTriggerNone
+	}
+	// The level is spent whether or not the cap lets the trigger through, so
+	// one episode never retries by itself.
+	episode.triggeredLevel = level
+
+	dayAgo := now.Add(-24 * time.Hour)
+	hourAgo := now.Add(-time.Hour)
+	kept := episode.triggers[:0]
+	lastHour := 0
+	for _, at := range episode.triggers {
+		if !at.After(dayAgo) {
+			continue
+		}
+		kept = append(kept, at)
+		if at.After(hourAgo) {
+			lastHour++
+		}
+	}
+	episode.triggers = kept
+	if lastHour >= maxAlertFiredTriggersPerHour || len(kept) >= maxAlertFiredTriggersPerDay {
+		return firedTriggerRateLimited
+	}
+	episode.triggers = append(episode.triggers, now)
+	return firedTriggerClaimed
+}
+
+// endEpisode marks an alert identifier's firing episode as over.
+func (b *AlertBridge) endEpisode(alertIdentifier string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	episode := b.episodes[alertIdentifier]
+	if episode == nil {
+		return
+	}
+	episode.active = false
+	episode.triggeredLevel = 0
+	// Keep the entry only while it still counts toward the daily cap.
+	dayAgo := b.now().Add(-24 * time.Hour)
+	for _, at := range episode.triggers {
+		if at.After(dayAgo) {
+			return
+		}
+	}
+	delete(b.episodes, alertIdentifier)
 }
 
 // handleAlertResolved handles an alert being resolved
@@ -246,6 +430,8 @@ func (b *AlertBridge) handleAlertResolved(alertID string) {
 	if !running {
 		return
 	}
+
+	b.endEpisode(alertID)
 
 	// Get the finding before resolving
 	finding := b.store.GetByAlertIdentifier(alertID)

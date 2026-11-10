@@ -14210,3 +14210,13 @@ and stay `RequireAdmin`. Apprise CLI targets that are not already saved need
 `requestCarriesInstanceAuthority` on save and on inline test, because they run as
 this server. `internal/api/notifications_org_authority_test.go` holds the session,
 token, cross-organization and Apprise matrices.
+
+### Alert bridge trigger wiring sits beside the router (10 November 2026)
+
+The alert-bridge trigger closure moved out of `internal/api/router.go` into
+`alertBridgePatrolWiring` (`internal/api/ai_alert_bridge_trigger.go`), so the
+path from a real alert manager to a queued scoped Patrol run is tested without
+building a router (`internal/api/ai_alert_bridge_trigger_test.go`). It builds
+the same `PatrolScope` as before. The alert-trigger policy check moved from
+inside the trigger to the bridge's policy hook, which runs before the bridge
+counts a trigger. No route, request payload or response changes.
