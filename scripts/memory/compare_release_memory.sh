@@ -123,7 +123,10 @@ run_tree() {
   local pid=$!
   local driver=""
   if [[ "${ESTATE}" == agents ]]; then
-    python3 "${SCRIPT_DIR}/agent_load.py" --port "${port}" --duration "${DURATION}" \
+    # The sampling loop ends the driver with SIGTERM. A driver deadline equal
+    # to the sampling window can expire as that signal arrives, and Python then
+    # exits by the signal (143) instead of handling it, failing the run.
+    python3 "${SCRIPT_DIR}/agent_load.py" --port "${port}" --duration "$((DURATION + 120))" \
       --stats "${OUT_DIR}/agents-${label}.json" > "${OUT_DIR}/agents-${label}.log" 2>&1 &
     driver=$!
   fi
