@@ -202,6 +202,7 @@ func TestAutoUpdateTransactionLock(t *testing.T) {
 // matrix below; no native service or published input is used by this fixture.
 func TestAutoUpdateServiceStateFailsClosed(t *testing.T) {
 	runParallelPythonFixtureControls(t, repoFile("scripts", "tests", "test_auto_update_service_state.py"), "UpdateServiceState", []string{
+		"test_transaction_model_clock_is_not_advanced_by_wall_time",
 		"test_poll_timeout_retains_backup_without_start_or_rollback",
 		"test_manager_diagnostics_refuse_initial_update_and_restart",
 		"test_manager_diagnostics_after_install_retain_backup_without_mutation",
@@ -219,6 +220,7 @@ func TestAutoUpdateServiceDeadlines(t *testing.T) {
 	runParallelPythonFixtureControls(t, repoFile("scripts", "tests", "test_auto_update_service_state.py"), "UpdateServiceDeadlines", []string{
 		"test_slow_reads_count_toward_one_polling_budget",
 		"test_complete_active_response_after_deadline_is_uncertain",
+		"test_complete_inactive_response_after_deadline_is_uncertain",
 		"test_last_manager_probe_uses_only_remaining_budget",
 		"test_timeout_kills_partial_manager_and_pipe_holding_child",
 		"test_fast_and_delayed_active_states_still_complete",
@@ -234,6 +236,7 @@ func TestAutoUpdateLogSinkFailures(t *testing.T) {
 	runParallelPythonFixtureControls(t, repoFile("scripts", "tests", "test_auto_update_service_state.py"), "UpdateLogSinks", []string{
 		"test_logger_double_keeps_complete_argument_frames_and_exit_sequence",
 		"test_real_log_retains_each_sink_failure_in_conditional_calls",
+		"test_real_logger_deadline_preserves_stdout_exit_and_owned_cleanup",
 		"test_real_logger_failure_drains_installer_and_preserves_recovery",
 	}, 45*time.Second, "PULSE_AUTO_UPDATER_UNDER_TEST="+repoFile("scripts", "pulse-auto-update.sh"))
 }
