@@ -155,10 +155,10 @@ func (s *SQLiteResourceStore) ApplyCanonicalIDSuccessions(successions []Canonica
 	// predecessor's whole row has had its move: a row made earlier would win
 	// the re-key of a later predecessor into the same successor.
 	sharedAt := time.Now().UTC()
-	for _, group := range groups {
-		shared, err := shareRemediationLockAmongSQL(tx, settledGroup(group, rekeys), sharedAt)
+	for i, members := range settledGroups(groups, rekeys) {
+		shared, err := shareRemediationLockAmongSQL(tx, members, sharedAt)
 		if err != nil {
-			return fmt.Errorf("share remediation lock across linked resources %v: %w", group, err)
+			return fmt.Errorf("share remediation lock across linked resources %v: %w", groups[i], err)
 		}
 		carried = append(carried, shared...)
 	}
@@ -289,8 +289,8 @@ func (m *MemoryStore) ApplyCanonicalIDSuccessions(successions []CanonicalIDSucce
 	}
 	// See the SQLite store: sharing waits for the whole batch.
 	sharedAt := time.Now().UTC()
-	for _, group := range groups {
-		m.shareRemediationLockAmongLocked(settledGroup(group, rekeys), sharedAt)
+	for _, members := range settledGroups(groups, rekeys) {
+		m.shareRemediationLockAmongLocked(members, sharedAt)
 	}
 	return nil
 }

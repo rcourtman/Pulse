@@ -2,8 +2,10 @@ package resourceapi
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"testing"
 	"time"
 
@@ -37,6 +39,7 @@ func TestPruneResourceForListResponseDoesNotMutateSharedPMG(t *testing.T) {
 func TestSharedResourceListsCachedPerGenerationAndImmuneToRequestDecoration(t *testing.T) {
 	now := time.Date(2026, 8, 5, 12, 0, 0, 0, time.UTC)
 	h := NewQueryService(&config.Config{DataPath: t.TempDir()})
+	defer h.CloseStores()
 	h.SetStateProvider(resourceUnifiedSeedProvider{
 		snapshot: models.StateSnapshot{LastUpdate: now},
 		resources: []unifiedresources.Resource{
@@ -87,6 +90,45 @@ func TestSharedResourceListsCachedPerGenerationAndImmuneToRequestDecoration(t *t
 	h.HandleListResources(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	var listResponse ResourcesResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &listResponse); err != nil {
+		t.Fatal(err)
+	}
+	cachedStats := h.registryCache[cacheKey(orgID)].contractStats
+	if cachedStats == nil {
+		t.Fatal("list request did not retain its generation-owned structural summary")
+	}
+
+	// Exercise both consumers, not their source spelling: stats and a later
+	// list must reuse this generation's summary and return the same counts.
+	for _, path := range []string{"/api/resources/stats", "/api/resources?limit=1"} {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req = req.WithContext(context.WithValue(req.Context(), apicontext.OrgIDContextKey, orgID))
+		rec := httptest.NewRecorder()
+		var stats unifiedresources.ResourceStats
+		if path == "/api/resources/stats" {
+			h.HandleStats(rec, req)
+			if err := json.Unmarshal(rec.Body.Bytes(), &stats); err != nil {
+				t.Fatal(err)
+			}
+		} else {
+			h.HandleListResources(rec, req)
+			var page ResourcesResponse
+			if err := json.Unmarshal(rec.Body.Bytes(), &page); err != nil {
+				t.Fatal(err)
+			}
+			stats = page.Aggregations
+			if len(page.Data) != 1 || page.Meta.Total != listResponse.Meta.Total {
+				t.Fatal("paginated response lost its row limit or full-fleet total")
+			}
+		}
+		if rec.Code != http.StatusOK || !reflect.DeepEqual(stats, listResponse.Aggregations) {
+			t.Fatalf("list and stats disagree for %s: status=%d", path, rec.Code)
+		}
+		if h.registryCache[cacheKey(orgID)].contractStats != cachedStats {
+			t.Fatalf("%s replaced the unchanged generation's summary", path)
+		}
 	}
 
 	after, _, err := h.sharedPresentationResources(orgID)

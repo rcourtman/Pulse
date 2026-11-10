@@ -180,12 +180,9 @@ func (h *QueryService) HandleListResources(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Flat copy so the per-request decorations below stay top-level writes
-	// on request-owned elements while nested data remains shared.
-	allResources := flatCopyResources(sharedResources)
-	allResources = unified.AttachResourceHealth(allResources, h.resourceHealthAlerts(orgID), time.Now().UTC())
-	h.applyActionAvailability(r.Context(), allResources)
-	resources := allResources
+	// Filters, facets and structural aggregations only read the shared
+	// generation. Decorate a request-owned page below, not the entire fleet.
+	allResources := sharedResources
 	if unsupported := unsupportedResourceTypeFilterTokens(r.URL.Query().Get("type")); len(unsupported) > 0 {
 		http.Error(w, "unsupported type filter token(s): "+strings.Join(unsupported, ", "), http.StatusBadRequest)
 		return
@@ -198,11 +195,16 @@ func (h *QueryService) HandleListResources(w http.ResponseWriter, r *http.Reques
 	// ignoring the active route's type selection, otherwise a storage-only
 	// query could never prove that an Images or Networks workflow also exists.
 	facetFilters.types = nil
-	facetResources := applyFilters(allResources, facetFilters)
-	resources = applyFilters(resources, filters)
+	facets := buildResourceListFacets(allResources, facetFilters)
+	resources := applyFilters(allResources, filters)
 	applySorting(resources, filters.sortField, filters.sortOrder)
 
 	paged, meta := paginate(resources, filters.page, filters.limit)
+	// Health and action readiness remain live per request, including when the
+	// registry and its structural counts are unchanged. Neither participates
+	// in filtering, ordering, facets or the structural aggregation contract.
+	paged = unified.AttachResourceHealth(paged, h.resourceHealthAlerts(orgID), time.Now().UTC())
+	h.applyActionAvailability(r.Context(), paged)
 	attachDiscoveryTargets(paged)
 	attachMetricsTargets(paged, registry)
 	paged = unified.RefreshCanonicalMetadataSlice(paged)
@@ -210,8 +212,7 @@ func (h *QueryService) HandleListResources(w http.ResponseWriter, r *http.Reques
 
 	// Build aggregations from the same presentation resource set returned by
 	// the list, so top-level host coalescing cannot drift between counts and rows.
-	stats := computeResourceContractStats(allResources)
-	stats.PolicyPosture = resourcePolicyPostureAggregation(allResources)
+	stats := h.sharedResourceContractStats(orgID, registry, allResources)
 
 	applyResourceContractTypes(paged)
 
@@ -219,7 +220,7 @@ func (h *QueryService) HandleListResources(w http.ResponseWriter, r *http.Reques
 	response.Data = paged
 	response.Meta = meta
 	response.Aggregations = stats
-	response.Facets = buildResourceListFacets(facetResources)
+	response.Facets = facets
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response.NormalizeCollections())
@@ -759,15 +760,14 @@ func (h *QueryService) HandleStats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	orgID := apicontext.OrgID(r.Context())
-	allResources, _, err := h.sharedPresentationResources(orgID)
+	allResources, registry, err := h.sharedPresentationResources(orgID)
 	if err != nil {
 		http.Error(w, sanitizeError(err, "Internal server error"), http.StatusInternalServerError)
 		return
 	}
 
 	// Both aggregations are read-only over the shared list.
-	stats := computeResourceContractStats(allResources)
-	stats.PolicyPosture = resourcePolicyPostureAggregation(allResources)
+	stats := h.sharedResourceContractStats(orgID, registry, allResources)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(stats)
@@ -1491,12 +1491,16 @@ type ResourceListFacets struct {
 	IncidentCount int                          `json:"incidentCount"`
 }
 
-func buildResourceListFacets(resources []unified.Resource) ResourceListFacets {
+func buildResourceListFacets(resources []unified.Resource, filters listFilters) ResourceListFacets {
 	facets := ResourceListFacets{
 		ByType: make(map[unified.ResourceType]int, 8),
 	}
-	for _, resource := range resources {
-		facets.ByType[resourceContractType(resource)]++
+	for i := range resources {
+		resource := &resources[i]
+		if !resourceMatchesFilters(resource, filters) {
+			continue
+		}
+		facets.ByType[resourceContractType(*resource)]++
 		facets.IncidentCount += resource.IncidentCount
 	}
 	return facets
@@ -1649,22 +1653,14 @@ type registryCacheEntry struct {
 	staleThresholds map[unified.DataSource]time.Duration
 	// rawList and presentation are lazily built once per registry generation
 	// and SHARED between requests. Both the slices and the nested data of
-	// their elements are read-only: take a flat copy (flatCopyResources)
-	// before any top-level field writes, and never write through nested
-	// pointers or into nested maps/slices of shared elements.
+	// their elements are read-only: take a request-owned slice (as filtering
+	// and AttachResourceHealth do) before top-level writes, and never write
+	// through nested pointers or into nested maps/slices of shared elements.
 	rawList      []unified.Resource
 	presentation []unified.Resource
-}
-
-// flatCopyResources returns a top-level copy of a shared resource list.
-// Element values are copies, so top-level field writes and in-place
-// reordering are safe; nested data stays shared with the cache, so writes
-// through nested pointers remain forbidden (clone the nested struct first,
-// as pruneResourceForListResponse does for PMG).
-func flatCopyResources(shared []unified.Resource) []unified.Resource {
-	out := make([]unified.Resource, len(shared))
-	copy(out, shared)
-	return out
+	// Structural only, derived from this presentation generation. All nested
+	// maps/pointers are read-only; live health/readiness are never stored here.
+	contractStats *unified.ResourceStats
 }
 
 // sharedPresentationResources returns the org's cached presentation-shape
@@ -1694,6 +1690,31 @@ func (h *QueryService) sharedPresentationResources(orgID string) ([]unified.Reso
 	}
 	h.cacheMu.Unlock()
 	return list, registry, nil
+}
+
+// sharedResourceContractStats reuses only generation-owned structural
+// metadata. Request health, actor context and executable readiness must stay
+// outside this cache. Returning a value still shares its read-only maps.
+func (h *QueryService) sharedResourceContractStats(orgID string, registry *unified.ResourceRegistry, resources []unified.Resource) unified.ResourceStats {
+	key := cacheKey(orgID)
+	h.cacheMu.Lock()
+	if entry, ok := h.registryCache[key]; ok && entry.registry == registry && entry.contractStats != nil {
+		stats := *entry.contractStats
+		h.cacheMu.Unlock()
+		return stats
+	}
+	h.cacheMu.Unlock()
+
+	stats := computeResourceContractStats(resources)
+	stats.PolicyPosture = resourcePolicyPostureAggregation(resources)
+
+	h.cacheMu.Lock()
+	if entry, ok := h.registryCache[key]; ok && entry.registry == registry {
+		entry.contractStats = &stats
+		h.registryCache[key] = entry
+	}
+	h.cacheMu.Unlock()
+	return stats
 }
 
 // sharedRawResources is sharedPresentationResources for the raw (uncoalesced)
@@ -2110,95 +2131,103 @@ func parseListFilters(r *http.Request) listFilters {
 
 func applyFilters(resources []unified.Resource, filters listFilters) []unified.Resource {
 	out := make([]unified.Resource, 0, len(resources))
-	for _, r := range resources {
-		if len(filters.types) > 0 {
-			if _, ok := filters.types[resourceContractType(r)]; !ok {
-				continue
-			}
+	for i := range resources {
+		if resourceMatchesFilters(&resources[i], filters) {
+			out = append(out, resources[i])
 		}
-		if len(filters.sources) > 0 {
-			matched := false
-			for _, source := range r.Sources {
-				if _, ok := filters.sources[source]; ok {
-					matched = true
-					break
-				}
-			}
-			if !matched {
-				continue
-			}
-		}
-		if len(filters.excludedSources) > 0 {
-			excluded := false
-			for _, source := range r.Sources {
-				if _, ok := filters.excludedSources[source]; ok {
-					excluded = true
-					break
-				}
-			}
-			if excluded {
-				continue
-			}
-		}
-		if len(filters.statuses) > 0 {
-			if _, ok := filters.statuses[r.Status]; !ok {
-				continue
-			}
-		}
-		if filters.parent != "" {
-			if r.ParentID == nil || *r.ParentID != filters.parent {
-				continue
-			}
-		}
-		if filters.cluster != "" {
-			cluster := strings.ToLower(filters.cluster)
-			identityCluster := strings.ToLower(r.Identity.ClusterName)
-			proxmoxCluster := ""
-			if r.Proxmox != nil {
-				proxmoxCluster = strings.ToLower(r.Proxmox.ClusterName)
-			}
-			dockerSwarmClusterName := ""
-			dockerSwarmClusterID := ""
-			if r.Docker != nil && r.Docker.Swarm != nil {
-				dockerSwarmClusterName = strings.ToLower(strings.TrimSpace(r.Docker.Swarm.ClusterName))
-				dockerSwarmClusterID = strings.ToLower(strings.TrimSpace(r.Docker.Swarm.ClusterID))
-			}
-
-			if identityCluster != cluster && proxmoxCluster != cluster && dockerSwarmClusterName != cluster && dockerSwarmClusterID != cluster {
-				continue
-			}
-		}
-		if filters.namespace != "" {
-			if r.Kubernetes == nil {
-				continue
-			}
-			want := strings.ToLower(filters.namespace)
-			got := strings.ToLower(strings.TrimSpace(r.Kubernetes.Namespace))
-			if got != want {
-				continue
-			}
-		}
-		if filters.query != "" {
-			name := strings.ToLower(r.Name)
-			if !strings.Contains(name, filters.query) {
-				continue
-			}
-		}
-		if len(filters.tags) > 0 {
-			matched := false
-			for _, tag := range r.Tags {
-				if _, ok := filters.tags[strings.ToLower(tag)]; ok {
-					matched = true
-					break
-				}
-			}
-			if !matched {
-				continue
-			}
-		}
-		out = append(out, r)
 	}
 	return out
+}
+
+// resourceMatchesFilters borrows a read-only row, so facets can count the
+// same scope without allocating another fleet-sized Resource slice.
+func resourceMatchesFilters(r *unified.Resource, filters listFilters) bool {
+	if len(filters.types) > 0 {
+		if _, ok := filters.types[resourceContractType(*r)]; !ok {
+			return false
+		}
+	}
+	if len(filters.sources) > 0 {
+		matched := false
+		for _, source := range r.Sources {
+			if _, ok := filters.sources[source]; ok {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return false
+		}
+	}
+	if len(filters.excludedSources) > 0 {
+		excluded := false
+		for _, source := range r.Sources {
+			if _, ok := filters.excludedSources[source]; ok {
+				excluded = true
+				break
+			}
+		}
+		if excluded {
+			return false
+		}
+	}
+	if len(filters.statuses) > 0 {
+		if _, ok := filters.statuses[r.Status]; !ok {
+			return false
+		}
+	}
+	if filters.parent != "" {
+		if r.ParentID == nil || *r.ParentID != filters.parent {
+			return false
+		}
+	}
+	if filters.cluster != "" {
+		cluster := strings.ToLower(filters.cluster)
+		identityCluster := strings.ToLower(r.Identity.ClusterName)
+		proxmoxCluster := ""
+		if r.Proxmox != nil {
+			proxmoxCluster = strings.ToLower(r.Proxmox.ClusterName)
+		}
+		dockerSwarmClusterName := ""
+		dockerSwarmClusterID := ""
+		if r.Docker != nil && r.Docker.Swarm != nil {
+			dockerSwarmClusterName = strings.ToLower(strings.TrimSpace(r.Docker.Swarm.ClusterName))
+			dockerSwarmClusterID = strings.ToLower(strings.TrimSpace(r.Docker.Swarm.ClusterID))
+		}
+
+		if identityCluster != cluster && proxmoxCluster != cluster && dockerSwarmClusterName != cluster && dockerSwarmClusterID != cluster {
+			return false
+		}
+	}
+	if filters.namespace != "" {
+		if r.Kubernetes == nil {
+			return false
+		}
+		want := strings.ToLower(filters.namespace)
+		got := strings.ToLower(strings.TrimSpace(r.Kubernetes.Namespace))
+		if got != want {
+			return false
+		}
+	}
+	if filters.query != "" {
+		name := strings.ToLower(r.Name)
+		if !strings.Contains(name, filters.query) {
+			return false
+		}
+	}
+	if len(filters.tags) > 0 {
+		matched := false
+		for _, tag := range r.Tags {
+			if _, ok := filters.tags[strings.ToLower(tag)]; ok {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return false
+		}
+	}
+	return true
 }
 
 func applySorting(resources []unified.Resource, field, order string) {
