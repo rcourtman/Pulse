@@ -737,10 +737,14 @@ func resolvePatrolScopeState(state patrolRuntimeState, scope PatrolScope) (Patro
 		}
 		if patrolAlertBelongsToScope(state, alert.ResourceID, included) {
 			scope.AlertContext = patrolAlertContext(alert)
-			if scope.alertResourceTypeHint {
-				scope.ResourceTypes = append([]string(nil), scope.resolvedResourceTypes...)
-			}
 		}
+	}
+	// An alert names one exact resource. Once that identity has resolved, the
+	// type the inventory holds for it is the truth, and the producer's hint
+	// (the unified store's guess, or an alert kind passed as a type) can only
+	// filter the owner back out.
+	if scope.alertResourceTypeHint && len(scope.resolvedResourceTypes) > 0 {
+		scope.ResourceTypes = append([]string(nil), scope.resolvedResourceTypes...)
 	}
 	if len(expanded) > 0 {
 		filtered := filterPatrolStateByScopeState(state, scope)

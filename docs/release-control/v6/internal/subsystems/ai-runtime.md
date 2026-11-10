@@ -4424,6 +4424,58 @@ change. Proofs: `internal/ai/unified/bridge_test.go`,
 `internal/ai/unified/bridge_alert_manager_test.go` and
 `internal/api/ai_alert_bridge_trigger_test.go`.
 
+Alert scopes carry the producer's resource type only as a hint. The bridge
+wiring builds `alert_fired` and `alert_cleared` scopes through
+`AlertTriggeredPatrolScope` and `AlertClearedPatrolScope`, the flapping scope
+sets the same flag, and `resolvePatrolScopeState` replaces a hinted type with
+the type of the resource the exact identity resolved to. Before, a host
+filesystem alert arrived typed `agent-disk` and a flapping alert arrived typed
+with its alert kind (`metric-threshold`, `connectivity`). The identity
+resolved, the type filter then removed the owner, and the run ended "No
+resources matched requested Patrol scope". A hint never widens a scope: an
+identity that does not resolve is still refused.
+
+When an alert clears, `PatrolService.ResolveFindingsForClearedAlert` closes the
+open findings that restate it: a finding stamped as its mirror, linked by
+identifier, or on the same resource with the same condition class
+(`findingMirrorsAlert`). It does so whatever the investigation concluded,
+including `needs_attention`, and whether or not the resource still exists, so
+a recreated container does not leave its old finding open. A finding about
+something the alert did not state is left for the verification run. Scoped
+runs now stamp alert mirrors when they finish, as full runs do, so a finding
+raised by an alert-triggered run is tied to its alert at once. Proofs:
+`internal/ai/patrol_alert_cleared_test.go` and
+`internal/api/ai_alert_bridge_trigger_test.go`.
+
+An alert that is active and has not woken Patrol in its current episode is
+looked at once after it has stayed active for 10 minutes
+(`sustainedAlertDelay`). That covers a warning under a critical-only minimum
+severity and an alert that was already active when Pulse started, for which
+the delay counts from the bridge start. The bridge checks every 30 seconds and
+asks `SustainedTriggerPolicyFunc`, wired to
+`alertBridgePatrolWiring.acceptsSustainedAlert`. The policy runs the trigger
+only where Patrol is on and its effective mode investigates findings (anything
+but `monitor`, so Watch only and free installs get no runs from it), only with
+alert triggers on and the alert type allowed, and not when
+`PatrolService.AlertExaminedSince` finds a completed run that named the alert
+since the episode began. Run history is persisted, so that last check keeps
+the rule to one look per episode across restarts.
+`patrol_alert_trigger_min_severity` keeps its default and its meaning: it
+decides which alerts wake Patrol the moment they fire.
+
+Bounds on the sustained trigger: one per alert episode, counted inside the
+per-identifier caps (3 in an hour, 6 in 24 hours), and at most 4 an hour across
+all alerts (`maxSustainedTriggersPerHour`). Alerts past the hourly cap wait,
+critical first and then the longest active. The run is an `alert_fired` scoped
+run marked `PatrolScope.AlertSustained` and queued at priority 50, below a
+freshly fired alert. Its prompt asks for what the alert does not already say
+(the cause, what is using the space, why the workload stopped, whether Pulse
+has an action) and tells the model not to report a finding that only repeats
+the alert. Proofs: `internal/ai/unified/bridge_test.go`,
+`internal/ai/unified/bridge_alert_manager_test.go`,
+`internal/api/ai_alert_bridge_trigger_test.go` and
+`internal/ai/patrol_alert_sustained_test.go`.
+
 The route-backed Proxmox platform tab is app-shell navigation only. Adding the
 tab through `frontend-modern/src/App.tsx` and
 `frontend-modern/src/AppLayout.tsx` must not fork Assistant or Patrol shell

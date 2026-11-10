@@ -1485,7 +1485,16 @@ toast and leaves the edit in the form to retry, and a successful save reloads
 the form from the response. The selector reads
 `patrol_alert_trigger_min_severity` from the settings response, defaulting to
 critical-only, and must keep using the shared AI settings form rather than
-forking a Patrol-local form or save path.
+forking a Patrol-local form or save path. While the selector reads Critical
+only and the install can choose a Patrol mode (the Patrol mode availability
+presentation is `available`), it carries one help line through `FormSelect`'s
+`help` slot: in Ask first and Autopilot, Patrol also looks at warnings that
+stay active for 10 minutes, at most 4 an hour. The line is hidden for Warning
+and critical, where warnings wake Patrol as they fire, and on installs limited
+to Watch only, which never get those runs. Its two numbers restate
+`sustainedAlertDelay` and `maxSustainedTriggersPerHour` in
+`internal/ai/unified/bridge.go` and must change with them. The rule has no
+switch of its own on this page.
 
 The Patrol page keeps the Patrol mode policy on its own header, not on
 Settings > Pulse Intelligence > Patrol: the first configurable decision remains

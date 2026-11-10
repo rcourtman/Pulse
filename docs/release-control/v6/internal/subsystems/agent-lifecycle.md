@@ -5960,6 +5960,11 @@ That callback is now `alertBridgePatrolWiring` in
 bridge's trigger policy hook, before an `alert_fired` event exists, and the
 bridge sends at most one event per firing episode and level, capped per alert
 identifier. No agent route, registration, heartbeat or command path changes.
+An alert on an agent's filesystem (`agent:<id>/disk:<mount>`) now resolves to
+the agent that owns it for `alert_fired`, `alert_cleared` and flapping runs.
+That is read-only identity resolution and changes no agent lifecycle state.
+The sustained alert trigger adds scoped Watch runs only. It starts no agent
+command and changes no agent state.
 
 `/api/agent/events` is the SSE stream agents subscribe to for
 real-time notifications: `finding.created` when a new finding is

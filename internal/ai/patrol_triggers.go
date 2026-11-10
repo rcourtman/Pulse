@@ -43,13 +43,14 @@ func BackgroundAutomationEventTriggerBlock() PatrolEventTriggerBlock {
 
 // Trigger priority values control which scoped patrol runs first when multiple are queued.
 const (
-	triggerPriorityManual       = 100 // User-initiated patrols run first
-	triggerPriorityAlertFired   = 80  // New alerts are high priority
-	triggerPriorityObjective    = 70  // Retained-objective evidence needs prompt investigation
-	triggerPriorityAnomaly      = 60  // Anomaly detection is medium-high
-	triggerPriorityAlertCleared = 40  // Cleared alerts are lower priority
-	triggerPriorityUserAction   = 30  // User finding actions
-	triggerPriorityScheduled    = 20  // Periodic background patrol
+	triggerPriorityManual         = 100 // User-initiated patrols run first
+	triggerPriorityAlertFired     = 80  // New alerts are high priority
+	triggerPriorityObjective      = 70  // Retained-objective evidence needs prompt investigation
+	triggerPriorityAnomaly        = 60  // Anomaly detection is medium-high
+	triggerPrioritySustainedAlert = 50  // Alerts that stayed active without a run
+	triggerPriorityAlertCleared   = 40  // Cleared alerts are lower priority
+	triggerPriorityUserAction     = 30  // User finding actions
+	triggerPriorityScheduled      = 20  // Periodic background patrol
 )
 
 const (
@@ -91,6 +92,10 @@ type PatrolScope struct {
 	// so an alert-triggered patrol can investigate the actual breach instead of
 	// re-checking the resource generically. Nil for non-alert triggers.
 	AlertContext *PatrolAlertContext
+	// AlertSustained marks an alert_fired run that was asked for because the
+	// alert stayed active without a Patrol run, not because it just fired.
+	// The run looks for what the alert does not already say.
+	AlertSustained bool
 	// FindingID is the ID of the finding that triggered this patrol (if applicable)
 	FindingID string
 	// NoStream skips streaming updates (phase, content, subscriber notifications).
@@ -711,6 +716,16 @@ func AlertTriggeredPatrolScope(alertIdentifier, resourceID, resourceType, alertT
 	}
 }
 
+// SustainedAlertPatrolScope creates a patrol scope for an alert that has
+// stayed active without a Patrol run. It ranks below a freshly fired alert and
+// an anomaly, and above a cleared alert.
+func SustainedAlertPatrolScope(alertIdentifier, resourceID, resourceType, alertType string) PatrolScope {
+	scope := AlertTriggeredPatrolScope(alertIdentifier, resourceID, resourceType, alertType)
+	scope.AlertSustained = true
+	scope.Priority = triggerPrioritySustainedAlert
+	return scope
+}
+
 // AlertClearedPatrolScope creates a patrol scope for an alert that cleared
 func AlertClearedPatrolScope(alertIdentifier, resourceID, resourceType string) PatrolScope {
 	return PatrolScope{
@@ -802,12 +817,13 @@ func FlappingPostmortemPatrolScope(alertIdentifier, resourceID, resourceType, al
 		context = "Flapping detected"
 	}
 	return PatrolScope{
-		ResourceIDs:     []string{resourceID},
-		ResourceTypes:   patrolScopeResourceTypes(resourceType),
-		Depth:           PatrolDepthQuick,
-		Reason:          TriggerReasonAlertFlapping,
-		Context:         context,
-		Priority:        triggerPriorityAnomaly,
-		AlertIdentifier: alertIdentifier,
+		ResourceIDs:           []string{resourceID},
+		ResourceTypes:         patrolScopeResourceTypes(resourceType),
+		Depth:                 PatrolDepthQuick,
+		Reason:                TriggerReasonAlertFlapping,
+		Context:               context,
+		Priority:              triggerPriorityAnomaly,
+		AlertIdentifier:       alertIdentifier,
+		alertResourceTypeHint: true,
 	}
 }

@@ -2,6 +2,7 @@ package unified
 
 import (
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -70,4 +71,35 @@ func TestAlertManagerToBridge_RepeatHealthAlertWakesPatrolAgain(t *testing.T) {
 		t.Fatalf("expected the same alert identifier on the repeat, got %q then %q",
 			first.AlertIdentifier, second.AlertIdentifier)
 	}
+}
+
+// A warning from a real alert manager does not wake Patrol under the default
+// minimum severity. Once it has stayed active for the delay, the sustained
+// trigger asks Patrol to look, once.
+func TestAlertManagerToBridge_WarningThatStaysActiveWakesPatrolOnce(t *testing.T) {
+	manager, bridge, recorder := newManagerBackedBridge(t, alerts.ActivationActive)
+	bridge.SetPatrolTriggerPolicy(func(_, alertLevel string) bool { return alertLevel == "critical" })
+	bridge.SetSustainedTriggerPolicy(func(PatrolTriggerEvent, time.Time) SustainedTriggerDecision {
+		return SustainedTriggerRun
+	})
+
+	// Any health state other than healthy, starting or unhealthy is a warning.
+	manager.CheckDockerHost(dockerHostWithHealth("degraded"))
+	recorder.expectNone(t)
+
+	bridge.checkSustainedAlerts()
+	recorder.expectNone(t)
+
+	fired := time.Now()
+	bridge.mu.Lock()
+	bridge.now = func() time.Time { return fired.Add(sustainedAlertDelay + time.Minute) }
+	bridge.mu.Unlock()
+	bridge.checkSustainedAlerts()
+	event := recorder.expect(t, "alert_fired")
+	if !event.Sustained || event.AlertLevel != "warning" || event.AlertType != "docker-container-health" {
+		t.Fatalf("unexpected sustained trigger: %+v", event)
+	}
+
+	bridge.checkSustainedAlerts()
+	recorder.expectNone(t)
 }
