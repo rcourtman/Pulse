@@ -19,8 +19,10 @@ const endpoint = '/api/admin/webhooks/audit';
 const orgID = 'estate/east';
 const token = 'synthetic-audit-webhook-token';
 const csrf = 'synthetic-cold-csrf';
-const firstURL = 'https://audit.example.test/events?receiver=first';
-const selectedURL = 'https://audit.example.test/events?receiver=second%2Fopaque';
+const firstURL =
+  'https://audit.example.test/pulse/security/production/receivers?destination=operations-north';
+const selectedURL =
+  'https://audit.example.test/pulse/security/production/receivers?destination=operations-south%2Fopaque';
 const addedURL = 'https://audit.example.test/events?receiver=third';
 const otherURL = 'https://other.example.test/events';
 const readError = 'Audit webhook configuration could not be loaded.';
@@ -79,7 +81,7 @@ const add = (draft = addedURL) => {
 const openRemove = (url = selectedURL) => {
   // Locate the actual endpoint card, not the first matching remove button.
   const card = screen.getByTitle(url).parentElement!.parentElement!;
-  fireEvent.click(within(card).getByRole('button', { name: 'Remove webhook endpoint' }));
+  fireEvent.click(within(card).getByRole('button', { name: `Remove webhook endpoint ${url}` }));
   return screen.getByRole('dialog', { name: 'Remove audit webhook' });
 };
 const confirmRemove = () =>
@@ -100,7 +102,7 @@ const mount = (props: AuditWebhookPanelProps = {}) => {
 const loaded = async (urls = [firstURL, selectedURL]) => {
   for (const url of urls) await screen.findByTitle(url);
   await waitFor(() =>
-    expect(screen.getAllByRole('button', { name: 'Remove webhook endpoint' })).toHaveLength(
+    expect(screen.getAllByRole('button', { name: /^Remove webhook endpoint / })).toHaveLength(
       urls.length,
     ),
   );
@@ -183,6 +185,33 @@ afterEach(() => {
 });
 
 describe('Audit Webhook rendered controls through the real HTTP client', () => {
+  it('names each same-prefix destination before opening its exact removal confirmation', async () => {
+    mount();
+    await loaded();
+    for (const url of [firstURL, selectedURL]) {
+      expect(screen.getByRole('button', { name: `Remove webhook endpoint ${url}` })).toBeEnabled();
+      expect(screen.getByTitle(url)).toHaveTextContent(url);
+    }
+    expect(
+      screen.queryByRole('button', { name: 'Remove webhook endpoint' }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: `Remove webhook endpoint ${selectedURL}`,
+      }),
+    );
+    const dialog = screen.getByRole('dialog', { name: 'Remove audit webhook' });
+    expect(within(dialog).getByText(selectedURL, { exact: true })).toBeInTheDocument();
+    expect(within(dialog).queryByText(firstURL, { exact: true })).not.toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(inventory).toEqual([firstURL, selectedURL]);
+    expect(writes()).toHaveLength(0);
+    expect(healthReads()).toHaveLength(0);
+    expectWire(reads()[0], 'GET');
+    expectAuthRetained();
+  });
+
   it('adds to the complete saved list only after cold CSRF preparation, without erasing a newer draft', async () => {
     const health = deferred<Response>();
     const save = deferred<Response>();
@@ -198,7 +227,7 @@ describe('Audit Webhook rendered controls through the real HTTP client', () => {
     expect(screen.getByTitle(firstURL)).toBeInTheDocument();
     expect(screen.getByTitle(selectedURL)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Add Endpoint' })).toBeDisabled();
-    for (const button of screen.getAllByRole('button', { name: 'Remove webhook endpoint' }))
+    for (const button of screen.getAllByRole('button', { name: /^Remove webhook endpoint / }))
       expect(button).toBeDisabled();
     fireEvent.input(input(), { target: { value: otherURL } });
     fireEvent.keyDown(input(), { key: 'Enter' });
@@ -439,7 +468,7 @@ describe('Audit Webhook rendered controls through the real HTTP client', () => {
     await loaded();
     expect(input()).toBeDisabled();
     fireEvent.keyDown(input(), { key: 'Enter' });
-    for (const button of screen.getAllByRole('button', { name: 'Remove webhook endpoint' }))
+    for (const button of screen.getAllByRole('button', { name: /^Remove webhook endpoint / }))
       expect(button).toBeDisabled();
     expect(writes()).toHaveLength(0);
 

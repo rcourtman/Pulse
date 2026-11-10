@@ -129,14 +129,14 @@ describe('audit webhook read admission', () => {
     apiFetchJSON.mockReturnValueOnce(refresh.promise);
     eventBus.emit('org_switched', 'tenant-a');
     expect(screen.getByText(existingUrl)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Remove webhook endpoint' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /^Remove webhook endpoint / })).toBeDisabled();
     fireEvent.keyDown(input, { key: 'Enter' });
     refresh.reject(new Error('read unavailable'));
     await screen.findByText(readErrorMessage);
     expect(screen.getByText(/Last loaded destinations are shown below/)).toBeInTheDocument();
     expect(screen.getByText(existingUrl)).toBeInTheDocument();
     expect(input).toHaveValue(addedUrl);
-    expect(screen.getByRole('button', { name: 'Remove webhook endpoint' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /^Remove webhook endpoint / })).toBeDisabled();
     expect(writeCalls()).toHaveLength(0);
     fireEvent.click(screen.getByRole('button', { name: 'Retry loading' }));
     await waitFor(() => expect(screen.queryByText(readErrorMessage)).not.toBeInTheDocument());
@@ -211,7 +211,7 @@ describe('audit webhook read admission', () => {
 
   it('rejects a stale removal confirmation when org storage changes without an event', async () => {
     await openPanel();
-    fireEvent.click(screen.getByRole('button', { name: 'Remove webhook endpoint' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Remove webhook endpoint / }));
     selectedOrg = 'tenant-b';
     fireEvent.click(screen.getByRole('button', { name: 'Remove webhook' }));
     expect(writeCalls()).toHaveLength(0);
@@ -287,7 +287,7 @@ describe('audit webhook read admission', () => {
     expect(screen.getByRole('textbox', { name: 'Audit webhook URL' })).toHaveValue('');
     expect(screen.getByRole('button', { name: 'Add Endpoint' })).toBeDisabled();
     expect(
-      screen.queryByRole('button', { name: 'Remove webhook endpoint' }),
+      screen.queryByRole('button', { name: /^Remove webhook endpoint / }),
     ).not.toBeInTheDocument();
     expect(showSuccess).not.toHaveBeenCalled();
     expect(apiFetchJSON).toHaveBeenCalledTimes(3);
@@ -323,7 +323,7 @@ describe('audit webhook read admission', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Retry loading' }));
     await screen.findByText(existingUrl);
     expect(screen.getByRole('textbox', { name: 'Audit webhook URL' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Remove webhook endpoint' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /^Remove webhook endpoint / })).toBeDisabled();
     expect(writeCalls()).toHaveLength(0);
   });
 });
@@ -365,7 +365,7 @@ describe('audit webhook entry recovery', () => {
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Add Endpoint' })).toBeDisabled(),
     );
-    expect(screen.getByRole('button', { name: 'Remove webhook endpoint' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /^Remove webhook endpoint / })).toBeDisabled();
     fireEvent.input(input, { target: { value: 'https://next.example.test/events' } });
     fireEvent.keyDown(input, { key: 'Enter' });
     expect(writeCalls()).toHaveLength(1);
@@ -378,13 +378,13 @@ describe('audit webhook entry recovery', () => {
   it('requires explicit removal and retains the endpoint and draft after a refused removal', async () => {
     const input = await openPanel();
     fireEvent.input(input, { target: { value: addedUrl } });
-    fireEvent.click(screen.getByRole('button', { name: 'Remove webhook endpoint' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Remove webhook endpoint / }));
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(writeCalls()).toHaveLength(0);
     expect(screen.getByText(existingUrl)).toBeInTheDocument();
 
     apiFetchJSON.mockRejectedValueOnce(new Error('save refused')).mockResolvedValueOnce({});
-    fireEvent.click(screen.getByRole('button', { name: 'Remove webhook endpoint' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Remove webhook endpoint / }));
     fireEvent.click(screen.getByRole('button', { name: 'Remove webhook' }));
     await screen.findByRole('alert');
     expect(screen.getByRole('dialog', { name: 'Remove audit webhook' })).toBeInTheDocument();
@@ -418,7 +418,7 @@ describe('audit webhook entry recovery', () => {
     const input = await openPanel(false);
     expect(input).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Add Endpoint' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Remove webhook endpoint' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /^Remove webhook endpoint / })).toBeDisabled();
     fireEvent.keyDown(input, { key: 'Enter' });
     expect(writeCalls()).toHaveLength(0);
   });
@@ -477,7 +477,7 @@ describe('audit webhook reader lifetime', () => {
     render(() => <AuditWebhookPanel currentUser="reader" canManage={manage()} />);
     await screen.findByText(existingUrl);
     fireEvent.input(screen.getByRole('textbox'), { target: { value: addedUrl } });
-    fireEvent.click(screen.getByRole('button', { name: 'Remove webhook endpoint' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Remove webhook endpoint / }));
     const read = defer<{ urls: string[] }>();
     apiFetchJSON.mockReturnValueOnce(read.promise);
     setManage(false);
@@ -487,12 +487,12 @@ describe('audit webhook reader lifetime', () => {
     expect(screen.getByRole('textbox')).toBeDisabled();
     read.resolve({ urls: [existingUrl] });
     await screen.findByText(existingUrl);
-    expect(screen.getByRole('button', { name: 'Remove webhook endpoint' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /^Remove webhook endpoint / })).toBeDisabled();
     fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Enter' });
     expect(writeCalls()).toHaveLength(0);
     setManage(true);
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Remove webhook endpoint' })).toBeEnabled(),
+      expect(screen.getByRole('button', { name: /^Remove webhook endpoint / })).toBeEnabled(),
     );
     expect(screen.getByRole('textbox')).toHaveValue('');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
@@ -564,7 +564,7 @@ describe('audit webhook reader lifetime', () => {
     render(() => <AuditWebhookPanel {...reader()} />);
     await screen.findByText(existingUrl);
     fireEvent.input(screen.getByRole('textbox'), { target: { value: addedUrl } });
-    fireEvent.click(screen.getByRole('button', { name: 'Remove webhook endpoint' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Remove webhook endpoint / }));
     setReader({ ...reader() });
     expect(screen.getByRole('dialog', { name: 'Remove audit webhook' })).toBeInTheDocument();
     expect(screen.getByRole('textbox')).toHaveValue(addedUrl);

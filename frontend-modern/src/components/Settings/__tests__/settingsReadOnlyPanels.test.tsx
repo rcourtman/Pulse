@@ -211,14 +211,14 @@ describe('settings read-only panel states', () => {
   it('returns focus to the endpoint field after removing a webhook row', async () => {
     render(() => <AuditWebhookPanel />);
 
-    const removeButton = await screen.findByRole('button', { name: 'Remove webhook endpoint' });
+    const removeButton = await screen.findByRole('button', { name: /^Remove webhook endpoint / });
     fireEvent.click(removeButton);
     expect(screen.getByRole('dialog', { name: 'Remove audit webhook' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Remove webhook' }));
     await waitFor(() => {
       expect(
-        screen.queryByRole('button', { name: 'Remove webhook endpoint' }),
+        screen.queryByRole('button', { name: /^Remove webhook endpoint / }),
       ).not.toBeInTheDocument();
     });
     expect(screen.getByPlaceholderText('https://your-api.com/webhook')).toHaveFocus();

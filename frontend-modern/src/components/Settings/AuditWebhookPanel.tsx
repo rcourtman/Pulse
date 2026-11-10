@@ -115,7 +115,7 @@ export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
       >
         <div class="space-y-6">
           <SettingsPanel title="Audit Webhooks" noPadding bodyClass="divide-y divide-border">
-            <div class="space-y-6 p-4 sm:p-6">
+            <div class="space-y-4 p-3 sm:space-y-6 sm:p-6">
               <Show when={!canManage()}>
                 <div class={AUDIT_WEBHOOK_READONLY_NOTICE_CLASS}>
                   Audit webhook configuration is read-only for this account.
@@ -158,22 +158,27 @@ export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
                     {getAuditWebhookLoadingState().text}
                   </p>
                 </Show>
-                <div class="space-y-3">
+                <div class="space-y-2 sm:space-y-3">
                   <For each={webhookUrls()}>
                     {(url) => (
                       <div class={AUDIT_WEBHOOK_ENDPOINT_CARD_CLASS}>
-                        <div class="flex items-center gap-3 overflow-hidden min-w-0">
+                        <div class="flex min-w-0 flex-1 items-center gap-3">
                           <div class={AUDIT_WEBHOOK_ENDPOINT_ICON_CLASS}>
                             <ExternalLink size={16} />
                           </div>
-                          <span class="text-sm font-medium text-base-content truncate" title={url}>
+                          <span
+                            class="min-w-0 text-sm font-medium text-base-content whitespace-normal [overflow-wrap:anywhere]"
+                            title={url}
+                          >
                             {url}
                           </span>
                         </div>
                         <button
+                          type="button"
+                          aria-label={`Remove webhook endpoint ${url}`}
                           onClick={() => openRemoveWebhook(url)}
                           disabled={!canEdit() || saving()}
-                          class="p-2 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/25 rounded-md transition-colors"
+                          class="min-h-11 min-w-11 shrink-0 p-2 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/25 rounded-md transition-colors sm:min-h-0 sm:min-w-0"
                           title="Remove webhook endpoint"
                         >
                           <Trash2 size={16} />

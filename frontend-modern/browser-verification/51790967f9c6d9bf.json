@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "base_sha": "3a213693699588b5b41a3fbcd05e6760e6f933e0",
+  "verified_at": "2026-11-10T03:16:24.820Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/AuditWebhookPanel.tsx",
+    "frontend-modern/src/utils/auditWebhookPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/AuditWebhookPanel.tsx": "afd68599615c851c188a268d11bcf2e785e3372460ab9886cf9f9a1439a48527",
+    "frontend-modern/src/utils/auditWebhookPresentation.ts": "9614046a4503aeed90b3e6a534a96f68941cfbc8e5112afc1ac44e88988e07d4"
+  },
+  "routes": ["/settings/audit-webhooks (production AuditWebhookPanel, mounted panel fixture)"],
+  "viewports": [
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 1440,
+      "height": 1000
+    }
+  ],
+  "states": [
+    "Three saved destinations, including two long same-prefix URLs with distinct receiver suffixes, in initial page, selected second-row removal confirmation and read-only configuration; light and dark at each viewport.",
+    "Complete URLs remain at glance, without hover/expansion or horizontal scrolling; all existing text, icons and controls retained. Phone target44x44; desktop fixture geometry unchanged."
+  ],
+  "interactions": [
+    "Keyboard-open the second saved URL confirmation and cancel with zero writes and input focus restored.",
+    "Reopen and confirm only that second fixture endpoint; verify one scoped/CSRF-protected full-list POST preserving both other URLs through actual panel/state/HTTP client.",
+    "Reload read-only and verify all edit controls disabled with no extra POST."
+  ],
+  "limitations": [
+    "12 comparable pairs /24 PNGs captured and natively inspected. Identical fixtures, themes, viewports, locale, timezone, keyboard/selection/scroll state and mouse-at0,0 per pair. Earlier passing captures were replaced because a lingering pointer hovered a moved link; no runtime source changed for that correction.",
+    "Actual panel, state, HTTP client and CSS with safe synthetic HTTP fixtures; not full-App/IdP/native authorization, receiver delivery, screen-reader software or original-client acceptance.",
+    "Initial evidence script intercepted a Vite module path and exited1 with no completed cleanup/capture receipt. Fixed matcher then baseline/final browser client0 with explicit browser/server closure. No product failure or host diagnosis inferred."
+  ],
+  "browser": {
+    "name": "Chromium",
+    "version": "141.0.7390.37",
+    "playwright": "1.56.1"
+  }
+}
