@@ -255,7 +255,7 @@ describe('AISettings model loading error states', () => {
     expect(screen.getByLabelText('Enable alert-triggered Patrols')).toBeInTheDocument();
     expect(screen.getByLabelText('Enable anomaly-triggered Patrols')).toBeInTheDocument();
     expect(screen.getByLabelText('Enable container update risk analysis')).toBeInTheDocument();
-    expect(screen.getByLabelText('Investigate alerts at or above')).toHaveValue('warning');
+    expect(screen.getByLabelText('Investigate immediately')).toHaveValue('warning');
     expect(screen.getByText('Model readiness')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Open Patrol/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Save Patrol settings/i })).toBeInTheDocument();
@@ -432,7 +432,7 @@ describe('AISettings model loading error states', () => {
     renderComponent('patrol');
 
     await screen.findByLabelText('Enable alert-triggered Patrols');
-    fireEvent.change(screen.getByLabelText('Investigate alerts at or above'), {
+    fireEvent.change(screen.getByLabelText('Investigate immediately'), {
       target: { value: 'warning' },
     });
     fireEvent.click(screen.getByLabelText('Enable alert-triggered Patrols'));
@@ -478,16 +478,16 @@ describe('AISettings model loading error states', () => {
     });
     const alertToggle = screen.getByLabelText('Enable alert-triggered Patrols');
     expect(alertToggle).toHaveAttribute('aria-pressed', 'false');
-    expect(screen.queryByLabelText('Investigate alerts at or above')).toBeNull();
+    expect(screen.queryByLabelText('Investigate immediately')).toBeNull();
 
     fireEvent.click(alertToggle);
-    fireEvent.change(screen.getByLabelText('Investigate alerts at or above'), {
+    fireEvent.change(screen.getByLabelText('Investigate immediately'), {
       target: { value: 'warning' },
     });
     fireEvent.click(alertToggle);
-    expect(screen.queryByLabelText('Investigate alerts at or above')).toBeNull();
+    expect(screen.queryByLabelText('Investigate immediately')).toBeNull();
     fireEvent.click(alertToggle);
-    expect(screen.getByLabelText('Investigate alerts at or above')).toHaveValue('warning');
+    expect(screen.getByLabelText('Investigate immediately')).toHaveValue('warning');
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(updateSettingsMock).not.toHaveBeenCalled();
 
@@ -515,13 +515,19 @@ describe('AISettings model loading error states', () => {
       patrol_alert_trigger_min_severity: minSeverity,
     });
 
-    it('tells a Critical only install that lasting warnings are still looked at', async () => {
+    it('distinguishes immediate critical investigations from the delayed warning exception', async () => {
       getSettingsMock.mockResolvedValue(alertTriggerSettings('critical'));
 
       renderComponent('patrol');
 
-      const selector = await screen.findByLabelText('Investigate alerts at or above');
+      const selector = await screen.findByLabelText('Investigate immediately');
       await waitFor(() => expect(selector).toHaveValue('critical'));
+      expect(within(selector).getByRole('option', { name: 'Critical only' })).toHaveValue(
+        'critical',
+      );
+      expect(within(selector).getByRole('option', { name: 'Warning and critical' })).toHaveValue(
+        'warning',
+      );
       expect(selector).toHaveAccessibleDescription(
         'In Ask first and Autopilot, Patrol also looks at warnings that stay active for 10 minutes, at most 4 an hour.',
       );
@@ -539,7 +545,7 @@ describe('AISettings model loading error states', () => {
 
       renderComponent('patrol');
 
-      const selector = await screen.findByLabelText('Investigate alerts at or above');
+      const selector = await screen.findByLabelText('Investigate immediately');
       await waitFor(() => expect(selector).toHaveValue('warning'));
       expect(screen.queryByText(sustainedAlertHelp)).toBeNull();
     });
@@ -550,7 +556,7 @@ describe('AISettings model loading error states', () => {
 
       renderComponent('patrol');
 
-      const selector = await screen.findByLabelText('Investigate alerts at or above');
+      const selector = await screen.findByLabelText('Investigate immediately');
       await waitFor(() => expect(selector).toHaveValue('critical'));
       expect(screen.getByText(/This install runs Watch only/i)).toBeInTheDocument();
       expect(screen.queryByText(sustainedAlertHelp)).toBeNull();
@@ -583,7 +589,7 @@ describe('AISettings model loading error states', () => {
     await waitFor(() => {
       expect(screen.getByLabelText('Schedule')).toHaveValue('180');
     });
-    fireEvent.change(screen.getByLabelText('Investigate alerts at or above'), {
+    fireEvent.change(screen.getByLabelText('Investigate immediately'), {
       target: { value: 'warning' },
     });
     fireEvent.click(screen.getByRole('button', { name: /Save Patrol settings/i }));
@@ -594,7 +600,7 @@ describe('AISettings model loading error states', () => {
       );
     });
     expect(notificationSuccessMock).not.toHaveBeenCalled();
-    expect(screen.getByLabelText('Investigate alerts at or above')).toHaveValue('warning');
+    expect(screen.getByLabelText('Investigate immediately')).toHaveValue('warning');
 
     fireEvent.click(screen.getByRole('button', { name: /Save Patrol settings/i }));
 

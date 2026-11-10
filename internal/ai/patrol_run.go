@@ -1200,6 +1200,23 @@ func (p *PatrolService) runScopedPatrolWithStart(ctx context.Context, scope Patr
 		}
 	}
 
+	// An alert the trigger policy accepted when it fired is meant to be
+	// investigated. When the model was asked and left no warning or critical
+	// finding of its own, Pulse opens one from the alert so the investigation
+	// has something to start from.
+	firingAlert := p.patrolScopeFiringAlert(scope)
+	var alertFinding *Finding
+	if firingAlert != nil && runStats.aiAnalysis != nil && runStats.lastAIError == nil && len(runStats.findingIDs) == 0 {
+		if alertFinding = p.openFindingForUnansweredAlert(scope, firingAlert); alertFinding != nil {
+			runStats.findingIDs = append(runStats.findingIDs, alertFinding.ID)
+			if alertFinding.TimesRaised <= 1 {
+				runStats.newFindings++
+			} else {
+				runStats.existingFindings++
+			}
+		}
+	}
+
 	duration := time.Since(start)
 	completedAt := time.Now()
 
@@ -1234,6 +1251,11 @@ func (p *PatrolService) runScopedPatrolWithStart(ctx context.Context, scope Patr
 		if findingsSummaryStr == "All healthy" {
 			findingsSummaryStr = fmt.Sprintf("Analysis incomplete (%d errors)", runStats.errors)
 		}
+	}
+	if firingAlert != nil && findingsSummaryStr == "All healthy" {
+		// The run filed nothing, but the alert it was started for is still
+		// firing. That is not healthy.
+		findingsSummaryStr = "No findings, alert still active"
 	}
 	resolvedFindings := 0
 	if runStats.aiAnalysis != nil {
@@ -1282,12 +1304,14 @@ func (p *PatrolService) runScopedPatrolWithStart(ctx context.Context, scope Patr
 
 	if runStats.aiAnalysis != nil {
 		runRecord.AIAnalysis = patrolRunAIAnalysisForRecord(runStats.aiAnalysis, patrolRunAnalysisRecordContext{
-			ResourcesChecked:  runStats.resourceCount,
-			NewFindings:       runStats.newFindings,
-			ExistingFindings:  runStats.existingFindings,
-			ResolvedFindings:  resolvedFindings,
-			UncertainFindings: patrolUncertainAssessmentCount(runStats.aiAnalysis.Assessments),
-			ErrorCount:        runStats.errors,
+			ResourcesChecked:   runStats.resourceCount,
+			NewFindings:        runStats.newFindings,
+			ExistingFindings:   runStats.existingFindings,
+			ResolvedFindings:   resolvedFindings,
+			UncertainFindings:  patrolUncertainAssessmentCount(runStats.aiAnalysis.Assessments),
+			ErrorCount:         runStats.errors,
+			FiringAlert:        patrolAlertSummaryName(firingAlert),
+			AlertFindingOpened: alertFinding != nil,
 		})
 		runRecord.FindingAssessments = append([]PatrolFindingAssessment(nil), runStats.aiAnalysis.Assessments...)
 		runRecord.InputTokens = runStats.aiAnalysis.InputTokens
@@ -1333,6 +1357,11 @@ func (p *PatrolService) runScopedPatrolWithStart(ctx context.Context, scope Patr
 	}
 
 	p.dispatchPatrolInvestigations(runStats.aiAnalysis)
+	if alertFinding != nil {
+		if stored := p.findings.Get(alertFinding.ID); stored != nil {
+			p.MaybeInvestigateFinding(stored)
+		}
+	}
 }
 
 func recordPatrolCircuitResult(breaker *circuit.Breaker, attempted bool, errorCount int, runErr error) {

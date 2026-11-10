@@ -4435,6 +4435,30 @@ resolved, the type filter then removed the owner, and the run ended "No
 resources matched requested Patrol scope". A hint never widens a scope: an
 identity that does not resolve is still refused.
 
+An alert that wakes Patrol when it fires is investigated whether or not the
+model files a finding. Investigations start from findings, and a model that
+describes the fault in prose and calls no tool left the alert with none. When
+an `alert_fired` run that is not `AlertSustained` ends with the alert still
+active, no model error and no warning or critical finding of its own,
+`openFindingForUnansweredAlert` (`internal/ai/patrol_alert_finding.go`) opens
+one from the alert: the alert's resolved resource, its level and its text,
+`Source` `alert`, linked by `AlertIdentifier`. The link folds it under the
+alert through the mirror stamp and closes it in
+`ResolveFindingsForClearedAlert` when the alert clears. Its ID comes from the
+alert identifier, so a repeat of the alert reopens the same finding and a
+dismissal holds. It sends no finding notification, because the alert already
+notified. It is opened only where Patrol investigates (effective mode other
+than `monitor`, with an orchestrator), so Watch only and free installs never
+get it, and not when another unresolved finding already mirrors the alert.
+Sustained, flapping, scheduled and manual runs keep the model's judgment. Cost:
+at most one such finding per `alert_fired` trigger, inside that trigger's caps
+(3 an hour and 6 in 24 hours per alert identifier), and its investigation goes
+through `ShouldInvestigate` like any other. A scoped run whose alert is still
+active no longer records `No findings reported — all clear.` or `All healthy`:
+the summary says the alert is still active, or that Pulse opened the finding.
+The run status value is unchanged. Proof:
+`internal/ai/patrol_alert_finding_test.go`.
+
 When an alert clears, `PatrolService.ResolveFindingsForClearedAlert` closes the
 open findings that restate it: a finding stamped as its mirror, linked by
 identifier, or on the same resource with the same condition class
@@ -4486,6 +4510,27 @@ the alert. Proofs: `internal/ai/unified/bridge_test.go`,
 `internal/ai/unified/bridge_alert_manager_test.go`,
 `internal/api/ai_alert_bridge_trigger_test.go` and
 `internal/ai/patrol_alert_sustained_test.go`.
+
+A finding belongs to the resource its ID names. `seedFindingsAndContextState`
+closes an open finding as `Resource no longer exists in infrastructure` when
+its resource has left the full inventory, and it runs before the model sees
+anything. A registry ID (`patrolRegistryMintedResourceID`: a resource type, a
+dash and 16 hex digits) is in the inventory only while a current resource
+carries it or lists it as superseded. A shared name does not keep it
+(`findingResourceInInventory`). Before, a container recreated by an image
+update kept its old finding open by name, `FindingsStore.Add` merged every
+report about the new container into it, and its finished investigation meant
+the new container was never investigated. The registry decides whether a new
+resource continues an old one, and Patrol follows it. Findings whose ID has
+another form (a source ID, a rollup key, a name used as the ID) are still
+matched by name, and the store's dedupe for a resource that is present is
+unchanged. `canonicalizeUnknownFindingResource` also repairs a miscopied
+registry ID on a full run, where the name alone used to admit the report, so a
+finding is not filed under an ID the next run would close. Cost: recreating a
+container closes its open findings, and one that still applies is raised again
+by the next run that looks at the container, with one notification and, where
+Patrol investigates, one investigation. Proof:
+`internal/ai/patrol_finding_replaced_resource_test.go`.
 
 The route-backed Proxmox platform tab is app-shell navigation only. Adding the
 tab through `frontend-modern/src/App.tsx` and

@@ -33,7 +33,7 @@ export const APITokenManagerDialogs: Component<APITokenManagerDialogsProps> = (p
         panelClass="max-w-2xl"
         ariaLabel={`Edit API token scopes for ${getAPITokenIdentityLabel(props.tokenToEdit()!)}`}
       >
-        <div class="w-full space-y-5 p-6">
+        <div class="min-h-0 w-full space-y-5 overflow-y-auto p-6">
           <div>
             <h3 class="text-lg font-semibold text-base-content">
               Edit token scopes{' '}

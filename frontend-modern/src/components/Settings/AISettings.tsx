@@ -231,7 +231,7 @@ const PatrolSettingsContent: Component<{ state: ReturnType<typeof useAISettingsS
             <Show when={props.state.form.patrolAlertTriggers}>
               <FormSelect
                 id="ai-patrol-alert-min-severity"
-                label="Investigate alerts at or above"
+                label="Investigate immediately"
                 value={props.state.form.patrolAlertTriggerMinSeverity}
                 onChange={(event) =>
                   props.state.setForm(
