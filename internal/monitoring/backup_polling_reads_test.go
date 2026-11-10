@@ -5,7 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
+	"os/exec"
 	"reflect"
+	"regexp"
+	"runtime"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -143,26 +149,81 @@ func TestBackupPollingPBSCacheKeepsIdentityAndDetachedEvidence(t *testing.T) {
 }
 
 func TestBackupPollingReadsDoNotCopyUnrelatedInventory(t *testing.T) {
+	// AllocsPerRun counts process-wide allocations. The real snapshot
+	// callback yields to worker goroutines, so other monitoring tests' work
+	// must not be attributed to the size of this fixture. Keep this binary's
+	// race instrumentation, and verify that the child actually ran the guard.
+	const childEnv = "PULSE_BACKUP_POLLING_ALLOCATION_CHILD"
+	if os.Getenv(childEnv) != t.Name() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		cmd := exec.CommandContext(ctx, os.Args[0],
+			"-test.run=^"+regexp.QuoteMeta(t.Name())+"$",
+			"-test.count=1", "-test.v", "-test.timeout=20s",
+			"-test.cpu="+strconv.Itoa(runtime.GOMAXPROCS(0)))
+		cmd.Env = append(os.Environ(), childEnv+"="+t.Name())
+		output, err := cmd.CombinedOutput()
+		t.Logf("isolated backup allocation check:\n%s", output)
+		if err != nil {
+			t.Fatalf("isolated backup allocation check: %v", err)
+		}
+		if !strings.Contains(string(output), "--- PASS: "+t.Name()+" ") ||
+			!strings.Contains(string(output), "full snapshot positive control:") {
+			t.Fatal("isolated backup allocation check did not complete the guard and positive control")
+		}
+		return
+	}
+	t.Logf("allocation child GOMAXPROCS=%d", runtime.GOMAXPROCS(0))
 	for _, c := range backupPollingReadCases() {
 		t.Run(c.name, func(t *testing.T) {
 			small, large := backupPollingReadFixture(0), backupPollingReadFixture(1000)
-			measure := func(m *Monitor) float64 { return testing.AllocsPerRun(5, func() { c.call(m) }) }
-			base, grown := measure(small), measure(large)
-			t.Logf("allocations per real callback: small=%.0f unrelated=%.0f", base, grown)
+			base, grown, peak := backupPollingAllocationFloors(t, small, large, c.call)
+			t.Logf("allocation floors per real callback: small=%.0f unrelated=%.0f peak=%.0f", base, grown, peak)
 			if grown > base+4 {
 				t.Fatalf("backup callback copied unrelated fleet inventory: %.0f -> %.0f", base, grown)
+			}
+			// Do not let a clean floor hide a copy in just one round. One
+			// clone of the fixture's 1000 VMs alone adds at least 200
+			// allocations to a five-call average; the complete-copy control
+			// below is larger still. This additional ceiling is well above
+			// runtime/pool variation, without relaxing the +4 floor bound.
+			if peak > base+100 {
+				t.Fatalf("backup callback intermittently copied unrelated fleet inventory: floor %.0f, peak %.0f", base, peak)
 			}
 		})
 	}
 	small, large := backupPollingReadFixture(0), backupPollingReadFixture(1000)
-	measure := func(m *Monitor) float64 {
-		return testing.AllocsPerRun(5, func() { backupPollingReadResult = m.state.GetSnapshot() })
-	}
-	base, grown := measure(small), measure(large)
+	base, grown, _ := backupPollingAllocationFloors(t, small, large,
+		func(m *Monitor) { backupPollingReadResult = m.state.GetSnapshot() })
 	t.Logf("full snapshot positive control: %.0f -> %.0f", base, grown)
 	if grown <= base+1000 {
 		t.Fatal("fixture does not expose whole-fleet copying")
 	}
+}
+
+// The callback's own goroutines and race-instrumented pools can add allocations
+// even in an isolated process. Compare fixed-work allocation floors, not one
+// noisy pair. Always retain all four interleaved pairs (two in either order),
+// each with the original five-call sample; never retry a failed assertion or
+// stop early on a favourable sample. The peak separately detects bursty copies.
+func backupPollingAllocationFloors(t *testing.T, small, large *Monitor, call func(*Monitor)) (base, grown, peak float64) {
+	t.Helper()
+	measure := func(m *Monitor) float64 { return testing.AllocsPerRun(5, func() { call(m) }) }
+	for round := 0; round < 4; round++ {
+		var s, l float64
+		if round%2 == 0 {
+			s, l = measure(small), measure(large)
+		} else {
+			l, s = measure(large), measure(small)
+		}
+		t.Logf("allocation pair %d: small=%.0f unrelated=%.0f", round+1, s, l)
+		if round == 0 {
+			base, grown, peak = s, l, l
+		} else {
+			base, grown, peak = min(base, s), min(grown, l), max(peak, l)
+		}
+	}
+	return base, grown, peak
 }
 
 // Fixed callback measurements keep provider operations, retained backup data
