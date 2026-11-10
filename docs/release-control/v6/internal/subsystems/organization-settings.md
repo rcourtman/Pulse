@@ -15,6 +15,37 @@
 
 ## Purpose
 
+### Saved sharing decisions keep exact parties and whole-page context
+
+Incoming and outgoing sharing rows retain the saved organization's full key
+beside its display name (or once for an unnamed, unlisted or ID-named party).
+Resource names and type/keys, each saved role, pending/active state, acceptance
+context and text-labelled actions remain individually available. Names and
+opaque keys are isolated literal text. This does not infer a grant from a label.
+
+The existing shared grid retains its stable-key row state, accepted-row proxies,
+callbacks and native table/row/cell structure. Only sharing uses this scoped
+layout; no shared primitive changes.
+
+Below the existing 34rem table-container threshold the two identity cells
+share a line, followed by separate status/action areas and full-width acceptance
+context. Managers keep 44px touch controls. Readers without sharing actions
+keep a compact metadata rhythm instead of an empty action line. Status and
+Actions retain accessible header labels. Empty inventories keep their existing
+meaning, wide tables retain Requested and Access, and no record is aggregated,
+truncated or moved behind hover or disclosure. Whole-page review includes the
+natural first view and incoming names/roles at the same outgoing anchor, not
+just each table in isolation.
+
+Only sharing presentation changes. The state owner's accepted-row identity,
+reader invalidation, confirmations, exact encoded mutation target, CSRF/org
+binding, no automatic write replay and saved readback remain unchanged.
+Registered sharing-panel and row-transport tests cover the visible keys across
+renamed/reordered inventories, key-only fallbacks, long/crafted literal text,
+read-only sessions and existing mutation/recovery flows. Actual-App fixtures
+and comparable desktop/phone captures are required for the consuming UI;
+these do not establish original-client, live authorization or release recovery.
+
 ### Sharing choices expose the selected saved identities
 
 Create Share distinguishes namesake recipients by organization ID and namesake
