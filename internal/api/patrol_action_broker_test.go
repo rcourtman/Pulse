@@ -941,3 +941,65 @@ func TestPatrolCatalogSeparatesCommandsOffFromDisconnected(t *testing.T) {
 		}
 	})
 }
+
+// A crashed container whose image has a newer build offers both start and
+// update. The agent leaves a stopped container stopped when it updates it, so
+// the catalog Patrol reads must not let update pass for the way to bring the
+// service back.
+func TestPatrolCatalogForACrashedContainerSaysUpdateLeavesItStopped(t *testing.T) {
+	const containerID = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+	now := time.Now().UTC()
+	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
+	h.SetStateProvider(resourceStateProvider{snapshot: models.StateSnapshot{
+		LastUpdate: now,
+		Hosts: []models.Host{{
+			ID: "agent-docker01", Hostname: "docker01", MachineID: "machine-docker01",
+			Status: "online", LastSeen: now, CommandsEnabled: true,
+		}},
+		DockerHosts: []models.DockerHost{{
+			ID: "agent-docker01", AgentID: "agent-docker01", Hostname: "docker01", MachineID: "machine-docker01",
+			Status: "online", LastSeen: now, Runtime: "docker",
+			Containers: []models.DockerContainer{{
+				ID: containerID, Name: "worker", Image: "example/worker:v1", State: "exited", Status: "Exited (139) 4 minutes ago", ExitCode: 139,
+				UpdateStatus: &models.DockerContainerUpdateStatus{
+					UpdateAvailable: true,
+					CurrentDigest:   "sha256:" + strings.Repeat("1", 64),
+					LatestDigest:    "sha256:" + strings.Repeat("2", 64),
+				},
+			}},
+		}},
+	}})
+	agents := &fakeDockerActionAgentCommander{connected: map[string]bool{"agent-docker01": true}}
+	h.SetActionExecutor(newRoutedActionExecutor(h, newDockerContainerActionExecutor(h, agents)))
+	registry, err := h.buildRegistry("default")
+	if err != nil {
+		t.Fatalf("buildRegistry: %v", err)
+	}
+	resourceID := ""
+	for _, container := range registry.DockerContainers() {
+		if container != nil && container.Name() == "worker" {
+			resourceID = container.ID()
+		}
+	}
+	if resourceID == "" {
+		t.Fatal("the worker container is not in the registry")
+	}
+
+	catalog, err := NewPatrolActionBroker("default", h).Capabilities(context.Background(), resourceID)
+	if err != nil {
+		t.Fatalf("Capabilities: %v", err)
+	}
+	descriptions := map[string]string{}
+	for _, capability := range catalog.Capabilities {
+		descriptions[capability.Name] = capability.Description
+	}
+	if len(descriptions) != 2 || descriptions["start"] == "" || descriptions["update"] == "" {
+		t.Fatalf("catalog = %#v, want start and update", catalog.Capabilities)
+	}
+	if update := descriptions["update"]; !strings.Contains(update, "stays stopped") || !strings.Contains(update, "does not start it") || strings.Contains(update, "rollback") {
+		t.Fatalf("update description = %q, want it to say the container stays stopped", update)
+	}
+	if start := descriptions["start"]; !strings.Contains(start, "Start this Docker container") {
+		t.Fatalf("start description = %q", start)
+	}
+}

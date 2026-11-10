@@ -2605,8 +2605,10 @@ func dockerContainerLifecycleCapabilities(ct models.DockerContainer, host models
 	}
 
 	var capabilities []ResourceCapability
+	running := false
 	switch strings.ToLower(strings.TrimSpace(ct.State)) {
 	case "running":
+		running = true
 		capabilities = dockerContainerLifecycleCapabilitySet(runtime, "stop", "restart")
 	case "created", "exited", "dead", "stopped":
 		capabilities = dockerContainerLifecycleCapabilitySet(runtime, "start")
@@ -2614,20 +2616,29 @@ func dockerContainerLifecycleCapabilities(ct models.DockerContainer, host models
 		return nil
 	}
 	if ct.UpdateStatus != nil && ct.UpdateStatus.UpdateAvailable && strings.TrimSpace(ct.UpdateStatus.CurrentDigest) != "" {
-		capabilities = append(capabilities, dockerContainerUpdateCapability(runtime))
+		capabilities = append(capabilities, dockerContainerUpdateCapability(runtime, running))
 	}
 	return capabilities
 }
 
-func dockerContainerUpdateCapability(runtime string) ResourceCapability {
+// dockerContainerUpdateCapability describes the update as the agent performs
+// it. The agent starts and checks the replacement only when the original was
+// running, so an update leaves a stopped container stopped. The description
+// says so: it is what a person approving the plan reads, and what Patrol reads
+// when it chooses between starting a crashed container and updating it.
+func dockerContainerUpdateCapability(runtime string, running bool) ResourceCapability {
 	displayRuntime := "Docker"
 	if runtime == "podman" {
 		displayRuntime = "Podman"
 	}
+	description := fmt.Sprintf("Update this %s container to its latest image through its reporting Pulse agent, with automatic backup and rollback.", displayRuntime)
+	if !running {
+		description = fmt.Sprintf("Update this stopped %s container to its latest image through its reporting Pulse agent. The container stays stopped: an update does not start it or check that the new image runs.", displayRuntime)
+	}
 	return ResourceCapability{
 		Name:                 "update",
 		Type:                 CapabilityTypeCommon,
-		Description:          fmt.Sprintf("Update this %s container to its latest image through its reporting Pulse agent, with automatic backup and rollback.", displayRuntime),
+		Description:          description,
 		MinimumApprovalLevel: ApprovalAdmin,
 		AutoAuthorization:    AutoAuthorizeLowRisk,
 		SupportsRollback:     true,

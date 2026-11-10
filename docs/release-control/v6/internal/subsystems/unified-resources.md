@@ -4060,6 +4060,21 @@ application resource-provider or WebSocket lifecycle.
 
 ## Current State
 
+### Update on a stopped container says it stays stopped (10 November 2026)
+
+The Docker agent starts and checks a replacement container only when the
+original was running, so an update leaves a stopped container stopped. The
+`update` capability's description said only "with automatic backup and
+rollback" in both states. On the fault set, Patrol read that as the safe way to
+bring a crashed container back and proposed `update` over `start` in each of
+the four runs where it proposed an action. `dockerContainerUpdateCapability`
+now takes the container's run state: a stopped container's update says it
+stays stopped and that nothing checks the new image runs, and makes no
+rollback promise. A running container's description, and every policy field of
+the capability, are unchanged. Proof: `TestDockerUpdateCapabilitySaysAStoppedContainerStaysStopped`
+and, through the real registry, executor and Patrol broker,
+`TestPatrolCatalogForACrashedContainerSaysUpdateLeavesItStopped`.
+
 ### Action refusals on websocket rows (4 November 2026)
 
 A refusal changes with the command agent's connection, which no REST read of a
