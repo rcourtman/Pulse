@@ -552,8 +552,30 @@ func (s *UnifiedStore) ConvertAlert(alert AlertAdapter) *UnifiedFinding {
 	return finding
 }
 
-// AddFromAlert creates a unified finding from an alert
+// AlertRecordOutcome says what recording an alert did to its finding.
+type AlertRecordOutcome int
+
+const (
+	// AlertRecordUpdated refreshed a finding that was already open.
+	AlertRecordUpdated AlertRecordOutcome = iota
+	// AlertRecordCreated made the first finding for this alert identifier.
+	AlertRecordCreated
+	// AlertRecordReopened reopened a finding whose alert had resolved. Alert
+	// identifiers are stable per resource and alert type, so this is how every
+	// firing after the first one arrives.
+	AlertRecordReopened
+)
+
+// AddFromAlert creates a unified finding from an alert. The boolean reports
+// only whether the finding was created; use RecordAlert to tell a re-firing
+// alert apart from a refresh of an open one.
 func (s *UnifiedStore) AddFromAlert(alert AlertAdapter) (*UnifiedFinding, bool) {
+	finding, outcome := s.RecordAlert(alert)
+	return finding, outcome == AlertRecordCreated
+}
+
+// RecordAlert creates, reopens or refreshes the unified finding for an alert.
+func (s *UnifiedStore) RecordAlert(alert AlertAdapter) (*UnifiedFinding, AlertRecordOutcome) {
 	alertIdentifier := alert.GetAlertIdentifier()
 
 	s.mu.Lock()
@@ -578,7 +600,9 @@ func (s *UnifiedStore) AddFromAlert(alert AlertAdapter) (*UnifiedFinding, bool) 
 			}
 
 			// Re-open if the finding was resolved (alert fired again)
+			outcome := AlertRecordUpdated
 			if existing.ResolvedAt != nil {
+				outcome = AlertRecordReopened
 				existing.ResolvedAt = nil
 				log.Debug().
 					Str("finding_id", existing.ID).
@@ -597,7 +621,7 @@ func (s *UnifiedStore) AddFromAlert(alert AlertAdapter) (*UnifiedFinding, bool) 
 
 			s.mu.Unlock()
 			s.scheduleSave()
-			return existing, false
+			return existing, outcome
 		}
 	}
 
@@ -625,7 +649,7 @@ func (s *UnifiedStore) AddFromAlert(alert AlertAdapter) (*UnifiedFinding, bool) 
 		Str("category", string(finding.Category)).
 		Msg("Created unified finding from alert")
 
-	return finding, true
+	return finding, AlertRecordCreated
 }
 
 // AddFromAI creates a unified finding from AI analysis

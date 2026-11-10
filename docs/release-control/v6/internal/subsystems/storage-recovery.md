@@ -5784,6 +5784,10 @@ value, threshold, resource identifier, level, and message — is read-only
 investigation context for that single run. It must not be persisted as
 protection state, recovery-local workload taxonomy, or a backup/recovery
 artifact; storage and recovery state stays owned by their canonical surfaces.
+Moving that wiring into `internal/api/ai_alert_bridge_trigger.go` and
+triggering again for each firing episode of an alert changes when a scoped run
+is requested, not what it carries. It reads and writes no backup, restore or
+storage data and opens no storage or recovery path.
 
 The Storage and Recovery cross-jump builders
 (`buildStorageHrefForResource`, `buildRecoveryHrefForResource`) were deleted

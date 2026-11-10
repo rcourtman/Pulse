@@ -5936,6 +5936,11 @@ that fails `AIConfig.AlertTriggersInvestigation` (below the minimum-severity
 floor or outside the alert-type allowlist) is logged and dropped without
 entering the trigger manager, so alert-driven investigation lifecycle stays
 bounded to the alerts the operator opted into.
+That callback is now `alertBridgePatrolWiring` in
+`internal/api/ai_alert_bridge_trigger.go`. The policy check runs as the
+bridge's trigger policy hook, before an `alert_fired` event exists, and the
+bridge sends at most one event per firing episode and level, capped per alert
+identifier. No agent route, registration, heartbeat or command path changes.
 
 `/api/agent/events` is the SSE stream agents subscribe to for
 real-time notifications: `finding.created` when a new finding is
