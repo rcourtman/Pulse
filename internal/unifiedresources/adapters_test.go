@@ -1972,6 +1972,55 @@ func TestResourceFromDockerContainerAdvertisesUpdateCapabilityOnlyWithDigest(t *
 	}
 }
 
+// The agent starts and checks the replacement only when the original was
+// running (dockeragent updateContainerWithProgress). The description must not
+// let a reader take an update for a way to bring a stopped container back.
+func TestDockerUpdateCapabilitySaysAStoppedContainerStaysStopped(t *testing.T) {
+	host := models.DockerHost{
+		ID:       "docker-host-1",
+		AgentID:  "agent-1",
+		Hostname: "dock1",
+		Runtime:  "docker",
+		LastSeen: time.Now().UTC(),
+	}
+	update := &models.DockerContainerUpdateStatus{
+		UpdateAvailable: true,
+		CurrentDigest:   "sha256:" + strings.Repeat("1", 64),
+		LatestDigest:    "sha256:" + strings.Repeat("2", 64),
+	}
+	updateDescription := func(t *testing.T, state string, wantNames []string) string {
+		t.Helper()
+		resource, _ := resourceFromDockerContainer(models.DockerContainer{
+			ID: "abc123", Name: "web", State: state, Image: "example/web:latest", UpdateStatus: update,
+		}, host)
+		if got := capabilityNames(resource.Capabilities); !reflect.DeepEqual(got, wantNames) {
+			t.Fatalf("%s container capabilities = %#v, want %#v", state, got, wantNames)
+		}
+		for _, capability := range resource.Capabilities {
+			if capability.Name == "update" {
+				return capability.Description
+			}
+		}
+		t.Fatalf("%s container advertises no update", state)
+		return ""
+	}
+
+	for _, state := range []string{"exited", "created", "dead", "stopped"} {
+		description := updateDescription(t, state, []string{"start", "update"})
+		if !strings.Contains(description, "stays stopped") || !strings.Contains(description, "does not start it") {
+			t.Fatalf("%s container update must say it stays stopped, got %q", state, description)
+		}
+		if strings.Contains(description, "rollback") {
+			t.Fatalf("%s container update is not checked after it, so it must not promise a rollback: %q", state, description)
+		}
+	}
+
+	running := updateDescription(t, "running", []string{"stop", "restart", "update"})
+	if strings.Contains(running, "stopped") || !strings.Contains(running, "automatic backup and rollback") {
+		t.Fatalf("running container update description = %q", running)
+	}
+}
+
 func TestCollectInterfaceIDsOrdersPhysicalInterfacesFirst(t *testing.T) {
 	interfaces := []models.HostNetworkInterface{
 		{Name: "br-8f2a1c3d", MAC: "02:42:aa:bb:cc:01", Addresses: []string{"172.18.0.1/16"}},
