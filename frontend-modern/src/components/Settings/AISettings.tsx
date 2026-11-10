@@ -98,6 +98,16 @@ const PatrolSettingsContent: Component<{ state: ReturnType<typeof useAISettingsS
     }),
   );
   const isPlanLockedPatrol = createMemo(() => patrolModeAvailability().kind === 'plan_locked');
+  // Under "Critical only" a warning still gets one Patrol look once it has
+  // stayed active, in the modes that investigate. The delay and the hourly
+  // limit are the server's (internal/ai/unified/bridge.go). Installs that can
+  // only run Watch only never get these runs, so the line stays hidden there.
+  const sustainedAlertHelp = createMemo(() =>
+    patrolModeAvailability().kind === 'available' &&
+    props.state.form.patrolAlertTriggerMinSeverity === 'critical'
+      ? 'In Ask first and Autopilot, Patrol also looks at warnings that stay active for 10 minutes, at most 4 an hour.'
+      : undefined,
+  );
   const alertAnalysisAvailability = createMemo(() =>
     getPatrolAlertAnalysisAvailabilityPresentation({
       alertAnalysisLocked: props.state.alertAnalysisLocked(),
@@ -233,6 +243,7 @@ const PatrolSettingsContent: Component<{ state: ReturnType<typeof useAISettingsS
                 fieldClass="mt-3 gap-2"
                 labelClass="text-xs font-medium text-muted"
                 selectBaseClass="w-full min-h-10 rounded-md border border-border bg-surface px-3 py-2 text-sm"
+                help={sustainedAlertHelp()}
               >
                 <option value="critical">Critical only</option>
                 <option value="warning">Warning and critical</option>

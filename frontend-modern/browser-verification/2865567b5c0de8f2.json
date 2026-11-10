@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "base_sha": "7816877c68d660b1eba9abb659156e01d41188c5",
+  "verified_at": "2026-11-10T12:37:38Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/AISettings.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/AISettings.tsx": "0a43740055afc6ae59093b91ac9a8c93be8be73f90c52d6414b9712006a95044"
+  },
+  "routes": [
+    "/settings/pulse-intelligence/patrol"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Pro runtime with a dev Pro licence (Patrol modes available), alert triggers on, Critical only: the help line shows under the selector, two lines at 1440 and three at 390, inside the card, dark and light, no horizontal page overflow.",
+    "Same install, Warning and critical: no help line and no described-by on the selector.",
+    "Same install, alert triggers off: the selector and the help line are both gone. Back on: both return.",
+    "Pro runtime with no licence (This install runs Watch only), Critical only: selector shown, no help line, at 1440 and 390."
+  ],
+  "interactions": [
+    "Changed the selector to Warning and critical and back with the mouse, and with ArrowDown and ArrowUp from the keyboard. The line left and returned each time.",
+    "Turned the Alert-triggered Patrols switch off and on again.",
+    "Read the selector's described-by text in the page: it is the help line. Nothing was saved by these edits (settings read back as critical).",
+    "Cleared the dev licence through the API and reloaded to reach the Watch only state."
+  ],
+  "limitations": [
+    "Private mock-mode stack on pulse-dev, embedded production build, headless Chromium. No model was configured and background Patrol was off, so no sustained run happened here. The help line restates constants in internal/ai/unified/bridge.go.",
+    "The line's wording for the chosen Patrol mode is not checked: this page does not know the mode, so the line names the two modes it applies to.",
+    "Screen reader software was not used. The described-by wiring was read from the page and from the rendered test.",
+    "One of three passes timed out waiting for the page on its first light-theme load while pulse-dev load was about 13. The other two passes completed with no console errors."
+  ],
+  "browser": {
+    "name": "Chromium",
+    "version": "151.0.7922.34",
+    "playwright": "1.62.1"
+  }
+}

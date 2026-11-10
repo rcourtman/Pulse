@@ -504,6 +504,59 @@ describe('AISettings model loading error states', () => {
     );
   });
 
+  describe('sustained alert help line', () => {
+    const sustainedAlertHelp = /Patrol also looks at warnings that stay active for 10 minutes/;
+    const alertTriggerSettings = (minSeverity: 'warning' | 'critical') => ({
+      ...baseSettings(),
+      enabled: true,
+      configured: true,
+      patrol_interval_minutes: 180,
+      patrol_alert_triggers_enabled: true,
+      patrol_alert_trigger_min_severity: minSeverity,
+    });
+
+    it('tells a Critical only install that lasting warnings are still looked at', async () => {
+      getSettingsMock.mockResolvedValue(alertTriggerSettings('critical'));
+
+      renderComponent('patrol');
+
+      const selector = await screen.findByLabelText('Investigate alerts at or above');
+      await waitFor(() => expect(selector).toHaveValue('critical'));
+      expect(selector).toHaveAccessibleDescription(
+        'In Ask first and Autopilot, Patrol also looks at warnings that stay active for 10 minutes, at most 4 an hour.',
+      );
+
+      fireEvent.change(selector, { target: { value: 'warning' } });
+      expect(screen.queryByText(sustainedAlertHelp)).toBeNull();
+      expect(selector).not.toHaveAccessibleDescription();
+
+      fireEvent.change(selector, { target: { value: 'critical' } });
+      expect(screen.getByText(sustainedAlertHelp)).toBeInTheDocument();
+    });
+
+    it('stays hidden when warnings already wake Patrol as they fire', async () => {
+      getSettingsMock.mockResolvedValue(alertTriggerSettings('warning'));
+
+      renderComponent('patrol');
+
+      const selector = await screen.findByLabelText('Investigate alerts at or above');
+      await waitFor(() => expect(selector).toHaveValue('warning'));
+      expect(screen.queryByText(sustainedAlertHelp)).toBeNull();
+    });
+
+    it('stays hidden on an install that can only run Watch only', async () => {
+      hasFeatureMock.mockImplementation((feature: string) => feature !== 'ai_autofix');
+      getSettingsMock.mockResolvedValue(alertTriggerSettings('critical'));
+
+      renderComponent('patrol');
+
+      const selector = await screen.findByLabelText('Investigate alerts at or above');
+      await waitFor(() => expect(selector).toHaveValue('critical'));
+      expect(screen.getByText(/This install runs Watch only/i)).toBeInTheDocument();
+      expect(screen.queryByText(sustainedAlertHelp)).toBeNull();
+    });
+  });
+
   it('keeps an unsaved alert severity edit in the form when the Patrol save is rejected', async () => {
     getSettingsMock.mockResolvedValue({
       ...baseSettings(),
