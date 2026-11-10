@@ -4476,11 +4476,17 @@ record. Removing a container clears its alerts, and the findings that restated
 the alert are closed by then, so the `alert_cleared` check has nothing to
 verify. `runScopedPatrolWithStart` returns before recording a failure when none
 of the requested identities resolves and none is ambiguous
-(`clearedAlertResourceIsGone`). A failed run in the history would report the
-operator's own action as an error. An ambiguous identity, an `alert_fired`
-scope and a run a person started keep the failed run, so a resource the
-resolver cannot bind still shows on the firing side. Proof:
-`internal/ai/patrol_cleared_alert_removed_test.go`.
+(`clearedAlertResourceIsGone`). It returns the same way when the identity
+resolves and the collected state holds no resource for it. That is the usual
+order for a removed container: the monitor's Docker report drops it from the
+collected state and clears its alert before the resource inventory is rebuilt,
+so the check starts while the inventory still lists it, and it used to end
+"No resources matched requested Patrol scope". A failed run in the history
+would report the operator's own action as an error. An ambiguous identity, an
+`alert_fired` scope and a run a person started keep the failed run, so a
+resource the resolver cannot bind still shows on the firing side. Proof:
+`internal/ai/patrol_cleared_alert_removed_test.go`, which raises and clears
+the alert through the real alert manager with the inventory one report behind.
 
 An alert that is active and has not woken Patrol in its current episode is
 looked at once after it has stayed active for 10 minutes

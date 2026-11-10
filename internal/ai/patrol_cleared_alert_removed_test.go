@@ -7,6 +7,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 // Removing a container clears its alerts. The check that follows a cleared
@@ -66,4 +67,86 @@ func TestRunScopedPatrolClearedAlertOnRemovedContainerRecordsNoRun(t *testing.T)
 			t.Fatalf("an accepted run must end in a record, got %+v", runs)
 		}
 	})
+}
+
+// The order a Docker report is handled in: the collected state drops the
+// removed container, the alert manager clears its alert, and only then is the
+// resource inventory rebuilt. The cleared-alert check starts in between, so
+// the inventory still lists the container that the collected state no longer
+// has. Seen on a rig one second after each "Alert cleared".
+func TestRunScopedPatrolClearedAlertWhileTheInventoryStillListsTheContainer(t *testing.T) {
+	const dockerHost = "dock-agent-1"
+	container := models.DockerContainer{ID: strings.Repeat("ab12", 16), Name: "web", State: "exited", Status: "Exited (139) 2 minutes ago", ExitCode: 139}
+	hostWith := func(containers ...models.DockerContainer) models.DockerHost {
+		return models.DockerHost{ID: dockerHost, DisplayName: "docker-box", Hostname: "docker-box", Status: "online", LastSeen: time.Now(), Containers: containers}
+	}
+
+	// The real alert manager raises the state alert and clears it when the
+	// container is removed.
+	manager := alerts.NewManagerWithDataDir(t.TempDir())
+	t.Cleanup(manager.Stop)
+	alertConfig := manager.GetConfig()
+	alertConfig.Enabled = true
+	manager.UpdateConfig(alertConfig)
+	stateAlert := func() *alerts.Alert {
+		for _, active := range manager.GetActiveAlerts() {
+			if active.Type == "docker-container-state" {
+				found := active
+				return &found
+			}
+		}
+		return nil
+	}
+	var raised *alerts.Alert
+	for deadline := time.Now().Add(20 * time.Second); raised == nil; raised = stateAlert() {
+		if time.Now().After(deadline) {
+			t.Fatalf("the alert manager raised no container state alert, active: %+v", manager.GetActiveAlerts())
+		}
+		manager.CheckDockerHost(hostWith(container))
+		time.Sleep(100 * time.Millisecond)
+	}
+	for deadline := time.Now().Add(20 * time.Second); stateAlert() != nil; {
+		if time.Now().After(deadline) {
+			t.Fatal("the alert did not clear after the container was removed")
+		}
+		manager.CheckDockerHost(hostWith())
+		time.Sleep(100 * time.Millisecond)
+	}
+	t.Logf("alert %s on %s cleared", raised.ID, raised.ResourceID)
+
+	before := models.StateSnapshot{DockerHosts: []models.DockerHost{hostWith(container)}}
+	after := models.StateSnapshot{
+		DockerHosts: []models.DockerHost{hostWith()},
+		RecentlyResolved: []models.ResolvedAlert{{ResolvedTime: time.Now(), Alert: models.Alert{
+			ID: raised.ID, Type: raised.Type, Level: string(raised.Level), ResourceID: raised.ResourceID,
+			ResourceName: raised.ResourceName, Message: raised.Message, StartTime: raised.StartTime,
+		}}},
+	}
+
+	for _, tc := range []struct {
+		name      string
+		inventory models.StateSnapshot
+	}{
+		{"inventory one report behind", before},
+		{"inventory caught up", after},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			registry := unifiedresources.NewRegistry(nil)
+			registry.IngestSnapshot(tc.inventory)
+			ps := NewPatrolService(nil, &mockStateProvider{state: after})
+			ps.SetReadState(registry)
+			ps.SetUnifiedResourceProvider(unifiedresources.NewUnifiedAIAdapter(registry))
+			ps.SetConfig(PatrolConfig{Enabled: true, AnalyzeDocker: true, Interval: time.Hour})
+
+			ps.runScopedPatrol(t.Context(), AlertClearedPatrolScope(raised.ID, raised.ResourceID, "app-container"))
+
+			if runs := ps.runHistoryStore.GetRecent(5); len(runs) != 0 {
+				t.Fatalf("a cleared alert on a removed container left a run in the history: status %q, %q, %q",
+					runs[0].Status, runs[0].FindingsSummary, runs[0].ErrorSummary)
+			}
+			if ps.runInProgress {
+				t.Fatal("the skipped check kept the Patrol run slot")
+			}
+		})
+	}
 }

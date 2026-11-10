@@ -1078,6 +1078,19 @@ func (p *PatrolService) runScopedPatrolWithStart(ctx context.Context, scope Patr
 			Strs("requested_types", scope.ResourceTypes).
 			Int("effective_scope_count", len(effectiveScopeIDs)).
 			Msg("AI Patrol: No resources matched scope filter")
+		if acceptedStart == nil && scope.Reason == TriggerReasonAlertCleared {
+			// The identity resolved and the collected state holds nothing for
+			// it. That is a removed resource seen a moment early: a Docker
+			// report drops the container from the collected state and clears
+			// its alert before the resource inventory is rebuilt, so the
+			// inventory still lists it when this check starts. Nothing is left
+			// to verify, as in clearedAlertResourceIsGone.
+			log.Info().
+				Str("alert_identifier", scope.AlertIdentifier).
+				Strs("resources", scopeResolution.RequestedResourceIDs).
+				Msg("AI Patrol: Cleared alert's resource is no longer in the collected state, nothing to verify")
+			return
+		}
 		p.recordScopedPatrolScopeFailure(start, runID, scope, scopeResolution, "No resources matched requested Patrol scope", "The requested resource identities did not resolve to any enabled resource in the current normal Patrol collection state.")
 		return
 	}
