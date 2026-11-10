@@ -34,6 +34,9 @@ after = (f / "installer-ran").exists()
 stopped = (f / "stop-ran").exists()
 state = (f / "state").read_text().strip()
 if args[0] == "show":
+    if after and mode == "post-install-hang":
+        print("LoadState=loaded\nActiveState=active", flush=True)
+        time.sleep(30)
     if not after and mode == "initial-hang": time.sleep(30)
     if not after and mode == "initial-error":
         print("LoadState=loaded\nActiveState=inactive")
@@ -99,7 +102,9 @@ verify_update_running_executable() {
     return "$RUNTIME_EXIT"
 }
 detect_service_name() { printf '%s\n' "$SERVICE_NAME"; }
-sleep() { :; } # Only the liveness wait; timeout/manager deadlines are real.
+# Advance the polling clock instead of waiting; manager/timeout deadlines stay
+# real. Dedicated UpdateServiceDeadlines controls below use actual time/sleep.
+sleep() { SECONDS=$((SECONDS + $1)); }
 verify_release_signature() { :; }
 mktemp() {
     local -a args=("$@")
@@ -398,6 +403,18 @@ class UpdateLogSinks(UpdaterFixture):
 
 
 class UpdateServiceState(UpdaterFixture):
+    def test_poll_timeout_retains_backup_without_start_or_rollback(self):
+        result = self.run_fixture(mode="post-install-hang", success=True)
+        self.assertEqual(result["exit"], 1, result)
+        self.assertTrue(result["installed"] and result["installer_finished"], result)
+        self.assertFalse(result["stopped"] or result["started"], result)
+        self.assertEqual(result["binary"], b"#!/bin/sh\necho 'Pulse v6.6.0'\n")
+        self.assertEqual(result["version"], "v6.6.0\n")
+        self.assertEqual(result["backups"], [b"#!/bin/sh\necho 'Pulse v6.5.0'\n"])
+        self.assertIn("Update service state is uncertain; backup retained", result["output"])
+        self.assertNotIn("Restoring from backup", result["output"])
+        self.assertNotIn("Update successfully installed and verified", result["output"])
+
     def test_manager_diagnostics_refuse_initial_update_and_restart(self):
         for fault in ("stderr-warning", "stderr-blank", "stdout-blank", "stdout-unterminated"):
             for flow, state in (("update", "active"), ("update", "inactive"), ("backstop", "inactive")):
@@ -1325,6 +1342,167 @@ exit "$status"
                     self.assert_preserved(e, except_index=1 if odd else None)
                     self.assertIn("WARN:", e["output"], e)
                     self.assertNotIn("SUCCESS:", e["output"], e)
+
+
+
+class UpdateServiceDeadlines(unittest.TestCase):
+    def exercise(self, budget="2", mode="active", *, read_only=False, late_timer=False, model_clock=False):
+        with tempfile.TemporaryDirectory(prefix="pulse-updater-deadline-") as directory:
+            f = Path(directory)
+            (f / "tools").mkdir()
+            (f / "manager.py").write_text(r'''
+import json, os, signal, subprocess, sys, time
+from pathlib import Path
+f = Path(os.environ["FIXTURE"])
+args = sys.argv[1:]
+with (f / "calls").open("a") as out:
+    out.write(json.dumps(args) + "\n")
+mode = os.environ["DEADLINE_MODE"]
+count = len((f / "calls").read_text().splitlines())
+if mode == "stubborn":
+    signal.signal(signal.SIGTERM, signal.SIG_IGN)
+    child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
+    (f / "owned").write_text(json.dumps({"group": os.getpgrp(), "pids": [os.getpid(), child.pid]}))
+    # A plausible partial observation must not pass after the manager hangs.
+    print("LoadState=loaded\nActiveState=active", flush=True)
+    child.wait()
+    sys.exit(97)
+if mode.startswith("slow-"):
+    time.sleep(1.35)
+if mode == "remaining" and count > 1:
+    time.sleep(4)
+state = "active" if mode in ("active", "slow-active", "diagnostic", "error") or mode == "delayed" and count > 1 else "inactive"
+print("LoadState=loaded\nActiveState=" + state)
+if mode == "diagnostic":
+    print("fixture manager diagnostic", file=sys.stderr)
+if mode == "error":
+    sys.exit(4)
+''')
+            (f / "tools/systemctl").write_text(
+                "#!/bin/sh\nexec " + shlex.quote(sys.executable) + " -I -S "
+                + shlex.quote(str(f / "manager.py")) + ' "$@"\n')
+            (f / "tools/timeout").write_text(
+                '#!/bin/sh\nprintf "%s\\n" "$*" >> "$FIXTURE/timeouts"\n'
+                # Only the explicit late-success control models a timer that
+                # returns a complete observation past its requested deadline.
+                'if [ "$LATE_TIMER" = true ]; then sleep 1.35; shift 3; exec "$@"; fi\n'
+                'exec "$REAL_TIMEOUT" "$@"\n')
+            for tool in (f / "tools").iterdir():
+                tool.chmod(0o700)
+            originals = {f / "saved-settings": b"private fixture settings\n",
+                         f / "saved-identity": b"private fixture identity\n"}
+            for path, value in originals.items():
+                path.write_bytes(value)
+                path.chmod(0o600)
+            env = {k: v for k, v in os.environ.items() if not k.startswith("PULSE_")}
+            env.update(UPDATER=str(UPDATER), FIXTURE=str(f), BUDGET=budget,
+                       DEADLINE_MODE=mode, LATE_TIMER="true" if late_timer else "false",
+                       REAL_TIMEOUT=shutil.which("timeout"),
+                       PATH=str(f / "tools") + os.pathsep + env["PATH"])
+            function = "read_update_service_state" if read_only else "wait_for_service_active"
+            script = ('set -euo pipefail\nsource "$UPDATER"\n'
+                      'log() { printf "[%s] %s\\n" "$1" "${*:2}" >&2; }\n'
+                      # Only the remaining-budget argument control uses a
+                      # deterministic clock: real SECONDS has one-second
+                      # quantization and can expire before a second probe.
+                      + ('unset SECONDS; SECONDS=0\n'
+                         'sleep() { SECONDS=$((SECONDS + $1)); }\n' if model_clock else '') +
+                      'status=0\n' + function + ' pulse-deadline@fixture "$BUDGET" || status=$?\n'
+                      'printf "STATUS=%s\\n" "$status"\nexit "$status"\n')
+            start = time.monotonic()
+            process = subprocess.Popen(["bash", "-c", script], cwd=f, env=env,
+                                       stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                       text=True, start_new_session=True)
+            exceeded = False
+            try:
+                stdout, stderr = process.communicate(timeout=8)
+            except subprocess.TimeoutExpired:
+                exceeded = True
+                # Clean only these recorded fixture-owned groups, never a host
+                # manager. EOF normally proves timeout killed both pipe holders.
+                groups = [process.pid]
+                if (f / "owned").exists():
+                    groups.append(json.loads((f / "owned").read_text())["group"])
+                for group in groups:
+                    self.assertGreater(group, 1)
+                    self.assertNotEqual(group, os.getpgrp())
+                    try:
+                        os.killpg(group, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+                stdout, stderr = process.communicate(timeout=3)
+            result = dict(code=process.returncode, elapsed=time.monotonic() - start,
+                          stdout=stdout, stderr=stderr, exceeded=exceeded,
+                          calls=[json.loads(line) for line in (f / "calls").read_text().splitlines()]
+                          if (f / "calls").exists() else [],
+                          timeouts=[shlex.split(line) for line in (f / "timeouts").read_text().splitlines()]
+                          if (f / "timeouts").exists() else [],
+                          owned=json.loads((f / "owned").read_text()) if (f / "owned").exists() else None)
+            self.assertEqual({p: p.read_bytes() for p in originals}, originals)
+            self.assertTrue(all(p.stat().st_mode & 0o777 == 0o600 for p in originals))
+            self.assertFalse(exceeded, result)
+            for args in result["calls"]:
+                self.assertEqual(args, ["show", "pulse-deadline@fixture", "--no-pager",
+                                        "--property=LoadState", "--property=ActiveState"])
+            return result
+
+    def test_slow_reads_count_toward_one_polling_budget(self):
+        result = self.exercise(mode="slow-inactive")
+        self.assertIn(result["code"], (1, 2), result)
+        self.assertLess(result["elapsed"], 3.6, result)
+        self.assertLessEqual(len(result["calls"]), 2, result)
+
+    def test_complete_active_response_after_deadline_is_uncertain(self):
+        result = self.exercise("1", late_timer=True)
+        self.assertEqual(result["code"], 2, result)
+        self.assertLess(result["elapsed"], 2.8, result)
+
+    def test_last_manager_probe_uses_only_remaining_budget(self):
+        result = self.exercise(mode="remaining", model_clock=True)
+        self.assertEqual(result["code"], 2, result)
+        self.assertLess(result["elapsed"], 3.6, result)
+        self.assertEqual([args[2] for args in result["timeouts"]], ["2", "1"], result)
+
+    def test_timeout_kills_partial_manager_and_pipe_holding_child(self):
+        result = self.exercise("1", mode="stubborn")
+        self.assertEqual(result["code"], 2, result)
+        self.assertLess(result["elapsed"], 3.5, result)
+        self.assertEqual(len(result["calls"]), 1, result)
+        self.assertEqual(len(result["owned"]["pids"]), 2, result)
+        self.assertEqual(result["timeouts"][0][:3], ["-k", "1", "1"], result)
+
+    def test_fast_and_delayed_active_states_still_complete(self):
+        for mode, calls in (("active", 1), ("delayed", 2)):
+            with self.subTest(mode=mode):
+                result = self.exercise("4", mode=mode)
+                self.assertEqual(result["code"], 0, result)
+                self.assertEqual(len(result["calls"]), calls, result)
+                self.assertLess(result["elapsed"], 3.5, result)
+
+    def test_settled_inactive_timeout_is_not_manager_uncertainty(self):
+        result = self.exercise(mode="inactive")
+        self.assertEqual(result["code"], 1, result)
+        self.assertLess(result["elapsed"], 3.6, result)
+
+    def test_invalid_budgets_never_query_the_manager(self):
+        for budget in ("", "0", "-1", "1x", "1+1"):
+            with self.subTest(budget=budget):
+                result = self.exercise(budget)
+                self.assertEqual(result["code"], 2, result)
+                self.assertEqual(result["calls"], [], result)
+                self.assertEqual(result["timeouts"], [], result)
+
+    def test_read_budget_and_failed_observations_remain_closed(self):
+        for budget in ("", "0", "6", "1+1"):
+            with self.subTest(budget=budget):
+                result = self.exercise(budget, read_only=True)
+                self.assertNotEqual(result["code"], 0, result)
+                self.assertEqual(result["calls"], [], result)
+        for mode in ("diagnostic", "error"):
+            with self.subTest(mode=mode):
+                result = self.exercise("2", mode=mode)
+                self.assertEqual(result["code"], 2, result)
+                self.assertEqual(len(result["calls"]), 1, result)
 
 
 if __name__ == "__main__":

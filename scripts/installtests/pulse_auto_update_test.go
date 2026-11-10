@@ -202,6 +202,7 @@ func TestAutoUpdateTransactionLock(t *testing.T) {
 // matrix below; no native service or published input is used by this fixture.
 func TestAutoUpdateServiceStateFailsClosed(t *testing.T) {
 	runParallelPythonFixtureControls(t, repoFile("scripts", "tests", "test_auto_update_service_state.py"), "UpdateServiceState", []string{
+		"test_poll_timeout_retains_backup_without_start_or_rollback",
 		"test_manager_diagnostics_refuse_initial_update_and_restart",
 		"test_manager_diagnostics_after_install_retain_backup_without_mutation",
 		"test_manager_diagnostics_after_stop_retain_backup_without_restart",
@@ -210,6 +211,21 @@ func TestAutoUpdateServiceStateFailsClosed(t *testing.T) {
 		"test_early_collector_failure_survives_later_success_and_drains_installer",
 		"test_unterminated_final_installer_line_is_collected_and_its_failure_retained",
 	}, 45*time.Second, "PULSE_AUTO_UPDATER_UNDER_TEST="+repoFile("scripts", "pulse-auto-update.sh"))
+}
+
+// Real timeout/elapsed-clock controls operate only an ordinary-user manager
+// and its owned pipe-holding child, not systemd or an installed Pulse instance.
+func TestAutoUpdateServiceDeadlines(t *testing.T) {
+	runParallelPythonFixtureControls(t, repoFile("scripts", "tests", "test_auto_update_service_state.py"), "UpdateServiceDeadlines", []string{
+		"test_slow_reads_count_toward_one_polling_budget",
+		"test_complete_active_response_after_deadline_is_uncertain",
+		"test_last_manager_probe_uses_only_remaining_budget",
+		"test_timeout_kills_partial_manager_and_pipe_holding_child",
+		"test_fast_and_delayed_active_states_still_complete",
+		"test_settled_inactive_timeout_is_not_manager_uncertainty",
+		"test_invalid_budgets_never_query_the_manager",
+		"test_read_budget_and_failed_observations_remain_closed",
+	}, 30*time.Second, "PULSE_AUTO_UPDATER_UNDER_TEST="+repoFile("scripts", "pulse-auto-update.sh"))
 }
 
 // Keep the full real-sink matrix mandatory, but give it its own existing-size
@@ -678,7 +694,7 @@ log() { echo "[$1] ${*:2}"; }
 detect_service_name() { echo pulse; }
 get_current_version() { tr -d '\r\n' < "$INSTALL_DIR/VERSION"; }
 verify_release_signature() { return 0; }
-sleep() { :; }
+sleep() { SECONDS=$((SECONDS + $1)); }
 
 # curl writes the installer / signature to the -o target; the fake installer
 # fails outright, like the real one aborting on a read-only filesystem after
@@ -774,7 +790,7 @@ systemctl() {
   esac
   return 1
 }
-sleep() { :; }
+sleep() { SECONDS=$((SECONDS + $1)); }
 log() { echo "[$1] ${*:2}"; }
 ` + extractAutoUpdateServiceFunctions(t) + `
 ensure_service_restarted pulse false || echo "INACTIVE_PATH_FAILED"
@@ -827,7 +843,7 @@ log() { echo "[$1] ${*:2}"; }
 detect_service_name() { echo pulse; }
 get_current_version() { tr -d '\r\n' < "$INSTALL_DIR/VERSION"; }
 verify_release_signature() { return 0; }
-sleep() { :; }
+sleep() { SECONDS=$((SECONDS + $1)); }
 
 # curl writes the installer / signature to the -o target; the fake installer
 # bumps VERSION to the new version, simulating a successful install.
@@ -1076,7 +1092,7 @@ command ssh-keygen -Y sign -f "$FIXTURE_DIR/fixture-key" -n pulse-install "$FIXT
 [[ "$FAULT" != invalid_signature ]] || printf 'tampered\n' >> "$FIXTURE_DIR/installer"
 log() { printf '[%s] %s\n' "$1" "${*:2}"; }
 detect_service_name() { printf 'pulse\n'; }
-sleep() { :; }
+sleep() { SECONDS=$((SECONDS + $1)); }
 file_mode() { command stat -c '%a' "$1" 2>/dev/null || command stat -f '%Lp' "$1"; }
 # Keep real crypto but place all temporary files inside this disposable fixture.
 mktemp() {
