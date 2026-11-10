@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { createSignal, Suspense } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { InvestigationRecord } from '@/api/ai';
@@ -152,6 +152,82 @@ describe('InvestigationSection', () => {
     ));
     expect(await screen.findByText('Replace the failing disk.')).toBeInTheDocument();
     expect(screen.queryByTestId('patrol-commands-off-handover')).not.toBeInTheDocument();
+  });
+
+  it('says Pulse could not start a stopped guest, with what to do and no button', async () => {
+    const reason =
+      'Pulse cannot start, stop or restart guests on pmxlab: no Pulse action runner is connected on that node. "Allow Pulse to run commands on this host" does not cover guest actions. Use Proxmox for this.';
+    getInvestigationMock.mockResolvedValue({
+      id: 'inv-no-runner',
+      finding_id: 'finding-no-runner',
+      session_id: 'session-no-runner',
+      status: 'completed',
+      outcome: 'needs_attention',
+      started_at: '2026-11-10T16:17:00.000Z',
+      turn_count: 3,
+      summary: 'gitea is stopped and nothing in its history explains why.',
+      guest_actions_unavailable: {
+        guest_name: 'gitea',
+        node_name: 'pmxlab',
+        actions: ['start'],
+        reason,
+      },
+    } satisfies Investigation);
+
+    render(() => (
+      <InvestigationSection findingId="finding-no-runner" investigationStatus="completed" />
+    ));
+
+    const notice = await screen.findByTestId('patrol-guest-actions-handover');
+    expect(notice).toHaveTextContent('Patrol could not start gitea itself.');
+    expect(notice).toHaveTextContent(reason);
+    expect(within(notice).queryByRole('link')).toBeNull();
+    expect(within(notice).queryByRole('button')).toBeNull();
+    expect(screen.queryByTestId('patrol-commands-off-handover')).not.toBeInTheDocument();
+    // The model's own summary stays below it, unedited.
+    expect(notice.compareDocumentPosition(screen.getByText(/nothing in its history/))).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+  });
+
+  it('shows no guest notice for a running guest or a run still going', async () => {
+    const fact = {
+      guest_name: 'nextcloud',
+      node_name: 'pmxlab',
+      actions: ['reboot', 'shutdown', 'stop'],
+      reason: 'Pulse cannot start, stop or restart guests on pmxlab.',
+    };
+    getInvestigationMock.mockResolvedValue({
+      id: 'inv-running-guest',
+      finding_id: 'finding-running-guest',
+      session_id: 'session-running-guest',
+      status: 'completed',
+      outcome: 'needs_attention',
+      started_at: '2026-11-10T16:17:00.000Z',
+      turn_count: 2,
+      summary: 'The disk alert keeps flapping.',
+      guest_actions_unavailable: fact,
+    } satisfies Investigation);
+    render(() => (
+      <InvestigationSection findingId="finding-running-guest" investigationStatus="completed" />
+    ));
+    expect(await screen.findByText('The disk alert keeps flapping.')).toBeInTheDocument();
+    expect(screen.queryByTestId('patrol-guest-actions-handover')).not.toBeInTheDocument();
+    cleanup();
+    resetCreateNonSuspendingQueryCacheForTest();
+
+    getInvestigationMock.mockResolvedValue({
+      id: 'inv-going',
+      finding_id: 'finding-going',
+      session_id: 'session-going',
+      status: 'running',
+      started_at: '2026-11-10T16:17:00.000Z',
+      turn_count: 1,
+      guest_actions_unavailable: { ...fact, actions: ['start'] },
+    } satisfies Investigation);
+    render(() => <InvestigationSection findingId="finding-going" investigationStatus="running" />);
+    expect(await screen.findByText(/1 turn/)).toBeInTheDocument();
+    expect(screen.queryByTestId('patrol-guest-actions-handover')).not.toBeInTheDocument();
   });
 
   it('keeps the last answer when a later read fails', async () => {

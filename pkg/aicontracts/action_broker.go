@@ -51,6 +51,11 @@ type ActionCapabilityCatalog struct {
 	// cannot read logs or files, or run commands or actions, for the
 	// resource. It is a setting the owner chose at install, not a fault.
 	CommandsDisabled *CommandsDisabledHost `json:"commands_disabled,omitempty"`
+	// GuestActionsUnavailable is set when this resource is a Proxmox guest
+	// whose node has no connected Pulse action runner, so Pulse cannot start,
+	// stop or restart it. Command access on the node's agent does not change
+	// that. It is how this install is set up, not a fault.
+	GuestActionsUnavailable *GuestActionsUnavailable `json:"guest_actions_unavailable,omitempty"`
 }
 
 // ActionCapabilityRefusal is one declared capability planning would refuse.
@@ -71,6 +76,21 @@ type CommandsDisabledHost struct {
 	Reason string `json:"reason"`
 	// Step is how the owner turns commands on for that host.
 	Step string `json:"step"`
+}
+
+// GuestActionsUnavailable names a Proxmox guest Pulse cannot start, stop or
+// restart because no Pulse action runner is connected on its node. Pulse
+// writes the sentence so no model has to explain the refusal. It carries no
+// step: nothing a person can do in one move connects a runner.
+type GuestActionsUnavailable struct {
+	GuestName string `json:"guest_name,omitempty"`
+	NodeName  string `json:"node_name"`
+	// Actions are the declared guest actions refused for this reason, for
+	// example "start" for a stopped guest.
+	Actions []string `json:"actions"`
+	// Reason is the fact and what to do now, for example "Pulse cannot
+	// start, stop or restart guests on pve1: ... Use Proxmox for this."
+	Reason string `json:"reason"`
 }
 
 // ActionCapabilityInfo describes one advertised capability.

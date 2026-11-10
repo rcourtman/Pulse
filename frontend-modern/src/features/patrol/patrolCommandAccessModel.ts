@@ -109,3 +109,101 @@ export function buildPatrolCommandAccessHandover(
     actionHref: buildInfrastructureCommandAccessPath(),
   };
 }
+
+/**
+ * Core's refusal code for a Proxmox guest action on a node with no connected
+ * action runner (actionlifecycle.ReasonCodeActionRunnerUnavailable).
+ */
+const ACTION_RUNNER_UNAVAILABLE = 'action_runner_unavailable';
+
+/**
+ * Which Proxmox nodes Pulse can start, stop or restart guests on. That runs
+ * only through a separately enrolled action runner on the node. Command access
+ * on the node's Pulse agent does not cover it, so a person who ticked the
+ * install option reasonably expects Patrol to start a dead guest, and it cannot.
+ */
+export interface PatrolGuestActionAccessSummary {
+  /** Proxmox nodes with at least one guest Pulse reports on. */
+  total: number;
+  /** Of those, the nodes where the server refuses a guest action for want of a runner. */
+  noRunner: PatrolCommandAccessHost[];
+}
+
+function proxmoxGuestNode(resource: Resource): PatrolCommandAccessHost | undefined {
+  const proxmox = resource.proxmox;
+  if (!proxmox || proxmox.template === true) return undefined;
+  if (resource.type !== 'vm' && resource.type !== 'system-container') return undefined;
+  const nativeName = asTrimmedString(proxmox.nodeName) || asTrimmedString(proxmox.node);
+  const name = asTrimmedString(proxmox.nodeDisplayName) || nativeName;
+  if (!name) return undefined;
+  // Node names repeat across connections, so the connection is part of the key.
+  const id =
+    asTrimmedString(proxmox.nodeIdentity) ||
+    `${asTrimmedString(proxmox.instance) ?? ''}/${nativeName || name}`;
+  return { id, name };
+}
+
+/**
+ * Reads the server's own refusals on the guest rows, never the absence of a
+ * capability: a node is listed only where planning would refuse a guest action
+ * with the runner code.
+ */
+export function buildPatrolGuestActionAccessSummary(
+  resources: readonly Resource[],
+): PatrolGuestActionAccessSummary {
+  const nodes = new Map<string, { name: string; noRunner: boolean }>();
+  for (const resource of resources) {
+    const node = proxmoxGuestNode(resource);
+    if (!node) continue;
+    const entry = nodes.get(node.id) ?? { name: node.name, noRunner: false };
+    if (
+      (resource.actionReadiness ?? []).some(
+        (item) =>
+          item.available === false &&
+          (asTrimmedString(item.reasonCode) ?? '').toLowerCase() === ACTION_RUNNER_UNAVAILABLE,
+      )
+    ) {
+      entry.noRunner = true;
+    }
+    nodes.set(node.id, entry);
+  }
+  const noRunner: PatrolCommandAccessHost[] = [];
+  for (const [id, entry] of nodes) {
+    if (entry.noRunner) noRunner.push({ id, name: entry.name });
+  }
+  noRunner.sort((left, right) => left.name.localeCompare(right.name));
+  return { total: nodes.size, noRunner };
+}
+
+export interface PatrolGuestActionsHandover {
+  title: string;
+  detail: string;
+}
+
+/**
+ * The hand-back Pulse wrote for a run on a stopped Proxmox guest it could not
+ * start. It has no button: nothing a person does in one move connects a
+ * runner, so the note says what to do now. A running guest's refused stop or
+ * reboot is rarely why a run handed back, so only a refused start shows it.
+ */
+export function buildPatrolGuestActionsHandover(
+  investigation: Investigation | null | undefined,
+  active: boolean,
+): PatrolGuestActionsHandover | undefined {
+  const fact = investigation?.guest_actions_unavailable;
+  if (!fact || active) return undefined;
+  const refusedStart = (fact.actions ?? []).some(
+    (action) => (asTrimmedString(action) ?? '').toLowerCase() === 'start',
+  );
+  if (!refusedStart) return undefined;
+  const guest = asTrimmedString(fact.guest_name) || 'this guest';
+  const node = asTrimmedString(fact.node_name) || 'its node';
+  return {
+    title: `Patrol could not start ${guest} itself.`,
+    // The server writes the sentence with the run, so the review and a
+    // refused action say the same words.
+    detail:
+      asTrimmedString(fact.reason) ||
+      `Pulse cannot start, stop or restart guests on ${node}: no Pulse action runner is connected on that node. Use Proxmox for this.`,
+  };
+}

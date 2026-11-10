@@ -347,6 +347,63 @@ describe('PatrolIntelligenceHeader command access', () => {
     );
   });
 
+  it('names the Proxmox nodes where Pulse cannot start or stop guests, with no button', () => {
+    const proxmoxGuest = (name: string, node: string, refused: boolean): Resource =>
+      ({
+        id: `lxc:${name}`,
+        type: 'system-container',
+        name,
+        displayName: name,
+        status: 'online',
+        sources: ['proxmox'],
+        proxmox: { nodeName: node, instance: 'home' },
+        ...(refused
+          ? {
+              actionReadiness: [
+                { name: 'start', available: false, reasonCode: 'action_runner_unavailable' },
+              ],
+            }
+          : {}),
+      }) as Resource;
+    // Commands are on everywhere, so the commands row has nothing to name.
+    resourcesMock.value = [
+      agentHost('pve1', true),
+      agentHost('pve2', true),
+      proxmoxGuest('gitea', 'pve1', true),
+      proxmoxGuest('pihole', 'pve1', true),
+      proxmoxGuest('nextcloud', 'pve2', false),
+    ];
+    renderHeader(createState({ autonomyLevel: 'approval' }).state);
+
+    expect(screen.queryByTestId('patrol-command-access')).toBeNull();
+    const row = screen.getByTestId('patrol-guest-action-access');
+    expect(row.closest('#patrol-control')).not.toBeNull();
+    expect(row).toHaveTextContent("Can't start or stop guests");
+    expect(row).toHaveTextContent('1 of 2 Proxmox nodes');
+    const all = within(row).getByRole('list', { name: 'Proxmox nodes with no action runner' });
+    expect(
+      within(all)
+        .getAllByRole('listitem')
+        .map((item) => item.textContent),
+    ).toEqual(['pve1']);
+    expect(row).toHaveTextContent('you do it in Proxmox');
+    expect(row).toHaveTextContent(
+      '"Allow Pulse to run commands on this host" does not cover guest actions',
+    );
+    // No single step connects a runner, so the row offers none.
+    expect(within(row).queryByRole('link')).toBeNull();
+    expect(within(row).queryByRole('button')).toBeNull();
+    cleanup();
+
+    renderHeader(createState({ autonomyLevel: 'monitor' }).state);
+    expect(screen.queryByTestId('patrol-guest-action-access')).toBeNull();
+    cleanup();
+
+    resourcesMock.value = [agentHost('pve2', true), proxmoxGuest('nextcloud', 'pve2', false)];
+    renderHeader(createState({ autonomyLevel: 'full' }).state);
+    expect(screen.queryByTestId('patrol-guest-action-access')).toBeNull();
+  });
+
   it('stays quiet in Watch only, when every host is ready, and before setup', () => {
     resourcesMock.value = [agentHost('tower'), agentHost('docker01')];
     renderHeader(createState({ autonomyLevel: 'monitor' }).state);

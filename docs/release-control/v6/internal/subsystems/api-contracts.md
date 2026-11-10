@@ -6054,6 +6054,24 @@ auto-register mutation boundary.
 
 ## Current State
 
+### A guest action refused for want of a runner says so in plain words
+
+`action_runner_unavailable` is named once in
+`internal/actionlifecycle/command_access.go`, with the sentence every surface
+shows: Pulse cannot start, stop or restart guests on that node, no Pulse action
+runner is connected there, "Allow Pulse to run commands on this host" does not
+cover guest actions, use Proxmox. It names the node by its display name. It
+gives no step, because connecting a runner is not one step today. The code and
+the gate are unchanged: a guest action still runs only through an admitted
+action runner on the guest's own node.
+
+`ActionCapabilityCatalog.guest_actions_unavailable` and
+`InvestigationSession.guest_actions_unavailable` (`guest_name`, `node_name`,
+`actions`, `reason`) carry the same fact. The Patrol broker fills the catalog
+field from the executor's own refusals, so it is set only where planning would
+refuse. `GET /api/ai/findings/{id}/investigation` passes the stored field
+through. Both are additive and omitted when unset.
+
 ### Investigation reads carry the commands-off hand-back
 
 `GET /api/ai/findings/{id}/investigation` passes `commands_disabled`

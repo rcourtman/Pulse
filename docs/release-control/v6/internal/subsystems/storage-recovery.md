@@ -4964,6 +4964,13 @@ vdev layout is reported` in
 
 ## Current State
 
+### The missing-runner refusal opens no storage or recovery path
+
+The Proxmox guest action executor in `internal/api` changed only the text of
+its `action_runner_unavailable` refusal, and Patrol's catalog repeats that
+refusal as `guest_actions_unavailable`. Both read existing resource state and
+write nothing.
+
 ### Commands-off refusal reasons open no storage or recovery path
 
 The `internal/api` action executors now report `host_commands_disabled` apart

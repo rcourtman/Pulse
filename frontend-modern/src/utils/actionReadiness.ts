@@ -25,6 +25,8 @@ export const getActionReadinessRefusal = (
   switch (normalizeToken(readiness.reasonCode)) {
     case 'host_commands_disabled':
       return 'Commands are not enabled on the Pulse agent on this host.';
+    case 'action_runner_unavailable':
+      return 'Pulse cannot start, stop or restart guests on this node: no Pulse action runner is connected there. Use Proxmox for this.';
     case 'command_agent_disconnected':
       return 'Docker / Podman command agent is not connected.';
     case 'no_command_agent':
