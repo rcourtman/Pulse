@@ -5531,6 +5531,15 @@ named and default organizations. The custom event envelope stays unchanged.
 
 ## Current State
 
+Alert metric windows and the storage capacity trend read the metrics store
+through `QueryCommitted`. The store now batches raw samples for up to 60
+seconds, and its other readers commit buffered samples older than 5 seconds
+before reading. `metricWindowPoints` already merges the fresh in-memory tail
+over stored rows, and capacity trends use hourly buckets over days, so neither
+needs the buffer committed; a flushing read on these per-evaluation paths would
+commit the buffer roughly ten times a second on an agent-fed install and undo
+the batching.
+
 The host continuity journal no longer rewrites itself for every host report.
 `HostContinuityStore.ObserveReport` writes a new host and any identity,
 credential, link, legacy, tombstone or report-stream change before the report

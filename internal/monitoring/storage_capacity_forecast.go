@@ -49,7 +49,9 @@ func (m *Monitor) storageCapacityTrendFor(cacheID, historyID string, currentUsag
 
 	points := make([]alerts.CapacityMetricPoint, 0, 256)
 	if m.metricsStore != nil {
-		stored, err := m.metricsStore.Query(
+		// Hourly buckets over the lookback: the newest buffered minute cannot
+		// move the trend, so read committed rows without flushing the buffer.
+		stored, err := m.metricsStore.QueryCommitted(
 			"storage",
 			historyID,
 			"usage",
