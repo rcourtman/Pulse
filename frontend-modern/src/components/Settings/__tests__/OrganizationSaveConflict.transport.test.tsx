@@ -144,7 +144,6 @@ function shareRemoveButton() {
   const row = screen.getByText(winning ? 'Current saved VM' : 'Old VM').closest('tr')!;
   return within(row).getByRole('button', {
     name: `Remove share of vm:${winning ? 'vm::202' : 'vm::101'} to Peer estate (peer-estate)`,
-    exact: true,
   });
 }
 async function openAndSubmit(panel: Panel) {

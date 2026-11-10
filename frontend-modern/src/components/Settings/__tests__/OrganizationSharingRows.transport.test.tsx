@@ -288,7 +288,6 @@ describe('rendered namesake sharing rows through the real transport', () => {
         expect(
           within(row).getByRole('button', {
             name: `Remove share of vm:${share.resourceId} to ${name} (${share.targetOrgId})`,
-            exact: true,
           }),
         ).toBeEnabled();
       }
@@ -299,7 +298,6 @@ describe('rendered namesake sharing rows through the real transport', () => {
           expect(
             within(row).getByRole('button', {
               name: `${action} share of vm:${share.resourceId} from ${share.sourceOrgName} (${share.sourceOrgId})`,
-              exact: true,
             }),
           ).toBeEnabled();
       }
@@ -337,7 +335,6 @@ describe('rendered namesake sharing rows through the real transport', () => {
       expect(
         within(row).getByRole('button', {
           name: `Remove share of vm:${share.resourceId} to ${share.targetOrgId}`,
-          exact: true,
         }),
       ).toBeEnabled();
     }
@@ -349,7 +346,6 @@ describe('rendered namesake sharing rows through the real transport', () => {
         expect(
           within(row).getByRole('button', {
             name: `${action} share of vm:${share.resourceId} from ${share.sourceOrgId}`,
-            exact: true,
           }),
         ).toBeEnabled();
     }
