@@ -391,7 +391,7 @@ describe('OrganizationSharingPanel', () => {
       expect(screen.getAllByText('Pending approval').length).toBeGreaterThanOrEqual(2);
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Accept share of / }));
 
     await waitFor(() => {
       expect(acceptIncomingShareMock).toHaveBeenCalledWith(
@@ -402,12 +402,12 @@ describe('OrganizationSharingPanel', () => {
     });
 
     await waitFor(() => {
-      expect((screen.getByRole('button', { name: 'Decline' }) as HTMLButtonElement).disabled).toBe(
-        false,
-      );
+      expect(
+        (screen.getByRole('button', { name: /^Decline share of / }) as HTMLButtonElement).disabled,
+      ).toBe(false);
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Decline' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Decline share of / }));
 
     await waitFor(() => {
       expect(declineIncomingShareMock).toHaveBeenCalledWith(
@@ -498,7 +498,7 @@ describe('selected sharing snapshot', () => {
     await waitFor(() =>
       expect(screen.queryByText('Alpha private workload')).not.toBeInTheDocument(),
     );
-    expect(screen.queryByRole('button', { name: 'Remove' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Remove share of / })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Create Share' })).not.toBeInTheDocument();
     expect(await screen.findByRole('button', { name: 'Reload sharing' })).toBeEnabled();
   });
@@ -735,7 +735,7 @@ describe('sharing read admission and recovery', () => {
     listSharesMock.mockReturnValueOnce(next.promise);
     emit('organizations_changed');
     expect(screen.queryByText(outgoing.resourceName)).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Remove' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Remove share of / })).not.toBeInTheDocument();
     next.resolve([]);
     await screen.findByRole('heading', { name: 'Outgoing Shares' });
     expect(screen.queryByText(outgoing.resourceName)).not.toBeInTheDocument();

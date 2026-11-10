@@ -12,6 +12,11 @@ export function getOrganizationAccessReloadMessage(orgId: string): string {
   return `Reload checks saved members and invitations for ${orgId}. It does not repeat an access change.`;
 }
 
+// Names may repeat or change; action names keep the saved party's ID.
+export function getShareOrganizationLabel(id: string, name?: string): string {
+  return name && name !== id ? `${name} (${id})` : id;
+}
+
 export function getOrganizationInvitationPresentation(orgId: string, displayName?: string) {
   const organization = displayName && displayName !== orgId ? `${displayName} (${orgId})` : orgId;
   return {

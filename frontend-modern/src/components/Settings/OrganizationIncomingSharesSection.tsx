@@ -10,6 +10,7 @@ import { formatOrgDate } from '@/utils/orgUtils';
 import {
   getOrganizationIncomingSharesEmptyState,
   getOrganizationShareStatusDescription,
+  getShareOrganizationLabel,
 } from '@/utils/organizationSettingsPresentation';
 import type { useOrganizationSharingPanelState } from './useOrganizationSharingPanelState';
 
@@ -97,6 +98,7 @@ export const OrganizationIncomingSharesSection: Component<
                     <Button
                       variant="successGhost"
                       size="xs"
+                      aria-label={`Accept share of ${share.resourceType}:${share.resourceId} from ${getShareOrganizationLabel(share.sourceOrgId, share.sourceOrgName)}`}
                       onClick={() => {
                         void props.state.acceptIncomingShare(share);
                       }}
@@ -108,6 +110,7 @@ export const OrganizationIncomingSharesSection: Component<
                   <Button
                     variant="dangerGhost"
                     size="xs"
+                    aria-label={`${share.status === 'pending' ? 'Decline' : 'Remove'} share of ${share.resourceType}:${share.resourceId} from ${getShareOrganizationLabel(share.sourceOrgId, share.sourceOrgName)}`}
                     onClick={() => {
                       void props.state.declineIncomingShare(share);
                     }}

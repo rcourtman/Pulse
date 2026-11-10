@@ -10,6 +10,7 @@ import { formatOrgDate } from '@/utils/orgUtils';
 import {
   getOrganizationOutgoingSharesEmptyState,
   getOrganizationShareStatusDescription,
+  getShareOrganizationLabel,
 } from '@/utils/organizationSettingsPresentation';
 import Trash2 from 'lucide-solid/icons/trash-2';
 import type { useOrganizationSharingPanelState } from './useOrganizationSharingPanelState';
@@ -99,6 +100,7 @@ export const OrganizationOutgoingSharesSection: Component<
                   variant="dangerGhost"
                   size="xs"
                   class="gap-1"
+                  aria-label={`Remove share of ${share.resourceType}:${share.resourceId} to ${getShareOrganizationLabel(share.targetOrgId, props.state.orgNameById().get(share.targetOrgId))}`}
                   onClick={() => {
                     void props.state.deleteShare(share);
                   }}
