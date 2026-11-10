@@ -7523,7 +7523,19 @@ storage, the Unraid array alert (`agent:<host ID>/storage:unraid-array`) to
 the array storage with that agent source ID, and host filesystem, SMART disk,
 disk temperature, RAID, custom-sensor and native-sensor alerts
 (`agent:<host ID>/disk:`, `/disk_temp:`, `/raid:`, `/custom:`, `/sensor:`) to
-the host. The owner reference must
+the host, and a Proxmox guest filesystem alert
+(`<instance>:<node>:<vmid>-disk-<key>`, one filesystem of a guest from
+`alerts.CheckGuest`) to the guest with the source ID
+`<instance>:<node>:<vmid>`, whether it is a VM or a system container
+(`proxmoxGuestFilesystemOwner`, `historyOwnerTypeMatches`). Until that shape
+was listed these alerts bound to nothing: their events joined no resource's
+history, and every Patrol run a guest disk alert started (fired, flapping,
+cleared) ended "scope resolution failed". The binding is a component binding
+(`AlertResourceReference.Component`), so a finding about the guest is not
+folded under one filesystem's alert and the metric window keeps the request's
+own coordinates. The key must be a label the alert manager's sanitizer can
+produce (lower-case letters, digits, dots, dashes), and a guest ID without
+the two colons is not this shape. The owner reference must
 resolve to exactly one resource of the expected type; an ambiguous or
 incompatible owner is a conflict, so the event keeps its own reference,
 follows no retained binding and is retried. Pool, mount and kernel device labels are names,
@@ -7535,9 +7547,13 @@ the facets, timeline and intelligence APIs and Assistant resource context, not
 a drawer. Patrol's scoped change feed matches the stored resource ID without
 expanding bindings, so it includes events recorded under the owner's
 canonical ID but not rows journaled before their binding.
-Proof: `TestHistoryIdentityMonitorAdapterResolvesDockerHostAndServiceReferences`
-and `TestHistoryIdentityMonitorAdapterResolvesSubResourceReferences` in
-`internal/unifiedresources/history_identity_test.go`, and
+Proof: `TestHistoryIdentityMonitorAdapterResolvesDockerHostAndServiceReferences`,
+`TestHistoryIdentityMonitorAdapterResolvesSubResourceReferences` and
+`TestHistoryIdentityBindsGuestFilesystemAlertsToTheirGuest` in
+`internal/unifiedresources/history_identity_test.go`,
+`TestPatrolGuestFilesystemAlertScopeResolvesToItsGuest` in
+`internal/ai/patrol_guest_disk_alert_scope_test.go` (the alert comes from the
+real alert manager), and
 `TestOwnerAlertTimelinesUseCanonicalHistoryIdentity` in
 `internal/monitoring/monitor_alert_handling_test.go` against the real alert
 producers.
