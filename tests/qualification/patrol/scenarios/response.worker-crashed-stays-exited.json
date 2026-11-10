@@ -270,9 +270,8 @@
         "start",
         "starting",
         "started",
-        "restart",
-        "restarting",
-        "restarted"
+        "restart it",
+        "restart the container"
       ]
     ],
     "misdirection_terms": [

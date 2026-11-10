@@ -383,3 +383,23 @@ func TestComparisonIgnoresResponseRuns(t *testing.T) {
 		t.Fatalf("a response report reads as a pass:\n%s", markdown)
 	}
 }
+
+// The next step for a crashed worker is to start it. "No restart policy" is
+// something Patrol observed, not that step, so it must not complete a
+// hand-over by itself.
+func TestCrashedWorkerRubricNeedsTheStartStep(t *testing.T) {
+	manifest := loadFaultSetCatalog(t).ByID["response.worker-crashed-stays-exited"]
+	off := AgentProfile{Name: AgentProfileCommandsOff}
+	observed := "immich_machine_learning crashed with SIGSEGV. It has no restart policy, so it stays exited."
+	grade := func(conclusion string) ResponseResult {
+		return GradeResponse(manifest, ResponseEvidence{AgentProfile: off, Findings: []ResponseFinding{responseTestFinding("immich-ml", conclusion)}})
+	}
+	if graded := grade(observed); graded.Grade != GradeHandedBack || len(graded.Checks.DecisiveMissing) != 1 {
+		t.Fatalf("a conclusion with no next step graded %s, missing %v", graded.Grade, graded.Checks.DecisiveMissing)
+	}
+	for _, step := range []string{" Start the container.", " It has to be started by hand.", " Restart it."} {
+		if graded := grade(observed + step); graded.Grade != GradeHandedOver {
+			t.Fatalf("%q graded %s (%s)", step, graded.Grade, graded.Reason)
+		}
+	}
+}
