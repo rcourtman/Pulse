@@ -67,6 +67,14 @@ def definitions(source):
     return "\n".join(selected)
 
 
+def python_tool(path, *arguments):
+    """Use the suite's stdlib interpreter, not runner PATH/site initialization."""
+    path.write_text("#!/bin/sh\nexec "
+                    + " ".join(shlex.quote(arg) for arg in (sys.executable, "-I", "-S", *arguments))
+                    + ' "$@"\n')
+    path.chmod(0o700)
+
+
 MODEL = r'''#!/usr/bin/python3
 import json, os, pathlib, sys
 root = pathlib.Path(os.environ['FIXTURE'])
@@ -178,13 +186,12 @@ class AgentTrueNASTeardown(unittest.TestCase):
             models = root / "models"; models.mkdir()
             for name in ("midclt", "ps", "systemctl"):
                 model = models / name; model.write_text(MODEL)
-                # These closed stdlib models share the interpreter selected by
-                # the containing suite. The host's /usr/bin/python3 may differ
-                # and pays its site startup cost on every observed operation.
-                file = tools / name
-                file.write_text("#!/bin/sh\nexec " + shlex.quote(sys.executable)
-                                + " -I -S " + shlex.quote(str(model)) + ' "$@"\n')
-                file.chmod(0o700)
+                python_tool(tools / name, str(model))
+            # Production's inline validators are stdlib-only too. Keep every
+            # real validation, but avoid a different PATH interpreter and its
+            # ambient site hooks at each fresh inventory read. Missing-python
+            # controls still refuse at the caller's command-availability check.
+            python_tool(tools / "python3")
             if fault == "missing-midclt": (tools / "midclt").unlink()
             for name in ("state", "helper", "profile", "unit"):
                 directory = root / name; directory.mkdir(mode=0o700)
@@ -282,6 +289,28 @@ remove_safe_profile_state_dir() { rm -rf -- "$SAFE_PROFILE_STATE_DIR"; }
             state = json.loads((root / "model.json").read_text())
             timed_stopped = timeout_child_stopped(root / "timed-pid")
             return result, second, events.splitlines(), before, after, state, timed_stopped
+
+    def test_models_and_validators_use_selected_isolated_interpreter(self):
+        with tempfile.TemporaryDirectory(prefix="python tools' ") as temporary:
+            root = Path(temporary)
+            hook = root / "sitecustomize.py"
+            marker = root / "ambient-hook"
+            hook.write_text("from pathlib import Path\nPath(" + repr(str(marker)) + ").touch()\n")
+            probe = ("import json,sys; print(json.dumps([sys.executable, "
+                     "sys.flags.isolated, sys.flags.no_site, sys.argv[1:]]))")
+            model = root / "model's source.py"; model.write_text(probe)
+            for name, arguments, caller in (
+                    ("python3", (), ["-c", probe]),
+                    ("midclt", (str(model),), [])):
+                with self.subTest(tool=name):
+                    tool = root / name
+                    python_tool(tool, *arguments)
+                    result = subprocess.run([str(tool), *caller, "value with ' quotes"],
+                                            env=dict(os.environ, PYTHONPATH=str(root)),
+                                            capture_output=True, text=True, check=True, timeout=12)
+                    self.assertEqual(json.loads(result.stdout),
+                                     [sys.executable, 1, 1, ["value with ' quotes"]])
+                    self.assertFalse(marker.exists(), "ambient site hook ran")
 
     @staticmethod
     def snapshot(root):
