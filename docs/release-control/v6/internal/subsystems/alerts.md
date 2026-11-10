@@ -3055,6 +3055,28 @@ actually enforced at dispatch. `internal/alerts/flapping_threshold_test.go`
 pins these boundaries through normal configuration updates and notification
 callbacks, alongside the existing flapping cooldown and one-shot callback tests.
 
+An observation is one firing of an alert, not one dispatch of it. Flapping is
+an alert that keeps firing and clearing. `dispatchAlert` counts a state change
+through `checkFlappingForDispatchLocked` only on the first dispatch of a firing
+(`Alert.flappingCounted`, carried by `preserveAlertState` while the alert stays
+active, unset on the new `Alert` a re-fire builds, and not persisted). Every
+later dispatch of the same firing obeys a hold that is in force and adds
+nothing to the history: a reminder after the notification cooldown, a critical
+escalation, the re-dispatch when delivery is turned on (`NotifyExistingAlert`),
+and the retry on every poll while delivery is not turned on. Before, a storage
+or disk alert that crossed its threshold once was counted on each of those. On
+an install with delivery pending it was declared flapping on the fifth poll,
+which paused it, withheld it from firing subscribers, dropped its notification
+when delivery was turned on, raised the flapping callback, and stopped its own
+evaluation for the hold, so it stayed active after the reading had dropped
+(the hold shares `suppressedUntil` with the minimum-delta rule). With delivery
+on and a one-minute reminder cooldown the fifth notification did the same.
+`internal/alerts/flapping_steady_alert_test.go` drives the real storage
+evaluation for a steady alert with delivery on, pending and on with
+one-minute reminders, and for an alert that fires five times in the window,
+which is still held. Tests that call `dispatchAlert` directly mark each
+dispatch as a new firing with `firesAgain`.
+
 Ordinary retention cleanup and hourly tracking cleanup retire a served
 suppression deadline, its flapping latch and its observations atomically under
 the manager lock, using the same expiry rule as dispatch. Neither sweep may
