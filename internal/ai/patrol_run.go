@@ -552,20 +552,9 @@ func (p *PatrolService) runPatrolWithTriggerStart(ctx context.Context, trigger T
 		}
 	}
 
-	if cfg.AnalyzeGuests && p.proxmoxGuestLifecycleWatcher != nil {
-		proxmoxEmit, proxmoxResolve := p.proxmoxGuestLifecycleWatcher.Observe(state, p.findings.GetActive(FindingSeverityInfo), time.Now())
-		for _, f := range proxmoxEmit {
+	if cfg.AnalyzeGuests {
+		for _, f := range p.observeProxmoxGuestLifecycle(state) {
 			trackFinding(f)
-		}
-		for _, sentinel := range proxmoxResolve {
-			if p.findings.ResolveWithReason(sentinel.DedupKey, sentinel.Reason) {
-				p.mu.RLock()
-				resolveUnified := p.unifiedFindingResolver
-				p.mu.RUnlock()
-				if resolveUnified != nil {
-					resolveUnified(sentinel.DedupKey)
-				}
-			}
 		}
 	}
 
@@ -1132,6 +1121,32 @@ func (p *PatrolService) runScopedPatrolWithStart(ctx context.Context, scope Patr
 	}
 	runStats.resourceCount = resourceCount
 
+	// The stopped-guest check is the same in a scoped run as in a full one. A
+	// guest that died between two full runs is otherwise seen only by the
+	// alert runs that look at it, and those never asked the check. It reads
+	// the whole state, so it can raise a finding for a guest this run was not
+	// scoped to. Only a finding on a requested resource is counted for this
+	// run, and investigations start after the run is recorded.
+	var lifecycleFindings []*Finding
+	if cfg.AnalyzeGuests {
+		requested := make(map[string]bool, len(scope.ResourceIDs))
+		for _, id := range scope.ResourceIDs {
+			requested[strings.TrimSpace(id)] = true
+		}
+		for _, f := range p.observeProxmoxGuestLifecycle(fullState) {
+			isNew := p.recordFindingDuringPatrol(f)
+			lifecycleFindings = append(lifecycleFindings, f)
+			if !requested[strings.TrimSpace(f.ResourceID)] {
+				continue
+			}
+			runStats.findingIDs = append(runStats.findingIDs, f.ID)
+			if isNew {
+				runStats.newFindings++
+			} else {
+				runStats.existingFindings++
+			}
+		}
+	}
 	// Acquire a breaker probe only after the requested scope has resolved to
 	// real work. This keeps collection-only failures outside provider health.
 	aiServiceEnabled := p.retryProviderInitIfNeeded(ctx)
@@ -1377,6 +1392,11 @@ func (p *PatrolService) runScopedPatrolWithStart(ctx context.Context, scope Patr
 	}
 
 	p.dispatchPatrolInvestigations(runStats.aiAnalysis)
+	for _, f := range lifecycleFindings {
+		if stored := p.findings.Get(f.ID); stored != nil {
+			p.MaybeInvestigateFinding(stored)
+		}
+	}
 	if alertFinding != nil {
 		if stored := p.findings.Get(alertFinding.ID); stored != nil {
 			p.MaybeInvestigateFinding(stored)
