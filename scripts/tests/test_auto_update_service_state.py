@@ -1486,9 +1486,10 @@ if mode == "error":
             function = "read_update_service_state" if read_only else "wait_for_service_active"
             script = ('set -euo pipefail\nsource "$UPDATER"\n'
                       'log() { printf "[%s] %s\\n" "$1" "${*:2}" >&2; }\n'
-                      # Only the remaining-budget argument control uses a
-                      # deterministic clock: real SECONDS has one-second
-                      # quantization and can expire before a second probe.
+                      # Logical budget/state classification controls use a
+                      # deterministic clock: real SECONDS can expire during
+                      # an otherwise complete probe. Separate real-time
+                      # controls retain late-read and child-kill deadlines.
                       + ('unset SECONDS; SECONDS=0\n'
                          'sleep() { SECONDS=$((SECONDS + $1)); }\n' if model_clock else '') +
                       'status=0\n' + function + ' pulse-deadline@fixture "$BUDGET" || status=$?\n'
@@ -1541,6 +1542,11 @@ if mode == "error":
         self.assertEqual(result["code"], 2, result)
         self.assertLess(result["elapsed"], 2.8, result)
 
+    def test_complete_inactive_response_after_deadline_is_uncertain(self):
+        result = self.exercise("1", mode="inactive", late_timer=True)
+        self.assertEqual(result["code"], 2, result)
+        self.assertLess(result["elapsed"], 2.8, result)
+
     def test_last_manager_probe_uses_only_remaining_budget(self):
         result = self.exercise(mode="remaining", model_clock=True)
         self.assertEqual(result["code"], 2, result)
@@ -1564,8 +1570,13 @@ if mode == "error":
                 self.assertLess(result["elapsed"], 3.5, result)
 
     def test_settled_inactive_timeout_is_not_manager_uncertainty(self):
-        result = self.exercise(mode="inactive")
+        # This oracle needs both reads to finish inside their granted budget.
+        # An actual late reply is uncertainty, even when its state is inactive;
+        # the real-clock control above must continue to reject that reply.
+        result = self.exercise(mode="inactive", model_clock=True)
         self.assertEqual(result["code"], 1, result)
+        self.assertEqual(len(result["calls"]), 2, result)
+        self.assertEqual([args[2] for args in result["timeouts"]], ["2", "1"], result)
         self.assertLess(result["elapsed"], 3.6, result)
 
     def test_invalid_budgets_never_query_the_manager(self):

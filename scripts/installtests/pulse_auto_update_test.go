@@ -219,6 +219,7 @@ func TestAutoUpdateServiceDeadlines(t *testing.T) {
 	runParallelPythonFixtureControls(t, repoFile("scripts", "tests", "test_auto_update_service_state.py"), "UpdateServiceDeadlines", []string{
 		"test_slow_reads_count_toward_one_polling_budget",
 		"test_complete_active_response_after_deadline_is_uncertain",
+		"test_complete_inactive_response_after_deadline_is_uncertain",
 		"test_last_manager_probe_uses_only_remaining_budget",
 		"test_timeout_kills_partial_manager_and_pipe_holding_child",
 		"test_fast_and_delayed_active_states_still_complete",
