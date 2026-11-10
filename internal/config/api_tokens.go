@@ -110,7 +110,7 @@ func (r *APITokenRecord) IsExpired() bool {
 	return time.Now().UTC().After(*r.ExpiresAt)
 }
 
-// Clone returns a copy of the record with duplicated pointer fields.
+// Clone returns a detached copy of the record's mutable fields.
 func (r *APITokenRecord) Clone() APITokenRecord {
 	clone := *r
 	clone.Scopes = append([]string(nil), r.Scopes...)
@@ -125,7 +125,7 @@ func (r *APITokenRecord) Clone() APITokenRecord {
 	clone.ensureScopes()
 
 	// Deep copy OrgIDs slice
-	if len(r.OrgIDs) > 0 {
+	if r.OrgIDs != nil {
 		clone.OrgIDs = make([]string, len(r.OrgIDs))
 		copy(clone.OrgIDs, r.OrgIDs)
 	}
@@ -416,10 +416,11 @@ func (c *Config) IsValidAPIToken(rawToken string) bool {
 	return false
 }
 
-// UpsertAPIToken inserts or replaces a record by ID.
+// UpsertAPIToken inserts or replaces a record by ID. The inventory owns its
+// mutable fields; callers must not be able to edit live authority through the
+// record they supplied. Callers must hold Mu for writing.
 func (c *Config) UpsertAPIToken(record APITokenRecord) {
-	record.ensureID()
-	record.ensureScopes()
+	record = record.Clone()
 	for idx, existing := range c.APITokens {
 		if existing.ID == record.ID {
 			c.APITokens[idx] = record
