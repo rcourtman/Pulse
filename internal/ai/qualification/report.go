@@ -86,14 +86,18 @@ type RunReport struct {
 	Investigation         map[string]aicontracts.InvestigationSession `json:"investigations,omitempty"`
 	Actions               []ActionProjection                          `json:"actions,omitempty"`
 	Remediation           RemediationResult                           `json:"remediation,omitempty"`
-	Score                 Score                                       `json:"score"`
-	SafetyOracle          *SafetyOracleResult                         `json:"safety_oracle,omitempty"`
-	PostPatrol            []PredicateObservation                      `json:"post_patrol_oracle,omitempty"`
-	Revert                []PredicateObservation                      `json:"revert_oracle,omitempty"`
-	Teardown              CleanupResult                               `json:"teardown"`
-	Phases                []PhaseTiming                               `json:"phases"`
-	Errors                []string                                    `json:"errors,omitempty"`
-	Passed                bool                                        `json:"passed"`
+	// Response is the outcome grade of a response-track run with the
+	// evidence it was decided from, including the agent profile and how the
+	// run started.
+	Response     *ResponseResult        `json:"response,omitempty"`
+	Score        Score                  `json:"score"`
+	SafetyOracle *SafetyOracleResult    `json:"safety_oracle,omitempty"`
+	PostPatrol   []PredicateObservation `json:"post_patrol_oracle,omitempty"`
+	Revert       []PredicateObservation `json:"revert_oracle,omitempty"`
+	Teardown     CleanupResult          `json:"teardown"`
+	Phases       []PhaseTiming          `json:"phases"`
+	Errors       []string               `json:"errors,omitempty"`
+	Passed       bool                   `json:"passed"`
 }
 
 // SafetyOracleResult preserves the independent live-lab safety outcomes that
@@ -291,6 +295,17 @@ func LoadReport(path string) (RunReport, error) {
 // It is deliberately labelled scorer replay; live/model qualification still
 // requires a real lab run.
 func ReplayScore(report RunReport) RunReport {
+	if report.Manifest.Track == TrackResponse {
+		// A response run is graded, not gated. Replay grades the stored
+		// evidence again with the current rubric code.
+		if report.Response != nil {
+			graded := GradeResponse(report.Manifest, report.Response.Evidence)
+			report.Response = &graded
+		}
+		report.Score.Passed = report.Response != nil && report.Response.Grade != ""
+		report.Passed = report.Score.Passed && report.Teardown.Passed && len(report.Errors) == 0
+		return report
+	}
 	faultsIntact := replayFaultsIntact(report)
 	noMutation := replayNoUnexpectedMutation(report)
 	report.Score = ScoreRun(ScoringInput{
@@ -352,6 +367,11 @@ func CompareReports(paths []string) (ComparisonReport, error) {
 		report, err := LoadReport(path)
 		if err != nil {
 			return ComparisonReport{}, fmt.Errorf("load %s: %w", path, err)
+		}
+		if report.Manifest.Track == TrackResponse {
+			// Response runs are graded on the fault set scorecard. A valid
+			// run is not a pass, so it must not enter a model's pass rate.
+			continue
 		}
 		grouped[report.Environment.Model] = append(grouped[report.Environment.Model], report)
 		groupedScenarios[report.Environment.Model+"\x00"+report.Manifest.ID] = append(groupedScenarios[report.Environment.Model+"\x00"+report.Manifest.ID], report)
@@ -638,6 +658,14 @@ func renderMarkdown(report RunReport) string {
 	if report.Passed {
 		verdict = "PASS"
 	}
+	if report.Manifest.Track == TrackResponse {
+		// A response run has no pass mark. This line only says whether the
+		// run itself was sound; the grade below is what Patrol did.
+		verdict = "INVALID RUN"
+		if report.Passed {
+			verdict = "VALID RUN"
+		}
+	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "# Pulse Patrol qualification: %s\n\n", html.EscapeString(report.Manifest.Title))
 	fmt.Fprintf(&b, "- Verdict: **%s**\n", verdict)
@@ -647,6 +675,11 @@ func renderMarkdown(report RunReport) string {
 	fmt.Fprintf(&b, "- Pulse runtime: `%s`\n", report.Environment.PulseVersion)
 	fmt.Fprintf(&b, "- Harness revision: `%s` (dirty=%t)\n", report.Environment.GitSHA, report.Environment.GitDirty)
 	fmt.Fprintf(&b, "- Run: `%s`\n\n", report.RunID)
+	if report.Manifest.Track == TrackResponse {
+		b.WriteString(renderResponseMarkdown(report))
+		fmt.Fprintf(&b, "\n## Teardown\n\n- Passed: %t\n- Second cleanup no-op: %t\n- Inventory restored: %t\n", report.Teardown.Passed, report.Teardown.SecondCleanupNoop, report.Teardown.InventoryUnchanged)
+		return sanitizeArtifactText(b.String())
+	}
 	fmt.Fprintf(&b, "## Scores\n\n")
 	fmt.Fprintf(&b, "| Metric | Result |\n|---|---:|\n")
 	fmt.Fprintf(&b, "| Recall | %.1f%% |\n", report.Score.Recall*100)
@@ -714,6 +747,93 @@ func renderMarkdown(report RunReport) string {
 	}
 	fmt.Fprintf(&b, "\n## Teardown\n\n- Passed: %t\n- Second cleanup no-op: %t\n- Inventory restored: %t\n", report.Teardown.Passed, report.Teardown.SecondCleanupNoop, report.Teardown.InventoryUnchanged)
 	return sanitizeArtifactText(b.String())
+}
+
+// renderResponseMarkdown is the body of a response-track report. The verdict
+// line above it says whether the run was valid. What Patrol did is the grade.
+func renderResponseMarkdown(report RunReport) string {
+	var b strings.Builder
+	if report.Response == nil || report.Response.Grade == "" {
+		b.WriteString("## Outcome\n\nNo grade: the run did not get far enough to observe Patrol.\n")
+		if len(report.Errors) > 0 {
+			b.WriteString("\n## Failures\n\n")
+			for _, failure := range report.Errors {
+				fmt.Fprintf(&b, "- %s\n", sanitizeArtifactText(failure))
+			}
+		}
+		return b.String()
+	}
+	response := report.Response
+	evidence := response.Evidence
+	fmt.Fprintf(&b, "## Outcome\n\n")
+	fmt.Fprintf(&b, "| | |\n|---|---|\n")
+	fmt.Fprintf(&b, "| Grade | **%s** |\n", response.Label)
+	fmt.Fprintf(&b, "| Why | %s |\n", markdownCell(response.Reason))
+	fmt.Fprintf(&b, "| A person would | %s |\n", expectLabel(response.Expect))
+	fmt.Fprintf(&b, "| Agent profile | %s (host `%s`) |\n", agentProfileLabel(evidence.AgentProfile.Name), markdownCode(evidence.AgentProfile.HostName))
+	switch evidence.Wake.Mode {
+	case WakeSelf:
+		fmt.Fprintf(&b, "| How the run started | Patrol woke by itself, trigger `%s` |\n", markdownCode(evidence.Wake.TriggerReason))
+	case WakeAsked:
+		fmt.Fprintf(&b, "| How the run started | Patrol had to be asked (%s) |\n", markdownCell(strings.TrimSpace(evidence.Wake.Asked+" "+evidence.Wake.AskDetail)))
+	default:
+		fmt.Fprintf(&b, "| How the run started | not applicable, nothing was wrong |\n")
+	}
+	if evidence.Wake.InvestigationStart != "" {
+		fmt.Fprintf(&b, "| Investigation started | %s |\n", markdownCell(evidence.Wake.InvestigationStart))
+	}
+	if evidence.Wake.AlertAfter > 0 {
+		fmt.Fprintf(&b, "| Fault to alert | %s |\n", evidence.Wake.AlertAfter.Round(time.Second))
+	}
+	if evidence.Wake.FindingAfter > 0 {
+		fmt.Fprintf(&b, "| Fault to finding | %s |\n", evidence.Wake.FindingAfter.Round(time.Second))
+	}
+	if evidence.Wake.SettledAfter > 0 {
+		fmt.Fprintf(&b, "| Fault to conclusion | %s |\n", evidence.Wake.SettledAfter.Round(time.Second))
+	}
+	b.WriteString("\n## Checks\n\n")
+	checks := response.Checks
+	fmt.Fprintf(&b, "- Looked: %t\n- Fix within reach: %t\n- Action on the scenario target: %t\n- Action executed: %t\n- Pulse verified the action: %t\n- Lab oracle saw recovery: %t\n- Conclusion stored: %t\n",
+		checks.Looked, checks.FixAvailable, checks.ActionOnTarget, checks.ActionExecuted, checks.LifecycleVerified, checks.PostconditionsMet, checks.ConclusionStored)
+	for _, group := range checks.DecisiveMissing {
+		fmt.Fprintf(&b, "- Decisive fact missing: one of %s\n", markdownCell(strings.Join(group, ", ")))
+	}
+	for _, group := range checks.AreaMissing {
+		fmt.Fprintf(&b, "- Area fact missing: one of %s\n", markdownCell(strings.Join(group, ", ")))
+	}
+	for _, term := range checks.Misdirection {
+		fmt.Fprintf(&b, "- Known-false statement: %s\n", markdownCell(term))
+	}
+	if len(evidence.Alerts) > 0 {
+		b.WriteString("\n## Alerts\n\n")
+		for _, alert := range evidence.Alerts {
+			fmt.Fprintf(&b, "- %s `%s` on `%s`: %s\n", markdownCell(alert.Level), markdownCode(alert.Type), markdownCode(alert.ResourceAlias), markdownCell(alert.Message))
+		}
+	}
+	if len(evidence.Findings) > 0 {
+		b.WriteString("\n## Findings\n\n")
+		for _, finding := range evidence.Findings {
+			fmt.Fprintf(&b, "- `%s` %s on `%s`: %s (investigation %s, outcome %s, %d evidence calls)\n", markdownCode(finding.ID), markdownCell(finding.Severity),
+				markdownCode(finding.ResourceAlias), markdownCell(finding.Title), markdownCell(finding.InvestigationStatus), markdownCell(finding.InvestigationOutcome), finding.EvidenceCallCount)
+			if action := finding.Action; action != nil {
+				fmt.Fprintf(&b, "  - Proposed `%s` on `%s`: %s, final state `%s`, verification `%s`. %s\n", markdownCode(action.Capability), markdownCode(action.TargetAlias),
+					markdownCell(action.Decision), markdownCode(action.FinalState), markdownCode(action.VerificationStatus), markdownCell(action.DecisionNote))
+			}
+		}
+	}
+	if len(evidence.OtherFindings) > 0 {
+		b.WriteString("\n## Findings on resources the fault did not touch\n\n")
+		for _, finding := range evidence.OtherFindings {
+			fmt.Fprintf(&b, "- `%s` %s on `%s`: %s\n", markdownCode(finding.ID), markdownCell(finding.Severity), markdownCode(finding.ResourceAlias), markdownCell(finding.Title))
+		}
+	}
+	if len(report.Errors) > 0 {
+		b.WriteString("\n## Failures\n\n")
+		for _, failure := range report.Errors {
+			fmt.Fprintf(&b, "- %s\n", sanitizeArtifactText(failure))
+		}
+	}
+	return b.String()
 }
 
 func renderComparisonMarkdown(comparison ComparisonReport) string {

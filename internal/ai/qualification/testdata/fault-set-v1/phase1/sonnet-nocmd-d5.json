@@ -1,0 +1,57 @@
+{
+  "source": "sonnet-nocmd/d5",
+  "captured_at": "2026-11-09T23:03:20Z",
+  "model": "claude-subscription:sonnet",
+  "scenario": "response.app-unhealthy-database-stopped",
+  "phase1_scorecard_column": "commands-off",
+  "phase1_grade": "partial",
+  "phase1_woke_by_itself": "yes",
+  "note": "",
+  "evidence": {
+    "agent_profile": {
+      "name": "commands-off",
+      "commands_enabled": false,
+      "host_name": "docker01"
+    },
+    "alerts": [
+      {
+        "type": "docker-container-health",
+        "level": "critical",
+        "resource_alias": "nextcloud",
+        "resource_name": "nextcloud",
+        "message": "Docker container 'nextcloud' health is unhealthy"
+      }
+    ],
+    "wake": {
+      "alert_after_ns": 38000000000,
+      "run_id": "1794265436254104000",
+      "trigger_reason": "alert_fired",
+      "mode": "self",
+      "investigation_start": "self",
+      "finding_after_ns": 88000000000,
+      "settled_after_ns": 294000000000
+    },
+    "findings": [
+      {
+        "id": "dfb5f9e470d567c3",
+        "severity": "critical",
+        "category": "reliability",
+        "resource_alias": "nextcloud",
+        "resource_name": "nextcloud",
+        "title": "Nextcloud Docker container is reporting unhealthy status despite normal resource usage",
+        "investigation_status": "completed",
+        "investigation_outcome": "needs_attention",
+        "turn_count": 7,
+        "evidence_call_count": 5,
+        "tools_used": [
+          "pulse_query",
+          "pulse_read",
+          "patrol_action_capabilities",
+          "patrol_propose_action",
+          "patrol_conclude_investigation"
+        ],
+        "conclusion": "### Investigation Summary\nThe nextcloud container (app-container-f2ed1ecc64cbced4) on docker01 is running with 0 restarts and negligible CPU (~0.06%) and memory (~0.002%) usage, ruling out resource exhaustion or a crash loop. Its Docker healthcheck is nonetheless reporting unhealthy, meaning the Apache/PHP process is alive but failing its internal health probe. Searching docker01's other containers found nextcloud-db (app-container-3cd1c6f7e6737d5e, postgres:16) — a database that shares the nextcloud_hb volume mount — in an exited state. A Nextcloud instance that stays up but fails its healthcheck is a classic symptom of the app being unable to reach a required Postgres backend. Attempts to confirm this directly (docker logs/exec on docker01, and a proposed start action on nextcloud-db) both failed with NO_AGENT / \"Docker command agent is not connected,\" indicating docker01's command-agent transport is itself down, independent of the container states observed via the monitoring/metrics path.\n\n### Root Cause\nObserved failure mechanism: nextcloud's Docker healthcheck probe is failing while the Apache/PHP process remains up (status=running, 0 restarts), consistent with the application being unable to complete a dependency check (e.g., database connectivity) rather than crashing outright.\n\nLeading hypothesis for origin: nextcloud-db (app-container-3cd1c6f7e6737d5e), the Postgres container Nextcloud depends on, is in status=exited on the same host (docker01). If Nextcloud requires this database to serve its healthcheck endpoint, the unreachable DB would directly explain the unhealthy status.\n\nWhat the evidence does not establish: the exact failing healthcheck probe (healthcheck_targets was empty), the specific error Nextcloud's own logs would show (e.g., a Postgres connection refusal), or why nextcloud-db exited (crash, manual stop, resource limit, or unrelated maintenance) — docker01's command agent being disconnected blocked all of these reads. It is also not confirmed that nextcloud-db is the sole or correct dependency for the healthcheck versus Redis or another service; no other obviously-stopped dependency was found in the docker01 container list, making nextcloud-db the strongest but not fully confirmed candidate.\n\n### Affected Resources\n- nextcloud (app-container-f2ed1ecc64cbced4): observed symptom — Docker healthcheck=unhealthy, process running, resources normal. This is the alerting/affected resource, not necessarily the causal one.\n- nextcloud-db (app-container-3cd1c6f7e6737d5e): observed state — exited on docker01, sharing nextcloud's data volume; suspected causal resource pending confirmation.\n- docker01 (docker-host, 66cd990e-2def-40c7-a9e4-c450a9e450de): host-level agent/command-connection is unavailable (NO_AGENT), which is itself an operational gap blocking both diagnosis and remediation of the containers above. Host metrics (CPU 71.3%, Mem 43.5%) are otherwise being reported normally through the monitoring path, so this is specifically a command/exec transport issue, not a host outage.\n\n### Recommendation\nAn operator must first restore the Docker command-agent connection on docker01 (check the agent process/service and its connectivity to Pulse) — no logs, exec, or control actions can run against docker01's containers until this is back. Once connectivity is restored:\n1. Inspect nextcloud-db's exit reason and logs to confirm why Postgres stopped.\n2. Check nextcloud's own application logs for database/Redis connectivity errors to confirm the dependency-failure hypothesis.\n3. If confirmed, start nextcloud-db (a \"start\" action was proposed on app-container-3cd1c6f7e6737d5e but could not execute due to the same NO_AGENT condition; it requires admin approval and is never auto-authorized) and verify the nextcloud healthcheck clears afterward.\n4. If nextcloud-db was intentionally stopped or the real dependency is different, re-evaluate before taking any action on nextcloud itself (restart/update), since those would not address a missing dependency.\n\n### Conclusion\nNEEDS_ATTENTION: docker01's Docker command agent is disconnected (NO_AGENT), blocking both root-cause confirmation (container logs/exit reason) and execution of the proposed remediation (starting nextcloud-db). An operator must restore the agent connection on docker01, confirm nextcloud-db's exit cause, and approve/start it to verify the nextcloud healthcheck recovers."
+      }
+    ]
+  }
+}

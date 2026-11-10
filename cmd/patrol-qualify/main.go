@@ -21,7 +21,7 @@ import (
 )
 
 func main() {
-	mode := flag.String("mode", "validate", "validate, list, live, live-suite, replay, verify-replay, compare, or export-contribution")
+	mode := flag.String("mode", "validate", "validate, list, live, live-suite, build-fixtures, fault-set, scorecard, replay, verify-replay, compare, or export-contribution")
 	catalogDir := flag.String("catalog", "tests/qualification/patrol/scenarios", "scenario manifest directory")
 	scenarioID := flag.String("scenario", "", "scenario id for live mode")
 	baseURL := flag.String("url", "http://127.0.0.1:7655", "Pulse API base URL")
@@ -45,6 +45,10 @@ func main() {
 	publicationDir := flag.String("publication-dir", "", "optional directory for comparison.json, comparison.md, and checksums")
 	contributionDir := flag.String("contribution-dir", "", "local output directory for an allowlist-only community evidence candidate")
 	communityChallenge := flag.String("community-challenge", "", "optional server-issued nonce bound into each live report before the run")
+	faultSet := flag.String("fault-set", "v1", "fault set for build-fixtures, fault-set, and scorecard modes")
+	faults := flag.String("faults", "", "optional comma-separated fault labels to run from the fault set, such as D1,D4")
+	agentProfile := flag.String("agent-profile", "", "agent profile a response run is declared as: commands-on or commands-off")
+	hostFilesystem := flag.String("host-filesystem", "", "comma-separated dedicated mount paths handed to the lab for host filesystem faults")
 	flag.Parse()
 
 	catalog, err := qualification.LoadCatalog(*catalogDir)
@@ -80,7 +84,10 @@ func main() {
 		if err != nil {
 			fatal(err)
 		}
-		target := qualification.DockerTarget{Context: strings.TrimSpace(*dockerContext), SSHHost: strings.TrimSpace(*dockerSSHHost), AllowSharedHost: *allowSharedHost}
+		target := qualification.DockerTarget{
+			Context: strings.TrimSpace(*dockerContext), SSHHost: strings.TrimSpace(*dockerSSHHost), AllowSharedHost: *allowSharedHost,
+			HostFilesystems: splitList(*hostFilesystem),
+		}
 		lab := qualification.NewDockerLab(nil, target)
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
@@ -92,12 +99,95 @@ func main() {
 			AuthorizeRemediation: *authorizeRemediation,
 			ExpectedPulseVersion: *expectedPulseVersion,
 			ChallengeNonce:       *communityChallenge,
+			AgentProfile:         strings.TrimSpace(*agentProfile),
 		})
 		if err != nil {
 			fatal(err)
 		}
 		if failed {
 			os.Exit(1)
+		}
+	case "build-fixtures":
+		manifests, err := selectFaultSet(catalog, *faultSet, *faults)
+		if err != nil {
+			fatal(err)
+		}
+		target := qualification.DockerTarget{Context: strings.TrimSpace(*dockerContext), HostFilesystems: splitList(*hostFilesystem)}
+		lab := qualification.NewDockerLab(nil, target)
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
+		statuses, err := lab.BuildFixtureImages(ctx, manifests)
+		for _, status := range statuses {
+			fmt.Printf("%-8s %-28s %s (%s)\n", status.State, status.Key, status.Image, status.Digest)
+		}
+		if err != nil {
+			fatal(err)
+		}
+		for _, mountPath := range target.HostFilesystems {
+			seeded, err := lab.SeedHostFilesystem(ctx, mountPath, time.Now())
+			if err != nil {
+				fatal(err)
+			}
+			state := "current"
+			if seeded {
+				state = "seeded"
+			}
+			fmt.Printf("%-8s host filesystem %s\n", state, mountPath)
+		}
+	case "fault-set":
+		if !*authorizeLive {
+			fatal(fmt.Errorf("fault-set mode requires --authorize-live-faults"))
+		}
+		profile := strings.TrimSpace(*agentProfile)
+		if !qualification.ValidAgentProfile(profile) {
+			fatal(fmt.Errorf("fault-set mode requires --agent-profile %s or %s", qualification.AgentProfileCommandsOn, qualification.AgentProfileCommandsOff))
+		}
+		manifests, err := selectFaultSet(catalog, *faultSet, *faults)
+		if err != nil {
+			fatal(err)
+		}
+		target := qualification.DockerTarget{Context: strings.TrimSpace(*dockerContext), HostFilesystems: splitList(*hostFilesystem)}
+		if missing := qualification.MissingHostFilesystems(manifests, target.HostFilesystems); len(missing) > 0 {
+			fatal(fmt.Errorf("the selected faults need --host-filesystem %s: hand the mount to the lab or leave those faults out with --faults", strings.Join(missing, ",")))
+		}
+		secret := *password
+		if value := strings.TrimSpace(os.Getenv(*passwordEnv)); value != "" {
+			secret = value
+		}
+		if secret == "" {
+			fatal(fmt.Errorf("Pulse password is required through --password-env or --password"))
+		}
+		client, err := qualification.NewPulseClient(qualification.ClientConfig{BaseURL: *baseURL, Username: *username, Password: secret, Timeout: 15 * time.Minute})
+		if err != nil {
+			fatal(err)
+		}
+		lab := qualification.NewDockerLab(nil, target)
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
+		gitSHA, dirty := qualification.GitEnvironment(ctx, nil, ".")
+		// One fault at a time, in label order. Subscription model routes serve
+		// one call at a time, and Patrol has one investigation slot, so a
+		// second fault would be scored on a queue, not on Patrol.
+		failed, runErr := runLiveQualification(ctx, liveQualificationConfig{
+			Manifests: manifests, Client: client, Lab: lab,
+			Model: *model, Repeats: *repeats, RepeatProfile: *repeatProfile,
+			ArtifactRoot: *artifactRoot, GitSHA: gitSHA, GitDirty: dirty,
+			AuthorizeRemediation: *authorizeRemediation,
+			ExpectedPulseVersion: *expectedPulseVersion,
+			AgentProfile:         profile,
+		})
+		if err := printScorecard(*artifactRoot, *faultSet, *artifactRoot); err != nil {
+			fmt.Fprintln(os.Stderr, "patrol-qualify:", err)
+		}
+		if runErr != nil {
+			fatal(runErr)
+		}
+		if failed {
+			os.Exit(1)
+		}
+	case "scorecard":
+		if err := printScorecard(*reportsRoot, *faultSet, strings.TrimSpace(*publicationDir)); err != nil {
+			fatal(err)
 		}
 	case "replay":
 		if strings.TrimSpace(*replayPath) == "" {
@@ -197,6 +287,7 @@ type liveQualificationConfig struct {
 	AuthorizeRemediation bool
 	ExpectedPulseVersion string
 	ChallengeNonce       string
+	AgentProfile         string
 }
 
 func runLiveQualification(ctx context.Context, config liveQualificationConfig) (failed bool, terminalErr error) {
@@ -241,6 +332,7 @@ func runLiveQualification(ctx context.Context, config liveQualificationConfig) (
 				AuthorizeRemediation: config.AuthorizeRemediation,
 				ExpectedPulseVersion: config.ExpectedPulseVersion,
 				ChallengeNonce:       config.ChallengeNonce,
+				AgentProfile:         config.AgentProfile,
 			})
 			if err != nil {
 				return failed, err
@@ -251,7 +343,20 @@ func runLiveQualification(ctx context.Context, config liveQualificationConfig) (
 				verdict = "FAIL"
 				failed = true
 			}
-			fmt.Printf("[%s] %s scenario=%s model=%s recall=%.1f%% fp=%d artifacts=%s\n", verdict, report.RunID, manifest.ID, report.Environment.Model, report.Score.Recall*100, report.Score.FalsePositives, filepath.Join(config.ArtifactRoot, report.RunID))
+			if manifest.Track == qualification.TrackResponse {
+				// A response run is graded, not passed. FAIL here means the
+				// run itself was unsound and produced no usable grade.
+				grade, wake := "no grade", ""
+				if report.Response != nil && report.Response.Grade != "" {
+					grade, wake = report.Response.Label, report.Response.Evidence.Wake.Mode
+				}
+				if verdict == "PASS" {
+					verdict = "RUN"
+				}
+				fmt.Printf("[%s] %s scenario=%s model=%s grade=%q wake=%s artifacts=%s\n", verdict, report.RunID, manifest.ID, report.Environment.Model, grade, wake, filepath.Join(config.ArtifactRoot, report.RunID))
+			} else {
+				fmt.Printf("[%s] %s scenario=%s model=%s recall=%.1f%% fp=%d artifacts=%s\n", verdict, report.RunID, manifest.ID, report.Environment.Model, report.Score.Recall*100, report.Score.FalsePositives, filepath.Join(config.ArtifactRoot, report.RunID))
+			}
 			if runErr != nil {
 				fmt.Fprintf(os.Stderr, "  error: %v\n", runErr)
 			}
@@ -288,6 +393,66 @@ func selectLiveManifests(catalog qualification.Catalog, mode, scenarioID string,
 	default:
 		return nil, fmt.Errorf("unsupported live mode %q", mode)
 	}
+}
+
+// selectFaultSet returns the scenarios of one fault set in label order,
+// optionally narrowed to named fault labels.
+func selectFaultSet(catalog qualification.Catalog, faultSet, labels string) ([]qualification.Manifest, error) {
+	manifests := qualification.FaultSetManifests(catalog, strings.TrimSpace(faultSet))
+	if len(manifests) == 0 {
+		return nil, fmt.Errorf("no response scenarios belong to fault set %q", faultSet)
+	}
+	wanted := splitList(labels)
+	if len(wanted) == 0 {
+		return manifests, nil
+	}
+	var selected []qualification.Manifest
+	for _, label := range wanted {
+		found := false
+		for _, manifest := range manifests {
+			if strings.EqualFold(manifest.Metadata["fault_label"], label) {
+				selected = append(selected, manifest)
+				found = true
+			}
+		}
+		if !found {
+			return nil, fmt.Errorf("fault set %q has no fault %q", faultSet, label)
+		}
+	}
+	return selected, nil
+}
+
+func splitList(value string) []string {
+	var items []string
+	for _, item := range strings.Split(value, ",") {
+		if item = strings.TrimSpace(item); item != "" {
+			items = append(items, item)
+		}
+	}
+	return items
+}
+
+// printScorecard grades every response report under root again and prints the
+// fault set table. With an output directory it also writes the table there.
+func printScorecard(root, faultSet, outputDir string) error {
+	paths, err := findReports(root)
+	if err != nil {
+		return err
+	}
+	var reports []qualification.RunReport
+	for _, path := range paths {
+		report, err := qualification.LoadReport(path)
+		if err != nil {
+			return fmt.Errorf("load %s: %w", path, err)
+		}
+		reports = append(reports, report)
+	}
+	card := qualification.BuildScorecard(strings.TrimSpace(faultSet), reports)
+	fmt.Print(qualification.RenderScorecardMarkdown(card))
+	if outputDir == "" {
+		return nil
+	}
+	return qualification.WriteScorecard(outputDir, card)
 }
 
 func liveRepeatCount(manifest qualification.Manifest, explicit int, profile string) (int, error) {

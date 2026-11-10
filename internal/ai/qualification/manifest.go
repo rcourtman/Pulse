@@ -29,6 +29,16 @@ const (
 	TrackWatch         Track = "watch"
 	TrackInvestigation Track = "investigation"
 	TrackRemediation   Track = "remediation"
+	// TrackResponse scores what Patrol does with a real fault from the moment
+	// it appears: whether it woke by itself, what it concluded, whether a
+	// governed action fixed it. It produces an outcome grade for a scorecard,
+	// not a launch gate.
+	TrackResponse Track = "response"
+)
+
+const (
+	resourceKindContainer      = "container"
+	resourceKindHostFilesystem = "host_filesystem"
 )
 
 // Manifest is the reviewed, model-independent statement of a qualification
@@ -52,6 +62,8 @@ type Manifest struct {
 	Patrol           PatrolSpec         `json:"patrol"`
 	Investigation    *InvestigationSpec `json:"investigation,omitempty"`
 	Remediation      *RemediationSpec   `json:"remediation,omitempty"`
+	Engagement       *EngagementSpec    `json:"engagement,omitempty"`
+	Outcome          *OutcomeSpec       `json:"outcome,omitempty"`
 	Security         SecuritySpec       `json:"security"`
 	Budgets          BudgetSpec         `json:"budgets"`
 	Repeat           RepeatSpec         `json:"repeat"`
@@ -69,9 +81,22 @@ type LabSpec struct {
 }
 
 type ResourceSpec struct {
-	Alias          string            `json:"alias"`
-	Kind           string            `json:"kind"`
-	Name           string            `json:"name"`
+	Alias string `json:"alias"`
+	Kind  string `json:"kind"`
+	Name  string `json:"name"`
+	// Fixture names a driver-owned service fixture (see fixtures.go). The
+	// image, entrypoint, health check and mounts then come from the reviewed
+	// fixture, so the running container shows what a real service would show.
+	Fixture string `json:"fixture,omitempty"`
+	// Env is the container environment. It is scenario-owned ground truth: a
+	// misconfiguration fault changes one of these values.
+	Env map[string]string `json:"env,omitempty"`
+	// Volume is a lab-created named volume shared by every resource that
+	// declares the same name. The mount target belongs to the fixture.
+	Volume string `json:"volume,omitempty"`
+	// MountPath is the dedicated host filesystem of a host_filesystem
+	// resource. The operator has to name the same path on the command line.
+	MountPath      string            `json:"mount_path,omitempty"`
 	Image          string            `json:"image,omitempty"`
 	Command        []string          `json:"command,omitempty"`
 	Restart        string            `json:"restart,omitempty"`
@@ -242,6 +267,238 @@ type TeardownSpec struct {
 	RequireInventorySame bool        `json:"require_inventory_unchanged"`
 }
 
+// EngagementSpec bounds how long a response scenario waits for Patrol to start
+// by itself before the harness asks for a run. It never names the trigger the
+// scenario expects: how the run started is an observation, read from the
+// Patrol run record that first reported the finding.
+type EngagementSpec struct {
+	// AlertTimeout bounds the wait for Pulse to raise an alert on a scenario
+	// resource after the fault is confirmed.
+	AlertTimeout string `json:"alert_timeout"`
+	// NaturalWakeTimeout bounds the wait for a finding nobody asked for.
+	NaturalWakeTimeout string `json:"natural_wake_timeout"`
+	// InvestigationStartTimeout bounds the wait for the investigation to
+	// start by itself before the harness asks for it.
+	InvestigationStartTimeout string `json:"investigation_start_timeout"`
+	// Fallback is what the harness asks for once the natural wait is over.
+	// scoped_run is the same request as Run Patrol on the affected resources.
+	// When Pulse cannot resolve that selection the harness asks from the
+	// firing alert, as its Investigate button does, and last for a full run.
+	Fallback string `json:"fallback"`
+}
+
+// OutcomeSpec is the scenario-owned grading rubric of a response scenario.
+// Every grade is decided from structured state and these terms. Nobody reads
+// the conclusion to grade it.
+type OutcomeSpec struct {
+	// Expect is what a maintenance person would do: fixed (an action exists
+	// and should be taken), handed_over (no action exists, the exact cause and
+	// next step is the product) or quiet (nothing is wrong).
+	Expect string `json:"expect"`
+	// DecisiveTerms are the facts the stored conclusion needs before it is a
+	// hand-over a person can act on. Each group is a set of accepted
+	// spellings and every group has to match.
+	DecisiveTerms [][]string `json:"decisive_terms,omitempty"`
+	// AreaTerms mark a conclusion that found something the alert did not
+	// already say, without reaching the decisive fact. Leave it empty when
+	// the scenario has no such middle ground.
+	AreaTerms [][]string `json:"area_terms,omitempty"`
+	// MisdirectionTerms are statements the lab knows to be false. A
+	// conclusion that contains one sends the user the wrong way and cannot be
+	// a hand-over.
+	MisdirectionTerms []string `json:"misdirection_terms,omitempty"`
+}
+
+const (
+	OutcomeExpectFixed      = "fixed"
+	OutcomeExpectHandedOver = "handed_over"
+	OutcomeExpectQuiet      = "quiet"
+)
+
+var hostFilesystemPath = regexp.MustCompile(`^/(mnt|srv|media)/[a-z0-9][a-z0-9._-]{1,63}$`)
+
+func (m Manifest) validateResource(resource ResourceSpec) []error {
+	var errs []error
+	switch resource.Kind {
+	case resourceKindContainer:
+		if resource.MountPath != "" {
+			errs = append(errs, fmt.Errorf("resource %q: mount_path belongs to host_filesystem resources", resource.Alias))
+		}
+		if resource.Fixture != "" {
+			if _, ok := fixtureByKey(resource.Fixture); !ok {
+				errs = append(errs, fmt.Errorf("resource %q uses unknown fixture %q", resource.Alias, resource.Fixture))
+			}
+			if resource.Image != "" || len(resource.Command) > 0 || len(resource.Healthcheck) > 0 || resource.HealthEvery != "" || resource.FaultVolume || resource.ScratchStorage {
+				errs = append(errs, fmt.Errorf("resource %q: a fixture owns its image, command, health check and mounts", resource.Alias))
+			}
+		} else {
+			if len(resource.Env) > 0 || resource.Volume != "" {
+				errs = append(errs, fmt.Errorf("resource %q: env and volume require a fixture", resource.Alias))
+			}
+			if resource.Image == "" && m.Lab.Image == "" {
+				errs = append(errs, fmt.Errorf("resource %q has no image", resource.Alias))
+			}
+		}
+		if resource.Volume != "" && !safeID.MatchString(resource.Volume) {
+			errs = append(errs, fmt.Errorf("resource %q has an invalid volume name", resource.Alias))
+		}
+		// A fixture stands in for a real service, with a real image name and
+		// usually an exact container name. Both are only safe on a Docker
+		// daemon nothing else uses.
+		if resource.Fixture != "" && m.Lab.SharedHostOK {
+			errs = append(errs, fmt.Errorf("resource %q: fixtures need a private Docker daemon, set lab.shared_host_ok to false", resource.Alias))
+		}
+	case resourceKindHostFilesystem:
+		if !hostFilesystemPath.MatchString(resource.MountPath) {
+			errs = append(errs, fmt.Errorf("resource %q: mount_path must be a dedicated mount directly under /mnt, /srv or /media", resource.Alias))
+		}
+		if m.Lab.SharedHostOK {
+			errs = append(errs, fmt.Errorf("resource %q: a host filesystem fixture needs a private lab host, set lab.shared_host_ok to false", resource.Alias))
+		}
+		if resource.Fixture != "" || resource.Image != "" || len(resource.Command) > 0 || len(resource.Healthcheck) > 0 || len(resource.Env) > 0 ||
+			resource.Volume != "" || resource.Restart != "" || resource.FaultVolume || resource.ScratchStorage || len(resource.Labels) > 0 || resource.Name != "" {
+			errs = append(errs, fmt.Errorf("resource %q: a host_filesystem resource declares only alias, kind and mount_path", resource.Alias))
+		}
+	default:
+		errs = append(errs, fmt.Errorf("resource %q has unsupported kind %q", resource.Alias, resource.Kind))
+	}
+	return errs
+}
+
+func (m Manifest) validateResponse(aliases map[string]struct{}, kinds map[string]string) []error {
+	if m.Track != TrackResponse {
+		var errs []error
+		if m.Engagement != nil || m.Outcome != nil {
+			errs = append(errs, errors.New("only response scenarios may declare engagement or outcome"))
+		}
+		for _, kind := range kinds {
+			if kind == resourceKindHostFilesystem {
+				errs = append(errs, errors.New("host_filesystem resources are limited to response scenarios"))
+				break
+			}
+		}
+		return errs
+	}
+	var errs []error
+	if m.Investigation != nil {
+		errs = append(errs, errors.New("response scenarios describe the conclusion in outcome, not in investigation"))
+	}
+	if m.Engagement == nil {
+		errs = append(errs, errors.New("response scenarios require engagement"))
+	} else {
+		for name, raw := range map[string]string{
+			"engagement.alert_timeout":               m.Engagement.AlertTimeout,
+			"engagement.natural_wake_timeout":        m.Engagement.NaturalWakeTimeout,
+			"engagement.investigation_start_timeout": m.Engagement.InvestigationStartTimeout,
+		} {
+			if _, err := positiveDuration(raw); err != nil {
+				errs = append(errs, fmt.Errorf("%s: %w", name, err))
+			}
+		}
+		if m.Engagement.Fallback != "scoped_run" {
+			errs = append(errs, fmt.Errorf("unsupported engagement.fallback %q", m.Engagement.Fallback))
+		}
+	}
+	if m.Patrol.InvestigationTimeout == "" {
+		errs = append(errs, errors.New("response scenarios require patrol.investigation_timeout"))
+	} else if _, err := positiveDuration(m.Patrol.InvestigationTimeout); err != nil {
+		errs = append(errs, fmt.Errorf("patrol.investigation_timeout: %w", err))
+	}
+	if !m.Patrol.Scoped {
+		errs = append(errs, errors.New("response scenarios require patrol.scoped=true for the fallback request"))
+	}
+	if m.Outcome == nil {
+		return append(errs, errors.New("response scenarios require outcome"))
+	}
+	checkGroups := func(label string, groups [][]string) {
+		for groupIndex, group := range groups {
+			if len(group) == 0 {
+				errs = append(errs, fmt.Errorf("outcome.%s[%d] must not be empty", label, groupIndex))
+			}
+			for termIndex, term := range group {
+				if strings.TrimSpace(term) == "" {
+					errs = append(errs, fmt.Errorf("outcome.%s[%d][%d] must not be empty", label, groupIndex, termIndex))
+				}
+			}
+		}
+	}
+	checkGroups("decisive_terms", m.Outcome.DecisiveTerms)
+	checkGroups("area_terms", m.Outcome.AreaTerms)
+	for index, term := range m.Outcome.MisdirectionTerms {
+		if strings.TrimSpace(term) == "" {
+			errs = append(errs, fmt.Errorf("outcome.misdirection_terms[%d] must not be empty", index))
+		}
+	}
+	switch m.Outcome.Expect {
+	case OutcomeExpectQuiet:
+		if len(m.Faults) != 0 || len(m.NegativeControls) == 0 {
+			errs = append(errs, errors.New("a quiet response scenario declares no fault and at least one negative control"))
+		}
+		if m.Remediation != nil || len(m.Outcome.DecisiveTerms) > 0 || len(m.Outcome.AreaTerms) > 0 {
+			errs = append(errs, errors.New("a quiet response scenario has nothing to fix or hand over"))
+		}
+	case OutcomeExpectFixed, OutcomeExpectHandedOver:
+		if len(m.Faults) == 0 {
+			errs = append(errs, errors.New("a response scenario that expects work declares at least one fault"))
+		}
+		if len(m.Outcome.DecisiveTerms) == 0 {
+			errs = append(errs, errors.New("outcome.decisive_terms is required: without it a hand-over cannot be told from a restated alert"))
+		}
+		if m.Outcome.Expect == OutcomeExpectFixed {
+			if m.Remediation == nil || m.Remediation.Decision != "approve_execute" {
+				errs = append(errs, errors.New("outcome.expect=fixed requires remediation with decision approve_execute"))
+			}
+		} else if m.Remediation != nil {
+			errs = append(errs, errors.New("outcome.expect=handed_over means no action exists: remove remediation"))
+		}
+	default:
+		errs = append(errs, fmt.Errorf("unsupported outcome.expect %q", m.Outcome.Expect))
+	}
+	_ = aliases
+	return errs
+}
+
+// outcomeResources lists the aliases whose findings count as Patrol looking
+// at the scenario: every fault target, the resource the finding is expected
+// on, the related resources, and for a quiet scenario the negative controls.
+func (m Manifest) outcomeResources() []string {
+	seen := make(map[string]struct{})
+	var aliases []string
+	add := func(alias string) {
+		if alias == "" {
+			return
+		}
+		if _, ok := seen[alias]; ok {
+			return
+		}
+		seen[alias] = struct{}{}
+		aliases = append(aliases, alias)
+	}
+	for _, fault := range m.Faults {
+		add(fault.Target)
+		add(fault.Expected.Resource)
+		for _, related := range fault.RelatedResources {
+			add(related)
+		}
+	}
+	if len(m.Faults) == 0 {
+		for _, control := range m.NegativeControls {
+			add(control.Resource)
+		}
+	}
+	sort.Strings(aliases)
+	return aliases
+}
+
+func (m Manifest) resource(alias string) (ResourceSpec, bool) {
+	for _, resource := range m.Resources {
+		if resource.Alias == alias {
+			return resource, true
+		}
+	}
+	return ResourceSpec{}, false
+}
+
 type Catalog struct {
 	Manifests []Manifest
 	ByID      map[string]Manifest
@@ -312,7 +569,7 @@ func (m Manifest) Validate() error {
 	if strings.TrimSpace(m.Title) == "" || strings.TrimSpace(m.Description) == "" || strings.TrimSpace(m.Owner) == "" {
 		errs = append(errs, errors.New("title, description, and owner are required"))
 	}
-	if m.Track != TrackWatch && m.Track != TrackInvestigation && m.Track != TrackRemediation {
+	if m.Track != TrackWatch && m.Track != TrackInvestigation && m.Track != TrackRemediation && m.Track != TrackResponse {
 		errs = append(errs, fmt.Errorf("unsupported track %q", m.Track))
 	}
 	if m.Lab.Driver != "docker" && m.Lab.Driver != "replay" {
@@ -320,6 +577,8 @@ func (m Manifest) Validate() error {
 	}
 	aliases := make(map[string]struct{}, len(m.Resources))
 	scratchResources := make(map[string]bool, len(m.Resources))
+	resourceKinds := make(map[string]string, len(m.Resources))
+	resourceByAlias := make(map[string]ResourceSpec, len(m.Resources))
 	if len(m.Resources) == 0 {
 		errs = append(errs, errors.New("at least one disposable resource is required"))
 	}
@@ -332,18 +591,27 @@ func (m Manifest) Validate() error {
 		}
 		aliases[resource.Alias] = struct{}{}
 		scratchResources[resource.Alias] = resource.ScratchStorage
-		if resource.Kind != "container" {
-			errs = append(errs, fmt.Errorf("resource %q has unsupported kind %q", resource.Alias, resource.Kind))
-		}
-		if resource.Image == "" && m.Lab.Image == "" {
-			errs = append(errs, fmt.Errorf("resource %q has no image", resource.Alias))
-		}
+		resourceKinds[resource.Alias] = resource.Kind
+		resourceByAlias[resource.Alias] = resource
+		errs = append(errs, m.validateResource(resource)...)
 	}
 	checkPredicates := func(label string, predicates []Predicate) []error {
 		problems := validatePredicates(label, predicates, aliases)
 		for _, predicate := range predicates {
 			if predicate.Probe == "docker.scratch_available_bytes" && !scratchResources[predicate.Target] {
 				problems = append(problems, fmt.Errorf("%s scratch probe requires scratch_storage on %q", label, predicate.Target))
+			}
+			kind, known := resourceKinds[predicate.Target]
+			if !known {
+				continue
+			}
+			hostProbe := strings.HasPrefix(predicate.Probe, "host.")
+			dockerProbe := strings.HasPrefix(predicate.Probe, "docker.")
+			if hostProbe && kind != resourceKindHostFilesystem {
+				problems = append(problems, fmt.Errorf("%s probe %s requires a host_filesystem resource, %q is a %s", label, predicate.Probe, predicate.Target, kind))
+			}
+			if dockerProbe && kind != resourceKindContainer {
+				problems = append(problems, fmt.Errorf("%s probe %s requires a container resource, %q is a %s", label, predicate.Probe, predicate.Target, kind))
 			}
 		}
 		return problems
@@ -372,6 +640,35 @@ func (m Manifest) Validate() error {
 				errs = append(errs, fmt.Errorf("fault %q uses a fixed storage bound and accepts no value", fault.ID))
 			}
 		case "marker_enable", "health_process_stop", "stop", "disconnect_network", "kill":
+			if kind, ok := resourceKinds[fault.Injector.Resource]; ok && kind != resourceKindContainer {
+				errs = append(errs, fmt.Errorf("fault %q injector %q requires a container resource", fault.ID, fault.Injector.Kind))
+			}
+		case "service_process_exit", "crash_once":
+			// Both run one fixed command the fixture declares. A fixture
+			// without that command cannot take the fault.
+			fixture, ok := fixtureByKey(resourceByAlias[fault.Injector.Resource].Fixture)
+			if !ok || (fault.Injector.Kind == "service_process_exit" && len(fixture.ServiceProcessExit) == 0) ||
+				(fault.Injector.Kind == "crash_once" && len(fixture.CrashOnce) == 0) {
+				errs = append(errs, fmt.Errorf("fault %q injector %q is not supported by the fixture of resource %q", fault.ID, fault.Injector.Kind, fault.Injector.Resource))
+			}
+			if fault.Injector.Value != "" {
+				errs = append(errs, fmt.Errorf("fault %q injector %q accepts no value", fault.ID, fault.Injector.Kind))
+			}
+		case "recreate_with_env":
+			key, _, ok := strings.Cut(fault.Injector.Value, "=")
+			if _, declared := resourceByAlias[fault.Injector.Resource].Env[key]; !ok || !declared {
+				errs = append(errs, fmt.Errorf("fault %q recreate_with_env value must be KEY=VALUE for an env key the resource already declares", fault.ID))
+			}
+			if resourceByAlias[fault.Injector.Resource].Fixture == "" {
+				errs = append(errs, fmt.Errorf("fault %q recreate_with_env requires a fixture resource", fault.ID))
+			}
+		case "fill_host_filesystem":
+			if resourceKinds[fault.Injector.Resource] != resourceKindHostFilesystem {
+				errs = append(errs, fmt.Errorf("fault %q fill_host_filesystem requires a host_filesystem resource", fault.ID))
+			}
+			if fault.Injector.Value != "" {
+				errs = append(errs, fmt.Errorf("fault %q uses a driver-owned fill layout and accepts no value", fault.ID))
+			}
 		default:
 			errs = append(errs, fmt.Errorf("fault %q has unsupported injector %q", fault.ID, fault.Injector.Kind))
 		}
@@ -461,10 +758,11 @@ func (m Manifest) Validate() error {
 				}
 			}
 		}
-	} else if m.Investigation != nil {
+	} else if m.Investigation != nil && m.Track != TrackResponse {
 		errs = append(errs, errors.New("Watch scenarios must not declare investigation expectations"))
 	}
-	if m.Track == TrackRemediation {
+	errs = append(errs, m.validateResponse(aliases, resourceKinds)...)
+	if m.Track == TrackRemediation || (m.Track == TrackResponse && m.Remediation != nil) {
 		if m.Remediation == nil {
 			errs = append(errs, errors.New("remediation expectations are required for remediation track"))
 		} else {
@@ -520,7 +818,7 @@ func (m Manifest) Validate() error {
 	if !m.Patrol.RequireRealModel {
 		errs = append(errs, errors.New("patrol.require_real_model must be true for qualification"))
 	}
-	if !m.Patrol.RequireToolCallEvidence && !m.permitsToolFreeAllClear() {
+	if !m.Patrol.RequireToolCallEvidence && !m.permitsToolFreeAllClear() && m.Track != TrackResponse {
 		errs = append(errs, errors.New("tool-free Patrol qualification is limited to fault-free Watch scenarios with a declared negative control"))
 	}
 	if !m.Security.RequireNoMutation {
@@ -575,7 +873,7 @@ func validatePredicates(label string, predicates []Predicate, aliases map[string
 			errs = append(errs, fmt.Errorf("%s[%d] targets unknown resource %q", label, index, predicate.Target))
 		}
 		switch predicate.Probe {
-		case "inventory.same_as_pre", "docker.exists", "docker.status", "docker.running", "docker.health", "docker.restart_count", "docker.exit_code", "docker.network_attached", "docker.scratch_available_bytes":
+		case "inventory.same_as_pre", "docker.exists", "docker.status", "docker.running", "docker.health", "docker.restart_count", "docker.exit_code", "docker.network_attached", "docker.scratch_available_bytes", "host.filesystem_used_percent":
 		default:
 			errs = append(errs, fmt.Errorf("%s[%d] has unsupported probe %q", label, index, predicate.Probe))
 		}

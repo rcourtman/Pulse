@@ -1,0 +1,56 @@
+{
+  "source": "sonnet-nocmd/d4",
+  "captured_at": "2026-11-09T22:54:17Z",
+  "model": "claude-subscription:sonnet",
+  "scenario": "response.restart-loop-bad-config",
+  "phase1_scorecard_column": "commands-off",
+  "phase1_grade": "handed_back",
+  "phase1_woke_by_itself": "yes",
+  "note": "",
+  "evidence": {
+    "agent_profile": {
+      "name": "commands-off",
+      "commands_enabled": false,
+      "host_name": "docker01"
+    },
+    "alerts": [
+      {
+        "type": "docker-container-state",
+        "level": "warning",
+        "resource_alias": "vault-migrate",
+        "resource_name": "vaultwarden-db-migrate",
+        "message": "Docker container 'vaultwarden-db-migrate' is Exited (0) 2 hours ago"
+      }
+    ],
+    "wake": {
+      "alert_after_ns": 2000000000,
+      "run_id": "1794264898250182000",
+      "trigger_reason": "alert_fired",
+      "mode": "self",
+      "investigation_start": "self",
+      "finding_after_ns": 72000000000,
+      "settled_after_ns": 382000000000
+    },
+    "findings": [
+      {
+        "id": "7b2f8805d9ffbeba",
+        "severity": "critical",
+        "category": "reliability",
+        "resource_alias": "vaultwarden",
+        "resource_name": "vaultwarden",
+        "title": "Vaultwarden container is in an active restart loop on docker01",
+        "investigation_status": "completed",
+        "investigation_outcome": "needs_attention",
+        "turn_count": 6,
+        "evidence_call_count": 10,
+        "tools_used": [
+          "pulse_query",
+          "pulse_read",
+          "pulse_docker",
+          "patrol_conclude_investigation"
+        ],
+        "conclusion": "Vaultwarden on docker01 is confirmed in an active crash-restart loop (restart_count climbed 5->7->9 across checks, near-zero CPU/memory, filesystem namespace cycling). A companion Flyway migration container (vaultwarden-db-migrate, app-container-7d93fd2a83f63840) is exited and is the leading hypothesis for a database-migration-related crash trigger, but this could not be confirmed: pulse_read logs against docker01 failed with NO_AGENT (no command connection available), so no container logs, migration exit code, or recent config/env/image-update change history could be retrieved. docker01 host itself is healthy, ruling out host-level resource exhaustion. No typed action capability is advertised for the finding resource, and the candidate causal resource's capabilities could not be checked within this run's tool/budget limits, so no remediation can be safely proposed. An operator must restore docker01's command/agent connection, pull vaultwarden and vaultwarden-db-migrate logs, check for recent compose/env/admin-token changes and whether an image update was applied, and if a corrupted DB or failed migration is found, restore from the most recent backup rather than repeatedly restarting."
+      }
+    ]
+  }
+}

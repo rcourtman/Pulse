@@ -1,0 +1,57 @@
+{
+  "source": "sonnet-nocmd-b/d2",
+  "captured_at": "2026-11-09T23:23:36Z",
+  "model": "claude-subscription:sonnet",
+  "scenario": "response.worker-crashed-stays-exited",
+  "phase1_scorecard_column": "commands-off",
+  "phase1_grade": "handed_back",
+  "phase1_woke_by_itself": "no",
+  "note": "Rerun of D2. The first attempt asked while Patrol was busy and the rig did not retry, so it produced no observation.",
+  "evidence": {
+    "agent_profile": {
+      "name": "commands-off",
+      "commands_enabled": false,
+      "host_name": "docker01"
+    },
+    "alerts": [
+      {
+        "type": "docker-container-state",
+        "level": "warning",
+        "resource_alias": "immich-ml",
+        "resource_name": "immich_machine_learning",
+        "message": "Docker container 'immich_machine_learning' is Exited (139) 32 seconds ago"
+      }
+    ],
+    "wake": {
+      "asked": "scoped_run",
+      "alert_after_ns": 54000000000,
+      "run_id": "1794266700356922000",
+      "trigger_reason": "manual",
+      "mode": "asked",
+      "investigation_start": "self",
+      "finding_after_ns": 124000000000,
+      "settled_after_ns": 344000000000
+    },
+    "findings": [
+      {
+        "id": "6188a565cadf407c",
+        "severity": "warning",
+        "category": "reliability",
+        "resource_alias": "immich-ml",
+        "resource_name": "immich_machine_learning",
+        "title": "immich_machine_learning crashed with SIGSEGV (exit 139) and did not auto-restart",
+        "investigation_status": "completed",
+        "investigation_outcome": "needs_attention",
+        "turn_count": 6,
+        "evidence_call_count": 5,
+        "tools_used": [
+          "pulse_query",
+          "pulse_read",
+          "patrol_propose_action",
+          "patrol_conclude_investigation"
+        ],
+        "conclusion": "### Investigation Summary\nimmich_machine_learning (app-container-23d1f403ee0a85ad) on host docker01 is confirmed exited with code 139 (SIGSEGV), 0 restarts, image ghcr.io/immich-app/immich-machine-learning:v1.119.0, update_available=true. A fleet check of docker01 shows its sibling app containers (nextcloud, nextcloud-db, paperless, vaultwarden) all running healthy, and host-level CPU (66.6%) and memory (54.2%) are within normal range, ruling out a host-wide resource exhaustion or Docker-daemon failure as the cause - the fault is isolated to this single container's process. Direct log retrieval via docker01's command agent failed with NO_AGENT, and a subsequent attempt to remediate by proposing a \"start\" action was persisted but rejected with \"action execution unavailable: Docker / Podman command agent is not connected.\" A host health check shows docker01's monitoring/metrics transport is online and connected (2/2), confirming the command/exec transport used for logs and container control is a distinct, currently-down channel - not a general host outage.\n\n### Root Cause\nObserved failure mechanism: the immich_machine_learning container process terminated via SIGSEGV (exit 139), and no restart policy was configured or triggered, so it has remained in the exited state since the crash.\nUnderlying origin: unconfirmed. Plausible causes - an incompatible ML model/backend, corrupted data, a driver/hardware fault, or a software bug in image v1.119.0 - could not be distinguished because crash-time stdout/stderr logs were unobtainable (NO_AGENT on docker01's command transport). No other host-level signal (CPU, memory, sibling container health) points to a host-wide cause, which narrows the fault to this container but does not identify its trigger.\n\n### Affected Resources\n- immich_machine_learning (app-container-23d1f403ee0a85ad) on docker01 - down since the crash; the finding resource and the resource exhibiting the symptom.\n- docker01 (host) - not itself impaired in CPU/memory/monitoring, but its Docker command-agent transport is disconnected, which is the proximate blocker preventing both log collection and any remediation action (start/update) on immich_machine_learning.\n\n### Recommendation\n1. An operator should restore docker01's Docker/Podman command-agent connectivity (the transport used for exec, logs, and container start/update actions is down, distinct from its healthy monitoring/metrics transport).\n2. Once connectivity is restored, retrieve docker logs for immich_machine_learning around the crash timestamp to identify the specific fault (stack trace, model load error, driver issue, etc.).\n3. Retry or approve the proposed \"start\" action to bring the container back online; it was recorded but could not execute due to the agent disconnect.\n4. Before or alongside restarting, review Immich v1.119.0+ release notes for known SIGSEGV fixes, since update_available=true; an image update may be the actual fix if this is a known regression.\n5. Once service is restored, add a restart policy (e.g., unless-stopped) to allow automatic recovery from any future transient crash.\n\n### Conclusion\nNEEDS_ATTENTION: The container crashed with SIGSEGV and remains down with no restart policy; remediation could not be executed because docker01's command/exec agent is disconnected (separate from its healthy monitoring agent), and crash logs could not be collected for the same reason. An operator must restore docker01's command-agent connectivity, then retrieve logs, approve/retry the proposed start action, and evaluate the pending v1.119.0+ image update for known SIGSEGV fixes."
+      }
+    ]
+  }
+}

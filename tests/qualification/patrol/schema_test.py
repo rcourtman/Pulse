@@ -64,6 +64,51 @@ class PublishedSchemaTests(unittest.TestCase):
         spec.pop("min_evidence_ids", None)
         self.assertFalse(self.validator.is_valid(manifest))
 
+    def response(self):
+        return copy.deepcopy(self.catalogue["response.host-disk-one-folder.json"])
+
+    def test_response_scenarios_need_their_rubric_and_engagement(self):
+        for field in ("outcome", "engagement"):
+            with self.subTest(field=field):
+                manifest = self.response()
+                manifest.pop(field)
+                self.assertFalse(self.validator.is_valid(manifest))
+        manifest = self.response()
+        manifest["outcome"].pop("decisive_terms")
+        self.assertFalse(self.validator.is_valid(manifest))
+        manifest = self.response()
+        manifest["investigation"] = {"min_evidence_calls": 1, "required_summary_terms": ["disk"], "require_completed_status": True}
+        self.assertFalse(self.validator.is_valid(manifest))
+
+    def test_quiet_outcome_carries_no_terms(self):
+        manifest = copy.deepcopy(self.catalogue["response.finished-job-stays-quiet.json"])
+        self.validator.validate(manifest)
+        manifest["outcome"]["decisive_terms"] = [["anything"]]
+        self.assertFalse(self.validator.is_valid(manifest))
+
+    def test_rubric_and_engagement_are_limited_to_response_scenarios(self):
+        for field in ("outcome", "engagement"):
+            with self.subTest(field=field):
+                manifest = copy.deepcopy(self.catalogue["watch.healthy-mixed.json"])
+                manifest[field] = self.response()[field]
+                self.assertFalse(self.validator.is_valid(manifest))
+
+    def test_host_filesystem_resource_is_only_a_bounded_mount_path(self):
+        def host_resource(manifest):
+            return next(r for r in manifest["resources"] if r["kind"] == "host_filesystem")
+
+        for mount_path in ("/", "/var/lib/docker", "/mnt", "/mnt/nvr/recordings", "/home/user/disk"):
+            with self.subTest(mount_path=mount_path):
+                manifest = self.response()
+                host_resource(manifest)["mount_path"] = mount_path
+                self.assertFalse(self.validator.is_valid(manifest))
+        manifest = self.response()
+        host_resource(manifest).pop("mount_path")
+        self.assertFalse(self.validator.is_valid(manifest))
+        manifest = self.response()
+        host_resource(manifest)["command"] = ["/bin/sh"]
+        self.assertFalse(self.validator.is_valid(manifest))
+
 
 if __name__ == "__main__":
     unittest.main()

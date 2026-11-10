@@ -1,0 +1,83 @@
+{
+  "source": "sonnet-r1/d2",
+  "captured_at": "2026-11-09T21:30:26Z",
+  "model": "claude-subscription:sonnet",
+  "scenario": "response.worker-crashed-stays-exited",
+  "phase1_scorecard_column": "commands-on",
+  "phase1_grade": "fixed",
+  "phase1_woke_by_itself": "no",
+  "note": "",
+  "evidence": {
+    "agent_profile": {
+      "name": "commands-on",
+      "commands_enabled": true,
+      "host_name": "docker01"
+    },
+    "alerts": [
+      {
+        "type": "docker-container-state",
+        "level": "warning",
+        "resource_alias": "immich-ml",
+        "resource_name": "immich_machine_learning",
+        "message": "Docker container 'immich_machine_learning' is Exited (139) 34 seconds ago"
+      }
+    ],
+    "wake": {
+      "asked": "scoped_run",
+      "alert_after_ns": 40000000000,
+      "run_id": "1794260047279408000",
+      "trigger_reason": "manual",
+      "mode": "asked",
+      "investigation_start": "self",
+      "finding_after_ns": 250000000000,
+      "settled_after_ns": 531000000000
+    },
+    "postconditions": [
+      {
+        "predicate": {
+          "probe": "docker.running",
+          "target": "immich-ml",
+          "operator": "eq",
+          "value": true,
+          "timeout": "30s"
+        },
+        "observed": true,
+        "passed": true,
+        "checked_at": "2026-11-09T21:30:26Z"
+      }
+    ],
+    "findings": [
+      {
+        "id": "6188a565cadf407c",
+        "severity": "warning",
+        "category": "reliability",
+        "resource_alias": "immich-ml",
+        "resource_name": "immich_machine_learning",
+        "title": "immich_machine_learning crashed with SIGSEGV and has not been auto-restarted",
+        "investigation_status": "completed",
+        "investigation_outcome": "fix_queued",
+        "turn_count": 6,
+        "evidence_call_count": 8,
+        "tools_used": [
+          "pulse_query",
+          "pulse_read",
+          "pulse_docker",
+          "patrol_action_capabilities",
+          "patrol_propose_action"
+        ],
+        "conclusion": "### Investigation Summary\nimmich_machine_learning (app-container-23d1f403ee0a85ad, host docker01) is confirmed exited with code 139 (SIGSEGV). Host-level docker logs show the service loaded its CLIP model (`ViT-B-32__openai`) successfully, completed startup, and then crashed during an inference call: `Fatal Python error: Segmentation fault` raised inside `onnxruntime/capi/onnxruntime_inference_collection.py:220` in `run()`. `docker inspect` confirms `RestartPolicy.Name: \"no\"`, `MaximumRetryCount: 0` — there is no restart policy on this container, which explains the restart count of 0 and why Docker never attempted recovery. A `check_updates` query shows an update is available (current digest `sha256:9c6636...` → latest `sha256:fa558a...`), but no release notes were available through these tools to confirm or rule out a known segfault fix, so the update's relevance to this crash remains unverified.\n\n### Root Cause\n**Observed failure mechanism**: a native segmentation fault inside the `onnxruntime` inference engine (`onnxruntime_inference_collection.py`, `run()`), occurring after successful model load, on **app-container-23d1f403ee0a85ad (immich_machine_learning)**.\n**Unestablished origin**: the evidence does not show *why* onnxruntime segfaulted — possibilities include a hardware-acceleration/CPU-instruction incompatibility, a corrupted or incompatible model file, an onnxruntime version bug, or a host resource constraint. None of these were directly tested (no host CPU-flag check, no model-cache integrity check, no onnxruntime changelog review was possible with available tools).\n**Contributing factor to the lack of recovery (not the crash cause itself)**: the container has no restart policy configured (`RestartPolicy.Name: \"no\"`), so it stayed down after the crash instead of being auto-restarted.\n\n### Affected Resources\n- **app-container-23d1f403ee0a85ad (immich_machine_learning)** — observed symptom: exited, exit code 139, restart count 0, currently offline since the crash ~3 minutes before the scan.\n- No other Immich components (server, postgres, redis) were found to be affected by this search; the crash appears isolated to the machine-learning service.\n\n### Recommendation\n1. An admin-approved **start** action has been planned for immich_machine_learning to restore the ML service immediately (addresses the symptom, not the underlying segfault cause).\n2. Separately (outside typed-action capabilities, requires operator/compose-file change): add a restart policy such as `unless-stopped` or `on-failure` to this container so future crashes self-recover.\n3. Before approving the available image update, review the immich-machine-learning v1.119.0→latest release notes for onnxruntime-related segfault fixes; if the notes confirm a fix, the `update` capability (low-risk auto-authorization eligible) is the safer long-term remediation.\n4. If the segfault recurs after a plain restart, investigate host hardware-acceleration configuration (GPU/CPU instruction set compatibility with the onnxruntime build) and model-cache integrity as the next diagnostic step.\n\n### Conclusion\nNEEDS_ATTENTION: A \"start\" action for app-container-23d1f403ee0a85ad (immich_machine_learning) has been planned (action_id act_ba083dbe2e388db73dca60dffe00e242) but is pending_approval and requires an admin to approve execution before the service is restored. The underlying onnxruntime segfault cause is unconfirmed and the container still lacks a restart policy — an operator should approve the start, consider adding a restart policy via the compose/host config, and review the pending image update's release notes for a known fix before deciding whether to update.",
+        "action": {
+          "action_id": "act_ba083dbe2e388db73dca60dffe00e242",
+          "capability": "start",
+          "target_alias": "immich-ml",
+          "target_resource_id": "app-container-23d1f403ee0a85ad",
+          "decision": "approved_executed",
+          "final_state": "completed",
+          "verification_status": "verified",
+          "plan_hash_bound": true,
+          "origin_bound": true
+        }
+      }
+    ]
+  }
+}

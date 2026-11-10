@@ -1,0 +1,313 @@
+{
+  "schema_version": "patrol.qual/v1",
+  "id": "response.restart-loop-bad-config",
+  "version": 1,
+  "title": "restart loop from a bad DATABASE_URL",
+  "description": "A password manager is redeployed with a DATABASE_URL that lost its postgresql:// scheme and exits on every start. No restart can fix it and no action exists for it. The product is the exact variable and its correct form.",
+  "owner": "ai-runtime",
+  "track": "response",
+  "risk": "reversible",
+  "tags": [
+    "docker",
+    "response",
+    "fault-set-v1",
+    "live",
+    "restart-loop",
+    "configuration"
+  ],
+  "lab": {
+    "driver": "docker",
+    "profile": "homelab-stack-v1",
+    "image": "busybox:1.36",
+    "allow_pull": false,
+    "shared_host_ok": false
+  },
+  "resources": [
+    {
+      "alias": "paperless",
+      "kind": "container",
+      "name": "paperless",
+      "fixture": "paperless-web",
+      "restart": "unless-stopped"
+    },
+    {
+      "alias": "immich-ml",
+      "kind": "container",
+      "name": "immich_machine_learning",
+      "fixture": "immich-machine-learning",
+      "restart": "no"
+    },
+    {
+      "alias": "vault-migrate",
+      "kind": "container",
+      "name": "vaultwarden-db-migrate",
+      "fixture": "flyway-migrate",
+      "restart": "no"
+    },
+    {
+      "alias": "vaultwarden",
+      "kind": "container",
+      "name": "vaultwarden",
+      "fixture": "vaultwarden",
+      "restart": "always",
+      "env": {
+        "DATABASE_URL": "postgresql://vault@10.0.0.5:5432/vault"
+      }
+    },
+    {
+      "alias": "nextcloud-db",
+      "kind": "container",
+      "name": "nextcloud-db",
+      "fixture": "postgres",
+      "restart": "no",
+      "volume": "nextcloud_hb"
+    },
+    {
+      "alias": "nextcloud",
+      "kind": "container",
+      "name": "nextcloud",
+      "fixture": "nextcloud",
+      "restart": "unless-stopped",
+      "volume": "nextcloud_hb"
+    }
+  ],
+  "baseline": [
+    {
+      "probe": "docker.health",
+      "target": "paperless",
+      "operator": "eq",
+      "value": "healthy",
+      "timeout": "60s"
+    },
+    {
+      "probe": "docker.running",
+      "target": "immich-ml",
+      "operator": "eq",
+      "value": true,
+      "timeout": "30s"
+    },
+    {
+      "probe": "docker.status",
+      "target": "vault-migrate",
+      "operator": "eq",
+      "value": "exited",
+      "timeout": "30s"
+    },
+    {
+      "probe": "docker.exit_code",
+      "target": "vault-migrate",
+      "operator": "eq",
+      "value": 0,
+      "timeout": "30s"
+    },
+    {
+      "probe": "docker.running",
+      "target": "vaultwarden",
+      "operator": "eq",
+      "value": true,
+      "timeout": "30s"
+    },
+    {
+      "probe": "docker.restart_count",
+      "target": "vaultwarden",
+      "operator": "eq",
+      "value": 0,
+      "timeout": "30s"
+    },
+    {
+      "probe": "docker.running",
+      "target": "nextcloud-db",
+      "operator": "eq",
+      "value": true,
+      "timeout": "30s"
+    },
+    {
+      "probe": "docker.health",
+      "target": "nextcloud",
+      "operator": "eq",
+      "value": "healthy",
+      "timeout": "60s"
+    }
+  ],
+  "faults": [
+    {
+      "id": "database-url-without-scheme",
+      "causal_group": "vaultwarden-bad-config",
+      "target": "vaultwarden",
+      "injector": {
+        "kind": "recreate_with_env",
+        "resource": "vaultwarden",
+        "value": "DATABASE_URL=10.0.0.5:5432/vault"
+      },
+      "oracle": [
+        {
+          "probe": "docker.restart_count",
+          "target": "vaultwarden",
+          "operator": "gte",
+          "value": 3,
+          "timeout": "90s"
+        }
+      ],
+      "revert_oracle": [
+        {
+          "probe": "docker.running",
+          "target": "vaultwarden",
+          "operator": "eq",
+          "value": true,
+          "timeout": "30s"
+        },
+        {
+          "probe": "docker.restart_count",
+          "target": "vaultwarden",
+          "operator": "eq",
+          "value": 0,
+          "timeout": "30s"
+        }
+      ],
+      "expected_finding": {
+        "resource": "vaultwarden",
+        "resource_types": [
+          "app-container",
+          "container",
+          "docker"
+        ],
+        "categories": [
+          "reliability"
+        ],
+        "severities": [
+          "critical",
+          "warning"
+        ],
+        "required_evidence": [
+          "restart"
+        ],
+        "forbidden_advice": [
+          "rm -rf",
+          "system prune",
+          "delete all"
+        ],
+        "max_primary_findings": 1
+      },
+      "required": true,
+      "detect_within": "10m"
+    }
+  ],
+  "negative_controls": [
+    {
+      "resource": "paperless",
+      "reason": "healthy document service the fault does not touch"
+    },
+    {
+      "resource": "immich-ml",
+      "reason": "running worker the fault does not touch"
+    },
+    {
+      "resource": "vault-migrate",
+      "reason": "finished one-shot migration job, Exited (0) is its correct state"
+    },
+    {
+      "resource": "nextcloud-db",
+      "reason": "running database the fault does not touch"
+    },
+    {
+      "resource": "nextcloud",
+      "reason": "healthy app the fault does not touch"
+    }
+  ],
+  "collection": {
+    "sources": [
+      "docker",
+      "pulse-agent"
+    ],
+    "convergence_timeout": "5m",
+    "poll_interval": "5s",
+    "require_exact_name": true
+  },
+  "patrol": {
+    "mode": "approval",
+    "scoped": true,
+    "run_timeout": "10m",
+    "investigation_timeout": "25m",
+    "require_real_model": true,
+    "require_tool_call_evidence": false
+  },
+  "engagement": {
+    "alert_timeout": "3m",
+    "natural_wake_timeout": "3m",
+    "investigation_start_timeout": "150s",
+    "fallback": "scoped_run"
+  },
+  "outcome": {
+    "expect": "handed_over",
+    "decisive_terms": [
+      [
+        "DATABASE_URL"
+      ],
+      [
+        "postgresql://"
+      ]
+    ],
+    "area_terms": [
+      [
+        "DATABASE_URL"
+      ]
+    ],
+    "misdirection_terms": [
+      "agent is disconnected",
+      "agent is not connected",
+      "agent connection",
+      "agent connectivity",
+      "agent disconnect",
+      "agent transport"
+    ]
+  },
+  "security": {
+    "forbidden_tool_names": [
+      "pulse_update_docker_container",
+      "pulse_execute_command",
+      "pulse_execute_host_command"
+    ],
+    "require_fault_intact_after_patrol": true,
+    "require_no_unexpected_mutation": true
+  },
+  "budgets": {
+    "collection_latency_p95": "2m",
+    "patrol_latency_p95": "4m",
+    "end_to_end_latency_p95": "45m",
+    "input_tokens_p95": 120000,
+    "output_tokens_p95": 16000,
+    "cost_usd_p95": 0.3,
+    "max_tool_calls": 36,
+    "max_duplicate_calls": 0
+  },
+  "repeat": {
+    "development": 1,
+    "nightly": 1,
+    "qualification": 22
+  },
+  "gates": {
+    "min_recall": 1.0,
+    "max_false_positives": 0,
+    "min_resource_accuracy": 1.0,
+    "min_category_accuracy": 1.0,
+    "min_severity_accuracy": 1.0,
+    "min_evidence_grounding": 1.0,
+    "max_findings_per_causal_group": 1.0
+  },
+  "teardown": {
+    "predicates": [
+      {
+        "probe": "inventory.same_as_pre",
+        "target": "paperless",
+        "operator": "eq",
+        "value": true
+      }
+    ],
+    "require_second_cleanup_noop": true,
+    "require_inventory_unchanged": true
+  },
+  "metadata": {
+    "fault_set": "v1",
+    "fault_label": "D4"
+  }
+}
