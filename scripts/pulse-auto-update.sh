@@ -26,7 +26,10 @@ log() {
     # Conditional callers disable errexit throughout this function. Try both
     # sinks, but never let successful stdout hide a failed journal write (or
     # vice versa). The installer collector owns draining and the first error.
-    logger -t "$LOG_TAG" -p "user.$level" "$@" || logger_status=$?
+    # A blocked journal socket must not hold the installer output collector or
+    # recovery path until systemd kills the whole update. Keep a TERM deadline
+    # and KILL backstop; timeout's observed failure still wins over stdout.
+    timeout -k 1 5 logger -t "$LOG_TAG" -p "user.$level" "$@" || logger_status=$?
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$level] $@" || output_status=$?
     if [[ "$logger_status" != 0 ]]; then
         return "$logger_status"
