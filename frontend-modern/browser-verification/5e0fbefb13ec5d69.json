@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "base_sha": "ca0a2d44b9ba6f21fe1245a6c1cd14ff6471163d",
+  "verified_at": "2026-11-10T18:42:25.655921Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/OrganizationSharingCreateSection.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/OrganizationSharingCreateSection.tsx": "928fe4d3a2edc2970153cfb916be47ef8517f9e3613e2f29d7cca9b5c1fd4992"
+  },
+  "routes": [
+    "/settings/organization/sharing"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Actual App/state hook/OrgsAPI/apiClient, synthetic owner, two namesake organizations and two same-name/type resources. Neither picker preselects a value.",
+    "Native option labels include complete saved keys. Selected names and separate bidi-isolated IDs remain readable outside clipped native selects.",
+    "Explicit manual entry clears the discovered-resource description, retaining destination, role, manual fields and Create Share.",
+    "24 native view_image captures/12 comparable before/after pairs: ready, selected and manual, both themes at desktop/phone. Existing visible information and controls remain."
+  ],
+  "interactions": [
+    "After-change native selectOption uses full visible labels; baseline records identical labels and must select by value.",
+    "Choice/manual interactions send no mutation. Create Share sends exactly one selected-org/CSRF-bound POST with the chosen orgId, resource type/id, unchanged resourceName and viewer role.",
+    "Actual client saved readback renders the stored pending grant and its ID-bound action name. No repeated write; existing retained draft behavior preserved.",
+    "Same-anchor comparisons preserve all control counts/values and on-screen role/guide/manual/Create actions without horizontal document overflow. Browser and preview server close."
+  ],
+  "browser": {
+    "name": "Chromium",
+    "version": "141.0.7390.37",
+    "playwright": "1.56.1"
+  },
+  "limitations": [
+    "Offline actual-App synthetic HTTP, not live backend authorization, original-client recovery, full App/IdP or installed/release acceptance.",
+    "No native-mobile platform, WebKit/Firefox or screen-reader speech acceptance.",
+    "Rendered registered tests cover rename/reorder/withdrawal, crafted names, name fallbacks, saving and uncertain-result reloads; committed-source proof is recorded separately."
+  ]
+}

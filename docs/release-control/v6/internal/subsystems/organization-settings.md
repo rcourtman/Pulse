@@ -15,6 +15,28 @@
 
 ## Purpose
 
+### Sharing choices expose the selected saved identities
+
+Create Share distinguishes namesake recipients by organization ID and namesake
+resources by complete type and ID in the native option text. Each current
+selection also has a wrapping, associated description containing its name and
+separate bidi-isolated ID, so clipping in a closed native select cannot hide the
+chosen identity. ID-only names are not repeated. Descriptions follow current
+option membership, not leftover draft fields: withdrawn choices and explicit
+manual resource entry do not retain a misleading selected-resource description.
+Names and keys are presented at render time only; governed resource names in
+the grant payload and all existing selection, authority, CSRF and no-write-retry
+fences are unchanged. No recipient is inferred or preselected.
+
+Phone spacing keeps the role, resource guidance, manual-entry control and
+Create Share action available alongside the additional identity text; desktop
+retains its existing layout. Registered sharing panel/transport tests exercise
+visible-name selection, namesake/type-distinct keys, name/ID fallbacks, crafted
+names, rename/reorder/withdrawal, disabled writes and uncertain-result reloads.
+Comparable actual-App desktop/phone light/dark browser fixtures bind the display
+and exact one-write/saved-readback behavior. This is selection clarity, not live
+authorization, original-client recovery or release availability.
+
 ### Keyboard recovery after an uncertain access change
 
 Organization Access hands lost panel focus to its existing unavailable warning

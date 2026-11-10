@@ -210,8 +210,18 @@ describe('OrganizationSharingPanel', () => {
     const quickPick = screen.getByLabelText('Quick Pick Resource') as HTMLSelectElement;
     const labels = Array.from(quickPick.options).map((option) => option.textContent?.trim());
 
-    expect(labels).toEqual(['Select resource', 'Alpha VM (vm)', 'pve-1 (agent)', 'Zulu VM (vm)']);
-    expect(labels).not.toContain('Hidden (vm)');
+    expect(labels).toEqual([
+      'Select resource',
+      'Alpha VM (vm:vm-100)',
+      'pve-1 (agent:host-1)',
+      'Zulu VM (vm:vm-200)',
+    ]);
+    expect(Array.from(quickPick.options, (option) => option.value)).toEqual([
+      '',
+      'vm::vm-100',
+      'agent::host-1',
+      'vm::vm-200',
+    ]);
   });
 
   it('populates resource fields from quick-pick selection', async () => {

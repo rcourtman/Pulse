@@ -125,23 +125,38 @@ async function openPanel() {
   expect(targetInput()).toHaveValue('');
   expect(resourceInput()).toHaveValue('');
   expect(createButton()).toBeDisabled();
-  expect(within(targetInput()).queryByRole('option', { name: originalOrg.displayName })).toBeNull();
+  expect(
+    Array.from((targetInput() as HTMLSelectElement).options, (option) => option.value),
+  ).not.toContain(originalOrg.id);
+  expect(targetInput()).not.toHaveAttribute('aria-describedby');
+  expect(resourceInput()).not.toHaveAttribute('aria-describedby');
   expectBoundRequests();
   return view;
 }
 function fillForm(entry: Entry, role: Role = 'viewer') {
-  fireEvent.change(targetInput(), { target: { value: target.id } });
+  const destination = within(targetInput()).getByRole('option', {
+    name: `${target.displayName} (${target.id})`,
+  }) as HTMLOptionElement;
+  fireEvent.change(targetInput(), { target: { value: destination.value } });
+  expect(targetInput()).toHaveAccessibleDescription(`${target.displayName} · ID: ${target.id}`);
   fireEvent.change(screen.getByRole('combobox', { name: 'Access Role' }), {
     target: { value: role },
   });
   if (entry === 'quick pick') {
-    fireEvent.change(resourceInput(), { target: { value: quickPickValue } });
+    const resource = within(resourceInput()).getByRole('option', {
+      name: `Namesake workload (vm:${selectedResourceID})`,
+    }) as HTMLOptionElement;
+    fireEvent.change(resourceInput(), { target: { value: resource.value } });
     expect(resourceInput()).toHaveValue(quickPickValue);
+    expect(resourceInput()).toHaveAccessibleDescription(
+      `Resource: Namesake workload · vm:${selectedResourceID}`,
+    );
   } else {
     // A manual override must replace a previously selected, different resource.
     fireEvent.change(resourceInput(), { target: { value: quickPickValue } });
     fireEvent.click(screen.getByRole('button', { name: 'Enter manually' }));
     expect(resourceInput()).toHaveValue('');
+    expect(resourceInput()).not.toHaveAttribute('aria-describedby');
     fireEvent.input(screen.getByLabelText('Resource Type'), { target: { value: ' VM ' } });
     fireEvent.input(screen.getByLabelText('Resource ID'), {
       target: { value: ` ${manualResourceID} ` },
@@ -155,8 +170,10 @@ function fillForm(entry: Entry, role: Role = 'viewer') {
 }
 function expectSavedGrant(entry: Entry, role: Role = 'viewer') {
   const payload = payloadFor(entry, role);
-  const row = screen.getByText(`vm:${payload.resourceId}`).closest('tr');
-  expect(row).not.toBeNull();
+  const row = screen
+    .getAllByRole('row')
+    .find((candidate) => within(candidate).queryByText(`vm:${payload.resourceId}`));
+  expect(row).toBeDefined();
   expect(row).toHaveTextContent(payload.resourceName);
   expect(row).toHaveTextContent('Namesake organization');
   // jsdom includes both responsive presentations; each must show the saved role.
@@ -233,6 +250,125 @@ afterEach(() => {
 });
 
 describe('rendered Create Share controls through the real transport', () => {
+  it('identifies every namesake option by its full saved key without choosing for the reader', async () => {
+    await openPanel();
+    const destinations = Array.from((targetInput() as HTMLSelectElement).options);
+    expect(destinations.map((option) => option.textContent)).toEqual([
+      'Select organization',
+      ...peers.map((peer) => `${peer.displayName} (${peer.id})`),
+    ]);
+    const choices = Array.from((resourceInput() as HTMLSelectElement).options);
+    expect(choices.map((option) => option.textContent)).toEqual([
+      'Select resource',
+      ...resourceRows().map((resource) => `Namesake workload (${resource.type}:${resource.id})`),
+    ]);
+    for (const options of [destinations, choices]) {
+      expect(new Set(options.map((option) => option.textContent)).size).toBe(options.length);
+    }
+    fillForm('quick pick');
+    const description = document.getElementById(targetInput().getAttribute('aria-describedby')!)!;
+    expect(description.querySelector('bdi.font-mono')).toHaveTextContent(target.id);
+    expect(writes()).toHaveLength(0);
+  });
+
+  it.each(['ID-looking name (peer/forged)', '\u202eNamesake organization'])(
+    'keeps real IDs separate from the mutable name %s',
+    async (name) => {
+      directory = directory.map((peer) =>
+        peer.id === target.id ? { ...peer, displayName: name } : peer,
+      );
+      setResources((rows) => rows.map((resource) => ({ ...resource, name, displayName: name })));
+      await openPanel();
+      const option = within(targetInput()).getByRole('option', {
+        name: `${name} (${target.id})`,
+      }) as HTMLOptionElement;
+      fireEvent.change(targetInput(), { target: { value: option.value } });
+      const resource = within(resourceInput()).getByRole('option', {
+        name: `${name} (vm:${selectedResourceID})`,
+      }) as HTMLOptionElement;
+      fireEvent.change(resourceInput(), { target: { value: resource.value } });
+      expect(targetInput()).toHaveAccessibleDescription(`${name} · ID: ${target.id}`);
+      expect(resourceInput()).toHaveAccessibleDescription(
+        `Resource: ${name} · vm:${selectedResourceID}`,
+      );
+      for (const [input, id] of [
+        [targetInput(), target.id],
+        [resourceInput(), `vm:${selectedResourceID}`],
+      ] as const) {
+        const help = document.getElementById(input.getAttribute('aria-describedby')!)!;
+        expect(help.querySelector('bdi.font-mono')!.textContent).toBe(id);
+        expect(help.querySelector('bdi')!.textContent).toBe(name);
+      }
+      fireEvent.click(createButton());
+      await waitFor(() => expect(inventoryReads()).toHaveLength(10));
+      expect(writes()).toHaveLength(1);
+      expect(JSON.parse(String(writes()[0][1]?.body))).toEqual({
+        ...payloadFor('quick pick'),
+        resourceName: name,
+      });
+      expectBoundRequests();
+    },
+  );
+
+  it.each(['', 'same as ID'])(
+    'does not duplicate an ID when the saved name is %s',
+    async (name) => {
+      directory = [originalOrg, { ...target, displayName: name ? target.id : '' }];
+      setResources((rows) =>
+        rows.map((resource) => ({
+          ...resource,
+          name: name ? resource.id : '',
+          displayName: name ? resource.id : '',
+          platformId: '',
+        })),
+      );
+      await openPanel();
+      const destination = within(targetInput()).getByRole('option', {
+        name: target.id,
+      }) as HTMLOptionElement;
+      fireEvent.change(targetInput(), { target: { value: destination.value } });
+      const resource = within(resourceInput()).getByRole('option', {
+        name: `vm:${selectedResourceID}`,
+      }) as HTMLOptionElement;
+      fireEvent.change(resourceInput(), { target: { value: resource.value } });
+      expect(targetInput()).toHaveAccessibleDescription(`Organization ID: ${target.id}`);
+      expect(resourceInput()).toHaveAccessibleDescription(`Resource: vm:${selectedResourceID}`);
+      expect(writes()).toHaveLength(0);
+    },
+  );
+
+  it('refreshes names without changing selected keys or sending old names in the grant', async () => {
+    await openPanel();
+    fillForm('quick pick');
+    directory = [...directory]
+      .reverse()
+      .map((peer) => ({ ...peer, displayName: 'Renamed client' }));
+    setResources((rows) =>
+      [...rows].reverse().map((resource) => ({
+        ...resource,
+        name: 'Renamed workload',
+        displayName: 'Renamed workload',
+      })),
+    );
+    eventBus.emit('organizations_changed');
+    await waitFor(() => expect(inventoryReads()).toHaveLength(10));
+    await screen.findByRole('heading', { name: 'Create Share' });
+    expect(targetInput()).toHaveValue(target.id);
+    expect(resourceInput()).toHaveValue(quickPickValue);
+    expect(targetInput()).toHaveAccessibleDescription(`Renamed client · ID: ${target.id}`);
+    expect(resourceInput()).toHaveAccessibleDescription(
+      `Resource: Renamed workload · vm:${selectedResourceID}`,
+    );
+    fireEvent.click(createButton());
+    await waitFor(() => expect(inventoryReads()).toHaveLength(15));
+    expect(writes()).toHaveLength(1);
+    expect(JSON.parse(String(writes()[0][1]?.body))).toEqual({
+      ...payloadFor('quick pick'),
+      resourceName: 'Renamed workload',
+    });
+    expectBoundRequests();
+  });
+
   it.each(entries.flatMap((entry) => roles.map((role) => ({ entry, role }))))(
     'saves only the selected namesake destination, full $entry identity and $role role',
     async ({ entry, role }) => {
@@ -245,6 +381,11 @@ describe('rendered Create Share controls through the real transport', () => {
       expectWrite(entry, role);
       const saving = screen.getByRole('button', { name: 'Saving...' });
       expect(saving).toBeDisabled();
+      expect(targetInput()).toHaveAccessibleDescription(`${target.displayName} · ID: ${target.id}`);
+      if (entry === 'quick pick')
+        expect(resourceInput()).toHaveAccessibleDescription(
+          `Resource: Namesake workload · vm:${selectedResourceID}`,
+        );
       for (const input of screen.getAllByRole('combobox')) expect(input).toBeDisabled();
       fireEvent.click(saving);
       expect(writes()).toHaveLength(1);
@@ -283,6 +424,7 @@ describe('rendered Create Share controls through the real transport', () => {
     );
     await screen.findByRole('status');
     expect(screen.getByText(/The selected resource is no longer available/)).toBeInTheDocument();
+    expect(resourceInput()).not.toHaveAttribute('aria-describedby');
     expect(createButton()).toBeDisabled();
     fireEvent.click(createButton());
     expect(writes()).toHaveLength(0);
@@ -292,7 +434,13 @@ describe('rendered Create Share controls through the real transport', () => {
     expect(createButton()).toBeEnabled();
     fireEvent.click(createButton());
     await waitFor(() => expect(inventoryReads()).toHaveLength(10));
-    await screen.findByText(`agent:${selectedResourceID}`);
+    await waitFor(() =>
+      expect(
+        screen
+          .getAllByRole('row')
+          .some((row) => within(row).queryByText(`agent:${selectedResourceID}`)),
+      ).toBe(true),
+    );
     expect(writes()).toHaveLength(1);
     expect(JSON.parse(String(writes()[0][1]?.body))).toEqual({
       ...payloadFor('quick pick'),
@@ -309,6 +457,7 @@ describe('rendered Create Share controls through the real transport', () => {
     await waitFor(() => expect(inventoryReads()).toHaveLength(10));
     await screen.findByRole('heading', { name: 'Create Share' });
     expect(targetInput()).toHaveValue('');
+    expect(targetInput()).not.toHaveAttribute('aria-describedby');
     expect(resourceInput()).toHaveValue(quickPickValue);
     expect(createButton()).toBeDisabled();
     directory = [originalOrg, ...peers];
@@ -355,8 +504,16 @@ describe('rendered Create Share controls through the real transport', () => {
       if (applied) expectSavedGrant('quick pick', 'editor');
       else {
         expect(outgoing).toEqual([]);
-        expect(screen.queryByText(`vm:${selectedResourceID}`)).not.toBeInTheDocument();
+        expect(
+          screen
+            .getAllByRole('row')
+            .some((row) => within(row).queryByText(`vm:${selectedResourceID}`)),
+        ).toBe(false);
       }
+      expect(targetInput()).toHaveAccessibleDescription(`${target.displayName} · ID: ${target.id}`);
+      expect(resourceInput()).toHaveAccessibleDescription(
+        `Resource: Namesake workload · vm:${selectedResourceID}`,
+      );
       // Explicit recovery is a GET snapshot, not a second POST or fabricated success.
       expectWrite('quick pick', 'editor');
       expect(notices.success).not.toHaveBeenCalled();
