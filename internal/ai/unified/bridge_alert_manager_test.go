@@ -103,3 +103,69 @@ func TestAlertManagerToBridge_WarningThatStaysActiveWakesPatrolOnce(t *testing.T
 	bridge.checkSustainedAlerts()
 	recorder.expectNone(t)
 }
+
+// The bridge hears an alert through the alert manager's firing subscription.
+// It must hear the first firing, and the next one after the alert cleared,
+// whether alert delivery is turned on or still pending, and however many
+// polls the alert stays active for in between.
+func TestAlertManagerToBridge_HearsEveryFiringWithDeliveryOnAndPending(t *testing.T) {
+	const steadyPolls = 8 // more than the flapping threshold of 5
+
+	for _, activation := range []alerts.ActivationState{alerts.ActivationActive, alerts.ActivationPending} {
+		// A state alert: dispatched once when it fires.
+		t.Run(string(activation)+"/container health", func(t *testing.T) {
+			manager, _, recorder := newManagerBackedBridge(t, activation)
+
+			manager.CheckDockerHost(dockerHostWithHealth("unhealthy"))
+			first := recorder.expect(t, "alert_fired")
+			for i := 0; i < steadyPolls; i++ {
+				manager.CheckDockerHost(dockerHostWithHealth("unhealthy"))
+			}
+			recorder.expectNone(t)
+
+			manager.CheckDockerHost(dockerHostWithHealth("healthy"))
+			recorder.expect(t, "alert_cleared")
+
+			manager.CheckDockerHost(dockerHostWithHealth("unhealthy"))
+			if again := recorder.expect(t, "alert_fired"); again.AlertIdentifier != first.AlertIdentifier {
+				t.Fatalf("the second firing came for %q, want %q", again.AlertIdentifier, first.AlertIdentifier)
+			}
+		})
+
+		// A threshold alert: while delivery is pending it is dispatched again
+		// on every poll, because nothing was delivered. Those repeats must
+		// not be taken for flapping, which would cut the bridge off and stop
+		// the alert from clearing.
+		t.Run(string(activation)+"/storage usage", func(t *testing.T) {
+			manager, _, recorder := newManagerBackedBridge(t, activation)
+			cfg := manager.GetConfig()
+			cfg.Enabled = true
+			cfg.StorageDefault = alerts.HysteresisThreshold{Trigger: 85, Clear: 80}
+			cfg.TimeThresholds = map[string]int{"storage": 0, "guest": 0, "node": 0, "agent": 0, "pbs": 0}
+			cfg.MetricTimeThresholds = map[string]map[string]int{"all": {"usage": 0}, "storage": {"usage": 0}}
+			manager.UpdateConfig(cfg)
+			poll := func(usage float64) {
+				manager.CheckStorage(models.Storage{
+					ID: "pve1-local", Name: "local", Node: "pve1", Instance: "pve1", Status: "available",
+					Total: 1000, Used: int64(usage * 10), Free: int64(1000 - usage*10), Usage: usage,
+				})
+			}
+
+			poll(90)
+			first := recorder.expect(t, "alert_fired")
+			for i := 0; i < steadyPolls; i++ {
+				poll(90)
+			}
+			recorder.expectNone(t)
+
+			poll(50)
+			recorder.expect(t, "alert_cleared")
+
+			// A new firing needs a reading at least 2% away from the last one.
+			poll(95)
+			if again := recorder.expect(t, "alert_fired"); again.AlertIdentifier != first.AlertIdentifier {
+				t.Fatalf("the second firing came for %q, want %q", again.AlertIdentifier, first.AlertIdentifier)
+			}
+		})
+	}
+}
