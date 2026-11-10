@@ -15,13 +15,17 @@ export const OrganizationOverviewMembersSection: Component<
   <div class="space-y-2 p-4 sm:p-6">
     <h4 class="text-sm font-semibold text-base-content">Membership</h4>
     <PulseDataGrid
-      class="mt-4"
+      class="mt-4 [&_table]:table-fixed sm:[&_table]:table-auto [&_td]:py-1 sm:[&_td]:py-3.5 [&_th:nth-child(2)]:w-20 sm:[&_th:nth-child(2)]:w-auto"
       data={props.state.members()}
       columns={[
         {
           key: 'userId',
           label: 'User',
-          render: (member) => <span class="text-base-content">{member.userId}</span>,
+          render: (member) => (
+            <span class="block whitespace-normal text-base-content [overflow-wrap:anywhere] sm:whitespace-nowrap">
+              {member.userId}
+            </span>
+          ),
         },
         {
           key: 'role',
