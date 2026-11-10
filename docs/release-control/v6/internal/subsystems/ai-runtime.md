@@ -4456,6 +4456,15 @@ at most one such finding per `alert_fired` trigger, inside that trigger's caps
 through `ShouldInvestigate` like any other. A scoped run whose alert is still
 active no longer records `No findings reported — all clear.` or `All healthy`:
 the summary says the alert is still active, or that Pulse opened the finding.
+That holds for a run that names no alert too. A manual or scheduled run scoped
+to a resource is summed up from the alerts active on the resources it was
+asked about (`patrolScopeActiveAlerts`, the most severe first, alerts on
+context resources such as a container's host left out), so a model that
+describes a fault in prose and files nothing cannot leave a record that calls
+a resource with an active alert healthy. No finding is opened for such a run:
+Pulse cannot tell prose that means "nothing to do" from prose that missed a
+symptom, and a finished job a person rechecks must stay quiet. The decision
+stays with the model in its own conversation.
 The run status value is unchanged. Proof:
 `internal/ai/patrol_alert_finding_test.go`.
 

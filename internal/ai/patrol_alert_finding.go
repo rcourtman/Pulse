@@ -2,6 +2,7 @@ package ai
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -196,4 +197,49 @@ func patrolAlertSummaryName(alert *models.Alert) string {
 		return fmt.Sprintf("alert on %s", name)
 	}
 	return fmt.Sprintf("%s alert on %s", level, name)
+}
+
+// patrolScopeActiveAlerts returns the alerts active right now on the resources
+// a scoped run was asked about, most severe first. Alerts on resources that are
+// in the run only as context, such as a container's host, are left out. A
+// cleared-alert check and a run without named resources have none.
+func (p *PatrolService) patrolScopeActiveAlerts(scope PatrolScope) []models.Alert {
+	if p == nil || scope.Reason == TriggerReasonAlertCleared || len(scope.ResourceIDs) == 0 || !p.hasPatrolRuntimeInputs() {
+		return nil
+	}
+	asked := make(map[string]bool, len(scope.ResourceIDs))
+	for _, id := range scope.ResourceIDs {
+		if id = strings.TrimSpace(id); id != "" {
+			asked[id] = true
+		}
+	}
+	state := p.currentPatrolRuntimeState()
+	var active []models.Alert
+	for _, alert := range state.ActiveAlerts {
+		if patrolAlertBelongsToScope(state, alert.ResourceID, asked) {
+			active = append(active, alert)
+		}
+	}
+	sort.SliceStable(active, func(i, j int) bool {
+		iCritical := strings.EqualFold(active[i].Level, "critical")
+		jCritical := strings.EqualFold(active[j].Level, "critical")
+		if iCritical != jCritical {
+			return iCritical
+		}
+		return active[i].StartTime.Before(active[j].StartTime)
+	})
+	return active
+}
+
+// patrolAlertsSummaryName names the most severe of several alerts for a run
+// summary line and says how many more there are.
+func patrolAlertsSummaryName(alerts []models.Alert) string {
+	if len(alerts) == 0 {
+		return ""
+	}
+	name := patrolAlertSummaryName(&alerts[0])
+	if more := len(alerts) - 1; more > 0 {
+		name += fmt.Sprintf(" (and %d more)", more)
+	}
+	return name
 }

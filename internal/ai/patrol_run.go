@@ -1245,8 +1245,15 @@ func (p *PatrolService) runScopedPatrolWithStart(ctx context.Context, scope Patr
 			findingsSummaryStr = fmt.Sprintf("Analysis incomplete (%d errors)", runStats.errors)
 		}
 	}
-	if firingAlert != nil && findingsSummaryStr == "All healthy" {
-		// The run filed nothing, but the alert it was started for is still
+	// A run a person or the schedule started names no alert, but the resource
+	// it was asked about can have one. Either way the summary must not call a
+	// resource with an active alert healthy.
+	activeAlertName := patrolAlertSummaryName(firingAlert)
+	if firingAlert == nil {
+		activeAlertName = patrolAlertsSummaryName(p.patrolScopeActiveAlerts(scope))
+	}
+	if activeAlertName != "" && findingsSummaryStr == "All healthy" {
+		// The run filed nothing, but an alert on what it looked at is still
 		// firing. That is not healthy.
 		findingsSummaryStr = "No findings, alert still active"
 	}
@@ -1303,7 +1310,7 @@ func (p *PatrolService) runScopedPatrolWithStart(ctx context.Context, scope Patr
 			ResolvedFindings:   resolvedFindings,
 			UncertainFindings:  patrolUncertainAssessmentCount(runStats.aiAnalysis.Assessments),
 			ErrorCount:         runStats.errors,
-			FiringAlert:        patrolAlertSummaryName(firingAlert),
+			FiringAlert:        activeAlertName,
 			AlertFindingOpened: alertFinding != nil,
 		})
 		runRecord.FindingAssessments = append([]PatrolFindingAssessment(nil), runStats.aiAnalysis.Assessments...)

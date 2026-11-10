@@ -257,6 +257,31 @@ func TestAlertRunWithoutAFindingKeepsTheModelsJudgment(t *testing.T) {
 		rig.notInvestigated("manual run")
 	})
 
+	// The same run as the Patrol page starts it: the resource and no alert.
+	// Pulse still knows the resource has an active alert, so the record must
+	// not sum the run up as healthy.
+	t.Run("a run a person started on the resource", func(t *testing.T) {
+		rig := newAlertRunRig(t, config.PatrolAutonomyApproval)
+		run := rig.run(PatrolScope{ResourceIDs: []string{rig.containerID}, Reason: TriggerReasonManual, NoStream: true})
+		if active := rig.active(); len(active) != 0 {
+			t.Fatalf("a manual run that files nothing must stay quiet, got %s", listAlertRunFindings(active))
+		}
+		rig.notInvestigated("manual run on the resource")
+		if strings.Contains(run.AIAnalysis, "all clear") || !strings.Contains(run.AIAnalysis, "critical alert on web is still active") {
+			t.Errorf("a run on a resource with an active alert must say so, got:\n%s", run.AIAnalysis)
+		}
+		if run.FindingsSummary == "All healthy" {
+			t.Errorf("a run on a resource with an active alert must not be summed up as %q", run.FindingsSummary)
+		}
+
+		// Once the alert is gone, a quiet run is a quiet run.
+		rig.setAlertActive(false)
+		run = rig.run(PatrolScope{ResourceIDs: []string{rig.containerID}, Reason: TriggerReasonManual, NoStream: true})
+		if !strings.Contains(run.AIAnalysis, "all clear") || run.FindingsSummary != "All healthy" {
+			t.Errorf("a run on a resource with no alert: summary %q, analysis:\n%s", run.FindingsSummary, run.AIAnalysis)
+		}
+	})
+
 	t.Run("the model filed its own finding", func(t *testing.T) {
 		rig := newAlertRunRig(t, config.PatrolAutonomyApproval)
 		rig.model = func(creator tools.PatrolFindingCreator) (*PatrolStreamResponse, error) {
