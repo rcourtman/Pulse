@@ -92,8 +92,23 @@ func appendNotificationTagValues(target []string, raw interface{}) []string {
 	return target
 }
 
-func notificationAlertMatchesTags(alert *alerts.Alert, filter []string, mode string) bool {
+// prepareNotificationTagFilter returns an owned, lowercase filter for one
+// destination batch. Never lowercase the saved configuration's slice in place.
+func prepareNotificationTagFilter(filter []string) []string {
 	filter = normalizeNotificationTagFilter(filter)
+	for i := range filter {
+		filter[i] = strings.ToLower(filter[i])
+	}
+	return filter
+}
+
+func notificationAlertMatchesTags(alert *alerts.Alert, filter []string, mode string) bool {
+	return notificationAlertMatchesPreparedTags(alert, prepareNotificationTagFilter(filter), normalizeNotificationTagMode(mode))
+}
+
+// filter and mode have already been prepared for this destination. Alert tags
+// keep the existing parsing and ToLower identity, including non-ASCII values.
+func notificationAlertMatchesPreparedTags(alert *alerts.Alert, filter []string, mode string) bool {
 	if len(filter) == 0 {
 		return true
 	}
@@ -108,9 +123,9 @@ func notificationAlertMatchesTags(alert *alerts.Alert, filter []string, mode str
 		tagSet[strings.ToLower(tag)] = struct{}{}
 	}
 
-	if normalizeNotificationTagMode(mode) == notificationTagModeAny {
+	if mode == notificationTagModeAny {
 		for _, required := range filter {
-			if _, exists := tagSet[strings.ToLower(required)]; exists {
+			if _, exists := tagSet[required]; exists {
 				return true
 			}
 		}
@@ -118,7 +133,7 @@ func notificationAlertMatchesTags(alert *alerts.Alert, filter []string, mode str
 	}
 
 	for _, required := range filter {
-		if _, exists := tagSet[strings.ToLower(required)]; !exists {
+		if _, exists := tagSet[required]; !exists {
 			return false
 		}
 	}
@@ -126,11 +141,15 @@ func notificationAlertMatchesTags(alert *alerts.Alert, filter []string, mode str
 }
 
 func notificationAlertMeetsMinimumSeverity(alert *alerts.Alert, minimumSeverity string) bool {
+	return notificationAlertMeetsPreparedMinimumSeverity(alert, normalizeNotificationMinimumSeverity(minimumSeverity))
+}
+
+func notificationAlertMeetsPreparedMinimumSeverity(alert *alerts.Alert, minimumSeverity string) bool {
 	if alert == nil {
 		return false
 	}
 	level := alerts.NormalizeAlertLevel(alert.Level)
-	switch normalizeNotificationMinimumSeverity(minimumSeverity) {
+	switch minimumSeverity {
 	case notificationMinimumSeverityAll:
 		return true
 	case notificationMinimumSeverityWarning:
@@ -156,16 +175,18 @@ func routeNotificationAlerts(
 		return alertList
 	}
 
-	normalizedFilter := normalizeNotificationTagFilter(filter)
+	normalizedFilter := prepareNotificationTagFilter(filter)
 	normalizedMinimumSeverity := normalizeNotificationMinimumSeverity(minimumSeverity)
 	if len(normalizedFilter) == 0 && normalizedMinimumSeverity == notificationMinimumSeverityAll {
 		return alertList
 	}
 
+	normalizedMode := normalizeNotificationTagMode(mode)
 	routed := make([]*alerts.Alert, 0, len(alertList))
 	for _, alert := range alertList {
-		if notificationAlertMatchesTags(alert, normalizedFilter, mode) &&
-			notificationAlertMeetsMinimumSeverity(alert, normalizedMinimumSeverity) {
+		// A severity rejection needs no tag parsing or temporary tag set.
+		if notificationAlertMeetsPreparedMinimumSeverity(alert, normalizedMinimumSeverity) &&
+			notificationAlertMatchesPreparedTags(alert, normalizedFilter, normalizedMode) {
 			routed = append(routed, alert)
 		}
 	}
