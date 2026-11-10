@@ -16,6 +16,28 @@
 
 ## Purpose
 
+### Release success includes customer delivery
+
+The release pipeline has separate publication and delivery verdicts.
+`release_commit_verdict` proves the irreversible public activation and exports
+the convergence owner from the verified activation marker, including qualified
+activation recovery. `release_delivery_verdict` keeps the parent workflow
+pending until that exact owner's run and customer-promotion verdict pass.
+An unrelated successful run, skipped verdict, failed promotion, cancelled run,
+unavailable status, or watcher timeout cannot make the parent workflow green.
+The existing convergence workflow owns retries and lease recovery. Publication
+remains committed when delivery fails and must not be replayed or undone.
+
+This enforces the 10 November 2026 direction prompted by public rc.2 being
+available while the live Pro Preview feed still served rc.1. It makes delivery
+failure visible in the originating release run. Cross-service propagation can
+still occur, and this source change alone does not establish installed recovery
+or eliminate the updater's misleading "up to date" wording during that gap.
+Those customer-path outcomes remain under L1's existing
+`maintenance-release-delivery-and-observation` follow-up. Executable cases in
+`scripts/release_control/release_promotion_policy_test.py` exercise the delivery
+watcher against failed and mismatched workflow evidence as well as success.
+
 ### Served development-agent artifacts
 
 The explicit development deployment script uses the canonical release target

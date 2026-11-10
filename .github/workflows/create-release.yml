@@ -2292,6 +2292,8 @@ jobs:
 
   release_commit_verdict:
     name: Release Activation Commit Verdict
+    outputs:
+      convergence_run_id: ${{ steps.verdict.outputs.convergence_run_id }}
     needs:
       - prepare
       - publication_trust_preflight
@@ -2322,6 +2324,7 @@ jobs:
           persist-credentials: false
 
       - name: Enforce irreversible release commit outcome
+        id: verdict
         env:
           GH_TOKEN: ${{ github.token }}
           DRAFT_ONLY: ${{ github.event.inputs.draft_only }}
@@ -2455,6 +2458,7 @@ jobs:
               rm -f "${recovery_run}" "${convergence_run}"
               echo "Release activation was committed by qualified recovery run ${recovery_run_id}; customer convergence continues in run ${marker_convergence_run_id}."
             fi
+            echo "convergence_run_id=${marker_convergence_run_id}" >> "$GITHUB_OUTPUT"
             rm -f "${marker}"
           fi
 
@@ -2462,3 +2466,53 @@ jobs:
           if [ "${DRAFT_ONLY:-false}" != "true" ]; then
             echo "Customer convergence continues independently in ${CONVERGENCE_RUN_URL}."
           fi
+
+  # Publication is irreversible, but publication alone is not successful
+  # delivery. Keep the parent run pending until its exact convergence owner
+  # has verified every applicable customer surface. Recovery still belongs
+  # to release-convergence.yml and must never replay or undo publication.
+  release_delivery_verdict:
+    name: Release Customer Delivery Verdict
+    needs:
+      - prepare
+      - dispatch_release_convergence
+      - release_commit_verdict
+    if: ${{ !cancelled() && needs.prepare.result == 'success' && needs.release_commit_verdict.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' && github.event.inputs.draft_only != 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    permissions:
+      actions: read
+      checks: read
+      contents: read
+    steps:
+      - name: Require verified customer delivery
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+          CONVERGENCE_RUN_ID: ${{ needs.release_commit_verdict.outputs.convergence_run_id }}
+        run: |
+          set -euo pipefail
+          if [[ ! "${CONVERGENCE_RUN_ID}" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error::Published ${TAG} has no exact customer delivery run."
+            exit 1
+          fi
+          run="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CONVERGENCE_RUN_ID}")"
+          jq -e \
+            --arg repository "${GITHUB_REPOSITORY}" \
+            --arg title "Release convergence ${TAG} source ${GITHUB_RUN_ID}" \
+            '.event == "workflow_dispatch" and
+             .path == ".github/workflows/release-convergence.yml" and
+             .head_branch == "main" and .head_repository.full_name == $repository and
+             .display_title == $title' <<<"${run}" >/dev/null
+
+          echo "${TAG} is published. Waiting for verified customer delivery in run ${CONVERGENCE_RUN_ID}."
+          if ! gh run watch "${CONVERGENCE_RUN_ID}" --repo "${GITHUB_REPOSITORY}" --interval 30 --exit-status; then
+            echo "::error::${TAG} remains published, but customer delivery failed. Recover the linked Release Convergence run without republishing the release."
+            exit 1
+          fi
+          # A successful workflow with a skipped verdict is not delivery proof.
+          gh api --paginate \
+            "repos/${GITHUB_REPOSITORY}/actions/runs/${CONVERGENCE_RUN_ID}/jobs?per_page=100" \
+            --jq '.jobs[] | select(.name == "Customer Promotion Convergence Verdict") | .conclusion' \
+            | { read -r conclusion; test "${conclusion}" = success; }
+          echo "[OK] ${TAG} publication and customer delivery both passed."

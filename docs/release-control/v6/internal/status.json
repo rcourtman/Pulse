@@ -641,7 +641,7 @@
     },
     {
       "id": "RA8",
-      "summary": "Stable or GA promotion and any production v6 public checkout flip happen only after an exercised RC, live release-pipeline proof, a recorded rollback target, a written v5 maintenance-only support policy, a coherent self-hosted commercial package, and explicit owner-approved launch execution.",
+      "summary": "Stable or GA promotion and any production v6 public checkout flip happen only after an exercised RC, live release-pipeline proof, a recorded rollback target, a written v5 maintenance-only support policy, a coherent self-hosted commercial package, and explicit owner-approved launch execution. Every normal release workflow reports end-to-end success only after its exact customer convergence run and customer-promotion verdict pass; irreversible public activation alone does not establish customer delivery.",
       "kind": "trust-gate",
       "blocking_level": "release-ready",
       "proof_type": "hybrid",
@@ -9673,7 +9673,7 @@
     },
     {
       "id": "maintenance-release-delivery-and-observation",
-      "summary": "Maintenance PR2888 source qualification and landing are complete at eeda20c0dda52ff2f9d1935892d5a09e13d71250. Track its release inclusion and affected installed customer outcomes, selected-candidate publication and its own 24-hour soak, stable promotion and installed upgrade/recovery, the existing unassisted-release observation commitment, and actual scheduled-scan and publisher storage recovery. Delivered PR2091 and the stable #1815 correction are reconciled rather than unfinished landing work. Current dated evidence and manual target exit criteria are in docs/release-control/v6/internal/records/maintenance-release-delivery-and-observation-2026-10-18.md. Keep v6-release-reliability active until those outcomes support an explicit completion judgment. Retain the advisory history-filter timing evidence and its repeatability/attribution residual under this existing owner. It does not add a protected source or release gate.",
+      "summary": "Maintenance PR2888 source qualification and landing are complete at eeda20c0dda52ff2f9d1935892d5a09e13d71250. Track its release inclusion and affected installed customer outcomes, selected-candidate publication and its own 24-hour soak, stable promotion and installed upgrade/recovery, the existing unassisted-release observation commitment, and actual scheduled-scan and publisher storage recovery. Delivered PR2091 and the stable #1815 correction are reconciled rather than unfinished landing work. Current dated evidence and manual target exit criteria are in docs/release-control/v6/internal/records/maintenance-release-delivery-and-observation-2026-10-18.md. Keep v6-release-reliability active until those outcomes support an explicit completion judgment. Retain the advisory history-filter timing evidence and its repeatability/attribution residual under this existing owner. It does not add a protected source or release gate. The 10 November 2026 release-delivery verdict change prevents public activation alone from making the parent release workflow green. Actual release delivery, recovery after a failed promotion, and truthful updater status while a public candidate is ahead of the private feed still need customer-path observation under this follow-up; source tests do not close those outcomes.",
       "owner": "pulse-maintainer",
       "status": "planned",
       "recorded_at": "2026-09-15",
