@@ -194,9 +194,14 @@ func (m *Manager) revalidateBackupNotificationNoLock(alert *Alert) bool {
 	return true
 }
 
+// dispatchAlert decides what one alert dispatch reaches. The per-alert rules
+// come first and hold the alert back from everyone. Past them, firing
+// subscribers always hear the alert, and delivery callbacks hear it only when
+// alert delivery is turned on. The return value reports delivery alone.
 func (m *Manager) dispatchAlert(alert *Alert, async bool) bool {
 	callbacks := m.getAlertCallbacks()
-	if len(callbacks) == 0 || alert == nil {
+	firingCallbacks := m.getAlertFiringCallbacks()
+	if (len(callbacks) == 0 && len(firingCallbacks) == 0) || alert == nil {
 		return false
 	}
 	if m.awaitsBackupRevalidationNoLock(alert) {
@@ -290,7 +295,13 @@ func (m *Manager) dispatchAlert(alert *Alert, async bool) bool {
 		return false
 	}
 
-	// Check activation state - only dispatch notifications if active
+	if len(callbacks) == 0 {
+		m.dispatchAlertFiring(alert, firingCallbacks, async)
+		return false
+	}
+
+	// Check activation state - only dispatch notifications if active. The
+	// alert still fired, so firing subscribers hear it either way.
 	if m.config.ActivationState != ActivationActive {
 		log.Debug().
 			Str("alertID", alert.ID).
@@ -299,6 +310,7 @@ func (m *Manager) dispatchAlert(alert *Alert, async bool) bool {
 		m.recordAlertEvent(eventlog.TypeNotificationSuppressed, alert, "",
 			AlertDeliveryReasonNotificationsInactive, "Notification suppressed: alert delivery is not turned on.",
 			map[string]string{"activationState": string(m.config.ActivationState)})
+		m.dispatchAlertFiring(alert, firingCallbacks, async)
 		return false
 	}
 
@@ -328,6 +340,7 @@ func (m *Manager) dispatchAlert(alert *Alert, async bool) bool {
 	if !m.beginCallback() {
 		return false
 	}
+	m.dispatchAlertFiring(alert, firingCallbacks, async)
 
 	// Record metric for fired alert
 	if recordAlertFired != nil {
@@ -374,6 +387,32 @@ func (m *Manager) dispatchAlert(alert *Alert, async bool) bool {
 		})
 	}
 	return true
+}
+
+// dispatchAlertFiring tells firing subscribers about an alert that passed the
+// per-alert rules. It keeps the caller's synchronous or asynchronous contract
+// and is owned by Stop like every other callback.
+func (m *Manager) dispatchAlertFiring(alert *Alert, callbacks []func(alert *Alert), async bool) {
+	if len(callbacks) == 0 || alert == nil {
+		return
+	}
+	alertCopy := cloneAlertForOutput(alert)
+	m.dispatchCallback(async, func() {
+		for _, callback := range callbacks {
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						log.Error().
+							Interface("panic", r).
+							Str("alertID", alertCopy.ID).
+							Str("type", alertCopy.Type).
+							Msg("Panic in alert firing callback")
+					}
+				}()
+				callback(alertCopy)
+			}()
+		}
+	})
 }
 
 func (m *Manager) recordAlertNotifiedNoLock(alert *Alert, notifiedAt time.Time) {

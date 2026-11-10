@@ -25,6 +25,7 @@ type callbackBus struct {
 
 	onAlert         func(alert *Alert)
 	alertSubs       map[int]func(alert *Alert)
+	alertFiringSubs map[int]func(alert *Alert)
 	onAlertForAI    func(alert *Alert)
 	alertForAISubs  map[int]func(alert *Alert)
 	onResolved      func(alertID string)
@@ -43,10 +44,11 @@ type callbackBus struct {
 
 func newCallbackBus() callbackBus {
 	return callbackBus{
-		alertSubs:      make(map[int]func(*Alert)),
-		alertForAISubs: make(map[int]func(*Alert)),
-		resolvedSubs:   make(map[int]func(string)),
-		lifecycleSubs:  make(map[int]func(LifecycleEvent)),
+		alertSubs:       make(map[int]func(*Alert)),
+		alertFiringSubs: make(map[int]func(*Alert)),
+		alertForAISubs:  make(map[int]func(*Alert)),
+		resolvedSubs:    make(map[int]func(string)),
+		lifecycleSubs:   make(map[int]func(LifecycleEvent)),
 	}
 }
 
@@ -115,6 +117,39 @@ func (b *callbackBus) subscribeAlertCallback(cb func(alert *Alert)) func() {
 		delete(b.alertSubs, id)
 		b.mu.Unlock()
 	}
+}
+
+func (b *callbackBus) subscribeAlertFiringCallback(cb func(alert *Alert)) func() {
+	if cb == nil {
+		return func() {}
+	}
+
+	b.mu.Lock()
+	if b.alertFiringSubs == nil {
+		b.alertFiringSubs = make(map[int]func(*Alert))
+	}
+	id := b.nextIDLocked()
+	b.alertFiringSubs[id] = cb
+	b.mu.Unlock()
+
+	return func() {
+		b.mu.Lock()
+		delete(b.alertFiringSubs, id)
+		b.mu.Unlock()
+	}
+}
+
+func (b *callbackBus) alertFiringCallbacks() []func(alert *Alert) {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+
+	callbacks := make([]func(alert *Alert), 0, len(b.alertFiringSubs))
+	for _, cb := range b.alertFiringSubs {
+		if cb != nil {
+			callbacks = append(callbacks, cb)
+		}
+	}
+	return callbacks
 }
 
 func (b *callbackBus) setAlertForAICallback(cb func(alert *Alert)) {
@@ -316,6 +351,20 @@ func (m *Manager) SubscribeAlertCallback(cb func(alert *Alert)) func() {
 	return m.callbacks.subscribeAlertCallback(cb)
 }
 
+// SubscribeAlertFiringCallback registers a consumer that reacts to the alert
+// itself, not to its notification. It hears every dispatch the per-alert
+// rules let through: an acknowledged, snoozed, monitor-only or flapping alert,
+// a correlated symptom, an alert under a resource monitoring policy and a
+// restored backup alert awaiting its first evaluation are all withheld, as
+// they are from delivery. Unlike SubscribeAlertCallback it does not depend on
+// alert delivery being turned on (ActivationState), so work that should
+// follow an alert firing, such as waking Patrol, does not stop on an install
+// whose notifications are still pending review. The returned function removes
+// the subscription when called.
+func (m *Manager) SubscribeAlertFiringCallback(cb func(alert *Alert)) func() {
+	return m.callbacks.subscribeAlertFiringCallback(cb)
+}
+
 // SetAlertForAICallback sets a callback for AI analysis when alerts are created.
 // Unlike SetAlertCallback, this callback is invoked unconditionally - it bypasses
 // activation state, quiet hours, and other notification suppression checks.
@@ -390,6 +439,10 @@ func (m *Manager) getAlertCallback() func(alert *Alert) {
 
 func (m *Manager) getAlertCallbacks() []func(alert *Alert) {
 	return m.callbacks.alertCallbacks()
+}
+
+func (m *Manager) getAlertFiringCallbacks() []func(alert *Alert) {
+	return m.callbacks.alertFiringCallbacks()
 }
 
 func (m *Manager) getAlertForAICallback() func(alert *Alert) {
