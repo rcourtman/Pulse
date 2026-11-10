@@ -6054,6 +6054,15 @@ auto-register mutation boundary.
 
 ## Current State
 
+### Investigation reads carry the commands-off hand-back
+
+`GET /api/ai/findings/{id}/investigation` passes `commands_disabled`
+(`host_resource_id`, `host_name`, `reason`, `step`) through from the stored
+run. It is additive and omitted when the run carries none. The frontend
+`Investigation` type mirrors it. `/settings/infrastructure?add=agent&commands=1`
+opens the agent installer with command access ticked, and is the link every
+commands-off surface uses for the one step.
+
 ### Action refusals separate a commands-off agent from a disconnected one
 
 `host_commands_disabled` and `command_agent_disconnected` are two readiness

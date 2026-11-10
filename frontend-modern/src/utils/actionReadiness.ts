@@ -23,6 +23,8 @@ export const getActionReadinessRefusal = (
   const reason = asTrimmedString(readiness.reason);
   if (reason) return reason;
   switch (normalizeToken(readiness.reasonCode)) {
+    case 'host_commands_disabled':
+      return 'Commands are not enabled on the Pulse agent on this host.';
     case 'command_agent_disconnected':
       return 'Docker / Podman command agent is not connected.';
     case 'no_command_agent':

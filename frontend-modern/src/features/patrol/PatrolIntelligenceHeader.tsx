@@ -16,6 +16,7 @@ import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
 import {
   presentationPolicyHidesCommercialSurfaces,
   presentationPolicyHidesUpgradePrompts,
+  presentationPolicyIsReadOnly,
 } from '@/stores/sessionPresentationPolicy';
 import { formatRelativeTime } from '@/utils/format';
 import { getPatrolPageHeaderMeta } from '@/utils/patrolPagePresentation';
@@ -31,6 +32,7 @@ import {
   type PatrolIntelligenceState,
 } from './usePatrolIntelligenceState';
 import { PatrolAutopilotAcknowledgementDialog } from './PatrolAutopilotAcknowledgementDialog';
+import { PatrolCommandAccessStrip } from './PatrolCommandAccessStrip';
 
 export { PATROL_AUTONOMY_POLICY_PRESENTATION } from './patrolControlPresentation';
 
@@ -406,6 +408,12 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
               })}
             </div>
           </details>
+        </Show>
+        <Show when={state.patrolEnabledLocal() && !state.shouldShowPatrolSetupOnly()}>
+          <PatrolCommandAccessStrip
+            autonomyLevel={effectiveAutonomyLevel()}
+            readOnly={presentationPolicyIsReadOnly()}
+          />
         </Show>
         <Show when={state.defaultModeApplied() && !state.autoFixLocked()}>
           <div

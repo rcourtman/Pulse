@@ -25,6 +25,7 @@ import {
 } from '@/utils/aiFindingPresentation';
 import { getInvestigationSectionState } from '@/utils/patrolEmptyStatePresentation';
 import { buildPatrolInvestigationRecordPresentation } from '@/features/patrol/patrolInvestigationContextModel';
+import { buildPatrolCommandAccessHandover } from '@/features/patrol/patrolCommandAccessModel';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { Button } from '@/components/shared/Button';
 import { InlineNotice } from '@/components/shared/InlineNotice';
@@ -36,6 +37,7 @@ import { notificationStore } from '@/stores/notifications';
 import { aiIntelligenceStore } from '@/stores/aiIntelligence';
 import type { InvestigationRecord } from '@/api/ai';
 import RefreshCwIcon from 'lucide-solid/icons/refresh-cw';
+import TerminalIcon from 'lucide-solid/icons/terminal';
 
 const INVESTIGATION_BADGE_PROPS = {
   appearance: 'outline',
@@ -114,6 +116,9 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
       props.investigationStatus === 'running'
     );
   });
+  const commandAccessHandover = createMemo(() =>
+    buildPatrolCommandAccessHandover(investigation(), investigationActive()),
+  );
   // The thread follows the run's session id, not each re-read of the run.
   const sessionId = createMemo(() => investigation()?.session_id ?? '');
 
@@ -233,6 +238,26 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
             {investigationQuery.loading() ? 'Retrying history...' : 'Retry history'}
           </Button>
         </InlineNotice>
+      </Show>
+
+      {/* Pulse wrote this, not the model: the run could not read or act on the
+          host because commands are off on its agent. It leads the review,
+          since it explains the hand-back and has the one step that changes it. */}
+      <Show when={commandAccessHandover()}>
+        {(handover) => (
+          <InlineNotice
+            tone="info"
+            class="mb-2"
+            aria-label="Patrol could not read or act on this host"
+            data-testid="patrol-commands-off-handover"
+            icon={<TerminalIcon />}
+            actionHref={handover().actionHref}
+            actionLabel={handover().actionLabel}
+          >
+            <p class="font-medium">{handover().title}</p>
+            <p class="text-xs">{handover().step}</p>
+          </InlineNotice>
+        )}
       </Show>
 
       {/* A failed read is neither loading nor an empty investigation. */}

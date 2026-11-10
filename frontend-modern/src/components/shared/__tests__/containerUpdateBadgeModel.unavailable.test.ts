@@ -23,6 +23,18 @@ describe('locked update explanation', () => {
     expect(text).not.toContain('not connected');
   });
 
+  it("reads the server's commands-off code without the host's own flag", () => {
+    const text = getUpdateUnavailableExplanation({
+      reason:
+        'Commands are not enabled on the Pulse agent on Tower. To allow them, run the Pulse install command on Tower again with "Allow Pulse to run commands on this host" ticked.',
+      reasonCode: 'host_commands_disabled',
+      hostName: 'Tower',
+    });
+    expect(text).toContain('the Pulse agent on Tower does not accept commands from Pulse');
+    expect(text).toContain('choose Manage on Tower, and follow Remote commands');
+    expect(text).not.toContain('not connected');
+  });
+
   it('tells a lost command channel apart from missing access', () => {
     const text = getUpdateUnavailableExplanation({ ...disconnected, hostCommandsEnabled: true });
     expect(text).toContain('the command channel to the Pulse agent on Tower is not connected');

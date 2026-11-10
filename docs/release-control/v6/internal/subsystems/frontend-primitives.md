@@ -5598,6 +5598,14 @@ resolves late` in
 
 ## Current State
 
+### The locked update badge reads the server's commands-off code
+
+`getUpdateUnavailableExplanation` names missing command access when the
+refusal code is `host_commands_disabled`. The earlier reading, a disconnected
+code joined with the host's own `commandsEnabled`, stays for a server that does
+not send the new code. The Patrol commands-off row and notice are built from
+`MetadataBadge`, `ButtonLink` and `InlineNotice` and add no primitive.
+
 ### Configuration import is bounded before dispatch
 
 The existing Settings recovery import reads at most a 2 MiB selected file,
