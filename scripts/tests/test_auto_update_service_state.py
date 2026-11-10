@@ -104,7 +104,18 @@ verify_update_running_executable() {
 detect_service_name() { printf '%s\n' "$SERVICE_NAME"; }
 # Advance the polling clock instead of waiting; manager/timeout deadlines stay
 # real. Dedicated UpdateServiceDeadlines controls below use actual time/sleep.
+unset SECONDS
+SECONDS=0
 sleep() { SECONDS=$((SECONDS + $1)); }
+if [[ "${CLOCK_PROBE:-false}" == true ]]; then
+    before=$SECONDS
+    command sleep 1.1
+    [[ "$SECONDS" == "$before" ]] || { echo 'fixture clock advanced with wall time' >&2; exit 98; }
+    sleep 3
+    [[ "$SECONDS" == "$((before + 3))" ]] || exit 98
+    printf 'FIXTURE_CLOCK=%s\n' "$SECONDS"
+    exit 0
+fi
 verify_release_signature() { :; }
 mktemp() {
     local -a args=("$@")
@@ -196,7 +207,7 @@ class UpdaterFixture(unittest.TestCase):
     def run_fixture(self, *, mode="normal", state="active", load="loaded", success=False, flow="update",
                     installer_exit=None, collector_exit=0, installer_output=None, collector_failures=None,
                     real_log=False, runtime_exit=0, installer_state=None, download_fault="",
-                    observation_fault="", observation_phase="initial"):
+                    observation_fault="", observation_phase="initial", clock_probe=False):
         with tempfile.TemporaryDirectory(prefix="pulse-updater-state-") as directory:
             f = Path(directory)
             for name in ("tools", "tmp", "install/bin", "config"):
@@ -242,6 +253,7 @@ class UpdaterFixture(unittest.TestCase):
                        INSTALLER_EXIT=str(installer_exit) if installer_exit is not None else ("0" if success else "23"),
                        COLLECTOR_EXIT=str(collector_exit),
                        REAL_LOG="true" if real_log else "false", RUNTIME_EXIT=str(runtime_exit),
+                       CLOCK_PROBE="true" if clock_probe else "false",
                        DOWNLOAD_FAULT=download_fault,
                        OBSERVATION_FAULT=observation_fault, OBSERVATION_PHASE=observation_phase,
                        PATH=str(f / "tools") + os.pathsep + os.environ["PATH"])
@@ -487,6 +499,15 @@ child.wait()
 
 
 class UpdateServiceState(UpdaterFixture):
+    def test_transaction_model_clock_is_not_advanced_by_wall_time(self):
+        result = self.run_fixture(clock_probe=True)
+        self.assertEqual(result["exit"], 0, result)
+        self.assertIn("FIXTURE_CLOCK=3\n", result["output"])
+        self.assertEqual(result["calls"], [], result)
+        self.assertFalse(result["installed"] or result["downloaded"], result)
+        self.assertEqual(result["version"], "v6.5.0\n", result)
+        self.assertEqual(result["temporary_files"], [], result)
+
     def test_poll_timeout_retains_backup_without_start_or_rollback(self):
         result = self.run_fixture(mode="post-install-hang", success=True)
         self.assertEqual(result["exit"], 1, result)
