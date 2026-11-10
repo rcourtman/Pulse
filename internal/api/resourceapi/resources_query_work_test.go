@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"sync"
 	"testing"
 	"time"
 
@@ -143,4 +144,66 @@ func TestResourceListAggregationRefreshesWithPresentationGeneration(t *testing.T
 	if rec.Code != http.StatusOK || !reflect.DeepEqual(stats, third.Aggregations) {
 		t.Fatal("stats endpoint disagrees with list")
 	}
+}
+
+// One shared generation can serve different live availability decisions; its
+// structural-summary maps must also remain read-only under concurrent reads.
+type concurrentPageDecisionKey struct{}
+type concurrentPageChecker struct{}
+
+func (concurrentPageChecker) CheckActionAvailable(ctx context.Context, req unified.ActionRequest, _ unified.Resource) unified.ResourceActionReadiness {
+	refused, _ := ctx.Value(concurrentPageDecisionKey{}).(bool)
+	return unified.ResourceActionReadiness{Name: req.CapabilityName, Available: !refused, ReasonCode: "command_agent_disconnected"}
+}
+
+func TestResourceListConcurrentPagesKeepRequestDecisionsIsolated(t *testing.T) {
+	now := time.Now().UTC()
+	provider := resourceUnifiedSeedProvider{
+		snapshot: models.StateSnapshot{LastUpdate: now, ActiveAlerts: []models.Alert{{ResourceID: "vm-a", Level: "critical", Type: "cpu"}}},
+		resources: []unified.Resource{
+			{ID: "vm-a", Name: "alpha", Type: unified.ResourceTypeVM, Status: unified.StatusOnline, LastSeen: now, Sources: []unified.DataSource{unified.SourceProxmox}, Capabilities: []unified.ResourceCapability{{Name: "start"}}},
+			{ID: "vm-b", Name: "beta", Type: unified.ResourceTypeVM, Status: unified.StatusOnline, LastSeen: now, Sources: []unified.DataSource{unified.SourceProxmox}, Capabilities: []unified.ResourceCapability{{Name: "start"}}},
+		},
+	}
+	h := NewQueryService(&config.Config{DataPath: t.TempDir()})
+	defer h.CloseStores()
+	h.SetStateProvider(provider)
+	h.SetActionAvailabilityChecker(concurrentPageChecker{})
+	var workers sync.WaitGroup
+	for i := 0; i < 24; i++ {
+		workers.Add(1)
+		go func(i int) {
+			defer workers.Done()
+			refused := i%2 == 0
+			ctx := context.WithValue(context.Background(), concurrentPageDecisionKey{}, refused)
+			for page := 1; page <= 2; page++ {
+				rec := httptest.NewRecorder()
+				req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/resources?limit=1&page=%d", page), nil).WithContext(ctx)
+				h.HandleListResources(rec, req)
+				var response ResourcesResponse
+				if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil || rec.Code != http.StatusOK || len(response.Data) != 1 {
+					t.Errorf("page response: status=%d error=%v", rec.Code, err)
+					return
+				}
+				row := response.Data[0]
+				if (len(row.ActionReadiness) == 1) != refused || (len(row.Capabilities) == 0) != refused {
+					t.Errorf("concurrent request reused another request's readiness: refused=%v row=%+v", refused, row)
+				}
+				wantHealth := unified.HealthOK
+				if page == 1 {
+					wantHealth = unified.HealthCritical
+				}
+				if row.Health == nil || row.Health.Verdict != wantHealth || response.Aggregations.Total != 2 || response.Facets.ByType[unified.ResourceTypeVM] != 2 {
+					t.Errorf("concurrent page lost health or structural counts")
+				}
+			}
+			rec := httptest.NewRecorder()
+			h.HandleStats(rec, httptest.NewRequest(http.MethodGet, "/api/resources/stats", nil))
+			var stats unified.ResourceStats
+			if err := json.Unmarshal(rec.Body.Bytes(), &stats); err != nil || rec.Code != http.StatusOK || stats.Total != 2 || stats.ByType[unified.ResourceTypeVM] != 2 {
+				t.Errorf("concurrent stats: status=%d error=%v", rec.Code, err)
+			}
+		}(i)
+	}
+	workers.Wait()
 }
