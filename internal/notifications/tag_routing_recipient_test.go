@@ -14,9 +14,11 @@ import (
 // occurrence receipts. Changed tags/floors must not steal an owed recovery.
 func TestNotificationBatchRoutingHTTPRecipients(t *testing.T) {
 	type delivery struct {
-		path   string
-		Event  string          `json:"event"`
-		Alerts []*alerts.Alert `json:"alerts"`
+		path    string
+		Event   string          `json:"event"`
+		Grouped bool            `json:"grouped"`
+		Count   int             `json:"count"`
+		Alerts  []*alerts.Alert `json:"alerts"`
 	}
 	received := make(chan delivery, 16)
 	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -78,14 +80,21 @@ func TestNotificationBatchRoutingHTTPRecipients(t *testing.T) {
 	}
 	check := func(event string) {
 		t.Helper()
+		// The existing generic grouped firing payload has grouped/count but
+		// no event field; the recovery producer adds event="resolved".
+		wantEvent, wantGrouped := "", true
+		if event == "resolved" {
+			wantEvent, wantGrouped = event, false
+		}
 		seen := make(map[string]bool)
 		deadline := time.NewTimer(15 * time.Second)
 		defer deadline.Stop()
 		for range len(want) {
 			select {
 			case msg := <-received:
-				if seen[msg.path] || msg.Event != event || !reflect.DeepEqual(alertIDs(msg.Alerts), want[msg.path]) {
-					t.Fatalf("wrong %s recipients: path=%s event=%s ids=%v", event, msg.path, msg.Event, alertIDs(msg.Alerts))
+				ids, known := want[msg.path]
+				if !known || seen[msg.path] || msg.Event != wantEvent || msg.Grouped != wantGrouped || msg.Count != len(ids) || !reflect.DeepEqual(alertIDs(msg.Alerts), ids) {
+					t.Fatalf("wrong %s recipients: path=%s event=%s grouped=%t count=%d ids=%v", event, msg.path, msg.Event, msg.Grouped, msg.Count, alertIDs(msg.Alerts))
 				}
 				seen[msg.path] = true
 			case <-deadline.C:
