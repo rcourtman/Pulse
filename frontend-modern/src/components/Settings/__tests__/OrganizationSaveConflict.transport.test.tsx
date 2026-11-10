@@ -142,7 +142,10 @@ function expectUnknownSnapshot() {
 }
 function shareRemoveButton() {
   const row = screen.getByText(winning ? 'Current saved VM' : 'Old VM').closest('tr')!;
-  return within(row).getByRole('button', { name: 'Remove' });
+  return within(row).getByRole('button', {
+    name: `Remove share of vm:${winning ? 'vm::202' : 'vm::101'} to Peer estate (peer-estate)`,
+    exact: true,
+  });
 }
 async function openAndSubmit(panel: Panel) {
   if (panel === 'overview') {
@@ -378,7 +381,9 @@ describe('organization save conflict recovery through real controls and transpor
           fireEvent.click(screen.getByRole('button', { name: 'Save' }));
         } else if (panel === 'sharing') {
           expect(screen.getByText('Current saved VM')).toBeInTheDocument();
-          expect(screen.queryByRole('button', { name: 'Remove' })).not.toBeInTheDocument();
+          expect(
+            screen.queryByRole('button', { name: /^Remove share of / }),
+          ).not.toBeInTheDocument();
           expect(screen.queryByRole('heading', { name: 'Create Share' })).not.toBeInTheDocument();
         }
       } else {
