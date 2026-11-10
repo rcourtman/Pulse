@@ -12,6 +12,16 @@ import {
 } from './provider_plan';
 import type { PortalBootstrapData } from './types';
 
+beforeEach(() => {
+  // These saved licences describe an active November fixture. Keep its clock
+  // fixed so CI cannot age it into grace/expiry; Date and timers stay real.
+  vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-11-01T00:00:00Z'));
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
 function evaluationPlan(overrides: Partial<ProviderPlanState> = {}): ProviderPlanState {
   return {
     plan_version: 'msp_eval',
@@ -97,6 +107,42 @@ describe('renderProviderPlanHTML', () => {
     expect(lapsed).toContain('Your subscription has not renewed.');
     expect(lapsed).toContain('Open Manage billing to renew');
     expect(lapsed).not.toContain('Renews automatically');
+  });
+
+  it.each([
+    { now: '2026-11-08T20:49:53.999Z', status: 'active' },
+    { now: '2026-11-08T20:49:54Z', status: 'grace' },
+    { now: '2026-11-22T20:49:53.999Z', status: 'grace' },
+    { now: '2026-11-22T20:49:54Z', status: 'ended' },
+    { now: '2027-01-01T00:00:00Z', status: 'ended' },
+  ])('renders the paid plan as $status at $now through the default clock', ({ now, status }) => {
+    vi.mocked(Date.now).mockReturnValue(Date.parse(now));
+    const html = renderProviderPlanHTML(view({
+      plan: evaluationPlan({ plan_version: 'msp_solo', evaluation: false, workspace_limit: 3 }),
+    }), true);
+    const root = document.createElement('div');
+    root.innerHTML = html;
+    // After expiry the offers below this article still say "Up to 3". Judge
+    // the current plan, not the independently available replacement plans.
+    const current = root.querySelector('[data-provider-plan-current="msp_solo"]')!.textContent!;
+    expect(current.includes('Up to 3 client workspaces')).toBe(status === 'active');
+    expect(current.includes('Your subscription has not renewed.')).toBe(status === 'grace');
+    expect(current.includes('Your Solo plan ended on')).toBe(status === 'ended');
+    expect(html.includes('data-provider-plan-action="buy"')).toBe(status === 'ended');
+    expect(html).toContain('data-provider-plan-action="manage-billing"');
+    expect(html).not.toContain('Renews automatically');
+  });
+
+  it.each([
+    { now: '2026-11-22T20:49:53.999Z', ended: false },
+    { now: '2026-11-22T20:49:54Z', ended: true },
+  ])('preserves evaluation expiry at $now through the default clock', ({ now, ended }) => {
+    vi.mocked(Date.now).mockReturnValue(Date.parse(now));
+    const html = renderProviderPlanHTML(view(), true);
+    expect(html.includes('Your evaluation ended on')).toBe(ended);
+    expect(html.includes('Your evaluation covers')).toBe(!ended);
+    expect(html).toContain('data-provider-plan-action="buy"');
+    expect(html).not.toContain('Your subscription has not renewed.');
   });
 
   // The control plane keeps serving the portal on a lapsed licence precisely
