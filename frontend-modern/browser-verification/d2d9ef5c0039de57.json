@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "base_sha": "e22ed152acd416eab990ef1fbd7eab4bbee9ebe4",
+  "verified_at": "2026-11-10T06:51:10.347007Z",
+  "result": "passed",
+  "changed_paths": ["frontend-modern/src/components/Settings/SSOProvidersPanel.tsx"],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx": "525f523085ee00be815f1b57fc6645950f3b107300fc3f731e1584e733356d73"
+  },
+  "routes": [
+    "Settings > Security > Single Sign-On Providers (actual panel/state/client and CSS in a safe mounted-panel fixture)"
+  ],
+  "viewports": [
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 1440,
+      "height": 1000
+    }
+  ],
+  "states": [
+    "Final browser pass re-exercises the same long OIDC names/issuers, selected deletion and disabled read-only SAML in desktop/narrow light/dark. Twelve parent-bound pairs use the prior e22ed152 after captures as this commit's before; no visual information/control loss from the description-reference correction.",
+    "Complete user-journey before/after pairs also retain assigned main65bddd0c initial captures against final content; no old repository receipt was rebound or edited. All final captures natively inspected."
+  ],
+  "interactions": [
+    "Actual selected OIDC detail GET via keyboard Edit then Cancel, empty secret field preserved; no save.",
+    "Keyboard-open second OIDC deletion, cancel with no write, reopen and confirm exactly one encoded DELETE with synthetic org/API/CSRF context; saved sibling retained in readback.",
+    "Read-only disabled SAML retains full name/entity and all management controls disabled, with no additional writes."
+  ],
+  "limitations": [
+    "Panel/HTTP safe fixtures are not full-App, native server authorisation, real IdP sign-in, recipient delivery, screen-reader software, released availability or original-client recovery.",
+    "Baseline attempt1 exited1 after five captures on an immediate survivor-isVisible assertion during post-delete refresh; explicit wait corrected in evidence script. Complete baseline and final runs exit0 with browser/server closed; no runtime repair was made for the fixture assertion.",
+    "This correction changes description wiring to aria-describedby with a visible summary target. Normal SSO tests verify computed accessible descriptions; browser capture comparison does not claim screen-reader-software acceptance."
+  ],
+  "browser": {
+    "name": "Chromium",
+    "version": "141.0.7390.37",
+    "playwright": "1.56.1"
+  }
+}

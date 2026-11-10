@@ -1,4 +1,4 @@
-import { Component, For, Show, createEffect, onCleanup } from 'solid-js';
+import { Component, For, Show, createEffect, createUniqueId, onCleanup } from 'solid-js';
 import { ActionIconButton, Button, CopyValueButton } from '@/components/shared/Button';
 import { InlineNotice } from '@/components/shared/InlineNotice';
 import { EmptyState } from '@/components/shared/EmptyState';
@@ -106,6 +106,8 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
     fetchMetadataPreview,
   } = useSSOProvidersState(props);
   const deletingProvider = () => providers().find((provider) => provider.id === deleteConfirm());
+  const summaryIdPrefix = createUniqueId();
+  const summaryId = (id: string) => `${summaryIdPrefix}-${encodeURIComponent(id)}`;
   let metadataPreviewButton: HTMLButtonElement | undefined;
   let recoveryNotice: HTMLDivElement | undefined;
   let recoveryFocusTimer: number | undefined;
@@ -243,6 +245,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                           </span>
                         </div>
                         <p
+                          id={summaryId(provider.id)}
                           class="text-xs text-muted [overflow-wrap:anywhere]"
                           title={getSSOProviderSummary(provider)}
                         >
@@ -263,7 +266,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                         onClick={() => openEditModal(provider)}
                         disabled={!canEdit()}
                         label={`Edit provider ${provider.name}`}
-                        aria-description={getSSOProviderSummary(provider)}
+                        aria-describedby={summaryId(provider.id)}
                         tone="accent"
                         size="md"
                         class="min-h-11 min-w-11 sm:min-h-0 sm:min-w-0"
@@ -275,7 +278,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                         onClick={() => setDeleteConfirm(provider.id)}
                         disabled={!canEdit()}
                         label={`Delete provider ${provider.name}`}
-                        aria-description={getSSOProviderSummary(provider)}
+                        aria-describedby={summaryId(provider.id)}
                         tone="danger"
                         size="md"
                         class="min-h-11 min-w-11 sm:min-h-0 sm:min-w-0"
