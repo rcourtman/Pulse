@@ -1022,6 +1022,13 @@ func (p *PatrolService) runScopedPatrolWithStart(ctx context.Context, scope Patr
 	resolvedScope, scopeResolution := resolvePatrolScopeState(fullState, scope)
 	if len(scopeResolution.UnmatchedResourceIDs) > 0 || len(scopeResolution.AmbiguousResourceIDs) > 0 ||
 		(len(scopeResolution.RequestedResourceIDs) > 0 && len(scopeResolution.ResolvedResourceIDs) == 0) {
+		if acceptedStart == nil && clearedAlertResourceIsGone(requestedScope, scopeResolution) {
+			log.Info().
+				Str("alert_identifier", requestedScope.AlertIdentifier).
+				Strs("resources", requestedScope.ResourceIDs).
+				Msg("AI Patrol: Cleared alert's resource is no longer in the inventory, nothing to verify")
+			return
+		}
 		p.recordScopedPatrolScopeFailure(start, runID, requestedScope, scopeResolution,
 			"Patrol scope could not be resolved",
 			"One or more requested resource identities did not resolve exactly to the current Patrol collection state.")
@@ -1345,6 +1352,21 @@ func recordPatrolCircuitResult(breaker *circuit.Breaker, attempted bool, errorCo
 		return
 	}
 	breaker.RecordFailureWithCategory(runErr, circuit.CategorizeError(runErr))
+}
+
+// clearedAlertResourceIsGone reports whether a cleared-alert check has nothing
+// left to look at: none of the resources the alert named is in the inventory.
+// Removing a container clears its alerts, and the findings that restated the
+// alert were closed when it cleared, so there is nothing to verify. Recording a
+// failed run would show the operator an error for something they did on
+// purpose. An ambiguous identity is still a failure: the resource may be there.
+// The firing side keeps its error record, so a resource the resolver cannot
+// bind still shows up there.
+func clearedAlertResourceIsGone(scope PatrolScope, resolution PatrolScopeResolution) bool {
+	return scope.Reason == TriggerReasonAlertCleared &&
+		len(resolution.UnmatchedResourceIDs) > 0 &&
+		len(resolution.AmbiguousResourceIDs) == 0 &&
+		len(resolution.ResolvedResourceIDs) == 0
 }
 
 func (p *PatrolService) recordScopedPatrolScopeFailure(start time.Time, runID string, scope PatrolScope, resolution PatrolScopeResolution, summary, detail string) {
