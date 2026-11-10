@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/apicontext"
-	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
@@ -1448,7 +1447,6 @@ func (r *Service) buildWorkloadChartsResponse(
 	inMemoryChartThreshold time.Duration,
 ) ([]byte, error) {
 	_ = ctx
-	nodes := monitor.NodesSnapshot()
 	readState := monitor.GetUnifiedReadStateOrSnapshot()
 	if readState == nil {
 		return nil, fmt.Errorf("state unavailable")
@@ -1462,19 +1460,11 @@ func (r *Service) buildWorkloadChartsResponse(
 	currentTime := time.Now().UnixMilli()
 	oldestTimestamp := currentTime
 
-	var selectedNode *models.Node
-	if selectedNodeID != "" {
-		for idx := range nodes {
-			if nodes[idx].ID == selectedNodeID {
-				selectedNode = &nodes[idx]
-				break
-			}
-		}
-		if selectedNode == nil {
-			log.Debug().
-				Str("selectedNodeID", selectedNodeID).
-				Msg("Workload charts node filter not found in current state; falling back to global scope")
-		}
+	selectedNode := workloadChartsSelectedNode(readState, selectedNodeID)
+	if selectedNodeID != "" && selectedNode == nil {
+		log.Debug().
+			Str("selectedNodeID", selectedNodeID).
+			Msg("Workload charts node filter not found in current state; falling back to global scope")
 	}
 
 	matchesSelectedNode := func(instance, nodeName string) bool {
@@ -1484,8 +1474,8 @@ func (r *Service) buildWorkloadChartsResponse(
 		if selectedNode == nil {
 			return true
 		}
-		return strings.EqualFold(strings.TrimSpace(instance), strings.TrimSpace(selectedNode.Instance)) &&
-			strings.EqualFold(strings.TrimSpace(nodeName), strings.TrimSpace(selectedNode.Name))
+		return strings.EqualFold(strings.TrimSpace(instance), selectedNode.Instance()) &&
+			strings.EqualFold(strings.TrimSpace(nodeName), selectedNode.NodeName())
 	}
 
 	matchesSelectedDockerHostView := func(host *unifiedresources.DockerHostView) bool {
@@ -1498,7 +1488,7 @@ func (r *Service) buildWorkloadChartsResponse(
 		if host == nil {
 			return false
 		}
-		nodeName := strings.TrimSpace(selectedNode.Name)
+		nodeName := selectedNode.NodeName()
 		if nodeName == "" {
 			return false
 		}
@@ -1516,7 +1506,7 @@ func (r *Service) buildWorkloadChartsResponse(
 		if host == nil {
 			return false
 		}
-		nodeName := strings.TrimSpace(selectedNode.Name)
+		nodeName := selectedNode.NodeName()
 		if nodeName == "" {
 			return false
 		}
@@ -1536,7 +1526,7 @@ func (r *Service) buildWorkloadChartsResponse(
 		if pod == nil {
 			return false
 		}
-		nodeName := strings.TrimSpace(selectedNode.Name)
+		nodeName := selectedNode.NodeName()
 		if nodeName == "" {
 			return false
 		}
@@ -1760,6 +1750,29 @@ func (r *Service) buildWorkloadChartsResponse(
 		return nil, fmt.Errorf("marshal workload chart response: %w", err)
 	}
 	return body, nil
+}
+
+// workloadChartsSelectedNode reads only the identity used by the existing
+// node filter. Materializing NodesSnapshot here copied every node's sensor and
+// network inventory, even for a global request. Keep its source-ID precedence
+// and native (not display) node name without building those model snapshots.
+func workloadChartsSelectedNode(readState unifiedresources.ReadState, selectedNodeID string) *unifiedresources.NodeView {
+	if selectedNodeID == "" || readState == nil {
+		return nil
+	}
+	for _, node := range readState.Nodes() {
+		if node == nil {
+			continue
+		}
+		id := node.SourceID()
+		if id == "" {
+			id = strings.TrimSpace(node.ID())
+		}
+		if id == selectedNodeID {
+			return node
+		}
+	}
+	return nil
 }
 
 // parseChartsRangeDuration converts the UI chart range query (e.g. "5m", "1h")
