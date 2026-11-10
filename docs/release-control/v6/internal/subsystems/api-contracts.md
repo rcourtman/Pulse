@@ -6054,6 +6054,28 @@ auto-register mutation boundary.
 
 ## Current State
 
+### Action refusals separate a commands-off agent from a disconnected one
+
+`host_commands_disabled` and `command_agent_disconnected` are two readiness
+codes with two fixes, named once in `internal/actionlifecycle/command_access.go`.
+The Docker executor reports `host_commands_disabled` when the container's host
+row carries a reporting Pulse agent whose own report says commands are off. It
+reads that report and never infers it from a missing session, so a stopped
+agent, an integration-only host and an unknown host keep
+`command_agent_disconnected`. The reason states the fact and the one step, the
+install command with command access ticked, because a monitoring-only agent
+refuses a server request to enable commands. REST and websocket
+`actionReadiness` and the plan refusal envelope carry the same code and reason.
+
+`Service.Capabilities` now returns only what the availability check would plan.
+`Service.DeclaredCapabilities` returns the declarations for policy evaluation,
+and `Service.CapabilityCatalog` returns both sides with each refusal.
+`aicontracts.ActionCapabilityCatalog` gains `unavailable` and
+`commands_disabled`. Both are additive, and `capabilities` now excludes refused
+entries. `TestPatrolCatalogSeparatesCommandsOffFromDisconnected` proves the
+catalog, the refusal and the three host states on real monitor state.
+`TestCapabilityCatalogSplitsDeclaredCapabilitiesByAvailability` proves the split.
+
 ### Organization withdrawal preserves valid authentication
 
 Synchronous protected replies distinguish an invalid admitted credential (401)

@@ -5121,6 +5121,17 @@ Agent` secondary handoff against the live setup wizard instead of relying
 
 ## Current State
 
+### Commands off is read from the agent's own report
+
+Action executors, the AI read tools and Patrol's catalog call a host
+commands-off only when a Pulse agent is reporting for it, is not stale, and
+reports `commandsEnabled` false (`actionlifecycle.HostCommandsDisabled`). A
+host only an integration reports is never judged. The install command's
+command switch keeps its default, no server path enables commands on an
+existing agent, and token scope and command-channel admission are unchanged.
+The refusal copy names the one step that works for a monitoring-only agent:
+run the install command on the host with command access ticked.
+
 The host continuity journal no longer rewrites itself for every host report.
 `HostContinuityStore.ObserveReport` writes a new host and any identity,
 credential, link, legacy, tombstone or report-stream change before the report

@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/actionlifecycle"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -157,6 +158,11 @@ type CommandRoutingResult struct {
 	ResolvedKind  string // Technology/transport kind: "node", "system-container", "vm", "app-container", "docker-host", "agent" (drives routing decisions)
 	ResolvedNode  string // Hypervisor node name (if applicable)
 	Transport     string // How command will be executed: "direct", "pct_exec", "qm_guest_exec"
+
+	// CommandsDisabledHost is set only when no agent can take the command and
+	// the agent it would go to reports commands off. The refusal then says so,
+	// and does not read as a connection that is down.
+	CommandsDisabledHost *CommandsDisabledHost
 }
 
 // resolveTargetForCommandFull resolves a target_host to full routing info including provenance.
@@ -168,7 +174,13 @@ func (e *PulseToolExecutor) resolveTargetForCommandFull(targetHost string) Comma
 	}
 	// With no read state, a target can only match a connected agent.
 	rs, _ := e.readStateForControl()
-	return routeCommandTarget(rs, agents, targetHost)
+	result := routeCommandTarget(rs, agents, targetHost)
+	if result.AgentID == "" && result.ResolvedKind != "ambiguous" {
+		if host, disabled := CommandsDisabledHostForTarget(rs, targetHost); disabled {
+			result.CommandsDisabledHost = &host
+		}
+	}
+	return result
 }
 
 // routeCommandTarget decides where a command for a target goes. pulse_query flags
@@ -327,8 +339,54 @@ func routeCommandTarget(rs unifiedresources.ReadState, agents []agentexec.Connec
 	return result
 }
 
+// CommandsDisabledHost names a host whose Pulse agent reports command
+// execution off.
+type CommandsDisabledHost struct {
+	ResourceID string
+	Name       string
+}
+
+// CommandsDisabledHostForTarget answers why no command connection serves a
+// target when the reason is that commands were never enabled: it names the
+// host whose agent a read or command for the target would go to, when that
+// agent is reporting with commands off. It asks routing where the target would
+// go if every reporting agent held a session, so it cannot name a host a
+// command would not use. Any other cause, a stopped agent or a dropped
+// session among them, answers false.
+func CommandsDisabledHostForTarget(rs unifiedresources.ReadState, target string) (CommandsDisabledHost, bool) {
+	target = strings.TrimSpace(target)
+	if rs == nil || target == "" {
+		return CommandsDisabledHost{}, false
+	}
+	hosts := rs.Hosts()
+	reporting := make([]agentexec.ConnectedAgent, 0, len(hosts))
+	for _, host := range hosts {
+		if host != nil && host.AgentID() != "" {
+			reporting = append(reporting, agentexec.ConnectedAgent{AgentID: host.AgentID(), Hostname: host.Hostname()})
+		}
+	}
+	route := routeCommandTarget(rs, reporting, target)
+	if route.AgentID == "" {
+		return CommandsDisabledHost{}, false
+	}
+	for _, host := range hosts {
+		if host == nil || host.AgentID() != route.AgentID {
+			continue
+		}
+		resource := unifiedresources.ResolveResourceContext(rs, host.ID()).Resource
+		if !actionlifecycle.HostCommandsDisabled(resource) {
+			return CommandsDisabledHost{}, false
+		}
+		return CommandsDisabledHost{ResourceID: host.ID(), Name: firstNonEmptyString(host.Name(), host.Hostname())}, true
+	}
+	return CommandsDisabledHost{}, false
+}
+
 // unavailableCommandConnection preserves monitoring context without inferring
-// installation, permission, or guest capability from an absent connection.
+// installation, permission, or guest capability from an absent connection. One
+// cause is not inferred but reported: the serving agent says commands are off.
+// That is a setting, not a fault, so it reads differently from a connection
+// that is down and carries the step that turns commands on.
 func unavailableCommandConnection(target string, routing CommandRoutingResult) CallToolResult {
 	if routing.ResolvedKind == "ambiguous" {
 		return NewToolResponseResult(ToolResponse{
@@ -340,8 +398,28 @@ func unavailableCommandConnection(target string, routing CommandRoutingResult) C
 			},
 		})
 	}
+	if host := routing.CommandsDisabledHost; host != nil {
+		details := map[string]any{
+			"target":           target,
+			"reason_code":      actionlifecycle.ReasonCodeHostCommandsDisabled,
+			"host":             host.Name,
+			"host_resource_id": host.ResourceID,
+			"how_to_enable":    actionlifecycle.HostCommandsDisabledStep(host.Name),
+		}
+		if routing.ResolvedKind != "" {
+			details["resource_kind"] = routing.ResolvedKind
+		}
+		message := actionlifecycle.HostCommandsDisabledReason(host.Name) +
+			" Pulse cannot read logs or files, or run commands or actions, on that host." +
+			" Nothing is disconnected or broken: the agent reports for monitoring and was installed without command access." +
+			" Retrying will not help. The requested operation did not run."
+		return NewToolResponseResult(ToolResponse{
+			OK:    false,
+			Error: &ToolError{Code: agentcapabilities.ErrCodeCommandsNotEnabled, Message: message, Failed: true, Details: details},
+		})
+	}
 	message := "No command connection is available. Specify a target with diagnostic access."
-	details := map[string]any{"target": target}
+	details := map[string]any{"target": target, "reason_code": actionlifecycle.ReasonCodeCommandAgentDisconnected}
 	if target != "" {
 		message = fmt.Sprintf("No command connection is available for %q. Check its diagnostic access and connection status.", target)
 	}

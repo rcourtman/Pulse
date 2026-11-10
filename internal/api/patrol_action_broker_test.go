@@ -821,3 +821,123 @@ func TestPatrolActionBrokerPlanningReplaySurvivesLostRegistry(t *testing.T) {
 		t.Fatal("planning replay executed infrastructure")
 	}
 }
+
+// A default agent install reports for monitoring with commands off. On real
+// monitor state, Patrol's catalog for a container on that host must offer no
+// action, name the host as commands-off, and refuse a proposal with that
+// reason. It must not read as a disconnected agent, which is a different
+// state with a different fix.
+func TestPatrolCatalogSeparatesCommandsOffFromDisconnected(t *testing.T) {
+	const containerID = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+	now := time.Now().UTC()
+	setup := func(t *testing.T, commandsEnabled, sessionConnected bool) (aicontracts.OrchestratorActionBroker, string) {
+		t.Helper()
+		h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
+		h.SetStateProvider(resourceStateProvider{snapshot: models.StateSnapshot{
+			LastUpdate: now,
+			Hosts: []models.Host{{
+				ID: "agent-docker01", Hostname: "docker01", MachineID: "machine-docker01",
+				Status: "online", LastSeen: now, CommandsEnabled: commandsEnabled,
+			}},
+			DockerHosts: []models.DockerHost{{
+				ID: "agent-docker01", AgentID: "agent-docker01", Hostname: "docker01", MachineID: "machine-docker01",
+				Status: "online", LastSeen: now, Runtime: "docker",
+				Containers: []models.DockerContainer{{ID: containerID, Name: "web", Image: "nginx:1.27", State: "running", Status: "Up 2 hours"}},
+			}},
+		}})
+		agents := &fakeDockerActionAgentCommander{connected: map[string]bool{"agent-docker01": sessionConnected}}
+		h.SetActionExecutor(newRoutedActionExecutor(h, newDockerContainerActionExecutor(h, agents)))
+		registry, err := h.buildRegistry("default")
+		if err != nil {
+			t.Fatalf("buildRegistry: %v", err)
+		}
+		for _, container := range registry.DockerContainers() {
+			if container != nil && container.Name() == "web" {
+				return NewPatrolActionBroker("default", h), container.ID()
+			}
+		}
+		t.Fatal("the web container is not in the registry")
+		return nil, ""
+	}
+	proposal := func(resourceID string) aicontracts.ActionProposal {
+		return aicontracts.ActionProposal{
+			ProposalID: "proposal-1", FindingID: "finding-1", InvestigationID: "investigation-1",
+			ResourceID: resourceID, CapabilityName: "restart", Reason: "the web worker died",
+		}
+	}
+
+	t.Run("commands off", func(t *testing.T) {
+		broker, resourceID := setup(t, false, false)
+		catalog, err := broker.Capabilities(context.Background(), resourceID)
+		if err != nil {
+			t.Fatalf("Capabilities: %v", err)
+		}
+		if len(catalog.Capabilities) != 0 {
+			t.Fatalf("a commands-off host must offer no runnable action, got %#v", catalog.Capabilities)
+		}
+		if len(catalog.Unavailable) == 0 {
+			t.Fatal("the declared container actions must be listed as unavailable")
+		}
+		for _, refusal := range catalog.Unavailable {
+			if refusal.ReasonCode != actionlifecycle.ReasonCodeHostCommandsDisabled {
+				t.Fatalf("refusal %q code = %q, want %q", refusal.Name, refusal.ReasonCode, actionlifecycle.ReasonCodeHostCommandsDisabled)
+			}
+			if !strings.Contains(refusal.Reason, "Commands are not enabled on the Pulse agent on docker01.") || strings.Contains(refusal.Reason, "not connected") {
+				t.Fatalf("refusal %q reason = %q", refusal.Name, refusal.Reason)
+			}
+		}
+		host := catalog.CommandsDisabled
+		if host == nil || host.HostName != "docker01" || host.HostResourceID == "" {
+			t.Fatalf("CommandsDisabled = %#v, want docker01", host)
+		}
+		if host.Reason != "Commands are not enabled on the Pulse agent on docker01." ||
+			host.Step != `To allow them, run the Pulse install command on docker01 again with "Allow Pulse to run commands on this host" ticked.` {
+			t.Fatalf("CommandsDisabled copy = %#v", host)
+		}
+
+		_, err = broker.Submit(context.Background(), proposal(resourceID))
+		if !errors.Is(err, unified.ErrActionExecutionUnavailable) {
+			t.Fatalf("Submit error = %v, want execution unavailable", err)
+		}
+		if !strings.Contains(err.Error(), "Commands are not enabled on the Pulse agent on docker01.") || strings.Contains(err.Error(), "not connected") {
+			t.Fatalf("Submit refusal = %q", err.Error())
+		}
+		var refused *actionlifecycle.AvailabilityRefusedError
+		if !errors.As(err, &refused) || refused.Readiness.ReasonCode != actionlifecycle.ReasonCodeHostCommandsDisabled {
+			t.Fatalf("Submit refusal readiness = %#v", refused)
+		}
+	})
+
+	t.Run("commands on, session down", func(t *testing.T) {
+		broker, resourceID := setup(t, true, false)
+		catalog, err := broker.Capabilities(context.Background(), resourceID)
+		if err != nil {
+			t.Fatalf("Capabilities: %v", err)
+		}
+		if len(catalog.Capabilities) != 0 || len(catalog.Unavailable) == 0 {
+			t.Fatalf("catalog = %#v, want every action unavailable", catalog)
+		}
+		for _, refusal := range catalog.Unavailable {
+			if refusal.ReasonCode != actionlifecycle.ReasonCodeCommandAgentDisconnected || strings.Contains(refusal.Reason, "not enabled") {
+				t.Fatalf("refusal = %#v, want disconnected", refusal)
+			}
+		}
+		if catalog.CommandsDisabled != nil {
+			t.Fatalf("CommandsDisabled = %#v, want unset when commands are enabled", catalog.CommandsDisabled)
+		}
+		if _, err := broker.Submit(context.Background(), proposal(resourceID)); err == nil || strings.Contains(err.Error(), "not enabled") {
+			t.Fatalf("Submit refusal = %v, want the disconnected reason", err)
+		}
+	})
+
+	t.Run("commands on, session up", func(t *testing.T) {
+		broker, resourceID := setup(t, true, true)
+		catalog, err := broker.Capabilities(context.Background(), resourceID)
+		if err != nil {
+			t.Fatalf("Capabilities: %v", err)
+		}
+		if len(catalog.Capabilities) == 0 || len(catalog.Unavailable) != 0 || catalog.CommandsDisabled != nil {
+			t.Fatalf("catalog = %#v, want runnable actions and no refusal", catalog)
+		}
+	})
+}

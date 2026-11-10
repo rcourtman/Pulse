@@ -65,6 +65,9 @@ type patrolActionBroker struct {
 	// lifecycle resolves the shared service per call so late-bound
 	// executor and publisher wiring on ResourceHandlers stays current.
 	lifecycle func() *actionlifecycle.Service
+	// readState resolves the tenant's resources for the catalog's command
+	// access fact. Nil leaves that fact unset.
+	readState func(orgID string) (unified.ReadState, error)
 	policy    PatrolActionPolicyProvider
 	now       func() time.Time
 }
@@ -75,6 +78,13 @@ func NewPatrolActionBroker(orgID string, resources *ResourceHandlers, policy ...
 	broker := &patrolActionBroker{
 		orgID:     strings.TrimSpace(orgID),
 		lifecycle: resources.ActionLifecycle,
+		readState: func(orgID string) (unified.ReadState, error) {
+			registry, err := resources.buildRegistry(orgID)
+			if err != nil || registry == nil {
+				return nil, err
+			}
+			return registry, nil
+		},
 	}
 	if len(policy) > 0 {
 		broker.policy = policy[0]
@@ -125,15 +135,31 @@ func NewActionRefreshPlanner(resources *ResourceHandlers, policy PatrolActionPol
 
 func (b *patrolActionBroker) Capabilities(ctx context.Context, resourceID string) (aicontracts.ActionCapabilityCatalog, error) {
 	resourceID = unified.CanonicalResourceID(resourceID)
-	capabilities, err := b.lifecycle().Capabilities(ctx, b.orgID, resourceID)
+	// The catalog lists what planning would accept now. A capability the
+	// resource declares but cannot run goes to Unavailable with its reason,
+	// so an investigation is not invited to propose what will be refused.
+	// Executors judge availability for the organization in the context, and
+	// an investigation's context is not a request's, so bind the broker's own.
+	if b.orgID != "" {
+		ctx = context.WithValue(ctx, OrgIDContextKey, b.orgID)
+	}
+	lifecycleCatalog, err := b.lifecycle().CapabilityCatalog(ctx, b.orgID, resourceID)
 	if err != nil {
 		return aicontracts.ActionCapabilityCatalog{}, err
 	}
 	catalog := aicontracts.ActionCapabilityCatalog{
-		ResourceID:   resourceID,
-		Capabilities: make([]aicontracts.ActionCapabilityInfo, 0, len(capabilities)),
+		ResourceID:       resourceID,
+		Capabilities:     make([]aicontracts.ActionCapabilityInfo, 0, len(lifecycleCatalog.Runnable)),
+		CommandsDisabled: b.commandsDisabledHost(resourceID),
 	}
-	for _, capability := range capabilities {
+	for _, refusal := range lifecycleCatalog.Refused {
+		catalog.Unavailable = append(catalog.Unavailable, aicontracts.ActionCapabilityRefusal{
+			Name:       refusal.Name,
+			ReasonCode: refusal.ReasonCode,
+			Reason:     refusal.Reason,
+		})
+	}
+	for _, capability := range lifecycleCatalog.Runnable {
 		info := aicontracts.ActionCapabilityInfo{
 			Name:                 capability.Name,
 			Description:          capability.Description,
@@ -156,6 +182,29 @@ func (b *patrolActionBroker) Capabilities(ctx context.Context, resourceID string
 		catalog.Capabilities = append(catalog.Capabilities, info)
 	}
 	return catalog, nil
+}
+
+// commandsDisabledHost reports the host whose agent serves the resource when
+// that agent says commands are off. It is the answer the AI read tools give
+// for the same resource, so the prompt and a refused read cannot disagree.
+func (b *patrolActionBroker) commandsDisabledHost(resourceID string) *aicontracts.CommandsDisabledHost {
+	if b.readState == nil {
+		return nil
+	}
+	readState, err := b.readState(b.orgID)
+	if err != nil || readState == nil {
+		return nil
+	}
+	host, disabled := tools.CommandsDisabledHostForTarget(readState, resourceID)
+	if !disabled {
+		return nil
+	}
+	return &aicontracts.CommandsDisabledHost{
+		HostResourceID: host.ResourceID,
+		HostName:       host.Name,
+		Reason:         actionlifecycle.HostCommandsDisabledReason(host.Name),
+		Step:           actionlifecycle.HostCommandsDisabledStep(host.Name),
+	}
 }
 
 // Plan persists the canonical plan without requesting approval or execution.
@@ -265,7 +314,7 @@ func (b *patrolActionBroker) loadPatrolActionPolicyInputs(ctx context.Context, p
 		inputs.snapshot, inputs.tenantErr = b.policy(ctx, b.orgID)
 		inputs.tenantLoaded = inputs.tenantErr == nil
 	}
-	capabilities, err := b.lifecycle().Capabilities(ctx, b.orgID, proposal.ResourceID)
+	capabilities, err := b.lifecycle().DeclaredCapabilities(ctx, b.orgID, proposal.ResourceID)
 	if err != nil {
 		inputs.capabilityErr = err
 	} else {

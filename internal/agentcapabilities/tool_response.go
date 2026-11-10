@@ -17,6 +17,10 @@ const (
 	ErrCodeInvalidInput                = "INVALID_INPUT"
 	ErrCodeExecutionFailed             = "EXECUTION_FAILED"
 	ErrCodeNoAgent                     = "NO_AGENT"
+	// ErrCodeCommandsNotEnabled is not NO_AGENT: the agent is reporting and
+	// commands were never enabled on it. Nothing is disconnected, a retry
+	// cannot succeed, and the fix is the install command, not a repair.
+	ErrCodeCommandsNotEnabled = "COMMANDS_NOT_ENABLED"
 )
 
 // ToolResponse is the structured tool-result envelope used when a tool needs

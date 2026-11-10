@@ -3928,6 +3928,25 @@ verdict on its own check.
 
 ## Current State
 
+### A read refused on a commands-off agent is not NO_AGENT
+
+`pulse_read` and file reads return `COMMANDS_NOT_ENABLED`, not `NO_AGENT`, when
+the agent a command for the target would go to is reporting with commands off.
+`CommandsDisabledHostForTarget` asks `routeCommandTarget` where the target would
+go if every reporting agent held a session, so it cannot name a host a command
+would not use. The response names the host, says nothing is disconnected, and
+carries `reason_code` `host_commands_disabled` and `how_to_enable`. Every other
+absent connection stays `NO_AGENT` with `reason_code`
+`command_agent_disconnected`, and still infers nothing about installation.
+
+Patrol's action catalog and `patrol_action_capabilities` list only capabilities
+planning would accept now, and both carry `commands_disabled` for a resource
+whose serving agent has commands off. The read path and the catalog use the
+same lookup, so a prompt and a refused read cannot disagree. No read or command
+policy changed: nothing that was refused is now allowed.
+`TestReadRefusalSeparatesCommandsOffFromDisconnected` proves both codes for a
+host and for a container on it.
+
 Patrol's utility-navigation attention count shares the desktop/mobile visible
 label-in-name contract: the label precedes its numeric badge in DOM text and
 in the accessible name, with a real word boundary. The attention explanation

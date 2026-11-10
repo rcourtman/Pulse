@@ -2201,3 +2201,83 @@ func TestExpirySweepsPublishEachExpiredPlan(t *testing.T) {
 		})
 	}
 }
+
+// A proposing surface reads Capabilities. It must not list what planning would
+// refuse, while policy still reads the declaration of a refused capability.
+func TestCapabilityCatalogSplitsDeclaredCapabilitiesByAvailability(t *testing.T) {
+	now := time.Now().UTC()
+	resource := testResource(now, unified.ApprovalAdmin)
+	resource.Capabilities = append(resource.Capabilities, unified.ResourceCapability{
+		Name: "stop", Type: unified.CapabilityTypeCommon, MinimumApprovalLevel: unified.ApprovalAdmin,
+	})
+	executor := &capabilityRefusingExecutor{refused: map[string]unified.ResourceActionReadiness{
+		"restart": {Name: "restart", ReasonCode: ReasonCodeHostCommandsDisabled, Reason: HostCommandsDisabledRefusal("docker01")},
+	}}
+	service := serviceForStore(t, unified.NewMemoryStore(), resource, executor)
+
+	catalog, err := service.CapabilityCatalog(context.Background(), "default", "vm:42")
+	if err != nil {
+		t.Fatalf("CapabilityCatalog: %v", err)
+	}
+	if len(catalog.Runnable) != 1 || catalog.Runnable[0].Name != "stop" {
+		t.Fatalf("runnable = %#v, want only stop", catalog.Runnable)
+	}
+	if len(catalog.Refused) != 1 || catalog.Refused[0].Name != "restart" || catalog.Refused[0].ReasonCode != ReasonCodeHostCommandsDisabled {
+		t.Fatalf("refused = %#v, want restart with the commands-off code", catalog.Refused)
+	}
+
+	runnable, err := service.Capabilities(context.Background(), "default", "vm:42")
+	if err != nil || len(runnable) != 1 || runnable[0].Name != "stop" {
+		t.Fatalf("Capabilities = %#v, %v, want only stop", runnable, err)
+	}
+	declared, err := service.DeclaredCapabilities(context.Background(), "default", "vm:42")
+	if err != nil || len(declared) != 2 {
+		t.Fatalf("DeclaredCapabilities = %#v, %v, want both declarations", declared, err)
+	}
+}
+
+func TestHostCommandsDisabledJudgesOnlyAReportingPulseAgent(t *testing.T) {
+	agent := func(edit func(*unified.Resource)) *unified.Resource {
+		host := &unified.Resource{
+			Type: unified.ResourceTypeAgent, Sources: []unified.DataSource{unified.SourceAgent},
+			Agent: &unified.AgentData{AgentID: "agent-1"},
+		}
+		if edit != nil {
+			edit(host)
+		}
+		return host
+	}
+	for name, tc := range map[string]struct {
+		host *unified.Resource
+		want bool
+	}{
+		"reporting with commands off": {agent(nil), true},
+		"commands enabled":            {agent(func(h *unified.Resource) { h.Agent.CommandsEnabled = true }), false},
+		"stopped reporting":           {agent(func(h *unified.Resource) { h.Agent.Stale = true }), false},
+		"integration host, no agent":  {agent(func(h *unified.Resource) { h.Sources = []unified.DataSource{unified.SourceTrueNAS} }), false},
+		"no agent facet":              {agent(func(h *unified.Resource) { h.Agent = nil }), false},
+		"unknown host":                {nil, false},
+	} {
+		if got := HostCommandsDisabled(tc.host); got != tc.want {
+			t.Errorf("%s: HostCommandsDisabled = %v, want %v", name, got, tc.want)
+		}
+	}
+	if got := HostCommandsDisabledRefusal(" "); !strings.Contains(got, "on this host.") {
+		t.Fatalf("an unnamed host must still read as a sentence, got %q", got)
+	}
+}
+
+type capabilityRefusingExecutor struct {
+	refused map[string]unified.ResourceActionReadiness
+}
+
+func (e *capabilityRefusingExecutor) ExecuteAction(context.Context, unified.ActionAuditRecord) (*unified.ExecutionResult, error) {
+	return &unified.ExecutionResult{Success: true}, nil
+}
+
+func (e *capabilityRefusingExecutor) CheckActionAvailable(_ context.Context, req unified.ActionRequest, _ unified.Resource) unified.ResourceActionReadiness {
+	if refusal, ok := e.refused[req.CapabilityName]; ok {
+		return refusal
+	}
+	return unified.ResourceActionReadiness{Name: req.CapabilityName, Available: true}
+}
