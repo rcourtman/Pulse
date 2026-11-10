@@ -430,9 +430,14 @@ func TestContractPatrolInternalBridgePreservesBoundedToolAuthority(t *testing.T)
 		UseCase:          "patrol",
 		MaxTurns:         5,
 		AllowedToolNames: allowed,
+		// Asked once by the chat loop when the run ends without a finding decision.
+		FindingDecisionPrompt: "record a finding or say none is needed",
 	})
 	if got.Prompt != "evaluate" || got.SystemPrompt != "bounded" || got.SessionID != "patrol-main" || got.ExecutionID != "run-1" || got.UseCase != "patrol" || got.MaxTurns != 5 {
 		t.Fatalf("Patrol bridge lost execution metadata: %+v", got)
+	}
+	if got.FindingDecisionPrompt != "record a finding or say none is needed" {
+		t.Fatalf("Patrol bridge lost the finding-decision question: %q", got.FindingDecisionPrompt)
 	}
 	if !reflect.DeepEqual(got.AllowedToolNames, allowed) {
 		t.Fatalf("Patrol bridge allowed tools = %v, want %v", got.AllowedToolNames, allowed)

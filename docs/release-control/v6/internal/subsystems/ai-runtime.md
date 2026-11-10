@@ -4481,6 +4481,22 @@ a resource with an active alert healthy. No finding is opened for such a run:
 Pulse cannot tell prose that means "nothing to do" from prose that missed a
 symptom, and a finished job a person rechecks must stay quiet. The decision
 stays with the model in its own conversation.
+For those runs Patrol asks the model once. `runAIAnalysisState` sets
+`PatrolExecuteRequest.FindingDecisionPrompt` (`patrolFindingDecisionPrompt`)
+for a scoped run whose requested resources have an active alert, and the chat
+loop (`AgenticLoop.SetPatrolFindingDecisionPrompt`) uses it when a Watch run
+ends a turn with text, no tool call and no accepted finding decision so far:
+it appends the question as a user message and runs one more turn through
+`applyPatrolFinalFindingDecisionRequest`, so that turn has the report and
+assess tools only and the shared final-decision system prompt. The model
+records what it described or says that nothing needs recording. It is asked
+at most once, never after a turn that was already decision-only, and never
+in a separate model session: the question joins the conversation that holds
+the evidence. Cost: one more provider call for a run that recorded nothing,
+and one closing call more when the answer is a recorded finding. Proofs:
+`internal/ai/chat/agentic_patrol_finding_decision_test.go` and
+`TestAlertRunHandsTheLoopAFindingDecisionQuestion` in
+`internal/ai/patrol_alert_finding_test.go`.
 The run status value is unchanged. Proof:
 `internal/ai/patrol_alert_finding_test.go`.
 

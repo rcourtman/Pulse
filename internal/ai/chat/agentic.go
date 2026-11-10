@@ -652,15 +652,19 @@ func (a *AgenticLoop) executeToolSafely(ctx context.Context, id, name string, in
 
 // AgenticLoop handles the tool-calling loop with streaming
 type AgenticLoop struct {
-	provider          providers.StreamingProvider
-	executor          *tools.PulseToolExecutor
-	tools             []providers.Tool
-	baseSystemPrompt  string // Base prompt without mode context
-	maxTurns          int
-	maxEvidenceCalls  int
-	orgID             string
-	executionID       string
-	streamIdleTimeout time.Duration
+	provider         providers.StreamingProvider
+	executor         *tools.PulseToolExecutor
+	tools            []providers.Tool
+	baseSystemPrompt string // Base prompt without mode context
+	maxTurns         int
+	maxEvidenceCalls int
+	// patrolFindingDecisionPrompt is the one follow-up question a Watch run
+	// asks when it ends in prose without any finding decision. Empty for runs
+	// that do not ask (SetPatrolFindingDecisionPrompt).
+	patrolFindingDecisionPrompt string
+	orgID                       string
+	executionID                 string
+	streamIdleTimeout           time.Duration
 
 	// Provider info for telemetry (e.g., "anthropic", "claude-3-sonnet")
 	providerName string
@@ -766,6 +770,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 	// before calling ExecuteWithTools, and this avoids races with concurrent sessions.
 	a.mu.Lock()
 	maxTurns := a.maxTurns
+	patrolFindingDecisionPrompt := a.patrolFindingDecisionPrompt
 	suppressProviderErrorEvents := a.suppressProviderErrorEvents
 	a.aborted[sessionID] = false
 	a.mu.Unlock()
@@ -787,6 +792,8 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 	objectiveHandoffCompleted := false        // Objective mission has made its one permitted handoff
 	patrolOutputLimitRecoveryPending := false // A truncated Watch decision needs one decision-only retry
 	patrolOutputLimitRecoveryAttempted := false
+	patrolFindingDecisionPending := false // The run ended in prose with no finding decision; ask once
+	patrolFindingDecisionAsked := false
 	investigationOutputLimitRecoveryPending := false // A truncated investigation conclusion needs one evidence-only retry
 	investigationOutputLimitRecoveryAttempted := false
 	// Patrol core normally establishes the exact-scope active-finding snapshot
@@ -914,6 +921,19 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 					Msg("[AgenticLoop] Watch output limit reached — retrying one finding-decision-only turn")
 			}
 		}
+		// findingDecisionOnlyTurn marks a turn that already offered the model
+		// nothing but the finding-decision tools.
+		findingDecisionOnlyTurn := patrolOutputLimitRecoveryTurn
+		if patrolFindingDecisionPending {
+			patrolFindingDecisionPending = false
+			if !patrolOutputLimitRecoveryTurn && applyPatrolFinalFindingDecisionRequest(&req, a.currentExecutionProfile(), tools) {
+				findingDecisionOnlyTurn = true
+				log.Info().
+					Int("turn", turn).
+					Str("session_id", sessionID).
+					Msg("[AgenticLoop] Watch ended without a finding decision — asking once for one")
+			}
+		}
 		if !patrolOutputLimitRecoveryTurn && investigationOutputLimitRecoveryPending && !investigationOutputLimitRecoveryAttempted {
 			if !applyInvestigationOutputLimitRecoveryRequest(&req, a.currentExecutionProfile()) {
 				return resultMessages, fmt.Errorf("Patrol investigation exhausted its output budget before a conclusion, and its evidence-only recovery profile is unavailable")
@@ -931,6 +951,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 			// persist the conclusion it reached from earlier evidence. Other
 			// profiles keep the historical tool-free final response.
 			if applyPatrolFinalFindingDecisionRequest(&req, a.currentExecutionProfile(), tools) {
+				findingDecisionOnlyTurn = true
 				log.Warn().
 					Int("turn", turn).
 					Int("max_turns", maxTurns).
@@ -1497,6 +1518,24 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 				if len(providerMessages) > 0 {
 					providerMessages[len(providerMessages)-1].Content = ""
 				}
+			}
+
+			// A Watch run that Patrol started for a resource with an active
+			// alert can end in prose that describes a fault and records nothing.
+			// Only the model knows whether that prose was a finding, so it is
+			// asked once, in this conversation and with its evidence, to record
+			// it or to say that nothing needs recording. The next turn offers
+			// the finding-decision tools only. A run that already made a finding
+			// decision, or whose last turn was already decision-only, is not asked.
+			if prompt := patrolFindingDecisionPrompt; prompt != "" &&
+				isPatrolDetectionExecution(a.currentExecutionProfile()) &&
+				!patrolFindingDecisionAsked && !findingDecisionOnlyTurn &&
+				len(acceptedPatrolLifecycleCallKeys) == 0 && turn+1 < maxTurns {
+				patrolFindingDecisionAsked = true
+				patrolFindingDecisionPending = true
+				providerMessages = append(providerMessages, providers.Message{Role: "user", Content: prompt})
+				turn++
+				continue
 			}
 
 			log.Debug().Msg("agentic loop complete - no tool calls")
