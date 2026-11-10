@@ -4637,6 +4637,20 @@ atomically checks and reserves a slot before beginning an investigation, while
 both in-memory reservations and persisted running sessions, so simultaneous
 activation, scheduled, alert-triggered, and manual callers cannot oversubscribe
 `MaxConcurrent` through a check-then-increment race.
+A finding turned away because every slot was busy is owed an investigation and
+no longer waits for a later run to report it again. `maybeInvestigateFinding`
+records it with `FindingsStore.DeferInvestigation`, and
+`startDeferredInvestigations` gives a freed slot to the next waiting finding
+through the same admission when one of Patrol's own investigations ends and at
+the end of each Patrol run: a critical finding before a warning, then the
+longest waiting, and one start per call so a later finding cannot overtake an
+earlier one through the advisory check. A finding
+whose start lost the orchestrator's atomic reservation after passing the
+advisory check waits the same way. The waiting list holds at most 64 findings,
+lives in memory only, and starts nothing that `ShouldInvestigate` would not
+start: mode, severity, the three-attempt cap, the cooldown and resolved,
+dismissed or terminal outcomes all still apply. Proof:
+`internal/ai/patrol_investigation_queue_test.go`.
 
 `ResourceOperatorStateProjection` carries `NeverAutoRemediate`
 and `Criticality` alongside `IntentionallyOffline` and `MaintenanceWindow` so the
