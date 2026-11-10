@@ -134,9 +134,9 @@ jobs:
         # Keep both installer/lifecycle families and the authenticated peer
         # controls in the actual recipe, not just a selector in a comment.
         native_recipe = (
-            "run: go test ./scripts/installtests "
+            "run: go test -count=1 -v ./scripts/installtests "
             "./scripts/installtests/windowslifecycleserver "
-            "-run '^Test(InstallPS1|WindowsAgentLifecycle|UninstallProof)'"
+            "-run '^Test(InstallPS1|WindowsAgentLifecycle|UninstallProof|PowerShellParser)'"
         )
         self.assertIn(native_recipe, [line.strip() for line in native.splitlines()])
         self.assertIn("node-version: '24'", native)

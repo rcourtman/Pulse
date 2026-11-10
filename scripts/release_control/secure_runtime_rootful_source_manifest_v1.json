@@ -54,6 +54,7 @@
     "scripts/installtests/native_helper_workflow_test.go",
     "scripts/installtests/native_installer_fixture_tools_test.go",
     "scripts/installtests/native_installer_triggers_test.go",
+    "scripts/installtests/native_powershell_admission_test.go",
     "scripts/installtests/native_pve_action_qualification_test.go",
     "scripts/installtests/native_unix_contract_runner_test.go",
     "scripts/installtests/native_windows_exit_test.go",

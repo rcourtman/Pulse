@@ -502,7 +502,10 @@ jobs:
 
       - name: Test native Windows installer contracts
         if: ${{ !matrix.unix }}
-        run: go test ./scripts/installtests ./scripts/installtests/windowslifecycleserver -run '^Test(InstallPS1|WindowsAgentLifecycle|UninstallProof)'
+        # Runtime parsing and SCM controls belong to Windows PowerShell 5.1,
+        # selected and verified by the tests, not optional Unix-image pwsh.
+        # Retain each runtime/skip/result and execute this exact source afresh.
+        run: go test -count=1 -v ./scripts/installtests ./scripts/installtests/windowslifecycleserver -run '^Test(InstallPS1|WindowsAgentLifecycle|UninstallProof|PowerShellParser)'
 
       - name: Execute generated command with Windows PowerShell 5.1
         if: ${{ !matrix.unix }}
