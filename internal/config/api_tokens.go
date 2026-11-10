@@ -480,13 +480,19 @@ func normalizeScopes(scopes []string) []string {
 }
 
 // HasScope reports whether the record grants the requested scope or wildcard access.
+// It does not normalize the record in place: admitted token snapshots can be
+// shared by concurrent readers. Load and mutation boundaries still canonicalize
+// stored scopes; this read preserves their legacy aliases and wildcard default.
 func (r *APITokenRecord) HasScope(scope string) bool {
 	if scope == "" {
 		return true
 	}
 	scope = strings.TrimSpace(scope)
-	r.ensureScopes()
+	if len(r.Scopes) == 0 {
+		return true // Preserve the legacy default without modifying the record.
+	}
 	for _, candidate := range r.Scopes {
+		candidate = canonicalizeScopeAlias(candidate)
 		if candidate == ScopeWildcard || candidate == scope {
 			return true
 		}
