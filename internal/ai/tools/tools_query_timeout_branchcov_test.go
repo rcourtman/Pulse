@@ -117,7 +117,8 @@ func TestClassifyTimeoutWrapper_BranchCoverage(t *testing.T) {
 		{name: "bare timeout missing duration and command", command: "timeout", wantHandled: true, wantIntent: IntentWriteOrUnknown, reasonContains: "timeout wrapper must include a duration and command"},
 		{name: "timeout duration but no command", command: "timeout 5s", wantHandled: true, wantIntent: IntentWriteOrUnknown, reasonContains: "timeout wrapper must include a duration and command"},
 		{name: "timeout wrapping write command stays write", command: "timeout 5s rm -rf /tmp/branch", wantHandled: true, wantIntent: IntentWriteOrUnknown, reasonContains: "timeout-wrapped command not read-only"},
-		{name: "timeout wrapping conditional read-only sql", command: `timeout 5s sqlite3 ":memory:" "SELECT 1"`, wantHandled: true, wantIntent: IntentReadOnlyConditional, reasonContains: "timeout-bounded"},
+		{name: "timeout wrapping conditional read-only find", command: `timeout 5s find /var/log -name "*.log"`, wantHandled: true, wantIntent: IntentReadOnlyConditional, reasonContains: "timeout-bounded"},
+		{name: "timeout wrapping sql client stays refused", command: `timeout 5s sqlite3 ":memory:" "SELECT 1"`, wantHandled: true, wantIntent: IntentWriteOrUnknown, reasonContains: "timeout-wrapped command not read-only"},
 	}
 
 	for _, tc := range tests {

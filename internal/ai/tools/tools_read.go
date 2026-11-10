@@ -134,16 +134,10 @@ func (e *PulseToolExecutor) executeReadExec(ctx context.Context, args map[string
 		return NewErrorResult(fmt.Errorf("app_container is no longer supported; use app-container")), nil
 	}
 
-	// High-confidence secret exfiltration blocks.
+	// Credential files, credential databases and process environments stay
+	// out of model context.
 	if blocked, reason := safety.CommandTouchesSensitivePath(command); blocked {
-		return NewToolResponseResult(NewToolBlockedError(
-			"SENSITIVE_COMMAND",
-			fmt.Sprintf("Refusing to run command that touches sensitive paths (%s).", reason),
-			map[string]interface{}{
-				"reason":          reason,
-				"policy_boundary": "Credential files and process environment values cannot be read through AI tools.",
-			},
-		)), nil
+		return sensitiveCommandBlocked(reason), nil
 	}
 
 	// STRUCTURAL ENFORCEMENT: Reject non-read-only commands at the tool layer
@@ -192,6 +186,9 @@ func (e *PulseToolExecutor) executeReadExec(ctx context.Context, args map[string
 	routing := e.resolveTargetForCommandFull(targetHost)
 	if routing.AgentID == "" {
 		return unavailableCommandConnection(targetHost, routing), nil
+	}
+	if e.commandTargetUsesBSDOptions(routing, dockerContainer) && safety.CommandReadsProcessEnvironment(command, true) {
+		return sensitiveCommandBlocked("ps -e and -E print process environments on this target; use ps -A or ps aux"), nil
 	}
 
 	// Build command (with optional Docker wrapper)
@@ -244,6 +241,43 @@ func (e *PulseToolExecutor) executeReadExec(ctx context.Context, args map[string
 		return NewTextResult("Command completed successfully (no output)"), nil
 	}
 	return NewTextResult(output), nil
+}
+
+func sensitiveCommandBlocked(reason string) CallToolResult {
+	return NewToolResponseResult(NewToolBlockedError(
+		"SENSITIVE_COMMAND",
+		fmt.Sprintf("Refusing to run command that touches sensitive paths (%s).", reason),
+		map[string]interface{}{
+			"reason":          reason,
+			"policy_boundary": "Credential files and process environment values cannot be read through AI tools.",
+		},
+	))
+}
+
+// commandTargetUsesBSDOptions reports whether ps on the target may read -e
+// and -E as "show the environment", as on macOS and FreeBSD. Linux containers
+// never do. A VM guest's operating system is not known here, so Linux guests
+// lose ps -ef and ps -eo too; ps -A and ps aux give the same listing.
+func (e *PulseToolExecutor) commandTargetUsesBSDOptions(routing CommandRoutingResult, dockerContainer string) bool {
+	if dockerContainer != "" {
+		return false
+	}
+	switch strings.ToLower(strings.TrimSpace(routing.TargetType)) {
+	case "container":
+		return false
+	case "vm":
+		return true
+	}
+	if e.agentServer == nil {
+		return true
+	}
+	for _, agent := range e.agentServer.GetConnectedAgents() {
+		if agent.AgentID == routing.AgentID {
+			platform := strings.ToLower(strings.TrimSpace(agent.Platform))
+			return platform != "linux" && platform != "windows"
+		}
+	}
+	return true
 }
 
 // executeReadFile reads a file's contents

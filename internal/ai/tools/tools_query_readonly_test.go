@@ -190,9 +190,6 @@ func TestExecutionIntent_ArgumentAwareReadCommands(t *testing.T) {
 		{`lsof -nP -iTCP:443`, true},
 		{`lsof -i`, true},
 		{`fuser -v /tmp/x`, true},
-		{`nslookup example.com`, true},
-		{`nslookup -type=AAAA example.com 192.0.2.1`, true},
-		{`dig +short example.com`, true},
 		{`hddtemp -n /dev/sda`, true},
 		{`hwinfo --short`, true},
 		{`inxi -Fz`, true},
@@ -225,15 +222,76 @@ func TestExecutionIntent_ArgumentAwareReadCommands(t *testing.T) {
 		{`rpm -qa`, true},
 		{`kubectl get pods -A -o wide`, true},
 		{`kubectl logs pod --tail=100`, true},
-		{`nc -w 3 -zv example.com 22`, true},
-		{`curl -fsSI --connect-timeout 5 https://example.com`, true},
-		{`wget -q --spider https://example.com`, true},
 		{`cat /var/log/*.log | grep error | sort -u | head -20`, true},
 		{`cat /etc/hostname 2>/dev/null`, true},
 		{`cat /etc/hostname 2>&1`, true},
 		{`sort '2>/dev/null'`, true},
 		{`ss -tuln | grep -E '3000|9090|22'`, true},
 		{`timeout 5s journalctl -f`, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.command, func(t *testing.T) {
+			got := ClassifyExecutionIntent(tt.command)
+			if readOnly := got.Intent != IntentWriteOrUnknown; readOnly != tt.readOnly {
+				t.Errorf("ClassifyExecutionIntent(%q) = %v (%s), want readOnly=%t", tt.command, got.Intent, got.Reason, tt.readOnly)
+			}
+		})
+	}
+}
+
+// pulse_read runs without approval, so it does not connect to destinations
+// named in the command and does not run database clients. A bounded ping to
+// an IP address literal is the one reachability probe it keeps.
+func TestExecutionIntent_NoApprovalReadsStayLocal(t *testing.T) {
+	tests := []struct {
+		command  string
+		readOnly bool
+	}{
+		{`ping -c 1 -w 1 192.0.2.1`, true},
+		{`ping -c 3 -W 2 2001:db8::1`, true},
+		{`timeout 5s ping -c 1 192.0.2.1`, true},
+		{`getent passwd`, true},
+		{`getent hosts`, true},
+		{`ffprobe -v error -show_entries format=duration:stream=codec_name video.mp4`, true},
+		{`lsof -nP -i @192.0.2.1:22`, true},
+		{`ss -tn dst 192.0.2.1`, true},
+		{`arp -an 192.0.2.1`, true},
+		{`arp -a -i eth0`, true},
+		{`ping 192.0.2.1`, false},
+		{`lsof -i@probe.example`, false},
+		{`lsof -i @probe.example:22`, false},
+		{`lsof -ni@probe.example`, false},
+		{`lsof +i@probe.example`, false},
+		{`lsof -i4@probe.example:22@127.0.0.1`, false},
+		{`ss -tn 'd\st probe.example'`, false},
+		{`ss -tn 'dst probe.example'`, false},
+		{`ss -tn '( dst probe.example )'`, false},
+		{`ss -tn dst probe.example`, false},
+		{`arp probe.example`, false},
+		{`getent -s files hosts probe.example`, false},
+		{`ping -c 4 example.com`, false},
+		{`ping -c 1 -p ff 192.0.2.1`, false},
+		{`ping -f -c 100 192.0.2.1`, false},
+		{`curl -fsSI --connect-timeout 5 https://example.com`, false},
+		{`curl -s http://localhost:8080/health`, false},
+		{`wget -q --spider https://example.com`, false},
+		{`timeout 5 curl -s http://localhost/`, false},
+		{`docker ps | curl -s http://localhost/`, false},
+		{`nc -w 3 -zv example.com 22`, false},
+		{`nslookup example.com`, false},
+		{`dig +short example.com`, false},
+		{`host example.com`, false},
+		{`traceroute 192.0.2.1`, false},
+		{`tracepath example.com`, false},
+		{`getent hosts example.com`, false},
+		{`getent ahosts example.com`, false},
+		{`ffprobe http://example.com/video.mp4`, false},
+		{`mediainfo https://example.com/video.mp4`, false},
+		{`sqlite3 /data/app.db "SELECT name FROM items LIMIT 1"`, false},
+		{`sqlite3 /data/app.db ".tables"`, false},
+		{`psql -d app -c "SELECT count(*) FROM orders"`, false},
+		{`mysql -e "SELECT 1"`, false},
+		{`timeout 5s sqlite3 ":memory:" "SELECT 1"`, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.command, func(t *testing.T) {

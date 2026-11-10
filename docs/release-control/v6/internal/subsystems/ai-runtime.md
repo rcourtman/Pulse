@@ -5210,8 +5210,8 @@ renamed.
 That same AI tool ownership also governs `pulse_read action="exec"` safety.
 `internal/ai/tools/tools_query.go` and `internal/ai/tools/tools_read.go` must
 fail closed on unknown commands: the shared read path may execute only commands
-that are known read-only by construction or proven read-only by an explicit
-content inspector. The runtime must not preserve a model-trusted fallback for
+that are known read-only by construction or proven read-only by argument
+inspection. The runtime must not preserve a model-trusted fallback for
 unknown binaries, custom scripts, downloads, shells, or dual-use interpreters
 such as `python`, `node`, `ruby`, `perl`, `bash`, or `sh`, because those
 surfaces can mutate state even when invoked in non-interactive forms. Wrapper
@@ -5219,9 +5219,10 @@ and inspection-shaped commands must inherit the same fail-closed boundary:
 `timeout` may only bound an inner command that independently classifies as
 read-only, `env` with a utility is executable and therefore blocked, `find`
 must reject write or exec actions, `awk` and `sed` must not regain read-only
-status through direct invocation or pipes, `wget` is read-only only for spider
-checks, and `curl` must reject request-body, mutation-method, config, cookie
-jar, upload, and file-output forms while preserving ordinary HTTP(S) probes.
+status through direct invocation or pipes, and `curl` and `wget` are refused
+outright because pulse_read opens no outbound connections (see "pulse_read
+keeps to local, non-secret reads"); their request-body, mutation-method,
+upload and file-output detection now only grades write risk.
 That same AI tool ownership now also includes canonical resource-native
 control. `internal/ai/tools/executor.go`,
 `internal/ai/tools/tools_control.go`, and `internal/api/router.go` must keep
@@ -7727,8 +7728,8 @@ or a claim of savings across six-hourly runs.
 ### pulse_read admits only argument-validated read forms
 
 `pulse_read` runs commands on monitored hosts, usually as root, without an
-approval prompt at any control level, so `ClassifyExecutionIntent` is the only
-gate between a model-proposed command and the agent. The classifier used to
+approval prompt at any control level, so `ClassifyExecutionIntent` is the AI's
+gate between a model-proposed command and the agent command policy. The classifier used to
 approve a command from its first word and checked arguments only for `find`,
 `curl` and `timeout`, which admitted state-changing forms such as `date -s`,
 `sort -o`, `journalctl --vacuum-time`/`--rotate`, `fuser -k`, `dmesg -C`,
@@ -7746,6 +7747,65 @@ diagnostics (`journalctl -u ... --since`, `dmesg -T`, `ss -tlnp`, `ip addr`,
 read-only. Proof: `TestExecutionIntent_ArgumentAwareReadCommands` and
 `TestExecutionIntent_RouteOperationBoundary` in
 `internal/ai/tools/tools_query_readonly_test.go`.
+
+### pulse_read keeps to local, non-secret reads (9 November 2026)
+
+Patrol investigations and Pulse Mobile chat reach `pulse_read` with nobody
+approving each call, so three rules sit beside the read-only classifier:
+
+- Local only. `ClassifyExecutionIntent` refuses network clients (HTTP
+  clients, `nc`, `ssh`), name lookups (`dig`, `host`, `nslookup`,
+  `getent hosts NAME`), traceroute tools, URL inputs to `ffprobe` and
+  `mediainfo`, and host names in `lsof -i`, `ss` `dst`/`src` filters and
+  `arp`. `ping` stays only with a count, optional deadline and display
+  options, and an IP address literal.
+- No database clients. SQL client CLIs accept client commands and functions
+  beyond the statement text, so statement inspection cannot prove them
+  read-only. `sqlContentInspector` keeps its write-keyword reasons for risk
+  grading and refuses every other call.
+- No credentials or process environments. `safety.CommandTouchesSensitivePath`
+  reads each pipeline stage word by word and refuses parent-directory
+  segments; credential paths named directly, relatively, with `~`, as
+  `--opt=value` or as `@file`, including under container root filesystems and
+  `/proc/<pid>/root`; `/proc/<pid>` views of other processes; globs that can
+  expand to a fixed credential location, a credential file name or a
+  `secrets` directory outside `/var/log`, or a parent directory (checked by
+  pattern intersection, with shell bracket expressions read as any
+  character); recursive grep outside `/var/log` and grep options it cannot
+  read exactly; `env`, `printenv`, `systemctl show-environment` and `ps`
+  environment output, directly or through `docker top`. procps re-reads an
+  invocation that fails SysV parsing as BSD options, where `e` adds
+  environments, so on Linux a `ps` invocation that mentions `e` anywhere is
+  accepted only in canonical SysV shapes (`-ef`, `-eLf`, `-eo FIELDS`,
+  `-p PIDS -o FIELDS`, `-C NAME`, `--sort FIELDS`, with fields from an
+  allowlist that has no environment field). Also refused: `getent shadow`; and
+  `kubectl get` of Secrets with a data-bearing output format. `ps -e`/`-E`
+  print environments on macOS and FreeBSD, so `tools_read.go` refuses them
+  after routing for agents reporting those platforms and for VM guests,
+  whose OS is not known there. `IsSensitivePath` covers the agent's token
+  files, Pulse's `*.enc` stores, `/etc/pve/priv`, PBS shadow and key files,
+  corosync and SSH host keys, Kubernetes admin configs and client credential
+  dotfiles. `RedactSensitiveText` also treats prefixed environment-style keys
+  (`DB_PASSWORD=`, `PULSE_TOKEN=`), prefixed JSON keys, Basic authorization,
+  `--token VALUE` flags and credentials in any URL scheme as secrets, and
+  still applies its other patterns to the text before a key/value match.
+
+These are pattern checks on a root shell, so they reduce exposure rather
+than make arbitrary reads safe. They are also not the only gate:
+`agentexec.Server.ExecuteCommand` refuses any command the shared
+`DefaultPolicy` does not auto-approve unless it is trusted or approved. A
+change that lets AI reads past that policy (marking them trusted, widening
+auto-approve) must re-check these rules first.
+Proofs: `TestExecutionIntent_NoApprovalReadsStayLocal`
+(`tools_query_readonly_test.go`),
+`TestExecuteReadExec_RefusesProcessEnvironmentAndCredentialReads` and
+`TestExecuteReadExec_PSDashEFollowsTargetPlatform` (`tools_read_test.go`),
+`TestCommandTouchesSensitivePathCoversIndirectReferences`,
+`TestIsSensitivePathCoversInfrastructureCredentialStores` and
+`TestCommandReadsProcessEnvironmentFollowsPSOptionSemantics`
+(`internal/ai/safety/ai_safety_paths_and_redaction_branchcov0716_test.go`),
+and `TestRedactSensitiveTextCoversEnvironmentStyleKeys`
+(`internal/ai/safety/redaction_test.go`).
 
 The browser Assistant chat window was retired on 2026-10-22. Operators who
 want to talk to their infrastructure use Claude Code, Codex, and other MCP

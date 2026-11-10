@@ -6,6 +6,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -141,4 +142,53 @@ func TestCommandClient_executeCommand_CancelKillsProcessGroup(t *testing.T) {
 	}
 
 	waitForProcessGone(t, readPidFile(t, pidFile), 5*time.Second)
+}
+
+// Commands Pulse sends must not see the agent's own configuration, which for
+// an environment-configured agent includes its API token. Unapproved reads
+// also lose credential-named variables; approved commands keep them.
+func TestCommandClient_executeCommand_DoesNotExposeAgentEnvironment(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("reads the shell environment through procps ps")
+	}
+	t.Setenv("PULSE_TOKEN", "agent-token-value")
+	t.Setenv("PULSE_COMMAND_ENV_PROBE", "agent-config-value")
+	t.Setenv("WORKLOAD_DB_PASSWORD", "workload-secret")
+	t.Setenv("LANG", "C.UTF-8")
+
+	c := &CommandClient{}
+	// "ps" is auto-approved by the default policy, so it runs like an AI read;
+	// its own process environment is the one the shell received.
+	read := c.executeCommand(context.Background(), executeCommandPayload{
+		RequestID: "env-read",
+		Command:   "ps eww -p $$",
+		Timeout:   10,
+	})
+	if !read.Success {
+		t.Fatalf("read command failed: %+v", read)
+	}
+	for _, withheld := range []string{"agent-token-value", "agent-config-value", "PULSE_", "workload-secret"} {
+		if strings.Contains(read.Stdout, withheld) {
+			t.Fatalf("read command saw %q:\n%s", withheld, read.Stdout)
+		}
+	}
+	if !strings.Contains(read.Stdout, "LANG=C.UTF-8") || !strings.Contains(read.Stdout, "PATH="+commandSearchPath) {
+		t.Fatalf("read command lost its runtime environment:\n%s", read.Stdout)
+	}
+
+	trusted := c.executeCommand(context.Background(), executeCommandPayload{
+		RequestID: "env-trusted",
+		Command:   "env",
+		Trusted:   true,
+		Timeout:   10,
+	})
+	if !trusted.Success {
+		t.Fatalf("trusted command failed: %+v", trusted)
+	}
+	if strings.Contains(trusted.Stdout, "agent-token-value") || strings.Contains(trusted.Stdout, "PULSE_") {
+		t.Fatalf("trusted command saw agent configuration:\n%s", trusted.Stdout)
+	}
+	if !strings.Contains(trusted.Stdout, "WORKLOAD_DB_PASSWORD=workload-secret") {
+		t.Fatalf("trusted command lost operator environment:\n%s", trusted.Stdout)
+	}
 }

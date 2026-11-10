@@ -53,13 +53,13 @@ func TestClassifyCommandRisk(t *testing.T) {
 		{"docker inspect", "docker inspect mycontainer", CommandRiskReadOnly},
 		{"systemctl status", "systemctl status nginx", CommandRiskReadOnly},
 		{"journalctl", "journalctl -u nginx --since today", CommandRiskReadOnly},
-		{"curl silent", "curl -s http://localhost:8080/health", CommandRiskReadOnly},
+		{"curl silent", "curl -s http://localhost:8080/health", CommandRiskMediumWrite},
 		{"grep search", "grep -r 'error' /var/log", CommandRiskReadOnly},
 		{"find files", "find /opt -name '*.log'", CommandRiskReadOnly},
 		{"netstat", "netstat -tulpn", CommandRiskReadOnly},
 		{"ss sockets", "ss -tlnp", CommandRiskReadOnly},
 		{"ip addr", "ip addr show", CommandRiskReadOnly},
-		{"ping", "ping -c 4 google.com", CommandRiskReadOnly},
+		{"ping", "ping -c 4 google.com", CommandRiskMediumWrite},
 		{"uptime", "uptime", CommandRiskReadOnly},
 		{"hostname", "hostname -f", CommandRiskReadOnly},
 		{"whoami", "whoami", CommandRiskReadOnly},
@@ -91,12 +91,12 @@ func TestClassifyCommandRisk(t *testing.T) {
 		{"sensors", "sensors", CommandRiskReadOnly},
 		{"lspci", "lspci -v", CommandRiskReadOnly},
 		// Curl read-only variants
-		{"curl -k", "curl -k https://192.168.0.8:8007", CommandRiskReadOnly},
-		{"curl fail silent", "curl -fsS https://localhost:8080/health", CommandRiskReadOnly},
-		{"curl https", "curl https://localhost:8080/health", CommandRiskReadOnly},
-		{"curl http", "curl http://localhost:8080/api/status", CommandRiskReadOnly},
-		{"wget spider", "wget --spider https://localhost:8080/health", CommandRiskReadOnly},
-		{"wget quiet spider", "wget -q --spider https://localhost:8080/health", CommandRiskReadOnly},
+		{"curl -k", "curl -k https://192.168.0.8:8007", CommandRiskMediumWrite},
+		{"curl fail silent", "curl -fsS https://localhost:8080/health", CommandRiskMediumWrite},
+		{"curl https", "curl https://localhost:8080/health", CommandRiskMediumWrite},
+		{"curl http", "curl http://localhost:8080/api/status", CommandRiskMediumWrite},
+		{"wget spider", "wget --spider https://localhost:8080/health", CommandRiskMediumWrite},
+		{"wget quiet spider", "wget -q --spider https://localhost:8080/health", CommandRiskMediumWrite},
 
 		// Network inspection commands
 		{"ip neigh", "ip neigh", CommandRiskReadOnly},
@@ -122,12 +122,13 @@ func TestClassifyCommandRisk(t *testing.T) {
 		{"append redirect", "echo test >> /tmp/file.txt", CommandRiskHighWrite},
 		{"mixed redirect danger", "cat file 2>/dev/null > /tmp/out", CommandRiskHighWrite},
 
-		// Dual-use tools: SQL CLIs with read-only queries
-		{"sqlite3 select", `sqlite3 /data/jellyfin.db "SELECT Name FROM TypedBaseItems"`, CommandRiskReadOnly},
-		{"sqlite3 dot tables", `sqlite3 /data/app.db ".tables"`, CommandRiskReadOnly},
-		{"sqlite3 dot schema", `sqlite3 /data/app.db ".schema"`, CommandRiskReadOnly},
-		{"mysql select", `mysql -u root -e "SELECT * FROM users"`, CommandRiskReadOnly},
-		{"psql select", `psql -d mydb -c "SELECT count(*) FROM orders"`, CommandRiskReadOnly},
+		// SQL clients are never read-only for pulse_read: statement inspection
+		// cannot prove a client call read-only.
+		{"sqlite3 select", `sqlite3 /data/jellyfin.db "SELECT Name FROM TypedBaseItems"`, CommandRiskMediumWrite},
+		{"sqlite3 dot tables", `sqlite3 /data/app.db ".tables"`, CommandRiskMediumWrite},
+		{"sqlite3 dot schema", `sqlite3 /data/app.db ".schema"`, CommandRiskMediumWrite},
+		{"mysql select", `mysql -u root -e "SELECT * FROM users"`, CommandRiskMediumWrite},
+		{"psql select", `psql -d mydb -c "SELECT count(*) FROM orders"`, CommandRiskMediumWrite},
 
 		// Dual-use tools: SQL CLIs with write operations - must stay MediumWrite
 		{"sqlite3 insert", `sqlite3 /tmp/test.db "INSERT INTO t VALUES (1)"`, CommandRiskMediumWrite},
@@ -143,13 +144,13 @@ func TestClassifyCommandRisk(t *testing.T) {
 		{"sqlite3 with redirect", `sqlite3 /data/app.db "SELECT 1" > /tmp/out`, CommandRiskHighWrite},
 		{"sqlite3 with chaining outside quotes", `sqlite3 /data/app.db ".tables"; rm -rf /`, CommandRiskHighWrite}, // HighWrite because contains "rm"
 		{"sqlite3 with sudo", `sudo sqlite3 /data/app.db "SELECT 1"`, CommandRiskHighWrite},
-		{"sqlite3 with && outside quotes", `sqlite3 db.db "SELECT 1" && echo done`, CommandRiskReadOnly},   // Both sub-commands are read-only
-		{"sqlite3 with || outside quotes", `sqlite3 db.db "SELECT 1" || echo failed`, CommandRiskReadOnly}, // Both sub-commands are read-only
+		{"sqlite3 with && outside quotes", `sqlite3 db.db "SELECT 1" && echo done`, CommandRiskMediumWrite},
+		{"sqlite3 with || outside quotes", `sqlite3 db.db "SELECT 1" || echo failed`, CommandRiskMediumWrite},
 
-		// Dual-use tools: Semicolons INSIDE quotes are allowed (normal SQL syntax)
-		{"sqlite3 select with semicolon", `sqlite3 /data/app.db "SELECT 1;"`, CommandRiskReadOnly},
-		{"sqlite3 select trailing semicolon", `sqlite3 db.db "SELECT Name FROM Items ORDER BY Date DESC LIMIT 1;"`, CommandRiskReadOnly},
-		{"mysql select with semicolon", `mysql -u root -e "SELECT * FROM users;"`, CommandRiskReadOnly},
+		// Semicolons INSIDE quotes are not chaining; the SQL client is still refused
+		{"sqlite3 select with semicolon", `sqlite3 /data/app.db "SELECT 1;"`, CommandRiskMediumWrite},
+		{"sqlite3 select trailing semicolon", `sqlite3 db.db "SELECT Name FROM Items ORDER BY Date DESC LIMIT 1;"`, CommandRiskMediumWrite},
+		{"mysql select with semicolon", `mysql -u root -e "SELECT * FROM users;"`, CommandRiskMediumWrite},
 
 		// Dual-use tools: Transaction control is treated as MediumWrite
 		// (expands attack surface, enables multi-statement flow that could include writes)
@@ -162,7 +163,7 @@ func TestClassifyCommandRisk(t *testing.T) {
 		{"sqlite3 pragma mutation", `sqlite3 x.db "PRAGMA journal_mode=WAL;"`, CommandRiskMediumWrite},
 
 		// Escaped quotes don't toggle quote state
-		{"sqlite3 escaped quote in sql", `sqlite3 db.db "SELECT * FROM t WHERE name = \"O'Brien\";"`, CommandRiskReadOnly},
+		{"sqlite3 escaped quote in sql", `sqlite3 db.db "SELECT * FROM t WHERE name = \"O'Brien\";"`, CommandRiskMediumWrite},
 		{"chaining with escaped quote trick", `sqlite3 db.db "SELECT \"test"; rm -rf /`, CommandRiskHighWrite}, // HighWrite because contains "rm"
 
 		// Unclosed quotes fail closed (treated as potential chaining)
@@ -1336,7 +1337,6 @@ func TestExecutionIntent_FailClosedUnknownCommands(t *testing.T) {
 		{"unknown binary", "myunknownbinary --do-something"},
 		{"made up tool", "superspecialtool action=foo"},
 		{"custom script", "./internal-script.sh"},
-		{"wget without flags", "wget http://example.com"},
 	}
 
 	for _, tt := range unknownCommands {
@@ -1406,7 +1406,7 @@ func TestExecutionIntent_GuardrailsDominate(t *testing.T) {
 
 // TestExecutionIntent_ReadOnlyCertainVsConditional validates the distinction:
 // - IntentReadOnlyCertain: Non-mutating by construction (cat, grep, ls, etc.)
-// - IntentReadOnlyConditional: Proven read-only by content inspection (sqlite3 SELECT)
+// - IntentReadOnlyConditional: Proven read-only by argument inspection (find without actions)
 //
 // This matters for auditing and debugging - we can see WHY a command was allowed.
 func TestExecutionIntent_ReadOnlyCertainVsConditional(t *testing.T) {
@@ -1421,8 +1421,6 @@ func TestExecutionIntent_ReadOnlyCertainVsConditional(t *testing.T) {
 		"ip neigh",
 		"ip neighbor show",
 		"arp -an",
-		"nc -zv verdeclose 8007",
-		"nc -w 3 -zv example.com 22",
 	}
 
 	for _, cmd := range certainCommands {
@@ -1435,11 +1433,10 @@ func TestExecutionIntent_ReadOnlyCertainVsConditional(t *testing.T) {
 		})
 	}
 
-	// Commands that are read-only by content inspection (need to examine the query)
+	// Commands that are read-only by argument inspection
 	conditionalCommands := []string{
-		`sqlite3 /data/app.db "SELECT * FROM users"`,
-		`mysql -u root -e "SELECT count(*) FROM orders"`,
-		`psql -d mydb -c "SELECT name FROM products"`,
+		`find /var/log -name "*.log" -type f`,
+		`timeout 5s find /etc/nginx -name "*.conf"`,
 	}
 
 	for _, cmd := range conditionalCommands {
@@ -1508,12 +1505,13 @@ func TestExecutionIntent_TokenBoundaryRegression(t *testing.T) {
 		{"actual CREATE statement", `sqlite3 db.db "CREATE TABLE t (id INT)"`, IntentWriteOrUnknown},
 		{"actual DROP statement", `sqlite3 db.db "DROP TABLE old_data"`, IntentWriteOrUnknown},
 
-		// These should be ALLOWED (column names containing keywords)
-		{"select with updated_at column", `sqlite3 db.db "SELECT updated_at FROM users"`, IntentReadOnlyConditional},
-		{"select with last_updated column", `sqlite3 db.db "SELECT last_updated FROM logs"`, IntentReadOnlyConditional},
-		{"select with created_at column", `sqlite3 db.db "SELECT created_at FROM users"`, IntentReadOnlyConditional},
-		{"select with deleted flag", `sqlite3 db.db "SELECT deleted FROM users WHERE id=1"`, IntentReadOnlyConditional},
-		{"select with insert_time column", `sqlite3 db.db "SELECT insert_time FROM events"`, IntentReadOnlyConditional},
+		// Column names containing keywords are not write keywords; the SQL
+		// client is refused for the client reason instead.
+		{"select with updated_at column", `sqlite3 db.db "SELECT updated_at FROM users"`, IntentWriteOrUnknown},
+		{"select with last_updated column", `sqlite3 db.db "SELECT last_updated FROM logs"`, IntentWriteOrUnknown},
+		{"select with created_at column", `sqlite3 db.db "SELECT created_at FROM users"`, IntentWriteOrUnknown},
+		{"select with deleted flag", `sqlite3 db.db "SELECT deleted FROM users WHERE id=1"`, IntentWriteOrUnknown},
+		{"select with insert_time column", `sqlite3 db.db "SELECT insert_time FROM events"`, IntentWriteOrUnknown},
 	}
 
 	for _, tt := range tests {
@@ -1522,6 +1520,10 @@ func TestExecutionIntent_TokenBoundaryRegression(t *testing.T) {
 			if result.Intent != tt.expected {
 				t.Errorf("ClassifyExecutionIntent(%q) = %v (reason: %s), want %v",
 					tt.command, result.Intent, result.Reason, tt.expected)
+			}
+			keywordHit := strings.Contains(result.Reason, "write/control keyword")
+			if wantKeywordHit := strings.HasPrefix(tt.name, "actual"); keywordHit != wantKeywordHit {
+				t.Errorf("ClassifyExecutionIntent(%q) reason = %q, want keyword hit %v", tt.command, result.Reason, wantKeywordHit)
 			}
 		})
 	}

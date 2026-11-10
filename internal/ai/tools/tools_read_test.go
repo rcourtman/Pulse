@@ -467,3 +467,67 @@ func decodeToolResponse(t *testing.T, result CallToolResult) ToolResponse {
 	require.NoError(t, json.Unmarshal([]byte(result.Content[0].Text), &payload))
 	return payload
 }
+
+func TestExecuteReadExec_RefusesProcessEnvironmentAndCredentialReads(t *testing.T) {
+	t.Setenv("PULSE_STRICT_RESOLUTION", "false")
+	for _, command := range []string{
+		"ps auxe",
+		"printenv",
+		"env",
+		"getent shadow",
+		"cat /var/log/../../etc/hostname",
+		"cat /var/lib/pulse-agent/token",
+		"head -n 5 /etc/pve/priv/token.cfg /var/log/syslog",
+		"grep -r token /etc",
+		"cat /etc/sha*",
+		"kubectl get secret db -o yaml",
+		"docker top web auxeww",
+	} {
+		t.Run(command, func(t *testing.T) {
+			agentSrv := &mockAgentServer{agents: []agentexec.ConnectedAgent{{AgentID: "agent1", Hostname: "node1", Platform: "linux"}}}
+			exec := NewPulseToolExecutor(ExecutorConfig{AgentServer: agentSrv})
+			result, err := exec.executeReadExec(context.Background(), map[string]interface{}{
+				"command":     command,
+				"target_host": "node1",
+			})
+			require.NoError(t, err)
+			require.NotEmpty(t, result.Content)
+			assert.Contains(t, result.Content[0].Text, "SENSITIVE_COMMAND")
+			agentSrv.AssertNotCalled(t, "ExecuteCommand", mock.Anything, mock.Anything, mock.Anything)
+		})
+	}
+}
+
+func TestExecuteReadExec_PSDashEFollowsTargetPlatform(t *testing.T) {
+	t.Setenv("PULSE_STRICT_RESOLUTION", "false")
+	run := func(t *testing.T, platform string) (CallToolResult, *mockAgentServer) {
+		agentSrv := &mockAgentServer{}
+		agentSrv.On("GetConnectedAgents").Return([]agentexec.ConnectedAgent{
+			{AgentID: "agent1", Hostname: "node1", Platform: platform},
+		})
+		agentSrv.On("ExecuteCommand", mock.Anything, "agent1", mock.Anything).Return(&agentexec.CommandResultPayload{
+			Stdout:   "UID PID CMD",
+			ExitCode: 0,
+		}, nil).Maybe()
+		exec := NewPulseToolExecutor(ExecutorConfig{AgentServer: agentSrv})
+		result, err := exec.executeReadExec(context.Background(), map[string]interface{}{
+			"command":     "ps -ef",
+			"target_host": "node1",
+		})
+		require.NoError(t, err)
+		require.NotEmpty(t, result.Content)
+		return result, agentSrv
+	}
+
+	// On Linux ps -e selects every process.
+	linux, linuxSrv := run(t, "linux")
+	assert.Contains(t, linux.Content[0].Text, "UID PID CMD")
+	linuxSrv.AssertNumberOfCalls(t, "ExecuteCommand", 1)
+
+	// On macOS and FreeBSD it adds each process's environment.
+	for _, platform := range []string{"macos", "freebsd"} {
+		result, srv := run(t, platform)
+		assert.Contains(t, result.Content[0].Text, "SENSITIVE_COMMAND", platform)
+		srv.AssertNumberOfCalls(t, "ExecuteCommand", 0)
+	}
+}
