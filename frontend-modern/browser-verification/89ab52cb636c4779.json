@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "872213f4f837835d85742ca8702eacdac9223f82",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/APITokenManagerDialogs.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/APITokenManagerDialogs.tsx": "17b1a729737151ccaa07555ccdd95b24c54ccd3a535451a7b0ef3ce001ab85af"
+  },
+  "routes": [
+    "/settings/security/api"
+  ],
+  "states": [
+    "Actual App API Access with a saved synthetic monitoring-read token and unchanged expiry",
+    "Scope editor at its initial scroll anchor; all 16 scope controls retained",
+    "Scope editor body scrolled to its end at desktop and narrow/reduced-height viewports",
+    "Saved scope update read back through the token inventory; reopened editor cancelled"
+  ],
+  "interactions": [
+    "Open the real inventory Edit scopes action and inspect the actual consuming dialog",
+    "Attempt body scrolling at identical before/after anchors: baseline 390x480 clips actions with scrollTop=0; candidate reaches both actions with scrollTop=135",
+    "Select Full access without an implicit write, deliberately save one scope PATCH, verify exact saved ID, organization and CSRF binding and unchanged other metadata",
+    "Reopen and Cancel without a second write; close the complete browser/server tree"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 1440,
+      "height": 600
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 390,
+      "height": 480
+    }
+  ],
+  "themes": [
+    "light",
+    "dark"
+  ],
+  "verified_at": "2026-11-10T13:33:03Z",
+  "browser": {
+    "client": "1.56.1",
+    "chromium": "141.0.7390.37"
+  },
+  "evidence": "32 natively inspected captures / 16 comparable pairs and terminal before/after browser exit0 retained in lane RECEIPTS.md; fixture and captures are evidence only"
+}
