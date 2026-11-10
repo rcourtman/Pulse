@@ -183,7 +183,13 @@ func TestHandleWorkloadChartsBatchSelectionPreservesEveryFamily(t *testing.T) {
 	want := make(map[string]VMChartData)
 	wantOldest := time.Now().UnixMilli()
 	for _, workload := range workloads {
-		raw := monitor.GetGuestMetricsForChartBatch(workload.family, []monitoring.GuestChartRequest{workload.request}, 4*time.Hour, workloadSummaryMetricOrder...)
+		metricNames := guestSparklineMetricOrder
+		if workload.kind == "k8s" {
+			metricNames = workloadSummaryMetricOrder
+		} else if workload.kind == "app-container" {
+			metricNames = infrastructureSummaryMetricOrder
+		}
+		raw := monitor.GetGuestMetricsForChartBatch(workload.family, []monitoring.GuestChartRequest{workload.request}, 4*time.Hour, metricNames...)
 		want[workload.key] = referenceConvertMetricsForChart(raw[workload.request.SQLResourceID], &wantOldest, 120)
 		for _, name := range workloadSummaryMetricOrder {
 			if len(want[workload.key][name]) != 120 {
@@ -211,7 +217,7 @@ func TestHandleWorkloadChartsBatchSelectionPreservesEveryFamily(t *testing.T) {
 			series = got.DockerData[workload.key]
 		}
 		if !reflect.DeepEqual(series, want[workload.key]) || got.GuestTypes[workload.key] != workload.kind {
-			t.Fatalf("%s history changed selected observations, values or ownership", workload.kind)
+			t.Fatalf("%s history changed observations, values or ownership: metric keys got=%v want=%v, type=%q", workload.kind, mapKeys(series), mapKeys(want[workload.key]), got.GuestTypes[workload.key])
 		}
 	}
 	if got.Stats.PointCounts.Guests != 1800 || got.Stats.PointCounts.DockerContainers != 600 || got.Stats.PointCounts.Total != 2400 {
