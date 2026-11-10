@@ -5788,6 +5788,8 @@ Moving that wiring into `internal/api/ai_alert_bridge_trigger.go` and
 triggering again for each firing episode of an alert changes when a scoped run
 is requested, not what it carries. It reads and writes no backup, restore or
 storage data and opens no storage or recovery path.
+Closing the findings that restate a cleared alert writes Patrol finding state
+only. It touches no backup, restore or storage record.
 
 The Storage and Recovery cross-jump builders
 (`buildStorageHrefForResource`, `buildRecoveryHrefForResource`) were deleted

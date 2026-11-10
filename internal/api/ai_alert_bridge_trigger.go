@@ -21,6 +21,8 @@ type alertBridgePatrolWiring struct {
 	triggerManager func() *ai.TriggerManager
 	// runScoped runs a scoped Patrol directly when no trigger queue exists.
 	runScoped func(scope ai.PatrolScope)
+	// alertCleared closes the findings tied to an alert that has resolved.
+	alertCleared func(alertIdentifier, alertResourceID, alertType string) int
 }
 
 // attach connects the wiring to the bridge.
@@ -41,15 +43,48 @@ func (w alertBridgePatrolWiring) acceptsFiringAlert(alertType, alertLevel string
 
 // trigger queues a scoped Patrol run for one alert bridge event.
 func (w alertBridgePatrolWiring) trigger(event unified.PatrolTriggerEvent) {
-	scope := ai.PatrolScope{
-		ResourceIDs:     []string{event.ResourceID},
-		ResourceTypes:   []string{event.ResourceType},
-		Depth:           ai.PatrolDepthQuick,
-		Context:         "Alert bridge: " + event.Reason,
-		Priority:        50,
-		AlertIdentifier: event.AlertIdentifier,
+	// The alert constructors mark the type as a hint. The unified store's
+	// type for an alert ("agent-disk" for a host filesystem) is often not a
+	// Patrol resource type, and the scope resolver replaces a hint with the
+	// type of the resource the alert resolves to.
+	var scope ai.PatrolScope
+	switch event.Reason {
+	case "alert_fired":
+		// The bridge asked acceptsFiringAlert before it sent this event.
+		scope = ai.AlertTriggeredPatrolScope(event.AlertIdentifier, event.ResourceID, event.ResourceType, event.AlertType)
+		if event.AlertType != "" {
+			scope.Context = fmt.Sprintf("Alert: %s = %.1f (threshold %.1f)", event.AlertType, event.Value, event.Threshold)
+		}
+	case "alert_cleared":
+		// Findings that restate the alert are closed here, whatever their
+		// investigation concluded and whether or not the resource still
+		// exists. The run below then checks the rest with current evidence.
+		if w.alertCleared != nil {
+			if closed := w.alertCleared(event.AlertIdentifier, event.ResourceID, event.AlertType); closed > 0 {
+				log.Info().
+					Str("alert_identifier", event.AlertIdentifier).
+					Int("findings_closed", closed).
+					Msg("Alert bridge: closed findings tied to the cleared alert")
+			}
+		}
+		scope = ai.AlertClearedPatrolScope(event.AlertIdentifier, event.ResourceID, event.ResourceType)
+		if event.AlertType != "" {
+			scope.Context = "Alert cleared: " + event.AlertType
+		}
+	default:
+		scope = ai.PatrolScope{
+			ResourceIDs:     []string{event.ResourceID},
+			ResourceTypes:   []string{event.ResourceType},
+			Depth:           ai.PatrolDepthQuick,
+			Reason:          ai.TriggerReasonManual,
+			Context:         "Alert bridge: " + event.Reason,
+			Priority:        50,
+			AlertIdentifier: event.AlertIdentifier,
+		}
 	}
 	if event.AlertType != "" {
+		// Shown until the run resolves the scope, which replaces it with the
+		// collected alert's own evidence.
 		scope.AlertContext = &ai.PatrolAlertContext{
 			AlertType: event.AlertType,
 			Level:     event.AlertLevel,
@@ -57,23 +92,6 @@ func (w alertBridgePatrolWiring) trigger(event unified.PatrolTriggerEvent) {
 			Threshold: event.Threshold,
 			Message:   event.Message,
 		}
-	}
-	switch event.Reason {
-	case "alert_fired":
-		// The bridge asked acceptsFiringAlert before it sent this event.
-		scope.Reason = ai.TriggerReasonAlertFired
-		scope.Priority = 80
-		if event.AlertType != "" {
-			scope.Context = fmt.Sprintf("Alert: %s = %.1f (threshold %.1f)", event.AlertType, event.Value, event.Threshold)
-		}
-	case "alert_cleared":
-		scope.Reason = ai.TriggerReasonAlertCleared
-		scope.Priority = 40
-		if event.AlertType != "" {
-			scope.Context = "Alert cleared: " + event.AlertType
-		}
-	default:
-		scope.Reason = ai.TriggerReasonManual
 	}
 
 	log.Debug().
@@ -112,5 +130,6 @@ func (r *Router) newAlertBridgePatrolWiring(orgID string, aiService *ai.Service,
 			orgCtx := context.WithValue(context.Background(), OrgIDContextKey, orgID)
 			patrol.TriggerScopedPatrol(orgCtx, scope)
 		},
+		alertCleared: patrol.ResolveFindingsForClearedAlert,
 	}
 }

@@ -4386,6 +4386,29 @@ change. Proofs: `internal/ai/unified/bridge_test.go`,
 `internal/ai/unified/bridge_alert_manager_test.go` and
 `internal/api/ai_alert_bridge_trigger_test.go`.
 
+Alert scopes carry the producer's resource type only as a hint. The bridge
+wiring builds `alert_fired` and `alert_cleared` scopes through
+`AlertTriggeredPatrolScope` and `AlertClearedPatrolScope`, the flapping scope
+sets the same flag, and `resolvePatrolScopeState` replaces a hinted type with
+the type of the resource the exact identity resolved to. Before, a host
+filesystem alert arrived typed `agent-disk` and a flapping alert arrived typed
+with its alert kind (`metric-threshold`, `connectivity`). The identity
+resolved, the type filter then removed the owner, and the run ended "No
+resources matched requested Patrol scope". A hint never widens a scope: an
+identity that does not resolve is still refused.
+
+When an alert clears, `PatrolService.ResolveFindingsForClearedAlert` closes the
+open findings that restate it: a finding stamped as its mirror, linked by
+identifier, or on the same resource with the same condition class
+(`findingMirrorsAlert`). It does so whatever the investigation concluded,
+including `needs_attention`, and whether or not the resource still exists, so
+a recreated container does not leave its old finding open. A finding about
+something the alert did not state is left for the verification run. Scoped
+runs now stamp alert mirrors when they finish, as full runs do, so a finding
+raised by an alert-triggered run is tied to its alert at once. Proofs:
+`internal/ai/patrol_alert_cleared_test.go` and
+`internal/api/ai_alert_bridge_trigger_test.go`.
+
 The route-backed Proxmox platform tab is app-shell navigation only. Adding the
 tab through `frontend-modern/src/App.tsx` and
 `frontend-modern/src/AppLayout.tsx` must not fork Assistant or Patrol shell

@@ -14220,3 +14220,7 @@ building a router (`internal/api/ai_alert_bridge_trigger_test.go`). It builds
 the same `PatrolScope` as before. The alert-trigger policy check moved from
 inside the trigger to the bridge's policy hook, which runs before the bridge
 counts a trigger. No route, request payload or response changes.
+The wiring builds its scopes through the `ai` alert scope constructors, which
+mark the resource type as a hint, and on `alert_cleared` it first calls
+`PatrolService.ResolveFindingsForClearedAlert`. Still no route, request payload
+or response change.

@@ -802,12 +802,13 @@ func FlappingPostmortemPatrolScope(alertIdentifier, resourceID, resourceType, al
 		context = "Flapping detected"
 	}
 	return PatrolScope{
-		ResourceIDs:     []string{resourceID},
-		ResourceTypes:   patrolScopeResourceTypes(resourceType),
-		Depth:           PatrolDepthQuick,
-		Reason:          TriggerReasonAlertFlapping,
-		Context:         context,
-		Priority:        triggerPriorityAnomaly,
-		AlertIdentifier: alertIdentifier,
+		ResourceIDs:           []string{resourceID},
+		ResourceTypes:         patrolScopeResourceTypes(resourceType),
+		Depth:                 PatrolDepthQuick,
+		Reason:                TriggerReasonAlertFlapping,
+		Context:               context,
+		Priority:              triggerPriorityAnomaly,
+		AlertIdentifier:       alertIdentifier,
+		alertResourceTypeHint: true,
 	}
 }

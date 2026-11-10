@@ -1318,6 +1318,13 @@ func (p *PatrolService) runScopedPatrolWithStart(ctx context.Context, scope Patr
 		Str("reason", string(scope.Reason)).
 		Msg("AI Patrol: Scoped patrol complete")
 
+	// A finding this run raised can restate the alert that triggered it.
+	// Stamp it now instead of at the next full run, so it is folded under the
+	// alert at once and closes with it when the alert clears.
+	if mirrored := p.reconcileAlertMirrors(); mirrored > 0 {
+		log.Debug().Int("changed", mirrored).Msg("AI Patrol: Updated alert-mirror stamps on findings")
+	}
+
 	p.dispatchPatrolInvestigations(runStats.aiAnalysis)
 }
 
