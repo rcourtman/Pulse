@@ -1,0 +1,100 @@
+{
+  "source": "sonnet-base/d5",
+  "captured_at": "2026-11-09T23:57:47Z",
+  "model": "claude-subscription:sonnet",
+  "scenario": "response.app-unhealthy-database-stopped",
+  "phase1_scorecard_column": "commands-on",
+  "phase1_grade": "fixed",
+  "phase1_woke_by_itself": "yes",
+  "note": "The clean run on a fresh install. The scorecard cell.",
+  "evidence": {
+    "agent_profile": {
+      "name": "commands-on",
+      "commands_enabled": true,
+      "host_name": "docker01"
+    },
+    "alerts": [
+      {
+        "type": "docker-container-health",
+        "level": "critical",
+        "resource_alias": "nextcloud",
+        "resource_name": "nextcloud",
+        "message": "Docker container 'nextcloud' health is unhealthy"
+      },
+      {
+        "type": "docker-container-state",
+        "level": "warning",
+        "resource_alias": "nextcloud-db",
+        "resource_name": "nextcloud-db",
+        "message": "Docker container 'nextcloud-db' is Exited (137) 40 seconds ago"
+      }
+    ],
+    "wake": {
+      "alert_after_ns": 64000000000,
+      "run_id": "1794268724178449000",
+      "trigger_reason": "alert_fired",
+      "mode": "self",
+      "investigation_start": "self",
+      "finding_after_ns": 94000000000,
+      "settled_after_ns": 164000000000
+    },
+    "postconditions": [
+      {
+        "predicate": {
+          "probe": "docker.running",
+          "target": "nextcloud-db",
+          "operator": "eq",
+          "value": true,
+          "timeout": "30s"
+        },
+        "observed": true,
+        "passed": true,
+        "checked_at": "2026-11-09T23:57:47Z"
+      },
+      {
+        "predicate": {
+          "probe": "docker.health",
+          "target": "nextcloud",
+          "operator": "eq",
+          "value": "healthy",
+          "timeout": "90s"
+        },
+        "observed": "healthy",
+        "passed": true,
+        "checked_at": "2026-11-09T23:57:47Z"
+      }
+    ],
+    "findings": [
+      {
+        "id": "e0f5fe2b84d2331c",
+        "severity": "critical",
+        "category": "reliability",
+        "resource_alias": "nextcloud",
+        "resource_name": "nextcloud",
+        "title": "Nextcloud Docker container is running but failing its health check",
+        "investigation_status": "completed",
+        "investigation_outcome": "fix_queued",
+        "turn_count": 4,
+        "evidence_call_count": 3,
+        "tools_used": [
+          "pulse_query",
+          "pulse_read",
+          "patrol_action_capabilities",
+          "patrol_propose_action"
+        ],
+        "conclusion": "### Investigation Summary\nThe nextcloud app container (app-container-e87583fa0bec4317) on docker01 is running with near-zero CPU/memory but failing its Docker health check, matching the critical alert. Docker logs (last 30m) show repeated Apache/PHP errors: `Doctrine\\DBAL\\Exception: SQLSTATE[08006] connection to server at \"nextcloud-db\", port 5432 failed: Connection refused`. A fleet inventory check of docker01's app containers confirmed `nextcloud-db` (postgres:16, app-container-3a02b070bacf2aac) is in status=exited. Nextcloud is up and accepting the health probe, but the probe fails because the application cannot reach its Postgres database, which is not running — fully explaining both the unhealthy status and the idle CPU/memory profile (the app is blocked on a failed DB connection, not under load or hung on its own).\n\n### Root Cause\nCausal resource: nextcloud-db (app-container-3a02b070bacf2aac) — the Postgres 16 container backing Nextcloud is stopped (status=exited) on docker01. This directly causes Nextcloud's healthcheck failures via repeated connection-refused errors to nextcloud-db:5432.\nNot established by current evidence: why nextcloud-db exited — no postgres logs, exit code, or docker01 host-level events (e.g., OOM kill, manual stop, crash, disk issue, dependency/start-ordering problem) were inspected in this run. Also unverified: whether nextcloud-db restarts cleanly and stays up once started, and whether it had crashed before or was simply never brought back up after some host event.\n\n### Affected Resources\n- nextcloud (app-container-e87583fa0bec4317): observed symptom — Docker status \"running\", health \"unhealthy\", 0 restarts, repeated DB connection-refused errors in its logs. This is the symptom, not the cause.\n- nextcloud-db (app-container-3a02b070bacf2aac): the causal resource, status \"exited\".\n- vaultwarden-db-migrate (app-container-7d93fd2a83f63840) is also exited on docker01 but is a one-shot migration job and not implicated in this finding; noted only for completeness, not investigated further.\n\n### Recommendation\nA plan to start nextcloud-db (capability \"start\" on app-container-3a02b070bacf2aac) has been persisted (action_id act_cdcdc1d852fe8ddace6fe9362b4c903c, state pending_approval). An admin must approve this action before it executes. After approval and execution, verify nextcloud-db stays up (check logs/exit status) and confirm Nextcloud's health transitions to \"healthy\" and the critical alert clears. If nextcloud-db exits again after being started, escalate to inspect its own logs, docker01 disk/memory pressure, and any compose/orchestration dependency ordering that may have left it stopped. Separately, the nextcloud:30-apache image update can be evaluated once the current incident is resolved — not urgent.\n\n### Conclusion\nNEEDS_ATTENTION: An admin must approve the pending \"start\" action on nextcloud-db (app-container-3a02b070bacf2aac) to restore Nextcloud's database connectivity and clear the health check failure. After approval, verify nextcloud-db remains running (it may need log review if it exits again) and confirm Nextcloud's health status returns to healthy.",
+        "action": {
+          "action_id": "act_cdcdc1d852fe8ddace6fe9362b4c903c",
+          "capability": "start",
+          "target_alias": "nextcloud-db",
+          "target_resource_id": "app-container-3a02b070bacf2aac",
+          "decision": "approved_executed",
+          "final_state": "completed",
+          "verification_status": "verified",
+          "plan_hash_bound": true,
+          "origin_bound": true
+        }
+      }
+    ]
+  }
+}

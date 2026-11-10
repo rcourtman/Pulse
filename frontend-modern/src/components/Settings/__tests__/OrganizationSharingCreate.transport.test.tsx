@@ -164,7 +164,7 @@ function expectSavedGrant(entry: Entry, role: Role = 'viewer') {
   const mobileAccess = within(row!).getByText('Access:').parentElement!;
   expect(within(mobileAccess).getByText(role, { exact: true })).toBeInTheDocument();
   expect(row).toHaveTextContent('Pending approval');
-  expect(within(row!).getByRole('button', { name: 'Remove' })).toBeEnabled();
+  expect(within(row!).getByRole('button', { name: /^Remove share of / })).toBeEnabled();
   // This saved state comes from the actual dispatched body, not the intended
   // fixture choice. A wrong callback must produce a wrong saved grant.
   expect(outgoing).toHaveLength(1);

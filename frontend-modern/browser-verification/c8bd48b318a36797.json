@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "base_sha": "d66223a83a5a6f51eaf9e505b42d6fa67363c1cb",
+  "verified_at": "2026-11-10T10:05:37Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/OrganizationIncomingSharesSection.tsx",
+    "frontend-modern/src/components/Settings/OrganizationOutgoingSharesSection.tsx",
+    "frontend-modern/src/utils/organizationSettingsPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/OrganizationIncomingSharesSection.tsx": "11d028424820752ffd583d667e18137970ccf0db75345036546539d0e6ad7208",
+    "frontend-modern/src/components/Settings/OrganizationOutgoingSharesSection.tsx": "daf6443a326e89c6db9854089dc53b0ab6064c59d18d20c2b2a0073f0287decb",
+    "frontend-modern/src/utils/organizationSettingsPresentation.ts": "ae5a8c9696303845913abf3d92dc8250c5977514ffeec8c5a7b4154f09921d1e"
+  },
+  "routes": [
+    "/settings/organization/sharing"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Actual App with synthetic REST organization/shares through the real state owner, API client and sharing rows; three namesake resources in each direction; viewer/editor/admin and pending/accepted states; namesake organization names and an unlisted/unnamed organization. Chromium 141.0.7390.37 / Playwright 1.56.1, en-GB/UTC and fixed 2026-11-10T09:00:00Z, light and dark.",
+    "Six row accessibility snapshots per viewport/theme verify exact resource and saved organization IDs in every existing Accept, Decline and Remove name, with the human name retained when available. Accepted row changes from Accept/Decline to its precise Remove name.",
+    "16 source-matched baseline captures retained from d66223a83a5a6f51eaf9e505b42d6fa67363c1cb; 16 fresh final captures. All 32 opened through native view_image. Same fixture, viewport/theme/locale/time/scroll anchors and interaction states; row and table metrics unchanged, including 65px pending phone rows. No visible field/control/layout change."
+  ],
+  "interactions": [
+    "Keyboard focus and Enter on the editor incoming share from peer/second emits exactly one POST to that saved share under ops/east, with the synthetic org/CSRF headers; real follow-up read renders Active, acceptance date/actor and its precise Remove action. Namesake peer/first remains pending.",
+    "Scroll each table to the matching left-edge baseline anchors, then scroll the incoming table right for accepted action controls. No page errors; all four contexts plus browser and preview server close.",
+    "Offline synthetic REST proof only: unrelated shell GETs return recorded empty objects and the absent localhost WebSocket backend logs ECONNREFUSED. Not HTTP authorization, production/IdP/native screen-reader or original-client recovery proof."
+  ]
+}
