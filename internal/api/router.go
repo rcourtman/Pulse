@@ -180,6 +180,7 @@ type Router struct {
 	stripeWebhookHandlers       *StripeWebhookHandlers
 	patrolLifecycleMu           sync.Mutex
 	startedPatrolOrgs           map[string]bool
+	patrolAlertSources          patrolAlertSources // which alert manager each organisation's Patrol listens to
 	actionRecoveryMu            sync.Mutex
 	aiAutoFixEndpoints          extensions.AIAutoFixEndpoints
 	aiAlertAnalysisEndpoints    extensions.AIAlertAnalysisEndpoints
@@ -1806,8 +1807,12 @@ func (r *Router) configureMonitorDependencies(m *monitoring.Monitor) {
 	}
 
 	r.monitorSupplementalMu.Lock()
-	defer r.monitorSupplementalMu.Unlock()
 	r.configureMonitorDependenciesLocked(m)
+	r.monitorSupplementalMu.Unlock()
+
+	// A full reload replaces the monitor and its alert manager. Patrol's
+	// alert bridge was bound to the old one when Patrol started.
+	r.followMonitorAlertManager(m)
 }
 
 // The caller holds monitorSupplementalMu across reading and applying the
@@ -2583,34 +2588,7 @@ func (r *Router) initializeAIIntelligenceServices(ctx context.Context, orgID, da
 
 	// 8. Initialize unified alert/finding system and bridge
 	if monitor != nil {
-		if alertManager := monitor.GetAlertManager(); alertManager != nil {
-			// Create unified store
-			unifiedStore := unified.NewUnifiedStore(unified.DefaultAlertToFindingConfig())
-			r.aiSettingsHandler.SetUnifiedStoreForOrg(orgID, unifiedStore)
-
-			// Create alert bridge
-			alertBridge := unified.NewAlertBridge(unifiedStore, unified.DefaultBridgeConfig())
-
-			// Create and set alert provider adapter
-			alertAdapter := unified.NewAlertManagerAdapter(alertManager)
-			alertBridge.SetAlertProvider(alertAdapter)
-
-			// Set patrol trigger function (triggers mini-patrol on alert events)
-			patrol := aiService.GetPatrolService()
-			if patrol != nil && ai.BackgroundAutomationDisabledForDev() {
-				log.Info().
-					Str("env", ai.DevDisableBackgroundAIEnv).
-					Str("org_id", orgID).
-					Msg("Pulse dev background AI disabled; alert bridge patrol trigger not wired")
-			} else if patrol != nil {
-				r.newAlertBridgePatrolWiring(orgID, aiService, patrol).attach(alertBridge)
-			}
-
-			// Start the bridge
-			alertBridge.Start()
-			r.aiSettingsHandler.SetAlertBridgeForOrg(orgID, alertBridge)
-			log.Info().Msg("AI Intelligence: Unified alert/finding bridge initialized and started")
-		}
+		r.startUnifiedAlertBridge(orgID, aiService, monitor.GetAlertManager())
 	}
 
 	// 9. Wire up AI intelligence providers to patrol service for context injection
@@ -2696,25 +2674,7 @@ func (r *Router) initializeAIIntelligenceServices(ctx context.Context, orgID, da
 		// scoped patrol so the postmortem context can be enriched later.
 		if monitor != nil {
 			if alertManager := monitor.GetAlertManager(); alertManager != nil {
-				alertManager.SetFlappingDetectedCallback(func(alert *alerts.Alert, trackingKey string) {
-					if alert == nil || trackingKey == "" {
-						return
-					}
-					emitFlappingPostmortemFinding(patrol, alertManager, alert, trackingKey)
-					scope := ai.FlappingPostmortemPatrolScope(
-						alert.ID,
-						alert.ResourceID,
-						alert.CanonicalKind,
-						alert.Type,
-					)
-					if triggerManager.TriggerPatrol(scope) {
-						log.Debug().
-							Str("alertID", alert.ID).
-							Str("trackingKey", trackingKey).
-							Str("alertType", alert.Type).
-							Msg("Flapping-detected triggered postmortem patrol via TriggerManager")
-					}
-				})
+				wireAlertFlappingPostmortem(alertManager, patrol, triggerManager)
 				log.Info().Msg("AI Intelligence: Alert-flapping callback wired to trigger manager")
 			}
 		}

@@ -3,11 +3,14 @@ package api
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/unified"
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rs/zerolog/log"
 )
 
@@ -180,4 +183,140 @@ func (r *Router) newAlertBridgePatrolWiring(orgID string, aiService *ai.Service,
 		},
 		lookedAtSince: patrol.AlertExaminedSince,
 	}
+}
+
+// patrolAlertSources remembers, per organisation, which alert manager Patrol's
+// alert-driven wiring listens to and how to point it at another one.
+//
+// Patrol is started once per organisation and binds the alert bridge, the
+// flapping callback and the threshold reader to the alert manager of the
+// monitor that is live at that moment. A full monitor reload (a node added, an
+// auto-registration, a polling interval change) stops that monitor and builds
+// a new one with a new alert manager. Nothing told Patrol, so after any reload
+// alerts stopped waking it until the process restarted.
+type patrolAlertSources struct {
+	mu    sync.Mutex
+	byOrg map[string]*patrolAlertSource
+}
+
+type patrolAlertSource struct {
+	bound  *alerts.Manager
+	rebind func(*alerts.Manager)
+}
+
+// register records the alert manager an organisation's wiring was just built
+// on, and the function that moves it to another.
+func (s *patrolAlertSources) register(orgID string, bound *alerts.Manager, rebind func(*alerts.Manager)) {
+	if s == nil || rebind == nil {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.byOrg == nil {
+		s.byOrg = make(map[string]*patrolAlertSource)
+	}
+	s.byOrg[normalizePatrolOrgID(orgID)] = &patrolAlertSource{bound: bound, rebind: rebind}
+}
+
+// follow moves an organisation's wiring to the alert manager of the monitor
+// that is live now. It does nothing for an organisation whose Patrol has not
+// started, and nothing when the wiring already listens to this manager.
+func (s *patrolAlertSources) follow(orgID string, current *alerts.Manager) bool {
+	if s == nil || current == nil {
+		return false
+	}
+	s.mu.Lock()
+	source := s.byOrg[normalizePatrolOrgID(orgID)]
+	if source == nil || source.bound == current {
+		s.mu.Unlock()
+		return false
+	}
+	source.bound = current
+	rebind := source.rebind
+	s.mu.Unlock()
+	rebind(current)
+	return true
+}
+
+// followMonitorAlertManager runs for every monitor the router is handed,
+// including the ones a full reload builds, and keeps Patrol listening to the
+// alert manager that is in use.
+func (r *Router) followMonitorAlertManager(m *monitoring.Monitor) {
+	if r == nil || m == nil {
+		return
+	}
+	alertManager := m.GetAlertManager()
+	if alertManager == nil {
+		return
+	}
+	if r.patrolAlertSources.follow(m.GetOrgID(), alertManager) {
+		log.Info().
+			Str("org_id", normalizePatrolOrgID(m.GetOrgID())).
+			Msg("AI Intelligence: Patrol alert wiring moved to the reloaded monitor's alert manager")
+	}
+}
+
+// wireAlertFlappingPostmortem has the alert manager tell Patrol when an alert
+// starts flapping: a postmortem finding the operator can see, and a scoped run.
+func wireAlertFlappingPostmortem(alertManager *alerts.Manager, patrol *ai.PatrolService, triggerManager *ai.TriggerManager) {
+	if alertManager == nil || patrol == nil || triggerManager == nil {
+		return
+	}
+	alertManager.SetFlappingDetectedCallback(func(alert *alerts.Alert, trackingKey string) {
+		if alert == nil || trackingKey == "" {
+			return
+		}
+		emitFlappingPostmortemFinding(patrol, alertManager, alert, trackingKey)
+		scope := ai.FlappingPostmortemPatrolScope(
+			alert.ID,
+			alert.ResourceID,
+			alert.CanonicalKind,
+			alert.Type,
+		)
+		if triggerManager.TriggerPatrol(scope) {
+			log.Debug().
+				Str("alertID", alert.ID).
+				Str("trackingKey", trackingKey).
+				Str("alertType", alert.Type).
+				Msg("Flapping-detected triggered postmortem patrol via TriggerManager")
+		}
+	})
+}
+
+// startUnifiedAlertBridge builds an organisation's unified alert store and
+// alert bridge on the given alert manager, wires the bridge to Patrol, starts
+// it, and records how to move it when a monitor reload replaces the manager.
+func (r *Router) startUnifiedAlertBridge(orgID string, aiService *ai.Service, alertManager *alerts.Manager) *unified.AlertBridge {
+	if r == nil || r.aiSettingsHandler == nil || aiService == nil || alertManager == nil {
+		return nil
+	}
+	unifiedStore := unified.NewUnifiedStore(unified.DefaultAlertToFindingConfig())
+	r.aiSettingsHandler.SetUnifiedStoreForOrg(orgID, unifiedStore)
+
+	alertBridge := unified.NewAlertBridge(unifiedStore, unified.DefaultBridgeConfig())
+	alertBridge.SetAlertProvider(unified.NewAlertManagerAdapter(alertManager))
+
+	// Set patrol trigger function (triggers mini-patrol on alert events)
+	patrol := aiService.GetPatrolService()
+	if patrol != nil && ai.BackgroundAutomationDisabledForDev() {
+		log.Info().
+			Str("env", ai.DevDisableBackgroundAIEnv).
+			Str("org_id", orgID).
+			Msg("Pulse dev background AI disabled; alert bridge patrol trigger not wired")
+	} else if patrol != nil {
+		r.newAlertBridgePatrolWiring(orgID, aiService, patrol).attach(alertBridge)
+	}
+
+	alertBridge.Start()
+	r.aiSettingsHandler.SetAlertBridgeForOrg(orgID, alertBridge)
+	log.Info().Msg("AI Intelligence: Unified alert/finding bridge initialized and started")
+
+	// A monitor reload builds a new alert manager. Everything here that
+	// listens to this one has to move with it.
+	r.patrolAlertSources.register(orgID, alertManager, func(current *alerts.Manager) {
+		alertBridge.ReplaceAlertProvider(unified.NewAlertManagerAdapter(current))
+		aiService.SetPatrolThresholdProvider(ai.NewAlertThresholdAdapter(current))
+		wireAlertFlappingPostmortem(current, aiService.GetPatrolService(), r.aiSettingsHandler.GetTriggerManagerForOrg(orgID))
+	})
+	return alertBridge
 }

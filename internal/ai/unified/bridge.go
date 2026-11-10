@@ -192,6 +192,29 @@ func (b *AlertBridge) SetAlertProvider(provider AlertProvider) {
 	})
 }
 
+// ReplaceAlertProvider points the bridge at another alert provider. A full
+// monitor reload replaces the alert manager, and the bridge's subscriptions
+// live on the manager it was given, so without this the bridge keeps
+// listening to a manager that has stopped and hears nothing again until the
+// process restarts. A running bridge is stopped and started around the swap,
+// so alerts already active on the new provider are synced like at startup. A
+// stopped bridge stays stopped.
+func (b *AlertBridge) ReplaceAlertProvider(provider AlertProvider) {
+	if b == nil || provider == nil {
+		return
+	}
+	b.mu.RLock()
+	wasRunning := b.running
+	b.mu.RUnlock()
+	if wasRunning {
+		b.Stop()
+	}
+	b.SetAlertProvider(provider)
+	if wasRunning {
+		b.Start()
+	}
+}
+
 // SetPatrolTrigger sets the function to call when patrol should be triggered
 func (b *AlertBridge) SetPatrolTrigger(fn PatrolTriggerFunc) {
 	b.mu.Lock()
