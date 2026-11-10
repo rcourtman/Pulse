@@ -12,7 +12,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
-	"github.com/rs/zerolog/log"
+	"github.com/rs/zerolog"
 )
 
 // Exercise the real read-only PMG poll with fixed provider replies. Only
@@ -108,15 +108,16 @@ func TestPMGBackupReadProjectionPreservesPollEvidence(t *testing.T) {
 }
 
 func TestPMGBackupReadsAvoidUnrelatedFleetCopy(t *testing.T) {
-	previous := log.Logger
-	log.Logger = log.Output(io.Discard)
-	defer func() { log.Logger = previous }()
+	// Only this poll owns the quiet output. Alert persistence and other
+	// background workers may still be using the process logger.
+	logger := zerolog.New(io.Discard)
+	ctx := logger.WithContext(context.Background())
 	for _, scenario := range []string{"cluster-unread", "all-nodes-unread", "partial", "complete"} {
 		t.Run(scenario, func(t *testing.T) {
 			small, sc := pmgPollingReadFixture(0, scenario)
 			large, lc := pmgPollingReadFixture(1000, scenario)
 			measure := func(m *Monitor, f *pmgBackupRetentionFixture) float64 {
-				return testing.AllocsPerRun(5, func() { m.pollPMGInstance(context.Background(), "gateway", f) })
+				return testing.AllocsPerRun(5, func() { m.pollPMGInstance(ctx, "gateway", f) })
 			}
 			base, grown := measure(small, sc), measure(large, lc)
 			t.Logf("allocations per real poll: small=%.0f unrelated-1000=%.0f", base, grown)
@@ -140,9 +141,8 @@ func TestPMGBackupReadsAvoidUnrelatedFleetCopy(t *testing.T) {
 var pmgPollingSnapshotSink models.StateSnapshot
 
 func BenchmarkPMGBackupReadPoll(b *testing.B) {
-	previous := log.Logger
-	log.Logger = log.Output(io.Discard)
-	b.Cleanup(func() { log.Logger = previous })
+	logger := zerolog.New(io.Discard)
+	ctx := logger.WithContext(context.Background())
 	for _, scenario := range []string{"cluster-unread", "all-nodes-unread", "partial", "complete"} {
 		for _, size := range []int{0, 1000} {
 			b.Run(fmt.Sprintf("%s/unrelated-%d", scenario, size), func(b *testing.B) {
@@ -150,7 +150,7 @@ func BenchmarkPMGBackupReadPoll(b *testing.B) {
 				b.ReportAllocs()
 				b.ResetTimer()
 				for i := 0; i < b.N; i++ {
-					m.pollPMGInstance(context.Background(), "gateway", f)
+					m.pollPMGInstance(ctx, "gateway", f)
 				}
 			})
 		}

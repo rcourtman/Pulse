@@ -819,10 +819,22 @@ type pmgPollClient interface {
 
 var _ pmgPollClient = (*pmg.Client)(nil)
 
+// A PMG caller can own its diagnostic output without replacing the process
+// logger that alert persistence and other background workers still use. Keep
+// ordinary process logging for callers that have not supplied a context logger.
+func pmgPollLogger(ctx context.Context) *zerolog.Logger {
+	logger := log.Ctx(ctx)
+	if logger.GetLevel() == zerolog.Disabled {
+		return &log.Logger
+	}
+	return logger
+}
+
 // pollPMGInstance polls a single Proxmox Mail Gateway instance
 func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, client pmgPollClient) {
 	defer recoverFromPanic(fmt.Sprintf("pollPMGInstance-%s", instanceName))
 
+	logger := pmgPollLogger(ctx)
 	start := time.Now()
 	debugEnabled := logging.IsLevelEnabled(zerolog.DebugLevel)
 	// pollErr is a connection, version or whole-poll failure and drives
@@ -860,14 +872,14 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 	case <-ctx.Done():
 		pollErr = ctx.Err()
 		if debugEnabled {
-			log.Debug().Str("instance", instanceName).Msg("PMG polling cancelled by context")
+			logger.Debug().Str("instance", instanceName).Msg("PMG polling cancelled by context")
 		}
 		return
 	default:
 	}
 
 	if debugEnabled {
-		log.Debug().Str("instance", instanceName).Msg("polling PMG instance")
+		logger.Debug().Str("instance", instanceName).Msg("polling PMG instance")
 	}
 
 	// Each poll uses one saved scope snapshot. A later edit/pause applies to
@@ -886,13 +898,13 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 	config.Mu.RUnlock()
 
 	if instanceCfg == nil {
-		log.Error().Str("instance", instanceName).Msg("PMG instance config not found")
+		logger.Error().Str("instance", instanceName).Msg("PMG instance config not found")
 		pollErr = fmt.Errorf("pmg instance config not found for %s", instanceName)
 		return
 	}
 	if instanceCfg.Disabled {
 		if debugEnabled {
-			log.Debug().Str("instance", instanceName).Msg("Skipping PMG poll: instance is paused")
+			logger.Debug().Str("instance", instanceName).Msg("Skipping PMG poll: instance is paused")
 		}
 		return
 	}
@@ -913,7 +925,7 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 	if err != nil {
 		monErr := errors.WrapConnectionError("pmg_get_version", instanceName, err)
 		pollErr = monErr
-		log.Error().Err(monErr).Str("instance", instanceName).Msg("failed to connect to PMG instance")
+		logger.Error().Err(monErr).Str("instance", instanceName).Msg("failed to connect to PMG instance")
 		m.setProviderConnectionHealth(InstanceTypePMG, instanceName, false)
 		m.state.UpdatePMGInstance(pmgInst)
 
@@ -949,7 +961,7 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 	recordReadError("pmg_cluster_status", clusterErr)
 	if clusterErr != nil {
 		if debugEnabled {
-			log.Debug().Err(clusterErr).Str("instance", instanceName).Msg("failed to retrieve PMG cluster status")
+			logger.Debug().Err(clusterErr).Str("instance", instanceName).Msg("failed to retrieve PMG cluster status")
 		}
 	}
 
@@ -975,7 +987,7 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 				if queueData, qErr := client.GetQueueStatus(ctx, entry.Name); qErr != nil {
 					recordReadError("pmg_queue_status", qErr)
 					if debugEnabled {
-						log.Debug().Err(qErr).
+						logger.Debug().Err(qErr).
 							Str("instance", instanceName).
 							Str("node", entry.Name).
 							Msg("Failed to fetch PMG queue status")
@@ -1023,7 +1035,7 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 		if backupErr != nil {
 			recordReadError("pmg_backups", backupErr)
 			if debugEnabled {
-				log.Debug().Err(backupErr).
+				logger.Debug().Err(backupErr).
 					Str("instance", instanceName).
 					Str("node", nodeName).
 					Msg("Failed to list PMG configuration backups")
@@ -1061,7 +1073,7 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 			instanceName, m.state.GetPMGBackupsForInstance(instanceName), pmgBackups,
 			clusterErr != nil, backupNodes, readBackupNodes)
 		if len(preservedBackupNodes) > 0 {
-			log.Warn().
+			logger.Warn().
 				Str("instance", instanceName).
 				Strs("nodes", preservedBackupNodes).
 				Bool("clusterReadFailed", clusterErr != nil).
@@ -1070,7 +1082,7 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 	}
 
 	if debugEnabled {
-		log.Debug().
+		logger.Debug().
 			Str("instance", instanceName).
 			Int("backupCount", len(pmgBackups)).
 			Msg("PMG backups polled")
@@ -1079,7 +1091,7 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 	if instanceCfg.MailStatsEnabled() {
 		if stats, err := client.GetMailStatistics(ctx, ""); err != nil {
 			recordReadError("pmg_mail_statistics", err)
-			log.Warn().Err(err).Str("instance", instanceName).Msg("failed to fetch PMG mail statistics")
+			logger.Warn().Err(err).Str("instance", instanceName).Msg("failed to fetch PMG mail statistics")
 		} else if stats != nil {
 			pmgInst.MailStats = &models.PMGMailStats{
 				Timeframe:            "day",
@@ -1106,7 +1118,7 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 		if counts, err := client.GetMailCount(ctx, 86400); err != nil {
 			recordReadError("pmg_mail_count", err)
 			if debugEnabled {
-				log.Debug().Err(err).Str("instance", instanceName).Msg("failed to fetch PMG mail count data")
+				logger.Debug().Err(err).Str("instance", instanceName).Msg("failed to fetch PMG mail count data")
 			}
 		} else if len(counts) > 0 {
 			points := make([]models.PMGMailCountPoint, 0, len(counts))
@@ -1137,7 +1149,7 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 		if scores, err := client.GetSpamScores(ctx); err != nil {
 			recordReadError("pmg_spam_scores", err)
 			if debugEnabled {
-				log.Debug().Err(err).Str("instance", instanceName).Msg("failed to fetch PMG spam score distribution")
+				logger.Debug().Err(err).Str("instance", instanceName).Msg("failed to fetch PMG spam score distribution")
 			}
 		} else if len(scores) > 0 {
 			buckets := make([]models.PMGSpamBucket, 0, len(scores))
@@ -1170,7 +1182,7 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 		if domains, err := client.ListRelayDomains(ctx); err != nil {
 			recordReadError("pmg_relay_domains", err)
 			if debugEnabled {
-				log.Debug().Err(err).Str("instance", instanceName).Msg("failed to fetch PMG relay domains")
+				logger.Debug().Err(err).Str("instance", instanceName).Msg("failed to fetch PMG relay domains")
 			}
 		} else if len(domains) > 0 {
 			relayDomains := make([]models.PMGRelayDomain, 0, len(domains))
@@ -1188,7 +1200,7 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 		if stats, err := client.GetDomainStatistics(ctx, start.Unix(), end.Unix()); err != nil {
 			recordReadError("pmg_domain_statistics", err)
 			if debugEnabled {
-				log.Debug().Err(err).Str("instance", instanceName).Msg("failed to fetch PMG domain statistics")
+				logger.Debug().Err(err).Str("instance", instanceName).Msg("failed to fetch PMG domain statistics")
 			}
 		} else if len(stats) > 0 {
 			domainStats := make([]models.PMGDomainStat, 0, len(stats))
@@ -1218,7 +1230,7 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 
 	m.state.UpdatePMGBackups(instanceName, pmgBackups)
 	m.state.UpdatePMGInstance(pmgInst)
-	log.Info().
+	logger.Info().
 		Str("instance", instanceName).
 		Str("status", pmgInst.Status).
 		Int("nodes", len(pmgInst.Nodes)).
