@@ -869,6 +869,79 @@ func TestProxmoxPhysicalDiskAlertReferenceShape(t *testing.T) {
 	}
 }
 
+// A Proxmox guest filesystem alert ("<instance>:<node>:<vmid>-disk-<key>",
+// alerts.CheckGuest) names one filesystem of a guest and no resource of its
+// own. It binds to the guest, VM or system container, so the alert's events
+// join the guest's history and Patrol can scope a run to the guest.
+func TestHistoryIdentityBindsGuestFilesystemAlertsToTheirGuest(t *testing.T) {
+	store, err := NewSQLiteResourceStore(t.TempDir(), "default")
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, store.Close()) })
+	now := time.Now().UTC().Truncate(time.Second)
+	snapshot := proxmoxHistoryIdentitySnapshot(now)
+	snapshot.Containers = append(snapshot.Containers, models.Container{ID: "lab:pve1:103", VMID: 103, Name: "files", Node: "pve1", Instance: "lab", Status: "running", Type: "lxc", LastSeen: now})
+	adapter := NewMonitorAdapter(NewRegistry(store))
+	adapter.PopulateFromSnapshot(snapshot)
+	registry := adapter.currentRegistry()
+	vmID := historyIdentityResourceID(t, registry, ResourceTypeVM, "web")
+	containerID := historyIdentityResourceID(t, registry, ResourceTypeSystemContainer, "files")
+
+	vmFilesystem := "lab:pve1:101-disk-var-dev-sda2"
+	containerFilesystem := "lab:pve1:103-disk-local-103-vm-103-disk-0.raw"
+	bound := map[string]string{
+		vmFilesystem:        vmID,
+		containerFilesystem: containerID,
+		"lab:pve1:101":      vmID, // the guest's own alerts, as before
+	}
+	unbound := []string{
+		"lab:pve1:999-disk-root",    // no guest has that VMID
+		"lab:pve1:101-disk-",        // no filesystem key
+		"lab:pve1:101-disk-Var Log", // not a key the alert manager produces
+		"lab:pve1:web-disk-root",    // a guest name, not its VMID
+		"lab-pve1-101-disk-root",    // not a guest source ID
+		"pve1:101-disk-root",        // no instance
+	}
+	refs := append([]string{}, unbound...)
+	for ref := range bound {
+		refs = append(refs, ref)
+	}
+	for i, ref := range refs {
+		require.NoError(t, adapter.RecordChange(ResourceChange{ID: "fired-" + ref, ResourceID: ref, Kind: ChangeAlertFired, SourceType: SourceHeuristic, ObservedAt: now.Add(time.Duration(i) * time.Second)}))
+	}
+	// Each guest's history now holds its filesystem alert beside its own.
+	requireHistoryReferenceBindings(t, store, bound, unbound)
+
+	for _, resolver := range []AlertResourceReferenceResolver{registry, NewUnifiedAIAdapter(registry), adapter} {
+		for ref, want := range map[string]struct {
+			id           string
+			resourceType ResourceType
+		}{vmFilesystem: {vmID, ResourceTypeVM}, containerFilesystem: {containerID, ResourceTypeSystemContainer}} {
+			binding, claimed := resolver.ResolveAlertResourceReference(ref)
+			if !claimed || binding.ResourceID != want.id || binding.ResourceType != want.resourceType || !binding.Component {
+				t.Fatalf("%s: binding = %+v, claimed=%v, want a component of %s %s", ref, binding, claimed, want.resourceType, want.id)
+			}
+		}
+		// The guest's own reference names the guest itself, not a part of it.
+		if binding, _ := resolver.ResolveAlertResourceReference("lab:pve1:101"); binding.ResourceID != vmID || binding.Component {
+			t.Fatalf("guest reference binding changed: %+v", binding)
+		}
+		for _, ref := range unbound {
+			if binding, _ := resolver.ResolveAlertResourceReference(ref); binding.ResourceID != "" {
+				t.Fatalf("bound untrusted reference %q: %+v", ref, binding)
+			}
+		}
+	}
+
+	// The alert clears after the container was removed. The event follows the
+	// binding its firing recorded and stays in the container's history.
+	removed := NewMonitorAdapter(NewRegistry(store))
+	require.NoError(t, removed.RecordChange(ResourceChange{ID: "resolved-" + containerFilesystem, ResourceID: containerFilesystem, Kind: ChangeAlertResolved, SourceType: SourceHeuristic, ObservedAt: now.Add(time.Hour)}))
+	got, err := store.GetRecentChangesFiltered(containerID, time.Time{}, 10, ResourceChangeFilters{Kinds: []ChangeKind{ChangeAlertResolved}})
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	require.Equal(t, containerID, got[0].ResourceID)
+}
+
 func TestAlertResourceReferenceRequiresCurrentDurableOwner(t *testing.T) {
 	snapshot := models.StateSnapshot{Hosts: []models.Host{{ID: "host-source", Hostname: "display-name", MachineID: "machine"}}}
 	registry := NewRegistry(nil)

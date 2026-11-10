@@ -214,6 +214,10 @@ func (rr *ResourceRegistry) dockerHistoryOwnerLocked(ref string) string {
 //   - "agent:<host ID>/disk:<mount or device>", ".../disk_temp:<device>",
 //     ".../raid:<device>", ".../custom:<sensor>" and ".../sensor:<hex of a
 //     native sensor ID>" belong to the host.
+//   - "<instance>:<node>:<vmid>-disk-<key>" (one filesystem of a Proxmox guest,
+//     alerts.CheckGuest) belongs to the guest with that source ID. The type
+//     returned is ResourceTypeVM, and a system container qualifies as well
+//     (historyOwnerTypeMatches): the reference does not say which the guest is.
 //
 // Pool, mount and kernel device labels are names: a device name can belong to
 // a different disk after a reboot, so these never bind a physical disk.
@@ -239,7 +243,55 @@ func historySubResourceOwner(ref string) (ownerRef string, ownerType ResourceTyp
 		}
 		return ref[:i], ResourceTypeStorage, true
 	}
+	if guestRef, found := proxmoxGuestFilesystemOwner(ref); found {
+		return guestRef, ResourceTypeVM, true
+	}
 	return "", "", false
+}
+
+// proxmoxGuestFilesystemOwner splits a Proxmox guest filesystem alert
+// reference, "<instance>:<node>:<vmid>-disk-<key>", into the guest's source ID
+// "<instance>:<node>:<vmid>". The instance is free text and may contain colons.
+// Node names never do, and the key is the alert manager's sanitized filesystem
+// label (lower-case letters, digits, dots and dashes), so the last colon ends
+// the node.
+func proxmoxGuestFilesystemOwner(ref string) (guestRef string, ok bool) {
+	last := strings.LastIndexByte(ref, ':')
+	if last <= 0 {
+		return "", false
+	}
+	vmid, key, found := strings.Cut(ref[last+1:], "-disk-")
+	if !found || key == "" {
+		return "", false
+	}
+	for _, r := range key {
+		if (r < 'a' || r > 'z') && (r < '0' || r > '9') && r != '.' && r != '-' {
+			return "", false
+		}
+	}
+	guestRef = ref[:last+1] + vmid
+	if _, _, _, parsed := ParseProxmoxGuestSourceID(guestRef); !parsed {
+		return "", false
+	}
+	return guestRef, true
+}
+
+// historyOwnerTypeMatches reports whether a resolved owner has the type its
+// sub-resource reference requires. A linked agent retains ownership of its
+// disk and sensor observations when its canonical resource is a VM, container
+// or node. A guest filesystem's owner is a Proxmox guest of either kind.
+func historyOwnerTypeMatches(owner *Resource, ownerType ResourceType) bool {
+	if owner == nil {
+		return false
+	}
+	actual := CanonicalResourceType(owner.Type)
+	switch ownerType {
+	case ResourceTypeAgent:
+		return actual == ResourceTypeAgent || owner.Agent != nil
+	case ResourceTypeVM:
+		return actual == ResourceTypeVM || actual == ResourceTypeSystemContainer
+	}
+	return actual == ownerType
 }
 
 // resolveHistoryReference resolves an alert reference to the resource whose
@@ -292,10 +344,7 @@ func (rr *ResourceRegistry) resolveAlertReferenceLocked(ref string) (resourceID 
 		owners := rr.durableHistoryMatchesLocked(ownerRef)
 		for id := range owners {
 			owner := rr.resources[id]
-			// A linked agent retains ownership of its disk/sensor observations
-			// when its canonical resource is a VM, container or node.
-			typeMatches := CanonicalResourceType(owner.Type) == ownerType || (ownerType == ResourceTypeAgent && owner.Agent != nil)
-			if len(owners) != 1 || !typeMatches {
+			if len(owners) != 1 || !historyOwnerTypeMatches(owner, ownerType) {
 				return "", true, false
 			}
 			matches[id] = struct{}{}
