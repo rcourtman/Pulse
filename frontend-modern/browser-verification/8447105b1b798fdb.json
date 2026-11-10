@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "base_sha": "4b7efba7f7e88f2a50da242fe5cd374f2418a7df",
+  "verified_at": "2026-11-10T15:11:39Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/AISettings.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/AISettings.tsx": "f0d45a3cab70370230af81f6803ba72586475c15516a06b88a8cbdbc01e50362"
+  },
+  "routes": [
+    "/settings/pulse-intelligence/patrol"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Critical only: Investigate immediately names the setting; the unchanged accessible help describes warnings active for10 minutes, at most4/hour, in Ask first and Autopilot. Both themes, desktop and phone.",
+    "Warning and critical: unchanged options/values, no delayed-warning help.",
+    "Alert triggers off hides selector/help; turning on restores the unsaved choice.",
+    "Watch-only install retains selector, hides delayed-warning help; no claim that it investigates.",
+    "Comparable before/after page-top and focused trigger states retain all control positions and surrounding information.32 captures/16 pairs inspected."
+  ],
+  "interactions": [
+    "Changed severity using native selector and ArrowUp; verified help and aria-describedby track choice. No implicit settings write.",
+    "Toggled alert triggers off/on, preserving local severity.",
+    "Saved warning using actual AI settings form and HTTP client; exact PUT settings payload, organization and CSRF asserted against fixture. Reloaded saved response and verified warning.",
+    "Changed locally to critical then Reset; saved warning survives with no additional write.",
+    "Saved critical; exact second PUT, original saved settings restored, reloaded critical/help. Browser and preview closed."
+  ],
+  "browser": {
+    "name": "Chromium",
+    "version": "141.0.7390.37",
+    "playwright": "1.56.1"
+  },
+  "limitations": [
+    "Actual application with offline synthetic API/provider responses; no live server authorization, model execution or original-client recovery claimed.",
+    "Browser preview uses exact edited runtime bytes; full committed-source tests and production build are separate proof.",
+    "Native screen reader and physical mobile keyboard not exercised."
+  ]
+}
