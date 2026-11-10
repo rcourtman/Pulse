@@ -424,12 +424,16 @@ download_update_asset() {
 # plausible partial result grants an update, restart or rollback.
 read_update_service_state() {
     local service_name=$1 observation="" line="" load="" state=""
+    local probe_seconds="${2-5}"
     local seen_load=false seen_state=false read_completed=false
+    # Polling can lend only its remaining budget, never extend the normal
+    # five-second manager bound. Invalid limits grant no service observation.
+    [[ "$probe_seconds" =~ ^[1-5]$ ]] || return 1
     # Keep diagnostics in the same observation and preserve trailing blank
     # records. Command substitution otherwise discards them, turning an
     # incomplete manager reply into consent for update/restart/rollback.
     # The completion marker also requires the last property to end normally.
-    if ! observation=$(LC_ALL=C timeout -k 1 5 systemctl show "$service_name" --no-pager --property=LoadState --property=ActiveState 2>&1 &&
+    if ! observation=$(LC_ALL=C timeout -k 1 "$probe_seconds" systemctl show "$service_name" --no-pager --property=LoadState --property=ActiveState 2>&1 &&
         printf '%s' '__pulse_state_read_completed__'); then
         log error "Cannot read Pulse service state ($service_name); reconcile service state before retrying" >&2
         return 1
@@ -560,16 +564,25 @@ stop_update_service_for_rollback() {
 
 wait_for_service_active() {
     local service_name=$1
-    local timeout_seconds="${2:-20}"
-    local elapsed=0 state=""
+    local timeout_seconds="${2-20}"
+    [[ "$timeout_seconds" =~ ^[1-9][0-9]*$ ]] || return 2
+    local started_at=$SECONDS elapsed=0 probe_seconds state=""
 
     while (( elapsed < timeout_seconds )); do
-        state=$(read_update_service_state "$service_name") || return 2
+        # Include manager reads and sleeps in one elapsed-time allowance.
+        # Twenty slow observations are not a twenty-second recovery wait.
+        probe_seconds=$((timeout_seconds - elapsed))
+        (( probe_seconds <= 5 )) || probe_seconds=5
+        state=$(read_update_service_state "$service_name" "$probe_seconds") || return 2
+        elapsed=$((SECONDS - started_at))
+        # Even a complete active reply is not timely evidence after expiry.
+        # Preserve uncertainty so the caller retains backup without rollback.
+        (( elapsed < timeout_seconds )) || return 2
         if [[ "$state" == active ]]; then
             return 0
         fi
         sleep 1
-        ((elapsed += 1))
+        elapsed=$((SECONDS - started_at))
     done
 
     return 1
