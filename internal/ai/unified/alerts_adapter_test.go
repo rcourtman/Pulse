@@ -113,9 +113,13 @@ func TestAlertManagerAdapter_WithManagerAndCallbacks(t *testing.T) {
 		alertCh <- ad.GetAlertIdentifier()
 	})
 	callbacks := getUnexportedField(t, manager, "callbacks")
-	alertSubs := getUnexportedValueField(t, callbacks, "alertSubs")
+	// The adapter follows the alert firing, not notification delivery.
+	alertSubs := getUnexportedValueField(t, callbacks, "alertFiringSubs")
 	if alertSubs.Len() == 0 {
-		t.Fatal("expected subscribed alert callback")
+		t.Fatal("expected subscribed alert firing callback")
+	}
+	if deliverySubs := getUnexportedValueField(t, callbacks, "alertSubs"); deliverySubs.Len() != 0 {
+		t.Fatal("expected no notification delivery subscription from the adapter")
 	}
 	for _, key := range alertSubs.MapKeys() {
 		alertSubs.MapIndex(key).Interface().(func(alert *alerts.Alert))(alert)

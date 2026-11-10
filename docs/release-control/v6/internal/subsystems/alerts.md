@@ -2651,6 +2651,18 @@ compose through additive fired/resolved subscriptions instead of overwriting a
 single callback slot, and alert-triggered Patrol enqueueing must stay on the
 canonical unified alert bridge plus trigger-manager path rather than reviving
 duplicate callback-side Patrol shortcuts.
+Fired subscriptions come in two kinds. Delivery callbacks (`SetAlertCallback`,
+`SubscribeAlertCallback`) hear an alert only while alert delivery is turned on.
+Firing subscribers (`SubscribeAlertFiringCallback`) hear every dispatch the
+per-alert rules let through, whatever the activation state. `dispatchAlert`
+applies those rules first and to both kinds: an acknowledged, snoozed,
+monitor-only or flapping alert, a correlated symptom, an alert under a resource
+monitoring policy and a restored backup alert awaiting evaluation reach
+neither. The unified alert bridge is a firing subscriber, so Patrol's alert
+trigger follows the alert and no longer stops on an install whose delivery is
+pending review or switched off. `dispatchAlert` still returns whether a
+notification was dispatched, and rate limiting, quiet hours and the delivery
+event log are unchanged. Proof: `internal/alerts/alert_firing_callback_test.go`.
 That runtime callback boundary is now factored into
 `internal/alerts/callbacks.go` as same-package Manager support code so it can
 own callback mutexes, subscription IDs, legacy Set* slots, and fan-out snapshot

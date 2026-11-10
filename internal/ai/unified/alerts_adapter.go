@@ -47,13 +47,16 @@ func (a *AlertManagerAdapter) GetAlert(alertID string) AlertAdapter {
 	return nil
 }
 
-// SetAlertCallback sets the callback for new alerts
+// SetAlertCallback sets the callback for firing alerts. It subscribes to the
+// alert firing, not to notification delivery, so the bridge hears alerts on an
+// install whose alert delivery has not been turned on. Acknowledged and
+// snoozed alerts are still withheld by the alert manager.
 func (a *AlertManagerAdapter) SetAlertCallback(cb func(AlertAdapter)) {
 	if a.manager == nil {
 		return
 	}
 
-	a.manager.SubscribeAlertCallback(func(alert *alerts.Alert) {
+	a.manager.SubscribeAlertFiringCallback(func(alert *alerts.Alert) {
 		if cb != nil && alert != nil {
 			cb(&alertWrapper{alert: alert})
 		}

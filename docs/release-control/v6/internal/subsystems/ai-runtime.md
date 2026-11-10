@@ -4351,6 +4351,14 @@ default estate surface. The user-facing Machines label is an app-shell
 presentation label for the existing `standalone` route/id and must not create a
 separate AI handoff or prompt namespace.
 
+The alert bridge hears alerts through the alert manager's firing subscription
+(`alerts.Manager.SubscribeAlertFiringCallback`, wired in
+`internal/ai/unified/alerts_adapter.go`), not through the notification delivery
+callback. Patrol's alert trigger therefore works on an install whose alert
+delivery is pending review or switched off, which is how a fresh install
+starts. The alert manager still withholds acknowledged and snoozed alerts from
+the bridge. Proof: `internal/ai/unified/alerts_adapter_firing_test.go`.
+
 Alert-triggered scoped patrols now investigate the specific breach rather than
 running a broad health check. The alert bridge (`internal/ai/unified/bridge.go`,
 `internal/ai/unified/setup.go`) carries the firing alert's real payload — type,
