@@ -3928,6 +3928,22 @@ verdict on its own check.
 
 ## Current State
 
+### A guest Pulse cannot start is a typed fact on the run
+
+`InvestigationSession.guest_actions_unavailable` follows the same rule as
+`commands_disabled`. The orchestrator writes it from the catalog core returns
+for the finding resource when that resource is a Proxmox guest whose node has
+no connected action runner. No model text sets it. It is kept on a finished run
+only for `needs_attention` and `cannot_fix`, kept on a run that failed before
+it concluded, and dropped otherwise. It carries the guest, the node, the
+refused actions and Pulse's sentence. It carries no step.
+
+The investigation prompt no longer passes on core's old "Connect a typed action
+runner" wording. For such a guest it says which actions cannot be proposed,
+that this is how the install is set up and not a fault, that enabling commands
+on the node's agent does not change it, and that the Recommendation should say
+Pulse cannot do the action here and which action the person takes in Proxmox.
+
 ### A commands-off hand-back is a typed fact on the run
 
 `InvestigationSession.commands_disabled` is written by the investigation

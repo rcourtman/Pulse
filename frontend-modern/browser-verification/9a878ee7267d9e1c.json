@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "base_sha": "44201d10633fff4c6e7b6f5af26e48ad7d435177",
+  "verified_at": "2026-11-10T17:20:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/api/patrol.ts",
+    "frontend-modern/src/components/patrol/InvestigationSection.tsx",
+    "frontend-modern/src/features/patrol/PatrolCommandAccessStrip.tsx",
+    "frontend-modern/src/features/patrol/patrolCommandAccessModel.ts",
+    "frontend-modern/src/utils/actionReadiness.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/api/patrol.ts": "234fd7f708b699fa34a75d8010d2976aacd21f6eefdabac18cc1f3a4d21e0559",
+    "frontend-modern/src/components/patrol/InvestigationSection.tsx": "e806e1755f4ff5dcacafa9d798c0b332c7dc6502235bbabb786dc3e35d42c15e",
+    "frontend-modern/src/features/patrol/PatrolCommandAccessStrip.tsx": "90452717d6941f4bb6ddd6891927bf651977d0bd3d76f87b5ccb86e70b1b36f6",
+    "frontend-modern/src/features/patrol/patrolCommandAccessModel.ts": "360b1d06aaf12c69ae7725e40984847b412a0387b8cb45cb5afe2853ecff7cbf",
+    "frontend-modern/src/utils/actionReadiness.ts": "db4e4ac309bceee128c0ed609b105eee3f5eb744b203faae3ec1a79e1430419b"
+  },
+  "routes": [
+    "/patrol",
+    "/patrol/activity"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "private mock-mode Pro stack on pulse-dev built from this tree and pulse-enterprise with the matching run field, dev Pro licence, Vite serving these exact files, headless Chromium at 2x, plus the in-app browser pane through a tunnel for /patrol",
+    "/patrol in Ask first at 1440, dark: under the commands row the control section shows a second 39px row reading Can't start or stop guests, a neutral 49 of 50 Proxmox nodes pill, the chips Analytics A, Analytics B, Analytics C and +46 more. The mock server refuses guest actions with action_runner_unavailable on 49 nodes. The one node left out has stale inventory, which is a different refusal",
+    "the same row open: 49 node chips in name order and one sentence saying no Pulse action runner is connected on these nodes, that you do it in Proxmox, and that Allow Pulse to run commands on this host does not cover guest actions. The row holds no link and no button",
+    "/patrol in Watch only: neither row is present. Back in Ask first both return",
+    "/patrol in light theme at 1440 with the row open, and in dark theme at 390: the row wraps on the phone with no horizontal overflow",
+    "/patrol/activity, a seeded needs-attention finding on a stopped LXC whose stored run carries guest_actions_unavailable with start: the Investigation block leads with a blue notice reading Patrol could not start dev-portal-01 itself, then the sentence the server stored, above the model's summary. The notice holds no link and no button. Seen at 1440 dark, 1440 light and 390 dark, no horizontal overflow",
+    "/patrol/activity, a seeded finding on a running LXC whose stored run carries the same fact with reboot, shutdown and stop: no notice",
+    "both runs were seeded into the Pro investigation store with the field the orchestrator writes. The path from a refused start to that field is covered by Go tests, not by this pass",
+    "the actionReadiness fallback text for action_runner_unavailable is only used when the server sends no reason and was not seen in the browser. Its unit test covers it",
+    "no console errors on either route"
+  ],
+  "interactions": [
+    "clicked the guest row's summary to open it and counted its links and buttons (none)",
+    "switched Patrol mode to Watch only and back through the API and reloaded each time",
+    "opened each seeded finding's review, scrolled to the Investigation block and read the notice or its absence"
+  ]
+}

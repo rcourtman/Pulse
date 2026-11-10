@@ -1275,6 +1275,22 @@ contract.
 
 ## Current State
 
+### Patrol says where it cannot start or stop guests
+
+A finding review shows one notice when its run carries
+`guest_actions_unavailable` with `start` refused: Patrol could not start that
+guest itself, then the sentence the server wrote with the run. It has no button,
+because no single step connects a runner. A running guest's refused stop or
+reboot shows no notice. It appears once the run has ended and sits above the
+model's summary.
+
+The Patrol control section shows a second row, "Can't start or stop guests",
+under the same conditions as the commands row, when the server refuses a guest
+action on at least one Proxmox node with `action_runner_unavailable`. It counts
+those nodes against all Proxmox nodes with guests, previews three names and
+expands to all of them. It reads the refusals on the guest rows, never the
+absence of a capability. It has no link or button.
+
 ### Patrol says where it can only watch
 
 A finding review leads with one notice when its run carries

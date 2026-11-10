@@ -40,6 +40,10 @@ describe('getActionReadinessRefusal', () => {
   it('falls back to a canned message per reason code when reason is blank', () => {
     const cases: Array<[string, string]> = [
       ['host_commands_disabled', 'Commands are not enabled on the Pulse agent on this host.'],
+      [
+        'action_runner_unavailable',
+        'Pulse cannot start, stop or restart guests on this node: no Pulse action runner is connected there. Use Proxmox for this.',
+      ],
       ['command_agent_disconnected', 'Docker / Podman command agent is not connected.'],
       ['no_command_agent', 'Install the Pulse agent inside this guest to manage its containers.'],
       ['command_agent_unavailable', 'Docker / Podman command execution is not available.'],

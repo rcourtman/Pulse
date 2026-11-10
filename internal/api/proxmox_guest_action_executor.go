@@ -211,7 +211,9 @@ func (e proxmoxGuestActionExecutor) CheckActionAvailable(ctx context.Context, re
 	}
 	agentID, err := e.connectedProxmoxNodeActionRunnerID(ctx, resource)
 	if err != nil {
-		return unavailableProxmoxActionReadiness(operation, "action_runner_unavailable", "Connect a typed action runner on this Proxmox node before planning a guest action.")
+		// A refusal a person reads. It says what Pulse cannot do and what to
+		// do now, in the same words the Patrol catalog and a stored run use.
+		return unavailableProxmoxActionReadiness(operation, actionlifecycle.ReasonCodeActionRunnerUnavailable, actionlifecycle.ProxmoxGuestActionsUnavailableReason(proxmoxGuestNodeLabel(resource)))
 	}
 	if liveAgentOperationReceiptVersion(ctx, e.agents, agentID) != operationreceipt.ProtocolVersion {
 		return unavailableProxmoxActionReadiness(operation, "operation_receipt_unsupported", "The Proxmox action runner cannot retain durable action receipts. Update the runner or restore its writable state directory, then retry.")
@@ -293,6 +295,18 @@ func (e proxmoxGuestActionExecutor) connectedProxmoxNodeActionRunnerID(ctx conte
 		return runner.agentID, nil
 	}
 	return "", fmt.Errorf("a typed action runner is not connected on the Proxmox node")
+}
+
+// proxmoxGuestNodeLabel is the node name a person recognises: the display
+// name when Pulse has one, else the name Proxmox gives the node.
+func proxmoxGuestNodeLabel(resource unified.Resource) string {
+	if resource.Proxmox == nil {
+		return ""
+	}
+	if label := strings.TrimSpace(resource.Proxmox.NodeDisplayName); label != "" {
+		return label
+	}
+	return strings.TrimSpace(resource.Proxmox.NodeName)
 }
 
 func proxmoxGuestKindAndHandler(resource unified.Resource) (proxmoxGuestKind, string, error) {

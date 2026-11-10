@@ -441,6 +441,36 @@ func TestInvestigationSessionCarriesItsRunDeadline(t *testing.T) {
 	}
 }
 
+// A run on a Proxmox guest whose node has no action runner stores what Pulse
+// could not do, under a name the Patrol page and enterprise both read.
+func TestInvestigationSessionCarriesGuestActionsUnavailable(t *testing.T) {
+	payload, err := json.Marshal(EmptyInvestigationSession())
+	if err != nil {
+		t.Fatalf("marshal session: %v", err)
+	}
+	if strings.Contains(string(payload), `"guest_actions_unavailable"`) {
+		t.Fatalf("a session with no such fact must omit it: %s", payload)
+	}
+	fact := &GuestActionsUnavailable{GuestName: "gitea", NodeName: "pve1", Actions: []string{"start"}, Reason: "Pulse cannot start, stop or restart guests on pve1."}
+	session := EmptyInvestigationSession()
+	session.GuestActionsUnavailable = fact
+	payload, err = json.Marshal(session)
+	if err != nil {
+		t.Fatalf("marshal session: %v", err)
+	}
+	want := `"guest_actions_unavailable":{"guest_name":"gitea","node_name":"pve1","actions":["start"],"reason":"Pulse cannot start, stop or restart guests on pve1."}`
+	if !strings.Contains(string(payload), want) {
+		t.Fatalf("session = %s, want %s", payload, want)
+	}
+	payload, err = json.Marshal(ActionCapabilityCatalog{ResourceID: "lxc-1", GuestActionsUnavailable: fact})
+	if err != nil {
+		t.Fatalf("marshal catalog: %v", err)
+	}
+	if !strings.Contains(string(payload), want) {
+		t.Fatalf("catalog = %s, want %s", payload, want)
+	}
+}
+
 func TestInvestigationResultCarriesTypedConclusion(t *testing.T) {
 	resultType := reflect.TypeOf(OrchestratorInvestigationResult{})
 	field, ok := resultType.FieldByName("Conclusion")

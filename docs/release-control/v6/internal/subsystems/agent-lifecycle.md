@@ -5121,6 +5121,16 @@ Agent` secondary handoff against the live setup wizard instead of relying
 
 ## Current State
 
+### A missing action runner is reported, not treated as commands off
+
+A Proxmox guest action refused because no action runner is connected on the
+node now carries a sentence a person can act on, and the Patrol catalog and
+stored run carry it as `guest_actions_unavailable`. Nothing about enrolment,
+admission or the runner's authority changed. A Pulse agent with commands
+enabled still does not count as a runner, and the sentence says the install
+option does not cover guest actions. No surface offers a step that connects a
+runner.
+
 ### A commands-off surface can open the installer with command access ticked
 
 `/settings/infrastructure?add=agent&commands=1` ticks "Allow Pulse to run

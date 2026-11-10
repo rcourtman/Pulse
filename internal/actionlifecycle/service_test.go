@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/actionplanner"
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -2280,4 +2281,33 @@ func (e *capabilityRefusingExecutor) CheckActionAvailable(_ context.Context, req
 		return refusal
 	}
 	return unified.ResourceActionReadiness{Name: req.CapabilityName, Available: true}
+}
+
+// The refusal for a Proxmox guest action on a node with no action runner is
+// read by a person and by Patrol. It has to say what Pulse cannot do, what is
+// missing and what to do now, and it must not hand anyone a step that does
+// not exist as one step.
+func TestProxmoxGuestActionsUnavailableReasonSaysWhatIsMissingAndWhatToDoNow(t *testing.T) {
+	reason := ProxmoxGuestActionsUnavailableReason("  pve1 ")
+	for _, want := range []string{
+		"Pulse cannot start, stop or restart guests on pve1",
+		"no Pulse action runner is connected on that node",
+		`"Allow Pulse to run commands on this host" does not cover guest actions`,
+		"Use Proxmox for this.",
+	} {
+		if !strings.Contains(reason, want) {
+			t.Fatalf("reason = %q, want it to contain %q", reason, want)
+		}
+	}
+	for _, banned := range []string{"typed action runner", "Connect a", "install command", "Agent Doctor", "before planning"} {
+		if strings.Contains(reason, banned) {
+			t.Fatalf("reason = %q, must not contain %q", reason, banned)
+		}
+	}
+	if got := utf8.RuneCountInString(ProxmoxGuestActionsUnavailableReason(strings.Repeat("n", 63))); got > actionAvailabilityReasonMaxRunes {
+		t.Fatalf("reason is %d runes with a long node name, over the %d a refusal keeps", got, actionAvailabilityReasonMaxRunes)
+	}
+	if unnamed := ProxmoxGuestActionsUnavailableReason(" "); !strings.Contains(unnamed, "guests on this node") {
+		t.Fatalf("reason without a node name = %q", unnamed)
+	}
 }

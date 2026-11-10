@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -159,6 +160,7 @@ func (b *patrolActionBroker) Capabilities(ctx context.Context, resourceID string
 			Reason:     refusal.Reason,
 		})
 	}
+	catalog.GuestActionsUnavailable = b.guestActionsUnavailable(resourceID, lifecycleCatalog.Refused)
 	for _, capability := range lifecycleCatalog.Runnable {
 		info := aicontracts.ActionCapabilityInfo{
 			Name:                 capability.Name,
@@ -205,6 +207,34 @@ func (b *patrolActionBroker) commandsDisabledHost(resourceID string) *aicontract
 		Reason:         actionlifecycle.HostCommandsDisabledReason(host.Name),
 		Step:           actionlifecycle.HostCommandsDisabledStep(host.Name),
 	}
+}
+
+// guestActionsUnavailable reports the guest actions the executor refused
+// because no action runner is connected on the guest's node. It reads the
+// executor's own refusals, so it cannot claim a runner is missing when
+// planning would accept the action.
+func (b *patrolActionBroker) guestActionsUnavailable(resourceID string, refused []unified.ResourceActionReadiness) *aicontracts.GuestActionsUnavailable {
+	var actions []string
+	for _, refusal := range refused {
+		if refusal.ReasonCode == actionlifecycle.ReasonCodeActionRunnerUnavailable && strings.TrimSpace(refusal.Name) != "" {
+			actions = append(actions, strings.TrimSpace(refusal.Name))
+		}
+	}
+	if len(actions) == 0 {
+		return nil
+	}
+	sort.Strings(actions)
+	fact := &aicontracts.GuestActionsUnavailable{Actions: actions}
+	if b.readState != nil {
+		if readState, err := b.readState(b.orgID); err == nil && readState != nil {
+			if resource := unified.ResolveResourceContext(readState, resourceID).Resource; resource != nil {
+				fact.GuestName = strings.TrimSpace(resource.Name)
+				fact.NodeName = proxmoxGuestNodeLabel(*resource)
+			}
+		}
+	}
+	fact.Reason = actionlifecycle.ProxmoxGuestActionsUnavailableReason(fact.NodeName)
+	return fact
 }
 
 // Plan persists the canonical plan without requesting approval or execution.

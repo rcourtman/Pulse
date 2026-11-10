@@ -25,7 +25,10 @@ import {
 } from '@/utils/aiFindingPresentation';
 import { getInvestigationSectionState } from '@/utils/patrolEmptyStatePresentation';
 import { buildPatrolInvestigationRecordPresentation } from '@/features/patrol/patrolInvestigationContextModel';
-import { buildPatrolCommandAccessHandover } from '@/features/patrol/patrolCommandAccessModel';
+import {
+  buildPatrolCommandAccessHandover,
+  buildPatrolGuestActionsHandover,
+} from '@/features/patrol/patrolCommandAccessModel';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { Button } from '@/components/shared/Button';
 import { InlineNotice } from '@/components/shared/InlineNotice';
@@ -37,6 +40,7 @@ import { notificationStore } from '@/stores/notifications';
 import { aiIntelligenceStore } from '@/stores/aiIntelligence';
 import type { InvestigationRecord } from '@/api/ai';
 import RefreshCwIcon from 'lucide-solid/icons/refresh-cw';
+import PowerIcon from 'lucide-solid/icons/power';
 import TerminalIcon from 'lucide-solid/icons/terminal';
 
 const INVESTIGATION_BADGE_PROPS = {
@@ -118,6 +122,9 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
   });
   const commandAccessHandover = createMemo(() =>
     buildPatrolCommandAccessHandover(investigation(), investigationActive()),
+  );
+  const guestActionsHandover = createMemo(() =>
+    buildPatrolGuestActionsHandover(investigation(), investigationActive()),
   );
   // The thread follows the run's session id, not each re-read of the run.
   const sessionId = createMemo(() => investigation()?.session_id ?? '');
@@ -256,6 +263,24 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
           >
             <p class="font-medium">{handover().title}</p>
             <p class="text-xs">{handover().step}</p>
+          </InlineNotice>
+        )}
+      </Show>
+
+      {/* Pulse wrote this too: the guest is stopped and Pulse cannot start it,
+          because its node has no action runner. No button: there is no single
+          step that changes it, so it says what to do now. */}
+      <Show when={guestActionsHandover()}>
+        {(handover) => (
+          <InlineNotice
+            tone="info"
+            class="mb-2"
+            aria-label="Pulse cannot start this guest"
+            data-testid="patrol-guest-actions-handover"
+            icon={<PowerIcon />}
+          >
+            <p class="font-medium">{handover().title}</p>
+            <p class="text-xs">{handover().detail}</p>
           </InlineNotice>
         )}
       </Show>

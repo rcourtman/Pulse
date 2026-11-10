@@ -22,6 +22,12 @@ const (
 // access. The label lives in the frontend (getUnifiedAgentCommandAccessOptionLabel).
 const commandAccessInstallOption = "Allow Pulse to run commands on this host"
 
+// ReasonCodeActionRunnerUnavailable is the refusal for a Proxmox guest action
+// when no action runner is connected on the guest's node. Guest start, stop,
+// shutdown and reboot run only through that separately enrolled runner. A
+// Pulse agent with commands enabled is not one, by design.
+const ReasonCodeActionRunnerUnavailable = "action_runner_unavailable"
+
 // HostCommandsDisabled reports whether a host's own Pulse agent is reporting
 // and says command execution is off. An agent that has stopped reporting is
 // not judged: its last report cannot say why a command would fail now. Nor is
@@ -56,6 +62,21 @@ func HostCommandsDisabledStep(hostName string) string {
 // the fact, then the step.
 func HostCommandsDisabledRefusal(hostName string) string {
 	return HostCommandsDisabledReason(hostName) + " " + HostCommandsDisabledStep(hostName)
+}
+
+// ProxmoxGuestActionsUnavailableReason is what a refused Proxmox guest action
+// shows when the node has no connected action runner. It names what is
+// missing and what the owner does now. It gives no step that connects a
+// runner: today that is a migration of the node's agent that turns command
+// access off and needs HTTPS to Pulse, not something to hand a person as a fix.
+// It says the install option does not cover this, because a person who ticked
+// it reasonably expects that it does.
+func ProxmoxGuestActionsUnavailableReason(nodeName string) string {
+	nodeName = strings.TrimSpace(nodeName)
+	if nodeName == "" {
+		nodeName = "this node"
+	}
+	return fmt.Sprintf("Pulse cannot start, stop or restart guests on %s: no Pulse action runner is connected on that node. %q does not cover guest actions. Use Proxmox for this.", nodeName, commandAccessInstallOption)
 }
 
 func commandAccessHostName(hostName string) string {
