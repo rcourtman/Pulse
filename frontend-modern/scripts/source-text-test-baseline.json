@@ -4,7 +4,6 @@
     "cmd/pulse-mcp/main_test.go": 3,
     "frontend-modern/src/__tests__/App.architecture.test.ts": 9,
     "frontend-modern/src/api/__tests__/recoveryTransport.test.ts": 1,
-    "frontend-modern/src/api/__tests__/resourcesHotPath.guardrails.test.ts": 1,
     "frontend-modern/src/components/__tests__/GitHubStarBanner.test.tsx": 1,
     "frontend-modern/src/components/__tests__/whatsNewModel.test.ts": 3,
     "frontend-modern/src/components/AI/__tests__/FindingsPanel.test.ts": 3,
