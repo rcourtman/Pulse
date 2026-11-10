@@ -42,7 +42,7 @@ const setup = (providers: unknown[], details: unknown = detail) => {
   });
 };
 const edit = async (type = 'SAML') => {
-  const button = await screen.findByRole('button', { name: 'Edit provider' });
+  const button = await screen.findByRole('button', { name: /^Edit provider / });
   await waitFor(() => expect(button).toBeEnabled());
   fireEvent.click(button);
   return within(await screen.findByRole('dialog', { name: `Edit ${type} provider` }));

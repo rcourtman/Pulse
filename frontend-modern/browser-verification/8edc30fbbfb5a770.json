@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "base_sha": "65bddd0c2739b1fe132c3bc33a88a34670f7ce53",
+  "verified_at": "2026-11-10T06:31:49.130160Z",
+  "result": "passed",
+  "changed_paths": ["frontend-modern/src/components/Settings/SSOProvidersPanel.tsx"],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx": "e4ea9371a8bdd128d5fee345f65c01c10d6089a9db55c6c28059cce5195f09d9"
+  },
+  "routes": [
+    "Settings > Security > Single Sign-On Providers (actual panel/state/client and CSS in a safe mounted-panel fixture)"
+  ],
+  "viewports": [
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 1440,
+      "height": 1000
+    }
+  ],
+  "states": [
+    "Two long same-prefix OIDC provider names/issuers: initial list and keyboard-selected second-provider deletion confirmation; disabled read-only SAML with a long entity ID. All states light/dark, desktop/narrow.",
+    "12 comparable pairs /24 PNGs natively inspected. Complete names and issuer/entity text, both callback URLs, type badges, switches, edit/delete controls and read-only warning remain at glance; phone edit/delete targets 44x44. Destructive confirmation adds selected name and issuer without hiding its existing warning/Cancel/Delete."
+  ],
+  "interactions": [
+    "Actual selected OIDC detail GET via keyboard Edit then Cancel, empty secret field preserved; no save.",
+    "Keyboard-open second OIDC deletion, cancel with no write, reopen and confirm exactly one encoded DELETE with synthetic org/API/CSRF context; saved sibling retained in readback.",
+    "Read-only disabled SAML retains full name/entity and all management controls disabled, with no additional writes."
+  ],
+  "limitations": [
+    "Panel/HTTP safe fixtures are not full-App, native server authorisation, real IdP sign-in, recipient delivery, screen-reader software, released availability or original-client recovery.",
+    "Baseline attempt1 exited1 after five captures on an immediate survivor-isVisible assertion during post-delete refresh; explicit wait corrected in evidence script. Complete baseline and final runs exit0 with browser/server closed; no runtime repair was made for the fixture assertion."
+  ],
+  "browser": {
+    "name": "Chromium",
+    "version": "141.0.7390.37",
+    "playwright": "1.56.1"
+  }
+}

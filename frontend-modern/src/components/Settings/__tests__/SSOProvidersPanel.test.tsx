@@ -129,7 +129,7 @@ describe('SSOProvidersPanel OIDC scopes', () => {
     setupFetch([corpProvider]);
     render(() => <SSOProvidersPanel />);
 
-    const editButton = await screen.findByRole('button', { name: 'Edit provider' });
+    const editButton = await screen.findByRole('button', { name: /^Edit provider / });
     fireEvent.click(editButton);
 
     await waitFor(() => {
@@ -162,7 +162,7 @@ describe('SSOProvidersPanel OIDC group role mappings', () => {
     });
     render(() => <SSOProvidersPanel />);
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Edit provider' }));
+    fireEvent.click(await screen.findByRole('button', { name: /^Edit provider / }));
     fireEvent.click(
       await screen.findByRole('button', { name: 'Show access restrictions & role mapping' }),
     );
@@ -238,8 +238,8 @@ describe('SSOProvidersPanel IdP endpoint URLs', () => {
       expect(notificationSuccessMock).toHaveBeenCalledWith(
         'Callback URL has been copied to the clipboard.',
       );
-      expect(screen.getByRole('button', { name: 'Edit provider' })).toBeDisabled();
-      expect(screen.getByRole('button', { name: 'Delete provider' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: /^Edit provider / })).toBeDisabled();
+      expect(screen.getByRole('button', { name: /^Delete provider / })).toBeDisabled();
       expect(fetchMock.mock.calls.every(([, options]) => !options?.method)).toBe(true);
     },
   );
@@ -362,7 +362,7 @@ describe('SSOProvidersPanel modal feedback and recovery', () => {
 
   const editProvider = async () => {
     render(() => <SSOProvidersPanel />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Edit provider' }));
+    fireEvent.click(await screen.findByRole('button', { name: /^Edit provider / }));
     return within(await screen.findByRole('dialog', { name: 'Edit OIDC provider' }));
   };
 
@@ -512,7 +512,7 @@ describe('SSOProvidersPanel modal feedback and recovery', () => {
     expect(await dialog.findByRole('alert')).toHaveTextContent('Synthetic IdP unavailable');
     expect(notificationErrorMock).not.toHaveBeenCalled();
     fireEvent.click(dialog.getByRole('button', { name: 'Cancel' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Edit provider' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Edit provider / }));
     expect((await screen.findByRole('dialog')).querySelector('[role="alert"]')).toBeNull();
   });
 });

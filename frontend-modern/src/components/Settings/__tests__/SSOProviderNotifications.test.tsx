@@ -45,20 +45,20 @@ describe('SSO provider consuming notification layers', () => {
         <ToastContainer />
       </>
     ));
-    fireEvent.click(await screen.findByRole('button', { name: 'Edit provider' }));
+    fireEvent.click(await screen.findByRole('button', { name: /^Edit provider / }));
     let editor = await screen.findByRole('dialog', { name: 'Edit OIDC provider' });
     fireEvent.submit(within(editor).getByRole('button', { name: 'Save Changes' }).closest('form')!);
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     const notifications = screen.getByRole('region', { name: 'Notifications' });
     expect(notifications).toHaveTextContent('SSO provider has been updated.');
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Edit provider' }));
+    fireEvent.click(await screen.findByRole('button', { name: /^Edit provider / }));
     editor = await screen.findByRole('dialog', { name: 'Edit OIDC provider' });
     expect(notifications).toHaveClass('z-50');
     expect(notifications.closest('[inert]')).not.toBeNull();
     fireEvent.click(within(editor).getByRole('button', { name: 'Cancel' }));
 
-    fireEvent.click(screen.getByRole('button', { name: 'Delete provider' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Delete provider / }));
     const confirmation = screen.getByRole('dialog', { name: 'Delete provider' });
     fireEvent.click(within(confirmation).getByRole('button', { name: 'Delete Provider' }));
     await waitFor(() =>

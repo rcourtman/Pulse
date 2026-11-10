@@ -132,7 +132,7 @@ describe.each(['oidc', 'saml'] as const)('SSO %s save error recovery', (type) =>
       });
       render(() => <SSOProvidersPanel />);
       const opener = await screen.findByRole('button', {
-        name: editing ? 'Edit provider' : `Add ${type.toUpperCase()}`,
+        name: editing ? /^Edit provider / : `Add ${type.toUpperCase()}`,
       });
       await waitFor(() => expect(opener).toBeEnabled());
       fireEvent.click(opener);

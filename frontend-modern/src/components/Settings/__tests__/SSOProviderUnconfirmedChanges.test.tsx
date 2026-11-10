@@ -82,7 +82,7 @@ for (const type of ['oidc', 'saml'] as const) {
           if (operation === 'create' || operation === 'edit') {
             fireEvent.click(
               screen.getByRole('button', {
-                name: operation === 'create' ? `Add ${type.toUpperCase()}` : 'Edit provider',
+                name: operation === 'create' ? `Add ${type.toUpperCase()}` : /^Edit provider /,
               }),
             );
             const dialog = within(await screen.findByRole('dialog'));
@@ -116,7 +116,7 @@ for (const type of ['oidc', 'saml'] as const) {
             expect(save).not.toBeInTheDocument();
             fireEvent.submit(form);
           } else if (operation === 'delete') {
-            fireEvent.click(screen.getByRole('button', { name: 'Delete provider' }));
+            fireEvent.click(screen.getByRole('button', { name: /^Delete provider / }));
             const confirm = within(screen.getByRole('dialog')).getByRole('button', {
               name: 'Delete Provider',
             });
@@ -176,7 +176,7 @@ for (const type of ['oidc', 'saml'] as const) {
             );
           else {
             expect(screen.getByText('Changed provider')).toBeInTheDocument();
-            fireEvent.click(screen.getByRole('button', { name: 'Edit provider' }));
+            fireEvent.click(screen.getByRole('button', { name: /^Edit provider / }));
             const editor = within(await screen.findByRole('dialog'));
             expect(editor.getByLabelText('Provider Name')).toHaveValue('Changed provider');
             if (type === 'oidc') {
@@ -209,7 +209,7 @@ it.each(['toggle', 'delete'] as const)(
     render(() => <SSOProvidersPanel />);
     await waitFor(() => expect(screen.getByRole('button', { name: 'Add OIDC' })).toBeEnabled());
     if (operation === 'delete') {
-      fireEvent.click(screen.getByRole('button', { name: 'Delete provider' }));
+      fireEvent.click(screen.getByRole('button', { name: /^Delete provider / }));
       fireEvent.click(
         within(screen.getByRole('dialog')).getByRole('button', { name: 'Delete Provider' }),
       );

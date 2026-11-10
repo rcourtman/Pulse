@@ -1,4 +1,4 @@
-import { Component, For, Show, createEffect, onCleanup } from 'solid-js';
+import { Component, For, Show, createEffect, createUniqueId, onCleanup } from 'solid-js';
 import { ActionIconButton, Button, CopyValueButton } from '@/components/shared/Button';
 import { InlineNotice } from '@/components/shared/InlineNotice';
 import { EmptyState } from '@/components/shared/EmptyState';
@@ -105,6 +105,9 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
     canTest,
     fetchMetadataPreview,
   } = useSSOProvidersState(props);
+  const deletingProvider = () => providers().find((provider) => provider.id === deleteConfirm());
+  const summaryIdPrefix = createUniqueId();
+  const summaryId = (id: string) => `${summaryIdPrefix}-${encodeURIComponent(id)}`;
   let metadataPreviewButton: HTMLButtonElement | undefined;
   let recoveryNotice: HTMLDivElement | undefined;
   let recoveryFocusTimer: number | undefined;
@@ -225,31 +228,32 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
               {(provider) => (
                 <div class={getSSOProviderCardClass(provider.enabled)}>
                   <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div class="flex items-center gap-3 min-w-0">
-                      <div class="p-2 rounded-md bg-surface-hover">
+                    <div class="flex min-w-0 items-center gap-3 sm:flex-1">
+                      <div class="shrink-0 p-2 rounded-md bg-surface-hover">
                         <SSOProviderTypeIcon type={provider.type} class="w-5 h-5 text-muted" />
                       </div>
-                      <div class="min-w-0">
-                        <div class="flex items-center gap-2">
+                      <div class="min-w-0 flex-1">
+                        <div class="flex items-start gap-2">
                           <span
-                            class="font-medium text-base-content truncate"
+                            class="min-w-0 font-medium text-base-content [overflow-wrap:anywhere]"
                             title={provider.name}
                           >
                             {provider.name}
                           </span>
-                          <span class={getSSOProviderTypeBadgeClass()}>
+                          <span class={`shrink-0 ${getSSOProviderTypeBadgeClass()}`}>
                             {getSSOProviderTypeLabel(provider.type)}
                           </span>
                         </div>
                         <p
-                          class="text-xs text-muted truncate"
+                          id={summaryId(provider.id)}
+                          class="text-xs text-muted [overflow-wrap:anywhere]"
                           title={getSSOProviderSummary(provider)}
                         >
                           {getSSOProviderSummary(provider)}
                         </p>
                       </div>
                     </div>
-                    <div class="flex items-center gap-2 self-end sm:self-auto">
+                    <div class="flex shrink-0 items-center gap-2 self-end sm:self-auto">
                       <Toggle
                         checked={provider.enabled}
                         ariaLabel={`${provider.enabled ? 'Disable' : 'Enable'} ${provider.name}`}
@@ -261,9 +265,11 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                         type="button"
                         onClick={() => openEditModal(provider)}
                         disabled={!canEdit()}
-                        label="Edit provider"
+                        label={`Edit provider ${provider.name}`}
+                        aria-describedby={summaryId(provider.id)}
                         tone="accent"
                         size="md"
+                        class="min-h-11 min-w-11 sm:min-h-0 sm:min-w-0"
                       >
                         <Pencil class="w-4 h-4" />
                       </ActionIconButton>
@@ -271,9 +277,11 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                         type="button"
                         onClick={() => setDeleteConfirm(provider.id)}
                         disabled={!canEdit()}
-                        label="Delete provider"
+                        label={`Delete provider ${provider.name}`}
+                        aria-describedby={summaryId(provider.id)}
                         tone="danger"
                         size="md"
+                        class="min-h-11 min-w-11 sm:min-h-0 sm:min-w-0"
                       >
                         <Trash2 class="w-4 h-4" />
                       </ActionIconButton>
@@ -957,6 +965,28 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
         >
           <div class="w-full p-6">
             <h3 class="text-lg font-semibold text-base-content mb-2">Delete Provider?</h3>
+            <Show when={deletingProvider()} keyed>
+              {(provider) => (
+                <dl class="mb-4 min-w-0 space-y-2 rounded-md border border-border bg-surface-alt p-3">
+                  <div>
+                    <dt class="text-xs text-muted">Provider</dt>
+                    <dd class="text-sm font-medium text-base-content [overflow-wrap:anywhere]">
+                      {provider.name}
+                    </dd>
+                  </div>
+                  <Show when={getSSOProviderSummary(provider)}>
+                    <div>
+                      <dt class="text-xs text-muted">
+                        {provider.type === 'oidc' ? 'Issuer URL' : 'IdP entity / metadata'}
+                      </dt>
+                      <dd class="text-xs text-base-content [overflow-wrap:anywhere]">
+                        {getSSOProviderSummary(provider)}
+                      </dd>
+                    </div>
+                  </Show>
+                </dl>
+              )}
+            </Show>
             <p class="text-sm text-muted mb-4">
               This will permanently delete this SSO provider. Users will no longer be able to sign
               in using this provider.
