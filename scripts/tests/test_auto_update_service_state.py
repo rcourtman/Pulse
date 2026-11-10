@@ -33,6 +33,9 @@ mode = os.environ["MODE"]
 after = (f / "installer-ran").exists()
 stopped = (f / "stop-ran").exists()
 state = (f / "state").read_text().strip()
+with (f / "call-observations").open("a") as out:
+    out.write(json.dumps(dict(args=args, state=state, after_install=after,
+                              after_stop=stopped, monotonic_ns=time.monotonic_ns())) + "\n")
 if args[0] == "show":
     if after and mode == "post-install-hang":
         print("LoadState=loaded\nActiveState=active", flush=True)
@@ -106,7 +109,8 @@ detect_service_name() { printf '%s\n' "$SERVICE_NAME"; }
 # real. Dedicated UpdateServiceDeadlines controls below use actual time/sleep.
 unset SECONDS
 SECONDS=0
-sleep() { SECONDS=$((SECONDS + $1)); }
+printf '%s\n' "$SECONDS" > "$FIXTURE/model-clock"
+sleep() { SECONDS=$((SECONDS + $1)); printf '%s\n' "$SECONDS" >> "$FIXTURE/model-clock"; }
 if [[ "${CLOCK_PROBE:-false}" == true ]]; then
     before=$SECONDS
     command sleep 1.1
@@ -320,6 +324,10 @@ class UpdaterFixture(unittest.TestCase):
             backups = list((f / "tmp").glob("pulse-backup.*"))
             observation = dict(exit=result.returncode, output=result.stdout.decode(), error=result.stderr.decode(),
                                execution=execution,
+                               model_clock=(f / "model-clock").read_text().splitlines()
+                               if (f / "model-clock").exists() else [],
+                               call_observations=[json.loads(line) for line in (f / "call-observations").read_text().splitlines()]
+                               if (f / "call-observations").exists() else [],
                                elapsed=time.monotonic() - start, calls=calls,
                                downloaded=(f / "downloads").exists(), temporary=(f / "temp-requests").exists(),
                                installed=(f / "installer-ran").exists(), stopped=(f / "stop-ran").exists(),
