@@ -1165,7 +1165,14 @@ siblings before they reach browser surfaces: a broader storage risk and a
 generic usage/capacity finding for the same normalized storage identity are one
 operator issue, while distinct backup, health, and pool-vs-device findings
 remain separate. This consolidation belongs in the finding store, not the
-frontend row renderer.
+frontend row renderer. It applies to findings about a storage only. A finding
+filed on a guest or a container (`vm`, `system-container`, `app-container`,
+`pod`) is never a storage finding, whatever its text mentions
+(`storageFindingLooksLikeStorageRisk`): a guest's disk finding names the
+storage its volume is on, and a never-backed-up finding says no backup exists
+on any storage, and read as storage siblings the two were merged into one
+finding with the disk title and the backup investigation. Proof:
+`internal/ai/patrol_finding_distinct_problems_test.go`.
 Capacity forecasts (days-to-full, current utilization, daily change rate) are
 computed deterministically by linear regression over a resource's utilization
 history and must persist as structured data on the Finding

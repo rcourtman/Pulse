@@ -1690,12 +1690,23 @@ func findingTextContainsAny(f *Finding, needles ...string) bool {
 	return false
 }
 
+// storageFindingLooksLikeStorageRisk reports whether a finding is about a
+// storage: one filed on a storage resource, or one whose text names a storage.
+//
+// A finding on a guest or a container is never about a storage, whatever its
+// text mentions. A guest's disk finding says which storage its volume is on,
+// and a never-backed-up finding says there is no backup on any storage. Read
+// as storage findings, those two were merged into one: the disk finding kept
+// its title and received the backup finding's investigation.
 func storageFindingLooksLikeStorageRisk(f *Finding) bool {
 	if f == nil {
 		return false
 	}
-	if canonicalFindingResourceType(f.ResourceType) == "storage" {
+	switch canonicalFindingResourceType(f.ResourceType) {
+	case "storage":
 		return true
+	case "vm", "system-container", "app-container", "pod":
+		return false
 	}
 	return findingTextContainsAny(f, "storage", "pool", "array", "unraid", "zfs", "ceph")
 }
