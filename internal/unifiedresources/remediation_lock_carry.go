@@ -383,20 +383,37 @@ type savedGroup struct {
 	members []string
 }
 
-// settledGroup maps a saved group through the re-keys applied AFTER it, in
-// application order, so a member a later succession in the batch re-keyed away
-// is replaced by its successor instead of being given a row of its own. The
-// re-keys before the group's own succession are already reflected in it.
-func settledGroup(group savedGroup, rekeys []rekeyedID) []string {
-	members := append([]string(nil), group.members...)
-	for _, rekey := range rekeys[group.index+1:] {
-		for i, id := range members {
-			if id == rekey.oldID {
-				members[i] = rekey.newID
-			}
-		}
+// settledGroups maps saved groups through the re-keys applied AFTER each
+// group, preserving application order. Callers save groups in ascending index
+// order. Build the suffix substitution backwards once, rather than walking
+// the entire suffix separately for every group (quadratic for a large fleet).
+// Values are the result of that suffix, not links to chase: keeping them as
+// values preserves repeated predecessors and cycles in the original order.
+func settledGroups(groups []savedGroup, rekeys []rekeyedID) [][]string {
+	if len(groups) == 0 {
+		return nil
 	}
-	return flattenComponents([][]string{members})
+	settled := make([][]string, len(groups))
+	suffix := make(map[string]string, len(rekeys))
+	groupIndex := len(groups) - 1
+	for i := len(rekeys) - 1; i >= 0; i-- {
+		for groupIndex >= 0 && groups[groupIndex].index == i {
+			members := append([]string(nil), groups[groupIndex].members...)
+			for j, id := range members {
+				if final, ok := suffix[id]; ok {
+					members[j] = final
+				}
+			}
+			settled[groupIndex] = flattenComponents([][]string{members})
+			groupIndex--
+		}
+		final := rekeys[i].newID
+		if successor, ok := suffix[final]; ok {
+			final = successor
+		}
+		suffix[rekeys[i].oldID] = final
+	}
+	return settled
 }
 
 // groupAfterRekey is the set a succession's pre-re-key members form once the

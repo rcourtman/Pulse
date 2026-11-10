@@ -1988,11 +1988,14 @@ func TestResourceAPIHotPathUsesSharedPresentationSnapshot(t *testing.T) {
 	if strings.Count(source, "sharedPresentationResources(orgID)") != 2 {
 		t.Fatalf("%s: expected HandleListResources and HandleStats to share the cached presentation snapshot for the registry generation", normalizedPath)
 	}
-	if !strings.Contains(source, "allResources := flatCopyResources(sharedResources)") {
-		t.Fatalf("%s: expected HandleListResources to copy the shared presentation slice before request-local decoration", normalizedPath)
+	if !strings.Contains(source, "allResources := sharedResources") ||
+		!strings.Contains(source, "paged = unified.AttachResourceHealth(paged,") ||
+		!strings.Contains(source, "h.applyActionAvailability(r.Context(), paged)") {
+		t.Fatalf("%s: expected read-only shared selection and live request-owned page decoration", normalizedPath)
 	}
-	if strings.Count(source, "computeResourceContractStats(allResources)") != 2 {
-		t.Fatalf("%s: expected canonical aggregations to reuse the shared presentation snapshot in both handlers", normalizedPath)
+	if strings.Count(source, "h.sharedResourceContractStats(orgID, registry, allResources)") != 2 ||
+		strings.Count(source, "stats := computeResourceContractStats(resources)") != 1 {
+		t.Fatalf("%s: expected both handlers to reuse structural aggregations from their presentation generation", normalizedPath)
 	}
 	if strings.Contains(source, "allResources := registry.List()") {
 		t.Fatalf("%s: direct registry.List() hot-path aggregation detected", normalizedPath)
