@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/apicontext"
-	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
