@@ -888,6 +888,105 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
                 with self.subTest(result=name, state=state):
                     self.assertFalse(passes(good | {name: state}))
 
+    def test_parent_release_requires_exact_customer_delivery(self) -> None:
+        workflow = yaml.safe_load(read(".github/workflows/create-release.yml"))
+        job = workflow["jobs"]["release_delivery_verdict"]
+        self.assertIn("release_commit_verdict", job["needs"])
+        self.assertIn("draft_only != 'true'", job["if"])
+        self.assertIn("historical_asset_backfill_only != 'true'", job["if"])
+        self.assertEqual(job["permissions"]["actions"], "read")
+        self.assertEqual(job["permissions"]["checks"], "read")
+        self.assertLessEqual(job["timeout-minutes"], 360)
+        step = job["steps"][0]
+        self.assertEqual(
+            step["env"]["CONVERGENCE_RUN_ID"],
+            "${{ needs.release_commit_verdict.outputs.convergence_run_id }}",
+            "qualified activation recovery may have a different convergence owner",
+        )
+        metadata = {
+            "event": "workflow_dispatch",
+            "path": ".github/workflows/release-convergence.yml",
+            "head_branch": "main",
+            "head_repository": {"full_name": "rcourtman/Pulse"},
+            "display_title": "Release convergence v6.8.0-rc.2 source 100",
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            gh = root / "gh"
+            gh.write_text(
+                "#!/usr/bin/env python3\n"
+                "import json, os, sys\n"
+                "from pathlib import Path\n"
+                "args = sys.argv[1:]\n"
+                "with open(os.environ['DELIVERY_CALLS'], 'a') as calls:\n"
+                "    calls.write(json.dumps(args) + '\\n')\n"
+                "if args[:2] == ['run', 'watch']:\n"
+                "    sys.exit(int(os.environ['DELIVERY_WATCH_EXIT']))\n"
+                "if args[0] == 'api' and any('/jobs?' in arg for arg in args):\n"
+                "    print(os.environ['DELIVERY_VERDICT'])\n"
+                "elif args[0] == 'api':\n"
+                "    print(os.environ['DELIVERY_METADATA'])\n"
+                "else:\n"
+                "    sys.exit('unexpected command')\n"
+            )
+            gh.chmod(0o755)
+            calls = root / "calls.jsonl"
+
+            def run_case(*, run_id="200", changes=None, watch_exit=0, verdict="success"):
+                calls.write_text("")
+                env = os.environ | {
+                    "PATH": str(root) + os.pathsep + os.environ["PATH"],
+                    "GITHUB_REPOSITORY": "rcourtman/Pulse",
+                    "GITHUB_RUN_ID": "100",
+                    "TAG": "v6.8.0-rc.2",
+                    "CONVERGENCE_RUN_ID": run_id,
+                    "DELIVERY_CALLS": str(calls),
+                    "DELIVERY_METADATA": json.dumps(metadata | (changes or {})),
+                    "DELIVERY_WATCH_EXIT": str(watch_exit),
+                    "DELIVERY_VERDICT": verdict,
+                }
+                result = subprocess.run(
+                    ["bash", "-c", step["run"]], env=env, text=True, capture_output=True
+                )
+                commands = [json.loads(line) for line in calls.read_text().splitlines()]
+                return result, commands
+
+            result, commands = run_case()
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("publication and customer delivery both passed", result.stdout)
+            self.assertEqual(commands[1], [
+                "run", "watch", "200", "--repo", "rcourtman/Pulse",
+                "--interval", "30", "--exit-status",
+            ])
+            self.assertIn("/actions/runs/200/jobs?per_page=100", commands[2][2])
+            for watch_exit in (1, 2, 4):
+                with self.subTest(watch_exit=watch_exit):
+                    result, commands = run_case(watch_exit=watch_exit)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn("remains published, but customer delivery failed", result.stdout)
+                    self.assertEqual(len(commands), 2)
+            for verdict in ("failure", "cancelled", "skipped", "", "timed_out"):
+                with self.subTest(verdict=verdict):
+                    result, _ = run_case(verdict=verdict)
+                    self.assertNotEqual(result.returncode, 0)
+            for changes in (
+                {"event": "push"},
+                {"path": ".github/workflows/create-release.yml"},
+                {"head_branch": "other"},
+                {"head_repository": {"full_name": "someone/Pulse"}},
+                {"display_title": "Release convergence v6.8.0-rc.1 source 100"},
+                {"display_title": "Release convergence v6.8.0-rc.2 source 99"},
+            ):
+                with self.subTest(changes=changes):
+                    result, commands = run_case(changes=changes)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertEqual(len(commands), 1, "reject identity before waiting")
+            for run_id in ("", "latest", "0", "200/other"):
+                with self.subTest(run_id=run_id):
+                    result, commands = run_case(run_id=run_id)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertEqual(commands, [])
+
     def test_activation_recovery_reuses_the_qualified_candidate_without_rebuilding(self) -> None:
         release = read(".github/workflows/create-release.yml")
         recovery = read(".github/workflows/recover-release-activation.yml")

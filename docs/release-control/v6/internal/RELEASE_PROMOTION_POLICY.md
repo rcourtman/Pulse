@@ -379,6 +379,12 @@ These records describe releases before the train and stay as written.
    build prevents that commit. A failed live promotion is post-commit
    convergence debt: it fails and retries the separate convergence run without
    claiming that the already-public release rolled back.
+   Publication alone is not successful customer delivery. The parent release
+   workflow must remain pending until its verified activation marker's exact
+   convergence run completes successfully with a passing customer-promotion
+   verdict. Failed, cancelled, skipped, unavailable, or timed-out delivery must
+   prevent a green parent release workflow. This does not undo publication or
+   authorize rerunning publication to repair delivery.
    The activation marker must bind the exact staged R2 prefix. The dispatch must
    pass that prefix with the exact Pulse lease SHA and convergence run ID.
    `pulse-pro` must reject an unleased dispatch, verify the public Pulse lock ref,
@@ -693,8 +699,13 @@ These records describe releases before the train and stay as written.
    broker, and the stable demo rather than move those targets backward.
    Any surface failure leaves the GitHub release committed, fails the convergence
    verdict, releases or stale-recovers the lease, and re-runs the complete
-   idempotent convergence workflow. It must not fail a so-called definitive
-   release verdict or return the committed release to draft.
+   idempotent convergence workflow. The activation commit verdict remains a
+   statement about irreversible publication, while the parent workflow's
+   separate customer-delivery verdict waits for the exact convergence owner
+   and fails when delivery fails. A green publication job must never stand in
+   for a green end-to-end release workflow. Delivery recovery must rerun the
+   linked convergence workflow, not publication or the parent delivery watcher,
+   and must never return the committed release to draft.
    The three reusable mutation workflows expose `workflow_call` only; direct
    dispatch of aliases, Pages, or demo deployment would bypass the lease and is
    prohibited. Non-mutating demo verification remains part of Release Dry Run.
@@ -748,11 +759,14 @@ still supports a stable patch; when one is published, these rules apply.
    from emergency patch status.
 5. The release workflow must await every immutable readiness gate, durably
    enqueue the exact convergence run, and verify the public activation marker.
-   `Release Activation Commit Verdict` is the release result. Docker aliases,
+   `Release Activation Commit Verdict` proves publication. Docker aliases,
    stable demo deployment and browser proof, Helm Pages, and private Pro live
    promotion are post-commit convergence outcomes in the linked workflow run.
-   They remain blocking convergence debt until green, but their failure must
-   not misreport the committed GitHub release as an atomic rollback.
+   The parent release workflow's `Release Customer Delivery Verdict` must wait
+   for that exact run and its customer-promotion verdict to pass. These remain
+   blocking convergence debt until green. Their failure prevents end-to-end
+   release success without misreporting the committed GitHub release as an
+   atomic rollback.
 
 ## Rollout Rules
 
