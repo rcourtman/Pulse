@@ -542,7 +542,6 @@ describe('Organization Access keyboard recovery', () => {
       } else {
         const control = screen.getByRole('button', {
           name: operation === 'invite' ? 'Invite' : 'Remove user-2 from organization',
-          exact: true,
         });
         control.focus();
         fireEvent.click(control);
