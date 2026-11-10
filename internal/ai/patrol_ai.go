@@ -66,6 +66,12 @@ type patrolRunAnalysisRecordContext struct {
 	ResolvedFindings  int
 	UncertainFindings int
 	ErrorCount        int
+	// FiringAlert names the alert the run was started for when it is still
+	// active as the run ends, for example "critical alert on web".
+	FiringAlert string
+	// AlertFindingOpened is set when Pulse opened a finding from that alert
+	// because the run filed none (openFindingForUnansweredAlert).
+	AlertFindingOpened bool
 }
 
 const (
@@ -283,9 +289,22 @@ func renderPatrolRecordStatusLine(ctx patrolRunAnalysisRecordContext) string {
 }
 
 func renderPatrolAcceptedActions(result *AIAnalysisResult, ctx patrolRunAnalysisRecordContext) string {
+	// A run started for an alert that is still firing has not found all clear,
+	// whatever the model filed.
+	alertLine := ""
+	if ctx.AlertFindingOpened {
+		alertLine = fmt.Sprintf("- Patrol reported no finding for the %s. Pulse opened one from the alert so that it is investigated.", ctx.FiringAlert)
+	}
 	if result == nil || (len(result.Findings) == 0 && len(result.ResolvedIDs) == 0 && len(result.Assessments) == 0) {
-		if ctx.ErrorCount > 0 {
+		switch {
+		case ctx.ErrorCount > 0 && alertLine != "":
+			return "- Analysis incomplete; no accepted finding activity recorded.\n" + alertLine
+		case ctx.ErrorCount > 0:
 			return "- Analysis incomplete; no accepted finding activity recorded."
+		case alertLine != "":
+			return alertLine
+		case ctx.FiringAlert != "":
+			return fmt.Sprintf("- No findings reported. The %s is still active.", ctx.FiringAlert)
 		}
 		return "- No findings reported — all clear."
 	}
@@ -332,6 +351,9 @@ func renderPatrolAcceptedActions(result *AIAnalysisResult, ctx patrolRunAnalysis
 			continue
 		}
 		lines = append(lines, fmt.Sprintf("- uncertain: %s", findingID))
+	}
+	if alertLine != "" {
+		lines = append(lines, alertLine)
 	}
 	if len(lines) == 0 {
 		return "- No accepted finding activity recorded."

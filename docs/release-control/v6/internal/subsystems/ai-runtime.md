@@ -4435,6 +4435,30 @@ resolved, the type filter then removed the owner, and the run ended "No
 resources matched requested Patrol scope". A hint never widens a scope: an
 identity that does not resolve is still refused.
 
+An alert that wakes Patrol when it fires is investigated whether or not the
+model files a finding. Investigations start from findings, and a model that
+describes the fault in prose and calls no tool left the alert with none. When
+an `alert_fired` run that is not `AlertSustained` ends with the alert still
+active, no model error and no warning or critical finding of its own,
+`openFindingForUnansweredAlert` (`internal/ai/patrol_alert_finding.go`) opens
+one from the alert: the alert's resolved resource, its level and its text,
+`Source` `alert`, linked by `AlertIdentifier`. The link folds it under the
+alert through the mirror stamp and closes it in
+`ResolveFindingsForClearedAlert` when the alert clears. Its ID comes from the
+alert identifier, so a repeat of the alert reopens the same finding and a
+dismissal holds. It sends no finding notification, because the alert already
+notified. It is opened only where Patrol investigates (effective mode other
+than `monitor`, with an orchestrator), so Watch only and free installs never
+get it, and not when another unresolved finding already mirrors the alert.
+Sustained, flapping, scheduled and manual runs keep the model's judgment. Cost:
+at most one such finding per `alert_fired` trigger, inside that trigger's caps
+(3 an hour and 6 in 24 hours per alert identifier), and its investigation goes
+through `ShouldInvestigate` like any other. A scoped run whose alert is still
+active no longer records `No findings reported — all clear.` or `All healthy`:
+the summary says the alert is still active, or that Pulse opened the finding.
+The run status value is unchanged. Proof:
+`internal/ai/patrol_alert_finding_test.go`.
+
 When an alert clears, `PatrolService.ResolveFindingsForClearedAlert` closes the
 open findings that restate it: a finding stamped as its mirror, linked by
 identifier, or on the same resource with the same condition class
