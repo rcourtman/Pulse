@@ -1,0 +1,94 @@
+{
+  "source": "sonnet-r1c/d5",
+  "captured_at": "2026-11-09T23:30:36Z",
+  "model": "claude-subscription:sonnet",
+  "scenario": "response.app-unhealthy-database-stopped",
+  "phase1_scorecard_column": "",
+  "phase1_grade": "",
+  "phase1_woke_by_itself": "",
+  "note": "Not a scorecard cell. Misled by the fixture of the time (a log line with an address that was not on the Docker network, and a stale duplicate database container). The restart was approved on purpose and Pulse reported it as not verified.",
+  "evidence": {
+    "agent_profile": {
+      "name": "commands-on",
+      "commands_enabled": true,
+      "host_name": "docker01"
+    },
+    "alerts": [
+      {
+        "type": "docker-container-health",
+        "level": "critical",
+        "resource_alias": "nextcloud",
+        "resource_name": "nextcloud",
+        "message": "Docker container 'nextcloud' health is unhealthy"
+      }
+    ],
+    "wake": {
+      "asked": "scoped_run",
+      "alert_after_ns": 37000000000,
+      "run_id": "1794267069258353000",
+      "trigger_reason": "alert_fired",
+      "mode": "self",
+      "investigation_start": "self",
+      "finding_after_ns": 277000000000,
+      "settled_after_ns": 622000000000
+    },
+    "postconditions": [
+      {
+        "predicate": {
+          "probe": "docker.running",
+          "target": "nextcloud-db",
+          "operator": "eq",
+          "value": true,
+          "timeout": "30s"
+        },
+        "observed": false,
+        "passed": false,
+        "checked_at": "2026-11-09T23:30:36Z"
+      },
+      {
+        "predicate": {
+          "probe": "docker.health",
+          "target": "nextcloud",
+          "operator": "eq",
+          "value": "healthy",
+          "timeout": "90s"
+        },
+        "observed": "unhealthy",
+        "passed": false,
+        "checked_at": "2026-11-09T23:30:36Z"
+      }
+    ],
+    "findings": [
+      {
+        "id": "7a2f50e8422ca8c5",
+        "severity": "critical",
+        "category": "reliability",
+        "resource_alias": "nextcloud",
+        "resource_name": "nextcloud",
+        "title": "Nextcloud container Docker health check is reporting unhealthy despite low resource usage",
+        "investigation_status": "completed",
+        "investigation_outcome": "fix_queued",
+        "turn_count": 7,
+        "evidence_call_count": 9,
+        "tools_used": [
+          "pulse_query",
+          "pulse_read",
+          "pulse_docker",
+          "patrol_propose_action"
+        ],
+        "conclusion": "### Investigation Summary\nThe nextcloud container (app-container-61695f0595ac7819, host docker01) is running with negligible CPU/memory usage and 0 restarts, but Docker reports health='unhealthy'. Container logs (last 1h) show a continuous stream of Apache/PHP errors: `Doctrine\\DBAL\\Exception: SQLSTATE[08006] connection to server at \"nextcloud-db\" (172.18.0.3), port 5432 failed: Connection refused`. This confirms the Nextcloud healthcheck is failing because the app cannot reach its PostgreSQL database.\n\nCross-checking docker01's containers found two generations of `nextcloud-db`: one exited (app-container-85c46ffc5faf8135) and one currently running (app-container-3cd1c6f7e6737d5e) at IP 172.17.0.3 on the `bridge` network. `docker network ls` on docker01 shows only `bridge` (172.17.0.0/16), `host`, and `none` — there is no 172.18.0.0/16 network on this host at all. nextcloud itself is attached only to `bridge` at 172.17.0.4. So the IP nextcloud is trying to reach (172.18.0.3) does not exist on any current network, while the live DB container is reachable at a different address (172.17.0.3) on the same bridge network nextcloud is already on.\n\nThis is consistent with nextcloud having resolved/cached \"nextcloud-db\" to a stale address from before the DB container was recreated (the exited nextcloud-db is the old generation), and never re-resolving it since. Direct confirmation via `docker exec nextcloud` (env/hosts inspection) was blocked by read-only policy, so the stale-DNS mechanism is inferred from the IP/network mismatch rather than directly observed inside the container.\n\nGiven this, I proposed restarting the nextcloud container (not the DB) as the low-risk remediation, since nextcloud and the current DB are both reachable on the same bridge network and a restart will force fresh name resolution. The plan was persisted (action_id act_161e4fd39254804fa340b296be09ba78) and is `pending_approval` (admin approval required); it has not been approved or executed.\n\n### Root Cause\n**Causal resource (likely)**: app-container-3cd1c6f7e6737d5e (nextcloud-db, host docker01) — specifically its recreation/IP change from a prior generation (app-container-85c46ffc5faf8135, now exited) to its current address 172.17.0.3.\n**Observed failure mechanism**: nextcloud's Apache/PHP process is attempting to connect to \"nextcloud-db\" at 172.18.0.3:5432, an address/network that no longer exists on docker01 (only `bridge` 172.17.0.0/16 exists); the connection is refused, causing the container's internal HEALTHCHECK to fail while the process itself stays alive with negligible resource usage.\n**Unconfirmed**: The exact mechanism by which nextcloud retained the stale 172.18.0.3 address (cached DNS resolution, a stale /etc/hosts entry, or an application-level config value) was not directly observed — `docker exec` into nextcloud to inspect env/hosts was blocked by read-only policy. It is also not established who/what recreated nextcloud-db or when, nor whether `update_available:true` on the nextcloud image is related to this incident (it appears to be a separate, unconfirmed factor).\n\n### Affected Resources\n- **app-container-61695f0595ac7819 (nextcloud, docker01)**: symptom — Docker health='unhealthy', alert firing; process running normally otherwise (0 restarts, 0.06% CPU, 0.002% memory). This is the affected resource, not the cause.\n- **app-container-3cd1c6f7e6737d5e (nextcloud-db, docker01)**: running normally (negligible CPU/memory) at 172.17.0.3; implicated as the causal resource via its IP/network mismatch with what nextcloud is targeting.\n- **app-container-85c46ffc5faf8135 (nextcloud-db, exited)**: prior generation of the DB container, sharing the same volume mount; consistent with a DB container recreation event.\n\n### Recommendation\nA restart of nextcloud has been proposed and persisted as a pending action (act_161e4fd39254804fa340b296be09ba78, capability `restart`, target app-container-61695f0595ac7819, causal resource app-container-3cd1c6f7e6737d5e). It requires admin approval before execution. An operator should:\n1. Approve the restart to force nextcloud to re-resolve \"nextcloud-db\" against its current bridge-network address.\n2. After execution, verify `.State.Health.Status` returns 'healthy' and the Doctrine connection-refused errors stop appearing in logs.\n3. Separately confirm what caused nextcloud-db's IP/generation change (e.g., a compose redeploy) so this does not recur on the next DB restart, and review the pending `update_available=true` image update for nextcloud independently.\n\n### Conclusion\nNEEDS_ATTENTION: A restart of nextcloud (app-container-61695f0595ac7819) has been proposed and is pending admin approval (action_id act_161e4fd39254804fa340b296be09ba78) to resolve a stale-DNS/IP mismatch pointing at a non-existent 172.18.0.3 database address instead of the current nextcloud-db container at 172.17.0.3. An admin must approve or reject this action; if approved, verify health returns to 'healthy' and logs clear of connection-refused errors. The underlying cause of the DB container's IP change (recreation event) remains unconfirmed and should be reviewed to prevent recurrence.",
+        "action": {
+          "action_id": "act_161e4fd39254804fa340b296be09ba78",
+          "capability": "restart",
+          "target_alias": "nextcloud",
+          "target_resource_id": "app-container-61695f0595ac7819",
+          "decision": "approved_executed",
+          "final_state": "completed",
+          "verification_status": "failed",
+          "plan_hash_bound": true,
+          "origin_bound": true
+        }
+      }
+    ]
+  }
+}

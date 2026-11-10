@@ -65,6 +65,10 @@ type DockerTarget struct {
 	Context         string
 	SSHHost         string
 	AllowSharedHost bool
+	// HostFilesystems lists the dedicated mount paths the operator has
+	// handed to the lab. A host_filesystem resource is refused unless its
+	// exact path is named here.
+	HostFilesystems []string
 }
 
 func (t DockerTarget) Validate(manifest Manifest) error {
@@ -101,16 +105,21 @@ type DockerState struct {
 }
 
 type PreparedLab struct {
-	RunID             string                 `json:"run_id"`
-	ScenarioID        string                 `json:"scenario_id"`
-	NetworkName       string                 `json:"network_name"`
-	ResourceNames     map[string]string      `json:"resource_names"`
-	ResourceIDs       map[string]string      `json:"resource_ids"`
-	FaultVolumes      map[string]string      `json:"fault_volumes,omitempty"`
-	PreInventory      DockerInventory        `json:"pre_inventory"`
-	BaselineStates    map[string]DockerState `json:"baseline_states"`
-	ExpectedInventory DockerInventory        `json:"expected_inventory"`
-	AppliedFaults     []string               `json:"applied_faults,omitempty"`
+	RunID         string            `json:"run_id"`
+	ScenarioID    string            `json:"scenario_id"`
+	NetworkName   string            `json:"network_name"`
+	ResourceNames map[string]string `json:"resource_names"`
+	ResourceIDs   map[string]string `json:"resource_ids"`
+	FaultVolumes  map[string]string `json:"fault_volumes,omitempty"`
+	SharedVolumes []string          `json:"shared_volumes,omitempty"`
+	// HostFilesystems records, per alias, the dedicated mount and exactly
+	// which files a fill fault wrote, so revert and cleanup remove those and
+	// nothing else.
+	HostFilesystems   map[string]*HostFilesystemState `json:"host_filesystems,omitempty"`
+	PreInventory      DockerInventory                 `json:"pre_inventory"`
+	BaselineStates    map[string]DockerState          `json:"baseline_states"`
+	ExpectedInventory DockerInventory                 `json:"expected_inventory"`
+	AppliedFaults     []string                        `json:"applied_faults,omitempty"`
 	mu                sync.Mutex
 }
 
@@ -136,6 +145,9 @@ type CleanupResult struct {
 type DockerLab struct {
 	runner CommandRunner
 	target DockerTarget
+	// localHostConfirmed caches that the Docker context talks to a local
+	// socket, which is what allows host filesystem commands to run here.
+	localHostConfirmed bool
 }
 
 func NewDockerLab(runner CommandRunner, target DockerTarget) *DockerLab {
@@ -191,7 +203,16 @@ func (l *DockerLab) Prepare(ctx context.Context, manifest Manifest, runID string
 		return lab, fmt.Errorf("create lab network: %w", err)
 	}
 	for _, resource := range manifest.Resources {
+		if resource.Kind == resourceKindHostFilesystem {
+			if err := l.prepareHostFilesystem(ctx, lab, resource); err != nil {
+				return lab, err
+			}
+			continue
+		}
 		name, err := renderResourceName(resource.Name, resource.Alias, runID)
+		if resource.Fixture != "" && !manifest.Lab.SharedHostOK {
+			name, err = renderExactResourceName(resource.Name, resource.Alias, runID)
+		}
 		if err != nil {
 			return lab, err
 		}
@@ -203,46 +224,26 @@ func (l *DockerLab) Prepare(ctx context.Context, manifest Manifest, runID string
 			}
 			lab.FaultVolumes[resource.Alias] = volume
 		}
-		image := resource.Image
-		if image == "" {
-			image = manifest.Lab.Image
+		if resource.Volume != "" && !contains(lab.SharedVolumes, resource.Volume) {
+			if _, err := l.docker(ctx, append([]string{"volume", "create"}, append(labels, resource.Volume)...)...); err != nil {
+				return lab, fmt.Errorf("create shared volume for %s: %w", resource.Alias, err)
+			}
+			lab.SharedVolumes = append(lab.SharedVolumes, resource.Volume)
 		}
-		if !manifest.Lab.AllowPull {
+		if fixture, ok := fixtureByKey(resource.Fixture); ok {
+			if err := l.requireFixtureImage(ctx, fixture); err != nil {
+				return lab, err
+			}
+		} else if !manifest.Lab.AllowPull {
+			image := resource.Image
+			if image == "" {
+				image = manifest.Lab.Image
+			}
 			if _, err := l.docker(ctx, "image", "inspect", image); err != nil {
 				return lab, fmt.Errorf("required pre-existing image %q is unavailable and allow_pull is false", image)
 			}
 		}
-		args := []string{"run", "-d", "--name", name, "--network", lab.NetworkName}
-		args = append(args, labels...)
-		args = append(args, "--label", labAliasLabel+"="+resource.Alias)
-		for key, value := range resource.Labels {
-			args = append(args, "--label", key+"="+renderText(value, resource.Alias, runID))
-		}
-		if resource.ScratchStorage {
-			args = append(args, "--tmpfs", scratchStorageMount)
-		}
-		if resource.Restart != "" {
-			args = append(args, "--restart", resource.Restart)
-		}
-		if volume := lab.FaultVolumes[resource.Alias]; volume != "" {
-			args = append(args, "--mount", "source="+volume+",target=/pulse-qual-fault")
-		}
-		if len(resource.Healthcheck) > 0 {
-			interval := resource.HealthEvery
-			if interval == "" {
-				interval = "2s"
-			}
-			healthcheck := make([]string, len(resource.Healthcheck))
-			for i, part := range resource.Healthcheck {
-				healthcheck[i] = renderText(part, resource.Alias, runID)
-			}
-			args = append(args, "--health-cmd", strings.Join(healthcheck, " "), "--health-interval", interval, "--health-timeout", "2s", "--health-retries", "2", "--health-start-period", "1s")
-		}
-		args = append(args, image)
-		for _, part := range resource.Command {
-			args = append(args, renderText(part, resource.Alias, runID))
-		}
-		result, err := l.docker(ctx, args...)
+		result, err := l.docker(ctx, containerRunArgs(manifest, lab, resource, nil)...)
 		if err != nil {
 			return lab, fmt.Errorf("start resource %s: %w", resource.Alias, err)
 		}
@@ -263,6 +264,83 @@ func (l *DockerLab) Prepare(ctx context.Context, manifest Manifest, runID string
 		return lab, err
 	}
 	return lab, nil
+}
+
+// containerRunArgs is the one place a lab container is described. Prepare
+// uses it to start a resource and recreate_with_env uses it to bring the same
+// resource back with one changed environment value.
+func containerRunArgs(manifest Manifest, lab *PreparedLab, resource ResourceSpec, envOverride map[string]string) []string {
+	runID := lab.RunID
+	args := []string{"run", "-d", "--name", lab.ResourceNames[resource.Alias], "--network", lab.NetworkName}
+	args = append(args, "--label", labRunLabel+"="+labRunToken(runID), "--label", labScenarioLabel+"="+labOpaqueToken("scenario", manifest.ID))
+	args = append(args, "--label", labAliasLabel+"="+resource.Alias)
+	for key, value := range resource.Labels {
+		args = append(args, "--label", key+"="+renderText(value, resource.Alias, runID))
+	}
+	if resource.ScratchStorage {
+		args = append(args, "--tmpfs", scratchStorageMount)
+	}
+	if resource.Restart != "" {
+		args = append(args, "--restart", resource.Restart)
+	}
+	if volume := lab.FaultVolumes[resource.Alias]; volume != "" {
+		args = append(args, "--mount", "source="+volume+",target=/pulse-qual-fault")
+	}
+	if len(resource.Healthcheck) > 0 {
+		interval := resource.HealthEvery
+		if interval == "" {
+			interval = "2s"
+		}
+		healthcheck := make([]string, len(resource.Healthcheck))
+		for i, part := range resource.Healthcheck {
+			healthcheck[i] = renderText(part, resource.Alias, runID)
+		}
+		args = append(args, "--health-cmd", strings.Join(healthcheck, " "), "--health-interval", interval, "--health-timeout", "2s", "--health-retries", "2", "--health-start-period", "1s")
+	}
+	image := resource.Image
+	if image == "" {
+		image = manifest.Lab.Image
+	}
+	if fixture, ok := fixtureByKey(resource.Fixture); ok {
+		image = fixture.Image
+		for _, path := range fixture.Tmpfs {
+			args = append(args, "--tmpfs", path)
+		}
+		if resource.Volume != "" && fixture.VolumeTarget != "" {
+			args = append(args, "--mount", "source="+resource.Volume+",target="+fixture.VolumeTarget)
+		}
+		keys := make([]string, 0, len(resource.Env))
+		for key := range resource.Env {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		for _, key := range keys {
+			value := resource.Env[key]
+			if override, ok := envOverride[key]; ok {
+				value = override
+			}
+			args = append(args, "--env", key+"="+value)
+		}
+	}
+	args = append(args, image)
+	for _, part := range resource.Command {
+		args = append(args, renderText(part, resource.Alias, runID))
+	}
+	return args
+}
+
+// renderExactResourceName lets a fixture keep the name its real service would
+// have. Cleanup never goes by name, so this only widens what the container is
+// called, not what the lab may remove.
+func renderExactResourceName(template, alias, runID string) (string, error) {
+	name := renderText(template, alias, runID)
+	if name == "" {
+		name = alias
+	}
+	if !safeID.MatchString(name) {
+		return "", fmt.Errorf("resource %q renders unsafe name %q", alias, name)
+	}
+	return name, nil
 }
 
 func renderResourceName(template, alias, runID string) (string, error) {
@@ -324,10 +402,52 @@ func (l *DockerLab) ApplyFault(ctx context.Context, manifest Manifest, lab *Prep
 		if _, err := l.docker(ctx, "kill", name); err != nil {
 			return err
 		}
+	case "service_process_exit", "crash_once":
+		spec, _ := manifest.resource(resource)
+		fixture, _ := fixtureByKey(spec.Fixture)
+		command := fixture.ServiceProcessExit
+		if fault.Injector.Kind == "crash_once" {
+			command = fixture.CrashOnce
+		}
+		if len(command) == 0 {
+			return fmt.Errorf("fixture of resource %q does not support injector %q", resource, fault.Injector.Kind)
+		}
+		if _, err := l.docker(ctx, append([]string{"exec", name}, command...)...); err != nil {
+			return fmt.Errorf("%s on %s: %w", fault.Injector.Kind, resource, err)
+		}
+	case "recreate_with_env":
+		key, value, _ := strings.Cut(fault.Injector.Value, "=")
+		if err := l.recreateContainer(ctx, manifest, lab, resource, map[string]string{key: value}); err != nil {
+			return err
+		}
+	case "fill_host_filesystem":
+		if err := l.fillHostFilesystem(ctx, lab, resource); err != nil {
+			return err
+		}
 	default:
 		return fmt.Errorf("unsupported injector %q", fault.Injector.Kind)
 	}
 	lab.AppliedFaults = append(lab.AppliedFaults, fault.ID)
+	return nil
+}
+
+// recreateContainer replaces a fixture container with one that differs only
+// in the given environment values, which is what editing a compose file and
+// redeploying does. The new container keeps the run labels, so cleanup still
+// owns it.
+func (l *DockerLab) recreateContainer(ctx context.Context, manifest Manifest, lab *PreparedLab, alias string, envOverride map[string]string) error {
+	spec, ok := manifest.resource(alias)
+	if !ok || spec.Fixture == "" {
+		return fmt.Errorf("resource %q cannot be recreated", alias)
+	}
+	if _, err := l.docker(ctx, "rm", "-f", lab.ResourceNames[alias]); err != nil {
+		return fmt.Errorf("remove %s before recreating it: %w", alias, err)
+	}
+	result, err := l.docker(ctx, containerRunArgs(manifest, lab, spec, envOverride)...)
+	if err != nil {
+		return fmt.Errorf("recreate %s: %w", alias, err)
+	}
+	lab.ResourceIDs[alias] = strings.TrimSpace(result.Stdout)
 	return nil
 }
 
@@ -354,6 +474,22 @@ func (l *DockerLab) RevertFault(ctx context.Context, manifest Manifest, lab *Pre
 		}
 	case "disconnect_network":
 		if _, err := l.docker(ctx, "network", "connect", lab.NetworkName, name); err != nil {
+			return err
+		}
+	case "service_process_exit":
+		if _, err := l.docker(ctx, "restart", name); err != nil {
+			return fmt.Errorf("restart %s after service_process_exit: %w", resource, err)
+		}
+	case "crash_once":
+		if _, err := l.docker(ctx, "start", name); err != nil {
+			return err
+		}
+	case "recreate_with_env":
+		if err := l.recreateContainer(ctx, manifest, lab, resource, nil); err != nil {
+			return err
+		}
+	case "fill_host_filesystem":
+		if err := l.clearHostFilesystemFault(ctx, lab, resource); err != nil {
 			return err
 		}
 	default:
@@ -442,6 +578,17 @@ func (l *DockerLab) probe(ctx context.Context, lab *PreparedLab, predicate Predi
 	if predicate.Probe == "inventory.same_as_pre" {
 		inventory, err := l.inventory(ctx)
 		return inventoryEqual(inventory, lab.PreInventory), nil, err
+	}
+	if predicate.Probe == "host.filesystem_used_percent" {
+		state := lab.HostFilesystems[predicate.Target]
+		if state == nil {
+			return nil, nil, fmt.Errorf("resource %q is not a prepared host filesystem", predicate.Target)
+		}
+		usage, err := l.hostFilesystemUsage(ctx, state.MountPath)
+		if err != nil {
+			return nil, nil, err
+		}
+		return usage.UsedPercent(), nil, nil
 	}
 	state, err := l.inspect(ctx, lab, predicate.Target)
 	if err != nil {
@@ -664,6 +811,15 @@ func (l *DockerLab) Cleanup(ctx context.Context, manifest Manifest, lab *Prepare
 	first, errs := cleanup()
 	second, secondErrs := cleanup()
 	errs = append(errs, secondErrs...)
+	// A fill fault must never outlive its run, whatever stopped the run.
+	for alias, state := range lab.HostFilesystems {
+		if state == nil || len(state.FaultFiles) == 0 {
+			continue
+		}
+		if err := l.clearHostFilesystemFault(ctx, lab, alias); err != nil {
+			errs = append(errs, err.Error())
+		}
+	}
 	post, err := l.inventory(ctx)
 	if err != nil {
 		errs = append(errs, err.Error())

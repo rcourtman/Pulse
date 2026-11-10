@@ -1,0 +1,32 @@
+{
+  "source": "sonnet-r1c/d6",
+  "captured_at": "2026-11-09T23:44:45Z",
+  "model": "claude-subscription:sonnet",
+  "scenario": "response.host-disk-one-folder",
+  "phase1_scorecard_column": "",
+  "phase1_grade": "",
+  "phase1_woke_by_itself": "",
+  "note": "Not a scorecard cell. Asked with a full run after Pulse could not resolve the scoped request.",
+  "evidence": {
+    "agent_profile": {
+      "name": "commands-on",
+      "commands_enabled": true,
+      "host_name": "docker01"
+    },
+    "alerts": [
+      {
+        "type": "disk",
+        "level": "warning",
+        "resource_alias": "nvr",
+        "resource_name": "docker01 (/mnt/nvr)",
+        "message": "Disk at 92.3%"
+      }
+    ],
+    "wake": {
+      "asked": "full_run",
+      "ask_detail": "Pulse could not resolve the scoped request, so a full run was requested",
+      "alert_after_ns": 61000000000,
+      "mode": "asked"
+    }
+  }
+}

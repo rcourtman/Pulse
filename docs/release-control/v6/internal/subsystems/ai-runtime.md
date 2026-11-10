@@ -6153,6 +6153,31 @@ fault injection only; it is not action approval. Only this exact autonomous
 shape may allow the declared fault to be repaired before the post-Patrol
 observation, while unexpected mutation and inventory-restoration gates remain
 mandatory.
+A response-track scenario (`track: "response"`) scores an outcome and is never
+a launch gate. `live-suite`, the comparison qualification gates and community
+evidence export must not select it, and its report is a valid or invalid run,
+not a pass. Its grade must be derived only from structured state and
+scenario-owned terms: the governed action record, the lab oracle's
+postconditions, the stored investigation summary matched against the
+manifest's `decisive_terms`, `area_terms` and `misdirection_terms`, the agent
+profile Pulse reports for the lab host, and the trigger reason of the Patrol
+run that first reported the finding. Fixed requires all three of the
+scenario's action on the scenario's target, Pulse's verified lifecycle state
+and the lab's independent postconditions. The runner must let Pulse collect the
+healthy lab before it injects, start no clock before Pulse's own projection
+shows the fault, ask for a run only after the natural wait, confirm fault and
+inventory integrity before any decision, and approve only the scenario's own
+fix bound to the exact finding, investigation and plan hash. It must never
+change an agent's command setting: the profile is observed, and a run declared
+as the other profile stops before injection. Response fixtures carry real image
+and container names, so they are limited to manifests with
+`shared_host_ok=false`, their images come from an explicit build step that
+refuses to replace an image without the harness build label, and lab identity
+is the Docker container ID, never a name. A `host_filesystem` resource may be
+written only below an operator-named dedicated mount of bounded size, and the
+driver removes exactly the files it recorded writing. The stored Phase 1 runs
+of fault set v1 are the regression that the rubric still agrees with a
+person's grades.
 The canonical `pulse_query` schema and executor must admit the same resource
 types. In particular, `action=get` accepts `docker-host`, returns a governed
 read-only host response when the identity resolves, and returns a successful

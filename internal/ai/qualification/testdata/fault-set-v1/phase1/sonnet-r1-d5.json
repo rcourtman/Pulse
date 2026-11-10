@@ -1,0 +1,56 @@
+{
+  "source": "sonnet-r1/d5",
+  "captured_at": "2026-11-09T21:59:09Z",
+  "model": "claude-subscription:sonnet",
+  "scenario": "response.app-unhealthy-database-stopped",
+  "phase1_scorecard_column": "",
+  "phase1_grade": "",
+  "phase1_woke_by_itself": "",
+  "note": "Not a scorecard cell. Found the cause, lost the fix to refused log filters and an exhausted evidence budget.",
+  "evidence": {
+    "agent_profile": {
+      "name": "commands-on",
+      "commands_enabled": true,
+      "host_name": "docker01"
+    },
+    "alerts": [
+      {
+        "type": "docker-container-health",
+        "level": "critical",
+        "resource_alias": "nextcloud",
+        "resource_name": "nextcloud",
+        "message": "Docker container 'nextcloud' health is unhealthy"
+      }
+    ],
+    "wake": {
+      "asked": "scoped_run",
+      "alert_after_ns": 84000000000,
+      "run_id": "1794261814024437000",
+      "trigger_reason": "manual",
+      "mode": "asked",
+      "investigation_start": "self",
+      "finding_after_ns": 304000000000,
+      "settled_after_ns": 659000000000
+    },
+    "findings": [
+      {
+        "id": "a796f12750267577",
+        "severity": "warning",
+        "category": "reliability",
+        "resource_alias": "nextcloud",
+        "resource_name": "nextcloud",
+        "title": "Nextcloud app container unhealthy, likely due to its database container being killed (exit 137)",
+        "investigation_status": "completed",
+        "investigation_outcome": "needs_attention",
+        "turn_count": 8,
+        "evidence_call_count": 10,
+        "tools_used": [
+          "pulse_query",
+          "pulse_read",
+          "patrol_conclude_investigation"
+        ],
+        "conclusion": "### Investigation Summary\nThe nextcloud app container (app-container-4a766ccbbccabe1d) is running but unhealthy with 5 restarts. Its own logs show the proximate cause clearly: repeated `Doctrine\\DBAL\\Exception: SQLSTATE[08006] connection to server at \"nextcloud-db\" (172.18.0.3), port 5432 failed: Connection refused`. This confirms the health-check failures are driven by loss of database connectivity, not an issue inside the Nextcloud app itself. The nextcloud-db container (app-container-880dfdd927c1e864, postgres:16) is currently in `exited` state on host docker01, consistent with the finding's reported exit code 137 (~3 minutes before the finding was raised). Its last available log line is a normal startup message (\"database system is ready to accept connections\"), with no in-container evidence of a clean shutdown sequence, which is consistent with (but does not prove) an abrupt kill rather than a graceful stop.\n\nI could not confirm the root cause of the 137 exit itself. Attempts to grep nextcloud-db's/host's logs for OOM-killer or kernel kill evidence, and to filter the host journal, were blocked by the environment (\"command requires approval\"), and no cross-resource capability lookup tool was available to validate remediation options for nextcloud-db. The evidence budget (10 calls) was exhausted between successful calls and approval-blocked attempts.\n\n### Root Cause\n- Observed failure mechanism: nextcloud (app-container-4a766ccbbccabe1d) is unhealthy because it cannot reach its Postgres dependency; its logs show repeated connection-refused errors to nextcloud-db at 172.18.0.3:5432.\n- Causal resource: nextcloud-db (app-container-880dfdd927c1e864, postgres:16, host docker01), which exited with code 137 roughly 3 minutes before the finding fired and remains in `exited` state, so there is simply no listener on 5432 for nextcloud to reach.\n- Unconfirmed: the origin of the exit 137 (OOM-kill by the kernel, an external/manual `docker stop -t 0`/`kill`, or a crash) is not established. Host-level OOM/journal evidence and nextcloud-db's own logs around the kill moment could not be retrieved in this run due to approval-gated log/grep access, so no unobserved actor (e.g., an OOM reaper event or a manual operator action) has been ruled in or out.\n\n### Affected Resources\n- nextcloud (app-container-4a766ccbbccabe1d): running but unhealthy, 5 restarts, image nextcloud:30-apache, host docker01 — symptom only, not the cause.\n- nextcloud-db (app-container-880dfdd927c1e864): exited (code 137), image postgres:16, host docker01 — the causal resource; its outage is itself a symptom of an unresolved external kill trigger.\n- Both share the nextcloud_hb volume mount on docker01, but no evidence ties the volume/mount to the failure.\n\n### Recommendation\nAn operator should: (1) restart nextcloud-db so the Postgres listener comes back up and nextcloud's health check can recover — this requires operator/admin approval since restart is not auto-authorized cross-resource from this investigation without a capability lookup I could not perform; (2) separately check docker01's journal/dmesg and nextcloud-db's container logs around 22:05 UTC for OOM-killer or external-stop evidence to determine the true trigger for the 137 exit; (3) if OOM is confirmed, add/raise a memory limit or reservation on nextcloud-db to prevent recurrence; (4) after nextcloud-db is stable, re-verify nextcloud's health check clears — if it does not, investigate nextcloud independently of the DB dependency. No action was proposed in this run because the cross-resource capability lookup for nextcloud-db could not be completed and the root trigger for the exit remains unconfirmed; a human should authorize and perform the nextcloud-db restart and the host-level log review.\n\n### Conclusion\nNEEDS_ATTENTION: nextcloud-db (app-container-880dfdd927c1e864) is exited (code 137) and confirmed via nextcloud's own logs as the cause of its unhealthy state, but the trigger for the exit (OOM-kill vs. external stop) could not be confirmed because host journal/dmesg and filtered log queries were blocked by approval requirements and the evidence budget was exhausted, and no cross-resource capability lookup for nextcloud-db could be completed to validate a safe restart action. An operator should restart nextcloud-db, review docker01's journal/dmesg around 22:05 UTC for OOM activity, and verify nextcloud's health recovers once the DB is reachable."
+      }
+    ]
+  }
+}
