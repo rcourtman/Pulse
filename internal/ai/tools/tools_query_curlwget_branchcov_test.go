@@ -2,11 +2,11 @@ package tools
 
 import "testing"
 
-// This file raises branch coverage for the curl/wget read-only classifier
-// helpers in tools_query.go:
+// This file raises branch coverage for the curl/wget write-detection helpers
+// in tools_query.go (pulse_read refuses both clients; these helpers keep the
+// write-risk distinction):
 //   - isHTTPMutationMethod
 //   - shortCurlOptionCluster
-//   - curlHasHTTPURL
 //   - isWgetWriteOrMutationOption
 //   - isCurlMutationOrFileOutput
 //
@@ -88,53 +88,6 @@ func TestShortCurlOptionCluster_BranchCov(t *testing.T) {
 			got := shortCurlOptionCluster(tc.token)
 			if got != tc.want {
 				t.Fatalf("shortCurlOptionCluster(%q) = %q, want %q", tc.token, got, tc.want)
-			}
-		})
-	}
-}
-
-// TestCurlHasHTTPURL_BranchCov covers every arm of curlHasHTTPURL: direct
-// http(s):// prefixes, the --url space-separated form (matching and
-// non-matching next token), the --url= attached form, the --url-at-end guard,
-// quoted URLs and the no-match default.
-func TestCurlHasHTTPURL_BranchCov(t *testing.T) {
-	tests := []struct {
-		name   string
-		fields []string
-		want   bool
-	}{
-		{name: "empty", fields: []string{}, want: false},
-		{name: "http_direct", fields: []string{"http://example.com"}, want: true},
-		{name: "https_direct", fields: []string{"https://example.com"}, want: true},
-		{name: "http_uppercase", fields: []string{"HTTP://EXAMPLE.COM"}, want: true},
-		{name: "https_mixed_case", fields: []string{"HtTpS://example.com"}, want: true},
-		{name: "http_quoted", fields: []string{`"http://example.com"`}, want: true},
-		{name: "http_single_quoted", fields: []string{"'https://example.com'"}, want: true},
-		{name: "ftp_not_http", fields: []string{"ftp://example.com"}, want: false},
-		{name: "ws_not_http", fields: []string{"ws://example.com"}, want: false},
-		{name: "bare_host", fields: []string{"example.com"}, want: false},
-		{name: "http_after_option", fields: []string{"-s", "http://example.com"}, want: true},
-		{name: "url_space_http", fields: []string{"--url", "http://example.com"}, want: true},
-		{name: "url_space_https", fields: []string{"--url", "https://example.com"}, want: true},
-		{name: "url_space_https_upper", fields: []string{"--url", "HTTPS://example.com"}, want: true},
-		{name: "url_space_https_quoted", fields: []string{"--url", `"https://example.com"`}, want: true},
-		{name: "url_space_ftp", fields: []string{"--url", "ftp://example.com"}, want: false},
-		{name: "url_space_bare", fields: []string{"--url", "example.com"}, want: false},
-		{name: "url_at_end_no_next", fields: []string{"--url"}, want: false},
-		{name: "url_equals_http", fields: []string{"--url=http://example.com"}, want: true},
-		{name: "url_equals_https", fields: []string{"--url=https://example.com"}, want: true},
-		{name: "url_equals_https_upper", fields: []string{"--url=HTTPS://EXAMPLE.COM"}, want: true},
-		{name: "url_equals_ftp", fields: []string{"--url=ftp://example.com"}, want: false},
-		{name: "url_equals_bare", fields: []string{"--url=example.com"}, want: false},
-		{name: "options_only_no_url", fields: []string{"-s", "-L", "-o", "out"}, want: false},
-		{name: "url_space_http_after_opts", fields: []string{"-s", "--url", "http://x"}, want: true},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			got := curlHasHTTPURL(tc.fields)
-			if got != tc.want {
-				t.Fatalf("curlHasHTTPURL(%v) = %v, want %v", tc.fields, got, tc.want)
 			}
 		})
 	}

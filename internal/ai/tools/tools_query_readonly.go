@@ -1,8 +1,11 @@
 package tools
 
 import (
+	"net"
 	"strconv"
 	"strings"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/safety"
 )
 
 // literalCommandBase receives a decoded word, so quote characters are part of
@@ -231,7 +234,7 @@ func isReadOnlyByConstruction(command string) bool {
 	}
 	// These programs only inspect data. Their options do not select write or
 	// execution modes. Other allowlisted programs require argument validation.
-	if wordIn(words[0], "cat head tail ls ll dir ps free du iostat vmstat mpstat grep locate which whereis whoami id groups echo printf uptime printenv locale netstat ping traceroute tracepath dig host stat wc cut tr getent nproc lscpu lsmem lsblk lxc-ls lxc-info zcat zgrep bzcat xzcat md5sum sha256sum sha1sum test pgrep pidof pstree last who w lspci lsusb pveversion") {
+	if wordIn(words[0], "cat head tail ls ll dir ps free du iostat vmstat mpstat grep locate which whereis whoami id groups echo printf uptime printenv locale netstat stat wc cut tr getent nproc lscpu lsmem lsblk lxc-ls lxc-info zcat zgrep bzcat xzcat md5sum sha256sum sha1sum test pgrep pidof pstree last who w lspci lsusb pveversion") {
 		return true
 	}
 	if words[0] == "[" {
@@ -244,10 +247,8 @@ func isReadOnlyByConstruction(command string) bool {
 	switch words[0] {
 	case "uname":
 		return safeReadOptions(args, "-a -s -n -r -v -m -p -i -o --all --kernel-name --nodename --kernel-release --kernel-version --machine --processor --hardware-platform --operating-system --help --version", 0)
-	case "nslookup":
-		// Interactive variants interpret stdin and may support output files.
-		operands, valid := readOptionOperands(args, "-type= -query= -querytype= -class= -domain= -timeout= -retry= -port= -debug -d2 -nodebug -recurse -norecurse -vc -novc -search -nosearch -defname -nodefname -fail -nofail", 2)
-		return valid && len(operands) > 0 && !wordIn(strings.ToLower(operands[0]), "- ls view finger set server lserver root exit help")
+	case "ping", "ping6":
+		return isBoundedIPPing(args)
 	case "df":
 		return safeReadOptions(args, "-a -B= -h -H -i -k -l -P -t= -T -x= --all --block-size= --human-readable --si --inodes --local --no-sync --portability --type= --print-type --exclude-type= --total --output? --help --version", -1)
 	case "date":
@@ -284,7 +285,7 @@ func isReadOnlyByConstruction(command string) bool {
 	case "route":
 		return safeReadOptions(args, "-n -e -v -A= -4 -6 -F -C --numeric --extend --verbose --family= --help --version", 0)
 	case "arp":
-		return safeReadOptions(args, "-a -e -n -v -D -i= -A= -H= --all --numeric --verbose --device= --protocol= --hw-type= --help --version", 1)
+		return safeReadOptions(args, arpOptions, 1)
 	case "ip":
 		return isReadOnlyIP(args)
 	case "lsof":
@@ -328,15 +329,133 @@ func isReadOnlyByConstruction(command string) bool {
 		return safeReadOptions(args, "--Output= --Inform= --Full --Details= --Language= --ParseSpeed= --BOM --Help --Version -f -h", -1)
 	case "exiftool":
 		return safeReadOptions(args, "-a -u -g -G -s -S -n -j -json -csv -t -T -b -e -fast -fast2 -r -ext= -ver -h", -1)
-	case "nc", "netcat":
-		zeroIO := false
-		_, valid := readOptionOperands(args, "-z -v -n -4 -6 -w= -G= -i= -p= -s=", 2, func(name, _ string) bool {
-			zeroIO = zeroIO || name == "-z"
-			return true
-		})
-		return valid && zeroIO
 	}
 	return isReadOnlySubcommand(words)
+}
+
+const arpOptions = "-a -e -n -v -D -i= -A= -H= --all --numeric --verbose --device= --protocol= --hw-type= --help --version"
+
+// outboundNetworkReason explains why pulse_read refuses network clients.
+const outboundNetworkReason = "pulse_read does not open network connections to destinations named in the command"
+
+// readCommandOpensConnection reports commands that connect to, or resolve, a
+// destination named in the command. pulse_read runs without approval, so it
+// keeps to local inspection. A bounded ping to an IP address literal stays,
+// as in the agent command policy; reachability beyond that goes through the
+// governed control path.
+func readCommandOpensConnection(words []string) bool {
+	if len(words) == 0 {
+		return false
+	}
+	args := words[1:]
+	switch strings.ToLower(literalCommandBase(words[0])) {
+	case "curl", "wget", "nc", "netcat", "ncat", "socat", "telnet", "dig", "host", "nslookup", "drill",
+		"traceroute", "traceroute6", "tracepath", "tracepath6", "mtr", "ssh", "scp", "sftp", "ftp", "tftp", "rsync", "openssl":
+		return true
+	case "ping", "ping6":
+		return !isBoundedIPPing(args)
+	case "getent":
+		database := safety.GetentDatabase(args)
+		if !wordIn(database, "hosts ahosts ahostsv4 ahostsv6 networks") {
+			return false
+		}
+		// Enumerating the local hosts file is fine; a key is a lookup.
+		operands := 0
+		for i := 0; i < len(args); i++ {
+			if args[i] == "-s" || args[i] == "--service" {
+				i++
+			} else if !strings.HasPrefix(args[i], "-") {
+				operands++
+			}
+		}
+		return operands > 1
+	case "lsof":
+		return lsofNamesHost(args)
+	case "ss":
+		return ssFilterNamesHost(args)
+	case "arp":
+		operands, _ := readOptionOperands(args, arpOptions, -1)
+		for _, operand := range operands {
+			if net.ParseIP(operand) == nil {
+				return true
+			}
+		}
+	case "ffprobe", "mediainfo":
+		for _, arg := range args {
+			if strings.Contains(arg, "://") {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// isBoundedIPPing accepts ping with a count, deadline and display options and
+// a single IP address literal, so no name lookup or custom payload is involved.
+func isBoundedIPPing(args []string) bool {
+	counted := false
+	operands, valid := readOptionOperands(args, "-c= -w= -W= -n -q -4 -6 -t=", 1, func(name, _ string) bool {
+		counted = counted || name == "-c"
+		return true
+	})
+	return valid && counted && len(operands) == 1 && net.ParseIP(operands[0]) != nil
+}
+
+// lsofNamesHost reports an Internet address with a host name, which lsof
+// resolves. Addresses carry the host after @ whichever way the option is
+// spelled (-i@host, -ni@host, +i, or the next word), so every @ is checked.
+func lsofNamesHost(args []string) bool {
+	for _, arg := range args {
+		parts := strings.Split(arg, "@")
+		for _, host := range parts[1:] {
+			if !isLiteralNetworkHost(host) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// ssFilterNamesHost reports a dst or src filter whose address is a host name,
+// which ss resolves. ss splits quoted expressions itself, so every operand is
+// tokenised the same way.
+func ssFilterNamesHost(args []string) bool {
+	var tokens []string
+	for _, arg := range args {
+		if strings.HasPrefix(arg, "-") {
+			continue
+		}
+		if strings.ContainsRune(arg, '\\') {
+			// ss decodes backslash escapes inside its filter expressions.
+			return true
+		}
+		tokens = append(tokens, strings.Fields(strings.NewReplacer("(", " ", ")", " ").Replace(arg))...)
+	}
+	for i := 0; i < len(tokens); i++ {
+		if wordIn(strings.ToLower(tokens[i]), "dst src") {
+			if i+1 >= len(tokens) || !isLiteralNetworkHost(tokens[i+1]) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// isLiteralNetworkHost accepts an IP address or prefix, optionally bracketed
+// and with a port or service (":22", "*:http"), and the "*" wildcard.
+func isLiteralNetworkHost(value string) bool {
+	host := value
+	if strings.HasPrefix(host, "[") {
+		end := strings.IndexByte(host, ']')
+		if end < 0 {
+			return false
+		}
+		host = host[1:end]
+	} else if strings.Count(host, ":") == 1 {
+		host, _, _ = strings.Cut(host, ":")
+	}
+	host, _, _ = strings.Cut(host, "/")
+	return host == "" || host == "*" || net.ParseIP(host) != nil
 }
 
 func stripReadRedirects(command string) string {
@@ -378,46 +497,6 @@ func stripReadRedirects(command string) string {
 		out.WriteByte(c)
 	}
 	return out.String()
-}
-
-func isSafeCurlRead(args []string) bool {
-	operands, valid := readOptionOperands(args, "-s -S -f -L -k -i -I -v -4 -6 --silent --show-error --fail --fail-with-body --location --insecure --include --head --verbose --ipv4 --ipv6 --compressed --connect-timeout= --max-time= --retry= --retry-delay= -m= -H= --header= -u= --user= -A= --user-agent= -b= --cookie= --cacert= --cert= --key= --url= -X= --request=", -1, func(name, value string) bool {
-		if name == "-X" || name == "--request" {
-			return wordIn(strings.ToUpper(value), "GET HEAD OPTIONS")
-		}
-		return name != "--url" || isHTTPReadURL(value)
-	})
-	if !valid {
-		return false
-	}
-	for _, operand := range operands {
-		if !isHTTPReadURL(operand) {
-			return false
-		}
-	}
-	return true
-}
-
-func isHTTPReadURL(value string) bool {
-	value = strings.ToLower(value)
-	return strings.HasPrefix(value, "http://") || strings.HasPrefix(value, "https://")
-}
-
-func isSafeWgetSpiderRead(args []string) bool {
-	spider := false
-	operands, valid := readOptionOperands(args, "--spider -q --quiet -S --server-response --no-check-certificate -T= --timeout= -t= --tries= -U= --user-agent= --header= --user= --password= --max-redirect=", -1, func(name, _ string) bool {
-		spider = spider || name == "--spider"
-		return true
-	})
-	if !valid || !spider {
-		return false
-	}
-	for _, operand := range operands {
-		if !isHTTPReadURL(operand) {
-			return false
-		}
-	}
-	return true
 }
 
 func isReadOnlyIP(args []string) bool {

@@ -7,7 +7,7 @@ import "testing"
 //   - GetReadOnlyViolationHint (top-level routing)
 //   - isPhase1GuardrailFailure (keyword classification)
 //   - getPhase1Hint            (structural guardrail switch)
-//   - getSQLHint               (SQL content-inspection switch)
+//   - getSQLHint               (SQL client refusal hint)
 //
 // All four functions are pure (no I/O) and return exact strings/bools, so every
 // case asserts the exact returned value rather than just "no panic".
@@ -36,7 +36,7 @@ func TestGetReadOnlyViolationHint(t *testing.T) {
 			name:    "sql cli command with empty reason routes to sql default hint",
 			command: "sqlite3 db",
 			result:  IntentResult{},
-			want:    ". For read-only queries, use self-contained SELECT statements without transaction control.",
+			want:    ". pulse_read does not run database clients; use the governed control path, or read the service's logs and status instead.",
 		},
 
 		// Phase 1 guardrail routing.
@@ -60,25 +60,25 @@ func TestGetReadOnlyViolationHint(t *testing.T) {
 			name:    "sqlite3 cli with write keyword routes to sql write hint",
 			command: "sqlite3 db.db \"INSERT INTO t VALUES(1)\"",
 			result:  IntentResult{Intent: IntentWriteOrUnknown, Reason: "content inspection: SQL contains write/control keyword: insert"},
-			want:    "content inspection: SQL contains write/control keyword: insert. Use only SELECT statements. Avoid: INSERT, UPDATE, DELETE, DROP, CREATE, PRAGMA, BEGIN, COMMIT, ROLLBACK.",
+			want:    "content inspection: SQL contains write/control keyword: insert. pulse_read does not run database clients; use the governed control path, or read the service's logs and status instead.",
 		},
 		{
-			name:    "mysql cli with no-inline reason routes to sql external hint",
+			name:    "mysql cli with statement-inspection reason routes to sql hint",
 			command: "mysql db",
-			result:  IntentResult{Intent: IntentWriteOrUnknown, Reason: "content inspection: no inline SQL found; input may be external (piped/interactive)"},
-			want:    "content inspection: no inline SQL found; input may be external (piped/interactive). Include SQL directly in quotes: sqlite3 db.db \"SELECT ...\"",
+			result:  IntentResult{Intent: IntentWriteOrUnknown, Reason: "content inspection: " + sqlClientNotReadOnlyReason},
+			want:    "content inspection: " + sqlClientNotReadOnlyReason + ". pulse_read does not run database clients; use the governed control path, or read the service's logs and status instead.",
 		},
 		{
-			name:    "mariadb cli with neutral reason routes to sql default hint",
+			name:    "mariadb cli with neutral reason routes to sql hint",
 			command: "mariadb db -e \"SELECT 1\"",
-			result:  IntentResult{Intent: IntentReadOnlyConditional, Reason: "content inspection: read-only"},
-			want:    "content inspection: read-only. For read-only queries, use self-contained SELECT statements without transaction control.",
+			result:  IntentResult{Intent: IntentWriteOrUnknown, Reason: "content inspection"},
+			want:    "content inspection. pulse_read does not run database clients; use the governed control path, or read the service's logs and status instead.",
 		},
 		{
 			name:    "psql cli with control keyword routes to sql write hint",
 			command: "psql -c \"BEGIN\"",
 			result:  IntentResult{Intent: IntentWriteOrUnknown, Reason: "content inspection: SQL contains write/control keyword: begin"},
-			want:    "content inspection: SQL contains write/control keyword: begin. Use only SELECT statements. Avoid: INSERT, UPDATE, DELETE, DROP, CREATE, PRAGMA, BEGIN, COMMIT, ROLLBACK.",
+			want:    "content inspection: SQL contains write/control keyword: begin. pulse_read does not run database clients; use the governed control path, or read the service's logs and status instead.",
 		},
 
 		// SQL CLI precedence over the unknown-command fallback.
@@ -86,7 +86,7 @@ func TestGetReadOnlyViolationHint(t *testing.T) {
 			name:    "sql cli command beats unknown reason fallback",
 			command: "sqlite3 db",
 			result:  IntentResult{Intent: IntentWriteOrUnknown, Reason: "unknown command"},
-			want:    "unknown command. For read-only queries, use self-contained SELECT statements without transaction control.",
+			want:    "unknown command. pulse_read does not run database clients; use the governed control path, or read the service's logs and status instead.",
 		},
 
 		// Unknown-command fallback (non-SQL, non-phase1).
@@ -115,10 +115,10 @@ func TestGetReadOnlyViolationHint(t *testing.T) {
 		// The interactive_repl NonInteractiveBlock reason is not in the phase1
 		// keyword list, so routing falls through to SQL/unknown/default paths.
 		{
-			name:    "bare mysql interactive_repl block misroutes to sql default hint",
+			name:    "bare mysql interactive_repl block routes to sql hint",
 			command: "mysql",
 			result:  IntentResult{Intent: IntentWriteOrUnknown, Reason: "[interactive_repl] command opens interactive session; pulse_read requires bounded non-interactive commands"},
-			want:    "[interactive_repl] command opens interactive session; pulse_read requires bounded non-interactive commands. For read-only queries, use self-contained SELECT statements without transaction control.",
+			want:    "[interactive_repl] command opens interactive session; pulse_read requires bounded non-interactive commands. pulse_read does not run database clients; use the governed control path, or read the service's logs and status instead.",
 		},
 		{
 			name:    "python interactive_repl block returns base hint unchanged",
@@ -197,7 +197,7 @@ func TestGetPhase1Hint(t *testing.T) {
 		{name: "tee arm", reason: "tee can write to files", baseHint: base, want: base + ". Read-only execution does not accept tee because tee writes to files."},
 		{name: "substitution arm", reason: "command substitution detected", baseHint: base, want: base + ". Read-only execution does not accept $() or backticks."},
 		{name: "chaining arm", reason: "shell chaining detected", baseHint: base, want: base + ". Run commands separately instead of chaining with ; && ||."},
-		{name: "piped input arm", reason: "piped input to dual-use tool", baseHint: base, want: base + ". For dual-use tools, include content directly instead of piping. Example: sqlite3 db.db \"SELECT ...\" instead of cat file | sqlite3 db.db"},
+		{name: "piped input arm", reason: "piped input to dual-use tool", baseHint: base, want: base + ". Read-only execution does not pipe input into interpreters or database clients."},
 		{name: "TTY arm", reason: "interactive/TTY flags", baseHint: base, want: base + ". Remove -it/--tty/--interactive flags. Use non-interactive form: docker exec container cmd (not docker exec -it)."},
 		{name: "terminal arm without TTY", reason: "requires terminal interaction", baseHint: base, want: base + ". Remove -it/--tty/--interactive flags. Use non-interactive form: docker exec container cmd (not docker exec -it)."},
 		{name: "pager arm", reason: "pager tools", baseHint: base, want: base + ". Use cat, head -n, or tail -n instead of interactive tools."},
@@ -213,7 +213,7 @@ func TestGetPhase1Hint(t *testing.T) {
 		// Switch-order precedence (first matching case wins).
 		{name: "precedence sudo before redirect", reason: "sudo and redirect", baseHint: base, want: base + ". Read-only execution does not accept sudo; privileged operations require the governed control path."},
 		{name: "precedence redirect before tee", reason: "redirect and tee", baseHint: base, want: base + ". Read-only execution does not accept redirects (>, >>, <, <<, <<<)."},
-		{name: "precedence piped input before TTY", reason: "piped input and TTY flags", baseHint: base, want: base + ". For dual-use tools, include content directly instead of piping. Example: sqlite3 db.db \"SELECT ...\" instead of cat file | sqlite3 db.db"},
+		{name: "precedence piped input before TTY", reason: "piped input and TTY flags", baseHint: base, want: base + ". Read-only execution does not pipe input into interpreters or database clients."},
 		{name: "precedence indefinitely before unbounded", reason: "indefinitely and unbounded", baseHint: base, want: base + ". Use bounded alternatives: ps aux (not top), journalctl -n 100 (not watch)."},
 
 		// Empty base hint (still gets the suffix).
@@ -233,40 +233,10 @@ func TestGetPhase1Hint(t *testing.T) {
 }
 
 func TestGetSQLHint(t *testing.T) {
-	const base = "REASON" // arbitrary non-empty base hint to verify concatenation
-	tests := []struct {
-		name     string
-		reason   string
-		baseHint string
-		want     string
-	}{
-		// external / no-inline arm (first case).
-		{name: "external arm", reason: "input may be external", baseHint: base, want: base + ". Include SQL directly in quotes: sqlite3 db.db \"SELECT ...\""},
-		{name: "no inline arm", reason: "no inline SQL found", baseHint: base, want: base + ". Include SQL directly in quotes: sqlite3 db.db \"SELECT ...\""},
-
-		// write / control arm (second case).
-		{name: "write arm", reason: "contains write keyword", baseHint: base, want: base + ". Use only SELECT statements. Avoid: INSERT, UPDATE, DELETE, DROP, CREATE, PRAGMA, BEGIN, COMMIT, ROLLBACK."},
-		{name: "control arm", reason: "transaction control keyword", baseHint: base, want: base + ". Use only SELECT statements. Avoid: INSERT, UPDATE, DELETE, DROP, CREATE, PRAGMA, BEGIN, COMMIT, ROLLBACK."},
-
-		// default / fallthrough arm.
-		{name: "default arm with unmatched reason", reason: "read-only content", baseHint: base, want: base + ". For read-only queries, use self-contained SELECT statements without transaction control."},
-		{name: "default arm with empty reason", reason: "", baseHint: base, want: base + ". For read-only queries, use self-contained SELECT statements without transaction control."},
-
-		// Switch-order precedence (external/no-inline before write/control).
-		{name: "precedence external before write", reason: "external write detected", baseHint: base, want: base + ". Include SQL directly in quotes: sqlite3 db.db \"SELECT ...\""},
-		{name: "precedence no inline before control", reason: "no inline control found", baseHint: base, want: base + ". Include SQL directly in quotes: sqlite3 db.db \"SELECT ...\""},
-
-		// Empty base hint (still gets the suffix).
-		{name: "empty base hint external arm", reason: "external", baseHint: "", want: ". Include SQL directly in quotes: sqlite3 db.db \"SELECT ...\""},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			got := getSQLHint(tc.reason, tc.baseHint)
-			if got != tc.want {
-				t.Fatalf("getSQLHint(%q, %q) =\n  %q\nwant\n  %q",
-					tc.reason, tc.baseHint, got, tc.want)
-			}
-		})
+	for _, base := range []string{"REASON", ""} {
+		want := base + ". pulse_read does not run database clients; use the governed control path, or read the service's logs and status instead."
+		if got := getSQLHint(base); got != want {
+			t.Fatalf("getSQLHint(%q) =\n  %q\nwant\n  %q", base, got, want)
+		}
 	}
 }

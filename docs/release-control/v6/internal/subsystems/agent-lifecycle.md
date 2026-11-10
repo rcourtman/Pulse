@@ -8196,6 +8196,20 @@ the fixed read-only catalog in `internal/monitoring/docker_detection.go`, wired
 through the authenticated executor in `internal/api/router.go`.
 `PolicyBlock` still applies to trusted payloads. The `Trusted` field must never be set by a code path that
 deserialises user input or accepts a caller-supplied command string.
+Every command Pulse sends through `executeCommand` (`sh -c`, `cmd /C`, or
+the local `qm guest exec` wrapper) gets an explicit environment from
+`commandEnvironment` in `internal/hostagent/command_env.go`: the host's
+runtime variables (PATH with the usual sbin and bin prefix, locale, container
+runtime and cluster endpoints, proxies) without the agent's own `PULSE_*`
+configuration, so an agent configured through `PULSE_TOKEN` does not pass its
+token to the commands it runs. Commands with neither an approval nor the
+`Trusted` flag, which is the AI's read-only path, also lose other
+credential-named variables; approved and trusted commands keep them. A VM
+guest command still runs in the guest agent's own environment. Proofs:
+`TestCommandEnvironmentWithholdsAgentConfiguration` in
+`internal/hostagent/command_client_test.go` and
+`TestCommandClient_executeCommand_DoesNotExposeAgentEnvironment` in
+`internal/hostagent/commands_execute_unix_test.go`.
 That same copied install transport must also normalize canonical base URLs
 before composing installer asset paths: when operators enter a trailing-slash
 Pulse URL, shell and PowerShell install commands must trim it before appending

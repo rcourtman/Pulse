@@ -1341,3 +1341,61 @@ func TestHealthySessionDurationOutlastsTheBaseReconnectDelay(t *testing.T) {
 		t.Fatalf("healthySessionDuration = %v, must exceed the base reconnect delay %v", healthySessionDuration, longestBaseDelay)
 	}
 }
+
+func TestCommandEnvironmentWithholdsAgentConfiguration(t *testing.T) {
+	environ := []string{
+		"PATH=/usr/bin:/bin",
+		"HOME=/root",
+		"LANG=C.UTF-8",
+		"DOCKER_HOST=unix:///run/user/0/docker.sock",
+		"KUBERNETES_SERVICE_HOST=10.96.0.1",
+		"HTTPS_PROXY=http://proxy:3128",
+		"PULSE_TOKEN=agent-token-value",
+		"PULSE_URL=https://pulse.example",
+		"PULSE_AGENT_HELPER_SOCKET=/run/pulse-agent/helper.sock",
+		"DB_PASSWORD=workload-secret",
+		"GITHUB_TOKEN=ghp_value",
+		"AWS_SECRET_ACCESS_KEY=aws-value",
+	}
+	runtimeVariables := []string{
+		"HOME=/root",
+		"LANG=C.UTF-8",
+		"DOCKER_HOST=unix:///run/user/0/docker.sock",
+		"KUBERNETES_SERVICE_HOST=10.96.0.1",
+		"HTTPS_PROXY=http://proxy:3128",
+		"PATH=" + commandSearchPath + ":/usr/bin:/bin",
+	}
+
+	// Unapproved reads: no agent configuration and no credential-named variables.
+	got := strings.Join(commandEnvironment(environ, "linux", false), "\n")
+	for _, withheld := range []string{"PULSE_", "agent-token-value", "workload-secret", "ghp_value", "aws-value"} {
+		if strings.Contains(got, withheld) {
+			t.Fatalf("read command environment kept %q:\n%s", withheld, got)
+		}
+	}
+	for _, kept := range runtimeVariables {
+		if !strings.Contains(got, kept) {
+			t.Fatalf("read command environment lost %q:\n%s", kept, got)
+		}
+	}
+	if strings.Count(got, "PATH=") != 1 {
+		t.Fatalf("command environment should carry one PATH:\n%s", got)
+	}
+
+	// Approved and trusted commands keep operator credentials, never the agent's own.
+	approved := strings.Join(commandEnvironment(environ, "linux", true), "\n")
+	if strings.Contains(approved, "PULSE_") || strings.Contains(approved, "agent-token-value") {
+		t.Fatalf("approved command environment kept agent configuration:\n%s", approved)
+	}
+	for _, kept := range append([]string{"DB_PASSWORD=workload-secret", "AWS_SECRET_ACCESS_KEY=aws-value"}, runtimeVariables...) {
+		if !strings.Contains(approved, kept) {
+			t.Fatalf("approved command environment lost %q:\n%s", kept, approved)
+		}
+	}
+
+	// Windows names are case-insensitive and PATH is left as the service has it.
+	windows := commandEnvironment([]string{"Path=C:\\Windows", "SystemRoot=C:\\Windows", "Pulse_Token=x", "Db_Password=y", "=C:=C:\\"}, "windows", false)
+	if !reflect.DeepEqual(windows, []string{"Path=C:\\Windows", "SystemRoot=C:\\Windows", "=C:=C:\\"}) {
+		t.Fatalf("windows command environment = %q", windows)
+	}
+}

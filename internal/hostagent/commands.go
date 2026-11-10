@@ -1685,9 +1685,11 @@ func (c *CommandClient) executeCommand(ctx context.Context, payload executeComma
 		cmd = execCommandContext(cmdCtx, "cmd", "/C", command)
 	} else {
 		cmd = execCommandContext(cmdCtx, "sh", "-c", command)
-		// Ensure PATH includes common binary locations for docker, kubectl, etc.
-		cmd.Env = append(os.Environ(), "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:"+os.Getenv("PATH"))
 	}
+	// Commands get the host's runtime environment, not the agent's own
+	// configuration; unapproved reads also lose credential-named variables.
+	approvedOrTrusted := payload.Trusted || strings.TrimSpace(payload.ApprovalID) != ""
+	cmd.Env = commandEnvironment(os.Environ(), runtime.GOOS, approvedOrTrusted)
 
 	// Kill the whole process tree on timeout or cancellation, not just the
 	// direct shell. Server-issued commands routinely spawn grandchildren

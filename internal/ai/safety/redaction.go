@@ -10,16 +10,28 @@ var (
 	pemBeginRE = regexp.MustCompile(`(?m)^-----BEGIN [A-Z0-9 ][A-Z0-9 ]+-----\s*$`)
 	pemEndRE   = regexp.MustCompile(`(?m)^-----END [A-Z0-9 ][A-Z0-9 ]+-----\s*$`)
 
-	// Common secret-bearing key/value patterns.
-	kvSecretRE = regexp.MustCompile(`(?i)\b(password|passwd|passphrase|secret|token|api[_-]?key|client[_-]?secret|private[_-]?key|access[_-]?token|refresh[_-]?token)\b\s*[:=]\s*(.+)$`)
+	// Common secret-bearing key/value patterns. The key may carry an
+	// identifier prefix, because environment-style names (DB_PASSWORD,
+	// POSTGRES_PASSWORD, PULSE_TOKEN, JWT_SECRET) are the commonest shape in
+	// container inspection, unit files and process listings. The sensitive
+	// word must end the key, so counters such as token_count or max_tokens
+	// are left alone.
+	kvSecretRE = regexp.MustCompile(`(?i)([A-Za-z0-9_.-]*?(?:` + secretKeyWords + `))\s*[:=]\s*(.+)$`)
 
 	// Structured, URL, and header forms that commonly appear in prompts,
 	// provider errors, tool schemas, and operator-entered handoff context.
-	quotedKVSecretRE = regexp.MustCompile(`(?i)("(?:password|passwd|passphrase|secret|token|api[_-]?key|apikey|client[_-]?secret|private[_-]?key|access[_-]?token|refresh[_-]?token|authorization|x-api-key|credential)"\s*:\s*")[^"]+`)
-	querySecretRE    = regexp.MustCompile(`(?i)([?&](?:key|api[_-]?key|apikey|access[_-]?token|refresh[_-]?token|token|client[_-]?secret|secret)=)[^\s&"']+`)
+	quotedKVSecretRE = regexp.MustCompile(`(?i)("[A-Za-z0-9_.-]*?(?:` + secretKeyWords + `|authorization|credential)"\s*:\s*")[^"]+`)
+	querySecretRE    = regexp.MustCompile(`(?i)([?&](?:key|api[_-]?key|apikey|access[_-]?token|refresh[_-]?token|token|client[_-]?secret|secret|password|passwd)=)[^\s&"']+`)
 	bearerRE         = regexp.MustCompile(`(?i)(\bauthorization\s*:\s*bearer\s+)([A-Za-z0-9\-._~+/]+=*)`)
-	xAPIKeyHeaderRE  = regexp.MustCompile(`(?i)(\bx-api-key\s*:\s*)[^\s,;]+`)
-	urlUserInfoRE    = regexp.MustCompile(`(?i)(https?://)[^\s/@:]+:[^\s/@]+@`)
+	// Command-line flags that take a credential as the next word, as seen in
+	// process listings and unit files: --token VALUE, --db-password VALUE.
+	// The flag must start a word, so prose such as "csrf-token mismatch" stays.
+	cliFlagSecretRE = regexp.MustCompile(`(?i)((?:^|\s)--?[A-Za-z0-9_.-]*?(?:` + secretKeyWords + `)[ \t]+)[^\s-]\S*`)
+	basicAuthRE     = regexp.MustCompile(`(?i)(\bauthorization\s*:\s*basic\s+)[A-Za-z0-9+/=._-]+`)
+	xAPIKeyHeaderRE = regexp.MustCompile(`(?i)(\bx-api-key\s*:\s*)[^\s,;]+`)
+	// Any URL scheme: database DSNs (postgres://, mysql://, redis://,
+	// amqp://) carry credentials the same way HTTP URLs do.
+	urlUserInfoRE = regexp.MustCompile(`(?i)\b([a-z][a-z0-9+.-]*://)[^\s/@:]+:[^\s/@]+@`)
 
 	// Common token formats to reduce accidental leakage even when not in k=v form.
 	awsAccessKeyRE = regexp.MustCompile(`\b(AKIA|ASIA)[0-9A-Z]{16}\b`)
@@ -30,6 +42,9 @@ var (
 )
 
 const redactedSecretValue = "[REDACTED]"
+
+// secretKeyWords are the key endings that mark a credential value.
+const secretKeyWords = `password|passwd|passphrase|secret|token|api[_-]?key|apikey|access[_-]?key|secret[_-]?key(?:[_-]?base)?|auth[_-]?key|client[_-]?secret|private[_-]?key|access[_-]?token|refresh[_-]?token|credentials?`
 
 // RedactSensitiveText removes likely-secret material from text outputs to reduce accidental
 // key/token leakage through AI tool results. It is intentionally conservative: if a value
@@ -66,7 +81,11 @@ func RedactSensitiveText(input string) (string, int) {
 			// submatch 2 is the value.
 			valueStart, valueEnd := m[4], m[5]
 			if valueStart >= 0 && valueEnd >= 0 && valueEnd > valueStart {
-				lines[i] = line[:valueStart] + "[REDACTED]"
+				// The text before the key can still hold other secret forms,
+				// such as a proxy URL with credentials earlier on the line.
+				var prefix string
+				prefix, redactions = redactLineSecretPatterns(line[:valueStart], redactions)
+				lines[i] = prefix + "[REDACTED]"
 				redactions++
 				continue
 			}
@@ -93,6 +112,10 @@ func redactLineSecretPatterns(line string, redactions int) (string, int) {
 	line, count = replaceAllCounting(querySecretRE, line, `${1}`+redactedSecretValue)
 	redactions += count
 	line, count = replaceAllCounting(bearerRE, line, `${1}`+redactedSecretValue)
+	redactions += count
+	line, count = replaceAllCounting(basicAuthRE, line, `${1}`+redactedSecretValue)
+	redactions += count
+	line, count = replaceAllCounting(cliFlagSecretRE, line, `${1}`+redactedSecretValue)
 	redactions += count
 	line, count = replaceAllCounting(xAPIKeyHeaderRE, line, `${1}`+redactedSecretValue)
 	redactions += count

@@ -485,3 +485,195 @@ func TestBranchCovRedactSensitiveValue(t *testing.T) {
 		}
 	})
 }
+
+func TestIsSensitivePathCoversInfrastructureCredentialStores(t *testing.T) {
+	for _, p := range []string{
+		"/var/lib/pulse-agent/token",
+		"/var/lib/pulse-agent/runtime.token",
+		"/run/pulse-agent/bootstrap.token",
+		"/etc/pulse/nodes.enc",
+		"/etc/pulse/.encryption.key",
+		"/etc/pve/priv/token.cfg",
+		"/etc/pve/priv/storage/backup.pw",
+		"/etc/corosync/authkey",
+		"/etc/shadow-",
+		"/etc/proxmox-backup/token.shadow",
+		"/etc/proxmox-backup/tape-encryption-keys.json",
+		"/etc/ssh/ssh_host_ed25519_key",
+		"/etc/ceph/ceph.client.admin.keyring",
+		"/etc/kubernetes/admin.conf",
+		"/etc/rancher/k3s/k3s.yaml",
+		"/root/.my.cnf",
+		"/root/.pgpass",
+		"/root/.docker/config.json",
+		"/home/u/.kube/config",
+	} {
+		if sensitive, reason := IsSensitivePath(p); !sensitive || reason == "" {
+			t.Errorf("IsSensitivePath(%q) = (%v, %q), want sensitive with a reason", p, sensitive, reason)
+		}
+	}
+	for _, p := range []string{
+		"/etc/hostname",
+		"/etc/ssh/ssh_host_ed25519_key.pub",
+		"/etc/ssh/sshd_config",
+		"/var/lib/pulse-agent/agent-id",
+		"/etc/pve/storage.cfg",
+		"/var/log/syslog",
+		"token",
+	} {
+		if sensitive, reason := IsSensitivePath(p); sensitive {
+			t.Errorf("IsSensitivePath(%q) = (true, %q), want not sensitive", p, reason)
+		}
+	}
+}
+
+func TestCommandTouchesSensitivePathCoversIndirectReferences(t *testing.T) {
+	for _, cmd := range []string{
+		// Parent-directory segments defeat every prefix rule.
+		"cat /var/log/../../etc/hostname",
+		"tail -n 5 /var/log/../lib/pulse-agent/agent-id",
+		// Credential files named directly, relatively, or as option values.
+		"cat /var/lib/pulse-agent/token",
+		"cat etc/shadow",
+		"head -n 5 /etc/pve/priv/token.cfg /var/log/syslog",
+		"journalctl --file=/etc/pve/priv/x -n 5",
+		"curl -H @/var/lib/pulse-agent/token http://localhost/",
+		// Patterns that can match a credential location, including shell-only
+		// bracket syntax, home-directory shorthand and re-rooted views.
+		"cat /etc/sha*",
+		"cat /var/log/syslog /etc/[!x]hadow",
+		"cat /var/log/syslog /etc/[[:alpha:]]hadow",
+		"cat /var/log/syslog ~/.kube/confi?",
+		"cat /rpool/data/subvol-101-disk-0/etc/sha*",
+		"cat /proc/1/root/etc/pve/priv/token.cfg",
+		"cat /proc/1/cmdline",
+		"cat /etc/os-release /etc/pulse/nodes?enc",
+		"cat /etc/os-release /var/lib/rancher/k3s/server/tls/dynamic-cert.json",
+		"cat /etc/os-release /etc/pve/.[.]/pve/priv/token.cfg",
+		"cat /var/log/syslog /proc/1/envir?n",
+		"cat /srv/app/server?key",
+		"cat /etc/os-release /rpool/data/subvol-101-disk-0/secrets/db-password",
+		"cat /etc/os-release /rpool/data/subvol-101-disk-0/secre?s/db-password",
+		"cat /etc/os-release /rpool/data/subvol-101-disk-0/*/db-password",
+		"cat /var/lib/pulse-agent/*",
+		"cat /etc/pve/pri?/token.cfg",
+		"cat /home/*/.my.cnf",
+		// Recursive searches outside /var/log, however the option is spelled.
+		"grep -r password /etc",
+		"grep -rn timeout /etc/nginx",
+		"grep --recurs . /etc /var/log/syslog",
+		"grep --dir=recurse x /var/log /srv",
+		"grep -r -e . --binary /etc /var/log/syslog",
+		"grep --no-such-option x /var/log/syslog",
+		"grep -R x /",
+		"grep -rn x /var /var/log/syslog",
+		"grep -e x -r /home",
+		"grep --recursive x /root",
+		"grep -d recurse x /etc",
+		"rgrep x /var/lib",
+		"grep -r x",
+		"grep -r x etc",
+		// Process environments.
+		"env",
+		"env -0",
+		"printenv",
+		"printenv PATH",
+		"timeout 5 printenv",
+		"ps auxe",
+		"ps e",
+		"ps axe -o pid",
+		"ps -axeww",
+		"ps -auxe",
+		"ps -e -ax -ww",
+		"ps -e --no-such-option",
+		"ps -enww -p 1",
+		"ps -e -u -ww -p 1",
+		"ps -n -C sleep",
+		"ps -e -ww -O p -p 1",
+		"ps -ww -p 1 -o environ",
+		"ps -eo pid,environ",
+		"docker ps | ps e",
+		"docker top web auxeww",
+		"systemctl show-environment",
+		// Credential databases and secret values.
+		"getent shadow",
+		"getent gshadow root",
+		"getent -s files shadow",
+		"kubectl get secret db -o yaml",
+		"kubectl get secrets -ojson",
+		"kubectl get secret/db --output=jsonpath=x",
+		"kubectl get configmaps,secrets -o json",
+	} {
+		if sensitive, reason := CommandTouchesSensitivePath(cmd); !sensitive || reason == "" {
+			t.Errorf("CommandTouchesSensitivePath(%q) = (%v, %q), want blocked with a reason", cmd, sensitive, reason)
+		}
+	}
+	for _, cmd := range []string{
+		"ps aux",
+		"ps -ef",
+		"ps -eo pid,etime,cmd",
+		"ps axo pid,comm",
+		"ps -C apache2 -o pid,etime",
+		"ps aux --sort -%cpu",
+		"grep -i error /var/log/syslog",
+		"grep -r error /var/log/nginx",
+		"grep -r error /var/log/*",
+		"grep --ignore-case error /var/log/syslog",
+		"cat ~/.bashrc",
+		"docker top web aux",
+		"cat /proc/loadavg",
+		"cat /proc/1/status",
+		"cat /etc/*.conf",
+		"ps -eLf",
+		"ps -ejH",
+		"ps -eww",
+		"ps -e -o pid,etime --sort -etime",
+		"ps -ef --forest",
+		"ps -p 1 -o pid,etime,cmd",
+		"ps -C postgres -o pid,etime",
+		"ps -eo pid,user,%cpu,cmd --sort=-%cpu",
+		"ps -aux",
+		"grep --binary-files=text -i error /var/log/syslog",
+		"grep -r --include=*.log error /var/log",
+		"grep -i error /var/log/*",
+		"cat /etc/os-release",
+		"cat /etc/*-release",
+		"tail -n 100 /var/log/*.log",
+		"ls -la /etc",
+		"ls /var/lib/pulse-agent",
+		"find /var/log -name '*.log' -type f 2>/dev/null | head -50",
+		"kubectl get secrets",
+		"kubectl get secret db -o name",
+		"kubectl describe secret db",
+		"getent passwd",
+		"docker inspect web",
+		"journalctl -u nginx -n 50 --no-pager",
+	} {
+		if sensitive, reason := CommandTouchesSensitivePath(cmd); sensitive {
+			t.Errorf("CommandTouchesSensitivePath(%q) = (true, %q), want allowed", cmd, reason)
+		}
+	}
+}
+
+func TestCommandReadsProcessEnvironmentFollowsPSOptionSemantics(t *testing.T) {
+	tests := []struct {
+		cmd  string
+		bsd  bool
+		want bool
+	}{
+		{"ps -ef", false, false},
+		{"ps -ef", true, true},
+		{"ps -E", true, true},
+		{"ps -axCeww", true, true},
+		{"ps -A", true, false},
+		{"ps aux", true, false},
+		{"ps -o pid,etime", true, false},
+		{"ps auxe", false, true},
+		{"printenv", false, true},
+	}
+	for _, tt := range tests {
+		if got := CommandReadsProcessEnvironment(tt.cmd, tt.bsd); got != tt.want {
+			t.Errorf("CommandReadsProcessEnvironment(%q, bsd=%v) = %v, want %v", tt.cmd, tt.bsd, got, tt.want)
+		}
+	}
+}

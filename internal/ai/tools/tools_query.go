@@ -165,8 +165,8 @@ const (
 	IntentReadOnlyCertain ExecutionIntent = iota
 
 	// IntentReadOnlyConditional - command appears read-only by bounded inspection.
-	// The command is self-contained (no shell composition) and content inspection
-	// found no write patterns. Examples: sqlite3 "SELECT ...", psql -c "SELECT ..."
+	// The command is self-contained (no shell composition) and argument
+	// inspection found no write or exec actions. Example: find without -exec.
 	// Guardrails: no redirects, no pipes, no subshells, no chaining, inline input only.
 	IntentReadOnlyConditional
 
@@ -227,18 +227,13 @@ func (s *sqlContentInspector) IsReadOnly(cmdLower string) (bool, string) {
 		}
 	}
 
-	// Conservative: if we can't find inline SQL content, assume external input
-	hasInlineSQL := strings.Contains(cmdLower, `"`) ||
-		strings.Contains(cmdLower, `'`) ||
-		strings.Contains(cmdLower, " .") || // dot commands like .tables, .schema
-		strings.Contains(cmdLower, " -e ") || // mysql -e
-		strings.Contains(cmdLower, " -c ") // psql -c
-	if !hasInlineSQL {
-		return false, "no inline SQL found; input may be external (piped/interactive)"
-	}
-
-	return true, ""
+	// SQL clients accept client commands and built-in functions beyond the
+	// statement text, so inspecting the statement cannot prove a call
+	// read-only. Database queries run through the governed control path.
+	return false, sqlClientNotReadOnlyReason
 }
+
+const sqlClientNotReadOnlyReason = "SQL client commands are not proven read-only by statement inspection"
 
 // registeredInspectors is the list of content inspectors to try.
 // Add new inspectors here for redis-cli, kubectl, etc.
@@ -318,6 +313,9 @@ func classifySingleCommandWithOptions(command string, opts executionClassificati
 	}
 	if result, handled := classifyWgetCommand(command); handled {
 		return result
+	}
+	if readCommandOpensConnection(literalWords) {
+		return IntentResult{Intent: IntentWriteOrUnknown, Reason: outboundNetworkReason}
 	}
 
 	// === PHASE 3: Known read-only by construction ===
@@ -504,68 +502,28 @@ func findHasWriteOrExecAction(fields []string) bool {
 }
 
 func classifyCurlCommand(command string) (IntentResult, bool) {
-	fields, glob, literal := readCommandWords(stripReadRedirects(command))
+	fields, _, _ := readCommandWords(stripReadRedirects(command))
 	if len(fields) == 0 || strings.ToLower(literalCommandBase(fields[0])) != "curl" {
 		return IntentResult{}, false
 	}
 	if isCurlMutationOrFileOutput(command) {
 		return IntentResult{Intent: IntentWriteOrUnknown, Reason: "curl option can mutate requests or write files"}, true
 	}
-	if !literal || glob || !isSafeCurlRead(fields[1:]) {
-		return IntentResult{Intent: IntentWriteOrUnknown, Reason: "curl options are not a supported read-only form"}, true
-	}
-	if curlHasHTTPURL(fields[1:]) {
-		return IntentResult{Intent: IntentReadOnlyConditional, Reason: "curl HTTP(S) request without mutation or file-output options"}, true
-	}
-	return IntentResult{Intent: IntentWriteOrUnknown, Reason: "curl command is not read-only without an explicit HTTP(S) URL"}, true
-}
-
-func curlHasHTTPURL(fields []string) bool {
-	for i := 0; i < len(fields); i++ {
-		token := strings.Trim(fields[i], `"'`)
-		tokenLower := strings.ToLower(token)
-		switch {
-		case strings.HasPrefix(tokenLower, "http://") || strings.HasPrefix(tokenLower, "https://"):
-			return true
-		case tokenLower == "--url" && i+1 < len(fields):
-			next := strings.ToLower(strings.Trim(fields[i+1], `"'`))
-			if strings.HasPrefix(next, "http://") || strings.HasPrefix(next, "https://") {
-				return true
-			}
-		case strings.HasPrefix(tokenLower, "--url="):
-			url := strings.TrimPrefix(tokenLower, "--url=")
-			if strings.HasPrefix(url, "http://") || strings.HasPrefix(url, "https://") {
-				return true
-			}
-		}
-	}
-	return false
+	return IntentResult{Intent: IntentWriteOrUnknown, Reason: outboundNetworkReason}, true
 }
 
 func classifyWgetCommand(command string) (IntentResult, bool) {
-	fields, glob, literal := readCommandWords(stripReadRedirects(command))
+	fields, _, _ := readCommandWords(stripReadRedirects(command))
 	if len(fields) == 0 || strings.ToLower(literalCommandBase(fields[0])) != "wget" {
 		return IntentResult{}, false
 	}
-	hasSpider := false
 	for _, field := range fields[1:] {
 		token := strings.Trim(field, `"'`)
-		tokenLower := strings.ToLower(token)
-		if tokenLower == "--spider" {
-			hasSpider = true
-			continue
-		}
-		if isWgetWriteOrMutationOption(token, tokenLower) {
+		if isWgetWriteOrMutationOption(token, strings.ToLower(token)) {
 			return IntentResult{Intent: IntentWriteOrUnknown, Reason: "wget option can write files or send mutation requests"}, true
 		}
 	}
-	if hasSpider {
-		if !literal || glob || !isSafeWgetSpiderRead(fields[1:]) {
-			return IntentResult{Intent: IntentWriteOrUnknown, Reason: "wget options are not a supported read-only form"}, true
-		}
-		return IntentResult{Intent: IntentReadOnlyConditional, Reason: "wget spider check is read-only"}, true
-	}
-	return IntentResult{Intent: IntentWriteOrUnknown, Reason: "wget can write downloaded content and is not on the read-only allowlist unless --spider is used"}, true
+	return IntentResult{Intent: IntentWriteOrUnknown, Reason: outboundNetworkReason}, true
 }
 
 func isWgetWriteOrMutationOption(token, tokenLower string) bool {
@@ -1504,7 +1462,7 @@ func GetReadOnlyViolationHint(command string, result IntentResult) string {
 		strings.Contains(cmdLower, "psql")
 
 	if isSQLCLI {
-		return getSQLHint(result.Reason, baseHint)
+		return getSQLHint(baseHint)
 	}
 
 	// Unknown command fallback hint
@@ -1544,7 +1502,7 @@ func getPhase1Hint(reason, baseHint string) string {
 	case strings.Contains(reason, "chaining"):
 		return baseHint + ". Run commands separately instead of chaining with ; && ||."
 	case strings.Contains(reason, "piped input"):
-		return baseHint + ". For dual-use tools, include content directly instead of piping. Example: sqlite3 db.db \"SELECT ...\" instead of cat file | sqlite3 db.db"
+		return baseHint + ". Read-only execution does not pipe input into interpreters or database clients."
 	// NonInteractiveOnly hints
 	case strings.Contains(reason, "TTY") || strings.Contains(reason, "terminal"):
 		return baseHint + ". Remove -it/--tty/--interactive flags. Use non-interactive form: docker exec container cmd (not docker exec -it)."
@@ -1559,16 +1517,10 @@ func getPhase1Hint(reason, baseHint string) string {
 	}
 }
 
-// getSQLHint returns actionable hints for SQL CLI content inspection failures.
-func getSQLHint(reason, baseHint string) string {
-	switch {
-	case strings.Contains(reason, "external") || strings.Contains(reason, "no inline"):
-		return baseHint + ". Include SQL directly in quotes: sqlite3 db.db \"SELECT ...\""
-	case strings.Contains(reason, "write") || strings.Contains(reason, "control"):
-		return baseHint + ". Use only SELECT statements. Avoid: INSERT, UPDATE, DELETE, DROP, CREATE, PRAGMA, BEGIN, COMMIT, ROLLBACK."
-	default:
-		return baseHint + ". For read-only queries, use self-contained SELECT statements without transaction control."
-	}
+// getSQLHint returns the hint for SQL client commands, which pulse_read never
+// runs: database queries need the governed control path.
+func getSQLHint(baseHint string) string {
+	return baseHint + ". pulse_read does not run database clients; use the governed control path, or read the service's logs and status instead."
 }
 
 const (
