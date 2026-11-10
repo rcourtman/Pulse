@@ -1,0 +1,68 @@
+{
+  "version": 1,
+  "base_sha": "f9fb852ce02b23c2142745b03e783079a1670783",
+  "verified_at": "2026-11-10T09:44:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/api/patrol.ts",
+    "frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx",
+    "frontend-modern/src/components/Settings/infrastructureWorkspaceModel.ts",
+    "frontend-modern/src/components/patrol/InvestigationSection.tsx",
+    "frontend-modern/src/components/shared/containerUpdateBadgeModel.ts",
+    "frontend-modern/src/features/patrol/PatrolCommandAccessStrip.tsx",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx",
+    "frontend-modern/src/features/patrol/patrolCommandAccessModel.ts",
+    "frontend-modern/src/utils/actionReadiness.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/api/patrol.ts": "be284f3f23ee67e16aed4f54a2b76117a1b600142ed8413edc2b2fa866f57aca",
+    "frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx": "e625253a84b44d4659ede86c57e4a61add6a1ea614461a9fe5ee60e0e3bbc119",
+    "frontend-modern/src/components/Settings/infrastructureWorkspaceModel.ts": "f493f1a3149afaa7b3e189d19bcc50379ab4b8c0395e8a5f388a01197b9f77db",
+    "frontend-modern/src/components/patrol/InvestigationSection.tsx": "10bebf616d89b76aa7ab5050c907046d88047bdc4494e174c122b9d4d5d5c7eb",
+    "frontend-modern/src/components/shared/containerUpdateBadgeModel.ts": "99bd659d589a94464f9753c01dfe634e0338d435cec83a242de0b70fc053c76b",
+    "frontend-modern/src/features/patrol/PatrolCommandAccessStrip.tsx": "9efd38a3e04af202daa0c7e098a7fb14d64e06fc085910fbf8da5cda0fc4b89d",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx": "fc3c211e6722163340aab8a59c139bafbf78a198726239336efdbb47c876fb8c",
+    "frontend-modern/src/features/patrol/patrolCommandAccessModel.ts": "5b78c2feb6c4e19b162b05d9856c0ae81161f7bcc1a332517d6cf51c42c4a9e4",
+    "frontend-modern/src/utils/actionReadiness.ts": "d40ad72a740fb3a233091c74830c435041c0b69c252904be03fbbe0e5b9c0e50"
+  },
+  "routes": [
+    "/patrol",
+    "/patrol/activity",
+    "/settings/infrastructure?add=agent&commands=1",
+    "/settings/infrastructure?add=agent",
+    "/docker"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "private mock-mode Pro stack built from this tree and pulse-enterprise with the matching run field, dev Pro licence, Vite serving these exact files, headless Chromium at 2x plus the in-app browser pane",
+    "/patrol in Ask first at 1440: the control section shows one 43px row under Mode and automation reading Can't read logs or run fixes, a 68 of 68 hosts pill, the chips Analytics A, Analytics B, Analytics C, +65 more, and a Get install command button on the right. 68 is every mock host a reporting Pulse agent backs. The one stale agent host and the hosts only an integration reports are not counted",
+    "the same row expanded: 68 host chips in name order and one sentence saying commands are off on those agents and how to allow more",
+    "/patrol in Watch only: the row is absent",
+    "/patrol in light theme at 1440 and in dark theme at 390: the row wraps to three lines on the phone with no horizontal overflow",
+    "/patrol/activity, Finding options and history, a seeded needs-attention finding whose stored run carries commands_disabled: the Investigation block leads with a blue notice reading Patrol could not read logs or run a fix on Field Office Edge 01: commands are not enabled on its Pulse agent, then the step the server stored, then a Get install command link, all above the model's summary",
+    "the run was seeded into the Pro investigation store with the field the orchestrator writes, because mock Docker hosts carry no agent facet. The path from a commands-off agent to that field is covered by Go tests, not by this pass",
+    "/settings/infrastructure?add=agent&commands=1: the Add Pulse Agent dialog opens with Allow Pulse to run commands on this host ticked and the token summary naming command access",
+    "/settings/infrastructure?add=agent: the same dialog opens with the box unticked",
+    "/docker with the refusal on the websocket frames rewritten to host_commands_disabled and the server's reason, since the mock server never sends that code: all five locked update badges read that the Pulse agent on Data Services 01 does not accept commands from Pulse and point to Settings, Infrastructure, Manage, Remote commands",
+    "the actionReadiness fallback text for host_commands_disabled is only used when the server sends no reason and was not seen in the browser. Its unit test covers it",
+    "no console errors on the Patrol and Settings routes. The console was not recorded on /docker"
+  ],
+  "interactions": [
+    "clicked the row's summary to expand and collapse it, and counted 68 list items when open",
+    "clicked Get install command on the row and landed on /settings/infrastructure?add=agent&commands=1 with the box ticked",
+    "unticked the box, waited 2.5 seconds, and confirmed it stayed unticked",
+    "opened the plain add-agent link afterwards and confirmed the box starts unticked",
+    "switched Patrol mode to Watch only and back through the API and reloaded each time",
+    "opened the seeded finding's review, scrolled the notice into view and read its link target",
+    "hovered a locked update badge on /docker and read its label"
+  ]
+}

@@ -45,6 +45,7 @@ import {
 } from './connectionsTableModel';
 import {
   buildInfrastructureOnboardingPath,
+  deriveCommandAccessRequestFromSearch,
   buildInfrastructureAgentDoctorPath,
   buildInfrastructureWorkspacePath,
   deriveAgentDoctorScopeFromLocation,
@@ -363,6 +364,22 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
     if (activeAddType() !== 'agent') {
       setShowAgentProfiles(false);
     }
+  });
+
+  // A link that asks for command access (Patrol, for a host whose agent has
+  // commands off) opens the installer with the option ticked, once per
+  // arrival, so the owner can still untick it. A token that is minting ignores
+  // the change, so this waits for it.
+  let commandAccessAppliedFor = '';
+  createEffect(() => {
+    const search = location.search ?? '';
+    if (routeStep() !== 'agent' || !deriveCommandAccessRequestFromSearch(search)) {
+      commandAccessAppliedFor = '';
+      return;
+    }
+    if (commandAccessAppliedFor === search || operations.isGeneratingToken()) return;
+    commandAccessAppliedFor = search;
+    untrack(() => void operations.setEnableCommands(true));
   });
 
   createEffect(() => {

@@ -138,14 +138,19 @@ export function getUpdateUnavailableExplanation(input: {
   hostCommandsEnabled?: boolean;
 }): string {
   const host = input.hostName?.trim() || 'this host';
+  // The server names a commands-off agent with its own code. An older server
+  // reported it as disconnected, which the host's own flag then told apart.
+  if (
+    input.reasonCode === 'host_commands_disabled' ||
+    (input.reasonCode === 'command_agent_disconnected' && input.hostCommandsEnabled === false)
+  ) {
+    return (
+      `Update available. Pulse cannot apply it because the Pulse agent on ${host} does not accept commands from Pulse.\n` +
+      `To allow it, open Settings → Infrastructure, choose Manage on ${host}, and follow Remote commands. ` +
+      'Or apply the update with your container manager.'
+    );
+  }
   if (input.reasonCode === 'command_agent_disconnected') {
-    if (input.hostCommandsEnabled === false) {
-      return (
-        `Update available. Pulse cannot apply it because the Pulse agent on ${host} does not accept commands from Pulse.\n` +
-        `To allow it, open Settings → Infrastructure, choose Manage on ${host}, and follow Remote commands. ` +
-        'Or apply the update with your container manager.'
-      );
-    }
     if (input.hostCommandsEnabled === true) {
       return (
         `Update available. Pulse cannot apply it at the moment because the command channel to the Pulse agent on ${host} is not connected.\n` +

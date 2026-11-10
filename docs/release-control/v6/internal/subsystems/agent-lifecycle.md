@@ -5121,6 +5121,14 @@ Agent` secondary handoff against the live setup wizard instead of relying
 
 ## Current State
 
+### A commands-off surface can open the installer with command access ticked
+
+`/settings/infrastructure?add=agent&commands=1` ticks "Allow Pulse to run
+commands on this host" once per arrival, after any token that is minting has
+finished, and leaves the owner free to untick it. Every other way into the
+installer keeps command access unticked by default. The link changes nothing
+on an agent: the owner still runs the install command on the host.
+
 ### Commands off is read from the agent's own report
 
 Action executors, the AI read tools and Patrol's catalog call a host

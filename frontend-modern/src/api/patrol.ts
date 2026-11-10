@@ -283,6 +283,19 @@ export interface Investigation {
   proposed_fix?: ProposedFix;
   approval_id?: string;
   action?: PatrolActionReference;
+  /**
+   * Written by Pulse, not the model: the run could not read from or act on
+   * this host because its Pulse agent has commands off. A finished run keeps it
+   * only when it handed the problem back.
+   */
+  commands_disabled?: InvestigationCommandsDisabled;
+}
+
+export interface InvestigationCommandsDisabled {
+  host_resource_id?: string;
+  host_name: string;
+  reason: string;
+  step: string;
 }
 
 export interface ProposedFix {

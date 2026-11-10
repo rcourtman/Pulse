@@ -76,6 +76,84 @@ describe('InvestigationSection', () => {
     expect(screen.queryByRole('button', { name: 'Re-investigate' })).not.toBeInTheDocument();
   });
 
+  it('leads a commands-off hand-back with the sentence and step Pulse wrote', async () => {
+    getInvestigationMock.mockResolvedValue({
+      id: 'inv-commands-off',
+      finding_id: 'finding-commands-off',
+      session_id: 'session-commands-off',
+      status: 'completed',
+      outcome: 'needs_attention',
+      started_at: '2026-11-10T10:00:00.000Z',
+      turn_count: 4,
+      summary: "An operator must restore docker01's Pulse command-agent connection.",
+      commands_disabled: {
+        host_resource_id: 'agent:docker01',
+        host_name: 'docker01',
+        reason: 'Commands are not enabled on the Pulse agent on docker01.',
+        step: 'To allow them, run the Pulse install command on docker01 again with "Allow Pulse to run commands on this host" ticked.',
+      },
+    } satisfies Investigation);
+
+    render(() => (
+      <InvestigationSection findingId="finding-commands-off" investigationStatus="completed" />
+    ));
+
+    const notice = await screen.findByTestId('patrol-commands-off-handover');
+    expect(notice).toHaveTextContent(
+      'Patrol could not read logs or run a fix on docker01: commands are not enabled on its Pulse agent.',
+    );
+    expect(notice).toHaveTextContent(
+      'To allow them, run the Pulse install command on docker01 again with "Allow Pulse to run commands on this host" ticked.',
+    );
+    expect(screen.getByRole('link', { name: 'Get install command' })).toHaveAttribute(
+      'href',
+      '/settings/infrastructure?add=agent&commands=1',
+    );
+    // The model's own summary stays below it, unedited.
+    expect(notice.compareDocumentPosition(screen.getByText(/restore docker01/))).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+  });
+
+  it('shows no commands-off notice for a run still going or a run that carries none', async () => {
+    getInvestigationMock.mockResolvedValue({
+      id: 'inv-running',
+      finding_id: 'finding-running',
+      session_id: 'session-running',
+      status: 'running',
+      started_at: '2026-11-10T10:00:00.000Z',
+      turn_count: 1,
+      commands_disabled: {
+        host_name: 'docker01',
+        reason: 'Commands are not enabled on the Pulse agent on docker01.',
+        step: 'To allow them, run the Pulse install command on docker01 again.',
+      },
+    } satisfies Investigation);
+    render(() => (
+      <InvestigationSection findingId="finding-running" investigationStatus="running" />
+    ));
+    expect(await screen.findByText(/1 turn/)).toBeInTheDocument();
+    expect(screen.queryByTestId('patrol-commands-off-handover')).not.toBeInTheDocument();
+    cleanup();
+    resetCreateNonSuspendingQueryCacheForTest();
+
+    getInvestigationMock.mockResolvedValue({
+      id: 'inv-plain',
+      finding_id: 'finding-plain',
+      session_id: 'session-plain',
+      status: 'completed',
+      outcome: 'needs_attention',
+      started_at: '2026-11-10T10:00:00.000Z',
+      turn_count: 2,
+      summary: 'Replace the failing disk.',
+    } satisfies Investigation);
+    render(() => (
+      <InvestigationSection findingId="finding-plain" investigationStatus="completed" />
+    ));
+    expect(await screen.findByText('Replace the failing disk.')).toBeInTheDocument();
+    expect(screen.queryByTestId('patrol-commands-off-handover')).not.toBeInTheDocument();
+  });
+
   it('keeps the last answer when a later read fails', async () => {
     getInvestigationMock.mockResolvedValueOnce({
       id: 'inv-kept',

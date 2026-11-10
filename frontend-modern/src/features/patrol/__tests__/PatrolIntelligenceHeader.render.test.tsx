@@ -4,6 +4,7 @@ import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { PatrolAutonomyLevel } from '@/api/patrol';
+import type { Resource } from '@/types/resource';
 import { settingsTabPath } from '@/components/Settings/settingsNavigationModel';
 import {
   PATROL_CONTROL_ANCHOR,
@@ -13,6 +14,26 @@ import {
 } from '@/routing/resourceLinks';
 import { PatrolIntelligenceHeader } from '../PatrolIntelligenceHeader';
 import type { PatrolIntelligenceState } from '../usePatrolIntelligenceState';
+
+const resourcesMock = vi.hoisted(() => ({ value: [] as Resource[] }));
+vi.mock('@/hooks/useResources', () => ({
+  useResources: () => ({ resources: () => resourcesMock.value }),
+}));
+
+const agentHost = (name: string, commandsEnabled = false): Resource =>
+  ({
+    id: `agent:${name}`,
+    type: 'agent',
+    name,
+    displayName: name,
+    status: 'online',
+    sources: ['agent'],
+    agent: { agentId: name, stale: false, ...(commandsEnabled ? { commandsEnabled: true } : {}) },
+  }) as Resource;
+
+beforeEach(() => {
+  resourcesMock.value = [];
+});
 
 const WATCH_ONLY_DETAIL =
   'Patrol checks infrastructure and reports issues only. It does not start fixes.';
@@ -285,5 +306,64 @@ describe('PatrolIntelligenceHeader Pro default mode', () => {
     renderHeader(state);
     expect(screen.getByText('Patrol is not running yet')).toBeInTheDocument();
     expect(screen.queryByText('Watching your infrastructure')).toBeNull();
+  });
+});
+
+describe('PatrolIntelligenceHeader command access', () => {
+  afterEach(cleanup);
+
+  it('names the hosts Patrol can only watch and links to the one step', () => {
+    resourcesMock.value = [
+      agentHost('tower'),
+      agentHost('docker01'),
+      agentHost('pve1', true),
+      agentHost('nas01'),
+      agentHost('minipc'),
+    ];
+    const { state } = createState({ autonomyLevel: 'approval' });
+    renderHeader(state);
+
+    const strip = screen.getByTestId('patrol-command-access');
+    expect(strip.closest('#patrol-control')).not.toBeNull();
+    expect(strip).toHaveTextContent("Can't read logs or run fixes");
+    expect(strip).toHaveTextContent('4 of 5 hosts');
+    // Collapsed, the row previews the first names and counts the rest.
+    const summary = strip.querySelector('summary')!;
+    expect(summary).toHaveTextContent('docker01');
+    expect(summary).toHaveTextContent('minipc');
+    expect(summary).toHaveTextContent('nas01');
+    expect(summary).toHaveTextContent('+1 more');
+    expect(summary).not.toHaveTextContent('pve1');
+    const all = within(strip).getByRole('list', { name: 'Hosts with commands off' });
+    expect(
+      within(all)
+        .getAllByRole('listitem')
+        .map((item) => item.textContent),
+    ).toEqual(['docker01', 'minipc', 'nas01', 'tower']);
+    expect(strip).toHaveTextContent('"Allow Pulse to run commands on this host" ticked');
+    expect(within(strip).getByRole('link', { name: 'Get install command' })).toHaveAttribute(
+      'href',
+      '/settings/infrastructure?add=agent&commands=1',
+    );
+  });
+
+  it('stays quiet in Watch only, when every host is ready, and before setup', () => {
+    resourcesMock.value = [agentHost('tower'), agentHost('docker01')];
+    renderHeader(createState({ autonomyLevel: 'monitor' }).state);
+    expect(screen.queryByTestId('patrol-command-access')).toBeNull();
+    cleanup();
+
+    // A locked plan runs as Watch only whatever mode was saved.
+    renderHeader(createState({ autonomyLevel: 'approval', autoFixLocked: true }).state);
+    expect(screen.queryByTestId('patrol-command-access')).toBeNull();
+    cleanup();
+
+    renderHeader(createState({ autonomyLevel: 'approval', setupOnly: true }).state);
+    expect(screen.queryByTestId('patrol-command-access')).toBeNull();
+    cleanup();
+
+    resourcesMock.value = [agentHost('tower', true), agentHost('docker01', true)];
+    renderHeader(createState({ autonomyLevel: 'full' }).state);
+    expect(screen.queryByTestId('patrol-command-access')).toBeNull();
   });
 });

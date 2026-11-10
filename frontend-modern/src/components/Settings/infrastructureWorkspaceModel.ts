@@ -18,6 +18,7 @@ const INFRASTRUCTURE_BASE_PATH = '/settings/infrastructure';
 // destination-shaped, so it owns a subroute of the infrastructure workspace.
 export const INFRASTRUCTURE_AGENT_DOCTOR_PATH = `${INFRASTRUCTURE_BASE_PATH}/agent-doctor`;
 export const INFRASTRUCTURE_ADD_QUERY_PARAM = 'add';
+export const INFRASTRUCTURE_COMMAND_ACCESS_QUERY_PARAM = 'commands';
 // Legacy deep links from before Agent Doctor had its own route remain valid.
 export const INFRASTRUCTURE_AGENT_DOCTOR_QUERY_PARAM = 'agentDoctor';
 export const INFRASTRUCTURE_AGENT_UPDATES_QUERY_PARAM = 'agentUpdates';
@@ -76,6 +77,22 @@ export function buildInfrastructureOnboardingPath(step: InfrastructurePanelStep 
   const params = new URLSearchParams();
   params.set(INFRASTRUCTURE_ADD_QUERY_PARAM, step);
   return `${INFRASTRUCTURE_BASE_PATH}?${params.toString()}`;
+}
+
+/**
+ * The agent installer with command access already ticked. Surfaces that find a
+ * host whose agent has commands off link here, because the only way to turn
+ * them on is to run the install command on that host with the option ticked.
+ */
+export function buildInfrastructureCommandAccessPath(): string {
+  const params = new URLSearchParams();
+  params.set(INFRASTRUCTURE_ADD_QUERY_PARAM, 'agent');
+  params.set(INFRASTRUCTURE_COMMAND_ACCESS_QUERY_PARAM, '1');
+  return `${INFRASTRUCTURE_BASE_PATH}?${params.toString()}`;
+}
+
+export function deriveCommandAccessRequestFromSearch(search: string): boolean {
+  return new URLSearchParams(search).get(INFRASTRUCTURE_COMMAND_ACCESS_QUERY_PARAM) === '1';
 }
 
 export function deriveAddStepFromSearch(search: string): InfrastructurePanelStep | null {

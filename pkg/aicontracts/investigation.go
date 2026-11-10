@@ -209,6 +209,12 @@ type InvestigationSession struct {
 	// the timeout it started with, so recovery measures a live run against
 	// this deadline rather than the timeout configured now.
 	Deadline *time.Time `json:"deadline,omitempty"`
+	// CommandsDisabled is written by Pulse, never by the model. It is set
+	// when the run could not read from or act on the finding's host because
+	// that host's Pulse agent has commands off, and it stays on a finished
+	// run only when the run handed the problem back. It carries the one
+	// sentence and the one step Pulse shows for that hand-back.
+	CommandsDisabled *CommandsDisabledHost `json:"commands_disabled,omitempty"`
 }
 
 func EmptyInvestigationSession() InvestigationSession {

@@ -1275,6 +1275,22 @@ contract.
 
 ## Current State
 
+### Patrol says where it can only watch
+
+A finding review leads with one notice when its run carries
+`commands_disabled`: Patrol could not read logs or run a fix on that host, the
+step the server wrote with the run, and a link to the install command with
+command access ticked. It shows once the run has ended and sits above the
+model's summary, which is left as written.
+
+The Patrol control section shows one row, "Can't read logs or run fixes", when
+Patrol is on, set up and in a mode that investigates, and at least one host
+with a reporting Pulse agent has commands off. It counts those hosts against
+all agent hosts, previews three names, expands to all of them, and links to
+the same install command. Watch only never reads a host, so the row is absent
+there, as it is when every host is ready. The judgement mirrors the server's:
+a stale agent and an integration-only host are not counted.
+
 ### AI Discovery removed (2026-10-11)
 
 Patrol reads canonical resource evidence through the shared AI runtime.

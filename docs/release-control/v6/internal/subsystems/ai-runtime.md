@@ -3928,6 +3928,17 @@ verdict on its own check.
 
 ## Current State
 
+### A commands-off hand-back is a typed fact on the run
+
+`InvestigationSession.commands_disabled` is written by the investigation
+orchestrator from the catalog core returns for the finding resource. No model
+text sets it. It is saved when the run starts, kept on a finished run only for
+`needs_attention` and `cannot_fix`, kept on a run that failed before it
+concluded, and dropped from a run that found the condition gone or planned an
+action. It carries the host, the one-sentence reason and the one step, so the
+handover for a commands-off host is Pulse's and does not depend on how a model
+read a refusal. It is not a field on the finding and adds no telemetry.
+
 ### A read refused on a commands-off agent is not NO_AGENT
 
 `pulse_read` and file reads return `COMMANDS_NOT_ENABLED`, not `NO_AGENT`, when
