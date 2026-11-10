@@ -34,11 +34,11 @@ func assertDigestPinnedDockerStage(t *testing.T, dockerfile, prefix, suffix stri
 
 const alpine324RuntimeDigest = "be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a"
 
-const node24Amd64FrontendDigest = "8a32c8cf649a49915a66e81e7a609223c708d0adabf288ee3f4077d765542f85"
+const node24Amd64FrontendDigest = "a34ab6d7f6f4813f4d0c5469d74685604b962fbdbf5793a7bc7b4998ecb867c8"
 
-const go12610AlpineBuilderDigest = "a2012b4a1d1f9f7e9f44e0d39b805a901e856b1dd80b4e6ee4338db547050308"
+const go12610AlpineBuilderDigest = "87c65a688975c0b1d4585d204874c45ca78354670e3a5f11368c5a492303d696"
 
-const go12610DevcontainerDigest = "670bb5aa5349ae03b8516764718486f4f16399134bdc9acd0c46a23f043ab05c"
+const go12610DevcontainerDigest = "cfa27959837144bf4649802ba38e59daffd0dd2a7994aa83daaf113285b0f551"
 
 func TestGoContainerBuildersUseGovernedToolchain(t *testing.T) {
 	// The devcontainer has a different OS base, but must retain the module's
