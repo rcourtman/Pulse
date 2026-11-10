@@ -3730,10 +3730,12 @@ func (p *PatrolService) seedFindingsAndContextState(scope *PatrolScope, snap pat
 		for _, f := range activeFindings {
 			usesSyntheticRuntimeResource := patrolFindingUsesSyntheticRuntimeResource(f)
 			inScopedState := usesSyntheticRuntimeResource || !stateHasScopedResources || findingLifecycleResources[f.ResourceID] || findingLifecycleResources[f.ResourceName]
-			inGlobalState := usesSyntheticRuntimeResource || !stateHasGlobalResources || globalResources[f.ResourceID] || globalResources[f.ResourceName]
+			inGlobalState := usesSyntheticRuntimeResource || !stateHasGlobalResources || findingResourceInInventory(f, globalResources)
 
 			// Auto-resolve findings only when the resource is gone from the full current state.
 			// Scoped patrols should skip out-of-scope findings, not resolve them as deleted.
+			// This runs before the model sees anything, so a finding on a removed
+			// container is closed before a report about its replacement arrives.
 			if stateHasGlobalResources && !inGlobalState {
 				if ok := p.findings.ResolveWithReason(f.ID, "Resource no longer exists in infrastructure"); ok {
 					// Notify unified store

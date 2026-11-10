@@ -4476,6 +4476,27 @@ the alert. Proofs: `internal/ai/unified/bridge_test.go`,
 `internal/api/ai_alert_bridge_trigger_test.go` and
 `internal/ai/patrol_alert_sustained_test.go`.
 
+A finding belongs to the resource its ID names. `seedFindingsAndContextState`
+closes an open finding as `Resource no longer exists in infrastructure` when
+its resource has left the full inventory, and it runs before the model sees
+anything. A registry ID (`patrolRegistryMintedResourceID`: a resource type, a
+dash and 16 hex digits) is in the inventory only while a current resource
+carries it or lists it as superseded. A shared name does not keep it
+(`findingResourceInInventory`). Before, a container recreated by an image
+update kept its old finding open by name, `FindingsStore.Add` merged every
+report about the new container into it, and its finished investigation meant
+the new container was never investigated. The registry decides whether a new
+resource continues an old one, and Patrol follows it. Findings whose ID has
+another form (a source ID, a rollup key, a name used as the ID) are still
+matched by name, and the store's dedupe for a resource that is present is
+unchanged. `canonicalizeUnknownFindingResource` also repairs a miscopied
+registry ID on a full run, where the name alone used to admit the report, so a
+finding is not filed under an ID the next run would close. Cost: recreating a
+container closes its open findings, and one that still applies is raised again
+by the next run that looks at the container, with one notification and, where
+Patrol investigates, one investigation. Proof:
+`internal/ai/patrol_finding_replaced_resource_test.go`.
+
 The route-backed Proxmox platform tab is app-shell navigation only. Adding the
 tab through `frontend-modern/src/App.tsx` and
 `frontend-modern/src/AppLayout.tsx` must not fork Assistant or Patrol shell
