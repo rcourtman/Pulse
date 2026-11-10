@@ -2,6 +2,7 @@ package installtests
 
 import (
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -13,30 +14,36 @@ import (
 	"time"
 )
 
+var errInstallerPowerShellPlatform = errors.New("installer runtime checks require native Windows PowerShell 5.1")
+
+func findNativeInstallerPowerShell(goos string, lookPath func(string) (string, error)) (string, error) {
+	// These Windows installer/SCM controls are not Unix runtime contracts. An
+	// optional, rolling pwsh on a Unix image neither exercises nor substitutes
+	// for Windows PowerShell 5.1. Keep portable source checks on every platform.
+	if goos != "windows" {
+		return "", errInstallerPowerShellPlatform
+	}
+	return lookPath("powershell.exe")
+}
+
 // Windows proof is specifically the supported legacy engine. Missing or newer
-// PowerShell must not silently skip (or stand in for) Windows PowerShell 5.1.
+// PowerShell must fail on Windows, not skip or fall back to PowerShell 7.
 func nativeInstallerPowerShell(t *testing.T) string {
 	t.Helper()
-	binary := "pwsh"
-	if runtime.GOOS == "windows" {
-		binary = "powershell.exe"
+	powerShell, err := findNativeInstallerPowerShell(runtime.GOOS, exec.LookPath)
+	if errors.Is(err, errInstallerPowerShellPlatform) {
+		t.Skip(err)
 	}
-	powerShell, err := exec.LookPath(binary)
 	if err != nil {
-		if runtime.GOOS == "windows" {
-			t.Fatal("native Windows installer proof requires Windows PowerShell 5.1")
-		}
-		t.Skip("PowerShell unavailable; native Windows installer proof remains unexecuted")
+		t.Fatalf("native Windows installer proof requires Windows PowerShell 5.1: %v", err)
 	}
-	if runtime.GOOS == "windows" {
-		cmd := exec.Command(powerShell, "-NoLogo", "-NoProfile", "-NonInteractive", "-Command",
-			`if ($PSVersionTable.PSEdition -ne 'Desktop' -or $PSVersionTable.PSVersion.Major -ne 5 -or $PSVersionTable.PSVersion.Minor -ne 1) { throw 'Windows PowerShell 5.1 required' }; Write-Output $PSVersionTable.PSVersion.ToString()`)
-		output, err := cmd.CombinedOutput()
-		if err != nil {
-			t.Fatalf("Windows installer proof selected the wrong engine: %v\n%s", err, output)
-		}
-		t.Logf("Windows PowerShell %s", strings.TrimSpace(string(output)))
+	cmd := exec.Command(powerShell, "-NoLogo", "-NoProfile", "-NonInteractive", "-Command",
+		`if ($PSVersionTable.PSEdition -ne 'Desktop' -or $PSVersionTable.PSVersion.Major -ne 5 -or $PSVersionTable.PSVersion.Minor -ne 1) { throw 'Windows PowerShell 5.1 required' }; Write-Output $PSVersionTable.PSVersion.ToString()`)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("Windows installer proof selected the wrong engine: %v\n%s", err, output)
 	}
+	t.Logf("Windows PowerShell %s", strings.TrimSpace(string(output)))
 	return powerShell
 }
 
