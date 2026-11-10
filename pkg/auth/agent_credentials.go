@@ -77,12 +77,54 @@ func CanonicalizeRoleScopes(role string, scopes []string) ([]string, bool, error
 // normally repairs excess authority, providing defense against in-memory
 // mutation and stale configuration snapshots.
 func ValidateRoleScopes(role string, scopes []string) error {
-	_, _, err := CanonicalizeRoleScopes(role, scopes)
-	if err != nil {
-		return err
+	// Admission only needs a decision, not the canonical slice or diagnostic
+	// sets. Scan without allocating, but keep migration's required-scope error
+	// order: missing authority wins over any unexpected scopes in the input.
+	role = strings.TrimSpace(role)
+	unexpected := false
+	switch role {
+	case RuntimeRoleMonitoringCollector:
+		var report, configRead bool
+		for _, scope := range scopes {
+			scope = strings.TrimSpace(scope)
+			report = report || scope == ScopeAgentReport
+			configRead = configRead || scope == ScopeAgentConfigRead
+			if !slices.Contains(monitoringCollectorScopeOrder, scope) {
+				unexpected = true
+			}
+		}
+		if !report {
+			return fmt.Errorf("monitoring collector credential requires %s", ScopeAgentReport)
+		}
+		if !configRead {
+			return fmt.Errorf("monitoring collector credential requires %s", ScopeAgentConfigRead)
+		}
+
+	case RuntimeRoleActionRunner, RuntimeRoleLegacyFullTrust:
+		var exec bool
+		for _, scope := range scopes {
+			scope = strings.TrimSpace(scope)
+			if scope == ScopeAgentExec {
+				exec = true
+			} else if role == RuntimeRoleActionRunner {
+				unexpected = true
+			}
+		}
+		if !exec {
+			if role == RuntimeRoleActionRunner {
+				return fmt.Errorf("action runner credential requires %s", ScopeAgentExec)
+			}
+			return fmt.Errorf("legacy full-trust credential requires %s", ScopeAgentExec)
+		}
+
+	case "":
+		return nil
+
+	default:
+		return fmt.Errorf("unsupported agent credential role %q", role)
 	}
-	if unexpected := UnexpectedScopes(role, scopes); len(unexpected) > 0 {
-		return fmt.Errorf("%s credential has non-canonical scopes", strings.TrimSpace(role))
+	if unexpected {
+		return fmt.Errorf("%s credential has non-canonical scopes", role)
 	}
 	return nil
 }
