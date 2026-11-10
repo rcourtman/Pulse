@@ -122,7 +122,7 @@ func TestNotificationBatchRoutingHTTPRecipients(t *testing.T) {
 	}
 	for _, alert := range batch {
 		alert.Metadata["tags"], alert.Level = []string{"changed-after-firing"}, alerts.AlertLevelInfo
-		manager.SendResolvedAlert(alert)
+		manager.SendResolvedAlert(&alerts.ResolvedAlert{Alert: alert, ResolvedTime: time.Now()})
 	}
 	check("resolved")
 	manager.Stop()
