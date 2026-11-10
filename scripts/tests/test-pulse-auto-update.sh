@@ -16,11 +16,27 @@ fi
 # shellcheck disable=SC1090
 source "${AUTO_UPDATE_SCRIPT}"
 
+# All waits in this suite use a simulated manager and simulated sleeps. Bash's
+# special SECONDS also advances with wall time unless it is unset first; mixing
+# the clocks can turn a settled timeout into uncertainty at the final read.
+# Actual manager/child deadlines remain in test_auto_update_service_state.py.
+unset SECONDS
+SECONDS=0
+
 # Command doubles run in this shell, not through the host manager. Actual
 # timeout/manager boundaries are exercised by test_auto_update_service_state.py.
 timeout() { case "$1" in -k) shift 2 ;; --kill-after=*) shift ;; esac; shift; "$@"; }
 
 failures=0
+
+test_fixture_clock_excludes_wall_time() {
+  local before=$SECONDS
+  command sleep 1.1
+  [[ "$SECONDS" == "$before" ]] || { echo "wall time advanced the fixture clock" >&2; return 1; }
+  sleep() { SECONDS=$((SECONDS + $1)); }
+  sleep 3
+  [[ "$SECONDS" == "$((before + 3))" ]]
+}
 
 assert_success() {
   local desc="$1"
@@ -489,6 +505,7 @@ INSTALLER
 }
 
 main() {
+  assert_success "fixture clock excludes wall time" test_fixture_clock_excludes_wall_time
   assert_success "wait_for_service_active retries until active" test_wait_for_service_active_succeeds_after_retry
   assert_success "wait_for_service_active times out when never active" test_wait_for_service_active_times_out_when_never_active
   assert_success "pick_highest_stable_tag ignores list order and prereleases" test_pick_highest_stable_tag_ignores_list_order_and_prereleases

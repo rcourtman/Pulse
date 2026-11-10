@@ -203,6 +203,61 @@ def read_logger_calls(path):
     return calls
 
 
+def fixture_session_processes(session):
+    """Inspect only the fixture's new session, never infer detached cleanup."""
+    if not Path("/proc/self/stat").exists():
+        return None
+    # Some ordinary source sandboxes expose an ancestor PID namespace's proc
+    # view. Its empty session match is unavailable evidence, not clean teardown.
+    if int(Path("/proc/self/stat").read_text().split(" ", 1)[0]) != os.getpid():
+        return None
+    owned = []
+    for path in Path("/proc").iterdir():
+        if not path.name.isdecimal():
+            continue
+        try:
+            fields = (path / "stat").read_text().rsplit(")", 1)[1].split()
+            if int(fields[3]) == session:
+                owned.append(dict(pid=int(path.name), group=int(fields[2]), state=fields[0]))
+        except (FileNotFoundError, ProcessLookupError):
+            pass  # A process exiting during this observation is not a live child.
+    return owned
+
+
+def capture_fixture_command(argv, env, timeout=15):
+    process = subprocess.Popen(argv, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                               start_new_session=True)
+    expired, partial, before = False, None, None
+    try:
+        stdout, stderr = process.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired as error:
+        expired = True
+        partial = dict(stdout=error.stdout, stderr=error.stderr)
+        before = fixture_session_processes(process.pid)
+        # GNU timeout owns a separate process group. Stop all observed groups
+        # in this fixture's session, not just the shell killed by run(timeout=).
+        groups = {process.pid} | {p["group"] for p in before or []}
+        for group in groups:
+            assert group > 1 and group != os.getpgrp()
+            try:
+                os.killpg(group, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+        try:
+            stdout, stderr = process.communicate(timeout=1)
+        except subprocess.TimeoutExpired:
+            for group in groups:
+                try:
+                    os.killpg(group, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+            stdout, stderr = process.communicate(timeout=3)
+    return subprocess.CompletedProcess(argv, process.returncode, stdout, stderr), dict(
+        timed_out=expired, command_deadline=timeout, partial=partial,
+        owned_before_stop=before, owned_after_drain=fixture_session_processes(process.pid),
+        leader_reaped=process.returncode is not None)
+
+
 class UpdaterFixture(unittest.TestCase):
     def run_fixture(self, *, mode="normal", state="active", load="loaded", success=False, flow="update",
                     installer_exit=None, collector_exit=0, installer_output=None, collector_failures=None,
@@ -260,10 +315,11 @@ class UpdaterFixture(unittest.TestCase):
             for line, status in (collector_failures or {}).items():
                 env[f"COLLECTOR_EXIT_{line}"] = str(status)
             start = time.monotonic()
-            result = subprocess.run(["bash", "-c", HARNESS], env=env, capture_output=True, timeout=15)
+            result, execution = capture_fixture_command(["bash", "-c", HARNESS], env)
             calls = [json.loads(line) for line in (f / "calls").read_text().splitlines()] if (f / "calls").exists() else []
             backups = list((f / "tmp").glob("pulse-backup.*"))
             observation = dict(exit=result.returncode, output=result.stdout.decode(), error=result.stderr.decode(),
+                               execution=execution,
                                elapsed=time.monotonic() - start, calls=calls,
                                downloaded=(f / "downloads").exists(), temporary=(f / "temp-requests").exists(),
                                installed=(f / "installer-ran").exists(), stopped=(f / "stop-ran").exists(),
@@ -278,6 +334,10 @@ class UpdaterFixture(unittest.TestCase):
                                binary=(f / "install/bin/pulse").read_bytes(), version=(f / "install/VERSION").read_text(),
                                backups=[(b / "pulse-bin").read_bytes() for b in backups],
                                settings=(f / "config/system.json").read_text(), identity=(f / "config/agent-id").read_text())
+            # Read state/calls/backup and partial output before TemporaryDirectory
+            # removes the fixture. A killed/late command remains a failed test,
+            # even if its TERM trap exits zero. This does not explain old timeouts.
+            self.assertFalse(execution["timed_out"], observation)
             self.assertEqual(observation["settings"], "operator settings\n")
             self.assertEqual(observation["identity"], "original identity\n")
             self.assertNotIn("trap leaked", observation["output"])
@@ -499,6 +559,21 @@ child.wait()
 
 
 class UpdateServiceState(UpdaterFixture):
+    def test_fixture_timeout_retains_partial_output_and_owned_cleanup(self):
+        result, execution = capture_fixture_command(
+            ["bash", "-c", "printf 'partial stdout\\n'; printf 'partial stderr\\n' >&2; "
+             "sleep 30 & trap 'wait; exit 0' TERM; wait"], dict(os.environ), timeout=0.2)
+        self.assertTrue(execution["timed_out"], execution)
+        self.assertEqual(execution["command_deadline"], 0.2)
+        self.assertIn(b"partial stdout", result.stdout)
+        self.assertIn(b"partial stderr", result.stderr)
+        self.assertIn(b"partial stdout", execution["partial"]["stdout"])
+        self.assertIn(b"partial stderr", execution["partial"]["stderr"])
+        self.assertTrue(execution["leader_reaped"], execution)
+        if execution["owned_before_stop"] is not None:
+            self.assertTrue(execution["owned_before_stop"], execution)
+            self.assertEqual(execution["owned_after_drain"], [], execution)
+
     def test_transaction_model_clock_is_not_advanced_by_wall_time(self):
         result = self.run_fixture(clock_probe=True)
         self.assertEqual(result["exit"], 0, result)

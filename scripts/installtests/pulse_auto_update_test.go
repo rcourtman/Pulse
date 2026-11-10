@@ -12,6 +12,28 @@ import (
 	"time"
 )
 
+// Pure transaction models must not add wall time to their simulated sleeps.
+// Real elapsed-time/TERM/KILL controls use the production clock separately.
+const autoUpdateFixtureClock = `
+unset SECONDS
+SECONDS=0
+sleep() { SECONDS=$((SECONDS + $1)); }
+`
+
+func TestAutoUpdateFixtureClockExcludesWallTime(t *testing.T) {
+	cmd := exec.Command("bash", "-c", autoUpdateFixtureClock+`
+set -eu
+before=$SECONDS
+command sleep 1.1
+[[ "$SECONDS" == "$before" ]] || exit 98
+sleep 3
+[[ "$SECONDS" == "$((before + 3))" ]] || exit 99
+`)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("fixture polling clock changed independently of modeled sleeps: %v\n%s", err, out)
+	}
+}
+
 // The native CI runner is checked without host-manager access. These controls
 // exercise its exact recipe, admission, signature/archive and recovery wiring;
 // the hosted runner still supplies the actual systemd/real-Pulse verdict.
@@ -202,6 +224,7 @@ func TestAutoUpdateTransactionLock(t *testing.T) {
 // matrix below; no native service or published input is used by this fixture.
 func TestAutoUpdateServiceStateFailsClosed(t *testing.T) {
 	runParallelPythonFixtureControls(t, repoFile("scripts", "tests", "test_auto_update_service_state.py"), "UpdateServiceState", []string{
+		"test_fixture_timeout_retains_partial_output_and_owned_cleanup",
 		"test_transaction_model_clock_is_not_advanced_by_wall_time",
 		"test_poll_timeout_retains_backup_without_start_or_rollback",
 		"test_manager_diagnostics_refuse_initial_update_and_restart",
@@ -697,7 +720,7 @@ log() { echo "[$1] ${*:2}"; }
 detect_service_name() { echo pulse; }
 get_current_version() { tr -d '\r\n' < "$INSTALL_DIR/VERSION"; }
 verify_release_signature() { return 0; }
-sleep() { SECONDS=$((SECONDS + $1)); }
+` + autoUpdateFixtureClock + `
 
 # curl writes the installer / signature to the -o target; the fake installer
 # fails outright, like the real one aborting on a read-only filesystem after
@@ -793,7 +816,7 @@ systemctl() {
   esac
   return 1
 }
-sleep() { SECONDS=$((SECONDS + $1)); }
+` + autoUpdateFixtureClock + `
 log() { echo "[$1] ${*:2}"; }
 ` + extractAutoUpdateServiceFunctions(t) + `
 ensure_service_restarted pulse false || echo "INACTIVE_PATH_FAILED"
@@ -846,7 +869,7 @@ log() { echo "[$1] ${*:2}"; }
 detect_service_name() { echo pulse; }
 get_current_version() { tr -d '\r\n' < "$INSTALL_DIR/VERSION"; }
 verify_release_signature() { return 0; }
-sleep() { SECONDS=$((SECONDS + $1)); }
+` + autoUpdateFixtureClock + `
 
 # curl writes the installer / signature to the -o target; the fake installer
 # bumps VERSION to the new version, simulating a successful install.
@@ -1095,7 +1118,7 @@ command ssh-keygen -Y sign -f "$FIXTURE_DIR/fixture-key" -n pulse-install "$FIXT
 [[ "$FAULT" != invalid_signature ]] || printf 'tampered\n' >> "$FIXTURE_DIR/installer"
 log() { printf '[%s] %s\n' "$1" "${*:2}"; }
 detect_service_name() { printf 'pulse\n'; }
-sleep() { SECONDS=$((SECONDS + $1)); }
+` + autoUpdateFixtureClock + `
 file_mode() { command stat -c '%a' "$1" 2>/dev/null || command stat -f '%Lp' "$1"; }
 # Keep real crypto but place all temporary files inside this disposable fixture.
 mktemp() {
