@@ -6,7 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os/exec"
 	"reflect"
+	"regexp"
+	"strings"
 	"testing"
 	"time"
 
@@ -115,6 +118,38 @@ func pmgPollingReadContext() context.Context {
 }
 
 func TestPMGBackupReadsAvoidUnrelatedFleetCopy(t *testing.T) {
+	if raceEnabled {
+		// The race runtime randomly discards sync.Pool entries used by the
+		// poll's formatting, JSON and diagnostics. Those unrelated allocations
+		// cannot establish whether inventory copying grew. Keep this exact
+		// five-sample oracle enforced by race CI, in a normal child; real poll
+		// behavior and logger concurrency retain their separate race tests.
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+		defer cancel()
+		cmd := exec.CommandContext(ctx, "go", "test", "-race=false",
+			"-count=1", "-timeout=30s", "-v",
+			"-run=^"+regexp.QuoteMeta(t.Name())+"$", ".")
+		cmd.WaitDelay = 5 * time.Second
+		output, err := cmd.CombinedOutput()
+		t.Logf("normal-instrumentation PMG allocation check:\n%s", output)
+		if err != nil {
+			t.Fatalf("normal-instrumentation PMG allocation check: %v", err)
+		}
+		for _, marker := range []string{
+			"--- PASS: " + t.Name() + " ",
+			"--- PASS: " + t.Name() + "/cluster-unread ",
+			"--- PASS: " + t.Name() + "/all-nodes-unread ",
+			"--- PASS: " + t.Name() + "/partial ",
+			"--- PASS: " + t.Name() + "/complete ",
+			"full snapshot positive control:",
+		} {
+			if !strings.Contains(string(output), marker) {
+				t.Fatalf("allocation child did not complete the unchanged guard and positive control: missing %q", marker)
+			}
+		}
+		return
+	}
+
 	ctx := pmgPollingReadContext()
 	for _, scenario := range []string{"cluster-unread", "all-nodes-unread", "partial", "complete"} {
 		t.Run(scenario, func(t *testing.T) {
