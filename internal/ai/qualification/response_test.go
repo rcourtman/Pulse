@@ -403,3 +403,31 @@ func TestCrashedWorkerRubricNeedsTheStartStep(t *testing.T) {
 		}
 	}
 }
+
+// By default only a critical alert wakes Patrol when it fires. Pulse has
+// Patrol look at a warning once it has stayed active for 10 minutes, checked
+// every 30 seconds (sustainedAlertDelay and sustainedCheckInterval in
+// internal/ai/unified). A scenario whose alert is a warning has to wait longer
+// than that before the harness asks. Otherwise it is always graded "had to be
+// asked", on a manual run.
+func TestWarningScenariosOutwaitTheSustainedAlertWake(t *testing.T) {
+	catalog := loadFaultSetCatalog(t)
+	const sustainedWake = 10*time.Minute + 30*time.Second
+	for _, id := range []string{"response.worker-crashed-stays-exited", "response.finished-job-stays-quiet", "response.host-disk-one-folder"} {
+		manifest, ok := catalog.ByID[id]
+		if !ok || manifest.Engagement == nil {
+			t.Fatalf("catalogue has no response scenario %s", id)
+		}
+		wait, err := positiveDuration(manifest.Engagement.NaturalWakeTimeout)
+		if err != nil {
+			t.Fatalf("%s: %v", id, err)
+		}
+		// The run that wakes still has to file its finding.
+		if wait < sustainedWake+2*time.Minute {
+			t.Errorf("%s waits %s for Patrol to wake by itself, and a warning wakes it after up to %s", id, wait, sustainedWake)
+		}
+		if manifest.Version < 2 {
+			t.Errorf("%s changed its wait without a new version", id)
+		}
+	}
+}

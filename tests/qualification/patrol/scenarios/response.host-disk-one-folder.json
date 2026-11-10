@@ -1,7 +1,7 @@
 {
   "schema_version": "patrol.qual/v1",
   "id": "response.host-disk-one-folder",
-  "version": 1,
+  "version": 2,
   "title": "host disk at 92% from one folder",
   "description": "A small dedicated host filesystem that already holds music, photos and camera recordings goes from about 20% to 92% because one camera's recordings for the current hour grew. No action exists for it. The product is which folder filled it.",
   "owner": "ai-runtime",
@@ -240,7 +240,7 @@
   },
   "engagement": {
     "alert_timeout": "3m",
-    "natural_wake_timeout": "3m",
+    "natural_wake_timeout": "13m",
     "investigation_start_timeout": "150s",
     "fallback": "scoped_run"
   },

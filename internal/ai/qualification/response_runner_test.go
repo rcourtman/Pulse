@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -29,6 +30,10 @@ type fakePulse struct {
 	conclusion      string
 	proposes        string // capability proposed on proposesOn, "" for none
 	proposesOn      string
+	trigger         string           // trigger reason of the run that woke by itself, "alert_fired" when empty
+	recordsRunAfter time.Duration    // how long the run goes on after it files its finding
+	neverRecordsRun bool             // the run history never lists a run for the finding
+	leftover        []map[string]any // findings Pulse already holds when the run begins
 
 	mu           sync.Mutex
 	asked        int
@@ -61,23 +66,47 @@ func (p *fakePulse) faultVisible() bool {
 func (p *fakePulse) finding() []map[string]any {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	held := append([]map[string]any{}, p.leftover...)
 	if !p.faultVisible() || (!p.wakesByItself && p.asked == 0) {
-		return []map[string]any{}
+		return held
 	}
 	if p.raisedAt.IsZero() {
 		p.raisedAt = time.Now().UTC()
 		trigger, id := "alert_fired", "run-alert"
+		if p.trigger != "" {
+			trigger = p.trigger
+		}
 		if !p.wakesByItself {
 			trigger, id = "manual", "run-asked"
 		}
 		p.run = &PatrolRun{ID: id, StartedAt: p.raisedAt, CompletedAt: p.raisedAt, TriggerReason: trigger, Type: "scoped", FindingIDs: []string{"finding-1"}, Status: "critical"}
 	}
-	return []map[string]any{{
+	return append(held, map[string]any{
 		"id": "finding-1", "key": "guest-unreachable", "severity": "critical", "category": "reliability",
 		"resource_id": p.resourceID(p.raisesOn), "resource_name": p.raisesOn, "resource_type": "app-container",
 		"title": "container is failing", "detected_at": p.raisedAt, "last_seen_at": p.raisedAt,
 		"investigation_status": "completed", "investigation_outcome": "needs_attention",
-	}}
+	})
+}
+
+// runState is where the run that filed the finding stands. Like Pulse, the
+// fake lists the finding while that run is still going and writes the run
+// record when it ends.
+func (p *fakePulse) runState() (running bool, recorded *PatrolRun) {
+	p.finding()
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.run == nil {
+		return false, nil
+	}
+	if time.Since(p.raisedAt) < p.recordsRunAfter {
+		return true, nil
+	}
+	if p.neverRecordsRun {
+		return false, nil
+	}
+	run := *p.run
+	return false, &run
 }
 
 func (p *fakePulse) action() map[string]any {
@@ -101,7 +130,8 @@ func (p *fakePulse) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case path == "/api/settings/ai":
 		write(map[string]any{"enabled": true, "patrol_enabled": true, "patrol_model": "anthropic:test-model"})
 	case path == "/api/ai/patrol/status":
-		write(map[string]any{"running": false, "enabled": true, "readiness": map[string]any{"ready": true, "provider": "anthropic", "model": "test-model"}})
+		running, _ := p.runState()
+		write(map[string]any{"running": running, "enabled": true, "readiness": map[string]any{"ready": true, "provider": "anthropic", "model": "test-model"}})
 	case path == "/api/version":
 		write(map[string]any{"version": "6.9.0-test"})
 	case path == "/api/ai/patrol/autonomy":
@@ -135,13 +165,10 @@ func (p *fakePulse) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		p.mu.Unlock()
 		write(map[string]any{"run_id": "run-asked"})
 	case path == "/api/ai/patrol/runs":
-		p.finding()
-		p.mu.Lock()
 		runs := []PatrolRun{}
-		if p.run != nil {
-			runs = append(runs, *p.run)
+		if _, recorded := p.runState(); recorded != nil {
+			runs = append(runs, *recorded)
 		}
-		p.mu.Unlock()
 		write(runs)
 	case strings.HasPrefix(path, "/api/ai/patrol/runs/"):
 		now := time.Now().UTC()
@@ -387,6 +414,94 @@ func TestResponseRunRefusesAWrongAgentProfile(t *testing.T) {
 	if _, err := NewRunner(RunnerConfig{Manifest: fastResponseManifest(t, "response.web-worker-died"), Lab: NewDockerLab(newFakeDocker(), DockerTarget{Context: "lab"}),
 		Client: &PulseClient{}}); err == nil {
 		t.Fatal("a response scenario with a fix ran without the remediation authorization")
+	}
+}
+
+// Pulse lists a finding while the run that filed it is still going and writes
+// the run record when that run ends. The trigger is read from that record, so
+// the harness has to wait for it. Five live replays printed an empty trigger
+// for every run that woke by itself, because the harness looked once, early.
+func TestResponseRunReadsTheTriggerOnceTheRunIsRecorded(t *testing.T) {
+	pulse := &fakePulse{
+		commandsEnabled: true, wakesByItself: true, raisesOn: "paperless", trigger: "alert_flapping", recordsRunAfter: 300 * time.Millisecond,
+		conclusion: "The gunicorn webserver exited and was not respawned.",
+	}
+	report, dir, err := runFakeResponse(t, fastResponseManifest(t, "response.web-worker-died"), pulse, AgentProfileCommandsOn)
+	if err != nil {
+		t.Fatalf("run: %v (errors %v)", err, report.Errors)
+	}
+	wake := report.Response.Evidence.Wake
+	if asked, _ := pulse.counts(); wake.Mode != WakeSelf || wake.TriggerReason != "alert_flapping" || wake.RunID != "run-alert" || asked != 0 {
+		t.Fatalf("wake = %+v, harness asked %d times", wake, asked)
+	}
+	markdown, err := os.ReadFile(filepath.Join(dir, "report.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(markdown), "| How the run started | Patrol woke by itself, trigger `alert_flapping` |") {
+		t.Fatalf("report does not name the trigger:\n%s", markdown)
+	}
+	card := RenderScorecardMarkdown(BuildScorecard("v1", []RunReport{report}))
+	if !strings.Contains(card, "woke by itself (alert_flapping)") {
+		t.Fatalf("scorecard does not name the trigger:\n%s", card)
+	}
+}
+
+// When Pulse never lists a run for the finding, the report says so. It does
+// not print an empty trigger as if it were one.
+func TestResponseRunWithNoRunRecordSaysSo(t *testing.T) {
+	pulse := &fakePulse{
+		commandsEnabled: true, wakesByItself: true, raisesOn: "paperless", recordsRunAfter: 50 * time.Millisecond, neverRecordsRun: true,
+		conclusion: "The gunicorn webserver exited and was not respawned.",
+	}
+	report, dir, err := runFakeResponse(t, fastResponseManifest(t, "response.web-worker-died"), pulse, AgentProfileCommandsOn)
+	if err != nil {
+		t.Fatalf("run: %v (errors %v)", err, report.Errors)
+	}
+	if wake := report.Response.Evidence.Wake; wake.Mode != WakeSelf || wake.TriggerReason != "" || wake.RunID != "" {
+		t.Fatalf("wake = %+v", wake)
+	}
+	markdown, err := os.ReadFile(filepath.Join(dir, "report.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if text := string(markdown); !strings.Contains(text, "Patrol woke by itself, Pulse recorded no run for the finding") || strings.Contains(text, "trigger ``") {
+		t.Fatalf("report prints an empty trigger:\n%s", text)
+	}
+}
+
+// A run on Pulse data that already saw the same fault is not independent: the
+// earlier container is gone and its finding is still open under the name. The
+// harness refuses before it injects anything.
+func TestResponseRunRefusesAnOpenFindingOnANamesake(t *testing.T) {
+	old := func(id, name string) map[string]any {
+		return map[string]any{"id": id, "severity": "critical", "category": "reliability", "title": "container is failing",
+			"resource_id": "app-container-removed-" + id, "resource_name": name, "resource_type": "app-container"}
+	}
+	pulse := &fakePulse{commandsEnabled: true, wakesByItself: true, raisesOn: "paperless", leftover: []map[string]any{old("finding-old", "Paperless ")}}
+	report, _, err := runFakeResponse(t, fastResponseManifest(t, "response.web-worker-died"), pulse, AgentProfileCommandsOn)
+	if err == nil || !strings.Contains(err.Error(), `open finding finding-old on another resource named "Paperless"`) || !strings.Contains(err.Error(), "fresh Pulse data directory") {
+		t.Fatalf("a run on top of an earlier run's open finding continued: %v", err)
+	}
+	if report.Response != nil || report.Passed {
+		t.Fatalf("a refused run produced a grade: %+v", report.Response)
+	}
+	if pulse.docker.container("paperless") != nil || pulse.docker.called("exec") != 0 {
+		t.Fatal("a refused run injected its fault or left the lab behind")
+	}
+
+	// What does not make a run depend on an earlier one: a namesake finding
+	// that is closed, and an open one on a resource this scenario is not
+	// graded on.
+	closed := old("finding-closed", "paperless")
+	closed["resolved_at"] = time.Now().UTC()
+	pulse = &fakePulse{
+		commandsEnabled: true, wakesByItself: true, raisesOn: "paperless", leftover: []map[string]any{closed, old("finding-elsewhere", "vaultwarden")},
+		conclusion: "The gunicorn webserver exited and was not respawned.",
+	}
+	report, _, err = runFakeResponse(t, fastResponseManifest(t, "response.web-worker-died"), pulse, AgentProfileCommandsOn)
+	if err != nil || report.Response == nil || len(report.Response.Evidence.Findings) != 1 || report.Response.Evidence.Findings[0].ID != "finding-1" {
+		t.Fatalf("run: %v, response %+v, errors %v", err, report.Response, report.Errors)
 	}
 }
 

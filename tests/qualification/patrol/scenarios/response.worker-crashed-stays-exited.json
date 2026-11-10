@@ -1,7 +1,7 @@
 {
   "schema_version": "patrol.qual/v1",
   "id": "response.worker-crashed-stays-exited",
-  "version": 1,
+  "version": 2,
   "title": "worker segfaulted once, stays exited",
   "description": "A machine-learning worker with no restart policy crashes once with a segmentation fault and stays exited. Starting it fixes it.",
   "owner": "ai-runtime",
@@ -253,7 +253,7 @@
   },
   "engagement": {
     "alert_timeout": "3m",
-    "natural_wake_timeout": "3m",
+    "natural_wake_timeout": "13m",
     "investigation_start_timeout": "150s",
     "fallback": "scoped_run"
   },

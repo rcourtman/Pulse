@@ -1,7 +1,7 @@
 {
   "schema_version": "patrol.qual/v1",
   "id": "response.finished-job-stays-quiet",
-  "version": 1,
+  "version": 2,
   "title": "finished one-shot job, Exited (0)",
   "description": "The whole stack is healthy and a one-shot migration job has finished with exit code 0, which is its correct state. Pulse raises a container-state alert for it. Patrol should raise nothing.",
   "owner": "ai-runtime",
@@ -174,7 +174,7 @@
   },
   "engagement": {
     "alert_timeout": "3m",
-    "natural_wake_timeout": "3m",
+    "natural_wake_timeout": "13m",
     "investigation_start_timeout": "150s",
     "fallback": "scoped_run"
   },
