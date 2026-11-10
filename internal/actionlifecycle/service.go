@@ -743,12 +743,69 @@ func (s *Service) ResourceOperatorState(orgID, resourceID string) (unified.Resou
 	return state, found, nil
 }
 
-// Capabilities returns the resource's advertised capability declarations
-// through the same registry resolution and typed errors as planning, so a
-// proposing surface can inspect capability names and parameter schemas
-// without guessing planner input or duplicating registry lookup.
+// CapabilityCatalog splits a resource's declared capabilities by whether
+// planning would accept them now. Refused holds the executor's own refusal
+// for each capability that is declared but cannot run.
+type CapabilityCatalog struct {
+	Runnable []unified.ResourceCapability
+	Refused  []unified.ResourceActionReadiness
+}
+
+// Capabilities returns the capabilities a proposal for the resource can use
+// now: the declared ones the executor's availability check does not refuse.
+// A proposing surface that lists a refused capability invites a proposal
+// planning will reject, so it reads this and not the declarations.
 func (s *Service) Capabilities(ctx context.Context, orgID, resourceID string) ([]unified.ResourceCapability, error) {
+	catalog, err := s.CapabilityCatalog(ctx, orgID, resourceID)
+	if err != nil {
+		return nil, err
+	}
+	return catalog.Runnable, nil
+}
+
+// DeclaredCapabilities returns the resource's advertised capability
+// declarations through the same registry resolution and typed errors as
+// planning, whether or not they can run now. Policy evaluation reads a
+// capability's declared approval and auto-authorization class from here.
+func (s *Service) DeclaredCapabilities(ctx context.Context, orgID, resourceID string) ([]unified.ResourceCapability, error) {
 	_ = ctx
+	resource, err := s.catalogResource(orgID, resourceID)
+	if err != nil {
+		return nil, err
+	}
+	capabilities := make([]unified.ResourceCapability, len(resource.Capabilities))
+	copy(capabilities, resource.Capabilities)
+	return capabilities, nil
+}
+
+// CapabilityCatalog asks the executor's availability check, the one planning
+// and the resource projections use, about each declared capability. It runs
+// no agent preflight: that needs a planned action.
+func (s *Service) CapabilityCatalog(ctx context.Context, orgID, resourceID string) (CapabilityCatalog, error) {
+	resource, err := s.catalogResource(orgID, resourceID)
+	if err != nil {
+		return CapabilityCatalog{}, err
+	}
+	catalog := CapabilityCatalog{Runnable: make([]unified.ResourceCapability, 0, len(resource.Capabilities))}
+	checker, _ := s.Executor.(AvailabilityChecker)
+	if checker != nil {
+		ctx = beginAvailabilityBatch(ctx, checker)
+	}
+	for _, capability := range resource.Capabilities {
+		if checker != nil {
+			if refusal, refused := checkCapability(ctx, checker, resource, capability.Name); refused {
+				refusal.ReasonCode = boundedActionAvailabilityText(refusal.ReasonCode, actionAvailabilityReasonCodeMaxRunes)
+				refusal.Reason = boundedActionAvailabilityText(refusal.Reason, actionAvailabilityReasonMaxRunes)
+				catalog.Refused = append(catalog.Refused, refusal)
+				continue
+			}
+		}
+		catalog.Runnable = append(catalog.Runnable, capability)
+	}
+	return catalog, nil
+}
+
+func (s *Service) catalogResource(orgID, resourceID string) (*unified.Resource, error) {
 	resourceID = unified.CanonicalResourceID(resourceID)
 	if resourceID == "" {
 		return nil, &actionplanner.ValidationError{Field: "resourceId", Message: "resource id is required"}
@@ -761,9 +818,7 @@ func (s *Service) Capabilities(ctx context.Context, orgID, resourceID string) ([
 	if !ok || resource == nil {
 		return nil, &ResourceNotFoundError{ResourceID: resourceID}
 	}
-	capabilities := make([]unified.ResourceCapability, len(resource.Capabilities))
-	copy(capabilities, resource.Capabilities)
-	return capabilities, nil
+	return resource, nil
 }
 
 // PersistPlanAudit records the planned action's audit record and its

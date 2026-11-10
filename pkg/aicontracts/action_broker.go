@@ -35,12 +35,42 @@ type ActionProposal struct {
 	EvidenceIDs     []string       `json:"evidence_ids,omitempty"`
 }
 
-// ActionCapabilityCatalog is the read-only projection of a resource's
-// advertised capabilities, so an investigation can select a capability and
-// fill its declared parameters instead of guessing planner input.
+// ActionCapabilityCatalog is the read-only projection of the capabilities a
+// proposal for a resource can use now, so an investigation can select a
+// capability and fill its declared parameters instead of guessing planner
+// input. A capability the resource declares but planning would refuse is not
+// in Capabilities: it is in Unavailable with the refusal.
 type ActionCapabilityCatalog struct {
 	ResourceID   string                 `json:"resource_id"`
 	Capabilities []ActionCapabilityInfo `json:"capabilities"`
+	// Unavailable lists declared capabilities that cannot run now, each with
+	// the executor's own reason.
+	Unavailable []ActionCapabilityRefusal `json:"unavailable,omitempty"`
+	// CommandsDisabled is set when the Pulse agent that reads from and acts
+	// on this resource's host reports command execution off. Pulse then
+	// cannot read logs or files, or run commands or actions, for the
+	// resource. It is a setting the owner chose at install, not a fault.
+	CommandsDisabled *CommandsDisabledHost `json:"commands_disabled,omitempty"`
+}
+
+// ActionCapabilityRefusal is one declared capability planning would refuse.
+type ActionCapabilityRefusal struct {
+	Name       string `json:"name"`
+	ReasonCode string `json:"reason_code,omitempty"`
+	Reason     string `json:"reason,omitempty"`
+}
+
+// CommandsDisabledHost names a host whose Pulse agent was installed without
+// command access, with the one sentence and the one step Pulse shows for it.
+// Pulse writes both so no model has to guess why a read or action was refused.
+type CommandsDisabledHost struct {
+	HostResourceID string `json:"host_resource_id,omitempty"`
+	HostName       string `json:"host_name"`
+	// Reason is the fact, for example "Commands are not enabled on the Pulse
+	// agent on docker01."
+	Reason string `json:"reason"`
+	// Step is how the owner turns commands on for that host.
+	Step string `json:"step"`
 }
 
 // ActionCapabilityInfo describes one advertised capability.

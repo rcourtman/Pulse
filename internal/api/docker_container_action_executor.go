@@ -395,7 +395,13 @@ func (e dockerContainerActionExecutor) CheckActionAvailable(ctx context.Context,
 		return unavailableDockerActionReadiness(operation, "no_command_agent", "Pulse sees this guest's containers through its Proxmox node and cannot control them from there. Install the Pulse agent inside the guest to manage them.")
 	}
 	if connectErr != nil {
-		readiness := unavailableDockerActionReadiness(operation, "command_agent_disconnected", "Docker / Podman command agent is not connected.")
+		// No command session can mean two things with two fixes. An agent that
+		// reports commands off was installed for monitoring only: nothing is
+		// broken, and the refusal carries the step that enables them.
+		readiness := unavailableDockerActionReadiness(operation, actionlifecycle.ReasonCodeCommandAgentDisconnected, "Docker / Podman command agent is not connected.")
+		if e.dockerHostCommandsDisabled(ctx, resource) {
+			readiness = unavailableDockerActionReadiness(operation, actionlifecycle.ReasonCodeHostCommandsDisabled, actionlifecycle.HostCommandsDisabledRefusal(dockerContainerHostName(resource)))
+		}
 		readiness.Detail = connectErr.Error()
 		return readiness
 	}
@@ -523,6 +529,42 @@ func (e dockerContainerActionExecutor) connectedDockerCommandAgentID(ctx context
 		return agentID, nil
 	}
 	return "", fmt.Errorf("docker container command agent is not connected: no live command session for agent %q", strings.TrimSpace(resource.Docker.AgentID))
+}
+
+// agentLookupHostCommandsDisabled memoizes one host's answer for a pass. It sits
+// apart from the session lookups in action_executor.go, which it does not use.
+const agentLookupHostCommandsDisabled agentLookupKind = 100
+
+// dockerHostCommandsDisabled reports whether the container's host runs a Pulse
+// agent that is reporting with command execution off. The host row carries the
+// agent's own report, so this reads it and never infers it from a missing
+// session. An unknown host answers false and the refusal stays "not connected".
+func (e dockerContainerActionExecutor) dockerHostCommandsDisabled(ctx context.Context, resource unified.Resource) bool {
+	if e.resources == nil || resource.ParentID == nil {
+		return false
+	}
+	hostID := unified.CanonicalResourceID(*resource.ParentID)
+	if hostID == "" {
+		return false
+	}
+	return memoizedAgentLookup(ctx, agentLookupKey{kind: agentLookupHostCommandsDisabled, first: hostID}, func() agentLookupResult {
+		registry, err := e.resources.buildRegistry(GetOrgID(ctx))
+		if err != nil {
+			return agentLookupResult{}
+		}
+		host, ok := registry.Get(hostID)
+		return agentLookupResult{ok: ok && actionlifecycle.HostCommandsDisabled(host)}
+	}).ok
+}
+
+func dockerContainerHostName(resource unified.Resource) string {
+	if name := strings.TrimSpace(resource.ParentName); name != "" {
+		return name
+	}
+	if resource.Docker != nil {
+		return strings.TrimSpace(resource.Docker.Hostname)
+	}
+	return ""
 }
 
 func unavailableDockerActionReadiness(operation, reasonCode, reason string) unified.ResourceActionReadiness {

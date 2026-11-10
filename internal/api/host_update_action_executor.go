@@ -77,7 +77,7 @@ func (e hostUpdateActionExecutor) CheckActionAvailable(ctx context.Context, req 
 			Name:       hostPackageUpdateCapability,
 			Available:  false,
 			ReasonCode: hostUpdateUnavailableReasonCode(err),
-			Reason:     hostUpdateUnavailableReason(err),
+			Reason:     hostUpdateUnavailableReason(err, resource),
 		}
 	}
 	return unified.ResourceActionReadiness{Name: hostPackageUpdateCapability, Available: true}
@@ -276,7 +276,7 @@ func hostUpdateUnavailableReasonCode(err error) string {
 	case strings.Contains(message, "not an agent-managed host"):
 		return "unsupported_resource"
 	case strings.Contains(message, "disabled"):
-		return "host_commands_disabled"
+		return actionlifecycle.ReasonCodeHostCommandsDisabled
 	case strings.Contains(message, "receipt protocol"):
 		return "operation_receipt_unsupported"
 	case strings.Contains(message, "unsupported"):
@@ -290,18 +290,18 @@ func hostUpdateUnavailableReasonCode(err error) string {
 	case strings.Contains(message, "no pending"):
 		return "no_pending_updates"
 	case strings.Contains(message, "disconnected"):
-		return "command_agent_disconnected"
+		return actionlifecycle.ReasonCodeCommandAgentDisconnected
 	default:
 		return "capability_unavailable"
 	}
 }
 
-func hostUpdateUnavailableReason(err error) string {
+func hostUpdateUnavailableReason(err error, resource unified.Resource) string {
 	switch hostUpdateUnavailableReasonCode(err) {
 	case "unsupported_resource":
 		return "This resource is not an agent-managed host."
-	case "host_commands_disabled":
-		return "Typed host operations are disabled for this agent."
+	case actionlifecycle.ReasonCodeHostCommandsDisabled:
+		return actionlifecycle.HostCommandsDisabledRefusal(resource.Name)
 	case "operation_receipt_unsupported":
 		return "The Pulse agent on this host cannot run reviewed actions: it is on an older version, or its durable state directory is unavailable. Update the agent, or check the agent logs if it is already current, then retry."
 	case "unsupported_package_manager":
@@ -314,7 +314,7 @@ func hostUpdateUnavailableReason(err error) string {
 		return "The host package inventory is too old to update safely."
 	case "no_pending_updates":
 		return "The host has no pending standard package updates."
-	case "command_agent_disconnected":
+	case actionlifecycle.ReasonCodeCommandAgentDisconnected:
 		return "The host command agent is not connected."
 	default:
 		return "Typed host package updates are not currently available."

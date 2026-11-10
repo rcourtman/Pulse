@@ -4964,6 +4964,14 @@ vdev layout is reported` in
 
 ## Current State
 
+### Commands-off refusal reasons open no storage or recovery path
+
+The `internal/api` action executors now report `host_commands_disabled` apart
+from `command_agent_disconnected`, and Patrol's catalog lists only runnable
+capabilities. Both read existing resource state and write nothing. The host
+package-cache cleanup executor keeps every gate it had. Only its refusal text
+for a commands-off host changed, to the shared sentence and step.
+
 Agent executable identity validation in `internal/api/unified_agent.go` refuses
 wrong package, target or release bytes before download/activation. It does not
 infer installed identity from shared tokens or hostnames and changes no backup,

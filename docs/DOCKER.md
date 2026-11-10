@@ -428,6 +428,9 @@ returning to the old image alone does not undo a data migration.
 
 Start with the **existing error and action stage**, not another click on Update:
 
+- **Commands not enabled:** “Commands are not enabled on the Pulse agent on …”
+  means that host's agent was installed for monitoring only. Nothing is
+  disconnected. See [Commands are not enabled on this agent](#commands-are-not-enabled-on-this-agent).
 - **Planning refused:** “Docker / Podman command agent is not connected” on the
   planning request means Pulse could not find a matching admitted live command
   channel and refused that plan before dispatch. The planning response can be
@@ -440,6 +443,27 @@ Start with the **existing error and action stage**, not another click on Update:
 - **Stage unknown:** a failed banner alone does not tell you whether the update
   ran. Retain that uncertainty; do not assume nothing changed or repeat the
   action to find out. Use existing observations where safe.
+
+#### Commands are not enabled on this agent
+
+This is a setting, not a fault. The agent on that host is connected and
+reporting. It was installed for monitoring only, so Pulse cannot start, stop,
+restart or update its containers, and Pulse Patrol cannot read logs there.
+
+Pulse cannot turn commands on from the server. The agent keeps that choice on
+its own host. To allow them:
+
+1. Open **Settings → Infrastructure** and choose **Manage** on the host.
+2. Select **Get install command**.
+3. Run it on that host with **Allow Pulse to run commands on this host** ticked.
+
+Allowing commands is a trust decision. The
+[agent privilege model](AGENT_SECURITY.md#agent-privilege-model) explains what
+it grants. Staying monitoring-only is supported: keep managing the workload
+with your usual Docker or Podman tool.
+
+“Command agent is not connected” is the other case. There commands are enabled
+on the agent and its command connection is down.
 
 #### Command agent is not connected
 

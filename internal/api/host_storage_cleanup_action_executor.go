@@ -72,7 +72,7 @@ func (e hostStorageCleanupActionExecutor) CheckActionAvailable(ctx context.Conte
 			Name:       hostStorageCleanupCapability,
 			Available:  false,
 			ReasonCode: hostStorageCleanupUnavailableReasonCode(err),
-			Reason:     hostStorageCleanupUnavailableReason(err),
+			Reason:     hostStorageCleanupUnavailableReason(err, resource),
 		}
 	}
 	return unified.ResourceActionReadiness{Name: hostStorageCleanupCapability, Available: true}
@@ -267,7 +267,7 @@ func hostStorageCleanupUnavailableReasonCode(err error) string {
 	case strings.Contains(message, "not an agent-managed host"):
 		return "unsupported_resource"
 	case strings.Contains(message, "disabled"):
-		return "host_commands_disabled"
+		return actionlifecycle.ReasonCodeHostCommandsDisabled
 	case strings.Contains(message, "receipt protocol"):
 		return "operation_receipt_unsupported"
 	case strings.Contains(message, "unsupported"):
@@ -283,18 +283,18 @@ func hostStorageCleanupUnavailableReasonCode(err error) string {
 	case strings.Contains(message, "not under storage pressure"):
 		return "storage_pressure_cleared"
 	case strings.Contains(message, "disconnected"):
-		return "command_agent_disconnected"
+		return actionlifecycle.ReasonCodeCommandAgentDisconnected
 	default:
 		return "capability_unavailable"
 	}
 }
 
-func hostStorageCleanupUnavailableReason(err error) string {
+func hostStorageCleanupUnavailableReason(err error, resource unified.Resource) string {
 	switch hostStorageCleanupUnavailableReasonCode(err) {
 	case "unsupported_resource":
 		return "This resource is not an agent-managed host."
-	case "host_commands_disabled":
-		return "Typed host operations are disabled for this agent."
+	case actionlifecycle.ReasonCodeHostCommandsDisabled:
+		return actionlifecycle.HostCommandsDisabledRefusal(resource.Name)
 	case "operation_receipt_unsupported":
 		return "The Pulse agent on this host cannot run reviewed actions: it is on an older version, or its durable state directory is unavailable. Update the agent, or check the agent logs if it is already current, then retry."
 	case "unsupported_cleanup_provider":
@@ -309,7 +309,7 @@ func hostStorageCleanupUnavailableReason(err error) string {
 		return "The package cache no longer contains enough reclaimable data."
 	case "storage_pressure_cleared":
 		return "The filesystem containing the package cache is no longer under storage pressure."
-	case "command_agent_disconnected":
+	case actionlifecycle.ReasonCodeCommandAgentDisconnected:
 		return "The host command agent is not connected."
 	default:
 		return "Typed package-cache cleanup is not currently available."

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/actionlifecycle"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
@@ -18,7 +19,7 @@ func (e *PulseToolExecutor) registerProposeTools() {
 	e.registry.registerBuiltin(RegisteredTool{
 		Definition: Tool{
 			Name:        agentcapabilities.PatrolActionCapabilitiesToolName,
-			Description: `Read the typed remediation capabilities currently advertised by a canonical resource. Use this after investigation evidence identifies the resource that should actually be changed; the causal resource may differ from the resource named by the original finding. Side-effect-free: this only reads capability names and parameter schemas.`,
+			Description: `Read the typed remediation capabilities a canonical resource can run now. Use this after investigation evidence identifies the resource that should actually be changed; the causal resource may differ from the resource named by the original finding. A capability that cannot run now is not listed. When commands_disabled is present, commands are not enabled on that host's Pulse agent, so no read or action can run there and a proposal will be refused. Side-effect-free: this only reads capability names and parameter schemas.`,
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]PropertySchema{
@@ -93,6 +94,15 @@ Create at most one action per investigation. Replaying the same accepted request
 type investigationCapabilityCatalogResponse struct {
 	ResourceID   string                            `json:"resource_id"`
 	Capabilities []investigationCapabilityResponse `json:"capabilities"`
+	// CommandsDisabled is the same fact a refused read on this resource
+	// reports: the agent serving it was installed without command access.
+	CommandsDisabled *investigationCommandsDisabledResponse `json:"commands_disabled,omitempty"`
+}
+
+type investigationCommandsDisabledResponse struct {
+	Host   string `json:"host"`
+	Reason string `json:"reason"`
+	Effect string `json:"effect"`
 }
 
 type investigationCapabilityResponse struct {
@@ -144,6 +154,15 @@ func (e *PulseToolExecutor) executeActionCapabilities(ctx context.Context, args 
 			})
 		}
 		response.Capabilities = append(response.Capabilities, item)
+	}
+	if rs := e.getReadState(); rs != nil {
+		if host, disabled := CommandsDisabledHostForTarget(rs, resourceID); disabled {
+			response.CommandsDisabled = &investigationCommandsDisabledResponse{
+				Host:   host.Name,
+				Reason: actionlifecycle.HostCommandsDisabledReason(host.Name),
+				Effect: "Pulse cannot read logs or files, or run commands or actions, on this host. Nothing is disconnected or broken. Do not propose an action or retry a read there.",
+			}
+		}
 	}
 	return NewJSONResult(response), nil
 }

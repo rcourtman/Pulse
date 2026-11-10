@@ -139,3 +139,78 @@ func TestPulseToolExecutor_ExecuteControlDocker(t *testing.T) {
 	assert.Contains(t, result.Content[0].Text, "retired and denied")
 	agentSrv.AssertNotCalled(t, "ExecuteCommand", mock.Anything, mock.Anything, mock.Anything)
 }
+
+// A read refused because commands were never enabled is not a dropped
+// connection. The agent reports, nothing is broken, and the model must be told
+// so instead of being sent to repair a connection.
+func TestReadRefusalSeparatesCommandsOffFromDisconnected(t *testing.T) {
+	t.Setenv("PULSE_STRICT_RESOLUTION", "false")
+	const containerID = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+	snapshot := func(commandsEnabled bool) models.StateSnapshot {
+		host := routingFixtureHost("agent-docker01", "docker01", "")
+		host.CommandsEnabled = commandsEnabled
+		docker := routingFixtureDocker("agent-docker01", "docker01", "")
+		docker.Containers = []models.DockerContainer{{ID: containerID, Name: "web", State: "running", Status: "Up 2 hours"}}
+		return models.StateSnapshot{Hosts: []models.Host{host}, DockerHosts: []models.DockerHost{docker}}
+	}
+	refusal := func(t *testing.T, commandsEnabled bool, operation, target string) ToolResponse {
+		t.Helper()
+		executor := NewPulseToolExecutor(ExecutorConfig{
+			StateProvider: &mockStateProvider{state: snapshot(commandsEnabled)},
+			AgentServer:   &mockAgentServer{},
+		})
+		var result CallToolResult
+		var err error
+		switch operation {
+		case "file read":
+			result, err = executor.executeFileRead(context.Background(), "/proc/meminfo", target, "")
+		default:
+			result, err = executor.executeReadExec(context.Background(), map[string]interface{}{"command": "uptime", "target_host": target})
+		}
+		assert.NoError(t, err)
+		assert.True(t, result.IsError)
+		var response ToolResponse
+		assert.NoError(t, json.Unmarshal([]byte(result.Content[0].Text), &response))
+		if response.Error == nil {
+			t.Fatalf("%s on %s returned no error: %s", operation, target, result.Content[0].Text)
+		}
+		return response
+	}
+
+	for _, operation := range []string{"file read", "read exec"} {
+		for _, target := range []string{"docker01", "web"} {
+			t.Run("commands off/"+operation+"/"+target, func(t *testing.T) {
+				response := refusal(t, false, operation, target)
+				assert.Equal(t, "COMMANDS_NOT_ENABLED", response.Error.Code)
+				assert.True(t, response.Error.Failed)
+				assert.Equal(t, "host_commands_disabled", response.Error.Details["reason_code"])
+				assert.Equal(t, "docker01", response.Error.Details["host"])
+				assert.Contains(t, response.Error.Message, "Commands are not enabled on the Pulse agent on docker01.")
+				assert.Contains(t, response.Error.Message, "Nothing is disconnected or broken")
+				assert.Contains(t, response.Error.Message, "did not run")
+				assert.NotContains(t, response.Error.Message, "No command connection")
+			})
+			t.Run("commands on, session down/"+operation+"/"+target, func(t *testing.T) {
+				response := refusal(t, true, operation, target)
+				assert.Equal(t, ErrCodeNoAgent, response.Error.Code)
+				assert.Equal(t, "command_agent_disconnected", response.Error.Details["reason_code"])
+				assert.NotContains(t, response.Error.Message, "not enabled")
+				assert.NotContains(t, response.Error.Details, "how_to_enable")
+			})
+		}
+	}
+
+	// The answer names only a host a command would use. An agent that stopped
+	// reporting, or a target no reporting agent serves, is not called commands-off.
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(snapshot(false))
+	if host, disabled := CommandsDisabledHostForTarget(registry, "docker01"); !disabled || host.Name != "docker01" || host.ResourceID == "" {
+		t.Fatalf("docker01 = %#v, %v, want commands-off", host, disabled)
+	}
+	if _, disabled := CommandsDisabledHostForTarget(registry, "no-such-host"); disabled {
+		t.Fatal("an unknown target must not read as commands-off")
+	}
+	if _, disabled := CommandsDisabledHostForTarget(nil, "docker01"); disabled {
+		t.Fatal("no read state must not read as commands-off")
+	}
+}
