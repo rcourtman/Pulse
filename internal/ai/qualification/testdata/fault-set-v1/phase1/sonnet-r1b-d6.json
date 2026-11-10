@@ -1,0 +1,57 @@
+{
+  "source": "sonnet-r1b/d6",
+  "captured_at": "2026-11-09T22:22:27Z",
+  "model": "claude-subscription:sonnet",
+  "scenario": "response.host-disk-one-folder",
+  "phase1_scorecard_column": "commands-on",
+  "phase1_grade": "partial",
+  "phase1_woke_by_itself": "no",
+  "note": "The run that reported the finding was started by hand from the alert's Investigate button.",
+  "evidence": {
+    "agent_profile": {
+      "name": "commands-on",
+      "commands_enabled": true,
+      "host_name": "docker01"
+    },
+    "alerts": [
+      {
+        "type": "disk",
+        "level": "warning",
+        "resource_alias": "nvr",
+        "resource_name": "docker01 (/mnt/nvr)",
+        "message": "Disk at 92.3%"
+      }
+    ],
+    "wake": {
+      "alert_after_ns": 65000000000,
+      "run_id": "1794263017276088000",
+      "trigger_reason": "manual",
+      "mode": "asked",
+      "asked": "alert_investigate",
+      "ask_detail": "started by hand from the alert's Investigate button",
+      "investigation_start": "self",
+      "finding_after_ns": 125000000000,
+      "settled_after_ns": 345000000000
+    },
+    "findings": [
+      {
+        "id": "f0ef4f344c382b90",
+        "severity": "warning",
+        "category": "capacity",
+        "resource_alias": "nvr",
+        "resource_name": "docker01 (/mnt/nvr)",
+        "title": "Abrupt disk-usage spike on /mnt/nvr (loop device) from 19.7% to 92.3% within ~1 minute",
+        "investigation_status": "completed",
+        "investigation_outcome": "needs_attention",
+        "turn_count": 6,
+        "evidence_call_count": 10,
+        "tools_used": [
+          "pulse_query",
+          "pulse_read",
+          "patrol_conclude_investigation"
+        ],
+        "conclusion": "### Investigation Summary\nDirect inspection confirms the finding: `df -h /mnt/nvr` on docker01 shows `/dev/loop6` at 359M total, 306M used, 93% full — consistent with the alert's 92.3% reading and confirming this is a sustained condition, not a single anomalous sample. The loop image is very small (359MB), so the earlier 19.7%→92.3% jump corresponds to only ~240MB of additional writes, easily explained by a modest write burst against a small fixed-size volume. Listing the mount's contents shows four subdirectories: frigate, lost+found, music, and photos — strongly indicating this volume backs an NVR/camera service (Frigate) alongside some media/photo storage, not any of the six Pulse-tracked app containers (immich_machine_learning, nextcloud, nextcloud-db, paperless, vaultwarden, vaultwarden-db-migrate), none of which report /mnt/nvr in their mount lists. A search for \"frigate\" in Pulse's inventory returned zero matches, and the host-level agent record returned an empty mounts/ports/networks payload, so the actual writing container is not present in Pulse's discovery at all — it is either unmanaged, undiscovered, or running outside Pulse's Docker inventory scope. losetup -a was blocked as a non-allowlisted command, so the loop file's backing path could not be independently verified beyond the df output.\n\n### Root Cause\nObserved mechanism: /mnt/nvr (loop device /dev/loop6 on docker01, 359MB fixed-size image) is 93% full due to roughly 240MB of writes landing primarily in the frigate/ subdirectory within the reporting window, consistent with an NVR/recording service lacking adequate retention or pruning for a volume this small.\nUnestablished: the identity and canonical resource ID of the writing container (likely a Frigate instance) could not be confirmed — it does not appear in Pulse's Docker/app-container inventory or search index, so its retention configuration, write rate, and whether the fill is still growing or has plateaued cannot be verified from available evidence. Whether the loop image itself is undersized by design or has become stale is also unconfirmed, since losetup output was blocked.\n\n### Affected Resources\n- docker01 (agent-b2d7e93ee6fa2348): host symptom only — /mnt/nvr mount at 93% usage; host-level CPU/Mem/disk-root metrics are unaffected and unrelated (root filesystem sits at ~44%).\n- /mnt/nvr (loop device /dev/loop6 on docker01): directly affected filesystem, confirmed near-full via df.\n- Unidentified NVR/Frigate writer container: suspected causal actor, not visible in Pulse inventory, so not confirmed or named as a canonical resource.\n\n### Recommendation\nAn operator should: 1) identify and inspect the actual container writing to /mnt/nvr (most likely a Frigate instance not currently tracked by Pulse) and review its retention/pruning settings; 2) check `losetup -a` and the loop file's host path directly to confirm whether 359MB is the intended size or a stale/undersized image; 3) re-check /mnt/nvr usage shortly to see if it is still climbing (it is already at 93% with only 26MB free, so it could reach 100% soon and cause write failures); 4) decide whether to grow the loop image or fix retention, then route that change through the governed control path. No typed action capability was advertised for the finding resource (docker01 agent), and no causal container resource could be identified in Pulse's inventory to query capabilities against, so no remediation was proposed.\n\n### Conclusion\nNEEDS_ATTENTION: /mnt/nvr on docker01 is confirmed near-full (93%, 26MB free) on a small fixed-size loop device, but the actual writing workload (likely a Frigate/NVR container) is not present in Pulse's inventory, so its retention configuration cannot be checked or fixed and no advertised remediation capability exists for either the finding resource or the unidentified causal container. An operator must identify that container on docker01, verify/fix its retention policy or the loop image size, and confirm the mount is not still filling."
+      }
+    ]
+  }
+}

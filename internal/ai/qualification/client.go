@@ -185,15 +185,46 @@ type Resource struct {
 	Technology string          `json:"technology"`
 	Name       string          `json:"name"`
 	Status     string          `json:"status"`
+	ParentID   string          `json:"parentId,omitempty"`
 	LastSeen   any             `json:"lastSeen,omitempty"`
 	Labels     map[string]any  `json:"labels,omitempty"`
 	Docker     *DockerResource `json:"docker,omitempty"`
+	Agent      *AgentResource  `json:"agent,omitempty"`
 }
 
 type DockerResource struct {
+	ContainerID    string `json:"containerId,omitempty"`
 	ContainerState string `json:"containerState,omitempty"`
 	Health         string `json:"health,omitempty"`
 	RestartCount   int    `json:"restartCount,omitempty"`
+}
+
+// AgentResource is the part of a host's agent payload the response track
+// reads: whether Pulse may run commands there, and what its disks report.
+type AgentResource struct {
+	CommandsEnabled bool        `json:"commandsEnabled,omitempty"`
+	Disks           []AgentDisk `json:"disks,omitempty"`
+}
+
+type AgentDisk struct {
+	Mountpoint string  `json:"mountpoint,omitempty"`
+	Usage      float64 `json:"usage,omitempty"`
+}
+
+// PulseAlert is an active alert as /api/alerts/active returns it.
+type PulseAlert struct {
+	ID           string    `json:"id"`
+	Type         string    `json:"type"`
+	Level        string    `json:"level"`
+	ResourceID   string    `json:"resourceId"`
+	ResourceName string    `json:"resourceName"`
+	Message      string    `json:"message"`
+	StartTime    time.Time `json:"startTime"`
+}
+
+// TriggeredRun is the accepted response of a Patrol run request.
+type TriggeredRun struct {
+	RunID string `json:"run_id"`
 }
 
 type Finding struct {
@@ -213,6 +244,10 @@ type Finding struct {
 	DetectedAt     time.Time  `json:"detected_at"`
 	LastSeenAt     time.Time  `json:"last_seen_at"`
 	ResolvedAt     *time.Time `json:"resolved_at,omitempty"`
+	// The investigation fields are read by the response track only. They
+	// stay out of reports that never observed them.
+	InvestigationStatus  string `json:"investigation_status,omitempty"`
+	InvestigationOutcome string `json:"investigation_outcome,omitempty"`
 }
 
 type ToolCall struct {
@@ -629,6 +664,70 @@ func (c *PulseClient) Trigger(ctx context.Context, resourceIDs []string, _ strin
 		body = map[string]any{"resource_ids": resourceIDs}
 	}
 	return c.request(ctx, http.MethodPost, "/api/ai/patrol/run", body, nil)
+}
+
+// RunRequest is the body of a Patrol run request. Empty asks for a full run.
+// Resource IDs alone are what Run Patrol sends for a selection. With an alert
+// identity it is what the Investigate button on that alert sends.
+type RunRequest struct {
+	ResourceIDs     []string `json:"resource_ids,omitempty"`
+	AlertIdentifier string   `json:"alert_identifier,omitempty"`
+	AlertType       string   `json:"alert_type,omitempty"`
+}
+
+// TriggerRun asks for a Patrol run and returns the accepted run identity.
+func (c *PulseClient) TriggerRun(ctx context.Context, request RunRequest) (TriggeredRun, error) {
+	var body any
+	if len(request.ResourceIDs) > 0 {
+		body = request
+	}
+	var accepted TriggeredRun
+	err := c.request(ctx, http.MethodPost, "/api/ai/patrol/run", body, &accepted)
+	return accepted, err
+}
+
+func (c *PulseClient) ActiveAlerts(ctx context.Context) ([]PulseAlert, error) {
+	var alerts []PulseAlert
+	err := c.request(ctx, http.MethodGet, "/api/alerts/active", nil, &alerts)
+	return alerts, err
+}
+
+// Reinvestigate asks Pulse to investigate a finding, the same request as the
+// button on the finding.
+func (c *PulseClient) Reinvestigate(ctx context.Context, findingID string) error {
+	return c.request(ctx, http.MethodPost, "/api/ai/findings/"+url.PathEscape(findingID)+"/reinvestigate", map[string]any{}, nil)
+}
+
+// WaitForPatrolIdle returns once Patrol has reported no running work for the
+// whole quiet period. A response run starts its fault only then: Patrol
+// declines a finding raised while its one slot is busy, and that would be
+// scored as Patrol not looking.
+func (c *PulseClient) WaitForPatrolIdle(ctx context.Context, quiet, timeout, poll time.Duration) error {
+	if poll <= 0 {
+		poll = 2 * time.Second
+	}
+	deadline := time.Now().Add(timeout)
+	var idleSince time.Time
+	for {
+		status, err := c.Status(ctx)
+		switch {
+		case err != nil || status.Running:
+			idleSince = time.Time{}
+		case idleSince.IsZero():
+			idleSince = time.Now()
+		}
+		if !idleSince.IsZero() && time.Since(idleSince) >= quiet {
+			return nil
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("Patrol did not stay idle for %s before %s", quiet, deadline.UTC().Format(time.RFC3339))
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(poll):
+		}
+	}
 }
 
 func (c *PulseClient) TriggerAndWait(ctx context.Context, resourceIDs []string, contextText string, timeout time.Duration) (PatrolRun, error) {

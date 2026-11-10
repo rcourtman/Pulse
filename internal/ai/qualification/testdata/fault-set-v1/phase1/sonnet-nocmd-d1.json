@@ -1,0 +1,57 @@
+{
+  "source": "sonnet-nocmd/d1",
+  "captured_at": "2026-11-09T22:30:35Z",
+  "model": "claude-subscription:sonnet",
+  "scenario": "response.web-worker-died",
+  "phase1_scorecard_column": "commands-off",
+  "phase1_grade": "handed_back",
+  "phase1_woke_by_itself": "yes",
+  "note": "",
+  "evidence": {
+    "agent_profile": {
+      "name": "commands-off",
+      "commands_enabled": false,
+      "host_name": "docker01"
+    },
+    "alerts": [
+      {
+        "type": "docker-container-health",
+        "level": "critical",
+        "resource_alias": "paperless",
+        "resource_name": "paperless",
+        "message": "Docker container 'paperless' health is unhealthy"
+      }
+    ],
+    "wake": {
+      "alert_after_ns": 21000000000,
+      "run_id": "1794263456241933000",
+      "trigger_reason": "alert_fired",
+      "mode": "self",
+      "investigation_start": "self",
+      "finding_after_ns": 111000000000,
+      "settled_after_ns": 466000000000
+    },
+    "findings": [
+      {
+        "id": "9a941dd0f5add7a1",
+        "severity": "critical",
+        "category": "reliability",
+        "resource_alias": "paperless",
+        "resource_name": "paperless",
+        "title": "Paperless container is running but failing its Docker healthcheck",
+        "investigation_status": "completed",
+        "investigation_outcome": "needs_attention",
+        "turn_count": 7,
+        "evidence_call_count": 6,
+        "tools_used": [
+          "pulse_query",
+          "pulse_read",
+          "pulse_docker",
+          "patrol_propose_action",
+          "patrol_conclude_investigation"
+        ],
+        "conclusion": "Paperless (app-container-09db7bd0fc80b390) on docker01 is confirmed running but Docker-unhealthy. Root cause inside the container (hung process vs. blocked DB/Redis dependency) could not be confirmed because docker01's command agent is disconnected (command_agent_connected=false), which caused both the log read and the proposed restart action to fail (\"action execution unavailable: Docker / Podman command agent is not connected\"). Host-wide fault is ruled out since peer container nextcloud on the same host is healthy. An operator must restore docker01's Pulse command-agent connection, then inspect paperless logs and approve a restart if a stalled process is confirmed."
+      }
+    ]
+  }
+}

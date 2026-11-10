@@ -1,0 +1,92 @@
+{
+  "source": "sonnet-r1/d1",
+  "captured_at": "2026-11-09T21:24:43Z",
+  "model": "claude-subscription:sonnet",
+  "scenario": "response.web-worker-died",
+  "phase1_scorecard_column": "commands-on",
+  "phase1_grade": "fixed",
+  "phase1_woke_by_itself": "yes",
+  "note": "",
+  "evidence": {
+    "agent_profile": {
+      "name": "commands-on",
+      "commands_enabled": true,
+      "host_name": "docker01"
+    },
+    "alerts": [
+      {
+        "type": "docker-container-health",
+        "level": "critical",
+        "resource_alias": "paperless",
+        "resource_name": "paperless",
+        "message": "Docker container 'paperless' health is unhealthy"
+      }
+    ],
+    "wake": {
+      "alert_after_ns": 20000000000,
+      "run_id": "1794259503268085000",
+      "trigger_reason": "alert_fired",
+      "mode": "self",
+      "investigation_start": "self",
+      "finding_after_ns": 50000000000,
+      "settled_after_ns": 250000000000
+    },
+    "postconditions": [
+      {
+        "predicate": {
+          "probe": "docker.running",
+          "target": "paperless",
+          "operator": "eq",
+          "value": true,
+          "timeout": "30s"
+        },
+        "observed": true,
+        "passed": true,
+        "checked_at": "2026-11-09T21:24:43Z"
+      },
+      {
+        "predicate": {
+          "probe": "docker.health",
+          "target": "paperless",
+          "operator": "eq",
+          "value": "healthy",
+          "timeout": "60s"
+        },
+        "observed": "healthy",
+        "passed": true,
+        "checked_at": "2026-11-09T21:24:43Z"
+      }
+    ],
+    "findings": [
+      {
+        "id": "21015d62bb1b3f0f",
+        "severity": "critical",
+        "category": "reliability",
+        "resource_alias": "paperless",
+        "resource_name": "paperless",
+        "title": "paperless container is running but failing its internal Docker health check",
+        "investigation_status": "completed",
+        "investigation_outcome": "fix_queued",
+        "turn_count": 4,
+        "evidence_call_count": 3,
+        "tools_used": [
+          "pulse_query",
+          "pulse_read",
+          "patrol_propose_action"
+        ],
+        "conclusion": "### Investigation Summary\nThe paperless app container (docker01) was reporting status=running / health=unhealthy with near-zero CPU/memory, 0 restarts. Docker logs for the container showed the gunicorn webserver process received a termination signal and exited (status 143), and the container's internal supervisor logged \"not respawned\" rather than restarting it. `docker inspect .State.Health` confirmed a 19-probe failing streak, each failing with \"wget: can't connect to remote host (127.0.0.1): Connection refused\" — i.e., nothing is listening on the healthcheck port. This is fully consistent with the near-zero CPU/memory: the web process is dead, not hung or waiting on a dependency.\n\n### Root Cause\nCausal mechanism: the gunicorn webserver process inside app-container-09db7bd0fc80b390 (paperless) was terminated (exit 143) and the container's supervisor did not respawn it, leaving no process bound to port 8000/127.0.0.1. The Docker-level container itself stayed up (0 restarts, status=running), so Docker's own restart policy never triggered — only the internal healthcheck detects the dead webserver.\nUnestablished: what originally sent the termination signal to gunicorn (external SIGTERM/SIGKILL, resource limit, orchestration event, or an internal supervisor policy/crash) is not visible in the available logs — no OOM-kill, dependency-outage, or external-signal evidence was captured. No DB/Redis/Tika connectivity evidence was gathered since the failure signature (dead process, connection refused) does not implicate those dependencies.\n\n### Affected Resources\n- app-container-09db7bd0fc80b390 (paperless, docker01): observed symptom — status=running, health=unhealthy, webserver process absent, 0 CPU/memory activity. This is both the affected and the proposed remediation target (no distinct upstream causal resource was identified).\n\n### Recommendation\nA restart action has been proposed and planned for paperless (action_id act_64fdc5c6c34c349ce4da91c134d648b3). It is currently `pending_approval` (admin approval required) and has not been executed — planning is not proof of fix. An admin should approve the restart, then verify: health transitions to `healthy`, CPU/memory show normal non-idle activity (confirming the webserver is actually serving), and FailingStreak resets. If the container becomes unhealthy again shortly after restart, that would point to a recurring external cause (e.g., OOM, dependency outage, or supervisor misconfiguration) requiring deeper log/resource review rather than a transient process exit. Separately, note an image update (ghcr.io/paperless-ngx/paperless-ngx:2.13.5 currently in use, update_available=true) is available and worth reviewing for healthcheck-related fixes, though not confirmed as the cause.\n\n### Conclusion\nNEEDS_ATTENTION: A restart action for paperless (action_id act_64fdc5c6c34c349ce4da91c134d648b3) has been planned and requires admin approval before it executes. An admin should approve it, then verify health becomes \"healthy\" and CPU/memory show normal activity. If the container repeatedly becomes unhealthy after restart, investigate for a recurring external cause (OOM, dependency outage) since the trigger for the original gunicorn termination was not established from available evidence.",
+        "action": {
+          "action_id": "act_64fdc5c6c34c349ce4da91c134d648b3",
+          "capability": "restart",
+          "target_alias": "paperless",
+          "target_resource_id": "app-container-09db7bd0fc80b390",
+          "decision": "approved_executed",
+          "final_state": "completed",
+          "verification_status": "verified",
+          "plan_hash_bound": true,
+          "origin_bound": true
+        }
+      }
+    ]
+  }
+}

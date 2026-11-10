@@ -1,0 +1,30 @@
+{
+  "source": "sonnet-nocmd/d6 full run 1794266011855032000, checked against sonnet-nocmd-final/findings.json",
+  "captured_at": "2026-11-09T23:13:31Z",
+  "model": "claude-subscription:sonnet",
+  "scenario": "response.finished-job-stays-quiet",
+  "phase1_scorecard_column": "commands-off",
+  "phase1_grade": "quiet",
+  "phase1_woke_by_itself": "n/a",
+  "note": "Not a dedicated run. With commands off D3 was never run as its own round. The scorecard cell rests on the full run asked for during D6, which covered the finished job and raised no finding on it.",
+  "evidence": {
+    "agent_profile": {
+      "name": "commands-off",
+      "commands_enabled": false,
+      "host_name": "docker01"
+    },
+    "alerts": [
+      {
+        "type": "docker-container-state",
+        "level": "warning",
+        "resource_alias": "vault-migrate",
+        "resource_name": "vaultwarden-db-migrate",
+        "message": "Docker container 'vaultwarden-db-migrate' is Exited (0) 2 hours ago"
+      }
+    ],
+    "wake": {
+      "mode": "not_applicable",
+      "asked": "full_run"
+    }
+  }
+}

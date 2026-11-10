@@ -30,10 +30,19 @@ type RunnerConfig struct {
 	// AuthorizeRemediation is a second, independent operator gate. Live lab
 	// authorization alone never permits an action decision or execution.
 	AuthorizeRemediation bool
+	// AgentProfile is what the operator says a response run is: commands-on
+	// or commands-off. The run refuses to continue when Pulse reports the
+	// other one. Empty records what Pulse reports without asserting it.
+	AgentProfile string
 }
 
 type QualificationRunner struct {
 	config RunnerConfig
+	// idleQuiet is how long Patrol has to stay idle before a response run
+	// injects its fault. Tests shorten it.
+	idleQuiet time.Duration
+	// askRetry is the pause before asking again while Patrol is busy.
+	askRetry time.Duration
 }
 
 func NewRunner(config RunnerConfig) (*QualificationRunner, error) {
@@ -46,9 +55,12 @@ func NewRunner(config RunnerConfig) (*QualificationRunner, error) {
 	if config.Client == nil {
 		return nil, errors.New("Pulse client is required")
 	}
-	if config.Manifest.Track == TrackRemediation && config.Manifest.Remediation != nil &&
+	if (config.Manifest.Track == TrackRemediation || config.Manifest.Track == TrackResponse) && config.Manifest.Remediation != nil &&
 		config.Manifest.Remediation.Decision != "observe" && !config.AuthorizeRemediation {
 		return nil, errors.New("remediation decision or execution requires explicit authorization")
+	}
+	if config.AgentProfile != "" && !ValidAgentProfile(config.AgentProfile) {
+		return nil, fmt.Errorf("unknown agent profile %q", config.AgentProfile)
 	}
 	if config.RunID == "" {
 		config.RunID = newRunID()
@@ -63,7 +75,7 @@ func NewRunner(config RunnerConfig) (*QualificationRunner, error) {
 	if config.ArtifactRoot == "" {
 		config.ArtifactRoot = filepath.Join("tmp", "patrol-qualification")
 	}
-	return &QualificationRunner{config: config}, nil
+	return &QualificationRunner{config: config, idleQuiet: 20 * time.Second, askRetry: 5 * time.Second}, nil
 }
 
 func newRunID() string {
@@ -188,27 +200,16 @@ func (r *QualificationRunner) Run(ctx context.Context) (report RunReport, termin
 		return report, terminalErr
 	}
 
+	if manifest.Track == TrackResponse {
+		// The response track needs Pulse to know the healthy lab before the
+		// fault appears, so it orders its phases differently from here on.
+		terminalErr = r.runResponse(ctx, &report, prepared)
+		return report, terminalErr
+	}
+
 	faultStarted := time.Now().UTC()
 	if err := r.phase(&report, "inject_and_confirm_ground_truth", func() error {
-		for _, fault := range manifest.Faults {
-			if err := r.config.Lab.ApplyFault(ctx, manifest, prepared, fault); err != nil {
-				return fmt.Errorf("apply fault %s: %w", fault.ID, err)
-			}
-			observations, err := r.config.Lab.Observe(ctx, manifest, prepared, fault.Oracle)
-			truth := FaultTruth{
-				ID: fault.ID, CausalGroup: fault.CausalGroup, TargetAlias: fault.Target,
-				TargetName: prepared.ResourceNames[fault.Target], Active: err == nil && allObservationsPassed(observations),
-				ConfirmedAt: time.Now().UTC(), Observations: observations,
-			}
-			report.GroundTruth.Faults = append(report.GroundTruth.Faults, truth)
-			if err != nil {
-				return fmt.Errorf("confirm fault %s: %w", fault.ID, err)
-			}
-		}
-		for _, control := range manifest.NegativeControls {
-			report.GroundTruth.Negative = append(report.GroundTruth.Negative, NegativeTruth{Alias: control.Resource, Name: prepared.ResourceNames[control.Resource], Reason: control.Reason})
-		}
-		return nil
+		return r.injectFaults(ctx, &report, prepared)
 	}); err != nil {
 		report.Errors = append(report.Errors, err.Error())
 		terminalErr = err
@@ -387,7 +388,46 @@ func (r *QualificationRunner) Run(ctx context.Context) (report RunReport, termin
 	}
 	ApplyProTrackGates(&report.Score, manifest, report.GroundTruth, report.Investigation, report.Remediation)
 
-	if err := r.phase(&report, "revert_and_verify", func() error {
+	if err := r.revertAndVerify(ctx, &report, prepared); err != nil {
+		terminalErr = errors.Join(terminalErr, err)
+	}
+	return report, terminalErr
+}
+
+// injectFaults applies every fault of the scenario and records what the lab
+// oracle saw, then records the negative controls. A fault the oracle cannot
+// confirm stays in the ground truth as inactive and ends the run.
+func (r *QualificationRunner) injectFaults(ctx context.Context, report *RunReport, prepared *PreparedLab) error {
+	manifest := r.config.Manifest
+	for _, fault := range manifest.Faults {
+		if err := r.config.Lab.ApplyFault(ctx, manifest, prepared, fault); err != nil {
+			return fmt.Errorf("apply fault %s: %w", fault.ID, err)
+		}
+		observations, err := r.config.Lab.Observe(ctx, manifest, prepared, fault.Oracle)
+		targetName := prepared.ResourceNames[fault.Target]
+		if state := prepared.HostFilesystems[fault.Target]; state != nil {
+			targetName = state.MountPath
+		}
+		report.GroundTruth.Faults = append(report.GroundTruth.Faults, FaultTruth{
+			ID: fault.ID, CausalGroup: fault.CausalGroup, TargetAlias: fault.Target,
+			TargetName: targetName, Active: err == nil && allObservationsPassed(observations),
+			ConfirmedAt: time.Now().UTC(), Observations: observations,
+		})
+		if err != nil {
+			return fmt.Errorf("confirm fault %s: %w", fault.ID, err)
+		}
+	}
+	for _, control := range manifest.NegativeControls {
+		report.GroundTruth.Negative = append(report.GroundTruth.Negative, NegativeTruth{Alias: control.Resource, Name: prepared.ResourceNames[control.Resource], Reason: control.Reason})
+	}
+	return nil
+}
+
+// revertAndVerify undoes every fault in reverse order and confirms with the
+// lab oracle that the baseline is back. It records its own failure.
+func (r *QualificationRunner) revertAndVerify(ctx context.Context, report *RunReport, prepared *PreparedLab) error {
+	manifest := r.config.Manifest
+	err := r.phase(report, "revert_and_verify", func() error {
 		for i := len(manifest.Faults) - 1; i >= 0; i-- {
 			fault := manifest.Faults[i]
 			if err := r.config.Lab.RevertFault(ctx, manifest, prepared, fault); err != nil {
@@ -409,11 +449,11 @@ func (r *QualificationRunner) Run(ctx context.Context) (report RunReport, termin
 			return err
 		}
 		return nil
-	}); err != nil {
+	})
+	if err != nil {
 		report.Errors = append(report.Errors, err.Error())
-		terminalErr = errors.Join(terminalErr, err)
 	}
-	return report, terminalErr
+	return err
 }
 
 func validatePatrolRunModelEvidence(manifest Manifest, run PatrolRun) error {

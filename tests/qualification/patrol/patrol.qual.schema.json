@@ -12,7 +12,7 @@
     "title": {"type": "string", "minLength": 1},
     "description": {"type": "string", "minLength": 1},
     "owner": {"type": "string", "minLength": 1},
-    "track": {"enum": ["watch", "investigation", "remediation"]},
+    "track": {"enum": ["watch", "investigation", "remediation", "response"]},
     "risk": {"type": "string"},
     "tags": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
     "lab": {"$ref": "#/$defs/lab"},
@@ -24,6 +24,8 @@
     "patrol": {"$ref": "#/$defs/patrol"},
     "investigation": {"$ref": "#/$defs/investigation"},
     "remediation": {"$ref": "#/$defs/remediation"},
+    "engagement": {"$ref": "#/$defs/engagement"},
+    "outcome": {"$ref": "#/$defs/outcome"},
     "security": {"$ref": "#/$defs/security"},
     "budgets": {"$ref": "#/$defs/budgets"},
     "repeat": {"$ref": "#/$defs/repeat"},
@@ -39,8 +41,12 @@
     },
     "resource": {
       "type": "object", "additionalProperties": false,
-      "required": ["alias", "kind", "name"],
-      "properties": {"alias": {"type": "string"}, "kind": {"const": "container"}, "name": {"type": "string"}, "image": {"type": "string"}, "command": {"type": "array", "items": {"type": "string"}}, "restart": {"type": "string"}, "healthcheck": {"type": "array", "items": {"type": "string"}}, "health_every": {"type": "string"}, "fault_volume": {"type": "boolean"}, "scratch_storage": {"type": "boolean"}, "labels": {"type": "object", "additionalProperties": {"type": "string"}}}
+      "required": ["alias", "kind"],
+      "allOf": [
+        {"if": {"properties": {"kind": {"const": "container"}}}, "then": {"required": ["name"]}},
+        {"if": {"properties": {"kind": {"const": "host_filesystem"}}}, "then": {"required": ["mount_path"], "properties": {"alias": true, "kind": true, "mount_path": true}, "additionalProperties": false}}
+      ],
+      "properties": {"alias": {"type": "string"}, "kind": {"enum": ["container", "host_filesystem"]}, "name": {"type": "string"}, "fixture": {"type": "string", "minLength": 1}, "env": {"type": "object", "additionalProperties": {"type": "string"}}, "volume": {"type": "string", "minLength": 1}, "mount_path": {"type": "string", "pattern": "^/(mnt|srv|media)/[a-z0-9][a-z0-9._-]{1,63}$"}, "image": {"type": "string"}, "command": {"type": "array", "items": {"type": "string"}}, "restart": {"type": "string"}, "healthcheck": {"type": "array", "items": {"type": "string"}}, "health_every": {"type": "string"}, "fault_volume": {"type": "boolean"}, "scratch_storage": {"type": "boolean"}, "labels": {"type": "object", "additionalProperties": {"type": "string"}}}
     },
     "predicate": {
       "type": "object", "additionalProperties": false,
@@ -52,7 +58,7 @@
       "required": ["id", "causal_group", "target", "injector", "oracle", "expected_finding", "required"],
       "properties": {
         "id": {"type": "string"}, "causal_group": {"type": "string"}, "target": {"type": "string"}, "required": {"type": "boolean"}, "detect_within": {"type": "string"},
-        "injector": {"type": "object", "additionalProperties": false, "required": ["kind", "resource"], "properties": {"kind": {"enum": ["marker_enable", "health_process_stop", "fill_scratch_storage", "stop", "disconnect_network", "kill"]}, "resource": {"type": "string"}, "value": {"type": "string"}}},
+        "injector": {"type": "object", "additionalProperties": false, "required": ["kind", "resource"], "properties": {"kind": {"enum": ["marker_enable", "health_process_stop", "fill_scratch_storage", "stop", "disconnect_network", "kill", "service_process_exit", "crash_once", "recreate_with_env", "fill_host_filesystem"]}, "resource": {"type": "string"}, "value": {"type": "string"}}},
         "oracle": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/predicate"}},
         "revert_oracle": {"type": "array", "items": {"$ref": "#/$defs/predicate"}},
         "related_resources": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
@@ -117,6 +123,30 @@
         "postconditions": {"type": "array", "items": {"$ref": "#/$defs/predicate"}}
       }
     },
+    "engagement": {
+      "type": "object", "additionalProperties": false,
+      "required": ["alert_timeout", "natural_wake_timeout", "investigation_start_timeout", "fallback"],
+      "properties": {
+        "alert_timeout": {"type": "string"},
+        "natural_wake_timeout": {"type": "string"},
+        "investigation_start_timeout": {"type": "string"},
+        "fallback": {"enum": ["scoped_run"]}
+      }
+    },
+    "outcome": {
+      "type": "object", "additionalProperties": false,
+      "required": ["expect"],
+      "properties": {
+        "expect": {"enum": ["fixed", "handed_over", "quiet"]},
+        "decisive_terms": {"type": "array", "minItems": 1, "items": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}}},
+        "area_terms": {"type": "array", "minItems": 1, "items": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}}},
+        "misdirection_terms": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+      },
+      "allOf": [
+        {"if": {"properties": {"expect": {"enum": ["fixed", "handed_over"]}}}, "then": {"required": ["decisive_terms"]}},
+        {"if": {"properties": {"expect": {"const": "quiet"}}}, "then": {"properties": {"expect": true}, "additionalProperties": false}}
+      ]
+    },
     "security": {
       "type": "object", "additionalProperties": false,
       "required": ["require_fault_intact_after_patrol", "require_no_unexpected_mutation"],
@@ -175,6 +205,7 @@
   },
   "allOf": [
     {"if": {"properties": {"track": {"enum": ["investigation", "remediation"]}}}, "then": {"required": ["investigation"]}},
-    {"if": {"properties": {"track": {"const": "remediation"}}}, "then": {"required": ["remediation"]}}
+    {"if": {"properties": {"track": {"const": "remediation"}}}, "then": {"required": ["remediation"]}},
+    {"if": {"properties": {"track": {"const": "response"}}}, "then": {"required": ["engagement", "outcome"], "not": {"required": ["investigation"]}}, "else": {"not": {"anyOf": [{"required": ["engagement"]}, {"required": ["outcome"]}]}}}
   ]
 }
