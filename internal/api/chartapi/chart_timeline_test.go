@@ -52,6 +52,7 @@ func timelineFixture(count int, shared bool) map[string][]monitoring.MetricPoint
 func TestConvertMetricsForChartSharedAndDivergentTimelines(t *testing.T) {
 	t.Parallel()
 	rng := rand.New(rand.NewSource(20261025))
+	var selection chartPointSelection // reuse across resources and cap changes
 	for scenario := 0; scenario < 100; scenario++ {
 		n := []int{0, 1, 2, 17, 121, 240, 500, 777}[scenario%8]
 		source := timelineFixture(n, scenario%2 == 0)
@@ -108,6 +109,15 @@ func TestConvertMetricsForChartSharedAndDivergentTimelines(t *testing.T) {
 				}
 				if string(gotJSON) != string(wantJSON) {
 					t.Fatal("wire bytes changed")
+				}
+				reusedOldest := int64(math.MaxInt64)
+				reused := selection.convert(source, &reusedOldest, limit)
+				reusedJSON, err := json.Marshal(reused)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if !reflect.DeepEqual(reused, want) || reusedOldest != wantOldest || string(reusedJSON) != string(wantJSON) {
+					t.Fatal("response-scoped selection changed observations, oldest or wire bytes")
 				}
 				for metric, points := range got {
 					if len(points) > 0 {
