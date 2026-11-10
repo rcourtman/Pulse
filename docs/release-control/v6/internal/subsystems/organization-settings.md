@@ -15,6 +15,21 @@
 
 ## Purpose
 
+### Keyboard recovery after an uncertain access change
+
+Organization Access hands lost panel focus to its existing unavailable warning
+when a focused control is removed after an uncertain change. The next Tab reaches
+the explicit read-only Reload access action. A reload that succeeds focuses the
+accepted organization summary; a failed reload focuses the new warning. Both
+targets are programmatically focusable, not additional Tab stops. Initial and
+background loads and successful-mutation refreshes do not focus the summary.
+Focus elsewhere is preserved, and context changes, hidden surfaces and disposal
+cancel stale handoffs. Visible information, mutation/authority fences, readback
+and no-write-retry behavior are unchanged. `OrganizationAccessPanel.test.tsx`
+covers failure, reload, no-steal, context and cleanup paths. Consuming-App browser
+proof covers keyboard recovery and exact one-write/read-only reload behavior at
+desktop and phone sizes in both themes; native screen-reader speech is unmeasured.
+
 ### Saved role IDs distinguish namesake access decisions
 
 Roles and User Access display the complete saved role ID separately from its

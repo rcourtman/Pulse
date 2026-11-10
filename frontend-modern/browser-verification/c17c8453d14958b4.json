@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "base_sha": "44201d10633fff4c6e7b6f5af26e48ad7d435177",
+  "verified_at": "2026-11-10T16:36:18Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/OrganizationAccessPanel.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/OrganizationAccessPanel.tsx": "641a3333749ed379ed3dfc5e4c85944af1e5e87998a74e774de80197d88a43d3"
+  },
+  "routes": [
+    "/settings/organization/access"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Actual-App Organization Access with synthetic saved owner and viewer; no initial focus grab, layout/text/controls unchanged.",
+    "Uncertain role change removes stale inventory; focus moves to named warning, next Tab reaches Reload access.",
+    "Explicit reload that fails focuses fresh warning; next Tab reaches Reload access.",
+    "Explicit reload that succeeds focuses the accepted organization summary; next Tab reaches Invite user ID. Saved editor role is read back, not an optimistic value.",
+    "32 inspected captures/16 same-fixture before/after pairs, both themes at desktop/phone; focus ring is the only intentional visible difference."
+  ],
+  "interactions": [
+    "Used native role selector and ArrowDown; asserted exact single POST userId/role body, encoded organization route and CSRF.",
+    "Synthetic server stores Editor but returns500; no automatic retry and stale controls removed.",
+    "Used Enter on Reload access, first503 then successful saved reads; mutation count remains exactly1 in every case.",
+    "Asserted warning/summary actual activeElement, next-Tab target and no horizontal overflow; browser/server closed."
+  ],
+  "browser": {
+    "name": "Chromium",
+    "version": "141.0.7390.37",
+    "playwright": "1.56.1"
+  },
+  "limitations": [
+    "Offline actual App/API client fixtures, not live authorization, original-client recovery, installed access or release availability.",
+    "No native screen-reader speech, physical mobile keyboard, WebKit or Firefox acceptance claimed.",
+    "No-steal/context/disposal/pointer intent and other mutation controls have registered rendered test coverage; source VM proof recorded separately."
+  ]
+}

@@ -517,6 +517,192 @@ describe('OrganizationAccessPanel', () => {
   );
 });
 
+describe('Organization Access keyboard recovery', () => {
+  const warning = () => screen.getByRole('alert', { name: 'Organization access unavailable' });
+  const summary = () => screen.getByText('Access for', { exact: false });
+  const settleFocus = () => new Promise((resolve) => setTimeout(resolve, 10));
+
+  it.each(['invite', 'role', 'remove'])(
+    'focuses the warning after an uncertain %s without repeating the write',
+    async (operation) => {
+      const request = deferred<never>();
+      const change = {
+        invite: inviteMemberMock,
+        role: updateMemberRoleMock,
+        remove: removeMemberMock,
+      }[operation]!;
+      change.mockReturnValueOnce(request.promise);
+      renderPanel();
+      const input = await screen.findByRole('textbox', { name: 'Invite user ID' });
+      fireEvent.input(input, { target: { value: 'new-user' } });
+      if (operation === 'role') {
+        const control = screen.getByRole('combobox', { name: 'Role for user-2' });
+        control.focus();
+        fireEvent.change(control, { target: { value: 'editor' } });
+      } else {
+        const control = screen.getByRole('button', {
+          name: operation === 'invite' ? 'Invite' : 'Remove user-2 from organization',
+        });
+        control.focus();
+        fireEvent.click(control);
+      }
+      request.reject(new Error('response lost after applying change'));
+      await waitFor(() => expect(warning()).toHaveFocus());
+      expect(warning()).toHaveTextContent('last access change could not be confirmed');
+      expect(warning()).toHaveAttribute('tabindex', '-1');
+      expect(warning()).not.toHaveAttribute('aria-describedby');
+      expect(screen.getByRole('button', { name: 'Reload access' })).toBeEnabled();
+      expect(screen.queryByText('user-2', { exact: true })).not.toBeInTheDocument();
+      expect(change).toHaveBeenCalledTimes(1);
+      expect(writes().reduce((sum, write) => sum + write.mock.calls.length, 0)).toBe(1);
+      expect(orgGetMock).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it('does not steal outside focus when an uncertain change finishes', async () => {
+    const request = deferred<never>();
+    updateMemberRoleMock.mockReturnValueOnce(request.promise);
+    render(() => (
+      <>
+        <button>Outside access panel</button>
+        <OrganizationAccessPanel currentUser="user-1" />
+      </>
+    ));
+    const control = await screen.findByRole('combobox', { name: 'Role for user-2' });
+    control.focus();
+    fireEvent.change(control, { target: { value: 'editor' } });
+    const outside = screen.getByRole('button', { name: 'Outside access panel' });
+    outside.focus();
+    request.reject(new Error('response unavailable'));
+    await screen.findByRole('alert');
+    await settleFocus();
+    expect(outside).toHaveFocus();
+    expect(updateMemberRoleMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not take focus on an initial read failure or an unrequested background read', async () => {
+    orgGetMock.mockRejectedValueOnce(new Error('Unavailable'));
+    renderPanel();
+    await screen.findByRole('alert');
+    await settleFocus();
+    expect(document.body).toHaveFocus();
+    eventBusEmitMock('organizations_changed');
+    await screen.findByText('user-2');
+    await settleFocus();
+    expect(document.body).toHaveFocus();
+    expect(summary()).toHaveAttribute('tabindex', '-1');
+    expect(summary()).not.toHaveAttribute('aria-label');
+    expectNoWrites();
+  });
+
+  it.each(['keyboard', 'pointer without button focus'])(
+    'focuses the saved summary after an explicit %s reload, without a write',
+    async (activation) => {
+      orgGetMock.mockRejectedValueOnce(new Error('Unavailable'));
+      renderPanel();
+      const reload = await screen.findByRole('button', { name: 'Reload access' });
+      if (activation === 'keyboard') reload.focus();
+      fireEvent.click(reload);
+      await waitFor(() => expect(summary()).toHaveFocus());
+      expect(summary()).toHaveTextContent('Access for Organization A (org-a)');
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+      expect(orgGetMock).toHaveBeenCalledTimes(2);
+      expectNoWrites();
+    },
+  );
+
+  it('returns focus to a fresh warning when an explicit saved-access reload fails', async () => {
+    orgGetMock.mockRejectedValue(new Error('Unavailable'));
+    renderPanel();
+    const reload = await screen.findByRole('button', { name: 'Reload access' });
+    const previous = warning();
+    reload.focus();
+    fireEvent.click(reload);
+    await waitFor(() => expect(warning()).toHaveFocus());
+    expect(warning()).not.toBe(previous);
+    expect(orgGetMock).toHaveBeenCalledTimes(2);
+    expectNoWrites();
+  });
+
+  it('preserves focus deliberately moved elsewhere during an explicit reload', async () => {
+    const read = deferred<typeof baseOrg>();
+    orgGetMock.mockRejectedValueOnce(new Error('Unavailable')).mockReturnValueOnce(read.promise);
+    render(() => (
+      <>
+        <button>Outside access panel</button>
+        <OrganizationAccessPanel currentUser="user-1" />
+      </>
+    ));
+    const reload = await screen.findByRole('button', { name: 'Reload access' });
+    reload.focus();
+    fireEvent.click(reload);
+    const outside = screen.getByRole('button', { name: 'Outside access panel' });
+    outside.focus();
+    read.resolve(baseOrg);
+    await screen.findByText('user-2');
+    await settleFocus();
+    expect(outside).toHaveFocus();
+    expectNoWrites();
+  });
+
+  it.each(['organization', 'user', 'hidden surface'])(
+    'cancels explicit reload focus when the %s changes',
+    async (context) => {
+      const read = deferred<typeof baseOrg>();
+      orgGetMock.mockRejectedValueOnce(new Error('Unavailable')).mockReturnValueOnce(read.promise);
+      const [user, setUser] = createSignal('user-1');
+      render(() => <OrganizationAccessPanel currentUser={user()} />);
+      const reload = await screen.findByRole('button', { name: 'Reload access' });
+      reload.focus();
+      fireEvent.click(reload);
+      if (context === 'organization') {
+        getOrgIDMock.mockReturnValue('org-b');
+        orgGetMock.mockResolvedValue({ ...baseOrg, id: 'org-b' });
+        eventBusEmitMock('org_switched');
+      } else if (context === 'user') {
+        setUser('different-user');
+      } else {
+        setHidden(true);
+      }
+      read.resolve(baseOrg);
+      if (context !== 'hidden surface') await screen.findByText('user-2');
+      await settleFocus();
+      expect(document.body).toHaveFocus();
+      expectNoWrites();
+    },
+  );
+
+  it('does not change successful-mutation refresh focus or retry its write', async () => {
+    renderPanel();
+    const control = await screen.findByRole('combobox', { name: 'Role for user-2' });
+    control.focus();
+    fireEvent.change(control, { target: { value: 'editor' } });
+    await waitFor(() => expect(orgGetMock).toHaveBeenCalledTimes(2));
+    await screen.findByText('user-2');
+    await settleFocus();
+    expect(document.body).toHaveFocus();
+    expect(updateMemberRoleMock).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('cancels a pending focus handoff when the panel unmounts', async () => {
+    const request = deferred<never>();
+    updateMemberRoleMock.mockReturnValueOnce(request.promise);
+    const view = renderPanel();
+    const control = await screen.findByRole('combobox', { name: 'Role for user-2' });
+    control.focus();
+    fireEvent.change(control, { target: { value: 'editor' } });
+    request.reject(new Error('response unavailable'));
+    await Promise.resolve();
+    expect(warning()).toBeInTheDocument();
+    const focus = vi.spyOn(warning(), 'focus');
+    view.unmount();
+    await settleFocus();
+    expect(focus).not.toHaveBeenCalled();
+    focus.mockRestore();
+  });
+});
+
 describe('Organization Access selection safety', () => {
   it('does not restore the previous organization after a failed switch, and offers a read-only retry', async () => {
     renderPanel();
