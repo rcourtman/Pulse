@@ -3705,7 +3705,7 @@ func (p *PatrolService) seedFindingsAndContextState(scope *PatrolScope, snap pat
 		// help, so this run is asked only for what the alert leaves out.
 		sb.WriteString(fmt.Sprintf("Note: This check looks at the collected %s alert on %q, which has stayed active: %s = %.1f (threshold %.1f). "+
 			"The operator can already see this alert. Look for what it does not say: the cause, what changed, what is using the space, or why the workload stopped. "+
-			"Report a finding when one of these is true: you found the cause; Pulse declares an action for this resource that would fix it (they are listed below); or reading logs or disk usage on the machine would likely establish the cause. "+
+			"Report a finding when one of these is true: you found the cause; Pulse can run an action for this resource that would fix it (the ones it can run are listed below); or reading logs or disk usage on the machine would likely establish the cause. "+
 			"Do not report a finding that only repeats the alert. Report nothing when the condition is expected or only a person can change it, such as a finished one-shot job, a deliberate setting, or hardware wear with no action.\n\n",
 			level, ac.ResourceName, ac.AlertType, ac.Value, ac.Threshold))
 	} else if scope != nil && scope.AlertContext != nil && scope.Reason != TriggerReasonAlertCleared {

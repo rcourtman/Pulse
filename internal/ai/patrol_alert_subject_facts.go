@@ -1,17 +1,32 @@
 package ai
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 )
+
+// ActionCapabilityLookup answers which actions Pulse can run for a resource
+// now, and why not when it can run none. It is the catalog an investigation
+// reads from the action broker, so the scan and the investigation that follows
+// it cannot disagree about what is within reach.
+type ActionCapabilityLookup func(ctx context.Context, resourceID string) (aicontracts.ActionCapabilityCatalog, error)
+
+// patrolActionCapabilityLookupTimeout bounds the lookup. It reads the
+// registry and the executors' in-memory availability checks, and runs no
+// agent preflight.
+const patrolActionCapabilityLookupTimeout = 5 * time.Second
 
 // patrolAlertSubjectFacts tells a run that looks at an alert what the scan has
 // no other way to see about the resource the alert is on: which actions Pulse
-// declares for it, whether a Proxmox guest is set to start on boot, and
-// whether Pulse has already reported that the guest stopped.
+// can run for it, whether Pulse can read logs on its host, whether a Proxmox
+// guest is set to start on boot, and whether Pulse has already reported that
+// the guest stopped.
 //
 // The alert note asks for a finding when Pulse has an action that would fix
 // the condition, and for silence when the condition is expected. The seed
@@ -19,10 +34,13 @@ import (
 // reported nothing about the stop, and filed the one other fact on the guest's
 // row, that it had never been backed up.
 //
-// The actions are the ones the inventory declares. Whether one can run now is
-// decided when it is planned: a Proxmox guest declares Start on a node Pulse
-// has no runner on. So the line says "declares", and tells the scan not to
-// promise. An investigation gets the checked list and the refusal.
+// The actions are the ones that can run, not the ones the inventory declares.
+// A stopped Proxmox guest declares Start on a node Pulse has no runner on, and
+// a container declares Start on a host whose agent was installed without
+// command access. Told the declared list, a scan on such a host wrote that
+// Pulse "lists start and update as available actions". When nothing can run,
+// the line carries the reason Pulse wrote for the refusal. When Pulse cannot
+// check, the seed says nothing about actions.
 func (p *PatrolService) patrolAlertSubjectFacts(scope *PatrolScope, snap patrolRuntimeState) string {
 	if scope == nil || scope.AlertContext == nil || scope.Reason == TriggerReasonAlertCleared {
 		return ""
@@ -35,12 +53,7 @@ func (p *PatrolService) patrolAlertSubjectFacts(scope *PatrolScope, snap patrolR
 		if name == "" {
 			name = strings.TrimSpace(scope.AlertContext.ResourceName)
 		}
-		if actions := patrolDeclaredActionNames(subject.Capabilities); len(actions) > 0 {
-			lines = append(lines, fmt.Sprintf("Pulse declares these actions for %q: %s. Whether one can run here is checked when it is proposed, so do not promise that it will work.",
-				name, strings.Join(actions, ", ")))
-		} else {
-			lines = append(lines, fmt.Sprintf("Pulse declares no action for %q.", name))
-		}
+		lines = append(lines, p.patrolRunnableActionLines(subject.ID, name)...)
 	}
 
 	if onBoot, stopped, isGuest := patrolAlertGuestStartOnBoot(scope, snap); isGuest && onBoot != nil {
@@ -92,18 +105,84 @@ func patrolAlertSubjectResource(scope *PatrolScope, snap patrolRuntimeState) *un
 	return subject
 }
 
-func patrolDeclaredActionNames(capabilities []unifiedresources.ResourceCapability) []string {
-	seen := make(map[string]bool, len(capabilities))
-	var names []string
-	for _, capability := range capabilities {
-		name := strings.TrimSpace(capability.Name)
-		if name != "" && !seen[name] {
-			seen[name] = true
-			names = append(names, name)
+// patrolRunnableActionLines states what Pulse can run for a resource, from the
+// same catalog an investigation is given.
+func (p *PatrolService) patrolRunnableActionLines(resourceID, name string) []string {
+	if p == nil {
+		return nil
+	}
+	p.mu.RLock()
+	lookup := p.actionCapabilityLookup
+	p.mu.RUnlock()
+	if lookup == nil {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), patrolActionCapabilityLookupTimeout)
+	defer cancel()
+	catalog, err := lookup(ctx, resourceID)
+	if err != nil {
+		return nil
+	}
+
+	var lines []string
+	runnable := make([]string, 0, len(catalog.Capabilities))
+	for _, capability := range catalog.Capabilities {
+		runnable = append(runnable, capability.Name)
+	}
+	runnable = patrolSortedDistinct(runnable)
+	switch {
+	case len(runnable) > 0:
+		lines = append(lines, fmt.Sprintf("Pulse can run these actions for %q: %s.", name, strings.Join(runnable, ", ")))
+	case catalog.GuestActionsUnavailable != nil && strings.TrimSpace(catalog.GuestActionsUnavailable.Reason) != "":
+		lines = append(lines, fmt.Sprintf("Pulse cannot run an action for %q. %s That is how this install is set up, not a fault.",
+			name, strings.TrimSpace(catalog.GuestActionsUnavailable.Reason)))
+	case catalog.CommandsDisabled != nil:
+		// The commands line below is the reason.
+		lines = append(lines, fmt.Sprintf("Pulse cannot run an action for %q.", name))
+	case len(catalog.Unavailable) > 0:
+		reasons := make([]string, 0, len(catalog.Unavailable))
+		for _, refusal := range catalog.Unavailable {
+			reasons = append(reasons, strings.TrimSpace(refusal.Reason))
+		}
+		reasons = patrolSortedDistinct(reasons)
+		if len(reasons) > 2 {
+			reasons = reasons[:2]
+		}
+		line := fmt.Sprintf("Pulse cannot run an action for %q now.", name)
+		if len(reasons) > 0 {
+			line += " " + strings.Join(reasons, " ")
+		}
+		lines = append(lines, line)
+	default:
+		lines = append(lines, fmt.Sprintf("Pulse has no action for %q.", name))
+	}
+	if host := catalog.CommandsDisabled; host != nil {
+		hostName := strings.TrimSpace(host.HostName)
+		if hostName == "" {
+			hostName = "its host"
+		}
+		reason := strings.TrimSpace(host.Reason)
+		if reason == "" {
+			reason = fmt.Sprintf("Commands are not enabled on the Pulse agent on %s.", hostName)
+		}
+		lines = append(lines, fmt.Sprintf("%s Pulse cannot read logs or files on %s or run an action that needs its agent. That is how the agent was installed, not a fault, so do not say an action is available and do not tell the user to reconnect or reinstall an agent.",
+			reason, hostName))
+	}
+	return lines
+}
+
+func patrolSortedDistinct(values []string) []string {
+	seen := make(map[string]bool, len(values))
+	var out []string
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value != "" && !seen[value] {
+			seen[value] = true
+			out = append(out, value)
 		}
 	}
-	sort.Strings(names)
-	return names
+	sort.Strings(out)
+	return out
 }
 
 // patrolAlertGuestStartOnBoot reads the start-on-boot setting of the Proxmox

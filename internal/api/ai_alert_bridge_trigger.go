@@ -2,15 +2,18 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/unified"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 	"github.com/rs/zerolog/log"
 )
 
@@ -283,6 +286,22 @@ func wireAlertFlappingPostmortem(alertManager *alerts.Manager, patrol *ai.Patrol
 	})
 }
 
+// patrolActionCapabilityLookup answers Patrol's scan from the organisation's
+// action broker. The broker is looked up on every call: it is installed after
+// the router is built, and Patrol can start before that.
+func (r *Router) patrolActionCapabilityLookup(orgID string) ai.ActionCapabilityLookup {
+	return func(ctx context.Context, resourceID string) (aicontracts.ActionCapabilityCatalog, error) {
+		if r == nil || r.aiSettingsHandler == nil {
+			return aicontracts.ActionCapabilityCatalog{}, errors.New("no action broker")
+		}
+		broker := r.aiSettingsHandler.actionBrokerFor(approval.NormalizeOrgID(orgID))
+		if broker == nil {
+			return aicontracts.ActionCapabilityCatalog{}, errors.New("no action broker")
+		}
+		return broker.Capabilities(ctx, resourceID)
+	}
+}
+
 // startUnifiedAlertBridge builds an organisation's unified alert store and
 // alert bridge on the given alert manager, wires the bridge to Patrol, starts
 // it, and records how to move it when a monitor reload replaces the manager.
@@ -298,6 +317,12 @@ func (r *Router) startUnifiedAlertBridge(orgID string, aiService *ai.Service, al
 
 	// Set patrol trigger function (triggers mini-patrol on alert events)
 	patrol := aiService.GetPatrolService()
+	if patrol != nil {
+		// A run that looks at an alert is told which actions can run for the
+		// alert's resource. It gets the action broker's answer, the one an
+		// investigation of the same resource gets.
+		patrol.SetActionCapabilityLookup(r.patrolActionCapabilityLookup(orgID))
+	}
 	if patrol != nil && ai.BackgroundAutomationDisabledForDev() {
 		log.Info().
 			Str("env", ai.DevDisableBackgroundAIEnv).

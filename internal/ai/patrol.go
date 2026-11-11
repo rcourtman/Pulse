@@ -562,6 +562,10 @@ type PatrolService struct {
 	// Unified resolver callback - marks findings resolved in unified store
 	unifiedFindingResolver func(findingID string)
 
+	// actionCapabilityLookup answers which actions can run for a resource now
+	// (the action broker's catalog). Nil when no broker is wired.
+	actionCapabilityLookup ActionCapabilityLookup
+
 	// Push notification callback - sends push via relay to mobile devices
 	pushNotifyCallback PushNotifyCallback
 
