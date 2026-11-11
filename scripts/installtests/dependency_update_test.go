@@ -36,9 +36,9 @@ const alpine324RuntimeDigest = "be2656061b536c1883c4034790e21d0a09c5aaaf51968b89
 
 const node24Amd64FrontendDigest = "a34ab6d7f6f4813f4d0c5469d74685604b962fbdbf5793a7bc7b4998ecb867c8"
 
-const go12610AlpineBuilderDigest = "87c65a688975c0b1d4585d204874c45ca78354670e3a5f11368c5a492303d696"
+const go12611AlpineBuilderDigest = "ae52b5bc6ed045a9ed26ab03dc19327a802a9cc9aa8b27ed57f5c6b60579b0bb"
 
-const go12610DevcontainerDigest = "cfa27959837144bf4649802ba38e59daffd0dd2a7994aa83daaf113285b0f551"
+const go12611DevcontainerDigest = "7af425da11f4fc1a9308eb704369e3f6d1c44e35bac0f874a59ade3f20fdc07e"
 
 func TestGoContainerBuildersUseGovernedToolchain(t *testing.T) {
 	// The devcontainer has a different OS base, but must retain the module's
@@ -48,10 +48,10 @@ func TestGoContainerBuildersUseGovernedToolchain(t *testing.T) {
 		pattern string
 		image   string
 	}{
-		{"Dockerfile", `(?m)^FROM --platform=linux/amd64 (\S+) AS backend-builder$`, "golang:1.26.10-alpine@sha256:" + go12610AlpineBuilderDigest},
-		{"deploy/provider-msp/Dockerfile.control-plane", `(?m)^FROM --platform=\$BUILDPLATFORM (\S+) AS builder$`, "golang:1.26.10-alpine@sha256:" + go12610AlpineBuilderDigest},
-		{"tests/integration/mock-github-server/Dockerfile", `(?m)^FROM (\S+) AS builder$`, "golang:1.26.10-alpine@sha256:" + go12610AlpineBuilderDigest},
-		{".devcontainer/Dockerfile", `(?m)^FROM (\S+)$`, "golang:1.26.10@sha256:" + go12610DevcontainerDigest},
+		{"Dockerfile", `(?m)^FROM --platform=linux/amd64 (\S+) AS backend-builder$`, "golang:1.26.11-alpine@sha256:" + go12611AlpineBuilderDigest},
+		{"deploy/provider-msp/Dockerfile.control-plane", `(?m)^FROM --platform=\$BUILDPLATFORM (\S+) AS builder$`, "golang:1.26.11-alpine@sha256:" + go12611AlpineBuilderDigest},
+		{"tests/integration/mock-github-server/Dockerfile", `(?m)^FROM (\S+) AS builder$`, "golang:1.26.11-alpine@sha256:" + go12611AlpineBuilderDigest},
+		{".devcontainer/Dockerfile", `(?m)^FROM (\S+)$`, "golang:1.26.11@sha256:" + go12611DevcontainerDigest},
 	} {
 		t.Run(fixture.path, func(t *testing.T) {
 			contents, err := os.ReadFile(repoFile(fixture.path))
@@ -68,7 +68,7 @@ func TestGoContainerBuildersUseGovernedToolchain(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !regexp.MustCompile(`(?m)^toolchain go1\.26\.10$`).Match(module) {
+	if !regexp.MustCompile(`(?m)^toolchain go1\.26\.11$`).Match(module) {
 		t.Fatal("container compiler pins must match the governed go.mod toolchain")
 	}
 }

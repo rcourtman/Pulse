@@ -6485,8 +6485,8 @@ governed release toolchain and immutable Go builder digest together, not to
 suppress the scanner or produce release artifacts with an older patched-over
 runtime.
 The hosted control-plane source builder and integration mock builder are both
-on the reviewed `golang:1.26.10-alpine` digest
-`sha256:a2012b4a1d1f9f7e9f44e0d39b805a901e856b1dd80b4e6ee4338db547050308`.
+on the reviewed `golang:1.26.11-alpine` digest
+`sha256:ae52b5bc6ed045a9ed26ab03dc19327a802a9cc9aa8b27ed57f5c6b60579b0bb`.
 `TestProviderMSPGoBuilderMatchesIntegrationMock` pins their exact agreement;
 it does not pull the image, prove its registry contents, or qualify a deployed
 control plane. The release publisher's prebuilt control-plane target is a
@@ -6542,19 +6542,22 @@ generated row-level inventory that does prove completeness, needs a declarative 
 record in the preparation snapshot: a marker in the body alone could be deleted to restore
 legacy acceptance, and a frozen in-flight release keeps its own renderer.
 
-As of 2026-10-21, the governed release floor is Go `1.26.10`. It supersedes
-`1.26.9`, whose `crypto/x509` still verifies chains through the compromised
-eMudhra intermediate CAs that Go 1.26.10 distrusts (CVE-2026-111943, Go issue
-82345). Pulse's certificate-verifying outbound TLS clients, such as licence,
-update, webhook and AI-provider connections, verify chains with that package, so
-an older compiler leaves an interception path open even though `govulncheck`
+As of 2026-11-11, the governed release floor is Go `1.26.11`. It supersedes
+`1.26.10`, whose `net/http` HTTP/1 server can crash on a `MaxBytesReader`
+header race (GO-2026-6859, CVE-2026-97054). `govulncheck` reports that
+advisory as reachable through Pulse's HTTP servers and clients. The 2026-10-21
+floor of `1.26.10` remains the minimum for the `crypto/x509` distrust of the
+compromised eMudhra intermediate CAs (CVE-2026-111943, Go issue 82345).
+Pulse's certificate-verifying outbound TLS clients, such as licence, update,
+webhook and AI-provider connections, verify chains with that package, so an
+older compiler leaves an interception path open even though `govulncheck`
 need not report a called symbol for a trust-store change. The 2026-10-11 floor
 of `1.26.9` remains the minimum for the 2026-10-08 `net/http`, `crypto/tls`,
 `html/template`, `os`, and `net/textproto` advisories, and the
 `golang.org/x/net` floor is `v0.60.0` for the same advisories. Source-built
 container stages pin the Docker Official Images manifest list for
-`golang:1.26.10-alpine`,
-`sha256:a2012b4a1d1f9f7e9f44e0d39b805a901e856b1dd80b4e6ee4338db547050308`;
+`golang:1.26.11-alpine`,
+`sha256:ae52b5bc6ed045a9ed26ab03dc19327a802a9cc9aa8b27ed57f5c6b60579b0bb`;
 the checked-in toolchain files and release-script guards must reject an older
 compiler so local, exact-candidate, provider control-plane, and container builds
 cannot silently reintroduce the vulnerable runtime.
@@ -8989,7 +8992,7 @@ a valid pinned SSH signature and the extracted request expression with absent
 and synthetic email. It does not establish installed onboarding, server acceptance
 or legal identity. See the qualification evidence below.
 
-### Governed Node 24, Go 1.26.10 and Alpine 3.24 digest parity
+### Governed Node 24, Go 1.26.11 and Alpine 3.24 digest parity
 
 The canonical Pulse release Dockerfile and provider-MSP control-plane Dockerfile
 pin the same immutable amd64 Node 24 Alpine frontend-builder image. The
@@ -9001,11 +9004,11 @@ also require that exact digest while retaining their release metadata and
 license-build assertions. The selected Node 24 digest is
 `8a32c8cf649a49915a66e81e7a609223c708d0adabf288ee3f4077d765542f85`.
 The server, provider-MSP and integration mock Go builders share the
-Go 1.26.10 Alpine digest
-`a2012b4a1d1f9f7e9f44e0d39b805a901e856b1dd80b4e6ee4338db547050308`.
+Go 1.26.11 Alpine digest
+`ae52b5bc6ed045a9ed26ab03dc19327a802a9cc9aa8b27ed57f5c6b60579b0bb`.
 The development container retains the same compiler patch on its distinct
 Debian-based image, digest
-`670bb5aa5349ae03b8516764718486f4f16399134bdc9acd0c46a23f043ab05c`.
+`7af425da11f4fc1a9308eb704369e3f6d1c44e35bac0f874a59ade3f20fdc07e`.
 `TestGoContainerBuildersUseGovernedToolchain` binds all four full image
 references and the `go.mod` toolchain, rejecting a partial refresh, changed
 compiler patch or duplicate stage. The release metadata and hosted runtime
