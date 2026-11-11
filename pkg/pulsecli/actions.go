@@ -503,15 +503,15 @@ func runActionCapabilities(cmd *cobra.Command, deps *ActionsDeps, opts actionCap
 	if err := decodeJSONBytes(respBody, &facets); err != nil {
 		return fmt.Errorf("failed to decode action capabilities response: %w", err)
 	}
+	if unified.CanonicalResourceID(facets.ResourceID) != resourceID {
+		// Empty capabilities may be omitted by the facets API, but its
+		// resource binding must be explicit even for an empty result.
+		return fmt.Errorf("invalid action capabilities response: resourceId does not match the request")
+	}
 	output := actionCapabilitiesResponse{
 		ResourceID:   resourceID,
 		Capabilities: facets.Capabilities,
 		Count:        len(facets.Capabilities),
-	}
-	if strings.TrimSpace(facets.ResourceID) != "" {
-		if canonical := unified.CanonicalResourceID(facets.ResourceID); canonical != "" {
-			output.ResourceID = canonical
-		}
 	}
 	if output.Capabilities == nil {
 		output.Capabilities = []unified.ResourceCapability{}
