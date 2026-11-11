@@ -4635,14 +4635,13 @@ fi
 if ! verify_release_signature "\$tmp_installer" "\$tmp_signature" "downloaded Pulse installer"; then
     exit 1
 fi
+# The installer owns its outcome and exit status. Help, cancellation and
+# removal can also succeed; zero does not mean an update or restart occurred.
 if [[ \${#extra_args[@]} -gt 0 ]]; then
     env "\${installer_env[@]}" bash "\$tmp_installer" "\${extra_args[@]}"
 else
     env "\${installer_env[@]}" bash "\$tmp_installer"
 fi
-
-echo ""
-echo "Update complete! Pulse will restart automatically."
 EOF
     then
         rm -f -- "$staged_helper" 2>/dev/null || true

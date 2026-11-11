@@ -7,6 +7,7 @@ application binary, database, privilege change or native recovery is exercised.
 import json
 import os
 from pathlib import Path
+import select
 import signal
 import subprocess
 import tempfile
@@ -46,7 +47,7 @@ else:
 
 
 class ServiceDeadlines(unittest.TestCase):
-    def exercise(self, body, mode="active", limit=8):
+    def exercise(self, body, mode="active", limit=8, startup_delay=0):
         with tempfile.TemporaryDirectory(prefix="pulse-service-deadline-") as directory:
             f = Path(directory)
             (f / "tools").mkdir()
@@ -62,17 +63,39 @@ class ServiceDeadlines(unittest.TestCase):
             env.update(INSTALLER=str(INSTALLER), FIXTURE=str(f), MANAGER_MODE=mode,
                        PATH=str(f / "tools") + os.pathsep + env["PATH"],
                        PULSE_INSTALL_DIR=str(f / "install"), PULSE_CONFIG_DIR=str(f / "config"))
-            script = 'set -euo pipefail\nsource "$INSTALLER"\n' + body
-            process = subprocess.Popen(["bash", "-c", script], cwd=f, env=env,
-                                       stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                       text=True, start_new_session=True)
+            script = 'set -euo pipefail\n'
+            if startup_delay:
+                script += f'command sleep {startup_delay}\n'
+            script += ('source "$INSTALLER"\n'
+                       'printf R >&"$FIXTURE_READY_FD"\n'
+                       'exec {FIXTURE_READY_FD}>&-\n'
+                       'IFS= read -r fixture_start\n' + body)
+            # Production starts its budget inside the polling function, not
+            # while Bash loads the installer. Bound startup separately, then
+            # release the ready child through stdin only after starting the
+            # existing measurement. This is a pipe handshake, not a sleep or
+            # a wider service deadline, and keeps all fixture output intact.
+            ready_read, ready_write = os.pipe()
+            env["FIXTURE_READY_FD"] = str(ready_write)
+            startup_started = time.monotonic()
+            with os.fdopen(ready_read, "rb", buffering=0) as ready:
+                try:
+                    process = subprocess.Popen(["bash", "-c", script], cwd=f, env=env,
+                                               stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                               stderr=subprocess.PIPE, text=True,
+                                               start_new_session=True, pass_fds=(ready_write,))
+                finally:
+                    os.close(ready_write)
+                startup_ready = bool(select.select([ready], [], [], limit)[0] and ready.read(1) == b"R")
+            startup_elapsed = time.monotonic() - startup_started
             start = time.monotonic()
-            exceeded = False
-            try:
-                stdout, stderr = process.communicate(timeout=limit)
-            except subprocess.TimeoutExpired:
-                exceeded = True
-                stdout = stderr = ""
+            exceeded = not startup_ready
+            stdout = stderr = ""
+            if startup_ready:
+                try:
+                    stdout, stderr = process.communicate(input="\n", timeout=limit)
+                except subprocess.TimeoutExpired:
+                    exceeded = True
             elapsed = time.monotonic() - start
             owned = json.loads((f / "processes").read_text()) if (f / "processes").exists() else None
             # Both stubborn processes inherit these output pipes and never
@@ -95,8 +118,10 @@ class ServiceDeadlines(unittest.TestCase):
                 stdout, stderr = process.communicate(timeout=3)
             self.assertEqual({p: p.read_bytes() for p in originals}, originals)
             self.assertTrue(all(p.stat().st_mode & 0o777 == 0o600 for p in originals))
+            self.assertTrue(startup_ready, dict(startup_elapsed=startup_elapsed,
+                                               stdout=stdout, stderr=stderr))
             return dict(code=process.returncode, stdout=stdout, stderr=stderr,
-                        exceeded=exceeded, elapsed=elapsed, owned=owned,
+                        exceeded=exceeded, elapsed=elapsed, startup_elapsed=startup_elapsed, owned=owned,
                         calls=[json.loads(line) for line in (f / "calls").read_text().splitlines()]
                         if (f / "calls").exists() else [])
 
@@ -118,6 +143,16 @@ class ServiceDeadlines(unittest.TestCase):
                                "slow-active", limit=4)
         self.assert_refused(result)
         self.assertLess(result["elapsed"], 2.5, result)
+
+    def test_installer_initialization_is_outside_the_poll_budget(self):
+        # The old oracle counts this deliberate fixture startup delay as a
+        # service timeout, even though the real one-second poll refuses it.
+        result = self.exercise('wait_for_service_active fixture 1\nprintf UNEXPECTED_SUCCESS\n',
+                               "slow-active", limit=6, startup_delay=3)
+        self.assert_refused(result)
+        self.assertGreaterEqual(result["startup_elapsed"], 3, result)
+        self.assertLess(result["elapsed"], 2.5, result)
+        self.assertEqual(result["calls"], [["is-active", "--quiet", "fixture"]])
 
     def test_startup_kills_term_ignoring_manager_and_child(self):
         result = self.exercise('wait_for_service_active fixture 1\n', "stubborn", limit=4)

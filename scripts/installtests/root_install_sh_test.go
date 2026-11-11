@@ -3101,7 +3101,8 @@ func TestRootManualUpdateDownloadDeadlines(t *testing.T) {
 	assets := t.TempDir()
 	key := filepath.Join(assets, "key")
 	installer := filepath.Join(assets, "install.sh")
-	if err := os.WriteFile(installer, []byte("#!/bin/bash\nprintf '%s\\n' EXECUTED \"$@\" > \"$FIXTURE/executed\"\n"), 0600); err != nil {
+	const installerResult = "Signed fixture installer returned"
+	if err := os.WriteFile(installer, []byte("#!/bin/bash\nprintf '%s\\n' EXECUTED \"$@\" > \"$FIXTURE/executed\"\nprintf '%s\\n' '"+installerResult+"'\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
 	for _, args := range [][]string{
@@ -3200,12 +3201,15 @@ fi
 			cmd.Env = append(env, "PATH="+filepath.Join(dir, "tools")+string(os.PathListSeparator)+os.Getenv("PATH"))
 			out, runErr := cmd.CombinedOutput()
 			calls, callErr := os.ReadFile(filepath.Join(dir, "executed"))
+			if strings.Contains(string(out), "Update complete!") {
+				t.Fatalf("wrapper invented an installer outcome: %s", out)
+			}
 			if fault == "success" {
-				if runErr != nil || callErr != nil || string(calls) != "EXECUTED\n--stable\n" || !strings.Contains(string(out), "Update complete!") {
+				if runErr != nil || callErr != nil || string(calls) != "EXECUTED\n--stable\n" || string(out) != "Updating Pulse...\n"+installerResult+"\n" {
 					t.Fatalf("valid signed installer: %v, %v, %q\n%s", runErr, callErr, calls, out)
 				}
 			} else {
-				if runErr == nil || !os.IsNotExist(callErr) || strings.Contains(string(out), "Update complete!") {
+				if runErr == nil || !os.IsNotExist(callErr) || strings.Contains(string(out), installerResult) {
 					t.Fatalf("failed bootstrap reported/executed success: %v, %v\n%s", runErr, callErr, out)
 				}
 				if strings.Contains(fault, "timeout") {

@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -68,6 +69,10 @@ for arg in "$@"; do
 done
 printf '%s\n' EXECUTED "$@" > "$MANUAL_UPDATE_CALLS"
 selected_update_channel > "$MANUAL_UPDATE_CHANNEL"
+if [[ -n "$MANUAL_UPDATE_OUTPUT" ]]; then
+    printf '%s\n' "$MANUAL_UPDATE_OUTPUT"
+fi
+exit "$MANUAL_UPDATE_EXIT"
 `
 	if err := os.WriteFile(installer, []byte(fixture), 0600); err != nil {
 		t.Fatal(err)
@@ -85,6 +90,8 @@ selected_update_channel > "$MANUAL_UPDATE_CHANNEL"
 		directory            bool
 		brokenLink           bool
 		badSignature         bool
+		installerOutput      string
+		installerExit        int
 	}{
 		{name: "stable", config: `{"updateChannel":"stable"}`, want: []string{"--stable"}},
 		{name: "rc", config: `{"updateChannel":"rc"}`, want: []string{"--rc"}},
@@ -122,6 +129,11 @@ selected_update_channel > "$MANUAL_UPDATE_CHANNEL"
 		{name: "source_marker_over_invalid", config: `{`, marker: "maintenance\n", want: []string{"--source", "maintenance"}},
 		{name: "explicit_channel_over_source_marker", config: `{`, marker: "main\n", args: []string{"--stable"}, want: []string{"--stable"}},
 		{name: "signature_still_required", config: `{"updateChannel":"rc"}`, badSignature: true, blocked: true},
+		{name: "help_is_not_an_update", config: `{`, args: []string{"--help"}, want: []string{"--help"}, installerOutput: "Usage: fixture installer [OPTIONS]"},
+		{name: "cancel_is_not_an_update", missingConfig: true, installerOutput: "Installation cancelled"},
+		{name: "removal_does_not_promise_restart", missingConfig: true, installerOutput: "Pulse removed successfully"},
+		{name: "actual_update_keeps_installer_result", args: []string{"--stable"}, want: []string{"--stable"}, installerOutput: "Pulse health confirmed after update"},
+		{name: "failed_update_keeps_installer_exit", missingConfig: true, installerOutput: "Pulse restart could not be confirmed", installerExit: 23},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -198,7 +210,8 @@ esac
 			channel := filepath.Join(dir, "channel")
 			cmd := exec.Command(bash, append([]string{helper}, tc.args...)...)
 			cmd.Env = append(os.Environ(), "PATH="+path, "FIXTURE_ASSETS="+assets, "MANUAL_UPDATE_CALLS="+calls, "MANUAL_UPDATE_TRANSPORT="+transport, "MANUAL_UPDATE_CHANNEL="+channel,
-				"BAD_SIGNATURE="+map[bool]string{true: "true", false: "false"}[tc.badSignature])
+				"BAD_SIGNATURE="+map[bool]string{true: "true", false: "false"}[tc.badSignature],
+				"MANUAL_UPDATE_OUTPUT="+tc.installerOutput, "MANUAL_UPDATE_EXIT="+strconv.Itoa(tc.installerExit))
 			out, runErr := cmd.CombinedOutput()
 			if tc.blocked {
 				if runErr == nil {
@@ -227,8 +240,15 @@ esac
 					}
 				}
 			} else {
-				if runErr != nil {
-					t.Fatalf("valid helper failed: %v\n%s", runErr, out)
+				if cmd.ProcessState == nil || cmd.ProcessState.ExitCode() != tc.installerExit {
+					t.Fatalf("helper did not preserve installer exit %d: %v\n%s", tc.installerExit, runErr, out)
+				}
+				wantOutput := "Updating Pulse...\n"
+				if tc.installerOutput != "" {
+					wantOutput += tc.installerOutput + "\n"
+				}
+				if string(out) != wantOutput {
+					t.Fatalf("helper altered the installer outcome: got %q, want %q", out, wantOutput)
 				}
 				got, err := os.ReadFile(calls)
 				if err != nil {
