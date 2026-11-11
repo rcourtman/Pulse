@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"reflect"
@@ -18,6 +17,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
@@ -173,6 +173,13 @@ func TestBackupPollingReadsDoNotCopyUnrelatedInventory(t *testing.T) {
 		}
 		return
 	}
+	// Formatting is not fleet-copy work. In race builds, sync.Pool deliberately
+	// drops pooled log events/buffers at random. Disable only this isolated
+	// child's logger; the real callbacks and their state/ingest work still run.
+	previous := log.Logger
+	log.Logger = zerolog.Nop()
+	defer func() { log.Logger = previous }()
+
 	t.Logf("allocation child GOMAXPROCS=%d", runtime.GOMAXPROCS(0))
 	for _, c := range backupPollingReadCases() {
 		t.Run(c.name, func(t *testing.T) {
@@ -191,6 +198,35 @@ func TestBackupPollingReadsDoNotCopyUnrelatedInventory(t *testing.T) {
 				t.Fatalf("backup callback intermittently copied unrelated fleet inventory: floor %.0f, peak %.0f", base, peak)
 			}
 		})
+		t.Run(c.name+"-full-copy-control", func(t *testing.T) {
+			small, large := backupPollingReadFixture(0), backupPollingReadFixture(1000)
+			base, grown, _ := backupPollingAllocationFloors(t, small, large, func(m *Monitor) {
+				c.call(m)
+				backupPollingReadResult = m.state.GetSnapshot()
+			})
+			t.Logf("real callback full-copy control: small=%.0f unrelated=%.0f", base, grown)
+			if grown <= base+1000 {
+				t.Fatal("allocation guard did not detect a full-fleet copy in the real callback")
+			}
+		})
+		t.Run(c.name+"-intermittent-copy-control", func(t *testing.T) {
+			small, large := backupPollingReadFixture(0), backupPollingReadFixture(1000)
+			calls := map[*Monitor]int{small: 0, large: 0}
+			base, grown, peak := backupPollingAllocationFloors(t, small, large, func(m *Monitor) {
+				c.call(m)
+				calls[m]++
+				// AllocsPerRun warms once, then measures five calls. Copy only
+				// the last call of the first sample for each fixture: later
+				// rounds have clean floors, but the peak must expose this copy.
+				if calls[m] == 6 {
+					backupPollingReadResult = m.state.GetSnapshot()
+				}
+			})
+			t.Logf("real callback intermittent-copy control: small=%.0f unrelated=%.0f peak=%.0f", base, grown, peak)
+			if grown > base+4 || peak <= base+100 {
+				t.Fatal("intermittent-copy control must retain a clean floor and fail the peak guard")
+			}
+		})
 	}
 	small, large := backupPollingReadFixture(0), backupPollingReadFixture(1000)
 	base, grown, _ := backupPollingAllocationFloors(t, small, large,
@@ -201,14 +237,37 @@ func TestBackupPollingReadsDoNotCopyUnrelatedInventory(t *testing.T) {
 	}
 }
 
-// The callback's own goroutines and race-instrumented pools can add allocations
-// even in an isolated process. Compare fixed-work allocation floors, not one
-// noisy pair. Always retain all four interleaved pairs (two in either order),
-// each with the original five-call sample; never retry a failed assertion or
-// stop early on a favourable sample. The peak separately detects bursty copies.
+// Wait for the real callback's own in-memory ingest work before ending each
+// allocation sample. Returning from pollStorageBackupsWithNodes does not mean
+// its worker has finished: without this boundary, a sample can count a different
+// number of worker context/timer allocations or queue several calls together.
+// The fixture has no recovery manager, so this never opens a database/store.
+func backupPollingCompleteRead(t testing.TB, m *Monitor, call func(*Monitor)) {
+	t.Helper()
+	call(m)
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		m.recoveryIngestMu.Lock()
+		running, pending := m.recoveryIngestRunning, len(m.recoveryIngestPending)
+		m.recoveryIngestMu.Unlock()
+		if !running && pending == 0 {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("synthetic backup callback ingest did not finish")
+		}
+		runtime.Gosched()
+	}
+}
+
+// Always retain all four interleaved pairs (two in either order), each with the
+// original five-call sample; never retry a failed assertion or stop early on a
+// favourable sample. The floor and peak retain their +4 / +100 copy bounds.
 func backupPollingAllocationFloors(t *testing.T, small, large *Monitor, call func(*Monitor)) (base, grown, peak float64) {
 	t.Helper()
-	measure := func(m *Monitor) float64 { return testing.AllocsPerRun(5, func() { call(m) }) }
+	measure := func(m *Monitor) float64 {
+		return testing.AllocsPerRun(5, func() { backupPollingCompleteRead(t, m, call) })
+	}
 	for round := 0; round < 4; round++ {
 		var s, l float64
 		if round%2 == 0 {
@@ -228,9 +287,11 @@ func backupPollingAllocationFloors(t *testing.T, small, large *Monitor, call fun
 
 // Fixed callback measurements keep provider operations, retained backup data
 // and registry inputs the same while growing only unrelated fleet metadata.
+// Exclude diagnostic formatting and include completed fixture ingest work,
+// matching the allocation guard rather than timing queued callbacks.
 func BenchmarkBackupPollingReadCost(b *testing.B) {
 	previous := log.Logger
-	log.Logger = log.Output(io.Discard)
+	log.Logger = zerolog.Nop()
 	b.Cleanup(func() { log.Logger = previous })
 	for _, c := range backupPollingReadCases() {
 		for _, size := range []int{0, 1000} {
@@ -239,7 +300,7 @@ func BenchmarkBackupPollingReadCost(b *testing.B) {
 				b.ReportAllocs()
 				b.ResetTimer()
 				for i := 0; i < b.N; i++ {
-					c.call(m)
+					backupPollingCompleteRead(b, m, c.call)
 				}
 			})
 		}
