@@ -4590,6 +4590,19 @@ the alert. Proofs: `internal/ai/unified/bridge_test.go`,
 `internal/api/ai_alert_bridge_trigger_test.go` and
 `internal/ai/patrol_alert_sustained_test.go`.
 
+An alert run is told what the scan cannot otherwise see about the resource its
+alert is on (`patrolAlertSubjectFacts`, written by
+`seedFindingsAndContextState` after the alert note, not for a cleared alert):
+the actions the inventory declares for it, a Proxmox guest's start-on-boot
+setting when Proxmox reported it, and that Pulse has already reported the guest
+stopped when the built-in stopped finding is open. The sustained note used to
+ask whether "Pulse offers an action", and the seed carried no capability, so
+the condition could never be met. The line says "declares" and tells the model
+not to promise the action works: a Proxmox guest declares `start` on a node
+that has no action runner, and only planning knows that. The checked list and
+the refusal stay with the investigation (`ActionCapabilityCatalog`). Proof:
+`internal/ai/patrol_guest_lifecycle_test.go`.
+
 A finding belongs to the resource its ID names. `seedFindingsAndContextState`
 closes an open finding as `Resource no longer exists in infrastructure` when
 its resource has left the full inventory, and it runs before the model sees
@@ -7103,7 +7116,16 @@ errors do not suppress the warning. Suppression advances the observation
 baseline so the intentional stop cannot surface one cycle later.
 
 The watcher runs before the model-provider gate whenever guest analysis is
-enabled, so detection is not conditional on an available LLM. Fresh running
+enabled, so detection is not conditional on an available LLM. It runs in a
+scoped run as well as a full one (`observeProxmoxGuestLifecycle`), always over
+the whole collected state and never the scoped one, because a guest missing
+from its input is forgotten and its finding resolved as removed. Before, a
+guest that died between two full runs got no stopped finding from the alert
+and manual runs that looked at it. A scoped run can therefore raise the finding
+for a guest outside its scope. Only a finding on a requested resource is put on
+that run's record, and every finding the check raises is offered for
+investigation after the run is recorded, as after a full run. Proof:
+`internal/ai/patrol_guest_lifecycle_test.go`. Fresh running
 evidence reconciles an active finding; stale or incomplete state does not, and
 explicit resource removal uses its own typed resolution reason. Finding
 evidence is bounded to guest kind, stopped state, Proxmox instance/node/VMID,
