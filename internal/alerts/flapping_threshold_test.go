@@ -37,9 +37,11 @@ func TestFlappingConfiguredThresholdGatesDispatch(t *testing.T) {
 
 			delivered := 0
 			m.SetAlertCallback(func(*Alert) { delivered++ })
+			// Each dispatch here is a new firing of the alert. Repeat dispatches
+			// of one firing are not state changes (flapping_steady_alert_test.go).
 			for attempt := 1; attempt <= threshold; attempt++ {
 				m.mu.Lock()
-				dispatched := m.dispatchAlert(alert, false)
+				dispatched := m.dispatchAlert(firesAgain(alert), false)
 				m.mu.Unlock()
 				if want := attempt < threshold; dispatched != want {
 					t.Fatalf("dispatch %d = %v, want %v at threshold %d", attempt, dispatched, want, threshold)
@@ -202,10 +204,11 @@ func TestFlappingCleanupReleasesAndRearmsDelivery(t *testing.T) {
 					}
 					transitions <- trackingKey
 				})
+				// Each dispatch is a new firing of the same alert identity.
 				dispatch := func() bool {
 					m.mu.Lock()
 					defer m.mu.Unlock()
-					return m.dispatchAlert(alert, false)
+					return m.dispatchAlert(firesAgain(alert), false)
 				}
 				receiveTransition := func() {
 					t.Helper()

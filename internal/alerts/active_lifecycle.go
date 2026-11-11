@@ -587,6 +587,7 @@ func (m *Manager) preserveAlertState(alertID string, updated *Alert) {
 	existing, exists := m.getActiveAlertNoLock(alertID)
 	if exists && existing != nil {
 		updated.StartTime = existing.StartTime
+		updated.flappingCounted = existing.flappingCounted
 		if existing.LastNotified != nil {
 			t := *existing.LastNotified
 			updated.LastNotified = &t

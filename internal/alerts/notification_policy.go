@@ -106,7 +106,8 @@ func (m *Manager) checkFlappingLocked(trackingKey string) (suppress bool, justTr
 		m.expireSuppressionNoLock(trackingKey, now)
 	}
 
-	// Record this state change
+	// Record this state change. dispatchAlert reaches here once per firing of
+	// an alert (checkFlappingForDispatchLocked), not once per dispatch.
 	m.flappingHistory[trackingKey] = append(m.flappingHistory[trackingKey], now)
 
 	// Remove state changes outside the window
@@ -155,6 +156,49 @@ func (m *Manager) checkFlappingLocked(trackingKey string) (suppress bool, justTr
 	}
 
 	return false, false
+}
+
+// checkFlappingForDispatchLocked is the flapping check for one dispatch of an
+// alert. Flapping is an alert that keeps firing and clearing, so what it counts
+// is firings: the first dispatch of each firing records one state change
+// (checkFlappingLocked), and every later dispatch of that same firing only asks
+// whether a flapping hold is in force.
+//
+// An alert that fires once and stays active is dispatched many times: again on
+// every poll while delivery is not turned on, because nothing was delivered,
+// and again for each reminder and escalation once it is. Counting those made a
+// steady alert "flap" within five polls on an install whose delivery was still
+// pending, which paused its notifications, cut it off from firing subscribers
+// and raised a flapping finding for an alert that had changed state once.
+//
+// Caller MUST hold m.mu.
+func (m *Manager) checkFlappingForDispatchLocked(trackingKey string, alert *Alert) (suppress bool, justTransitioned bool) {
+	if !m.config.FlappingEnabled {
+		return false, false
+	}
+	if alert != nil && alert.flappingCounted {
+		if until, cooling := m.suppressedUntil[trackingKey]; cooling {
+			now := time.Now()
+			if now.Before(until) {
+				return true, false
+			}
+			m.expireSuppressionNoLock(trackingKey, now)
+		}
+		return false, false
+	}
+	if alert != nil {
+		alert.flappingCounted = true
+		// Callers usually pass the active alert itself. When they pass a copy,
+		// the active one must remember the count too.
+		if active, exists := m.getActiveAlertNoLock(trackingKey); exists && active != nil {
+			active.flappingCounted = true
+		} else if alert.ID != "" {
+			if active, exists := m.getActiveAlertNoLock(alert.ID); exists && active != nil {
+				active.flappingCounted = true
+			}
+		}
+	}
+	return m.checkFlappingLocked(trackingKey)
 }
 
 // expireSuppressionNoLock retires a served suppression and its episode together.
@@ -256,13 +300,14 @@ func (m *Manager) dispatchAlert(alert *Alert, async bool) bool {
 
 	trackingKey := canonicalTrackingKeyForAlert(alert)
 
-	// Check for flapping (caller must hold m.mu). When this call is the
+	// Check for flapping (caller must hold m.mu). Only the first dispatch of
+	// a firing counts as a state change. When this call is the
 	// first transition into the flapping state for the current cooldown
 	// window, fire the flapping-detected callback so a postmortem patrol
 	// can be triggered. The callback runs in its own goroutine because
 	// the caller of dispatchAlert holds m.mu and the callback is allowed
 	// to take its own locks or re-enter the alerts package.
-	suppress, justTransitioned := m.checkFlappingLocked(trackingKey)
+	suppress, justTransitioned := m.checkFlappingForDispatchLocked(trackingKey, alert)
 	if justTransitioned {
 		m.recordAlertEvent(eventlog.TypeFlappingDetected, alert, "",
 			AlertDeliveryReasonFlapping, "Alert entered flapping suppression.",

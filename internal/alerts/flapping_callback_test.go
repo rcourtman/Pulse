@@ -64,19 +64,21 @@ func TestFlappingDetectedCallback(t *testing.T) {
 		Level:         AlertLevelWarning,
 	}
 
-	// First two dispatches: below threshold, no transition, no callback.
+	// First two firings: below threshold, no transition, no callback. Each
+	// dispatch stands for the alert firing again. Repeat dispatches of one
+	// firing are not state changes.
 	for i := 0; i < 2; i++ {
 		m.mu.Lock()
-		m.dispatchAlert(alert, false)
+		m.dispatchAlert(firesAgain(alert), false)
 		m.mu.Unlock()
 	}
 	if got := atomic.LoadInt32(&calls); got != 0 {
 		t.Fatalf("expected 0 callback invocations before threshold, got %d", got)
 	}
 
-	// Third dispatch crosses the threshold -- this is the transition.
+	// Third firing crosses the threshold -- this is the transition.
 	m.mu.Lock()
-	m.dispatchAlert(alert, false)
+	m.dispatchAlert(firesAgain(alert), false)
 	m.mu.Unlock()
 
 	select {
@@ -114,7 +116,7 @@ func TestFlappingDetectedCallback(t *testing.T) {
 	// flapping, callback must not refire.
 	for i := 0; i < 4; i++ {
 		m.mu.Lock()
-		m.dispatchAlert(alert, false)
+		m.dispatchAlert(firesAgain(alert), false)
 		m.mu.Unlock()
 	}
 

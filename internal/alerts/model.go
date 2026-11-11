@@ -156,6 +156,12 @@ type Alert struct {
 	// MetricStatus is the live evaluation behind an open threshold alert. It
 	// is volatile and stripped from durable snapshots.
 	MetricStatus *models.MetricAlertStatus `json:"metricStatus,omitempty"`
+	// flappingCounted is set once flapping detection has counted this firing
+	// of the alert as a state change. It stays with the alert while it is
+	// active, so reminders, escalations and retried deliveries of the same
+	// firing are not counted again. A new firing is a new Alert and starts
+	// unset. Not persisted: after a restart a restored alert counts once.
+	flappingCounted bool
 }
 
 // lastObservedAt is when the alert's condition was last evaluated. A
