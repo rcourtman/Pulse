@@ -5531,6 +5531,30 @@ named and default organizations. The custom event envelope stays unchanged.
 
 ## Current State
 
+Mock nodes are now shaped like real ones in the two facts Pulse uses to tell
+which agent runs on which node (`internal/mock/generator.go`). Each mock node
+has its own bridge addresses (`mockNodeBridgeAddresses`), where every node
+used to list `192.168.10.21/24`, and the agent linked to a mock node reports
+that node's addressed interfaces (`mockLinkedHostInterfaces`), where it used
+to report one unrelated `eth0` address. With one shared address no mock agent
+could be matched to its node by address, so the guest start rule refused
+every mock node's agent as unconfirmed. Proof:
+`internal/mock/node_agent_link_test.go`.
+
+`Monitor.ReadProxmoxGuestTasks` (`internal/monitoring/proxmox_guest_tasks.go`)
+reads a node's task log for one guest in a window of time, live through the
+configured Proxmox API connection and never from cached state or an agent.
+`proxmox.Client.GetGuestTasks` (`pkg/proxmox/guest_tasks.go`) does the read
+with the node's own `vmid`, `since` and `until` filters and validates the
+answer with the reader the backup history uses. The result says whether it is
+the whole of it. Proxmox lists every task only to a caller with `Sys.Audit`
+on `/nodes/<node>`, and answers anyone else with their own tasks and no
+error, so `Complete` is true only when the request worked, returned fewer
+than 200 rows, and that permission is confirmed. A monitor with no client
+for the instance answers `no_connection`. Patrol uses this to tell a guest
+somebody stopped from one that went down by itself, and an empty read that
+is not complete must never be taken as "nothing happened".
+
 Alert metric windows and the storage capacity trend read the metrics store
 through `QueryCommitted`. The store now batches raw samples for up to 60
 seconds, and its other readers commit buffered samples older than 5 seconds

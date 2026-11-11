@@ -156,7 +156,7 @@ describe('InvestigationSection', () => {
 
   it('says Pulse could not start a stopped guest, with what to do and no button', async () => {
     const reason =
-      'Pulse cannot start, stop or restart guests on pmxlab: no Pulse action runner is connected on that node. "Allow Pulse to run commands on this host" does not cover guest actions. Use Proxmox for this.';
+      'Pulse cannot start guests on pmxlab yet: the Pulse agent on that node is too old. Update the Pulse agent on pmxlab, then try again.';
     getInvestigationMock.mockResolvedValue({
       id: 'inv-no-runner',
       finding_id: 'finding-no-runner',
@@ -195,7 +195,8 @@ describe('InvestigationSection', () => {
       guest_name: 'nextcloud',
       node_name: 'pmxlab',
       actions: ['reboot', 'shutdown', 'stop'],
-      reason: 'Pulse cannot start, stop or restart guests on pmxlab.',
+      reason:
+        'Pulse cannot stop or restart guests on pmxlab: that needs the Pulse action runner on that node.',
     };
     getInvestigationMock.mockResolvedValue({
       id: 'inv-running-guest',

@@ -415,6 +415,51 @@ helper/runner security claim and will remain until supported command-enabled
 installs have a runner enrollment path and live action-session parity has been
 qualified.
 
+That profile carries one typed action: starting a stopped Proxmox VM or
+container. Nothing is enabled by this. A node opts in the way it always has,
+by installing the collector with command execution.
+
+- **Who can.** A collector that has command execution enabled, runs as root as
+  the `pulse-agent` systemd service on a Proxmox node, keeps durable receipts
+  and has passed a containment probe reports that it can start guests. Pulse
+  decides from that report, never from an agent version. An older collector, a
+  monitoring-only collector and a collector outside systemd are refused, and
+  Pulse says which it is.
+- **Which collector.** Pulse sends a start only to a collector it has
+  evidence runs on the guest's own node. All of this must hold. The collector
+  is the only agent tied to that node. The node is on the guest's own Proxmox
+  connection. The collector carries the node's name, and no other node Pulse
+  monitors does. One of the collector's own interfaces holds an address that
+  Proxmox itself lists for that node and for no other node. Anything less is
+  refused, including a node whose network inventory Pulse cannot read.
+  Three things are not evidence: the link Pulse makes between an agent and a
+  node on a matching name, the address Pulse reaches the node's API at, which
+  can belong to a reverse proxy, and the collector's configured report
+  address. This is evidence and not proof of the machine. It cannot rule out
+  a machine that Pulse does not monitor as a node, carries the node's name
+  and holds one of the node's addresses.
+- **What runs.** The same fixed `qm start <vmid>` or `pct start <vmid>` the
+  action runner runs, in the same transient systemd unit with the same
+  properties. Three things differ: the service the unit is bound to, the
+  state directory and the unit's name prefix. All three are the collector's
+  own.
+- **What does not.** Stop, shutdown and reboot. The server refuses to send
+  them on this path and the collector refuses to run them. They still need the
+  action runner. The collector's typed catalog is the containment probe, a
+  status read and a start. Package commands stay with the runner.
+- **Who decides.** An admin approves every start. There is no automatic
+  authorization for it. Pulse's own Proxmox API read decides whether the guest
+  is running afterwards. The collector's word is kept as evidence and does not
+  confirm the action.
+
+This adds a capability to the legacy/full-trust profile. It does not bring
+that profile into the typed helper/runner security claim. The collector still
+runs as root and still accepts shell commands, and when Pulse is reached over
+plain HTTP its command channel is neither encrypted nor signed: the collector
+credential crosses it in clear text. A start request adds no exposure to a
+node that already accepts a root shell over that channel. Use HTTPS, or the
+action runner, where that is not acceptable.
+
 Safe-profile conversion is always deliberate:
 
 ```bash

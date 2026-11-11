@@ -86,6 +86,16 @@ func (p *PatrolService) openFindingForUnansweredAlert(scope PatrolScope, alert *
 	if resourceID == "" {
 		return nil
 	}
+	// A powered-off alert on a guest somebody stopped through Proxmox says
+	// what that person already knows. Opening a finding from it would start
+	// an investigation that ends by asking to start the guest again.
+	if strings.EqualFold(strings.TrimSpace(alert.Type), "powered-off") {
+		if record, deliberate := p.proxmoxGuestStoppedOnPurpose(resourceID); deliberate {
+			log.Debug().Str("alert", alert.ID).Str("resource_id", resourceID).Str("task", record.cause.task).Str("user", record.cause.user).
+				Msg("AI Patrol: no finding opened for a powered-off alert on a guest that was stopped on purpose")
+			return nil
+		}
+	}
 	category := alertFindingCategory(alert.Type)
 	// One finding per alert identifier: a host can have the same kind of alert
 	// on two filesystems, and each repeat of an alert reopens its own finding.

@@ -42,7 +42,23 @@ describe('getActionReadinessRefusal', () => {
       ['host_commands_disabled', 'Commands are not enabled on the Pulse agent on this host.'],
       [
         'action_runner_unavailable',
-        'Pulse cannot start, stop or restart guests on this node: no Pulse action runner is connected there. Use Proxmox for this.',
+        'Pulse cannot stop or restart guests on this node: that needs the Pulse action runner there. Use Proxmox for this.',
+      ],
+      [
+        'guest_start_agent_not_connected',
+        'Pulse cannot start guests on this node: no Pulse agent that accepts commands is connected there. Use Proxmox for this.',
+      ],
+      [
+        'guest_start_agent_unconfirmed',
+        'Pulse cannot start guests on this node: it cannot confirm which Pulse agent runs there. Use Proxmox for this.',
+      ],
+      [
+        'guest_start_agent_update_required',
+        'Pulse cannot start guests on this node yet: its Pulse agent is too old. Update the agent, then try again.',
+      ],
+      [
+        'guest_start_unavailable',
+        'Pulse cannot start guests on this node: its Pulse agent cannot run a start. Use Proxmox for this.',
       ],
       ['command_agent_disconnected', 'Docker / Podman command agent is not connected.'],
       ['no_command_agent', 'Install the Pulse agent inside this guest to manage its containers.'],

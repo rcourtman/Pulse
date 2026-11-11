@@ -71,6 +71,44 @@ type patrolActionBroker struct {
 	readState func(orgID string) (unified.ReadState, error)
 	policy    PatrolActionPolicyProvider
 	now       func() time.Time
+	// proposalNote adds what Pulse knows and the proposal's author may not
+	// have said. Nil adds nothing.
+	proposalNote PatrolProposalNoteProvider
+}
+
+// PatrolProposalNoteProvider returns a sentence Pulse adds to a proposal's
+// reason before it is planned, or "" for none. The reason is what the person
+// approving reads, so a fact that should stop them approving blind belongs
+// there whatever the model wrote.
+type PatrolProposalNoteProvider func(ctx context.Context, orgID string, proposal aicontracts.ActionProposal) string
+
+// NewPatrolActionBrokerWithProposalNote builds the Patrol proposal broker
+// with a note provider.
+func NewPatrolActionBrokerWithProposalNote(orgID string, resources *ResourceHandlers, note PatrolProposalNoteProvider, policy ...PatrolActionPolicyProvider) aicontracts.OrchestratorActionBroker {
+	broker := NewPatrolActionBroker(orgID, resources, policy...)
+	if typed, ok := broker.(*patrolActionBroker); ok {
+		typed.proposalNote = note
+	}
+	return broker
+}
+
+// withProposalNote appends Pulse's own sentence to a proposal's reason. It
+// runs on every plan and submit of the same proposal and adds the sentence
+// once, so the planned action and a later submit carry the same reason.
+func (b *patrolActionBroker) withProposalNote(ctx context.Context, proposal aicontracts.ActionProposal) aicontracts.ActionProposal {
+	if b == nil || b.proposalNote == nil {
+		return proposal
+	}
+	note := strings.TrimSpace(b.proposalNote(ctx, b.orgID, proposal))
+	if note == "" || strings.Contains(proposal.Reason, note) {
+		return proposal
+	}
+	reason := strings.TrimSpace(proposal.Reason)
+	if reason != "" && !strings.ContainsAny(reason[len(reason)-1:], ".!?") {
+		reason += "."
+	}
+	proposal.Reason = strings.TrimSpace(reason + " " + note)
+	return proposal
 }
 
 // NewPatrolActionBroker builds the tenant-bound Patrol proposal broker over
@@ -210,21 +248,36 @@ func (b *patrolActionBroker) commandsDisabledHost(resourceID string) *aicontract
 }
 
 // guestActionsUnavailable reports the guest actions the executor refused
-// because no action runner is connected on the guest's node. It reads the
-// executor's own refusals, so it cannot claim a runner is missing when
-// planning would accept the action.
+// because of how the guest's node is set up: no action runner for stop,
+// shutdown or reboot, or no agent that can start a guest. It reads the
+// executor's own refusals and repeats their words, so it cannot claim
+// something is missing when planning would accept the action. A start
+// refused because the node's agent has commands off is not reported here: the
+// catalog's commands fact carries that, with its step. A stop or reboot
+// refused for want of a runner still is, on any node.
 func (b *patrolActionBroker) guestActionsUnavailable(resourceID string, refused []unified.ResourceActionReadiness) *aicontracts.GuestActionsUnavailable {
 	var actions []string
+	reason, startReason := "", ""
 	for _, refusal := range refused {
-		if refusal.ReasonCode == actionlifecycle.ReasonCodeActionRunnerUnavailable && strings.TrimSpace(refusal.Name) != "" {
-			actions = append(actions, strings.TrimSpace(refusal.Name))
+		name := strings.TrimSpace(refusal.Name)
+		if name == "" || !actionlifecycle.IsProxmoxGuestActionUnavailableReasonCode(refusal.ReasonCode) {
+			continue
+		}
+		actions = append(actions, name)
+		if reason == "" {
+			reason = strings.TrimSpace(refusal.Reason)
+		}
+		if name == "start" {
+			startReason = strings.TrimSpace(refusal.Reason)
 		}
 	}
 	if len(actions) == 0 {
 		return nil
 	}
 	sort.Strings(actions)
-	fact := &aicontracts.GuestActionsUnavailable{Actions: actions}
+	// A refused start is why a run on a dead guest hands back, so its
+	// sentence is the one the fact carries.
+	fact := &aicontracts.GuestActionsUnavailable{Actions: actions, Reason: firstNonEmpty(startReason, reason)}
 	if b.readState != nil {
 		if readState, err := b.readState(b.orgID); err == nil && readState != nil {
 			if resource := unified.ResolveResourceContext(readState, resourceID).Resource; resource != nil {
@@ -233,7 +286,6 @@ func (b *patrolActionBroker) guestActionsUnavailable(resourceID string, refused 
 			}
 		}
 	}
-	fact.Reason = actionlifecycle.ProxmoxGuestActionsUnavailableReason(fact.NodeName)
 	return fact
 }
 
@@ -277,6 +329,7 @@ func (b *patrolActionBroker) submit(ctx context.Context, proposal aicontracts.Ac
 	if proposal.InvestigationID == "" {
 		return aicontracts.ActionDisposition{}, fmt.Errorf("action proposal requires an investigation id")
 	}
+	proposal = b.withProposalNote(ctx, proposal)
 
 	policyFactors, planningAutoAuthorized := b.planPolicyFactors(ctx, proposal, b.currentTime())
 

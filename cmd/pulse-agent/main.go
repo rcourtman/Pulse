@@ -272,7 +272,25 @@ func (m *multiValue) Set(value string) error {
 	return nil
 }
 
+// typedActionLauncherCommand is the hidden entry systemd runs inside a
+// transient unit the collector started. It must match hostagent's constant.
+const typedActionLauncherCommand = "__pulse_typed_action_launcher"
+
+// typedActionLauncherExit runs the collector's typed action launcher when the
+// process was started as one, and returns its exit code. The launcher serves
+// the collector's narrow catalog only: the containment probe, a guest status
+// read and a guest start. Nothing else is resolved or run.
+func typedActionLauncherExit(args []string) (int, bool) {
+	if len(args) > 1 && args[1] == typedActionLauncherCommand {
+		return hostagent.RunCollectorTypedActionLauncher(args[2:]), true
+	}
+	return 0, false
+}
+
 func main() {
+	if code, launcher := typedActionLauncherExit(os.Args); launcher {
+		os.Exit(code)
+	}
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 	if len(os.Args) > 1 && isCollectorLifecycleCommand(os.Args[1]) {

@@ -584,6 +584,22 @@ func handlePatrolReportFinding(_ context.Context, e *PulseToolExecutor, args map
 				"reason":                                "alert_owned_resource_state",
 			}), nil
 		}
+		var ownedByGuestStop *PatrolFindingOwnedByGuestStopError
+		if errors.As(err, &ownedByGuestStop) {
+			result := map[string]interface{}{
+				"ok":      true,
+				"is_new":  false,
+				"applied": false,
+				"reason":  "guest_stop_already_accounted_for",
+				"note":    ownedByGuestStop.Note,
+			}
+			// The finding to give a verdict on is the one Pulse filed. The
+			// refused report has no finding of its own to point at.
+			if ownedByGuestStop.OwnerFindingID != "" {
+				result[agentcapabilities.FindingIDArgumentName] = ownedByGuestStop.OwnerFindingID
+			}
+			return NewJSONResult(result), nil
+		}
 		return NewErrorResult(fmt.Errorf("failed to create finding: %w", err)), nil
 	}
 

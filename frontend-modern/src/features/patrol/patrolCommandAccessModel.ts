@@ -111,22 +111,28 @@ export function buildPatrolCommandAccessHandover(
 }
 
 /**
- * Core's refusal code for a Proxmox guest action on a node with no connected
- * action runner (actionlifecycle.ReasonCodeActionRunnerUnavailable).
+ * Core's refusal codes for a guest start on a node that is not set up for it
+ * (actionlifecycle.ReasonCodeGuestStart*): no Pulse agent there accepts
+ * commands, Pulse cannot confirm the agent runs on that node, the agent is too
+ * old, or the agent cannot run a start. A node whose agent has commands off is
+ * not here. The commands row names it and carries its step.
  */
-const ACTION_RUNNER_UNAVAILABLE = 'action_runner_unavailable';
+const GUEST_START_REFUSALS = new Set([
+  'guest_start_agent_not_connected',
+  'guest_start_agent_unconfirmed',
+  'guest_start_agent_update_required',
+  'guest_start_unavailable',
+]);
 
 /**
- * Which Proxmox nodes Pulse can start, stop or restart guests on. That runs
- * only through a separately enrolled action runner on the node. Command access
- * on the node's Pulse agent does not cover it, so a person who ticked the
- * install option reasonably expects Patrol to start a dead guest, and it cannot.
+ * Which Proxmox nodes Pulse cannot start a stopped guest on. A node's Pulse
+ * agent starts one, after an admin approves, when it was installed with
+ * command access. Stopping or restarting a guest needs the action runner and
+ * is not what this is about: a guest that died is what Patrol hands back.
  */
 export interface PatrolGuestActionAccessSummary {
-  /** Proxmox nodes with at least one guest Pulse reports on. */
-  total: number;
-  /** Of those, the nodes where the server refuses a guest action for want of a runner. */
-  noRunner: PatrolCommandAccessHost[];
+  /** Nodes where the server refuses to start a stopped guest, by name. */
+  cannotStart: PatrolCommandAccessHost[];
 }
 
 function proxmoxGuestNode(resource: Resource): PatrolCommandAccessHost | undefined {
@@ -145,34 +151,28 @@ function proxmoxGuestNode(resource: Resource): PatrolCommandAccessHost | undefin
 
 /**
  * Reads the server's own refusals on the guest rows, never the absence of a
- * capability: a node is listed only where planning would refuse a guest action
- * with the runner code.
+ * capability: a node is listed only where planning would refuse to start one
+ * of its stopped guests because of how the node is set up.
  */
 export function buildPatrolGuestActionAccessSummary(
   resources: readonly Resource[],
 ): PatrolGuestActionAccessSummary {
-  const nodes = new Map<string, { name: string; noRunner: boolean }>();
+  const nodes = new Map<string, string>();
   for (const resource of resources) {
     const node = proxmoxGuestNode(resource);
     if (!node) continue;
-    const entry = nodes.get(node.id) ?? { name: node.name, noRunner: false };
-    if (
-      (resource.actionReadiness ?? []).some(
-        (item) =>
-          item.available === false &&
-          (asTrimmedString(item.reasonCode) ?? '').toLowerCase() === ACTION_RUNNER_UNAVAILABLE,
-      )
-    ) {
-      entry.noRunner = true;
-    }
-    nodes.set(node.id, entry);
+    const refusedStart = (resource.actionReadiness ?? []).some(
+      (item) =>
+        item.available === false &&
+        (asTrimmedString(item.name) ?? '').toLowerCase() === 'start' &&
+        GUEST_START_REFUSALS.has((asTrimmedString(item.reasonCode) ?? '').toLowerCase()),
+    );
+    if (refusedStart) nodes.set(node.id, node.name);
   }
-  const noRunner: PatrolCommandAccessHost[] = [];
-  for (const [id, entry] of nodes) {
-    if (entry.noRunner) noRunner.push({ id, name: entry.name });
-  }
-  noRunner.sort((left, right) => left.name.localeCompare(right.name));
-  return { total: nodes.size, noRunner };
+  const cannotStart: PatrolCommandAccessHost[] = [];
+  for (const [id, name] of nodes) cannotStart.push({ id, name });
+  cannotStart.sort((left, right) => left.name.localeCompare(right.name));
+  return { cannotStart };
 }
 
 export interface PatrolGuestActionsHandover {
@@ -182,9 +182,9 @@ export interface PatrolGuestActionsHandover {
 
 /**
  * The hand-back Pulse wrote for a run on a stopped Proxmox guest it could not
- * start. It has no button: nothing a person does in one move connects a
- * runner, so the note says what to do now. A running guest's refused stop or
- * reboot is rarely why a run handed back, so only a refused start shows it.
+ * start. The server's sentence says why and what to do now, so the note has
+ * no button of its own. A running guest's refused stop or reboot is rarely
+ * why a run handed back, so only a refused start shows it.
  */
 export function buildPatrolGuestActionsHandover(
   investigation: Investigation | null | undefined,
@@ -203,7 +203,6 @@ export function buildPatrolGuestActionsHandover(
     // The server writes the sentence with the run, so the review and a
     // refused action say the same words.
     detail:
-      asTrimmedString(fact.reason) ||
-      `Pulse cannot start, stop or restart guests on ${node}: no Pulse action runner is connected on that node. Use Proxmox for this.`,
+      asTrimmedString(fact.reason) || `Pulse cannot start guests on ${node}. Use Proxmox for this.`,
   };
 }

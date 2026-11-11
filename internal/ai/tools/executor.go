@@ -171,6 +171,24 @@ func (e *PatrolFindingOwnedByAlertsError) Error() string {
 	return "finding " + e.FindingID + " restates resource state owned by real-time alerts"
 }
 
+// PatrolFindingOwnedByGuestStopError is returned when a proposed finding is
+// about a Proxmox guest being stopped and Pulse has already accounted for that
+// stop: either somebody stopped the guest on purpose, or Pulse filed its own
+// finding for it. The tool boundary acknowledges the report as a no-op and
+// tells the model why, so one stop cannot become two findings or a finding
+// about a deliberate act.
+type PatrolFindingOwnedByGuestStopError struct {
+	FindingID string
+	// OwnerFindingID is the finding Pulse already filed for the stop. It is
+	// empty when the stop was deliberate and nothing was filed.
+	OwnerFindingID string
+	Note           string
+}
+
+func (e *PatrolFindingOwnedByGuestStopError) Error() string {
+	return "finding " + e.FindingID + " is about a guest stop Pulse already accounted for: " + e.Note
+}
+
 // PatrolFindingAssessmentInput is the explicit terminal verdict for an active
 // finding that was presented to the model during one Patrol run.
 type PatrolFindingAssessmentInput struct {

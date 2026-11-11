@@ -6099,6 +6099,75 @@ auto-register mutation boundary.
 
 ## Current State
 
+### Guest start has its own refusal codes and a second route
+
+A start proposal carries one more sentence when it answers a stopped-guest
+finding whose cause Pulse could not work out. `patrolActionBroker` asks a
+`PatrolProposalNoteProvider` before planning, and the router's provider
+returns `PatrolService.ProxmoxGuestStartProposalNote` for a `start`: "Pulse
+could not read the node's task log, so it cannot tell whether a person
+stopped this guest. Check that before you approve a start." It is appended
+to the reason the approving admin reads, once, on every plan and submit of
+the same proposal, so both carry the same reason. `newProxmoxGuestTaskReader`
+adapts `Monitor.ReadProxmoxGuestTasks` for Patrol and resolves the monitor on
+every read, because a reload replaces it.
+
+`proxmoxGuestActionExecutor` routes a guest action to the node's action
+runner, or, for `start` only, to the node's own collector command session
+when that session reported `proxmox_guest_start_version`. "The node's own"
+means the agent `tools.GuestNodeAgentFor` confirms, read from the
+guest's own record on every call. It needs exactly one agent tied to the
+node, the node on the guest's own connection under the guest's own node name,
+the agent carrying the node's name with no other node of that name on
+record, and an address on one of the agent's own interfaces that is in the
+network inventory Proxmox itself reports for that node and for no other node
+on record. The link is not evidence, because Pulse makes it on a sole
+matching hostname. The endpoint Pulse dials is not evidence, because it can
+be a proxy on another host. The agent's report address is not evidence,
+because it is a setting. A hostname never selects a collector for a start,
+though it can still route a read. An agent that is tied to the node and fails
+any of this is refused with `guest_start_agent_unconfirmed`, also when it
+reports commands off: nobody is told to switch commands on for an agent that
+may sit on another machine. `host_commands_disabled` is for a confirmed agent
+only. This is evidence
+and not proof: a machine that is not a node on record, with the node's name
+and one of its addresses, is not ruled out. Known fail-closed limits: a node
+with no readable inventory, two nodes of one name, and a machine monitored
+through two connections, where guests seen through the connection its node
+record does not carry are refused.
+Only what a known agent's session reported is memoized for an
+availability pass, keyed by agent ID. The server decides
+from that report and never from an agent version. Stop, shutdown and reboot
+without a runner keep `action_runner_unavailable`, now with a sentence that
+says the install option covers starting only. A refused start carries one of
+`host_commands_disabled`, `guest_start_agent_not_connected`,
+`guest_start_agent_unconfirmed`,
+`guest_start_agent_update_required`, `guest_start_unavailable` or
+`operation_receipt_unsupported`, each with its own sentence from
+`internal/actionlifecycle/command_access.go`.
+
+`guest_actions_unavailable` on the catalog and the stored run now repeats the
+executor's own sentence for whichever of those set-up refusals applies, and
+uses the start's sentence when a start is among them. A start refused
+because the node's agent has commands off is not reported there:
+`commands_disabled` carries it with its step. A stop, shutdown or reboot
+refused for want of a runner is still reported there on such a node, beside
+`commands_disabled`, because enabling commands would not make it runnable.
+
+`agentexec.Server.GetProxmoxGuestStartSessionsForOrganization` lists
+collector command sessions with what each last reported, at registration or
+in a later `agent_capabilities` message on the same session. It never lists a
+runner, and a runner's session never stores such a report.
+The dispatch gate re-checks the carrying session and allows a collector
+session `start` and nothing else.
+
+A start a collector session ran is confirmed only by Pulse's own Proxmox API
+observation. The agent's readback stays on the result as evidence with
+`independent_observation_required`. A route planned on the runner is
+dispatched with `agentexec.RequireActionRunnerSession`, so a collector
+session that took the runner's place under the same agent ID is refused and
+cannot be judged by the runner's rule.
+
 ### A guest action refused for want of a runner says so in plain words
 
 `action_runner_unavailable` is named once in

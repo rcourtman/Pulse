@@ -546,7 +546,7 @@ sudo chmod 0700 /usr/local/libexec/pulse-queue-depth
 | `--enable-kubernetes` | `PULSE_ENABLE_KUBERNETES` | Enable Kubernetes metrics | `false` (installer auto-detect if not configured) |
 | `--enable-proxmox` | `PULSE_ENABLE_PROXMOX` | Enable Proxmox integration | `false` |
 | `--proxmox-type` | `PULSE_PROXMOX_TYPE` | Proxmox type: `pve` or `pbs` | *(auto-detect)* |
-| `--enable-commands` | `PULSE_ENABLE_COMMANDS` | Enable Pulse command execution: Docker / Podman container actions from the UI (start/stop/restart/update), Patrol actions, and Proxmox LXC Docker inventory (disabled by default) | `false` |
+| `--enable-commands` | `PULSE_ENABLE_COMMANDS` | Enable Pulse command execution: Docker / Podman container actions from the UI (start/stop/restart/update), Patrol actions, starting a stopped Proxmox guest after an admin approves it, and Proxmox LXC Docker inventory (disabled by default) | `false` |
 | `--disable-commands` | `PULSE_DISABLE_COMMANDS` | **Deprecated** (commands are disabled by default) | - |
 | `--disk-exclude` | `PULSE_DISK_EXCLUDE` | Device name/path or mount point patterns to exclude from disk and S.M.A.R.T. monitoring (repeatable or CSV) | *(none)* |
 | `--disk-include` | `PULSE_DISK_INCLUDE` | Device name/path or mount point patterns to include despite automatic filesystem filtering (repeatable or CSV) | *(none)* |

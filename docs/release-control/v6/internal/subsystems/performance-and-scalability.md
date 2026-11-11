@@ -2234,6 +2234,12 @@ without contention or cross-delivery.
 
 ## Current State
 
+The mock fixture's node and agent counts are unchanged by the node address
+correction in `internal/mock/generator.go`. A mock node still lists two
+interfaces, one of them addressed, and its linked agent still reports one
+addressed interface. Only the address values differ, each node now having its
+own, so the perf rig's data volume and row counts stay as they were.
+
 ### Retained component state in bounded platform windows
 
 `PlatformWindowedRows` and `PlatformWindowedList` retain one keyed renderer

@@ -10,7 +10,7 @@ import (
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
-func proxmoxGuestExecutionResult(actionID, resourceID, agentID string, kind proxmoxGuestKind, operation string, exitCode int, output, commandError string, agentVerification *unified.ActionVerificationResult, independentBefore, independentAfter *proxmoxGuestPostconditionObservation, independentEvaluation agentexec.PostconditionEvaluation, actionStartedAt, agentReceivedAt time.Time) (*unified.ExecutionResult, error) {
+func proxmoxGuestExecutionResult(actionID, resourceID, agentID string, kind proxmoxGuestKind, operation string, exitCode int, output, commandError string, agentVerification *unified.ActionVerificationResult, independentBefore, independentAfter *proxmoxGuestPostconditionObservation, independentEvaluation agentexec.PostconditionEvaluation, actionStartedAt, agentReceivedAt time.Time, requireIndependent bool) (*unified.ExecutionResult, error) {
 	executionSummary := fmt.Sprintf("Proxmox guest %s command exited with status %d.", strings.TrimSpace(operation), exitCode)
 	execution := unified.ActionExecutionTruth{Status: unified.ActionExecutionSucceeded, Summary: executionSummary}
 	verification := unified.ActionVerificationTruth{Status: unified.ActionVerificationInconclusive, EvidenceClass: unified.ActionEvidenceNone, ReasonCode: "agent_readback_inconclusive", Summary: "The executing agent did not return a conclusive postcondition read."}
@@ -49,6 +49,14 @@ func proxmoxGuestExecutionResult(actionID, resourceID, agentID string, kind prox
 			reason = ""
 		}
 		verification = unified.ActionVerificationTruth{Status: status, EvidenceClass: unified.ActionEvidenceAgentAttested, ReasonCode: reason, Summary: agentSummary, Evidence: []unified.ActionEvidence{evidence}}
+	}
+
+	if requireIndependent && verification.Status == unified.ActionVerificationConfirmed {
+		// Keep the agent's readback as evidence and withhold the verdict. Only
+		// the independent observation below can confirm this action.
+		verification.Status = unified.ActionVerificationInconclusive
+		verification.ReasonCode = "independent_observation_required"
+		verification.Summary = "The agent that ran this action reported the guest in the requested state. Pulse's own Proxmox check has not confirmed it."
 	}
 
 	if exitCode == 0 && usableIndependentProxmoxObservation(agentID, actionStartedAt, independentAfter) {

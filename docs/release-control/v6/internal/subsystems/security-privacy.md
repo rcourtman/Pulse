@@ -2271,6 +2271,46 @@ database grew past it. `TestSQLiteLoggerUsesSharedPageCacheBound` and
 
 ## Current State
 
+`internal/api/router.go` wires a read of a Proxmox node's task log for one
+guest into Patrol, resolved through the organization's own monitor on every
+call, so one organization never reads through another's connection. The read
+returns each task's type, status, times and the Proxmox user who ran it.
+Patrol uses the type and times to tell a guest somebody stopped from one that
+went down by itself. The user is kept in memory with the stop and written to
+one debug log line. It is never put into a finding, the scan's seed, a tool
+result or a proposal reason, because each of those can reach a model
+provider (`TestProxmoxUserNeverReachesModelFacingText`). The read needs no
+new permission: it uses the token Pulse already holds, and without
+`Sys.Audit` on the node Pulse says it cannot tell and does not guess.
+
+### The commands path carries one typed guest action
+
+A collector installed with command execution may now start a stopped Proxmox
+VM or container after an admin approves. Nothing is enabled by default, the
+installer is unchanged and no credential gains a scope. The node opts in by
+the same install choice as before, and that node already accepts a root shell
+from Pulse under the command policy.
+
+The boundary that holds: stop, shutdown and reboot stay with the action
+runner and are refused on a collector session by the server gate, by the
+executor and by the agent. A monitoring-only collector holds no command
+session and is refused. A start goes only to an agent Pulse has evidence
+runs on the guest's own node: the only agent tied to it, on the guest's own
+Proxmox connection, carrying a name no other monitored node carries, with an
+address on one of its own interfaces that Proxmox lists for that node alone.
+A link made on a matching name does not count, nor the address Pulse dials,
+nor the agent's configured report address. This is evidence and not proof.
+The residual is a machine Pulse does not monitor as a node that carries the
+node's name and holds one of its addresses.
+The start runs in the runner's containment with a durable
+receipt, and only Pulse's own Proxmox API read confirms it, so a collector
+that answers "started" without starting is not believed.
+
+On plain HTTP the command channel is neither encrypted nor signed, and the
+collector credential crosses it in clear text. That was already true and a
+start adds nothing to it. `docs/AGENT_SECURITY.md` says so where it describes
+the legacy/full-trust profile.
+
 Valid-user organization withdrawal is authorization denial, not expired login:
 protected synchronous results use403/access_denied and monitoring sockets4403.
 Credential withdrawal still uses401/1008, evaluated first. Handler-private bytes

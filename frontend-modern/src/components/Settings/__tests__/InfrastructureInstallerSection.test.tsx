@@ -67,6 +67,11 @@ describe('InfrastructureInstallerSection', () => {
     expect(checkbox).toHaveAccessibleDescription(
       /update, start, stop or restart Docker and Podman containers.*run commands as root/,
     );
+    // On a Proxmox node the same choice lets Pulse start a stopped guest, and
+    // nothing more: a person who ticks it must not expect stop or restart.
+    expect(checkbox).toHaveAccessibleDescription(
+      /On a Proxmox node it also lets Pulse start a stopped guest after an admin approves it\. Stopping or restarting a guest still needs the action runner\./,
+    );
     expect(checkbox).toHaveAccessibleDescription(
       /prepares a new token and command.*does not reconfigure an installed agent.*Earlier tokens remain valid.*only when no agent still uses them/,
     );

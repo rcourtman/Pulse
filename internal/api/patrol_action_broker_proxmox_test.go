@@ -15,12 +15,11 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 )
 
-// A container on a Proxmox node died. The node's Pulse agent has commands
-// enabled, and no action runner is connected there. Guest actions run only
-// through the runner, so Patrol cannot start the container, and the catalog
-// has to say that in words a person can act on. A commands-on agent must not
-// count as a runner: the fake commander panics if generic connectivity is
-// asked for.
+// A container on a Proxmox node died. No action runner is connected there and
+// no Pulse agent on the node holds a command session, so Patrol cannot start
+// the container, and the catalog has to say that in words a person can act
+// on. Generic connectivity is never the answer: the fake commander panics if
+// it is asked for. The start-capable agent session has its own tests.
 func TestPatrolCatalogSaysPulseCannotStartAGuestWithoutARunner(t *testing.T) {
 	now := time.Now().UTC()
 	setup := func(t *testing.T, runnerConnected bool) (aicontracts.OrchestratorActionBroker, string) {
@@ -58,21 +57,21 @@ func TestPatrolCatalogSaysPulseCannotStartAGuestWithoutARunner(t *testing.T) {
 		t.Fatal("the gitea container is not in the registry")
 		return nil, ""
 	}
-	wantReason := actionlifecycle.ProxmoxGuestActionsUnavailableReason("pmxlab")
+	wantReason := actionlifecycle.ProxmoxGuestStartAgentNotConnectedReason("pmxlab")
 
-	t.Run("commands on, no runner", func(t *testing.T) {
+	t.Run("no runner and no command session", func(t *testing.T) {
 		broker, resourceID := setup(t, false)
 		catalog, err := broker.Capabilities(context.Background(), resourceID)
 		if err != nil {
 			t.Fatalf("Capabilities: %v", err)
 		}
 		if len(catalog.Capabilities) != 0 {
-			t.Fatalf("no guest action can run without a runner, got %#v", catalog.Capabilities)
+			t.Fatalf("no guest action can run here, got %#v", catalog.Capabilities)
 		}
 		if len(catalog.Unavailable) != 1 || catalog.Unavailable[0].Name != "start" ||
-			catalog.Unavailable[0].ReasonCode != actionlifecycle.ReasonCodeActionRunnerUnavailable ||
+			catalog.Unavailable[0].ReasonCode != actionlifecycle.ReasonCodeGuestStartAgentNotConnected ||
 			catalog.Unavailable[0].Reason != wantReason {
-			t.Fatalf("Unavailable = %#v, want start refused for the missing runner", catalog.Unavailable)
+			t.Fatalf("Unavailable = %#v, want start refused for want of an agent that takes commands", catalog.Unavailable)
 		}
 		if strings.Contains(catalog.Unavailable[0].Reason, "typed action runner") {
 			t.Fatalf("refusal still speaks in internal terms: %q", catalog.Unavailable[0].Reason)
@@ -95,7 +94,7 @@ func TestPatrolCatalogSaysPulseCannotStartAGuestWithoutARunner(t *testing.T) {
 			t.Fatalf("Submit error = %v, want the same refusal", err)
 		}
 		var refused *actionlifecycle.AvailabilityRefusedError
-		if !errors.As(err, &refused) || refused.Readiness.ReasonCode != actionlifecycle.ReasonCodeActionRunnerUnavailable {
+		if !errors.As(err, &refused) || refused.Readiness.ReasonCode != actionlifecycle.ReasonCodeGuestStartAgentNotConnected {
 			t.Fatalf("Submit refusal readiness = %#v", refused)
 		}
 	})

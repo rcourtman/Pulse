@@ -84,8 +84,10 @@ describe('patrol command access', () => {
   });
 });
 
+const START_REASON =
+  'Pulse cannot start guests on pve1: no Pulse agent that accepts commands is connected on that node. Use Proxmox for this.';
 const RUNNER_REASON =
-  'Pulse cannot start, stop or restart guests on pve1: no Pulse action runner is connected on that node. "Allow Pulse to run commands on this host" does not cover guest actions. Use Proxmox for this.';
+  'Pulse cannot stop or restart guests on pve1: that needs the Pulse action runner on that node. "Allow Pulse to run commands on this host" covers starting a stopped guest only. Use Proxmox for this.';
 
 const guest = (
   id: string,
@@ -104,46 +106,63 @@ const guest = (
     ...overrides,
   }) as Resource;
 
-const noRunner = (name: string) => [
+const refusedStart = (reasonCode = 'guest_start_agent_not_connected') => [
+  { name: 'start', available: false, reasonCode, reason: START_REASON },
+];
+const needsRunner = (name: string) => [
   { name, available: false, reasonCode: 'action_runner_unavailable', reason: RUNNER_REASON },
 ];
 
 describe('patrol guest action access', () => {
-  it('names the Proxmox nodes where the server refuses a guest action for want of a runner', () => {
+  it('names the Proxmox nodes where the server refuses to start a stopped guest', () => {
     const summary = buildPatrolGuestActionAccessSummary([
-      guest('gitea', 'pve1', { actionReadiness: noRunner('start') }),
-      guest('pihole', 'pve1', { actionReadiness: noRunner('stop') }),
-      // A runner is connected on pve2: its guests carry no refusal.
-      guest('nextcloud', 'pve2'),
+      guest('gitea', 'pve1', { actionReadiness: refusedStart() }),
+      // A running guest's stop needs the runner everywhere. That is not this row.
+      guest('pihole', 'pve1', { actionReadiness: needsRunner('stop') }),
+      guest('nextcloud', 'pve2', { actionReadiness: needsRunner('shutdown') }),
+      // pve3's agent can start guests: its stopped guest carries no refusal.
+      guest('idle', 'pve3'),
+      // An old agent and an agent that cannot run a start are both named.
+      guest('old', 'pve4', { actionReadiness: refusedStart('guest_start_agent_update_required') }),
+      guest('bare', 'pve5', { actionReadiness: refusedStart('guest_start_unavailable') }),
+      // So is a node whose agent Pulse cannot match to it by address.
+      guest('namesake', 'pve8', { actionReadiness: refusedStart('guest_start_agent_unconfirmed') }),
+      // Commands off is the commands row's, with its own step.
+      guest('quiet', 'pve6', { actionReadiness: refusedStart('host_commands_disabled') }),
       // Another refusal is not this one.
-      guest('locked', 'pve3', {
-        actionReadiness: [{ name: 'start', available: false, reasonCode: 'locked' }],
-      }),
+      guest('locked', 'pve7', { actionReadiness: refusedStart('guest_locked') }),
       guest(
         'web',
         'zeta',
-        { type: 'vm', actionReadiness: noRunner('reboot') },
+        { type: 'vm', actionReadiness: refusedStart() },
         { nodeDisplayName: 'Alpha' },
       ),
       // The same node name on another connection is another node.
-      guest('other', 'pve1', { actionReadiness: noRunner('start') }, { instance: 'office' }),
+      guest('other', 'pve1', { actionReadiness: refusedStart() }, { instance: 'office' }),
       // Not judged: a template, a guest with no node, and things that are not Proxmox guests.
-      guest('tmpl', 'pve9', { actionReadiness: noRunner('start') }, { template: true }),
-      guest('lost', '', { actionReadiness: noRunner('start') }),
+      guest('tmpl', 'pve9', { actionReadiness: refusedStart() }, { template: true }),
+      guest('lost', '', { actionReadiness: refusedStart() }),
       host('pve1', { agent: { agentId: 'pve1', commandsEnabled: true } }),
       { id: 'jail', type: 'system-container', name: 'jail', status: 'online' } as Resource,
     ]);
-    expect(summary.total).toBe(5);
-    expect(summary.noRunner.map((entry) => entry.name)).toEqual(['Alpha', 'pve1', 'pve1']);
-    expect(new Set(summary.noRunner.map((entry) => entry.id)).size).toBe(3);
+    expect(summary.cannotStart.map((entry) => entry.name)).toEqual([
+      'Alpha',
+      'pve1',
+      'pve1',
+      'pve4',
+      'pve5',
+      'pve8',
+    ]);
+    expect(new Set(summary.cannotStart.map((entry) => entry.id)).size).toBe(6);
   });
 
-  it('lists nothing when no guest action is refused for a runner', () => {
-    expect(buildPatrolGuestActionAccessSummary([guest('nextcloud', 'pve2')])).toEqual({
-      total: 1,
-      noRunner: [],
-    });
-    expect(buildPatrolGuestActionAccessSummary([])).toEqual({ total: 0, noRunner: [] });
+  it('lists nothing when no start is refused for how a node is set up', () => {
+    expect(
+      buildPatrolGuestActionAccessSummary([
+        guest('nextcloud', 'pve2', { actionReadiness: needsRunner('stop') }),
+      ]),
+    ).toEqual({ cannotStart: [] });
+    expect(buildPatrolGuestActionAccessSummary([])).toEqual({ cannotStart: [] });
   });
 
   it('builds the hand-back for a stopped guest from what the server wrote with the run', () => {
@@ -152,12 +171,12 @@ describe('patrol guest action access', () => {
         guest_name: 'gitea',
         node_name: 'pve1',
         actions: ['start'],
-        reason: RUNNER_REASON,
+        reason: START_REASON,
       },
     } as Investigation;
     expect(buildPatrolGuestActionsHandover(run, false)).toEqual({
       title: 'Patrol could not start gitea itself.',
-      detail: RUNNER_REASON,
+      detail: START_REASON,
     });
     expect(buildPatrolGuestActionsHandover(run, true)).toBeUndefined();
     expect(buildPatrolGuestActionsHandover({} as Investigation, false)).toBeUndefined();
@@ -182,8 +201,7 @@ describe('patrol guest action access', () => {
     } as Investigation;
     expect(buildPatrolGuestActionsHandover(run, false)).toEqual({
       title: 'Patrol could not start this guest itself.',
-      detail:
-        'Pulse cannot start, stop or restart guests on pve1: no Pulse action runner is connected on that node. Use Proxmox for this.',
+      detail: 'Pulse cannot start guests on pve1. Use Proxmox for this.',
     });
   });
 });

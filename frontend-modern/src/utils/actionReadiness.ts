@@ -26,7 +26,15 @@ export const getActionReadinessRefusal = (
     case 'host_commands_disabled':
       return 'Commands are not enabled on the Pulse agent on this host.';
     case 'action_runner_unavailable':
-      return 'Pulse cannot start, stop or restart guests on this node: no Pulse action runner is connected there. Use Proxmox for this.';
+      return 'Pulse cannot stop or restart guests on this node: that needs the Pulse action runner there. Use Proxmox for this.';
+    case 'guest_start_agent_not_connected':
+      return 'Pulse cannot start guests on this node: no Pulse agent that accepts commands is connected there. Use Proxmox for this.';
+    case 'guest_start_agent_unconfirmed':
+      return 'Pulse cannot start guests on this node: it cannot confirm which Pulse agent runs there. Use Proxmox for this.';
+    case 'guest_start_agent_update_required':
+      return 'Pulse cannot start guests on this node yet: its Pulse agent is too old. Update the agent, then try again.';
+    case 'guest_start_unavailable':
+      return 'Pulse cannot start guests on this node: its Pulse agent cannot run a start. Use Proxmox for this.';
     case 'command_agent_disconnected':
       return 'Docker / Podman command agent is not connected.';
     case 'no_command_agent':

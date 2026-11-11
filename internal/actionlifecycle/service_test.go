@@ -2283,31 +2283,83 @@ func (e *capabilityRefusingExecutor) CheckActionAvailable(_ context.Context, req
 	return unified.ResourceActionReadiness{Name: req.CapabilityName, Available: true}
 }
 
-// The refusal for a Proxmox guest action on a node with no action runner is
-// read by a person and by Patrol. It has to say what Pulse cannot do, what is
-// missing and what to do now, and it must not hand anyone a step that does
-// not exist as one step.
-func TestProxmoxGuestActionsUnavailableReasonSaysWhatIsMissingAndWhatToDoNow(t *testing.T) {
-	reason := ProxmoxGuestActionsUnavailableReason("  pve1 ")
-	for _, want := range []string{
-		"Pulse cannot start, stop or restart guests on pve1",
-		"no Pulse action runner is connected on that node",
-		`"Allow Pulse to run commands on this host" does not cover guest actions`,
-		"Use Proxmox for this.",
+// The refusals for a Proxmox guest action are read by a person and by Patrol.
+// Each has to say what Pulse cannot do, what is missing and what to do now,
+// and none may hand anyone a step that does not exist as one step.
+func TestProxmoxGuestActionRefusalsSayWhatIsMissingAndWhatToDoNow(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		reason func(string) string
+		want   []string
+	}{
+		{"stop needs the runner", ProxmoxGuestRunnerOnlyReason, []string{
+			"Pulse cannot stop or restart guests on pve1",
+			"that needs the Pulse action runner on that node",
+			`"Allow Pulse to run commands on this host" covers starting a stopped guest only`,
+			"Use Proxmox for this.",
+		}},
+		{"no agent takes commands", ProxmoxGuestStartAgentNotConnectedReason, []string{
+			"Pulse cannot start guests on pve1",
+			"no Pulse agent that accepts commands is connected on that node",
+			"Use Proxmox for this.",
+		}},
+		{"agent not confirmed on the node", ProxmoxGuestStartAgentUnconfirmedReason, []string{
+			"Pulse cannot start guests on pve1",
+			"it cannot confirm which Pulse agent runs on that node",
+			"an address that the agent reports and only that node has",
+			"Use Proxmox for this.",
+		}},
+		{"agent too old", ProxmoxGuestStartAgentUpdateReason, []string{
+			"Pulse cannot start guests on pve1 yet",
+			"the Pulse agent on that node is too old",
+			"Update the Pulse agent on pve1, then try again.",
+		}},
+		{"agent not a systemd service", ProxmoxGuestStartNotSystemdReason, []string{
+			"Pulse cannot start guests on pve1",
+			"does not run as the pulse-agent systemd service",
+			"Use Proxmox for this.",
+		}},
+		{"containment not set up", ProxmoxGuestStartContainmentReason, []string{
+			"Pulse cannot start guests on pve1",
+			"could not set up the contained way it runs a start",
+			"Its log says why.",
+			"Use Proxmox for this.",
+		}},
 	} {
-		if !strings.Contains(reason, want) {
-			t.Fatalf("reason = %q, want it to contain %q", reason, want)
+		t.Run(tc.name, func(t *testing.T) {
+			reason := tc.reason("  pve1 ")
+			for _, want := range tc.want {
+				if !strings.Contains(reason, want) {
+					t.Fatalf("reason = %q, want it to contain %q", reason, want)
+				}
+			}
+			for _, banned := range []string{"typed action", "Connect a", "Agent Doctor", "before planning", "does not cover", "\u2014", ";"} {
+				if strings.Contains(reason, banned) {
+					t.Fatalf("reason = %q, must not contain %q", reason, banned)
+				}
+			}
+			if got := utf8.RuneCountInString(tc.reason(strings.Repeat("n", 63))); got > actionAvailabilityReasonMaxRunes {
+				t.Fatalf("reason is %d runes with a long node name, over the %d a refusal keeps", got, actionAvailabilityReasonMaxRunes)
+			}
+			if unnamed := tc.reason(" "); !strings.Contains(unnamed, "guests on this node") {
+				t.Fatalf("reason without a node name = %q", unnamed)
+			}
+		})
+	}
+}
+
+// Patrol's catalog and the page read one question from a refusal's code: is
+// this how the node is set up. A commands-off node is not in that set, because
+// it has its own fact and its own step.
+func TestProxmoxGuestActionUnavailableReasonCodes(t *testing.T) {
+	for _, code := range []string{ReasonCodeActionRunnerUnavailable, ReasonCodeGuestStartAgentNotConnected, ReasonCodeGuestStartAgentUnconfirmed, ReasonCodeGuestStartAgentUpdateRequired, ReasonCodeGuestStartUnavailable} {
+		if !IsProxmoxGuestActionUnavailableReasonCode(" " + code + " ") {
+			t.Fatalf("%q is a guest action set-up refusal", code)
 		}
 	}
-	for _, banned := range []string{"typed action runner", "Connect a", "install command", "Agent Doctor", "before planning"} {
-		if strings.Contains(reason, banned) {
-			t.Fatalf("reason = %q, must not contain %q", reason, banned)
+	for _, code := range []string{ReasonCodeHostCommandsDisabled, ReasonCodeCommandAgentDisconnected, "guest_locked", ""} {
+		if IsProxmoxGuestActionUnavailableReasonCode(code) {
+			t.Fatalf("%q is not a guest action set-up refusal", code)
 		}
-	}
-	if got := utf8.RuneCountInString(ProxmoxGuestActionsUnavailableReason(strings.Repeat("n", 63))); got > actionAvailabilityReasonMaxRunes {
-		t.Fatalf("reason is %d runes with a long node name, over the %d a refusal keeps", got, actionAvailabilityReasonMaxRunes)
-	}
-	if unnamed := ProxmoxGuestActionsUnavailableReason(" "); !strings.Contains(unnamed, "guests on this node") {
-		t.Fatalf("reason without a node name = %q", unnamed)
 	}
 }

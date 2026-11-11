@@ -769,8 +769,22 @@ func (r *Router) setupRoutes() {
 			}, nil
 		}
 		resourceHandlers.SetActionRefreshPlanner(NewActionRefreshPlanner(resourceHandlers, patrolPolicyProvider))
+		// A start proposed for a guest Pulse saw stop says so when Pulse could
+		// not tell whether a person stopped it. Patrol knows that from the
+		// finding the proposal answers.
+		patrolProposalNote := func(ctx context.Context, scopedOrgID string, proposal aicontracts.ActionProposal) string {
+			if !strings.EqualFold(strings.TrimSpace(proposal.CapabilityName), "start") {
+				return ""
+			}
+			orgCtx := context.WithValue(ctx, OrgIDContextKey, approval.NormalizeOrgID(scopedOrgID))
+			svc := r.aiSettingsHandler.GetAIService(orgCtx)
+			if svc == nil {
+				return ""
+			}
+			return svc.GetPatrolService().ProxmoxGuestStartProposalNote(proposal.FindingID)
+		}
 		r.aiSettingsHandler.SetActionBrokerFactory(func(orgID string) aicontracts.OrchestratorActionBroker {
-			return NewPatrolActionBroker(orgID, resourceHandlers, patrolPolicyProvider)
+			return NewPatrolActionBrokerWithProposalNote(orgID, resourceHandlers, patrolProposalNote, patrolPolicyProvider)
 		})
 		r.aiSettingsHandler.SetProposalCatalogFactory(func(orgID string) tools.ProposalCatalog {
 			return func(ctx context.Context, resourceID string) ([]unifiedresources.ResourceCapability, error) {
@@ -2603,6 +2617,11 @@ func (r *Router) initializeAIIntelligenceServices(ctx context.Context, orgID, da
 		if proxmoxCorrelator != nil {
 			patrol.SetProxmoxEventProvider(proxmoxCorrelator)
 		}
+
+		// Wire the read of a node's task log, so a guest somebody stopped
+		// through Proxmox is told apart from one that went down by itself.
+		// The monitor is resolved on every read: a reload replaces it.
+		patrol.SetProxmoxGuestTaskReader(newProxmoxGuestTaskReader(func() *monitoring.Monitor { return r.resolveMonitorForOrg(orgID) }))
 
 		// Wire forecast service for trend predictions
 		if forecastService != nil {

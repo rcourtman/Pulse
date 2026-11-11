@@ -216,10 +216,9 @@ type InvestigationSession struct {
 	// sentence and the one step Pulse shows for that hand-back.
 	CommandsDisabled *CommandsDisabledHost `json:"commands_disabled,omitempty"`
 	// GuestActionsUnavailable is written by Pulse, never by the model. It is
-	// set when the finding's resource is a Proxmox guest Pulse could not
-	// start, stop or restart because its node has no connected action
-	// runner, and it stays on a finished run only when the run handed the
-	// problem back.
+	// set when the finding's resource is a Proxmox guest and Pulse refused an
+	// action it declares because of how its node is set up, and it stays on
+	// a finished run only when the run handed the problem back.
 	GuestActionsUnavailable *GuestActionsUnavailable `json:"guest_actions_unavailable,omitempty"`
 }
 
