@@ -1126,6 +1126,25 @@ observed/unknown destination types, uncertain access, pre-write recheck and
 file precedence/refusal. Encrypted export scope and authenticated Recovery
 authorisation are unchanged; source proof is not installed transfer acceptance.
 
+### Saved agent identity read errors cannot create replacement identity
+
+The Unified Agent entrypoint treats a non-absence error reading its selected
+saved agent ID as a startup refusal, not permission to derive, persist or use a
+replacement ID. The diagnostic names the readable-file recovery requirement
+without exposing the private path, original ID, credential or filesystem error.
+The refusal precedes enrollment, remote configuration, service dispatch and
+updater/host/Docker/Kubernetes construction, retaining saved identity and trust.
+A missing/readable-empty identity still permits first startup. Explicit
+flag/environment IDs remain deliberate overrides with the same persistence
+semantics. Credential selection, canonical enrollment, TLS verification and
+monitoring-only command ceilings do not change.
+
+Registered command-package coverage is in `agent_id_read_failure_test.go`:
+real read obstructions preserve files and reach no authenticated consumer,
+while known/explicit identities reach the real config transport and consistent
+module configurations. This does not establish original-client recovery,
+installed service state, exposure or release availability.
+
 ### Explicit agent credential-file failure does not borrow authority
 
 The `cmd/pulse-agent/main.go` flag loader keeps `PULSE_TOKEN` separate from an

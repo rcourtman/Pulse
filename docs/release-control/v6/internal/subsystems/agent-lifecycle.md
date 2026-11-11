@@ -860,6 +860,34 @@ trap. Generated setup commands already remove their own private bootstrap
 files; this does not remove that caller-owned cleanup or widen token/TLS trust.
 
 
+### Unreadable saved agent identity is not a first start
+
+Unified Agent startup reads its selected `--agent-id-file` (the resolved state
+directory's `agent-id` by default) before deriving or publishing an identity.
+A non-absence read failure stops startup with an actionable path-free error;
+it must not fall back to machine identity and replace an unreadable saved file.
+No enrollment, remote configuration, service dispatch, updater or monitoring
+module is reached through that failure. Saved identity bytes/type/mode and
+credential/trust files remain unchanged. This prevents a read failure from
+forking monitoring History or presenting a replacement identity to Pulse.
+
+Missing and readable-empty files retain existing first-start derivation, and
+readable IDs retain whitespace trimming. An explicit flag/environment ID still
+bypasses the unselected file and is persisted as before; this is a deliberate
+operator override, not error recovery. The existing canonical enrollment handoff,
+URL validation and updater self-test remain unchanged. No new identity, token,
+command or transport authority is granted.
+
+`TestRunUnreadableAgentIDStopsBeforeAuthenticatedStartup` exercises actual
+filesystem obstructions at default and selected paths, with and without
+enrollment, and zero downstream requests/constructors. It checks preserved
+bytes, types and modes. `TestRunKnownAgentIdentityStatesReachConsumers` couples
+real remote-config HTTP to all three module configurations and the updater,
+covering saved/missing/empty IDs and explicit override precedence without
+running collectors. `TestRunLocalProbesDoNotRequireReadableAgentID` retains the
+local read-only probes. These are confined source fixtures, not original-host
+recovery or installed service acceptance.
+
 ### Selected agent credential files retain their own authority
 
 The real agent flag-loading path resolves a non-empty explicit `--token` before
