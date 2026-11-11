@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -118,7 +119,11 @@ func Enroll(ctx context.Context, cfg EnrollmentConfig) (EnrollmentResult, error)
 	// A restart reuses the saved runtime token. That needs no request and no
 	// host discovery, so a host-information failure cannot block a process
 	// that is already enrolled.
-	if persisted := persistedRuntimeToken(collector, stateDir); persisted != "" {
+	persisted, err := persistedRuntimeToken(collector, stateDir)
+	if err != nil {
+		return EnrollmentResult{}, err
+	}
+	if persisted != "" {
 		logger.Info().Msg("Found existing runtime token, skipping enrollment")
 		return EnrollmentResult{APIToken: persisted}, nil
 	}
@@ -157,14 +162,24 @@ func Enroll(ctx context.Context, cfg EnrollmentConfig) (EnrollmentResult, error)
 	}, nil
 }
 
-// persistedRuntimeToken returns the runtime token an earlier enrollment saved
-// in stateDir, or "" when there is none.
-func persistedRuntimeToken(collector SystemCollector, stateDir string) string {
+// LoadRuntimeToken reads the runtime credential saved by an earlier enrollment.
+// A missing or readable empty file still permits first enrollment. Other read
+// failures must not fall back to bootstrap authority or replace saved state.
+func LoadRuntimeToken(stateDir string) (string, error) {
+	return persistedRuntimeToken(&defaultCollector{}, stateDir)
+}
+
+func persistedRuntimeToken(collector SystemCollector, stateDir string) (string, error) {
 	data, err := collector.ReadFile(filepath.Join(stateDir, runtimeTokenFile))
 	if err != nil {
-		return ""
+		if errors.Is(err, os.ErrNotExist) {
+			return "", nil
+		}
+		// Do not disclose credential contents, private paths or the underlying
+		// filesystem error. An unreadable saved token is not an absent token.
+		return "", errors.New("cannot read saved runtime token; check that runtime.token in the configured state directory is readable by the agent service; refusing to re-enroll")
 	}
-	return string(bytes.TrimSpace(data))
+	return string(bytes.TrimSpace(data)), nil
 }
 
 // runEnrollmentLoop checks for an existing runtime token or performs enrollment
@@ -180,7 +195,11 @@ func persistedRuntimeToken(collector SystemCollector, stateDir string) string {
 //   - 5xx/network errors: retry with exponential backoff
 func (a *Agent) runEnrollmentLoop(ctx context.Context) error {
 	// Check if we already have a persisted runtime token from a previous enrollment.
-	if token := persistedRuntimeToken(a.collector, a.stateDir); token != "" {
+	token, err := persistedRuntimeToken(a.collector, a.stateDir)
+	if err != nil {
+		return err
+	}
+	if token != "" {
 		a.logger.Info().Msg("Found existing runtime token, skipping enrollment")
 		a.cfg.APIToken = token
 		return nil
