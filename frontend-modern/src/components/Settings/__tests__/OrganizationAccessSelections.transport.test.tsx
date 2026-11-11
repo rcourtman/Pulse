@@ -218,6 +218,18 @@ async function expectSavedReread() {
   await waitFor(() => expect(orgReads()).toHaveLength(2));
   await expectSavedMembers();
 }
+async function openOwnershipPanel() {
+  render(() => <OrganizationAccessPanel currentUser={owner} />);
+  // Ordinary selection cases below inventory every visible row and invitation.
+  // These boundary cases need the admitted owner and exact reviewed member,
+  // then verify the complete saved roles after the withdrawal/recovery.
+  expect(await screen.findByLabelText(`Role for ${people[1]}`, { selector: 'select' })).toHaveValue(
+    'viewer',
+  );
+  expect(roleFor(owner)).toHaveValue('owner');
+  expect(orgReads()).toHaveLength(1);
+  expect(writes()).toHaveLength(0);
+}
 
 beforeEach(async () => {
   clearAuth();
@@ -370,7 +382,7 @@ describe('ownership capability boundary through the rendered consent and real tr
   )(
     'retires unconfirmed $origin consent across $change and requires a newly reviewed successor',
     async ({ origin, change }) => {
-      await openPanel();
+      await openOwnershipPanel();
       chooseOwnership(origin, people[1]);
       expect(ownershipDialog().getByText(people[1], { selector: 'strong' })).toBeInTheDocument();
       expect(writes()).toHaveLength(0);
@@ -406,7 +418,7 @@ describe('ownership capability boundary through the rendered consent and real tr
   )(
     'never dispatches confirmed $origin ownership after $change during cold CSRF preparation',
     async ({ origin, change }) => {
-      await openPanel();
+      await openOwnershipPanel();
       document.cookie = 'pulse_csrf=; Max-Age=0; Path=/';
       const preparation = deferredResponse(json({}, 503));
       healthReply = () => preparation.promise;
@@ -455,7 +467,7 @@ describe('ownership capability boundary through the rendered consent and real tr
   )(
     'keeps fresh saved ownership and a pending replacement invite after a late $origin $outcome',
     async ({ origin, outcome }) => {
-      await openPanel();
+      await openOwnershipPanel();
       const oldReply = deferredResponse(json({}, 503));
       let oldAcknowledgement: Response | undefined;
       writeReply = async (response) => {
@@ -534,7 +546,7 @@ describe('ownership capability boundary through the rendered consent and real tr
   it.each(['row', 'form'] as const)(
     'does not recreate %s consent or readers from a superseded capability grant',
     async (origin) => {
-      await openPanel();
+      await openOwnershipPanel();
       chooseOwnership(origin, people[1]);
       const oldGrant = deferredResponse(json(capabilityBody(false)));
       const oldRead = refreshCapability(() => oldGrant.promise);
