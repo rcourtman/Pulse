@@ -51,7 +51,7 @@ function tree(root) {
   );
 }
 
-function fixture({ previous = true, files = completedFiles, code = 0, signal, failure } = {}) {
+function fixture({ previous = true, files = completedFiles, code = 0, signal, failure, cleanupFailure = false } = {}) {
   const root = mkdtempSync(path.join(os.tmpdir(), 'pulse-frontend-producer-'));
   roots.push(root);
   for (const name of [
@@ -112,14 +112,15 @@ for (const [name, bytes] of Object.entries(config.files)) {
 if (config.signal) process.kill(process.pid, config.signal);
 else process.exitCode = config.code;
 `,
-    // Inject explicit rename errors only, never fabricated success. These
-    // cases establish rollback/backup custody, not real disk-fault recovery.
+    // Inject explicit rename/cleanup errors only, never fabricated success.
+    // These cases establish error/backup custody, not real disk-fault recovery.
     'rename-failure.mjs': `
 import fs from 'node:fs';
 import path from 'node:path';
 import { syncBuiltinESMExports } from 'node:module';
 const rename = fs.promises.rename;
 const failure = ${JSON.stringify(failure ?? null)};
+const cleanupFailure = ${JSON.stringify(cleanupFailure)};
 const canonical = ${JSON.stringify(source)};
 fs.promises.rename = async (from, to) => {
   const isPromotion = to === canonical && path.basename(from) === 'dist';
@@ -131,6 +132,17 @@ fs.promises.rename = async (from, to) => {
     throw Object.assign(new Error('Synthetic rename failure: ' + failure), { code: 'EACCES' });
   }
   return rename(from, to);
+};
+const rm = fs.promises.rm;
+fs.promises.rm = async (file, options) => {
+  // Only the build's real, owned scratch directory may fail cleanup. Never
+  // affect the compiler fixture, usable dist, embedded target or build lock.
+  if (cleanupFailure && fs.existsSync(file) && path.dirname(file) === path.dirname(canonical)
+      && path.basename(file).startsWith('.dist-build-')) {
+    fs.writeFileSync(${JSON.stringify(path.join(root, 'observed-cleanup.json'))}, JSON.stringify({ file }));
+    throw Object.assign(new Error('Synthetic build scratch cleanup failure'), { code: 'EACCES' });
+  }
+  return rm(file, options);
 };
 syncBuiltinESMExports();
 `,
@@ -151,7 +163,7 @@ syncBuiltinESMExports();
     target,
     run: () =>
       invoke('build-embed-assets.mjs',
-        failure ? ['--import', pathToFileURL(path.join(root, 'rename-failure.mjs')).href] : []),
+        failure || cleanupFailure ? ['--import', pathToFileURL(path.join(root, 'rename-failure.mjs')).href] : []),
     sync: () => invoke('sync-embed-dist.mjs'),
   };
 }
@@ -268,5 +280,101 @@ describe('producer promotion error custody', () => {
     expect(f.sync().status).toBe(1);
     expect(tree(f.target)).toEqual(previous);
     expect(tree(backup)).toEqual(previous);
+  });
+});
+
+
+describe('producer cleanup error custody', () => {
+  function retainedScratch(f) {
+    const { file } = JSON.parse(readFileSync(path.join(f.root, 'observed-cleanup.json'), 'utf8'));
+    expect(path.dirname(file)).toBe(path.dirname(f.source));
+    expect(path.basename(file)).toMatch(/^\.dist-build-/);
+    expect(readdirSync(path.dirname(f.source)).filter((name) => name.startsWith('.dist-build-'))).toEqual([path.basename(file)]);
+    expect(readdirSync(path.join(f.root, 'tmp', 'locks'))).toEqual([]);
+    return file;
+  }
+
+  describe.each([true, false])('with previous output: %s', (previous) => {
+    it.each([
+      { name: 'compiler exit', code: 17, reason: /exited with code 17/ },
+      { name: 'compiler signal', signal: 'SIGTERM', reason: /terminated by signal SIGTERM/ },
+      { name: 'incomplete zero-exit output', files: { 'assets/current.js': 'partial' }, reason: /frontend build output incomplete/ },
+      { name: 'promotion error', failure: 'promote', reason: /Synthetic rename failure: promote/ },
+    ])('keeps the $name and the cleanup error together', (fault) => {
+      const f = fixture({ previous, ...fault, cleanupFailure: true });
+      const sourceBefore = tree(f.source);
+      const embedBefore = tree(f.target);
+      const result = f.run();
+      expect(result.status).toBe(1);
+      expect(result.stderr).toMatch(fault.reason);
+      expect(result.stderr).toContain('Synthetic build scratch cleanup failure');
+      const scratch = retainedScratch(f);
+      expect(result.stderr).toContain(`staging cleanup failed at ${scratch}`);
+      expect(result.stdout).not.toContain('Synced frontend embed assets');
+      expect(tree(f.source)).toEqual(sourceBefore);
+      expect(tree(f.target)).toEqual(embedBefore);
+      expect(tree(path.join(scratch, 'dist'))).toEqual(Object.fromEntries(
+        Object.entries(fault.files ?? completedFiles).map(([name, bytes]) => [path.normalize(name), Buffer.from(bytes)]),
+      ));
+      expect(existsSync(path.join(scratch, 'previous-dist'))).toBe(false);
+    });
+
+    it('distinguishes promoted output from an embed skipped after cleanup failure', () => {
+      const f = fixture({ previous, cleanupFailure: true });
+      const sourceBefore = tree(f.source);
+      const embedBefore = tree(f.target);
+      const result = f.run();
+      expect(result.status).toBe(1);
+      const scratch = retainedScratch(f);
+      expect(result.stderr).toContain(`Frontend build output promoted to ${f.source}`);
+      expect(result.stderr).toContain(`cleanup failed at ${scratch}`);
+      expect(result.stderr).toContain('embedded assets were not updated');
+      expect(result.stderr).toContain('Synthetic build scratch cleanup failure');
+      expect(result.stdout).not.toContain('Synced frontend embed assets');
+      const expected = Object.fromEntries(
+        Object.entries(completedFiles).map(([name, bytes]) => [path.normalize(name), Buffer.from(bytes)]),
+      );
+      expect(tree(f.source)).toEqual(expected);
+      expect(tree(f.target)).toEqual(embedBefore);
+      expect(tree(path.join(scratch, 'previous-dist'))).toEqual(sourceBefore);
+      // No recompile or weakened admission: the real standalone consumer can
+      // still read the completed canonical output after the lock is released.
+      expect(f.sync().status).toBe(0);
+      expect(tree(f.source)).toEqual(expected);
+      expect(tree(f.target)).toEqual(expected);
+      expect(tree(path.join(scratch, 'previous-dist'))).toEqual(sourceBefore);
+    });
+  });
+
+  it('preserves a backup-move error when scratch cleanup also fails', () => {
+    const f = fixture({ failure: 'backup', cleanupFailure: true });
+    const before = tree(f.source);
+    const result = f.run();
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('Synthetic rename failure: backup');
+    expect(result.stderr).toContain('Synthetic build scratch cleanup failure');
+    const scratch = retainedScratch(f);
+    expect(result.stderr).toContain(`staging cleanup failed at ${scratch}`);
+    expect(tree(f.source)).toEqual(before);
+    expect(tree(f.target)).toEqual(before);
+    expect(existsSync(path.join(scratch, 'previous-dist'))).toBe(false);
+  });
+
+  it('never attempts scratch cleanup when restore left the only usable backup there', () => {
+    const f = fixture({ failure: 'restore', cleanupFailure: true });
+    const before = tree(f.source);
+    const result = f.run();
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('Frontend output promotion and restore failed');
+    expect(result.stderr).not.toContain('Synthetic build scratch cleanup failure');
+    expect(existsSync(path.join(f.root, 'observed-cleanup.json'))).toBe(false);
+    expect(tree(f.source)).toBeNull();
+    expect(tree(f.target)).toEqual(before);
+    expect(readdirSync(path.join(f.root, 'tmp', 'locks'))).toEqual([]);
+    const retained = readdirSync(path.dirname(f.source)).filter((name) => name.startsWith('.dist-build-'));
+    expect(retained).toHaveLength(1);
+    const backup = path.join(path.dirname(f.source), retained[0], 'previous-dist');
+    expect(result.stderr).toContain(`previous build retained at ${backup}`);
+    expect(tree(backup)).toEqual(before);
   });
 });
