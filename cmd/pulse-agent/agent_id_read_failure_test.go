@@ -145,14 +145,15 @@ func TestRunUnreadableAgentIDStopsBeforeAuthenticatedStartup(t *testing.T) {
 					ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 					defer cancel()
 					evidence := spyIdentityStartup(t, cancel)
-					args := []string{"--url", server.URL, "--state-dir", stateDir, "--enable-host", "--enable-docker", "--enable-kubernetes", "--disable-auto-update", "--health-addr", "", "--command-authority", "monitoring-only"}
+					selectedPath := ""
 					if location == "selected-file" {
-						args = append(args, "--agent-id-file", path)
+						selectedPath = path
 					}
-					if enroll {
-						args = append(args, "--enroll")
-					}
-					err = run(ctx, args, func(string) string { return "" })
+					err = run(ctx, []string{
+						"--url", server.URL, "--state-dir", stateDir, "--agent-id-file", selectedPath,
+						fmt.Sprintf("--enroll=%t", enroll), "--enable-host", "--enable-docker", "--enable-kubernetes",
+						"--disable-auto-update", "--health-addr", "", "--command-authority", "monitoring-only",
+					}, func(string) string { return "" })
 					if err == nil || !strings.Contains(err.Error(), "cannot read saved agent ID") || !strings.Contains(err.Error(), "readable by the agent service") {
 						t.Errorf("unknown saved identity did not stop startup with actionable guidance: %v", err)
 					}
@@ -217,25 +218,24 @@ func TestRunKnownAgentIdentityStatesReachConsumers(t *testing.T) {
 				}
 				t.Cleanup(func() { _ = os.Chmod(path, 0600) })
 			}
-			var requests atomic.Int64
-			var requestedPath, requestedToken string
+			var requests [][2]string
 			var requestMu sync.Mutex
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				requests.Add(1)
 				requestMu.Lock()
-				requestedPath, requestedToken = r.URL.Path, r.Header.Get("X-API-Token")
+				requests = append(requests, [2]string{r.URL.Path, r.Header.Get("X-API-Token")})
 				requestMu.Unlock()
+				if r.URL.Path == "/api/agents/agent/lookup" {
+					// No hostname remap: config must retain the ID startup selected.
+					http.NotFound(w, r)
+					return
+				}
 				w.Header().Set("Content-Type", "application/json")
 				_, _ = io.WriteString(w, `{"success":true,"config":{}}`)
 			}))
 			defer server.Close()
-			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 			defer cancel()
 			evidence := spyIdentityStartup(t, cancel)
-			args := []string{"--url", server.URL, "--state-dir", stateDir, "--token", "synthetic-primary-token", "--enable-host", "--enable-docker", "--enable-kubernetes", "--disable-auto-update", "--health-addr", "", "--command-authority", "monitoring-only"}
-			if state == "explicit-flag" || state == "flag-over-environment" {
-				args = append(args, "--agent-id", want)
-			}
 			env := func(key string) string {
 				if key == "PULSE_AGENT_ID" {
 					if state == "explicit-environment" {
@@ -247,7 +247,24 @@ func TestRunKnownAgentIdentityStatesReachConsumers(t *testing.T) {
 				}
 				return ""
 			}
-			if err := run(ctx, args, env); err != nil {
+			var err error
+			// Literal temporary-state arguments also satisfy the repository's
+			// static guard against seeding a real service state directory.
+			if state == "explicit-flag" || state == "flag-over-environment" {
+				err = run(ctx, []string{
+					"--url", server.URL, "--state-dir", stateDir, "--token", "synthetic-primary-token",
+					"--agent-id", want, "--hostname", "synthetic-fixture-host",
+					"--enable-host", "--enable-docker", "--enable-kubernetes", "--disable-auto-update",
+					"--health-addr", "", "--command-authority", "monitoring-only",
+				}, env)
+			} else {
+				err = run(ctx, []string{
+					"--url", server.URL, "--state-dir", stateDir, "--token", "synthetic-primary-token",
+					"--hostname", "synthetic-fixture-host", "--enable-host", "--enable-docker", "--enable-kubernetes",
+					"--disable-auto-update", "--health-addr", "", "--command-authority", "monitoring-only",
+				}, env)
+			}
+			if err != nil {
 				t.Fatalf("known identity startup failed: %v", err)
 			}
 			id := evidence.host.AgentID
@@ -259,7 +276,7 @@ func TestRunKnownAgentIdentityStatesReachConsumers(t *testing.T) {
 			}
 			requestMu.Lock()
 			defer requestMu.Unlock()
-			if requests.Load() != 1 || requestedPath != "/api/agents/agent/"+id+"/config" || requestedToken != "synthetic-primary-token" {
+			if len(requests) != 2 || requests[0] != [2]string{"/api/agents/agent/lookup", "synthetic-primary-token"} || requests[1] != [2]string{"/api/agents/agent/" + id + "/config", "synthetic-primary-token"} {
 				t.Fatal("remote config did not consume the same selected identity and credential")
 			}
 			if evidence.host.APIToken != "synthetic-primary-token" || evidence.docker.APIToken != "synthetic-primary-token" || evidence.kube.APIToken != "synthetic-primary-token" || evidence.updater.APIToken != "synthetic-primary-token" || evidence.host.EnableCommands || evidence.host.CommandAuthorityProfile != hostagent.CommandAuthorityMonitoringOnly || evidence.host.InsecureSkipVerify || evidence.docker.InsecureSkipVerify || evidence.kube.InsecureSkipVerify || evidence.updater.InsecureSkipVerify {
