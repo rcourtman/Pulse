@@ -6,6 +6,7 @@ import { useSettingsAccess } from '../useSettingsAccess';
 import { canMountSettingsPanel } from '../settingsNavVisibility';
 import type { SettingsTab } from '../settingsNavigationModel';
 import type { SecurityStatus } from '@/types/config';
+import { AlertsAPI } from '@/api/alerts';
 import { clearAuth, getApiToken, getOrgID, setApiToken, setOrgID } from '@/utils/apiClient';
 import { eventBus } from '@/stores/events';
 import { showError, showSuccess } from '@/utils/toast';
@@ -178,6 +179,27 @@ afterEach(() => {
 });
 
 describe('native Settings credential setup and rotation through real API transport', () => {
+  it('keeps confirmed once-only credentials available after an old unbound alert401', async () => {
+    await mount();
+    const held = deferred<Response>();
+    fetchMock.mockImplementationOnce(() => held.promise);
+    const oldAlert = AlertsAPI.getActive().catch((error: unknown) => error);
+    submit();
+    await reveal();
+    const issued = generated();
+    expect(getApiToken()).toBeNull();
+    held.resolve(json({ error: 'synthetic-old-token-refused' }, 401));
+    expect(await oldAlert).toMatchObject({ status: 401 });
+    expect(getOrgID()).toBe('fixture-estate');
+    expect(localStorage.getItem('just_logged_out')).toBeNull();
+    expect(screen.getByText('Credentials are active now')).toBeVisible();
+    expect(document.body).toHaveTextContent(issued.password);
+    expect(document.body).toHaveTextContent(issued.apiToken);
+    download();
+    expect(await blobText(blobs[0])).toContain(issued.apiToken);
+    expect(writes()).toHaveLength(1);
+  });
+
   it.each([false, true])(
     'submits one admitted %s initial/rotation write and preserves org while dropping its obsolete token',
     async (initial) => {

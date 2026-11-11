@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "base_sha": "847aa339065cf690443f943f8baed60799bacc53",
+  "verified_at": "2026-11-11T18:33:35Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/utils/apiClient.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/utils/apiClient.ts": "7dc1b31c610c7e202d22ac4367e540ce3057db401c57386bd9cd4a809caa1903"
+  },
+  "routes": [
+    "/settings/security",
+    "/"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Actual QuickSecuritySetup rotation, alertsActivation.refreshActiveAlerts, AlertsAPI, shared apiClient and Login compiled from the parent and final runtime content, with identical deterministic synthetic credentials, locale, theme, viewport and interaction. Component-consumer fixture, not full App, IdP, actual server or installed/customer acceptance.",
+    "Playwright1.56.1 runtime matches the integration lock; Chromium141.0.7390.37 desktop and WebKit26.0 narrow in light/dark. Sixteen settled captures/eight comparable pairs were opened with native image inspection.",
+    "After confirmed rotation clears the obsolete token, an older unbound alert401 clears selected organization and replaces once-only credentials with Login on the parent; final content retains the selected organization and generated credentials. Confirmed states match across pairs. No field, distinction or control is removed or moved.",
+    "The explicit credential boundary does not cover HttpOnly session changes without a public set/clear call, or the server-to-response-body rotation interval before clearApiToken. Unchanged-credential unbound org-only and strict-session no-fallback policies remain unchanged."
+  ],
+  "interactions": [
+    "Started an actual unbound alert-store read, held its reply, clicked Rotate credentials once, and waited for the actual component to confirm and clear its obsolete token. Then delivered the old401. Parent navigates to actual Login; final keeps the once-only screen and its Download/Copy/Done controls with no extra request or mutation.",
+    "In all four final journeys downloaded the real generated synthetic credential file and checked its confirmed status and username. The Done control stays enabled. A separate current403 preserves the selected organization; a current401 still clears selection and redirects to Login. These are state/interaction controls, not additional retained pixel states."
+  ]
+}
