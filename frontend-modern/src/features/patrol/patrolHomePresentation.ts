@@ -1,6 +1,8 @@
 import type { PatrolAutonomyLevel, PatrolObjective } from '@/api/patrol';
 import type { AttentionFlapping, AttentionItem, AttentionItemDetail } from '@/api/patrolAttention';
 import type { UnifiedFinding } from '@/stores/aiIntelligence';
+import type { PatrolActionReference } from '@/types/actionAudit';
+import { getPatrolInvestigationVerdict } from '@/features/patrol/patrolInvestigationContextModel';
 
 export interface PatrolAutonomyExperience {
   label: string;
@@ -19,8 +21,8 @@ export const PATROL_AUTONOMY_EXPERIENCE: Record<PatrolAutonomyLevel, PatrolAuton
   approval: {
     label: 'Ask first',
     summary: 'Patrol investigates and prepares fixes, then waits for your approval.',
-    needsYouDescription:
-      'These issues are waiting for a decision or approval before work can continue.',
+    // Shown under an empty inbox, so it describes the queue, not its items.
+    needsYouDescription: 'Issues that need a decision or an approval from you appear here.',
     quietWorkDescription: 'Patrol continues investigating while it waits for the decisions above.',
   },
   assisted: {
@@ -263,6 +265,89 @@ export function getPatrolFindingsOnSubject(
     (finding) =>
       finding.status === 'active' && normalizeResourceKey(finding.resourceId) === resource,
   );
+}
+
+export type PatrolAttentionFindingState =
+  'investigating' | 'action_waiting' | 'concluded' | 'found';
+
+export interface PatrolAttentionFindingRead {
+  finding: UnifiedFinding;
+  state: PatrolAttentionFindingState;
+  /** Short label for the list row and the detail badge. */
+  label: string;
+  /** Patrol's answer in one paragraph: the investigation's, else the first look. */
+  text: string;
+  /** The typed action still waiting on a person, when there is one. */
+  action?: PatrolActionReference;
+}
+
+const actionWaitsOnPerson = (action: PatrolActionReference | undefined): boolean =>
+  action?.state === 'pending_approval' ||
+  action?.state === 'planned' ||
+  action?.state === 'approved';
+
+function readPatrolFinding(finding: UnifiedFinding): PatrolAttentionFindingRead {
+  const action = finding.investigationRecord?.action;
+  const verdict = getPatrolInvestigationVerdict(finding.investigationRecord?.conclusion);
+  if (actionWaitsOnPerson(action)) {
+    return {
+      finding,
+      state: 'action_waiting',
+      label: action!.state === 'pending_approval' ? 'Fix ready to approve' : 'Fix ready to run',
+      // The action is planned before the investigation writes its conclusion.
+      // In that gap the first look may name the wrong cause, so it is not
+      // shown beside a fix it did not lead to.
+      text: verdict?.text || 'Patrol has prepared a fix. The review says what it changes and why.',
+      action,
+    };
+  }
+  if (finding.investigationStatus === 'running' || finding.investigationStatus === 'pending') {
+    return {
+      finding,
+      state: 'investigating',
+      label: 'Patrol is investigating',
+      text: 'Patrol is investigating this now. Its answer will appear here.',
+    };
+  }
+  if (verdict) {
+    return { finding, state: 'concluded', label: 'Patrol investigated', text: verdict.text };
+  }
+  return { finding, state: 'found', label: 'Patrol finding', text: finding.description };
+}
+
+const PATROL_ATTENTION_FINDING_ORDER: Record<PatrolAttentionFindingState, number> = {
+  action_waiting: 0,
+  investigating: 1,
+  concluded: 2,
+  found: 3,
+};
+
+/**
+ * What Patrol has to say about an attention item: the open finding that
+ * restates its alert, or one on the same resource. The inbox shows it on the
+ * item, so the reader does not go looking for Patrol's answer on another tab.
+ * A finding with a fix waiting on a person comes first. Findings someone
+ * dismissed are settled and say nothing here.
+ */
+export function getPatrolAttentionFindingRead(
+  item: AttentionItem,
+  findings: readonly UnifiedFinding[],
+): PatrolAttentionFindingRead | null {
+  const seen = new Set<string>();
+  const reads: PatrolAttentionFindingRead[] = [];
+  for (const finding of [
+    ...getLinkedPatrolFindings(item, findings),
+    ...getPatrolFindingsOnSubject(item, findings),
+  ]) {
+    if (seen.has(finding.id) || finding.status !== 'active' || finding.dismissedReason) continue;
+    seen.add(finding.id);
+    reads.push(readPatrolFinding(finding));
+  }
+  reads.sort(
+    (left, right) =>
+      PATROL_ATTENTION_FINDING_ORDER[left.state] - PATROL_ATTENTION_FINDING_ORDER[right.state],
+  );
+  return reads[0] ?? null;
 }
 
 export type PatrolLastingDecisionKind =

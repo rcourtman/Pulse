@@ -73,6 +73,7 @@ import {
   getAttentionFlappingPresentation,
   getAttentionHandoverClose,
   getLinkedPatrolFindings,
+  getPatrolAttentionFindingRead,
   getPatrolFindingsOnSubject,
   getPatrolRememberedDecisionPresentation,
   partitionPatrolAttention,
@@ -330,6 +331,21 @@ export function PatrolAttentionWorkbench(
       setActionBusy(false);
     }
   };
+  // Patrol's own finding on the selected item may hold a fix waiting on a
+  // person. It opens in the same shared review as an item's safe action.
+  const reviewFindingAction = async (actionId: string, trigger: HTMLButtonElement) => {
+    if (actionBusy()) return;
+    actionTrigger = trigger;
+    setActionBusy(true);
+    setActionError('');
+    try {
+      setActionDetail(await ResourceActionsAPI.getAction(actionId));
+    } catch (cause) {
+      setActionError(cause instanceof Error ? cause.message : 'The action could not be opened.');
+    } finally {
+      setActionBusy(false);
+    }
+  };
   const closeActionReview = () => {
     setActionDetail(null);
     queueMicrotask(() => {
@@ -345,6 +361,8 @@ export function PatrolAttentionWorkbench(
     await Promise.all([
       selected ? patrolAttentionStore.select(selected) : Promise.resolve(),
       patrolAttentionStore.load(patrolAttentionStore.filter()),
+      // The finding that proposed the action moves with it.
+      props.findings ? aiIntelligenceStore.loadPatrolFindings() : Promise.resolve(),
     ]);
   };
   const changeLifecycle = async (
@@ -543,6 +561,7 @@ export function PatrolAttentionWorkbench(
             itemButtons={itemButtons}
             onSelect={selectItem}
             view={attentionView()}
+            findings={props.findings}
           />
           <Show when={attention().needsUser.length > PRIMARY_DECISION_LIMIT}>
             <div class="border-t border-border px-4 py-3 text-center sm:px-5">
@@ -571,6 +590,7 @@ export function PatrolAttentionWorkbench(
               actionBusy={actionBusy()}
               actionError={actionError()}
               onReviewAction={reviewAction}
+              onReviewFindingAction={reviewFindingAction}
               lifecycleBusy={lifecycleBusy()}
               lifecycleError={lifecycleError()}
               queuePosition={() =>
@@ -647,6 +667,7 @@ function AttentionList(props: {
   itemButtons: Map<string, HTMLButtonElement>;
   onSelect: (itemId: string) => void;
   view: PatrolAttentionView;
+  findings?: () => UnifiedFinding[];
 }) {
   const now = useRelativeTimeNow();
   const hasQuietWork = () => {
@@ -721,6 +742,12 @@ function AttentionList(props: {
                   }
                   return undefined;
                 };
+                // Patrol's finding on this item, named on the row so a fix
+                // waiting for approval is visible before the item is opened.
+                const patrolRead = () => {
+                  const findings = props.findings?.();
+                  return findings ? getPatrolAttentionFindingRead(item, findings) : null;
+                };
                 return (
                   <li>
                     <button
@@ -772,6 +799,22 @@ function AttentionList(props: {
                                   title={decision.reason}
                                 >
                                   {label()}
+                                </span>
+                              )}
+                            </Show>
+                            <Show when={patrolRead()}>
+                              {(read) => (
+                                <span
+                                  class="font-semibold"
+                                  classList={{
+                                    'text-amber-700 dark:text-amber-300':
+                                      read().state === 'action_waiting',
+                                    'text-blue-700 dark:text-blue-300':
+                                      read().state !== 'action_waiting',
+                                  }}
+                                  data-testid="patrol-attention-row-finding"
+                                >
+                                  {read().label}
                                 </span>
                               )}
                             </Show>
@@ -876,6 +919,7 @@ function AttentionDetail(props: {
     offer: AttentionActionOffer,
     trigger: HTMLButtonElement,
   ) => void;
+  onReviewFindingAction?: (actionId: string, trigger: HTMLButtonElement) => void;
   lifecycleBusy: boolean;
   lifecycleError: string;
   queuePosition: Accessor<number | undefined>;
@@ -907,6 +951,12 @@ function AttentionDetail(props: {
     const findings = props.findings?.();
     if (!current || !findings) return [];
     return getPatrolFindingsOnSubject(current.item, findings);
+  });
+  const patrolRead = createMemo(() => {
+    const current = detail();
+    const findings = props.findings?.();
+    if (!current || !findings) return null;
+    return getPatrolAttentionFindingRead(current.item, findings);
   });
   const orderedEvidence = createMemo(() =>
     [...(detail()?.evidence ?? [])].sort(
@@ -1072,6 +1122,74 @@ function AttentionDetail(props: {
               </Show>
             </section>
 
+            {/* Patrol's answer leads: what it found, and the fix waiting on
+                the reader if there is one. Without this the item only restated
+                its alert and sent the reader to another tab for the answer. */}
+            <Show when={patrolRead()}>
+              {(read) => (
+                <DetailSection title="What Patrol found">
+                  <div
+                    class="rounded-md border p-3"
+                    classList={{
+                      'border-amber-200 bg-amber-50/70 dark:border-amber-900/25 dark:bg-amber-950/30':
+                        read().state === 'action_waiting',
+                      'border-border-subtle': read().state !== 'action_waiting',
+                    }}
+                    data-testid="patrol-attention-finding"
+                  >
+                    <div class="flex flex-wrap items-center gap-2">
+                      <MetadataBadge
+                        tone={read().state === 'action_waiting' ? 'warning' : 'info'}
+                        size="xs"
+                        shape="rounded"
+                      >
+                        {read().label}
+                      </MetadataBadge>
+                      <p class="min-w-0 text-sm font-semibold text-base-content">
+                        {read().finding.title}
+                      </p>
+                    </div>
+                    <p class="mt-2 text-sm leading-6 text-base-content">{read().text}</p>
+                    <Show when={props.actionError && !loaded().item.availableActions[0]}>
+                      <p role="alert" class="mt-2 text-xs leading-5 text-red-700 dark:text-red-300">
+                        {props.actionError}
+                      </p>
+                    </Show>
+                    <div class="mt-3 flex flex-wrap items-center gap-2">
+                      <Show when={read().action}>
+                        {(action) => (
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            class="min-h-11 sm:min-h-0"
+                            data-patrol-action-trigger
+                            isLoading={props.actionBusy}
+                            onClick={(event) =>
+                              props.onReviewFindingAction?.(action().action_id, event.currentTarget)
+                            }
+                          >
+                            {action().state === 'pending_approval'
+                              ? 'Review and approve'
+                              : 'Review and run'}
+                          </Button>
+                        )}
+                      </Show>
+                      <Show when={props.onOpenFindings}>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          class="min-h-11 sm:min-h-0"
+                          onClick={() => props.onOpenFindings?.(loaded().item)}
+                        >
+                          Open the full finding
+                        </Button>
+                      </Show>
+                    </div>
+                  </div>
+                </DetailSection>
+              )}
+            </Show>
+
             <DetailSection title="Affected resource">
               <div class="flex flex-wrap items-center gap-2">
                 <p class="text-sm font-medium text-base-content">
@@ -1119,7 +1237,7 @@ function AttentionDetail(props: {
               )}
             </Show>
 
-            <Show when={loaded().item.recommendedNextStep}>
+            <Show when={!patrolRead() && loaded().item.recommendedNextStep}>
               {(nextStep) => (
                 <DetailSection title="Next step">
                   <p class="text-sm font-medium leading-5 text-base-content">{nextStep()}</p>

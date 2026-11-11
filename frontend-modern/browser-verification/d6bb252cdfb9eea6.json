@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "base_sha": "fac821963b4174974c6c03748d22b0969e495b8f",
+  "verified_at": "2026-11-11T22:28:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/AI/FindingsPanel.tsx",
+    "frontend-modern/src/components/patrol/ApprovalSection.tsx",
+    "frontend-modern/src/components/patrol/InvestigationSection.tsx",
+    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx",
+    "frontend-modern/src/features/patrol/patrolHomePresentation.ts",
+    "frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/AI/FindingsPanel.tsx": "28844cded96b21e93b86e6411159fd4f7a75cbc157cb101365bc7e8107935fbb",
+    "frontend-modern/src/components/patrol/ApprovalSection.tsx": "8d849f1cd2fa9913d82a4a2a64e28ad5beb358d906165b26410851b9f866408d",
+    "frontend-modern/src/components/patrol/InvestigationSection.tsx": "9f2d0548836e25177e24d245598e07a8284d187abe1573849c3c42eed121ab5b",
+    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx": "aa449679d9445d14d06d8072d1781f56211c17e9f8702f659a87fee60f1c7634",
+    "frontend-modern/src/features/patrol/patrolHomePresentation.ts": "4d0957a9121d38c970a5db83c6e8054d78a3b22002345442ee714e153ecbfab2",
+    "frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts": "fd231754dc0d89d1c8d82d93963db3cdd1586803768e3cabcbbc0742493b80a9"
+  },
+  "routes": [
+    "/patrol",
+    "/patrol/activity"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Empty Patrol inbox in Ask first mode with its new sub-line",
+    "Inbox row for an alert whose Patrol finding has a fix waiting: 'Fix ready to approve' label on the row",
+    "Inbox item detail with the 'What Patrol found' section before the investigation concluded (prepared-fix sentence) and after it (the investigation's conclusion)",
+    "Inbox item detail after approval: 'Fix ready to run' label and 'Review and run' button",
+    "Finding review on the Activity tab with a concluded investigation: conclusion first, action card naming the action's own resource (nextcloud-db for a finding on nextcloud), first look and full investigation collapsed",
+    "Finding review before the investigation concluded: first look in view with the action card under it",
+    "Action card in pending approval and approved states",
+    "Shared action review dialog opened from the inbox item and from the finding review, through Approve and Run to the recorded outcome",
+    "Phone width: inbox list row, inbox item with the Patrol section, finding review with the action card; no horizontal overflow, 44px buttons",
+    "Private Pro stack built from this tree, real agent with commands on, live Sonnet investigation of a stopped database container"
+  ],
+  "interactions": [
+    "Opened the alert's inbox item from the list",
+    "Clicked 'Review and approve' on the inbox item: the shared review opened on /patrol without leaving the page",
+    "Clicked Approve in the review: it stayed open and offered Run action",
+    "Closed the review and clicked 'Open the full finding': landed on the finding under Activity",
+    "Opened the finding review and clicked 'Review and run' on its action card",
+    "Clicked Run action: the review stayed open while the finding redrew underneath and showed the recorded outcome",
+    "Reloaded the inbox item after the investigation concluded to read the conclusion in place of the prepared-fix sentence",
+    "Repeated the inbox item and finding review at 375px wide"
+  ]
+}

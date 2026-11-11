@@ -24,7 +24,10 @@ import {
   getInvestigationStatusBadgeTone,
 } from '@/utils/aiFindingPresentation';
 import { getInvestigationSectionState } from '@/utils/patrolEmptyStatePresentation';
-import { buildPatrolInvestigationRecordPresentation } from '@/features/patrol/patrolInvestigationContextModel';
+import {
+  buildPatrolInvestigationRecordPresentation,
+  getPatrolInvestigationVerdict,
+} from '@/features/patrol/patrolInvestigationContextModel';
 import {
   buildPatrolCommandAccessHandover,
   buildPatrolGuestActionsHandover,
@@ -77,6 +80,12 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
   const [cooldownUntil, setCooldownUntil] = createSignal(0);
   const investigationRecord = createMemo(() =>
     buildPatrolInvestigationRecordPresentation(props.investigationRecord),
+  );
+  // The finding review already leads with the investigation's one-line
+  // answer, so the argument behind it waits in an expansion. A record without
+  // that line (a finding nobody investigated) keeps its text in view.
+  const hasVerdict = createMemo(() =>
+    Boolean(getPatrolInvestigationVerdict(props.investigationRecord?.conclusion)),
   );
 
   // Reads stay out of the app's route Suspense boundary, whose fallback
@@ -340,109 +349,121 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
             </Show>
           </div>
 
-          <Show when={investigationRecord().conclusion}>
-            <div
-              class={`mt-2 ${summaryClass}`}
-              // eslint-disable-next-line solid/no-innerhtml
-              innerHTML={renderMarkdown(investigationRecord().conclusion!)}
-            />
-          </Show>
-          <Show when={investigationRecord().recommendedAction}>
-            <p class="mt-1 text-xs text-muted">
-              <span class="font-medium text-base-content">Recommended action:</span>{' '}
-              {investigationRecord().recommendedAction}
-            </p>
-          </Show>
+          <details
+            class="mt-2"
+            open={!hasVerdict()}
+            data-testid="patrol-investigation-record-detail"
+          >
+            <summary
+              class="cursor-pointer text-xs font-medium text-muted"
+              classList={{ hidden: !hasVerdict() }}
+            >
+              Full investigation
+            </summary>
+            <Show when={investigationRecord().conclusion}>
+              <div
+                class={`mt-2 ${summaryClass}`}
+                // eslint-disable-next-line solid/no-innerhtml
+                innerHTML={renderMarkdown(investigationRecord().conclusion!)}
+              />
+            </Show>
+            <Show when={investigationRecord().recommendedAction}>
+              <p class="mt-1 text-xs text-muted">
+                <span class="font-medium text-base-content">Recommended action:</span>{' '}
+                {investigationRecord().recommendedAction}
+              </p>
+            </Show>
 
-          <Show when={investigationRecord().proposedFix}>
-            {(fix) => (
-              <div class="mt-2 rounded-sm border border-border-subtle bg-surface p-2 text-xs">
-                <div class="font-medium text-base-content">{fix().description}</div>
-                <div class="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-muted">
-                  <Show when={fix().riskLabel}>
-                    <span>{fix().riskLabel} risk</span>
-                  </Show>
-                  <Show when={fix().targetHost}>
-                    <span>target {fix().targetHost}</span>
-                  </Show>
-                  <Show when={fix().commandSummary}>
-                    <span>{fix().commandSummary}</span>
-                  </Show>
-                  <Show when={fix().destructive}>
-                    <span class="text-amber-700 dark:text-amber-300">destructive</span>
+            <Show when={investigationRecord().proposedFix}>
+              {(fix) => (
+                <div class="mt-2 rounded-sm border border-border-subtle bg-surface p-2 text-xs">
+                  <div class="font-medium text-base-content">{fix().description}</div>
+                  <div class="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-muted">
+                    <Show when={fix().riskLabel}>
+                      <span>{fix().riskLabel} risk</span>
+                    </Show>
+                    <Show when={fix().targetHost}>
+                      <span>target {fix().targetHost}</span>
+                    </Show>
+                    <Show when={fix().commandSummary}>
+                      <span>{fix().commandSummary}</span>
+                    </Show>
+                    <Show when={fix().destructive}>
+                      <span class="text-amber-700 dark:text-amber-300">destructive</span>
+                    </Show>
+                  </div>
+                  <Show when={fix().rationale}>
+                    <p class="mt-1 text-muted">{fix().rationale}</p>
                   </Show>
                 </div>
-                <Show when={fix().rationale}>
-                  <p class="mt-1 text-muted">{fix().rationale}</p>
-                </Show>
+              )}
+            </Show>
+
+            <Show when={investigationRecord().hasRecord}>
+              <div class="mt-2">
+                <div class="text-[10px] font-medium uppercase text-muted">Impact</div>
+                <p
+                  class="mt-1 text-xs"
+                  classList={{
+                    'text-muted': Boolean(investigationRecord().impact),
+                    'italic ': !investigationRecord().impact,
+                  }}
+                >
+                  {investigationRecord().impact || 'Impact not assessed'}
+                </p>
               </div>
-            )}
-          </Show>
+            </Show>
 
-          <Show when={investigationRecord().hasRecord}>
-            <div class="mt-2">
-              <div class="text-[10px] font-medium uppercase text-muted">Impact</div>
-              <p
-                class="mt-1 text-xs"
-                classList={{
-                  'text-muted': Boolean(investigationRecord().impact),
-                  'italic ': !investigationRecord().impact,
-                }}
-              >
-                {investigationRecord().impact || 'Impact not assessed'}
-              </p>
-            </div>
-          </Show>
-
-          <Show when={investigationRecord().evidenceSummaries.length > 0}>
-            <div class="mt-2">
-              <div class="text-[10px] font-medium uppercase text-muted">Evidence</div>
-              <ul class="mt-1 space-y-1 text-xs text-muted">
-                <For each={investigationRecord().evidenceSummaries}>
-                  {(item) => <li>{item}</li>}
-                </For>
-              </ul>
-            </div>
-          </Show>
-
-          <Show when={investigationRecord().verificationSummaries.length > 0}>
-            <div class="mt-2">
-              <div class="text-[10px] font-medium uppercase text-muted">Verification</div>
-              <ul class="mt-1 space-y-1 text-xs text-muted">
-                <For each={investigationRecord().verificationSummaries}>
-                  {(item) => <li>{item}</li>}
-                </For>
-              </ul>
-            </div>
-          </Show>
-
-          <Show when={investigationRecord().hasRecord}>
-            <div class="mt-2">
-              <div class="text-[10px] font-medium uppercase text-muted">Rollback</div>
-              <Show
-                when={investigationRecord().rollbackSummaries.length > 0}
-                fallback={<p class="mt-1 text-xs italic">Rollback not specified</p>}
-              >
+            <Show when={investigationRecord().evidenceSummaries.length > 0}>
+              <div class="mt-2">
+                <div class="text-[10px] font-medium uppercase text-muted">Evidence</div>
                 <ul class="mt-1 space-y-1 text-xs text-muted">
-                  <For each={investigationRecord().rollbackSummaries}>
+                  <For each={investigationRecord().evidenceSummaries}>
                     {(item) => <li>{item}</li>}
                   </For>
                 </ul>
-              </Show>
-            </div>
-          </Show>
+              </div>
+            </Show>
 
-          <Show when={investigationRecord().toolsUsed.length > 0}>
-            <div class="mt-2 flex flex-wrap gap-1">
-              <For each={investigationRecord().toolsUsed}>
-                {(tool) => (
-                  <MetadataBadge tone="muted" size="xs" shape="rounded">
-                    {tool}
-                  </MetadataBadge>
-                )}
-              </For>
-            </div>
-          </Show>
+            <Show when={investigationRecord().verificationSummaries.length > 0}>
+              <div class="mt-2">
+                <div class="text-[10px] font-medium uppercase text-muted">Verification</div>
+                <ul class="mt-1 space-y-1 text-xs text-muted">
+                  <For each={investigationRecord().verificationSummaries}>
+                    {(item) => <li>{item}</li>}
+                  </For>
+                </ul>
+              </div>
+            </Show>
+
+            <Show when={investigationRecord().hasRecord}>
+              <div class="mt-2">
+                <div class="text-[10px] font-medium uppercase text-muted">Rollback</div>
+                <Show
+                  when={investigationRecord().rollbackSummaries.length > 0}
+                  fallback={<p class="mt-1 text-xs italic">Rollback not specified</p>}
+                >
+                  <ul class="mt-1 space-y-1 text-xs text-muted">
+                    <For each={investigationRecord().rollbackSummaries}>
+                      {(item) => <li>{item}</li>}
+                    </For>
+                  </ul>
+                </Show>
+              </div>
+            </Show>
+
+            <Show when={investigationRecord().toolsUsed.length > 0}>
+              <div class="mt-2 flex flex-wrap gap-1">
+                <For each={investigationRecord().toolsUsed}>
+                  {(tool) => (
+                    <MetadataBadge tone="muted" size="xs" shape="rounded">
+                      {tool}
+                    </MetadataBadge>
+                  )}
+                </For>
+              </div>
+            </Show>
+          </details>
 
           <Show when={investigationRecord().error}>
             <div
@@ -495,7 +516,13 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
 
             {/* Tools used + turn count */}
             <div class="flex items-center gap-2 flex-wrap">
-              <Show when={inv().tools_used && inv().tools_used!.length > 0}>
+              <Show
+                when={
+                  inv().tools_used &&
+                  inv().tools_used!.length > 0 &&
+                  investigationRecord().toolsUsed.length === 0
+                }
+              >
                 <div class="flex items-center gap-1 flex-wrap">
                   <For each={inv().tools_used}>
                     {(tool) => (

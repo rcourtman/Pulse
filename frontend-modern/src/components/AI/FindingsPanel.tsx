@@ -22,7 +22,11 @@ import { UpgradeButtonLink } from '@/components/shared/UpgradeLink';
 import { aiIntelligenceStore, type UnifiedFinding } from '@/stores/aiIntelligence';
 import { notificationStore } from '@/stores/notifications';
 import { getFlappingPresentation } from '@/features/patrol/patrolHomePresentation';
+import { getPatrolInvestigationVerdict } from '@/features/patrol/patrolInvestigationContextModel';
 import { InvestigationSection, ApprovalSection } from '@/components/patrol';
+import { ActionReviewDialog } from '@/features/actions/ActionReviewDialog';
+import { ResourceActionsAPI } from '@/api/resourceActions';
+import type { ActionDetailResponse } from '@/types/actionAudit';
 import { createSuppressionRuleFromFinding, reinvestigateFinding } from '@/api/patrol';
 import type { PatrolRunRecord, PatrolRuntimeState, PatrolAutonomyLevel } from '@/api/patrol';
 import { formatRelativeTime } from '@/utils/format';
@@ -629,6 +633,21 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     }
     requestAnimationFrame(scrollToFindingHash);
   });
+
+  const [actionReviewDetail, setActionReviewDetail] = createSignal<ActionDetailResponse | null>(
+    null,
+  );
+  // A failed read is thrown to the section that asked, which says so in place.
+  const openActionReview = async (actionId: string) => {
+    setActionReviewDetail(await ResourceActionsAPI.getAction(actionId));
+  };
+  const actionReviewChanged = async (next: ActionDetailResponse) => {
+    setActionReviewDetail(next);
+    // The finding that proposed the action moves with it.
+    await (isPatrolFindingsSource()
+      ? aiIntelligenceStore.loadPatrolFindings()
+      : aiIntelligenceStore.loadFindings());
+  };
 
   const handleAcknowledge = async (finding: UnifiedFinding, e: Event) => {
     e.stopPropagation();
@@ -1416,17 +1435,9 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       manualControls.snooze ||
       manualControls.dismiss;
 
-    return (
-      <div
-        id={isPatrolFindingsSource() ? undefined : `finding-${finding.id}-details`}
-        class="mt-3 pt-3 border-t border-border-subtle"
-      >
-        <Show when={hasTriggeringAlert(finding)}>
-          <div class="text-xs text-amber-700 dark:text-amber-300 mb-2">
-            Triggered by alert{finding.alertType ? ` (${finding.alertType})` : ''} • Identifier{' '}
-            {getFindingAlertIdentifier(finding)}
-          </div>
-        </Show>
+    const verdict = getPatrolInvestigationVerdict(finding.investigationRecord?.conclusion);
+    const firstLook = () => (
+      <>
         <p class="text-sm text-muted">{finding.description}</p>
         <Show when={presentCapacityForecast(finding.capacityForecast)}>
           {(fc) => (
@@ -1469,6 +1480,68 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
             {' ('}
             {Math.round(finding.aiConfidence! * 100)}%)
           </p>
+        </Show>
+      </>
+    );
+    const approvalSection = () => (
+      <Show
+        when={
+          finding.investigationRecord?.action ||
+          finding.investigationOutcome === 'fix_queued' ||
+          finding.investigationOutcome === 'fix_executed' ||
+          finding.investigationOutcome === 'fix_failed' ||
+          finding.investigationOutcome === 'fix_rejected' ||
+          finding.investigationOutcome === 'fix_verified' ||
+          finding.investigationOutcome === 'fix_verification_failed' ||
+          finding.investigationOutcome === 'fix_verification_unknown'
+        }
+      >
+        <ApprovalSection
+          findingId={finding.id}
+          hasAction={Boolean(finding.investigationRecord?.action)}
+          investigationOutcome={finding.investigationOutcome}
+          resourceId={finding.resourceId}
+          resourceName={finding.resourceName}
+          onReviewAction={openActionReview}
+        />
+      </Show>
+    );
+
+    return (
+      <div
+        id={isPatrolFindingsSource() ? undefined : `finding-${finding.id}-details`}
+        class="mt-3 pt-3 border-t border-border-subtle"
+      >
+        <Show when={hasTriggeringAlert(finding)}>
+          <div class="text-xs text-amber-700 dark:text-amber-300 mb-2">
+            Triggered by alert{finding.alertType ? ` (${finding.alertType})` : ''} • Identifier{' '}
+            {getFindingAlertIdentifier(finding)}
+          </div>
+        </Show>
+        <Show when={verdict} fallback={firstLook()}>
+          {(found) => (
+            <>
+              {/* The investigation's answer leads. The first look was written
+                  before any evidence was read and can disagree with it, so it
+                  waits behind an expansion once there is a conclusion. */}
+              <div data-testid="patrol-finding-verdict">
+                <p class="text-[11px] font-semibold uppercase tracking-wider text-muted">
+                  What Patrol found
+                </p>
+                <p class="mt-1 text-sm leading-6 text-base-content">{found().text}</p>
+              </div>
+              {approvalSection()}
+              <details
+                class="mt-3 rounded-sm border border-border-subtle"
+                data-testid="patrol-finding-first-look"
+              >
+                <summary class="cursor-pointer px-2 py-1.5 text-xs font-medium text-muted">
+                  First look, before the investigation
+                </summary>
+                <div class="border-t border-border-subtle px-2 py-2">{firstLook()}</div>
+              </details>
+            </>
+          )}
         </Show>
         <Show when={finding.previousResolvedFixSummary}>
           <p class="text-sm text-base-content mt-2 px-2 py-1 rounded-sm border border-emerald-200 bg-emerald-50/40 dark:border-emerald-800 dark:bg-emerald-950/30">
@@ -1977,32 +2050,22 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
           />
         </Show>
 
-        {/* Inline Approval Section (replaces manual approval JSX) */}
-        <Show
-          when={
-            finding.investigationRecord?.action ||
-            finding.investigationOutcome === 'fix_queued' ||
-            finding.investigationOutcome === 'fix_executed' ||
-            finding.investigationOutcome === 'fix_failed' ||
-            finding.investigationOutcome === 'fix_rejected' ||
-            finding.investigationOutcome === 'fix_verified' ||
-            finding.investigationOutcome === 'fix_verification_failed' ||
-            finding.investigationOutcome === 'fix_verification_unknown'
-          }
-        >
-          <ApprovalSection
-            findingId={finding.id}
-            hasAction={Boolean(finding.investigationRecord?.action)}
-            investigationOutcome={finding.investigationOutcome}
-            resourceName={finding.resourceName}
-          />
-        </Show>
+        {/* With a conclusion the action sits under it, at the top. */}
+        <Show when={!verdict}>{approvalSection()}</Show>
       </div>
     );
   };
 
   return (
     <div ref={panelRoot} class="space-y-4">
+      {/* The shared review for a finding's proposed action. It lives here,
+          not in the finding's own review, which redraws when the finding
+          changes: approving changes it, and the dialog must outlast that. */}
+      <ActionReviewDialog
+        detail={actionReviewDetail()}
+        onClose={() => setActionReviewDetail(null)}
+        onChanged={actionReviewChanged}
+      />
       {/* Controls */}
       <Show when={showFilterControls()}>
         <div class="flex flex-wrap items-center justify-between gap-2">
