@@ -164,7 +164,7 @@ func newConfigCmd(deps *ConfigDeps) *cobra.Command {
 			}
 
 			if deps != nil && deps.ExportFile != nil && *deps.ExportFile != "" {
-				if err := os.WriteFile(*deps.ExportFile, []byte(exportedData), 0600); err != nil {
+				if err := writeConfigExportFile(*deps.ExportFile, []byte(exportedData)); err != nil {
 					return fmt.Errorf("failed to write export file: %w", err)
 				}
 				fmt.Fprintf(cmd.OutOrStdout(), "Configuration exported to %s\n", *deps.ExportFile)
