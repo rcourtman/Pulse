@@ -10,21 +10,23 @@ if [[ "${MODE}" != "report" && "${MODE}" != "--enforce" && "${MODE}" != "--enfor
   exit 2
 fi
 
-if ! command -v rg >/dev/null 2>&1; then
-  echo "ripgrep (rg) is required" >&2
+if [[ "$(git rev-parse --is-inside-work-tree 2>/dev/null)" != true || -n "$(git rev-parse --show-prefix 2>/dev/null)" ]]; then
+  echo "Run the boundary audit from the Git repository root" >&2
   exit 2
 fi
 
 NAME_PATTERN='^(internal/license/|internal/api/(license_|entitlement_|billing_|stripe_|hosted_|rbac_|audit_|reporting_|sso_|conversion_|router_routes_org_license\.go$|router_routes_hosted\.go$|router_routes_licensing\.go$|router_routes_cloud\.go$))'
 SEMANTIC_API_PATTERN='/api/license|/api/upgrade-metrics|/api/webhooks/stripe|/api/public/signup|/api/public/magic-link|/api/hosted/|/api/admin/orgs/\{id\}/billing-state|/api/security/sso|/api/admin/rbac|/api/audit|"github\.com/rcourtman/pulse-go-rewrite/pkg/licensing'
 
-NAME_MATCHES="$(rg --files internal/license internal/api 2>/dev/null | rg "${NAME_PATTERN}" || true)"
-SEMANTIC_API_MATCHES="$(rg -l --glob 'internal/api/*.go' --glob '!internal/api/*_test.go' "${SEMANTIC_API_PATTERN}" internal/api 2>/dev/null || true)"
+# Git and grep are already present on the checkout runner. Include untracked,
+# non-ignored files as before, without installing a search tool from apt mirrors.
+NAME_MATCHES="$(git ls-files --cached --others --exclude-standard -- internal/license internal/api | grep -E "${NAME_PATTERN}" || true)"
+SEMANTIC_API_MATCHES="$(git grep --no-index --exclude-standard -l -E -e "${SEMANTIC_API_PATTERN}" -- ':(glob)internal/api/*.go' ':(exclude,glob)internal/api/*_test.go' 2>/dev/null || true)"
 ALL_MATCHES="$(printf "%s\n%s\n" "${NAME_MATCHES}" "${SEMANTIC_API_MATCHES}" | sed '/^$/d' | sort -u || true)"
 SHIM_EXCLUDES='^(internal/license/features\.go|internal/license/license\.go|internal/license/pubkey\.go|internal/license/persistence\.go|internal/license/subscription/state\.go|internal/license/subscription/transitions\.go|internal/license/conversion/upgrade_reasons\.go|internal/license/conversion/events\.go|internal/license/conversion/config\.go|internal/license/conversion/quality\.go|internal/license/conversion/metrics\.go|internal/license/conversion/store\.go|internal/license/conversion/recorder\.go|internal/license/metering/event\.go|internal/license/metering/aggregator\.go|internal/license/entitlements/types\.go|internal/license/entitlements/aliases\.go|internal/license/entitlements/source\.go|internal/license/entitlements/evaluator\.go|internal/license/entitlements/token_source\.go|internal/license/entitlements/database_source\.go|internal/license/entitlements/billing_store\.go)$'
-ALL_MATCHES="$(printf "%s\n" "${ALL_MATCHES}" | rg -v "${SHIM_EXCLUDES}" || true)"
-PROD_MATCHES="$(printf "%s\n" "${ALL_MATCHES}" | rg -v '_test\.go$' || true)"
-TEST_MATCHES="$(printf "%s\n" "${ALL_MATCHES}" | rg '_test\.go$' || true)"
+ALL_MATCHES="$(printf "%s\n" "${ALL_MATCHES}" | grep -Ev "${SHIM_EXCLUDES}" || true)"
+PROD_MATCHES="$(printf "%s\n" "${ALL_MATCHES}" | grep -Ev '_test\.go$' || true)"
+TEST_MATCHES="$(printf "%s\n" "${ALL_MATCHES}" | grep -E '_test\.go$' || true)"
 
 PAID_SURFACE_ALLOWLIST="$(cat "${PAID_SURFACE_ALLOWLIST_FILE}" 2>/dev/null | sed 's/#.*$//' | sed '/^$/d' | sort -u || true)"
 PAID_SURFACE_ALLOWLIST_REGEX='^$'
@@ -32,8 +34,8 @@ if [[ -n "${PAID_SURFACE_ALLOWLIST}" ]]; then
 	PAID_SURFACE_ALLOWLIST_REGEX="^($(printf "%s\n" "${PAID_SURFACE_ALLOWLIST}" | sed 's/[.[\*^$()+?{|]/\\&/g' | sed 's#/#\\/#g' | paste -sd'|' -))$"
 fi
 
-PROD_PAID_SURFACE_MATCHES="$(printf "%s\n" "${PROD_MATCHES}" | rg "${PAID_SURFACE_ALLOWLIST_REGEX}" || true)"
-PROD_PRIVATE_IMPL_MATCHES="$(printf "%s\n" "${PROD_MATCHES}" | rg -v "${PAID_SURFACE_ALLOWLIST_REGEX}" || true)"
+PROD_PAID_SURFACE_MATCHES="$(printf "%s\n" "${PROD_MATCHES}" | grep -E "${PAID_SURFACE_ALLOWLIST_REGEX}" || true)"
+PROD_PRIVATE_IMPL_MATCHES="$(printf "%s\n" "${PROD_MATCHES}" | grep -Ev "${PAID_SURFACE_ALLOWLIST_REGEX}" || true)"
 
 PAID_SURFACE_MISSING_FILES="$(printf "%s\n" "${PAID_SURFACE_ALLOWLIST}" | while IFS= read -r file; do
 	[[ -z "${file}" ]] && continue
@@ -48,34 +50,35 @@ if [[ -n "${PRIVATE_IMPL_BASELINE}" ]]; then
 	PRIVATE_IMPL_BASELINE_REGEX="^($(printf "%s\n" "${PRIVATE_IMPL_BASELINE}" | sed 's/[.[\*^$()+?{|]/\\&/g' | sed 's#/#\\/#g' | paste -sd'|' -))$"
 fi
 
-PROD_BASELINED_PRIVATE_IMPL_MATCHES="$(printf "%s\n" "${PROD_PRIVATE_IMPL_MATCHES}" | rg "${PRIVATE_IMPL_BASELINE_REGEX}" || true)"
-PROD_NEW_PRIVATE_IMPL_MATCHES="$(printf "%s\n" "${PROD_PRIVATE_IMPL_MATCHES}" | rg -v "${PRIVATE_IMPL_BASELINE_REGEX}" || true)"
+PROD_BASELINED_PRIVATE_IMPL_MATCHES="$(printf "%s\n" "${PROD_PRIVATE_IMPL_MATCHES}" | grep -E "${PRIVATE_IMPL_BASELINE_REGEX}" || true)"
+PROD_NEW_PRIVATE_IMPL_MATCHES="$(printf "%s\n" "${PROD_PRIVATE_IMPL_MATCHES}" | grep -Ev "${PRIVATE_IMPL_BASELINE_REGEX}" || true)"
 PRIVATE_IMPL_STALE_BASELINE_ENTRIES="$(printf "%s\n" "${PRIVATE_IMPL_BASELINE}" | while IFS= read -r file; do
 	[[ -z "${file}" ]] && continue
-	if ! printf "%s\n" "${PROD_PRIVATE_IMPL_MATCHES}" | rg -Fxq -- "${file}"; then
+	if ! printf "%s\n" "${PROD_PRIVATE_IMPL_MATCHES}" | grep -Fxq -- "${file}"; then
 		printf "%s\n" "${file}"
 	fi
 done)"
 
-API_INTERNAL_LICENSE_IMPORTS="$(rg -n 'internal/license/' internal/api/*.go 2>/dev/null | rg -v '_test\.go' || true)"
-API_INTERNAL_LICENSE_ROOT_IMPORTS="$(rg -n '"github.com/rcourtman/pulse-go-rewrite/internal/license"' internal/api/*.go 2>/dev/null | rg -v '_test\.go' || true)"
+API_INTERNAL_LICENSE_IMPORTS="$(git grep --no-index --exclude-standard -n -E -e 'internal/license/' -- ':(glob)internal/api/*.go' 2>/dev/null | grep -Ev '_test\.go' || true)"
+API_INTERNAL_LICENSE_ROOT_IMPORTS="$(git grep --no-index --exclude-standard -n -E -e '"github.com/rcourtman/pulse-go-rewrite/internal/license"' -- ':(glob)internal/api/*.go' 2>/dev/null | grep -Ev '_test\.go' || true)"
 API_ROOT_IMPORT_ALLOWLIST='^$'
-API_INTERNAL_LICENSE_ROOT_IMPORTS_OUTSIDE_ALLOWLIST="$(printf "%s\n" "${API_INTERNAL_LICENSE_ROOT_IMPORTS}" | rg -v "${API_ROOT_IMPORT_ALLOWLIST}" || true)"
-API_PKG_LICENSING_IMPORTS="$(rg -n '"github.com/rcourtman/pulse-go-rewrite/pkg/licensing' internal/api/*.go 2>/dev/null | rg -v '_test\.go' || true)"
+API_INTERNAL_LICENSE_ROOT_IMPORTS_OUTSIDE_ALLOWLIST="$(printf "%s\n" "${API_INTERNAL_LICENSE_ROOT_IMPORTS}" | grep -Ev "${API_ROOT_IMPORT_ALLOWLIST}" || true)"
+API_PKG_LICENSING_IMPORTS="$(git grep --no-index --exclude-standard -n -E -e '"github.com/rcourtman/pulse-go-rewrite/pkg/licensing' -- ':(glob)internal/api/*.go' 2>/dev/null | grep -Ev '_test\.go' || true)"
 API_PKG_LICENSING_IMPORT_FILES="$(printf "%s\n" "${API_PKG_LICENSING_IMPORTS}" | cut -d: -f1 | sed '/^$/d' | sort -u || true)"
 API_PKG_LICENSING_IMPORT_ALLOWLIST='^internal/api/licensing_bridge\.go$'
-API_PKG_LICENSING_IMPORT_FILES_OUTSIDE_ALLOWLIST="$(printf "%s\n" "${API_PKG_LICENSING_IMPORT_FILES}" | rg -v "${API_PKG_LICENSING_IMPORT_ALLOWLIST}" || true)"
+API_PKG_LICENSING_IMPORT_FILES_OUTSIDE_ALLOWLIST="$(printf "%s\n" "${API_PKG_LICENSING_IMPORT_FILES}" | grep -Ev "${API_PKG_LICENSING_IMPORT_ALLOWLIST}" || true)"
 
 NON_API_INTERNAL_LICENSE_ROOT_IMPORTS="$({
-  rg -n '"github.com/rcourtman/pulse-go-rewrite/internal/license"' \
-    --glob '*.go' \
-    --glob '!**/*_test.go' \
-    --glob '!internal/api/**' \
-    --glob '!internal/license/**' \
+  git grep --no-index --exclude-standard -n -E \
+    -e '"github.com/rcourtman/pulse-go-rewrite/internal/license"' -- \
+    ':(glob)**/*.go' \
+    ':(exclude,glob)**/*_test.go' \
+    ':(exclude)internal/api' \
+    ':(exclude)internal/license' \
     2>/dev/null || true
 })"
 NON_API_IMPORT_ALLOWLIST='^$'
-NON_API_INTERNAL_LICENSE_IMPORTS="$(printf "%s\n" "${NON_API_INTERNAL_LICENSE_ROOT_IMPORTS}" | rg -v "${NON_API_IMPORT_ALLOWLIST}" || true)"
+NON_API_INTERNAL_LICENSE_IMPORTS="$(printf "%s\n" "${NON_API_INTERNAL_LICENSE_ROOT_IMPORTS}" | grep -Ev "${NON_API_IMPORT_ALLOWLIST}" || true)"
 
 prod_count=0
 prod_private_impl_count=0
