@@ -1498,11 +1498,10 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 	// previously enrolled agent from restarting.
 	var token string
 	if *enrollFlag {
-		runtimeTokenPath := filepath.Join(stateDir, "runtime.token")
-		if content, err := os.ReadFile(runtimeTokenPath); err == nil {
-			if t := strings.TrimSpace(string(content)); t != "" {
-				token = t
-			}
+		var err error
+		token, err = hostagent.LoadRuntimeToken(stateDir)
+		if err != nil {
+			return Config{}, err
 		}
 	}
 	if token == "" {
