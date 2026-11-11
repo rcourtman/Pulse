@@ -244,6 +244,44 @@ describe('PatrolWeeklyDigestCard', () => {
     ).toEqual(['1 fix failed', '2 could not fix']);
   });
 
+  it('counts a finding closed by a verified fix as resolved', () => {
+    // A week whose only issue Patrol fixed read "Issues resolved 0" beside
+    // "1 fixed and verified".
+    const base = digest();
+    const resolved = buildDigestTiles(
+      digest({
+        findings: {
+          ...base.findings,
+          resolved: 1,
+          auto_resolved: 0,
+          dismissed: 0,
+          suppressed: 0,
+          fixed: 1,
+        },
+      }),
+    ).find((tile) => tile.id === 'resolved');
+    expect(resolved?.value).toBe('1');
+    expect(resolved?.details).toEqual(['1 closed by a fix Pulse ran and verified.']);
+    expect(resolved?.tone).toBe('positive');
+  });
+
+  it('reads a server without the fixed count as none', () => {
+    const base = digest();
+    expect(base.findings.fixed).toBeUndefined();
+    const resolved = buildDigestTiles(
+      digest({
+        findings: {
+          ...base.findings,
+          resolved: 0,
+          auto_resolved: 0,
+          dismissed: 0,
+          suppressed: 0,
+        },
+      }),
+    ).find((tile) => tile.id === 'resolved');
+    expect(resolved?.details).toEqual(['No issues were resolved this period.']);
+  });
+
   it('names unclassified and interrupted runs in the email order', () => {
     // A run with no readable conclusion still needs a read, so it ranks just
     // after timeouts; an interrupted run Patrol retries ranks last.

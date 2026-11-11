@@ -358,3 +358,76 @@ func TestSummarizeDigestSpendPricesPromptCacheBuckets(t *testing.T) {
 		t.Fatalf("estimated usd = %f (known=%v), want %f", spend.EstimatedUSD, spend.PricingKnown, want)
 	}
 }
+
+// A verified fix closes its finding when the action reports back, between
+// Patrol runs, so no run record counts that resolution. The week summary read
+// "1 fixed and verified" beside "Issues resolved 0" until the digest counted
+// it from the finding itself.
+func TestBuildPatrolDigestCountsAFindingClosedByAVerifiedFix(t *testing.T) {
+	t.Parallel()
+	runs := newDigestTestRuns("fixed")
+	runs.start("fixed", "chat-1")
+	runs.finish("fixed", "chat-1", InvestigationStatusCompleted, InvestigationOutcomeFixQueued)
+	runs.store.UpdateInvestigationOutcome("fixed", string(InvestigationOutcomeFixVerified))
+
+	findings := runs.store.GetAll(nil)
+	if len(findings) != 1 {
+		t.Fatalf("findings = %d", len(findings))
+	}
+	if findings[0].ResolvedAt == nil || !findings[0].AutoResolved {
+		t.Fatalf("a verified fix should close its finding: resolvedAt=%v autoResolved=%v", findings[0].ResolvedAt, findings[0].AutoResolved)
+	}
+
+	digest := BuildPatrolDigest(PatrolDigestInput{Now: time.Now(), Days: 7, Findings: findings})
+	if digest.Findings.Fixed != 1 || digest.Findings.Resolved != 1 || digest.Findings.AutoResolved != 0 {
+		t.Fatalf("findings = %+v, want the verified fix counted once as resolved", digest.Findings)
+	}
+	if digest.Investigations.ByOutcome["fix_verified"] != 1 {
+		t.Fatalf("investigations = %+v, want the same run as fixed and verified", digest.Investigations)
+	}
+}
+
+// A finding Patrol stopped detecting during a run is already in that run's
+// record. Counting it again from the finding would double the week's total.
+func TestBuildPatrolDigestDoesNotCountRunResolutionsTwice(t *testing.T) {
+	t.Parallel()
+	now := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+	resolvedAt := now.Add(-24 * time.Hour)
+	digest := BuildPatrolDigest(PatrolDigestInput{
+		Now: now, Days: 7,
+		Runs: []PatrolRunRecord{
+			{ID: "run", StartedAt: resolvedAt, CompletedAt: resolvedAt.Add(time.Minute), TriggerReason: string(TriggerReasonScheduled), ResolvedFindings: 1, Status: "healthy"},
+		},
+		Findings: []*Finding{
+			{ID: "cleared-in-run", Severity: FindingSeverityWarning, DetectedAt: now.Add(-48 * time.Hour), ResolvedAt: &resolvedAt, AutoResolved: true},
+		},
+	})
+	if digest.Findings.Resolved != 1 || digest.Findings.AutoResolved != 1 || digest.Findings.Fixed != 0 {
+		t.Fatalf("findings = %+v, want one resolution, counted by its run", digest.Findings)
+	}
+}
+
+// A run can see the condition gone and resolve the finding before the fix's
+// verification reports back. The run record has it, so the later
+// confirmation does not make it a second resolution.
+func TestBuildPatrolDigestLeavesAFixConfirmedAfterItsRunToTheRun(t *testing.T) {
+	t.Parallel()
+	now := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+	resolvedAt := now.Add(-24 * time.Hour)
+	digest := BuildPatrolDigest(PatrolDigestInput{
+		Now: now, Days: 7,
+		Runs: []PatrolRunRecord{
+			{ID: "run", StartedAt: resolvedAt, CompletedAt: resolvedAt.Add(time.Minute), TriggerReason: string(TriggerReasonScheduled), ResolvedFindings: 1, Status: "healthy"},
+		},
+		Findings: []*Finding{
+			{
+				ID: "run-then-verified", Severity: FindingSeverityWarning, DetectedAt: now.Add(-48 * time.Hour),
+				ResolvedAt: &resolvedAt, AutoResolved: true, InvestigationOutcome: string(InvestigationOutcomeFixVerified),
+				Lifecycle: []FindingLifecycleEvent{{At: resolvedAt.Add(5 * time.Minute), Type: "verification_passed"}},
+			},
+		},
+	})
+	if digest.Findings.Resolved != 1 || digest.Findings.Fixed != 0 {
+		t.Fatalf("findings = %+v, want the run's one resolution only", digest.Findings)
+	}
+}

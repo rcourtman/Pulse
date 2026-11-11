@@ -1209,6 +1209,9 @@ export interface PatrolDigestFindings {
   open_by_severity: PatrolDigestSeverityCounts;
   resolved: number;
   auto_resolved: number;
+  // Closed by a fix Pulse ran and then verified. Absent from servers older
+  // than the field.
+  fixed?: number;
   dismissed: number;
   suppressed: number;
 }

@@ -2905,7 +2905,11 @@ six tiles in plain customer language: Patrol runs, New issues, Issues resolved,
 Investigated, Fixes run, and Estimated spend, with the effective Patrol mode
 sentence underneath, and it links to `/actions` only when Patrol-origin fixes
 are waiting for approval. The card reads `GET /api/ai/patrol/digest` and must
-not recompute counts from findings or run history client-side. Forensic
+not recompute counts from findings or run history client-side. The Issues
+resolved tile names findings closed by a fix Pulse ran and verified
+(`findings.fixed`, read as none from a server that predates the field), so a
+week whose only issue Patrol fixed no longer reads "Issues resolved 0" beside
+"1 fixed and verified". Forensic
 vocabulary (evidence classes, verdicts, model names, tool traces) stays out of
 the card and remains in run history and the Actions audit. Empty history
 renders "Patrol has not run in the last N days"; a truncated history says

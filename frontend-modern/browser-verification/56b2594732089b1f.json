@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "base_sha": "7c18c2a58949e9b1dc8c59c3e4d4acb0249d5717",
+  "verified_at": "2026-11-11T22:52:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/api/patrol.ts",
+    "frontend-modern/src/features/patrol/PatrolWeeklyDigestCard.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/api/patrol.ts": "23e4e63093f9eff00374765c3dc3704e80490a5c50f18e87cf8119d71b54c638",
+    "frontend-modern/src/features/patrol/PatrolWeeklyDigestCard.tsx": "048c10289d59ce6982fb99ee5b89f2bdf3e5fafddb8d6c7ac396851be8ae4a76"
+  },
+  "routes": [
+    "/patrol/activity",
+    "/actions"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Week summary after Patrol's proposed start of a stopped database container was approved, run and verified on a private Pro stack built from this tree: Issues resolved 1 with '1 closed by a fix Pulse ran and verified.', beside Investigated 1 '1 fixed and verified.' and Fixes run 1",
+    "New issues tile for the same week: 'All of them have since cleared.'",
+    "Phone width: the week summary tiles stack in one column with no horizontal overflow"
+  ],
+  "interactions": [
+    "Approved and ran the action from the Actions page review, then opened Patrol Activity and read the week summary",
+    "Reloaded the Activity tab at 375px wide"
+  ]
+}

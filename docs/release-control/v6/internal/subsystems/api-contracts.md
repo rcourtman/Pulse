@@ -13485,6 +13485,9 @@ scoped read. It returns `generated_at`, `window` (`start`, `end`, `days`,
 in `internal/ai/patrol_digest.go` and mirrored by `PatrolDigest` in
 `frontend-modern/src/api/patrol.ts`. Every count is derived from records Pulse
 already retains; the endpoint persists nothing and adds no telemetry fields.
+`findings.fixed` is an additive count of findings closed in the window by a
+fix Pulse ran and verified; it is included in `findings.resolved`, and a
+client that predates it reads the same `resolved` total without the split.
 A missing AI or Patrol service returns the same zero-valued shape rather than
 an error so clients can render an honest "Patrol has not run" state, and
 `investigations.by_outcome` always serialises as an object. An out-of-range

@@ -105,6 +105,8 @@ export function buildDigestTiles(digest: PatrolDigest): DigestTile[] {
   if (runs.last_run_at) runDetails.push(`Last run ${formatRelativeTime(runs.last_run_at)}.`);
 
   const resolvedDetails: string[] = [];
+  const fixed = findings.fixed ?? 0;
+  if (fixed > 0) resolvedDetails.push(`${fixed} closed by a fix Pulse ran and verified.`);
   if (findings.auto_resolved > 0) {
     resolvedDetails.push(`${findings.auto_resolved} cleared by Patrol on its own.`);
   }
