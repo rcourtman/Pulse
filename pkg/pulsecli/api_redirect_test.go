@@ -149,8 +149,13 @@ func TestCLIAPICommandsPreserveSameOriginTLSRedirects(t *testing.T) {
 					}
 					w.Header().Set("Content-Type", "application/json")
 					body := `{}`
-					if command.name == "fleet" {
+					switch command.name {
+					case "fleet":
 						body = `{"connections":[]}`
+					case "audit":
+						body = `{"audits":[],"count":0}`
+					case "events":
+						body = `{"actionId":"synthetic-action","events":[],"count":0}`
 					}
 					_, _ = io.WriteString(w, body)
 				}))
