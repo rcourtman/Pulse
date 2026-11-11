@@ -74,7 +74,9 @@ const capabilityBody = (enabled: boolean) => ({
 });
 type Capability = 'enabled' | 'withdrawn' | 'failed' | 'malformed';
 const reads = (path: string) =>
-  fetchMock.mock.calls.filter(([url, options]) => url === path && (options?.method ?? 'GET') === 'GET');
+  fetchMock.mock.calls.filter(
+    ([url, options]) => url === path && (options?.method ?? 'GET') === 'GET',
+  );
 const turn = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 let capabilityReply: () => Promise<Response>;
 let healthReply: () => Promise<Response>;
@@ -94,7 +96,11 @@ function refresh(reply: () => Promise<Response>) {
 function capabilities(kind: Capability) {
   return refresh(async () => {
     if (kind === 'failed') throw new TypeError('synthetic-private-sharing-capability-unavailable');
-    return json(kind === 'malformed' ? { capabilities: 'multi_tenant', limits: [] } : capabilityBody(kind === 'enabled'));
+    return json(
+      kind === 'malformed'
+        ? { capabilities: 'multi_tenant', limits: [] }
+        : capabilityBody(kind === 'enabled'),
+    );
   });
 }
 function expectWithdrawn() {
@@ -103,7 +109,9 @@ function expectWithdrawn() {
   expect(screen.queryByRole('heading', { name: 'Create Share' })).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Reload sharing' })).not.toBeInTheDocument();
   expect(screen.queryByText('No outgoing shares configured.')).not.toBeInTheDocument();
-  expect(screen.queryByText('No incoming shares from other organizations.')).not.toBeInTheDocument();
+  expect(
+    screen.queryByText('No incoming shares from other organizations.'),
+  ).not.toBeInTheDocument();
   for (const share of [...outgoingRows(), ...incomingRows()])
     expect(screen.queryByText(`vm:${share.resourceId}`)).not.toBeInTheDocument();
   expect(notices.success).not.toHaveBeenCalled();
@@ -680,9 +688,11 @@ describe('rendered namesake sharing rows through the real transport', () => {
 // the actual producer/store as well: a hidden row alone must not be mistaken
 // for cancellation of an intent still waiting on CSRF or a response body.
 describe('sharing rows through real capability withdrawal', () => {
-  it.each(operations.flatMap((operation) =>
-    (['withdrawn', 'failed', 'malformed'] as const).map((kind) => ({ operation, kind })),
-  ))('retires cold $operation on $kind capability before dispatch', async ({ operation, kind }) => {
+  it.each(
+    operations.flatMap((operation) =>
+      (['withdrawn', 'failed', 'malformed'] as const).map((kind) => ({ operation, kind })),
+    ),
+  )('retires cold $operation on $kind capability before dispatch', async ({ operation, kind }) => {
     const health = hold(json({}));
     healthReply = () => health.promise;
     await renderPanel(operation);
@@ -712,64 +722,80 @@ describe('sharing rows through real capability withdrawal', () => {
     expect(reads('/api/health')).toHaveLength(1);
   });
 
-  it.each(operations)('ignores a superseded grant while cold %s stays retired', async (operation) => {
-    const health = hold(json({}));
-    healthReply = () => health.promise;
-    await renderPanel(operation);
-    document.cookie = 'pulse_csrf=; Max-Age=0; Path=/';
-    fireEvent.click(rowAction(operation));
-    await waitFor(() => expect(reads('/api/health')).toHaveLength(1));
-    const oldReply = hold(json(capabilityBody(false)));
-    const oldLoad = refresh(() => oldReply.promise);
-    await capabilities('withdrawn');
-    expectWithdrawn();
-    oldReply.resolve(json(capabilityBody(true)));
-    await oldLoad;
-    expectWithdrawn();
-    vi.useFakeTimers();
-    document.cookie = `pulse_csrf=${csrfToken}; Path=/`;
-    health.resolve(json({}));
-    await vi.advanceTimersByTimeAsync(25);
-    vi.useRealTimers();
-    expect(writes()).toHaveLength(0);
-    expect(sharingReads()).toHaveLength(5);
-    expectWithdrawn();
-  });
+  it.each(operations)(
+    'ignores a superseded grant while cold %s stays retired',
+    async (operation) => {
+      const health = hold(json({}));
+      healthReply = () => health.promise;
+      await renderPanel(operation);
+      document.cookie = 'pulse_csrf=; Max-Age=0; Path=/';
+      fireEvent.click(rowAction(operation));
+      await waitFor(() => expect(reads('/api/health')).toHaveLength(1));
+      const oldReply = hold(json(capabilityBody(false)));
+      const oldLoad = refresh(() => oldReply.promise);
+      await capabilities('withdrawn');
+      expectWithdrawn();
+      oldReply.resolve(json(capabilityBody(true)));
+      await oldLoad;
+      expectWithdrawn();
+      vi.useFakeTimers();
+      document.cookie = `pulse_csrf=${csrfToken}; Path=/`;
+      health.resolve(json({}));
+      await vi.advanceTimersByTimeAsync(25);
+      vi.useRealTimers();
+      expect(writes()).toHaveLength(0);
+      expect(sharingReads()).toHaveLength(5);
+      expectWithdrawn();
+    },
+  );
 
-  it.each(operations.flatMap((operation) =>
-    (['success', 'unreadable'] as const).map((outcome) => ({ operation, outcome })),
-  ))('rereads applied $operation without importing a late $outcome into a new draft', async ({ operation, outcome }) => {
-    const body = hold('');
-    const response = json({});
-    const read = vi.spyOn(response, 'text').mockImplementation(() => body.promise);
-    completion.resolve(response);
-    await renderPanel(operation);
-    fireEvent.click(rowAction(operation));
-    await waitFor(() => expect(read).toHaveBeenCalledOnce());
-    expectWrite(operation);
-    applyDispatchedWrite();
-    const signal = writes()[0][1]?.signal;
-    expect(signal?.aborted).toBe(false);
-    await capabilities('withdrawn');
-    expectWithdrawn();
-    expect(signal?.aborted).toBe(true);
-    await capabilities('enabled');
-    await expectFreshRows(operation, true);
-    // Use the live replacement form, not a cached query on a detached form.
-    fireEvent.change(screen.getByRole('combobox', { name: 'Target Organization' }), { target: { value: 'peer/third' } });
-    fireEvent.input(screen.getByLabelText('Resource Type'), { target: { value: 'vm' } });
-    fireEvent.input(screen.getByLabelText('Resource ID'), { target: { value: `current::draft/${operation}` } });
-    fireEvent.change(screen.getByRole('combobox', { name: 'Access Role' }), { target: { value: 'admin' } });
-    body.resolve(outcome === 'success' ? '{}' : '{"synthetic-private-partial":');
-    await turn();
-    expect(screen.getByRole('combobox', { name: 'Target Organization' })).toHaveValue('peer/third');
-    expect(screen.getByLabelText('Resource ID')).toHaveValue(`current::draft/${operation}`);
-    expect(screen.getByRole('combobox', { name: 'Access Role' })).toHaveValue('admin');
-    expect(screen.getByRole('button', { name: 'Create Share' })).toBeEnabled();
-    expectSavedRows(operation, true);
-    expect(sharingReads()).toHaveLength(10);
-    expect(writes()).toHaveLength(1);
-    expect(notices.success).not.toHaveBeenCalled();
-    expect(notices.error).not.toHaveBeenCalled();
-  });
+  it.each(
+    operations.flatMap((operation) =>
+      (['success', 'unreadable'] as const).map((outcome) => ({ operation, outcome })),
+    ),
+  )(
+    'rereads applied $operation without importing a late $outcome into a new draft',
+    async ({ operation, outcome }) => {
+      const body = hold('');
+      const response = json({});
+      const read = vi.spyOn(response, 'text').mockImplementation(() => body.promise);
+      completion.resolve(response);
+      await renderPanel(operation);
+      fireEvent.click(rowAction(operation));
+      await waitFor(() => expect(read).toHaveBeenCalledOnce());
+      expectWrite(operation);
+      applyDispatchedWrite();
+      const signal = writes()[0][1]?.signal;
+      expect(signal?.aborted).toBe(false);
+      await capabilities('withdrawn');
+      expectWithdrawn();
+      expect(signal?.aborted).toBe(true);
+      await capabilities('enabled');
+      await expectFreshRows(operation, true);
+      // Use the live replacement form, not a cached query on a detached form.
+      fireEvent.change(screen.getByRole('combobox', { name: 'Target Organization' }), {
+        target: { value: 'peer/third' },
+      });
+      fireEvent.input(screen.getByLabelText('Resource Type'), { target: { value: 'vm' } });
+      fireEvent.input(screen.getByLabelText('Resource ID'), {
+        target: { value: `current::draft/${operation}` },
+      });
+      fireEvent.change(screen.getByRole('combobox', { name: 'Access Role' }), {
+        target: { value: 'admin' },
+      });
+      body.resolve(outcome === 'success' ? '{}' : '{"synthetic-private-partial":');
+      await turn();
+      expect(screen.getByRole('combobox', { name: 'Target Organization' })).toHaveValue(
+        'peer/third',
+      );
+      expect(screen.getByLabelText('Resource ID')).toHaveValue(`current::draft/${operation}`);
+      expect(screen.getByRole('combobox', { name: 'Access Role' })).toHaveValue('admin');
+      expect(screen.getByRole('button', { name: 'Create Share' })).toBeEnabled();
+      expectSavedRows(operation, true);
+      expect(sharingReads()).toHaveLength(10);
+      expect(writes()).toHaveLength(1);
+      expect(notices.success).not.toHaveBeenCalled();
+      expect(notices.error).not.toHaveBeenCalled();
+    },
+  );
 });

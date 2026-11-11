@@ -107,7 +107,11 @@ function refresh(reply: () => Promise<Response>) {
 function capabilities(kind: Capability) {
   return refresh(async () => {
     if (kind === 'failed') throw new TypeError('synthetic-private-sharing-capability-unavailable');
-    return json(kind === 'malformed' ? { capabilities: 'multi_tenant', limits: [] } : capabilityBody(kind === 'enabled'));
+    return json(
+      kind === 'malformed'
+        ? { capabilities: 'multi_tenant', limits: [] }
+        : capabilityBody(kind === 'enabled'),
+    );
   });
 }
 function expectWithdrawn() {
@@ -115,7 +119,9 @@ function expectWithdrawn() {
   expect(screen.queryByRole('heading', { name: 'Outgoing Shares' })).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Reload sharing' })).not.toBeInTheDocument();
   expect(screen.queryByText('No outgoing shares configured.')).not.toBeInTheDocument();
-  expect(screen.queryByText('No incoming shares from other organizations.')).not.toBeInTheDocument();
+  expect(
+    screen.queryByText('No incoming shares from other organizations.'),
+  ).not.toBeInTheDocument();
   expect(notices.success).not.toHaveBeenCalled();
   expect(notices.error).not.toHaveBeenCalled();
   expect(getOrgID()).toBe(orgID);
@@ -596,9 +602,11 @@ describe('rendered Create Share controls through the real transport', () => {
 // Keep the real capability producer, normalization and store connected to both
 // input paths, including work still waiting on the client's CSRF preparation.
 describe('Create Share through real capability withdrawal', () => {
-  it.each(entries.flatMap((entry) =>
-    (['withdrawn', 'failed', 'malformed'] as const).map((kind) => ({ entry, kind })),
-  ))('retires a cold $entry grant on $kind capability before dispatch', async ({ entry, kind }) => {
+  it.each(
+    entries.flatMap((entry) =>
+      (['withdrawn', 'failed', 'malformed'] as const).map((kind) => ({ entry, kind })),
+    ),
+  )('retires a cold $entry grant on $kind capability before dispatch', async ({ entry, kind }) => {
     const health = hold(json({}));
     healthReply = () => health.promise;
     await openPanel();
@@ -662,7 +670,8 @@ describe('Create Share through real capability withdrawal', () => {
   });
 
   it.each(['success', 'unreadable'] as const)(
-    'reads an applied grant without importing its late %s body into the new draft', async (outcome) => {
+    'reads an applied grant without importing its late %s body into the new draft',
+    async (outcome) => {
       const body = hold('');
       const response = json({});
       const read = vi.spyOn(response, 'text').mockImplementation(() => body.promise);
@@ -683,7 +692,9 @@ describe('Create Share through real capability withdrawal', () => {
       await screen.findByRole('heading', { name: 'Outgoing Shares' });
       expectSavedGrant('quick pick', 'editor');
       fillForm('manual entry', 'admin');
-      fireEvent.input(screen.getByLabelText('Resource ID'), { target: { value: 'current::draft/independent' } });
+      fireEvent.input(screen.getByLabelText('Resource ID'), {
+        target: { value: 'current::draft/independent' },
+      });
       body.resolve(outcome === 'success' ? '{}' : '{"synthetic-private-partial":');
       await turn();
       expect(targetInput()).toHaveValue(target.id);
