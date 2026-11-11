@@ -45,12 +45,17 @@ const json = (body: unknown, status = 200) =>
     status,
     headers: { 'Content-Type': 'application/json' },
   });
-const capabilityBody = (enabled: boolean) => ({ capabilities: enabled ? ['rbac'] : [], limits: [] });
+const capabilityBody = (enabled: boolean) => ({
+  capabilities: enabled ? ['rbac'] : [],
+  limits: [],
+});
 const fetchMock = vi.fn<typeof fetch>();
 const reads = (path: string) =>
   fetchMock.mock.calls.filter(([url, init]) => url === path && (init?.method ?? 'GET') === 'GET');
 const writes = () =>
-  fetchMock.mock.calls.filter(([, init]) => ['POST', 'PUT', 'DELETE'].includes(init?.method ?? 'GET'));
+  fetchMock.mock.calls.filter(([, init]) =>
+    ['POST', 'PUT', 'DELETE'].includes(init?.method ?? 'GET'),
+  );
 const turn = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 type Operation = 'create' | 'edit' | 'delete';
 type Capability = 'enabled' | 'withdrawn' | 'failed' | 'malformed';
@@ -87,7 +92,11 @@ function refresh(reply: () => Promise<Response>) {
 function capabilities(kind: Capability) {
   return refresh(async () => {
     if (kind === 'failed') throw new TypeError('synthetic-private-capability-unavailable');
-    return json(kind === 'malformed' ? { capabilities: 'rbac', limits: [] } : capabilityBody(kind === 'enabled'));
+    return json(
+      kind === 'malformed'
+        ? { capabilities: 'rbac', limits: [] }
+        : capabilityBody(kind === 'enabled'),
+    );
   });
 }
 function rowFor(role: Role) {
@@ -103,8 +112,12 @@ async function openPanel() {
   expect(writes()).toHaveLength(0);
 }
 function openEditor(role = selected) {
-  fireEvent.click(rowFor(role).getByRole('button', { name: `Edit role ${role.name} (Role ID: ${role.id})` }));
-  const dialog = screen.getByRole('dialog', { name: `Edit role: ${role.name} (Role ID: ${role.id})` });
+  fireEvent.click(
+    rowFor(role).getByRole('button', { name: `Edit role ${role.name} (Role ID: ${role.id})` }),
+  );
+  const dialog = screen.getByRole('dialog', {
+    name: `Edit role: ${role.name} (Role ID: ${role.id})`,
+  });
   expect(within(dialog).getByLabelText('Role ID')).toHaveValue(role.id);
   expect(within(dialog).getByLabelText('Role ID')).toBeDisabled();
   return within(dialog);
@@ -112,7 +125,9 @@ function openEditor(role = selected) {
 function prepare(operation: Operation) {
   if (operation === 'edit') {
     const editor = openEditor();
-    fireEvent.input(editor.getByLabelText('Description'), { target: { value: 'Updated second policy' } });
+    fireEvent.input(editor.getByLabelText('Description'), {
+      target: { value: 'Updated second policy' },
+    });
     return editor.getByRole('button', { name: 'Update Role' });
   }
   if (operation === 'create') {
@@ -122,8 +137,14 @@ function prepare(operation: Operation) {
     fireEvent.input(editor.getByLabelText('Role Name'), { target: { value: 'New auditor' } });
     return editor.getByRole('button', { name: 'Create Role' });
   }
-  fireEvent.click(rowFor(selected).getByRole('button', { name: `Delete role ${selected.name} (Role ID: ${selected.id})` }));
-  const dialog = within(screen.getByRole('dialog', { name: `Delete role: ${selected.name} (Role ID: ${selected.id})` }));
+  fireEvent.click(
+    rowFor(selected).getByRole('button', {
+      name: `Delete role ${selected.name} (Role ID: ${selected.id})`,
+    }),
+  );
+  const dialog = within(
+    screen.getByRole('dialog', { name: `Delete role: ${selected.name} (Role ID: ${selected.id})` }),
+  );
   expect(dialog.getByText(selected.id)).toBeInTheDocument();
   return dialog.getByRole('button', { name: 'Delete Role' });
 }
@@ -137,7 +158,9 @@ function expectWithdrawn() {
 }
 function expectNoObsoleteFeedback() {
   expect(screen.queryByText(/Role Fleet auditor .* (saved|deleted)/)).toBeNull();
-  expect(screen.queryByText(/could not be confirmed|Failed to save role|Failed to delete role/)).toBeNull();
+  expect(
+    screen.queryByText(/could not be confirmed|Failed to save role|Failed to delete role/),
+  ).toBeNull();
   expect(screen.queryByText(/synthetic-private/)).toBeNull();
 }
 function expectBoundRequests() {
@@ -161,7 +184,8 @@ async function expectFreshInventory(expected: Role[]) {
   await waitFor(() => {
     expect(reads(rolesPath)).toHaveLength(2);
     expect(screen.getByRole('button', { name: 'New Role' })).toBeEnabled();
-    for (const role of expected) expect(rowFor(role).getByText(role.description)).toBeInTheDocument();
+    for (const role of expected)
+      expect(rowFor(role).getByText(role.description)).toBeInTheDocument();
   });
   expect(screen.queryByRole('dialog')).toBeNull();
   expectNoObsoleteFeedback();
@@ -169,20 +193,31 @@ async function expectFreshInventory(expected: Role[]) {
 }
 function expectedSaved(operation: 'edit' | 'delete') {
   return operation === 'edit'
-    ? originals.map((role) => role.id === selected.id ? { ...role, description: 'Updated second policy' } : role)
+    ? originals.map((role) =>
+        role.id === selected.id ? { ...role, description: 'Updated second policy' } : role,
+      )
     : originals.filter((role) => role.id !== selected.id);
 }
 function expectDispatched(operation: Operation) {
   expect(writes()).toHaveLength(1);
   const [path, init] = writes()[0];
   expect(path).toBe(operation === 'create' ? rolesPath : rolePath());
-  expect(init?.method).toBe(operation === 'edit' ? 'PUT' : operation === 'create' ? 'POST' : 'DELETE');
+  expect(init?.method).toBe(
+    operation === 'edit' ? 'PUT' : operation === 'create' ? 'POST' : 'DELETE',
+  );
   if (operation === 'edit')
-    expect(JSON.parse(String(init?.body))).toEqual({ ...selected, description: 'Updated second policy' });
+    expect(JSON.parse(String(init?.body))).toEqual({
+      ...selected,
+      description: 'Updated second policy',
+    });
   else if (operation === 'delete') expect(init?.body).toBeUndefined();
-  else expect(JSON.parse(String(init?.body))).toEqual({
-    id: 'new-auditor', name: 'New auditor', description: '', permissions: [{ action: 'read', resource: 'nodes' }],
-  });
+  else
+    expect(JSON.parse(String(init?.body))).toEqual({
+      id: 'new-auditor',
+      name: 'New auditor',
+      description: '',
+      permissions: [{ action: 'read', resource: 'nodes' }],
+    });
 }
 
 beforeEach(async () => {
@@ -194,7 +229,12 @@ beforeEach(async () => {
   vi.stubEnv('MODE', 'production');
   document.cookie = `pulse_csrf=${csrf}; Path=/`;
   syncSessionPresentationPolicy({
-    presentationPolicy: { demoMode: false, readOnly: false, hideCommercial: false, hideUpgrade: true },
+    presentationPolicy: {
+      demoMode: false,
+      readOnly: false,
+      hideCommercial: false,
+      hideUpgrade: true,
+    },
   });
   saved = structuredClone(originals);
   unexpected = [];
@@ -220,7 +260,7 @@ beforeEach(async () => {
     const role = saved.find((candidate) => rolePath(candidate) === path);
     if (role && method === 'PUT') {
       const replacement = JSON.parse(String(init.body)) as Role;
-      saved = saved.map((candidate) => candidate.id === role.id ? replacement : candidate);
+      saved = saved.map((candidate) => (candidate.id === role.id ? replacement : candidate));
       return mutationReply(init);
     }
     if (role && method === 'DELETE') {
@@ -270,34 +310,37 @@ describe('Roles through real runtime capability transitions', () => {
     (['create', 'edit', 'delete'] as const).flatMap((operation) =>
       (['withdrawn', 'failed', 'malformed'] as const).map((kind) => ({ operation, kind })),
     ),
-  )('retires a cold $operation confirmation on $kind capability before dispatch', async ({ operation, kind }) => {
-    const health = deferred(json({}));
-    healthReply = () => health.promise;
-    await openPanel();
-    const confirmation = prepare(operation);
-    document.cookie = 'pulse_csrf=; Max-Age=0; Path=/';
-    fireEvent.click(confirmation);
-    await waitFor(() => expect(reads('/api/health')).toHaveLength(1));
-    expect(writes()).toHaveLength(0);
-    vi.useFakeTimers();
-    await capabilities(kind);
-    expectWithdrawn();
-    expect(Boolean(runtimeCapabilitiesLoadError())).toBe(kind === 'failed');
-    document.cookie = `pulse_csrf=${csrf}; Path=/`;
-    health.resolve(json({}));
-    // Advance only the existing cookie-preparation delay; no production
-    // retries, polling intervals or arbitrary sleeps are part of this proof.
-    await vi.advanceTimersByTimeAsync(25);
-    vi.useRealTimers();
-    expect(writes()).toHaveLength(0);
-    expect(saved).toEqual(originals);
-    expect(reads(rolesPath)).toHaveLength(1);
-    expectNoObsoleteFeedback();
-    await capabilities('enabled');
-    await expectFreshInventory(originals);
-    expect(writes()).toHaveLength(0);
-    expectBoundRequests();
-  });
+  )(
+    'retires a cold $operation confirmation on $kind capability before dispatch',
+    async ({ operation, kind }) => {
+      const health = deferred(json({}));
+      healthReply = () => health.promise;
+      await openPanel();
+      const confirmation = prepare(operation);
+      document.cookie = 'pulse_csrf=; Max-Age=0; Path=/';
+      fireEvent.click(confirmation);
+      await waitFor(() => expect(reads('/api/health')).toHaveLength(1));
+      expect(writes()).toHaveLength(0);
+      vi.useFakeTimers();
+      await capabilities(kind);
+      expectWithdrawn();
+      expect(Boolean(runtimeCapabilitiesLoadError())).toBe(kind === 'failed');
+      document.cookie = `pulse_csrf=${csrf}; Path=/`;
+      health.resolve(json({}));
+      // Advance only the existing cookie-preparation delay; no production
+      // retries, polling intervals or arbitrary sleeps are part of this proof.
+      await vi.advanceTimersByTimeAsync(25);
+      vi.useRealTimers();
+      expect(writes()).toHaveLength(0);
+      expect(saved).toEqual(originals);
+      expect(reads(rolesPath)).toHaveLength(1);
+      expectNoObsoleteFeedback();
+      await capabilities('enabled');
+      await expectFreshInventory(originals);
+      expect(writes()).toHaveLength(0);
+      expectBoundRequests();
+    },
+  );
 
   it('does not re-admit Roles when an older capability grant arrives after a newer withdrawal', async () => {
     await openPanel();
@@ -344,37 +387,44 @@ describe('Roles through real runtime capability transitions', () => {
     (['edit', 'delete'] as const).flatMap((operation) =>
       (['success', 'unreadable'] as const).map((outcome) => ({ operation, outcome })),
     ),
-  )('rereads applied $operation state without importing its late $outcome body into a new draft', async ({ operation, outcome }) => {
-    const reply = heldBody();
-    mutationReply = () => reply.response;
-    await openPanel();
-    fireEvent.click(prepare(operation));
-    await waitFor(() => expect(reply.read).toHaveBeenCalledOnce());
-    expectDispatched(operation);
-    const signal = writes()[0][1]?.signal;
-    expect(signal?.aborted).toBe(false);
-    const expected = expectedSaved(operation);
-    expect(saved).toEqual(expected);
-    await capabilities('withdrawn');
-    expectWithdrawn();
-    expect(signal?.aborted).toBe(true);
-    await capabilities('enabled');
-    await expectFreshInventory(expected);
-    if (operation === 'delete') expect(screen.queryByText(selected.id)).toBeNull();
-    const current = expected.find((role) => role.id === selected.id) ?? expected[0];
-    const editor = openEditor(current);
-    expect(editor.getByLabelText('Description')).toHaveValue(current.description);
-    fireEvent.input(editor.getByLabelText('Description'), { target: { value: 'Current independent draft' } });
-    reply.resolve(outcome === 'success' ? JSON.stringify(current) : '{"synthetic-private-partial":');
-    await turn();
-    expect(editor.getByLabelText('Description')).toHaveValue('Current independent draft');
-    expect(editor.getByLabelText('Permission 2 action')).toHaveValue('delete');
-    expectNoObsoleteFeedback();
-    expect(writes()).toHaveLength(1);
-    expect(reads(rolesPath)).toHaveLength(2);
-    expect(saved).toEqual(expected);
-    expectBoundRequests();
-  });
+  )(
+    'rereads applied $operation state without importing its late $outcome body into a new draft',
+    async ({ operation, outcome }) => {
+      const reply = heldBody();
+      mutationReply = () => reply.response;
+      await openPanel();
+      fireEvent.click(prepare(operation));
+      await waitFor(() => expect(reply.read).toHaveBeenCalledOnce());
+      expectDispatched(operation);
+      const signal = writes()[0][1]?.signal;
+      expect(signal?.aborted).toBe(false);
+      const expected = expectedSaved(operation);
+      expect(saved).toEqual(expected);
+      await capabilities('withdrawn');
+      expectWithdrawn();
+      expect(signal?.aborted).toBe(true);
+      await capabilities('enabled');
+      await expectFreshInventory(expected);
+      if (operation === 'delete') expect(screen.queryByText(selected.id)).toBeNull();
+      const current = expected.find((role) => role.id === selected.id) ?? expected[0];
+      const editor = openEditor(current);
+      expect(editor.getByLabelText('Description')).toHaveValue(current.description);
+      fireEvent.input(editor.getByLabelText('Description'), {
+        target: { value: 'Current independent draft' },
+      });
+      reply.resolve(
+        outcome === 'success' ? JSON.stringify(current) : '{"synthetic-private-partial":',
+      );
+      await turn();
+      expect(editor.getByLabelText('Description')).toHaveValue('Current independent draft');
+      expect(editor.getByLabelText('Permission 2 action')).toHaveValue('delete');
+      expectNoObsoleteFeedback();
+      expect(writes()).toHaveLength(1);
+      expect(reads(rolesPath)).toHaveLength(2);
+      expect(saved).toEqual(expected);
+      expectBoundRequests();
+    },
+  );
 
   it.each(['edit', 'delete'] as const)(
     'reads the applied %s result after capability withdrawal actually aborts the dispatched fetch',
@@ -382,10 +432,14 @@ describe('Roles through real runtime capability transitions', () => {
       const response = deferred(new Response(null, { status: 204 }));
       const observedAbort = vi.fn();
       mutationReply = (init) => {
-        init.signal!.addEventListener('abort', () => {
-          observedAbort();
-          response.reject(new DOMException('Synthetic request aborted', 'AbortError'));
-        }, { once: true });
+        init.signal!.addEventListener(
+          'abort',
+          () => {
+            observedAbort();
+            response.reject(new DOMException('Synthetic request aborted', 'AbortError'));
+          },
+          { once: true },
+        );
         return response.promise;
       };
       await openPanel();
