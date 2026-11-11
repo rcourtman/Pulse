@@ -7177,6 +7177,85 @@ resources, out-of-window decisions, cross-organization stores, and audit-read
 errors do not suppress the warning. Suppression advances the observation
 baseline so the intentional stop cannot surface one cycle later.
 
+The watcher also asks Proxmox who stopped the guest, once, when it first sees
+the stop (`internal/ai/findings_proxmox_stop_cause.go`). It reads the node's
+task log for that guest through Pulse's own Proxmox API connection
+(`ProxmoxGuestTaskReader`), over a window that opens two hours before the
+last running observation, because Proxmox filters tasks on their start time
+and a shutdown can run for a long time. A task bears on the stop when it
+started no later than the stopped observation and had not finished before the
+last running one, with two minutes of slack for clocks. Of those, the last
+stop, restart or start task to begin decides
+(`classifyProxmoxGuestStop`).
+
+- A stop task last (`qmstop`, `qmshutdown`, `qmsuspend`, `qmrollback`,
+  `vzstop`, `vzshutdown`, `vzsuspend`, `vzrollback`, `hastop`): a person or a
+  job stopped the guest on purpose. No finding is filed, so nothing is
+  investigated and no start is proposed. The stop is logged at debug with
+  the Proxmox user who ran the task, which appears nowhere else: not in a
+  finding, the seed, a tool result or a proposal reason. The task's exit
+  status does not matter: asking is what makes it deliberate.
+- A start that worked last (`qmstart`, `vzstart`, `hastart`, `qmresume`,
+  `vzresume`), or no such task at all, in a log read in full: the finding is
+  filed and says the guest was not stopped through Proxmox, with
+  `stop_cause=no_stop_task`. A stop that was followed by a start does not
+  explain a guest that is down now, and the finding then names that start
+  and does not claim the log held no stop.
+- A restart (`qmreboot`, `vzreboot`) or a start that failed last: the finding
+  is filed and names the task, with `stop_cause=restart_task`.
+- The log could not be read in full: the finding is filed and says Pulse
+  cannot tell whether a person stopped the guest, with `stop_cause=unknown`
+  and the reason. A read is not full when the request failed, was cut off at
+  200 rows, or Pulse's access is not confirmed to hold `Sys.Audit` on
+  `/nodes/<node>`. Without that permission Proxmox answers with the caller's
+  own tasks only and no error. Unknown is the zero value and is never treated
+  as "nobody stopped it". A stop task seen in such a read decides nothing
+  either: a later start may be among the tasks Pulse cannot see.
+
+All the guests found stopped in one look share 30 seconds for their reads,
+and a read that gets no time is unknown.
+
+A stop Pulse ran after an approval is still recognized from the action audit
+first, without reading the task log. The cause is kept while the guest stays
+stopped and is dropped when a fresh Proxmox observation shows it running, or
+when it is removed. A stale Proxmox source drops nothing. Each stop has an
+episode number, so a task log read that comes back late cannot write to a
+stop that is over or to a later one, and files nothing for it. After a restart the
+open finding keeps its own words, because a later read would search the wrong
+time.
+
+The same fact reaches the model's own path in three places. The scan seed
+lists each guest Pulse saw stop under "Proxmox Guests Pulse Saw Stop" with
+what the task log said (`seedProxmoxGuestStops`). An alert run on a guest
+somebody stopped is told so in place of the runnable actions and the
+start-on-boot line (`patrolAlertSubjectFacts`), and
+`openFindingForUnansweredAlert` opens nothing for its powered-off alert. And
+`patrol_report_finding` refuses a reliability finding about the guest being
+down, on a guest that is still stopped, when the stop was deliberate or when
+Pulse already filed its own finding for it (`proxmoxGuestStopOwnsFinding`,
+`tools.PatrolFindingOwnedByGuestStopError`, tool result reason
+`guest_stop_already_accounted_for`). One dead guest therefore gets one
+finding and one start approval. "About being down" is read from the report's
+key and title only (`proxmoxGuestReportIsAboutBeingDown`), which covers the
+duplicate a model filed here under the key `restart-loop`. A missing backup,
+a failing replication or another category stays reportable. A report is
+matched by the ID it gives, by the inventory ID that resolves to, or by a
+name given where the ID belongs when exactly one stopped guest has it. A model that
+words the same stop in a way the lists miss still files a second finding.
+
+Known gaps. A person who shuts a guest down from inside it leaves no task,
+so that reads as "not stopped through Proxmox" and a start is proposed. A
+stop-mode backup of a container stops it inside the `vzdump` task with no
+stop task. The guest is locked while that runs, which the detector already
+skips. A shutdown that began more than two hours before the last running
+observation is missed. A stop task that starts within two minutes after Pulse
+saw the guest stopped counts as the cause. A guest seen running only while
+it carried a Proxmox lock has no running baseline, as before, so a stop
+right after that is not classified at all. The cause is held in memory, so after a restart a guest somebody
+stopped is quiet only because the detector needs a running observation
+first, and the model's path no longer has the note. Proof:
+`internal/ai/findings_proxmox_stop_cause_test.go`.
+
 The watcher runs before the model-provider gate whenever guest analysis is
 enabled, so detection is not conditional on an available LLM. It runs in a
 scoped run as well as a full one (`observeProxmoxGuestLifecycle`), always over

@@ -6101,6 +6101,17 @@ auto-register mutation boundary.
 
 ### Guest start has its own refusal codes and a second route
 
+A start proposal carries one more sentence when it answers a stopped-guest
+finding whose cause Pulse could not work out. `patrolActionBroker` asks a
+`PatrolProposalNoteProvider` before planning, and the router's provider
+returns `PatrolService.ProxmoxGuestStartProposalNote` for a `start`: "Pulse
+could not read the node's task log, so it cannot tell whether a person
+stopped this guest. Check that before you approve a start." It is appended
+to the reason the approving admin reads, once, on every plan and submit of
+the same proposal, so both carry the same reason. `newProxmoxGuestTaskReader`
+adapts `Monitor.ReadProxmoxGuestTasks` for Patrol and resolves the monitor on
+every read, because a reload replaces it.
+
 `proxmoxGuestActionExecutor` routes a guest action to the node's action
 runner, or, for `start` only, to the node's own collector command session
 when that session reported `proxmox_guest_start_version`. "The node's own"

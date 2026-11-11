@@ -1277,6 +1277,17 @@ contract.
 
 ### Patrol can start a dead guest on a commands-on node
 
+A start is on the table for every stopped guest on such a node, so Patrol
+first asks Proxmox who stopped it. A guest that a person or a job stopped
+through Proxmox gets no finding, no investigation and no start proposal. A
+guest with no stop task in the node's log gets a finding that says it was
+not stopped through Proxmox. When Pulse cannot read the log in full, the
+finding says Pulse cannot tell whether a person stopped the guest, and the
+reason an admin reads before approving the start says the same. The model's
+own scan is told the same fact and cannot file a second finding for a stop
+Pulse already filed. The rules are in the ai-runtime contract under "Proxmox
+guest lifecycle Patrol detector floor".
+
 The capability catalog Patrol's seed and investigations read lists `start` as
 runnable for a stopped Proxmox guest whose node's Pulse agent reported that
 it can start guests. It still needs an admin's approval and has no automatic

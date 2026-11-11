@@ -4973,6 +4973,13 @@ runner demands a runner again at dispatch. Both decisions read existing
 resource state, and neither changes backup, snapshot, replication or recovery
 behaviour.
 
+`internal/api/router.go` and `internal/api/proxmox_guest_stop_tasks.go` give
+Patrol a read of a node's task log for one guest, and
+`internal/api/patrol_action_broker.go` can append one sentence to a start
+proposal's reason. The read lists tasks and reads no backup task log. It
+runs once when a guest is first seen stopped, apart from the backup history
+collection, and changes nothing that collection stores.
+
 `internal/api/proxmox_guest_action_executor.go` now routes a guest `start` to
 the node's own collector command session when no action runner is connected
 and that session reported that it can start guests. Stop, shutdown and reboot

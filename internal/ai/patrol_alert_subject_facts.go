@@ -62,6 +62,15 @@ func (p *PatrolService) patrolAlertSubjectFacts(scope *PatrolScope, snap patrolR
 	var lines []string
 
 	subject := patrolAlertSubjectResource(scope, snap)
+	// Somebody stopped this guest through Proxmox. That is the whole answer
+	// to its alert. Saying which actions Pulse could run, or that the guest
+	// starts on boot, would only argue for starting it again.
+	if subject != nil {
+		if record, deliberate := p.proxmoxGuestStoppedOnPurpose(subject.ID); deliberate {
+			return "About the resource this alert is on: This guest was " + record.requestedSentence() +
+				". That was deliberate. Report nothing about it being stopped and do not propose starting it.\n\n"
+		}
+	}
 	if subject != nil {
 		name := strings.TrimSpace(subject.Name)
 		if name == "" {

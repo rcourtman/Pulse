@@ -2271,6 +2271,18 @@ database grew past it. `TestSQLiteLoggerUsesSharedPageCacheBound` and
 
 ## Current State
 
+`internal/api/router.go` wires a read of a Proxmox node's task log for one
+guest into Patrol, resolved through the organization's own monitor on every
+call, so one organization never reads through another's connection. The read
+returns each task's type, status, times and the Proxmox user who ran it.
+Patrol uses the type and times to tell a guest somebody stopped from one that
+went down by itself. The user is kept in memory with the stop and written to
+one debug log line. It is never put into a finding, the scan's seed, a tool
+result or a proposal reason, because each of those can reach a model
+provider (`TestProxmoxUserNeverReachesModelFacingText`). The read needs no
+new permission: it uses the token Pulse already holds, and without
+`Sys.Audit` on the node Pulse says it cannot tell and does not guess.
+
 ### The commands path carries one typed guest action
 
 A collector installed with command execution may now start a stopped Proxmox

@@ -3759,6 +3759,11 @@ func (p *PatrolService) seedFindingsAndContextState(scope *PatrolScope, snap pat
 	globalResources = patrolRuntimeKnownResources(current)
 	stateHasGlobalResources := len(globalResources) > 0
 
+	// --- Proxmox guests Pulse saw stop, and who stopped them ---
+	sb.WriteString(p.seedProxmoxGuestStops(func(resourceID, resourceName string) bool {
+		return !stateHasScopedResources || findingLifecycleResources[resourceID] || findingLifecycleResources[resourceName]
+	}))
+
 	// --- Active Findings to Re-check ---
 	activeFindings := p.findings.GetActive(FindingSeverityInfo)
 	var seededFindingIDs []string

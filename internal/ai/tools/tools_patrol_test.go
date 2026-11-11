@@ -186,6 +186,45 @@ func TestHandlePatrolReportFinding_AcknowledgesAlertOwnedStateAsNoOp(t *testing.
 	assert.Equal(t, "finding-alert-owned", parsed[agentcapabilities.FindingIDArgumentName])
 }
 
+// A report about a guest stop Pulse already accounted for is acknowledged as a
+// no-op that says why. It points at the finding Pulse filed when there is one,
+// and at no finding when the stop was deliberate.
+func TestHandlePatrolReportFinding_AcknowledgesAnAccountedGuestStopAsNoOp(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		owner string
+		note  string
+	}{
+		{name: "Pulse filed the stop", owner: "proxmox:guest:stopped:vm:160", note: "Pulse already has finding proxmox:guest:stopped:vm:160 for builder being stopped."},
+		{name: "a person stopped it", note: "builder was stopped through Proxmox at 2026-11-11 10:21 UTC (vzstop). A deliberate stop is not a finding."},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			creator := &mockPatrolFindingCreator{
+				createFindingFunc: func(PatrolFindingInput) (string, bool, error) {
+					return "refused-report", false, &PatrolFindingOwnedByGuestStopError{FindingID: "refused-report", OwnerFindingID: tc.owner, Note: tc.note}
+				},
+				checked: true,
+			}
+			result, err := handlePatrolReportFinding(context.Background(), newPatrolTestExecutor(creator), validReportArgs())
+			require.NoError(t, err)
+
+			var parsed map[string]interface{}
+			require.NoError(t, json.Unmarshal([]byte(extractText(result)), &parsed))
+			assert.Equal(t, true, parsed["ok"])
+			assert.Equal(t, false, parsed["applied"])
+			assert.Equal(t, false, parsed["is_new"])
+			assert.Equal(t, "guest_stop_already_accounted_for", parsed["reason"])
+			assert.Equal(t, tc.note, parsed["note"])
+			// The refused report has no finding of its own to point at.
+			if tc.owner == "" {
+				assert.NotContains(t, parsed, agentcapabilities.FindingIDArgumentName)
+			} else {
+				assert.Equal(t, tc.owner, parsed[agentcapabilities.FindingIDArgumentName])
+			}
+		})
+	}
+}
+
 func TestHandlePatrolReportFinding_ValidInput(t *testing.T) {
 	creator := &mockPatrolFindingCreator{checked: true}
 	exec := newPatrolTestExecutor(creator)

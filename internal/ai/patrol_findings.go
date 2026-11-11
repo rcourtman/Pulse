@@ -674,6 +674,9 @@ func (a *patrolFindingCreatorAdapter) CreateFinding(input tools.PatrolFindingInp
 	if a.findingOwnedByAlerts(finding) {
 		return id, false, &tools.PatrolFindingOwnedByAlertsError{FindingID: id}
 	}
+	if err := a.patrol.proxmoxGuestStopOwnsFinding(finding); err != nil {
+		return id, false, err
+	}
 
 	// Inline validation: check if finding is actionable against current metrics
 	if !a.isActionable(finding) {

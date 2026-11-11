@@ -5121,6 +5121,13 @@ Agent` secondary handoff against the live setup wizard instead of relying
 
 ## Current State
 
+`internal/api/router.go` now gives Patrol a read of a Proxmox node's task log
+(`newProxmoxGuestTaskReader`, `internal/api/proxmox_guest_stop_tasks.go`), and
+`internal/api/patrol_action_broker.go` can add one sentence to a start
+proposal's reason. Neither touches an agent. The read goes through Pulse's own
+Proxmox API connection, never through an agent session, and no agent message,
+registration field or install step changes.
+
 ### A collector with commands enabled starts a stopped Proxmox guest
 
 A collector that has commands enabled can run one typed guest action: start.

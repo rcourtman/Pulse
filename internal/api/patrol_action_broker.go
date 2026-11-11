@@ -71,6 +71,44 @@ type patrolActionBroker struct {
 	readState func(orgID string) (unified.ReadState, error)
 	policy    PatrolActionPolicyProvider
 	now       func() time.Time
+	// proposalNote adds what Pulse knows and the proposal's author may not
+	// have said. Nil adds nothing.
+	proposalNote PatrolProposalNoteProvider
+}
+
+// PatrolProposalNoteProvider returns a sentence Pulse adds to a proposal's
+// reason before it is planned, or "" for none. The reason is what the person
+// approving reads, so a fact that should stop them approving blind belongs
+// there whatever the model wrote.
+type PatrolProposalNoteProvider func(ctx context.Context, orgID string, proposal aicontracts.ActionProposal) string
+
+// NewPatrolActionBrokerWithProposalNote builds the Patrol proposal broker
+// with a note provider.
+func NewPatrolActionBrokerWithProposalNote(orgID string, resources *ResourceHandlers, note PatrolProposalNoteProvider, policy ...PatrolActionPolicyProvider) aicontracts.OrchestratorActionBroker {
+	broker := NewPatrolActionBroker(orgID, resources, policy...)
+	if typed, ok := broker.(*patrolActionBroker); ok {
+		typed.proposalNote = note
+	}
+	return broker
+}
+
+// withProposalNote appends Pulse's own sentence to a proposal's reason. It
+// runs on every plan and submit of the same proposal and adds the sentence
+// once, so the planned action and a later submit carry the same reason.
+func (b *patrolActionBroker) withProposalNote(ctx context.Context, proposal aicontracts.ActionProposal) aicontracts.ActionProposal {
+	if b == nil || b.proposalNote == nil {
+		return proposal
+	}
+	note := strings.TrimSpace(b.proposalNote(ctx, b.orgID, proposal))
+	if note == "" || strings.Contains(proposal.Reason, note) {
+		return proposal
+	}
+	reason := strings.TrimSpace(proposal.Reason)
+	if reason != "" && !strings.ContainsAny(reason[len(reason)-1:], ".!?") {
+		reason += "."
+	}
+	proposal.Reason = strings.TrimSpace(reason + " " + note)
+	return proposal
 }
 
 // NewPatrolActionBroker builds the tenant-bound Patrol proposal broker over
@@ -291,6 +329,7 @@ func (b *patrolActionBroker) submit(ctx context.Context, proposal aicontracts.Ac
 	if proposal.InvestigationID == "" {
 		return aicontracts.ActionDisposition{}, fmt.Errorf("action proposal requires an investigation id")
 	}
+	proposal = b.withProposalNote(ctx, proposal)
 
 	policyFactors, planningAutoAuthorized := b.planPolicyFactors(ctx, proposal, b.currentTime())
 

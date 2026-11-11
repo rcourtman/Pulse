@@ -1,6 +1,7 @@
 package ai
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strings"
@@ -44,6 +45,23 @@ type proxmoxGuestLifecycleWatcher struct {
 	mu                 sync.Mutex
 	prior              map[string]proxmoxGuestLifecycleSnapshot
 	lookupActionAudits proxmoxGuestActionAuditLookup
+	// readTasks reads a node's task log for a guest. Nil leaves the cause of
+	// every stop unknown.
+	readTasks ProxmoxGuestTaskReader
+	// stops holds what Pulse worked out about each guest it saw stop, for as
+	// long as the guest stays stopped.
+	stops map[string]proxmoxGuestStopRecord
+	// stopEpisodes numbers each guest's current stop, so a task log read that
+	// comes back late cannot write to a stop that is over or to a later one.
+	stopEpisodes map[string]proxmoxGuestStopEpisode
+	stopSeq      uint64
+}
+
+// proxmoxGuestStopEpisode is one stop of one guest: its number and when Pulse
+// first saw the guest stopped.
+type proxmoxGuestStopEpisode struct {
+	seq       uint64
+	stoppedAt time.Time
 }
 
 func newProxmoxGuestLifecycleWatcher(lookupActionAudits ...proxmoxGuestActionAuditLookup) *proxmoxGuestLifecycleWatcher {
@@ -54,11 +72,13 @@ func newProxmoxGuestLifecycleWatcher(lookupActionAudits ...proxmoxGuestActionAud
 	return watcher
 }
 
-// DetectProxmoxGuestLifecycleFindings is the pure detector used by Patrol and
-// the end-to-end action lifecycle proof. A stopped guest is actionable only
+// DetectProxmoxGuestLifecycleFindings is the pure detector used by the
+// end-to-end action lifecycle proof. A stopped guest is actionable only
 // when it was freshly observed running before a newer, fresh stopped
 // observation and the stopped resource advertises the exact governed start
-// capability for its guest kind.
+// capability for its guest kind. It reads no task log, so every finding it
+// builds says the cause of the stop is unknown. Patrol's own check is
+// proxmoxGuestLifecycleWatcher.Observe, which asks Proxmox who stopped it.
 func DetectProxmoxGuestLifecycleFindings(before, after unifiedresources.ReadState, now time.Time) []*Finding {
 	previous := proxmoxGuestLifecycleSnapshots(before)
 	current := proxmoxGuestLifecycleSnapshots(after)
@@ -70,7 +90,8 @@ func DetectProxmoxGuestLifecycleFindings(before, after unifiedresources.ReadStat
 		if !ok || !proxmoxGuestStoppedTransition(beforeSnapshot, afterSnapshot) {
 			continue
 		}
-		findings = append(findings, buildProxmoxGuestStoppedFinding(afterSnapshot, now.UTC()))
+		cause := proxmoxGuestStopCause{unreadReason: proxmoxGuestStopReasonNoReader, since: beforeSnapshot.observedAt, until: afterSnapshot.observedAt}
+		findings = append(findings, buildProxmoxGuestStoppedFinding(afterSnapshot, now.UTC(), cause))
 	}
 	return findings
 }
@@ -96,8 +117,9 @@ func (w *proxmoxGuestLifecycleWatcher) Observe(state patrolRuntimeState, active 
 	}
 
 	type stoppedTransition struct {
-		before proxmoxGuestLifecycleSnapshot
-		after  proxmoxGuestLifecycleSnapshot
+		before  proxmoxGuestLifecycleSnapshot
+		after   proxmoxGuestLifecycleSnapshot
+		episode uint64
 	}
 	transitions := make([]stoppedTransition, 0)
 
@@ -116,19 +138,37 @@ func (w *proxmoxGuestLifecycleWatcher) Observe(state patrolRuntimeState, active 
 				resolve = append(resolve, resolveSentinel{DedupKey: activeFinding.ID, Reason: proxmoxGuestLifecycleResolveRunning})
 				resolved[activeFinding.ID] = struct{}{}
 			case activeFinding != nil && snapshot.startable():
-				emit = append(emit, buildProxmoxGuestStoppedFinding(snapshot, now.UTC()))
+				emit = append(emit, w.refreshedStoppedFindingLocked(snapshot, activeFinding, now.UTC()))
 			case activeFinding == nil:
 				if previous, ok := w.prior[id]; ok && proxmoxGuestStoppedTransition(previous, snapshot) {
-					transitions = append(transitions, stoppedTransition{before: previous, after: snapshot})
+					if w.stopEpisodes == nil {
+						w.stopEpisodes = make(map[string]proxmoxGuestStopEpisode)
+					}
+					w.stopSeq++
+					w.stopEpisodes[id] = proxmoxGuestStopEpisode{seq: w.stopSeq, stoppedAt: snapshot.observedAt}
+					delete(w.stops, id)
+					transitions = append(transitions, stoppedTransition{before: previous, after: snapshot, episode: w.stopSeq})
 				}
 			}
 			w.prior[id] = snapshot
+		}
+		// A guest Proxmox freshly reports running has no stop left to explain.
+		// This holds for a guest the check does not otherwise act on, such as
+		// one carrying a Proxmox lock: a stop on record must not outlive the
+		// stop. A stale Proxmox source proves nothing either way, whatever
+		// another source says about the guest being reachable.
+		// Nor does a running observation older than the stop, which a look
+		// that overlapped a newer one can still be holding.
+		if snapshot.status == unifiedresources.StatusOnline && snapshot.sourceFresh && !snapshot.observedAt.IsZero() &&
+			snapshot.observedAt.After(w.stopEpisodes[id].stoppedAt) {
+			w.forgetStopLocked(id)
 		}
 	}
 
 	for id := range w.prior {
 		if _, present := current[id]; !present {
 			delete(w.prior, id)
+			w.forgetStopLocked(id)
 		}
 	}
 	for _, finding := range activeByResource {
@@ -142,13 +182,49 @@ func (w *proxmoxGuestLifecycleWatcher) Observe(state patrolRuntimeState, active 
 	}
 	w.mu.Unlock()
 
+	// Every guest found stopped in this look shares one allowance of time for
+	// its task log read.
+	readCtx, cancelReads := context.WithTimeout(context.Background(), proxmoxGuestStopReadBudget)
+	defer cancelReads()
 	for _, transition := range transitions {
 		if w.governedStopCompleted(transition.before, transition.after, now.UTC()) {
+			w.rememberStop(transition.after, transition.episode, proxmoxGuestStopCause{kind: proxmoxGuestStopRequested, governed: true, task: "stop", user: "Pulse", taskAt: transition.after.observedAt})
 			continue
 		}
-		emit = append(emit, buildProxmoxGuestStoppedFinding(transition.after, now.UTC()))
+		// Asked once, when the stop is first seen. The answer travels with the
+		// finding from then on.
+		cause := w.readStopCause(readCtx, transition.before, transition.after)
+		if !w.rememberStop(transition.after, transition.episode, cause) {
+			// While the log was being read the guest ran again, went away or
+			// stopped a second time. This answer is about a stop that is
+			// over, and whoever saw the later state speaks for it.
+			continue
+		}
+		if cause.kind == proxmoxGuestStopRequested {
+			// A person or a job stopped it on purpose. That is not a problem
+			// and nobody should be asked to approve starting it again.
+			log.Debug().Str("resource_id", transition.after.id).Str("guest", transition.after.name).Int("vmid", transition.after.vmid).
+				Str("task", cause.task).Str("user", cause.user).Str("task_status", cause.taskStatus).Time("task_started", cause.taskAt).
+				Msg("AI Patrol: Proxmox guest was stopped through Proxmox, no finding filed")
+			continue
+		}
+		emit = append(emit, buildProxmoxGuestStoppedFinding(transition.after, now.UTC(), cause))
 	}
 	return emit, resolve
+}
+
+// refreshedStoppedFindingLocked rebuilds an open stopped-guest finding for a
+// guest that is still stopped. The cause was worked out when the stop was
+// first seen. After a restart Pulse no longer holds it, and the open finding's
+// own words are kept, because asking again later would search the wrong time.
+// The caller holds w.mu.
+func (w *proxmoxGuestLifecycleWatcher) refreshedStoppedFindingLocked(snapshot proxmoxGuestLifecycleSnapshot, open *Finding, now time.Time) *Finding {
+	if record, ok := w.stops[snapshot.id]; ok {
+		return buildProxmoxGuestStoppedFinding(snapshot, now, record.cause)
+	}
+	finding := buildProxmoxGuestStoppedFindingBase(snapshot, now)
+	finding.Description, finding.Recommendation, finding.Evidence = open.Description, open.Recommendation, open.Evidence
+	return finding
 }
 
 func (w *proxmoxGuestLifecycleWatcher) governedStopCompleted(before, after proxmoxGuestLifecycleSnapshot, now time.Time) bool {
@@ -293,7 +369,15 @@ func proxmoxGuestStoppedTransition(before, after proxmoxGuestLifecycleSnapshot) 
 		after.startable() && after.observedAt.After(before.observedAt)
 }
 
-func buildProxmoxGuestStoppedFinding(snapshot proxmoxGuestLifecycleSnapshot, now time.Time) *Finding {
+// buildProxmoxGuestStoppedFinding builds the finding for a guest Pulse saw
+// stop, with what the node's task log said about why.
+func buildProxmoxGuestStoppedFinding(snapshot proxmoxGuestLifecycleSnapshot, now time.Time, cause proxmoxGuestStopCause) *Finding {
+	finding := buildProxmoxGuestStoppedFindingBase(snapshot, now)
+	cause.applyTo(finding, snapshot)
+	return finding
+}
+
+func buildProxmoxGuestStoppedFindingBase(snapshot proxmoxGuestLifecycleSnapshot, now time.Time) *Finding {
 	name := snapshot.name
 	if name == "" {
 		name = snapshot.id
