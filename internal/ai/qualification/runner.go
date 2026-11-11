@@ -43,6 +43,14 @@ type QualificationRunner struct {
 	idleQuiet time.Duration
 	// askRetry is the pause before asking again while Patrol is busy.
 	askRetry time.Duration
+	// leftoverWait is how long a response run waits for Pulse to close a
+	// finding an earlier run left under a graded resource's name. Pulse
+	// closes a finding that restates an alert when the alert clears, and any
+	// finding on a removed resource at the start of its next run. In a
+	// healthy lab the next run is Patrol's look at the finished job's
+	// warning, about eleven minutes after provisioning, so the wait has to
+	// outlast that.
+	leftoverWait time.Duration
 }
 
 func NewRunner(config RunnerConfig) (*QualificationRunner, error) {
@@ -75,7 +83,7 @@ func NewRunner(config RunnerConfig) (*QualificationRunner, error) {
 	if config.ArtifactRoot == "" {
 		config.ArtifactRoot = filepath.Join("tmp", "patrol-qualification")
 	}
-	return &QualificationRunner{config: config, idleQuiet: 20 * time.Second, askRetry: 5 * time.Second}, nil
+	return &QualificationRunner{config: config, idleQuiet: 20 * time.Second, askRetry: 5 * time.Second, leftoverWait: 13 * time.Minute}, nil
 }
 
 func newRunID() string {

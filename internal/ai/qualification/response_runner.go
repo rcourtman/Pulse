@@ -276,6 +276,9 @@ func (r *QualificationRunner) runResponse(ctx context.Context, report *RunReport
 
 	var evidence ResponseEvidence
 	var view labView
+	// baselineWaited is how long the run sat on the healthy lab waiting for
+	// an earlier run's finding to close.
+	var baselineWaited time.Duration
 	before := make(map[string]Finding)
 	// runsBefore holds the Patrol runs that existed before the fault. The run
 	// that owns a finding is looked for among the others, so no timestamp
@@ -299,23 +302,16 @@ func (r *QualificationRunner) runResponse(ctx context.Context, report *RunReport
 			return fmt.Errorf("the run was declared as agent profile %q, and Pulse reports host %s as %q", declared, view.host.Name, evidence.AgentProfile.Name)
 		}
 		r.recordLabView(report, view)
-		findings, err := client.Findings(ctx)
+		findings, leftovers, err := r.awaitIndependentBaseline(ctx, view, outcome, poll)
 		if err != nil {
 			return err
 		}
+		evidence.Leftovers = leftovers
+		for _, leftover := range leftovers {
+			baselineWaited = max(baselineWaited, leftover.ClosedAfter)
+		}
 		for _, finding := range findings {
 			before[finding.ID] = finding
-			// A finding Patrol already closed its investigation on is never
-			// investigated again. Scoring on top of one would grade an old
-			// conclusion.
-			if alias := view.findingAlias(manifest, finding); alias != "" {
-				return fmt.Errorf("Pulse already holds finding %s on lab resource %s: use a Pulse data directory with no history for this lab", finding.ID, alias)
-			}
-			// An open finding on an earlier container of the same name makes
-			// this run depend on that one.
-			if alias := view.namesakeAlias(manifest, outcome, finding); alias != "" {
-				return fmt.Errorf("Pulse holds open finding %s on another resource named %q, the name of lab resource %s: an earlier run left it, so use a fresh Pulse data directory or resolve that finding first", finding.ID, strings.TrimSpace(finding.ResourceName), alias)
-			}
 		}
 		runs, err := client.Runs(ctx)
 		if err != nil {
@@ -460,7 +456,14 @@ func (r *QualificationRunner) runResponse(ctx context.Context, report *RunReport
 			}
 		}
 		if len(findings) == 0 {
-			if findings, err = waitForFinding(naturalWake, nil); err != nil {
+			wake := naturalWake
+			if len(manifest.Faults) == 0 {
+				// With no fault the wait is for whatever Patrol says about
+				// the healthy lab, and that clock has been running since
+				// the baseline.
+				wake = max(wake-baselineWaited, 0)
+			}
+			if findings, err = waitForFinding(wake, nil); err != nil {
 				return err
 			}
 		}
@@ -706,6 +709,89 @@ func (r *QualificationRunner) owningRun(ctx context.Context, findingID string, r
 		}
 	}
 	return owner, found
+}
+
+// awaitIndependentBaseline reads the findings Pulse holds before the fault
+// and returns them once this run no longer depends on an earlier one.
+//
+// A finding on a lab resource itself ends the run at once: Patrol never
+// investigates a finding it already concluded on. An open finding on an
+// earlier resource with a graded resource's name is different. In a fault set
+// the previous fault's container was removed seconds ago, and Pulse closes its
+// finding by itself: when the alert it restates clears, or else at the start
+// of Pulse's next run. So the run waits for that, up to leftoverWait, and
+// refuses only if the finding is still open then. It never asks Pulse for a
+// run to hurry this up, because that run would not be Pulse's own doing.
+//
+// The run Pulse starts by itself during the wait may also say something about
+// the new lab. In a scenario with no fault that is the answer the scenario is
+// there to observe, so such a finding is left out of the returned history and
+// graded like any other. In a scenario with a fault it came before the fault,
+// and the run stops.
+func (r *QualificationRunner) awaitIndependentBaseline(ctx context.Context, view labView, outcome []string, poll time.Duration) ([]Finding, []LeftoverFinding, error) {
+	manifest := r.config.Manifest
+	started := time.Now()
+	var leftovers []LeftoverFinding
+	for first := true; ; first = false {
+		findings, err := r.config.Client.Findings(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
+		history := make([]Finding, 0, len(findings))
+		open := make(map[string]struct{})
+		blocking := -1
+		for _, finding := range findings {
+			if alias := view.findingAlias(manifest, finding); alias != "" {
+				switch {
+				case first:
+					// A finding Patrol already closed its investigation on
+					// is never investigated again. Scoring on top of one
+					// would grade an old conclusion.
+					return nil, nil, fmt.Errorf("Pulse already holds finding %s on lab resource %s: use a Pulse data directory with no history for this lab", finding.ID, alias)
+				case len(manifest.Faults) > 0:
+					return nil, nil, fmt.Errorf("Patrol raised finding %s on lab resource %s before the fault, while the run waited for an earlier run's finding to close: run this fault on a fresh Pulse data directory", finding.ID, alias)
+				}
+				continue
+			}
+			history = append(history, finding)
+			alias := view.namesakeAlias(manifest, outcome, finding)
+			if alias == "" {
+				continue
+			}
+			open[finding.ID] = struct{}{}
+			index := -1
+			for i := range leftovers {
+				if leftovers[i].ID == finding.ID {
+					index = i
+				}
+			}
+			if index < 0 {
+				leftovers = append(leftovers, LeftoverFinding{ID: finding.ID, ResourceName: strings.TrimSpace(finding.ResourceName), ResourceAlias: alias})
+				index = len(leftovers) - 1
+			}
+			leftovers[index].ClosedAfter = 0
+			if blocking < 0 {
+				blocking = index
+			}
+		}
+		waited := time.Since(started)
+		for i := range leftovers {
+			if _, still := open[leftovers[i].ID]; !still && leftovers[i].ClosedAfter == 0 {
+				leftovers[i].ClosedAfter = waited
+			}
+		}
+		if blocking < 0 {
+			return history, leftovers, nil
+		}
+		if waited >= r.leftoverWait {
+			left := leftovers[blocking]
+			return nil, nil, fmt.Errorf("Pulse still holds open finding %s on another resource named %q, the name of lab resource %s, after a wait of %s for Pulse to close it: an earlier run left it, so use a fresh Pulse data directory or resolve that finding first",
+				left.ID, left.ResourceName, left.ResourceAlias, r.leftoverWait)
+		}
+		if err := sleepContext(ctx, poll); err != nil {
+			return nil, nil, err
+		}
+	}
 }
 
 // awaitOwningRun waits for the run record behind a finding. Pulse lists a

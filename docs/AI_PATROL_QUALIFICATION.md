@@ -423,8 +423,9 @@ shares a `metadata.fault_set` value, in `metadata.fault_label` order.
 1. Provision the lab and confirm the baseline with the lab oracle.
 2. Wait until Pulse shows the healthy lab, matched by Docker container ID.
    Record the agent profile. Refuse to continue if Pulse already holds a
-   finding on a lab resource, or an open finding on another resource with the
-   name of a resource this scenario is graded on.
+   finding on a lab resource. If an open finding on another resource has the
+   name of a resource this scenario is graded on, wait up to 13 minutes for
+   Pulse to close it, and refuse if it is still open then.
 3. Wait until Patrol is idle. Patrol has one investigation slot and declines a
    finding raised while it is busy.
 4. Inject the fault and confirm it with the lab oracle. Wait until Pulse's own
@@ -663,8 +664,26 @@ Things that change a score without any change to Patrol:
   Before Pulse closed a finding whose container was replaced by a namesake, it
   filed the new container's fault into that old finding, and the run was graded
   on nothing. Pulse still ties a finding to a name when the finding has no
-  registry ID. The run now refuses to start in that state and names the
-  finding. Resolve it in Pulse or start from a fresh directory, then run that
+  registry ID. A run does not inject anything in that state.
+- Inside one set the leftover is usually the previous fault's, and D3 is the
+  scenario that meets it, because D3 is graded on all six containers. D2 on a
+  default agent ends with its finding open, its container is removed, and D3
+  starts seconds later. Pulse closes such a finding by itself in one of two
+  ways. A finding that restates an alert closes when the alert clears. Any
+  other finding on a removed resource closes at the start of Pulse's next run,
+  and in a healthy lab that run is Patrol's look at the finished job's
+  warning, about 11 minutes after provisioning.
+- So the run waits up to 13 minutes for the finding to close, and `report.md`
+  says how long it waited ("Before the fault"). It never asks Pulse for a run
+  to clear the finding. In D3 the wait costs nothing: the time counts toward
+  the 13 minutes D3 watches the healthy lab anyway, and a finding Patrol
+  raises on the lab meanwhile is graded as the false alarm it is. In a
+  scenario with a fault, such a finding came before the fault and the run
+  stops.
+- If the finding is still open after the wait, the run refuses and names it.
+  That happens when Pulse starts no run, for example because it allows only
+  four looks at long-standing alerts per hour and the set has used them.
+  Resolve the finding in Pulse or start from a fresh directory, then run that
   fault again with `-faults`.
 - The host disk keeps its identity across runs. Its alert and finding are the
   same ones, Patrol does not investigate a finding it already concluded on, and

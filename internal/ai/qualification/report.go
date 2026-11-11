@@ -771,6 +771,14 @@ func renderResponseMarkdown(report RunReport) string {
 	fmt.Fprintf(&b, "| Why | %s |\n", markdownCell(response.Reason))
 	fmt.Fprintf(&b, "| A person would | %s |\n", expectLabel(response.Expect))
 	fmt.Fprintf(&b, "| Agent profile | %s (host `%s`) |\n", agentProfileLabel(evidence.AgentProfile.Name), markdownCode(evidence.AgentProfile.HostName))
+	for _, leftover := range evidence.Leftovers {
+		wait := leftover.ClosedAfter.Round(time.Second)
+		if leftover.ClosedAfter < time.Second {
+			wait = leftover.ClosedAfter.Round(time.Millisecond)
+		}
+		fmt.Fprintf(&b, "| Before the fault | waited %s for Pulse to close finding `%s`, which an earlier run left on another resource named `%s` |\n",
+			wait, markdownCode(leftover.ID), markdownCode(leftover.ResourceName))
+	}
 	switch evidence.Wake.Mode {
 	case WakeSelf:
 		if evidence.Wake.TriggerReason == "" {

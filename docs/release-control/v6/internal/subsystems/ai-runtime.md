@@ -6444,7 +6444,11 @@ change an agent's command setting: the profile is observed, and a run declared
 as the other profile stops before injection. A run must also stop before
 injection when Pulse holds an open finding, bound to another resource, under
 the name of a resource the scenario is graded on, because an earlier run left
-it and Pulse can file the new fault into it. The trigger reason must be read
+it and Pulse can file the new fault into it. Before it stops, the run may wait
+a bounded time for Pulse to close that finding by itself. It must record the
+wait in the report and must never ask Pulse for a run to clear the finding. A
+finding Patrol raises on the lab during that wait is graded when the scenario
+has no fault and stops the run when it has one. The trigger reason must be read
 from the run record once that run has ended, and a finding with no run record
 must be reported as such, never as an empty trigger. Response fixtures carry real image
 and container names, so they are limited to manifests with

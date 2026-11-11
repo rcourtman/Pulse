@@ -180,6 +180,9 @@ type ResponseEvidence struct {
 	AgentProfile AgentProfile    `json:"agent_profile"`
 	Alerts       []ObservedAlert `json:"alerts,omitempty"`
 	Wake         WakeObservation `json:"wake"`
+	// Leftovers are the findings of an earlier run that the run waited for
+	// Pulse to close before it injected anything.
+	Leftovers []LeftoverFinding `json:"leftover_findings,omitempty"`
 	// Findings are the findings on the scenario's outcome resources.
 	Findings []ResponseFinding `json:"findings,omitempty"`
 	// OtherFindings were raised during the run on lab resources the fault
@@ -188,6 +191,17 @@ type ResponseEvidence struct {
 	// Postconditions are the lab oracle's observations after an executed
 	// action. They never come from Pulse.
 	Postconditions []PredicateObservation `json:"postconditions,omitempty"`
+}
+
+// LeftoverFinding is a finding an earlier run left open under the name of a
+// resource this scenario is graded on, bound to another resource. Pulse closes
+// such a finding by itself a little after that resource is gone, and
+// ClosedAfter is how long this run waited for that.
+type LeftoverFinding struct {
+	ID            string        `json:"id"`
+	ResourceName  string        `json:"resource_name"`
+	ResourceAlias string        `json:"resource_alias"`
+	ClosedAfter   time.Duration `json:"closed_after_ns"`
 }
 
 // ResponseChecks is the machine-readable reasoning behind a grade.
