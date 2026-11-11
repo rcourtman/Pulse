@@ -35,7 +35,9 @@ type alertRunRig struct {
 	containerID   string
 	modelTurns    int
 	notifications int
-	model         func(creator tools.PatrolFindingCreator) (*PatrolStreamResponse, error)
+	// decisionPrompt is the follow-up question the last run handed to the chat loop.
+	decisionPrompt string
+	model          func(creator tools.PatrolFindingCreator) (*PatrolStreamResponse, error)
 }
 
 func newAlertRunRig(t *testing.T, mode string) *alertRunRig {
@@ -50,6 +52,7 @@ func newAlertRunRig(t *testing.T, mode string) *alertRunRig {
 		executor: executor,
 		executePatrolStreamFunc: func(ctx context.Context, req PatrolExecuteRequest, callback ChatStreamCallback) (*PatrolStreamResponse, error) {
 			rig.modelTurns++
+			rig.decisionPrompt = req.FindingDecisionPrompt
 			if rig.model != nil {
 				return rig.model(executor.GetPatrolFindingCreator())
 			}
@@ -351,4 +354,31 @@ func TestAlertRunDoesNotReopenADismissedAlertFinding(t *testing.T) {
 		t.Fatalf("a dismissed alert finding came back: %s", listAlertRunFindings(left))
 	}
 	rig.notInvestigated("dismissed finding")
+}
+
+// A scoped run on a resource with an active alert hands the chat loop one
+// follow-up question, to be asked if the run ends in prose and records
+// nothing. A run with no active alert on its resource asks nothing.
+func TestAlertRunHandsTheLoopAFindingDecisionQuestion(t *testing.T) {
+	rig := newAlertRunRig(t, config.PatrolAutonomyApproval)
+
+	rig.run(PatrolScope{ResourceIDs: []string{rig.containerID}, Reason: TriggerReasonManual, NoStream: true})
+	for _, want := range []string{"critical alert active on \"web\"", rig.alert.Message, "patrol_report_finding", "no finding is needed"} {
+		if !strings.Contains(rig.decisionPrompt, want) {
+			t.Errorf("manual run on a resource with an active alert: question lacks %q, got %q", want, rig.decisionPrompt)
+		}
+	}
+
+	sustained := SustainedAlertPatrolScope(rig.alert.ID, rig.alert.ResourceID, "app-container", rig.alert.Type)
+	sustained.NoStream = true
+	rig.run(sustained)
+	if rig.decisionPrompt == "" {
+		t.Error("sustained alert run: no question was handed to the loop")
+	}
+
+	rig.setAlertActive(false)
+	rig.run(PatrolScope{ResourceIDs: []string{rig.containerID}, Reason: TriggerReasonManual, NoStream: true})
+	if rig.decisionPrompt != "" {
+		t.Errorf("a run on a resource with no active alert must ask nothing, got %q", rig.decisionPrompt)
+	}
 }

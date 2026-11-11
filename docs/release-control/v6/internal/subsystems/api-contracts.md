@@ -1263,6 +1263,12 @@ The internal Patrol bridge preserves explicit execution limits, scoped tool
 allowlists and execution identity. The retired unmatched-signal evaluator no
 longer contributes a signal-count-derived successful-report budget. Diagnosis
 and missing-finding assessments stay in the original evidence conversation.
+The bridge also carries Patrol's one finding-decision question
+(`PatrolExecuteRequest.FindingDecisionPrompt`) to the chat runtime unchanged.
+The chat loop asks it at most once, in that same conversation, when a Watch
+run on a resource with an active alert ends without any finding decision. It
+is never a separate model session.
+`TestContractPatrolInternalBridgePreservesBoundedToolAuthority` pins the field.
 
 The frontend `Node` projection preserves the unified resource's optional
 `metricsTarget` without deriving storage coordinates from its display identity.

@@ -2666,6 +2666,9 @@ type PatrolRequest struct {
 	UseCase          string   `json:"use_case"`
 	MaxTurns         int      `json:"max_turns,omitempty"`
 	AllowedToolNames []string `json:"allowed_tool_names,omitempty"`
+	// FindingDecisionPrompt, when set, is asked once if the run ends in prose
+	// without any finding decision (AgenticLoop.SetPatrolFindingDecisionPrompt).
+	FindingDecisionPrompt string `json:"finding_decision_prompt,omitempty"`
 }
 
 // PatrolResponse contains the results of a patrol execution
@@ -2745,6 +2748,7 @@ func (s *Service) ExecutePatrolStream(ctx context.Context, req PatrolRequest, ca
 	if req.MaxTurns > 0 {
 		tempLoop.SetMaxTurns(req.MaxTurns)
 	}
+	tempLoop.SetPatrolFindingDecisionPrompt(req.FindingDecisionPrompt)
 
 	// Set provider info for telemetry
 	parts := strings.SplitN(patrolModel, ":", 2)

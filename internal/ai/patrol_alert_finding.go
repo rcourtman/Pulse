@@ -243,3 +243,40 @@ func patrolAlertsSummaryName(alerts []models.Alert) string {
 	}
 	return name
 }
+
+// patrolFindingDecisionPrompt is the follow-up question for a scoped run on a
+// resource with an active alert, or empty when the run asks none.
+//
+// Such a run sometimes ends with the fault described in prose and nothing
+// recorded, so the run reads as if nothing was wrong and no investigation
+// starts. Pulse cannot tell that prose from a considered "nothing to do", and
+// a finished job a person rechecks must stay quiet, so Pulse does not file
+// anything itself. It asks the model once, in the same conversation, to
+// record what it described or to say that nothing needs recording. The chat
+// loop asks only when the run made no finding decision at all, and the turn
+// that answers may use the finding-decision tools only.
+func (p *PatrolService) patrolFindingDecisionPrompt(scope *PatrolScope) string {
+	if p == nil || scope == nil {
+		return ""
+	}
+	active := p.patrolScopeActiveAlerts(*scope)
+	if len(active) == 0 {
+		return ""
+	}
+	alert := active[0]
+	name := strings.TrimSpace(alert.ResourceName)
+	if name == "" {
+		name = strings.TrimSpace(alert.ResourceID)
+	}
+	level := strings.ToLower(strings.TrimSpace(alert.Level))
+	if level == "" {
+		level = "an"
+	} else {
+		level = "a " + level
+	}
+	return fmt.Sprintf("Before you finish: Pulse has %s alert active on %q (%s: %q), and you have not recorded a finding. "+
+		"If your analysis found a problem beyond what that alert already states, such as its cause or a separate fault on this resource, record it now with one %s call. "+
+		"If nothing needs recording, for example a finished one-shot job, a deliberate stop, or nothing beyond the alert itself, reply in one line that no finding is needed and why. "+
+		"Do not gather more evidence.",
+		level, name, alert.Type, strings.TrimSpace(alert.Message), "patrol_report_finding")
+}

@@ -1,6 +1,8 @@
 package chat
 
 import (
+	"strings"
+
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 )
@@ -120,6 +122,18 @@ func (a *AgenticLoop) SetKnowledgeAccumulator(ka *KnowledgeAccumulator) {
 func (a *AgenticLoop) SetMaxTurns(n int) {
 	a.mu.Lock()
 	a.maxTurns = n
+	a.mu.Unlock()
+}
+
+// SetPatrolFindingDecisionPrompt sets the one follow-up question a Watch run
+// asks when it ends in prose without recording any finding decision. Patrol
+// sets it for a run on a resource with an active alert, where a model that
+// describes a fault and calls no tool would otherwise leave nothing behind.
+// The question is asked at most once, in the same conversation, and the turn
+// that answers it may use the finding-decision tools only.
+func (a *AgenticLoop) SetPatrolFindingDecisionPrompt(prompt string) {
+	a.mu.Lock()
+	a.patrolFindingDecisionPrompt = strings.TrimSpace(prompt)
 	a.mu.Unlock()
 }
 

@@ -204,6 +204,9 @@ type PatrolExecuteRequest struct {
 	UseCase          string   `json:"use_case"` // "patrol" — for model selection
 	MaxTurns         int      `json:"max_turns,omitempty"`
 	AllowedToolNames []string `json:"allowed_tool_names,omitempty"`
+	// FindingDecisionPrompt, when set, is asked once in the same conversation
+	// if the run ends in prose without recording any finding decision.
+	FindingDecisionPrompt string `json:"finding_decision_prompt,omitempty"`
 }
 
 // QuickAnalysisRequest represents a lightweight single-turn analysis request.
