@@ -2,15 +2,18 @@ package ai
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/actionlifecycle"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 )
 
 // deadGuestRig runs Patrol over a Proxmox container and a VM collected the
@@ -140,6 +143,11 @@ func poweredOffAlertFromManager(t *testing.T, guest any, instance string) models
 // a manual run, and neither said it had stopped.
 func TestScopedPatrolRunsTheStoppedGuestCheck(t *testing.T) {
 	rig := newDeadGuestRig(t, config.PatrolAutonomyApproval)
+	// What the action broker answers for a stopped guest on a node with no
+	// action runner: Start is declared and cannot run.
+	rig.ps.SetActionCapabilityLookup(func(context.Context, string) (aicontracts.ActionCapabilityCatalog, error) {
+		return guestWithoutRunnerCatalog("gitea", "delly"), nil
+	})
 
 	// A full run sees both guests running.
 	rig.collect("running", "running")
@@ -185,8 +193,7 @@ func TestScopedPatrolRunsTheStoppedGuestCheck(t *testing.T) {
 		t.Fatalf("the model was asked %d times, want once", len(rig.prompts))
 	}
 	for _, want := range []string{
-		`Pulse declares these actions for "gitea": start.`,
-		"so do not promise that it will work",
+		`Pulse cannot run an action for "gitea". Pulse cannot start, stop or restart guests on delly`,
 		"Start on boot is on for this guest, so it is meant to be running.",
 		"Pulse has already reported that this guest stopped. Do not report the stop again.",
 	} {
@@ -194,8 +201,10 @@ func TestScopedPatrolRunsTheStoppedGuestCheck(t *testing.T) {
 			t.Errorf("the alert run's prompt lacks %q", want)
 		}
 	}
-	if strings.Contains(rig.prompts[0], "Pulse offers an action") {
-		t.Error("the prompt still asks about actions Pulse offers, which the scan cannot see")
+	for _, stale := range []string{"Pulse offers an action", "Pulse declares", "Pulse can run these actions"} {
+		if strings.Contains(rig.prompts[0], stale) {
+			t.Errorf("the prompt of a run on a guest Pulse cannot start says %q", stale)
+		}
 	}
 
 	// A scoped run on the VM alone must not forget or resolve the container's finding.
@@ -241,13 +250,48 @@ func TestManualRunOnADeadGuestRaisesTheStoppedFinding(t *testing.T) {
 	}
 }
 
-// What an alert run is told about the resource its alert is on.
-func TestAlertRunSeedStatesWhatPulseDeclaresForTheAlertsResource(t *testing.T) {
+// guestWithoutRunnerCatalog is the action broker's catalog for a stopped
+// Proxmox guest on a node with no action runner.
+func guestWithoutRunnerCatalog(guest, node string) aicontracts.ActionCapabilityCatalog {
+	reason := actionlifecycle.ProxmoxGuestActionsUnavailableReason(node)
+	return aicontracts.ActionCapabilityCatalog{
+		Capabilities: []aicontracts.ActionCapabilityInfo{},
+		Unavailable:  []aicontracts.ActionCapabilityRefusal{{Name: "start", ReasonCode: actionlifecycle.ReasonCodeActionRunnerUnavailable, Reason: reason}},
+		GuestActionsUnavailable: &aicontracts.GuestActionsUnavailable{
+			GuestName: guest, NodeName: node, Actions: []string{"start"}, Reason: reason,
+		},
+	}
+}
+
+// What an alert run is told about the resource its alert is on: the actions
+// that can run, never the ones the inventory only declares. On a host whose
+// agent has commands off a sustained run wrote that Pulse "lists start and
+// update as available actions". Neither could run there.
+func TestAlertRunSeedStatesWhatPulseCanRunForTheAlertsResource(t *testing.T) {
 	yes, no := true, false
-	seed := func(t *testing.T, onBoot *bool, status string, scopeFor func(models.Alert) PatrolScope) string {
+	type lookup = func(context.Context, string) (aicontracts.ActionCapabilityCatalog, error)
+	answer := func(catalog aicontracts.ActionCapabilityCatalog) lookup {
+		return func(context.Context, string) (aicontracts.ActionCapabilityCatalog, error) { return catalog, nil }
+	}
+	sustained := func(alert models.Alert) PatrolScope {
+		return SustainedAlertPatrolScope(alert.ID, alert.ResourceID, "system-container", alert.Type)
+	}
+	fired := func(alert models.Alert) PatrolScope {
+		return AlertTriggeredPatrolScope(alert.ID, alert.ResourceID, "system-container", alert.Type)
+	}
+	// seed builds the seed of a run on the container's powered-off alert, and
+	// returns it with the resource IDs the lookup was asked about.
+	seed := func(t *testing.T, onBoot *bool, status string, scopeFor func(models.Alert) PatrolScope, capabilities lookup) (string, []string, string) {
 		t.Helper()
 		rig := newDeadGuestRig(t, config.PatrolAutonomyMonitor)
 		rig.ct.OnBoot = onBoot
+		var asked []string
+		if capabilities != nil {
+			rig.ps.SetActionCapabilityLookup(func(ctx context.Context, resourceID string) (aicontracts.ActionCapabilityCatalog, error) {
+				asked = append(asked, resourceID)
+				return capabilities(ctx, resourceID)
+			})
+		}
 		alert := models.Alert{ID: "homelab:delly:101-powered-state", Type: "powered-off", Level: "warning", ResourceID: rig.ct.ID, ResourceName: "gitea", Message: "Container 'gitea' is powered off"}
 		rig.collect(status, "running", alert)
 		state := rig.ps.currentPatrolRuntimeState()
@@ -256,45 +300,102 @@ func TestAlertRunSeedStatesWhatPulseDeclaresForTheAlertsResource(t *testing.T) {
 			t.Fatalf("scope did not resolve: %+v", resolution)
 		}
 		output, _ := rig.ps.seedFindingsAndContextState(&resolved, filterPatrolStateByScopeState(state, resolved))
-		return output
+		return output, asked, rig.ctID
 	}
-	sustained := func(alert models.Alert) PatrolScope {
-		return SustainedAlertPatrolScope(alert.ID, alert.ResourceID, "system-container", alert.Type)
-	}
-
-	dead := seed(t, &yes, "stopped", sustained)
-	for _, want := range []string{`Pulse declares these actions for "gitea": start.`, "Start on boot is on for this guest, so it is meant to be running."} {
-		if !strings.Contains(dead, want) {
-			t.Errorf("stopped guest with start on boot: seed lacks %q:\n%s", want, dead)
+	has := func(t *testing.T, name, seed string, wants ...string) {
+		t.Helper()
+		for _, want := range wants {
+			if !strings.Contains(seed, want) {
+				t.Errorf("%s: seed lacks %q:\n%s", name, want, seed)
+			}
 		}
 	}
-	if strings.Contains(dead, "already reported") {
-		t.Errorf("no stopped finding exists, and the seed says Pulse reported one:\n%s", dead)
+	lacks := func(t *testing.T, name, seed string, unwanted ...string) {
+		t.Helper()
+		for _, text := range unwanted {
+			if strings.Contains(seed, text) {
+				t.Errorf("%s: seed says %q:\n%s", name, text, seed)
+			}
+		}
 	}
 
-	fired := seed(t, &yes, "stopped", func(alert models.Alert) PatrolScope {
-		return AlertTriggeredPatrolScope(alert.ID, alert.ResourceID, "system-container", alert.Type)
-	})
-	if !strings.Contains(fired, `Pulse declares these actions for "gitea": start.`) {
-		t.Errorf("a fired alert's run is not told the declared actions:\n%s", fired)
+	// An action that can run is named, and the lookup is asked about the
+	// inventory's ID for the alert's resource, the ID an investigation uses.
+	runnable, asked, ctID := seed(t, &yes, "stopped", sustained, answer(aicontracts.ActionCapabilityCatalog{
+		Capabilities: []aicontracts.ActionCapabilityInfo{{Name: "start"}},
+	}))
+	has(t, "runnable", runnable, `Pulse can run these actions for "gitea": start.`, "Start on boot is on for this guest, so it is meant to be running.")
+	lacks(t, "runnable", runnable, "cannot run", "already reported", "Pulse declares")
+	if len(asked) == 0 || asked[0] != ctID {
+		t.Errorf("the lookup was asked about %v, want the container's inventory ID %s", asked, ctID)
+	}
+	firedSeed, _, _ := seed(t, &yes, "stopped", fired, answer(aicontracts.ActionCapabilityCatalog{
+		Capabilities: []aicontracts.ActionCapabilityInfo{{Name: "start"}},
+	}))
+	has(t, "fired alert", firedSeed, `Pulse can run these actions for "gitea": start.`)
+
+	// The guest declares Start and its node has no runner.
+	noRunner, _, _ := seed(t, &yes, "stopped", sustained, answer(guestWithoutRunnerCatalog("gitea", "delly")))
+	has(t, "no runner", noRunner,
+		`Pulse cannot run an action for "gitea". Pulse cannot start, stop or restart guests on delly: no Pulse action runner is connected on that node.`,
+		"Use Proxmox for this. That is how this install is set up, not a fault.")
+	lacks(t, "no runner", noRunner, "Pulse can run these actions", "Pulse declares", ": start.")
+
+	// The host's agent was installed without command access.
+	commandsOff, _, _ := seed(t, &yes, "stopped", sustained, answer(aicontracts.ActionCapabilityCatalog{
+		Unavailable: []aicontracts.ActionCapabilityRefusal{
+			{Name: "start", ReasonCode: actionlifecycle.ReasonCodeHostCommandsDisabled, Reason: actionlifecycle.HostCommandsDisabledRefusal("delly")},
+			{Name: "update", ReasonCode: actionlifecycle.ReasonCodeHostCommandsDisabled, Reason: actionlifecycle.HostCommandsDisabledRefusal("delly")},
+		},
+		CommandsDisabled: &aicontracts.CommandsDisabledHost{HostName: "delly", Reason: actionlifecycle.HostCommandsDisabledReason("delly"), Step: actionlifecycle.HostCommandsDisabledStep("delly")},
+	}))
+	has(t, "commands off", commandsOff,
+		`Pulse cannot run an action for "gitea".`,
+		"Commands are not enabled on the Pulse agent on delly. Pulse cannot read logs or files on delly or run an action that needs its agent.",
+		"do not say an action is available")
+	lacks(t, "commands off", commandsOff, "Pulse can run these actions", "start, update", "run the Pulse install command")
+
+	// Commands are allowed and the agent is not connected right now.
+	disconnected, _, _ := seed(t, &yes, "stopped", sustained, answer(aicontracts.ActionCapabilityCatalog{
+		Unavailable: []aicontracts.ActionCapabilityRefusal{
+			{Name: "start", ReasonCode: actionlifecycle.ReasonCodeCommandAgentDisconnected, Reason: "The Pulse agent on delly is not connected."},
+			{Name: "update", ReasonCode: actionlifecycle.ReasonCodeCommandAgentDisconnected, Reason: "The Pulse agent on delly is not connected."},
+		},
+	}))
+	has(t, "disconnected", disconnected, `Pulse cannot run an action for "gitea" now. The Pulse agent on delly is not connected.`)
+	lacks(t, "disconnected", disconnected, "Pulse can run these actions", "not a fault")
+
+	// Nothing is declared for the resource.
+	none, _, _ := seed(t, &yes, "stopped", sustained, answer(aicontracts.ActionCapabilityCatalog{}))
+	has(t, "nothing declared", none, `Pulse has no action for "gitea".`)
+
+	// Pulse could not check, or has no broker. The seed then says nothing about actions.
+	for name, capabilities := range map[string]lookup{
+		"lookup failed": func(context.Context, string) (aicontracts.ActionCapabilityCatalog, error) {
+			return aicontracts.ActionCapabilityCatalog{}, errors.New("registry unavailable")
+		},
+		"no lookup": nil,
+	} {
+		unchecked, _, _ := seed(t, &yes, "stopped", sustained, capabilities)
+		has(t, name, unchecked, "Start on boot is on for this guest, so it is meant to be running.")
+		lacks(t, name, unchecked, "Pulse can run these actions", "Pulse cannot run", "Pulse has no action", "Pulse declares")
 	}
 
-	if unknown := seed(t, nil, "stopped", sustained); strings.Contains(unknown, "Start on boot") {
+	if unknown, _, _ := seed(t, nil, "stopped", sustained, nil); strings.Contains(unknown, "Start on boot") {
 		t.Errorf("Proxmox did not report start on boot, and the seed states it:\n%s", unknown)
 	}
 
-	running := seed(t, &no, "running", sustained)
-	if !strings.Contains(running, `Pulse declares these actions for "gitea": reboot, shutdown, stop.`) || !strings.Contains(running, "Start on boot is off for this guest.") {
-		t.Errorf("running guest: seed does not state its actions and setting:\n%s", running)
-	}
-	if strings.Contains(running, "meant to be running") {
-		t.Errorf("a running guest is described as down:\n%s", running)
-	}
+	running, _, _ := seed(t, &no, "running", sustained, answer(aicontracts.ActionCapabilityCatalog{
+		Capabilities: []aicontracts.ActionCapabilityInfo{{Name: "stop"}, {Name: "reboot"}, {Name: "shutdown"}},
+	}))
+	has(t, "running guest", running, `Pulse can run these actions for "gitea": reboot, shutdown, stop.`, "Start on boot is off for this guest.")
+	lacks(t, "running guest", running, "meant to be running")
 
-	cleared := seed(t, &yes, "stopped", func(alert models.Alert) PatrolScope {
+	cleared, asked, _ := seed(t, &yes, "stopped", func(alert models.Alert) PatrolScope {
 		return AlertClearedPatrolScope(alert.ID, alert.ResourceID, "system-container")
-	})
-	if strings.Contains(cleared, "Pulse declares") {
-		t.Errorf("a cleared alert's check is told about actions:\n%s", cleared)
+	}, answer(aicontracts.ActionCapabilityCatalog{Capabilities: []aicontracts.ActionCapabilityInfo{{Name: "start"}}}))
+	lacks(t, "cleared alert", cleared, "Pulse can run these actions", "Pulse cannot run")
+	if len(asked) != 0 {
+		t.Errorf("a cleared alert's check asked which actions can run: %v", asked)
 	}
 }

@@ -275,8 +275,9 @@ func (p *PatrolService) patrolFindingDecisionPrompt(scope *PatrolScope) string {
 		level = "a " + level
 	}
 	return fmt.Sprintf("Before you finish: Pulse has %s alert active on %q (%s: %q), and you have not recorded a finding. "+
-		"If your analysis found a problem beyond what that alert already states, such as its cause or a separate fault on this resource, record it now with one %s call. "+
-		"If nothing needs recording, for example a finished one-shot job, a deliberate stop, or nothing beyond the alert itself, reply in one line that no finding is needed and why. "+
+		"If your analysis found a problem beyond what that alert already states, such as its cause, a workload that failed and will not come back by itself, or a separate fault on this resource, record it now with one %s call. "+
+		"That holds even when only a person can fix it. "+
+		"If nothing needs recording, for example a finished one-shot job that exited cleanly, a deliberate stop, or a reading with nothing known beyond the alert itself, reply in one line that no finding is needed and why. "+
 		"Do not gather more evidence.",
 		level, name, alert.Type, strings.TrimSpace(alert.Message), "patrol_report_finding")
 }

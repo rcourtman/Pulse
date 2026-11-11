@@ -4585,7 +4585,28 @@ run marked `PatrolScope.AlertSustained` and queued at priority 50, below a
 freshly fired alert. Its prompt asks for what the alert does not already say
 (the cause, what is using the space, why the workload stopped, whether Pulse
 has an action) and tells the model not to report a finding that only repeats
-the alert. Proofs: `internal/ai/unified/bridge_test.go`,
+the alert. The rule is `patrolActiveAlertFindingRule`. It asks for a finding
+when the workload has failed and will not come back by itself, even when Pulse
+cannot act or read logs there and only a person can fix it. It must not ask
+for silence because only a person can change the condition: on a host whose
+agent has commands off that is every fault, and a sustained run on a worker
+that had crashed with a segfault described the crash and filed nothing. Silence
+is for the expected condition, named by what it is: a finished one-shot job
+that exited cleanly, a workload stopped on purpose, a deliberate setting,
+hardware wear nobody can act on. The follow-up question
+(`patrolFindingDecisionPrompt`) names the same case.
+
+A person's targeted check on a resource with an alert active
+(`patrolAskedResourceAlert`: a manual scoped run with no alert context) gets
+the same rule in its own note (`patrolAskedResourceAlertNote`) and the same
+facts about the resource. It must not get the general note, which tells a run
+to leave threshold breaches to the alerting system and look for what alerts
+cannot detect: asked about a container with a full disk, such a run wrote that
+the disk was already tracked by the alert and filed that the container had
+never been backed up. The note says another fact on the resource's row is not
+an answer to the alert. A full run, and the checks Pulse starts by itself for a
+verification, an objective or an anomaly, keep their notes. Proofs:
+`internal/ai/unified/bridge_test.go`,
 `internal/ai/unified/bridge_alert_manager_test.go`,
 `internal/api/ai_alert_bridge_trigger_test.go` and
 `internal/ai/patrol_alert_sustained_test.go`.
@@ -4593,15 +4614,29 @@ the alert. Proofs: `internal/ai/unified/bridge_test.go`,
 An alert run is told what the scan cannot otherwise see about the resource its
 alert is on (`patrolAlertSubjectFacts`, written by
 `seedFindingsAndContextState` after the alert note, not for a cleared alert):
-the actions the inventory declares for it, a Proxmox guest's start-on-boot
-setting when Proxmox reported it, and that Pulse has already reported the guest
-stopped when the built-in stopped finding is open. The sustained note used to
-ask whether "Pulse offers an action", and the seed carried no capability, so
-the condition could never be met. The line says "declares" and tells the model
-not to promise the action works: a Proxmox guest declares `start` on a node
-that has no action runner, and only planning knows that. The checked list and
-the refusal stay with the investigation (`ActionCapabilityCatalog`). Proof:
-`internal/ai/patrol_guest_lifecycle_test.go`.
+the actions Pulse can run for it, a Proxmox guest's start-on-boot setting when
+Proxmox reported it, and that Pulse has already reported the guest stopped when
+the built-in stopped finding is open. The sustained note used to ask whether
+"Pulse offers an action", and the seed carried no capability, so the condition
+could never be met.
+
+The actions come from the action broker's `ActionCapabilityCatalog`, the
+catalog an investigation of the same resource reads
+(`PatrolService.SetActionCapabilityLookup`, set by `startUnifiedAlertBridge`
+from `AISettingsHandler.actionBrokerFor`). The seed lists only what can run
+now. It must not list what the inventory declares: a stopped Proxmox guest
+declares `start` on a node with no action runner, and a container declares
+`start` and `update` on a host whose agent was installed without command
+access. Given the declared list, a scan on such a host wrote that Pulse lists
+both as available. When nothing can run the line gives Pulse's own reason
+(`GuestActionsUnavailable.Reason`, the refusal reasons, or the commands-off
+sentence). When the host's agent has commands off the seed also says Pulse
+cannot read logs or files there, and that this is how the agent was installed
+and not a fault. When Pulse cannot check (no broker, or the lookup fails) the
+seed says nothing about actions. The lookup reads the registry and the
+executors' in-memory availability checks, runs no agent preflight, and is
+bounded at 5 seconds. Proofs: `internal/ai/patrol_guest_lifecycle_test.go` and
+`internal/api/ai_alert_bridge_capabilities_test.go`.
 
 A finding belongs to the resource its ID names. `seedFindingsAndContextState`
 closes an open finding as `Resource no longer exists in infrastructure` when

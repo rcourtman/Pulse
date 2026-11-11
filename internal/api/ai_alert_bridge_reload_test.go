@@ -175,6 +175,9 @@ func TestPatrolHearsAlertsAfterARealMonitorReload(t *testing.T) {
 	if patrol == nil {
 		t.Fatal("starting Patrol built no Patrol service")
 	}
+	if _, ok, _ := patrol.ActionCapabilities(ctx, "no-such-resource"); !ok {
+		t.Error("starting Patrol did not give its scan the action broker's lookup")
+	}
 
 	container := func(manager *alerts.Manager, name, health string) {
 		manager.CheckDockerHost(models.DockerHost{

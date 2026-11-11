@@ -572,6 +572,34 @@ func (p *PatrolService) SetStateProvider(sp StateProvider) {
 	}
 }
 
+// SetActionCapabilityLookup gives Patrol the action broker's answer to which
+// actions can run for a resource now. An alert run's seed states it, so the
+// scan does not name an action the host cannot run.
+func (p *PatrolService) SetActionCapabilityLookup(lookup ActionCapabilityLookup) {
+	if p == nil {
+		return
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.actionCapabilityLookup = lookup
+}
+
+// ActionCapabilities answers which actions Pulse can run for a resource now,
+// as Patrol's scan is told. ok is false when Patrol has no lookup.
+func (p *PatrolService) ActionCapabilities(ctx context.Context, resourceID string) (catalog aicontracts.ActionCapabilityCatalog, ok bool, err error) {
+	if p == nil {
+		return catalog, false, nil
+	}
+	p.mu.RLock()
+	lookup := p.actionCapabilityLookup
+	p.mu.RUnlock()
+	if lookup == nil {
+		return catalog, false, nil
+	}
+	catalog, err = lookup(ctx, resourceID)
+	return catalog, true, err
+}
+
 // SetGuestProber sets the guest prober for pre-patrol reachability checks.
 // This enables the patrol service to ping guests via connected host agents.
 func (p *PatrolService) SetGuestProber(prober GuestProber) {

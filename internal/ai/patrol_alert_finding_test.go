@@ -14,6 +14,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/relay"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 )
 
 // What a model that calls no tools leaves behind: the fault in prose and no
@@ -37,7 +38,9 @@ type alertRunRig struct {
 	notifications int
 	// decisionPrompt is the follow-up question the last run handed to the chat loop.
 	decisionPrompt string
-	model          func(creator tools.PatrolFindingCreator) (*PatrolStreamResponse, error)
+	// prompt is what the last run asked the model.
+	prompt string
+	model  func(creator tools.PatrolFindingCreator) (*PatrolStreamResponse, error)
 }
 
 func newAlertRunRig(t *testing.T, mode string) *alertRunRig {
@@ -53,6 +56,7 @@ func newAlertRunRig(t *testing.T, mode string) *alertRunRig {
 		executePatrolStreamFunc: func(ctx context.Context, req PatrolExecuteRequest, callback ChatStreamCallback) (*PatrolStreamResponse, error) {
 			rig.modelTurns++
 			rig.decisionPrompt = req.FindingDecisionPrompt
+			rig.prompt = req.Prompt
 			if rig.model != nil {
 				return rig.model(executor.GetPatrolFindingCreator())
 			}
@@ -363,7 +367,12 @@ func TestAlertRunHandsTheLoopAFindingDecisionQuestion(t *testing.T) {
 	rig := newAlertRunRig(t, config.PatrolAutonomyApproval)
 
 	rig.run(PatrolScope{ResourceIDs: []string{rig.containerID}, Reason: TriggerReasonManual, NoStream: true})
-	for _, want := range []string{"critical alert active on \"web\"", rig.alert.Message, "patrol_report_finding", "no finding is needed"} {
+	for _, want := range []string{
+		"critical alert active on \"web\"", rig.alert.Message, "patrol_report_finding", "no finding is needed",
+		// The question must not let "nothing beyond the alert" cover a
+		// workload that failed and will stay down.
+		"a workload that failed and will not come back by itself", "even when only a person can fix it",
+	} {
 		if !strings.Contains(rig.decisionPrompt, want) {
 			t.Errorf("manual run on a resource with an active alert: question lacks %q, got %q", want, rig.decisionPrompt)
 		}
@@ -380,5 +389,58 @@ func TestAlertRunHandsTheLoopAFindingDecisionQuestion(t *testing.T) {
 	rig.run(PatrolScope{ResourceIDs: []string{rig.containerID}, Reason: TriggerReasonManual, NoStream: true})
 	if rig.decisionPrompt != "" {
 		t.Errorf("a run on a resource with no active alert must ask nothing, got %q", rig.decisionPrompt)
+	}
+}
+
+// A person's check on a resource with an alert active looks at that alert. It
+// used to get the general note, "Do NOT report findings for threshold
+// breaches. Focus on [...] issues alerts cannot detect", so a check on a
+// container with a full disk wrote that the disk "is already being tracked by
+// the active alert system" and filed that the container had never been backed
+// up.
+func TestManualRunOnAResourceWithAnActiveAlertIsAskedAboutTheAlert(t *testing.T) {
+	rig := newAlertRunRig(t, config.PatrolAutonomyMonitor)
+	rig.ps.SetActionCapabilityLookup(func(_ context.Context, resourceID string) (aicontracts.ActionCapabilityCatalog, error) {
+		if resourceID != rig.containerID {
+			t.Errorf("the lookup was asked about %q, want the container %q", resourceID, rig.containerID)
+		}
+		return aicontracts.ActionCapabilityCatalog{Capabilities: []aicontracts.ActionCapabilityInfo{{Name: "restart"}}}, nil
+	})
+	manual := PatrolScope{ResourceIDs: []string{rig.containerID}, Reason: TriggerReasonManual, NoStream: true}
+
+	rig.run(manual)
+	for _, want := range []string{
+		`Pulse has a critical alert active on "web" (docker-container-health: "Docker container 'web' health is unhealthy")`,
+		"look at the alert first",
+		"the workload has failed and will not come back by itself",
+		"Another fact about the resource, such as its backup age, is not an answer to this alert.",
+		`Pulse can run these actions for "web": restart.`,
+	} {
+		if !strings.Contains(rig.prompt, want) {
+			t.Errorf("manual check on a resource with an active alert: prompt lacks %q", want)
+		}
+	}
+	if strings.Contains(rig.prompt, "Do NOT report findings for threshold breaches") {
+		t.Error("manual check on a resource with an active alert is still told to leave the alert's condition alone")
+	}
+
+	// No alert on the resource: the general note, as before.
+	rig.setAlertActive(false)
+	rig.run(manual)
+	if !strings.Contains(rig.prompt, "Do NOT report findings for threshold breaches") || strings.Contains(rig.prompt, "look at the alert first") {
+		t.Error("manual check on a resource with no alert must keep the general note")
+	}
+
+	// A full run keeps the general note whatever is firing.
+	rig.setAlertActive(true)
+	rig.ps.runPatrol(context.Background())
+	if !strings.Contains(rig.prompt, "Do NOT report findings for threshold breaches") || strings.Contains(rig.prompt, "look at the alert first") {
+		t.Error("a full run must keep the general note")
+	}
+
+	// A check Pulse starts by itself on the resource keeps its own question.
+	rig.run(PatrolScope{ResourceIDs: []string{rig.containerID}, Reason: TriggerReasonVerification, NoStream: true})
+	if strings.Contains(rig.prompt, "look at the alert first") {
+		t.Error("a verification check was given the note for a person's check")
 	}
 }
