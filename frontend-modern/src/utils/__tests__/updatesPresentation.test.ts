@@ -3,6 +3,9 @@ import {
   getUpdateCheckActionLabel,
   formatUpdateReleaseDate,
   getUpdateAvailabilityHeading,
+  getUpdateAvailabilityState,
+  getUpdatePreparationDescription,
+  getUpdateCheckNotice,
   getUpdateBuildBadges,
   getUpdateCheckedLabel,
   getUpdateCheckModeLabel,
@@ -43,15 +46,52 @@ describe('updatesPresentation', () => {
   it('returns canonical update status copy', () => {
     expect(getUpdateAvailabilityHeading(true)).toBe('Available');
     expect(getUpdateAvailabilityHeading(false)).toBe('Status');
-    expect(getUpdatePrimaryStatusLabel(true)).toBe('Update Ready');
-    expect(getUpdatePrimaryStatusLabel(false)).toBe('Up to date');
-    expect(getUpdatePrimaryStatusLabel(false, true)).toBe('Source build');
-    expect(getUpdatePrimaryStatusLabel(true, true)).toBe('Source build');
+    expect(getUpdatePrimaryStatusLabel('available')).toBe('Update Ready');
+    expect(getUpdatePrimaryStatusLabel('up_to_date')).toBe('Up to date');
+    expect(getUpdatePrimaryStatusLabel('source')).toBe('Source build');
+    expect(getUpdatePrimaryStatusLabel('preparing')).toBe('Update is still being prepared');
+    expect(getUpdatePrimaryStatusLabel('unavailable')).toBe('Could not confirm update status');
+    expect(getUpdatePrimaryStatusLabel('not_checked')).toBe('Not checked yet');
     expect(getUpdateCheckModeLabel(true)).toBe('Auto-check enabled');
     expect(getUpdateCheckModeLabel(false)).toBe('Manual checks only');
     expect(getUpdateCheckModeLabel(true, true)).toBe('Release updates disabled');
     expect(getUpdateCheckActionLabel(true)).toBe('Checking...');
     expect(getUpdateCheckActionLabel(false)).toBe('Check Now');
+  });
+
+  it('distinguishes delivery preparation, verified currency and unknown checks', () => {
+    const info = {
+      available: false,
+      availability: 'preparing',
+      preparingVersion: '6.8.0-rc.2',
+    } as import('@/api/updates').UpdateInfo;
+    expect(getUpdateAvailabilityState(info)).toBe('preparing');
+    expect(getUpdatePreparationDescription(info)).toContain('Version 6.8.0-rc.2 has been released');
+    expect(getUpdateCheckNotice(info)).toEqual({
+      tone: 'info',
+      message: 'Update is still being prepared',
+    });
+    expect(
+      getUpdateAvailabilityState({ ...info, available: true, availability: 'available' }),
+    ).toBe('available');
+    expect(
+      getUpdateCheckNotice({ ...info, available: true, availability: 'available' }),
+    ).toBeUndefined();
+    const current = {
+      ...info,
+      availability: 'up_to_date',
+      preparingVersion: undefined,
+    } as import('@/api/updates').UpdateInfo;
+    expect(getUpdateAvailabilityState(current)).toBe('up_to_date');
+    expect(getUpdateCheckNotice(current)?.tone).toBe('success');
+    expect(getUpdateAvailabilityState(current, { error: 'network down' })).toBe('unavailable');
+    expect(getUpdateAvailabilityState(current, { checking: true })).toBe('checking');
+    expect(getUpdateAvailabilityState({ ...current, availability: undefined })).toBe('unavailable');
+    expect(getUpdateAvailabilityState({ ...current, warning: 'Activation required' })).toBe(
+      'unavailable',
+    );
+    expect(getUpdateAvailabilityState(null)).toBe('not_checked');
+    expect(getUpdateAvailabilityState(current, { sourceBuild: true })).toBe('source');
   });
 
   describe('getUpdateCheckedLabel', () => {

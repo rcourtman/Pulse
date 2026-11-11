@@ -8,6 +8,7 @@ import { STORAGE_KEYS } from '@/utils/localStorage';
 import { getStartUpdateErrorMessage } from '@/utils/systemSettingsPresentation';
 
 const CHECK_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours
+const PREPARING_CHECK_INTERVAL = 5 * 60 * 1000;
 const TRANSIENT_RETRY_MAX_ATTEMPTS = 3;
 const TRANSIENT_RETRY_BASE_DELAY_MS = import.meta.env.MODE === 'test' ? 0 : 400;
 
@@ -48,6 +49,8 @@ const normalizeUpdateInfo = (value: unknown): UpdateInfo | undefined => {
     isPrerelease,
     isMajorUpgrade,
     warning,
+    availability,
+    preparingVersion,
   } = value;
 
   if (
@@ -65,6 +68,19 @@ const normalizeUpdateInfo = (value: unknown): UpdateInfo | undefined => {
   if (warning !== undefined && typeof warning !== 'string') {
     return undefined;
   }
+  if (
+    availability !== undefined &&
+    availability !== 'available' &&
+    availability !== 'up_to_date' &&
+    availability !== 'preparing' &&
+    availability !== 'unavailable'
+  )
+    return undefined;
+  if (
+    preparingVersion !== undefined &&
+    (typeof preparingVersion !== 'string' || !preparingVersion.trim())
+  )
+    return undefined;
 
   return {
     available,
@@ -76,6 +92,8 @@ const normalizeUpdateInfo = (value: unknown): UpdateInfo | undefined => {
     isPrerelease,
     isMajorUpgrade: typeof isMajorUpgrade === 'boolean' ? isMajorUpgrade : false,
     ...(warning !== undefined ? { warning } : {}),
+    ...(availability !== undefined ? { availability } : {}),
+    ...(preparingVersion !== undefined ? { preparingVersion } : {}),
   };
 };
 
@@ -320,7 +338,16 @@ const performUpdateCheck = async (force: boolean): Promise<void> => {
   const now = Date.now();
 
   // Skip if checked recently (unless forced)
-  if (!force && state.lastCheck && now - state.lastCheck < CHECK_INTERVAL) {
+  const checkInterval = state.updateInfo?.preparingVersion
+    ? PREPARING_CHECK_INTERVAL
+    : CHECK_INTERVAL;
+  // Old negative cache entries predate publication/delivery comparison and
+  // cannot establish that this installation is current.
+  const hasVerifiedResult =
+    state.updateInfo?.available ||
+    state.updateInfo?.availability === 'up_to_date' ||
+    state.updateInfo?.availability === 'preparing';
+  if (!force && hasVerifiedResult && state.lastCheck && now - state.lastCheck < checkInterval) {
     // Use cached data if available
     if (state.updateInfo) {
       // First check if version matches (in case user updated)

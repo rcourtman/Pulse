@@ -641,7 +641,7 @@
     },
     {
       "id": "RA8",
-      "summary": "Stable or GA promotion and any production v6 public checkout flip happen only after an exercised RC, live release-pipeline proof, a recorded rollback target, a written v5 maintenance-only support policy, a coherent self-hosted commercial package, and explicit owner-approved launch execution. Every normal release workflow reports end-to-end success only after its exact customer convergence run and customer-promotion verdict pass; irreversible public activation alone does not establish customer delivery.",
+      "summary": "Stable or GA promotion and any production v6 public checkout flip happen only after an exercised RC, live release-pipeline proof, a recorded rollback target, a written v5 maintenance-only support policy, a coherent self-hosted commercial package, and explicit owner-approved launch execution. Every normal release workflow reports end-to-end success only after its exact customer convergence run and customer-promotion verdict pass; irreversible public activation alone does not establish customer delivery. The in-app updater distinguishes published releases awaiting runtime delivery from confirmed current installations, preserves valid ready offers, and never reports latest-version success from unavailable or legacy negative check results.",
       "kind": "trust-gate",
       "blocking_level": "release-ready",
       "proof_type": "hybrid",
@@ -665,6 +665,35 @@
           "run": [
             "python3",
             "scripts/release_control/release_promotion_policy_test.py"
+          ]
+        },
+        {
+          "id": "update-availability-feedback-tests",
+          "run": [
+            "npm",
+            "--prefix",
+            "frontend-modern",
+            "test",
+            "--",
+            "--maxWorkers=1",
+            "--no-file-parallelism",
+            "src/api/__tests__/updates.test.ts",
+            "src/utils/__tests__/updatesPresentation.test.ts",
+            "src/stores/__tests__/updates.test.ts",
+            "src/components/Settings/__tests__/UpdatesSettingsPanel.clock.test.tsx",
+            "src/components/Settings/__tests__/useSystemSettingsState.test.ts",
+            "src/components/Settings/__tests__/useSystemSettingsState.branchcov0722pm.test.ts"
+          ]
+        },
+        {
+          "id": "update-delivery-availability-tests",
+          "run": [
+            "go",
+            "test",
+            "./internal/updates",
+            "-run",
+            "TestProUpdatePreparation|TestPublishedCommunityReleasePreparing",
+            "-count=1"
           ]
         }
       ],

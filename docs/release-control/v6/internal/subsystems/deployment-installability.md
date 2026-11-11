@@ -16,6 +16,30 @@
 
 ## Purpose
 
+### Published releases awaiting runtime delivery
+
+`UpdateInfo.availability` distinguishes `available`, `up_to_date`, `preparing`
+and `unavailable`. `preparingVersion` identifies a published newer release
+whose update for this installation is not ready. Community checks use the
+canonical release selector and exact runtime archive. Pro checks read the
+same public channel metadata without activation credentials, while offers,
+commands and apply targets remain exclusively from the private broker.
+Public metadata must never supply an install action for Pro. A valid older
+private offer remains available alongside notice of a newer preparing release.
+Unreadable publication metadata cannot establish that an installation is current.
+Refresh failures append their explanation without replacing existing major-upgrade
+or prerelease cautions on a retained ready offer.
+Preparing checks record an existing no-offer outcome rather than `up_to_date`.
+
+Settings and manual-check feedback consume this additive API contract. They
+reserve latest-version success for an explicit confirmed result, retain the
+preparing version through reload, refresh preparing cache after five minutes
+and withdraw currency claims after failed checks. Publication failure must
+not prevent an already valid private offer. Tests exercise channel filtering,
+delivery catching up, missing community archives, outages and absence of
+private credentials on public discovery requests. Installed recovery and
+future release observations remain under the existing L1 follow-up.
+
 ### Release success includes customer delivery
 
 The release pipeline has separate publication and delivery verdicts.
@@ -4197,12 +4221,14 @@ Tokens and hostnames never establish CPU or installed-executable identity.
    compiled Pulse Pro binary: when the running edition is Pro (recorded by
    `pkg/edition`, flipped to `pro` in `enterpriseruntime.Initialize` alongside
    `coreaudit.SetLogger`/`server.SetBusinessHooks`, and keyed off the compiled
-   binary — never license-active state), `internal/updates` checks and applies
+   binary — never license-active state), `internal/updates` offers and applies
    updates exclusively through the license server download broker
    (`GET /v1/downloads/pulse-pro` with the installation token and instance
    fingerprint, per `internal/updates/pro_update.go`), verifying the private
    archive against the same pinned `pulse-installer` SSHSIG key plus the
    broker manifest sha256, and refusing GitHub-shaped download URLs outright.
+   Public release metadata is consulted separately, without private credentials,
+   only to identify a newer published release still awaiting Pro delivery.
    The broker is dual-channel (pulse-pro side, 2026-07-22): the stable
    manifest slot answers every request by default, and a separate rc slot
    answers `channel=rc`. The Pro updater must send `channel=rc` on the broker

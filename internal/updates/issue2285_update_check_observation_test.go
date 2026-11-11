@@ -135,7 +135,7 @@ func TestIssue2285UnactivatedProCheckIsNotUpToDateOrCached(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unactivated Pro check: %v", err)
 	}
-	if info.Available || !strings.Contains(info.Warning, "Update checks are unavailable") {
+	if info.Available || info.Availability != UpdateUnavailable || !strings.Contains(info.Warning, "activated license") {
 		t.Fatalf("unactivated Pro result = %+v, want unavailable warning without an offer", info)
 	}
 	if got := manager.LastUpdateCheck(); got.Outcome != UpdateCheckOutcomeSkipped || got.Available || got.Channel != "stable" {

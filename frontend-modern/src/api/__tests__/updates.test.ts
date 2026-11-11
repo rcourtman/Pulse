@@ -7,6 +7,7 @@ vi.mock('@/utils/apiClient', () => ({
 import { UpdatesAPI } from '@/api/updates';
 import type { UpdateChannel } from '@/types/config';
 import { apiFetchJSON } from '@/utils/apiClient';
+import { getUpdateAvailabilityState, getUpdateCheckNotice } from '@/utils/updatesPresentation';
 
 describe('UpdatesAPI', () => {
   const apiFetchJSONMock = vi.mocked(apiFetchJSON);
@@ -54,6 +55,29 @@ describe('UpdatesAPI', () => {
 
   it('passes explicit freshness without overriding the saved channel', async () => {
     await UpdatesAPI.checkForUpdates(undefined, true);
+    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/updates/check?force=true');
+  });
+
+  it('carries pending runtime delivery into informational check feedback', async () => {
+    apiFetchJSONMock.mockResolvedValueOnce({
+      available: false,
+      availability: 'preparing',
+      preparingVersion: '6.8.0-rc.2',
+      currentVersion: '6.8.0-rc.1',
+      latestVersion: '6.8.0-rc.1',
+      releaseNotes: '',
+      downloadUrl: '',
+      isPrerelease: true,
+      isMajorUpgrade: false,
+    });
+    const result = await UpdatesAPI.checkForUpdates(undefined, true);
+    expect(getUpdateAvailabilityState(result)).toBe('preparing');
+    expect(getUpdateCheckNotice(result)).toEqual({
+      tone: 'info',
+      message: 'Update is still being prepared',
+    });
+    expect(result.preparingVersion).toBe('6.8.0-rc.2');
+    expect(result.downloadUrl).toBe('');
     expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/updates/check?force=true');
   });
 

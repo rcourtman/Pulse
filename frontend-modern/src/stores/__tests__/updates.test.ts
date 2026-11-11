@@ -114,6 +114,60 @@ describe('updateStore', () => {
     expect(store.updateInfo()?.latestVersion).toBe('v1.2.0');
   });
 
+  it('preserves preparing status across reload and refreshes it after five minutes', async () => {
+    mockGetVersion.mockResolvedValue(baseVersionInfo);
+    const preparing = {
+      ...baseUpdateInfo,
+      available: false,
+      availability: 'preparing',
+      preparingVersion: 'v1.1.0',
+      latestVersion: 'v1.0.0',
+      downloadUrl: '',
+    };
+    localStorage.setItem(
+      STORAGE_KEYS.UPDATES,
+      JSON.stringify({ lastCheck: Date.now(), updateInfo: preparing }),
+    );
+    const store = await loadUpdateStore();
+    await store.checkForUpdates();
+    expect(store.updateInfo()).toMatchObject({
+      availability: 'preparing',
+      preparingVersion: 'v1.1.0',
+      available: false,
+    });
+    expect(mockCheckForUpdates).not.toHaveBeenCalled();
+    localStorage.setItem(
+      STORAGE_KEYS.UPDATES,
+      JSON.stringify({ lastCheck: Date.now() - 5 * 60 * 1000 - 1, updateInfo: preparing }),
+    );
+    mockCheckForUpdates.mockResolvedValue({ ...baseUpdateInfo, availability: 'available' });
+    await store.checkForUpdates();
+    expect(mockCheckForUpdates).toHaveBeenCalledWith(undefined, false);
+    expect(store.updateInfo()).toMatchObject({ availability: 'available', available: true });
+    expect(store.updateInfo()?.preparingVersion).toBeUndefined();
+  });
+
+  it('refreshes old negative cache entries that cannot prove publication was checked', async () => {
+    mockGetVersion.mockResolvedValue(baseVersionInfo);
+    localStorage.setItem(
+      STORAGE_KEYS.UPDATES,
+      JSON.stringify({
+        lastCheck: Date.now(),
+        updateInfo: { ...baseUpdateInfo, available: false },
+      }),
+    );
+    mockCheckForUpdates.mockResolvedValue({
+      ...baseUpdateInfo,
+      availability: 'preparing',
+      available: false,
+      preparingVersion: 'v1.1.0',
+    });
+    const store = await loadUpdateStore();
+    await store.checkForUpdates();
+    expect(mockCheckForUpdates).toHaveBeenCalledOnce();
+    expect(store.updateInfo()?.availability).toBe('preparing');
+  });
+
   it('retries transient update-check failures before succeeding', async () => {
     mockGetVersion.mockResolvedValue(baseVersionInfo);
     mockCheckForUpdates

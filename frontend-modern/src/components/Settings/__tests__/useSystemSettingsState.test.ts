@@ -387,6 +387,50 @@ describe('useSystemSettingsState', () => {
     dispose();
   });
 
+  it('reports preparation as information instead of latest-version success', async () => {
+    const { hookState, dispose } = mountHookWithTab('system-updates');
+    const { updateStore } = await import('@/stores/updates');
+    const { notificationStore } = await import('@/stores/notifications');
+    vi.mocked(updateStore.updateInfo).mockReturnValue({
+      available: false,
+      availability: 'preparing',
+      preparingVersion: '6.8.0-rc.2',
+    } as import('@/api/updates').UpdateInfo);
+    await hookState.checkForUpdates();
+    expect(notificationStore.info).toHaveBeenCalledWith('Update is still being prepared');
+    expect(notificationStore.success).not.toHaveBeenCalledWith(
+      'You are running the latest version',
+    );
+    dispose();
+  });
+
+  it('does not report currency for an unavailable publication check', async () => {
+    const { hookState, dispose } = mountHookWithTab('system-updates');
+    const { updateStore } = await import('@/stores/updates');
+    const { notificationStore } = await import('@/stores/notifications');
+    vi.mocked(updateStore.updateInfo).mockReturnValue({
+      available: false,
+      availability: 'unavailable',
+      warning: 'Publication check unavailable',
+    } as import('@/api/updates').UpdateInfo);
+    await hookState.checkForUpdates();
+    expect(notificationStore.error).toHaveBeenCalledWith('Could not confirm update status');
+    expect(notificationStore.success).not.toHaveBeenCalledWith(
+      'You are running the latest version',
+    );
+    dispose();
+  });
+
+  it('refreshes update availability after saving update preferences', async () => {
+    const { hookState, dispose } = mountHookWithTab('system-updates');
+    const { updateStore } = await import('@/stores/updates');
+    vi.mocked(updateStore.checkForUpdates).mockClear();
+    await hookState.saveSettings();
+    expect(updateSystemSettingsMock).toHaveBeenCalled();
+    expect(updateStore.checkForUpdates).toHaveBeenCalledWith(true);
+    dispose();
+  });
+
   it('shows clean success toast without port reference when saving from General tab', async () => {
     const { hookState, dispose } = mountHookWithTab('system-general');
     const { notificationStore } = await import('@/stores/notifications');

@@ -1,4 +1,4 @@
-import type { VersionInfo } from '@/api/updates';
+import type { UpdateAvailability, UpdateInfo, VersionInfo } from '@/api/updates';
 import { formatRelativeTime } from '@/utils/format';
 
 export interface UpdateBuildBadge {
@@ -65,9 +65,61 @@ export function getUpdateAvailabilityHeading(available: boolean): string {
   return available ? 'Available' : 'Status';
 }
 
-export function getUpdatePrimaryStatusLabel(available: boolean, sourceBuild = false): string {
-  if (sourceBuild) return 'Source build';
-  return available ? 'Update Ready' : 'Up to date';
+export type UpdatePresentationState = UpdateAvailability | 'not_checked' | 'checking' | 'source';
+
+export function getUpdateAvailabilityState(
+  info: UpdateInfo | null | undefined,
+  options: { sourceBuild?: boolean; checking?: boolean; error?: string | null } = {},
+): UpdatePresentationState {
+  if (options.sourceBuild) return 'source';
+  if (options.checking) return 'checking';
+  if (options.error) return 'unavailable';
+  if (!info) return 'not_checked';
+  if (info.available) return 'available';
+  if (info.availability === 'unavailable' || info.warning) return 'unavailable';
+  if (info.preparingVersion) return 'preparing';
+  if (info.availability === 'up_to_date') return 'up_to_date';
+  return 'unavailable';
+}
+
+export function getUpdatePrimaryStatusLabel(state: UpdatePresentationState): string {
+  switch (state) {
+    case 'source':
+      return 'Source build';
+    case 'checking':
+      return UPDATES_PANEL_COPY.checkingLabel;
+    case 'available':
+      return 'Update Ready';
+    case 'preparing':
+      return 'Update is still being prepared';
+    case 'up_to_date':
+      return 'Up to date';
+    case 'unavailable':
+      return 'Could not confirm update status';
+    default:
+      return 'Not checked yet';
+  }
+}
+
+export function getUpdatePreparationDescription(
+  info: UpdateInfo | null | undefined,
+): string | undefined {
+  if (!info?.preparingVersion) return undefined;
+  return `Version ${info.preparingVersion} has been released. Its update for this installation is still being prepared. Check again shortly.`;
+}
+
+export function getUpdateCheckNotice(info: UpdateInfo | null | undefined):
+  | {
+      tone: 'success' | 'info' | 'error';
+      message: string;
+    }
+  | undefined {
+  const state = getUpdateAvailabilityState(info);
+  if (state === 'available') return undefined;
+  if (state === 'up_to_date')
+    return { tone: 'success', message: 'You are running the latest version' };
+  if (state === 'preparing') return { tone: 'info', message: getUpdatePrimaryStatusLabel(state) };
+  return { tone: 'error', message: getUpdatePrimaryStatusLabel('unavailable') };
 }
 
 export function getUpdateCheckModeLabel(enabled: boolean, sourceBuild = false): string {

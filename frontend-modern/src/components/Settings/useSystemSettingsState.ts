@@ -3,6 +3,7 @@ import { SettingsAPI, type TelemetryPreviewResponse } from '@/api/settings';
 import { UpdatesAPI } from '@/api/updates';
 import type { UpdateInfo, UpdatePlan } from '@/api/updates';
 import { notificationStore } from '@/stores/notifications';
+import { getUpdateCheckNotice } from '@/utils/updatesPresentation';
 import { logger } from '@/utils/logger';
 import { updateStore } from '@/stores/updates';
 import { copyToClipboard } from '@/utils/clipboard';
@@ -273,6 +274,10 @@ export function useSystemSettingsState({
       );
       setHasUnsavedChanges(false);
 
+      // Saving an update channel changes the comparison being requested.
+      // Replace the old channel's cached verdict with a fresh check.
+      if (initiatingTab === 'system-updates') await checkForUpdates();
+
       if (isNetworkTab) {
         setTimeout(() => {
           window.location.reload();
@@ -510,9 +515,8 @@ export function useSystemSettingsState({
         updateStore.clearDismissed();
       }
 
-      if (!info?.available) {
-        notificationStore.success('You are running the latest version');
-      }
+      const notice = getUpdateCheckNotice(info);
+      if (notice) notificationStore[notice.tone](notice.message);
     } catch (error) {
       notificationStore.error(getCheckForUpdatesErrorMessage());
       logger.error('Update check error', error);

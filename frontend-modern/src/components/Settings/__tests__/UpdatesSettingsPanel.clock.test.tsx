@@ -4,7 +4,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { UpdateInfo, VersionInfo } from '@/api/updates';
 import { RELATIVE_TIME_TICK_MS } from '@/utils/relativeTimeClock';
 
-const store = vi.hoisted(() => ({ lastCheckedAt: vi.fn(), lastError: () => null }));
+const store = vi.hoisted(() => ({
+  lastCheckedAt: vi.fn(),
+  lastError: vi.fn<() => string | null>(() => null),
+}));
 vi.mock('@/stores/updates', () => ({ updateStore: store }));
 vi.mock('../UpdateHistorySection', () => ({ UpdateHistorySection: () => null }));
 import { UpdatesSettingsPanel } from '../UpdatesSettingsPanel';
@@ -15,14 +18,22 @@ const mount = (sourceBuild = false) => {
   store.lastCheckedAt.mockImplementation(checkedAt);
   const [channel, setChannel] = createSignal<'stable' | 'rc'>('stable');
   const [auto, setAuto] = createSignal(false);
+  const [info, setInfo] = createSignal<UpdateInfo>({
+    available: false,
+    availability: 'up_to_date',
+    latestVersion: '6.5.0',
+  } as UpdateInfo);
+  const [checking, setChecking] = createSignal(false);
+  const [error, setError] = createSignal<string | null>(null);
+  store.lastError.mockImplementation(error);
   const check = vi.fn(async () => {});
   const install = vi.fn();
   const dirty = vi.fn();
   render(() => (
     <UpdatesSettingsPanel
       versionInfo={() => ({ version: '6.5.0', isSourceBuild: sourceBuild }) as VersionInfo}
-      updateInfo={() => ({ available: false, latestVersion: '6.5.0' }) as UpdateInfo}
-      checkingForUpdates={() => false}
+      updateInfo={info}
+      checkingForUpdates={checking}
       updateChannel={channel}
       setUpdateChannel={setChannel}
       autoUpdateEnabled={auto}
@@ -34,7 +45,7 @@ const mount = (sourceBuild = false) => {
       isInstalling={() => false}
     />
   ));
-  return { setCheckedAt, setChannel, check, install, dirty };
+  return { setCheckedAt, setChannel, check, install, dirty, setInfo, setChecking, setError };
 };
 
 describe('held global update check age', () => {
@@ -80,5 +91,41 @@ describe('held global update check age', () => {
     expect(screen.getByRole('button', { name: 'Check Now' })).toBeDisabled();
     expect(controls.check).not.toHaveBeenCalled();
     expect(controls.install).not.toHaveBeenCalled();
+  });
+
+  it('shows publication preparation and changes to ready only after an installable offer', () => {
+    const controls = mount();
+    controls.setInfo({
+      available: false,
+      availability: 'preparing',
+      preparingVersion: '6.8.0-rc.2',
+      latestVersion: '6.8.0-rc.1',
+    } as UpdateInfo);
+    expect(screen.getByText('Update is still being prepared')).toBeInTheDocument();
+    expect(screen.getByText(/Version 6.8.0-rc.2 has been released/)).toBeInTheDocument();
+    expect(screen.queryByText('Up to date')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /install/i })).not.toBeInTheDocument();
+    controls.setChecking(true);
+    expect(screen.getByRole('button', { name: 'Checking...' })).toBeDisabled();
+    controls.setChecking(false);
+    controls.setInfo({
+      available: true,
+      availability: 'available',
+      latestVersion: '6.8.0-rc.2',
+    } as UpdateInfo);
+    expect(screen.getByText('Update Ready')).toBeInTheDocument();
+    expect(screen.queryByText('Update is still being prepared')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Its update for this installation/)).not.toBeInTheDocument();
+  });
+
+  it('withdraws up-to-date status after a failed check and for old negative data', () => {
+    const controls = mount();
+    controls.setError('Refresh failed');
+    expect(screen.queryByText('Up to date')).not.toBeInTheDocument();
+    expect(screen.getByText('Could not confirm update status')).toBeInTheDocument();
+    controls.setError(null);
+    controls.setInfo({ available: false, latestVersion: '6.5.0' } as UpdateInfo);
+    expect(screen.queryByText('Up to date')).not.toBeInTheDocument();
+    expect(screen.getByText('Could not confirm update status')).toBeInTheDocument();
   });
 });

@@ -18,6 +18,18 @@
 
 ## Purpose
 
+### Update checks do not turn delivery uncertainty into success
+
+The settings state owner uses the shared update presentation model to report
+published-but-preparing releases as information and unavailable checks as
+unconfirmed. Latest-version success requires an explicit `up_to_date` result.
+Private Pro activation credentials stay on the broker request; the separate
+public publication lookup receives no installation token or fingerprint and
+cannot contribute an apply URL or Docker command. Existing activation, channel,
+private artifact and signature guards remain authoritative. Settings feedback
+tests cover preparation, failed checks and confirmed current results, while
+backend Pro fixtures reject private headers on publication discovery.
+
 ### Unknown saved approval state is never replacement authority
 
 An unreadable/invalid approval or execution file blocks approval initialization

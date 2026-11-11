@@ -21,6 +21,22 @@
 
 ## Purpose
 
+### Update availability is distinct from an installable offer
+
+`GET /api/updates/check` carries additive `availability` values `available`,
+`up_to_date`, `preparing` and `unavailable`, plus optional `preparingVersion`.
+`available`, `latestVersion`, `downloadUrl` and `dockerUpdate` still describe
+the installable offer. A published newer release awaiting this runtime's
+delivery must never borrow a public community download for a Pro installation.
+Pro publication discovery carries no broker activation headers. A newer
+preparing version can coexist with an older installable private offer.
+Clients must not interpret absent availability on old negative cache as a
+confirmed current result, and errors/warnings withdraw currency feedback.
+Backend preparation cases verify the serialized fields and credential boundary;
+the direct update-client transport and shared presentation/store tests preserve
+them through the request and reload paths. This changes no update apply,
+authentication, channel-selection or signature-verification authority.
+
 ### Saved approval failure is not a successful empty list
 
 `GET /api/ai/approvals` returns fixed `503 approval_store_unavailable` / "Saved
