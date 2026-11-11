@@ -67,6 +67,12 @@ func BuildFindingInvestigationRecord(f *Finding, session *InvestigationSession) 
 		record.Error = strings.TrimSpace(normalized.Error)
 		if summary := strings.TrimSpace(normalized.Summary); summary != "" {
 			record.Conclusion = summary
+			// The finding's recommendation was written at first look, before
+			// the investigation read anything. The summary carries the
+			// investigation's own recommendation, and the two can disagree
+			// (restart the app, when the cause was its stopped database), so
+			// the first guess is not repeated under it.
+			record.RecommendedAction = ""
 		}
 		record.Evidence = append(record.Evidence, investigationRecordEvidenceIDs(normalized.EvidenceIDs)...)
 		if normalized.ProposedFix != nil {

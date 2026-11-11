@@ -73,7 +73,9 @@ func TestBuildFindingInvestigationRecord_FromSession(t *testing.T) {
 	if record.Conclusion != "Postgres was consuming CPU." {
 		t.Fatalf("conclusion = %q", record.Conclusion)
 	}
-	if record.RecommendedAction != "Reduce CPU pressure" {
+	// The investigation concluded, so its own fix replaces the recommendation
+	// the finding carried from first look.
+	if record.RecommendedAction != "Restart postgres" {
 		t.Fatalf("recommended action = %q", record.RecommendedAction)
 	}
 	if record.Confidence != aicontracts.InvestigationRecordConfidenceMedium {
@@ -224,5 +226,33 @@ func TestPatrolInvestigationCompletionReplacesEarlyActionProjection(t *testing.T
 	record := store.Get("finding-1").InvestigationRecord
 	if record.Conclusion != session.Summary || record.CompletedAt == nil || len(record.Evidence) != 1 || record.Evidence[0].ID != "final-evidence" {
 		t.Fatalf("completed evidence was lost: %#v", record)
+	}
+}
+
+// A first-look recommendation is a guess made before any evidence was read.
+// It stays while nothing has replaced it and goes once the investigation has
+// written its own summary, so the record never shows the two side by side.
+func TestBuildFindingInvestigationRecordDropsFirstLookRecommendationOnceConcluded(t *testing.T) {
+	now := time.Now().UTC()
+	finding := &Finding{
+		ID: "finding-1", ResourceID: "app-container-1", DetectedAt: now,
+		Description: "nextcloud is unhealthy", Recommendation: "Restart nextcloud",
+	}
+
+	running := &InvestigationSession{ID: "investigation-1", FindingID: finding.ID, StartedAt: now}
+	if got := BuildFindingInvestigationRecord(finding, running).RecommendedAction; got != "Restart nextcloud" {
+		t.Fatalf("before a summary the first-look recommendation stays, got %q", got)
+	}
+
+	concluded := &InvestigationSession{
+		ID: "investigation-1", FindingID: finding.ID, StartedAt: now,
+		Summary: "nextcloud-db is stopped. Start nextcloud-db.",
+	}
+	record := BuildFindingInvestigationRecord(finding, concluded)
+	if record.Conclusion != "nextcloud-db is stopped. Start nextcloud-db." {
+		t.Fatalf("conclusion = %q", record.Conclusion)
+	}
+	if record.RecommendedAction != "" {
+		t.Fatalf("a concluded investigation repeated the first-look recommendation: %q", record.RecommendedAction)
 	}
 }
