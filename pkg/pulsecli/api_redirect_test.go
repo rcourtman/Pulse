@@ -148,7 +148,11 @@ func TestCLIAPICommandsPreserveSameOriginTLSRedirects(t *testing.T) {
 						return
 					}
 					w.Header().Set("Content-Type", "application/json")
-					_, _ = io.WriteString(w, `{}`)
+					body := `{}`
+					if command.name == "fleet" {
+						body = `{"connections":[]}`
+					}
+					_, _ = io.WriteString(w, body)
 				}))
 				defer server.Close()
 				client := server.Client() // Keep this caller's actual TLS trust.
