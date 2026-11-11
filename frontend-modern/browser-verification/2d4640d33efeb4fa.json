@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "base_sha": "c81a5921f3a9770d69c5271e628a37cdbd202e5e",
+  "verified_at": "2026-11-11T22:52:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/actions/ActionReviewDialog.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/actions/ActionReviewDialog.tsx": "02dc2c944800fb7a75eaee0066a8a0a23aa465337934de4884345396b0b008b0"
+  },
+  "routes": [
+    "/actions"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Action review for a Patrol-proposed container start in pending approval, approved and completed states on a private Pro stack built from this tree",
+    "Notice after Approve at both widths: 'Approved. Nothing has run yet. Press Run action when you are ready.' while the review shows Ready to run and offers Run action",
+    "Notice after Run at both widths: 'Action sent. Its recorded outcome is below.' while the review shows Completed with its recorded outcome",
+    "At 375px the notice sits at the bottom edge on the notification layer's existing lower level behind the open review, as success notices already did; the review dialog fits the width and its layout is unchanged"
+  ],
+  "interactions": [
+    "Opened the action's review from the Actions list",
+    "Clicked Approve and read the notice",
+    "Clicked Run action and read the notice and the recorded outcome",
+    "Repeated Approve and Run at 375px wide with screenshots of each state"
+  ]
+}

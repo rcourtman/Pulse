@@ -10221,7 +10221,10 @@ tokens; it introduces no new shared primitive, theme token, or layout helper.
 The only navigation it offers is the existing `/actions` route, shown only when
 Patrol-origin fixes are waiting for approval. The Issues resolved tile gains
 one detail line for findings closed by a verified fix and no new element.
-Loading, failed-load, no-runs,
+The shared action review dialog's two notices after Approve and after Run
+are plain sentences through the existing notification store ("Approved.
+Nothing has run yet. Press Run action when you are ready." and "Action sent.
+Its recorded outcome is below."); no dialog structure changes. Loading, failed-load, no-runs,
 and truncated-history states carry distinct copy, and a failed load never
 renders zero counts as if the week were quiet. Browser proof covers the desktop
 and narrow Activity tab in `frontend-modern/browser-verification.json`.
