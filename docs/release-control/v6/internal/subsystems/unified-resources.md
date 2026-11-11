@@ -8851,6 +8851,19 @@ decision and every recorded outcome are read and rendered as before, and no
 resource or action identity changes (`ActionReviewDialog.test.tsx`,
 `Actions.requestOwnership.test.tsx`).
 
+### Action review notices say what happened
+
+After Approve on an action that does not collapse to one confirmation, the
+review's notice is "Approved. Nothing has run yet. Press Run action when you
+are ready." The old wording asked the operator to "review once more", which
+read as a second approval rather than the separate run step it is. After Run
+the notice is "Action sent. Its recorded outcome is below." in place of
+"Action dispatch response recorded. Review execution, verification, and
+recovery separately." Only the two strings change: approval and execution
+remain separate calls for capabilities that are not `low_risk`, the recorded
+outcome still shows execution, verification and recovery as separate truths,
+and no decision, plan or audit field changes.
+
 ### vSphere Overview leads with vCenter health signals
 
 The vSphere Overview answers "is anything in trouble?" before inventory, as

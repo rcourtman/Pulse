@@ -7924,7 +7924,15 @@ by severity), Patrol-origin action audits, and `internal/ai/cost` usage events
 with `use_case = patrol`. It is a pure function over those inputs: it starts no
 run, calls no provider, spends no tokens, and mutates no store. New-finding and
 resolution totals come from run records because resolved findings are purged
-from the store after 24 hours, and the payload reports
+from the store after 24 hours. One resolution has no run record: a verified
+fix closes its finding when the action reports back, between runs. The digest
+counts it from the finding as `findings.fixed` and adds it to
+`findings.resolved`, recognising it by a `verification_passed` lifecycle row
+stamped together with `ResolvedAt` (`digestFindingClosedByVerifiedFix`). A
+finding a run had already resolved before its fix was confirmed stays with the
+run's count. Like manual resolutions, this count lasts only while the finding
+is still in the store. Without it a week could read "1 fixed and verified"
+beside "Issues resolved 0". The payload reports
 `history_complete=false` with `history_since` when the bounded run history no
 longer reaches the start of the window. Unknown model pricing is reported as
 `pricing_known=false`, never as zero known spend. The effective mode comes from

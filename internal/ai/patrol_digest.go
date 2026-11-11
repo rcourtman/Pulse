@@ -74,9 +74,11 @@ type PatrolDigestFindings struct {
 	New            int                        `json:"new"`
 	OpenBySeverity PatrolDigestSeverityCounts `json:"open_by_severity"`
 	// Resolved is every resolution in the window; AutoResolved is the subset
-	// Patrol cleared itself because the condition was no longer detected.
+	// Patrol cleared itself because the condition was no longer detected, and
+	// Fixed is the subset closed by a fix Pulse ran and then verified.
 	Resolved     int `json:"resolved"`
 	AutoResolved int `json:"auto_resolved"`
+	Fixed        int `json:"fixed"`
 	Dismissed    int `json:"dismissed"`
 	Suppressed   int `json:"suppressed"`
 }
@@ -313,8 +315,17 @@ func summarizeDigestFindings(digest *PatrolDigest, findings []*Finding, inWindow
 				digest.Findings.OpenBySeverity.Info++
 			}
 		}
-		if f.ResolvedAt != nil && inWindow(*f.ResolvedAt) && !f.AutoResolved {
-			manualResolved++
+		if f.ResolvedAt != nil && inWindow(*f.ResolvedAt) {
+			switch {
+			case !f.AutoResolved:
+				manualResolved++
+			case digestFindingClosedByVerifiedFix(f):
+				// A verified fix closes its finding when the action reports
+				// back, between Patrol runs, so no run record counts it. Left
+				// out, a week could read "1 fixed and verified" beside
+				// "Issues resolved 0".
+				digest.Findings.Fixed++
+			}
 		}
 		for _, event := range f.Lifecycle {
 			if !inWindow(event.At) {
@@ -332,8 +343,37 @@ func summarizeDigestFindings(digest *PatrolDigest, findings []*Finding, inWindow
 			digest.Investigations.ByOutcome[outcome]++
 		}
 	}
-	digest.Findings.Resolved = digest.Findings.AutoResolved + manualResolved
+	digest.Findings.Resolved = digest.Findings.AutoResolved + manualResolved + digest.Findings.Fixed
 }
+
+// digestFindingClosedByVerifiedFix reports whether a resolved finding was
+// closed by resolveVerifiedFindingLocked: a fix ran, was confirmed, and that
+// confirmation is what resolved the finding. The store stamps ResolvedAt and
+// the "verification_passed" row together in that case. A finding a Patrol run
+// had already resolved before its fix was confirmed keeps the run's earlier
+// ResolvedAt, and the run record counts it, so it is not counted again here.
+func digestFindingClosedByVerifiedFix(f *Finding) bool {
+	if !f.AutoResolved || f.ResolvedAt == nil {
+		return false
+	}
+	for _, event := range f.Lifecycle {
+		if event.Type != "verification_passed" {
+			continue
+		}
+		gap := event.At.Sub(*f.ResolvedAt)
+		if gap < 0 {
+			gap = -gap
+		}
+		if gap <= digestVerifiedCloseSlack {
+			return true
+		}
+	}
+	return false
+}
+
+// digestVerifiedCloseSlack is how far apart the store's two clock reads for
+// one verified close may be.
+const digestVerifiedCloseSlack = 2 * time.Second
 
 // digestInvestigationRuns returns how each investigation run recorded in a
 // finding's lifecycle ended, for the runs that finished inside the window.

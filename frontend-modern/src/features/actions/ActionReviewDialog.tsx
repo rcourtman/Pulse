@@ -235,7 +235,7 @@ export const ActionReviewDialog: Component<{
       await refresh();
       notificationStore.success(
         outcome === 'approved'
-          ? 'Action approved. Review once more before running it.'
+          ? 'Approved. Nothing has run yet. Press Run action when you are ready.'
           : 'Action rejected.',
       );
       if (outcome === 'rejected') props.onClose();
@@ -312,9 +312,7 @@ export const ActionReviewDialog: Component<{
         'Operator confirmed execution from Actions review.',
       );
       await refresh();
-      notificationStore.success(
-        'Action dispatch response recorded. Review execution, verification, and recovery separately.',
-      );
+      notificationStore.success('Action sent. Its recorded outcome is below.');
     } catch (cause) {
       setError(actionableErrorMessage(cause, 'The action could not be run.'));
       try {
