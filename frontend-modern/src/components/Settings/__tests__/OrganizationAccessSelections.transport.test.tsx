@@ -7,7 +7,14 @@ import type {
 } from '@/api/orgs';
 import { loadRuntimeCapabilities } from '@/stores/license';
 import { syncSessionPresentationPolicy } from '@/stores/sessionPresentationPolicy';
-import { clearAuth, getApiToken, getOrgID, setApiToken, setOrgID } from '@/utils/apiClient';
+import {
+  apiClient,
+  clearAuth,
+  getApiToken,
+  getOrgID,
+  setApiToken,
+  setOrgID,
+} from '@/utils/apiClient';
 import { OrganizationAccessPanel } from '../OrganizationAccessPanel';
 
 // Keep actual controls, grid reconciliation, ownership dialog, state owner,
@@ -24,6 +31,13 @@ const displayName = 'North estate';
 const owner = 'owner/maintainer?realm=lab#saved';
 const unrelatedToken = 'synthetic-unrelated-organization-token';
 const csrf = 'synthetic-organization-selection-csrf';
+const capabilityPath = '/api/license/runtime-capabilities';
+const capabilityBody = (enabled: boolean) => ({
+  capabilities: enabled ? ['multi_tenant'] : [],
+  limits: [],
+});
+const capabilityWithdrawals = ['disabled', 'read failure', 'malformed'] as const;
+type CapabilityWithdrawal = (typeof capabilityWithdrawals)[number];
 // Same-prefix saved principals must stay complete in their own row. Encoded
 // separators still distinguish JSON role targets from DELETE path segments.
 const people = ['01', '02', '03'].map(
@@ -72,6 +86,42 @@ let ownerID: string;
 let nextWriteStatus: number;
 let ownershipReplyUserID: string | undefined;
 let unexpected: string[];
+let capabilityReply: () => Promise<Response>;
+let healthReply: () => Promise<Response>;
+let writeReply: (response: Response) => Promise<Response>;
+let releases: (() => void)[];
+let capabilityLoads: Promise<void>[];
+
+function deferredResponse(fallback: Response) {
+  let resolve!: (response: Response) => void;
+  const promise = new Promise<Response>((done) => {
+    resolve = done;
+  });
+  releases.push(() => resolve(fallback));
+  return { promise, resolve };
+}
+const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+function refreshCapability(reply = async () => json(capabilityBody(true))) {
+  capabilityReply = reply;
+  const loading = loadRuntimeCapabilities(true);
+  capabilityLoads.push(loading);
+  return loading;
+}
+async function withdrawCapability(change: CapabilityWithdrawal) {
+  await refreshCapability(async () =>
+    change === 'read failure'
+      ? json({ error: 'Synthetic capability read unavailable' }, 503)
+      : change === 'malformed'
+        ? json({ capabilities: 'multi_tenant', limits: [] })
+        : json(capabilityBody(false)),
+  );
+}
+function expectWithdrawnOwnership() {
+  expect(screen.queryByRole('dialog')).toBeNull();
+  expect(screen.queryAllByRole('combobox', { name: /^Role for / })).toHaveLength(0);
+  expect(screen.queryByRole('textbox', { name: 'Invite user ID' })).toBeNull();
+  expect(document.body).not.toHaveTextContent('Synthetic capability read unavailable');
+}
 
 function roleFor(userId: string) {
   return screen.getByRole('combobox', { name: `Role for ${userId}` });
@@ -190,6 +240,11 @@ beforeEach(async () => {
   nextWriteStatus = 200;
   ownershipReplyUserID = undefined;
   unexpected = [];
+  releases = [];
+  capabilityLoads = [];
+  capabilityReply = async () => json(capabilityBody(true));
+  healthReply = async () => json({});
+  writeReply = async (response) => response;
   notices.success.mockReset();
   notices.error.mockReset();
   confirmMock.mockReset().mockReturnValue(true);
@@ -199,8 +254,8 @@ beforeEach(async () => {
     const path = String(input);
     const method = init.method ?? 'GET';
     if (method === 'GET') {
-      if (path === '/api/license/runtime-capabilities')
-        return json({ capabilities: ['multi_tenant'], limits: [] });
+      if (path === capabilityPath) return capabilityReply();
+      if (path === '/api/health') return healthReply();
       if (path === orgPath) return json({ id: orgID, displayName, ownerUserId: ownerID, members });
       // Deliberately return a different order from the fixture's identity list.
       if (path === `${orgPath}/members`)
@@ -211,11 +266,13 @@ beforeEach(async () => {
       // Derive all saved fixture changes from the actual path/body, never the
       // identity the test intended. A lost reply may still have applied a write.
       const reply = (body: unknown, empty = false) =>
-        nextWriteStatus === 200
-          ? empty
-            ? new Response(null, { status: 204 })
-            : json(body)
-          : json({ error: 'Synthetic acknowledgement unavailable' }, nextWriteStatus);
+        writeReply(
+          nextWriteStatus === 200
+            ? empty
+              ? new Response(null, { status: 204 })
+              : json(body)
+            : json({ error: 'Synthetic acknowledgement unavailable' }, nextWriteStatus),
+        );
       if (path === `${orgPath}/members` && method === 'POST') {
         const body = JSON.parse(String(init.body));
         const member = members.find((candidate) => candidate.userId === body.userId);
@@ -283,17 +340,226 @@ beforeEach(async () => {
     throw new Error(`Unexpected synthetic organization selection request: ${method} ${path}`);
   });
   vi.stubGlobal('fetch', fetchMock);
-  await loadRuntimeCapabilities(true);
+  await refreshCapability();
 });
 
-afterEach(() => {
+afterEach(async () => {
   cleanup();
+  for (const release of releases) release();
+  await Promise.allSettled(capabilityLoads);
+  await settle();
   syncSessionPresentationPolicy(null);
   clearAuth();
   document.cookie = 'pulse_csrf=; Max-Age=0; Path=/';
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
   expect(unexpected).toEqual([]);
+});
+
+// These are composed-consumer regressions, not a new transfer policy. Hook-only
+// preparation tests cannot prove that capability-return re-renders a fresh
+// dialog/draft, and the older dialog tests replace the capability producer.
+describe('ownership capability boundary through the rendered consent and real transport', () => {
+  it.each(
+    (['row', 'form'] as const).flatMap((origin) =>
+      capabilityWithdrawals.map((change) => ({ origin, change })),
+    ),
+  )(
+    'retires unconfirmed $origin consent across $change and requires a newly reviewed successor',
+    async ({ origin, change }) => {
+      await openPanel();
+      chooseOwnership(origin, people[1]);
+      expect(ownershipDialog().getByText(people[1], { selector: 'strong' })).toBeInTheDocument();
+      expect(writes()).toHaveLength(0);
+
+      await withdrawCapability(change);
+      expectWithdrawnOwnership();
+      await refreshCapability();
+      await expectSavedReread();
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(ownerID).toBe(owner);
+      expect(members).toEqual(originalMembers);
+      expect(writes()).toHaveLength(0);
+      expect(notices.success).not.toHaveBeenCalled();
+      expect(notices.error).not.toHaveBeenCalled();
+
+      chooseOwnership(origin, people[2]);
+      expect(ownershipDialog().getByText(people[2], { selector: 'strong' })).toBeInTheDocument();
+      expect(ownershipDialog().queryByText(people[1], { exact: false })).toBeNull();
+      expect(writes()).toHaveLength(0);
+      fireEvent.click(ownershipDialog().getByRole('button', { name: 'Transfer ownership' }));
+      await waitFor(() => expect(orgReads()).toHaveLength(3));
+      await expectSavedMembers();
+      expectWrite(`${orgPath}/members`, 'POST', { userId: people[2], role: 'owner' });
+      expectSavedOwnership(people[2]);
+      expect(notices.success).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each(
+    (['row', 'form'] as const).flatMap((origin) =>
+      capabilityWithdrawals.map((change) => ({ origin, change })),
+    ),
+  )(
+    'never dispatches confirmed $origin ownership after $change during cold CSRF preparation',
+    async ({ origin, change }) => {
+      await openPanel();
+      document.cookie = 'pulse_csrf=; Max-Age=0; Path=/';
+      const preparation = deferredResponse(json({}, 503));
+      healthReply = () => preparation.promise;
+      chooseOwnership(origin, people[1]);
+      // Observe the real client's promise without replacing its preparation,
+      // cancellation, context or dispatch. Await it, not a guessed delay.
+      const transport = vi.spyOn(apiClient, 'fetch');
+      fireEvent.click(ownershipDialog().getByRole('button', { name: 'Transfer ownership' }));
+      const submitted = transport.mock.results[0].value;
+      await waitFor(() =>
+        expect(fetchMock.mock.calls.filter(([url]) => url === '/api/health')).toHaveLength(1),
+      );
+      expect(writes()).toHaveLength(0);
+
+      await withdrawCapability(change);
+      expectWithdrawnOwnership();
+      await refreshCapability();
+      await expectSavedReread();
+      document.cookie = `pulse_csrf=${csrf}; Path=/`;
+      preparation.resolve(json({}));
+      await Promise.allSettled([submitted]);
+      await settle();
+      expect(writes()).toHaveLength(0);
+      expect(ownerID).toBe(owner);
+      expect(members).toEqual(originalMembers);
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(roleFor(people[1])).toHaveValue('viewer');
+      expect(notices.success).not.toHaveBeenCalled();
+      expect(notices.error).not.toHaveBeenCalled();
+      expectBoundRequests();
+
+      chooseOwnership(origin, people[2]);
+      expect(ownershipDialog().getByText(people[2], { selector: 'strong' })).toBeInTheDocument();
+      fireEvent.click(ownershipDialog().getByRole('button', { name: 'Transfer ownership' }));
+      await waitFor(() => expect(orgReads()).toHaveLength(3));
+      await expectSavedMembers();
+      expectWrite(`${orgPath}/members`, 'POST', { userId: people[2], role: 'owner' });
+      expectSavedOwnership(people[2]);
+    },
+  );
+
+  it.each(
+    (['row', 'form'] as const).flatMap((origin) =>
+      (['success', 'failure'] as const).map((outcome) => ({ origin, outcome })),
+    ),
+  )(
+    'keeps fresh saved ownership and a pending replacement invite after a late $origin $outcome',
+    async ({ origin, outcome }) => {
+      await openPanel();
+      const oldReply = deferredResponse(json({}, 503));
+      let oldAcknowledgement: Response | undefined;
+      writeReply = async (response) => {
+        oldAcknowledgement = response;
+        return oldReply.promise;
+      };
+      chooseOwnership(origin, people[1]);
+      const transport = vi.spyOn(apiClient, 'fetch');
+      fireEvent.click(ownershipDialog().getByRole('button', { name: 'Transfer ownership' }));
+      const submitted = transport.mock.results[0].value;
+      await waitFor(() => expect(writes()).toHaveLength(1));
+      expectWrite(`${orgPath}/members`, 'POST', { userId: people[1], role: 'owner' });
+      const oldSignal = writes()[0][1]?.signal;
+      expect(oldSignal?.aborted).toBe(false);
+
+      await withdrawCapability('disabled');
+      expectWithdrawnOwnership();
+      expect(oldSignal?.aborted).toBe(true);
+      await refreshCapability();
+      await expectSavedReread();
+      // The applied write is recovered by a fresh fixture read, never replayed
+      // or inferred from the old acknowledgement. The previous owner is Admin.
+      expectSavedOwnership(people[1]);
+      expect(notices.success).not.toHaveBeenCalled();
+
+      const replacement = 'new/operator?realm=lab#replacement';
+      const replacementReply = deferredResponse(json({}, 503));
+      let replacementAcknowledgement: Response | undefined;
+      writeReply = async (response) => {
+        replacementAcknowledgement = response;
+        return replacementReply.promise;
+      };
+      fireEvent.input(screen.getByRole('textbox', { name: 'Invite user ID' }), {
+        target: { value: replacement },
+      });
+      fireEvent.change(screen.getByRole('combobox', { name: 'Invite role' }), {
+        target: { value: 'editor' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Invite' }));
+      await waitFor(() => expect(writes()).toHaveLength(2));
+      expect(screen.getByRole('button', { name: 'Invite' })).toBeDisabled();
+
+      oldReply.resolve(outcome === 'success' ? oldAcknowledgement! : json({}, 503));
+      await Promise.allSettled([submitted]);
+      await settle();
+      expect(screen.queryByRole('alert')).toBeNull();
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(roleFor(people[1])).toHaveValue('owner');
+      expect(roleFor(owner)).toHaveValue('admin');
+      expect(screen.getByRole('textbox', { name: 'Invite user ID' })).toHaveValue(replacement);
+      expect(screen.getByRole('combobox', { name: 'Invite role' })).toHaveValue('editor');
+      expect(screen.getByRole('button', { name: 'Invite' })).toBeDisabled();
+      expect(orgReads()).toHaveLength(2);
+      expect(writes()).toHaveLength(2);
+      expect(notices.success).not.toHaveBeenCalled();
+      expect(notices.error).not.toHaveBeenCalled();
+
+      replacementReply.resolve(replacementAcknowledgement!);
+      await waitFor(() => expect(orgReads()).toHaveLength(3));
+      await expectSavedMembers();
+      expect(within(pendingGroup(replacement)).getByText('editor')).toBeInTheDocument();
+      expect(screen.getByRole('textbox', { name: 'Invite user ID' })).toHaveValue('');
+      expect(screen.getByRole('combobox', { name: 'Invite role' })).toHaveValue('viewer');
+      expect(screen.getByRole('button', { name: 'Invite' })).toBeEnabled();
+      expect(writes()).toHaveLength(2);
+      expect(JSON.parse(String(writes()[1][1]?.body))).toEqual({
+        userId: replacement,
+        role: 'editor',
+      });
+      expect(notices.success).toHaveBeenCalledTimes(1);
+      expect(notices.error).not.toHaveBeenCalled();
+      expectBoundRequests();
+    },
+  );
+
+  it.each(['row', 'form'] as const)(
+    'does not recreate %s consent or readers from a superseded capability grant',
+    async (origin) => {
+      await openPanel();
+      chooseOwnership(origin, people[1]);
+      const oldGrant = deferredResponse(json(capabilityBody(false)));
+      const oldRead = refreshCapability(() => oldGrant.promise);
+      await withdrawCapability('disabled');
+      expectWithdrawnOwnership();
+      oldGrant.resolve(json(capabilityBody(true)));
+      await oldRead;
+      await settle();
+      expectWithdrawnOwnership();
+      expect(orgReads()).toHaveLength(1);
+      expect(writes()).toHaveLength(0);
+      expect(ownerID).toBe(owner);
+
+      await refreshCapability();
+      await expectSavedReread();
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(roleFor(people[1])).toHaveValue('viewer');
+      expect(writes()).toHaveLength(0);
+      chooseOwnership(origin, people[2]);
+      expect(ownershipDialog().getByText(people[2], { selector: 'strong' })).toBeInTheDocument();
+      fireEvent.click(ownershipDialog().getByRole('button', { name: 'Transfer ownership' }));
+      await waitFor(() => expect(orgReads()).toHaveLength(3));
+      await expectSavedMembers();
+      expectWrite(`${orgPath}/members`, 'POST', { userId: people[2], role: 'owner' });
+      expectSavedOwnership(people[2]);
+    },
+  );
 });
 
 describe('organization access selections through rendered controls and real transport', () => {
