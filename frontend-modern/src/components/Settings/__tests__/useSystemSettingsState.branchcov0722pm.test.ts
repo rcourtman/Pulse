@@ -678,17 +678,30 @@ describe('useSystemSettingsState branch coverage', () => {
       dispose();
     });
 
-    it('toast the latest-version message and clears the plan when no update is available', async () => {
+    it('reports unknown status and clears the plan when no result is available', async () => {
       mocks.updateStoreUpdateInfoMock.mockReturnValue(null);
       const { hookState, dispose } = mountHook();
       await hookState.checkForUpdates();
       await flushAsync();
       expect(mocks.getUpdatePlanMock).not.toHaveBeenCalled();
       expect(hookState.updatePlan()).toBeNull();
+      expect(mocks.notificationErrorMock).toHaveBeenCalledWith('Could not confirm update status');
+      expect(mocks.notificationSuccessMock).not.toHaveBeenCalled();
+      expect(mocks.updateStoreClearDismissedMock).not.toHaveBeenCalled();
+      dispose();
+    });
+
+    it('reports latest-version success only for a confirmed current result', async () => {
+      mocks.updateStoreUpdateInfoMock.mockReturnValue({
+        available: false,
+        availability: 'up_to_date',
+        latestVersion: '1.0.0',
+      });
+      const { hookState, dispose } = mountHook();
+      await hookState.checkForUpdates();
       expect(mocks.notificationSuccessMock).toHaveBeenCalledWith(
         'You are running the latest version',
       );
-      expect(mocks.updateStoreClearDismissedMock).not.toHaveBeenCalled();
       dispose();
     });
 

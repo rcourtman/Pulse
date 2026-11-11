@@ -173,8 +173,32 @@ func TestCheckForUpdatesWithChannel_NoReleases(t *testing.T) {
 	if info.Available {
 		t.Fatalf("expected no updates for stable channel with only prereleases")
 	}
+	if info.Availability != UpdateUnavailable {
+		t.Fatalf("missing channel release cannot prove currency: %+v", info)
+	}
 	if got := atomic.LoadInt32(&hits); got != 1 {
 		t.Fatalf("expected 1 request, got %d", got)
+	}
+}
+
+func TestPublishedCommunityReleasePreparing(t *testing.T) {
+	withBuildVersion(t, "6.8.0-rc.1")
+	if _, supported := updateReleaseAssetForRuntime("v6.8.0-rc.2"); !supported {
+		t.Skip("community server release archives are Linux-only; exercised on the Linux worker")
+	}
+	server := newReleaseServer(t, []ReleaseInfo{{TagName: "v6.8.0-rc.2", Prerelease: true}}, nil)
+	defer server.Close()
+	t.Setenv("PULSE_UPDATE_SERVER", server.URL)
+	manager := NewManager(&config.Config{UpdateChannel: "rc"})
+	info, err := manager.CheckForUpdatesWithOptions(context.Background(), UpdateCheckOptions{Force: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Availability != UpdatePreparing || info.PreparingVersion != "6.8.0-rc.2" || info.Available || info.DownloadURL != "" {
+		t.Fatalf("published release without this runtime archive must be preparing: %+v", info)
+	}
+	if manager.LastUpdateCheck().Outcome == UpdateCheckOutcomeUpToDate {
+		t.Fatal("preparing release recorded as current")
 	}
 }
 
@@ -287,6 +311,23 @@ func TestForcedUpdateCheckDoesNotReturnCachedResultOnRateLimit(t *testing.T) {
 	}
 	if manager.GetStatus().Status != "error" {
 		t.Fatalf("status=%+v", manager.GetStatus())
+	}
+
+	// An automatic refresh may retain a ready offer, including its cautions,
+	// but must neither mutate the cached warning nor claim a fresh comparison.
+	old.Available = true
+	old.Availability = UpdateAvailable
+	old.Warning = "Review the release notes carefully before updating."
+	manager.cacheTime["stable"] = time.Now().Add(-10 * time.Minute)
+	info, err = manager.CheckForUpdates(context.Background())
+	if err != nil || info == nil || !info.Available || info == old {
+		t.Fatalf("automatic rate-limit fallback: %+v, %v", info, err)
+	}
+	if !strings.Contains(info.Warning, old.Warning) || !strings.Contains(info.Warning, "rate limited") {
+		t.Fatalf("rate-limit fallback replaced the upgrade caution: %s", info.Warning)
+	}
+	if old.Warning != "Review the release notes carefully before updating." {
+		t.Fatal("rate-limit fallback mutated the cached warning")
 	}
 }
 

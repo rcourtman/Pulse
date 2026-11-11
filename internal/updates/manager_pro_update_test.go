@@ -19,14 +19,17 @@ import (
 // signed R2 URLs it hands out: /v1/downloads/pulse-pro returns the manifest,
 // and the artifact/.sshsig endpoints simulate the presigned object URLs.
 type proBrokerFixture struct {
-	t           *testing.T
-	server      *httptest.Server
-	version     string
-	prerelease  bool
-	tarball     []byte
-	sha256Hex   string         // manifest hash; may deliberately mismatch the tarball
-	omitSSHSig  bool           // drop the sshsig_url from the manifest
-	dockerBlock map[string]any // broker docker block; nil for the default digest-pinned one
+	t                 *testing.T
+	server            *httptest.Server
+	version           string
+	prerelease        bool
+	tarball           []byte
+	sha256Hex         string         // manifest hash; may deliberately mismatch the tarball
+	omitSSHSig        bool           // drop the sshsig_url from the manifest
+	dockerBlock       map[string]any // broker docker block; nil for the default digest-pinned one
+	publishedReleases []ReleaseInfo
+	publishedStatus   int
+	publishedCalls    int
 
 	brokerCalls    int
 	tarballCalls   int
@@ -43,6 +46,23 @@ func newProBrokerFixture(t *testing.T, version string, prerelease bool) *proBrok
 	f.sha256Hex = hex.EncodeToString(digest[:])
 
 	mux := http.NewServeMux()
+	mux.HandleFunc("/repos/rcourtman/Pulse/releases", func(w http.ResponseWriter, r *http.Request) {
+		f.publishedCalls++
+		if r.Header.Get("Authorization") != "" || r.Header.Get("X-Pulse-Instance-Fingerprint") != "" {
+			t.Error("private update credentials reached public release discovery")
+		}
+		if f.publishedStatus != 0 && f.publishedStatus != http.StatusOK {
+			w.WriteHeader(f.publishedStatus)
+			return
+		}
+		releases := f.publishedReleases
+		if releases == nil {
+			releases = []ReleaseInfo{{TagName: "v" + f.version, Prerelease: f.prerelease}}
+		}
+		if err := json.NewEncoder(w).Encode(releases); err != nil {
+			t.Errorf("encode published releases: %v", err)
+		}
+	})
 	mux.HandleFunc("/v1/downloads/pulse-pro", func(w http.ResponseWriter, r *http.Request) {
 		f.brokerCalls++
 		if got := r.Header.Get("Authorization"); got != "Bearer pit_live_test" {
@@ -106,6 +126,7 @@ func newProBrokerFixture(t *testing.T, version string, prerelease bool) *proBrok
 	})
 
 	f.server = httptest.NewServer(mux)
+	t.Setenv("PULSE_UPDATE_SERVER", f.server.URL)
 	t.Cleanup(f.server.Close)
 	return f
 }
@@ -153,7 +174,7 @@ func setupProUpdateTest(t *testing.T, currentVersion string) {
 }
 
 // TestCheckForUpdatesProUsesBroker proves the Pro binary's update check reads
-// the license server download broker, never GitHub: the offered version is the
+// the license server download broker for offers: the offered version is the
 // broker's pinned private release and the download URL is the broker intent
 // URL, not a public release asset.
 func TestCheckForUpdatesProUsesBroker(t *testing.T) {
@@ -273,6 +294,84 @@ func TestCheckForUpdatesProUsesBroker(t *testing.T) {
 			t.Fatalf("expected activation guidance in warning, got %q", info.Warning)
 		}
 	})
+}
+
+func TestProUpdatePreparation(t *testing.T) {
+	for _, tc := range []struct {
+		name, channel, current, ready string
+		releases                      []ReleaseInfo
+		publicStatus                  int
+		want                          UpdateAvailability
+		preparing                     string
+		available                     bool
+	}{
+		{"preview delivery behind publication", "rc", "6.8.0-rc.1", "6.8.0-rc.1", []ReleaseInfo{{TagName: "v6.8.0-rc.2", Prerelease: true}}, 0, UpdatePreparing, "6.8.0-rc.2", false},
+		{"stable ignores published preview", "stable", "6.7.0", "6.7.0", []ReleaseInfo{{TagName: "v6.8.0-rc.2", Prerelease: true}, {TagName: "v6.7.0"}}, 0, UpdateUpToDate, "", false},
+		{"stable delivery behind publication", "stable", "6.7.0", "6.7.0", []ReleaseInfo{{TagName: "v6.8.0"}}, 0, UpdatePreparing, "6.8.0", false},
+		{"delivery caught up", "rc", "6.8.0-rc.1", "6.8.0-rc.2", []ReleaseInfo{{TagName: "v6.8.0-rc.2", Prerelease: true}}, 0, UpdateAvailable, "", true},
+		{"installed release is current", "rc", "6.8.0-rc.2", "6.8.0-rc.2", []ReleaseInfo{{TagName: "v6.8.0-rc.2", Prerelease: true}}, 0, UpdateUpToDate, "", false},
+		{"retain an older installable offer", "rc", "6.8.0-beta.1", "6.8.0-rc.1", []ReleaseInfo{{TagName: "v6.8.0-rc.2", Prerelease: true}}, 0, UpdateAvailable, "6.8.0-rc.2", true},
+		{"unreadable publication is not current", "rc", "6.8.0-rc.1", "6.8.0-rc.1", nil, http.StatusServiceUnavailable, UpdateUnavailable, "", false},
+		{"private offer survives publication outage", "rc", "6.8.0-rc.1", "6.8.0-rc.2", nil, http.StatusServiceUnavailable, UpdateAvailable, "", true},
+		{"major upgrade survives publication outage", "rc", "6.8.0-rc.1", "7.0.0-rc.1", nil, http.StatusServiceUnavailable, UpdateAvailable, "", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			setupProUpdateTest(t, tc.current)
+			readyVer, err := ParseVersion(tc.ready)
+			if err != nil {
+				t.Fatal(err)
+			}
+			fixture := newProBrokerFixture(t, tc.ready, readyVer.IsPrerelease())
+			fixture.publishedReleases = tc.releases
+			fixture.publishedStatus = tc.publicStatus
+			manager := NewManager(&config.Config{DataPath: t.TempDir(), UpdateChannel: tc.channel})
+			manager.SetProUpdateCredentialSource(fixture.credentialSource())
+			info, err := manager.CheckForUpdatesWithOptions(context.Background(), UpdateCheckOptions{Force: true})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if info.Availability != tc.want || info.PreparingVersion != tc.preparing || info.Available != tc.available {
+				t.Fatalf("update result = %+v, want %s preparing=%q available=%v", info, tc.want, tc.preparing, tc.available)
+			}
+			encoded, err := json.Marshal(info)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var wire map[string]any
+			if err := json.Unmarshal(encoded, &wire); err != nil {
+				t.Fatal(err)
+			}
+			if wire["availability"] != string(tc.want) {
+				t.Fatalf("availability wire value = %v", wire["availability"])
+			}
+			if tc.preparing != "" && wire["preparingVersion"] != tc.preparing {
+				t.Fatalf("preparingVersion wire value = %v", wire["preparingVersion"])
+			}
+			if fixture.publishedCalls == 0 || fixture.brokerCalls == 0 {
+				t.Fatal("both release publication and private delivery must be checked")
+			}
+			if !tc.available && tc.preparing != "" && (info.DownloadURL != "" || info.DockerUpdate != nil) {
+				t.Fatal("preparing release exposed an install action")
+			}
+			if tc.available && (!strings.Contains(info.DownloadURL, proDownloadBrokerPath) || !strings.Contains(info.DownloadURL, "version=v"+tc.ready)) {
+				t.Fatalf("offer escaped the private broker: %s", info.DownloadURL)
+			}
+			if tc.publicStatus != 0 && tc.available {
+				if !strings.Contains(info.Warning, "pre-release build") || !strings.Contains(info.Warning, "Could not confirm") {
+					t.Fatalf("publication outage replaced the upgrade caution: %s", info.Warning)
+				}
+				if tc.ready == "7.0.0-rc.1" && !strings.Contains(info.Warning, "major version upgrade") {
+					t.Fatalf("publication outage replaced the major upgrade caution: %s", info.Warning)
+				}
+			}
+			if fixture.tarballCalls != 0 || fixture.sshsigCalls != 0 {
+				t.Fatal("a check downloaded an artifact")
+			}
+			if tc.want == UpdatePreparing && manager.LastUpdateCheck().Outcome == UpdateCheckOutcomeUpToDate {
+				t.Fatal("preparing delivery was recorded as up to date")
+			}
+		})
+	}
 }
 
 // TestCheckProUpdatesDockerCommands proves a Docker deployment of the Pro

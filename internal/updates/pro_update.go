@@ -17,17 +17,19 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentidentity"
 	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
+	"github.com/rs/zerolog/log"
 )
 
 // The compiled Pulse Pro binary must never update off the public community
 // releases: the GitHub assets are community builds, so applying one would
 // replace the Pro binary and silently strip Audit, RBAC, Reporting, and SSO.
-// Instead the Pro binary checks and applies updates through the license
+// Pro update offers and installation use the license
 // server's authenticated download broker (GET /v1/downloads/pulse-pro), which
 // returns the pinned private release version plus short-lived signed URLs for
 // the archive, its sha256, and its .sshsig sidecar. The archive is signed with
 // the same pinned pulse-installer key the community release path already
 // verifies, so the Pro path runs at the same trust bar.
+// Separate public version metadata identifies publication awaiting Pro delivery.
 const (
 	proDownloadBrokerPath = "/v1/downloads/pulse-pro"
 
@@ -343,15 +345,17 @@ func (m *Manager) fetchProDownloadManifest(ctx context.Context, creds ProUpdateC
 
 // checkProUpdates is the Pro-binary counterpart to the GitHub release check:
 // it compares the current version against the private release pinned on the
-// download broker. Never touches GitHub.
+// download broker. Public metadata describes announced releases only and must
+// never supply Pro artifacts, commands, credentials, or an apply target.
 func (m *Manager) checkProUpdates(ctx context.Context, channel string, currentInfo *VersionInfo, currentVer *Version) (*UpdateInfo, error) {
 	creds, ok := m.proUpdateCredentials()
 	if !ok {
 		return &UpdateInfo{
+			Availability:   UpdateUnavailable,
 			Available:      false,
 			CurrentVersion: currentInfo.Version,
 			LatestVersion:  currentInfo.Version,
-			Warning:        "Update checks are unavailable: " + errProUpdateNotActivated().Error(),
+			Warning:        "Update checks need an activated license. Open Plans & Billing to activate Pulse Pro.",
 			checkOutcome:   UpdateCheckOutcomeSkipped,
 		}, nil
 	}
@@ -372,6 +376,7 @@ func (m *Manager) checkProUpdates(ctx context.Context, channel string, currentIn
 	// instead of dangling an apply that the channel guard would refuse.
 	if stableChannelRefusesProPin(channel, manifest) && latestVer.IsNewerThan(currentVer) {
 		return &UpdateInfo{
+			Availability:   UpdateUnavailable,
 			Available:      false,
 			CurrentVersion: currentInfo.Version,
 			LatestVersion:  currentInfo.Version,
@@ -387,6 +392,7 @@ func (m *Manager) checkProUpdates(ctx context.Context, channel string, currentIn
 
 	isMajorUpgrade := latestVer.Major > currentVer.Major
 	info := &UpdateInfo{
+		Availability:   UpdateUpToDate,
 		Available:      latestVer.IsNewerThan(currentVer),
 		CurrentVersion: currentInfo.Version,
 		LatestVersion:  strings.TrimPrefix(manifest.Release.Version, "v"),
@@ -402,6 +408,38 @@ func (m *Manager) checkProUpdates(ctx context.Context, channel string, currentIn
 		info.DockerUpdate = proDockerUpdateCommands(manifest)
 	}
 	info.Warning = updateWarning(info.Available, isMajorUpgrade, isPrerelease, currentVer.Major, latestVer.Major)
+	if info.Available {
+		info.Availability = UpdateAvailable
+	}
+
+	// A successful broker read says what this installation can receive, not
+	// whether a newer release has been published. Compare public metadata on
+	// the same channel, retaining any valid private offer while delivery lags.
+	published, err := m.getLatestReleaseForChannel(ctx, channel, currentVer)
+	if err != nil {
+		log.Warn().Err(err).Msg("Could not verify published release during Pro update check")
+		if !info.Available {
+			info.Availability = UpdateUnavailable
+			info.checkOutcome = updateCheckErrorOutcome(err)
+		}
+		info.Warning = strings.TrimSpace(info.Warning + " Could not confirm whether a newer release has been published. Try Check Now again.")
+		return info, nil
+	}
+	publishedVer, err := ParseVersion(published.TagName)
+	if err != nil {
+		return nil, withUpdateCheckOutcome(UpdateCheckOutcomeMetadataError, fmt.Errorf("parse published release version: %w", err))
+	}
+	if publishedVer.IsNewerThan(currentVer) && publishedVer.IsNewerThan(latestVer) {
+		info.PreparingVersion = strings.TrimPrefix(published.TagName, "v")
+		if !info.Available {
+			info.Availability = UpdatePreparing
+			info.checkOutcome = UpdateCheckOutcomeNoRelease
+			// The intent URL is never a public download, but there is no newer
+			// private offer to apply while this release is being prepared.
+			info.DownloadURL = ""
+			info.DockerUpdate = nil
+		}
+	}
 	return info, nil
 }
 

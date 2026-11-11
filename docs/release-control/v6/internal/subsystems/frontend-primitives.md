@@ -20,6 +20,22 @@
 
 ## Purpose
 
+### Updates distinguish publication from delivery
+
+The shared `updatesPresentation.ts` model owns preparing, ready, confirmed
+current, checking and unknown/error wording for Settings and manual checks.
+Only an explicit `up_to_date` response permits latest-version success. A
+published release with pending runtime delivery names `preparingVersion` and
+says its update is still being prepared. Unknown, failed and old negative
+responses must not fall through to a green currency claim. The update store
+persists the additive fields, refreshes preparing results after five minutes,
+and refreshes legacy negative cache instead of treating it as verified.
+An existing installable offer can coexist with a newer preparing version.
+The current source must be exercised at desktop, intermediate and phone widths,
+including manual checks, reload, preparation-to-ready and error transitions,
+keyboard focus and disabled/loading states. The panel, store and shared
+presentation tests own these transitions; the browser receipt binds final bytes.
+
 ### Shared delivery warnings distinguish unavailable status from retained failures
 
 `AlertDeliveryHealthCard` keeps review and refresh available when notification
@@ -8133,7 +8149,7 @@ notice never makes the changelog undiscoverable. Development and source-build
 identities must not render that link as if they named a published release.
 
 The update verdict is honest about its age. The frontend serves the update
-verdict from a 24-hour localStorage cache, so the panel's "Up to date" state
+verdict normally from a 24-hour localStorage cache, so the panel's "Up to date" state
 must render the age of the check it came from rather than reading as a live
 comparison (#1601). `frontend-modern/src/stores/updates.ts` exposes
 `lastCheckedAt`, the epoch milliseconds of the check backing the currently

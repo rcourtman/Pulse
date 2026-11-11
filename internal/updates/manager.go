@@ -57,17 +57,30 @@ type ReleaseInfo struct {
 	Assets      []ReleaseAsset `json:"assets"`
 }
 
-// UpdateInfo represents available update information
+// UpdateAvailability separates a completed release comparison from an
+// installable offer. A published version can precede delivery to this runtime.
+type UpdateAvailability string
+
+const (
+	UpdateAvailable   UpdateAvailability = "available"
+	UpdateUpToDate    UpdateAvailability = "up_to_date"
+	UpdatePreparing   UpdateAvailability = "preparing"
+	UpdateUnavailable UpdateAvailability = "unavailable"
+)
+
+// UpdateInfo represents available update information.
 type UpdateInfo struct {
-	Available      bool      `json:"available"`
-	CurrentVersion string    `json:"currentVersion"`
-	LatestVersion  string    `json:"latestVersion"`
-	ReleaseNotes   string    `json:"releaseNotes"`
-	ReleaseDate    time.Time `json:"releaseDate,omitzero"`
-	DownloadURL    string    `json:"downloadUrl"`
-	IsPrerelease   bool      `json:"isPrerelease"`
-	IsMajorUpgrade bool      `json:"isMajorUpgrade"`
-	Warning        string    `json:"warning,omitempty"`
+	Availability     UpdateAvailability `json:"availability"`
+	PreparingVersion string             `json:"preparingVersion,omitempty"`
+	Available        bool               `json:"available"`
+	CurrentVersion   string             `json:"currentVersion"`
+	LatestVersion    string             `json:"latestVersion"`
+	ReleaseNotes     string             `json:"releaseNotes"`
+	ReleaseDate      time.Time          `json:"releaseDate,omitzero"`
+	DownloadURL      string             `json:"downloadUrl"`
+	IsPrerelease     bool               `json:"isPrerelease"`
+	IsMajorUpgrade   bool               `json:"isMajorUpgrade"`
+	Warning          string             `json:"warning,omitempty"`
 	// DockerUpdate carries digest-pinned image update commands from the
 	// license server download broker. Only set for Docker deployments of the
 	// compiled Pro binary, which cannot self-update in a container and must
@@ -427,6 +440,7 @@ func (m *Manager) CheckForUpdatesWithOptions(ctx context.Context, options Update
 	// Skip update check for source builds
 	if currentInfo.IsSourceBuild {
 		info := &UpdateInfo{
+			Availability:   UpdateUnavailable,
 			Available:      false,
 			CurrentVersion: currentInfo.Version,
 			LatestVersion:  currentInfo.Version,
@@ -450,9 +464,8 @@ func (m *Manager) CheckForUpdatesWithOptions(ctx context.Context, options Update
 		return nil, fmt.Errorf("failed to parse current version: %w", err)
 	}
 
-	// The compiled Pro binary checks the license server download broker, never
-	// GitHub: the public release assets are community builds, and offering one
-	// here would set up the silent Pro→community downgrade.
+	// Pro offers and applies only broker artifacts. Public metadata is read
+	// separately to distinguish pending delivery from an up-to-date install.
 	if edition.IsPro() {
 		info, proErr := m.checkProUpdates(ctx, channel, currentInfo, currentVer)
 		if proErr != nil {
@@ -465,9 +478,9 @@ func (m *Manager) CheckForUpdatesWithOptions(ctx context.Context, options Update
 			outcome = info.checkOutcome
 		}
 		m.recordUpdateCheck(channel, effectiveChannel, outcome, info.Available)
-		// A missing activation can be repaired without restarting Pulse. Do not
-		// cache its unavailable result across the next credentialed check.
-		if useCache && info.checkOutcome != UpdateCheckOutcomeSkipped {
+		// Activation and publication checks can recover without restarting.
+		// Do not retain an unavailable result across the next check.
+		if useCache && info.Availability != UpdateUnavailable {
 			m.statusMu.Lock()
 			m.checkCache[channel] = info
 			m.cacheTime[channel] = time.Now()
@@ -478,6 +491,10 @@ func (m *Manager) CheckForUpdatesWithOptions(ctx context.Context, options Update
 		if info.Available {
 			status = "available"
 			message = fmt.Sprintf("Update available: %s", info.LatestVersion)
+		} else if info.Availability == UpdatePreparing {
+			message = fmt.Sprintf("Update %s is still being prepared", info.PreparingVersion)
+		} else if info.Availability == UpdateUnavailable {
+			message = "Could not confirm update status"
 		}
 		m.publishCheckStatus(statusTicket, status, 100, message)
 		return info, nil
@@ -500,11 +517,17 @@ func (m *Manager) CheckForUpdatesWithOptions(ctx context.Context, options Update
 				m.statusMu.RUnlock()
 				if hasCached && cachedInfo != nil {
 					m.publishCheckStatus(statusTicket, "idle", 0, "Using cached update info (GitHub rate limit)")
-					return cachedInfo, nil
+					retained := *cachedInfo
+					if !retained.Available {
+						retained.Availability = UpdateUnavailable
+					}
+					retained.Warning = strings.TrimSpace(retained.Warning + " Could not refresh update status because the release service is rate limited. Try Check Now again shortly.")
+					return &retained, nil
 				}
 			}
 
 			info := &UpdateInfo{
+				Availability:   UpdateUnavailable,
 				Available:      false,
 				CurrentVersion: currentInfo.Version,
 				LatestVersion:  currentInfo.Version,
@@ -521,6 +544,8 @@ func (m *Manager) CheckForUpdatesWithOptions(ctx context.Context, options Update
 			// No releases available for this channel - return "no update available"
 			m.recordUpdateCheck(channel, effectiveChannel, UpdateCheckOutcomeNoRelease, false)
 			info := &UpdateInfo{
+				Availability:   UpdateUnavailable,
+				Warning:        "No published release could be found for this update channel. Try Check Now again later.",
 				Available:      false,
 				CurrentVersion: currentInfo.Version,
 				LatestVersion:  currentInfo.Version,
@@ -568,6 +593,7 @@ func (m *Manager) CheckForUpdatesWithOptions(ctx context.Context, options Update
 	isPrerelease := release.Prerelease || latestVer.IsPrerelease()
 
 	info := &UpdateInfo{
+		Availability:   UpdateUpToDate,
 		Available:      available,
 		CurrentVersion: currentInfo.Version,
 		LatestVersion:  strings.TrimPrefix(release.TagName, "v"),
@@ -579,11 +605,21 @@ func (m *Manager) CheckForUpdatesWithOptions(ctx context.Context, options Update
 	}
 
 	info.Warning = updateWarning(info.Available, isMajorUpgrade, isPrerelease, currentVer.Major, latestVer.Major)
+	if info.Available {
+		info.Availability = UpdateAvailable
+	}
 	checkOutcome := availabilityOutcome(info.Available)
 	if latestVer.IsNewerThan(currentVer) && downloadURL == "" {
 		// Metadata for a newer release without this binary's exact archive is
 		// not an offer and is not evidence that the install is up to date.
 		checkOutcome = UpdateCheckOutcomeMetadataError
+		if _, supported := updateReleaseAssetForRuntime(release.TagName); supported {
+			info.Availability = UpdatePreparing
+			info.PreparingVersion = info.LatestVersion
+		} else {
+			info.Availability = UpdateUnavailable
+			info.Warning = "Release updates are not available for this server platform."
+		}
 	}
 	m.recordUpdateCheck(channel, effectiveChannel, checkOutcome, info.Available)
 
@@ -600,6 +636,8 @@ func (m *Manager) CheckForUpdatesWithOptions(ctx context.Context, options Update
 	if info.Available {
 		status = "available"
 		message = fmt.Sprintf("Update available: %s", info.LatestVersion)
+	} else if info.Availability == UpdatePreparing {
+		message = fmt.Sprintf("Update %s is still being prepared", info.PreparingVersion)
 	}
 	m.publishCheckStatus(statusTicket, status, 100, message)
 

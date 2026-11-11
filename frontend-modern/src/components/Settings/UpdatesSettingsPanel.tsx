@@ -8,6 +8,8 @@ import {
 } from '@/components/shared/SelectionCardGroup';
 import RefreshCw from 'lucide-solid/icons/refresh-cw';
 import CheckCircle from 'lucide-solid/icons/check-circle';
+import Clock from 'lucide-solid/icons/clock';
+import CircleHelp from 'lucide-solid/icons/circle-help';
 import ArrowRight from 'lucide-solid/icons/arrow-right';
 import Package from 'lucide-solid/icons/package';
 import type { UpdateInfo, VersionInfo, UpdatePlan } from '@/api/updates';
@@ -29,6 +31,8 @@ import {
   getUpdateCheckActionLabel,
   formatUpdateReleaseDate,
   getUpdateAvailabilityHeading,
+  getUpdateAvailabilityState,
+  getUpdatePreparationDescription,
   getUpdateBuildBadges,
   getUpdateCheckedLabel,
   getUpdateCheckModeLabel,
@@ -56,6 +60,12 @@ export interface UpdatesSettingsPanelProps {
 
 export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props) => {
   const now = useRelativeTimeNow();
+  const availability = () =>
+    getUpdateAvailabilityState(props.updateInfo(), {
+      sourceBuild: props.versionInfo()?.isSourceBuild,
+      checking: props.checkingForUpdates(),
+      error: updateStore.lastError(),
+    });
   const autoUpdateTitleId = `settings-updates-${createUniqueId()}-auto-update-title`;
   const latestVersion = () => props.updateInfo()?.latestVersion;
   const dockerImageTag = () => buildDockerImageTag(latestVersion());
@@ -158,7 +168,7 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                       <ArrowRight class="w-5 h-5" />
                     </div>
                     <span class="text-xs font-semibold text-green-700 dark:text-green-300 uppercase tracking-wide">
-                      {getUpdatePrimaryStatusLabel(true)}
+                      {getUpdatePrimaryStatusLabel('available')}
                     </span>
                   </div>
                 </div>
@@ -182,7 +192,21 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                   >
                     <Show
                       when={props.updateInfo()?.available}
-                      fallback={<CheckCircle class="w-5 h-5 text-muted" />}
+                      fallback={
+                        <Show
+                          when={availability() === 'preparing'}
+                          fallback={
+                            <Show
+                              when={availability() === 'up_to_date'}
+                              fallback={<CircleHelp class="w-5 h-5 text-muted" />}
+                            >
+                              <CheckCircle class="w-5 h-5 text-muted" />
+                            </Show>
+                          }
+                        >
+                          <Clock class="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                        </Show>
+                      }
                     >
                       <CheckCircle class="w-5 h-5 text-green-600 dark:text-green-400" />
                     </Show>
@@ -196,7 +220,7 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                       fallback={
                         <>
                           <p class="mt-1 text-lg font-bold text-base-content">
-                            {getUpdatePrimaryStatusLabel(false, props.versionInfo()?.isSourceBuild)}
+                            {getUpdatePrimaryStatusLabel(availability())}
                           </p>
                           <Show when={!props.versionInfo()?.isSourceBuild}>
                             <p class="mt-0.5 text-xs text-muted">
@@ -214,6 +238,14 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                           Released {formatUpdateReleaseDate(props.updateInfo()?.releaseDate)}
                         </p>
                       </Show>
+                    </Show>
+                    <Show when={getUpdatePreparationDescription(props.updateInfo())}>
+                      <p class="mt-2 text-sm text-base-content" role="status">
+                        {getUpdatePreparationDescription(props.updateInfo())}
+                      </p>
+                    </Show>
+                    <Show when={availability() === 'unavailable' && props.updateInfo()?.warning}>
+                      <p class="mt-2 text-sm text-muted">{props.updateInfo()?.warning}</p>
                     </Show>
                   </div>
                 </div>

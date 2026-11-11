@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "base_sha": "12705a44e74465d2ae453f4c9ee78694ecbed5f3",
+  "verified_at": "2026-11-11T01:08:37Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/api/updates.ts",
+    "frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx",
+    "frontend-modern/src/components/Settings/useSystemSettingsState.ts",
+    "frontend-modern/src/stores/updates.ts",
+    "frontend-modern/src/utils/updatesPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/api/updates.ts": "e7967ccb65ef6d63aa7ac7ad016c237ea6eabded1f57c711391c0d58f6f988cf",
+    "frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx": "29d93ac18bffd5d53f7e19b953d1c2425b5531e0c2c407cba0b3d69bf6ef8e06",
+    "frontend-modern/src/components/Settings/useSystemSettingsState.ts": "823535b4a2c7478254417da69c1c11dcde8884ac9af21b403f1226698ccd2e7a",
+    "frontend-modern/src/stores/updates.ts": "07615e554d27dbf43f6afb9db598155229c6f9f381f21c387d9493a648c8c275",
+    "frontend-modern/src/utils/updatesPresentation.ts": "a6e2e12daf302bd93bc9f69a64a471627d7bccac86b77b8034021fc5f96eaf2f"
+  },
+  "routes": [
+    "/settings/system-updates"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 860,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Actual current-source native server and production frontend, Chromium 151.0.7922.10. Safe version/release/check/plan HTTP fixtures exercise publication ahead of runtime delivery, ready offers, an older ready offer with a newer release preparing, confirmed current, failed refresh after current, unavailable and legacy negative responses, and source builds. Native authentication, settings persistence and application routing remain real. This does not establish installed-customer recovery.",
+    "All six viewport/theme combinations pass in light and dark. Preparation shows its version, an amber clock and informational feedback without latest-version success or an install action. Current status alone produces latest-version success. Failed refresh withdraws the old current verdict. Source builds disable checking. The final backend rebuild was followed by a complete matrix repeat, adding a ready major/prerelease offer whose existing caution and publication-outage warning must both remain visible. Six representative final screenshots were inspected across desktop, intermediate and phone states for wrapping, notices and controls, including that combined warning. Earlier focus and state captures were also inspected against the identical frontend source hashes."
+  ],
+  "interactions": [
+    "Check Now by pointer and Enter, visible keyboard focus and hover, disabled checking while a request is held, informational notification dismissal, preparation retained on reload, five-minute cache expiry refreshing to ready, ready offer retained alongside a newer preparing version, current-to-error transition and no stale success.",
+    "Save Stable, verify native persisted settings and reload, then save Preview and verify a fresh preparing comparison and native persisted rc channel. Source-build reload disables checking. The driver waits for settings initialization before changing a reloaded channel. All six combinations finish with no page errors, no horizontal overflow and zero apply requests. Browser and proof server are closed after verification."
+  ]
+}

@@ -1,7 +1,12 @@
 import { apiFetchJSON } from '@/utils/apiClient';
 import type { UpdateChannel } from '@/types/config';
 
+export type UpdateAvailability = 'available' | 'up_to_date' | 'preparing' | 'unavailable';
+
 export interface UpdateInfo {
+  // Absent in older cached responses. Absence does not prove "up to date".
+  availability?: UpdateAvailability;
+  preparingVersion?: string;
   available: boolean;
   currentVersion: string;
   latestVersion: string;
