@@ -55,6 +55,8 @@ const expectWrite = (
   body: object,
   binding: OrganizationAccessRequestOptions,
 ) => {
+  // Deep equality alone cannot distinguish otherwise identical AbortSignals.
+  expect(writes()[index][1]?.signal).toBe(binding.signal);
   expect(writes()[index]).toEqual([
     path,
     {
