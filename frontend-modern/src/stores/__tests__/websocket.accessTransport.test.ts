@@ -149,7 +149,11 @@ beforeEach(async () => {
   releaseResponses = [];
   dispose = () => {};
   fetchMock.mockReset().mockRejectedValue(new Error('Unexpected extra HTTP request'));
-  vi.stubGlobal('fetch', fetchMock);
+  // Snapshot at dispatch: the client reuses and updates its header object
+  // for CSRF retries, but the first HTTP request already carried old values.
+  vi.stubGlobal('fetch', (url: RequestInfo | URL, options?: RequestInit) =>
+    fetchMock(url, { ...options, headers: { ...(options?.headers as Record<string, string>) } }),
+  );
   vi.stubGlobal('WebSocket', SyntheticSocket);
   sessionStorage.clear();
   localStorage.clear();
@@ -239,10 +243,6 @@ describe('monitoring access across the real HTTP client and socket store', () =>
       await expect(refresh()).resolves.toBe(false);
       expectAlerts(known ? [knownAlert] : [], known ? 'ready' : 'unavailable');
       expectRequests(csrf ? [org, org] : [org], csrf ? 'synthetic-refreshed-csrf' : undefined);
-      if (csrf)
-        expect(
-          (fetchMock.mock.calls[1][1]?.headers as Record<string, string>)['X-CSRF-Token'],
-        ).toBe('synthetic-refreshed-csrf');
       expect(storageSnapshot(sessionStorage)).toEqual(before);
       expectSavedAuthority(org);
       expect(sockets).toHaveLength(org === 'north' ? 1 : 2);
