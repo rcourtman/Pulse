@@ -1132,8 +1132,12 @@ The `cmd/pulse-agent/main.go` flag loader keeps `PULSE_TOKEN` separate from an
 explicit `--token` so an environment value cannot shadow `--token-file`. A
 selected unreadable or empty credential file stops startup without disclosing
 the file path or contents and without substituting environment/state authority.
-Non-empty direct tokens retain first priority; implicit token-optional startup
-and enrolled runtime-token restart remain supported. Opaque credential contents
+Non-empty direct tokens retain first priority. Implicit token-optional startup
+still accepts a missing or readable-empty instance token file, but another read
+failure stops configuration loading before any module receives an empty
+credential. Its static correction hint discloses neither the saved path, file
+contents nor nested filesystem error. Unselected implicit files are not read,
+and enrolled runtime-token restart remains supported. Opaque credential contents
 are not interpreted as shell assignments or unquoted on the operator's behalf.
 
 Actual flag-loading/error controls are `TestLoadConfigTokenSources` and
@@ -1143,6 +1147,13 @@ failure, no environment credential use, no token in agent logs, preserved
 monitoring-only scopes/commands and ordinary process identity continuity.
 Neither this local journey nor a credential's inventory entry establishes
 authentication or recovery of an unobserved installed agent.
+
+`TestResolveTokenImplicitFileReadStates` and
+`TestLoadConfigRejectsUnreadableImplicitToken` exercise safe error classification
+and real filesystem read failures without replacing saved state.
+`TestResolveTokenDoesNotReadUnselectedImplicitFile` and
+`TestLoadConfigKnownImplicitTokenStates` retain source precedence, token-optional
+startup, enrolled restart, identity, TLS verification and command ceilings.
 
 ### Infrastructure credentials remain within the configured HTTP origin
 

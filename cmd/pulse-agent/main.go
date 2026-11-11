@@ -1799,13 +1799,16 @@ func resolveTokenInternal(tokenFlag, tokenFileFlag, envToken, stateDir string, r
 	if strings.TrimSpace(stateDir) == "" {
 		tokenFile = defaultTokenFilePath()
 	}
-	if content, err := readFile(tokenFile); err == nil {
-		if t := strings.TrimSpace(string(content)); t != "" {
-			return t, nil
+	content, err := readFile(tokenFile)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return "", nil
 		}
+		// Token-optional startup does not make an unreadable saved credential
+		// absent. Keep the error actionable without exposing its path or contents.
+		return "", errors.New("cannot read saved API token; check that token in the configured state directory is readable by the agent service")
 	}
-
-	return "", nil
+	return strings.TrimSpace(string(content)), nil
 }
 
 // initModuleWithRetry attempts to initialize an agent module with exponential
