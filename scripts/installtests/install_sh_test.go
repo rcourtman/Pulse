@@ -2201,6 +2201,19 @@ func TestWriteTrueNASBootstrapScriptUsesCanonicalRenderer(t *testing.T) {
 	}
 }
 
+func TestTrueNASBootstrapRunsStandalone(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix bootstrap controls; no native FreeBSD acceptance is claimed")
+	}
+	runParallelPythonFixtureControls(t, repoFile("scripts", "tests", "test_truenas_bootstrap.py"), "TrueNASBootstrapTest", []string{
+		"test_core_bootstrap_is_self_contained_and_confirms_running",
+		"test_core_failed_phases_cannot_claim_startup_or_continue",
+		"test_core_delayed_status_has_a_finite_grace_period",
+		"test_missing_persistent_inputs_stop_before_manager_mutation",
+		"test_scale_restart_success_and_failure_still_propagate",
+	}, 30*time.Second)
+}
+
 func TestInstallSHUsesCanonicalQNAPBootstrapRenderer(t *testing.T) {
 	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
 	if err != nil {
