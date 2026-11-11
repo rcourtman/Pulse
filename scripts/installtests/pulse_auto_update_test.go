@@ -253,15 +253,23 @@ func TestAutoUpdateServiceDeadlines(t *testing.T) {
 	}, 30*time.Second, "PULSE_AUTO_UPDATER_UNDER_TEST="+repoFile("scripts", "pulse-auto-update.sh"))
 }
 
-// Keep the full real-sink matrix mandatory, but give it its own existing-size
-// bound rather than exhausting the service-state suite's manager deadlines.
+// Every real-sink transaction keeps its own existing deadline. Twelve
+// independent state/failure cases must not consume one cumulative Python bound
+// on native platforms. Keep the full stream and all cases mandatory; discovery
+// still admits at most Go's existing parallel budget and rejects skips.
 func TestAutoUpdateLogSinkFailures(t *testing.T) {
-	runParallelPythonFixtureControls(t, repoFile("scripts", "tests", "test_auto_update_service_state.py"), "UpdateLogSinks", []string{
+	required := []string{
 		"test_logger_double_keeps_complete_argument_frames_and_exit_sequence",
 		"test_real_log_retains_each_sink_failure_in_conditional_calls",
 		"test_real_logger_deadline_preserves_stdout_exit_and_owned_cleanup",
-		"test_real_logger_failure_drains_installer_and_preserves_recovery",
-	}, 45*time.Second, "PULSE_AUTO_UPDATER_UNDER_TEST="+repoFile("scripts", "pulse-auto-update.sh"))
+	}
+	for _, state := range []string{"active", "inactive"} {
+		for _, failure := range []string{"success", "first_failure", "consecutive_failures", "final_failure", "timeout_failure", "kill_failure"} {
+			required = append(required, fmt.Sprintf("test_real_logger_%s_%s", state, failure))
+		}
+	}
+	runParallelPythonFixtureControls(t, repoFile("scripts", "tests", "test_auto_update_service_state.py"), "UpdateLogSinks", required,
+		45*time.Second, "PULSE_AUTO_UPDATER_UNDER_TEST="+repoFile("scripts", "pulse-auto-update.sh"))
 }
 
 // A real owned process retains its old executable after its disk path changes.
