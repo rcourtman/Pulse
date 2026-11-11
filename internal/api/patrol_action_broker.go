@@ -210,21 +210,35 @@ func (b *patrolActionBroker) commandsDisabledHost(resourceID string) *aicontract
 }
 
 // guestActionsUnavailable reports the guest actions the executor refused
-// because no action runner is connected on the guest's node. It reads the
-// executor's own refusals, so it cannot claim a runner is missing when
-// planning would accept the action.
+// because of how the guest's node is set up: no action runner for stop,
+// shutdown or reboot, or no agent that can start a guest. It reads the
+// executor's own refusals and repeats their words, so it cannot claim
+// something is missing when planning would accept the action. A node whose
+// agent has commands off is not reported here: the catalog's commands fact
+// carries that, with its step.
 func (b *patrolActionBroker) guestActionsUnavailable(resourceID string, refused []unified.ResourceActionReadiness) *aicontracts.GuestActionsUnavailable {
 	var actions []string
+	reason, startReason := "", ""
 	for _, refusal := range refused {
-		if refusal.ReasonCode == actionlifecycle.ReasonCodeActionRunnerUnavailable && strings.TrimSpace(refusal.Name) != "" {
-			actions = append(actions, strings.TrimSpace(refusal.Name))
+		name := strings.TrimSpace(refusal.Name)
+		if name == "" || !actionlifecycle.IsProxmoxGuestActionUnavailableReasonCode(refusal.ReasonCode) {
+			continue
+		}
+		actions = append(actions, name)
+		if reason == "" {
+			reason = strings.TrimSpace(refusal.Reason)
+		}
+		if name == "start" {
+			startReason = strings.TrimSpace(refusal.Reason)
 		}
 	}
 	if len(actions) == 0 {
 		return nil
 	}
 	sort.Strings(actions)
-	fact := &aicontracts.GuestActionsUnavailable{Actions: actions}
+	// A refused start is why a run on a dead guest hands back, so its
+	// sentence is the one the fact carries.
+	fact := &aicontracts.GuestActionsUnavailable{Actions: actions, Reason: firstNonEmpty(startReason, reason)}
 	if b.readState != nil {
 		if readState, err := b.readState(b.orgID); err == nil && readState != nil {
 			if resource := unified.ResolveResourceContext(readState, resourceID).Resource; resource != nil {
@@ -233,7 +247,6 @@ func (b *patrolActionBroker) guestActionsUnavailable(resourceID string, refused 
 			}
 		}
 	}
-	fact.Reason = actionlifecycle.ProxmoxGuestActionsUnavailableReason(fact.NodeName)
 	return fact
 }
 

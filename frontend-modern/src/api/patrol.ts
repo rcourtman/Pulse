@@ -291,8 +291,8 @@ export interface Investigation {
   commands_disabled?: InvestigationCommandsDisabled;
   /**
    * Written by Pulse, not the model: the finding's resource is a Proxmox guest
-   * Pulse could not start, stop or restart because its node has no connected
-   * action runner. A finished run keeps it only when it handed the problem back.
+   * and Pulse refused an action it declares because of how its node is set up.
+   * A finished run keeps it only when it handed the problem back.
    */
   guest_actions_unavailable?: InvestigationGuestActionsUnavailable;
 }

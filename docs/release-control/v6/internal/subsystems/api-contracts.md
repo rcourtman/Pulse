@@ -6099,6 +6099,33 @@ auto-register mutation boundary.
 
 ## Current State
 
+### Guest start has its own refusal codes and a second route
+
+`proxmoxGuestActionExecutor` routes a guest action to the node's action
+runner, or, for `start` only, to the node's own collector command session
+when that session reported `proxmox_guest_start_version`. The server decides
+from that report and never from an agent version. Stop, shutdown and reboot
+without a runner keep `action_runner_unavailable`, now with a sentence that
+says the install option covers starting only. A refused start carries one of
+`host_commands_disabled`, `guest_start_agent_not_connected`,
+`guest_start_agent_update_required`, `guest_start_unavailable` or
+`operation_receipt_unsupported`, each with its own sentence from
+`internal/actionlifecycle/command_access.go`.
+
+`guest_actions_unavailable` on the catalog and the stored run now repeats the
+executor's own sentence for whichever of those set-up refusals applies, and
+uses the start's sentence when a start is among them. A commands-off node is
+not reported there: `commands_disabled` carries it with its step.
+
+`agentexec.Server.GetProxmoxGuestStartSessionsForOrganization` lists
+collector command sessions with what each reported. It never lists a runner.
+The dispatch gate re-checks the carrying session and allows a collector
+session `start` and nothing else.
+
+A start a collector session ran is confirmed only by Pulse's own Proxmox API
+observation. The agent's readback stays on the result as evidence with
+`independent_observation_required`.
+
 ### A guest action refused for want of a runner says so in plain words
 
 `action_runner_unavailable` is named once in

@@ -2271,6 +2271,26 @@ database grew past it. `TestSQLiteLoggerUsesSharedPageCacheBound` and
 
 ## Current State
 
+### The commands path carries one typed guest action
+
+A collector installed with command execution may now start a stopped Proxmox
+VM or container after an admin approves. Nothing is enabled by default, the
+installer is unchanged and no credential gains a scope. The node opts in by
+the same install choice as before, and that node already accepts a root shell
+from Pulse under the command policy.
+
+The boundary that holds: stop, shutdown and reboot stay with the action
+runner and are refused on a collector session by the server gate, by the
+executor and by the agent. A monitoring-only collector holds no command
+session and is refused. The start runs in the runner's containment with a
+durable receipt, and only Pulse's own Proxmox API read confirms it, so a
+collector that answers "started" without starting is not believed.
+
+On plain HTTP the command channel is neither encrypted nor signed, and the
+collector credential crosses it in clear text. That was already true and a
+start adds nothing to it. `docs/AGENT_SECURITY.md` says so where it describes
+the legacy/full-trust profile.
+
 Valid-user organization withdrawal is authorization denial, not expired login:
 protected synchronous results use403/access_denied and monitoring sockets4403.
 Credential withdrawal still uses401/1008, evaluated first. Handler-private bytes

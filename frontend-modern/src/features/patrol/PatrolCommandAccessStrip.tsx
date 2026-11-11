@@ -62,10 +62,11 @@ function NameList(props: { names: PatrolCommandAccessHost[]; label: string }) {
  * install with commands off. The first row names the hosts Patrol can only
  * watch and carries the one step that changes it.
  *
- * Starting, stopping and restarting a Proxmox guest is separate: it runs only
- * through an action runner on the node, and ticking the install option does
- * not cover it. The second row names the nodes where Pulse cannot do that. It
- * has no button, because no single step connects a runner.
+ * Starting a stopped Proxmox guest runs through the node's own Pulse agent,
+ * after an admin approves it. The second row names the nodes where the server
+ * refuses that because of how the node is set up: no agent there accepts
+ * commands, or the agent is too old or cannot run a start. A node whose agent
+ * has commands off is in the first row, whose step also covers this.
  *
  * Both rows are absent in Watch only, which never reads a host or proposes a
  * fix, and each is absent when it has nothing to name.
@@ -79,7 +80,7 @@ export function PatrolCommandAccessStrip(props: {
   const guestSummary = createMemo(() => buildPatrolGuestActionAccessSummary(resources()));
   const needsAccess = createMemo(() => patrolModeNeedsCommandAccess(props.autonomyLevel));
   const visible = createMemo(() => needsAccess() && summary().commandsOff.length > 0);
-  const guestVisible = createMemo(() => needsAccess() && guestSummary().noRunner.length > 0);
+  const guestVisible = createMemo(() => needsAccess() && guestSummary().cannotStart.length > 0);
 
   return (
     <>
@@ -133,22 +134,23 @@ export function PatrolCommandAccessStrip(props: {
                 class="h-3.5 w-3.5 shrink-0 text-muted transition-transform group-open:rotate-90"
                 aria-hidden="true"
               />
-              <span class="font-medium text-base-content">Can't start or stop guests</span>
+              <span class="font-medium text-base-content">Can't start guests</span>
               <MetadataBadge tone="neutral" size="xs" shape="pill">
-                {guestSummary().noRunner.length} of {guestSummary().total} Proxmox{' '}
-                {guestSummary().total === 1 ? 'node' : 'nodes'}
+                {guestSummary().cannotStart.length} Proxmox{' '}
+                {guestSummary().cannotStart.length === 1 ? 'node' : 'nodes'}
               </MetadataBadge>
-              <NamePreview names={guestSummary().noRunner} />
+              <NamePreview names={guestSummary().cannotStart} />
             </summary>
             <div class="space-y-2 pb-1 pt-2">
               <NameList
-                names={guestSummary().noRunner}
-                label="Proxmox nodes with no action runner"
+                names={guestSummary().cannotStart}
+                label="Proxmox nodes where Pulse cannot start guests"
               />
               <p class="max-w-3xl text-xs leading-5 text-muted">
-                No Pulse action runner is connected on these nodes, so Pulse cannot start, stop or
-                restart their guests. Patrol tells you when a guest needs it, and you do it in
-                Proxmox. "{getUnifiedAgentCommandAccessOptionLabel()}" does not cover guest actions.
+                Pulse cannot start a stopped guest on these nodes. Patrol tells you when a guest
+                needs it, and you start it in Proxmox. To let Pulse start one after you approve it,
+                the node needs an up-to-date Pulse agent installed with "
+                {getUnifiedAgentCommandAccessOptionLabel()}" ticked.
               </p>
             </div>
           </details>

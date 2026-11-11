@@ -108,6 +108,41 @@ type AgentRegisterPayload struct {
 	ActionPreflightVersion   int      `json:"action_preflight_version,omitempty"`
 	DockerObservationVersion int      `json:"docker_observation_version,omitempty"`
 	GuestExecGuardVersion    int      `json:"guest_exec_guard_version,omitempty"`
+	// ProxmoxGuestStartVersion is set by a collector's command session that
+	// can run one typed guest start. See ProxmoxGuestStartProtocolVersion.
+	ProxmoxGuestStartVersion int `json:"proxmox_guest_start_version,omitempty"`
+	// ProxmoxGuestStartUnavailable is the closed reason a collector that knows
+	// the protocol cannot offer it on this host.
+	ProxmoxGuestStartUnavailable string `json:"proxmox_guest_start_unavailable,omitempty"`
+}
+
+// ProxmoxGuestStartProtocolVersion is what a collector's command session
+// reports when it can start a stopped Proxmox guest through typed containment.
+// The collector reports it only when commands are enabled on it, it runs as
+// its own systemd service on a Proxmox node, and its containment probe passed.
+// The server never infers this from an agent version. An agent that does not
+// report it is refused, and so is every other guest action on such a session:
+// stop, shutdown and reboot run only through the action runner.
+const ProxmoxGuestStartProtocolVersion = 1
+
+// The reasons a collector gives for not offering guest start.
+const (
+	ProxmoxGuestStartUnavailableNotSystemdService = "not_systemd_service"
+	ProxmoxGuestStartUnavailableContainment       = "containment_unavailable"
+)
+
+// NormalizeProxmoxGuestStartUnavailable keeps a reported reason inside the
+// closed set. An unknown reason from a newer agent reads as containment being
+// unavailable, which is the safe and least specific answer.
+func NormalizeProxmoxGuestStartUnavailable(reason string) string {
+	switch reason = strings.TrimSpace(reason); reason {
+	case "":
+		return ""
+	case ProxmoxGuestStartUnavailableNotSystemdService, ProxmoxGuestStartUnavailableContainment:
+		return reason
+	default:
+		return ProxmoxGuestStartUnavailableContainment
+	}
 }
 
 // RegisteredPayload is sent by server after successful registration
@@ -589,6 +624,11 @@ type ConnectedAgent struct {
 	OperationReceiptVersion  int
 	ActionPreflightVersion   int
 	DockerObservationVersion int
+	// ProxmoxGuestStartVersion and ProxmoxGuestStartUnavailable are what the
+	// session's agent reported about starting Proxmox guests. Both are empty
+	// for an action runner and for an agent that predates the protocol.
+	ProxmoxGuestStartVersion     int
+	ProxmoxGuestStartUnavailable string
 }
 
 // --- Deploy protocol payloads ---

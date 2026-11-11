@@ -347,8 +347,13 @@ describe('PatrolIntelligenceHeader command access', () => {
     );
   });
 
-  it('names the Proxmox nodes where Pulse cannot start or stop guests, with no button', () => {
-    const proxmoxGuest = (name: string, node: string, refused: boolean): Resource =>
+  it('names the Proxmox nodes where Pulse cannot start a stopped guest, with no button', () => {
+    const proxmoxGuest = (
+      name: string,
+      node: string,
+      refused: boolean,
+      reasonCode = 'guest_start_agent_not_connected',
+    ): Resource =>
       ({
         id: `lxc:${name}`,
         type: 'system-container',
@@ -359,9 +364,7 @@ describe('PatrolIntelligenceHeader command access', () => {
         proxmox: { nodeName: node, instance: 'home' },
         ...(refused
           ? {
-              actionReadiness: [
-                { name: 'start', available: false, reasonCode: 'action_runner_unavailable' },
-              ],
+              actionReadiness: [{ name: 'start', available: false, reasonCode }],
             }
           : {}),
       }) as Resource;
@@ -371,26 +374,37 @@ describe('PatrolIntelligenceHeader command access', () => {
       agentHost('pve2', true),
       proxmoxGuest('gitea', 'pve1', true),
       proxmoxGuest('pihole', 'pve1', true),
-      proxmoxGuest('nextcloud', 'pve2', false),
+      // pve2's agent starts guests. Its running guest's stop still needs the
+      // runner, and that is not what this row is about.
+      {
+        ...proxmoxGuest('nextcloud', 'pve2', false),
+        actionReadiness: [
+          { name: 'stop', available: false, reasonCode: 'action_runner_unavailable' },
+        ],
+      } as Resource,
     ];
     renderHeader(createState({ autonomyLevel: 'approval' }).state);
 
     expect(screen.queryByTestId('patrol-command-access')).toBeNull();
     const row = screen.getByTestId('patrol-guest-action-access');
     expect(row.closest('#patrol-control')).not.toBeNull();
-    expect(row).toHaveTextContent("Can't start or stop guests");
-    expect(row).toHaveTextContent('1 of 2 Proxmox nodes');
-    const all = within(row).getByRole('list', { name: 'Proxmox nodes with no action runner' });
+    expect(row).toHaveTextContent("Can't start guests");
+    expect(row).toHaveTextContent('1 Proxmox node');
+    expect(row).not.toHaveTextContent('1 Proxmox nodes');
+    const all = within(row).getByRole('list', {
+      name: 'Proxmox nodes where Pulse cannot start guests',
+    });
     expect(
       within(all)
         .getAllByRole('listitem')
         .map((item) => item.textContent),
     ).toEqual(['pve1']);
-    expect(row).toHaveTextContent('you do it in Proxmox');
+    expect(row).toHaveTextContent('you start it in Proxmox');
     expect(row).toHaveTextContent(
-      '"Allow Pulse to run commands on this host" does not cover guest actions',
+      'the node needs an up-to-date Pulse agent installed with "Allow Pulse to run commands on this host" ticked',
     );
-    // No single step connects a runner, so the row offers none.
+    expect(row).not.toHaveTextContent('does not cover');
+    // The causes differ per node, so the row carries no single button.
     expect(within(row).queryByRole('link')).toBeNull();
     expect(within(row).queryByRole('button')).toBeNull();
     cleanup();

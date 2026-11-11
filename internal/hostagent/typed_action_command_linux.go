@@ -58,7 +58,39 @@ type typedActionWaitResult struct {
 	err error
 }
 
+// typedActionRunnerSupervisor is the action runner: the only supervisor that
+// may run the whole closed catalog.
+var typedActionRunnerSupervisor = typedActionSupervisor{
+	serviceUnit: typedActionRunnerServiceUnit,
+	unitPrefix:  typedActionUnitPrefix,
+	stateDir:    typedActionRunnerStateDir,
+}
+
+func typedActionRunnerStateDir() (string, error) {
+	stateDir := strings.TrimSpace(os.Getenv("PULSE_AGENT_RUNNER_STATE_DIR"))
+	if !filepath.IsAbs(stateDir) {
+		return "", errors.New("PULSE_AGENT_RUNNER_STATE_DIR must be absolute for typed action containment")
+	}
+	return stateDir, nil
+}
+
 func runTypedActionCommandPlatform(ctx context.Context, env []string, catalog typedActionCatalog, name string, args ...string) typedActionCommandResult {
+	return runTypedActionCommandUnder(ctx, typedActionRunnerSupervisor, env, catalog, name, args...)
+}
+
+// runTypedActionCommandUnder runs one closed invocation in a transient unit
+// that belongs to the given supervisor. The supervisor decides the service the
+// unit is bound to, the unit's name prefix and the private state directory.
+// It cannot change any sandbox property.
+func runTypedActionCommandUnder(ctx context.Context, supervisor typedActionSupervisor, env []string, catalog typedActionCatalog, name string, args ...string) typedActionCommandResult {
+	if err := validateTypedActionInvocation(catalog, name, args); err != nil {
+		return typedActionCommandResult{exitCode: -1, err: err}
+	}
+	if supervisor.allow != nil {
+		if err := supervisor.allow(catalog, name, args); err != nil {
+			return typedActionCommandResult{exitCode: -1, err: err}
+		}
+	}
 	select {
 	case typedActionSystemdGate <- struct{}{}:
 		defer func() { <-typedActionSystemdGate }()
@@ -85,17 +117,17 @@ func runTypedActionCommandPlatform(ctx context.Context, env []string, catalog ty
 	if err := validateTrustedExecutable(runnerPath, uint32(os.Geteuid())); err != nil {
 		return typedActionCommandResult{exitCode: -1, err: fmt.Errorf("validate action-runner executable: %w", err)}
 	}
-	unit, err := newTypedActionUnitName()
+	unit, err := newTypedActionUnitName(supervisor.unitPrefix)
 	if err != nil {
 		return typedActionCommandResult{exitCode: -1, err: err}
 	}
-	resultPath, err := prepareTypedActionResultPath(unit)
+	resultPath, err := prepareTypedActionResultPath(supervisor, unit)
 	if err != nil {
 		return typedActionCommandResult{exitCode: -1, err: err}
 	}
 	defer os.Remove(resultPath)
 
-	commandArgs, err := typedActionSystemdRunArgs(unit, runnerPath, resultPath, env, catalog, name, args)
+	commandArgs, err := typedActionSystemdRunArgsFor(supervisor.serviceUnit, unit, runnerPath, resultPath, env, catalog, name, args)
 	if err != nil {
 		return typedActionCommandResult{exitCode: -1, err: err}
 	}
@@ -209,6 +241,15 @@ func requestTypedActionUnitStop(systemctl, unit string) error {
 }
 
 func typedActionSystemdRunArgs(unit, runnerPath, resultPath string, env []string, catalog typedActionCatalog, name string, args []string) ([]string, error) {
+	return typedActionSystemdRunArgsFor(typedActionRunnerServiceUnit, unit, runnerPath, resultPath, env, catalog, name, args)
+}
+
+// typedActionSystemdRunArgsFor builds the transient unit for one supervisor.
+// serviceUnit is the only input that differs between supervisors here.
+func typedActionSystemdRunArgsFor(serviceUnit, unit, runnerPath, resultPath string, env []string, catalog typedActionCatalog, name string, args []string) ([]string, error) {
+	if serviceUnit != typedActionRunnerServiceUnit && serviceUnit != typedActionCollectorServiceUnit {
+		return nil, errors.New("typed action supervisor service is not a Pulse agent service")
+	}
 	if err := validateTypedActionEnvironment(catalog, env); err != nil {
 		return nil, err
 	}
@@ -233,7 +274,7 @@ func typedActionSystemdRunArgs(unit, runnerPath, resultPath string, env []string
 		"--property=User=root", "--property=Group=root", "--property=UMask=0077", "--property=Restart=no",
 		"--property=KillMode=control-group", "--property=KillSignal=SIGTERM", "--property=SendSIGKILL=yes", "--property=FinalKillSignal=SIGKILL",
 		"--property=TimeoutStopSec=" + typedActionSystemdStopGrace, "--property=RuntimeMaxSec=" + typedActionRuntimeMaximum,
-		"--property=BindsTo=pulse-agent-runner.service", "--property=After=pulse-agent-runner.service", "--property=PartOf=pulse-agent-runner.service",
+		"--property=BindsTo=" + serviceUnit, "--property=After=" + serviceUnit, "--property=PartOf=" + serviceUnit,
 	}
 	if catalog != typedActionCatalogProxmoxHandoff {
 		result = append(result,
@@ -267,18 +308,24 @@ func validateTypedActionEnvironment(catalog typedActionCatalog, env []string) er
 	return nil
 }
 
-func newTypedActionUnitName() (string, error) {
+func newTypedActionUnitName(prefix string) (string, error) {
 	var id [16]byte
 	if _, err := rand.Read(id[:]); err != nil {
 		return "", fmt.Errorf("generate typed action unit identity: %w", err)
 	}
-	return typedActionUnitPrefix + hex.EncodeToString(id[:]) + typedActionUnitSuffix, nil
+	return prefix + hex.EncodeToString(id[:]) + typedActionUnitSuffix, nil
 }
 
-func prepareTypedActionResultPath(unit string) (string, error) {
-	stateDir := strings.TrimSpace(os.Getenv("PULSE_AGENT_RUNNER_STATE_DIR"))
+func prepareTypedActionResultPath(supervisor typedActionSupervisor, unit string) (string, error) {
+	if supervisor.stateDir == nil {
+		return "", errors.New("typed action supervisor has no state directory")
+	}
+	stateDir, err := supervisor.stateDir()
+	if err != nil {
+		return "", err
+	}
 	if !filepath.IsAbs(stateDir) {
-		return "", errors.New("PULSE_AGENT_RUNNER_STATE_DIR must be absolute for typed action containment")
+		return "", errors.New("typed action state directory must be absolute")
 	}
 	dir := filepath.Join(stateDir, "typed-actions")
 	if err := os.MkdirAll(dir, 0o700); err != nil {
@@ -363,9 +410,25 @@ func validateTrustedExecutable(path string, owner uint32) error {
 }
 
 func RunTypedActionLauncher(args []string) int {
+	return runTypedActionLauncher(args, nil)
+}
+
+// RunCollectorTypedActionLauncher is the launcher the collector binary serves.
+// It refuses everything but the containment probe, a guest status read and a
+// guest start before it resolves or starts anything.
+func RunCollectorTypedActionLauncher(args []string) int {
+	return runTypedActionLauncher(args, validateCollectorTypedActionInvocation)
+}
+
+func runTypedActionLauncher(args []string, allow func(typedActionCatalog, string, []string) error) int {
 	catalog, resultPath, name, commandArgs, err := parseTypedActionLauncherArgs(args)
 	if err != nil {
 		return typedActionLauncherSupervisorFailureExit
+	}
+	if allow != nil {
+		if err := allow(catalog, name, commandArgs); err != nil {
+			return typedActionLauncherSupervisorFailureExit
+		}
 	}
 	result := typedActionLauncherResult{Version: typedActionResultVersion, ExitCode: -1}
 	providerHandoff := catalog == typedActionCatalogProxmoxHandoff
@@ -543,6 +606,13 @@ func writeTypedActionLauncherResult(path string, result typedActionLauncherResul
 var typedActionReconcileMu sync.Mutex
 
 func ReconcileTypedActionUnits(ctx context.Context) error {
+	return reconcileTypedActionUnitsUnder(ctx, typedActionRunnerSupervisor)
+}
+
+// reconcileTypedActionUnitsUnder stops the supervisor's own stale units and
+// proves containment with a harmless probe. It only ever names units with the
+// supervisor's prefix.
+func reconcileTypedActionUnitsUnder(ctx context.Context, supervisor typedActionSupervisor) error {
 	typedActionReconcileMu.Lock()
 	defer typedActionReconcileMu.Unlock()
 	if _, err := typedActionResolveSystemdTool("systemd-run"); err != nil {
@@ -552,13 +622,13 @@ func ReconcileTypedActionUnits(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	output, err := exec.CommandContext(ctx, systemctl, "--no-ask-password", "list-units", "--all", "--full", "--plain", "--no-legend", typedActionUnitPrefix+"*"+typedActionUnitSuffix).CombinedOutput()
+	output, err := exec.CommandContext(ctx, systemctl, "--no-ask-password", "list-units", "--all", "--full", "--plain", "--no-legend", supervisor.unitPrefix+"*"+typedActionUnitSuffix).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("enumerate stale typed action units: %w", err)
 	}
 	for _, line := range strings.Split(string(output), "\n") {
 		fields := strings.Fields(line)
-		if len(fields) == 0 || !validTypedActionUnitName(fields[0]) {
+		if len(fields) == 0 || !validTypedActionUnitNameWithPrefix(supervisor.unitPrefix, fields[0]) {
 			continue
 		}
 		unit := fields[0]
@@ -575,7 +645,7 @@ func ReconcileTypedActionUnits(ctx context.Context) error {
 			}
 		}
 	}
-	probe := runTypedActionCommand(ctx, nil, typedActionCatalogProbe, "true")
+	probe := runTypedActionCommandUnder(ctx, supervisor, nil, typedActionCatalogProbe, "true")
 	if probe.err != nil || probe.exitCode != 0 {
 		return fmt.Errorf("qualify typed action systemd containment: %w", probe.err)
 	}
@@ -583,8 +653,12 @@ func ReconcileTypedActionUnits(ctx context.Context) error {
 }
 
 func validTypedActionUnitName(unit string) bool {
-	value := strings.TrimSuffix(strings.TrimPrefix(unit, typedActionUnitPrefix), typedActionUnitSuffix)
-	if len(value) != 32 || typedActionUnitPrefix+value+typedActionUnitSuffix != unit {
+	return validTypedActionUnitNameWithPrefix(typedActionUnitPrefix, unit)
+}
+
+func validTypedActionUnitNameWithPrefix(prefix, unit string) bool {
+	value := strings.TrimSuffix(strings.TrimPrefix(unit, prefix), typedActionUnitSuffix)
+	if len(value) != 32 || prefix+value+typedActionUnitSuffix != unit {
 		return false
 	}
 	_, err := hex.DecodeString(value)

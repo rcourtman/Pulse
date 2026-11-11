@@ -1275,6 +1275,22 @@ contract.
 
 ## Current State
 
+### Patrol can start a dead guest on a commands-on node
+
+The capability catalog Patrol's seed and investigations read lists `start` as
+runnable for a stopped Proxmox guest whose node's Pulse agent reported that
+it can start guests. It still needs an admin's approval and has no automatic
+authorization. Stop, shutdown and reboot are not listed there and stay
+refused without an action runner.
+
+The Patrol page's second row is now "Can't start guests". It names a node
+only where the server refuses to start one of its stopped guests because of
+how the node is set up: no agent there accepts commands, the agent is too
+old, or the agent cannot run a start. A commands-off node stays in the first
+row, whose install step now also covers starting guests. The finding notice
+"Patrol could not start <guest> itself" shows the server's sentence for
+whichever of those applies.
+
 ### Patrol says where it cannot start or stop guests
 
 A finding review shows one notice when its run carries

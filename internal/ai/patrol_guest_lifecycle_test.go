@@ -193,7 +193,7 @@ func TestScopedPatrolRunsTheStoppedGuestCheck(t *testing.T) {
 		t.Fatalf("the model was asked %d times, want once", len(rig.prompts))
 	}
 	for _, want := range []string{
-		`Pulse cannot run an action for "gitea". Pulse cannot start, stop or restart guests on delly`,
+		`Pulse cannot run an action for "gitea". Pulse cannot start guests on delly`,
 		"Start on boot is on for this guest, so it is meant to be running.",
 		"Pulse has already reported that this guest stopped. Do not report the stop again.",
 	} {
@@ -251,12 +251,13 @@ func TestManualRunOnADeadGuestRaisesTheStoppedFinding(t *testing.T) {
 }
 
 // guestWithoutRunnerCatalog is the action broker's catalog for a stopped
-// Proxmox guest on a node with no action runner.
+// Proxmox guest on a node with no action runner and no Pulse agent that
+// accepts commands.
 func guestWithoutRunnerCatalog(guest, node string) aicontracts.ActionCapabilityCatalog {
-	reason := actionlifecycle.ProxmoxGuestActionsUnavailableReason(node)
+	reason := actionlifecycle.ProxmoxGuestStartAgentNotConnectedReason(node)
 	return aicontracts.ActionCapabilityCatalog{
 		Capabilities: []aicontracts.ActionCapabilityInfo{},
-		Unavailable:  []aicontracts.ActionCapabilityRefusal{{Name: "start", ReasonCode: actionlifecycle.ReasonCodeActionRunnerUnavailable, Reason: reason}},
+		Unavailable:  []aicontracts.ActionCapabilityRefusal{{Name: "start", ReasonCode: actionlifecycle.ReasonCodeGuestStartAgentNotConnected, Reason: reason}},
 		GuestActionsUnavailable: &aicontracts.GuestActionsUnavailable{
 			GuestName: guest, NodeName: node, Actions: []string{"start"}, Reason: reason,
 		},
@@ -337,7 +338,7 @@ func TestAlertRunSeedStatesWhatPulseCanRunForTheAlertsResource(t *testing.T) {
 	// The guest declares Start and its node has no runner.
 	noRunner, _, _ := seed(t, &yes, "stopped", sustained, answer(guestWithoutRunnerCatalog("gitea", "delly")))
 	has(t, "no runner", noRunner,
-		`Pulse cannot run an action for "gitea". Pulse cannot start, stop or restart guests on delly: no Pulse action runner is connected on that node.`,
+		`Pulse cannot run an action for "gitea". Pulse cannot start guests on delly: no Pulse agent that accepts commands is connected on that node.`,
 		"Use Proxmox for this. That is how this install is set up, not a fault.")
 	lacks(t, "no runner", noRunner, "Pulse can run these actions", "Pulse declares", ": start.")
 

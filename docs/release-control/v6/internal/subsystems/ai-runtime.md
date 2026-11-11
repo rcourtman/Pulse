@@ -3935,6 +3935,15 @@ verdict on its own check.
 
 ## Current State
 
+### The guest actions fact carries the start's own reason
+
+`GuestActionsUnavailable` on `ActionCapabilityCatalog` and
+`InvestigationSession` is no longer only "no action runner". It names the
+guest actions Pulse refuses because of how the node is set up and carries the
+executor's sentence, which is the start's sentence when a start is refused.
+The fields did not change. A node whose agent has commands off is still
+`CommandsDisabled`, not this fact.
+
 ### A guest Pulse cannot start is a typed fact on the run
 
 `InvestigationSession.guest_actions_unavailable` follows the same rule as

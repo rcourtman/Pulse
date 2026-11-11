@@ -4964,6 +4964,18 @@ vdev layout is reported` in
 
 ## Current State
 
+### A guest start can run through the node's own Pulse agent
+
+`internal/api/proxmox_guest_action_executor.go` now routes a guest `start` to
+the node's own collector command session when no action runner is connected
+and that session reported that it can start guests. Stop, shutdown and reboot
+still need the runner. `internal/api/proxmox_guest_action_result.go` confirms
+such a start only from Pulse's own Proxmox API observation, and
+`internal/api/patrol_action_broker.go` repeats the executor's own refusal
+sentence in `guest_actions_unavailable`. All three read existing resource
+state. None of them changes backup, snapshot, replication or recovery
+behaviour, and no guest is started without an admin's approval.
+
 ### The missing-runner refusal opens no storage or recovery path
 
 The Proxmox guest action executor in `internal/api` changed only the text of

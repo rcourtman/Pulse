@@ -8,7 +8,15 @@ func runTypedActionCommandPlatform(context.Context, []string, typedActionCatalog
 	return typedActionCommandResult{exitCode: -1, err: errTypedActionContainmentUnavailable}
 }
 
+func runTypedActionCommandUnder(context.Context, typedActionSupervisor, []string, typedActionCatalog, string, ...string) typedActionCommandResult {
+	return typedActionCommandResult{exitCode: -1, err: errTypedActionContainmentUnavailable}
+}
+
 func RunTypedActionLauncher([]string) int {
+	return typedActionLauncherSupervisorFailureExit
+}
+
+func RunCollectorTypedActionLauncher([]string) int {
 	return typedActionLauncherSupervisorFailureExit
 }
 

@@ -20,6 +20,9 @@ type proxmoxTypedActionRunner func(context.Context, []string, typedActionCatalog
 type proxmoxGuestLifecycleManager struct {
 	run proxmoxGuestCommandRunner
 	now func() time.Time
+	// refuse is asked before anything is read or changed. A non-empty answer
+	// ends the request as a refusal. The action runner's manager has none.
+	refuse func(agentexec.ProxmoxGuestLifecyclePayload) string
 }
 
 func newProxmoxGuestLifecycleManager() *proxmoxGuestLifecycleManager {
@@ -40,6 +43,29 @@ func newProxmoxGuestLifecycleManagerWithTypedRunner(run proxmoxTypedActionRunner
 	}
 }
 
+// newCollectorProxmoxGuestLifecycleManager is the manager a collector's command
+// session uses. It starts a stopped guest and does nothing else: stop, shutdown
+// and reboot belong to the action runner. It refuses outright when commands
+// are not enabled on this agent or its typed containment is not ready, and it
+// runs through the collector's own containment, never the runner's.
+func newCollectorProxmoxGuestLifecycleManager(commandsEnabled bool, containment *collectorTypedActions) *proxmoxGuestLifecycleManager {
+	manager := newProxmoxGuestLifecycleManagerWithTypedRunner(func(ctx context.Context, env []string, catalog typedActionCatalog, name string, args ...string) typedActionCommandResult {
+		return containment.runCommand(ctx, env, catalog, name, args...)
+	})
+	manager.refuse = func(req agentexec.ProxmoxGuestLifecyclePayload) string {
+		switch {
+		case !commandsEnabled:
+			return "commands are not enabled on this Pulse agent"
+		case req.Operation != "start":
+			return "this Pulse agent starts guests only; stop, shutdown and reboot need the action runner"
+		case !containment.isReady():
+			return "typed action containment is not ready on this Pulse agent"
+		}
+		return ""
+	}
+	return manager
+}
+
 func typedActionCatalogForProxmoxInvocation(tool, verb string) typedActionCatalog {
 	if isProxmoxHandoffLifecycleInvocation(tool, verb) {
 		return typedActionCatalogProxmoxHandoff
@@ -58,6 +84,12 @@ func (m *proxmoxGuestLifecycleManager) Apply(ctx context.Context, req agentexec.
 	if err := agentexec.ValidateProxmoxGuestLifecyclePayload(&req); err != nil {
 		result.ReasonCode, result.Error = agentexec.ActionRefusalContractInvalid, "typed Proxmox lifecycle preflight refused"
 		return result
+	}
+	if m.refuse != nil {
+		if reason := m.refuse(req); reason != "" {
+			result.ReasonCode, result.Error = agentexec.ActionRefusalCapabilityUnavailable, reason
+			return result
+		}
 	}
 	before, err := m.inspect(ctx, req.GuestKind, req.VMID)
 	result.Before = before

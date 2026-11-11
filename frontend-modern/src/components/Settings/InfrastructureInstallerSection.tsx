@@ -375,9 +375,11 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
             </label>
             <p id="install-command-access-description" class="ml-6 mt-1 text-xs text-muted">
               Needed to update, start, stop or restart Docker and Podman containers from Pulse, and
-              for Patrol actions. Pulse can then run commands as root on this host, so leave it off
-              if you only want monitoring. It cannot be switched on later from Pulse: rerun the
-              install command with this selected.
+              for Patrol actions. On a Proxmox node it also lets Pulse start a stopped guest after
+              an admin approves it. Stopping or restarting a guest still needs the action runner.
+              Pulse can then run commands as root on this host, so leave it off if you only want
+              monitoring. It cannot be switched on later from Pulse: rerun the install command with
+              this selected.
             </p>
             <p id="install-token-replacement-description" class="ml-6 mt-2 text-xs text-muted">
               Changing this choice prepares a new token and command. It does not reconfigure an

@@ -186,6 +186,10 @@ func NewActionRunnerClient(config ActionRunnerClientConfig, agentID, hostname, v
 		DockerContainerLifecycleOperator: config.DockerContainerLifecycleOperator,
 	}, agentID, hostname, runtime.GOOS, version)
 	client.actionRunnerOnly = true
+	// The runner keeps the whole guest lifecycle catalog and its own
+	// containment. The collector's start-only manager is not for it.
+	client.proxmoxGuestLifecycle = newProxmoxGuestLifecycleManager()
+	client.guestStart = nil
 	client.runtimeRole = agentexec.RuntimeRoleActionRunner
 	client.actionCapability = agentexec.ActionCapabilityTypedV1
 	if config.DockerContainerLifecycleOperator == nil {

@@ -52,9 +52,10 @@ type ActionCapabilityCatalog struct {
 	// resource. It is a setting the owner chose at install, not a fault.
 	CommandsDisabled *CommandsDisabledHost `json:"commands_disabled,omitempty"`
 	// GuestActionsUnavailable is set when this resource is a Proxmox guest
-	// whose node has no connected Pulse action runner, so Pulse cannot start,
-	// stop or restart it. Command access on the node's agent does not change
-	// that. It is how this install is set up, not a fault.
+	// and Pulse refuses an action it declares because of how its node is set
+	// up: no action runner for stop, shutdown or reboot, or no Pulse agent
+	// that can start a guest. It is how this install is set up, not a fault.
+	// A node whose agent has commands off is CommandsDisabled instead.
 	GuestActionsUnavailable *GuestActionsUnavailable `json:"guest_actions_unavailable,omitempty"`
 }
 
@@ -78,10 +79,10 @@ type CommandsDisabledHost struct {
 	Step string `json:"step"`
 }
 
-// GuestActionsUnavailable names a Proxmox guest Pulse cannot start, stop or
-// restart because no Pulse action runner is connected on its node. Pulse
-// writes the sentence so no model has to explain the refusal. It carries no
-// step: nothing a person can do in one move connects a runner.
+// GuestActionsUnavailable names a Proxmox guest and the actions Pulse refuses
+// for it because of how its node is set up. Pulse writes the sentence so no
+// model has to explain the refusal. The sentence carries the step when there
+// is one, such as updating the node's Pulse agent.
 type GuestActionsUnavailable struct {
 	GuestName string `json:"guest_name,omitempty"`
 	NodeName  string `json:"node_name"`
@@ -89,7 +90,8 @@ type GuestActionsUnavailable struct {
 	// example "start" for a stopped guest.
 	Actions []string `json:"actions"`
 	// Reason is the fact and what to do now, for example "Pulse cannot
-	// start, stop or restart guests on pve1: ... Use Proxmox for this."
+	// start guests on pve1: ... Use Proxmox for this." When a start is among
+	// the refused actions it is the start's sentence.
 	Reason string `json:"reason"`
 }
 

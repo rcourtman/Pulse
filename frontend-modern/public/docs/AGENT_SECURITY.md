@@ -415,6 +415,37 @@ helper/runner security claim and will remain until supported command-enabled
 installs have a runner enrollment path and live action-session parity has been
 qualified.
 
+That profile carries one typed action: starting a stopped Proxmox VM or
+container. Nothing is enabled by this. A node opts in the way it always has,
+by installing the collector with command execution.
+
+- **Who can.** A collector that has command execution enabled, runs as root as
+  the `pulse-agent` systemd service on a Proxmox node, keeps durable receipts
+  and has passed a containment probe reports that it can start guests. Pulse
+  decides from that report, never from an agent version. An older collector, a
+  monitoring-only collector and a collector outside systemd are refused, and
+  Pulse says which it is.
+- **What runs.** The same fixed `qm start <vmid>` or `pct start <vmid>` the
+  action runner runs, in the same transient systemd unit with the same
+  properties. Only the service the unit is bound to and the state directory
+  differ: they are the collector's own.
+- **What does not.** Stop, shutdown and reboot. The server refuses to send
+  them on this path and the collector refuses to run them. They still need the
+  action runner. The collector's typed catalog is the containment probe, a
+  status read and a start. Package commands stay with the runner.
+- **Who decides.** An admin approves every start. There is no automatic
+  authorization for it. Pulse's own Proxmox API read decides whether the guest
+  is running afterwards. The collector's word is kept as evidence and does not
+  confirm the action.
+
+This adds a capability to the legacy/full-trust profile. It does not bring
+that profile into the typed helper/runner security claim. The collector still
+runs as root and still accepts shell commands, and when Pulse is reached over
+plain HTTP its command channel is neither encrypted nor signed: the collector
+credential crosses it in clear text. A start request adds no exposure to a
+node that already accepts a root shell over that channel. Use HTTPS, or the
+action runner, where that is not acceptable.
+
 Safe-profile conversion is always deliberate:
 
 ```bash

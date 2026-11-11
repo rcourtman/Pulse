@@ -149,7 +149,11 @@ type CommandClient struct {
 	// actionRunnerOnly is an immutable constructor-selected protocol ceiling.
 	// It permits only the closed typed action families and their receipt,
 	// preflight, observation, cancellation, and liveness messages.
-	actionRunnerOnly      bool
+	actionRunnerOnly bool
+	// guestStart is the typed containment a collector with commands enabled
+	// uses to start a stopped Proxmox guest. Nil on the action runner and on
+	// a collector without commands.
+	guestStart            *collectorTypedActions
 	runtimeRole           string
 	actionCapability      string
 	healthPath            string
@@ -201,6 +205,10 @@ func NewCommandClient(cfg Config, agentID, hostname, platform, version string) *
 		logger.Warn().Err(receiptErr).Str("state_dir", stateDir).
 			Msg("Operation receipt store unavailable — Pulse will refuse reviewed actions for this agent until its state directory is writable")
 	}
+	var guestStart *collectorTypedActions
+	if cfg.EnableCommands {
+		guestStart = newCollectorTypedActions(stateDir, logger)
+	}
 	return &CommandClient{
 		pulseURL:              strings.TrimRight(cfg.PulseURL, "/"),
 		apiToken:              cfg.APIToken,
@@ -218,7 +226,8 @@ func NewCommandClient(cfg Config, agentID, hostname, platform, version string) *
 		storageCleanup:        cfg.storageCleanup,
 		dockerLifecycle:       newLocalDockerLifecycleManager(cfg.DockerContainerLifecycleOperator),
 		dockerUpdater:         cfg.DockerContainerUpdater,
-		proxmoxGuestLifecycle: newProxmoxGuestLifecycleManager(),
+		proxmoxGuestLifecycle: newCollectorProxmoxGuestLifecycleManager(cfg.EnableCommands, guestStart),
+		guestStart:            guestStart,
 		operationReceipts:     receipts,
 		operationReceiptErr:   receiptErr,
 		logger:                logger,
@@ -292,6 +301,10 @@ type registerPayload struct {
 	ActionPreflightVersion   int      `json:"action_preflight_version,omitempty"`
 	DockerObservationVersion int      `json:"docker_observation_version,omitempty"`
 	GuestExecGuardVersion    int      `json:"guest_exec_guard_version,omitempty"`
+
+	// Reported by a collector only. See agentexec.ProxmoxGuestStartProtocolVersion.
+	ProxmoxGuestStartVersion     int    `json:"proxmox_guest_start_version,omitempty"`
+	ProxmoxGuestStartUnavailable string `json:"proxmox_guest_start_unavailable,omitempty"`
 }
 
 type registeredPayload struct {
@@ -425,6 +438,10 @@ func (c *CommandClient) connectAndHandle(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("build websocket origin: %w", err)
 	}
+
+	// Decide before dialing what this session will report about starting
+	// guests. The probe can take a moment, and Pulse times a registration out.
+	c.prepareGuestStart(ctx)
 
 	c.logger.Debug().Str("url", wsURL).Msg("Connecting to Pulse command server")
 
@@ -572,7 +589,28 @@ func (c *CommandClient) buildWebSocketOrigin() (string, error) {
 	return securityutil.HTTPOriginForWebSocketBaseURLWithOptions(c.pulseURL, options)
 }
 
+// prepareGuestStart readies the collector's typed containment. The action
+// runner prepares its own before it starts and never comes through here.
+func (c *CommandClient) prepareGuestStart(ctx context.Context) {
+	if c == nil || c.actionRunnerOnly || c.guestStart == nil {
+		return
+	}
+	c.guestStart.ensure(ctx)
+}
+
+// guestStartRegistration is what a collector tells Pulse about starting a
+// stopped Proxmox guest: the protocol version when it can, or the closed
+// reason it cannot. It says nothing without durable receipts, since Pulse
+// refuses every reviewed action then.
+func (c *CommandClient) guestStartRegistration() (int, string) {
+	if c == nil || c.actionRunnerOnly || c.guestStart == nil || c.operationReceiptVersion() != operationreceipt.ProtocolVersion {
+		return 0, ""
+	}
+	return c.guestStart.registration()
+}
+
 func (c *CommandClient) sendRegistration(conn *websocket.Conn) error {
+	guestStartVersion, guestStartUnavailable := c.guestStartRegistration()
 	payload, err := json.Marshal(registerPayload{
 		AgentID:                  c.agentID,
 		Hostname:                 c.hostname,
@@ -585,6 +623,9 @@ func (c *CommandClient) sendRegistration(conn *websocket.Conn) error {
 		ActionPreflightVersion:   agentexec.ActionPreflightProtocolVersion,
 		DockerObservationVersion: agentexec.DockerContainerObservationProtocolVersion,
 		GuestExecGuardVersion:    c.guestExecGuardVersion(),
+
+		ProxmoxGuestStartVersion:     guestStartVersion,
+		ProxmoxGuestStartUnavailable: guestStartUnavailable,
 	})
 	if err != nil {
 		return fmt.Errorf("marshal registration payload: %w", err)

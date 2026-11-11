@@ -522,7 +522,7 @@ func TestHandlePlanActionRejectsDisconnectedProxmoxNodeCommandAgent(t *testing.T
 		t.Fatalf("plan status = %d, want %d, body=%s", rec.Code, http.StatusConflict, rec.Body.String())
 	}
 	if !strings.Contains(rec.Body.String(), `"error":"action_execution_unavailable"`) ||
-		!strings.Contains(rec.Body.String(), `"reason":"Pulse cannot start, stop or restart guests on delly: no Pulse action runner is connected on that node. \"Allow Pulse to run commands on this host\" does not cover guest actions. Use Proxmox for this."`) ||
+		!strings.Contains(rec.Body.String(), `"reason":"Pulse cannot stop or restart guests on delly: that needs the Pulse action runner on that node. \"Allow Pulse to run commands on this host\" covers starting a stopped guest only. Use Proxmox for this."`) ||
 		!strings.Contains(rec.Body.String(), `"reasonCode":"action_runner_unavailable"`) {
 		t.Fatalf("unexpected response body: %s", rec.Body.String())
 	}

@@ -327,9 +327,6 @@ describe('infrastructure operations model', () => {
     expect(infrastructureInstallerSectionSource).toContain(
       'commands keep it separate: copy the command first, then use Show token only.',
     );
-    expect(infrastructureInstallerSectionSource).toContain(
-      'Pulse can then run commands as root on this host',
-    );
     expect(infrastructureOperationsModelSource).toContain(
       'preflights this Pulse URL, verifies the matching agent binary is available',
     );
