@@ -4594,7 +4594,18 @@ that had crashed with a segfault described the crash and filed nothing. Silence
 is for the expected condition, named by what it is: a finished one-shot job
 that exited cleanly, a workload stopped on purpose, a deliberate setting,
 hardware wear nobody can act on. The follow-up question
-(`patrolFindingDecisionPrompt`) names the same case. Proofs:
+(`patrolFindingDecisionPrompt`) names the same case.
+
+A person's targeted check on a resource with an alert active
+(`patrolAskedResourceAlert`: a manual scoped run with no alert context) gets
+the same rule in its own note (`patrolAskedResourceAlertNote`) and the same
+facts about the resource. It must not get the general note, which tells a run
+to leave threshold breaches to the alerting system and look for what alerts
+cannot detect: asked about a container with a full disk, such a run wrote that
+the disk was already tracked by the alert and filed that the container had
+never been backed up. The note says another fact on the resource's row is not
+an answer to the alert. A full run, and the checks Pulse starts by itself for a
+verification, an objective or an anomaly, keep their notes. Proofs:
 `internal/ai/unified/bridge_test.go`,
 `internal/ai/unified/bridge_alert_manager_test.go`,
 `internal/api/ai_alert_bridge_trigger_test.go` and

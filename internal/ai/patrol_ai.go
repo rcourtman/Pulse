@@ -3694,6 +3694,9 @@ func (p *PatrolService) seedFindingsAndContextState(scope *PatrolScope, snap pat
 	sb.WriteString(fmt.Sprintf("- Guest Memory warning: %.0f%%\n", thresholds.GuestMemWarning))
 	sb.WriteString(fmt.Sprintf("- Guest Disk warning: %.0f%%, critical: %.0f%%\n", thresholds.GuestDiskWarn, thresholds.GuestDiskCrit))
 	sb.WriteString(fmt.Sprintf("- Storage warning: %.0f%%, critical: %.0f%%\n", thresholds.StorageWarning, thresholds.StorageCritical))
+	// askedAlert is the alert active on the resource a person's targeted
+	// check was asked about.
+	var askedAlert *models.Alert
 	if scope != nil && scope.AlertContext != nil && scope.Reason != TriggerReasonAlertCleared && scope.AlertSustained {
 		ac := scope.AlertContext
 		level := ac.Level
@@ -3719,12 +3722,20 @@ func (p *PatrolService) seedFindingsAndContextState(scope *PatrolScope, snap pat
 			level, ac.ResourceName, ac.AlertType, ac.Value, ac.Threshold))
 	} else if scope != nil && scope.AlertContext != nil && scope.Reason == TriggerReasonAlertCleared {
 		sb.WriteString("Note: Verify that the collected alert's breach has resolved using current evidence.\n\n")
+	} else if askedAlert = p.patrolAskedResourceAlert(scope); askedAlert != nil {
+		// A person asked about a resource that has an alert active. The
+		// general note below would tell this run to
+		// leave the alert's condition alone and look for what alerts cannot
+		// detect, and the run then files whatever else is on the resource's
+		// row. Asked about a container with a full disk, one filed that the
+		// container had never been backed up.
+		sb.WriteString(patrolAskedResourceAlertNote(askedAlert))
 	} else {
 		sb.WriteString("Note: The real-time alerting system monitors these thresholds continuously. Do NOT report findings for threshold breaches. Focus on trends, capacity planning, and issues alerts cannot detect.\n\n")
 	}
 	// The notes above ask what Pulse can do about the alert and whether the
 	// condition is expected. These are the facts that answer it.
-	sb.WriteString(p.patrolAlertSubjectFacts(scope, snap))
+	sb.WriteString(p.patrolAlertSubjectFacts(scope, snap, askedAlert))
 
 	scopedResources := patrolRuntimeKnownResources(snap)
 	stateHasScopedResources := len(scopedResources) > 0

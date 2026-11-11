@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 )
@@ -41,8 +42,21 @@ const patrolActionCapabilityLookupTimeout = 5 * time.Second
 // Pulse "lists start and update as available actions". When nothing can run,
 // the line carries the reason Pulse wrote for the refusal. When Pulse cannot
 // check, the seed says nothing about actions.
-func (p *PatrolService) patrolAlertSubjectFacts(scope *PatrolScope, snap patrolRuntimeState) string {
-	if scope == nil || scope.AlertContext == nil || scope.Reason == TriggerReasonAlertCleared {
+//
+// askedAlert is the alert active on the resource a person's targeted check
+// was asked about (patrolAskedResourceAlert). That run is given the same
+// facts.
+func (p *PatrolService) patrolAlertSubjectFacts(scope *PatrolScope, snap patrolRuntimeState, askedAlert *models.Alert) string {
+	if scope == nil || scope.Reason == TriggerReasonAlertCleared {
+		return ""
+	}
+	var alertResourceID, alertResourceName string
+	switch {
+	case scope.AlertContext != nil:
+		alertResourceID, alertResourceName = scope.AlertContext.ResourceID, scope.AlertContext.ResourceName
+	case askedAlert != nil:
+		alertResourceID, alertResourceName = askedAlert.ResourceID, askedAlert.ResourceName
+	default:
 		return ""
 	}
 	var lines []string
@@ -51,12 +65,12 @@ func (p *PatrolService) patrolAlertSubjectFacts(scope *PatrolScope, snap patrolR
 	if subject != nil {
 		name := strings.TrimSpace(subject.Name)
 		if name == "" {
-			name = strings.TrimSpace(scope.AlertContext.ResourceName)
+			name = strings.TrimSpace(alertResourceName)
 		}
 		lines = append(lines, p.patrolRunnableActionLines(subject.ID, name)...)
 	}
 
-	if onBoot, stopped, isGuest := patrolAlertGuestStartOnBoot(scope, snap); isGuest && onBoot != nil {
+	if onBoot, stopped, isGuest := patrolAlertGuestStartOnBoot(alertResourceID, snap); isGuest && onBoot != nil {
 		switch {
 		case *onBoot && stopped:
 			lines = append(lines, "Start on boot is on for this guest, so it is meant to be running.")
@@ -187,8 +201,8 @@ func patrolSortedDistinct(values []string) []string {
 
 // patrolAlertGuestStartOnBoot reads the start-on-boot setting of the Proxmox
 // guest an alert names. The setting is nil when Proxmox did not report it.
-func patrolAlertGuestStartOnBoot(scope *PatrolScope, snap patrolRuntimeState) (onBoot *bool, stopped, isGuest bool) {
-	reference := strings.TrimSpace(scope.AlertContext.ResourceID)
+func patrolAlertGuestStartOnBoot(alertResourceID string, snap patrolRuntimeState) (onBoot *bool, stopped, isGuest bool) {
+	reference := strings.TrimSpace(alertResourceID)
 	if reference == "" {
 		return nil, false, false
 	}
