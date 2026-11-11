@@ -6,6 +6,9 @@ import (
 	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -158,7 +161,10 @@ func (r *RecoveryTokenStore) GenerateRecoveryToken(duration time.Duration, ip st
 	}
 
 	r.tokens[tokenHash] = token
-	r.saveUnsafe()
+	if err := r.saveUnsafe(); err != nil {
+		delete(r.tokens, tokenHash)
+		return "", fmt.Errorf("persist recovery token: %w", err)
+	}
 
 	log.Info().
 		Str("token", safePrefixForLog(tokenStr, 8)+"...").
@@ -186,29 +192,24 @@ func (r *RecoveryTokenStore) IsRecoveryTokenValidConstantTime(providedToken stri
 func (r *RecoveryTokenStore) ValidateRecoveryTokenConstantTime(providedToken string, ip string) bool {
 	tokenHash := recoveryTokenHash(providedToken)
 
-	r.mu.RLock()
-	defer r.mu.RUnlock()
+	// Keep admission, persistence and publication in one critical section.
+	// No caller may authorize from an in-flight or failed consumption.
+	r.mu.Lock()
+	defer r.mu.Unlock()
 
 	token, exists := r.tokens[tokenHash]
 	if !exists || time.Now().After(token.ExpiresAt) || token.Used || !recoveryTokenBoundToIP(token, ip) {
 		return false
 	}
 
-	r.mu.RUnlock()
-	r.mu.Lock()
-
-	token, exists = r.tokens[tokenHash]
-	if !exists || time.Now().After(token.ExpiresAt) || token.Used || !recoveryTokenBoundToIP(token, ip) {
-		r.mu.Unlock()
-		r.mu.RLock()
-		return false
-	}
-
+	previous := *token
 	token.Used = true
 	token.UsedAt = time.Now()
-	r.saveUnsafe()
-	r.mu.Unlock()
-	r.mu.RLock()
+	if err := r.saveUnsafe(); err != nil {
+		*token = previous
+		log.Error().Err(err).Msg("Failed to persist recovery token consumption")
+		return false
+	}
 
 	log.Info().
 		Str("token", safePrefixForLog(tokenHash, 8)+"...").
@@ -279,22 +280,25 @@ func (r *RecoveryTokenStore) cleanup() {
 	}
 
 	if cleaned > 0 {
-		r.saveUnsafe()
+		if err := r.saveUnsafe(); err != nil {
+			log.Error().Err(err).Msg("Failed to persist recovery token cleanup")
+			return
+		}
 		log.Info().Int("count", cleaned).Msg("Cleaned up recovery tokens")
 	}
 }
 
-// saveUnsafe saves without locking (caller must hold lock)
-func (r *RecoveryTokenStore) saveUnsafe() {
+// saveUnsafe publishes a complete private snapshot without locking (caller
+// must hold the lock or own the not-yet-published store during initialization).
+// Every returned error precedes rename; callers may then roll back live changes
+// without undoing an acknowledged write. This does not promise directory-fsync
+// durability across sudden power loss.
+func (r *RecoveryTokenStore) saveUnsafe() (retErr error) {
 	tokensFile := filepath.Join(r.dataPath, "recovery_tokens.json")
-
-	// Create directory if it doesn't exist
 	if err := os.MkdirAll(r.dataPath, 0700); err != nil {
-		log.Error().Err(err).Msg("Failed to create recovery tokens directory")
-		return
+		return fmt.Errorf("create recovery tokens directory: %w", err)
 	}
 
-	// Marshal tokens
 	persisted := make([]*RecoveryToken, 0, len(r.tokens))
 	for _, token := range r.tokens {
 		copy := *token
@@ -302,22 +306,44 @@ func (r *RecoveryTokenStore) saveUnsafe() {
 	}
 	data, err := json.Marshal(persisted)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to marshal recovery tokens")
-		return
+		return fmt.Errorf("marshal recovery tokens: %w", err)
 	}
 
-	// Write to temporary file first
-	tmpFile := tokensFile + ".tmp"
-	if err := os.WriteFile(tmpFile, data, 0600); err != nil {
-		log.Error().Err(err).Msg("Failed to write recovery tokens file")
-		return
+	// Own the exclusive descriptor, not a reusable temporary pathname that
+	// could follow an old symlink or retain a previous file's wider mode.
+	file, err := os.CreateTemp(r.dataPath, ".recovery_tokens.*.tmp")
+	if err != nil {
+		return fmt.Errorf("create recovery tokens file: %w", err)
 	}
+	closed, published := false, false
+	defer func() {
+		if !closed {
+			retErr = errors.Join(retErr, file.Close())
+		}
+		if !published {
+			if err := os.Remove(file.Name()); err != nil && !os.IsNotExist(err) {
+				retErr = errors.Join(retErr, fmt.Errorf("cleanup recovery tokens file: %w", err))
+			}
+		}
+	}()
 
-	// Atomic rename
-	if err := os.Rename(tmpFile, tokensFile); err != nil {
-		log.Error().Err(err).Msg("Failed to rename recovery tokens file")
-		return
+	if n, err := file.Write(data); err != nil {
+		return fmt.Errorf("write recovery tokens: %w", err)
+	} else if n != len(data) {
+		return fmt.Errorf("write recovery tokens: %w", io.ErrShortWrite)
 	}
+	if err := file.Sync(); err != nil {
+		return fmt.Errorf("sync recovery tokens: %w", err)
+	}
+	closed = true
+	if err := file.Close(); err != nil {
+		return fmt.Errorf("close recovery tokens: %w", err)
+	}
+	if err := os.Rename(file.Name(), tokensFile); err != nil {
+		return fmt.Errorf("publish recovery tokens: %w", err)
+	}
+	published = true
+	return nil
 }
 
 func (r *RecoveryTokenStore) loadCanonicalTokens(tokens []*RecoveryToken, now time.Time) int {
@@ -366,8 +392,12 @@ func (r *RecoveryTokenStore) migrateLegacyTokens(data []byte, now time.Time) (bo
 		}
 	}
 
+	if err := r.saveUnsafe(); err != nil {
+		// Retain the known legacy inventory. Any later consumption still has
+		// to publish its complete hashed snapshot before granting authority.
+		return true, err
+	}
 	log.Info().Int("loaded", loaded).Int("total", len(legacy)).Msg("Recovery tokens loaded from disk (legacy raw-token format)")
-	r.saveUnsafe()
 	return true, nil
 }
 
@@ -391,7 +421,10 @@ func (r *RecoveryTokenStore) load() {
 		return
 	}
 
-	if migrated, err := r.migrateLegacyTokens(data, now); err == nil && migrated {
+	if migrated, err := r.migrateLegacyTokens(data, now); migrated {
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to persist recovery token migration")
+		}
 		return
 	}
 	log.Error().Msg("Failed to decode recovery tokens file; unsupported format")

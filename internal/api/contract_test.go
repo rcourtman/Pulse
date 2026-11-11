@@ -26752,3 +26752,163 @@ func TestContract_AIApprovalReviewAuthenticationCSRFAndMethods(t *testing.T) {
 		t.Fatal("rejected request mutated approval")
 	}
 }
+
+func TestRecoveryTokenPersistenceHTTP(t *testing.T) {
+	t.Run("issuance", func(t *testing.T) {
+		router := newRecoveryRouter(t)
+		cleanupTestRouter(t, router)
+		store := ensureRecoveryTokenStore(router.config.DataPath)
+		if _, err := store.GenerateRecoveryToken(time.Hour, "127.0.0.1"); err != nil {
+			t.Fatal(err)
+		}
+		before := recoveryPersistenceBytes(t, store)
+		restore := blockRecoveryPersistence(t, store, "rename")
+		req := httptest.NewRequest(http.MethodPost, "/api/security/recovery", strings.NewReader(`{"action":"generate_token"}`))
+		req.RemoteAddr = "127.0.0.1:12345"
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+		var result struct {
+			Success bool   `json:"success"`
+			Token   string `json:"token"`
+			Message string `json:"message"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
+			t.Fatalf("not the recovery JSON response: status=%d: %v", rec.Code, err)
+		}
+		if rec.Code != http.StatusOK || result.Success || result.Token != "" || result.Message != "Failed to generate recovery token" {
+			t.Fatalf("failed issuance was not reported generically: status=%d success=%v", rec.Code, result.Success)
+		}
+		if len(store.tokens) != 1 {
+			t.Fatal("HTTP issuance retained unreturned authority")
+		}
+		restore()
+		if !bytes.Equal(before, recoveryPersistenceBytes(t, store)) {
+			t.Fatal("failed HTTP issuance changed saved tokens")
+		}
+	})
+
+	t.Run("recovery_admission", func(t *testing.T) {
+		router := newRecoveryRouter(t)
+		cleanupTestRouter(t, router)
+		store := ensureRecoveryTokenStore(router.config.DataPath)
+		// Synthetic matching remote binding exercises token admission, not the
+		// independent direct-loopback permission. No remote session is created.
+		token, err := store.GenerateRecoveryToken(time.Hour, "203.0.113.77")
+		if err != nil {
+			t.Fatal(err)
+		}
+		before := recoveryPersistenceBytes(t, store)
+		restore := blockRecoveryPersistence(t, store, "rename")
+		serve := func() *httptest.ResponseRecorder {
+			req := httptest.NewRequest(http.MethodGet, "/api/security/recovery", nil)
+			req.RemoteAddr = "203.0.113.77:12345"
+			req.Header.Set("X-Recovery-Token", token)
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, req)
+			return rec
+		}
+		if rec := serve(); rec.Code != http.StatusForbidden || len(rec.Result().Cookies()) != 0 || strings.Contains(rec.Body.String(), store.dataPath) {
+			t.Fatalf("failed consumption admitted recovery or disclosed storage: %d", rec.Code)
+		}
+		restore()
+		if !bytes.Equal(before, recoveryPersistenceBytes(t, store)) {
+			t.Fatal("refused recovery changed saved tokens")
+		}
+		if rec := serve(); rec.Code != http.StatusOK || len(rec.Result().Cookies()) != 0 {
+			t.Fatalf("repaired storage did not admit one status read without a session: %d", rec.Code)
+		}
+		if reloadRecoveryPersistence(store).IsRecoveryTokenValidConstantTime(token, "203.0.113.77") {
+			t.Fatal("HTTP admission did not persist consumption")
+		}
+		if rec := serve(); rec.Code != http.StatusForbidden {
+			t.Fatalf("accepted recovery read was replayable: %d", rec.Code)
+		}
+	})
+
+	t.Run("quick_setup", func(t *testing.T) {
+		router := newRecoveryRouter(t)
+		cleanupTestRouter(t, router)
+		store := ensureRecoveryTokenStore(router.config.DataPath)
+		token, err := store.GenerateRecoveryToken(time.Hour, "127.0.0.1")
+		if err != nil {
+			t.Fatal(err)
+		}
+		config.Mu.RLock()
+		beforeUser, beforePass := router.config.AuthUser, router.config.AuthPass
+		beforeTokens := append([]config.APITokenRecord(nil), router.config.APITokens...)
+		for i := range beforeTokens {
+			beforeTokens[i] = router.config.APITokens[i].Clone()
+		}
+		config.Mu.RUnlock()
+		before := recoveryPersistenceBytes(t, store)
+		restore := blockRecoveryPersistence(t, store, "rename")
+		authLimiter.Reset("127.0.0.1")
+		t.Cleanup(func() { authLimiter.Reset("127.0.0.1") })
+		req := httptest.NewRequest(http.MethodPost, "/api/security/quick-setup", strings.NewReader(`{"username":"not-authorized","password":"SyntheticOnly!123","apiToken":"synthetic-never-installed","force":true}`))
+		req.RemoteAddr = "127.0.0.1:12345"
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Recovery-Token", token)
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+		if rec.Code != http.StatusUnauthorized || len(rec.Result().Cookies()) != 0 {
+			t.Fatalf("failed consumption admitted unauthenticated credential replacement: %d", rec.Code)
+		}
+		config.Mu.RLock()
+		unchanged := router.config.AuthUser == beforeUser && router.config.AuthPass == beforePass && reflect.DeepEqual(router.config.APITokens, beforeTokens)
+		config.Mu.RUnlock()
+		if !unchanged || strings.Contains(rec.Body.String(), store.dataPath) {
+			t.Fatal("refused credential replacement changed authority or disclosed storage")
+		}
+		restore()
+		if !bytes.Equal(before, recoveryPersistenceBytes(t, store)) {
+			t.Fatal("refused credential replacement changed saved tokens")
+		}
+	})
+
+	t.Run("rbac_reset", func(t *testing.T) {
+		resetRecoveryStore()
+		t.Cleanup(resetRecoveryStore)
+		provider := NewTenantRBACProvider(t.TempDir())
+		t.Cleanup(func() { _ = provider.Close() })
+		dir := t.TempDir()
+		store := ensureRecoveryTokenStore(dir)
+		token, err := store.GenerateRecoveryToken(time.Hour, "127.0.0.1")
+		if err != nil {
+			t.Fatal(err)
+		}
+		before := recoveryPersistenceBytes(t, store)
+		restore := blockRecoveryPersistence(t, store, "rename")
+		handlers := NewRBACHandlers(nil, provider)
+		body := fmt.Sprintf(`{"org_id":"recovery-fixture","username":"not-authorized","recovery_token":%q}`, token)
+		req := httptest.NewRequest(http.MethodPost, "/api/admin/rbac/reset-admin", strings.NewReader(body))
+		req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "recovery-fixture"))
+		req.RemoteAddr = "127.0.0.1:12345"
+		rec := httptest.NewRecorder()
+		handlers.HandleRBACAdminReset(rec, req)
+		if rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), `"invalid_token"`) || provider.ManagerCount() != 0 {
+			t.Fatalf("failed consumption admitted role reset: %d", rec.Code)
+		}
+		if strings.Contains(rec.Body.String(), dir) || strings.Contains(rec.Body.String(), token) {
+			t.Fatal("refusal disclosed storage or token")
+		}
+		restore()
+		if !bytes.Equal(before, recoveryPersistenceBytes(t, store)) {
+			t.Fatal("refused reset changed saved tokens")
+		}
+		// The private extension runtime must use the same refusing validator.
+		_, err = store.GenerateRecoveryToken(time.Hour, "127.0.0.1")
+		if err != nil {
+			t.Fatal(err)
+		}
+		restore = blockRecoveryPersistence(t, store, "rename")
+		runtime := newRBACAdminRuntime(handlers)
+		if runtime.ValidateRecoveryToken(token, "127.0.0.1") {
+			t.Fatal("extension runtime admitted failed persistence")
+		}
+		restore()
+		if _, present := provider.PeekManager("recovery-fixture"); present {
+			t.Fatal("refused recovery initialized an RBAC manager")
+		}
+	})
+}

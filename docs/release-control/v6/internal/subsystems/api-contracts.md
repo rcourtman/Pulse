@@ -21,6 +21,29 @@
 
 ## Purpose
 
+### Recovery-token authority waits for its saved single-use marker
+
+Recovery-token issuance and consumption acknowledge only a complete owner-only
+snapshot published by atomic rename. Preparation, encoding, write, file-sync,
+close or rename failure returns no new token and grants no token-derived
+recovery authority. Failed issuance removes its unreturned record; failed
+consumption restores the prior live record so a deliberately retried operation
+can proceed after storage repair. The store lock spans validation, persistence
+and publication, so concurrent consumers cannot authorize the same token.
+An accepted use remains consumed when the store is reloaded after an ordinary
+process restart. This does not promise directory-fsync/power-loss durability.
+
+Known legacy tokens remain in memory when their hashed rewrite fails, but a
+later consumption must publish the complete hashed inventory before granting
+anything. Cleanup/migration failures are logged as failures, not saved success.
+Existing IP binding, expiry, loopback-only sessions, authenticated alternatives,
+CSRF, tenant/scope checks and raw-secret exclusions remain unchanged.
+`recovery_token_persistence_test.go` exercises actual filesystem failures,
+rollback, unrelated authority, concurrent use and reload; the registered
+`TestRecoveryTokenPersistenceHTTP` in `contract_test.go` checks existing
+issuance/refusal payloads and recovery, quick-setup and RBAC consuming boundaries.
+
+
 ### Update availability is distinct from an installable offer
 
 `GET /api/updates/check` carries additive `availability` values `available`,

@@ -587,7 +587,10 @@ func TestRecoveryTokenStore_Persistence_FilterExpiredOnLoad(t *testing.T) {
 		ExpiresAt: time.Now().Add(-time.Hour), // Expired
 		Used:      false,
 	}
-	store1.saveUnsafe()
+	if err := store1.saveUnsafe(); err != nil {
+		store1.mu.Unlock()
+		t.Fatal(err)
+	}
 	store1.mu.Unlock()
 
 	// Create second store and load
@@ -628,7 +631,10 @@ func TestRecoveryTokenStore_Persistence_KeepRecentlyUsedOnLoad(t *testing.T) {
 		Used:      true,
 		UsedAt:    time.Now().Add(-time.Hour), // Used within 24 hours
 	}
-	store1.saveUnsafe()
+	if err := store1.saveUnsafe(); err != nil {
+		store1.mu.Unlock()
+		t.Fatal(err)
+	}
 	store1.mu.Unlock()
 
 	// Create second store and load
@@ -768,8 +774,9 @@ func TestRecoveryTokenStore_SaveUnsafe_MkdirAllError(t *testing.T) {
 		Used:      false,
 	}
 
-	// saveUnsafe should handle error gracefully (logs but doesn't panic)
-	store.saveUnsafe()
+	if err := store.saveUnsafe(); err == nil {
+		t.Fatal("saveUnsafe must report persistence failure")
+	}
 
 	// Verify the blocking file still exists (wasn't overwritten)
 	data, err := os.ReadFile(blockedPath)
@@ -815,8 +822,9 @@ func TestRecoveryTokenStore_SaveUnsafe_WriteFileError(t *testing.T) {
 		_ = os.Chmod(readOnlyDir, 0755) // Restore for cleanup
 	})
 
-	// saveUnsafe should handle error gracefully (logs but doesn't panic)
-	store.saveUnsafe()
+	if err := store.saveUnsafe(); err == nil {
+		t.Fatal("saveUnsafe must report persistence failure")
+	}
 
 	// Verify no file was created
 	tokensFile := filepath.Join(readOnlyDir, "recovery_tokens.json")
@@ -850,8 +858,9 @@ func TestRecoveryTokenStore_SaveUnsafe_RenameError(t *testing.T) {
 		Used:      false,
 	}
 
-	// saveUnsafe should handle rename error gracefully
-	store.saveUnsafe()
+	if err := store.saveUnsafe(); err == nil {
+		t.Fatal("saveUnsafe must report rename failure")
+	}
 
 	// The blocking directory should still exist (rename failed)
 	info, err := os.Stat(tokensFilePath)
