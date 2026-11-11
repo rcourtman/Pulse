@@ -1446,6 +1446,109 @@ describe('PatrolAttentionWorkbench', () => {
     );
   });
 
+  it("leads the item with Patrol's answer and opens its waiting fix in the shared review", async () => {
+    const active = item();
+    apiMocks.getList.mockResolvedValue(
+      listResponse([active], summary({ activeCount: 1, openCount: 1, calm: false })),
+    );
+    apiMocks.getDetail.mockResolvedValue(detail(active));
+    apiMocks.getAction.mockResolvedValue({ audit: { id: 'act-db-start' } });
+    apiMocks.loadPatrolFindings.mockResolvedValue(undefined);
+    const onOpenFindings = vi.fn();
+    const withFix = mirroredFinding({
+      id: 'finding-db',
+      title: 'Database VM cannot reach its storage',
+      mirrorsAlertId: undefined,
+      mirrorsAlertType: undefined,
+      investigationStatus: 'completed',
+      investigationRecord: {
+        id: 'record-1',
+        finding_id: 'finding-db',
+        subject: { resource_id: 'pve:vm:101' },
+        trigger: { detected_at: '2026-07-19T07:00:00Z' },
+        status: 'completed',
+        evidence: [],
+        verification: [],
+        rollback: [],
+        tools_used: [],
+        started_at: '2026-07-19T07:01:00Z',
+        conclusion:
+          '### Root Cause\nThe storage VM is stopped.\n\n### Conclusion\nNEEDS_ATTENTION: The storage VM is stopped. Start it.',
+        action: {
+          action_id: 'act-db-start',
+          resource_id: 'pve:vm:200',
+          capability_name: 'start',
+          state: 'pending_approval',
+          plan: {
+            actionId: 'act-db-start',
+            requestId: 'proposal-db-start',
+            allowed: true,
+            requiresApproval: true,
+            approvalPolicy: 'admin',
+            rollbackAvailable: false,
+          },
+        },
+      },
+    });
+    render(() => (
+      <Router>
+        <Route
+          path="/patrol"
+          component={() => (
+            <PatrolAttentionWorkbench findings={() => [withFix]} onOpenFindings={onOpenFindings} />
+          )}
+        />
+      </Router>
+    ));
+
+    // The row says a fix is waiting before the item is opened.
+    expect(await screen.findByTestId('patrol-attention-row-finding')).toHaveTextContent(
+      'Fix ready to approve',
+    );
+    fireEvent.click(await screen.findByRole('button', { name: /Database VM · Disk pressure/ }));
+
+    const answer = within(await screen.findByTestId('patrol-attention-finding'));
+    expect(answer.getByText('Database VM cannot reach its storage')).toBeInTheDocument();
+    expect(answer.getByText('The storage VM is stopped. Start it.')).toBeInTheDocument();
+    // The item's generic advice steps aside for Patrol's answer.
+    expect(screen.queryByText('Next step')).not.toBeInTheDocument();
+
+    fireEvent.click(answer.getByRole('button', { name: 'Review and approve' }));
+    const review = await screen.findByRole('dialog', { name: 'Governed action review' });
+    expect(review).toHaveTextContent('act-db-start');
+    expect(apiMocks.getAction).toHaveBeenCalledWith('act-db-start');
+
+    fireEvent.click(within(review).getByRole('button', { name: 'Complete action' }));
+    await waitFor(() => expect(apiMocks.loadPatrolFindings).toHaveBeenCalled());
+
+    // The detail re-reads after the action changed, so find the answer again.
+    fireEvent.click(within(review).getByRole('button', { name: 'Close action review' }));
+    fireEvent.click(
+      within(await screen.findByTestId('patrol-attention-finding')).getByRole('button', {
+        name: 'Open the full finding',
+      }),
+    );
+    expect(onOpenFindings).toHaveBeenCalledWith(active);
+  });
+
+  it('keeps the generic next step when Patrol has no finding on the item', async () => {
+    const active = item({ recommendedNextStep: 'Check the disk before making changes.' });
+    apiMocks.getList.mockResolvedValue(
+      listResponse([active], summary({ activeCount: 1, openCount: 1, calm: false })),
+    );
+    apiMocks.getDetail.mockResolvedValue(detail(active));
+    render(() => (
+      <Router>
+        <Route path="/patrol" component={() => <PatrolAttentionWorkbench findings={() => []} />} />
+      </Router>
+    ));
+    fireEvent.click(await screen.findByRole('button', { name: /Database VM · Disk pressure/ }));
+
+    expect(await screen.findByText('Check the disk before making changes.')).toBeInTheDocument();
+    expect(screen.queryByTestId('patrol-attention-finding')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('patrol-attention-row-finding')).not.toBeInTheDocument();
+  });
+
   it('collapses a flapping item into one label and a summarised timeline', async () => {
     const flapping = item({
       id: 'record-flap',
