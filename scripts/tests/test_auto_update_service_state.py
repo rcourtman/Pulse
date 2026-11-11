@@ -536,34 +536,75 @@ child.wait()
                                 self.fail(f"owned journal reader {pid} remains in state {state}")
                             time.sleep(0.01)
 
-    def test_real_logger_failure_drains_installer_and_preserves_recovery(self):
-        # More than a pipe buffer, plus an unterminated final line. These run
-        # production log(), perform_update and its collector together: a green
-        # log() double cannot establish that a real sink failure is retained.
+    def assert_real_logger_pipeline(self, state, failure_mode):
+        # Retain the complete >128 KiB stream, early/consecutive/final sink
+        # failures and unterminated last line. Each independent transaction is
+        # a discovered control, not twelve transactions sharing one deadline.
         lines = ["opening"] + ["x" * 2048 for _ in range(64)] + ["final installer evidence"]
-        for state in ("active", "inactive"):
-            for failures in ({}, {1: 73}, {1: 73, 2: 42}, {len(lines): 73}, {1: 124}, {1: 137}):
-                with self.subTest(state=state, failures=failures):
-                    r = self.run_fixture(state=state, success=True, real_log=True,
-                                         installer_output="\n".join(lines), collector_failures=failures)
-                    self.assertTrue(r["installer_finished"])
-                    self.assertEqual(r["collected"], len(lines))
-                    self.assertTrue("installer: final installer evidence" in r["output"])
-                    installer_calls = [args for args in r["logger_calls"] if args[4].startswith("installer: ")]
-                    self.assertEqual(len(installer_calls), len(lines))
-                    self.assertTrue(all(args[:4] == ["-t", "pulse-custom@department-auto-update", "-p", "user.info"]
-                                        for args in installer_calls))
-                    first_failure = next(iter(failures.values()), 0)
-                    expected = (f"Installer pipeline failed (installer exit: 0; log collector exit: {first_failure})"
-                                if failures else "Installer completed; verifying update (installer exit: 0; log collector exit: 0)")
-                    self.assertTrue(expected in r["output"], "real logger exit was not retained by the collector")
-                    self.assertEqual(r["exit"], 1 if failures else 0)
-                    self.assertEqual("Update successfully installed and verified" in r["output"], not failures)
-                    self.assertEqual(r["binary"], b"#!/bin/sh\necho 'Pulse v6.5.0'\n" if failures
-                                     else b"#!/bin/sh\necho 'Pulse v6.6.0'\n")
-                    self.assertEqual(r["version"], "v6.5.0\n" if failures else "v6.6.0\n")
-                    self.assertEqual(r["started"], state == "active")
-                    self.assertEqual(r["backups"], [])
+        failures = {
+            "success": {},
+            "first_failure": {1: 73},
+            "consecutive_failures": {1: 73, 2: 42},
+            "final_failure": {len(lines): 73},
+            "timeout_failure": {1: 124},
+            "kill_failure": {1: 137},
+        }[failure_mode]
+        r = self.run_fixture(state=state, success=True, real_log=True,
+                             installer_output="\n".join(lines), collector_failures=failures)
+        self.assertTrue(r["installer_finished"])
+        self.assertEqual(r["collected"], len(lines))
+        self.assertTrue("installer: final installer evidence" in r["output"])
+        installer_calls = [args for args in r["logger_calls"] if args[4].startswith("installer: ")]
+        self.assertEqual(len(installer_calls), len(lines))
+        self.assertTrue(all(args[:4] == ["-t", "pulse-custom@department-auto-update", "-p", "user.info"]
+                            for args in installer_calls))
+        first_failure = next(iter(failures.values()), 0)
+        expected = (f"Installer pipeline failed (installer exit: 0; log collector exit: {first_failure})"
+                    if failures else "Installer completed; verifying update (installer exit: 0; log collector exit: 0)")
+        self.assertTrue(expected in r["output"], "real logger exit was not retained by the collector")
+        self.assertEqual(r["exit"], 1 if failures else 0)
+        self.assertEqual("Update successfully installed and verified" in r["output"], not failures)
+        self.assertEqual(r["binary"], b"#!/bin/sh\necho 'Pulse v6.5.0'\n" if failures
+                         else b"#!/bin/sh\necho 'Pulse v6.6.0'\n")
+        self.assertEqual(r["version"], "v6.5.0\n" if failures else "v6.6.0\n")
+        self.assertEqual(r["started"], state == "active")
+        self.assertEqual(r["backups"], [])
+
+    def test_real_logger_active_success(self):
+        self.assert_real_logger_pipeline("active", "success")
+
+    def test_real_logger_active_first_failure(self):
+        self.assert_real_logger_pipeline("active", "first_failure")
+
+    def test_real_logger_active_consecutive_failures(self):
+        self.assert_real_logger_pipeline("active", "consecutive_failures")
+
+    def test_real_logger_active_final_failure(self):
+        self.assert_real_logger_pipeline("active", "final_failure")
+
+    def test_real_logger_active_timeout_failure(self):
+        self.assert_real_logger_pipeline("active", "timeout_failure")
+
+    def test_real_logger_active_kill_failure(self):
+        self.assert_real_logger_pipeline("active", "kill_failure")
+
+    def test_real_logger_inactive_success(self):
+        self.assert_real_logger_pipeline("inactive", "success")
+
+    def test_real_logger_inactive_first_failure(self):
+        self.assert_real_logger_pipeline("inactive", "first_failure")
+
+    def test_real_logger_inactive_consecutive_failures(self):
+        self.assert_real_logger_pipeline("inactive", "consecutive_failures")
+
+    def test_real_logger_inactive_final_failure(self):
+        self.assert_real_logger_pipeline("inactive", "final_failure")
+
+    def test_real_logger_inactive_timeout_failure(self):
+        self.assert_real_logger_pipeline("inactive", "timeout_failure")
+
+    def test_real_logger_inactive_kill_failure(self):
+        self.assert_real_logger_pipeline("inactive", "kill_failure")
 
 
 class UpdateServiceState(UpdaterFixture):
