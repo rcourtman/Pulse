@@ -13803,6 +13803,18 @@ layout-only change. It reads no new attention fields, sends no new request,
 and leaves the attention projection, lifecycle, and queue ordering contracts
 above unchanged.
 
+### Patrol's answer on the attention item
+
+The "What Patrol found" section on a Patrol attention item, its row label and
+the conclusion-first finding review read only payloads that already exist: the
+finding's `investigation_record.conclusion`, whose Conclusion section is the
+investigation's own outcome line, and `investigation_record.action`, the typed
+action reference with its `state`. No attention or finding field is added and
+no route changes. Opening a waiting fix reads `GET /api/actions/{id}` and
+hands the answer to the shared action review, which remains the only caller of
+the decision and execute routes. The action's target name is resolved with the
+existing resource lookup by the action's `resource_id`.
+
 ### Router-owned worker shutdown
 
 Each Router owns its five route-specific limiters, eight endpoint-category

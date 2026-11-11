@@ -2594,9 +2594,19 @@ inconclusive verification. Patrol owns that detection and investigation
 context, while the dedicated Actions route is the canonical operator hub for
 decision, execution, progress, and durable outcome history. The expanded
 `ApprovalSection` renders the bounded plan, preflight, safety checks,
-verification steps, and rollback availability, then deep-links by exact action
-id into the shared Actions review. It must not call `/api/actions` decision or
-execute mutations itself. Legacy `ProposedFix` and
+verification steps, and rollback availability. For an action that still waits
+on a person (pending approval, planned or approved, with a reviewed plan
+identity) it asks its host to open the shared `ActionReviewDialog` where the
+reader is, as the Patrol inbox does, and it always keeps the deep link by
+exact action id into the Actions route. `FindingsPanel` is that host: it reads
+the action and mounts the dialog at the panel root, because a finding review
+redraws when its finding changes and approving changes it, so a dialog mounted
+inside the review closed itself when used. Neither may call `/api/actions`
+decision or execute mutations: the shared review owns those. The section names the action's own resource as the target, resolved through the
+registry, because a fix often lands on another resource than the finding's
+(the finding on the app that broke, the action on the database it needs), and
+it states the action's waiting state in the reader's terms instead of
+repeating the planner's API message. Legacy `ProposedFix` and
 `ApprovalID` data may explain historical records but must never reveal a raw
 command, present an approve/run control, or reconstruct an executable action;
 when the typed reference is absent the UI says action details are unavailable
@@ -2604,6 +2614,27 @@ and offers an Assistant handoff. Collapsed-row attention state must consult the
 same investigation action reference, so it cannot claim there is no approval
 while the expanded panel has one. Browser proof must exercise pending,
 terminal-verified, and legacy-history states rather than judging only source.
+
+Patrol's answer leads wherever a person meets the problem. A finding review
+whose investigation ended with a Conclusion section shows that line first
+(`getPatrolInvestigationVerdict` in
+`frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts`,
+outcome marker and repeated registry IDs removed), then the action, and keeps
+the first-look description, impact, evidence and recommendation behind a
+"First look, before the investigation" expansion, because the first look was
+written before any evidence was read and can disagree with the conclusion.
+`InvestigationSection` folds the full summary and record fields behind "Full
+investigation" in that case and does not list the tools twice. The Patrol
+inbox item shows the same answer in a "What Patrol found" section
+(`getPatrolAttentionFindingRead` in `patrolHomePresentation.ts`): the open
+finding that restates the item's alert or sits on its resource, a fix that
+waits on a person first, with a button that opens the shared review and one
+that opens the full finding. The list row names that state, and the item's
+generic next step steps aside once Patrol has a finding. Dismissed and
+resolved findings say nothing there. The investigation record's
+`recommended_action` no longer repeats the finding's first-look
+recommendation once the investigation has written its own summary
+(`BuildFindingInvestigationRecord` in `internal/ai/investigation_records.go`).
 The typed reference must retain the exact reviewed `planHash` so Patrol can
 surface missing identity as an explicit replan-required state before handing
 off. The Actions review remains the only browser surface that may expose

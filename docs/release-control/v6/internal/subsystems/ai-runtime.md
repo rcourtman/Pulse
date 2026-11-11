@@ -3512,7 +3512,17 @@ resolve canonical/source IDs and unique aliases before collection, reject
     `BuildFindingInvestigationRecord` then propagates `Finding.Impact`
     into `InvestigationRecord.Impact` without transformation, and the AI
     engine must not synthesize impact text from severity or category when
-    the finding source has not authored one. The Patrol runtime-failure
+    the finding source has not authored one. `Finding.Recommendation` is
+    different: it is a first-look guess written before any evidence is
+    read, so `BuildFindingInvestigationRecord` carries it into
+    `InvestigationRecord.RecommendedAction` only until the investigation
+    has written its own summary. Once `InvestigationSession.Summary` is
+    set, the summary is the conclusion and holds the investigation's own
+    recommendation, and the first-look recommendation is dropped so the
+    record never shows the two side by side (a live run recommended
+    restarting an app under a summary that said to start its stopped
+    database). A proposed fix's description still fills the field. The
+    Patrol runtime-failure
     classifier (`internal/ai/patrol_runtime_failure.go`) is the canonical
     example: it stamps a constant impact string on every runtime-failure
     cause because the operational consequence of a non-running Patrol is

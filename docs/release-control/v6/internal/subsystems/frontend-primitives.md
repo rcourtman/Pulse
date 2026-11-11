@@ -5497,6 +5497,14 @@ non-empty.
 `Open resource` in the attention detail is a `ButtonLink` whose destination
 comes from `buildResourcePagePath`; the workbench hides it when no platform
 page can show the subject instead of linking to a page that cannot.
+The "What Patrol found" section on an attention item is built from the same
+findings accessor and shared primitives: a `MetadataBadge` for the state, and
+shared `Button`s for `Review and approve` (or `Review and run`) and `Open the
+full finding`, with the phone touch-target class the other detail buttons use.
+The row's state label sits in the existing metadata line and adds no row
+height. The review button opens the workbench's existing shared
+`ActionReviewDialog`; no second dialog shell is created for it. Phone-width
+checks must show the section and its buttons without horizontal overflow.
 The feature shell keeps the independent attention workbench mounted when
 Patrol is off or its model needs setup, while retaining the existing setup task
 above it. Desktop and narrow browser checks must show the task and attention

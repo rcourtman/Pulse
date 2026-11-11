@@ -381,10 +381,10 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 				Str("agentID", cfg.AgentID).
 				Msg("Loaded persisted agent ID")
 		} else if err != nil && !errors.Is(err, fs.ErrNotExist) {
-			logger.Warn().
-				Err(err).
-				Str("path", cfg.AgentIDFile).
-				Msg("Failed to read agent-id-file; will fall back to machine-id and rewrite the file")
+			// An unreadable saved identity is not a first start. Deriving a
+			// replacement here can split History and overwrite that identity
+			// when its directory is writable even though the file is not.
+			return errors.New("cannot read saved agent ID; check that the configured agent-id file is readable by the agent service; refusing to replace the saved identity")
 		}
 	}
 	if cfg.AgentID == "" {

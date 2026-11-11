@@ -511,3 +511,28 @@ func TestDockerContainerUpdateExecutionSummariesCarryUncertaintyAndAgentError(t 
 		})
 	}
 }
+
+// The compensation sentence is shown to every user who runs a container
+// action, so it names the operation that ran and nothing about a test rig.
+func TestDockerLifecycleCompensationSummaryNamesTheOperation(t *testing.T) {
+	cases := map[string]string{
+		agentexec.DockerContainerOperationStart:   "Pulse cannot undo a container start.",
+		agentexec.DockerContainerOperationStop:    "Pulse cannot undo a container stop.",
+		agentexec.DockerContainerOperationRestart: "Pulse cannot undo a container restart.",
+	}
+	now := time.Now().UTC()
+	for operation, want := range cases {
+		req := agentexec.DockerContainerLifecyclePayload{Operation: operation}
+		result, err := dockerContainerExecutionResult("app-container:fixture", "agent-1", req, dockerResultFacts(now, true, true, true, true), nil, now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := result.ActionResultV2.Compensation.Summary
+		if got != want {
+			t.Fatalf("%s compensation summary = %q, want %q", operation, got, want)
+		}
+		if strings.Contains(strings.ToLower(got), "fixture") || strings.Contains(strings.ToLower(got), "lab") {
+			t.Fatalf("%s compensation summary mentions the test rig: %q", operation, got)
+		}
+	}
+}

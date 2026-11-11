@@ -69,7 +69,7 @@ func dockerContainerExecutionResult(resourceID, agentID string, req agentexec.Do
 
 	canonical := unified.ActionResultV2{
 		Version: unified.ActionResultV2Version, Execution: execution, Verification: verification,
-		Compensation: unified.ActionCompensationTruth{Support: unified.ActionCompensationUnavailable, Status: unified.ActionCompensationNotAvailable, Summary: "Container restart is non-rollbackable. Lab fixture cleanup is compensation for the disposable test environment, not product rollback."},
+		Compensation: unified.ActionCompensationTruth{Support: unified.ActionCompensationUnavailable, Status: unified.ActionCompensationNotAvailable, Summary: dockerLifecycleCompensationSummary(req.Operation)},
 	}
 	legacy := &unified.ExecutionResult{Output: summary}
 	projected, _, err := unified.ApplyActionResultV2(legacy, canonical)
@@ -359,6 +359,14 @@ func dockerLifecycleExecutionSummary(operation string, facts agentexec.DockerCon
 		summary = "The agent did not " + base + " the container."
 	}
 	return summary + dockerAgentErrorSentence(facts.Error)
+}
+
+// dockerLifecycleCompensationSummary says, for the operation that ran, that
+// Pulse has no way to undo it. Every user who runs a container action reads
+// this sentence in the action's recorded outcome.
+func dockerLifecycleCompensationSummary(operation string) string {
+	base, _ := dockerLifecycleVerbs(operation)
+	return "Pulse cannot undo a container " + base + "."
 }
 
 // dockerAgentErrorSentence appends the agent's own error text, if any, as a

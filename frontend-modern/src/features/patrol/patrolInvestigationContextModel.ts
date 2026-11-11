@@ -70,6 +70,54 @@ export function buildPatrolInvestigationRecordPresentation(
   };
 }
 
+export interface PatrolInvestigationVerdict {
+  /** The investigation's own one-line decision, without its outcome marker. */
+  text: string;
+}
+
+const SUMMARY_HEADING = /^\s{0,3}#{1,6}\s+(.*?)\s*#*\s*$/;
+const OUTCOME_MARKER = /^\s*(?:\*\*)?(?:RESOLVED|CANNOT_FIX|NEEDS_ATTENTION)(?:\*\*)?\s*:\s*/i;
+// Identifiers the model repeats beside a name, such as
+// "nextcloud-db (app-container-f678dd3b3f36f8ee, action_id act_a6336838...)".
+// The name already says which resource it is, the button opens the action,
+// and the full text stays in the expansion.
+const ACTION_ID_MENTION = /,?\s*\baction[_ ]id\s+act_[0-9a-f]+/gi;
+const REGISTRY_ID = /\b(?:[a-z][a-z0-9]*-)+[0-9a-f]{16}\b/g;
+const EMPTY_ASIDE = /\s*\(\s*[,;]?\s*\)/g;
+
+/**
+ * The line an investigation ends on: its Conclusion section, which the
+ * investigation prompt asks for as one outcome line. A finding review leads
+ * with it, because it is the answer the rest of the summary argues for.
+ * Returns null for a summary without that section, such as a finding nobody
+ * investigated, whose record carries the first-look description instead.
+ */
+export function getPatrolInvestigationVerdict(
+  summary?: string | null,
+): PatrolInvestigationVerdict | null {
+  if (typeof summary !== 'string') return null;
+  let inConclusion = false;
+  const lines: string[] = [];
+  for (const raw of summary.split('\n')) {
+    const heading = SUMMARY_HEADING.exec(raw);
+    if (heading) {
+      inConclusion = heading[1].trim().toLowerCase() === 'conclusion';
+      continue;
+    }
+    if (inConclusion && raw.trim()) lines.push(raw.trim());
+  }
+  const text = lines
+    .join(' ')
+    .replace(OUTCOME_MARKER, '')
+    .replace(ACTION_ID_MENTION, '')
+    .replace(REGISTRY_ID, '')
+    .replace(EMPTY_ASIDE, '')
+    .replace(/\s+([,.;:])/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return text ? { text } : null;
+}
+
 function presentProposedFix(
   fix?: InvestigationRecordFix | null,
 ): PatrolInvestigationRecordPresentation['proposedFix'] | undefined {
