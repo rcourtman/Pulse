@@ -3775,20 +3775,7 @@ func (p *PatrolService) seedFindingsAndContextState(scope *PatrolScope, snap pat
 			// This runs before the model sees anything, so a finding on a removed
 			// container is closed before a report about its replacement arrives.
 			if stateHasGlobalResources && !inGlobalState {
-				if ok := p.findings.ResolveWithReason(f.ID, "Resource no longer exists in infrastructure"); ok {
-					// Notify unified store
-					p.mu.RLock()
-					resolveUnified := p.unifiedFindingResolver
-					p.mu.RUnlock()
-					if resolveUnified != nil {
-						resolveUnified(f.ID)
-					}
-					log.Info().
-						Str("finding_id", f.ID).
-						Str("resource_id", f.ResourceID).
-						Str("resource_name", f.ResourceName).
-						Msg("AI Patrol: Auto-resolved finding for deleted resource")
-				}
+				p.resolveFindingForRemovedResource(f)
 				continue
 			}
 			if !inScopedState {
