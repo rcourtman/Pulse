@@ -51,6 +51,7 @@ func (p *PatrolService) Start(ctx context.Context) {
 
 	go p.patrolLoop(ctx)
 	go p.remindSweepLoop(ctx)
+	go p.removedResourceSweepLoop(ctx)
 	go p.objectiveObserverLoop(ctx)
 }
 

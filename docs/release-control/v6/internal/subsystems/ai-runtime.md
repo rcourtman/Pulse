@@ -4624,6 +4624,19 @@ by the next run that looks at the container, with one notification and, where
 Patrol investigates, one investigation. Proof:
 `internal/ai/patrol_finding_replaced_resource_test.go`.
 
+The same close also happens between runs. The inventory has no removal event,
+so `removedResourceSweepLoop` compares the open findings with the inventory
+Patrol already reads once a minute (`sweepFindingsForRemovedResources`, the
+same `findingResourceInInventory` test). It closes a finding once its resource
+has been missing on every look for `removedResourceGrace` (3 minutes). A run
+closes on one look, and the sweep must not: it also looks while the inventory
+refills after a restart or a monitor reload, before agents have reported. A
+resource that is back starts the count over, and an inventory with nothing in
+it closes nothing and counts for nothing. The sweep calls no model, records no
+run and keeps its memory in the loop, not on disk. Without it a finding on a
+removed container stayed open until the next run, up to six hours on the
+default schedule. Proof: `internal/ai/patrol_removed_resources_test.go`.
+
 The route-backed Proxmox platform tab is app-shell navigation only. Adding the
 tab through `frontend-modern/src/App.tsx` and
 `frontend-modern/src/AppLayout.tsx` must not fork Assistant or Patrol shell
