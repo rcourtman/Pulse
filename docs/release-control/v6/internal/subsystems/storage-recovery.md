@@ -4966,6 +4966,13 @@ vdev layout is reported` in
 
 ### A guest start can run through the node's own Pulse agent
 
+`internal/api/proxmox_guest_action_executor.go` now sends that start only to
+an agent Pulse has confirmed runs on the guest's own node, and refuses any
+other with `guest_start_agent_unconfirmed`. A route it planned on the action
+runner demands a runner again at dispatch. Both decisions read existing
+resource state, and neither changes backup, snapshot, replication or recovery
+behaviour.
+
 `internal/api/proxmox_guest_action_executor.go` now routes a guest `start` to
 the node's own collector command session when no action runner is connected
 and that session reported that it can start guests. Stop, shutdown and reboot

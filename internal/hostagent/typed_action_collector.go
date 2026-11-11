@@ -21,7 +21,11 @@ import (
 //
 // Nothing runs until prepare has passed once in this process. prepare stops
 // this collector's stale units, so it must never run while one of them could
-// be in flight, and the ready flag is what guarantees that.
+// be in flight, and the ready flag is what guarantees that. The agent replaces
+// its command client when commands are switched or its identity changes, so
+// every client of one state directory shares one of these
+// (sharedCollectorTypedActions): a new client must not prepare again while an
+// old client's start is still finishing.
 type collectorTypedActions struct {
 	stateDir string
 	logger   zerolog.Logger
@@ -41,8 +45,27 @@ type collectorTypedActions struct {
 
 const (
 	collectorTypedActionPrepareTimeout = 30 * time.Second
-	collectorTypedActionPrepareWait    = 15 * time.Second
+	collectorTypedActionPrepareWait    = 5 * time.Second
 )
+
+var (
+	collectorTypedActionsMu     sync.Mutex
+	collectorTypedActionsShared = map[string]*collectorTypedActions{}
+)
+
+// sharedCollectorTypedActions is this process's one containment for a state
+// directory. Readiness outlives any single command client.
+func sharedCollectorTypedActions(stateDir string, logger zerolog.Logger) *collectorTypedActions {
+	stateDir = strings.TrimSpace(stateDir)
+	collectorTypedActionsMu.Lock()
+	defer collectorTypedActionsMu.Unlock()
+	if shared := collectorTypedActionsShared[stateDir]; shared != nil {
+		return shared
+	}
+	shared := newCollectorTypedActions(stateDir, logger)
+	collectorTypedActionsShared[stateDir] = shared
+	return shared
+}
 
 // errCollectorTypedActionsNotApplicable is the answer on a host that is not a
 // Proxmox node. There is no guest to start there, so the agent reports
@@ -74,7 +97,10 @@ func (c *collectorTypedActions) supervisor() typedActionSupervisor {
 // tried again on the next call, which is the next registration. A preparation
 // that outlasts the wait keeps going in the background and the caller
 // registers without guest start. A later registration does not wait for it
-// again: it reads what the preparation has found so far.
+// again: it reads what the preparation has found so far. The command client
+// notices when the answer changes after it registered and restates it on the
+// live session, so Pulse is not left with a stale answer and nothing running
+// on the session is interrupted.
 func (c *collectorTypedActions) ensure(ctx context.Context) bool {
 	if c == nil {
 		return false

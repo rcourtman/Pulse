@@ -141,7 +141,15 @@ func (e proxmoxGuestActionExecutor) ExecuteAction(ctx context.Context, record un
 	if attempt.OperationKind != "" && agentexec.ProxmoxGuestLifecycleOperationIdentity(agentID, request) != (operationreceipt.Identity{AttemptID: attempt.ID, ActionID: attempt.ActionID, OperationKind: attempt.OperationKind, OperationVersion: attempt.OperationVersion, RequestDigest: attempt.RequestDigest, AgentID: attempt.AgentID}) {
 		return nil, fmt.Errorf("Proxmox guest lifecycle dispatch binding drift")
 	}
-	result, err := typedAgents.ExecuteProxmoxGuestLifecycle(agentCommandContext(ctx), agentID, request)
+	// The session that carries the request is looked up again at dispatch. A
+	// route planned on the runner must still be a runner there: the result is
+	// judged by the runner's rules below, and a collector session that took its
+	// place under the same agent ID has to be refused, not believed.
+	dispatchCtx := agentCommandContext(ctx)
+	if route.runner {
+		dispatchCtx = agentexec.RequireActionRunnerSession(dispatchCtx)
+	}
+	result, err := typedAgents.ExecuteProxmoxGuestLifecycle(dispatchCtx, agentID, request)
 	agentReceivedAt := time.Now().UTC()
 	if err != nil {
 		return nil, err
@@ -258,15 +266,25 @@ func (e proxmoxGuestActionExecutor) proxmoxGuestActionRoute(ctx context.Context,
 	if strings.TrimSpace(operation) != "start" {
 		return proxmoxGuestActionRoute{reasonCode: actionlifecycle.ReasonCodeActionRunnerUnavailable, reason: actionlifecycle.ProxmoxGuestRunnerOnlyReason(node)}
 	}
-	session := e.proxmoxNodeGuestStartSession(ctx, resource)
+	nodeAgent := e.proxmoxGuestNodeAgent(ctx, resource)
+	switch nodeAgent.link {
+	case tools.GuestNodeAgentConfirmed:
+	case tools.GuestNodeAgentUnconfirmed:
+		// Said before anything about the agent's settings. Telling a person
+		// to switch commands on for an agent that may sit on another machine
+		// would open that machine and still leave this start refused.
+		return proxmoxGuestActionRoute{reasonCode: actionlifecycle.ReasonCodeGuestStartAgentUnconfirmed, reason: actionlifecycle.ProxmoxGuestStartAgentUnconfirmedReason(node)}
+	default:
+		return proxmoxGuestActionRoute{reasonCode: actionlifecycle.ReasonCodeGuestStartAgentNotConnected, reason: actionlifecycle.ProxmoxGuestStartAgentNotConnectedReason(node)}
+	}
 	// The node's agent says commands are off. That wins over a session that
 	// has not closed yet, and it is a setting with its own step, not a fault.
-	if hostName, disabled := e.proxmoxNodeCommandsDisabled(ctx, resource); disabled {
-		return proxmoxGuestActionRoute{reasonCode: actionlifecycle.ReasonCodeHostCommandsDisabled, reason: actionlifecycle.HostCommandsDisabledRefusal(firstNonEmpty(hostName, node))}
+	if nodeAgent.commandsDisabled {
+		return proxmoxGuestActionRoute{reasonCode: actionlifecycle.ReasonCodeHostCommandsDisabled, reason: actionlifecycle.HostCommandsDisabledRefusal(firstNonEmpty(nodeAgent.hostName, node))}
 	}
-	switch session.state {
+	switch e.proxmoxGuestStartSessionState(ctx, nodeAgent.agentID) {
 	case proxmoxGuestStartReady:
-		return proxmoxGuestActionRoute{agentID: session.agentID}
+		return proxmoxGuestActionRoute{agentID: nodeAgent.agentID}
 	case proxmoxGuestStartNoReceipts:
 		return proxmoxGuestActionRoute{reasonCode: "operation_receipt_unsupported", reason: proxmoxGuestStartReceiptsReason}
 	case proxmoxGuestStartAgentTooOld:
@@ -303,91 +321,87 @@ const (
 	proxmoxGuestStartNoContainment
 )
 
-type proxmoxGuestStartSession struct {
-	agentID string
-	state   proxmoxGuestStartState
+// agentLookupGuestStartSession memoizes one agent's answer for an availability
+// pass. It sits apart from the session lookups in action_executor.go, which it
+// does not use. It is keyed by the agent's ID, never by a node name: which
+// agent belongs to a guest is read from that guest's own record every time.
+const agentLookupGuestStartSession agentLookupKind = 101
+
+// proxmoxGuestNodeAgent is the agent Pulse confirmed on a guest's node
+// (tools.GuestNodeAgentFor), with what that agent's own report says about
+// command access. agentID, hostName and commandsDisabled are set only for a
+// confirmed agent.
+type proxmoxGuestNodeAgent struct {
+	link             tools.GuestNodeAgentLink
+	agentID          string
+	hostName         string
+	commandsDisabled bool
 }
 
-// These memoize one node's answers for an availability pass. They sit apart
-// from the session lookups in action_executor.go, which they do not use.
-const (
-	agentLookupGuestStartSession    agentLookupKind = 101
-	agentLookupNodeCommandsDisabled agentLookupKind = 102
-)
-
-// proxmoxNodeGuestStartSession finds the collector command session on the
-// machine hosting this guest, by the same node match a runner gets, and reads
-// what its agent reported. Nothing here is inferred from an agent version.
-func (e proxmoxGuestActionExecutor) proxmoxNodeGuestStartSession(ctx context.Context, resource unified.Resource) proxmoxGuestStartSession {
-	lister, ok := e.agents.(proxmoxGuestStartSessionLister)
-	if !ok || resource.Proxmox == nil || e.resources == nil {
-		return proxmoxGuestStartSession{}
-	}
-	result := memoizedAgentLookup(ctx, agentLookupKey{kind: agentLookupGuestStartSession, first: resource.Proxmox.NodeName, second: resource.Proxmox.Instance}, func() agentLookupResult {
-		registry, err := e.resources.buildRegistry(GetOrgID(ctx))
-		if err != nil {
-			return agentLookupResult{}
-		}
-		agent, connected := tools.ConnectedAgentForGuestNode(registry, resource.ID, resource.Proxmox.Instance, resource.Proxmox.NodeName, lister.GetProxmoxGuestStartSessionsForOrganization(GetOrgID(ctx)))
-		if !connected || strings.TrimSpace(agent.AgentID) == "" {
-			return agentLookupResult{}
-		}
-		state := proxmoxGuestStartAgentTooOld
-		switch {
-		case agent.ProxmoxGuestStartVersion == agentexec.ProxmoxGuestStartProtocolVersion:
-			state = proxmoxGuestStartReady
-		case agent.ProxmoxGuestStartUnavailable == agentexec.ProxmoxGuestStartUnavailableNotSystemdService:
-			state = proxmoxGuestStartNotSystemd
-		case agent.ProxmoxGuestStartUnavailable != "":
-			state = proxmoxGuestStartNoContainment
-		case agent.OperationReceiptVersion != operationreceipt.ProtocolVersion:
-			state = proxmoxGuestStartNoReceipts
-		}
-		return agentLookupResult{agentID: agent.AgentID, ok: true, version: int(state)}
-	})
-	if !result.ok {
-		return proxmoxGuestStartSession{}
-	}
-	return proxmoxGuestStartSession{agentID: result.agentID, state: proxmoxGuestStartState(result.version)}
-}
-
-// proxmoxNodeCommandsDisabled reports whether the Pulse agent on this guest's
-// node is reporting with commands off, and names its host. It asks which
-// reporting agent the node's own session would be, by the node match a runner
-// gets. An agent inside the guest is a different machine and is never judged.
-func (e proxmoxGuestActionExecutor) proxmoxNodeCommandsDisabled(ctx context.Context, resource unified.Resource) (string, bool) {
+// proxmoxGuestNodeAgent resolves the agent for one guest from that guest's own
+// record, and how sure Pulse is that it runs on the guest's node. A hostname
+// never selects it: another machine can hold the node's name, and a
+// collector's credential is not bound to one host by an admin the way a
+// runner's is. An agent inside the guest is a different machine and is never
+// the answer. Nothing is cached across guests.
+func (e proxmoxGuestActionExecutor) proxmoxGuestNodeAgent(ctx context.Context, resource unified.Resource) proxmoxGuestNodeAgent {
 	if e.resources == nil || resource.Proxmox == nil {
-		return "", false
+		return proxmoxGuestNodeAgent{}
 	}
-	result := memoizedAgentLookup(ctx, agentLookupKey{kind: agentLookupNodeCommandsDisabled, first: resource.Proxmox.NodeName, second: resource.Proxmox.Instance}, func() agentLookupResult {
-		registry, err := e.resources.buildRegistry(GetOrgID(ctx))
-		if err != nil {
-			return agentLookupResult{}
+	registry, err := e.resources.buildRegistry(GetOrgID(ctx))
+	if err != nil || registry == nil {
+		return proxmoxGuestNodeAgent{}
+	}
+	found := tools.GuestNodeAgentFor(registry, resource.ID)
+	nodeAgent := proxmoxGuestNodeAgent{link: found.Link}
+	if found.Link != tools.GuestNodeAgentConfirmed || found.AgentID == "" {
+		if found.Link == tools.GuestNodeAgentConfirmed {
+			nodeAgent.link = tools.GuestNodeAgentUnconfirmed
 		}
-		hosts := registry.Hosts()
-		reporting := make([]agentexec.ConnectedAgent, 0, len(hosts))
-		for _, host := range hosts {
-			if host != nil && host.AgentID() != "" {
-				reporting = append(reporting, agentexec.ConnectedAgent{AgentID: host.AgentID(), Hostname: host.Hostname()})
-			}
+		return nodeAgent
+	}
+	nodeAgent.agentID = found.AgentID
+	for _, host := range registry.Hosts() {
+		if host == nil || host.AgentID() != nodeAgent.agentID {
+			continue
 		}
-		agent, found := tools.ConnectedAgentForGuestNode(registry, resource.ID, resource.Proxmox.Instance, resource.Proxmox.NodeName, reporting)
-		if !found || strings.TrimSpace(agent.AgentID) == "" {
-			return agentLookupResult{}
+		nodeAgent.hostName = firstNonEmpty(host.Name(), host.Hostname())
+		if hostResource, ok := registry.Get(host.ID()); ok {
+			nodeAgent.commandsDisabled = actionlifecycle.HostCommandsDisabled(hostResource)
 		}
-		for _, host := range hosts {
-			if host == nil || host.AgentID() != agent.AgentID {
+		break
+	}
+	return nodeAgent
+}
+
+// proxmoxGuestStartSessionState reads what the collector command session of
+// one agent reported about starting guests. Nothing here is inferred from an
+// agent version.
+func (e proxmoxGuestActionExecutor) proxmoxGuestStartSessionState(ctx context.Context, agentID string) proxmoxGuestStartState {
+	lister, ok := e.agents.(proxmoxGuestStartSessionLister)
+	if !ok || strings.TrimSpace(agentID) == "" {
+		return proxmoxGuestStartNoSession
+	}
+	return proxmoxGuestStartState(memoizedAgentLookup(ctx, agentLookupKey{kind: agentLookupGuestStartSession, first: agentID}, func() agentLookupResult {
+		for _, agent := range lister.GetProxmoxGuestStartSessionsForOrganization(GetOrgID(ctx)) {
+			if agent.AgentID != agentID {
 				continue
 			}
-			hostResource, ok := registry.Get(host.ID())
-			if !ok || !actionlifecycle.HostCommandsDisabled(hostResource) {
-				return agentLookupResult{}
+			state := proxmoxGuestStartAgentTooOld
+			switch {
+			case agent.ProxmoxGuestStartVersion == agentexec.ProxmoxGuestStartProtocolVersion:
+				state = proxmoxGuestStartReady
+			case agent.ProxmoxGuestStartUnavailable == agentexec.ProxmoxGuestStartUnavailableNotSystemdService:
+				state = proxmoxGuestStartNotSystemd
+			case agent.ProxmoxGuestStartUnavailable != "":
+				state = proxmoxGuestStartNoContainment
+			case agent.OperationReceiptVersion != operationreceipt.ProtocolVersion:
+				state = proxmoxGuestStartNoReceipts
 			}
-			return agentLookupResult{agentID: firstNonEmpty(host.Name(), host.Hostname()), ok: true}
+			return agentLookupResult{agentID: agentID, ok: true, version: int(state)}
 		}
-		return agentLookupResult{}
-	})
-	return result.agentID, result.ok
+		return agentLookupResult{version: int(proxmoxGuestStartNoSession)}
+	}).version)
 }
 
 func (e proxmoxGuestActionExecutor) currentProxmoxGuestResource(ctx context.Context, resourceID, operation string) (unified.Resource, proxmoxGuestKind, error) {

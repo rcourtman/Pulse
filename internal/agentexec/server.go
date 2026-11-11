@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -140,6 +141,11 @@ type agentConn struct {
 	writeMu               sync.Mutex
 	done                  chan struct{}
 	doneOnce              sync.Once
+
+	// guestStart is what the session's agent last said about starting Proxmox
+	// guests, at registration or in a later capabilities message. Nil for an
+	// action runner and for an agent that said nothing.
+	guestStart atomic.Pointer[proxmoxGuestStartReport]
 }
 
 type pendingHostOperation struct {
@@ -1385,12 +1391,9 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		done:                  make(chan struct{}),
 	}
 
-	if admission.RuntimeRole != RuntimeRoleActionRunner {
-		// Only a collector's command session can report guest start. A runner
-		// is admitted by its credential and needs no such report.
-		ac.agent.ProxmoxGuestStartVersion = reg.ProxmoxGuestStartVersion
-		ac.agent.ProxmoxGuestStartUnavailable = NormalizeProxmoxGuestStartUnavailable(reg.ProxmoxGuestStartUnavailable)
-	}
+	// Only a collector's command session can report guest start. A runner is
+	// admitted by its credential and needs no such report.
+	ac.recordProxmoxGuestStart(reg.ProxmoxGuestStartVersion, reg.ProxmoxGuestStartUnavailable)
 
 	// Clear deadline for normal operation - both on the WebSocket and underlying connection
 	// This MUST happen BEFORE registering the agent in the map to avoid race conditions
@@ -1628,6 +1631,14 @@ func (s *Server) readLoop(ac *agentConn) {
 		}
 
 		switch msg.Type {
+		case MsgTypeAgentCapabilities:
+			var capabilities AgentCapabilitiesPayload
+			if err := msg.DecodePayload(&capabilities); err != nil {
+				log.Warn().Err(err).Str("agent_id", ac.agent.AgentID).Msg("Dropping invalid agent capabilities message")
+				continue
+			}
+			ac.recordProxmoxGuestStart(capabilities.ProxmoxGuestStartVersion, capabilities.ProxmoxGuestStartUnavailable)
+
 		case MsgTypeAgentPing:
 			pongMsg, err := NewMessage(MsgTypePong, "", nil)
 			if err != nil {
@@ -2593,7 +2604,7 @@ func dispatchTypedDockerContainerOperation[Res any](
 	// this lookup would allow a replacement connection to inherit the result.
 	if msgType == MsgTypeProxmoxGuestLifecycle {
 		request, _ := payload.(ProxmoxGuestLifecyclePayload)
-		if !proxmoxGuestLifecycleSessionAllows(ac, request.Operation) {
+		if !proxmoxGuestLifecycleSessionAllows(ac, request.Operation) || (ActionRunnerSessionRequired(ctx) && !isTypedActionRunner(ac)) {
 			return nil, fmt.Errorf("Proxmox guest lifecycle requires a typed action-runner session")
 		}
 	}
@@ -2923,6 +2934,23 @@ func isTypedActionRunner(ac *agentConn) bool {
 		ac.admission.ActionCapability == ActionCapabilityTypedV1
 }
 
+type requiredActionRunnerSessionKey struct{}
+
+// RequireActionRunnerSession marks a dispatch that only an action runner may
+// carry. A caller that planned on a runner uses it so that a collector session
+// which took the runner's place under the same agent ID in the meantime is
+// refused, not trusted with the runner's rules for judging the result.
+func RequireActionRunnerSession(ctx context.Context) context.Context {
+	return context.WithValue(ctx, requiredActionRunnerSessionKey{}, true)
+}
+
+// ActionRunnerSessionRequired reports whether a dispatch was marked with
+// RequireActionRunnerSession.
+func ActionRunnerSessionRequired(ctx context.Context) bool {
+	required, _ := ctx.Value(requiredActionRunnerSessionKey{}).(bool)
+	return required
+}
+
 // commandSessionStartsProxmoxGuests reports whether a collector's own command
 // session may carry a typed guest start. The session exists only for a
 // credential with the exec scope, which admission checks and every lookup
@@ -2932,7 +2960,33 @@ func isTypedActionRunner(ac *agentConn) bool {
 func commandSessionStartsProxmoxGuests(ac *agentConn) bool {
 	return ac != nil && requireLegacyFullTrustConnection(ac, "proxmox guest start") == nil &&
 		strings.TrimSpace(ac.admission.ActionCapability) == "" &&
-		ac.agent.ProxmoxGuestStartVersion == ProxmoxGuestStartProtocolVersion
+		ac.proxmoxGuestStart().version == ProxmoxGuestStartProtocolVersion
+}
+
+// proxmoxGuestStartReport is what a collector said about starting guests.
+type proxmoxGuestStartReport struct {
+	version     int
+	unavailable string
+}
+
+// recordProxmoxGuestStart stores a collector's report. It is the agent's own
+// claim either way, at registration or later, and the dispatch gate reads it
+// when a start is sent. A runner's session never stores one.
+func (ac *agentConn) recordProxmoxGuestStart(version int, unavailable string) {
+	if ac == nil || strings.TrimSpace(ac.admission.RuntimeRole) == RuntimeRoleActionRunner {
+		return
+	}
+	ac.guestStart.Store(&proxmoxGuestStartReport{version: version, unavailable: NormalizeProxmoxGuestStartUnavailable(unavailable)})
+}
+
+func (ac *agentConn) proxmoxGuestStart() proxmoxGuestStartReport {
+	if ac == nil {
+		return proxmoxGuestStartReport{}
+	}
+	if report := ac.guestStart.Load(); report != nil {
+		return *report
+	}
+	return proxmoxGuestStartReport{}
 }
 
 // proxmoxGuestLifecycleSessionAllows is the dispatch gate for one typed guest
@@ -2967,7 +3021,10 @@ func (s *Server) GetProxmoxGuestStartSessionsForOrganization(organizationID stri
 	sessions := make([]ConnectedAgent, 0, len(ids))
 	for _, agentID := range ids {
 		if ac, ok := s.connectionForOrganization(organizationID, agentID); ok && requireLegacyFullTrustConnection(ac, "proxmox guest start") == nil {
-			sessions = append(sessions, ac.agent)
+			session := ac.agent
+			report := ac.proxmoxGuestStart()
+			session.ProxmoxGuestStartVersion, session.ProxmoxGuestStartUnavailable = report.version, report.unavailable
+			sessions = append(sessions, session)
 		}
 	}
 	return sessions

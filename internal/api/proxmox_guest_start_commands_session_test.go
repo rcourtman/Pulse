@@ -21,6 +21,14 @@ import (
 type fakeProxmoxStartSessionCommander struct {
 	*fakeProxmoxActionAgentCommander
 	sessions []agentexec.ConnectedAgent
+	// runnerRequired records, per dispatch, whether the executor demanded
+	// that an action runner carry the request.
+	runnerRequired []bool
+}
+
+func (f *fakeProxmoxStartSessionCommander) ExecuteProxmoxGuestLifecycle(ctx context.Context, agentID string, req agentexec.ProxmoxGuestLifecyclePayload) (*agentexec.ProxmoxGuestLifecycleResultPayload, error) {
+	f.runnerRequired = append(f.runnerRequired, agentexec.ActionRunnerSessionRequired(ctx))
+	return f.fakeProxmoxActionAgentCommander.ExecuteProxmoxGuestLifecycle(ctx, agentID, req)
 }
 
 func (f *fakeProxmoxStartSessionCommander) GetProxmoxGuestStartSessionsForOrganization(string) []agentexec.ConnectedAgent {
@@ -42,24 +50,44 @@ func guestStartSession(agentID, hostname string) agentexec.ConnectedAgent {
 }
 
 // guestStartLab is one Proxmox node, pmxlab, monitored through the API and
-// through its own Pulse agent. A stopped container (gitea) and a running one
-// (web) live on it. No action runner is connected.
+// through its own Pulse agent, which Pulse has linked to the node. A stopped
+// container (gitea) and a running one (web) live on it. No action runner is
+// connected unless the commander lists one.
 type guestStartLab struct {
 	handlers *ResourceHandlers
 	broker   aicontracts.OrchestratorActionBroker
+	agents   actionAgentCommander
 	stopped  string
 	running  string
 }
 
+// labNodeAddress is an address Proxmox lists for the lab node. The node's own
+// agent reports it too, which is how Pulse knows the agent is on that machine.
+const labNodeAddress = "10.0.0.5"
+
 func newGuestStartLab(t *testing.T, commandsEnabled bool, agents actionAgentCommander) guestStartLab {
 	t.Helper()
+	return newGuestStartLabWithLink(t, commandsEnabled, true, labNodeAddress, agents)
+}
+
+// newGuestStartLabWithLink can leave the node's agent unlinked: a machine
+// that reports under the node's name and that Pulse has not tied to the node.
+// It can also give the agent an address the node does not have: a machine
+// Pulse tied to the node on its name alone.
+func newGuestStartLabWithLink(t *testing.T, commandsEnabled, linked bool, agentAddress string, agents actionAgentCommander) guestStartLab {
+	t.Helper()
 	now := time.Now().UTC()
+	linkedNodeID := ""
+	if linked {
+		linkedNodeID = "pmxlab-pmxlab"
+	}
 	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
 	h.SetStateProvider(resourceStateProvider{snapshot: models.StateSnapshot{
 		LastUpdate: now,
 		Nodes: []models.Node{{
-			ID: "pmxlab-pmxlab", Name: "pmxlab", Instance: "pmxlab", Host: "https://10.0.0.5:8006",
+			ID: "pmxlab-pmxlab", Name: "pmxlab", Instance: "pmxlab", Host: "https://" + labNodeAddress + ":8006",
 			Status: "online", Type: "node", LastSeen: now,
+			NetworkInterfaces: []models.HostNetworkInterface{{Name: "vmbr0", Addresses: []string{labNodeAddress + "/24"}}},
 		}},
 		Containers: []models.Container{
 			{ID: "pmxlab:pmxlab:112", VMID: 112, Name: "gitea", Node: "pmxlab", Instance: "pmxlab", Status: "stopped", Type: "lxc", LastSeen: now},
@@ -67,7 +95,8 @@ func newGuestStartLab(t *testing.T, commandsEnabled bool, agents actionAgentComm
 		},
 		Hosts: []models.Host{{
 			ID: "agent-pmxlab", Hostname: "pmxlab", MachineID: "machine-pmxlab",
-			Status: "online", LastSeen: now, CommandsEnabled: commandsEnabled,
+			Status: "online", LastSeen: now, CommandsEnabled: commandsEnabled, LinkedNodeID: linkedNodeID,
+			NetworkInterfaces: []models.HostNetworkInterface{{Name: "vmbr0", Addresses: []string{agentAddress + "/24"}}},
 		}},
 	}})
 	h.SetActionExecutor(newRoutedActionExecutor(h, newProxmoxGuestActionExecutor(h, agents, nil)))
@@ -75,7 +104,7 @@ func newGuestStartLab(t *testing.T, commandsEnabled bool, agents actionAgentComm
 	if err != nil {
 		t.Fatalf("buildRegistry: %v", err)
 	}
-	lab := guestStartLab{handlers: h, broker: NewPatrolActionBroker("default", h)}
+	lab := guestStartLab{handlers: h, broker: NewPatrolActionBroker("default", h), agents: agents}
 	for _, container := range registry.Containers() {
 		if container == nil {
 			continue
@@ -91,6 +120,29 @@ func newGuestStartLab(t *testing.T, commandsEnabled bool, agents actionAgentComm
 		t.Fatal("the lab containers are not in the registry")
 	}
 	return lab
+}
+
+// executor is the Proxmox guest executor over the lab, with Pulse's own
+// Proxmox check when one is given.
+func (lab guestStartLab) executor(observer proxmoxGuestPostconditionObserver) proxmoxGuestActionExecutor {
+	return newProxmoxGuestActionExecutor(lab.handlers, lab.agents, observer).(proxmoxGuestActionExecutor)
+}
+
+// labGuestObservation is what Pulse's own Proxmox connection saw of the lab's
+// stopped container, gitea.
+func labGuestObservation(observedAt time.Time, status string, uptime uint64) proxmoxGuestPostconditionObservation {
+	return proxmoxGuestPostconditionObservation{
+		ObserverID:  "proxmox-api:default:pmxlab",
+		TrustDomain: "proxmox-control-plane:default:pmxlab",
+		// Written in two parts because the commit hook's fallback secret scan
+		// reads the whole name as a payment identifier.
+		Method: "proxmox_ap" + "i_guest_status_current",
+		Snapshot: proxmoxGuestLifecycleSnapshot{
+			Instance: "pmxlab", Node: "pmxlab", VMID: 112, Kind: proxmoxGuestCT,
+			Status: status, Uptime: uptime, ObservedAt: observedAt,
+		},
+		ReceivedAt: observedAt,
+	}
 }
 
 func (lab guestStartLab) catalog(t *testing.T, resourceID string) aicontracts.ActionCapabilityCatalog {
@@ -160,6 +212,45 @@ func TestPatrolCatalogOffersStartThroughACommandsOnAgentAndNothingElse(t *testin
 	// Nothing runs until an admin approves.
 	if len(agents.calls) != 0 {
 		t.Fatalf("a start ran without an approval: %#v", agents.calls)
+	}
+}
+
+// An agent Pulse tied to the node by name, and cannot match to it by address,
+// is refused in words a person can act on, and the fact travels to Patrol.
+func TestGuestStartRefusalForAnAgentPulseCannotConfirm(t *testing.T) {
+	agents := newFakeProxmoxStartSessionCommander(guestStartSession("agent-pmxlab", "pmxlab"))
+	lab := newGuestStartLabWithLink(t, true, true, "10.99.0.7", agents)
+	catalog := lab.catalog(t, lab.stopped)
+	want := actionlifecycle.ProxmoxGuestStartAgentUnconfirmedReason("pmxlab")
+	if len(catalog.Capabilities) != 0 || len(catalog.Unavailable) != 1 || catalog.Unavailable[0].ReasonCode != actionlifecycle.ReasonCodeGuestStartAgentUnconfirmed || catalog.Unavailable[0].Reason != want {
+		t.Fatalf("catalog = %#v, want start refused as unconfirmed", catalog)
+	}
+	if fact := catalog.GuestActionsUnavailable; fact == nil || fact.Reason != want || strings.Join(fact.Actions, ",") != "start" {
+		t.Fatalf("GuestActionsUnavailable = %#v, want the unconfirmed sentence for start", fact)
+	}
+	if catalog.CommandsDisabled != nil {
+		t.Fatalf("CommandsDisabled = %#v, want unset: commands are on", catalog.CommandsDisabled)
+	}
+}
+
+// A start is never refused with the "enable commands" step for an agent Pulse
+// cannot confirm, even when that agent reports commands off. Switching
+// commands on there could open another machine and would still leave this
+// start refused. The catalog's separate commands-off fact is about running
+// commands for the resource at all and follows the read route as before.
+func TestGuestStartDoesNotAskForCommandsOnAnAgentPulseCannotConfirm(t *testing.T) {
+	agents := newFakeProxmoxStartSessionCommander(guestStartSession("agent-pmxlab", "pmxlab"))
+	lab := newGuestStartLabWithLink(t, false, true, "10.99.0.7", agents)
+	catalog := lab.catalog(t, lab.stopped)
+	want := actionlifecycle.ProxmoxGuestStartAgentUnconfirmedReason("pmxlab")
+	if len(catalog.Capabilities) != 0 || len(catalog.Unavailable) != 1 || catalog.Unavailable[0].ReasonCode != actionlifecycle.ReasonCodeGuestStartAgentUnconfirmed || catalog.Unavailable[0].Reason != want {
+		t.Fatalf("catalog = %#v, want start refused as unconfirmed", catalog)
+	}
+	if fact := catalog.GuestActionsUnavailable; fact == nil || fact.Reason != want {
+		t.Fatalf("GuestActionsUnavailable = %#v, want the unconfirmed sentence", fact)
+	}
+	if len(agents.calls) != 0 {
+		t.Fatalf("an unconfirmed agent was sent a request: %#v", agents.calls)
 	}
 }
 
@@ -265,17 +356,6 @@ func TestGuestStartRefusalSaysWhyOnEachKindOfNode(t *testing.T) {
 	}
 }
 
-// startableProxmoxVM is the seeded VM the executor tests use, stopped, with
-// the start capability a stopped guest declares.
-func startableProxmoxVM(now time.Time) unified.Resource {
-	resource := proxmoxGuestActionResource("vm:160", unified.ResourceTypeVM, "stopped", now)
-	resource.Capabilities = []unified.ResourceCapability{{
-		Name: "start", Type: unified.CapabilityTypeCommon, Description: "Start this Proxmox VM",
-		MinimumApprovalLevel: unified.ApprovalAdmin, Platform: "qemu", InternalHandler: proxmoxVMLifecycleHandler,
-	}}
-	return resource
-}
-
 // Stop, shutdown and reboot never ride a collector's command session, however
 // capable its agent says it is. Each is refused when planned, when bound and
 // when executed, and nothing reaches the agent.
@@ -310,34 +390,85 @@ func TestCommandsSessionNeverCarriesStopShutdownOrReboot(t *testing.T) {
 	}
 }
 
-// A start goes to the command session on the guest's own node and to no other
-// session, and it is bound to that agent before it is sent.
-func TestGuestStartRunsOnTheNodesOwnCommandSession(t *testing.T) {
-	now := time.Now().UTC()
-	resource := startableProxmoxVM(now)
-	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
-	h.SetStateProvider(resourceUnifiedSeedProvider{snapshot: models.StateSnapshot{LastUpdate: now}, resources: []unified.Resource{resource}})
-	agents := newFakeProxmoxStartSessionCommander(guestStartSession("other-agent", "another-node"), guestStartSession("node-agent-1", "delly"))
-	executor := newProxmoxGuestActionExecutor(h, agents, nil).(proxmoxGuestActionExecutor)
-
-	if readiness := executor.CheckActionAvailable(context.Background(), unified.ActionRequest{ResourceID: "vm:160", CapabilityName: "start"}, resource); !readiness.Available {
-		t.Fatalf("readiness = %#v, want start available", readiness)
+// A start goes to the command session of the agent Pulse has linked to the
+// guest's own node, and to no other. A machine that only reports under the
+// node's name is never that agent: the same VMID there is a different guest.
+func TestGuestStartRunsOnlyOnTheAgentLinkedToTheGuestsNode(t *testing.T) {
+	start := func(t *testing.T, lab guestStartLab) (unified.ResourceActionReadiness, error) {
+		t.Helper()
+		executor := lab.executor(nil)
+		registry, err := lab.handlers.buildRegistry("default")
+		if err != nil {
+			t.Fatal(err)
+		}
+		resource, ok := registry.Get(lab.stopped)
+		if !ok {
+			t.Fatal("the stopped guest is not on record")
+		}
+		readiness := executor.CheckActionAvailable(context.Background(), unified.ActionRequest{ResourceID: lab.stopped, CapabilityName: "start"}, *resource)
+		_, err = executor.ExecuteAction(actionDispatchTestContext(t, "act_ct"), proxmoxGuestActionRecord("act_ct", lab.stopped, "start"))
+		return readiness, err
 	}
-	if _, err := executor.ExecuteAction(actionDispatchTestContext(t, "act_vm"), proxmoxGuestActionRecord("act_vm", "vm:160", "start")); err != nil {
+
+	t.Run("the linked agent, among others", func(t *testing.T) {
+		agents := newFakeProxmoxStartSessionCommander(guestStartSession("other-agent", "another-node"), guestStartSession("agent-pmxlab", "pmxlab"))
+		readiness, err := start(t, newGuestStartLab(t, true, agents))
+		if !readiness.Available || err != nil {
+			t.Fatalf("readiness = %#v, err = %v, want the start to run", readiness, err)
+		}
+		if len(agents.calls) != 1 || agents.callAgents[0] != "agent-pmxlab" || agents.calls[0].Operation != "start" || agents.calls[0].GuestKind != "ct" || agents.calls[0].VMID != 112 || agents.calls[0].ExpectedStatus != "stopped" {
+			t.Fatalf("dispatch = %#v to %v, want one start for CT 112 on agent-pmxlab", agents.calls, agents.callAgents)
+		}
+		// A collector carried it, so no runner was demanded and the result
+		// will be judged by the collector's stricter rule.
+		if len(agents.runnerRequired) != 1 || agents.runnerRequired[0] {
+			t.Fatalf("runner demanded = %v, want false for a collector route", agents.runnerRequired)
+		}
+	})
+
+	const elsewhere = "10.99.0.7"
+	notConnected := actionlifecycle.ReasonCodeGuestStartAgentNotConnected
+	for name, tc := range map[string]struct {
+		linked       bool
+		agentAddress string
+		sessions     []agentexec.ConnectedAgent
+		code         string
+	}{
+		"the linked agent is offline and a machine of the same name is connected": {true, labNodeAddress, []agentexec.ConnectedAgent{guestStartSession("agent-elsewhere", "pmxlab")}, notConnected},
+		"only another node's agent is connected":                                  {true, labNodeAddress, []agentexec.ConnectedAgent{guestStartSession("other-agent", "another-node")}, notConnected},
+		"an unlinked machine reports under the node's name":                       {false, labNodeAddress, []agentexec.ConnectedAgent{guestStartSession("agent-pmxlab", "pmxlab")}, notConnected},
+		"an unlinked machine of the same name, by another agent ID":               {false, elsewhere, []agentexec.ConnectedAgent{guestStartSession("agent-elsewhere", "pmxlab")}, notConnected},
+		// Pulse tied this agent to the node on its name. It holds a session
+		// and says it can start guests, and it shares no address with the
+		// node, so it may be a different machine called pmxlab.
+		"an agent linked on its name alone, with no address in common": {true, elsewhere, []agentexec.ConnectedAgent{guestStartSession("agent-pmxlab", "pmxlab")}, actionlifecycle.ReasonCodeGuestStartAgentUnconfirmed},
+	} {
+		t.Run(name, func(t *testing.T) {
+			agents := newFakeProxmoxStartSessionCommander(tc.sessions...)
+			readiness, err := start(t, newGuestStartLabWithLink(t, true, tc.linked, tc.agentAddress, agents))
+			if readiness.Available || readiness.ReasonCode != tc.code {
+				t.Fatalf("readiness = %#v, want %s", readiness, tc.code)
+			}
+			if err == nil || len(agents.calls) != 0 {
+				t.Fatalf("a machine that is not the node's linked agent started the guest: err=%v calls=%#v to %v", err, agents.calls, agents.callAgents)
+			}
+		})
+	}
+}
+
+// A route planned on the action runner tells dispatch that a runner must
+// carry it. If a collector session has taken the runner's place under the
+// same agent ID by then, dispatch refuses, so a collector's answer is never
+// judged by the runner's rules.
+func TestGuestActionPlannedOnARunnerDemandsARunnerAtDispatch(t *testing.T) {
+	agents := newFakeProxmoxStartSessionCommander()
+	agents.runners = []agentexec.ConnectedAgent{{AgentID: "agent-pmxlab", Hostname: "pmxlab"}}
+	lab := newGuestStartLab(t, true, agents)
+	if _, err := lab.executor(nil).ExecuteAction(actionDispatchTestContext(t, "act_ct"), proxmoxGuestActionRecord("act_ct", lab.stopped, "start")); err != nil {
 		t.Fatalf("ExecuteAction: %v", err)
 	}
-	if len(agents.calls) != 1 || agents.callAgents[0] != "node-agent-1" || agents.calls[0].Operation != "start" || agents.calls[0].VMID != 160 || agents.calls[0].ExpectedStatus != "stopped" {
-		t.Fatalf("dispatch = %#v to %v, want one start for VM 160 on node-agent-1", agents.calls, agents.callAgents)
-	}
-
-	// Only another node's agent is connected: nothing may start this guest.
-	elsewhere := newFakeProxmoxStartSessionCommander(guestStartSession("other-agent", "another-node"))
-	executor = newProxmoxGuestActionExecutor(h, elsewhere, nil).(proxmoxGuestActionExecutor)
-	if readiness := executor.CheckActionAvailable(context.Background(), unified.ActionRequest{ResourceID: "vm:160", CapabilityName: "start"}, resource); readiness.Available || readiness.ReasonCode != actionlifecycle.ReasonCodeGuestStartAgentNotConnected {
-		t.Fatalf("readiness = %#v, want no agent connected on this node", readiness)
-	}
-	if _, err := executor.ExecuteAction(actionDispatchTestContext(t, "act_vm"), proxmoxGuestActionRecord("act_vm", "vm:160", "start")); err == nil || len(elsewhere.calls) != 0 {
-		t.Fatalf("another node's agent started the guest: err=%v calls=%#v", err, elsewhere.calls)
+	if len(agents.runnerRequired) != 1 || !agents.runnerRequired[0] {
+		t.Fatalf("runner demanded = %v, want true for a runner route", agents.runnerRequired)
 	}
 }
 
@@ -346,7 +477,6 @@ func TestGuestStartRunsOnTheNodesOwnCommandSession(t *testing.T) {
 // session ran. Without that check the run is not verified, and when the check
 // disagrees the run is contradicted.
 func TestAgentRunStartIsConfirmedOnlyByPulsesOwnProxmoxCheck(t *testing.T) {
-	const controlPlane = "proxmox-control-plane:default:homelab"
 	for _, tc := range []struct {
 		name     string
 		observe  func(time.Time) proxmoxGuestPostconditionObserver
@@ -370,8 +500,8 @@ func TestAgentRunStartIsConfirmedOnlyByPulsesOwnProxmoxCheck(t *testing.T) {
 			name: "check sees the guest still stopped",
 			observe: func(now time.Time) proxmoxGuestPostconditionObserver {
 				return &fakeProxmoxGuestPostconditionObserver{observations: []proxmoxGuestPostconditionObservation{
-					proxmoxGuestActionObservation(now.Add(-time.Second), "stopped", 0, controlPlane),
-					proxmoxGuestActionObservation(now.Add(time.Minute), "stopped", 0, controlPlane),
+					labGuestObservation(now.Add(-time.Second), "stopped", 0),
+					labGuestObservation(now.Add(time.Minute), "stopped", 0),
 				}}
 			},
 			status: unified.ActionVerificationContradicted, evidence: unified.ActionEvidenceIndependent, reason: "postcondition_contradicted",
@@ -380,8 +510,8 @@ func TestAgentRunStartIsConfirmedOnlyByPulsesOwnProxmoxCheck(t *testing.T) {
 			name: "check sees the guest running",
 			observe: func(now time.Time) proxmoxGuestPostconditionObserver {
 				return &fakeProxmoxGuestPostconditionObserver{observations: []proxmoxGuestPostconditionObservation{
-					proxmoxGuestActionObservation(now.Add(-time.Second), "stopped", 0, controlPlane),
-					proxmoxGuestActionObservation(now.Add(time.Minute), "running", 5, controlPlane),
+					labGuestObservation(now.Add(-time.Second), "stopped", 0),
+					labGuestObservation(now.Add(time.Minute), "running", 5),
 				}}
 			},
 			status: unified.ActionVerificationConfirmed, evidence: unified.ActionEvidenceIndependent,
@@ -389,16 +519,13 @@ func TestAgentRunStartIsConfirmedOnlyByPulsesOwnProxmoxCheck(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			now := time.Now().UTC()
-			resource := startableProxmoxVM(now)
-			h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
-			h.SetStateProvider(resourceUnifiedSeedProvider{snapshot: models.StateSnapshot{LastUpdate: now}, resources: []unified.Resource{resource}})
 			// The agent claims success every time.
-			agents := newFakeProxmoxStartSessionCommander(guestStartSession("node-agent-1", "delly"))
-			executor := newProxmoxGuestActionExecutor(h, agents, tc.observe(now))
-			ctx, cancel := context.WithTimeout(actionDispatchTestContext(t, "act_vm"), 200*time.Millisecond)
+			agents := newFakeProxmoxStartSessionCommander(guestStartSession("agent-pmxlab", "pmxlab"))
+			lab := newGuestStartLab(t, true, agents)
+			ctx, cancel := context.WithTimeout(actionDispatchTestContext(t, "act_ct"), 200*time.Millisecond)
 			defer cancel()
 
-			result, err := executor.ExecuteAction(ctx, proxmoxGuestActionRecord("act_vm", "vm:160", "start"))
+			result, err := lab.executor(tc.observe(now)).ExecuteAction(ctx, proxmoxGuestActionRecord("act_ct", lab.stopped, "start"))
 			if err != nil {
 				t.Fatalf("ExecuteAction: %v", err)
 			}

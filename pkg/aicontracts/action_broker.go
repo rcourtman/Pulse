@@ -55,7 +55,8 @@ type ActionCapabilityCatalog struct {
 	// and Pulse refuses an action it declares because of how its node is set
 	// up: no action runner for stop, shutdown or reboot, or no Pulse agent
 	// that can start a guest. It is how this install is set up, not a fault.
-	// A node whose agent has commands off is CommandsDisabled instead.
+	// A start refused because the node's agent has commands off is not
+	// here: CommandsDisabled carries that, with its step.
 	GuestActionsUnavailable *GuestActionsUnavailable `json:"guest_actions_unavailable,omitempty"`
 }
 

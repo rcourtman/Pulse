@@ -2303,6 +2303,12 @@ func TestProxmoxGuestActionRefusalsSayWhatIsMissingAndWhatToDoNow(t *testing.T) 
 			"no Pulse agent that accepts commands is connected on that node",
 			"Use Proxmox for this.",
 		}},
+		{"agent not confirmed on the node", ProxmoxGuestStartAgentUnconfirmedReason, []string{
+			"Pulse cannot start guests on pve1",
+			"it cannot confirm which Pulse agent runs on that node",
+			"an address that the agent reports and only that node has",
+			"Use Proxmox for this.",
+		}},
 		{"agent too old", ProxmoxGuestStartAgentUpdateReason, []string{
 			"Pulse cannot start guests on pve1 yet",
 			"the Pulse agent on that node is too old",
@@ -2346,7 +2352,7 @@ func TestProxmoxGuestActionRefusalsSayWhatIsMissingAndWhatToDoNow(t *testing.T) 
 // this how the node is set up. A commands-off node is not in that set, because
 // it has its own fact and its own step.
 func TestProxmoxGuestActionUnavailableReasonCodes(t *testing.T) {
-	for _, code := range []string{ReasonCodeActionRunnerUnavailable, ReasonCodeGuestStartAgentNotConnected, ReasonCodeGuestStartAgentUpdateRequired, ReasonCodeGuestStartUnavailable} {
+	for _, code := range []string{ReasonCodeActionRunnerUnavailable, ReasonCodeGuestStartAgentNotConnected, ReasonCodeGuestStartAgentUnconfirmed, ReasonCodeGuestStartAgentUpdateRequired, ReasonCodeGuestStartUnavailable} {
 		if !IsProxmoxGuestActionUnavailableReasonCode(" " + code + " ") {
 			t.Fatalf("%q is a guest action set-up refusal", code)
 		}

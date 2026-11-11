@@ -1285,8 +1285,9 @@ refused without an action runner.
 
 The Patrol page's second row is now "Can't start guests". It names a node
 only where the server refuses to start one of its stopped guests because of
-how the node is set up: no agent there accepts commands, the agent is too
-old, or the agent cannot run a start. A commands-off node stays in the first
+how the node is set up: no agent there accepts commands, Pulse cannot
+confirm the agent runs on that node, the agent is too old, or the agent
+cannot run a start. A commands-off node stays in the first
 row, whose install step now also covers starting guests. The finding notice
 "Patrol could not start <guest> itself" shows the server's sentence for
 whichever of those applies.

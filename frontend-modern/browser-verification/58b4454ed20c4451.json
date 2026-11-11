@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "base_sha": "0140328072813e757d7eaad0d785416c223be5ac",
+  "verified_at": "2026-11-11T12:32:08Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/patrol/PatrolCommandAccessStrip.tsx",
+    "frontend-modern/src/features/patrol/patrolCommandAccessModel.ts",
+    "frontend-modern/src/utils/actionReadiness.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/patrol/PatrolCommandAccessStrip.tsx": "2921494810c1f76ff4c6a5d627c95430218089bfcf5d5f0c3997c049a92ce0b7",
+    "frontend-modern/src/features/patrol/patrolCommandAccessModel.ts": "35b23e5afc897f16ad7bd873441c96e1f7d41056a782fc2b656b0004641b76bc",
+    "frontend-modern/src/utils/actionReadiness.ts": "cc7823044e2d01c4d88c0404234886dbc66efd359ec64756182785a8b19f2f48"
+  },
+  "routes": [
+    "/patrol",
+    "/patrol/activity",
+    "/settings/infrastructure?add=agent&commands=1"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "private mock-mode Pro stack on pulse-dev built from this tree and the matching pulse-enterprise change, dev Pro licence, Vite serving these exact files (hashes compared), headless Chromium at 2x",
+    "/patrol in Ask first at 1440, dark, as the server sent it. Mock nodes now each have their own addresses and each node's agent reports them, so the server confirms the agent and refuses each stopped guest's start with host_commands_disabled, as before this change. The commands row reads Can't read logs or run fixes, 68 of 68 hosts, with Get install command. The Can't start guests row is absent",
+    "before the mock data was corrected, the same server refused every stopped guest's start with guest_start_agent_unconfirmed, because all mock nodes shared one address. That state was read from the API and not kept",
+    "/patrol with the start refusal rewritten for three nodes on the REST reads and websocket frames, to the codes and sentences the server sends for an agent that is too old, for a node with no agent that accepts commands, and for an agent Pulse cannot confirm runs on the node (guest_start_agent_unconfirmed, new here). A second 39px row reads Can't start guests, a neutral 3 Proxmox nodes pill, and the chips Analytics A, West Production B and West Production C",
+    "the same row open: the three node chips and one paragraph. It now ends by saying the node needs an up-to-date Pulse agent, installed with Allow Pulse to run commands on this host ticked, that Pulse can match to the node by address. The row holds no link and no button",
+    "/patrol in Watch only: neither row is present. Back in Ask first the commands row returns",
+    "/patrol in light theme at 1440 with the row open, and in dark theme at 390: the row and its paragraph wrap on the phone with no horizontal overflow",
+    "/patrol/activity, the seeded needs-attention finding on a stopped LXC whose stored run carries guest_actions_unavailable with start: the notice Patrol could not start dev-portal-01 itself, then the stored sentence. No link and no button. Seen at 1440 dark, 1440 light and 390 dark, no horizontal overflow",
+    "/patrol/activity, the seeded finding on a running LXC: no notice",
+    "/settings/infrastructure?add=agent&commands=1 at 1440 and 390: the command access box and its description, unchanged by this commit, no horizontal overflow on the phone",
+    "the unconfirmed sentence in a finding notice was not seen in the browser: the seeded run carries the agent-too-old sentence. The notice prints whatever sentence the run stored",
+    "the actionReadiness fallback sentence for guest_start_agent_unconfirmed is used only when the server sends no reason and was not seen in the browser. Its unit test covers it",
+    "no console errors on any route"
+  ],
+  "interactions": [
+    "opened the commands row and the guest row by their summaries and counted the guest row's links and buttons (none)",
+    "switched Patrol mode to Watch only and back through the API and reloaded",
+    "opened each seeded finding's review, scrolled to the Investigation block and read the notice or its absence",
+    "opened the agent installer with the command access box ticked and read its description at both widths"
+  ]
+}

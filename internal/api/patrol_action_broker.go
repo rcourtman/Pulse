@@ -213,9 +213,10 @@ func (b *patrolActionBroker) commandsDisabledHost(resourceID string) *aicontract
 // because of how the guest's node is set up: no action runner for stop,
 // shutdown or reboot, or no agent that can start a guest. It reads the
 // executor's own refusals and repeats their words, so it cannot claim
-// something is missing when planning would accept the action. A node whose
-// agent has commands off is not reported here: the catalog's commands fact
-// carries that, with its step.
+// something is missing when planning would accept the action. A start
+// refused because the node's agent has commands off is not reported here: the
+// catalog's commands fact carries that, with its step. A stop or reboot
+// refused for want of a runner still is, on any node.
 func (b *patrolActionBroker) guestActionsUnavailable(resourceID string, refused []unified.ResourceActionReadiness) *aicontracts.GuestActionsUnavailable {
 	var actions []string
 	reason, startReason := "", ""

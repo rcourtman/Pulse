@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path"
 	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
@@ -43,8 +42,8 @@ func prepareCollectorTypedActions(ctx context.Context, supervisor typedActionSup
 	if err != nil {
 		return agentexec.ProxmoxGuestStartUnavailableNotSystemdService, fmt.Errorf("read own cgroup: %w", err)
 	}
-	if unit := systemdUnitFromCgroup(string(data)); unit != supervisor.serviceUnit {
-		return agentexec.ProxmoxGuestStartUnavailableNotSystemdService, fmt.Errorf("the Pulse agent is not running as %s (found %q)", supervisor.serviceUnit, unit)
+	if unit := systemServiceFromCgroup(string(data)); unit != supervisor.serviceUnit {
+		return agentexec.ProxmoxGuestStartUnavailableNotSystemdService, fmt.Errorf("the Pulse agent is not running as the system service %s (found %q)", supervisor.serviceUnit, unit)
 	}
 	if err := collectorTypedActionReconcile(ctx, supervisor); err != nil {
 		return agentexec.ProxmoxGuestStartUnavailableContainment, err
@@ -52,11 +51,13 @@ func prepareCollectorTypedActions(ctx context.Context, supervisor typedActionSup
 	return "", nil
 }
 
-// systemdUnitFromCgroup names the systemd unit a process runs in, from the
-// content of /proc/<pid>/cgroup. It reads the unified hierarchy, or the named
-// systemd hierarchy on a host that still has one. The unit is the cgroup
-// itself, so a process systemd did not start as that unit never matches.
-func systemdUnitFromCgroup(content string) string {
+// systemServiceFromCgroup names the system manager's service a process runs
+// as, from the content of /proc/<pid>/cgroup, or nothing. It reads the unified
+// hierarchy, or the named systemd hierarchy on a host that still has one. The
+// cgroup must be exactly /system.slice/<name>.service. A unit of a user
+// manager, a unit in another slice and a delegated sub-cgroup can all end in
+// the same name and are none of them the service the transient unit binds to.
+func systemServiceFromCgroup(content string) string {
 	unified, named := "", ""
 	for _, line := range strings.Split(content, "\n") {
 		parts := strings.SplitN(strings.TrimSpace(line), ":", 3)
@@ -74,8 +75,9 @@ func systemdUnitFromCgroup(content string) string {
 	if cgroup == "" {
 		cgroup = unified
 	}
-	if cgroup == "" || !strings.HasPrefix(cgroup, "/") {
+	unit, isSystemService := strings.CutPrefix(cgroup, "/system.slice/")
+	if !isSystemService || unit == "" || strings.Contains(unit, "/") || !strings.HasSuffix(unit, ".service") {
 		return ""
 	}
-	return path.Base(cgroup)
+	return unit
 }

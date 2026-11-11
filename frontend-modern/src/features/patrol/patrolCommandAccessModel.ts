@@ -113,12 +113,13 @@ export function buildPatrolCommandAccessHandover(
 /**
  * Core's refusal codes for a guest start on a node that is not set up for it
  * (actionlifecycle.ReasonCodeGuestStart*): no Pulse agent there accepts
- * commands, the agent is too old, or the agent cannot run a start. A node
- * whose agent has commands off is not here. The commands row names it and
- * carries its step.
+ * commands, Pulse cannot confirm the agent runs on that node, the agent is too
+ * old, or the agent cannot run a start. A node whose agent has commands off is
+ * not here. The commands row names it and carries its step.
  */
 const GUEST_START_REFUSALS = new Set([
   'guest_start_agent_not_connected',
+  'guest_start_agent_unconfirmed',
   'guest_start_agent_update_required',
   'guest_start_unavailable',
 ]);

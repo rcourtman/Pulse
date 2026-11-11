@@ -458,3 +458,133 @@ func TestCollectorRegistrationDoesNotWaitForASlowContainmentProbe(t *testing.T) 
 		t.Fatalf("the probe started %d times, want once", len(started))
 	}
 }
+
+// The agent replaces its command client when commands are switched or its
+// identity changes. Every client of one state directory shares one
+// containment, so a new client does not prepare again, which would stop units
+// an old client's start may still be using.
+func TestCommandClientsOfOneStateDirShareOneContainment(t *testing.T) {
+	logger := zerolog.Nop()
+	stateDir := t.TempDir()
+	build := func(dir string) *CommandClient {
+		client := NewCommandClient(Config{PulseURL: "http://127.0.0.1:1", APIToken: "token", StateDir: dir, EnableCommands: true, Logger: &logger}, "agent-pve", "pve.example.test", "linux", "test")
+		t.Cleanup(func() { _ = client.Close() })
+		return client
+	}
+	first := build(stateDir)
+	prepared := 0
+	first.guestStart.prepare = func(context.Context, typedActionSupervisor) (string, error) {
+		prepared++
+		return "", nil
+	}
+	first.prepareGuestStart(context.Background())
+	if version, _ := first.guestStartRegistration(); version != agentexec.ProxmoxGuestStartProtocolVersion {
+		t.Fatalf("the first client is not ready: version %d", version)
+	}
+
+	second := build(stateDir)
+	if second.guestStart != first.guestStart {
+		t.Fatal("a replacement command client built its own containment")
+	}
+	second.prepareGuestStart(context.Background())
+	if version, _ := second.guestStartRegistration(); version != agentexec.ProxmoxGuestStartProtocolVersion || prepared != 1 {
+		t.Fatalf("the replacement client prepared again: version %d, prepared %d times", version, prepared)
+	}
+	if other := build(t.TempDir()); other.guestStart == first.guestStart {
+		t.Fatal("another state directory shares this one's containment")
+	}
+}
+
+// Containment can become ready after a session registered without it. The
+// collector says so on the live session at its next ping, Pulse takes the new
+// answer, and the next start runs. The session is never dropped, so nothing
+// running on it is interrupted.
+func TestRealServerCollectorRestatesGuestStartOnTheLiveSession(t *testing.T) {
+	originalInterval := commandPingInterval
+	commandPingInterval = 20 * time.Millisecond
+	t.Cleanup(func() { commandPingInterval = originalInterval })
+
+	node := &collectorGuestRun{}
+	var mu sync.Mutex
+	fail := true
+	server, client, admission := startCollectorSession(t, node, func(context.Context, typedActionSupervisor) (string, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		if fail {
+			return agentexec.ProxmoxGuestStartUnavailableContainment, errors.New("probe failed")
+		}
+		return "", nil
+	})
+	sessions := server.GetProxmoxGuestStartSessionsForOrganization("default")
+	if len(sessions) != 1 || sessions[0].ProxmoxGuestStartVersion != 0 || sessions[0].ProxmoxGuestStartUnavailable != agentexec.ProxmoxGuestStartUnavailableContainment {
+		t.Fatalf("sessions = %#v, want the session registered without guest start", sessions)
+	}
+	connectedAt := sessions[0].ConnectedAt
+	// Several ping ticks pass and nothing changes, so the answer stands.
+	time.Sleep(5 * commandPingInterval)
+	if sessions = server.GetProxmoxGuestStartSessionsForOrganization("default"); len(sessions) != 1 || sessions[0].ProxmoxGuestStartVersion != 0 {
+		t.Fatalf("sessions = %#v, want the registered answer to stand", sessions)
+	}
+
+	mu.Lock()
+	fail = false
+	mu.Unlock()
+	client.prepareGuestStart(context.Background())
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		sessions = server.GetProxmoxGuestStartSessionsForOrganization("default")
+		if len(sessions) == 1 && sessions[0].ProxmoxGuestStartVersion == agentexec.ProxmoxGuestStartProtocolVersion {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if len(sessions) != 1 || sessions[0].ProxmoxGuestStartVersion != agentexec.ProxmoxGuestStartProtocolVersion || sessions[0].ProxmoxGuestStartUnavailable != "" {
+		t.Fatalf("sessions = %#v, want Pulse to hold the restated answer", sessions)
+	}
+	if !sessions[0].ConnectedAt.Equal(connectedAt) || !server.IsAgentConnected(admission.AgentID) {
+		t.Fatal("the session was dropped or replaced to restate a capability")
+	}
+	result, err := server.ExecuteProxmoxGuestLifecycle(context.Background(), admission.AgentID, collectorGuestRequest(t, "start", "stopped"))
+	if err != nil || !result.MutationCompleted {
+		t.Fatalf("start after the restated answer = %+v, %v", result, err)
+	}
+}
+
+// Only a collector with containment restates, and only on its live
+// connection. A ping loop that outlived its connection says nothing about the
+// session that replaced it.
+func TestRestateGuestStartIsForTheLiveCollectorConnectionOnly(t *testing.T) {
+	logger := zerolog.Nop()
+	stale := &websocket.Conn{}
+
+	runner := NewActionRunnerClient(ActionRunnerClientConfig{
+		PulseURL: "https://127.0.0.1:1", APIToken: "token", StateDir: t.TempDir(),
+		HealthPath: filepath.Join(t.TempDir(), "health.json"), ActivationNonce: strings.Repeat("a", 32), Logger: &logger,
+	}, "agent-pve", "pve.example.test", "test")
+	t.Cleanup(func() { _ = runner.Close() })
+	if restated, err := runner.restateGuestStartIfChanged(stale); restated || err != nil {
+		t.Fatalf("the action runner restated a collector capability: %v, %v", restated, err)
+	}
+
+	commandsOff := NewCommandClient(Config{PulseURL: "http://127.0.0.1:1", APIToken: "token", StateDir: t.TempDir(), EnableCommands: false, Logger: &logger}, "agent-pve", "pve.example.test", "linux", "test")
+	t.Cleanup(func() { _ = commandsOff.Close() })
+	if restated, err := commandsOff.restateGuestStartIfChanged(stale); restated || err != nil {
+		t.Fatalf("a commands-off collector restated a capability: %v, %v", restated, err)
+	}
+
+	// A collector whose answer has changed, asked on a connection that is not
+	// its live one: nothing is sent and the session's bookkeeping is untouched.
+	collector := NewCommandClient(Config{PulseURL: "http://127.0.0.1:1", APIToken: "token", StateDir: t.TempDir(), EnableCommands: true, Logger: &logger}, "agent-pve", "pve.example.test", "linux", "test")
+	t.Cleanup(func() { _ = collector.Close() })
+	collector.guestStart.prepare = func(context.Context, typedActionSupervisor) (string, error) { return "", nil }
+	collector.prepareGuestStart(context.Background())
+	if restated, err := collector.restateGuestStartIfChanged(stale); restated || err != nil {
+		t.Fatalf("a stale connection restated: %v, %v", restated, err)
+	}
+	collector.connMu.Lock()
+	restating := collector.guestStartRestating
+	collector.connMu.Unlock()
+	if restating {
+		t.Fatal("a stale ping marked the live session as changed")
+	}
+}

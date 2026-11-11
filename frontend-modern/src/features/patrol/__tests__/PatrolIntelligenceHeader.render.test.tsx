@@ -401,7 +401,7 @@ describe('PatrolIntelligenceHeader command access', () => {
     ).toEqual(['pve1']);
     expect(row).toHaveTextContent('you start it in Proxmox');
     expect(row).toHaveTextContent(
-      'the node needs an up-to-date Pulse agent installed with "Allow Pulse to run commands on this host" ticked',
+      'the node needs an up-to-date Pulse agent, installed with "Allow Pulse to run commands on this host" ticked, that Pulse can match to the node by address',
     );
     expect(row).not.toHaveTextContent('does not cover');
     // The causes differ per node, so the row carries no single button.

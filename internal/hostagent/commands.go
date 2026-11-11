@@ -154,6 +154,8 @@ type CommandClient struct {
 	// uses to start a stopped Proxmox guest. Nil on the action runner and on
 	// a collector without commands.
 	guestStart            *collectorTypedActions
+	guestStartRegistered  guestStartReport // what the live session registered with; guarded by connMu
+	guestStartRestating   bool             // the answer has changed since; guarded by connMu
 	runtimeRole           string
 	actionCapability      string
 	healthPath            string
@@ -207,7 +209,7 @@ func NewCommandClient(cfg Config, agentID, hostname, platform, version string) *
 	}
 	var guestStart *collectorTypedActions
 	if cfg.EnableCommands {
-		guestStart = newCollectorTypedActions(stateDir, logger)
+		guestStart = sharedCollectorTypedActions(stateDir, logger)
 	}
 	return &CommandClient{
 		pulseURL:              strings.TrimRight(cfg.PulseURL, "/"),
@@ -609,8 +611,58 @@ func (c *CommandClient) guestStartRegistration() (int, string) {
 	return c.guestStart.registration()
 }
 
+// guestStartReport is what one registration said about starting guests.
+type guestStartReport struct {
+	version     int
+	unavailable string
+}
+
+// msgTypeAgentCapabilities matches agentexec.MsgTypeAgentCapabilities.
+const msgTypeAgentCapabilities messageType = "agent_capabilities"
+
+// restateGuestStartIfChanged tells Pulse, on the live session, what this agent
+// can now say about starting guests when that differs from what the session
+// registered. Containment can become ready, or fail, after a registration
+// stopped waiting for it. Nothing is interrupted: the session stays up, and a
+// server that predates the message ignores it. Pulse does not acknowledge the
+// message and can drop one, so once the answer has changed the current answer
+// is sent again on every call for the rest of the session. It is small, and
+// the server stores it the same way each time.
+func (c *CommandClient) restateGuestStartIfChanged(conn *websocket.Conn) (bool, error) {
+	if c == nil || conn == nil || c.actionRunnerOnly || c.guestStart == nil {
+		return false, nil
+	}
+	c.connMu.Lock()
+	defer c.connMu.Unlock()
+	// A ping loop can outlive its connection by a tick. What it sampled then
+	// says nothing about the session that replaced it.
+	if c.conn != conn {
+		return false, nil
+	}
+	version, unavailable := c.guestStartRegistration()
+	current := guestStartReport{version: version, unavailable: unavailable}
+	if !c.guestStartRestating && c.guestStartRegistered == current {
+		return false, nil
+	}
+	payload, err := json.Marshal(agentexec.AgentCapabilitiesPayload{
+		ProxmoxGuestStartVersion: current.version, ProxmoxGuestStartUnavailable: current.unavailable,
+	})
+	if err != nil {
+		return false, fmt.Errorf("marshal capabilities payload: %w", err)
+	}
+	c.guestStartRestating = true
+	if err := conn.WriteJSON(wsMessage{Type: msgTypeAgentCapabilities, Timestamp: time.Now(), Payload: payload}); err != nil {
+		return false, fmt.Errorf("send capabilities: %w", err)
+	}
+	return true, nil
+}
+
 func (c *CommandClient) sendRegistration(conn *websocket.Conn) error {
 	guestStartVersion, guestStartUnavailable := c.guestStartRegistration()
+	c.connMu.Lock()
+	c.guestStartRegistered = guestStartReport{version: guestStartVersion, unavailable: guestStartUnavailable}
+	c.guestStartRestating = false
+	c.connMu.Unlock()
 	payload, err := json.Marshal(registerPayload{
 		AgentID:                  c.agentID,
 		Hostname:                 c.hostname,
@@ -637,6 +689,11 @@ func (c *CommandClient) sendRegistration(conn *websocket.Conn) error {
 		Payload:   payload,
 	}
 
+	// Every write on a registered session is under connMu. Registration is
+	// the first, before any other writer exists, and takes it for the same
+	// reason: one rule for the socket.
+	c.connMu.Lock()
+	defer c.connMu.Unlock()
 	return conn.WriteJSON(msg)
 }
 
@@ -710,8 +767,12 @@ func (c *CommandClient) retireIfNeverAdmitted() bool {
 	return c.admission.CompareAndSwap(commandClientPending, commandClientSuperseded)
 }
 
+// commandPingInterval is how often a session pings Pulse. A variable so a test
+// can see a ping tick without waiting half a minute.
+var commandPingInterval = 30 * time.Second
+
 func (c *CommandClient) pingLoop(ctx context.Context, conn *websocket.Conn, done chan struct{}) {
-	ticker := time.NewTicker(30 * time.Second)
+	ticker := time.NewTicker(commandPingInterval)
 	defer ticker.Stop()
 
 	for {
@@ -735,6 +796,11 @@ func (c *CommandClient) pingLoop(ctx context.Context, conn *websocket.Conn, done
 				}
 			}
 			c.connMu.Unlock()
+			if restated, err := c.restateGuestStartIfChanged(conn); err != nil {
+				c.logger.Debug().Err(err).Msg("Failed to tell Pulse that Proxmox guest start readiness changed")
+			} else if restated {
+				c.logger.Debug().Msg("Told Pulse what this agent can now say about starting Proxmox guests")
+			}
 		}
 	}
 }

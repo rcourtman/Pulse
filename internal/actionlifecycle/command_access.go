@@ -34,6 +34,9 @@ const (
 	// ReasonCodeGuestStartAgentNotConnected refuses a start on a node where no
 	// Pulse agent holds a command session and none reports commands off.
 	ReasonCodeGuestStartAgentNotConnected = "guest_start_agent_not_connected"
+	// ReasonCodeGuestStartAgentUnconfirmed refuses a start on a node that has
+	// a Pulse agent tied to it which Pulse cannot show runs on that node.
+	ReasonCodeGuestStartAgentUnconfirmed = "guest_start_agent_unconfirmed"
 	// ReasonCodeGuestStartAgentUpdateRequired refuses a start on a node whose
 	// agent predates guest start.
 	ReasonCodeGuestStartAgentUpdateRequired = "guest_start_agent_update_required"
@@ -47,7 +50,7 @@ const (
 // commands-off node is not one of these: it has its own code and its own step.
 func IsProxmoxGuestActionUnavailableReasonCode(code string) bool {
 	switch strings.TrimSpace(code) {
-	case ReasonCodeActionRunnerUnavailable, ReasonCodeGuestStartAgentNotConnected,
+	case ReasonCodeActionRunnerUnavailable, ReasonCodeGuestStartAgentNotConnected, ReasonCodeGuestStartAgentUnconfirmed,
 		ReasonCodeGuestStartAgentUpdateRequired, ReasonCodeGuestStartUnavailable:
 		return true
 	default:
@@ -104,6 +107,15 @@ func ProxmoxGuestRunnerOnlyReason(nodeName string) string {
 // no Pulse agent on the node holds a command session.
 func ProxmoxGuestStartAgentNotConnectedReason(nodeName string) string {
 	return fmt.Sprintf("Pulse cannot start guests on %s: no Pulse agent that accepts commands is connected on that node. Use Proxmox for this.", proxmoxGuestNodeName(nodeName))
+}
+
+// ProxmoxGuestStartAgentUnconfirmedReason is what a refused start shows when a
+// Pulse agent is tied to the node and Pulse cannot show it runs there. Pulse
+// ties an agent to a node by name when nothing contradicts it. That is enough
+// to show the two together and not enough to start a guest: another machine
+// can hold the name, and the same VMID there is a different guest.
+func ProxmoxGuestStartAgentUnconfirmedReason(nodeName string) string {
+	return fmt.Sprintf("Pulse cannot start guests on %s: it cannot confirm which Pulse agent runs on that node. It needs an address that the agent reports and only that node has. Use Proxmox for this.", proxmoxGuestNodeName(nodeName))
 }
 
 // ProxmoxGuestStartAgentUpdateReason is what a refused start shows when the

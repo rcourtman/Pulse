@@ -425,10 +425,24 @@ by installing the collector with command execution.
   decides from that report, never from an agent version. An older collector, a
   monitoring-only collector and a collector outside systemd are refused, and
   Pulse says which it is.
+- **Which collector.** Pulse sends a start only to a collector it has
+  evidence runs on the guest's own node. All of this must hold. The collector
+  is the only agent tied to that node. The node is on the guest's own Proxmox
+  connection. The collector carries the node's name, and no other node Pulse
+  monitors does. One of the collector's own interfaces holds an address that
+  Proxmox itself lists for that node and for no other node. Anything less is
+  refused, including a node whose network inventory Pulse cannot read.
+  Three things are not evidence: the link Pulse makes between an agent and a
+  node on a matching name, the address Pulse reaches the node's API at, which
+  can belong to a reverse proxy, and the collector's configured report
+  address. This is evidence and not proof of the machine. It cannot rule out
+  a machine that Pulse does not monitor as a node, carries the node's name
+  and holds one of the node's addresses.
 - **What runs.** The same fixed `qm start <vmid>` or `pct start <vmid>` the
   action runner runs, in the same transient systemd unit with the same
-  properties. Only the service the unit is bound to and the state directory
-  differ: they are the collector's own.
+  properties. Three things differ: the service the unit is bound to, the
+  state directory and the unit's name prefix. All three are the collector's
+  own.
 - **What does not.** Stop, shutdown and reboot. The server refuses to send
   them on this path and the collector refuses to run them. They still need the
   action runner. The collector's typed catalog is the containment probe, a

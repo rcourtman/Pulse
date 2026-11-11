@@ -77,21 +77,29 @@ func TestCollectorTypedActionUnitDiffersFromTheRunnersOnlyInItsService(t *testin
 	}
 }
 
-func TestSystemdUnitFromCgroupNamesTheServiceTheProcessRunsAs(t *testing.T) {
+func TestSystemServiceFromCgroupAcceptsOnlyTheSystemManagersOwnService(t *testing.T) {
 	for content, want := range map[string]string{
 		"0::/system.slice/pulse-agent.service\n": "pulse-agent.service",
 		"12:pids:/system.slice/pulse-agent.service\n1:name=systemd:/system.slice/pulse-agent.service\n0::/system.slice/pulse-agent.service\n": "pulse-agent.service",
 		"1:name=systemd:/system.slice/pulse-agent.service\n0::/\n":                                                                            "pulse-agent.service",
-		"0::/user.slice/user-0.slice/session-3.scope\n":                                                                                       "session-3.scope",
 		"0::/system.slice/pulse-agent-runner.service\n":                                                                                       "pulse-agent-runner.service",
-		"0::/system.slice/pulse-agent.service/worker\n":                                                                                       "worker",
-		"0::/\n":                            "/",
-		"":                                  "",
-		"garbage":                           "",
-		"0::relative/pulse-agent.service\n": "",
+		// The same unit name under a user manager is another service.
+		"0::/user.slice/user-0.slice/user@0.service/app.slice/pulse-agent.service\n": "",
+		// So is one in another slice, and a delegated sub-cgroup of the real one.
+		"0::/machine.slice/pulse-agent.service\n":                    "",
+		"0::/system.slice/pulse-agent.service/worker\n":              "",
+		"0::/system.slice/system-pulse.slice/pulse-agent.service\n":  "",
+		"0::/system.slice/pulse-agent.service/pulse-agent.service\n": "",
+		"0::/user.slice/user-0.slice/session-3.scope\n":              "",
+		"0::/system.slice/pulse-agent.scope\n":                       "",
+		"0::/system.slice/\n":                                        "",
+		"0::/\n":                                                     "",
+		"":                                                           "",
+		"garbage":                                                    "",
+		"0::system.slice/pulse-agent.service\n":                      "",
 	} {
-		if got := systemdUnitFromCgroup(content); got != want {
-			t.Fatalf("systemdUnitFromCgroup(%q) = %q, want %q", content, got, want)
+		if got := systemServiceFromCgroup(content); got != want {
+			t.Fatalf("systemServiceFromCgroup(%q) = %q, want %q", content, got, want)
 		}
 	}
 }
@@ -136,7 +144,7 @@ func TestPrepareCollectorTypedActionsRequiresProxmoxRootOwnServiceAndProbe(t *te
 	if reason, err := prepareCollectorTypedActions(context.Background(), supervisor); err == nil || reason != agentexec.ProxmoxGuestStartUnavailableContainment || probed != 0 {
 		t.Fatalf("not root: %q %v probed=%d", reason, err, probed)
 	}
-	for _, cgroup := range []string{"0::/user.slice/user-0.slice/session-3.scope\n", "0::/system.slice/pulse-agent-runner.service\n", "0::/system.slice/pulse-agent.service/worker\n", ""} {
+	for _, cgroup := range []string{"0::/user.slice/user-0.slice/session-3.scope\n", "0::/system.slice/pulse-agent-runner.service\n", "0::/system.slice/pulse-agent.service/worker\n", "0::/user.slice/user-0.slice/user@0.service/app.slice/pulse-agent.service\n", ""} {
 		withCollectorTypedActionHooks(t, true, 0, cgroup, pass)
 		if reason, err := prepareCollectorTypedActions(context.Background(), supervisor); err == nil || reason != agentexec.ProxmoxGuestStartUnavailableNotSystemdService || probed != 0 {
 			t.Fatalf("cgroup %q: %q %v probed=%d", cgroup, reason, err, probed)

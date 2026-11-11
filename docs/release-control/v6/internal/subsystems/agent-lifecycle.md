@@ -5125,11 +5125,12 @@ Agent` secondary handoff against the live setup wizard instead of relying
 
 A collector that has commands enabled can run one typed guest action: start.
 It runs the same fixed `qm start <vmid>` or `pct start <vmid>` the action
-runner runs, in the same transient systemd unit with the same properties. Two
-things differ and nothing else: the unit is bound to `pulse-agent.service`,
-the collector's own service, and its result file lives in the collector's own
-state directory. The collector names its units with its own prefix, so
-neither supervisor's start-up reconciliation can stop the other's work.
+runner runs, in the same transient systemd unit with the same properties.
+Three things differ and nothing else: the unit is bound to
+`pulse-agent.service`, the collector's own service. Its result file lives in
+the collector's own state directory. And its name carries the collector's own
+prefix, so neither supervisor's start-up reconciliation can stop the other's
+work.
 
 The collector binary serves the hidden launcher for its own catalog only: the
 containment probe, a guest status read and a guest start. Stop, shutdown,
@@ -5140,11 +5141,25 @@ The runner's catalog, unit and launcher are unchanged.
 The collector reports `proxmox_guest_start_version` at registration only when
 commands are enabled, the host is a Proxmox node, it runs as root as
 `pulse-agent.service`, it keeps durable receipts and its containment probe
-passed. Otherwise it reports the closed reason in
-`proxmox_guest_start_unavailable`, or nothing on a host that is not a Proxmox
-node. Containment is prepared once per process and never again after it
-passes, because preparing stops the collector's stale units. A commands-off
-collector builds no containment and refuses the typed message.
+passed. "Runs as" means its cgroup is exactly
+`/system.slice/pulse-agent.service`: a user manager's unit of that name,
+another slice and a delegated sub-cgroup do not count. Otherwise it reports
+the closed reason in `proxmox_guest_start_unavailable`, or nothing on a host
+that is not a Proxmox node.
+
+Containment belongs to the process, not to a command client. The agent
+replaces its client when commands are switched or its identity changes, and
+every client of one state directory shares one containment. It is prepared
+until it passes once and never again, because preparing stops the collector's
+stale units and an old client's start may still be finishing. A registration
+waits at most five seconds for a preparation. When the answer changes after a
+session registered, the collector restates it on the live session with an
+`agent_capabilities` message, checked on the ping tick. Pulse does not
+acknowledge that message and can drop one, so once the answer has changed the
+collector sends the current answer on every tick for the rest of the session.
+The session is not dropped, so nothing running on it is interrupted, and a
+server that predates the message ignores it. A commands-off collector builds no containment and
+refuses the typed message.
 
 The earlier note below still holds for stop, shutdown and reboot: a collector
 is not a runner, and no surface offers a step that connects one.

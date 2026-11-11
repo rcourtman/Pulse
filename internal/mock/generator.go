@@ -1111,11 +1111,70 @@ func generateNode(name string, highLoad bool, config MockConfig) models.Node {
 		Temperature: temp,
 		NetworkInterfaces: []models.HostNetworkInterface{
 			{Name: "eno1", Addresses: []string{}},
-			{Name: "vmbr0", Addresses: []string{"192.168.10.21/24", "fd42:7065:6c73::21/64"}},
+			{Name: "vmbr0", Addresses: mockNodeBridgeAddresses(name)},
 		},
 		Host: fmt.Sprintf("https://%s.local:8006", name),
 		ID:   "", // Will be set by generateNodes to match real format: instance-nodename
 	}
+}
+
+// mockNodeBridgeAddresses gives each mock node its own bridge addresses. A
+// real node's addresses are its own, and the Pulse agent on that node reports
+// the same ones. Pulse relies on that to know which agent runs on which node,
+// so mock nodes that all shared one address would read as nodes whose agents
+// cannot be confirmed.
+func mockNodeBridgeAddresses(name string) []string {
+	// Cluster nodes are named pve1, pve2 and so on, and keep readable
+	// addresses in one subnet. Any other name gets its own from a hash.
+	digits := ""
+	if rest, isClusterNode := strings.CutPrefix(name, "pve"); isClusterNode {
+		digits = rest
+	}
+	number := 0
+	for _, r := range digits {
+		if !unicode.IsDigit(r) || number > 1000 {
+			number = 0
+			break
+		}
+		number = number*10 + int(r-'0')
+	}
+	if number > 0 && number < 230 {
+		return []string{fmt.Sprintf("192.168.10.%d/24", 20+number), fmt.Sprintf("fd42:7065:6c73::%x/64", 20+number)}
+	}
+	hasher := fnv.New32a()
+	_, _ = hasher.Write([]byte(name))
+	sum := hasher.Sum32()
+	subnet, host := 11+int(sum>>8)%200, 2+int(sum)%250
+	return []string{fmt.Sprintf("192.168.%d.%d/24", subnet, host), fmt.Sprintf("fd42:7065:6c73:%x::%x/64", subnet, host)}
+}
+
+// mockLinkedHostInterfaces is what the Pulse agent on a mock node reports for
+// its network: the node's own interfaces and addresses, because it runs on
+// that machine.
+func mockLinkedHostInterfaces(node models.Node, hostIndex int) []models.HostNetworkInterface {
+	interfaces := make([]models.HostNetworkInterface, 0, len(node.NetworkInterfaces))
+	for i, nic := range node.NetworkInterfaces {
+		if len(nic.Addresses) == 0 {
+			continue
+		}
+		interfaces = append(interfaces, models.HostNetworkInterface{
+			Name:      nic.Name,
+			MAC:       fmt.Sprintf("02:50:%02x:%02x:%02x:%02x", hostIndex%255, (hostIndex*13)%255, (hostIndex*29)%255, (hostIndex*37+i)%255),
+			Addresses: append([]string(nil), nic.Addresses...),
+			RXBytes:   uint64(1_000_000_000 + rand.Int63n(5_000_000_000)),
+			TXBytes:   uint64(750_000_000 + rand.Int63n(4_000_000_000)),
+		})
+	}
+	if len(interfaces) > 0 {
+		return interfaces
+	}
+	return []models.HostNetworkInterface{{
+		Name:      "eth0",
+		MAC:       fmt.Sprintf("02:50:%02x:%02x:%02x:%02x", hostIndex%255, (hostIndex*13)%255, (hostIndex*29)%255, (hostIndex*37)%255),
+		Addresses: []string{fmt.Sprintf("192.168.%d.%d", 80+(hostIndex%10), 20+(hostIndex%200))},
+		RXBytes:   uint64(1_000_000_000 + rand.Int63n(5_000_000_000)),
+		TXBytes:   uint64(750_000_000 + rand.Int63n(4_000_000_000)),
+	}}
 }
 
 // generateNodeTemperature generates realistic temperature data for a node
@@ -4453,28 +4512,18 @@ func buildMockLinkedHostFromNode(node models.Node, hostID string, hostIndex int,
 			clampFloat((cpuUsage/100.0)*float64(cpuCount)*0.7, 0.05, float64(cpuCount)*1.2),
 			clampFloat((cpuUsage/100.0)*float64(cpuCount)*0.6, 0.05, float64(cpuCount)*1.2),
 		},
-		Memory: memory,
-		Disks:  disks,
-		NetworkInterfaces: []models.HostNetworkInterface{
-			{
-				Name: "eth0",
-				MAC:  fmt.Sprintf("02:50:%02x:%02x:%02x:%02x", hostIndex%255, (hostIndex*13)%255, (hostIndex*29)%255, (hostIndex*37)%255),
-				Addresses: []string{
-					fmt.Sprintf("192.168.%d.%d", 80+(hostIndex%10), 20+(hostIndex%200)),
-				},
-				RXBytes: uint64(1_000_000_000 + rand.Int63n(5_000_000_000)),
-				TXBytes: uint64(750_000_000 + rand.Int63n(4_000_000_000)),
-			},
-		},
-		Sensors:         nodeTemperatureToHostSensors(node.Temperature),
-		Status:          status,
-		UptimeSeconds:   node.Uptime,
-		IntervalSeconds: 30,
-		LastSeen:        lastSeen,
-		AgentVersion:    hostAgentVersions[rand.Intn(len(hostAgentVersions))],
-		MachineID:       mockStableHexString(32, "linked-host-machine", hostID),
-		Tags:            []string{"mock", "proxmox-node"},
-		LinkedNodeID:    node.ID,
+		Memory:            memory,
+		Disks:             disks,
+		NetworkInterfaces: mockLinkedHostInterfaces(node, hostIndex),
+		Sensors:           nodeTemperatureToHostSensors(node.Temperature),
+		Status:            status,
+		UptimeSeconds:     node.Uptime,
+		IntervalSeconds:   30,
+		LastSeen:          lastSeen,
+		AgentVersion:      hostAgentVersions[rand.Intn(len(hostAgentVersions))],
+		MachineID:         mockStableHexString(32, "linked-host-machine", hostID),
+		Tags:              []string{"mock", "proxmox-node"},
+		LinkedNodeID:      node.ID,
 	}
 
 	host.NetInRate = SampleMetric("agent", host.ID, "netin", now)

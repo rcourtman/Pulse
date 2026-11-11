@@ -3941,8 +3941,9 @@ verdict on its own check.
 `InvestigationSession` is no longer only "no action runner". It names the
 guest actions Pulse refuses because of how the node is set up and carries the
 executor's sentence, which is the start's sentence when a start is refused.
-The fields did not change. A node whose agent has commands off is still
-`CommandsDisabled`, not this fact.
+The fields did not change. A start refused because the node's agent has
+commands off is not in this fact: `CommandsDisabled` carries it, with its
+step.
 
 ### A guest Pulse cannot start is a typed fact on the run
 

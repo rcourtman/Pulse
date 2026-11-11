@@ -23,9 +23,10 @@ func guestStartTestServer() (*Server, func(org, id, host, role, capability, toke
 	add := func(org, id, host, role, capability, token string, startVersion int) *agentConn {
 		ac := &agentConn{
 			admission: AgentAdmission{OrganizationID: org, AgentID: id, Hostname: host, RuntimeRole: role, ActionCapability: capability, TokenID: token},
-			agent:     ConnectedAgent{AgentID: id, Hostname: host, OperationReceiptVersion: 1, ProxmoxGuestStartVersion: startVersion},
+			agent:     ConnectedAgent{AgentID: id, Hostname: host, OperationReceiptVersion: 1},
 			done:      make(chan struct{}),
 		}
+		ac.recordProxmoxGuestStart(startVersion, "")
 		s.agents[agentSessionKey(org, id)] = ac
 		return ac
 	}
@@ -97,6 +98,22 @@ func TestProxmoxGuestLifecycleDispatchRefusesEveryVerbButStartOnACollectorSessio
 	}
 }
 
+// A caller that planned a start on the action runner says so. If a collector
+// session has taken the runner's place under the same agent ID by the time
+// the request is dispatched, it is refused: the caller would judge its answer
+// by the runner's rules.
+func TestProxmoxGuestLifecycleDispatchRefusesACollectorWhereARunnerWasPlanned(t *testing.T) {
+	s, add := guestStartTestServer()
+	add("org-a", "pve1-agent", "pve1", RuntimeRoleLegacyFullTrust, "", "valid", ProxmoxGuestStartProtocolVersion)
+	ctx := RequireActionRunnerSession(WithOrganizationID(context.Background(), "org-a"))
+	if !ActionRunnerSessionRequired(ctx) || ActionRunnerSessionRequired(context.Background()) {
+		t.Fatal("the runner requirement did not travel with the context")
+	}
+	if _, err := s.ExecuteProxmoxGuestLifecycle(ctx, "pve1-agent", boundProxmoxGuestOperation(t, "start", "stopped")); err == nil || !strings.Contains(err.Error(), "requires a typed action-runner session") {
+		t.Fatalf("a collector session carried a start planned on a runner: %v", err)
+	}
+}
+
 // The list the executor reads holds collector command sessions only, with what
 // each reported. It never holds a runner, another tenant's session or a
 // session whose credential was revoked.
@@ -104,7 +121,7 @@ func TestProxmoxGuestStartSessionsListCollectorSessionsOnly(t *testing.T) {
 	s, add := guestStartTestServer()
 	add("org-a", "capable", "pve1", RuntimeRoleLegacyFullTrust, "", "valid", ProxmoxGuestStartProtocolVersion)
 	unavailable := add("org-a", "no-systemd", "pve2", RuntimeRoleLegacyFullTrust, "", "valid", 0)
-	unavailable.agent.ProxmoxGuestStartUnavailable = ProxmoxGuestStartUnavailableNotSystemdService
+	unavailable.recordProxmoxGuestStart(0, ProxmoxGuestStartUnavailableNotSystemdService)
 	add("org-a", "old", "pve3", RuntimeRoleLegacyFullTrust, "", "valid", 0)
 	add("org-a", "runner", "pve4", RuntimeRoleActionRunner, ActionCapabilityTypedV1, "valid", 0)
 	add("org-a", "revoked", "pve5", RuntimeRoleLegacyFullTrust, "", "revoked", ProxmoxGuestStartProtocolVersion)
@@ -139,5 +156,33 @@ func TestNormalizeProxmoxGuestStartUnavailableKeepsTheClosedSet(t *testing.T) {
 		if got := NormalizeProxmoxGuestStartUnavailable(in); got != want {
 			t.Fatalf("NormalizeProxmoxGuestStartUnavailable(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+// A collector's later capabilities message replaces what it registered with.
+// A runner's session never holds a collector's report, whatever it sends.
+func TestAgentConnRecordsGuestStartForCollectorSessionsOnly(t *testing.T) {
+	_, add := guestStartTestServer()
+	collector := add("org-a", "collector", "pve1", RuntimeRoleLegacyFullTrust, "", "valid", 0)
+	if commandSessionStartsProxmoxGuests(collector) {
+		t.Fatal("a session that reported nothing can start guests")
+	}
+	collector.recordProxmoxGuestStart(0, "something a newer agent says")
+	if got := collector.proxmoxGuestStart(); got.version != 0 || got.unavailable != ProxmoxGuestStartUnavailableContainment {
+		t.Fatalf("report = %+v, want the reason kept inside the closed set", got)
+	}
+	collector.recordProxmoxGuestStart(ProxmoxGuestStartProtocolVersion, "")
+	if !commandSessionStartsProxmoxGuests(collector) || !proxmoxGuestLifecycleSessionAllows(collector, "start") {
+		t.Fatal("the restated answer did not take effect")
+	}
+	collector.recordProxmoxGuestStart(0, ProxmoxGuestStartUnavailableNotSystemdService)
+	if commandSessionStartsProxmoxGuests(collector) {
+		t.Fatal("a session that withdrew guest start can still start guests")
+	}
+
+	runner := add("org-a", "runner", "pve2", RuntimeRoleActionRunner, ActionCapabilityTypedV1, "valid", 0)
+	runner.recordProxmoxGuestStart(ProxmoxGuestStartProtocolVersion, "")
+	if got := runner.proxmoxGuestStart(); got != (proxmoxGuestStartReport{}) || commandSessionStartsProxmoxGuests(runner) {
+		t.Fatalf("a runner session holds a collector report: %+v", got)
 	}
 }

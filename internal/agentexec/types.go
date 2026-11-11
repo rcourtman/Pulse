@@ -125,6 +125,19 @@ type AgentRegisterPayload struct {
 // stop, shutdown and reboot run only through the action runner.
 const ProxmoxGuestStartProtocolVersion = 1
 
+// MsgTypeAgentCapabilities is sent by a collector on its live command session
+// when what it can do has changed since it registered. Today that is only
+// whether it can start a Proxmox guest: its containment can become ready, or
+// fail, after a registration stopped waiting for it. A server that predates
+// the message ignores it.
+const MsgTypeAgentCapabilities MessageType = "agent_capabilities"
+
+// AgentCapabilitiesPayload restates the capability fields of a registration.
+type AgentCapabilitiesPayload struct {
+	ProxmoxGuestStartVersion     int    `json:"proxmox_guest_start_version,omitempty"`
+	ProxmoxGuestStartUnavailable string `json:"proxmox_guest_start_unavailable,omitempty"`
+}
+
 // The reasons a collector gives for not offering guest start.
 const (
 	ProxmoxGuestStartUnavailableNotSystemdService = "not_systemd_service"

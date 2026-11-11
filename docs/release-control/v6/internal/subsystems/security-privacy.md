@@ -2282,9 +2282,17 @@ from Pulse under the command policy.
 The boundary that holds: stop, shutdown and reboot stay with the action
 runner and are refused on a collector session by the server gate, by the
 executor and by the agent. A monitoring-only collector holds no command
-session and is refused. The start runs in the runner's containment with a
-durable receipt, and only Pulse's own Proxmox API read confirms it, so a
-collector that answers "started" without starting is not believed.
+session and is refused. A start goes only to an agent Pulse has evidence
+runs on the guest's own node: the only agent tied to it, on the guest's own
+Proxmox connection, carrying a name no other monitored node carries, with an
+address on one of its own interfaces that Proxmox lists for that node alone.
+A link made on a matching name does not count, nor the address Pulse dials,
+nor the agent's configured report address. This is evidence and not proof.
+The residual is a machine Pulse does not monitor as a node that carries the
+node's name and holds one of its addresses.
+The start runs in the runner's containment with a durable
+receipt, and only Pulse's own Proxmox API read confirms it, so a collector
+that answers "started" without starting is not believed.
 
 On plain HTTP the command channel is neither encrypted nor signed, and the
 collector credential crosses it in clear text. That was already true and a

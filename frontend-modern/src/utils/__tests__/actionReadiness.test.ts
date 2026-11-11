@@ -49,6 +49,10 @@ describe('getActionReadinessRefusal', () => {
         'Pulse cannot start guests on this node: no Pulse agent that accepts commands is connected there. Use Proxmox for this.',
       ],
       [
+        'guest_start_agent_unconfirmed',
+        'Pulse cannot start guests on this node: it cannot confirm which Pulse agent runs there. Use Proxmox for this.',
+      ],
+      [
         'guest_start_agent_update_required',
         'Pulse cannot start guests on this node yet: its Pulse agent is too old. Update the agent, then try again.',
       ],

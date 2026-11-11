@@ -125,6 +125,8 @@ describe('patrol guest action access', () => {
       // An old agent and an agent that cannot run a start are both named.
       guest('old', 'pve4', { actionReadiness: refusedStart('guest_start_agent_update_required') }),
       guest('bare', 'pve5', { actionReadiness: refusedStart('guest_start_unavailable') }),
+      // So is a node whose agent Pulse cannot match to it by address.
+      guest('namesake', 'pve8', { actionReadiness: refusedStart('guest_start_agent_unconfirmed') }),
       // Commands off is the commands row's, with its own step.
       guest('quiet', 'pve6', { actionReadiness: refusedStart('host_commands_disabled') }),
       // Another refusal is not this one.
@@ -149,8 +151,9 @@ describe('patrol guest action access', () => {
       'pve1',
       'pve4',
       'pve5',
+      'pve8',
     ]);
-    expect(new Set(summary.cannotStart.map((entry) => entry.id)).size).toBe(5);
+    expect(new Set(summary.cannotStart.map((entry) => entry.id)).size).toBe(6);
   });
 
   it('lists nothing when no start is refused for how a node is set up', () => {

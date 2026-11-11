@@ -65,7 +65,8 @@ function NameList(props: { names: PatrolCommandAccessHost[]; label: string }) {
  * Starting a stopped Proxmox guest runs through the node's own Pulse agent,
  * after an admin approves it. The second row names the nodes where the server
  * refuses that because of how the node is set up: no agent there accepts
- * commands, or the agent is too old or cannot run a start. A node whose agent
+ * commands, Pulse cannot confirm the agent runs on that node, or the agent is
+ * too old or cannot run a start. A node whose agent
  * has commands off is in the first row, whose step also covers this.
  *
  * Both rows are absent in Watch only, which never reads a host or proposes a
@@ -149,8 +150,9 @@ export function PatrolCommandAccessStrip(props: {
               <p class="max-w-3xl text-xs leading-5 text-muted">
                 Pulse cannot start a stopped guest on these nodes. Patrol tells you when a guest
                 needs it, and you start it in Proxmox. To let Pulse start one after you approve it,
-                the node needs an up-to-date Pulse agent installed with "
-                {getUnifiedAgentCommandAccessOptionLabel()}" ticked.
+                the node needs an up-to-date Pulse agent, installed with "
+                {getUnifiedAgentCommandAccessOptionLabel()}" ticked, that Pulse can match to the
+                node by address.
               </p>
             </div>
           </details>

@@ -5531,6 +5531,16 @@ named and default organizations. The custom event envelope stays unchanged.
 
 ## Current State
 
+Mock nodes are now shaped like real ones in the two facts Pulse uses to tell
+which agent runs on which node (`internal/mock/generator.go`). Each mock node
+has its own bridge addresses (`mockNodeBridgeAddresses`), where every node
+used to list `192.168.10.21/24`, and the agent linked to a mock node reports
+that node's addressed interfaces (`mockLinkedHostInterfaces`), where it used
+to report one unrelated `eth0` address. With one shared address no mock agent
+could be matched to its node by address, so the guest start rule refused
+every mock node's agent as unconfirmed. Proof:
+`internal/mock/node_agent_link_test.go`.
+
 Alert metric windows and the storage capacity trend read the metrics store
 through `QueryCommitted`. The store now batches raw samples for up to 60
 seconds, and its other readers commit buffered samples older than 5 seconds
