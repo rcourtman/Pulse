@@ -867,7 +867,12 @@ The real agent flag-loading path resolves a non-empty explicit `--token` before
 file. An environment fallback must not become the direct flag's default and
 shadow the operator's selected file. A selected unreadable or empty file stops
 startup with a credential-safe error rather than borrowing another credential
-or starting unauthenticated. Implicit token-optional startup remains supported.
+or starting unauthenticated. Implicit token-optional startup remains supported
+for missing or readable-empty saved files. Other failures reading the selected
+instance's implicit `token` file stop configuration loading with an actionable,
+path-free error, rather than silently dropping its saved credential. A higher
+priority flag, selected file, environment credential or saved enrolment runtime
+token does not read that unselected implicit file. No saved file is modified.
 With enrolment enabled, an existing non-empty `runtime.token` still takes
 precedence and permits restart even when the bootstrap file has been removed.
 Token contents remain opaque: surrounding whitespace is trimmed, but quotes
@@ -877,6 +882,12 @@ and shell assignments are not interpreted or repaired into credentials.
 selected-file failure, custom state, enrolment, identity, TLS verification and
 monitoring-only command ceilings. `TestResolveTokenSelectedFileReadErrorIsPrivate`
 checks that file errors expose neither the configured path nor its contents.
+`TestResolveTokenImplicitFileReadStates`,
+`TestResolveTokenDoesNotReadUnselectedImplicitFile`,
+`TestLoadConfigRejectsUnreadableImplicitToken` and
+`TestLoadConfigKnownImplicitTokenStates` cover implicit read failure, absent and
+readable-empty files, source selection, real filesystem obstructions and the
+unchanged identity, TLS and monitoring-only ceilings.
 `TestHostAgentCredentialFileHandoff` joins the authenticated host issuer, actual
 installer token-writer function, private file modes, compiled agent and trusted
 HTTPS lookup/report routes. It checks normal process restart, credential
