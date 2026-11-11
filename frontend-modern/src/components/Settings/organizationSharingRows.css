@@ -1,0 +1,111 @@
+/* Keep exact parties and resource keys together without turning a phone table
+ * into four narrow, very tall columns. Only sharing uses this layout. */
+.organization-sharing-rows .organization-share-mobile-access {
+  display: none;
+}
+
+/* Match the shared grid's Access/Requested CONTAINER cutoff. A narrow Settings
+ * pane needs the same saved roles as a phone, even above the sm viewport. */
+@container (max-width: 33.999rem) {
+  .organization-sharing-rows .organization-share-mobile-access {
+    display: inline-flex;
+  }
+
+  .organization-sharing-rows table,
+  .organization-sharing-rows thead,
+  .organization-sharing-rows tbody {
+    display: block;
+  }
+
+  .organization-sharing-rows table {
+    table-layout: fixed;
+  }
+
+  .organization-sharing-rows thead tr,
+  .organization-sharing-rows tbody tr:has(.organization-share-status) {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 12px;
+    padding: 8px;
+  }
+
+  .organization-sharing-rows thead th {
+    padding: 0;
+  }
+
+  .organization-sharing-rows thead th:nth-child(n + 3) {
+    /* Status/Actions keep accessible labels without another visual line.
+     * Access and Requested retain the shared grid's existing priorities. */
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .organization-sharing-rows tbody tr:has(.organization-share-status) {
+    row-gap: 4px;
+  }
+
+  .organization-sharing-rows tbody tr:has(.organization-share-status) > td {
+    min-width: 0;
+    padding: 0;
+  }
+
+  .organization-sharing-rows tbody tr:has(.organization-share-status) > td:nth-child(4),
+  .organization-sharing-rows .organization-share-status {
+    display: contents;
+  }
+
+  .organization-sharing-rows .organization-share-status-description {
+    grid-column: 1 / -1;
+    grid-row: 3;
+  }
+
+  .organization-sharing-rows .organization-share-status-badge {
+    grid-column: 1;
+    grid-row: 2;
+    min-height: 44px;
+  }
+
+  .organization-sharing-rows tbody tr:has(.organization-share-status) > td:last-child {
+    grid-column: 2;
+    grid-row: 2;
+    justify-self: end;
+    align-self: start;
+  }
+
+  /* Readers have no touch actions. Preserve their existing incoming overview
+   * instead of reserving an empty 44px line on every share. Font sizes stay
+   * unchanged, with every name, key, role, status and acceptance detail kept. */
+  .organization-sharing-rows-readonly tbody tr:has(.organization-share-status) {
+    padding: 2px 4px;
+    row-gap: 0;
+  }
+
+  .organization-sharing-rows-readonly bdi.text-xs,
+  .organization-sharing-rows-readonly .organization-share-status-description {
+    line-height: 14px;
+  }
+
+  .organization-sharing-rows-readonly bdi.text-base-content {
+    line-height: 18px;
+  }
+
+  .organization-sharing-rows-readonly [data-share-access] > span,
+  .organization-sharing-rows-readonly .organization-share-status-badge > span {
+    line-height: 14px;
+  }
+
+  .organization-sharing-rows-readonly .organization-share-status-badge {
+    min-height: 18px;
+  }
+
+  .organization-sharing-rows tbody tr:not(:has(.organization-share-status)),
+  .organization-sharing-rows tbody tr:not(:has(.organization-share-status)) > td {
+    display: block;
+    width: 100%;
+  }
+}

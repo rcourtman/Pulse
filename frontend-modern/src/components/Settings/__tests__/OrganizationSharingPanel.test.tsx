@@ -401,6 +401,16 @@ describe('OrganizationSharingPanel', () => {
       expect(screen.getAllByText('Pending approval').length).toBeGreaterThanOrEqual(2);
     });
 
+    // The consuming panel must expose each saved party, not only its mutable name.
+    const partyKeys = screen.getAllByText('org-b', { exact: true });
+    expect(partyKeys).toHaveLength(2);
+    for (const key of partyKeys) {
+      expect(key).toBeVisible();
+      expect(key.tagName).toBe('BDI');
+      expect(key.closest('td')).toHaveTextContent('Organization B');
+      expect(key.closest('td')).toHaveTextContent('viewer');
+    }
+
     fireEvent.click(screen.getByRole('button', { name: /^Accept share of / }));
 
     await waitFor(() => {

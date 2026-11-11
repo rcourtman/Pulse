@@ -1,4 +1,5 @@
 import { Component, Show } from 'solid-js';
+import './organizationSharingRows.css';
 import { Button } from '@/components/shared/Button';
 import {
   OrganizationRoleBadge,
@@ -26,18 +27,18 @@ export const OrganizationOutgoingSharesSection: Component<
     <div class="space-y-2 p-4 sm:p-6">
       <h4 class="text-sm font-semibold text-base-content">Outgoing Shares</h4>
       <PulseDataGrid
-        class="mt-4"
+        class={`organization-sharing-rows mt-4 ${!props.state.canManageCurrentOrg() ? 'organization-sharing-rows-readonly' : ''}`}
         data={props.state.outgoingShares()}
         columns={[
           {
             key: 'resourceName',
             label: 'Resource',
             render: (share) => (
-              <div class="flex flex-col">
-                <span class="text-base-content">{share.resourceName || share.resourceId}</span>
-                <span class="text-xs text-muted">
-                  {share.resourceType}:{share.resourceId}
-                </span>
+              <div class="flex min-w-0 flex-col whitespace-normal [overflow-wrap:anywhere]">
+                <bdi class="text-base-content">{share.resourceName || share.resourceId}</bdi>
+                <bdi class="text-xs text-muted whitespace-pre-wrap">
+                  {`${share.resourceType}:${share.resourceId}`}
+                </bdi>
               </div>
             ),
           },
@@ -45,17 +46,27 @@ export const OrganizationOutgoingSharesSection: Component<
             key: 'targetOrgId',
             label: 'Target Org',
             render: (share) => (
-              <div class="flex flex-col items-start gap-1">
-                <span class="text-base-content">
-                  {props.state.orgNameById().get(share.targetOrgId) || share.targetOrgId}
-                </span>
-                <span data-share-access class="inline-flex sm:hidden">
-                  <span class="sr-only">Access:</span>
-                  <OrganizationRoleBadge
-                    role={normalizeOrganizationShareRole(share.accessRole)}
-                    size="xs"
-                  />
-                </span>
+              <div class="flex min-w-0 flex-col items-start whitespace-normal [overflow-wrap:anywhere]">
+                <div class="flex flex-wrap items-center gap-1">
+                  <Show
+                    when={
+                      props.state.orgNameById().get(share.targetOrgId) &&
+                      props.state.orgNameById().get(share.targetOrgId) !== share.targetOrgId
+                    }
+                  >
+                    <bdi class="text-base-content">
+                      {props.state.orgNameById().get(share.targetOrgId)}
+                    </bdi>
+                  </Show>
+                  <span data-share-access class="organization-share-mobile-access inline-flex">
+                    <span class="sr-only">Access:</span>
+                    <OrganizationRoleBadge
+                      role={normalizeOrganizationShareRole(share.accessRole)}
+                      size="xs"
+                    />
+                  </span>
+                </div>
+                <bdi class="text-xs text-muted whitespace-pre-wrap">{share.targetOrgId}</bdi>
               </div>
             ),
           },
@@ -72,9 +83,11 @@ export const OrganizationOutgoingSharesSection: Component<
             key: 'status',
             label: 'Status',
             render: (share) => (
-              <div class="flex flex-col gap-1">
-                <OrganizationShareStatusBadge status={share.status} />
-                <span class="text-xs text-muted">
+              <div class="organization-share-status flex min-w-0 flex-col items-start gap-1 whitespace-normal [overflow-wrap:anywhere]">
+                <span class="organization-share-status-badge inline-flex items-center">
+                  <OrganizationShareStatusBadge status={share.status} wrap />
+                </span>
+                <span class="organization-share-status-description text-xs text-muted">
                   {getOrganizationShareStatusDescription(
                     share.status,
                     share.acceptedAt,
@@ -115,7 +128,7 @@ export const OrganizationOutgoingSharesSection: Component<
         ]}
         keyExtractor={(share) => share.id}
         emptyState={getOrganizationOutgoingSharesEmptyState()}
-        desktopMinWidth="980px"
+        desktopMinWidth="100%"
       />
     </div>
   );

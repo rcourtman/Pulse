@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "base_sha": "1f0c6257e8a9aa4d276ebeccf3e04ca29c9a4d56",
+  "verified_at": "2026-11-10T23:32:42Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/OrganizationIncomingSharesSection.tsx",
+    "frontend-modern/src/components/Settings/OrganizationOutgoingSharesSection.tsx",
+    "frontend-modern/src/components/Settings/organizationSharingRows.css"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/OrganizationIncomingSharesSection.tsx": "41433149ebdbde2300ab52ee86571abfbe6c1094bac47ea583585968f97969f5",
+    "frontend-modern/src/components/Settings/OrganizationOutgoingSharesSection.tsx": "e56d824d42247328d85d48dc6b23ec5295a0d16b7a51fdbc7795081e123482a5",
+    "frontend-modern/src/components/Settings/organizationSharingRows.css": "7fbad779beb466755fba606c94fe7ca965779d74bda189e64fc2a34575a4c27d"
+  },
+  "routes": [
+    "/settings/organization/sharing"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 600,
+      "height": 1000
+    },
+    {
+      "width": 650,
+      "height": 1000
+    },
+    {
+      "width": 1024,
+      "height": 1000
+    }
+  ],
+  "states": [
+    "Actual App route and organization API client consume safe synthetic HTTP org/share/resource data. Namesake parties/workloads have long saved IDs; pending and accepted rows, exact roles, request dates, acceptance details and manager actions are retained. Chromium desktop/phone light/dark, intermediate container cutovers and WebKit phone/light; Playwright 1.56.1 matches integration lock, Chromium 141.0.7390.37 and WebKit 26.0.",
+    "Policy-read-only and ordinary viewer sessions retain scope/role guidance, show no mutation actions and make no writes. Compact non-manager rows preserve both incoming names/workload names/roles in the natural phone first view and outgoing anchor. Empty states remain full width. This is not live authorization or original-client recovery proof."
+  ],
+  "interactions": [
+    "Five supported browser commands exit 0 with 12 cases and no page errors, browser/server closure. All three final runtime hashes are asserted by each driver. 24 exact org/CSRF-bound mutations cover Accept, Remove incoming and Remove outgoing, saved accepted state/readback and no additional writes after a read-only reload; viewer/empty sessions make none.",
+    "Native grid accessibility roles/header/cell counts and visible saved roles are checked at the container cutoffs. Visible action centers own their hit targets, phone actions are at least 44px, rows and complete keys fit without document/table horizontal overflow.",
+    "All 60 retained images were opened with native view_image one immutable local image per result; 30 comparable before/after pairs use the same safe fixture/time/viewport/theme/posture and real App scroll anchor. Parent-source baseline has clipped keys and offscreen fields/controls; final retains separate per-share identity, role, status and controls. Desktop Requested/Access remain visible. Existing incoming names/roles stay in the checked phone overview; not every newly visible key/status fits the natural first view.",
+    "Before captures were reused, not rerun. The old baseline WebKit driver has a late local updates/status access-control page error after its owner captures, with cleanup recorded; current WebKit passes. Earlier prototype/packing failures and the abandoned renderer interpretation remain in lane receipts. No release or installed-client acceptance is claimed."
+  ]
+}

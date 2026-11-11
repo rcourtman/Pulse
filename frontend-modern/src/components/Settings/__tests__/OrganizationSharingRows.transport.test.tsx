@@ -79,6 +79,7 @@ let outgoing: OrganizationShare[];
 let incoming: IncomingOrganizationShare[];
 let directory: { id: string; displayName: string }[];
 let completion: ReturnType<typeof deferred<Response>>;
+let memberIsViewer: boolean;
 let reload: ReturnType<typeof deferred<Response>> | undefined;
 
 function rowFor(share: OrganizationShare): HTMLElement {
@@ -233,6 +234,7 @@ beforeEach(async () => {
     displayName: 'Namesake organization',
   }));
   completion = deferred<Response>();
+  memberIsViewer = false;
   reload = undefined;
   fetchMock.mockImplementation(async (input, options = {}) => {
     const url = String(input);
@@ -254,11 +256,16 @@ beforeEach(async () => {
       return json({ capabilities: ['multi_tenant'], limits: [], max_history_days: 7 });
     if (url === base) {
       if (reload) return reload.promise;
-      return json({ id: orgID, displayName: 'East operations', ownerUserId: owner });
+      return json({
+        id: orgID,
+        displayName: 'East operations',
+        ownerUserId: memberIsViewer ? 'other-owner' : owner,
+      });
     }
     if (url === '/api/orgs')
       return json([{ id: orgID, displayName: 'East operations' }, ...directory]);
-    if (url === `${base}/members`) return json([{ userId: owner, role: 'owner', addedAt: '' }]);
+    if (url === `${base}/members`)
+      return json([{ userId: owner, role: memberIsViewer ? 'viewer' : 'owner', addedAt: '' }]);
     if (url === `${base}/shares`) return json(outgoing);
     if (url === `${base}/shares/incoming`) return json(incoming);
     throw new Error(`Unexpected synthetic request: ${options.method ?? 'GET'} ${url}`);
@@ -285,6 +292,7 @@ describe('rendered namesake sharing rows through the real transport', () => {
         const row = rowFor(share);
         const name = directory.find((org) => org.id === share.targetOrgId)!.displayName;
         expect(within(row).getByText(name, { exact: true })).toBeInTheDocument();
+        expect(within(row).getByText(share.targetOrgId, { exact: true }).tagName).toBe('BDI');
         expect(
           within(row).getByRole('button', {
             name: `Remove share of vm:${share.resourceId} to ${name} (${share.targetOrgId})`,
@@ -294,6 +302,7 @@ describe('rendered namesake sharing rows through the real transport', () => {
       for (const share of incoming) {
         const row = rowFor(share);
         expect(within(row).getByText(share.sourceOrgName, { exact: true })).toBeInTheDocument();
+        expect(within(row).getByText(share.sourceOrgId, { exact: true }).tagName).toBe('BDI');
         for (const action of ['Accept', 'Decline'])
           expect(
             within(row).getByRole('button', {
@@ -332,6 +341,7 @@ describe('rendered namesake sharing rows through the real transport', () => {
     for (const share of outgoing) {
       const row = rowFor(share);
       expect(within(row).getAllByText(share.targetOrgId, { exact: true })).toHaveLength(1);
+      expect(within(row).getByText(share.targetOrgId, { exact: true }).tagName).toBe('BDI');
       expect(
         within(row).getByRole('button', {
           name: `Remove share of vm:${share.resourceId} to ${share.targetOrgId}`,
@@ -341,6 +351,7 @@ describe('rendered namesake sharing rows through the real transport', () => {
     for (const share of incoming) {
       const row = rowFor(share);
       expect(within(row).getAllByText(share.sourceOrgId, { exact: true })).toHaveLength(1);
+      expect(within(row).getByText(share.sourceOrgId, { exact: true }).tagName).toBe('BDI');
       const actions = share.status === 'accepted' ? ['Remove'] : ['Accept', 'Decline'];
       for (const action of actions)
         expect(
@@ -348,6 +359,40 @@ describe('rendered namesake sharing rows through the real transport', () => {
             name: `${action} share of vm:${share.resourceId} from ${share.sourceOrgId}`,
           }),
         ).toBeEnabled();
+    }
+    expect(writes()).toHaveLength(0);
+    expectBoundRequests();
+  });
+
+  it('renders long opaque saved keys and crafted organization names as isolated text', async () => {
+    const craftedName = '<img src=x onerror=not-a-script> & same name';
+    directory = directory.map((_, index) => ({
+      id: `peer/${'same-prefix-'.repeat(6)}${index}?realm=lab#saved%雪`,
+      displayName: craftedName,
+    }));
+    outgoing = outgoing.map((share, index) => ({ ...share, targetOrgId: directory[index].id }));
+    incoming = incoming.map((share, index) => ({
+      ...share,
+      sourceOrgId: directory[index].id,
+      sourceOrgName: craftedName,
+    }));
+    await renderPanel('accept incoming');
+    for (const share of outgoing) {
+      const row = rowFor(share);
+      expect(within(row).getByText(share.targetOrgId, { exact: true }).tagName).toBe('BDI');
+      expect(within(row).getByText(craftedName, { exact: true }).tagName).toBe('BDI');
+      expect(row.querySelector('img')).toBeNull();
+      expect(
+        within(row).getByRole('button', {
+          name: `Remove share of vm:${share.resourceId} to ${craftedName} (${share.targetOrgId})`,
+        }),
+      ).toBeEnabled();
+    }
+    for (const share of incoming) {
+      const row = rowFor(share);
+      expect(within(row).getByText(share.sourceOrgId, { exact: true }).tagName).toBe('BDI');
+      expect(within(row).getByText(craftedName, { exact: true }).tagName).toBe('BDI');
+      expect(row.querySelector('img')).toBeNull();
     }
     expect(writes()).toHaveLength(0);
     expectBoundRequests();
@@ -384,6 +429,28 @@ describe('rendered namesake sharing rows through the real transport', () => {
     expectBoundRequests();
   });
 
+  it('uses the compact reader rows for an ordinary viewer without changing session policy', async () => {
+    memberIsViewer = true;
+    render(() => <OrganizationSharingPanel currentUser={owner} />);
+    await screen.findByRole('heading', { name: 'Incoming Shares' });
+    expect(screen.queryByRole('heading', { name: 'Create Share' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('This session is read-only. Sharing changes are disabled.'),
+    ).not.toBeInTheDocument();
+    for (const share of [...outgoing, ...incoming]) {
+      const row = rowFor(share);
+      expect(row.closest('.organization-sharing-rows')).toHaveClass(
+        'organization-sharing-rows-readonly',
+      );
+      expect(within(row).queryByRole('button')).not.toBeInTheDocument();
+      const key = 'sourceOrgId' in share ? share.sourceOrgId : share.targetOrgId;
+      expect(within(row).getByText(key as string, { exact: true })).toBeInTheDocument();
+      expect(row).toHaveTextContent(share.accessRole);
+    }
+    expect(writes()).toHaveLength(0);
+    expectBoundRequests();
+  });
+
   it('retains saved access labels for a read-only reader without adding actions', async () => {
     outgoing[1].accessRole = 'admin';
     incoming[1].accessRole = 'editor';
@@ -402,6 +469,8 @@ describe('rendered namesake sharing rows through the real transport', () => {
       const row = rowFor(share);
       const label = within(row).getByText('Access:').parentElement!;
       expect(within(label).getByText(share.accessRole, { exact: true })).toBeInTheDocument();
+      const partyID = 'sourceOrgId' in share ? share.sourceOrgId : share.targetOrgId;
+      expect(within(row).getByText(partyID as string, { exact: true }).tagName).toBe('BDI');
       expect(within(row).queryByRole('button')).not.toBeInTheDocument();
     }
     expect(
