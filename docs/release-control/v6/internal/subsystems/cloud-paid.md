@@ -123,6 +123,15 @@ withdrawal, disposal and recovery. Desktop/narrow proof consumes actual source
 through the real API client with safe fixtures; it is not installed billing or
 commercial delivery acceptance.
 
+The shared client can defer destructive 401 navigation only while the existing
+Authentication form owns a credential change for the same explicit credential
+generation and organisation. Billing/organisation callers still receive the
+real failed response, never a paid/empty/success fallback. Definite refusal or
+closing an uncertain credential result applies any still-current deferred 401;
+confirmed token replacement retires it. This adds no entitlement, tenant switch
+or credential retry. `apiClient.credentialChange.test.ts` covers this lifetime;
+the Billing transport tests retain their selected-read/refusal expectations.
+
 
 ### Manual licence recovery feedback
 

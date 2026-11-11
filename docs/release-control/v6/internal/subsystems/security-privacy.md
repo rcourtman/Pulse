@@ -118,6 +118,25 @@ The warning, download status and separate-sign-in/token-check guidance distingui
 that uncertainty from active credentials and do not offer another blind write.
 Save/copy/download stay available until explicit dismissal or withdrawal.
 
+The form owns a temporary, generation-and-organisation-bound deferral of global
+401 navigation from submission through response-body acceptance. Real rejected
+responses still reach their consumers and the form reports the rejected sign-in;
+this is not authenticated access. A confirmed result retires obsolete-token
+rejections before releasing the deferral. A definite refusal/skipped change
+releases immediately. An uncertain result keeps only this reader's attempted
+credentials savable until Close/disposal, which applies any still-current queued
+401. Replacement credentials (even the same token value) or organisation changes
+cannot inherit that deferred side effect. Other current-reader expiry retains
+its existing sign-out behavior. Only one live credential change owns this hold.
+
+Thirty seconds bounds the submission and response-body wait together. Expiry
+aborts the client wait and shows the same uncertain-result screen, never another
+write or an assumption that server-side changes rolled back. Registered
+`apiClient.credentialChange.test.ts` and `QuickSecuritySetup.transport.test.tsx`
+cover early header/body 401, indefinite delivery, confirmed/uncertain/refused
+outcomes, save/close/disposal, replacement ownership and genuine current expiry.
+This does not cover implicit HttpOnly/IdP or WebSocket identity changes.
+
 Before submission, the form explains immediate administrator-password and
 all-API-token replacement, including full token access and agents/automation;
 it no longer implies that old credentials last until a restart. Confirmed

@@ -545,3 +545,146 @@ describe('native Settings credential setup and rotation through real API transpo
     expect(screen.queryByText('Copied!')).toBeNull();
   });
 });
+
+describe('pending credential changes versus real background authentication failures', () => {
+  const redirect = vi.fn();
+  const locationDescriptor = Object.getOwnPropertyDescriptor(window, 'location');
+  beforeEach(() => {
+    localStorage.clear();
+    redirect.mockReset();
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: {
+        get href() { return 'http://localhost/settings/security'; },
+        set href(value: string) { redirect(value); },
+      },
+    });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    if (locationDescriptor) Object.defineProperty(window, 'location', locationDescriptor);
+  });
+  const rejectBackgroundRead = async () => {
+    fetchMock.mockImplementationOnce(() => json({ error: 'Synthetic expired authentication' }, 401));
+    expect(await AlertsAPI.getActive().catch((error: unknown) => error)).toMatchObject({ status: 401 });
+  };
+
+  it.each(['headers', 'body'])(
+    'retains once-only credentials when a background401 arrives before rotation %s',
+    async (phase) => {
+      await mount();
+      const heldHeaders = deferred<Response>();
+      const heldBody = deferred<unknown>();
+      const response = json({ success: true });
+      if (phase === 'body') response.json = () => heldBody.promise;
+      nextWrite = () => phase === 'headers' ? heldHeaders.promise : response;
+      submit();
+      await rejectBackgroundRead();
+      expect(getOrgID()).toBe('fixture-estate');
+      expect(getApiToken()).toBe('synthetic-original-token');
+      expect(redirect).not.toHaveBeenCalled();
+      expect(screen.getByText('Sign-in rejected:')).toBeVisible();
+      expect(screen.getByRole('button', { name: 'Rotating credentials...' })).toBeDisabled();
+      if (phase === 'headers') heldHeaders.resolve(response);
+      else heldBody.resolve({ success: true });
+      await reveal();
+      expect(getApiToken()).toBeNull();
+      expect(getOrgID()).toBe('fixture-estate');
+      expect(redirect).not.toHaveBeenCalled();
+      expect(screen.getByText('Credentials are active now')).toBeVisible();
+      download();
+      expect(await blobText(blobs[0])).toContain(generated().apiToken);
+      expect(writes()).toHaveLength(1);
+      await rejectBackgroundRead();
+      expect(redirect).toHaveBeenCalledExactlyOnceWith('/');
+    },
+  );
+
+  it.each(['server', 'network', 'malformed'])(
+    'allows attempted credentials to be saved after an unconfirmed %s and does not hide401 on close',
+    async (failure) => {
+      await mount();
+      const held = deferred<Response>();
+      nextWrite = () => held.promise;
+      submit();
+      await rejectBackgroundRead();
+      if (failure === 'network') held.reject(new Error('Synthetic lost response'));
+      else if (failure === 'server') held.resolve(json({ error: 'Synthetic incomplete change' }, 500));
+      else held.resolve(new Response('not-json'));
+      await reveal();
+      expect(screen.getByText('Credential change unconfirmed')).toBeVisible();
+      expect(screen.getByText(/Background sign-in was rejected/)).toBeVisible();
+      expect(redirect).not.toHaveBeenCalled();
+      expect(getApiToken()).toBe('synthetic-original-token');
+      download();
+      expect(await blobText(blobs[0])).toContain('Status: Unconfirmed');
+      expect(await blobText(blobs[0])).toContain(generated().apiToken);
+      fireEvent.click(screen.getByRole('button', { name: "Close - I've Saved These Credentials" }));
+      expect(getApiToken()).toBeNull();
+      expect(getOrgID()).toBeNull();
+      expect(redirect).toHaveBeenCalledExactlyOnceWith('/');
+      expect(writes()).toHaveLength(1);
+    },
+  );
+
+  it('does not keep a background401 deferred after a definite refusal', async () => {
+    await mount();
+    const held = deferred<Response>();
+    nextWrite = () => held.promise;
+    submit();
+    await rejectBackgroundRead();
+    held.resolve(json({ error: 'Synthetic change refused' }, 403));
+    await waitFor(() => expect(redirect).toHaveBeenCalledExactlyOnceWith('/'));
+    expect(screen.queryByRole('button', { name: 'Download credentials' })).toBeNull();
+    expect(writes()).toHaveLength(1);
+  });
+
+  it.each(['headers', 'body'])(
+    'bounds a never-completing %s to one unconfirmed attempt, not a new rotation',
+    async (phase) => {
+      await mount();
+      vi.useFakeTimers();
+      const never = new Promise<never>(() => {});
+      const response = json({ success: true });
+      if (phase === 'body') response.json = () => never;
+      nextWrite = () => phase === 'headers' ? never : response;
+      submit();
+      await rejectBackgroundRead();
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(screen.getByText('Credential change unconfirmed')).toBeVisible();
+      expect(screen.getByRole('button', { name: 'Download credentials' })).toBeEnabled();
+      expect(writes()[0][1].signal.aborted).toBe(true);
+      expect(redirect).not.toHaveBeenCalled();
+      expect(writes()).toHaveLength(1);
+      vi.useRealTimers();
+      download();
+      expect(await blobText(blobs[0])).toContain(generated().apiToken);
+    },
+  );
+
+  it('releases an unresolved rejection when its own form unmounts', async () => {
+    await mount();
+    nextWrite = () => new Promise<Response>(() => {});
+    submit();
+    await rejectBackgroundRead();
+    dispose();
+    expect(redirect).toHaveBeenCalledExactlyOnceWith('/');
+    expect(writes()[0][1].signal.aborted).toBe(true);
+  });
+
+  it('does not transfer an unresolved rejection or reveal to replacement credentials', async () => {
+    await mount();
+    const held = deferred<Response>();
+    nextWrite = () => held.promise;
+    submit();
+    await rejectBackgroundRead();
+    setApiToken('synthetic-later-token');
+    held.resolve(json({ success: true }));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    dispose();
+    expect(getApiToken()).toBe('synthetic-later-token');
+    expect(getOrgID()).toBe('fixture-estate');
+    expect(redirect).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: 'Download credentials' })).toBeNull();
+  });
+});
