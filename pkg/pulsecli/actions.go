@@ -563,13 +563,18 @@ func runActionAudit(cmd *cobra.Command, deps *ActionsDeps, opts actionAuditOptio
 	}
 
 	var audits actionAuditListResponse
-	if err := decodeJSONBytes(respBody, &audits); err != nil {
+	if err := decodeActionHistoryResponse(respBody, &audits, "audits"); err != nil {
 		return fmt.Errorf("failed to decode action audit response: %w", err)
+	}
+	if audits.Count != len(audits.Audits) {
+		return fmt.Errorf("invalid action audit response: count does not match audits")
+	}
+	if unified.CanonicalResourceID(audits.ResourceID) != unified.CanonicalResourceID(opts.ResourceID) {
+		return fmt.Errorf("invalid action audit response: resourceId does not match the request")
 	}
 	if audits.Audits == nil {
 		audits.Audits = []unified.ActionAuditRecord{}
 	}
-	audits.Count = len(audits.Audits)
 
 	encoder := json.NewEncoder(cmd.OutOrStdout())
 	encoder.SetIndent("", "  ")
@@ -622,16 +627,18 @@ func runActionEvents(cmd *cobra.Command, deps *ActionsDeps, opts actionEventsOpt
 	}
 
 	var events actionLifecycleEventsResponse
-	if err := decodeJSONBytes(respBody, &events); err != nil {
+	if err := decodeActionHistoryResponse(respBody, &events, "events"); err != nil {
 		return fmt.Errorf("failed to decode action lifecycle response: %w", err)
 	}
-	if strings.TrimSpace(events.ActionID) == "" {
-		events.ActionID = actionID
+	if events.Count != len(events.Events) {
+		return fmt.Errorf("invalid action lifecycle response: count does not match events")
+	}
+	if events.ActionID != actionID {
+		return fmt.Errorf("invalid action lifecycle response: actionId does not match the request")
 	}
 	if events.Events == nil {
 		events.Events = []unified.ActionLifecycleEvent{}
 	}
-	events.Count = len(events.Events)
 
 	encoder := json.NewEncoder(cmd.OutOrStdout())
 	encoder.SetIndent("", "  ")
@@ -639,6 +646,23 @@ func runActionEvents(cmd *cobra.Command, deps *ActionsDeps, opts actionEventsOpt
 		return fmt.Errorf("failed to write action lifecycle response: %w", err)
 	}
 	return nil
+}
+
+// Empty history must be explicit, not inferred from a missing response. Keep
+// accepting a present null collection with count zero: existing servers may
+// encode an empty store that way. Callers check the count and request binding
+// before emitting any history JSON.
+func decodeActionHistoryResponse(data []byte, out any, collection string) error {
+	var envelope map[string]json.RawMessage
+	if err := decodeJSONBytes(data, &envelope); err != nil {
+		return err
+	}
+	_, hasCollection := envelope[collection]
+	count, hasCount := envelope["count"]
+	if !hasCollection || !hasCount || bytes.Equal(bytes.TrimSpace(count), []byte("null")) {
+		return fmt.Errorf("expected %s and a non-null count field", collection)
+	}
+	return decodeJSONBytes(data, out)
 }
 
 func buildActionRequest(cmd *cobra.Command, opts actionPlanOptions) (unified.ActionRequest, error) {
