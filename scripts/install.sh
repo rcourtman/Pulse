@@ -1870,10 +1870,32 @@ EOF
         service_management_functions="$(freebsd_enable_snippet)
 
 start_agent_service() {
-    ensure_freebsd_agent_enabled
-    service \"\${SERVICE_NAME}\" stop 2>/dev/null || true
+    # The bootstrap is a standalone script, not the installer shell. Invoke
+    # the enablement function actually included by freebsd_enable_snippet.
+    if ! apply_freebsd_agent_enablement; then
+        echo \"ERROR: Could not enable \${SERVICE_NAME} in rc.conf\" >&2
+        return 1
+    fi
+    if ! service \"\${SERVICE_NAME}\" stop; then
+        echo \"ERROR: Could not stop \${SERVICE_NAME}; startup was not attempted\" >&2
+        return 1
+    fi
     sleep 1
-    service \"\${SERVICE_NAME}\" start 2>/dev/null || true
+    if ! service \"\${SERVICE_NAME}\" start; then
+        echo \"ERROR: Could not start \${SERVICE_NAME}\" >&2
+        return 1
+    fi
+    # daemon(8) starts asynchronously. Give its pidfiles a finite grace period,
+    # but do not equate a successful start command with a running service.
+    local attempt
+    for attempt in 1 2 3 4 5; do
+        if service \"\${SERVICE_NAME}\" status >/dev/null 2>&1; then
+            return 0
+        fi
+        if [[ \$attempt -lt 5 ]]; then sleep 1; fi
+    done
+    echo \"ERROR: \${SERVICE_NAME} running state was not confirmed after startup\" >&2
+    return 1
 }"
     fi
 
