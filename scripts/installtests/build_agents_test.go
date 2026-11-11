@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -241,5 +242,41 @@ esac
 		if !strings.Contains(string(output), want) {
 			t.Fatalf("missing %q: %v %s", want, err, output)
 		}
+	}
+}
+
+// TestReleaseScriptsRequireGovernedToolchain ties every release compiler guard
+// and the dev toolchain installer to the toolchain go.mod declares, so a
+// toolchain bump cannot leave a release path on the previous compiler.
+func TestReleaseScriptsRequireGovernedToolchain(t *testing.T) {
+	module, err := os.ReadFile(repoFile("go.mod"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	match := regexp.MustCompile(`(?m)^toolchain (go[0-9]+\.[0-9]+\.[0-9]+)$`).FindSubmatch(module)
+	if match == nil {
+		t.Fatal("go.mod must declare an exact toolchain")
+	}
+	toolchain := string(match[1])
+	for path, want := range map[string]string{
+		"scripts/build-release.sh":                      `required_go="` + toolchain + `"`,
+		"scripts/build-release-binaries.sh":             `required_go="` + toolchain + `"`,
+		"scripts/build-secure-runtime-qualification.sh": `required_go="` + toolchain + `"`,
+		"scripts/install-go-toolchain.sh":               `DEFAULT_VERSION="` + toolchain + `"`,
+	} {
+		source, err := os.ReadFile(repoFile(path))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Count(string(source), want) != 1 {
+			t.Errorf("%s must contain %s exactly once to match go.mod", path, want)
+		}
+	}
+	version, err := os.ReadFile(repoFile("scripts/.go-version"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(string(version)) != toolchain {
+		t.Errorf("scripts/.go-version is %q; go.mod declares %s", strings.TrimSpace(string(version)), toolchain)
 	}
 }
