@@ -171,7 +171,15 @@ func newConfigCmd(deps *ConfigDeps) *cobra.Command {
 				return nil
 			}
 
-			fmt.Fprintln(cmd.OutOrStdout(), exportedData)
+			n, err := fmt.Fprintln(cmd.OutOrStdout(), exportedData)
+			if err == nil && n != len(exportedData)+1 {
+				err = io.ErrShortWrite
+			}
+			if err != nil {
+				// The destination may already contain part of the archive. Do
+				// not retry it or report an incomplete backup as successful.
+				return fmt.Errorf("failed to write configuration export to stdout: %w", err)
+			}
 			return nil
 		},
 	}
