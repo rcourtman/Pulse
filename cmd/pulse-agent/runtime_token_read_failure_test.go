@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -52,6 +53,10 @@ func TestLoadConfigRejectsUnknownRuntimeState(t *testing.T) {
 				}
 				if _, err := os.ReadFile(tokenPath); err == nil {
 					t.Skip("filesystem did not enforce the intended read obstruction")
+				} else if errors.Is(err, os.ErrNotExist) {
+					// Windows can report a non-directory ancestor as missing.
+					// Preserve the OS's existing first-enrollment classification.
+					t.Skip("platform reports this obstruction as a missing path")
 				}
 				args := []string{"--url", "http://127.0.0.1:7655", "--state-dir", dir, "--enroll"}
 				env := func(string) string { return "" }
