@@ -54,6 +54,23 @@ func TestSeedFindingsAndContext_SustainedAlertAsksForWhatTheAlertLeavesOut(t *te
 		t.Fatalf("sustained run was told a finding is expected:\n%s", stayed)
 	}
 
+	// A workload that failed and will stay down gets a finding even where only
+	// a person can fix it. With commands off on the host that is every fault,
+	// and "report nothing when only a person can change it" silenced a worker
+	// that had crashed with a segfault. The finished job stays quiet.
+	for _, want := range []string{
+		"the workload has failed and will not come back by itself",
+		"even when Pulse cannot act or read logs there and only a person can fix it",
+		"Report nothing when the condition is expected: a finished one-shot job that exited cleanly",
+	} {
+		if !strings.Contains(stayed, want) {
+			t.Errorf("sustained note is missing %q:\n%s", want, stayed)
+		}
+	}
+	if strings.Contains(stayed, "only a person can change it") {
+		t.Errorf("sustained note still tells the run to stay silent when only a person can act:\n%s", stayed)
+	}
+
 	fresh, _ := ps.seedFindingsAndContextState(&PatrolScope{Reason: TriggerReasonAlertFired, AlertContext: alertContext}, state)
 	if !strings.Contains(fresh, "Reporting a finding for this breach is expected") || strings.Contains(fresh, "which has stayed active") {
 		t.Fatalf("a freshly fired alert must keep its instruction:\n%s", fresh)

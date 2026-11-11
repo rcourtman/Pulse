@@ -4585,7 +4585,17 @@ run marked `PatrolScope.AlertSustained` and queued at priority 50, below a
 freshly fired alert. Its prompt asks for what the alert does not already say
 (the cause, what is using the space, why the workload stopped, whether Pulse
 has an action) and tells the model not to report a finding that only repeats
-the alert. Proofs: `internal/ai/unified/bridge_test.go`,
+the alert. The rule is `patrolActiveAlertFindingRule`. It asks for a finding
+when the workload has failed and will not come back by itself, even when Pulse
+cannot act or read logs there and only a person can fix it. It must not ask
+for silence because only a person can change the condition: on a host whose
+agent has commands off that is every fault, and a sustained run on a worker
+that had crashed with a segfault described the crash and filed nothing. Silence
+is for the expected condition, named by what it is: a finished one-shot job
+that exited cleanly, a workload stopped on purpose, a deliberate setting,
+hardware wear nobody can act on. The follow-up question
+(`patrolFindingDecisionPrompt`) names the same case. Proofs:
+`internal/ai/unified/bridge_test.go`,
 `internal/ai/unified/bridge_alert_manager_test.go`,
 `internal/api/ai_alert_bridge_trigger_test.go` and
 `internal/ai/patrol_alert_sustained_test.go`.

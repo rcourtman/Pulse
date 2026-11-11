@@ -363,7 +363,12 @@ func TestAlertRunHandsTheLoopAFindingDecisionQuestion(t *testing.T) {
 	rig := newAlertRunRig(t, config.PatrolAutonomyApproval)
 
 	rig.run(PatrolScope{ResourceIDs: []string{rig.containerID}, Reason: TriggerReasonManual, NoStream: true})
-	for _, want := range []string{"critical alert active on \"web\"", rig.alert.Message, "patrol_report_finding", "no finding is needed"} {
+	for _, want := range []string{
+		"critical alert active on \"web\"", rig.alert.Message, "patrol_report_finding", "no finding is needed",
+		// The question must not let "nothing beyond the alert" cover a
+		// workload that failed and will stay down.
+		"a workload that failed and will not come back by itself", "even when only a person can fix it",
+	} {
 		if !strings.Contains(rig.decisionPrompt, want) {
 			t.Errorf("manual run on a resource with an active alert: question lacks %q, got %q", want, rig.decisionPrompt)
 		}
