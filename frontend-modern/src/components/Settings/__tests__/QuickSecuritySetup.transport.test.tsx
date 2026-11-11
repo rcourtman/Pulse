@@ -555,18 +555,27 @@ describe('pending credential changes versus real background authentication failu
     Object.defineProperty(window, 'location', {
       configurable: true,
       value: {
-        get href() { return 'http://localhost/settings/security'; },
-        set href(value: string) { redirect(value); },
+        get href() {
+          return 'http://localhost/settings/security';
+        },
+        set href(value: string) {
+          redirect(value);
+        },
       },
     });
   });
   afterEach(() => {
+    cleanup();
     vi.useRealTimers();
     if (locationDescriptor) Object.defineProperty(window, 'location', locationDescriptor);
   });
   const rejectBackgroundRead = async () => {
-    fetchMock.mockImplementationOnce(() => json({ error: 'Synthetic expired authentication' }, 401));
-    expect(await AlertsAPI.getActive().catch((error: unknown) => error)).toMatchObject({ status: 401 });
+    fetchMock.mockImplementationOnce(() =>
+      json({ error: 'Synthetic expired authentication' }, 401),
+    );
+    expect(await AlertsAPI.getActive().catch((error: unknown) => error)).toMatchObject({
+      status: 401,
+    });
   };
 
   it.each(['headers', 'body'])(
@@ -577,7 +586,7 @@ describe('pending credential changes versus real background authentication failu
       const heldBody = deferred<unknown>();
       const response = json({ success: true });
       if (phase === 'body') response.json = () => heldBody.promise;
-      nextWrite = () => phase === 'headers' ? heldHeaders.promise : response;
+      nextWrite = () => (phase === 'headers' ? heldHeaders.promise : response);
       submit();
       await rejectBackgroundRead();
       expect(getOrgID()).toBe('fixture-estate');
@@ -609,7 +618,8 @@ describe('pending credential changes versus real background authentication failu
       submit();
       await rejectBackgroundRead();
       if (failure === 'network') held.reject(new Error('Synthetic lost response'));
-      else if (failure === 'server') held.resolve(json({ error: 'Synthetic incomplete change' }, 500));
+      else if (failure === 'server')
+        held.resolve(json({ error: 'Synthetic incomplete change' }, 500));
       else held.resolve(new Response('not-json'));
       await reveal();
       expect(screen.getByText('Credential change unconfirmed')).toBeVisible();
@@ -639,6 +649,21 @@ describe('pending credential changes versus real background authentication failu
     expect(writes()).toHaveLength(1);
   });
 
+  it('also retains a rejection first delivered after an uncertain result until save/close', async () => {
+    await mount();
+    nextWrite = () => json({ error: 'Synthetic incomplete change' }, 500);
+    submit();
+    await reveal();
+    await rejectBackgroundRead();
+    expect(screen.getByText(/Background sign-in was rejected/)).toBeVisible();
+    expect(redirect).not.toHaveBeenCalled();
+    download();
+    expect(await blobText(blobs[0])).toContain(generated().apiToken);
+    fireEvent.click(screen.getByRole('button', { name: "Close - I've Saved These Credentials" }));
+    expect(redirect).toHaveBeenCalledExactlyOnceWith('/');
+    expect(writes()).toHaveLength(1);
+  });
+
   it.each(['headers', 'body'])(
     'bounds a never-completing %s to one unconfirmed attempt, not a new rotation',
     async (phase) => {
@@ -647,7 +672,7 @@ describe('pending credential changes versus real background authentication failu
       const never = new Promise<never>(() => {});
       const response = json({ success: true });
       if (phase === 'body') response.json = () => never;
-      nextWrite = () => phase === 'headers' ? never : response;
+      nextWrite = () => (phase === 'headers' ? never : response);
       submit();
       await rejectBackgroundRead();
       await vi.advanceTimersByTimeAsync(30_000);
@@ -680,7 +705,7 @@ describe('pending credential changes versus real background authentication failu
     await rejectBackgroundRead();
     setApiToken('synthetic-later-token');
     held.resolve(json({ success: true }));
-    await new Promise(resolve => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
     dispose();
     expect(getApiToken()).toBe('synthetic-later-token');
     expect(getOrgID()).toBe('fixture-estate');

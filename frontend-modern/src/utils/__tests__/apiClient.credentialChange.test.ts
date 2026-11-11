@@ -13,7 +13,8 @@ import {
 const fetchMock = vi.fn<typeof fetch>();
 const redirect = vi.fn();
 const locationDescriptor = Object.getOwnPropertyDescriptor(window, 'location');
-const rejected = () => new Response('{"error":"Synthetic authentication refusal"}', { status: 401 });
+const rejected = () =>
+  new Response('{"error":"Synthetic authentication refusal"}', { status: 401 });
 
 beforeEach(() => {
   clearAuth();
@@ -27,8 +28,12 @@ beforeEach(() => {
   Object.defineProperty(window, 'location', {
     configurable: true,
     value: {
-      get href() { return 'http://localhost/settings/security'; },
-      set href(value: string) { redirect(value); },
+      get href() {
+        return 'http://localhost/settings/security';
+      },
+      set href(value: string) {
+        redirect(value);
+      },
     },
   });
 });
@@ -88,6 +93,13 @@ describe('a credential change owns only its temporary authentication redirect', 
     ['same-value new admission', () => setApiToken('synthetic-original-token')],
     ['explicit sign-out', clearAuth],
     ['new organization', () => setOrgID('south')],
+    [
+      'organization round trip',
+      () => {
+        setOrgID('south');
+        setOrgID('north');
+      },
+    ],
   ])('does not replay deferred side effects after %s', async (_name, replace) => {
     const change = beginCredentialChange(vi.fn());
     await apiFetch('/api/alerts/active');

@@ -442,6 +442,11 @@ class ApiClient {
 
   setOrgID(orgID: string | null) {
     const normalized = sanitizeOrgID(orgID);
+    // Leaving and returning to the same organisation must not revive a
+    // credential form's deferred navigation, even before its cleanup runs.
+    if ((this.getOrgID() || 'default') !== (normalized || 'default')) {
+      this.credentialChange = undefined;
+    }
     this.orgID = normalized;
     this.persistOrgContext(normalized);
   }

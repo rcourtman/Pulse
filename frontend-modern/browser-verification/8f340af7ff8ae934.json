@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "base_sha": "5937ce280a0685c621fcf321b78675942d921333",
+  "verified_at": "2026-11-11T19:49:41Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/QuickSecuritySetup.tsx",
+    "frontend-modern/src/utils/apiClient.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/utils/apiClient.ts": "95d96bc776ada8dc3ea9ef40e6ab1b7778cca5d05dfaed32aba450a7e6d018ec",
+    "frontend-modern/src/components/Settings/QuickSecuritySetup.tsx": "e41703c024dcff3e705932d933b0711158856146cb154ec6522064cde76bcfd4"
+  },
+  "routes": [
+    "/settings/security",
+    "/"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Actual QuickSecuritySetup, alertsActivation/AlertsAPI, apiClient, Login and CSS compiled with the locked e2185308 module graph. Baseline copies are the exact two changed runtime blobs from assigned a2e7adba280e061335ed97d6dc555a0e255beab5; all other source is unchanged assigned main. Deterministic synthetic credentials/data, identical theme, locale, viewport and interaction state. Not full App, real backend/HttpOnly session, IdP or installed/client recovery.",
+    "Playwright1.56.1 matches integration lock. Chromium141.0.7390.37 desktop and WebKit26.0 narrow; light/dark. Twenty-eight captures were opened natively: twelve comparable pairs plus four confirmed destinations. All generated fields, Copy/Download/Close/Done controls and once-only/immediate/uncertain warnings remain visible, including390x844. Pending background rejection replaces only Important with Sign-in rejected in the existing banner.",
+    "An actual alert-store401 while rotation success body is held replaces the baseline with Login. Final keeps the pending form, then confirmed downloadable credentials. A500 after the same early401 keeps explicitly unconfirmed savable values. A definite403 releases queued current401 to Login. No retry, stronger token or tenant fallback.",
+    "Four locked browser clients reported0, complete assertion reports and captures. The final outcomes enclosing shell reported143 after printing browser_client_exit:0; initiator/descendant cleanup remain unknown. This is preserved separately, not diagnosed or cleared by the valid browser assertions/pixels."
+  ],
+  "interactions": [
+    "One explicit rotation and one admitted alert read per journey. Release old401 before success-body parsing; final selection survives. Finish accepted body; real Download retrieves confirmed generated credentials; current403 preserves selection and new current401 navigates to Login.",
+    "Uncertain500: Download retrieves generated values with Unconfirmed status. After explicit saved Close the queued genuine401 clears auth and selection and renders actual Login. Refused403: the same queued background expiry is released immediately. Both themes and viewports exercise these controls.",
+    "Pending controls remain disabled. Registered source tests additionally cover a whole-delivery30s deadline, indefinite headers/bodies, failed/malformed responses, disposal, same-value credential replacement, organization round trips and no blind retry. These test-only states are not claimed as browser timeout/IdP proof."
+  ]
+}
