@@ -183,8 +183,9 @@ func persistedRuntimeToken(collector SystemCollector, stateDir string) (string, 
 }
 
 // runEnrollmentLoop checks for an existing runtime token or performs enrollment
-// with exponential backoff. On success, updates a.cfg.APIToken in memory and
-// persists the runtime token to disk.
+// with exponential backoff. A completed exchange is acknowledged in memory only
+// after its runtime token and any canonical identity are saved. A local save
+// failure is terminal: the server may already have consumed the bootstrap token.
 //
 // Behavior on specific HTTP status codes:
 //   - 200: enrollment succeeded, runtime token returned
@@ -211,14 +212,23 @@ func (a *Agent) runEnrollmentLoop(ctx context.Context) error {
 	for {
 		result, err := a.enroll(ctx)
 		if err == nil {
-			// Success — persist and use the runtime token.
-			a.cfg.APIToken = result.RuntimeToken
-			a.persistRuntimeToken(result.RuntimeToken)
+			// Save the unrepeatable credential first. If the later identity save
+			// fails, retain this token for recovery instead of deleting it or
+			// exchanging the consumed bootstrap again. Neither failure may release
+			// a successful result to authenticated startup consumers.
+			if err := a.persistRuntimeToken(result.RuntimeToken); err != nil {
+				return errors.New("cannot confirm saved runtime token after enrollment; check that the configured state directory is writable and storage is available; retain existing state, as the bootstrap token may already be consumed")
+			}
 			canonicalID := strings.TrimSpace(result.AgentID)
+			if canonicalID != "" {
+				if err := a.persistAgentID(canonicalID); err != nil {
+					return errors.New("cannot confirm saved agent ID after enrollment; the runtime token was saved, so preserve runtime.token and check that the configured state directory and agent-id destination are writable before restarting")
+				}
+			}
+			a.cfg.APIToken = result.RuntimeToken
 			if canonicalID != "" {
 				a.agentID = canonicalID
 				a.cfg.AgentID = canonicalID
-				a.persistAgentID(canonicalID)
 			}
 			a.logger.Info().
 				Str("agentId", canonicalID).
@@ -336,25 +346,29 @@ func (a *Agent) enroll(ctx context.Context) (*enrollResponse, error) {
 	return &result, nil
 }
 
-// persistRuntimeToken writes the runtime token to the state directory.
-func (a *Agent) persistRuntimeToken(token string) {
+// persistRuntimeToken writes the runtime token to the state directory. A failed
+// permission confirmation can follow publication; never infer absence or retry
+// enrollment from this error. Diagnostics deliberately omit raw storage errors.
+func (a *Agent) persistRuntimeToken(token string) error {
 	if a.stateDir == "" {
-		return
+		return errors.New("runtime token state directory is not configured")
 	}
 	if err := a.collector.MkdirAll(a.stateDir, 0700); err != nil {
-		a.logger.Warn().Err(err).Msg("Failed to create state directory for runtime token")
-		return
+		a.logger.Warn().Msg("Failed to create state directory for runtime token")
+		return errors.New("cannot create runtime token state directory")
 	}
 	if err := a.collector.Chmod(a.stateDir, 0700); err != nil {
-		a.logger.Warn().Err(err).Msg("Failed to enforce state directory permissions for runtime token")
-		return
+		a.logger.Warn().Msg("Failed to enforce state directory permissions for runtime token")
+		return errors.New("cannot enforce runtime token state directory permissions")
 	}
 	tokenPath := filepath.Join(a.stateDir, runtimeTokenFile)
 	if err := writePrivateAgentState(a.collector, tokenPath, []byte(token)); err != nil {
-		a.logger.Warn().Err(err).Msg("Failed to persist runtime token")
-		return
+		a.logger.Warn().Msg("Failed to persist runtime token")
+		return errors.New("cannot persist runtime token")
 	}
 	if err := a.collector.Chmod(tokenPath, 0600); err != nil {
-		a.logger.Debug().Err(err).Msg("Failed to enforce runtime token file permissions")
+		a.logger.Warn().Msg("Failed to enforce runtime token file permissions")
+		return errors.New("cannot enforce runtime token file permissions")
 	}
+	return nil
 }

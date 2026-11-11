@@ -1619,27 +1619,30 @@ func (a *Agent) warnCanonicalIDMismatch(canonicalAgentID string) {
 
 // persistAgentID writes the server-assigned agent ID to the state directory.
 // This file is read by the uninstall script to deregister the agent from the server.
-// Errors are debug-logged, never fatal — same resilience pattern as proxmox_setup.go.
-func (a *Agent) persistAgentID(agentID string) {
+// Report acknowledgments remain best-effort, but enrollment must check the error
+// before releasing its new authority. Do not log private storage error details.
+func (a *Agent) persistAgentID(agentID string) error {
 	if a.stateDir == "" {
-		return
+		return errors.New("agent-id state directory is not configured")
 	}
 	if err := a.collector.MkdirAll(a.stateDir, 0700); err != nil {
-		a.logger.Debug().Err(err).Msg("Failed to create state directory for agent-id")
-		return
+		a.logger.Debug().Msg("Failed to create state directory for agent-id")
+		return errors.New("cannot create agent-id state directory")
 	}
 	if err := a.collector.Chmod(a.stateDir, 0700); err != nil {
-		a.logger.Debug().Err(err).Msg("Failed to enforce state directory permissions for agent-id")
-		return
+		a.logger.Debug().Msg("Failed to enforce state directory permissions for agent-id")
+		return errors.New("cannot enforce agent-id state directory permissions")
 	}
 	agentIDPath := filepath.Join(a.stateDir, "agent-id")
 	if err := writePrivateAgentState(a.collector, agentIDPath, []byte(agentID)); err != nil {
-		a.logger.Debug().Err(err).Msg("Failed to persist agent-id")
-		return
+		a.logger.Debug().Msg("Failed to persist agent-id")
+		return errors.New("cannot persist agent-id")
 	}
 	if err := a.collector.Chmod(agentIDPath, 0600); err != nil {
-		a.logger.Debug().Err(err).Msg("Failed to enforce agent-id file permissions")
+		a.logger.Debug().Msg("Failed to enforce agent-id file permissions")
+		return errors.New("cannot enforce agent-id file permissions")
 	}
+	return nil
 }
 
 // ApplyRemoteConfig applies server-side configuration overrides that can be
