@@ -75,6 +75,10 @@ func ReadBoundedHTTPBody(reader io.Reader, declaredLength, maxBytes int64, sourc
 }
 
 func GetPassphrase(deps *ConfigDeps, prompt string, confirm bool) string {
+	return getPassphrase(deps, os.Stderr, prompt, confirm)
+}
+
+func getPassphrase(deps *ConfigDeps, diagnostic io.Writer, prompt string, confirm bool) string {
 	if pass := os.Getenv("PULSE_PASSPHRASE"); pass != "" {
 		return pass
 	}
@@ -83,9 +87,11 @@ func GetPassphrase(deps *ConfigDeps, prompt string, confirm bool) string {
 		return *deps.Passphrase
 	}
 
-	fmt.Print(prompt)
+	// Keep terminal prompts out of the encrypted archive when stdout is
+	// redirected. Commands supply their own diagnostic stream.
+	fmt.Fprint(diagnostic, prompt)
 	bytePassword, err := configReadPassword(deps, int(syscall.Stdin))
-	fmt.Println()
+	fmt.Fprintln(diagnostic)
 	if err != nil {
 		return ""
 	}
@@ -95,14 +101,14 @@ func GetPassphrase(deps *ConfigDeps, prompt string, confirm bool) string {
 		return pass
 	}
 
-	fmt.Print("Confirm passphrase: ")
+	fmt.Fprint(diagnostic, "Confirm passphrase: ")
 	bytePassword2, err := configReadPassword(deps, int(syscall.Stdin))
-	fmt.Println()
+	fmt.Fprintln(diagnostic)
 	if err != nil {
 		return ""
 	}
 	if string(bytePassword2) != pass {
-		fmt.Println("Passphrases do not match")
+		fmt.Fprintln(diagnostic, "Passphrases do not match")
 		return ""
 	}
 
@@ -150,7 +156,7 @@ func newConfigCmd(deps *ConfigDeps) *cobra.Command {
   # Export with passphrase from environment variable
   PULSE_PASSPHRASE=mysecret pulse config export -o pulse-config.enc`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			pass := GetPassphrase(deps, "Enter passphrase for encryption: ", false)
+			pass := getPassphrase(deps, cmd.ErrOrStderr(), "Enter passphrase for encryption: ", false)
 			if pass == "" {
 				return fmt.Errorf("passphrase is required")
 			}
@@ -206,7 +212,7 @@ func newConfigCmd(deps *ConfigDeps) *cobra.Command {
 				return fmt.Errorf("failed to read import file: %w", err)
 			}
 
-			pass := GetPassphrase(deps, "Enter passphrase for decryption: ", false)
+			pass := getPassphrase(deps, cmd.ErrOrStderr(), "Enter passphrase for decryption: ", false)
 			if pass == "" {
 				return fmt.Errorf("passphrase is required")
 			}
