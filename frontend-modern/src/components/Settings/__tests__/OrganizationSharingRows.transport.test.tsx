@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import type { IncomingOrganizationShare, OrganizationShare } from '@/api/orgs';
 import { eventBus } from '@/stores/events';
-import { loadRuntimeCapabilities } from '@/stores/license';
+import { loadRuntimeCapabilities, runtimeCapabilitiesLoadError } from '@/stores/license';
 import { syncSessionPresentationPolicy } from '@/stores/sessionPresentationPolicy';
 import { clearAuth, getApiToken, getOrgID, setApiToken, setOrgID } from '@/utils/apiClient';
 import { OrganizationSharingPanel } from '../OrganizationSharingPanel';
@@ -67,6 +67,59 @@ function incomingRows(): IncomingOrganizationShare[] {
 }
 const fetchMock = vi.fn<typeof fetch>();
 const confirmMock = vi.fn(() => true);
+const capabilityPath = '/api/license/runtime-capabilities';
+const capabilityBody = (enabled: boolean) => ({
+  capabilities: enabled ? ['multi_tenant'] : [],
+  limits: [],
+});
+type Capability = 'enabled' | 'withdrawn' | 'failed' | 'malformed';
+const reads = (path: string) =>
+  fetchMock.mock.calls.filter(([url, options]) => url === path && (options?.method ?? 'GET') === 'GET');
+const turn = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+let capabilityReply: () => Promise<Response>;
+let healthReply: () => Promise<Response>;
+let releases: (() => void)[];
+let loads: Promise<void>[];
+function hold<T>(cleanupValue: T) {
+  const reply = deferred<T>();
+  releases.push(() => reply.resolve(cleanupValue));
+  return reply;
+}
+function refresh(reply: () => Promise<Response>) {
+  capabilityReply = reply;
+  const pending = loadRuntimeCapabilities(true);
+  loads.push(pending);
+  return pending;
+}
+function capabilities(kind: Capability) {
+  return refresh(async () => {
+    if (kind === 'failed') throw new TypeError('synthetic-private-sharing-capability-unavailable');
+    return json(kind === 'malformed' ? { capabilities: 'multi_tenant', limits: [] } : capabilityBody(kind === 'enabled'));
+  });
+}
+function expectWithdrawn() {
+  expect(screen.queryByRole('heading', { name: 'Outgoing Shares' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('heading', { name: 'Incoming Shares' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('heading', { name: 'Create Share' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Reload sharing' })).not.toBeInTheDocument();
+  expect(screen.queryByText('No outgoing shares configured.')).not.toBeInTheDocument();
+  expect(screen.queryByText('No incoming shares from other organizations.')).not.toBeInTheDocument();
+  for (const share of [...outgoingRows(), ...incomingRows()])
+    expect(screen.queryByText(`vm:${share.resourceId}`)).not.toBeInTheDocument();
+  expect(notices.success).not.toHaveBeenCalled();
+  expect(notices.error).not.toHaveBeenCalled();
+  expect(getOrgID()).toBe(orgID);
+  expect(getApiToken()).toBe(storedToken);
+}
+async function expectFreshRows(operation: Operation, applied: boolean) {
+  await waitFor(() => expect(sharingReads()).toHaveLength(10));
+  await screen.findByRole('heading', { name: 'Outgoing Shares' });
+  expectSavedRows(operation, applied);
+  expect(writes()).toHaveLength(applied ? 1 : 0);
+  expect(notices.success).not.toHaveBeenCalled();
+  expect(notices.error).not.toHaveBeenCalled();
+}
+
 const writes = () =>
   fetchMock.mock.calls.filter(([, options]) => (options?.method ?? 'GET') !== 'GET');
 const sharingReads = () =>
@@ -234,6 +287,10 @@ beforeEach(async () => {
     displayName: 'Namesake organization',
   }));
   completion = deferred<Response>();
+  releases = [];
+  loads = [];
+  capabilityReply = async () => json(capabilityBody(true));
+  healthReply = async () => json({});
   memberIsViewer = false;
   reload = undefined;
   fetchMock.mockImplementation(async (input, options = {}) => {
@@ -252,8 +309,8 @@ beforeEach(async () => {
         );
       return known ? completion.promise : json({ error: 'Unknown synthetic share' }, 404);
     }
-    if (url === '/api/license/runtime-capabilities')
-      return json({ capabilities: ['multi_tenant'], limits: [], max_history_days: 7 });
+    if (url === capabilityPath) return capabilityReply();
+    if (url === '/api/health') return healthReply();
     if (url === base) {
       if (reload) return reload.promise;
       return json({
@@ -270,12 +327,17 @@ beforeEach(async () => {
     if (url === `${base}/shares/incoming`) return json(incoming);
     throw new Error(`Unexpected synthetic request: ${options.method ?? 'GET'} ${url}`);
   });
-  await loadRuntimeCapabilities(true);
+  await refresh(capabilityReply);
 });
-afterEach(() => {
+afterEach(async () => {
   cleanup();
   completion.resolve(new Response(null, { status: 204 }));
   reload?.resolve(json({ id: orgID }));
+  for (const release of releases) release();
+  if (vi.isFakeTimers()) await vi.runOnlyPendingTimersAsync();
+  vi.useRealTimers();
+  await Promise.allSettled(loads);
+  await turn();
   clearAuth();
   setOrgID(null);
   syncSessionPresentationPolicy(null);
@@ -612,4 +674,102 @@ describe('rendered namesake sharing rows through the real transport', () => {
       expect(notices.success).not.toHaveBeenCalled();
     },
   );
+});
+
+// The row suites above keep capabilities enabled. Exercise withdrawal through
+// the actual producer/store as well: a hidden row alone must not be mistaken
+// for cancellation of an intent still waiting on CSRF or a response body.
+describe('sharing rows through real capability withdrawal', () => {
+  it.each(operations.flatMap((operation) =>
+    (['withdrawn', 'failed', 'malformed'] as const).map((kind) => ({ operation, kind })),
+  ))('retires cold $operation on $kind capability before dispatch', async ({ operation, kind }) => {
+    const health = hold(json({}));
+    healthReply = () => health.promise;
+    await renderPanel(operation);
+    const savedOutgoing = structuredClone(outgoing);
+    const savedIncoming = structuredClone(incoming);
+    document.cookie = 'pulse_csrf=; Max-Age=0; Path=/';
+    fireEvent.click(rowAction(operation));
+    await waitFor(() => expect(reads('/api/health')).toHaveLength(1));
+    expect(writes()).toHaveLength(0);
+    expect(rowAction(operation)).toBeDisabled();
+    vi.useFakeTimers();
+    await capabilities(kind);
+    expectWithdrawn();
+    expect(Boolean(runtimeCapabilitiesLoadError())).toBe(kind === 'failed');
+    document.cookie = `pulse_csrf=${csrfToken}; Path=/`;
+    health.resolve(json({}));
+    // Advance just the existing preparation delay, not a test/production bound.
+    await vi.advanceTimersByTimeAsync(25);
+    vi.useRealTimers();
+    expect(writes()).toHaveLength(0);
+    expect(outgoing).toEqual(savedOutgoing);
+    expect(incoming).toEqual(savedIncoming);
+    expect(sharingReads()).toHaveLength(5);
+    expectWithdrawn();
+    await capabilities('enabled');
+    await expectFreshRows(operation, false);
+    expect(reads('/api/health')).toHaveLength(1);
+  });
+
+  it.each(operations)('ignores a superseded grant while cold %s stays retired', async (operation) => {
+    const health = hold(json({}));
+    healthReply = () => health.promise;
+    await renderPanel(operation);
+    document.cookie = 'pulse_csrf=; Max-Age=0; Path=/';
+    fireEvent.click(rowAction(operation));
+    await waitFor(() => expect(reads('/api/health')).toHaveLength(1));
+    const oldReply = hold(json(capabilityBody(false)));
+    const oldLoad = refresh(() => oldReply.promise);
+    await capabilities('withdrawn');
+    expectWithdrawn();
+    oldReply.resolve(json(capabilityBody(true)));
+    await oldLoad;
+    expectWithdrawn();
+    vi.useFakeTimers();
+    document.cookie = `pulse_csrf=${csrfToken}; Path=/`;
+    health.resolve(json({}));
+    await vi.advanceTimersByTimeAsync(25);
+    vi.useRealTimers();
+    expect(writes()).toHaveLength(0);
+    expect(sharingReads()).toHaveLength(5);
+    expectWithdrawn();
+  });
+
+  it.each(operations.flatMap((operation) =>
+    (['success', 'unreadable'] as const).map((outcome) => ({ operation, outcome })),
+  ))('rereads applied $operation without importing a late $outcome into a new draft', async ({ operation, outcome }) => {
+    const body = hold('');
+    const response = json({});
+    const read = vi.spyOn(response, 'text').mockImplementation(() => body.promise);
+    completion.resolve(response);
+    await renderPanel(operation);
+    fireEvent.click(rowAction(operation));
+    await waitFor(() => expect(read).toHaveBeenCalledOnce());
+    expectWrite(operation);
+    applyDispatchedWrite();
+    const signal = writes()[0][1]?.signal;
+    expect(signal?.aborted).toBe(false);
+    await capabilities('withdrawn');
+    expectWithdrawn();
+    expect(signal?.aborted).toBe(true);
+    await capabilities('enabled');
+    await expectFreshRows(operation, true);
+    // Use the live replacement form, not a cached query on a detached form.
+    fireEvent.change(screen.getByRole('combobox', { name: 'Target Organization' }), { target: { value: 'peer/third' } });
+    fireEvent.input(screen.getByLabelText('Resource Type'), { target: { value: 'vm' } });
+    fireEvent.input(screen.getByLabelText('Resource ID'), { target: { value: `current::draft/${operation}` } });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Access Role' }), { target: { value: 'admin' } });
+    body.resolve(outcome === 'success' ? '{}' : '{"synthetic-private-partial":');
+    await turn();
+    expect(screen.getByRole('combobox', { name: 'Target Organization' })).toHaveValue('peer/third');
+    expect(screen.getByLabelText('Resource ID')).toHaveValue(`current::draft/${operation}`);
+    expect(screen.getByRole('combobox', { name: 'Access Role' })).toHaveValue('admin');
+    expect(screen.getByRole('button', { name: 'Create Share' })).toBeEnabled();
+    expectSavedRows(operation, true);
+    expect(sharingReads()).toHaveLength(10);
+    expect(writes()).toHaveLength(1);
+    expect(notices.success).not.toHaveBeenCalled();
+    expect(notices.error).not.toHaveBeenCalled();
+  });
 });

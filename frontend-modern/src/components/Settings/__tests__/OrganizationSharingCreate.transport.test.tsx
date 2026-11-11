@@ -4,7 +4,7 @@ import { createSignal, type Accessor, type Setter } from 'solid-js';
 import type { Organization, OrganizationShare } from '@/api/orgs';
 import type { Resource } from '@/types/resource';
 import { eventBus } from '@/stores/events';
-import { loadRuntimeCapabilities } from '@/stores/license';
+import { loadRuntimeCapabilities, runtimeCapabilitiesLoadError } from '@/stores/license';
 import { syncSessionPresentationPolicy } from '@/stores/sessionPresentationPolicy';
 import { clearAuth, getApiToken, getOrgID, setApiToken, setOrgID } from '@/utils/apiClient';
 import { OrganizationSharingPanel } from '../OrganizationSharingPanel';
@@ -84,6 +84,44 @@ let applyWrite: boolean;
 let healthReply: () => Promise<Response>;
 let writeReply: () => Promise<Response>;
 let unexpected: string[];
+let capabilityReply: () => Promise<Response>;
+let releases: (() => void)[];
+let loads: Promise<void>[];
+const capabilityBody = (enabled: boolean) => ({
+  capabilities: enabled ? ['multi_tenant'] : [],
+  limits: [],
+});
+type Capability = 'enabled' | 'withdrawn' | 'failed' | 'malformed';
+const turn = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+function hold<T>(cleanupValue: T) {
+  const reply = deferred<T>();
+  releases.push(() => reply.resolve(cleanupValue));
+  return reply;
+}
+function refresh(reply: () => Promise<Response>) {
+  capabilityReply = reply;
+  const pending = loadRuntimeCapabilities(true);
+  loads.push(pending);
+  return pending;
+}
+function capabilities(kind: Capability) {
+  return refresh(async () => {
+    if (kind === 'failed') throw new TypeError('synthetic-private-sharing-capability-unavailable');
+    return json(kind === 'malformed' ? { capabilities: 'multi_tenant', limits: [] } : capabilityBody(kind === 'enabled'));
+  });
+}
+function expectWithdrawn() {
+  expect(screen.queryByRole('heading', { name: 'Create Share' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('heading', { name: 'Outgoing Shares' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Reload sharing' })).not.toBeInTheDocument();
+  expect(screen.queryByText('No outgoing shares configured.')).not.toBeInTheDocument();
+  expect(screen.queryByText('No incoming shares from other organizations.')).not.toBeInTheDocument();
+  expect(notices.success).not.toHaveBeenCalled();
+  expect(notices.error).not.toHaveBeenCalled();
+  expect(getOrgID()).toBe(orgID);
+  expect(getApiToken()).toBe(storedToken);
+}
+
 const fetchMock = vi.fn<typeof fetch>();
 const writes = () => fetchMock.mock.calls.filter(([, init]) => (init?.method ?? 'GET') !== 'GET');
 const inventoryReads = () =>
@@ -204,6 +242,9 @@ beforeEach(async () => {
   outgoing = [];
   applyWrite = true;
   unexpected = [];
+  releases = [];
+  loads = [];
+  capabilityReply = async () => json(capabilityBody(true));
   healthReply = async () => {
     document.cookie = `pulse_csrf=${csrf}; Path=/`;
     return json({});
@@ -213,8 +254,7 @@ beforeEach(async () => {
     const url = String(input);
     const method = init.method ?? 'GET';
     if (method === 'GET') {
-      if (url === '/api/license/runtime-capabilities')
-        return json({ capabilities: ['multi_tenant'], limits: [] });
+      if (url === '/api/license/runtime-capabilities') return capabilityReply();
       if (url === '/api/health') return healthReply();
       if (url === orgPath) return json(originalOrg);
       if (url === '/api/orgs') return json(directory);
@@ -237,10 +277,15 @@ beforeEach(async () => {
     unexpected.push(`${method} ${url}`);
     throw new Error(`Unexpected synthetic request: ${method} ${url}`);
   });
-  await loadRuntimeCapabilities(true);
+  await refresh(capabilityReply);
 });
-afterEach(() => {
+afterEach(async () => {
   cleanup();
+  for (const release of releases) release();
+  if (vi.isFakeTimers()) await vi.runOnlyPendingTimersAsync();
+  vi.useRealTimers();
+  await Promise.allSettled(loads);
+  await turn();
   clearAuth();
   syncSessionPresentationPolicy(null);
   document.cookie = 'pulse_csrf=; Max-Age=0; Path=/';
@@ -546,4 +591,110 @@ describe('rendered Create Share controls through the real transport', () => {
     expect(healthReads()).toHaveLength(1);
     expectWrite('manual entry', 'admin');
   });
+});
+
+// Keep the real capability producer, normalization and store connected to both
+// input paths, including work still waiting on the client's CSRF preparation.
+describe('Create Share through real capability withdrawal', () => {
+  it.each(entries.flatMap((entry) =>
+    (['withdrawn', 'failed', 'malformed'] as const).map((kind) => ({ entry, kind })),
+  ))('retires a cold $entry grant on $kind capability before dispatch', async ({ entry, kind }) => {
+    const health = hold(json({}));
+    healthReply = () => health.promise;
+    await openPanel();
+    fillForm(entry, 'admin');
+    document.cookie = 'pulse_csrf=; Max-Age=0; Path=/';
+    fireEvent.click(createButton());
+    await waitFor(() => expect(healthReads()).toHaveLength(1));
+    expect(writes()).toHaveLength(0);
+    expect(screen.getByRole('button', { name: 'Saving...' })).toBeDisabled();
+    vi.useFakeTimers();
+    await capabilities(kind);
+    expectWithdrawn();
+    expect(Boolean(runtimeCapabilitiesLoadError())).toBe(kind === 'failed');
+    document.cookie = `pulse_csrf=${csrf}; Path=/`;
+    health.resolve(json({}));
+    await vi.advanceTimersByTimeAsync(25);
+    vi.useRealTimers();
+    expect(writes()).toHaveLength(0);
+    expect(outgoing).toEqual([]);
+    expect(inventoryReads()).toHaveLength(5);
+    expectWithdrawn();
+    await capabilities('enabled');
+    await waitFor(() => expect(inventoryReads()).toHaveLength(10));
+    await screen.findByRole('heading', { name: 'Create Share' });
+    expect(writes()).toHaveLength(0);
+    expect(outgoing).toEqual([]);
+    expect(targetInput()).toHaveValue(target.id);
+    expect(screen.getByRole('combobox', { name: 'Access Role' })).toHaveValue('admin');
+    if (entry === 'quick pick') expect(resourceInput()).toHaveValue(quickPickValue);
+    else expect(screen.getByLabelText('Resource ID')).toHaveValue(` ${manualResourceID} `);
+    expect(createButton()).toBeEnabled();
+    expect(notices.success).not.toHaveBeenCalled();
+    expect(notices.error).not.toHaveBeenCalled();
+    expectBoundRequests();
+  });
+
+  it('ignores a superseded grant while a cold manual share stays retired', async () => {
+    const health = hold(json({}));
+    healthReply = () => health.promise;
+    await openPanel();
+    fillForm('manual entry', 'admin');
+    document.cookie = 'pulse_csrf=; Max-Age=0; Path=/';
+    fireEvent.click(createButton());
+    await waitFor(() => expect(healthReads()).toHaveLength(1));
+    const oldReply = hold(json(capabilityBody(false)));
+    const oldLoad = refresh(() => oldReply.promise);
+    await capabilities('withdrawn');
+    expectWithdrawn();
+    oldReply.resolve(json(capabilityBody(true)));
+    await oldLoad;
+    expectWithdrawn();
+    vi.useFakeTimers();
+    document.cookie = `pulse_csrf=${csrf}; Path=/`;
+    health.resolve(json({}));
+    await vi.advanceTimersByTimeAsync(25);
+    vi.useRealTimers();
+    expect(writes()).toHaveLength(0);
+    expect(outgoing).toEqual([]);
+    expect(inventoryReads()).toHaveLength(5);
+    expectWithdrawn();
+  });
+
+  it.each(['success', 'unreadable'] as const)(
+    'reads an applied grant without importing its late %s body into the new draft', async (outcome) => {
+      const body = hold('');
+      const response = json({});
+      const read = vi.spyOn(response, 'text').mockImplementation(() => body.promise);
+      writeReply = async () => response;
+      await openPanel();
+      fillForm('quick pick', 'editor');
+      fireEvent.click(createButton());
+      await waitFor(() => expect(read).toHaveBeenCalledOnce());
+      expectWrite('quick pick', 'editor');
+      const signal = writes()[0][1]?.signal;
+      expect(signal?.aborted).toBe(false);
+      expect(outgoing[0]).toMatchObject(payloadFor('quick pick', 'editor'));
+      await capabilities('withdrawn');
+      expectWithdrawn();
+      expect(signal?.aborted).toBe(true);
+      await capabilities('enabled');
+      await waitFor(() => expect(inventoryReads()).toHaveLength(10));
+      await screen.findByRole('heading', { name: 'Outgoing Shares' });
+      expectSavedGrant('quick pick', 'editor');
+      fillForm('manual entry', 'admin');
+      fireEvent.input(screen.getByLabelText('Resource ID'), { target: { value: 'current::draft/independent' } });
+      body.resolve(outcome === 'success' ? '{}' : '{"synthetic-private-partial":');
+      await turn();
+      expect(targetInput()).toHaveValue(target.id);
+      expect(screen.getByLabelText('Resource ID')).toHaveValue('current::draft/independent');
+      expect(screen.getByRole('combobox', { name: 'Access Role' })).toHaveValue('admin');
+      expect(createButton()).toBeEnabled();
+      expectSavedGrant('quick pick', 'editor');
+      expect(inventoryReads()).toHaveLength(10);
+      expectWrite('quick pick', 'editor');
+      expect(notices.success).not.toHaveBeenCalled();
+      expect(notices.error).not.toHaveBeenCalled();
+    },
+  );
 });
