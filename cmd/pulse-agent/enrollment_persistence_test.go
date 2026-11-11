@@ -72,7 +72,7 @@ func TestRunEnrollmentPersistenceFailureStopsAuthenticatedConsumers(t *testing.T
 				t.Fatal(err)
 			}
 			err := run(ctx, []string{"--url", server.URL, "--token", "synthetic-bootstrap", "--enroll", "--state-dir", stateDir,
-				"--hostname", "synthetic-state-host", "--agent-id", "synthetic-original-id", "--agent-id-file", selectedID, "--ca-cert", caPath, "--enable-host", "--enable-docker", "--enable-kubernetes", "--health-addr", ""}, func(string) string { return "" })
+				"--hostname", "synthetic-state-host", "--agent-id", "synthetic-original-id", "--agent-id-file", selectedID, "--cacert", caPath, "--enable-host", "--enable-docker", "--enable-kubernetes", "--health-addr", ""}, func(string) string { return "" })
 			want := "cannot confirm saved runtime token"
 			if file != "runtime.token" {
 				want = "cannot confirm saved agent ID"
