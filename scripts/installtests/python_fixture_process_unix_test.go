@@ -126,7 +126,9 @@ func TestPythonFixtureControlsCancellationStopsOwnedGroup(t *testing.T) {
 			if err := sentinel.Start(); err != nil {
 				t.Fatal(err)
 			}
-			t.Cleanup(func() { _ = sentinel.Process.Kill(); _ = sentinel.Wait() })
+			sentinelDone := make(chan struct{})
+			go func() { _ = sentinel.Wait(); close(sentinelDone) }()
+			t.Cleanup(func() { _ = sentinel.Process.Kill(); <-sentinelDone })
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			finished := make(chan error, 1)
@@ -155,8 +157,10 @@ func TestPythonFixtureControlsCancellationStopsOwnedGroup(t *testing.T) {
 				t.Fatal("cancelled Python control waited for its descendant's output pipe")
 			}
 			pythonFixtureChildStopped(t, pid)
-			if err := sentinel.Process.Signal(syscall.Signal(0)); err != nil {
-				t.Fatalf("unrelated Python process was stopped: %v", err)
+			select {
+			case <-sentinelDone:
+				t.Fatal("unrelated Python process was stopped")
+			default:
 			}
 		})
 	}
