@@ -124,7 +124,9 @@ function expectWithdrawnOwnership() {
 }
 
 function roleFor(userId: string) {
-  return screen.getByRole('combobox', { name: `Role for ${userId}` });
+  // Resolve the real label/select pair once instead of repeatedly computing
+  // every select's accessible name across the whole rendered member grid.
+  return screen.getByLabelText(`Role for ${userId}`, { selector: 'select' });
 }
 function chooseOwnership(origin: 'row' | 'form', userId: string) {
   if (origin === 'row') {
@@ -494,7 +496,7 @@ describe('ownership capability boundary through the rendered consent and real tr
       });
       fireEvent.click(screen.getByRole('button', { name: 'Invite' }));
       await waitFor(() => expect(writes()).toHaveLength(2));
-      expect(screen.getByRole('button', { name: 'Invite' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'Saving...' })).toBeDisabled();
 
       oldReply.resolve(outcome === 'success' ? oldAcknowledgement! : json({}, 503));
       await Promise.allSettled([submitted]);
@@ -505,7 +507,7 @@ describe('ownership capability boundary through the rendered consent and real tr
       expect(roleFor(owner)).toHaveValue('admin');
       expect(screen.getByRole('textbox', { name: 'Invite user ID' })).toHaveValue(replacement);
       expect(screen.getByRole('combobox', { name: 'Invite role' })).toHaveValue('editor');
-      expect(screen.getByRole('button', { name: 'Invite' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'Saving...' })).toBeDisabled();
       expect(orgReads()).toHaveLength(2);
       expect(writes()).toHaveLength(2);
       expect(notices.success).not.toHaveBeenCalled();
