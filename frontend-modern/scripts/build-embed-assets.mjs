@@ -44,6 +44,7 @@ async function buildDist() {
   const backupDir = path.join(temporary, 'previous-dist');
   const distDir = path.join(frontendRoot, 'dist');
   let backupRetained = false;
+  let buildFailure;
   try {
     await run(process.execPath, [viteCLI, 'build', '--outDir', stagingDir, '--emptyOutDir'], {
       cwd: frontendRoot,
@@ -74,8 +75,32 @@ async function buildDist() {
       }
       throw error;
     }
+  } catch (error) {
+    // A finally cleanup error must not erase the compiler, validation or
+    // promotion failure that explains why no embed was produced.
+    buildFailure = { error };
+    throw error;
   } finally {
-    if (!backupRetained) await rm(temporary, { recursive: true, force: true });
+    if (!backupRetained) {
+      try {
+        await rm(temporary, { recursive: true, force: true });
+      } catch (cleanupError) {
+        const message = (error) =>
+          error instanceof Error ? error.message : String(error);
+        if (buildFailure) {
+          throw new AggregateError(
+            [buildFailure.error, cleanupError],
+            `Frontend build failed: ${message(buildFailure.error)}; staging cleanup failed at ${temporary}: ${message(cleanupError)}`,
+          );
+        }
+        // Canonical dist is complete, but this exception stops the caller
+        // before syncEmbedDir. Do not imply the embedded assets changed too.
+        throw new Error(
+          `Frontend build output promoted to ${distDir}, but cleanup failed at ${temporary}; embedded assets were not updated: ${message(cleanupError)}`,
+          { cause: cleanupError },
+        );
+      }
+    }
   }
 }
 
