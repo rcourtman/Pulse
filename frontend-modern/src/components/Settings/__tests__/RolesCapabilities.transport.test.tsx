@@ -416,6 +416,9 @@ describe('Roles through real runtime capability transitions', () => {
         outcome === 'success' ? JSON.stringify(current) : '{"synthetic-private-partial":',
       );
       await turn();
+      // A cached `within` can still find controls in a detached dialog. Check
+      // the live surface as well, so an old response cannot silently close it.
+      expect(screen.getByRole('dialog')).toContainElement(editor.getByLabelText('Role ID'));
       expect(editor.getByLabelText('Description')).toHaveValue('Current independent draft');
       expect(editor.getByLabelText('Permission 2 action')).toHaveValue('delete');
       expectNoObsoleteFeedback();
