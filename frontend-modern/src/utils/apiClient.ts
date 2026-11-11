@@ -243,6 +243,9 @@ class ApiClient {
   private apiToken: string | null = null;
   private csrfToken: string | null = null;
   private orgID: string | null = null;
+  // Explicit credential changes retire older requests, including ordinary
+  // background reads. Values alone cannot identify a replacement session.
+  private authGeneration = 0;
 
   constructor() {
     // Check session storage for existing auth on page load
@@ -490,6 +493,7 @@ class ApiClient {
       return;
     }
 
+    this.authGeneration += 1;
     this.apiToken = sanitizedToken;
     this.persistToken(sanitizedToken);
   }
@@ -531,6 +535,7 @@ class ApiClient {
 
   // Clear all authentication
   clearAuth() {
+    this.authGeneration += 1;
     this.apiToken = null;
     this.orgID = null;
     this.removeStoredToken();
@@ -546,6 +551,7 @@ class ApiClient {
   }
 
   clearApiToken() {
+    this.authGeneration += 1;
     this.apiToken = null;
     this.removeStoredToken();
   }
@@ -611,6 +617,9 @@ class ApiClient {
       ...fetchOptions
     } = options;
 
+    const authGeneration = this.authGeneration;
+    const authenticationChanged = () => !skipAuth && authGeneration !== this.authGeneration;
+
     // Build headers object
     const finalHeaders: Record<string, string> = { ...headers };
     const checkExpectedOrg = () => {
@@ -672,6 +681,9 @@ class ApiClient {
 
     // CSRF preparation may have awaited a request while the operator switched
     // organisations or left the view. Do not dispatch a stale confirmation.
+    if (authenticationChanged()) {
+      throw new Error('Authentication changed. Reload before making changes.');
+    }
     checkExpectedOrg();
     // Only strict confirmations opt into the extra pre-dispatch abort check;
     // ordinary callers retain native fetch's established abort behaviour.
@@ -681,9 +693,10 @@ class ApiClient {
     // retry with a replacement credential or sign out the replacement reader.
     // Return the response unchanged so endpoint-owned completions stay owned.
     const responseIsRetired = () =>
-      (expectedOrgID !== undefined || !retry) &&
-      (fetchOptions.signal?.aborted ||
-        (expectedOrgID !== undefined && (this.getOrgID() || 'default') !== expectedOrgID));
+      authenticationChanged() ||
+      ((expectedOrgID !== undefined || !retry) &&
+        (fetchOptions.signal?.aborted ||
+          (expectedOrgID !== undefined && (this.getOrgID() || 'default') !== expectedOrgID)));
     let response = await fetch(url, finalOptions);
     if (responseIsRetired()) return response;
 
@@ -733,6 +746,7 @@ class ApiClient {
       url.startsWith('/api/')
     ) {
       const text = await response.clone().text();
+      if (responseIsRetired()) return response;
       let recoverableOrg = false;
       try {
         const parsed = JSON.parse(text);
@@ -852,6 +866,7 @@ class ApiClient {
         throw err;
       }
 
+      if (responseIsRetired()) return response;
       return await fetch(url, {
         ...fetchOptions,
         headers: finalHeaders,
