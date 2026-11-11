@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "base_sha": "baed5c0c3ba0533e4ea762f99c3205503cbdb918",
+  "verified_at": "2026-11-11T17:16:33Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/utils/apiClient.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/utils/apiClient.ts": "2072266fb3d948ca4ae32acc2aef08ad395fa93611921a988d804856a29185b7"
+  },
+  "routes": [
+    "/settings/organizations/overview",
+    "/"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Real OrganizationOverviewPanel, its reader state, OrgsAPI, shared apiClient, event bus and capability store compiled from the verified parent and the exact changed content; safe fetch fixtures only. Root mounts the real Login component after actual location navigation. This is a component-consumer fixture, not full App, installed, customer or IdP acceptance.",
+    "Playwright 1.56.1 matches the integration lock; Chromium141.0.7390.37 desktop and WebKit26.0 narrow, light and dark. A queued old401 followed by reader replacement signs out and erases selection on the parent, but preserves the replacement credential, South selection, two correct members and available controls on final content.",
+    "Sixteen settled captures form eight before/after pairs: four unchanged initial states and four post-delivery states. All were opened with native image inspection. The original successful drivers captured transient Login/table animation; those originals remain adverse capture-timing evidence. Settled capture-only drivers wait for fonts and finite animations; no product source or fixture changed.",
+    "No visible field, per-item distinction or control is removed or moved by this repair. Genuine current401 still clears auth and navigates to Login; current403 retains authentication with unavailable details and a successful explicit reload."
+  ],
+  "interactions": [
+    "Loaded North with its exact organization ID, two member identities, roles, dates, editable name and Save; held a refresh reply, resolved its401 then synchronously replaced the reader and emitted the existing org_switched event before the pending continuation ran.",
+    "Verified final South identity/rows, old signal cancellation, preserved replacement authentication, no sign-out marker and no mutation caused by the obsolete read. Edited and saved South once through the actual input/button in all four desktop/narrow/theme journeys; exactly one PUT targets South and the accepted saved value is reread.",
+    "Before and after, separate current-reader403/401 controls at desktop and narrow light exercise Reload organization and genuine credential expiry. These results are DOM/navigation/storage proof, not additional retained pixel states."
+  ]
+}

@@ -676,7 +676,16 @@ class ApiClient {
     // Only strict confirmations opt into the extra pre-dispatch abort check;
     // ordinary callers retain native fetch's established abort behaviour.
     if (expectedOrgID !== undefined || !retry) fetchOptions.signal?.throwIfAborted();
+    // A response can already be queued when its reader is retired. Native
+    // abort cannot retract that fulfilled promise; do not let its continuation
+    // retry with a replacement credential or sign out the replacement reader.
+    // Return the response unchanged so endpoint-owned completions stay owned.
+    const responseIsRetired = () =>
+      (expectedOrgID !== undefined || !retry) &&
+      (fetchOptions.signal?.aborted ||
+        (expectedOrgID !== undefined && (this.getOrgID() || 'default') !== expectedOrgID));
     let response = await fetch(url, finalOptions);
+    if (responseIsRetired()) return response;
 
     // Session-preferred reads intentionally omit the API token on their first
     // attempt because HttpOnly session cookies cannot be detected from browser
@@ -697,6 +706,7 @@ class ApiClient {
           'X-API-Token': this.apiToken,
         },
       });
+      if (responseIsRetired()) return response;
     }
 
     // Recover a missing org as before. A default-membership refusal is only
