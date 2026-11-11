@@ -324,8 +324,11 @@ func runActionPlan(cmd *cobra.Command, deps *ActionsDeps, opts actionPlanOptions
 	}
 
 	var plan unified.ActionPlan
-	if err := decodeJSONBytes(respBody, &plan); err != nil {
-		return fmt.Errorf("failed to decode action plan response: %w", err)
+	if err := decodeActionConfirmationResponse(respBody, &plan, "actionId", "requestId", "allowed"); err != nil {
+		return actionConfirmationResponseError("plan", err)
+	}
+	if strings.TrimSpace(plan.ActionID) == "" || plan.RequestID != actionReq.RequestID {
+		return actionConfirmationResponseError("plan", fmt.Errorf("missing actionId or requestId does not match the request"))
 	}
 
 	encoder := json.NewEncoder(cmd.OutOrStdout())
@@ -390,8 +393,11 @@ func runActionDecision(cmd *cobra.Command, deps *ActionsDeps, opts actionDecisio
 	}
 
 	var decision actionDecisionResponse
-	if err := decodeJSONBytes(respBody, &decision); err != nil {
-		return fmt.Errorf("failed to decode action decision response: %w", err)
+	if err := decodeActionConfirmationResponse(respBody, &decision, "actionId", "state"); err != nil {
+		return actionConfirmationResponseError("decision", err)
+	}
+	if decision.ActionID != actionID || strings.TrimSpace(string(decision.State)) == "" {
+		return actionConfirmationResponseError("decision", fmt.Errorf("actionId does not match the request or state is blank"))
 	}
 
 	encoder := json.NewEncoder(cmd.OutOrStdout())
@@ -450,8 +456,11 @@ func runActionExecution(cmd *cobra.Command, deps *ActionsDeps, opts actionExecut
 	}
 
 	var execution actionExecutionResponse
-	if err := decodeJSONBytes(respBody, &execution); err != nil {
-		return fmt.Errorf("failed to decode action execution response: %w", err)
+	if err := decodeActionConfirmationResponse(respBody, &execution, "actionId", "state"); err != nil {
+		return actionConfirmationResponseError("execution", err)
+	}
+	if execution.ActionID != actionID || strings.TrimSpace(string(execution.State)) == "" {
+		return actionConfirmationResponseError("execution", fmt.Errorf("actionId does not match the request or state is blank"))
 	}
 
 	encoder := json.NewEncoder(cmd.OutOrStdout())
@@ -460,6 +469,35 @@ func runActionExecution(cmd *cobra.Command, deps *ActionsDeps, opts actionExecut
 		return fmt.Errorf("failed to write action execution response: %w", err)
 	}
 	return nil
+}
+
+// Confirm only the response's binding and explicit outcome fields, not a
+// particular business outcome: a plan may be disallowed, a decision replay may
+// show a later state or another approver, and execution may still be in flight.
+// Optional results and additive server fields remain compatible.
+func decodeActionConfirmationResponse(data []byte, out any, requiredFields ...string) error {
+	var envelope map[string]json.RawMessage
+	if err := decodeJSONBytes(data, &envelope); err != nil {
+		return fmt.Errorf("expected one JSON object")
+	}
+	for _, field := range requiredFields {
+		value, present := envelope[field]
+		if !present || bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
+			return fmt.Errorf("expected a non-null %s field", field)
+		}
+	}
+	if err := decodeJSONBytes(data, out); err != nil {
+		// Some field decoders (notably timestamps) include the bad value in
+		// their errors. It may belong to an unrelated response, not this caller.
+		return fmt.Errorf("invalid response field types")
+	}
+	return nil
+}
+
+func actionConfirmationResponseError(operation string, err error) error {
+	// The POST may already have taken effect. Never imply that a bad response
+	// made it safe to repeat the mutation, or echo an unrelated response body.
+	return fmt.Errorf("invalid action %s response: %w; request outcome is unconfirmed; check action audit before retrying", operation, err)
 }
 
 func runActionCapabilities(cmd *cobra.Command, deps *ActionsDeps, opts actionCapabilitiesOptions) error {

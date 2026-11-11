@@ -152,6 +152,10 @@ func TestCLIAPICommandsPreserveSameOriginTLSRedirects(t *testing.T) {
 					switch command.name {
 					case "fleet":
 						body = `{"connections":[]}`
+					case "plan":
+						body = `{"actionId":"synthetic-action","requestId":"synthetic-request","allowed":false}`
+					case "decide", "execute":
+						body = `{"actionId":"synthetic-action","state":"executing"}`
 					case "capabilities":
 						body = `{"resourceId":"vm:42"}`
 					case "audit":
