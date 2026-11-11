@@ -4440,6 +4440,31 @@ change. Proofs: `internal/ai/unified/bridge_test.go`,
 `internal/ai/unified/bridge_alert_manager_test.go` and
 `internal/api/ai_alert_bridge_trigger_test.go`.
 
+The bridge follows the alert manager across a monitor reload. Patrol starts
+once per organisation (`StartPatrolForOrg`) and binds the bridge, the flapping
+callback and the Patrol threshold reader to the alert manager of the monitor
+that is live then. A full reload (`ReloadableMonitor.doReload`: a node added
+or auto-registered, a polling interval change) stops that monitor and builds
+a new one with a new alert manager, and the bridge's subscriptions stayed on
+the stopped one, so no alert woke Patrol again until the process restarted.
+`Router.startUnifiedAlertBridge` now registers how to move that wiring
+(`patrolAlertSources`), and `configureMonitorDependencies`, the initializer
+every monitor passes through, calls `followMonitorAlertManager`. When the
+monitor's alert manager is not the one the organisation's wiring listens to,
+`AlertBridge.ReplaceAlertProvider` stops the bridge, subscribes it to the new
+manager and starts it, which syncs the alerts already active there as at
+startup, and the flapping callback and threshold reader are set on the new
+manager. The same monitor handed over twice is not subscribed twice. Not
+moved by this, and still read from the first monitor after a reload because
+the same startup binds them once: the pattern and correlation detectors'
+alert history hooks, the notification occurrence lifecycle provider, Patrol's
+metrics history provider and the forecast service's data adapter and resource
+iterator, and the AI service's incident store. Proof:
+`internal/api/ai_alert_bridge_reload_test.go`, which also starts Patrol through
+`Router.StartPatrol`, reloads through `ReloadableMonitor.Reload` and the
+router refresh the server runs after it, and checks that a fired, a resolved
+and a flapping alert on the new alert manager each reach Patrol.
+
 Alert scopes carry the producer's resource type only as a hint. The bridge
 wiring builds `alert_fired` and `alert_cleared` scopes through
 `AlertTriggeredPatrolScope` and `AlertClearedPatrolScope`, the flapping scope
