@@ -91,7 +91,9 @@ func runFleetConnections(cmd *cobra.Command, deps *FleetDeps, opts fleetConnecti
 		return fmt.Errorf("failed to decode fleet connections response: %w", err)
 	}
 	if connections.Connections == nil {
-		connections.Connections = []json.RawMessage{}
+		// Missing data is not an empty fleet. The server emits an explicit
+		// array, including [] when there are no connections in the scope.
+		return fmt.Errorf("invalid fleet connections response: expected a non-null connections array (use [] for an empty fleet)")
 	}
 
 	encoder := json.NewEncoder(cmd.OutOrStdout())
