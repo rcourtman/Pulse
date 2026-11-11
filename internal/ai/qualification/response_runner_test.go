@@ -34,8 +34,17 @@ type fakePulse struct {
 	recordsRunAfter time.Duration    // how long the run goes on after it files its finding
 	neverRecordsRun bool             // the run history never lists a run for the finding
 	leftover        []map[string]any // findings Pulse already holds when the run begins
+	// leftoverClosesAfter is how long after the first read Pulse closes the
+	// leftover findings by itself, 0 for never. leftoverWait is how long the
+	// run may wait for that, 10s when empty.
+	leftoverClosesAfter time.Duration
+	leftoverWait        time.Duration
+	// earlyFindingOn is the container the run that closes the leftovers also
+	// files a finding on, as Pulse's own look at a healthy lab can.
+	earlyFindingOn string
 
 	mu           sync.Mutex
+	firstRead    time.Time
 	asked        int
 	raisedAt     time.Time
 	run          *PatrolRun
@@ -66,7 +75,29 @@ func (p *fakePulse) faultVisible() bool {
 func (p *fakePulse) finding() []map[string]any {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	held := append([]map[string]any{}, p.leftover...)
+	// The leftovers' clock starts at the first read a client makes, set in
+	// the handler. This function is also called for the fake's own state.
+	closed := p.leftoverClosesAfter > 0 && !p.firstRead.IsZero() && time.Since(p.firstRead) >= p.leftoverClosesAfter
+	held := []map[string]any{}
+	for _, finding := range p.leftover {
+		listed := make(map[string]any, len(finding)+1)
+		for key, value := range finding {
+			listed[key] = value
+		}
+		if closed {
+			listed["resolved_at"] = p.firstRead.Add(p.leftoverClosesAfter).UTC()
+		}
+		held = append(held, listed)
+	}
+	if p.earlyFindingOn != "" && closed {
+		at := p.firstRead.Add(p.leftoverClosesAfter).UTC()
+		held = append(held, map[string]any{
+			"id": "finding-early", "key": "container-exited", "severity": "warning", "category": "reliability",
+			"resource_id": p.resourceID(p.earlyFindingOn), "resource_name": p.earlyFindingOn, "resource_type": "app-container",
+			"title": "container is not running", "detected_at": at, "last_seen_at": at,
+			"investigation_status": "completed", "investigation_outcome": "needs_attention",
+		})
+	}
 	if !p.faultVisible() || (!p.wakesByItself && p.asked == 0) {
 		return held
 	}
@@ -151,6 +182,11 @@ func (p *fakePulse) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		p.docker.mu.Unlock()
 		write(map[string]any{"data": data, "meta": map[string]any{"totalPages": 1}})
 	case path == "/api/ai/patrol/findings":
+		p.mu.Lock()
+		if p.firstRead.IsZero() {
+			p.firstRead = time.Now()
+		}
+		p.mu.Unlock()
 		write(p.finding())
 	case path == "/api/alerts/active":
 		alerts := []map[string]any{}
@@ -182,6 +218,9 @@ func (p *fakePulse) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				"state": "pending_approval", "plan": map[string]any{"planHash": "sha256:plan"}}
 		}
 		write(session)
+	case path == "/api/ai/findings/finding-early/investigation":
+		write(map[string]any{"id": "inv-early", "finding_id": "finding-early", "status": "completed", "outcome": "needs_attention",
+			"turn_count": 2, "evidence_call_count": 1, "tools_used": []string{"pulse_query"}, "summary": "The container exited and should be started."})
 	case path == "/api/actions/act-1":
 		write(p.action())
 	case path == "/api/actions/act-1/decision":
@@ -240,7 +279,10 @@ func runFakeResponse(t *testing.T, manifest Manifest, pulse *fakePulse, declared
 	if err != nil {
 		t.Fatal(err)
 	}
-	runner.idleQuiet, runner.askRetry = 0, time.Millisecond
+	runner.idleQuiet, runner.askRetry, runner.leftoverWait = 0, time.Millisecond, 10*time.Second
+	if pulse.leftoverWait > 0 {
+		runner.leftoverWait = pulse.leftoverWait
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	report, runErr := runner.Run(ctx)
@@ -268,6 +310,9 @@ func TestResponseRunWokeByItselfAndFixed(t *testing.T) {
 	}
 	if evidence.AgentProfile.Name != AgentProfileCommandsOn || evidence.AgentProfile.HostName != "docker01" || evidence.AgentProfile.Declared != AgentProfileCommandsOn {
 		t.Fatalf("agent profile = %+v", evidence.AgentProfile)
+	}
+	if len(evidence.Leftovers) != 0 {
+		t.Fatalf("a run on clean Pulse data recorded a wait: %+v", evidence.Leftovers)
 	}
 	if len(evidence.Alerts) != 1 || evidence.Alerts[0].ResourceAlias != "paperless" || evidence.Alerts[0].Level != "critical" {
 		t.Fatalf("alerts = %+v", evidence.Alerts)
@@ -470,18 +515,100 @@ func TestResponseRunWithNoRunRecordSaysSo(t *testing.T) {
 	}
 }
 
+// In a fault set the previous fault's container was removed seconds before
+// the next scenario starts, and Pulse closes its finding by itself a little
+// later. A live set lost its D3 cell to that gap. The run waits for the
+// finding to close, records that it waited, and never asks Pulse for a run to
+// hurry it up.
+func TestResponseRunWaitsForAnEarlierRunsFindingToClose(t *testing.T) {
+	pulse := &fakePulse{
+		commandsEnabled: true, wakesByItself: true, raisesOn: "paperless", leftoverClosesAfter: 60 * time.Millisecond,
+		leftover: []map[string]any{{"id": "finding-old", "severity": "warning", "category": "reliability", "title": "container exited",
+			"resource_id": "app-container-removed", "resource_name": "paperless", "resource_type": "app-container"}},
+		conclusion: "The gunicorn webserver exited and was not respawned.",
+	}
+	report, dir, err := runFakeResponse(t, fastResponseManifest(t, "response.web-worker-died"), pulse, AgentProfileCommandsOn)
+	if err != nil || report.Response == nil {
+		t.Fatalf("run: %v, response %+v, errors %v", err, report.Response, report.Errors)
+	}
+	evidence := report.Response.Evidence
+	if len(evidence.Leftovers) != 1 || evidence.Leftovers[0].ID != "finding-old" || evidence.Leftovers[0].ResourceAlias != "paperless" ||
+		evidence.Leftovers[0].ResourceName != "paperless" || evidence.Leftovers[0].ClosedAfter < pulse.leftoverClosesAfter {
+		t.Fatalf("leftovers = %+v", evidence.Leftovers)
+	}
+	if len(evidence.Findings) != 1 || evidence.Findings[0].ID != "finding-1" {
+		t.Fatalf("the run was graded on %+v", evidence.Findings)
+	}
+	if asked, _ := pulse.counts(); asked != 0 {
+		t.Fatalf("the harness asked Pulse for %d runs", asked)
+	}
+	markdown, err := os.ReadFile(filepath.Join(dir, "report.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if text := string(markdown); !strings.Contains(text, "| Before the fault | waited ") || !strings.Contains(text, "for Pulse to close finding `finding-old`, which an earlier run left on another resource named `paperless` |") {
+		t.Fatalf("report does not say that the run waited:\n%s", text)
+	}
+	stored, err := LoadReport(filepath.Join(dir, "report.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if replayed := ReplayScore(stored); replayed.Response == nil || len(replayed.Response.Evidence.Leftovers) != 1 {
+		t.Fatalf("the stored report lost the wait: %+v", replayed.Response)
+	}
+}
+
+// The run Pulse starts by itself while the harness waits can also say
+// something about the new lab. With no fault in the scenario that is the false
+// alarm the scenario exists to catch, so it is graded and not taken for old
+// history. With a fault it came before the fault, and the run stops.
+func TestResponseRunGradesWhatPatrolSaysWhileItWaits(t *testing.T) {
+	leftover := func(name string) []map[string]any {
+		return []map[string]any{{"id": "finding-old", "severity": "warning", "category": "reliability", "title": "container crashed",
+			"resource_id": "app-container-removed", "resource_name": name, "resource_type": "app-container"}}
+	}
+	quiet := fastResponseManifest(t, "response.finished-job-stays-quiet")
+	pulse := &fakePulse{commandsEnabled: false, leftover: leftover("immich_machine_learning"), leftoverClosesAfter: 60 * time.Millisecond, earlyFindingOn: "vaultwarden-db-migrate"}
+	report, _, err := runFakeResponse(t, quiet, pulse, AgentProfileCommandsOff)
+	if err != nil || report.Response == nil {
+		t.Fatalf("run: %v, response %+v, errors %v", err, report.Response, report.Errors)
+	}
+	if response := report.Response; response.Grade != GradeFalseAlarm || len(response.Evidence.Findings) != 1 || response.Evidence.Findings[0].ID != "finding-early" ||
+		len(response.Evidence.Leftovers) != 1 || response.Evidence.Leftovers[0].ResourceAlias != "immich-ml" {
+		t.Fatalf("grade %s, findings %+v, leftovers %+v", response.Grade, response.Evidence.Findings, response.Evidence.Leftovers)
+	}
+	if asked, _ := pulse.counts(); asked != 0 {
+		t.Fatalf("the harness asked Pulse for %d runs", asked)
+	}
+
+	pulse = &fakePulse{commandsEnabled: true, wakesByItself: true, raisesOn: "paperless", leftover: leftover("paperless"), leftoverClosesAfter: 60 * time.Millisecond, earlyFindingOn: "vaultwarden"}
+	report, _, err = runFakeResponse(t, fastResponseManifest(t, "response.web-worker-died"), pulse, AgentProfileCommandsOn)
+	if err == nil || !strings.Contains(err.Error(), "Patrol raised finding finding-early on lab resource vaultwarden before the fault") {
+		t.Fatalf("a finding raised before the fault did not stop the run: %v", err)
+	}
+	if report.Response != nil || pulse.docker.called("exec") != 0 {
+		t.Fatalf("a stopped run injected its fault or produced a grade: %+v", report.Response)
+	}
+}
+
 // A run on Pulse data that already saw the same fault is not independent: the
-// earlier container is gone and its finding is still open under the name. The
-// harness refuses before it injects anything.
+// earlier container is gone and its finding is still open under the name. When
+// Pulse does not close it within the wait, the harness refuses before it
+// injects anything.
 func TestResponseRunRefusesAnOpenFindingOnANamesake(t *testing.T) {
 	old := func(id, name string) map[string]any {
 		return map[string]any{"id": id, "severity": "critical", "category": "reliability", "title": "container is failing",
 			"resource_id": "app-container-removed-" + id, "resource_name": name, "resource_type": "app-container"}
 	}
-	pulse := &fakePulse{commandsEnabled: true, wakesByItself: true, raisesOn: "paperless", leftover: []map[string]any{old("finding-old", "Paperless ")}}
+	pulse := &fakePulse{commandsEnabled: true, wakesByItself: true, raisesOn: "paperless", leftover: []map[string]any{old("finding-old", "Paperless ")}, leftoverWait: 100 * time.Millisecond}
+	began := time.Now()
 	report, _, err := runFakeResponse(t, fastResponseManifest(t, "response.web-worker-died"), pulse, AgentProfileCommandsOn)
-	if err == nil || !strings.Contains(err.Error(), `open finding finding-old on another resource named "Paperless"`) || !strings.Contains(err.Error(), "fresh Pulse data directory") {
+	if err == nil || !strings.Contains(err.Error(), `open finding finding-old on another resource named "Paperless"`) || !strings.Contains(err.Error(), "fresh Pulse data directory") ||
+		!strings.Contains(err.Error(), "after a wait of 100ms") {
 		t.Fatalf("a run on top of an earlier run's open finding continued: %v", err)
+	}
+	if asked, _ := pulse.counts(); asked != 0 || time.Since(began) < pulse.leftoverWait {
+		t.Fatalf("the harness asked Pulse for %d runs and refused after %s", asked, time.Since(began))
 	}
 	if report.Response != nil || report.Passed {
 		t.Fatalf("a refused run produced a grade: %+v", report.Response)
