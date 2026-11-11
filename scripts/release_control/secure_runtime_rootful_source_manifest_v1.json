@@ -69,6 +69,8 @@
     "scripts/installtests/pulse_auto_update_download_test.go",
     "scripts/installtests/pulse_auto_update_test.go",
     "scripts/installtests/python_fixture_controls_test.go",
+    "scripts/installtests/python_fixture_process_unix_test.go",
+    "scripts/installtests/python_fixture_process_windows_test.go",
     "scripts/installtests/qnap_autorun_update_test.go",
     "scripts/installtests/release_ldflags_test.go",
     "scripts/installtests/release_notes_contract_test.go",

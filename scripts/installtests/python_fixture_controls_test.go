@@ -169,9 +169,7 @@ namespace = runpy.run_path(sys.argv[1])
 suite = unittest.defaultTestLoader.loadTestsFromTestCase(namespace[sys.argv[2]])
 print(json.dumps([test._testMethodName for test in suite]))
 `
-	cmd := exec.CommandContext(ctx, "python3", "-I", "-S", "-c", discover, script, class)
-	cmd.Env = append(os.Environ(), env...)
-	output, err := cmd.CombinedOutput()
+	output, err := pythonFixtureOutput(ctx, []string{"-I", "-S", "-c", discover, script, class}, env)
 	if err != nil {
 		return nil, fmt.Errorf("discover %s controls: %w (context %v)\n%s", class, err, ctx.Err(), output)
 	}
@@ -196,9 +194,7 @@ print(json.dumps([test._testMethodName for test in suite]))
 
 func executePythonFixtureControl(ctx context.Context, script, class, name string, env ...string) ([]byte, error) {
 	selector := class + "." + name
-	cmd := exec.CommandContext(ctx, "python3", "-I", "-S", script, "-v", selector)
-	cmd.Env = append(os.Environ(), env...)
-	output, err := cmd.CombinedOutput()
+	output, err := pythonFixtureOutput(ctx, []string{"-I", "-S", script, "-v", selector}, env)
 	if err != nil {
 		return output, fmt.Errorf("%s: %w (context %v)\n%s", selector, err, ctx.Err(), output)
 	}
