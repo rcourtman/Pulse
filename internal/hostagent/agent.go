@@ -565,8 +565,8 @@ func newAgentHTTPClient(caCertPath string, insecureSkipVerify bool, serverFinger
 		},
 		// Redirects can rewrite report POSTs to GETs and must never cross an
 		// authority boundary implicitly.
-		CheckRedirect: func(req *http.Request, _ []*http.Request) error {
-			return fmt.Errorf("server returned redirect to %s - use the final Pulse URL explicitly", req.URL)
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return &controlPlaneRedirectError{}
 		},
 	}, nil
 }
@@ -1525,7 +1525,7 @@ func (a *Agent) sendReportToDestination(ctx context.Context, report agentshost.R
 	}
 	req.Header.Set("User-Agent", "pulse-agent/"+Version)
 
-	resp, err := client.Do(req)
+	resp, err := doControlPlaneRequest(client, req)
 	if err != nil {
 		return fmt.Errorf("send request: %w", err)
 	}

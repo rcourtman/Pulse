@@ -18,6 +18,25 @@
 
 ## Purpose
 
+### Refused host-agent redirects keep upstream destinations out of diagnostics
+
+The host-agent control-plane request boundary rejects redirect responses before
+`net/http` can parse or include their `Location` in an error. Enrollment,
+primary/observer host reports and typed action-runner credential lifecycle calls
+return only a local numeric-status redirect diagnostic with final-URL guidance,
+not untrusted userinfo, paths, query/fragment values, malformed Location text or
+response/close-error contents. No redirected request carries a bearer or body;
+the rejected response is closed without a body read. Existing no-follow,
+TLS/CA/pin, proxy, timeout, cancellation, buffering, enrollment and command-role
+rules remain in place. Ordinary status/response handling is unchanged.
+
+Registered host-agent `control_plane_redirect_privacy_test.go` cases use actual
+local HTTP consumers to check errors, report logs, no forwarding and ordinary
+same-credential recovery. `control_plane_http_test.go` covers closure, client
+immutability, ordinary responses/cookies, cancellation/timeouts and HTTPS trust
+controls. No updater status field or rendered surface changes; this source
+repair does not establish exposure, original-host recovery or publication.
+
 ### Agent saved-authority ingress cannot accept partial or streaming state
 
 The production agent-specific reader admits only regular saved authority files
