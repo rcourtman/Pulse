@@ -117,6 +117,7 @@
     "internal/agentexec",
     "internal/agenthelper",
     "internal/agentidentity",
+    "internal/agentstate",
     "internal/agenttarget",
     "internal/agenttls",
     "internal/agentupdate",
