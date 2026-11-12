@@ -6527,6 +6527,15 @@ written only below an operator-named dedicated mount of bounded size, and the
 driver removes exactly the files it recorded writing. The stored Phase 1 runs
 of fault set v1 are the regression that the rubric still agrees with a
 person's grades.
+The fault set's finished job is the negative control for a container Pulse
+itself leaves alone. Since the container state alert stopped firing for a
+short-lived container that exits 0 under a restart policy of `no` or
+`on-failure`, the job raises no alert when its agent reports the policy, and a
+healthy lab starts no Patrol run by itself. The scenario must keep
+provisioning the job that way (restart `no`, baseline exit code 0), so a quiet
+grade measures Patrol on a healthy lab and not an alert the lab was built to
+raise. Its description and the runbook say when the warning still appears: an
+agent too old to report the policy.
 The canonical `pulse_query` schema and executor must admit the same resource
 types. In particular, `action=get` accepts `docker-host`, returns a governed
 read-only host response when the identity resolves, and returns a successful
