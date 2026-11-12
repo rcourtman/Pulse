@@ -18,8 +18,11 @@ func TestAlertSubscriberIsolationPreservesQueuedFiringAndRecovery(t *testing.T) 
 	for _, fault := range []string{"panic", "mutation", "mutation-and-panic"} {
 		t.Run(fault, func(t *testing.T) {
 			type message struct {
-				Event  string          `json:"event"`
-				Alerts []*alerts.Alert `json:"alerts"`
+				Event   string          `json:"event"`
+				Alerts  []*alerts.Alert `json:"alerts"`
+				Count   int             `json:"count"`
+				Source  string          `json:"source"`
+				Grouped bool            `json:"grouped"`
 			}
 			received := make(chan message, 4)
 			server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -81,7 +84,16 @@ func TestAlertSubscriberIsolationPreservesQueuedFiringAndRecovery(t *testing.T) 
 				t.Helper()
 				select {
 				case msg := <-received:
-					require.Equal(t, event, msg.Event)
+					if event == "alert" {
+						// Ordinary queued firing uses the existing generic grouped
+						// payload, even for one alert. Only recovery adds event.
+						require.Empty(t, msg.Event)
+						require.True(t, msg.Grouped)
+					} else {
+						require.Equal(t, event, msg.Event)
+					}
+					require.Equal(t, 1, msg.Count)
+					require.Equal(t, "pulse-monitoring", msg.Source)
 					require.Len(t, msg.Alerts, 1)
 					require.Equal(t, original.ID, msg.Alerts[0].ID)
 					require.Equal(t, original.ResourceName, msg.Alerts[0].ResourceName)
