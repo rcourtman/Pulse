@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "base_sha": "9bbeb5abd5e5591d73ff08d905f5881d4e431b4d",
+  "verified_at": "2026-11-12T09:14:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Alerts/ThresholdsTableDockerContainersSection.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Alerts/ThresholdsTableDockerContainersSection.tsx": "82269c43ed50d5140be9fefeb7749a27057ff0751ffd1d766cc0cb8bc994eeee"
+  },
+  "routes": [
+    "/alerts/thresholds/docker",
+    "/alerts/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 2200,
+      "height": 1200
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Private Pro stack built from this tree with a real agent and four real containers (a finished job, a failed job, a stopped unless-stopped service, a running service): each container card shows OFFLINE with Warn, and the Global Defaults card shows OFFLINE ALERTS with Warn",
+    "The Containers section renders as cards at 1440 and at 2200 wide (content column 1460 px); no card overflows and the page has no horizontal scroll",
+    "Phone width: the defaults card holds eight cells in two columns with OFFLINE ALERTS last, each container card shows OFFLINE on its own row, the control is 44 px tall, no horizontal overflow",
+    "Container Runtimes keeps its Enabled/Disabled offline switch"
+  ],
+  "interactions": [
+    "Clicked the finished job's control once (Crit) and the stopped service's twice (Off), pressed Save Changes: the saved config held poweredOffSeverity critical and disableConnectivity true under each container's docker:<host>/<name> key",
+    "After the next agent report the finished job raised a critical state alert and the stopped service's warning cleared; the failed job kept its warning",
+    "Clicked the defaults control to Off and saved: every inherited row read Off, the saved Docker defaults had stateDisableConnectivity true, and only the container with its own Crit level still alerted",
+    "Reloaded at 375 wide, opened the Containers group and read the defaults card and a container card"
+  ]
+}

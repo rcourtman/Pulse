@@ -32,7 +32,11 @@ vi.mock('../ResourceTable', () => ({
     formatMetricValue?: (metric: string, value: number | undefined) => string;
     onToggleDisabled?: (id: string, forceState?: boolean) => void;
     onToggleNodeConnectivity?: (id: string, forceState?: boolean) => void;
+    showOfflineAlertsColumn?: boolean;
+    onSetOfflineState?: (id: string, state: 'off' | 'warning' | 'critical') => void;
+    onSetGlobalOfflineState?: (state: 'off' | 'warning' | 'critical') => void;
   }) => {
+    const offlineStates = ['off', 'warning', 'critical'] as const;
     const resources =
       props.resources ||
       (props.groupedResources ? Object.values(props.groupedResources).flat() : []);
@@ -62,11 +66,36 @@ vi.mock('../ResourceTable', () => ({
             Disable connectivity
           </button>
         ) : null}
+        {props.showOfflineAlertsColumn && props.onSetOfflineState ? (
+          <>
+            <div data-testid={`offline-own-${r.id}`}>
+              {r.disableConnectivity ? 'off' : (r.poweredOffSeverity ?? 'default')}
+            </div>
+            {offlineStates.map((state) => (
+              <button
+                data-testid={`set-offline-${state}-${r.id}`}
+                onClick={() => props.onSetOfflineState?.(r.id, state)}
+              >
+                Offline {state}
+              </button>
+            ))}
+          </>
+        ) : null}
       </div>
     );
     return (
       <div data-testid={`resource-table-${title}`}>
         <div data-testid={`resource-count-${title}`}>{resources.length}</div>
+        {props.showOfflineAlertsColumn && props.onSetGlobalOfflineState
+          ? offlineStates.map((state) => (
+              <button
+                data-testid={`set-default-offline-${state}`}
+                onClick={() => props.onSetGlobalOfflineState?.(state)}
+              >
+                Default offline {state}
+              </button>
+            ))
+          : null}
         {props.groupedResources
           ? Object.entries(props.groupedResources).map(([group, groupResources], index) => (
               <div data-testid={`resource-group-${index}`}>
@@ -1290,6 +1319,94 @@ describe('ThresholdsTable V6 ID compatibility', () => {
     expect(overrides().find((entry) => entry.id === 'machine-a')).toEqual(machineOverride);
     expect(overrides().some((entry) => entry.id.includes('runtime-b'))).toBe(false);
     expect(screen.getByTestId('toggle-disabled-docker:runtime-b/web')).toBeInTheDocument();
+  });
+
+  it('lets a container set its own offline alert level, and the default for all containers', async () => {
+    setPathname('/alerts/thresholds/containers');
+    const runtime = {
+      id: 'runtime-a',
+      type: 'docker-host',
+      name: 'runtime-a',
+      displayName: 'runtime-a',
+      platformId: 'runtime-a',
+      platformType: 'docker',
+      sourceType: 'agent',
+      status: 'online',
+      lastSeen: 123,
+    };
+    const container = {
+      id: 'runtime-a-web',
+      parentId: 'runtime-a',
+      type: 'app-container',
+      name: 'web',
+      displayName: 'Web',
+      platformId: 'runtime-a',
+      platformType: 'docker',
+      sourceType: 'agent',
+      status: 'running',
+      lastSeen: 123,
+      docker: { containerId: 'runtime-a-container' },
+    };
+    const [overrides, setOverrides] = createSignal<any[]>([]);
+    const [rawOverridesConfig, setRawOverridesConfig] = createSignal<any>({});
+    const setDockerDisableConnectivity = vi.fn();
+    const setDockerPoweredOffSeverity = vi.fn();
+    render(() => (
+      <ThresholdsTable
+        {...(baseProps() as any)}
+        containerRuntimes={[runtime]}
+        allResources={[container]}
+        overrides={overrides}
+        setOverrides={setOverrides}
+        rawOverridesConfig={rawOverridesConfig}
+        setRawOverridesConfig={setRawOverridesConfig}
+        setDockerDisableConnectivity={setDockerDisableConnectivity}
+        setDockerPoweredOffSeverity={setDockerPoweredOffSeverity}
+      />
+    ));
+
+    const rowId = 'docker:runtime-a/web';
+    const own = () => screen.getByTestId(`offline-own-${rowId}`);
+
+    // The row starts on the default for all containers and stores nothing.
+    expect(own()).toHaveTextContent('default');
+    expect(rawOverridesConfig()).toEqual({});
+
+    await fireEvent.click(screen.getByTestId(`set-offline-critical-${rowId}`));
+    expect(own()).toHaveTextContent('critical');
+    expect(rawOverridesConfig()).toEqual({ [rowId]: { poweredOffSeverity: 'critical' } });
+    expect(overrides().find((entry) => entry.id === rowId)).toMatchObject({
+      type: 'dockerContainer',
+      disableConnectivity: false,
+      poweredOffSeverity: 'critical',
+    });
+
+    // Back on the default level, the row keeps no override of its own.
+    await fireEvent.click(screen.getByTestId(`set-offline-warning-${rowId}`));
+    expect(own()).toHaveTextContent('default');
+    expect(rawOverridesConfig()).toEqual({});
+    expect(overrides()).toEqual([]);
+
+    await fireEvent.click(screen.getByTestId(`set-offline-off-${rowId}`));
+    expect(own()).toHaveTextContent('off');
+    expect(rawOverridesConfig()).toEqual({ [rowId]: { disableConnectivity: true } });
+
+    // Turning a row back on from Off keeps the chosen level on the row, as
+    // it does for guests, even when that level equals the default.
+    await fireEvent.click(screen.getByTestId(`set-offline-warning-${rowId}`));
+    expect(own()).toHaveTextContent('warning');
+    expect(rawOverridesConfig()).toEqual({ [rowId]: { poweredOffSeverity: 'warning' } });
+
+    // The runtime row keeps its on/off connectivity switch, not three levels.
+    expect(screen.queryByTestId('set-offline-off-runtime-a')).not.toBeInTheDocument();
+
+    // The defaults row sets the level every container without its own inherits.
+    const containers = within(screen.getByTestId('section-Containers'));
+    await fireEvent.click(containers.getByTestId('set-default-offline-critical'));
+    expect(setDockerDisableConnectivity).toHaveBeenCalledWith(false);
+    expect(setDockerPoweredOffSeverity).toHaveBeenCalledWith('critical');
+    await fireEvent.click(containers.getByTestId('set-default-offline-off'));
+    expect(setDockerDisableConnectivity).toHaveBeenLastCalledWith(true);
   });
 
   it('removes docker host offline alerts using legacy compatibility IDs', async () => {

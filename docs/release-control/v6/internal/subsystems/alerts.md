@@ -15,7 +15,29 @@
 
 ## Purpose
 
-### Finished containers raise no state alert (12 November 2026)
+### Containers set their own offline alert level (12 November 2026)
+
+The Containers table on Alert Thresholds shows the Offline Alerts control the
+shared resource table already renders for guests: Off, Warn or Crit on each
+container, and on the defaults row for every container without its own. The
+column had been switched off for containers since the table was written, while
+the Docker guide told operators to use it, so `disableConnectivity`,
+`poweredOffSeverity` and the Docker defaults `stateDisableConnectivity` and
+`statePoweredOffSeverity` could be set only through the config API.
+
+Nothing new is stored or evaluated. The row writes the same override the guest
+row writes, under the container's stable `docker:<host>/<name>` key, and
+`checkDockerContainerState` reads it as before: Off clears the state alert, a
+level of the row's own sets the severity, turns state alerts back on over a
+disabled default, and alerts on a finished job. Turning a row back on from Off
+keeps the chosen level on the row even when it equals the default, as it does
+for guests. The Container Runtimes table keeps its on/off connectivity switch.
+
+The table renders as cards at the widths checked (twelve columns need
+1,728 px, and the page's content column measured 1,460 px in a 2,200 px
+window), so the control is one more cell on each card, not a wider table. `ThresholdsTable.test.tsx` covers the row's three
+levels, the stored override, the defaults row and the unchanged runtime row.
+
 
 A Docker container state alert is about a workload that should be running and
 is not. A container that finished its own work is not that: it reports state
@@ -49,10 +71,9 @@ or an ignored-container pattern turns it off.
 An override that carries `PoweredOffSeverity` for the container is an explicit
 request to hear whenever it is not running, and it alerts whether or not the
 container finished cleanly; an override that carries only metric thresholds
-does not. The Containers table on Alert Thresholds shows no offline column
-(`showOfflineAlertsColumn={false}`), so such an override comes from the config
-API or from an earlier save, and user-facing copy must not point at a control
-for it.
+does not. The Containers table on Alert Thresholds sets that override from the
+row's Offline Alerts control (see "Containers set their own offline alert
+level").
 
 ### Same-named Docker hosts on Alert Thresholds (5 November 2026)
 

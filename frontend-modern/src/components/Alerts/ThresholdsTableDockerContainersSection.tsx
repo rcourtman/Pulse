@@ -66,7 +66,7 @@ export function ThresholdsTableDockerContainersSection(props: ThresholdsTableSec
             onCancelEdit={state.cancelEdit}
             onRemoveOverride={state.removeOverride}
             onToggleDisabled={state.toggleDisabled}
-            showOfflineAlertsColumn={false}
+            showOfflineAlertsColumn={true}
             editingId={state.editingId}
             editingThresholds={state.editingThresholds}
             setEditingThresholds={state.setEditingThresholds}
