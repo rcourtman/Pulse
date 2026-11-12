@@ -413,10 +413,15 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 	}
 	if cfg.AgentID != "" && cfg.AgentIDFile != "" {
 		if err := writeAgentIDFile(cfg.AgentIDFile, cfg.AgentID); err != nil {
+			// A failed refresh is harmless only if the selected identity is
+			// already saved. Do not publish a new or overridden ID to any
+			// authenticated consumer unless it can survive the next start.
+			persisted, readErr := readAgentIDFile(cfg.AgentIDFile)
+			if readErr != nil || persisted != cfg.AgentID {
+				return errors.New("cannot confirm saved agent ID before startup; preserve existing state and check that the configured agent-id destination and its parent directory are writable and storage is available; refusing to start with an unsaved identity")
+			}
 			logger.Warn().
-				Err(err).
-				Str("path", cfg.AgentIDFile).
-				Msg("Failed to persist agent ID; ID will be re-derived on next start")
+				Msg("Could not refresh the agent ID file; using the matching saved identity")
 		}
 	}
 	if lookupHostname == "" {

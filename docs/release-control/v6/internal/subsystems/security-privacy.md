@@ -18,6 +18,22 @@
 
 ## Purpose
 
+### Agent startup does not publish an unsaved selected identity
+
+Before authenticated startup, a failed agent-ID save permits continuation only
+when the readable saved file already contains the selected ID after existing
+whitespace normalization. Otherwise startup returns path-free local guidance to
+preserve state and repair storage/destination writability. No enrollment,
+remote-config request, service dispatch, updater or runtime module is started
+with that unconfirmed identity. A matching read-only saved ID remains usable;
+startup never clears attributes or deletes state to force replacement. Raw write
+errors and private paths are not added to the new diagnostic. Token selection,
+TLS verification, command ceilings and explicit ID precedence remain unchanged.
+The registered command tests cover write refusal, intact saved credentials and
+trust, restored-writability recovery and compatible read-only saved identity.
+This is not a recovery of erased authority, installed-client proof or disclosure
+assessment.
+
 ### Recovery-token authority waits for its saved single-use marker
 
 Recovery-token issuance and consumption acknowledge only a complete owner-only

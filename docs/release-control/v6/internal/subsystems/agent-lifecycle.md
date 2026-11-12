@@ -939,6 +939,34 @@ running collectors. `TestRunLocalProbesDoNotRequireReadableAgentID` retains the
 local read-only probes. These are confined source fixtures, not original-host
 recovery or installed service acceptance.
 
+### Selected agent identity must survive startup publication
+
+Before enrollment, remote configuration, Windows service dispatch, the updater
+or monitoring modules, Unified Agent startup must confirm its selected agent ID
+is saved. If its atomic write fails, a readable saved ID matching the selection
+still permits startup, including whitespace-normalised and read-only files.
+An unmatched, absent or unreadable destination instead returns fixed actionable
+guidance to preserve state and repair destination/parent writability or storage.
+It does not continue with an identity that the next start could lose, disclose
+raw storage errors, clear read-only attributes or replace obstructing state.
+
+Flag/environment precedence, first-start identity derivation, credential and TLS
+selection, command ceilings, and the later canonical enrollment handoff remain.
+A matching saved read-only ID does not require a writable refresh to keep
+monitoring. URL-only validation and updater self-test remain local probes.
+
+`TestRunUnconfirmedAgentIDStopsAuthenticatedStartup` in the registered
+`cmd/pulse-agent/main_test.go` exercises default/custom directories,
+non-directory parents and write-blocked selected files, flag/environment
+selections and first-derived identity. It checks zero authenticated requests
+and constructors before confirmation, intact identity/credential/trust state,
+then real TLS configuration reads and all module identities after repairing only
+the owned fixture obstruction. `TestRunMatchingReadOnlyAgentIDStillReachesConsumers`
+retains monitoring with matching saved IDs, exact or whitespace-padded, without
+changing their bytes, inode or attributes. Unix uses an unwritable parent;
+Windows uses its read-only file attribute. Source fixtures and cross-compilation
+are not installed or native-platform recovery evidence.
+
 ### Selected agent credential files retain their own authority
 
 The real agent flag-loading path resolves a non-empty explicit `--token` before
