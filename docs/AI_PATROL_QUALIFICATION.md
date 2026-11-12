@@ -524,6 +524,14 @@ Writing a rubric:
 - `decisive_terms` are the facts a person needs before the conclusion is
   something they can act on: the cause and the next step. For the bad
   `DATABASE_URL` that is the variable name and the correct form.
+- A decisive term states what happened. It never just names a component.
+  A model that cannot read the log still knows Paperless serves through
+  gunicorn, so "gunicorn" or "web server" in a list of guesses used to earn
+  D1 a hand-over on a default agent in three replays of six. D1 now asks for
+  "exited unexpectedly", "not respawned" or the probe's "connection refused",
+  which only the log or the probe output shows. Checked against 15 stored
+  runs: all seven Sonnet runs with commands on match, no run with commands off
+  does.
 - `area_terms` mark a real discovery short of that, something the alert did not
   already say. Leave it out when a scenario has no such middle ground. A
   crashed container whose alert already says it exited has none.
@@ -616,6 +624,17 @@ commands on, 1 of 6 with commands off. Two cells need a note:
   asks from the alert before it falls back to a full run. So D6 with commands
   off will likely grade Handed back or Partial on the unchanged product, not
   Not looked at. The column total does not change.
+
+### When to replay
+
+Replay the set before merging a change to anything every Patrol run reads or
+passes through: the report tool's description, the final decision prompt, the
+seed, a triage flag, or the gate that decides which findings alerts own. Such a
+change can pass its own tests and its own live check and still move another
+fault. On 12 November 2026 a key offered for one case was used for another, and
+a crash finding was discarded for four hours on `main` before a replay showed
+it. Run both profiles, on fresh data folders. A cell that moves needs a second
+run or a control on the previous commit before it is read as a change.
 
 ### Replaying a fault set
 

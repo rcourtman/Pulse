@@ -1229,6 +1229,18 @@ after reviewing the logs"). With commands on Patrol read the SIGTERM in the
 log, proposed a start, and Pulse verified it: Fixed. The rubric's next-step
 terms were widened after the first run, because they had been copied from the
 crashed worker and missed a step that names the service.
+
+The same replay showed a cell that moved with wording. D1 on a default agent
+read "Handed over" in three replays and "Handed back" in three, including a
+control on the commit before the stopped-container change. All six conclusions
+said the cause was unconfirmed and listed guesses, because a default agent
+cannot read the log. The three that passed had named the component in a guess.
+D1's decisive terms now state what happened ("exited unexpectedly", "not
+respawned", the probe's "connection refused") and no longer accept a component
+name. The runbook's rubric guidance carries the rule, and
+`TestWebWorkerRubricDoesNotCreditAGuess` holds it with text from the stored
+runs. By this rubric the default agent's score on 11 November was 3 of 6, not
+4. The runbook also says when a change needs a replay before it merges.
 Investigation and interactive profiles retain their bounded final summary.
 Patrol report, assessment and resolution tools are governed Pulse-state writes
 for invocation authorization. Accepting one records a decision, does not prove
