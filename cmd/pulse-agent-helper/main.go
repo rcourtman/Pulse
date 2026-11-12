@@ -140,10 +140,6 @@ func run(args []string) error {
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
-	go func() {
-		<-ctx.Done()
-		_ = listener.Close()
-	}()
 	return server.Serve(ctx, listener)
 }
 

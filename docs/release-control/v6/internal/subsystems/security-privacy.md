@@ -1462,6 +1462,13 @@ operations rather than command, path, argument, environment, or shell input.
 Protocol decoding is bounded and strict, request deadlines are mandatory, and
 audit records contain metadata only. SMART and Proxmox LXC filesystem payloads
 remain local collector data and must never be copied into helper audit output.
+The server owns listener and accepted-handler shutdown: an ended service
+context closes blocked transports and skips new provider dispatch, then joins
+accepted handlers and close callbacks. This is cooperative local cleanup, not
+revocation or rollback of an accepted operation; peer disconnect alone conveys
+no such guarantee. `internal/agenthelper/server_lifecycle_test.go` and the Unix
+lifecycle test in `cmd/pulse-agent-helper/main_test.go` exercise these boundaries
+without changing peer admission, operation authority or durable update recovery.
 Container inventory is a bounded helper-owned projection of fixed
 Docker/Podman daemon endpoints, never a daemon proxy. Update staging accepts
 only an artifact identity and digest from the fixed collector-owned quarantine;

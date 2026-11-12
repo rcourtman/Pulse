@@ -382,3 +382,57 @@ func TestLocalProxmoxProviderV1RetainsStrictLegacyShape(t *testing.T) {
 		t.Fatalf("v1 shape changed: %s", data)
 	}
 }
+
+func TestHelperServerCancellationOwnsUnixListener(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("kernel-authenticated helper transport is Linux-only")
+	}
+	dir, err := os.MkdirTemp("", "pah-life-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	socket := filepath.Join(dir, "helper.sock")
+	listener, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	server, err := agenthelper.NewServer(agenthelper.ServerConfig{
+		AllowedUID: uint32(os.Getuid()), PeerResolver: agenthelper.PlatformPeerResolver{},
+		Registry: agenthelper.NewRegistry(nil, nil),
+	})
+	if err != nil {
+		_ = listener.Close()
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	done := make(chan struct{})
+	go func() {
+		if err := server.Serve(ctx, listener); err != nil {
+			t.Errorf("Serve: %v", err)
+		}
+		close(done)
+	}()
+	t.Cleanup(func() { cancel(); _ = listener.Close(); <-done })
+	client, err := agenthelper.NewClient(agenthelper.ClientConfig{SocketPath: socket})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var health agenthelper.HealthResult
+	if _, err := client.Call(t.Context(), agenthelper.OperationHealth, agenthelper.OperationVersion1, time.Second, nil, &health); err != nil {
+		t.Fatalf("kernel-authenticated helper health: %v", err)
+	}
+	if health.Status != "ok" {
+		t.Fatalf("health = %#v", health)
+	}
+	cancel() // Same service context as run; no separate listener-close watcher.
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("helper server did not own its Unix listener shutdown")
+	}
+	if conn, err := net.DialTimeout("unix", socket, time.Second); err == nil {
+		_ = conn.Close()
+		t.Fatal("canceled helper still accepted a new Unix connection")
+	}
+}
