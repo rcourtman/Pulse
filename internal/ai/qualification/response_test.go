@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 	"testing"
@@ -19,7 +20,7 @@ func loadFaultSetCatalog(t *testing.T) Catalog {
 	return catalog
 }
 
-func TestFaultSetV1HoldsSixLabelledScenarios(t *testing.T) {
+func TestFaultSetV1HoldsSevenLabelledScenarios(t *testing.T) {
 	manifests := FaultSetManifests(loadFaultSetCatalog(t), "v1")
 	var labels, expects []string
 	for _, manifest := range manifests {
@@ -32,10 +33,10 @@ func TestFaultSetV1HoldsSixLabelledScenarios(t *testing.T) {
 			t.Errorf("%s may run on a shared host, and its fixtures shadow real image names", manifest.ID)
 		}
 	}
-	if got, want := strings.Join(labels, " "), "D1 D2 D3 D4 D5 D6"; got != want {
+	if got, want := strings.Join(labels, " "), "D1 D2 D3 D4 D5 D6 D7"; got != want {
 		t.Fatalf("fault set v1 labels = %q, want %q", got, want)
 	}
-	if got, want := strings.Join(expects, " "), "fixed fixed quiet handed_over fixed handed_over"; got != want {
+	if got, want := strings.Join(expects, " "), "fixed fixed quiet handed_over fixed handed_over fixed"; got != want {
 		t.Fatalf("fault set v1 expectations = %q, want %q", got, want)
 	}
 }
@@ -468,5 +469,158 @@ func TestWarningScenariosOutwaitTheSustainedAlertWake(t *testing.T) {
 		if manifest.Version < 2 {
 			t.Errorf("%s changed its wait without a new version", id)
 		}
+	}
+}
+
+// The stopped service is the other half of the finished job. Pulse's alert
+// rule cannot tell them apart (both exited 0 soon after starting, with no
+// restart policy), so it alerts on neither and Patrol has to judge. The
+// scenario only measures that when the lab really produces the case the rule
+// skips, and when the run that judges is the one the schedule makes.
+func TestStoppedServiceScenarioProvisionsAStopNoAlertCovers(t *testing.T) {
+	manifest, ok := loadFaultSetCatalog(t).ByID["response.service-stopped-no-alert"]
+	if !ok {
+		t.Fatal("catalogue has no stopped-service scenario")
+	}
+	const service, job = "gitea", "vault-migrate"
+	for _, alias := range []string{service, job} {
+		resource, ok := manifest.resource(alias)
+		if !ok {
+			t.Fatalf("the scenario has no resource %q", alias)
+		}
+		if resource.Restart != "no" && resource.Restart != "on-failure" {
+			t.Fatalf("%s restart policy = %q: Docker would restart a clean exit, so Pulse would alert on it", alias, resource.Restart)
+		}
+	}
+	if len(manifest.Faults) != 1 || manifest.Faults[0].Injector.Kind != "stop" || manifest.Faults[0].Injector.Resource != service {
+		t.Fatalf("faults = %+v, want one stop of %s", manifest.Faults, service)
+	}
+	exitedCleanly := false
+	for _, predicate := range manifest.Faults[0].Oracle {
+		if predicate.Probe == "docker.exit_code" && predicate.Target == service && predicate.Operator == "eq" && string(predicate.Value) == "0" {
+			exitedCleanly = true
+		}
+	}
+	if !exitedCleanly {
+		t.Fatal("the fault oracle does not require the service to have exited with code 0, and any other exit raises an alert")
+	}
+	fixture, ok := fixtureByKey("gitea")
+	if !ok || !strings.Contains(fixture.Entrypoint, "trap ") || !strings.Contains(fixture.Entrypoint, "exit 0") {
+		t.Fatalf("the gitea fixture has to end with exit code 0 on SIGTERM: %q", fixture.Entrypoint)
+	}
+	if manifest.Engagement.Fallback != EngagementFallbackFullRun {
+		t.Fatalf("fallback = %q: a scoped run reads the selected container and never follows the no-alert flag", manifest.Engagement.Fallback)
+	}
+	if got := strings.Join(manifest.Outcome.QuietResources, " "); got != job {
+		t.Fatalf("quiet resources = %q, want the finished job", got)
+	}
+}
+
+// Reporting the stopped service is only half of the scenario. A run that also
+// reports the finished job has not told them apart.
+func TestStoppedServiceRubricFailsWhenTheFinishedJobIsReported(t *testing.T) {
+	manifest := loadFaultSetCatalog(t).ByID["response.service-stopped-no-alert"]
+	off := AgentProfile{Name: AgentProfileCommandsOff}
+	on := AgentProfile{Name: AgentProfileCommandsOn, CommandsEnabled: true}
+	conclusion := "gitea exited with exit code 0 and has no restart policy, so it stays down. Pulse raised no alert. Start the container."
+	service := responseTestFinding("gitea", conclusion)
+	job := ResponseFinding{ID: "f2", Severity: "warning", ResourceAlias: "vault-migrate"}
+	bystander := ResponseFinding{ID: "f3", Severity: "warning", ResourceAlias: "paperless"}
+
+	if graded := GradeResponse(manifest, ResponseEvidence{AgentProfile: off, Findings: []ResponseFinding{service}}); graded.Grade != GradeHandedOver {
+		t.Fatalf("service reported, job quiet: %s (%s)", graded.Grade, graded.Reason)
+	}
+	fixed := service
+	fixed.Action = &ResponseAction{Capability: "start", TargetAlias: "gitea", Decision: ActionDecisionApprovedExecuted, FinalState: "completed", VerificationStatus: "verified"}
+	if graded := GradeResponse(manifest, ResponseEvidence{AgentProfile: on, Postconditions: []PredicateObservation{{Passed: true}}, Findings: []ResponseFinding{fixed}}); graded.Grade != GradeFixed {
+		t.Fatalf("service started, job quiet: %s (%s)", graded.Grade, graded.Reason)
+	}
+	graded := GradeResponse(manifest, ResponseEvidence{AgentProfile: on, Postconditions: []PredicateObservation{{Passed: true}}, Findings: []ResponseFinding{fixed}, OtherFindings: []ResponseFinding{job}})
+	if graded.Grade != GradeFalseAlarm || graded.Resolved || strings.Join(graded.Checks.QuietReported, " ") != "vault-migrate" {
+		t.Fatalf("job reported as well: %s (%s, %+v)", graded.Grade, graded.Reason, graded.Checks)
+	}
+	if graded := GradeResponse(manifest, ResponseEvidence{AgentProfile: off, OtherFindings: []ResponseFinding{job}}); graded.Grade != GradeFalseAlarm {
+		t.Fatalf("only the job reported: %s (%s)", graded.Grade, graded.Reason)
+	}
+	// A finding on a negative control the scenario does not name is recorded
+	// and not graded, as in every other scenario.
+	if graded := GradeResponse(manifest, ResponseEvidence{AgentProfile: off, Findings: []ResponseFinding{service}, OtherFindings: []ResponseFinding{bystander}}); graded.Grade != GradeHandedOver {
+		t.Fatalf("an unnamed negative control changed the grade: %s (%s)", graded.Grade, graded.Reason)
+	}
+	// The step a default agent wrote on the first live run. A rubric copied
+	// from the crashed worker missed it, because it named the service.
+	named := responseTestFinding("gitea", "gitea exited cleanly and Pulse raised no alert. If unintentional, restart the gitea container after reviewing the logs.")
+	if graded := GradeResponse(manifest, ResponseEvidence{AgentProfile: off, Findings: []ResponseFinding{named}}); graded.Grade != GradeHandedOver {
+		t.Fatalf("a hand-over that names the service graded %s (%s)", graded.Grade, graded.Reason)
+	}
+	// "No restart policy" is a fact about the container and not a next step.
+	policy := responseTestFinding("gitea", "gitea exited cleanly and has no restart policy.")
+	if graded := GradeResponse(manifest, ResponseEvidence{AgentProfile: off, Findings: []ResponseFinding{policy}}); graded.Grade != GradeHandedBack {
+		t.Fatalf("a conclusion with no next step graded %s (%s)", graded.Grade, graded.Reason)
+	}
+	// Without the clean exit the conclusion says no more than "it is stopped".
+	bare := responseTestFinding("gitea", "gitea is stopped. Start the container.")
+	if graded := GradeResponse(manifest, ResponseEvidence{AgentProfile: off, Findings: []ResponseFinding{bare}}); graded.Grade != GradeHandedBack {
+		t.Fatalf("a conclusion without the clean exit graded %s (%s)", graded.Grade, graded.Reason)
+	}
+}
+
+func TestQuietResourcesMustBeNegativeControlsOfAFaultedScenario(t *testing.T) {
+	catalog := loadFaultSetCatalog(t)
+	stopped := catalog.ByID["response.service-stopped-no-alert"]
+	outcome := *stopped.Outcome
+	outcome.QuietResources = []string{"gitea"}
+	stopped.Outcome = &outcome
+	if err := stopped.Validate(); err == nil || !strings.Contains(err.Error(), "is not a negative control") {
+		t.Fatalf("a faulted resource was accepted as quiet: %v", err)
+	}
+	quiet := catalog.ByID["response.finished-job-stays-quiet"]
+	outcome = *quiet.Outcome
+	outcome.QuietResources = []string{"vault-migrate"}
+	quiet.Outcome = &outcome
+	if err := quiet.Validate(); err == nil || !strings.Contains(err.Error(), "remove outcome.quiet_resources") {
+		t.Fatalf("a quiet scenario accepted quiet_resources: %v", err)
+	}
+	full := catalog.ByID["response.worker-crashed-stays-exited"]
+	engagement := *full.Engagement
+	engagement.Fallback = "ask_nicely"
+	full.Engagement = &engagement
+	if err := full.Validate(); err == nil || !strings.Contains(err.Error(), "unsupported engagement.fallback") {
+		t.Fatalf("an unknown fallback was accepted: %v", err)
+	}
+}
+
+// The published schema is what an author checks a scenario against before the
+// Go loader sees it. The stopped-service scenario passed the loader and failed
+// the schema, which knew neither its fallback nor its quiet resources. Every
+// field of the two response-track specs and every fallback the loader accepts
+// has to exist in the schema.
+func TestPublishedSchemaKnowsTheResponseTrackVocabulary(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", "..", "tests", "qualification", "patrol", "patrol.qual.schema.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var schema struct {
+		Defs map[string]struct {
+			Properties map[string]struct {
+				Enum []string `json:"enum"`
+			} `json:"properties"`
+		} `json:"$defs"`
+	}
+	if err := json.Unmarshal(raw, &schema); err != nil {
+		t.Fatal(err)
+	}
+	for def, spec := range map[string]reflect.Type{"engagement": reflect.TypeOf(EngagementSpec{}), "outcome": reflect.TypeOf(OutcomeSpec{})} {
+		for i := 0; i < spec.NumField(); i++ {
+			field, _, _ := strings.Cut(spec.Field(i).Tag.Get("json"), ",")
+			if _, ok := schema.Defs[def].Properties[field]; !ok {
+				t.Errorf("the published schema has no %s.%s", def, field)
+			}
+		}
+	}
+	fallbacks := append([]string(nil), schema.Defs["engagement"].Properties["fallback"].Enum...)
+	sort.Strings(fallbacks)
+	if got, want := strings.Join(fallbacks, " "), EngagementFallbackFullRun+" "+EngagementFallbackScopedRun; got != want {
+		t.Fatalf("published fallbacks = %q, the loader accepts %q", got, want)
 	}
 }

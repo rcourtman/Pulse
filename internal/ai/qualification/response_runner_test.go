@@ -682,7 +682,7 @@ func TestAskForRunFollowsWhatAPersonWouldClick(t *testing.T) {
 			}
 			runner := &QualificationRunner{config: RunnerConfig{Client: client}, askRetry: time.Millisecond}
 			var wake WakeObservation
-			accepted, err := runner.askForRun(context.Background(), []string{"agent-1"}, tc.alert, time.Second, &wake)
+			accepted, err := runner.askForRun(context.Background(), EngagementFallbackScopedRun, []string{"agent-1"}, tc.alert, time.Second, &wake)
 			if (err != nil) != tc.wantErr {
 				t.Fatalf("error = %v, want error %t", err, tc.wantErr)
 			}
@@ -767,5 +767,39 @@ func TestSettleInvestigationsAsksOnceWhenNoneStarts(t *testing.T) {
 	}
 	if wake.InvestigationStart != WakeSelf {
 		t.Fatalf("an investigation that started by itself was recorded as %q", wake.InvestigationStart)
+	}
+}
+
+// A scenario whose fallback is full_run asks for a whole-estate run first. It
+// selects nothing, as the schedule does, and it is the scenario's own choice,
+// so there is no fallback to explain.
+func TestAskForRunStartsWithAFullRunWhenTheScenarioAsksForOne(t *testing.T) {
+	var mu sync.Mutex
+	var bodies []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		payload, _ := io.ReadAll(r.Body)
+		mu.Lock()
+		bodies = append(bodies, strings.TrimSpace(string(payload)))
+		mu.Unlock()
+		_, _ = w.Write([]byte(`{"run_id":"r1"}`))
+	}))
+	defer server.Close()
+	client, err := NewPulseClient(ClientConfig{BaseURL: server.URL, Username: "admin", Password: "test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	runner := &QualificationRunner{config: RunnerConfig{Client: client}, askRetry: time.Millisecond}
+	var wake WakeObservation
+	accepted, err := runner.askForRun(context.Background(), EngagementFallbackFullRun, []string{"app-container-1"}, nil, time.Second, &wake)
+	if err != nil || accepted.RunID != "r1" {
+		t.Fatalf("run %q, error %v", accepted.RunID, err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(bodies) != 1 || bodies[0] != "" {
+		t.Fatalf("requests = %q, want one request that selects nothing", bodies)
+	}
+	if wake.Asked != AskFullRun || wake.AskDetail != "" {
+		t.Fatalf("wake = %+v, want a plain full run", wake)
 	}
 }

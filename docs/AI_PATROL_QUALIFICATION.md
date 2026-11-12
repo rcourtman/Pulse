@@ -256,7 +256,7 @@ and broad enough to qualify the first launch surface:
 | `remediation.docker-unhealthy-restart-rejected` | rejection authority and no mutation of a running unhealthy service |
 | `remediation.docker-unhealthy-restart-approved` | approval, typed restart, execution, and independent verification |
 
-The six `response.*` scenarios of fault set v1 are listed under
+The seven `response.*` scenarios of fault set v1 are listed under
 [Response track and fault sets](#response-track-and-fault-sets).
 
 The next catalogue additions should use new driver implementations, not shell
@@ -461,6 +461,13 @@ with an agent too old to report the restart policy. The wait is there so a false
 the healthy lab is seen either way. A new scenario whose alert is a warning
 needs the same wait.
 
+D7 raises no alert at all, so nothing wakes Patrol for it and only the next
+scheduled run can meet it. Its scenario sets `engagement.fallback` to
+`full_run`: after a short wait the harness asks for a run over the whole
+estate, which is the run the schedule makes. A scoped run would read the
+selected container and skip the triage flag a scheduled run depends on. D7
+therefore always reads "had to be asked".
+
 The harness never approves a proposal the scenario did not define, including a
 harmless one. The hand-run rig approved any restart on a fixture, which is how
 it observed Pulse reporting a wrong fix as not verified. A live run no longer
@@ -571,8 +578,9 @@ Pulse.
 
 ### Fault set v1
 
-All six scenarios provision the same six-service stack, so each fault happens
-next to healthy neighbours and one finished job, as on a real host.
+Every scenario provisions the same six-service stack, so each fault happens
+next to healthy neighbours and one finished job, as on a real host. D7 adds a
+seventh service to it.
 
 | Fault | Scenario | A person would | Decisive fact |
 |---|---|---|---|
@@ -582,6 +590,15 @@ next to healthy neighbours and one finished job, as on a real host.
 | D4 | `response.restart-loop-bad-config` | fix the config | `DATABASE_URL`, `postgresql://` |
 | D5 | `response.app-unhealthy-database-stopped` | start the database | `nextcloud-db` is stopped, start it |
 | D6 | `response.host-disk-one-folder` | find what filled it | `frigate/recordings`, `driveway` |
+| D7 | `response.service-stopped-no-alert` | start it | it exited cleanly, start it |
+
+D7 was added on 12 November 2026. It is the other half of D3: a service with
+no restart policy that is stopped cleanly soon after it started looks the same
+to the alert rule as a finished job, so Pulse alerts on neither and Patrol has
+to tell them apart. The scenario names the finished job in
+`outcome.quiet_resources`. A finding on it grades the run False alarm,
+whatever Patrol said about the service. Scores from before that date are out
+of 6.
 
 The Phase 1 runs are checked in under
 `internal/ai/qualification/testdata/fault-set-v1/phase1/`, reduced to the

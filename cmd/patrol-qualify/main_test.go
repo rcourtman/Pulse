@@ -70,7 +70,7 @@ func TestSelectFaultSetOrdersByLabelAndNarrowsToNamedFaults(t *testing.T) {
 		return strings.Join(out, " ")
 	}
 	all, err := selectFaultSet(catalog, "v1", "")
-	if err != nil || labels(all) != "D1 D2 D3 D4 D5 D6" {
+	if err != nil || labels(all) != "D1 D2 D3 D4 D5 D6 D7" {
 		t.Fatalf("fault set v1 = %q, %v", labels(all), err)
 	}
 	some, err := selectFaultSet(catalog, "v1", " d4, D1 ")

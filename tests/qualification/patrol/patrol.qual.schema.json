@@ -130,7 +130,7 @@
         "alert_timeout": {"type": "string"},
         "natural_wake_timeout": {"type": "string"},
         "investigation_start_timeout": {"type": "string"},
-        "fallback": {"enum": ["scoped_run"]}
+        "fallback": {"enum": ["scoped_run", "full_run"]}
       }
     },
     "outcome": {
@@ -140,7 +140,8 @@
         "expect": {"enum": ["fixed", "handed_over", "quiet"]},
         "decisive_terms": {"type": "array", "minItems": 1, "items": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}}},
         "area_terms": {"type": "array", "minItems": 1, "items": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}}},
-        "misdirection_terms": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+        "misdirection_terms": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "quiet_resources": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
       },
       "allOf": [
         {"if": {"properties": {"expect": {"enum": ["fixed", "handed_over"]}}}, "then": {"required": ["decisive_terms"]}},
