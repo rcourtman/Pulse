@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentstate"
 	"github.com/rs/zerolog"
 )
 
@@ -171,14 +172,24 @@ func LoadRuntimeToken(stateDir string) (string, error) {
 }
 
 func persistedRuntimeToken(collector SystemCollector, stateDir string) (string, error) {
-	data, err := collector.ReadFile(filepath.Join(stateDir, runtimeTokenFile))
-	if err != nil {
+	path := filepath.Join(stateDir, runtimeTokenFile)
+	// Keep existing injected collectors source-compatible. The production
+	// collector reads only a bounded regular file; custom readers still cannot
+	// return oversized or partial authority through the legacy interface.
+	readFile := collector.ReadFile
+	if reader, ok := collector.(interface {
+		ReadPrivateStateFile(string) ([]byte, error)
+	}); ok {
+		readFile = reader.ReadPrivateStateFile
+	}
+	data, err := readFile(path)
+	if err != nil || len(data) > agentstate.MaxFileBytes {
 		if errors.Is(err, os.ErrNotExist) {
 			return "", nil
 		}
 		// Do not disclose credential contents, private paths or the underlying
 		// filesystem error. An unreadable saved token is not an absent token.
-		return "", errors.New("cannot read saved runtime token; check that runtime.token in the configured state directory is readable by the agent service; refusing to re-enroll")
+		return "", errors.New("cannot read saved runtime token; check that runtime.token in the configured state directory is a regular file of at most 64 KiB and readable by the agent service; refusing to re-enroll")
 	}
 	return string(bytes.TrimSpace(data)), nil
 }

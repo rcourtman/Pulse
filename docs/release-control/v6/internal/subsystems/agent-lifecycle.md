@@ -17,6 +17,39 @@
 
 ## Purpose
 
+### Saved authority reads are bounded files, not waiting streams
+
+Production startup reads selected/default API-token files, enrolled
+`runtime.token` and the selected saved agent ID through the agent-state reader.
+Each must resolve to a regular file of at most 64 KiB, including surrounding
+whitespace. File and directory symlinks remain supported for relocated state
+and projected Kubernetes secrets. The reader checks the opened descriptor and
+reads at most the ceiling plus one overflow byte; growth or read failure never
+releases a prefix as authority. Unix opens are nonblocking so a FIFO substituted
+between path inspection and open cannot wait for a writer. This does not impose
+a deadline on arbitrary filesystem I/O or promise a filesystem snapshot.
+
+Invalid selected state stops before enrollment, authenticated configuration,
+service dispatch or updater/module construction with fixed, path-free guidance
+to check file type, size and service readability. It does not borrow a lower
+priority token, re-enroll, derive replacement identity, delete saved state or
+change its attributes. Missing/readable-empty behavior, opaque token trimming,
+explicit configuration precedence and read-only configured-ID launches retain
+their existing policies. A boundary-size saved ID remains readable after its
+ordinary atomic publication; its optional trailing newline cannot push it past
+the read limit. Enrollment/report publication and TLS/command ceilings do not
+change. Injected legacy collectors retain their interface and reject oversized
+returned token bytes; production filesystem bounds do not depend on them.
+
+Registered `internal/agentstate` tests cover complete/oversized/growing reads,
+partial errors, linked read-only state and Unix FIFO path/handle refusal.
+`saved_authority_bounds_test.go` in `internal/hostagent` couples invalid saved
+runtime state to both enrollment entrypoints and host Run without discovery or
+re-enrollment, then reuses repaired saved authority. Its command counterpart
+drives all five file roles through actual startup, trusted HTTPS and consistent
+consumer identity/credentials, retaining state and monitoring-only ceilings.
+These are source/fixture proofs, not original-host or native-service recovery.
+
 ### Enrollment response completeness precedes saved authority
 
 An HTTP 200 enrollment reply must be read completely within the existing 64 KiB

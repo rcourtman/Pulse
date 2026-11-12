@@ -496,6 +496,46 @@ if module.MAX_RECEIPT_BYTES <= 0:
             with self.subTest(source=relative):
                 self.assertEqual(source_hashes.get(relative), sha(source.read_bytes()))
 
+    def test_manifest_reader_hashes_saved_authority_sources(self) -> None:
+        repo_root = Path(__file__).resolve().parents[2]
+        _, source_hashes = attester.load_source_manifest(
+            repo_root, repo_root / attester.SOURCE_MANIFEST_PATH,
+        )
+        # Include both platform implementations, not just the host-selected one.
+        for basename in ("read.go", "read_unix.go", "read_other.go"):
+            relative = "internal/agentstate/" + basename
+            with self.subTest(source=relative):
+                self.assertEqual(source_hashes.get(relative), sha((repo_root / relative).read_bytes()))
+
+    def test_saved_authority_changes_and_omissions_reject_stale_attestation(self) -> None:
+        manifest = json.loads(self.manifest.read_text(encoding="utf-8"))
+        manifest["recursive_roots"] = ["internal/agentstate"]
+        self.manifest.write_text(json.dumps(manifest), encoding="utf-8")
+        repo_root = Path(__file__).resolve().parents[2]
+        for basename in ("read.go", "read_unix.go", "read_other.go"):
+            relative = "internal/agentstate/" + basename
+            target = self.root / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes((repo_root / relative).read_bytes())
+        _, self.receipt["source_hashes"] = attester.load_source_manifest(self.root, self.manifest)
+        self.attest()
+        for basename in ("read.go", "read_unix.go", "read_other.go"):
+            relative = "internal/agentstate/" + basename
+            target = self.root / relative
+            original = target.read_bytes()
+            with self.subTest(source=relative, mutation="changed"):
+                try:
+                    target.write_bytes(original + b"\n// changed fixture source\n")
+                    with self.assertRaisesRegex(attester.ValidationError, "source_hashes do not match"):
+                        self.attest()
+                finally:
+                    target.write_bytes(original)
+            with self.subTest(source=relative, mutation="omitted"):
+                incomplete = copy.deepcopy(self.receipt)
+                del incomplete["source_hashes"][relative]
+                with self.assertRaisesRegex(attester.ValidationError, "source_hashes do not match"):
+                    self.attest(incomplete)
+
     def test_manifest_contract_binds_transitive_harness_and_production_boundary(self) -> None:
         manifest = json.loads((Path(__file__).with_name("secure_runtime_rootful_source_manifest_v1.json")).read_text(encoding="utf-8"))
         required = {
