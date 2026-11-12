@@ -76,7 +76,9 @@ func NewClient(config ClientConfig) (*Client, error) {
 
 // Call performs exactly one typed operation over one Unix-socket connection.
 // It returns the generated request ID even when the helper returns a typed
-// remote error so callers can correlate local and helper audit records.
+// remote error so callers can correlate local and helper audit records. The
+// operation budget includes dialing and all socket I/O. Cancellation closes
+// only this local connection: an accepted remote operation may still complete.
 func (c *Client) Call(
 	ctx context.Context,
 	operation string,
@@ -84,23 +86,34 @@ func (c *Client) Call(
 	deadline time.Duration,
 	payload any,
 	result any,
-) (string, error) {
+) (requestID string, callErr error) {
 	if strings.TrimSpace(operation) == "" || operationVersion < 1 {
 		return "", errors.New("helper operation and positive version are required")
 	}
 	if deadline <= 0 || deadline > c.maxDeadline {
 		return "", errors.New("helper operation deadline is outside the allowed range")
 	}
-	if contextDeadline, ok := ctx.Deadline(); ok {
-		remaining := time.Until(contextDeadline)
-		if remaining <= 0 {
-			return "", ctx.Err()
-		}
-		if remaining < deadline {
-			deadline = remaining
-		}
+	ctx, cancel := context.WithTimeout(ctx, deadline)
+	defer cancel()
+	if err := ctx.Err(); err != nil {
+		return "", err
 	}
-	deadlineMillis := deadline.Milliseconds()
+	operationDeadline, _ := ctx.Deadline()
+	// Socket deadlines can fire before the context timer is scheduled. Preserve
+	// context identity as well as the transport error in either ordering.
+	defer func() {
+		if callErr == nil {
+			return
+		}
+		contextErr := ctx.Err()
+		if contextErr == nil && !time.Now().Before(operationDeadline) {
+			contextErr = context.DeadlineExceeded
+		}
+		if contextErr != nil && !errors.Is(callErr, contextErr) {
+			callErr = errors.Join(callErr, contextErr)
+		}
+	}()
+	deadlineMillis := time.Until(operationDeadline).Milliseconds()
 	if deadlineMillis < 1 {
 		deadlineMillis = 1
 	}
@@ -133,15 +146,27 @@ func (c *Client) Call(
 	if err != nil {
 		return requestID, err
 	}
+	if err := ctx.Err(); err != nil {
+		return requestID, err
+	}
 
 	conn, err := c.dialContext(ctx, "unix", c.socketPath)
 	if err != nil {
 		return requestID, fmt.Errorf("connect to helper Unix socket: %w", err)
 	}
 	defer conn.Close()
-	operationDeadline := time.Now().Add(deadline)
-	if contextDeadline, ok := ctx.Deadline(); ok && contextDeadline.Before(operationDeadline) {
-		operationDeadline = contextDeadline
+	closeDone := make(chan struct{})
+	stopClose := context.AfterFunc(ctx, func() {
+		_ = conn.Close() // Interrupt both a blocked request write and response read.
+		close(closeDone)
+	})
+	defer func() {
+		if !stopClose() {
+			<-closeDone // The callback must not outlive this connection's owner.
+		}
+	}()
+	if err := ctx.Err(); err != nil {
+		return requestID, err // A canceled dial result must not send a new frame.
 	}
 	if err := conn.SetDeadline(operationDeadline); err != nil {
 		return requestID, fmt.Errorf("set helper connection deadline: %w", err)
