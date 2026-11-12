@@ -141,18 +141,19 @@ func TestHistoryJournalResolutionCannotBeUndoneByOlderRecoveryMarker(t *testing.
 		t.Fatal(err)
 	}
 	m.Stop()
-	store, err := eventlog.Open(filepath.Join(dir, "alerts"))
-	if err != nil {
-		t.Fatal(err)
-	}
 	db, err := sql.Open("sqlite", filepath.Join(dir, "alerts", "events.db"))
 	if err != nil {
-		store.Close()
 		t.Fatal(err)
 	}
 	defer db.Close()
+	// Install the fixture's write fault before starting another store owner.
+	// Its startup maintenance may write too; a no-wait auxiliary connection
+	// must not race that owner while creating the test trigger.
 	if _, err := db.Exec(`CREATE TRIGGER history_test_write_fault BEFORE INSERT ON alert_events BEGIN SELECT RAISE(ABORT,'history driver fault'); END`); err != nil {
-		store.Close()
+		t.Fatal(err)
+	}
+	store, err := eventlog.Open(filepath.Join(dir, "alerts"))
+	if err != nil {
 		t.Fatal(err)
 	}
 	snapshot, err := json.Marshal(active[0])
