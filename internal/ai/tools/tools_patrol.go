@@ -39,13 +39,20 @@ func PatrolReportFindingRequiredArguments() []string {
 // Patrol seed marks those containers. The report tool and the final decision
 // prompt both carry this sentence, so the model is never told an alert covers
 // a container that has none.
-const PatrolUnalertedStoppedContainerRule = `The one exception is a container the seed marks as having no alert because Pulse read its clean exit as a finished job: no alert covers it. Leave it alone when it is a finished job, such as a migration, an init step or a scheduled task. When the evidence shows a service that should be running, report it with the key ` + PatrolUnalertedStoppedServiceKey + `: title it as that service being stopped, name the evidence, and say once that Pulse raised no alert for it.`
+const PatrolUnalertedStoppedContainerRule = `The one exception is a container the seed marks as having no alert because Pulse read its clean exit as a finished job: no alert covers it. Leave it alone when it is a finished job, such as a migration, an init step or a scheduled task. When the evidence shows a service that should be running, report it with the key ` + PatrolUnalertedStoppedServiceKey + `: title it as that service being stopped, name the evidence, and say once that Pulse raised no alert for it. Use that key for nothing else: any other stopped container has an alert, and a report about it needs a key that names why it stopped.`
 
 // PatrolUnalertedStoppedServiceKey is the stable key for a finding that a
 // container Pulse read as a finished job is a stopped service. None of the
 // canonical keys fits, and without one the model borrowed restart-loop and
 // guest-unreachable.
 const PatrolUnalertedStoppedServiceKey = "service-stopped"
+
+// PatrolAlertOwnedReportNote is what the report tool tells the model when a
+// report only restates a stopped state an alert already covers. The reply used
+// to be a bare acknowledgement that named a finding ID, and the model read it
+// as "filed": on a crashed container it then ended the run with nothing
+// recorded. The note says nothing was filed and what would be.
+const PatrolAlertOwnedReportNote = `Not filed, and no finding exists for this report. An alert already tells the operator this resource is stopped, and this report's key says only that. If the evidence shows why it stopped or what it broke, such as a crash and its exit code, an out-of-memory kill, bad configuration or a failed dependency, report that under a key that names the cause. Otherwise report nothing for it.`
 
 // registerPatrolTools registers the patrol-specific finding lifecycle tools.
 // These tools are only functional during a patrol run when patrolFindingCreator is set.
@@ -590,12 +597,13 @@ func handlePatrolReportFinding(_ context.Context, e *PulseToolExecutor, args map
 		}
 		var ownedByAlerts *PatrolFindingOwnedByAlertsError
 		if errors.As(err, &ownedByAlerts) {
+			// No finding ID: nothing was stored, and an ID reads as "filed".
 			return NewJSONResult(map[string]interface{}{
-				"ok":                                    true,
-				agentcapabilities.FindingIDArgumentName: ownedByAlerts.FindingID,
-				"is_new":                                false,
-				"applied":                               false,
-				"reason":                                "alert_owned_resource_state",
+				"ok":      true,
+				"is_new":  false,
+				"applied": false,
+				"reason":  "alert_owned_resource_state",
+				"note":    PatrolAlertOwnedReportNote,
 			}), nil
 		}
 		var ownedByGuestStop *PatrolFindingOwnedByGuestStopError

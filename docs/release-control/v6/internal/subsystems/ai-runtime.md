@@ -1181,8 +1181,26 @@ whole estate (two of them startup runs on a fresh data folder) each reported
 both services and neither job, and scoped runs reported the service and left
 the job alone. The first run cost 6,000 to 10,700 output tokens; the next run
 raised no flag. The container names were recognisable (a media server, a Git
-host, a migration, a certificate renewal). Ambiguous names, other models and
-the full fault set were not run.
+host, a migration, a certificate renewal). Ambiguous names and other models
+were not run.
+
+The first replay of fault set v1 on that change (12 November 2026, Sonnet,
+default agent) found one regression. The crashed worker has an alert. The run
+that woke on it reported under `service-stopped`, the gate answered
+`alert_owned_resource_state`, and the model ended the run saying a finding had
+been filed. The reply carried a finding ID and no explanation, so nothing told
+it otherwise, and the fault read "had to be asked". Two things changed:
+
+- The rule says the key is for nothing else: any other stopped container has
+  an alert, and a report about it needs a key that names why it stopped.
+- The reply to an alert-owned report (`tools.PatrolAlertOwnedReportNote`)
+  carries no finding ID. It says nothing was filed and that a report needs a
+  key naming the cause, such as a crash and its exit code.
+
+Re-run on a fresh data folder, the alert-woken run filed its finding and the
+fault read "Handed over, woke by itself" again. The model did not borrow the
+key in that run, so the reply note is covered by its unit test and not by a
+live run. The finished job stayed quiet in every replay.
 Investigation and interactive profiles retain their bounded final summary.
 Patrol report, assessment and resolution tools are governed Pulse-state writes
 for invocation authorization. Accepting one records a decision, does not prove

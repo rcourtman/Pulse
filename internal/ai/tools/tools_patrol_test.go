@@ -166,6 +166,10 @@ func TestHandlePatrolReportFinding_AcknowledgesSameRunDuplicateAsNoOp(t *testing
 	require.Len(t, creator.createCalls, 1)
 }
 
+// The reply to a report that only restates an alerted stopped state has to say
+// that nothing was filed. A bare acknowledgement with a finding ID read as
+// "filed" to the model, which then ended a run on a crashed container with
+// nothing recorded.
 func TestHandlePatrolReportFinding_AcknowledgesAlertOwnedStateAsNoOp(t *testing.T) {
 	creator := &mockPatrolFindingCreator{
 		createFindingFunc: func(PatrolFindingInput) (string, bool, error) {
@@ -183,7 +187,10 @@ func TestHandlePatrolReportFinding_AcknowledgesAlertOwnedStateAsNoOp(t *testing.
 	assert.Equal(t, false, parsed["applied"])
 	assert.Equal(t, false, parsed["is_new"])
 	assert.Equal(t, "alert_owned_resource_state", parsed["reason"])
-	assert.Equal(t, "finding-alert-owned", parsed[agentcapabilities.FindingIDArgumentName])
+	assert.Equal(t, PatrolAlertOwnedReportNote, parsed["note"])
+	assert.NotContains(t, parsed, agentcapabilities.FindingIDArgumentName)
+	assert.Contains(t, PatrolAlertOwnedReportNote, "Not filed")
+	assert.Contains(t, PatrolAlertOwnedReportNote, "a key that names the cause")
 }
 
 // A report about a guest stop Pulse already accounted for is acknowledged as a
