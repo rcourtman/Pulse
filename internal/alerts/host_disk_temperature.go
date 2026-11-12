@@ -46,24 +46,28 @@ func (m *Manager) rememberHostDiskTemperaturePending(host models.Host, disk mode
 	m.hostDiskTempPendingContexts[resourceID] = hostDiskTempContext{host.ID, host.LinkedNodeID, host.LinkedVMID, host.LinkedContainerID, disk.Type}
 }
 
-func (m *Manager) hostDiskTemperatureTrackedResourcesNoLock() map[string]struct{} {
+func (m *Manager) hostDiskTemperatureTrackedResourcesNoLock(prefix string) map[string]struct{} {
 	resources := make(map[string]struct{})
-	for resourceID := range m.hostDiskTempPendingContexts {
-		resources[resourceID] = struct{}{}
-	}
-	for _, state := range m.mirrorStatesNoLock() {
-		for _, resourceID := range state.PendingResourceIDs() {
+	include := func(resourceID string) bool { return strings.HasPrefix(resourceID, prefix) }
+	add := func(resourceID string) {
+		if include(resourceID) {
 			resources[resourceID] = struct{}{}
 		}
 	}
+	for resourceID := range m.hostDiskTempPendingContexts {
+		add(resourceID)
+	}
+	for _, state := range m.mirrorStatesNoLock() {
+		state.CollectPendingResourceIDs(resources, include)
+	}
 	for _, alert := range m.activeAlerts {
 		if alert != nil {
-			resources[alert.ResourceID] = struct{}{}
+			add(alert.ResourceID)
 		}
 	}
 	for _, pending := range m.intentPending {
 		if pending.Signal == MetricAlertIntentSignal("diskTemperature") {
-			resources[pending.ResourceID] = struct{}{}
+			add(pending.ResourceID)
 		}
 	}
 	return resources
@@ -91,7 +95,7 @@ func (m *Manager) interruptHostDiskTemperatureRuns(hostID string) {
 func (m *Manager) interruptHostDiskTemperatureRunsExcept(hostID string, observed map[string]struct{}) {
 	m.mu.Lock()
 	changed := false
-	for resourceID := range m.hostDiskTemperatureTrackedResourcesNoLock() {
+	for resourceID := range m.hostDiskTemperatureTrackedResourcesNoLock(hostDiskTemperatureResourcePrefix(hostID)) {
 		if _, present := observed[resourceID]; present {
 			continue
 		}
@@ -115,7 +119,7 @@ func (m *Manager) interruptHostDiskTemperatureRunsExcept(hostID string, observed
 // existing per-type threshold re-evaluation; this only drops pending evidence.
 func (m *Manager) reevaluateHostDiskTemperaturePendingNoLock() bool {
 	intentChanged := false
-	for resourceID := range m.hostDiskTemperatureTrackedResourcesNoLock() {
+	for resourceID := range m.hostDiskTemperatureTrackedResourcesNoLock("") {
 		if !strings.HasPrefix(resourceID, "agent:") || !strings.Contains(resourceID, "/disk_temp:") || !m.hostDiskTemperaturePendingNoLock(resourceID) {
 			continue
 		}

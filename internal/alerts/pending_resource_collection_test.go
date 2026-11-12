@@ -3,6 +3,7 @@ package alerts
 import (
 	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -149,6 +150,82 @@ func BenchmarkHostPendingResourceCollection(b *testing.B) {
 						m.CheckHost(host)
 					}
 				})
+			})
+		}
+	}
+}
+
+// Keep a small executable reference of the old collect-then-filter algorithm.
+// This is also a check on early prefix admission: core/shadow, old active
+// records and intent-only runs must all still reach the same cleanup set.
+func legacyDiskTemperatureResources(m *Manager, prefix string) map[string]struct{} {
+	all := make(map[string]struct{})
+	for id := range m.hostDiskTempPendingContexts {
+		all[id] = struct{}{}
+	}
+	for _, state := range m.mirrorStatesNoLock() {
+		for _, id := range state.PendingResourceIDs() {
+			all[id] = struct{}{}
+		}
+	}
+	for _, alert := range m.activeAlerts {
+		if alert != nil {
+			all[alert.ResourceID] = struct{}{}
+		}
+	}
+	for _, pending := range m.intentPending {
+		if pending.Signal == MetricAlertIntentSignal("diskTemperature") {
+			all[pending.ResourceID] = struct{}{}
+		}
+	}
+	for id := range all {
+		if !strings.HasPrefix(id, prefix) {
+			delete(all, id)
+		}
+	}
+	return all
+}
+
+func TestHostPendingResourceCollectionMatchesLegacySets(t *testing.T) {
+	for _, mode := range []string{"pending", "firing", "mixed"} {
+		m := pendingCollectionFixture(12, mode)
+		m.activeAlerts["nil-entry"] = nil
+		contextOnly := hostDiskTemperatureResourceID("host-0000", "/dev/context-only")
+		m.hostDiskTempPendingContexts[contextOnly] = hostDiskTempContext{hostID: "host-0000"}
+		shadowOnly := hostDiskTemperatureResourceID("host-0000", "/dev/shadow-only")
+		m.shadow.state.ApplyDiscrete(reducer.DiscreteSignal{ResourceID: shadowOnly, Key: "health", Matched: true}, reducer.DiscreteRule{Confirmations: 2})
+		intentOnly := hostDiskTemperatureResourceID("host-0000", "/dev/intent-only")
+		m.intentPending[intentOnly] = IntentPendingState{ResourceID: intentOnly, Signal: MetricAlertIntentSignal("diskTemperature")}
+		for _, prefix := range []string{"", hostDiskTemperatureResourcePrefix("host-0000"), hostDiskTemperatureResourcePrefix("host-000"), "unmatched/"} {
+			t.Run(mode+"/"+prefix, func(t *testing.T) {
+				if got, want := m.hostDiskTemperatureTrackedResourcesNoLock(prefix), legacyDiskTemperatureResources(m, prefix); !reflect.DeepEqual(got, want) {
+					t.Fatalf("disk temperature resources = %v, legacy = %v", got, want)
+				}
+			})
+		}
+	}
+}
+
+func TestHostPendingResourceCollectionAllocationsStayHostLocal(t *testing.T) {
+	for _, mode := range []string{"pending", "firing", "mixed"} {
+		for _, path := range []string{"native-sensors", "disk-temperature-gap"} {
+			t.Run(mode+"/"+path, func(t *testing.T) {
+				measure := func(hosts int) float64 {
+					m := pendingCollectionFixture(hosts, mode)
+					seen := map[string]struct{}{hostDiskTemperatureResourceID("host-0000", "/dev/sda"): {}}
+					return testing.AllocsPerRun(10, func() {
+						if path == "native-sensors" {
+							pendingCollectionResult = m.hostNativeSensorTrackedResourcesNoLock("host-0000")
+						} else {
+							m.interruptHostDiskTemperatureRunsExcept("host-0000", seen)
+						}
+					})
+				}
+				small, fleet := measure(1), measure(1000)
+				t.Logf("one host %.0f allocations, 1000 hosts %.0f", small, fleet)
+				if fleet > small+4 {
+					t.Fatalf("temporary allocations grew with unrelated fleet: %.0f -> %.0f", small, fleet)
+				}
 			})
 		}
 	}
