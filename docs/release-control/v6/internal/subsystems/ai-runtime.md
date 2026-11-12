@@ -1216,6 +1216,12 @@ was not exercised. Fault D7 (`response.service-stopped-no-alert`, 12 November
   read. D7 names the finished job, which the alert rule cannot tell from the
   stopped service.
 
+Both exist in the published authoring schema
+(`tests/qualification/patrol/patrol.qual.schema.json`).
+`TestPublishedSchemaKnowsTheResponseTrackVocabulary` holds the schema to every
+engagement and outcome field and every fallback the loader accepts, because D7
+first passed the loader and failed the schema.
+
 First live runs of D7, Sonnet, one per profile: each whole-estate run raised
 two flags, filed `service-stopped` on the service and nothing on the job. The
 default agent handed it over ("If unintentional, restart the gitea container

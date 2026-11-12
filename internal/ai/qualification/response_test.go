@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 	"testing"
@@ -586,5 +587,40 @@ func TestQuietResourcesMustBeNegativeControlsOfAFaultedScenario(t *testing.T) {
 	full.Engagement = &engagement
 	if err := full.Validate(); err == nil || !strings.Contains(err.Error(), "unsupported engagement.fallback") {
 		t.Fatalf("an unknown fallback was accepted: %v", err)
+	}
+}
+
+// The published schema is what an author checks a scenario against before the
+// Go loader sees it. The stopped-service scenario passed the loader and failed
+// the schema, which knew neither its fallback nor its quiet resources. Every
+// field of the two response-track specs and every fallback the loader accepts
+// has to exist in the schema.
+func TestPublishedSchemaKnowsTheResponseTrackVocabulary(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", "..", "tests", "qualification", "patrol", "patrol.qual.schema.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var schema struct {
+		Defs map[string]struct {
+			Properties map[string]struct {
+				Enum []string `json:"enum"`
+			} `json:"properties"`
+		} `json:"$defs"`
+	}
+	if err := json.Unmarshal(raw, &schema); err != nil {
+		t.Fatal(err)
+	}
+	for def, spec := range map[string]reflect.Type{"engagement": reflect.TypeOf(EngagementSpec{}), "outcome": reflect.TypeOf(OutcomeSpec{})} {
+		for i := 0; i < spec.NumField(); i++ {
+			field, _, _ := strings.Cut(spec.Field(i).Tag.Get("json"), ",")
+			if _, ok := schema.Defs[def].Properties[field]; !ok {
+				t.Errorf("the published schema has no %s.%s", def, field)
+			}
+		}
+	}
+	fallbacks := append([]string(nil), schema.Defs["engagement"].Properties["fallback"].Enum...)
+	sort.Strings(fallbacks)
+	if got, want := strings.Join(fallbacks, " "), EngagementFallbackFullRun+" "+EngagementFallbackScopedRun; got != want {
+		t.Fatalf("published fallbacks = %q, the loader accepts %q", got, want)
 	}
 }
