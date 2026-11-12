@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -129,8 +130,31 @@ func NewServer(config ServerConfig) (*Server, error) {
 	}, nil
 }
 
-func (s *Server) Serve(ctx context.Context, listener net.Listener) error {
+// Serve owns listener and the connections it accepts. Cancellation or a
+// terminal Accept error closes the listener, cancels accepted operations and
+// joins their handlers before returning. Providers must cooperate with their
+// context; closing a transport does not undo an already accepted operation.
+func (s *Server) Serve(parent context.Context, listener net.Listener) error {
+	ctx, cancel := context.WithCancel(parent)
+	var handlers sync.WaitGroup
+	listenerClosed := make(chan struct{})
+	stopClose := context.AfterFunc(ctx, func() {
+		_ = listener.Close() // Wake an idle Accept without an external watcher.
+		close(listenerClosed)
+	})
+	defer func() {
+		cancel() // Also drain accepted work after an unexpected listener failure.
+		if stopClose() {
+			_ = listener.Close()
+		} else {
+			<-listenerClosed
+		}
+		handlers.Wait()
+	}()
 	for {
+		if ctx.Err() != nil {
+			return nil
+		}
 		conn, err := listener.Accept()
 		if err != nil {
 			if ctx.Err() != nil {
@@ -142,11 +166,17 @@ func (s *Server) Serve(ctx context.Context, listener net.Listener) error {
 			}
 			return fmt.Errorf("accept helper connection: %w", err)
 		}
+		if ctx.Err() != nil {
+			_ = conn.Close() // A late Accept result must not start new work.
+			return nil
+		}
 		if !s.tryAcquireConnection() {
 			_ = conn.Close()
 			continue
 		}
+		handlers.Add(1)
 		go func() {
+			defer handlers.Done()
 			defer s.releaseConnection()
 			s.handleConnection(ctx, conn)
 		}()
@@ -183,6 +213,21 @@ func (s *Server) handleConnection(parent context.Context, conn net.Conn) {
 		event.Duration = s.now().Sub(started)
 		if s.audit != nil {
 			s.audit(event)
+		}
+	}()
+
+	if parent.Err() != nil {
+		event.ErrorCode = ErrorInternal
+		return
+	}
+	connectionClosed := make(chan struct{})
+	stopClose := context.AfterFunc(parent, func() {
+		_ = conn.Close() // Interrupt pre-frame reads and blocked response writes.
+		close(connectionClosed)
+	})
+	defer func() {
+		if !stopClose() {
+			<-connectionClosed // No close callback may outlive this handler.
 		}
 	}()
 
@@ -229,6 +274,10 @@ func (s *Server) handleConnection(parent context.Context, conn net.Conn) {
 
 	operationContext, cancel := context.WithTimeout(context.WithValue(parent, peerContextKey{}, peer), time.Duration(request.DeadlineMillis)*time.Millisecond)
 	defer cancel()
+	if operationContext.Err() != nil {
+		s.writeError(conn, &event, request, ErrorDeadlineExceeded, "operation deadline exceeded", true)
+		return
+	}
 	result, operationError := operation.handle(operationContext, request.Payload)
 	if operationError == nil && operationContext.Err() != nil {
 		operationError = &ResponseError{Code: ErrorDeadlineExceeded, Message: "operation deadline exceeded", Retryable: true}

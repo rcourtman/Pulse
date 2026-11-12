@@ -17,6 +17,34 @@
 
 ## Purpose
 
+### Typed helper shutdown owns accepted connection handlers
+
+The helper server owns the listener passed to `Serve`. Service-context
+cancellation closes it even when `Accept` is idle. A terminal listener error
+also cancels accepted operations. Both paths join the accepted connection
+handlers and listener-close callback before returning; the command entrypoint
+does not start a separate listener-close watcher. Parent cancellation closes
+each handler's transport to interrupt pre-frame reads and response writes, and
+the handler joins that close callback before releasing its connection slot.
+An already-ended connection or late `Accept` result does not enter peer
+resolution, and an ended operation context does not dispatch its provider.
+
+Draining is cooperative with provider code, not forced preemption or a hard
+shutdown deadline. A peer disconnect alone still does not cancel an accepted
+operation or establish rollback/no remote effect. Durable update activation and
+recovery remain provider-owned and unchanged. Peer UID admission, the closed
+operation registry, frame limits, deadlines and payload-free auditing retain
+their existing boundaries; no report field or rendered state changes.
+
+Registered `internal/agenthelper/server_lifecycle_test.go` covers idle and
+already-canceled service lifetimes, terminal-accept draining, incomplete-frame
+reads, blocked response writes, late admission, pre-dispatch cancellation,
+joined close callbacks and the peer-disconnect control. The command-package
+`TestHelperServerCancellationOwnsUnixListener` in `main_test.go` exercises the
+same lifecycle with the actual Unix socket, kernel peer check and typed health
+client. These are source fixtures, not installed systemd or original-host
+acceptance.
+
 ### Rejected agent control-plane redirects do not disclose their destination
 
 Host-agent enrollment, primary/observer host reports, action-runner credential
