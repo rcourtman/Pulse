@@ -1126,6 +1126,30 @@ observed/unknown destination types, uncertain access, pre-write recheck and
 file precedence/refusal. Encrypted export scope and authenticated Recovery
 authorisation are unchanged; source proof is not installed transfer acceptance.
 
+### Enrollment diagnostics do not copy upstream credential-bearing bodies
+
+The agent retains only numeric HTTP status from non-200 enrollment replies;
+server/proxy body bytes never enter an enrollment error or retry log. A bounded
+amount may be drained and discarded without replacing the known status with a
+body-read error. Success-response parse/read failures also use fixed local
+reasons, not upstream JSON values, private read-error text or partial tokens.
+
+An HTTP 200 reply is not confirmed authority until its body is complete, at most
+64 KiB, structurally decodable and contains a nonblank runtime token. An
+unconfirmed success ends the exchange loop without saving or releasing its
+partial authority or replaying the possibly consumed bootstrap token. It preserves
+existing state, reports uncertainty and suggests checking the server/proxy response
+before restart. This does not undo remote issuance/revocation or restore lost
+credentials. Cancellation remains recognizable as its original context error.
+
+Both enrollment entrypoints, permanent/manual/transient status controls, complete
+size-boundary/optional-field replies and raw read-error/close behavior are covered
+by registered hostagent `enrollment_response_test.go` tests. The command-package
+test of the same name exercises real trusted-HTTPS startup and retained identity
+and CA bytes. Status policy, TLS/URL trust, command authority, payload fields and
+private-file publication are unchanged; source proof is not original-estate or
+installed acceptance and does not measure prior disclosure.
+
 ### Failed enrollment persistence does not release replacement authority
 
 A successful bootstrap response is not usable startup authority until its
