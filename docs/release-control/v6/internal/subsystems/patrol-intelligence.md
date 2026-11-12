@@ -15,6 +15,18 @@
 
 ## Purpose
 
+### A stopped container no alert covers is Patrol's to judge (12 November 2026)
+
+Pulse raises no alert for a container it reads as a finished job. Patrol used
+to tell the operator that real-time alerting owned such a container's stopped
+state, and filed nothing, so a service stopped cleanly soon after it started
+was reported by nothing. Patrol is now asked to judge each such exit once, as
+a job or as a service that should be running, and files a `service-stopped`
+finding for a service. The finding names the service as stopped and says once
+that Pulse raised no alert. A finished job gets no finding. The mechanics and
+the live measurement are in the AI runtime contract ("That ownership holds
+only where an alert exists or will").
+
 ### Unavailable approval reads are not an empty or freshly authorised queue
 
 Patrol shows a persistent, accessible approval-status warning and read-only

@@ -45,7 +45,10 @@ is not. A container that finished its own work is not that: it reports state
 (under which Docker leaves a clean exit alone), and a run from start to finish
 of less than one hour. Migrations, init steps and scheduled jobs end this way,
 and `checkDockerContainerState` clears any open state alert for them and
-raises none.
+raises none. The rule is one exported function, `DockerContainerFinishedJob`.
+Patrol calls it, because a true answer means no state alert will ever fire for
+the container and Patrol must not tell the operator that one covers it. No
+other package may restate the rule.
 
 Every other stopped container alerts as before. A non-zero exit, an OOM kill,
 and any state other than `exited` are not a finished job. Under `always` or

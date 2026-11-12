@@ -1146,6 +1146,43 @@ free-form prose, so evidence that a deeper issue also stopped the container
 does not hide that issue. This lets causal incidents retain one user-facing
 Patrol finding even when a provider tries to file the alert-owned dependency
 state separately.
+That ownership holds only where an alert exists or will. The alert subsystem
+raises no state alert for a container it reads as a finished job
+(`alerts.DockerContainerFinishedJob`), and Patrol must not claim otherwise. On
+12 November 2026 a live run on such a container, a media server stopped
+cleanly a few seconds after it started, ended with "a down-state condition
+that Pulse's real-time alerting already owns" and no finding, while no alert
+existed. Four things now keep that from happening:
+
+- `patrolAppContainerRows` carries the alert subsystem's answer on each row.
+  The unified view has no restart policy, so the answer is joined from the
+  agent's own report by the container's alert ID; a container the reports do
+  not hold has no answer and stays alert-owned.
+- The scoped seed row for such a container reads `exited, no alert (read as a
+  finished job)`.
+- The report tool and the final decision prompt both carry
+  `tools.PatrolUnalertedStoppedContainerRule` beside the sentence that says
+  alerts own a stopped resource: leave a finished job alone, and report a
+  service that should be running under the key `service-stopped`.
+- `findingOwnedByAlerts` returns false for such a container, so that key is
+  kept there and still answered `alert_owned_resource_state` everywhere else.
+
+A run follows its flags, so `triageUnalertedStops` raises a `watch` flag
+("Stopped, No Alert") for each such exit. Judging costs model work, so a run
+over the whole estate asks about each exit once: a completed run remembers the
+exits it was asked about (container alert ID plus finish time, in memory, at
+most eight per run, pruned to the exits the snapshot still holds). A run the
+operator scoped to the container always asks. A job that runs again is a new
+exit. A restarted Pulse asks once more.
+
+Measured on the Phase 1 rig with Sonnet and a default agent, on two stopped
+services with no restart policy and two finished jobs: three runs over the
+whole estate (two of them startup runs on a fresh data folder) each reported
+both services and neither job, and scoped runs reported the service and left
+the job alone. The first run cost 6,000 to 10,700 output tokens; the next run
+raised no flag. The container names were recognisable (a media server, a Git
+host, a migration, a certificate renewal). Ambiguous names, other models and
+the full fault set were not run.
 Investigation and interactive profiles retain their bounded final summary.
 Patrol report, assessment and resolution tools are governed Pulse-state writes
 for invocation authorization. Accepting one records a decision, does not prove
@@ -6535,7 +6572,9 @@ healthy lab starts no Patrol run by itself. The scenario must keep
 provisioning the job that way (restart `no`, baseline exit code 0), so a quiet
 grade measures Patrol on a healthy lab and not an alert the lab was built to
 raise. Its description and the runbook say when the warning still appears: an
-agent too old to report the policy.
+agent too old to report the policy. A run that looks at the lab is asked to
+judge that job (the `watch` flag above), so the scenario's quiet grade now
+rests on the model reading it as a job, not on the report being dropped.
 The canonical `pulse_query` schema and executor must admit the same resource
 types. In particular, `action=get` accepts `docker-host`, returns a governed
 read-only host response when the identity resolves, and returns a successful

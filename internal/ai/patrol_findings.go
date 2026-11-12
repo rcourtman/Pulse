@@ -862,15 +862,25 @@ func (a *patrolFindingCreatorAdapter) findingOwnedByAlerts(finding *Finding) boo
 	}
 
 	state := ""
+	finishedJob := false
 	for _, row := range patrolAppContainerRows(a.snap, nil) {
 		if row.id == finding.ResourceID || row.name == finding.ResourceID || row.name == finding.ResourceName {
 			state = strings.ToLower(strings.TrimSpace(row.status))
+			finishedJob = row.finishedJob
 			break
 		}
 	}
 	switch state {
 	case "exited", "stopped", "dead", "offline":
 	default:
+		return false
+	}
+	// The alert subsystem raises no state alert for a container it reads as a
+	// finished job, so no alert owns this stopped state and none will. A
+	// report that the container should be running is then the only word
+	// Pulse has on it, and dropping it as alert-owned would leave the
+	// operator with neither.
+	if finishedJob {
 		return false
 	}
 

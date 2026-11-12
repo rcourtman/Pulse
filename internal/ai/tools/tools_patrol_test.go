@@ -950,6 +950,8 @@ func TestPatrolToolsRegistered(t *testing.T) {
 	assert.Equal(t, PatrolReportFindingRequiredArguments(), reportTool.InputSchema.Required)
 	assert.Contains(t, reportTool.Description, strings.Join(PatrolReportFindingRequiredArguments(), ", "))
 	assert.Contains(t, reportTool.Description, "real-time alerts own that condition")
+	// The model must never be told an alert covers a container that has none.
+	assert.Contains(t, reportTool.Description, PatrolUnalertedStoppedContainerRule)
 	assert.Contains(t, reportTool.Description, "reporting several findings in parallel")
 	assert.Contains(t, reportTool.InputSchema.Required, "recommendation")
 	assert.Contains(t, reportTool.InputSchema.Required, "evidence")

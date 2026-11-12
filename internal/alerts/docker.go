@@ -856,7 +856,7 @@ func (m *Manager) checkDockerContainerState(host models.DockerHost, container mo
 	// row's own severity still wins: an operator who chose one for this
 	// container asked to hear whenever it is not running.
 	ownSeverity := hasOverride && override.PoweredOffSeverity != ""
-	if !ownSeverity && dockerContainerFinishedCleanly(container) {
+	if !ownSeverity && DockerContainerFinishedJob(container) {
 		m.clearDockerContainerStateAlert(resourceID)
 		return
 	}
@@ -906,7 +906,7 @@ func (m *Manager) checkDockerContainerState(host models.DockerHost, container mo
 // days, so the exact value matters little; it has to sit between the two.
 const dockerFinishedJobMaxRun = time.Hour
 
-// dockerContainerFinishedCleanly reports whether an exited container ended
+// DockerContainerFinishedJob reports whether an exited container ended
 // its own work and is meant to stay down: it exited with code 0, was not
 // OOM killed, ran for less than dockerFinishedJobMaxRun, and has a restart
 // policy that leaves a clean exit alone ("no" or "on-failure"). Migrations,
@@ -922,7 +922,11 @@ const dockerFinishedJobMaxRun = time.Hour
 // policy. Such a service exits 0 when Docker shuts down for a host reboot and
 // then stays down, which is an outage the operator needs to hear about. A
 // container whose start or finish time is unknown is not called finished.
-func dockerContainerFinishedCleanly(container models.DockerContainer) bool {
+//
+// It is exported because the answer means no state alert will ever fire for
+// the container, and Patrol must know that before it treats the stopped state
+// as something an alert already covers.
+func DockerContainerFinishedJob(container models.DockerContainer) bool {
 	if strings.ToLower(strings.TrimSpace(container.State)) != "exited" {
 		return false
 	}

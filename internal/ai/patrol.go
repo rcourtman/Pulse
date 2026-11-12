@@ -486,6 +486,11 @@ type InvestigationFix = aicontracts.Fix
 type PatrolService struct {
 	mu sync.RWMutex
 
+	// unalertedStopsJudged holds the container exits no alert covers that a
+	// completed run has already judged as job or service (patrol_triage.go).
+	unalertedStopsMu     sync.Mutex
+	unalertedStopsJudged map[string]struct{}
+
 	aiService           *Service
 	stateProvider       StateProvider
 	thresholdProvider   ThresholdProvider
