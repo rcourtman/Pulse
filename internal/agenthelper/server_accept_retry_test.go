@@ -144,6 +144,7 @@ func TestServerAcceptRetryCancellation(t *testing.T) {
 						ctx, cancel = context.WithTimeout(context.Background(), wantElapsed)
 					}
 					defer cancel()
+					cancelDone := make(chan struct{})
 					closed := 0
 					listener := lifecycleListener{
 						accept: func() (net.Conn, error) {
@@ -153,7 +154,7 @@ func TestServerAcceptRetryCancellation(t *testing.T) {
 								return nil, errors.New("retry ran before cancellation")
 							}
 							if attempts == wantAttempts && !deadline {
-								go func() { time.Sleep(time.Millisecond); cancel() }()
+								go func() { time.Sleep(time.Millisecond); cancel(); close(cancelDone) }()
 							}
 							return nil, retryAcceptError{temporary: true}
 						},
@@ -167,6 +168,9 @@ func TestServerAcceptRetryCancellation(t *testing.T) {
 					}
 					if closed != 1 || len(server.connectionSlots) != 0 {
 						t.Errorf("canceled retry cleanup: closes=%d active=%d", closed, len(server.connectionSlots))
+					}
+					if !deadline {
+						<-cancelDone // Join even when old Serve returns before the timer.
 					}
 				})
 			})
