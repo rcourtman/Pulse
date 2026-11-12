@@ -1,8 +1,8 @@
 # Pulse v6.8.0 Release Notes
 
-`v6.8.0` is a stable minor release. It promotes the `v6.8.0-rc.1` release candidate and replaces stable `v6.7.0`.
+`v6.8.0` is a stable minor release. It promotes the `v6.8.0-rc.2` release candidate and replaces stable `v6.7.0`.
 
-Pulse v6.8.0 makes backup problems easier to identify, adds individual sensor limits and improves notification recovery after restarts. It keeps same-named systems separate, reduces polling overhead and gives clearer recovery steps when settings, permissions or updates cannot be confirmed.
+Pulse v6.8.0 makes backup problems easier to identify, adds individual sensor limits and improves notification recovery after restarts. It keeps same-named systems separate, reduces routine polling and disk writes, and makes Patrol investigations and settings recovery clearer.
 
 ## Highlights
 
@@ -12,18 +12,18 @@ Pulse v6.8.0 makes backup problems easier to identify, adds individual sensor li
 
 ## What's improved
 
-- **Larger fleets need less repeated work.** Proxmox, PBS and PMG polling copies less unrelated data. Custom alert rules reuse guest readings, and node alert checks and Agent Doctor avoid repeated fleet scans.
+- **Larger fleets need less repeated work.** Proxmox, PBS and PMG polling copies less unrelated data. Resource lists, workload charts, custom alert rules and Agent Doctor also avoid repeated work.
 - **Latest readings stay visible.** Resource drawers keep available CPU, memory and other readings when history fails or exceeds your plan, with older readings still labelled.
 - **Settings offers access recovery.** Failed permission checks clear outdated controls and offer retry instead of leaving stale permissions on screen.
-- **Infrastructure failures explain recovery.** Unread connection lists and saved settings offer retry instead of showing first-time setup or incomplete editors.
+- **Infrastructure failures explain recovery.** Unread connection lists and settings offer retry, with help for saved changes awaiting reload and direct HTTPS recovery that preserves connections and certificate checks.
 - **Role edits preserve saved choices.** Roles keeps permissions outside the shortcuts, inheritance and priority. Inherited administrator grants work while explicit denials still apply.
-- **Uncertain access changes prompt a check.** Roles, User Access and SSO require reading saved state before another edit when a change cannot be confirmed. SSO keeps the draft visible during that check.
-- **SSO saves protect existing settings.** Delayed edits cannot restore older secrets or hidden settings over newer saves. Failed startup reads block provider changes until an authenticated read recovers the saved configuration.
+- **Uncertain access changes prompt a check.** Roles, User Access, API tokens and SSO require reading saved state before another edit when a change cannot be confirmed, preserving relevant drafts.
+- **SSO saves protect existing settings.** Delayed edits cannot restore older secrets or hidden settings. Failed startup reads block provider changes until an authenticated read recovers the saved configuration.
 - **Missing organization access has a recovery screen.** Users can answer invitations, check access again or sign out. Failed invitation reads offer retry and identify the organization being joined.
-- **Refreshes preserve unfinished work.** Unchanged access checks keep drafts and pending results in access, sharing and organization forms. Concurrent system saves retain unrelated fields and reach workspaces still starting up.
-- **Conflicting organization saves preserve current access.** Overlapping edits cannot restore removed members, invitations or shares, or recreate a deleted workspace. Reload and review current details before trying again.
-- **Docs is easier to navigate and recover.** Load failures explain their cause, retry keeps the guide, heading links restore focus, and wide tables support keyboard scrolling.
-- **French is available.** Supported interface areas and the getting-started guide now include French.
+- **Refreshes preserve unfinished work.** Unchanged access checks retain access, sharing, organization and authentication drafts and pending results. Concurrent system saves preserve unrelated fields and reach workspaces still starting.
+- **Conflicting organization saves preserve current access.** Overlapping edits cannot restore removed members, invitations or shares, or recreate a deleted workspace. Reload current details before trying again.
+- **Docs is easier to use.** Load failures explain their cause, retry keeps the guide, heading links restore focus, and wide tables support keyboard scrolling. French is available in supported interface areas and the getting-started guide.
+- **Needs attention uses the drawer width.** Alert details fill available space and wrap into readable rows.
 
 ## Alerts and notifications
 
@@ -45,8 +45,9 @@ Pulse v6.8.0 makes backup problems easier to identify, adds individual sensor li
 - **Full disks remain visible in summaries.** Compact Proxmox rows show the fullest measured disk despite another missing reading. Wide machine rows keep individual bars, and narrow cells preserve percentages.
 - **Disk controls show the selected view clearly.** Disk, alert and view toggles are easier to distinguish on machine tables.
 - **VM history keeps readings with their source.** Fallback polling cannot record old readings as fresh or allocated capacity as measured filesystem usage. Guest history stays within its Proxmox connection.
-- **Storage guidance protects history.** Help recommends persistent metric storage and explains that changing the database path neither moves existing history nor fixes excessive writes.
 - **Machine I/O history stays visible.** Native disk I/O can appear beside stored CPU history when disk series are missing. Mixed history no longer claims a single source.
+- **Routine monitoring writes less to disk.** Metric samples are normally saved in minute batches and host report bookkeeping is grouped, while chart reads still request fresh data. An abrupt crash can lose the newest buffered minute.
+- **Saved configuration and agent credentials use safer writes.** Private, complete-file replacement protects configuration, bootstrap state and enrollment from interrupted writes and unsafe temporary paths, including relocated agent storage.
 
 ## Proxmox, PBS and backups
 
@@ -81,39 +82,39 @@ Pulse v6.8.0 makes backup problems easier to identify, adds individual sensor li
 ## Install, updates and agents
 
 - **Agent installation reports failures honestly.** URL validation precedes service or credential replacement. Failed startup returns an error with log guidance instead of declaring success.
-- **Server installation requires a known service state.** Unreadable or changing state stops installation changes. Service-manager checks and startup waits have enforced time limits.
-- **Agent profile changes preserve recovery files.** Migration stops if collector or helper state is uncertain. Recovery files remain until both services have stopped.
-- **Uninstall failures explain what stopped.** If removal cannot be confirmed, the installer distinguishes retained files from running monitoring and explains how to reconcile registration.
-- **NAS installation handles older utilities.** URL, hostname and certificate fingerprint processing works with older NAS text tools.
+- **Server installation protects working services.** Uncertain service state stops changes, checks have time limits, and failed replacement writes preserve existing service files.
+- **Agent profile changes preserve recovery files.** Migration requires known collector and helper state, and keeps recovery files until both stop. Unconfirmed removal explains retained files, service state and registration recovery.
+- **Older NAS utilities and curl work again.** Installers handle older text tools and curl versions. Downloads ignore implicit curl settings so local defaults cannot silently change installation requests.
 - **Container installers download before running.** Downloads have size and time limits and are staged privately for syntax checks. The wrapper accepts private token files and rejects empty credential-file arguments.
 - **Command-access setup preserves credentials.** Preparing a replacement token leaves existing agent tokens valid. Concurrent requests no longer create the same install credential twice.
 - **Agent updates check version and architecture.** Downloads must contain the expected release for the intended platform before activation. ARMv6 builds select ARMv6 updates rather than guessing ARMv7.
 - **Agent updates retain honest outcomes.** Binary replacement and persistent NAS copies are more durable. Failed recovery no longer reports an earlier update as newly completed.
 - **Automatic server updates cannot overlap.** Competing runs cannot update the same installation at once. A busy lock or missing flock stops the update before installation changes.
+- **Unattended update status is more accurate.** Failed timer checks report errors. Optional setup failures do not claim updates are enabled, temporary-file cleanup does not stop monitoring, and recovery waits obey elapsed time limits.
 - **Community-scripts LXC installs are recognised again.** Pulse detects the newer update helper and shows suitable controls. Security settings names the current and older Pulse service in restart instructions.
-- **Update progress stays with the running update.** Background checks cannot overwrite progress or final results. Saved channel changes reach checks consistently, and slow progress connections no longer delay shutdown.
+- **Update progress stays with the running update.** Background checks cannot overwrite progress or final results. Channel changes reach checks consistently, slow connections do not delay shutdown, and replacement assets use private staging.
 
 ## Pulse Pro, AI and hosted
 
 - **Reporting distinguishes outages from empty scope.** Failed resource reads offer retry. Earlier-account selections, results and downloads cannot populate the current report, including after live updates reconnect.
-- **Organization and billing controls use current details.** Workspace switches and failed reads clear outdated actions. Sharing requires a named recipient, and ownership transfers identify the workspace before confirmation.
+- **Organization controls use current details.** Billing and sharing discard outdated actions after workspace changes or failed reads. Sharing requires a named recipient, and ownership transfers identify the workspace before confirmation.
 - **Losing workspace access preserves sign-in.** Live data disconnects without silently switching workspaces or repeatedly reconnecting. Select another authorized workspace, or reload after access is restored.
-- **Infrastructure updates use the selected organization.** Update lists, summaries and check commands use that organization's agents.
-- **Patrol and AI stay within their organization.** Findings, events, notifications, anomaly learning and guest probes use the owning workspace. Deployment choices and scheduler health follow the selected workspace.
-- **Patrol notifications follow each finding.** Recovery uses its resolution and recurrence history, rather than dismissal, snooze or suppression. Stalled resource lookups no longer hold up shutdown.
-- **Locked history links to plan details.** Range notices open Plans & Billing, which also introduces the separate Pulse MSP installation and evaluation.
-- **MSP setup supports domain-free trials.** Setup collects needed values before package changes and can use a public-IP trial address. Moving to your own domain later requires agent reinstallation.
-- **MSP certificates have clearer recovery.** Setup checks TLS and DNS readiness, supports DNS-based or token-free port-80 verification, and explains certificate failures and shared trial limits.
-- **MSP plan failures explain the next step.** Setup distinguishes rejection, rate limits, server failures and connection problems. A running portal does not imply paid features, and refresh feedback avoids assuming whether payment arrived.
+- **Workspace tools use their own systems.** Patrol findings, notifications, learning and guest probes stay in their organization. Infrastructure updates, deployment choices and scheduler health use the selected workspace.
+- **Patrol follows recurring alerts.** Each new firing can trigger investigation even when notifications are off. Runs find the correct resource, and findings that repeat an alert close when that alert clears.
+- **Patrol checks lasting alerts.** In Ask first and Autopilot, alerts still active after 10 minutes can receive one investigation, even below the immediate severity setting, with a limit of four per hour and the alert-trigger switch and filters respected.
+- **Waiting investigations start when space opens.** Patrol keeps findings queued while all investigation slots are busy, prioritizing critical findings and then those waiting longest.
+- **Patrol shows current action and approval status.** Summaries, rows and resource links agree on the next step. Failed approval reads retain known requests and usable findings instead of implying an empty queue or suggesting premature recovery.
+- **Patrol explains missing command access.** Reporting agents with commands off are distinguished from disconnected agents. Patrol names affected hosts and opens the install command with command access selected.
+- **Patrol notifications follow each finding.** Recovery uses resolution and recurrence history, rather than dismissal, snooze or suppression. Stalled resource lookups no longer hold up shutdown.
+- **Plans & Billing explains more options.** Locked history ranges link to plan details, which also introduces the separate Pulse MSP installation and evaluation.
 - **MSP clients keep monitoring after paid access ends.** Clients fall back to Community features. Renewal supports private provider networks, and clients still being created retain credentials for another attempt.
-- **Portal tasks are easier to complete.** Forms support keyboard submission without duplicate requests, keep the client name after failed creation and open clients without another sign-in.
 
 ## Monitoring and service health
 
 - **Buffered reports no longer inflate rates.** Machine and Docker disk and network rates use collection times after reconnect. Libvirt CPU and I/O rates use their collection interval and leave invalid intervals unknown.
 - **System Logs shows connection loss.** Connecting, reconnecting and disconnected states replace a misleading Live label. Uncertain access clears buffered lines and offers explicit reconnect.
 - **Diagnostics and Agent Doctor stay current.** Diagnostics clears results when its account, workspace or panel changes and blocks stale exports after failures. Open Doctor rows refresh versions, diagnoses and repair commands.
-- **Linux sensors report more detail.** Agents collect individual temperatures and fan speeds with stable names, including stopped fans and invalid readings. New sensor alerts start disabled, and missing readings cannot close an existing sensor alert.
+- **Linux sensors report more detail.** Agents collect individual temperatures and fan speeds with stable names, including stopped fans and invalid readings. New alerts start disabled, and missing readings cannot close an existing sensor alert.
 - **Agent links and commands distinguish namesakes.** Links survive NAT and reused names, ambiguous matches stay unlinked, and Assistant uses each node's own agent. Separate command sessions reset reconnect delays after a healthy connection.
 - **Guest reads pause during possible replication freezes.** Pulse defers guest-agent commands during discovered replication windows and when replication status cannot be verified.
 - **Guest filesystem reads run about once a minute.** Successful replies are reused between reads with their original observation time and cleared after a guest restart.
@@ -126,31 +127,31 @@ Pulse v6.8.0 makes backup problems easier to identify, adds individual sensor li
 ## Security
 
 - **Private responses stop when access ends.** History, audit data, configuration exports, reports, support bundles, Assistant results and progress streams recheck the requesting session or token before sending more data.
-- **Browser results stay with the active account.** Resource lists, agents, workload metadata and audit controls discard outdated replies and confirmations after navigation or access changes.
+- **Browser data and credentials stay with their owner.** Resource lists and audit controls discard old replies after access changes, password changes use the current local account, and uncertain credential changes keep attempted values for recovery.
 - **Default workspace membership is restricted.** In multi-org mode, use Settings → Organization access to manage membership, review migrated local-user grants and explicitly grant proxy users access where needed.
-- **Workspace permissions cover more requests.** Basic authentication respects membership, configuration transfers require workspace management permission, and malformed role, user-access and token changes are refused before saving.
-- **Proxy credentials cannot authorize cross-site writes.** Browser writes from unapproved origins are refused when proxies attach identity headers, Basic credentials or API tokens, including sites sharing the same parent domain.
+- **Access checks cover more requests.** Basic authentication respects workspace membership, configuration transfers require management access, and AI review uses action permissions. Unread roles or policy and malformed access edits are refused.
+- **Proxy credentials cannot authorize cross-site writes.** Unapproved origins cannot make browser writes using proxy identity headers, Basic credentials or API tokens, including sites sharing the same parent domain.
 - **Diagnostics exposes less private data.** Support bundles limit configuration and environment fields and show actual versions. Browser diagnostics omit private response bodies, while included server logs still need private handling.
-- **API clients keep credentials at the configured address.** CLI, MCP and external-agent requests refuse redirects to another scheme, host or port. Invalid agent URLs stay out of startup logs.
-- **Saved credentials use safer file writes.** Configuration, bootstrap, billing and enrollment avoid unsafe temporary paths and interrupted writes. Relocated agent state remains private across enrollment and restart.
+- **API clients keep credentials at the configured address.** CLI, MCP and external-agent requests refuse redirects to another scheme, host or port. Agent tokens can auto-register only their recorded source.
+- **Saved keys and approvals survive read failures.** Pulse preserves invalid encryption keys for recovery from the original backup, keeps billing secrets when encryption is unavailable, and refuses to replace unread approvals with an empty store.
+- **AI commands have stronger limits.** Read tools block credentials, process environments and database clients, and restrict outbound connections. Command approvals must be marked used on disk before execution, preventing reuse after restart.
 - **Protected content is safer to open.** Downloads and Assistant results reject executable formats, HTML base tags cannot redirect Pulse links, import checks protect passphrase fingerprints, and libraries include HTML security fixes.
-- **Token controls preserve intended access.** Custom scopes stay separate from Full access. Uncertain changes require a fresh inventory check, and closing or replacing a token reveal clears old copy feedback.
-- **Authentication stays responsive.** Slow storage and token reads no longer block sign-in. Basic API polling stops creating browser sessions, while OIDC refresh cannot overwrite a replacement session, reuse a rotated token or undo sign-out.
-- **SAML validates login assertions more strictly.** Responses need bearer confirmation and an audience matching Pulse. Identity providers using RSA PKCS#1 v1.5 key transport must switch to a supported encryption method.
+- **Authentication stays responsive.** Slow persistence and token checks no longer block sign-in. Basic API polling avoids browser sessions, unread session files are preserved, and OIDC refresh cannot overwrite a newer session or undo sign-out.
+- **SSO rejects obsolete login attempts.** OIDC and SAML callbacks honor provider removal and policy changes. SAML requires bearer confirmation and a matching audience. Replace RSA PKCS#1 v1.5 key transport with supported encryption.
 
 ## Other improvements
 
-- **Access forms stay usable.** Roles and User Access keep actions, saved permissions and errors reachable in short windows. Searches distinguish filtered results from an empty directory.
-- **Needs attention uses the drawer width.** Alert details fill available space and wrap into readable rows.
-- **Account controls explain sign-out.** Identity and Sign out stay visible. Pulse confirms local closure before proxy navigation, explains uncertain cleanup and offers retry without losing portal drafts. Account responses disable HTTP caching.
-- **Invitations and access actions identify their targets.** Invitation identities stay readable, member actions name the affected person, portal Access identifies provider staff, and alert setup opens alert settings.
-- **API guidance protects secrets and saved access.** Examples use private request files, support token edits, explain optional expiry and scope defaults, and show complete custom-role replacement without dropping restrictions.
-- **Recovery guidance preserves access and connections.** Help covers authenticated transfers, local recovery limited to the connecting client, missing role controls and direct HTTPS corrections without deleting connections or weakening certificate checks.
-- **Saved changes have clearer recovery steps.** Help separates saved settings from failed live reloads, including SSO changes and role-assignment audit events. Organization setup explains how to apply its feature flag to each deployment.
-- **OIDC guidance explains configuration and login rules.** Saved providers take precedence over environment settings. Deployment-managed providers use their existing configuration, and every non-empty group, domain and email allowlist must match.
-- **Agent and storage guidance avoids unnecessary changes.** Help explains unlinking a wrong node without reinstalling its agent, why linked agents do not change Proxmox VM I/O charts, and how to compare existing TrueNAS history without replaying workloads.
-- **Privilege-helper updates have instructions.** Help and agent logs explain that automatic updates replace only the collector and that helper updates use the agent installer's update flow. Install commands name the current release.
-- **MSP guidance clarifies access and networking.** Providers are not promised client user or audit administration. Read-only details explain existing restrictions, and overlapping private subnets require distinct reachable addresses or tunnel NAT.
+- **Access controls identify saved targets.** Users, roles, API tokens, SSO providers, organizations and audit webhooks show their saved identities beside actions. Permissions, destinations and dialog buttons remain reachable in short windows.
+- **Token details show saved expiry clearly.** API Access shows saved expiry without implying a token still has access, keeps custom scopes separate from Full access, and clears old copy feedback when a reveal closes or changes.
+- **Account controls explain sign-out.** Identity and Sign out stay visible. Pulse confirms local closure before proxy navigation and offers recovery without losing drafts. Portal account responses prevent caching.
+- **API and recovery help preserves access.** Examples use private request files and full custom-role replacement, with help for authenticated transfers, client-local recovery and enabling organizations per deployment.
+- **SSO setup uses the actual login addresses.** Registration instructions reflect saved provider details and the public URL. Matching OIDC initialization preserves pending logins, and custom SAML paths stay on the configured host.
+- **OIDC guidance explains login rules.** Saved providers take precedence over environment settings. Deployment-managed providers use their existing configuration, and every non-empty group, domain and email allowlist must match.
+- **Agent and storage help avoids unnecessary changes.** Guidance covers wrong node links, separate Proxmox I/O sources, existing TrueNAS history and persistent metric storage, explaining that changing its path does not move history or reduce writes.
+- **Privilege-helper updates have instructions.** Help and agent logs explain that automatic updates replace only the collector. Update helpers through the agent installer, and use install commands naming the current release.
+- **MSP setup supports domain-free trials and certificates.** Setup collects values before package changes, checks DNS and TLS, and supports DNS or port-80 verification. Moving a trial to your own domain requires agent reinstallation.
+- **MSP portal errors explain recovery.** Plan checks distinguish rejection, rate limits and outages. Forms support Enter without duplicate requests, retain failed client names and open clients without another sign-in. Paid features require a plan.
+- **MSP guidance clarifies access and networking.** Provider access excludes client user and audit administration, read-only details explain restrictions, and overlapping private subnets need distinct reachable addresses or tunnel NAT.
 - **MCP updates preserve the working adapter.** Failed replacement copies leave it intact, downloads have size and time limits, and unsafe destinations are refused. Pro terms explain current AI modes and which can run fixes.
 
 ## Known issues
