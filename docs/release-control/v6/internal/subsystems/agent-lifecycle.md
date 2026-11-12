@@ -17,6 +17,33 @@
 
 ## Purpose
 
+### Rejected control-plane redirects do not disclose their destination
+
+Host-agent enrollment, primary/observer host reports and action-runner
+activation/cancellation/revocation reject all HTTP redirects, including
+same-origin redirects. Their request boundary intercepts redirect responses
+before `net/http` parses `Location`, so neither a rejected destination nor a
+malformed-Location error can disclose echoed credentials, userinfo or private
+paths/query values through local runtime logs or CLI errors. Only fixed local
+guidance and the numeric HTTP status leave that boundary. A rejected response
+is closed without reading its body or propagating an upstream close error.
+
+The guard copies the supplied HTTP client without replacing its underlying
+TLS/CA/pin or proxy policy, timeout, cancellation or ordinary response handling.
+No-Location responses retain their existing status handling. Reporting buffers,
+enrollment retry/status rules, saved authority and monitoring-only command
+ceilings do not change. This does not alter updater-reported fields, MCP/CLI
+adapter redirect policy or any rendered surface.
+
+Registered `control_plane_redirect_privacy_test.go` coverage exercises six real
+runtime consumers against five redirect statuses and five destination shapes,
+including malformed and same-origin locations, with local servers, safe
+diagnostics, no forwarded request, isolated buffers and same-credential recovery.
+`control_plane_http_test.go` covers response closure without body reads, ordinary
+statuses/cookies/client immutability, cancellation/timeouts and actual custom-CA,
+exact-pin, untrusted and wrong-pin HTTPS. These are synthetic source proofs, not
+measured exposure or installed/original-host recovery.
+
 ### Saved authority reads are bounded files, not waiting streams
 
 Production startup reads selected/default API-token files, enrolled

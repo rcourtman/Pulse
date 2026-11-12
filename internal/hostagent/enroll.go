@@ -354,7 +354,7 @@ func (a *Agent) enroll(ctx context.Context) (*enrollResponse, error) {
 	req.Header.Set("Authorization", "Bearer "+a.cfg.APIToken)
 	req.Header.Set("User-Agent", "pulse-agent/"+a.agentVersion)
 
-	resp, err := a.httpClient.Do(req)
+	resp, err := doControlPlaneRequest(a.httpClient, req)
 	if err != nil {
 		return nil, fmt.Errorf("enrollment request failed: %w", err)
 	}
