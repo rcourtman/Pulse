@@ -350,6 +350,7 @@ func cloneDockerData(in *DockerData) *DockerData {
 	out.BuildCacheUsage = cloneDockerStorageUsageMeta(in.BuildCacheUsage)
 	out.Ports = cloneDockerPortMetaSlice(in.Ports)
 	out.HealthcheckTargets = cloneStringSlice(in.HealthcheckTargets)
+	out.HealthProbe = cloneDockerHealthProbe(in.HealthProbe)
 	out.Labels = cloneStringMap(in.Labels)
 	out.EngineLabels = cloneStringMap(in.EngineLabels)
 	out.Networks = cloneDockerNetworkMetaSlice(in.Networks)
@@ -1368,6 +1369,14 @@ func cloneInt64Ptr(in *int64) *int64 {
 }
 
 func cloneFloat64Ptr(in *float64) *float64 {
+	if in == nil {
+		return nil
+	}
+	out := *in
+	return &out
+}
+
+func cloneDockerHealthProbe(in *DockerHealthProbe) *DockerHealthProbe {
 	if in == nil {
 		return nil
 	}

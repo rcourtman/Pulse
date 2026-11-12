@@ -651,6 +651,11 @@ func TestWebWorkerRubricDoesNotCreditAGuess(t *testing.T) {
 	for _, observed := range []string{
 		"The container log shows webserver (gunicorn) exited unexpectedly with status 143 and was not respawned. Restart the container.",
 		"The health probe gets connection refused on port 8000: nothing is listening. Restart the container.",
+		// A default agent that reports why the health check fails gives Patrol
+		// the fact as a reason code, and Patrol quotes the code. First seen on
+		// 12 November 2026, graded "Handed back" by the spaced spelling alone.
+		"health=unhealthy with health_probe reason=connection_refused against 127.0.0.1, failing streak 6 to 24. Restart the container if the process is hung.",
+		"The internal web service is refusing connections on 127.0.0.1 while the container stays running. Restart the container.",
 	} {
 		if graded := grade(observed); graded.Grade != GradeHandedOver {
 			t.Fatalf("an observed cause graded %s (%s): %q", graded.Grade, graded.Reason, observed)

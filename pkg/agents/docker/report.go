@@ -84,6 +84,7 @@ type Container struct {
 	Status              string                   `json:"status"`
 	Health              string                   `json:"health,omitempty"`
 	HealthcheckTargets  []string                 `json:"healthcheckTargets,omitempty"`
+	HealthProbe         *ContainerHealthProbe    `json:"healthProbe,omitempty"` // Why the last health check failed; only while unhealthy
 	CPUPercent          float64                  `json:"cpuPercent"`
 	MemoryUsageBytes    int64                    `json:"memoryUsageBytes"`
 	MemoryLimitBytes    int64                    `json:"memoryLimitBytes"`
@@ -111,6 +112,43 @@ type Container struct {
 }
 
 // ContainerPort tracks an exposed container port mapping.
+// ContainerHealthProbe says why an unhealthy container's last health check
+// failed. The agent derives Reason from the probe output and never sends the
+// output: like the health check command, it can hold credentials, paths and
+// query strings. Reason is one of the HealthProbeReason values.
+type ContainerHealthProbe struct {
+	Reason        string `json:"reason"`
+	ExitCode      int    `json:"exitCode"`
+	FailingStreak int    `json:"failingStreak,omitempty"`
+	HTTPStatus    int    `json:"httpStatus,omitempty"`
+}
+
+// The closed vocabulary for ContainerHealthProbe.Reason. A probe whose output
+// states none of these reports HealthProbeReasonOther, and the exit code is
+// then all that is known.
+const (
+	HealthProbeReasonConnectionRefused = "connection_refused"
+	HealthProbeReasonTimeout           = "timeout"
+	HealthProbeReasonNameNotResolved   = "name_not_resolved"
+	HealthProbeReasonHTTPStatus        = "http_status"
+	HealthProbeReasonTLS               = "tls"
+	HealthProbeReasonCommandMissing    = "command_missing"
+	HealthProbeReasonOther             = "other"
+)
+
+// NormalizeHealthProbeReason maps anything outside the vocabulary to
+// HealthProbeReasonOther, so a newer or a misbehaving agent cannot put free
+// text where a code belongs.
+func NormalizeHealthProbeReason(reason string) string {
+	switch reason {
+	case HealthProbeReasonConnectionRefused, HealthProbeReasonTimeout, HealthProbeReasonNameNotResolved,
+		HealthProbeReasonHTTPStatus, HealthProbeReasonTLS, HealthProbeReasonCommandMissing:
+		return reason
+	default:
+		return HealthProbeReasonOther
+	}
+}
+
 type ContainerPort struct {
 	PrivatePort int    `json:"privatePort"`
 	PublicPort  int    `json:"publicPort,omitempty"`

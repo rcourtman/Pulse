@@ -39,6 +39,22 @@ window), so the control is one more cell on each card, not a wider table. `Thres
 levels, the stored override, the defaults row and the unchanged runtime row.
 
 
+### A health alert says why the check fails (12 November 2026)
+
+The Docker container health alert read "health is unhealthy" and sent the
+operator to the host to find out why. When the agent reports the reason, the
+message ends with it: `Docker container 'paperless' health is unhealthy
+(health check: connection refused)`. The summary and a `healthProbeReason`
+metadata key carry it too. Three rules:
+
+- The start of the message is unchanged. Patrol's alert-opened findings and
+  notification rules match on it.
+- The failing streak stays out of the text. It grows on every report, and an
+  alert whose message changes every thirty seconds is a different alert to
+  everything that compares messages.
+- An agent that does not report the reason leaves the alert exactly as it
+  was.
+
 A Docker container state alert is about a workload that should be running and
 is not. A container that finished its own work is not that: it reports state
 `exited`, exit code 0, no OOM kill, a restart policy of `no` or `on-failure`

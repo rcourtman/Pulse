@@ -52,6 +52,12 @@ capacity monitoring, for example a log2ram `/var/log` mount. This reports
 filesystem capacity and usage metadata. It does not read or transmit file
 contents. Local `--disk-exclude` rules still take precedence.
 
+For a container the runtime marks unhealthy, the Docker module reads the last
+health-check result on the host and reports why it failed as one of a fixed
+set of reason codes (for example connection refused or an HTTP status), with
+the exit code and the number of failures in a row. The health check's output
+and its command are never sent.
+
 Fresh installs use a local `monitoring-only` command-authority ceiling and a
 credential without `agent:exec`. Remote configuration cannot promote that
 service. Selecting **Allow Pulse to run commands on this host** at install time (the combined

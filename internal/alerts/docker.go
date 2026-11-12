@@ -1028,6 +1028,17 @@ func (m *Manager) checkDockerContainerHealth(host models.DockerHost, container m
 	metadata := dockerContainerAlertMetadata(host, container, containerName)
 	metadata["health"] = container.Health
 
+	// The agent says why the last health check failed, as a reason code. The
+	// text is stable while the reason is, so the alert does not change on
+	// every report; the failing streak stays out of it for that reason.
+	message := fmt.Sprintf("Docker container '%s' health is %s", containerName, container.Health)
+	summary := fmt.Sprintf("Health is %s", container.Health)
+	if why := container.HealthProbe.Describe(); why != "" && health == "unhealthy" {
+		message += " (health check: " + why + ")"
+		summary += " (" + why + ")"
+		metadata["healthProbeReason"] = container.HealthProbe.Reason
+	}
+
 	_, _ = m.evaluateCanonicalStatefulAlert(canonicalStatefulAlertParams{
 		Spec: spec,
 		Evidence: alertspecs.AlertEvidence{
@@ -1044,8 +1055,8 @@ func (m *Manager) checkDockerContainerHealth(host models.DockerHost, container m
 		ResourceName:                 containerName,
 		Node:                         nodeName,
 		Instance:                     instanceName,
-		Message:                      fmt.Sprintf("Docker container '%s' health is %s", containerName, container.Health),
-		Summary:                      fmt.Sprintf("Health is %s", container.Health),
+		Message:                      message,
+		Summary:                      summary,
 		Metadata:                     metadata,
 		AddToRecent:                  true,
 		AddToHistory:                 true,

@@ -236,6 +236,19 @@ Alerts** level, Warn or Crit, alerts whenever it is not running, finished or
 not. An agent that does not yet report the restart policy keeps the old
 behaviour until it updates.
 
+### Why a health check is failing
+
+When Docker marks a container unhealthy, Pulse says why its last health check
+failed: connection refused, timed out, name not resolved, an HTTP status such
+as 503, TLS error (which includes certificate problems), or command not found
+when the check's own command is missing from the container. The reason is in
+the alert, in the container's **Health check** row and in the State tooltip. A
+check whose output names none of these shows its exit code.
+
+The agent works this out on the host and sends only the reason. The check's
+output and its command never leave the host. An agent that does not yet report
+the reason shows "Failing" until it updates.
+
 ## Container CPU readings
 
 Pulse shows container CPU as a share of the **Docker/Podman host's total CPU

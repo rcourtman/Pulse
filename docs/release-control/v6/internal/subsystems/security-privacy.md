@@ -18,6 +18,20 @@
 
 ## Purpose
 
+### Health-check output stays on the host (12 November 2026)
+
+The Docker module now reads the last health-check result of an unhealthy
+container. The output of that probe is content: it can hold credentials, URLs
+with query strings, tokens and paths. The agent classifies it locally and
+reports one reason code from a closed set, the exit code, the failing streak
+and an HTTP status number. No part of the output crosses the reporting
+boundary, and the server maps any reason outside the set to `other`, so a
+modified agent cannot use the field to carry text.
+`TestCollectContainerSendsTheProbeReasonAndNoneOfItsOutput` and
+`TestApplyDockerReportCarriesTheHealthProbeReason` hold both ends. This adds
+no data category to what a monitoring-only agent sends: it is the same kind of
+derived fact as the health-check target host names.
+
 ### Refused agent redirects keep upstream destinations out of diagnostics
 
 `internal/securityutil/control_plane_http.go` is the shared agent control-plane

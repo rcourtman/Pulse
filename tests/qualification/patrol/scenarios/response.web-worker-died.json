@@ -1,7 +1,7 @@
 {
   "schema_version": "patrol.qual/v1",
   "id": "response.web-worker-died",
-  "version": 2,
+  "version": 3,
   "title": "web worker died, container up, health failing",
   "description": "The serving process inside a document service exits while the container stays up, so Docker never restarts it and only the health check fails. A restart fixes it. The cause is only in the service log.",
   "owner": "ai-runtime",
@@ -283,7 +283,11 @@
         "webserver is not running",
         "not listening",
         "nothing is listening",
-        "connection refused"
+        "connection refused",
+        "connection_refused",
+        "refusing connections",
+        "refuses connections",
+        "refused connections"
       ],
       [
         "restart",

@@ -1170,6 +1170,7 @@ type DockerData struct {
 	ContainerState     string                      `json:"containerState,omitempty"`
 	Health             string                      `json:"health,omitempty"`
 	HealthcheckTargets []string                    `json:"healthcheckTargets,omitempty"`
+	HealthProbe        *DockerHealthProbe          `json:"healthProbe,omitempty"`
 	RestartCount       int                         `json:"restartCount,omitempty"`
 	ExitCode           int                         `json:"exitCode,omitempty"`
 	OOMKilled          *bool                       `json:"oomKilled,omitempty"`
@@ -2099,3 +2100,8 @@ type ResourceStats struct {
 	// contract instead of classifying a full-state payload itself.
 	PlatformAdmission *PlatformAdmission `json:"platformAdmission,omitempty"`
 }
+
+// DockerHealthProbe says why an unhealthy container's last health check
+// failed, as the agent's closed reason code. See
+// models.DockerContainerHealthProbe.
+type DockerHealthProbe = models.DockerContainerHealthProbe

@@ -524,6 +524,7 @@ func addDockerFacts(facts *[]Fact, resource unified.Resource, observedAt *time.T
 	addAgentContextCountFact(facts, "Images", resource.Docker.ImageCount, agentContextSourceUnifiedResource, agentContextTrustRuntimeObserved, observedAt)
 	addAgentContextFact(facts, "Container state", resource.Docker.ContainerState, agentContextSourceUnifiedResource, agentContextTrustRuntimeObserved, observedAt)
 	addAgentContextFact(facts, "Container health", resource.Docker.Health, agentContextSourceUnifiedResource, agentContextTrustRuntimeObserved, observedAt)
+	addAgentContextFact(facts, "Health-check failure", resource.Docker.HealthProbe.Describe(), agentContextSourceUnifiedResource, agentContextTrustRuntimeObserved, observedAt)
 	addAgentContextFact(facts, "Health-check targets", formatDockerHealthcheckTargets(resource.Docker.HealthcheckTargets, policy), agentContextSourceUnifiedResource, agentContextTrustDiscovered, observedAt)
 	if resource.Docker.RestartCount > 0 {
 		addAgentContextFact(facts, "Restart count", fmt.Sprintf("%d", resource.Docker.RestartCount), agentContextSourceUnifiedResource, agentContextTrustRuntimeObserved, observedAt)

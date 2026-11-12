@@ -785,6 +785,24 @@ export interface FilesystemObservation {
 // platform hosts table; `app-container` resources use the container fields
 // on the Docker containers table; `docker-service` resources use the service
 // fields on the Swarm services table.
+// Why an unhealthy container's last health check failed. The agent derives
+// `reason` from the probe output on the host and sends only the code.
+export type DockerHealthProbeReason =
+  | 'connection_refused'
+  | 'timeout'
+  | 'name_not_resolved'
+  | 'http_status'
+  | 'tls'
+  | 'command_missing'
+  | 'other';
+
+export interface DockerHealthProbe {
+  reason: DockerHealthProbeReason | string;
+  exitCode: number;
+  failingStreak?: number;
+  httpStatus?: number;
+}
+
 export interface ResourceDockerMeta {
   serviceId?: string;
   serviceName?: string;
@@ -842,6 +860,7 @@ export interface ResourceDockerMeta {
   imageContainers?: number;
   containerState?: string;
   health?: string;
+  healthProbe?: DockerHealthProbe;
   restartCount?: number;
   exitCode?: number;
   cpuRawPercent?: number;

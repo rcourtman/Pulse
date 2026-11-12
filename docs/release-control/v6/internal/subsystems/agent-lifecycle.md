@@ -2613,6 +2613,18 @@ because the server must be able to tell a container Docker will not restart
 from one whose policy was never sent. The field is empty only when inspect
 returned no host config, and it is absent from reports of agents older than
 the field.
+For a container the runtime marks unhealthy, the module also reports why the
+last health check failed, as `healthProbe`: one reason code from a closed set
+(`connection_refused`, `timeout`, `name_not_resolved`, `http_status`, `tls`,
+`command_missing`, `other`), the probe exit code, the failing streak and, for
+`http_status`, the status number. The agent derives the code from the probe
+output on the host (`classifyHealthProbe`) and never sends the output. Probe
+output is in the same class as the health-check command, which already stays
+on the host: it can hold credentials, paths and query strings. The code is
+named only when the output states it in the words the common probe tools and
+the engine print. Anything else is `other`, because a wrong reason sends the
+operator the wrong way. Nothing is reported for a container that is not
+unhealthy, or whose newest kept result passed.
 Inside-guest Docker / Podman visibility is also a privacy boundary: full
 Docker / Podman inventory may come from a guest-local agent or another explicit
 guest reporting path. LXC Docker inventory may also come from the Proxmox host
