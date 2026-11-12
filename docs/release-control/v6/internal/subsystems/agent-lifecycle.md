@@ -939,6 +939,52 @@ running collectors. `TestRunLocalProbesDoNotRequireReadableAgentID` retains the
 local read-only probes. These are confined source fixtures, not original-host
 recovery or installed service acceptance.
 
+### Configured or saved agent identity must survive startup
+
+A non-empty resolved `--agent-id` or `PULSE_AGENT_ID` is authoritative launch
+configuration: keep it configured across restarts. Ordinary startup's atomic ID
+save remains best effort for these IDs. If that save fails, startup gives fixed
+guidance and continues with the configured ID, even with no saved file or
+creatable state directory. Kubernetes/OpenShift agents with read-only root
+filesystems need no new state volume or weaker confinement. Flag precedence and
+whitespace normalization remain unchanged; stale or unreadable optional saved
+state cannot override the explicitly selected ID.
+
+Without an explicit configured ID, startup depends on saved state. Before
+enrollment, remote configuration, Windows service dispatch, the updater or
+monitoring modules, a failed atomic ID write requires a readable saved ID
+matching the selection. Matching read-only IDs, including whitespace-padded
+files, remain usable. An unmatched, absent or unreadable destination instead
+returns fixed guidance to preserve state and repair destination/parent
+writability or storage; it cannot continue with an unsaved derived identity.
+Neither path clears attributes, removes obstructing state or adds raw write
+errors/private paths to the identity-save diagnostic.
+
+The later canonical enrollment handoff is separate: a server-issued replacement
+ID and runtime token must still be saved before consumers use them, even when
+the initial ID was configured. Credential and TLS selection, command ceilings,
+URL-only validation and updater self-test remain unchanged.
+
+Registered `cmd/pulse-agent/main_test.go` tests exercise the real startup and
+verified TLS configuration transport with collector/update constructor spies:
+
+- `TestRunConfiguredAgentIDSaveFailureStillReachesConsumers` preserves explicit
+  flag/environment IDs through default/custom directories, non-directory parents
+  and blocked writes, intact optional saved state and repaired-writability saves.
+- `TestRunConfiguredAgentIDWithoutSavedStateStillReachesConsumers` repeats startup
+  with flag/environment/flag-over-environment IDs, absent state and unwritable or
+  non-directory parents, preserving selected identity and confinement attributes.
+- `TestRunDerivedAgentIDRequiresPersistence` rejects failed saves of generated
+  identities with missing/empty/whitespace state, before enrollment or consumers,
+  then verifies recovery after repairing only the owned write obstruction.
+- `TestRunMatchingReadOnlyAgentIDStillReachesConsumers` retains matching saved IDs,
+  exact or whitespace-padded, without changing bytes, inode or attributes.
+
+Unix write obstructions use an ordinary service user and unwritable parent;
+Windows uses its read-only file attribute for existing files. Filesystem-specific
+skips are explicit. Source fixtures and cross-compilation are not native cluster,
+installed service or original-host recovery acceptance.
+
 ### Selected agent credential files retain their own authority
 
 The real agent flag-loading path resolves a non-empty explicit `--token` before

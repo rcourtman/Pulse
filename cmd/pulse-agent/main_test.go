@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"encoding/pem"
 	"errors"
 	"flag"
+	"fmt"
 	"io"
 	"io/fs"
 	"net/http"
@@ -3431,4 +3433,377 @@ func TestLoadConfigRegistryCredentialOptOut(t *testing.T) {
 			t.Error("expected --disable-registry-credentials to disable credential reads")
 		}
 	})
+}
+
+// Exercise the real startup, filesystem and verified TLS config transport, but
+// never start collectors, commands or updates on the test host.
+type identityWriteFixture struct {
+	stateDir string
+	caPath   string
+	server   *httptest.Server
+	mu       sync.Mutex
+	requests [][2]string
+	files    map[string]string
+	start    func(string, string, bool) (*identityStartupEvidence, error)
+}
+
+func newIdentityWriteFixture(t *testing.T) *identityWriteFixture {
+	t.Helper()
+	stateDir := t.TempDir()
+	f := &identityWriteFixture{stateDir: stateDir}
+	f.server = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		f.mu.Lock()
+		f.requests = append(f.requests, [2]string{r.URL.Path, r.Header.Get("X-API-Token")})
+		f.mu.Unlock()
+		if r.URL.Path == "/api/agents/agent/lookup" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"success":true,"config":{}}`)
+	}))
+	t.Cleanup(f.server.Close)
+	f.caPath = filepath.Join(f.stateDir, "saved-ca.pem")
+	ca := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: f.server.Certificate().Raw})
+	f.files = map[string]string{"saved-ca.pem": string(ca), "token": "synthetic-manual\n", "runtime.token": "synthetic-runtime\n", "connection.env": "synthetic-connection-marker\n"}
+	for name, data := range f.files {
+		if err := os.WriteFile(filepath.Join(f.stateDir, name), []byte(data), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	f.start = func(path, selector string, enroll bool) (*identityStartupEvidence, error) {
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		evidence := spyIdentityStartup(t, cancel)
+		env := func(key string) string {
+			if selector == "environment" && key == "PULSE_AGENT_ID" {
+				return "synthetic-selected-id"
+			}
+			return ""
+		}
+		var err error
+		// Keep the literal, locally owned temporary state visible to the
+		// existing source guard; neither path borrows real service state.
+		if selector == "flag" {
+			err = run(ctx, []string{"--url", f.server.URL, "--state-dir", stateDir, "--token", "synthetic-primary-token",
+				"--agent-id-file", path, "--agent-id", "synthetic-selected-id", "--hostname", "synthetic-identity-host", "--cacert", f.caPath,
+				fmt.Sprintf("--enroll=%t", enroll), "--enable-host", "--enable-docker", "--enable-kubernetes", "--disable-auto-update", "--health-addr", "", "--command-authority", "monitoring-only"}, env)
+		} else {
+			err = run(ctx, []string{"--url", f.server.URL, "--state-dir", stateDir, "--token", "synthetic-primary-token",
+				"--agent-id-file", path, "--hostname", "synthetic-identity-host", "--cacert", f.caPath,
+				fmt.Sprintf("--enroll=%t", enroll), "--enable-host", "--enable-docker", "--enable-kubernetes", "--disable-auto-update", "--health-addr", "", "--command-authority", "monitoring-only"}, env)
+		}
+		return evidence, err
+	}
+	return f
+}
+
+func (f *identityWriteFixture) assertSavedState(t *testing.T) {
+	t.Helper()
+	for name, want := range f.files {
+		path := filepath.Join(f.stateDir, name)
+		data, err := os.ReadFile(path)
+		info, statErr := os.Stat(path)
+		if err != nil || string(data) != want || statErr != nil || runtime.GOOS != "windows" && info.Mode().Perm() != 0600 {
+			t.Fatalf("startup changed saved %s", name)
+		}
+	}
+}
+
+func (f *identityWriteFixture) assertConsumers(t *testing.T, evidence *identityStartupEvidence, selector string) string {
+	t.Helper()
+	id := evidence.host.AgentID
+	if id == "" || selector != "derived" && id != "synthetic-selected-id" || evidence.docker.AgentID != id || evidence.kube.AgentID != id || fmt.Sprint(evidence.calls) != "[service updater host docker kubernetes]" {
+		t.Fatalf("startup consumers lost the selected identity: %v", evidence.calls)
+	}
+	if evidence.host.APIToken != "synthetic-primary-token" || evidence.docker.APIToken != "synthetic-primary-token" || evidence.kube.APIToken != "synthetic-primary-token" || evidence.updater.APIToken != "synthetic-primary-token" || evidence.host.EnableCommands || evidence.host.CommandAuthorityProfile != hostagent.CommandAuthorityMonitoringOnly || evidence.host.InsecureSkipVerify || evidence.docker.InsecureSkipVerify || evidence.kube.InsecureSkipVerify || evidence.updater.InsecureSkipVerify {
+		t.Fatal("startup changed credential, TLS verification or command ceilings")
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(f.requests) != 2 || f.requests[0] != [2]string{"/api/agents/agent/lookup", "synthetic-primary-token"} || f.requests[1] != [2]string{"/api/agents/agent/" + id + "/config", "synthetic-primary-token"} {
+		t.Fatal("remote configuration did not use the same selected identity and credential")
+	}
+	return id
+}
+
+// Obstruct replacement without making the file unreadable. On Windows a
+// read-only destination blocks rename; Unix requires an unwritable parent.
+func blockIdentityReplacement(t *testing.T, path string) func() {
+	t.Helper()
+	restore := func() { _ = os.Chmod(filepath.Dir(path), 0700) }
+	if runtime.GOOS == "windows" {
+		if err := os.Chmod(path, 0400); err != nil {
+			t.Fatal(err)
+		}
+		restore = func() { _ = os.Chmod(path, 0600) }
+	} else {
+		if os.Geteuid() == 0 {
+			t.Skip("Unix write obstruction requires an ordinary service user")
+		}
+		if err := os.Chmod(filepath.Dir(path), 0500); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Cleanup(restore)
+	if err := writeAgentIDFile(path, "synthetic-obstruction-probe"); err == nil {
+		t.Fatal("fixture did not obstruct identity replacement")
+	}
+	return restore
+}
+
+// Explicit launch configuration remains authoritative even if its optional ID
+// save fails. A stale file is not allowed to override flag/environment selection.
+func TestRunConfiguredAgentIDSaveFailureStillReachesConsumers(t *testing.T) {
+	for _, selector := range []string{"flag", "environment"} {
+		for _, shape := range []string{"default-directory", "selected-directory", "non-directory-parent", "write-blocked"} {
+			t.Run(selector+"/"+shape, func(t *testing.T) {
+				f := newIdentityWriteFixture(t)
+				path := filepath.Join(t.TempDir(), "agent-id")
+				selected := path
+				if shape == "default-directory" {
+					path, selected = filepath.Join(f.stateDir, "agent-id"), ""
+				}
+				markerPath, marker := path, "synthetic-original-id\n"
+				var repair func()
+				switch shape {
+				case "default-directory", "selected-directory":
+					if err := os.Mkdir(path, 0700); err != nil {
+						t.Fatal(err)
+					}
+					markerPath = filepath.Join(path, "keep")
+					repair = func() {
+						if err := os.Rename(path, path+".retained"); err != nil {
+							t.Fatal(err)
+						}
+					}
+				case "non-directory-parent":
+					path, selected = filepath.Join(markerPath, "agent-id"), filepath.Join(markerPath, "agent-id")
+					repair = func() {
+						if err := os.Rename(markerPath, markerPath+".retained"); err != nil {
+							t.Fatal(err)
+						}
+					}
+				}
+				if err := os.WriteFile(markerPath, []byte(marker), 0600); err != nil {
+					t.Fatal(err)
+				}
+				if shape == "write-blocked" {
+					repair = blockIdentityReplacement(t, path)
+				}
+				before, err := os.Stat(markerPath)
+				if err != nil {
+					t.Fatal(err)
+				}
+				evidence, err := f.start(selected, selector, false)
+				if err != nil {
+					t.Fatalf("configured identity unnecessarily stopped monitoring: %v", err)
+				}
+				id := f.assertConsumers(t, evidence, selector)
+				after, err := os.Stat(markerPath)
+				data, readErr := os.ReadFile(markerPath)
+				if err != nil || readErr != nil || string(data) != marker || !os.SameFile(before, after) || before.Mode() != after.Mode() {
+					t.Fatal("failed optional save replaced saved identity state or its attributes")
+				}
+				f.assertSavedState(t)
+				// Restoring only this owned obstruction enables the existing
+				// best-effort save; it must not change the configured identity.
+				repair()
+				f.mu.Lock()
+				f.requests = nil
+				f.mu.Unlock()
+				evidence, err = f.start(selected, selector, false)
+				if err != nil || f.assertConsumers(t, evidence, selector) != id {
+					t.Fatalf("configured identity changed after restoring writable storage: %v", err)
+				}
+				if data, err := os.ReadFile(path); err != nil || string(data) != id+"\n" {
+					t.Fatal("writable optional destination did not save the configured identity")
+				}
+				if temporary, _ := filepath.Glob(filepath.Join(filepath.Dir(path), ".agent-id-*")); len(temporary) != 0 {
+					t.Fatal("optional save left temporary state")
+				}
+				f.assertSavedState(t)
+			})
+		}
+	}
+}
+
+// Model a confined launch with no saved identity and no creatable state directory.
+// No mount or privilege is required to keep a configured cluster ID across starts.
+func TestRunConfiguredAgentIDWithoutSavedStateStillReachesConsumers(t *testing.T) {
+	for _, selector := range []string{"flag", "environment", "flag-over-environment"} {
+		for _, shape := range []string{"non-directory-parent", "unwritable-parent"} {
+			t.Run(selector+"/"+shape, func(t *testing.T) {
+				f := newIdentityWriteFixture(t)
+				parent := filepath.Join(t.TempDir(), "parent")
+				stateDir := filepath.Join(parent, "state")
+				const marker = "synthetic-parent-marker"
+				if shape == "non-directory-parent" {
+					if err := os.WriteFile(parent, []byte(marker), 0600); err != nil {
+						t.Fatal(err)
+					}
+				} else {
+					if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+						t.Skip("unwritable parent requires an ordinary Unix service user")
+					}
+					if err := os.Mkdir(parent, 0500); err != nil {
+						t.Fatal(err)
+					}
+					t.Cleanup(func() { _ = os.Chmod(parent, 0700) })
+				}
+				before, err := os.Stat(parent)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := writeAgentIDFile(filepath.Join(stateDir, "agent-id"), "synthetic-probe"); err == nil {
+					t.Fatal("fixture did not prevent state creation")
+				}
+				for attempt := 0; attempt < 2; attempt++ {
+					ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+					defer cancel()
+					evidence := spyIdentityStartup(t, cancel)
+					env := func(key string) string {
+						if key == "PULSE_AGENT_ID" {
+							if selector == "environment" {
+								return "  synthetic-selected-id\t"
+							}
+							if selector == "flag-over-environment" {
+								return "synthetic-shadowed-environment-id"
+							}
+						}
+						return ""
+					}
+					if selector == "environment" {
+						err = run(ctx, []string{"--url", f.server.URL, "--state-dir", stateDir, "--token", "synthetic-primary-token",
+							"--hostname", "synthetic-identity-host", "--cacert", f.caPath,
+							"--enable-host", "--enable-docker", "--enable-kubernetes", "--disable-auto-update", "--health-addr", "", "--command-authority", "monitoring-only"}, env)
+					} else {
+						err = run(ctx, []string{"--url", f.server.URL, "--state-dir", stateDir, "--token", "synthetic-primary-token",
+							"--agent-id", "  synthetic-selected-id\t", "--hostname", "synthetic-identity-host", "--cacert", f.caPath,
+							"--enable-host", "--enable-docker", "--enable-kubernetes", "--disable-auto-update", "--health-addr", "", "--command-authority", "monitoring-only"}, env)
+					}
+					if err != nil {
+						t.Fatalf("configured identity with no saved state stopped attempt %d: %v", attempt, err)
+					}
+					f.assertConsumers(t, evidence, selector)
+					f.mu.Lock()
+					f.requests = nil
+					f.mu.Unlock()
+					if _, err := os.Stat(stateDir); err == nil {
+						t.Fatal("startup created state despite its obstruction")
+					}
+					after, err := os.Stat(parent)
+					if err != nil || !os.SameFile(before, after) || before.Mode() != after.Mode() {
+						t.Fatal("startup modified the state parent's attributes or identity")
+					}
+					if shape == "non-directory-parent" {
+						if got, err := os.ReadFile(parent); err != nil || string(got) != marker {
+							t.Fatal("startup changed obstructing state")
+						}
+					}
+					f.assertSavedState(t)
+				}
+			})
+		}
+	}
+}
+
+func TestRunDerivedAgentIDRequiresPersistence(t *testing.T) {
+	for _, shape := range []string{"missing", "empty", "whitespace"} {
+		for _, enroll := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/enroll-%t", shape, enroll), func(t *testing.T) {
+				f := newIdentityWriteFixture(t)
+				path := filepath.Join(t.TempDir(), "agent-id")
+				marker := ""
+				if shape == "whitespace" {
+					marker = " \n\t"
+				}
+				if shape == "missing" {
+					if runtime.GOOS == "windows" {
+						t.Skip("missing file write obstruction requires Unix directory permissions")
+					}
+				} else if err := os.WriteFile(path, []byte(marker), 0600); err != nil {
+					t.Fatal(err)
+				}
+				repair := blockIdentityReplacement(t, path)
+				before, err := os.Stat(filepath.Dir(path))
+				if err != nil {
+					t.Fatal(err)
+				}
+				evidence, err := f.start(path, "derived", enroll)
+				if err == nil || !strings.Contains(err.Error(), "cannot confirm saved agent ID before startup") || !strings.Contains(err.Error(), "writable") || !strings.Contains(err.Error(), "preserve existing state") {
+					t.Errorf("unsaved derived identity did not stop with recovery guidance: %v", err)
+				}
+				for _, private := range []string{path, f.stateDir, "synthetic-"} {
+					if strings.Contains(fmt.Sprint(err), private) {
+						t.Error("identity-save diagnostic disclosed private input")
+					}
+				}
+				f.mu.Lock()
+				requests := len(f.requests)
+				f.mu.Unlock()
+				if requests != 0 || len(evidence.calls) != 0 {
+					t.Errorf("unsaved derived identity reached enrollment/authenticated consumers: requests=%d constructors=%v", requests, evidence.calls)
+				}
+				after, err := os.Stat(filepath.Dir(path))
+				if err != nil || !os.SameFile(before, after) || before.Mode() != after.Mode() {
+					t.Fatal("failed save changed the destination parent's attributes")
+				}
+				if shape == "missing" {
+					if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
+						t.Fatal("failed save created a derived identity")
+					}
+				} else if data, err := os.ReadFile(path); err != nil || string(data) != marker {
+					t.Fatal("failed save replaced existing identity state")
+				}
+				f.assertSavedState(t)
+				repair()
+				evidence, err = f.start(path, "derived", false)
+				if err != nil {
+					t.Fatalf("derived identity did not recover after restoring writable storage: %v", err)
+				}
+				id := f.assertConsumers(t, evidence, "derived")
+				if data, err := os.ReadFile(path); err != nil || string(data) != id+"\n" {
+					t.Fatal("recovered derived identity does not survive restart")
+				}
+				if temporary, _ := filepath.Glob(filepath.Join(filepath.Dir(path), ".agent-id-*")); len(temporary) != 0 {
+					t.Fatal("identity save left temporary state")
+				}
+				f.assertSavedState(t)
+			})
+		}
+	}
+}
+
+func TestRunMatchingReadOnlyAgentIDStillReachesConsumers(t *testing.T) {
+	for _, selector := range []string{"flag", "environment", "saved"} {
+		for _, marker := range []string{"synthetic-selected-id\n", " \n synthetic-selected-id\t\n"} {
+			t.Run(fmt.Sprintf("%s/whitespace-%t", selector, strings.HasPrefix(marker, " ")), func(t *testing.T) {
+				f := newIdentityWriteFixture(t)
+				path := filepath.Join(t.TempDir(), "agent-id")
+				if err := os.WriteFile(path, []byte(marker), 0600); err != nil {
+					t.Fatal(err)
+				}
+				blockIdentityReplacement(t, path)
+				before, err := os.Stat(path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				evidence, err := f.start(path, selector, false)
+				if err != nil {
+					t.Fatalf("matching saved identity unnecessarily stopped monitoring: %v", err)
+				}
+				f.assertConsumers(t, evidence, selector)
+				after, err := os.Stat(path)
+				data, readErr := os.ReadFile(path)
+				if err != nil || readErr != nil || string(data) != marker || !os.SameFile(before, after) || before.Mode() != after.Mode() {
+					t.Fatal("startup modified the confirmed read-only identity or its attributes")
+				}
+				if temporary, _ := filepath.Glob(filepath.Join(filepath.Dir(path), ".agent-id-*")); len(temporary) != 0 {
+					t.Fatal("failed refresh left temporary state")
+				}
+				f.assertSavedState(t)
+			})
+		}
+	}
 }

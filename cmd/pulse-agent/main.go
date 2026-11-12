@@ -373,6 +373,9 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 	// 2b. Compute Agent ID if missing (needed for remote config)
 	// We replicate the logic from hostagent.New to ensure we get the same ID
 	lookupHostname := strings.TrimSpace(cfg.HostnameOverride)
+	// An explicit launch-config ID survives restart through configuration,
+	// including read-only Kubernetes/OpenShift deployments without state mounts.
+	agentIDConfigured := cfg.AgentID != ""
 	if cfg.AgentID == "" && cfg.AgentIDFile != "" {
 		if persisted, err := readAgentIDFile(cfg.AgentIDFile); err == nil && persisted != "" {
 			cfg.AgentID = persisted
@@ -413,10 +416,21 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 	}
 	if cfg.AgentID != "" && cfg.AgentIDFile != "" {
 		if err := writeAgentIDFile(cfg.AgentIDFile, cfg.AgentID); err != nil {
-			logger.Warn().
-				Err(err).
-				Str("path", cfg.AgentIDFile).
-				Msg("Failed to persist agent ID; ID will be re-derived on next start")
+			if agentIDConfigured {
+				// Saving an explicit ID is best effort, not a requirement for
+				// otherwise confined agents to acquire writable filesystem state.
+				logger.Warn().
+					Msg("Could not save the agent ID file; using the explicitly configured identity; keep --agent-id or PULSE_AGENT_ID configured across restarts")
+			} else {
+				// A derived/loaded identity depends on disk. A failed refresh
+				// is harmless only while saved state still confirms that ID.
+				persisted, readErr := readAgentIDFile(cfg.AgentIDFile)
+				if readErr != nil || persisted != cfg.AgentID {
+					return errors.New("cannot confirm saved agent ID before startup; preserve existing state and check that the configured agent-id destination and its parent directory are writable and storage is available; refusing to start with an unsaved identity")
+				}
+				logger.Warn().
+					Msg("Could not refresh the agent ID file; using the matching saved identity")
+			}
 		}
 	}
 	if lookupHostname == "" {

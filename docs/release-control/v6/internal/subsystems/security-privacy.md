@@ -18,6 +18,28 @@
 
 ## Purpose
 
+### Agent startup preserves configured or saved identity authority
+
+An explicit, non-empty flag/environment agent ID is authoritative launch
+configuration. A failed optional save does not stop read-only/no-state agents or
+force them to add storage or relax confinement: startup continues with that ID
+and fixed guidance to retain it in launch configuration across restarts. Without
+an explicit configured ID, a failed save permits authenticated startup only when
+a readable saved file already contains the selected ID after existing whitespace
+normalization. Otherwise it returns fixed guidance to preserve state and repair
+storage/destination writability, before enrollment, remote configuration, service
+dispatch, updater or runtime modules. Matching saved read-only IDs remain usable.
+
+Neither path clears attributes or deletes state to force replacement. No raw
+write errors or private paths are added to identity-save diagnostics. Token
+selection, TLS verification, command ceilings, explicit ID precedence and the
+separate canonical enrollment/runtime-token persistence requirements are
+unchanged. Registered command tests cover configured no-state/repeated starts,
+failed optional saves and generated-ID refusal/repaired-writability recovery,
+intact saved credentials/trust, and matching read-only identity compatibility.
+These fixtures are not erased-authority recovery, installed-client acceptance or
+an exposure/disclosure assessment.
+
 ### Recovery-token authority waits for its saved single-use marker
 
 Recovery-token issuance and consumption acknowledge only a complete owner-only
