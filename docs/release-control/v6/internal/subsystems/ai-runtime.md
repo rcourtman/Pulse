@@ -1241,6 +1241,38 @@ name. The runbook's rubric guidance carries the rule, and
 `TestWebWorkerRubricDoesNotCreditAGuess` holds it with text from the stored
 runs. By this rubric the default agent's score on 11 November was 3 of 6, not
 4. The runbook also says when a change needs a replay before it merges.
+
+Patrol reads why a health check fails. On a default agent it cannot read a
+container's log or probe output, and on the dead web worker it could only say
+the cause was unconfirmed. The agent now reports a reason code for an
+unhealthy container's last probe (`healthProbe`, see the agent lifecycle
+contract), and Patrol meets it in four places: the alert text an alert-woken
+run is scoped by, the Health cell of the scoped container table
+(`unhealthy (health check: connection refused, 14 in a row)`), the unhealthy
+container line of a full run, and `health_probe` on the container payloads of
+`pulse_query`. The reason is a closed code and its words come from
+`DockerContainerHealthProbe.Summary`, so nothing a container printed reaches
+the model through it.
+
+Scored on fault set v1 before it merged, Sonnet, Ask first, both profiles, one
+run per cell (12 November 2026):
+
+- **Default agent, D1.** Patrol's finding was titled "health check sustained
+  failure (connection refused)" and its conclusion put the failure at the web
+  process's listener, where earlier runs could only list guesses. The stored
+  grade was still "Handed back": the rubric accepted "connection refused" and
+  the conclusion wrote the code `connection_refused` and "refusing
+  connections". With those spellings added the run regrades to "Handed over".
+  That is a rubric changed after seeing a transcript, for a fact the agent
+  observed.
+- **Default agent, D7** read "Handed back", against "Handed over" in the one
+  earlier run. That conclusion never said the exit was clean. The
+  investigator's container payload carries no exit code, so the fact reaches
+  it only through the finding text. Not fixed here.
+- Every other cell matched the previous replay or was no worse. Default agent
+  4 of 7 after the regrade, commands on 6 of 7.
+- D5's probe is a script with no output and reported `other`. Patrol still
+  found the stopped database, so an uninformative reason did not mislead it.
 Investigation and interactive profiles retain their bounded final summary.
 Patrol report, assessment and resolution tools are governed Pulse-state writes
 for invocation authorization. Accepting one records a decision, does not prove

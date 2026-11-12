@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "base_sha": "1d75178716c85fc7e8c03a313008ce29bbe7dcbf",
+  "verified_at": "2026-11-12T17:55:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/docker/dockerContainerStatePresentation.ts",
+    "frontend-modern/src/types/resource.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/docker/dockerContainerStatePresentation.ts": "0d16c9a6e182a6782478be934dd68cd97bf86511576e4fd4576a9ca152762ecf",
+    "frontend-modern/src/types/resource.ts": "51f9ff362264fc4217042d0f2e519473d601d97007fb5c8e45b593f620ea389d"
+  },
+  "routes": [
+    "/docker"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Private Pro stack built from this tree with a real agent and eight real containers whose health checks fail in different ways (wget connection refused, wget HTTP 503, engine timeout, name not resolved, curl missing, a custom script, a script printing a credential) plus one passing: with the previous agent the API carried no probe and every health alert read 'health is unhealthy' (read from the API, not in the browser)",
+    "With the agent from this tree: State tooltips read '...failing: connection refused, 21 in a row', 'HTTP 503', 'timed out', 'name not resolved', 'command not found' and 'exit code 1'; the healthy container read 'Running, and its health check is passing'",
+    "Drawer, Runtime context, Health check row: 'Failing: connection refused' and the five other reasons; 'Passing' for the healthy container; row height unchanged at 20 px",
+    "Phone width: every Health check value fits its 154 px cell with no ellipsis (the first wording, 'check command not found in the container', needed 271 px and was shortened); no horizontal page scroll",
+    "The drawer's Needs attention block shows the alert text 'health is unhealthy (health check: connection refused)' and wraps on a phone",
+    "No part of any probe output appears in /api/state, /api/resources or /api/alerts/active, including the credential one probe prints"
+  ],
+  "interactions": [
+    "Expanded the hp-refused and hp-nocurl rows at 1440 wide and read the Health check row and its title",
+    "At 375 wide expanded each of the seven hp-* rows in turn and measured the Health check value against its cell",
+    "Swapped the previous agent for the new one on the same host: active alerts took the reason in place, and kept it across a server restart"
+  ]
+}

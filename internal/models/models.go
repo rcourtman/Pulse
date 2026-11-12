@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/agents/filesystem"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 )
@@ -1324,6 +1325,7 @@ type DockerContainer struct {
 	Status              string                       `json:"status"`
 	Health              string                       `json:"health,omitempty"`
 	HealthcheckTargets  []string                     `json:"healthcheckTargets,omitempty"`
+	HealthProbe         *DockerContainerHealthProbe  `json:"healthProbe,omitempty"` // Why the last health check failed; only while unhealthy
 	CPUPercent          float64                      `json:"cpuPercent"`
 	CPUCapacityPercent  float64                      `json:"cpuCapacityPercent,omitempty"`
 	MemoryUsage         int64                        `json:"memoryUsageBytes"`
@@ -1351,6 +1353,59 @@ type DockerContainer struct {
 	Filesystems         []filesystem.Observation     `json:"filesystems,omitempty"`
 	Podman              *DockerPodmanContainer       `json:"podman,omitempty"`
 	UpdateStatus        *DockerContainerUpdateStatus `json:"updateStatus,omitempty"` // Image update detection status
+}
+
+// DockerContainerHealthProbe says why an unhealthy container's last health
+// check failed. Reason is one of the agent's closed HealthProbeReason codes,
+// which the agent derives from the probe output on the host. The output
+// itself never reaches the server.
+type DockerContainerHealthProbe struct {
+	Reason        string `json:"reason"`
+	ExitCode      int    `json:"exitCode"`
+	FailingStreak int    `json:"failingStreak,omitempty"`
+	HTTPStatus    int    `json:"httpStatus,omitempty"`
+}
+
+// Describe names the failure in a few words: "connection refused",
+// "HTTP 503". A probe whose output stated nothing known gives its exit code.
+// The text is stable while the reason is, so an alert that carries it does
+// not change on every report.
+func (p *DockerContainerHealthProbe) Describe() string {
+	if p == nil {
+		return ""
+	}
+	switch p.Reason {
+	case agentsdocker.HealthProbeReasonConnectionRefused:
+		return "connection refused"
+	case agentsdocker.HealthProbeReasonTimeout:
+		return "timed out"
+	case agentsdocker.HealthProbeReasonNameNotResolved:
+		return "name not resolved"
+	case agentsdocker.HealthProbeReasonHTTPStatus:
+		if p.HTTPStatus > 0 {
+			return fmt.Sprintf("HTTP %d", p.HTTPStatus)
+		}
+		return "HTTP error"
+	case agentsdocker.HealthProbeReasonTLS:
+		return "TLS error"
+	case agentsdocker.HealthProbeReasonCommandMissing:
+		return "command not found"
+	default:
+		return fmt.Sprintf("exit code %d", p.ExitCode)
+	}
+}
+
+// Summary is Describe with the failing streak: "health check: connection
+// refused, 14 in a row". Empty when there is no probe.
+func (p *DockerContainerHealthProbe) Summary() string {
+	if p == nil {
+		return ""
+	}
+	summary := "health check: " + p.Describe()
+	if p.FailingStreak > 1 {
+		summary += fmt.Sprintf(", %d in a row", p.FailingStreak)
+	}
+	return summary
 }
 
 func (c DockerContainer) NormalizeCollections() DockerContainer {

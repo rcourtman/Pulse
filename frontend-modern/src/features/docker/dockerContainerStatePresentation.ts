@@ -1,4 +1,4 @@
-import type { Resource } from '@/types/resource';
+import type { DockerHealthProbe, Resource } from '@/types/resource';
 import { asTrimmedString } from '@/utils/stringUtils';
 
 import {
@@ -26,11 +26,46 @@ const normalizedToken = (value: unknown): string =>
 const presentationTone = (variant: string): DockerContainerStateTone | null =>
   variant === 'danger' || variant === 'warning' || variant === 'muted' ? variant : null;
 
+// Why the last health check failed, in a few words. The agent reports a
+// reason code and never the probe output; a probe whose output named nothing
+// known gives its exit code. The wording matches the alert's.
+export const describeDockerHealthProbe = (
+  probe: DockerHealthProbe | undefined,
+): string | undefined => {
+  if (!probe) return undefined;
+  switch (probe.reason) {
+    case 'connection_refused':
+      return 'connection refused';
+    case 'timeout':
+      return 'timed out';
+    case 'name_not_resolved':
+      return 'name not resolved';
+    case 'http_status':
+      return probe.httpStatus ? `HTTP ${probe.httpStatus}` : 'HTTP error';
+    case 'tls':
+      return 'TLS error';
+    case 'command_missing':
+      return 'command not found';
+    default:
+      return typeof probe.exitCode === 'number' ? `exit code ${probe.exitCode}` : undefined;
+  }
+};
+
+const failingHealthCheckTitle = (resource: Resource, lead: string): string => {
+  const probe = resource.docker?.healthProbe;
+  const why = describeDockerHealthProbe(probe);
+  if (!why) return lead;
+  const streak = probe?.failingStreak ?? 0;
+  return streak > 1 ? `${lead}: ${why}, ${streak} in a row` : `${lead}: ${why}`;
+};
+
 const containerStateTitle = (resource: Resource, label: string): string => {
   const state = dockerContainerRunState(resource);
   const health = normalizedToken(resource.docker?.health);
   if (state === 'running') {
-    if (health === 'unhealthy') return 'Running, but its health check is failing';
+    if (health === 'unhealthy') {
+      return failingHealthCheckTitle(resource, 'Running, but its health check is failing');
+    }
     if (health === 'starting') return 'Running, and its health check has not passed yet';
     if (health === 'healthy') return 'Running, and its health check is passing';
     return 'Running, with no health check';
@@ -111,7 +146,12 @@ export const getDockerContainerHealthCheckPresentation = (
   if (state && state !== 'running') return undefined;
   const health = normalizedToken(resource.docker?.health);
   if (health === 'unhealthy') {
-    return { label: 'Failing', title: 'Its health check is failing', tone: 'danger' };
+    const why = describeDockerHealthProbe(resource.docker?.healthProbe);
+    return {
+      label: why ? `Failing: ${why}` : 'Failing',
+      title: failingHealthCheckTitle(resource, 'Its health check is failing'),
+      tone: 'danger',
+    };
   }
   if (health === 'starting') {
     return { label: 'Starting', title: 'Its health check has not passed yet', tone: 'warning' };

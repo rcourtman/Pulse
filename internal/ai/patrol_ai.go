@@ -1890,6 +1890,16 @@ type patrolDockerHostRow struct {
 	unhealthyContainers []string
 }
 
+// patrolUnhealthyContainerLine names an unhealthy container for the seed and
+// adds why its health check fails when the agent reports it.
+func patrolUnhealthyContainerLine(host, name, health, probe string) string {
+	line := fmt.Sprintf("%s/%s: health=%s", host, name, health)
+	if probe != "" {
+		line += " (" + probe + ")"
+	}
+	return line
+}
+
 type patrolAppContainerRow struct {
 	id, name, status string
 	// alertResourceID is the container's ID in the alert subsystem
@@ -1897,9 +1907,13 @@ type patrolAppContainerRow struct {
 	// container rather than a same-named one on another host.
 	alertResourceID string
 	health          string
-	restartCount    int
-	oomKilled       *bool
-	cpu, memory     float64
+	// healthProbe is why the last health check failed, as the agent reported
+	// it ("health check: connection refused, 14 in a row"). Empty unless the
+	// container is unhealthy and its agent sends the reason.
+	healthProbe  string
+	restartCount int
+	oomKilled    *bool
+	cpu, memory  float64
 	// finishedJob is the alert subsystem's answer for an exited container:
 	// it read the exit as a completed one-shot job and raises no state alert
 	// for it (alerts.DockerContainerFinishedJob).
@@ -2186,7 +2200,7 @@ func patrolDockerHostRows(snap patrolRuntimeState, scopedSet map[string]bool) []
 				}
 				health := strings.TrimSpace(cv.Health())
 				if health != "" && health != "healthy" && state == "running" {
-					row.unhealthyContainers = append(row.unhealthyContainers, fmt.Sprintf("%s/%s: health=%s", host, cv.Name(), health))
+					row.unhealthyContainers = append(row.unhealthyContainers, patrolUnhealthyContainerLine(host, cv.Name(), health, cv.HealthProbe().Summary()))
 				}
 			}
 
@@ -2215,7 +2229,7 @@ func patrolDockerHostRows(snap patrolRuntimeState, scopedSet map[string]bool) []
 				row.stoppedCount++
 			}
 			if c.Health != "" && c.Health != "healthy" && c.State == "running" {
-				row.unhealthyContainers = append(row.unhealthyContainers, fmt.Sprintf("%s/%s: health=%s", dh.Hostname, c.Name, c.Health))
+				row.unhealthyContainers = append(row.unhealthyContainers, patrolUnhealthyContainerLine(dh.Hostname, c.Name, c.Health, c.HealthProbe.Summary()))
 			}
 		}
 		rows = append(rows, row)
@@ -2279,6 +2293,7 @@ func patrolAppContainerRows(snap patrolRuntimeState, scopedSet map[string]bool) 
 				status:          strings.TrimSpace(cv.ContainerState()),
 				alertResourceID: alertResourceID,
 				health:          strings.TrimSpace(cv.Health()),
+				healthProbe:     cv.HealthProbe().Summary(),
 				restartCount:    cv.RestartCount(),
 				oomKilled:       cv.OOMKilled(),
 				cpu:             cv.CPUPercent(),
@@ -2308,6 +2323,7 @@ func patrolAppContainerRows(snap patrolRuntimeState, scopedSet map[string]bool) 
 				status:          container.State,
 				alertResourceID: alertResourceID,
 				health:          container.Health,
+				healthProbe:     container.HealthProbe.Summary(),
 				restartCount:    container.RestartCount,
 				oomKilled:       container.OOMKilled,
 				cpu:             container.CPUPercent,
@@ -2914,6 +2930,9 @@ func (p *PatrolService) seedResourceInventoryState(snap patrolRuntimeState, scop
 					health := strings.TrimSpace(row.health)
 					if health == "" {
 						health = "not reported"
+					}
+					if row.healthProbe != "" {
+						health += " (" + row.healthProbe + ")"
 					}
 					state := row.status
 					if row.finishedJob {

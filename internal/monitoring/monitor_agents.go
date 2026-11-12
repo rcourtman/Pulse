@@ -2409,6 +2409,7 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 			Status:             payload.Status,
 			Health:             payload.Health,
 			HealthcheckTargets: append([]string(nil), payload.HealthcheckTargets...),
+			HealthProbe:        dockerHealthProbeFromReport(payload.Health, payload.HealthProbe),
 			CPUPercent:         safeFloat(payload.CPUPercent),
 			MemoryUsage:        payload.MemoryUsageBytes,
 			MemoryLimit:        payload.MemoryLimitBytes,
@@ -5494,4 +5495,29 @@ func (m *Monitor) persistNodeLinkIntents(hosts []models.Host) error {
 		})
 	}
 	return m.hostContinuityStore.SetNodeLinkIntents(entries)
+}
+
+// dockerHealthProbeFromReport keeps a reported probe only for a container the
+// same report calls unhealthy, and only in the closed vocabulary: the reason
+// is shown to operators and given to Patrol, so nothing an agent sends may
+// arrive there as free text.
+func dockerHealthProbeFromReport(health string, probe *agentsdocker.ContainerHealthProbe) *models.DockerContainerHealthProbe {
+	if probe == nil || !strings.EqualFold(strings.TrimSpace(health), "unhealthy") {
+		return nil
+	}
+	out := &models.DockerContainerHealthProbe{
+		Reason:        agentsdocker.NormalizeHealthProbeReason(probe.Reason),
+		ExitCode:      probe.ExitCode,
+		FailingStreak: probe.FailingStreak,
+	}
+	if out.ExitCode < -1 || out.ExitCode > 255 {
+		out.ExitCode = -1
+	}
+	if out.FailingStreak < 0 {
+		out.FailingStreak = 0
+	}
+	if out.Reason == agentsdocker.HealthProbeReasonHTTPStatus && probe.HTTPStatus >= 400 && probe.HTTPStatus <= 599 {
+		out.HTTPStatus = probe.HTTPStatus
+	}
+	return out
 }

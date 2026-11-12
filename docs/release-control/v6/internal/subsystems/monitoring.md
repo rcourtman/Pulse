@@ -3942,6 +3942,13 @@ Report ingest carries the agent's `restartPolicy` onto
 unchanged. Monitoring must not invent a policy for a report that has none: an
 empty value means the agent did not say, and the container state alert reads
 that as unknown rather than as `no`.
+The health-probe reason is runtime-authored evidence with one extra rule,
+because it is shown to operators and given to Patrol. Report ingest
+(`dockerHealthProbeFromReport`) keeps it only for a container the same report
+calls unhealthy, maps any reason outside the agent's closed vocabulary to
+`other`, drops an HTTP status outside 400 to 599 or on any other reason, and
+bounds the exit code and streak. Whatever an agent sends, no free text reaches
+`models.DockerContainer.HealthProbe`.
 Docker host identity collapse must be surfaced, not silently absorbed. Docker
 report ingest keys host identity on the agent-reported machine ID in unified
 mode, so cloned VMs that still share `/etc/machine-id` fold into one

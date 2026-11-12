@@ -21,6 +21,18 @@
 
 ## Purpose
 
+### Docker containers carry why a health check fails (12 November 2026)
+
+`agentsdocker.Container` gains an optional `healthProbe` object: `reason`,
+`exitCode`, `failingStreak` and `httpStatus`. It is `omitempty` and present
+only while the container is unhealthy, so reports from older agents still
+decode and read as "no reason reported". Unlike the restart policy it reaches
+clients: `models.DockerContainer.healthProbe`, the unified resource's
+`docker.healthProbe`, and `health_probe` (with a `summary` in words) on the
+Patrol and Assistant container payloads. `reason` is a closed set and a client
+must treat a value it does not know as `other`. The resource context adds a
+"Health-check failure" fact from the same field.
+
 ### Docker container reports carry the restart policy (12 November 2026)
 
 `agentsdocker.Container` gains an optional `restartPolicy` string: `no`,

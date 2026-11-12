@@ -645,6 +645,7 @@ func (a *Agent) collectContainer(ctx context.Context, summary containertypes.Sum
 	if inspect.Config != nil && inspect.Config.Healthcheck != nil {
 		healthcheckTargets = extractHealthcheckTargets(inspect.Config.Healthcheck.Test)
 	}
+	healthProbe := containerHealthProbe(inspect.State.Health)
 
 	ports := make([]agentsdocker.ContainerPort, len(summary.Ports))
 	for i, port := range summary.Ports {
@@ -750,6 +751,7 @@ func (a *Agent) collectContainer(ctx context.Context, summary containertypes.Sum
 		Status:              summary.Status,
 		Health:              health,
 		HealthcheckTargets:  healthcheckTargets,
+		HealthProbe:         healthProbe,
 		CPUPercent:          cpuPercent,
 		MemoryUsageBytes:    memUsage,
 		MemoryLimitBytes:    memLimit,

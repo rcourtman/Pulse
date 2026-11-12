@@ -319,12 +319,37 @@ func (s DockerHostSummary) NormalizeCollections() DockerHostSummary {
 // DockerContainerSummary is a summarized Docker container
 type DockerContainerSummary struct {
 	GovernedResourceMetadata
-	ID                 string   `json:"id"`
-	Name               string   `json:"name"`
-	State              string   `json:"state"`
-	Image              string   `json:"image"`
-	Health             string   `json:"health,omitempty"`
-	HealthcheckTargets []string `json:"healthcheck_targets,omitempty"`
+	ID                 string       `json:"id"`
+	Name               string       `json:"name"`
+	State              string       `json:"state"`
+	Image              string       `json:"image"`
+	Health             string       `json:"health,omitempty"`
+	HealthcheckTargets []string     `json:"healthcheck_targets,omitempty"`
+	HealthProbe        *HealthProbe `json:"health_probe,omitempty"`
+}
+
+// HealthProbe says why an unhealthy container's last health check failed.
+// Reason is the agent's closed code and Summary the same fact in words. The
+// probe output is never available: it stays on the host.
+type HealthProbe struct {
+	Reason        string `json:"reason"`
+	Summary       string `json:"summary"`
+	ExitCode      int    `json:"exit_code"`
+	FailingStreak int    `json:"failing_streak,omitempty"`
+	HTTPStatus    int    `json:"http_status,omitempty"`
+}
+
+func healthProbeFrom(probe *unifiedresources.DockerHealthProbe) *HealthProbe {
+	if probe == nil {
+		return nil
+	}
+	return &HealthProbe{
+		Reason:        probe.Reason,
+		Summary:       probe.Summary(),
+		ExitCode:      probe.ExitCode,
+		FailingStreak: probe.FailingStreak,
+		HTTPStatus:    probe.HTTPStatus,
+	}
 }
 
 // AppContainerSummary is a summarized canonical app container for list responses.
@@ -689,6 +714,7 @@ type ResourceResponse struct {
 	Image              string                   `json:"image,omitempty"`
 	Health             string                   `json:"health,omitempty"`
 	HealthcheckTargets []string                 `json:"healthcheck_targets"`
+	HealthProbe        *HealthProbe             `json:"health_probe,omitempty"`
 	RestartCount       int                      `json:"restart_count,omitempty"`
 	UpdateAvailable    bool                     `json:"update_available,omitempty"`
 }

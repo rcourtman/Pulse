@@ -4617,6 +4617,7 @@ func BuildTopologyResponseFromReadState(rs unifiedresources.ReadState, options T
 						Image:                    container.Image(),
 						Health:                   container.Health(),
 						HealthcheckTargets:       container.HealthcheckTargets(),
+						HealthProbe:              healthProbeFrom(container.HealthProbe()),
 					})
 				}
 			}
@@ -5153,6 +5154,7 @@ func (e *PulseToolExecutor) executeGetResource(_ context.Context, args map[strin
 				response.Image = strings.TrimSpace(resource.Docker.Image)
 				response.Health = strings.TrimSpace(resource.Docker.Health)
 				response.HealthcheckTargets = append([]string{}, resource.Docker.HealthcheckTargets...)
+				response.HealthProbe = healthProbeFrom(resource.Docker.HealthProbe)
 				response.RestartCount = resource.Docker.RestartCount
 				response.Labels = resource.Docker.Labels
 				if update := resource.Docker.UpdateStatus; update != nil && update.UpdateAvailable {
@@ -5251,6 +5253,7 @@ func (e *PulseToolExecutor) executeGetResource(_ context.Context, args map[strin
 			response.Image = container.Image()
 			response.Health = container.Health()
 			response.HealthcheckTargets = container.HealthcheckTargets()
+			response.HealthProbe = healthProbeFrom(container.HealthProbe())
 			response.Filesystems = container.Filesystems()
 			response.CPU = ResourceCPU{
 				Percent: container.CPUPercent(),

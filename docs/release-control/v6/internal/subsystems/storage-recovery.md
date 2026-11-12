@@ -21,6 +21,15 @@
 
 ## Purpose
 
+### `DockerData` gains a container-only health-probe field (12 November 2026)
+
+`internal/unifiedresources/types.go` gains `DockerData.HealthProbe` and the
+`DockerHealthProbe` alias: why an unhealthy app container's last health check
+failed. It is set only by the Docker container adapter, is nil on every
+storage, backup and recovery resource, and adds nothing to a storage or
+recovery projection, clone path or identity. Storage and recovery readers of
+`DockerData` need no change.
+
 ### Unknown saved sessions retain bytes, not automatic authority
 
 After an unread or undecodable session inventory, the next session save retains

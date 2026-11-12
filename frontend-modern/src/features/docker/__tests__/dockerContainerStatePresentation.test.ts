@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { Resource } from '@/types/resource';
+import type { DockerHealthProbe, Resource } from '@/types/resource';
 import {
   getDockerContainerHealthCheckPresentation,
   getDockerContainerRunStatePresentation,
@@ -146,6 +146,57 @@ describe('drawer runtime rows', () => {
     ).toMatchObject({ label: 'Passing', tone: null });
     expect(
       getDockerContainerHealthCheckPresentation(container({ containerState: 'running' })),
+    ).toBeUndefined();
+  });
+
+  it('says why the health check fails when the agent reports the reason', () => {
+    const refused = container({
+      containerState: 'running',
+      health: 'unhealthy',
+      healthProbe: { reason: 'connection_refused', exitCode: 1, failingStreak: 14 },
+    });
+    expect(getDockerContainerHealthCheckPresentation(refused)).toEqual({
+      label: 'Failing: connection refused',
+      title: 'Its health check is failing: connection refused, 14 in a row',
+      tone: 'danger',
+    });
+    expect(getDockerContainerStatePresentation(refused).title).toBe(
+      'Running, but its health check is failing: connection refused, 14 in a row',
+    );
+
+    const cases: Array<[DockerHealthProbe, string]> = [
+      [{ reason: 'http_status', exitCode: 22, httpStatus: 503 }, 'HTTP 503'],
+      [{ reason: 'http_status', exitCode: 22 }, 'HTTP error'],
+      [{ reason: 'timeout', exitCode: -1 }, 'timed out'],
+      [{ reason: 'name_not_resolved', exitCode: 6 }, 'name not resolved'],
+      [{ reason: 'tls', exitCode: 60 }, 'TLS error'],
+      [{ reason: 'command_missing', exitCode: 127 }, 'command not found'],
+      [{ reason: 'other', exitCode: 2 }, 'exit code 2'],
+      [{ reason: 'a code from a newer server', exitCode: 3 }, 'exit code 3'],
+    ];
+    for (const [healthProbe, words] of cases) {
+      expect(
+        getDockerContainerHealthCheckPresentation(
+          container({ containerState: 'running', health: 'unhealthy', healthProbe }),
+        ),
+      ).toMatchObject({
+        label: `Failing: ${words}`,
+        title: `Its health check is failing: ${words}`,
+      });
+    }
+  });
+
+  it('ignores a probe reason once the container is healthy or stopped', () => {
+    const healthProbe = { reason: 'connection_refused', exitCode: 1, failingStreak: 3 };
+    expect(
+      getDockerContainerHealthCheckPresentation(
+        container({ containerState: 'running', health: 'healthy', healthProbe }),
+      ),
+    ).toMatchObject({ label: 'Passing' });
+    expect(
+      getDockerContainerHealthCheckPresentation(
+        container({ containerState: 'exited', exitCode: 1, health: 'unhealthy', healthProbe }),
+      ),
     ).toBeUndefined();
   });
 

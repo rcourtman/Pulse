@@ -4157,6 +4157,15 @@ func (v DockerContainerView) HealthcheckTargets() []string {
 	return append([]string(nil), v.r.Docker.HealthcheckTargets...)
 }
 
+// HealthProbe says why the container's last health check failed. Nil unless
+// the container is unhealthy and its agent reports the reason.
+func (v DockerContainerView) HealthProbe() *DockerHealthProbe {
+	if v.r == nil || v.r.Docker == nil {
+		return nil
+	}
+	return cloneDockerHealthProbe(v.r.Docker.HealthProbe)
+}
+
 func (v DockerContainerView) RestartCount() int {
 	if v.r == nil || v.r.Docker == nil {
 		return 0

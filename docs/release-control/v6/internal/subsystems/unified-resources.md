@@ -23,6 +23,18 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Docker containers carry the health-probe reason (12 November 2026)
+
+`DockerData.HealthProbe` (JSON `docker.healthProbe`) says why an unhealthy
+container's last health check failed: the agent's closed reason code, the exit
+code, the failing streak and an HTTP status. It is a copy of
+`models.DockerContainerHealthProbe`, cloned with the resource, absent unless
+the container is unhealthy and its agent reports it. The container view reads
+it for the State tooltip and the drawer's Health check row ("Failing:
+connection refused"). The frontend's wording mirrors
+`DockerContainerHealthProbe.Describe` and treats an unknown code as the exit
+code.
+
 ### PBS rollups read the attribution rule (4 November 2026)
 
 PBS protected-workload counts and datastore consumers name the guest
