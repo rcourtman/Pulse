@@ -210,7 +210,15 @@ func TestRunKnownAgentIdentityStatesReachConsumers(t *testing.T) {
 			} else if state == "whitespace" {
 				initial = " \n\t"
 			} else if strings.Contains(state, "explicit") || state == "flag-over-environment" {
-				initial, want, mode = "synthetic-unselected-id\n", "synthetic-selected-id", 0000
+				initial, want = "synthetic-unselected-id\n", "synthetic-selected-id"
+				if runtime.GOOS != "windows" {
+					// An explicit ID bypasses unreadable saved state on Unix, where
+					// directory permissions still permit atomic replacement. On
+					// Windows mode0000 sets read-only, not unreadable, and prevents
+					// replacement. Keep all precedence/restart assertions there
+					// with a writable destination instead of changing its attributes.
+					mode = 0000
+				}
 			}
 			if state != "missing" {
 				if err := os.WriteFile(path, []byte(initial), mode); err != nil {
