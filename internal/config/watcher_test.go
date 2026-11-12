@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -645,4 +646,126 @@ func TestConfigWatcher_ReloadAPITokens_Retries(t *testing.T) {
 
 	// Should attempt retries and log errors but continue
 	cw.reloadAPITokens()
+}
+
+// A failed disk observation is not a saved revocation. In particular, both
+// truncate-in-place and remove/replace writes have incomplete intermediate
+// states; neither may publish an empty live inventory or rebuild bindings.
+func TestConfigWatcher_ReloadAPITokensPreservesIncompleteInventory(t *testing.T) {
+	const raw = "synthetic-retained-monitoring-bearer"
+	for _, state := range []string{"blank", "missing", "missing-directory", "whitespace", "malformed", "encrypted-blank", "encrypted-whitespace"} {
+		t.Run(state, func(t *testing.T) {
+			dir := filepath.Join(t.TempDir(), "saved")
+			p := NewConfigPersistence(dir)
+			past := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
+			saved := []APITokenRecord{
+				{ID: "scoped-live", Hash: auth.HashAPIToken(raw), Name: "Night monitoring", Scopes: []string{ScopeMonitoringRead}, OrgID: "client-a", CreatedAt: past, Metadata: map[string]string{"owner_user_id": "alice"}},
+				{ID: "expired-unrelated", Hash: auth.HashAPIToken("synthetic-expired-bearer"), Name: "Expired", Scopes: []string{ScopeSettingsRead}, OrgID: "client-b", CreatedAt: past, ExpiresAt: &past},
+			}
+			require.NoError(t, p.SaveAPITokens(saved))
+			loaded, err := p.LoadAPITokens()
+			require.NoError(t, err)
+			original, err := os.ReadFile(p.apiTokensFile)
+			require.NoError(t, err)
+			cfg := &Config{APITokens: loaded}
+			callbacks := make(chan struct{}, 4)
+			cw := &ConfigWatcher{config: cfg, persistence: p, apiTokensPath: p.apiTokensFile, stopChan: make(chan struct{})}
+			cw.SetAPITokenReloadCallback(func() { callbacks <- struct{}{} })
+			var incomplete []byte
+			switch state {
+			case "blank":
+				incomplete = []byte{}
+			case "missing":
+				require.NoError(t, os.Remove(p.apiTokensFile))
+			case "missing-directory":
+				require.NoError(t, os.Rename(dir, dir+"-retained"))
+			case "whitespace":
+				incomplete = []byte(" \t\n")
+			case "malformed":
+				incomplete = []byte("[")
+			case "encrypted-blank", "encrypted-whitespace":
+				require.NotNil(t, p.crypto)
+				plain := []byte{}
+				if state == "encrypted-whitespace" {
+					plain = []byte(" \t\n")
+				}
+				incomplete, err = p.crypto.Encrypt(plain)
+				require.NoError(t, err)
+			}
+			if incomplete != nil {
+				require.NoError(t, os.WriteFile(p.apiTokensFile, incomplete, 0600))
+			}
+			before, readErr := os.ReadFile(p.apiTokensFile)
+			infoBefore, statErr := os.Stat(p.apiTokensFile)
+			cw.reloadAPITokens()
+			require.Equal(t, loaded, cfg.APITokens, "failed observation replaced saved token IDs, scopes, expiry, owner or organization")
+			require.True(t, cfg.HasAPITokens(), "incomplete inventory disabled token-only authentication")
+			require.True(t, cfg.IsValidAPIToken(raw))
+			require.False(t, cfg.IsValidAPIToken("synthetic-expired-bearer"))
+			require.False(t, cfg.IsValidAPIToken("unissued-synthetic-bearer"))
+			select {
+			case <-callbacks:
+				t.Fatal("incomplete inventory published a binding rebuild")
+			case <-time.After(20 * time.Millisecond):
+			}
+			after, afterErr := os.ReadFile(p.apiTokensFile)
+			if os.IsNotExist(readErr) {
+				require.True(t, os.IsNotExist(afterErr), "reload created replacement storage")
+			} else {
+				require.NoError(t, readErr)
+				require.NoError(t, afterErr)
+				require.Equal(t, before, after, "reload rewrote incomplete storage")
+				require.NoError(t, statErr)
+				infoAfter, err := os.Stat(p.apiTokensFile)
+				require.NoError(t, err)
+				require.True(t, os.SameFile(infoBefore, infoAfter))
+				require.Equal(t, infoBefore.Mode(), infoAfter.Mode())
+				require.Equal(t, infoBefore.ModTime(), infoAfter.ModTime())
+			}
+			if state == "missing-directory" {
+				require.NoError(t, os.Rename(dir+"-retained", dir))
+			}
+			require.NoError(t, os.WriteFile(p.apiTokensFile, original, 0600))
+			cw.reloadAPITokens()
+			require.Equal(t, loaded, cfg.APITokens)
+			select {
+			case <-callbacks:
+			case <-time.After(time.Second):
+				t.Fatal("restored exact inventory did not rebuild bindings")
+			}
+			// A later durable, explicit empty array is still a real revocation. Never
+			// keep the previously accepted bearer just because it was once retained.
+			require.NoError(t, p.SaveAPITokens(nil))
+			cw.reloadAPITokens()
+			require.Empty(t, cfg.APITokens)
+			require.False(t, cfg.HasAPITokens())
+			require.False(t, cfg.IsValidAPIToken(raw))
+			select {
+			case <-callbacks:
+			case <-time.After(time.Second):
+				t.Fatal("explicit empty inventory did not rebuild bindings")
+			}
+		})
+	}
+}
+
+func TestConfigWatcher_ReloadAPITokensAcceptsCompleteEmptyInventories(t *testing.T) {
+	for _, payload := range []string{"[]", " \n[]\t", "null"} {
+		t.Run(payload, func(t *testing.T) {
+			p := NewConfigPersistence(t.TempDir())
+			cfg := &Config{APITokens: []APITokenRecord{{ID: "old", Hash: auth.HashAPIToken("synthetic-old"), Scopes: []string{ScopeMonitoringRead}, OrgID: "default"}}}
+			require.NoError(t, os.WriteFile(p.apiTokensFile, []byte(payload), 0600))
+			callbacks := make(chan struct{}, 1)
+			cw := &ConfigWatcher{config: cfg, persistence: p, stopChan: make(chan struct{})}
+			cw.SetAPITokenReloadCallback(func() { callbacks <- struct{}{} })
+			cw.reloadAPITokens()
+			require.Empty(t, cfg.APITokens)
+			require.False(t, cfg.IsValidAPIToken("synthetic-old"))
+			select {
+			case <-callbacks:
+			case <-time.After(time.Second):
+				t.Fatal("explicit empty inventory did not publish")
+			}
+		})
+	}
 }
