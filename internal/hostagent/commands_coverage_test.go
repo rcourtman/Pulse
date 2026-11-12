@@ -82,7 +82,16 @@ func TestCommandClient_LoopsCoverage(t *testing.T) {
 }
 
 func TestCommandClient_PingLoop_Direct(t *testing.T) {
-	// Directly test pingLoop logic for coverage
+	for _, stop := range []string{"context", "session"} {
+		t.Run(stop, func(t *testing.T) {
+			testCommandClientPingLoop(t, stop)
+		})
+	}
+}
+
+func testCommandClientPingLoop(t *testing.T, stop string) {
+	t.Helper()
+	ping := make(chan struct{}, 1)
 	upgrader := websocket.Upgrader{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		conn, err := upgrader.Upgrade(w, r, nil)
@@ -91,8 +100,15 @@ func TestCommandClient_PingLoop_Direct(t *testing.T) {
 		}
 		defer conn.Close()
 		for {
-			if _, _, err := conn.ReadMessage(); err != nil {
+			var message wsMessage
+			if err := conn.ReadJSON(&message); err != nil {
 				return
+			}
+			if message.Type == msgTypeAgentPing {
+				select {
+				case ping <- struct{}{}:
+				default:
+				}
 			}
 		}
 	}))
@@ -106,17 +122,45 @@ func TestCommandClient_PingLoop_Direct(t *testing.T) {
 	defer conn.Close()
 
 	client := &CommandClient{
-		conn:   conn,
-		logger: zerolog.Nop(),
+		conn:         conn,
+		logger:       zerolog.Nop(),
+		pingInterval: 10 * time.Millisecond,
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	done := make(chan struct{})
-	// We can't wait for the ticker easily; this is just a cancellation/exit-path coverage check.
-	go client.pingLoop(ctx, conn, done)
-	close(done)
+	exited := make(chan struct{})
+	go func() {
+		defer close(exited)
+		client.pingLoop(ctx, conn, done)
+	}()
+	defer func() {
+		cancel()
+		_ = conn.Close()
+		select {
+		case <-exited:
+		case <-time.After(3 * time.Second):
+			t.Error("ping loop did not stop")
+		}
+	}()
+
+	select {
+	case <-ping:
+	case <-time.After(3 * time.Second):
+		t.Fatal("client-local cadence did not send a ping")
+	}
+	if stop == "context" {
+		cancel()
+	} else {
+		close(done)
+	}
+	select {
+	case <-exited:
+	case <-time.After(3 * time.Second):
+		t.Fatal("ping loop did not stop after " + stop + " ended")
+	}
 }
 
 func TestCommandClient_RegistrationFailure(t *testing.T) {
