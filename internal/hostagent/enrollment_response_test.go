@@ -20,6 +20,13 @@ import (
 	"github.com/rs/zerolog"
 )
 
+// Enrollment runs on Windows too; do not borrow the !windows Proxmox adapter.
+type enrollmentRoundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f enrollmentRoundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
+}
+
 // Keep both public pre-module enrollment and the legacy loop on the real
 // filesystem/HTTP implementation. No report or command client is run here.
 func responseTestEnrollment(t *testing.T, entry, url, dir string, ctx context.Context, logs *bytes.Buffer) (EnrollmentResult, error) {
@@ -227,7 +234,7 @@ func TestEnrollmentResponseReadFailureIsPrivateAndClosesBody(t *testing.T) {
 			calls := 0
 			var logs bytes.Buffer
 			a := &Agent{cfg: Config{APIToken: "synthetic-bootstrap"}, collector: &defaultCollector{}, stateDir: t.TempDir(), logger: zerolog.New(&logs), trimmedPulseURL: "https://synthetic.invalid",
-				httpClient: &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+				httpClient: &http.Client{Transport: enrollmentRoundTripFunc(func(*http.Request) (*http.Response, error) {
 					calls++
 					return &http.Response{StatusCode: 200, Body: body, Header: make(http.Header)}, nil
 				})}}
