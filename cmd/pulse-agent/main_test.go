@@ -3444,7 +3444,7 @@ type identityWriteFixture struct {
 	mu       sync.Mutex
 	requests [][2]string
 	files    map[string]string
-	start    func(string, string) (*identityStartupEvidence, error)
+	start    func(string, string, bool) (*identityStartupEvidence, error)
 }
 
 func newIdentityWriteFixture(t *testing.T) *identityWriteFixture {
@@ -3471,7 +3471,7 @@ func newIdentityWriteFixture(t *testing.T) *identityWriteFixture {
 			t.Fatal(err)
 		}
 	}
-	f.start = func(path, selector string) (*identityStartupEvidence, error) {
+	f.start = func(path, selector string, enroll bool) (*identityStartupEvidence, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
 		evidence := spyIdentityStartup(t, cancel)
@@ -3487,11 +3487,11 @@ func newIdentityWriteFixture(t *testing.T) *identityWriteFixture {
 		if selector == "flag" {
 			err = run(ctx, []string{"--url", f.server.URL, "--state-dir", stateDir, "--token", "synthetic-primary-token",
 				"--agent-id-file", path, "--agent-id", "synthetic-selected-id", "--hostname", "synthetic-identity-host", "--cacert", f.caPath,
-				"--enable-host", "--enable-docker", "--enable-kubernetes", "--disable-auto-update", "--health-addr", "", "--command-authority", "monitoring-only"}, env)
+				fmt.Sprintf("--enroll=%t", enroll), "--enable-host", "--enable-docker", "--enable-kubernetes", "--disable-auto-update", "--health-addr", "", "--command-authority", "monitoring-only"}, env)
 		} else {
 			err = run(ctx, []string{"--url", f.server.URL, "--state-dir", stateDir, "--token", "synthetic-primary-token",
 				"--agent-id-file", path, "--hostname", "synthetic-identity-host", "--cacert", f.caPath,
-				"--enable-host", "--enable-docker", "--enable-kubernetes", "--disable-auto-update", "--health-addr", "", "--command-authority", "monitoring-only"}, env)
+				fmt.Sprintf("--enroll=%t", enroll), "--enable-host", "--enable-docker", "--enable-kubernetes", "--disable-auto-update", "--health-addr", "", "--command-authority", "monitoring-only"}, env)
 		}
 		return evidence, err
 	}
@@ -3552,12 +3552,11 @@ func blockIdentityReplacement(t *testing.T, path string) func() {
 	return restore
 }
 
-func TestRunUnconfirmedAgentIDStopsAuthenticatedStartup(t *testing.T) {
-	for _, selector := range []string{"flag", "environment", "derived"} {
+// Explicit launch configuration remains authoritative even if its optional ID
+// save fails. A stale file is not allowed to override flag/environment selection.
+func TestRunConfiguredAgentIDSaveFailureStillReachesConsumers(t *testing.T) {
+	for _, selector := range []string{"flag", "environment"} {
 		for _, shape := range []string{"default-directory", "selected-directory", "non-directory-parent", "write-blocked"} {
-			if selector == "derived" && shape != "write-blocked" {
-				continue // Non-absence read errors have their own startup tests.
-			}
 			t.Run(selector+"/"+shape, func(t *testing.T) {
 				f := newIdentityWriteFixture(t)
 				path := filepath.Join(t.TempDir(), "agent-id")
@@ -3585,10 +3584,6 @@ func TestRunUnconfirmedAgentIDStopsAuthenticatedStartup(t *testing.T) {
 							t.Fatal(err)
 						}
 					}
-				case "write-blocked":
-					if selector == "derived" {
-						marker = " \n\t"
-					}
 				}
 				if err := os.WriteFile(markerPath, []byte(marker), 0600); err != nil {
 					t.Fatal(err)
@@ -3600,9 +3595,144 @@ func TestRunUnconfirmedAgentIDStopsAuthenticatedStartup(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				evidence, err := f.start(selected, selector)
+				evidence, err := f.start(selected, selector, false)
+				if err != nil {
+					t.Fatalf("configured identity unnecessarily stopped monitoring: %v", err)
+				}
+				id := f.assertConsumers(t, evidence, selector)
+				after, err := os.Stat(markerPath)
+				data, readErr := os.ReadFile(markerPath)
+				if err != nil || readErr != nil || string(data) != marker || !os.SameFile(before, after) || before.Mode() != after.Mode() {
+					t.Fatal("failed optional save replaced saved identity state or its attributes")
+				}
+				f.assertSavedState(t)
+				// Restoring only this owned obstruction enables the existing
+				// best-effort save; it must not change the configured identity.
+				repair()
+				f.mu.Lock()
+				f.requests = nil
+				f.mu.Unlock()
+				evidence, err = f.start(selected, selector, false)
+				if err != nil || f.assertConsumers(t, evidence, selector) != id {
+					t.Fatalf("configured identity changed after restoring writable storage: %v", err)
+				}
+				if data, err := os.ReadFile(path); err != nil || string(data) != id+"\n" {
+					t.Fatal("writable optional destination did not save the configured identity")
+				}
+				if temporary, _ := filepath.Glob(filepath.Join(filepath.Dir(path), ".agent-id-*")); len(temporary) != 0 {
+					t.Fatal("optional save left temporary state")
+				}
+				f.assertSavedState(t)
+			})
+		}
+	}
+}
+
+// Model a confined launch with no saved identity and no creatable state directory.
+// No mount or privilege is required to keep a configured cluster ID across starts.
+func TestRunConfiguredAgentIDWithoutSavedStateStillReachesConsumers(t *testing.T) {
+	for _, selector := range []string{"flag", "environment", "flag-over-environment"} {
+		for _, shape := range []string{"non-directory-parent", "unwritable-parent"} {
+			t.Run(selector+"/"+shape, func(t *testing.T) {
+				f := newIdentityWriteFixture(t)
+				parent := filepath.Join(t.TempDir(), "parent")
+				stateDir := filepath.Join(parent, "state")
+				const marker = "synthetic-parent-marker"
+				if shape == "non-directory-parent" {
+					if err := os.WriteFile(parent, []byte(marker), 0600); err != nil {
+						t.Fatal(err)
+					}
+				} else {
+					if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+						t.Skip("unwritable parent requires an ordinary Unix service user")
+					}
+					if err := os.Mkdir(parent, 0500); err != nil {
+						t.Fatal(err)
+					}
+					t.Cleanup(func() { _ = os.Chmod(parent, 0700) })
+				}
+				before, err := os.Stat(parent)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := writeAgentIDFile(filepath.Join(stateDir, "agent-id"), "synthetic-probe"); err == nil {
+					t.Fatal("fixture did not prevent state creation")
+				}
+				for attempt := 0; attempt < 2; attempt++ {
+					ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+					defer cancel()
+					evidence := spyIdentityStartup(t, cancel)
+					env := func(key string) string {
+						if key == "PULSE_AGENT_ID" {
+							if selector == "environment" {
+								return "  synthetic-selected-id\t"
+							}
+							if selector == "flag-over-environment" {
+								return "synthetic-shadowed-environment-id"
+							}
+						}
+						return ""
+					}
+					if selector == "environment" {
+						err = run(ctx, []string{"--url", f.server.URL, "--state-dir", stateDir, "--token", "synthetic-primary-token",
+							"--hostname", "synthetic-identity-host", "--cacert", f.caPath,
+							"--enable-host", "--enable-docker", "--enable-kubernetes", "--disable-auto-update", "--health-addr", "", "--command-authority", "monitoring-only"}, env)
+					} else {
+						err = run(ctx, []string{"--url", f.server.URL, "--state-dir", stateDir, "--token", "synthetic-primary-token",
+							"--agent-id", "  synthetic-selected-id\t", "--hostname", "synthetic-identity-host", "--cacert", f.caPath,
+							"--enable-host", "--enable-docker", "--enable-kubernetes", "--disable-auto-update", "--health-addr", "", "--command-authority", "monitoring-only"}, env)
+					}
+					if err != nil {
+						t.Fatalf("configured identity with no saved state stopped attempt %d: %v", attempt, err)
+					}
+					f.assertConsumers(t, evidence, selector)
+					f.mu.Lock()
+					f.requests = nil
+					f.mu.Unlock()
+					if _, err := os.Stat(stateDir); err == nil {
+						t.Fatal("startup created state despite its obstruction")
+					}
+					after, err := os.Stat(parent)
+					if err != nil || !os.SameFile(before, after) || before.Mode() != after.Mode() {
+						t.Fatal("startup modified the state parent's attributes or identity")
+					}
+					if shape == "non-directory-parent" {
+						if got, err := os.ReadFile(parent); err != nil || string(got) != marker {
+							t.Fatal("startup changed obstructing state")
+						}
+					}
+					f.assertSavedState(t)
+				}
+			})
+		}
+	}
+}
+
+func TestRunDerivedAgentIDRequiresPersistence(t *testing.T) {
+	for _, shape := range []string{"missing", "empty", "whitespace"} {
+		for _, enroll := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/enroll-%t", shape, enroll), func(t *testing.T) {
+				f := newIdentityWriteFixture(t)
+				path := filepath.Join(t.TempDir(), "agent-id")
+				marker := ""
+				if shape == "whitespace" {
+					marker = " \n\t"
+				}
+				if shape == "missing" {
+					if runtime.GOOS == "windows" {
+						t.Skip("missing file write obstruction requires Unix directory permissions")
+					}
+				} else if err := os.WriteFile(path, []byte(marker), 0600); err != nil {
+					t.Fatal(err)
+				}
+				repair := blockIdentityReplacement(t, path)
+				before, err := os.Stat(filepath.Dir(path))
+				if err != nil {
+					t.Fatal(err)
+				}
+				evidence, err := f.start(path, "derived", enroll)
 				if err == nil || !strings.Contains(err.Error(), "cannot confirm saved agent ID before startup") || !strings.Contains(err.Error(), "writable") || !strings.Contains(err.Error(), "preserve existing state") {
-					t.Errorf("unconfirmed identity did not stop startup with recovery guidance: %v", err)
+					t.Errorf("unsaved derived identity did not stop with recovery guidance: %v", err)
 				}
 				for _, private := range []string{path, f.stateDir, "synthetic-"} {
 					if strings.Contains(fmt.Sprint(err), private) {
@@ -3611,31 +3741,33 @@ func TestRunUnconfirmedAgentIDStopsAuthenticatedStartup(t *testing.T) {
 				}
 				f.mu.Lock()
 				requests := len(f.requests)
-				f.requests = nil
 				f.mu.Unlock()
 				if requests != 0 || len(evidence.calls) != 0 {
-					t.Errorf("unconfirmed identity reached authenticated consumers: requests=%d constructors=%v", requests, evidence.calls)
+					t.Errorf("unsaved derived identity reached enrollment/authenticated consumers: requests=%d constructors=%v", requests, evidence.calls)
 				}
-				after, err := os.Stat(markerPath)
-				data, readErr := os.ReadFile(markerPath)
-				if err != nil || readErr != nil || string(data) != marker || !os.SameFile(before, after) || before.Mode() != after.Mode() {
-					t.Fatal("failed publication replaced saved identity state or its attributes")
+				after, err := os.Stat(filepath.Dir(path))
+				if err != nil || !os.SameFile(before, after) || before.Mode() != after.Mode() {
+					t.Fatal("failed save changed the destination parent's attributes")
+				}
+				if shape == "missing" {
+					if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
+						t.Fatal("failed save created a derived identity")
+					}
+				} else if data, err := os.ReadFile(path); err != nil || string(data) != marker {
+					t.Fatal("failed save replaced existing identity state")
 				}
 				f.assertSavedState(t)
-				// Repair only this owned fixture obstruction; do not delete state
-				// or re-enroll. The next ordinary start must persist the same ID
-				// consumed by every module and by remote configuration.
 				repair()
-				evidence, err = f.start(selected, selector)
+				evidence, err = f.start(path, "derived", false)
 				if err != nil {
-					t.Fatalf("startup did not recover after making its destination writable: %v", err)
+					t.Fatalf("derived identity did not recover after restoring writable storage: %v", err)
 				}
-				id := f.assertConsumers(t, evidence, selector)
+				id := f.assertConsumers(t, evidence, "derived")
 				if data, err := os.ReadFile(path); err != nil || string(data) != id+"\n" {
-					t.Fatal("recovered identity does not survive restart")
+					t.Fatal("recovered derived identity does not survive restart")
 				}
 				if temporary, _ := filepath.Glob(filepath.Join(filepath.Dir(path), ".agent-id-*")); len(temporary) != 0 {
-					t.Fatal("identity publication left temporary state")
+					t.Fatal("identity save left temporary state")
 				}
 				f.assertSavedState(t)
 			})
@@ -3657,7 +3789,7 @@ func TestRunMatchingReadOnlyAgentIDStillReachesConsumers(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				evidence, err := f.start(path, selector)
+				evidence, err := f.start(path, selector, false)
 				if err != nil {
 					t.Fatalf("matching saved identity unnecessarily stopped monitoring: %v", err)
 				}
