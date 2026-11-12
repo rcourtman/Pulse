@@ -19,8 +19,9 @@ func (m *Manager) reconcileHostFilesystemObservationGaps(host models.Host, seen 
 			return strings.HasPrefix(resourceID, prefix)
 		})
 	}
+	signal := MetricAlertIntentSignal("disk")
 	for _, pending := range m.intentPending {
-		if pending.Signal == MetricAlertIntentSignal("disk") && strings.HasPrefix(pending.ResourceID, prefix) {
+		if pending.Signal == signal && strings.HasPrefix(pending.ResourceID, prefix) {
 			resources[pending.ResourceID] = struct{}{}
 		}
 	}

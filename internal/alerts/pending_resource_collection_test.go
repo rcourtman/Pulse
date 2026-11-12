@@ -22,6 +22,7 @@ func pendingCollectionFixture(hosts int, mode string) *Manager {
 		activeAlerts:                make(map[string]*Alert),
 		intentPending:               make(map[string]IntentPendingState),
 		hostDiskTempPendingContexts: make(map[string]hostDiskTempContext),
+		hostDiskTempAbsences:        make(map[string]int),
 		hostNativeSensorPendingCtx:  make(map[string]hostNativeSensorContext),
 		config:                      AlertConfig{Overrides: make(map[string]ThresholdConfig)},
 		stopping:                    true, // no persistence worker in this in-memory fixture
@@ -29,6 +30,7 @@ func pendingCollectionFixture(hosts int, mode string) *Manager {
 	at := time.Date(2026, 11, 12, 12, 0, 0, 0, time.UTC)
 	for h := 0; h < hosts; h++ {
 		hostID := fmt.Sprintf("host-%04d", h)
+		m.hostDiskTempAbsences[hostDiskTemperatureResourceID(hostID, "/dev/absent")] = 1
 		for i, resource := range []struct{ id, metric string }{
 			{hostDiskTemperatureResourceID(hostID, "/dev/sda"), "diskTemperature"},
 			{HostNativeSensorResourceID(hostID, "chip/temp1"), "temperature"},
@@ -91,6 +93,9 @@ func TestHostPendingResourceCollectionIsolation(t *testing.T) {
 			if m.core.PendingCount() != beforeCore || m.shadow.state.PendingCount() != beforeShadow {
 				t.Fatal("observed disk or other-host pending state was interrupted")
 			}
+			if len(m.hostDiskTempAbsences) != 11 {
+				t.Fatal("observation gap changed another host's absence tracking")
+			}
 		})
 	}
 }
@@ -121,9 +126,22 @@ func BenchmarkHostPendingResourceCollection(b *testing.B) {
 						m.interruptHostDiskTemperatureRunsExcept("host-0000", seen)
 					}
 				})
+				b.Run("filesystem-gap", func(b *testing.B) {
+					m := pendingCollectionFixture(hosts, mode)
+					host := models.Host{ID: "host-0000", Disks: []models.Disk{{Mountpoint: "/root"}}}
+					seen := map[string]struct{}{hostResourceID(host.ID) + "/disk:root": {}}
+					b.ReportAllocs()
+					b.ResetTimer()
+					for i := 0; i < b.N; i++ {
+						m.reconcileHostFilesystemObservationGaps(host, seen)
+					}
+				})
 				b.Run("host-report", func(b *testing.B) {
 					m := NewManagerWithDataDir(b.TempDir())
 					b.Cleanup(m.Stop)
+					m.stopMu.Lock()
+					m.stopping = true // close checkpoint admission before warm-up
+					m.stopMu.Unlock()
 					fleet := pendingCollectionFixture(hosts, mode)
 					m.mu.Lock()
 					m.config = AlertConfig{Enabled: true, ActivationState: ActivationActive, Overrides: fleet.config.Overrides,
@@ -131,6 +149,7 @@ func BenchmarkHostPendingResourceCollection(b *testing.B) {
 					m.core, m.shadow = fleet.core, fleet.shadow
 					m.activeAlerts, m.intentPending = fleet.activeAlerts, fleet.intentPending
 					m.hostDiskTempPendingContexts = fleet.hostDiskTempPendingContexts
+					m.hostDiskTempAbsences = fleet.hostDiskTempAbsences
 					m.mu.Unlock()
 					cool := 25.0
 					host := models.Host{ID: "host-0000", Hostname: "selected", Status: "online",
@@ -141,9 +160,6 @@ func BenchmarkHostPendingResourceCollection(b *testing.B) {
 								Status: agentshost.NativeSensorStatusOK, Value: &cool}},
 						}}
 					m.CheckHost(host) // steady report, after first-report transitions
-					m.stopMu.Lock()
-					m.stopping = true // benchmark evaluation, not periodic file checkpoints
-					m.stopMu.Unlock()
 					b.ReportAllocs()
 					b.ResetTimer()
 					for i := 0; i < b.N; i++ {
@@ -208,14 +224,18 @@ func TestHostPendingResourceCollectionMatchesLegacySets(t *testing.T) {
 
 func TestHostPendingResourceCollectionAllocationsStayHostLocal(t *testing.T) {
 	for _, mode := range []string{"pending", "firing", "mixed"} {
-		for _, path := range []string{"native-sensors", "disk-temperature-gap"} {
+		for _, path := range []string{"native-sensors", "disk-temperature-gap", "filesystem-gap"} {
 			t.Run(mode+"/"+path, func(t *testing.T) {
 				measure := func(hosts int) float64 {
 					m := pendingCollectionFixture(hosts, mode)
 					seen := map[string]struct{}{hostDiskTemperatureResourceID("host-0000", "/dev/sda"): {}}
+					host := models.Host{ID: "host-0000", Disks: []models.Disk{{Mountpoint: "/root"}}}
+					filesystems := map[string]struct{}{hostResourceID(host.ID) + "/disk:root": {}}
 					return testing.AllocsPerRun(10, func() {
 						if path == "native-sensors" {
 							pendingCollectionResult = m.hostNativeSensorTrackedResourcesNoLock("host-0000")
+						} else if path == "filesystem-gap" {
+							m.reconcileHostFilesystemObservationGaps(host, filesystems)
 						} else {
 							m.interruptHostDiskTemperatureRunsExcept("host-0000", seen)
 						}

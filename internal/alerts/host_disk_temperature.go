@@ -65,8 +65,9 @@ func (m *Manager) hostDiskTemperatureTrackedResourcesNoLock(prefix string) map[s
 			add(alert.ResourceID)
 		}
 	}
+	signal := MetricAlertIntentSignal("diskTemperature")
 	for _, pending := range m.intentPending {
-		if pending.Signal == MetricAlertIntentSignal("diskTemperature") {
+		if pending.Signal == signal {
 			add(pending.ResourceID)
 		}
 	}
@@ -93,19 +94,18 @@ func (m *Manager) interruptHostDiskTemperatureRuns(hostID string) {
 
 // Live shared SMART/Unraid rows are not observation gaps when SMART is empty.
 func (m *Manager) interruptHostDiskTemperatureRunsExcept(hostID string, observed map[string]struct{}) {
+	prefix := hostDiskTemperatureResourcePrefix(hostID)
 	m.mu.Lock()
 	changed := false
-	for resourceID := range m.hostDiskTemperatureTrackedResourcesNoLock(hostDiskTemperatureResourcePrefix(hostID)) {
+	for resourceID := range m.hostDiskTemperatureTrackedResourcesNoLock(prefix) {
 		if _, present := observed[resourceID]; present {
 			continue
 		}
-		if strings.HasPrefix(resourceID, hostDiskTemperatureResourcePrefix(hostID)) {
-			changed = m.interruptHostDiskTemperatureRunNoLock(resourceID) || changed
-		}
+		changed = m.interruptHostDiskTemperatureRunNoLock(resourceID) || changed
 	}
 	// Empty/expired inventory is not another confirmation that a disk left.
 	for resourceID := range m.hostDiskTempAbsences {
-		if strings.HasPrefix(resourceID, hostDiskTemperatureResourcePrefix(hostID)) {
+		if strings.HasPrefix(resourceID, prefix) {
 			delete(m.hostDiskTempAbsences, resourceID)
 		}
 	}
