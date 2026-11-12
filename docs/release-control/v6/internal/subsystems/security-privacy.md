@@ -18,24 +18,36 @@
 
 ## Purpose
 
-### Refused host-agent redirects keep upstream destinations out of diagnostics
+### Refused agent redirects keep upstream destinations out of diagnostics
 
-The host-agent control-plane request boundary rejects redirect responses before
-`net/http` can parse or include their `Location` in an error. Enrollment,
-primary/observer host reports and typed action-runner credential lifecycle calls
-return only a local numeric-status redirect diagnostic with final-URL guidance,
-not untrusted userinfo, paths, query/fragment values, malformed Location text or
-response/close-error contents. No redirected request carries a bearer or body;
-the rejected response is closed without a body read. Existing no-follow,
-TLS/CA/pin, proxy, timeout, cancellation, buffering, enrollment and command-role
-rules remain in place. Ordinary status/response handling is unchanged.
+`internal/securityutil/control_plane_http.go` is the shared agent control-plane
+request boundary. Enrollment, primary/observer host reports, typed action-runner
+credential lifecycle calls and remote-config hostname lookup/configuration fetch
+reject redirects before `net/http` can parse or include `Location` in an error.
+They return only local numeric-status redirect guidance, not untrusted userinfo,
+paths, query/fragment values, malformed Location text or response/close-error
+contents. No redirected request carries a bearer or body; the rejected response
+is closed without a body read. Existing no-follow, TLS/CA/pin, proxy, timeout,
+cancellation, buffering, enrollment and command-role rules remain in place.
+Ordinary status/response handling is unchanged.
 
-Registered host-agent `control_plane_redirect_privacy_test.go` cases use actual
-local HTTP consumers to check errors, report logs, no forwarding and ordinary
-same-credential recovery. `control_plane_http_test.go` covers closure, client
-immutability, ordinary responses/cookies, cancellation/timeouts and HTTPS trust
-controls. No updater status field or rendered surface changes; this source
-repair does not establish exposure, original-host recovery or publication.
+Registered host-agent `control_plane_redirect_privacy_test.go` checks errors,
+report logs, no forwarding and ordinary same-credential recovery. Its
+`control_plane_http_test.go` covers shared-helper closure, client immutability,
+ordinary responses/cookies, cancellation/timeouts and HTTPS trust. Registered
+`send_report_test.go` couples both report entrypoints to closure without body
+reads, close-error logging or identity/version adoption. Remote-config
+`client_redirect_privacy_test.go` additionally proves both reads keep rejected
+destinations out of errors/warnings, recover with a valid signed response and
+the same credential, and retain closure, context and CA/pin policy. Its existing
+`client_additional_test.go` enforces destination-free numeric guidance.
+`cmd/pulse-agent/remote_config_redirect_test.go` exercises actual HTTPS startup
+and periodic consumers: failed reads do not replace saved authority, enable
+commands or apply redirect bodies, and later reads recover normally. Config
+signature/identity/metadata checks and startup/refresh fallback stay unchanged.
+No updater status field, rendered error or page data changes. Other transport,
+status and decode diagnostics are not claimed sanitized. This repair does not
+establish exposure, original-host recovery or publication.
 
 ### Agent saved-authority ingress cannot accept partial or streaming state
 

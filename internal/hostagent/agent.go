@@ -30,6 +30,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/platformsupport"
 	"github.com/rcourtman/pulse-go-rewrite/internal/remoteconfig"
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rcourtman/pulse-go-rewrite/internal/sensors"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
@@ -566,7 +567,7 @@ func newAgentHTTPClient(caCertPath string, insecureSkipVerify bool, serverFinger
 		// Redirects can rewrite report POSTs to GETs and must never cross an
 		// authority boundary implicitly.
 		CheckRedirect: func(*http.Request, []*http.Request) error {
-			return &controlPlaneRedirectError{}
+			return &securityutil.AgentControlPlaneRedirectError{}
 		},
 	}, nil
 }
@@ -1525,7 +1526,7 @@ func (a *Agent) sendReportToDestination(ctx context.Context, report agentshost.R
 	}
 	req.Header.Set("User-Agent", "pulse-agent/"+Version)
 
-	resp, err := doControlPlaneRequest(client, req)
+	resp, err := securityutil.DoAgentControlPlaneRequest(client, req)
 	if err != nil {
 		return fmt.Errorf("send request: %w", err)
 	}
