@@ -399,38 +399,9 @@ func (m *Manager) dispatchAlert(alert *Alert, async bool) bool {
 		AlertDeliveryReasonReady, "Notification dispatched to the delivery pipeline.", nil)
 
 	alertCopy := cloneAlertForOutput(alert)
-	if async {
-		m.runAdmittedCallback(true, func() {
-			defer func() {
-				if r := recover(); r != nil {
-					log.Error().
-						Interface("panic", r).
-						Str("alertID", alertCopy.ID).
-						Str("type", alertCopy.Type).
-						Msg("Panic in onAlert callback")
-				}
-			}()
-			for _, callback := range callbacks {
-				callback(alertCopy)
-			}
-		})
-	} else {
-		// Synchronous calls also need panic recovery to prevent service crash
-		m.runAdmittedCallback(false, func() {
-			defer func() {
-				if r := recover(); r != nil {
-					log.Error().
-						Interface("panic", r).
-						Str("alertID", alertCopy.ID).
-						Str("type", alertCopy.Type).
-						Msg("Panic in onAlert callback (synchronous)")
-				}
-			}()
-			for _, callback := range callbacks {
-				callback(alertCopy)
-			}
-		})
-	}
+	m.runAdmittedCallback(async, func() {
+		callAlertSubscribers(alertCopy, callbacks, "Panic in onAlert callback")
+	})
 	return true
 }
 
@@ -443,21 +414,34 @@ func (m *Manager) dispatchAlertFiring(alert *Alert, callbacks []func(alert *Aler
 	}
 	alertCopy := cloneAlertForOutput(alert)
 	m.dispatchCallback(async, func() {
-		for _, callback := range callbacks {
-			func() {
-				defer func() {
-					if r := recover(); r != nil {
-						log.Error().
-							Interface("panic", r).
-							Str("alertID", alertCopy.ID).
-							Str("type", alertCopy.Type).
-							Msg("Panic in alert firing callback")
-					}
-				}()
-				callback(alertCopy)
-			}()
-		}
+		callAlertSubscribers(alertCopy, callbacks, "Panic in alert firing callback")
 	})
+}
+
+// callAlertSubscribers owns the already-exported snapshot. Each subscriber may
+// retain or mutate its copy, or panic, without changing what its peers receive.
+// Keep the final snapshot for the last subscriber: no other consumer has seen
+// it, and the ordinary single-subscriber path needs no additional clone.
+func callAlertSubscribers(snapshot *Alert, callbacks []func(*Alert), panicMessage string) {
+	alertID, alertType := snapshot.ID, snapshot.Type
+	for index, callback := range callbacks {
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Error().
+						Interface("panic", r).
+						Str("alertID", alertID).
+						Str("type", alertType).
+						Msg(panicMessage)
+				}
+			}()
+			owned := snapshot
+			if index < len(callbacks)-1 {
+				owned = snapshot.Clone()
+			}
+			callback(owned)
+		}()
+	}
 }
 
 func (m *Manager) recordAlertNotifiedNoLock(alert *Alert, notifiedAt time.Time) {
