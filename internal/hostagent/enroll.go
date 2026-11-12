@@ -189,7 +189,7 @@ func persistedRuntimeToken(collector SystemCollector, stateDir string) (string, 
 		}
 		// Do not disclose credential contents, private paths or the underlying
 		// filesystem error. An unreadable saved token is not an absent token.
-		return "", errors.New("cannot read saved runtime token; check that runtime.token in the configured state directory is a regular file of at most 64 KiB and readable by the agent service; refusing to re-enroll")
+		return "", errors.New("cannot read saved runtime token; check that runtime.token in the configured state directory is a regular file of at most 64 KiB and readable by the agent service; restore any unavailable file or directory link target before restarting; refusing to re-enroll")
 	}
 	return string(bytes.TrimSpace(data)), nil
 }

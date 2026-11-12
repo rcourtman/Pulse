@@ -388,7 +388,7 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 			// An unreadable saved identity is not a first start. Deriving a
 			// replacement here can split History and overwrite that identity
 			// when its directory is writable even though the file is not.
-			return errors.New("cannot read saved agent ID; check that the configured agent-id file is a regular file of at most 64 KiB and readable by the agent service; refusing to replace the saved identity")
+			return errors.New("cannot read saved agent ID; check that the configured agent-id file is a regular file of at most 64 KiB and readable by the agent service; restore any unavailable file or directory link target before restarting; refusing to replace the saved identity")
 		}
 	}
 	if cfg.AgentID == "" {
@@ -1801,7 +1801,7 @@ func resolveTokenInternal(tokenFlag, tokenFileFlag, envToken, stateDir string, r
 		if err != nil || len(content) > agentstate.MaxFileBytes {
 			// A selected source must not silently become some other credential
 			// (or an unauthenticated agent). Do not include path or file contents.
-			return "", fmt.Errorf("cannot read --token-file; check that the configured file exists, is a regular file of at most 64 KiB and is readable by the agent service")
+			return "", fmt.Errorf("cannot read --token-file; check that the configured file exists, is a regular file of at most 64 KiB and is readable by the agent service; restore any unavailable file or directory link target before restarting")
 		}
 		if t := strings.TrimSpace(string(content)); t != "" {
 			return t, nil
@@ -1827,7 +1827,7 @@ func resolveTokenInternal(tokenFlag, tokenFileFlag, envToken, stateDir string, r
 		}
 		// Token-optional startup does not make an unreadable saved credential
 		// absent. Keep the error actionable without exposing its path or contents.
-		return "", errors.New("cannot read saved API token; check that token in the configured state directory is a regular file of at most 64 KiB and readable by the agent service")
+		return "", errors.New("cannot read saved API token; check that token in the configured state directory is a regular file of at most 64 KiB and readable by the agent service; restore any unavailable file or directory link target before restarting")
 	}
 	return strings.TrimSpace(string(content)), nil
 }

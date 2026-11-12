@@ -117,8 +117,119 @@ func TestReadFileFollowsProjectedSecretsAndRelocatedState(t *testing.T) {
 		t.Fatal(err)
 	}
 	link("missing-version", filepath.Join(root, "..data"))
-	if data, err := ReadFile(filepath.Join(alias, "token")); !errors.Is(err, os.ErrNotExist) || data != nil {
-		t.Fatalf("missing projected destination lost existing absence policy: %v", err)
+	if data, err := ReadFile(filepath.Join(alias, "token")); !errors.Is(err, ErrUnavailable) || errors.Is(err, os.ErrNotExist) || data != nil {
+		t.Fatalf("missing projected destination became first-run absence: %v", err)
+	}
+}
+
+func TestMissingLinkedAuthorityIsNotFirstRunAbsence(t *testing.T) {
+	for _, shape := range []string{"file-link", "directory-link", "nested-directory-link", "unclean-directory-link", "link-chain"} {
+		t.Run(shape, func(t *testing.T) {
+			root := t.TempDir()
+			target := filepath.Join(root, "unavailable")
+			linkPath := filepath.Join(root, "saved-state")
+			path := linkPath
+			want := []byte("synthetic-retained-authority\n")
+			switch shape {
+			case "directory-link":
+				path = filepath.Join(linkPath, "token")
+			case "nested-directory-link":
+				path = filepath.Join(linkPath, "nested", "token")
+			case "unclean-directory-link":
+				path = linkPath + string(os.PathSeparator) + ".." + string(os.PathSeparator) + "token"
+			case "link-chain":
+				if err := os.Symlink("unavailable", filepath.Join(root, "intermediate")); err != nil {
+					if runtime.GOOS == "windows" {
+						t.Skip("Windows symlink privilege unavailable")
+					}
+					t.Fatal(err)
+				}
+				target = filepath.Join(root, "intermediate")
+			}
+			directoryTarget := shape != "file-link" && shape != "link-chain"
+			if directoryTarget {
+				// Windows chooses the link kind from the existing target. Make
+				// the directory link first, then model its target going missing.
+				if err := os.Mkdir(target, 0700); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := os.Symlink(filepath.Base(target), linkPath); err != nil {
+				if runtime.GOOS == "windows" {
+					t.Skip("Windows symlink privilege unavailable")
+				}
+				t.Fatal(err)
+			}
+			if directoryTarget {
+				if err := os.Remove(target); err != nil {
+					t.Fatal(err)
+				}
+			}
+			before, err := os.Lstat(linkPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for attempt := 0; attempt < 2; attempt++ {
+				if data, err := ReadFile(path); data != nil || !errors.Is(err, ErrUnavailable) || errors.Is(err, os.ErrNotExist) {
+					t.Fatalf("missing linked authority became absence or data: %v", err)
+				}
+			}
+			after, err := os.Lstat(linkPath)
+			gotTarget, linkErr := os.Readlink(linkPath)
+			if err != nil || linkErr != nil || !os.SameFile(before, after) || before.Mode() != after.Mode() || !before.ModTime().Equal(after.ModTime()) || gotTarget != filepath.Base(target) {
+				t.Fatal("refusal changed the retained link")
+			}
+			// Restore the missing target, not the saved link or another identity.
+			restored := filepath.Join(root, "unavailable")
+			if shape == "directory-link" {
+				restored = filepath.Join(restored, "token")
+			} else if shape == "nested-directory-link" {
+				restored = filepath.Join(restored, "nested", "token")
+			} else if shape == "unclean-directory-link" {
+				if err := os.Mkdir(restored, 0700); err != nil {
+					t.Fatal(err)
+				}
+				restored = filepath.Join(root, "token")
+			}
+			if err := os.MkdirAll(filepath.Dir(restored), 0700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(restored, want, 0600); err != nil {
+				t.Fatal(err)
+			}
+			if data, err := ReadFile(path); err != nil || !bytes.Equal(data, want) {
+				t.Fatalf("restoring the linked target did not restore authority: %v", err)
+			}
+		})
+	}
+}
+
+func TestMissingStateBeneathLiveDirectoryLinksStillAllowsFirstStart(t *testing.T) {
+	root := t.TempDir()
+	alias := filepath.Join(t.TempDir(), "relocated")
+	if err := os.Symlink(root, alias); err != nil {
+		if runtime.GOOS == "windows" {
+			t.Skip("Windows symlink privilege unavailable")
+		}
+		t.Fatal(err)
+	}
+	for _, path := range []string{filepath.Join(root, "token"), filepath.Join(root, "nested", "token"), filepath.Join(alias, "token"), filepath.Join(alias, "nested", "token")} {
+		if data, err := ReadFile(path); data != nil || !errors.Is(err, os.ErrNotExist) || errors.Is(err, ErrUnavailable) {
+			t.Fatalf("real first-run absence was refused: %v", err)
+		}
+	}
+	// A saved file which reappears after the missing Stat observation cannot be
+	// classified as absent using that stale observation. Other errors retain
+	// their identity, and no raw missing-path error is wrapped as unavailable.
+	path := filepath.Join(root, "token")
+	if err := os.WriteFile(path, []byte("synthetic-reappeared"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := classifyMissingFile(path, os.ErrNotExist); !errors.Is(err, ErrUnavailable) || errors.Is(err, os.ErrNotExist) {
+		t.Fatal("reappeared state was classified as absent")
+	}
+	if err := classifyMissingFile(path, os.ErrPermission); !errors.Is(err, os.ErrPermission) {
+		t.Fatal("unrelated read error lost its identity")
 	}
 }
 
