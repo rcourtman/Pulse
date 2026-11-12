@@ -33,12 +33,20 @@ use that path. Invalid state stops before authenticated startup consumers,
 retains saved files and cannot borrow authority, re-enroll or create a new
 identity. Diagnostics are fixed actionable text about regular-file, size and
 readability requirements, never file bytes, raw paths or storage errors.
-Existing absence/empty rules, source priority, configured-ID/read-only launches,
+An existing file link or relocated-directory link whose target is unavailable
+cannot be treated as missing authority. Neither can a file lost between path
+inspection and open. The nearest-existing-entry check preserves directory-link
+traversal semantics (including `..`), does not wrap `os.ErrNotExist` as an
+unavailable-state error, and returns no data. Restoring the original target
+permits reuse without enrollment or substituted identity. A genuinely missing
+file/parent, including beneath a live directory link, still follows first-run
+policy. Readable-empty rules, source priority, configured-ID/read-only launches,
 TLS verification, command ceilings and private publication remain unchanged.
 Legacy injected collectors remain source-compatible and reject oversized
 returned runtime credentials. `internal/agentstate` and both registered
 `saved_authority_bounds_test.go` suites verify these boundaries and state-safe
-recovery in owned fixtures, not installed recovery or historical exposure.
+recovery in owned fixtures, including unavailable file/directory links and
+restoration, not installed recovery or historical exposure.
 
 ### Agent startup preserves configured or saved identity authority
 

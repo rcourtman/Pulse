@@ -33,8 +33,15 @@ Invalid selected state stops before enrollment, authenticated configuration,
 service dispatch or updater/module construction with fixed, path-free guidance
 to check file type, size and service readability. It does not borrow a lower
 priority token, re-enroll, derive replacement identity, delete saved state or
-change its attributes. Missing/readable-empty behavior, opaque token trimming,
-explicit configuration precedence and read-only configured-ID launches retain
+change its attributes. A dangling file link or missing relocated-directory/link
+chain target is unavailable saved state, not first-run absence. A file observed
+before open cannot become absence if it disappears before opening. The missing
+classification checks the nearest existing path entry without collapsing `..`
+across a directory link. Diagnostics direct the operator to restore unavailable
+link targets before restarting; they do not create or replace those targets.
+Genuinely missing files/parents, including missing children beneath a live
+directory link, still permit first start. Readable-empty behavior, opaque token
+trimming, explicit configuration precedence and read-only configured-ID launches retain
 their existing policies. A boundary-size saved ID remains readable after its
 ordinary atomic publication; its optional trailing newline cannot push it past
 the read limit. Enrollment/report publication and TLS/command ceilings do not
@@ -42,11 +49,12 @@ change. Injected legacy collectors retain their interface and reject oversized
 returned token bytes; production filesystem bounds do not depend on them.
 
 Registered `internal/agentstate` tests cover complete/oversized/growing reads,
-partial errors, linked read-only state and Unix FIFO path/handle refusal.
+partial errors, linked read-only state, unavailable link targets/restoration,
+real first-run absence beneath live links and Unix FIFO path/handle refusal.
 `saved_authority_bounds_test.go` in `internal/hostagent` couples invalid saved
-runtime state to both enrollment entrypoints and host Run without discovery or
-re-enrollment, then reuses repaired saved authority. Its command counterpart
-drives all five file roles through actual startup, trusted HTTPS and consistent
+runtime state (including unavailable token and state-directory links) to both
+enrollment entrypoints and host Run without discovery or re-enrollment, then
+reuses repaired saved authority. Its command counterpart drives all five file roles through actual startup, trusted HTTPS and consistent
 consumer identity/credentials, retaining state and monitoring-only ceilings.
 These are source/fixture proofs, not original-host or native-service recovery.
 
