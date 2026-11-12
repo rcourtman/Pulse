@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -74,7 +75,7 @@ func collectorGuestRequest(t *testing.T, operation, expectedStatus string) agent
 
 // startCollectorSession runs a real command server and a real collector
 // command client against it. prepare stands in for the systemd checks.
-func startCollectorSession(t *testing.T, node *collectorGuestRun, prepare func(context.Context, typedActionSupervisor) (string, error)) (*agentexec.Server, *CommandClient, agentexec.AgentAdmission) {
+func startCollectorSession(t *testing.T, node *collectorGuestRun, pingInterval time.Duration, prepare func(context.Context, typedActionSupervisor) (string, error)) (*agentexec.Server, *CommandClient, agentexec.AgentAdmission) {
 	t.Helper()
 	admission := agentexec.AgentAdmission{
 		TokenID: "collector-token", AgentID: "agent-pve", Hostname: "pve.example.test",
@@ -102,6 +103,7 @@ func startCollectorSession(t *testing.T, node *collectorGuestRun, prepare func(c
 	}
 	client.guestStart.prepare = prepare
 	client.guestStart.run = node.run
+	client.pingInterval = pingInterval
 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
@@ -131,7 +133,7 @@ func startCollectorSession(t *testing.T, node *collectorGuestRun, prepare func(c
 func TestRealServerCollectorStartsAStoppedGuestAndIsSentNothingElse(t *testing.T) {
 	node := &collectorGuestRun{}
 	prepared := 0
-	server, _, admission := startCollectorSession(t, node, func(_ context.Context, supervisor typedActionSupervisor) (string, error) {
+	server, _, admission := startCollectorSession(t, node, 0, func(_ context.Context, supervisor typedActionSupervisor) (string, error) {
 		prepared++
 		if supervisor.serviceUnit != typedActionCollectorServiceUnit || supervisor.unitPrefix != typedActionCollectorUnitPrefix {
 			t.Errorf("containment prepared for %q with prefix %q", supervisor.serviceUnit, supervisor.unitPrefix)
@@ -194,7 +196,7 @@ func TestRealServerCollectorStartsAStoppedGuestAndIsSentNothingElse(t *testing.T
 // A collector that cannot set up containment says why and is refused a start.
 func TestRealServerCollectorWithoutContainmentReportsWhyAndIsRefused(t *testing.T) {
 	node := &collectorGuestRun{}
-	server, client, admission := startCollectorSession(t, node, func(context.Context, typedActionSupervisor) (string, error) {
+	server, client, admission := startCollectorSession(t, node, 0, func(context.Context, typedActionSupervisor) (string, error) {
 		return agentexec.ProxmoxGuestStartUnavailableNotSystemdService, errors.New("not running as pulse-agent.service")
 	})
 	sessions := server.GetProxmoxGuestStartSessionsForOrganization("default")
@@ -217,7 +219,7 @@ func TestRealServerCollectorWithoutContainmentReportsWhyAndIsRefused(t *testing.
 // On a host that is not a Proxmox node the collector reports nothing at all.
 func TestCollectorOnAHostThatIsNotAProxmoxNodeReportsNothing(t *testing.T) {
 	node := &collectorGuestRun{}
-	server, _, _ := startCollectorSession(t, node, func(context.Context, typedActionSupervisor) (string, error) {
+	server, _, _ := startCollectorSession(t, node, 0, func(context.Context, typedActionSupervisor) (string, error) {
 		return "", errCollectorTypedActionsNotApplicable
 	})
 	sessions := server.GetProxmoxGuestStartSessionsForOrganization("default")
@@ -500,14 +502,12 @@ func TestCommandClientsOfOneStateDirShareOneContainment(t *testing.T) {
 // answer, and the next start runs. The session is never dropped, so nothing
 // running on it is interrupted.
 func TestRealServerCollectorRestatesGuestStartOnTheLiveSession(t *testing.T) {
-	originalInterval := commandPingInterval
-	commandPingInterval = 20 * time.Millisecond
-	t.Cleanup(func() { commandPingInterval = originalInterval })
+	const pingInterval = 20 * time.Millisecond
 
 	node := &collectorGuestRun{}
 	var mu sync.Mutex
 	fail := true
-	server, client, admission := startCollectorSession(t, node, func(context.Context, typedActionSupervisor) (string, error) {
+	server, client, admission := startCollectorSession(t, node, pingInterval, func(context.Context, typedActionSupervisor) (string, error) {
 		mu.Lock()
 		defer mu.Unlock()
 		if fail {
@@ -521,7 +521,7 @@ func TestRealServerCollectorRestatesGuestStartOnTheLiveSession(t *testing.T) {
 	}
 	connectedAt := sessions[0].ConnectedAt
 	// Several ping ticks pass and nothing changes, so the answer stands.
-	time.Sleep(5 * commandPingInterval)
+	time.Sleep(5 * pingInterval)
 	if sessions = server.GetProxmoxGuestStartSessionsForOrganization("default"); len(sessions) != 1 || sessions[0].ProxmoxGuestStartVersion != 0 {
 		t.Fatalf("sessions = %#v, want the registered answer to stand", sessions)
 	}
@@ -547,6 +547,45 @@ func TestRealServerCollectorRestatesGuestStartOnTheLiveSession(t *testing.T) {
 	result, err := server.ExecuteProxmoxGuestLifecycle(context.Background(), admission.AgentID, collectorGuestRequest(t, "start", "stopped"))
 	if err != nil || !result.MutationCompleted {
 		t.Fatalf("start after the restated answer = %+v, %v", result, err)
+	}
+}
+
+// A short fixture cadence belongs to that client only. Other clients, including
+// one with a nonpositive override, keep the production 30-second interval.
+func TestCollectorPingCadenceIsClientLocal(t *testing.T) {
+	for _, interval := range []time.Duration{0, -time.Second} {
+		t.Run(interval.String(), func(t *testing.T) {
+			var ready atomic.Bool
+			prepare := func(context.Context, typedActionSupervisor) (string, error) {
+				if !ready.Load() {
+					return agentexec.ProxmoxGuestStartUnavailableContainment, errors.New("probe failed")
+				}
+				return "", nil
+			}
+			ordinaryServer, ordinary, admission := startCollectorSession(t, &collectorGuestRun{}, interval, prepare)
+			fastServer, fast, _ := startCollectorSession(t, &collectorGuestRun{}, 10*time.Millisecond, prepare)
+			ready.Store(true)
+			ordinary.prepareGuestStart(context.Background())
+			fast.prepareGuestStart(context.Background())
+
+			deadline := time.Now().Add(3 * time.Second)
+			for {
+				sessions := fastServer.GetProxmoxGuestStartSessionsForOrganization("default")
+				if len(sessions) == 1 && sessions[0].ProxmoxGuestStartVersion == agentexec.ProxmoxGuestStartProtocolVersion {
+					break
+				}
+				if time.Now().After(deadline) {
+					t.Fatal("the fast client did not restate at its own cadence")
+				}
+				time.Sleep(10 * time.Millisecond)
+			}
+			if sessions := ordinaryServer.GetProxmoxGuestStartSessionsForOrganization("default"); len(sessions) != 1 || sessions[0].ProxmoxGuestStartVersion != 0 || sessions[0].ProxmoxGuestStartUnavailable != agentexec.ProxmoxGuestStartUnavailableContainment {
+				t.Fatalf("the short cadence affected another client's session: %#v", sessions)
+			}
+			if !ordinaryServer.IsAgentConnected(admission.AgentID) {
+				t.Fatal("the ordinary client disconnected instead of keeping its cadence")
+			}
+		})
 	}
 }
 

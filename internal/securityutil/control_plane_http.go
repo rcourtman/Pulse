@@ -1,4 +1,4 @@
-package hostagent
+package securityutil
 
 import (
 	"errors"
@@ -6,24 +6,24 @@ import (
 	"net/http"
 )
 
-// controlPlaneRedirectError contains only local text and a numeric status. A
+// AgentControlPlaneRedirectError contains only local text and a numeric status. A
 // reverse proxy's Location can echo credentials or private endpoint details.
-type controlPlaneRedirectError struct {
-	statusCode int
+type AgentControlPlaneRedirectError struct {
+	StatusCode int
 }
 
-func (e *controlPlaneRedirectError) Error() string {
-	if e.statusCode == 0 {
+func (e *AgentControlPlaneRedirectError) Error() string {
+	if e.StatusCode == 0 {
 		return "server returned a redirect - use the final Pulse URL explicitly"
 	}
-	return fmt.Sprintf("server returned HTTP %d redirect - use the final Pulse URL explicitly", e.statusCode)
+	return fmt.Sprintf("server returned HTTP %d redirect - use the final Pulse URL explicitly", e.StatusCode)
 }
 
-// doControlPlaneRequest preserves the supplied client's TLS, proxy, timeout and
+// DoAgentControlPlaneRequest preserves the supplied client's TLS, proxy, timeout and
 // cookie handling without allowing redirects. Reject before net/http parses a
 // Location: even a parse failure or a fixed CheckRedirect error can otherwise
 // put the untrusted destination in an error that runtime callers log.
-func doControlPlaneRequest(client *http.Client, request *http.Request) (*http.Response, error) {
+func DoAgentControlPlaneRequest(client *http.Client, request *http.Request) (*http.Response, error) {
 	guarded := *client
 	transport := guarded.Transport
 	if transport == nil {
@@ -31,7 +31,7 @@ func doControlPlaneRequest(client *http.Client, request *http.Request) (*http.Re
 	}
 	guarded.Transport = controlPlaneNoRedirectTransport{base: transport}
 	response, err := guarded.Do(request)
-	var redirect *controlPlaneRedirectError
+	var redirect *AgentControlPlaneRedirectError
 	if errors.As(err, &redirect) {
 		// net/http wraps RoundTrip errors in a URL error. Release only our
 		// fixed diagnostic, not that wrapper or any upstream text.
@@ -57,7 +57,7 @@ func (t controlPlaneNoRedirectTransport) RoundTrip(request *http.Request) (*http
 			if response.Body != nil {
 				_ = response.Body.Close()
 			}
-			return nil, &controlPlaneRedirectError{statusCode: response.StatusCode}
+			return nil, &AgentControlPlaneRedirectError{StatusCode: response.StatusCode}
 		}
 	}
 	return response, nil

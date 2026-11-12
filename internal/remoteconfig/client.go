@@ -103,8 +103,8 @@ func New(cfg Config) *Client {
 				Proxy:           http.ProxyFromEnvironment,
 				TLSClientConfig: tlsConfig,
 			},
-			CheckRedirect: func(req *http.Request, via []*http.Request) error {
-				return fmt.Errorf("server returned redirect to %s", req.URL)
+			CheckRedirect: func(*http.Request, []*http.Request) error {
+				return http.ErrUseLastResponse
 			},
 		}
 	}
@@ -155,7 +155,7 @@ func (c *Client) Fetch(ctx context.Context) (map[string]interface{}, *bool, erro
 	req.Header.Set("X-API-Token", c.cfg.APIToken)
 	req.Header.Set("User-Agent", "pulse-agent-config-client")
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := securityutil.DoAgentControlPlaneRequest(c.httpClient, req)
 	if err != nil {
 		logger.Warn().
 			Err(err).
@@ -321,7 +321,7 @@ func (c *Client) resolveAgentID(ctx context.Context) (string, error) {
 	req.Header.Set("X-API-Token", c.cfg.APIToken)
 	req.Header.Set("User-Agent", "pulse-agent-config-client")
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := securityutil.DoAgentControlPlaneRequest(c.httpClient, req)
 	if err != nil {
 		logger.Warn().
 			Err(err).

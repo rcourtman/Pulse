@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -15,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	"github.com/rs/zerolog"
@@ -567,5 +569,38 @@ func TestAgentSendReport_ObserverAckNeverInvokesCallback(t *testing.T) {
 
 	if called {
 		t.Fatal("OnServerVersion called from a non-authoritative destination ack")
+	}
+}
+
+// Couple the shared transport's close-without-reading rule to both real report
+// entrypoints. An upstream close error must not enter the report's debug log.
+func TestAgentSendReport_RedirectCannotConsumeAcknowledgement(t *testing.T) {
+	for _, authoritative := range []bool{true, false} {
+		t.Run(fmt.Sprint(authoritative), func(t *testing.T) {
+			body := &controlPlaneTestBody{}
+			calls := 0
+			var logs bytes.Buffer
+			var accepted int
+			agent := &Agent{
+				cfg:     Config{APIToken: "synthetic-saved-credential", AgentID: "synthetic-saved-id", OnServerVersion: func(string) { accepted++ }},
+				agentID: "synthetic-saved-id", trimmedPulseURL: "https://pulse.example", logger: zerolog.New(&logs),
+				httpClient: &http.Client{Transport: controlPlaneTestTransport(func(r *http.Request) (*http.Response, error) {
+					calls++
+					if r.URL.Path != agentReportEndpoint || r.Header.Get("Authorization") != "Bearer synthetic-saved-credential" {
+						t.Error("report changed endpoint or saved credential")
+					}
+					return &http.Response{StatusCode: http.StatusFound, Status: "synthetic-private-status", Header: http.Header{"Location": {"http://[synthetic-private-location"}}, Body: body}, nil
+				})},
+			}
+			err := agent.sendReportToDestination(context.Background(), agentshost.Report{}, agent.trimmedPulseURL, agent.cfg.APIToken, agent.httpClient, authoritative)
+			var redirect *securityutil.AgentControlPlaneRedirectError
+			if !errors.As(err, &redirect) || redirect.StatusCode != http.StatusFound || calls != 1 {
+				t.Fatal("report bypassed shared redirect boundary")
+			}
+			if body.reads != 0 || body.closes != 1 || accepted != 0 || agent.agentID != "synthetic-saved-id" {
+				t.Error("rejected response reached acknowledgement or changed identity")
+			}
+			assertPrivateRedirectDiagnostic(t, err.Error()+logs.String(), "synthetic-private")
+		})
 	}
 }

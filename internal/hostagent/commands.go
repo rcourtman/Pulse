@@ -138,6 +138,10 @@ type CommandClient struct {
 	connMu sync.Mutex
 	done   chan struct{}
 
+	// Set before Run; nonpositive values keep the production default. Keep
+	// test cadences on the client, not in a global read by old session loops.
+	pingInterval time.Duration
+
 	// In-flight command and durable typed-operation requests by request ID, so
 	// a server-issued cancel_command can abort the local execution context
 	// instead of letting abandoned work run to its full timeout. Mutations that
@@ -767,12 +771,14 @@ func (c *CommandClient) retireIfNeverAdmitted() bool {
 	return c.admission.CompareAndSwap(commandClientPending, commandClientSuperseded)
 }
 
-// commandPingInterval is how often a session pings Pulse. A variable so a test
-// can see a ping tick without waiting half a minute.
-var commandPingInterval = 30 * time.Second
+const defaultCommandPingInterval = 30 * time.Second
 
 func (c *CommandClient) pingLoop(ctx context.Context, conn *websocket.Conn, done chan struct{}) {
-	ticker := time.NewTicker(commandPingInterval)
+	interval := c.pingInterval
+	if interval <= 0 {
+		interval = defaultCommandPingInterval
+	}
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
 	for {

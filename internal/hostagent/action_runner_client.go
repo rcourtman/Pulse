@@ -143,7 +143,7 @@ func performActionRunnerCredentialLifecycle(ctx context.Context, config ActionRu
 	if err != nil {
 		return fmt.Errorf("build action-runner lifecycle client: %w", err)
 	}
-	response, err := doControlPlaneRequest(client, request)
+	response, err := securityutil.DoAgentControlPlaneRequest(client, request)
 	if err != nil {
 		return fmt.Errorf("action-runner lifecycle request: %w", err)
 	}
@@ -333,7 +333,7 @@ func (c *CommandClient) activateActionRunnerCredential(ctx context.Context) erro
 	if err != nil {
 		return fmt.Errorf("build action-runner activation client: %w", err)
 	}
-	response, err := doControlPlaneRequest(client, request)
+	response, err := securityutil.DoAgentControlPlaneRequest(client, request)
 	if err != nil {
 		return fmt.Errorf("activate action-runner credential: %w", err)
 	}

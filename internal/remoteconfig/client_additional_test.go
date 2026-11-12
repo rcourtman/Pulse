@@ -287,8 +287,8 @@ func TestClientFetchAgentLookupAndErrors(t *testing.T) {
 	defer redirect.Close()
 
 	client = New(Config{PulseURL: redirect.URL, APIToken: "t", AgentID: "agent-1"})
-	if _, _, err := client.Fetch(context.Background()); err == nil {
-		t.Fatalf("expected redirect error")
+	if _, _, err := client.Fetch(context.Background()); err == nil || !strings.Contains(err.Error(), "HTTP 302 redirect") || strings.Contains(err.Error(), "/other") {
+		t.Fatal("expected a local numeric redirect error without its destination")
 	}
 
 	badJSON := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

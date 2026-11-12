@@ -7,6 +7,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"io"
 	"net/http"
 	"net/http/cookiejar"
@@ -49,9 +50,9 @@ func TestControlPlaneRedirectClosesWithoutReading(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			response, err := doControlPlaneRequest(client, request)
-			var redirect *controlPlaneRedirectError
-			if response != nil || !errors.As(err, &redirect) || redirect.statusCode != status {
+			response, err := securityutil.DoAgentControlPlaneRequest(client, request)
+			var redirect *securityutil.AgentControlPlaneRedirectError
+			if response != nil || !errors.As(err, &redirect) || redirect.StatusCode != status {
 				t.Fatal("redirect lost its local status or returned an open response")
 			}
 			if _, wrapped := err.(*url.Error); wrapped {
@@ -92,7 +93,7 @@ func TestControlPlaneRequestPreservesClientAndOrdinaryResponses(t *testing.T) {
 			request, _ := http.NewRequest(http.MethodPost, "https://pulse.example/api/agents/agent/report", strings.NewReader("synthetic-report"))
 			request.Header.Set("Authorization", "Bearer synthetic-credential")
 			request.Header.Set("X-API-Token", "synthetic-credential")
-			response, err := doControlPlaneRequest(client, request)
+			response, err := securityutil.DoAgentControlPlaneRequest(client, request)
 			if err != nil || response != original || calls != 1 || response.StatusCode != status {
 				t.Fatal("non-redirect or no-Location response changed")
 			}
@@ -129,7 +130,7 @@ func TestControlPlaneRequestRetainsCancellationAndTimeout(t *testing.T) {
 				want = context.Canceled
 			}
 			request, _ := http.NewRequestWithContext(ctx, http.MethodPost, "https://pulse.example/api/agents/agent/report", nil)
-			response, err := doControlPlaneRequest(client, request)
+			response, err := securityutil.DoAgentControlPlaneRequest(client, request)
 			if response != nil || !errors.Is(err, want) {
 				t.Fatal("transport error lost cancellation/timeout identity")
 			}
@@ -169,8 +170,8 @@ func TestControlPlaneRedirectRetainsTLSVerification(t *testing.T) {
 			before := requests.Load()
 			request, _ := http.NewRequest(http.MethodPost, server.URL+enrollEndpoint, nil)
 			request.Header.Set("Authorization", "Bearer synthetic-private")
-			response, err := doControlPlaneRequest(client, request)
-			var redirect *controlPlaneRedirectError
+			response, err := securityutil.DoAgentControlPlaneRequest(client, request)
+			var redirect *securityutil.AgentControlPlaneRedirectError
 			if response != nil || err == nil {
 				t.Fatal("TLS/redirect failure returned success")
 			}
