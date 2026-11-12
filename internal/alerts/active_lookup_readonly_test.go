@@ -123,7 +123,7 @@ func TestActiveAlertReadLockConsumersConcurrent(t *testing.T) {
 			"legacy-capacity": {ID: "old-capacity", Type: "usage", CanonicalState: capacityID,
 				Metadata: map[string]interface{}{capacityAlertOriginKey: capacityAlertOriginForecast}},
 			"legacy-disk": {ID: "old-disk", Type: "disk-health", CanonicalState: diskID,
-				Metadata: map[string]interface{}{"riskCodes": []string{"smart-health-failed"}}},
+				Metadata: map[string]interface{}{"riskCodes": []string{"health_status"}}},
 		},
 		activeAlertAlias: map[string]string{"retired": "retired-storage"},
 	}
