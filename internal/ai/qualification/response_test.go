@@ -624,3 +624,36 @@ func TestPublishedSchemaKnowsTheResponseTrackVocabulary(t *testing.T) {
 		t.Fatalf("published fallbacks = %q, the loader accepts %q", got, want)
 	}
 }
+
+// A default agent cannot read logs, so on the dead web worker it can only see
+// a failing health check on a running container. Its conclusions said so and
+// then listed guesses. Three of six replays earned "Handed over" because a
+// guess named the component ("web server", "gunicorn"), and three did not, so
+// the cell moved with the wording. The decisive fact is that the process
+// exited, which only the log or the probe output shows. The guesses are
+// shortened from three stored default-agent runs. The observed causes use the
+// fixture's own log line and probe output.
+func TestWebWorkerRubricDoesNotCreditAGuess(t *testing.T) {
+	manifest := loadFaultSetCatalog(t).ByID["response.web-worker-died"]
+	off := AgentProfile{Name: AgentProfileCommandsOff}
+	grade := func(conclusion string) ResponseResult {
+		return GradeResponse(manifest, ResponseEvidence{AgentProfile: off, Findings: []ResponseFinding{responseTestFinding("paperless", conclusion)}})
+	}
+	for _, guess := range []string{
+		"Unconfirmed. The health check against 127.0.0.1 is failing, consistent with the web/gunicorn worker or a dependent service not responding internally. If unintentional, restart the container.",
+		"This points to an internal application-layer problem, e.g. the web server not responding correctly on its healthcheck port, or a stuck dependency connection. A restart may clear it.",
+		"Not established. This pattern is consistent with the webserver not responding correctly to the probe or an internal dependency being unreachable. Restart after reading the logs.",
+	} {
+		if graded := grade(guess); graded.Grade != GradeHandedBack || len(graded.Checks.DecisiveMissing) != 1 {
+			t.Fatalf("a guess graded %s (%s, missing %v): %q", graded.Grade, graded.Reason, graded.Checks.DecisiveMissing, guess)
+		}
+	}
+	for _, observed := range []string{
+		"The container log shows webserver (gunicorn) exited unexpectedly with status 143 and was not respawned. Restart the container.",
+		"The health probe gets connection refused on port 8000: nothing is listening. Restart the container.",
+	} {
+		if graded := grade(observed); graded.Grade != GradeHandedOver {
+			t.Fatalf("an observed cause graded %s (%s): %q", graded.Grade, graded.Reason, observed)
+		}
+	}
+}

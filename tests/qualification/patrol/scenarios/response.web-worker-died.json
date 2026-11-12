@@ -1,7 +1,7 @@
 {
   "schema_version": "patrol.qual/v1",
   "id": "response.web-worker-died",
-  "version": 1,
+  "version": 2,
   "title": "web worker died, container up, health failing",
   "description": "The serving process inside a document service exits while the container stays up, so Docker never restarts it and only the health check fails. A restart fixes it. The cause is only in the service log.",
   "owner": "ai-runtime",
@@ -269,10 +269,18 @@
     "expect": "fixed",
     "decisive_terms": [
       [
-        "gunicorn",
-        "webserver",
-        "web server",
-        "web process",
+        "exited unexpectedly",
+        "not respawned",
+        "gunicorn exited",
+        "webserver exited",
+        "web server exited",
+        "web process exited",
+        "gunicorn has exited",
+        "webserver has exited",
+        "gunicorn died",
+        "webserver died",
+        "gunicorn is not running",
+        "webserver is not running",
         "not listening",
         "nothing is listening",
         "connection refused"
