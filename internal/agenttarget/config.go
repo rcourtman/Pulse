@@ -1,6 +1,7 @@
 package agenttarget
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -65,17 +66,12 @@ func LoadObservers(path string, primaryURL string) ([]Observer, error) {
 	if !filepath.IsAbs(path) {
 		return nil, errors.New("observer config path must be absolute")
 	}
-	if err := requirePrivateRegularFile(path, "observer config", maxConfigBytes); err != nil {
+	data, err := readPrivateRegularFile(path, "observer config", maxConfigBytes)
+	if err != nil {
 		return nil, err
 	}
 
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, fmt.Errorf("open observer config: %w", err)
-	}
-	defer f.Close()
-
-	dec := json.NewDecoder(io.LimitReader(f, maxConfigBytes+1))
+	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.DisallowUnknownFields()
 	var parsed observerFile
 	if err := dec.Decode(&parsed); err != nil {
@@ -139,12 +135,9 @@ func resolveObserver(item observerFileTarget) (Observer, error) {
 	if !filepath.IsAbs(tokenPath) {
 		return Observer{}, errors.New("tokenFile must be an absolute path")
 	}
-	if err := requirePrivateRegularFile(tokenPath, "observer token", maxTokenBytes); err != nil {
-		return Observer{}, err
-	}
-	tokenBytes, err := os.ReadFile(tokenPath)
+	tokenBytes, err := readPrivateRegularFile(tokenPath, "observer token", maxTokenBytes)
 	if err != nil {
-		return Observer{}, fmt.Errorf("read observer token: %w", err)
+		return Observer{}, err
 	}
 	token := strings.TrimSpace(string(tokenBytes))
 	if token == "" {
@@ -258,6 +251,10 @@ func requirePrivateRegularFile(path string, label string, maxBytes int64) error 
 	if err != nil {
 		return fmt.Errorf("stat %s file: %w", label, err)
 	}
+	return validatePrivateRegularFile(info, label, maxBytes)
+}
+
+func validatePrivateRegularFile(info os.FileInfo, label string, maxBytes int64) error {
 	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
 		return fmt.Errorf("%s file must be a regular file, not a symlink", label)
 	}
