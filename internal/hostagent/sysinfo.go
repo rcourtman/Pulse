@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentstate"
 	"github.com/rcourtman/pulse-go-rewrite/internal/hostmetrics"
 	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rcourtman/pulse-go-rewrite/internal/sensors"
@@ -144,6 +145,12 @@ func (c *defaultCollector) GOOS() string {
 
 func (c *defaultCollector) ReadFile(name string) ([]byte, error) {
 	return os.ReadFile(name)
+}
+
+// ReadPrivateStateFile bounds saved startup authority without limiting ordinary
+// system/proc reads or changing SystemCollector's injected filesystem interface.
+func (c *defaultCollector) ReadPrivateStateFile(name string) ([]byte, error) {
+	return agentstate.ReadFile(name)
 }
 
 func (c *defaultCollector) NetInterfaces() ([]net.Interface, error) {

@@ -30,6 +30,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentidentity"
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentstate"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agenttarget"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentupdate"
 	pulseconfig "github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -387,7 +388,7 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 			// An unreadable saved identity is not a first start. Deriving a
 			// replacement here can split History and overwrite that identity
 			// when its directory is writable even though the file is not.
-			return errors.New("cannot read saved agent ID; check that the configured agent-id file is readable by the agent service; refusing to replace the saved identity")
+			return errors.New("cannot read saved agent ID; check that the configured agent-id file is a regular file of at most 64 KiB and readable by the agent service; refusing to replace the saved identity")
 		}
 	}
 	if cfg.AgentID == "" {
@@ -966,7 +967,7 @@ func readAgentIDFile(path string) (string, error) {
 	if path == "" {
 		return "", nil
 	}
-	data, err := os.ReadFile(path)
+	data, err := agentstate.ReadFile(path)
 	if err != nil {
 		return "", err
 	}
@@ -993,7 +994,13 @@ func writeAgentIDFile(path, id string) error {
 	tmpPath := tmp.Name()
 	cleanup := func() { _ = os.Remove(tmpPath) }
 
-	if _, err := tmp.WriteString(id + "\n"); err != nil {
+	contents := id
+	// A boundary-size ID must remain readable on the next start; do not make
+	// its optional line terminator exceed the saved-authority read ceiling.
+	if len(contents) < agentstate.MaxFileBytes {
+		contents += "\n"
+	}
+	if _, err := tmp.WriteString(contents); err != nil {
 		_ = tmp.Close()
 		cleanup()
 		return fmt.Errorf("write agent-id-file: %w", err)
@@ -1762,7 +1769,7 @@ func resolveEnableCommands(enableFlag, disableFlag bool, envEnable, envDisable s
 //
 // Reading from a file is more secure than CLI args as tokens won't appear in `ps` output.
 func resolveToken(tokenFlag, tokenFileFlag, envToken, stateDir string) (string, error) {
-	return resolveTokenInternal(tokenFlag, tokenFileFlag, envToken, stateDir, os.ReadFile)
+	return resolveTokenInternal(tokenFlag, tokenFileFlag, envToken, stateDir, agentstate.ReadFile)
 }
 
 // defaultAgentStateDir mirrors where each platform's installer keeps agent
@@ -1791,10 +1798,10 @@ func resolveTokenInternal(tokenFlag, tokenFileFlag, envToken, stateDir string, r
 	// 2. Token from --token-file flag
 	if tokenFileFlag != "" {
 		content, err := readFile(tokenFileFlag)
-		if err != nil {
+		if err != nil || len(content) > agentstate.MaxFileBytes {
 			// A selected source must not silently become some other credential
 			// (or an unauthenticated agent). Do not include path or file contents.
-			return "", fmt.Errorf("cannot read --token-file; check that the configured file exists and is readable by the agent service")
+			return "", fmt.Errorf("cannot read --token-file; check that the configured file exists, is a regular file of at most 64 KiB and is readable by the agent service")
 		}
 		if t := strings.TrimSpace(string(content)); t != "" {
 			return t, nil
@@ -1814,13 +1821,13 @@ func resolveTokenInternal(tokenFlag, tokenFileFlag, envToken, stateDir string, r
 		tokenFile = defaultTokenFilePath()
 	}
 	content, err := readFile(tokenFile)
-	if err != nil {
+	if err != nil || len(content) > agentstate.MaxFileBytes {
 		if errors.Is(err, os.ErrNotExist) {
 			return "", nil
 		}
 		// Token-optional startup does not make an unreadable saved credential
 		// absent. Keep the error actionable without exposing its path or contents.
-		return "", errors.New("cannot read saved API token; check that token in the configured state directory is readable by the agent service")
+		return "", errors.New("cannot read saved API token; check that token in the configured state directory is a regular file of at most 64 KiB and readable by the agent service")
 	}
 	return strings.TrimSpace(string(content)), nil
 }

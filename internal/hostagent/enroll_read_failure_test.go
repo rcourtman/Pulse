@@ -41,6 +41,10 @@ func (c *obstructedRuntimeCollector) ReadFile(path string) ([]byte, error) {
 	return c.defaultCollector.ReadFile(path)
 }
 
+func (c *obstructedRuntimeCollector) ReadPrivateStateFile(path string) ([]byte, error) {
+	return c.ReadFile(path)
+}
+
 func (c *obstructedRuntimeCollector) HostInfo(context.Context) (*gohost.InfoStat, error) {
 	c.hostReads++
 	return &gohost.InfoStat{Hostname: "synthetic-saved-host", Platform: "linux", KernelArch: "x86_64"}, nil

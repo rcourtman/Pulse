@@ -18,6 +18,28 @@
 
 ## Purpose
 
+### Agent saved-authority ingress cannot accept partial or streaming state
+
+The production agent-specific reader admits only regular saved authority files
+up to 64 KiB, inspects the opened handle and actually reads at most one overflow
+byte beyond that ceiling. A growing/oversized file or read failure returns no
+partial credential or ID. Unix nonblocking open prevents a substituted FIFO
+from waiting for a writer. Legitimate file/directory links, projected read-only
+secrets and relocated state are not rejected merely for being links; this is
+not a new anti-symlink trust policy or an arbitrary filesystem-I/O deadline.
+
+Selected/default API token, saved enrollment token and selected agent-ID reads
+use that path. Invalid state stops before authenticated startup consumers,
+retains saved files and cannot borrow authority, re-enroll or create a new
+identity. Diagnostics are fixed actionable text about regular-file, size and
+readability requirements, never file bytes, raw paths or storage errors.
+Existing absence/empty rules, source priority, configured-ID/read-only launches,
+TLS verification, command ceilings and private publication remain unchanged.
+Legacy injected collectors remain source-compatible and reject oversized
+returned runtime credentials. `internal/agentstate` and both registered
+`saved_authority_bounds_test.go` suites verify these boundaries and state-safe
+recovery in owned fixtures, not installed recovery or historical exposure.
+
 ### Agent startup preserves configured or saved identity authority
 
 An explicit, non-empty flag/environment agent ID is authoritative launch
