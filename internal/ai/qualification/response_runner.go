@@ -480,7 +480,7 @@ func (r *QualificationRunner) runResponse(ctx context.Context, report *RunReport
 		}
 		sort.Strings(ids)
 		readAlerts()
-		accepted, err := r.askForRun(ctx, ids, outcomeAlert, runTimeout, &evidence.Wake)
+		accepted, err := r.askForRun(ctx, manifest.Engagement.Fallback, ids, outcomeAlert, runTimeout, &evidence.Wake)
 		if err != nil {
 			return err
 		}
@@ -647,10 +647,14 @@ const (
 // the affected resources. If Pulse cannot resolve that selection and an alert
 // is firing, the Investigate button on that alert. Last a full run. Patrol
 // refuses a run while one is in progress, and a person would click again, so
-// that is retried.
-func (r *QualificationRunner) askForRun(ctx context.Context, resourceIDs []string, alert *PulseAlert, timeout time.Duration, wake *WakeObservation) (TriggeredRun, error) {
+// that is retried. A scenario whose fallback is full_run starts at the last
+// step: it stands in for the scheduled run, which selects nothing.
+func (r *QualificationRunner) askForRun(ctx context.Context, fallback string, resourceIDs []string, alert *PulseAlert, timeout time.Duration, wake *WakeObservation) (TriggeredRun, error) {
 	deadline := time.Now().Add(timeout)
 	ask := AskScopedRun
+	if fallback == EngagementFallbackFullRun {
+		ask = AskFullRun
+	}
 	for {
 		var request RunRequest
 		switch ask {

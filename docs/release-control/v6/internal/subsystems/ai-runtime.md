@@ -1201,6 +1201,28 @@ Re-run on a fresh data folder, the alert-woken run filed its finding and the
 fault read "Handed over, woke by itself" again. The model did not borrow the
 key in that run, so the reply note is covered by its unit test and not by a
 live run. The finished job stayed quiet in every replay.
+
+That replay never reached the whole-estate path. The set's only full run was
+the startup run, before any container exists, so the "Stopped, No Alert" flag
+was not exercised. Fault D7 (`response.service-stopped-no-alert`, 12 November
+2026) covers it, with two additions to the response track:
+
+- `engagement.fallback: full_run` asks for a run over the whole estate once
+  the natural wait is over, as the schedule does. No alert fires for D7, so
+  nothing else can wake Patrol, and a scoped run would read the selected
+  container without following the flag.
+- `outcome.quiet_resources` names negative controls the scenario is also
+  about. A finding on one grades the run False alarm before anything else is
+  read. D7 names the finished job, which the alert rule cannot tell from the
+  stopped service.
+
+First live runs of D7, Sonnet, one per profile: each whole-estate run raised
+two flags, filed `service-stopped` on the service and nothing on the job. The
+default agent handed it over ("If unintentional, restart the gitea container
+after reviewing the logs"). With commands on Patrol read the SIGTERM in the
+log, proposed a start, and Pulse verified it: Fixed. The rubric's next-step
+terms were widened after the first run, because they had been copied from the
+crashed worker and missed a step that names the service.
 Investigation and interactive profiles retain their bounded final summary.
 Patrol report, assessment and resolution tools are governed Pulse-state writes
 for invocation authorization. Accepting one records a decision, does not prove

@@ -34,7 +34,9 @@ const (
 	// harness asked for a run.
 	GradeNotLookedAt Grade = "not_looked_at"
 	// GradeFalseAlarm: nothing was wrong and Patrol raised a finding. Fault
-	// set v1 never saw one, so the Phase 1 scorecard had no word for it.
+	// set v1 never saw one, so the Phase 1 scorecard had no word for it. It
+	// is also the grade when a faulted scenario names a quiet resource and
+	// Patrol raised a finding there.
 	GradeFalseAlarm Grade = "false_alarm"
 )
 
@@ -219,6 +221,8 @@ type ResponseChecks struct {
 	AreaMissing     [][]string `json:"area_missing,omitempty"`
 	// Misdirection lists the known-false statements the conclusion made.
 	Misdirection []string `json:"misdirection,omitempty"`
+	// QuietReported lists the scenario's quiet resources that got a finding.
+	QuietReported []string `json:"quiet_reported,omitempty"`
 }
 
 type ResponseResult struct {
@@ -255,6 +259,18 @@ func GradeResponse(manifest Manifest, evidence ResponseEvidence) ResponseResult 
 			return finishGrade(result, GradeQuiet, "nothing was wrong and no finding was raised")
 		}
 		return finishGrade(result, GradeFalseAlarm, fmt.Sprintf("%d finding(s) raised on a healthy resource", len(findings)))
+	}
+	// A scenario can be about telling two resources apart: one is at fault and
+	// one only looks like it. A finding on the second is a false alarm, and it
+	// is graded before anything Patrol said about the first.
+	for _, finding := range evidence.OtherFindings {
+		if contains(spec.QuietResources, finding.ResourceAlias) && !contains(result.Checks.QuietReported, finding.ResourceAlias) {
+			result.Checks.QuietReported = append(result.Checks.QuietReported, finding.ResourceAlias)
+		}
+	}
+	if len(result.Checks.QuietReported) > 0 {
+		sort.Strings(result.Checks.QuietReported)
+		return finishGrade(result, GradeFalseAlarm, fmt.Sprintf("a finding was raised on %s, where nothing is wrong", strings.Join(result.Checks.QuietReported, ", ")))
 	}
 	if len(findings) == 0 {
 		return finishGrade(result, GradeNotLookedAt, "no finding on the faulted resources")

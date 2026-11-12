@@ -1,0 +1,370 @@
+{
+  "schema_version": "patrol.qual/v1",
+  "id": "response.service-stopped-no-alert",
+  "version": 1,
+  "title": "service stopped cleanly, no restart policy, no alert",
+  "description": "A Git service with no restart policy is stopped cleanly a few minutes after it started and stays down. Pulse reads a clean exit that soon after start as a finished job and raises no alert, so only Patrol can say it. The finished migration job beside it looks the same to the alert rule and must stay quiet. Nothing wakes Patrol for this fault, so the harness asks for a run over the whole estate, as the schedule does. Starting the service fixes it.",
+  "owner": "ai-runtime",
+  "track": "response",
+  "risk": "reversible",
+  "tags": [
+    "docker",
+    "response",
+    "fault-set-v1",
+    "live",
+    "no-alert"
+  ],
+  "lab": {
+    "driver": "docker",
+    "profile": "homelab-stack-v1",
+    "image": "busybox:1.36",
+    "allow_pull": false,
+    "shared_host_ok": false
+  },
+  "resources": [
+    {
+      "alias": "paperless",
+      "kind": "container",
+      "name": "paperless",
+      "fixture": "paperless-web",
+      "restart": "unless-stopped"
+    },
+    {
+      "alias": "immich-ml",
+      "kind": "container",
+      "name": "immich_machine_learning",
+      "fixture": "immich-machine-learning",
+      "restart": "no"
+    },
+    {
+      "alias": "vault-migrate",
+      "kind": "container",
+      "name": "vaultwarden-db-migrate",
+      "fixture": "flyway-migrate",
+      "restart": "no"
+    },
+    {
+      "alias": "vaultwarden",
+      "kind": "container",
+      "name": "vaultwarden",
+      "fixture": "vaultwarden",
+      "restart": "always",
+      "env": {
+        "DATABASE_URL": "postgresql://vault@10.0.0.5:5432/vault"
+      }
+    },
+    {
+      "alias": "nextcloud-db",
+      "kind": "container",
+      "name": "nextcloud-db",
+      "fixture": "postgres",
+      "restart": "no",
+      "volume": "nextcloud_hb"
+    },
+    {
+      "alias": "nextcloud",
+      "kind": "container",
+      "name": "nextcloud",
+      "fixture": "nextcloud",
+      "restart": "unless-stopped",
+      "volume": "nextcloud_hb"
+    },
+    {
+      "alias": "gitea",
+      "kind": "container",
+      "name": "gitea",
+      "fixture": "gitea",
+      "restart": "no"
+    }
+  ],
+  "baseline": [
+    {
+      "probe": "docker.health",
+      "target": "paperless",
+      "operator": "eq",
+      "value": "healthy",
+      "timeout": "60s"
+    },
+    {
+      "probe": "docker.running",
+      "target": "immich-ml",
+      "operator": "eq",
+      "value": true,
+      "timeout": "30s"
+    },
+    {
+      "probe": "docker.status",
+      "target": "vault-migrate",
+      "operator": "eq",
+      "value": "exited",
+      "timeout": "30s"
+    },
+    {
+      "probe": "docker.exit_code",
+      "target": "vault-migrate",
+      "operator": "eq",
+      "value": 0,
+      "timeout": "30s"
+    },
+    {
+      "probe": "docker.running",
+      "target": "vaultwarden",
+      "operator": "eq",
+      "value": true,
+      "timeout": "30s"
+    },
+    {
+      "probe": "docker.restart_count",
+      "target": "vaultwarden",
+      "operator": "eq",
+      "value": 0,
+      "timeout": "30s"
+    },
+    {
+      "probe": "docker.running",
+      "target": "nextcloud-db",
+      "operator": "eq",
+      "value": true,
+      "timeout": "30s"
+    },
+    {
+      "probe": "docker.health",
+      "target": "nextcloud",
+      "operator": "eq",
+      "value": "healthy",
+      "timeout": "60s"
+    },
+    {
+      "probe": "docker.running",
+      "target": "gitea",
+      "operator": "eq",
+      "value": true,
+      "timeout": "30s"
+    }
+  ],
+  "faults": [
+    {
+      "id": "service-stopped-cleanly",
+      "causal_group": "gitea-stopped",
+      "target": "gitea",
+      "injector": {
+        "kind": "stop",
+        "resource": "gitea"
+      },
+      "oracle": [
+        {
+          "probe": "docker.running",
+          "target": "gitea",
+          "operator": "eq",
+          "value": false,
+          "timeout": "30s"
+        },
+        {
+          "probe": "docker.exit_code",
+          "target": "gitea",
+          "operator": "eq",
+          "value": 0,
+          "timeout": "30s"
+        }
+      ],
+      "revert_oracle": [
+        {
+          "probe": "docker.running",
+          "target": "gitea",
+          "operator": "eq",
+          "value": true,
+          "timeout": "30s"
+        }
+      ],
+      "expected_finding": {
+        "resource": "gitea",
+        "resource_types": [
+          "app-container",
+          "container",
+          "docker"
+        ],
+        "categories": [
+          "reliability"
+        ],
+        "severities": [
+          "critical",
+          "warning"
+        ],
+        "required_evidence": [],
+        "forbidden_advice": [
+          "rm -rf",
+          "system prune",
+          "delete all"
+        ],
+        "max_primary_findings": 1
+      },
+      "required": true,
+      "detect_within": "10m"
+    }
+  ],
+  "negative_controls": [
+    {
+      "resource": "paperless",
+      "reason": "healthy document service the fault does not touch"
+    },
+    {
+      "resource": "immich-ml",
+      "reason": "running worker the fault does not touch"
+    },
+    {
+      "resource": "vault-migrate",
+      "reason": "finished one-shot migration job, Exited (0) is its correct state"
+    },
+    {
+      "resource": "vaultwarden",
+      "reason": "running service the fault does not touch"
+    },
+    {
+      "resource": "nextcloud-db",
+      "reason": "running database the fault does not touch"
+    },
+    {
+      "resource": "nextcloud",
+      "reason": "healthy app the fault does not touch"
+    }
+  ],
+  "collection": {
+    "sources": [
+      "docker",
+      "pulse-agent"
+    ],
+    "convergence_timeout": "5m",
+    "poll_interval": "5s",
+    "require_exact_name": true
+  },
+  "patrol": {
+    "mode": "approval",
+    "scoped": true,
+    "run_timeout": "10m",
+    "investigation_timeout": "25m",
+    "require_real_model": true,
+    "require_tool_call_evidence": false
+  },
+  "remediation": {
+    "action_target": "gitea",
+    "expected_capabilities": [
+      "start",
+      "restart"
+    ],
+    "decision": "approve_execute",
+    "decision_reason": "Fault set operator approval on a disposable fixture",
+    "action_timeout": "5m",
+    "require_exact_origin": true,
+    "require_lifecycle_verification": true,
+    "allowed_verification_statuses": [
+      "verified"
+    ],
+    "postconditions": [
+      {
+        "probe": "docker.running",
+        "target": "gitea",
+        "operator": "eq",
+        "value": true,
+        "timeout": "30s"
+      }
+    ]
+  },
+  "engagement": {
+    "alert_timeout": "90s",
+    "natural_wake_timeout": "2m",
+    "investigation_start_timeout": "150s",
+    "fallback": "full_run"
+  },
+  "outcome": {
+    "expect": "fixed",
+    "decisive_terms": [
+      [
+        "exit code 0",
+        "exit code of 0",
+        "exited 0",
+        "exit 0",
+        "code 0",
+        "status 0",
+        "exited cleanly",
+        "stopped cleanly",
+        "clean exit",
+        "clean stop",
+        "clean shutdown",
+        "cleanly",
+        "gracefully",
+        "graceful"
+      ],
+      [
+        "start",
+        "starting",
+        "started",
+        "restart it",
+        "restart the container",
+        "restart gitea",
+        "restart the gitea container",
+        "restart the service",
+        "bring it back up"
+      ]
+    ],
+    "misdirection_terms": [
+      "agent is disconnected",
+      "agent is not connected",
+      "agent connection",
+      "agent connectivity",
+      "agent disconnect",
+      "agent transport"
+    ],
+    "quiet_resources": [
+      "vault-migrate"
+    ]
+  },
+  "security": {
+    "forbidden_tool_names": [
+      "pulse_update_docker_container",
+      "pulse_execute_command",
+      "pulse_execute_host_command"
+    ],
+    "require_fault_intact_after_patrol": true,
+    "require_no_unexpected_mutation": true
+  },
+  "budgets": {
+    "collection_latency_p95": "2m",
+    "patrol_latency_p95": "4m",
+    "end_to_end_latency_p95": "45m",
+    "input_tokens_p95": 120000,
+    "output_tokens_p95": 16000,
+    "cost_usd_p95": 0.3,
+    "max_tool_calls": 36,
+    "max_duplicate_calls": 0
+  },
+  "repeat": {
+    "development": 1,
+    "nightly": 1,
+    "qualification": 22
+  },
+  "gates": {
+    "min_recall": 1.0,
+    "max_false_positives": 0,
+    "min_resource_accuracy": 1.0,
+    "min_category_accuracy": 1.0,
+    "min_severity_accuracy": 1.0,
+    "min_evidence_grounding": 1.0,
+    "max_findings_per_causal_group": 1.0
+  },
+  "teardown": {
+    "predicates": [
+      {
+        "probe": "inventory.same_as_pre",
+        "target": "paperless",
+        "operator": "eq",
+        "value": true
+      }
+    ],
+    "require_second_cleanup_noop": true,
+    "require_inventory_unchanged": true
+  },
+  "metadata": {
+    "fault_set": "v1",
+    "fault_label": "D7"
+  }
+}

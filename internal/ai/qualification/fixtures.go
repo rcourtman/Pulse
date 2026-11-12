@@ -46,8 +46,8 @@ type Fixture struct {
 	CrashOnce []string
 }
 
-// fixtureCatalogue is the six-service stack of fault set v1. The entrypoints
-// are the ones that produced the Phase 1 baseline.
+// fixtureCatalogue is the service stack of fault set v1. The first six
+// entrypoints are the ones that produced the Phase 1 baseline.
 var fixtureCatalogue = []Fixture{
 	{
 		Key:         "paperless-web",
@@ -130,6 +130,18 @@ while true; do
   fi
   sleep 10
 done
+`,
+	},
+	{
+		Key:   "gitea",
+		Image: "gitea/gitea:1.22.3",
+		// A service that shuts down cleanly, as most real ones do: docker
+		// stop sends SIGTERM and it ends with exit code 0. The sleep is one
+		// second so the trap runs well inside the stop timeout.
+		Entrypoint: `#!/bin/sh
+trap 'echo "[W] Terminate signal received by PID 1, shutting down"; echo "[I] PID 1: Finished"; exit 0' TERM
+echo "[I] Starting new Web server: tcp:0.0.0.0:3000 on PID: 1"
+while true; do sleep 1; done
 `,
 	},
 }

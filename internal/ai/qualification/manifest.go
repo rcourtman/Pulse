@@ -284,8 +284,17 @@ type EngagementSpec struct {
 	// scoped_run is the same request as Run Patrol on the affected resources.
 	// When Pulse cannot resolve that selection the harness asks from the
 	// firing alert, as its Investigate button does, and last for a full run.
+	// full_run asks for a run over the whole estate straight away, which is
+	// what the schedule does. A fault that raises no alert is only ever met
+	// that way, and a full run follows triage flags where a scoped run reads
+	// the selected resources.
 	Fallback string `json:"fallback"`
 }
+
+const (
+	EngagementFallbackScopedRun = "scoped_run"
+	EngagementFallbackFullRun   = "full_run"
+)
 
 // OutcomeSpec is the scenario-owned grading rubric of a response scenario.
 // Every grade is decided from structured state and these terms. Nobody reads
@@ -307,6 +316,11 @@ type OutcomeSpec struct {
 	// conclusion that contains one sends the user the wrong way and cannot be
 	// a hand-over.
 	MisdirectionTerms []string `json:"misdirection_terms,omitempty"`
+	// QuietResources are negative controls the scenario is also about: a
+	// finding on one of them during the run makes the result a false alarm,
+	// whatever Patrol said about the fault. Other negative controls are
+	// recorded and not graded.
+	QuietResources []string `json:"quiet_resources,omitempty"`
 }
 
 const (
@@ -395,7 +409,7 @@ func (m Manifest) validateResponse(aliases map[string]struct{}, kinds map[string
 				errs = append(errs, fmt.Errorf("%s: %w", name, err))
 			}
 		}
-		if m.Engagement.Fallback != "scoped_run" {
+		if m.Engagement.Fallback != EngagementFallbackScopedRun && m.Engagement.Fallback != EngagementFallbackFullRun {
 			errs = append(errs, fmt.Errorf("unsupported engagement.fallback %q", m.Engagement.Fallback))
 		}
 	}
@@ -429,8 +443,20 @@ func (m Manifest) validateResponse(aliases map[string]struct{}, kinds map[string
 			errs = append(errs, fmt.Errorf("outcome.misdirection_terms[%d] must not be empty", index))
 		}
 	}
+	for _, alias := range m.Outcome.QuietResources {
+		control := false
+		for _, negative := range m.NegativeControls {
+			control = control || negative.Resource == alias
+		}
+		if !control {
+			errs = append(errs, fmt.Errorf("outcome.quiet_resources: %q is not a negative control", alias))
+		}
+	}
 	switch m.Outcome.Expect {
 	case OutcomeExpectQuiet:
+		if len(m.Outcome.QuietResources) > 0 {
+			errs = append(errs, errors.New("a quiet response scenario grades every negative control: remove outcome.quiet_resources"))
+		}
 		if len(m.Faults) != 0 || len(m.NegativeControls) == 0 {
 			errs = append(errs, errors.New("a quiet response scenario declares no fault and at least one negative control"))
 		}
