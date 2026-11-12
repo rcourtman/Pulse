@@ -45,6 +45,9 @@ func (m *Manager) registerActiveAlertAliasNoLock(storageKey string, alert *Alert
 	}
 }
 
+// Active-alert lookup helpers are read-only: callers may hold m.mu.RLock.
+// Admission and restoration register aliases under m.mu.Lock; a read must not
+// prune a dangling alias or memoize a canonical fallback in the shared index.
 func (m *Manager) resolveActiveAlertKeyNoLock(id string) (string, bool) {
 	if _, ok := m.activeAlerts[id]; ok {
 		return id, true
@@ -54,7 +57,6 @@ func (m *Manager) resolveActiveAlertKeyNoLock(id string) (string, bool) {
 		return "", false
 	}
 	if _, exists := m.activeAlerts[key]; !exists {
-		delete(m.activeAlertAlias, id)
 		return "", false
 	}
 	return key, true
@@ -68,10 +70,6 @@ func (m *Manager) resolveActiveAlertKeyByCanonicalStateNoLock(id string) (string
 		if deriveCanonicalIdentity(alert).State != id {
 			continue
 		}
-		if m.activeAlertAlias == nil {
-			m.activeAlertAlias = make(map[string]string)
-		}
-		m.activeAlertAlias[id] = storageKey
 		return storageKey, true
 	}
 	return "", false
