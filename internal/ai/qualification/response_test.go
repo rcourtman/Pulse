@@ -404,6 +404,45 @@ func TestCrashedWorkerRubricNeedsTheStartStep(t *testing.T) {
 	}
 }
 
+// The finished job is the control for a container Pulse itself leaves alone.
+// The container state alert skips a short-lived container that exited 0 under
+// a restart policy of "no" or "on-failure" (dockerContainerFinishedCleanly in
+// internal/alerts). Provisioned under "always" or "unless-stopped" the job
+// would raise that alert on every run, and a quiet grade would measure Patrol
+// against an alert the lab was built to raise.
+func TestFinishedJobScenarioProvisionsAJobPulseLeavesAlone(t *testing.T) {
+	manifest, ok := loadFaultSetCatalog(t).ByID["response.finished-job-stays-quiet"]
+	if !ok {
+		t.Fatal("catalogue has no finished-job scenario")
+	}
+	if len(manifest.Faults) != 0 {
+		t.Fatalf("the finished-job scenario injects %d faults, want none", len(manifest.Faults))
+	}
+	const job = "vault-migrate"
+	found := false
+	for _, resource := range manifest.Resources {
+		if resource.Alias != job {
+			continue
+		}
+		found = true
+		if resource.Restart != "no" && resource.Restart != "on-failure" {
+			t.Fatalf("finished job restart policy = %q: Docker would restart a clean exit, so Pulse would alert on it", resource.Restart)
+		}
+	}
+	if !found {
+		t.Fatalf("the finished-job scenario has no resource %q", job)
+	}
+	exitedCleanly := false
+	for _, predicate := range manifest.Baseline {
+		if predicate.Probe == "docker.exit_code" && predicate.Target == job && predicate.Operator == "eq" && string(predicate.Value) == "0" {
+			exitedCleanly = true
+		}
+	}
+	if !exitedCleanly {
+		t.Fatal("the baseline does not require the finished job to have exited with code 0")
+	}
+}
+
 // By default only a critical alert wakes Patrol when it fires. Pulse has
 // Patrol look at a warning once it has stayed active for 10 minutes, checked
 // every 30 seconds (sustainedAlertDelay and sustainedCheckInterval in

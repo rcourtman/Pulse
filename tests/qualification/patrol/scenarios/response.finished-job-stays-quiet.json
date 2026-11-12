@@ -3,7 +3,7 @@
   "id": "response.finished-job-stays-quiet",
   "version": 2,
   "title": "finished one-shot job, Exited (0)",
-  "description": "The whole stack is healthy and a one-shot migration job has finished with exit code 0, which is its correct state. Pulse raises a container-state alert for it. Patrol should raise nothing.",
+  "description": "The whole stack is healthy and a one-shot migration job has finished with exit code 0, which is its correct state. Pulse raises no alert for it when the agent reports the restart policy, and a container-state warning when the agent is too old to. Patrol should raise nothing either way.",
   "owner": "ai-runtime",
   "track": "response",
   "risk": "reversible",

@@ -221,6 +221,17 @@ queue cancellation or proof of recovery. For those messages, use
 Patrol findings are separate from threshold alerts; see
 [metric Off and Patrol](FAQ.md#can-i-disable-alerts-for-specific-metrics).
 
+### A finished job is not an offline container
+
+A container that ran for under an hour, exited with code 0 and that Docker will
+not restart (restart policy `no` or `on-failure`) has finished, like a
+migration or an init step, and raises no offline alert. A crash, an
+out-of-memory kill, a stopped container with `always` or `unless-stopped`, and
+a container that ran for longer before it stopped still alert. Give a
+long-running service a restart policy such as `unless-stopped`, and Pulse
+alerts whenever it is stopped. An agent that does not yet report the restart
+policy keeps the old behaviour until it updates.
+
 ## Container CPU readings
 
 Pulse shows container CPU as a share of the **Docker/Podman host's total CPU

@@ -3936,6 +3936,12 @@ models, and unified resources. An absent value means an older or reduced-fidelit
 report did not provide the evidence and must remain distinguishable from both
 confirmed OOM and confirmed non-OOM state. Exit code 137 proves only SIGKILL and
 must not be promoted into OOM truth by monitoring.
+Docker and Podman container restart policy is runtime-authored evidence too.
+Report ingest carries the agent's `restartPolicy` onto
+`models.DockerContainer.RestartPolicy`, trimmed and lower-cased and otherwise
+unchanged. Monitoring must not invent a policy for a report that has none: an
+empty value means the agent did not say, and the container state alert reads
+that as unknown rather than as `no`.
 Docker host identity collapse must be surfaced, not silently absorbed. Docker
 report ingest keys host identity on the agent-reported machine ID in unified
 mode, so cloned VMs that still share `/etc/machine-id` fold into one

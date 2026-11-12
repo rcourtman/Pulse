@@ -452,11 +452,14 @@ The wait in step 5 has to outlast every way Patrol can wake by itself for that
 alert. By default a critical alert wakes Patrol when it fires, and 3 minutes
 covers that. A warning does not wake it. Pulse has Patrol look at a warning
 once it has stayed active for 10 minutes, and checks for that every 30 seconds.
-D2, D3 and D6 raise warnings, so they wait 13 minutes. With 3 minutes the
+D2 and D6 raise warnings, so they wait 13 minutes. With 3 minutes the
 harness asked before Patrol could wake. D2 was then always graded "had to be
-asked", and its grade came from a manual run. D3 has no fault. Its wait is
-there so a false alarm from that later wake is seen. A new scenario whose
-alert is a warning needs the same wait.
+asked", and its grade came from a manual run. D3 has no fault and keeps the
+same wait. Its finished job raised a warning until Pulse stopped alerting on
+short-lived containers that exit 0 and will not restart, and it still does
+with an agent too old to report the restart policy. The wait is there so a false alarm on
+the healthy lab is seen either way. A new scenario whose alert is a warning
+needs the same wait.
 
 The harness never approves a proposal the scenario did not define, including a
 harmless one. The hand-run rig approved any restart on a fixture, which is how
@@ -670,9 +673,10 @@ Things that change a score without any change to Patrol:
   default agent ends with its finding open, its container is removed, and D3
   starts seconds later. Pulse closes such a finding by itself in one of two
   ways. A finding that restates an alert closes when the alert clears. Any
-  other finding on a removed resource closes at the start of Pulse's next run,
-  and in a healthy lab that run is Patrol's look at the finished job's
-  warning, about 11 minutes after provisioning.
+  other finding on a removed resource closes once Pulse has seen the resource
+  missing for 3 minutes, or at the start of Pulse's next run if that comes
+  first. A healthy lab starts no run by itself: the finished job no longer
+  raises the warning that used to bring Patrol in after about 11 minutes.
 - So the run waits up to 13 minutes for the finding to close, and `report.md`
   says how long it waited ("Before the fault"). It never asks Pulse for a run
   to clear the finding. In D3 the wait costs nothing: the time counts toward
@@ -681,8 +685,6 @@ Things that change a score without any change to Patrol:
   scenario with a fault, such a finding came before the fault and the run
   stops.
 - If the finding is still open after the wait, the run refuses and names it.
-  That happens when Pulse starts no run, for example because it allows only
-  four looks at long-standing alerts per hour and the set has used them.
   Resolve the finding in Pulse or start from a fresh directory, then run that
   fault again with `-faults`.
 - The host disk keeps its identity across runs. Its alert and finding are the

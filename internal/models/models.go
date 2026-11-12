@@ -1332,6 +1332,7 @@ type DockerContainer struct {
 	UptimeSeconds       int64                        `json:"uptimeSeconds"`
 	RestartCount        int                          `json:"restartCount"`
 	ExitCode            int                          `json:"exitCode"`
+	RestartPolicy       string                       `json:"restartPolicy,omitempty"` // Docker's policy name as the agent reported it; empty when not reported
 	OOMKilled           *bool                        `json:"oomKilled,omitempty"`
 	CreatedAt           time.Time                    `json:"createdAt"`
 	StartedAt           *time.Time                   `json:"startedAt,omitempty"`

@@ -91,6 +91,7 @@ type Container struct {
 	UptimeSeconds       int64                    `json:"uptimeSeconds"`
 	RestartCount        int                      `json:"restartCount"`
 	ExitCode            int                      `json:"exitCode"`
+	RestartPolicy       string                   `json:"restartPolicy,omitempty"` // Docker's policy name: no, on-failure, always, unless-stopped; empty when not reported
 	OOMKilled           *bool                    `json:"oomKilled,omitempty"`
 	StartedAt           *time.Time               `json:"startedAt,omitempty"`
 	FinishedAt          *time.Time               `json:"finishedAt,omitempty"`

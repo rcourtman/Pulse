@@ -21,6 +21,14 @@
 
 ## Purpose
 
+### Docker container reports carry the restart policy (12 November 2026)
+
+`agentsdocker.Container` gains an optional `restartPolicy` string: `no`,
+`on-failure`, `always` or `unless-stopped`. It is `omitempty`, so reports from
+older agents still decode and read as "not reported". The server keeps it on
+the internal `models.DockerContainer` for the container state alert and does
+not add it to the frontend or unified-resource payloads; no client reads it.
+
 ### Recovery-token authority waits for its saved single-use marker
 
 Recovery-token issuance and consumption acknowledge only a complete owner-only

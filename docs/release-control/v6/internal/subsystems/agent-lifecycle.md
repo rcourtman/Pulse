@@ -2564,6 +2564,14 @@ containers, preserving explicit false; absence is reserved for older or
 reduced-fidelity report producers. Lifecycle transport must not synthesize OOM
 state from exit code 137 or collapse absent and false, because monitoring and
 alerts depend on that distinction to fail closed.
+The same module reports each inspected container's restart policy as
+`restartPolicy`, in Docker's own lower-case names (`no`, `on-failure`,
+`always`, `unless-stopped`). Docker returns an empty name for a container
+created without a policy on older API versions; the agent reports that as `no`,
+because the server must be able to tell a container Docker will not restart
+from one whose policy was never sent. The field is empty only when inspect
+returned no host config, and it is absent from reports of agents older than
+the field.
 Inside-guest Docker / Podman visibility is also a privacy boundary: full
 Docker / Podman inventory may come from a guest-local agent or another explicit
 guest reporting path. LXC Docker inventory may also come from the Proxmox host
