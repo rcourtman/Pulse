@@ -15,14 +15,13 @@ func (m *Manager) reconcileHostFilesystemObservationGaps(host models.Host, seen 
 	m.mu.Lock()
 	resources := make(map[string]struct{})
 	for _, state := range m.mirrorStatesNoLock() {
-		for _, resourceID := range state.PendingResourceIDs() {
-			if strings.HasPrefix(resourceID, prefix) {
-				resources[resourceID] = struct{}{}
-			}
-		}
+		state.CollectPendingResourceIDs(resources, func(resourceID string) bool {
+			return strings.HasPrefix(resourceID, prefix)
+		})
 	}
+	signal := MetricAlertIntentSignal("disk")
 	for _, pending := range m.intentPending {
-		if pending.Signal == MetricAlertIntentSignal("disk") && strings.HasPrefix(pending.ResourceID, prefix) {
+		if pending.Signal == signal && strings.HasPrefix(pending.ResourceID, prefix) {
 			resources[pending.ResourceID] = struct{}{}
 		}
 	}

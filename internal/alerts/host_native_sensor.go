@@ -75,9 +75,9 @@ func (m *Manager) hostNativeSensorTrackedResourcesNoLock(hostID string) map[stri
 		}
 	}
 	for _, state := range m.mirrorStatesNoLock() {
-		for _, resourceID := range state.PendingResourceIDs() {
-			add(resourceID)
-		}
+		state.CollectPendingResourceIDs(resources, func(resourceID string) bool {
+			return strings.HasPrefix(resourceID, prefix)
+		})
 	}
 	for _, pending := range m.intentPending {
 		add(pending.ResourceID)
@@ -269,9 +269,7 @@ func (m *Manager) reevaluateHostNativeSensorPendingNoLock() bool {
 	changed := false
 	resources := make(map[string]struct{})
 	for _, state := range m.mirrorStatesNoLock() {
-		for _, resourceID := range state.PendingResourceIDs() {
-			resources[resourceID] = struct{}{}
-		}
+		state.CollectPendingResourceIDs(resources, isHostNativeSensorResourceID)
 	}
 	for _, pending := range m.intentPending {
 		resources[pending.ResourceID] = struct{}{}

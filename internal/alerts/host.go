@@ -1275,7 +1275,7 @@ func (m *Manager) cleanupHostDiskTemperatureAlerts(hostID string, seen map[strin
 		}
 		absent[alert.ResourceID] = append(absent[alert.ResourceID], storageKey)
 	}
-	for resourceID := range m.hostDiskTemperatureTrackedResourcesNoLock() {
+	for resourceID := range m.hostDiskTemperatureTrackedResourcesNoLock(resourcePrefix) {
 		if !strings.HasPrefix(resourceID, resourcePrefix) {
 			continue
 		}

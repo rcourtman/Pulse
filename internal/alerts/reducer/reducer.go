@@ -651,6 +651,20 @@ func (s *State) DropPendingForResource(resourceID string) int {
 	return dropped
 }
 
+// CollectPendingResourceIDs adds pending (not firing) resource IDs to an
+// initialized caller-owned set. include may be nil to collect every resource.
+// Filtering before insertion lets per-resource cleanup merge core and shadow
+// observations without allocating and deduplicating a fleet-sized snapshot
+// for each state. It does not mutate incidents; the owner serializes access,
+// and include must not change the state.
+func (s *State) CollectPendingResourceIDs(ids map[string]struct{}, include func(string) bool) {
+	for _, incident := range s.incidents {
+		if incident.State == StatePending && (include == nil || include(incident.ResourceID)) {
+			ids[incident.ResourceID] = struct{}{}
+		}
+	}
+}
+
 // PendingResourceIDs lists the resource IDs with a pending (not firing)
 // incident — the enumeration hook for callers that reap runs whose
 // resources disappeared (removed containers, decommissioned hosts).
