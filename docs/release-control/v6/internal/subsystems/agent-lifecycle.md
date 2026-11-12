@@ -17,6 +17,32 @@
 
 ## Purpose
 
+### Enrollment success requires saved runtime authority
+
+After a successful bootstrap exchange, enrollment saves the runtime token and
+any returned canonical agent ID before replacing its in-memory authority or
+returning a successful result. Creation, directory/file permission or private
+publication failure is terminal, not another enrollment attempt. The runtime
+token is saved first and retained if the subsequent ID save fails. The unified
+entrypoint also requires a returned canonical ID to reach an explicitly selected
+`--agent-id-file` before remote configuration, service dispatch, updater or module
+construction. Existing post-report identity refresh remains best-effort.
+
+The errors distinguish an unconfirmed token save from a failed later identity
+save, preserve existing state and warn that bootstrap authority may already have
+been consumed. This is not an atomic remote/local transaction, restoration of
+lost credentials or a power-loss durability guarantee. Saved-token restarts,
+manual-token 403 fallback, network backoff, native Windows startup dispatch and
+TLS/command ceilings retain their existing rules.
+
+`enrollment_persistence_test.go` in `internal/hostagent` covers real filesystem
+and injected storage failures through both enrollment entrypoints and host Run,
+including no replacement authority/retry, private diagnostics and retained saved
+tokens. The command-package test of the same name uses real trusted-HTTPS
+enrollment and obstructed default/custom destinations, proving no authenticated
+startup consumer is reached. These are source/fixture proofs, not installed or
+original-client recovery.
+
 ### Command requests remain live after approval persistence
 
 The approval-gated arbitrary command verifier can now wait for a synchronous

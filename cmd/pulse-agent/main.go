@@ -451,18 +451,18 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 		if err != nil {
 			return fmt.Errorf("enrollment failed: %w", err)
 		}
-		cfg.APIToken = enrollment.APIToken
 		if enrollment.AgentID != "" && enrollment.AgentID != cfg.AgentID {
-			cfg.AgentID = enrollment.AgentID
 			if cfg.AgentIDFile != "" {
-				if err := writeAgentIDFile(cfg.AgentIDFile, cfg.AgentID); err != nil {
-					logger.Warn().
-						Err(err).
-						Str("path", cfg.AgentIDFile).
-						Msg("Failed to persist enrolled agent ID; ID will be re-derived on next start")
+				if err := writeAgentIDFile(cfg.AgentIDFile, enrollment.AgentID); err != nil {
+					// Enroll saved the runtime token and its standard identity file,
+					// but an explicitly selected identity file must also survive a
+					// restart before any consumer uses the replacement authority.
+					return errors.New("cannot confirm saved agent ID after enrollment; the runtime token was saved, so preserve runtime.token and check that the configured agent-id file is writable before restarting")
 				}
 			}
+			cfg.AgentID = enrollment.AgentID
 		}
+		cfg.APIToken = enrollment.APIToken
 		// Enrollment is settled for this process; the host module must not
 		// attempt a second exchange.
 		cfg.Enroll = false

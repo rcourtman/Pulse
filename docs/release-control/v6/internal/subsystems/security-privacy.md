@@ -1126,6 +1126,27 @@ observed/unknown destination types, uncertain access, pre-write recheck and
 file precedence/refusal. Encrypted export scope and authenticated Recovery
 authorisation are unchanged; source proof is not installed transfer acceptance.
 
+### Failed enrollment persistence does not release replacement authority
+
+A successful bootstrap response is not usable startup authority until its
+runtime token and any canonical ID have completed private publication and
+permission checks. A local save failure returns no EnrollmentResult, leaves
+in-memory authority unchanged, stops authenticated startup consumers and never
+retries the completed exchange. A later ID failure preserves the already-saved
+runtime token, including when a separately selected identity destination fails.
+Existing atomic-file/link protections, TLS verification and command ceilings
+remain unchanged; report-time identity refresh is still best-effort.
+
+Persistence diagnostics disclose neither raw storage errors, private paths nor
+credentials. They distinguish unconfirmed storage from absence: a permission
+failure can follow publication, and bootstrap authority may already be consumed.
+There is no automatic deletion, rollback or re-enrollment, no cross-file or
+remote/local atomicity claim, and no promise of recovering previously lost state.
+Registered hostagent and command-package `enrollment_persistence_test.go` cases
+exercise storage failures, saved-state retention, one-use exchange behavior and
+real trusted-HTTPS consuming startup. Saved-token restarts and manual 403 skip
+remain supported by the existing enrollment controls.
+
 ### Saved agent identity read errors cannot create replacement identity
 
 The Unified Agent entrypoint treats a non-absence error reading its selected
