@@ -32,6 +32,9 @@ type TriageResult struct {
 	Intel      seedIntelligence              // Pre-computed intelligence (anomalies, forecasts, etc.)
 	GuestIntel map[string]*GuestIntelligence // Guest reachability data
 	FlaggedIDs map[string]bool               // Set of flagged resource IDs for scoped seed building
+	// unalertedStopKeys are the container exits this run was asked to judge
+	// as job or service. A run that completes remembers them.
+	unalertedStopKeys []string
 }
 
 // TriageSummary provides top-level infrastructure counts.
@@ -73,6 +76,8 @@ func (p *PatrolService) runDeterministicTriageState(
 	flags = append(flags, triageDiskHealthChecksState(snap, scopedSet)...)
 	flags = append(flags, triageContainerHealthChecksState(snap, scopedSet)...)
 	flags = append(flags, triageContainerRestartChecksState(snap, scopedSet)...)
+	unalertedStopFlags, unalertedStopKeys := p.triageUnalertedStops(snap, scopedSet)
+	flags = append(flags, unalertedStopFlags...)
 	flags = append(flags, triageAlertChecksState(snap, scopedSet)...)
 	flags = append(flags, triageConnectivityChecksState(snap, guestIntel, scopedSet)...)
 	flags = append(flags, triageRecentChanges(intel)...)
@@ -99,6 +104,8 @@ func (p *PatrolService) runDeterministicTriageState(
 		Intel:      intel,
 		GuestIntel: guestIntel,
 		FlaggedIDs: flaggedIDs,
+
+		unalertedStopKeys: unalertedStopKeys,
 	}
 }
 
@@ -136,6 +143,97 @@ func triageContainerRestartChecksState(snap patrolRuntimeState, scopedSet map[st
 		})
 	}
 	return flags
+}
+
+// triageUnalertedStopCategory marks a flag for a stopped container that no
+// alert covers.
+const triageUnalertedStopCategory = "unalerted-stop"
+
+// triageUnalertedStopMaxFlags bounds how many such containers one run is asked
+// to judge. A host that keeps dozens of exited init containers must not turn
+// every run into a review of all of them.
+const triageUnalertedStopMaxFlags = 8
+
+// triageUnalertedStoppedContainersState flags the exited containers the alert
+// subsystem reads as finished jobs. No alert covers them, and a run follows
+// its flags, so without one nothing in Pulse would ever look at a service
+// that was stopped cleanly soon after it started. The flag asks for the one
+// judgement the alert rule cannot make: a job, or a service that should be
+// running. skip leaves out the exits a caller does not want judged again. The
+// second result holds the key of each flagged exit.
+func triageUnalertedStoppedContainersState(snap patrolRuntimeState, scopedSet map[string]bool, skip func(key string) bool) ([]TriageFlag, []string) {
+	rows := patrolAppContainerRows(snap, scopedSet)
+	sort.SliceStable(rows, func(i, j int) bool { return rows[i].name < rows[j].name })
+	flags := make([]TriageFlag, 0)
+	keys := make([]string, 0)
+	for _, row := range rows {
+		if !row.finishedJob || (skip != nil && skip(row.finishedJobKey)) {
+			continue
+		}
+		if len(flags) == triageUnalertedStopMaxFlags {
+			break
+		}
+		flags = append(flags, TriageFlag{
+			ResourceID:   row.id,
+			ResourceName: triageResourceName(row.name, row.id),
+			ResourceType: "app-container",
+			Category:     triageUnalertedStopCategory,
+			Severity:     "watch",
+			Reason:       "Stopped with no alert: Pulse read its clean exit as a finished job. Decide whether it is a job or a service that should be running",
+		})
+		keys = append(keys, row.finishedJobKey)
+	}
+	return flags, keys
+}
+
+// triageUnalertedStops flags the stopped containers no alert covers for this
+// run. A run over the whole estate asks about each exit once: the judgement
+// costs model work, and a finished migration does not become a service by
+// being looked at again. A run the operator scoped to a resource always asks,
+// because they asked.
+func (p *PatrolService) triageUnalertedStops(snap patrolRuntimeState, scopedSet map[string]bool) ([]TriageFlag, []string) {
+	if scopedSet != nil || p == nil {
+		return triageUnalertedStoppedContainersState(snap, scopedSet, nil)
+	}
+	return triageUnalertedStoppedContainersState(snap, nil, p.unalertedStopJudged)
+}
+
+func (p *PatrolService) unalertedStopJudged(key string) bool {
+	p.unalertedStopsMu.Lock()
+	defer p.unalertedStopsMu.Unlock()
+	_, judged := p.unalertedStopsJudged[key]
+	return judged
+}
+
+// rememberUnalertedStopsJudged records the exits a completed run was asked to
+// judge, and forgets every exit the snapshot no longer holds, so the memory
+// stays the size of the estate's finished containers. It lives in memory: a
+// restarted Pulse asks once more.
+func (p *PatrolService) rememberUnalertedStopsJudged(keys []string, snap patrolRuntimeState) {
+	if p == nil {
+		return
+	}
+	current := make(map[string]struct{})
+	for _, row := range patrolAppContainerRows(snap, nil) {
+		if row.finishedJobKey != "" {
+			current[row.finishedJobKey] = struct{}{}
+		}
+	}
+	p.unalertedStopsMu.Lock()
+	defer p.unalertedStopsMu.Unlock()
+	if p.unalertedStopsJudged == nil {
+		p.unalertedStopsJudged = make(map[string]struct{})
+	}
+	for _, key := range keys {
+		if key != "" {
+			p.unalertedStopsJudged[key] = struct{}{}
+		}
+	}
+	for key := range p.unalertedStopsJudged {
+		if _, still := current[key]; !still {
+			delete(p.unalertedStopsJudged, key)
+		}
+	}
 }
 
 func triageContainerHealthChecksState(snap patrolRuntimeState, scopedSet map[string]bool) []TriageFlag {
@@ -988,6 +1086,8 @@ func triageFlagLabel(flag TriageFlag) string {
 		return "Baseline Anomaly"
 	case flag.Category == "health":
 		return "Health Risk"
+	case flag.Category == triageUnalertedStopCategory:
+		return "Stopped, No Alert"
 	default:
 		return "Issue"
 	}

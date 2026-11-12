@@ -215,3 +215,15 @@ func TestAgenticLoop_FindingDecisionQuestionIsNotAskedWhenItDoesNotApply(t *test
 		}
 	})
 }
+
+// The final decision turn tells the model that real-time alerts own a stopped
+// resource. It must carry the exception too, or the model's last word on a
+// container Pulse raised no alert for is that an alert covers it.
+func TestFinalFindingDecisionPromptCarriesTheNoAlertException(t *testing.T) {
+	if !strings.Contains(patrolFinalFindingDecisionSystemPrompt, "owned by real-time alerts") {
+		t.Fatal("the final decision prompt no longer states the stopped-resource rule this exception belongs to")
+	}
+	if !strings.Contains(patrolFinalFindingDecisionSystemPrompt, tools.PatrolUnalertedStoppedContainerRule) {
+		t.Fatal("the final decision prompt states the stopped-resource rule without its no-alert exception")
+	}
+}

@@ -934,6 +934,7 @@ func (p *PatrolService) runAIAnalysisState(ctx context.Context, snap patrolRunti
 	// The original conversation owns the diagnosis and finding decisions.
 	// Omitted assessments remain explicit in the result. A separate model
 	// session must not infer them from old finding excerpts or signal counts.
+	p.rememberUnalertedStopsJudged(triageResult.unalertedStopKeys, snap)
 	return buildAnalysisResult(finalContent, attempt.toolCalls, inputTokens, outputTokens, cacheCreationTokens, cacheReadTokens), nil
 }
 
@@ -1899,6 +1900,13 @@ type patrolAppContainerRow struct {
 	restartCount    int
 	oomKilled       *bool
 	cpu, memory     float64
+	// finishedJob is the alert subsystem's answer for an exited container:
+	// it read the exit as a completed one-shot job and raises no state alert
+	// for it (alerts.DockerContainerFinishedJob).
+	finishedJob bool
+	// finishedJobKey names this one exit of this container, so Patrol can
+	// remember that it has judged it. Empty unless finishedJob.
+	finishedJobKey string
 }
 
 type patrolStoragePoolRow struct {
@@ -2215,24 +2223,68 @@ func patrolDockerHostRows(snap patrolRuntimeState, scopedSet map[string]bool) []
 	return rows
 }
 
+// patrolUnalertedStoppedStateSuffix marks a scoped container row whose stopped
+// state no alert covers. It is the mark the report tool's exception
+// (tools.PatrolUnalertedStoppedContainerRule) refers to.
+const patrolUnalertedStoppedStateSuffix = ", no alert (read as a finished job)"
+
+// patrolFinishedJobKey returns a key for one exit of a container the alert
+// subsystem reads as a finished job, and "" for every other container. The
+// finish time is part of it, so a job that runs again is a new exit.
+func patrolFinishedJobKey(alertResourceID string, container models.DockerContainer) string {
+	if alertResourceID == "" || !alerts.DockerContainerFinishedJob(container) {
+		return ""
+	}
+	return fmt.Sprintf("%s@%d", alertResourceID, container.FinishedAt.Unix())
+}
+
+// patrolFinishedJobAlertIDs maps the alert-subsystem ID of each exited
+// container the alert subsystem reads as a finished job to that exit's key. A
+// container missing from the agent reports in this snapshot is simply absent:
+// its stopped state is then treated as alert-owned, as before.
+func patrolFinishedJobAlertIDs(snap patrolRuntimeState) map[string]string {
+	var finished map[string]string
+	for _, host := range snap.DockerHosts {
+		for _, container := range host.Containers {
+			id := dockerAlertScopeAlias(host.ID, container.ID, container.Name)
+			key := patrolFinishedJobKey(id, container)
+			if key == "" {
+				continue
+			}
+			if finished == nil {
+				finished = make(map[string]string)
+			}
+			finished[id] = key
+		}
+	}
+	return finished
+}
+
 func patrolAppContainerRows(snap patrolRuntimeState, scopedSet map[string]bool) []patrolAppContainerRow {
 	rs := snap.readState
 	if rs != nil {
+		// The unified view does not carry the restart policy the finished-job
+		// rule reads, so the answer comes from the agent's own report, joined
+		// on the ID the alert subsystem gives the container.
+		finishedJobs := patrolFinishedJobAlertIDs(snap)
 		rows := make([]patrolAppContainerRow, 0, len(rs.DockerContainers()))
 		for _, cv := range rs.DockerContainers() {
 			if !seedIsInScope(scopedSet, cv.ID()) {
 				continue
 			}
+			alertResourceID := dockerAlertScopeAlias(cv.HostSourceID(), cv.ContainerID(), cv.Name())
 			rows = append(rows, patrolAppContainerRow{
 				id:              cv.ID(),
 				name:            cv.Name(),
 				status:          strings.TrimSpace(cv.ContainerState()),
-				alertResourceID: dockerAlertScopeAlias(cv.HostSourceID(), cv.ContainerID(), cv.Name()),
+				alertResourceID: alertResourceID,
 				health:          strings.TrimSpace(cv.Health()),
 				restartCount:    cv.RestartCount(),
 				oomKilled:       cv.OOMKilled(),
 				cpu:             cv.CPUPercent(),
 				memory:          cv.MemoryPercent(),
+				finishedJob:     finishedJobs[alertResourceID] != "",
+				finishedJobKey:  finishedJobs[alertResourceID],
 			})
 		}
 		return rows
@@ -2248,16 +2300,20 @@ func patrolAppContainerRows(snap patrolRuntimeState, scopedSet map[string]bool) 
 			if !seedIsInScope(scopedSet, container.ID) {
 				continue
 			}
+			alertResourceID := dockerAlertScopeAlias(host.ID, container.ID, container.Name)
+			finishedJobKey := patrolFinishedJobKey(alertResourceID, container)
 			rows = append(rows, patrolAppContainerRow{
 				id:              container.ID,
 				name:            container.Name,
 				status:          container.State,
-				alertResourceID: dockerAlertScopeAlias(host.ID, container.ID, container.Name),
+				alertResourceID: alertResourceID,
 				health:          container.Health,
 				restartCount:    container.RestartCount,
 				oomKilled:       container.OOMKilled,
 				cpu:             container.CPUPercent,
 				memory:          container.MemoryPercent,
+				finishedJob:     finishedJobKey != "",
+				finishedJobKey:  finishedJobKey,
 			})
 		}
 	}
@@ -2859,8 +2915,12 @@ func (p *PatrolService) seedResourceInventoryState(snap patrolRuntimeState, scop
 					if health == "" {
 						health = "not reported"
 					}
+					state := row.status
+					if row.finishedJob {
+						state += patrolUnalertedStoppedStateSuffix
+					}
 					sb.WriteString(fmt.Sprintf("| %s | %s | %s | %s | %d | %.0f%% | %.0f%% |\n",
-						row.name, row.id, row.status, health, row.restartCount, row.cpu, row.memory))
+						row.name, row.id, state, health, row.restartCount, row.cpu, row.memory))
 				}
 				sb.WriteString("\n")
 			}
