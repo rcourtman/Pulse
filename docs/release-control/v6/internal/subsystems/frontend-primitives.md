@@ -8667,6 +8667,11 @@ The Docker tab now follows that same composition pattern through
 `frontend-modern/src/components/Alerts/ThresholdsTableDockerServiceGapSection.tsx`,
 `frontend-modern/src/components/Alerts/ThresholdsTableDockerHostsSection.tsx`,
 and `frontend-modern/src/components/Alerts/ThresholdsTableDockerContainersSection.tsx`.
+The Containers section passes `showOfflineAlertsColumn` to the shared resource
+table, as the guest section does, so container rows and their defaults row use
+the table's existing three-level Offline Alerts control. No new primitive,
+label or column kind is introduced; the cell takes the `badge` kind the other
+offline cells use.
 Future Docker thresholds presentation changes should extend those section
 surfaces rather than restoring mixed JSX ownership to
 `frontend-modern/src/components/Alerts/ThresholdsTableDockerTab.tsx`.
