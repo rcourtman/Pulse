@@ -757,6 +757,7 @@ func (a *Agent) collectContainer(ctx context.Context, summary containertypes.Sum
 		UptimeSeconds:       uptimeSeconds,
 		RestartCount:        inspect.RestartCount,
 		ExitCode:            inspect.State.ExitCode,
+		RestartPolicy:       containerRestartPolicyName(inspect.HostConfig),
 		OOMKilled:           &oomKilled,
 		StartedAt:           startedPtr,
 		FinishedAt:          finishedPtr,
@@ -1523,4 +1524,20 @@ func maskSensitiveEnvVars(envVars []string) []string {
 	}
 
 	return result
+}
+
+// containerRestartPolicyName reports Docker's restart policy for a container
+// in its canonical lower-case form. Docker returns an empty name for a
+// container created without a policy on older API versions; that is the same
+// as "no", and it is reported as "no" so the server can tell a container
+// Docker will not restart from one whose policy the agent never sent.
+func containerRestartPolicyName(hostConfig *containertypes.HostConfig) string {
+	if hostConfig == nil {
+		return ""
+	}
+	name := strings.ToLower(strings.TrimSpace(string(hostConfig.RestartPolicy.Name)))
+	if name == "" {
+		return string(containertypes.RestartPolicyDisabled)
+	}
+	return name
 }

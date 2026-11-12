@@ -15,6 +15,45 @@
 
 ## Purpose
 
+### Finished containers raise no state alert (12 November 2026)
+
+A Docker container state alert is about a workload that should be running and
+is not. A container that finished its own work is not that: it reports state
+`exited`, exit code 0, no OOM kill, a restart policy of `no` or `on-failure`
+(under which Docker leaves a clean exit alone), and a run from start to finish
+of less than one hour. Migrations, init steps and scheduled jobs end this way,
+and `checkDockerContainerState` clears any open state alert for them and
+raises none.
+
+Every other stopped container alerts as before. A non-zero exit, an OOM kill,
+and any state other than `exited` are not a finished job. Under `always` or
+`unless-stopped` Docker restarts a clean exit, so an exited container there
+was stopped by someone. An empty or unrecognised policy means the reporting
+agent predates the field, and exit code 0 alone cannot tell a finished job
+from a service that was stopped gracefully, so that container keeps its alert
+until its agent reports the policy.
+
+The run time is what tells a job from a service that has no restart policy.
+Such a service exits 0 when Docker shuts down for a host reboot and then stays
+down, and that outage must alert. A container that ran for an hour or more, or
+whose start or finish time is missing, is never called finished. The bound is
+one constant, `dockerFinishedJobMaxRun`; a job that runs longer keeps its
+alert, as before.
+
+Two costs remain. A service with no restart policy that is stopped cleanly
+within an hour of starting reads as finished; giving the service a restart
+policy such as `unless-stopped` is the answer, and the Docker guide says so. A
+job that runs for more than an hour keeps its alert; the row's Alerts switch
+or an ignored-container pattern turns it off.
+
+An override that carries `PoweredOffSeverity` for the container is an explicit
+request to hear whenever it is not running, and it alerts whether or not the
+container finished cleanly; an override that carries only metric thresholds
+does not. The Containers table on Alert Thresholds shows no offline column
+(`showOfflineAlertsColumn={false}`), so such an override comes from the config
+API or from an earlier save, and user-facing copy must not point at a control
+for it.
+
 ### Same-named Docker hosts on Alert Thresholds (5 November 2026)
 
 Container Runtimes and Containers take the Docker page's qualifier from

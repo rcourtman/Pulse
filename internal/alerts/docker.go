@@ -852,6 +852,15 @@ func (m *Manager) checkDockerContainerState(host models.DockerHost, container mo
 		return
 	}
 
+	// A container that finished its work is not a stopped service. The
+	// row's own severity still wins: an operator who chose one for this
+	// container asked to hear whenever it is not running.
+	ownSeverity := hasOverride && override.PoweredOffSeverity != ""
+	if !ownSeverity && dockerContainerFinishedCleanly(container) {
+		m.clearDockerContainerStateAlert(resourceID)
+		return
+	}
+
 	observedState := strings.ToLower(strings.TrimSpace(container.State))
 	if observedState == "" {
 		observedState = "unknown"
@@ -890,6 +899,50 @@ func (m *Manager) checkDockerContainerState(host models.DockerHost, container mo
 		AddToHistory:  true,
 		DispatchAsync: true,
 	})
+}
+
+// dockerFinishedJobMaxRun is the longest a container may have run and still
+// read as a finished job. Jobs run for seconds or minutes and services for
+// days, so the exact value matters little; it has to sit between the two.
+const dockerFinishedJobMaxRun = time.Hour
+
+// dockerContainerFinishedCleanly reports whether an exited container ended
+// its own work and is meant to stay down: it exited with code 0, was not
+// OOM killed, ran for less than dockerFinishedJobMaxRun, and has a restart
+// policy that leaves a clean exit alone ("no" or "on-failure"). Migrations,
+// init steps and scheduled jobs end this way.
+//
+// Under "always" or "unless-stopped" Docker restarts a clean exit, so an
+// exited container there was stopped by someone and still alerts. An empty
+// policy means the agent did not report one (an agent older than the field),
+// and that container keeps alerting too: exit code 0 alone cannot tell a
+// finished job from a service that was stopped gracefully.
+//
+// The run time is what separates a job from a service that has no restart
+// policy. Such a service exits 0 when Docker shuts down for a host reboot and
+// then stays down, which is an outage the operator needs to hear about. A
+// container whose start or finish time is unknown is not called finished.
+func dockerContainerFinishedCleanly(container models.DockerContainer) bool {
+	if strings.ToLower(strings.TrimSpace(container.State)) != "exited" {
+		return false
+	}
+	if container.ExitCode != 0 {
+		return false
+	}
+	if container.OOMKilled != nil && *container.OOMKilled {
+		return false
+	}
+	switch strings.ToLower(strings.TrimSpace(container.RestartPolicy)) {
+	case "no", "on-failure":
+	default:
+		return false
+	}
+	if container.StartedAt == nil || container.FinishedAt == nil ||
+		container.StartedAt.IsZero() || container.FinishedAt.IsZero() {
+		return false
+	}
+	ran := container.FinishedAt.Sub(*container.StartedAt)
+	return ran >= 0 && ran < dockerFinishedJobMaxRun
 }
 
 func (m *Manager) clearDockerContainerStateAlert(resourceID string) {

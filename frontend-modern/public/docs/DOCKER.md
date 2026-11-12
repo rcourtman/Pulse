@@ -199,6 +199,15 @@ is not a blanket mute for everything on that machine.
   check the saved row. Other containers and the machine keep their own rules.
   Turning off only the container's **Offline Alerts** leaves its other checks
   enabled. Neither setting stops collection or hides readings.
+- **A finished job is not an offline container.** A container that ran for
+  under an hour, exited with code 0 and that Docker will not restart (restart
+  policy `no` or `on-failure`) has finished, like a migration or an init step,
+  and raises no offline alert. A crash, an out-of-memory kill, a stopped
+  container with `always` or `unless-stopped`, and a container that ran for
+  longer before it stopped still alert. Give a long-running service a restart
+  policy such as `unless-stopped`, and Pulse alerts whenever it is stopped. An
+  agent that does not yet report the restart policy keeps the old behaviour
+  until it updates.
 - **Machine maintenance** has a different scope. On a unified-agent host, the
   runtime's **Manage** controls apply to the machine too. A window covering
   the machine and its descendants also suppresses wanted machine alerts, not
