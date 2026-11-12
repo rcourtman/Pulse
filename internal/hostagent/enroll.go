@@ -17,8 +17,9 @@ import (
 )
 
 const (
-	enrollEndpoint   = "/api/agents/agent/enroll"
-	runtimeTokenFile = "runtime.token"
+	enrollEndpoint         = "/api/agents/agent/enroll"
+	runtimeTokenFile       = "runtime.token"
+	maxEnrollResponseBytes = 64 * 1024
 )
 
 // Enrollment retry parameters. Variables (not constants) so tests can override.
@@ -188,7 +189,8 @@ func persistedRuntimeToken(collector SystemCollector, stateDir string) (string, 
 // failure is terminal: the server may already have consumed the bootstrap token.
 //
 // Behavior on specific HTTP status codes:
-//   - 200: enrollment succeeded, runtime token returned
+//   - 200: save a complete, bounded, valid response; an invalid reply is terminal
+//     because the bootstrap token may already have been consumed
 //   - 403: token is not a bootstrap token (e.g. manual install) — skip enrollment
 //   - 401: token expired or invalid — permanent failure, no retry
 //   - 409: token already consumed — permanent failure, no retry
@@ -234,6 +236,17 @@ func (a *Agent) runEnrollmentLoop(ctx context.Context) error {
 				Str("agentId", canonicalID).
 				Msg("Enrollment succeeded, using runtime token")
 			return nil
+		}
+
+		var responseErr *enrollResponseError
+		if errors.As(err, &responseErr) {
+			// A success status may follow an unrepeatable exchange even when
+			// its body is unusable. Do not turn that uncertainty into a second
+			// exchange. Preserve cancellation identity without raw read errors.
+			if ctx.Err() != nil {
+				return fmt.Errorf("%s: %w", responseErr, ctx.Err())
+			}
+			return err
 		}
 
 		// Check for non-retryable errors.
@@ -283,14 +296,25 @@ func (a *Agent) runEnrollmentLoop(ctx context.Context) error {
 	}
 }
 
-// enrollStatusError represents an HTTP error from the enrollment endpoint.
+// enrollStatusError retains only the status. An upstream body may echo a
+// credential or private server details and must never enter errors or logs.
 type enrollStatusError struct {
 	StatusCode int
-	Body       string
 }
 
 func (e *enrollStatusError) Error() string {
-	return fmt.Sprintf("enrollment returned HTTP %d: %s", e.StatusCode, e.Body)
+	return fmt.Sprintf("enrollment returned HTTP %d", e.StatusCode)
+}
+
+// enrollResponseError marks an unusable HTTP 200 response, not a retryable
+// transport/status failure. Reasons are fixed local text, never response data.
+type enrollResponseError struct {
+	reason string
+}
+
+func (e *enrollResponseError) Error() string {
+	return "cannot confirm enrollment response (HTTP 200): " + e.reason +
+		"; bootstrap token may already be consumed; preserve existing state and check the server or proxy response before restarting; refusing to retry enrollment"
 }
 
 // enroll performs a single enrollment attempt by POSTing to the server.
@@ -323,24 +347,29 @@ func (a *Agent) enroll(ctx context.Context) (*enrollResponse, error) {
 	if err != nil {
 		return nil, fmt.Errorf("enrollment request failed: %w", err)
 	}
-	respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<16))
-	status := resp.StatusCode
-	resp.Body.Close()
+	defer resp.Body.Close()
 
-	if status != http.StatusOK {
-		return nil, &enrollStatusError{
-			StatusCode: status,
-			Body:       string(respBody),
-		}
+	if resp.StatusCode != http.StatusOK {
+		// Drain only a bounded amount for connection reuse. Even read errors
+		// here must not replace the known status with private response data.
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, maxEnrollResponseBytes))
+		return nil, &enrollStatusError{StatusCode: resp.StatusCode}
+	}
+	respBody, err := io.ReadAll(io.LimitReader(resp.Body, maxEnrollResponseBytes+1))
+	if err != nil {
+		return nil, &enrollResponseError{reason: "incomplete response body"}
+	}
+	if len(respBody) > maxEnrollResponseBytes {
+		return nil, &enrollResponseError{reason: "response body exceeds the size limit"}
 	}
 
 	var result enrollResponse
 	if err := json.Unmarshal(respBody, &result); err != nil {
-		return nil, fmt.Errorf("decode enrollment response: %w", err)
+		return nil, &enrollResponseError{reason: "invalid JSON response"}
 	}
 
-	if result.RuntimeToken == "" {
-		return nil, fmt.Errorf("enrollment response missing runtimeToken")
+	if strings.TrimSpace(result.RuntimeToken) == "" {
+		return nil, &enrollResponseError{reason: "response missing a nonblank runtime token"}
 	}
 
 	return &result, nil

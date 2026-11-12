@@ -17,6 +17,31 @@
 
 ## Purpose
 
+### Enrollment response completeness precedes saved authority
+
+An HTTP 200 enrollment reply must be read completely within the existing 64 KiB
+limit, decode as one JSON value compatible with the response structure, and
+contain a nonblank runtime token before either saved or in-memory authority
+changes. A read failure, oversized reply, invalid JSON/type or missing/blank token
+ends that exchange loop without another POST. The error explains that bootstrap
+authority may already be consumed, retains existing state and directs the operator
+to check the server/proxy response before restarting; it does not claim remote
+rollback or recovery of a lost credential. Body-read cancellation retains its
+context identity and never permits a retry.
+
+Non-200 diagnostics retain numeric HTTP status only, never the upstream body.
+Existing status classification, manual-token 403 fallback and transient/network
+backoff remain unchanged. Complete replies at the size boundary, unknown JSON
+fields and an omitted canonical ID remain compatible. TLS, enrollment payload,
+command ceilings and private-file publication rules do not change.
+
+Registered `enrollment_response_test.go` coverage in `internal/hostagent` exercises
+both enrollment entrypoints, real HTTP truncation and size boundaries, read-error
+privacy/closure/cancellation and status/backoff controls. Its command-package
+counterpart uses actual trusted HTTPS and Unified Agent startup, proving invalid
+success cannot reach authenticated configuration, service dispatch, updater or
+module constructors. These are source/fixture proofs, not installed recovery.
+
 ### Enrollment success requires saved runtime authority
 
 After a successful bootstrap exchange, enrollment saves the runtime token and

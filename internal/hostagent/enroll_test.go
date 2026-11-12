@@ -323,8 +323,8 @@ func TestEnroll_ContextCancelled(t *testing.T) {
 }
 
 func TestEnrollStatusError(t *testing.T) {
-	err := &enrollStatusError{StatusCode: 401, Body: "Unauthorized"}
-	expected := "enrollment returned HTTP 401: Unauthorized"
+	err := &enrollStatusError{StatusCode: 401}
+	expected := "enrollment returned HTTP 401"
 	if err.Error() != expected {
 		t.Errorf("expected %q, got %q", expected, err.Error())
 	}
