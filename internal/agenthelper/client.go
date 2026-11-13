@@ -171,6 +171,21 @@ func (c *Client) Call(
 	if err := conn.SetDeadline(operationDeadline); err != nil {
 		return requestID, fmt.Errorf("set helper connection deadline: %w", err)
 	}
+	// Preparation and dialing consumed part of the same operation budget. Do
+	// not grant that time again to the remote provider after connecting. Keep
+	// the earlier frame validation before dialing, and reuse the encoded payload.
+	remaining := time.Until(operationDeadline)
+	if remaining <= 0 {
+		return requestID, context.DeadlineExceeded
+	}
+	request.DeadlineMillis = max(1, remaining.Milliseconds())
+	framed, err = EncodeRequestFrame(request)
+	if err != nil {
+		return requestID, err
+	}
+	if err := ctx.Err(); err != nil {
+		return requestID, err
+	}
 	if _, err := writeAll(conn, framed); err != nil {
 		return requestID, fmt.Errorf("write helper request: %w", err)
 	}

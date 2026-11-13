@@ -291,7 +291,11 @@ func (s *Server) handleConnection(parent context.Context, conn net.Conn) {
 		return
 	}
 
-	operationContext, cancel := context.WithTimeout(context.WithValue(parent, peerContextKey{}, peer), time.Duration(request.DeadlineMillis)*time.Millisecond)
+	// The peer and frame have already used part of this connection's budget.
+	// A fresh timeout here would let cooperative provider work outlive it even
+	// after the socket deadline (which cannot interrupt a running provider).
+	operationDeadline := started.Add(time.Duration(request.DeadlineMillis) * time.Millisecond)
+	operationContext, cancel := context.WithDeadline(context.WithValue(parent, peerContextKey{}, peer), operationDeadline)
 	defer cancel()
 	if operationContext.Err() != nil {
 		s.writeError(conn, &event, request, ErrorDeadlineExceeded, "operation deadline exceeded", true)

@@ -18,6 +18,20 @@
 
 ## Purpose
 
+### Local helper work cannot restart its operation allowance
+
+The typed client advertises only the budget remaining after preparation and
+dialing. The server charges peer resolution and request ingress to that
+connection's allowance and does not dispatch an already-expired operation.
+Existing peer UID admission, closed operations, bounded frames, payload-free
+auditing, typed deadline errors and durable update transactions remain intact.
+`internal/agenthelper/operation_budget_test.go` verifies wire budgets and
+cooperative provider lifetime through the actual client/server paths, alongside
+the existing admission, cancellation and update recovery suites. This changes
+no credential, permission, report field, rendered state or data category; it
+neither measures exposure nor establishes original-host recovery. Noncooperative
+providers are not forcibly preempted, and disconnect is not rollback.
+
 ### Health-check output stays on the host (12 November 2026)
 
 The Docker module now reads the last health-check result of an unhealthy
