@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "base_sha": "f8f735f89e6db584c711d3531600621dae9baf29",
+  "verified_at": "2026-11-13T15:28:38Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx",
+    "frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx": "0f6a70483d166e5d037c3f0187eb688cc2a90306db282a532ff9750b6d2ea96d",
+    "frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx": "e4c78cebca4afb6bdfa4e18c250a86ea5f76c33a6b6945c148cb53289e8e8b3d"
+  },
+  "routes": [
+    "/settings/infrastructure?add=agent"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Private community server built from this tree on pulse-dev with sign-in on, no agents",
+    "Add Pulse Agent, after Generate token and Dismiss: 'Send the last log lines of a failed container' is in view under 'Installation commands', above the closed advanced options, unticked",
+    "Unticked: none of the 21 command blocks carries the flag or the environment variable",
+    "Ticked: 10 Unix command blocks carry --enable-failure-logs and 4 Windows blocks carry PULSE_ENABLE_FAILURE_LOGS; the token step is unchanged and no new token is created",
+    "Unticked again: the flag and the variable are gone from every block",
+    "Desktop: the card is 1068 px wide and 83 px tall, text on two lines. Phone: 287 px wide and 215 px tall, text wraps, no horizontal page scroll",
+    "First wording made the phone card 248 px tall; it was shortened and rechecked"
+  ],
+  "interactions": [
+    "Headless browser on pulse-dev (the desktop app's browser pane tools were unavailable in this session): opened the dialog, generated a token, dismissed the token dialog, ticked and unticked the checkbox, read every command block before and after, viewed the screenshots at both widths",
+    "Ran the real install.sh in preflight mode against the same server with --enable-failure-logs, --disable-failure-logs and neither: it reported 'Failed container log lines' true, false and false"
+  ]
+}

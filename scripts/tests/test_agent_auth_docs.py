@@ -62,7 +62,8 @@ class AgentAuthDocsTest(unittest.TestCase):
     def test_normal_install_is_not_conflated_with_bootstrap_enrolment(self):
         text = " ".join(section().split())
         install = (ROOT / "frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx").read_text()
-        args = install.split("const getInstallerExtraArgs = () => [", 1)[1].split("];", 1)[0]
+        # Every copied install command takes its arguments from this one list.
+        args = install.split("export const getInstallerOptionArgs = (", 1)[1].split("];", 1)[0]
         self.assertNotIn("--enroll", args)
         scopes = (ROOT / "internal/api/agenttokens/install.go").read_text()
         host = scopes.split("func HostScopes(", 1)[1].split("\n}", 1)[0]

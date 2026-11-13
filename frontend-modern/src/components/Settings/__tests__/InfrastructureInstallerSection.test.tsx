@@ -26,6 +26,8 @@ const stateOverrides: Record<string, unknown> = {
   lookupResult: () => lookupResult,
   enableCommands: () => false,
   setEnableCommands: vi.fn(),
+  enableFailureLogs: () => false,
+  setEnableFailureLogs: vi.fn(),
   isGeneratingToken: () => false,
 };
 
@@ -84,6 +86,30 @@ describe('InfrastructureInstallerSection', () => {
 
     fireEvent.click(checkbox);
     expect(stateOverrides.setEnableCommands).toHaveBeenCalledWith(true);
+    view.unmount();
+  });
+
+  // A flag nobody is shown is a feature nobody has. The choice sits with the
+  // copied commands, in view, and says what leaves the host and how to undo it.
+  it('offers failure logs beside the install commands, off by default', () => {
+    const view = render(() => <InfrastructureInstallerSection />);
+    expect(
+      screen.getByRole('button', { name: 'Show advanced connection and install options' }),
+    ).toBeInTheDocument();
+    const checkbox = screen.getByRole('checkbox', {
+      name: 'Send the last log lines of a failed container',
+    });
+    expect(checkbox).not.toBeChecked();
+    expect(checkbox).toHaveAccessibleDescription(
+      /crashes, restarts in a loop or fails its health check.*last 30 log lines/,
+    );
+    expect(checkbox).toHaveAccessibleDescription(
+      /masked on the host first, but masking can miss some.*leave this off if your logs hold secrets/,
+    );
+    expect(checkbox).toHaveAccessibleDescription(/rerun the installer with --disable-failure-logs/);
+
+    fireEvent.click(checkbox);
+    expect(stateOverrides.setEnableFailureLogs).toHaveBeenCalledWith(true);
     view.unmount();
   });
 });

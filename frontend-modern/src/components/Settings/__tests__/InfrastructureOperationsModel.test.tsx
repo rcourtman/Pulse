@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen } from '@solidjs/testing-library';
 import { createRoot, createSignal } from 'solid-js';
 import { NodesAPI } from '@/api/nodes';
 import type { NodeConfigWithStatus } from '@/types/nodes';
@@ -15,6 +16,11 @@ import infrastructureOperationsModelSource from '../infrastructureOperationsMode
 import useInfrastructureConfiguredNodesStateSource from '../useInfrastructureConfiguredNodesState.ts?raw';
 import useInfrastructureInstallStateSource from '../useInfrastructureInstallState.tsx?raw';
 import { resolveAgentCommandPlatform } from '@/utils/agentInstallCommand';
+import { FailureLogsInstallOption } from '../InfrastructureInstallerSection';
+import {
+  getInstallerOptionArgs,
+  getPowerShellInstallerOptionEnv,
+} from '../useInfrastructureInstallState';
 import {
   INSTALL_PROFILE_OPTIONS,
   buildCommandsByPlatform,
@@ -572,5 +578,49 @@ describe('configured-node trust readback', () => {
     } finally {
       dispose();
     }
+  });
+});
+
+// Failure logs are a choice the host owner makes when installing. The screen
+// offers it, and the copied commands carry it to the installer on each platform.
+describe('failure logs install option', () => {
+  it('maps the install-screen choices to installer flags and PowerShell environment', () => {
+    const off = { enableCommands: false, enableFailureLogs: false };
+    const logsOnly = { enableCommands: false, enableFailureLogs: true };
+    const both = { enableCommands: true, enableFailureLogs: true };
+
+    expect(getInstallerOptionArgs(['--enable-docker'], off)).toEqual(['--enable-docker']);
+    expect(getInstallerOptionArgs([], logsOnly)).toEqual(['--enable-failure-logs']);
+    expect(getInstallerOptionArgs(['--enable-docker'], both)).toEqual([
+      '--enable-docker',
+      '--enable-commands',
+      '--enable-failure-logs',
+    ]);
+
+    expect(getPowerShellInstallerOptionEnv([], off)).toEqual([]);
+    expect(getPowerShellInstallerOptionEnv(['--enable-docker'], logsOnly)).toEqual([
+      '$env:PULSE_ENABLE_DOCKER="true"',
+      '$env:PULSE_ENABLE_FAILURE_LOGS="true"',
+    ]);
+    expect(getPowerShellInstallerOptionEnv([], both)).toEqual([
+      '$env:PULSE_ENABLE_COMMANDS="true"',
+      '$env:PULSE_ENABLE_FAILURE_LOGS="true"',
+    ]);
+  });
+
+  it('renders the choice as a labelled checkbox that reports what the owner picked', () => {
+    const onChange = vi.fn();
+    const view = render(() => <FailureLogsInstallOption checked={false} onChange={onChange} />);
+    const checkbox = screen.getByRole('checkbox', {
+      name: 'Send the last log lines of a failed container',
+    });
+    expect(checkbox).not.toBeChecked();
+    expect(checkbox).toHaveAccessibleDescription(
+      /last 30 log lines.*masking can miss some.*--disable-failure-logs/,
+    );
+
+    fireEvent.click(checkbox);
+    expect(onChange).toHaveBeenCalledWith(true);
+    view.unmount();
   });
 });

@@ -256,12 +256,16 @@ container's details under **Last log lines**. That is what `docker logs` would
 show you, without a shell on the host. It is off unless you turn it on, on
 each host, because log text leaves the host:
 
-```bash
-pulse-agent --enable-failure-logs   # or PULSE_ENABLE_FAILURE_LOGS=true
-```
+| | |
+| --- | --- |
+| New host | In **Settings → Infrastructure → Install on a host**, select **Send the last log lines of a failed container** before you copy the install command. |
+| Host that already has the agent | Rerun the install command with `--enable-failure-logs`. |
+| Turn it off again | Rerun the install command with `--disable-failure-logs`. |
+| Windows | Set `$env:PULSE_ENABLE_FAILURE_LOGS` to `"true"` or `"false"` before the install command. |
+| Agent you run yourself | Pass `--enable-failure-logs` or set `PULSE_ENABLE_FAILURE_LOGS=true`. |
 
-Add the flag or the variable to the agent's service and restart it. Nothing in
-Pulse's own settings can turn it on.
+An agent update keeps your choice. The checkbox only changes the command you
+copy: nothing in Pulse can turn this on for a host that is already installed.
 
 What the agent sends, and when:
 
