@@ -3,10 +3,14 @@
 import contextlib
 import importlib.util
 import io
+import os
 from pathlib import Path
+import signal
 import subprocess
+import sys
 import tempfile
 import threading
+import time
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
@@ -18,6 +22,15 @@ spec.loader.exec_module(runner)
 
 
 class InventoryControls(unittest.TestCase):
+    def test_process_deadline_preserves_go_alarm_and_rejects_unbounded_input(self):
+        for duration, seconds in (("10m", 600), ("100ms", .1), ("1m2.5s", 62.5), ("1h", 3600)):
+            self.assertEqual(runner.process_deadline(duration), seconds + runner.PROCESS_EXIT_GRACE_SECONDS)
+        for duration in ("0", "0s", "-1s", "inf", "nan", "1s trailing", "1", "1m-2s"):
+            with self.subTest(duration=duration), patch.object(runner.subprocess, "Popen") as popen:
+                with self.assertRaises(ValueError):
+                    runner.run_check("binary", "TestOne", cwd="cwd", timeout=duration)
+                popen.assert_not_called()
+
     def setUp(self):
         self.names = [f"TestFixture{i:03d}" for i in range(500)]
         self.names += ["ExampleInstaller", "FuzzInstaller", "TestFutureFixture",
@@ -248,13 +261,35 @@ class CompiledGoControls(unittest.TestCase):
         cls.binary = cls.cwd / "controls.test"
         (cls.cwd / "go.mod").write_text("module native.runner.controls\n\ngo 1.24\n")
         (cls.cwd / "controls_test.go").write_text('''package controls
-import ("fmt"; "os"; "testing"; "time")
+import ("fmt"; "os"; "os/exec"; "strconv"; "testing"; "time")
 func TestPass(t *testing.T) { t.Run("child", func(t *testing.T) {}) }
 func TestPassExtra(t *testing.T) { t.Fatal("selector must stay anchored") }
 func TestSkip(t *testing.T) { t.Skip("explicit platform skip") }
 func TestFail(t *testing.T) { t.Fatal("real failure") }
 func TestExitZero(t *testing.T) { os.Exit(0) }
 func TestTimeout(t *testing.T) { time.Sleep(time.Hour) }
+func outputDescendant(t *testing.T) {
+    child := exec.Command(os.Args[0], "-test.run=^TestOutputDescendant$", "-test.timeout=30s")
+    child.Env = append(os.Environ(), "NATIVE_RUNNER_OUTPUT_CHILD=1")
+    child.Stdout, child.Stderr = os.Stdout, os.Stderr
+    if err := child.Start(); err != nil { t.Fatal(err) }
+    if err := os.WriteFile("child-pid", []byte(strconv.Itoa(child.Process.Pid)), 0600); err != nil { t.Fatal(err) }
+    deadline := time.Now().Add(5 * time.Second)
+    for {
+        if _, err := os.Stat("child-ready"); err == nil { return }
+        if time.Now().After(deadline) { t.Fatal("output child did not start") }
+        time.Sleep(time.Millisecond)
+    }
+}
+func TestOutputDescendant(t *testing.T) {
+    if os.Getenv("NATIVE_RUNNER_OUTPUT_CHILD") != "1" { t.Skip("child fixture only") }
+    fmt.Println("owned child output Σ")
+    if err := os.WriteFile("child-ready", []byte("ready"), 0600); err != nil { t.Fatal(err) }
+    time.Sleep(time.Hour)
+}
+func TestFailedWithOutputDescendant(t *testing.T) { outputDescendant(t); t.Fatal("original parent failure") }
+func TestPassedWithOutputDescendant(t *testing.T) { outputDescendant(t) }
+func TestTimeoutWithOutputDescendant(t *testing.T) { outputDescendant(t); time.Sleep(time.Hour) }
 func TestDrain(t *testing.T) {
     deadline := time.Now().Add(5 * time.Second)
     for {
@@ -294,6 +329,94 @@ func Example_output() { fmt.Println("installer"); /* Output: installer */ }
         self.assertEqual(popen.call_args.args[0], [str(self.binary), "-test.count=1", "-test.timeout=10m",
                                                   "-test.paniconexit0", "-test.v", "-test.run=^TestPass$"])
         self.assertEqual(popen.call_args.kwargs["cwd"], self.cwd)
+        self.assertTrue(popen.call_args.kwargs["start_new_session"])
+        self.assertNotEqual(popen.call_args.kwargs["stdout"], subprocess.PIPE)
+
+    @unittest.skipUnless(os.name == "posix", "native Unix process-group control")
+    def test_inherited_output_cannot_hide_failed_passed_or_timed_out_parent(self):
+        for name in ("TestFailedWithOutputDescendant", "TestPassedWithOutputDescendant",
+                     "TestTimeoutWithOutputDescendant"):
+            with self.subTest(name=name), tempfile.TemporaryDirectory(dir=self.cwd) as directory:
+                output, errors, done = io.StringIO(), [], threading.Event()
+                def observe():
+                    try:
+                        runner.run_check(self.binary, name, cwd=directory, timeout="1s", output=output)
+                    except Exception as error:
+                        errors.append(error)
+                    finally:
+                        done.set()
+                thread = threading.Thread(target=observe)
+                thread.start()
+                # A held descriptor is not a still-running parent. The child
+                # has a 30s safety alarm; this observes completion before that
+                # independent alarm, rather than waiting for it to grant EOF.
+                observed = done.wait(timeout=5)
+                child = Path(directory) / "child-pid"
+                try:
+                    self.assertTrue(observed, "parent observation still depends on child pipe EOF")
+                    self.assertTrue(child.exists())
+                    pid = int(child.read_text())
+                    # A zombie is stopped but not yet reaped by the VM's init;
+                    # do not claim that signalling a group proves full cleanup.
+                    deadline = time.monotonic() + 2
+                    while time.monotonic() < deadline:
+                        try:
+                            os.kill(pid, 0)
+                        except ProcessLookupError:
+                            break
+                        proc = Path(f"/proc/{pid}/stat")
+                        if proc.exists() and proc.read_text().rsplit(") ", 1)[1].startswith("Z "):
+                            break
+                        time.sleep(.01)
+                    else:
+                        self.fail("owned output child is still running")
+                    self.assertEqual(len(errors), 1)
+                    text = output.getvalue()
+                    self.assertIn("owned child output Σ", text)
+                    if name == "TestPassedWithOutputDescendant":
+                        self.assertIsInstance(errors[0], RuntimeError)
+                        self.assertIn("left an owned process group", str(errors[0]))
+                        self.assertIn("--- PASS: " + name, text)
+                    else:
+                        self.assertIsInstance(errors[0], subprocess.CalledProcessError)
+                        self.assertEqual(errors[0].returncode, 2)
+                        self.assertIn("original parent failure" if name.startswith("TestFailed")
+                                      else "test timed out after 1s", text)
+                finally:
+                    # Even an adverse run of the old implementation must not
+                    # leave this synthetic child behind or wait its full alarm.
+                    if child.exists():
+                        try:
+                            os.kill(int(child.read_text()), signal.SIGKILL)
+                        except ProcessLookupError:
+                            pass
+                    thread.join(timeout=5)
+                    self.assertFalse(thread.is_alive())
+
+    @unittest.skipUnless(os.name == "posix", "native Unix process-group control")
+    def test_external_deadline_retains_output_when_the_program_ignores_go_flags(self):
+        with tempfile.TemporaryDirectory(dir=self.cwd) as directory:
+            fixture = Path(directory) / "stalled"
+            fixture.write_text(f"#!{sys.executable}\nimport time\n"
+                               "print('before independent deadline', flush=True)\n"
+                               "time.sleep(30)\n")
+            fixture.chmod(0o700)
+            output = io.StringIO()
+            processes = []
+            actual_popen = subprocess.Popen
+            def start(*args, **kwargs):
+                process = actual_popen(*args, **kwargs)
+                processes.append(process)
+                return process
+            with patch.object(runner, "PROCESS_EXIT_GRACE_SECONDS", .2), \
+                    patch.object(runner.subprocess, "Popen", side_effect=start), \
+                    self.assertRaises(subprocess.TimeoutExpired):
+                runner.run_check(fixture, "TestStalled", cwd=directory, timeout="100ms", output=output)
+            self.assertEqual(output.getvalue(), "before independent deadline\n")
+            # The exact child was reaped, not merely signalled or hidden by a
+            # manufactured test completion marker.
+            self.assertEqual(len(processes), 1)
+            self.assertEqual(processes[0].returncode, -signal.SIGKILL)
 
     def test_failure_exit_zero_and_timeout_cannot_pass(self):
         for name in ("TestFail", "TestExitZero", "TestTimeout"):
