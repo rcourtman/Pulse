@@ -268,6 +268,12 @@ func (s apiTokenMigrationSummary) changed() bool {
 // inventory successfully before using it: IDs are revocation handles, scopes
 // are authorization state, and organization bindings constrain tenancy.
 func canonicalizeAPITokens(tokens []APITokenRecord) (apiTokenMigrationSummary, error) {
+	// JSON null rows and incomplete objects decode into zero-value records.
+	// Reject them before assigning IDs, defaults or replacement storage: none
+	// supplies the credential that makes it a saved token in the first place.
+	if err := validateAPITokenCredentials(tokens); err != nil {
+		return apiTokenMigrationSummary{}, err
+	}
 	summary := apiTokenMigrationSummary{
 		missingIDs:        bindMissingAPITokenIDs(tokens),
 		legacyOrgBindings: bindLegacyAPITokensToDefault(tokens),
@@ -289,6 +295,18 @@ func canonicalizeAPITokens(tokens []APITokenRecord) (apiTokenMigrationSummary, e
 		}
 	}
 	return summary, nil
+}
+
+// validateAPITokenCredentials checks presence, not a new hash format. Keep
+// existing nonblank encodings byte-for-byte, including legacy credentials.
+// Report only the position, never credential or caller-controlled metadata.
+func validateAPITokenCredentials(tokens []APITokenRecord) error {
+	for i := range tokens {
+		if strings.TrimSpace(tokens[i].Hash) == "" {
+			return fmt.Errorf("API token record %d is missing credential hash", i+1)
+		}
+	}
+	return nil
 }
 
 // tokenPrefix returns the first six characters suitable for hints.

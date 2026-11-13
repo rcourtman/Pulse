@@ -817,6 +817,11 @@ func (c *ConfigPersistence) SaveAPITokens(tokens []APITokenRecord) error {
 }
 
 func (c *ConfigPersistence) persistAPITokensLocked(tokens []APITokenRecord) error {
+	// Invalid input must not replace either the canonical inventory or its
+	// last backup, even when it is syntactically complete JSON.
+	if err := validateAPITokenCredentials(tokens); err != nil {
+		return err
+	}
 
 	if err := c.EnsureConfigDir(); err != nil {
 		return fmt.Errorf("prepare config directory for api tokens: %w", err)
