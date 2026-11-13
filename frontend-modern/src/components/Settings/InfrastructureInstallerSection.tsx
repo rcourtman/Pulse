@@ -43,6 +43,7 @@ type InfrastructureInstallerFocusPresentation = {
 };
 
 const COMMAND_ACCESS_OPTION_LABEL = getUnifiedAgentCommandAccessOptionLabel();
+const FAILURE_LOGS_OPTION_LABEL = 'Send the last log lines of a failed container';
 
 const ALL_AGENT_PLATFORMS: readonly AgentPlatform[] = ['linux', 'macos', 'freebsd', 'windows'];
 
@@ -129,6 +130,34 @@ const getCommandSectionDescription = (
   }
   return section.description;
 };
+
+/**
+ * The install-time choice to report a failed container's last log lines. It is
+ * a local opt-in on the host: ticking it only changes the copied command.
+ */
+export const FailureLogsInstallOption: Component<{
+  checked: boolean;
+  onChange: (value: boolean) => void;
+}> = (props) => (
+  <div class="rounded-md border border-border bg-surface-hover px-4 py-3">
+    <label class="flex cursor-pointer items-start gap-2 text-sm font-medium text-base-content">
+      <input
+        type="checkbox"
+        checked={props.checked}
+        onChange={(event) => props.onChange(event.currentTarget.checked)}
+        aria-describedby="install-failure-logs-description"
+        class="mt-0.5 rounded-sm text-blue-600 focus:ring-blue-500"
+      />
+      {FAILURE_LOGS_OPTION_LABEL}
+    </label>
+    <p id="install-failure-logs-description" class="ml-6 mt-1 text-xs text-muted">
+      When a Docker or Podman container crashes, restarts in a loop or fails its health check, the
+      agent sends its last 30 log lines so Pulse can show why. Secrets are masked on the host first,
+      but masking can miss some, so leave this off if your logs hold secrets. To turn it off later,
+      rerun the installer with <code>--disable-failure-logs</code>.
+    </p>
+  </div>
+);
 
 export const InfrastructureInstallerSection: Component<InfrastructureInstallerSectionProps> = (
   props,
@@ -539,6 +568,11 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                   </p>
                 </div>
               </div>
+
+              <FailureLogsInstallOption
+                checked={state.enableFailureLogs()}
+                onChange={state.setEnableFailureLogs}
+              />
 
               <div class="rounded-md border border-border bg-surface-hover px-4 py-3">
                 <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">

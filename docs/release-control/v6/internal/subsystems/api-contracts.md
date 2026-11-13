@@ -3166,6 +3166,12 @@ payload shape change when the portal presents compact client rows.
     the operator wants Patrol actions or server-opted-in Docker-in-LXC
     inventory from the Proxmox node; generic Proxmox API Inventory setup must
     remain least-privilege and command-execution-free.
+    The infrastructure install state renders host options into copied
+    commands through `getInstallerOptionArgs` (Unix flags) and
+    `getPowerShellInstallerOptionEnv` (PowerShell environment). The failure-logs
+    option adds `--enable-failure-logs` or `PULSE_ENABLE_FAILURE_LOGS` there and
+    nowhere else: it is not a field of the install-token request, mints no
+    token and changes no scope, unlike command access.
     32a. `internal/api/cloud_agent_install_command.go` shared with `agent-lifecycle`, `cloud-paid`: hosted tenant agent install commands are agent lifecycle enrollment transport, hosted/provider MSP tenant boundary, and canonical API payload contract.
     The route and reusable helper must both mint PVE/PBS install tokens only in
     hosted mode, only for an existing tenant/org, and only into that tenant

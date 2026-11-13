@@ -76,6 +76,37 @@ const toLookupResponseFromInfrastructureItem = (
   },
 });
 
+/** The choices the install screen offers for what an agent may do on its host. */
+export interface InstallerHostOptions {
+  enableCommands: boolean;
+  enableFailureLogs: boolean;
+}
+
+/** Flags the copied Unix install command carries for those choices. */
+export const getInstallerOptionArgs = (
+  profileFlags: readonly string[],
+  options: InstallerHostOptions,
+): string[] => [
+  ...profileFlags,
+  ...(options.enableCommands ? ['--enable-commands'] : []),
+  ...(options.enableFailureLogs ? ['--enable-failure-logs'] : []),
+];
+
+/** The same choices for install.ps1, which reads them from the environment. */
+export const getPowerShellInstallerOptionEnv = (
+  profileFlags: string[],
+  options: InstallerHostOptions,
+): string[] => {
+  const envAssignments = getPowerShellInstallProfileEnvFromFlags(profileFlags);
+  if (options.enableCommands) {
+    envAssignments.push(`$env:PULSE_ENABLE_COMMANDS="true"`);
+  }
+  if (options.enableFailureLogs) {
+    envAssignments.push(`$env:PULSE_ENABLE_FAILURE_LOGS="true"`);
+  }
+  return envAssignments;
+};
+
 export const useInfrastructureInstallState = (options: InfrastructureInstallStateOptions = {}) => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -96,6 +127,9 @@ export const useInfrastructureInstallState = (options: InfrastructureInstallStat
   const [lookupWasAutoDetected, setLookupWasAutoDetected] = createSignal(false);
   const [insecureMode, setInsecureMode] = createSignal(false);
   const [enableCommands, setEnableCommands] = createSignal(false);
+  // A local opt-in on the host. It changes the copied command only: the token
+  // and its scopes are the same either way.
+  const [enableFailureLogs, setEnableFailureLogs] = createSignal(false);
   const [installProfile, setInstallProfile] = createSignal<InstallProfile>('auto');
   const [customAgentUrl, setCustomAgentUrl] = createSignal('');
   const [customCaPath, setCustomCaPath] = createSignal('');
@@ -519,17 +553,14 @@ Pulse prepares the first-host install token from setup so you can move straight 
     INSTALL_PROFILE_OPTIONS.find((option) => option.value === installProfile()) ??
     INSTALL_PROFILE_OPTIONS[0];
   const getInstallProfileFlags = () => getSelectedInstallProfile().flags;
-  const getPowerShellInstallEnv = () => {
-    const envAssignments = getPowerShellInstallProfileEnvFromFlags(getInstallProfileFlags());
-    if (enableCommands()) {
-      envAssignments.push(`$env:PULSE_ENABLE_COMMANDS="true"`);
-    }
-    return envAssignments;
-  };
-  const getInstallerExtraArgs = () => [
-    ...getInstallProfileFlags(),
-    ...(enableCommands() ? ['--enable-commands'] : []),
-  ];
+  const getInstallerHostOptions = (): InstallerHostOptions => ({
+    enableCommands: enableCommands(),
+    enableFailureLogs: enableFailureLogs(),
+  });
+  const getPowerShellInstallEnv = () =>
+    getPowerShellInstallerOptionEnv(getInstallProfileFlags(), getInstallerHostOptions());
+  const getInstallerExtraArgs = () =>
+    getInstallerOptionArgs(getInstallProfileFlags(), getInstallerHostOptions());
 
   const handleInstallProfileChange = (profile: InstallProfile) => {
     setInstallProfile(profile);
@@ -604,6 +635,7 @@ Pulse prepares the first-host install token from setup so you can move straight 
     customCaPath,
     downloadSetupHandoff,
     enableCommands,
+    enableFailureLogs,
     getInstallProfileFlags,
     getSelectedInstallProfile,
     handleGenerateToken,
@@ -628,6 +660,7 @@ Pulse prepares the first-host install token from setup so you can move straight 
     setCustomAgentUrl,
     setCustomCaPath,
     setEnableCommands: handleEnableCommandsChange,
+    setEnableFailureLogs,
     setInsecureMode,
     setLookupValue,
     setTokenName,

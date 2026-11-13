@@ -16,6 +16,7 @@ param (
     [bool]$EnableProxmox = $false,
     [string]$ProxmoxType = "",
     [bool]$EnableCommands = $false,
+    [bool]$EnableFailureLogs = $false,
     [string]$CommandAuthority = $env:PULSE_COMMAND_AUTHORITY,
     [bool]$Insecure = $false,
     [bool]$Uninstall = $false,
@@ -85,6 +86,9 @@ if (-not $PSBoundParameters.ContainsKey('ProxmoxType') -and -not [string]::IsNul
 }
 if (-not $PSBoundParameters.ContainsKey('EnableCommands') -and -not [string]::IsNullOrWhiteSpace($env:PULSE_ENABLE_COMMANDS)) {
     $EnableCommands = Parse-Bool $env:PULSE_ENABLE_COMMANDS $EnableCommands
+}
+if (-not $PSBoundParameters.ContainsKey('EnableFailureLogs') -and -not [string]::IsNullOrWhiteSpace($env:PULSE_ENABLE_FAILURE_LOGS)) {
+    $EnableFailureLogs = Parse-Bool $env:PULSE_ENABLE_FAILURE_LOGS $EnableFailureLogs
 }
 if (-not $PSBoundParameters.ContainsKey('Insecure') -and -not [string]::IsNullOrWhiteSpace($env:PULSE_INSECURE_SKIP_VERIFY)) {
     $Insecure = Parse-Bool $env:PULSE_INSECURE_SKIP_VERIFY $Insecure
@@ -1012,6 +1016,14 @@ if (-not $PSBoundParameters.ContainsKey('EnableCommands') -and
     $ExistingServicePath -match '(?i)(?:^|\s)--enable-commands(?:\s|$)') {
     $EnableCommands = $true
 }
+# Failure logs are a local opt-in. An update keeps the owner's choice unless
+# this run names one: -EnableFailureLogs $false or PULSE_ENABLE_FAILURE_LOGS=false
+# turns it off again.
+if (-not $PSBoundParameters.ContainsKey('EnableFailureLogs') -and
+    [string]::IsNullOrWhiteSpace($env:PULSE_ENABLE_FAILURE_LOGS) -and
+    $ExistingServicePath -match '(?i)(?:^|\s)--enable-failure-logs(?:\s|$)') {
+    $EnableFailureLogs = $true
+}
 if ([string]::IsNullOrWhiteSpace($CommandAuthority)) {
     $authorityMatch = [regex]::Match($ExistingServicePath, '(?i)(?:^|\s)--command-authority(?:=|\s+)["'']?([a-z-]+)')
     if ($authorityMatch.Success) {
@@ -1084,6 +1096,7 @@ if ($EnableKubernetes) { $ServiceArgs += "--enable-kubernetes" }
 if ($EnableProxmox) { $ServiceArgs += "--enable-proxmox" }
 if (-not [string]::IsNullOrWhiteSpace($NormalizedProxmoxType)) { $ServiceArgs += @("--proxmox-type", "`"$NormalizedProxmoxType`"") }
 if ($EnableCommands) { $ServiceArgs += "--enable-commands" }
+if ($EnableFailureLogs) { $ServiceArgs += "--enable-failure-logs" }
 $ServiceArgs += @("--command-authority", "`"$CommandAuthority`"")
 if ($Insecure) { $ServiceArgs += "--insecure" }
 if (-not [string]::IsNullOrWhiteSpace($CACertPath)) { $ServiceArgs += @("--cacert", "`"$CACertPath`"") }

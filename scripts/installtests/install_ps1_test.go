@@ -531,6 +531,28 @@ func TestInstallPS1PreservesCommandExecutionParity(t *testing.T) {
 	}
 }
 
+// Failure logs are a local opt-in on Windows as on Unix: off unless asked for,
+// passed to the service, and kept by an update that does not name the choice.
+func TestInstallPS1CarriesFailureLogsOptIn(t *testing.T) {
+	content, err := os.ReadFile(repoFile("scripts", "install.ps1"))
+	if err != nil {
+		t.Fatalf("read install.ps1: %v", err)
+	}
+
+	script := string(content)
+	required := []string{
+		`[bool]$EnableFailureLogs = $false,`,
+		`$EnableFailureLogs = Parse-Bool $env:PULSE_ENABLE_FAILURE_LOGS $EnableFailureLogs`,
+		`$ExistingServicePath -match '(?i)(?:^|\s)--enable-failure-logs(?:\s|$)') {`,
+		`if ($EnableFailureLogs) { $ServiceArgs += "--enable-failure-logs" }`,
+	}
+	for _, needle := range required {
+		if !strings.Contains(script, needle) {
+			t.Fatalf("install.ps1 missing failure-logs opt-in: %s", needle)
+		}
+	}
+}
+
 func TestInstallPS1UsesInsecureTlsForRuntimeTransport(t *testing.T) {
 	content, err := os.ReadFile(repoFile("scripts", "install.ps1"))
 	if err != nil {

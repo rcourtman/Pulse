@@ -2720,6 +2720,22 @@ it is cut to 30 lines, 512 bytes a line and 4 KB (`BoundFailureLogLines`).
 Cleaning comes first because a secret split by a control character matches no
 masking rule until the character is gone. Lines of a container that recovers
 or is removed are forgotten.
+
+The owner makes that choice at install time. `scripts/install.sh` takes
+`--enable-failure-logs` and `--disable-failure-logs`, and
+`scripts/install.ps1` takes `-EnableFailureLogs` or
+`PULSE_ENABLE_FAILURE_LOGS`; each writes `--enable-failure-logs` into the
+service arguments. An update or reinstall that names neither keeps what the
+installed service has: the recovered service argument turns it on unless this
+run named a choice (`FAILURE_LOGS_EXPLICIT`), so `--disable-failure-logs` is
+the way off and is not undone by recovery. The install screen
+(`InfrastructureInstallerSection.tsx`) offers "Send the last log lines of a
+failed container" beside the copied commands, outside the advanced options,
+unticked by default. Ticking it adds the flag (or the PowerShell environment
+assignment) to every copied install command and does nothing else: it mints
+no token, changes no scope and reaches no installed agent. It still is not a
+server-side switch. The screen says what leaves the host, that masking can
+miss a secret, and how to turn it off.
 Inside-guest Docker / Podman visibility is also a privacy boundary: full
 Docker / Podman inventory may come from a guest-local agent or another explicit
 guest reporting path. LXC Docker inventory may also come from the Proxmox host

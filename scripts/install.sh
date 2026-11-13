@@ -30,6 +30,7 @@
 #   --server-fingerprint <sha256> Pin the Pulse server leaf certificate
 #   --observers-file <path> Report to additional observer Pulse instances
 #   --enable-commands   Enable Pulse command execution on agent (disabled by default; required for Patrol actions and Proxmox LXC Docker inventory)
+#   --enable-failure-logs Report the last log lines of a failed Docker/Podman container (disabled by default; --disable-failure-logs turns it off again)
 #   --least-privilege   Run the agent as the dedicated 'pulse-agent' system user instead of root (Linux systemd only; SMART, Proxmox LXC filesystems, and command execution need root or an explicit grant)
 #   --enable-privileged-helper Install the typed root helper for an explicitly selected least-privilege Linux systemd profile
 #   --enable-action-runner Install the separately credentialed typed remediation runner (requires the typed-helper profile)
@@ -111,6 +112,8 @@ AGENT_ID=""
 HOSTNAME_OVERRIDE=""
 REPORT_IP=""
 ENABLE_COMMANDS="false"
+ENABLE_FAILURE_LOGS="false"   # Report a failed container's last log lines (opt-in)
+FAILURE_LOGS_EXPLICIT="false" # true once this run named the choice, so a recovered service argument cannot override it
 COMMAND_AUTHORITY="${PULSE_COMMAND_AUTHORITY:-}"
 COMMAND_AUTHORITY_SOURCE=""
 if [[ -n "$COMMAND_AUTHORITY" ]]; then
@@ -586,6 +589,8 @@ Options:
   --server-fingerprint <sha256> Pin the Pulse server leaf certificate for agent connections
   --observers-file <path> Absolute path to private JSON config for report-only observer Pulse destinations
   --enable-commands       Enable Pulse command execution (disabled by default; required for Patrol actions and Proxmox LXC Docker inventory)
+  --enable-failure-logs   Report the last log lines of a failed Docker/Podman container (disabled by default)
+  --disable-failure-logs  Stop reporting them on an agent that was installed with --enable-failure-logs
   --command-authority <profile> Local command ceiling: monitoring-only, command-capable, or legacy
   --least-privilege       Run the agent as the 'pulse-agent' system user instead of root (Linux systemd only)
   --enable-privileged-helper Install the typed root helper (requires --least-privilege on standard Linux systemd)
@@ -5039,6 +5044,7 @@ build_exec_arg_items() {
     if [[ -n "$SERVER_FINGERPRINT" ]]; then EXEC_ARG_ITEMS+=(--server-fingerprint "$SERVER_FINGERPRINT"); fi
     if [[ -n "$OBSERVERS_FILE" ]]; then EXEC_ARG_ITEMS+=(--observers-file "$OBSERVERS_FILE"); fi
     if [[ "$ENABLE_COMMANDS" == "true" ]]; then EXEC_ARG_ITEMS+=(--enable-commands); fi
+    if [[ "${ENABLE_FAILURE_LOGS:-false}" == "true" ]]; then EXEC_ARG_ITEMS+=(--enable-failure-logs); fi
     EXEC_ARG_ITEMS+=(--command-authority "${COMMAND_AUTHORITY:-legacy}")
     if [[ "$HEALTH_ADDR_SET" == "true" ]]; then EXEC_ARG_ITEMS+=(--health-addr "$HEALTH_ADDR"); fi
     if [[ "$ENROLL" == "true" ]]; then EXEC_ARG_ITEMS+=(--enroll); fi
@@ -5525,6 +5531,12 @@ recover_connection_state_from_arg_stream() {
                 ;;
             --enable-commands|-enable-commands)
                 ENABLE_COMMANDS="true"
+                RECOVERED_AGENT_ARG_STATE="true"
+                ;;
+            --enable-failure-logs|-enable-failure-logs|--enable-failure-logs=true|-enable-failure-logs=true)
+                # An update or reinstall keeps the owner's choice unless this
+                # run names one.
+                if [[ "${FAILURE_LOGS_EXPLICIT:-false}" != "true" ]]; then ENABLE_FAILURE_LOGS="true"; fi
                 RECOVERED_AGENT_ARG_STATE="true"
                 ;;
             --enroll|-enroll)
@@ -6190,6 +6202,8 @@ while [[ $# -gt 0 ]]; do
         --server-fingerprint) SERVER_FINGERPRINT="$2"; shift 2 ;;
         --observers-file) OBSERVERS_FILE="$2"; shift 2 ;;
         --enable-commands) ENABLE_COMMANDS="true"; shift ;;
+        --enable-failure-logs) ENABLE_FAILURE_LOGS="true"; FAILURE_LOGS_EXPLICIT="true"; shift ;;
+        --disable-failure-logs) ENABLE_FAILURE_LOGS="false"; FAILURE_LOGS_EXPLICIT="true"; shift ;;
         --command-authority) COMMAND_AUTHORITY="$2"; COMMAND_AUTHORITY_SOURCE="explicit"; shift 2 ;;
         --least-privilege) LEAST_PRIVILEGE="true"; shift ;;
         --enable-privileged-helper) PRIVILEGED_HELPER_ENABLED="true"; PRIVILEGED_HELPER_EXPLICIT="true"; shift ;;
@@ -6574,6 +6588,7 @@ log_info "  Docker/Podman: $ENABLE_DOCKER"
 log_info "  Kubernetes: $ENABLE_KUBERNETES"
 log_info "  Proxmox: $ENABLE_PROXMOX"
 log_info "  Pulse command execution: $ENABLE_COMMANDS"
+log_info "  Failed container log lines: $ENABLE_FAILURE_LOGS"
 if [[ "$ENABLE_PROXMOX" == "true" ]]; then
     if [[ -n "$PROXMOX_TYPE" ]]; then
         log_info "  Proxmox type: $PROXMOX_TYPE"

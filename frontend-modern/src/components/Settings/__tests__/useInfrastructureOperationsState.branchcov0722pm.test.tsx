@@ -416,6 +416,37 @@ describe('useInfrastructureOperationsState command-building closures', () => {
     });
   });
 
+  // Failure logs are a choice the host owner makes on the host. Selecting it
+  // changes the copied commands and nothing else: the token and its scopes are
+  // the same, so no token is minted or replaced.
+  describe('failure logs opt-in', () => {
+    it('adds the flag to copied install commands only when selected, without a new token', async () => {
+      const { state, dispose } = mountHook();
+      await flushAsync();
+      await state.handleGenerateToken();
+      const mintsBefore = mocks.createHostAgentInstallToken.mock.calls.length;
+      const commandFor = (platform: AgentPlatform) => {
+        const section = state.commandSections().find((entry) => entry.platform === platform);
+        return section!.snippets[0].command;
+      };
+
+      expect(state.enableFailureLogs()).toBe(false);
+      expect(unixBootstrapTestSource(commandFor('linux'))).not.toContain('failure-logs');
+      expect(commandFor('windows')).not.toContain('FAILURE_LOGS');
+
+      state.setEnableFailureLogs(true);
+
+      expect(unixBootstrapTestSource(commandFor('linux'))).toContain('--enable-failure-logs');
+      expect(commandFor('windows')).toContain('$env:PULSE_ENABLE_FAILURE_LOGS="true"');
+      expect(state.commandsUnlocked()).toBe(true);
+      expect(mocks.createHostAgentInstallToken.mock.calls.length).toBe(mintsBefore);
+
+      state.setEnableFailureLogs(false);
+      expect(unixBootstrapTestSource(commandFor('linux'))).not.toContain('failure-logs');
+      dispose();
+    });
+  });
+
   describe('install token and command-option atomicity', () => {
     it('locks copyable commands until a command-enabled replacement token is ready', async () => {
       const { state, dispose } = mountHook();

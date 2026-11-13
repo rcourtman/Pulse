@@ -3198,6 +3198,13 @@ artifact-selection behaviour.
    When enabled, the terminal summary must also state that Proxmox LXC Docker
    inventory still requires explicit server-side
    `PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY=true`.
+   The shell installer must also accept `--enable-failure-logs` and
+   `--disable-failure-logs`, write `--enable-failure-logs` into the service
+   arguments when chosen, and report the choice in the terminal summary as
+   "Failed container log lines". It is off by default. Argument recovery during
+   an update or reinstall keeps an installed `--enable-failure-logs` unless the
+   run named a choice (`FAILURE_LOGS_EXPLICIT`), so `--disable-failure-logs` is
+   never undone by the recovered service arguments.
    For command-enabled PVE agents, the generated systemd unit must keep the
    normal service hardening except for the two flags that block host-side
    `pct exec` / `lxc-attach`: `NoNewPrivileges=false` and
@@ -8204,6 +8211,9 @@ runtime toggles from the settings surface: when PowerShell install transport
 sets `PULSE_INSECURE_SKIP_VERIFY` or `PULSE_ENABLE_COMMANDS`,
 `scripts/install.ps1` must persist those settings into the service command line
 instead of dropping TLS-mode or command-execution intent on Windows installs.
+`PULSE_ENABLE_FAILURE_LOGS` (or `-EnableFailureLogs`) follows the same rule
+and persists `--enable-failure-logs`. An update that names neither keeps the
+flag when the existing service command line has it.
 The same insecure-TLS boundary must also affect installer-owned network calls:
 when `PULSE_INSECURE_SKIP_VERIFY` is enabled, `scripts/install.ps1` must use
 that relaxed certificate policy for its own agent download and uninstall

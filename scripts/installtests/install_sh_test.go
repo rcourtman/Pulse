@@ -9579,3 +9579,109 @@ func agentStartupObservationExit(ok bool) int {
 	}
 	return 1
 }
+
+// Failure logs are a local opt-in. An update or reinstall must keep the
+// owner's choice without being told again, and --disable-failure-logs must be
+// able to take it back, or the only way off would be to edit the service file.
+func TestInstallSHKeepsFailureLogsChoiceAcrossUpdates(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		explicit    string
+		chosen      string
+		existingArg string
+		want        bool
+	}{
+		{name: "installed on, update says nothing", explicit: "false", chosen: "false", existingArg: "--enable-failure-logs", want: true},
+		{name: "installed on, update turns it off", explicit: "true", chosen: "false", existingArg: "--enable-failure-logs", want: false},
+		{name: "installed off, update says nothing", explicit: "false", chosen: "false", existingArg: "--enable-host", want: false},
+		{name: "installed off, update turns it on", explicit: "true", chosen: "true", existingArg: "--enable-host", want: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			script := `
+		fail() { echo "FAIL:$1"; exit 99; }
+		set -u
+		PULSE_URL=""
+		PULSE_TOKEN=""
+		INTERVAL="30s"
+		INTERVAL_EXPLICIT="false"
+		ENABLE_HOST="true"
+		HOST_EXPLICIT="false"
+		ENABLE_DOCKER=""
+		DOCKER_EXPLICIT="false"
+		ENABLE_KUBERNETES=""
+		KUBERNETES_EXPLICIT="false"
+		KUBECONFIG_PATH=""
+		ENABLE_PROXMOX=""
+		PROXMOX_EXPLICIT="false"
+		PROXMOX_TYPE=""
+		INSECURE="false"
+		SERVER_FINGERPRINT=""
+		OBSERVERS_FILE=""
+		ENABLE_COMMANDS="false"
+		ENABLE_FAILURE_LOGS="` + tc.chosen + `"
+		FAILURE_LOGS_EXPLICIT="` + tc.explicit + `"
+		COMMAND_AUTHORITY=""
+		ENROLL="false"
+		HEALTH_ADDR=""
+		HEALTH_ADDR_SET="false"
+		AGENT_ID=""
+		HOSTNAME_OVERRIDE=""
+		REPORT_IP=""
+		STATE_DIR="/var/lib/pulse-agent"
+		CURL_CA_BUNDLE=""
+		KUBE_INCLUDE_ALL_PODS="false"
+		KUBE_INCLUDE_ALL_DEPLOYMENTS="false"
+		DISK_EXCLUDES=()
+		DISK_INCLUDES=()
+		RUNTIME_TOKEN_FILE="/var/lib/pulse-agent/token"
+` + extractInstallShellFunction(t, "strip_recovered_arg_quotes") + `
+` + extractInstallShellFunction(t, "normalize_recovered_agent_arg_key") + `
+` + extractInstallShellFunction(t, "apply_recovered_agent_arg_value") + `
+` + extractInstallShellFunction(t, "recovered_connection_state_ready") + `
+` + extractTokenRecoveryShellFunctions(t) + `
+` + extractInstallShellFunction(t, "recover_connection_state_from_arg_stream") + `
+` + extractInstallShellFunction(t, "build_exec_arg_items") + `
+` + extractInstallShellFunction(t, "join_exec_arg_items") + `
+` + extractInstallShellFunction(t, "build_exec_args") + `
+		recover_connection_state_from_arg_stream <<'ARGS'
+/usr/local/bin/pulse-agent
+--url
+http://192.168.2.96:7655
+--token
+deadbeef
+--enable-docker
+` + tc.existingArg + `
+ARGS
+		build_exec_args
+		printf 'EXEC_ARGS=%s\n' "$EXEC_ARGS"
+	`
+			out, err := exec.Command("bash", "-c", script).CombinedOutput()
+			if err != nil {
+				t.Fatalf("bash: %v\n%s", err, out)
+			}
+			got := strings.Contains(string(out), "--enable-failure-logs")
+			if got != tc.want {
+				t.Fatalf("service arguments carry --enable-failure-logs = %v, want %v:\n%s", got, tc.want, out)
+			}
+		})
+	}
+}
+
+// Both spellings must mark the choice as named by this run. Without that mark
+// --disable-failure-logs would be undone by the recovered service argument.
+func TestInstallSHFailureLogsFlagsNameTheChoice(t *testing.T) {
+	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
+	if err != nil {
+		t.Fatalf("read install.sh: %v", err)
+	}
+	script := string(content)
+	for _, needle := range []string{
+		`--enable-failure-logs) ENABLE_FAILURE_LOGS="true"; FAILURE_LOGS_EXPLICIT="true"; shift ;;`,
+		`--disable-failure-logs) ENABLE_FAILURE_LOGS="false"; FAILURE_LOGS_EXPLICIT="true"; shift ;;`,
+		`ENABLE_FAILURE_LOGS="false"`,
+	} {
+		if !strings.Contains(script, needle) {
+			t.Fatalf("install.sh is missing %q", needle)
+		}
+	}
+}
