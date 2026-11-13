@@ -10326,3 +10326,101 @@ func TestRemediationLockHoldsOnTheRetiredIDWhileThePreviousGenerationServes(t *t
 		}
 	}
 }
+
+// The connection feed and PBS poller retain their historical alert subjects.
+// They must read the API row's intent without renaming that row or its history.
+func TestMaintenanceAlertSubjectsResolveToTheirOwningResource(t *testing.T) {
+	now := time.Now().UTC()
+	snapshot := models.StateSnapshot{
+		Nodes: []models.Node{
+			{ID: "site-a-node1", Instance: "site-a", Name: "node1", LinkedAgentID: "host-a", Status: "online", LastSeen: now},
+			{ID: "site-b-node1", Instance: "site-b", Name: "node1", LinkedAgentID: "host-b", Status: "online", LastSeen: now},
+		},
+		Hosts: []models.Host{
+			{ID: "host-a", Hostname: "node1", MachineID: "machine-a", Status: "online", LastSeen: now},
+			{ID: "host-b", Hostname: "node1", MachineID: "machine-b", Status: "online", LastSeen: now},
+		},
+		PBSInstances: []models.PBSInstance{
+			{ID: "pbs-backup-a", Name: "backup-a", Host: "https://backup-a.invalid:8007", Status: "online", LastSeen: now,
+				Datastores: []models.PBSDatastore{{Name: "main", Status: "available"}}},
+			{ID: "pbs-backup-b", Name: "backup-b", Host: "https://backup-b.invalid:8007", Status: "online", LastSeen: now,
+				Datastores: []models.PBSDatastore{{Name: "main", Status: "available"}}},
+		},
+	}
+	rr := NewRegistry(nil)
+	rr.IngestSnapshot(snapshot)
+	before := rr.List()
+	check := func(registry *ResourceRegistry) {
+		t.Helper()
+		for _, pair := range [][2]string{
+			{"pve:site-a", "agent:host-a"}, {"pve:site-b", "agent:host-b"},
+			{"pbs:backup-a", "pbs-backup-a"}, {"pbs:backup-b", "pbs-backup-b"},
+			{"pbs-backup-a-main", "pbs-backup-a/main"}, {"pbs-backup-b-main", "pbs-backup-b/main"},
+		} {
+			want, found := registry.ResolveReferenceID(pair[1])
+			if !found {
+				t.Fatalf("fixture owner %q missing", pair[1])
+			}
+			got, ok := registry.ResolveReferenceID(pair[0])
+			if !ok || got != want {
+				t.Errorf("subject %q = %q, %v; want owner %q", pair[0], got, ok, want)
+			}
+			resource, id, ok := registry.GetByReference(pair[0])
+			if !ok || id != want || resource.ID != want {
+				t.Errorf("API lookup %q = %+v, %q, %v; want %q", pair[0], resource, id, ok, want)
+			}
+		}
+		if a, _ := registry.ResolveReferenceID("pve:site-a"); a != "" {
+			if b, _ := registry.ResolveReferenceID("pve:site-b"); a == b {
+				t.Fatal("namesake PVE nodes crossed instances")
+			}
+		}
+	}
+	check(rr)
+	if !reflect.DeepEqual(before, rr.List()) {
+		t.Fatal("lookup changed resource rows or history coordinates")
+	}
+	// API and saved-host overlays seed from serialized rows, not an inventory
+	// snapshot. The source provenance must survive that real read boundary.
+	encoded, err := json.Marshal(before)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var rows []Resource
+	if err := json.Unmarshal(encoded, &rows); err != nil {
+		t.Fatal(err)
+	}
+	seeded := NewRegistry(nil)
+	seeded.IngestResources(rows)
+	check(seeded)
+}
+
+func TestMaintenanceAlertSubjectsRefuseAmbiguousOrUnownedReferences(t *testing.T) {
+	rr := NewRegistry(nil)
+	rr.IngestSnapshot(models.StateSnapshot{
+		Nodes: []models.Node{
+			{ID: "cluster-node1", Instance: "cluster", Name: "node1"},
+			{ID: "cluster-node2", Instance: "cluster", Name: "node2"},
+		},
+		PBSInstances: []models.PBSInstance{
+			{ID: "pbs-a", Name: "a", Host: "https://a.invalid:8007", Datastores: []models.PBSDatastore{{Name: "b-c"}}},
+			{ID: "pbs-a-b", Name: "a-b", Host: "https://a-b.invalid:8007", Datastores: []models.PBSDatastore{{Name: "c"}}},
+		},
+		Storage: []models.Storage{{ID: "pve-node-pbs-mount", Name: "remote", Instance: "pve", Node: "node", Type: "pbs"}},
+	})
+	for _, ref := range []string{"pve:cluster", "pbs-a-b-c", "pbs:missing", "pve:node1", "pbs-pve-remote"} {
+		if got, ok := rr.ResolveReferenceID(ref); ok {
+			t.Errorf("ambiguous/unowned subject %q resolved to %q", ref, got)
+		}
+	}
+	// Adding a second node invalidates an already-built single-owner index.
+	single := NewRegistry(nil)
+	single.IngestSnapshot(models.StateSnapshot{Nodes: []models.Node{{ID: "c-n1", Instance: "c", Name: "n1"}}})
+	if _, ok := single.ResolveReferenceID("pve:c"); !ok {
+		t.Fatal("single owner missing")
+	}
+	single.IngestSnapshot(models.StateSnapshot{Nodes: []models.Node{{ID: "c-n2", Instance: "c", Name: "n2"}}})
+	if id, ok := single.ResolveReferenceID("pve:c"); ok {
+		t.Errorf("stale single-owner index resolved ambiguous connection to %q", id)
+	}
+}
