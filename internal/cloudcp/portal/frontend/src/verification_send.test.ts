@@ -12,7 +12,11 @@ describe('page-local verification send window', function() {
     ['n.ame@example.com', 'n.ame@example.com'],
   ])('keeps service mailbox identity for %s', function(email, key) {
     expect(verificationEmailKey(email)).toBe(key);
-    expect(trimVerificationEmail(email).includes('Buyer') || !email.includes('Buyer')).toBe(true);
+  });
+
+  it('trims service whitespace without folding the transmitted address', function() {
+    expect(trimVerificationEmail('\u0085Buyer@EXAMPLE.COM\u3000')).toBe('Buyer@EXAMPLE.COM');
+    expect(trimVerificationEmail('\uFEFFBuyer@EXAMPLE.COM')).toBe('\uFEFFBuyer@EXAMPLE.COM');
   });
 
   it('reserves synchronously across purposes and keeps different addresses independent', function() {

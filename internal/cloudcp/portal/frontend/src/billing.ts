@@ -191,7 +191,7 @@ export function installBillingRuntime(deps: BillingRuntimeDeps): void {
     return store.getBillingState();
   }
 
-  function updateBillingState(mutator, notify = true) {
+  function updateBillingState(mutator: (state: PortalBillingState) => void, notify = true) {
     return store.updateBillingState(mutator, { notify: notify });
   }
 
