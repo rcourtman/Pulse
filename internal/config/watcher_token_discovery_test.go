@@ -79,6 +79,12 @@ func (f *tokenDiscoveryFixture) snapshot() []APITokenRecord {
 	return append([]APITokenRecord(nil), f.cw.config.APITokens...)
 }
 
+func (f *tokenDiscoveryFixture) valid(raw string) bool {
+	Mu.RLock()
+	defer Mu.RUnlock()
+	return f.cw.config.IsValidAPIToken(raw)
+}
+
 func (f *tokenDiscoveryFixture) awaitRestored(t *testing.T) {
 	t.Helper()
 	require.Eventually(t, func() bool {
@@ -90,9 +96,9 @@ func (f *tokenDiscoveryFixture) awaitRestored(t *testing.T) {
 		return false
 	}, time.Second, 10*time.Millisecond, "automatic discovery missed complete inventory with preserved/older timestamp")
 	require.ElementsMatch(t, f.restored, f.snapshot(), "discovery changed saved authority")
-	require.True(t, f.cw.config.IsValidAPIToken("synthetic-discovery-monitor"))
-	require.True(t, f.cw.config.IsValidAPIToken("synthetic-discovery-agent"))
-	require.False(t, f.cw.config.IsValidAPIToken("synthetic-unissued"))
+	require.True(t, f.valid("synthetic-discovery-monitor"))
+	require.True(t, f.valid("synthetic-discovery-agent"))
+	require.False(t, f.valid("synthetic-unissued"))
 	require.Eventually(t, func() bool { return f.callbacks.Load() > 0 }, time.Second, time.Millisecond)
 }
 
@@ -100,8 +106,8 @@ func (f *tokenDiscoveryFixture) awaitRevoked(t *testing.T) {
 	t.Helper()
 	require.Eventually(t, func() bool { return len(f.snapshot()) == 0 }, time.Second, 10*time.Millisecond,
 		"automatic discovery missed explicit withdrawal after restoration")
-	require.False(t, f.cw.config.IsValidAPIToken("synthetic-discovery-monitor"))
-	require.False(t, f.cw.config.IsValidAPIToken("synthetic-discovery-agent"))
+	require.False(t, f.valid("synthetic-discovery-monitor"))
+	require.False(t, f.valid("synthetic-discovery-agent"))
 }
 
 func TestConfigWatcher_PollDiscoversPreservedAPITokens(t *testing.T) {
