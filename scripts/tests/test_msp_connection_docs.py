@@ -44,10 +44,15 @@ class MSPConnectionDocsTest(unittest.TestCase):
             with self.subTest(boundary=boundary):
                 self.assertIn(boundary, text)
         self.assertNotIn("Self-signed certificates are handled automatically", text)
+        # The docs rest on one rule: the pin is whatever certificate the
+        # answering candidate presented, so it is first-seen, not independently
+        # verified. Check that relationship rather than an exact return line;
+        # TestInstallGrantAutoRegisterStillSelectsReachableFallback covers it
+        # at runtime.
         source = (ROOT / "internal/api/configapi/config_setup_handlers.go").read_text()
         selection = source.split("func selectAutoRegisterHost(", 1)[1].split("\nfunc ", 1)[0]
-        self.assertIn("fetchTLSFingerprint(candidate)", selection)
-        self.assertIn("return candidate, fingerprint, true, candidates, nil", selection)
+        self.assertRegex(selection, r"fingerprint, err := fetchTLSFingerprint\(candidate\)")
+        self.assertRegex(selection, r"return candidate, fingerprint, true\b")
 
     def test_generated_root_acls_and_optional_reads_are_not_required_baseline(self):
         text = " ".join(connection_help().split())
