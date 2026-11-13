@@ -148,3 +148,60 @@ func TestMaintenanceAlertSubjectsRespectWindowsAndResumeNotifications(t *testing
 		})
 	}
 }
+
+func TestMaintenanceAlertSubjectsKeepUnrelatedResourcesAndRecurringScope(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Minute)
+	store := unifiedresources.NewMemoryStore()
+	registry := unifiedresources.NewRegistry(store)
+	snapshot := models.StateSnapshot{}
+	for _, site := range []string{"a", "b"} {
+		snapshot.Nodes = append(snapshot.Nodes, models.Node{ID: "site-" + site + "-node1", Instance: "site-" + site, Name: "node1", LinkedAgentID: "host-" + site, Status: "online", LastSeen: now})
+		snapshot.Hosts = append(snapshot.Hosts, models.Host{ID: "host-" + site, Hostname: "node1", MachineID: "machine-" + site, Status: "online", LastSeen: now})
+		snapshot.PBSInstances = append(snapshot.PBSInstances, models.PBSInstance{ID: "pbs-backup-" + site, Name: "backup-" + site, Host: "https://backup-" + site + ".invalid:8007", Status: "online", LastSeen: now, Datastores: []models.PBSDatastore{{Name: "main", Status: "unavailable"}}})
+	}
+	registry.IngestSnapshot(snapshot)
+	minute := now.Hour()*60 + now.Minute()
+	for _, ownerRef := range []string{"agent:host-a", "pbs-backup-a"} {
+		ownerID, ok := registry.ResolveReferenceID(ownerRef)
+		if !ok {
+			t.Fatalf("fixture owner %q missing", ownerRef)
+		}
+		if err := store.SetResourceOperatorState(unifiedresources.ResourceOperatorState{
+			CanonicalID: ownerID, MaintenanceScope: unifiedresources.MaintenanceScopeResourceAndDescendants,
+			MaintenanceRecurrence: &unifiedresources.RecurringMaintenanceWindow{
+				Timezone: "UTC", Weekdays: []string{"monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"},
+				StartMinute: (minute + 1440 - 60) % 1440, EndMinute: (minute + 60) % 1440,
+			},
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	manager := alerts.NewManagerWithDataDir(t.TempDir())
+	t.Cleanup(manager.Stop)
+	manager.UpdateConfig(alerts.AlertConfig{Enabled: true, ActivationState: alerts.ActivationActive, TimeThresholds: map[string]int{"storage": 0}})
+	monitor := &Monitor{alertManager: manager}
+	monitor.installOperatorIntentResolver(unifiedresources.NewMonitorAdapter(registry))
+	for range 5 {
+		for _, site := range []string{"a", "b"} {
+			manager.CheckConnection(alerts.ConnectionSnapshot{ID: "pve:site-" + site, Name: "site-" + site, Type: alerts.ConnectionTypePVE, State: alerts.ConnectionStateUnreachable, Enabled: true})
+			manager.CheckConnection(alerts.ConnectionSnapshot{ID: "pbs:backup-" + site, PolicyResourceID: "pbs-backup-" + site, Name: "backup-" + site, Type: alerts.ConnectionTypePBS, State: alerts.ConnectionStateUnreachable, Enabled: true})
+			manager.CheckStorage(models.Storage{ID: "pbs-backup-" + site + "-main", Instance: "pbs-backup-" + site, Node: "backup-" + site, Name: "main", Type: "pbs", Status: "unavailable"})
+		}
+	}
+	active := manager.GetActiveAlerts()
+	encoded, err := json.Marshal(map[string]any{"phase": "recurring-scoped-estate", "alerts": active, "resources": registry.List()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("MAINTENANCE_SUBJECT_FIXTURE %s", encoded)
+	want := map[string]bool{"pve:site-b": true, "pbs:backup-b": true, "pbs-backup-b-main": true}
+	for _, a := range active {
+		if !want[a.ResourceID] {
+			t.Errorf("scheduled subject notified or control duplicated: %+v", a)
+		}
+		delete(want, a.ResourceID)
+	}
+	if len(want) != 0 {
+		t.Errorf("maintenance suppressed unrelated resources: %v", want)
+	}
+}
