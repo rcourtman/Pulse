@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "parent": "0da6ae83bf0e1da5b997386f9a6f8af01d03fa51",
+  "content_fingerprint": "10d92f6d1ce4c19c",
+  "verified_blobs": {
+    "internal/cloudcp/provider_msp_license_refresh.go": "0afd3c72e919ac5314f6ef7b88e5cf93defb35aa",
+    "internal/cloudcp/provider_msp_plan_catalogue_test.go": "dcd2237f75208529815a55fafba674c7fc6b6952",
+    "internal/cloudcp/portal/frontend/src/provider_plan.ts": "1ece4664ee4f267669744325c3ec38214790c9f1",
+    "internal/cloudcp/portal/frontend/src/provider_plan.test.ts": "ddf1cb0b1de72e48341e6e1f86e9ef402361b43a",
+    "internal/cloudcp/portal/frontend/src/styles.css": "1220b90f281f867c13328db6f0aa6a6856b1a3a7",
+    "internal/cloudcp/portal/dist/portal_app.js": "e73cd93b8ac6f40883d241ae648bfd64f5e11643",
+    "internal/cloudcp/portal/dist/portal_app.css": "02ddd00426d02081486a51d3abe2e0a211fb6879",
+    "internal/cloudcp/portal/dist/build_manifest.json": "d736ddc78942602d4b98f80af9f31357bcbce8a8"
+  },
+  "verified_at": "2026-11-13T19:39:39.942753+00:00",
+  "surface": "Existing embedded MSP Plan catalogue completeness and deliberate recovery",
+  "command": "pulse-worker-browser tmp/plan-catalogue-proof/browser.cjs",
+  "runtime": {
+    "playwright": "1.56.1",
+    "chromium": "141.0.7390.37",
+    "webkit": "26.0"
+  },
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "themes": [
+    "light",
+    "dark"
+  ],
+  "cases": {
+    "before": 26,
+    "after": 26
+  },
+  "checks": {
+    "before": 173,
+    "after": 226
+  },
+  "result": "passed",
+  "fixture": "Actual committed template and production-built JS/CSS, synthetic account and local HTTP. Baseline handler states from source-_gfch348; final expected native snapshots require independent exact-source VM reconciliation retained in the lane dossier. No external checkout navigation in these successful passes.",
+  "comparisons": "52 captures opened through native view_image: 26 pairs, matching fixtures, viewport, theme, locale, clock, chosen period and top scroll. Six Chromium states in four desktop/phone light/dark contexts; WebKit phone/dark partial and outage. Existing licence/price/buy/apply positions unchanged for partial offers; outage Apply rises 30px; newly usable annual-only offer moves Apply down but keeps it visible on phone. No horizontal overflow in tested states. Timer enables reload without an automatic read; deliberate reload recovers known tiers; read-only restrictions and exact local checkout request payload retained.",
+  "captures": {
+    "count": 52,
+    "pairs": 26,
+    "location": "Current Web outcome captures/; CAPTURES.json indexes before/after files and observations."
+  },
+  "limits": "No production/provider/customer operation, installed or original-client recovery, live checkout/payment, mail, release or full E2E acceptance. Initial failed external navigation and artifact access errors remain adverse evidence in the dossier. The portal is outside the main-frontend guard classifier; its skip does not establish browser proof."
+}

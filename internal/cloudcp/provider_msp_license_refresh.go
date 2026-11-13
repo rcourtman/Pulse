@@ -36,6 +36,7 @@ const (
 	providerMSPLicenseRefreshInitialDelay = 2 * time.Minute
 	providerMSPLicenseRestartDelay        = 2 * time.Second
 	providerMSPPlansCacheTTL              = 5 * time.Minute
+	providerMSPPlansRetryDelay            = time.Minute
 	providerMSPLicenseHTTPTimeout         = 20 * time.Second
 	maxProviderMSPLicenseResponseBytes    = 256 * 1024
 )
@@ -79,9 +80,10 @@ type ProviderMSPLicenseRefresher struct {
 	mu      sync.Mutex // serialises refreshes
 	restart func()
 
-	plansMu       sync.Mutex
-	plans         []ProviderMSPPurchasablePlan
-	plansCachedAt time.Time
+	plansMu          sync.Mutex
+	plans            providerMSPPlanCatalogue
+	plansErr         error
+	plansNextFetchAt time.Time
 }
 
 // NewProviderMSPLicenseRefresher returns nil unless this control plane is a
@@ -296,26 +298,62 @@ func (r *ProviderMSPLicenseRefresher) Run(ctx context.Context) {
 	}
 }
 
-// Plans returns what the licence server sells now, with each plan's client
-// workspace cap, cached briefly.
-func (r *ProviderMSPLicenseRefresher) Plans(ctx context.Context) ([]ProviderMSPPurchasablePlan, error) {
+// providerMSPPlanCatalogue keeps an unknown (older server) list distinct from
+// an explicitly complete or incomplete catalogue. Only verified offers are used.
+type providerMSPPlanCatalogue struct {
+	Plans             []ProviderMSPPurchasablePlan
+	Complete          *bool
+	RetryAfterSeconds int
+}
+
+// Plans caches complete catalogues for five minutes. Partial/unknown results
+// and failures share a one-minute retry window, not a complete-success cache.
+// Repeated deliberate portal reads cannot spend another upstream request in
+// that window; nothing schedules an automatic request when it expires.
+func (r *ProviderMSPLicenseRefresher) Plans(ctx context.Context) (providerMSPPlanCatalogue, error) {
 	r.plansMu.Lock()
 	defer r.plansMu.Unlock()
-	if r.plans != nil && r.now().Sub(r.plansCachedAt) < providerMSPPlansCacheTTL {
-		return r.plans, nil
+	if err := ctx.Err(); err != nil {
+		return providerMSPPlanCatalogue{}, err
+	}
+	cached := func() (providerMSPPlanCatalogue, error) {
+		result := r.plans
+		result.Plans = append([]ProviderMSPPurchasablePlan{}, result.Plans...)
+		if result.Complete == nil || !*result.Complete || r.plansErr != nil {
+			if remaining := r.plansNextFetchAt.Sub(r.now()); remaining > 0 {
+				result.RetryAfterSeconds = int((remaining + time.Second - 1) / time.Second)
+			}
+		}
+		return result, r.plansErr
+	}
+	if r.now().Before(r.plansNextFetchAt) {
+		return cached()
 	}
 	var resp struct {
-		Plans []ProviderMSPPurchasablePlan `json:"plans"`
+		Plans    *[]ProviderMSPPurchasablePlan `json:"plans"`
+		Complete *bool                         `json:"complete"`
 	}
 	status, err := r.call(ctx, http.MethodGet, "/v1/provider-msp/plans", nil, &resp)
+	// A caller leaving is not a shared catalogue outage. Do not let its
+	// cancellation poison the next reader's opportunity to fetch.
+	if ctx.Err() != nil {
+		return providerMSPPlanCatalogue{}, ctx.Err()
+	}
+	if err == nil && status != http.StatusOK {
+		err = fmt.Errorf("licence server plans unavailable (HTTP %d)", status)
+	}
+	if err == nil && resp.Plans == nil {
+		err = errors.New("licence server returned no plan list")
+	}
 	if err != nil {
-		return nil, err
+		// Expired prices are not independently verified current offers.
+		r.plans = providerMSPPlanCatalogue{}
+		r.plansErr = err
+		r.plansNextFetchAt = r.now().Add(providerMSPPlansRetryDelay)
+		return cached()
 	}
-	if status != http.StatusOK {
-		return nil, fmt.Errorf("licence server plans unavailable (HTTP %d)", status)
-	}
-	plans := make([]ProviderMSPPurchasablePlan, 0, len(resp.Plans))
-	for _, plan := range resp.Plans {
+	plans := make([]ProviderMSPPurchasablePlan, 0, len(*resp.Plans))
+	for _, plan := range *resp.Plans {
 		limit, known := pkglicensing.WorkspaceLimitForPlan(plan.PlanVersion)
 		if !known {
 			// A plan this control plane cannot enforce is not offered.
@@ -324,9 +362,14 @@ func (r *ProviderMSPLicenseRefresher) Plans(ctx context.Context) ([]ProviderMSPP
 		plan.WorkspaceLimit = limit
 		plans = append(plans, plan)
 	}
-	r.plans = plans
-	r.plansCachedAt = r.now()
-	return plans, nil
+	r.plans = providerMSPPlanCatalogue{Plans: plans, Complete: resp.Complete}
+	r.plansErr = nil
+	ttl := providerMSPPlansRetryDelay
+	if resp.Complete != nil && *resp.Complete {
+		ttl = providerMSPPlansCacheTTL
+	}
+	r.plansNextFetchAt = r.now().Add(ttl)
+	return cached()
 }
 
 // Checkout starts a Stripe checkout for this platform and returns its URL.
@@ -384,16 +427,18 @@ func (r *ProviderMSPLicenseRefresher) BillingPortal(ctx context.Context) (string
 
 // ProviderMSPPlanState is what the portal shows about this platform's plan.
 type ProviderMSPPlanState struct {
-	PlanVersion       string                       `json:"plan_version"`
-	PlanSource        string                       `json:"plan_source"`
-	Evaluation        bool                         `json:"evaluation"`
-	LicenseID         string                       `json:"license_id,omitempty"`
-	ExpiresAt         string                       `json:"expires_at,omitempty"`
-	Lapsed            bool                         `json:"lapsed"`
-	WorkspaceLimit    int                          `json:"workspace_limit"`
-	PurchaseAvailable bool                         `json:"purchase_available"`
-	Plans             []ProviderMSPPurchasablePlan `json:"plans"`
-	PlansError        string                       `json:"plans_error,omitempty"`
+	PlanVersion            string                       `json:"plan_version"`
+	PlanSource             string                       `json:"plan_source"`
+	Evaluation             bool                         `json:"evaluation"`
+	LicenseID              string                       `json:"license_id,omitempty"`
+	ExpiresAt              string                       `json:"expires_at,omitempty"`
+	Lapsed                 bool                         `json:"lapsed"`
+	WorkspaceLimit         int                          `json:"workspace_limit"`
+	PurchaseAvailable      bool                         `json:"purchase_available"`
+	Plans                  []ProviderMSPPurchasablePlan `json:"plans"`
+	PlansError             string                       `json:"plans_error,omitempty"`
+	PlansComplete          *bool                        `json:"plans_complete,omitempty"`
+	PlansRetryAfterSeconds int                          `json:"plans_retry_after_seconds,omitempty"`
 }
 
 func providerMSPPlanState(ctx context.Context, cfg *CPConfig, refresher *ProviderMSPLicenseRefresher) ProviderMSPPlanState {
@@ -414,13 +459,15 @@ func providerMSPPlanState(ctx context.Context, cfg *CPConfig, refresher *Provide
 	if refresher == nil || state.LicenseID == "" {
 		return state
 	}
-	plans, err := refresher.Plans(ctx)
+	catalogue, err := refresher.Plans(ctx)
+	state.PlansRetryAfterSeconds = catalogue.RetryAfterSeconds
 	if err != nil {
-		state.PlansError = "Plans are unavailable right now. Try again in a few minutes."
+		state.PlansError = "Plan offers are unavailable right now. Try reloading plans in a minute."
 		return state
 	}
-	state.Plans = plans
-	state.PurchaseAvailable = len(plans) > 0
+	state.Plans = catalogue.Plans
+	state.PlansComplete = catalogue.Complete
+	state.PurchaseAvailable = len(catalogue.Plans) > 0
 	return state
 }
 

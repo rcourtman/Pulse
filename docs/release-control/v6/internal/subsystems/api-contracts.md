@@ -21,6 +21,28 @@
 
 ## Purpose
 
+### Provider Plan reports catalogue completeness separately from usable offers
+
+`GET /api/accounts/{account_id}/provider-msp/plan` adds optional
+`plans_complete` and `plans_retry_after_seconds` without changing saved licence
+fields or the member-read/owner-write boundary. Explicit true means all upstream
+catalogue reads resolved (including a confirmed empty catalogue); false means
+some could not be read. Absence/null is unknown for older-server compatibility,
+not evidence that a list is complete. The portal preserves the known plans,
+prices, periods and purchase actions beside partial/unknown context. Its shared
+styles keep that flag in the existing heading line rather than displacing the
+current licence or offers.
+
+The nonnegative retry count describes the remaining one-minute local window
+for partial/unknown or failed reads. It is not an automatic-retry instruction,
+a changed upstream quota or a guarantee that providers will have recovered.
+Complete catalogues retain the existing five-minute cache. An unavailable or
+malformed read returns the existing fixed `plans_error`, no stale offers and
+`Cache-Control: no-store` on the portal response. A deliberate read after the
+window may recover offers; a timer only enables its button. Registered native
+catalogue tests and portal Plan tests cover these additive fields, unknown
+compatibility and unchanged prices/licence/permission behavior.
+
 ### Docker containers can carry their last log lines (13 November 2026)
 
 `agentsdocker.Container` gains an optional `failureLog` object: `reason`

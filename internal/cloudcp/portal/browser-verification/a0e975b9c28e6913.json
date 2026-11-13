@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "parent": "4f5e391f747fc95943a0d79ef4adb185b188ea7e",
+  "content_fingerprint": "a0e975b9c28e6913",
+  "verified_blobs": {
+    "internal/cloudcp/provider_msp_license_refresh.go": "0afd3c72e919ac5314f6ef7b88e5cf93defb35aa",
+    "internal/cloudcp/provider_msp_plan_catalogue_test.go": "dcd2237f75208529815a55fafba674c7fc6b6952",
+    "internal/cloudcp/portal/frontend/src/provider_plan.ts": "05e51db7bc14f5625f3ebc6015d565bdbc5847a6",
+    "internal/cloudcp/portal/frontend/src/provider_plan.test.ts": "ddf1cb0b1de72e48341e6e1f86e9ef402361b43a",
+    "internal/cloudcp/portal/frontend/src/styles.css": "1220b90f281f867c13328db6f0aa6a6856b1a3a7",
+    "internal/cloudcp/portal/dist/portal_app.js": "e73cd93b8ac6f40883d241ae648bfd64f5e11643",
+    "internal/cloudcp/portal/dist/portal_app.css": "02ddd00426d02081486a51d3abe2e0a211fb6879",
+    "internal/cloudcp/portal/dist/build_manifest.json": "bf2b597c29922c39c98668d4c4e85eae56ad7dc4"
+  },
+  "verified_at": "2026-11-13T20:05:55.264179+00:00",
+  "verification_kind": "Type-only source correction with exact rendered-runtime equivalence; no new browser execution claimed",
+  "original_browser_receipt": "internal/cloudcp/portal/browser-verification/10d92f6d1ce4c19c.json",
+  "result": "passed",
+  "reason": "Annotate cycle as monthly | annual after exact-source TypeScript rejected its widened string inference. The annotation erases completely; rebuilt served JS and CSS are byte-identical to the already browser/pixel-verified source. Only the source-hash manifest changes.",
+  "served_content_sha256": {
+    "portal_app.js": "c417c3371e5effea16326ca87ec4097c7d7478ef2e2aa86468c2348e0e2ded52",
+    "portal_app.css": "4dcf60cf61ce355332590d0af5443e664ef0bf74149ced3dfcbd214e2d5cc2ab"
+  },
+  "captures": "Existing primary 52 captures / 26 pairs are unchanged; the lane dossier additionally retains eight inspected supplemental captures / four pairs on the identical runtime.",
+  "limits": "This is an equivalence receipt, not a fresh browser pass, native producer acceptance or full-suite success. The failed type proof and root unknown-execution dependency remain retained."
+}
