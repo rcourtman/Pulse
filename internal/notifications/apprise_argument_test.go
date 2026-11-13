@@ -25,9 +25,9 @@ func TestAppriseTargetsNeverReachTheCommandLineAsOptions(t *testing.T) {
 	manager := NewNotificationManager("")
 	t.Cleanup(manager.Stop)
 	var args []string
-	manager.appriseExec = func(_ context.Context, got []string) ([]byte, error) {
+	manager.appriseExec = func(_ context.Context, got []string) (int64, error) {
 		args = got
-		return nil, nil
+		return 0, nil
 	}
 	if err := manager.SendTestAppriseWithConfig(cfg); err != nil {
 		t.Fatalf("send test: %v", err)
