@@ -406,9 +406,7 @@ func TestConfigWatcher_PollForChanges(t *testing.T) {
 	cfg := &Config{}
 	cw, err := NewConfigWatcher(cfg)
 	require.NoError(t, err)
-	if stat, err := os.Stat(apiTokensPath); err == nil {
-		cw.apiTokensLastModTime = stat.ModTime()
-	}
+	cw.reloadAPITokens() // Seed the successful content snapshot before callbacks.
 
 	// Set short poll interval
 	cw.pollInterval = 10 * time.Millisecond

@@ -95,10 +95,23 @@ Legacy complete JSON `null` remains an explicit empty inventory, not a new
 invalid-schema policy. Existing bounded retries, canonical migration-before-use,
 concurrent mutation serialization and token/tenant checks are unchanged.
 
+Automatic discovery does not depend on an increasing file timestamp. The
+five-second polling fallback compares file content with the exact bytes of
+the last successfully decoded inventory, so a lost inode watch, timestamp-
+preserving restore or older backup cannot indefinitely hide a complete
+inventory or a later explicit `[]`/`null` withdrawal. A failed read never
+advances this fingerprint; a later stat or read cannot mark unconsumed bytes
+as accepted. Unchanged polls neither rewrite the file nor rebuild bindings.
+Canonical migration may produce a new encoding, which a subsequent poll
+reconciles normally. Startup's missing-file compatibility is unchanged.
+
 Registered persistence, startup and watcher tests exercise blank, missing,
 missing-directory, whitespace, malformed and encrypted incomplete states,
 unchanged saved bytes/attributes, retained authentication, exact-source recovery
-and explicit revocation. They are synthetic fixtures, not original-client
+and explicit revocation. `watcher_token_discovery_test.go` additionally exercises
+real file-watch removal, event-free polling, equal/older timestamps, same-inode/
+same-size edits, failed-read recovery, exact-read/replacement races and quiet
+unchanged polling. They are synthetic fixtures, not original-client
 recovery, installed acceptance or an historical impact assessment.
 
 ### Agent saved-authority ingress cannot accept partial or streaming state

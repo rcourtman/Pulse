@@ -28,23 +28,23 @@ var (
 
 // ConfigWatcher monitors runtime config files for changes and updates runtime config.
 type ConfigWatcher struct {
-	config               *Config
-	envPath              string
-	apiTokensPath        string
-	persistence          *ConfigPersistence
-	watcher              *fsnotify.Watcher
-	stopChan             chan struct{}
-	stopOnce             sync.Once // Ensures Stop() can only close channel once
-	wg                   sync.WaitGroup
-	lastModTime          time.Time
-	lastEnvHash          string
-	apiTokensLastModTime time.Time
-	mu                   sync.RWMutex
-	onMockReload         func() // Callback to trigger backend restart when PULSE_MOCK_* changes
-	onAPITokenReload     func() // Callback when API tokens are reloaded from disk
-	pollInterval         time.Duration
-	mockEnvOwned         map[string]struct{}
-	mockEnvFallbacks     map[string]mockEnvFallback
+	config            *Config
+	envPath           string
+	apiTokensPath     string
+	persistence       *ConfigPersistence
+	watcher           *fsnotify.Watcher
+	stopChan          chan struct{}
+	stopOnce          sync.Once // Ensures Stop() can only close channel once
+	wg                sync.WaitGroup
+	lastModTime       time.Time
+	lastEnvHash       string
+	apiTokensLastHash string // Guarded by mu; only a successful snapshot advances it.
+	mu                sync.RWMutex
+	onMockReload      func() // Callback to trigger backend restart when PULSE_MOCK_* changes
+	onAPITokenReload  func() // Callback when API tokens are reloaded from disk
+	pollInterval      time.Duration
+	mockEnvOwned      map[string]struct{}
+	mockEnvFallbacks  map[string]mockEnvFallback
 }
 
 type mockEnvFallback struct {
@@ -122,9 +122,6 @@ func NewConfigWatcher(config *Config) (*ConfigWatcher, error) {
 				cw.mockEnvOwned[key] = struct{}{}
 			}
 		}
-	}
-	if stat, err := watcherOsStat(apiTokensPath); err == nil {
-		cw.apiTokensLastModTime = stat.ModTime()
 	}
 
 	return cw, nil
@@ -302,9 +299,6 @@ func (cw *ConfigWatcher) handleEvents(events <-chan fsnotify.Event, errors <-cha
 
 				if event.Op&(fsnotify.Write|fsnotify.Create|fsnotify.Rename|fsnotify.Remove) != 0 {
 					cw.rewatchFileIfPresent(cw.apiTokensPath)
-					if stat, statErr := watcherOsStat(cw.apiTokensPath); statErr == nil {
-						cw.apiTokensLastModTime = stat.ModTime()
-					}
 					log.Info().Str("event", event.Op.String()).Msg("Detected API token file change")
 					cw.reloadAPITokens()
 				}
@@ -363,6 +357,11 @@ func (cw *ConfigWatcher) pollForChanges() {
 	for {
 		select {
 		case <-ticker.C:
+			// A removed/replaced inode loses its file watch. Restored files can
+			// preserve (or predate) the old mtime, so metadata is not a reliable
+			// discovery cursor. Check tokens before any .env touch can skip this tick.
+			cw.reloadAPITokensIfChanged()
+
 			// Check .env
 			if stat, err := os.Stat(cw.envPath); err == nil {
 				if stat.ModTime().After(cw.lastModTime) {
@@ -381,20 +380,29 @@ func (cw *ConfigWatcher) pollForChanges() {
 				}
 			}
 
-			if cw.apiTokensPath != "" {
-				if stat, err := os.Stat(cw.apiTokensPath); err == nil {
-					if stat.ModTime().After(cw.apiTokensLastModTime) {
-						log.Info().Msg("Detected API token file change via polling")
-						cw.apiTokensLastModTime = stat.ModTime()
-						cw.reloadAPITokens()
-					}
-				}
-			}
-
 		case <-cw.stopChan:
 			return
 		}
 	}
+}
+
+func (cw *ConfigWatcher) reloadAPITokensIfChanged() {
+	if cw.apiTokensPath == "" {
+		return
+	}
+	hash, err := cw.calculateFileHash(cw.apiTokensPath)
+	if err != nil {
+		// Absence/unreadable storage is not an explicit saved revocation.
+		return
+	}
+	cw.mu.RLock()
+	unchanged := hash == cw.apiTokensLastHash
+	cw.mu.RUnlock()
+	if unchanged {
+		return
+	}
+	log.Info().Msg("Detected API token file change via polling")
+	cw.reloadAPITokens()
 }
 
 // calculateFileHash returns the SHA256 hash of a file
@@ -513,8 +521,8 @@ func (cw *ConfigWatcher) reloadAPITokens() {
 	// Serialize the disk snapshot with every in-process API-token mutation.
 	// Without this lock a reload can read the old file, wait behind a rename or
 	// revoke that writes the new file, and then replace the newer runtime
-	// inventory with its stale snapshot. The final stat below would also record
-	// the new file's timestamp, leaving polling unable to repair the rollback.
+	// inventory with its stale snapshot. Only the successfully decoded bytes
+	// may advance the polling fingerprint.
 	Mu.Lock()
 	defer Mu.Unlock()
 
@@ -524,6 +532,7 @@ func (cw *ConfigWatcher) reloadAPITokens() {
 
 	// Retry logic to handle temporary file system issues
 	var tokens []APITokenRecord
+	var snapshotHash string
 	var err error
 	maxRetries := 3
 	retryDelay := 50 * time.Millisecond
@@ -532,7 +541,7 @@ func (cw *ConfigWatcher) reloadAPITokens() {
 		// A missing file during a running server's reload can be a
 		// remove/replace window, not an explicit saved revocation. Require
 		// a complete existing inventory; first-install absence is separate.
-		tokens, err = cw.persistence.loadAPITokens(false)
+		tokens, snapshotHash, err = cw.persistence.loadAPITokenSnapshot(false)
 		if err == nil {
 			break
 		}
@@ -567,11 +576,7 @@ func (cw *ConfigWatcher) reloadAPITokens() {
 	cw.config.APITokens = tokens
 	cw.config.SortAPITokens()
 
-	if cw.apiTokensPath != "" {
-		if stat, err := os.Stat(cw.apiTokensPath); err == nil {
-			cw.apiTokensLastModTime = stat.ModTime()
-		}
-	}
+	cw.apiTokensLastHash = snapshotHash
 
 	log.Info().
 		Int("count", len(tokens)).
