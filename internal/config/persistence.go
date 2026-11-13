@@ -823,17 +823,6 @@ func (c *ConfigPersistence) persistAPITokensLocked(tokens []APITokenRecord) erro
 		return err
 	}
 
-	if err := c.EnsureConfigDir(); err != nil {
-		return fmt.Errorf("prepare config directory for api tokens: %w", err)
-	}
-
-	// Backup previous state (best effort).
-	if existing, err := c.fs.ReadFile(c.apiTokensFile); err == nil && len(existing) > 0 {
-		if err := c.writeConfigBackupLocked(c.apiTokensFile+".backup", existing, 0600); err != nil {
-			log.Warn().Err(err).Msg("Failed to create API token backup file")
-		}
-	}
-
 	sanitized := make([]APITokenRecord, len(tokens))
 	for i := range tokens {
 		record := tokens[i]
@@ -859,8 +848,25 @@ func (c *ConfigPersistence) persistAPITokensLocked(tokens []APITokenRecord) erro
 		}
 	}
 
+	if err := c.EnsureConfigDir(); err != nil {
+		return fmt.Errorf("prepare config directory for api tokens: %w", err)
+	}
+
+	// Capture the exact previous encoding before publication, but do not
+	// replace a distinct recovery point until the primary write succeeds.
+	// Validation, encoding, encryption and primary-write failures must leave
+	// the backup untouched, especially when the primary is itself incomplete.
+	existing, readErr := c.fs.ReadFile(c.apiTokensFile)
 	if err := c.writeConfigFileLocked(c.apiTokensFile, data, 0600); err != nil {
 		return fmt.Errorf("persist api tokens file %s: %w", c.apiTokensFile, err)
+	}
+	// The backup remains best effort: once the primary commits, a backup
+	// failure must not make callers roll back live credentials to old state.
+	// During import both writes remain staged in the existing transaction.
+	if readErr == nil && len(existing) > 0 {
+		if err := c.writeConfigBackupLocked(c.apiTokensFile+".backup", existing, 0600); err != nil {
+			log.Warn().Err(err).Msg("Failed to create API token backup file")
+		}
 	}
 	return nil
 }
