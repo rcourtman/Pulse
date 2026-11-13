@@ -29,7 +29,7 @@ import (
 
 // ConfigPersistence handles saving and loading configuration
 type ConfigPersistence struct {
-	mu                         sync.RWMutex
+	mu                         persistenceMutex
 	patrolHistoryMu            sync.Mutex // Serializes history/schedule read-modify-write updates.
 	tx                         *importTransaction
 	configDir                  string
@@ -322,6 +322,7 @@ func newConfigPersistence(configDir string) (*ConfigPersistence, error) {
 	}
 
 	cp := &ConfigPersistence{
+		mu:                         persistenceMutex{directory: resolvedConfigDir},
 		configDir:                  resolvedConfigDir,
 		alertFile:                  resolvedPaths.alertFile,
 		alertIntentFile:            resolvedPaths.alertIntentFile,
@@ -3670,7 +3671,7 @@ func (c *ConfigPersistence) RecordWorkflowPromptActivity(record WorkflowPromptAc
 // plaintext on decryption failure (transparent migration from unencrypted files).
 func loadHistoryData[T any](
 	fs FileSystem,
-	mu *sync.RWMutex,
+	mu sync.Locker,
 	filePath string,
 	cryptoMgr *crypto.CryptoManager,
 	emptyDataFactory func() *T,
