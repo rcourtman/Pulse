@@ -76,8 +76,18 @@ func TestUninstallHostAgentKeepsCredentialUsedBySiblingHost(t *testing.T) {
 	monitor.persistence = config.NewConfigPersistence(dataPath)
 
 	now := time.Now().UTC()
-	token := config.APITokenRecord{ID: "shared-host-token", Name: "Shared host token", CreatedAt: now.Add(-time.Hour)}
+	const rawToken = "synthetic-shared-host-credential"
+	record, err := config.NewAPITokenRecord(rawToken, "Shared host token", []string{config.ScopeAgentReport, config.ScopeAgentConfigRead})
+	if err != nil {
+		t.Fatalf("NewAPITokenRecord: %v", err)
+	}
+	token := *record
+	token.ID = "shared-host-token"
+	token.CreatedAt = now.Add(-time.Hour)
 	monitor.config.APITokens = []config.APITokenRecord{token}
+	if !monitor.config.IsValidAPIToken(rawToken) {
+		t.Fatal("shared fixture credential does not authenticate before uninstall")
+	}
 	if err := monitor.persistence.SaveAPITokens(monitor.config.APITokens); err != nil {
 		t.Fatalf("SaveAPITokens: %v", err)
 	}
@@ -97,6 +107,9 @@ func TestUninstallHostAgentKeepsCredentialUsedBySiblingHost(t *testing.T) {
 		t.Fatalf("UninstallHostAgent(first): %v", err)
 	}
 	requireAgentTokenPresent(t, monitor, token.ID)
+	if !monitor.config.IsValidAPIToken(rawToken) {
+		t.Fatal("sibling host lost its authenticating credential after uninstall")
+	}
 	live := monitor.GetLiveHostsSnapshot()
 	if len(live) != 1 || live[0].ID != second.ID {
 		t.Fatalf("sibling host %q did not survive first host uninstall: %+v", second.ID, live)
@@ -111,5 +124,9 @@ func TestUninstallHostAgentKeepsCredentialUsedBySiblingHost(t *testing.T) {
 	}
 	if len(persisted) != 1 || persisted[0].ID != token.ID {
 		t.Fatalf("shared credential was removed from durable inventory: %+v", persisted)
+	}
+	restartedConfig := &config.Config{APITokens: persisted}
+	if !restartedConfig.IsValidAPIToken(rawToken) {
+		t.Fatal("sibling host credential does not authenticate from the durable inventory")
 	}
 }
