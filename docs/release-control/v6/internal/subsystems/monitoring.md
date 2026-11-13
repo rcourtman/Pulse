@@ -7635,8 +7635,11 @@ columns exist only in node RRD, so `GuestRRDPoint` parses only the recorded
 guest columns (`time`, `maxmem`), `PVEClientInterface` exposes no guest RRD
 lookups, and the VM memory resolver must not consult the guest RRD endpoint
 (#1634). Monitoring must use a current linked host-agent sample before
-guest-agent `/proc/meminfo`, so that file-read stays off the guest's shared
-agent channel (#2439), and try the read before a last-known agent sample.
+status meminfo and guest-agent `/proc/meminfo`: the agent subtracts the ZFS
+ARC, which the kernel's `MemAvailable` counts as used, so a TrueNAS guest is
+not reported at 91% when it is 14% used (#4340), and the file-read stays off
+the guest's shared agent channel (#2439). Status meminfo and the read both
+rank above a last-known agent sample.
 Guest-agent fallback
 caches must key on `(instance, node, vmid)` instead of raw `node/vmid`, so
 separate Proxmox instances cannot leak stale or foreign memory evidence into

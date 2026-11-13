@@ -468,6 +468,32 @@ func TestResolveGuestStatusMemoryLinkedAgentBeforeFileRead(t *testing.T) {
 			wantTotal:  6 * giB,
 		},
 		{
+			// #4340: a TrueNAS guest's balloon meminfo counts the ZFS ARC as
+			// used; its own agent subtracts the ARC.
+			name: "current agent outranks status meminfo that counts the ZFS ARC as used",
+			status: &proxmox.VMStatus{
+				Agent:   proxmox.VMAgentField{Value: 1},
+				MaxMem:  8 * giB,
+				MemInfo: &proxmox.VMMemInfo{Total: 8 * giB, Used: 7 * giB, Available: 1 * giB},
+			},
+			hosts:      agent(8*giB, 1*giB, "current"),
+			wantSource: "agent",
+			wantUsed:   1 * giB,
+			wantTotal:  8 * giB,
+		},
+		{
+			name: "last-known agent ranks below status meminfo",
+			status: &proxmox.VMStatus{
+				Agent:   proxmox.VMAgentField{Value: 1},
+				MaxMem:  8 * giB,
+				MemInfo: &proxmox.VMMemInfo{Total: 8 * giB, Used: 7 * giB, Available: 1 * giB},
+			},
+			hosts:      agent(8*giB, 1*giB, "last-known"),
+			wantSource: "available-field",
+			wantUsed:   7 * giB,
+			wantTotal:  8 * giB,
+		},
+		{
 			name:       "last-known agent ranks below the file-read",
 			status:     running(),
 			hosts:      agent(6*giB, 2*giB, "last-known"),
