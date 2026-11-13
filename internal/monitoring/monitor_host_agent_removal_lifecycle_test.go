@@ -161,12 +161,18 @@ func TestHostAgentRemovalLifecycleRevokesDedicatedCredentialAndRetainsDenial(t *
 	monitor.persistence = config.NewConfigPersistence(dataPath)
 
 	now := time.Now().UTC()
-	oldToken := config.APITokenRecord{
-		ID:        "dedicated-old-token",
-		Name:      "Dedicated host token",
-		CreatedAt: now.Add(-time.Hour),
+	const rawToken = "synthetic-dedicated-host-credential"
+	record, err := config.NewAPITokenRecord(rawToken, "Dedicated host token", []string{config.ScopeAgentReport, config.ScopeAgentConfigRead})
+	if err != nil {
+		t.Fatalf("NewAPITokenRecord: %v", err)
 	}
+	oldToken := *record
+	oldToken.ID = "dedicated-old-token"
+	oldToken.CreatedAt = now.Add(-time.Hour)
 	monitor.config.APITokens = []config.APITokenRecord{oldToken}
+	if !monitor.config.IsValidAPIToken(rawToken) {
+		t.Fatal("dedicated fixture credential does not authenticate before removal")
+	}
 	if err := monitor.persistence.SaveAPITokens(monitor.config.APITokens); err != nil {
 		t.Fatalf("SaveAPITokens: %v", err)
 	}
@@ -190,12 +196,19 @@ func TestHostAgentRemovalLifecycleRevokesDedicatedCredentialAndRetainsDenial(t *
 	if len(monitor.config.APITokens) != 0 {
 		t.Fatalf("dedicated credential remained in memory: %+v", monitor.config.APITokens)
 	}
+	if monitor.config.IsValidAPIToken(rawToken) {
+		t.Fatal("removed host credential still authenticates in memory")
+	}
 	reloadedTokens, err := monitor.persistence.LoadAPITokens()
 	if err != nil {
 		t.Fatalf("LoadAPITokens: %v", err)
 	}
 	if len(reloadedTokens) != 0 {
 		t.Fatalf("dedicated credential remained on disk: %+v", reloadedTokens)
+	}
+	restartedConfig := &config.Config{APITokens: reloadedTokens}
+	if restartedConfig.IsValidAPIToken(rawToken) {
+		t.Fatal("removed host credential authenticates from the durable inventory")
 	}
 	if _, err := monitor.ApplyHostReport(report, &oldToken); err == nil {
 		t.Fatal("explicitly revoked credential bypassed the durable identity denial")
