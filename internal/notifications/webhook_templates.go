@@ -82,7 +82,7 @@ func GetWebhookTemplates() []WebhookTemplate {
 			Headers:     map[string]string{"Content-Type": "application/json"},
 			PayloadTemplate: `{
 				"chat_id": "{{.ChatID | jsonString}}",
-				"text": "<b>Pulse Alert: {{.Level | title | html | jsonString}}</b>\n\n{{.Message | html | jsonString}}\n\n<b>Details:</b>\n• Resource: {{.ResourceName | html | jsonString}}\n• Node: {{.Node | html | jsonString}}\n• Type: {{.Type | title | html | jsonString}}\n• Value: {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.1f" .Value}} MB/s{{else}}{{printf "%.1f" .Value}}%{{end}}\n• Threshold: {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.0f" .Threshold}} MB/s{{else}}{{printf "%.0f" .Threshold}}%{{end}}\n• Duration: {{.Duration | html | jsonString}}\n\n<a href=\"{{.AlertURL | html | jsonString}}\">View in Pulse</a>",
+				"text": "<b>Pulse Alert: {{.Level | title | html | jsonString}}</b>\n\n{{.Message | html | jsonString}}\n\n<b>Details:</b>\n• Resource: {{.ResourceName | html | jsonString}}\n• Node: {{.Node | html | jsonString}}\n• Type: {{.Type | title | html | jsonString}}\n• Value: {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.1f" .Value}} MB/s{{else}}{{printf "%.1f" .Value}}%{{end}}\n• Threshold: {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.0f" .Threshold}} MB/s{{else}}{{printf "%.0f" .Threshold}}%{{end}}\n• Duration: {{.Duration | html | jsonString}}\n\n{{if .AlertURL}}<a href=\"{{.AlertURL | html | jsonString}}\">View in Pulse</a>{{else}}View in Pulse{{end}}",
 				"parse_mode": "HTML",
 				"disable_web_page_preview": true
 			}`,

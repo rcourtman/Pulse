@@ -26,6 +26,8 @@ before `jsonString`; chat routing remains JSON-only. Underscores, asterisks,
 brackets, backticks, angle brackets, ampersands and quotes in messages or names
 cannot become Telegram formatting. Grouped messages keep every member's details,
 and headings, metric units, preview policy and link targets are preserved.
+Without a configured public or full instance URL, the existing dashboard pointer
+remains plain text rather than an invalid empty HTML link.
 
 `telegram_literal_text_test.go` exercises the built-in renderer, single/grouped
 firing and recovery sends, enhanced sends and the Test button through real local

@@ -59,6 +59,9 @@ func parseTelegramLiteralContent(payload telegramLiteralPayload) (telegramLitera
 				if len(token.Attr) != 1 || token.Attr[0].Name != (xml.Name{Local: "href"}) {
 					return content, fmt.Errorf("unexpected link attributes")
 				}
+				if token.Attr[0].Value == "" {
+					return content, fmt.Errorf("empty HTML link target")
+				}
 				content.links = append(content.links, token.Attr[0].Value)
 				continue
 			default:
@@ -288,4 +291,38 @@ func TestTelegramCustomTemplateStillOwnsParseMode(t *testing.T) {
 	require.NoError(t, json.Unmarshal(requests[0].body, &payload))
 	require.Equal(t, "MarkdownV2", payload.ParseMode)
 	require.Equal(t, alert.Message, payload.Text, "built-in escaping must not rewrite a caller-owned template")
+}
+
+// An unset public URL is supported. HTML must not turn the existing dashboard
+// pointer into a malformed empty link; a full instance URL still supplies it.
+func TestTelegramFiringWithoutPublicURLKeepsDashboardPointer(t *testing.T) {
+	for _, instance := range []string{"", "https://pve.example.test:8006"} {
+		name := "unset"
+		if instance != "" {
+			name = "instance-fallback"
+		}
+		t.Run(name, func(t *testing.T) {
+			url, captured := newWebhookCaptureServer(t)
+			m := NewNotificationManagerWithDeferredQueue("", t.TempDir())
+			t.Cleanup(m.Stop)
+			require.NoError(t, m.UpdateAllowedPrivateCIDRs("127.0.0.1/32"))
+			webhook := WebhookConfig{Service: "telegram", Enabled: true, URL: url + "/sendMessage?chat_id=-1001234"}
+			alert := telegramReportedAlerts()[0]
+			alert.Instance = instance
+			require.NoError(t, m.sendGroupedWebhook(webhook, []*alerts.Alert{alert}))
+			requests := captured()
+			require.Len(t, requests, 1)
+			var payload telegramLiteralPayload
+			require.NoError(t, json.Unmarshal(requests[0].body, &payload))
+			content, err := parseTelegramLiteralContent(payload)
+			require.NoError(t, err)
+			require.Contains(t, content.text, alert.Message)
+			require.Contains(t, content.text, "View in Pulse")
+			if instance == "" {
+				require.Empty(t, content.links)
+			} else {
+				require.Equal(t, []string{instance}, content.links)
+			}
+		})
+	}
 }
