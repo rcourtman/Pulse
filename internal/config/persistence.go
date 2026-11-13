@@ -698,21 +698,26 @@ func persistMetadata(fs FileSystem, dataPath, fileName string, data []byte) erro
 	return nil
 }
 
-// LoadAPITokens loads API token metadata from disk.
+// LoadAPITokens loads API token metadata from disk. Only a first load may
+// interpret a missing file as an unconfigured installation. A present file must
+// contain complete JSON; a zero-byte/truncated write is not an empty inventory.
 func (c *ConfigPersistence) LoadAPITokens() ([]APITokenRecord, error) {
+	return c.loadAPITokens(true)
+}
+
+// A hot reload needs positive saved authority, including for an empty inventory.
+// Do not Stat before reading: losing a file between the two observations would
+// otherwise turn a replacement window into a successful empty snapshot.
+func (c *ConfigPersistence) loadAPITokens(allowMissing bool) ([]APITokenRecord, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	data, err := c.fs.ReadFile(c.apiTokensFile)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if allowMissing && os.IsNotExist(err) {
 			return []APITokenRecord{}, nil
 		}
 		return nil, fmt.Errorf("read api tokens file %s: %w", c.apiTokensFile, err)
-	}
-
-	if len(data) == 0 {
-		return []APITokenRecord{}, nil
 	}
 
 	migratedPlaintext := false
