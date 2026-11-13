@@ -81,7 +81,7 @@ This installs the current stable version. To install another, change
 ```bash
 (
 set -e
-export PULSE_VERSION=v6.7.0
+export PULSE_VERSION=v6.8.0
 pulse_installer_dir="$(mktemp -d)"
 trap 'rm -rf "$pulse_installer_dir"' EXIT
 cd "$pulse_installer_dir"
@@ -122,7 +122,7 @@ docker run -d \
   -v pulse_data:/data \
   -e PULSE_DEPLOYMENT_METHOD=docker_run \
   --restart unless-stopped \
-  rcourtman/pulse:v6.7.0
+  rcourtman/pulse:v6.8.0
 ```
 
 For a new container, continue with [bootstrap-token setup](#step-1-get-the-token)
@@ -134,7 +134,7 @@ Create a `docker-compose.yml` file:
 ```yaml
 services:
   pulse:
-    image: ${PULSE_IMAGE:-rcourtman/pulse:v6.7.0}
+    image: ${PULSE_IMAGE:-rcourtman/pulse:v6.8.0}
     container_name: pulse
     restart: unless-stopped
     ports:
@@ -193,7 +193,7 @@ For Linux servers (VM or bare metal), use the official installer:
 ```bash
 (
 set -e
-export PULSE_VERSION=v6.7.0
+export PULSE_VERSION=v6.8.0
 pulse_installer_dir="$(mktemp -d)"
 trap 'rm -rf "$pulse_installer_dir"' EXIT
 cd "$pulse_installer_dir"

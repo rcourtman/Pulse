@@ -43,7 +43,7 @@ native pour Pulse. Il installe le serveur Pulse. Exécutez ce bloc sur votre hô
 Proxmox : il vérifie l'installateur signé et ne le lance qu'ensuite :
 
 ```bash
-export PULSE_VERSION=v6.7.0
+export PULSE_VERSION=v6.8.0
 curl -fsSLO "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh" &&
 curl -fsSLO "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh.sshsig" &&
 ssh-keygen -Y verify \
@@ -73,7 +73,7 @@ docker run -d \
   -p 7655:7655 \
   -v pulse_data:/data \
   --restart unless-stopped \
-  rcourtman/pulse:v6.7.0
+  rcourtman/pulse:v6.8.0
 ```
 
 Ouvrez ensuite Pulse sur `http://<your-ip>:7655`.
@@ -84,7 +84,7 @@ images Pro privées s'il utilise la variable `PULSE_IMAGE` :
 ```yaml
 services:
   pulse:
-    image: ${PULSE_IMAGE:-rcourtman/pulse:v6.7.0}
+    image: ${PULSE_IMAGE:-rcourtman/pulse:v6.8.0}
     container_name: pulse
     restart: unless-stopped
     ports:
