@@ -487,3 +487,52 @@ func TestExtractOperatorStateResourceID(t *testing.T) {
 		})
 	}
 }
+
+// Detail reads and operator-state writes must agree with alert intent after
+// QueryService rebuilds the registry from the monitor's serialized row view.
+func TestMaintenanceAlertSubjectsReadAndWriteCanonicalOperatorState(t *testing.T) {
+	now := time.Now().UTC()
+	rr := unified.NewRegistry(nil)
+	rr.IngestSnapshot(models.StateSnapshot{
+		Nodes: []models.Node{{ID: "site-a-node1", Instance: "site-a", Name: "node1", LinkedAgentID: "host-a", LastSeen: now, Status: "online"}},
+		Hosts: []models.Host{{ID: "host-a", Hostname: "node1", MachineID: "machine-a", Status: "online", LastSeen: now}},
+		PBSInstances: []models.PBSInstance{{ID: "pbs-backup-a", Name: "backup-a", Host: "https://backup-a.invalid:8007", Status: "online", LastSeen: now,
+			Datastores: []models.PBSDatastore{{Name: "main", Status: "unavailable"}}}},
+	})
+	h := newOperatorStateHandlers(t)
+	t.Cleanup(func() { _ = h.CloseStores() })
+	h.SetStateProvider(&countingUnifiedSeedProvider{listing: func() ([]unified.Resource, time.Time) { return rr.List(), now }})
+	for _, pair := range [][2]string{{"pve:site-a", "agent:host-a"}, {"pbs:backup-a", "pbs-backup-a"}, {"pbs-backup-a-main", "pbs-backup-a/main"}} {
+		t.Run(pair[0], func(t *testing.T) {
+			want, ok := rr.ResolveReferenceID(pair[1])
+			if !ok {
+				t.Fatalf("fixture owner %q missing", pair[1])
+			}
+			rec := httptest.NewRecorder()
+			h.HandleGetResource(rec, httptest.NewRequest(http.MethodGet, "/api/resources/"+pair[0], nil))
+			if rec.Code != http.StatusOK {
+				t.Fatalf("GET subject returned %d: %s", rec.Code, rec.Body.String())
+			}
+			var resource unified.Resource
+			if err := json.Unmarshal(rec.Body.Bytes(), &resource); err != nil {
+				t.Fatal(err)
+			}
+			if resource.ID != want {
+				t.Fatalf("detail ID %q, want %q", resource.ID, want)
+			}
+			body := activeMaintenanceBody(now, "planned reboot")
+			body["maintenanceScope"] = "resource_and_descendants"
+			if got := putOperatorStateThroughAPI(t, h, pair[0], body); got != want {
+				t.Fatalf("write ID %q, want %q", got, want)
+			}
+			for _, ref := range []string{pair[0], pair[1], want} {
+				get := httptest.NewRecorder()
+				h.HandleResourceOperatorState(get, httptest.NewRequest(http.MethodGet, "/api/resources/"+ref+"/operator-state", nil))
+				var state resourceOperatorStateAPI
+				if get.Code != http.StatusOK || json.Unmarshal(get.Body.Bytes(), &state) != nil || state.CanonicalID != want || !state.MaintenanceWindowActive {
+					t.Errorf("state through %q = %d %s", ref, get.Code, get.Body.String())
+				}
+			}
+		})
+	}
+}
