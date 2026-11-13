@@ -148,6 +148,46 @@ func resolvePermittedOutboundIP(ctx context.Context, host string, opts Restricte
 	return ips[0], nil
 }
 
+// ValidateOutboundHost refuses host unless every address it names or resolves
+// to passes the restricted outbound policy. It is for a destination that some
+// other client dials later, outside NewRestrictedOutboundHTTPClient's pinned
+// dialer: that client may pick any resolved address, so one blocked address is
+// enough to refuse the host. A host that does not resolve is refused too.
+func ValidateOutboundHost(ctx context.Context, host string, opts RestrictedOutboundHTTPOptions) error {
+	host = strings.TrimSpace(host)
+	if host == "" {
+		return fmt.Errorf("hostname is required")
+	}
+	switch strings.ToLower(strings.TrimSuffix(host, ".")) {
+	case "metadata.google.internal", "metadata.goog":
+		return fmt.Errorf("metadata service host is not allowed")
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		return validateOutboundIP(ip, opts)
+	}
+
+	baseCtx := ctx
+	if baseCtx == nil {
+		baseCtx = context.Background()
+	}
+	resolveCtx, cancel := context.WithTimeout(baseCtx, 5*time.Second)
+	defer cancel()
+
+	addrs, err := resolveOutboundIPAddrs(resolveCtx, host, opts)
+	if err != nil {
+		return fmt.Errorf("failed to resolve hostname %s: %w", host, err)
+	}
+	if len(addrs) == 0 {
+		return fmt.Errorf("hostname %s did not resolve", host)
+	}
+	for _, addr := range addrs {
+		if err := validateOutboundIP(addr.IP, opts); err != nil {
+			return fmt.Errorf("hostname %s resolves to a blocked address: %w", host, err)
+		}
+	}
+	return nil
+}
+
 // ValidateOutboundFetchURL validates a fully-qualified HTTP(S) URL against the restricted outbound policy.
 func ValidateOutboundFetchURL(ctx context.Context, raw string, opts RestrictedOutboundHTTPOptions) (*url.URL, error) {
 	parsed, err := NormalizeAbsoluteHTTPURL(raw)

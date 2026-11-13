@@ -247,6 +247,36 @@ func infrastructureRedirectPolicy(req *http.Request, via []*http.Request) error 
 	return nil
 }
 
+// SameHostRedirectPolicy is a CheckRedirect rule for appliance API clients
+// whose deployments may redirect HTTP to HTTPS. A redirect may change the
+// scheme, port or path but never the host, so a response cannot send the
+// client, and the credentials it carries, to an address nobody configured.
+func SameHostRedirectPolicy(req *http.Request, via []*http.Request) error {
+	if len(via) >= 10 {
+		return fmt.Errorf("stopped after 10 redirects")
+	}
+	if req == nil || req.URL == nil || len(via) == 0 || via[0] == nil || via[0].URL == nil {
+		return fmt.Errorf("redirects require an original request")
+	}
+	origin, originErr := redirectHost(via[0].URL)
+	destination, destinationErr := redirectHost(req.URL)
+	if originErr != nil || destinationErr != nil || origin != destination {
+		return fmt.Errorf("redirects must stay on the configured host")
+	}
+	return nil
+}
+
+func redirectHost(u *url.URL) (string, error) {
+	if u == nil || u.User != nil || u.Opaque != "" || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" {
+		return "", fmt.Errorf("invalid HTTP origin")
+	}
+	host := u.Hostname()
+	if address, err := netip.ParseAddr(host); err == nil {
+		return address.String(), nil
+	}
+	return strings.ToLower(strings.TrimSuffix(host, ".")), nil
+}
+
 func infrastructureRedirectOrigin(u *url.URL) (string, error) {
 	if u == nil || u.User != nil || u.Opaque != "" || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" {
 		return "", fmt.Errorf("invalid HTTP origin")

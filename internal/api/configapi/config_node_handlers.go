@@ -16,6 +16,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/apicontext"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pmg"
@@ -27,6 +28,18 @@ import (
 // ID ("pve:delly") but no matching instance is in the current config. Callers
 // distinguish this from malformed IDs so they can emit 404 vs 400.
 var errNodeIDNotFound = errors.New("node id not found")
+
+// refuseTenantOutboundDestination answers 403 when the request acts for a
+// tenant organization's administrator and destination is an address that
+// administrator may not point this server at (see
+// securityutil.TenantOutboundPolicy). Instance administrators pass.
+func refuseTenantOutboundDestination(w http.ResponseWriter, r *http.Request, destination string) bool {
+	if err := securityutil.CheckTenantOutboundDestination(r.Context(), destination); err != nil {
+		http.Error(w, securityutil.TenantOutboundRefusalMessage(r.Context(), err), http.StatusForbidden)
+		return true
+	}
+	return false
+}
 
 // resolveNodeID accepts either the legacy array-index form ("pve-0") or the
 // semantic form the unified connections aggregator emits ("pve:delly") and
@@ -349,6 +362,9 @@ func (h *ConfigHandlers) handleAddNode(w http.ResponseWriter, r *http.Request) {
 	normalizedHost, err := normalizeNodeHost(req.Host, req.Type)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if refuseTenantOutboundDestination(w, r, normalizedHost) {
 		return
 	}
 
@@ -899,6 +915,9 @@ func (h *ConfigHandlers) handleTestConnection(w http.ResponseWriter, r *http.Req
 	normalizedHost, err := normalizeNodeHost(req.Host, req.Type)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if refuseTenantOutboundDestination(w, r, normalizedHost) {
 		return
 	}
 
@@ -1476,6 +1495,9 @@ func (h *ConfigHandlers) handleUpdateNode(w http.ResponseWriter, r *http.Request
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
+			if refuseTenantOutboundDestination(w, r, host) {
+				return
+			}
 			updated.Host = host
 		}
 
@@ -1484,6 +1506,11 @@ func (h *ConfigHandlers) handleUpdateNode(w http.ResponseWriter, r *http.Request
 		}
 
 		if len(req.ClusterEndpointOverrides) > 0 {
+			for _, override := range req.ClusterEndpointOverrides {
+				if strings.TrimSpace(override.IPOverride) != "" && refuseTenantOutboundDestination(w, r, override.IPOverride) {
+					return
+				}
+			}
 			endpoints, err := applyClusterEndpointOverrides(updated.ClusterEndpoints, req.ClusterEndpointOverrides)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)
@@ -1562,6 +1589,9 @@ func (h *ConfigHandlers) handleUpdateNode(w http.ResponseWriter, r *http.Request
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
+			if refuseTenantOutboundDestination(w, r, host) {
+				return
+			}
 			updated.Host = host
 		}
 
@@ -1622,6 +1652,9 @@ func (h *ConfigHandlers) handleUpdateNode(w http.ResponseWriter, r *http.Request
 			host, err := normalizeNodeHost(req.Host, nodeType)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			if refuseTenantOutboundDestination(w, r, host) {
 				return
 			}
 			updated.Host = host
@@ -2014,6 +2047,9 @@ func (h *ConfigHandlers) handleRefreshClusterNodes(w http.ResponseWriter, r *htt
 	}
 
 	pve := &h.getConfig(r.Context()).PVEInstances[index]
+	if refuseTenantOutboundDestination(w, r, pve.Host) {
+		return
+	}
 
 	// Create client config for cluster detection
 	clientConfig := config.CreateProxmoxConfig(pve)
@@ -2099,6 +2135,9 @@ func (h *ConfigHandlers) handleTestNodeConfig(w http.ResponseWriter, r *http.Req
 		return
 	}
 	req.normalizeTokenAliases()
+	if refuseTenantOutboundDestination(w, r, req.Host) {
+		return
+	}
 
 	var testResult map[string]interface{}
 
@@ -2236,6 +2275,9 @@ func (h *ConfigHandlers) handleTestNode(w http.ResponseWriter, r *http.Request) 
 			http.Error(w, trustErr.Error(), http.StatusBadRequest)
 			return
 		}
+		if refuseTenantOutboundDestination(w, r, endpoint) {
+			return
+		}
 		verifySSL, _ := tlsOptions.apply(pve.VerifySSL, pve.Fingerprint)
 
 		// Create a temporary client to test connection
@@ -2280,6 +2322,9 @@ func (h *ConfigHandlers) handleTestNode(w http.ResponseWriter, r *http.Request) 
 		}
 	} else if nodeType == "pbs" && index < len(h.getConfig(r.Context()).PBSInstances) {
 		pbsInstance := h.getConfig(r.Context()).PBSInstances[index]
+		if refuseTenantOutboundDestination(w, r, pbsInstance.Host) {
+			return
+		}
 		verifySSL, fingerprint := tlsOptions.apply(pbsInstance.VerifySSL, pbsInstance.Fingerprint)
 
 		// Create a temporary client to test connection
@@ -2320,6 +2365,9 @@ func (h *ConfigHandlers) handleTestNode(w http.ResponseWriter, r *http.Request) 
 		}
 	} else if nodeType == "pmg" && index < len(h.getConfig(r.Context()).PMGInstances) {
 		pmgInstance := h.getConfig(r.Context()).PMGInstances[index]
+		if refuseTenantOutboundDestination(w, r, pmgInstance.Host) {
+			return
+		}
 
 		clientConfig := config.CreatePMGConfig(&pmgInstance)
 		clientConfig.VerifySSL, clientConfig.Fingerprint = tlsOptions.apply(clientConfig.VerifySSL, clientConfig.Fingerprint)

@@ -53,8 +53,11 @@ type platformConnectionUpdateSpec[T any] struct {
 	normalize    func(*T)
 	preserve     func(updated *T, stored T)
 	validate     func(T) error
-	redacted     func(T) any
-	save         func([]T) error
+	// destination is the address the connection makes this server dial,
+	// held to the request's tenant outbound policy before saving.
+	destination func(T) string
+	redacted    func(T) any
+	save        func([]T) error
 }
 
 // updatePlatformConnection runs the shared platform connection update flow
@@ -81,6 +84,9 @@ func updatePlatformConnection[T any](w http.ResponseWriter, r *http.Request, con
 	spec.preserve(&instance, instances[index])
 	if err := spec.validate(instance); err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "validation_error", err.Error(), nil)
+		return
+	}
+	if refuseTenantOutboundDestination(w, r, spec.destination(instance)) {
 		return
 	}
 	instances[index] = instance

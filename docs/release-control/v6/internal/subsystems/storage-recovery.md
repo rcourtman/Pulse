@@ -9850,3 +9850,10 @@ data, and opens no new storage or recovery path.
 Organization managers may now configure alert destinations in their own organization.
 This grants no recovery administration, backup authority or instance setting.
 Notification queue and dead-letter routes remain instance administration.
+
+### Tenant outbound destinations and recovery (13 November 2026)
+
+Refusing loopback and metadata destinations for organization administrators in
+`internal/api/` changes which addresses connection, availability and SMTP routes
+accept. It reads and writes no backup, restore or storage data, and opens no new
+storage or recovery path.

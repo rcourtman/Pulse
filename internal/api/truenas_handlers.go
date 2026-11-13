@@ -66,6 +66,9 @@ func (h *TrueNASHandlers) HandleAdd(w http.ResponseWriter, r *http.Request) {
 		writeErrorResponse(w, http.StatusBadRequest, "validation_error", err.Error(), nil)
 		return
 	}
+	if refuseTenantOutboundDestination(w, r, instance.Host) {
+		return
+	}
 
 	persistence := h.persistenceForRequest(w, r.Context())
 	if persistence == nil {
@@ -227,9 +230,10 @@ func (h *TrueNASHandlers) HandleUpdate(w http.ResponseWriter, r *http.Request) {
 		preserve: func(updated *config.TrueNASInstance, stored config.TrueNASInstance) {
 			updated.PreserveMaskedSecrets(stored)
 		},
-		validate: func(inst config.TrueNASInstance) error { return inst.Validate() },
-		redacted: func(inst config.TrueNASInstance) any { return inst.Redacted() },
-		save:     persistence.SaveTrueNASConfig,
+		validate:    func(inst config.TrueNASInstance) error { return inst.Validate() },
+		destination: func(inst config.TrueNASInstance) string { return inst.Host },
+		redacted:    func(inst config.TrueNASInstance) any { return inst.Redacted() },
+		save:        persistence.SaveTrueNASConfig,
 	})
 }
 
@@ -410,6 +414,9 @@ func (h *TrueNASHandlers) HandleTestSavedConnection(w http.ResponseWriter, r *ht
 			}
 			instance = payload
 		}
+		if refuseTenantOutboundDestination(w, r, instance.Host) {
+			return
+		}
 		invalidConfig, err := h.testConnectionInstance(r, instance)
 		if err != nil {
 			if invalidConfig {
@@ -435,6 +442,9 @@ func (h *TrueNASHandlers) writeConnectionTestResult(
 	r *http.Request,
 	instance config.TrueNASInstance,
 ) {
+	if refuseTenantOutboundDestination(w, r, instance.Host) {
+		return
+	}
 	invalidConfig, err := h.testConnectionInstance(r, instance)
 	if err != nil {
 		if invalidConfig {

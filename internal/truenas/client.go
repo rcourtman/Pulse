@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/tlsutil"
 )
 
 const defaultHTTPTimeout = 30 * time.Second
@@ -143,8 +144,9 @@ func NewClient(config ClientConfig) (*Client, error) {
 	client := &Client{
 		config: config,
 		httpClient: &http.Client{
-			Timeout:   timeout,
-			Transport: transport,
+			Timeout:       timeout,
+			Transport:     transport,
+			CheckRedirect: tlsutil.SameHostRedirectPolicy,
 		},
 		baseURL: fmt.Sprintf("%s://%s/api/v2.0", scheme, hostPort),
 		rpcURL:  fmt.Sprintf("%s://%s/api/current", wsScheme, hostPort),

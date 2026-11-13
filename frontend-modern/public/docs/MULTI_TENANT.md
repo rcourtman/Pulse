@@ -194,6 +194,8 @@ To onboard an internal estate:
 4. **(Optional) Alias node names per estate.** If two estates both use the default `pve` hostname and you want them visually distinct, set `--hostname` (or the `PULSE_HOSTNAME` environment variable) on the agent, for example `--hostname "acme-pve1"`. See [UNIFIED_AGENT.md](UNIFIED_AGENT.md).
 5. **(Optional) Isolate the agent control plane on its own port.** When remote nodes reach the central server across the internet, enable [Split-Port Agent Ingest](CONFIGURATION.md#split-port-agent-ingest-network-isolation) so reports and command WebSockets share a dedicated, firewalled agent port that never exposes the web UI or management API.
 
+**Addresses an organization admin can use.** Organization owners and admins can add their organization's infrastructure connections, availability checks and SMTP server, but cannot point them at the Pulse server's own loopback, link-local or cloud metadata addresses. Private network addresses work. An instance administrator can add any address.
+
 Route each estate's alerts into the right internal system with per-organization webhooks or the org-scoped alerts API. See the multi-tenant section of [WEBHOOKS.md](WEBHOOKS.md).
 
 **Licensing:** self-hosted multi-tenant requires an Enterprise license with the `multi_tenant` capability (see [Requirements](#requirements)). MSP licensing is separate and is based on a signed provider MSP license that sets the client workspace cap for isolated client runtimes, not shared-process organizations.

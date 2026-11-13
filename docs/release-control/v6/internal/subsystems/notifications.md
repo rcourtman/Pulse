@@ -2011,3 +2011,12 @@ again unchanged; targets saved under API mode may not be carried across.
 it would reach the CLI as an option such as `--attach`.
 `internal/notifications/apprise_argument_test.go` and
 `internal/api/notifications_org_authority_test.go` pin these.
+
+### SMTP server for organization managers (13 November 2026)
+
+An organization manager without instance authority cannot save or test an email
+destination whose SMTP server is this server's loopback, link-local or cloud
+metadata address (or, on Pulse Cloud, a private address). The check is
+`securityutil.CheckTenantOutboundDestination` in
+`internal/api/alerting/notifications.go`. Webhook and Apprise API targets keep
+their existing outbound validation.
