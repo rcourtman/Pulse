@@ -37,7 +37,7 @@ func TestWildcardRefusalNamesAFormThatWorks(t *testing.T) {
 	} {
 		text := readExecResult(t, command)
 		assert.Contains(t, text, "SENSITIVE_COMMAND", command)
-		assert.Contains(t, text, "du -xh -d 3 \\u003cdirectory\\u003e | sort -rh | head -20", command)
+		assert.Contains(t, text, "du -xh -d 3 \\u003cdirectory\\u003e", command)
 	}
 
 	// Other refusals have no wildcard to replace and get no hint.
@@ -46,8 +46,13 @@ func TestWildcardRefusalNamesAFormThatWorks(t *testing.T) {
 	assert.NotContains(t, text, "\"hint\"")
 }
 
-// The hint is only worth giving if what it suggests passes the same policy.
+// The hint is only worth giving if what it suggests runs. That means three
+// gates: the sensitive-path check, the read-only classifier, and the agent's
+// own command policy, which never auto-approves a compound command. A first
+// version suggested a pipe, passed the first two, and sent Patrol to
+// "command requires approval" four times.
 func TestWildcardRefusalHintPassesThePolicy(t *testing.T) {
+	policy := agentexec.DefaultPolicy()
 	forms := regexp.MustCompile("`([^`]+)`").FindAllStringSubmatch(WildcardRefusalHint, -1)
 	require.Len(t, forms, 2)
 	for _, form := range forms {
@@ -65,6 +70,9 @@ func TestWildcardRefusalHintPassesThePolicy(t *testing.T) {
 				}
 				if intent := ClassifyExecutionIntent(command); intent.Intent == IntentWriteOrUnknown {
 					t.Fatalf("%q is refused as not read-only: %s", command, intent.Reason)
+				}
+				if !policy.IsAutoApproved(command) {
+					t.Fatalf("%q needs approval under the agent's command policy (%s)", command, policy.Evaluate(command))
 				}
 			}
 		}

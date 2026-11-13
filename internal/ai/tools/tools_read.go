@@ -248,12 +248,15 @@ func (e *PulseToolExecutor) executeReadExec(ctx context.Context, args map[string
 // other form offered it sized three folders by name and stopped one level
 // above the folder that had filled the disk. Naming the directory passes the
 // same policy and answers the same question. The suggested form looks three
-// levels down in one call and keeps only the largest folders: the replay of
-// the same fault, with a one-level form, spent its last evidence call one
-// folder above the answer.
+// levels down in one call: a replay with a two-level form spent its last
+// evidence call one folder above the answer. It has no pipe, because the
+// agent's command policy never auto-approves a compound command, and a
+// replay that suggested `| sort -rh | head -20` spent four calls on
+// "command requires approval".
 const WildcardRefusalHint = "Name the directory instead of using a wildcard. For folder sizes, " +
-	"`du -xh -d 3 <directory> | sort -rh | head -20` lists the largest folders up to three levels down; " +
-	"run it again on the largest one to go deeper. For a listing, use `ls -la <directory>`."
+	"`du -xh -d 3 <directory>` lists every folder up to three levels down with its size; " +
+	"run it again on the largest one to go deeper. Do not add a pipe: piped commands need approval. " +
+	"For a listing, use `ls -la <directory>`."
 
 func sensitiveCommandBlocked(reason string) CallToolResult {
 	details := map[string]interface{}{
