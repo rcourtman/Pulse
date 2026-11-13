@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  sameRoleIDs,
   getRoleIdentityLabel,
   getRBACFeatureGateCopy,
   getRolesDeleteErrorMessage,
@@ -17,6 +18,29 @@ import {
 } from '@/utils/rbacPresentation';
 
 describe('rbacPresentation', () => {
+  it.each([
+    { first: [], second: [], same: true },
+    { first: ['reader', 'writer'], second: ['writer', 'reader'], same: true },
+    { first: ['reader'], second: [], same: false },
+    { first: [], second: ['reader'], same: false },
+    { first: ['reader'], second: ['Reader'], same: false },
+    { first: ['reader'], second: [' reader'], same: false },
+    { first: ['reader', 'reader'], second: ['reader', 'reader'], same: true },
+    { first: ['reader', 'reader'], second: ['reader'], same: false },
+    { first: ['a,b', 'c'], second: ['a', 'b,c'], same: false },
+    { first: ['a\u0000b', 'c'], second: ['a', 'b\u0000c'], same: false },
+    { first: ['saved-unlisted', 'reader'], second: ['reader', 'saved-unlisted'], same: true },
+  ])(
+    'compares exact unordered role IDs without changing either input: %j',
+    ({ first, second, same }) => {
+      const firstCopy = [...first];
+      const secondCopy = [...second];
+      expect(sameRoleIDs(Object.freeze(first), Object.freeze(second))).toBe(same);
+      expect(first).toEqual(firstCopy);
+      expect(second).toEqual(secondCopy);
+    },
+  );
+
   it('identifies namesake roles by their unchanged saved keys, not mutable names', () => {
     expect(getRoleIdentityLabel({ id: 'policy/north:read', name: 'Fleet auditor' })).toBe(
       'Fleet auditor (Role ID: policy/north:read)',

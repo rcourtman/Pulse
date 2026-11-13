@@ -103,6 +103,11 @@ export function getUserAssignmentsUpdateErrorMessage(): string {
   return 'Failed to update user roles';
 }
 
+/** Compare local copies so opaque IDs and the actual request order stay intact. */
+export function sameRoleIDs(first: readonly string[], second: readonly string[]): boolean {
+  return JSON.stringify([...first].sort()) === JSON.stringify([...second].sort());
+}
+
 export function getUserAssignmentsDeleteErrorMessage(error?: unknown): string {
   if (error && typeof error === 'object') {
     const typedError = error as { code?: unknown; status?: unknown };

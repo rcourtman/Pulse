@@ -21,7 +21,9 @@ The existing User Access editor compares its draft with the admitted account's
 saved role IDs as exact, unordered lists. Opening an unchanged editor,
 leaving an empty assignment unchanged, or toggling roles away and back does not
 send a role update or start CSRF preparation. Save Changes is disabled for those
-states, and the state handler enforces the same boundary. This is not an
+states, and the state handler enforces the same boundary. Both use the shared
+`sameRoleIDs` comparison, rather than passing a separate derived flag through
+the panel or duplicating equality logic. This is not an
 access-review attestation or a backend concurrency guarantee.
 
 The comparison includes saved IDs absent from the role catalogue. It sorts

@@ -171,15 +171,12 @@ describe('User Access through the real RBAC transport', () => {
     await loaded(state);
     await state.openManageAccess(state.filteredAssignments()[0]);
     document.cookie = 'pulse_csrf=; Max-Age=0; Path=/';
-    expect(state.hasRoleChanges()).toBe(false);
     await state.handleSaveAssignments();
     expect(mutations()).toHaveLength(0);
     expect(fetchMock.mock.calls.filter(([url]) => url === '/api/health')).toHaveLength(0);
     state.toggleRole('reader');
-    expect(state.hasRoleChanges()).toBe(true);
     state.toggleRole('reader');
     expect(state.formRoleIds()).toEqual(['saved-unlisted-role', 'reader']);
-    expect(state.hasRoleChanges()).toBe(false);
     await state.handleSaveAssignments();
     expect(mutations()).toHaveLength(0);
     expect(state.showModal()).toBe(true);

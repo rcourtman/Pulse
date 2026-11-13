@@ -9,6 +9,7 @@ import {
   getUserAssignmentsLoadErrorMessage,
   getUserAssignmentsUpdateErrorMessage,
   getUserIdentityLabel,
+  sameRoleIDs,
 } from '@/utils/rbacPresentation';
 import { useRBACFeatureGateState } from './useRBACFeatureGateState';
 
@@ -38,13 +39,6 @@ export function useUserAssignmentsPanelState(props: UserAssignmentsPanelProps = 
   );
   const [inventoryLoaded, setInventoryLoaded] = createSignal(false);
   const [unconfirmedChange, setUnconfirmedChange] = createSignal<string | null>(null);
-  // Compare opaque IDs in local sorted copies, never in the submitted array.
-  // JSON preserves separators inside IDs; changed multiplicity remains a change.
-  const hasRoleChanges = createMemo(
-    () =>
-      JSON.stringify([...formRoleIds()].sort()) !==
-      JSON.stringify([...(editingUser()?.roleIds ?? [])].sort()),
-  );
 
   const featureGate = useRBACFeatureGateState({
     kind: 'user-assignments',
@@ -346,7 +340,8 @@ export function useUserAssignmentsPanelState(props: UserAssignmentsPanelProps = 
   };
   const handleSaveAssignments = async () => {
     const user = editingUser();
-    if (showModal() && user && hasRoleChanges()) await mutateUser(user, 'save');
+    if (showModal() && user && !sameRoleIDs(formRoleIds(), user.roleIds))
+      await mutateUser(user, 'save');
   };
   const toggleRole = (roleId: string) => {
     if (!showModal() || !canEdit() || !roles().some((role) => role.id === roleId)) return;
@@ -370,7 +365,6 @@ export function useUserAssignmentsPanelState(props: UserAssignmentsPanelProps = 
     featureGate,
     filteredAssignments,
     formRoleIds,
-    hasRoleChanges,
     handleSaveAssignments,
     handleDeleteUser,
     loading,
