@@ -17,6 +17,30 @@
 
 ## Purpose
 
+### Typed helper work consumes one operation budget
+
+The client retains one deadline across request preparation, dialing and socket
+I/O. After connecting it recalculates `deadlineMillis` from the remaining
+allowance, reusing the encoded payload; invalid frames are still rejected before
+dialing. The relative wire field has millisecond precision, with a positive
+sub-millisecond remainder rounded to 1 ms. No new absolute timestamp or clock
+synchronization requirement is added.
+
+The server anchors that allowance to its connection-handler start, not provider
+dispatch. Peer resolution and request-frame ingress cannot restart the budget
+or leave cooperative provider work running beyond it. An allowance already
+spent before dispatch returns the existing retryable `deadline_exceeded` error
+without calling the provider. An earlier service-context deadline still wins.
+The separate bounded response-write window remains available to return errors.
+
+`internal/agenthelper/operation_budget_test.go` exercises the real client/server
+paths in virtual time, including preparation/dial costs, earlier parent deadlines,
+frame/peer ingress, expired pre-dispatch refusal, successful and invalid-budget
+controls, and one end-to-end cooperative provider that stops at the caller's
+deadline. This is not forced preemption, a filesystem-I/O deadline or installed
+recovery. A peer disconnect still does not cancel accepted work by itself or
+establish rollback; durable update recovery remains provider-owned.
+
 ### Typed helper shutdown owns accepted connection handlers
 
 The helper server owns the listener passed to `Serve`. Service-context
