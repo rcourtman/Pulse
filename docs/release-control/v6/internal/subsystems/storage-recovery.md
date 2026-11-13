@@ -9856,4 +9856,5 @@ Notification queue and dead-letter routes remain instance administration.
 Refusing loopback and metadata destinations for organization administrators in
 `internal/api/` changes which addresses connection, availability and SMTP routes
 accept. It reads and writes no backup, restore or storage data, and opens no new
-storage or recovery path.
+storage or recovery path. The licensing bridge accessor it uses reads one
+environment flag and touches no licence state.

@@ -14475,5 +14475,7 @@ availability add, update and test; TrueNAS and vCenter add, update and test,
 and vCenter preview; the email SMTP server) answer 403 `destination_not_allowed` for a
 loopback, link-local or cloud metadata address, and on Pulse Cloud also for a
 private address. Availability checks are held to it on save whatever their observation
-locations. Instance administrators see no change. Proof:
-`internal/api/tenant_outbound_policy_test.go`.
+locations. Instance administrators see no change. The provider-runtime test
+comes from `isProviderHostedRuntimeFromLicensing` in
+`internal/api/licensing_bridge.go`, so the policy file imports no licensing
+package. Proof: `internal/api/tenant_outbound_policy_test.go`.

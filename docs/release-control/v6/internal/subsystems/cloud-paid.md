@@ -4153,3 +4153,11 @@ cancelled requests never start a retry. The retry
 restarts Traefik through `Manager.RestartProviderIngress`, with the gap doubling
 from 15 minutes to 6 hours until the client that started it is issued, and never
 restarts a client runtime, which could revive a replaced container.
+
+### Provider runtime flag for the tenant outbound policy (13 November 2026)
+
+`isProviderHostedRuntimeFromLicensing` in `internal/api/licensing_bridge.go`
+reports whether `PULSE_PROVIDER_HOSTED` marks this runtime as a provider client
+runtime. The tenant outbound policy uses it to keep private networks open for
+provider clients and close them on Pulse Cloud. It reads no licence,
+entitlement or billing state, and changes no paid capability.

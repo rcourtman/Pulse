@@ -2,12 +2,9 @@ package api
 
 import (
 	"net/http"
-	"os"
-	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
-	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 )
 
 // withTenantOutboundPolicy attaches the tenant outbound policy to requests
@@ -31,8 +28,7 @@ func withTenantOutboundPolicy(cfg *config.Config, handler http.HandlerFunc) http
 // and shared-process organizations monitor the operator's LAN, so both keep
 // private addresses.
 func tenantOutboundPolicyForRuntime() securityutil.TenantOutboundPolicy {
-	providerRuntime := strings.EqualFold(strings.TrimSpace(os.Getenv(pkglicensing.ProviderHostedRuntimeEnvVar)), "true")
-	pulseCloud := hostedModeEnabledFromEnv() && !providerRuntime
+	pulseCloud := hostedModeEnabledFromEnv() && !isProviderHostedRuntimeFromLicensing()
 	return securityutil.TenantOutboundPolicy{AllowPrivateNetworks: !pulseCloud}
 }
 

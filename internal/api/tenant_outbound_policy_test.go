@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
-	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 )
 
 // loopbackListener counts connections made to a listener on this server's own
@@ -122,7 +121,7 @@ func TestTenantOutboundPolicyClosesPrivateNetworksOnlyOnPulseCloud(t *testing.T)
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Setenv("PULSE_HOSTED_MODE", tc.hosted)
-			t.Setenv(pkglicensing.ProviderHostedRuntimeEnvVar, tc.provider)
+			t.Setenv("PULSE_PROVIDER_HOSTED", tc.provider)
 			if got := tenantOutboundPolicyForRuntime(); got != (securityutil.TenantOutboundPolicy{AllowPrivateNetworks: tc.allowPrivate}) {
 				t.Fatalf("policy = %+v, want AllowPrivateNetworks=%v", got, tc.allowPrivate)
 			}

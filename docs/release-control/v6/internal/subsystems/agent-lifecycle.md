@@ -11733,4 +11733,5 @@ and `internal/api/security_setup_fix.go`. Agent, install and connection routes k
 
 `RequireOrgAdmin` now carries a tenant outbound policy for callers without
 instance authority. Agent report, install, link and command routes read no
-destination from it, so agent lifecycle behavior does not change.
+destination from it, so agent lifecycle behavior does not change. The policy
+reads the provider-runtime flag through the licensing bridge.
