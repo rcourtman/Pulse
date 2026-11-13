@@ -60,36 +60,33 @@ func normalizeNotificationTagFilter(values []string) []string {
 	return normalized
 }
 
-func notificationAlertTags(alert *alerts.Alert) []string {
-	if alert == nil || alert.Metadata == nil {
-		return nil
+func addNotificationTagValue(target map[string]struct{}, raw string) {
+	if tag := strings.ToLower(strings.TrimSpace(raw)); tag != "" {
+		target[tag] = struct{}{}
 	}
-
-	values := make([]string, 0)
-	for _, key := range []string{"tags", "resourceTags", "hostTags", "serviceTags"} {
-		values = appendNotificationTagValues(values, alert.Metadata[key])
-	}
-	return normalizeNotificationTagFilter(values)
 }
 
-func appendNotificationTagValues(target []string, raw interface{}) []string {
+// Collect directly into one call-local membership set. Arrays contain literal
+// tags (including commas/semicolons); only a scalar string is delimited.
+func addNotificationTagValues(target map[string]struct{}, raw interface{}) {
 	switch value := raw.(type) {
 	case string:
-		for _, part := range strings.FieldsFunc(value, func(r rune) bool {
+		for part := range strings.FieldsFuncSeq(value, func(r rune) bool {
 			return r == ',' || r == ';'
 		}) {
-			target = append(target, part)
+			addNotificationTagValue(target, part)
 		}
 	case []string:
-		target = append(target, value...)
+		for _, tag := range value {
+			addNotificationTagValue(target, tag)
+		}
 	case []interface{}:
 		for _, item := range value {
 			if text, ok := item.(string); ok {
-				target = append(target, text)
+				addNotificationTagValue(target, text)
 			}
 		}
 	}
-	return target
 }
 
 // prepareNotificationTagFilter returns an owned, lowercase filter for one
@@ -113,14 +110,13 @@ func notificationAlertMatchesPreparedTags(alert *alerts.Alert, filter []string, 
 		return true
 	}
 
-	alertTags := notificationAlertTags(alert)
-	if len(alertTags) == 0 {
+	if alert == nil || alert.Metadata == nil {
 		return false
 	}
 
-	tagSet := make(map[string]struct{}, len(alertTags))
-	for _, tag := range alertTags {
-		tagSet[strings.ToLower(tag)] = struct{}{}
+	tagSet := make(map[string]struct{})
+	for _, key := range []string{"tags", "resourceTags", "hostTags", "serviceTags"} {
+		addNotificationTagValues(tagSet, alert.Metadata[key])
 	}
 
 	if mode == notificationTagModeAny {
