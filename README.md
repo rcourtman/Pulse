@@ -74,7 +74,7 @@ docker run -d \
   -v pulse_data:/data \
   -e PULSE_DEPLOYMENT_METHOD=docker_run \
   --restart unless-stopped \
-  rcourtman/pulse:v6.7.0
+  rcourtman/pulse:v6.8.0
 ```
 
 The Pulse container does not need the Docker socket. Docker hosts are
@@ -86,7 +86,7 @@ The installer is signed. This block downloads it, verifies it against the
 pinned `pulse-installer` key, and only then runs it:
 
 ```bash
-export PULSE_VERSION=v6.7.0
+export PULSE_VERSION=v6.8.0
 curl -fsSLO "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh" &&
 curl -fsSLO "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh.sshsig" &&
 ssh-keygen -Y verify \
