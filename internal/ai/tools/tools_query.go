@@ -4609,6 +4609,7 @@ func BuildTopologyResponseFromReadState(rs unifiedresources.ReadState, options T
 
 			if includeDocker && !options.SummaryOnly {
 				if options.MaxDockerContainersPerHost <= 0 || len(containers) < options.MaxDockerContainersPerHost {
+					exitCode, oomKilled := containerExitFacts(state, container.ExitCode(), container.OOMKilled())
 					containers = append(containers, DockerContainerSummary{
 						GovernedResourceMetadata: governance.Resolve(container.Name(), container.ID(), container.ContainerID()),
 						ID:                       container.ID(),
@@ -4618,6 +4619,8 @@ func BuildTopologyResponseFromReadState(rs unifiedresources.ReadState, options T
 						Health:                   container.Health(),
 						HealthcheckTargets:       container.HealthcheckTargets(),
 						HealthProbe:              healthProbeFrom(container.HealthProbe()),
+						ExitCode:                 exitCode,
+						OOMKilled:                oomKilled,
 					})
 				}
 			}
@@ -5155,6 +5158,7 @@ func (e *PulseToolExecutor) executeGetResource(_ context.Context, args map[strin
 				response.Health = strings.TrimSpace(resource.Docker.Health)
 				response.HealthcheckTargets = append([]string{}, resource.Docker.HealthcheckTargets...)
 				response.HealthProbe = healthProbeFrom(resource.Docker.HealthProbe)
+				response.ExitCode, response.OOMKilled = containerExitFacts(resource.Docker.ContainerState, resource.Docker.ExitCode, resource.Docker.OOMKilled)
 				response.RestartCount = resource.Docker.RestartCount
 				response.Labels = resource.Docker.Labels
 				if update := resource.Docker.UpdateStatus; update != nil && update.UpdateAvailable {
@@ -5254,6 +5258,7 @@ func (e *PulseToolExecutor) executeGetResource(_ context.Context, args map[strin
 			response.Health = container.Health()
 			response.HealthcheckTargets = container.HealthcheckTargets()
 			response.HealthProbe = healthProbeFrom(container.HealthProbe())
+			response.ExitCode, response.OOMKilled = containerExitFacts(state, container.ExitCode(), container.OOMKilled())
 			response.Filesystems = container.Filesystems()
 			response.CPU = ResourceCPU{
 				Percent: container.CPUPercent(),

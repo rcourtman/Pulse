@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"strings"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
@@ -326,6 +327,30 @@ type DockerContainerSummary struct {
 	Health             string       `json:"health,omitempty"`
 	HealthcheckTargets []string     `json:"healthcheck_targets,omitempty"`
 	HealthProbe        *HealthProbe `json:"health_probe,omitempty"`
+	ExitCode           *int         `json:"exit_code,omitempty"`
+	OOMKilled          *bool        `json:"oom_killed,omitempty"`
+}
+
+// containerExitFacts says how a container that is not running last ended.
+// Docker reports exit code 0 for a container that is running or was never
+// started, where the number means nothing, so the code is given only for a
+// container that has exited, is dead or is restarting. There 0 is a clean
+// stop and anything else a failure, which is the difference between a job or
+// a deliberate stop and a crash. The out-of-memory flag follows the same
+// rule and keeps "not reported" apart from "no".
+func containerExitFacts(state string, exitCode int, oomKilled *bool) (*int, *bool) {
+	switch strings.ToLower(strings.TrimSpace(state)) {
+	case "exited", "dead", "restarting":
+	default:
+		return nil, nil
+	}
+	code := exitCode
+	var oom *bool
+	if oomKilled != nil {
+		value := *oomKilled
+		oom = &value
+	}
+	return &code, oom
 }
 
 // HealthProbe says why an unhealthy container's last health check failed.
@@ -715,6 +740,8 @@ type ResourceResponse struct {
 	Health             string                   `json:"health,omitempty"`
 	HealthcheckTargets []string                 `json:"healthcheck_targets"`
 	HealthProbe        *HealthProbe             `json:"health_probe,omitempty"`
+	ExitCode           *int                     `json:"exit_code,omitempty"`
+	OOMKilled          *bool                    `json:"oom_killed,omitempty"`
 	RestartCount       int                      `json:"restart_count,omitempty"`
 	UpdateAvailable    bool                     `json:"update_available,omitempty"`
 }

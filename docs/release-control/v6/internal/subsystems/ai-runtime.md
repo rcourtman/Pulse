@@ -1273,6 +1273,29 @@ run per cell (12 November 2026):
   4 of 7 after the regrade, commands on 6 of 7.
 - D5's probe is a script with no output and reported `other`. Patrol still
   found the stopped database, so an uninformative reason did not mislead it.
+
+The container payloads say how a stopped container ended. The investigator
+reads a container through `pulse_query` (`DockerContainerSummary` in topology,
+`ResourceResponse` for one resource and for resource-scoped health), and
+neither carried an exit code. On a default agent it then had no way to tell a
+clean stop from a crash: on the stopped Git service one conclusion told the
+owner to "inspect gitea's container logs and exit code" on the host, while
+Pulse held the code all along. Both payloads now carry `exit_code` and
+`oom_killed` (`containerExitFacts`), under one rule: only for a container that
+has exited, is dead or is restarting. Docker reports 0 for a container that is
+running or was never started, where the number means nothing, so the key is
+absent there, not present as 0. `oom_killed` keeps the agent's "not reported"
+apart from "no".
+
+Scored on fault set v1 before it merged, Sonnet, Ask first, both profiles, one
+run per cell (12 to 13 November 2026). Default agent 5 of 7: the stopped
+service's conclusion read "exited cleanly (exit_code=0) rather than crashing"
+and graded "Handed over", and D1 graded "Handed over" by the harness itself,
+the second run in a row to hold the real cause. Commands on 6 of 7. The
+finished job stayed quiet on both with its exit code now visible. D6 with
+commands on read "Handed back" after "Partial"; it has read each in different
+replays and is a miss either way. No other cell was worse than the previous
+replay.
 Investigation and interactive profiles retain their bounded final summary.
 Patrol report, assessment and resolution tools are governed Pulse-state writes
 for invocation authorization. Accepting one records a decision, does not prove
