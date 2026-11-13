@@ -166,6 +166,34 @@ afterEach(() => {
 });
 
 describe('User Access through the real RBAC transport', () => {
+  it('suppresses untouched and reordered-equivalent saves before CSRF or mutation work', async () => {
+    const { state } = mount();
+    await loaded(state);
+    await state.openManageAccess(state.filteredAssignments()[0]);
+    document.cookie = 'pulse_csrf=; Max-Age=0; Path=/';
+    await state.handleSaveAssignments();
+    expect(mutations()).toHaveLength(0);
+    expect(fetchMock.mock.calls.filter(([url]) => url === '/api/health')).toHaveLength(0);
+    state.toggleRole('reader');
+    state.toggleRole('reader');
+    expect(state.formRoleIds()).toEqual(['saved-unlisted-role', 'reader']);
+    await state.handleSaveAssignments();
+    expect(mutations()).toHaveLength(0);
+    expect(state.showModal()).toBe(true);
+    expect(state.saving()).toBe(false);
+    expect(state.successNotice()).toBeNull();
+    expect(fetchMock.mock.calls.filter(([url]) => url === '/api/health')).toHaveLength(0);
+    expect(fetchMock.mock.calls.filter(([url]) => url === '/api/admin/users')).toHaveLength(1);
+    // Deliberate changes still use the normal cold-CSRF and bound write path.
+    state.toggleRole('operator');
+    await state.handleSaveAssignments();
+    expect(mutations()).toHaveLength(1);
+    expect(fetchMock.mock.calls.filter(([url]) => url === '/api/health')).toHaveLength(1);
+    expect(JSON.parse(String(mutations()[0][1]?.body))).toEqual({
+      roleIds: ['saved-unlisted-role', 'reader', 'operator'],
+    });
+  });
+
   it.each(
     operations.flatMap((operation) =>
       ['confirmed', 'uncertain'].map((outcome) => ({ operation, outcome })),

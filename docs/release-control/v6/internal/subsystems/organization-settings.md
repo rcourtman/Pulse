@@ -15,6 +15,37 @@
 
 ## Purpose
 
+### User Access saves only changed role membership
+
+The existing User Access editor compares its draft with the admitted account's
+saved role IDs as exact, unordered lists. Opening an unchanged editor,
+leaving an empty assignment unchanged, or toggling roles away and back does not
+send a role update or start CSRF preparation. Save Changes is disabled for those
+states, and the state handler enforces the same boundary. Both use the shared
+`sameRoleIDs` comparison, rather than passing a separate derived flag through
+the panel or duplicating equality logic. This is not an
+access-review attestation or a backend concurrency guarantee.
+
+The comparison includes saved IDs absent from the role catalogue. It sorts
+local copies and compares their JSON, preserving literal separators inside IDs
+and conservatively treating changed duplicate counts as a change. It does not
+trim, case-fold, normalize, reorder or deduplicate the actual submitted array.
+A deliberate removal of the last selected role still sends `roleIds: []`.
+Definite rejections keep the admitted baseline and the correctable changed
+draft. Pending writes remain disabled; uncertain writes still require fresh
+saved-access readback rather than replay. Reader, tenant, capability, CSRF,
+accepted-row and backend authorization rules are unchanged.
+
+`RBACPaywallPanels.test.tsx` and the User Access selection/transport suites cover
+unchanged, reverted/reordered, empty, repeated and exact-key selections, changed
+duplicate counts, opaque separators, a
+changed write with retained unlisted IDs, and deliberate clear. Reader-lifetime
+regressions begin with actual changes wherever a dispatched or refused write is
+their subject. Comparable native Settings-shell/panel browser fixtures verify
+saved-permission context, role choices and unchanged/changed/reverted actions
+at desktop and phone sizes. This is source protection, not original-client,
+IdP, installed or published recovery.
+
 ### Saved sharing decisions keep exact parties and whole-page context
 
 Incoming and outgoing sharing rows retain the saved organization's full key

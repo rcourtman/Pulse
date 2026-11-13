@@ -376,6 +376,7 @@ describe('RBAC paywall settings panels', () => {
     render(() => <Dynamic component={UserAssignmentsPanel} {...panelProps()} />);
     fireEvent.click(await screen.findByRole('button', { name: 'Manage access for alice' }));
     const dialog = await screen.findByRole('dialog', { name: 'Manage access: alice' });
+    fireEvent.click(within(dialog).getByRole('checkbox', { name: /Admin/ }));
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save Changes' }));
     expect(within(dialog).getByRole('button', { name: 'Applying...' })).toBeDisabled();
     const signal = updateUserRolesMock.mock.calls[0][2].signal;
@@ -417,6 +418,47 @@ describe('RBAC paywall settings panels', () => {
     expect(screen.getByPlaceholderText('Search users...')).toBeDisabled();
     expect(getUsersMock).not.toHaveBeenCalled();
     expect(getRolesMock).not.toHaveBeenCalled();
+  });
+
+  it('keeps Save Changes disabled until role membership differs from the admitted account', async () => {
+    render(() => <UserAssignmentsPanel />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Manage access for alice' }));
+    const dialog = within(await screen.findByRole('dialog', { name: 'Manage access: alice' }));
+    const save = dialog.getByRole('button', { name: 'Save Changes' });
+    const admin = dialog.getByRole('checkbox', { name: /Admin/ });
+    expect(save).toBeDisabled();
+    fireEvent.click(save);
+    expect(updateUserRolesMock).not.toHaveBeenCalled();
+    fireEvent.click(admin);
+    expect(save).toBeEnabled();
+    fireEvent.click(admin);
+    expect(save).toBeDisabled();
+    fireEvent.click(save);
+    expect(updateUserRolesMock).not.toHaveBeenCalled();
+    expect(getUsersMock).toHaveBeenCalledTimes(1);
+    expect(dialog.getByRole('button', { name: 'Cancel' })).toBeEnabled();
+    expect(dialog.getByRole('button', { name: 'Close user assignments' })).toBeEnabled();
+  });
+
+  it('conservatively treats changed duplicate counts as a changed draft without sorting the payload', async () => {
+    getUsersMock.mockResolvedValue([{ username: 'alice', roleIds: ['admin', 'admin'] }]);
+    render(() => <UserAssignmentsPanel />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Manage access for alice' }));
+    const dialog = within(await screen.findByRole('dialog', { name: 'Manage access: alice' }));
+    const save = dialog.getByRole('button', { name: 'Save Changes' });
+    const admin = dialog.getByRole('checkbox', { name: /Admin/ });
+    expect(save).toBeDisabled();
+    fireEvent.click(admin);
+    fireEvent.click(admin);
+    expect(save).toBeEnabled();
+    fireEvent.click(save);
+    await waitFor(() =>
+      expect(updateUserRolesMock).toHaveBeenCalledExactlyOnceWith(
+        'alice',
+        ['admin'],
+        expect.objectContaining({ expectedOrgID: 'default', retry: false }),
+      ),
+    );
   });
 
   it('loads user assignments when the RBAC entitlement is granted', async () => {
@@ -965,12 +1007,13 @@ describe('RBAC paywall settings panels', () => {
       expect(screen.getByRole('dialog', { name: 'Manage access: alice' })).toBeInTheDocument();
     });
 
+    fireEvent.click(screen.getByRole('checkbox', { name: /Admin/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
 
     await waitFor(() => {
       expect(updateUserRolesMock).toHaveBeenCalledWith(
         'alice',
-        ['admin'],
+        [],
         expect.objectContaining({
           expectedOrgID: 'default',
           retry: false,
@@ -997,7 +1040,8 @@ describe('RBAC paywall settings panels', () => {
       await screen.findByRole('button', { name: 'Manage access for alice' });
       if (kind === 'save') {
         fireEvent.click(screen.getByRole('button', { name: 'Manage access for alice' }));
-        fireEvent.click(await screen.findByRole('button', { name: 'Save Changes' }));
+        fireEvent.click(await screen.findByRole('checkbox', { name: /Admin/ }));
+        fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
       } else {
         fireEvent.click(screen.getByRole('button', { name: 'Remove alice' }));
         fireEvent.click(

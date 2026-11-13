@@ -335,3 +335,124 @@ describe('User Access selection through rendered controls and real transport', (
     expectBoundRequests();
   });
 });
+
+describe('User Access writes only changed role membership', () => {
+  const openSelected = async () => {
+    const selected = originalUsers[1];
+    await openPanel();
+    fireEvent.click(
+      rowFor(selected).getByRole('button', {
+        name: `Manage access for Alex Example (${selected.username})`,
+      }),
+    );
+    const editor = within(
+      await screen.findByRole('dialog', {
+        name: `Manage access: Alex Example (${selected.username})`,
+      }),
+    );
+    await editor.findByText(`saved:${selected.username}`);
+    return editor;
+  };
+  const readerName = `Fleet role (Role ID: ${roles[0].id}) Read saved monitoring`;
+  const operatorName = `Fleet role (Role ID: ${roles[1].id}) Operate selected resources`;
+
+  it.each(
+    [[], [roles[0].id, unlistedRole], [roles[0].id, roles[0].id, unlistedRole]].map((roleIds) => ({
+      roleIds,
+    })),
+  )(
+    'keeps an unchanged saved selection read-only, including empty or repeated IDs: %j',
+    async ({ roleIds }) => {
+      savedUsers[1].roleIds = [...roleIds];
+      const editor = await openSelected();
+      const save = editor.getByRole('button', { name: 'Save Changes' });
+      expect(save).toBeDisabled();
+      fireEvent.click(save);
+      expect(writes()).toHaveLength(0);
+      expect(reads('/api/admin/users')).toHaveLength(1);
+      expect(editor.getByText(`saved:${originalUsers[1].username}`)).toBeInTheDocument();
+      fireEvent.click(editor.getByRole('button', { name: 'Cancel' }));
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(savedUsers[1].roleIds).toEqual(roleIds);
+      expectBoundRequests();
+    },
+  );
+
+  it('disables a reverted selection even when toggling changed its order and keeps unlisted IDs', async () => {
+    savedUsers[1].roleIds = [roles[0].id, roles[1].id, unlistedRole];
+    const editor = await openSelected();
+    const save = editor.getByRole('button', { name: 'Save Changes' });
+    const reader = editor.getByRole('checkbox', { name: readerName });
+    expect(save).toBeDisabled();
+    fireEvent.click(reader);
+    expect(save).toBeEnabled();
+    fireEvent.click(reader);
+    expect(save).toBeDisabled();
+    fireEvent.click(save);
+    expect(writes()).toHaveLength(0);
+    expect(editor.getByRole('list', { name: 'Kept saved role IDs' })).toHaveTextContent(
+      unlistedRole,
+    );
+    // A real removal is still admitted once with the original unlisted key.
+    fireEvent.click(editor.getByRole('checkbox', { name: operatorName }));
+    fireEvent.click(save);
+    await screen.findByText(`Roles updated for ${originalUsers[1].username}`);
+    expect(writes()).toHaveLength(1);
+    expect(JSON.parse(String(writes()[0][1]?.body))).toEqual({
+      roleIds: [unlistedRole, roles[0].id],
+    });
+    expectBoundRequests();
+  });
+
+  it('still admits an explicit clear to an empty array and starts the next editor unchanged', async () => {
+    savedUsers[1].roleIds = [roles[0].id];
+    const editor = await openSelected();
+    fireEvent.click(editor.getByRole('checkbox', { name: readerName }));
+    const save = editor.getByRole('button', { name: 'Save Changes' });
+    expect(save).toBeEnabled();
+    fireEvent.click(save);
+    await screen.findByText(`Roles updated for ${originalUsers[1].username}`);
+    expect(writes()).toHaveLength(1);
+    expect(JSON.parse(String(writes()[0][1]?.body))).toEqual({ roleIds: [] });
+    expect(savedUsers[1].roleIds).toEqual([]);
+    fireEvent.click(
+      rowFor(originalUsers[1]).getByRole('button', {
+        name: `Manage access for Alex Example (${originalUsers[1].username})`,
+      }),
+    );
+    expect(await screen.findByRole('button', { name: 'Save Changes' })).toBeDisabled();
+    expect(writes()).toHaveLength(1);
+    expectBoundRequests();
+  });
+
+  it('distinguishes opaque separators that would collide under joined-key comparison', async () => {
+    const ids = ['a,b', 'c', 'a', 'b,c'];
+    catalogue = ids.map((id) => ({ id, name: id, description: id, permissions: [] }));
+    savedUsers[1].roleIds = ids.slice(0, 2);
+    const editor = await openSelected();
+    for (const choice of editor.getAllByRole('checkbox')) fireEvent.click(choice);
+    const save = editor.getByRole('button', { name: 'Save Changes' });
+    expect(save).toBeEnabled();
+    fireEvent.click(save);
+    await screen.findByText(`Roles updated for ${originalUsers[1].username}`);
+    expect(writes()).toHaveLength(1);
+    expect(JSON.parse(String(writes()[0][1]?.body))).toEqual({ roleIds: ids.slice(2) });
+    expectBoundRequests();
+  });
+
+  it('compares opaque IDs without case folding or trimming and leaves the submitted keys intact', async () => {
+    const distinctIDs = [roles[0].id.toUpperCase(), ` ${roles[0].id}`];
+    catalogue.push(...distinctIDs.map((id) => ({ ...roles[0], id, name: 'Exact role key' })));
+    const editor = await openSelected();
+    const choices = editor.getAllByRole('checkbox', { name: /^Exact role key/ });
+    expect(choices).toHaveLength(distinctIDs.length);
+    for (const choice of choices) fireEvent.click(choice);
+    fireEvent.click(editor.getByRole('button', { name: 'Save Changes' }));
+    await screen.findByText(`Roles updated for ${originalUsers[1].username}`);
+    expect(writes()).toHaveLength(1);
+    expect(JSON.parse(String(writes()[0][1]?.body))).toEqual({
+      roleIds: [roles[0].id, unlistedRole, ...distinctIDs],
+    });
+    expectBoundRequests();
+  });
+});

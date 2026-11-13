@@ -9,6 +9,7 @@ import {
   getUserAssignmentsLoadErrorMessage,
   getUserAssignmentsUpdateErrorMessage,
   getUserIdentityLabel,
+  sameRoleIDs,
 } from '@/utils/rbacPresentation';
 import { useRBACFeatureGateState } from './useRBACFeatureGateState';
 
@@ -339,7 +340,8 @@ export function useUserAssignmentsPanelState(props: UserAssignmentsPanelProps = 
   };
   const handleSaveAssignments = async () => {
     const user = editingUser();
-    if (showModal() && user) await mutateUser(user, 'save');
+    if (showModal() && user && !sameRoleIDs(formRoleIds(), user.roleIds))
+      await mutateUser(user, 'save');
   };
   const toggleRole = (roleId: string) => {
     if (!showModal() || !canEdit() || !roles().some((role) => role.id === roleId)) return;
