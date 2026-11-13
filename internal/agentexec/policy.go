@@ -42,6 +42,10 @@ type CommandPolicy struct {
 	// by NormalizeVerifyWindow; values above MaxVerifyWindow are clamped.
 	VerifyWindow time.Duration `json:"verify_window"`
 
+	// allowLogReads approves cat, head, tail and grep whose every file
+	// operand is under /var/log (see isAutoApprovedLogRead).
+	allowLogReads bool
+
 	// compiled regex patterns
 	autoApproveRe     []*regexp.Regexp
 	requireApprovalRe []*regexp.Regexp
@@ -138,6 +142,7 @@ func DefaultPolicy() *CommandPolicy {
 		RequireApproval:   slices.Clone(template.RequireApproval),
 		Blocked:           slices.Clone(template.Blocked),
 		VerifyWindow:      template.VerifyWindow,
+		allowLogReads:     template.allowLogReads,
 		autoApproveRe:     template.autoApproveRe,
 		requireApprovalRe: template.requireApprovalRe,
 		blockedRe:         template.blockedRe,
@@ -146,7 +151,8 @@ func DefaultPolicy() *CommandPolicy {
 
 func buildDefaultPolicy() *CommandPolicy {
 	p := &CommandPolicy{
-		VerifyWindow: DefaultVerifyWindow,
+		VerifyWindow:  DefaultVerifyWindow,
+		allowLogReads: true,
 		AutoApprove: []string{
 			// System inspection
 			`^ps(\s|$)`,
@@ -158,7 +164,7 @@ func buildDefaultPolicy() *CommandPolicy {
 			`^uname(\s|$)`,
 			`^cat\s+/proc/(cpuinfo|meminfo|loadavg|uptime|version|diskstats|mdstat|swaps|mounts|filesystems|partitions)$`,
 			`^cat\s+/proc/net/(dev|route|tcp|tcp6|udp|udp6|unix)$`,
-			`^cat\s+/etc/os-release`,
+			`^cat\s+/etc/os-release$`,
 			`^lsof(\s|$)`,
 			`^netstat(\s|$)`,
 			`^ss(\s|$)`,
@@ -170,11 +176,9 @@ func buildDefaultPolicy() *CommandPolicy {
 			`^who$`,
 			`^last(\s|$)`,
 
-			// Log reading (read-only)
-			`^cat\s+/var/log/`,
-			`^tail\s+.*(/var/log/|/log/)`,
-			`^head\s+.*(/var/log/|/log/)`,
-			`^grep\s+.*(/var/log/|/log/)`,
+			// Log reading (read-only). cat, head, tail and grep of files
+			// under /var/log are approved by isAutoApprovedLogRead, which
+			// checks every operand rather than matching a prefix.
 			`^journalctl\s`,
 
 			// Service status (read-only)
@@ -376,6 +380,9 @@ const (
 // Evaluate checks a command against the policy
 func (p *CommandPolicy) Evaluate(command string) PolicyDecision {
 	command = strings.TrimSpace(command)
+	// Options can differ only by case (grep -F and -f), so the log read
+	// check works on the original text.
+	logReadCommand := command
 	command = strings.ToLower(command)
 
 	policyCommand := command
@@ -391,6 +398,7 @@ func (p *CommandPolicy) Evaluate(command string) PolicyDecision {
 				policyCommand = sudoCommand
 			}
 		}
+		logReadCommand = stripPlainSudo(logReadCommand)
 	}
 
 	// Check blocked first (highest priority)
@@ -415,6 +423,9 @@ func (p *CommandPolicy) Evaluate(command string) PolicyDecision {
 	}
 
 	// Check auto-approve
+	if p.allowLogReads && isAutoApprovedLogRead(logReadCommand) {
+		return PolicyAllow
+	}
 	for _, re := range p.autoApproveRe {
 		if re.MatchString(policyCommand) {
 			return PolicyAllow
@@ -445,13 +456,29 @@ func containsShellControlOperators(command string) bool {
 		return true
 	}
 
-	for _, marker := range []string{";", "&&", "||", "|", "`", "$(", ">", "<"} {
+	// A single & runs the command before it in the background and starts
+	// another, so it separates commands as much as ; does.
+	for _, marker := range []string{";", "&", "|", "`", "$(", ">", "<"} {
 		if strings.Contains(command, marker) {
 			return true
 		}
 	}
 
 	return false
+}
+
+// stripPlainSudo removes a leading "sudo " that carries no options, keeping
+// the rest of the text exactly as the shell will see it. Anything else
+// returns "" so no log read check applies.
+func stripPlainSudo(command string) string {
+	if !strings.HasPrefix(command, "sudo ") {
+		return ""
+	}
+	rest := strings.TrimLeft(command[len("sudo"):], " ")
+	if rest == "" || rest[0] == '-' {
+		return ""
+	}
+	return rest
 }
 
 func extractSudoCommand(command string) (string, bool, bool) {
