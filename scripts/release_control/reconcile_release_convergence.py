@@ -207,6 +207,21 @@ def api_read_subject(endpoint: str) -> str:
     return "GitHub API read"
 
 
+def retryable_read_failure(returncode: int, stderr: str) -> bool:
+    if returncode <= 0:
+        # A successful response or locally signalled gh is not a retry request.
+        return False
+    if re.search(r"\bHTTP (502|503|504)\b", stderr) is not None:
+        return True
+    # GitHub can cancel its HTTP/2 stream before an inventory GET completes.
+    # Match only this whole transport diagnostic, never local cancellation,
+    # another stream error, or a refusal that happens to quote these words.
+    return re.fullmatch(
+        r"(?:gh: )?stream error: stream ID [1-9][0-9]*; CANCEL; received from peer",
+        stderr.strip(),
+    ) is not None
+
+
 class GitHub:
     def __init__(
         self,
@@ -248,7 +263,7 @@ class GitHub:
                 result.returncode == 0
                 or not retry_read
                 or attempt == 2
-                or re.search(r"\bHTTP (502|503|504)\b", result.stderr or "") is None
+                or not retryable_read_failure(result.returncode, result.stderr or "")
             ):
                 break
             print(
