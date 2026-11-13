@@ -12,6 +12,30 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// importWriterLocked reuses the admitted scope's paths, filesystem and crypto
+// without copying its mutexes or live metadata stores. Only this private writer
+// can stage into tx. Its local mutex must not reacquire the shared directory
+// lock held by the importing instance until commit/rollback/cleanup finishes.
+// Include a destination here when adding an imported archive section.
+func (c *ConfigPersistence) importWriterLocked(tx *importTransaction) *ConfigPersistence {
+	return &ConfigPersistence{
+		configDir:       c.configDir,
+		nodesFile:       c.nodesFile,
+		alertFile:       c.alertFile,
+		alertIntentFile: c.alertIntentFile,
+		emailFile:       c.emailFile,
+		appriseFile:     c.appriseFile,
+		deadManFile:     c.deadManFile,
+		webhookFile:     c.webhookFile,
+		systemFile:      c.systemFile,
+		apiTokensFile:   c.apiTokensFile,
+		ssoFile:         c.ssoFile,
+		crypto:          c.crypto,
+		fs:              c.fs,
+		tx:              tx,
+	}
+}
+
 // importTransaction coordinates staging config writes during an import so they
 // can be committed atomically or rolled back on failure.
 type importTransaction struct {
