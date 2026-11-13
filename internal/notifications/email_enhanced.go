@@ -424,28 +424,43 @@ func buildMultipartEmailMessageWithAttachments(addresses resolvedEmailAddresses,
 }
 
 type base64LineWriter struct {
-	w     io.Writer
-	count int
+	w         io.Writer
+	count     int
+	lineBreak [2]byte
 }
 
 func newBase64LineWriter(w io.Writer) *base64LineWriter {
-	return &base64LineWriter{w: w}
+	return &base64LineWriter{w: w, lineBreak: [2]byte{'\r', '\n'}}
 }
 
+// Write complete line segments rather than allocating and dispatching once per
+// encoded byte. Keep the line separator on the writer too, so wrapping a large
+// report needs no temporary allocation per byte or line. A full final line has
+// no trailing CRLF until another byte arrives, including across Write calls.
 func (w *base64LineWriter) Write(p []byte) (int, error) {
 	written := 0
-	for _, b := range p {
+	for len(p) > 0 {
 		if w.count == 76 {
-			if _, err := w.w.Write([]byte("\r\n")); err != nil {
+			n, err := w.w.Write(w.lineBreak[:])
+			if err != nil {
 				return written, err
+			}
+			if n != len(w.lineBreak) {
+				return written, io.ErrShortWrite
 			}
 			w.count = 0
 		}
-		if _, err := w.w.Write([]byte{b}); err != nil {
+		length := min(76-w.count, len(p))
+		n, err := w.w.Write(p[:length])
+		w.count += n
+		written += n
+		if err != nil {
 			return written, err
 		}
-		w.count++
-		written++
+		if n != length {
+			return written, io.ErrShortWrite
+		}
+		p = p[n:]
 	}
 	return written, nil
 }

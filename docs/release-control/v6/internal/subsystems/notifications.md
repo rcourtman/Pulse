@@ -17,6 +17,32 @@
 
 ## Purpose
 
+### SMTP attachment encoding works in complete line segments
+
+The existing report-email path wraps base64 at 76 characters using whole
+content segments and a writer-owned CRLF buffer, not a write and allocation
+for every encoded byte. It retains exact encoded bytes across arbitrary input
+chunks, padding, empty input and a final full line: a line separator is emitted
+only when the next byte arrives. Multipart headers, text/HTML alternatives,
+attachment order/content, empty-attachment omission and the report attachment
+size limit are unchanged. MIME construction still buffers the complete message;
+this is not an unbounded streaming or attachment-limit change.
+
+A refused or short destination write stops immediately and counts only the
+accepted input bytes, excluding inserted separators. It does not retry the
+write or alter SMTP authentication, TLS, envelopes, rate limits, acceptance,
+transport retries, scheduled-report persistence or visible delivery states.
+
+`email_attachment_stream_test.go` compares encoding against an independent
+base64-and-line-join oracle, checks chunk and final-line boundaries, propagates
+short/error writes, bounds the one-MiB path's allocations/write calls, and
+parses both raw and decoded multipart content. Its real plain/TLS/STARTTLS
+receivers inspect every nonempty attachment and both message alternatives,
+with one accepted send. Existing report-delivery and notification suites retain
+provider-verdict/retry/uncertainty and saved-state coverage. Benchmarks measure
+source-local formatter cost; they do not establish fleet CPU/RSS relief or
+inbox receipt.
+
 ### Telegram treats alert values as literal text
 
 The built-in Telegram firing and resolved templates use Telegram's HTML mode.
