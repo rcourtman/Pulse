@@ -370,23 +370,48 @@ type agentAutoRegisterAuthority struct {
 // resolved address. Unlike source matching it never ignores the port, so two
 // connections behind one address stay distinct.
 func autoRegisterSameEndpoint(a, b, nodeType string) bool {
+	left, right, ok := normalizeAutoRegisterEndpointPair(a, b, nodeType)
+	if !ok {
+		return false
+	}
+	return strings.EqualFold(left.hostname, right.hostname) || hostsShareResolvedIdentity(left.address, right.address)
+}
+
+// autoRegisterSpelledEndpoint reports whether two connection addresses spell
+// the same host and port after normalisation, without resolving names. A
+// caller-supplied name can resolve to one address when checked and another
+// when dialled, so only this form may decide which address Pulse contacts.
+func autoRegisterSpelledEndpoint(a, b, nodeType string) bool {
+	left, right, ok := normalizeAutoRegisterEndpointPair(a, b, nodeType)
+	return ok && strings.EqualFold(left.hostname, right.hostname)
+}
+
+type autoRegisterEndpoint struct {
+	address  string
+	hostname string
+}
+
+// normalizeAutoRegisterEndpointPair normalises two connection addresses and
+// reports whether both parse and share a port.
+func normalizeAutoRegisterEndpointPair(a, b, nodeType string) (autoRegisterEndpoint, autoRegisterEndpoint, bool) {
 	left, err := normalizeNodeHost(a, nodeType)
 	if err != nil {
-		return false
+		return autoRegisterEndpoint{}, autoRegisterEndpoint{}, false
 	}
 	right, err := normalizeNodeHost(b, nodeType)
 	if err != nil {
-		return false
+		return autoRegisterEndpoint{}, autoRegisterEndpoint{}, false
 	}
 	leftURL, err := url.Parse(left)
 	if err != nil {
-		return false
+		return autoRegisterEndpoint{}, autoRegisterEndpoint{}, false
 	}
 	rightURL, err := url.Parse(right)
 	if err != nil || leftURL.Port() != rightURL.Port() {
-		return false
+		return autoRegisterEndpoint{}, autoRegisterEndpoint{}, false
 	}
-	return strings.EqualFold(leftURL.Hostname(), rightURL.Hostname()) || hostsShareResolvedIdentity(left, right)
+	return autoRegisterEndpoint{address: left, hostname: leftURL.Hostname()},
+		autoRegisterEndpoint{address: right, hostname: rightURL.Hostname()}, true
 }
 
 func (a agentAutoRegisterAuthority) owns(address string) bool {
@@ -395,6 +420,21 @@ func (a agentAutoRegisterAuthority) owns(address string) bool {
 	}
 	for _, owned := range a.ownedHosts {
 		if autoRegisterSameEndpoint(address, owned, a.nodeType) {
+			return true
+		}
+	}
+	return false
+}
+
+// mayProbe reports whether Pulse may contact address for a TLS fingerprint on
+// this caller's behalf: only an address spelled as the token's spent grant
+// recorded it, which is an address Pulse already monitors.
+func (a agentAutoRegisterAuthority) mayProbe(address string) bool {
+	if strings.TrimSpace(address) == "" {
+		return false
+	}
+	for _, owned := range a.ownedHosts {
+		if autoRegisterSpelledEndpoint(address, owned, a.nodeType) {
 			return true
 		}
 	}
@@ -1061,13 +1101,20 @@ func normalizeAutoRegisterHostCandidates(nodeType, primary string, alternates []
 	return candidates, nil
 }
 
-func selectAutoRegisterHost(nodeType, primary string, alternates []string) (string, string, bool, []string, error) {
-	candidates, err := normalizeAutoRegisterHostCandidates(nodeType, primary, alternates)
-	if err != nil {
-		return "", "", false, nil, err
+// selectAutoRegisterHost picks the first candidate that presents a TLS
+// certificate and returns it with that certificate's fingerprint. mayProbe
+// limits which candidates Pulse contacts; nil allows all of them. A candidate
+// the caller may not change is never contacted, so the fetch cannot be used to
+// test which addresses Pulse can reach. When no permitted candidate answers,
+// the first candidate is returned with no fingerprint.
+func selectAutoRegisterHost(nodeType string, candidates []string, mayProbe func(string) bool) (string, string, bool) {
+	if len(candidates) == 0 {
+		return "", "", false
 	}
-
 	for idx, candidate := range candidates {
+		if mayProbe != nil && !mayProbe(candidate) {
+			continue
+		}
 		fingerprint, err := fetchTLSFingerprint(candidate)
 		if err != nil || strings.TrimSpace(fingerprint) == "" {
 			log.Debug().
@@ -1084,10 +1131,10 @@ func selectAutoRegisterHost(nodeType, primary string, alternates []string) (stri
 				Str("requestedHost", candidates[0]).
 				Msg("Auto-register switched to fallback host candidate reachable from Pulse")
 		}
-		return candidate, fingerprint, true, candidates, nil
+		return candidate, fingerprint, true
 	}
 
-	return candidates[0], "", false, candidates, nil
+	return candidates[0], "", false
 }
 
 func canonicalAutoRegisterMatchMessage(reason string) string {
@@ -2340,7 +2387,7 @@ func (h *ConfigHandlers) handleCanonicalAutoRegister(w http.ResponseWriter, r *h
 		return
 	}
 
-	host, fingerprint, verifySSL, candidateHosts, err := selectAutoRegisterHost(req.Type, req.Host, req.CandidateHosts)
+	candidateHosts, err := normalizeAutoRegisterHostCandidates(req.Type, req.Host, req.CandidateHosts)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -2358,13 +2405,21 @@ func (h *ConfigHandlers) handleCanonicalAutoRegister(w http.ResponseWriter, r *h
 	// An agent token may change an existing connection only through its
 	// install grant or at the address that grant recorded. Read the authority
 	// after prepareProxmoxInstallBootstrap, which binds a fresh install token to
-	// its first presenting hostname, and before anything is mutated. Creating
-	// a source stays governed by the install grant below.
+	// its first presenting hostname, and before Pulse contacts any candidate or
+	// mutates anything. Creating a source stays governed by the install grant
+	// below.
 	agentAuth := isAgentAutoRegAuth(r.Context())
 	var agentAuthority agentAutoRegisterAuthority
+	var mayProbe func(string) bool
 	if agentAuth {
 		agentAuthority = h.agentAutoRegisterAuthority(r.Context(), req)
+		// Without a grant the token can change only its recorded connection,
+		// so Pulse fetches a certificate only from that connection's address.
+		if !agentAuthority.installGrant {
+			mayProbe = agentAuthority.mayProbe
+		}
 	}
+	host, fingerprint, verifySSL := selectAutoRegisterHost(req.Type, candidateHosts, mayProbe)
 
 	log.Info().
 		Str("requestedHost", req.Host).
