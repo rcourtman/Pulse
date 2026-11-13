@@ -38,15 +38,13 @@ export function useUserAssignmentsPanelState(props: UserAssignmentsPanelProps = 
   );
   const [inventoryLoaded, setInventoryLoaded] = createSignal(false);
   const [unconfirmedChange, setUnconfirmedChange] = createSignal<string | null>(null);
-  const hasRoleChanges = createMemo(() => {
-    const user = editingUser();
-    if (!user) return false;
-    // Role membership is unordered. Compare exact saved keys, including those
-    // absent from the catalogue, without changing the eventual write payload.
-    const saved = new Set(user.roleIds);
-    const selected = new Set(formRoleIds());
-    return saved.size !== selected.size || [...selected].some((id) => !saved.has(id));
-  });
+  // Compare opaque IDs in local sorted copies, never in the submitted array.
+  // JSON preserves separators inside IDs; changed multiplicity remains a change.
+  const hasRoleChanges = createMemo(
+    () =>
+      JSON.stringify([...formRoleIds()].sort()) !==
+      JSON.stringify([...(editingUser()?.roleIds ?? [])].sort()),
+  );
 
   const featureGate = useRBACFeatureGateState({
     kind: 'user-assignments',

@@ -425,6 +425,21 @@ describe('User Access writes only changed role membership', () => {
     expectBoundRequests();
   });
 
+  it('distinguishes opaque separators that would collide under joined-key comparison', async () => {
+    const ids = ['a,b', 'c', 'a', 'b,c'];
+    catalogue = ids.map((id) => ({ id, name: id, description: id, permissions: [] }));
+    savedUsers[1].roleIds = ids.slice(0, 2);
+    const editor = await openSelected();
+    for (const choice of editor.getAllByRole('checkbox')) fireEvent.click(choice);
+    const save = editor.getByRole('button', { name: 'Save Changes' });
+    expect(save).toBeEnabled();
+    fireEvent.click(save);
+    await screen.findByText(`Roles updated for ${originalUsers[1].username}`);
+    expect(writes()).toHaveLength(1);
+    expect(JSON.parse(String(writes()[0][1]?.body))).toEqual({ roleIds: ids.slice(2) });
+    expectBoundRequests();
+  });
+
   it('compares opaque IDs without case folding or trimming and leaves the submitted keys intact', async () => {
     const distinctIDs = [roles[0].id.toUpperCase(), ` ${roles[0].id}`];
     catalogue.push(...distinctIDs.map((id) => ({ ...roles[0], id, name: 'Exact role key' })));

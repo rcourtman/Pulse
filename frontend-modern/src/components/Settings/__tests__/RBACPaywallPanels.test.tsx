@@ -440,6 +440,27 @@ describe('RBAC paywall settings panels', () => {
     expect(dialog.getByRole('button', { name: 'Close user assignments' })).toBeEnabled();
   });
 
+  it('conservatively treats changed duplicate counts as a changed draft without sorting the payload', async () => {
+    getUsersMock.mockResolvedValue([{ username: 'alice', roleIds: ['admin', 'admin'] }]);
+    render(() => <UserAssignmentsPanel />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Manage access for alice' }));
+    const dialog = within(await screen.findByRole('dialog', { name: 'Manage access: alice' }));
+    const save = dialog.getByRole('button', { name: 'Save Changes' });
+    const admin = dialog.getByRole('checkbox', { name: /Admin/ });
+    expect(save).toBeDisabled();
+    fireEvent.click(admin);
+    fireEvent.click(admin);
+    expect(save).toBeEnabled();
+    fireEvent.click(save);
+    await waitFor(() =>
+      expect(updateUserRolesMock).toHaveBeenCalledExactlyOnceWith(
+        'alice',
+        ['admin'],
+        expect.objectContaining({ expectedOrgID: 'default', retry: false }),
+      ),
+    );
+  });
+
   it('loads user assignments when the RBAC entitlement is granted', async () => {
     render(() => <UserAssignmentsPanel />);
 
