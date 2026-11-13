@@ -288,7 +288,7 @@ func TestBase64LineWriterStopsOnDestinationFailure(t *testing.T) {
 		err, wantErr                  error
 	}{
 		{"content error", 13, 13, 1, cause, cause},
-		{"line break error", 76, 76, 2, cause, cause},
+		{"complete content error", 76, 76, 1, cause, cause},
 		{"partial line break error", 77, 76, 2, cause, cause},
 		{"next content error", 87, 85, 3, cause, cause},
 		{"short content", 13, 13, 1, nil, io.ErrShortWrite},
