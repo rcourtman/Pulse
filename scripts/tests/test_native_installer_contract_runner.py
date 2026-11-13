@@ -384,7 +384,10 @@ func Example_output() { fmt.Println("installer"); /* Output: installer */ }
                         self.assertIn("--- PASS: " + name, text)
                     else:
                         self.assertIsInstance(errors[0], subprocess.CalledProcessError)
-                        self.assertEqual(errors[0].returncode, 2)
+                        # A direct test binary exits 1 for t.Fatal, whereas the
+                        # Go timeout panic exits 2. Preserve that distinction.
+                        self.assertEqual(errors[0].returncode,
+                                         1 if name.startswith("TestFailed") else 2)
                         self.assertIn("original parent failure" if name.startswith("TestFailed")
                                       else "test timed out after 1s", text)
                 finally:
