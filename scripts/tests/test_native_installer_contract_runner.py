@@ -365,7 +365,12 @@ func Example_output() { fmt.Println("installer"); /* Output: installer */ }
                         except ProcessLookupError:
                             break
                         proc = Path(f"/proc/{pid}/stat")
-                        if proc.exists() and proc.read_text().rsplit(") ", 1)[1].startswith("Z "):
+                        try:
+                            if proc.exists() and proc.read_text().rsplit(") ", 1)[1].startswith("Z "):
+                                break
+                        except FileNotFoundError:
+                            # Init can reap a stopped orphan between exists()
+                            # and read_text(); disappearance is also stop proof.
                             break
                         time.sleep(.01)
                     else:
