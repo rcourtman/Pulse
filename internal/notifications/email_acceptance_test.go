@@ -20,7 +20,7 @@ import (
 // accepted only after the final DATA reply, not when its bytes arrive. QUIT
 // errors deliberately contain private-looking prose: cleanup diagnostics must
 // neither resend the accepted message nor copy that prose into a new log.
-func acceptanceSMTPServer(t *testing.T, mode string, dataCode int, quitReply string) (*EnhancedEmailManager, *atomic.Int32, *atomic.Int32) {
+func acceptanceSMTPServer(t *testing.T, mode string, dataCode int, quitReply string, captures ...chan<- []byte) (*EnhancedEmailManager, *atomic.Int32, *atomic.Int32) {
 	t.Helper()
 	certServer := httptest.NewTLSServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
 	tlsConfig := certServer.TLS.Clone()
@@ -77,7 +77,8 @@ func acceptanceSMTPServer(t *testing.T, mode string, dataCode int, quitReply str
 						if err = conn.PrintfLine("354 Send message"); err != nil {
 							return
 						}
-						if _, err = conn.ReadDotBytes(); err != nil {
+						message, readErr := conn.ReadDotBytes()
+						if err = readErr; err != nil {
 							return
 						}
 						if dataCode == 0 { // No acknowledgement: acceptance is unknown.
@@ -86,6 +87,13 @@ func acceptanceSMTPServer(t *testing.T, mode string, dataCode int, quitReply str
 						err = conn.PrintfLine("%d transaction verdict", dataCode)
 						if err == nil && dataCode == 250 {
 							accepted.Add(1)
+							for _, capture := range captures {
+								select {
+								case capture <- message:
+								default:
+									t.Error("unexpected additional accepted SMTP message")
+								}
+							}
 						}
 					case "QUIT":
 						if quitReply != "" {
