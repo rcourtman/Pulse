@@ -9,13 +9,17 @@ and excludes only the check already executed by preflight. Run at most two
 independent processes together, retaining complete, discovery-ordered output.
 Refill a free slot without waiting for its sibling. An observed failure stops
 admission and drains every already-started check before returning failure.
+Observe process exit independently of inherited output descriptors; a timed-out
+test's child must not keep a proof slot waiting for pipe EOF.
 """
 
 import argparse
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
+import os
 from pathlib import Path
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -25,6 +29,21 @@ ROOT = Path(__file__).resolve().parents[2]
 PACKAGE = "./scripts/installtests"
 PREFLIGHT = ("TestInstallSHNASBootOwnersQuiesceBeforeRecoveryErasure",)
 MAX_CHECKS = 2
+PROCESS_EXIT_GRACE_SECONDS = 5
+
+
+def process_deadline(timeout):
+    # This internal interface uses Go duration strings. Keep Go's own alarm
+    # unchanged, with a separate small allowance to observe its terminal output
+    # and exit. Never admit an unbounded (zero) or malformed duration.
+    parts = re.findall(r"(\d+(?:\.\d+)?)(ms|s|m|h)", timeout)
+    if not parts or "".join(value + unit for value, unit in parts) != timeout:
+        raise ValueError("invalid native installer check timeout")
+    seconds = sum(float(value) * {"ms": .001, "s": 1, "m": 60, "h": 3600}[unit]
+                  for value, unit in parts)
+    if not 0 < seconds < float("inf"):
+        raise ValueError("native installer check timeout must be finite and positive")
+    return seconds + PROCESS_EXIT_GRACE_SECONDS
 
 
 def partition(output):
@@ -49,16 +68,40 @@ def partition(output):
 def run_check(binary, name, *, cwd, timeout="10m", output=None):
     command = [str(binary), "-test.count=1", "-test.timeout=" + timeout,
                "-test.paniconexit0", "-test.v", "-test.run=^" + name + "$"]
+    deadline = process_deadline(timeout)
     completed = False
-    with subprocess.Popen(command, cwd=cwd, stdout=subprocess.PIPE,
-                          stderr=subprocess.STDOUT, text=True) as process:
-        for line in process.stdout:
-            print(line, end="", file=output, flush=output is None)
-            if re.match(r"^--- (PASS|SKIP): " + re.escape(name) + r"(?:\s|$)", line):
-                completed = True
-        code = process.wait()
+    descendants = False
+    # A pipe can stay open after the Go process exits, even after its alarm has
+    # fired. Spool to disk instead: wait observes that exact process, not EOF
+    # from an inherited descriptor. No output-sized in-memory capture.
+    with tempfile.TemporaryFile(mode="w+", encoding="utf-8") as log:
+        # Do not use Popen's context manager: its implicit unbounded wait would
+        # defeat the explicit cleanup bound if observing stop itself failed.
+        process = subprocess.Popen(command, cwd=cwd, stdout=log,
+                                   stderr=subprocess.STDOUT, start_new_session=True)
+        try:
+            try:
+                code = process.wait(timeout=deadline)
+            finally:
+                # The new session owns only this check's process group, not
+                # its concurrent sibling or the caller. Also retire children
+                # left after a normal Go exit before reading the shared log.
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                    descendants = True
+                except ProcessLookupError:
+                    pass
+                process.wait(timeout=PROCESS_EXIT_GRACE_SECONDS)
+        finally:
+            log.seek(0)
+            for line in log:
+                print(line, end="", file=output, flush=output is None)
+                if re.match(r"^--- (PASS|SKIP): " + re.escape(name) + r"(?:\s|$)", line):
+                    completed = True
     if code:
         raise subprocess.CalledProcessError(code, command)
+    if descendants:
+        raise RuntimeError("native installer check left an owned process group: " + name)
     if not completed:
         raise RuntimeError("native installer check did not finish: " + name)
 
