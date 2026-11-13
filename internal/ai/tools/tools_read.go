@@ -243,14 +243,28 @@ func (e *PulseToolExecutor) executeReadExec(ctx context.Context, args map[string
 	return NewTextResult(output), nil
 }
 
+// WildcardRefusalHint is what a refused wildcard should be asked as instead.
+// On 13 November 2026 Patrol's `du -sh /mnt/nvr/*` was refused, and with no
+// other form offered it sized three folders by name and stopped one level
+// above the folder that had filled the disk. Naming the directory passes the
+// same policy and answers the same question.
+const WildcardRefusalHint = "Name the directory instead of using a wildcard. For folder sizes, " +
+	"`du -xh -d 2 <directory>` lists every folder below it with its size; raise -d to go deeper. " +
+	"For a listing, use `ls -la <directory>`."
+
 func sensitiveCommandBlocked(reason string) CallToolResult {
+	details := map[string]interface{}{
+		"reason":          reason,
+		"policy_boundary": "Credential files and process environment values cannot be read through AI tools.",
+	}
+	switch reason {
+	case safety.ReasonPatternCanMatchCredentialFile, safety.ReasonPatternCanMatchSecretsDirectory:
+		details["hint"] = WildcardRefusalHint
+	}
 	return NewToolResponseResult(NewToolBlockedError(
 		"SENSITIVE_COMMAND",
 		fmt.Sprintf("Refusing to run command that touches sensitive paths (%s).", reason),
-		map[string]interface{}{
-			"reason":          reason,
-			"policy_boundary": "Credential files and process environment values cannot be read through AI tools.",
-		},
+		details,
 	))
 }
 
