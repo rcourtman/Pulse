@@ -3847,6 +3847,44 @@ coverage:
 `TestProviderMSPWorkspaceLadderRisesFromTheEvaluation` in
 `pkg/licensing/features_test.go`.
 
+### Provider plan lists distinguish completeness from availability
+
+The native provider plan consumer carries the licence server's optional
+`complete` flag into portal `plans_complete`. Explicit true permits the existing
+five-minute success cache, including a deliberately closed empty catalogue.
+False and absent/null (older server, completeness unknown) retain independently
+verified offers but use a one-minute retry window. Failed HTTP, transport or
+malformed/missing-list reads use the same bounded window, never stale prices or
+an inferred closed catalogue. Concurrent reads share it. A departing caller's
+cancellation is not cached as a platform-wide outage. No timer sends requests;
+the upstream hourly/IP budget is unchanged.
+
+The existing Plan heading flags partial/unknown availability without moving the
+current licence, prices or purchase/apply controls. Explanatory copy and a
+member-readable Reload plans control follow those controls. Known offers stay
+usable even alongside a catalogue error; a missing billing period is marked
+not listed rather than silently selected into an empty view. When only annual
+offers are known, they are selected initially. Complete empty lists have no
+incompleteness warning. Paid-plan billing, lapsed/evaluation messaging,
+read-only purchase restrictions and licence confirmation are unchanged.
+
+`plans_retry_after_seconds` describes the remaining native retry window.
+The portal disables only deliberate catalogue reload during that window; the
+expiry timer enables that same button without replacing focused purchase
+controls or fetching anything. A pending read is not duplicated. A route-level
+failure retains saved licence recovery but withdraws unconfirmed offers until
+an explicit successful read. This is local flow reliability, not installed
+licence recovery, real checkout, mail, customer acceptance or release proof.
+
+Normal Go tests in `internal/cloudcp/provider_msp_plan_catalogue_test.go` cover
+complete/partial/unknown/closed/malformed responses, exact TTL boundaries,
+concurrent and transport failures, caller cancellation, recovered offers and
+retirement of expired prices. Registered `provider_plan.test.ts` covers the
+warning/offer distinction, missing periods, read-only/manual recovery and the
+non-fetching, focus-preserving retry timer. Source-bound desktop/phone,
+light/dark before/after captures exercise native handler snapshots through the
+actual compiled portal API/controller and embedded template with safe fixtures.
+
 ### Provider MSP health monitor recovers clients across upgrades
 
 The health monitor rejoins Traefik and the control plane to each active

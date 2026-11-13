@@ -31,6 +31,7 @@ function evaluationPlan(overrides: Partial<ProviderPlanState> = {}): ProviderPla
     expires_at: '2026-11-22T20:49:54Z',
     workspace_limit: 2,
     purchase_available: true,
+    plans_complete: true,
     plans: [
       { plan_version: 'msp_solo', billing_cycle: 'monthly', unit_amount: 6900, currency: 'usd', workspace_limit: 3 },
       { plan_version: 'msp_solo', billing_cycle: 'annual', unit_amount: 69000, currency: 'usd', workspace_limit: 3 },
@@ -177,6 +178,53 @@ describe('renderProviderPlanHTML', () => {
     expect(html).not.toContain('Choose a plan');
   });
 
+  it.each([false, undefined])('keeps usable offers beside an incomplete/unknown %s catalogue warning', (complete) => {
+    const html = renderProviderPlanHTML(view({ plan: evaluationPlan({ plans_complete: complete, plans_error: 'One price lookup failed.' }) }), true);
+    expect(html).toContain('Buy Solo');
+    expect(html).toContain('$69/mo');
+    expect(html).toContain('Apply my purchase now');
+    expect(html).toContain('One price lookup failed.');
+    expect(html).toContain('data-provider-plan-action="reload-plans"');
+  });
+
+  it('distinguishes a complete closed catalogue from an unknown empty one', () => {
+    const closed = renderProviderPlanHTML(view({ plan: evaluationPlan({ plans: [], purchase_available: false }) }), true);
+    expect(closed).not.toContain('data-provider-plan-catalogue-warning');
+    expect(closed).not.toContain('data-provider-plan-action="reload-plans"');
+    const unknown = renderProviderPlanHTML(view({ plan: evaluationPlan({ plans: [], purchase_available: false, plans_complete: undefined }) }), true);
+    expect(unknown).toContain('Full plan list not confirmed');
+    expect(unknown).toContain('Some plans or billing periods may be missing');
+  });
+
+  it('defaults to a known annual offer when no monthly offer is listed', () => {
+    const html = renderProviderPlanHTML(view({ plan: evaluationPlan({ plans_complete: false, plans: [evaluationPlan().plans[1]] }) }), true);
+    const root = document.createElement('div'); root.innerHTML = html;
+    expect(html).toContain('$690/yr');
+    expect(root.querySelector<HTMLButtonElement>('[data-provider-plan-cycle="monthly"]')!.disabled).toBe(true);
+    expect(root.querySelector('[data-provider-plan-cycle="monthly"]')!.textContent).toBe('Monthly (not listed)');
+    expect(root.querySelector('[data-provider-plan-cycle="annual"]')!.getAttribute('aria-pressed')).toBe('true');
+    expect(html).toContain('data-provider-plan-action="buy"');
+  });
+
+  it('makes a missing annual period explicit without hiding monthly offers', () => {
+    const html = renderProviderPlanHTML(view({ cycle: 'annual', plan: evaluationPlan({ plans_complete: false, plans: [evaluationPlan().plans[0]] }) }), false);
+    const root = document.createElement('div'); root.innerHTML = html;
+    expect(html).toContain('$69/mo');
+    expect(root.querySelector<HTMLButtonElement>('[data-provider-plan-cycle="annual"]')!.disabled).toBe(true);
+    expect(html).toContain('Annual (not listed)');
+    expect(html).toContain('Only an owner or admin');
+    expect(html).not.toContain('data-provider-plan-action="buy"');
+  });
+
+  it('does not show stale offers after a transport failure, but keeps saved licence recovery', () => {
+    const html = renderProviderPlanHTML(view({ error: 'Your plan could not be loaded.' }), true);
+    expect(html).toContain('Free evaluation');
+    expect(html).toContain('Apply my purchase now');
+    expect(html).not.toContain('data-provider-plan-offer');
+    expect(html).toContain('Your plan could not be loaded.');
+    expect(html).toContain('data-provider-plan-action="reload-plans"');
+  });
+
   it('formats amounts in the listed currency', () => {
     expect(formatProviderPlanPrice({ plan_version: 'msp_solo', billing_cycle: 'monthly', unit_amount: 6950, currency: 'eur', workspace_limit: 3 })).toBe('EUR 69.50/mo');
   });
@@ -270,6 +318,59 @@ describe('installProviderPlan', () => {
     await flush();
     expect(api.startCheckout).toHaveBeenCalledWith('a_1', 'msp_solo', 'monthly');
     expect(navigate).toHaveBeenCalledWith('https://checkout.stripe.com/c/pay/cs_test');
+  });
+
+  it('enables only a deliberate catalogue reload after the server retry window', async () => {
+    const partial = evaluationPlan({ plans_complete: false, plans_retry_after_seconds: 60 });
+    api.fetchPlan = vi.fn().mockResolvedValueOnce(partial).mockResolvedValueOnce(evaluationPlan());
+    const { controller } = install(providerBootstrap());
+    await controller.load();
+    const reload = document.querySelector<HTMLButtonElement>('[data-provider-plan-action="reload-plans"]')!;
+    const buy = document.querySelector<HTMLButtonElement>('[data-provider-plan-action="buy"]')!;
+    expect(reload.disabled).toBe(true);
+    click('[data-provider-plan-action="reload-plans"]'); await flush();
+    expect(api.fetchPlan).toHaveBeenCalledTimes(1);
+    expect(timers).toHaveLength(1);
+    vi.mocked(Date.now).mockReturnValue(Date.parse('2026-11-01T00:01:00Z'));
+    buy.focus(); timers.shift()!();
+    expect(reload.disabled).toBe(false);
+    expect(document.activeElement).toBe(buy);
+    expect(document.querySelector('[data-provider-plan-action="buy"]')).toBe(buy);
+    expect(api.fetchPlan).toHaveBeenCalledTimes(1);
+    click('[data-provider-plan-action="reload-plans"]'); await flush();
+    expect(api.fetchPlan).toHaveBeenCalledTimes(2);
+    expect(document.querySelector('[data-provider-plan-catalogue-warning]')).toBeNull();
+    expect(controller.view().plan!.plans_complete).toBe(true);
+    expect(api.startCheckout).not.toHaveBeenCalled();
+    expect(api.refreshLicense).not.toHaveBeenCalled();
+  });
+
+  it('admits one pending plan read and keeps deliberate retry after a route error', async () => {
+    let reject!: (reason: Error) => void;
+    api.fetchPlan = vi.fn().mockImplementationOnce(() => new Promise((_, r) => { reject = r; })).mockResolvedValueOnce(evaluationPlan());
+    const { controller } = install(providerBootstrap());
+    const pending = controller.load();
+    await controller.load();
+    expect(api.fetchPlan).toHaveBeenCalledTimes(1);
+    reject(new Error('Plan request failed.')); await pending;
+    expect(document.body.textContent).toContain('Plan request failed.');
+    expect(timers).toHaveLength(1);
+    vi.mocked(Date.now).mockReturnValue(Date.parse('2026-11-01T00:01:00Z')); timers.shift()!();
+    click('[data-provider-plan-action="reload-plans"]'); await flush();
+    expect(controller.view().error).toBe('');
+    expect(document.body.textContent).toContain('Buy Solo');
+    expect(api.fetchPlan).toHaveBeenCalledTimes(2);
+  });
+
+  it('permits read-only catalogue recovery without purchase or licence writes', async () => {
+    api.fetchPlan = vi.fn().mockResolvedValueOnce(evaluationPlan({ plans_complete: false })).mockResolvedValueOnce(evaluationPlan());
+    const { controller } = install(providerBootstrap(false)); await controller.load();
+    click('[data-provider-plan-action="reload-plans"]'); await flush();
+    expect(api.fetchPlan).toHaveBeenCalledTimes(2);
+    expect(api.startCheckout).not.toHaveBeenCalled();
+    expect(api.openBillingPortal).not.toHaveBeenCalled();
+    expect(api.refreshLicense).not.toHaveBeenCalled();
+    expect(document.querySelector('[data-provider-plan-action="buy"]')).toBeNull();
   });
 
   it('opens the billing portal for a paying provider', async () => {

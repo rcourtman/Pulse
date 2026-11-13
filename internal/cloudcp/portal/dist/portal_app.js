@@ -2806,13 +2806,17 @@
     }
     return '<article class="billing-action-row" data-provider-plan-current="' + escapeAttribute(plan.plan_version) + '"><div class="billing-action-main"><div class="billing-action-copy"><h3>' + escapeText(title) + "</h3><p>" + escapeText(description) + '</p></div><div class="billing-action-meta">' + escapeText(meta.join(" \u2022 ")) + "</div></div>" + (cta ? '<div class="billing-action-cta">' + cta + "</div>" : "") + "</article>";
   }
-  function renderCycleToggle(cycle, hasAnnual) {
-    if (!hasAnnual) return "";
-    function button(value, label) {
+  function renderCycleToggle(cycle, hasMonthly, hasAnnual, incomplete) {
+    if (!hasAnnual && !incomplete) return "";
+    function button(value, label, available) {
       var active = value === cycle;
-      return '<button class="' + (active ? "btn-primary" : "btn-secondary") + ' btn-compact" type="button" data-provider-plan-action="select-cycle" data-provider-plan-cycle="' + value + '" aria-pressed="' + (active ? "true" : "false") + '">' + label + "</button>";
+      return '<button class="' + (active ? "btn-primary" : "btn-secondary") + ' btn-compact" type="button" data-provider-plan-action="select-cycle" data-provider-plan-cycle="' + value + '" aria-pressed="' + (active ? "true" : "false") + '"' + (available ? "" : " disabled") + ">" + label + "</button>";
     }
-    return '<div class="billing-action-meta" role="group" aria-label="Billing period">' + button("monthly", "Monthly") + " " + button("annual", "Annual, 2 months free") + "</div>";
+    return '<div class="billing-action-meta" role="group" aria-label="Billing period">' + button("monthly", hasMonthly ? "Monthly" : "Monthly (not listed)", hasMonthly) + " " + button("annual", hasAnnual ? "Annual, 2 months free" : "Annual (not listed)", hasAnnual) + "</div>";
+  }
+  function renderCatalogueRecovery(view, message, now) {
+    var waiting = (view.reloadReadyAt || 0) > now;
+    return '<div class="provider-plan-catalogue-notice" data-provider-plan-catalogue-warning><p>' + escapeText(message) + '</p><button class="btn-secondary btn-compact" type="button" data-provider-plan-action="reload-plans"' + (view.loading || view.busy || waiting ? " disabled" : "") + ">" + (view.loading ? "Loading plans\u2026" : "Reload plans") + '</button> <span class="billing-action-meta" data-provider-plan-reload-wait>' + (waiting ? "Reload is available in about a minute." : "") + "</span></div>";
   }
   function renderOffer(option, canManage, busy) {
     var name = providerPlanName(option.plan_version);
@@ -2820,7 +2824,12 @@
     return '<article class="billing-action-row" data-provider-plan-offer="' + escapeAttribute(option.plan_version) + '"><div class="billing-action-main"><div class="billing-action-copy"><h3>' + escapeText(name) + "</h3><p>Up to " + escapeText(clientWorkspaces(option.workspace_limit)) + '.</p></div><div class="billing-action-meta">' + escapeText(formatProviderPlanPrice(option)) + "</div></div>" + (action ? '<div class="billing-action-cta">' + action + "</div>" : "") + "</article>";
   }
   function renderProviderPlanHTML(view, canManage, inUse = -1, now = Date.now()) {
-    var parts = ['<div class="billing-section-intro"><h2>Plan</h2></div>'];
+    var plan = view.plan;
+    var choosing = !!plan && (plan.evaluation || planEnded(plan, now));
+    var problem = view.error || choosing && plan.plans_error || "";
+    var incomplete = choosing && !!plan.license_id && plan.plans_complete !== true;
+    var label = view.error ? "Plan could not be refreshed" : problem && !plan?.purchase_available ? "Plan offers unavailable" : incomplete ? plan.plans_complete === false ? "Some plans or periods unavailable" : "Full plan list not confirmed" : "";
+    var parts = ['<div class="billing-section-intro"><h2>Plan' + (label ? '<span class="provider-plan-catalogue-label" role="' + (problem ? "alert" : "status") + '">' + escapeText(label) + "</span>" : "") + "</h2></div>"];
     if (view.notice) {
       parts.push('<p class="billing-action-meta" role="status">' + escapeText(view.notice) + "</p>");
     }
@@ -2829,26 +2838,29 @@
       return parts.join("");
     }
     if (view.error && !view.plan) {
-      parts.push('<p class="billing-action-meta" role="alert">' + escapeText(view.error) + "</p>");
+      parts.push(renderCatalogueRecovery(view, view.error, now));
       return parts.join("");
     }
-    var plan = view.plan;
     if (!plan) return parts.join("");
     parts.push(renderCurrentPlan(plan, canManage, view.busy, inUse, now));
     var ended = planEnded(plan, now);
     if (plan.evaluation || ended) {
-      if (plan.plans_error) {
-        parts.push('<p class="billing-action-meta" role="alert">' + escapeText(plan.plans_error) + "</p>");
-      } else if (plan.purchase_available) {
-        var hasAnnual = plan.plans.some(function(option) {
+      if (!view.error && plan.purchase_available) {
+        var eligible = plan.plans.filter(function(option) {
+          return ended && !plan.evaluation ? option.workspace_limit >= plan.workspace_limit : option.workspace_limit > plan.workspace_limit;
+        });
+        var hasMonthly = eligible.some(function(option) {
+          return option.billing_cycle === "monthly";
+        });
+        var hasAnnual = eligible.some(function(option) {
           return option.billing_cycle === "annual";
         });
-        var cycle = hasAnnual ? view.cycle : "monthly";
-        var offers = plan.plans.filter(function(option) {
-          return option.billing_cycle === cycle && (ended && !plan.evaluation ? option.workspace_limit >= plan.workspace_limit : option.workspace_limit > plan.workspace_limit);
+        var cycle = view.cycle === "annual" ? hasAnnual ? "annual" : "monthly" : hasMonthly ? "monthly" : "annual";
+        var offers = eligible.filter(function(option) {
+          return option.billing_cycle === cycle;
         });
         parts.push('<div class="billing-section-intro"><h3>Choose a plan</h3><p>You pay per client workspace, never per monitored system. Every client workspace is full Pulse.</p></div>');
-        parts.push(renderCycleToggle(cycle, hasAnnual));
+        parts.push(renderCycleToggle(cycle, hasMonthly, hasAnnual, !!incomplete));
         parts.push(offers.map(function(option) {
           return renderOffer(option, canManage, view.busy);
         }).join(""));
@@ -2863,6 +2875,9 @@
       parts.push(
         '<p class="billing-action-meta">' + (plan.evaluation ? "Just paid? " : "Changed your plan? ") + '<button class="btn-secondary btn-compact" type="button" data-provider-plan-action="refresh"' + (view.busy ? " disabled" : "") + ">" + (view.busy === "refresh" ? "Checking\u2026" : plan.evaluation ? "Apply my purchase now" : "Apply it now") + "</button></p>"
       );
+    }
+    if (problem || incomplete) {
+      parts.push(renderCatalogueRecovery(view, problem || (plan.plans_complete === false ? "Some plans or billing periods could not be loaded. You can still choose an offer shown above." : "The full plan list is not confirmed by this server. Some plans or billing periods may be missing; offers shown above remain usable."), now));
     }
     return parts.join("");
   }
@@ -2919,9 +2934,23 @@
       var workspaces = Array.isArray(current.workspaces) ? current.workspaces : [];
       root.innerHTML = renderProviderPlanHTML(view, current.can_manage === true, workspaces.length);
     }
+    function setReloadWindow(seconds) {
+      var delay = Number.isFinite(seconds) ? Math.min(60, Math.max(0, Math.ceil(seconds))) : 0;
+      var readyAt = Date.now() + delay * 1e3;
+      view.reloadReadyAt = readyAt;
+      if (!delay) return;
+      later(function() {
+        if (view.reloadReadyAt !== readyAt) return;
+        var root = document.getElementById(PROVIDER_PLAN_ROOT_ID);
+        var button = root?.querySelector('[data-provider-plan-action="reload-plans"]');
+        if (button) button.disabled = view.loading || !!view.busy;
+        var hint = root?.querySelector("[data-provider-plan-reload-wait]");
+        if (hint) hint.textContent = "";
+      }, delay * 1e3);
+    }
     async function load() {
       var current = account();
-      if (!current) return;
+      if (!current || view.loading) return;
       var epoch = planEpoch;
       view.loading = true;
       render();
@@ -2934,9 +2963,11 @@
         }
         view.plan = plan;
         view.error = "";
+        setReloadWindow(plan.plans_retry_after_seconds || 0);
       } catch (error) {
         if (epoch === planEpoch) {
           view.error = error instanceof Error && error.message ? error.message : "Your plan could not be loaded.";
+          setReloadWindow(60);
         }
       } finally {
         view.loading = false;
@@ -3043,6 +3074,10 @@
       event.preventDefault();
       var action = target.getAttribute("data-provider-plan-action") || "";
       switch (action) {
+        case "reload-plans":
+          if (view.busy || Date.now() < (view.reloadReadyAt || 0)) return;
+          void load();
+          return;
         case "select-cycle":
           view.cycle = target.getAttribute("data-provider-plan-cycle") === "annual" ? "annual" : "monthly";
           render();

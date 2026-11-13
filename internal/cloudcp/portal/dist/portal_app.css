@@ -2180,3 +2180,22 @@ header .logout-btn:hover,
     font-size: 16px;
   }
 }
+.provider-plan-catalogue-label {
+  display: inline-block;
+  vertical-align: middle;
+  margin-left: 12px;
+  padding: 2px 4px;
+  border: 1px solid var(--warn-border);
+  border-radius: 4px;
+  background: var(--warn-subtle);
+  color: var(--warn);
+  font: 500 12px/1.4 var(--font-ui);
+}
+.provider-plan-catalogue-notice {
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--ink-secondary);
+}
+.provider-plan-catalogue-notice p {
+  margin: 0 0 8px;
+}
