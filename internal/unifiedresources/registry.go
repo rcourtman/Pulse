@@ -1762,6 +1762,11 @@ func (rr *ResourceRegistry) uniqueCanonicalIdentityResourceIDLocked(ref string) 
 			matches[rr.linkHoldTargetLocked(resourceID)] = struct{}{}
 		}
 	}
+	rr.forEachAlertSubjectReferenceLocked(func(candidate, resourceID string) {
+		if strings.EqualFold(candidate, ref) {
+			matches[rr.linkHoldTargetLocked(resourceID)] = struct{}{}
+		}
+	})
 	return uniqueResourceIDMatch(matches)
 }
 
@@ -5684,7 +5689,48 @@ func (rr *ResourceRegistry) buildCanonicalIdentityIndexLocked() {
 			indexCandidate(alias, resourceID)
 		}
 	}
+	rr.forEachAlertSubjectReferenceLocked(func(candidate, resourceID string) {
+		indexCandidate(candidate, rr.linkHoldTargetLocked(resourceID))
+	})
 	rr.canonicalIdentityIndex = index
+}
+
+// forEachAlertSubjectReferenceLocked bridges the connection and PBS storage
+// subjects to the same resources the operator-state API uses. These are lookup
+// references, not new resources or replacements for alert/history IDs. Feed
+// them through the normal ambiguity index: a multi-node PVE connection has no
+// single node owner, and a hyphenated PBS storage subject can name two stores.
+// Neither case may pick an arbitrary resource's maintenance window.
+func (rr *ResourceRegistry) forEachAlertSubjectReferenceLocked(visit func(string, string)) {
+	for resourceID, resource := range rr.resources {
+		if CanonicalResourceType(resource.Type) == ResourceTypeAgent && resource.Proxmox != nil {
+			if instance := strings.TrimSpace(resource.Proxmox.Instance); instance != "" {
+				visit("pve:"+instance, resourceID)
+			}
+		}
+	}
+	for sourceID, resourceID := range rr.bySource[SourcePBS] {
+		resource := rr.resources[resourceID]
+		if resource == nil {
+			continue
+		}
+		instanceID, datastore, isDatastore := strings.Cut(sourceID, "/")
+		// The PBS poller uses pbs-<configured name>, while its connection
+		// uses pbs:<configured name>. Do not infer this from a display name
+		// or from a PVE mount that merely has storage type "pbs".
+		name, pollerID := strings.CutPrefix(instanceID, "pbs-")
+		if !pollerID || name == "" {
+			continue
+		}
+		if !isDatastore && resource.PBS != nil {
+			visit("pbs:"+name, resourceID)
+		} else if isDatastore && datastore != "" && CanonicalResourceType(resource.Type) == ResourceTypeStorage && resource.ParentID != nil {
+			parentID := rr.bySource[SourcePBS][instanceID]
+			if parent := rr.resources[parentID]; parent != nil && parent.PBS != nil && *resource.ParentID == parentID {
+				visit(instanceID+"-"+datastore, resourceID)
+			}
+		}
+	}
 }
 
 func (rr *ResourceRegistry) refreshLinkedAgentIDFromParentLocked(resource *Resource) {

@@ -23,6 +23,29 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Maintenance resolves connection and PBS datastore subjects (13 November 2026)
+
+Reference lookups accept the existing PVE/PBS connection subjects and PBS
+poller datastore subjects without changing canonical resource IDs, alert keys,
+metric coordinates or saved operator state. A PVE connection (`pve:<instance>`)
+resolves to its single owning node, including its linked agent. A PBS connection
+(`pbs:<name>`) resolves through the PBS poller's `pbs-<name>` source. A PBS
+storage alert (`pbs-<name>-<datastore>`) resolves through the explicit PBS
+`pbs-<name>/<datastore>` source and its PBS parent, not an arbitrary PVE mount.
+The same reference resolver serves resource API reads and alert intent, so a
+window set on the canonical row covers those subjects. Resource-only scope
+still excludes datastores; descendant scope includes them, and expiry resumes
+normal confirmation and notification.
+
+These references join the existing ambiguity index. No single node's window
+silences a multi-node PVE connection, and a hyphenated datastore subject naming
+two resources resolves to neither. Display-name and hostname guesses do not
+choose an owner. Serialized resource views retain the source provenance needed
+to rebuild this lookup. `registry_test.go` covers the lookup, cross-instance and
+ambiguity controls; `monitor_maintenance_subjects_test.go` covers detectors,
+timed/scope policy, notification callbacks and unchanged recovery/history IDs.
+
+
 ### Docker containers carry the health-probe reason (12 November 2026)
 
 `DockerData.HealthProbe` (JSON `docker.healthProbe`) says why an unhealthy
