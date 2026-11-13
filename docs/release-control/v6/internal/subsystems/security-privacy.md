@@ -1469,6 +1469,10 @@ revocation or rollback of an accepted operation; peer disconnect alone conveys
 no such guarantee. `internal/agenthelper/server_lifecycle_test.go` and the Unix
 lifecycle test in `cmd/pulse-agent-helper/main_test.go` exercise these boundaries
 without changing peer admission, operation authority or durable update recovery.
+Temporary listener failures use a bounded, cancelable 5-ms-to-1-second backoff
+instead of a busy retry loop; successful accepts reset it. The registered
+`server_accept_retry*_test.go` fixtures preserve accepted work and terminal
+cleanup without changing peer grants, connection limits or request deadlines.
 Container inventory is a bounded helper-owned projection of fixed
 Docker/Podman daemon endpoints, never a daemon proxy. Update staging accepts
 only an artifact identity and digest from the fixed collector-owned quarantine;

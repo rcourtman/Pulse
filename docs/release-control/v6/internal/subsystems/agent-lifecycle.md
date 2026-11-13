@@ -29,6 +29,13 @@ the handler joins that close callback before releasing its connection slot.
 An already-ended connection or late `Accept` result does not enter peer
 resolution, and an ended operation context does not dispatch its provider.
 
+Temporary listener errors, including Unix `EMFILE` and `ENFILE`, retry after
+5 ms, doubling to a 1-second ceiling rather than spinning while resources are
+unavailable. A successful `Accept` resets this delay, even if the connection
+limit then rejects the peer. Retry waits are service-context-cancelable and do
+not cancel accepted operations. Permanent listener errors still return their
+original error identity through the existing cooperative drain.
+
 Draining is cooperative with provider code, not forced preemption or a hard
 shutdown deadline. A peer disconnect alone still does not cancel an accepted
 operation or establish rollback/no remote effect. Durable update activation and
@@ -44,6 +51,12 @@ joined close callbacks and the peer-disconnect control. The command-package
 same lifecycle with the actual Unix socket, kernel peer check and typed health
 client. These are source fixtures, not installed systemd or original-host
 acceptance.
+`server_accept_retry_test.go` and its Unix companion use virtual time on the
+production retry path to verify delay growth/capping, reset, cancellation and
+deadline responsiveness, continued delivery of an accepted SMART result, and
+immediate permanent-error handling. Descriptor exhaustion is represented by
+the real wrapped syscall error shapes, not by changing limits or exhausting a
+running host.
 
 ### Rejected agent control-plane redirects do not disclose their destination
 

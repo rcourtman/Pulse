@@ -15,6 +15,8 @@ const (
 	defaultMaxOperationTimeout      = 30 * time.Second
 	defaultPreFrameTimeout          = 2 * time.Second
 	responseWriteTimeout            = 5 * time.Second
+	initialAcceptRetryDelay         = 5 * time.Millisecond
+	maxAcceptRetryDelay             = time.Second
 )
 
 type Peer struct {
@@ -134,9 +136,11 @@ func NewServer(config ServerConfig) (*Server, error) {
 // terminal Accept error closes the listener, cancels accepted operations and
 // joins their handlers before returning. Providers must cooperate with their
 // context; closing a transport does not undo an already accepted operation.
+// Temporary Accept errors back off without interrupting accepted operations.
 func (s *Server) Serve(parent context.Context, listener net.Listener) error {
 	ctx, cancel := context.WithCancel(parent)
 	var handlers sync.WaitGroup
+	var acceptRetryDelay time.Duration
 	listenerClosed := make(chan struct{})
 	stopClose := context.AfterFunc(ctx, func() {
 		_ = listener.Close() // Wake an idle Accept without an external watcher.
@@ -162,10 +166,25 @@ func (s *Server) Serve(parent context.Context, listener net.Listener) error {
 			}
 			var netErr net.Error
 			if errors.As(err, &netErr) && netErr.Temporary() {
+				// Resource exhaustion can fail Accept immediately. Yield instead
+				// of spinning, but let shutdown interrupt even the capped wait.
+				if acceptRetryDelay == 0 {
+					acceptRetryDelay = initialAcceptRetryDelay
+				} else {
+					acceptRetryDelay = min(acceptRetryDelay*2, maxAcceptRetryDelay)
+				}
+				timer := time.NewTimer(acceptRetryDelay)
+				select {
+				case <-ctx.Done():
+					timer.Stop()
+					return nil
+				case <-timer.C:
+				}
 				continue
 			}
 			return fmt.Errorf("accept helper connection: %w", err)
 		}
+		acceptRetryDelay = 0
 		if ctx.Err() != nil {
 			_ = conn.Close() // A late Accept result must not start new work.
 			return nil
