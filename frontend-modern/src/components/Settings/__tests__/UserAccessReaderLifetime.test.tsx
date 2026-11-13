@@ -204,8 +204,10 @@ describe('User Access reader lifetime', () => {
       mutate.mockReturnValueOnce(mutation.promise);
       const { state, refresh } = mountRefreshingReader();
       await loaded(state);
-      if (kind === 'save') await state.openManageAccess(alice);
-      else state.openDeleteUser(alice);
+      if (kind === 'save') {
+        await state.openManageAccess(alice);
+        state.toggleRole('reader');
+      } else state.openDeleteUser(alice);
       const writing = kind === 'save' ? state.handleSaveAssignments() : state.handleDeleteUser();
       refresh();
       await pause();
@@ -272,6 +274,7 @@ describe('User Access reader lifetime', () => {
       const { state, setStatus, refresh, view } = mountRefreshingReader();
       await loaded(state);
       await state.openManageAccess(alice);
+      state.toggleRole('reader');
       const writing = state.handleSaveAssignments();
       const signal = mocks.updateUserRoles.mock.calls.at(-1)![2].signal;
       refresh();
@@ -350,6 +353,7 @@ describe('User Access reader lifetime', () => {
     const { state, setAllowed } = mount();
     await loaded(state);
     await state.openManageAccess(alice);
+    state.toggleRole('reader');
     setAllowed(false);
     await pause();
     expect(state.filteredAssignments()).toEqual([]);
@@ -368,6 +372,7 @@ describe('User Access reader lifetime', () => {
     const { state } = mount();
     await loaded(state);
     await state.openManageAccess(alice);
+    state.toggleRole('reader');
     const saving = state.handleSaveAssignments();
     await pause();
     mocks.getUsers.mockResolvedValueOnce([bob]);
@@ -395,6 +400,7 @@ describe('User Access reader lifetime', () => {
     const { state, setAllowed } = mount();
     await loaded(state);
     await state.openManageAccess(alice);
+    state.toggleRole('reader');
     setAllowed(false);
     await pause();
     mocks.getUsers.mockResolvedValueOnce([bob]);
@@ -423,6 +429,7 @@ describe('User Access reader lifetime', () => {
     const { state } = mount();
     await loaded(state);
     await state.openManageAccess(alice);
+    state.toggleRole('reader');
     mocks.org = 'south';
     await state.handleSaveAssignments();
     state.openDeleteUser(alice);
@@ -443,8 +450,9 @@ describe('User Access reader lifetime', () => {
     expect(mocks.getUsers).toHaveBeenCalledWith(options);
     expect(mocks.getRoles).toHaveBeenCalledWith(options);
     expect(mocks.getUserPermissions).toHaveBeenCalledWith(alice.username, options);
+    state.toggleRole('reader');
     await state.handleSaveAssignments();
-    expect(mocks.updateUserRoles).toHaveBeenCalledWith(alice.username, ['reader'], options);
+    expect(mocks.updateUserRoles).toHaveBeenCalledWith(alice.username, [], options);
     state.openDeleteUser(alice);
     await state.handleDeleteUser();
     expect(mocks.deleteUser).toHaveBeenCalledWith(alice.username, options);
@@ -456,6 +464,7 @@ describe('User Access reader lifetime', () => {
     const { state } = mount();
     await loaded(state);
     await state.openManageAccess(alice);
+    state.toggleRole('reader');
     const save = state.handleSaveAssignments();
     state.toggleRole('reader');
     state.closeModal();
@@ -464,7 +473,7 @@ describe('User Access reader lifetime', () => {
     await state.handleDeleteUser();
     expect(mocks.updateUserRoles).toHaveBeenCalledTimes(1);
     expect(mocks.deleteUser).not.toHaveBeenCalled();
-    expect(state.formRoleIds()).toEqual(['reader']);
+    expect(state.formRoleIds()).toEqual([]);
     expect(state.showModal()).toBe(true);
     pending.resolve();
     await save;
@@ -576,6 +585,7 @@ describe('User Access reader lifetime', () => {
     const { state } = mount();
     await loaded(state);
     await state.openManageAccess(alice);
+    state.toggleRole('reader');
     const oldRefresh = deferred<UserRoleAssignment[]>();
     mocks.getUsers.mockReturnValueOnce(oldRefresh.promise);
     const save = state.handleSaveAssignments();
@@ -651,6 +661,7 @@ describe('User Access reader lifetime', () => {
     const { state } = mount();
     await loaded(state);
     await state.openManageAccess(alice);
+    state.toggleRole('reader');
     await state.handleSaveAssignments();
     expect(state.successNotice()).toBe(`Roles updated for ${alice.username}`);
     expect(mocks.success).not.toHaveBeenCalled();
@@ -752,6 +763,7 @@ describe('User Access reader lifetime', () => {
       const { state } = mount();
       await loaded(state);
       await state.openManageAccess(alice);
+      state.toggleRole('reader');
       await state.handleSaveAssignments();
       const warning = state.unconfirmedChange();
       const checking = deferred<UserRoleAssignment[]>();
@@ -787,6 +799,7 @@ describe('User Access reader lifetime', () => {
     await loaded(state);
     const reading = state.openManageAccess(alice);
     const signal = mocks.getUserPermissions.mock.calls.at(-1)![1].signal;
+    state.toggleRole('reader');
     await state.handleSaveAssignments();
     expect(signal.aborted).toBe(true);
     permissions.resolve([{ action: '*', resource: 'obsolete saved permissions' }]);

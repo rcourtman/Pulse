@@ -293,6 +293,7 @@ export const UserAssignmentsPanel: Component<UserAssignmentsPanelProps> = (props
         permissionsError={state.permissionsError()}
         roles={state.roles()}
         saving={state.saving()}
+        hasRoleChanges={state.hasRoleChanges()}
         userPermissions={state.userPermissions()}
         onClose={state.closeModal}
         onSave={state.handleSaveAssignments}

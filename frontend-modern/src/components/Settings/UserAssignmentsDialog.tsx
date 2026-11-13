@@ -66,6 +66,7 @@ interface UserAssignmentsDialogProps {
   permissionsError: string | null;
   roles: Role[];
   saving: boolean;
+  hasRoleChanges: boolean;
   userPermissions: Permission[] | null;
   onClose: () => void;
   onSave: () => void;
@@ -244,7 +245,7 @@ export const UserAssignmentsDialog: Component<UserAssignmentsDialogProps> = (pro
             <button
               type="button"
               onClick={props.onSave}
-              disabled={props.saving}
+              disabled={props.saving || !props.hasRoleChanges}
               class="inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-md bg-blue-600 px-6 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {props.saving ? 'Applying...' : 'Save Changes'}

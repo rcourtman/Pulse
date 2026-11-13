@@ -38,6 +38,15 @@ export function useUserAssignmentsPanelState(props: UserAssignmentsPanelProps = 
   );
   const [inventoryLoaded, setInventoryLoaded] = createSignal(false);
   const [unconfirmedChange, setUnconfirmedChange] = createSignal<string | null>(null);
+  const hasRoleChanges = createMemo(() => {
+    const user = editingUser();
+    if (!user) return false;
+    // Role membership is unordered. Compare exact saved keys, including those
+    // absent from the catalogue, without changing the eventual write payload.
+    const saved = new Set(user.roleIds);
+    const selected = new Set(formRoleIds());
+    return saved.size !== selected.size || [...selected].some((id) => !saved.has(id));
+  });
 
   const featureGate = useRBACFeatureGateState({
     kind: 'user-assignments',
@@ -339,7 +348,7 @@ export function useUserAssignmentsPanelState(props: UserAssignmentsPanelProps = 
   };
   const handleSaveAssignments = async () => {
     const user = editingUser();
-    if (showModal() && user) await mutateUser(user, 'save');
+    if (showModal() && user && hasRoleChanges()) await mutateUser(user, 'save');
   };
   const toggleRole = (roleId: string) => {
     if (!showModal() || !canEdit() || !roles().some((role) => role.id === roleId)) return;
@@ -363,6 +372,7 @@ export function useUserAssignmentsPanelState(props: UserAssignmentsPanelProps = 
     featureGate,
     filteredAssignments,
     formRoleIds,
+    hasRoleChanges,
     handleSaveAssignments,
     handleDeleteUser,
     loading,
