@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "base_sha": "b127253fc0b21a143561b703e22f54674ecd3d6d",
+  "verified_at": "2026-11-13T22:17:39.526754Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/UserAssignmentsDialog.tsx",
+    "frontend-modern/src/components/Settings/useUserAssignmentsPanelState.ts",
+    "frontend-modern/src/utils/rbacPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/UserAssignmentsDialog.tsx": "eb5323be80cba24b4655cbb28044ed2f69ec30d543548dad1daa80263a9ad20d",
+    "frontend-modern/src/components/Settings/useUserAssignmentsPanelState.ts": "5b94134b4a2dc6e07c72b2a9a120f6ddc40e781f6f4c45087bd3ad298dec50d1",
+    "frontend-modern/src/utils/rbacPresentation.ts": "cc6aa84f70bcee45a2940211d50107599de9c04576442b7753159970a7cbeea8"
+  },
+  "routes": [
+    "/settings/security/users (isolated native Settings shell and User Access panel; safe HTTP fixtures, not full App routing)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Comparable unchanged, changed and toggled-back role selections at desktop and phone in light/dark Chromium, plus narrow dark WebKit. All 30 captures / 15 pairs were individually opened with native view_image after dialog animation settled.",
+    "Full saved principal, each namesake role ID and description, saved-permission badges/qualifier, kept unlisted role ID and Close/Cancel/Save remain in place. Only unchanged or reverted Save Changes becomes disabled; a real changed selection remains enabled.",
+    "Real SettingsPageShell, UserAssignmentsPanel, UserAssignmentsDialog, state owner, capability store, RBACAPI and API client consume synthetic local HTTP. No live authorization, IdP, original-client, installed or released recovery established.",
+    "Final shared sameRoleIDs comparison is compiled into both the rendered disabled condition and private save admission. All 92 compiled source hashes match this containing source. Fresh browser proof follows the bundle-budget repair; earlier-source captures and failed budget checks are retained separately."
+  ],
+  "interactions": [
+    "Native button activation on unchanged and reverted selections dispatches one PUT per before case and zero per after case across five browser/viewport/theme groups; no automatic writes.",
+    "Changed selection dispatches exactly one org/token/CSRF-bound PUT, preserves the unlisted saved ID and suppresses another activation while pending. Successful readback reopens unchanged with Save disabled. Explicitly clearing the last known role sends roleIds: [].",
+    "Checked title, identity, both role controls and action containment, no horizontal overflow or page exception. Playwright 1.56.1 matches the integration lock; Chromium 141.0.7390.37 and WebKit 26.0."
+  ],
+  "evidence": [
+    "RECEIPTS.md",
+    "CAPTURES.md",
+    "CAPTURES.json",
+    "BROWSER-BEFORE.json",
+    "BROWSER-AFTER.json"
+  ]
+}
