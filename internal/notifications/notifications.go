@@ -4061,7 +4061,7 @@ func templateFuncMap() template.FuncMap {
 
 // generatePayloadFromTemplateWithService renders the payload using Go templates with service-specific handling
 func (n *NotificationManager) generatePayloadFromTemplateWithService(templateStr string, data WebhookPayloadData, service string) ([]byte, error) {
-	tmpl, err := template.New("webhook").Funcs(templateFuncMap()).Parse(templateStr)
+	tmpl, err := webhookPayloadTemplate(templateStr)
 	if err != nil {
 		return nil, failNotificationConfiguration("invalid template", err)
 	}
