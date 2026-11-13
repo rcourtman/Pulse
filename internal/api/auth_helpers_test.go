@@ -1111,6 +1111,7 @@ func TestCheckAuth_NoAuthConfigured(t *testing.T) {
 	}
 	req := httptest.NewRequest("GET", "/api/test", nil)
 	req.RemoteAddr = "127.0.0.1:12345"
+	req.Host = "localhost"
 	w := httptest.NewRecorder()
 
 	result := CheckAuth(cfg, w, req)

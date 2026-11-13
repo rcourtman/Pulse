@@ -64,10 +64,14 @@ class RecoveryAPIReferenceTest(unittest.TestCase):
             self.assertIn(marker, text)
 
     def test_session_is_local_and_the_reference_does_not_offer_cookie_transfer(self):
-        router = (ROOT / "internal/api/router.go").read_text()
-        loopback = router.split("func isDirectLoopbackRequest(", 1)[1].split("\nfunc ", 1)[0]
-        for marker in ("ip.IsLoopback()", '"X-Forwarded-For"', '"Forwarded"', '"X-Real-IP"'):
+        trust = (ROOT / "internal/api/loopback_trust.go").read_text()
+        loopback = trust.split("func isDirectLoopbackRequest(", 1)[1].split("\nfunc ", 1)[0]
+        for marker in ("ip.IsLoopback()", "loopbackProxyHeaders", "isLocalRequestHost(req.Host)",
+                       "isSameOriginOrNonBrowserRequest(req)"):
             self.assertIn(marker, loopback)
+        proxy_headers = trust.split("var loopbackProxyHeaders", 1)[1].split("\n}", 1)[0]
+        for marker in ('"X-Forwarded-For"', '"Forwarded"', '"X-Real-IP"'):
+            self.assertIn(marker, proxy_headers)
         auth = (ROOT / "internal/api/auth.go").read_text().split(
             "func requestMatchesRecoverySession(", 1)[1].split("\nfunc ", 1)[0]
         for marker in ("session.RecoveryBypass", "isDirectLoopbackRequest(r)",

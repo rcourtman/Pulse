@@ -4977,6 +4977,14 @@ and tenant-scoped access/entitlement remain unchanged. The executable controls
 in `internal/api/audit_handlers_test.go` preserve selected destinations after
 rejection; they establish neither receiver delivery nor installed recovery.
 
+Loopback trust in `internal/api/loopback_trust.go` and the client address
+from `GetClientIP` change no agent route. Agents authenticate with tokens, which
+outrank loopback trust, so agent enrollment, reporting, commands and uninstall
+are unchanged. Two things move: an agent behind an appending proxy is now
+recorded, locked out and rate limited by the proxy-appended hop, and an agent
+on the Pulse host that addresses Pulse by hostname rather than `localhost`
+loses the loopback rate-limit exemption.
+
 ## Forbidden Paths
 
 1. New install or update continuity behavior hidden only inside broad monitoring ownership.

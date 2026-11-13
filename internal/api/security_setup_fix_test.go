@@ -94,6 +94,7 @@ func TestQuickSecuritySetupRequiresBootstrapToken(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/api/security/quick-setup", strings.NewReader(payload))
 	req.RemoteAddr = "127.0.0.1:54321"
+	req.Host = "localhost"
 	rr := httptest.NewRecorder()
 	handler(rr, req)
 	if rr.Code != http.StatusUnauthorized {
@@ -116,6 +117,7 @@ func TestQuickSecuritySetupRequiresBootstrapToken(t *testing.T) {
 
 	reqLoopback := httptest.NewRequest(http.MethodPost, "/api/security/quick-setup", strings.NewReader(payload))
 	reqLoopback.RemoteAddr = "127.0.0.1:54321"
+	reqLoopback.Host = "localhost"
 	reqLoopback.Header.Set(bootstrapTokenHeader, bootstrapToken)
 
 	rrLoopback := httptest.NewRecorder()
@@ -332,6 +334,7 @@ func TestValidateBootstrapTokenEndpoint_RateLimited(t *testing.T) {
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/api/security/validate-bootstrap-token", strings.NewReader(`{"token":"deadbeef"}`))
 	req.RemoteAddr = "127.0.0.1:1234"
+	req.Host = "localhost"
 	handler.ServeHTTP(rr, req)
 	if rr.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401 for first invalid token, got %d (%s)", rr.Code, rr.Body.String())
@@ -340,6 +343,7 @@ func TestValidateBootstrapTokenEndpoint_RateLimited(t *testing.T) {
 	rr = httptest.NewRecorder()
 	req = httptest.NewRequest(http.MethodPost, "/api/security/validate-bootstrap-token", strings.NewReader(`{"token":"deadbeef"}`))
 	req.RemoteAddr = "127.0.0.1:1234"
+	req.Host = "localhost"
 	handler.ServeHTTP(rr, req)
 	if rr.Code != http.StatusTooManyRequests {
 		t.Fatalf("expected 429 after exhausting bootstrap token validation limit, got %d (%s)", rr.Code, rr.Body.String())
@@ -387,6 +391,7 @@ func TestQuickSecuritySetupAllowsRecoveryTokenRotation(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/security/quick-setup", strings.NewReader(body))
 	req.Header.Set("X-Recovery-Token", token)
 	req.RemoteAddr = "127.0.0.1:54321"
+	req.Host = "localhost"
 
 	rr := httptest.NewRecorder()
 	handler := handleQuickSecuritySetupFixed(router)

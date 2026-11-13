@@ -139,6 +139,7 @@ func TestHandleOAuthDisconnect_AuthFailure(t *testing.T) {
 	handler := &AISettingsHandler{}
 	req := httptest.NewRequest(http.MethodPost, "/api/ai/oauth/disconnect", nil)
 	req.RemoteAddr = "127.0.0.1:12345"
+	req.Host = "localhost"
 	rr := httptest.NewRecorder()
 
 	handler.HandleOAuthDisconnect(rr, req)
@@ -169,6 +170,7 @@ func TestHandleOAuthDisconnect_Success(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/api/ai/oauth/disconnect", nil)
 	req.RemoteAddr = "127.0.0.1:12345"
+	req.Host = "localhost"
 	rr := httptest.NewRecorder()
 
 	handler.HandleOAuthDisconnect(rr, req)
@@ -208,6 +210,7 @@ func TestHandleOAuthDisconnect_NilPersistence(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/api/ai/oauth/disconnect", nil)
 	req.RemoteAddr = "127.0.0.1:12345"
+	req.Host = "localhost"
 	rr := httptest.NewRecorder()
 
 	handler.HandleOAuthDisconnect(rr, req)
@@ -247,6 +250,7 @@ func TestHandleOAuthDisconnect_TenantIsolation(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/api/ai/oauth/disconnect", nil)
 	req.RemoteAddr = "127.0.0.1:12345"
+	req.Host = "localhost"
 	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "tenant-a"))
 	rr := httptest.NewRecorder()
 

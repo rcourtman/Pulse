@@ -176,7 +176,10 @@ func GetClientIP(r *http.Request) string {
 
 	// Only trust proxy headers when the immediate peer is trusted.
 	if isTrustedProxyIP(rawRemoteIP) {
-		if forwarded := firstValidForwardedIP(r.Header.Get("X-Forwarded-For")); forwarded != "" {
+		if forwarded, present := forwardedClientIP(r.Header.Values("X-Forwarded-For")); present {
+			if forwarded == "" {
+				return rawRemoteIP
+			}
 			return forwarded
 		}
 
@@ -323,18 +326,53 @@ func extractRemoteIP(remoteAddr string) string {
 	return strings.Trim(remoteAddr, "[]")
 }
 
-func firstValidForwardedIP(header string) string {
-	if header == "" {
-		return ""
-	}
-	for _, part := range strings.Split(header, ",") {
-		part = strings.TrimSpace(strings.Trim(part, "[]"))
-		if part == "" {
-			continue
+// forwardedClientIP reads the client address from X-Forwarded-For values sent
+// by a trusted proxy. A proxy that appends keeps whatever the client sent on
+// the left, so the client is the right-most hop that is not itself a trusted
+// proxy; earlier entries are the client's own claims. Several header lines are
+// read as one list, in order.
+//
+// present is false when the header carries no entries at all, so the caller
+// can fall back to X-Real-IP. An entry that is not an address stops the walk
+// and returns "", because nothing to its left can be attributed; the caller
+// then uses the proxy's own address. When every hop is trusted the left-most
+// is returned.
+func forwardedClientIP(values []string) (ip string, present bool) {
+	var hops []string
+	for _, value := range values {
+		for _, part := range strings.Split(value, ",") {
+			if part = strings.TrimSpace(part); part != "" {
+				hops = append(hops, part)
+			}
 		}
+	}
+	if len(hops) == 0 {
+		return "", false
+	}
 
-		if net.ParseIP(part) != nil {
-			return part
+	leftMost := ""
+	for i := len(hops) - 1; i >= 0; i-- {
+		hop := parseForwardedHop(hops[i])
+		if hop == "" {
+			return "", true
+		}
+		if !isTrustedProxyIP(hop) {
+			return hop, true
+		}
+		leftMost = hop
+	}
+	return leftMost, true
+}
+
+// parseForwardedHop accepts an X-Forwarded-For entry written as an address,
+// a bracketed IPv6 address, or either with a port, and returns the address.
+func parseForwardedHop(hop string) string {
+	if ip := net.ParseIP(strings.Trim(hop, "[]")); ip != nil {
+		return ip.String()
+	}
+	if host, _, err := net.SplitHostPort(hop); err == nil {
+		if ip := net.ParseIP(host); ip != nil {
+			return ip.String()
 		}
 	}
 	return ""

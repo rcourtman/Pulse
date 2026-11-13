@@ -197,26 +197,6 @@ func pulseBinDir() string {
 	return "/opt/pulse/bin"
 }
 
-func isDirectLoopbackRequest(req *http.Request) bool {
-	if req == nil {
-		return false
-	}
-
-	remote := extractRemoteIP(req.RemoteAddr)
-	ip := net.ParseIP(remote)
-	if ip == nil || !ip.IsLoopback() {
-		return false
-	}
-
-	if req.Header.Get("X-Forwarded-For") != "" ||
-		req.Header.Get("Forwarded") != "" ||
-		req.Header.Get("X-Real-IP") != "" {
-		return false
-	}
-
-	return true
-}
-
 // NewRouter creates a new router instance
 func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, mtMonitor *monitoring.MultiTenantMonitor, wsHub *websocket.Hub, reloadFunc func() error, serverVersion string) *Router {
 	// Initialize persistent auth stores and capture the exact workers this router owns.

@@ -5133,6 +5133,14 @@ unchanged. `internal/api/audit_handlers_test.go` pins both methods, duplicate
 aliases, preserved destinations, singleton compatibility and complete-body
 bounds. This proves configuration preservation, not external receiver delivery.
 
+`isDirectLoopbackRequest` now also requires a local `Host` (`localhost`,
+`*.localhost` or a loopback literal), no reverse-proxy forwarding header and
+no browser request from another origin, and `GetClientIP` reads the right-most
+`X-Forwarded-For` hop not in `PULSE_TRUSTED_PROXY_CIDRS` across every header
+line. No payload shape changes: a refused loopback request gets the same 401
+or 403 a remote client gets. `internal/api/loopback_trust_test.go` and
+`internal/api/client_ip_test.go` pin both rules.
+
 ## Forbidden Paths
 
 1. Handler-local payload shape drift without a contract test

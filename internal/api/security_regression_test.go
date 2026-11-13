@@ -3981,6 +3981,7 @@ func TestApplyRestartRequiresBootstrapTokenBeforeAuthentication(t *testing.T) {
 			req := httptest.NewRequest(http.MethodPost, "/api/security/apply-restart", nil)
 			if tt.token == bootstrapToken {
 				req.RemoteAddr = "127.0.0.1:54321"
+				req.Host = "localhost"
 			} else {
 				req.RemoteAddr = fmt.Sprintf("198.51.100.%d:54321", 101+i)
 			}

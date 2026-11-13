@@ -4503,6 +4503,12 @@ and tenant-scoped access/entitlement remain unchanged. The executable controls
 in `internal/api/audit_handlers_test.go` preserve selected destinations after
 rejection; they establish neither receiver delivery nor installed recovery.
 
+Loopback trust in `internal/api/loopback_trust.go` gates authentication
+recovery, not storage or backup recovery. Requiring a local `Host` and a
+same-origin or non-browser request opens no storage, backup or restore path, and
+`GetClientIP` choosing the right-most untrusted forwarded hop changes no
+storage-recovery payload.
+
 ## Forbidden Paths
 
 1. Reintroducing storage or recovery product logic as ad hoc dashboard-only summaries without a canonical page-surface owner

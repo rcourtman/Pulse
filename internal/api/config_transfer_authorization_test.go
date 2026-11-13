@@ -64,6 +64,7 @@ func configTransferRequest(t *testing.T, router *Router, path, remoteAddr, body 
 	counted := &countingConfigTransferBody{reader: strings.NewReader(body)}
 	req := httptest.NewRequest(http.MethodPost, path, counted)
 	req.RemoteAddr = remoteAddr
+	req.Host = "localhost"
 	rec := httptest.NewRecorder()
 	router.Handler().ServeHTTP(rec, req)
 	return rec, counted
