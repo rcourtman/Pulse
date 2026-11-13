@@ -37,7 +37,7 @@ func referenceNotificationTagMatch(alert *alerts.Alert, filter []string, mode st
 	if len(filter) == 0 {
 		return true
 	}
-	tags := notificationAlertTags(alert)
+	tags := referenceNotificationCollectedTags(alert)
 	if len(tags) == 0 {
 		return false
 	}
