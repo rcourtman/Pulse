@@ -218,7 +218,7 @@ export function renderProviderPlanHTML(view: ProviderPlanView, canManage: boolea
       });
       var hasMonthly = eligible.some(function(option) { return option.billing_cycle === 'monthly'; });
       var hasAnnual = eligible.some(function(option) { return option.billing_cycle === 'annual'; });
-      var cycle = view.cycle === 'annual' ? (hasAnnual ? 'annual' : 'monthly') : (hasMonthly ? 'monthly' : 'annual');
+      var cycle: 'monthly' | 'annual' = view.cycle === 'annual' ? (hasAnnual ? 'annual' : 'monthly') : (hasMonthly ? 'monthly' : 'annual');
       var offers = eligible.filter(function(option) { return option.billing_cycle === cycle; });
       parts.push('<div class="billing-section-intro"><h3>Choose a plan</h3><p>You pay per client workspace, never per monitored system. Every client workspace is full Pulse.</p></div>');
       parts.push(renderCycleToggle(cycle, hasMonthly, hasAnnual, !!incomplete));
