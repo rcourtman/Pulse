@@ -293,30 +293,6 @@ func (m *Monitor) resolveGuestStatusMemory(
 	derivedTotalMinusUsedTotal := uint64(0)
 	selectedUsed := uint64(0)
 	hasSelectedUsed := false
-	if status.MemInfo != nil {
-		memInfoTotal := memTotal
-		if status.MemInfo.Total > 0 {
-			memInfoTotal = status.MemInfo.Total
-		}
-		memAvailable, memorySource = deriveGuestMemInfoAvailable(status.MemInfo, guestRaw)
-		hasMemAvailable = memorySource != ""
-		if memInfoTotal == 0 || memInfoTotal > math.MaxInt64 || memAvailable > memInfoTotal ||
-			(memTotal > 0 && memInfoTotal > memTotal) {
-			memAvailable = 0
-			hasMemAvailable = false
-			memorySource = ""
-		}
-		if memorySource == "derived-total-minus-used" {
-			derivedTotalMinusUsedAvailable = memAvailable
-			derivedTotalMinusUsedTotal = memInfoTotal
-			memAvailable = 0
-			hasMemAvailable = false
-			memorySource = ""
-		} else if hasMemAvailable {
-			memTotal = memInfoTotal
-		}
-	}
-
 	selectLinkedAgentMemory := func(requireCurrent bool) {
 		agentHost, ok := vmIDToHostAgent[guestID]
 		if !ok ||
@@ -347,12 +323,40 @@ func (m *Monitor) resolveGuestStatusMemory(
 			Msg("QEMU memory: using linked Pulse host agent memory (excludes page cache)")
 	}
 
-	// A current linked agent is as cache-aware as /proc/meminfo. Taking it first
-	// keeps this file-read off the guest's shared agent channel, where a command
-	// in flight when a freeze starts can break the thaw (#2439). A last-known
-	// sample ranks below the read.
-	if !hasMemAvailable {
-		selectLinkedAgentMemory(true)
+	// A current linked agent outranks every Proxmox-side reading. It is as
+	// cache-aware as /proc/meminfo and also counts the ZFS ARC as reclaimable,
+	// which the kernel's MemAvailable does not: a TrueNAS or other ZFS guest
+	// whose status meminfo reads 91% used is 14% used to its own agent (#4340).
+	// Taking it first also keeps the /proc/meminfo file-read off the guest's
+	// shared agent channel, where a command in flight when a freeze starts can
+	// break the thaw (#2439). A last-known sample ranks below the read.
+	selectLinkedAgentMemory(true)
+
+	if status.MemInfo != nil && hasSelectedUsed {
+		// Diagnostics keep the status sample the agent outranked.
+		deriveGuestMemInfoAvailable(status.MemInfo, guestRaw)
+	} else if status.MemInfo != nil {
+		memInfoTotal := memTotal
+		if status.MemInfo.Total > 0 {
+			memInfoTotal = status.MemInfo.Total
+		}
+		memAvailable, memorySource = deriveGuestMemInfoAvailable(status.MemInfo, guestRaw)
+		hasMemAvailable = memorySource != ""
+		if memInfoTotal == 0 || memInfoTotal > math.MaxInt64 || memAvailable > memInfoTotal ||
+			(memTotal > 0 && memInfoTotal > memTotal) {
+			memAvailable = 0
+			hasMemAvailable = false
+			memorySource = ""
+		}
+		if memorySource == "derived-total-minus-used" {
+			derivedTotalMinusUsedAvailable = memAvailable
+			derivedTotalMinusUsedTotal = memInfoTotal
+			memAvailable = 0
+			hasMemAvailable = false
+			memorySource = ""
+		} else if hasMemAvailable {
+			memTotal = memInfoTotal
+		}
 	}
 
 	triedGuestAgentMemAvailable := false

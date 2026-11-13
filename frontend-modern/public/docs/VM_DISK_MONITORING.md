@@ -320,8 +320,10 @@ guest incidents. Table filters and alert suppression do not stop API polling.
 | Filesystem usage and guest information | `VM.GuestAgent.Audit` | `VM.Monitor` |
 | Reading Linux guest memory via `/proc/meminfo` | Also `VM.GuestAgent.FileRead` | `VM.Monitor` |
 
-A VM with a current linked Pulse Agent takes its memory from that agent and
-skips the `/proc/meminfo` read.
+A VM with a current linked Pulse Agent takes its memory from that agent, ahead
+of the Proxmox status reading, and skips the `/proc/meminfo` read. The agent
+treats the ZFS ARC as reclaimable cache, so a TrueNAS VM shows the same memory
+on the Proxmox page as on the TrueNAS page.
 
 Windows has no `/proc/meminfo`. A failure reading that Linux path is not evidence
 that Windows filesystem collection needs `VM.GuestAgent.FileRead` or that the
