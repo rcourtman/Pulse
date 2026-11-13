@@ -3,6 +3,7 @@ package dockeragent
 import (
 	"context"
 	"io"
+	"strconv"
 
 	containertypes "github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/image"
@@ -142,6 +143,10 @@ type dockerClient interface {
 	ContainerInspectWithRaw(ctx context.Context, containerID string, size bool) (containertypes.InspectResponse, []byte, error)
 	ContainerStatsOneShot(ctx context.Context, containerID string) (dockerStatsResponseReader, error)
 	ContainerInspect(ctx context.Context, containerID string) (containertypes.InspectResponse, error)
+	// ContainerLogTail returns the raw stream of the container's last lines
+	// of stdout and stderr. The stream is multiplexed unless the container
+	// has a TTY.
+	ContainerLogTail(ctx context.Context, containerID string, lines int) (io.ReadCloser, error)
 	ImagePull(ctx context.Context, ref string, options dockerImagePullOptions) (io.ReadCloser, error)
 	ContainerStop(ctx context.Context, containerID string, options dockerContainerStopOptions) error
 	ContainerRestart(ctx context.Context, containerID string, options dockerContainerRestartOptions) error
@@ -211,6 +216,14 @@ func (m *mobyDockerClient) ContainerStatsOneShot(ctx context.Context, containerI
 		return dockerStatsResponseReader{}, err
 	}
 	return dockerStatsResponseReader{Body: result.Body}, nil
+}
+
+func (m *mobyDockerClient) ContainerLogTail(ctx context.Context, containerID string, lines int) (io.ReadCloser, error) {
+	return m.Client.ContainerLogs(ctx, containerID, client.ContainerLogsOptions{
+		ShowStdout: true,
+		ShowStderr: true,
+		Tail:       strconv.Itoa(lines),
+	})
 }
 
 func (m *mobyDockerClient) ContainerInspect(ctx context.Context, containerID string) (containertypes.InspectResponse, error) {

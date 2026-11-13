@@ -21,6 +21,18 @@
 
 ## Purpose
 
+### Docker containers can carry their last log lines (13 November 2026)
+
+`agentsdocker.Container` gains an optional `failureLog` object: `reason`
+(`exited`, `oom_killed`, `restarting`, `unhealthy`), `lines`, `truncated`,
+`redactions` and `capturedAt`. An agent sends it only when its operator set
+`--enable-failure-logs`, and only for a failed container, so most reports
+never carry it. It reaches clients as `models.DockerContainer.failureLog` and
+the unified resource's `docker.failureLog`, and reaches Patrol and the
+Assistant as `failure_log` on the single-container payload, never on the
+topology summary. A client renders the lines as text. `reason` is a closed
+set.
+
 ### Docker containers carry why a health check fails (12 November 2026)
 
 `agentsdocker.Container` gains an optional `healthProbe` object: `reason`,

@@ -323,6 +323,7 @@ func (a *Agent) collectContainers(ctx context.Context) ([]agentsdocker.Container
 		containers = append(containers, container)
 	}
 	a.pruneStaleCPUSamples(active)
+	a.failureLogs.prune(active)
 	a.pruneInactiveContainerInspectCache(active)
 	a.registryChecker.pruneLocalImages(activeImages)
 	return containers, nil
@@ -646,6 +647,7 @@ func (a *Agent) collectContainer(ctx context.Context, summary containertypes.Sum
 		healthcheckTargets = extractHealthcheckTargets(inspect.Config.Healthcheck.Test)
 	}
 	healthProbe := containerHealthProbe(inspect.State.Health)
+	failureLog := a.containerFailureLog(ctx, summary.ID, inspect)
 
 	ports := make([]agentsdocker.ContainerPort, len(summary.Ports))
 	for i, port := range summary.Ports {
@@ -752,6 +754,7 @@ func (a *Agent) collectContainer(ctx context.Context, summary containertypes.Sum
 		Health:              health,
 		HealthcheckTargets:  healthcheckTargets,
 		HealthProbe:         healthProbe,
+		FailureLog:          failureLog,
 		CPUPercent:          cpuPercent,
 		MemoryUsageBytes:    memUsage,
 		MemoryLimitBytes:    memLimit,

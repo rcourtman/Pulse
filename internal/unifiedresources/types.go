@@ -1171,6 +1171,7 @@ type DockerData struct {
 	Health             string                      `json:"health,omitempty"`
 	HealthcheckTargets []string                    `json:"healthcheckTargets,omitempty"`
 	HealthProbe        *DockerHealthProbe          `json:"healthProbe,omitempty"`
+	FailureLog         *DockerFailureLog           `json:"failureLog,omitempty"`
 	RestartCount       int                         `json:"restartCount,omitempty"`
 	ExitCode           int                         `json:"exitCode,omitempty"`
 	OOMKilled          *bool                       `json:"oomKilled,omitempty"`
@@ -2105,3 +2106,7 @@ type ResourceStats struct {
 // failed, as the agent's closed reason code. See
 // models.DockerContainerHealthProbe.
 type DockerHealthProbe = models.DockerContainerHealthProbe
+
+// DockerFailureLog is the last few log lines of a failed container, from a
+// host whose operator turned that on. See models.DockerContainerFailureLog.
+type DockerFailureLog = models.DockerContainerFailureLog

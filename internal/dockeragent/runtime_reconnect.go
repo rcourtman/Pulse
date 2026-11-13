@@ -82,6 +82,10 @@ func (s *swappableDockerClient) ContainerStatsOneShot(ctx context.Context, conta
 	return s.get().ContainerStatsOneShot(ctx, containerID)
 }
 
+func (s *swappableDockerClient) ContainerLogTail(ctx context.Context, containerID string, lines int) (io.ReadCloser, error) {
+	return s.get().ContainerLogTail(ctx, containerID, lines)
+}
+
 func (s *swappableDockerClient) ContainerInspect(ctx context.Context, containerID string) (containertypes.InspectResponse, error) {
 	return s.get().ContainerInspect(ctx, containerID)
 }

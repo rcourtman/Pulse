@@ -249,6 +249,39 @@ The agent works this out on the host and sends only the reason. The check's
 output and its command never leave the host. An agent that does not yet report
 the reason shows "Failing" until it updates.
 
+## The last log lines of a failed container
+
+Pulse can show the last lines a container logged before it failed, in the
+container's details under **Last log lines**. That is what `docker logs` would
+show you, without a shell on the host. It is off unless you turn it on, on
+each host, because log text leaves the host:
+
+```bash
+pulse-agent --enable-failure-logs   # or PULSE_ENABLE_FAILURE_LOGS=true
+```
+
+Add the flag or the variable to the agent's service and restart it. Nothing in
+Pulse's own settings can turn it on.
+
+What the agent sends, and when:
+
+| | |
+| --- | --- |
+| Which containers | Only one that has failed: it exited with an error, was killed for running out of memory, is being restarted by Docker, or is running with a failing health check. Never a healthy container or one you stopped cleanly. |
+| How much | At most the last 30 lines and 4 KB, read once per failure. |
+| Masking | Passwords, tokens, keys and credentials in URLs are masked on the host. |
+
+Masking looks for known shapes. A secret printed in a shape it does not know
+will get through, so leave this off on a host whose containers log secrets.
+
+Where the lines go once Pulse has them:
+
+| | |
+| --- | --- |
+| In Pulse | Anyone who can see that container can read them. They are dropped when the container recovers or is removed. |
+| AI | If Pulse Patrol or the Assistant looks at the container, the lines are sent to your AI provider with the rest of what it reads, and stay in that run's saved record. |
+| Alerts | Pulse does not put them in an alert. Patrol can quote from them in a finding, and a finding can be sent as a notification. |
+
 ## Container CPU readings
 
 Pulse shows container CPU as a share of the **Docker/Podman host's total CPU

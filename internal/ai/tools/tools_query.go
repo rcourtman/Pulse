@@ -5159,6 +5159,7 @@ func (e *PulseToolExecutor) executeGetResource(_ context.Context, args map[strin
 				response.HealthcheckTargets = append([]string{}, resource.Docker.HealthcheckTargets...)
 				response.HealthProbe = healthProbeFrom(resource.Docker.HealthProbe)
 				response.ExitCode, response.OOMKilled = containerExitFacts(resource.Docker.ContainerState, resource.Docker.ExitCode, resource.Docker.OOMKilled)
+				response.FailureLog = failureLogFrom(resource.Docker.FailureLog)
 				response.RestartCount = resource.Docker.RestartCount
 				response.Labels = resource.Docker.Labels
 				if update := resource.Docker.UpdateStatus; update != nil && update.UpdateAvailable {
@@ -5259,6 +5260,7 @@ func (e *PulseToolExecutor) executeGetResource(_ context.Context, args map[strin
 			response.HealthcheckTargets = container.HealthcheckTargets()
 			response.HealthProbe = healthProbeFrom(container.HealthProbe())
 			response.ExitCode, response.OOMKilled = containerExitFacts(state, container.ExitCode(), container.OOMKilled())
+			response.FailureLog = failureLogFrom(container.FailureLog())
 			response.Filesystems = container.Filesystems()
 			response.CPU = ResourceCPU{
 				Percent: container.CPUPercent(),

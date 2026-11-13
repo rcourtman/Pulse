@@ -1326,6 +1326,7 @@ type DockerContainer struct {
 	Health              string                       `json:"health,omitempty"`
 	HealthcheckTargets  []string                     `json:"healthcheckTargets,omitempty"`
 	HealthProbe         *DockerContainerHealthProbe  `json:"healthProbe,omitempty"` // Why the last health check failed; only while unhealthy
+	FailureLog          *DockerContainerFailureLog   `json:"failureLog,omitempty"`  // Last log lines of a failed container; only from a host that opted in
 	CPUPercent          float64                      `json:"cpuPercent"`
 	CPUCapacityPercent  float64                      `json:"cpuCapacityPercent,omitempty"`
 	MemoryUsage         int64                        `json:"memoryUsageBytes"`
@@ -1353,6 +1354,30 @@ type DockerContainer struct {
 	Filesystems         []filesystem.Observation     `json:"filesystems,omitempty"`
 	Podman              *DockerPodmanContainer       `json:"podman,omitempty"`
 	UpdateStatus        *DockerContainerUpdateStatus `json:"updateStatus,omitempty"` // Image update detection status
+}
+
+// DockerContainerFailureLog is the last few log lines of a container that
+// has failed, as its agent captured them. An agent sends them only when its
+// operator turned that on for the host. The lines are bounded and masked on
+// the host and again on receipt, but they are still text the container wrote:
+// show them, hand them to a model as untrusted data, and keep them out of
+// alert messages and notifications, which leave Pulse.
+type DockerContainerFailureLog struct {
+	Reason     string    `json:"reason"`
+	Lines      []string  `json:"lines"`
+	Truncated  bool      `json:"truncated,omitempty"`
+	Redactions int       `json:"redactions,omitempty"`
+	CapturedAt time.Time `json:"capturedAt"`
+}
+
+// Clone returns a copy that shares nothing with the original.
+func (l *DockerContainerFailureLog) Clone() *DockerContainerFailureLog {
+	if l == nil {
+		return nil
+	}
+	out := *l
+	out.Lines = append([]string(nil), l.Lines...)
+	return &out
 }
 
 // DockerContainerHealthProbe says why an unhealthy container's last health

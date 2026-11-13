@@ -85,6 +85,7 @@ type Container struct {
 	Health              string                   `json:"health,omitempty"`
 	HealthcheckTargets  []string                 `json:"healthcheckTargets,omitempty"`
 	HealthProbe         *ContainerHealthProbe    `json:"healthProbe,omitempty"` // Why the last health check failed; only while unhealthy
+	FailureLog          *ContainerFailureLog     `json:"failureLog,omitempty"`  // Last log lines of a failed container; only when the host opted in
 	CPUPercent          float64                  `json:"cpuPercent"`
 	MemoryUsageBytes    int64                    `json:"memoryUsageBytes"`
 	MemoryLimitBytes    int64                    `json:"memoryLimitBytes"`
@@ -146,6 +147,45 @@ func NormalizeHealthProbeReason(reason string) string {
 		return reason
 	default:
 		return HealthProbeReasonOther
+	}
+}
+
+// ContainerFailureLog is the last few log lines of a container that has
+// failed. Log text is content, so it leaves the host only when the operator
+// turned it on there (--enable-failure-logs), never for a healthy container,
+// and only after the agent has bounded and masked it. Reason is one of the
+// FailureLogReason values.
+type ContainerFailureLog struct {
+	Reason     string    `json:"reason"`
+	Lines      []string  `json:"lines"`
+	Truncated  bool      `json:"truncated,omitempty"`
+	Redactions int       `json:"redactions,omitempty"`
+	CapturedAt time.Time `json:"capturedAt"`
+}
+
+// Why a failure log was captured.
+const (
+	FailureLogReasonExited     = "exited"
+	FailureLogReasonOOMKilled  = "oom_killed"
+	FailureLogReasonRestarting = "restarting"
+	FailureLogReasonUnhealthy  = "unhealthy"
+)
+
+// Bounds on a failure log. The agent applies them before sending and the
+// server applies them again on receipt.
+const (
+	FailureLogMaxLines     = 30
+	FailureLogMaxLineBytes = 512
+	FailureLogMaxBytes     = 4096
+)
+
+// ValidFailureLogReason reports whether reason is in the closed vocabulary.
+func ValidFailureLogReason(reason string) bool {
+	switch reason {
+	case FailureLogReasonExited, FailureLogReasonOOMKilled, FailureLogReasonRestarting, FailureLogReasonUnhealthy:
+		return true
+	default:
+		return false
 	}
 }
 

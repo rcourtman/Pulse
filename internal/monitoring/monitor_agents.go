@@ -28,6 +28,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/fsfilters"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/secretredact"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
@@ -2410,6 +2411,7 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 			Health:             payload.Health,
 			HealthcheckTargets: append([]string(nil), payload.HealthcheckTargets...),
 			HealthProbe:        dockerHealthProbeFromReport(payload.Health, payload.HealthProbe),
+			FailureLog:         dockerFailureLogFromReport(payload.FailureLog, time.Now()),
 			CPUPercent:         safeFloat(payload.CPUPercent),
 			MemoryUsage:        payload.MemoryUsageBytes,
 			MemoryLimit:        payload.MemoryLimitBytes,
@@ -5520,4 +5522,38 @@ func dockerHealthProbeFromReport(health string, probe *agentsdocker.ContainerHea
 		out.HTTPStatus = probe.HTTPStatus
 	}
 	return out
+}
+
+// dockerFailureLogFromReport keeps a reported failure log only in the shape
+// the agent is supposed to send, and does not trust the agent to have shaped
+// it: the reason has to be one of the closed set, and the lines are masked and
+// bounded again here. A modified or older agent then cannot store more text,
+// or less masked text, than a current one. The capture time is held to the
+// server's clock, so a wrong clock on the host cannot date it in the future.
+func dockerFailureLogFromReport(log *agentsdocker.ContainerFailureLog, receivedAt time.Time) *models.DockerContainerFailureLog {
+	if log == nil || !agentsdocker.ValidFailureLogReason(log.Reason) {
+		return nil
+	}
+	// Cleaned before it is masked, as on the host: a secret split by a
+	// control character matches no rule until the character is gone.
+	masked, redactions := secretredact.Text(agentsdocker.CleanFailureLogText(strings.Join(log.Lines, "\n")))
+	lines, truncated := agentsdocker.BoundFailureLogLines(strings.Split(masked, "\n"))
+	if len(lines) == 0 {
+		return nil
+	}
+	capturedAt := log.CapturedAt.UTC()
+	if capturedAt.IsZero() || capturedAt.After(receivedAt) {
+		capturedAt = receivedAt.UTC()
+	}
+	reported := log.Redactions
+	if reported < 0 {
+		reported = 0
+	}
+	return &models.DockerContainerFailureLog{
+		Reason:     log.Reason,
+		Lines:      lines,
+		Truncated:  log.Truncated || truncated,
+		Redactions: reported + redactions,
+		CapturedAt: capturedAt,
+	}
 }

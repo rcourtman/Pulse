@@ -3949,6 +3949,16 @@ calls unhealthy, maps any reason outside the agent's closed vocabulary to
 `other`, drops an HTTP status outside 400 to 599 or on any other reason, and
 bounds the exit code and streak. Whatever an agent sends, no free text reaches
 `models.DockerContainer.HealthProbe`.
+A reported failure log is shaped again on receipt
+(`dockerFailureLogFromReport`). The reason has to be one of the agent's four,
+the lines are masked by `pkg/secretredact` and bounded by
+`BoundFailureLogLines` a second time, an empty result is dropped, and a
+capture time ahead of the server's clock is set to it. Monitoring does not
+depend on the agent having masked or bounded anything, so an old or modified
+agent cannot store more text, or less masked text, than a current one.
+`models.DockerContainer.FailureLog` lives with the container's current state
+and goes wherever that state goes: the resource API and the WebSocket state.
+Monitoring writes it to no metric history and no alert.
 Docker host identity collapse must be surfaced, not silently absorbed. Docker
 report ingest keys host identity on the agent-reported machine ID in unified
 mode, so cloned VMs that still share `/etc/machine-id` fold into one

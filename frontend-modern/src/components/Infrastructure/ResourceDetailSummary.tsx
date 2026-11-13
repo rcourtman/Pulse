@@ -32,6 +32,7 @@ import {
   getDockerContainerUptimeSeconds,
   type DockerContainerStatePresentation,
 } from '@/features/docker/dockerContainerStatePresentation';
+import { drawerContentCardTestId } from './resourceDetailDrawerOverviewModel';
 import { formatInteger } from './resourceDetailMappers';
 import {
   buildKubernetesControllerSection,
@@ -398,6 +399,51 @@ const dockerVolumeConsumersLabel = (refCount: number | undefined): string | null
   return `${refCount} container${refCount === 1 ? '' : 's'}`;
 };
 
+// The last lines a failed container wrote, when its host reports them. They
+// are what the owner would otherwise open a shell for (`docker logs`), so
+// they sit in the drawer as selectable text. The agent sends them only for a
+// container that has failed, only where the operator turned that on, and
+// after masking; the label says so, because a masked line reads oddly without
+// it. Rendered as text: a log line is whatever the container printed.
+// It is a content card, so it stays in view on the Overview: the lines are the
+// answer to "why did it fail", and under the closed Details fold they were
+// two clicks from the row.
+const dockerFailureLogSection = (resource: Resource, now: number): DetailSection | null => {
+  const log = resource.docker?.failureLog;
+  if (resource.type !== 'app-container' || !log) return null;
+  const lines = (log.lines ?? []).filter((line) => typeof line === 'string' && line.length > 0);
+  if (lines.length === 0) return null;
+  const capturedAt = dockerTimestampMillis(log.capturedAt);
+  const label = [
+    capturedAt ? `Captured ${formatRelativeTime(capturedAt, { now })}` : 'Captured on the host',
+    'Secrets masked on the host',
+    log.truncated ? 'Cut to the last lines' : '',
+  ]
+    .filter(Boolean)
+    .join('. ');
+  const text = lines.join('\n');
+  return {
+    label: 'Last log lines',
+    testId: drawerContentCardTestId('docker-failure-log'),
+    rows: [
+      {
+        label,
+        value: text,
+        title: label,
+        layout: 'stacked',
+        valueContent: (
+          <pre
+            data-testid="resource-failure-log-lines"
+            class="m-0 max-h-64 overflow-auto rounded border border-border bg-surface-alt p-2 text-left font-mono text-[10px] font-normal leading-snug whitespace-pre-wrap wrap-anywhere select-text"
+          >
+            {text}
+          </pre>
+        ),
+      },
+    ],
+  };
+};
+
 const dockerVolumeSection = (resource: Resource, now: number): DetailSection | null => {
   if (resource.type !== 'docker-volume') return null;
   const docker = resource.docker;
@@ -575,6 +621,7 @@ export const useResourceSummarySections = (
             ]),
           }
         : null,
+      props.content !== 'overview' ? dockerFailureLogSection(props.resource, now()) : null,
       props.content !== 'overview' && docker
         ? dockerSection(props.resource, docker, now(), updateNextSteps)
         : null,
