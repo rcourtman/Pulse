@@ -21,6 +21,11 @@ type tokenDiscoveryFixture struct {
 	callbacks   atomic.Int32
 }
 
+// This is a correctness observation budget, not a polling-latency SLO. A
+// complete encrypted read/migration can finish after one second under race
+// instrumentation; permanent missed restoration/withdrawal must still fail.
+const tokenDiscoveryObservationBudget = 3 * time.Second
+
 func newTokenDiscoveryFixture(t *testing.T) *tokenDiscoveryFixture {
 	t.Helper()
 	dir := t.TempDir()
@@ -94,17 +99,17 @@ func (f *tokenDiscoveryFixture) awaitRestored(t *testing.T) {
 			}
 		}
 		return false
-	}, time.Second, 10*time.Millisecond, "automatic discovery missed complete inventory with preserved/older timestamp")
+	}, tokenDiscoveryObservationBudget, 10*time.Millisecond, "automatic discovery missed complete inventory with preserved/older timestamp")
 	require.ElementsMatch(t, f.restored, f.snapshot(), "discovery changed saved authority")
 	require.True(t, f.valid("synthetic-discovery-monitor"))
 	require.True(t, f.valid("synthetic-discovery-agent"))
 	require.False(t, f.valid("synthetic-unissued"))
-	require.Eventually(t, func() bool { return f.callbacks.Load() > 0 }, time.Second, time.Millisecond)
+	require.Eventually(t, func() bool { return f.callbacks.Load() > 0 }, tokenDiscoveryObservationBudget, time.Millisecond)
 }
 
 func (f *tokenDiscoveryFixture) awaitRevoked(t *testing.T) {
 	t.Helper()
-	require.Eventually(t, func() bool { return len(f.snapshot()) == 0 }, time.Second, 10*time.Millisecond,
+	require.Eventually(t, func() bool { return len(f.snapshot()) == 0 }, tokenDiscoveryObservationBudget, 10*time.Millisecond,
 		"automatic discovery missed explicit withdrawal after restoration")
 	require.False(t, f.valid("synthetic-discovery-monitor"))
 	require.False(t, f.valid("synthetic-discovery-agent"))
