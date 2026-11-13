@@ -8634,6 +8634,19 @@ the fixed read-only catalog in `internal/monitoring/docker_detection.go`, wired
 through the authenticated executor in `internal/api/router.go`.
 `PolicyBlock` still applies to trusted payloads. The `Trusted` field must never be set by a code path that
 deserialises user input or accepts a caller-supplied command string.
+The policy's log-read approval is an argument check, not a prefix match:
+`isAutoApprovedLogRead` in `internal/agentexec/policy_log_reads.go` approves
+`cat`, `head`, `tail` and `grep` only when every word is plain or simply
+quoted, every option is known with a checked value and comes before the
+first operand, and every file operand is a path under `/var/log` with no
+parent segment and no glob that could expand to one. grep options that open
+another file or follow every symlink, and a recursive grep with only glob
+operands, need approval. A single `&` separates commands like `;`, and the
+other fixed `cat` rules take no extra operands. Paths that already exist as
+symlinks under `/var/log` are not resolved here. Proofs:
+`TestDefaultPolicyLogReadsAllowPathsUnderVarLog` and
+`TestDefaultPolicyLogReadsRefuseOperandsOutsideVarLog` in
+`internal/agentexec/policy_log_operands_test.go`.
 Every command Pulse sends through `executeCommand` (`sh -c`, `cmd /C`, or
 the local `qm guest exec` wrapper) gets an explicit environment from
 `commandEnvironment` in `internal/hostagent/command_env.go`: the host's
