@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"errors"
 	"regexp"
 	"strings"
 	"testing"
@@ -53,8 +54,8 @@ func TestWildcardRefusalNamesAFormThatWorks(t *testing.T) {
 // "command requires approval" four times.
 func TestWildcardRefusalHintPassesThePolicy(t *testing.T) {
 	policy := agentexec.DefaultPolicy()
-	forms := regexp.MustCompile("`([^`]+)`").FindAllStringSubmatch(WildcardRefusalHint, -1)
-	require.Len(t, forms, 2)
+	forms := regexp.MustCompile("`([^`]+)`").FindAllStringSubmatch(WildcardRefusalHint+" "+SingleCommandHint, -1)
+	require.Len(t, forms, 3)
 	for _, form := range forms {
 		for _, dir := range []string{"/mnt/nvr", "/mnt/nvr/frigate/recordings", "/srv/media"} {
 			command := strings.ReplaceAll(form[1], "<directory>", dir)
@@ -77,4 +78,36 @@ func TestWildcardRefusalHintPassesThePolicy(t *testing.T) {
 			}
 		}
 	}
+}
+
+// pulse_read never sends an approval, so a command the agent will not
+// auto-approve can never run through it. The refusal says why and what to run
+// instead; a bare "command requires approval" cost Patrol three of its ten
+// evidence calls on one investigation.
+func TestApprovalRefusalNamesASingleCommand(t *testing.T) {
+	t.Setenv("PULSE_STRICT_RESOLUTION", "false")
+	run := func(t *testing.T, err error) string {
+		t.Helper()
+		agentSrv := &mockAgentServer{}
+		agentSrv.On("GetConnectedAgents").Return([]agentexec.ConnectedAgent{{AgentID: "agent1", Hostname: "docker01", Platform: "linux"}})
+		agentSrv.On("ExecuteCommand", mock.Anything, "agent1", mock.Anything).Return((*agentexec.CommandResultPayload)(nil), err)
+		exec := NewPulseToolExecutor(ExecutorConfig{AgentServer: agentSrv})
+		result, callErr := exec.executeReadExec(context.Background(), map[string]interface{}{
+			"command":     "du -xh -d 3 /mnt/nvr | sort -rh | head -20",
+			"target_host": "docker01",
+		})
+		require.NoError(t, callErr)
+		require.NotEmpty(t, result.Content)
+		return result.Content[0].Text
+	}
+
+	text := run(t, agentexec.ErrCommandRequiresApproval)
+	assert.Contains(t, text, "APPROVAL_REQUIRED")
+	assert.Contains(t, text, "Run each part as its own command")
+	assert.Contains(t, text, "du -xh -d 3 \\u003cdirectory\\u003e")
+
+	// Any other failure is reported as it is, with no hint about approval.
+	text = run(t, errors.New("agent disconnected"))
+	assert.Contains(t, text, "command execution failed: agent disconnected")
+	assert.NotContains(t, text, "APPROVAL_REQUIRED")
 }

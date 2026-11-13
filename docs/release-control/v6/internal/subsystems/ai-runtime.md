@@ -8468,6 +8468,15 @@ other form offered, and the investigation stopped one folder down. A hint
 with a two-level form reached the hour folder on the last evidence call, one
 level above the camera folder; one with `| sort -rh | head -20` passed the
 first two gates and drew "command requires approval" four times.
+`pulse_read` never sends an approval, so a command the agent's policy will
+not auto-approve can never run through it. Its `command` parameter says one
+command per call, and when `agentexec.Server` refuses with
+`agentexec.ErrCommandRequiresApproval` the tool returns an `APPROVAL_REQUIRED`
+refusal carrying `tools.SingleCommandHint`: piped, chained or substituted
+commands always need approval, so run each part on its own. Any other
+execution failure is reported as before. A later replay of the same fault
+chose a piped and then a chained `du` by itself, and both bare refusals cost
+evidence calls the investigation needed.
 Proofs: `TestExecutionIntent_NoApprovalReadsStayLocal`
 (`tools_query_readonly_test.go`),
 `TestExecuteReadExec_RefusesProcessEnvironmentAndCredentialReads` and

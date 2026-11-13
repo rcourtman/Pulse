@@ -5378,6 +5378,10 @@ Agent` secondary handoff against the live setup wizard instead of relying
     from a deserialised HTTP body, a user-supplied command string, an
     AI tool call, or a governed approval consumer — those callers must
     continue to carry an `ApprovalID` and approval grant.
+    A payload refused only because it carries no `ApprovalID` returns the
+    named `agentexec.ErrCommandRequiresApproval` (message unchanged), so a
+    caller that cannot ask for approval, such as `pulse_read`, can say what
+    would run instead. Naming the error changes nothing about the gate.
 18. Keep plaintext agent transport validation resolver-aware but fail-closed.
     When agent reporting, remote config, update, Docker, Kubernetes, or
     command-channel clients allow self-hosted `http://` or `ws://`, dotted

@@ -43,6 +43,11 @@ var (
 	errServerShuttingDown = errors.New("agent execution server is shutting down")
 )
 
+// ErrCommandRequiresApproval is returned for a command the policy will not
+// auto-approve when the request carries no approval. Callers that cannot ask
+// for approval use it to tell the requester what would run instead.
+var ErrCommandRequiresApproval = errors.New("command requires approval")
+
 const maxWebSocketMessageBytes int64 = 1 << 20 // 1 MiB
 
 const (
@@ -910,7 +915,7 @@ func (s *Server) authorizeCommandPayload(cmd ExecuteCommandPayload) error {
 			return nil
 		}
 		if cmd.ApprovalID == "" {
-			return fmt.Errorf("command requires approval")
+			return ErrCommandRequiresApproval
 		}
 		if cmd.authorization == nil || strings.TrimSpace(cmd.authorization.ActionID) == "" {
 			return fmt.Errorf("command requires server-owned approval authorization")
