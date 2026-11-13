@@ -406,9 +406,7 @@ func TestConfigWatcher_PollForChanges(t *testing.T) {
 	cfg := &Config{}
 	cw, err := NewConfigWatcher(cfg)
 	require.NoError(t, err)
-	if stat, err := os.Stat(apiTokensPath); err == nil {
-		cw.apiTokensLastModTime = stat.ModTime()
-	}
+	cw.reloadAPITokens() // Seed the successful content snapshot before callbacks.
 
 	// Set short poll interval
 	cw.pollInterval = 10 * time.Millisecond
@@ -423,7 +421,11 @@ func TestConfigWatcher_PollForChanges(t *testing.T) {
 	require.NotNil(t, cw.persistence)
 
 	// Run pollForChanges in background
-	go cw.pollForChanges()
+	cw.wg.Add(1)
+	go func() {
+		defer cw.wg.Done()
+		cw.pollForChanges()
+	}()
 	defer cw.Stop()
 
 	// 1. Update .env
@@ -454,10 +456,13 @@ func TestConfigWatcher_PollForChanges(t *testing.T) {
 	future = future.Add(2 * time.Second)
 	require.NoError(t, os.Chtimes(apiTokensPath, future, future))
 
-	// Waiting for polling to pick up change in file modification
-	// persistence.SaveAPITokens writes to the file.
-
-	require.Eventually(t, func() bool { return tokenCalled.Load() }, 1*time.Second, 10*time.Millisecond)
+	// A canonical migration can produce an earlier reconciliation callback.
+	// Wait for the intended inventory, not just any notification.
+	require.Eventually(t, func() bool {
+		Mu.RLock()
+		defer Mu.RUnlock()
+		return tokenCalled.Load() && len(cfg.APITokens) == 1 && cfg.APITokens[0].ID == "new"
+	}, 1*time.Second, 10*time.Millisecond)
 
 	Mu.RLock()
 	defer Mu.RUnlock()

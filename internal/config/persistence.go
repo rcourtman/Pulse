@@ -3,6 +3,8 @@ package config
 import (
 	"bufio"
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -702,23 +704,29 @@ func persistMetadata(fs FileSystem, dataPath, fileName string, data []byte) erro
 // interpret a missing file as an unconfigured installation. A present file must
 // contain complete JSON; a zero-byte/truncated write is not an empty inventory.
 func (c *ConfigPersistence) LoadAPITokens() ([]APITokenRecord, error) {
-	return c.loadAPITokens(true)
+	tokens, _, err := c.loadAPITokenSnapshot(true)
+	return tokens, err
 }
 
 // A hot reload needs positive saved authority, including for an empty inventory.
 // Do not Stat before reading: losing a file between the two observations would
 // otherwise turn a replacement window into a successful empty snapshot.
-func (c *ConfigPersistence) loadAPITokens(allowMissing bool) ([]APITokenRecord, error) {
+// The fingerprint belongs to the exact bytes decoded below, never a later
+// read/stat that could observe an external replacement after this snapshot.
+// A canonical migration may rewrite the file; polling will observe that new
+// encoding on its next pass without overlooking any intervening withdrawal.
+func (c *ConfigPersistence) loadAPITokenSnapshot(allowMissing bool) ([]APITokenRecord, string, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	data, err := c.fs.ReadFile(c.apiTokensFile)
 	if err != nil {
 		if allowMissing && os.IsNotExist(err) {
-			return []APITokenRecord{}, nil
+			return []APITokenRecord{}, "", nil
 		}
-		return nil, fmt.Errorf("read api tokens file %s: %w", c.apiTokensFile, err)
+		return nil, "", fmt.Errorf("read api tokens file %s: %w", c.apiTokensFile, err)
 	}
+	digest := sha256.Sum256(data)
 
 	migratedPlaintext := false
 	// Attempt decryption; fall back to plaintext for migration from unencrypted files.
@@ -732,16 +740,16 @@ func (c *ConfigPersistence) loadAPITokens(allowMissing bool) ([]APITokenRecord, 
 
 	var tokens []APITokenRecord
 	if err := json.Unmarshal(data, &tokens); err != nil {
-		return nil, fmt.Errorf("decode api tokens file %s: %w", c.apiTokensFile, err)
+		return nil, "", fmt.Errorf("decode api tokens file %s: %w", c.apiTokensFile, err)
 	}
 
 	migrations, err := canonicalizeAPITokens(tokens)
 	if err != nil {
-		return nil, fmt.Errorf("validate api token authority in %s: %w", c.apiTokensFile, err)
+		return nil, "", fmt.Errorf("validate api token authority in %s: %w", c.apiTokensFile, err)
 	}
 	if migratedPlaintext || migrations.changed() {
 		if err := c.persistAPITokensLocked(tokens); err != nil {
-			return nil, fmt.Errorf("persist canonical api tokens file %s: %w", c.apiTokensFile, err)
+			return nil, "", fmt.Errorf("persist canonical api tokens file %s: %w", c.apiTokensFile, err)
 		}
 		log.Warn().
 			Bool("encrypted_plaintext", migratedPlaintext && c.crypto != nil).
@@ -752,7 +760,7 @@ func (c *ConfigPersistence) loadAPITokens(allowMissing bool) ([]APITokenRecord, 
 			Msg("Migrated API token metadata before loading")
 	}
 
-	return tokens, nil
+	return tokens, hex.EncodeToString(digest[:]), nil
 }
 
 // SaveTrueNASConfig persists TrueNAS instance configuration to encrypted storage.

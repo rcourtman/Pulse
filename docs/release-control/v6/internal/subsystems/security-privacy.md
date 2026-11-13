@@ -95,10 +95,39 @@ Legacy complete JSON `null` remains an explicit empty inventory, not a new
 invalid-schema policy. Existing bounded retries, canonical migration-before-use,
 concurrent mutation serialization and token/tenant checks are unchanged.
 
+Automatic discovery does not depend on an increasing file timestamp. The
+five-second polling fallback compares file content with the exact bytes of
+the last successfully decoded inventory, so a lost inode watch, timestamp-
+preserving restore or older backup cannot indefinitely hide a complete
+inventory or a later explicit `[]`/`null` withdrawal. A failed read never
+advances this fingerprint; a later stat or read cannot mark unconsumed bytes
+as accepted. Unchanged polls neither rewrite the file nor rebuild bindings.
+Canonical migration may produce a new encoding, which a subsequent poll
+reconciles normally. Startup's missing-file compatibility is unchanged.
+
+The polling cursor also binds those consumed bytes to the corresponding live
+inventory. Local token creation, editing, rotation or removal can change live
+authority and saved storage before a poll consumes that intermediate file. An
+exact restore of earlier bytes must still reconcile that changed inventory,
+including withdrawing locally added or rotated credentials. The live digest
+includes nested scopes, organizations, owner/binding metadata, expiry and
+display fields under the existing watcher/config lock order. It excludes only
+request-local `LastUsedAt`: ordinary authentication neither rolls back usage
+nor triggers repeated decoding or binding callbacks for unchanged storage.
+Failed reads still retain the exact locally mutated inventory without writes.
+
 Registered persistence, startup and watcher tests exercise blank, missing,
 missing-directory, whitespace, malformed and encrypted incomplete states,
 unchanged saved bytes/attributes, retained authentication, exact-source recovery
-and explicit revocation. They are synthetic fixtures, not original-client
+and explicit revocation. `watcher_token_discovery_test.go` additionally exercises
+real file-watch removal, event-free polling, equal/older timestamps, same-inode/
+same-size edits, failed-read recovery, exact-read/replacement races and quiet
+unchanged polling. `watcher_local_mutation_test.go` covers event-free exact
+encrypted restoration after local mutations (including in-place fields),
+incomplete-read retention, genuine bearer withdrawal and usage-only quiet
+polls. `security_tokens_poll_restore_test.go` couples the actual creation path
+to the production five-second polling fallback without inode events and to
+subsequent explicit empty withdrawal. They are synthetic fixtures, not original-client
 recovery, installed acceptance or an historical impact assessment.
 
 ### Agent saved-authority ingress cannot accept partial or streaming state
