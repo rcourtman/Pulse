@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -36,7 +37,7 @@ func (e *PulseToolExecutor) registerReadTools() {
 					},
 					"command": {
 						Type:        "string",
-						Description: "For exec: the read-only shell command to run",
+						Description: "For exec: one read-only command. Pipes, ;, &&, || and $( ) need approval this tool cannot request, so run each command in its own call",
 					},
 					"path": {
 						Type:        "string",
@@ -218,6 +219,9 @@ func (e *PulseToolExecutor) executeReadExec(ctx context.Context, args map[string
 		TargetID:   routing.TargetID,
 	})
 	if err != nil {
+		if errors.Is(err, agentexec.ErrCommandRequiresApproval) {
+			return approvalRequiredBlocked(command), nil
+		}
 		return NewErrorResult(fmt.Errorf("command execution failed: %w", err)), nil
 	}
 
@@ -243,14 +247,54 @@ func (e *PulseToolExecutor) executeReadExec(ctx context.Context, args map[string
 	return NewTextResult(output), nil
 }
 
+// WildcardRefusalHint is what a refused wildcard should be asked as instead.
+// On 13 November 2026 Patrol's `du -sh /mnt/nvr/*` was refused, and with no
+// other form offered it sized three folders by name and stopped one level
+// above the folder that had filled the disk. Naming the directory passes the
+// same policy and answers the same question. The suggested form looks three
+// levels down in one call: a replay with a two-level form spent its last
+// evidence call one folder above the answer. It has no pipe, because the
+// agent's command policy never auto-approves a compound command, and a
+// replay that suggested `| sort -rh | head -20` spent four calls on
+// "command requires approval".
+const WildcardRefusalHint = "Name the directory instead of using a wildcard. For folder sizes, " +
+	"`du -xh -d 3 <directory>` lists every folder up to three levels down with its size; " +
+	"run it again on the largest one to go deeper. Do not add a pipe: piped commands need approval. " +
+	"For a listing, use `ls -la <directory>`."
+
+// SingleCommandHint tells the model what pulse_read can run without approval.
+// It never sends an approval, so a command the agent's policy will not
+// auto-approve fails every time. On 13 November 2026 Patrol's piped and
+// chained `du` reads drew a bare "command requires approval" three times in
+// one investigation, which then ran out of evidence calls.
+const SingleCommandHint = "pulse_read runs a command only when the agent auto-approves it, and it cannot ask for approval. " +
+	"Piped, chained or substituted commands (|, ;, &&, ||, $( )) always need approval. Run each part as its own " +
+	"command: for folder sizes, `du -xh -d 3 <directory>` instead of piping du into sort or head."
+
+func approvalRequiredBlocked(command string) CallToolResult {
+	return NewToolResponseResult(NewToolBlockedError(
+		"APPROVAL_REQUIRED",
+		fmt.Sprintf("Command '%s' needs approval, which pulse_read cannot request.", truncateCommand(command, 50)),
+		map[string]interface{}{
+			"hint":            SingleCommandHint,
+			"policy_boundary": "pulse_read runs only commands the agent's policy auto-approves.",
+		},
+	))
+}
+
 func sensitiveCommandBlocked(reason string) CallToolResult {
+	details := map[string]interface{}{
+		"reason":          reason,
+		"policy_boundary": "Credential files and process environment values cannot be read through AI tools.",
+	}
+	switch reason {
+	case safety.ReasonPatternCanMatchCredentialFile, safety.ReasonPatternCanMatchSecretsDirectory:
+		details["hint"] = WildcardRefusalHint
+	}
 	return NewToolResponseResult(NewToolBlockedError(
 		"SENSITIVE_COMMAND",
 		fmt.Sprintf("Refusing to run command that touches sensitive paths (%s).", reason),
-		map[string]interface{}{
-			"reason":          reason,
-			"policy_boundary": "Credential files and process environment values cannot be read through AI tools.",
-		},
+		details,
 	))
 }
 

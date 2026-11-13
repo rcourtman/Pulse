@@ -609,6 +609,13 @@ func recursiveSearchReason(roots []string) string {
 	return ""
 }
 
+// A wildcard is refused when it could expand to a credential file or a secrets
+// directory. Callers use these to tell the model what to ask for instead.
+const (
+	ReasonPatternCanMatchSecretsDirectory = "path pattern can match a secrets directory"
+	ReasonPatternCanMatchCredentialFile   = "path pattern can match a credential file"
+)
+
 // sensitiveWordReason checks one shell word, plus the value of an --opt=value
 // or @file word, as a path.
 func sensitiveWordReason(word string) string {
@@ -642,10 +649,10 @@ func sensitiveWordReason(word string) string {
 				return "parent-directory path segments are not accepted"
 			}
 			if globDirectoryCanBeSecrets(absolute) {
-				return "path pattern can match a secrets directory"
+				return ReasonPatternCanMatchSecretsDirectory
 			}
 			if globNameCanMatchCredentialFile(absolute) {
-				return "path pattern can match a credential file"
+				return ReasonPatternCanMatchCredentialFile
 			}
 		}
 	}

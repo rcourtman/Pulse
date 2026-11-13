@@ -8453,6 +8453,30 @@ than make arbitrary reads safe. They are also not the only gate:
 `DefaultPolicy` does not auto-approve unless it is trusted or approved. A
 change that lets AI reads past that policy (marking them trusted, widening
 auto-approve) must re-check these rules first.
+A refused glob names what to ask instead. The two glob reasons are exported
+(`safety.ReasonPatternCanMatchCredentialFile`,
+`safety.ReasonPatternCanMatchSecretsDirectory`) and `sensitiveCommandBlocked`
+adds `tools.WildcardRefusalHint` to their refusal: name the directory, with
+`du -xh -d 3 <directory>` for folder sizes three levels down or
+`ls -la <directory>` for a listing, and no pipe. A suggested form must pass
+three gates: these checks, the read-only classifier, and the agent's
+`agentexec.DefaultPolicy`, which never auto-approves a compound command.
+`TestWildcardRefusalHintPassesThePolicy` pins all three, so the hint never
+sends the model to another refusal. The rule itself is unchanged. On the
+fault set's full-disk fault Patrol's `du -sh /mnt/nvr/*` was refused with no
+other form offered, and the investigation stopped one folder down. A hint
+with a two-level form reached the hour folder on the last evidence call, one
+level above the camera folder; one with `| sort -rh | head -20` passed the
+first two gates and drew "command requires approval" four times.
+`pulse_read` never sends an approval, so a command the agent's policy will
+not auto-approve can never run through it. Its `command` parameter says one
+command per call, and when `agentexec.Server` refuses with
+`agentexec.ErrCommandRequiresApproval` the tool returns an `APPROVAL_REQUIRED`
+refusal carrying `tools.SingleCommandHint`: piped, chained or substituted
+commands always need approval, so run each part on its own. Any other
+execution failure is reported as before. A later replay of the same fault
+chose a piped and then a chained `du` by itself, and both bare refusals cost
+evidence calls the investigation needed.
 Proofs: `TestExecutionIntent_NoApprovalReadsStayLocal`
 (`tools_query_readonly_test.go`),
 `TestExecuteReadExec_RefusesProcessEnvironmentAndCredentialReads` and
