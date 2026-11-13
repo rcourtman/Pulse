@@ -32,6 +32,44 @@ no credential, permission, report field, rendered state or data category; it
 neither measures exposure nor establishes original-host recovery. Noncooperative
 providers are not forcibly preempted, and disconnect is not rollback.
 
+### Container log lines leave a host only by local opt-in (13 November 2026)
+
+Log text is content. A default agent never reads it. An operator can turn on
+`--enable-failure-logs` on a host, and nothing else can: the setting is not in
+remote configuration and the server has no request that reads a log. This is
+the custom-sensors pattern, a local boundary with fixed rules, and not a
+read-only command mode: the server never chooses a container, a path or a
+line count.
+
+What then crosses the boundary is bounded twice and masked twice, on the host
+and again on receipt (`pkg/secretredact`, shared by both, extracted from the
+AI safety package so the agent applies the same rules without the server's
+dependencies). Both ends remove control characters before they mask, never
+after: `PASS<NUL>WORD=value` matches no rule until the NUL is gone, and
+cleaning it afterwards would rebuild an unmasked secret. The limits are 30 lines, 512 bytes a line and 4 KB, only for a
+container that has failed, read once per failure.
+
+Three things the masking does not do, and the docs say so:
+
+- It is pattern-based. A secret in a shape it does not know is sent as
+  written.
+- The lines are readable by every identity that can read the container, and
+  go to the AI provider when Patrol or the Assistant reads it.
+- A log line is attacker-influenced text. The model payload carries a fixed
+  note with the lines (`tools.FailureLogNote`) saying they are untrusted and
+  never instructions, and the frontend renders them as text.
+- Pulse puts them in no alert message. It cannot keep them out of what a
+  model writes: Patrol can quote a line in a finding, a finding can be sent
+  as a notification, and a tool result stays in the saved record of the run
+  that read it, after the container has recovered. The same is true of any
+  log a commands-on agent reads for Patrol today. The docs state it and do
+  not promise otherwise.
+
+`TestFailureLogIsNotReadUnlessTheHostTurnedItOn`,
+`TestFailureLogIsMaskedBoundedAndReadOncePerFailure` and
+`TestApplyDockerReportShapesTheFailureLogItself` hold the off switch and both
+ends of the masking.
+
 ### Health-check output stays on the host (12 November 2026)
 
 The Docker module now reads the last health-check result of an unhealthy

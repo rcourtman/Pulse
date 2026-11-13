@@ -4166,6 +4166,15 @@ func (v DockerContainerView) HealthProbe() *DockerHealthProbe {
 	return cloneDockerHealthProbe(v.r.Docker.HealthProbe)
 }
 
+// FailureLog is the last few log lines of a failed container. Nil unless the
+// container has failed and its host reports them.
+func (v DockerContainerView) FailureLog() *DockerFailureLog {
+	if v.r == nil || v.r.Docker == nil {
+		return nil
+	}
+	return v.r.Docker.FailureLog.Clone()
+}
+
 func (v DockerContainerView) RestartCount() int {
 	if v.r == nil || v.r.Docker == nil {
 		return 0

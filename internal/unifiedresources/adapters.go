@@ -2481,6 +2481,7 @@ func resourceFromDockerContainer(ct models.DockerContainer, host models.DockerHo
 		Health:             ct.Health,
 		HealthcheckTargets: cloneStringSlice(ct.HealthcheckTargets),
 		HealthProbe:        cloneDockerHealthProbe(ct.HealthProbe),
+		FailureLog:         ct.FailureLog.Clone(),
 		RestartCount:       ct.RestartCount,
 		ExitCode:           ct.ExitCode,
 		OOMKilled:          cloneBoolPtr(ct.OOMKilled),

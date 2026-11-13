@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "base_sha": "9d594ccd152a9e8dbd9e5121669930b7413dc227",
+  "verified_at": "2026-11-13T10:55:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/ResourceDetailSummary.tsx",
+    "frontend-modern/src/types/resource.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/ResourceDetailSummary.tsx": "e3055377c0915173549056e55429a34fe5bcd0ca4d2dc17ac5a144d6f45a9057",
+    "frontend-modern/src/types/resource.ts": "742cf58bbe3b59533da65f1b801adbf25b529e8a32f463e0ac8dec44f8979f6d"
+  },
+  "routes": [
+    "/docker"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Private Pro stack built from this tree, a real agent and seven real containers: a crash that prints a URL with a password and a token, a restart loop, an unhealthy container, an oversized log, a TTY container with colour codes, a clean exit and a healthy container that both print secrets",
+    "Switch off (the default): no container carries failureLog in /api/state or /api/resources",
+    "Switch on: the drawer of each failed container shows a 'Last log lines' card on the Overview, in view without opening Details, with 'Captured N ago. Secrets masked on the host' and the lines as selectable monospace text in a pre element with no child elements",
+    "The crash shows 4 lines with the password and token replaced by [REDACTED]; the oversized log shows its newest 17 lines ending 'FATAL: no space left on device', says 'Cut to the last lines' and scrolls inside a 256 px box; the TTY container shows 'panic: nil map' with no colour codes",
+    "The clean exit and the healthy container show no card, and none of their text appears in any API payload",
+    "Desktop: the card is 1262 px wide. Phone: 313 px wide, lines wrap, no horizontal page scroll",
+    "First build put the card under the closed Details fold, two clicks from the row; it was moved to an Overview content card and rechecked"
+  ],
+  "interactions": [
+    "Expanded six container rows at 1440 wide and two at 375 wide with a headless browser on pulse-dev (the desktop app's browser pane tools were unavailable in this session) and read the card's text, size, overflow and child elements; viewed the screenshots",
+    "Watched the restart-loop container's lines for two minutes: present on every sample, captured once",
+    "Restarted the server: the lines returned with the agent's next report"
+  ]
+}

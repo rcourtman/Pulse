@@ -803,6 +803,17 @@ export interface DockerHealthProbe {
   httpStatus?: number;
 }
 
+// The last few log lines of a container that has failed. A host sends them
+// only when its operator turned that on (--enable-failure-logs); they are
+// masked and cut short on the host. Render them as text, never as markup.
+export interface DockerFailureLog {
+  reason: 'exited' | 'oom_killed' | 'restarting' | 'unhealthy' | string;
+  lines: string[];
+  truncated?: boolean;
+  redactions?: number;
+  capturedAt: string;
+}
+
 export interface ResourceDockerMeta {
   serviceId?: string;
   serviceName?: string;
@@ -861,6 +872,7 @@ export interface ResourceDockerMeta {
   containerState?: string;
   health?: string;
   healthProbe?: DockerHealthProbe;
+  failureLog?: DockerFailureLog;
   restartCount?: number;
   exitCode?: number;
   cpuRawPercent?: number;

@@ -21,6 +21,14 @@
 
 ## Purpose
 
+### `DockerData` gains a container-only failure-log field (13 November 2026)
+
+`internal/unifiedresources/types.go` gains `DockerData.FailureLog` and the
+`DockerFailureLog` alias: the last log lines of a failed app container, from a
+host that opted in. Like the health-probe field it is set only by the Docker
+container adapter, is nil on every storage, backup and recovery resource, and
+changes no storage or recovery projection, clone path or identity.
+
 ### `DockerData` gains a container-only health-probe field (12 November 2026)
 
 `internal/unifiedresources/types.go` gains `DockerData.HealthProbe` and the

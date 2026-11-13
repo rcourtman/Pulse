@@ -46,6 +46,15 @@ ambiguity controls; `monitor_maintenance_subjects_test.go` covers detectors,
 timed/scope policy, notification callbacks and unchanged recovery/history IDs.
 
 
+### Docker containers can carry their last log lines (13 November 2026)
+
+`DockerData.FailureLog` (JSON `docker.failureLog`) is the last few log lines
+of a failed container, from a host whose operator turned that on. It is a copy
+of `models.DockerContainerFailureLog`, cloned with the resource, and absent
+for almost every container. The container drawer shows it under "Last log
+lines" as selectable text in a scrolling block, with when it was captured and
+that it was masked on the host.
+
 ### Docker containers carry the health-probe reason (12 November 2026)
 
 `DockerData.HealthProbe` (JSON `docker.healthProbe`) says why an unhealthy

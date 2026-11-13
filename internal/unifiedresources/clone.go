@@ -351,6 +351,7 @@ func cloneDockerData(in *DockerData) *DockerData {
 	out.Ports = cloneDockerPortMetaSlice(in.Ports)
 	out.HealthcheckTargets = cloneStringSlice(in.HealthcheckTargets)
 	out.HealthProbe = cloneDockerHealthProbe(in.HealthProbe)
+	out.FailureLog = in.FailureLog.Clone()
 	out.Labels = cloneStringMap(in.Labels)
 	out.EngineLabels = cloneStringMap(in.EngineLabels)
 	out.Networks = cloneDockerNetworkMetaSlice(in.Networks)

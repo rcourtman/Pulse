@@ -560,6 +560,7 @@ sudo chmod 0700 /usr/local/libexec/pulse-queue-depth
 | `--disable-auto-update` | `PULSE_DISABLE_AUTO_UPDATE` | Disable auto-updates | `false` |
 | `--disable-docker-update-checks` | `PULSE_DISABLE_DOCKER_UPDATE_CHECKS` | Disable Docker image update detection | `false` |
 | `--disable-registry-credentials` | `PULSE_DISABLE_REGISTRY_CREDENTIALS` | Do not read host Docker credentials (config.json / credential helpers) for registry update checks | `false` |
+| `--enable-failure-logs` | `PULSE_ENABLE_FAILURE_LOGS` | Report the last log lines of a container that has failed, masked and cut short. Log text leaves this host. Only this setting turns it on; the server cannot | `false` |
 | `--insecure` | `PULSE_INSECURE_SKIP_VERIFY` | Skip TLS verification | `false` |
 | `--allow-plaintext-http` | `PULSE_AGENT_ALLOW_PLAINTEXT_HTTP` | Allow plain HTTP to a Pulse server at an address that is not local. Local-network Pulse URLs (private IP, single-label, `.local`/`.lan`/`.home`/`.home.arpa`/`.internal`, or resolves to private addresses) already work over HTTP for the primary URL without this flag. The flag extends plain HTTP to any host, including servers numbered from public IP space. Sends the API token in cleartext; only for networks you fully control. Report-only observers still need their own `allowPlaintextHTTP` opt-in | `false` |
 | `--hostname` | `PULSE_HOSTNAME` | Override hostname | *(OS hostname)* |

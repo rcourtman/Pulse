@@ -56,6 +56,11 @@ type Config struct {
 	ServerFingerprint   string
 	DisableAutoUpdate   bool
 	DisableUpdateChecks bool // Disable Docker image update detection (registry checks)
+	// CollectFailureLogs lets the agent report the last log lines of a
+	// container that has failed. It is off unless the operator turns it on
+	// on this host: log text is content, and nothing the server sends can
+	// enable it.
+	CollectFailureLogs bool
 	// DisableRegistryCredentials keeps update checks from reading the host's
 	// Docker credential store (config.json auths and credential helpers), so
 	// private-registry checks fall back to anonymous-only behavior.
@@ -161,6 +166,7 @@ type Agent struct {
 	stateFilters        []string
 	hostID              string
 	prevContainerCPU    map[string]cpuSample
+	failureLogs         failureLogCache
 	cpuMu               sync.Mutex // protects prevContainerCPU
 	storageUsageMu      sync.Mutex
 	storageUsageCache   dockerStorageUsageCache

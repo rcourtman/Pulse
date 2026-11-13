@@ -770,6 +770,7 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 			DisableAutoUpdate:          cfg.DisableAutoUpdate,
 			DisableUpdateChecks:        cfg.DisableDockerUpdateChecks,
 			DisableRegistryCredentials: cfg.DisableRegistryCredentials,
+			CollectFailureLogs:         cfg.EnableFailureLogs,
 			Runtime:                    cfg.DockerRuntime,
 			LogLevel:                   cfg.LogLevel,
 			Logger:                     &logger,
@@ -1200,6 +1201,7 @@ type Config struct {
 	DisableAutoUpdate          bool
 	DisableDockerUpdateChecks  bool   // Disable Docker image update detection
 	DisableRegistryCredentials bool   // Do not read host Docker credentials for registry update checks
+	EnableFailureLogs          bool   // Report the last log lines of a failed container (off by default; log text leaves the host)
 	DockerRuntime              string // Force Docker / Podman runtime: docker, podman, or auto
 
 	// Security
@@ -1333,6 +1335,7 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 	envDisableAutoUpdate := strings.TrimSpace(getenv("PULSE_DISABLE_AUTO_UPDATE"))
 	envDisableDockerUpdateChecks := strings.TrimSpace(getenv("PULSE_DISABLE_DOCKER_UPDATE_CHECKS"))
 	envDisableRegistryCredentials := strings.TrimSpace(getenv("PULSE_DISABLE_REGISTRY_CREDENTIALS"))
+	envEnableFailureLogs := strings.TrimSpace(getenv("PULSE_ENABLE_FAILURE_LOGS"))
 	envDockerRuntime := strings.TrimSpace(getenv("PULSE_DOCKER_RUNTIME"))
 	envEnableCommands := strings.TrimSpace(getenv("PULSE_ENABLE_COMMANDS"))
 	envCommandAuthority := strings.TrimSpace(getenv("PULSE_COMMAND_AUTHORITY"))
@@ -1426,6 +1429,7 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 	disableAutoUpdateFlag := fs.Bool("disable-auto-update", utils.ParseBool(envDisableAutoUpdate), "Disable automatic updates")
 	disableDockerUpdateChecksFlag := fs.Bool("disable-docker-update-checks", utils.ParseBool(envDisableDockerUpdateChecks), "Disable Docker image update detection (avoids Docker Hub rate limits)")
 	disableRegistryCredentialsFlag := fs.Bool("disable-registry-credentials", utils.ParseBool(envDisableRegistryCredentials), "Do not read host Docker credentials (config.json / credential helpers) for registry update checks")
+	enableFailureLogsFlag := fs.Bool("enable-failure-logs", utils.ParseBool(envEnableFailureLogs), "Report the last log lines of a container that has failed, masked and bounded. Off by default: log text leaves this host. Only this flag or PULSE_ENABLE_FAILURE_LOGS turns it on; the server cannot")
 	dockerRuntimeFlag := fs.String("docker-runtime", envDockerRuntime, "Docker / Podman runtime: auto, docker, or podman (default: auto)")
 	enableCommandsFlag := fs.Bool("enable-commands", utils.ParseBool(envEnableCommands), "Enable Pulse command execution for Patrol actions and Proxmox LXC Docker inventory (disabled by default)")
 	commandAuthorityFlag := fs.String("command-authority", envCommandAuthority, "Local command authority: monitoring-only, command-capable, or legacy")
@@ -1629,6 +1633,7 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 		DisableAutoUpdate:          *disableAutoUpdateFlag,
 		DisableDockerUpdateChecks:  *disableDockerUpdateChecksFlag,
 		DisableRegistryCredentials: *disableRegistryCredentialsFlag,
+		EnableFailureLogs:          *enableFailureLogsFlag,
 		DockerRuntime:              dockerRuntime,
 		EnableCommands:             enableCommands,
 		CommandAuthorityProfile:    commandAuthorityProfile,

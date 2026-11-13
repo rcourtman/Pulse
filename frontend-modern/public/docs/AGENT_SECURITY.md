@@ -58,6 +58,22 @@ set of reason codes (for example connection refused or an HTTP status), with
 the exit code and the number of failures in a row. The health check's output
 and its command are never sent.
 
+Container log text is content and stays on the host by default. The local
+`--enable-failure-logs` option (or `PULSE_ENABLE_FAILURE_LOGS=true`) is a
+separate boundary, like custom sensors: it does not enable remote commands,
+`--enable-commands` is not required, and the server cannot turn it on or
+choose what is read. With it on, the Docker module reads the last lines of a
+container only after that container has failed, at most 30 lines and 4 KB,
+once per failure, masks credential-shaped values on the host and sends the
+result with its report. The server masks and bounds the lines again when it
+receives them. Masking is pattern-based and is not a guarantee: a secret in an
+unrecognised shape is sent as written. The lines are stored with the
+container's current state, are readable by anyone who can read that container
+in Pulse, and reach the configured AI provider when Patrol or the Assistant
+reads the container, where they also stay in that run's saved record. Pulse
+does not put them in an alert message. Patrol can quote from them in a
+finding, and a finding can be sent as a notification.
+
 Fresh installs use a local `monitoring-only` command-authority ceiling and a
 credential without `agent:exec`. Remote configuration cannot promote that
 service. Selecting **Allow Pulse to run commands on this host** at install time (the combined

@@ -2690,6 +2690,36 @@ named only when the output states it in the words the common probe tools and
 the engine print. Anything else is `other`, because a wrong reason sends the
 operator the wrong way. Nothing is reported for a container that is not
 unhealthy, or whose newest kept result passed.
+The last log lines of a failed container are a separate, local opt-in:
+`--enable-failure-logs` / `PULSE_ENABLE_FAILURE_LOGS`, off by default, set
+only on the host. No remote configuration, command or report response reaches
+`dockeragent.Config.CollectFailureLogs`, and with it off the agent never asks
+the runtime for logs. With it on, `containerFailureLog` reads through the
+runtime API the module already holds, and only for a container whose own
+state shows a failure (`failureLogReason`): exited non-zero or dead, killed
+for memory, restarting after either, or running with a failing health check.
+A clean stop, a clean exit Docker restarts, a healthy container and one never
+started are never read. A restart loop is "running" for a moment on every
+turn; lines already captured from it are held through that moment
+(`betweenRestarts`) and nothing is read in it.
+
+One failure is read once and served from memory afterwards. The key is the
+finish time for an exit, and a five-minute slot for a container that stays
+unhealthy or keeps restarting, so a loop is not read on every turn. At most
+five new reads happen per collection and each has a five-second deadline, so
+a host where everything fails still reports on time. A read that fails waits a
+minute before it is tried again. Lines held for an earlier failure are never
+reported for a later one.
+
+The stream's frames are removed with a fixed buffer, so a frame that declares
+a huge length allocates nothing, and a raw stream from a runtime that does
+not frame is accepted. At most 4 MB are read and the last 64 KB kept: the end
+of the log is the part that says why. Then, in this order, terminal codes and
+control characters are removed, the text is masked by `pkg/secretredact`, and
+it is cut to 30 lines, 512 bytes a line and 4 KB (`BoundFailureLogLines`).
+Cleaning comes first because a secret split by a control character matches no
+masking rule until the character is gone. Lines of a container that recovers
+or is removed are forgotten.
 Inside-guest Docker / Podman visibility is also a privacy boundary: full
 Docker / Podman inventory may come from a guest-local agent or another explicit
 guest reporting path. LXC Docker inventory may also come from the Proxmox host

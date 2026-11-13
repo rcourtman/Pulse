@@ -3435,6 +3435,35 @@ func TestLoadConfigRegistryCredentialOptOut(t *testing.T) {
 	})
 }
 
+// Failure logs carry log text off the host, so they are off unless the
+// operator turns them on with the flag or its environment variable.
+func TestLoadConfigFailureLogsAreOptIn(t *testing.T) {
+	cfg, err := loadConfig([]string{"-token", "test-token"}, func(string) string { return "" })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.EnableFailureLogs {
+		t.Fatal("failure logs are on by default")
+	}
+
+	env := map[string]string{"PULSE_TOKEN": "test-token", "PULSE_ENABLE_FAILURE_LOGS": "true"}
+	cfg, err = loadConfig([]string{}, func(s string) string { return env[s] })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.EnableFailureLogs {
+		t.Fatal("PULSE_ENABLE_FAILURE_LOGS did not turn failure logs on")
+	}
+
+	cfg, err = loadConfig([]string{"-token", "test-token", "-enable-failure-logs"}, func(string) string { return "" })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.EnableFailureLogs {
+		t.Fatal("--enable-failure-logs did not turn failure logs on")
+	}
+}
+
 // Exercise the real startup, filesystem and verified TLS config transport, but
 // never start collectors, commands or updates on the test host.
 type identityWriteFixture struct {

@@ -504,6 +504,7 @@ func cloneDockerContainer(src DockerContainer) DockerContainer {
 		probe := *src.HealthProbe
 		dest.HealthProbe = &probe
 	}
+	dest.FailureLog = src.FailureLog.Clone()
 	dest.OOMKilled = cloneBoolPtr(src.OOMKilled)
 	dest.StartedAt = cloneTimePtr(src.StartedAt)
 	dest.FinishedAt = cloneTimePtr(src.FinishedAt)

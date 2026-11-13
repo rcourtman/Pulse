@@ -183,6 +183,7 @@
     "pkg/pbs",
     "pkg/pmg",
     "pkg/proxmox",
+    "pkg/secretredact",
     "pkg/securityutil",
     "pkg/tlsutil",
     "scripts/installtests/windowsupdatepacket"

@@ -26,6 +26,7 @@ type fakeDockerClient struct {
 	containerInspectWithRawFn func(ctx context.Context, id string, size bool) (containertypes.InspectResponse, []byte, error)
 	containerStatsOneShotFn   func(ctx context.Context, id string) (dockerStatsResponseReader, error)
 	containerInspectFn        func(ctx context.Context, id string) (containertypes.InspectResponse, error)
+	containerLogTailFn        func(ctx context.Context, id string, lines int) (io.ReadCloser, error)
 	imagePullFn               func(ctx context.Context, ref string, opts dockerImagePullOptions) (io.ReadCloser, error)
 	containerStopFn           func(ctx context.Context, id string, opts dockerContainerStopOptions) error
 	containerRestartFn        func(ctx context.Context, id string, opts dockerContainerRestartOptions) error
@@ -77,6 +78,13 @@ func (f *fakeDockerClient) ContainerStatsOneShot(ctx context.Context, id string)
 		return dockerStatsResponseReader{}, errors.New("unexpected ContainerStatsOneShot call")
 	}
 	return f.containerStatsOneShotFn(ctx, id)
+}
+
+func (f *fakeDockerClient) ContainerLogTail(ctx context.Context, id string, lines int) (io.ReadCloser, error) {
+	if f.containerLogTailFn == nil {
+		return nil, errors.New("unexpected ContainerLogTail call")
+	}
+	return f.containerLogTailFn(ctx, id, lines)
 }
 
 func (f *fakeDockerClient) ContainerInspect(ctx context.Context, id string) (containertypes.InspectResponse, error) {
