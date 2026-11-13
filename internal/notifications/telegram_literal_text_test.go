@@ -246,6 +246,9 @@ func TestTelegramGroupedLiteralTextSettlesWithoutDeadLetter(t *testing.T) {
 			require.NoError(t, err)
 			require.Len(t, pending, 1)
 			require.Len(t, pending[0].Alerts, len(batch))
+			// Deferred construction deliberately has no processor until startup.
+			// Attach the production processor for this synchronous queue witness.
+			m.queue.SetProcessor(m.ProcessQueuedNotification)
 			m.queue.processNotification(pending[0])
 			m.Stop()
 
