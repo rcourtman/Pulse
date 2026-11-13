@@ -89,35 +89,46 @@ func TestIsTrustedProxyIP(t *testing.T) {
 	}
 }
 
-func TestRightMostUntrustedForwardedIP(t *testing.T) {
+func TestForwardedClientIP(t *testing.T) {
 	tests := []struct {
-		name     string
-		primary  string
-		fallback string
-		header   string
-		want     string
+		name        string
+		primary     string
+		fallback    string
+		values      []string
+		want        string
+		wantPresent bool
 	}{
-		{"empty header", "10.0.0.0/8", "", "", ""},
-		{"single untrusted hop", "10.0.0.0/8", "", "203.0.113.5", "203.0.113.5"},
-		{"single trusted hop returns self", "10.0.0.0/8", "", "10.0.0.1", "10.0.0.1"},
-		{"rightmost untrusted wins over trusted", "10.0.0.0/8", "", "203.0.113.5, 10.0.0.1", "203.0.113.5"},
-		{"all trusted returns leftmost valid", "10.0.0.0/8", "", "10.0.0.1, 10.0.0.2", "10.0.0.1"},
-		{"invalid entries skipped returns leftmost valid", "10.0.0.0/8", "", "10.0.0.1, not-an-ip", "10.0.0.1"},
-		{"all invalid returns empty", "10.0.0.0/8", "", "garbage, also-bad", ""},
-		{"multi hop mixed picks rightmost untrusted", "10.0.0.0/8", "", "203.0.113.5, 10.0.0.1, 10.0.0.2", "203.0.113.5"},
-		{"bracketed entries stripped", "10.0.0.0/8", "", "[203.0.113.5], [10.0.0.1]", "203.0.113.5"},
-		{"no config treats all as untrusted rightmost wins", "", "", "1.2.3.4, 5.6.7.8", "5.6.7.8"},
-		{"no config single ip returns it", "", "", "1.2.3.4", "1.2.3.4"},
-		{"fallback env provides trust set", "", "10.0.0.0/8", "203.0.113.5, 10.0.0.1", "203.0.113.5"},
+		{"no header", "10.0.0.0/8", "", nil, "", false},
+		{"empty header", "10.0.0.0/8", "", []string{""}, "", false},
+		{"only separators", "10.0.0.0/8", "", []string{" , ,"}, "", false},
+		{"single untrusted hop", "10.0.0.0/8", "", []string{"203.0.113.5"}, "203.0.113.5", true},
+		{"single trusted hop returns self", "10.0.0.0/8", "", []string{"10.0.0.1"}, "10.0.0.1", true},
+		{"rightmost untrusted wins over trusted", "10.0.0.0/8", "", []string{"203.0.113.5, 10.0.0.1"}, "203.0.113.5", true},
+		{"client claim left of appended hop ignored", "10.0.0.0/8", "", []string{"198.51.100.99, 203.0.113.5"}, "203.0.113.5", true},
+		{"all trusted returns leftmost", "10.0.0.0/8", "", []string{"10.0.0.1, 10.0.0.2"}, "10.0.0.1", true},
+		{"unreadable hop stops the walk", "10.0.0.0/8", "", []string{"198.51.100.99, unknown"}, "", true},
+		{"unreadable hop after trusted hop stops the walk", "10.0.0.0/8", "", []string{"198.51.100.99, unknown, 10.0.0.2"}, "", true},
+		{"client garbage left of appended hop ignored", "10.0.0.0/8", "", []string{"garbage, 203.0.113.5"}, "203.0.113.5", true},
+		{"all invalid", "10.0.0.0/8", "", []string{"garbage, also-bad"}, "", true},
+		{"multi hop mixed picks rightmost untrusted", "10.0.0.0/8", "", []string{"203.0.113.5, 10.0.0.1, 10.0.0.2"}, "203.0.113.5", true},
+		{"bracketed entries stripped", "10.0.0.0/8", "", []string{"[203.0.113.5], [10.0.0.1]"}, "203.0.113.5", true},
+		{"ipv4 with port", "10.0.0.0/8", "", []string{"198.51.100.99, 203.0.113.5:4711"}, "203.0.113.5", true},
+		{"bracketed ipv6 with port", "10.0.0.0/8", "", []string{"198.51.100.99, [2001:db8::5]:4711"}, "2001:db8::5", true},
+		{"trusted hop with port skipped", "10.0.0.0/8", "", []string{"203.0.113.5, 10.0.0.2:80"}, "203.0.113.5", true},
+		{"ipv6 normalised", "10.0.0.0/8", "", []string{"2001:DB8:0:0::5"}, "2001:db8::5", true},
+		{"header lines read as one list", "10.0.0.0/8", "", []string{"198.51.100.99", "203.0.113.5"}, "203.0.113.5", true},
+		{"later line trusted hops skipped", "10.0.0.0/8", "", []string{"198.51.100.99, 203.0.113.5", "10.0.0.2"}, "203.0.113.5", true},
+		{"no config treats all as untrusted rightmost wins", "", "", []string{"1.2.3.4, 5.6.7.8"}, "5.6.7.8", true},
+		{"fallback env provides trust set", "", "10.0.0.0/8", []string{"203.0.113.5, 10.0.0.1"}, "203.0.113.5", true},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			setupTrustEnv(t, tc.primary, tc.fallback)
-			got := rightMostUntrustedForwardedIP(tc.header)
-			if got != tc.want {
-				t.Errorf("rightMostUntrustedForwardedIP(%q) primary=%q = %q, want %q",
-					tc.header, tc.primary, got, tc.want)
+			got, present := forwardedClientIP(tc.values)
+			if got != tc.want || present != tc.wantPresent {
+				t.Errorf("forwardedClientIP(%q) primary=%q = (%q, %v), want (%q, %v)",
+					tc.values, tc.primary, got, present, tc.want, tc.wantPresent)
 			}
 		})
 	}
@@ -181,9 +192,41 @@ func TestClientIP(t *testing.T) {
 			setupEnv: true,
 		},
 		{
-			name:     "trusted remote invalid xff falls back to valid xreal ip",
+			name:     "trusted remote unreadable xff returns proxy not xreal ip",
 			req:      makeReq(t, "10.0.0.1:1234", map[string]string{"X-Forwarded-For": "not-an-ip", "X-Real-IP": "203.0.113.7"}),
+			want:     "10.0.0.1",
+			setupEnv: true,
+		},
+		{
+			name:     "trusted remote empty xff value falls back to xreal ip",
+			req:      makeReq(t, "10.0.0.1:1234", map[string]string{"X-Forwarded-For": " ", "X-Real-IP": "203.0.113.7"}),
 			want:     "203.0.113.7",
+			setupEnv: true,
+		},
+		{
+			name: "trusted remote reads the proxy's own xff line",
+			req: &http.Request{RemoteAddr: "10.0.0.1:1234", Header: http.Header{
+				"X-Forwarded-For": {"198.51.100.99", "203.0.113.5"},
+			}},
+			want:     "203.0.113.5",
+			setupEnv: true,
+		},
+		{
+			name:     "trusted remote valid xff wins over conflicting xreal ip",
+			req:      makeReq(t, "10.0.0.1:1234", map[string]string{"X-Forwarded-For": "203.0.113.5", "X-Real-IP": "198.51.100.99"}),
+			want:     "203.0.113.5",
+			setupEnv: true,
+		},
+		{
+			name:     "untrusted cdn hop becomes the client",
+			req:      makeReq(t, "10.0.0.1:1234", map[string]string{"X-Forwarded-For": "203.0.113.5, 192.0.2.10"}),
+			want:     "192.0.2.10",
+			setupEnv: true,
+		},
+		{
+			name:     "trusted remote xff hop with port",
+			req:      makeReq(t, "10.0.0.1:1234", map[string]string{"X-Forwarded-For": "198.51.100.99, 203.0.113.5:4711"}),
+			want:     "203.0.113.5",
 			setupEnv: true,
 		},
 		{
