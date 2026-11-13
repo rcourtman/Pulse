@@ -116,6 +116,7 @@ func TestPublicBootstrapHandlersRejectOversizedJSONBeforeCredentialUse(t *testin
 		body := `{"action":"` + strings.Repeat("a", int(maxSecurityRequestBodyBytes)) + `"}`
 		req := httptest.NewRequest(http.MethodPost, "/api/security/recovery", strings.NewReader(body))
 		req.RemoteAddr = "127.0.0.1:1234"
+		req.Host = "localhost"
 		rec := httptest.NewRecorder()
 
 		router.mux.ServeHTTP(rec, req)

@@ -4712,7 +4712,22 @@ foreign `Origin`, `Referer` or `Sec-Fetch-Site` is judged as a browser.
 `TestBasicAuthenticatedBrowserWritesRequireExactOrigin` covers the matrix.
 
 No-auth recovery trusts only a direct loopback transport without forwarded
-identity headers. `ALLOW_UNPROTECTED_EXPORT` is an export-only exception and is
+identity headers. `isDirectLoopbackRequest` (`internal/api/loopback_trust.go`)
+is that one rule for every loopback grant: a loopback peer, no reverse-proxy
+forwarding header, a local `Host` (`localhost`, `*.localhost` or a loopback
+literal, never a DNS name that could be re-resolved to 127.0.0.1), and a
+browser request that is `same-origin`/`none` by Fetch Metadata or names
+exactly this origin (`isSameOriginOrNonBrowserRequest`); a page on another
+local port is same-site but gets no loopback trust, reads and WebSocket
+upgrades included.
+`TestRecoveryTokenRequiresLocalHostAndSameOrigin` and
+`TestNoAuthLoopbackAccessRequiresLocalHostAndSameOrigin` prove a rebound
+host, a same-host proxy passing a public `Host` and a cross-site page get no
+recovery token, session or anonymous access. `GetClientIP` takes the
+right-most `X-Forwarded-For` hop that is not in `PULSE_TRUSTED_PROXY_CIDRS`,
+reading every header line, so a client behind an appending proxy cannot choose
+its lockout, rate-limit, audit or recovery-binding address
+(`TestGetClientIPUsesRightMostUntrustedForwardedHop`). `ALLOW_UNPROTECTED_EXPORT` is an export-only exception and is
 ineffective once any authentication or hosted mode is active. Security status
 reports that effective policy rather than the environment variable alone, and
 the root and shipped security guides remain byte-for-byte synchronized. The

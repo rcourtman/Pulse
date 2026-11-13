@@ -32,9 +32,19 @@ away. Wildcard ranges `0.0.0.0/0` and `::/0` are rejected at startup.
 
 At the public edge, replace client-supplied forwarded scheme, host and client-IP
 headers with values established by the proxy; do not append an untrusted value.
-With multiple proxy hops, configure the upstream trust boundary on each hop
-and trust only the final peer in Pulse. `PULSE_TRUSTED_NETWORKS` is not a
+Pulse takes the client address from the right-most `X-Forwarded-For` entry
+that is not a trusted proxy, so entries a client sent itself are ignored. With
+multiple proxy hops (for example a CDN in front of your proxy), either have the
+final proxy replace `X-Forwarded-For` with the real client address it
+established from the upstream hop, or add each upstream hop's address range to
+`PULSE_TRUSTED_PROXY_CIDRS`. Otherwise Pulse sees every user as the upstream
+hop, so they share one login lockout and rate limit.
+`PULSE_TRUSTED_NETWORKS` is not a
 substitute for proxy trust, and proxy trust is not an authentication bypass.
+
+A proxy on the same host that sends Pulse a `localhost` or loopback `Host`
+must also send `X-Forwarded-For` (all the configs below do). With no forwarding
+headers at all, Pulse cannot tell the proxy's requests from a local user's.
 See [configuration overrides](CONFIGURATION.md#common-overrides-environment-variables).
 
 ## ⚡ Quick Configs

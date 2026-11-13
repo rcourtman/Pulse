@@ -171,7 +171,7 @@ func TestIsDirectLoopbackRequest(t *testing.T) {
 			if tt.req != nil {
 				req = tt.req
 			} else if tt.name != "nil request" {
-				req = httptest.NewRequest("GET", "/", nil)
+				req = httptest.NewRequest("GET", "http://localhost:7655/", nil)
 				req.RemoteAddr = tt.remoteAddr
 				for key, value := range tt.headers {
 					req.Header.Set(key, value)

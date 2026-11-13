@@ -342,53 +342,29 @@ func TestExtractRemoteIP(t *testing.T) {
 	}
 }
 
-func TestFirstValidForwardedIP(t *testing.T) {
+func TestParseForwardedHop(t *testing.T) {
 	cases := []struct {
-		name   string
-		header string
-		want   string
+		name string
+		hop  string
+		want string
 	}{
-		// Empty input
-		{"empty string", "", ""},
-		{"whitespace only", "   ", ""},
-
-		// Single IP
-		{"single IPv4", "192.168.1.100", "192.168.1.100"},
-		{"single IPv4 with whitespace", "  192.168.1.100  ", "192.168.1.100"},
-		{"single IPv6", "2001:db8::1", "2001:db8::1"},
-		{"single IPv6 bracketed", "[2001:db8::1]", "2001:db8::1"},
-		{"single IPv6 loopback", "::1", "::1"},
-
-		// Multiple IPs (comma-separated)
-		{"two IPs first valid", "192.168.1.100, 10.0.0.1", "192.168.1.100"},
-		{"two IPs with spaces", "  192.168.1.100  ,  10.0.0.1  ", "192.168.1.100"},
-		{"three IPs", "203.0.113.1, 10.0.0.1, 172.16.0.1", "203.0.113.1"},
-
-		// Invalid first, valid second
-		{"invalid first then valid", "not-an-ip, 192.168.1.100", "192.168.1.100"},
-		{"empty first then valid", ", 192.168.1.100", "192.168.1.100"},
-		{"garbage then valid", "garbage, foobar, 10.0.0.1", "10.0.0.1"},
-
-		// All invalid
-		{"all invalid", "not-an-ip, also-invalid", ""},
-		{"hostnames not IPs", "example.com, localhost", ""},
-
-		// Mixed IPv4 and IPv6
-		{"IPv6 first then IPv4", "2001:db8::1, 192.168.1.1", "2001:db8::1"},
-		{"IPv4 first then IPv6", "192.168.1.1, 2001:db8::1", "192.168.1.1"},
-
-		// Edge cases
-		{"IP with port rejected", "192.168.1.100:8080", ""},
-		{"bracketed IPv6 with port rejected", "[2001:db8::1]:443", ""},
-		{"multiple commas", "192.168.1.1,,,10.0.0.1", "192.168.1.1"},
-		{"only commas", ",,,", ""},
+		{"IPv4", "192.168.1.100", "192.168.1.100"},
+		{"IPv6", "2001:db8::1", "2001:db8::1"},
+		{"bracketed IPv6", "[2001:db8::1]", "2001:db8::1"},
+		{"IPv6 loopback", "::1", "::1"},
+		{"IPv4 with port", "192.168.1.100:8080", "192.168.1.100"},
+		{"bracketed IPv6 with port", "[2001:db8::1]:443", "2001:db8::1"},
+		{"IPv4-mapped IPv6", "::ffff:203.0.113.9", "203.0.113.9"},
+		{"hostname", "example.com", ""},
+		{"hostname with port", "example.com:80", ""},
+		{"unknown marker", "unknown", ""},
+		{"empty", "", ""},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := firstValidForwardedIP(tc.header)
-			if got != tc.want {
-				t.Errorf("firstValidForwardedIP(%q) = %q, want %q", tc.header, got, tc.want)
+			if got := parseForwardedHop(tc.hop); got != tc.want {
+				t.Errorf("parseForwardedHop(%q) = %q, want %q", tc.hop, got, tc.want)
 			}
 		})
 	}

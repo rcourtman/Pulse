@@ -143,6 +143,7 @@ func TestSSOLoadFailureAnonymousAdmissionCannotSurviveRecovery(t *testing.T) {
 					body := &ssoLoadObservedBody{}
 					req := httptest.NewRequest(op.method, op.path, body)
 					req.RemoteAddr = "127.0.0.1:1234"
+					req.Host = "localhost"
 					// A mutable identity-looking header is deliberately not admission.
 					w := httptest.NewRecorder()
 					w.Header().Set("X-Authenticated-User", user)
@@ -163,6 +164,7 @@ func TestSSOLoadFailureAnonymousAdmissionCannotSurviveRecovery(t *testing.T) {
 					require.NoError(t, os.WriteFile(file, saved, 0600))
 					admin := httptest.NewRequest(http.MethodGet, "/api/security/sso/providers", nil)
 					admin.RemoteAddr = "127.0.0.1:4321"
+					admin.Host = "localhost"
 					admin.AddCookie(&http.Cookie{Name: cookieNameSession, Value: raw})
 					recovered := httptest.NewRecorder()
 					r.Handler().ServeHTTP(recovered, admin)
@@ -212,6 +214,7 @@ func TestSSOManagementRecordsActualAuthentication(t *testing.T) {
 			cfg := &config.Config{}
 			req := httptest.NewRequest(http.MethodGet, "/api/security/sso/providers", nil)
 			req.RemoteAddr = "127.0.0.1:1234"
+			req.Host = "localhost"
 			switch mode {
 			case "token", "bearer":
 				cfg.APITokens = []config.APITokenRecord{newTokenRecord(t, token, []string{config.ScopeSettingsRead}, nil)}
@@ -266,6 +269,7 @@ func TestSSOLoadFailureKnownFirstRunKeepsLoopbackManagement(t *testing.T) {
 	} {
 		req := httptest.NewRequest(op.method, op.path, strings.NewReader(op.body))
 		req.RemoteAddr = "127.0.0.1:1234"
+		req.Host = "localhost"
 		w := httptest.NewRecorder()
 		r.Handler().ServeHTTP(w, req)
 		require.Equal(t, op.status, w.Code, w.Body.String())

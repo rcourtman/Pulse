@@ -38,6 +38,7 @@ func establishLoopbackRecoverySession(t *testing.T, router *Router) *http.Cookie
 
 	req := httptest.NewRequest(http.MethodPost, "/api/security/recovery", strings.NewReader(`{"action":"disable_auth"}`))
 	req.RemoteAddr = "127.0.0.1:12345"
+	req.Host = "localhost"
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 
@@ -67,6 +68,7 @@ func TestRecoverySessionAllowsDirectLoopback(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/api/secure", nil)
 	req.RemoteAddr = "127.0.0.1:12345"
+	req.Host = "localhost"
 	req.AddCookie(sessionCookie)
 	rec := httptest.NewRecorder()
 
@@ -91,6 +93,7 @@ func TestRecoverySessionRejectsForwardedLoopback(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/api/secure", nil)
 	req.RemoteAddr = "127.0.0.1:12345"
+	req.Host = "localhost"
 	req.Header.Set("X-Forwarded-For", "127.0.0.1")
 	req.AddCookie(sessionCookie)
 	rec := httptest.NewRecorder()
@@ -122,6 +125,7 @@ func TestRecoveryEndpointDisableAuthAllowsLoopback(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/api/security/recovery", strings.NewReader(`{"action":"disable_auth"}`))
 	req.RemoteAddr = "127.0.0.1:12345"
+	req.Host = "localhost"
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 
@@ -173,6 +177,7 @@ func TestRecoveryEndpointEnableAuthClearsRecoverySession(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/api/security/recovery", strings.NewReader(`{"action":"enable_auth"}`))
 	req.RemoteAddr = "127.0.0.1:12345"
+	req.Host = "localhost"
 	req.Header.Set("Content-Type", "application/json")
 	req.AddCookie(sessionCookie)
 	rec := httptest.NewRecorder()
@@ -185,6 +190,7 @@ func TestRecoveryEndpointEnableAuthClearsRecoverySession(t *testing.T) {
 
 	followUp := httptest.NewRequest(http.MethodGet, "/api/secure", nil)
 	followUp.RemoteAddr = "127.0.0.1:12345"
+	followUp.Host = "localhost"
 	followUp.AddCookie(sessionCookie)
 	followRec := httptest.NewRecorder()
 
@@ -240,6 +246,7 @@ func TestRecoveryEndpointGenerateTokenLoopbackSuccess(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/api/security/recovery", strings.NewReader(`{"action":"generate_token"}`))
 	req.RemoteAddr = "127.0.0.1:12345"
+	req.Host = "localhost"
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 
@@ -266,6 +273,7 @@ func TestRecoveryEndpointInvalidAction(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/api/security/recovery", strings.NewReader(`{"action":"not-valid"}`))
 	req.RemoteAddr = "127.0.0.1:12345"
+	req.Host = "localhost"
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 

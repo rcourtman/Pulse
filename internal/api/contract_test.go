@@ -11724,6 +11724,7 @@ func TestContract_QuickSecuritySetupBootstrapRetrievalGuidance(t *testing.T) {
 	body := `{"username":"bootstrap","password":"StrongPass!1","apiToken":"` + strings.Repeat("aa", 32) + `"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/security/quick-setup", strings.NewReader(body))
 	req.RemoteAddr = "127.0.0.1:54321"
+	req.Host = "localhost"
 	rec := httptest.NewRecorder()
 
 	authLimiter.Reset("127.0.0.1")
@@ -25596,6 +25597,7 @@ func TestContract_ConfigImportReplayRemainsAuthenticatedAndScoped(t *testing.T) 
 			for _, want := range []int{http.StatusOK, http.StatusConflict} {
 				req := httptest.NewRequest(http.MethodPost, "/api/config/import", bytes.NewReader(body))
 				req.RemoteAddr = "127.0.0.1:1234"
+				req.Host = "localhost"
 				req.Header.Set("X-Pulse-Org-ID", orgID)
 				req.Header.Set("X-CSRF-Token", generateCSRFToken(session))
 				req.AddCookie(&http.Cookie{Name: cookieNameSession, Value: session})
@@ -25616,6 +25618,7 @@ func TestContract_ConfigImportReplayRemainsAuthenticatedAndScoped(t *testing.T) 
 		req := httptest.NewRequest(http.MethodPost, "/api/config/import", counted)
 		req.Header.Set("X-Pulse-Org-ID", "tenant-a")
 		req.RemoteAddr = "127.0.0.1:1234"
+		req.Host = "localhost"
 		if authenticated {
 			req.AddCookie(&http.Cookie{Name: cookieNameSession, Value: session})
 		}
@@ -26765,6 +26768,7 @@ func TestRecoveryTokenPersistenceHTTP(t *testing.T) {
 		restore := blockRecoveryPersistence(t, store, "rename")
 		req := httptest.NewRequest(http.MethodPost, "/api/security/recovery", strings.NewReader(`{"action":"generate_token"}`))
 		req.RemoteAddr = "127.0.0.1:12345"
+		req.Host = "localhost"
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
