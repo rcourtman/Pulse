@@ -77,6 +77,30 @@ No updater status field, rendered error or page data changes. Other transport,
 status and decode diagnostics are not claimed sanitized. This repair does not
 establish exposure, original-host recovery or publication.
 
+### Incomplete saved token inventories do not withdraw live authentication
+
+A present API-token file must decode as a complete JSON inventory. A zero-byte
+or incomplete plaintext/encrypted file is an error, not a successful no-token
+configuration. Startup propagates that error rather than entering an
+unconfigured authentication mode. Genuine first-install file absence remains
+compatible with setup.
+
+Hot reload requires a complete existing file even when the current inventory
+is empty. A missing file or unavailable directory during remove/replace is a
+failed observation: the watcher retains exact live token IDs, scopes, owners,
+organizations and expiry, and does not rebuild agent bindings. It never writes
+replacement storage. Restoring the exact saved inventory allows a later reload;
+a subsequently saved explicit empty array still withdraws all those tokens.
+Legacy complete JSON `null` remains an explicit empty inventory, not a new
+invalid-schema policy. Existing bounded retries, canonical migration-before-use,
+concurrent mutation serialization and token/tenant checks are unchanged.
+
+Registered persistence, startup and watcher tests exercise blank, missing,
+missing-directory, whitespace, malformed and encrypted incomplete states,
+unchanged saved bytes/attributes, retained authentication, exact-source recovery
+and explicit revocation. They are synthetic fixtures, not original-client
+recovery, installed acceptance or an historical impact assessment.
+
 ### Agent saved-authority ingress cannot accept partial or streaming state
 
 The production agent-specific reader admits only regular saved authority files

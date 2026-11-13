@@ -1468,12 +1468,12 @@ func TestLoadAPITokensEmptyFile(t *testing.T) {
 	}
 
 	tokens, err := cp.LoadAPITokens()
-	if err != nil {
-		t.Fatalf("LoadAPITokens returned error for empty file: %v", err)
+	if err == nil || tokens != nil {
+		t.Fatal("an incomplete empty file must not become a successful empty inventory")
 	}
-
-	if len(tokens) != 0 {
-		t.Fatalf("expected empty slice for empty file, got %d tokens", len(tokens))
+	data, readErr := os.ReadFile(tokensFile)
+	if readErr != nil || len(data) != 0 {
+		t.Fatal("failed load changed the incomplete saved inventory")
 	}
 }
 

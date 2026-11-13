@@ -769,3 +769,59 @@ func TestPVEEndpointTrustEmptyAndMalformedChoicesConflict(t *testing.T) {
 		t.Fatal("merge treated an invalid nonempty pin as deliberate empty CA policy")
 	}
 }
+
+// A present but incomplete token file must reach Load's authentication-error
+// path, not the first-install path that has no configured tokens.
+func TestLoad_APITokensRefusesIncompleteSavedInventory(t *testing.T) {
+	for _, state := range []string{"blank", "whitespace", "encrypted-blank", "encrypted-whitespace", "malformed"} {
+		t.Run(state, func(t *testing.T) {
+			dir := t.TempDir()
+			t.Setenv("PULSE_DATA_DIR", dir)
+			t.Setenv("PULSE_AUTH_CONFIG_DIR", dir)
+			p := NewConfigPersistence(dir)
+			var data []byte
+			switch state {
+			case "blank":
+				data = []byte{}
+			case "whitespace":
+				data = []byte(" \t\n")
+			case "malformed":
+				data = []byte("[")
+			case "encrypted-blank", "encrypted-whitespace":
+				require.NotNil(t, p.crypto)
+				plain := []byte{}
+				if state == "encrypted-whitespace" {
+					plain = []byte(" \t\n")
+				}
+				var err error
+				data, err = p.crypto.Encrypt(plain)
+				require.NoError(t, err)
+			}
+			require.NoError(t, os.WriteFile(p.apiTokensFile, data, 0600))
+			before, err := os.Stat(p.apiTokensFile)
+			require.NoError(t, err)
+			cfg, err := LoadWithoutLoggingInit()
+			require.ErrorContains(t, err, "load API tokens")
+			require.Nil(t, cfg, "partial startup configuration escaped the authentication boundary")
+			got, err := os.ReadFile(p.apiTokensFile)
+			require.NoError(t, err)
+			require.Equal(t, data, got)
+			after, err := os.Stat(p.apiTokensFile)
+			require.NoError(t, err)
+			require.True(t, os.SameFile(before, after))
+			require.Equal(t, before.Mode(), after.Mode())
+			require.Equal(t, before.ModTime(), after.ModTime())
+		})
+	}
+}
+
+func TestLoad_APITokensMissingFirstInstallStillWorks(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", dir)
+	t.Setenv("PULSE_AUTH_CONFIG_DIR", dir)
+	cfg, err := LoadWithoutLoggingInit()
+	require.NoError(t, err)
+	require.Empty(t, cfg.APITokens)
+	_, err = os.Stat(filepath.Join(dir, "api_tokens.json"))
+	require.True(t, os.IsNotExist(err), "first load created a replacement inventory")
+}

@@ -529,7 +529,10 @@ func (cw *ConfigWatcher) reloadAPITokens() {
 	retryDelay := 50 * time.Millisecond
 
 	for attempt := 1; attempt <= maxRetries; attempt++ {
-		tokens, err = cw.persistence.LoadAPITokens()
+		// A missing file during a running server's reload can be a
+		// remove/replace window, not an explicit saved revocation. Require
+		// a complete existing inventory; first-install absence is separate.
+		tokens, err = cw.persistence.loadAPITokens(false)
 		if err == nil {
 			break
 		}
@@ -559,7 +562,7 @@ func (cw *ConfigWatcher) reloadAPITokens() {
 		return
 	}
 
-	// LoadAPITokens persists every authorization-relevant migration before it
+	// The loader persists every authorization-relevant migration before it
 	// returns. Only a durable canonical inventory may replace live credentials.
 	cw.config.APITokens = tokens
 	cw.config.SortAPITokens()
