@@ -1,5 +1,5 @@
 {
-  "source_hash": "7d9948affcc1f5f4b9a36a5bf7832d36f3891ee1513b7afc2a03faef92b6ca55",
+  "source_hash": "c12088b77a49963087c064326c8ae7faa19c0c1f82d91d3a07ab37a073cb0a5d",
   "build_inputs": [
     "package.json",
     "tsconfig.json",
@@ -21,6 +21,7 @@
     "src/async_state.ts",
     "src/auth_controller.test.ts",
     "src/auth_controller.ts",
+    "src/billing.test.ts",
     "src/billing.ts",
     "src/billing_controller.test.ts",
     "src/billing_controller.ts",
@@ -44,6 +45,8 @@
     "src/theme.test.ts",
     "src/theme.ts",
     "src/types.ts",
+    "src/verification_send.test.ts",
+    "src/verification_send.ts",
     "src/workspace_presentation.test.ts",
     "src/workspace_presentation.ts"
   ]

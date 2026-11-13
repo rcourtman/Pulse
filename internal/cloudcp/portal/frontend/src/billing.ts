@@ -6,7 +6,8 @@ import {
   resolveQueryState,
   succeedMutationState,
 } from './async_state';
-import type { PortalAPI } from './api';
+import { PortalAPIError, type PortalAPI } from './api';
+import { createVerificationSendWindow, trimVerificationEmail, verificationEmailKey } from './verification_send';
 import { installBillingController } from './billing_controller';
 import {
   clearFlowStatus,
@@ -56,15 +57,13 @@ interface VerificationFlowDefinition {
   confirmButtonID?: string;
   step2ID?: string;
   statusID: string;
+  resendID?: string;
   requestLabel: string;
   requestPendingLabel: string;
   confirmLabel?: string;
   confirmPendingLabel?: string;
-  requestSuccessMessage: string;
-  resendSuccessMessage: string;
   requestErrorMessage: string;
   confirmErrorMessage: string;
-  readEmailValue?: () => string;
   readCodeValue?: () => string;
   onRequestStart?: () => void;
   beforeConfirm?: () => boolean;
@@ -82,6 +81,97 @@ export interface BillingRuntimeDeps {
 export function installBillingRuntime(deps: BillingRuntimeDeps): void {
   var api = deps.api;
   var store = deps.store;
+  var sendWindow = createVerificationSendWindow();
+  var flowVersions = { manage: 0, retrieve: 0, export: 0, delete: 0 };
+  var sessionVersion = 0;
+  var departed = false;
+  var sendTimer: ReturnType<typeof setInterval> | undefined;
+  var sessionIdentity = currentSessionIdentity();
+
+  function currentSessionIdentity(): string {
+    var bootstrap = store.getBootstrap();
+    return JSON.stringify([bootstrap.authenticated, bootstrap.email, bootstrap.commercial_api_base_url]);
+  }
+
+  function sameMailbox(left: string, right: string): boolean {
+    return !!verificationEmailKey(left) && verificationEmailKey(left) === verificationEmailKey(right);
+  }
+
+  function confirmPendingFor(email: string): boolean {
+    return Object.values(getBillingState().flows).some(function(state) {
+      return state.confirm.pending && sameMailbox(state.pendingEmail, email);
+    });
+  }
+
+  function updateSendControls(): void {
+    (Object.keys(verificationFlows) as PortalBillingFlowID[]).forEach(function(flowID) {
+      var flow = verificationFlows[flowID];
+      var state = getBillingState().flows[flowID];
+      var windowState = sendWindow.state(state.emailValue);
+      var confirmPending = confirmPendingFor(state.emailValue);
+      var label = windowState.pending ? flow.requestPendingLabel
+        : windowState.seconds ? 'Request again in ' + windowState.seconds + 's' : flow.requestLabel;
+      renderButton(flow.requestButtonID, departed || windowState.pending || !!windowState.seconds || confirmPending, label);
+      var note = getElement(flow.statusID + '-send-note');
+      if (note) {
+        var message = windowState.pending ? 'A code request for this email is in progress.'
+          : windowState.seconds ? 'One request per minute per email, shared across actions. Codes only work for their original action.' : '';
+        if (note.textContent !== message) note.textContent = message;
+        note.hidden = !message;
+      }
+      var resend = flow.resendID ? getElement(flow.resendID) : null;
+      if (resend) {
+        var resendWindow = sendWindow.state(state.pendingEmail);
+        var blocked = departed || resendWindow.pending || !!resendWindow.seconds || confirmPendingFor(state.pendingEmail);
+        resend.setAttribute('aria-disabled', String(blocked));
+        var resendLabel = resendWindow.pending ? 'Request pending…'
+          : resendWindow.seconds ? 'Wait ' + resendWindow.seconds + 's' : 'Send again';
+        if (resend.textContent !== resendLabel) resend.textContent = resendLabel;
+      }
+      var targetMatches = sameMailbox(state.emailValue, state.pendingEmail);
+      var emailInput = getElement<HTMLInputElement>(flow.emailInputID);
+      if (emailInput) emailInput.disabled = state.confirm.pending;
+      var codeInput = flow.codeInputID ? getElement<HTMLInputElement>(flow.codeInputID) : null;
+      if (codeInput) codeInput.disabled = state.confirm.pending || sendWindow.state(state.pendingEmail).pending;
+      if (flowID === 'delete') {
+        var checkbox = getElement<HTMLInputElement>('data-delete-confirm-check');
+        if (checkbox) checkbox.disabled = state.confirm.pending || sendWindow.state(state.pendingEmail).pending;
+      }
+      renderButton(flow.confirmButtonID,
+        departed || state.confirm.pending || sendWindow.state(state.pendingEmail).pending || !targetMatches,
+        state.confirm.pending ? flow.confirmPendingLabel : flow.confirmLabel);
+      if (flow.step2ID) setVisible(flow.step2ID, state.step2Visible && targetMatches);
+    });
+    if (!sendWindow.active() && sendTimer !== undefined) {
+      clearInterval(sendTimer);
+      sendTimer = undefined;
+    }
+  }
+
+  function watchSendWindow(): void {
+    if (sendTimer === undefined) sendTimer = setInterval(updateSendControls, 1000);
+  }
+
+  function retireVerificationState(seedEmail = ''): void {
+    sessionVersion += 1;
+    sendWindow.clear();
+    if (sendTimer !== undefined) clearInterval(sendTimer);
+    sendTimer = undefined;
+    updateBillingState(function(state) {
+      state.flows = createPortalBillingState().flows;
+      Object.values(state.flows).forEach(function(flow) { flow.emailValue = seedEmail; });
+    }, false);
+  }
+
+  window.addEventListener('pagehide', function() {
+    departed = true;
+    retireVerificationState();
+    renderAllFlows();
+  });
+  window.addEventListener('pageshow', function() {
+    departed = false;
+    updateSendControls();
+  });
 
   store.updateBillingState(function(billingState) {
     if (!billingState.flows) {
@@ -124,7 +214,6 @@ export function installBillingRuntime(deps: BillingRuntimeDeps): void {
     if (flow.renderPanel) {
       flow.renderPanel(flowState);
     }
-    renderButton(flow.requestButtonID, flowState.request.pending, flowState.request.pending ? flow.requestPendingLabel : flow.requestLabel);
     renderButton(flow.confirmButtonID, flowState.confirm.pending, flowState.confirm.pending ? flow.confirmPendingLabel : flow.confirmLabel);
     renderBillingStatus(flow.statusID, flowState.status);
     if (flow.step2ID) {
@@ -133,6 +222,7 @@ export function installBillingRuntime(deps: BillingRuntimeDeps): void {
     if (flow.renderResult) {
       flow.renderResult(flowState.result);
     }
+    updateSendControls();
   }
 
   function renderAllFlows() {
@@ -153,17 +243,6 @@ export function installBillingRuntime(deps: BillingRuntimeDeps): void {
 
   function renderUpgrade() {
     renderUpgradePanel(getBillingState(), store.getBootstrap());
-  }
-
-  function resetVerificationFlow(flowID: PortalBillingFlowID) {
-    var flow = verificationFlows[flowID];
-    if (!flow) return;
-    updateBillingState(function(billingState) {
-      resetVerificationFlowState(billingState, flowID);
-    }, false);
-    if (flow.codeInputID) {
-      setValue(flow.codeInputID, '');
-    }
   }
 
   async function loadUpgradePricing(force: boolean) {
@@ -286,17 +365,13 @@ export function installBillingRuntime(deps: BillingRuntimeDeps): void {
       confirmButtonID: 'manage-inline-confirm',
       step2ID: 'manage-inline-step2',
       statusID: 'manage-inline-status',
+      resendID: 'manage-inline-resend',
       requestLabel: 'Send Verification Code',
       requestPendingLabel: 'Sending...',
       confirmLabel: 'Open Customer Portal',
       confirmPendingLabel: 'Redirecting...',
-      requestSuccessMessage: 'Verification code sent. Check your email.',
-      resendSuccessMessage: 'New verification code sent.',
       requestErrorMessage: 'Failed to send verification code',
       confirmErrorMessage: 'Failed to open customer portal',
-      readEmailValue: function() {
-        return getBillingState().flows.manage.emailValue;
-      },
       readCodeValue: function() {
         return getBillingState().flows.manage.codeValue;
       },
@@ -320,13 +395,8 @@ export function installBillingRuntime(deps: BillingRuntimeDeps): void {
       requestPendingLabel: 'Sending...',
       confirmLabel: 'Show License',
       confirmPendingLabel: 'Loading...',
-      requestSuccessMessage: 'Verification code sent. Check your email.',
-      resendSuccessMessage: 'New verification code sent.',
       requestErrorMessage: 'Failed to send verification code',
       confirmErrorMessage: 'Failed to retrieve license',
-      readEmailValue: function() {
-        return getBillingState().flows.retrieve.emailValue;
-      },
       readCodeValue: function() {
         return getBillingState().flows.retrieve.codeValue;
       },
@@ -352,17 +422,13 @@ export function installBillingRuntime(deps: BillingRuntimeDeps): void {
       confirmButtonID: 'data-export-confirm',
       step2ID: 'data-export-step2',
       statusID: 'data-export-status',
+      resendID: 'data-export-resend',
       requestLabel: 'Send Verification Code',
       requestPendingLabel: 'Sending...',
       confirmLabel: 'Export My Data',
       confirmPendingLabel: 'Exporting...',
-      requestSuccessMessage: 'Verification code sent. Check your email.',
-      resendSuccessMessage: 'New verification code sent.',
       requestErrorMessage: 'Request failed',
       confirmErrorMessage: 'Export failed',
-      readEmailValue: function() {
-        return getBillingState().flows.export.emailValue;
-      },
       readCodeValue: function() {
         return getBillingState().flows.export.codeValue;
       },
@@ -391,17 +457,13 @@ export function installBillingRuntime(deps: BillingRuntimeDeps): void {
       confirmButtonID: 'data-delete-confirm',
       step2ID: 'data-delete-step2',
       statusID: 'data-delete-status',
+      resendID: 'data-delete-resend',
       requestLabel: 'Send Verification Code',
       requestPendingLabel: 'Sending...',
       confirmLabel: 'Delete My Data',
       confirmPendingLabel: 'Deleting...',
-      requestSuccessMessage: 'Verification code sent. Check your email.',
-      resendSuccessMessage: 'New verification code sent.',
       requestErrorMessage: 'Request failed',
       confirmErrorMessage: 'Deletion failed',
-      readEmailValue: function() {
-        return getBillingState().flows.delete.emailValue;
-      },
       readCodeValue: function() {
         return getBillingState().flows.delete.codeValue;
       },
@@ -435,60 +497,86 @@ export function installBillingRuntime(deps: BillingRuntimeDeps): void {
     },
   };
 
-  async function requestVerificationCode(flowID: PortalBillingFlowID) {
+  async function requestVerificationCode(flowID: PortalBillingFlowID, resend = false) {
     var flow = verificationFlows[flowID];
-    if (!flow) return;
-    var email = flow.readEmailValue ? flow.readEmailValue() : readValue(flow.emailInputID);
+    if (!flow || departed) return;
+    var state = getBillingState().flows[flowID];
+    var email = trimVerificationEmail(resend ? state.pendingEmail : state.emailValue);
     if (!email) {
       focusElement(flow.emailInputID);
       return;
     }
-    if (flow.onRequestStart) {
-      flow.onRequestStart();
+    if (!sameMailbox(state.emailValue, email) || confirmPendingFor(email)) return;
+    var reservation = sendWindow.begin(email);
+    if (!reservation) {
+      updateSendControls();
+      return;
     }
+    var version = ++flowVersions[flowID];
+    var session = sessionVersion;
+    // A deliberate new send can replace the challenge. A blocked local send
+    // above leaves the earlier same-action code and consent untouched.
+    if (flow.onRequestStart) flow.onRequestStart();
     updateBillingState(function(billingState) {
-      beginMutationState(billingState.flows[flowID].request);
+      var next = billingState.flows[flowID];
+      next.codeValue = '';
+      next.checkboxChecked = false;
+      beginMutationState(next.request);
       clearFlowStatus(billingState, flowID);
     });
+    watchSendWindow();
+    function current(): boolean {
+      return session === sessionVersion && version === flowVersions[flowID] &&
+        !departed && sameMailbox(getBillingState().flows[flowID].emailValue, email);
+    }
+    function showCodeEntry(message: string, error: boolean): void {
+      if (!current()) return;
+      updateBillingState(function(billingState) {
+        var next = billingState.flows[flowID];
+        next.pendingEmail = email;
+        next.step2Visible = !!flow.step2ID;
+        succeedMutationState(next.request);
+        setFlowStatus(billingState, flowID, message, error);
+      });
+    }
     try {
       await api.postCommercialJSON(flow.requestPath, { email: email });
-      updateBillingState(function(billingState) {
-        billingState.flows[flowID].pendingEmail = email;
-        billingState.flows[flowID].step2Visible = !!flow.step2ID;
-        succeedMutationState(billingState.flows[flowID].request);
-        setFlowStatus(billingState, flowID, flow.requestSuccessMessage, false);
-      });
+      sendWindow.settle(reservation, true);
+      showCodeEntry('If eligible, check your email. Use the latest code for this action.', false);
     } catch (err) {
-      var message = err instanceof Error ? err.message : flow.requestErrorMessage;
-      updateBillingState(function(billingState) {
-        failMutationState(billingState.flows[flowID].request, message);
-        setFlowStatus(billingState, flowID, message, true);
-      });
+      var definiteRejection = err instanceof PortalAPIError && [400, 429, 500].includes(err.status);
+      sendWindow.settle(reservation, !definiteRejection);
+      if (!definiteRejection) {
+        showCodeEntry('The request outcome is unknown. If a code arrives, use the latest code for this action.', true);
+      } else if (current()) {
+        var message = err instanceof Error ? err.message : flow.requestErrorMessage;
+        updateBillingState(function(billingState) {
+          failMutationState(billingState.flows[flowID].request, message);
+          setFlowStatus(billingState, flowID, message, true);
+        });
+      }
+    } finally {
+      updateSendControls();
     }
   }
 
-  async function resendVerificationCode(flowID: PortalBillingFlowID, event?: Event) {
+  function resendVerificationCode(flowID: PortalBillingFlowID, event?: Event) {
     if (event) event.preventDefault();
-    var flow = verificationFlows[flowID];
-    if (!flow) return;
-    var email = getBillingState().flows[flowID].pendingEmail;
-    if (!email) return;
-    try {
-      await api.postCommercialJSON(flow.requestPath, { email: email });
-      updateBillingState(function(billingState) {
-        setFlowStatus(billingState, flowID, flow.resendSuccessMessage, false);
-      });
-    } catch (err) {
-      updateBillingState(function(billingState) {
-        setFlowStatus(billingState, flowID, err instanceof Error ? err.message : flow.requestErrorMessage, true);
-      });
-    }
+    return requestVerificationCode(flowID, true);
   }
 
   async function confirmVerificationCode(flowID: PortalBillingFlowID) {
     var flow = verificationFlows[flowID];
-    if (!flow) return;
-    var email = getBillingState().flows[flowID].pendingEmail;
+    if (!flow || departed) return;
+    var state = getBillingState().flows[flowID];
+    var email = state.pendingEmail;
+    if (state.confirm.pending || sendWindow.state(email).pending || !sameMailbox(state.emailValue, email)) return;
+    var version = flowVersions[flowID];
+    var session = sessionVersion;
+    function current(): boolean {
+      return session === sessionVersion && version === flowVersions[flowID] &&
+        !departed && sameMailbox(getBillingState().flows[flowID].emailValue, email);
+    }
     var code = flow.readCodeValue ? flow.readCodeValue() : readValue(flow.codeInputID);
     if (!email || !code) return;
     if (flow.beforeConfirm && flow.beforeConfirm() === false) {
@@ -499,6 +587,8 @@ export function installBillingRuntime(deps: BillingRuntimeDeps): void {
     });
     try {
       var data = await api.postCommercialJSON(flow.confirmPath, { email: email, code: code });
+      if (!current()) return;
+      flowVersions[flowID] += 1;
       updateBillingState(function(billingState) {
         succeedMutationState(billingState.flows[flowID].confirm);
         if (flow.applyConfirmSuccessState) {
@@ -509,6 +599,7 @@ export function installBillingRuntime(deps: BillingRuntimeDeps): void {
         flow.afterConfirmSuccess(data, email);
       }
     } catch (err) {
+      if (!current()) return;
       var message = err instanceof Error ? err.message : flow.confirmErrorMessage;
       updateBillingState(function(billingState) {
         failMutationState(billingState.flows[flowID].confirm, message);
@@ -573,7 +664,14 @@ export function installBillingRuntime(deps: BillingRuntimeDeps): void {
   }
 
   renderBillingRuntime();
-  store.subscribeBootstrap(renderBillingRuntime);
+  store.subscribeBootstrap(function() {
+    var identity = currentSessionIdentity();
+    if (identity !== sessionIdentity) {
+      sessionIdentity = identity;
+      retireVerificationState(store.getBootstrap().authenticated ? store.getBootstrap().email : '');
+    }
+    renderBillingRuntime();
+  });
   store.subscribeBilling(renderBillingRuntime);
 
   installBillingController({
@@ -605,9 +703,40 @@ export function installBillingRuntime(deps: BillingRuntimeDeps): void {
       void startUpgradeCheckout(planKey, tier, billingCycle);
     },
     updateInputValue: function(inputKind, value) {
+      var emailFlows: Record<string, PortalBillingFlowID> = {
+        'manage-email': 'manage', 'retrieve-email': 'retrieve',
+        'data-export-email': 'export', 'data-delete-email': 'delete',
+      };
+      var editedFlow = emailFlows[inputKind];
+      if (editedFlow && getBillingState().flows[editedFlow].confirm.pending) {
+        setValue(verificationFlows[editedFlow].emailInputID, getBillingState().flows[editedFlow].emailValue);
+        return;
+      }
+      var changedMailbox = editedFlow &&
+        verificationEmailKey(getBillingState().flows[editedFlow].emailValue) !== verificationEmailKey(value);
       updateBillingState(function(billingState) {
         updateBillingInputValue(billingState, inputKind, value);
+        if (changedMailbox) {
+          flowVersions[editedFlow!] += 1;
+          resetVerificationFlowState(billingState, editedFlow!);
+        }
       }, false);
+      if (changedMailbox && editedFlow) {
+        var flow = verificationFlows[editedFlow];
+        setVisible(flow.step2ID!, false);
+        setValue(flow.codeInputID!, '');
+        var checkbox = getElement<HTMLInputElement>('data-delete-confirm-check');
+        if (editedFlow === 'delete' && checkbox) checkbox.checked = false;
+        renderBillingStatus(flow.statusID, getBillingState().flows[editedFlow].status);
+        if (editedFlow === 'retrieve') {
+          setVisible('retrieve-inline-result', false);
+          setValue('retrieve-inline-token', '');
+          setVisible('retrieve-inline-copy', false);
+          setVisible('retrieve-inline-invoice', false);
+        }
+        if (editedFlow === 'export') renderExportResult(null);
+      }
+      updateSendControls();
     },
     updateDeleteConfirmation: function(checked) {
       updateBillingState(function(billingState) {

@@ -1888,6 +1888,58 @@
     };
   }
 
+  // src/verification_send.ts
+  function trimVerificationEmail(email) {
+    return String(email || "").replace(/^\p{White_Space}+|\p{White_Space}+$/gu, "");
+  }
+  function verificationEmailKey(email) {
+    return trimVerificationEmail(email).replace(/[A-Z]/g, function(letter) {
+      return letter.toLowerCase();
+    });
+  }
+  function createVerificationSendWindow(now = () => performance.now()) {
+    var reservations = /* @__PURE__ */ new Map();
+    function state(email) {
+      var key = verificationEmailKey(email);
+      var entry = reservations.get(key);
+      if (entry && !entry.pending && entry.readyAt <= now()) {
+        reservations.delete(key);
+        entry = void 0;
+      }
+      return {
+        pending: !!entry?.pending,
+        seconds: entry && !entry.pending ? Math.max(0, Math.ceil((entry.readyAt - now()) / 1e3)) : 0
+      };
+    }
+    return {
+      state,
+      begin(email) {
+        var key = verificationEmailKey(email);
+        var current = state(email);
+        if (!key || current.pending || current.seconds) return null;
+        var entry = { key, pending: true, readyAt: 0 };
+        reservations.set(key, entry);
+        return entry;
+      },
+      settle(entry, wait) {
+        if (reservations.get(entry.key) !== entry) return;
+        if (!wait) {
+          reservations.delete(entry.key);
+          return;
+        }
+        entry.pending = false;
+        entry.readyAt = now() + 6e4;
+      },
+      active() {
+        Array.from(reservations.keys()).forEach(state);
+        return reservations.size > 0;
+      },
+      clear() {
+        reservations.clear();
+      }
+    };
+  }
+
   // src/billing_view.ts
   function getElement3(id) {
     return document.getElementById(id);
@@ -2024,7 +2076,7 @@
     var button = getElement3(id);
     if (!button) return;
     button.disabled = disabled;
-    button.textContent = label;
+    if (button.textContent !== label) button.textContent = label;
   }
   function renderOpenBillingPanels(openBillingPanelID) {
     var shell = document.querySelector(".billing-shell");
@@ -2083,19 +2135,19 @@
   function renderManagePanel(flowState) {
     var root = getElement3("manage-billing-root");
     if (!root) return;
-    root.innerHTML = '<p>Request a verification code for the commercial email, then open the Stripe customer portal for billing changes, invoices, and subscription actions.</p><div id="manage-inline-step1"><div class="form-group"><label for="manage-inline-email">Email address</label><input type="email" id="manage-inline-email" value="' + escapeAttribute(flowState.emailValue || "") + '" autocomplete="email" data-account-billing-input="manage-email"></div><div class="form-actions"><button class="btn-primary" type="button" id="manage-inline-request" data-account-billing-action="manage-inline-request">Send Verification Code</button></div></div><div id="manage-inline-step2"' + (flowState.step2Visible ? "" : " hidden") + '><div class="form-group"><label for="manage-inline-code">Verification code</label><input type="text" id="manage-inline-code" value="' + escapeAttribute(flowState.codeValue || "") + '" inputmode="numeric" pattern="[0-9]{6}" placeholder="123456" data-account-billing-input="manage-code"></div><div class="form-actions"><button class="btn-primary" type="button" id="manage-inline-confirm" data-account-billing-action="manage-inline-confirm">Open Customer Portal</button></div><div class="helper-text">Need a new code? <a href="#" id="manage-inline-resend" data-account-billing-action="manage-inline-resend">Send again</a></div></div><div class="billing-status" id="manage-inline-status"></div>';
+    root.innerHTML = '<p>Request a verification code for the commercial email, then open the Stripe customer portal for billing changes, invoices, and subscription actions.</p><div id="manage-inline-step1"><div class="form-group"><label for="manage-inline-email">Email address</label><input type="email" id="manage-inline-email" value="' + escapeAttribute(flowState.emailValue || "") + '" autocomplete="email" data-account-billing-input="manage-email"></div><div class="form-actions"><button class="btn-primary" type="button" id="manage-inline-request" data-account-billing-action="manage-inline-request">Send Verification Code</button></div></div><div id="manage-inline-step2"' + (flowState.step2Visible ? "" : " hidden") + '><div class="form-group"><label for="manage-inline-code">Verification code</label><input type="text" id="manage-inline-code" value="' + escapeAttribute(flowState.codeValue || "") + '" inputmode="numeric" pattern="[0-9]{6}" placeholder="123456" data-account-billing-input="manage-code"></div><div class="form-actions"><button class="btn-primary" type="button" id="manage-inline-confirm" data-account-billing-action="manage-inline-confirm">Open Customer Portal</button></div><div class="helper-text">Need a new code? <a href="#" id="manage-inline-resend" data-account-billing-action="manage-inline-resend">Send again</a></div></div><div class="billing-status" id="manage-inline-status"></div><div class="helper-text" id="manage-inline-status-send-note" role="status" hidden></div>';
   }
   function renderRetrievePanel(flowState) {
     var root = getElement3("retrieve-billing-root");
     if (!root) return;
     var result = flowState.result;
     var invoiceURL = result && result.invoice_url ? result.invoice_url : "#";
-    root.innerHTML = '<p>Request a verification code for the commercial email, then reveal the current active self-hosted license without leaving Pulse Account.</p><div id="retrieve-inline-step1"><div class="form-group"><label for="retrieve-inline-email">Email address</label><input type="email" id="retrieve-inline-email" value="' + escapeAttribute(flowState.emailValue || "") + '" autocomplete="email" data-account-billing-input="retrieve-email"></div><div class="form-actions"><button class="btn-primary" type="button" id="retrieve-inline-request" data-account-billing-action="retrieve-inline-request">Send Verification Code</button></div></div><div id="retrieve-inline-step2"' + (flowState.step2Visible ? "" : " hidden") + '><div class="form-group"><label for="retrieve-inline-code">Verification code</label><input type="text" id="retrieve-inline-code" value="' + escapeAttribute(flowState.codeValue || "") + '" inputmode="numeric" pattern="[0-9]{6}" placeholder="123456" data-account-billing-input="retrieve-code"></div><div class="form-actions"><button class="btn-primary" type="button" id="retrieve-inline-confirm" data-account-billing-action="retrieve-inline-confirm">Show License</button><button class="btn-secondary" type="button" id="retrieve-inline-copy" data-account-billing-action="retrieve-inline-copy"' + (result ? "" : " hidden") + '>Copy License Key</button><a class="btn-secondary" id="retrieve-inline-invoice" href="' + escapeAttribute(invoiceURL) + '" target="_blank" rel="noopener"' + (result && result.invoice_url ? "" : " hidden") + '>View Invoice</a></div><div class="helper-text">Use the latest active self-hosted license for this commercial email.</div></div><div class="billing-status" id="retrieve-inline-status"></div><div id="retrieve-inline-result" class="billing-result"' + (result ? "" : " hidden") + '><label for="retrieve-inline-token">License key</label><textarea id="retrieve-inline-token" readonly>' + escapeText(result ? result.token : "") + '</textarea><div class="result-grid"><div><div class="result-meta-label">Plan</div><div class="result-meta-value" id="retrieve-inline-tier">' + escapeText(result ? result.tier : "") + '</div></div><div><div class="result-meta-label">Issued</div><div class="result-meta-value" id="retrieve-inline-issued">' + escapeText(result ? new Date(result.issued_at).toLocaleString() : "") + '</div></div><div><div class="result-meta-label">Expires</div><div class="result-meta-value" id="retrieve-inline-expires">' + escapeText(result ? result.expires_at ? new Date(result.expires_at).toLocaleString() : "Does not expire" : "") + '</div></div><div><div class="result-meta-label">Purchase Email</div><div class="result-meta-value" id="retrieve-inline-email-value">' + escapeText(result ? result.email : "") + "</div></div></div></div>";
+    root.innerHTML = '<p>Request a verification code for the commercial email, then reveal the current active self-hosted license without leaving Pulse Account.</p><div id="retrieve-inline-step1"><div class="form-group"><label for="retrieve-inline-email">Email address</label><input type="email" id="retrieve-inline-email" value="' + escapeAttribute(flowState.emailValue || "") + '" autocomplete="email" data-account-billing-input="retrieve-email"></div><div class="form-actions"><button class="btn-primary" type="button" id="retrieve-inline-request" data-account-billing-action="retrieve-inline-request">Send Verification Code</button></div></div><div id="retrieve-inline-step2"' + (flowState.step2Visible ? "" : " hidden") + '><div class="form-group"><label for="retrieve-inline-code">Verification code</label><input type="text" id="retrieve-inline-code" value="' + escapeAttribute(flowState.codeValue || "") + '" inputmode="numeric" pattern="[0-9]{6}" placeholder="123456" data-account-billing-input="retrieve-code"></div><div class="form-actions"><button class="btn-primary" type="button" id="retrieve-inline-confirm" data-account-billing-action="retrieve-inline-confirm">Show License</button><button class="btn-secondary" type="button" id="retrieve-inline-copy" data-account-billing-action="retrieve-inline-copy"' + (result ? "" : " hidden") + '>Copy License Key</button><a class="btn-secondary" id="retrieve-inline-invoice" href="' + escapeAttribute(invoiceURL) + '" target="_blank" rel="noopener"' + (result && result.invoice_url ? "" : " hidden") + '>View Invoice</a></div><div class="helper-text">Use the latest active self-hosted license for this commercial email.</div></div><div class="billing-status" id="retrieve-inline-status"></div><div class="helper-text" id="retrieve-inline-status-send-note" role="status" hidden></div><div id="retrieve-inline-result" class="billing-result"' + (result ? "" : " hidden") + '><label for="retrieve-inline-token">License key</label><textarea id="retrieve-inline-token" readonly>' + escapeText(result ? result.token : "") + '</textarea><div class="result-grid"><div><div class="result-meta-label">Plan</div><div class="result-meta-value" id="retrieve-inline-tier">' + escapeText(result ? result.tier : "") + '</div></div><div><div class="result-meta-label">Issued</div><div class="result-meta-value" id="retrieve-inline-issued">' + escapeText(result ? new Date(result.issued_at).toLocaleString() : "") + '</div></div><div><div class="result-meta-label">Expires</div><div class="result-meta-value" id="retrieve-inline-expires">' + escapeText(result ? result.expires_at ? new Date(result.expires_at).toLocaleString() : "Does not expire" : "") + '</div></div><div><div class="result-meta-label">Purchase Email</div><div class="result-meta-value" id="retrieve-inline-email-value">' + escapeText(result ? result.email : "") + "</div></div></div></div>";
   }
   function renderExportPanel(flowState) {
     var root = getElement3("data-export-root");
     if (!root) return;
-    root.innerHTML = '<h4>Export My Data</h4><div id="data-export-step1"><div class="form-group"><label for="data-export-email">Email address</label><input type="email" id="data-export-email" value="' + escapeAttribute(flowState.emailValue || "") + '" autocomplete="email" data-account-billing-input="data-export-email"></div><div class="form-actions"><button class="btn-primary" type="button" id="data-export-request" data-account-billing-action="data-export-request">Send Verification Code</button></div></div><div id="data-export-step2"' + (flowState.step2Visible ? "" : " hidden") + '><div class="form-group"><label for="data-export-code">Verification code</label><input type="text" id="data-export-code" value="' + escapeAttribute(flowState.codeValue || "") + '" inputmode="numeric" pattern="[0-9]{6}" placeholder="123456" data-account-billing-input="data-export-code"></div><div class="form-actions"><button class="btn-primary" type="button" id="data-export-confirm" data-account-billing-action="data-export-confirm">Export My Data</button></div><div class="helper-text">Need a new code? <a href="#" id="data-export-resend" data-account-billing-action="data-export-resend">Send again</a></div></div><div class="billing-status" id="data-export-status"></div><div id="data-export-result" class="billing-result"' + (flowState.result ? "" : " hidden") + '><label for="data-export-payload">Export payload</label><textarea id="data-export-payload" readonly>' + escapeText(flowState.result ? JSON.stringify(flowState.result, null, 2) : "") + "</textarea></div>";
+    root.innerHTML = '<h4>Export My Data</h4><div id="data-export-step1"><div class="form-group"><label for="data-export-email">Email address</label><input type="email" id="data-export-email" value="' + escapeAttribute(flowState.emailValue || "") + '" autocomplete="email" data-account-billing-input="data-export-email"></div><div class="form-actions"><button class="btn-primary" type="button" id="data-export-request" data-account-billing-action="data-export-request">Send Verification Code</button></div></div><div id="data-export-step2"' + (flowState.step2Visible ? "" : " hidden") + '><div class="form-group"><label for="data-export-code">Verification code</label><input type="text" id="data-export-code" value="' + escapeAttribute(flowState.codeValue || "") + '" inputmode="numeric" pattern="[0-9]{6}" placeholder="123456" data-account-billing-input="data-export-code"></div><div class="form-actions"><button class="btn-primary" type="button" id="data-export-confirm" data-account-billing-action="data-export-confirm">Export My Data</button></div><div class="helper-text">Need a new code? <a href="#" id="data-export-resend" data-account-billing-action="data-export-resend">Send again</a></div></div><div class="billing-status" id="data-export-status"></div><div class="helper-text" id="data-export-status-send-note" role="status" hidden></div><div id="data-export-result" class="billing-result"' + (flowState.result ? "" : " hidden") + '><label for="data-export-payload">Export payload</label><textarea id="data-export-payload" readonly>' + escapeText(flowState.result ? JSON.stringify(flowState.result, null, 2) : "") + "</textarea></div>";
   }
   function renderExportResult(result) {
     setVisible("data-export-result", !!result);
@@ -2104,7 +2156,7 @@
   function renderDeletePanel(flowState) {
     var root = getElement3("data-delete-root");
     if (!root) return;
-    root.innerHTML = '<h4>Delete My Data</h4><div class="warning"><strong>Warning:</strong> deleting commercial data also revokes license records and cannot be undone.</div><div id="data-delete-step1"><div class="form-group"><label for="data-delete-email">Email address</label><input type="email" id="data-delete-email" value="' + escapeAttribute(flowState.emailValue || "") + '" autocomplete="email" data-account-billing-input="data-delete-email"></div><div class="form-actions"><button class="btn-danger" type="button" id="data-delete-request" data-account-billing-action="data-delete-request">Send Verification Code</button></div></div><div id="data-delete-step2"' + (flowState.step2Visible ? "" : " hidden") + '><div class="form-group"><label for="data-delete-code">Verification code</label><input type="text" id="data-delete-code" value="' + escapeAttribute(flowState.codeValue || "") + '" inputmode="numeric" pattern="[0-9]{6}" placeholder="123456" data-account-billing-input="data-delete-code"></div><div class="checkbox-row"><input type="checkbox" id="data-delete-confirm-check"' + (flowState.checkboxChecked ? " checked" : "") + '><span>I understand this permanently deletes my commercial data and revokes associated licenses.</span></div><div class="form-actions"><button class="btn-danger" type="button" id="data-delete-confirm" data-account-billing-action="data-delete-confirm">Delete My Data</button></div><div class="helper-text">Need a new code? <a href="#" id="data-delete-resend" data-account-billing-action="data-delete-resend">Send again</a></div></div><div class="billing-status" id="data-delete-status"></div>';
+    root.innerHTML = '<h4>Delete My Data</h4><div class="warning"><strong>Warning:</strong> deleting commercial data also revokes license records and cannot be undone.</div><div id="data-delete-step1"><div class="form-group"><label for="data-delete-email">Email address</label><input type="email" id="data-delete-email" value="' + escapeAttribute(flowState.emailValue || "") + '" autocomplete="email" data-account-billing-input="data-delete-email"></div><div class="form-actions"><button class="btn-danger" type="button" id="data-delete-request" data-account-billing-action="data-delete-request">Send Verification Code</button></div></div><div id="data-delete-step2"' + (flowState.step2Visible ? "" : " hidden") + '><div class="form-group"><label for="data-delete-code">Verification code</label><input type="text" id="data-delete-code" value="' + escapeAttribute(flowState.codeValue || "") + '" inputmode="numeric" pattern="[0-9]{6}" placeholder="123456" data-account-billing-input="data-delete-code"></div><div class="checkbox-row"><input type="checkbox" id="data-delete-confirm-check"' + (flowState.checkboxChecked ? " checked" : "") + '><span>I understand this permanently deletes my commercial data and revokes associated licenses.</span></div><div class="form-actions"><button class="btn-danger" type="button" id="data-delete-confirm" data-account-billing-action="data-delete-confirm">Delete My Data</button></div><div class="helper-text">Need a new code? <a href="#" id="data-delete-resend" data-account-billing-action="data-delete-resend">Send again</a></div></div><div class="billing-status" id="data-delete-status"></div><div class="helper-text" id="data-delete-status-send-note" role="status" hidden></div>';
   }
 
   // src/billing_controller.ts
@@ -2231,6 +2283,91 @@
   function installBillingRuntime(deps) {
     var api = deps.api;
     var store = deps.store;
+    var sendWindow = createVerificationSendWindow();
+    var flowVersions = { manage: 0, retrieve: 0, export: 0, delete: 0 };
+    var sessionVersion = 0;
+    var departed = false;
+    var sendTimer;
+    var sessionIdentity = currentSessionIdentity();
+    function currentSessionIdentity() {
+      var bootstrap = store.getBootstrap();
+      return JSON.stringify([bootstrap.authenticated, bootstrap.email, bootstrap.commercial_api_base_url]);
+    }
+    function sameMailbox(left, right) {
+      return !!verificationEmailKey(left) && verificationEmailKey(left) === verificationEmailKey(right);
+    }
+    function confirmPendingFor(email) {
+      return Object.values(getBillingState().flows).some(function(state) {
+        return state.confirm.pending && sameMailbox(state.pendingEmail, email);
+      });
+    }
+    function updateSendControls() {
+      Object.keys(verificationFlows).forEach(function(flowID) {
+        var flow = verificationFlows[flowID];
+        var state = getBillingState().flows[flowID];
+        var windowState = sendWindow.state(state.emailValue);
+        var confirmPending = confirmPendingFor(state.emailValue);
+        var label = windowState.pending ? flow.requestPendingLabel : windowState.seconds ? "Request again in " + windowState.seconds + "s" : flow.requestLabel;
+        renderButton(flow.requestButtonID, departed || windowState.pending || !!windowState.seconds || confirmPending, label);
+        var note = getElement3(flow.statusID + "-send-note");
+        if (note) {
+          var message = windowState.pending ? "A code request for this email is in progress." : windowState.seconds ? "One request per minute per email, shared across actions. Codes only work for their original action." : "";
+          if (note.textContent !== message) note.textContent = message;
+          note.hidden = !message;
+        }
+        var resend = flow.resendID ? getElement3(flow.resendID) : null;
+        if (resend) {
+          var resendWindow = sendWindow.state(state.pendingEmail);
+          var blocked = departed || resendWindow.pending || !!resendWindow.seconds || confirmPendingFor(state.pendingEmail);
+          resend.setAttribute("aria-disabled", String(blocked));
+          var resendLabel = resendWindow.pending ? "Request pending\u2026" : resendWindow.seconds ? "Wait " + resendWindow.seconds + "s" : "Send again";
+          if (resend.textContent !== resendLabel) resend.textContent = resendLabel;
+        }
+        var targetMatches = sameMailbox(state.emailValue, state.pendingEmail);
+        var emailInput = getElement3(flow.emailInputID);
+        if (emailInput) emailInput.disabled = state.confirm.pending;
+        var codeInput = flow.codeInputID ? getElement3(flow.codeInputID) : null;
+        if (codeInput) codeInput.disabled = state.confirm.pending || sendWindow.state(state.pendingEmail).pending;
+        if (flowID === "delete") {
+          var checkbox = getElement3("data-delete-confirm-check");
+          if (checkbox) checkbox.disabled = state.confirm.pending || sendWindow.state(state.pendingEmail).pending;
+        }
+        renderButton(
+          flow.confirmButtonID,
+          departed || state.confirm.pending || sendWindow.state(state.pendingEmail).pending || !targetMatches,
+          state.confirm.pending ? flow.confirmPendingLabel : flow.confirmLabel
+        );
+        if (flow.step2ID) setVisible(flow.step2ID, state.step2Visible && targetMatches);
+      });
+      if (!sendWindow.active() && sendTimer !== void 0) {
+        clearInterval(sendTimer);
+        sendTimer = void 0;
+      }
+    }
+    function watchSendWindow() {
+      if (sendTimer === void 0) sendTimer = setInterval(updateSendControls, 1e3);
+    }
+    function retireVerificationState(seedEmail = "") {
+      sessionVersion += 1;
+      sendWindow.clear();
+      if (sendTimer !== void 0) clearInterval(sendTimer);
+      sendTimer = void 0;
+      updateBillingState(function(state) {
+        state.flows = createPortalBillingState().flows;
+        Object.values(state.flows).forEach(function(flow) {
+          flow.emailValue = seedEmail;
+        });
+      }, false);
+    }
+    window.addEventListener("pagehide", function() {
+      departed = true;
+      retireVerificationState();
+      renderAllFlows();
+    });
+    window.addEventListener("pageshow", function() {
+      departed = false;
+      updateSendControls();
+    });
     store.updateBillingState(function(billingState) {
       if (!billingState.flows) {
         var nextState = createPortalBillingState();
@@ -2267,7 +2404,6 @@
       if (flow.renderPanel) {
         flow.renderPanel(flowState);
       }
-      renderButton(flow.requestButtonID, flowState.request.pending, flowState.request.pending ? flow.requestPendingLabel : flow.requestLabel);
       renderButton(flow.confirmButtonID, flowState.confirm.pending, flowState.confirm.pending ? flow.confirmPendingLabel : flow.confirmLabel);
       renderBillingStatus(flow.statusID, flowState.status);
       if (flow.step2ID) {
@@ -2276,6 +2412,7 @@
       if (flow.renderResult) {
         flow.renderResult(flowState.result);
       }
+      updateSendControls();
     }
     function renderAllFlows() {
       renderUpgrade();
@@ -2293,16 +2430,6 @@
     }
     function renderUpgrade() {
       renderUpgradePanel(getBillingState(), store.getBootstrap());
-    }
-    function resetVerificationFlow(flowID) {
-      var flow = verificationFlows[flowID];
-      if (!flow) return;
-      updateBillingState(function(billingState) {
-        resetVerificationFlowState(billingState, flowID);
-      }, false);
-      if (flow.codeInputID) {
-        setValue(flow.codeInputID, "");
-      }
     }
     async function loadUpgradePricing(force) {
       var billingState = getBillingState();
@@ -2419,17 +2546,13 @@
         confirmButtonID: "manage-inline-confirm",
         step2ID: "manage-inline-step2",
         statusID: "manage-inline-status",
+        resendID: "manage-inline-resend",
         requestLabel: "Send Verification Code",
         requestPendingLabel: "Sending...",
         confirmLabel: "Open Customer Portal",
         confirmPendingLabel: "Redirecting...",
-        requestSuccessMessage: "Verification code sent. Check your email.",
-        resendSuccessMessage: "New verification code sent.",
         requestErrorMessage: "Failed to send verification code",
         confirmErrorMessage: "Failed to open customer portal",
-        readEmailValue: function() {
-          return getBillingState().flows.manage.emailValue;
-        },
         readCodeValue: function() {
           return getBillingState().flows.manage.codeValue;
         },
@@ -2454,13 +2577,8 @@
         requestPendingLabel: "Sending...",
         confirmLabel: "Show License",
         confirmPendingLabel: "Loading...",
-        requestSuccessMessage: "Verification code sent. Check your email.",
-        resendSuccessMessage: "New verification code sent.",
         requestErrorMessage: "Failed to send verification code",
         confirmErrorMessage: "Failed to retrieve license",
-        readEmailValue: function() {
-          return getBillingState().flows.retrieve.emailValue;
-        },
         readCodeValue: function() {
           return getBillingState().flows.retrieve.codeValue;
         },
@@ -2486,17 +2604,13 @@
         confirmButtonID: "data-export-confirm",
         step2ID: "data-export-step2",
         statusID: "data-export-status",
+        resendID: "data-export-resend",
         requestLabel: "Send Verification Code",
         requestPendingLabel: "Sending...",
         confirmLabel: "Export My Data",
         confirmPendingLabel: "Exporting...",
-        requestSuccessMessage: "Verification code sent. Check your email.",
-        resendSuccessMessage: "New verification code sent.",
         requestErrorMessage: "Request failed",
         confirmErrorMessage: "Export failed",
-        readEmailValue: function() {
-          return getBillingState().flows.export.emailValue;
-        },
         readCodeValue: function() {
           return getBillingState().flows.export.codeValue;
         },
@@ -2525,17 +2639,13 @@
         confirmButtonID: "data-delete-confirm",
         step2ID: "data-delete-step2",
         statusID: "data-delete-status",
+        resendID: "data-delete-resend",
         requestLabel: "Send Verification Code",
         requestPendingLabel: "Sending...",
         confirmLabel: "Delete My Data",
         confirmPendingLabel: "Deleting...",
-        requestSuccessMessage: "Verification code sent. Check your email.",
-        resendSuccessMessage: "New verification code sent.",
         requestErrorMessage: "Request failed",
         confirmErrorMessage: "Deletion failed",
-        readEmailValue: function() {
-          return getBillingState().flows.delete.emailValue;
-        },
         readCodeValue: function() {
           return getBillingState().flows.delete.codeValue;
         },
@@ -2568,58 +2678,80 @@
         renderPanel: renderDeletePanel
       }
     };
-    async function requestVerificationCode(flowID) {
+    async function requestVerificationCode(flowID, resend = false) {
       var flow = verificationFlows[flowID];
-      if (!flow) return;
-      var email = flow.readEmailValue ? flow.readEmailValue() : readValue(flow.emailInputID);
+      if (!flow || departed) return;
+      var state = getBillingState().flows[flowID];
+      var email = trimVerificationEmail(resend ? state.pendingEmail : state.emailValue);
       if (!email) {
         focusElement2(flow.emailInputID);
         return;
       }
-      if (flow.onRequestStart) {
-        flow.onRequestStart();
+      if (!sameMailbox(state.emailValue, email) || confirmPendingFor(email)) return;
+      var reservation = sendWindow.begin(email);
+      if (!reservation) {
+        updateSendControls();
+        return;
       }
+      var version = ++flowVersions[flowID];
+      var session = sessionVersion;
+      if (flow.onRequestStart) flow.onRequestStart();
       updateBillingState(function(billingState) {
-        beginMutationState(billingState.flows[flowID].request);
+        var next = billingState.flows[flowID];
+        next.codeValue = "";
+        next.checkboxChecked = false;
+        beginMutationState(next.request);
         clearFlowStatus(billingState, flowID);
       });
+      watchSendWindow();
+      function current() {
+        return session === sessionVersion && version === flowVersions[flowID] && !departed && sameMailbox(getBillingState().flows[flowID].emailValue, email);
+      }
+      function showCodeEntry(message2, error) {
+        if (!current()) return;
+        updateBillingState(function(billingState) {
+          var next = billingState.flows[flowID];
+          next.pendingEmail = email;
+          next.step2Visible = !!flow.step2ID;
+          succeedMutationState(next.request);
+          setFlowStatus(billingState, flowID, message2, error);
+        });
+      }
       try {
         await api.postCommercialJSON(flow.requestPath, { email });
-        updateBillingState(function(billingState) {
-          billingState.flows[flowID].pendingEmail = email;
-          billingState.flows[flowID].step2Visible = !!flow.step2ID;
-          succeedMutationState(billingState.flows[flowID].request);
-          setFlowStatus(billingState, flowID, flow.requestSuccessMessage, false);
-        });
+        sendWindow.settle(reservation, true);
+        showCodeEntry("If eligible, check your email. Use the latest code for this action.", false);
       } catch (err) {
-        var message = err instanceof Error ? err.message : flow.requestErrorMessage;
-        updateBillingState(function(billingState) {
-          failMutationState(billingState.flows[flowID].request, message);
-          setFlowStatus(billingState, flowID, message, true);
-        });
+        var definiteRejection = err instanceof PortalAPIError && [400, 429, 500].includes(err.status);
+        sendWindow.settle(reservation, !definiteRejection);
+        if (!definiteRejection) {
+          showCodeEntry("The request outcome is unknown. If a code arrives, use the latest code for this action.", true);
+        } else if (current()) {
+          var message = err instanceof Error ? err.message : flow.requestErrorMessage;
+          updateBillingState(function(billingState) {
+            failMutationState(billingState.flows[flowID].request, message);
+            setFlowStatus(billingState, flowID, message, true);
+          });
+        }
+      } finally {
+        updateSendControls();
       }
     }
-    async function resendVerificationCode(flowID, event) {
+    function resendVerificationCode(flowID, event) {
       if (event) event.preventDefault();
-      var flow = verificationFlows[flowID];
-      if (!flow) return;
-      var email = getBillingState().flows[flowID].pendingEmail;
-      if (!email) return;
-      try {
-        await api.postCommercialJSON(flow.requestPath, { email });
-        updateBillingState(function(billingState) {
-          setFlowStatus(billingState, flowID, flow.resendSuccessMessage, false);
-        });
-      } catch (err) {
-        updateBillingState(function(billingState) {
-          setFlowStatus(billingState, flowID, err instanceof Error ? err.message : flow.requestErrorMessage, true);
-        });
-      }
+      return requestVerificationCode(flowID, true);
     }
     async function confirmVerificationCode(flowID) {
       var flow = verificationFlows[flowID];
-      if (!flow) return;
-      var email = getBillingState().flows[flowID].pendingEmail;
+      if (!flow || departed) return;
+      var state = getBillingState().flows[flowID];
+      var email = state.pendingEmail;
+      if (state.confirm.pending || sendWindow.state(email).pending || !sameMailbox(state.emailValue, email)) return;
+      var version = flowVersions[flowID];
+      var session = sessionVersion;
+      function current() {
+        return session === sessionVersion && version === flowVersions[flowID] && !departed && sameMailbox(getBillingState().flows[flowID].emailValue, email);
+      }
       var code = flow.readCodeValue ? flow.readCodeValue() : readValue(flow.codeInputID);
       if (!email || !code) return;
       if (flow.beforeConfirm && flow.beforeConfirm() === false) {
@@ -2630,6 +2762,8 @@
       });
       try {
         var data = await api.postCommercialJSON(flow.confirmPath, { email, code });
+        if (!current()) return;
+        flowVersions[flowID] += 1;
         updateBillingState(function(billingState) {
           succeedMutationState(billingState.flows[flowID].confirm);
           if (flow.applyConfirmSuccessState) {
@@ -2640,6 +2774,7 @@
           flow.afterConfirmSuccess(data, email);
         }
       } catch (err) {
+        if (!current()) return;
         var message = err instanceof Error ? err.message : flow.confirmErrorMessage;
         updateBillingState(function(billingState) {
           failMutationState(billingState.flows[flowID].confirm, message);
@@ -2696,7 +2831,14 @@
       renderAllFlows();
     }
     renderBillingRuntime();
-    store.subscribeBootstrap(renderBillingRuntime);
+    store.subscribeBootstrap(function() {
+      var identity = currentSessionIdentity();
+      if (identity !== sessionIdentity) {
+        sessionIdentity = identity;
+        retireVerificationState(store.getBootstrap().authenticated ? store.getBootstrap().email : "");
+      }
+      renderBillingRuntime();
+    });
     store.subscribeBilling(renderBillingRuntime);
     installBillingController({
       setShellSection: function(section) {
@@ -2727,9 +2869,41 @@
         void startUpgradeCheckout(planKey, tier, billingCycle);
       },
       updateInputValue: function(inputKind, value) {
+        var emailFlows = {
+          "manage-email": "manage",
+          "retrieve-email": "retrieve",
+          "data-export-email": "export",
+          "data-delete-email": "delete"
+        };
+        var editedFlow = emailFlows[inputKind];
+        if (editedFlow && getBillingState().flows[editedFlow].confirm.pending) {
+          setValue(verificationFlows[editedFlow].emailInputID, getBillingState().flows[editedFlow].emailValue);
+          return;
+        }
+        var changedMailbox = editedFlow && verificationEmailKey(getBillingState().flows[editedFlow].emailValue) !== verificationEmailKey(value);
         updateBillingState(function(billingState) {
           updateBillingInputValue(billingState, inputKind, value);
+          if (changedMailbox) {
+            flowVersions[editedFlow] += 1;
+            resetVerificationFlowState(billingState, editedFlow);
+          }
         }, false);
+        if (changedMailbox && editedFlow) {
+          var flow = verificationFlows[editedFlow];
+          setVisible(flow.step2ID, false);
+          setValue(flow.codeInputID, "");
+          var checkbox = getElement3("data-delete-confirm-check");
+          if (editedFlow === "delete" && checkbox) checkbox.checked = false;
+          renderBillingStatus(flow.statusID, getBillingState().flows[editedFlow].status);
+          if (editedFlow === "retrieve") {
+            setVisible("retrieve-inline-result", false);
+            setValue("retrieve-inline-token", "");
+            setVisible("retrieve-inline-copy", false);
+            setVisible("retrieve-inline-invoice", false);
+          }
+          if (editedFlow === "export") renderExportResult(null);
+        }
+        updateSendControls();
       },
       updateDeleteConfirmation: function(checked) {
         updateBillingState(function(billingState) {
