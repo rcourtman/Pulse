@@ -82,14 +82,14 @@ func GetWebhookTemplates() []WebhookTemplate {
 			Headers:     map[string]string{"Content-Type": "application/json"},
 			PayloadTemplate: `{
 				"chat_id": "{{.ChatID | jsonString}}",
-				"text": "*Pulse Alert: {{.Level | title | jsonString}}*\n\n{{.Message | jsonString}}\n\n*Details:*\n• Resource: {{.ResourceName | jsonString}}\n• Node: {{.Node | jsonString}}\n• Type: {{.Type | title | jsonString}}\n• Value: {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.1f" .Value}} MB/s{{else}}{{printf "%.1f" .Value}}%{{end}}\n• Threshold: {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.0f" .Threshold}} MB/s{{else}}{{printf "%.0f" .Threshold}}%{{end}}\n• Duration: {{.Duration | jsonString}}\n\n[View in Pulse]({{.AlertURL | jsonString}})",
-				"parse_mode": "Markdown",
+				"text": "<b>Pulse Alert: {{.Level | title | html | jsonString}}</b>\n\n{{.Message | html | jsonString}}\n\n<b>Details:</b>\n• Resource: {{.ResourceName | html | jsonString}}\n• Node: {{.Node | html | jsonString}}\n• Type: {{.Type | title | html | jsonString}}\n• Value: {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.1f" .Value}} MB/s{{else}}{{printf "%.1f" .Value}}%{{end}}\n• Threshold: {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.0f" .Threshold}} MB/s{{else}}{{printf "%.0f" .Threshold}}%{{end}}\n• Duration: {{.Duration | html | jsonString}}\n\n{{if .AlertURL}}<a href=\"{{.AlertURL | html | jsonString}}\">View in Pulse</a>{{else}}View in Pulse{{end}}",
+				"parse_mode": "HTML",
 				"disable_web_page_preview": true
 			}`,
 			ResolvedPayloadTemplate: `{
 				"chat_id": "{{.ChatID | jsonString}}",
-				"text": "*Resolved: {{.ResourceName | jsonString}}*\n\n{{.Message | jsonString}}\n\n*Details:*\n• Resource: {{.ResourceName | jsonString}}\n• Node: {{.Node | jsonString}}\n• Type: {{.Type | title | jsonString}}\n• Duration: {{.Duration | jsonString}}\n• Resolved At: {{.ResolvedAt | jsonString}}",
-				"parse_mode": "Markdown",
+				"text": "<b>Resolved: {{.ResourceName | html | jsonString}}</b>\n\n{{.Message | html | jsonString}}\n\n<b>Details:</b>\n• Resource: {{.ResourceName | html | jsonString}}\n• Node: {{.Node | html | jsonString}}\n• Type: {{.Type | title | html | jsonString}}\n• Duration: {{.Duration | html | jsonString}}\n• Resolved At: {{.ResolvedAt | html | jsonString}}",
+				"parse_mode": "HTML",
 				"disable_web_page_preview": true
 			}`,
 			Instructions: "1. Create a bot with @BotFather on Telegram\n2. Get your bot token\n3. Get your chat ID by messaging the bot and visiting: https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getUpdates\n4. URL format: https://api.telegram.org/bot<BOT_TOKEN>/sendMessage?chat_id=<CHAT_ID>\n5. IMPORTANT: You MUST include ?chat_id=YOUR_CHAT_ID in the URL",

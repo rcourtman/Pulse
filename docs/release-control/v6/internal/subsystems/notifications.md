@@ -17,6 +17,28 @@
 
 ## Purpose
 
+### Telegram treats alert values as literal text
+
+The built-in Telegram firing and resolved templates use Telegram's HTML mode.
+Only fixed headings and the existing Pulse link are markup. Every dynamic text
+value and the link attribute pass through Go's existing `html` template escaper
+before `jsonString`; chat routing remains JSON-only. Underscores, asterisks,
+brackets, backticks, angle brackets, ampersands and quotes in messages or names
+cannot become Telegram formatting. Grouped messages keep every member's details,
+and headings, metric units, preview policy and link targets are preserved.
+Without a configured public or full instance URL, the existing dashboard pointer
+remains plain text rather than an invalid empty HTML link.
+
+`telegram_literal_text_test.go` exercises the built-in renderer, single/grouped
+firing and recovery sends, enhanced sends and the Test button through real local
+HTTP. Its persistent-queue control retains the reported four-alert batch across
+settlement/reopen and checks one attempt and one audit. An independent HTML-subset
+parser verifies literal content and link decoding; it is not the Telegram service.
+A real HTTP 400 control still dead-letters once, without splitting, replaying or
+fabricating acceptance. User-owned templates retain their own parse mode and text.
+This repairs built-in formatting, not arbitrary provider failures or Telegram's
+message-length limit, installed-provider acceptance or reporter recovery.
+
 ### Request-owned HTTP transports release completed connections
 
 HTTP Apprise creates a client for each delivery. A webhook request also owns
