@@ -16,7 +16,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"os/exec"
 	"sort"
 	"strconv"
 	"strings"
@@ -375,7 +374,7 @@ type webhookRequestOptions struct {
 // It exists so tests can disable or inline async behavior without relying on sleeps.
 var spawnAsync = func(f func()) { go f() }
 
-type appriseExecFunc func(ctx context.Context, args []string) ([]byte, error)
+type appriseExecFunc func(ctx context.Context, args []string) (int64, error)
 
 // copyEmailConfig returns a defensive copy of EmailConfig including its slices to avoid data races.
 func copyEmailConfig(cfg EmailConfig) EmailConfig {
@@ -689,11 +688,6 @@ func NormalizeAppriseConfig(cfg AppriseConfig) AppriseConfig {
 	}
 
 	return normalized
-}
-
-func defaultAppriseExec(ctx context.Context, args []string) ([]byte, error) {
-	cmd := exec.CommandContext(ctx, "apprise", args...)
-	return cmd.CombinedOutput()
 }
 
 type notificationRecord struct {
@@ -2905,23 +2899,23 @@ func (n *NotificationManager) sendAppriseViaCLI(cfg AppriseConfig, title, body s
 		execFn = defaultAppriseExec
 	}
 
-	output, err := execFn(ctx, args)
+	outputBytes, err := execFn(ctx, args)
 	if err != nil {
-		if len(output) > 0 {
+		if outputBytes > 0 {
 			log.Debug().
 				Str("cliPath", "apprise").
 				Int("targetCount", len(cfg.Targets)).
-				Int("outputBytes", len(output)).
+				Int64("outputBytes", outputBytes).
 				Msg("apprise CLI output (error)")
 		}
 		return safeAppriseError("execute apprise CLI", err)
 	}
 
-	if len(output) > 0 {
+	if outputBytes > 0 {
 		log.Debug().
 			Str("cliPath", "apprise").
 			Int("targetCount", len(cfg.Targets)).
-			Int("outputBytes", len(output)).
+			Int64("outputBytes", outputBytes).
 			Msg("apprise CLI output")
 	}
 	return nil

@@ -607,8 +607,11 @@ configuration reads/edits and private admitted queue configuration are unchanged
 `apprise_diagnostics.go` retains structured failure classes and typed causes for
 `errors.Is`/`errors.As`, but formats only fixed safe reasons or a numeric CLI exit.
 HTTP status remains the authoritative retry verdict; response bodies are drained
-only to the existing size limit and discarded. CLI diagnostics retain byte and
-target counts, not output or target values. Shared URL validation and redirect
+only to the existing size limit and discarded. CLI stdout and stderr stream
+into a count-only sink, with no output-sized buffer or retained private bytes.
+The command still drains to its original exit or configured context cancellation;
+there is no output limit, early cutoff or new retry. CLI diagnostics retain exact
+byte and target counts, not output or target values. Shared URL validation and redirect
 checks use an opaque Apprise diagnostic label, including allowlist debug logs;
 ordinary webhook diagnostics retain their existing redaction. Endpoint, mounted
 path, escaped configuration key, target arguments, authentication headers,
@@ -622,6 +625,13 @@ typed transport failures and the real queue's retry/DLQ/audit/log projection.
 `internal/api/alerting/notifications_test.go` covers configuration logging and
 the real sender's test-error HTTP response. All secrets are synthetic; these
 controls do not establish installed Apprise acceptance or prior user exposure.
+
+`apprise_exec_test.go` exercises the default executor with owned subprocesses:
+mixed large stdout/stderr, silent success, native failure, missing executable,
+and cancellation before start and after output. Firing, recovery and Test keep
+their exact diagnostic counts and native error causes without output content;
+the count-only sink allocates nothing per write and admits concurrent writers.
+These controls do not establish provider receipt or change descendant cleanup.
 
 ### Current-policy quiet-hours replay
 
