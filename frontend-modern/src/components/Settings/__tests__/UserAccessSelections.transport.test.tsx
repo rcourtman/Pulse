@@ -357,9 +357,9 @@ describe('User Access writes only changed role membership', () => {
   const operatorName = `Fleet role (Role ID: ${roles[1].id}) Operate selected resources`;
 
   it.each(
-    [[], [roles[0].id, unlistedRole], [roles[0].id, roles[0].id, unlistedRole]].map(
-      (roleIds) => ({ roleIds }),
-    ),
+    [[], [roles[0].id, unlistedRole], [roles[0].id, roles[0].id, unlistedRole]].map((roleIds) => ({
+      roleIds,
+    })),
   )(
     'keeps an unchanged saved selection read-only, including empty or repeated IDs: %j',
     async ({ roleIds }) => {
@@ -390,7 +390,9 @@ describe('User Access writes only changed role membership', () => {
     expect(save).toBeDisabled();
     fireEvent.click(save);
     expect(writes()).toHaveLength(0);
-    expect(editor.getByRole('list', { name: 'Kept saved role IDs' })).toHaveTextContent(unlistedRole);
+    expect(editor.getByRole('list', { name: 'Kept saved role IDs' })).toHaveTextContent(
+      unlistedRole,
+    );
     // A real removal is still admitted once with the original unlisted key.
     fireEvent.click(editor.getByRole('checkbox', { name: operatorName }));
     fireEvent.click(save);
@@ -425,9 +427,7 @@ describe('User Access writes only changed role membership', () => {
 
   it('compares opaque IDs without case folding or trimming and leaves the submitted keys intact', async () => {
     const distinctIDs = [roles[0].id.toUpperCase(), ` ${roles[0].id}`];
-    catalogue.push(
-      ...distinctIDs.map((id) => ({ ...roles[0], id, name: 'Exact role key' })),
-    );
+    catalogue.push(...distinctIDs.map((id) => ({ ...roles[0], id, name: 'Exact role key' })));
     const editor = await openSelected();
     const choices = editor.getAllByRole('checkbox', { name: /^Exact role key/ });
     expect(choices).toHaveLength(distinctIDs.length);
