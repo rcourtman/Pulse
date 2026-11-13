@@ -3,6 +3,7 @@ package config
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"sort"
@@ -28,23 +29,24 @@ var (
 
 // ConfigWatcher monitors runtime config files for changes and updates runtime config.
 type ConfigWatcher struct {
-	config            *Config
-	envPath           string
-	apiTokensPath     string
-	persistence       *ConfigPersistence
-	watcher           *fsnotify.Watcher
-	stopChan          chan struct{}
-	stopOnce          sync.Once // Ensures Stop() can only close channel once
-	wg                sync.WaitGroup
-	lastModTime       time.Time
-	lastEnvHash       string
-	apiTokensLastHash string // Guarded by mu; only a successful snapshot advances it.
-	mu                sync.RWMutex
-	onMockReload      func() // Callback to trigger backend restart when PULSE_MOCK_* changes
-	onAPITokenReload  func() // Callback when API tokens are reloaded from disk
-	pollInterval      time.Duration
-	mockEnvOwned      map[string]struct{}
-	mockEnvFallbacks  map[string]mockEnvFallback
+	config                     *Config
+	envPath                    string
+	apiTokensPath              string
+	persistence                *ConfigPersistence
+	watcher                    *fsnotify.Watcher
+	stopChan                   chan struct{}
+	stopOnce                   sync.Once // Ensures Stop() can only close channel once
+	wg                         sync.WaitGroup
+	lastModTime                time.Time
+	lastEnvHash                string
+	apiTokensLastHash          string // Guarded by mu; exact successfully consumed file bytes.
+	apiTokensLastInventoryHash string // Guarded by mu; corresponding inventory, excluding request-local usage.
+	mu                         sync.RWMutex
+	onMockReload               func() // Callback to trigger backend restart when PULSE_MOCK_* changes
+	onAPITokenReload           func() // Callback when API tokens are reloaded from disk
+	pollInterval               time.Duration
+	mockEnvOwned               map[string]struct{}
+	mockEnvFallbacks           map[string]mockEnvFallback
 }
 
 type mockEnvFallback struct {
@@ -397,12 +399,42 @@ func (cw *ConfigWatcher) reloadAPITokensIfChanged() {
 	}
 	cw.mu.RLock()
 	unchanged := hash == cw.apiTokensLastHash
+	if unchanged {
+		// A local create/rename/rotate/revoke can change live authority and
+		// storage without this watcher consuming the intermediate file. Exact
+		// restoration of the old bytes is only unchanged if the corresponding
+		// inventory is still live. Keep the same lock order as reloadAPITokens.
+		Mu.RLock()
+		inventoryHash, hashErr := apiTokenInventoryHash(cw.config.APITokens)
+		unchanged = hashErr == nil && inventoryHash == cw.apiTokensLastInventoryHash
+		Mu.RUnlock()
+	}
 	cw.mu.RUnlock()
 	if unchanged {
 		return
 	}
 	log.Info().Msg("Detected API token file change via polling")
 	cw.reloadAPITokens()
+}
+
+// apiTokenInventoryHash binds a consumed file snapshot to the live inventory.
+// Include all record fields, including nested authority and display metadata,
+// without keeping mutable aliases or requiring mutation hooks at every caller.
+// LastUsedAt is request-local telemetry: authentication must not cause a reload
+// of unchanged storage that rolls usage back or repeatedly rebuilds bindings.
+// The caller holds Mu while reading live records.
+func apiTokenInventoryHash(tokens []APITokenRecord) (string, error) {
+	inventory := make([]APITokenRecord, len(tokens))
+	copy(inventory, tokens)
+	for i := range inventory {
+		inventory[i].LastUsedAt = nil
+	}
+	data, err := json.Marshal(inventory)
+	if err != nil {
+		return "", err
+	}
+	digest := sha256.Sum256(data)
+	return hex.EncodeToString(digest[:]), nil
 }
 
 // calculateFileHash returns the SHA256 hash of a file
@@ -577,6 +609,13 @@ func (cw *ConfigWatcher) reloadAPITokens() {
 	cw.config.SortAPITokens()
 
 	cw.apiTokensLastHash = snapshotHash
+	// Hash after canonical sorting, from the inventory actually published under
+	// Mu. A failed fingerprint cannot authorize a later polling skip.
+	cw.apiTokensLastInventoryHash, err = apiTokenInventoryHash(cw.config.APITokens)
+	if err != nil {
+		cw.apiTokensLastInventoryHash = ""
+		log.Warn().Msg("Could not fingerprint the loaded API token inventory; polling will recheck it")
+	}
 
 	log.Info().
 		Int("count", len(tokens)).
