@@ -247,10 +247,13 @@ func (e *PulseToolExecutor) executeReadExec(ctx context.Context, args map[string
 // On 13 November 2026 Patrol's `du -sh /mnt/nvr/*` was refused, and with no
 // other form offered it sized three folders by name and stopped one level
 // above the folder that had filled the disk. Naming the directory passes the
-// same policy and answers the same question.
+// same policy and answers the same question. The suggested form looks three
+// levels down in one call and keeps only the largest folders: the replay of
+// the same fault, with a one-level form, spent its last evidence call one
+// folder above the answer.
 const WildcardRefusalHint = "Name the directory instead of using a wildcard. For folder sizes, " +
-	"`du -xh -d 2 <directory>` lists every folder below it with its size; raise -d to go deeper. " +
-	"For a listing, use `ls -la <directory>`."
+	"`du -xh -d 3 <directory> | sort -rh | head -20` lists the largest folders up to three levels down; " +
+	"run it again on the largest one to go deeper. For a listing, use `ls -la <directory>`."
 
 func sensitiveCommandBlocked(reason string) CallToolResult {
 	details := map[string]interface{}{

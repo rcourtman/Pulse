@@ -8457,12 +8457,14 @@ A refused glob names what to ask instead. The two glob reasons are exported
 (`safety.ReasonPatternCanMatchCredentialFile`,
 `safety.ReasonPatternCanMatchSecretsDirectory`) and `sensitiveCommandBlocked`
 adds `tools.WildcardRefusalHint` to their refusal: name the directory, with
-`du -xh -d 2 <directory>` for folder sizes or `ls -la <directory>` for a
-listing. Both forms pass these checks and the read-only classifier, which
+`du -xh -d 3 <directory> | sort -rh | head -20` for the largest folders three
+levels down or `ls -la <directory>` for a listing. Both forms pass these checks and the read-only classifier, which
 `TestWildcardRefusalHintPassesThePolicy` pins, so the hint never sends the
 model to another refusal. The rule itself is unchanged. On the fault set's
 full-disk fault Patrol's `du -sh /mnt/nvr/*` was refused with no other form
-offered, and the investigation stopped one folder down.
+offered, and the investigation stopped one folder down. A first hint that
+looked one level per call reached the hour folder and spent the last evidence
+call there, one level above the camera folder, hence three levels per call.
 Proofs: `TestExecutionIntent_NoApprovalReadsStayLocal`
 (`tools_query_readonly_test.go`),
 `TestExecuteReadExec_RefusesProcessEnvironmentAndCredentialReads` and

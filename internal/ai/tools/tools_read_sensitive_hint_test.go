@@ -37,7 +37,7 @@ func TestWildcardRefusalNamesAFormThatWorks(t *testing.T) {
 	} {
 		text := readExecResult(t, command)
 		assert.Contains(t, text, "SENSITIVE_COMMAND", command)
-		assert.Contains(t, text, "du -xh -d 2 \\u003cdirectory\\u003e", command)
+		assert.Contains(t, text, "du -xh -d 3 \\u003cdirectory\\u003e | sort -rh | head -20", command)
 	}
 
 	// Other refusals have no wildcard to replace and get no hint.
@@ -55,10 +55,10 @@ func TestWildcardRefusalHintPassesThePolicy(t *testing.T) {
 			command := strings.ReplaceAll(form[1], "<directory>", dir)
 			for _, depth := range []string{"", "6"} {
 				if depth != "" {
-					if !strings.Contains(command, "-d 2") {
+					if !strings.Contains(command, "-d 3") {
 						continue
 					}
-					command = strings.Replace(command, "-d 2", "-d "+depth, 1)
+					command = strings.Replace(command, "-d 3", "-d "+depth, 1)
 				}
 				if sensitive, reason := safety.CommandTouchesSensitivePath(command); sensitive {
 					t.Fatalf("%q is refused as sensitive: %s", command, reason)
