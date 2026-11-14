@@ -7,11 +7,14 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rcourtman/pulse-go-rewrite/internal/truenas"
 	"github.com/rcourtman/pulse-go-rewrite/internal/vmware"
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 )
 
 type outboundNASProbe struct{}
@@ -31,6 +34,20 @@ func TestApplianceTenantSavesStampPolicyAndIgnoreForgedMetadata(t *testing.T) {
 	mtp := config.NewMultiTenantPersistence(router.config.DataPath)
 	tenant, err := mtp.GetPersistence("org-a")
 	if err != nil {
+		t.Fatal(err)
+	}
+	// Instance authority is not organization membership. Prove that fence,
+	// then explicitly arrange membership for this synthetic fixture only.
+	denied := notificationAuthorityRequest(t, router, http.MethodGet, "/api/truenas/connections", "", "platform-admin", "org-a")
+	if denied.Code != http.StatusForbidden {
+		t.Fatalf("nonmember instance operator = %d", denied.Code)
+	}
+	org, err := mtp.LoadOrganization("org-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	org.Members = append(org.Members, models.OrganizationMember{UserID: "platform-admin", Role: models.OrgRoleAdmin, AddedAt: time.Now()})
+	if err := mtp.SaveOrganization(org); err != nil {
 		t.Fatal(err)
 	}
 	for _, platform := range []string{"truenas", "vmware"} {
@@ -67,7 +84,7 @@ func TestApplianceTenantSavesStampPolicyAndIgnoreForgedMetadata(t *testing.T) {
 				}
 			}
 			// The authenticated instance operator can explicitly own this connection,
-			// including in another organization. A body cannot impersonate that actor.
+			// when also admitted to this organization. A body cannot impersonate either grant.
 			rec = notificationAuthorityRequest(t, router, http.MethodPut, "/api/"+platform+"/connections/policy-connection", `{"outboundPolicy":"tenant-public"}`, "platform-admin", "org-a")
 			if rec.Code != http.StatusOK || readPolicy() != "" {
 				t.Fatalf("instance save=%d %s", rec.Code, rec.Body.String())
@@ -128,6 +145,9 @@ func TestApplianceCloudSaveRetainsPublicOnlyPolicy(t *testing.T) {
 	t.Setenv("PULSE_HOSTED_MODE", "true")
 	t.Setenv("PULSE_PROVIDER_HOSTED", "")
 	router := notificationAuthorityRouter(t)
+	// Exercise the actual active-subscription route. The original 402 was
+	// a valid billing fence, not a reason to weaken product admission.
+	setupHostedLicenseProvider(t, pkglicensing.SubStateActive, nil)
 	for _, platform := range []string{"truenas", "vmware"} {
 		rec := notificationAuthorityRequest(t, router, http.MethodPost, "/api/"+platform+"/connections", `{"name":"fixture","host":"93.184.216.34","username":"fixture","apiKey":"synthetic-key","password":"synthetic-password","outboundPolicy":"tenant-lan"}`, "org-a-owner", "org-a")
 		if rec.Code != http.StatusCreated {
