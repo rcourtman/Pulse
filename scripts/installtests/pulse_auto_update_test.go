@@ -311,7 +311,7 @@ func TestAutoUpdateRunningExecutableIdentity(t *testing.T) {
 func extractAutoUpdateServiceFunctions(t *testing.T) string {
 	t.Helper()
 	var functions []string
-	for _, name := range []string{"read_update_service_state", "start_update_service_if_stopped", "stop_update_service_for_rollback", "wait_for_service_active", "ensure_service_restarted"} {
+	for _, name := range []string{"version_greater_than", "read_update_service_state", "start_update_service_if_stopped", "stop_update_service_for_rollback", "wait_for_service_active", "ensure_service_restarted"} {
 		functions = append(functions, extractAutoUpdateFunction(t, name))
 	}
 	// These pure-shell controls have simulated service state and script

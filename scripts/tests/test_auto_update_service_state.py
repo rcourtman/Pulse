@@ -1418,10 +1418,18 @@ with patch.object(Path, 'iterdir', entries), patch.object(Path, 'stat', descript
                 self.wait_marker(f / "returned-first")
                 self.assertIsNone(first.poll())
                 self.assertEqual((f / "install/VERSION").read_text(), "v6.6.0\n" if status == 0 else "v6.5.0\n")
-                self.finish(self.start(f, "next"), 0)
+                # A released lock admits a fresh observation, not another
+                # installation of the version the first call just installed.
+                # After rollback, the still-older version must install normally.
+                output = self.finish(self.start(f, "next"), 3 if status == 0 else 0)
+                if status == 0:
+                    self.assertIn("Update no longer needed", output)
+                    self.assertFalse((f / "manager-next").exists())
+                    self.assertFalse((f / "download-next").exists())
                 (f / "release-return-first").touch()
                 self.finish(first, 0 if status == 0 else 1)
-                self.assertEqual((f / "entered").read_text().splitlines(), ["first", "next"])
+                self.assertEqual((f / "entered").read_text().splitlines(),
+                                 ["first"] if status == 0 else ["first", "next"])
                 self.assert_saved(f)
 
     def test_service_observation_refusal_releases_the_early_lock(self):
