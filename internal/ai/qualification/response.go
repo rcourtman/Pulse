@@ -1,6 +1,8 @@
 package qualification
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -466,6 +468,78 @@ type Scorecard struct {
 	// Invalid lists runs that produced no grade, with the reason. They are
 	// harness or lab failures, never a verdict on Patrol.
 	Invalid []string `json:"invalid,omitempty"`
+	// Rubrics says which stored runs were graded with a newer catalog rubric
+	// than the one they ran under, and which could not be.
+	Rubrics []string `json:"rubrics,omitempty"`
+}
+
+// ApplyCatalogRubrics grades stored runs by the catalog's current rubric, so
+// a widened or narrowed outcome rubric shows up in the scorecard without a
+// new live run. A report keeps the manifest it ran under; it takes the
+// catalog's outcome only when the catalog holds a newer version of the same
+// scenario whose only change is that outcome. Evidence gathered under other
+// faults, resources or lab cannot be regraded, so those runs keep their
+// recorded rubric and the scorecard says so. It returns one line per
+// scenario and version.
+func ApplyCatalogRubrics(reports []RunReport, catalog Catalog) []string {
+	type key struct {
+		id       string
+		recorded int
+		applied  bool
+	}
+	counts := make(map[key]int)
+	current := make(map[string]int)
+	for i := range reports {
+		if reports[i].Response == nil || reports[i].Response.Grade == "" {
+			continue // a run with no grade is listed as invalid either way
+		}
+		recorded := reports[i].Manifest
+		latest, ok := catalog.ByID[recorded.ID]
+		if !ok || latest.Version == recorded.Version {
+			continue
+		}
+		current[recorded.ID] = latest.Version
+		candidate := recorded
+		candidate.Version = latest.Version
+		candidate.Outcome = latest.Outcome
+		same, err := sameManifestJSON(candidate, latest)
+		applied := err == nil && same
+		if applied {
+			reports[i].Manifest = candidate
+		}
+		counts[key{recorded.ID, recorded.Version, applied}]++
+	}
+	keys := make([]key, 0, len(counts))
+	for k := range counts {
+		keys = append(keys, k)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		if keys[i].id != keys[j].id {
+			return keys[i].id < keys[j].id
+		}
+		return keys[i].recorded < keys[j].recorded
+	})
+	lines := make([]string, 0, len(keys))
+	for _, k := range keys {
+		if k.applied {
+			lines = append(lines, fmt.Sprintf("%s: %d run(s) recorded under v%d graded with the catalog's v%d rubric", k.id, counts[k], k.recorded, current[k.id]))
+		} else {
+			lines = append(lines, fmt.Sprintf("%s: %d run(s) recorded under v%d keep their rubric; v%d changes more than the rubric", k.id, counts[k], k.recorded, current[k.id]))
+		}
+	}
+	return lines
+}
+
+func sameManifestJSON(a, b Manifest) (bool, error) {
+	left, err := json.Marshal(a)
+	if err != nil {
+		return false, err
+	}
+	right, err := json.Marshal(b)
+	if err != nil {
+		return false, err
+	}
+	return bytes.Equal(left, right), nil
 }
 
 const (
@@ -651,6 +725,12 @@ func RenderScorecardMarkdown(card Scorecard) string {
 			fmt.Fprintf(&b, " **%d of %d** |", column.Resolved, column.Runs)
 		}
 		b.WriteString("\n")
+	}
+	if len(card.Rubrics) > 0 {
+		b.WriteString("\nRubrics:\n\n")
+		for _, line := range card.Rubrics {
+			fmt.Fprintf(&b, "- %s\n", sanitizeArtifactText(line))
+		}
 	}
 	if len(card.Invalid) > 0 {
 		b.WriteString("\nRuns with no grade (lab or harness failure, not a verdict on Patrol):\n\n")

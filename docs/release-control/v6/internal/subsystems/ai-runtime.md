@@ -2099,6 +2099,12 @@ Its disk and storage probes read Proxmox's own used and total figures, the
 numbers Pulse alerts on, never `df`'s Use%, which counts reserved blocks as
 used and left a fill short of Pulse's threshold. One fault set uses one driver.
 
+A fault-set scorecard grades stored runs by the catalog's current rubric only
+when a newer manifest version changed nothing but its `outcome`
+(`ApplyCatalogRubrics`); evidence gathered under other faults, resources or lab
+keeps its recorded rubric, and the scorecard lists both cases.
+`TestScorecardGradesStoredRunsByTheCatalogRubric` regrades a kept pve-v1 run.
+
 Patrol model qualification extends only through
 `internal/ai/qualification/`, `cmd/patrol-qualify/`, and reviewed manifests
 under `tests/qualification/patrol/`. A manifest's qualification repeat profile must be
