@@ -5335,7 +5335,13 @@ service-history reads plus denial/recovery without fabricated samples.
     connections use REST. Both snapshot queries request only `creation`,
     `used` and `referenced` (`query-options.extra.properties` on
     `pool.snapshot.query`): unfiltered, TrueNAS 25.04 and 25.10 read every
-    ZFS property of every snapshot on each poll (#4374). Replication tasks
+    ZFS property of every snapshot on each poll (#4374). The connection's
+    collection scope gates those reads: `MonitorDatasets` off skips datasets
+    and ZFS snapshots, `MonitorPools` off skips pools and the boot pool, and
+    `MonitorReplication` off skips replication tasks, with no request sent.
+    The poller rebuilds the provider when a scope flag changes, and the
+    provider parents a child of an uncollected pool or dataset to its nearest
+    collected ancestor. Replication tasks
     use `replication.query` on current
     connections.
     TrueNAS system services are also native appliance inventory: `service.query`

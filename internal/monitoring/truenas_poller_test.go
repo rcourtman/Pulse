@@ -3055,3 +3055,23 @@ func TestTrueNASPollerCOREUnknownRotationRate(t *testing.T) {
 		t.Fatal("disabled CORE connection kept polling or retained current inventory")
 	}
 }
+
+// Toggling a collection-scope checkbox must rebuild the provider, or the old
+// client keeps collecting the surface the operator just turned off.
+func TestTrueNASProviderConfigChangedOnCollectionScope(t *testing.T) {
+	base := config.NewTrueNASInstance()
+	if trueNASProviderConfigChanged(base, base) {
+		t.Fatal("identical configs must not rebuild the provider")
+	}
+	for name, mutate := range map[string]func(*config.TrueNASInstance){
+		"datasets":    func(i *config.TrueNASInstance) { i.MonitorDatasets = false },
+		"pools":       func(i *config.TrueNASInstance) { i.MonitorPools = false },
+		"replication": func(i *config.TrueNASInstance) { i.MonitorReplication = false },
+	} {
+		next := base
+		mutate(&next)
+		if !trueNASProviderConfigChanged(base, next) {
+			t.Fatalf("turning %s off must rebuild the provider", name)
+		}
+	}
+}

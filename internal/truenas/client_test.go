@@ -273,6 +273,84 @@ func TestFetchSnapshot(t *testing.T) {
 	}
 }
 
+type recordingTransport struct {
+	next  http.RoundTripper
+	paths map[string]int
+}
+
+func (r *recordingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	r.paths[req.URL.Path]++
+	return r.next.RoundTrip(req)
+}
+
+// The connection editor's Datasets, Pools and Replication checkboxes promise
+// that Pulse collects only the enabled surfaces; a disabled one must send no
+// request at all.
+func TestFetchSnapshotHonorsCollectionScope(t *testing.T) {
+	const (
+		poolPath        = "/api/v2.0/pool"
+		bootPath        = "/api/v2.0/boot/get_state"
+		datasetPath     = "/api/v2.0/pool/dataset"
+		snapshotPath    = "/api/v2.0/zfs/snapshot"
+		replicationPath = "/api/v2.0/replication"
+	)
+	for _, tc := range []struct {
+		name        string
+		config      ClientConfig
+		skipped     []string
+		wantPools   bool
+		wantDataset bool
+	}{
+		{name: "everything", wantPools: true, wantDataset: true},
+		{name: "datasets off", config: ClientConfig{SkipDatasets: true}, skipped: []string{datasetPath, snapshotPath}, wantPools: true},
+		{name: "pools off", config: ClientConfig{SkipPools: true}, skipped: []string{poolPath, bootPath}, wantDataset: true},
+		{name: "replication off", config: ClientConfig{SkipReplication: true}, skipped: []string{replicationPath}, wantPools: true, wantDataset: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			routes := alertArgsTransport(defaultAPIResponses())
+			routes[snapshotPath] = apiResponse{body: `[{"name":"tank/apps@auto-1","dataset":"tank/apps","snapshot_name":"auto-1"}]`}
+			routes[replicationPath] = apiResponse{body: `[]`}
+			cfg := tc.config
+			cfg.Host = "http://truenas.invalid"
+			cfg.APIKey = "synthetic"
+			client, err := NewClient(cfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer client.Close()
+			recorder := &recordingTransport{next: routes, paths: map[string]int{}}
+			client.httpClient.Transport = recorder
+			client.mode = TransportLegacyREST
+
+			snapshot, err := client.FetchSnapshot(context.Background())
+			if err != nil {
+				t.Fatalf("FetchSnapshot() error = %v", err)
+			}
+			for _, path := range tc.skipped {
+				if recorder.paths[path] != 0 {
+					t.Fatalf("%s requested %d times with that surface off", path, recorder.paths[path])
+				}
+			}
+			if tc.name == "everything" {
+				for _, path := range []string{poolPath, datasetPath, snapshotPath, replicationPath} {
+					if recorder.paths[path] == 0 {
+						t.Fatalf("%s not requested with every surface on", path)
+					}
+				}
+			}
+			if gotPools := len(snapshot.Pools) > 0; gotPools != tc.wantPools {
+				t.Fatalf("pools collected = %v, want %v", gotPools, tc.wantPools)
+			}
+			if gotDatasets := len(snapshot.Datasets) > 0 && len(snapshot.ZFSSnapshots) > 0; gotDatasets != tc.wantDataset {
+				t.Fatalf("datasets and snapshots collected = %v, want %v", gotDatasets, tc.wantDataset)
+			}
+			if len(snapshot.Disks) == 0 || snapshot.System.Hostname == "" {
+				t.Fatalf("surfaces outside the scope must still be collected: %+v", snapshot)
+			}
+		})
+	}
+}
+
 func TestGetPoolsDatasetsAndAlertsUseNativeQueryShapes(t *testing.T) {
 	server := newMockServerWithRPC(t, map[string]apiResponse{
 		"/api/v2.0/pool":         {status: http.StatusInternalServerError, body: `{"error":"legacy pool endpoint should not be used"}`},

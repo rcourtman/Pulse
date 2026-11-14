@@ -59,6 +59,12 @@ type ClientConfig struct {
 	InsecureSkipVerify bool
 	Fingerprint        string
 	Timeout            time.Duration
+
+	// The connection's collection scope. Zero values collect everything, so
+	// connection tests and other one-off clients need not set them.
+	SkipDatasets    bool // datasets and their ZFS snapshots
+	SkipPools       bool // pools, including the boot pool
+	SkipReplication bool // replication tasks
 }
 
 // Client owns one connection-local TrueNAS transport decision. Supported
@@ -2150,20 +2156,26 @@ func (c *Client) FetchSnapshot(ctx context.Context) (*FixtureSnapshot, error) {
 		mergeSystemTelemetry(system, telemetry)
 	}
 
-	pools, err := c.GetPools(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("fetch truenas pools: %w", err)
-	}
-	// boot.get_state is best-effort because older/minimally privileged API
-	// keys may not expose it. When available it supplies the only boot-pool
-	// topology and per-member ZFS state.
-	if bootPool, bootErr := c.GetBootPool(ctx); bootErr == nil && bootPool != nil {
-		pools = mergeBootPool(pools, *bootPool)
+	var pools []Pool
+	if !c.config.SkipPools {
+		pools, err = c.GetPools(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("fetch truenas pools: %w", err)
+		}
+		// boot.get_state is best-effort because older/minimally privileged API
+		// keys may not expose it. When available it supplies the only boot-pool
+		// topology and per-member ZFS state.
+		if bootPool, bootErr := c.GetBootPool(ctx); bootErr == nil && bootPool != nil {
+			pools = mergeBootPool(pools, *bootPool)
+		}
 	}
 
-	datasets, err := c.GetDatasets(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("fetch truenas datasets: %w", err)
+	var datasets []Dataset
+	if !c.config.SkipDatasets {
+		datasets, err = c.GetDatasets(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("fetch truenas datasets: %w", err)
+		}
 	}
 
 	disks, err := c.GetDisks(ctx)
@@ -2182,8 +2194,14 @@ func (c *Client) FetchSnapshot(ctx context.Context) (*FixtureSnapshot, error) {
 	apps, _ := c.GetApps(ctx)
 	vms, _ := c.GetVMs(ctx)
 	shares, _ := c.GetNetworkShares(ctx)
-	zfsSnapshots, _ := c.GetZFSSnapshots(ctx)
-	replicationTasks, _ := c.GetReplicationTasks(ctx)
+	var zfsSnapshots []ZFSSnapshot
+	if !c.config.SkipDatasets {
+		zfsSnapshots, _ = c.GetZFSSnapshots(ctx)
+	}
+	var replicationTasks []ReplicationTask
+	if !c.config.SkipReplication {
+		replicationTasks, _ = c.GetReplicationTasks(ctx)
+	}
 
 	return &FixtureSnapshot{
 		CollectedAt:      time.Now().UTC(),
