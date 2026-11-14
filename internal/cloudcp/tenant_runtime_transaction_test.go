@@ -324,7 +324,7 @@ func TestTenantRuntimeTransactionCompensatesFailures(t *testing.T) {
 				if len(retained) != 1 {
 					t.Fatalf("post-attempt recovery trees=%v", retained)
 				}
-				f.assertState(retained[0], "new-attempt")
+				f.assertState(filepath.Join(retained[0], "data"), "new-attempt")
 			}
 			if name == "snapshot-collision" {
 				f.assertState(filepath.Join(filepath.Dir(f.service.tenantsDir), "backups", "rollout", "fixture", "t-SAFE"), "older-recovery")
@@ -556,7 +556,7 @@ func TestFilesystemTenantRuntimeRestoreRetainsBothCompleteTreesOnTransitionFailu
 				if len(retained) != 1 {
 					t.Fatalf("original recovery tree lost: %v", retained)
 				}
-				original = retained[0]
+				original = filepath.Join(retained[0], "data")
 			}
 			data, err = os.ReadFile(filepath.Join(original, "state.txt"))
 			if err != nil || string(data) != "post-attempt" {

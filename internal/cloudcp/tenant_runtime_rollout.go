@@ -852,12 +852,21 @@ func (s filesystemTenantRuntimeSynchronizer) Restore(ctx context.Context, snapsh
 	}
 	retained := ""
 	if _, err := os.Lstat(dst); err == nil {
-		retained, err = os.MkdirTemp(parent, "."+filepath.Base(dst)+".pre-restore-*")
+		reservation, err := os.MkdirTemp(parent, "."+filepath.Base(dst)+".pre-restore-*")
 		if err != nil {
 			return err
 		}
+		// Rename cannot replace an existing directory. Reserve its private
+		// parent, then move into an unused child on the same filesystem.
+		retained = filepath.Join(reservation, "data")
 		if err := s.rename(dst, retained); err != nil {
-			return fmt.Errorf("retain destination before restore: %w", err)
+			return fmt.Errorf("retain destination before restore: %w; complete replacement retained at %s", err, stage)
+		}
+		if err := syncTenantRuntimeDirectory(reservation); err != nil {
+			return fmt.Errorf("sync retained data at %s (replacement at %s): %w", retained, stage, err)
+		}
+		if err := syncTenantRuntimeDirectory(parent); err != nil {
+			return fmt.Errorf("sync retained directory at %s (replacement at %s): %w", retained, stage, err)
 		}
 	} else if !os.IsNotExist(err) {
 		return err
