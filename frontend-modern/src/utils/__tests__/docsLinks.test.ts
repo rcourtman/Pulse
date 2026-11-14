@@ -129,6 +129,8 @@ describe('docsLinks', () => {
     }
   });
 
+  const apiReference = () => readFileSync(path.join(repoRoot, 'docs', 'API.md'), 'utf8');
+
   const probeGuides = () =>
     [
       readFileSync(path.join(repoRoot, 'docs', 'CONFIGURATION.md'), 'utf8')
@@ -200,7 +202,7 @@ describe('docsLinks', () => {
       expect(guide).not.toContain('Run from');
       expect(guide).not.toContain('an assigned check is not also run locally');
     }
-    const api = readFileSync(path.join(repoRoot, 'docs', 'API.md'), 'utf8');
+    const api = apiReference();
     expect(api).toContain('`observationLocationIds` - Observation locations');
     expect(api).toContain('`pulse:local` for this Pulse server');
     expect(api).toContain('`agent:<host-agent-id>` for a connected agent');
@@ -209,7 +211,7 @@ describe('docsLinks', () => {
   });
 
   it('documents alert history entries carrying only the newest evidence envelope', () => {
-    const api = readFileSync(path.join(repoRoot, 'docs', 'API.md'), 'utf8');
+    const api = apiReference();
     expect(api).toContain(
       '`GET /api/alerts/history` — each entry carries at most one `evidence` envelope, the newest',
     );
@@ -217,13 +219,13 @@ describe('docsLinks', () => {
   });
 
   it('documents alert configuration saves as replacing only the keys they send', () => {
-    const api = readFileSync(path.join(repoRoot, 'docs', 'API.md'), 'utf8');
+    const api = apiReference();
     expect(api).toContain('`PUT /api/alerts/config` — replaces only the top-level keys the body');
     expect(api).toContain('a key left out keeps its stored value');
   });
 
   it('documents the Pulse Pro runtime switch routes and their scopes', () => {
-    const api = readFileSync(path.join(repoRoot, 'docs', 'API.md'), 'utf8');
+    const api = apiReference();
     expect(api).toContain('`GET /api/updates/pro-runtime` (`settings:read`)');
     expect(api).toContain('`POST /api/updates/pro-runtime/apply` (`settings:write`)');
     const routes = readFileSync(
@@ -239,7 +241,7 @@ describe('docsLinks', () => {
   });
 
   it('documents instance administration refusing organization-bound tokens', () => {
-    const api = readFileSync(path.join(repoRoot, 'docs', 'API.md'), 'utf8');
+    const api = apiReference();
     expect(api).toContain('tenant organization gets `403` whatever its scopes');
     expect(api).toContain('Token management is instance administration');
     const guard = readFileSync(
@@ -252,10 +254,21 @@ describe('docsLinks', () => {
   });
 
   it('documents network discovery without the removed AI Discovery routes', () => {
-    const api = readFileSync(path.join(repoRoot, 'docs', 'API.md'), 'utf8');
+    const api = apiReference();
     expect(api).toContain('`POST /api/discover` (admin, `settings:write`)');
     expect(api).not.toContain('/api/discovery');
     expect(api).not.toContain('### AI Discovery');
+  });
+
+  it('documents action permissions on routes that start work on a host', () => {
+    const api = apiReference();
+    expect(api).toContain(
+      '`POST /api/infra-updates/check` (requires `monitoring:write` and permission to execute actions',
+    );
+    expect(api).toContain(
+      '`POST /api/ai/findings/{id}/reinvestigate` (Pro, `ai:execute`, and permission to plan and execute actions)',
+    );
+    expect(api).toContain('planning an action needs\n  permission to plan actions');
   });
 
   it('separates server removal from persistent-data erasure', () => {

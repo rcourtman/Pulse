@@ -79,7 +79,15 @@ type AIService interface {
 	GetBaseURL() string
 }
 
+// assistantExecuteAuthority reports whether the Assistant may plan
+// infrastructure actions (pulse_control) for this caller. The caller needs the
+// action-plan capability bound by withAssistantActionAuthority on the chat
+// route (absent means no), and an API token also needs an Assistant execute
+// scope.
 func assistantExecuteAuthority(ctx context.Context) bool {
+	if !assistantActionPlanAuthorityFromContext(ctx) {
+		return false
+	}
 	token := pulsauth.GetAPIToken(ctx)
 	if token == nil || token.HasScope(config.ScopeAIExecute) {
 		return true
@@ -2707,7 +2715,7 @@ func (h *AIHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 		HandoffMetadata:     handoffMetadata,
 		AutonomousMode:      autonomousMode,
 		HasExecuteAuthority: assistantExecuteAuthority(ctx),
-		// Bound by withAssistantHostCommandAuthority on the route; absent
+		// Bound by withAssistantActionAuthority on the route; absent
 		// means the caller may not have the Assistant run host commands.
 		HasHostCommandAuthority: chat.HostCommandAuthorityFromContext(ctx),
 		SuppressSessionEvent:    true,

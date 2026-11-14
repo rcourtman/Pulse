@@ -2445,7 +2445,7 @@ its `ChatSessionCompactionResult`) was removed on 2026-10-23 with the browser
 Assistant, its only caller.
 
 `/api/ai/chat` binds Assistant host-command authority at the route through
-`withAssistantHostCommandAuthority`: the canonical action-execute capability
+`withAssistantActionAuthority`: the canonical action-execute capability
 answered by `requestHasActionCapability` in
 `internal/api/action_authority.go`, which mirrors `requireActionCapability`
 without refusing the request (session callers under the default authorizer need
@@ -2453,6 +2453,28 @@ instance administrator authority or an admin proxy role; API tokens need a scope
 from `tokenHasActionCapabilityScope`, so an `ai:chat`-only token never gets it;
 the installed authorizer still decides). `HandleChat` passes it as
 `ExecuteRequest.HasHostCommandAuthority` and an unbound request fails closed.
+The same wrapper binds the caller's action-plan capability, the one
+`POST /api/actions/plan` requires (`assistantRequestHasActionPlanCapability`:
+`requestHasActionCapability` with `auth.ActionPlan` for sessions and proxy
+users; for API tokens the installed authorizer's plan answer, with the
+Assistant's own token scope rule kept). `assistantExecuteAuthority` needs it
+before granting `ExecuteRequest.HasExecuteAuthority`, so a caller who cannot
+plan actions on the REST route cannot plan one through `pulse_control`; an
+unbound request fails closed.
+
+Routes that start work on an agent's host carry the same capabilities as the
+Actions routes, on top of their token scopes. `POST /api/infra-updates/check`
+queues a Docker update scan whose registry lookups can run the host's
+credential helper, so it needs `requireActionCapability(auth.ActionExecute)`.
+`POST /api/ai/findings/{id}/reinvestigate` starts an investigation that runs
+commands on hosts and can plan a fix, so it needs both `auth.ActionPlan` and
+`auth.ActionExecute`. Under the default authorizer both refuse non-admin
+sessions and non-admin proxy roles; scoped API tokens keep their route scope
+rules. The attention restart offer and its plan route
+(`/api/ai/patrol/attention/{id}/actions/restart/plan`) check
+`actionAuthority.authorizeActor`, which under the default authorizer admits
+every org member, so `callerMayReviewAndRunAction` also applies
+`requestHasActionCapability` for plan, approve and execute.
 
 Infrastructure settings copied agent commands are a shared API/payload boundary
 even when the final command string is assembled in the browser. Selected-row

@@ -323,7 +323,11 @@ func (r *Router) registerMonitoringResourceRoutes(
 	// Infrastructure update detection routes (Docker containers, packages, etc.)
 	r.mux.HandleFunc("/api/infra-updates", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, infraUpdateHandlers.HandleGetInfraUpdates)))
 	r.mux.HandleFunc("/api/infra-updates/summary", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, infraUpdateHandlers.HandleGetInfraUpdatesSummary)))
-	r.mux.HandleFunc("/api/infra-updates/check", RequireAuth(r.config, RequireScope(config.ScopeMonitoringWrite, infraUpdateHandlers.HandleTriggerInfraUpdateCheck)))
+	// The check queues a Docker update scan on the agent's host, and registry
+	// lookups there can run the configured credential helper: a host command,
+	// so it needs the action-execute capability as well as the token scope.
+	r.mux.HandleFunc("/api/infra-updates/check", RequireAuth(r.config, RequireScope(config.ScopeMonitoringWrite,
+		requireActionCapability(r.config, r.authorizer, auth.ActionExecute, infraUpdateHandlers.HandleTriggerInfraUpdateCheck))))
 	r.mux.HandleFunc("/api/infra-updates/agent/", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, func(w http.ResponseWriter, req *http.Request) {
 		// Extract agent ID from path: /api/infra-updates/agent/{agentId}
 		agentID := strings.TrimPrefix(req.URL.Path, "/api/infra-updates/agent/")

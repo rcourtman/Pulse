@@ -1198,7 +1198,11 @@ func (r *Router) routeAIFindings(w http.ResponseWriter, req *http.Request) {
 		if !ensureScope(w, req, config.ScopeAIExecute) {
 			return
 		}
-		r.aiAutoFixEndpoints.HandleReinvestigateFinding(w, req)
+		// An investigation runs commands on hosts and can plan a fix, so the
+		// caller needs both action capabilities, as a Patrol run does.
+		requireActionCapability(r.config, r.authorizer, auth.ActionPlan,
+			requireActionCapability(r.config, r.authorizer, auth.ActionExecute,
+				r.aiAutoFixEndpoints.HandleReinvestigateFinding))(w, req)
 	case strings.HasSuffix(path, "/reapprove"):
 		if !ensureScope(w, req, config.ScopeAIExecute) {
 			return
