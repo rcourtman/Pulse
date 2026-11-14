@@ -1273,6 +1273,9 @@ type DockerData struct {
 	Nodes       []models.DockerNode      `json:"-"`
 	Secrets     []models.DockerSecret    `json:"-"`
 	Configs     []models.DockerConfig    `json:"-"`
+
+	// FailureLogsEnabled is the Docker agent's local failure-logs setting.
+	FailureLogsEnabled bool `json:"failureLogsEnabled,omitempty"`
 }
 
 // PBSData contains Proxmox Backup Server data.

@@ -1182,6 +1182,9 @@ type DockerHost struct {
 	NetOutRate    float64 `json:"netOutRate,omitempty"`
 	DiskReadRate  float64 `json:"diskReadRate,omitempty"`
 	DiskWriteRate float64 `json:"diskWriteRate,omitempty"`
+
+	// FailureLogsEnabled is the agent's local failure-logs setting.
+	FailureLogsEnabled bool `json:"failureLogsEnabled,omitempty"`
 }
 
 func (h DockerHost) NormalizeCollections() DockerHost {

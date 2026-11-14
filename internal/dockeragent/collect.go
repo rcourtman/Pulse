@@ -168,6 +168,8 @@ func (a *Agent) buildReport(ctx context.Context) (agentsdocker.Report, error) {
 			Type:            a.cfg.AgentType,
 			IntervalSeconds: int(a.cfg.Interval / time.Second),
 			Modules:         a.helperOperationModuleStatuses(),
+
+			FailureLogsEnabled: a.cfg.CollectFailureLogs,
 		},
 		Host: agentsdocker.HostInfo{
 			Hostname:         hostName,

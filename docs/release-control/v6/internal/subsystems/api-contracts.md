@@ -43,6 +43,15 @@ window may recover offers; a timer only enables its button. Registered native
 catalogue tests and portal Plan tests cover these additive fields, unknown
 compatibility and unchanged prices/licence/permission behavior.
 
+### Docker agents report their failure-logs setting (14 November 2026)
+
+`agentsdocker.AgentInfo` gains `failureLogsEnabled` (omitted when off): the
+host's own `--enable-failure-logs` setting. It reaches `models.DockerHost` and
+the unified resource's `docker.failureLogsEnabled`. The settings telemetry
+preview type (`TelemetryPingPreview`, schema v22) gains
+`agent_hosts_commands_enabled` and `docker_hosts_failure_logs_enabled`, two
+integers. No route, request field or response shape changes otherwise.
+
 ### Docker containers can carry their last log lines (13 November 2026)
 
 `agentsdocker.Container` gains an optional `failureLog` object: `reason`

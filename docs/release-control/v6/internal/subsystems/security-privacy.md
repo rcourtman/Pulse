@@ -4469,7 +4469,7 @@ carry the schema notice for the first release that includes this field.
 
 ### Telemetry ingestion matches the released sender while storage stays compatible
 
-The active outbound contract is schema v21. Schema v8 added content-free
+The active outbound contract is schema v22. Schema v8 added content-free
 approved-action refusal counters for target change, prerequisite failure, and
 invalid typed contract so agent-side pre-mutation failures no longer collapse
 into `other`. Schema v9 completes that split with a content-free `uncoded`
@@ -4532,6 +4532,16 @@ whole UTC dates inside the window, so the partial start date is left out and
 the count never exceeds 30. No query, resource ID, time window, result
 or request count leaves the install, and the receiver clamps the value to
 0 to 30.
+Schema v22 adds two counts of agents whose owner turned on a local opt-in:
+`agent_hosts_commands_enabled` (agent hosts reporting commands on) and
+`docker_hosts_failure_logs_enabled` (Docker hosts whose agent reports
+`failureLogsEnabled`, the host's own `--enable-failure-logs` setting). They
+are counted in the install snapshot from the unified host and Docker host
+views (`countAgentHostsWithCommands`, `countDockerHostsWithFailureLogs`).
+Only the two integers leave the install: never which hosts, their names or
+any log text. The receiver stores them only from schema v22 and caps each at
+`agent_hosts` and `docker_hosts`. The agent reports the setting so the server
+can count it; the server still cannot change it.
 Patrol run and new-finding volumes use bounded local UTC-day tallies in
 `internal/config/persistence.go`, preserving aggregate activity after the
 operator-facing run history is trimmed. Finding volume has its own persistence
