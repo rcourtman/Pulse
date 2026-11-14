@@ -4,6 +4,7 @@ import { copyToClipboard } from '@/utils/clipboard';
 import {
   apiErrorFromResponse,
   apiFetch,
+  beginCredentialChange,
   clearApiToken,
   getApiToken,
   getOrgID,
@@ -36,6 +37,7 @@ export const QuickSecuritySetup: Component<QuickSecuritySetupProps> = (props) =>
   const [credentials, setCredentials] = createSignal<SecurityCredentials | null>(null);
   const [outcome, setOutcome] = createSignal<'confirmed' | 'unconfirmed' | null>(null);
   const [error, setError] = createSignal('');
+  const [authenticationRejected, setAuthenticationRejected] = createSignal(false);
   const [copied, setCopied] = createSignal<'username' | 'password' | 'token' | null>(null);
   const [useCustomPassword, setUseCustomPassword] = createSignal(false);
   const [customUsername, setCustomUsername] = createSignal(props.defaultUsername ?? 'admin');
@@ -48,16 +50,24 @@ export const QuickSecuritySetup: Component<QuickSecuritySetupProps> = (props) =>
   let controller: AbortController | undefined;
   let attempted: SecurityCredentials | null = null;
   let disposed = false;
+  let credentialChange: ReturnType<typeof beginCredentialChange> | undefined;
+  const releaseCredentialChange = () => {
+    const change = credentialChange;
+    credentialChange = undefined;
+    return change?.release() ?? false;
+  };
   const isCurrent = () =>
     !disposed &&
     props.owner === owner &&
     (getOrgID() || 'default') === org &&
-    getApiToken() === credentialAtAdmission;
+    getApiToken() === credentialAtAdmission &&
+    (!credentialChange || credentialChange.isCurrent());
   const controlsDisabled = () => props.disabled || isSettingUp();
 
   onCleanup(() => {
     disposed = true;
     controller?.abort();
+    releaseCredentialChange();
     controller = undefined;
     attempted = null;
     credentialAtAdmission = null;
@@ -117,8 +127,26 @@ export const QuickSecuritySetup: Component<QuickSecuritySetupProps> = (props) =>
       }
     }
 
+    try {
+      credentialChange = beginCredentialChange(() => {
+        if (isCurrent()) setAuthenticationRejected(true);
+      });
+    } catch {
+      setError('Another credential change is in progress. Save its result first.');
+      return;
+    }
+    setAuthenticationRejected(false);
     const request = new AbortController();
     controller = request;
+    // A stalled fetch or body is uncertain, not permission to rotate again.
+    // Race both awaits so even a response that never finishes can be saved.
+    let rejectInterrupted!: (reason: Error) => void;
+    const interrupted = new Promise<never>((_resolve, reject) => {
+      rejectInterrupted = reject;
+    });
+    const onAbort = () => rejectInterrupted(new DOMException('Aborted', 'AbortError'));
+    request.signal.addEventListener('abort', onAbort, { once: true });
+    const deadline = setTimeout(() => request.abort(), 30_000);
     attempted = {
       username: customUsername(),
       password: useCustomPassword() ? customPassword() : generatePassword(),
@@ -127,22 +155,28 @@ export const QuickSecuritySetup: Component<QuickSecuritySetupProps> = (props) =>
     setIsSettingUp(true);
     props.onPendingChange(true);
     try {
-      const response = await apiFetch('/api/security/quick-setup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        expectedOrgID: org,
-        signal: request.signal,
-        retry: false,
-        body: JSON.stringify({ ...attempted, force: isRotation }),
-      });
+      const response = await Promise.race([
+        apiFetch('/api/security/quick-setup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          expectedOrgID: org,
+          signal: request.signal,
+          retry: false,
+          body: JSON.stringify({ ...attempted, force: isRotation }),
+        }),
+        interrupted,
+      ]);
       if (!isCurrent()) return;
       if (!response.ok) {
         if (response.status >= 500) throw new Error('Unconfirmed credential change');
-        const refusal = await apiErrorFromResponse(response, 'Credential change was refused');
+        const refusal = await Promise.race([
+          apiErrorFromResponse(response, 'Credential change was refused'),
+          interrupted,
+        ]);
         if (isCurrent()) setError(refusal.message);
         return;
       }
-      const result: unknown = await response.json();
+      const result: unknown = await Promise.race([response.json(), interrupted]);
       if (!isCurrent()) return;
       if (
         !result ||
@@ -165,6 +199,7 @@ export const QuickSecuritySetup: Component<QuickSecuritySetupProps> = (props) =>
       // Drop only this reader's obsolete token, not its selected organisation.
       clearApiToken();
       credentialAtAdmission = null;
+      releaseCredentialChange();
       showSuccess('Credentials are active. Save them before continuing.');
     } catch {
       if (!isCurrent()) return;
@@ -176,6 +211,11 @@ export const QuickSecuritySetup: Component<QuickSecuritySetupProps> = (props) =>
       setCustomPassword('');
       setConfirmPassword('');
     } finally {
+      clearTimeout(deadline);
+      request.signal.removeEventListener('abort', onAbort);
+      // Confirmed success retired old-auth rejections. Definite refusals
+      // release immediately; an uncertain attempt stays savable until Close.
+      if (!credentials() || !isCurrent()) releaseCredentialChange();
       if (controller === request) {
         controller = undefined;
         attempted = null;
@@ -354,7 +394,9 @@ Important:
             <div class="flex">
               <AlertTriangle class="h-5 w-5 text-yellow-600 dark:text-yellow-400 mr-2 shrink-0" />
               <div class="text-xs text-yellow-700 dark:text-yellow-300">
-                <p class="font-semibold">Important:</p>
+                <p class="font-semibold" role={authenticationRejected() ? 'status' : undefined}>
+                  {authenticationRejected() ? 'Sign-in rejected:' : 'Important:'}
+                </p>
                 <p>
                   {useCustomPassword()
                     ? 'Your password will be hashed before storage'
@@ -499,8 +541,9 @@ Important:
             >
               <p class="font-semibold">The password or token may have changed.</p>
               <p class="text-xs">
-                Check sign-in in a separate window and verify the token before relying on these
-                credentials. Do not repeat the change until you have checked the result.
+                {authenticationRejected()
+                  ? 'Background sign-in was rejected. Save these credentials, then check sign-in in a separate window and verify the token. Do not repeat this change.'
+                  : 'Check sign-in in a separate window and verify the token before relying on these credentials. Do not repeat the change until you have checked the result.'}
               </p>
             </Show>
           </InlineNotice>
@@ -512,6 +555,7 @@ Important:
                 if (!isCurrent() || props.disabled) return;
                 const confirmed = outcome() === 'confirmed';
                 setCredentials(null);
+                if (releaseCredentialChange()) return;
                 props.onConfigured?.();
                 if (confirmed) window.location.reload();
               }}

@@ -246,6 +246,12 @@ class ApiClient {
   // Explicit credential changes retire older requests, including ordinary
   // background reads. Values alone cannot identify a replacement session.
   private authGeneration = 0;
+  private credentialChange?: {
+    generation: number;
+    orgID: string;
+    rejected: boolean;
+    onRejected: () => void;
+  };
 
   constructor() {
     // Check session storage for existing auth on page load
@@ -436,6 +442,11 @@ class ApiClient {
 
   setOrgID(orgID: string | null) {
     const normalized = sanitizeOrgID(orgID);
+    // Leaving and returning to the same organisation must not revive a
+    // credential form's deferred navigation, even before its cleanup runs.
+    if ((this.getOrgID() || 'default') !== (normalized || 'default')) {
+      this.credentialChange = undefined;
+    }
     this.orgID = normalized;
     this.persistOrgContext(normalized);
   }
@@ -554,6 +565,44 @@ class ApiClient {
     this.authGeneration += 1;
     this.apiToken = null;
     this.removeStoredToken();
+  }
+
+  // Quick setup can replace credentials before its response body arrives.
+  // Keep the real rejection, but let that reader save a possibly committed
+  // attempt before destructive navigation. This grants no authentication.
+  beginCredentialChange(onRejected: () => void) {
+    const isCurrent = (change: NonNullable<typeof this.credentialChange>) =>
+      this.credentialChange === change &&
+      this.authGeneration === change.generation &&
+      (this.getOrgID() || 'default') === change.orgID;
+    if (this.credentialChange && isCurrent(this.credentialChange)) {
+      throw new Error('Another credential change is in progress. Save its result first.');
+    }
+    const change = {
+      generation: this.authGeneration,
+      orgID: this.getOrgID() || 'default',
+      rejected: false,
+      onRejected,
+    };
+    this.credentialChange = change;
+    return {
+      isCurrent: () => isCurrent(change),
+      release: () => {
+        const rejected = isCurrent(change) && change.rejected;
+        if (this.credentialChange === change) this.credentialChange = undefined;
+        if (rejected) this.redirectToLogin();
+        return rejected;
+      },
+    };
+  }
+
+  private redirectToLogin() {
+    logger.warn('Authentication expired - redirecting to login');
+    if (typeof window !== 'undefined') {
+      this.clearAuth();
+      localStorage.setItem('just_logged_out', 'true');
+      window.location.href = '/';
+    }
   }
 
   // Check if we have any auth configured
@@ -794,12 +843,16 @@ class ApiClient {
       url !== '/api/security/change-password' &&
       !ownsQuickSetupResult
     ) {
-      logger.warn('Authentication expired - redirecting to login');
-      // Clear auth and redirect to login
-      if (typeof window !== 'undefined') {
-        this.clearAuth();
-        localStorage.setItem('just_logged_out', 'true');
-        window.location.href = '/';
+      const change = this.credentialChange;
+      if (
+        change &&
+        change.generation === authGeneration &&
+        change.orgID === (this.getOrgID() || 'default')
+      ) {
+        change.rejected = true;
+        change.onRejected();
+      } else {
+        this.redirectToLogin();
       }
       return response;
     }
@@ -918,6 +971,8 @@ export const setApiToken = (token: string) => apiClient.setApiToken(token);
 export const getApiToken = () => apiClient.getApiToken();
 export const clearAuth = () => apiClient.clearAuth();
 export const clearApiToken = () => apiClient.clearApiToken();
+export const beginCredentialChange = (onRejected: () => void) =>
+  apiClient.beginCredentialChange(onRejected);
 export const hasAuth = () => apiClient.hasAuth();
 export const setOrgID = (orgID: string | null) => apiClient.setOrgID(orgID);
 export const getOrgID = () => apiClient.getOrgID();
