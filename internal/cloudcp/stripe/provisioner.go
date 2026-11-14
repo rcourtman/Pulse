@@ -17,6 +17,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/docker"
 	cpemail "github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/email"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/entitlements"
+	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/lifecycle"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -91,6 +92,7 @@ type provisioningCleanupState struct {
 	tenantDataDir string
 	containerID   string
 	tenantCreated bool
+	release       func()
 }
 
 // NewProvisioner creates a Provisioner.
@@ -481,14 +483,14 @@ func (p *Provisioner) maybeStartContainer(ctx context.Context, tenantID, tenantD
 	}
 	id, err := p.docker.CreateAndStart(ctx, tenantID, tenantDataDir)
 	if err != nil {
-		if p.allowDockerless && dockerUnavailableError(err) {
+		if id == "" && p.allowDockerless && dockerUnavailableError(err) {
 			log.Warn().
 				Err(err).
 				Str("tenant_id", tenantID).
 				Msg("Docker start failed; continuing because CP_ALLOW_DOCKERLESS_PROVISIONING is enabled")
 			return "", nil
 		}
-		return "", err
+		return id, err
 	}
 	return id, nil
 }
@@ -598,7 +600,8 @@ func (p *Provisioner) rollbackProvisioning(state provisioningCleanupState) {
 			Err(err).
 			Str("tenant_id", state.tenantID).
 			Str("container_id", state.containerID).
-			Msg("Provisioning rollback: failed to remove container")
+			Msg("Provisioning rollback: failed to remove container; retaining tenant data and registry")
+		return
 	}
 
 	if state.tenantCreated && strings.TrimSpace(state.tenantID) != "" {
@@ -636,6 +639,9 @@ func (p *Provisioner) HandleCheckout(ctx context.Context, session CheckoutSessio
 			outcome = "skipped_existing"
 		}
 		cpmetrics.ProvisioningTotal.WithLabelValues(outcome).Inc()
+		if cleanup.release != nil {
+			cleanup.release()
+		}
 	}()
 
 	customerID := strings.TrimSpace(session.Customer)
@@ -684,6 +690,11 @@ func (p *Provisioner) HandleCheckout(ctx context.Context, session CheckoutSessio
 	if err != nil {
 		return fmt.Errorf("generate tenant id: %w", err)
 	}
+	ctx, lease, err := p.registry.AcquireRuntimeLifecycle(ctx, tenantID)
+	if err != nil {
+		return err
+	}
+	cleanup.release = func() { _ = lease.Close() }
 
 	planVersion := DerivePlanVersion(session.Metadata, "")
 
@@ -806,6 +817,7 @@ func (p *Provisioner) HandleCheckout(ctx context.Context, session CheckoutSessio
 
 	// Start container if Docker is available.
 	containerID, err := p.maybeStartContainer(ctx, tenantID, tenantDataDir)
+	cleanup.containerID = containerID
 	if err != nil {
 		return fmt.Errorf("start container: %w", err)
 	}
@@ -908,6 +920,9 @@ func (p *Provisioner) ProvisionWorkspaceForOwner(ctx context.Context, accountID,
 			p.rollbackProvisioning(cleanup)
 		}
 		cpmetrics.ProvisioningTotal.WithLabelValues(outcome).Inc()
+		if cleanup.release != nil {
+			cleanup.release()
+		}
 	}()
 
 	accountID = strings.TrimSpace(accountID)
@@ -930,6 +945,11 @@ func (p *Provisioner) ProvisionWorkspaceForOwner(ctx context.Context, accountID,
 	if err != nil {
 		return nil, fmt.Errorf("generate tenant id: %w", err)
 	}
+	ctx, lease, err := p.registry.AcquireRuntimeLifecycle(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	cleanup.release = func() { _ = lease.Close() }
 
 	tenantDataDir, secretsDir, err := p.ensureTenantDirs(tenantID)
 	if err != nil {
@@ -994,6 +1014,7 @@ func (p *Provisioner) ProvisionWorkspaceForOwner(ctx context.Context, accountID,
 	}
 
 	containerID, err := p.maybeStartContainer(ctx, tenantID, tenantDataDir)
+	cleanup.containerID = containerID
 	if err != nil {
 		return nil, fmt.Errorf("start container: %w", err)
 	}
@@ -1028,7 +1049,12 @@ func (p *Provisioner) DeprovisionWorkspaceContainer(ctx context.Context, tenant 
 	if tenant == nil {
 		return nil
 	}
-	if err := p.maybeStopAndRemoveContainer(ctx, tenant.ContainerID); err != nil {
+	ctx, lease, current, err := p.lockTenant(ctx, tenant.ID)
+	if err != nil {
+		return err
+	}
+	defer lease.Close()
+	if err := p.maybeStopAndRemoveContainer(ctx, current.ContainerID); err != nil {
 		return fmt.Errorf("stop/remove container: %w", err)
 	}
 	return nil
@@ -1049,6 +1075,11 @@ func (p *Provisioner) HandleSubscriptionUpdated(ctx context.Context, sub Subscri
 		log.Warn().Str("customer_id", customerID).Msg("subscription.updated: tenant not found")
 		return nil
 	}
+	ctx, lease, tenant, err := p.lockTenant(ctx, tenant.ID)
+	if err != nil {
+		return err
+	}
+	defer lease.Close()
 
 	subState := MapSubscriptionStatus(sub.Status)
 	priceID := sub.FirstPriceID()
@@ -1120,6 +1151,11 @@ func (p *Provisioner) HandleSubscriptionDeleted(ctx context.Context, sub Subscri
 		log.Warn().Str("customer_id", customerID).Msg("subscription.deleted: tenant not found")
 		return nil
 	}
+	ctx, lease, tenant, err := p.lockTenant(ctx, tenant.ID)
+	if err != nil {
+		return err
+	}
+	defer lease.Close()
 
 	// Update registry
 	tenant.State = registry.TenantStateCanceled
@@ -1207,6 +1243,12 @@ func (p *Provisioner) HandleMSPSubscriptionUpdated(ctx context.Context, sub Subs
 	}
 	planVersion = canonicalizeProvisionedPlanVersion(planVersion)
 
+	tenants, release, err := p.lockAccountTenants(ctx, sa.AccountID)
+	if err != nil {
+		return err
+	}
+	defer release()
+
 	// Persist account-level Stripe state.
 	sa.StripeSubscriptionID = strings.TrimSpace(sub.ID)
 	sa.PlanVersion = planVersion
@@ -1214,11 +1256,6 @@ func (p *Provisioner) HandleMSPSubscriptionUpdated(ctx context.Context, sub Subs
 	applyStripeAccountGraceWindow(sa, subState, time.Now().UTC())
 	if err := p.registry.UpdateStripeAccount(sa); err != nil {
 		return fmt.Errorf("update stripe account: %w", err)
-	}
-
-	tenants, err := p.registry.ListByAccountID(sa.AccountID)
-	if err != nil {
-		return fmt.Errorf("list tenants by account: %w", err)
 	}
 
 	for _, tenant := range tenants {
@@ -1283,17 +1320,18 @@ func (p *Provisioner) HandleMSPSubscriptionDeleted(ctx context.Context, sub Subs
 		return nil
 	}
 
+	tenants, release, err := p.lockAccountTenants(ctx, sa.AccountID)
+	if err != nil {
+		return err
+	}
+	defer release()
+
 	// Persist account-level Stripe state.
 	sa.StripeSubscriptionID = strings.TrimSpace(sub.ID)
 	sa.SubscriptionState = "canceled"
 	sa.GraceStartedAt = nil
 	if err := p.registry.UpdateStripeAccount(sa); err != nil {
 		return fmt.Errorf("update stripe account: %w", err)
-	}
-
-	tenants, err := p.registry.ListByAccountID(sa.AccountID)
-	if err != nil {
-		return fmt.Errorf("list tenants by account: %w", err)
 	}
 
 	for _, tenant := range tenants {
@@ -1319,4 +1357,54 @@ func (p *Provisioner) HandleMSPSubscriptionDeleted(ctx context.Context, sub Subs
 		Msg("MSP subscription deleted, capabilities revoked")
 
 	return nil
+}
+
+func (p *Provisioner) lockTenant(ctx context.Context, id string) (context.Context, *lifecycle.Lease, *registry.Tenant, error) {
+	ctx, lease, err := p.registry.AcquireRuntimeLifecycle(ctx, id)
+	if err != nil {
+		return ctx, nil, nil, err
+	}
+	tenant, err := p.registry.Get(id)
+	if err != nil || tenant == nil {
+		_ = lease.Close()
+		if err == nil {
+			err = fmt.Errorf("tenant %s no longer exists", id)
+		}
+		return ctx, nil, nil, err
+	}
+	return ctx, lease, tenant, nil
+}
+
+// Hold the affected tenant leases before changing account-wide authority.
+// Otherwise a busy tenant could roll back an older signed billing file after
+// the account's cancellation had already been committed.
+func (p *Provisioner) lockAccountTenants(ctx context.Context, accountID string) ([]*registry.Tenant, func(), error) {
+	tenants, err := p.registry.ListByAccountID(accountID)
+	if err != nil {
+		return nil, nil, err
+	}
+	var leases []*lifecycle.Lease
+	release := func() {
+		for i := len(leases) - 1; i >= 0; i-- {
+			_ = leases[i].Close()
+		}
+	}
+	current := make([]*registry.Tenant, 0, len(tenants))
+	for _, tenant := range tenants {
+		if tenant == nil {
+			continue
+		}
+		_, lease, tenant, err := p.lockTenant(ctx, tenant.ID)
+		if err != nil {
+			release()
+			return nil, nil, err
+		}
+		leases = append(leases, lease)
+		if tenant.AccountID != accountID {
+			release()
+			return nil, nil, fmt.Errorf("tenant account changed during lifecycle admission")
+		}
+		current = append(current, tenant)
+	}
+	return current, release, nil
 }

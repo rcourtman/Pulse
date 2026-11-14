@@ -88,24 +88,33 @@ func (s *StuckProvisioningCleanup) cleanup(ctx context.Context) {
 		if ctx.Err() != nil {
 			return
 		}
-		tenant, err := s.registry.Get(tenantID)
-		if err != nil {
-			log.Error().Err(err).Str("tenant_id", tenantID).Msg("Stuck provisioning cleanup: failed to reload tenant")
-			continue
-		}
-		if tenant == nil || tenant.State != registry.TenantStateProvisioning {
-			continue
-		}
+		s.cleanupTenant(ctx, tenantID)
+	}
+}
 
-		log.Warn().
-			Str("tenant_id", tenant.ID).
-			Str("account_id", tenant.AccountID).
-			Dur("stuck_duration", time.Since(tenant.CreatedAt)).
-			Msg("Tenant stuck in provisioning state, transitioning to failed")
+func (s *StuckProvisioningCleanup) cleanupTenant(ctx context.Context, tenantID string) {
+	ctx, lease, err := s.registry.AcquireRuntimeLifecycle(ctx, tenantID)
+	if err != nil {
+		return
+	}
+	defer lease.Close()
+	tenant, err := s.registry.Get(tenantID)
+	if err != nil {
+		log.Error().Err(err).Str("tenant_id", tenantID).Msg("Stuck provisioning cleanup: failed to reload tenant")
+		return
+	}
+	if tenant == nil || tenant.State != registry.TenantStateProvisioning {
+		return
+	}
 
-		tenant.State = registry.TenantStateFailed
-		if err := s.registry.Update(tenant); err != nil {
-			log.Error().Err(err).Str("tenant_id", tenant.ID).Msg("Stuck provisioning cleanup: failed to update tenant")
-		}
+	log.Warn().
+		Str("tenant_id", tenant.ID).
+		Str("account_id", tenant.AccountID).
+		Dur("stuck_duration", time.Since(tenant.CreatedAt)).
+		Msg("Tenant stuck in provisioning state, transitioning to failed")
+
+	tenant.State = registry.TenantStateFailed
+	if err := s.registry.Update(tenant); err != nil {
+		log.Error().Err(err).Str("tenant_id", tenant.ID).Msg("Stuck provisioning cleanup: failed to update tenant")
 	}
 }

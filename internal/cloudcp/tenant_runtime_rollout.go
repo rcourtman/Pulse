@@ -13,6 +13,7 @@ import (
 	"time"
 
 	cpDocker "github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/docker"
+	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/lifecycle"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
 	"github.com/rs/zerolog/log"
 )
@@ -262,15 +263,16 @@ func newTenantRuntimeRolloutServiceFromConfig(
 	return service, cleanup, nil
 }
 
-// Rollout performs the tenant runtime rollout or a drift reconciliation if the
-// canonical live container is already on the requested image.
+// Rollout performs the tenant runtime rollout or drift reconciliation. The
+// lease spans registry reads, stopped-writer capture, compensation and commit;
+// an interrupted transaction leaves a durable hold that monitors also honor.
 func (s *tenantRuntimeRolloutService) Rollout(ctx context.Context, opts TenantRuntimeRolloutOptions) (*TenantRuntimeRolloutResult, error) {
 	if s == nil {
 		return nil, fmt.Errorf("rollout service is nil")
 	}
 	tenantID := strings.TrimSpace(opts.TenantID)
-	if tenantID == "" {
-		return nil, fmt.Errorf("tenant id is required")
+	if !lifecycle.ValidTenantID(tenantID) {
+		return nil, fmt.Errorf("valid tenant id is required")
 	}
 	image := strings.TrimSpace(opts.Image)
 	if image == "" {
@@ -279,6 +281,11 @@ func (s *tenantRuntimeRolloutService) Rollout(ctx context.Context, opts TenantRu
 	if image == "" {
 		return nil, fmt.Errorf("image is required")
 	}
+	ctx, lease, err := lifecycle.Acquire(ctx, filepath.Join(filepath.Dir(s.tenantsDir), "control-plane"), tenantID)
+	if err != nil {
+		return nil, err
+	}
+	defer lease.Close()
 
 	tenant, err := s.registry.Get(tenantID)
 	if err != nil {
@@ -287,7 +294,11 @@ func (s *tenantRuntimeRolloutService) Rollout(ctx context.Context, opts TenantRu
 	if tenant == nil {
 		return nil, fmt.Errorf("tenant %s not found", tenantID)
 	}
-
+	switch tenant.State {
+	case registry.TenantStateActive, registry.TenantStateProvisioning, registry.TenantStateFailed:
+	default:
+		return nil, fmt.Errorf("tenant %s state %s does not allow runtime recovery", tenantID, tenant.State)
+	}
 	healthTimeout := opts.HealthTimeout
 	if healthTimeout <= 0 {
 		healthTimeout = s.healthTimeout
@@ -296,212 +307,126 @@ func (s *tenantRuntimeRolloutService) Rollout(ctx context.Context, opts TenantRu
 	if healthPoll <= 0 {
 		healthPoll = s.healthPoll
 	}
-	runID := sanitizeTenantRuntimeRolloutRunID(opts.RunID, s.now())
-
 	live, err := s.resolveLiveContainer(ctx, tenant)
-	if err != nil {
-		if errors.Is(err, errTenantRuntimeMissing) {
-			return s.recreateMissingRuntime(ctx, tenant, image, healthTimeout, healthPoll)
-		}
+	if err != nil && !errors.Is(err, errTenantRuntimeMissing) {
 		return nil, err
 	}
-	if strings.TrimSpace(tenant.ContainerID) != "" && tenant.ContainerID != live.ID {
-		log.Warn().
-			Str("tenant_id", tenantID).
-			Str("registry_container_id", tenant.ContainerID).
-			Str("live_container_id", live.ID).
-			Msg("Tenant registry container_id drifted from the live runtime container")
+	if errors.Is(err, errTenantRuntimeMissing) {
+		live = nil
 	}
-
 	canonicalName := tenantRuntimeContainerName(tenantID)
-	desiredRouting := s.docker.DesiredRuntimeRouting(tenantID)
-	if tenantRuntimeMatchesContract(live, canonicalName, image, desiredRouting) {
-		healthy, err := s.waitForHealth(ctx, live.ID, healthTimeout, healthPoll)
-		if err == nil {
-			if updateErr := s.persistTenantRuntimeState(tenant, live, healthy); updateErr != nil {
-				return nil, updateErr
+	if live != nil && tenantRuntimeMatchesContract(live, canonicalName, image, s.docker.DesiredRuntimeRouting(tenantID)) {
+		healthy, healthErr := s.waitForHealth(ctx, live.ID, healthTimeout, healthPoll)
+		if healthErr == nil {
+			if err := s.persistTenantRuntimeState(tenant, live, healthy); err != nil {
+				return nil, err
 			}
 			return &TenantRuntimeRolloutResult{
-				TenantID:            tenantID,
-				PreviousContainerID: live.ID,
-				ActiveContainerID:   live.ID,
-				ActiveImageRef:      live.ImageRef,
-				ActiveImageID:       live.ImageID,
-				ReconciledOnly:      true,
+				TenantID: tenantID, PreviousContainerID: live.ID, ActiveContainerID: live.ID,
+				ActiveImageRef: live.ImageRef, ActiveImageID: live.ImageID, ReconciledOnly: true,
 			}, nil
 		}
-		log.Warn().
-			Err(err).
-			Str("tenant_id", tenantID).
-			Str("container_id", live.ID).
-			Msg("Live tenant container already matches requested image but failed health sync; recreating canonically")
-	} else if live.Name == canonicalName && live.ImageRef == image {
-		log.Warn().
-			Str("tenant_id", tenantID).
-			Str("container_id", live.ID).
-			Str("live_route_host", live.RouteHost).
-			Str("desired_route_host", desiredRouting.Host).
-			Str("live_public_url", live.PublicURL).
-			Str("desired_public_url", desiredRouting.PublicURL).
-			Msg("Live tenant container already matches requested image but runtime routing drifted; recreating canonically")
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
 	}
-
-	tenantDataDir := filepath.Join(s.tenantsDir, tenantID)
 	if err := s.enforceAdmission(ctx, "tenant runtime rollout"); err != nil {
 		return nil, err
 	}
+	runID := sanitizeTenantRuntimeRolloutRunID(opts.RunID, s.now())
 	snapshotRoot := strings.TrimSpace(opts.SnapshotRoot)
 	if snapshotRoot == "" {
 		snapshotRoot = filepath.Join(filepath.Dir(s.tenantsDir), "backups", "rollout")
 	}
-	snapshotDir := filepath.Join(snapshotRoot, runID, tenantID)
-	if err := s.synchronizer.Snapshot(ctx, tenantDataDir, snapshotDir); err != nil {
-		return nil, fmt.Errorf("snapshot tenant data for %s: %w", tenantID, err)
+	tx := &tenantRuntimeTransaction{
+		service: s, lease: lease, tenant: tenant, previous: live,
+		dataDir: filepath.Join(s.tenantsDir, tenantID), canonicalName: canonicalName,
+		healthTimeout: healthTimeout, healthPoll: healthPoll,
+		record: lifecycle.Recovery{TenantID: tenantID, SnapshotDir: filepath.Join(snapshotRoot, runID, tenantID), Phase: "stopping"},
 	}
-
-	backupName := canonicalName + ".pre-" + runID
-	if existing, inspectErr := s.docker.Inspect(ctx, backupName); inspectErr == nil && existing != nil {
-		return nil, fmt.Errorf("backup container name %s already exists", backupName)
-	} else if inspectErr != nil && !cpDocker.IsNotFound(inspectErr) {
-		return nil, fmt.Errorf("inspect backup container %s: %w", backupName, inspectErr)
+	if live != nil {
+		tx.record.PreviousContainerID = live.ID
+		tx.record.BackupContainerName = canonicalName + ".pre-" + runID
+		if existing, err := s.docker.Inspect(ctx, tx.record.BackupContainerName); err == nil && existing != nil {
+			return nil, fmt.Errorf("backup container name %s already exists", tx.record.BackupContainerName)
+		} else if err != nil && !cpDocker.IsNotFound(err) {
+			return nil, fmt.Errorf("inspect backup container: %w", err)
+		}
 	}
-
-	if err := s.docker.Stop(ctx, live.ID); err != nil {
-		return nil, fmt.Errorf("stop live tenant container %s: %w", live.ID, err)
+	if err := lease.MarkRecovery(tx.record); err != nil {
+		return nil, fmt.Errorf("record rollout recovery hold: %w", err)
 	}
-	if err := s.docker.Rename(ctx, live.ID, backupName); err != nil {
-		return nil, fmt.Errorf("rename live tenant container %s -> %s: %w", live.ID, backupName, err)
+	if live != nil {
+		if err := s.docker.Stop(ctx, live.ID); err != nil {
+			return nil, tx.abort(ctx, fmt.Errorf("stop live tenant container: %w", err), false)
+		}
+		if err := tx.requireStopped(ctx, live.ID); err != nil {
+			return nil, tx.held(err)
+		}
 	}
-
-	restorePrevious := func(newContainerID string, rolloutErr error) error {
-		var restoreProblems []string
-		if strings.TrimSpace(newContainerID) != "" {
-			if removeErr := s.docker.Remove(ctx, newContainerID); removeErr != nil {
-				restoreProblems = append(restoreProblems, fmt.Sprintf("remove failed container: %v", removeErr))
-			}
-		}
-		if syncErr := s.synchronizer.Restore(ctx, snapshotDir, tenantDataDir); syncErr != nil {
-			restoreProblems = append(restoreProblems, fmt.Sprintf("restore tenant data: %v", syncErr))
-		}
-		if renameErr := s.docker.Rename(ctx, backupName, canonicalName); renameErr != nil {
-			restoreProblems = append(restoreProblems, fmt.Sprintf("rename backup container back: %v", renameErr))
-		}
-		if startErr := s.docker.Start(ctx, canonicalName); startErr != nil {
-			restoreProblems = append(restoreProblems, fmt.Sprintf("restart previous container: %v", startErr))
-		}
-		restoredInfo, inspectErr := s.resolveLiveContainer(ctx, tenant)
-		if inspectErr != nil {
-			restoreProblems = append(restoreProblems, fmt.Sprintf("inspect restored container: %v", inspectErr))
-		} else {
-			healthy, healthErr := s.waitForHealth(ctx, restoredInfo.ID, healthTimeout, healthPoll)
-			if healthErr != nil {
-				restoreProblems = append(restoreProblems, fmt.Sprintf("verify restored container health: %v", healthErr))
-			}
-			if updateErr := s.persistTenantRuntimeState(tenant, restoredInfo, healthy); updateErr != nil {
-				restoreProblems = append(restoreProblems, fmt.Sprintf("persist restored tenant state: %v", updateErr))
-			}
-		}
-		if len(restoreProblems) == 0 {
-			return rolloutErr
-		}
-		return fmt.Errorf("%w; rollback problems: %s", rolloutErr, strings.Join(restoreProblems, "; "))
+	// Missing-runtime recovery also captures the existing data before a new
+	// image is allowed to touch it. A failed first boot can mutate that data.
+	if err := s.synchronizer.Snapshot(ctx, tx.dataDir, tx.record.SnapshotDir); err != nil {
+		return nil, tx.abort(ctx, fmt.Errorf("snapshot tenant data: %w", err), false)
 	}
-
-	newContainerID, err := s.docker.CreateAndStart(ctx, tenantID, tenantDataDir)
+	if live != nil {
+		if err := s.docker.Rename(ctx, live.ID, tx.record.BackupContainerName); err != nil {
+			return nil, tx.abort(ctx, fmt.Errorf("rename live tenant container: %w", err), false)
+		}
+		if err := tx.requireStopped(ctx, live.ID); err != nil {
+			return nil, tx.held(err)
+		}
+	}
+	if info, err := s.docker.Inspect(ctx, canonicalName); !cpDocker.IsNotFound(err) {
+		return nil, tx.abort(ctx, fmt.Errorf("canonical name is not confirmed vacant before create (present=%t): %v", info != nil, err), false)
+	}
+	tx.record.Phase = "creating"
+	if err := lease.MarkRecovery(tx.record); err != nil {
+		return nil, tx.abort(ctx, err, false)
+	}
+	newID, createErr := s.docker.CreateAndStart(ctx, tenantID, tx.dataDir)
+	tx.record.NewContainerID = newID // An error may still return a created ID.
+	if err := lease.MarkRecovery(tx.record); err != nil {
+		return nil, tx.abort(ctx, errors.Join(createErr, err), true)
+	}
+	if createErr != nil {
+		return nil, tx.abort(ctx, fmt.Errorf("start new tenant runtime: %w", createErr), true)
+	}
+	if strings.TrimSpace(newID) == "" {
+		return nil, tx.abort(ctx, fmt.Errorf("new tenant runtime returned no identity"), true)
+	}
+	if _, err := s.waitForHealth(ctx, newID, healthTimeout, healthPoll); err != nil {
+		return nil, tx.abort(ctx, err, true)
+	}
+	newInfo, err := s.docker.Inspect(ctx, newID)
 	if err != nil {
-		return nil, restorePrevious("", fmt.Errorf("start new tenant runtime: %w", err))
+		return nil, tx.abort(ctx, fmt.Errorf("inspect new tenant runtime: %w", err), true)
 	}
-
-	healthy, err := s.waitForHealth(ctx, newContainerID, healthTimeout, healthPoll)
-	if err != nil || !healthy {
-		if err == nil {
-			err = fmt.Errorf("tenant runtime %s failed health checks", newContainerID)
-		}
-		return nil, restorePrevious(newContainerID, err)
-	}
-
-	newInfo, err := s.resolveLiveContainer(ctx, tenant)
-	if err != nil {
-		return nil, restorePrevious(newContainerID, fmt.Errorf("inspect new tenant runtime: %w", err))
-	}
-	if newInfo.Name != canonicalName {
-		return nil, restorePrevious(newContainerID, fmt.Errorf("new tenant runtime is not using canonical container name %s", canonicalName))
+	if newInfo == nil || newInfo.ID != newID || !newInfo.Running || !tenantRuntimeMatchesContract(newInfo, canonicalName, image, s.docker.DesiredRuntimeRouting(tenantID)) {
+		return nil, tx.abort(ctx, fmt.Errorf("new tenant runtime does not match its canonical identity and runtime contract"), true)
 	}
 	if err := s.persistTenantRuntimeState(tenant, newInfo, true); err != nil {
-		return nil, restorePrevious(newContainerID, err)
+		return nil, tx.abort(ctx, err, true)
 	}
-	if opts.PrunePrevious {
-		if err := s.docker.Remove(ctx, backupName); err != nil {
-			return nil, fmt.Errorf("remove previous tenant runtime %s: %w", backupName, err)
+	if err := lease.Complete(); err != nil {
+		return nil, tx.held(fmt.Errorf("runtime committed but recovery hold completion failed: %w", err))
+	}
+	previousID := tenant.ContainerID
+	if live != nil {
+		previousID = live.ID
+	}
+	result := &TenantRuntimeRolloutResult{
+		TenantID: tenantID, PreviousContainerID: previousID, ActiveContainerID: newID,
+		ActiveImageRef: newInfo.ImageRef, ActiveImageID: newInfo.ImageID,
+		BackupContainerName: tx.record.BackupContainerName, RestoredMissing: live == nil,
+	}
+	if opts.PrunePrevious && live != nil {
+		if err := s.docker.Remove(ctx, live.ID); err != nil {
+			return result, fmt.Errorf("rollout committed to %s; previous container %s retained: %w", newID, live.ID, err)
 		}
-		backupName = ""
+		result.BackupContainerName = ""
 	}
-
-	return &TenantRuntimeRolloutResult{
-		TenantID:            tenantID,
-		PreviousContainerID: live.ID,
-		ActiveContainerID:   newInfo.ID,
-		ActiveImageRef:      newInfo.ImageRef,
-		ActiveImageID:       newInfo.ImageID,
-		BackupContainerName: backupName,
-		ReconciledOnly:      false,
-	}, nil
-}
-
-func (s *tenantRuntimeRolloutService) recreateMissingRuntime(
-	ctx context.Context,
-	tenant *registry.Tenant,
-	image string,
-	healthTimeout time.Duration,
-	healthPoll time.Duration,
-) (*TenantRuntimeRolloutResult, error) {
-	if tenant == nil {
-		return nil, fmt.Errorf("tenant is nil")
-	}
-	tenantID := strings.TrimSpace(tenant.ID)
-	if tenantID == "" {
-		return nil, fmt.Errorf("tenant id is required")
-	}
-
-	tenantDataDir := filepath.Join(s.tenantsDir, tenantID)
-	if err := s.enforceAdmission(ctx, "tenant runtime restore"); err != nil {
-		return nil, err
-	}
-	newContainerID, err := s.docker.CreateAndStart(ctx, tenantID, tenantDataDir)
-	if err != nil {
-		return nil, fmt.Errorf("recreate missing tenant runtime for %s using image %s: %w", tenantID, image, err)
-	}
-
-	healthy, err := s.waitForHealth(ctx, newContainerID, healthTimeout, healthPoll)
-	if err != nil || !healthy {
-		if err == nil {
-			err = fmt.Errorf("tenant runtime %s failed health checks", newContainerID)
-		}
-		if removeErr := s.docker.Remove(ctx, newContainerID); removeErr != nil {
-			return nil, fmt.Errorf("%w; cleanup failed for recreated container %s: %v", err, newContainerID, removeErr)
-		}
-		return nil, err
-	}
-
-	newInfo, err := s.resolveLiveContainer(ctx, tenant)
-	if err != nil {
-		return nil, fmt.Errorf("inspect recreated tenant runtime %s: %w", tenantID, err)
-	}
-	if newInfo.Name != tenantRuntimeContainerName(tenantID) {
-		return nil, fmt.Errorf("recreated tenant runtime is not using canonical container name %s", tenantRuntimeContainerName(tenantID))
-	}
-	if err := s.persistTenantRuntimeState(tenant, newInfo, true); err != nil {
-		return nil, err
-	}
-
-	return &TenantRuntimeRolloutResult{
-		TenantID:            tenantID,
-		PreviousContainerID: strings.TrimSpace(tenant.ContainerID),
-		ActiveContainerID:   newInfo.ID,
-		ActiveImageRef:      newInfo.ImageRef,
-		ActiveImageID:       newInfo.ImageID,
-		RestoredMissing:     true,
-	}, nil
+	return result, nil
 }
 
 func (s *tenantRuntimeRolloutService) enforceAdmission(ctx context.Context, operation string) error {
@@ -796,6 +721,9 @@ func (s *tenantRuntimeRolloutService) waitForHealth(ctx context.Context, contain
 	}
 	deadline := s.now().Add(timeout)
 	for {
+		if err := ctx.Err(); err != nil {
+			return false, err
+		}
 		healthy, err := s.docker.HealthCheck(ctx, containerID)
 		if err == nil && healthy {
 			return true, nil
@@ -821,12 +749,13 @@ func (s *tenantRuntimeRolloutService) persistTenantRuntimeState(tenant *registry
 		return fmt.Errorf("runtime container info is nil")
 	}
 	now := s.now()
-	tenant.ContainerID = info.ID
-	tenant.CurrentImageDigest = info.ImageID
-	tenant.DesiredImageDigest = info.ImageID
-	tenant.LastHealthCheck = &now
-	tenant.HealthCheckOK = healthy
-	if err := s.registry.Update(tenant); err != nil {
+	updated := *tenant
+	updated.ContainerID = info.ID
+	updated.CurrentImageDigest = info.ImageID
+	updated.DesiredImageDigest = info.ImageID
+	updated.LastHealthCheck = &now
+	updated.HealthCheckOK = healthy
+	if err := s.registry.Update(&updated); err != nil {
 		return fmt.Errorf("update tenant %s runtime registry state: %w", tenant.ID, err)
 	}
 	return nil
@@ -857,7 +786,7 @@ func sanitizeTenantRuntimeRolloutRunID(raw string, now time.Time) string {
 		}
 	}
 	sanitized := strings.Trim(builder.String(), "-")
-	if sanitized == "" {
+	if sanitized == "" || sanitized == "." || sanitized == ".." {
 		return now.UTC().Format("20060102T150405Z")
 	}
 	return sanitized
@@ -869,37 +798,152 @@ func (filesystemTenantRuntimeSynchronizer) Snapshot(ctx context.Context, srcDir,
 	return syncTenantRuntimeTree(ctx, srcDir, snapshotDir)
 }
 
+// Restore prepares every byte before moving the destination. The previous
+// post-attempt tree is retained beside it, not cleared or silently discarded.
+// The runtime lease must remain held and every writer stopped throughout.
 func (filesystemTenantRuntimeSynchronizer) Restore(ctx context.Context, snapshotDir, dstDir string) error {
-	return syncTenantRuntimeTree(ctx, snapshotDir, dstDir)
+	src, dst, err := validateTenantRuntimeTreePaths(snapshotDir, dstDir)
+	if err != nil {
+		return err
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	parent := filepath.Dir(dst)
+	if err := os.MkdirAll(parent, 0o755); err != nil {
+		return err
+	}
+	stage, err := os.MkdirTemp(parent, "."+filepath.Base(dst)+".restore-*")
+	if err != nil {
+		return err
+	}
+	complete := false
+	defer func() {
+		if !complete {
+			_ = os.RemoveAll(stage)
+		}
+	}()
+	if err := copyTenantRuntimeTree(ctx, src, stage); err != nil {
+		return fmt.Errorf("stage restore; destination unchanged: %w", err)
+	}
+	complete = true
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	retained := ""
+	if _, err := os.Lstat(dst); err == nil {
+		retained, err = os.MkdirTemp(parent, "."+filepath.Base(dst)+".pre-restore-*")
+		if err != nil {
+			return err
+		}
+		if err := os.Rename(dst, retained); err != nil {
+			return fmt.Errorf("retain destination before restore: %w", err)
+		}
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+	if err := os.Rename(stage, dst); err != nil {
+		if retained != "" {
+			if undoErr := os.Rename(retained, dst); undoErr != nil {
+				return fmt.Errorf("install staged restore: %w; original destination retained at %s, replacement at %s; undo failed: %v", err, retained, stage, undoErr)
+			}
+		}
+		return fmt.Errorf("install staged restore: %w; complete replacement retained at %s", err, stage)
+	}
+	if err := syncTenantRuntimeDirectory(parent); err != nil {
+		return fmt.Errorf("sync restored directory; retained tree at %s: %w", retained, err)
+	}
+	log.Info().Str("tenant_data_dir", dst).Str("retained_tree", retained).Msg("Tenant data restored from complete staged copy")
+	return nil
 }
 
-func syncTenantRuntimeTree(ctx context.Context, srcDir, dstDir string) error {
-	srcDir = strings.TrimSpace(srcDir)
-	dstDir = strings.TrimSpace(dstDir)
-	if srcDir == "" || dstDir == "" {
-		return fmt.Errorf("source and destination directories are required")
-	}
-	srcInfo, err := os.Lstat(srcDir)
+func canonicalTenantRuntimePath(path string) (string, error) {
+	path, err := filepath.Abs(path)
 	if err != nil {
-		return fmt.Errorf("stat source dir %s: %w", srcDir, err)
+		return "", err
 	}
-	if !srcInfo.IsDir() {
-		return fmt.Errorf("source path %s is not a directory", srcDir)
+	resolved, err := filepath.EvalSymlinks(path)
+	if err == nil {
+		return resolved, nil
 	}
-	if err := os.MkdirAll(dstDir, 0o755); err != nil {
-		return fmt.Errorf("create destination dir %s: %w", dstDir, err)
+	if !os.IsNotExist(err) {
+		return "", err
 	}
-	if err := clearDirectoryContents(dstDir); err != nil {
-		return fmt.Errorf("clear destination dir %s: %w", dstDir, err)
+	parent := filepath.Dir(path)
+	if parent == path {
+		return "", err
 	}
+	resolved, err = canonicalTenantRuntimePath(parent)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(resolved, filepath.Base(path)), nil
+}
 
+func validateTenantRuntimeTreePaths(srcDir, dstDir string) (string, string, error) {
+	if strings.TrimSpace(srcDir) == "" || strings.TrimSpace(dstDir) == "" {
+		return "", "", fmt.Errorf("source and destination directories are required")
+	}
+	for _, path := range []string{srcDir, dstDir} {
+		info, err := os.Lstat(path)
+		if err != nil && !os.IsNotExist(err) {
+			return "", "", err
+		}
+		if err == nil && !info.IsDir() {
+			return "", "", fmt.Errorf("tree root %s must be a directory, not a symlink or file", path)
+		}
+	}
+	src, err := canonicalTenantRuntimePath(srcDir)
+	if err != nil {
+		return "", "", err
+	}
+	dst, err := canonicalTenantRuntimePath(dstDir)
+	if err != nil {
+		return "", "", err
+	}
+	if src == dst || strings.HasPrefix(src, dst+string(os.PathSeparator)) || strings.HasPrefix(dst, src+string(os.PathSeparator)) {
+		return "", "", fmt.Errorf("source and destination trees must not overlap")
+	}
+	info, err := os.Lstat(src)
+	if err != nil {
+		return "", "", err
+	}
+	if !info.IsDir() {
+		return "", "", fmt.Errorf("source must be a directory")
+	}
+	return src, dst, nil
+}
+
+// syncTenantRuntimeTree only creates new destinations. A repeated run ID must
+// never overwrite an earlier complete (or interrupted) snapshot.
+func syncTenantRuntimeTree(ctx context.Context, srcDir, dstDir string) error {
+	src, dst, err := validateTenantRuntimeTreePaths(srcDir, dstDir)
+	if err != nil {
+		return err
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		return err
+	}
+	if err := os.Mkdir(dst, 0o700); err != nil {
+		return fmt.Errorf("create exclusive snapshot %s: %w", dst, err)
+	}
+	if err := copyTenantRuntimeTree(ctx, src, dst); err != nil {
+		return err
+	}
+	return syncTenantRuntimeDirectory(filepath.Dir(dst))
+}
+
+func copyTenantRuntimeTree(ctx context.Context, srcDir, dstDir string) error {
 	type pendingDirectory struct {
 		path string
 		info fs.FileInfo
 	}
 	pendingDirs := make([]pendingDirectory, 0, 8)
 
-	err = filepath.WalkDir(srcDir, func(path string, d fs.DirEntry, walkErr error) error {
+	err := filepath.WalkDir(srcDir, func(path string, d fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
@@ -942,11 +986,13 @@ func syncTenantRuntimeTree(ctx context.Context, srcDir, dstDir string) error {
 				return fmt.Errorf("preserve symlink ownership %s: %w", targetPath, err)
 			}
 			return nil
-		default:
-			if err := copyTenantRuntimeFile(path, targetPath, info); err != nil {
+		case mode.IsRegular():
+			if err := copyTenantRuntimeFile(ctx, path, targetPath, info); err != nil {
 				return err
 			}
 			return nil
+		default:
+			return fmt.Errorf("unsupported file type in tenant data: %s", path)
 		}
 	})
 	if err != nil {
@@ -962,20 +1008,28 @@ func syncTenantRuntimeTree(ctx context.Context, srcDir, dstDir string) error {
 	return nil
 }
 
-func clearDirectoryContents(dir string) error {
-	entries, err := os.ReadDir(dir)
+func syncTenantRuntimeDirectory(path string) error {
+	f, err := os.Open(path)
 	if err != nil {
 		return err
 	}
-	for _, entry := range entries {
-		if err := os.RemoveAll(filepath.Join(dir, entry.Name())); err != nil {
-			return err
-		}
-	}
-	return nil
+	defer f.Close()
+	return f.Sync()
 }
 
-func copyTenantRuntimeFile(srcPath, dstPath string, info fs.FileInfo) error {
+type tenantRuntimeContextReader struct {
+	ctx    context.Context
+	reader io.Reader
+}
+
+func (r tenantRuntimeContextReader) Read(p []byte) (int, error) {
+	if err := r.ctx.Err(); err != nil {
+		return 0, err
+	}
+	return r.reader.Read(p)
+}
+
+func copyTenantRuntimeFile(ctx context.Context, srcPath, dstPath string, info fs.FileInfo) error {
 	if err := os.MkdirAll(filepath.Dir(dstPath), 0o755); err != nil {
 		return fmt.Errorf("create file parent %s: %w", filepath.Dir(dstPath), err)
 	}
@@ -986,13 +1040,13 @@ func copyTenantRuntimeFile(srcPath, dstPath string, info fs.FileInfo) error {
 	}
 	defer srcFile.Close()
 
-	dstFile, err := os.OpenFile(dstPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, info.Mode().Perm())
+	dstFile, err := os.OpenFile(dstPath, os.O_CREATE|os.O_WRONLY|os.O_EXCL, info.Mode().Perm())
 	if err != nil {
 		return fmt.Errorf("open destination file %s: %w", dstPath, err)
 	}
 	defer dstFile.Close()
 
-	if _, err := io.Copy(dstFile, srcFile); err != nil {
+	if _, err := io.Copy(dstFile, tenantRuntimeContextReader{ctx: ctx, reader: srcFile}); err != nil {
 		return fmt.Errorf("copy file %s -> %s: %w", srcPath, dstPath, err)
 	}
 	if err := dstFile.Chmod(info.Mode().Perm()); err != nil {
@@ -1004,7 +1058,10 @@ func copyTenantRuntimeFile(srcPath, dstPath string, info fs.FileInfo) error {
 	if err := os.Chtimes(dstPath, info.ModTime(), info.ModTime()); err != nil {
 		return fmt.Errorf("preserve file times %s: %w", dstPath, err)
 	}
-	return nil
+	if err := dstFile.Sync(); err != nil {
+		return err
+	}
+	return dstFile.Close()
 }
 
 func preserveDirectoryMetadata(path string, info fs.FileInfo) error {
@@ -1017,7 +1074,7 @@ func preserveDirectoryMetadata(path string, info fs.FileInfo) error {
 	if err := os.Chtimes(path, info.ModTime(), info.ModTime()); err != nil {
 		return err
 	}
-	return nil
+	return syncTenantRuntimeDirectory(path)
 }
 
 func preserveOwnership(path string, info fs.FileInfo, symlink bool) error {
