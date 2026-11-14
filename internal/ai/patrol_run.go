@@ -465,6 +465,7 @@ func (p *PatrolService) runPatrolWithTriggerStart(ctx context.Context, trigger T
 		return
 	}
 
+	p.refreshReadStateForRun()
 	state := p.currentPatrolRuntimeState()
 
 	// Helper to track findings
@@ -1007,6 +1008,7 @@ func (p *PatrolService) runScopedPatrolWithStart(ctx context.Context, scope Patr
 		return
 	}
 
+	p.refreshReadStateForRun()
 	fullState := p.currentPatrolRuntimeState()
 	requestedScope := scope
 	resolvedScope, scopeResolution := resolvePatrolScopeState(fullState, scope)

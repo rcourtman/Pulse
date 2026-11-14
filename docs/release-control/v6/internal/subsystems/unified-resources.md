@@ -2694,6 +2694,14 @@ coverage: `TestRegistrySeededFromMonitorJudgesFreshnessByItsThresholds` and
 `TestContract_ResourceListJudgesFreshnessLikeTheMonitorBroadcast` in
 `internal/api/contract_test.go`.
 
+`ReadRefresher` (`read_refresh.go`) lets a reader that holds a read state ask
+its owner to publish what it has already collected. `MonitorAdapter` runs the
+refresher its monitor installed, without the adapter's locks, and a plain
+registry ignores the call. Readers call `RefreshForRead` once before acting,
+never per lookup, since the refresh rebuilds the registry. Proof:
+`TestRefreshForReadRunsTheOwnersRefresher` in
+`monitor_adapter_read_state_test.go`.
+
 Across platform/runtime pages, workflow tabs are evidence-gated from the
 canonical model that owns their rows. `Overview` is the stable landing tab;
 supporting tabs appear only when their native inventory or signal exists, and
