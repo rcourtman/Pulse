@@ -146,8 +146,8 @@ export const RolesEditorDialog: Component<RolesEditorDialogProps> = (props) => (
                       >
                         <Show
                           when={
-                            !RBAC_PERMISSION_ACTIONS.some(
-                              (action) => action === permission().action,
+                            !(RBAC_PERMISSION_ACTIONS as readonly string[]).includes(
+                              permission().action,
                             )
                           }
                         >
@@ -170,8 +170,8 @@ export const RolesEditorDialog: Component<RolesEditorDialogProps> = (props) => (
                       >
                         <Show
                           when={
-                            !RBAC_PERMISSION_RESOURCES.some(
-                              (resource) => resource === permission().resource,
+                            !(RBAC_PERMISSION_RESOURCES as readonly string[]).includes(
+                              permission().resource,
                             )
                           }
                         >
@@ -186,7 +186,7 @@ export const RolesEditorDialog: Component<RolesEditorDialogProps> = (props) => (
                         onClick={() => props.onRemovePermission(index)}
                         disabled={props.formPermissions.length <= 1}
                         aria-label={`Remove permission ${index + 1}: ${permission().action}:${permission().resource}`}
-                        title={`Remove permission ${index + 1}: ${permission().action}:${permission().resource}`}
+                        title="Remove permission"
                         class="self-end sm:self-auto p-1.5 text-slate-400 hover:text-red-500 disabled:opacity-30"
                       >
                         <Trash2 class="w-4 h-4" />

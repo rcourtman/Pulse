@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "ba261d9aa16dece7ead21d59efbaef9b53a69d4d",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/RolesEditorDialog.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/RolesEditorDialog.tsx": "91ff4df20196b66c555406d3ff983c4bcc11a0d2352dccb53919b3dbd737a2be"
+  },
+  "routes": [
+    "Settings > Security > Roles (real RolesPanel, state owner, RBACAPI and apiClient; synthetic offline transport)"
+  ],
+  "states": [
+    "Saved three-rule role including unknown options and saved constraints",
+    "Middle action/resource changes; same DOM nodes retain focus",
+    "First-rule removal, reindexed remaining rules, independent least-privilege append",
+    "One explicit PUT, exact serialized readback and reopened editor; cancellation without write"
+  ],
+  "interactions": [
+    "Focus and select native action/resource controls; Tab advances to the matching resource in Chromium and WebKit",
+    "Identify indexed current-value removal buttons, remove first rule, append and edit last rule",
+    "Save and reopen actual dispatched-body readback; cancel another draft without mutating saved state"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "verified_at": "2026-11-14T15:22:59Z",
+  "browsers": [
+    "Chromium 141.0.7390.37",
+    "WebKit 26.0"
+  ],
+  "playwright": "1.56.1",
+  "themes": [
+    "light",
+    "dark"
+  ],
+  "assertions": 169,
+  "baseline_assertions": 129,
+  "captures": "Eight final cases /169 assertions, compared with original baseline and the own-parent captures. All24 captures across original, parent and final were copied to current output and inspected through native view_image.",
+  "evidence": "RECEIPTS.md and PAIRS.json in current lane outcome; browser scripts are evidence only, not source.",
+  "limits": [
+    "Not full App/IdP, original-client recovery, installed acceptance or screen-reader speech testing.",
+    "An earlier separately retained exploratory run used a stale canonical dependency tree; final before/after runs used the exact locked graph."
+  ],
+  "scope_note": "Restore the original static tooltip and replace equivalent string-membership callbacks to meet the unchanged production bundle budget; contextual accessible names, stable focused controls and payloads remain. No timeout or size threshold changed."
+}
