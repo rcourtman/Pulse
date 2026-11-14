@@ -980,6 +980,10 @@ func parseTrustedProxyCIDRValues(keys ...string) []string {
 			seen[entry] = struct{}{}
 			values = append(values, entry)
 		}
+		// Match the control-plane client-IP parser: the first nonblank setting
+		// is authoritative. The app-server setting is a legacy fallback, not
+		// additional trust to union into an explicit CP configuration.
+		return values
 	}
 	return values
 }
