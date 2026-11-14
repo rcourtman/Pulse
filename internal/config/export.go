@@ -187,14 +187,19 @@ func (c *ConfigPersistence) ImportConfig(encryptedData string, passphrase string
 		log.Warn().Str("version", exportData.Version).Msg("Config was exported from unsupported version. Proceeding with best effort.")
 	}
 
+	// Keep ordinary readers/savers and other imports outside the entire
+	// replacement, including rollback and cleanup. Staging uses a private
+	// writer: attaching tx to this live instance would let unrelated saves
+	// acknowledge staged data that a failed import can later discard.
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	tx, err := newImportTransaction(c.configDir)
 	if err != nil {
 		return fmt.Errorf("failed to start import transaction: %w", err)
 	}
 	defer tx.Cleanup()
 
-	c.beginTransaction(tx)
-	defer c.endTransaction(tx)
+	writer := c.importWriterLocked(tx)
 
 	committed := false
 	defer func() {
@@ -204,11 +209,11 @@ func (c *ConfigPersistence) ImportConfig(encryptedData string, passphrase string
 	}()
 
 	// Import all configurations
-	if err := c.SaveNodesConfig(exportData.Nodes.PVEInstances, exportData.Nodes.PBSInstances, exportData.Nodes.PMGInstances); err != nil {
+	if err := writer.SaveNodesConfig(exportData.Nodes.PVEInstances, exportData.Nodes.PBSInstances, exportData.Nodes.PMGInstances); err != nil {
 		return fmt.Errorf("failed to import nodes config: %w", err)
 	}
 
-	if err := c.SaveAlertConfig(exportData.Alerts); err != nil {
+	if err := writer.SaveAlertConfig(exportData.Alerts); err != nil {
 		return fmt.Errorf("failed to import alert config: %w", err)
 	}
 	intentPolicies := exportData.AlertIntent
@@ -216,27 +221,27 @@ func (c *ConfigPersistence) ImportConfig(encryptedData string, passphrase string
 		defaults := alerts.NewAlertIntentPolicyDocument()
 		intentPolicies = &defaults
 	}
-	if err := c.SaveAlertIntentPolicies(*intentPolicies); err != nil {
+	if err := writer.SaveAlertIntentPolicies(*intentPolicies); err != nil {
 		return fmt.Errorf("failed to import alert intent policies: %w", err)
 	}
 
-	if err := c.SaveEmailConfig(exportData.Email); err != nil {
+	if err := writer.SaveEmailConfig(exportData.Email); err != nil {
 		return fmt.Errorf("failed to import email config: %w", err)
 	}
 
-	if err := c.SaveAppriseConfig(exportData.Apprise); err != nil {
+	if err := writer.SaveAppriseConfig(exportData.Apprise); err != nil {
 		return fmt.Errorf("failed to import Apprise config: %w", err)
 	}
 
-	if err := c.SaveDeadManConfig(exportData.DeadMan); err != nil {
+	if err := writer.SaveDeadManConfig(exportData.DeadMan); err != nil {
 		return fmt.Errorf("failed to import dead-man config: %w", err)
 	}
 
-	if err := c.SaveWebhooks(exportData.Webhooks); err != nil {
+	if err := writer.SaveWebhooks(exportData.Webhooks); err != nil {
 		return fmt.Errorf("failed to import webhooks: %w", err)
 	}
 
-	if err := c.SaveSystemSettings(exportData.System); err != nil {
+	if err := writer.SaveSystemSettings(exportData.System); err != nil {
 		return fmt.Errorf("failed to import system settings: %w", err)
 	}
 
@@ -245,18 +250,18 @@ func (c *ConfigPersistence) ImportConfig(encryptedData string, passphrase string
 		if exportData.APITokens == nil {
 			exportData.APITokens = []APITokenRecord{}
 		}
-		if err := c.SaveAPITokens(exportData.APITokens); err != nil {
+		if err := writer.SaveAPITokens(exportData.APITokens); err != nil {
 			return fmt.Errorf("failed to import api tokens: %w", err)
 		}
 	}
 
 	// Import SSO configuration
 	if exportData.SSO != nil {
-		if err := c.SaveSSOConfig(exportData.SSO); err != nil {
+		if err := writer.SaveSSOConfig(exportData.SSO); err != nil {
 			return fmt.Errorf("failed to import sso configuration: %w", err)
 		}
 	} else {
-		if err := c.SaveSSOConfig(NewSSOConfig()); err != nil {
+		if err := writer.SaveSSOConfig(NewSSOConfig()); err != nil {
 			return fmt.Errorf("failed to reset sso configuration: %w", err)
 		}
 	}
@@ -265,9 +270,7 @@ func (c *ConfigPersistence) ImportConfig(encryptedData string, passphrase string
 		return fmt.Errorf("failed to commit import transaction: %w", err)
 	}
 	committed = true
-	c.mu.Lock()
 	c.cleanupOldBackups(c.nodesFile + ".backup-*")
-	c.mu.Unlock()
 
 	return nil
 }
