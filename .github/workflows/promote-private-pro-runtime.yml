@@ -132,13 +132,28 @@ jobs:
             fi
 
             echo "Watching exact ${label} run ${run_id} in ${repo}."
+            # A just-dispatched run can 404 for a few seconds, and API
+            # outages are brief. Only a lookup failing for ten minutes
+            # straight ends the watch; a plain message keeps the failure
+            # annotations to the one private run URL reconciliation reads.
+            local lookup_failing_since=""
             while (( SECONDS < deadline )); do
-              run_state="$(
+              if ! run_state="$(
                 gh run view "${run_id}" \
                   --repo "${repo}" \
                   --json status,conclusion,url \
                   --jq '[.status, (.conclusion // ""), .url] | @tsv'
-              )"
+              )"; then
+                lookup_failing_since="${lookup_failing_since:-${SECONDS}}"
+                if (( SECONDS - lookup_failing_since >= 600 )); then
+                  echo "::error::Could not read ${label} run ${run_id} for 10 minutes."
+                  return 1
+                fi
+                echo "Could not read ${label} run ${run_id}; retrying."
+                sleep 15
+                continue
+              fi
+              lookup_failing_since=""
               status="$(awk -F '\t' '{print $1}' <<<"${run_state}")"
               conclusion="$(awk -F '\t' '{print $2}' <<<"${run_state}")"
               url="$(awk -F '\t' '{print $3}' <<<"${run_state}")"
