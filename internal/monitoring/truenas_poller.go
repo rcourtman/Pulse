@@ -274,6 +274,7 @@ func (p *TrueNASPoller) syncConnections() {
 			}
 
 			client, err := truenas.NewClient(truenas.ClientConfig{
+				OutboundPolicy:     instance.OutboundPolicy,
 				Host:               instance.Host,
 				Port:               instance.Port,
 				APIKey:             instance.APIKey,
@@ -1486,7 +1487,8 @@ func trueNASAppRunning(app *truenas.App) bool {
 }
 
 func trueNASProviderConfigChanged(previous, next config.TrueNASInstance) bool {
-	return strings.TrimSpace(previous.Host) != strings.TrimSpace(next.Host) ||
+	return previous.OutboundPolicy != next.OutboundPolicy ||
+		strings.TrimSpace(previous.Host) != strings.TrimSpace(next.Host) ||
 		previous.Port != next.Port ||
 		strings.TrimSpace(previous.APIKey) != strings.TrimSpace(next.APIKey) ||
 		strings.TrimSpace(previous.Username) != strings.TrimSpace(next.Username) ||
