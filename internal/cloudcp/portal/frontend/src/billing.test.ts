@@ -115,7 +115,8 @@ describe('commercial verification runtime', function() {
     expect(location.hash).toBe(hash);
     pending.resolve({}); await settle();
     expect(store.getBillingState().flows.delete.pendingEmail).toBe('owner@example.com');
-    expect(store.getBillingState().flows.delete.status.message).toContain('latest code for this action');
+    expect(store.getBillingState().flows.delete.status.message).toBe('If eligible, check your email.');
+    expect(document.querySelector('label[for="data-delete-code"]')?.textContent).toBe('Latest code · this action only');
   });
 
   it.each(ids)('keeps %s mailbox corrections independent and ignores a late old reply', async function(id) {
@@ -136,7 +137,7 @@ describe('commercial verification runtime', function() {
     var { store, post } = mount();
     post.mockRejectedValueOnce(new PortalAPIError('synthetic uncertain outcome', status));
     send('retrieve'); await settle();
-    expect(store.getBillingState().flows.retrieve.status.message).toContain('outcome is unknown');
+    expect(store.getBillingState().flows.retrieve.status.message).toContain('Outcome unknown');
     expect(store.getBillingState().flows.retrieve.step2Visible).toBe(true);
     expect(store.getBillingState().flows.retrieve.pendingEmail).toBe('owner@example.com');
     expect(node<HTMLButtonElement>('retrieve-inline-request').disabled).toBe(true);
@@ -159,6 +160,18 @@ describe('commercial verification runtime', function() {
     expect(post).toHaveBeenCalledTimes(1);
     send('export'); await settle();
     expect(post).toHaveBeenCalledTimes(2);
+  });
+
+  it.each(ids)('keeps %s pacing and purpose visible in the existing controls', async function(id) {
+    var { store } = mount();
+    send(id); await settle();
+    expect(node(flows[id].prefix + '-request').textContent).toBe('Wait 60s · all actions for this email');
+    expect(document.querySelector('label[for="' + flows[id].prefix + '-code"]')?.textContent).toBe('Latest code · this action only');
+    expect(store.getBillingState().flows[id].status.message).toBe('If eligible, check your email.');
+    var announcement = node(flows[id].prefix + '-status-send-note');
+    expect(announcement.hidden).toBe(false);
+    expect(announcement.getAttribute('role')).toBe('status');
+    expect(announcement.textContent).toContain('One request per minute per email, shared across actions.');
   });
 
   it('invalidates a different visible mailbox, code and destructive consent without replacing the email input', async function() {

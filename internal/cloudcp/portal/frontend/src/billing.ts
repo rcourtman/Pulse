@@ -110,7 +110,7 @@ export function installBillingRuntime(deps: BillingRuntimeDeps): void {
       var windowState = sendWindow.state(state.emailValue);
       var confirmPending = confirmPendingFor(state.emailValue);
       var label = windowState.pending ? flow.requestPendingLabel
-        : windowState.seconds ? 'Request again in ' + windowState.seconds + 's' : flow.requestLabel;
+        : windowState.seconds ? 'Wait ' + windowState.seconds + 's · all actions for this email' : flow.requestLabel;
       renderButton(flow.requestButtonID, departed || windowState.pending || !!windowState.seconds || confirmPending, label);
       var note = getElement(flow.statusID + '-send-note');
       if (note) {
@@ -542,12 +542,12 @@ export function installBillingRuntime(deps: BillingRuntimeDeps): void {
     try {
       await api.postCommercialJSON(flow.requestPath, { email: email });
       sendWindow.settle(reservation, true);
-      showCodeEntry('If eligible, check your email. Use the latest code for this action.', false);
+      showCodeEntry('If eligible, check your email.', false);
     } catch (err) {
       var definiteRejection = err instanceof PortalAPIError && [400, 429, 500].includes(err.status);
       sendWindow.settle(reservation, !definiteRejection);
       if (!definiteRejection) {
-        showCodeEntry('The request outcome is unknown. If a code arrives, use the latest code for this action.', true);
+        showCodeEntry('Outcome unknown. Use a code if it arrives.', true);
       } else if (current()) {
         var message = err instanceof Error ? err.message : flow.requestErrorMessage;
         updateBillingState(function(billingState) {

@@ -132,6 +132,15 @@ a:hover {
 [hidden] {
   display: none !important;
 }
+.verification-send-announcement {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
 header {
   position: sticky;
   top: 0;

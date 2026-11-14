@@ -122,6 +122,18 @@ a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
 [hidden] { display: none !important; }
 
+/* The same pacing and purpose are visible in the button and code label.
+ * Announce changes without a duplicate paragraph displacing phone controls. */
+.verification-send-announcement {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 /* ── Header (top bar) ─────────────────────────────────────────── */
 header {
   position: sticky;
