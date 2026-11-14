@@ -115,7 +115,7 @@ func TestSavedVMwareOutboundPolicyBindsWarmAndColdPolls(t *testing.T) {
 	poller.syncConnections()
 	poller.pollAll(context.Background())
 	after := poller.ConnectionSummaries("default", []config.VMwareVCenterInstance{instance})[instance.ID].Poll
-	if hits.Load() != 0 || after.LastError == nil || !strings.Contains(after.LastError.Message, securityutil.ErrTenantOutboundDestination.Error()) || after.LastSuccessAt == nil || !after.LastSuccessAt.Equal(*before.LastSuccessAt) {
+	if hits.Load() != 0 || after.LastError == nil || after.LastError.Message != "refresh vmware inventory: This VMware destination requires an instance administrator." || after.LastSuccessAt == nil || !after.LastSuccessAt.Equal(*before.LastSuccessAt) {
 		t.Fatalf("warm policy/freshness failure: hits=%d status=%+v", hits.Load(), after)
 	}
 	if !reflect.DeepEqual(records, poller.GetCurrentRecordsForOrg("default")) {
@@ -126,7 +126,7 @@ func TestSavedVMwareOutboundPolicyBindsWarmAndColdPolls(t *testing.T) {
 	cold.syncConnections()
 	cold.pollAll(context.Background())
 	status := cold.ConnectionSummaries("default", []config.VMwareVCenterInstance{instance})[instance.ID].Poll
-	if hits.Load() != 0 || status.LastError == nil || status.LastSuccessAt != nil {
+	if hits.Load() != 0 || status.LastError == nil || status.LastError.Message != "refresh vmware inventory: This VMware destination requires an instance administrator." || status.LastSuccessAt != nil {
 		t.Fatalf("cold policy/freshness failure: %+v", status)
 	}
 	loaded, err := store.LoadVMwareConfig()
