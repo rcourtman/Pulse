@@ -78,7 +78,6 @@ const save = (dialog: HTMLElement, operation: Operation) =>
   fireEvent.click(
     within(dialog).getByRole('button', {
       name: operation === 'scope' ? 'Save scopes' : 'Save',
-      exact: true,
     }),
   );
 const refuse = (operation: Operation, status = 403) =>
