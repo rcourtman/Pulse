@@ -28,6 +28,9 @@ interface RolesEditorDialogProps {
   onUpdatePermission: (index: number, field: keyof Permission, value: string) => void;
 }
 
+// Catalog text is its exact value; share the static option renderer across rows.
+const renderCatalogOption = (value: string) => <option>{value}</option>;
+
 export const RolesEditorDialog: Component<RolesEditorDialogProps> = (props) => (
   <Show when={props.isOpen}>
     <Dialog
@@ -153,9 +156,7 @@ export const RolesEditorDialog: Component<RolesEditorDialogProps> = (props) => (
                         >
                           <option value={permission().action}>{permission().action}</option>
                         </Show>
-                        {RBAC_PERMISSION_ACTIONS.map((action) => (
-                          <option>{action}</option>
-                        ))}
+                        {RBAC_PERMISSION_ACTIONS.map(renderCatalogOption)}
                       </FormSelect>
                       <span class="hidden sm:inline text-slate-400 text-sm">:</span>
                       <FormSelect
@@ -177,9 +178,7 @@ export const RolesEditorDialog: Component<RolesEditorDialogProps> = (props) => (
                         >
                           <option value={permission().resource}>{permission().resource}</option>
                         </Show>
-                        {RBAC_PERMISSION_RESOURCES.map((resource) => (
-                          <option>{resource}</option>
-                        ))}
+                        {RBAC_PERMISSION_RESOURCES.map(renderCatalogOption)}
                       </FormSelect>
                       <button
                         type="button"
