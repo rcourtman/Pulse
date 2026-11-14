@@ -80,6 +80,31 @@ const buildTelemetryPreviewPayload = (
   report_schedules: 0,
   report_schedules_enabled: 0,
   report_schedules_run_30d: 0,
+  reporting_generated_resources_30d: 0,
+  reporting_generated_vm_inventory_30d: 0,
+  reporting_generated_backup_health_30d: 0,
+  reporting_generated_patrol_digest_30d: 0,
+  reporting_successful_resources_periods_30d: 0,
+  reporting_successful_vm_inventory_periods_30d: 0,
+  reporting_successful_backup_health_periods_30d: 0,
+  reporting_successful_patrol_digest_periods_30d: 0,
+  reporting_repeat_resources_periods_30d: 0,
+  reporting_repeat_vm_inventory_periods_30d: 0,
+  reporting_repeat_backup_health_periods_30d: 0,
+  reporting_repeat_patrol_digest_periods_30d: 0,
+  reporting_saved_30d: 0,
+  reporting_email_accepted_30d: 0,
+  reporting_delivery_failed_30d: 0,
+  reporting_delivery_unconfirmed_30d: 0,
+  reporting_data_complete_30d: 0,
+  reporting_data_incomplete_30d: 0,
+  reporting_data_unavailable_30d: 0,
+  reporting_telemetry_available: false,
+  reporting_observation_days: 0,
+  reporting_resources_active_days_30d: 0,
+  reporting_vm_inventory_active_days_30d: 0,
+  reporting_backup_health_active_days_30d: 0,
+  reporting_patrol_digest_active_days_30d: 0,
   agent_profiles: 0,
   update_attempts_30d: 0,
   update_successes_30d: 0,
@@ -573,25 +598,31 @@ describe('useSystemSettingsState', () => {
     dispose();
   });
 
-  it('loads the telemetry preview payload on demand', async () => {
-    getTelemetryPreviewMock.mockResolvedValue({
-      enabled: true,
-      payload: buildTelemetryPreviewPayload(),
-    });
+  it.each([true, false])(
+    'loads the full telemetry preview on demand (reporting available: %s)',
+    async (reportingAvailable) => {
+      const payload = buildTelemetryPreviewPayload({
+        reporting_telemetry_available: reportingAvailable,
+        reporting_observation_days: reportingAvailable ? 14 : 0,
+        reporting_generated_resources_30d: reportingAvailable ? 3 : 0,
+      });
+      getTelemetryPreviewMock.mockResolvedValue({ enabled: true, payload });
 
-    const { hookState, dispose } = mountHookWithTab('system-general');
+      const { hookState, dispose } = mountHookWithTab('system-general');
 
-    await hookState.handleLoadTelemetryPreview();
-    await flushAsync();
+      await hookState.handleLoadTelemetryPreview();
+      await flushAsync();
 
-    expect(getTelemetryPreviewMock).toHaveBeenCalledOnce();
-    expect(hookState.telemetryPreviewPayload()).toContain('"install_id": "preview-install-id"');
-    expect(hookState.telemetryPreviewPayload()).toContain(
-      '"pulse_intelligence_patrol_control_completed_operations_loop_30d": false',
-    );
-    expect(hookState.telemetryPreviewEnabled()).toBe(true);
-    dispose();
-  });
+      expect(getTelemetryPreviewMock).toHaveBeenCalledOnce();
+      expect(hookState.telemetryPreviewPayload()).toContain('"install_id": "preview-install-id"');
+      expect(hookState.telemetryPreviewPayload()).toContain(
+        '"pulse_intelligence_patrol_control_completed_operations_loop_30d": false',
+      );
+      expect(JSON.parse(hookState.telemetryPreviewPayload())).toEqual(payload);
+      expect(hookState.telemetryPreviewEnabled()).toBe(true);
+      dispose();
+    },
+  );
 
   it('copies the loaded telemetry preview payload', async () => {
     getTelemetryPreviewMock.mockResolvedValue({
@@ -608,6 +639,10 @@ describe('useSystemSettingsState', () => {
 
     expect(copyToClipboardMock).toHaveBeenCalledWith(
       expect.stringContaining('"pulse_intelligence_resolved_operations_loop_30d": false'),
+    );
+    expect(copyToClipboardMock).toHaveBeenCalledWith(hookState.telemetryPreviewPayload());
+    expect(JSON.parse(hookState.telemetryPreviewPayload()).reporting_telemetry_available).toBe(
+      false,
     );
     expect(notificationStore.success).toHaveBeenCalledWith(
       'Telemetry payload copied to clipboard',
