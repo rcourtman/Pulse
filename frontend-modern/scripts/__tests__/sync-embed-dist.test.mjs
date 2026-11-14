@@ -17,11 +17,17 @@ import {
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, describe, expect, it } from 'vitest';
 import { completeBuild } from './build-output-fixture.mjs';
 
 const repository = fileURLToPath(new URL('../../../', import.meta.url));
 const roots = [];
+// Keep every invocation a fresh process running the real CLI/helper, but do
+// not recompile jsdom's identical dependency graph for every fixture. Node's
+// cache contains bytecode, never module state or validation results. Start it
+// empty for this suite and remove it after all children have settled.
+const compileCache = mkdtempSync(path.join(os.tmpdir(), 'pulse-embed-bytecode-'));
+const childEnv = { ...process.env, NODE_COMPILE_CACHE: compileCache };
 const oldFiles = completeBuild({
   'assets/previous.js': 'console.log("previous frontend");\n',
   'docs/retained.md': 'Previously usable help.\n',
@@ -141,7 +147,7 @@ syncBuiltinESMExports();
             '-e',
             `import { syncEmbedDir } from ${JSON.stringify(pathToFileURL(script).href)}; await syncEmbedDir({ lock: false });`,
           ])],
-      { cwd: root, encoding: 'utf8', timeout: 15_000 },
+      { cwd: root, env: childEnv, encoding: 'utf8', timeout: 15_000 },
     );
   return {
     root, source, target, run,
@@ -156,7 +162,9 @@ function expectNoDebris(f) {
 }
 
 function startNode(root, args) {
-  const child = spawn(process.execPath, args, { cwd: root, stdio: ['ignore', 'pipe', 'pipe'] });
+  const child = spawn(process.execPath, args, {
+    cwd: root, env: childEnv, stdio: ['ignore', 'pipe', 'pipe'],
+  });
   const result = { code: null, signal: null, error: null, stdout: '', stderr: '' };
   let settled = false;
   child.stdout.on('data', (data) => (result.stdout += data));
@@ -284,6 +292,10 @@ syncBuiltinESMExports();
 
 afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
+});
+
+afterAll(() => {
+  rmSync(compileCache, { recursive: true, force: true });
 });
 
 const invalidBuilds = [
