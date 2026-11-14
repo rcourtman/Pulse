@@ -292,7 +292,7 @@ func TestTenantRuntimeTransactionCompensatesFailures(t *testing.T) {
 			case "health":
 				f.docker.faults["health:new"] = errors.New("unhealthy replacement")
 			case "persist":
-				f.reg.failUpdate = 1
+				f.reg.failUpdate = 2
 			case "canceled-create":
 				f.docker.afterCreate = cancel
 				f.docker.createError = true
@@ -485,7 +485,8 @@ func TestTenantRuntimeTransactionRejectsInactiveTenantsAndUnsafeRunPaths(t *test
 
 func TestTenantRuntimeTransactionDoesNotLeaveFailedRecoveryGreen(t *testing.T) {
 	f := newRuntimeTransactionFixture(t, false)
-	previousCheck := time.Date(2026, 11, 14, 12, 0, 0, 0, time.UTC)
+	previousCheck := f.service.now().Add(-time.Hour)
+	observedStop := f.service.now()
 	f.reg.tenant.HealthCheckOK = true
 	f.reg.tenant.LastHealthCheck = &previousCheck
 	f.sync.restoreError = true
@@ -495,8 +496,8 @@ func TestTenantRuntimeTransactionDoesNotLeaveFailedRecoveryGreen(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if current.HealthCheckOK || current.LastHealthCheck == nil || !current.LastHealthCheck.Equal(previousCheck) {
-			t.Fatalf("stopped runtime retained green or fabricated a check: %+v", current)
+		if current.HealthCheckOK || current.LastHealthCheck == nil || !current.LastHealthCheck.Equal(observedStop) {
+			t.Fatalf("stopped runtime retained green or misdated its observed stop: %+v", current)
 		}
 	}
 	if _, err := f.rollout(context.Background(), false); err == nil {
@@ -506,7 +507,7 @@ func TestTenantRuntimeTransactionDoesNotLeaveFailedRecoveryGreen(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if current.HealthCheckOK || current.ContainerID != "old" || current.LastHealthCheck == nil || !current.LastHealthCheck.Equal(previousCheck) {
+	if current.HealthCheckOK || current.ContainerID != "old" || current.LastHealthCheck == nil || !current.LastHealthCheck.Equal(observedStop) {
 		t.Fatalf("incomplete recovery falsely healthy: %+v", current)
 	}
 	f.assertHold(true)

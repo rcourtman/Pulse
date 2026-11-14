@@ -54,7 +54,7 @@ func TestTenantRuntimeMonitorCannotRestartOrOverwriteDuringRollout(t *testing.T)
 			t.Fatal("monitor touched a runtime inside the stopped-writer snapshot transaction")
 		}
 		observed, err := m.registry.Get("t-SAFE")
-		if err != nil || observed.ContainerID != "old" || observed.LastHealthCheck != nil {
+		if err != nil || observed.ContainerID != "old" || observed.LastHealthCheck == nil || observed.HealthCheckOK {
 			t.Fatalf("monitor persisted an in-flight result: %+v %v", observed, err)
 		}
 	}

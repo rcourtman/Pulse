@@ -356,16 +356,6 @@ func (s *tenantRuntimeRolloutService) Rollout(ctx context.Context, opts TenantRu
 	if err := lease.MarkRecovery(tx.record); err != nil {
 		return nil, fmt.Errorf("record rollout recovery hold: %w", err)
 	}
-	// Health is no longer current once this transaction takes the workspace
-	// out of service. Keep the last actual check timestamp, never a fresh
-	// synthetic success, and leave failed recovery visibly unavailable.
-	if tenant.HealthCheckOK {
-		unavailable := *tenant
-		unavailable.HealthCheckOK = false
-		if err := s.registry.Update(&unavailable); err != nil {
-			return nil, tx.abort(ctx, fmt.Errorf("withdraw runtime health before rollout: %w", err), false)
-		}
-	}
 	if live != nil {
 		if err := s.docker.Stop(ctx, live.ID); err != nil {
 			return nil, tx.abort(ctx, fmt.Errorf("stop live tenant container: %w", err), false)
@@ -373,6 +363,17 @@ func (s *tenantRuntimeRolloutService) Rollout(ctx context.Context, opts TenantRu
 		if err := tx.requireStopped(ctx, live.ID); err != nil {
 			return nil, tx.held(err)
 		}
+	}
+	// This is an observed negative health result: the exact runtime was
+	// inspected as stopped (or both live identities were not found), just as
+	// the monitor's health check treats a non-running container as unhealthy.
+	// Do not leave an unfinished restore green or misdate the last observation.
+	observedAt := s.now()
+	unavailable := *tenant
+	unavailable.HealthCheckOK = false
+	unavailable.LastHealthCheck = &observedAt
+	if err := s.registry.Update(&unavailable); err != nil {
+		return nil, tx.abort(ctx, fmt.Errorf("record stopped runtime health: %w", err), false)
 	}
 	// Missing-runtime recovery also captures the existing data before a new
 	// image is allowed to touch it. A failed first boot can mutate that data.

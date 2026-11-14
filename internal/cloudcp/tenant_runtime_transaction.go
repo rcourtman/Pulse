@@ -127,6 +127,8 @@ func (t *tenantRuntimeTransaction) resumePrevious(ctx context.Context) error {
 	if t.previous == nil {
 		updated := *t.tenant
 		updated.HealthCheckOK = false
+		now := t.service.now()
+		updated.LastHealthCheck = &now
 		return t.service.registry.Update(&updated)
 	}
 	d := t.service.docker
