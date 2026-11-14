@@ -15,6 +15,25 @@
 
 ## Purpose
 
+### Pending User Access controls reflect the submitted draft
+
+While the existing role update is pending, each role checkbox, Close, Cancel
+and Retry saved permissions is natively disabled, as Save Changes already is.
+The visible selections must remain the exact submitted draft: a native checkbox
+click cannot show an unsent change while the state owner refuses edits. Role
+names, exact IDs, descriptions, saved permissions and retained unlisted IDs stay
+readable; no whole-card opacity or replacement summary conceals that context.
+
+Definite refusal re-enables the same correctable draft and read-only permission
+retry. Success still reloads saved access; an uncertain result still withdraws
+the editor and requires Check saved access, without replay. This presentation
+does not change grants, requests, authorization, reader retirement or the shared
+dialog's background isolation. `UserAccessPending.transport.test.tsx` exercises
+all three outcomes through rendered controls and the real state/API/client,
+including native clicks, Escape, exact user/org/CSRF binding and retained IDs.
+Comparable desktop and narrow light/dark browser proof checks pending choices
+and the permission-read failure with actual pixels and ordinary pointer input.
+
 ### User Access saves only changed role membership
 
 The existing User Access editor compares its draft with the admitted account's

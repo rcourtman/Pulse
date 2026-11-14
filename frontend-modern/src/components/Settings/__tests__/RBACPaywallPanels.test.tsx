@@ -372,10 +372,12 @@ describe('RBAC paywall settings panels', () => {
     const [status, setStatus] = createSignal({ user: 'operator-a', allowed: true });
     const pending = deferred<void>();
     updateUserRolesMock.mockReturnValueOnce(pending.promise);
+    getUserPermissionsMock.mockRejectedValueOnce(new Error('Synthetic unread permissions'));
     const panelProps = () => ({ currentUser: status().user, canManage: status().allowed });
     render(() => <Dynamic component={UserAssignmentsPanel} {...panelProps()} />);
     fireEvent.click(await screen.findByRole('button', { name: 'Manage access for alice' }));
     const dialog = await screen.findByRole('dialog', { name: 'Manage access: alice' });
+    await within(dialog).findByRole('button', { name: 'Retry saved permissions' });
     fireEvent.click(within(dialog).getByRole('checkbox', { name: /Admin/ }));
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save Changes' }));
     expect(within(dialog).getByRole('button', { name: 'Applying...' })).toBeDisabled();
@@ -384,10 +386,27 @@ describe('RBAC paywall settings panels', () => {
     await waitFor(() =>
       expect(within(dialog).getByRole('button', { name: 'Applying...' })).toBeDisabled(),
     );
+    const editor = within(dialog);
+    const choice = editor.getByRole('checkbox', { name: /Admin/ });
+    for (const control of [
+      choice,
+      editor.getByRole('button', { name: 'Cancel' }),
+      editor.getByRole('button', { name: 'Close user assignments' }),
+      editor.getByRole('button', { name: 'Retry saved permissions' }),
+    ]) {
+      expect(control).toBeDisabled();
+      control.click();
+    }
+    expect(choice).not.toBeChecked();
+    expect(getUserPermissionsMock).toHaveBeenCalledTimes(1);
+    expect(updateUserRolesMock).toHaveBeenCalledTimes(1);
     expect(dialog).toBeInTheDocument();
     expect(signal.aborted).toBe(false);
     expect(getUsersMock).toHaveBeenCalledTimes(1);
     pending.reject(Object.assign(new Error('Synthetic lost reply'), { status: 503 }));
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent('could not be confirmed'),
+    );
     const warning = await screen.findByRole('alert');
     expect(warning).toHaveTextContent('could not be confirmed');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
