@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "base_sha": "6afaa3ae0a23322c6959e87aad7fe38e8214573b",
+  "verified_at": "2026-11-14T01:51:07Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsCoverageStrip.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsCoverageStrip.tsx": "e1c36c6b3d1696480abc186b78ff465b1a1aa6d5d23b0861b77bf609807fcc54"
+  },
+  "routes": [
+    "/proxmox/backups/coverage"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 1024,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Actual ProxmoxBackupsTable and real stylesheet, compiled twice with the frozen assigned-base header and final committed header; identical synthetic API data, viewport, theme, collapsed policy and scroll0 for 12 pairs / 24 captures.",
+    "Chromium 1440/light and 1024/dark, WebKit 390/light and 390/dark: pending four assessments plus two unevaluated host backups; settled two of four rated guests protected plus two unevaluated hosts; all four rated guests protected with no unrated targets.",
+    "Author opened every retained before/after PNG with native view_image. Phone mixed state gains 2 not evaluated without changing155 px card height; pending gains 4 checking and 2 not evaluated with 20 px extra height, retaining all six rows and existing controls in 844 px view; healthy phone and all desktop card heights unchanged.",
+    "129 browser assertions pass, no page errors or horizontal overflow. Playwright1.56.1 matches integration lock; observed Chromium and WebKit versions are in the retained program record. Safe fixtures establish frontend presentation, not actual estate protection or published delivery."
+  ],
+  "interactions": [
+    "On every before/after profile, focus What the counts mean and press Space to open/close the existing disclosure; verify the seven-day policy text.",
+    "Click No successful backup; verify selected aria-pressed state and the home-assistant workload; click again to clear the exception filter.",
+    "Hold and then release the posture response; check transition from Checking backups to2/4 protected without changing the source-owned rated denominator. All API fixture requests are GET.",
+    "Every capture is at scroll0; retain and inspect comparable pairs. Browser close and server close are recorded by the completed program."
+  ],
+  "evidence": {
+    "record": "browser-paired.json",
+    "captures": "CAPTURES.json",
+    "observations": "PIXEL-OBSERVATIONS.md",
+    "scope": "Full consuming-table fixture, not the complete authenticated App, hosted backend or original clients."
+  }
+}
