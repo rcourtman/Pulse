@@ -56,7 +56,7 @@ import { parseBackupTimestampMs } from '@/utils/backupTimestamp';
 // ReplicationJobsSnapshot without going through the unified-resource
 // pipeline.
 
-type ReplicationStatusFilter = 'all' | 'healthy' | 'failed' | 'pending' | 'disabled';
+type ReplicationStatusFilter = 'all' | 'healthy' | 'failed' | 'pending' | 'unknown' | 'disabled';
 
 type ReplicationColumn =
   | 'status'
@@ -173,6 +173,12 @@ const STATUS_FILTER_OPTIONS: PlatformTableFilterOption<ReplicationStatusFilter>[
     leading: filterChipStatusDot('bg-amber-500'),
   },
   {
+    value: 'unknown',
+    label: 'Unknown',
+    tone: 'muted',
+    leading: filterChipStatusDot('bg-slate-400'),
+  },
+  {
     value: 'disabled',
     label: 'Disabled',
     tone: 'muted',
@@ -186,13 +192,28 @@ interface ReplicationStatusIndicator {
   tone: string;
 }
 
+const reportedSyncOutcome = (job: ReplicationJob): string =>
+  (job.lastSyncStatus ?? '').trim().toLowerCase();
+
+const hasSuccessfulSyncOutcome = (job: ReplicationJob): boolean =>
+  ['ok', 'success', 'completed'].includes(reportedSyncOutcome(job));
+
+// The canonical DTO omits a zero count. A successful observed sync requires
+// that zero, but an absent/unsupported outcome cannot establish it. Keep an
+// explicit count independent of the outcome, including an explicitly read 0.
+const replicationFailCount = (job: ReplicationJob): number | undefined =>
+  job.failCount ?? (hasSuccessfulSyncOutcome(job) ? 0 : undefined);
+
 function classifyJob(job: ReplicationJob): ReplicationStatusFilter {
   if (!job.enabled) return 'disabled';
   if ((job.failCount ?? 0) > 0) return 'failed';
-  const last = (job.lastSyncStatus ?? '').toLowerCase();
-  if (last === 'ok' || last === 'success' || last === 'completed') return 'healthy';
+  const last = reportedSyncOutcome(job);
+  if (hasSuccessfulSyncOutcome(job)) return 'healthy';
   if (last === 'failed' || last === 'error') return 'failed';
-  return 'pending';
+  if (last === 'pending') return 'pending';
+  // Configuration can remain readable while its source-node status read is
+  // unavailable. Neither that omission nor a future status means "pending".
+  return 'unknown';
 }
 
 function indicatorFor(classification: ReplicationStatusFilter): ReplicationStatusIndicator {
@@ -207,6 +228,8 @@ function indicatorFor(classification: ReplicationStatusFilter): ReplicationStatu
       return { variant: 'danger', label: 'Failed', tone: 'text-red-600 dark:text-red-300' };
     case 'pending':
       return { variant: 'warning', label: 'Pending', tone: 'text-amber-600 dark:text-amber-300' };
+    case 'unknown':
+      return { variant: 'muted', label: 'Unknown', tone: 'text-muted' };
     case 'disabled':
       return { variant: 'muted', label: 'Disabled', tone: 'text-muted' };
     default:
@@ -360,7 +383,7 @@ const buildReplicationJobSections = (
   const errorText = (job.error ?? '').trim();
   const last = lastSyncFor(job, now);
   const next = nextSyncFor(job, now);
-  const failCount = job.failCount ?? 0;
+  const failCount = replicationFailCount(job);
   return compactDetailSections([
     // A failed job's error is the drawer summary; any other job's error
     // still leads, because it is why the job may fail next.
@@ -375,11 +398,24 @@ const buildReplicationJobSections = (
       rows: compactDetailRows([
         makeDetailRow('Guest', guestLabel === '—' ? '' : guestLabel),
         makeDetailRow('Job ID', job.jobId || job.id),
-        makeDetailRow('Failures', String(failCount), {
-          tone: failCount > 0 ? 'danger' : undefined,
+        classification === 'unknown'
+          ? makeDetailRow('Reported outcome', job.lastSyncStatus?.trim() || 'Not reported', {
+              wrap: true,
+            })
+          : null,
+        makeDetailRow('Failures', failCount === undefined ? 'Not reported' : String(failCount), {
+          tone: failCount === undefined ? 'muted' : failCount > 0 ? 'danger' : undefined,
         }),
         makeDetailRow('Comment', job.comment),
       ]),
+      footerContent: (
+        <Show when={classification === 'unknown'}>
+          <p class="whitespace-normal text-[11px] leading-snug text-muted wrap-anywhere">
+            The latest sync outcome is not reported or is not recognised. Unknown does not mean the
+            job is pending or has no failures.
+          </p>
+        </Show>
+      ),
     },
     {
       label: 'Route',
@@ -857,7 +893,18 @@ export const ProxmoxReplicationTable: Component<{
                                 >
                                   <Show
                                     when={(job.failCount ?? 0) > 0}
-                                    fallback={<span class="text-muted">0</span>}
+                                    fallback={
+                                      <span
+                                        class="text-muted"
+                                        aria-label={
+                                          replicationFailCount(job) === undefined
+                                            ? 'Failure count not reported'
+                                            : undefined
+                                        }
+                                      >
+                                        {replicationFailCount(job) === undefined ? '—' : '0'}
+                                      </span>
+                                    }
                                   >
                                     <span class="text-red-600 dark:text-red-300 font-semibold">
                                       {job.failCount}
