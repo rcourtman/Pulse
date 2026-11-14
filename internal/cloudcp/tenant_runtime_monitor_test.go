@@ -17,7 +17,7 @@ import (
 
 func runtimeMonitorFixture(t *testing.T, f *runtimeTransactionFixture, wrap func(http.Handler) http.Handler) (*Monitor, *fakeProviderDaemon) {
 	t.Helper()
-	reg, err := registry.NewTenantRegistry(strings.TrimSuffix(f.service.tenantsDir, "tenants") + "control-plane")
+	reg, err := registry.NewTenantRegistry(filepath.Join(filepath.Dir(f.service.tenantsDir), "control-plane"))
 	if err != nil {
 		t.Fatal(err)
 	}
