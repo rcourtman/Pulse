@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "base_sha": "c44776a904a837ff8ef3efb27502270d610af144",
+  "verified_at": "2026-11-14T07:16:08.022350Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/UserAssignmentsDialog.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/UserAssignmentsDialog.tsx": "6e6fc6cce10a4c8cf3d7732e0444d993403fe9b3683c991f410dff1b8b5f92de"
+  },
+  "routes": [
+    "/settings/security-users"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Actual UserAssignmentsPanel, state owner, RBACAPI, apiClient, shared Dialog and runtime-capability reader inside SettingsPageShell. Only a reduced existing security navigation is supplied by the offline fixture; not routed full App, live IdP or native server/installed recovery. Safe synthetic HTTP inventory, permissions,409definite refusal and502uncertainty. No grant or retry-policy change.",
+    "Chromium1440x900 and WebKit390x844, light/dark.129baseline+133final assertions;28native-opened original PNGs/12comparable pairs and4final refusal states. Baselinec44776a904a837ff8ef3efb27502270d610af144dialog/state; final source content matches this receipt. Identical fixture data, viewport, theme, pointer/keyboard sequence and500mssettle.",
+    "Baseline reproduces the native checkbox unchecking visually while the submitted roleIds retain the operator role; final disabled input preserves the exact submitted selection. Close, Cancel, choices, Applying and permission-read Retry are all disabled during the pending write. Labels,full saved user/role IDs,descriptions,saved-permission context and retained unlisted ID remain in view; no summary or hidden controls replace them.",
+    "Failure re-enables controls and keeps the draft. Cancel/reopen uses saved memberships. A pending permission-read Retry starts no read. Uncertain outcome withdraws the editor; Check saved access reads inventory without another PUT. All writes use the URL-encoded saved principal, exact role arrays,org/auth/CSRF headers. No page error, raw synthetic private error or horizontal page overflow.",
+    "Playwright1.56.1matches integration lock. Exact launch snapshotf96239b2e6a3edf5058b3c995eec2344de217ea2e5c6ccb07ec5dfccf95ddcf2 installed via fresh npm ci --offline --ignore-scripts from its cache export. Vite6.4.5,Solid1.9.17,Tailwind4.3.3; no canonical installed-tree assumption."
+  ],
+  "interactions": [
+    "Open actual user editor,select operator,Save once and hold HTTP response. Inspect pending controls; ordinary pointer activation at the checkbox must not show an unsent change. Tab/Shift+Tab/Escape do not dismiss the pending editor or move focus into the inert background.",
+    "Release definite refusal,check recovered choices and Cancel/Close,then cancel/reopen. Separately reject saved permissions,submit a draft,attempt read-only Retry while pending,then return502and check inventory. Exactly two explicit writes per environment,no implicit replay."
+  ],
+  "evidence": {
+    "record": "browser-before.json;browser-after.json",
+    "captures": "CAPTURES.json",
+    "observations": "PIXEL-OBSERVATIONS.md",
+    "fixture": "BROWSER-FIXTURE.tar.xz"
+  },
+  "baseline_source_sha": "c44776a904a837ff8ef3efb27502270d610af144",
+  "dependency_snapshot": "f96239b2e6a3edf5058b3c995eec2344de217ea2e5c6ccb07ec5dfccf95ddcf2"
+}
