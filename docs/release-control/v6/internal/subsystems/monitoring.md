@@ -5332,7 +5332,11 @@ service-history reads plus denial/recovery without fabricated samples.
     same native-query rule: current connections prefer
     `zfs.resource.snapshot.query`, with `pool.snapshot.query` allowed only as a
     same-transport method-name compatibility path; version-gated legacy
-    connections use REST. Replication tasks use `replication.query` on current
+    connections use REST. Both snapshot queries request only `creation`,
+    `used` and `referenced` (`query-options.extra.properties` on
+    `pool.snapshot.query`): unfiltered, TrueNAS 25.04 and 25.10 read every
+    ZFS property of every snapshot on each poll (#4374). Replication tasks
+    use `replication.query` on current
     connections.
     TrueNAS system services are also native appliance inventory: `service.query`
     is the preferred source for service name, boot enablement, runtime state,

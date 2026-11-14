@@ -810,6 +810,79 @@ func TestGetZFSSnapshotsUsesNativeSnapshotQueryShape(t *testing.T) {
 	}
 }
 
+// TrueNAS 25.04 and 25.10 have no zfs.resource.snapshot.query. The fallback
+// must still request only the properties Pulse reads: an unfiltered
+// pool.snapshot.query reads all of them for every snapshot (#4374).
+func TestGetZFSSnapshotsFallbackRequestsOnlyReadProperties(t *testing.T) {
+	server := newMockServerWithRPC(t, map[string]apiResponse{
+		"/api/v2.0/zfs/snapshot": {status: http.StatusInternalServerError, body: `{"error":"legacy snapshot endpoint should not be used"}`},
+	}, nil, func(t *testing.T, conn *websocket.Conn) {
+		authReq := readRPCRequest(t, conn)
+		writeRPCResult(t, conn, authReq.ID, true)
+
+		nativeReq := readRPCRequest(t, conn)
+		if nativeReq.Method != "zfs.resource.snapshot.query" {
+			t.Fatalf("expected zfs.resource.snapshot.query first, got %q", nativeReq.Method)
+		}
+		writeRPCError(t, conn, nativeReq.ID, -32601, "Method does not exist")
+
+		request := readRPCRequest(t, conn)
+		if request.Method != "pool.snapshot.query" {
+			t.Fatalf("expected pool.snapshot.query fallback, got %q", request.Method)
+		}
+		params, ok := request.Params.([]any)
+		if !ok || len(params) != 2 {
+			t.Fatalf("expected filters/options params, got %#v", request.Params)
+		}
+		if filters, ok := params[0].([]any); !ok || len(filters) != 0 {
+			t.Fatalf("expected empty filters, got %#v", params[0])
+		}
+		options, _ := params[1].(map[string]any)
+		extra, _ := options["extra"].(map[string]any)
+		properties, _ := extra["properties"].([]any)
+		got := make([]string, 0, len(properties))
+		for _, property := range properties {
+			name, _ := property.(string)
+			got = append(got, name)
+		}
+		if strings.Join(got, ",") != "creation,used,referenced" {
+			t.Fatalf("expected extra.properties [creation used referenced], got %#v", params[1])
+		}
+		// 25.10 property shape.
+		writeRPCResult(t, conn, request.ID, []map[string]any{{
+			"id":            "tank/apps@auto-20260331-0600",
+			"name":          "tank/apps@auto-20260331-0600",
+			"dataset":       "tank/apps",
+			"snapshot_name": "auto-20260331-0600",
+			"properties": map[string]any{
+				"creation":   map[string]any{"value": "Sat Mar  9 16:00 2024", "rawvalue": "1710000000", "source": "NONE"},
+				"used":       map[string]any{"value": "1K", "rawvalue": "1024", "parsed": 1024, "source": "NONE"},
+				"referenced": map[string]any{"value": "2K", "rawvalue": "2048", "parsed": 2048, "source": "NONE"},
+			},
+		}})
+	})
+	t.Cleanup(server.Close)
+
+	client := mustClientForServer(t, server.URL, ClientConfig{APIKey: "api-key"})
+	snapshots, err := client.GetZFSSnapshots(context.Background())
+	if err != nil {
+		t.Fatalf("GetZFSSnapshots() error = %v", err)
+	}
+	if len(snapshots) != 1 {
+		t.Fatalf("expected 1 snapshot, got %d", len(snapshots))
+	}
+	snapshot := snapshots[0]
+	if snapshot.FullName != "tank/apps@auto-20260331-0600" {
+		t.Fatalf("unexpected snapshot identity: %+v", snapshot)
+	}
+	if snapshot.CreatedAt == nil || !snapshot.CreatedAt.Equal(time.Unix(1710000000, 0).UTC()) {
+		t.Fatalf("unexpected snapshot creation time: %+v", snapshot.CreatedAt)
+	}
+	if snapshot.UsedBytes == nil || *snapshot.UsedBytes != 1024 || snapshot.Referenced == nil || *snapshot.Referenced != 2048 {
+		t.Fatalf("unexpected snapshot byte properties: %+v", snapshot)
+	}
+}
+
 func TestGetReplicationTasksUsesNativeReplicationQueryShape(t *testing.T) {
 	server := newMockServerWithRPC(t, map[string]apiResponse{
 		"/api/v2.0/replication": {status: http.StatusInternalServerError, body: `{"error":"legacy replication endpoint should not be used"}`},

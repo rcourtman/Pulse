@@ -1945,12 +1945,16 @@ func (c *Client) GetZFSSnapshots(ctx context.Context) ([]ZFSSnapshot, error) {
 	return c.getZFSSnapshotsRPC(ctx)
 }
 
+// zfsSnapshotProperties are the only snapshot properties parseZFSSnapshots
+// reads. Both snapshot queries must request exactly these.
+var zfsSnapshotProperties = []string{"creation", "used", "referenced"}
+
 func (c *Client) getZFSSnapshotsRPC(ctx context.Context) ([]ZFSSnapshot, error) {
 	var response []map[string]any
 	err := c.callRPC(ctx, "zfs.resource.snapshot.query", []any{map[string]any{
 		"paths":      []string{},
 		"recursive":  true,
-		"properties": []string{"creation", "used", "referenced"},
+		"properties": zfsSnapshotProperties,
 	}}, &response)
 	if err == nil {
 		return parseZFSSnapshots(response), nil
@@ -1959,7 +1963,14 @@ func (c *Client) getZFSSnapshotsRPC(ctx context.Context) ([]ZFSSnapshot, error) 
 		return nil, err
 	}
 
-	if err := c.queryRPC(ctx, "pool.snapshot.query", &response); err != nil {
+	// TrueNAS 25.04 and 25.10 lack zfs.resource.snapshot.query. Without
+	// extra.properties, pool.snapshot.query reads every ZFS property of every
+	// snapshot: about 12 s of middlewared CPU per poll for 2,240 snapshots
+	// against 1.2 s with this list (#4374).
+	if err := c.callRPC(ctx, "pool.snapshot.query", []any{
+		[]any{},
+		map[string]any{"extra": map[string]any{"properties": zfsSnapshotProperties}},
+	}, &response); err != nil {
 		return nil, err
 	}
 	return parseZFSSnapshots(response), nil
