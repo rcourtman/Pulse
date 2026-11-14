@@ -4977,14 +4977,6 @@ and tenant-scoped access/entitlement remain unchanged. The executable controls
 in `internal/api/audit_handlers_test.go` preserve selected destinations after
 rejection; they establish neither receiver delivery nor installed recovery.
 
-Loopback trust in `internal/api/loopback_trust.go` and the client address
-from `GetClientIP` change no agent route. Agents authenticate with tokens, which
-outrank loopback trust, so agent enrollment, reporting, commands and uninstall
-are unchanged. Two things move: an agent behind an appending proxy is now
-recorded, locked out and rate limited by the proxy-appended hop, and an agent
-on the Pulse host that addresses Pulse by hostname rather than `localhost`
-loses the loopback rate-limit exemption.
-
 ## Forbidden Paths
 
 1. New install or update continuity behavior hidden only inside broad monitoring ownership.
@@ -8659,6 +8651,24 @@ symlinks under `/var/log` are not resolved here. Proofs:
 `TestDefaultPolicyLogReadsAllowPathsUnderVarLog` and
 `TestDefaultPolicyLogReadsRefuseOperandsOutsideVarLog` in
 `internal/agentexec/policy_log_operands_test.go`.
+The other auto-approve patterns match a command's start, so
+`autoApprovedArgsSafe` in `internal/agentexec/policy_args.go` then checks the
+arguments of the programs whose options change the system, write files or
+read another file's contents: `ip` (addr, link and route alone, with show or
+list, or `ip route get`), `ifconfig` (listing options and at most one
+interface), `find` (no `-exec`, `-ok`, `-delete`, `-fprint*`, `-fls` or
+`-files0-from`), `du`, `file`, `last`, `blkid`, `ss`, `lsof`, `journalctl`,
+`systemctl`, `apt-cache`, `sar` (`-f` only for a sysstat daily file), `ps`
+(no BSD `e`, `environ` format or UNIX cluster procps would re-read as BSD
+options), `dpkg -l`/`-L`, `pvesh get` (no guest file-read or
+file-restore) and `podman` (display flags only, since its global flags are
+accepted after the subcommand). Words are split after quote removal and anything the shell
+would expand is refused, so a quoted or escaped option is seen as the
+program sees it; programs that read meaning from the number or content of
+operands (`ip`, `ifconfig`, `ps`, `sar`, `pvesh`, `apt-cache`) refuse
+unquoted globs. Proofs: `TestDefaultPolicyAutoApprovesDisplayForms` and
+`TestDefaultPolicyRequiresApprovalForMutatingForms` in
+`internal/agentexec/policy_args_test.go`.
 Every command Pulse sends through `executeCommand` (`sh -c`, `cmd /C`, or
 the local `qm guest exec` wrapper) gets an explicit environment from
 `commandEnvironment` in `internal/hostagent/command_env.go`: the host's
@@ -8667,10 +8677,17 @@ runtime and cluster endpoints, proxies) without the agent's own `PULSE_*`
 configuration, so an agent configured through `PULSE_TOKEN` does not pass its
 token to the commands it runs. Commands with neither an approval nor the
 `Trusted` flag, which is the AI's read-only path, also lose other
-credential-named variables; approved and trusted commands keep them. A VM
-guest command still runs in the guest agent's own environment. Proofs:
-`TestCommandEnvironmentWithholdsAgentConfiguration` in
-`internal/hostagent/command_client_test.go` and
+credential-named variables and the variables that change how `sh` or `grep`
+read the command (`BASH_FUNC_*` exported functions, `BASH_ENV`, `ENV`,
+`SHELLOPTS`, `BASHOPTS`, `PS4`, `GREP_OPTIONS`) or point an approved program
+at another file or output (`BLKID_FILE`, `BLKID_CONF`, `APT_CONFIG`,
+`PS_FORMAT`, `PS_PERSONALITY`, `CMD_ENV`); approved and
+trusted commands
+keep them. A VM guest command still runs in the guest agent's own environment.
+Proofs: `TestCommandEnvironmentWithholdsAgentConfiguration` in
+`internal/hostagent/command_client_test.go`,
+`TestCommandEnvironmentDropsInterpretationVariablesForReads` in
+`internal/hostagent/command_env_test.go` and
 `TestCommandClient_executeCommand_DoesNotExposeAgentEnvironment` in
 `internal/hostagent/commands_execute_unix_test.go`.
 That same copied install transport must also normalize canonical base URLs
