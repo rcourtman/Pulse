@@ -356,6 +356,16 @@ func (s *tenantRuntimeRolloutService) Rollout(ctx context.Context, opts TenantRu
 	if err := lease.MarkRecovery(tx.record); err != nil {
 		return nil, fmt.Errorf("record rollout recovery hold: %w", err)
 	}
+	// Health is no longer current once this transaction takes the workspace
+	// out of service. Keep the last actual check timestamp, never a fresh
+	// synthetic success, and leave failed recovery visibly unavailable.
+	if tenant.HealthCheckOK {
+		unavailable := *tenant
+		unavailable.HealthCheckOK = false
+		if err := s.registry.Update(&unavailable); err != nil {
+			return nil, tx.abort(ctx, fmt.Errorf("withdraw runtime health before rollout: %w", err), false)
+		}
+	}
 	if live != nil {
 		if err := s.docker.Stop(ctx, live.ID); err != nil {
 			return nil, tx.abort(ctx, fmt.Errorf("stop live tenant container: %w", err), false)
@@ -792,7 +802,16 @@ func sanitizeTenantRuntimeRolloutRunID(raw string, now time.Time) string {
 	return sanitized
 }
 
-type filesystemTenantRuntimeSynchronizer struct{}
+type filesystemTenantRuntimeSynchronizer struct {
+	renameTree func(string, string) error
+}
+
+func (s filesystemTenantRuntimeSynchronizer) rename(src, dst string) error {
+	if s.renameTree != nil {
+		return s.renameTree(src, dst)
+	}
+	return os.Rename(src, dst)
+}
 
 func (filesystemTenantRuntimeSynchronizer) Snapshot(ctx context.Context, srcDir, snapshotDir string) error {
 	return syncTenantRuntimeTree(ctx, srcDir, snapshotDir)
@@ -801,7 +820,7 @@ func (filesystemTenantRuntimeSynchronizer) Snapshot(ctx context.Context, srcDir,
 // Restore prepares every byte before moving the destination. The previous
 // post-attempt tree is retained beside it, not cleared or silently discarded.
 // The runtime lease must remain held and every writer stopped throughout.
-func (filesystemTenantRuntimeSynchronizer) Restore(ctx context.Context, snapshotDir, dstDir string) error {
+func (s filesystemTenantRuntimeSynchronizer) Restore(ctx context.Context, snapshotDir, dstDir string) error {
 	src, dst, err := validateTenantRuntimeTreePaths(snapshotDir, dstDir)
 	if err != nil {
 		return err
@@ -836,15 +855,15 @@ func (filesystemTenantRuntimeSynchronizer) Restore(ctx context.Context, snapshot
 		if err != nil {
 			return err
 		}
-		if err := os.Rename(dst, retained); err != nil {
+		if err := s.rename(dst, retained); err != nil {
 			return fmt.Errorf("retain destination before restore: %w", err)
 		}
 	} else if !os.IsNotExist(err) {
 		return err
 	}
-	if err := os.Rename(stage, dst); err != nil {
+	if err := s.rename(stage, dst); err != nil {
 		if retained != "" {
-			if undoErr := os.Rename(retained, dst); undoErr != nil {
+			if undoErr := s.rename(retained, dst); undoErr != nil {
 				return fmt.Errorf("install staged restore: %w; original destination retained at %s, replacement at %s; undo failed: %v", err, retained, stage, undoErr)
 			}
 		}
@@ -901,7 +920,11 @@ func validateTenantRuntimeTreePaths(srcDir, dstDir string) (string, string, erro
 	if err != nil {
 		return "", "", err
 	}
-	if src == dst || strings.HasPrefix(src, dst+string(os.PathSeparator)) || strings.HasPrefix(dst, src+string(os.PathSeparator)) {
+	inside := func(parent, child string) bool {
+		rel, err := filepath.Rel(parent, child)
+		return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(os.PathSeparator))
+	}
+	if inside(src, dst) || inside(dst, src) {
 		return "", "", fmt.Errorf("source and destination trees must not overlap")
 	}
 	info, err := os.Lstat(src)

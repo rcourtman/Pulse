@@ -482,3 +482,85 @@ func TestTenantRuntimeTransactionRejectsInactiveTenantsAndUnsafeRunPaths(t *test
 		}
 	}
 }
+
+func TestTenantRuntimeTransactionDoesNotLeaveFailedRecoveryGreen(t *testing.T) {
+	f := newRuntimeTransactionFixture(t, false)
+	previousCheck := time.Date(2026, 11, 14, 12, 0, 0, 0, time.UTC)
+	f.reg.tenant.HealthCheckOK = true
+	f.reg.tenant.LastHealthCheck = &previousCheck
+	f.sync.restoreError = true
+	f.docker.faults["health:new"] = errors.New("new runtime unhealthy")
+	f.sync.afterSnapshot = func() {
+		current, err := f.service.registry.Get("t-SAFE")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if current.HealthCheckOK || current.LastHealthCheck == nil || !current.LastHealthCheck.Equal(previousCheck) {
+			t.Fatalf("stopped runtime retained green or fabricated a check: %+v", current)
+		}
+	}
+	if _, err := f.rollout(context.Background(), false); err == nil {
+		t.Fatal("expected partial restore failure")
+	}
+	current, err := f.service.registry.Get("t-SAFE")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if current.HealthCheckOK || current.ContainerID != "old" || current.LastHealthCheck == nil || !current.LastHealthCheck.Equal(previousCheck) {
+		t.Fatalf("incomplete recovery falsely healthy: %+v", current)
+	}
+	f.assertHold(true)
+}
+
+func TestFilesystemTenantRuntimeRestoreRetainsBothCompleteTreesOnTransitionFailure(t *testing.T) {
+	for _, failure := range []string{"retain", "install", "install-and-undo"} {
+		t.Run(failure, func(t *testing.T) {
+			root := t.TempDir()
+			src := filepath.Join(root, "snapshot")
+			dst := filepath.Join(root, "tenant")
+			for _, entry := range []struct{ path, data string }{{src, "snapshot"}, {dst, "post-attempt"}} {
+				if err := os.Mkdir(entry.path, 0o700); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(filepath.Join(entry.path, "state.txt"), []byte(entry.data), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			calls := 0
+			syncer := filesystemTenantRuntimeSynchronizer{renameTree: func(from, to string) error {
+				calls++
+				if failure == "retain" && calls == 1 || failure != "retain" && calls == 2 || failure == "install-and-undo" && calls == 3 {
+					return errors.New("inert rename failure")
+				}
+				return os.Rename(from, to)
+			}}
+			if err := syncer.Restore(context.Background(), src, dst); err == nil {
+				t.Fatal("expected transition failure")
+			}
+			data, err := os.ReadFile(filepath.Join(src, "state.txt"))
+			if err != nil || string(data) != "snapshot" {
+				t.Fatalf("original snapshot lost: %q %v", data, err)
+			}
+			stages, _ := filepath.Glob(filepath.Join(root, ".tenant.restore-*"))
+			if len(stages) != 1 {
+				t.Fatalf("complete staged recovery copy lost: %v", stages)
+			}
+			data, err = os.ReadFile(filepath.Join(stages[0], "state.txt"))
+			if err != nil || string(data) != "snapshot" {
+				t.Fatalf("staged recovery lost: %q %v", data, err)
+			}
+			original := dst
+			if failure == "install-and-undo" {
+				retained, _ := filepath.Glob(filepath.Join(root, ".tenant.pre-restore-*"))
+				if len(retained) != 1 {
+					t.Fatalf("original recovery tree lost: %v", retained)
+				}
+				original = retained[0]
+			}
+			data, err = os.ReadFile(filepath.Join(original, "state.txt"))
+			if err != nil || string(data) != "post-attempt" {
+				t.Fatalf("original destination lost: %q %v", data, err)
+			}
+		})
+	}
+}
