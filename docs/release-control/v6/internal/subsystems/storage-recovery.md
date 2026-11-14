@@ -9883,3 +9883,9 @@ Refusing loopback and metadata destinations for organization administrators in
 accept. It reads and writes no backup, restore or storage data, and opens no new
 storage or recovery path. The licensing bridge accessor it uses reads one
 environment flag and touches no licence state.
+
+### Hosted landing organization and recovery (14 November 2026)
+
+Landing hosted sessions in their `PULSE_TENANT_ID` workspace and listing it first
+changes which organization a browser opens by default. It reads and writes no
+backup, restore or storage data, and opens no new storage or recovery path.

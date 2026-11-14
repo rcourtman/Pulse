@@ -128,11 +128,12 @@ func (m *TenantMiddleware) Middleware(next http.Handler) http.Handler {
 
 		orgID := requestedTenantOrgID(r)
 
-		// Shared-process multi-organization mode limits the default
-		// organization. A signed-in user who did not name an organization and
-		// cannot use the default one lands in the first organization they
-		// belong to, so the app shell and bootstrap reads load in their own
-		// organization instead of failing.
+		// A signed-in user who did not name an organization lands in the
+		// organization the access policy picks: a hosted runtime's own
+		// workspace, or, where shared-process multi-organization mode limits
+		// the default organization, the first organization they belong to. The
+		// app shell and bootstrap reads then load in their own organization
+		// instead of an empty or forbidden default.
 		policy, _ := m.authChecker.(contextAuthorizationChecker)
 		namedOrg := requestNamesTenantOrg(r)
 		if policy != nil && !namedOrg && orgID == "default" && !isAdminBypassRequest(r.Context()) &&

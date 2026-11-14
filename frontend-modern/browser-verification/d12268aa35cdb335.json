@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "base_sha": "21bf03d5f65fd4f60f9e297026cefe5d64729f27",
+  "verified_at": "2026-11-14T20:40:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/useAppRuntimeState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/useAppRuntimeState.ts": "aa4c0eb9ad62dee4eacea2321e0fdb2ae64882b2e46d7c188eb3bd638805122c"
+  },
+  "routes": [
+    "/",
+    "/settings/infrastructure",
+    "/settings/system-general"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "provider-hosted client runtime (PULSE_HOSTED_MODE, PULSE_PROVIDER_HOSTED, PULSE_TENANT_ID=t-LABCLIENT1), unlicensed Community fallback, session from a portal-style handoff",
+    "before fix: fresh tab with no pulse_org_id cookie and empty sessionStorage landed in default at /settings/system-general; GET /api/orgs answered 402",
+    "after fix: same fresh-session revisit lands in t-LABCLIENT1 at /settings/infrastructure with the client Settings menu; GET /api/orgs 200 listing t-LABCLIENT1 first",
+    "GET /api/orgs sent with X-Pulse-Org-ID default, as the app sends it, answered 200 on the unlicensed client with t-LABCLIENT1 listed first"
+  ],
+  "interactions": [
+    "POST /api/cloud/handoff/exchange with a signed handoff token, then load /",
+    "clear the pulse_org_id cookie and sessionStorage to simulate a browser restart, then open / in a fresh tab",
+    "repeat the revisit at 1280x800 and 375x812"
+  ]
+}

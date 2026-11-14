@@ -441,19 +441,12 @@ export const useAppRuntimeState = () => {
         return;
       }
 
-      if (!isMultiTenantEnabled()) {
-        const storedOrgID = getSelectedOrgID();
-        const hostedOrgID =
-          isHostedModeEnabled() && storedOrgID && storedOrgID !== 'default'
-            ? storedOrgID
-            : 'default';
-        setOrganizations([
-          {
-            id: hostedOrgID,
-            displayName: hostedOrgID === 'default' ? 'Default Organization' : hostedOrgID,
-          },
-        ]);
-        activateLoadedOrg(hostedOrgID);
+      // A hosted runtime serves its customer's workspace, not the default
+      // organization, whatever its licence: the server lists that workspace
+      // first, so a session with no stored selection lands there.
+      if (!isMultiTenantEnabled() && !isHostedModeEnabled()) {
+        setOrganizations([{ id: 'default', displayName: 'Default Organization' }]);
+        activateLoadedOrg('default');
         return;
       }
 
@@ -472,6 +465,26 @@ export const useAppRuntimeState = () => {
 
       activateLoadedOrg(selectedOrg);
     } catch (error) {
+      // A hosted runtime keeps the workspace this browser already selected.
+      // With none, it stores no guess: requests that name no organization
+      // land in the client workspace, and the next load reads the list again.
+      if (isHostedModeEnabled()) {
+        const storedOrgID = getSelectedOrgID();
+        logger.warn('Failed to load organizations, keeping the hosted selection', error);
+        if (storedOrgID) {
+          setOrganizations([
+            {
+              id: storedOrgID,
+              displayName: storedOrgID === 'default' ? 'Default Organization' : storedOrgID,
+            },
+          ]);
+          activateLoadedOrg(storedOrgID);
+        } else {
+          setOrganizations([{ id: 'default', displayName: 'Default Organization' }]);
+          setActiveOrgID('default');
+        }
+        return;
+      }
       logger.warn('Failed to load organizations, falling back to default org', error);
       showToast('error', 'Failed to load organizations. Using default.');
       const fallback = [{ id: 'default', displayName: 'Default Organization' }];
