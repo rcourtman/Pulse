@@ -189,7 +189,7 @@ func TestProxmoxSafetyPartialMutationsRemainOwnedForCleanup(t *testing.T) {
 			if !result.Passed || !result.SecondCleanupNoop || !result.InventoryUnchanged {
 				t.Fatalf("known partial mutation did not clean up: %+v", result)
 			}
-			if len(node.guests[111].files) != 1 || !node.guests[111].files[pveGuestFillFile(0)] || !node.dump["existing.log"] || len(node.dump) != 1 || len(node.staged) != 0 {
+			if len(node.guests[111].files) != 1 || !node.guests[111].files[pveGuestFillFile(0)] || !node.dump["existing.log"] || len(node.dump) != 1 {
 				t.Fatal("cleanup lost preexisting bytes or retained owned files")
 			}
 		})
@@ -197,7 +197,7 @@ func TestProxmoxSafetyPartialMutationsRemainOwnedForCleanup(t *testing.T) {
 }
 
 func TestProxmoxSafetyBackupCollisionAndReplacementAreNeverUnlinked(t *testing.T) {
-	for _, point := range []string{"collision", "replacement", "storage-moved", "directory-replaced"} {
+	for _, point := range []string{"collision", "replacement", "storage-moved", "symlink"} {
 		t.Run(point, func(t *testing.T) {
 			node := newFakePVENode()
 			node.path = "/mnt/custom backups"
@@ -205,9 +205,9 @@ func TestProxmoxSafetyBackupCollisionAndReplacementAreNeverUnlinked(t *testing.T
 			var foreign string
 			runner := pveRunnerFunc(func(ctx context.Context, name string, args ...string) (CommandResult, error) {
 				script := args[len(args)-1]
-				if point == "collision" && strings.Contains(script, " && ln -T -- ") && foreign == "" {
-					quoted := fakeQuoted.FindAllStringSubmatch(script, -1)
-					foreign = filepath.Base(quoted[len(quoted)-1][1])
+				if point == "collision" && strings.Contains(script, "set -C; printf") && foreign == "" {
+					match := fakeReservation.FindStringSubmatch(script)
+					foreign = filepath.Base(match[2])
 					node.dump[foreign] = true
 				}
 				return node.Run(ctx, name, args...)
@@ -223,21 +223,23 @@ func TestProxmoxSafetyBackupCollisionAndReplacementAreNeverUnlinked(t *testing.T
 			}
 			switch point {
 			case "replacement":
-				for file := range node.links {
+				for file := range node.markers {
 					foreign = file
-					delete(node.links, file)
+					delete(node.markers, file)
 					break
 				}
 			case "storage-moved":
 				node.path = "/mnt/replacement storage"
-			case "directory-replaced":
-				for dir := range node.dirs {
-					node.dirs[dir] = "9:999"
+			case "symlink":
+				for file := range node.markers {
+					foreign = file
+					node.links[file] = "external symlink"
+					break
 				}
 			}
 			result := lab.Cleanup(context.Background(), manifest, prepared)
-			if result.Passed || len(node.staged) == 0 {
-				t.Fatalf("unsafe cleanup was not refused with anchors retained: %+v", result)
+			if result.Passed || len(prepared.PVEFaultFiles["storage:local"]) == 0 && point != "collision" {
+				t.Fatalf("unsafe cleanup was not refused with custody retained: %+v", result)
 			}
 			if foreign != "" && !node.dump[foreign] {
 				t.Fatal("cleanup unlinked a colliding/replaced backup")
@@ -274,50 +276,163 @@ func TestProxmoxSafetyInventoryFailuresAreNotEmptySuccess(t *testing.T) {
 	}
 }
 
-// Real local shell semantics for the generated ownership guard/unlink only.
+func TestProxmoxSafetyUnverifiedDirectoryCreationIsNotAdopted(t *testing.T) {
+	for _, response := range []string{"collision", "lost-response"} {
+		t.Run(response, func(t *testing.T) {
+			node := newFakePVENode()
+			manifest := loadPVEManifest(t, "response.pve-guest-disk-one-folder")
+			failed := false
+			runner := pveRunnerFunc(func(ctx context.Context, name string, args ...string) (CommandResult, error) {
+				script := args[len(args)-1]
+				if !failed && strings.Contains(script, "mkdir -- ") {
+					failed = true
+					if response == "lost-response" {
+						if _, err := node.Run(ctx, name, args...); err != nil {
+							t.Fatal(err)
+						}
+					} else {
+						dir := filepath.Join(pveGuestFillDir, "pulse-qualification-unverified")
+						node.guests[111].dirs[dir] = "9:99"
+						node.guests[111].files[filepath.Join(dir, "preexisting")] = true
+					}
+					return CommandResult{}, errors.New("inert unverified creation")
+				}
+				return node.Run(ctx, name, args...)
+			})
+			lab := NewProxmoxLab(runner, pveTarget)
+			prepared, err := lab.Prepare(context.Background(), manifest, "unverified")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := lab.ApplyFault(context.Background(), manifest, prepared, manifest.Faults[0]); err == nil || !failed {
+				t.Fatal("unverified creation was accepted")
+			}
+			node.calls = nil
+			if result := lab.Cleanup(context.Background(), manifest, prepared); result.Passed || len(result.Errors) == 0 {
+				t.Fatal("unknown directory creation became completed cleanup")
+			}
+			assertNoPVEMutations(t, node.calls)
+			if len(node.guests[111].dirs) != 1 {
+				t.Fatal("unverified directory was adopted or removed")
+			}
+			if response == "collision" && len(node.guests[111].files) != 1 {
+				t.Fatal("preexisting bytes were removed")
+			}
+		})
+	}
+}
+
+func TestProxmoxSafetyLostFileCreationResponseRetainsOnlyOwnBytes(t *testing.T) {
+	node := newFakePVENode()
+	manifest := loadPVEManifest(t, "response.pve-storage-old-backups")
+	failed := false
+	runner := pveRunnerFunc(func(ctx context.Context, name string, args ...string) (CommandResult, error) {
+		result, err := node.Run(ctx, name, args...)
+		if !failed && strings.Contains(args[len(args)-1], "set -C; printf") {
+			failed = true
+			return result, errors.New("inert lost response after marked creation")
+		}
+		return result, err
+	})
+	lab := NewProxmoxLab(runner, pveTarget)
+	prepared, err := lab.Prepare(context.Background(), manifest, "lost-file-response")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := lab.ApplyFault(context.Background(), manifest, prepared, manifest.Faults[0]); err == nil || !failed {
+		t.Fatal("lost creation response was not exercised")
+	}
+	if len(node.dump) != 1 {
+		t.Fatal("partial creation did not leave exactly one marked file")
+	}
+	if result := lab.Cleanup(context.Background(), manifest, prepared); !result.Passed || len(node.dump) != 0 {
+		t.Fatalf("the run's marker could not reconcile its partial creation: %+v", result)
+	}
+}
+
+func TestProxmoxSafetyFailedCleanupRetainsCustody(t *testing.T) {
+	for _, kind := range []string{"guest", "storage"} {
+		t.Run(kind, func(t *testing.T) {
+			node := newFakePVENode()
+			scenario := "response.pve-guest-disk-one-folder"
+			if kind == "storage" {
+				scenario = "response.pve-storage-old-backups"
+			}
+			manifest := loadPVEManifest(t, scenario)
+			refuseCleanup := false
+			runner := pveRunnerFunc(func(ctx context.Context, name string, args ...string) (CommandResult, error) {
+				if refuseCleanup && strings.Contains(args[len(args)-1], "rm -f") {
+					return CommandResult{}, errors.New("inert cleanup failure")
+				}
+				return node.Run(ctx, name, args...)
+			})
+			lab := NewProxmoxLab(runner, pveTarget)
+			prepared, err := lab.Prepare(context.Background(), manifest, "cleanup-error")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := lab.ApplyFault(context.Background(), manifest, prepared, manifest.Faults[0]); err != nil {
+				t.Fatal(err)
+			}
+			before, _ := json.Marshal(prepared.PVEFaultFiles)
+			refuseCleanup = true
+			result := lab.Cleanup(context.Background(), manifest, prepared)
+			after, _ := json.Marshal(prepared.PVEFaultFiles)
+			if result.Passed || result.SecondCleanupNoop || len(result.Errors) == 0 || string(before) != string(after) {
+				t.Fatalf("failed cleanup lost custody or claimed success: %+v", result)
+			}
+			if len(node.guests[111].files)+len(node.dump) == 0 {
+				t.Fatal("failed cleanup erased unremoved file evidence")
+			}
+		})
+	}
+}
+
+func TestProxmoxSafetyManifestAndReportNamesAreNotCustody(t *testing.T) {
+	node := newFakePVENode()
+	manifest := loadPVEManifest(t, "response.pve-guest-stopped-by-person")
+	lab := NewProxmoxLab(node, pveTarget)
+	prepared := &PreparedLab{PVENode: pveTarget.Node, ResourceIDs: map[string]string{"gitea": "112"}, PVEFaultFiles: map[string][]string{"guest:112": {pveGuestFillFile(0)}}}
+	if err := lab.ApplyFault(context.Background(), manifest, prepared, manifest.Faults[0]); err == nil {
+		t.Fatal("manifest names granted fault authority")
+	}
+	if err := lab.RevertFault(context.Background(), manifest, prepared, manifest.Faults[0]); err == nil {
+		t.Fatal("report names granted revert authority")
+	}
+	if result := lab.Cleanup(context.Background(), manifest, prepared); result.Passed {
+		t.Fatal("report names granted cleanup authority")
+	}
+	assertNoPVEMutations(t, node.calls)
+}
+
+// Real local shell semantics for the generated ownership unlink only.
 // All files are tiny t.TempDir fixtures; no SSH or Proxmox program is executed.
 func TestProxmoxSafetyOwnedUnlinkShellPreservesForeignBytes(t *testing.T) {
 	if _, err := exec.LookPath("sh"); err != nil {
 		t.Skip("local shell is unavailable")
 	}
-	if _, err := exec.LookPath("stat"); err != nil {
-		t.Skip("stat is unavailable")
-	}
-	for _, scenario := range []string{"owned", "collision", "replaced-directory", "symlink-directory"} {
+	for _, scenario := range []string{"owned", "foreign", "symlink"} {
 		t.Run(scenario, func(t *testing.T) {
 			root := t.TempDir()
-			dir := filepath.Join(root, "dump", ".pulse-qualification-test")
-			if err := os.MkdirAll(dir, 0o700); err != nil {
+			if err := os.Mkdir(filepath.Join(root, "dump"), 0700); err != nil {
 				t.Fatal(err)
 			}
-			anchor, final := filepath.Join(dir, "archive.tar.zst"), filepath.Join(root, "dump", "archive.tar.zst")
-			owned := []byte("owned archive")
-			foreign := []byte("preexisting backup bytes")
-			if err := os.WriteFile(anchor, owned, 0o600); err != nil {
-				t.Fatal(err)
+			final := filepath.Join(root, "dump", "archive.tar.zst")
+			marker := "INFO: Pulse qualification owner local-test\n"
+			owned, foreign := []byte(marker+"synthetic bytes"), []byte("preexisting backup bytes")
+			data := owned
+			if scenario == "foreign" {
+				data = foreign
 			}
-			id, err := exec.Command("stat", "-c", "%d:%i", "--", dir).Output()
-			if err != nil {
-				t.Fatal(err)
-			}
-			if scenario == "collision" {
-				if err := os.WriteFile(final, foreign, 0o600); err != nil {
+			if scenario == "symlink" {
+				if err := os.WriteFile(final+"-target", foreign, 0600); err != nil {
 					t.Fatal(err)
 				}
-			} else if err := os.Link(anchor, final); err != nil {
+				if err := os.Symlink(final+"-target", final); err != nil {
+					t.Fatal(err)
+				}
+			} else if err := os.WriteFile(final, data, 0600); err != nil {
 				t.Fatal(err)
-			}
-			if scenario == "replaced-directory" || scenario == "symlink-directory" {
-				if err := os.Rename(dir, dir+"-original"); err != nil {
-					t.Fatal(err)
-				}
-				if scenario == "symlink-directory" {
-					if err := os.Symlink(dir+"-original", dir); err != nil {
-						t.Fatal(err)
-					}
-				} else if err := os.Mkdir(dir, 0o700); err != nil {
-					t.Fatal(err)
-				}
 			}
 			runner := pveRunnerFunc(func(ctx context.Context, name string, args ...string) (CommandResult, error) {
 				if name != "ssh" {
@@ -332,28 +447,162 @@ func TestProxmoxSafetyOwnedUnlinkShellPreservesForeignBytes(t *testing.T) {
 				return CommandResult{Stdout: string(out)}, err
 			})
 			lab := NewProxmoxLab(runner, pveTarget)
-			state := &pveStorageCustody{path: root, dir: dir, dirID: strings.TrimSpace(string(id)), files: []string{anchor}, links: map[string]string{final: anchor}}
+			state := &pveStorageCustody{path: root, marker: marker, files: []string{final}}
 			prepared := &PreparedLab{PVEFaultFiles: map[string][]string{"storage:local": {final}}, pve: &pveRunState{storages: map[string]*pveStorageCustody{"local": state}}}
-			err = lab.clearStorageFill(context.Background(), "local", prepared)
+			err := lab.clearStorageFill(context.Background(), "local", prepared)
 			if scenario == "owned" {
 				if err != nil {
 					t.Fatal(err)
 				}
 				if _, err := os.Stat(final); !os.IsNotExist(err) {
-					t.Fatal("owned link survived cleanup")
+					t.Fatal("owned file survived cleanup")
 				}
 			} else {
 				if err == nil {
 					t.Fatal("foreign path was accepted as owned")
 				}
 				data, err := os.ReadFile(final)
-				if scenario != "collision" {
-					foreign = owned
-				}
 				if err != nil || !reflect.DeepEqual(data, foreign) {
-					t.Fatal("refused cleanup changed preexisting bytes")
+					t.Fatal("refused cleanup changed foreign bytes")
 				}
 			}
 		})
+	}
+}
+
+func TestProxmoxSafetyExclusiveFileReservationPreservesExistingEntries(t *testing.T) {
+	if _, err := exec.LookPath("sh"); err != nil {
+		t.Skip("local shell is unavailable")
+	}
+	for _, scenario := range []string{"absent", "file", "directory", "symlink", "dangling-symlink"} {
+		t.Run(scenario, func(t *testing.T) {
+			root := t.TempDir()
+			file, target := filepath.Join(root, "backup with ' quote.tar.zst"), filepath.Join(root, "target")
+			old, marker := "preexisting archive bytes", "INFO: Pulse qualification owner test-marker\n"
+			switch scenario {
+			case "file":
+				if err := os.WriteFile(file, []byte(old), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			case "directory":
+				if err := os.Mkdir(file, 0o700); err != nil {
+					t.Fatal(err)
+				}
+			case "symlink", "dangling-symlink":
+				if scenario == "symlink" {
+					if err := os.WriteFile(target, []byte(old), 0o600); err != nil {
+						t.Fatal(err)
+					}
+				}
+				if err := os.Symlink(target, file); err != nil {
+					t.Fatal(err)
+				}
+			}
+			output, err := exec.Command("sh", "-c", pveReserveFileScript(file, marker)).CombinedOutput()
+			if scenario == "absent" {
+				data, readErr := os.ReadFile(file)
+				if err != nil || readErr != nil || string(data) != marker {
+					t.Fatalf("exclusive creation failed: %v %s", err, output)
+				}
+			} else {
+				if err == nil {
+					t.Fatal("existing entry was accepted for creation")
+				}
+				if scenario == "file" || scenario == "symlink" {
+					data, readErr := os.ReadFile(file)
+					if readErr != nil || string(data) != old {
+						t.Fatal("exclusive creation changed old bytes")
+					}
+				} else if info, err := os.Lstat(file); err != nil || scenario == "directory" && !info.IsDir() || scenario == "dangling-symlink" && info.Mode()&os.ModeSymlink == 0 {
+					t.Fatal("exclusive creation changed an existing directory/symlink")
+				}
+			}
+		})
+	}
+}
+
+// Exercise the actual generated shell against tiny local fixtures, with only
+// Proxmox's read-only storage responses modeled. Nothing calls SSH or a live
+// appliance, and the logical storage is only 100 KB.
+func TestProxmoxSafetyPruningReleasesSyntheticBackupBytes(t *testing.T) {
+	for _, program := range []string{"sh", "fallocate", "head", "touch"} {
+		if _, err := exec.LookPath(program); err != nil {
+			t.Skip(program + " is unavailable")
+		}
+	}
+	root := t.TempDir()
+	dump := filepath.Join(root, "dump")
+	if err := os.Mkdir(dump, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	old := filepath.Join(dump, "preexisting backup.log")
+	oldBytes := []byte("preexisting log bytes")
+	if err := os.WriteFile(old, oldBytes, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	usedBytes := func() int64 {
+		entries, err := os.ReadDir(dump)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var used int64 = 40000
+		for _, entry := range entries {
+			info, err := entry.Info()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if info.IsDir() {
+				t.Fatal("backup fill retained a private data directory")
+			}
+			used += info.Size()
+		}
+		return used
+	}
+	before := usedBytes()
+	runner := pveRunnerFunc(func(ctx context.Context, name string, args ...string) (CommandResult, error) {
+		if name != "ssh" {
+			t.Fatalf("unexpected program %q", name)
+		}
+		script := args[len(args)-1]
+		if strings.HasPrefix(script, "pvesh get /storage/") {
+			data, _ := json.Marshal(map[string]string{"path": root, "type": "dir"})
+			return CommandResult{Stdout: string(data)}, nil
+		}
+		if fakeStorageStatus.MatchString(script) {
+			data, _ := json.Marshal(map[string]int64{"used": usedBytes(), "total": 100000})
+			return CommandResult{Stdout: string(data)}, nil
+		}
+		if !strings.Contains(script, root) {
+			t.Fatalf("local fixture command escaped its root: %s", script)
+		}
+		out, err := exec.CommandContext(ctx, "sh", "-c", script).CombinedOutput()
+		return CommandResult{Stdout: string(out)}, err
+	})
+	lab := NewProxmoxLab(runner, pveTarget)
+	state := &pveStorageCustody{path: root}
+	prepared := &PreparedLab{PVEFaultFiles: map[string][]string{}, pve: &pveRunState{storages: map[string]*pveStorageCustody{"local": state}}}
+	if err := lab.fillStorageBackups(context.Background(), prepared, "local", "local", 111); err != nil {
+		t.Fatal(err)
+	}
+	if usedBytes() < 91000 || len(state.files) == 0 {
+		t.Fatal("actual synthetic files did not produce the modeled pressure")
+	}
+	for _, file := range state.files {
+		data, err := os.ReadFile(file)
+		if err != nil || !strings.HasPrefix(string(data), state.marker) {
+			t.Fatal("a partial write lost its ownership marker")
+		}
+		if err := os.Remove(file); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := usedBytes(); got != before {
+		t.Fatalf("pruning left hidden archive bytes: %d vs %d", got, before)
+	}
+	if err := lab.clearStorageFill(context.Background(), "local", prepared); err != nil {
+		t.Fatal(err)
+	}
+	if data, err := os.ReadFile(old); err != nil || string(data) != string(oldBytes) {
+		t.Fatal("the old log changed")
 	}
 }

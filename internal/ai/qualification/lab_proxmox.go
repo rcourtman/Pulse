@@ -2,6 +2,7 @@ package qualification
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -117,13 +118,9 @@ type pveGuestCustody struct {
 }
 
 type pveStorageCustody struct {
-	path  string
-	dir   string
-	dirID string
-	files []string
-	// Each published name must still be the same file as our private anchor
-	// before cleanup may unlink it. A name alone is not ownership evidence.
-	links map[string]string
+	path   string
+	marker string
+	files  []string
 }
 
 func NewProxmoxLab(runner CommandRunner, target ProxmoxTarget) *ProxmoxLab {
@@ -666,6 +663,18 @@ func pveBackupArchiveName(vmid int, day time.Time, index int) string {
 	return fmt.Sprintf("vzdump-lxc-%d-%s-02_00_%02d.tar.zst", vmid, day.Format("2006_01_02"), index%60)
 }
 
+// pveFileGuard proves a synthetic file still carries this run's ownership
+// marker. Symlinks and special files never become cleanup authority.
+func pveFileGuard(file, marker string) string {
+	return "[ ! -L " + shellQuote(file) + " ] && [ -f " + shellQuote(file) +
+		" ] && [ \"$(head -c " + strconv.Itoa(len(marker)) + " -- " + shellQuote(file) + ")\" = " + shellQuote(strings.TrimSuffix(marker, "\n")) + " ]"
+}
+
+func pveReserveFileScript(file, marker string) string {
+	return "[ ! -e " + shellQuote(file) + " ] && [ ! -L " + shellQuote(file) +
+		" ] && ( set -C; printf '%s' " + shellQuote(marker) + " > " + shellQuote(file) + " )"
+}
+
 // fillStorageBackups writes a month of nightly archives of one guest into the
 // storage's dump folder, oldest first, until the storage reaches the target.
 // Each archive gets the log a real backup leaves beside it.
@@ -674,8 +683,8 @@ func (l *ProxmoxLab) fillStorageBackups(ctx context.Context, lab *PreparedLab, a
 	if err != nil {
 		return err
 	}
-	if state.dir != "" {
-		return errors.New("this run already has a storage fill directory")
+	if len(state.files) != 0 {
+		return errors.New("this run already has storage fill files")
 	}
 	used, total, err := l.storageUsage(ctx, storage)
 	if err != nil {
@@ -685,14 +694,12 @@ func (l *ProxmoxLab) fillStorageBackups(ctx context.Context, lab *PreparedLab, a
 	if need <= 0 {
 		return fmt.Errorf("storage %s is already past %.0f%%", storage, pveStorageFillTarget)
 	}
+	// A content marker proves creation without keeping another hardlink to
+	// the archive: real pruning must be able to release the allocated bytes.
+	// These are synthetic (already non-restorable) lab archives, never real
+	// backups. A new run never adopts an old run's marker or filename.
+	state.marker = "INFO: Pulse qualification owner " + rand.Text() + "\n"
 	dump := path.Join(state.path, "dump")
-	dir := path.Join(dump, ".pulse-qualification-"+lab.RunID)
-	dirID, err := l.reserveDirectory(ctx, lab, 0, dir)
-	if err != nil {
-		return err
-	}
-	state.dir, state.dirID = dir, dirID
-	state.links = make(map[string]string)
 	size := need/int64(pveStorageFillMaxDays-2) + 1
 	key := "storage:" + storage
 	now := time.Now().UTC()
@@ -707,26 +714,23 @@ func (l *ProxmoxLab) fillStorageBackups(ctx context.Context, lab *PreparedLab, a
 		stamp := now.AddDate(0, 0, -day)
 		archive := path.Join(dump, pveBackupArchiveName(vmid, stamp, day))
 		logFile := strings.TrimSuffix(archive, ".tar.zst") + ".log"
-		anchor := path.Join(dir, path.Base(archive))
-		logAnchor := path.Join(dir, path.Base(logFile))
-		// The exclusive directory proves these new paths cannot replace a
-		// preexisting backup. Record them before potentially partial writes.
-		state.files = append(state.files, anchor, logAnchor)
+		for _, file := range []string{archive, logFile} {
+			// Track the attempt before creating, including lost responses.
+			// POSIX noclobber uses exclusive creation; it never truncates a
+			// preexisting regular file, symlink or directory.
+			state.files = append(state.files, file)
+			if _, err := l.node(ctx, pveReserveFileScript(file, state.marker)); err != nil {
+				return fmt.Errorf("reserve a new backup file on %s without replacement: %w", storage, err)
+			}
+			lab.PVEFaultFiles[key] = append(lab.PVEFaultFiles[key], file)
+		}
 		touch := stamp.Format("200601020000")
-		script := pveDirectoryGuard(dir, dirID) + " && fallocate -l " + strconv.FormatInt(size, 10) + " " + shellQuote(anchor) +
-			" && printf 'INFO: Starting Backup of VM " + strconv.Itoa(vmid) + " (lxc)\\nINFO: Finished Backup of VM " + strconv.Itoa(vmid) + "\\nINFO: Backup job finished successfully\\n' > " + shellQuote(logAnchor) +
-			" && touch -t " + touch + " " + shellQuote(anchor) + " " + shellQuote(logAnchor)
+		log := state.marker + "INFO: Starting Backup of VM " + strconv.Itoa(vmid) + " (lxc)\nINFO: Finished Backup of VM " + strconv.Itoa(vmid) + "\nINFO: Backup job finished successfully\n"
+		script := pveFileGuard(archive, state.marker) + " && fallocate -l " + strconv.FormatInt(size, 10) + " " + shellQuote(archive) +
+			" && " + pveFileGuard(logFile, state.marker) + " && printf '%s' " + shellQuote(log) + " > " + shellQuote(logFile) +
+			" && touch -t " + touch + " " + shellQuote(archive) + " " + shellQuote(logFile)
 		if _, err := l.node(ctx, script); err != nil {
 			return fmt.Errorf("write an old backup archive to %s: %w", storage, err)
-		}
-		for _, pair := range [][2]string{{archive, anchor}, {logFile, logAnchor}} {
-			// Keep the anchor even on an uncertain link result. ln without -f
-			// refuses a preexisting name; cleanup verifies same-file identity.
-			state.links[pair[0]] = pair[1]
-			if _, err := l.node(ctx, pveDirectoryGuard(dir, dirID)+" && ln -T -- "+shellQuote(pair[1])+" "+shellQuote(pair[0])); err != nil {
-				return fmt.Errorf("publish an owned backup name on %s without replacement: %w", storage, err)
-			}
-			lab.PVEFaultFiles[key] = append(lab.PVEFaultFiles[key], pair[0])
 		}
 	}
 	percent, err := l.storageUsedPercent(ctx, storage)
@@ -736,49 +740,30 @@ func (l *ProxmoxLab) fillStorageBackups(ctx context.Context, lab *PreparedLab, a
 	return err
 }
 
-// clearStorageFill unlinks only names that still refer to this run's private
-// anchors. Colliding, replaced and unowned names are never removed.
+// clearStorageFill checks the per-run content marker before unlinking each
+// attempted path. Missing files are already pruned; collisions and replacements
+// are retained as explicit errors, never inferred to be owned from their names.
 func (l *ProxmoxLab) clearStorageFill(ctx context.Context, storage string, lab *PreparedLab) error {
 	if lab == nil || lab.pve == nil {
 		return errors.New("storage fill cleanup has no run custody")
 	}
 	state := lab.pve.storages[storage]
-	if state == nil || state.dir == "" {
+	if state == nil || len(state.files) == 0 {
 		return nil
 	}
 	if _, err := l.admittedStorage(ctx, lab, storage); err != nil {
 		return err
 	}
-	guard := pveDirectoryGuard(state.dir, state.dirID)
-	files := make([]string, 0, len(state.links))
-	for file := range state.links {
-		files = append(files, file)
-	}
-	sort.Strings(files)
-	for _, file := range files {
-		anchor := state.links[file]
-		script := "(" + guard + ") && { if [ ! -e " + shellQuote(file) + " ] && [ ! -L " + shellQuote(file) +
-			" ]; then :; elif [ " + shellQuote(file) + " -ef " + shellQuote(anchor) +
-			" ]; then rm -f -- " + shellQuote(file) + "; else exit 1; fi; }"
+	for _, file := range state.files {
+		script := "if [ ! -e " + shellQuote(file) + " ] && [ ! -L " + shellQuote(file) +
+			" ]; then :; elif " + pveFileGuard(file, state.marker) +
+			"; then rm -f -- " + shellQuote(file) + "; else exit 1; fi"
 		if _, err := l.node(ctx, script); err != nil {
-			return fmt.Errorf("backup %s no longer has verified run ownership; retaining anchors: %w", file, err)
+			return fmt.Errorf("backup %s no longer has verified run ownership; retaining custody: %w", file, err)
 		}
-	}
-	script := guard
-	if len(state.files) != 0 {
-		quoted := make([]string, len(state.files))
-		for i, file := range state.files {
-			quoted[i] = shellQuote(file)
-		}
-		script += " && rm -f -- " + strings.Join(quoted, " ")
-	}
-	script += " && rmdir -- " + shellQuote(state.dir)
-	_, err := l.node(ctx, script)
-	if err != nil {
-		return fmt.Errorf("clear owned staging files on %s: %w", storage, err)
 	}
 	delete(lab.PVEFaultFiles, "storage:"+storage)
-	state.dir, state.dirID, state.files, state.links = "", "", nil, nil
+	state.files = nil
 	return nil
 }
 
@@ -915,6 +900,9 @@ func (l *ProxmoxLab) Cleanup(ctx context.Context, manifest Manifest, lab *Prepar
 	lab.mu.Lock()
 	defer lab.mu.Unlock()
 	errs := append([]string(nil), lab.pve.uncertain...)
+	if !lab.pve.baseline {
+		errs = append(errs, "pre-lab Proxmox inventory was not captured")
+	}
 	cleanup := func() int {
 		changed := 0
 		for vmid, guest := range lab.pve.guests {
@@ -931,7 +919,7 @@ func (l *ProxmoxLab) Cleanup(ctx context.Context, manifest Manifest, lab *Prepar
 			}
 		}
 		for storage, state := range lab.pve.storages {
-			if state.dir != "" {
+			if len(state.files) != 0 {
 				changed++
 				if err := l.clearStorageFill(ctx, storage, lab); err != nil {
 					errs = append(errs, err.Error())
