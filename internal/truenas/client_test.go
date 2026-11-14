@@ -273,6 +273,84 @@ func TestFetchSnapshot(t *testing.T) {
 	}
 }
 
+type recordingTransport struct {
+	next  http.RoundTripper
+	paths map[string]int
+}
+
+func (r *recordingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	r.paths[req.URL.Path]++
+	return r.next.RoundTrip(req)
+}
+
+// The connection editor's Datasets, Pools and Replication checkboxes promise
+// that Pulse collects only the enabled surfaces; a disabled one must send no
+// request at all.
+func TestFetchSnapshotHonorsCollectionScope(t *testing.T) {
+	const (
+		poolPath        = "/api/v2.0/pool"
+		bootPath        = "/api/v2.0/boot/get_state"
+		datasetPath     = "/api/v2.0/pool/dataset"
+		snapshotPath    = "/api/v2.0/zfs/snapshot"
+		replicationPath = "/api/v2.0/replication"
+	)
+	for _, tc := range []struct {
+		name        string
+		config      ClientConfig
+		skipped     []string
+		wantPools   bool
+		wantDataset bool
+	}{
+		{name: "everything", wantPools: true, wantDataset: true},
+		{name: "datasets off", config: ClientConfig{SkipDatasets: true}, skipped: []string{datasetPath, snapshotPath}, wantPools: true},
+		{name: "pools off", config: ClientConfig{SkipPools: true}, skipped: []string{poolPath, bootPath}, wantDataset: true},
+		{name: "replication off", config: ClientConfig{SkipReplication: true}, skipped: []string{replicationPath}, wantPools: true, wantDataset: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			routes := alertArgsTransport(defaultAPIResponses())
+			routes[snapshotPath] = apiResponse{body: `[{"name":"tank/apps@auto-1","dataset":"tank/apps","snapshot_name":"auto-1"}]`}
+			routes[replicationPath] = apiResponse{body: `[]`}
+			cfg := tc.config
+			cfg.Host = "http://truenas.invalid"
+			cfg.APIKey = "synthetic"
+			client, err := NewClient(cfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer client.Close()
+			recorder := &recordingTransport{next: routes, paths: map[string]int{}}
+			client.httpClient.Transport = recorder
+			client.mode = TransportLegacyREST
+
+			snapshot, err := client.FetchSnapshot(context.Background())
+			if err != nil {
+				t.Fatalf("FetchSnapshot() error = %v", err)
+			}
+			for _, path := range tc.skipped {
+				if recorder.paths[path] != 0 {
+					t.Fatalf("%s requested %d times with that surface off", path, recorder.paths[path])
+				}
+			}
+			if tc.name == "everything" {
+				for _, path := range []string{poolPath, datasetPath, snapshotPath, replicationPath} {
+					if recorder.paths[path] == 0 {
+						t.Fatalf("%s not requested with every surface on", path)
+					}
+				}
+			}
+			if gotPools := len(snapshot.Pools) > 0; gotPools != tc.wantPools {
+				t.Fatalf("pools collected = %v, want %v", gotPools, tc.wantPools)
+			}
+			if gotDatasets := len(snapshot.Datasets) > 0 && len(snapshot.ZFSSnapshots) > 0; gotDatasets != tc.wantDataset {
+				t.Fatalf("datasets and snapshots collected = %v, want %v", gotDatasets, tc.wantDataset)
+			}
+			if len(snapshot.Disks) == 0 || snapshot.System.Hostname == "" {
+				t.Fatalf("surfaces outside the scope must still be collected: %+v", snapshot)
+			}
+		})
+	}
+}
+
 func TestGetPoolsDatasetsAndAlertsUseNativeQueryShapes(t *testing.T) {
 	server := newMockServerWithRPC(t, map[string]apiResponse{
 		"/api/v2.0/pool":         {status: http.StatusInternalServerError, body: `{"error":"legacy pool endpoint should not be used"}`},
@@ -800,6 +878,79 @@ func TestGetZFSSnapshotsUsesNativeSnapshotQueryShape(t *testing.T) {
 	}
 	snapshot := snapshots[0]
 	if snapshot.FullName != "tank/apps@auto-20260331-0600" || snapshot.Dataset != "tank/apps" || snapshot.Name != "auto-20260331-0600" {
+		t.Fatalf("unexpected snapshot identity: %+v", snapshot)
+	}
+	if snapshot.CreatedAt == nil || !snapshot.CreatedAt.Equal(time.Unix(1710000000, 0).UTC()) {
+		t.Fatalf("unexpected snapshot creation time: %+v", snapshot.CreatedAt)
+	}
+	if snapshot.UsedBytes == nil || *snapshot.UsedBytes != 1024 || snapshot.Referenced == nil || *snapshot.Referenced != 2048 {
+		t.Fatalf("unexpected snapshot byte properties: %+v", snapshot)
+	}
+}
+
+// TrueNAS 25.04 and 25.10 have no zfs.resource.snapshot.query. The fallback
+// must still request only the properties Pulse reads: an unfiltered
+// pool.snapshot.query reads all of them for every snapshot (#4374).
+func TestGetZFSSnapshotsFallbackRequestsOnlyReadProperties(t *testing.T) {
+	server := newMockServerWithRPC(t, map[string]apiResponse{
+		"/api/v2.0/zfs/snapshot": {status: http.StatusInternalServerError, body: `{"error":"legacy snapshot endpoint should not be used"}`},
+	}, nil, func(t *testing.T, conn *websocket.Conn) {
+		authReq := readRPCRequest(t, conn)
+		writeRPCResult(t, conn, authReq.ID, true)
+
+		nativeReq := readRPCRequest(t, conn)
+		if nativeReq.Method != "zfs.resource.snapshot.query" {
+			t.Fatalf("expected zfs.resource.snapshot.query first, got %q", nativeReq.Method)
+		}
+		writeRPCError(t, conn, nativeReq.ID, -32601, "Method does not exist")
+
+		request := readRPCRequest(t, conn)
+		if request.Method != "pool.snapshot.query" {
+			t.Fatalf("expected pool.snapshot.query fallback, got %q", request.Method)
+		}
+		params, ok := request.Params.([]any)
+		if !ok || len(params) != 2 {
+			t.Fatalf("expected filters/options params, got %#v", request.Params)
+		}
+		if filters, ok := params[0].([]any); !ok || len(filters) != 0 {
+			t.Fatalf("expected empty filters, got %#v", params[0])
+		}
+		options, _ := params[1].(map[string]any)
+		extra, _ := options["extra"].(map[string]any)
+		properties, _ := extra["properties"].([]any)
+		got := make([]string, 0, len(properties))
+		for _, property := range properties {
+			name, _ := property.(string)
+			got = append(got, name)
+		}
+		if strings.Join(got, ",") != "creation,used,referenced" {
+			t.Fatalf("expected extra.properties [creation used referenced], got %#v", params[1])
+		}
+		// 25.10 property shape.
+		writeRPCResult(t, conn, request.ID, []map[string]any{{
+			"id":            "tank/apps@auto-20260331-0600",
+			"name":          "tank/apps@auto-20260331-0600",
+			"dataset":       "tank/apps",
+			"snapshot_name": "auto-20260331-0600",
+			"properties": map[string]any{
+				"creation":   map[string]any{"value": "Sat Mar  9 16:00 2024", "rawvalue": "1710000000", "source": "NONE"},
+				"used":       map[string]any{"value": "1K", "rawvalue": "1024", "parsed": 1024, "source": "NONE"},
+				"referenced": map[string]any{"value": "2K", "rawvalue": "2048", "parsed": 2048, "source": "NONE"},
+			},
+		}})
+	})
+	t.Cleanup(server.Close)
+
+	client := mustClientForServer(t, server.URL, ClientConfig{APIKey: "api-key"})
+	snapshots, err := client.GetZFSSnapshots(context.Background())
+	if err != nil {
+		t.Fatalf("GetZFSSnapshots() error = %v", err)
+	}
+	if len(snapshots) != 1 {
+		t.Fatalf("expected 1 snapshot, got %d", len(snapshots))
+	}
+	snapshot := snapshots[0]
+	if snapshot.FullName != "tank/apps@auto-20260331-0600" {
 		t.Fatalf("unexpected snapshot identity: %+v", snapshot)
 	}
 	if snapshot.CreatedAt == nil || !snapshot.CreatedAt.Equal(time.Unix(1710000000, 0).UTC()) {

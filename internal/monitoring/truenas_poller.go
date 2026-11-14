@@ -283,6 +283,9 @@ func (p *TrueNASPoller) syncConnections() {
 				UseHTTPS:           instance.UseHTTPS,
 				InsecureSkipVerify: instance.InsecureSkipVerify,
 				Fingerprint:        instance.Fingerprint,
+				SkipDatasets:       !instance.MonitorDatasets,
+				SkipPools:          !instance.MonitorPools,
+				SkipReplication:    !instance.MonitorReplication,
 			})
 			if err != nil {
 				now := time.Now().UTC()
@@ -1495,7 +1498,10 @@ func trueNASProviderConfigChanged(previous, next config.TrueNASInstance) bool {
 		strings.TrimSpace(previous.Password) != strings.TrimSpace(next.Password) ||
 		previous.UseHTTPS != next.UseHTTPS ||
 		previous.InsecureSkipVerify != next.InsecureSkipVerify ||
-		strings.TrimSpace(previous.Fingerprint) != strings.TrimSpace(next.Fingerprint)
+		strings.TrimSpace(previous.Fingerprint) != strings.TrimSpace(next.Fingerprint) ||
+		previous.MonitorDatasets != next.MonitorDatasets ||
+		previous.MonitorPools != next.MonitorPools ||
+		previous.MonitorReplication != next.MonitorReplication
 }
 
 // classifyTrueNASError wraps a TrueNAS API error in MonitorError for metrics classification.

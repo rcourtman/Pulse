@@ -59,6 +59,12 @@ type ClientConfig struct {
 	InsecureSkipVerify bool
 	Fingerprint        string
 	Timeout            time.Duration
+
+	// The connection's collection scope. Zero values collect everything, so
+	// connection tests and other one-off clients need not set them.
+	SkipDatasets    bool // datasets and their ZFS snapshots
+	SkipPools       bool // pools, including the boot pool
+	SkipReplication bool // replication tasks
 }
 
 // Client owns one connection-local TrueNAS transport decision. Supported
@@ -1945,12 +1951,16 @@ func (c *Client) GetZFSSnapshots(ctx context.Context) ([]ZFSSnapshot, error) {
 	return c.getZFSSnapshotsRPC(ctx)
 }
 
+// zfsSnapshotProperties are the only snapshot properties parseZFSSnapshots
+// reads. Both snapshot queries must request exactly these.
+var zfsSnapshotProperties = []string{"creation", "used", "referenced"}
+
 func (c *Client) getZFSSnapshotsRPC(ctx context.Context) ([]ZFSSnapshot, error) {
 	var response []map[string]any
 	err := c.callRPC(ctx, "zfs.resource.snapshot.query", []any{map[string]any{
 		"paths":      []string{},
 		"recursive":  true,
-		"properties": []string{"creation", "used", "referenced"},
+		"properties": zfsSnapshotProperties,
 	}}, &response)
 	if err == nil {
 		return parseZFSSnapshots(response), nil
@@ -1959,7 +1969,14 @@ func (c *Client) getZFSSnapshotsRPC(ctx context.Context) ([]ZFSSnapshot, error) 
 		return nil, err
 	}
 
-	if err := c.queryRPC(ctx, "pool.snapshot.query", &response); err != nil {
+	// TrueNAS 25.04 and 25.10 lack zfs.resource.snapshot.query. Without
+	// extra.properties, pool.snapshot.query reads every ZFS property of every
+	// snapshot: about 12 s of middlewared CPU per poll for 2,240 snapshots
+	// against 1.2 s with this list (#4374).
+	if err := c.callRPC(ctx, "pool.snapshot.query", []any{
+		[]any{},
+		map[string]any{"extra": map[string]any{"properties": zfsSnapshotProperties}},
+	}, &response); err != nil {
 		return nil, err
 	}
 	return parseZFSSnapshots(response), nil
@@ -2139,20 +2156,26 @@ func (c *Client) FetchSnapshot(ctx context.Context) (*FixtureSnapshot, error) {
 		mergeSystemTelemetry(system, telemetry)
 	}
 
-	pools, err := c.GetPools(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("fetch truenas pools: %w", err)
-	}
-	// boot.get_state is best-effort because older/minimally privileged API
-	// keys may not expose it. When available it supplies the only boot-pool
-	// topology and per-member ZFS state.
-	if bootPool, bootErr := c.GetBootPool(ctx); bootErr == nil && bootPool != nil {
-		pools = mergeBootPool(pools, *bootPool)
+	var pools []Pool
+	if !c.config.SkipPools {
+		pools, err = c.GetPools(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("fetch truenas pools: %w", err)
+		}
+		// boot.get_state is best-effort because older/minimally privileged API
+		// keys may not expose it. When available it supplies the only boot-pool
+		// topology and per-member ZFS state.
+		if bootPool, bootErr := c.GetBootPool(ctx); bootErr == nil && bootPool != nil {
+			pools = mergeBootPool(pools, *bootPool)
+		}
 	}
 
-	datasets, err := c.GetDatasets(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("fetch truenas datasets: %w", err)
+	var datasets []Dataset
+	if !c.config.SkipDatasets {
+		datasets, err = c.GetDatasets(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("fetch truenas datasets: %w", err)
+		}
 	}
 
 	disks, err := c.GetDisks(ctx)
@@ -2171,8 +2194,14 @@ func (c *Client) FetchSnapshot(ctx context.Context) (*FixtureSnapshot, error) {
 	apps, _ := c.GetApps(ctx)
 	vms, _ := c.GetVMs(ctx)
 	shares, _ := c.GetNetworkShares(ctx)
-	zfsSnapshots, _ := c.GetZFSSnapshots(ctx)
-	replicationTasks, _ := c.GetReplicationTasks(ctx)
+	var zfsSnapshots []ZFSSnapshot
+	if !c.config.SkipDatasets {
+		zfsSnapshots, _ = c.GetZFSSnapshots(ctx)
+	}
+	var replicationTasks []ReplicationTask
+	if !c.config.SkipReplication {
+		replicationTasks, _ = c.GetReplicationTasks(ctx)
+	}
 
 	return &FixtureSnapshot{
 		CollectedAt:      time.Now().UTC(),

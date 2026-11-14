@@ -570,6 +570,7 @@ func truenasRecordsFromSnapshot(snapshot *FixtureSnapshot, connectionID string, 
 	systemRisk := unifiedresources.StorageRiskFromAssessment(systemAssessment)
 	_, protectionReduced, rebuildInProgress, protectionSummary, rebuildSummary := unifiedresources.StorageRiskSemantics(systemRisk)
 	incidentAssignments := buildIncidentAssignments(snapshot, collectedAt)
+	parents := newTrueNASParents(systemSourceID, snapshot)
 	records := make([]unifiedresources.IngestRecord, 0, 1+len(snapshot.Pools)+len(snapshot.Datasets)+len(snapshot.Apps)+len(snapshot.VMs)+len(snapshot.Shares)+len(snapshot.Disks))
 
 	totalCapacity, totalUsed := aggregatePoolUsage(snapshot.Pools)
@@ -671,15 +672,11 @@ func truenasRecordsFromSnapshot(snapshot *FixtureSnapshot, connectionID string, 
 	}
 
 	for _, dataset := range snapshot.Datasets {
-		parentPool := strings.TrimSpace(dataset.Pool)
-		if parentPool == "" {
-			parentPool = parentPoolFromDataset(dataset.Name)
-		}
 		totalBytes := dataset.UsedBytes + dataset.AvailBytes
 		incidents := incidentAssignments.Datasets[strings.TrimSpace(dataset.Name)]
 		records = append(records, unifiedresources.IngestRecord{
 			SourceID:               scopedDatasetSourceID(systemSourceID, dataset.Name),
-			ParentSourceID:         scopedPoolSourceID(systemSourceID, parentPool),
+			ParentSourceID:         parents.pool(datasetPool(dataset)),
 			SupersededCanonicalIDs: supersededChildIDs(unifiedresources.ResourceTypeStorage, scopedDatasetSourceID(legacySystemSourceID, dataset.Name)),
 			Resource: unifiedresources.Resource{
 				Type:      unifiedresources.ResourceTypeStorage,
@@ -804,11 +801,9 @@ func truenasRecordsFromSnapshot(snapshot *FixtureSnapshot, connectionID string, 
 	}
 
 	for _, share := range snapshot.Shares {
-		parentSourceID := systemSourceID
+		parentSourceID := parents.pool(poolFromSharePath(share.Path))
 		if dataset := strings.TrimSpace(share.Dataset); dataset != "" {
-			parentSourceID = scopedDatasetSourceID(systemSourceID, dataset)
-		} else if pool := poolFromSharePath(share.Path); pool != "" {
-			parentSourceID = scopedPoolSourceID(systemSourceID, pool)
+			parentSourceID = parents.dataset(dataset)
 		}
 		records = append(records, unifiedresources.IngestRecord{
 			SourceID:               scopedNetworkShareSourceID(systemSourceID, share),
@@ -849,10 +844,7 @@ func truenasRecordsFromSnapshot(snapshot *FixtureSnapshot, connectionID string, 
 		if hasHardwareSerial {
 			diskIdentity.MachineID = disk.Serial
 		}
-		parentSourceID := systemSourceID
-		if pool := strings.TrimSpace(disk.Pool); pool != "" {
-			parentSourceID = scopedPoolSourceID(systemSourceID, pool)
-		}
+		parentSourceID := parents.pool(disk.Pool)
 		// Disks with a usable serial mint identity-keyed canonical IDs that
 		// do not depend on the source ID, so only the rest re-key when the
 		// system scope moves to the connection.
@@ -3053,6 +3045,61 @@ func trueNASDiskMetricResourceID(systemSourceID string, disk Disk) string {
 		SizeBytes: disk.SizeBytes,
 	}
 	return unifiedresources.PhysicalDiskMetaMetricID(meta, scopedDiskSourceID(systemSourceID, disk.Name))
+}
+
+// trueNASParents parents each child to its nearest collected ancestor. A pool
+// or dataset outside the connection's collection scope, or missing from this
+// poll, is not ingested, and a child pointing at it would surface parentless.
+type trueNASParents struct {
+	system   string
+	pools    map[string]struct{}
+	datasets map[string]string // dataset name -> pool name
+}
+
+func newTrueNASParents(systemSourceID string, snapshot *FixtureSnapshot) trueNASParents {
+	parents := trueNASParents{
+		system:   systemSourceID,
+		pools:    make(map[string]struct{}, len(snapshot.Pools)),
+		datasets: make(map[string]string, len(snapshot.Datasets)),
+	}
+	for _, pool := range snapshot.Pools {
+		if name := strings.TrimSpace(pool.Name); name != "" {
+			parents.pools[name] = struct{}{}
+		}
+	}
+	for _, dataset := range snapshot.Datasets {
+		if name := strings.TrimSpace(dataset.Name); name != "" {
+			parents.datasets[name] = datasetPool(dataset)
+		}
+	}
+	return parents
+}
+
+// pool returns the named pool's source ID, or the system's when that pool was
+// not collected.
+func (p trueNASParents) pool(name string) string {
+	name = strings.TrimSpace(name)
+	if _, ok := p.pools[name]; ok && name != "" {
+		return scopedPoolSourceID(p.system, name)
+	}
+	return p.system
+}
+
+// dataset returns the named dataset's source ID, falling back to its pool and
+// then the system when they were not collected.
+func (p trueNASParents) dataset(name string) string {
+	name = strings.TrimSpace(name)
+	if _, ok := p.datasets[name]; ok && name != "" {
+		return scopedDatasetSourceID(p.system, name)
+	}
+	return p.pool(parentPoolFromDataset(name))
+}
+
+func datasetPool(dataset Dataset) string {
+	if pool := strings.TrimSpace(dataset.Pool); pool != "" {
+		return pool
+	}
+	return parentPoolFromDataset(dataset.Name)
 }
 
 func parentPoolFromDataset(datasetName string) string {

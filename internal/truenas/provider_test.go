@@ -713,6 +713,71 @@ func TestProviderCloseDelegatesToFetcher(t *testing.T) {
 	}
 }
 
+// A pool or dataset outside the collection scope is not ingested, so its
+// children must hang off the nearest collected ancestor, never a missing one.
+func TestRecordsParentToNearestCollectedAncestor(t *testing.T) {
+	const system = "system:truenas-main"
+	for _, tc := range []struct {
+		name  string
+		scope func(*FixtureSnapshot)
+		// child name -> expected parent source ID
+		want map[string]string
+	}{
+		{
+			name:  "everything collected",
+			scope: func(*FixtureSnapshot) {},
+			want: map[string]string{
+				"tank/media": system + "/pool:tank",
+				"sda":        system + "/pool:tank",
+			},
+		},
+		{
+			name:  "pools off",
+			scope: func(s *FixtureSnapshot) { s.Pools = nil },
+			want: map[string]string{
+				"tank/media": system,
+				"sda":        system,
+			},
+		},
+		{
+			name:  "datasets off",
+			scope: func(s *FixtureSnapshot) { s.Datasets = nil },
+			want: map[string]string{
+				"sda": system + "/pool:tank",
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			snapshot := DefaultFixtures()
+			tc.scope(&snapshot)
+			records := FixtureRecords(snapshot)
+			sources := make(map[string]struct{}, len(records))
+			for _, record := range records {
+				sources[record.SourceID] = struct{}{}
+			}
+			for _, record := range records {
+				if record.ParentSourceID == "" {
+					continue
+				}
+				if _, ok := sources[record.ParentSourceID]; !ok {
+					t.Fatalf("%s %q points at uncollected parent %q", record.Resource.Type, record.Resource.Name, record.ParentSourceID)
+				}
+				if want, ok := tc.want[record.Resource.Name]; ok && record.Resource.Type != unifiedresources.ResourceTypeNetworkShare && record.ParentSourceID != want {
+					t.Fatalf("%q parent = %q, want %q", record.Resource.Name, record.ParentSourceID, want)
+				}
+			}
+			if tc.name == "datasets off" {
+				for _, record := range records {
+					if record.Resource.Type == unifiedresources.ResourceTypeNetworkShare &&
+						!strings.HasPrefix(record.ParentSourceID, system+"/pool:") {
+						t.Fatalf("share %q parent = %q, want its pool", record.Resource.Name, record.ParentSourceID)
+					}
+				}
+			}
+		})
+	}
+}
+
 func TestRecordsIncludeDiskResourcesWithCorrectParentChain(t *testing.T) {
 	previous := IsFeatureEnabled()
 	SetFeatureEnabled(true)
