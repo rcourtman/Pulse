@@ -2,6 +2,7 @@ package securityutil
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"time"
@@ -55,8 +56,11 @@ func (p ConnectionOutboundPolicy) DialContext(timeout time.Duration, resolve fun
 	}, timeout)
 	return func(ctx context.Context, network, address string) (net.Conn, error) {
 		conn, err := dial(ctx, network, address)
-		if err != nil {
+		if errors.Is(err, pubsec.ErrOutboundDestinationValidation) {
 			return nil, fmt.Errorf("%w: %w", ErrTenantOutboundDestination, err)
+		}
+		if err != nil {
+			return nil, err
 		}
 		return conn, nil
 	}

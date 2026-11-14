@@ -3,6 +3,7 @@ package securityutil
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -202,6 +203,11 @@ func resolveValidatedOutboundIPs(ctx context.Context, host string, opts Restrict
 	return ips, nil
 }
 
+// ErrOutboundDestinationValidation distinguishes a rejected resolution from a
+// failed socket connection to an approved destination. It never wraps caller
+// cancellation/deadline errors or ordinary TCP dial failures.
+var ErrOutboundDestinationValidation = errors.New("outbound destination validation failed")
+
 // NewValidatedOutboundDialer resolves and validates every address immediately
 // before each new connection, then dials only those numeric addresses. It
 // never asks the underlying dialer to resolve the hostname a second time.
@@ -218,7 +224,10 @@ func validatedOutboundDialer(opts RestrictedOutboundHTTPOptions, timeout time.Du
 		}
 		ips, err := resolveValidatedOutboundIPs(ctx, host, opts)
 		if err != nil {
-			return nil, err
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				return nil, err
+			}
+			return nil, fmt.Errorf("%w: %w", ErrOutboundDestinationValidation, err)
 		}
 		return dial(ctx, network, port, ips, timeout)
 	}

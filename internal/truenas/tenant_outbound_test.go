@@ -19,8 +19,14 @@ import (
 func TestTenantTrueNASRebindingNeverReachesRESTOrWebSocket(t *testing.T) {
 	for _, rpc := range []bool{false, true} {
 		t.Run(map[bool]string{true: "WebSocket", false: "REST"}[rpc], func(t *testing.T) {
-			var hits atomic.Int32
-			server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { hits.Add(1); w.WriteHeader(503) }))
+			var hits, sockets atomic.Int32
+			server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { hits.Add(1); w.WriteHeader(503) }))
+			server.Config.ConnState = func(_ net.Conn, state http.ConnState) {
+				if state == http.StateNew {
+					sockets.Add(1)
+				}
+			}
+			server.StartTLS()
 			defer server.Close()
 			endpoint, _ := url.Parse(server.URL)
 			port, _ := strconv.Atoi(endpoint.Port())
@@ -59,8 +65,8 @@ func TestTenantTrueNASRebindingNeverReachesRESTOrWebSocket(t *testing.T) {
 			if !errors.Is(err, securityutil.ErrTenantOutboundDestination) {
 				t.Fatalf("rebound refusal=%v", err)
 			}
-			if hits.Load() != 0 || calls != 2 {
-				t.Fatalf("requests=%d resolutions=%d", hits.Load(), calls)
+			if hits.Load() != 0 || sockets.Load() != 0 || calls != 2 {
+				t.Fatalf("requests=%d sockets=%d resolutions=%d", hits.Load(), sockets.Load(), calls)
 			}
 		})
 	}

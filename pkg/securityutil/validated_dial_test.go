@@ -114,3 +114,24 @@ func TestValidatedDialResolutionFailuresNeverReachSocket(t *testing.T) {
 		})
 	}
 }
+
+func TestValidatedDialDoesNotMislabelSocketFailureOrCancellation(t *testing.T) {
+	socketErr := errors.New("approved peer refused the connection")
+	dial := validatedOutboundDialer(RestrictedOutboundHTTPOptions{ResolveIPAddrs: resolveTo("93.184.216.34")}, time.Second, func(context.Context, string, string, []net.IP, time.Duration) (net.Conn, error) {
+		return nil, socketErr
+	})
+	_, err := dial(context.Background(), "tcp", "nas.example.test:443")
+	if err != socketErr || errors.Is(err, ErrOutboundDestinationValidation) {
+		t.Fatalf("socket failure mislabeled: %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	dial = validatedOutboundDialer(RestrictedOutboundHTTPOptions{ResolveIPAddrs: func(ctx context.Context, _ string) ([]net.IPAddr, error) { return nil, ctx.Err() }}, time.Second, func(context.Context, string, string, []net.IP, time.Duration) (net.Conn, error) {
+		t.Fatal("canceled resolver dialed")
+		return nil, nil
+	})
+	_, err = dial(ctx, "tcp", "nas.example.test:443")
+	if !errors.Is(err, context.Canceled) || errors.Is(err, ErrOutboundDestinationValidation) {
+		t.Fatalf("cancellation mislabeled: %v", err)
+	}
+}

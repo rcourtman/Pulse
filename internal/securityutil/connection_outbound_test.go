@@ -50,7 +50,7 @@ func TestConnectionOutboundPolicyPreservesCanceledResolution(t *testing.T) {
 	cancel()
 	dial := ConnectionOutboundTenantLAN.DialContext(time.Second, func(ctx context.Context, _ string) ([]net.IPAddr, error) { return nil, ctx.Err() })
 	_, err := dial(ctx, "tcp", "nas.example.test:443")
-	if !errors.Is(err, context.Canceled) || !errors.Is(err, ErrTenantOutboundDestination) {
+	if !errors.Is(err, context.Canceled) || errors.Is(err, ErrTenantOutboundDestination) {
 		t.Fatalf("cancellation lost: %v", err)
 	}
 }

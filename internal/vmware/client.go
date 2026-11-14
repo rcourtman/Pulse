@@ -708,6 +708,12 @@ func classifyTransportError(stage string, err error) error {
 	if err == nil {
 		return nil
 	}
+	if errors.Is(err, securityutil.ErrTenantOutboundDestination) {
+		// Preserve a useful refusal without exposing untrusted endpoint or
+		// transport text. This is configuration policy, not failed VMware
+		// credentials, TLS verification or a request to widen VMware grants.
+		return &ConnectionError{Category: "invalid_config", Message: "VMware destination is not available to organization administrators. An instance administrator can add this connection."}
+	}
 	lower := strings.ToLower(err.Error())
 	if strings.Contains(lower, "x509") || strings.Contains(lower, "certificate") || strings.Contains(lower, "tls") {
 		return &ConnectionError{Category: "tls", Message: fmt.Sprintf("VMware TLS validation failed during %s", stage)}
