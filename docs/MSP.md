@@ -465,7 +465,8 @@ Client workspaces renew a one-day lease from the control plane. A client that
 cannot renew loses its MSP capabilities and falls back to Community behaviour until
 it can, so core monitoring keeps running. Renewal stays on the deployment's Docker
 network, so `DOMAIN` can point at a private address. Client runtimes from v6.7.0 or
-earlier renew over the host's own network and lock instead of falling back;
+earlier renew over the host's own network and lock instead of falling back: for
+them `DOMAIN` must be a public address that containers on this host can reach.
 `upgrade.sh --rollout-tenants` moves them on.
 
 `setup.sh` also resolves the four image pins from their published tags when
