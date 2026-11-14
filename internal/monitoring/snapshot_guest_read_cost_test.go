@@ -105,7 +105,7 @@ func TestSnapshotGuestReadKeepsTargetsNamesTagsAndEvidence(t *testing.T) {
 					wantType, wantNode = "lxc", "node-b"
 				}
 				want := models.GuestSnapshot{ID: fmt.Sprintf("site-%s-%d-weekly", wantNode, row.VMID), Instance: "site", Node: wantNode, VMID: row.VMID, Type: wantType,
-					Name: "weekly", Time: time.Unix(1700000000, 0), Description: "accepted listing", Parent: "base", VMState: wantType == "qemu"}
+					Name: "weekly", Time: time.Unix(1700000000, 0), Description: "accepted listing", Parent: "base"}
 				if !reflect.DeepEqual(row, want) {
 					t.Fatalf("snapshot projection changed: got %+v, want %+v", row, want)
 				}

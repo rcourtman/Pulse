@@ -121,6 +121,53 @@ func TestSnapshotInventoryAcceptedScopedAndExtendedResponses(t *testing.T) {
 	}
 }
 
+func TestSnapshotInventoryMemoryFlagAdmission(t *testing.T) {
+	for _, kind := range []string{"qemu", "lxc"} {
+		t.Run(kind, func(t *testing.T) {
+			for _, tc := range []struct {
+				name, flag string
+				memory     int
+				valid      bool
+			}{
+				{"omitted", "", 0, true},
+				{"disk-only", `,"vmstate":0`, 0, true},
+				{"with-memory", `,"vmstate":1`, 1, true},
+				{"null", `,"vmstate":null`, 0, false},
+				{"boolean", `,"vmstate":true`, 0, false},
+				{"string", `,"vmstate":"1"`, 0, false},
+				{"negative", `,"vmstate":-1`, 0, false},
+				{"other-integer", `,"vmstate":2`, 0, false},
+				{"fraction", `,"vmstate":0.5`, 0, false},
+				{"duplicate", `,"vmstate":1,"vmstate":0`, 0, false},
+				{"escaped-duplicate", `,"vmstate":1,"vm\u0073tate":0`, 0, false},
+				{"case-overwrite", `,"vmstate":1,"VMState":0`, 0, false},
+				{"case-only", `,"VMState":1`, 0, false},
+			} {
+				t.Run(tc.name, func(t *testing.T) {
+					body := `{"data":[{"name":"current"},{"name":"weekly","snaptime":1700000000` + tc.flag + `}]}`
+					var requests atomic.Int32
+					server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+						requests.Add(1)
+						fmt.Fprint(w, body)
+					}))
+					defer server.Close()
+					rows, err := readTestSnapshotInventory(backupTestClient(t, server.URL), kind)
+					if !tc.valid {
+						if err == nil || rows != nil {
+							t.Fatalf("ambiguous memory evidence admitted: rows=%+v err=%v", rows, err)
+						}
+					} else if err != nil || len(rows) != 1 || rows[0].VMState != tc.memory || rows[0].VMID != 105 || rows[0].Name != "weekly" || rows[0].SnapTime != 1700000000 {
+						t.Fatalf("memory evidence lost: rows=%+v err=%v", rows, err)
+					}
+					if requests.Load() != 1 {
+						t.Errorf("memory inventory replayed: %d requests", requests.Load())
+					}
+				})
+			}
+		})
+	}
+}
+
 type snapshotCloseFailure struct {
 	io.Reader
 	closed bool

@@ -128,7 +128,7 @@ func testSnapshotPollWorkersBoundWaitingAndActiveWork(t *testing.T) {
 					}
 					kind := previous[fmt.Sprintf("%s/%d", row.Type, row.VMID)].Type
 					require.NotEmpty(t, kind, "snapshot belongs to an eligible typed guest")
-					require.Equal(t, models.GuestSnapshot{ID: fmt.Sprintf("site-node-%d-fresh", row.VMID), Instance: "site", Node: "node", VMID: row.VMID, Type: kind, Name: "fresh", Time: time.Unix(1700000100, 0), Description: "accepted", VMState: kind == "qemu"}, row)
+					require.Equal(t, models.GuestSnapshot{ID: fmt.Sprintf("site-node-%d-fresh", row.VMID), Instance: "site", Node: "node", VMID: row.VMID, Type: kind, Name: "fresh", Time: time.Unix(1700000100, 0), Description: "accepted"}, row)
 				}
 			})
 		})

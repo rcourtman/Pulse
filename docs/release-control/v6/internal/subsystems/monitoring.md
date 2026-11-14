@@ -17,6 +17,32 @@
 
 ## Purpose
 
+### Snapshot memory state comes from the snapshot, not its guest kind (14 November 2026)
+
+The existing snapshot memory boolean is true only for a QEMU snapshot whose
+accepted PVE inventory explicitly reports `vmstate: 1`. Disk-only (`0`) and
+legacy omitted flags do not claim saved memory; LXC snapshots never do. The
+same observation flows through live backup/state JSON, recovery `vmState`
+metadata and the existing `pulse_storage` snapshots `vm_state` response. The
+public boolean shapes, snapshot identity, dates, descriptions and parents do
+not change. This is snapshot metadata, not a claim of restorability or native
+freeze/thaw acceptance. The dedicated Backups table does not render the flag;
+investigation threads can display it in their existing generic tool output.
+
+A present flag must be integer `0` or `1`. Null, wrong-type, other-valued,
+duplicate/escaped-duplicate and case-overwritten flags make the listing unread;
+they neither replace last accepted snapshots nor establish their removal.
+An ordinary valid listing recovers without a restart or wider permissions.
+Unread retained observations are not retrospectively rewritten.
+`TestSnapshotInventoryMemoryFlagAdmission` exercises both HTTP readers.
+`TestSnapshotMemoryEvidenceReachesExistingConsumers` exercises both guest kinds
+through the real HTTP client, collector, public-state serialization, recovery
+mapping/JSON round-trip and existing agent read, including invalid-success
+continuity, ordinary recovery and scoped empty removal. Its recovery provider
+is in-memory; it opens no database and executes no guest command. The existing
+worker-bound and unused-detail fixtures retain their targets and metadata but
+now expect no memory claim from a provider that supplied no flag.
+
 ### Tenant appliance policy follows each connection (14 November 2026)
 
 The existing tenant destination rule is enforced at each new TrueNAS REST or
