@@ -159,17 +159,8 @@ func (p *PatrolService) patrolRunnableActionLines(subject *unifiedresources.Reso
 		return nil
 	}
 	powerMatters := !patrolAlertIsAboutSpaceOrAge(alertType)
-	resourceID := subject.ID
-	p.mu.RLock()
-	lookup := p.actionCapabilityLookup
-	p.mu.RUnlock()
-	if lookup == nil {
-		return nil
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), patrolActionCapabilityLookupTimeout)
-	defer cancel()
-	catalog, err := lookup(ctx, resourceID)
-	if err != nil {
+	catalog, ok := p.patrolActionCatalog(subject.ID)
+	if !ok {
 		return nil
 	}
 
@@ -258,6 +249,38 @@ func (p *PatrolService) patrolRunnableActionLines(subject *unifiedresources.Reso
 			reason, hostName))
 	}
 	return lines
+}
+
+// patrolActionCatalog asks the action broker's catalog for a resource. It
+// reports false when Pulse has no lookup or the lookup failed.
+func (p *PatrolService) patrolActionCatalog(resourceID string) (aicontracts.ActionCapabilityCatalog, bool) {
+	if p == nil {
+		return aicontracts.ActionCapabilityCatalog{}, false
+	}
+	p.mu.RLock()
+	lookup := p.actionCapabilityLookup
+	p.mu.RUnlock()
+	if lookup == nil {
+		return aicontracts.ActionCapabilityCatalog{}, false
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), patrolActionCapabilityLookupTimeout)
+	defer cancel()
+	catalog, err := lookup(ctx, resourceID)
+	if err != nil {
+		return aicontracts.ActionCapabilityCatalog{}, false
+	}
+	return catalog, true
+}
+
+// patrolAlertSubjectGuestReadable reports whether the resource an alert run
+// looks at is a running Proxmox guest Pulse can read inside.
+func (p *PatrolService) patrolAlertSubjectGuestReadable(scope *PatrolScope, snap patrolRuntimeState) bool {
+	subject := patrolAlertSubjectResource(scope, snap)
+	if !patrolResourceIsRunningProxmoxGuest(subject) {
+		return false
+	}
+	catalog, ok := p.patrolActionCatalog(subject.ID)
+	return ok && catalog.Reads != nil && catalog.CommandsDisabled == nil
 }
 
 // patrolResourceIsRunningProxmoxGuest reports whether a resource is a Proxmox

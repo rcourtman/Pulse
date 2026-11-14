@@ -4877,7 +4877,11 @@ Proxmox, and runs wrote that Pulse had no command or log access and raised
 nothing. Given only the read fact, a sustained check still kept to "do not
 report a finding that only repeats the alert's reading", so on a disk alert
 the line also says to report a finding when the check cannot tell what fills
-the disk, because its investigation reads that. A disk, usage, storage, backup-age or snapshot-age alert
+the disk, because its investigation reads that. The run's closing
+finding-decision question (`patrolFindingDecisionPrompt`) had the last word
+and still offered "a reading with nothing known beyond the alert itself" as a
+reason to record nothing, so for that alert it now says the unseen cause is
+one to record and drops that exit. A disk, usage, storage, backup-age or snapshot-age alert
 (`patrolAlertIsAboutSpaceOrAge`) also leaves out the node's refused power
 actions and the start-on-boot line: no start, stop or restart changes them.
 Fault set `pve-v1` cell P2 is the replay. Proof:
