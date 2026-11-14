@@ -473,9 +473,10 @@ func TestAlertRunSeedSaysPulseCanReadInsideAGuestItCannotPowerCycle(t *testing.T
 		}
 	}
 	const readsInside = `Pulse can read disk usage, files and logs inside "gitea" through the Pulse agent on delly. This check cannot read them; an investigation of a finding can.`
+	const reportOnDisk = "So when you cannot tell from here what fills the disk, report a finding: its investigation reads what does, and that is not a finding that only repeats the alert."
 
 	disk := seed(t, "disk", "running", false, guestOnRunnerlessNodeCatalog("delly", "container"))
-	has(t, "disk alert", disk, readsInside)
+	has(t, "disk alert", disk, readsInside+" "+reportOnDisk)
 	lacks(t, "disk alert", disk, "Use Proxmox", "cannot stop or restart", "Pulse cannot run an action", "Pulse has no action", "Start on boot")
 
 	// A runnable action still bears on any alert and is still named.
@@ -487,6 +488,7 @@ func TestAlertRunSeedSaysPulseCanReadInsideAGuestItCannotPowerCycle(t *testing.T
 	// Memory pressure can be a reason to restart, so the refusal stays.
 	memory := seed(t, "memory", "running", false, guestOnRunnerlessNodeCatalog("delly", "container"))
 	has(t, "memory alert", memory, `Pulse cannot run an action for "gitea". Pulse cannot stop or restart guests on delly`, readsInside, "Start on boot is on for this guest.")
+	lacks(t, "memory alert", memory, reportOnDisk)
 
 	// A stopped guest cannot be read inside.
 	stopped := seed(t, "powered-off", "stopped", false, guestOnRunnerlessNodeCatalog("delly", "container"))

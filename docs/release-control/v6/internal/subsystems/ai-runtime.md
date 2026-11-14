@@ -4874,7 +4874,10 @@ agent). The alert check has no agent reads, so the line says the investigation
 a finding starts can read there. A guest disk alert on a node with commands on
 and no action runner was told only that Pulse cannot run an action and to use
 Proxmox, and runs wrote that Pulse had no command or log access and raised
-nothing. A disk, usage, storage, backup-age or snapshot-age alert
+nothing. Given only the read fact, a sustained check still kept to "do not
+report a finding that only repeats the alert's reading", so on a disk alert
+the line also says to report a finding when the check cannot tell what fills
+the disk, because its investigation reads that. A disk, usage, storage, backup-age or snapshot-age alert
 (`patrolAlertIsAboutSpaceOrAge`) also leaves out the node's refused power
 actions and the start-on-boot line: no start, stop or restart changes them.
 Fault set `pve-v1` cell P2 is the replay. Proof:

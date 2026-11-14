@@ -87,7 +87,7 @@ func (p *PatrolService) patrolAlertSubjectFacts(scope *PatrolScope, snap patrolR
 		if name == "" {
 			name = strings.TrimSpace(alertResourceName)
 		}
-		lines = append(lines, p.patrolRunnableActionLines(subject, name, powerMatters)...)
+		lines = append(lines, p.patrolRunnableActionLines(subject, name, alertType)...)
 	}
 
 	if onBoot, stopped, isGuest := patrolAlertGuestStartOnBoot(alertResourceID, snap); powerMatters && isGuest && onBoot != nil {
@@ -152,12 +152,13 @@ func patrolAlertIsAboutSpaceOrAge(alertType string) bool {
 
 // patrolRunnableActionLines states what Pulse can run for a resource, and
 // what it can read inside a Proxmox guest, from the same catalog an
-// investigation is given. With powerMatters false, the guest power actions
+// investigation is given. For a space or age alert the guest power actions
 // its node refuses are left out.
-func (p *PatrolService) patrolRunnableActionLines(subject *unifiedresources.Resource, name string, powerMatters bool) []string {
+func (p *PatrolService) patrolRunnableActionLines(subject *unifiedresources.Resource, name, alertType string) []string {
 	if p == nil || subject == nil {
 		return nil
 	}
+	powerMatters := !patrolAlertIsAboutSpaceOrAge(alertType)
 	resourceID := subject.ID
 	p.mu.RLock()
 	lookup := p.actionCapabilityLookup
@@ -234,7 +235,15 @@ func (p *PatrolService) patrolRunnableActionLines(subject *unifiedresources.Reso
 		}
 		// This check has no agent reads (PatrolDetectionToolNamesForResourceTypes);
 		// the investigation a finding starts has them.
-		lines = append(lines, fmt.Sprintf("Pulse can read disk usage, files and logs inside %q %s. This check cannot read them; an investigation of a finding can.", name, through))
+		line := fmt.Sprintf("Pulse can read disk usage, files and logs inside %q %s. This check cannot read them; an investigation of a finding can.", name, through)
+		// Told only that a read was possible, a sustained check on a guest
+		// disk alert still kept to "do not report a finding that only repeats
+		// the alert's reading" and raised nothing. Here the finding is what
+		// gets the folder named.
+		if strings.EqualFold(strings.TrimSpace(alertType), "disk") {
+			line += " So when you cannot tell from here what fills the disk, report a finding: its investigation reads what does, and that is not a finding that only repeats the alert."
+		}
+		lines = append(lines, line)
 	}
 	if host := catalog.CommandsDisabled; host != nil {
 		hostName := strings.TrimSpace(host.HostName)
