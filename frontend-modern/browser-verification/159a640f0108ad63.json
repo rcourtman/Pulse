@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "d5eb3eb59cfdd37889412e2a52b0dc2297460d6f",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/RolesEditorDialog.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/RolesEditorDialog.tsx": "c9212f6da932a32e228c836eebcbe41a717699a9ca81ef00ec2a4c18c46bd766"
+  },
+  "routes": [
+    "Settings > Security > Roles (real RolesPanel, state owner, RBACAPI and apiClient; synthetic offline transport)"
+  ],
+  "states": [
+    "Saved three-rule role including unknown options and saved constraints",
+    "Middle action/resource changes; same DOM nodes retain focus",
+    "First-rule removal, reindexed remaining rules, independent least-privilege append",
+    "One explicit PUT, exact serialized readback and reopened editor; cancellation without write"
+  ],
+  "interactions": [
+    "Focus and select native action/resource controls; Tab advances to the matching resource in Chromium and WebKit",
+    "Identify indexed current-value removal buttons, remove first rule, append and edit last rule",
+    "Save and reopen actual dispatched-body readback; cancel another draft without mutating saved state"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "verified_at": "2026-11-14T14:24:54Z",
+  "browsers": [
+    "Chromium 141.0.7390.37",
+    "WebKit 26.0"
+  ],
+  "playwright": "1.56.1",
+  "themes": [
+    "light",
+    "dark"
+  ],
+  "assertions": 169,
+  "baseline_assertions": 129,
+  "captures": "Eight comparable pairs (16 captures) inspected through native view_image; both phases copied into the current worker output.",
+  "evidence": "RECEIPTS.md and PAIRS.json in current lane outcome; browser scripts are evidence only, not source.",
+  "limits": [
+    "Not full App/IdP, original-client recovery, installed acceptance or screen-reader speech testing.",
+    "An earlier separately retained exploratory run used a stale canonical dependency tree; final before/after runs used the exact locked graph."
+  ]
+}

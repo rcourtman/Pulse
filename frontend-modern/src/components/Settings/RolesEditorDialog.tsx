@@ -1,4 +1,4 @@
-import { Component, For, Show } from 'solid-js';
+import { Component, For, Index, Show } from 'solid-js';
 import { InlineNotice } from '@/components/shared/InlineNotice';
 import { Dialog } from '@/components/shared/Dialog';
 import { FormSelect } from '@/components/shared/FormSelect';
@@ -129,25 +129,29 @@ export const RolesEditorDialog: Component<RolesEditorDialogProps> = (props) => (
               </div>
 
               <div class="space-y-2">
-                <For each={props.formPermissions}>
+                {/* Draft updates replace permission objects. Keep the indexed controls
+                    mounted so changing a value does not discard keyboard focus. */}
+                <Index each={props.formPermissions}>
                   {(permission, index) => (
                     <div class="flex flex-col sm:flex-row sm:items-center gap-2">
                       <FormSelect
-                        label={`Permission ${index() + 1} action`}
+                        label={`Permission ${index + 1} action`}
                         labelClass="sr-only"
                         fieldBaseClass="contents"
-                        value={permission.action}
+                        value={permission().action}
                         onChange={(event) =>
-                          props.onUpdatePermission(index(), 'action', event.currentTarget.value)
+                          props.onUpdatePermission(index, 'action', event.currentTarget.value)
                         }
                         selectBaseClass="w-full sm:flex-1 rounded-md border border-border bg-surface px-2 py-1.5 text-sm text-base-content"
                       >
                         <Show
                           when={
-                            !RBAC_PERMISSION_ACTIONS.some((action) => action === permission.action)
+                            !RBAC_PERMISSION_ACTIONS.some(
+                              (action) => action === permission().action,
+                            )
                           }
                         >
-                          <option value={permission.action}>{permission.action}</option>
+                          <option value={permission().action}>{permission().action}</option>
                         </Show>
                         <For each={RBAC_PERMISSION_ACTIONS}>
                           {(action) => <option value={action}>{action}</option>}
@@ -155,23 +159,23 @@ export const RolesEditorDialog: Component<RolesEditorDialogProps> = (props) => (
                       </FormSelect>
                       <span class="hidden sm:inline text-slate-400 text-sm">:</span>
                       <FormSelect
-                        label={`Permission ${index() + 1} resource`}
+                        label={`Permission ${index + 1} resource`}
                         labelClass="sr-only"
                         fieldBaseClass="contents"
-                        value={permission.resource}
+                        value={permission().resource}
                         onChange={(event) =>
-                          props.onUpdatePermission(index(), 'resource', event.currentTarget.value)
+                          props.onUpdatePermission(index, 'resource', event.currentTarget.value)
                         }
                         selectBaseClass="w-full sm:flex-1 rounded-md border bg-surface px-2 py-1.5 text-sm text-base-content"
                       >
                         <Show
                           when={
                             !RBAC_PERMISSION_RESOURCES.some(
-                              (resource) => resource === permission.resource,
+                              (resource) => resource === permission().resource,
                             )
                           }
                         >
-                          <option value={permission.resource}>{permission.resource}</option>
+                          <option value={permission().resource}>{permission().resource}</option>
                         </Show>
                         <For each={RBAC_PERMISSION_RESOURCES}>
                           {(resource) => <option value={resource}>{resource}</option>}
@@ -179,17 +183,17 @@ export const RolesEditorDialog: Component<RolesEditorDialogProps> = (props) => (
                       </FormSelect>
                       <button
                         type="button"
-                        onClick={() => props.onRemovePermission(index())}
+                        onClick={() => props.onRemovePermission(index)}
                         disabled={props.formPermissions.length <= 1}
-                        aria-label="Remove permission"
-                        title="Remove permission"
+                        aria-label={`Remove permission ${index + 1}: ${permission().action}:${permission().resource}`}
+                        title={`Remove permission ${index + 1}: ${permission().action}:${permission().resource}`}
                         class="self-end sm:self-auto p-1.5 text-slate-400 hover:text-red-500 disabled:opacity-30"
                       >
                         <Trash2 class="w-4 h-4" />
                       </button>
                     </div>
                   )}
-                </For>
+                </Index>
               </div>
             </div>
           </fieldset>

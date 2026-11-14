@@ -283,7 +283,7 @@ describe('saved role identities through their rendered rows and real transport',
     fireEvent.input(within(dialog).getByLabelText('Role Name'), {
       target: { value: 'Discarded draft name' },
     });
-    fireEvent.click(within(dialog).getAllByRole('button', { name: 'Remove permission' })[1]);
+    fireEvent.click(within(dialog).getAllByRole('button', { name: /^Remove permission / })[1]);
     fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(saved).toEqual(originalRoles);
