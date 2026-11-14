@@ -270,6 +270,65 @@ func TestVMwarePollerSyncRecordsProviderConstructionFailure(t *testing.T) {
 	}
 }
 
+// The connection editor's VMs, Hosts and Datastores checkboxes must reach the
+// client, and toggling one must rebuild the provider, or the old client keeps
+// collecting the surface the operator just turned off.
+func TestVMwarePollerHonorsCollectionScope(t *testing.T) {
+	base := config.NewVMwareVCenterInstance()
+	if cfg := vmwareClientConfig(base); cfg.SkipVMs || cfg.SkipHosts || cfg.SkipDatastores {
+		t.Fatalf("default scope must collect everything, got %+v", cfg)
+	}
+	for name, tc := range map[string]struct {
+		mutate func(*config.VMwareVCenterInstance)
+		skips  func(vmware.ClientConfig) bool
+	}{
+		"vms":        {func(i *config.VMwareVCenterInstance) { i.MonitorVMs = false }, func(c vmware.ClientConfig) bool { return c.SkipVMs && !c.SkipHosts && !c.SkipDatastores }},
+		"hosts":      {func(i *config.VMwareVCenterInstance) { i.MonitorHosts = false }, func(c vmware.ClientConfig) bool { return c.SkipHosts && !c.SkipVMs && !c.SkipDatastores }},
+		"datastores": {func(i *config.VMwareVCenterInstance) { i.MonitorDatastores = false }, func(c vmware.ClientConfig) bool { return c.SkipDatastores && !c.SkipVMs && !c.SkipHosts }},
+	} {
+		next := base
+		tc.mutate(&next)
+		if !tc.skips(vmwareClientConfig(next)) {
+			t.Fatalf("turning %s off must skip exactly that surface, got %+v", name, vmwareClientConfig(next))
+		}
+	}
+
+	mtp, persistence := newTestTenantPersistence(t)
+	connection := config.NewVMwareVCenterInstance()
+	connection.ID = "vc-scope"
+	connection.Host = "vc.scope.local"
+	connection.Username = "administrator@vsphere.local"
+	connection.Password = "secret"
+	if err := persistence.SaveVMwareConfig([]config.VMwareVCenterInstance{connection}); err != nil {
+		t.Fatalf("SaveVMwareConfig() error = %v", err)
+	}
+
+	var built []config.VMwareVCenterInstance
+	poller := NewVMwarePoller(mtp, time.Minute)
+	poller.newProvider = func(instance config.VMwareVCenterInstance) (vmwarePollerProvider, error) {
+		built = append(built, instance)
+		return &failingVMwarePollerProvider{}, nil
+	}
+
+	poller.syncConnections()
+	poller.syncConnections()
+	if len(built) != 1 {
+		t.Fatalf("unchanged config built %d providers, want 1", len(built))
+	}
+
+	connection.MonitorVMs = false
+	if err := persistence.SaveVMwareConfig([]config.VMwareVCenterInstance{connection}); err != nil {
+		t.Fatalf("SaveVMwareConfig() error = %v", err)
+	}
+	poller.syncConnections()
+	if len(built) != 2 {
+		t.Fatalf("turning VMs off built %d providers, want a rebuild", len(built))
+	}
+	if !vmwareClientConfig(built[1]).SkipVMs {
+		t.Fatal("rebuilt provider still collects VMs")
+	}
+}
+
 type failingVMwarePollerProvider struct {
 	err error
 }
