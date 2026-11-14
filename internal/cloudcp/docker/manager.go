@@ -887,6 +887,16 @@ func (m *Manager) tenantTrustedProxyCIDRs(ctx context.Context, networkNames ...s
 		appendCIDR(cidr)
 	}
 
+	// Hosted tenants share a network with other tenants. Network membership
+	// is not proxy authority: only the configured ingress proxies may supply
+	// forwarded identity there. Preserve subnet discovery for the separate,
+	// ownership-checked per-tenant MSP bridges, whose support peers get dynamic
+	// addresses and join after the runtime's environment has been created.
+	if !m.cfg.IsolateTenantNetworks {
+		sort.Strings(values)
+		return values
+	}
+
 	if len(networkNames) == 0 && m != nil {
 		networkNames = []string{m.cfg.Network}
 	}
