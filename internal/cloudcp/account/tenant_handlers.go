@@ -419,10 +419,12 @@ func HandleUpdateTenant(reg *registry.TenantRegistry, billing ...WorkspaceBillin
 		// This is admission only; the transaction reloads its own current snapshot.
 		present, err := reg.GetTenantForAccount(accountID, tenantID)
 		if err != nil {
+			auditEvent(r, "cp_tenant_update", "failure").Err(err).Str("account_id", accountID).Str("tenant_id", tenantID).Str("reason", "tenant_lookup_failed").Msg("Tenant update failed")
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
 		if present == nil {
+			auditEvent(r, "cp_tenant_update", "failure").Str("account_id", accountID).Str("tenant_id", tenantID).Str("reason", "tenant_not_found").Msg("Tenant update failed")
 			http.Error(w, "tenant not found", http.StatusNotFound)
 			return
 		}
@@ -435,6 +437,7 @@ func HandleUpdateTenant(reg *registry.TenantRegistry, billing ...WorkspaceBillin
 		if req.DisplayName != nil {
 			name := strings.TrimSpace(*req.DisplayName)
 			if name == "" {
+				auditEvent(r, "cp_tenant_update", "failure").Str("account_id", accountID).Str("tenant_id", tenantID).Str("reason", "invalid_display_name").Msg("Tenant update failed")
 				http.Error(w, "invalid display_name", http.StatusBadRequest)
 				return
 			}
@@ -448,6 +451,7 @@ func HandleUpdateTenant(reg *registry.TenantRegistry, billing ...WorkspaceBillin
 		if stateVal != nil {
 			state, ok := parseTenantState(*stateVal)
 			if !ok {
+				auditEvent(r, "cp_tenant_update", "failure").Str("account_id", accountID).Str("tenant_id", tenantID).Str("reason", "invalid_state").Msg("Tenant update failed")
 				http.Error(w, "invalid status", http.StatusBadRequest)
 				return
 			}
@@ -576,11 +580,11 @@ func HandleDeleteTenant(reg *registry.TenantRegistry, provisioner WorkspaceProvi
 		r = r.WithContext(ctx)
 		previous, tenant, err := reg.BeginTenantDeletionForAccount(ctx, accountID, tenantID)
 		if err != nil {
-			status, message := http.StatusInternalServerError, "internal error"
+			status, message, reason := http.StatusInternalServerError, "internal error", "tenant_mark_deleting_failed"
 			if errors.Is(err, registry.ErrTenantNotFound) {
-				status, message = http.StatusNotFound, "tenant not found"
+				status, message, reason = http.StatusNotFound, "tenant not found", "tenant_not_found"
 			}
-			auditEvent(r, "cp_tenant_delete", "failure").Err(err).Str("account_id", accountID).Str("tenant_id", tenantID).Str("reason", "tenant_mark_deleting_failed").Msg("Tenant deletion failed")
+			auditEvent(r, "cp_tenant_delete", "failure").Err(err).Str("account_id", accountID).Str("tenant_id", tenantID).Str("reason", reason).Msg("Tenant deletion failed")
 			http.Error(w, message, status)
 			return
 		}
@@ -593,6 +597,7 @@ func HandleDeleteTenant(reg *registry.TenantRegistry, provisioner WorkspaceProvi
 			return
 		}
 		if tenant.State == registry.TenantStateDeleted {
+			auditEvent(r, "cp_tenant_delete", "success").Str("account_id", accountID).Str("tenant_id", tenantID).Str("old_state", string(previousState)).Str("new_state", string(tenant.State)).Msg("Tenant deleted")
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}

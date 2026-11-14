@@ -1076,6 +1076,11 @@ func TestWorkspaceDeletePreservesLatestMetadataAndIsIdempotent(t *testing.T) {
 		current.HealthCheckOK = false
 		return reg.Update(current)
 	}}
+	var audit bytes.Buffer
+	oldLogger := log.Logger
+	log.Logger = zerolog.New(&audit)
+	defer func() { log.Logger = oldLogger }()
+
 	for i := 0; i < 2; i++ {
 		req := httptest.NewRequest(http.MethodDelete, "/", nil)
 		req.SetPathValue("account_id", tenant.AccountID)
@@ -1096,6 +1101,17 @@ func TestWorkspaceDeletePreservesLatestMetadataAndIsIdempotent(t *testing.T) {
 	if p.calls != 1 {
 		t.Fatalf("completed deletion deprovisioned %d times", p.calls)
 	}
+	var events []map[string]any
+	for _, line := range strings.Split(audit.String(), "\n") {
+		var event map[string]any
+		if json.Unmarshal([]byte(line), &event) == nil && event["audit_event"] == "cp_tenant_delete" && event["outcome"] == "success" {
+			events = append(events, event)
+		}
+	}
+	if len(events) != 2 || events[0]["old_state"] != "active" || events[1]["old_state"] != "deleted" || events[0]["new_state"] != "deleted" || events[1]["new_state"] != "deleted" {
+		t.Fatalf("missing or stale deletion audits: %+v", events)
+	}
+
 }
 
 type tenantBillingFunc func(context.Context, *registry.Tenant) error
@@ -1232,5 +1248,51 @@ func TestWorkspaceFailedDeleteRetainsTerminalWithdrawal(t *testing.T) {
 	rows, err := reg.ListHostedEntitlements()
 	if err != nil || len(rows) != 1 || rows[0].RevokedAt == nil {
 		t.Fatalf("failed delete retained refresh authority: %v", err)
+	}
+}
+
+func TestWorkspacePatchPreservesFailureAuditReasons(t *testing.T) {
+	for _, tc := range []struct {
+		name, body, reason string
+		status             int
+	}{
+		{"name", `{"display_name":" "}`, "invalid_display_name", http.StatusBadRequest},
+		{"state", `{"state":"invalid"}`, "invalid_state", http.StatusBadRequest},
+		{"body", `{`, "invalid_json_body", http.StatusBadRequest},
+		{"missing", `{}`, "tenant_not_found", http.StatusNotFound},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			reg := newTestRegistry(t)
+			if err := reg.CreateAccount(&registry.Account{ID: "a-audit", Kind: registry.AccountKindMSP}); err != nil {
+				t.Fatal(err)
+			}
+			tenant := &registry.Tenant{ID: "t-audit", AccountID: "a-audit", State: registry.TenantStateActive}
+			if err := reg.Create(tenant); err != nil {
+				t.Fatal(err)
+			}
+			req := httptest.NewRequest(http.MethodPatch, "/", strings.NewReader(tc.body))
+			req.SetPathValue("account_id", tenant.AccountID)
+			id := tenant.ID
+			if tc.name == "missing" {
+				id = "t-missing"
+			}
+			req.SetPathValue("tenant_id", id)
+			var output bytes.Buffer
+			old := log.Logger
+			log.Logger = zerolog.New(&output)
+			defer func() { log.Logger = old }()
+			res := httptest.NewRecorder()
+			HandleUpdateTenant(reg)(res, req)
+			if res.Code != tc.status {
+				t.Fatalf("status %d, want %d", res.Code, tc.status)
+			}
+			var event map[string]any
+			if err := json.Unmarshal(bytes.TrimSpace(output.Bytes()), &event); err != nil {
+				t.Fatalf("missing/invalid audit: %v", err)
+			}
+			if event["audit_event"] != "cp_tenant_update" || event["outcome"] != "failure" || event["reason"] != tc.reason || event["account_id"] != tenant.AccountID || event["tenant_id"] != id {
+				t.Fatalf("audit lost mutation attribution: %+v", event)
+			}
+		})
 	}
 }
