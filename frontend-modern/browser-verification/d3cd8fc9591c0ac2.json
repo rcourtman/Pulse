@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "c29cec2241a7877e2873b53f78f6ff748ef8da80",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/APITokenManager.tsx",
+    "frontend-modern/src/components/Settings/APITokenManagerDialogs.tsx",
+    "frontend-modern/src/components/Settings/useAPITokenManagerState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/APITokenManager.tsx": "849de7a6cad8e9fb1be5a59abf65f05afee8d90b35472f9ebfafa47a71861760",
+    "frontend-modern/src/components/Settings/APITokenManagerDialogs.tsx": "f2426af2bb7a1e10c23205cde6f5675b9d8adfae983d817f6d5fc84ac018a646",
+    "frontend-modern/src/components/Settings/useAPITokenManagerState.ts": "17de1177aca85e1c654c59108e47f095367c08de30f49ba0b43e64028347042e"
+  },
+  "routes": [
+    "offline fixture /: actual API Access APITokenManager, dialogs, state, SecurityAPI, apiClient and Toast; not full App or a live server"
+  ],
+  "states": [
+    "Definite HTTP403 scope-edit refusal retains draft, masked token hint, expiry/value warning and scope choices",
+    "Definite HTTP403 rename refusal retains name draft, masked hint and unchanged-value/agent guidance",
+    "Pending explicit retry clears refusal and locks Save/Cancel/Escape",
+    "Cancel/reopen and reader/organization retirement clear local feedback; late response ignored",
+    "Uncertain503 closes editor and requires explicit inventory read, with no automatic write replay"
+  ],
+  "interactions": [
+    "Real consuming buttons and HTTP client; only resource/capability context fixed empty",
+    "Toggle Settings(read) then submit; rename draft then submit; compare same fixtures/theme/viewport/inner-list scroll state before and after",
+    "Repeat explicit attempt, Cancel/reopen, uncertain503, inventory check, org switch during pending response",
+    "49 baseline and169 final assertions;16 final source-bound PNGs (8 comparable pairs) opened with native view_image",
+    "No duplicate refusal toast; body siblings remain inert; heading, Full access distinction, selected Settings(read), refusal and both actions remain visible"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "verified_at": "2026-11-14T06:20:18.593553Z",
+  "browsers": [
+    "Playwright1.56.1 Chromium141.0.7390.37 desktop",
+    "Playwright1.56.1 WebKit26.0 narrow"
+  ],
+  "themes": [
+    "light",
+    "dark"
+  ],
+  "evidence": "Current lane RECEIPTS.md, CAPTURES.json, browser-before.json, browser-after.json, PIXEL-OBSERVATIONS.md; fixture/evidence not committed."
+}

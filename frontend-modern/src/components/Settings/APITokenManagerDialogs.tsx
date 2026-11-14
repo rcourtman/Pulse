@@ -1,5 +1,6 @@
 import { Component, For, Show, type Accessor } from 'solid-js';
 import { Dialog } from '@/components/shared/Dialog';
+import { InlineNotice } from '@/components/shared/InlineNotice';
 import type { APIScopeOption } from '@/constants/apiScopes';
 import type { APITokenRecord } from '@/types/api';
 import { getAPITokenHint, getAPITokenIdentityLabel } from './apiTokenManagerModel';
@@ -13,6 +14,8 @@ interface APITokenManagerDialogsProps {
   scopeGroups: Accessor<[APIScopeOption['group'], APIScopeOption[]][]>;
   updatingTokenId: Accessor<string | null>;
   isRenaming: Accessor<boolean>;
+  scopeError?: string | null;
+  renameError?: string | null;
   editScopesChanged: () => boolean;
   onToggleEditScope: (scope: string) => void;
   onCloseScopeEditor: () => void;
@@ -33,7 +36,9 @@ export const APITokenManagerDialogs: Component<APITokenManagerDialogsProps> = (p
         panelClass="max-w-2xl"
         ariaLabel={`Edit API token scopes for ${getAPITokenIdentityLabel(props.tokenToEdit()!)}`}
       >
-        <div class="min-h-0 w-full space-y-5 overflow-y-auto p-6">
+        <div
+          class={`min-h-0 w-full overflow-y-auto px-6 ${props.scopeError ? 'space-y-2 py-3 sm:space-y-3 sm:py-4' : 'space-y-5 py-6'}`}
+        >
           <div>
             <h3 class="text-lg font-semibold text-base-content">
               Edit token scopes{' '}
@@ -105,6 +110,12 @@ export const APITokenManagerDialogs: Component<APITokenManagerDialogsProps> = (p
             </p>
           </Show>
 
+          <Show when={props.scopeError}>
+            <InlineNotice tone="danger" role="alert">
+              {props.scopeError}
+            </InlineNotice>
+          </Show>
+
           <div class="flex justify-end gap-3 border-t border-border pt-4">
             <button
               type="button"
@@ -166,6 +177,11 @@ export const APITokenManagerDialogs: Component<APITokenManagerDialogsProps> = (p
               autofocus
             />
           </label>
+          <Show when={props.renameError}>
+            <InlineNotice tone="danger" role="alert" class="mt-4">
+              {props.renameError}
+            </InlineNotice>
+          </Show>
           <div class="mt-5 flex justify-end gap-3">
             <button
               type="button"

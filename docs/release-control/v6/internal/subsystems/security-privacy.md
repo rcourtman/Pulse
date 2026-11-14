@@ -501,6 +501,15 @@ wire formats, credentials, permissions and extension interfaces are unchanged.
 
 ### Saved credential lifetime is not an access guarantee
 
+Token scope and rename editors present definite refusals within the active
+dialog's accessibility scope. They reuse the existing bounded messages, never
+add raw response bodies or token secrets, and do not leave a duplicate toast
+covering the editor. Pending writes remain locked; a changed reader or authority
+retires local feedback and ignores late results. Unknown outcomes still retire
+the editor and require an explicit inventory read, never a blind repeated write.
+The registered `APITokenEditFeedback.transport.test.tsx` covers these consuming
+boundaries alongside the existing token transport, lifetime and recovery suites.
+
 API Access shows the existing saved expiry metadata in each inventory layout,
 including an explicit UTC instant and elapsed-expiry text. It never calls an
 unreadable saved value non-expiring or treats no expiry as valid authentication.

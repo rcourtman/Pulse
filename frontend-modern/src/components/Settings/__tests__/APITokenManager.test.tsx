@@ -1201,7 +1201,10 @@ describe('APITokenManager', () => {
         expect.objectContaining({ expectedOrgID: 'default', signal: expect.any(AbortSignal) }),
       );
     });
-    expect(notificationErrorMock).toHaveBeenCalledWith('Cannot grant scope "monitoring:read"');
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+      'Cannot grant scope "monitoring:read"',
+    );
+    expect(notificationErrorMock).not.toHaveBeenCalled();
     expect(screen.getByRole('dialog', { name: /^Edit API token scopes / })).toBeInTheDocument();
   });
 
