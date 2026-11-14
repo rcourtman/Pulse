@@ -106,6 +106,10 @@ func TestProxmoxSafetyPreparePreservesAndInventoriesCustomStorage(t *testing.T) 
 func TestProxmoxSafetyCleanupRestoresOnlyAMutatedGuest(t *testing.T) {
 	node := newFakePVENode()
 	manifest := loadPVEManifest(t, "response.pve-guest-stopped-by-person")
+	mutated, err := pveGuestSpec(manifest, manifest.Faults[0].Injector.Resource)
+	if err != nil {
+		t.Fatal(err)
+	}
 	lab := NewProxmoxLab(node, pveTarget)
 	prepared, err := lab.Prepare(context.Background(), manifest, "owned-power")
 	if err != nil {
@@ -115,9 +119,9 @@ func TestProxmoxSafetyCleanupRestoresOnlyAMutatedGuest(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Another actor's change is not a restoration obligation for this run.
-	node.guests[110].status = "stopped"
+	node.guests[112].status = "stopped"
 	result := lab.Cleanup(context.Background(), manifest, prepared)
-	if node.guests[112].status != "running" || node.guests[110].status != "stopped" {
+	if node.guests[mutated.VMID].status != "running" || node.guests[112].status != "stopped" {
 		t.Fatal("cleanup normalized an untouched guest or failed its own obligation")
 	}
 	if result.Passed || result.InventoryUnchanged {
@@ -131,6 +135,10 @@ func TestProxmoxSafetyAdmissionIsRenewedAtApplyAndCleanup(t *testing.T) {
 			t.Run(point+"/"+change, func(t *testing.T) {
 				node := newFakePVENode()
 				manifest := loadPVEManifest(t, "response.pve-guest-stopped-by-person")
+				mutated, err := pveGuestSpec(manifest, manifest.Faults[0].Injector.Resource)
+				if err != nil {
+					t.Fatal(err)
+				}
 				lab := NewProxmoxLab(node, pveTarget)
 				prepared, err := lab.Prepare(context.Background(), manifest, "renew")
 				if err != nil {
@@ -143,9 +151,9 @@ func TestProxmoxSafetyAdmissionIsRenewedAtApplyAndCleanup(t *testing.T) {
 				}
 				switch change {
 				case "marker":
-					node.guests[112].fixture = false
+					node.guests[mutated.VMID].fixture = false
 				case "hostname":
-					node.guests[112].hostname = "replacement"
+					node.guests[mutated.VMID].hostname = "replacement"
 				case "node":
 					node.marker = ""
 				}
@@ -169,13 +177,21 @@ func TestProxmoxSafetyPartialMutationsRemainOwnedForCleanup(t *testing.T) {
 			node := newFakePVENode()
 			scenario := map[string]string{"power": "response.pve-guest-stopped-by-person", "guest": "response.pve-guest-disk-one-folder", "storage": "response.pve-storage-old-backups"}[kind]
 			manifest := loadPVEManifest(t, scenario)
+			powerID := 0
+			if kind == "power" {
+				mutated, err := pveGuestSpec(manifest, manifest.Faults[0].Injector.Resource)
+				if err != nil {
+					t.Fatal(err)
+				}
+				powerID = mutated.VMID
+			}
 			node.guests[111].files[pveGuestFillFile(0)] = true
 			node.dump["existing.log"] = true
 			failed := false
 			runner := pveRunnerFunc(func(ctx context.Context, name string, args ...string) (CommandResult, error) {
 				script := args[len(args)-1]
 				result, err := node.Run(ctx, name, args...)
-				match := kind == "power" && script == "pct stop 112" || kind == "guest" && strings.Contains(script, "dd if=") || kind == "storage" && strings.Contains(script, "fallocate ")
+				match := kind == "power" && script == "pct stop "+strconv.Itoa(powerID) || kind == "guest" && strings.Contains(script, "dd if=") || kind == "storage" && strings.Contains(script, "fallocate ")
 				if match && !failed {
 					failed = true
 					return result, errors.New("inert response lost after partial mutation")
