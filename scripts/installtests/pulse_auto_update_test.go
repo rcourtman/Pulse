@@ -259,6 +259,9 @@ func TestAutoUpdateServiceDeadlines(t *testing.T) {
 // still admits at most Go's existing parallel budget and rejects skips.
 func TestAutoUpdateLogSinkFailures(t *testing.T) {
 	required := []string{
+		"test_fixture_protocol_keeps_missing_empty_partial_and_complete_counter_distinct",
+		"test_fixture_timeout_cannot_be_hidden_by_interrupted_protocol_writes",
+		"test_fixture_success_cannot_hide_malformed_protocol",
 		"test_logger_double_keeps_complete_argument_frames_and_exit_sequence",
 		"test_real_log_retains_each_sink_failure_in_conditional_calls",
 		"test_real_logger_deadline_preserves_stdout_exit_and_owned_cleanup",

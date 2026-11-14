@@ -17,6 +17,7 @@ import sys
 import tempfile
 import time
 import unittest
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -190,7 +191,11 @@ esac
 def read_logger_calls(path):
     if not path.exists():
         return []
-    fields = path.read_bytes().split(b"\0")
+    return decode_logger_calls(path.read_bytes())
+
+
+def decode_logger_calls(data):
+    fields = data.split(b"\0")
     if fields.pop() != b"":
         raise ValueError("unterminated logger argument frame")
     calls, offset = [], 0
@@ -205,6 +210,57 @@ def read_logger_calls(path):
         calls.append([arg.decode("utf-8") for arg in fields[offset:offset + count]])
         offset += count
     return calls
+
+
+def read_fixture_protocol(directory):
+    """Keep interrupted writes as evidence, not another parsing exception.
+
+    A deadline can stop a writer between truncation and printf, in the middle
+    of a JSON line, or in a counted argv frame. Unknown is not zero/empty, and
+    malformed evidence must also fail a command that returned successfully.
+    """
+    def lines(data):
+        if data and not data.endswith(b"\n"):
+            raise ValueError("unterminated line")
+        return data.decode().splitlines()
+
+    def json_lines(data):
+        return [json.loads(line) for line in lines(data)]
+
+    def counter(data):
+        if not data.endswith(b"\n") or not data[:-1].isdigit():
+            raise ValueError("incomplete or invalid collector count")
+        return int(data[:-1])
+
+    definitions = (
+        ("calls", "calls", json_lines, []),
+        ("model_clock", "model-clock", lines, []),
+        ("call_observations", "call-observations", json_lines, []),
+        ("runtime_probes", "runtime-probes", lines, []),
+        ("collected", "collector-count", counter, None),
+        ("logger_calls", "logger-calls", decode_logger_calls, []),
+        ("curl_calls", "curl-calls", decode_logger_calls, []),
+    )
+    values, raw, errors = {}, {}, {}
+    for key, name, decode, absent in definitions:
+        try:
+            data = (directory / name).read_bytes()
+        except FileNotFoundError:
+            values[key] = absent
+            raw[name] = None
+            continue
+        except OSError as error:
+            values[key] = None
+            raw[name] = None
+            errors[name] = type(error).__name__
+            continue
+        raw[name] = data
+        try:
+            values[key] = decode(data)
+        except (UnicodeError, ValueError) as error:
+            values[key] = None
+            errors[name] = str(error)
+    return dict(**values, protocol_raw=raw, protocol_errors=errors)
 
 
 def fixture_session_processes(session):
@@ -320,23 +376,14 @@ class UpdaterFixture(unittest.TestCase):
                 env[f"COLLECTOR_EXIT_{line}"] = str(status)
             start = time.monotonic()
             result, execution = capture_fixture_command(["bash", "-c", HARNESS], env)
-            calls = [json.loads(line) for line in (f / "calls").read_text().splitlines()] if (f / "calls").exists() else []
+            protocol = read_fixture_protocol(f)
             backups = list((f / "tmp").glob("pulse-backup.*"))
             observation = dict(exit=result.returncode, output=result.stdout.decode(), error=result.stderr.decode(),
                                execution=execution,
-                               model_clock=(f / "model-clock").read_text().splitlines()
-                               if (f / "model-clock").exists() else [],
-                               call_observations=[json.loads(line) for line in (f / "call-observations").read_text().splitlines()]
-                               if (f / "call-observations").exists() else [],
-                               elapsed=time.monotonic() - start, calls=calls,
+                               elapsed=time.monotonic() - start, **protocol,
                                downloaded=(f / "downloads").exists(), temporary=(f / "temp-requests").exists(),
                                installed=(f / "installer-ran").exists(), stopped=(f / "stop-ran").exists(),
                                installer_finished=(f / "installer-finished").exists(),
-                               runtime_probes=(f / "runtime-probes").read_text().splitlines()
-                               if (f / "runtime-probes").exists() else [],
-                               collected=int((f / "collector-count").read_text()) if (f / "collector-count").exists() else 0,
-                               logger_calls=read_logger_calls(f / "logger-calls"),
-                               curl_calls=read_logger_calls(f / "curl-calls"),
                                temporary_files=[p.name for p in (f / "tmp").iterdir()],
                                started=(f / "start-ran").exists(), state=(f / "state").read_text().strip(),
                                binary=(f / "install/bin/pulse").read_bytes(), version=(f / "install/VERSION").read_text(),
@@ -346,10 +393,11 @@ class UpdaterFixture(unittest.TestCase):
             # removes the fixture. A killed/late command remains a failed test,
             # even if its TERM trap exits zero. This does not explain old timeouts.
             self.assertFalse(execution["timed_out"], observation)
+            self.assertEqual(protocol["protocol_errors"], {}, observation)
             self.assertEqual(observation["settings"], "operator settings\n")
             self.assertEqual(observation["identity"], "original identity\n")
             self.assertNotIn("trap leaked", observation["output"])
-            for args in calls:
+            for args in protocol["calls"]:
                 # All read/mutation calls target the exact explicit service.
                 self.assertIn("pulse-custom@department", args)
             return observation
@@ -395,6 +443,76 @@ class UpdateDownloads(UpdaterFixture):
 
 
 class UpdateLogSinks(UpdaterFixture):
+    def test_fixture_protocol_keeps_missing_empty_partial_and_complete_counter_distinct(self):
+        with tempfile.TemporaryDirectory(prefix="pulse-updater-observation-") as directory:
+            f = Path(directory)
+            observation = read_fixture_protocol(f)
+            self.assertIsNone(observation["collected"])
+            self.assertIsNone(observation["protocol_raw"]["collector-count"])
+            self.assertEqual(observation["protocol_errors"], {})
+            for data in (b"", b"6", b"6\n7\n", b"-1\n", b"bad\n"):
+                with self.subTest(data=data):
+                    (f / "collector-count").write_bytes(data)
+                    observation = read_fixture_protocol(f)
+                    self.assertIsNone(observation["collected"])
+                    self.assertEqual(observation["protocol_raw"]["collector-count"], data)
+                    self.assertIn("collector-count", observation["protocol_errors"])
+            for value in (0, 66):
+                (f / "collector-count").write_text(f"{value}\n")
+                observation = read_fixture_protocol(f)
+                self.assertEqual(observation["collected"], value)
+                self.assertEqual(observation["protocol_errors"], {})
+
+    def test_fixture_timeout_cannot_be_hidden_by_interrupted_protocol_writes(self):
+        capture = capture_fixture_command
+        observed = []
+
+        def interrupted(_argv, env):
+            # Actually stop an owned command with each interrupted protocol
+            # shape, rather than guessing a historical writer's signal phase.
+            command = r'''
+printf 'partial fixture stdout\n'
+printf 'partial fixture stderr\n' >&2
+: > "$FIXTURE/collector-count"
+printf '{' > "$FIXTURE/call-observations"
+printf '2\000only-one-arg\000' > "$FIXTURE/logger-calls"
+exec sleep 30
+'''
+            result, execution = capture(["bash", "-c", command], env, timeout=0.2)
+            observed.append(execution)
+            return result, execution
+
+        with mock.patch(__name__ + ".capture_fixture_command", side_effect=interrupted):
+            with self.assertRaises(AssertionError) as failure:
+                self.run_fixture()
+        # This must be the real deadline assertion with raw evidence, not
+        # int(''), a JSON exception, an argv-frame exception, or a false pass.
+        message = str(failure.exception)
+        for retained in ("'timed_out': True", "'leader_reaped': True", "partial fixture stdout",
+                         "partial fixture stderr", "'collector-count': b''",
+                         "'call-observations': b'{'", "only-one-arg", "'collected': None",
+                         "'protocol_errors':"):
+            self.assertIn(retained, message)
+        self.assertTrue(observed[0]["leader_reaped"], observed)
+        if observed[0]["owned_before_stop"] is not None:
+            self.assertTrue(observed[0]["owned_before_stop"], observed)
+            self.assertEqual(observed[0]["owned_after_drain"], [], observed)
+
+    def test_fixture_success_cannot_hide_malformed_protocol(self):
+        for name, data in (("collector-count", b""), ("calls", b"["),
+                           ("logger-calls", b"2\0one\0"), ("curl-calls", b"1\0partial")):
+            with self.subTest(name=name):
+                def malformed(argv, env):
+                    (Path(env["FIXTURE"]) / name).write_bytes(data)
+                    return subprocess.CompletedProcess(argv, 0, b"", b""), dict(timed_out=False)
+
+                with mock.patch(__name__ + ".capture_fixture_command", side_effect=malformed):
+                    with self.assertRaises(AssertionError) as failure:
+                        self.run_fixture()
+                self.assertIn("'timed_out': False", str(failure.exception))
+                self.assertIn(name, str(failure.exception))
+                self.assertIn("'protocol_errors':", str(failure.exception))
+
     def test_logger_double_keeps_complete_argument_frames_and_exit_sequence(self):
         with tempfile.TemporaryDirectory(prefix="pulse-updater-logger-") as directory:
             f = Path(directory)
