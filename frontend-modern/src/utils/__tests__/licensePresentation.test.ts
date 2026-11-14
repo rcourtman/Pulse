@@ -107,6 +107,9 @@ describe('licensePresentation', () => {
       mspReferralBody:
         'Managing infrastructure for clients? Pulse MSP is a separate self-hosted install with an isolated workspace for each client. Evaluate two clients free for 60 days.',
       mspReferralActionLabel: 'See Pulse MSP',
+      infrastructureMspReferralBody:
+        'Managing infrastructure for clients? Pulse MSP gives each client an isolated workspace. Two clients are free for 60 days.',
+      infrastructureMspReferralDismissLabel: 'Hide the Pulse MSP suggestion',
     });
   });
 
