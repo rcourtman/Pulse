@@ -161,9 +161,21 @@ func testSnapshotMemoryEvidenceReachesExistingConsumers(t *testing.T) {
 	// A malformed success is unread, not a replacement memory verdict or
 	// removal. Recovery resumes on the next ordinary accepted inventory.
 	previous := poll(`{"data":[{"name":"weekly","snaptime":1700000000,"vmstate":1}]}`)
+	byID := func(rows []models.GuestSnapshot) map[string]models.GuestSnapshot {
+		indexed := make(map[string]models.GuestSnapshot, len(rows))
+		for _, row := range rows {
+			indexed[row.ID] = row
+		}
+		return indexed
+	}
+	// State sorts snapshots by creation time; equal-time guests can come
+	// back in either map iteration order. Compare every field by exact ID,
+	// not their incidental order, without hiding duplicates or missing rows.
+	wantPrevious := byID(previous)
 	for _, flag := range []string{`null`, `2`, `true`, `"1"`, `1,"VMState":0`} {
 		rows := poll(`{"data":[{"name":"would-replace","snaptime":1700000100,"vmstate":` + flag + `}]}`)
-		if !reflect.DeepEqual(rows, previous) {
+		indexed := byID(rows)
+		if len(rows) != len(previous) || len(indexed) != len(rows) || !reflect.DeepEqual(indexed, wantPrevious) {
 			t.Errorf("ambiguous vmstate %s replaced accepted evidence: %+v, want %+v", flag, rows, previous)
 		}
 	}
