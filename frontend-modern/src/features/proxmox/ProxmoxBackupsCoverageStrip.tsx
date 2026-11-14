@@ -3,6 +3,7 @@ import ChevronRightIcon from 'lucide-solid/icons/chevron-right';
 import { ProgressBar } from '@/components/shared/ProgressBar';
 import { TableCard } from '@/components/shared/TableCard';
 import { TableCardHeader } from '@/components/shared/TableCardHeader';
+import { useBreakpoint } from '@/hooks/useBreakpoint';
 import type {
   BackupExceptionGroup,
   BackupExceptionTone,
@@ -21,7 +22,7 @@ import type { DatastoreJobFailureGroup } from './proxmoxBackupServerJobs';
 export interface CoverageStripProps {
   title: string;
   verdict: BackupVerdict;
-  // Compact context shown on the right of the header strip.
+  // Inventory context beside the header on desktop and below it on phones.
   tail?: JSX.Element;
   // The rule behind the verdict. Collapsed by default: the counts are the
   // answer, and each workload's own drawer explains its state.
@@ -135,6 +136,7 @@ const RowCells: Component<{ tone: RowTone; label: string; count: number; total: 
 };
 
 export const ProxmoxBackupsCoverageStrip: Component<CoverageStripProps> = (props) => {
+  const { isAtLeast } = useBreakpoint();
   const asides = () =>
     [
       props.verdict.checking > 0 ? `${props.verdict.checking} checking` : null,
@@ -185,11 +187,22 @@ export const ProxmoxBackupsCoverageStrip: Component<CoverageStripProps> = (props
           </span>
         }
         actions={
-          <Show when={props.tail}>
-            <span class="hidden text-[10px] font-medium text-muted sm:inline">{props.tail}</span>
+          <Show when={isAtLeast('sm') && props.tail}>
+            <span class="text-[10px] font-medium text-muted">{props.tail}</span>
           </Show>
         }
       />
+      {/* Completion, running/failed entries and unmatched backups qualify the
+          inventory, not the protected ratio. Keep that context visible without
+          squeezing the verdict or hiding it behind a disclosure on phones. */}
+      <Show when={!isAtLeast('sm') && props.tail}>
+        <div
+          class="border-b border-border px-3 py-1 text-[10px] font-medium text-muted"
+          data-backup-inventory-summary
+        >
+          {props.tail}
+        </div>
+      </Show>
       <Show when={rated() > 0}>
         <ul class="divide-y divide-border" aria-label="Backups that are not protected">
           <For each={props.verdict.exceptions}>
