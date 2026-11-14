@@ -17,6 +17,42 @@
 
 ## Purpose
 
+### Tenant appliance policy follows each connection (14 November 2026)
+
+The existing tenant destination rule is enforced at each new TrueNAS REST or
+WebSocket connection and VMware vCenter HTTP connection, not only before a
+save/test. One bounded DNS answer is checked in full, then the dialer connects
+only to those numeric addresses. A later dial/reconnect resolves and checks
+again. Proxies are not used for tenant appliance connections because a proxy
+could independently resolve the original name. Original HTTP Host, TLS SNI,
+CA/fingerprint validation, credentials and same-host redirect rules are retained.
+LAN/VPN private addresses remain allowed for self-hosted/provider tenants and
+excluded for Pulse Cloud tenant saves; local/link-local/metadata addresses stay
+excluded in both. Ordinary instance-managed proxy/dial behavior is unchanged.
+
+TrueNAS and VMware saves stamp server-owned `outboundPolicy` provenance from
+the authenticated request. Supplied JSON cannot clear or widen it; it is omitted
+from public connection projections. Pollers reload it from encrypted storage,
+and a policy change rebuilds the client. An explicit instance-authority save
+can take ownership without a tenant restriction. Old records have no saving-actor
+provenance and retain their existing behavior: this repair does not establish
+retroactive protection for them. Unknown nonempty saved policies fail closed.
+Other connection families are not claimed to gain dial-time protection here.
+Failed polls retain prior inventory/success timestamps and report their error,
+not healthy empty state. No History, authority or saved credential is deleted.
+
+`pkg/securityutil/validated_dial_test.go` holds the one-resolution/pinned-IP,
+mixed-answer, rebinding, LAN/Cloud and failure rules. Registered appliance
+`tenant_outbound_test.go` tests use synthetic resolver changes and local
+listeners through real REST, WebSocket and VMware authentication consumers.
+`internal/api/appliance_outbound_policy_test.go` and config
+`connection_outbound_test.go` hold authenticated save/input/projection and
+fresh encrypted reload. Monitoring `appliance_outbound_policy_test.go` exercises
+warm-client replacement, cold saved polling, failed-observation retention and
+explicit instance-managed recovery. These are offline fixture proofs, not
+original-appliance recovery, installed protection or historical exposure.
+
+
 ### Proxmox agent temperatures follow their reporting lease (7 November 2026)
 
 Direct and cluster-sibling temperature readings are current only inside the

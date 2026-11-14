@@ -154,38 +154,74 @@ func resolvePermittedOutboundIP(ctx context.Context, host string, opts Restricte
 // dialer: that client may pick any resolved address, so one blocked address is
 // enough to refuse the host. A host that does not resolve is refused too.
 func ValidateOutboundHost(ctx context.Context, host string, opts RestrictedOutboundHTTPOptions) error {
+	_, err := resolveValidatedOutboundIPs(ctx, host, opts)
+	return err
+}
+
+// resolveValidatedOutboundIPs keeps validation and dialing on the same DNS
+// answer. Unlike fetch policy (which can discard blocked answers), connection
+// policy refuses the whole name when any answer is blocked.
+func resolveValidatedOutboundIPs(ctx context.Context, host string, opts RestrictedOutboundHTTPOptions) ([]net.IP, error) {
 	host = strings.TrimSpace(host)
 	if host == "" {
-		return fmt.Errorf("hostname is required")
+		return nil, fmt.Errorf("hostname is required")
 	}
 	switch strings.ToLower(strings.TrimSuffix(host, ".")) {
 	case "metadata.google.internal", "metadata.goog":
-		return fmt.Errorf("metadata service host is not allowed")
+		return nil, fmt.Errorf("metadata service host is not allowed")
 	}
 	if ip := net.ParseIP(host); ip != nil {
-		return validateOutboundIP(ip, opts)
+		if err := validateOutboundIP(ip, opts); err != nil {
+			return nil, err
+		}
+		return []net.IP{ip}, nil
 	}
 
-	baseCtx := ctx
-	if baseCtx == nil {
-		baseCtx = context.Background()
+	if ctx == nil {
+		ctx = context.Background()
 	}
-	resolveCtx, cancel := context.WithTimeout(baseCtx, 5*time.Second)
+	resolveCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
 	addrs, err := resolveOutboundIPAddrs(resolveCtx, host, opts)
 	if err != nil {
-		return fmt.Errorf("failed to resolve hostname %s: %w", host, err)
+		return nil, fmt.Errorf("failed to resolve hostname %s: %w", host, err)
 	}
 	if len(addrs) == 0 {
-		return fmt.Errorf("hostname %s did not resolve", host)
+		return nil, fmt.Errorf("hostname %s did not resolve", host)
 	}
+	ips := make([]net.IP, 0, len(addrs))
 	for _, addr := range addrs {
 		if err := validateOutboundIP(addr.IP, opts); err != nil {
-			return fmt.Errorf("hostname %s resolves to a blocked address: %w", host, err)
+			return nil, fmt.Errorf("hostname %s resolves to a blocked address: %w", host, err)
 		}
+		// Resolver callbacks can reuse their result buffers. Own the approved
+		// bytes before handing them to concurrent pinned-dial workers.
+		ips = append(ips, append(net.IP(nil), addr.IP...))
 	}
-	return nil
+	return ips, nil
+}
+
+// NewValidatedOutboundDialer resolves and validates every address immediately
+// before each new connection, then dials only those numeric addresses. It
+// never asks the underlying dialer to resolve the hostname a second time.
+// TLS callers must keep the original hostname for SNI and verification.
+func NewValidatedOutboundDialer(opts RestrictedOutboundHTTPOptions, timeout time.Duration) func(context.Context, string, string) (net.Conn, error) {
+	return validatedOutboundDialer(opts, timeout, DialPinnedIPs)
+}
+
+func validatedOutboundDialer(opts RestrictedOutboundHTTPOptions, timeout time.Duration, dial func(context.Context, string, string, []net.IP, time.Duration) (net.Conn, error)) func(context.Context, string, string) (net.Conn, error) {
+	return func(ctx context.Context, network, address string) (net.Conn, error) {
+		host, port, err := net.SplitHostPort(address)
+		if err != nil {
+			return nil, fmt.Errorf("parse outbound address %q: %w", address, err)
+		}
+		ips, err := resolveValidatedOutboundIPs(ctx, host, opts)
+		if err != nil {
+			return nil, err
+		}
+		return dial(ctx, network, port, ips, timeout)
+	}
 }
 
 // ValidateOutboundFetchURL validates a fully-qualified HTTP(S) URL against the restricted outbound policy.

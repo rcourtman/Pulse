@@ -438,6 +438,7 @@ func (p *VMwarePoller) providerEntries() []vmwarePollerProviderEntry {
 
 func (p *VMwarePoller) defaultProvider(instance config.VMwareVCenterInstance) (vmwarePollerProvider, error) {
 	client, err := vmware.NewClient(vmware.ClientConfig{
+		OutboundPolicy:     instance.OutboundPolicy,
 		Host:               instance.Host,
 		Port:               instance.Port,
 		Username:           instance.Username,
