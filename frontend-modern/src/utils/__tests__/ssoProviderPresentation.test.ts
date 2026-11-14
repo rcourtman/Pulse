@@ -69,7 +69,8 @@ describe('ssoProviderPresentation', () => {
 
   it('formats provider card and test result tones canonically', () => {
     expect(getSSOProviderCardClass(true)).toContain('bg-surface');
-    expect(getSSOProviderCardClass(false)).toContain('opacity-60');
+    expect(getSSOProviderCardClass(false)).toContain('bg-surface-alt');
+    expect(getSSOProviderCardClass(false)).not.toContain('opacity-');
     expect(getSSOTestResultPresentation(true).panelClass).toContain('bg-green-50');
     expect(getSSOTestResultPresentation(false).panelClass).toContain('bg-red-50');
   });

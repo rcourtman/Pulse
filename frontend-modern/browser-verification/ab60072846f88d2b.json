@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "67fd609df193a8cc7e40ad8ad99300e765343c6f",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx",
+    "frontend-modern/src/utils/ssoProviderPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx": "ab6f6635af69e21beb529e3e0eee55afd3f4b1826a1f6334a777df315ea92d86",
+    "frontend-modern/src/utils/ssoProviderPresentation.ts": "8611cc40399f80e512465c06c63caee9b0334cf3d044bdb66332b67f526d6b78"
+  },
+  "routes": [
+    "Settings > Security > Single Sign-On (real SettingsPageShell, SSOProvidersPanel, useSSOProvidersState and apiClient; synthetic offline transport)"
+  ],
+  "states": [
+    "Same-named enabled/disabled saved providers in administrator inventory",
+    "The same inventory under read-only management, with both native controls disabled",
+    "Pending and explicitly refused activation still uses saved disabled flag; acknowledged activation is followed by real saved-inventory readback"
+  ],
+  "interactions": [
+    "Inspect saved flags and switch descriptions against exact issuer summaries",
+    "Keyboard Space activates intended recovery provider once; no optimistic state during a pending PUT or 403 refusal",
+    "Second explicit activation dispatches one PUT, omits secret/config subobjects and consumes saved readback; reader cannot activate either flag"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "verified_at": "2026-11-14T18:51:46Z",
+  "browsers": [
+    "141.0.7390.37",
+    "26.0"
+  ],
+  "playwright": "1.56.1",
+  "themes": [
+    "light",
+    "dark"
+  ],
+  "assertions": 246,
+  "baseline_assertions": 162,
+  "captures": "24 individually inspected images /12 same-data/view/theme/interaction pairs. Provider-card geometry and controls retained. Detailed output PAIRS.json, CAPTURES.md and PIXEL-OBSERVATIONS.md.",
+  "proof": "RECEIPTS.md in lane outcome; source-32jj80qo baseline and source-p59jd4e0 exact two-runtime-file preview overlays. Containing committed-source proof will verify all served bytes.",
+  "limits": [
+    "Synthetic transport, not live IdP/sign-in, original-client recovery or publication. No screen-reader speech test.",
+    "Initial evidence-only Router fixture failed before captures; corrected and retained separately. Four intentional403 console errors in each completed run."
+  ]
+}

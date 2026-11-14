@@ -258,6 +258,8 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                       <Toggle
                         checked={provider.enabled}
                         ariaLabel={`${provider.enabled ? 'Disable' : 'Enable'} ${provider.name}`}
+                        ariaDescribedBy={summaryId(provider.id)}
+                        label={provider.enabled ? 'Enabled' : 'Disabled'}
                         onChange={() => handleToggleEnabled(provider)}
                         disabled={!canEdit()}
                         containerClass="items-center"
