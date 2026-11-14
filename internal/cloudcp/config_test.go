@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -214,23 +215,31 @@ func TestLoadConfig_DerivesTrialActivationPublicKey(t *testing.T) {
 }
 
 func TestLoadConfig_TrustedProxyCIDRs(t *testing.T) {
-	setRequiredCPEnv(t)
-	t.Setenv("CP_TRUSTED_PROXY_CIDRS", "172.18.0.0/16, 127.0.0.1/32")
-	t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "192.168.0.0/16")
-
-	cfg, err := LoadConfig()
-	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-
-	want := []string{"172.18.0.0/16", "127.0.0.1/32", "192.168.0.0/16"}
-	if len(cfg.TrustedProxyCIDRs) != len(want) {
-		t.Fatalf("len(TrustedProxyCIDRs) = %d, want %d (%v)", len(cfg.TrustedProxyCIDRs), len(want), cfg.TrustedProxyCIDRs)
-	}
-	for i, expected := range want {
-		if cfg.TrustedProxyCIDRs[i] != expected {
-			t.Fatalf("TrustedProxyCIDRs[%d] = %q, want %q", i, cfg.TrustedProxyCIDRs[i], expected)
-		}
+	for _, tc := range []struct {
+		name, primary, fallback string
+		want                    []string
+	}{
+		{"CP setting excludes extra app trust", "172.30.0.2/32, 173.245.48.0/20", "172.30.8.0/21", []string{"172.30.0.2/32", "173.245.48.0/20"}},
+		{"CP only", "172.30.0.2/32", "", []string{"172.30.0.2/32"}},
+		{"legacy app fallback", "", "172.30.0.2/32", []string{"172.30.0.2/32"}},
+		{"blank CP allows fallback", " \t ", " 2001:db8::2 , 2001:db8::2 ", []string{"2001:db8::2"}},
+		{"deduplicate selected setting", " 172.30.0.2/32, ,172.30.0.2/32 ", "172.30.8.0/21", []string{"172.30.0.2/32"}},
+		{"invalid CP does not fall through", "not-a-proxy", "172.30.8.0/21", []string{"not-a-proxy"}},
+		{"empty entries do not fall through", ", ,", "172.30.8.0/21", nil},
+		{"unconfigured", "", "", nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			setRequiredCPEnv(t)
+			t.Setenv("CP_TRUSTED_PROXY_CIDRS", tc.primary)
+			t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", tc.fallback)
+			cfg, err := LoadConfig()
+			if err != nil {
+				t.Fatalf("LoadConfig: %v", err)
+			}
+			if !slices.Equal(cfg.TrustedProxyCIDRs, tc.want) {
+				t.Fatalf("TrustedProxyCIDRs = %v, want %v", cfg.TrustedProxyCIDRs, tc.want)
+			}
+		})
 	}
 }
 
