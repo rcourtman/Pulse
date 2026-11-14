@@ -5832,6 +5832,27 @@ broadcast reads normally trigger that refresh after readPathRegistryFreshness.
 Storeless generations retain explicit links without writing fixture identity
 pins, successions or change history.
 
+### Readers that act on the store refresh it first
+
+A Proxmox guest poll publishes state and runs its alert effects, but does not
+rebuild the canonical store. The store follows at the next accepted agent
+report or frontend or REST read, so a headless reader holding the store can see
+the previous poll for a whole agent-report interval. On 14 November 2026 a
+container's disk alert cleared at 3.3% while the store still held 92%, and the
+Patrol run that clear started reported the disk still full. The monitor
+installs `refreshUnifiedResourceReadForReader` on its `MonitorAdapter` when it
+wires the store, and `unifiedresources.RefreshForRead` runs it: a read-path
+rebuild with a zero freshness window, because a store rebuilt inside
+`readPathRegistryFreshness` can still predate the poll. It does not queue
+behind an ingest that is publishing. Callers refresh once before acting, never
+per lookup. A reader can still hold the store of a monitor a reload stopped,
+so the refresh passes the report-refresh gate: Stop waits for one in flight
+and refuses later ones, and none reads the config the reload rewrites. Proof:
+`TestReaderRefreshPublishesThePollItsAlertJudged` and
+`TestReaderRefreshDoesNothingAfterStop` in
+`internal/monitoring/unified_inventory_read_refresh_test.go`, and
+`TestPatrolHearsAlertsAfterARealMonitorReload` under `-race`.
+
 The cached data view compares fixture freshness and each link's pair, primary
 and creation time through sameManualLinks. The structure view compares the
 fixture structure revision and the same link fields. Changing a link or the

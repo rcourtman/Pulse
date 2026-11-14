@@ -130,9 +130,26 @@ func (g *GraceEnforcer) enforce(ctx context.Context) {
 		}
 
 		// Fallback for legacy callers without a provisioner dependency.
-		tenant.State = registry.TenantStateCanceled
-		if err := g.registry.Update(tenant); err != nil {
-			log.Error().Err(err).Str("tenant_id", tenant.ID).Msg("Grace enforcer: failed to cancel tenant")
-		}
+		g.cancelLegacyTenant(ctx, tenant.ID, cutoff)
+	}
+}
+
+func (g *GraceEnforcer) cancelLegacyTenant(ctx context.Context, id string, cutoff time.Time) {
+	_, lease, err := g.registry.AcquireRuntimeLifecycle(ctx, id)
+	if err != nil {
+		return
+	}
+	defer lease.Close()
+	tenant, err := g.registry.Get(id)
+	if err != nil || tenant == nil {
+		return
+	}
+	sa, err := g.registry.GetStripeAccountByCustomerID(tenant.StripeCustomerID)
+	if err != nil || sa == nil || (sa.SubscriptionState != "past_due" && sa.SubscriptionState != string(pkglicensing.SubStateGrace)) || sa.GraceStartedAt == nil || *sa.GraceStartedAt <= 0 || time.Unix(*sa.GraceStartedAt, 0).UTC().After(cutoff) {
+		return
+	}
+	tenant.State = registry.TenantStateCanceled
+	if err := g.registry.Update(tenant); err != nil {
+		log.Error().Err(err).Str("tenant_id", id).Msg("Grace enforcer: failed to cancel tenant")
 	}
 }

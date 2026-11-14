@@ -5897,6 +5897,12 @@ providers without requiring a tenant snapshot-provider bridge, and
 `internal/api/ai_handlers.go` must not mint tenant-local `StateSnapshot`
 adapters purely to satisfy Patrol when canonical tenant read-state is already
 available.
+A Patrol run, full or scoped, refreshes its read state through
+`unifiedresources.RefreshForRead` before it captures runtime state, so a run an
+alert started reads the poll that alert judged. Without it a disk alert that
+cleared at 3.3% met the store's 92% row, and the check that clear started
+reported the disk still full (14 November 2026, fault set `pve-v1`). Proof:
+`TestPatrolRunsRefreshTheReadStateBeforeReadingIt`.
 That same AI ownership also extends to persisted runtime state under
 `internal/config/persistence.go`: AI findings, usage history, patrol run
 history, and chat sessions must not keep legacy plaintext files on the runtime

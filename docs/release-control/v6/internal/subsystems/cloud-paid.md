@@ -4201,6 +4201,18 @@ runtime. The tenant outbound policy uses it to keep private networks open for
 provider clients and close them on Pulse Cloud. It reads no licence,
 entitlement or billing state, and changes no paid capability.
 
+### Hosted client revisit lands in its workspace (14 November 2026)
+
+A provider who reopened a client address in a new browser session landed in the
+runtime's empty default organization: the handoff's `pulse_org_id` cookie had
+been rewritten as a session cookie and the tab's stored selection was gone. A
+hosted runtime's members now land in the workspace named by `PULSE_TENANT_ID`
+when a request names no organization, `GET /api/orgs` lists that workspace first,
+and the hosted browser bootstrap in `frontend-modern/src/useAppRuntimeState.ts`
+always takes its selection from that list, whatever the licence. A provider
+client may read the list without a lease. An explicit selection still wins, and
+no licence, entitlement or billing state changes.
+
 ### Settings > Infrastructure offers Pulse MSP to provider-sized installs
 
 On 14 November 2026 Richard approved one deliberate exception to keeping

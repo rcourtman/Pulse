@@ -79,14 +79,17 @@ for (const type of ['oidc', 'saml'] as const) {
           render(() => <SSOProvidersPanel currentUser="admin" onConfigUpdated={changed} />);
           const add = await screen.findByRole('button', { name: 'Add OIDC' });
           await waitFor(() => expect(add).toBeEnabled());
+          let activeDialog: HTMLElement | undefined;
           if (operation === 'create' || operation === 'edit') {
             fireEvent.click(
               screen.getByRole('button', {
                 name: operation === 'create' ? `Add ${type.toUpperCase()}` : /^Edit provider /,
               }),
             );
-            const dialog = within(await screen.findByRole('dialog'));
-            fireEvent.input(dialog.getByLabelText('Provider Name'), {
+            activeDialog = await screen.findByRole('dialog');
+            const dialog = within(activeDialog);
+            const name = dialog.getByLabelText('Provider Name');
+            fireEvent.input(name, {
               target: { value: 'Changed provider' },
             });
             if (operation === 'create') {
@@ -112,16 +115,18 @@ for (const type of ['oidc', 'saml'] as const) {
             expect(await dialog.findByRole('alert')).toHaveTextContent(
               'may already have been applied',
             );
-            expect(dialog.getByLabelText('Provider Name')).toHaveValue('Changed provider');
+            expect(name).toHaveValue('Changed provider');
             expect(save).not.toBeInTheDocument();
             fireEvent.submit(form);
           } else if (operation === 'delete') {
             fireEvent.click(screen.getByRole('button', { name: /^Delete provider / }));
-            const confirm = within(screen.getByRole('dialog')).getByRole('button', {
+            activeDialog = screen.getByRole('dialog');
+            const dialog = within(activeDialog);
+            const confirm = dialog.getByRole('button', {
               name: 'Delete Provider',
             });
             fireEvent.click(confirm);
-            expect(await within(screen.getByRole('dialog')).findByRole('alert')).toHaveTextContent(
+            expect(await dialog.findByRole('alert')).toHaveTextContent(
               'may already have been applied',
             );
             expect(confirm).toBeDisabled();
@@ -129,13 +134,12 @@ for (const type of ['oidc', 'saml'] as const) {
           } else {
             const toggle = screen.getByRole('button', { name: 'Disable Saved provider' });
             fireEvent.click(toggle);
-            expect(await screen.findByRole('alert')).toHaveTextContent(
-              'may already have been applied',
-            );
+            const alert = await screen.findByRole('alert');
+            expect(alert).toHaveTextContent('may already have been applied');
             expect(toggle).toBeDisabled();
             fireEvent.click(toggle);
             expect(screen.getByText('Saved provider')).toBeInTheDocument();
-            expect(screen.getByRole('alert')).toHaveTextContent('last successful read');
+            expect(alert).toHaveTextContent('last successful read');
           }
           expect(writes()).toHaveLength(1);
           expect(reads()).toHaveLength(1);
@@ -146,9 +150,8 @@ for (const type of ['oidc', 'saml'] as const) {
           expect(JSON.stringify(logs.error.mock.calls)).not.toContain('PRIVATE_PROVIDER_FAILURE');
 
           failNextRead = true;
-          const recoveryScope = screen.queryByRole('dialog')
-            ? within(screen.getByRole('dialog'))
-            : screen;
+          if (activeDialog) expect(activeDialog).toBeInTheDocument();
+          const recoveryScope = activeDialog ? within(activeDialog) : screen;
           fireEvent.click(
             recoveryScope.getByRole('button', { name: /check providers|Check saved providers/ }),
           );
@@ -157,13 +160,15 @@ for (const type of ['oidc', 'saml'] as const) {
           );
           expect(screen.queryByRole('dialog')).toBeNull();
           expect(screen.queryByText('No SSO providers configured')).toBeNull();
-          expect(screen.getByRole('button', { name: 'Add OIDC' })).toBeDisabled();
+          expect(add).toBeInTheDocument();
+          expect(add).toBeDisabled();
           expect(reads()).toHaveLength(2);
           expect(writes()).toHaveLength(1);
           fireEvent.click(screen.getByRole('button', { name: 'Check saved providers' }));
-          await waitFor(() =>
-            expect(screen.getByRole('button', { name: 'Add OIDC' })).toBeEnabled(),
-          );
+          await waitFor(() => {
+            expect(add).toBeInTheDocument();
+            expect(add).toBeEnabled();
+          });
           expect(reads()).toHaveLength(3);
           expect(writes()).toHaveLength(1);
           expect(document.body).not.toHaveTextContent('could not be confirmed');

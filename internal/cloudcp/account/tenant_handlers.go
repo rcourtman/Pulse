@@ -406,6 +406,13 @@ func HandleUpdateTenant(reg *registry.TenantRegistry) http.HandlerFunc {
 			return
 		}
 
+		ctx, lease, err := reg.AcquireRuntimeLifecycle(r.Context(), tenantID)
+		if err != nil {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		defer lease.Close()
+		r = r.WithContext(ctx)
 		tenant, err := reg.GetTenantForAccount(accountID, tenantID)
 		if err != nil {
 			auditEvent(r, "cp_tenant_update", "failure").
@@ -547,6 +554,13 @@ func HandleDeleteTenant(reg *registry.TenantRegistry, provisioner WorkspaceProvi
 			return
 		}
 
+		ctx, lease, err := reg.AcquireRuntimeLifecycle(r.Context(), tenantID)
+		if err != nil {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		defer lease.Close()
+		r = r.WithContext(ctx)
 		tenant, err := reg.GetTenantForAccount(accountID, tenantID)
 		if err != nil {
 			auditEvent(r, "cp_tenant_delete", "failure").

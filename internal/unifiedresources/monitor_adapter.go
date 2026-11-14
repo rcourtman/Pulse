@@ -39,6 +39,10 @@ type MonitorAdapter struct {
 	// Guarded by mu.
 	changeObserver ResourceChangeObserver
 
+	// readRefresher publishes the owner's latest collected state into this
+	// adapter on behalf of a reader (RefreshForRead). Guarded by mu.
+	readRefresher func()
+
 	// restartBaseline maps each resource the change history recorded before
 	// this process's first diff to its last recorded state. A resource's first
 	// appearance in this run is compared with that state rather than with
@@ -46,6 +50,32 @@ type MonitorAdapter struct {
 	// as new. Guarded by mutationMu.
 	restartBaseline       map[string]string
 	restartBaselineLoaded bool
+}
+
+// SetReadRefresher installs the function RefreshForRead runs: the monitor
+// that feeds this adapter publishes its collected state with it. nil removes
+// it.
+func (a *MonitorAdapter) SetReadRefresher(refresh func()) {
+	if a == nil {
+		return
+	}
+	a.mu.Lock()
+	a.readRefresher = refresh
+	a.mu.Unlock()
+}
+
+// RefreshForRead implements ReadRefresher. The refresher runs without the
+// adapter's locks, because it publishes a new registry into this adapter.
+func (a *MonitorAdapter) RefreshForRead() {
+	if a == nil {
+		return
+	}
+	a.mu.RLock()
+	refresh := a.readRefresher
+	a.mu.RUnlock()
+	if refresh != nil {
+		refresh()
+	}
 }
 
 // ResourceChangeObserver is told about a change the adapter just recorded,

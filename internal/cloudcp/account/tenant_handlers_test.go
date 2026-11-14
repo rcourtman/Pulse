@@ -17,6 +17,7 @@ import (
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/admin"
+	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/lifecycle"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
 	cpstripe "github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/stripe"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -735,5 +736,55 @@ func TestCreateWorkspace_ProviderHostedMSPRefusesNewClientsOnALapsedLicence(t *t
 	lapsed = false
 	if rec := create(); rec.Code != http.StatusCreated {
 		t.Fatalf("create after renewal = %d %q, want 201", rec.Code, rec.Body.String())
+	}
+}
+
+// A rollout and a portal lifecycle write must not change the same tenant at
+// once. Busy/unfinished recovery keeps the existing generic failure response
+// and must not mark deleting, clear the saved runtime ID or rename the tenant.
+func TestWorkspaceWritesRespectRuntimeLifecycle(t *testing.T) {
+	for _, method := range []string{http.MethodDelete, http.MethodPatch} {
+		t.Run(method, func(t *testing.T) {
+			reg := newTestRegistry(t)
+			if err := reg.CreateAccount(&registry.Account{ID: "a-lifecycle", Kind: registry.AccountKindMSP}); err != nil {
+				t.Fatal(err)
+			}
+			tenant := &registry.Tenant{ID: "t-lifecycle", AccountID: "a-lifecycle", State: registry.TenantStateActive, ContainerID: "original", DisplayName: "Original"}
+			if err := reg.Create(tenant); err != nil {
+				t.Fatal(err)
+			}
+			_, lease, err := reg.AcquireRuntimeLifecycle(context.Background(), tenant.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer lease.Close()
+			for _, held := range []bool{false, true} {
+				if held {
+					if err := lease.MarkRecovery(lifecycle.Recovery{TenantID: tenant.ID, Phase: "restore-incomplete"}); err != nil {
+						t.Fatal(err)
+					}
+					_ = lease.Close()
+				}
+				req := httptest.NewRequest(method, "/", strings.NewReader(`{"display_name":"Changed"}`))
+				req.SetPathValue("account_id", tenant.AccountID)
+				req.SetPathValue("tenant_id", tenant.ID)
+				res := httptest.NewRecorder()
+				if method == http.MethodDelete {
+					HandleDeleteTenant(reg, nil)(res, req)
+				} else {
+					HandleUpdateTenant(reg)(res, req)
+				}
+				if res.Code != http.StatusInternalServerError || res.Body.String() != "internal error\n" {
+					t.Fatalf("lifecycle failure response = %d %q", res.Code, res.Body.String())
+				}
+				current, err := reg.Get(tenant.ID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if current.State != registry.TenantStateActive || current.ContainerID != "original" || current.DisplayName != "Original" {
+					t.Fatalf("busy write changed tenant: %+v", current)
+				}
+			}
+		})
 	}
 }

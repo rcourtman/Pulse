@@ -343,7 +343,7 @@ describe('ssoProviderPresentation branch coverage (supplemental)', () => {
 
     it('returns the full disabled-card class string', () => {
       expect(getSSOProviderCardClass(false)).toBe(
-        'p-4 rounded-md border bg-surface-alt border-border opacity-60',
+        'p-4 rounded-md border bg-surface-alt border-border',
       );
     });
   });

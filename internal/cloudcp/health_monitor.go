@@ -89,70 +89,87 @@ func (m *Monitor) checkAll(ctx context.Context) {
 		}
 		activeContainerIDs[tenant.ContainerID] = struct{}{}
 
-		// Rejoin Traefik and the control plane to this client's network
-		// first. A recreated support container (every upgrade recreates the
-		// control plane) has lost it, which cuts the client's route and
-		// would make a healthy client look unreachable.
-		if err := m.docker.EnsureSupportContainersOnTenantNetwork(ctx, tenant.ID); err != nil {
-			log.Warn().Err(err).
-				Str("tenant_id", tenant.ID).
-				Msg("Health monitor: could not reattach support containers to tenant network")
-		}
-
-		healthy, err := m.docker.HealthCheck(ctx, tenant.ContainerID)
-		if err != nil {
-			log.Warn().Err(err).
-				Str("tenant_id", tenant.ID).
-				Str("container_id", tenant.ContainerID).
-				Msg("Health check error")
-		}
-
-		now := time.Now().UTC()
-		tenant.LastHealthCheck = &now
-		tenant.HealthCheckOK = healthy
-
-		if healthy {
-			cpmetrics.HealthCheckResults.WithLabelValues("healthy").Inc()
-			m.failures[tenant.ContainerID] = 0
-		} else {
-			cpmetrics.HealthCheckResults.WithLabelValues("unhealthy").Inc()
-			m.failures[tenant.ContainerID] = m.failures[tenant.ContainerID] + 1
-		}
-
-		if err := m.registry.Update(tenant); err != nil {
-			log.Error().
-				Err(err).
-				Str("tenant_id", tenant.ID).
-				Str("container_id", tenant.ContainerID).
-				Msg("Failed to update health status")
-			continue
-		}
-
-		if !healthy && m.cfg.RestartOnFail && m.failures[tenant.ContainerID] >= m.cfg.FailThreshold {
-			log.Warn().
-				Str("tenant_id", tenant.ID).
-				Str("container_id", tenant.ContainerID).
-				Int("consecutive_failures", m.failures[tenant.ContainerID]).
-				Int("fail_threshold", m.cfg.FailThreshold).
-				Msg("Container unhealthy, attempting restart")
-
-			// Restart, never Stop: the unless-stopped policy does not bring
-			// back a container stopped through the API, so a stop took the
-			// client workspace down until someone started it by hand.
-			if err := m.docker.Restart(ctx, tenant.ContainerID); err != nil {
-				log.Error().
-					Err(err).
-					Str("tenant_id", tenant.ID).
-					Str("container_id", tenant.ContainerID).
-					Msg("Failed to restart unhealthy container")
-			}
-			m.failures[tenant.ContainerID] = 0
-		}
+		m.checkTenant(ctx, tenant.ID)
 	}
 
 	for containerID := range m.failures {
 		if _, ok := activeContainerIDs[containerID]; !ok {
 			delete(m.failures, containerID)
 		}
+	}
+}
+
+// A list result is only a work index. Reload under the same cross-process
+// lease as rollout/deletion so a delayed health result cannot restore an old
+// ContainerID or restart the pre-rollout container.
+func (m *Monitor) checkTenant(ctx context.Context, tenantID string) {
+	ctx, lease, err := m.registry.AcquireRuntimeLifecycle(ctx, tenantID)
+	if err != nil {
+		log.Debug().Err(err).Str("tenant_id", tenantID).Msg("Health monitor: tenant lifecycle unavailable")
+		return
+	}
+	defer lease.Close()
+	tenant, err := m.registry.Get(tenantID)
+	if err != nil || tenant == nil || tenant.State != registry.TenantStateActive || tenant.ContainerID == "" {
+		return
+	}
+	// Rejoin Traefik and the control plane to this client's network
+	// first. A recreated support container (every upgrade recreates the
+	// control plane) has lost it, which cuts the client's route and
+	// would make a healthy client look unreachable.
+	if err := m.docker.EnsureSupportContainersOnTenantNetwork(ctx, tenant.ID); err != nil {
+		log.Warn().Err(err).
+			Str("tenant_id", tenant.ID).
+			Msg("Health monitor: could not reattach support containers to tenant network")
+	}
+
+	healthy, err := m.docker.HealthCheck(ctx, tenant.ContainerID)
+	if err != nil {
+		log.Warn().Err(err).
+			Str("tenant_id", tenant.ID).
+			Str("container_id", tenant.ContainerID).
+			Msg("Health check error")
+	}
+
+	now := time.Now().UTC()
+	tenant.LastHealthCheck = &now
+	tenant.HealthCheckOK = healthy
+
+	if healthy {
+		cpmetrics.HealthCheckResults.WithLabelValues("healthy").Inc()
+		m.failures[tenant.ContainerID] = 0
+	} else {
+		cpmetrics.HealthCheckResults.WithLabelValues("unhealthy").Inc()
+		m.failures[tenant.ContainerID] = m.failures[tenant.ContainerID] + 1
+	}
+
+	if err := m.registry.UpdateRuntimeState(tenant); err != nil {
+		log.Error().
+			Err(err).
+			Str("tenant_id", tenant.ID).
+			Str("container_id", tenant.ContainerID).
+			Msg("Failed to update health status")
+		return
+	}
+
+	if !healthy && m.cfg.RestartOnFail && m.failures[tenant.ContainerID] >= m.cfg.FailThreshold {
+		log.Warn().
+			Str("tenant_id", tenant.ID).
+			Str("container_id", tenant.ContainerID).
+			Int("consecutive_failures", m.failures[tenant.ContainerID]).
+			Int("fail_threshold", m.cfg.FailThreshold).
+			Msg("Container unhealthy, attempting restart")
+
+		// Restart, never Stop: the unless-stopped policy does not bring
+		// back a container stopped through the API, so a stop took the
+		// client workspace down until someone started it by hand.
+		if err := m.docker.Restart(ctx, tenant.ContainerID); err != nil {
+			log.Error().
+				Err(err).
+				Str("tenant_id", tenant.ID).
+				Str("container_id", tenant.ContainerID).
+				Msg("Failed to restart unhealthy container")
+		}
+		m.failures[tenant.ContainerID] = 0
 	}
 }

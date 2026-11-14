@@ -212,6 +212,20 @@ func (s patrolRuntimeState) withDerivedProvidersAndResources(resources []unified
 	return s
 }
 
+// refreshReadStateForRun publishes the monitor's collected state into the
+// read state before a run captures it. A run an alert started must read the
+// poll that alert judged, not the store's previous generation: a cleared disk
+// alert at 3% otherwise met a 92% row and Patrol reported the disk still full.
+func (p *PatrolService) refreshReadStateForRun() {
+	if p == nil {
+		return
+	}
+	p.mu.RLock()
+	readState := p.readState
+	p.mu.RUnlock()
+	unifiedresources.RefreshForRead(readState)
+}
+
 func (p *PatrolService) currentPatrolRuntimeState() patrolRuntimeState {
 	if p == nil {
 		return emptyPatrolRuntimeState(nil, nil)

@@ -75,13 +75,16 @@ type Manager struct {
 // RuntimeContainerInfo is the canonical live-container snapshot used by
 // operator rollout and reconciliation flows.
 type RuntimeContainerInfo struct {
-	ID        string
-	Name      string
-	ImageRef  string
-	ImageID   string
-	Running   bool
-	RouteHost string
-	PublicURL string
+	ID         string
+	Name       string
+	ImageRef   string
+	ImageID    string
+	Running    bool
+	Restarting bool
+	Paused     bool
+	Stopped    bool
+	RouteHost  string
+	PublicURL  string
 	// ProviderHosted reports whether the container carries the provider client marker.
 	ProviderHosted bool
 }
@@ -1224,6 +1227,9 @@ func (m *Manager) Inspect(ctx context.Context, containerIDOrName string) (*Runti
 		ImageRef:       imageRef,
 		ImageID:        strings.TrimSpace(inspect.Image),
 		Running:        running,
+		Restarting:     inspect.State != nil && inspect.State.Restarting,
+		Paused:         inspect.State != nil && inspect.State.Paused,
+		Stopped:        inspect.State != nil && !inspect.State.Running && !inspect.State.Restarting && !inspect.State.Paused && (inspect.State.Status == "exited" || inspect.State.Status == "created" || inspect.State.Status == "dead"),
 		RouteHost:      routeHost,
 		PublicURL:      publicURL,
 	}, nil

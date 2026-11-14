@@ -150,7 +150,7 @@ export function getSSOProviderSummary(provider: SSOProviderSummaryLike): string 
 export function getSSOProviderCardClass(enabled: boolean): string {
   return enabled
     ? 'p-4 rounded-md border bg-surface border-border'
-    : 'p-4 rounded-md border bg-surface-alt border-border opacity-60';
+    : 'p-4 rounded-md border bg-surface-alt border-border';
 }
 
 export function getSSOProviderTypeBadgeClass(): string {

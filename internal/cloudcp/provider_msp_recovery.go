@@ -136,48 +136,58 @@ func recoverProviderMSPWorkspacesWithDependencies(ctx context.Context, cfg *CPCo
 		if item.Action != providerMSPRecoveryActionRecover {
 			continue
 		}
-		if err := validateProviderMSPRecoveryTenantData(cfg, item.TenantID); err != nil {
-			item.Error = err.Error()
-			report.OK = false
-			report.ErrorCount++
-			continue
-		}
+		func() {
+			ctx, lease, err := reg.AcquireRuntimeLifecycle(ctx, item.TenantID)
+			if err != nil {
+				item.Error = err.Error()
+				report.OK = false
+				report.ErrorCount++
+				return
+			}
+			defer lease.Close()
+			if err := validateProviderMSPRecoveryTenantData(cfg, item.TenantID); err != nil {
+				item.Error = err.Error()
+				report.OK = false
+				report.ErrorCount++
+				return
+			}
 
-		result, err := deps.RolloutTenantRuntime(ctx, cfg, TenantRuntimeRolloutOptions{
-			TenantID:      item.TenantID,
-			Image:         opts.Image,
-			RunID:         opts.RunID,
-			SnapshotRoot:  opts.SnapshotRoot,
-			HealthTimeout: opts.HealthTimeout,
-			PrunePrevious: opts.PrunePrevious,
-		})
-		if err != nil {
-			item.Error = err.Error()
-			report.OK = false
-			report.ErrorCount++
-			continue
-		}
-		if result == nil || strings.TrimSpace(result.ActiveContainerID) == "" {
-			item.Error = "tenant runtime recovery did not return an active container"
-			report.OK = false
-			report.ErrorCount++
-			continue
-		}
-		if err := markProviderMSPRecoveryTenantActive(reg, item.TenantID, deps.Now()); err != nil {
-			item.Error = err.Error()
-			report.OK = false
-			report.ErrorCount++
-			continue
-		}
+			result, err := deps.RolloutTenantRuntime(ctx, cfg, TenantRuntimeRolloutOptions{
+				TenantID:      item.TenantID,
+				Image:         opts.Image,
+				RunID:         opts.RunID,
+				SnapshotRoot:  opts.SnapshotRoot,
+				HealthTimeout: opts.HealthTimeout,
+				PrunePrevious: opts.PrunePrevious,
+			})
+			if err != nil {
+				item.Error = err.Error()
+				report.OK = false
+				report.ErrorCount++
+				return
+			}
+			if result == nil || strings.TrimSpace(result.ActiveContainerID) == "" {
+				item.Error = "tenant runtime recovery did not return an active container"
+				report.OK = false
+				report.ErrorCount++
+				return
+			}
+			if err := markProviderMSPRecoveryTenantActive(reg, item.TenantID, deps.Now()); err != nil {
+				item.Error = err.Error()
+				report.OK = false
+				report.ErrorCount++
+				return
+			}
 
-		item.Recovered = true
-		item.PreviousContainerID = result.PreviousContainerID
-		item.ActiveContainerID = result.ActiveContainerID
-		item.ActiveImageRef = result.ActiveImageRef
-		item.ActiveImageID = result.ActiveImageID
-		item.RestoredMissing = result.RestoredMissing
-		item.ReconciledOnly = result.ReconciledOnly
-		report.RecoveredCount++
+			item.Recovered = true
+			item.PreviousContainerID = result.PreviousContainerID
+			item.ActiveContainerID = result.ActiveContainerID
+			item.ActiveImageRef = result.ActiveImageRef
+			item.ActiveImageID = result.ActiveImageID
+			item.RestoredMissing = result.RestoredMissing
+			item.ReconciledOnly = result.ReconciledOnly
+			report.RecoveredCount++
+		}()
 	}
 	if report.ErrorCount > 0 {
 		return report, fmt.Errorf("provider MSP recovery failed for %d workspace(s)", report.ErrorCount)
@@ -332,13 +342,15 @@ func markProviderMSPRecoveryTenantActive(reg *registry.TenantRegistry, tenantID 
 	if now.IsZero() {
 		now = time.Now().UTC()
 	}
-	tenant.State = registry.TenantStateActive
-	tenant.HealthCheckOK = true
-	tenant.LastHealthCheck = &now
-	if err := reg.Update(tenant); err != nil {
+	if tenant.State != registry.TenantStateActive && tenant.State != registry.TenantStateProvisioning && tenant.State != registry.TenantStateFailed {
+		return fmt.Errorf("recovered workspace %s authority changed to %s", tenantID, tenant.State)
+	}
+	if err := reg.TransitionTenantState(tenant.ID, tenant.State, registry.TenantStateActive); err != nil {
 		return fmt.Errorf("mark recovered workspace %s active: %w", tenantID, err)
 	}
-	return nil
+	tenant.HealthCheckOK = true
+	tenant.LastHealthCheck = &now
+	return reg.UpdateRuntimeState(tenant)
 }
 
 func dedupeProviderMSPRecoveryTenantIDs(values []string) []string {

@@ -5279,6 +5279,10 @@ func (m *Monitor) wireResourceStoreAndProviders(store ResourceStoreInterface, pr
 		m.resourceWiringGeneration.Add(1)
 	}
 	m.mu.Unlock()
+	if refreshable, ok := store.(interface{ SetReadRefresher(func()) }); ok {
+		// Readers that hold the store itself (Patrol) refresh through it.
+		refreshable.SetReadRefresher(m.refreshUnifiedResourceReadForReader)
+	}
 
 	if storeChanged || force {
 		m.installOperatorIntentResolver(store)
@@ -5893,6 +5897,13 @@ type readRefreshResourceStore interface {
 // and identity-pin persistence can take seconds per transaction on slow
 // volumes (#1665: /api/state stuck for minutes with SQLite on NFS).
 func (m *Monitor) updateResourceStoreForRead(state models.StateSnapshot, scope mockModeScope) {
+	m.updateResourceStoreForReadWithin(state, scope, readPathRegistryFreshness)
+}
+
+// updateResourceStoreForReadWithin is updateResourceStoreForRead with the
+// freshness window a warm store may serve without a rebuild. Zero always
+// rebuilds unless an ingest is publishing at that moment.
+func (m *Monitor) updateResourceStoreForReadWithin(state models.StateSnapshot, scope mockModeScope, maxAge time.Duration) {
 	if !scope.current() {
 		return
 	}
@@ -5914,7 +5925,7 @@ func (m *Monitor) updateResourceStoreForRead(state models.StateSnapshot, scope m
 	if timed, ok := store.(interface{ LastRebuiltAt() time.Time }); ok {
 		last := timed.LastRebuiltAt()
 		cold = last.IsZero()
-		if !cold && time.Since(last) < readPathRegistryFreshness {
+		if !cold && time.Since(last) < maxAge {
 			return
 		}
 	}
@@ -5934,7 +5945,7 @@ func (m *Monitor) updateResourceStoreForRead(state models.StateSnapshot, scope m
 	}
 	rebuilt := false
 	mark, published := scope.publish(func() bool {
-		rebuilt = readStore.TryReplaceRegistryForRead(snapshotForStore, readPathRegistryFreshness, func() map[unifiedresources.DataSource][]unifiedresources.IngestRecord {
+		rebuilt = readStore.TryReplaceRegistryForRead(snapshotForStore, maxAge, func() map[unifiedresources.DataSource][]unifiedresources.IngestRecord {
 			return recordsBySource
 		})
 		return rebuilt

@@ -592,6 +592,67 @@ describe('useAppRuntimeState', () => {
     dispose();
   });
 
+  it('opens a hosted client workspace on a fresh session without a stored selection', async () => {
+    // A provider client on Community fallback has no multi-tenant capability,
+    // and a new browser session has neither the org cookie nor the tab's
+    // stored selection. The server lists the client's workspace first.
+    isHostedModeEnabledMock.mockReturnValue(true);
+    getOrgIDMock.mockReturnValue(null);
+    orgsListMock.mockResolvedValue([
+      { id: 't-client', displayName: 'Client' },
+      { id: 'default', displayName: 'Default Organization' },
+    ]);
+    const { hookState, dispose } = mountHook();
+
+    await waitFor(() => {
+      expect(setOrgIDMock).toHaveBeenCalledWith('t-client');
+    });
+    expect(setOrgIDMock).not.toHaveBeenCalledWith('default');
+    expect(hookState.activeOrgID()).toBe('t-client');
+    expect(hookState.showOrgSwitcher()).toBe(false);
+
+    dispose();
+  });
+
+  it('keeps the stored hosted workspace when the organization list is unavailable', async () => {
+    isHostedModeEnabledMock.mockReturnValue(true);
+    getOrgIDMock.mockReturnValue('t-client');
+    orgsListMock.mockRejectedValue(new Error('subscription_required'));
+    const { hookState, dispose } = mountHook();
+
+    await waitFor(() => {
+      expect(setOrgIDMock).toHaveBeenCalledWith('t-client');
+    });
+    expect(hookState.activeOrgID()).toBe('t-client');
+    expect(showToastMock).not.toHaveBeenCalledWith(
+      'error',
+      'Failed to load organizations. Using default.',
+    );
+
+    dispose();
+  });
+
+  it('stores no fallback when a fresh hosted session cannot read the organization list', async () => {
+    isHostedModeEnabledMock.mockReturnValue(true);
+    getOrgIDMock.mockReturnValue(null);
+    orgsListMock.mockRejectedValueOnce(new Error('network'));
+    const first = mountHook();
+    await waitFor(() => expect(orgsListMock).toHaveBeenCalledOnce());
+    await waitFor(() => expect(first.hookState.orgsLoading()).toBe(false));
+    expect(setOrgIDMock).not.toHaveBeenCalled();
+    first.dispose();
+
+    // The next load reads the list again and lands in the client workspace.
+    orgsListMock.mockResolvedValueOnce([
+      { id: 't-client', displayName: 'Client' },
+      { id: 'default', displayName: 'Default Organization' },
+    ]);
+    const second = mountHook();
+    await waitFor(() => expect(setOrgIDMock).toHaveBeenCalledWith('t-client'));
+    expect(second.hookState.activeOrgID()).toBe('t-client');
+    second.dispose();
+  });
+
   it('opts into unbound default recovery then activates membership before acquiring the socket', async () => {
     isMultiTenantEnabledMock.mockReturnValue(true);
     const fallbackFetch = apiFetchMock.getMockImplementation()!;

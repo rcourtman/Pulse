@@ -193,7 +193,12 @@ func (h *OrgHandlers) HandleListOrgs(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if !h.requireMultiTenantGate(w, r) {
+	// A provider client's workspace opens without a subscription, so its users
+	// may always read which organizations they belong to. The list names no
+	// organization of its own, and the routes that add or change organizations
+	// keep the subscription gate.
+	providerWorkspaceOpen := h != nil && h.hostedMode && isProviderHostedWorkspaceFromLicensing(hostedRuntimeHomeOrgID())
+	if !providerWorkspaceOpen && !h.requireMultiTenantGate(w, r) {
 		return
 	}
 	if h.persistence == nil {
@@ -217,6 +222,20 @@ func (h *OrgHandlers) HandleListOrgs(w http.ResponseWriter, r *http.Request) {
 		normalizeOrganization(org)
 		if h.canAccessOrg(r, username, token, org) {
 			filtered = append(filtered, org)
+		}
+	}
+
+	// Clients with no stored selection open the first organization listed,
+	// so the organization a request naming none lands in comes first.
+	if token == nil && h.accessPolicy != nil {
+		if landing := h.accessPolicy.LandingOrgID(r.Context(), username); landing != "" {
+			for i, org := range filtered {
+				if org.ID == landing {
+					copy(filtered[1:i+1], filtered[:i])
+					filtered[0] = org
+					break
+				}
+			}
 		}
 	}
 
