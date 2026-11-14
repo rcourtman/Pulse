@@ -574,9 +574,9 @@ func TestProviderMSPEvaluationDocsUsePublishedSignedBundle(t *testing.T) {
 	doc := string(repoDocBytes)
 	assertContainsAll(t, doc,
 		"signed provider bundle published",
-		"with Pulse v6.7.0",
+		"with Pulse v6.8.0",
 		"**not** download the moving `main` branch archive",
-		`export PULSE_VERSION=v6.7.0`,
+		`export PULSE_VERSION=v6.8.0`,
 		`PULSE_MSP_BUNDLE="pulse-provider-msp-${PULSE_VERSION}.tar.gz"`,
 		`releases/download/${PULSE_VERSION}`,
 		"ssh-keygen -Y verify",
@@ -587,9 +587,6 @@ func TestProviderMSPEvaluationDocsUsePublishedSignedBundle(t *testing.T) {
 		// The portal and client workspaces need both records, and the default
 		// DNS-01 token needs both permissions.
 		"`*.DOMAIN` (each client workspace",
-		// The pinned v6.7.0 bundle still mounts traefik.yml with an example.com
-		// ACME contact; drop this when the pin moves past it.
-		`e=$(sudo sed -n 's/^ACME_EMAIL=//p' .env | tail -n 1 | tr -d "\"'" | sed 's/[&/\]/\\&/g') && sudo sed -i "s/admin@example.com/$e/" traefik.yml && sudo docker compose restart traefik`,
 		"Zone / Zone / Read and Zone / DNS / Edit",
 		"The licence request omits an email address unless you export",
 		"`PULSE_PROVIDER_MSP_EVAL_EMAIL` before running `setup.sh`",
@@ -624,6 +621,10 @@ func TestProviderMSPEvaluationDocsUsePublishedSignedBundle(t *testing.T) {
 		t.Fatal("MSP guide starts retained pre-rollout runtime copies")
 	}
 	assertNotContainsAny(t, doc,
+		// v6.8.0 setup asks up front and needs no traefik.yml edit.
+		"admin@example.com",
+		"pauses for",
+		"Bundles newer than",
 		"Pulse/archive/refs/heads/main.tar.gz",
 		"evaluation request is anonymous",
 		"assisted upgrade path",

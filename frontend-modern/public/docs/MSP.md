@@ -365,7 +365,7 @@ every paid plan are self-service: you evaluate on your own host and buy from
 ### Evaluating without a licence
 
 Self-service evaluation is available from the signed provider bundle published
-with Pulse v6.7.0. Use this exact release asset and its integrity sidecars; do
+with Pulse v6.8.0. Use this exact release asset and its integrity sidecars; do
 **not** download the moving `main` branch archive or run its `setup.sh` as
 root. For a later release, first confirm its release page contains the
 versioned provider archive, checksum, and SSH signature before changing the
@@ -377,7 +377,7 @@ failed download, signature or checksum stops before anything is extracted or
 run as root:
 
 ```bash
-export PULSE_VERSION=v6.7.0
+export PULSE_VERSION=v6.8.0
 export PULSE_MSP_BUNDLE="pulse-provider-msp-${PULSE_VERSION}.tar.gz"
 export PULSE_RELEASE_BASE="https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}"
 
@@ -399,11 +399,11 @@ The licence request omits an email address unless you export
 `PULSE_PROVIDER_MSP_EVAL_EMAIL` before running `setup.sh`, in which case that
 address is included in the request.
 
-The host needs Ubuntu 24.04 or similar, a domain you can point at it, and
-ports 80 and 443 free; 2 vCPU, 4 GB RAM and 40 GB of disk is enough for an
-evaluation. Install `curl`, `openssh-client`, `coreutils`, and `tar` before the
-verification step. Point two DNS records at the host's public IP: the domain
-you choose for `DOMAIN` (the portal, at `https://DOMAIN/portal`) and
+The host needs Ubuntu 24.04 or similar and ports 80 and 443 free; 2 vCPU,
+4 GB RAM and 40 GB of disk is enough for an evaluation. A domain is optional.
+Install `curl`, `openssh-client`, `coreutils`, and `tar` before the
+verification step. With your own domain, point two DNS records at the host's
+public IP: the domain you choose for `DOMAIN` (the portal, at `https://DOMAIN/portal`) and
 `*.DOMAIN` (each client workspace, at `https://<client-id>.DOMAIN`). On
 Cloudflare, set both to DNS only. The wildcard certificate is issued over
 DNS-01 with Cloudflare as the default provider (`CF_DNS_API_TOKEN`, a token
@@ -411,9 +411,8 @@ with Zone / Zone / Read and Zone / DNS / Edit on that zone); any other
 Traefik dnsChallenge provider works by setting `ACME_DNS_PROVIDER` in `.env`
 and putting that provider's credential variables in `dns-credentials.env`.
 
-**Just trying it, with no domain or token?** Bundles newer than the one pinned
-above offer a trial address at setup's domain prompt. On a server with a public
-IP, press Enter there. Setup builds an address from the server's IP, in the form
+**Just trying it, with no domain or token?** On a server with a public IP,
+press Enter at setup's domain prompt for a trial address. Setup builds an address from the server's IP, in the form
 `pulse.<ip-with-dashes>.sslip.io`, and each client gets its own
 Let's Encrypt certificate over port 80. You need no DNS records, Cloudflare
 account or token, but inbound TCP ports 80 and 443 must be open in your cloud
@@ -429,8 +428,8 @@ A trial address is for evaluation only:
   and then tries the other service. Later, **Open client** shows a waiting page
   that keeps trying instead of a browser error.
 
-**Own a domain but have no DNS API token?** On those same bundles, enter the
-domain and press Enter at the token prompt. Point the same two A records here, keep ports 80 and 443 open,
+**Own a domain but have no DNS API token?** Enter the domain and press Enter
+at the token prompt. Point the same two A records here, keep ports 80 and 443 open,
 and each client gets its own certificate. Nothing needs reinstalling later. Let's
 Encrypt allows 50 new certificates a week per registered domain; use DNS-01 if
 you will add clients faster than that, or would rather not list each client
@@ -439,25 +438,12 @@ address in public certificate logs.
 To use a DNS provider other than Cloudflare, copy `.env.example` to
 `/opt/pulse-provider-msp/.env` and fill it in before running `setup.sh`.
 
-When setup pauses for `DOMAIN`, `ACME_EMAIL` and `CF_DNS_API_TOKEN`, edit
-`/opt/pulse-provider-msp/.env` from a second session with `sudo`, because the
-file is readable by root only, then press Enter. It ends with
-`Pulse Provider MSP is running.` and the bootstrap command that prints your
-portal sign-in link; run that command with `sudo` as well. In the portal,
-**Add client** and then **Install agents** walk the first client to live data.
-
-**v6.7.0 only:** the bundle's `traefik.yml` gives Let's Encrypt
-`admin@example.com`, which it refuses, so no certificate is issued and the
-portal refuses TLS. Once setup finishes, copy your `ACME_EMAIL` into that file
-and restart Traefik:
-
-```bash
-cd /opt/pulse-provider-msp && e=$(sudo sed -n 's/^ACME_EMAIL=//p' .env | tail -n 1 | tr -d "\"'" | sed 's/[&/\]/\\&/g') && sudo sed -i "s/admin@example.com/$e/" traefik.yml && sudo docker compose restart traefik
-```
-
-With a DNS provider other than Cloudflare, also change both
-`provider: cloudflare` lines in that file. Later bundles read both values from
-`.env` and report after setup whether the certificate was issued.
+Setup asks for the domain, an email for certificate notices and, for your own
+domain, the Cloudflare token before it installs anything. It ends with
+`Pulse Provider MSP is running.`, says whether the certificate was issued and
+what to fix if not, and prints the bootstrap command for your portal sign-in
+link; run that command with `sudo` as well. In the portal, **Add client** and
+then **Install agents** walk the first client to live data.
 
 Leave `CP_PROVIDER_MSP_LICENSE_FILE` blank and `setup.sh` self-issues a
 2-client evaluation licence. The bundle sends the public half of the
@@ -477,11 +463,11 @@ entitlement leases chained to a Pulse-signed licence.
 
 Client workspaces renew a one-day lease from the control plane. A client that
 cannot renew loses its MSP capabilities and falls back to Community behaviour until
-it can, so core monitoring keeps running. From the release after v6.7.0, renewal
-stays on the deployment's Docker network, so `DOMAIN` can point at a private
-address. Client runtimes on v6.7.0 or earlier renew over the host's own network and
-lock instead of falling back: for them `DOMAIN` must be a public address that
-containers on this host can reach. `upgrade.sh --rollout-tenants` moves them on.
+it can, so core monitoring keeps running. Renewal stays on the deployment's Docker
+network, so `DOMAIN` can point at a private address. Client runtimes from v6.7.0 or
+earlier renew over the host's own network and lock instead of falling back: for
+them `DOMAIN` must be a public address that containers on this host can reach.
+`upgrade.sh --rollout-tenants` moves them on.
 
 `setup.sh` also resolves the four image pins from their published tags when
 you leave them blank, writing the resolved digests back into `.env`. The
