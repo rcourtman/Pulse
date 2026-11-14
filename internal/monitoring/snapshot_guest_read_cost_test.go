@@ -114,7 +114,7 @@ func TestSnapshotGuestReadKeepsTargetsNamesTagsAndEvidence(t *testing.T) {
 			for _, alert := range am.GetActiveAlerts() {
 				names[alert.ResourceID] = alert.ResourceName
 			}
-			if !reflect.DeepEqual(names, map[string]string{"site:node-a:102": "guest-2", "site:node-b:103": "guest-3"}) {
+			if !reflect.DeepEqual(names, map[string]string{"site:node-a:102": "guest-2 snapshot 'weekly'", "site:node-b:103": "guest-3 snapshot 'weekly'"}) {
 				t.Fatalf("snapshot alerts lost scoped names or ignored tags: %v", names)
 			}
 			projection, err := json.Marshal(struct {
