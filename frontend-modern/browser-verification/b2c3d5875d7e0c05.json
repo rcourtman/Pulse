@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "base_sha": "1151e84b829a3d0cbf8a76bac132eb3b07508aca",
-  "verified_at": "2026-11-14T05:30:43Z",
+  "base_sha": "1b9eeb4fd31e7990601b9afca222c8fb987e62a2",
+  "verified_at": "2026-11-14T05:47:02Z",
   "result": "passed",
   "changed_paths": [
     "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx",
@@ -12,7 +12,7 @@
     "frontend-modern/src/components/Settings/useSSOProvidersState.ts": "7faf61312a9b14444729927fcdf93f0a7655e3afc9b214153ef440a15b5f9420"
   },
   "routes": [
-    "/settings/security"
+    "/"
   ],
   "viewports": [
     {
@@ -25,10 +25,11 @@
     }
   ],
   "states": [
-    "Consuming SSOProvidersPanel with the actual state hook, API client, Dialog, Toast and index.css. Safe synthetic OIDC and SAML provider inventory and HTTP409 DELETE refusal, then HTTP502 uncertain outcome. Vite6.4.5/Solid1.9.17/Tailwind4.3.3; Playwright1.56.1 matches integration lock. This is not full App/IdP, native provider deletion, persistence, installed recovery or release proof.",
-    "Baseline built and eight captures taken before runtime edits on1151e84b82; identical fixture data, viewport, theme, pending/interaction state and1000ms settle used for final comparisons. Chromium1440x900 and WebKit390x844 in light/dark.20 original PNGs opened through native view_image:8 comparable refusal pairs and4 final uncertainty captures.",
+    "Consuming SSOProvidersPanel with the actual state hook, API client, Dialog, Toast and index.css, served at / in an offline fixture for the existing /settings/security-sso surface. Not routed full-App coverage. Safe synthetic OIDC and SAML inventory and HTTP409 DELETE refusal, then HTTP502 uncertain outcome. Vite6.4.5/Solid1.9.17/Tailwind4.3.3 installed using npm ci --offline --ignore-scripts from the SHA256-verified exact launch-cache export. Playwright1.56.1 matches integration lock. Not live/native IdP, provider deletion, persistence, installed recovery or release proof.",
+    "Exact-graph baseline uses isolated unchanged1151e84b82 panel/state/type-icon blobs; all remaining runtime inputs are unchanged between that source and1b9eeb4fd3. Exact-graph final uses committed1b9eeb4fd3 runtime bytes. Same fixture data, ordinary interaction, viewport/theme and1000ms settle. Chromium1440x900 and WebKit390x844 light/dark;20 newly opened original PNGs:8 comparable refusal pairs and4 final uncertainty states. Initial pre-edit baseline and first final used an older installed graph despite matching canonical lock; those originals remain in the outcome archive as limited historical evidence, not this locked-graph proof.",
     "65 baseline and193 final assertions. The existing background toast remains inert/foreground and is retained after closing. The same bounded refusal now also has role=alert inside the active dialog. Raw synthetic error contents never appear. Provider name, complete endpoint, deletion consequence, Cancel and Delete all remain visible; no horizontal overflow or page errors.",
-    "The error clears on explicit retry and on cancel/reopen. While pending, Cancel/Delete remain disabled and Escape cannot dismiss. An uncertain result still blocks retry, shows the original may-already-have-been-applied guidance, and checks saved providers with no new write. Shared focus trap, background inertness and return focus are unchanged."
+    "The error clears on explicit retry and on cancel/reopen. While pending, Cancel/Delete remain disabled and Escape cannot dismiss. An uncertain result still blocks retry, shows the original may-already-have-been-applied guidance, and checks saved providers with no new write. Shared focus trap, background inertness and return focus are unchanged.",
+    "This receipt correction replaces mistaken dependency/route attribution in the initial receipt. No runtime/test/manifest source changed after1b9eeb4fd3. Its current committed runtime was rebuilt and re-exercised with the verified locked graph, then all new pixels were presented through native view_image. The receipt is bound to its own containing commit parent1b9eeb4fd3; original comparison baseline remains explicitly1151e84b82."
   ],
   "interactions": [
     "Open actual saved-provider confirmation and submit one refusal; inspect the new in-dialog alert and all retained context. Tab from Delete wraps to Cancel, then back to Delete; Enter submits only the explicit second attempt.",
@@ -39,6 +40,10 @@
     "record": "browser-before.json; browser-after.json",
     "captures": "CAPTURES.json",
     "observations": "PIXEL-OBSERVATIONS.md",
-    "fixture": "BROWSER-FIXTURE.tar.xz"
-  }
+    "fixture": "BROWSER-FIXTURE.tar.xz",
+    "dependency_correction": "DEPENDENCY-CORRECTION.json; OLDER-DEPENDENCY-BROWSER.tar.xz"
+  },
+  "baseline_source_sha": "1151e84b829a3d0cbf8a76bac132eb3b07508aca",
+  "verified_runtime_source_sha": "1b9eeb4fd31e7990601b9afca222c8fb987e62a2",
+  "dependency_snapshot": "f96239b2e6a3edf5058b3c995eec2344de217ea2e5c6ccb07ec5dfccf95ddcf2"
 }
