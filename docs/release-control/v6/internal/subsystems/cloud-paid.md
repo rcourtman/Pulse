@@ -4200,3 +4200,42 @@ reports whether `PULSE_PROVIDER_HOSTED` marks this runtime as a provider client
 runtime. The tenant outbound policy uses it to keep private networks open for
 provider clients and close them on Pulse Cloud. It reads no licence,
 entitlement or billing state, and changes no paid capability.
+
+### Settings > Infrastructure offers Pulse MSP to provider-sized installs
+
+On 14 November 2026 Richard approved one deliberate exception to keeping
+upgrade prompts off free self-hosted installs. `InfrastructureWorkspace.tsx`
+shows a single dismissible line under the source list that points at Pulse
+MSP, a separate product sold from `pulserelay.pro/msp`. Like the Plans &
+Billing line it ignores `presentationPolicyHidesUpgradePrompts()`, and it
+changes no plan, licence, entitlement or checkout path in this install.
+
+It renders only when `infrastructureLooksProviderSized()` in
+`selfHostedBillingPresentation.ts` finds three or more Proxmox VE connection
+rows, three or more Proxmox Backup Server rows, or 25 or more agent rows, and
+only after the session presentation policy has resolved and runtime
+capabilities have loaded successfully. A failed capabilities read falls back to
+`hosted_mode: false`, so `runtimeCapabilitiesLoadError()` also hides it. It
+never renders when `isHostedModeEnabled()` is true (Pulse-hosted
+workspaces and every provider MSP client runtime), when
+`presentationPolicyHidesCommercialSurfaces()` is true (demo and white-label
+sessions), or for read-only sessions. Closing it stores
+`INFRASTRUCTURE_MSP_REFERRAL_DISMISSED_STORAGE_KEY` in that browser, and it
+does not return there. The link,
+`PULSE_MSP_INFRASTRUCTURE_REFERRAL_URL`, keeps `utm_source=pulse` and
+`utm_campaign=msp`, so the website funnel still counts it as an app referral,
+and uses `utm_medium=app-infrastructure` to tell it apart from the Plans &
+Billing line. `InfrastructureWorkspace.test.tsx` pins rendering, the link and
+permanent dismissal, and the absence for small installs, hosted, commercial-
+hidden, unresolved-policy, capability-loading, capability-error,
+unresolved-ledger and read-only sessions;
+`selfHostedBillingPresentation.test.ts` pins the literal 3 and 25 boundaries,
+and `ProLicensePanel.test.tsx` pins that both in-app MSP links share
+`utm_source` and `utm_campaign` and differ only by `utm_medium`. The
+dismissal key lives beside the line in `selfHostedBillingPresentation.ts`
+(`INFRASTRUCTURE_MSP_REFERRAL_DISMISSED_STORAGE_KEY`), not in the shared
+`STORAGE_KEYS` registry.
+Rows restored from the in-memory query cache can show the line for one
+background fetch after an install drops below the threshold in the same
+browser session; that is accepted rather than delaying every first render. The demand
+ledger entry in pulse-pro `FEATURE_REQUESTS.md` grades it after 30 days.

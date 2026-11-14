@@ -14,6 +14,10 @@ import {
   type InfrastructureSystemRow,
 } from '../connectionsTableModel';
 import { InfrastructureWorkspace } from '../InfrastructureWorkspace';
+import {
+  INFRASTRUCTURE_MSP_REFERRAL_DISMISSED_STORAGE_KEY,
+  PULSE_MSP_INFRASTRUCTURE_REFERRAL_URL,
+} from '../selfHostedBillingPresentation';
 
 const routeState = vi.hoisted(() => ({
   pathname: '/settings/infrastructure',
@@ -42,6 +46,7 @@ const connectionState = vi.hoisted(() => {
 const ledgerReadState = vi.hoisted(() => ({
   error: null as unknown,
   loading: false,
+  resolvedOnce: true,
   reload: vi.fn(),
 }));
 const nodeCredentialSlotState = vi.hoisted(() => ({ mountCount: 0 }));
@@ -67,6 +72,13 @@ const emptyFleetMember = vi.hoisted(
 const navigateSpy = vi.hoisted(() => vi.fn());
 const setEnableCommandsSpy = vi.hoisted(() => vi.fn());
 const presentationPolicyIsReadOnlyMock = vi.hoisted(() => vi.fn(() => false));
+const commercialState = vi.hoisted(() => ({
+  capabilitiesLoaded: false,
+  capabilitiesError: false,
+  hosted: false,
+  hideCommercial: false,
+  policyResolved: true,
+}));
 
 const originalResizeObserver = globalThis.ResizeObserver;
 let latestResizeObserverCallback: ResizeObserverCallback | null = null;
@@ -120,6 +132,16 @@ vi.mock('@solidjs/router', async () => {
 
 vi.mock('@/stores/sessionPresentationPolicy', () => ({
   presentationPolicyIsReadOnly: () => presentationPolicyIsReadOnlyMock(),
+  presentationPolicyHidesCommercialSurfaces: () => commercialState.hideCommercial,
+  sessionPresentationPolicyResolved: () => commercialState.policyResolved,
+}));
+
+vi.mock('@/stores/license', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/stores/license')>()),
+  runtimeCapabilitiesLoaded: () => commercialState.capabilitiesLoaded,
+  runtimeCapabilitiesLoadError: () =>
+    commercialState.capabilitiesError ? new Error('capabilities unavailable') : null,
+  isHostedModeEnabled: () => commercialState.hosted,
 }));
 
 vi.mock('../useInfrastructureOperationsState', () => ({
@@ -180,7 +202,7 @@ vi.mock('../useConnectionsLedger', () => ({
     reload: ledgerReadState.reload,
     loading: () => ledgerReadState.loading,
     error: () => ledgerReadState.error,
-    resolvedOnce: () => true,
+    resolvedOnce: () => ledgerReadState.resolvedOnce,
   }),
 }));
 
@@ -353,9 +375,16 @@ describe('InfrastructureWorkspace', () => {
     navigateSpy.mockReset();
     ledgerReadState.error = null;
     ledgerReadState.loading = false;
+    ledgerReadState.resolvedOnce = true;
     ledgerReadState.reload.mockReset();
     presentationPolicyIsReadOnlyMock.mockReset();
     presentationPolicyIsReadOnlyMock.mockReturnValue(false);
+    commercialState.capabilitiesLoaded = false;
+    commercialState.capabilitiesError = false;
+    commercialState.hosted = false;
+    commercialState.hideCommercial = false;
+    commercialState.policyResolved = true;
+    localStorage.removeItem(INFRASTRUCTURE_MSP_REFERRAL_DISMISSED_STORAGE_KEY);
     routeState.pathname = '/settings/infrastructure';
     routeState.search = '';
     connectionState.connections = [connectionFixture()];
@@ -1939,6 +1968,73 @@ describe('InfrastructureWorkspace', () => {
     expect(screen.queryByText('Pulse Agent hosts')).toBeNull();
     expect(screen.getAllByText('Render East')).toHaveLength(1);
     expect(screen.getAllByText('minipc')).toHaveLength(1);
+  });
+
+  const providerSizedConnections = () =>
+    ['zeus', 'hera', 'apollo'].map((name, index) =>
+      connectionFixture({ id: `pve:${name}`, name, address: `https://10.0.${index}.1:8006` }),
+    );
+
+  it('offers Pulse MSP on a provider-sized install and hides it for good once closed', async () => {
+    commercialState.capabilitiesLoaded = true;
+    connectionState.connections = providerSizedConnections();
+
+    const first = renderWorkspace();
+    const line = await screen.findByTestId('infrastructure-msp-referral');
+    const link = within(line).getByRole('link', { name: 'See Pulse MSP' });
+    expect(link).toHaveAttribute('href', PULSE_MSP_INFRASTRUCTURE_REFERRAL_URL);
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(PULSE_MSP_INFRASTRUCTURE_REFERRAL_URL).toContain('utm_medium=app-infrastructure');
+
+    fireEvent.click(within(line).getByRole('button', { name: 'Hide the Pulse MSP suggestion' }));
+    await waitFor(() =>
+      expect(screen.queryByTestId('infrastructure-msp-referral')).not.toBeInTheDocument(),
+    );
+    expect(localStorage.getItem(INFRASTRUCTURE_MSP_REFERRAL_DISMISSED_STORAGE_KEY)).toBe('true');
+
+    first.unmount();
+    renderWorkspace();
+    expect(screen.queryByTestId('infrastructure-msp-referral')).not.toBeInTheDocument();
+  });
+
+  it('keeps the Pulse MSP line off small installs and sessions that must not see it', () => {
+    const expectNoLine = () => {
+      const view = renderWorkspace();
+      expect(screen.queryByTestId('infrastructure-msp-referral')).not.toBeInTheDocument();
+      view.unmount();
+    };
+
+    commercialState.capabilitiesLoaded = true;
+    connectionState.connections = [connectionFixture()];
+    expectNoLine();
+
+    connectionState.connections = providerSizedConnections();
+    commercialState.hosted = true;
+    expectNoLine();
+
+    commercialState.hosted = false;
+    commercialState.hideCommercial = true;
+    expectNoLine();
+
+    commercialState.hideCommercial = false;
+    commercialState.policyResolved = false;
+    expectNoLine();
+
+    commercialState.policyResolved = true;
+    commercialState.capabilitiesLoaded = false;
+    expectNoLine();
+
+    commercialState.capabilitiesLoaded = true;
+    commercialState.capabilitiesError = true;
+    expectNoLine();
+
+    commercialState.capabilitiesError = false;
+    ledgerReadState.resolvedOnce = false;
+    expectNoLine();
+
+    ledgerReadState.resolvedOnce = true;
+    presentationPolicyIsReadOnlyMock.mockReturnValue(true);
+    expectNoLine();
   });
 
   it('hides the add flow and source-manager actions in read-only mode', () => {
