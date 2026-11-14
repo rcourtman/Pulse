@@ -662,3 +662,74 @@ func TestWebWorkerRubricDoesNotCreditAGuess(t *testing.T) {
 		}
 	}
 }
+
+// pveTaskLogRecord is a pve-v1 run kept with the manifest version and grade it
+// was recorded under.
+type pveTaskLogRecord struct {
+	RunID           string           `json:"run_id"`
+	RecordedVersion int              `json:"recorded_manifest_version"`
+	RecordedGrade   Grade            `json:"recorded_grade"`
+	Evidence        ResponseEvidence `json:"evidence"`
+}
+
+// A dead guest's conclusion said it stopped "with no corresponding entry in
+// the Proxmox task log". That is the decisive fact, and P4's first rubric
+// missed it, grading the run Handed back. v2 accepts the task-log wordings,
+// and the scorecard grades stored runs by it.
+func TestScorecardGradesStoredRunsByTheCatalogRubric(t *testing.T) {
+	payload, err := os.ReadFile(filepath.Join("testdata", "fault-set-pve-v1", "p4-default-agent-task-log-wording.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var record pveTaskLogRecord
+	if err := json.Unmarshal(payload, &record); err != nil {
+		t.Fatal(err)
+	}
+	catalog := loadFaultSetCatalog(t)
+	current := catalog.ByID["response.pve-guest-died"]
+	if current.Version != 2 {
+		t.Fatalf("P4 is at v%d; this test pins the v2 rubric change", current.Version)
+	}
+	if graded := GradeResponse(current, record.Evidence); graded.Grade != GradeHandedOver {
+		t.Fatalf("the v2 rubric grades the task-log wording %q, want handed_over (missing %v)", graded.Grade, graded.Checks.DecisiveMissing)
+	}
+
+	// The manifest as it was recorded: v1, without the task-log wordings.
+	recorded := current
+	recorded.Version = record.RecordedVersion
+	outcome := *current.Outcome
+	outcome.DecisiveTerms = [][]string{
+		append([]string(nil), current.Outcome.DecisiveTerms[0][:14]...),
+		current.Outcome.DecisiveTerms[1],
+	}
+	recorded.Outcome = &outcome
+	if graded := GradeResponse(recorded, record.Evidence); graded.Grade != record.RecordedGrade {
+		t.Fatalf("the v1 rubric grades the record %q, want the recorded %q", graded.Grade, record.RecordedGrade)
+	}
+	report := func(manifest Manifest) RunReport {
+		graded := GradeResponse(manifest, record.Evidence)
+		return RunReport{RunID: record.RunID, Manifest: manifest, Response: &graded,
+			Environment: Environment{Model: "claude-subscription:sonnet"}}
+	}
+
+	reports := []RunReport{report(recorded)}
+	notes := ApplyCatalogRubrics(reports, catalog)
+	card := BuildScorecard("pve-v1", reports)
+	if len(card.Rows) != 1 || len(card.Rows[0].Cells) != 1 || len(card.Rows[0].Cells[0]) != 1 || card.Rows[0].Cells[0][0].Grade != GradeHandedOver {
+		t.Fatalf("scorecard after the rubric change = %+v", card.Rows)
+	}
+	if len(notes) != 1 || !strings.Contains(notes[0], "graded with the catalog's v2 rubric") {
+		t.Fatalf("rubric notes = %q", notes)
+	}
+
+	// A run recorded under different faults cannot be regraded by a new rubric.
+	moved := recorded
+	moved.Faults = append([]FaultSpec(nil), recorded.Faults...)
+	moved.Faults[0].Injector.Kind = "pve_stop_guest"
+	reports = []RunReport{report(moved)}
+	notes = ApplyCatalogRubrics(reports, catalog)
+	card = BuildScorecard("pve-v1", reports)
+	if card.Rows[0].Cells[0][0].Grade != GradeHandedBack || len(notes) != 1 || !strings.Contains(notes[0], "keep their rubric") {
+		t.Fatalf("a run under other faults was regraded: %+v, %q", card.Rows[0].Cells, notes)
+	}
+}

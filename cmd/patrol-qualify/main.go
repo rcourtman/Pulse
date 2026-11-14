@@ -180,7 +180,7 @@ func main() {
 			ExpectedPulseVersion: *expectedPulseVersion,
 			AgentProfile:         profile,
 		})
-		if err := printScorecard(*artifactRoot, *faultSet, *artifactRoot); err != nil {
+		if err := printScorecard(*artifactRoot, *faultSet, *artifactRoot, catalog); err != nil {
 			fmt.Fprintln(os.Stderr, "patrol-qualify:", err)
 		}
 		if runErr != nil {
@@ -190,7 +190,7 @@ func main() {
 			os.Exit(1)
 		}
 	case "scorecard":
-		if err := printScorecard(*reportsRoot, *faultSet, strings.TrimSpace(*publicationDir)); err != nil {
+		if err := printScorecard(*reportsRoot, *faultSet, strings.TrimSpace(*publicationDir), catalog); err != nil {
 			fatal(err)
 		}
 	case "replay":
@@ -461,7 +461,7 @@ func splitList(value string) []string {
 
 // printScorecard grades every response report under root again and prints the
 // fault set table. With an output directory it also writes the table there.
-func printScorecard(root, faultSet, outputDir string) error {
+func printScorecard(root, faultSet, outputDir string, catalog qualification.Catalog) error {
 	paths, err := findReports(root)
 	if err != nil {
 		return err
@@ -474,7 +474,9 @@ func printScorecard(root, faultSet, outputDir string) error {
 		}
 		reports = append(reports, report)
 	}
+	rubrics := qualification.ApplyCatalogRubrics(reports, catalog)
 	card := qualification.BuildScorecard(strings.TrimSpace(faultSet), reports)
+	card.Rubrics = rubrics
 	fmt.Print(qualification.RenderScorecardMarkdown(card))
 	if outputDir == "" {
 		return nil

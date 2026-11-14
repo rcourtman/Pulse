@@ -1,0 +1,56 @@
+{
+  "source": "pve-v1 replay on Pulse PR 4400, default agent, 14 Nov 2026",
+  "run_id": "q-20261114-201101-a72ba6e4",
+  "recorded_manifest_version": 1,
+  "recorded_grade": "handed_back",
+  "evidence": {
+    "agent_profile": {
+      "name": "commands-off",
+      "commands_enabled": false,
+      "declared": "commands-off",
+      "host_name": "pmxlab",
+      "host_resource_id": "agent-cb92e49a2a913d3b"
+    },
+    "alerts": [
+      {
+        "id": "pmxlab:pmxlab:112::pmxlab:pmxlab:112-powered-state",
+        "type": "powered-off",
+        "level": "warning",
+        "resource_alias": "gitea",
+        "resource_name": "gitea",
+        "message": "Container 'gitea' is powered off",
+        "start_time": "2026-11-14T20:12:04.607189Z"
+      }
+    ],
+    "wake": {
+      "mode": "self",
+      "trigger_reason": "alert_fired",
+      "run_id": "1794687741143403000",
+      "investigation_start": "self",
+      "alert_after_ns": 27530437419,
+      "finding_after_ns": 633679452815,
+      "settled_after_ns": 970845419841
+    },
+    "findings": [
+      {
+        "id": "proxmox:guest:stopped:system-container-fe24c58f228eedf1",
+        "severity": "warning",
+        "category": "reliability",
+        "resource_alias": "gitea",
+        "resource_name": "gitea",
+        "title": "Proxmox LXC gitea stopped",
+        "investigation_status": "completed",
+        "investigation_outcome": "needs_attention",
+        "turn_count": 8,
+        "evidence_call_count": 10,
+        "tools_used": [
+          "pulse_query",
+          "pulse_metrics",
+          "pulse_storage",
+          "patrol_conclude_investigation"
+        ],
+        "conclusion": "### Investigation Summary\nLXC 112 (gitea, Alpine) on node pmxlab transitioned from running to stopped between 2026-11-14 20:10 and 20:22 UTC with no corresponding entry in the Proxmox task log, confirming the stop was not requested through Proxmox itself. The host node pmxlab stayed healthy through and after that window (CPU avg 4.3%, max 34.7%; memory avg ~50%, max 54.3%; no disk anomalies), and both sibling guests on the same node, nextcloud (vmid 111) and pihole (vmid 110), remained online throughout. Gitea's own pre-stop metrics show negligible CPU and memory use, and its last backup (2026-11-14 12:44:50Z) completed hours before the stop with no error. onboot is enabled, consistent with the finding's note that this was not an intentional disable.\n\n### Root Cause\nObserved failure mechanism: gitea (system-container-fe24c58f228eedf1, LXC 112 on pmxlab) halted outside of any Proxmox-initiated task, i.e., from inside the guest or due to a guest-level failure, not a host or hypervisor action.\nUnestablished: the specific internal trigger (application crash, in-guest shutdown command, kernel/cgroup fault, or OOM-kill inside the container) cannot be determined from available evidence, because Pulse has no command access to the pmxlab agent and cannot read gitea's guest console, syslog, or dmesg. Node-level and sibling-container metrics rule out shared host resource exhaustion as the cause, narrowing the origin to something internal to this guest, but the exact mechanism remains unobserved.\n\n### Affected Resources\n- system-container-fe24c58f228eedf1 (gitea, LXC 112 on pmxlab): affected resource, currently offline; this is the symptom, not necessarily the originating fault.\n- pmxlab (agent-cb92e49a2a913d3b): host node, confirmed healthy and not implicated as the cause; included only to rule out a shared-resource explanation.\n\n### Recommendation\nA person should open the gitea LXC console/log in the Proxmox UI directly to determine why it halted (application crash vs. in-guest command vs. kernel event). If the guest shows no unresolved fault, start it from Proxmox. No typed action can be proposed here because commands are not enabled on the Pulse agent on pmxlab, so Pulse cannot read gitea's logs or execute a start from this surface. Given this is the second detection of the same unrequested-stop condition, the operator should also judge whether enabling command access on this agent is warranted so future investigations can read logs and the governed Start action becomes available.\n\n### Conclusion\nNEEDS_ATTENTION: gitea stopped from inside the guest with no Proxmox-initiated task; the next diagnostic step (reading guest logs/console) and the remediation (starting the container) both require capabilities Pulse cannot exercise on pmxlab's command-disabled agent, so a person must inspect the guest via Proxmox directly and start it if appropriate."
+      }
+    ]
+  }
+}

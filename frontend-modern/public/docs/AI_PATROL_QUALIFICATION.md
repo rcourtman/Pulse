@@ -690,7 +690,11 @@ go run ./cmd/patrol-qualify -mode scorecard \
 ```
 
 `scorecard` grades each stored report again from its evidence, so a rubric
-change shows up without a new live run. A run that never reached a grade is
+change shows up without a new live run. A report keeps the manifest it ran
+under unless the catalog holds a newer version of that scenario whose only
+change is its `outcome`; then the catalog's rubric grades it, and a line under
+the table says how many runs that covered. A newer version that changed
+faults, resources or the lab leaves those runs on their recorded rubric. A run that never reached a grade is
 listed under the table as a lab or harness failure. It is never counted as a
 verdict on Patrol. `fault-set` exits non-zero when any run was invalid, and
 zero whatever the grades are.
@@ -792,6 +796,10 @@ nested Proxmox VE 9.2 node:
 | P3 | Handed over, woke by itself | Handed over, woke by itself |
 | P4 | Fixed, woke by itself | Handed over, woke by itself |
 | Score | 3 of 4 | 3 of 4 |
+
+P4 is at version 2. Its first rubric missed a conclusion that said the guest
+stopped "with no corresponding entry in the Proxmox task log", so v2 also
+accepts the task-log wordings Patrol used across the stored runs.
 
 P2 with commands on is the open cell. Patrol's alert check is told Pulse cannot
 run an action on the guest and concludes it cannot look inside either, so it
