@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "base_sha": "7dae365c79c32aa6ab47d1a5356c58b791fad0ae",
+  "verified_at": "2026-11-14T03:48:39Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxReplicationTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxReplicationTable.tsx": "fdb3b7145cc78e33117b70ac2d413def4f529a55202eac0256073bf67dd489ec"
+  },
+  "routes": [
+    "/proxmox/replication"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Actual ProxmoxReplicationTable with its actual fetchReplicationJobs, inventory parser, createNonSuspendingQuery, router and index.css. Six safe synthetic jobs: observed success, observed failure, explicit pending, missing outcome, disabled and future-unknown status. The before/final static builds use exactly the assigned parent and final table bytes with matching locked Vite6.4.5, Solid1.9.17 and Tailwind4.3.3.",
+    "Same fixture data, UTC frozen clock, URL, viewport, light/dark theme, keyboard disclosure/filter state and scroll0. Initial baseline was captured before runtime edits; the same frozen baseline build supplies the settled comparisons. Chromium1440/light and dark, WebKit390/light and dark; Playwright1.56.1 matches integration lock.",
+    "Unknown stays neutral instead of joining Pending. Missing failure counts stay unreported unless observed successful status establishes the canonical omitted-zero encoding. Explicit pending, failure, disabled, actual zero/positive counts, guest identity, route, chronology and all existing controls remain. The open unknown job explains the limit without hover.",
+    "183 executed browser assertions:148 full-matrix plus35 bounded light/narrow diagnostic assertions.30 original PNGs were opened with native view_image:13 comparable pairs plus4 new Unknown-filter captures. An earlier350ms phone Pending frame retained an ambiguous All highlight despite its Pending DOM assertion; the same-source1000ms before/after pair and actual class/color/focus facts show Pending visibly selected. Earlier frame and all script failures are retained, not erased or diagnosed.",
+    "All existing status buttons remain within the390px viewport. All six jobs remain visible in the overview and with the unknown detail open. No horizontal page overflow, page error or new API write. Proof is a consuming-surface fixture, not full App/IdP, native replication/guest recovery, installed protection or release availability."
+  ],
+  "interactions": [
+    "Focus the missing-outcome guest disclosure and press Space; inspect Unknown, Reported outcome/Failures unreported, complete route/schedule and the unchanged exact guest link. Close via the original control.",
+    "Expand phone Filters, focus Pending and press Space; confirm only explicit pending remains, aria-pressed/counts and visible selected styling. Select Unknown, confirm both unobserved jobs remain accessible and no existing filter is hidden.",
+    "Deliver a later real HTTP read with the previously unobserved job successful. Existing query refresh removes it from the selected Unknown filter, counts update, All still contains six jobs and the recovered row says Healthy. Browser and local server close are recorded."
+  ],
+  "evidence": {
+    "record": "browser-before.json; browser-after.json; BROWSER-DIAGNOSTIC.tar.xz",
+    "captures": "CAPTURES.json",
+    "observations": "PIXEL-OBSERVATIONS.md",
+    "fixture": "BROWSER-FIXTURE.tar.xz"
+  }
+}
