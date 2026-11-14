@@ -85,6 +85,11 @@ func TestPatrolCatalogSaysPulseCannotStartAGuestWithoutARunner(t *testing.T) {
 		if catalog.CommandsDisabled != nil {
 			t.Fatalf("CommandsDisabled = %#v, want unset on a commands-on node", catalog.CommandsDisabled)
 		}
+		// No action runs here, and Pulse can still read inside the guest
+		// through the node's agent. That is where pulse_read goes.
+		if reads := catalog.Reads; reads == nil || reads.HostName != "pmxlab" || reads.Guest != "container" || reads.HostResourceID == "" {
+			t.Fatalf("Reads = %#v, want reads inside the container through pmxlab", catalog.Reads)
+		}
 
 		_, err = broker.Submit(context.Background(), aicontracts.ActionProposal{
 			ProposalID: "proposal-1", FindingID: "finding-1", InvestigationID: "investigation-1",

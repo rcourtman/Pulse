@@ -6347,6 +6347,13 @@ entries. `TestPatrolCatalogSeparatesCommandsOffFromDisconnected` proves the
 catalog, the refusal and the three host states on real monitor state.
 `TestCapabilityCatalogSplitsDeclaredCapabilitiesByAvailability` proves the split.
 
+`aicontracts.ActionCapabilityCatalog` gains `reads` (`CommandReadHost`:
+`host_resource_id`, `host_name`, and `guest` set to `container` or `vm` when
+the reads run inside a Proxmox guest through its node's agent). It is set only
+when `commands_disabled` is not, from the routing the AI read tools use. It is
+additive and omitted when empty. `TestPatrolCatalogSaysPulseCannotStartAGuestWithoutARunner`
+proves it on a commands-on node with no runner.
+
 ### Organization withdrawal preserves valid authentication
 
 Synchronous protected replies distinguish an invalid admitted credential (401)

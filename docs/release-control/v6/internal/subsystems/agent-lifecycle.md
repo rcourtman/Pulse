@@ -5586,6 +5586,15 @@ enabled still does not count as a runner, and the sentence says the install
 option does not cover guest actions. No surface offers a step that connects a
 runner.
 
+### Patrol's catalog says when a guest can be read through its node's agent
+
+`internal/api/patrol_action_broker.go` sets the catalog's `reads` when the
+agent a read for the resource would go to is reporting, not stale, and reports
+`commandsEnabled` true (`tools.CommandReadHostForTarget`, the same routing
+`pulse_read` uses). For a Proxmox guest that is the node's agent, reading
+inside the guest. Nothing about enrolment, admission, command scope or the
+runner changed, and a dropped command session still refuses the read.
+
 ### A commands-off surface can open the installer with command access ticked
 
 `/settings/infrastructure?add=agent&commands=1` ticks "Allow Pulse to run

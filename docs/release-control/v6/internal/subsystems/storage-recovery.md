@@ -5039,6 +5039,10 @@ its `action_runner_unavailable` refusal, and Patrol's catalog repeats that
 refusal as `guest_actions_unavailable`. Both read existing resource state and
 write nothing.
 
+Patrol's catalog `reads` fact, set in `internal/api/patrol_action_broker.go`,
+reads existing resource state and writes nothing. It opens no storage,
+backup or recovery path.
+
 ### Commands-off refusal reasons open no storage or recovery path
 
 The `internal/api` action executors now report `host_commands_disabled` apart

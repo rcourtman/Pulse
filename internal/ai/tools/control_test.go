@@ -214,3 +214,45 @@ func TestReadRefusalSeparatesCommandsOffFromDisconnected(t *testing.T) {
 		t.Fatal("no read state must not read as commands-off")
 	}
 }
+
+// A read for a Proxmox guest goes through its node's agent. The read fact
+// names that host only when its agent reports commands on, and says the read
+// runs inside the guest.
+func TestCommandReadHostForTargetFollowsGuestRouting(t *testing.T) {
+	snapshot := func(commandsEnabled bool) models.StateSnapshot {
+		host := routingFixtureHost("agent-pve1", "pve1", "")
+		host.CommandsEnabled = commandsEnabled
+		return models.StateSnapshot{
+			Nodes:      []models.Node{{ID: "lab-pve1", Instance: "lab", Name: "pve1", Status: "online"}},
+			Hosts:      []models.Host{host},
+			Containers: []models.Container{{ID: "lab:pve1:111", Instance: "lab", Node: "pve1", VMID: 111, Name: "nextcloud", Type: "lxc", Status: "running"}},
+			VMs:        []models.VM{{ID: "lab:pve1:160", Instance: "lab", Node: "pve1", VMID: 160, Name: "builder", Type: "qemu", Status: "running"}},
+		}
+	}
+	on := unifiedresources.NewRegistry(nil)
+	on.IngestSnapshot(snapshot(true))
+	for target, guest := range map[string]string{"nextcloud": "container", "builder": "vm"} {
+		read, ok := CommandReadHostForTarget(on, target)
+		if !ok || read.Name != "pve1" || read.ResourceID == "" || read.Guest != guest {
+			t.Errorf("%s = %#v, %v, want reads inside the %s through pve1", target, read, ok, guest)
+		}
+		if _, disabled := CommandsDisabledHostForTarget(on, target); disabled {
+			t.Errorf("%s reads as commands-off on an agent with commands on", target)
+		}
+	}
+
+	off := unifiedresources.NewRegistry(nil)
+	off.IngestSnapshot(snapshot(false))
+	if read, ok := CommandReadHostForTarget(off, "nextcloud"); ok {
+		t.Errorf("commands off still reads: %#v", read)
+	}
+	if host, disabled := CommandsDisabledHostForTarget(off, "nextcloud"); !disabled || host.Name != "pve1" {
+		t.Errorf("commands off = %#v, %v, want pve1", host, disabled)
+	}
+	if _, ok := CommandReadHostForTarget(on, "no-such-guest"); ok {
+		t.Error("an unknown target must not read")
+	}
+	if _, ok := CommandReadHostForTarget(nil, "nextcloud"); ok {
+		t.Error("no read state must not read")
+	}
+}
