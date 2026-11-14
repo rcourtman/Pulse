@@ -11824,3 +11824,10 @@ and `internal/api/security_setup_fix.go`. Agent, install and connection routes k
 instance authority. Agent report, install, link and command routes read no
 destination from it, so agent lifecycle behavior does not change. The policy
 reads the provider-runtime flag through the licensing bridge.
+
+### Hosted landing organization (14 November 2026)
+
+Sessions that name no organization on a hosted runtime now land in the runtime's
+`PULSE_TENANT_ID` workspace. Agent and API-token requests keep their routing:
+org-bound tokens resolve by binding and unbound tokens stay in the default
+organization, so no agent lifecycle path changes.

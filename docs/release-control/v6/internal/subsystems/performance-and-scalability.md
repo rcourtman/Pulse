@@ -4778,3 +4778,10 @@ withhold saved links until the read succeeds. It is not erasure of every copy
 already held elsewhere, live IdP or original administrator recovery. Registered
 metadata-lifetime, Workloads consumer and runtime tests cover the boundaries;
 desktop/narrow browser proof must exercise the actual platform consumer.
+
+### Hosted organization bootstrap (14 November 2026)
+
+Hosted runtimes without the multi-tenant capability now read `GET /api/orgs` once
+during bootstrap, as multi-tenant runtimes already did, to land in the client
+workspace. Self-hosted single-organization runtimes make no extra request, and
+no polling, socket or render path changes.

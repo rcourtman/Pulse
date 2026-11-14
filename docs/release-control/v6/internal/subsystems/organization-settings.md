@@ -1202,3 +1202,12 @@ total JS/CSS limits and preload/integrity checks remain unchanged. Exact
 production validation must pass the resulting 6305-byte RolePanel ceiling. The
 prior failed budget results remain evidence; no runtime/auth/API/grant contract
 changes and no test timeouts are waived by the allowance.
+
+### Landing organization first in the list (14 November 2026)
+
+`GET /api/orgs` puts the organization a request naming none would land in first,
+so clients without a stored selection open it: a hosted runtime's own workspace,
+or the first membership of a user who cannot use the default organization. The
+list still filters by the same access policy. On a provider client runtime the
+list is readable without a lease; creating, changing and deleting organizations
+keep the subscription gate.

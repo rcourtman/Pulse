@@ -4663,6 +4663,7 @@
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/__tests__/App.architecture.test.ts",
+              "frontend-modern/src/__tests__/useAppRuntimeState.test.ts",
               "frontend-modern/src/utils/__tests__/apiClient.issue1640.test.ts",
               "frontend-modern/src/utils/__tests__/apiClient.org.test.ts",
               "tests/integration/tests/83-product-trust-accessibility.spec.ts"

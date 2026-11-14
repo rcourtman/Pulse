@@ -14513,8 +14513,16 @@ re-check the policy every 10 seconds. API-token bindings are unchanged.
 The hosted `402 subscription_required` payload applies to Pulse Cloud tenants. A
 provider MSP client runtime, marked `PULSE_PROVIDER_HOSTED=true` by its control plane,
 does not answer it for the workspace it was provisioned for: without a valid lease
-that workspace opens with Community behaviour. Organization routes and further
-organizations in that runtime still answer it.
+that workspace opens with Community behaviour. Organization routes other than the
+read-only `GET /api/orgs` list, and further organizations in that runtime, still
+answer it.
+
+On a hosted runtime a session that names no organization lands in the workspace
+named by `PULSE_TENANT_ID` when the user belongs to it, and `GET /api/orgs` lists
+the landing organization first. A new browser session that lost the handoff's
+`pulse_org_id` cookie and the tab's stored selection therefore opens the client
+workspace, not the empty default organization. An explicit selection, users
+outside the workspace and API tokens keep their routing.
 
 ### Notification destinations are organization-bound (6 November 2026)
 

@@ -182,13 +182,36 @@ func (c *DefaultAuthorizationChecker) userDefaultOrgAccess(ctx context.Context, 
 	}
 }
 
-// LandingOrgID returns the organization a request that names none should use
-// when the user cannot use the default organization: the first organization,
-// by ID, the user belongs to. It returns "" when the default organization is
-// usable or the user belongs to no organization.
+// hostedRuntimeHomeOrgID returns the workspace a hosted runtime was provisioned
+// for, named by PULSE_TENANT_ID, or "" when none is configured.
+func hostedRuntimeHomeOrgID() string {
+	orgID := strings.TrimSpace(os.Getenv("PULSE_TENANT_ID"))
+	if orgID == "default" || !isValidOrganizationID(orgID) {
+		return ""
+	}
+	return orgID
+}
+
+// LandingOrgID returns the organization a request that names none should use.
+// A hosted runtime serves one customer workspace, so its members land there
+// rather than in the runtime's empty default organization; the cloud handoff
+// only names that workspace in a cookie, which a new browser session may not
+// carry. In self-hosted multi-organization mode, a user who cannot use the
+// default organization lands in the first organization, by ID, they belong
+// to. It returns "" when the default organization is the right landing or the
+// user belongs to no organization.
 func (c *DefaultAuthorizationChecker) LandingOrgID(ctx context.Context, userID string) string {
 	userID = strings.TrimSpace(userID)
-	if userID == "" || !c.defaultOrgRestricted() {
+	if userID == "" {
+		return ""
+	}
+	if c.hostedMode {
+		if home := hostedRuntimeHomeOrgID(); home != "" && c.UserCanAccessOrg(userID, home) {
+			return home
+		}
+		return ""
+	}
+	if !c.defaultOrgRestricted() {
 		return ""
 	}
 	if c.userDefaultOrgAccess(ctx, userID).Allowed {
