@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "base_sha": "644f74cd8641a244e3e25b9c4b1e4a66f3f527df",
+  "verified_at": "2026-11-14T12:49:24.605397Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsCoverageStrip.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsCoverageStrip.tsx": "dac9e9f00f0d3059f8e48a170dd61a5e1066c2f660f4fc73ddf13fdc026d7e93"
+  },
+  "routes": [
+    "/proxmox/backups/coverage",
+    "/proxmox/backups/coverage?reason=source-failed"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Actual ProxmoxBackupsTable, inventory parsers/recovery model, useProtectionPostures, HTTP API client, Backup health and Coverage table inside an offline routed fixture. Only the surrounding Backups heading, safe synthetic resources/HTTP bodies and dark-mode provider are supplied; not full App, native appliance or original-estate recovery.",
+    "One protected, one source-failed, one partly unreadable and one missing-assessment workload; completed/running/failed PBS entries plus an unmatched completed backup. Missing fourth assessment correctly remains unknown, rated 1/4. Current source produces 2 completed restore points, 1 running, 1 failed, 2 with PBS backups, 1 unmatched. No backup or protection state logic changed.",
+    "Chromium1440x900 and WebKit390x844, light/dark, unfiltered/keyboard-filtered Coverage. 45 baseline and61final assertions,16native-opened captures/eight comparable pairs. Same data,viewport,theme,interaction and reduced-motion settings. Baseline644f74cd8641a244e3e25b9c4b1e4a66f3f527df; exact final runtime content in this receipt.",
+    "Baseline phone hides the entire inventory summary. Final phone shows all its values below the unchanged verdict; original reason rows,counts,percentages,tabs,search,Filters,workload rows,unmatched disclosure and rule control remain visible. Desktop layout retained; light-theme pairs are byte-identical, dark pairs inspected without claiming byte identity. No horizontal page overflow or page errors.",
+    "Final viewport round trips across640px retain exactly one visible inventory summary with live counts; no duplicate summary DOM. Read-only GET fixtures; no new collection,grants,retry or recovery-policy behavior.",
+    "Playwright1.56.1matches integration lock. Exact launch snapshotf96239b2e6a3edf5058b3c995eec2344de217ea2e5c6ccb07ec5dfccf95ddcf2 installed offline from cache; Vite6.4.5,Solid1.9.17,Tailwind4.3.3. Static fixture compilation is evidence only,not a production-build claim."
+  ],
+  "interactions": [
+    "Read Backup health and Coverage; focus Last backup failed and press Enter; verify aria-pressed and actual reason route filter,with summary independent of the narrower table.",
+    "Resize each final browser context to the opposite viewport and back,verify one visible summary and retained failed count."
+  ],
+  "evidence": {
+    "record": "before-result.json;after-result.json",
+    "captures": "PAIRS.json",
+    "observations": "PIXEL-OBSERVATIONS.md",
+    "fixture": "BROWSER-FIXTURE.tar.xz"
+  },
+  "baseline_source_sha": "644f74cd8641a244e3e25b9c4b1e4a66f3f527df",
+  "dependency_snapshot": "f96239b2e6a3edf5058b3c995eec2344de217ea2e5c6ccb07ec5dfccf95ddcf2"
+}
