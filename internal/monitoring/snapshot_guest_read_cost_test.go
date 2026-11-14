@@ -4,11 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"os/exec"
 	"reflect"
 	"regexp"
 	"runtime"
+	"runtime/debug"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -148,7 +151,10 @@ func TestSnapshotGuestReadDoesNotCopyUnusedDetails(t *testing.T) {
 		cmd.Env = append(os.Environ(), childEnv+"="+t.Name())
 		output, err := cmd.CombinedOutput()
 		t.Logf("isolated snapshot allocation check:\n%s", output)
-		if err != nil || !strings.Contains(string(output), "--- PASS: "+t.Name()+" ") || !strings.Contains(string(output), "unused-detail copy positive control:") {
+		if err != nil || !strings.Contains(string(output), "--- PASS: "+t.Name()+" ") ||
+			!strings.Contains(string(output), "unused-detail copy positive control (one slice per guest):") ||
+			!strings.Contains(string(output), "unused-detail copy positive control (one call):") ||
+			!strings.Contains(string(output), "unused-detail copy positive control (full conversion):") {
 			t.Fatalf("isolated allocation guard/control did not pass: %v", err)
 		}
 		return
@@ -160,20 +166,156 @@ func TestSnapshotGuestReadDoesNotCopyUnusedDetails(t *testing.T) {
 		return nil, errBackupPollingUnread
 	}}
 	call := func(m *Monitor) { m.pollGuestSnapshots(context.Background(), "site", client) }
-	sparse, detailed := snapshotGuestReadFixture(16, 0), snapshotGuestReadFixture(16, 64)
-	base, grown, peak := backupPollingAllocationFloors(t, sparse, detailed, call)
-	if grown > base+4 || peak > base+100 {
-		t.Fatalf("unused guest details increased real poll allocations: sparse=%.0f detailed=%.0f peak=%.0f", base, grown, peak)
+	// Noise per call is fixed; any per-detail copy grows with the entry count.
+	sparse, detailed := snapshotGuestReadFixture(16, 0), snapshotGuestReadFixture(16, 256)
+	poll := snapshotGuestReadCosts(t, sparse, detailed, call)
+	t.Logf("real poll allocations: %s", poll)
+	if poll.copiesEveryCall() || poll.copiesSomeCall() {
+		t.Fatalf("unused guest details increased real poll allocations: %s", poll)
 	}
-	base, grown, _ = backupPollingAllocationFloors(t, sparse, detailed, func(m *Monitor) {
+
+	// A small real regression: one detached address list per guest.
+	copyAddresses := func(m *Monitor) {
+		readState := m.resourceStore.(unifiedresources.ReadState)
+		for _, vm := range readState.VMs() {
+			backupPollingReadResult = vm.IPAddresses()
+		}
+		for _, ct := range readState.Containers() {
+			backupPollingReadResult = ct.IPAddresses()
+		}
+	}
+	every := snapshotGuestReadCosts(t, sparse, detailed, func(m *Monitor) {
 		call(m)
-		for _, vm := range m.resourceStore.(unifiedresources.ReadState).VMs() {
-			backupPollingReadResult = vmFromReadStateView(vm)
+		copyAddresses(m)
+	})
+	t.Logf("unused-detail copy positive control (one slice per guest): %s", every)
+	if !every.copiesEveryCall() {
+		t.Fatal("guard missed one copied detail slice per guest")
+	}
+
+	// The same copy on one measured call per fixture leaves the minimum and
+	// median clean, so only the peak can expose it.
+	calls := map[*Monitor]int{}
+	once := snapshotGuestReadCosts(t, sparse, detailed, func(m *Monitor) {
+		call(m)
+		if calls[m]++; calls[m] == snapshotGuestReadWarmup+5 {
+			copyAddresses(m)
 		}
 	})
-	t.Logf("unused-detail copy positive control: %.0f -> %.0f", base, grown)
-	if grown <= base+500 {
+	t.Logf("unused-detail copy positive control (one call): %s", once)
+	if once.copiesEveryCall() || !once.copiesSomeCall() {
+		t.Fatal("a copy on one call must keep a clean minimum and median and fail the peak bound")
+	}
+
+	// The regression the guard was written for: converting every guest.
+	full := snapshotGuestReadCosts(t, sparse, detailed, func(m *Monitor) {
+		call(m)
+		readState := m.resourceStore.(unifiedresources.ReadState)
+		for _, vm := range readState.VMs() {
+			backupPollingReadResult = vmFromReadStateView(vm)
+		}
+		for _, ct := range readState.Containers() {
+			backupPollingReadResult = containerFromReadStateView(ct)
+		}
+	})
+	t.Logf("unused-detail copy positive control (full conversion): %s", full)
+	if !full.copiesEveryCall() || full.detailed.objects[0] <= full.sparse.objects[0]+500 {
 		t.Fatal("fixture did not expose full guest conversions in the real callback")
+	}
+}
+
+// snapshotGuestReadCallCost summarises the heap allocations of single complete
+// poll calls on one fixture.
+type snapshotGuestReadCallCost struct {
+	bytes, objects [3]uint64 // min, median, max
+}
+
+func (c snapshotGuestReadCallCost) String() string {
+	return fmt.Sprintf("bytes min=%d median=%d max=%d, objects min=%d median=%d max=%d",
+		c.bytes[0], c.bytes[1], c.bytes[2], c.objects[0], c.objects[1], c.objects[2])
+}
+
+type snapshotGuestReadCostPair struct {
+	sparse, detailed snapshotGuestReadCallCost
+}
+
+func (p snapshotGuestReadCostPair) String() string {
+	return fmt.Sprintf("sparse %s; detailed %s", p.sparse, p.detailed)
+}
+
+// Bytes grow with what is copied, and the detailed fixture's 256 entries make
+// any per-detail copy large next to noise: one address list per guest adds
+// about 90 KiB per call, converting every guest about 2 MiB. The median object
+// bound catches copies of many tiny values the allocator packs together, such
+// as one guest's cloned address strings (+513 objects, +13 KiB). Over 200 race
+// runs under load the fixtures' minimum, median and maximum bytes differed by
+// at most 1.7 KiB and their median objects by at most 15.
+const (
+	snapshotGuestReadWarmup      = 2
+	snapshotGuestReadCallRounds  = 31
+	snapshotGuestReadEveryCall   = 4 << 10
+	snapshotGuestReadSomeCall    = 16 << 10
+	snapshotGuestReadMedianAlloc = 32
+)
+
+// copiesEveryCall reports a copy present on every call: it moves both the
+// minimum and the median.
+func (p snapshotGuestReadCostPair) copiesEveryCall() bool {
+	return p.detailed.bytes[0] > p.sparse.bytes[0]+snapshotGuestReadEveryCall ||
+		p.detailed.bytes[1] > p.sparse.bytes[1]+snapshotGuestReadEveryCall ||
+		p.detailed.objects[1] > p.sparse.objects[1]+snapshotGuestReadMedianAlloc
+}
+
+// copiesSomeCall reports a copy on any single call.
+func (p snapshotGuestReadCostPair) copiesSomeCall() bool {
+	return p.detailed.bytes[2] > p.sparse.bytes[2]+snapshotGuestReadSomeCall
+}
+
+// snapshotGuestReadCosts measures every single poll call separately,
+// interleaving the fixtures, with one P and the collector paused. A poll's
+// own allocations are fixed for a fixture; runtime and library caches only add
+// to a call. Race builds add the most: sync.Pool drops a quarter of the values
+// it is given, so any fmt call in the poll can miss its printer cache. That
+// spreads object counts over 60 or more per call, which no small count bound
+// survives, and averaging five calls (testing.AllocsPerRun) folds one noisy
+// call into its whole five-call sample.
+func snapshotGuestReadCosts(t *testing.T, sparse, detailed *Monitor, call func(*Monitor)) snapshotGuestReadCostPair {
+	t.Helper()
+	defer runtime.GOMAXPROCS(runtime.GOMAXPROCS(1))
+	runtime.GC()
+	defer debug.SetGCPercent(debug.SetGCPercent(-1))
+	defer debug.SetMemoryLimit(debug.SetMemoryLimit(math.MaxInt64))
+	var stats runtime.MemStats
+	measure := func(m *Monitor) (bytes, objects uint64) {
+		runtime.ReadMemStats(&stats)
+		bytes, objects = stats.TotalAlloc, stats.Mallocs
+		backupPollingCompleteRead(t, m, call)
+		runtime.ReadMemStats(&stats)
+		return stats.TotalAlloc - bytes, stats.Mallocs - objects
+	}
+	for i := 0; i < snapshotGuestReadWarmup; i++ {
+		measure(sparse)
+		measure(detailed)
+	}
+	var sb, so, db, do []uint64
+	for round := 0; round < snapshotGuestReadCallRounds; round++ {
+		for _, detailedFirst := range []bool{round%2 == 1, round%2 == 0} {
+			if detailedFirst {
+				b, o := measure(detailed)
+				db, do = append(db, b), append(do, o)
+			} else {
+				b, o := measure(sparse)
+				sb, so = append(sb, b), append(so, o)
+			}
+		}
+	}
+	summarise := func(counts []uint64) [3]uint64 {
+		slices.Sort(counts)
+		return [3]uint64{counts[0], counts[len(counts)/2], counts[len(counts)-1]}
+	}
+	return snapshotGuestReadCostPair{
+		sparse:   snapshotGuestReadCallCost{bytes: summarise(sb), objects: summarise(so)},
+		detailed: snapshotGuestReadCallCost{bytes: summarise(db), objects: summarise(do)},
 	}
 }
 
