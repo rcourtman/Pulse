@@ -1,0 +1,165 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "7254714b1315286d02d0250c9f0ab1d9eec9cfb7",
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "c31bad53ad7b6fa9308bdd5ca168a475fddc59e4dff5792252e32780aa24b6e1"
+  },
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx"
+  ],
+  "routes": [
+    "/proxmox/backups (actual ProxmoxBackupsTable, canonical DTO adapter and stylesheet; safe offline HTTP fixtures, not authenticated App)"
+  ],
+  "states": [
+    "healthy and online-alias PBS servers with independent successful datastore capacity; 94% remains danger",
+    "unknown and degraded connection states do not claim Unreachable or current capacity",
+    "failed connection retains Unreachable/Unavailable",
+    "open alias/unknown datastore and same-identity connected/degraded/error/healthy refresh"
+  ],
+  "interactions": [
+    "Space-key open of each selected datastore; explicit close on its matching row",
+    "live DTO replacement preserves selected datastore DOM and identity",
+    "all five servers/datastores, counts, links and existing controls retained; no horizontal page overflow",
+    "258 assertions; 32 captures / 16 comparable pairs; all 32 viewed with native view_image"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "browsers": [
+    {
+      "engine": "chromium",
+      "width": 1440,
+      "height": 900,
+      "theme": "light",
+      "browserVersion": "141.0.7390.37",
+      "errors": [],
+      "transitions": [
+        {
+          "phase": "connected",
+          "used": "40.0%400 B / 1000 B",
+          "indicator": "inline-block rounded-full shrink-0 h-1.5 w-1.5 bg-emerald-500 dark:bg-emerald-400"
+        },
+        {
+          "phase": "degraded",
+          "used": "Unknown",
+          "indicator": "inline-block rounded-full shrink-0 h-1.5 w-1.5 bg-amber-500 dark:bg-amber-400"
+        },
+        {
+          "phase": "offline",
+          "used": "Unavailable",
+          "indicator": "inline-block rounded-full shrink-0 h-1.5 w-1.5 bg-red-500 dark:bg-red-400"
+        },
+        {
+          "phase": "healthy",
+          "used": "40.0%400 B / 1000 B",
+          "indicator": "inline-block rounded-full shrink-0 h-1.5 w-1.5 bg-emerald-500 dark:bg-emerald-400"
+        }
+      ],
+      "layout": "full"
+    },
+    {
+      "engine": "chromium",
+      "width": 1440,
+      "height": 900,
+      "theme": "dark",
+      "browserVersion": "141.0.7390.37",
+      "errors": [],
+      "transitions": [
+        {
+          "phase": "connected",
+          "used": "40.0%400 B / 1000 B",
+          "indicator": "inline-block rounded-full shrink-0 h-1.5 w-1.5 bg-emerald-500 dark:bg-emerald-400"
+        },
+        {
+          "phase": "degraded",
+          "used": "Unknown",
+          "indicator": "inline-block rounded-full shrink-0 h-1.5 w-1.5 bg-amber-500 dark:bg-amber-400"
+        },
+        {
+          "phase": "offline",
+          "used": "Unavailable",
+          "indicator": "inline-block rounded-full shrink-0 h-1.5 w-1.5 bg-red-500 dark:bg-red-400"
+        },
+        {
+          "phase": "healthy",
+          "used": "40.0%400 B / 1000 B",
+          "indicator": "inline-block rounded-full shrink-0 h-1.5 w-1.5 bg-emerald-500 dark:bg-emerald-400"
+        }
+      ],
+      "layout": "full"
+    },
+    {
+      "engine": "webkit",
+      "width": 390,
+      "height": 844,
+      "theme": "light",
+      "browserVersion": "26.0",
+      "errors": [],
+      "transitions": [
+        {
+          "phase": "connected",
+          "used": "40.0%",
+          "indicator": "inline-block rounded-full shrink-0 h-1.5 w-1.5 bg-emerald-500 dark:bg-emerald-400"
+        },
+        {
+          "phase": "degraded",
+          "used": "Unknown",
+          "indicator": "inline-block rounded-full shrink-0 h-1.5 w-1.5 bg-amber-500 dark:bg-amber-400"
+        },
+        {
+          "phase": "offline",
+          "used": "Unavailable",
+          "indicator": "inline-block rounded-full shrink-0 h-1.5 w-1.5 bg-red-500 dark:bg-red-400"
+        },
+        {
+          "phase": "healthy",
+          "used": "40.0%",
+          "indicator": "inline-block rounded-full shrink-0 h-1.5 w-1.5 bg-emerald-500 dark:bg-emerald-400"
+        }
+      ],
+      "layout": "compact"
+    },
+    {
+      "engine": "webkit",
+      "width": 390,
+      "height": 844,
+      "theme": "dark",
+      "browserVersion": "26.0",
+      "errors": [],
+      "transitions": [
+        {
+          "phase": "connected",
+          "used": "40.0%",
+          "indicator": "inline-block rounded-full shrink-0 h-1.5 w-1.5 bg-emerald-500 dark:bg-emerald-400"
+        },
+        {
+          "phase": "degraded",
+          "used": "Unknown",
+          "indicator": "inline-block rounded-full shrink-0 h-1.5 w-1.5 bg-amber-500 dark:bg-amber-400"
+        },
+        {
+          "phase": "offline",
+          "used": "Unavailable",
+          "indicator": "inline-block rounded-full shrink-0 h-1.5 w-1.5 bg-red-500 dark:bg-red-400"
+        },
+        {
+          "phase": "healthy",
+          "used": "40.0%",
+          "indicator": "inline-block rounded-full shrink-0 h-1.5 w-1.5 bg-emerald-500 dark:bg-emerald-400"
+        }
+      ],
+      "layout": "compact"
+    }
+  ],
+  "verified_at": "2026-11-14T02:49:36Z",
+  "evidence": "RECEIPTS.md; CAPTURES.json; browser-before.json; browser-after.json; BROWSER-FIXTURE.tar.xz in candidate 20261114T023403Z-web-product output",
+  "limits": "Containing source-suite proof and independent comparable-pixel review remain separate; no original-estate, installation, release or backup/thaw/restore claim."
+}

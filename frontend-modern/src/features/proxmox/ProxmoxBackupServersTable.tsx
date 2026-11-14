@@ -77,6 +77,7 @@ interface BackupServerRow {
   serverName: string;
   online: boolean;
   connectionLabel: string;
+  connectionVariant: StatusIndicatorVariant;
   datastore?: ResourcePBSDatastore;
   // The worst backend-judged GC, prune, verify or sync result for this store.
   jobs: DatastoreJobSummary;
@@ -91,6 +92,7 @@ interface BackupServerGroup {
   serverName: string;
   online: boolean;
   connectionLabel: string;
+  connectionVariant: StatusIndicatorVariant;
   datastoreCount: number;
 }
 
@@ -109,6 +111,7 @@ export function groupBackupServerRows(rows: readonly BackupServerRow[]): BackupS
         serverName: row.serverName,
         online: row.online,
         connectionLabel: row.connectionLabel,
+        connectionVariant: row.connectionVariant,
         datastoreCount: 0,
       };
       items.push({ kind: 'server', group: current });
@@ -136,28 +139,63 @@ function buildBackupCounts(backups: readonly PBSBackup[]): Map<string, Map<strin
   return counts;
 }
 
-function serverIsOnline(resource: Resource): boolean {
-  const status = (resource.status ?? '').toLowerCase();
-  const conn = (resource.pbs?.connectionHealth ?? '').trim().toLowerCase();
-  if (conn) return conn === 'healthy' || conn === 'ok';
-  return status === 'online' || status === 'running';
+// The resource model also accepts online/running/connected as successful PBS
+// connection evidence. An explicit warning or unknown value must not fall
+// through to a retained online status, nor turn into a failed connection.
+function serverConnection(
+  resource: Resource,
+): Pick<BackupServerRow, 'online' | 'connectionLabel' | 'connectionVariant'> {
+  const value = resource.pbs?.connectionHealth?.trim() || (resource.status ?? '').trim();
+  let connectionVariant: StatusIndicatorVariant = 'muted';
+  switch (value.toLowerCase()) {
+    case 'healthy':
+    case 'ok':
+    case 'online':
+    case 'running':
+    case 'connected':
+      connectionVariant = 'success';
+      break;
+    case 'warning':
+    case 'degraded':
+      connectionVariant = 'warning';
+      break;
+    case 'unhealthy':
+    case 'offline':
+    case 'down':
+    case 'stopped':
+    case 'error':
+    case 'disconnected':
+    case 'failed':
+    case 'unreachable':
+    case 'timeout':
+      connectionVariant = 'danger';
+      break;
+  }
+  return {
+    online: connectionVariant === 'success',
+    connectionLabel: value ? value.charAt(0).toUpperCase() + value.slice(1) : 'Unknown',
+    connectionVariant,
+  };
 }
 
-function connectionLabel(resource: Resource): string {
-  const conn = resource.pbs?.connectionHealth?.trim();
-  if (conn) return conn.charAt(0).toUpperCase() + conn.slice(1);
-  return serverIsOnline(resource) ? 'Online' : 'Offline';
+function connectionToneClass(variant: StatusIndicatorVariant): string {
+  if (variant === 'danger') return 'text-red-600 dark:text-red-400';
+  if (variant === 'warning') return 'text-amber-600 dark:text-amber-300';
+  return 'text-muted';
 }
 
 // PBS retains a named datastore when its status read fails, with zero-valued
 // capacity and explicit unavailable/error evidence. Those zeros are not an
 // empty datastore. Reachability alone cannot establish a successful store read.
-function datastoreCapacity(datastore: ResourcePBSDatastore | undefined, online: boolean) {
+function datastoreCapacity(
+  datastore: ResourcePBSDatastore | undefined,
+  connection: StatusIndicatorVariant,
+) {
   if (!datastore) return { state: 'absent' as const, percent: undefined };
   const status =
     typeof datastore.status === 'string' ? datastore.status.trim().toLowerCase() : datastore.status;
   if (
-    !online ||
+    connection === 'danger' ||
     (typeof datastore.error === 'string' && Boolean(datastore.error.trim())) ||
     ['unavailable', 'offline', 'error', 'failed'].includes(status ?? '')
   ) {
@@ -166,6 +204,7 @@ function datastoreCapacity(datastore: ResourcePBSDatastore | undefined, online: 
   // Empty status is supported by older payloads; an unrecognised explicit
   // status must not be interpreted as current healthy capacity.
   if (
+    connection !== 'success' ||
     (status && !['available', 'online', 'healthy', 'ok'].includes(status)) ||
     !Number.isFinite(datastore.total) ||
     datastore.total <= 0 ||
@@ -237,7 +276,7 @@ function BackupServerDatastoreContext(props: {
   const capacityText = () => {
     const datastore = props.row.datastore;
     if (!datastore) return 'No datastore data';
-    const reading = datastoreCapacity(datastore, props.row.online);
+    const reading = datastoreCapacity(datastore, props.row.connectionVariant);
     if (reading.state !== 'available') {
       return `${reading.state === 'unavailable' ? 'Unavailable' : 'Unknown'}. This does not mean the datastore is empty.`;
     }
@@ -254,7 +293,7 @@ function BackupServerDatastoreContext(props: {
     return formatPlatformTableIntegerValue(props.row.backupCount);
   };
   const capacityTone = (): DetailValueTone | undefined => {
-    const reading = datastoreCapacity(props.row.datastore, props.row.online);
+    const reading = datastoreCapacity(props.row.datastore, props.row.connectionVariant);
     if (reading.state === 'unavailable' || reading.state === 'unknown') return 'warning';
     if (reading.percent !== undefined && reading.percent >= 90) return 'danger';
     if (reading.percent !== undefined && reading.percent >= 75) return 'warning';
@@ -275,7 +314,7 @@ function BackupServerDatastoreContext(props: {
             <DrawerSubjectHeading
               headingId={headingId()}
               title={datastore().name}
-              statusVariant={props.row.online ? 'success' : 'danger'}
+              statusVariant={props.row.connectionVariant}
               statusLabel={props.row.connectionLabel}
               trailing={<span class="truncate text-xs text-muted">on {props.row.serverName}</span>}
             />
@@ -548,8 +587,7 @@ export function buildBackupServerRows(
       .sort((left, right) => left.name.localeCompare(right.name));
     const host = {
       serverName: server.name,
-      online: serverIsOnline(server),
-      connectionLabel: connectionLabel(server),
+      ...serverConnection(server),
     };
     // Each keyed row has a reconciled Solid store. Give it its own JSON DTO
     // snapshot: otherwise joining an Agent mutates the source's service
@@ -592,7 +630,7 @@ function BackupServerGroupRow(props: { group: BackupServerGroup; colSpan: number
       <td colspan={props.colSpan} class={getGroupedTableRowCellClass()}>
         <div class="flex min-w-0 items-center gap-2" title={props.group.connectionLabel}>
           <StatusDot
-            variant={props.group.online ? 'success' : 'danger'}
+            variant={props.group.connectionVariant}
             title={props.group.connectionLabel}
             ariaLabel={props.group.connectionLabel}
             size="xs"
@@ -613,7 +651,7 @@ function BackupServerGroupRow(props: { group: BackupServerGroup; colSpan: number
           {/* Connection health is the server's, so only its header says it. */}
           <Show when={!props.group.online}>
             <span
-              class="shrink-0 text-[10px] font-medium text-red-600 dark:text-red-400"
+              class={`shrink-0 text-[10px] font-medium ${connectionToneClass(props.group.connectionVariant)}`}
               data-backup-server-connection
             >
               {props.group.connectionLabel}
@@ -741,7 +779,8 @@ export function ProxmoxBackupServersTable(props: {
                   }
                   const row = item.row;
                   // Read admission is not a generic storage-adapter capacity snapshot.
-                  const capacityEvidence = () => datastoreCapacity(row.datastore, row.online);
+                  const capacityEvidence = () =>
+                    datastoreCapacity(row.datastore, row.connectionVariant);
                   const pct = () => capacityEvidence().percent;
                   // Only a readable store can be forecast; Unavailable stays the answer.
                   const forecast = createMemo(() => {
@@ -837,10 +876,14 @@ export function ProxmoxBackupServersTable(props: {
                                     when={row.online}
                                     fallback={
                                       <span
-                                        class="block truncate text-[11px] text-red-600 dark:text-red-400"
+                                        class={`block truncate text-[11px] ${connectionToneClass(row.connectionVariant)}`}
                                         title={`${row.serverName}: ${row.connectionLabel}`}
                                       >
-                                        Unreachable
+                                        {row.connectionVariant === 'danger'
+                                          ? 'Unreachable'
+                                          : row.connectionVariant === 'warning'
+                                            ? row.connectionLabel
+                                            : 'Unknown'}
                                       </span>
                                     }
                                   >
@@ -989,7 +1032,7 @@ export function ProxmoxBackupServersTable(props: {
                       <PlatformResourceDetailTableRow
                         resource={row.resource}
                         statusIndicator={{
-                          variant: row.online ? 'success' : 'danger',
+                          variant: row.connectionVariant,
                           label: row.connectionLabel,
                         }}
                         open={isExpanded()}
