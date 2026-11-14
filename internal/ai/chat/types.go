@@ -248,6 +248,11 @@ type ExecuteRequest struct {
 	// HasExecuteAuthority is injected by the authenticated server boundary.
 	// It is never accepted from provider/model JSON.
 	HasExecuteAuthority bool `json:"-"`
+	// HasHostCommandAuthority is the caller's canonical action-execute
+	// capability, injected by the authenticated server boundary. Without it
+	// the turn offers and runs no tool that executes a command on a host.
+	// Never accepted from provider/model JSON.
+	HasHostCommandAuthority bool `json:"-"`
 
 	// SuppressSessionEvent is set by HTTP streaming callers that have already
 	// emitted the browser-visible session event before expensive handoff or

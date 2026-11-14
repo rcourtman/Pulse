@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/cost"
@@ -1313,10 +1314,12 @@ func TestService_ExecuteStream_InventoryCountAnswersFromCanonicalStateWithoutPro
 
 	var providerCalled atomic.Bool
 	var capturedProviderTools []providers.Tool
+	var capturedSystemPrompt string
 	provider := &stubServiceProvider{
 		streamFn: func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
 			providerCalled.Store(true)
 			capturedProviderTools = append([]providers.Tool(nil), req.Tools...)
+			capturedSystemPrompt = req.System
 			callback(providers.StreamEvent{
 				Type: "content",
 				Data: providers.ContentEvent{Text: "provider-backed count"},
@@ -1485,8 +1488,9 @@ func TestService_ExecuteStream_InventoryCountAnswersFromCanonicalStateWithoutPro
 	doneModel = ""
 	countedProgressSeen = false
 	err = service.ExecuteStream(context.Background(), ExecuteRequest{
-		SessionID: "inventory-count-explicit-command",
-		Prompt:    "Use read-only tools only. On node delly, count entries in /dev with `ls /dev | wc -l`; answer with the number only.",
+		SessionID:               "inventory-count-explicit-command",
+		Prompt:                  "Use read-only tools only. On node delly, count entries in /dev with `ls /dev | wc -l`; answer with the number only.",
+		HasHostCommandAuthority: true,
 	}, func(event StreamEvent) {
 		switch event.Type {
 		case "content":
@@ -1533,6 +1537,35 @@ func TestService_ExecuteStream_InventoryCountAnswersFromCanonicalStateWithoutPro
 	set := toolNameSet(capturedProviderTools)
 	if !set["pulse_read"] {
 		t.Fatalf("expected explicit command count to expose pulse_read, got %#v", set)
+	}
+	if strings.Contains(capturedSystemPrompt, agentcapabilities.HostCommandAuthorityPromptNote) {
+		t.Fatal("a caller allowed to run actions must not get the host-command boundary note")
+	}
+
+	// The same request from a caller whose role cannot run actions offers no
+	// host-command tool, and the prompt says why.
+	providerCalled.Store(false)
+	capturedProviderTools = nil
+	capturedSystemPrompt = ""
+	err = service.ExecuteStream(context.Background(), ExecuteRequest{
+		SessionID: "inventory-count-explicit-command-viewer",
+		Prompt:    "Use read-only tools only. On node delly, count entries in /dev with `ls /dev | wc -l`; answer with the number only.",
+	}, func(StreamEvent) {})
+	if err != nil {
+		t.Fatalf("viewer ExecuteStream failed: %v", err)
+	}
+	if !providerCalled.Load() {
+		t.Fatal("expected viewer turn to reach provider")
+	}
+	set = toolNameSet(capturedProviderTools)
+	if set["pulse_read"] {
+		t.Fatalf("pulse_read offered to a caller without host-command authority: %#v", set)
+	}
+	if !set["pulse_query"] {
+		t.Fatalf("viewer lost Pulse data tools: %#v", set)
+	}
+	if !strings.Contains(capturedSystemPrompt, agentcapabilities.HostCommandAuthorityPromptNote) {
+		t.Fatal("viewer prompt is missing the host-command boundary note")
 	}
 }
 

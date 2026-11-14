@@ -643,6 +643,11 @@ type PulseToolExecutor struct {
 	// permission to execute infrastructure mutations.
 	hasExecuteAuthority   bool
 	executeAuthorityBound bool
+	// hasHostCommandAuthority is the request caller's canonical
+	// action-execute capability. Bound false, it withholds every tool
+	// invocation that runs a command on a host.
+	hasHostCommandAuthority   bool
+	hostCommandAuthorityBound bool
 	// denyInfrastructureMutations is the request-local execution
 	// restriction for non-interactive read-only workloads (e.g. Patrol
 	// investigations): every infrastructure-mutating invocation is
@@ -812,6 +817,8 @@ func (e *PulseToolExecutor) Clone() *PulseToolExecutor {
 		orgID:                       e.orgID,
 		hasExecuteAuthority:         e.hasExecuteAuthority,
 		executeAuthorityBound:       e.executeAuthorityBound,
+		hasHostCommandAuthority:     e.hasHostCommandAuthority,
+		hostCommandAuthorityBound:   e.hostCommandAuthorityBound,
 		denyInfrastructureMutations: e.denyInfrastructureMutations,
 		pulseStateAllowlist:         clonePulseStateAllowlist(e.pulseStateAllowlist),
 		executionProfile:            e.executionProfile,
@@ -894,6 +901,20 @@ func (e *PulseToolExecutor) SetControlLevel(level ControlLevel) {
 func (e *PulseToolExecutor) SetExecuteAuthority(allowed bool) {
 	e.hasExecuteAuthority = allowed
 	e.executeAuthorityBound = true
+}
+
+// SetHostCommandAuthority binds whether the current request's caller holds
+// the canonical action-execute capability. Without it, tools that run a
+// command on a host are neither offered nor executable. Never serialized.
+func (e *PulseToolExecutor) SetHostCommandAuthority(allowed bool) {
+	e.hasHostCommandAuthority = allowed
+	e.hostCommandAuthorityBound = true
+}
+
+// HostCommandsWithheld reports whether this executor is bound to a caller
+// without host-command authority.
+func (e *PulseToolExecutor) HostCommandsWithheld() bool {
+	return e != nil && e.hostCommandAuthorityBound && !e.hasHostCommandAuthority
 }
 
 // RegisterTool allows tests or extensions to add tools at runtime.
@@ -1099,6 +1120,8 @@ func (e *PulseToolExecutor) invocationPolicy() InvocationPolicy {
 		ControlLevel:                e.controlLevel,
 		HasExecuteAuthority:         e.hasExecuteAuthority,
 		ExecuteAuthorityBound:       e.executeAuthorityBound,
+		HasHostCommandAuthority:     e.hasHostCommandAuthority,
+		HostCommandAuthorityBound:   e.hostCommandAuthorityBound,
 		DenyInfrastructureMutations: e.denyInfrastructureMutations,
 		PulseStateAllowlist:         clonePulseStateAllowlist(e.pulseStateAllowlist),
 		Profile:                     e.executionProfile,

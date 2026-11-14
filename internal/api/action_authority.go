@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/actionlifecycle"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/chat"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
@@ -213,6 +214,42 @@ func requireActionCapability(cfg *config.Config, authorizer auth.Authorizer, cap
 			return
 		}
 		handler(w, r)
+	}
+}
+
+// requestHasActionCapability answers requireActionCapability's question without
+// refusing the request. It is for routes that stay open to every signed-in user
+// but hand one operation only to callers with the capability, such as Assistant
+// chat, where only callers allowed to execute actions may have the model run
+// commands on hosts. API tokens also need a scope that grants the capability
+// (tokenHasActionCapabilityScope), because the chat route admits tokens that
+// hold only ai:chat.
+func requestHasActionCapability(cfg *config.Config, authorizer auth.Authorizer, r *http.Request, capability string) bool {
+	if record := getAPITokenRecordFromRequest(r); record != nil {
+		if !tokenHasActionCapabilityScope(record, capability) {
+			return false
+		}
+	} else if _, isDefaultAuthorizer := authorizer.(*auth.DefaultAuthorizer); isDefaultAuthorizer {
+		if cfg != nil && strings.TrimSpace(cfg.ProxyAuthSecret) != "" {
+			if valid, _, isAdmin := CheckProxyAuth(cfg, r); valid && !isAdmin {
+				return false
+			}
+		}
+		if !requestCarriesInstanceAuthority(cfg, r) {
+			return false
+		}
+	}
+	return authorizeActionCapability(r.Context(), authorizer, capability) == nil
+}
+
+// withAssistantHostCommandAuthority binds whether the Assistant may run
+// commands on hosts for this caller: the canonical action-execute capability.
+// Everyone who can chat keeps the Assistant for Pulse's own data; tools that
+// execute a command on a host through an agent are withheld without it.
+func withAssistantHostCommandAuthority(cfg *config.Config, authorizer auth.Authorizer, handler http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		allowed := requestHasActionCapability(cfg, authorizer, r, auth.ActionExecute)
+		handler(w, r.WithContext(chat.WithHostCommandAuthority(r.Context(), allowed)))
 	}
 }
 

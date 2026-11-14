@@ -182,6 +182,24 @@ func NewControlToolsDisabledToolResult() ToolResult {
 	return NewToolTextResult(ControlToolsDisabledMessage)
 }
 
+// HostCommandAuthorityRequiredMessage is the refusal for a host-command tool
+// call from a caller whose role cannot run actions. It is written for the
+// model to relay to the user.
+const HostCommandAuthorityRequiredMessage = "Blocked: %s runs a command on a monitored host, and this user's Pulse role is not allowed to run actions. Do not retry. Answer from Pulse's monitoring data instead, and tell the user that reading files, logs or command output from a host needs a role that can run actions, such as an administrator."
+
+// HostCommandAuthorityPromptNote tells the model why host-command tools are
+// missing from its manifest, so it can explain the boundary instead of
+// guessing at one.
+const HostCommandAuthorityPromptNote = `## HOST COMMANDS
+This user's Pulse role is not allowed to run actions, so tools that run commands on monitored hosts (reading files, logs or command output) are not offered. Answer from Pulse's monitoring data. If the request needs a command on a host, say that their role does not allow it and that a user with permission to run actions, such as an administrator, can do it.`
+
+// NewHostCommandAuthorityRequiredToolResult is the stable shared result for a
+// host-command invocation refused because the caller lacks the canonical
+// action-execute capability.
+func NewHostCommandAuthorityRequiredToolResult(toolName string) ToolResult {
+	return NewToolTextResultWithIsError(fmt.Sprintf(HostCommandAuthorityRequiredMessage, strings.TrimSpace(toolName)), true)
+}
+
 // NewInvocationBlockedToolResult is the stable shared result for a tool
 // invocation the registry's invocation policy refuses before the handler
 // runs: a mutating (or unclassifiable, therefore fail-closed) invocation

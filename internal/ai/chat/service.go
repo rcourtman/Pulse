@@ -798,6 +798,7 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		effectiveExecutor.SetControlLevel(effectiveControlLevel)
 		effectiveExecutor.ApplyExecutionProfile(tools.ProfileInteractiveAssistant)
 		effectiveExecutor.SetExecuteAuthority(req.HasExecuteAuthority)
+		effectiveExecutor.SetHostCommandAuthority(req.HasHostCommandAuthority)
 		effectiveExecutor.SetResolvedContext(resolvedCtx)
 	}
 	filteredTools := s.toolsForExecutor(effectiveExecutor, autonomousMode)
@@ -857,6 +858,9 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		// conditions where ExecuteStream calls overwrite each other's
 		// knowledge accumulator, autonomous mode, budget checker, and provider info.
 		systemPrompt := s.buildSystemPromptForOfferedTools(filteredTools)
+		if effectiveExecutor.HostCommandsWithheld() {
+			systemPrompt += "\n\n" + agentcapabilities.HostCommandAuthorityPromptNote
+		}
 		loop := NewAgenticLoop(attemptProvider, executor, systemPrompt)
 		loop.SetOrgID(s.orgID)
 		loop.SetAutonomousMode(autonomousMode)
@@ -3001,6 +3005,7 @@ func (s *Service) ListAvailableTools(ctx context.Context, prompt string) []strin
 	effectiveExecutor.SetControlLevel(effectiveControlLevel)
 	effectiveExecutor.ApplyExecutionProfile(tools.ProfileInteractiveAssistant)
 	effectiveExecutor.SetExecuteAuthority(executeAuthorityFromContext(ctx))
+	effectiveExecutor.SetHostCommandAuthority(HostCommandAuthorityFromContext(ctx))
 	availableTools := s.toolsForExecutor(effectiveExecutor, autonomousMode)
 	names := make([]string, 0, len(availableTools))
 	for _, tool := range availableTools {

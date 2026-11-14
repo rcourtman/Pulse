@@ -978,6 +978,20 @@ allowlist; investigation is domain-read-only and may emit at most one
 side-effect-free typed proposal whose correlation identity is server-authored.
 Unknown profiles, actions, aliases, origins, scopes, and mutation
 classifications fail closed.
+
+Host commands are a separate gate from mutation. An invocation that runs a
+command on a monitored host through a Pulse agent (`pulse_read` in every
+subaction, `pulse_kubernetes` `logs`, `pulse_docker` `check_updates`, and
+the fail-closed class) carries
+`InvocationClass.HostCommand`, read-only or not. The authenticated chat route
+binds the caller's canonical action-execute capability
+(`requestHasActionCapability` with `auth.ActionExecute`) as
+`ExecuteRequest.HasHostCommandAuthority`; without it the same invocation
+policy drops those tools and subactions from the projected manifest, refuses a
+fabricated call before its handler with a relayable message, and the turn's
+prompt explains the boundary. A caller who may chat but not run actions keeps
+the Assistant for Pulse's own data. Unbound executors (Patrol detection,
+investigation, verification and fix replay) are not restricted by this gate.
 An investigation proposal is a request for the canonical policy plane to make
 an execution decision, not execution or approval by the model. When an
 investigation's recommendation or conclusion tells the operator to try,

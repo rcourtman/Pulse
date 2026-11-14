@@ -2435,6 +2435,16 @@ Assistant session summarization (`POST /api/ai/sessions/{id}/summarize` and
 its `ChatSessionCompactionResult`) was removed on 2026-10-23 with the browser
 Assistant, its only caller.
 
+`/api/ai/chat` binds Assistant host-command authority at the route through
+`withAssistantHostCommandAuthority`: the canonical action-execute capability
+answered by `requestHasActionCapability` in
+`internal/api/action_authority.go`, which mirrors `requireActionCapability`
+without refusing the request (session callers under the default authorizer need
+instance administrator authority or an admin proxy role; API tokens need a scope
+from `tokenHasActionCapabilityScope`, so an `ai:chat`-only token never gets it;
+the installed authorizer still decides). `HandleChat` passes it as
+`ExecuteRequest.HasHostCommandAuthority` and an unbound request fails closed.
+
 Infrastructure settings copied agent commands are a shared API/payload boundary
 even when the final command string is assembled in the browser. Selected-row
 upgrade commands may carry fresh token and identity fields when the operator is
