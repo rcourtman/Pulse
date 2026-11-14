@@ -1,6 +1,6 @@
 # Pulse Makefile for development
 
-.PHONY: build run dev dev-lab dev-status dev-status-lab dev-logs dev-stop dev-restart dev-restart-lab dev-backend-restart dev-verify dev-verify-lab dev-foreground dev-foreground-lab frontend backend all clean distclean dev-hot lint lint-backend lint-frontend format format-backend format-frontend build-agents control-plane handoff
+.PHONY: build run dev dev-lab dev-status dev-status-lab dev-logs dev-stop dev-restart dev-restart-lab dev-backend-restart dev-verify dev-verify-lab dev-foreground dev-foreground-lab frontend backend all clean distclean dev-hot lint lint-backend lint-frontend format format-backend format-frontend build-agents control-plane handoff test test-integration test-all
 
 FRONTEND_DIR := frontend-modern
 FRONTEND_DIST := $(FRONTEND_DIR)/dist
@@ -107,7 +107,20 @@ control-plane:
 test:
 	@./scripts/ensure_test_assets.sh
 	@echo "Running backend tests..."
-	go test -race -timeout $(GO_TEST_TIMEOUT) $$(go list $(GO_TEST_PACKAGES))
+	@# Admit the complete inventory before testing: a failed command substitution
+	@# otherwise leaves go test a partial list (or the current directory).
+	@# Own fresh, unfiltered execution even with ambient GOFLAGS. Compilation,
+	@# module, tag and worker settings remain the caller's; race/time bounds stay.
+	@packages="$$(go list -n=false $(GO_TEST_PACKAGES))" || { \
+		status=$$?; echo "Go package listing failed; backend tests have not run." >&2; exit "$$status"; \
+	}; \
+	case "$$packages" in \
+		*[![:space:]]*) ;; \
+		*) echo "Go package listing was empty; backend tests have not run." >&2; exit 1 ;; \
+	esac; \
+	go test -race -timeout $(GO_TEST_TIMEOUT) -count=1 \
+		-run= -skip= -list= -exec= -fuzz= -short=false -failfast=false \
+		-c=false -n=false $$packages
 
 # Run integration tests (requires Ollama at OLLAMA_URL or 127.0.0.1:11434)
 test-integration:
