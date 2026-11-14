@@ -8,6 +8,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/stretchr/testify/require"
@@ -50,35 +51,44 @@ func TestDialPinnedIPsFallbackPrefersOtherFamily(t *testing.T) {
 }
 
 func TestDialPinnedIPsSharesBudgetAndBoundsConcurrency(t *testing.T) {
-	winner, _ := pinnedTestConnection(t)
-	var active, peak atomic.Int32
-	var attemptsMu sync.Mutex
-	var attempts []string
-	dial := func(ctx context.Context, network, address string) (net.Conn, error) {
-		current := active.Add(1)
-		defer active.Add(-1)
-		for previous := peak.Load(); current > previous; previous = peak.Load() {
-			if peak.CompareAndSwap(previous, current) {
-				break
+	// These are synthetic stalled dials, not real sockets. Keep the exact
+	// 1.5-second operation budget and the two-attempt bound, but let virtual
+	// time drive the timers so host scheduling cannot consume the fixture's
+	// opportunity to observe the healthy third address.
+	synctest.Test(t, func(t *testing.T) {
+		winner, _ := pinnedTestConnection(t)
+		var active, peak atomic.Int32
+		var attemptsMu sync.Mutex
+		var attempts []string
+		dial := func(ctx context.Context, network, address string) (net.Conn, error) {
+			current := active.Add(1)
+			defer active.Add(-1)
+			for previous := peak.Load(); current > previous; previous = peak.Load() {
+				if peak.CompareAndSwap(previous, current) {
+					break
+				}
 			}
+			attemptsMu.Lock()
+			attempts = append(attempts, address)
+			attemptsMu.Unlock()
+			if address == "192.0.2.3:443" {
+				return winner, nil
+			}
+			<-ctx.Done()
+			return nil, ctx.Err()
 		}
+		ips := []net.IP{net.ParseIP("192.0.2.1"), net.ParseIP("192.0.2.2"), net.ParseIP("192.0.2.3"), net.ParseIP("192.0.2.4")}
+		startedAt := time.Now()
+		connection, err := dialPinnedIPs(context.Background(), "tcp", "443", ips, 1500*time.Millisecond, dial)
+		require.NoError(t, err, "two stalled addresses must leave budget for the third")
+		require.Same(t, winner, connection)
+		require.LessOrEqual(t, peak.Load(), int32(2), "only two TCP attempts may overlap")
 		attemptsMu.Lock()
-		attempts = append(attempts, address)
-		attemptsMu.Unlock()
-		if address == "192.0.2.3:443" {
-			return winner, nil
-		}
-		<-ctx.Done()
-		return nil, ctx.Err()
-	}
-	ips := []net.IP{net.ParseIP("192.0.2.1"), net.ParseIP("192.0.2.2"), net.ParseIP("192.0.2.3"), net.ParseIP("192.0.2.4")}
-	connection, err := dialPinnedIPs(context.Background(), "tcp", "443", ips, 1500*time.Millisecond, dial)
-	require.NoError(t, err, "two stalled addresses must leave budget for the third")
-	require.Same(t, winner, connection)
-	require.LessOrEqual(t, peak.Load(), int32(2), "only two TCP attempts may overlap")
-	attemptsMu.Lock()
-	defer attemptsMu.Unlock()
-	require.Contains(t, attempts, "192.0.2.3:443")
+		defer attemptsMu.Unlock()
+		require.Contains(t, attempts, "192.0.2.3:443")
+		require.Equal(t, 750*time.Millisecond, time.Since(startedAt), "the third address must win halfway through the unchanged total budget")
+
+	})
 }
 
 func TestDialPinnedIPsUnevenFamiliesKeepResolverOrder(t *testing.T) {
