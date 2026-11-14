@@ -135,8 +135,10 @@ describe.each(['oidc', 'saml'] as const)('SSO %s save error recovery', (type) =>
         name: editing ? /^Edit provider / : `Add ${type.toUpperCase()}`,
       });
       await waitFor(() => expect(opener).toBeEnabled());
+      const addOIDC = screen.getByRole('button', { name: 'Add OIDC' });
       fireEvent.click(opener);
-      const dialog = within(await screen.findByRole('dialog'));
+      const dialogElement = await screen.findByRole('dialog');
+      const dialog = within(dialogElement);
       const name = dialog.getByLabelText('Provider Name') as HTMLInputElement;
       fireEvent.input(name, { target: { value: 'Retained draft' } });
       if (!editing) {
@@ -159,9 +161,10 @@ describe.each(['oidc', 'saml'] as const)('SSO %s save error recovery', (type) =>
       });
       const form = save.closest('form')!;
       fireEvent.submit(form);
-      expect(await dialog.findByRole('alert')).toHaveTextContent(expected);
-      if (!unconfirmed) expect(dialog.getByRole('alert').textContent).toBe(expected);
-      expect(dialog.getByRole('alert')).not.toHaveTextContent(canary);
+      const alert = await dialog.findByRole('alert');
+      expect(alert).toHaveTextContent(expected);
+      if (!unconfirmed) expect(alert.textContent).toBe(expected);
+      expect(alert).not.toHaveTextContent(canary);
       expect(name.value).toBe('Retained draft');
       if (unconfirmed) expect(save).not.toBeInTheDocument();
       else expect(save).toBeEnabled();
@@ -178,14 +181,19 @@ describe.each(['oidc', 'saml'] as const)('SSO %s save error recovery', (type) =>
         fireEvent.submit(form);
         expect(writes()).toHaveLength(1);
         fireEvent.click(dialog.getByRole('button', { name: 'Close draft and check providers' }));
-        await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-        await waitFor(() => expect(screen.getByRole('button', { name: 'Add OIDC' })).toBeEnabled());
+        await waitFor(() => expect(dialogElement).not.toBeInTheDocument());
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+        await waitFor(() => {
+          expect(addOIDC).toBeInTheDocument();
+          expect(addOIDC).toBeEnabled();
+        });
         expect(writes()).toHaveLength(1);
         expect(successMock).not.toHaveBeenCalled();
         return;
       }
       fireEvent.submit(form);
-      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      await waitFor(() => expect(dialogElement).not.toBeInTheDocument());
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
       expect(writes()).toHaveLength(2);
       expect(writes()[0][1].body).toBe(writes()[1][1].body);
       if (editing) {
