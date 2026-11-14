@@ -16,7 +16,7 @@ import (
 )
 
 func TestTenantRuntimeRollout_ReconcilesLiveContainerAlreadyOnTargetImage(t *testing.T) {
-	tenant := &registry.Tenant{ID: "t-ROLLSYNC", ContainerID: "stale-registry-id"}
+	tenant := &registry.Tenant{State: registry.TenantStateActive, ID: "t-ROLLSYNC", ContainerID: "stale-registry-id"}
 	reg := &fakeTenantRuntimeRolloutRegistry{tenant: tenant}
 	docker := newFakeTenantRuntimeRolloutDocker()
 	routing := docker.DesiredRuntimeRouting(tenant.ID)
@@ -33,7 +33,7 @@ func TestTenantRuntimeRollout_ReconcilesLiveContainerAlreadyOnTargetImage(t *tes
 	sync := &fakeTenantRuntimeRolloutSynchronizer{}
 	clock := newFakeTenantRuntimeRolloutClock()
 
-	service := newTestTenantRuntimeRolloutService(reg, docker, sync, clock)
+	service := newTestTenantRuntimeRolloutService(t, reg, docker, sync, clock)
 	result, err := service.Rollout(context.Background(), TenantRuntimeRolloutOptions{
 		TenantID: tenant.ID,
 		Image:    "pulse-runtime:target",
@@ -63,7 +63,7 @@ func TestTenantRuntimeRollout_ReconcilesLiveContainerAlreadyOnTargetImage(t *tes
 }
 
 func TestTenantRuntimeRollout_RollsForwardCanonically(t *testing.T) {
-	tenant := &registry.Tenant{ID: "t-ROLLFWD", ContainerID: "old-container"}
+	tenant := &registry.Tenant{State: registry.TenantStateActive, ID: "t-ROLLFWD", ContainerID: "old-container"}
 	reg := &fakeTenantRuntimeRolloutRegistry{tenant: tenant}
 	docker := newFakeTenantRuntimeRolloutDocker()
 	routing := docker.DesiredRuntimeRouting(tenant.ID)
@@ -89,7 +89,7 @@ func TestTenantRuntimeRollout_RollsForwardCanonically(t *testing.T) {
 	sync := &fakeTenantRuntimeRolloutSynchronizer{}
 	clock := newFakeTenantRuntimeRolloutClock()
 
-	service := newTestTenantRuntimeRolloutService(reg, docker, sync, clock)
+	service := newTestTenantRuntimeRolloutService(t, reg, docker, sync, clock)
 	result, err := service.Rollout(context.Background(), TenantRuntimeRolloutOptions{
 		TenantID: tenant.ID,
 		Image:    "pulse-runtime:new",
@@ -129,13 +129,13 @@ func TestTenantRuntimeRollout_RollsForwardCanonically(t *testing.T) {
 	if docker.createCalls[0].tenantID != tenant.ID {
 		t.Fatalf("created tenant id = %q, want %q", docker.createCalls[0].tenantID, tenant.ID)
 	}
-	if docker.createCalls[0].tenantDataDir != filepath.Join(tTempDirForRolloutService(), tenant.ID) {
+	if docker.createCalls[0].tenantDataDir != filepath.Join(service.tenantsDir, tenant.ID) {
 		t.Fatalf("created tenant data dir = %q", docker.createCalls[0].tenantDataDir)
 	}
 }
 
 func TestTenantRuntimeRollout_RollsBackOnHealthFailure(t *testing.T) {
-	tenant := &registry.Tenant{ID: "t-ROLLBACK", ContainerID: "old-container"}
+	tenant := &registry.Tenant{State: registry.TenantStateActive, ID: "t-ROLLBACK", ContainerID: "old-container"}
 	reg := &fakeTenantRuntimeRolloutRegistry{tenant: tenant}
 	docker := newFakeTenantRuntimeRolloutDocker()
 	routing := docker.DesiredRuntimeRouting(tenant.ID)
@@ -162,7 +162,7 @@ func TestTenantRuntimeRollout_RollsBackOnHealthFailure(t *testing.T) {
 	sync := &fakeTenantRuntimeRolloutSynchronizer{}
 	clock := newFakeTenantRuntimeRolloutClock()
 
-	service := newTestTenantRuntimeRolloutService(reg, docker, sync, clock)
+	service := newTestTenantRuntimeRolloutService(t, reg, docker, sync, clock)
 	_, err := service.Rollout(context.Background(), TenantRuntimeRolloutOptions{
 		TenantID:      tenant.ID,
 		Image:         "pulse-runtime:new",
@@ -198,7 +198,7 @@ func TestFilesystemTenantRuntimeSynchronizer_SnapshotAndRestore(t *testing.T) {
 
 	ctx := context.Background()
 	srcDir := t.TempDir()
-	snapshotDir := t.TempDir()
+	snapshotDir := filepath.Join(t.TempDir(), "snapshot")
 	restoreDir := t.TempDir()
 
 	mustWrite := func(path, contents string, mode os.FileMode) {
@@ -216,8 +216,6 @@ func TestFilesystemTenantRuntimeSynchronizer_SnapshotAndRestore(t *testing.T) {
 	if err := os.Symlink(filepath.Join("secrets", "handoff.key"), filepath.Join(srcDir, ".cloud_handoff_key")); err != nil {
 		t.Fatalf("symlink .cloud_handoff_key: %v", err)
 	}
-
-	mustWrite(filepath.Join(snapshotDir, "stale.txt"), "remove me\n", 0o644)
 
 	syncer := filesystemTenantRuntimeSynchronizer{}
 	if err := syncer.Snapshot(ctx, srcDir, snapshotDir); err != nil {
@@ -263,7 +261,7 @@ func TestFilesystemTenantRuntimeSynchronizer_SnapshotAndRestore(t *testing.T) {
 }
 
 func TestTenantRuntimeRollout_RecreatesSameImageWhenRoutingContractDrifts(t *testing.T) {
-	tenant := &registry.Tenant{ID: "t-MixedCase", ContainerID: "live-container"}
+	tenant := &registry.Tenant{State: registry.TenantStateActive, ID: "t-MixedCase", ContainerID: "live-container"}
 	reg := &fakeTenantRuntimeRolloutRegistry{tenant: tenant}
 	docker := newFakeTenantRuntimeRolloutDocker()
 	docker.addContainer(&cpDocker.RuntimeContainerInfo{
@@ -289,7 +287,7 @@ func TestTenantRuntimeRollout_RecreatesSameImageWhenRoutingContractDrifts(t *tes
 	sync := &fakeTenantRuntimeRolloutSynchronizer{}
 	clock := newFakeTenantRuntimeRolloutClock()
 
-	service := newTestTenantRuntimeRolloutService(reg, docker, sync, clock)
+	service := newTestTenantRuntimeRolloutService(t, reg, docker, sync, clock)
 	result, err := service.Rollout(context.Background(), TenantRuntimeRolloutOptions{
 		TenantID: tenant.ID,
 		Image:    "pulse-runtime:target",
@@ -317,7 +315,7 @@ func TestTenantRuntimeRollout_RecreatesSameImageWhenRoutingContractDrifts(t *tes
 }
 
 func TestTenantRuntimeRollout_RecreatesMissingRuntimeFromTenantData(t *testing.T) {
-	tenant := &registry.Tenant{ID: "t-MISSING01", ContainerID: "removed-container"}
+	tenant := &registry.Tenant{State: registry.TenantStateActive, ID: "t-MISSING01", ContainerID: "removed-container"}
 	reg := &fakeTenantRuntimeRolloutRegistry{tenant: tenant}
 	docker := newFakeTenantRuntimeRolloutDocker()
 	routing := docker.DesiredRuntimeRouting(tenant.ID)
@@ -334,7 +332,7 @@ func TestTenantRuntimeRollout_RecreatesMissingRuntimeFromTenantData(t *testing.T
 	sync := &fakeTenantRuntimeRolloutSynchronizer{}
 	clock := newFakeTenantRuntimeRolloutClock()
 
-	service := newTestTenantRuntimeRolloutService(reg, docker, sync, clock)
+	service := newTestTenantRuntimeRolloutService(t, reg, docker, sync, clock)
 	result, err := service.Rollout(context.Background(), TenantRuntimeRolloutOptions{
 		TenantID: tenant.ID,
 		Image:    "pulse-runtime:stable",
@@ -349,13 +347,13 @@ func TestTenantRuntimeRollout_RecreatesMissingRuntimeFromTenantData(t *testing.T
 	if result.ReconciledOnly {
 		t.Fatalf("ReconciledOnly = true, want false")
 	}
-	if len(sync.snapshots) != 0 {
-		t.Fatalf("snapshot count = %d, want 0", len(sync.snapshots))
+	if len(sync.snapshots) != 1 {
+		t.Fatalf("snapshot count = %d, want 1", len(sync.snapshots))
 	}
 	if len(docker.createCalls) != 1 {
 		t.Fatalf("create call count = %d, want 1", len(docker.createCalls))
 	}
-	if docker.createCalls[0].tenantDataDir != filepath.Join(tTempDirForRolloutService(), tenant.ID) {
+	if docker.createCalls[0].tenantDataDir != filepath.Join(service.tenantsDir, tenant.ID) {
 		t.Fatalf("created tenant data dir = %q", docker.createCalls[0].tenantDataDir)
 	}
 	if got := reg.updatedTenant.ContainerID; got != "recreated-container" {
@@ -386,7 +384,7 @@ func TestTenantRuntimeRollout_MobileProofTenantUsesCanonicalRuntimeContract(t *t
 }
 
 func TestTenantRuntimeRollout_AdmissionFailureStopsBeforeSnapshotOrContainerSwap(t *testing.T) {
-	tenant := &registry.Tenant{ID: "t-ADMIT01", ContainerID: "old-container"}
+	tenant := &registry.Tenant{State: registry.TenantStateActive, ID: "t-ADMIT01", ContainerID: "old-container"}
 	reg := &fakeTenantRuntimeRolloutRegistry{tenant: tenant}
 	docker := newFakeTenantRuntimeRolloutDocker()
 	routing := docker.DesiredRuntimeRouting(tenant.ID)
@@ -400,7 +398,7 @@ func TestTenantRuntimeRollout_AdmissionFailureStopsBeforeSnapshotOrContainerSwap
 		PublicURL: routing.PublicURL,
 	})
 	sync := &fakeTenantRuntimeRolloutSynchronizer{}
-	service := newTestTenantRuntimeRolloutService(reg, docker, sync, newFakeTenantRuntimeRolloutClock())
+	service := newTestTenantRuntimeRolloutService(t, reg, docker, sync, newFakeTenantRuntimeRolloutClock())
 	service.admissionCheck = func(context.Context) error {
 		return errors.New("storage pressure")
 	}
@@ -421,11 +419,11 @@ func TestTenantRuntimeRollout_AdmissionFailureStopsBeforeSnapshotOrContainerSwap
 }
 
 func TestTenantRuntimeRollout_AdmissionFailureStopsMissingRuntimeRestore(t *testing.T) {
-	tenant := &registry.Tenant{ID: "t-ADMIT02", ContainerID: "removed-container"}
+	tenant := &registry.Tenant{State: registry.TenantStateActive, ID: "t-ADMIT02", ContainerID: "removed-container"}
 	reg := &fakeTenantRuntimeRolloutRegistry{tenant: tenant}
 	docker := newFakeTenantRuntimeRolloutDocker()
 	sync := &fakeTenantRuntimeRolloutSynchronizer{}
-	service := newTestTenantRuntimeRolloutService(reg, docker, sync, newFakeTenantRuntimeRolloutClock())
+	service := newTestTenantRuntimeRolloutService(t, reg, docker, sync, newFakeTenantRuntimeRolloutClock())
 	service.admissionCheck = func(context.Context) error {
 		return errors.New("storage pressure")
 	}
@@ -446,9 +444,9 @@ func TestTenantRuntimeRollout_AdmissionFailureStopsMissingRuntimeRestore(t *test
 }
 
 func TestTenantRuntimeContractReconcilePlan_AllTenantsClassifiesNoopRolloutAndSkip(t *testing.T) {
-	tenantNoop := &registry.Tenant{ID: "t-NOOP12345", ContainerID: "noop-live"}
-	tenantDrift := &registry.Tenant{ID: "t-Drift1234", ContainerID: "drift-live"}
-	tenantMissing := &registry.Tenant{ID: "t-MISSING01", ContainerID: ""}
+	tenantNoop := &registry.Tenant{State: registry.TenantStateActive, ID: "t-NOOP12345", ContainerID: "noop-live"}
+	tenantDrift := &registry.Tenant{State: registry.TenantStateActive, ID: "t-Drift1234", ContainerID: "drift-live"}
+	tenantMissing := &registry.Tenant{State: registry.TenantStateActive, ID: "t-MISSING01", ContainerID: ""}
 	reg := &fakeTenantRuntimeRolloutRegistry{
 		tenant:  tenantNoop,
 		tenants: []*registry.Tenant{tenantNoop, tenantDrift, tenantMissing},
@@ -475,7 +473,7 @@ func TestTenantRuntimeContractReconcilePlan_AllTenantsClassifiesNoopRolloutAndSk
 		PublicURL: "https://t-Drift1234.cloud.pulserelay.pro",
 	})
 
-	service := newTestTenantRuntimeRolloutService(reg, docker, &fakeTenantRuntimeRolloutSynchronizer{}, newFakeTenantRuntimeRolloutClock())
+	service := newTestTenantRuntimeRolloutService(t, reg, docker, &fakeTenantRuntimeRolloutSynchronizer{}, newFakeTenantRuntimeRolloutClock())
 	plan, err := service.PlanContractReconcile(context.Background(), TenantRuntimeContractReconcilePlanOptions{All: true})
 	if err != nil {
 		t.Fatalf("PlanContractReconcile() error = %v", err)
@@ -509,8 +507,8 @@ func TestTenantRuntimeContractReconcilePlan_AllTenantsClassifiesNoopRolloutAndSk
 }
 
 func TestTenantRuntimeContractReconcilePlan_ExplicitTenantIDsDedupesAndPreservesOrder(t *testing.T) {
-	tenantA := &registry.Tenant{ID: "t-EXPLICIT1", ContainerID: "explicit-a"}
-	tenantB := &registry.Tenant{ID: "t-EXPLICIT2", ContainerID: "explicit-b"}
+	tenantA := &registry.Tenant{State: registry.TenantStateActive, ID: "t-EXPLICIT1", ContainerID: "explicit-a"}
+	tenantB := &registry.Tenant{State: registry.TenantStateActive, ID: "t-EXPLICIT2", ContainerID: "explicit-b"}
 	reg := &fakeTenantRuntimeRolloutRegistry{
 		tenant:  tenantA,
 		tenants: []*registry.Tenant{tenantA, tenantB},
@@ -528,7 +526,7 @@ func TestTenantRuntimeContractReconcilePlan_ExplicitTenantIDsDedupesAndPreserves
 			PublicURL: routing.PublicURL,
 		})
 	}
-	service := newTestTenantRuntimeRolloutService(reg, docker, &fakeTenantRuntimeRolloutSynchronizer{}, newFakeTenantRuntimeRolloutClock())
+	service := newTestTenantRuntimeRolloutService(t, reg, docker, &fakeTenantRuntimeRolloutSynchronizer{}, newFakeTenantRuntimeRolloutClock())
 	plan, err := service.PlanContractReconcile(context.Background(), TenantRuntimeContractReconcilePlanOptions{
 		TenantIDs: []string{"t-EXPLICIT2", "t-EXPLICIT1", "t-EXPLICIT2", ""},
 	})
@@ -573,7 +571,7 @@ func TestTenantRuntimeImageRolloutPlan_AllActiveTenantsTargetsConfiguredImage(t 
 		})
 	}
 
-	service := newTestTenantRuntimeRolloutService(reg, docker, &fakeTenantRuntimeRolloutSynchronizer{}, newFakeTenantRuntimeRolloutClock())
+	service := newTestTenantRuntimeRolloutService(t, reg, docker, &fakeTenantRuntimeRolloutSynchronizer{}, newFakeTenantRuntimeRolloutClock())
 	plan, err := service.PlanImageRollout(context.Background(), TenantRuntimeImageRolloutPlanOptions{
 		All:   true,
 		Image: targetImage,
@@ -606,6 +604,7 @@ func TestTenantRuntimeImageRolloutPlan_AllActiveTenantsTargetsConfiguredImage(t 
 }
 
 func newTestTenantRuntimeRolloutService(
+	t *testing.T,
 	reg tenantRuntimeRolloutRegistry,
 	docker tenantRuntimeRolloutDocker,
 	sync tenantRuntimeRolloutSynchronizer,
@@ -614,7 +613,7 @@ func newTestTenantRuntimeRolloutService(
 	return &tenantRuntimeRolloutService{
 		registry:      reg,
 		docker:        docker,
-		tenantsDir:    tTempDirForRolloutService(),
+		tenantsDir:    filepath.Join(t.TempDir(), "tenants"),
 		defaultImage:  "pulse-runtime:stable",
 		synchronizer:  sync,
 		now:           clock.Now,
@@ -622,10 +621,6 @@ func newTestTenantRuntimeRolloutService(
 		healthTimeout: 5 * time.Second,
 		healthPoll:    1 * time.Second,
 	}
-}
-
-func tTempDirForRolloutService() string {
-	return "/tmp/pulse-rollout-tests"
 }
 
 type fakeTenantRuntimeRolloutRegistry struct {
@@ -762,11 +757,11 @@ func (f *fakeTenantRuntimeRolloutDocker) CreateAndStart(_ context.Context, tenan
 	}
 	next := f.createQueue[0]
 	f.createQueue = f.createQueue[1:]
-	if next.err != nil {
-		return "", next.err
+	if next.info != nil {
+		f.addContainer(next.info)
+		return next.info.ID, next.err
 	}
-	f.addContainer(next.info)
-	return next.info.ID, nil
+	return "", next.err
 }
 
 func (f *fakeTenantRuntimeRolloutDocker) DesiredRuntimeRouting(tenantID string) cpDocker.TenantRuntimeRoutingContract {
@@ -792,10 +787,12 @@ func (f *fakeTenantRuntimeRolloutDocker) HealthCheck(_ context.Context, containe
 func (f *fakeTenantRuntimeRolloutDocker) Inspect(_ context.Context, containerIDOrName string) (*cpDocker.RuntimeContainerInfo, error) {
 	if info, ok := f.byID[containerIDOrName]; ok {
 		copy := *info
+		copy.Stopped = !copy.Running && !copy.Restarting && !copy.Paused
 		return &copy, nil
 	}
 	if info, ok := f.byName[containerIDOrName]; ok {
 		copy := *info
+		copy.Stopped = !copy.Running && !copy.Restarting && !copy.Paused
 		return &copy, nil
 	}
 	return nil, errdefs.ErrNotFound.WithMessage(fmt.Sprintf("missing container %s", containerIDOrName))
@@ -877,4 +874,20 @@ func TestTenantRuntimeMatchesContractRequiresTheProviderClientMarker(t *testing.
 	if !tenantRuntimeMatchesContract(live, "pulse-t-acme", "pulse:new", routing) {
 		t.Fatal("a marked provider client on the right image matches")
 	}
+}
+
+func (f *fakeTenantRuntimeRolloutRegistry) UpdateRuntimeState(t *registry.Tenant) error {
+	current, err := f.Get(t.ID)
+	if err != nil {
+		return err
+	}
+	if current == nil {
+		return fmt.Errorf("tenant missing")
+	}
+	current.ContainerID = t.ContainerID
+	current.CurrentImageDigest = t.CurrentImageDigest
+	current.DesiredImageDigest = t.DesiredImageDigest
+	current.LastHealthCheck = t.LastHealthCheck
+	current.HealthCheckOK = t.HealthCheckOK
+	return f.Update(current)
 }

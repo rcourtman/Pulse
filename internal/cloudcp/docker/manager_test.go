@@ -964,3 +964,47 @@ func TestProviderHostedControlPlaneMarksItsClientRuntimes(t *testing.T) {
 		t.Fatalf("Pulse Cloud tenant env must not carry %s: %v", marker, cloud.Env)
 	}
 }
+
+func TestRuntimeInspectRequiresExplicitStoppedState(t *testing.T) {
+	for _, tc := range []struct {
+		name, state string
+		stopped     bool
+	}{
+		{"exited", `{"Status":"exited","Running":false}`, true},
+		{"created", `{"Status":"created","Running":false}`, true},
+		{"dead", `{"Status":"dead","Running":false}`, true},
+		{"running", `{"Status":"running","Running":true}`, false},
+		{"restarting", `{"Status":"restarting","Restarting":true}`, false},
+		{"paused", `{"Status":"paused","Paused":true}`, false},
+		{"missing", "null", false},
+		{"empty", "{}", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Api-Version", "1.47")
+				if strings.HasSuffix(r.URL.Path, "/_ping") {
+					_, _ = w.Write([]byte("OK"))
+					return
+				}
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"Id":"fixture","Name":"/pulse-fixture","State":` + tc.state + `,"Config":{"Image":"runtime:fixture"}}`))
+			}))
+			defer server.Close()
+			t.Setenv("DOCKER_HOST", "tcp://"+strings.TrimPrefix(server.URL, "http://"))
+			t.Setenv("DOCKER_TLS_VERIFY", "")
+			t.Setenv("DOCKER_CERT_PATH", "")
+			mgr, err := NewManager(ManagerConfig{Image: "runtime:fixture"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer mgr.Close()
+			info, err := mgr.Inspect(context.Background(), "fixture")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if info.Stopped != tc.stopped {
+				t.Fatalf("stopped=%t, want %t: %+v", info.Stopped, tc.stopped, info)
+			}
+		})
+	}
+}

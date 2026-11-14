@@ -19,7 +19,8 @@ import (
 
 // TenantRegistry provides CRUD operations for tenant records backed by SQLite.
 type TenantRegistry struct {
-	db *sql.DB
+	db  *sql.DB
+	dir string
 }
 
 const (
@@ -81,7 +82,7 @@ func NewTenantRegistry(dir string) (*TenantRegistry, error) {
 	db.SetMaxIdleConns(1)
 	db.SetConnMaxLifetime(0)
 
-	r := &TenantRegistry{db: db}
+	r := &TenantRegistry{db: db, dir: dir}
 	if err := r.initSchema(); err != nil {
 		_ = db.Close()
 		return nil, err
