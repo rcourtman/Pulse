@@ -4,11 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"os/exec"
 	"reflect"
 	"regexp"
 	"runtime"
+	"runtime/debug"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -180,59 +183,57 @@ func TestBackupPollingReadsDoNotCopyUnrelatedInventory(t *testing.T) {
 	log.Logger = zerolog.Nop()
 	defer func() { log.Logger = previous }()
 
+	// A copy of the state costs about 1.3 MB and 4000 objects per call with
+	// the fixture's 1000 unrelated VMs and config maps. Over 200 race runs
+	// under load the fixtures differed by at most 288 bytes and 4 objects.
+	const everyCallBytes, everyCallObjects, someCallBytes = 4 << 10, 16, 16 << 10
 	t.Logf("allocation child GOMAXPROCS=%d", runtime.GOMAXPROCS(0))
 	for _, c := range backupPollingReadCases() {
 		t.Run(c.name, func(t *testing.T) {
 			small, large := backupPollingReadFixture(0), backupPollingReadFixture(1000)
-			base, grown, peak := backupPollingAllocationFloors(t, small, large, c.call)
-			t.Logf("allocation floors per real callback: small=%.0f unrelated=%.0f peak=%.0f", base, grown, peak)
-			if grown > base+4 {
-				t.Fatalf("backup callback copied unrelated fleet inventory: %.0f -> %.0f", base, grown)
+			costs := backupPollingCallCosts(t, small, large, c.call)
+			t.Logf("allocations per real callback: %s", costs)
+			if costs.grewEveryCall(everyCallBytes, everyCallObjects) {
+				t.Fatalf("backup callback copied unrelated fleet inventory: %s", costs)
 			}
-			// Do not let a clean floor hide a copy in just one round. One
-			// clone of the fixture's 1000 VMs alone adds at least 200
-			// allocations to a five-call average; the complete-copy control
-			// below is larger still. This additional ceiling is well above
-			// runtime/pool variation, without relaxing the +4 floor bound.
-			if peak > base+100 {
-				t.Fatalf("backup callback intermittently copied unrelated fleet inventory: floor %.0f, peak %.0f", base, peak)
+			// Do not let a clean minimum and median hide a copy on some calls.
+			if costs.grewSomeCall(someCallBytes) {
+				t.Fatalf("backup callback intermittently copied unrelated fleet inventory: %s", costs)
 			}
 		})
 		t.Run(c.name+"-full-copy-control", func(t *testing.T) {
 			small, large := backupPollingReadFixture(0), backupPollingReadFixture(1000)
-			base, grown, _ := backupPollingAllocationFloors(t, small, large, func(m *Monitor) {
+			costs := backupPollingCallCosts(t, small, large, func(m *Monitor) {
 				c.call(m)
 				backupPollingReadResult = m.state.GetSnapshot()
 			})
-			t.Logf("real callback full-copy control: small=%.0f unrelated=%.0f", base, grown)
-			if grown <= base+1000 {
+			t.Logf("real callback full-copy control: %s", costs)
+			if !costs.grewEveryCall(everyCallBytes, everyCallObjects) || costs.large.objects[0] <= costs.small.objects[0]+1000 {
 				t.Fatal("allocation guard did not detect a full-fleet copy in the real callback")
 			}
 		})
 		t.Run(c.name+"-intermittent-copy-control", func(t *testing.T) {
 			small, large := backupPollingReadFixture(0), backupPollingReadFixture(1000)
 			calls := map[*Monitor]int{small: 0, large: 0}
-			base, grown, peak := backupPollingAllocationFloors(t, small, large, func(m *Monitor) {
+			costs := backupPollingCallCosts(t, small, large, func(m *Monitor) {
 				c.call(m)
-				calls[m]++
-				// AllocsPerRun warms once, then measures five calls. Copy only
-				// the last call of the first sample for each fixture: later
-				// rounds have clean floors, but the peak must expose this copy.
-				if calls[m] == 6 {
+				// Copy on one measured call per fixture: the minimum and
+				// median stay clean, so only the peak bound can expose it.
+				if calls[m]++; calls[m] == backupPollingCostWarmup+5 {
 					backupPollingReadResult = m.state.GetSnapshot()
 				}
 			})
-			t.Logf("real callback intermittent-copy control: small=%.0f unrelated=%.0f peak=%.0f", base, grown, peak)
-			if grown > base+4 || peak <= base+100 {
-				t.Fatal("intermittent-copy control must retain a clean floor and fail the peak guard")
+			t.Logf("real callback intermittent-copy control: %s", costs)
+			if costs.grewEveryCall(everyCallBytes, everyCallObjects) || !costs.grewSomeCall(someCallBytes) {
+				t.Fatal("intermittent-copy control must keep a clean minimum and median and fail the peak bound")
 			}
 		})
 	}
 	small, large := backupPollingReadFixture(0), backupPollingReadFixture(1000)
-	base, grown, _ := backupPollingAllocationFloors(t, small, large,
+	costs := backupPollingCallCosts(t, small, large,
 		func(m *Monitor) { backupPollingReadResult = m.state.GetSnapshot() })
-	t.Logf("full snapshot positive control: %.0f -> %.0f", base, grown)
-	if grown <= base+1000 {
+	t.Logf("full snapshot positive control: %s", costs)
+	if costs.large.objects[0] <= costs.small.objects[0]+1000 {
 		t.Fatal("fixture does not expose whole-fleet copying")
 	}
 }
@@ -260,29 +261,91 @@ func backupPollingCompleteRead(t testing.TB, m *Monitor, call func(*Monitor)) {
 	}
 }
 
-// Always retain all four interleaved pairs (two in either order), each with the
-// original five-call sample; never retry a failed assertion or stop early on a
-// favourable sample. The floor and peak retain their +4 / +100 copy bounds.
-func backupPollingAllocationFloors(t *testing.T, small, large *Monitor, call func(*Monitor)) (base, grown, peak float64) {
+// backupPollingCallCost summarises the heap allocations of single complete
+// calls on one fixture.
+type backupPollingCallCost struct {
+	bytes, objects [3]uint64 // min, median, max
+}
+
+func (c backupPollingCallCost) String() string {
+	return fmt.Sprintf("bytes min=%d median=%d max=%d, objects min=%d median=%d max=%d",
+		c.bytes[0], c.bytes[1], c.bytes[2], c.objects[0], c.objects[1], c.objects[2])
+}
+
+// backupPollingCostPair compares a fixture with its grown twin.
+type backupPollingCostPair struct {
+	small, large backupPollingCallCost
+}
+
+func (p backupPollingCostPair) String() string {
+	return fmt.Sprintf("small %s; large %s", p.small, p.large)
+}
+
+// grewEveryCall reports a copy present on every call: it moves the minimum or
+// median bytes, or the median object count.
+func (p backupPollingCostPair) grewEveryCall(bytes, objects uint64) bool {
+	return p.large.bytes[0] > p.small.bytes[0]+bytes || p.large.bytes[1] > p.small.bytes[1]+bytes ||
+		p.large.objects[1] > p.small.objects[1]+objects
+}
+
+// grewSomeCall reports a copy on any single call.
+func (p backupPollingCostPair) grewSomeCall(bytes uint64) bool {
+	return p.large.bytes[2] > p.small.bytes[2]+bytes
+}
+
+const (
+	backupPollingCostWarmup = 2
+	backupPollingCostRounds = 31
+)
+
+// backupPollingCallCosts measures every single complete call separately,
+// interleaving the fixtures, with one P, the collector paused and no memory
+// limit. A callback's own allocations are fixed for a fixture; runtime and
+// library caches only add to a call. Race builds, which CI runs, add the
+// most: sync.Pool drops a quarter of the values it is given, so any fmt call
+// can miss its printer cache. Object counts then spread over 60 or more per
+// call, and averaging five calls (testing.AllocsPerRun) folded one noisy call
+// into its whole sample until a +4 bound failed. The minimum and median of
+// single calls, with bytes as well as objects, stay stable; a copy on every
+// call moves both, and the maximum catches a copy on any one call.
+func backupPollingCallCosts(t *testing.T, small, large *Monitor, call func(*Monitor)) backupPollingCostPair {
 	t.Helper()
-	measure := func(m *Monitor) float64 {
-		return testing.AllocsPerRun(5, func() { backupPollingCompleteRead(t, m, call) })
+	defer runtime.GOMAXPROCS(runtime.GOMAXPROCS(1))
+	runtime.GC()
+	defer debug.SetGCPercent(debug.SetGCPercent(-1))
+	defer debug.SetMemoryLimit(debug.SetMemoryLimit(math.MaxInt64))
+	var stats runtime.MemStats
+	measure := func(m *Monitor) (bytes, objects uint64) {
+		runtime.ReadMemStats(&stats)
+		bytes, objects = stats.TotalAlloc, stats.Mallocs
+		backupPollingCompleteRead(t, m, call)
+		runtime.ReadMemStats(&stats)
+		return stats.TotalAlloc - bytes, stats.Mallocs - objects
 	}
-	for round := 0; round < 4; round++ {
-		var s, l float64
-		if round%2 == 0 {
-			s, l = measure(small), measure(large)
-		} else {
-			l, s = measure(large), measure(small)
-		}
-		t.Logf("allocation pair %d: small=%.0f unrelated=%.0f", round+1, s, l)
-		if round == 0 {
-			base, grown, peak = s, l, l
-		} else {
-			base, grown, peak = min(base, s), min(grown, l), max(peak, l)
+	for i := 0; i < backupPollingCostWarmup; i++ {
+		measure(small)
+		measure(large)
+	}
+	var sb, so, lb, lo []uint64
+	for round := 0; round < backupPollingCostRounds; round++ {
+		for _, largeFirst := range []bool{round%2 == 1, round%2 == 0} {
+			if largeFirst {
+				b, o := measure(large)
+				lb, lo = append(lb, b), append(lo, o)
+			} else {
+				b, o := measure(small)
+				sb, so = append(sb, b), append(so, o)
+			}
 		}
 	}
-	return base, grown, peak
+	summarise := func(counts []uint64) [3]uint64 {
+		slices.Sort(counts)
+		return [3]uint64{counts[0], counts[len(counts)/2], counts[len(counts)-1]}
+	}
+	return backupPollingCostPair{
+		small: backupPollingCallCost{bytes: summarise(sb), objects: summarise(so)},
+		large: backupPollingCallCost{bytes: summarise(lb), objects: summarise(lo)},
+	}
 }
 
 // Fixed callback measurements keep provider operations, retained backup data
