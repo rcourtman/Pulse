@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "base_sha": "dd54dcb7f8b57bdaa71093cc3209b90fc4fbc303",
+  "base_sha": "33025f218524d90da1fc3ff17c83fa868d0db2c4",
   "result": "passed",
   "changed_paths": [
     "frontend-modern/src/api/settings.ts"
@@ -30,5 +30,15 @@
     "before-result.json",
     "after-result.json",
     "PAIRS.json"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
   ]
 }
