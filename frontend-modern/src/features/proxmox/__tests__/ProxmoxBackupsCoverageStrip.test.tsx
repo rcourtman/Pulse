@@ -45,22 +45,25 @@ describe('Backup health inventory context', () => {
   it('keeps one live summary through phone/desktop transfers without losing counts or controls', async () => {
     vi.stubGlobal('innerWidth', 390);
     const [failed, setFailed] = createSignal(1);
-    // A caller may retain the same JSX node. Both responsive locations must
-    // never try to own it at once, including after a viewport round trip.
-    const summary = (
-      <span>2 completed restore points · 1 running · {failed()} failed · 1 unmatched</span>
-    );
     const select = vi.fn();
-    render(() => (
-      <ProxmoxBackupsCoverageStrip
-        title="Backup health"
-        verdict={verdict(row('vm', 'unprotected'))}
-        tail={summary}
-        onSelectGroup={select}
-        rule="Restore points older than 7 days need attention."
-      />
-    ));
+    render(() => {
+      // A caller may retain the same JSX node. Keep its computation owned by
+      // the mounted tree; neither responsive location may duplicate it.
+      const summary = (
+        <span>2 completed restore points · 1 running · {failed()} failed · 1 unmatched</span>
+      );
+      return (
+        <ProxmoxBackupsCoverageStrip
+          title="Backup health"
+          verdict={verdict(row('vm', 'unprotected'))}
+          tail={summary}
+          onSelectGroup={select}
+          rule="Restore points older than 7 days need attention."
+        />
+      );
+    });
     const currentSummary = () => screen.getByText(/2 completed restore points/);
+    const ownedSummary = currentSummary();
     expect(currentSummary().closest('[data-backup-inventory-summary]')).not.toBeNull();
     expect(currentSummary()).toBeVisible();
     for (const width of [640, 390, 1440, 639]) {
@@ -72,7 +75,7 @@ describe('Backup health inventory context', () => {
         );
       });
       expect(screen.getAllByText(/2 completed restore points/)).toHaveLength(1);
-      expect(currentSummary()).toBe(summary);
+      expect(currentSummary()).toBe(ownedSummary);
       expect(currentSummary()).toBeVisible();
     }
     setFailed(2);
