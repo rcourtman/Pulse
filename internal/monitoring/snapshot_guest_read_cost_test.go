@@ -156,7 +156,10 @@ func TestSnapshotGuestReadDoesNotCopyUnusedDetails(t *testing.T) {
 	previous := log.Logger
 	log.Logger = zerolog.Nop()
 	defer func() { log.Logger = previous }()
-	call := func(m *Monitor) { m.pollGuestSnapshots(context.Background(), "site", backupPollingUnreadClient{}) }
+	client := &snapshotPoolClient{read: func(context.Context, string, int) ([]proxmox.Snapshot, error) {
+		return nil, errBackupPollingUnread
+	}}
+	call := func(m *Monitor) { m.pollGuestSnapshots(context.Background(), "site", client) }
 	sparse, detailed := snapshotGuestReadFixture(16, 0), snapshotGuestReadFixture(16, 64)
 	base, grown, peak := backupPollingAllocationFloors(t, sparse, detailed, call)
 	if grown > base+4 || peak > base+100 {
@@ -181,10 +184,13 @@ func BenchmarkSnapshotGuestReadCost(b *testing.B) {
 	for _, detail := range []int{0, 64} {
 		b.Run(fmt.Sprintf("guests-16/detail-%d", detail), func(b *testing.B) {
 			m := snapshotGuestReadFixture(16, detail)
+			client := &snapshotPoolClient{read: func(context.Context, string, int) ([]proxmox.Snapshot, error) {
+				return nil, errBackupPollingUnread
+			}}
 			b.ReportAllocs()
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				backupPollingCompleteRead(b, m, func(m *Monitor) { m.pollGuestSnapshots(context.Background(), "site", backupPollingUnreadClient{}) })
+				backupPollingCompleteRead(b, m, func(m *Monitor) { m.pollGuestSnapshots(context.Background(), "site", client) })
 			}
 		})
 	}
