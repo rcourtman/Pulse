@@ -765,13 +765,96 @@ provisions its own containers under the same names, and images built by
 with `fx2.sh clean` and `docker image rm`. Between the two profiles, restart
 the agent with the other setting on a fresh Pulse data directory.
 
+### Proxmox fault set pve-v1
+
+The `proxmox` lab driver breaks containers and storage on a Proxmox VE node
+that exists for the lab. The grades, dimensions and scorecard are the ones
+above.
+
+| Fault | Scenario | A person would | Decisive fact |
+|---|---|---|---|
+| P1 | `response.pve-guest-stopped-by-person` | nothing | none, someone stopped it |
+| P2 | `response.pve-guest-disk-one-folder` | find what filled it | the `preview` folder |
+| P3 | `response.pve-storage-old-backups` | prune old backups | vzdump archives of guest 111 |
+| P4 | `response.pve-guest-died` | start it | it died with no stop task, start it |
+
+P1 and P4 look the same to the alert rule: a guest that is stopped. The task
+log tells them apart, so Patrol has to read it. P1 expects quiet and grades a
+finding on the stopped guest as a false alarm.
+
+First scores, 14 November 2026, Sonnet, Ask first, one run per cell on a
+nested Proxmox VE 9.2 node:
+
+| Fault | Commands on | Default agent |
+|---|---|---|
+| P1 | Quiet | Quiet |
+| P2 | Not looked at | Not looked at |
+| P3 | Handed over, woke by itself | Handed over, woke by itself |
+| P4 | Fixed, woke by itself | Handed over, woke by itself |
+| Score | 3 of 4 | 3 of 4 |
+
+P2 with commands on is the open cell. Patrol's alert check is told Pulse cannot
+run an action on the guest and concludes it cannot look inside either, so it
+raises nothing. In an earlier run of the same cell it did raise a finding, and
+the investigation named the `preview` folder from `du` inside the guest.
+
+Before any write the driver requires all of:
+
+- `/etc/pulse-qualification-lab` on the node reads
+  `pulse-qualification-lab node=<node>`, and the node's hostname and its only
+  cluster member are that node;
+- every guest the manifest names carries `pulse-qualification-fixture` in its
+  description;
+- storage faults name a directory storage.
+
+Guest disk and storage fills write fixed-size files into one fixed folder,
+record each one, and revert and cleanup remove exactly those. Old backups are
+sparse vzdump archives at 02:00 on back-dated days, a pattern the node's own
+backups never match. Cleanup runs twice; the second pass must find nothing,
+and the node's guest list and real backups must match the inventory taken
+before the run.
+
+The lab node needs:
+
+- Proxmox VE with guests 110 `pihole`, 111 `nextcloud` and 112 `gitea`,
+  started at boot, and one real backup each. Without a backup every run carries
+  a standing "never backed up" finding.
+- A Pulse API token with Pulse's monitoring role on `/` and
+  `PVEDatastoreAdmin` on `/storage`. Without the second grant Proxmox lists no
+  backups to the token and says nothing.
+- A Pulse agent installed with `--enable-proxmox`, with or without
+  `--enable-commands` (the agent profile), and the node added to Pulse.
+- SSH as root from the harness.
+
+```sh
+go run ./cmd/patrol-qualify -mode fault-set \
+  -fault-set pve-v1 -agent-profile commands-on \
+  -url http://127.0.0.1:7655 \
+  -pve-ssh-host root@<node-address> -pve-node <node> \
+  -pve-ssh-identity <key> \
+  -authorize-live-faults -authorize-remediation \
+  -artifacts tmp/patrol-fault-set/<label>
+```
+
+A set uses one driver, so `-fault-set pve-v1` takes no Docker flags.
+
+Run each Proxmox fault on its own fresh Pulse data directory, with `-faults`.
+The Docker set gives every fault new containers, so an old finding cannot bind
+to the next fault's resources. Proxmox guests and storage persist, and every
+manifest watches all of them, so a finding one fault leaves open makes the next
+one refuse. A new data directory means a new agent token: add the node and
+install the agent again.
+
+Pulse measures guest disk and storage the way Proxmox does, used over total.
+`df`'s Use% counts reserved blocks as used and reads about five points higher,
+so the driver's probes ask Proxmox. Patrol keys Proxmox findings by the source
+ID (`pmxlab:pmxlab:111`, `pmxlab-local`) rather than the registry ID, and the
+harness binds both through the resource's canonical identity.
+
 ### Room left open
 
-- **Other platforms.** The grades, the two dimensions and the scorecard do not
-  depend on Docker. A Proxmox fault set (stopped guest, failed backup, storage
-  filling) needs a lab driver with its own resource kinds, injectors and
-  `proxmox.` probes, and manifests with a new `metadata.fault_set`. Nothing
-  else changes. It is not built: it needs a host that can be broken on purpose.
+- **Other platforms.** A failed backup job and a VM (not a container) are not
+  in pve-v1. Each needs an injector and a probe, nothing else.
 - **A local model.** The model is already a scorecard column. Running the set
   against a local route is the same command with `-model ollama:<model>` on a
   host with the memory for it.

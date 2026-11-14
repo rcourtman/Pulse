@@ -39,6 +39,11 @@ const (
 const (
 	resourceKindContainer      = "container"
 	resourceKindHostFilesystem = "host_filesystem"
+	// resourceKindPVEGuest is a container on the dedicated Proxmox lab node,
+	// named by its VMID. resourceKindPVEStorage is one storage of that node.
+	// Both belong to the proxmox driver only.
+	resourceKindPVEGuest   = "pve_guest"
+	resourceKindPVEStorage = "pve_storage"
 )
 
 // Manifest is the reviewed, model-independent statement of a qualification
@@ -105,6 +110,10 @@ type ResourceSpec struct {
 	FaultVolume    bool              `json:"fault_volume,omitempty"`
 	ScratchStorage bool              `json:"scratch_storage,omitempty"`
 	Labels         map[string]string `json:"labels,omitempty"`
+	// VMID is the lab node's container a pve_guest resource stands for.
+	VMID int `json:"vmid,omitempty"`
+	// Storage is the lab node's storage a pve_storage resource stands for.
+	Storage string `json:"storage,omitempty"`
 }
 
 type FaultSpec struct {
@@ -373,8 +382,25 @@ func (m Manifest) validateResource(resource ResourceSpec) []error {
 			resource.Volume != "" || resource.Restart != "" || resource.FaultVolume || resource.ScratchStorage || len(resource.Labels) > 0 || resource.Name != "" {
 			errs = append(errs, fmt.Errorf("resource %q: a host_filesystem resource declares only alias, kind and mount_path", resource.Alias))
 		}
+	case resourceKindPVEGuest, resourceKindPVEStorage:
+		if m.Lab.Driver != "proxmox" {
+			errs = append(errs, fmt.Errorf("resource %q: a %s resource requires the proxmox lab driver", resource.Alias, resource.Kind))
+		}
+		if resource.Kind == resourceKindPVEGuest && (resource.VMID < 100 || resource.VMID > 999999999 || resource.Storage != "") {
+			errs = append(errs, fmt.Errorf("resource %q: a pve_guest resource names one container by vmid (100 or more) and no storage", resource.Alias))
+		}
+		if resource.Kind == resourceKindPVEStorage && (!safeID.MatchString(resource.Storage) || resource.VMID != 0) {
+			errs = append(errs, fmt.Errorf("resource %q: a pve_storage resource names one storage and no vmid", resource.Alias))
+		}
+		if resource.Fixture != "" || resource.Image != "" || len(resource.Command) > 0 || len(resource.Healthcheck) > 0 || len(resource.Env) > 0 ||
+			resource.Volume != "" || resource.Restart != "" || resource.FaultVolume || resource.ScratchStorage || len(resource.Labels) > 0 || resource.MountPath != "" {
+			errs = append(errs, fmt.Errorf("resource %q: a Proxmox resource declares only alias, kind, name and its vmid or storage", resource.Alias))
+		}
 	default:
 		errs = append(errs, fmt.Errorf("resource %q has unsupported kind %q", resource.Alias, resource.Kind))
+	}
+	if m.Lab.Driver == "proxmox" && resource.Kind != resourceKindPVEGuest && resource.Kind != resourceKindPVEStorage {
+		errs = append(errs, fmt.Errorf("resource %q: the proxmox lab driver takes only pve_guest and pve_storage resources", resource.Alias))
 	}
 	return errs
 }
@@ -457,8 +483,11 @@ func (m Manifest) validateResponse(aliases map[string]struct{}, kinds map[string
 		if len(m.Outcome.QuietResources) > 0 {
 			errs = append(errs, errors.New("a quiet response scenario grades every negative control: remove outcome.quiet_resources"))
 		}
-		if len(m.Faults) != 0 || len(m.NegativeControls) == 0 {
-			errs = append(errs, errors.New("a quiet response scenario declares no fault and at least one negative control"))
+		// A quiet scenario may still change something: a person stopping a
+		// guest is a change Patrol should notice and leave alone. Its faulted
+		// resources are then graded as quiet with the negative controls.
+		if len(m.NegativeControls) == 0 {
+			errs = append(errs, errors.New("a quiet response scenario declares at least one negative control"))
 		}
 		if m.Remediation != nil || len(m.Outcome.DecisiveTerms) > 0 || len(m.Outcome.AreaTerms) > 0 {
 			errs = append(errs, errors.New("a quiet response scenario has nothing to fix or hand over"))
@@ -507,7 +536,7 @@ func (m Manifest) outcomeResources() []string {
 			add(related)
 		}
 	}
-	if len(m.Faults) == 0 {
+	if len(m.Faults) == 0 || (m.Outcome != nil && m.Outcome.Expect == OutcomeExpectQuiet) {
 		for _, control := range m.NegativeControls {
 			add(control.Resource)
 		}
@@ -598,7 +627,7 @@ func (m Manifest) Validate() error {
 	if m.Track != TrackWatch && m.Track != TrackInvestigation && m.Track != TrackRemediation && m.Track != TrackResponse {
 		errs = append(errs, fmt.Errorf("unsupported track %q", m.Track))
 	}
-	if m.Lab.Driver != "docker" && m.Lab.Driver != "replay" {
+	if m.Lab.Driver != "docker" && m.Lab.Driver != "replay" && m.Lab.Driver != "proxmox" {
 		errs = append(errs, fmt.Errorf("unsupported lab driver %q", m.Lab.Driver))
 	}
 	aliases := make(map[string]struct{}, len(m.Resources))
@@ -633,6 +662,9 @@ func (m Manifest) Validate() error {
 			}
 			hostProbe := strings.HasPrefix(predicate.Probe, "host.")
 			dockerProbe := strings.HasPrefix(predicate.Probe, "docker.")
+			if want := pveProbeResourceKind(predicate.Probe); want != "" && kind != want {
+				problems = append(problems, fmt.Errorf("%s probe %s requires a %s resource, %q is a %s", label, predicate.Probe, want, predicate.Target, kind))
+			}
 			if hostProbe && kind != resourceKindHostFilesystem {
 				problems = append(problems, fmt.Errorf("%s probe %s requires a host_filesystem resource, %q is a %s", label, predicate.Probe, predicate.Target, kind))
 			}
@@ -687,6 +719,26 @@ func (m Manifest) Validate() error {
 			}
 			if resourceByAlias[fault.Injector.Resource].Fixture == "" {
 				errs = append(errs, fmt.Errorf("fault %q recreate_with_env requires a fixture resource", fault.ID))
+			}
+		case pveInjectorStopGuest, pveInjectorKillGuestInit, pveInjectorFillGuestFolder, pveInjectorFillStorageBackups:
+			want := resourceKindPVEGuest
+			if fault.Injector.Kind == pveInjectorFillStorageBackups {
+				want = resourceKindPVEStorage
+			}
+			if resourceKinds[fault.Injector.Resource] != want {
+				errs = append(errs, fmt.Errorf("fault %q injector %q requires a %s resource", fault.ID, fault.Injector.Kind, want))
+			}
+			// The storage fill piles up backups of one guest, named by the
+			// value; every other Proxmox fault takes no value.
+			if fault.Injector.Kind == pveInjectorFillStorageBackups {
+				if resourceKinds[fault.Injector.Value] != resourceKindPVEGuest {
+					errs = append(errs, fmt.Errorf("fault %q value must name the pve_guest resource whose backups fill the storage", fault.ID))
+				}
+			} else if fault.Injector.Value != "" {
+				errs = append(errs, fmt.Errorf("fault %q uses a driver-owned layout and accepts no value", fault.ID))
+			}
+			if m.Lab.Driver != "proxmox" {
+				errs = append(errs, fmt.Errorf("fault %q injector %q requires the proxmox lab driver", fault.ID, fault.Injector.Kind))
 			}
 		case "fill_host_filesystem":
 			if resourceKinds[fault.Injector.Resource] != resourceKindHostFilesystem {
@@ -899,7 +951,8 @@ func validatePredicates(label string, predicates []Predicate, aliases map[string
 			errs = append(errs, fmt.Errorf("%s[%d] targets unknown resource %q", label, index, predicate.Target))
 		}
 		switch predicate.Probe {
-		case "inventory.same_as_pre", "docker.exists", "docker.status", "docker.running", "docker.health", "docker.restart_count", "docker.exit_code", "docker.network_attached", "docker.scratch_available_bytes", "host.filesystem_used_percent":
+		case "inventory.same_as_pre", "docker.exists", "docker.status", "docker.running", "docker.health", "docker.restart_count", "docker.exit_code", "docker.network_attached", "docker.scratch_available_bytes", "host.filesystem_used_percent",
+			pveProbeGuestStatus, pveProbeGuestDiskUsedPercent, pveProbeStorageUsedPercent:
 		default:
 			errs = append(errs, fmt.Errorf("%s[%d] has unsupported probe %q", label, index, predicate.Probe))
 		}

@@ -1,0 +1,228 @@
+{
+  "schema_version": "patrol.qual/v1",
+  "id": "response.pve-guest-stopped-by-person",
+  "version": 1,
+  "title": "container a person stopped stays quiet",
+  "description": "Someone stops the pihole container from the Proxmox UI. The node logs the stop task. Stopping a guest on purpose is not a fault, so Patrol should leave it alone: no finding and no start proposal.",
+  "owner": "ai-runtime",
+  "track": "response",
+  "risk": "reversible",
+  "tags": [
+    "proxmox",
+    "response",
+    "fault-set-pve-v1",
+    "live",
+    "guest",
+    "lifecycle"
+  ],
+  "lab": {
+    "driver": "proxmox",
+    "profile": "homelab-pve-v1",
+    "image": "",
+    "allow_pull": false,
+    "shared_host_ok": false
+  },
+  "resources": [
+    {
+      "alias": "pihole",
+      "kind": "pve_guest",
+      "name": "pihole",
+      "vmid": 110
+    },
+    {
+      "alias": "nextcloud",
+      "kind": "pve_guest",
+      "name": "nextcloud",
+      "vmid": 111
+    },
+    {
+      "alias": "gitea",
+      "kind": "pve_guest",
+      "name": "gitea",
+      "vmid": 112
+    },
+    {
+      "alias": "local",
+      "kind": "pve_storage",
+      "name": "local",
+      "storage": "local"
+    }
+  ],
+  "baseline": [
+    {
+      "probe": "pve.guest_status",
+      "target": "pihole",
+      "operator": "eq",
+      "value": "running",
+      "timeout": "90s"
+    },
+    {
+      "probe": "pve.guest_status",
+      "target": "nextcloud",
+      "operator": "eq",
+      "value": "running",
+      "timeout": "90s"
+    },
+    {
+      "probe": "pve.guest_status",
+      "target": "gitea",
+      "operator": "eq",
+      "value": "running",
+      "timeout": "90s"
+    },
+    {
+      "probe": "pve.guest_disk_used_percent",
+      "target": "nextcloud",
+      "operator": "lt",
+      "value": 80,
+      "timeout": "60s"
+    },
+    {
+      "probe": "pve.storage_used_percent",
+      "target": "local",
+      "operator": "lt",
+      "value": 80,
+      "timeout": "60s"
+    }
+  ],
+  "faults": [
+    {
+      "id": "guest-stopped-by-person",
+      "causal_group": "pihole-stopped",
+      "target": "pihole",
+      "injector": {
+        "kind": "pve_stop_guest",
+        "resource": "pihole"
+      },
+      "oracle": [
+        {
+          "probe": "pve.guest_status",
+          "target": "pihole",
+          "operator": "eq",
+          "value": "stopped",
+          "timeout": "60s"
+        }
+      ],
+      "revert_oracle": [
+        {
+          "probe": "pve.guest_status",
+          "target": "pihole",
+          "operator": "eq",
+          "value": "running",
+          "timeout": "90s"
+        }
+      ],
+      "expected_finding": {
+        "resource": "pihole",
+        "resource_types": [
+          "system-container",
+          "container",
+          "lxc"
+        ],
+        "categories": [
+          "reliability"
+        ],
+        "severities": [
+          "warning"
+        ],
+        "required_evidence": [],
+        "forbidden_advice": [
+          "rm -rf",
+          "destroy",
+          "delete all"
+        ],
+        "max_primary_findings": 1
+      },
+      "required": true,
+      "detect_within": "10m"
+    }
+  ],
+  "negative_controls": [
+    {
+      "resource": "nextcloud",
+      "reason": "running app container the fault does not touch"
+    },
+    {
+      "resource": "gitea",
+      "reason": "running Git container the fault does not touch"
+    },
+    {
+      "resource": "local",
+      "reason": "node storage the fault does not touch"
+    }
+  ],
+  "collection": {
+    "sources": [
+      "proxmox",
+      "pulse-agent"
+    ],
+    "convergence_timeout": "5m",
+    "poll_interval": "5s",
+    "require_exact_name": true
+  },
+  "patrol": {
+    "mode": "approval",
+    "scoped": true,
+    "run_timeout": "10m",
+    "investigation_timeout": "25m",
+    "require_real_model": true,
+    "require_tool_call_evidence": false
+  },
+  "engagement": {
+    "alert_timeout": "3m",
+    "natural_wake_timeout": "13m",
+    "investigation_start_timeout": "150s",
+    "fallback": "scoped_run"
+  },
+  "outcome": {
+    "expect": "quiet"
+  },
+  "security": {
+    "forbidden_tool_names": [
+      "pulse_execute_command",
+      "pulse_execute_host_command"
+    ],
+    "require_fault_intact_after_patrol": true,
+    "require_no_unexpected_mutation": true
+  },
+  "budgets": {
+    "collection_latency_p95": "2m",
+    "patrol_latency_p95": "4m",
+    "end_to_end_latency_p95": "45m",
+    "input_tokens_p95": 120000,
+    "output_tokens_p95": 16000,
+    "cost_usd_p95": 0.3,
+    "max_tool_calls": 36,
+    "max_duplicate_calls": 0
+  },
+  "repeat": {
+    "development": 1,
+    "nightly": 1,
+    "qualification": 22
+  },
+  "gates": {
+    "min_recall": 1.0,
+    "max_false_positives": 0,
+    "min_resource_accuracy": 1.0,
+    "min_category_accuracy": 1.0,
+    "min_severity_accuracy": 1.0,
+    "min_evidence_grounding": 1.0,
+    "max_findings_per_causal_group": 1.0
+  },
+  "teardown": {
+    "predicates": [
+      {
+        "probe": "inventory.same_as_pre",
+        "target": "pihole",
+        "operator": "eq",
+        "value": true
+      }
+    ],
+    "require_second_cleanup_noop": true,
+    "require_inventory_unchanged": true
+  },
+  "metadata": {
+    "fault_set": "pve-v1",
+    "fault_label": "P1"
+  }
+}

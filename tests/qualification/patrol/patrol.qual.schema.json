@@ -37,16 +37,18 @@
     "lab": {
       "type": "object", "additionalProperties": false,
       "required": ["driver", "profile", "image"],
-      "properties": {"driver": {"enum": ["docker", "replay"]}, "profile": {"type": "string"}, "image": {"type": "string"}, "allow_pull": {"type": "boolean"}, "shared_host_ok": {"type": "boolean"}}
+      "properties": {"driver": {"enum": ["docker", "replay", "proxmox"]}, "profile": {"type": "string"}, "image": {"type": "string"}, "allow_pull": {"type": "boolean"}, "shared_host_ok": {"type": "boolean"}}
     },
     "resource": {
       "type": "object", "additionalProperties": false,
       "required": ["alias", "kind"],
       "allOf": [
         {"if": {"properties": {"kind": {"const": "container"}}}, "then": {"required": ["name"]}},
-        {"if": {"properties": {"kind": {"const": "host_filesystem"}}}, "then": {"required": ["mount_path"], "properties": {"alias": true, "kind": true, "mount_path": true}, "additionalProperties": false}}
+        {"if": {"properties": {"kind": {"const": "host_filesystem"}}}, "then": {"required": ["mount_path"], "properties": {"alias": true, "kind": true, "mount_path": true}, "additionalProperties": false}},
+        {"if": {"properties": {"kind": {"const": "pve_guest"}}}, "then": {"required": ["vmid"], "properties": {"alias": true, "kind": true, "name": true, "vmid": true}, "additionalProperties": false}},
+        {"if": {"properties": {"kind": {"const": "pve_storage"}}}, "then": {"required": ["storage"], "properties": {"alias": true, "kind": true, "name": true, "storage": true}, "additionalProperties": false}}
       ],
-      "properties": {"alias": {"type": "string"}, "kind": {"enum": ["container", "host_filesystem"]}, "name": {"type": "string"}, "fixture": {"type": "string", "minLength": 1}, "env": {"type": "object", "additionalProperties": {"type": "string"}}, "volume": {"type": "string", "minLength": 1}, "mount_path": {"type": "string", "pattern": "^/(mnt|srv|media)/[a-z0-9][a-z0-9._-]{1,63}$"}, "image": {"type": "string"}, "command": {"type": "array", "items": {"type": "string"}}, "restart": {"type": "string"}, "healthcheck": {"type": "array", "items": {"type": "string"}}, "health_every": {"type": "string"}, "fault_volume": {"type": "boolean"}, "scratch_storage": {"type": "boolean"}, "labels": {"type": "object", "additionalProperties": {"type": "string"}}}
+      "properties": {"alias": {"type": "string"}, "kind": {"enum": ["container", "host_filesystem", "pve_guest", "pve_storage"]}, "name": {"type": "string"}, "fixture": {"type": "string", "minLength": 1}, "env": {"type": "object", "additionalProperties": {"type": "string"}}, "volume": {"type": "string", "minLength": 1}, "mount_path": {"type": "string", "pattern": "^/(mnt|srv|media)/[a-z0-9][a-z0-9._-]{1,63}$"}, "image": {"type": "string"}, "command": {"type": "array", "items": {"type": "string"}}, "restart": {"type": "string"}, "healthcheck": {"type": "array", "items": {"type": "string"}}, "health_every": {"type": "string"}, "fault_volume": {"type": "boolean"}, "scratch_storage": {"type": "boolean"}, "labels": {"type": "object", "additionalProperties": {"type": "string"}}, "vmid": {"type": "integer", "minimum": 100}, "storage": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"}}
     },
     "predicate": {
       "type": "object", "additionalProperties": false,
@@ -58,7 +60,7 @@
       "required": ["id", "causal_group", "target", "injector", "oracle", "expected_finding", "required"],
       "properties": {
         "id": {"type": "string"}, "causal_group": {"type": "string"}, "target": {"type": "string"}, "required": {"type": "boolean"}, "detect_within": {"type": "string"},
-        "injector": {"type": "object", "additionalProperties": false, "required": ["kind", "resource"], "properties": {"kind": {"enum": ["marker_enable", "health_process_stop", "fill_scratch_storage", "stop", "disconnect_network", "kill", "service_process_exit", "crash_once", "recreate_with_env", "fill_host_filesystem"]}, "resource": {"type": "string"}, "value": {"type": "string"}}},
+        "injector": {"type": "object", "additionalProperties": false, "required": ["kind", "resource"], "properties": {"kind": {"enum": ["marker_enable", "health_process_stop", "fill_scratch_storage", "stop", "disconnect_network", "kill", "service_process_exit", "crash_once", "recreate_with_env", "fill_host_filesystem", "pve_stop_guest", "pve_kill_guest_init", "pve_fill_guest_folder", "pve_fill_storage_backups"]}, "resource": {"type": "string"}, "value": {"type": "string"}}},
         "oracle": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/predicate"}},
         "revert_oracle": {"type": "array", "items": {"$ref": "#/$defs/predicate"}},
         "related_resources": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
