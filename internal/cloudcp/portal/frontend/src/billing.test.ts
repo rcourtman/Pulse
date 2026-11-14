@@ -174,6 +174,15 @@ describe('commercial verification runtime', function() {
     expect(announcement.textContent).toContain('One request per minute per email, shared across actions.');
   });
 
+  it.each(ids)('puts the %s request outcome before any newly available code controls', async function(id) {
+    var { post } = mount();
+    post.mockRejectedValueOnce(new PortalAPIError('synthetic uncertain outcome', 503));
+    send(id); await settle();
+    var status = node(flows[id].prefix + '-status');
+    expect(status.textContent).toContain('Outcome unknown');
+    expect(status.compareDocumentPosition(node(flows[id].prefix + '-code')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it('invalidates a different visible mailbox, code and destructive consent without replacing the email input', async function() {
     var { store, post } = mount();
     send('delete'); await settle();
