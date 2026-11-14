@@ -508,7 +508,7 @@ func (r *Router) setupRoutes() {
 		reconcile(r.monitor)
 	})
 	actionAuth := actionAuthority{authorizer: r.authorizer, orgChecker: r.orgAccess}
-	r.resourceHandlers.SetActionAuthorizers(actionAuth, actionAuth)
+	r.resourceHandlers.SetActionAuthorizers(actionAuth, actionAuth, actionAuth)
 	r.attentionHandlers.SetActionDependencies(r.resourceHandlers, actionAuth)
 	r.maintenanceSentinel = r.buildMaintenanceVerificationSentinel()
 	r.maintenanceVerificationHandlers = NewMaintenanceVerificationHandlers(r.resourceHandlers, r.maintenanceSentinel)

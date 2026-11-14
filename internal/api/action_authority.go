@@ -164,6 +164,22 @@ func (a actionAuthority) AuthorizeExecution(ctx context.Context, orgID string, _
 	return a.authorizeActor(ctx, orgID, actor, auth.ActionExecute)
 }
 
+// AuthorizeLiveCheck admits the agent's check of an action before dispatch
+// (an apt-get -s upgrade for OS updates, a container inspect) only for callers
+// who could execute it. Planning, refreshing, reviewing and approving need
+// their own capabilities; asking the agent to do work needs execute, as every
+// other route that reaches an agent does. Service and policy actors are
+// server-stamped broker identities and cannot come from a request; a broker
+// that plans on a person's behalf binds that person's authority with
+// actionlifecycle.WithLiveCheckAuthority.
+func (a actionAuthority) AuthorizeLiveCheck(ctx context.Context, orgID string, actor unified.ActionActor) error {
+	switch unified.NormalizeActionActor(actor).Kind {
+	case unified.ActionActorService, unified.ActionActorPolicy:
+		return nil
+	}
+	return a.authorizeActor(ctx, orgID, actor, auth.ActionExecute)
+}
+
 func authorizeActionCapability(ctx context.Context, authorizer auth.Authorizer, capability string) error {
 	if authorizer == nil {
 		return actionlifecycle.ErrActionAuthorizationDenied
