@@ -1,4 +1,4 @@
-package cloudcp
+package api
 
 import (
 	"context"
@@ -10,7 +10,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/api"
+	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp"
 	cpdocker "github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/docker"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/proxytrust"
 )
@@ -30,11 +30,11 @@ func TestHostedTenantProxyTrustPropagation(t *testing.T) {
 		{"empty-entry primary cannot activate fallback", ", ,", ingress, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			setRequiredCPEnv(t)
-			t.Setenv("CP_CONTROL_PLANE_MODE", string(ControlPlaneModePulseHosted))
+			setRequiredCloudTrustEnv(t)
+			t.Setenv("CP_CONTROL_PLANE_MODE", string(cloudcp.ControlPlaneModePulseHosted))
 			t.Setenv("CP_TRUSTED_PROXY_CIDRS", tc.primary)
 			t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", tc.fallback)
-			cfg, err := LoadConfig()
+			cfg, err := cloudcp.LoadConfig()
 			if err != nil {
 				t.Fatalf("LoadConfig: %v", err)
 			}
@@ -128,25 +128,25 @@ func TestHostedTenantProxyTrustPropagation(t *testing.T) {
 
 			// Consume precisely the create payload, not the expected string.
 			t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", trustEnv)
-			api.ResetTrustedProxyConfigForTests()
-			t.Cleanup(api.ResetTrustedProxyConfigForTests)
-			if err := api.ValidateTrustedProxyCIDRsFromEnv(); err != nil {
+			ResetTrustedProxyConfigForTests()
+			t.Cleanup(ResetTrustedProxyConfigForTests)
+			if err := ValidateTrustedProxyCIDRsFromEnv(); err != nil {
 				t.Fatalf("tenant startup validation: %v", err)
 			}
 			for _, peer := range []string{"172.30.8.7", "172.30.0.3", "2001:db8:30::7"} {
-				if api.IsTrustedProxyIP(peer) {
+				if IsTrustedProxyIP(peer) {
 					t.Errorf("tenant trusts unconfigured peer %s", peer)
 				}
 			}
 			for _, peer := range []string{"172.30.0.2", "173.245.48.1", "2400:cb00::1"} {
-				if got := api.IsTrustedProxyIP(peer); got != (tc.wantEnv != "") {
+				if got := IsTrustedProxyIP(peer); got != (tc.wantEnv != "") {
 					t.Errorf("tenant ingress trust for %s = %v, want %v", peer, got, tc.wantEnv != "")
 				}
 			}
 			r := httptest.NewRequest(http.MethodGet, "https://tenant.example.test/api/health", nil)
 			r.RemoteAddr = "172.30.8.7:1234"
 			r.Header.Set("X-Forwarded-For", "198.51.100.9")
-			if got := api.GetClientIP(r); got != "172.30.8.7" {
+			if got := GetClientIP(r); got != "172.30.8.7" {
 				t.Errorf("unconfigured peer client IP = %q, want its actual address", got)
 			}
 			r.RemoteAddr = "172.30.0.2:1234"
@@ -155,9 +155,18 @@ func TestHostedTenantProxyTrustPropagation(t *testing.T) {
 			if tc.wantEnv != "" {
 				wantClient = "198.51.100.9"
 			}
-			if got := api.GetClientIP(r); got != wantClient {
+			if got := GetClientIP(r); got != wantClient {
 				t.Errorf("configured ingress client IP = %q, want %q", got, wantClient)
 			}
 		})
 	}
+}
+
+func setRequiredCloudTrustEnv(t *testing.T) {
+	t.Helper()
+	t.Setenv("CP_ADMIN_KEY", "synthetic-cloud-key")
+	t.Setenv("CP_BASE_URL", "https://cloud.example.test")
+	t.Setenv("STRIPE_WEBHOOK_SECRET", "whsec_test")
+	t.Setenv("CP_ENV", "development")
+	t.Setenv("CP_REQUIRE_EMAIL_PROVIDER", "false")
 }
