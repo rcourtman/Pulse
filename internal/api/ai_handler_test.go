@@ -37,23 +37,41 @@ type assistantScopeToken map[string]bool
 func (t assistantScopeToken) HasScope(scope string) bool { return t[scope] }
 
 func TestAssistantExecuteAuthorityTokenMatrix(t *testing.T) {
+	// The chat route binds the caller's action-plan capability; these cases
+	// run with it granted and pin the token scope half of the rule.
+	planned := context.WithValue(context.Background(), assistantActionPlanAuthorityContextKey{}, true)
 	tests := []struct {
 		name string
 		ctx  context.Context
 		want bool
 	}{
-		{name: "browser session", ctx: context.Background(), want: true},
-		{name: "chat token", ctx: pulsauth.WithAPIToken(context.Background(), assistantScopeToken{config.ScopeAIChat: true}), want: false},
+		{name: "browser session", ctx: planned, want: true},
+		{name: "chat token", ctx: pulsauth.WithAPIToken(planned, assistantScopeToken{config.ScopeAIChat: true}), want: false},
 		// Relay-mobile tokens gained propose authority on 2026-07-18; the
 		// chat entrypoint pins their sessions to approval-required mode.
-		{name: "relay token", ctx: pulsauth.WithAPIToken(context.Background(), assistantScopeToken{config.ScopeRelayMobileAccess: true}), want: true},
-		{name: "execute token", ctx: pulsauth.WithAPIToken(context.Background(), assistantScopeToken{config.ScopeAIChat: true, config.ScopeAIExecute: true}), want: true},
-		{name: "unknown scope", ctx: pulsauth.WithAPIToken(context.Background(), assistantScopeToken{"ai:unknown": true}), want: false},
+		{name: "relay token", ctx: pulsauth.WithAPIToken(planned, assistantScopeToken{config.ScopeRelayMobileAccess: true}), want: true},
+		{name: "execute token", ctx: pulsauth.WithAPIToken(planned, assistantScopeToken{config.ScopeAIChat: true, config.ScopeAIExecute: true}), want: true},
+		{name: "unknown scope", ctx: pulsauth.WithAPIToken(planned, assistantScopeToken{"ai:unknown": true}), want: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			assert.Equal(t, tt.want, assistantExecuteAuthority(tt.ctx))
 		})
+	}
+}
+
+func TestAssistantExecuteAuthorityNeedsBoundPlanCapability(t *testing.T) {
+	denied := context.WithValue(context.Background(), assistantActionPlanAuthorityContextKey{}, false)
+	for name, ctx := range map[string]context.Context{
+		"unbound session":        context.Background(),
+		"session without plan":   denied,
+		"execute token, no plan": pulsauth.WithAPIToken(denied, assistantScopeToken{config.ScopeAIExecute: true}),
+		"relay token, no plan":   pulsauth.WithAPIToken(denied, assistantScopeToken{config.ScopeRelayMobileAccess: true}),
+		"unbound execute token":  pulsauth.WithAPIToken(context.Background(), assistantScopeToken{config.ScopeAIExecute: true}),
+	} {
+		if assistantExecuteAuthority(ctx) {
+			t.Fatalf("%s: Assistant planning allowed without the action-plan capability", name)
+		}
 	}
 }
 

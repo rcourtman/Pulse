@@ -2580,6 +2580,10 @@ Assistant tools that run a command on a monitored host are additionally bound
 to the chat caller's canonical action-execute capability at `/api/ai/chat`;
 reading host files or logs is never a read-side storage helper for callers who
 cannot run actions.
+Assistant planning (`pulse_control`) is bound to the action-plan capability
+the REST plan route requires, and the infra-update check and finding
+reinvestigation routes now need the action capabilities. These change who may
+start host work; they open no storage or recovery read or write path.
 
 1. `frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx` shared with `unified-resources`: Proxmox backup server table rows are both a storage/recovery backup-health surface and a unified-resource platform-table consumer boundary.
 2. `frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx` shared with `unified-resources`: Proxmox workload coverage rows are both a storage/recovery protection-posture surface and a unified-resource identity consumer boundary.

@@ -242,15 +242,45 @@ func requestHasActionCapability(cfg *config.Config, authorizer auth.Authorizer, 
 	return authorizeActionCapability(r.Context(), authorizer, capability) == nil
 }
 
-// withAssistantHostCommandAuthority binds whether the Assistant may run
-// commands on hosts for this caller: the canonical action-execute capability.
-// Everyone who can chat keeps the Assistant for Pulse's own data; tools that
-// execute a command on a host through an agent are withheld without it.
-func withAssistantHostCommandAuthority(cfg *config.Config, authorizer auth.Authorizer, handler http.HandlerFunc) http.HandlerFunc {
+type assistantActionPlanAuthorityContextKey struct{}
+
+// withAssistantActionAuthority binds what the Assistant may do on this
+// caller's behalf beyond reading Pulse's own data, using the same capabilities
+// as the Actions routes:
+//   - host commands (tools that run a command on a host through an agent)
+//     need action-execute;
+//   - planning an action (pulse_control) needs action-plan, the capability
+//     POST /api/actions/plan requires.
+//
+// Everyone who can chat keeps the Assistant for Pulse's own data.
+func withAssistantActionAuthority(cfg *config.Config, authorizer auth.Authorizer, handler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		allowed := requestHasActionCapability(cfg, authorizer, r, auth.ActionExecute)
-		handler(w, r.WithContext(chat.WithHostCommandAuthority(r.Context(), allowed)))
+		hostCommands := requestHasActionCapability(cfg, authorizer, r, auth.ActionExecute)
+		plan := assistantRequestHasActionPlanCapability(cfg, authorizer, r)
+		ctx := chat.WithHostCommandAuthority(r.Context(), hostCommands)
+		ctx = context.WithValue(ctx, assistantActionPlanAuthorityContextKey{}, plan)
+		handler(w, r.WithContext(ctx))
 	}
+}
+
+// assistantRequestHasActionPlanCapability is the role half of the Assistant's
+// planning authority. Sessions and proxy users need what POST
+// /api/actions/plan needs. API tokens keep the Assistant's own token scope
+// rule (assistantExecuteAuthority: ai:execute, or relay-mobile pinned to
+// approval) and must still pass the authorizer, so an RBAC role without the
+// plan grant cannot plan through a token either.
+func assistantRequestHasActionPlanCapability(cfg *config.Config, authorizer auth.Authorizer, r *http.Request) bool {
+	if getAPITokenRecordFromRequest(r) != nil {
+		return authorizeActionCapability(r.Context(), authorizer, auth.ActionPlan) == nil
+	}
+	return requestHasActionCapability(cfg, authorizer, r, auth.ActionPlan)
+}
+
+// assistantActionPlanAuthorityFromContext reports the plan capability bound
+// by withAssistantActionAuthority. Absent means false.
+func assistantActionPlanAuthorityFromContext(ctx context.Context) bool {
+	allowed, _ := ctx.Value(assistantActionPlanAuthorityContextKey{}).(bool)
+	return allowed
 }
 
 // requireAIApprovalReview reuses canonical action review authority for browser

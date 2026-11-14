@@ -1435,7 +1435,7 @@ Returns scheduler health, DLQ, and breaker status. Requires authentication (sess
 ### Infrastructure Updates
 - `GET /api/infra-updates` (requires `monitoring:read`)
 - `GET /api/infra-updates/summary` (requires `monitoring:read`)
-- `POST /api/infra-updates/check` (requires `monitoring:write`)
+- `POST /api/infra-updates/check` (requires `monitoring:write` and permission to execute actions: the scan runs on the agent's host)
 - `GET /api/infra-updates/agent/{agentId}` (requires `monitoring:read`)
 - `GET /api/infra-updates/{resourceId}` (requires `monitoring:read`)
 
@@ -1675,7 +1675,9 @@ The web chat window is retired; these routes serve Pulse Mobile chat until
 the app retires on 31 March 2027. To ask about your infrastructure from an
 agent, connect an MCP client through `pulse-mcp` instead.
 - `GET /api/ai/status` reports whether the chat service is running
-- `POST /api/ai/chat` (streaming)
+- `POST /api/ai/chat` (streaming). Every signed-in user can ask about Pulse data. Running a
+  command on a host needs permission to execute actions, and planning an action needs
+  permission to plan actions, as on the Actions routes.
 - `GET /api/ai/sessions` returns session summaries; scoped handoffs may include a safe `handoff_summary` marker without model-only context text or command payloads.
 - `POST /api/ai/sessions`
 - `PATCH /api/ai/sessions/{id}` (rename)
@@ -1809,7 +1811,7 @@ accepted on the acknowledge, dismiss and snooze routes.
 - `GET /api/ai/unified/findings`
 - `GET /api/ai/findings/{id}/investigation`
 - `GET /api/ai/findings/{id}/investigation/messages`
-- `POST /api/ai/findings/{id}/reinvestigate` (Pro, `ai:execute`)
+- `POST /api/ai/findings/{id}/reinvestigate` (Pro, `ai:execute`, and permission to plan and execute actions)
   - Needs the `ai_autofix` entitlement (`402 license_required` otherwise) and a
     Patrol mode other than Watch only (`400 autonomy_disabled`). Returns
     `409 investigation_running` while one is already in progress.

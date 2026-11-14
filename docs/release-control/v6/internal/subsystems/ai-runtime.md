@@ -992,6 +992,13 @@ fabricated call before its handler with a relayable message, and the turn's
 prompt explains the boundary. A caller who may chat but not run actions keeps
 the Assistant for Pulse's own data. Unbound executors (Patrol detection,
 investigation, verification and fix replay) are not restricted by this gate.
+Planning follows the REST plan route: the chat route grants
+`ExecuteRequest.HasExecuteAuthority`, which infrastructure-mutation
+invocations such as `pulse_control` need, only to a caller with the canonical
+action-plan capability (`auth.ActionPlan`, as `POST /api/actions/plan`
+requires). The route that starts an unbound investigation,
+`POST /api/ai/findings/{id}/reinvestigate`, needs both the plan and execute
+capabilities.
 An investigation proposal is a request for the canonical policy plane to make
 an execution decision, not execution or approval by the model. When an
 investigation's recommendation or conclusion tells the operator to try,

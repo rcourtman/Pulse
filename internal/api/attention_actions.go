@@ -62,9 +62,7 @@ func (h *AttentionHandlers) projectAttentionActions(
 	authorized := actorErr == nil &&
 		h.hasAutoFixLicense != nil &&
 		h.hasAutoFixLicense(r.Context()) &&
-		h.actionAuthority.authorizeActor(r.Context(), orgID, actor, auth.ActionPlan) == nil &&
-		h.actionAuthority.authorizeActor(r.Context(), orgID, actor, auth.ActionApprove) == nil &&
-		h.actionAuthority.authorizeActor(r.Context(), orgID, actor, auth.ActionExecute) == nil
+		h.callerMayReviewAndRunAction(r, orgID, actor)
 
 	actions := make(map[string]unified.ActionAuditRecord, len(details))
 	if storeErr == nil {
@@ -124,6 +122,22 @@ func (h *AttentionHandlers) projectAttentionActions(
 			detail.Item.AvailableActions = []ai.AttentionActionOffer{offer}
 		}
 	}
+}
+
+// callerMayReviewAndRunAction reports whether this caller may plan, approve
+// and run an attention action. authorizeActor checks the actor, its org access
+// and the authorizer, but under the default authorizer the authorizer allows
+// every signed-in user. The request-level check adds what the Actions routes
+// require there: an administrator session or admin proxy role, or a token
+// scope for each capability.
+func (h *AttentionHandlers) callerMayReviewAndRunAction(r *http.Request, orgID string, actor unified.ActionActor) bool {
+	for _, capability := range []string{auth.ActionPlan, auth.ActionApprove, auth.ActionExecute} {
+		if h.actionAuthority.authorizeActor(r.Context(), orgID, actor, capability) != nil ||
+			!requestHasActionCapability(h.resources.cfg, h.actionAuthority.authorizer, r, capability) {
+			return false
+		}
+	}
+	return true
 }
 
 func (h *AttentionHandlers) handleAttentionActionPlan(
@@ -190,10 +204,7 @@ func (h *AttentionHandlers) handleAttentionActionPlan(
 
 	orgID := GetOrgID(r.Context())
 	actor, err := actionActorForRequest(h.resources.cfg, r, orgID)
-	if err != nil ||
-		h.actionAuthority.authorizeActor(r.Context(), orgID, actor, auth.ActionPlan) != nil ||
-		h.actionAuthority.authorizeActor(r.Context(), orgID, actor, auth.ActionApprove) != nil ||
-		h.actionAuthority.authorizeActor(r.Context(), orgID, actor, auth.ActionExecute) != nil {
+	if err != nil || !h.callerMayReviewAndRunAction(r, orgID, actor) {
 		writeJSONError(w, http.StatusForbidden, "attention_action_denied", "You do not have permission to review and run this action")
 		return
 	}

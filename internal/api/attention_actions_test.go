@@ -16,6 +16,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
 
 type attentionActionTestExecutor struct {
@@ -326,5 +327,94 @@ func TestAttentionActionPlanRequiresAutoFixEntitlementBeforeProjection(t *testin
 	}
 	if payload.Error != "license_required" || payload.Feature != featureAIAutoFixKey {
 		t.Fatalf("license response = %+v", payload)
+	}
+}
+
+// Under the default authorizer, authorizeActor alone admits every signed-in
+// user, so the attention restart offer and plan must also pass the request
+// rule the Actions routes use. A viewer is neither offered the restart nor
+// able to plan it; an administrator is both.
+func TestAttentionActionPlanRequiresActionCapabilityForSessions(t *testing.T) {
+	InitSessionStore(t.TempDir())
+	now := time.Now().UTC()
+	alert := attentionHandlerAlert("docker-health-viewer", operationaltrust.OperationalOpen, now)
+	containerID := strings.Repeat("d2", 32)
+	reference := alerts.DockerContainerResourceID("host-1", containerID, "api")
+	alert.Type = ai.AttentionDockerHealthKind
+	alert.ResourceID = reference
+	alert.ResourceName = "API container"
+	alert.Metadata = map[string]interface{}{"resourceType": string(unified.ResourceTypeAppContainer)}
+	alert.OperationalRecord.SubjectResourceID = reference
+	alert.Evidence[0].Subject.ResourceID = reference
+
+	resources := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir(), AuthUser: "admin"})
+	resources.SetStateProvider(resourceUnifiedSeedProvider{
+		snapshot: models.StateSnapshot{LastUpdate: now},
+		resources: []unified.Resource{{
+			ID:        "app-container-viewer-check",
+			Type:      unified.ResourceTypeAppContainer,
+			Name:      "API container",
+			Status:    unified.StatusWarning,
+			LastSeen:  now,
+			UpdatedAt: now,
+			Sources:   []unified.DataSource{unified.SourceDocker},
+			Docker:    &unified.DockerData{HostSourceID: "host-1", ContainerID: containerID},
+			Capabilities: []unified.ResourceCapability{{
+				Name:                 ai.AttentionDockerRestartCapability,
+				Type:                 unified.CapabilityTypeCommon,
+				Description:          "Restart this Docker container.",
+				MinimumApprovalLevel: unified.ApprovalAdmin,
+				AutoAuthorization:    unified.AutoAuthorizeLowRisk,
+				InternalHandler:      ai.AttentionDockerLifecycleHandler,
+			}},
+		}},
+	})
+	resources.SetActionExecutor(&attentionActionTestExecutor{})
+	authority := actionAuthority{authorizer: &auth.DefaultAuthorizer{}, orgChecker: NewAuthorizationChecker(nil)}
+	handler := &AttentionHandlers{
+		readAlerts: func(context.Context) ([]alerts.Alert, []alerts.Alert, error) {
+			return []alerts.Alert{alert}, nil, nil
+		},
+	}
+	handler.SetActionDependencies(resources, authority)
+	handler.SetActionLicenseChecker(func(context.Context) bool { return true })
+
+	sessionRequest := func(method, path, user string) *http.Request {
+		token := "attention-session-" + user
+		GetSessionStore().CreateSession(token, time.Hour, "browser", "127.0.0.1", user)
+		req := httptest.NewRequest(method, path, nil)
+		req.AddCookie(&http.Cookie{Name: cookieNameSession, Value: token})
+		return actionHandlerTestRequest(req, user)
+	}
+
+	for _, tc := range []struct {
+		user      string
+		wantOffer bool
+		wantPlan  int
+	}{
+		// The withheld offer refuses the plan before the authority check.
+		{user: "viewer", wantOffer: false, wantPlan: http.StatusConflict},
+		{user: "admin", wantOffer: true, wantPlan: http.StatusOK},
+	} {
+		t.Run(tc.user, func(t *testing.T) {
+			detailResponse := httptest.NewRecorder()
+			handler.HandleAttention(detailResponse, sessionRequest(http.MethodGet, "/api/ai/patrol/attention/docker-health-viewer", tc.user))
+			if detailResponse.Code != http.StatusOK {
+				t.Fatalf("detail status=%d body=%s", detailResponse.Code, detailResponse.Body.String())
+			}
+			var detail ai.AttentionItemDetail
+			if err := json.Unmarshal(detailResponse.Body.Bytes(), &detail); err != nil {
+				t.Fatalf("decode detail: %v", err)
+			}
+			if got := len(detail.Item.AvailableActions) == 1; got != tc.wantOffer {
+				t.Fatalf("restart offered = %v, want %v: %+v", got, tc.wantOffer, detail.Item.AvailableActions)
+			}
+
+			planResponse := httptest.NewRecorder()
+			handler.HandleAttention(planResponse, sessionRequest(http.MethodPost, "/api/ai/patrol/attention/docker-health-viewer/actions/restart/plan", tc.user))
+			if planResponse.Code != tc.wantPlan {
+				t.Fatalf("plan status=%d, want %d: %s", planResponse.Code, tc.wantPlan, planResponse.Body.String())
+			}
+		})
 	}
 }

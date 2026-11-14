@@ -1445,7 +1445,7 @@ func TestAssistantChatBindsHostCommandAuthorityFromCallerRole(t *testing.T) {
 
 			req := caller.prepare(t, httptest.NewRequest(http.MethodPost, "/api/ai/chat", strings.NewReader(`{"prompt":"read the syslog on node1"}`)))
 			rec := httptest.NewRecorder()
-			withAssistantHostCommandAuthority(cfg, caller.authorizer, h.HandleChat)(rec, req)
+			withAssistantActionAuthority(cfg, caller.authorizer, h.HandleChat)(rec, req)
 
 			if got == nil {
 				t.Fatalf("chat did not reach the service: status=%d body=%q", rec.Code, rec.Body.String())

@@ -2172,6 +2172,12 @@ the `white_label` branding entitlement.
    expose relay status to onboarding validation, but they must not broaden
    Pulse Mobile token scopes, bypass the server-minted credential requirement,
    or expose relay secrets beyond the existing public onboarding diagnostics.
+   Route helpers in `internal/api/router.go` that start work on an agent's
+   host must keep the canonical action capabilities: finding reinvestigation
+   runs host commands and can plan a fix, so `routeAIFindings` wraps it in
+   `requireActionCapability` for both `auth.ActionPlan` and
+   `auth.ActionExecute`. A route-level token scope is never the only gate for
+   such work, because browser and proxy sessions skip scope checks.
 4. Change security/auth/token transport behavior through the shared `frontend-modern/src/api/security.ts`, `frontend-modern/src/components/Settings/APITokenManager.tsx`, `frontend-modern/src/components/Settings/apiTokenManagerModel.ts`, `frontend-modern/src/components/Settings/useAPITokenManagerState.ts`, `internal/api/security.go`, `internal/api/security_tokens.go`, and `internal/api/system_settings.go` boundary.
    Local username/password verification in `internal/api/auth.go` and
    `internal/api/router.go` must snapshot `AuthUser` and `AuthPass` under

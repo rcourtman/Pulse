@@ -2614,6 +2614,11 @@ chat caller's canonical action-execute capability, bound at `/api/ai/chat` as
 host-command authority.
 Agent command enablement alone never lets a caller who cannot run actions
 have the Assistant run a read command on that host.
+The same holds outside the Assistant: `POST /api/infra-updates/check` queues
+the Docker update scan on an agent and needs the action-execute capability, and
+`POST /api/ai/findings/{id}/reinvestigate` starts an investigation that runs
+agent commands and needs the plan and execute capabilities. Signed-in users
+without them keep the read routes for update status and findings.
 
 Commercial v5-to-v6 migration retry state may pass through `internal/api/`
 handlers that agent-lifecycle also references, but the ownership remains
