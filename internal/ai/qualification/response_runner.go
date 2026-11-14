@@ -452,7 +452,7 @@ func (r *QualificationRunner) runResponse(ctx context.Context, report *RunReport
 		}
 		// A recreated container is a deliberate inventory change. Everything
 		// after this point is compared with the lab as the fault left it.
-		inventory, err := r.config.Lab.inventory(ctx)
+		inventory, err := r.config.Lab.runInventory(ctx, prepared)
 		if err != nil {
 			return err
 		}
@@ -693,7 +693,7 @@ func (r *QualificationRunner) runResponse(ctx context.Context, report *RunReport
 				faultsIntact = false
 			}
 		}
-		current, err := r.config.Lab.inventory(ctx)
+		current, err := r.config.Lab.runInventory(ctx, prepared)
 		if err != nil {
 			return err
 		}

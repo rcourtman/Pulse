@@ -333,7 +333,7 @@ func (r *QualificationRunner) Run(ctx context.Context) (report RunReport, termin
 				}
 			}
 		}
-		current, err := r.config.Lab.inventory(ctx)
+		current, err := r.config.Lab.runInventory(ctx, prepared)
 		if err != nil {
 			return err
 		}

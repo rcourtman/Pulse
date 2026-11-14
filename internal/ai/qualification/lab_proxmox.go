@@ -2,6 +2,7 @@ package qualification
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -58,6 +59,7 @@ var (
 	pveDescription  = regexp.MustCompile(`(?m)^description:\s*(.*)$`)
 	pveStatusLine   = regexp.MustCompile(`(?m)^status:\s*(\S+)\s*$`)
 	pveNodeName     = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
+	pveDirectoryID  = regexp.MustCompile(`^[0-9]+:[0-9]+$`)
 )
 
 func pveProbeResourceKind(probe string) string {
@@ -95,9 +97,30 @@ func (t ProxmoxTarget) Validate() error {
 }
 
 type ProxmoxLab struct {
-	runner    CommandRunner
-	target    ProxmoxTarget
-	confirmed bool
+	runner CommandRunner
+	target ProxmoxTarget
+}
+
+type pveRunState struct {
+	guests    map[int]*pveGuestCustody
+	storages  map[string]*pveStorageCustody
+	baseline  bool
+	ready     bool
+	uncertain []string
+}
+
+type pveGuestCustody struct {
+	hostname string
+	status   string
+	restore  bool
+	fillDir  string
+	dirID    string
+}
+
+type pveStorageCustody struct {
+	path   string
+	marker string
+	files  []string
 }
 
 func NewProxmoxLab(runner CommandRunner, target ProxmoxTarget) *ProxmoxLab {
@@ -123,9 +146,6 @@ func (l *ProxmoxLab) node(ctx context.Context, script string) (CommandResult, er
 // exactly this node name, reports that host name, and is a single-node
 // installation of that name. A production node carries no marker.
 func (l *ProxmoxLab) confirmLabNode(ctx context.Context) error {
-	if l.confirmed {
-		return nil
-	}
 	if err := l.target.Validate(); err != nil {
 		return err
 	}
@@ -152,7 +172,6 @@ func (l *ProxmoxLab) confirmLabNode(ctx context.Context) error {
 	if len(nodes) != 1 || nodes[0].Node != l.target.Node {
 		return fmt.Errorf("%s is not a single-node installation of %s; refusing to touch it", l.target.SSHHost, l.target.Node)
 	}
-	l.confirmed = true
 	return nil
 }
 
@@ -292,6 +311,10 @@ func (l *ProxmoxLab) Prepare(ctx context.Context, manifest Manifest, runID strin
 		BaselineStates: make(map[string]DockerState),
 		PVEFaultFiles:  make(map[string][]string),
 		PVENode:        l.target.Node,
+		pve: &pveRunState{
+			guests:   make(map[int]*pveGuestCustody),
+			storages: make(map[string]*pveStorageCustody),
+		},
 	}
 	for _, resource := range manifest.Resources {
 		switch resource.Kind {
@@ -302,37 +325,43 @@ func (l *ProxmoxLab) Prepare(ctx context.Context, manifest Manifest, runID strin
 			}
 			lab.ResourceIDs[resource.Alias] = strconv.Itoa(resource.VMID)
 			lab.ResourceNames[resource.Alias] = hostname
-			// Leftovers of an interrupted run are driver-owned, so clear them
-			// before the baseline: a guest is running, its fill folder empty.
-			if err := l.clearGuestFill(ctx, resource.VMID, nil); err != nil {
+			status, err := l.guestStatus(ctx, resource.VMID)
+			if err != nil {
 				return lab, err
 			}
+			lab.pve.guests[resource.VMID] = &pveGuestCustody{hostname: hostname, status: status}
 		case resourceKindPVEStorage:
-			if _, err := l.storagePath(ctx, resource.Storage); err != nil {
+			dir, err := l.storagePath(ctx, resource.Storage)
+			if err != nil {
 				return lab, err
 			}
 			lab.ResourceIDs[resource.Alias] = resource.Storage
 			lab.ResourceNames[resource.Alias] = resource.Storage
-			if err := l.clearStorageFill(ctx, resource.Storage, nil); err != nil {
-				return lab, err
-			}
+			lab.pve.storages[resource.Storage] = &pveStorageCustody{path: dir}
 		default:
 			return lab, fmt.Errorf("resource %q of kind %s cannot run on the proxmox driver", resource.Alias, resource.Kind)
 		}
 	}
-	pre, err := l.inventory(ctx)
+	// Preparation is read-only. Neither a filename pattern nor a fixture
+	// marker proves ownership of preexisting bytes or a stopped guest.
+	pre, err := l.runInventory(ctx, lab)
 	if err != nil {
 		return lab, fmt.Errorf("capture pre-lab inventory: %w", err)
 	}
 	lab.PreInventory = pre
+	lab.pve.baseline = true
 	if _, err := l.Observe(ctx, manifest, lab, manifest.Baseline); err != nil {
 		return lab, fmt.Errorf("baseline did not converge: %w", err)
 	}
 	lab.ExpectedInventory = pre
+	lab.pve.ready = true
 	return lab, nil
 }
 
 func (l *ProxmoxLab) ApplyFault(ctx context.Context, manifest Manifest, lab *PreparedLab, fault FaultSpec) error {
+	if lab == nil || lab.pve == nil || !lab.pve.ready || lab.PVENode != l.target.Node || lab.ScenarioID != manifest.ID {
+		return errors.New("Proxmox fault has no prepared run custody")
+	}
 	lab.mu.Lock()
 	defer lab.mu.Unlock()
 	if contains(lab.AppliedFaults, fault.ID) {
@@ -342,10 +371,27 @@ func (l *ProxmoxLab) ApplyFault(ctx context.Context, manifest Manifest, lab *Pre
 		return err
 	}
 	alias := fault.Injector.Resource
+	resource, ok := manifest.resource(alias)
+	if !ok || lab.ResourceIDs[alias] == "" {
+		return fmt.Errorf("resource %q was not admitted by this run", alias)
+	}
+	if resource.Kind == resourceKindPVEGuest {
+		if lab.ResourceIDs[alias] != strconv.Itoa(resource.VMID) {
+			return errors.New("Proxmox guest differs from prepared identity")
+		}
+		if err := l.admitGuestMutation(ctx, lab, resource.VMID); err != nil {
+			return err
+		}
+	} else if resource.Kind == resourceKindPVEStorage && lab.ResourceIDs[alias] != resource.Storage {
+		return errors.New("Proxmox storage differs from prepared identity")
+	}
 	switch fault.Injector.Kind {
 	case pveInjectorStopGuest:
 		spec, err := pveGuestSpec(manifest, alias)
 		if err != nil {
+			return err
+		}
+		if err := l.recordGuestPowerFault(ctx, lab, spec.VMID); err != nil {
 			return err
 		}
 		if _, err := l.node(ctx, "pct stop "+strconv.Itoa(spec.VMID)); err != nil {
@@ -354,6 +400,9 @@ func (l *ProxmoxLab) ApplyFault(ctx context.Context, manifest Manifest, lab *Pre
 	case pveInjectorKillGuestInit:
 		spec, err := pveGuestSpec(manifest, alias)
 		if err != nil {
+			return err
+		}
+		if err := l.recordGuestPowerFault(ctx, lab, spec.VMID); err != nil {
 			return err
 		}
 		id := strconv.Itoa(spec.VMID)
@@ -379,6 +428,12 @@ func (l *ProxmoxLab) ApplyFault(ctx context.Context, manifest Manifest, lab *Pre
 		if err != nil {
 			return fmt.Errorf("fault %q: %w", fault.ID, err)
 		}
+		if lab.ResourceIDs[fault.Injector.Value] != strconv.Itoa(guest.VMID) {
+			return errors.New("backup guest was not admitted by this run")
+		}
+		if err := l.admitGuestMutation(ctx, lab, guest.VMID); err != nil {
+			return err
+		}
 		if err := l.fillStorageBackups(ctx, lab, alias, spec.Storage, guest.VMID); err != nil {
 			return err
 		}
@@ -390,6 +445,11 @@ func (l *ProxmoxLab) ApplyFault(ctx context.Context, manifest Manifest, lab *Pre
 }
 
 func (l *ProxmoxLab) RevertFault(ctx context.Context, manifest Manifest, lab *PreparedLab, fault FaultSpec) error {
+	if lab == nil || lab.pve == nil || lab.PVENode != l.target.Node {
+		return errors.New("Proxmox revert has no prepared run custody")
+	}
+	lab.mu.Lock()
+	defer lab.mu.Unlock()
 	if err := l.confirmLabNode(ctx); err != nil {
 		return err
 	}
@@ -400,7 +460,7 @@ func (l *ProxmoxLab) RevertFault(ctx context.Context, manifest Manifest, lab *Pr
 		if err != nil {
 			return err
 		}
-		return l.startGuest(ctx, spec.VMID)
+		return l.restoreGuest(ctx, lab, spec.VMID)
 	case pveInjectorFillGuestFolder:
 		spec, err := pveGuestSpec(manifest, alias)
 		if err != nil {
@@ -431,6 +491,90 @@ func (l *ProxmoxLab) startGuest(ctx context.Context, vmid int) error {
 	return nil
 }
 
+func (l *ProxmoxLab) admitGuestMutation(ctx context.Context, lab *PreparedLab, vmid int) error {
+	guest := lab.pve.guests[vmid]
+	if guest == nil {
+		return fmt.Errorf("container %d was not admitted by this run", vmid)
+	}
+	hostname, err := l.guestIdentity(ctx, vmid)
+	if err != nil {
+		return err
+	}
+	if hostname != guest.hostname {
+		return fmt.Errorf("container %d no longer has its admitted identity", vmid)
+	}
+	return nil
+}
+
+func (l *ProxmoxLab) recordGuestPowerFault(ctx context.Context, lab *PreparedLab, vmid int) error {
+	status, err := l.guestStatus(ctx, vmid)
+	if err != nil {
+		return err
+	}
+	if lab.pve.guests[vmid].status != "running" || status != "running" {
+		return fmt.Errorf("container %d was not continuously running before this fault", vmid)
+	}
+	// A failed command can still have stopped the guest. Record the run's
+	// restoration obligation before attempting the mutation.
+	lab.pve.guests[vmid].restore = true
+	return nil
+}
+
+func (l *ProxmoxLab) restoreGuest(ctx context.Context, lab *PreparedLab, vmid int) error {
+	guest := lab.pve.guests[vmid]
+	if guest == nil || !guest.restore {
+		return nil
+	}
+	if err := l.admitGuestMutation(ctx, lab, vmid); err != nil {
+		return err
+	}
+	if err := l.startGuest(ctx, vmid); err != nil {
+		return err
+	}
+	guest.restore = false
+	return nil
+}
+
+func pveGuestCommand(vmid int, script string) string {
+	return "pct exec " + strconv.Itoa(vmid) + " -- sh -c " + shellQuote(script)
+}
+
+func pveDirectoryGuard(dir, id string) string {
+	return "[ ! -L " + shellQuote(dir) + " ] && [ \"$(stat -c '%d:%i' -- " + shellQuote(dir) + ")\" = " + shellQuote(id) + " ]"
+}
+
+func (l *ProxmoxLab) reserveDirectory(ctx context.Context, lab *PreparedLab, vmid int, dir string) (string, error) {
+	script := "mkdir -- " + shellQuote(dir) + " && stat -c '%d:%i' -- " + shellQuote(dir)
+	if vmid != 0 {
+		script = pveGuestCommand(vmid, script)
+	}
+	result, err := l.node(ctx, script)
+	id := strings.TrimSpace(result.Stdout)
+	if err != nil || !pveDirectoryID.MatchString(id) {
+		failure := fmt.Sprintf("could not establish exclusive directory custody for %s", dir)
+		// An SSH failure after mkdir is ambiguous. Never adopt or delete the
+		// path on a later pass merely because it has our naming convention.
+		lab.pve.uncertain = append(lab.pve.uncertain, failure)
+		return "", fmt.Errorf("%s: %w", failure, errors.Join(err, errors.New("no verified directory identity")))
+	}
+	return id, nil
+}
+
+func (l *ProxmoxLab) admittedStorage(ctx context.Context, lab *PreparedLab, storage string) (*pveStorageCustody, error) {
+	state := lab.pve.storages[storage]
+	if state == nil {
+		return nil, fmt.Errorf("storage %s was not admitted by this run", storage)
+	}
+	dir, err := l.storagePath(ctx, storage)
+	if err != nil {
+		return nil, err
+	}
+	if dir != state.path {
+		return nil, fmt.Errorf("storage %s changed its admitted directory", storage)
+	}
+	return state, nil
+}
+
 func pveGuestFillFile(index int) string {
 	return path.Join(pveGuestFillDir, fmt.Sprintf("%02x-thumbs-4096-4096-max.png", index))
 }
@@ -439,9 +583,17 @@ func pveGuestFillFile(index int) string {
 // until the container's root disk reaches the target.
 func (l *ProxmoxLab) fillGuestFolder(ctx context.Context, lab *PreparedLab, alias string, vmid int) error {
 	id := strconv.Itoa(vmid)
-	if _, err := l.node(ctx, "pct exec "+id+" -- mkdir -p "+pveGuestFillDir); err != nil {
-		return fmt.Errorf("create the fill folder in container %d: %w", vmid, err)
+	guest := lab.pve.guests[vmid]
+	if guest.fillDir != "" {
+		return errors.New("this run already has a guest fill directory")
 	}
+	dir := path.Join(pveGuestFillDir, "pulse-qualification-"+lab.RunID)
+	dirID, err := l.reserveDirectory(ctx, lab, vmid, dir)
+	if err != nil {
+		return err
+	}
+	guest.fillDir, guest.dirID = dir, dirID
+	guest.restore = guest.status == "running"
 	key := "guest:" + id
 	for index := 0; index < pveGuestFillMaxFiles; index++ {
 		used, err := l.guestDiskUsedPercent(ctx, vmid)
@@ -451,10 +603,10 @@ func (l *ProxmoxLab) fillGuestFolder(ctx context.Context, lab *PreparedLab, alia
 		if used >= pveGuestFillTarget {
 			return nil
 		}
-		file := pveGuestFillFile(index)
+		file := path.Join(dir, path.Base(pveGuestFillFile(index)))
 		lab.PVEFaultFiles[key] = append(lab.PVEFaultFiles[key], file)
 		// Small synced steps: a container this size kills a single large write.
-		if _, err := l.node(ctx, "pct exec "+id+" -- sh -c "+shellQuote("dd if=/dev/urandom of="+file+" bs=1M count="+strconv.Itoa(pveGuestFillFileMiB)+" conv=fsync status=none")); err != nil {
+		if _, err := l.node(ctx, pveGuestCommand(vmid, pveDirectoryGuard(dir, dirID)+" && dd if=/dev/urandom of="+file+" bs=1M count="+strconv.Itoa(pveGuestFillFileMiB)+" conv=fsync status=none")); err != nil {
 			used, _ := l.guestDiskUsedPercent(ctx, vmid)
 			if used >= pveGuestFillTarget {
 				return nil
@@ -469,34 +621,41 @@ func (l *ProxmoxLab) fillGuestFolder(ctx context.Context, lab *PreparedLab, alia
 	return err
 }
 
-// clearGuestFill removes the driver's fill files from a container. With a lab
-// it removes what that run recorded; without one (Prepare) it removes any file
-// matching the driver's own naming in the driver's own folder.
+// clearGuestFill removes only this run's recorded files in its exclusively
+// created directory. It never adopts preexisting preview files.
 func (l *ProxmoxLab) clearGuestFill(ctx context.Context, vmid int, lab *PreparedLab) error {
-	id := strconv.Itoa(vmid)
-	if err := l.startGuest(ctx, vmid); err != nil {
-		return err
+	if lab == nil || lab.pve == nil {
+		return errors.New("guest fill cleanup has no run custody")
 	}
-	if lab != nil {
-		key := "guest:" + id
-		files := lab.PVEFaultFiles[key]
-		if len(files) == 0 {
-			return nil
-		}
-		quoted := make([]string, len(files))
-		for i, file := range files {
-			quoted[i] = file
-		}
-		if _, err := l.node(ctx, "pct exec "+id+" -- rm -f "+strings.Join(quoted, " ")); err != nil {
-			return fmt.Errorf("clear the fill in container %d: %w", vmid, err)
-		}
-		delete(lab.PVEFaultFiles, key)
+	guest := lab.pve.guests[vmid]
+	if guest == nil || guest.fillDir == "" {
 		return nil
 	}
-	_, err := l.node(ctx, "pct exec "+id+" -- sh -c "+shellQuote("rm -f "+pveGuestFillDir+"/*-thumbs-4096-4096-max.png"))
-	if err != nil {
-		return fmt.Errorf("clear leftover fill in container %d: %w", vmid, err)
+	if err := l.admitGuestMutation(ctx, lab, vmid); err != nil {
+		return err
 	}
+	if err := l.restoreGuest(ctx, lab, vmid); err != nil {
+		return err
+	}
+	// Keep the restoration obligation until all fill bytes are cleared.
+	guest.restore = guest.status == "running"
+	key := "guest:" + strconv.Itoa(vmid)
+	files := lab.PVEFaultFiles[key]
+	script := pveDirectoryGuard(guest.fillDir, guest.dirID)
+	if len(files) != 0 {
+		quoted := make([]string, len(files))
+		for i, file := range files {
+			quoted[i] = shellQuote(file)
+		}
+		script += " && rm -f -- " + strings.Join(quoted, " ")
+	}
+	script += " && rmdir -- " + shellQuote(guest.fillDir)
+	if _, err := l.node(ctx, pveGuestCommand(vmid, script)); err != nil {
+		return fmt.Errorf("clear owned fill in container %d: %w", vmid, err)
+	}
+	delete(lab.PVEFaultFiles, key)
+	guest.fillDir, guest.dirID = "", ""
+	guest.restore = false
 	return nil
 }
 
@@ -504,17 +663,28 @@ func pveBackupArchiveName(vmid int, day time.Time, index int) string {
 	return fmt.Sprintf("vzdump-lxc-%d-%s-02_00_%02d.tar.zst", vmid, day.Format("2006_01_02"), index%60)
 }
 
+// pveFileGuard proves a synthetic file still carries this run's ownership
+// marker. Symlinks and special files never become cleanup authority.
+func pveFileGuard(file, marker string) string {
+	return "[ ! -L " + shellQuote(file) + " ] && [ -f " + shellQuote(file) +
+		" ] && [ \"$(head -c " + strconv.Itoa(len(marker)) + " -- " + shellQuote(file) + ")\" = " + shellQuote(strings.TrimSuffix(marker, "\n")) + " ]"
+}
+
+func pveReserveFileScript(file, marker string) string {
+	return "[ ! -e " + shellQuote(file) + " ] && [ ! -L " + shellQuote(file) +
+		" ] && ( set -C; printf '%s' " + shellQuote(marker) + " > " + shellQuote(file) + " )"
+}
+
 // fillStorageBackups writes a month of nightly archives of one guest into the
 // storage's dump folder, oldest first, until the storage reaches the target.
 // Each archive gets the log a real backup leaves beside it.
 func (l *ProxmoxLab) fillStorageBackups(ctx context.Context, lab *PreparedLab, alias, storage string, vmid int) error {
-	dir, err := l.storagePath(ctx, storage)
+	state, err := l.admittedStorage(ctx, lab, storage)
 	if err != nil {
 		return err
 	}
-	dump := path.Join(dir, "dump")
-	if _, err := l.node(ctx, "mkdir -p "+shellQuote(dump)); err != nil {
-		return err
+	if len(state.files) != 0 {
+		return errors.New("this run already has storage fill files")
 	}
 	used, total, err := l.storageUsage(ctx, storage)
 	if err != nil {
@@ -524,6 +694,12 @@ func (l *ProxmoxLab) fillStorageBackups(ctx context.Context, lab *PreparedLab, a
 	if need <= 0 {
 		return fmt.Errorf("storage %s is already past %.0f%%", storage, pveStorageFillTarget)
 	}
+	// A content marker proves creation without keeping another hardlink to
+	// the archive: real pruning must be able to release the allocated bytes.
+	// These are synthetic (already non-restorable) lab archives, never real
+	// backups. A new run never adopts an old run's marker or filename.
+	state.marker = "INFO: Pulse qualification owner " + rand.Text() + "\n"
+	dump := path.Join(state.path, "dump")
 	size := need/int64(pveStorageFillMaxDays-2) + 1
 	key := "storage:" + storage
 	now := time.Now().UTC()
@@ -538,10 +714,20 @@ func (l *ProxmoxLab) fillStorageBackups(ctx context.Context, lab *PreparedLab, a
 		stamp := now.AddDate(0, 0, -day)
 		archive := path.Join(dump, pveBackupArchiveName(vmid, stamp, day))
 		logFile := strings.TrimSuffix(archive, ".tar.zst") + ".log"
-		lab.PVEFaultFiles[key] = append(lab.PVEFaultFiles[key], archive, logFile)
+		for _, file := range []string{archive, logFile} {
+			// Track the attempt before creating, including lost responses.
+			// POSIX noclobber uses exclusive creation; it never truncates a
+			// preexisting regular file, symlink or directory.
+			state.files = append(state.files, file)
+			if _, err := l.node(ctx, pveReserveFileScript(file, state.marker)); err != nil {
+				return fmt.Errorf("reserve a new backup file on %s without replacement: %w", storage, err)
+			}
+			lab.PVEFaultFiles[key] = append(lab.PVEFaultFiles[key], file)
+		}
 		touch := stamp.Format("200601020000")
-		script := "fallocate -l " + strconv.FormatInt(size, 10) + " " + shellQuote(archive) +
-			" && printf 'INFO: Starting Backup of VM " + strconv.Itoa(vmid) + " (lxc)\\nINFO: Finished Backup of VM " + strconv.Itoa(vmid) + "\\nINFO: Backup job finished successfully\\n' > " + shellQuote(logFile) +
+		log := state.marker + "INFO: Starting Backup of VM " + strconv.Itoa(vmid) + " (lxc)\nINFO: Finished Backup of VM " + strconv.Itoa(vmid) + "\nINFO: Backup job finished successfully\n"
+		script := pveFileGuard(archive, state.marker) + " && fallocate -l " + strconv.FormatInt(size, 10) + " " + shellQuote(archive) +
+			" && " + pveFileGuard(logFile, state.marker) + " && printf '%s' " + shellQuote(log) + " > " + shellQuote(logFile) +
 			" && touch -t " + touch + " " + shellQuote(archive) + " " + shellQuote(logFile)
 		if _, err := l.node(ctx, script); err != nil {
 			return fmt.Errorf("write an old backup archive to %s: %w", storage, err)
@@ -554,33 +740,31 @@ func (l *ProxmoxLab) fillStorageBackups(ctx context.Context, lab *PreparedLab, a
 	return err
 }
 
-// clearStorageFill removes the archives a run wrote, or, from Prepare, every
-// archive in the dump folder that carries the driver's fixed 02:00 naming
-// for a fixture guest of this lab.
+// clearStorageFill checks the per-run content marker before unlinking each
+// attempted path. Missing files are already pruned; collisions and replacements
+// are retained as explicit errors, never inferred to be owned from their names.
 func (l *ProxmoxLab) clearStorageFill(ctx context.Context, storage string, lab *PreparedLab) error {
-	dir, err := l.storagePath(ctx, storage)
-	if err != nil {
-		return err
+	if lab == nil || lab.pve == nil {
+		return errors.New("storage fill cleanup has no run custody")
 	}
-	dump := path.Join(dir, "dump")
-	if lab != nil {
-		key := "storage:" + storage
-		files := lab.PVEFaultFiles[key]
-		if len(files) == 0 {
-			return nil
-		}
-		quoted := make([]string, len(files))
-		for i, file := range files {
-			quoted[i] = shellQuote(file)
-		}
-		if _, err := l.node(ctx, "rm -f "+strings.Join(quoted, " ")); err != nil {
-			return fmt.Errorf("clear the archives on %s: %w", storage, err)
-		}
-		delete(lab.PVEFaultFiles, key)
+	state := lab.pve.storages[storage]
+	if state == nil || len(state.files) == 0 {
 		return nil
 	}
-	_, err = l.node(ctx, "rm -f "+shellQuote(dump)+"/vzdump-lxc-*-02_00_*.tar.zst "+shellQuote(dump)+"/vzdump-lxc-*-02_00_*.log")
-	return err
+	if _, err := l.admittedStorage(ctx, lab, storage); err != nil {
+		return err
+	}
+	for _, file := range state.files {
+		script := "if [ ! -e " + shellQuote(file) + " ] && [ ! -L " + shellQuote(file) +
+			" ]; then :; elif " + pveFileGuard(file, state.marker) +
+			"; then rm -f -- " + shellQuote(file) + "; else exit 1; fi"
+		if _, err := l.node(ctx, script); err != nil {
+			return fmt.Errorf("backup %s no longer has verified run ownership; retaining custody: %w", file, err)
+		}
+	}
+	delete(lab.PVEFaultFiles, "storage:"+storage)
+	state.files = nil
+	return nil
 }
 
 func (l *ProxmoxLab) Observe(ctx context.Context, manifest Manifest, lab *PreparedLab, predicates []Predicate) ([]PredicateObservation, error) {
@@ -635,7 +819,7 @@ func (l *ProxmoxLab) waitPredicate(ctx context.Context, manifest Manifest, lab *
 func (l *ProxmoxLab) probe(ctx context.Context, manifest Manifest, lab *PreparedLab, predicate Predicate) (any, error) {
 	switch predicate.Probe {
 	case "inventory.same_as_pre":
-		inventory, err := l.inventory(ctx)
+		inventory, err := l.runInventory(ctx, lab)
 		return inventoryEqual(inventory, lab.PreInventory), err
 	case pveProbeGuestStatus:
 		spec, err := pveGuestSpec(manifest, predicate.Target)
@@ -659,49 +843,85 @@ func (l *ProxmoxLab) probe(ctx context.Context, manifest Manifest, lab *Prepared
 	return nil, fmt.Errorf("the proxmox driver has no probe %q", predicate.Probe)
 }
 
-// inventory lists the node's containers and the driver-named archives on its
-// storages. A run that ends where it started leaves both as they were.
-func (l *ProxmoxLab) inventory(ctx context.Context) (DockerInventory, error) {
-	result, err := l.node(ctx, "pct list | awk 'NR>1{print $1\":\"$2}'; echo ---; ls /var/lib/vz/dump 2>/dev/null | grep -E '^vzdump-lxc-[0-9]+-[0-9_]+-02_00_[0-9]+\\.(tar\\.zst|log)$' || true")
+// runInventory observes all entries (not just driver-shaped backup names) in
+// each declared directory storage, including custom paths and logs. It is
+// metadata evidence, not a content-integrity check of arbitrary backups.
+func (l *ProxmoxLab) runInventory(ctx context.Context, lab *PreparedLab) (DockerInventory, error) {
+	result, err := l.node(ctx, "pct list")
 	if err != nil {
 		return DockerInventory{}, err
 	}
-	parts := strings.SplitN(result.Stdout, "---", 2)
-	guests := strings.Fields(parts[0])
+	var guests []string
+	lines := strings.Split(strings.TrimSpace(result.Stdout), "\n")
+	if len(lines) == 0 || len(strings.Fields(lines[0])) < 2 || strings.Fields(lines[0])[0] != "VMID" {
+		return DockerInventory{}, errors.New("Proxmox container inventory has no header")
+	}
+	for _, line := range lines[1:] {
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			return DockerInventory{}, errors.New("Proxmox container inventory is incomplete")
+		}
+		if _, err := strconv.Atoi(fields[0]); err != nil {
+			return DockerInventory{}, fmt.Errorf("invalid container inventory id: %w", err)
+		}
+		guests = append(guests, fields[0]+":"+fields[1])
+	}
 	sort.Strings(guests)
 	var archives []string
-	if len(parts) == 2 {
-		archives = strings.Fields(parts[1])
-		sort.Strings(archives)
+	for storage := range lab.pve.storages {
+		state, err := l.admittedStorage(ctx, lab, storage)
+		if err != nil {
+			return DockerInventory{}, err
+		}
+		dump := path.Join(state.path, "dump")
+		result, err := l.node(ctx, "find "+shellQuote(dump)+" -mindepth 1 -printf '%P\\0%y\\0%s\\0%T@\\0%l\\0'")
+		if err != nil {
+			return DockerInventory{}, fmt.Errorf("inventory storage %s: %w", storage, err)
+		}
+		fields := strings.Split(result.Stdout, "\x00")
+		if fields[len(fields)-1] != "" || (len(fields)-1)%5 != 0 {
+			return DockerInventory{}, fmt.Errorf("incomplete inventory for storage %s", storage)
+		}
+		for i := 0; i < len(fields)-1; i += 5 {
+			entry, _ := json.Marshal(append([]string{storage, dump}, fields[i:i+5]...))
+			archives = append(archives, string(entry))
+		}
 	}
+	sort.Strings(archives)
 	return DockerInventory{Containers: guests, Volumes: archives}, nil
 }
 
-// Cleanup reverts what a run left applied: running guests, empty fill
-// folders, no archives. A second pass must find nothing to do.
+// Cleanup acts on retained mutation custody, never the manifest's unvisited
+// resources. A partial Prepare creates no cleanup authority.
 func (l *ProxmoxLab) Cleanup(ctx context.Context, manifest Manifest, lab *PreparedLab) CleanupResult {
-	var errs []string
+	if lab == nil || lab.pve == nil || lab.PVENode != l.target.Node {
+		return CleanupResult{Errors: []string{"Proxmox cleanup has no prepared run custody"}}
+	}
+	lab.mu.Lock()
+	defer lab.mu.Unlock()
+	errs := append([]string(nil), lab.pve.uncertain...)
+	if !lab.pve.baseline {
+		errs = append(errs, "pre-lab Proxmox inventory was not captured")
+	}
 	cleanup := func() int {
 		changed := 0
-		for _, resource := range manifest.Resources {
-			switch resource.Kind {
-			case resourceKindPVEGuest:
-				key := "guest:" + strconv.Itoa(resource.VMID)
-				if len(lab.PVEFaultFiles[key]) > 0 {
-					changed++
-				}
-				status, err := l.guestStatus(ctx, resource.VMID)
-				if err == nil && status != "running" {
-					changed++
-				}
-				if err := l.clearGuestFill(ctx, resource.VMID, lab); err != nil {
+		for vmid, guest := range lab.pve.guests {
+			if guest.fillDir == "" && !guest.restore {
+				continue
+			}
+			changed++
+			if guest.fillDir != "" {
+				if err := l.clearGuestFill(ctx, vmid, lab); err != nil {
 					errs = append(errs, err.Error())
 				}
-			case resourceKindPVEStorage:
-				if len(lab.PVEFaultFiles["storage:"+resource.Storage]) > 0 {
-					changed++
-				}
-				if err := l.clearStorageFill(ctx, resource.Storage, lab); err != nil {
+			} else if err := l.restoreGuest(ctx, lab, vmid); err != nil {
+				errs = append(errs, err.Error())
+			}
+		}
+		for storage, state := range lab.pve.storages {
+			if len(state.files) != 0 {
+				changed++
+				if err := l.clearStorageFill(ctx, storage, lab); err != nil {
 					errs = append(errs, err.Error())
 				}
 			}
@@ -713,11 +933,11 @@ func (l *ProxmoxLab) Cleanup(ctx context.Context, manifest Manifest, lab *Prepar
 	}
 	cleanup()
 	secondNoop := cleanup() == 0
-	post, err := l.inventory(ctx)
+	post, err := l.runInventory(ctx, lab)
 	if err != nil {
 		errs = append(errs, err.Error())
 	}
-	unchanged := inventoryEqual(post, lab.PreInventory)
+	unchanged := err == nil && lab.pve.baseline && inventoryEqual(post, lab.PreInventory)
 	passed := len(errs) == 0
 	if manifest.Teardown.RequireSecondNoop && !secondNoop {
 		passed = false

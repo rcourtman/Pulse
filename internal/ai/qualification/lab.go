@@ -126,7 +126,10 @@ type PreparedLab struct {
 	BaselineStates    map[string]DockerState `json:"baseline_states"`
 	ExpectedInventory DockerInventory        `json:"expected_inventory"`
 	AppliedFaults     []string               `json:"applied_faults,omitempty"`
-	mu                sync.Mutex
+	// pve is in-process custody, not reconstructed from manifest names or
+	// report filenames. A new run never adopts an interrupted run's files.
+	pve *pveRunState
+	mu  sync.Mutex
 }
 
 type PredicateObservation struct {
