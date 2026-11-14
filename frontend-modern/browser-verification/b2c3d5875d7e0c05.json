@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "base_sha": "1151e84b829a3d0cbf8a76bac132eb3b07508aca",
+  "verified_at": "2026-11-14T05:30:43Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx",
+    "frontend-modern/src/components/Settings/useSSOProvidersState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx": "906c791b366b463d39ef5d72006c420d62b3cd8799d459bed9fda649cefb4b19",
+    "frontend-modern/src/components/Settings/useSSOProvidersState.ts": "7faf61312a9b14444729927fcdf93f0a7655e3afc9b214153ef440a15b5f9420"
+  },
+  "routes": [
+    "/settings/security"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Consuming SSOProvidersPanel with the actual state hook, API client, Dialog, Toast and index.css. Safe synthetic OIDC and SAML provider inventory and HTTP409 DELETE refusal, then HTTP502 uncertain outcome. Vite6.4.5/Solid1.9.17/Tailwind4.3.3; Playwright1.56.1 matches integration lock. This is not full App/IdP, native provider deletion, persistence, installed recovery or release proof.",
+    "Baseline built and eight captures taken before runtime edits on1151e84b82; identical fixture data, viewport, theme, pending/interaction state and1000ms settle used for final comparisons. Chromium1440x900 and WebKit390x844 in light/dark.20 original PNGs opened through native view_image:8 comparable refusal pairs and4 final uncertainty captures.",
+    "65 baseline and193 final assertions. The existing background toast remains inert/foreground and is retained after closing. The same bounded refusal now also has role=alert inside the active dialog. Raw synthetic error contents never appear. Provider name, complete endpoint, deletion consequence, Cancel and Delete all remain visible; no horizontal overflow or page errors.",
+    "The error clears on explicit retry and on cancel/reopen. While pending, Cancel/Delete remain disabled and Escape cannot dismiss. An uncertain result still blocks retry, shows the original may-already-have-been-applied guidance, and checks saved providers with no new write. Shared focus trap, background inertness and return focus are unchanged."
+  ],
+  "interactions": [
+    "Open actual saved-provider confirmation and submit one refusal; inspect the new in-dialog alert and all retained context. Tab from Delete wraps to Cancel, then back to Delete; Enter submits only the explicit second attempt.",
+    "Hold the second HTTP response pending; verify the old alert clears, both controls disable, a normal click cannot re-submit and Escape leaves the confirmation open. Release refusal; Cancel returns focus to the exact original provider. Reopen has no stale error.",
+    "Submit an uncertain HTTP502 result. Confirm one recovery alert and disabled Delete; Check saved providers closes the confirmation and performs the original inventory read, with exactly three explicit DELETEs and no replay."
+  ],
+  "evidence": {
+    "record": "browser-before.json; browser-after.json",
+    "captures": "CAPTURES.json",
+    "observations": "PIXEL-OBSERVATIONS.md",
+    "fixture": "BROWSER-FIXTURE.tar.xz"
+  }
+}

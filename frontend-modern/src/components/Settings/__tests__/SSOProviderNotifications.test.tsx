@@ -65,6 +65,9 @@ describe('SSO provider consuming notification layers', () => {
       expect(notifications).toHaveTextContent('Unable to remove the SSO provider.'),
     );
     expect(confirmation).toBeInTheDocument();
+    const failure = within(confirmation).getByRole('alert');
+    expect(failure).toHaveTextContent('Unable to remove the SSO provider.');
+    expect(failure.closest('[inert]')).toBeNull();
     expect(notifications).toHaveClass('z-9999');
     expect(notifications).not.toHaveClass('z-50');
     expect(notifications.closest('[inert]')).not.toBeNull();
@@ -74,5 +77,7 @@ describe('SSO provider consuming notification layers', () => {
     fireEvent.click(within(confirmation).getByRole('button', { name: 'Cancel' }));
     expect(notifications.closest('[inert]')).toBeNull();
     expect(notifications).toHaveTextContent('Unable to remove the SSO provider.');
+    fireEvent.click(screen.getByRole('button', { name: /^Delete provider / }));
+    expect(within(screen.getByRole('dialog')).queryByRole('alert')).toBeNull();
   });
 });
