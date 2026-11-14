@@ -177,7 +177,24 @@ func (m *Monitor) refreshUnifiedResourceRead() {
 // report interval: an alert cleared at 3% while Patrol read 92% and reported
 // the disk still full (14 Nov 2026). A store rebuilt within the shared
 // freshness window can still predate that poll, so this one always rebuilds.
+//
+// Readers call it from their own goroutines, so it can arrive after Stop: a
+// Patrol run still holding the store of a monitor a reload replaced. It shares
+// the report-refresh gate, so Stop waits for one in flight and refuses later
+// ones, and none reads the config a reload is rewriting.
 func (m *Monitor) refreshUnifiedResourceReadForReader() {
+	if m == nil {
+		return
+	}
+	r := &m.agentReportRefresh
+	r.mu.Lock()
+	if r.stopped {
+		r.mu.Unlock()
+		return
+	}
+	r.inFlight.Add(1)
+	r.mu.Unlock()
+	defer r.inFlight.Done()
 	m.refreshUnifiedResourceReadWithin(0)
 }
 

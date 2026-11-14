@@ -86,3 +86,28 @@ func TestReaderRefreshPublishesThePollItsAlertJudged(t *testing.T) {
 		t.Fatalf("a reader's refresh left the store at %.1f%%, want the collected 3.3%%", got)
 	}
 }
+
+// A reload stops the old monitor and then rewrites the config it shared, while
+// a Patrol run may still hold the old store. A reader refresh after Stop must
+// not run: it would read that config during the rewrite (race seen in
+// TestPatrolHearsAlertsAfterARealMonitorReload).
+func TestReaderRefreshDoesNothingAfterStop(t *testing.T) {
+	state := models.NewState()
+	full := models.Container{
+		ID: "pmxlab:pmxlab:111", Instance: "pmxlab", Node: "pmxlab", VMID: 111, Name: "nextcloud",
+		Type: "lxc", Status: "running", Disk: models.Disk{Total: 1000, Used: 920, Free: 80, Usage: 92},
+	}
+	state.UpdateContainers([]models.Container{full})
+	adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
+	m := &Monitor{state: state}
+	m.SetResourceStore(adapter)
+	m.stopAgentReportRefresh()
+
+	freed := full
+	freed.Disk = models.Disk{Total: 1000, Used: 33, Free: 967, Usage: 3.3}
+	state.UpdateContainers([]models.Container{freed})
+	unifiedresources.RefreshForRead(adapter)
+	if got := containerDiskPercent(t, adapter, "nextcloud"); got != 92 {
+		t.Fatalf("a stopped monitor published %.1f%% on a reader's refresh", got)
+	}
+}

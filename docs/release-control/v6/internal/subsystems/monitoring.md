@@ -5845,8 +5845,13 @@ wires the store, and `unifiedresources.RefreshForRead` runs it: a read-path
 rebuild with a zero freshness window, because a store rebuilt inside
 `readPathRegistryFreshness` can still predate the poll. It does not queue
 behind an ingest that is publishing. Callers refresh once before acting, never
-per lookup. Proof: `TestReaderRefreshPublishesThePollItsAlertJudged` in
-`internal/monitoring/unified_inventory_read_refresh_test.go`.
+per lookup. A reader can still hold the store of a monitor a reload stopped,
+so the refresh passes the report-refresh gate: Stop waits for one in flight
+and refuses later ones, and none reads the config the reload rewrites. Proof:
+`TestReaderRefreshPublishesThePollItsAlertJudged` and
+`TestReaderRefreshDoesNothingAfterStop` in
+`internal/monitoring/unified_inventory_read_refresh_test.go`, and
+`TestPatrolHearsAlertsAfterARealMonitorReload` under `-race`.
 
 The cached data view compares fixture freshness and each link's pair, primary
 and creation time through sameManualLinks. The structure view compares the
