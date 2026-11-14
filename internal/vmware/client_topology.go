@@ -206,29 +206,51 @@ func newVMwareTopologyCache() *vmwareTopologyCache {
 	}
 }
 
+// inventoryNames maps managed object IDs to display names for every listed
+// host, VM and datastore, including those outside the collection scope, so a
+// collected VM still names its host when hosts are not collected.
+type inventoryNames struct {
+	hosts      map[string]string
+	vms        map[string]string
+	datastores map[string]string
+}
+
+func newInventoryNames(snapshot *InventorySnapshot) inventoryNames {
+	names := inventoryNames{
+		hosts:      map[string]string{},
+		vms:        map[string]string{},
+		datastores: map[string]string{},
+	}
+	if snapshot == nil {
+		return names
+	}
+	for _, host := range snapshot.Hosts {
+		names.hosts[strings.TrimSpace(host.Host)] = firstNonEmptyTrimmed(host.Name, host.Host)
+	}
+	for _, vm := range snapshot.VMs {
+		names.vms[strings.TrimSpace(vm.VM)] = firstNonEmptyTrimmed(vm.Name, vm.VM)
+	}
+	for _, datastore := range snapshot.Datastores {
+		names.datastores[strings.TrimSpace(datastore.Datastore)] = firstNonEmptyTrimmed(datastore.Name, datastore.Datastore)
+	}
+	return names
+}
+
 func (c *Client) enrichInventoryTopology(
 	ctx context.Context,
 	automationSessionID string,
 	release string,
 	sessionID string,
 	snapshot *InventorySnapshot,
+	names inventoryNames,
 ) ([]InventoryEnrichmentIssue, error) {
 	if snapshot == nil {
 		return nil, nil
 	}
 
-	hostNamesByID := make(map[string]string, len(snapshot.Hosts))
-	for _, host := range snapshot.Hosts {
-		hostNamesByID[strings.TrimSpace(host.Host)] = firstNonEmptyTrimmed(host.Name, host.Host)
-	}
-	vmNamesByID := make(map[string]string, len(snapshot.VMs))
-	for _, vm := range snapshot.VMs {
-		vmNamesByID[strings.TrimSpace(vm.VM)] = firstNonEmptyTrimmed(vm.Name, vm.VM)
-	}
-	datastoreNamesByID := make(map[string]string, len(snapshot.Datastores))
-	for _, datastore := range snapshot.Datastores {
-		datastoreNamesByID[strings.TrimSpace(datastore.Datastore)] = firstNonEmptyTrimmed(datastore.Name, datastore.Datastore)
-	}
+	hostNamesByID := names.hosts
+	vmNamesByID := names.vms
+	datastoreNamesByID := names.datastores
 
 	var issues []InventoryEnrichmentIssue
 	clusters, err := c.collectClusterInventory(ctx, automationSessionID)

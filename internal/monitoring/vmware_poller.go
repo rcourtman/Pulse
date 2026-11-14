@@ -437,15 +437,7 @@ func (p *VMwarePoller) providerEntries() []vmwarePollerProviderEntry {
 }
 
 func (p *VMwarePoller) defaultProvider(instance config.VMwareVCenterInstance) (vmwarePollerProvider, error) {
-	client, err := vmware.NewClient(vmware.ClientConfig{
-		OutboundPolicy:     instance.OutboundPolicy,
-		Host:               instance.Host,
-		Port:               instance.Port,
-		Username:           instance.Username,
-		Password:           instance.Password,
-		InsecureSkipVerify: instance.InsecureSkipVerify,
-		Timeout:            20 * time.Second,
-	})
+	client, err := vmware.NewClient(vmwareClientConfig(instance))
 	if err != nil {
 		return nil, err
 	}
@@ -454,6 +446,24 @@ func (p *VMwarePoller) defaultProvider(instance config.VMwareVCenterInstance) (v
 		ConnectionName: strings.TrimSpace(instance.Name),
 		VCenterHost:    strings.TrimSpace(instance.Host),
 	}, client), nil
+}
+
+// vmwareClientConfig carries the connection's collection scope to the client.
+// The provider-rebuild check compares whole instances, so toggling a scope
+// checkbox rebuilds the provider and the old client stops collecting.
+func vmwareClientConfig(instance config.VMwareVCenterInstance) vmware.ClientConfig {
+	return vmware.ClientConfig{
+		OutboundPolicy:     instance.OutboundPolicy,
+		Host:               instance.Host,
+		Port:               instance.Port,
+		Username:           instance.Username,
+		Password:           instance.Password,
+		InsecureSkipVerify: instance.InsecureSkipVerify,
+		Timeout:            20 * time.Second,
+		SkipVMs:            !instance.MonitorVMs,
+		SkipHosts:          !instance.MonitorHosts,
+		SkipDatastores:     !instance.MonitorDatastores,
+	}
 }
 
 func (p *VMwarePoller) nextWaitDuration(now time.Time) time.Duration {

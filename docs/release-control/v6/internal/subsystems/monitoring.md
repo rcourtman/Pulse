@@ -6681,6 +6681,17 @@ health record, even if that provider keeps separate authenticated Automation
 API and VI JSON clients internally. Connection edits that change host, auth,
 TLS, or poll cadence must replace that live provider state instead of leaving
 stale VMware sessions resident until restart.
+The connection's collection scope (`MonitorVMs`, `MonitorHosts`,
+`MonitorDatastores`) reaches the client as `SkipVMs`, `SkipHosts` and
+`SkipDatastores` through `vmwareClientConfig`; the poller's whole-instance
+comparison rebuilds the provider when a flag changes. A skipped surface is
+listed once per poll only as a name directory, so a collected VM still names
+its host and datastores, and a failure listing it (vCenter refuses
+`/api/vcenter/vm` above 4,000 VMs) does not fail the poll. It yields no
+resources, and none of its entities get signal, performance, topology or tag
+reads. A VM whose host was not collected has no parent record and stays at
+the top level rather than pointing at a missing host. Zero-value skips
+collect everything, so connection tests are unchanged.
 That same provider-owned summary must also serve the shared settings runtime
 surface. `internal/monitoring/vmware_poller.go` owns the per-connection poll
 summary (`poll` plus `observed`), `POST /api/vmware/connections/{id}/test`
