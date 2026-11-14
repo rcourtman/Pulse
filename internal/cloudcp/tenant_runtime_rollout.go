@@ -413,7 +413,7 @@ func (s *tenantRuntimeRolloutService) Rollout(ctx context.Context, opts TenantRu
 	if err != nil {
 		return nil, tx.abort(ctx, fmt.Errorf("inspect new tenant runtime: %w", err), true)
 	}
-	if newInfo == nil || newInfo.ID != newID || !newInfo.Running || !tenantRuntimeMatchesContract(newInfo, canonicalName, image, s.docker.DesiredRuntimeRouting(tenantID)) {
+	if newInfo == nil || newInfo.ID != newID || !newInfo.Running || newInfo.Paused || newInfo.Restarting || !tenantRuntimeMatchesContract(newInfo, canonicalName, image, s.docker.DesiredRuntimeRouting(tenantID)) {
 		return nil, tx.abort(ctx, fmt.Errorf("new tenant runtime does not match its canonical identity and runtime contract"), true)
 	}
 	if err := s.persistTenantRuntimeState(tenant, newInfo, true); err != nil {

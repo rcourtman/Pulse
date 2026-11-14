@@ -1409,9 +1409,9 @@ func (p *Provisioner) lockTenant(ctx context.Context, id string) (context.Contex
 	return ctx, lease, tenant, nil
 }
 
-// Hold the affected tenant leases before changing account-wide authority.
-// Otherwise a busy tenant could roll back an older signed billing file after
-// the account's cancellation had already been committed.
+// Positive grants/plan changes wait for the affected data transactions.
+// Withdrawal uses its separate authority path above, so an abandoned runtime
+// recovery can never indefinitely block revocation.
 func (p *Provisioner) lockAccountTenants(ctx context.Context, accountID string) ([]*registry.Tenant, func(), error) {
 	tenants, err := p.registry.ListByAccountID(accountID)
 	if err != nil {

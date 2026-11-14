@@ -167,6 +167,9 @@ func (t *tenantRuntimeTransaction) resumePrevious(ctx context.Context) error {
 	if canonical == nil || canonical.ID != t.previous.ID {
 		return fmt.Errorf("previous runtime is not canonical")
 	}
+	if canonical.Paused || canonical.Restarting {
+		return fmt.Errorf("previous runtime is paused or restarting, not recovered")
+	}
 	// A failed pre-swap capture must not start a previously stopped runtime.
 	if t.previous.Running {
 		if !canonical.Running {

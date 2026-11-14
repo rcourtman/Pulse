@@ -616,3 +616,28 @@ func TestTenantRuntimeTransactionPreservesConcurrentWithdrawal(t *testing.T) {
 		})
 	}
 }
+
+func TestTenantRuntimeTransactionDoesNotCommitPausedOrRestartingRuntime(t *testing.T) {
+	for _, name := range []string{"paused", "restarting"} {
+		t.Run(name, func(t *testing.T) {
+			f := newRuntimeTransactionFixture(t, false)
+			f.docker.afterCreate = func() {
+				if name == "paused" {
+					f.docker.byID["new"].Paused = true
+				} else {
+					f.docker.byID["new"].Restarting = true
+				}
+			}
+			if _, err := f.rollout(context.Background(), false); err == nil {
+				t.Fatal("unavailable runtime committed as healthy")
+			}
+			if f.reg.tenant.ContainerID != "old" || f.reg.tenant.HealthCheckOK {
+				t.Fatal("unavailable replacement persisted as healthy")
+			}
+			if f.docker.byID["old"].Running {
+				t.Fatal("unconfirmed replacement quiescence reopened original")
+			}
+			f.assertHold(true)
+		})
+	}
+}
