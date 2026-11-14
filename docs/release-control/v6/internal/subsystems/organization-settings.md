@@ -1179,3 +1179,26 @@ Instance administration still grants the default organization. Configuration
 import and export additionally require management of the tenant, not
 membership. `basic_tenant_authorization_test.go` and
 `TestConfigTransferVerifiedUsersRequireTenantManagement` cover these rules.
+
+
+### Role permission controls retain their editing position
+
+The existing role editor keeps its indexed action/resource controls mounted
+when an immutable permission draft changes. The next Tab remains on the same
+rule; removal names identify the current rule number and action/resource,
+including duplicates and unknown values. Fixed catalogs use fresh option nodes
+from one static renderer, never shared DOM nodes between selects. Unknown values
+keep explicit bindings. Normal-suite RolesEditorPermissions and rendered
+transport tests cover focused repeated edits, independent options, reindexing,
+constraints and saved readback. Actual desktop/narrow Chromium/WebKit proof
+retains the same at-a-glance fields and controls.
+
+A controlled production-build comparison measures the original RolesPanel at
+6193 gzip bytes and the repaired consumer at 6246 (+53 bytes). Its historical
+5418-byte reference allows 6231 at 15%, leaving this accessibility repair 15 bytes
+over that cap. The candidate declares a bounded 64-byte reference allowance
+(5418 to 5482), not a measured baseline reset. The 15% rule, every other chunk,
+total JS/CSS limits and preload/integrity checks remain unchanged. Exact
+production validation must pass the resulting 6305-byte RolePanel ceiling. The
+prior failed budget results remain evidence; no runtime/auth/API/grant contract
+changes and no test timeouts are waived by the allowance.

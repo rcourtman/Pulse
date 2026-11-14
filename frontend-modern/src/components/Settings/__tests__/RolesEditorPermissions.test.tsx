@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { clearAuth, setOrgID } from '@/utils/apiClient';
 import { RolesPanel } from '../RolesPanel';
+import { RBAC_PERMISSION_ACTIONS, RBAC_PERMISSION_RESOURCES } from '@/utils/rbacPermissions';
 
 // Keep the rendered editor, indexed draft operations, RBACAPI and serialization
 // connected. Hook-only permission edits cannot catch a miswired form callback.
@@ -108,6 +109,37 @@ async function saveAndReopen(dialog: HTMLElement, expected: unknown) {
 }
 
 describe('saved permission transformations through the role editor', () => {
+  it('creates independent static option nodes for every permission row', async () => {
+    render(() => <RolesPanel currentUser="role-maintainer" canManage />);
+    const editor = within(await openEditor());
+    const actions = original.permissions.map(
+      (_, index) => editor.getByLabelText(`Permission ${index + 1} action`) as HTMLSelectElement,
+    );
+    const resources = original.permissions.map(
+      (_, index) => editor.getByLabelText(`Permission ${index + 1} resource`) as HTMLSelectElement,
+    );
+    // Sharing a renderer must never share or move its DOM options between rows.
+    for (const [selects, catalog] of [
+      [actions, RBAC_PERMISSION_ACTIONS],
+      [resources, RBAC_PERMISSION_RESOURCES],
+    ] as const) {
+      for (const value of catalog) {
+        const options = selects.map((select) =>
+          Array.from(select.options).find((option) => option.value === value),
+        );
+        options.forEach((option) => expect(option).toBeInTheDocument());
+        expect(new Set(options).size).toBe(selects.length);
+      }
+    }
+    fireEvent.change(actions[1], { target: { value: 'write' } });
+    expect(actions[0]).toHaveValue('read');
+    expect(actions[1]).toHaveValue('write');
+    expect(actions[2]).toHaveValue('future:inspect');
+    expect(resources[2]).toHaveValue('future/resource');
+    expect(saved).toEqual(original);
+    expect(writes()).toHaveLength(0);
+  });
+
   it('keeps the same focused controls through repeated action and resource edits', async () => {
     render(() => <RolesPanel currentUser="role-maintainer" canManage />);
     const dialog = await openEditor();
