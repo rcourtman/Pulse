@@ -86,6 +86,14 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
   const [isGenerating, setIsGenerating] = createSignal(false);
   const [updatingTokenId, setUpdatingTokenId] = createSignal<string | null>(null);
   const [isRenaming, setIsRenaming] = createSignal(false);
+  const [scopeError, setScopeError] = createSignal<string | null>(null);
+  const [renameError, setRenameError] = createSignal<string | null>(null);
+  const clearEditErrors = () => {
+    batch(() => {
+      setScopeError(null);
+      setRenameError(null);
+    });
+  };
   const [newTokenValue, setNewTokenValue] = createSignal<string | null>(null);
   const [newTokenRecord, setNewTokenRecord] = createSignal<APITokenRecord | null>(null);
   const [nameInput, setNameInput] = createSignal('');
@@ -137,6 +145,7 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
       setIsGenerating(false);
       setUpdatingTokenId(null);
       setIsRenaming(false);
+      clearEditErrors();
       clearTokenValue();
     });
   };
@@ -152,6 +161,7 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
     readController?.abort();
     readController = undefined;
     mutationController = controller;
+    clearEditErrors();
     setIsMutating(true);
     const isCurrent = () =>
       mutationController === controller && version === contextVersion() && canManage();
@@ -197,9 +207,10 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
     // These responses explicitly refuse the request. A missing response, timeout,
     // server error or malformed success does not establish server-side rollback.
     const status = (error as { status?: number } | null)?.status;
-    if (status && [400, 401, 403, 404, 409, 422, 429].includes(status)) return;
+    if (status && [400, 401, 403, 404, 409, 422, 429].includes(status)) return false;
     inventoryVersion += 1;
     batch(() => {
+      clearEditErrors();
       setUnconfirmedChange(operation);
       setTokensLoaded(false);
       setTokens([]);
@@ -207,6 +218,7 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
       setLoadError('The token change could not be confirmed.');
       if (tokenId && newTokenRecord()?.id === tokenId) clearTokenValue();
     });
+    return true;
   };
 
   let createSectionRef: HTMLDivElement | undefined;
@@ -603,8 +615,11 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
     } catch (err) {
       if (!mutation.isCurrent()) return false;
       logger.error('Failed to update API token scopes', err);
-      notificationStore.error(getAPITokenUpdateErrorMessage(err));
-      requireInventoryCheck(err, 'scope', record.id);
+      const message = getAPITokenUpdateErrorMessage(err);
+      // A definite refusal belongs to the still-open editor. A body-level
+      // toast is inert there and can cover its controls, especially on phones.
+      if (requireInventoryCheck(err, 'scope', record.id)) notificationStore.error(message);
+      else setScopeError(message);
       return false;
     } finally {
       mutation.finish();
@@ -615,7 +630,7 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
     if (!canManage() || !isCurrentRecord(record) || isMutating()) return false;
     const trimmedName = name.trim();
     if (!trimmedName) {
-      notificationStore.error('Enter a token name.');
+      setRenameError('Enter a token name.');
       return false;
     }
 
@@ -634,8 +649,9 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
     } catch (err) {
       if (!mutation.isCurrent()) return false;
       logger.error('Failed to rename API token', err);
-      notificationStore.error('Unable to rename the API token.');
-      requireInventoryCheck(err, 'rename', record.id);
+      const message = 'Unable to rename the API token.';
+      if (requireInventoryCheck(err, 'rename', record.id)) notificationStore.error(message);
+      else setRenameError(message);
       return false;
     } finally {
       mutation.finish();
@@ -695,6 +711,7 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
     contextVersion,
     isMutating,
     clearScopes,
+    clearEditErrors,
     copyNewMonitoringKioskLink,
     createHighlight,
     dismissNewToken,
@@ -711,6 +728,8 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
     isGenerating,
     updatingTokenId,
     isRenaming,
+    scopeError,
+    renameError,
     isRevealActiveForCurrentToken,
     loading,
     loadError,

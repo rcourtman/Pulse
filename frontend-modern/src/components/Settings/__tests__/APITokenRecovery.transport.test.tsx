@@ -274,7 +274,10 @@ describe('API token recovery through the real HTTP client', () => {
       }),
     );
     await confirm('rename', await ready());
-    await waitFor(() => expect(notificationStore.error).toHaveBeenCalledTimes(1));
+    expect(await within(screen.getByRole('dialog')).findByRole('alert')).toHaveTextContent(
+      'Unable to rename the API token.',
+    );
+    expect(notificationStore.error).not.toHaveBeenCalled();
     expect(requests()).toEqual([
       ['GET', '/api/security/tokens'],
       ['PATCH', '/api/security/tokens/token%2Fone'],

@@ -55,6 +55,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
     isMutating,
     canGenerateToken,
     clearScopes,
+    clearEditErrors,
     copyNewMonitoringKioskLink,
     createHighlight,
     dismissNewToken,
@@ -70,6 +71,8 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
     isFullAccessSelected,
     isGenerating,
     isRenaming,
+    scopeError,
+    renameError,
     isRevealActiveForCurrentToken,
     loading,
     loadError,
@@ -97,6 +100,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
   } = useAPITokenManagerState(props);
 
   const clearDialogs = () => {
+    clearEditErrors();
     window.clearTimeout(focusTimer);
     dialogTrigger = undefined;
     setTokenToEdit(null);
@@ -156,6 +160,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
 
   const openScopeEditor = (token: APITokenRecord, trigger: HTMLButtonElement) => {
     if (!canManage() || isMutating()) return;
+    clearEditErrors();
     rememberDialogTrigger(trigger);
     setEditScopes([...effectiveScopes(token)]);
     setTokenToEdit(token);
@@ -169,6 +174,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
 
   const openRenameDialog = (token: APITokenRecord, trigger: HTMLButtonElement) => {
     if (!canManage() || isMutating()) return;
+    clearEditErrors();
     rememberDialogTrigger(trigger);
     setRenameInput(token.name ?? '');
     setTokenToRename(token);
@@ -176,6 +182,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
 
   const closeScopeEditor = () => {
     if (updatingTokenId() !== null) return;
+    clearEditErrors();
     setTokenToEdit(null);
     setEditScopes([]);
     restoreDialogTrigger();
@@ -226,6 +233,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
 
   const closeRenameDialog = () => {
     if (isRenaming()) return;
+    clearEditErrors();
     setTokenToRename(null);
     setRenameInput('');
     restoreDialogTrigger();
@@ -935,6 +943,8 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
           scopeGroups={scopeGroups}
           updatingTokenId={updatingTokenId}
           isRenaming={isRenaming}
+          scopeError={scopeError()}
+          renameError={renameError()}
           editScopesChanged={editScopesChanged}
           onToggleEditScope={toggleEditScope}
           onCloseScopeEditor={closeScopeEditor}

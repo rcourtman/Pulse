@@ -14398,6 +14398,17 @@ is retained evidence, not product source.
 
 ### API token panel requests retain their confirmed context
 
+Definite scope-edit and rename refusals keep the existing bounded message inside
+the still-open editor as an alert, not in a competing inert body-level toast.
+The draft, token hint and controls remain available. An explicit new attempt,
+Cancel/reopen or context retirement clears that local feedback; a late old-reader
+result cannot populate a replacement editor. Compact refusal spacing keeps the
+existing scope choices rather than replacing or summarizing them.
+`APITokenEditFeedback.transport.test.tsx` exercises real HTTP refusals, pending
+locks, successful correction, clean reopen, reader/organisation/permission
+retirement and uncertain-result inventory recovery. It does not change HTTP
+payloads, refusal classification, authority or the no-automatic-retry boundary.
+
 Repeated token action names and compact-card names retain the saved name and
 the already-displayed masked hint. Scope, rename and revoke dialogs carry that
 same saved context in their accessible names and visibly retain the hint beside
