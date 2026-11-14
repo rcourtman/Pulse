@@ -1,4 +1,4 @@
-import { Component, For, Index, Show } from 'solid-js';
+import { Component, Index, Show } from 'solid-js';
 import { InlineNotice } from '@/components/shared/InlineNotice';
 import { Dialog } from '@/components/shared/Dialog';
 import { FormSelect } from '@/components/shared/FormSelect';
@@ -153,9 +153,9 @@ export const RolesEditorDialog: Component<RolesEditorDialogProps> = (props) => (
                         >
                           <option value={permission().action}>{permission().action}</option>
                         </Show>
-                        <For each={RBAC_PERMISSION_ACTIONS}>
-                          {(action) => <option value={action}>{action}</option>}
-                        </For>
+                        {RBAC_PERMISSION_ACTIONS.map((action) => (
+                          <option>{action}</option>
+                        ))}
                       </FormSelect>
                       <span class="hidden sm:inline text-slate-400 text-sm">:</span>
                       <FormSelect
@@ -177,9 +177,9 @@ export const RolesEditorDialog: Component<RolesEditorDialogProps> = (props) => (
                         >
                           <option value={permission().resource}>{permission().resource}</option>
                         </Show>
-                        <For each={RBAC_PERMISSION_RESOURCES}>
-                          {(resource) => <option value={resource}>{resource}</option>}
-                        </For>
+                        {RBAC_PERMISSION_RESOURCES.map((resource) => (
+                          <option>{resource}</option>
+                        ))}
                       </FormSelect>
                       <button
                         type="button"
