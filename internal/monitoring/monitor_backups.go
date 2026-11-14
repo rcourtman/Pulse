@@ -1273,21 +1273,24 @@ func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, c
 	log.Debug().Str("instance", instanceName).Msg("polling guest snapshots")
 
 	// The guest inventory comes from the fixture read view in mock mode.
+	// Keep its immutable typed views: snapshot discovery needs only identity,
+	// template status and tags, not detached copies of disks, addresses or
+	// network interfaces. Tags below still use the view's detached accessor.
 	scope := m.mockModeFence.begin()
 	readState := m.backupReadStateForInstance(instanceName)
-	var vms []models.VM
+	var vms []*unifiedresources.VMView
 	for _, vm := range readState.VMs() {
 		if vm == nil || vm.Instance() != instanceName {
 			continue
 		}
-		vms = append(vms, vmFromReadStateView(vm))
+		vms = append(vms, vm)
 	}
-	var containers []models.Container
+	var containers []*unifiedresources.ContainerView
 	for _, ct := range readState.Containers() {
 		if ct == nil || ct.Instance() != instanceName {
 			continue
 		}
-		containers = append(containers, containerFromReadStateView(ct))
+		containers = append(containers, ct)
 	}
 
 	previousSnapshots := make([]models.GuestSnapshot, 0)
@@ -1308,38 +1311,38 @@ func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, c
 
 	guestLookups := make(map[string]alerts.GuestLookup, len(vms)+len(containers))
 	for _, vm := range vms {
-		key := alerts.BuildGuestKey(vm.Instance, vm.Node, vm.VMID)
+		key := alerts.BuildGuestKey(vm.Instance(), vm.Node(), vm.VMID())
 		guestLookups[key] = alerts.GuestLookup{
 			ResourceID: key,
-			Name:       vm.Name,
-			Instance:   vm.Instance,
-			Node:       vm.Node,
+			Name:       vm.Name(),
+			Instance:   vm.Instance(),
+			Node:       vm.Node(),
 			Type:       "qemu",
-			VMID:       vm.VMID,
-			Tags:       append([]string(nil), vm.Tags...),
+			VMID:       vm.VMID(),
+			Tags:       append([]string(nil), vm.Tags()...),
 		}
 	}
 	for _, ct := range containers {
-		key := alerts.BuildGuestKey(ct.Instance, ct.Node, ct.VMID)
+		key := alerts.BuildGuestKey(ct.Instance(), ct.Node(), ct.VMID())
 		guestLookups[key] = alerts.GuestLookup{
 			ResourceID: key,
-			Name:       ct.Name,
-			Instance:   ct.Instance,
-			Node:       ct.Node,
-			Type:       firstNonEmptyString(ct.Type, "lxc"),
-			VMID:       ct.VMID,
-			Tags:       append([]string(nil), ct.Tags...),
+			Name:       ct.Name(),
+			Instance:   ct.Instance(),
+			Node:       ct.Node(),
+			Type:       firstNonEmptyString(ct.ContainerType(), "lxc"),
+			VMID:       ct.VMID(),
+			Tags:       append([]string(nil), ct.Tags()...),
 		}
 	}
 
 	activeGuests := 0
 	for _, vm := range vms {
-		if !vm.Template {
+		if !vm.Template() {
 			activeGuests++
 		}
 	}
 	for _, ct := range containers {
-		if !ct.Template {
+		if !ct.Template() {
 			activeGuests++
 		}
 	}
@@ -1398,27 +1401,27 @@ func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, c
 	targets := make([]guestSnapshotPollTarget, 0, activeGuests)
 
 	for _, vm := range vms {
-		if vm.Template {
+		if vm.Template() {
 			continue
 		}
 		targets = append(targets, guestSnapshotPollTarget{
-			key:       guestKey(instanceName, vm.Node, vm.VMID),
-			node:      vm.Node,
+			key:       guestKey(instanceName, vm.Node(), vm.VMID()),
+			node:      vm.Node(),
 			guestType: "qemu",
-			vmid:      vm.VMID,
+			vmid:      vm.VMID(),
 			vmState:   true,
 		})
 	}
 
 	for _, ct := range containers {
-		if ct.Template {
+		if ct.Template() {
 			continue
 		}
 		targets = append(targets, guestSnapshotPollTarget{
-			key:       guestKey(instanceName, ct.Node, ct.VMID),
-			node:      ct.Node,
+			key:       guestKey(instanceName, ct.Node(), ct.VMID()),
+			node:      ct.Node(),
 			guestType: "lxc",
-			vmid:      ct.VMID,
+			vmid:      ct.VMID(),
 			vmState:   false,
 		})
 	}
