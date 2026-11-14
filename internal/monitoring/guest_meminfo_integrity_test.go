@@ -266,3 +266,9 @@ func TestGuestMeminfoIntegrityPollingContract(t *testing.T) {
 		}
 	}
 }
+
+// Snapshot memory metadata is also guest memory evidence. Keep this registered
+// provider-client contract connected to the real collector and agent consumer.
+func TestSnapshotMemoryEvidenceReachesExistingConsumers(t *testing.T) {
+	testSnapshotMemoryEvidenceReachesExistingConsumers(t)
+}

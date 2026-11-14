@@ -1308,6 +1308,7 @@ type Snapshot struct {
 	SnapTime    int64  `json:"snaptime"`
 	Parent      string `json:"parent"`
 	VMID        int    `json:"vmid"`
+	VMState     int    `json:"vmstate"` // 1 only when the snapshot includes VM memory.
 }
 
 // GetVMs returns all VMs on a specific node

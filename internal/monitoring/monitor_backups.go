@@ -1395,7 +1395,6 @@ func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, c
 		node      string
 		guestType string
 		vmid      int
-		vmState   bool
 	}
 
 	targets := make([]guestSnapshotPollTarget, 0, activeGuests)
@@ -1409,7 +1408,6 @@ func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, c
 			node:      vm.Node(),
 			guestType: "qemu",
 			vmid:      vm.VMID(),
-			vmState:   true,
 		})
 	}
 
@@ -1422,7 +1420,6 @@ func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, c
 			node:      ct.Node(),
 			guestType: "lxc",
 			vmid:      ct.VMID(),
-			vmState:   false,
 		})
 	}
 
@@ -1444,7 +1441,8 @@ func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, c
 			Time:        time.Unix(snap.SnapTime, 0),
 			Description: snap.Description,
 			Parent:      snap.Parent,
-			VMState:     target.vmState,
+			// Being a VM does not mean this snapshot saved its memory.
+			VMState: target.guestType == "qemu" && snap.VMState == 1,
 		}
 	}
 

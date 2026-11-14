@@ -42,11 +42,19 @@ func readSnapshotInventory(resp *http.Response, vmid int) ([]Snapshot, error) {
 	snapshots := make([]Snapshot, 0, len(rows))
 	seen := make(map[string]bool, len(rows))
 	for _, row := range rows {
-		if _, valid := inventoryResponseObject(row, "name", "description", "snaptime", "parent", "vmid"); !valid {
+		fields, valid := inventoryResponseObject(row, "name", "description", "snaptime", "parent", "vmid", "vmstate")
+		if !valid {
 			return nil, errInvalidSnapshotInventoryResponse
 		}
 		var snap Snapshot
 		if json.Unmarshal(row, &snap) != nil || strings.TrimSpace(snap.Name) == "" || seen[snap.Name] {
+			return nil, errInvalidSnapshotInventoryResponse
+		}
+		// Omission is a legacy response with no memory-state claim. An
+		// explicit flag must be an unambiguous PVE boolean (integer 0/1),
+		// never null or another value coerced into a memory verdict.
+		if flag, present := fields["vmstate"]; present &&
+			(bytes.Equal(bytes.TrimSpace(flag), []byte("null")) || (snap.VMState != 0 && snap.VMState != 1)) {
 			return nil, errInvalidSnapshotInventoryResponse
 		}
 		seen[snap.Name] = true
