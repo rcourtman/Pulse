@@ -156,9 +156,8 @@ describe('buildVMwareConnectionFailurePresentation — each named category switc
 
 // ---- buildVMwareConnectionFailurePresentation: switch default fall-through --
 //
-// A category that is not one of the five named values (including the
-// normalized-undefined case) falls through the switch's `default -> break`
-// and continues to the `vmware_invalid_config` guard / final return.
+// After the destination/configuration guard, an unrecognized category
+// (including normalized-undefined) falls through to the caller defaults.
 
 describe('buildVMwareConnectionFailurePresentation — switch default fall-through', () => {
   it('falls through the switch for an unknown category string', () => {
@@ -185,10 +184,10 @@ describe('buildVMwareConnectionFailurePresentation — vmware_invalid_config cod
     expect(out).toStrictEqual({
       code: 'vmware_invalid_config',
       category: 'unknown_blob',
-      guidance: 'Review the host, port, username, and password fields before retrying.',
+      guidance: 'Review the endpoint with your Pulse instance administrator before retrying.',
       message: 'Fallback message',
-      title: 'Connection configuration is invalid',
-      tone: 'danger',
+      title: 'Check the vCenter destination',
+      tone: 'warning',
     });
   });
 
@@ -199,7 +198,28 @@ describe('buildVMwareConnectionFailurePresentation — vmware_invalid_config cod
       makeInput({ code: '  vmware_invalid_config  ', category: 'mystery' }),
     );
     expect(out.code).toBe('vmware_invalid_config');
-    expect(out.title).toBe('Connection configuration is invalid');
+    expect(out.title).toBe('Check the vCenter destination');
+  });
+
+  it.each([
+    { code: 'destination_not_allowed', category: undefined },
+    { code: 'vmware_connection_failed', category: 'invalid_config' },
+  ])('keeps the same endpoint guidance for $code / $category', ({ code, category }) => {
+    const out = buildVMwareConnectionFailurePresentation(
+      makeInput({
+        code,
+        category,
+        message: 'This destination requires an instance administrator.',
+      }),
+    );
+    expect(out).toStrictEqual({
+      code,
+      category,
+      guidance: 'Review the endpoint with your Pulse instance administrator before retrying.',
+      message: 'This destination requires an instance administrator.',
+      title: 'Check the vCenter destination',
+      tone: 'warning',
+    });
   });
 
   it('skips the guard when the code is some other value (guard false arm -> final return)', () => {
