@@ -115,11 +115,17 @@ type PreparedLab struct {
 	// HostFilesystems records, per alias, the dedicated mount and exactly
 	// which files a fill fault wrote, so revert and cleanup remove those and
 	// nothing else.
-	HostFilesystems   map[string]*HostFilesystemState `json:"host_filesystems,omitempty"`
-	PreInventory      DockerInventory                 `json:"pre_inventory"`
-	BaselineStates    map[string]DockerState          `json:"baseline_states"`
-	ExpectedInventory DockerInventory                 `json:"expected_inventory"`
-	AppliedFaults     []string                        `json:"applied_faults,omitempty"`
+	HostFilesystems map[string]*HostFilesystemState `json:"host_filesystems,omitempty"`
+	// PVEFaultFiles records, per guest ("guest:<vmid>") or storage
+	// ("storage:<name>"), each file a Proxmox fill fault wrote, so revert and
+	// cleanup remove exactly those.
+	PVEFaultFiles map[string][]string `json:"pve_fault_files,omitempty"`
+	// PVENode is the Proxmox lab node a proxmox run used.
+	PVENode           string                 `json:"pve_node,omitempty"`
+	PreInventory      DockerInventory        `json:"pre_inventory"`
+	BaselineStates    map[string]DockerState `json:"baseline_states"`
+	ExpectedInventory DockerInventory        `json:"expected_inventory"`
+	AppliedFaults     []string               `json:"applied_faults,omitempty"`
 	mu                sync.Mutex
 }
 

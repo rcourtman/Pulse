@@ -31,6 +31,9 @@ func main() {
 	model := flag.String("model", "", "optional Patrol model override, pinned for and restored after the complete live suite")
 	expectedPulseVersion := flag.String("expected-pulse-version", "", "optional exact /api/version identity required from the tested Pulse runtime")
 	dockerContext := flag.String("docker-context", "", "explicit Docker context for disposable resources")
+	pveSSHHost := flag.String("pve-ssh-host", "", "SSH destination (root@host) of the dedicated Proxmox lab node, for proxmox fault sets")
+	pveNode := flag.String("pve-node", "", "Proxmox node name the lab node must report, for proxmox fault sets")
+	pveIdentity := flag.String("pve-ssh-identity", "", "optional absolute path of a dedicated SSH key for the Proxmox lab node")
 	dockerSSHHost := flag.String("docker-ssh-host", "", "explicit SSH host whose Docker daemon holds disposable resources")
 	allowSharedHost := flag.Bool("allow-shared-host", false, "allow exact-labelled fixtures on a manifest-approved shared Docker host")
 	authorizeLive := flag.Bool("authorize-live-faults", false, "required acknowledgement for live fault injection")
@@ -146,9 +149,11 @@ func main() {
 		if err != nil {
 			fatal(err)
 		}
-		target := qualification.DockerTarget{Context: strings.TrimSpace(*dockerContext), HostFilesystems: splitList(*hostFilesystem)}
-		if missing := qualification.MissingHostFilesystems(manifests, target.HostFilesystems); len(missing) > 0 {
-			fatal(fmt.Errorf("the selected faults need --host-filesystem %s: hand the mount to the lab or leave those faults out with --faults", strings.Join(missing, ",")))
+		lab, err := faultSetLab(manifests,
+			qualification.DockerTarget{Context: strings.TrimSpace(*dockerContext), HostFilesystems: splitList(*hostFilesystem)},
+			qualification.ProxmoxTarget{SSHHost: strings.TrimSpace(*pveSSHHost), Node: strings.TrimSpace(*pveNode), IdentityFile: strings.TrimSpace(*pveIdentity)})
+		if err != nil {
+			fatal(err)
 		}
 		secret := *password
 		if value := strings.TrimSpace(os.Getenv(*passwordEnv)); value != "" {
@@ -161,7 +166,6 @@ func main() {
 		if err != nil {
 			fatal(err)
 		}
-		lab := qualification.NewDockerLab(nil, target)
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
 		gitSHA, dirty := qualification.GitEnvironment(ctx, nil, ".")
@@ -277,7 +281,7 @@ func main() {
 type liveQualificationConfig struct {
 	Manifests            []qualification.Manifest
 	Client               *qualification.PulseClient
-	Lab                  *qualification.DockerLab
+	Lab                  qualification.Lab
 	Model                string
 	Repeats              int
 	RepeatProfile        string
@@ -393,6 +397,29 @@ func selectLiveManifests(catalog qualification.Catalog, mode, scenarioID string,
 	default:
 		return nil, fmt.Errorf("unsupported live mode %q", mode)
 	}
+}
+
+// faultSetLab picks the lab driver the selected scenarios declare. A fault set
+// runs on one driver: Docker faults on a private Docker daemon, Proxmox faults
+// on the dedicated Proxmox lab node.
+func faultSetLab(manifests []qualification.Manifest, docker qualification.DockerTarget, pve qualification.ProxmoxTarget) (qualification.Lab, error) {
+	drivers := map[string]bool{}
+	for _, manifest := range manifests {
+		drivers[manifest.Lab.Driver] = true
+	}
+	if len(drivers) != 1 {
+		return nil, fmt.Errorf("the selected faults use %d lab drivers; run Docker and Proxmox faults separately", len(drivers))
+	}
+	if drivers["proxmox"] {
+		if err := pve.Validate(); err != nil {
+			return nil, fmt.Errorf("proxmox faults need --pve-ssh-host and --pve-node: %w", err)
+		}
+		return qualification.NewProxmoxLab(nil, pve), nil
+	}
+	if missing := qualification.MissingHostFilesystems(manifests, docker.HostFilesystems); len(missing) > 0 {
+		return nil, fmt.Errorf("the selected faults need --host-filesystem %s: hand the mount to the lab or leave those faults out with --faults", strings.Join(missing, ","))
+	}
+	return qualification.NewDockerLab(nil, docker), nil
 }
 
 // selectFaultSet returns the scenarios of one fault set in label order,

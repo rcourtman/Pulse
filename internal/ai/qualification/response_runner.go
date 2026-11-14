@@ -24,6 +24,9 @@ type labView struct {
 // cannot influence. A name is only a fallback for a Pulse build that does not
 // report the ID, and then it has to be unique.
 func resolveLabView(manifest Manifest, lab *PreparedLab, resources []Resource) (labView, error) {
+	if manifest.Lab.Driver == "proxmox" {
+		return resolvePVELabView(manifest, lab, resources)
+	}
 	view := labView{resources: make(map[string]Resource, len(manifest.Resources))}
 	byID := make(map[string]Resource, len(resources))
 	for _, resource := range resources {
@@ -66,6 +69,81 @@ func resolveLabView(manifest Manifest, lab *PreparedLab, resources []Resource) (
 	return view, nil
 }
 
+// resolvePVELabView binds the lab node, its fixture containers and its
+// storages to Pulse resources by node name and VMID or storage name, which the
+// lab knows and a model cannot influence. Each must match exactly once.
+func resolvePVELabView(manifest Manifest, lab *PreparedLab, resources []Resource) (labView, error) {
+	view := labView{resources: make(map[string]Resource, len(manifest.Resources))}
+	node := lab.PVENode
+	onNode := func(resource Resource) bool {
+		return resource.Proxmox != nil && resource.Proxmox.NodeName == node
+	}
+	var hosts []Resource
+	for _, resource := range resources {
+		if resource.Type == "agent" && onNode(resource) {
+			hosts = append(hosts, resource)
+		}
+	}
+	if len(hosts) != 1 {
+		return labView{}, fmt.Errorf("Pulse shows %d resources for the lab node %s, want exactly 1", len(hosts), node)
+	}
+	view.host = hosts[0]
+	if view.host.Agent == nil {
+		return labView{}, fmt.Errorf("Pulse does not show an agent on the lab node %s", node)
+	}
+	for _, spec := range manifest.Resources {
+		var matched []Resource
+		for _, resource := range resources {
+			if !onNode(resource) {
+				continue
+			}
+			switch spec.Kind {
+			case resourceKindPVEGuest:
+				if resource.Type == "system-container" && resource.Proxmox.VMID == spec.VMID {
+					matched = append(matched, resource)
+				}
+			case resourceKindPVEStorage:
+				if resource.Type == "storage" && resource.Name == spec.Storage {
+					matched = append(matched, resource)
+				}
+			}
+		}
+		if len(matched) != 1 {
+			return labView{}, fmt.Errorf("Pulse shows %d resources for lab %s %s, want exactly 1", len(matched), spec.Kind, spec.Alias)
+		}
+		view.resources[spec.Alias] = matched[0]
+	}
+	return view, nil
+}
+
+// validateCollectedPVEPredicate checks Pulse's own reading of a Proxmox
+// resource against a lab predicate: power state, or disk use.
+func validateCollectedPVEPredicate(subject string, predicate Predicate, resources map[string]Resource) error {
+	resource, ok := resources[predicate.Target]
+	if !ok {
+		return fmt.Errorf("%s: Pulse has no resource for %s", subject, predicate.Target)
+	}
+	var observed any
+	switch predicate.Probe {
+	case pveProbeGuestStatus:
+		if resource.Proxmox == nil || resource.Proxmox.RuntimeStatus == "" {
+			return fmt.Errorf("%s: Pulse reports no power state for %s", subject, resource.Name)
+		}
+		observed = resource.Proxmox.RuntimeStatus
+	case pveProbeGuestDiskUsedPercent, pveProbeStorageUsedPercent:
+		if resource.Metrics == nil || resource.Metrics.Disk == nil {
+			return fmt.Errorf("%s: Pulse reports no disk use for %s", subject, resource.Name)
+		}
+		observed = resource.Metrics.Disk.Percent
+	default:
+		return nil
+	}
+	if passed, err := comparePredicate(observed, predicate.Operator, predicate.Value); err != nil || !passed {
+		return fmt.Errorf("%s: Pulse reports %s %v for %s, which does not satisfy %s %s", subject, predicate.Probe, observed, resource.Name, predicate.Operator, string(predicate.Value))
+	}
+	return nil
+}
+
 func sameDockerID(reported, known string) bool {
 	reported, known = strings.TrimSpace(reported), strings.TrimSpace(known)
 	if len(reported) < 12 || len(known) < 12 {
@@ -99,6 +177,12 @@ func (v labView) validateProjection(manifest Manifest, subject string, predicate
 			}
 			continue
 		}
+		if pveProbeResourceKind(predicate.Probe) != "" {
+			if err := validateCollectedPVEPredicate(subject, predicate, v.resources); err != nil {
+				return err
+			}
+			continue
+		}
 		if err := validateCollectedDockerPredicate(subject, predicate, v.resources); err != nil {
 			return err
 		}
@@ -125,6 +209,12 @@ func (v labView) findingAlias(manifest Manifest, finding Finding) string {
 		switch spec.Kind {
 		case resourceKindContainer:
 			if finding.ResourceID == pulse.ID {
+				return spec.Alias
+			}
+		case resourceKindPVEGuest, resourceKindPVEStorage:
+			// Patrol keys a Proxmox finding by the source ID, not the
+			// registry ID (14 Nov 2026).
+			if finding.ResourceID == pulse.ID || (pulse.sourceID() != "" && finding.ResourceID == pulse.sourceID()) {
 				return spec.Alias
 			}
 		case resourceKindHostFilesystem:
@@ -171,6 +261,19 @@ func (v labView) alertAlias(manifest Manifest, lab *PreparedLab, alert PulseAler
 			if strings.Contains(alert.ResourceName, spec.MountPath) && strings.Contains(alert.ResourceName, v.host.Name) {
 				return spec.Alias
 			}
+		case resourceKindPVEGuest, resourceKindPVEStorage:
+			// A Proxmox alert names its resource by the source ID:
+			// pmxlab:pmxlab:110 for a stopped container, pmxlab-local for a
+			// storage. A guest's disk alert appends the disk:
+			// pmxlab:pmxlab:111-disk-local-111-vm-111-disk-0.raw.
+			pulse := v.resources[spec.Alias]
+			source := pulse.sourceID()
+			if (pulse.ID != "" && alert.ResourceID == pulse.ID) || (source != "" && alert.ResourceID == source) {
+				return spec.Alias
+			}
+			if spec.Kind == resourceKindPVEGuest && source != "" && strings.HasPrefix(alert.ResourceID, source+"-disk-") {
+				return spec.Alias
+			}
 		}
 	}
 	return ""
@@ -178,8 +281,16 @@ func (v labView) alertAlias(manifest Manifest, lab *PreparedLab, alert PulseAler
 
 func (v labView) aliasOfResourceID(manifest Manifest, resourceID string) string {
 	for _, spec := range manifest.Resources {
-		if spec.Kind == resourceKindContainer && v.resources[spec.Alias].ID == resourceID {
-			return spec.Alias
+		pulse := v.resources[spec.Alias]
+		switch spec.Kind {
+		case resourceKindContainer:
+			if pulse.ID == resourceID {
+				return spec.Alias
+			}
+		case resourceKindPVEGuest, resourceKindPVEStorage:
+			if pulse.ID == resourceID || (pulse.sourceID() != "" && pulse.sourceID() == resourceID) {
+				return spec.Alias
+			}
 		}
 	}
 	return ""

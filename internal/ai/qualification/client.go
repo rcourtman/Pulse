@@ -190,6 +190,45 @@ type Resource struct {
 	Labels     map[string]any  `json:"labels,omitempty"`
 	Docker     *DockerResource `json:"docker,omitempty"`
 	Agent      *AgentResource  `json:"agent,omitempty"`
+	// Proxmox and Metrics are read for the proxmox lab: which node and
+	// container a resource is, its power state and its disk use.
+	Proxmox *ProxmoxResource      `json:"proxmox,omitempty"`
+	Metrics *ResourceMetricsBlock `json:"metrics,omitempty"`
+	// CanonicalIdentity carries the source ID Proxmox findings and alerts
+	// are keyed by, such as pmxlab:pmxlab:111 for a container.
+	CanonicalIdentity *ResourceCanonicalIdentity `json:"canonicalIdentity,omitempty"`
+}
+
+type ResourceCanonicalIdentity struct {
+	PrimaryID string `json:"primaryId,omitempty"`
+}
+
+// sourceID is the resource's primary identity without its type prefix:
+// system-container:pmxlab:pmxlab:111 gives pmxlab:pmxlab:111, and
+// storage:pmxlab-local gives pmxlab-local. Empty when Pulse reports none.
+func (r Resource) sourceID() string {
+	if r.CanonicalIdentity == nil || r.Type == "" {
+		return ""
+	}
+	id, found := strings.CutPrefix(r.CanonicalIdentity.PrimaryID, r.Type+":")
+	if !found {
+		return ""
+	}
+	return id
+}
+
+type ProxmoxResource struct {
+	VMID          int    `json:"vmid,omitempty"`
+	NodeName      string `json:"nodeName,omitempty"`
+	RuntimeStatus string `json:"runtimeStatus,omitempty"`
+}
+
+type ResourceMetricsBlock struct {
+	Disk *ResourceMetricValue `json:"disk,omitempty"`
+}
+
+type ResourceMetricValue struct {
+	Percent float64 `json:"percent,omitempty"`
 }
 
 type DockerResource struct {

@@ -18,7 +18,7 @@ import (
 
 type RunnerConfig struct {
 	Manifest             Manifest
-	Lab                  *DockerLab
+	Lab                  Lab
 	Client               *PulseClient
 	ArtifactRoot         string
 	RunID                string
@@ -173,7 +173,7 @@ func (r *QualificationRunner) Run(ctx context.Context) (report RunReport, termin
 			GitSHA: r.config.GitSHA, GitDirty: r.config.GitDirty,
 			PulseVersion: version.Version,
 			PulseBaseURL: r.config.Client.config.BaseURL,
-			DockerTarget: dockerTargetLabel(r.config.Lab.target),
+			DockerTarget: r.config.Lab.targetLabel(),
 			Model:        model, Provider: provider, InferenceRoute: inferenceRouteForProviderEndpoint(provider, settings.ZaiBaseURL), ChallengeNonce: r.config.ChallengeNonce,
 			CapturedAt: time.Now().UTC(),
 		}
@@ -560,7 +560,7 @@ func (r *QualificationRunner) initialEnvironment() Environment {
 	provider, _ := splitModel(r.config.ExpectedModel)
 	dockerTarget := ""
 	if r.config.Lab != nil {
-		dockerTarget = dockerTargetLabel(r.config.Lab.target)
+		dockerTarget = r.config.Lab.targetLabel()
 	}
 	return Environment{
 		GitSHA:         r.config.GitSHA,

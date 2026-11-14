@@ -2087,6 +2087,18 @@ pre-existing inventory. The opt-in Docker oracle test makes no provider or
 Pulse API call and cannot qualify diagnosis. Host/storage-pool, backup and
 missing-source-access coverage remain separate required scenarios.
 
+The Proxmox qualification driver (fault set `pve-v1`) writes only to a node
+that carries `/etc/pulse-qualification-lab` naming it, whose hostname and only
+cluster member match, and only to guests whose description carries the fixture
+marker. Its injectors are fixed in the driver: stop a guest, kill a guest's
+init, fill one fixed folder in a guest, and write back-dated vzdump archives
+for one fixture guest to a directory storage. Every file it writes is recorded,
+revert and cleanup remove exactly those, a second cleanup must be a no-op, and
+the guest list and real backups must match the inventory taken before the run.
+Its disk and storage probes read Proxmox's own used and total figures, the
+numbers Pulse alerts on, never `df`'s Use%, which counts reserved blocks as
+used and left a fill short of Pulse's threshold. One fault set uses one driver.
+
 Patrol model qualification extends only through
 `internal/ai/qualification/`, `cmd/patrol-qualify/`, and reviewed manifests
 under `tests/qualification/patrol/`. A manifest's qualification repeat profile must be
