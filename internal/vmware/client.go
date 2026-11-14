@@ -102,6 +102,12 @@ type ClientConfig struct {
 	Password           string
 	InsecureSkipVerify bool
 	Timeout            time.Duration
+
+	// The connection's collection scope. Zero values collect everything, so
+	// connection tests and other one-off clients need not set them.
+	SkipVMs        bool
+	SkipHosts      bool
+	SkipDatastores bool
 }
 
 // Client executes phase-1 VMware connection validation.
@@ -114,6 +120,18 @@ type Client struct {
 	// poller keeps one client per vCenter connection, so the cache spans the
 	// whole poll loop rather than one collection.
 	tagCatalog vmwareTagCatalog
+	scope      collectionScope
+}
+
+// collectionScope is the connection editor's "Collection scope". A skipped
+// surface is listed once per poll as a name directory, so collected resources
+// still name the hosts, VMs and datastores they reference, but it yields no
+// resources and none of its entities get signal, metric, topology or tag
+// reads, which is where VMware polling spends its requests.
+type collectionScope struct {
+	skipVMs        bool
+	skipHosts      bool
+	skipDatastores bool
 }
 
 type viJSONServiceContentRefs struct {
@@ -158,6 +176,11 @@ func newClientWithResolver(cfg ClientConfig, resolve func(context.Context, strin
 		},
 		username: strings.TrimSpace(cfg.Username),
 		password: strings.TrimSpace(cfg.Password),
+		scope: collectionScope{
+			skipVMs:        cfg.SkipVMs,
+			skipHosts:      cfg.SkipHosts,
+			skipDatastores: cfg.SkipDatastores,
+		},
 	}, nil
 }
 
@@ -224,11 +247,13 @@ func (c *Client) CollectInventory(ctx context.Context) (*InventorySnapshot, erro
 	if err != nil {
 		return nil, err
 	}
+	names := newInventoryNames(inventory)
+	c.scope.apply(inventory)
 	signalIssues, err := c.enrichInventorySnapshot(ctx, automationSessionID, release, sessionID, refs.PerfManagerMoID, refs.EventManagerMoID, perfCounters, inventory)
 	if err != nil {
 		return nil, err
 	}
-	topologyIssues, err := c.enrichInventoryTopology(ctx, automationSessionID, release, sessionID, inventory)
+	topologyIssues, err := c.enrichInventoryTopology(ctx, automationSessionID, release, sessionID, inventory, names)
 	if err != nil {
 		return nil, err
 	}
@@ -250,19 +275,30 @@ func (c *Client) collectInventoryBaseWithSession(ctx context.Context) (*Inventor
 		return nil, "", err
 	}
 
+	// A skipped surface is only a name directory, so failing to list it, such
+	// as vCenter refusing to list more than 4,000 VMs, does not fail the poll.
 	var hosts []InventoryHost
 	if err := c.listAutomationResources(ctx, automationSessionID, "/api/vcenter/host", "host inventory", &hosts); err != nil {
-		return nil, "", err
+		if !c.scope.skipHosts {
+			return nil, "", err
+		}
+		hosts = nil
 	}
 
 	var vms []InventoryVM
 	if err := c.listAutomationResources(ctx, automationSessionID, "/api/vcenter/vm", "vm inventory", &vms); err != nil {
-		return nil, "", err
+		if !c.scope.skipVMs {
+			return nil, "", err
+		}
+		vms = nil
 	}
 
 	var datastores []InventoryDatastore
 	if err := c.listAutomationResources(ctx, automationSessionID, "/api/vcenter/datastore", "datastore inventory", &datastores); err != nil {
-		return nil, "", err
+		if !c.scope.skipDatastores {
+			return nil, "", err
+		}
+		datastores = nil
 	}
 
 	var networks []InventoryNetwork
@@ -276,6 +312,22 @@ func (c *Client) collectInventoryBaseWithSession(ctx context.Context) (*Inventor
 		Datastores: datastores,
 		Networks:   networks,
 	}, automationSessionID, nil
+}
+
+// apply drops the surfaces outside the scope before any per-entity read.
+func (s collectionScope) apply(snapshot *InventorySnapshot) {
+	if snapshot == nil {
+		return
+	}
+	if s.skipHosts {
+		snapshot.Hosts = nil
+	}
+	if s.skipVMs {
+		snapshot.VMs = nil
+	}
+	if s.skipDatastores {
+		snapshot.Datastores = nil
+	}
 }
 
 func normalizeBaseURL(rawHost string, port int) (*url.URL, error) {

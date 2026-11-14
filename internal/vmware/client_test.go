@@ -524,6 +524,116 @@ func TestClientResolveVIJSONReleaseClassifiesUnsupportedVersionFloor(t *testing.
 	}
 }
 
+type pathRecorder struct {
+	next  http.RoundTripper
+	mu    sync.Mutex
+	paths map[string]int
+}
+
+func (r *pathRecorder) RoundTrip(req *http.Request) (*http.Response, error) {
+	r.mu.Lock()
+	r.paths[req.URL.Path]++
+	r.mu.Unlock()
+	return r.next.RoundTrip(req)
+}
+
+// The connection editor's VMs, Hosts and Datastores checkboxes promise that
+// Pulse collects only the enabled surfaces. A skipped surface is listed once
+// as a name directory but yields no resources and none of its entities get a
+// signal, metric, topology or tag read.
+func TestClientCollectInventoryHonorsCollectionScope(t *testing.T) {
+	const vi = "/sdk/vim25/9.0.0.0/"
+	hostReads := []string{vi + "HostSystem/host-101/overallStatus", vi + "HostSystem/host-101/triggeredAlarmState", vi + "HostSystem/host-101/datastore"}
+	vmReads := []string{vi + "VirtualMachine/vm-201/overallStatus", vi + "VirtualMachine/vm-201/snapshot", vi + "VirtualMachine/vm-201/runtime", "/api/vcenter/vm/vm-201"}
+	datastoreReads := []string{vi + "Datastore/datastore-11/overallStatus", vi + "Datastore/datastore-11/summary", vi + "Datastore/datastore-11/vm"}
+
+	for _, tc := range []struct {
+		name    string
+		config  ClientConfig
+		server  vmwareTestServerConfig
+		skipped []string
+		read    []string
+	}{
+		{name: "everything", read: append(append(append([]string{}, hostReads...), vmReads...), datastoreReads...)},
+		{name: "hosts off", config: ClientConfig{SkipHosts: true}, skipped: hostReads, read: append(append([]string{}, vmReads...), datastoreReads...)},
+		{name: "vms off", config: ClientConfig{SkipVMs: true}, skipped: vmReads, read: append(append([]string{}, hostReads...), datastoreReads...)},
+		{name: "datastores off", config: ClientConfig{SkipDatastores: true}, skipped: datastoreReads, read: append(append([]string{}, hostReads...), vmReads...)},
+		// vCenter refuses /api/vcenter/vm above 4,000 VMs; with VMs off that
+		// must not fail the whole poll.
+		{name: "vms off and unlistable", config: ClientConfig{SkipVMs: true}, server: vmwareTestServerConfig{refuseVMList: true}, skipped: vmReads, read: hostReads},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			server := newVMwareTestServer(t, tc.server)
+			defer server.Close()
+
+			cfg := tc.config
+			cfg.Host = server.URL
+			cfg.Username = "admin"
+			cfg.Password = "secret"
+			cfg.InsecureSkipVerify = true
+			cfg.Timeout = 5 * time.Second
+			client, err := NewClient(cfg)
+			if err != nil {
+				t.Fatalf("NewClient: %v", err)
+			}
+			recorder := &pathRecorder{next: client.httpClient.Transport, paths: map[string]int{}}
+			client.httpClient.Transport = recorder
+
+			snapshot, err := client.CollectInventory(context.Background())
+			if err != nil {
+				t.Fatalf("CollectInventory: %v", err)
+			}
+			for _, path := range tc.skipped {
+				if recorder.paths[path] != 0 {
+					t.Fatalf("%s requested %d times with that surface off", path, recorder.paths[path])
+				}
+			}
+			for _, path := range tc.read {
+				if recorder.paths[path] == 0 {
+					t.Fatalf("%s not requested with that surface on", path)
+				}
+			}
+
+			if got, want := len(snapshot.Hosts), boolCount(!cfg.SkipHosts); got != want {
+				t.Fatalf("hosts = %d, want %d", got, want)
+			}
+			if got, want := len(snapshot.VMs), boolCount(!cfg.SkipVMs); got != want {
+				t.Fatalf("vms = %d, want %d", got, want)
+			}
+			if got, want := len(snapshot.Datastores), boolCount(!cfg.SkipDatastores); got != want {
+				t.Fatalf("datastores = %d, want %d", got, want)
+			}
+			if len(snapshot.Networks) != 1 {
+				t.Fatalf("networks are outside the scope and must still be collected, got %d", len(snapshot.Networks))
+			}
+
+			// Collected resources still name what they reference.
+			if !cfg.SkipVMs {
+				vm := snapshot.VMs[0]
+				if vm.RuntimeHostName != "esxi-01.lab.local" {
+					t.Fatalf("vm host name = %q, want esxi-01.lab.local", vm.RuntimeHostName)
+				}
+				if len(vm.DatastoreNames) != 1 || vm.DatastoreNames[0] != "nvme-primary" {
+					t.Fatalf("vm datastore names = %+v, want [nvme-primary]", vm.DatastoreNames)
+				}
+			}
+			if !cfg.SkipDatastores && !tc.server.refuseVMList {
+				datastore := snapshot.Datastores[0]
+				if len(datastore.VMNames) != 1 || datastore.VMNames[0] != "app-01" {
+					t.Fatalf("datastore vm names = %+v, want [app-01]", datastore.VMNames)
+				}
+			}
+		})
+	}
+}
+
+func boolCount(value bool) int {
+	if value {
+		return 1
+	}
+	return 0
+}
+
 type vmwareTestServerConfig struct {
 	omitHostOverallStatus         bool
 	denyHostOverallStatus         bool
@@ -531,6 +641,7 @@ type vmwareTestServerConfig struct {
 	denyClusterInventory          bool
 	unavailableVMGuestInfo        bool
 	denyTagAssociations           bool
+	refuseVMList                  bool
 	tagRequestCounts              map[string]int
 	tagRequestCountsMu            *sync.Mutex
 }
@@ -567,6 +678,10 @@ func newVMwareTestServer(t *testing.T, cfg vmwareTestServerConfig) *httptest.Ser
 	})
 	mux.HandleFunc("/api/vcenter/vm", func(w http.ResponseWriter, r *http.Request) {
 		requireAutomationSession(t, r)
+		if cfg.refuseVMList {
+			http.Error(w, `{"error_type":"UNABLE_TO_ALLOCATE_RESOURCE"}`, http.StatusBadRequest)
+			return
+		}
 		writeJSON(w, []InventoryVM{{
 			VM:            "vm-201",
 			Name:          "app-01",

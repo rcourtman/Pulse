@@ -553,6 +553,56 @@ func TestProviderActivityChanges_ProjectCanonicalTimelineEntries(t *testing.T) {
 	}
 }
 
+// A host outside the collection scope is not ingested, so a VM on it must not
+// point at that missing host record. VMware has no record above the host, so
+// the VM stays at the top level, still naming its host.
+func TestRecordsDoNotParentToUncollectedHosts(t *testing.T) {
+	snapshot := DefaultFixtures()
+	if len(snapshot.VMs) == 0 || len(snapshot.Hosts) == 0 {
+		t.Fatal("fixtures need hosts and VMs")
+	}
+	hostSources := map[string]struct{}{}
+	for _, record := range FixtureRecords(snapshot) {
+		if record.Resource.Type == unifiedresources.ResourceTypeAgent {
+			hostSources[record.SourceID] = struct{}{}
+		}
+	}
+	parented := 0
+	for _, record := range FixtureRecords(snapshot) {
+		if record.Resource.Type != unifiedresources.ResourceTypeVM || record.ParentSourceID == "" {
+			continue
+		}
+		if _, ok := hostSources[record.ParentSourceID]; !ok {
+			t.Fatalf("vm %q parent %q is not a collected host", record.Resource.Name, record.ParentSourceID)
+		}
+		parented++
+	}
+	if parented == 0 {
+		t.Fatal("expected fixture VMs to hang off their collected hosts")
+	}
+
+	snapshot.Hosts = nil
+	sources := map[string]struct{}{}
+	records := FixtureRecords(snapshot)
+	for _, record := range records {
+		sources[record.SourceID] = struct{}{}
+	}
+	for _, record := range records {
+		if record.ParentSourceID == "" {
+			continue
+		}
+		if _, ok := sources[record.ParentSourceID]; !ok {
+			t.Fatalf("%s %q points at uncollected parent %q", record.Resource.Type, record.Resource.Name, record.ParentSourceID)
+		}
+	}
+	for _, record := range records {
+		if record.Resource.Type == unifiedresources.ResourceTypeVM && record.Resource.VMware != nil && record.Resource.VMware.RuntimeHostName != "" {
+			return
+		}
+	}
+	t.Fatal("VMs must still name their host when hosts are not collected")
+}
+
 func boolPtr(value bool) *bool {
 	return &value
 }

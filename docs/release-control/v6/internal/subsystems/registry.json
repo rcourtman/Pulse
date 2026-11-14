@@ -6777,7 +6777,8 @@
               "internal/monitoring/monitor_discovery_helpers.go",
               "internal/monitoring/monitor_pbs_pmg.go",
               "internal/monitoring/poll_providers.go",
-              "internal/monitoring/truenas_poller.go"
+              "internal/monitoring/truenas_poller.go",
+              "internal/monitoring/vmware_poller.go"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
@@ -6789,7 +6790,8 @@
               "internal/monitoring/monitor_pmg_test.go",
               "internal/monitoring/monitor_polling_test.go",
               "internal/monitoring/truenas_disk_history_scope_test.go",
-              "internal/monitoring/truenas_poller_test.go"
+              "internal/monitoring/truenas_poller_test.go",
+              "internal/monitoring/vmware_poller_test.go"
             ]
           },
           {

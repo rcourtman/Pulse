@@ -618,6 +618,7 @@ describe('ProxmoxBackupsTable', () => {
   });
 
   it('offers By date / Coverage views and no legacy sub-tab tree', async () => {
+    vi.stubGlobal('innerWidth', 390);
     mockBackupAPIs();
 
     renderInRouter(() => (
@@ -627,9 +628,19 @@ describe('ProxmoxBackupsTable', () => {
     await screen.findAllByText('pbs-docker');
 
     const healthSummary = screen.getByText(/^\d+ completed restore point/);
-    // Restore-point totals sit in the header strip from sm up; a phone keeps
-    // the protected count and reason rows.
-    expect(healthSummary.parentElement).toHaveClass('hidden', 'sm:inline');
+    // Parsed inventory totals accompany the verdict on phones too. The one
+    // summary transfers to the inline header at sm without a second copy.
+    expect(healthSummary).toBeVisible();
+    expect(healthSummary.closest('[data-backup-inventory-summary]')).not.toBeNull();
+    window.innerWidth = 640;
+    fireEvent(window, new Event('resize'));
+    await waitFor(() => {
+      expect(
+        screen.getByText(/^\d+ completed restore point/).closest('[data-backup-inventory-summary]'),
+      ).toBeNull();
+    });
+    expect(screen.getAllByText(/^\d+ completed restore point/)).toHaveLength(1);
+    expect(screen.getByText(/^\d+ completed restore point/)).toBeVisible();
 
     // The two route-backed sections exist...
     expect(screen.getByRole('navigation', { name: /backup views/i })).toBeInTheDocument();

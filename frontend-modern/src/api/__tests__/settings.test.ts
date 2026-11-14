@@ -74,6 +74,31 @@ const mockTelemetryPreviewPayload = {
   report_schedules: 0,
   report_schedules_enabled: 0,
   report_schedules_run_30d: 0,
+  reporting_generated_resources_30d: 3,
+  reporting_generated_vm_inventory_30d: 0,
+  reporting_generated_backup_health_30d: 0,
+  reporting_generated_patrol_digest_30d: 0,
+  reporting_successful_resources_periods_30d: 0,
+  reporting_successful_vm_inventory_periods_30d: 0,
+  reporting_successful_backup_health_periods_30d: 0,
+  reporting_successful_patrol_digest_periods_30d: 0,
+  reporting_repeat_resources_periods_30d: 0,
+  reporting_repeat_vm_inventory_periods_30d: 0,
+  reporting_repeat_backup_health_periods_30d: 0,
+  reporting_repeat_patrol_digest_periods_30d: 0,
+  reporting_saved_30d: 0,
+  reporting_email_accepted_30d: 0,
+  reporting_delivery_failed_30d: 0,
+  reporting_delivery_unconfirmed_30d: 0,
+  reporting_data_complete_30d: 0,
+  reporting_data_incomplete_30d: 0,
+  reporting_data_unavailable_30d: 0,
+  reporting_telemetry_available: true,
+  reporting_observation_days: 14,
+  reporting_resources_active_days_30d: 0,
+  reporting_vm_inventory_active_days_30d: 0,
+  reporting_backup_health_active_days_30d: 0,
+  reporting_patrol_digest_active_days_30d: 0,
   agent_profiles: 0,
   update_attempts_30d: 0,
   update_successes_30d: 0,
@@ -318,6 +343,9 @@ describe('SettingsAPI', () => {
 
       expect(apiFetchJSON).toHaveBeenCalledWith('/api/system/settings/telemetry-preview');
       expect(result.payload.successful_history_reads_over_7d_30d).toBe(7);
+      expect(result.payload.reporting_telemetry_available).toBe(true);
+      expect(result.payload.reporting_observation_days).toBe(14);
+      expect(result.payload.reporting_generated_resources_30d).toBe(3);
       expect(result).toEqual(mockPreview);
     });
   });

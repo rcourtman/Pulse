@@ -373,8 +373,10 @@ func TestServerShutdownJoinsCloseCallbacks(t *testing.T) {
 			done := make(chan struct{})
 			server := newTestServer(t, NewRegistry(nil, nil), authorizedResolver(1000), nil)
 			if target == "listener" {
+				// A real Accept wakes when the listener is closed, not as soon as
+				// the parent is canceled: Serve's child may not be canceled yet.
 				listener := lifecycleListener{
-					accept: func() (net.Conn, error) { close(ready); <-ctx.Done(); return nil, net.ErrClosed },
+					accept: func() (net.Conn, error) { close(ready); <-closeEntered; return nil, net.ErrClosed },
 					close:  func() error { close(closeEntered); <-release; return nil },
 				}
 				go func() {

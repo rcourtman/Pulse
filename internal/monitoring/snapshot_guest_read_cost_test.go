@@ -148,7 +148,10 @@ func TestSnapshotGuestReadDoesNotCopyUnusedDetails(t *testing.T) {
 		cmd.Env = append(os.Environ(), childEnv+"="+t.Name())
 		output, err := cmd.CombinedOutput()
 		t.Logf("isolated snapshot allocation check:\n%s", output)
-		if err != nil || !strings.Contains(string(output), "--- PASS: "+t.Name()+" ") || !strings.Contains(string(output), "unused-detail copy positive control:") {
+		if err != nil || !strings.Contains(string(output), "--- PASS: "+t.Name()+" ") ||
+			!strings.Contains(string(output), "unused-detail copy positive control (one slice per guest):") ||
+			!strings.Contains(string(output), "unused-detail copy positive control (one call):") ||
+			!strings.Contains(string(output), "unused-detail copy positive control (full conversion):") {
 			t.Fatalf("isolated allocation guard/control did not pass: %v", err)
 		}
 		return
@@ -160,22 +163,80 @@ func TestSnapshotGuestReadDoesNotCopyUnusedDetails(t *testing.T) {
 		return nil, errBackupPollingUnread
 	}}
 	call := func(m *Monitor) { m.pollGuestSnapshots(context.Background(), "site", client) }
-	sparse, detailed := snapshotGuestReadFixture(16, 0), snapshotGuestReadFixture(16, 64)
-	base, grown, peak := backupPollingAllocationFloors(t, sparse, detailed, call)
-	if grown > base+4 || peak > base+100 {
-		t.Fatalf("unused guest details increased real poll allocations: sparse=%.0f detailed=%.0f peak=%.0f", base, grown, peak)
+	// Noise per call is fixed; any per-detail copy grows with the entry count.
+	sparse, detailed := snapshotGuestReadFixture(16, 0), snapshotGuestReadFixture(16, 256)
+	everyCall := func(p backupPollingCostPair) bool {
+		return p.grewEveryCall(snapshotGuestReadEveryCallBytes, snapshotGuestReadEveryCallObjects)
 	}
-	base, grown, _ = backupPollingAllocationFloors(t, sparse, detailed, func(m *Monitor) {
+	someCall := func(p backupPollingCostPair) bool { return p.grewSomeCall(snapshotGuestReadSomeCallBytes) }
+	poll := backupPollingCallCosts(t, sparse, detailed, call)
+	t.Logf("real poll allocations: %s", poll)
+	if everyCall(poll) || someCall(poll) {
+		t.Fatalf("unused guest details increased real poll allocations: %s", poll)
+	}
+
+	// A small real regression: one detached address list per guest.
+	copyAddresses := func(m *Monitor) {
+		readState := m.resourceStore.(unifiedresources.ReadState)
+		for _, vm := range readState.VMs() {
+			backupPollingReadResult = vm.IPAddresses()
+		}
+		for _, ct := range readState.Containers() {
+			backupPollingReadResult = ct.IPAddresses()
+		}
+	}
+	every := backupPollingCallCosts(t, sparse, detailed, func(m *Monitor) {
 		call(m)
-		for _, vm := range m.resourceStore.(unifiedresources.ReadState).VMs() {
-			backupPollingReadResult = vmFromReadStateView(vm)
+		copyAddresses(m)
+	})
+	t.Logf("unused-detail copy positive control (one slice per guest): %s", every)
+	if !everyCall(every) {
+		t.Fatal("guard missed one copied detail slice per guest")
+	}
+
+	// The same copy on one measured call per fixture leaves the minimum and
+	// median clean, so only the peak can expose it.
+	calls := map[*Monitor]int{}
+	once := backupPollingCallCosts(t, sparse, detailed, func(m *Monitor) {
+		call(m)
+		if calls[m]++; calls[m] == backupPollingCostWarmup+5 {
+			copyAddresses(m)
 		}
 	})
-	t.Logf("unused-detail copy positive control: %.0f -> %.0f", base, grown)
-	if grown <= base+500 {
+	t.Logf("unused-detail copy positive control (one call): %s", once)
+	if everyCall(once) || !someCall(once) {
+		t.Fatal("a copy on one call must keep a clean minimum and median and fail the peak bound")
+	}
+
+	// The regression the guard was written for: converting every guest.
+	full := backupPollingCallCosts(t, sparse, detailed, func(m *Monitor) {
+		call(m)
+		readState := m.resourceStore.(unifiedresources.ReadState)
+		for _, vm := range readState.VMs() {
+			backupPollingReadResult = vmFromReadStateView(vm)
+		}
+		for _, ct := range readState.Containers() {
+			backupPollingReadResult = containerFromReadStateView(ct)
+		}
+	})
+	t.Logf("unused-detail copy positive control (full conversion): %s", full)
+	if !everyCall(full) || full.large.objects[0] <= full.small.objects[0]+500 {
 		t.Fatal("fixture did not expose full guest conversions in the real callback")
 	}
 }
+
+// Bytes grow with what is copied, and the detailed fixture's 256 entries make
+// any per-detail copy large next to noise: one address list per guest adds
+// about 90 KiB per call, converting every guest about 2 MiB. The median object
+// bound catches copies of many tiny values the allocator packs together, such
+// as one guest's cloned address strings (+513 objects, +13 KiB). Over 200 race
+// runs under load the fixtures' minimum, median and maximum bytes differed by
+// at most 1.7 KiB and their median objects by at most 15.
+const (
+	snapshotGuestReadEveryCallBytes   = 4 << 10
+	snapshotGuestReadEveryCallObjects = 32
+	snapshotGuestReadSomeCallBytes    = 16 << 10
+)
 
 func BenchmarkSnapshotGuestReadCost(b *testing.B) {
 	previous := log.Logger
