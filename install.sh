@@ -2386,8 +2386,11 @@ smoke_test_pve_auto_register_token() {
     local smoke_output=""
     local smoke_status=0
 
+    # Optional auto-registration must not hold a completed install on a peer
+    # that accepts connections but never replies. Bound each attempt and the
+    # existing retry window, including on systems without the timeout utility.
     set +e
-    smoke_output=$(printf 'Authorization: PVEAPIToken=%s=%s\n' "$token_id" "$token_value" | curl -q --retry 2 --retry-delay 1 -kfsS -H @- "${host_url%/}/api2/json/nodes" 2>&1)
+    smoke_output=$(printf 'Authorization: PVEAPIToken=%s=%s\n' "$token_id" "$token_value" | curl -q --retry 2 --retry-delay 1 --connect-timeout 5 --max-time 10 --retry-max-time 20 -kfsS -H @- "${host_url%/}/api2/json/nodes" 2>&1)
     smoke_status=$?
     set -e
 
@@ -2496,7 +2499,7 @@ PY
     set +xv
 
     local setup_response
-    if ! setup_response=$(curl -q --retry 3 --retry-delay 2 -fsS -X POST "$pulse_url/api/setup-script-url" -H "Content-Type: application/json" -d "$setup_payload"); then
+    if ! setup_response=$(curl -q --retry 3 --retry-delay 2 --connect-timeout 5 --max-time 10 --retry-max-time 20 -fsS -X POST "$pulse_url/api/setup-script-url" -H "Content-Type: application/json" -d "$setup_payload"); then
         AUTO_NODE_REGISTER_ERROR="setup token request failed"
         print_warn "Unable to request setup token from Pulse (${pulse_url}); skipping automatic node registration"
         return
@@ -2773,7 +2776,7 @@ PY
 )
 
     local register_response
-    if ! register_response=$(printf %s "$register_payload" | curl -q --retry 3 --retry-delay 2 -fsS -X POST "$pulse_url/api/auto-register" -H "Content-Type: application/json" -d @-); then
+    if ! register_response=$(printf %s "$register_payload" | curl -q --retry 3 --retry-delay 2 --connect-timeout 5 --max-time 10 --retry-max-time 20 -fsS -X POST "$pulse_url/api/auto-register" -H "Content-Type: application/json" -d @-); then
         AUTO_NODE_REGISTER_ERROR="auto-register request failed"
         print_warn "Pulse auto-registration request failed; skipping automatic node registration"
         return

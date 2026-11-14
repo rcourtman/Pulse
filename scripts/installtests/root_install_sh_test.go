@@ -861,8 +861,8 @@ func TestRootInstallScriptAutoRegisterUsesSecureContractShape(t *testing.T) {
 		`data.get("nodeName", "")`,
 		`[[ "$register_status" != "success" ]] || [[ "$register_action" != "use_token" ]] || [[ "$register_type" != "pve" ]] || [[ "$register_source" != "script" ]]`,
 		`AUTO_NODE_REGISTERED_NAME="$register_node_name"`,
-		`curl -q --retry 3 --retry-delay 2 -fsS -X POST "$pulse_url/api/setup-script-url" -H "Content-Type: application/json" -d "$setup_payload"`,
-		`printf %s "$register_payload" | curl -q --retry 3 --retry-delay 2 -fsS -X POST "$pulse_url/api/auto-register" -H "Content-Type: application/json" -d @-`,
+		`curl -q --retry 3 --retry-delay 2 --connect-timeout 5 --max-time 10 --retry-max-time 20 -fsS -X POST "$pulse_url/api/setup-script-url" -H "Content-Type: application/json" -d "$setup_payload"`,
+		`printf %s "$register_payload" | curl -q --retry 3 --retry-delay 2 --connect-timeout 5 --max-time 10 --retry-max-time 20 -fsS -X POST "$pulse_url/api/auto-register" -H "Content-Type: application/json" -d @-`,
 		`token_output=$(pveum user token add pulse-monitor@pve "$token_name" --privsep 1 2>&1)`,
 		`pveum aclmod / -token "$token_id" -role PVEAuditor`,
 		`pveum aclmod / -token "$token_id" -role PulseMonitor`,
@@ -1452,7 +1452,7 @@ func TestRootInstallAutoRegisterSmokeTestsCreatedTokenBeforeRegistration(t *test
 
 	for _, needle := range []string{
 		`smoke_test_pve_auto_register_token() {`,
-		`printf 'Authorization: PVEAPIToken=%s=%s\n' "$token_id" "$token_value" | curl -q --retry 2 --retry-delay 1 -kfsS -H @- "${host_url%/}/api2/json/nodes"`,
+		`printf 'Authorization: PVEAPIToken=%s=%s\n' "$token_id" "$token_value" | curl -q --retry 2 --retry-delay 1 --connect-timeout 5 --max-time 10 --retry-max-time 20 -kfsS -H @- "${host_url%/}/api2/json/nodes"`,
 		`AUTO_NODE_REGISTER_ERROR="token smoke check failed"`,
 		`smoke_test_pve_auto_register_token "$normalized_host_url" "$token_id" "$token_value"`,
 	} {
@@ -1462,7 +1462,7 @@ func TestRootInstallAutoRegisterSmokeTestsCreatedTokenBeforeRegistration(t *test
 	}
 
 	smokeCallIdx := strings.Index(script, `smoke_test_pve_auto_register_token "$normalized_host_url" "$token_id" "$token_value"`)
-	registerIdx := strings.Index(script, `curl -q --retry 3 --retry-delay 2 -fsS -X POST "$pulse_url/api/auto-register" -H "Content-Type: application/json" -d @-`)
+	registerIdx := strings.Index(script, `curl -q --retry 3 --retry-delay 2 --connect-timeout 5 --max-time 10 --retry-max-time 20 -fsS -X POST "$pulse_url/api/auto-register" -H "Content-Type: application/json" -d @-`)
 	if smokeCallIdx < 0 || registerIdx < 0 || smokeCallIdx > registerIdx {
 		t.Fatalf("expected token smoke check to run before /api/auto-register (smoke=%d register=%d)", smokeCallIdx, registerIdx)
 	}

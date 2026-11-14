@@ -74,6 +74,7 @@
     "scripts/installtests/qnap_autorun_update_test.go",
     "scripts/installtests/release_ldflags_test.go",
     "scripts/installtests/release_notes_contract_test.go",
+    "scripts/installtests/root_auto_register_transport_test.go",
     "scripts/installtests/root_auto_update_repo_test.go",
     "scripts/installtests/root_curl_config_test.go",
     "scripts/installtests/root_install_sh_test.go",
