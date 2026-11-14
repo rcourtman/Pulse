@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "base_sha": "bc724d3442821d9c30a29c84cebd2e21e66c2c8b",
+  "verified_at": "2026-11-14T20:41:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx",
+    "frontend-modern/src/components/Settings/selfHostedBillingPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx": "f7bb1b834c886452e4425dd503f4bec859252e8d17432684f1ba42b648d6538f",
+    "frontend-modern/src/components/Settings/selfHostedBillingPresentation.ts": "2c1699a210d2e915a9735d467edb04436b41b6cd6537fa368c0f7b018c6ce101"
+  },
+  "routes": [
+    "/settings/infrastructure"
+  ],
+  "viewports": [
+    {
+      "width": 1024,
+      "height": 900
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "production vite build of these exact bytes (sha256 checked on pulse-dev) served by vite preview on pulse-dev, proxied to the pulse-perf-rig mock estate on :7699 (a free Community install: /api/security/status presentationPolicy hideCommercial false, hideUpgrade true, readOnly false; runtime capabilities read succeeded with hosted_mode false), viewed in the desktop app's built-in browser through an SSH tunnel and signed in with the rig's documented dev login",
+    "Settings > Infrastructure with 57 connected systems (55 agent connections): the Pulse MSP line renders once, below the source list and its Optional setup discovery block, as muted text with an outline 'See Pulse MSP' button and a muted close icon",
+    "1024: text, button and close icon in one row (610px by 58px), no horizontal page overflow (scrollWidth 1013 of 1024); measured on the first build of this change, whose markup and classes are identical to these bytes (later revisions only added the runtimeCapabilitiesLoadError gate and moved the dismissal key constant)",
+    "375 phone: text wraps above the button with the close icon top right, line 359px wide from x=8, close control 44px by 44px, scrollWidth 375 of 375 (same first build, identical markup)",
+    "rebuilt from these final bytes: with the dismissal key cleared the line rendered with the same text and link",
+    "small-install, hosted-mode, commercial-hidden, unresolved-policy, capability-loading, capability-error, unresolved-ledger and read-only absence covered by InfrastructureWorkspace unit tests (no hosted, demo or read-only rig was started)"
+  ],
+  "interactions": [
+    "read the rendered line and link from the DOM on the final build: href https://pulserelay.pro/msp?utm_source=pulse&utm_medium=app-infrastructure&utm_campaign=msp, target _blank, rel noopener noreferrer",
+    "clicked the close icon on the final build: the line disappeared and localStorage pulse-infrastructure-msp-referral-dismissed became 'true'; navigating back to /settings/infrastructure kept the line absent while the source rows rendered",
+    "did not click the link, so no synthetic visit reached the live website funnel"
+  ]
+}

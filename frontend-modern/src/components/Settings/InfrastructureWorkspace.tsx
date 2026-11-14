@@ -11,16 +11,32 @@ import {
 } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
 import X from 'lucide-solid/icons/x';
-import { presentationPolicyIsReadOnly } from '@/stores/sessionPresentationPolicy';
-import { hasFeature, runtimeCapabilitiesLoaded } from '@/stores/license';
+import {
+  presentationPolicyHidesCommercialSurfaces,
+  presentationPolicyIsReadOnly,
+  sessionPresentationPolicyResolved,
+} from '@/stores/sessionPresentationPolicy';
+import {
+  hasFeature,
+  isHostedModeEnabled,
+  runtimeCapabilitiesLoadError,
+  runtimeCapabilitiesLoaded,
+} from '@/stores/license';
 import { copyToClipboard } from '@/utils/clipboard';
+import { createLocalStorageBooleanSignal } from '@/utils/localStorage';
 import { getUnifiedAgentCommandAccessOptionLabel } from '@/utils/unifiedAgentInventoryPresentation';
 import { notificationStore } from '@/stores/notifications';
 import { updateStore } from '@/stores/updates';
 import { eventBus } from '@/stores/events';
 import { Dialog } from '@/components/shared/Dialog';
-import { Button } from '@/components/shared/Button';
+import { ActionIconButton, Button, ButtonLink } from '@/components/shared/Button';
 import { AgentProfilesPanel } from './AgentProfilesPanel';
+import {
+  INFRASTRUCTURE_MSP_REFERRAL_DISMISSED_STORAGE_KEY,
+  PULSE_MSP_INFRASTRUCTURE_REFERRAL_URL,
+  SELF_HOSTED_PRO_BILLING_PRESENTATION,
+  infrastructureLooksProviderSized,
+} from './selfHostedBillingPresentation';
 import { ConnectionEditor } from './ConnectionEditor/ConnectionEditor';
 import { NodeCredentialSlot } from './ConnectionEditor/CredentialSlots/NodeCredentialSlot';
 import { TrueNASCredentialSlot } from './ConnectionEditor/CredentialSlots/TrueNASCredentialSlot';
@@ -225,6 +241,31 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
   };
 
   const rows = createMemo(() => ledger.rows());
+
+  // A deliberate exception (14 November 2026) to keeping upgrade prompts off
+  // free installs: provider-sized installs get one dismissible line pointing
+  // at Pulse MSP, a separate product. It never renders for hosted runtimes,
+  // which include every MSP client workspace, for demo or white-label
+  // sessions, or for read-only users, and closing it hides it for good. A
+  // failed capabilities read falls back to hosted_mode false, so only a
+  // successful read can clear the hosted check.
+  const [mspReferralDismissed, setMspReferralDismissed] = createLocalStorageBooleanSignal(
+    INFRASTRUCTURE_MSP_REFERRAL_DISMISSED_STORAGE_KEY,
+    false,
+  );
+  const showMspReferral = createMemo(
+    () =>
+      !mspReferralDismissed() &&
+      !readOnly() &&
+      sessionPresentationPolicyResolved() &&
+      !presentationPolicyHidesCommercialSurfaces() &&
+      runtimeCapabilitiesLoaded() &&
+      !runtimeCapabilitiesLoadError() &&
+      !isHostedModeEnabled() &&
+      ledger.resolvedOnce() &&
+      infrastructureLooksProviderSized(rows()),
+  );
+
   const agentDoctorTargets = createMemo(() =>
     collectInfrastructureAgentDoctorTargets({
       rows: rows(),
@@ -1136,6 +1177,39 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
             readOnly() ? undefined : (server) => reviewDiscoveredSource(server)
           }
         />
+
+        <Show when={showMspReferral()}>
+          <div
+            class="flex items-start gap-2 rounded-md border border-border bg-surface px-3 py-2 sm:items-center"
+            data-testid="infrastructure-msp-referral"
+          >
+            <div class="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+              <p class="text-sm text-muted">
+                {SELF_HOSTED_PRO_BILLING_PRESENTATION.infrastructureMspReferralBody}
+              </p>
+              <ButtonLink
+                href={PULSE_MSP_INFRASTRUCTURE_REFERRAL_URL}
+                target="_blank"
+                variant="outline"
+                size="settingsActionXs"
+                class="w-fit shrink-0"
+              >
+                {SELF_HOSTED_PRO_BILLING_PRESENTATION.mspReferralActionLabel}
+              </ButtonLink>
+            </div>
+            <ActionIconButton
+              type="button"
+              onClick={() => setMspReferralDismissed(true)}
+              label={SELF_HOSTED_PRO_BILLING_PRESENTATION.infrastructureMspReferralDismissLabel}
+              title={SELF_HOSTED_PRO_BILLING_PRESENTATION.infrastructureMspReferralDismissLabel}
+              tone="muted"
+              size="sm"
+              class="min-h-11 min-w-11 shrink-0 sm:min-h-0 sm:min-w-0"
+            >
+              <X class="h-4 w-4" aria-hidden="true" />
+            </ActionIconButton>
+          </div>
+        </Show>
 
         <InfrastructureDiscoverySettingsDialog
           isOpen={showDiscoverySettings()}

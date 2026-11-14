@@ -25,6 +25,10 @@ import {
   SELF_HOSTED_PRO_BILLING_PLAN_ROUTE,
 } from '@/utils/pricingHandoff';
 import { PATROL_CONTROL_STARTER_URL } from '@/utils/licensePresentation';
+import {
+  PULSE_MSP_INFRASTRUCTURE_REFERRAL_URL,
+  PULSE_MSP_REFERRAL_URL,
+} from '../selfHostedBillingPresentation';
 import { PATROL_CONTROL_PATH } from '@/routing/resourceLinks';
 
 let mockEntitlements: LicenseEntitlements | null = null;
@@ -254,6 +258,20 @@ describe('ProLicensePanel', () => {
       renderPanel();
       await screen.findByText('License and billing details are hidden');
       expect(screen.queryByTestId('pulse-msp-referral')).toBeNull();
+    });
+
+    it('keeps both in-app MSP links counted as app referrals and apart from each other', () => {
+      // The website funnel counts utm_source=pulse with utm_campaign=msp as an
+      // app referral; the medium is what tells Plans & Billing from Infrastructure.
+      const billing = new URL(PULSE_MSP_REFERRAL_URL);
+      const infrastructure = new URL(PULSE_MSP_INFRASTRUCTURE_REFERRAL_URL);
+      for (const link of [billing, infrastructure]) {
+        expect(link.origin + link.pathname).toBe('https://pulserelay.pro/msp');
+        expect(link.searchParams.get('utm_source')).toBe('pulse');
+        expect(link.searchParams.get('utm_campaign')).toBe('msp');
+      }
+      expect(billing.searchParams.get('utm_medium')).toBe('app');
+      expect(infrastructure.searchParams.get('utm_medium')).toBe('app-infrastructure');
     });
   });
 

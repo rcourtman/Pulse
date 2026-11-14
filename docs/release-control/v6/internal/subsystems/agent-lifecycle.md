@@ -11836,3 +11836,13 @@ Sessions that name no organization on a hosted runtime now land in the runtime's
 `PULSE_TENANT_ID` workspace. Agent and API-token requests keep their routing:
 org-bound tokens resolve by binding and unbound tokens stay in the default
 organization, so no agent lifecycle path changes.
+
+### Infrastructure workspace MSP line reads rows only for size (14 November 2026)
+
+`InfrastructureWorkspace.tsx` renders one dismissible Pulse MSP line below
+the source manager when the ledger rows look provider-sized (see cloud-paid,
+"Settings > Infrastructure offers Pulse MSP to provider-sized installs"). It
+reads `ledger.rows()` only to count Proxmox VE, Proxmox Backup Server and
+agent rows after the ledger has resolved once. It changes no row, add route,
+manage dialog, Agent Doctor scope, discovery state or agent command, and it
+never renders for read-only sessions.

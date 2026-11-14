@@ -11539,3 +11539,17 @@ mirrors the instance administration gate on `/api/settings/relay`, following the
 Infrastructure helper beside it: auth-free installs and unresolved sessions keep the
 surface, and a resolved session needs `relayRead`. The alert destinations surfaces
 use it so a page an organization owner may use never depends on a route they are refused.
+
+### Infrastructure MSP referral copy stays in the billing presentation owner
+
+The dismissible Pulse MSP line on Settings > Infrastructure takes its text,
+button label and dismiss label from `SELF_HOSTED_PRO_BILLING_PRESENTATION`
+(`infrastructureMspReferralBody`, `mspReferralActionLabel`,
+`infrastructureMspReferralDismissLabel`), its tagged destination from
+`PULSE_MSP_INFRASTRUCTURE_REFERRAL_URL`, and its size rule from
+`infrastructureLooksProviderSized()`, all in `selfHostedBillingPresentation.ts`.
+`InfrastructureWorkspace.tsx` renders it with the shared `ButtonLink` outline
+action, which supplies `noopener noreferrer` for the new tab, and the shared
+`ActionIconButton` close control, which keeps a 44px touch target below the
+`sm` breakpoint. No copy, link styling or threshold is drafted in the
+workspace.
