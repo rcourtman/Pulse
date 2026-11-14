@@ -54,6 +54,7 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
   const [form, setForm] = createStore<ProviderForm>(createEmptyProviderForm());
   const [advancedOpen, setAdvancedOpen] = createSignal(false);
   const [deleteConfirm, setDeleteConfirmValue] = createSignal<string | null>(null);
+  const [deleteFeedback, setDeleteFeedback] = createSignal<string | null>(null);
   const [testing, setTesting] = createSignal(false);
   const [testResult, setTestResult] = createSignal<SSOProviderTestResult | null>(null);
   const [showMetadataPreview, setShowMetadataPreviewValue] = createSignal(false);
@@ -126,6 +127,7 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
       setShowModalValue(false);
       setEditingProvider(null);
       setEditorFeedback(null);
+      setDeleteFeedback(null);
       setForm(createEmptyProviderForm());
       setAdvancedOpen(false);
     });
@@ -394,6 +396,7 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
       return;
     const mutation = beginMutation();
     if (!mutation) return;
+    setDeleteFeedback(null);
     try {
       const response = await apiFetch(
         `/api/security/sso/providers/${encodeURIComponent(providerId)}`,
@@ -404,9 +407,13 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
       );
       if (!mutation.isCurrent()) return;
       if (!response.ok) {
-        if (isDefiniteRefusal(response.status))
-          notificationStore.error(getSSOProviderDeleteErrorMessage());
-        else requireInventoryCheck('deletion');
+        if (isDefiniteRefusal(response.status)) {
+          // The background toast remains inert while this confirmation is open.
+          // Keep the same bounded feedback in its active accessibility scope too.
+          const message = getSSOProviderDeleteErrorMessage();
+          setDeleteFeedback(message);
+          notificationStore.error(message);
+        } else requireInventoryCheck('deletion');
         return;
       }
       notificationStore.success(getSSOProviderDeleteSuccessMessage());
@@ -619,6 +626,7 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
     advancedOpen,
     setAdvancedOpen,
     deleteConfirm,
+    deleteFeedback,
     setDeleteConfirm,
     testing,
     testResult,

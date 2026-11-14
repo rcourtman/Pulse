@@ -85,6 +85,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
     advancedOpen,
     setAdvancedOpen,
     deleteConfirm,
+    deleteFeedback,
     setDeleteConfirm,
     testing,
     testResult,
@@ -991,6 +992,11 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
               This will permanently delete this SSO provider. Users will no longer be able to sign
               in using this provider.
             </p>
+            <Show when={deleteFeedback()}>
+              <InlineNotice role="alert" tone="danger" class="mb-4">
+                {deleteFeedback()}
+              </InlineNotice>
+            </Show>
             <Show when={unconfirmedChange()}>
               <div class="mb-4">
                 <InventoryCheckNotice />
