@@ -9822,3 +9822,22 @@ The TrueNAS API client (`internal/truenas/client.go`) now refuses a redirect
 that changes the host, through `tlsutil.SameHostRedirectPolicy`. A change of
 scheme, port or path on the same host, such as an HTTP to HTTPS upgrade, still
 follows. Polling, inventory and freshness are otherwise unchanged.
+
+
+### Appliance destination refusal feedback keeps the editor usable
+
+TrueNAS fresh/saved connection tests present a typed, wrapped destination-policy
+refusal as “This TrueNAS destination requires an instance administrator.” VMware
+keeps its `invalid_config` classification with the equivalent concise message.
+Neither rewrites ordinary TLS, authentication or network diagnostics, changes
+HTTP status/code, widens a grant or alters the retained dial-time policy. Saved
+credentials, pins, enabled state and monitoring options remain unchanged after
+a failed test. Compact role guidance avoids letting a nested transport chain
+cover controls in the existing editor toast.
+
+`TestTrueNASPolicyRefusalFeedbackPreservesSavedConfiguration` exercises fresh and
+saved response producers, nested typed refusal, ordinary diagnostics and a
+text-only non-sentinel control, with saved configuration readback. VMware's
+tenant rebinding and policy-message tests retain zero sockets/requests and
+sanitized concise feedback. Comparable production-consumer browser pairs at
+desktop/phone and light/dark remain necessary; native tests alone are not pixels.

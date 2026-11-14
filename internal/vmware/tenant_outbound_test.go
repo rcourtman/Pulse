@@ -51,7 +51,7 @@ func TestTenantVMwareRebindingNeverReachesAuthentication(t *testing.T) {
 	}
 	_, err = client.TestConnection(context.Background())
 	var connectionErr *ConnectionError
-	if !errors.As(err, &connectionErr) || connectionErr.Category != "invalid_config" || !strings.Contains(err.Error(), securityutil.ErrTenantOutboundDestination.Error()) {
+	if !errors.As(err, &connectionErr) || connectionErr.Category != "invalid_config" || connectionErr.Message != "This VMware destination requires an instance administrator." {
 		t.Fatalf("rebound refusal=%v", err)
 	}
 	if hits.Load() != 0 || sockets.Load() != 0 || calls != 2 {
@@ -88,7 +88,7 @@ func TestTenantVMwarePolicyMessageKeepsEndpointAndSecretsOut(t *testing.T) {
 	inner := fmt.Errorf("%w: https://fixture-user:fixture-password@private.example.test/private?token=synthetic", securityutil.ErrTenantOutboundDestination)
 	err := classifyTransportError("automation session", &url.Error{Op: "Post", URL: "https://private.example.test", Err: inner})
 	var failure *ConnectionError
-	if !errors.As(err, &failure) || failure.Category != "invalid_config" || !strings.Contains(failure.Message, "instance administrator") {
+	if !errors.As(err, &failure) || failure.Category != "invalid_config" || failure.Message != "This VMware destination requires an instance administrator." {
 		t.Fatalf("policy guidance=%v", err)
 	}
 	for _, secret := range []string{"fixture-user", "fixture-password", "private.example.test", "private?", "synthetic"} {

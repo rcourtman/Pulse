@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/url"
 	"strings"
@@ -421,10 +422,10 @@ func (h *TrueNASHandlers) HandleTestSavedConnection(w http.ResponseWriter, r *ht
 		invalidConfig, err := h.testConnectionInstance(r, instance)
 		if err != nil {
 			if invalidConfig {
-				writeErrorResponse(w, http.StatusBadRequest, "truenas_invalid_config", "Invalid TrueNAS connection configuration", map[string]string{"error": err.Error()})
+				writeErrorResponse(w, http.StatusBadRequest, "truenas_invalid_config", "Invalid TrueNAS connection configuration", map[string]string{"error": trueNASConnectionTestError(err)})
 				return
 			}
-			writeErrorResponse(w, http.StatusBadRequest, "truenas_connection_failed", "Failed to connect to TrueNAS", map[string]string{"error": err.Error()})
+			writeErrorResponse(w, http.StatusBadRequest, "truenas_connection_failed", "Failed to connect to TrueNAS", map[string]string{"error": trueNASConnectionTestError(err)})
 			return
 		}
 		// This probe reads system information through a separate client. It
@@ -449,10 +450,10 @@ func (h *TrueNASHandlers) writeConnectionTestResult(
 	invalidConfig, err := h.testConnectionInstance(r, instance)
 	if err != nil {
 		if invalidConfig {
-			writeErrorResponse(w, http.StatusBadRequest, "truenas_invalid_config", "Invalid TrueNAS connection configuration", map[string]string{"error": err.Error()})
+			writeErrorResponse(w, http.StatusBadRequest, "truenas_invalid_config", "Invalid TrueNAS connection configuration", map[string]string{"error": trueNASConnectionTestError(err)})
 			return
 		}
-		writeErrorResponse(w, http.StatusBadRequest, "truenas_connection_failed", "Failed to connect to TrueNAS", map[string]string{"error": err.Error()})
+		writeErrorResponse(w, http.StatusBadRequest, "truenas_connection_failed", "Failed to connect to TrueNAS", map[string]string{"error": trueNASConnectionTestError(err)})
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"success": true})
@@ -624,4 +625,15 @@ func trueNASConnectionIDFromActionPath(path string, suffix string) (string, bool
 		return "", false
 	}
 	return connectionID, true
+}
+
+// The connection editor shows details.error in its existing toast. Keep a
+// dial-time policy refusal actionable without the wrapped transport chain
+// obscuring the editor controls. Ordinary TLS/auth/network details still pass
+// through unchanged, and this presentation never changes destination authority.
+func trueNASConnectionTestError(err error) string {
+	if errors.Is(err, securityutil.ErrTenantOutboundDestination) {
+		return "This TrueNAS destination requires an instance administrator."
+	}
+	return err.Error()
 }

@@ -5366,3 +5366,22 @@ cookie are judged by the cookie, the same as the Apprise CLI rule. The
 check runs when a destination is tested or saved; addresses saved before it,
 cluster member addresses a monitored Proxmox reports, and DNS changes after the
 check are not re-checked at poll time.
+
+
+### Appliance destination refusal feedback keeps the editor usable
+
+TrueNAS fresh/saved connection tests present a typed, wrapped destination-policy
+refusal as “This TrueNAS destination requires an instance administrator.” VMware
+keeps its `invalid_config` classification with the equivalent concise message.
+Neither rewrites ordinary TLS, authentication or network diagnostics, changes
+HTTP status/code, widens a grant or alters the retained dial-time policy. Saved
+credentials, pins, enabled state and monitoring options remain unchanged after
+a failed test. Compact role guidance avoids letting a nested transport chain
+cover controls in the existing editor toast.
+
+`TestTrueNASPolicyRefusalFeedbackPreservesSavedConfiguration` exercises fresh and
+saved response producers, nested typed refusal, ordinary diagnostics and a
+text-only non-sentinel control, with saved configuration readback. VMware's
+tenant rebinding and policy-message tests retain zero sockets/requests and
+sanitized concise feedback. Comparable production-consumer browser pairs at
+desktop/phone and light/dark remain necessary; native tests alone are not pixels.
