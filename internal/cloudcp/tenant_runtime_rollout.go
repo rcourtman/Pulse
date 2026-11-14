@@ -101,7 +101,7 @@ const (
 type tenantRuntimeRolloutRegistry interface {
 	Get(tenantID string) (*registry.Tenant, error)
 	List() ([]*registry.Tenant, error)
-	Update(t *registry.Tenant) error
+	UpdateRuntimeState(t *registry.Tenant) error
 }
 
 type tenantRuntimeRolloutDocker interface {
@@ -372,7 +372,7 @@ func (s *tenantRuntimeRolloutService) Rollout(ctx context.Context, opts TenantRu
 	unavailable := *tenant
 	unavailable.HealthCheckOK = false
 	unavailable.LastHealthCheck = &observedAt
-	if err := s.registry.Update(&unavailable); err != nil {
+	if err := s.registry.UpdateRuntimeState(&unavailable); err != nil {
 		return nil, tx.abort(ctx, fmt.Errorf("record stopped runtime health: %w", err), false)
 	}
 	// Missing-runtime recovery also captures the existing data before a new
@@ -766,7 +766,7 @@ func (s *tenantRuntimeRolloutService) persistTenantRuntimeState(tenant *registry
 	updated.DesiredImageDigest = info.ImageID
 	updated.LastHealthCheck = &now
 	updated.HealthCheckOK = healthy
-	if err := s.registry.Update(&updated); err != nil {
+	if err := s.registry.UpdateRuntimeState(&updated); err != nil {
 		return fmt.Errorf("update tenant %s runtime registry state: %w", tenant.ID, err)
 	}
 	return nil

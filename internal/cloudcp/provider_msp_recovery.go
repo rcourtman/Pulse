@@ -342,13 +342,15 @@ func markProviderMSPRecoveryTenantActive(reg *registry.TenantRegistry, tenantID 
 	if now.IsZero() {
 		now = time.Now().UTC()
 	}
-	tenant.State = registry.TenantStateActive
-	tenant.HealthCheckOK = true
-	tenant.LastHealthCheck = &now
-	if err := reg.Update(tenant); err != nil {
+	if tenant.State != registry.TenantStateActive && tenant.State != registry.TenantStateProvisioning && tenant.State != registry.TenantStateFailed {
+		return fmt.Errorf("recovered workspace %s authority changed to %s", tenantID, tenant.State)
+	}
+	if err := reg.TransitionTenantState(tenant.ID, tenant.State, registry.TenantStateActive); err != nil {
 		return fmt.Errorf("mark recovered workspace %s active: %w", tenantID, err)
 	}
-	return nil
+	tenant.HealthCheckOK = true
+	tenant.LastHealthCheck = &now
+	return reg.UpdateRuntimeState(tenant)
 }
 
 func dedupeProviderMSPRecoveryTenantIDs(values []string) []string {

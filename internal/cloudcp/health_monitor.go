@@ -143,7 +143,7 @@ func (m *Monitor) checkTenant(ctx context.Context, tenantID string) {
 		m.failures[tenant.ContainerID] = m.failures[tenant.ContainerID] + 1
 	}
 
-	if err := m.registry.Update(tenant); err != nil {
+	if err := m.registry.UpdateRuntimeState(tenant); err != nil {
 		log.Error().
 			Err(err).
 			Str("tenant_id", tenant.ID).

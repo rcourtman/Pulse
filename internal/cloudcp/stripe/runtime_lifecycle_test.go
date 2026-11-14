@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/entitlements"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/lifecycle"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
 )
@@ -47,7 +48,7 @@ func TestMSPBillingLifecycleCannotChangeAuthorityDuringRollout(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer lease.Close()
-			sub := Subscription{ID: "sub_changed", Customer: "cus_runtime", Status: "canceled", Metadata: map[string]string{"plan_version": "msp_max"}}
+			sub := Subscription{ID: "sub_changed", Customer: "cus_runtime", Status: "active", Metadata: map[string]string{"plan_version": "msp_max"}}
 			var changeErr error
 			if action == "update" {
 				changeErr = p.HandleMSPSubscriptionUpdated(context.Background(), sub)
@@ -61,20 +62,44 @@ func TestMSPBillingLifecycleCannotChangeAuthorityDuringRollout(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if account.SubscriptionState != "active" || account.StripeSubscriptionID != "sub_original" || account.PlanVersion != "msp_starter" {
-				t.Fatalf("account authority changed before tenant exclusion: %+v", account)
+			if action == "update" && (account.SubscriptionState != "active" || account.StripeSubscriptionID != "sub_original" || account.PlanVersion != "msp_starter") {
+				t.Fatalf("positive authority changed before tenant exclusion: %+v", account)
+			}
+			if action == "cancel" && (account.SubscriptionState != "canceled" || account.StripeSubscriptionID != "sub_changed") {
+				t.Fatalf("recovery hold blocked cancellation: %+v", account)
 			}
 			for i, tenant := range tenants {
 				current, err := reg.Get(tenant.ID)
 				if err != nil {
 					t.Fatal(err)
 				}
-				if current.State != tenant.State || current.ContainerID != tenant.ContainerID || current.PlanVersion != tenant.PlanVersion {
+				wantState := tenant.State
+				if action == "cancel" {
+					wantState = registry.TenantStateCanceled
+				}
+				if current.State != wantState || current.ContainerID != tenant.ContainerID || current.PlanVersion != tenant.PlanVersion {
 					t.Fatalf("busy billing replaced runtime state: %+v", current)
 				}
 				data, err := os.ReadFile(filepath.Join(dir, tenant.ID, "billing.json"))
-				if err != nil || !bytes.Equal(data, billing[i]) {
+				if err != nil || (action == "update" || i == 1) && !bytes.Equal(data, billing[i]) {
 					t.Fatalf("busy billing rewrote tenant data: %v", err)
+				}
+			}
+			if action == "cancel" {
+				rows, err := reg.ListHostedEntitlements()
+				if err != nil {
+					t.Fatal(err)
+				}
+				if len(rows) != 2 {
+					t.Fatalf("fixture entitlement count %d", len(rows))
+				}
+				for _, row := range rows {
+					if row.RevokedAt == nil {
+						t.Fatal("held client prevented authority revocation")
+					}
+					if _, err := p.hostedEntitlements.RefreshEntitlement(row.RefreshToken, "fixture.invalid"); !errors.Is(err, entitlements.ErrHostedEntitlementInactive) {
+						t.Fatalf("withdrawn authority could refresh: %v", err)
+					}
 				}
 			}
 			// Any earlier admitted tenant is released when a later one is busy.
@@ -131,8 +156,8 @@ func TestCloudBillingAndDeprovisionHonorUnfinishedRuntimeRecovery(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if current.ContainerID != "saved-runtime" || current.State != registry.TenantStateActive {
-		t.Fatalf("saved runtime changed during unfinished recovery: %+v", current)
+	if current.ContainerID != "saved-runtime" || current.State != registry.TenantStateCanceled {
+		t.Fatalf("saved runtime identity lost or withdrawal blocked during unfinished recovery: %+v", current)
 	}
 	got, err := os.ReadFile(billingPath)
 	if err != nil || !bytes.Equal(got, original) {

@@ -875,3 +875,19 @@ func TestTenantRuntimeMatchesContractRequiresTheProviderClientMarker(t *testing.
 		t.Fatal("a marked provider client on the right image matches")
 	}
 }
+
+func (f *fakeTenantRuntimeRolloutRegistry) UpdateRuntimeState(t *registry.Tenant) error {
+	current, err := f.Get(t.ID)
+	if err != nil {
+		return err
+	}
+	if current == nil {
+		return fmt.Errorf("tenant missing")
+	}
+	current.ContainerID = t.ContainerID
+	current.CurrentImageDigest = t.CurrentImageDigest
+	current.DesiredImageDigest = t.DesiredImageDigest
+	current.LastHealthCheck = t.LastHealthCheck
+	current.HealthCheckOK = t.HealthCheckOK
+	return f.Update(current)
+}

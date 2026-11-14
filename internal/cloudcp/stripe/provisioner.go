@@ -3,6 +3,7 @@ package stripe
 import (
 	"context"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -1066,6 +1067,14 @@ func (p *Provisioner) HandleSubscriptionUpdated(ctx context.Context, sub Subscri
 	if customerID == "" {
 		return fmt.Errorf("subscription missing customer")
 	}
+	ctx, authority, err := p.registry.AcquireBillingAuthority(ctx, customerID)
+	if err != nil {
+		return err
+	}
+	defer authority.Close()
+	if state := MapSubscriptionStatus(sub.Status); !ShouldGrantCapabilities(state) {
+		return p.withdrawSubscription(ctx, sub, state)
+	}
 
 	tenant, err := p.registry.GetByStripeCustomerID(customerID)
 	if err != nil {
@@ -1138,55 +1147,66 @@ func (p *Provisioner) HandleSubscriptionUpdated(ctx context.Context, sub Subscri
 
 // HandleSubscriptionDeleted revokes capabilities on cancellation.
 func (p *Provisioner) HandleSubscriptionDeleted(ctx context.Context, sub Subscription) error {
+	sub.Status = "canceled"
+	return p.withdrawSubscription(ctx, sub, pkglicensing.SubStateCanceled)
+}
+
+// Authority withdrawal is independent of the runtime's unfinished-recovery
+// hold. Only the on-disk billing-file update waits; renewal/recovery cannot
+// recreate the withdrawn registry authority while that file remains fenced.
+func (p *Provisioner) withdrawSubscription(ctx context.Context, sub Subscription, state pkglicensing.SubscriptionState) error {
 	customerID := strings.TrimSpace(sub.Customer)
 	if customerID == "" {
 		return fmt.Errorf("subscription missing customer")
 	}
-
-	tenant, err := p.registry.GetByStripeCustomerID(customerID)
-	if err != nil {
-		return fmt.Errorf("lookup tenant by customer: %w", err)
-	}
-	if tenant == nil {
-		log.Warn().Str("customer_id", customerID).Msg("subscription.deleted: tenant not found")
-		return nil
-	}
-	ctx, lease, tenant, err := p.lockTenant(ctx, tenant.ID)
+	ctx, authority, err := p.registry.AcquireBillingAuthority(ctx, customerID)
 	if err != nil {
 		return err
 	}
-	defer lease.Close()
-
-	// Update registry
-	tenant.State = registry.TenantStateCanceled
-	if err := p.registry.Update(tenant); err != nil {
-		return fmt.Errorf("update tenant record: %w", err)
+	defer authority.Close()
+	tenant, err := p.registry.GetByStripeCustomerID(customerID)
+	if err != nil {
+		return err
+	}
+	if tenant == nil {
+		return nil
+	}
+	if err := p.registry.SetTenantState(tenant.ID, withdrawnTenantState(state)); err != nil {
+		return err
 	}
 	if err := p.hostedEntitlements.RevokeTenantEntitlement(tenant.ID, time.Now().UTC()); err != nil {
-		return fmt.Errorf("revoke hosted entitlement for tenant %s: %w", tenant.ID, err)
+		return err
 	}
-	if err := p.writeHostedEntitlementLeaseState(tenant, pkglicensing.SubStateCanceled, tenant.PlanVersion, customerID, strings.TrimSpace(sub.ID), ""); err != nil {
-		return fmt.Errorf("write canceled hosted entitlement state for tenant %s: %w", tenant.ID, err)
-	}
-	if sa, saErr := p.registry.GetStripeAccountByCustomerID(customerID); saErr == nil && sa != nil {
+	if sa, err := p.registry.GetStripeAccountByCustomerID(customerID); err != nil {
+		return err
+	} else if sa != nil {
 		sa.StripeSubscriptionID = strings.TrimSpace(sub.ID)
-		sa.SubscriptionState = "canceled"
+		sa.SubscriptionState = withdrawalAccountState(sub, state)
 		sa.GraceStartedAt = nil
-		if updateErr := p.registry.UpdateStripeAccount(sa); updateErr != nil {
-			log.Warn().
-				Err(updateErr).
-				Str("tenant_id", tenant.ID).
-				Str("customer_id", customerID).
-				Msg("Failed to update stripe account mapping after subscription delete")
+		if err := p.registry.UpdateStripeAccount(sa); err != nil {
+			return err
 		}
 	}
+	ctx, lease, tenant, err := p.lockTenant(ctx, tenant.ID)
+	if err != nil {
+		return fmt.Errorf("authority withdrawn; billing file deferred: %w", err)
+	}
+	defer lease.Close()
+	return p.writeHostedEntitlementLeaseState(tenant, state, tenant.PlanVersion, customerID, strings.TrimSpace(sub.ID), "")
+}
 
-	log.Info().
-		Str("tenant_id", tenant.ID).
-		Str("customer_id", customerID).
-		Msg("Subscription deleted, capabilities revoked")
+func withdrawnTenantState(state pkglicensing.SubscriptionState) registry.TenantState {
+	if state == pkglicensing.SubStateSuspended {
+		return registry.TenantStateSuspended
+	}
+	return registry.TenantStateCanceled
+}
 
-	return nil
+func withdrawalAccountState(sub Subscription, state pkglicensing.SubscriptionState) string {
+	if strings.TrimSpace(sub.Status) != "" {
+		return normalizeStripeAccountSubscriptionState(sub.Status)
+	}
+	return string(state)
 }
 
 // HandleInvoicePaymentFailed transitions subscription state to grace/past_due.
@@ -1208,6 +1228,14 @@ func (p *Provisioner) HandleMSPSubscriptionUpdated(ctx context.Context, sub Subs
 	customerID := strings.TrimSpace(sub.Customer)
 	if customerID == "" {
 		return fmt.Errorf("subscription missing customer")
+	}
+	ctx, authority, err := p.registry.AcquireBillingAuthority(ctx, customerID)
+	if err != nil {
+		return err
+	}
+	defer authority.Close()
+	if state := MapSubscriptionStatus(sub.Status); !ShouldGrantCapabilities(state) {
+		return p.withdrawMSPSubscription(ctx, sub, state)
 	}
 
 	sa, err := p.registry.GetStripeAccountByCustomerID(customerID)
@@ -1291,72 +1319,78 @@ func (p *Provisioner) HandleMSPSubscriptionUpdated(ctx context.Context, sub Subs
 
 // HandleMSPSubscriptionDeleted revokes capabilities for all tenants under an MSP account.
 func (p *Provisioner) HandleMSPSubscriptionDeleted(ctx context.Context, sub Subscription) error {
+	sub.Status = "canceled"
+	return p.withdrawMSPSubscription(ctx, sub, pkglicensing.SubStateCanceled)
+}
+
+func (p *Provisioner) withdrawMSPSubscription(ctx context.Context, sub Subscription, state pkglicensing.SubscriptionState) error {
 	customerID := strings.TrimSpace(sub.Customer)
 	if customerID == "" {
 		return fmt.Errorf("subscription missing customer")
 	}
-
-	sa, err := p.registry.GetStripeAccountByCustomerID(customerID)
-	if err != nil {
-		return fmt.Errorf("lookup stripe account by customer: %w", err)
-	}
-	if sa == nil {
-		log.Warn().Str("customer_id", customerID).Msg("msp subscription.deleted: stripe account mapping not found")
-		return nil
-	}
-
-	account, err := p.registry.GetAccount(sa.AccountID)
-	if err != nil {
-		return fmt.Errorf("lookup account: %w", err)
-	}
-	if account == nil {
-		log.Warn().Str("account_id", sa.AccountID).Msg("msp subscription.deleted: account not found")
-		return nil
-	}
-	if account.Kind != registry.AccountKindMSP {
-		if err := p.HandleSubscriptionDeleted(ctx, sub); err != nil {
-			return fmt.Errorf("handle non-msp subscription deletion: %w", err)
-		}
-		return nil
-	}
-
-	tenants, release, err := p.lockAccountTenants(ctx, sa.AccountID)
+	ctx, authority, err := p.registry.AcquireBillingAuthority(ctx, customerID)
 	if err != nil {
 		return err
 	}
-	defer release()
-
-	// Persist account-level Stripe state.
+	defer authority.Close()
+	sa, err := p.registry.GetStripeAccountByCustomerID(customerID)
+	if err != nil {
+		return err
+	}
+	if sa == nil {
+		return nil
+	}
+	account, err := p.registry.GetAccount(sa.AccountID)
+	if err != nil {
+		return err
+	}
+	if account == nil {
+		return nil
+	}
+	if account.Kind != registry.AccountKindMSP {
+		return p.withdrawSubscription(ctx, sub, state)
+	}
+	tenants, err := p.registry.ListByAccountID(sa.AccountID)
+	if err != nil {
+		return err
+	}
 	sa.StripeSubscriptionID = strings.TrimSpace(sub.ID)
-	sa.SubscriptionState = "canceled"
+	sa.SubscriptionState = withdrawalAccountState(sub, state)
 	sa.GraceStartedAt = nil
 	if err := p.registry.UpdateStripeAccount(sa); err != nil {
-		return fmt.Errorf("update stripe account: %w", err)
+		return err
 	}
-
+	var problems []error
+	// Withdraw every tenant's authority before attempting any runtime lease.
+	// A held client must not prevent the other clients from being revoked.
 	for _, tenant := range tenants {
 		if tenant == nil {
 			continue
 		}
-		tenant.State = registry.TenantStateCanceled
-		if err := p.registry.Update(tenant); err != nil {
-			return fmt.Errorf("update tenant record: %w", err)
+		if err := p.registry.SetTenantState(tenant.ID, withdrawnTenantState(state)); err != nil {
+			problems = append(problems, err)
+			continue
 		}
 		if err := p.hostedEntitlements.RevokeTenantEntitlement(tenant.ID, time.Now().UTC()); err != nil {
-			return fmt.Errorf("revoke hosted entitlement for tenant %s: %w", tenant.ID, err)
-		}
-		if err := p.writeHostedEntitlementLeaseState(tenant, pkglicensing.SubStateCanceled, tenant.PlanVersion, customerID, strings.TrimSpace(sub.ID), ""); err != nil {
-			return fmt.Errorf("write canceled hosted entitlement state for tenant %s: %w", tenant.ID, err)
+			problems = append(problems, err)
 		}
 	}
-
-	log.Info().
-		Str("account_id", sa.AccountID).
-		Str("customer_id", customerID).
-		Int("tenants", len(tenants)).
-		Msg("MSP subscription deleted, capabilities revoked")
-
-	return nil
+	for _, tenant := range tenants {
+		if tenant == nil {
+			continue
+		}
+		if err := func() error {
+			_, lease, current, err := p.lockTenant(ctx, tenant.ID)
+			if err != nil {
+				return fmt.Errorf("authority withdrawn; billing file deferred: %w", err)
+			}
+			defer lease.Close()
+			return p.writeHostedEntitlementLeaseState(current, state, current.PlanVersion, customerID, strings.TrimSpace(sub.ID), "")
+		}(); err != nil {
+			problems = append(problems, err)
+		}
+	}
+	return errors.Join(problems...)
 }
 
 func (p *Provisioner) lockTenant(ctx context.Context, id string) (context.Context, *lifecycle.Lease, *registry.Tenant, error) {

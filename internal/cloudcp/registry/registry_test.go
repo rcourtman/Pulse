@@ -1554,3 +1554,45 @@ func TestStripeEventPrunesExpiredRows(t *testing.T) {
 	assertStripeEventExists("evt_recent_processed", true)
 	assertStripeEventExists("evt_new", true)
 }
+
+// Ordinary application CRUD proof: narrow runtime writes and compare-state
+// transitions must not overwrite a legitimate concurrent withdrawal.
+func TestRuntimeStatePatchPreservesWithdrawnAuthority(t *testing.T) {
+	reg := newTestRegistry(t)
+	tenant := &Tenant{ID: "t-runtime-patch", AccountID: "a-fixture", DisplayName: "Keep name", State: TenantStateActive, PlanVersion: "msp_starter", ContainerID: "old"}
+	if err := reg.Create(tenant); err != nil {
+		t.Fatal(err)
+	}
+	stale := *tenant
+	if err := reg.SetTenantState(tenant.ID, TenantStateCanceled); err != nil {
+		t.Fatal(err)
+	}
+	stale.ContainerID = "new"
+	stale.CurrentImageDigest = "sha256:new"
+	stale.DesiredImageDigest = "sha256:new"
+	stale.HealthCheckOK = true
+	if err := reg.UpdateRuntimeState(&stale); err != nil {
+		t.Fatal(err)
+	}
+	current, err := reg.Get(tenant.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if current.State != TenantStateCanceled || current.ContainerID != "new" || current.AccountID != tenant.AccountID || current.DisplayName != tenant.DisplayName || current.PlanVersion != tenant.PlanVersion {
+		t.Fatalf("runtime patch overwrote authority or metadata: %+v", current)
+	}
+	if err := reg.TransitionTenantState(tenant.ID, TenantStateActive, TenantStateActive); err == nil {
+		t.Fatal("stale recovery reactivated cancellation")
+	}
+	if err := reg.TransitionTenantState(tenant.ID, TenantStateProvisioning, TenantStateFailed); err == nil {
+		t.Fatal("stale provisioning cleanup overwrote cancellation")
+	}
+	if err := reg.UpdateRuntimeState(nil); err == nil {
+		t.Fatal("nil runtime accepted")
+	}
+	missing := stale
+	missing.ID = "t-absent"
+	if err := reg.UpdateRuntimeState(&missing); err == nil {
+		t.Fatal("missing runtime silently accepted")
+	}
+}

@@ -114,7 +114,7 @@ func (s *StuckProvisioningCleanup) cleanupTenant(ctx context.Context, tenantID s
 		Msg("Tenant stuck in provisioning state, transitioning to failed")
 
 	tenant.State = registry.TenantStateFailed
-	if err := s.registry.Update(tenant); err != nil {
+	if err := s.registry.TransitionTenantState(tenant.ID, registry.TenantStateProvisioning, registry.TenantStateFailed); err != nil {
 		log.Error().Err(err).Str("tenant_id", tenant.ID).Msg("Stuck provisioning cleanup: failed to update tenant")
 	}
 }

@@ -129,7 +129,14 @@ func (t *tenantRuntimeTransaction) resumePrevious(ctx context.Context) error {
 		updated.HealthCheckOK = false
 		now := t.service.now()
 		updated.LastHealthCheck = &now
-		return t.service.registry.Update(&updated)
+		return t.service.registry.UpdateRuntimeState(&updated)
+	}
+	current, err := t.service.registry.Get(t.tenant.ID)
+	if err != nil {
+		return err
+	}
+	if current == nil || (current.State != registry.TenantStateActive && current.State != registry.TenantStateProvisioning && current.State != registry.TenantStateFailed) {
+		return fmt.Errorf("tenant authority changed during recovery; previous runtime remains stopped")
 	}
 	d := t.service.docker
 	info, err := d.Inspect(ctx, t.previous.ID)

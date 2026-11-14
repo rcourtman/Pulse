@@ -565,3 +565,54 @@ func TestFilesystemTenantRuntimeRestoreRetainsBothCompleteTreesOnTransitionFailu
 		})
 	}
 }
+
+func (r *transactionRegistry) UpdateRuntimeState(t *registry.Tenant) error {
+	current, err := r.Get(t.ID)
+	if err != nil {
+		return err
+	}
+	if current == nil {
+		return fmt.Errorf("tenant missing")
+	}
+	current.ContainerID = t.ContainerID
+	current.CurrentImageDigest = t.CurrentImageDigest
+	current.DesiredImageDigest = t.DesiredImageDigest
+	current.LastHealthCheck = t.LastHealthCheck
+	current.HealthCheckOK = t.HealthCheckOK
+	return r.Update(current)
+}
+
+func TestTenantRuntimeTransactionPreservesConcurrentWithdrawal(t *testing.T) {
+	for _, healthy := range []bool{false, true} {
+		t.Run(fmt.Sprint(healthy), func(t *testing.T) {
+			f := newRuntimeTransactionFixture(t, false)
+			f.docker.afterCreate = func() { f.reg.tenant.State = registry.TenantStateCanceled }
+			if !healthy {
+				f.docker.faults["health:new"] = errors.New("new health failed")
+			}
+			_, err := f.rollout(context.Background(), false)
+			if f.reg.tenant.State != registry.TenantStateCanceled {
+				t.Fatal("runtime persistence recreated withdrawn lifecycle state")
+			}
+			if !healthy {
+				if err == nil {
+					t.Fatal("expected held recovery")
+				}
+				f.assertHold(true)
+				if f.docker.byID["old"].Running {
+					t.Fatal("rollback reopened old state after authority withdrawal")
+				}
+				for _, event := range f.events {
+					if event == "start:old" {
+						t.Fatal("withdrawn old state started")
+					}
+				}
+			} else {
+				if err != nil {
+					t.Fatal(err)
+				}
+				f.assertHold(false)
+			}
+		})
+	}
+}
