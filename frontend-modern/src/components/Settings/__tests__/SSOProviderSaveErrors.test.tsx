@@ -139,6 +139,16 @@ describe.each(['oidc', 'saml'] as const)('SSO %s save error recovery', (type) =>
       fireEvent.click(opener);
       const dialogElement = await screen.findByRole('dialog');
       const dialog = within(dialogElement);
+      // Query just the named native control, then check its name and visibility.
+      // Avoid computing accessibility for every other button in this large form.
+      const button = (label: string) => {
+        const control = dialog.getByText(label, { selector: 'button', exact: true });
+        expect(control).toHaveAccessibleName(label);
+        expect(control).toBeVisible();
+        expect(control.closest('[inert], [aria-hidden="true"]')).toBeNull();
+        expect(control.getAttribute('role')).toBeNull();
+        return control;
+      };
       const name = dialog.getByLabelText('Provider Name') as HTMLInputElement;
       fireEvent.input(name, { target: { value: 'Retained draft' } });
       if (!editing) {
@@ -156,9 +166,7 @@ describe.each(['oidc', 'saml'] as const)('SSO %s save error recovery', (type) =>
           });
         }
       }
-      const save = dialog.getByRole('button', {
-        name: editing ? 'Save Changes' : 'Create Provider',
-      });
+      const save = button(editing ? 'Save Changes' : 'Create Provider');
       const form = save.closest('form')!;
       fireEvent.submit(form);
       const alert = await dialog.findByRole('alert');
@@ -168,7 +176,7 @@ describe.each(['oidc', 'saml'] as const)('SSO %s save error recovery', (type) =>
       expect(name.value).toBe('Retained draft');
       if (unconfirmed) expect(save).not.toBeInTheDocument();
       else expect(save).toBeEnabled();
-      expect(dialog.getByRole('button', { name: 'Cancel' })).toBeEnabled();
+      expect(button('Cancel')).toBeEnabled();
       expect(successMock).not.toHaveBeenCalled();
       const writes = () =>
         fetchMock.mock.calls.filter(([, options]) => ['POST', 'PUT'].includes(options?.method));
@@ -180,7 +188,7 @@ describe.each(['oidc', 'saml'] as const)('SSO %s save error recovery', (type) =>
       if (unconfirmed) {
         fireEvent.submit(form);
         expect(writes()).toHaveLength(1);
-        fireEvent.click(dialog.getByRole('button', { name: 'Close draft and check providers' }));
+        fireEvent.click(button('Close draft and check providers'));
         await waitFor(() => expect(dialogElement).not.toBeInTheDocument());
         expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
         await waitFor(() => {
