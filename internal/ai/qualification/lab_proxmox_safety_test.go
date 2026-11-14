@@ -85,6 +85,11 @@ func TestProxmoxSafetyPreparePreservesAndInventoriesCustomStorage(t *testing.T) 
 	if len(prepared.PreInventory.Volumes) != len(node.dump) {
 		t.Fatalf("inventory omitted ordinary/custom backup entries: %+v", prepared.PreInventory)
 	}
+	var driver Lab = lab
+	observed, err := driver.runInventory(context.Background(), prepared)
+	if err != nil || !inventoryEqual(observed, prepared.PreInventory) {
+		t.Fatalf("runner safety oracle did not observe prepared storage: %+v %v", observed, err)
+	}
 	if result := lab.Cleanup(context.Background(), manifest, prepared); !result.Passed {
 		t.Fatalf("unchanged custom storage did not verify: %+v", result)
 	}

@@ -344,7 +344,7 @@ func (l *ProxmoxLab) Prepare(ctx context.Context, manifest Manifest, runID strin
 	}
 	// Preparation is read-only. Neither a filename pattern nor a fixture
 	// marker proves ownership of preexisting bytes or a stopped guest.
-	pre, err := l.inventory(ctx, lab)
+	pre, err := l.runInventory(ctx, lab)
 	if err != nil {
 		return lab, fmt.Errorf("capture pre-lab inventory: %w", err)
 	}
@@ -819,7 +819,7 @@ func (l *ProxmoxLab) waitPredicate(ctx context.Context, manifest Manifest, lab *
 func (l *ProxmoxLab) probe(ctx context.Context, manifest Manifest, lab *PreparedLab, predicate Predicate) (any, error) {
 	switch predicate.Probe {
 	case "inventory.same_as_pre":
-		inventory, err := l.inventory(ctx, lab)
+		inventory, err := l.runInventory(ctx, lab)
 		return inventoryEqual(inventory, lab.PreInventory), err
 	case pveProbeGuestStatus:
 		spec, err := pveGuestSpec(manifest, predicate.Target)
@@ -843,10 +843,10 @@ func (l *ProxmoxLab) probe(ctx context.Context, manifest Manifest, lab *Prepared
 	return nil, fmt.Errorf("the proxmox driver has no probe %q", predicate.Probe)
 }
 
-// inventory observes all entries (not just driver-shaped backup names) in
+// runInventory observes all entries (not just driver-shaped backup names) in
 // each declared directory storage, including custom paths and logs. It is
 // metadata evidence, not a content-integrity check of arbitrary backups.
-func (l *ProxmoxLab) inventory(ctx context.Context, lab *PreparedLab) (DockerInventory, error) {
+func (l *ProxmoxLab) runInventory(ctx context.Context, lab *PreparedLab) (DockerInventory, error) {
 	result, err := l.node(ctx, "pct list")
 	if err != nil {
 		return DockerInventory{}, err
@@ -933,7 +933,7 @@ func (l *ProxmoxLab) Cleanup(ctx context.Context, manifest Manifest, lab *Prepar
 	}
 	cleanup()
 	secondNoop := cleanup() == 0
-	post, err := l.inventory(ctx, lab)
+	post, err := l.runInventory(ctx, lab)
 	if err != nil {
 		errs = append(errs, err.Error())
 	}
