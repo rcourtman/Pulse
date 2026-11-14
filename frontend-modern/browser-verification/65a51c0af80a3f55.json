@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "4d0634e85492b673b08d9ea89fef787df283c089",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/AuditLogPanel.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/AuditLogPanel.tsx": "1f8353d889de398966334b9541f3bac0cabeba5a2c0449f99ed5de39dec20e7c"
+  },
+  "routes": [
+    "Settings > Security > Audit Log (real AuditLogPanel, useAuditLogPanelState, router, licence store, apiClient and shipped CSS; offline synthetic GET responses)"
+  ],
+  "states": [
+    "Three saved events, two signed login rows with the same user/event/timestamp but different opaque IDs; unsigned event remains distinct.",
+    "Closed page, requested legend, requested limit help, selected-event verification and withdrawn audit reader.",
+    "Desktop Chromium 1365x900 and narrow touch WebKit 390x844, light/dark, en-GB/UTC; matching fixture, viewport, theme and interaction anchors before/after."
+  ],
+  "interactions": [
+    "Native Tab/Shift+Tab reach both help triggers; Enter/Space activate, named dialogs receive focus, Escape/Close restore focus; pointer click/tap opens explanations with viewport-contained dialog and 44px narrow targets.",
+    "Accessible action names distinguish exact saved event IDs. Keyboard activation sends one GET to the complete encoded selected ID with the saved organisation; other signed event stays unchecked.",
+    "Help sends no verification request. All transport remains GET; loss of reader withdraws inventory and help."
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "verified_at": "2026-11-14T21:21:58Z",
+  "playwright": "1.56.1",
+  "browsers": [
+    "141.0.7390.37",
+    "26.0"
+  ],
+  "themes": [
+    "light",
+    "dark"
+  ],
+  "assertions": 132,
+  "baseline_assertions": 76,
+  "captures": "48 individually opened original PNGs /24 comparable before-after pairs. Closed and full-page desktop frames duplicate because the page fits; baseline phone tap-help frames match closed because no help opened. PAIRS.json, CAPTURES.md and PIXEL-OBSERVATIONS.md in the lane dossier.",
+  "proof": "source-hng7_cc6 baseline and source-x6jxi55s formatted exact-file overlay on this parent. Runtime SHA256 matches the served overlay. Lane RECEIPTS.md retains native source/browser records and containing-source validation.",
+  "limits": [
+    "Synthetic read-only transport, not a full authenticated App, live IdP, original client recovery or published release. No screen-reader speech test.",
+    "Pre-existing narrow table horizontal scroll remains (434.9375px table in the narrow container); no table content, column or verification control is removed by this repair.",
+    "A prior guest-readiness timeout (source-xg85emeb) is retained, not turned into a passing test."
+  ]
+}
