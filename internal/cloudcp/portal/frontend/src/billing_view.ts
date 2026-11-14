@@ -215,7 +215,7 @@ export function renderButton(id: string | undefined, disabled: boolean, label: s
   var button = getElement<HTMLButtonElement>(id);
   if (!button) return;
   button.disabled = disabled;
-  button.textContent = label;
+  if (button.textContent !== label) button.textContent = label;
 }
 
 export function renderOpenBillingPanels(openBillingPanelID: string): void {
@@ -303,9 +303,10 @@ export function renderManagePanel(flowState: VerificationFlowState): void {
         '<button class="btn-primary" type="button" id="manage-inline-request" data-account-billing-action="manage-inline-request">Send Verification Code</button>' +
       '</div>' +
     '</div>' +
+    '<div class="billing-status" id="manage-inline-status"></div>' +
     '<div id="manage-inline-step2"' + (flowState.step2Visible ? '' : ' hidden') + '>' +
       '<div class="form-group">' +
-        '<label for="manage-inline-code">Verification code</label>' +
+        '<label for="manage-inline-code">Latest code · this action only</label>' +
         '<input type="text" id="manage-inline-code" value="' + escapeAttribute(flowState.codeValue || '') + '" inputmode="numeric" pattern="[0-9]{6}" placeholder="123456" data-account-billing-input="manage-code">' +
       '</div>' +
       '<div class="form-actions">' +
@@ -313,7 +314,7 @@ export function renderManagePanel(flowState: VerificationFlowState): void {
       '</div>' +
       '<div class="helper-text">Need a new code? <a href="#" id="manage-inline-resend" data-account-billing-action="manage-inline-resend">Send again</a></div>' +
     '</div>' +
-    '<div class="billing-status" id="manage-inline-status"></div>';
+    '<div class="verification-send-announcement" id="manage-inline-status-send-note" role="status" hidden></div>';
 }
 
 export function renderRetrievePanel(flowState: VerificationFlowState): void {
@@ -339,9 +340,10 @@ export function renderRetrievePanel(flowState: VerificationFlowState): void {
         '<button class="btn-primary" type="button" id="retrieve-inline-request" data-account-billing-action="retrieve-inline-request">Send Verification Code</button>' +
       '</div>' +
     '</div>' +
+    '<div class="billing-status" id="retrieve-inline-status"></div>' +
     '<div id="retrieve-inline-step2"' + (flowState.step2Visible ? '' : ' hidden') + '>' +
       '<div class="form-group">' +
-        '<label for="retrieve-inline-code">Verification code</label>' +
+        '<label for="retrieve-inline-code">Latest code · this action only</label>' +
         '<input type="text" id="retrieve-inline-code" value="' + escapeAttribute(flowState.codeValue || '') + '" inputmode="numeric" pattern="[0-9]{6}" placeholder="123456" data-account-billing-input="retrieve-code">' +
       '</div>' +
       '<div class="form-actions">' +
@@ -351,7 +353,7 @@ export function renderRetrievePanel(flowState: VerificationFlowState): void {
       '</div>' +
       '<div class="helper-text">Use the latest active self-hosted license for this commercial email.</div>' +
     '</div>' +
-    '<div class="billing-status" id="retrieve-inline-status"></div>' +
+    '<div class="verification-send-announcement" id="retrieve-inline-status-send-note" role="status" hidden></div>' +
     '<div id="retrieve-inline-result" class="billing-result"' + (result ? '' : ' hidden') + '>' +
       '<label for="retrieve-inline-token">License key</label>' +
       '<textarea id="retrieve-inline-token" readonly>' + escapeText(result ? result.token : '') + '</textarea>' +
@@ -378,9 +380,10 @@ export function renderExportPanel(flowState: VerificationFlowState): void {
         '<button class="btn-primary" type="button" id="data-export-request" data-account-billing-action="data-export-request">Send Verification Code</button>' +
       '</div>' +
     '</div>' +
+    '<div class="billing-status" id="data-export-status"></div>' +
     '<div id="data-export-step2"' + (flowState.step2Visible ? '' : ' hidden') + '>' +
       '<div class="form-group">' +
-        '<label for="data-export-code">Verification code</label>' +
+        '<label for="data-export-code">Latest code · this action only</label>' +
         '<input type="text" id="data-export-code" value="' + escapeAttribute(flowState.codeValue || '') + '" inputmode="numeric" pattern="[0-9]{6}" placeholder="123456" data-account-billing-input="data-export-code">' +
       '</div>' +
       '<div class="form-actions">' +
@@ -388,7 +391,7 @@ export function renderExportPanel(flowState: VerificationFlowState): void {
       '</div>' +
       '<div class="helper-text">Need a new code? <a href="#" id="data-export-resend" data-account-billing-action="data-export-resend">Send again</a></div>' +
     '</div>' +
-    '<div class="billing-status" id="data-export-status"></div>' +
+    '<div class="verification-send-announcement" id="data-export-status-send-note" role="status" hidden></div>' +
     '<div id="data-export-result" class="billing-result"' + (flowState.result ? '' : ' hidden') + '>' +
       '<label for="data-export-payload">Export payload</label>' +
       '<textarea id="data-export-payload" readonly>' + escapeText(flowState.result ? JSON.stringify(flowState.result, null, 2) : '') + '</textarea>' +
@@ -415,9 +418,10 @@ export function renderDeletePanel(flowState: VerificationFlowState): void {
         '<button class="btn-danger" type="button" id="data-delete-request" data-account-billing-action="data-delete-request">Send Verification Code</button>' +
       '</div>' +
     '</div>' +
+    '<div class="billing-status" id="data-delete-status"></div>' +
     '<div id="data-delete-step2"' + (flowState.step2Visible ? '' : ' hidden') + '>' +
       '<div class="form-group">' +
-        '<label for="data-delete-code">Verification code</label>' +
+        '<label for="data-delete-code">Latest code · this action only</label>' +
         '<input type="text" id="data-delete-code" value="' + escapeAttribute(flowState.codeValue || '') + '" inputmode="numeric" pattern="[0-9]{6}" placeholder="123456" data-account-billing-input="data-delete-code">' +
       '</div>' +
       '<div class="checkbox-row">' +
@@ -429,5 +433,5 @@ export function renderDeletePanel(flowState: VerificationFlowState): void {
       '</div>' +
       '<div class="helper-text">Need a new code? <a href="#" id="data-delete-resend" data-account-billing-action="data-delete-resend">Send again</a></div>' +
     '</div>' +
-    '<div class="billing-status" id="data-delete-status"></div>';
+    '<div class="verification-send-announcement" id="data-delete-status-send-note" role="status" hidden></div>';
 }

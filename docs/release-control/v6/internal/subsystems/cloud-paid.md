@@ -15,6 +15,41 @@
 
 ## Purpose
 
+### Commercial verification requests share a page-local mailbox window
+
+The existing Pulse Account manage, licence-retrieval, export and deletion
+actions coordinate deliberate code requests and resends against one in-memory
+mailbox window. Pending requests exclude another send or confirmation for the
+same mailbox; successful or uncertain replies start a conservative one-minute
+wait from settlement. Observed definite 400/429/500 rejections leave deliberate
+retry available. The request and resend controls explain the shared wait.
+Timer ticks update those controls, not the form, focus, code draft or consent.
+Expiry never sends a request.
+
+A generic reply is not mail-delivery, new-challenge or account-existence
+evidence. The UI uses conditional eligibility/latest-action-code wording;
+uncertain transport outcomes retain an honestly marked code-entry path, not
+an automatic resend. Codes remain purpose-specific. Local suppression retains
+an earlier same-action code and consent; an actual new send clears both because
+a new challenge can replace the old one. Authentication, server budgets,
+purpose/expiry/attempt checks and generic anti-enumeration replies are unchanged.
+
+Mailbox keys trim Unicode whitespace and fold only ASCII letters, preserving
+Unicode lookalikes, dots and plus-address distinctions. Corrected mailboxes
+remain independent. Editing a mailbox invalidates that flow's old target,
+code, result and destructive consent; stale replies cannot restore them.
+Confirmation holds the displayed mailbox fixed while pending. A page departure
+or bootstrap identity/API change retires the local windows and private
+verification flows, with late-response fencing and no browser storage,
+cross-tab coordination or claim of server-side cancellation.
+
+Registered verification-send and billing runtime tests cover the shared
+window, action pairs, uncertainty, explicit retry, pending serialization,
+displayed-target binding, code/consent preservation and retirement.
+Containing browser proof must exercise the actual embedded portal at desktop
+and narrow viewports; component or build success alone is not rendered,
+installed, mail-provider or original-client recovery.
+
 ### Email sign-in supports native keyboard submission
 
 The existing Pulse Account email sign-in form accepts Enter and pointer
