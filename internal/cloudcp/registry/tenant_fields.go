@@ -70,7 +70,7 @@ func (r *TenantRegistry) mutateAccountTenant(ctx context.Context, accountID, ten
 // PatchTenantForAccount changes only account-editable fields. The entire patch
 // is rejected if its state transition is no longer valid; a rename alone can
 // never rewrite billing, health, runtime identity or a concurrent withdrawal.
-func (r *TenantRegistry) PatchTenantForAccount(ctx context.Context, accountID, tenantID string, displayName *string, state *TenantState) (*Tenant, *Tenant, error) {
+func (r *TenantRegistry) PatchTenantForAccount(ctx context.Context, accountID, tenantID string, displayName *string, state *TenantState, localMSPBilling ...bool) (*Tenant, *Tenant, error) {
 	return r.mutateAccountTenant(ctx, accountID, tenantID, func(conn *sql.Conn, current *Tenant) error {
 		if IsTenantDeletionState(current.State) {
 			return ErrTenantStateConflict
@@ -96,7 +96,7 @@ func (r *TenantRegistry) PatchTenantForAccount(ctx context.Context, accountID, t
 				if !current.ManualHold {
 					return ErrTenantStateConflict
 				}
-				allowed, err := canResumeAccountTenant(ctx, conn, current)
+				allowed, err := canResumeAccountTenant(ctx, conn, current, len(localMSPBilling) > 0 && localMSPBilling[0])
 				if err != nil {
 					return err
 				}
@@ -110,11 +110,14 @@ func (r *TenantRegistry) PatchTenantForAccount(ctx context.Context, accountID, t
 	})
 }
 
-func canResumeAccountTenant(ctx context.Context, conn *sql.Conn, tenant *Tenant) (bool, error) {
+func canResumeAccountTenant(ctx context.Context, conn *sql.Conn, tenant *Tenant, localMSPBilling bool) (bool, error) {
 	var customer, storedState string
 	err := conn.QueryRowContext(ctx, `SELECT stripe_customer_id, subscription_state FROM stripe_accounts WHERE account_id = ?`, tenant.AccountID).Scan(&customer, &storedState)
 	if errors.Is(err, sql.ErrNoRows) {
-		// Provider-hosted MSP clients have no Stripe identity. Missing billing for
+		if !localMSPBilling {
+			return false, nil
+		}
+		// Configured MSP control planes have no Stripe identity. Missing billing for
 		// a billed tenant is unknown authority, not permission to resume it.
 		if tenant.StripeCustomerID != "" || tenant.StripeSubscriptionID != "" || tenant.StripePriceID != "" {
 			return false, nil

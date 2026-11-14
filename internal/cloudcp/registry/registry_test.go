@@ -1656,6 +1656,7 @@ func TestTenantManualHoldResumeUsesCurrentBillingAndKnownCause(t *testing.T) {
 		allowed         bool
 	}{
 		{"local_provider", AccountKindMSP, "", "", "", true, true},
+		{"unconfigured_msp_missing", AccountKindMSP, "", "", "", true, false},
 		{"individual_missing", AccountKindIndividual, "", "", "", true, false},
 		{"billed_missing", AccountKindMSP, "cus_missing", "", "", true, false},
 		{"mismatched_customer", AccountKindMSP, "cus_wrong", "cus_current", "active", true, false},
@@ -1682,7 +1683,7 @@ func TestTenantManualHoldResumeUsesCurrentBillingAndKnownCause(t *testing.T) {
 				t.Fatal(err)
 			}
 			active := TenantStateActive
-			_, current, err := reg.PatchTenantForAccount(context.Background(), tenant.AccountID, tenant.ID, nil, &active)
+			_, current, err := reg.PatchTenantForAccount(context.Background(), tenant.AccountID, tenant.ID, nil, &active, tc.name != "unconfigured_msp_missing")
 			if tc.allowed {
 				if err != nil || current.State != TenantStateActive || current.ManualHold {
 					t.Fatalf("manual resume failed: %+v %v", current, err)
@@ -1771,5 +1772,31 @@ func TestTenantBillingGrantUsesCurrentHoldAndFieldOwnership(t *testing.T) {
 	current, applied, err := reg.ApplyTenantBillingGrant(context.Background(), old.AccountID, old.ID, "sub_new", "price_new", "msp_max")
 	if err != nil || !applied || current.State != TenantStateSuspended || !current.ManualHold || current.DisplayName != "Latest" || current.ContainerID != "runtime" || current.CurrentImageDigest != "image" || current.PlanVersion != "msp_max" {
 		t.Fatalf("stale billing grant replaced held/current fields: %+v %v %v", current, applied, err)
+	}
+}
+
+func TestTenantManualResumeRefusesEmptyStoredBilling(t *testing.T) {
+	reg := newTestRegistry(t)
+	if err := reg.CreateAccount(&Account{ID: "a-empty", Kind: AccountKindMSP}); err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateStripeAccount(&StripeAccount{AccountID: "a-empty", StripeCustomerID: "cus_empty", SubscriptionState: "active"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.Create(&Tenant{ID: "t-empty", AccountID: "a-empty", State: TenantStateSuspended, ManualHold: true}); err != nil {
+		t.Fatal(err)
+	}
+	// Constructors intentionally default a new empty state to trial. This is
+	// an actually empty legacy saved value, not construction of a new trial.
+	if _, err := reg.db.Exec(`UPDATE stripe_accounts SET subscription_state = '' WHERE account_id = ?`, "a-empty"); err != nil {
+		t.Fatal(err)
+	}
+	active := TenantStateActive
+	if _, _, err := reg.PatchTenantForAccount(context.Background(), "a-empty", "t-empty", nil, &active); !errors.Is(err, ErrTenantStateConflict) {
+		t.Fatalf("empty saved billing recreated authority: %v", err)
+	}
+	row, _ := reg.Get("t-empty")
+	if row.State != TenantStateSuspended || !row.ManualHold {
+		t.Fatalf("empty billing changed hold: %+v", row)
 	}
 }

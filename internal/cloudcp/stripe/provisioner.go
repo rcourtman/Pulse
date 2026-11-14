@@ -1441,9 +1441,11 @@ func (p *Provisioner) lockAccountTenants(ctx context.Context, accountID string) 
 
 // ResumeWorkspaceBilling completes an explicit manual resume with the same
 // current billing authority as refresh. The account handler holds both leases
-// through its field patch and this local file/token reconciliation. It performs
+// through its field patch and this local file/token reconciliation. The local
+// billing policy is the same server-owned configuration passed to the registry,
+// never a request field or an inference from missing billing. It performs
 // no external call and cannot restore a nonpayable or terminal tenant.
-func (p *Provisioner) ResumeWorkspaceBilling(ctx context.Context, tenant *registry.Tenant) error {
+func (p *Provisioner) ResumeWorkspaceBilling(ctx context.Context, tenant *registry.Tenant, localMSPBilling bool) error {
 	if p == nil || tenant == nil {
 		return fmt.Errorf("workspace billing is unavailable")
 	}
@@ -1466,6 +1468,9 @@ func (p *Provisioner) ResumeWorkspaceBilling(ctx context.Context, tenant *regist
 		customer, subscription = sa.StripeCustomerID, sa.StripeSubscriptionID
 	}
 	if sa == nil {
+		if !localMSPBilling {
+			return fmt.Errorf("workspace billing authority is unavailable")
+		}
 		account, err := p.registry.GetAccount(current.AccountID)
 		if err != nil {
 			return err

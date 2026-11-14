@@ -372,12 +372,22 @@ func parseTenantState(s string) (registry.TenantState, bool) {
 // WorkspaceBillingReconciler finishes an existing manual resume without an
 // external billing request. It is provided by the control-plane provisioner.
 type WorkspaceBillingReconciler interface {
-	ResumeWorkspaceBilling(context.Context, *registry.Tenant) error
+	ResumeWorkspaceBilling(context.Context, *registry.Tenant, bool) error
 }
 
-// HandleUpdateTenant updates display name and/or state.
-// Route: PATCH /api/accounts/{account_id}/tenants/{tenant_id}
+// TenantMutationPolicy comes only from control-plane configuration. Missing
+// billing data is not evidence that a Stripe-hosted account is locally billed.
+type TenantMutationPolicy struct{ LocalMSPBilling bool }
+
+// HandleUpdateTenant defaults to Stripe-backed authority. Only configured MSP
+// control planes may opt into the existing no-Stripe local billing path.
 func HandleUpdateTenant(reg *registry.TenantRegistry, billing ...WorkspaceBillingReconciler) http.HandlerFunc {
+	return HandleUpdateTenantWithPolicy(reg, TenantMutationPolicy{}, billing...)
+}
+
+// HandleUpdateTenantWithPolicy updates display name and/or state.
+// Route: PATCH /api/accounts/{account_id}/tenants/{tenant_id}
+func HandleUpdateTenantWithPolicy(reg *registry.TenantRegistry, policy TenantMutationPolicy, billing ...WorkspaceBillingReconciler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPatch {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -484,7 +494,7 @@ func HandleUpdateTenant(reg *registry.TenantRegistry, billing ...WorkspaceBillin
 		}
 		defer lease.Close()
 		r = r.WithContext(ctx)
-		previous, tenant, err := reg.PatchTenantForAccount(ctx, accountID, tenantID, req.DisplayName, next)
+		previous, tenant, err := reg.PatchTenantForAccount(ctx, accountID, tenantID, req.DisplayName, next, policy.LocalMSPBilling)
 		if err != nil {
 			status, message, reason := http.StatusInternalServerError, "internal error", "tenant_update_failed"
 			if errors.Is(err, registry.ErrTenantNotFound) {
@@ -502,7 +512,7 @@ func HandleUpdateTenant(reg *registry.TenantRegistry, billing ...WorkspaceBillin
 			if len(billing) == 0 || billing[0] == nil {
 				resumeErr = fmt.Errorf("workspace billing is unavailable")
 			} else {
-				resumeErr = billing[0].ResumeWorkspaceBilling(ctx, tenant)
+				resumeErr = billing[0].ResumeWorkspaceBilling(ctx, tenant, policy.LocalMSPBilling)
 			}
 			if resumeErr != nil {
 				// Never roll back a newer withdrawal. A field-scoped re-hold only applies

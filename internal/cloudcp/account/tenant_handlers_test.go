@@ -63,7 +63,7 @@ func newTestTenantMuxWithWorkspaceLimitPolicy(t *testing.T, reg *registry.Tenant
 
 	listTenants := HandleListTenants(reg)
 	createTenant := HandleCreateTenantWithWorkspaceLimitPolicy(reg, provisioner, policy)
-	updateTenant := HandleUpdateTenant(reg, provisioner)
+	updateTenant := HandleUpdateTenantWithPolicy(reg, TenantMutationPolicy{LocalMSPBilling: policy.ProviderHostedMSP}, provisioner)
 	deleteTenant := HandleDeleteTenant(reg, provisioner)
 
 	collection := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -848,7 +848,7 @@ func TestWorkspacePatchPreservesWithdrawalDuringBodyRead(t *testing.T) {
 				}
 			}}
 			res := httptest.NewRecorder()
-			HandleUpdateTenant(reg, tenantBillingFunc(func(context.Context, *registry.Tenant) error { return nil }))(res, req)
+			HandleUpdateTenant(reg, tenantBillingFunc(func(context.Context, *registry.Tenant, bool) error { return nil }))(res, req)
 			if res.Code != tc.status {
 				t.Fatalf("PATCH = %d %s, want %d", res.Code, res.Body.String(), tc.status)
 			}
@@ -930,7 +930,7 @@ func TestWorkspacePatchDoesNotHoldRuntimeWhileReadingBody(t *testing.T) {
 				}
 			}}
 			res := httptest.NewRecorder()
-			HandleUpdateTenant(reg, tenantBillingFunc(func(context.Context, *registry.Tenant) error { return nil }))(res, req)
+			HandleUpdateTenant(reg, tenantBillingFunc(func(context.Context, *registry.Tenant, bool) error { return nil }))(res, req)
 			want := http.StatusConflict
 			if action == "move_account" {
 				want = http.StatusNotFound
@@ -972,7 +972,7 @@ func TestWorkspacePatchStateAndResumePolicy(t *testing.T) {
 				req.SetPathValue("account_id", tenant.AccountID)
 				req.SetPathValue("tenant_id", tenant.ID)
 				res := httptest.NewRecorder()
-				HandleUpdateTenant(reg, tenantBillingFunc(func(context.Context, *registry.Tenant) error { return nil }))(res, req)
+				HandleUpdateTenant(reg, tenantBillingFunc(func(context.Context, *registry.Tenant, bool) error { return nil }))(res, req)
 				allowed := initial == registry.TenantStateActive || initial == registry.TenantStateSuspended
 				want := http.StatusConflict
 				if allowed {
@@ -1005,7 +1005,7 @@ func TestWorkspacePatchStateAndResumePolicy(t *testing.T) {
 			})
 		}
 	}
-	for _, stored := range []string{"active", "trial", "past_due", "grace", "canceled", "suspended", "expired", "paused", "unknown", ""} {
+	for _, stored := range []string{"active", "trial", "past_due", "grace", "canceled", "suspended", "expired", "paused", "unknown"} {
 		t.Run("billing_"+stored, func(t *testing.T) {
 			reg := newTestRegistry(t)
 			if err := reg.CreateAccount(&registry.Account{ID: "a-policy", Kind: registry.AccountKindMSP}); err != nil {
@@ -1022,7 +1022,7 @@ func TestWorkspacePatchStateAndResumePolicy(t *testing.T) {
 			req.SetPathValue("account_id", tenant.AccountID)
 			req.SetPathValue("tenant_id", tenant.ID)
 			res := httptest.NewRecorder()
-			HandleUpdateTenant(reg, tenantBillingFunc(func(context.Context, *registry.Tenant) error { return nil }))(res, req)
+			HandleUpdateTenant(reg, tenantBillingFunc(func(context.Context, *registry.Tenant, bool) error { return nil }))(res, req)
 			allowed := stored == "active" || stored == "trial" || stored == "past_due" || stored == "grace"
 			want := http.StatusConflict
 			if allowed {
@@ -1114,10 +1114,10 @@ func TestWorkspaceDeletePreservesLatestMetadataAndIsIdempotent(t *testing.T) {
 
 }
 
-type tenantBillingFunc func(context.Context, *registry.Tenant) error
+type tenantBillingFunc func(context.Context, *registry.Tenant, bool) error
 
-func (f tenantBillingFunc) ResumeWorkspaceBilling(ctx context.Context, tenant *registry.Tenant) error {
-	return f(ctx, tenant)
+func (f tenantBillingFunc) ResumeWorkspaceBilling(ctx context.Context, tenant *registry.Tenant, localMSPBilling bool) error {
+	return f(ctx, tenant, localMSPBilling)
 }
 
 func TestWorkspaceManualResumeReconcilesRevokedBilling(t *testing.T) {
@@ -1188,11 +1188,12 @@ func TestWorkspaceResumeFailureKeepsHoldAndDoesNotReportSuccess(t *testing.T) {
 			if err := reg.CreateAccount(&registry.Account{ID: "a-resume-fail", Kind: registry.AccountKindMSP}); err != nil {
 				t.Fatal(err)
 			}
+			createTestStripeAccount(t, reg, "a-resume-fail", "msp_starter")
 			tenant := &registry.Tenant{ID: "t-resume-fail", AccountID: "a-resume-fail", State: registry.TenantStateSuspended, ManualHold: true}
 			if err := reg.Create(tenant); err != nil {
 				t.Fatal(err)
 			}
-			reconciler := tenantBillingFunc(func(context.Context, *registry.Tenant) error {
+			reconciler := tenantBillingFunc(func(context.Context, *registry.Tenant, bool) error {
 				if withdraw {
 					return errors.Join(reg.SetTenantState(tenant.ID, registry.TenantStateCanceled), fmt.Errorf("billing write failed"))
 				}
