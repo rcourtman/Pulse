@@ -146,8 +146,8 @@ export const ProxmoxBackupsCoverageStrip: Component<CoverageStripProps> = (props
     <TableCard data-coverage-strip>
       <TableCardHeader
         title={
-          <span class="inline-flex items-center gap-2 whitespace-nowrap">
-            {props.title}
+          <span class="inline-flex max-w-full flex-wrap items-center gap-x-2 gap-y-1">
+            <span class="whitespace-nowrap">{props.title}</span>
             <span
               class="inline-flex items-center gap-1.5 normal-case tracking-normal"
               data-backup-verdict={props.verdict.tone}
@@ -172,12 +172,16 @@ export const ProxmoxBackupsCoverageStrip: Component<CoverageStripProps> = (props
                   <span class="font-medium">protected</span>
                 </span>
               </Show>
-              <Show when={asides().length > 0}>
-                <span class="hidden font-medium text-muted sm:inline">
-                  · {asides().join(' · ')}
-                </span>
-              </Show>
             </span>
+            {/* These targets are outside the protected ratio. Keep their
+                counts visible on phones too, without widening the card. */}
+            <For each={asides()}>
+              {(aside) => (
+                <span class="whitespace-nowrap font-medium normal-case tracking-normal text-muted">
+                  · {aside}
+                </span>
+              )}
+            </For>
           </span>
         }
         actions={
