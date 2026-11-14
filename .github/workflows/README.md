@@ -167,8 +167,8 @@ nothing; results are in the job log and step summary. Run
 it locally (`PULSE_REHEARSAL_ENGINE=podman` on hosts without Docker).
 
 `release-signing-preflight.yml` checks that the macOS release signing path
-would work, without building or publishing anything. It runs every Monday at
-06:23 UTC and on manual dispatch from `main`. The schedule replaces the nightly
+would work, without building or publishing anything. It runs every six hours
+at 23 minutes past the hour and on manual dispatch from `main`. The schedule replaces the nightly
 release rehearsal that dispatched it until that rehearsal was switched off with
 the release steward on 4 October 2026. A failed scheduled run opens an issue
 titled "Release signing preflight is failing", or comments on the open one, and

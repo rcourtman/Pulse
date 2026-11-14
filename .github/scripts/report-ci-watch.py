@@ -36,7 +36,7 @@ WATCHES = {
     ),
     "signing": (
         "release-signing-preflight.yml", "CI watch: Release signing preflight failed",
-        "The weekly release signing preflight failed.",
+        "The scheduled release signing preflight failed.",
         "The run's annotations identify the failing checks: Developer ID identity, "
         "certificate expiry, signing, or Apple notary access. A failed credential "
         "check needs correction before release signing can succeed.",
