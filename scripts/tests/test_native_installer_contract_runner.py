@@ -21,6 +21,61 @@ runner = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(runner)
 
 
+def output_child_stopped(pid):
+    """Observe fixture termination without mistaking other read errors for it."""
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return True
+    proc = Path(f"/proc/{pid}/stat")
+    try:
+        return proc.exists() and proc.read_text().rsplit(") ", 1)[1].startswith("Z ")
+    except (FileNotFoundError, ProcessLookupError):
+        # Init can reap the orphan during either open or read of procfs.
+        # ENOENT and ESRCH both establish disappearance, not a live child.
+        return True
+
+
+class OwnedChildObservationControls(unittest.TestCase):
+    def test_missing_process_is_stopped_without_reading_proc(self):
+        with patch.object(os, "kill", side_effect=ProcessLookupError), \
+                patch.object(Path, "exists") as exists:
+            self.assertTrue(output_child_stopped(123))
+        exists.assert_not_called()
+
+    def test_reaping_during_proc_read_accepts_both_disappearance_errors(self):
+        for error in (FileNotFoundError, ProcessLookupError):
+            with self.subTest(error=error.__name__), patch.object(os, "kill"), \
+                    patch.object(Path, "exists", return_value=True), \
+                    patch.object(Path, "read_text", side_effect=error) as read:
+                self.assertTrue(output_child_stopped(123))
+            read.assert_called_once_with()
+
+    def test_only_zombie_state_is_stopped_while_process_exists(self):
+        for state in ("Z", "R", "S", "D", "T"):
+            with self.subTest(state=state), patch.object(os, "kill"), \
+                    patch.object(Path, "exists", return_value=True), \
+                    patch.object(Path, "read_text", return_value=f"123 (fixture ) child) {state} 1 2"):
+                self.assertEqual(output_child_stopped(123), state == "Z")
+
+    def test_absent_proc_entry_alone_cannot_clear_a_live_process(self):
+        with patch.object(os, "kill"), patch.object(Path, "exists", return_value=False), \
+                patch.object(Path, "read_text") as read:
+            self.assertFalse(output_child_stopped(123))
+        read.assert_not_called()
+
+    def test_permission_and_unexpected_observation_errors_remain_failures(self):
+        for error in (PermissionError, OSError):
+            with self.subTest(error=error.__name__, operation="signal"), \
+                    patch.object(os, "kill", side_effect=error), self.assertRaises(error):
+                output_child_stopped(123)
+            for operation in ("exists", "read_text"):
+                with self.subTest(error=error.__name__, operation=operation), \
+                        patch.object(os, "kill"), patch.object(Path, "exists", return_value=True), \
+                        patch.object(Path, operation, side_effect=error), self.assertRaises(error):
+                    output_child_stopped(123)
+
+
 class InventoryControls(unittest.TestCase):
     def test_process_deadline_preserves_go_alarm_and_rejects_unbounded_input(self):
         for duration, seconds in (("10m", 600), ("100ms", .1), ("1m2.5s", 62.5), ("1h", 3600)):
@@ -360,17 +415,7 @@ func Example_output() { fmt.Println("installer"); /* Output: installer */ }
                     # do not claim that signalling a group proves full cleanup.
                     deadline = time.monotonic() + 2
                     while time.monotonic() < deadline:
-                        try:
-                            os.kill(pid, 0)
-                        except ProcessLookupError:
-                            break
-                        proc = Path(f"/proc/{pid}/stat")
-                        try:
-                            if proc.exists() and proc.read_text().rsplit(") ", 1)[1].startswith("Z "):
-                                break
-                        except FileNotFoundError:
-                            # Init can reap a stopped orphan between exists()
-                            # and read_text(); disappearance is also stop proof.
+                        if output_child_stopped(pid):
                             break
                         time.sleep(.01)
                     else:
