@@ -338,7 +338,11 @@ Docker-data read mounts for storage admission checks; it may stat only narrow
 operator-owned marker directories on the target filesystems. Docker daemon
 access must be routed through the packaged socket proxy rather than a raw
 read-write socket mount, and audit/rate-limit client IP recovery must honor
-forwarded headers only from configured trusted provider proxy CIDRs.
+forwarded headers only from configured trusted provider proxy CIDRs. Behind a
+trusted proxy the client is the right-most `X-Forwarded-For` hop that is not
+itself a trusted proxy, read across every header line and accepting `ip:port`
+hops; an unreadable hop resolves to the proxy's own address, never to the
+client-controlled entries left of it.
 Provider-hosted MSP report branding is a tenant runtime configuration
 contract, not control-plane report generation. The control plane may accept
 provider-default report brand environment values and pass them into each tenant

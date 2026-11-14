@@ -75,6 +75,46 @@ func TestCPRateLimiterMiddleware_TooManyRequests(t *testing.T) {
 	}
 }
 
+// A client behind an appending proxy can send its own X-Forwarded-For line or
+// entries; rotating them must not move it into a fresh rate-limit bucket.
+func TestCPRateLimiterMiddleware_SpoofedForwardedForSharesBucket(t *testing.T) {
+	t.Setenv("CP_TRUSTED_PROXY_CIDRS", "10.0.0.0/8")
+	resetTrustedProxyConfig()
+	t.Cleanup(resetTrustedProxyConfig)
+
+	cases := []struct {
+		name   string
+		first  []string
+		second []string
+	}{
+		{"client header line before proxy line", []string{"198.51.100.1", "203.0.113.50"}, []string{"198.51.100.2", "203.0.113.50"}},
+		{"client entry before host:port hop", []string{"198.51.100.1, 203.0.113.50:5555"}, []string{"198.51.100.2, 203.0.113.50:6666"}},
+		{"client entry before unreadable hop", []string{"198.51.100.1, unknown"}, []string{"198.51.100.2, unknown"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rl := NewCPRateLimiter(1, time.Minute)
+			h := rl.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusNoContent)
+			}))
+			send := func(values []string) int {
+				req := httptest.NewRequest(http.MethodPost, "/auth/magic-link/request", nil)
+				req.RemoteAddr = "10.0.0.2:4444"
+				req.Header["X-Forwarded-For"] = values
+				rec := httptest.NewRecorder()
+				h.ServeHTTP(rec, req)
+				return rec.Code
+			}
+			if code := send(tc.first); code != http.StatusNoContent {
+				t.Fatalf("first request status = %d, want %d", code, http.StatusNoContent)
+			}
+			if code := send(tc.second); code != http.StatusTooManyRequests {
+				t.Fatalf("rotated client claim status = %d, want %d", code, http.StatusTooManyRequests)
+			}
+		})
+	}
+}
+
 func TestClientIP(t *testing.T) {
 	t.Run("x-forwarded-for-single-value", func(t *testing.T) {
 		t.Setenv("CP_TRUSTED_PROXY_CIDRS", "127.0.0.1/32")
