@@ -19,6 +19,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/tlsutil"
 )
 
@@ -94,6 +95,7 @@ type InventorySummary struct {
 
 // ClientConfig configures a VMware vCenter client.
 type ClientConfig struct {
+	OutboundPolicy     securityutil.ConnectionOutboundPolicy
 	Host               string
 	Port               int
 	Username           string
@@ -122,6 +124,10 @@ type viJSONServiceContentRefs struct {
 
 // NewClient constructs a VMware client from saved connection input.
 func NewClient(cfg ClientConfig) (*Client, error) {
+	return newClientWithResolver(cfg, nil)
+}
+
+func newClientWithResolver(cfg ClientConfig, resolve func(context.Context, string) ([]net.IPAddr, error)) (*Client, error) {
 	baseURL, err := normalizeBaseURL(cfg.Host, cfg.Port)
 	if err != nil {
 		return nil, &ConnectionError{Category: "invalid_config", Message: err.Error()}
@@ -138,6 +144,9 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 		TLSClientConfig: &tls.Config{
 			InsecureSkipVerify: cfg.InsecureSkipVerify, // operator-controlled onboarding setting
 		},
+	}
+	if outboundDial := cfg.OutboundPolicy.DialContext(timeout, resolve); outboundDial != nil {
+		transport.DialContext = outboundDial
 	}
 	return &Client{
 		baseURL: baseURL,
@@ -698,6 +707,12 @@ func decodeVIJSONBody(body []byte, label string, target any) error {
 func classifyTransportError(stage string, err error) error {
 	if err == nil {
 		return nil
+	}
+	if errors.Is(err, securityutil.ErrTenantOutboundDestination) {
+		// Preserve a useful refusal without exposing untrusted endpoint or
+		// transport text. This is configuration policy, not failed VMware
+		// credentials, TLS verification or a request to widen VMware grants.
+		return &ConnectionError{Category: "invalid_config", Message: "VMware destination is not available to organization administrators. An instance administrator can add this connection."}
 	}
 	lower := strings.ToLower(err.Error())
 	if strings.Contains(lower, "x509") || strings.Contains(lower, "certificate") || strings.Contains(lower, "tls") {

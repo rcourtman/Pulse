@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 )
 
 const vmwareSensitiveMask = "********"
@@ -18,6 +19,11 @@ func IsVMwareSensitiveMask(value string) bool {
 
 // VMwareVCenterInstance represents a configured VMware vCenter endpoint.
 type VMwareVCenterInstance struct {
+	// OutboundPolicy is server-owned save provenance, not an editable API
+	// field. Empty preserves legacy/instance-managed connections. Tenant
+	// handlers overwrite caller input and Redacted omits it from responses.
+	OutboundPolicy securityutil.ConnectionOutboundPolicy `json:"outboundPolicy,omitempty"`
+
 	ID                 string `json:"id"`
 	Name               string `json:"name"`
 	Host               string `json:"host"`
@@ -88,6 +94,7 @@ func (v *VMwareVCenterInstance) Redacted() VMwareVCenterInstance {
 		return VMwareVCenterInstance{}
 	}
 	redacted := *v
+	redacted.OutboundPolicy = ""
 	if strings.TrimSpace(redacted.Password) != "" {
 		redacted.Password = vmwareSensitiveMask
 	}

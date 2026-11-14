@@ -11,6 +11,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rcourtman/pulse-go-rewrite/internal/truenas"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
@@ -467,6 +468,7 @@ func (h *TrueNASHandlers) testConnectionInstance(
 	}
 
 	client, err := newClient(truenas.ClientConfig{
+		OutboundPolicy:     securityutil.ConnectionOutboundPolicyForContext(r.Context()),
 		Host:               instance.Host,
 		Port:               instance.Port,
 		APIKey:             instance.APIKey,
@@ -518,6 +520,7 @@ func decodeTrueNASInstanceRequest(
 		return config.TrueNASInstance{}, false
 	}
 
+	instance.OutboundPolicy = securityutil.ConnectionOutboundPolicyForContext(r.Context())
 	return instance, true
 }
 
@@ -526,7 +529,9 @@ func decodeOptionalTrueNASInstanceRequest(
 	r *http.Request,
 	base config.TrueNASInstance,
 ) (config.TrueNASInstance, bool, bool) {
-	return decodeOptionalInstanceRequest(w, r, base)
+	instance, decoded, ok := decodeOptionalInstanceRequest(w, r, base)
+	instance.OutboundPolicy = securityutil.ConnectionOutboundPolicyForContext(r.Context())
+	return instance, decoded, ok
 }
 
 func (h *TrueNASHandlers) featureEnabled(w http.ResponseWriter) bool {
