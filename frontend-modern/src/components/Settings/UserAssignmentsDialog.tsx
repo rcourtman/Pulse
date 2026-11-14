@@ -104,9 +104,10 @@ export const UserAssignmentsDialog: Component<UserAssignmentsDialogProps> = (pro
             <button
               type="button"
               onClick={props.onClose}
+              disabled={props.saving}
               aria-label="Close user assignments"
               title="Close"
-              class="shrink-0 p-1.5 rounded-md hover:text-base-content hover:bg-surface-hover"
+              class="shrink-0 p-1.5 rounded-md hover:text-base-content hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
             >
               <X class="w-5 h-5" />
             </button>
@@ -129,7 +130,7 @@ export const UserAssignmentsDialog: Component<UserAssignmentsDialogProps> = (pro
                 <For each={props.roles}>
                   {(role) => (
                     <label
-                      class={`flex min-w-0 flex-col p-2 sm:p-3 rounded-md border transition-all cursor-pointer [overflow-wrap:anywhere] ${props.formRoleIds.includes(role.id) ? 'bg-blue-50 border-blue-200 dark:bg-blue-900/25 dark:border-blue-800' : 'bg-surface border-border hover:border-blue-100 dark:hover:border-blue-900/25'}`}
+                      class={`flex min-w-0 flex-col p-2 sm:p-3 rounded-md border transition-all [overflow-wrap:anywhere] ${props.saving ? 'cursor-not-allowed' : 'cursor-pointer'} ${props.formRoleIds.includes(role.id) ? 'bg-blue-50 border-blue-200 dark:bg-blue-900/25 dark:border-blue-800' : 'bg-surface border-border hover:border-blue-100 dark:hover:border-blue-900/25'}`}
                     >
                       <div class="flex items-start justify-between gap-2 mb-1">
                         <div class="flex min-w-0 items-start gap-2 shadow-xs">
@@ -137,8 +138,9 @@ export const UserAssignmentsDialog: Component<UserAssignmentsDialogProps> = (pro
                             type="checkbox"
                             aria-label={`${getRoleIdentityLabel(role)} ${role.description}`.trim()}
                             checked={props.formRoleIds.includes(role.id)}
+                            disabled={props.saving}
                             onChange={() => props.onToggleRole(role.id)}
-                            class="mt-0.5 w-4 h-4 shrink-0 text-blue-600 rounded-sm border-border focus:ring-blue-500"
+                            class="mt-0.5 w-4 h-4 shrink-0 text-blue-600 rounded-sm border-border focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
                           />
                           <RoleAccessIdentity
                             id={role.id}
@@ -172,14 +174,16 @@ export const UserAssignmentsDialog: Component<UserAssignmentsDialogProps> = (pro
               <div class="bg-surface-hover rounded-md p-4 border border-border-subtle">
                 <Show when={!props.loadingPermissions && props.permissionsError}>
                   {(message) => (
-                    <InlineNotice
-                      tone="warning"
-                      role="alert"
-                      aria-live="polite"
-                      actionLabel="Retry saved permissions"
-                      actionOnClick={props.onRetryPermissions}
-                    >
+                    <InlineNotice tone="warning" role="alert" aria-live="polite">
                       {message()}
+                      <button
+                        type="button"
+                        onClick={props.onRetryPermissions}
+                        disabled={props.saving}
+                        class="mt-1 flex min-h-11 min-w-11 max-w-full items-center rounded-sm text-left text-xs font-semibold underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-0"
+                      >
+                        Retry saved permissions
+                      </button>
                     </InlineNotice>
                   )}
                 </Show>
@@ -238,7 +242,8 @@ export const UserAssignmentsDialog: Component<UserAssignmentsDialogProps> = (pro
             <button
               type="button"
               onClick={props.onClose}
-              class="w-full sm:w-auto rounded-md px-4 py-2 text-sm font-medium text-base-content hover:bg-surface-hover transition-colors"
+              disabled={props.saving}
+              class="w-full sm:w-auto rounded-md px-4 py-2 text-sm font-medium text-base-content hover:bg-surface-hover transition-colors disabled:cursor-not-allowed disabled:opacity-60"
             >
               Cancel
             </button>
