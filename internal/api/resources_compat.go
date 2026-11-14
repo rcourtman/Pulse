@@ -32,6 +32,7 @@ type ResourceHandlers struct {
 	actionEmergencyStop       func(orgID string) (bool, error)
 	actionDecisionAuthorizer  actionlifecycle.DecisionAuthorizer
 	actionExecutionAuthorizer actionlifecycle.ExecutionAuthorizer
+	actionLiveCheckAuthorizer actionlifecycle.LiveCheckAuthorizer
 	actionRefreshPlanner      actionlifecycle.RefreshPlanner
 	operatorStateChanged      func(orgID, resourceID string)
 }
@@ -108,9 +109,10 @@ func (h *ResourceHandlers) SetActionEmergencyStopChecker(checker func(orgID stri
 	h.actionEmergencyStop = checker
 }
 
-func (h *ResourceHandlers) SetActionAuthorizers(decision actionlifecycle.DecisionAuthorizer, execution actionlifecycle.ExecutionAuthorizer) {
+func (h *ResourceHandlers) SetActionAuthorizers(decision actionlifecycle.DecisionAuthorizer, execution actionlifecycle.ExecutionAuthorizer, liveCheck actionlifecycle.LiveCheckAuthorizer) {
 	h.actionDecisionAuthorizer = decision
 	h.actionExecutionAuthorizer = execution
+	h.actionLiveCheckAuthorizer = liveCheck
 }
 
 func (h *ResourceHandlers) SetActionRefreshPlanner(planner actionlifecycle.RefreshPlanner) {

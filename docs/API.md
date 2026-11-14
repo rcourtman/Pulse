@@ -591,7 +591,9 @@ JSON
 Inspect the returned approval policy, blast radius, expiry and preflight checks.
 Keep its `actionId` and reviewed `planHash`; replace `act_...` and `sha256:...`
 below with those returned values. Planning is not proof that execution is safe
-or currently available.
+or currently available. Pulse asks the agent to check the plan (for example a
+simulated package upgrade) only when the caller may also execute actions;
+otherwise the agent checks it when the action runs.
 
 3. **Decide only if approval is required.** Use an authorised approver's private
    header file. Approve only the reviewed plan; stop on a refusal or stale-plan

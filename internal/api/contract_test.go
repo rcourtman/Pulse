@@ -17357,7 +17357,13 @@ func TestContract_APIActionExecutionRevalidatesPlanAndLiveReadiness(t *testing.T
 	for _, snippet := range []string{
 		"if unified.IsPermanentActionExecutionRefusal(err)",
 		"if err := s.ValidatePlanFresh(orgID, record); err != nil",
-		"if err := s.ValidateExecutionAvailable(ctx, orgID, record); err != nil",
+		"if err := s.validateExecutionAvailable(ctx, orgID, record, liveCheck); err != nil",
+		// Dispatch admission always runs the agent check; only stages before
+		// dispatch consult the LiveCheckAuthorizer.
+		"return s.validateCurrentReadiness(ctx, orgID, record, true)",
+		"return s.validateExecutionAvailable(ctx, orgID, record, true)",
+		"if err := s.ValidateCurrentReadiness(ctx, orgID, record); err != nil {\n\t\tif unified.IsPermanentActionExecutionRefusal(err)",
+		"if err := s.ValidateExecutionAvailable(ctx, orgID, record); err != nil {\n\t\tif unified.IsPermanentActionExecutionRefusal(err)",
 		"errors.Is(err, unified.ErrActionPlanDrift)",
 		"RecordRefusedExecution(store, record, actorID, now, err)",
 		"unified.RefuseActionExecution(record, reason, actor, now)",
@@ -17368,9 +17374,28 @@ func TestContract_APIActionExecutionRevalidatesPlanAndLiveReadiness(t *testing.T
 	}
 	beginIndex := strings.Index(src, "started, startEvent, err := unified.BeginActionExecution(record, actorID, now)")
 	planIndex := strings.Index(src, "if err := s.ValidatePlanFresh(orgID, record); err != nil")
-	readinessIndex := strings.Index(src, "if err := s.ValidateExecutionAvailable(ctx, orgID, record); err != nil")
+	readinessIndex := strings.Index(src, "if err := s.validateExecutionAvailable(ctx, orgID, record, liveCheck); err != nil")
 	if planIndex < 0 || readinessIndex < 0 || beginIndex < 0 || planIndex > readinessIndex || readinessIndex > beginIndex {
 		t.Fatal("Execute must validate plan freshness and executor-owned live readiness before entering executing state or dispatching")
+	}
+	// Both dispatch admissions run the forced (agent-checking) validators
+	// before they enter executing.
+	for _, admission := range []struct{ fn, validate, begin string }{
+		{fn: "func (s *Service) beginHumanExecution(", validate: "if err := s.ValidateCurrentReadiness(ctx, orgID, record); err != nil", begin: "unified.BeginActionExecution(record, actorID, now)"},
+		{fn: "func (s *Service) beginPolicyExecution(", validate: "if err := s.ValidateExecutionAvailable(ctx, orgID, record); err != nil", begin: "unified.BeginPolicyActionExecution("},
+	} {
+		start := strings.Index(src, admission.fn)
+		if start < 0 {
+			t.Fatalf("actionlifecycle service must keep %q", admission.fn)
+		}
+		body := src[start:]
+		if end := strings.Index(body[len(admission.fn):], "\nfunc "); end >= 0 {
+			body = body[:len(admission.fn)+end]
+		}
+		validateAt, beginAt := strings.Index(body, admission.validate), strings.Index(body, admission.begin)
+		if validateAt < 0 || beginAt < 0 || validateAt > beginAt {
+			t.Fatalf("%s must run %q before %q", admission.fn, admission.validate, admission.begin)
+		}
 	}
 
 	adapterSource, err := os.ReadFile("actions.go")

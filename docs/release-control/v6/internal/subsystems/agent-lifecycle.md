@@ -2643,6 +2643,10 @@ the Docker update scan on an agent and needs the action-execute capability, and
 `POST /api/ai/findings/{id}/reinvestigate` starts an investigation that runs
 agent commands and needs the plan and execute capabilities. Signed-in users
 without them keep the read routes for update status and findings.
+The typed `action_preflight` the action lifecycle sends while planning,
+refreshing, reviewing or approving an action also needs the action-execute
+capability; callers with only plan or approve get the plan or decision
+without it, and dispatch admission always runs the executor's check.
 
 Commercial v5-to-v6 migration retry state may pass through `internal/api/`
 handlers that agent-lifecycle also references, but the ownership remains

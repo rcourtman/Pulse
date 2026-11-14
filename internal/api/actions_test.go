@@ -24,6 +24,7 @@ func configureActionHandlerTestAuthority(h *ResourceHandlers) {
 	h.SetActionAuthorizers(
 		actionlifecycle.DecisionAuthorizerFunc(func(context.Context, string, unified.ActionAuditRecord, unified.ActionDecision) error { return nil }),
 		actionlifecycle.ExecutionAuthorizerFunc(func(context.Context, string, unified.ActionAuditRecord, unified.ActionActor) error { return nil }),
+		actionlifecycle.LiveCheckAuthorizerFunc(func(context.Context, string, unified.ActionActor) error { return nil }),
 	)
 }
 

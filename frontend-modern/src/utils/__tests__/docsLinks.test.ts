@@ -269,6 +269,9 @@ describe('docsLinks', () => {
       '`POST /api/ai/findings/{id}/reinvestigate` (Pro, `ai:execute`, and permission to plan and execute actions)',
     );
     expect(api).toContain('planning an action needs\n  permission to plan actions');
+    expect(api).toContain(
+      'Pulse asks the agent to check the plan (for example a\nsimulated package upgrade) only when the caller may also execute actions;\notherwise the agent checks it when the action runs.',
+    );
   });
 
   it('separates server removal from persistent-data erasure', () => {
