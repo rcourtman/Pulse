@@ -1539,6 +1539,11 @@ report. `TestAgentReportRefreshFoldsReportsWithinWindow` and
 shutdown behaviour. The founder approved trading immediate visibility for this
 bound on 24 September 2026.
 
+Store wiring now also installs the reader refresh
+(`refreshUnifiedResourceReadForReader`, see monitoring.md). It is a read-path
+rebuild for headless readers such as a Patrol run and changes neither report
+admission nor this window.
+
 ### Canonical Patrol and Assistant continuation, 2026-09-07
 
 ### Canonical Patrol and Assistant continuation, 2026-09-07

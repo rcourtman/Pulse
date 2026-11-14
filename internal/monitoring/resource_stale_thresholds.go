@@ -166,6 +166,22 @@ func unifiedSnapshotResources(view monitorUnifiedStateView) []unifiedresources.R
 // Check the store before copying state, preserving the cheap warm-read path.
 // The existing refresh boundary owns publication, provider and mode fencing.
 func (m *Monitor) refreshUnifiedResourceRead() {
+	m.refreshUnifiedResourceReadWithin(readPathRegistryFreshness)
+}
+
+// refreshUnifiedResourceReadForReader is the store's read refresher (see
+// unifiedresources.RefreshForRead). A reader that acts on what it reads, such
+// as a Patrol run an alert started, must see the poll that alert judged. The
+// store is rebuilt only at ingest boundaries and on frontend and REST reads,
+// so after a Proxmox poll it can hold the previous values for a whole agent
+// report interval: an alert cleared at 3% while Patrol read 92% and reported
+// the disk still full (14 Nov 2026). A store rebuilt within the shared
+// freshness window can still predate that poll, so this one always rebuilds.
+func (m *Monitor) refreshUnifiedResourceReadForReader() {
+	m.refreshUnifiedResourceReadWithin(0)
+}
+
+func (m *Monitor) refreshUnifiedResourceReadWithin(maxAge time.Duration) {
 	if m == nil || mock.IsMockEnabled() {
 		return
 	}
@@ -177,12 +193,12 @@ func (m *Monitor) refreshUnifiedResourceRead() {
 	}
 	if timed, ok := store.(interface{ LastRebuiltAt() time.Time }); ok {
 		last := timed.LastRebuiltAt()
-		if !last.IsZero() && time.Since(last) < readPathRegistryFreshness {
+		if !last.IsZero() && time.Since(last) < maxAge {
 			return
 		}
 	}
 	state, scope := m.currentStateWithScope()
-	m.updateResourceStoreForRead(state, scope)
+	m.updateResourceStoreForReadWithin(state, scope, maxAge)
 }
 
 // unifiedResourceThresholdProjectionLister lists a read state with the stale

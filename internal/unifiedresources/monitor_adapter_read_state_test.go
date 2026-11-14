@@ -1354,3 +1354,34 @@ func TestMonitorAdapterReferenceTracksPublishedRegistry(t *testing.T) {
 		t.Fatal("unknown selection acquired an owner")
 	}
 }
+
+func TestRefreshForReadRunsTheOwnersRefresher(t *testing.T) {
+	adapter := NewMonitorAdapter(NewRegistry(nil))
+	calls := 0
+	adapter.SetReadRefresher(func() { calls++ })
+	RefreshForRead(adapter)
+	if calls != 1 {
+		t.Fatalf("RefreshForRead ran the refresher %d times, want 1", calls)
+	}
+	adapter.SetReadRefresher(nil)
+	RefreshForRead(adapter)
+	if calls != 1 {
+		t.Fatal("a removed refresher still ran")
+	}
+	// A read state with no owner to refresh it is read as it is.
+	RefreshForRead(NewRegistry(nil))
+	RefreshForRead(nil)
+	var none *MonitorAdapter
+	none.RefreshForRead()
+}
+
+// The refresher publishes a new registry into the adapter, so it must run
+// without the adapter's locks held.
+func TestRefreshForReadRunsWithoutTheAdapterLocks(t *testing.T) {
+	adapter := NewMonitorAdapter(NewRegistry(nil))
+	adapter.SetReadRefresher(func() {
+		adapter.SetReadRefresher(nil)
+		_ = adapter.LastRebuiltAt()
+	})
+	RefreshForRead(adapter)
+}
