@@ -544,7 +544,7 @@ function VmwareOverview(props: VmwareOverviewProps) {
         scope={props.model().resources}
         emptyIcon={vmwareIcon()}
         emptyTitle="No vSphere hosts"
-        emptyDescription="Hosts appear here once the vCenter connection enumerates them."
+        emptyDescription="Check the vCenter connection's collection scope and status in Settings."
         showToolbar={false}
         vmScope={{
           sectionId: VSPHERE_VMS_SECTION_ID,
@@ -608,7 +608,7 @@ function VmwareOverview(props: VmwareOverviewProps) {
             />
           }
           emptyStateTitle="No vSphere VMs"
-          emptyStateDescription="Virtual machines appear here once the vCenter connection enumerates them."
+          emptyStateDescription="Check the vCenter connection's collection scope and status in Settings."
         />
       </section>
     </div>

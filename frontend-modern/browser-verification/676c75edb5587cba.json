@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "base_sha": "6c461ecb0c4e26b9c24cca9b3711eebce2a80c5d",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/vmware/VmwarePageSurface.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/vmware/VmwarePageSurface.tsx": "74e9af404f613d6ba4a429984cfd7b1fa4774bc0832d4784583d9675553bcc57"
+  },
+  "verified_at": "2026-11-14T17:49:53.171Z",
+  "routes": [
+    "/vmware/overview (real VmwarePageSurface, unified-resource adapters, VMware/Workloads tables and shipped CSS; synthetic read-only transport, not full authenticated App)"
+  ],
+  "states": [
+    "Host monitoring off and VM monitoring off, using retained real post-#4382 poller/registry exports without rerunning producer proof; neutral text when safe diagnostics cannot expose administrative collection scope.",
+    "Resource-read failures retain their distinct error and Refresh control. Restored/normal host and VM rows remain usable.",
+    "Chromium desktop 1365x900 and WebKit narrow 390x844, light/dark, Playwright 1.56.1; separate same-runtime version attestation Chromium 141.0.7390.37 and WebKit 26.0.",
+    "24 captures opened individually with native view_image; 12 same-data/view/theme/scroll pairs. Ten strict pairs; two narrow VM-off pairs have an incidental tab-rail arrow only in the after image. Four error pairs are byte-identical. No information or control removed."
+  ],
+  "interactions": [
+    "Loaded real monitoring adapters with selected scope inventory; verified absent rows, retained canonical IDs/reference names and unchanged counts. Runtime sources uses real healthy empty projection, not administrative scope.",
+    "Verified normal Networks navigation and real VM detail expansion; read-only GET requests, no connections/settings-scope reads, no new grant.",
+    "Inspected desktop and narrow pixels. Identical initial host-off VM-section geometry and all narrow geometry; desktop VM empty card is 22.75px shorter because the new text wraps to one line."
+  ],
+  "evidence": [
+    "RECEIPTS.md",
+    "PAIRS.json",
+    "PIXEL-OBSERVATIONS.md",
+    "before-browser-result.json",
+    "after-browser-result.json",
+    "SOURCE.json"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ]
+}
