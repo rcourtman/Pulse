@@ -569,6 +569,8 @@ func Run(ctx context.Context, version string) (runErr error) {
 			snap.VMs = counts.VMs
 			snap.Containers = counts.Containers
 			snap.AgentHosts = counts.AgentHosts
+			snap.AgentHostsCommandsEnabled = counts.AgentHostsCommandsEnabled
+			snap.DockerHostsFailureLogsEnabled = counts.DockerHostsFailureLogsEnabled
 			snap.DockerHosts = counts.DockerHosts
 			snap.DockerContainers = counts.DockerContainers
 			snap.KubernetesClusters = counts.KubernetesClusters

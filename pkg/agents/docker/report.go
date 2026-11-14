@@ -40,6 +40,9 @@ type AgentInfo struct {
 	Type            string                   `json:"type,omitempty"` // "unified", "host", or "docker" - empty means legacy
 	IntervalSeconds int                      `json:"intervalSeconds"`
 	Modules         []hostagent.ModuleStatus `json:"modules,omitempty"`
+	// FailureLogsEnabled reports the host's local --enable-failure-logs
+	// setting. It is a fact about the agent, set only on the host.
+	FailureLogsEnabled bool `json:"failureLogsEnabled,omitempty"`
 }
 
 // HostInfo contains metadata about the Docker host where the agent runs.

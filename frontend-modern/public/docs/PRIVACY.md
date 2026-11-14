@@ -40,7 +40,7 @@ Every field is listed below with the reason it exists. Nothing else is included 
 
 | Field | Example | Purpose |
 |-------|---------|---------|
-| Schema version | `21` | Identify the exact payload contract so old and new signals are not mixed silently |
+| Schema version | `22` | Identify the exact payload contract so old and new signals are not mixed silently |
 | Sent at | `2026-07-23T08:30:00Z` | Date the individual heartbeat without sending a history of client activity |
 | Install ID | `a1b2c3d4-...` | Distinguish active installations within one rotation window without tying telemetry to an account or person |
 | Version | `6.0.0-rc.1` | Track the canonical release identity currently deployed |
@@ -87,6 +87,8 @@ Every field is listed below with the reason it exists. Nothing else is included 
 | Availability targets | `9` | Understand agentless availability-check adoption in aggregate |
 | Availability probe targets | `2` | Understand external-probe adoption in aggregate; counts only, no agent names or addresses |
 | Availability probe agents | `1` | Understand how many distinct probe agents installs deploy; counts only |
+| Agent hosts commands enabled | `1` | Count agent hosts whose owner turned on commands, so changes that need commands can be judged by how many owners they reach; a count only, never which hosts |
+| Docker hosts failure logs enabled | `0` | Count Docker hosts whose owner turned on the last log lines of a failed container; a count only, never which hosts or any log text |
 | AI enabled | `true`/`false` | See whether AI features are actually used before expanding or removing them |
 | Patrol enabled | `true`/`false` | See whether proactive AI health patrol is used |
 | Discovery enabled | `true`/`false` | See whether network subnet discovery is used |
@@ -457,6 +459,7 @@ Every change to the payload bumps the schema version, is listed here with its da
 
 | Schema | Date | Change |
 |--------|------|--------|
+| 22 | 2026-11-14 | Counts of agent hosts with commands on and Docker hosts with failure logs on; never which hosts |
 | 21 | 2026-10-29 | Content-free count of distinct days on which an external agent or MCP client successfully read change or metric history |
 | 20 | 2026-10-17 | Content-free aggregate report generation, delivery outcomes, source-data states and distinct-period repeat use, with measurement availability and elapsed observation days |
 | 19 | 2026-10-16 | Content-free rolling count of successful metric-history responses that return data older than seven days |

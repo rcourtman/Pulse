@@ -23,6 +23,8 @@ type InstallSnapshotCounts struct {
 	VMs                                  int
 	Containers                           int
 	AgentHosts                           int
+	AgentHostsCommandsEnabled            int
+	DockerHostsFailureLogsEnabled        int
 	DockerHosts                          int
 	DockerContainers                     int
 	KubernetesClusters                   int
@@ -377,6 +379,8 @@ func accumulateInstallSnapshotCounts(counts *InstallSnapshotCounts, monitor *Mon
 		counts.Containers += len(readState.Containers())
 		counts.AgentHosts += len(readState.Hosts())
 		counts.DockerHosts += len(readState.DockerHosts())
+		counts.AgentHostsCommandsEnabled += countAgentHostsWithCommands(readState.Hosts())
+		counts.DockerHostsFailureLogsEnabled += countDockerHostsWithFailureLogs(readState.DockerHosts())
 		counts.DockerContainers += len(readState.DockerContainers())
 		counts.KubernetesClusters += len(readState.K8sClusters())
 		counts.KubernetesNodes += len(readState.K8sNodes())
@@ -388,6 +392,30 @@ func accumulateInstallSnapshotCounts(counts *InstallSnapshotCounts, monitor *Mon
 	resources, _ := monitor.UnifiedResourceSnapshot()
 	accumulateInstallSnapshotUnifiedResourceCounts(counts, resources)
 	counts.ActiveAlerts += len(monitor.ActiveAlertsSnapshot())
+}
+
+// countAgentHostsWithCommands counts agents whose owner turned on commands.
+// Only the count leaves the install.
+func countAgentHostsWithCommands(hosts []*unifiedresources.HostView) int {
+	count := 0
+	for _, host := range hosts {
+		if host != nil && host.CommandsEnabled() {
+			count++
+		}
+	}
+	return count
+}
+
+// countDockerHostsWithFailureLogs counts Docker agents whose owner turned on
+// failure logs. Only the count leaves the install.
+func countDockerHostsWithFailureLogs(hosts []*unifiedresources.DockerHostView) int {
+	count := 0
+	for _, host := range hosts {
+		if host != nil && host.FailureLogsEnabled() {
+			count++
+		}
+	}
+	return count
 }
 
 func accumulateInstallSnapshotUnifiedResourceCounts(counts *InstallSnapshotCounts, resources []unifiedresources.Resource) {

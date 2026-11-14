@@ -230,7 +230,7 @@ const (
 	// Schema v20 adds aggregate reporting outcomes and distinct-period reuse.
 	// Schema v21 adds only the count of distinct days, 0 to 30, on which an
 	// external agent successfully read change or metric history.
-	TelemetrySchemaVersion = 21
+	TelemetrySchemaVersion = 22
 )
 
 type installIDRecord struct {
@@ -329,6 +329,10 @@ type Ping struct {
 	// addresses leave the install.
 	AvailabilityProbeTargets int `json:"availability_probe_targets"`
 	AvailabilityProbeAgents  int `json:"availability_probe_agents"`
+	// Schema v22 agent opt-ins. Counts of hosts whose owner turned on a
+	// local agent setting; never which hosts.
+	AgentHostsCommandsEnabled     int `json:"agent_hosts_commands_enabled"`
+	DockerHostsFailureLogsEnabled int `json:"docker_hosts_failure_logs_enabled"`
 
 	// Feature usage (booleans and counts — no content)
 	AIEnabled            bool `json:"ai_enabled"`
@@ -615,6 +619,8 @@ type Snapshot struct {
 	AvailabilityTargets                                                  int
 	AvailabilityProbeTargets                                             int
 	AvailabilityProbeAgents                                              int
+	AgentHostsCommandsEnabled                                            int
+	DockerHostsFailureLogsEnabled                                        int
 	AIEnabled                                                            bool
 	PatrolEnabled                                                        bool
 	DiscoveryEnabled                                                     bool
@@ -1418,6 +1424,8 @@ func applySnapshot(base Ping, fn SnapshotFunc) Ping {
 	ping.AvailabilityTargets = s.AvailabilityTargets
 	ping.AvailabilityProbeTargets = s.AvailabilityProbeTargets
 	ping.AvailabilityProbeAgents = s.AvailabilityProbeAgents
+	ping.AgentHostsCommandsEnabled = s.AgentHostsCommandsEnabled
+	ping.DockerHostsFailureLogsEnabled = s.DockerHostsFailureLogsEnabled
 	ping.AIEnabled = s.AIEnabled
 	ping.PatrolEnabled = s.PatrolEnabled
 	ping.DiscoveryEnabled = s.DiscoveryEnabled

@@ -1502,6 +1502,7 @@ func resourceFromDockerHost(host models.DockerHost) (Resource, ResourceIdentity)
 		KernelVersion:         host.KernelVersion,
 		Architecture:          host.Architecture,
 		AgentVersion:          host.AgentVersion,
+		FailureLogsEnabled:    host.FailureLogsEnabled,
 		CPUs:                  host.CPUs,
 		TotalMemoryBytes:      host.TotalMemoryBytes,
 		Memory:                agentMemoryMetaFromModel(host.Memory),

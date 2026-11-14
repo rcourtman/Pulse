@@ -46,6 +46,14 @@ ambiguity controls; `monitor_maintenance_subjects_test.go` covers detectors,
 timed/scope policy, notification callbacks and unchanged recovery/history IDs.
 
 
+### Docker hosts carry their failure-logs setting (14 November 2026)
+
+`DockerData.FailureLogsEnabled` (JSON `docker.failureLogsEnabled`) is the
+Docker agent's local failure-logs setting, copied from `models.DockerHost` by
+`resourceFromDockerHost` and read through `DockerHostView.FailureLogsEnabled`.
+It is a fact the agent reports about itself; nothing in Pulse changes it. The
+install snapshot counts it for telemetry.
+
 ### Docker containers can carry their last log lines (13 November 2026)
 
 `DockerData.FailureLog` (JSON `docker.failureLog`) is the last few log lines

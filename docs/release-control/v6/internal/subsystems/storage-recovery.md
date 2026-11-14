@@ -21,6 +21,13 @@
 
 ## Purpose
 
+### `DockerData` gains a host-only failure-logs setting (14 November 2026)
+
+`internal/unifiedresources/types.go` gains `DockerData.FailureLogsEnabled`,
+set only by the Docker host adapter from the agent's report. It is false on
+every storage, backup and recovery resource and changes no storage or
+recovery projection, clone path or identity.
+
 ### `DockerData` gains a container-only failure-log field (13 November 2026)
 
 `internal/unifiedresources/types.go` gains `DockerData.FailureLog` and the

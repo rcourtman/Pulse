@@ -1786,6 +1786,14 @@ func (v DockerHostView) AgentVersion() string {
 	return v.r.Docker.AgentVersion
 }
 
+// FailureLogsEnabled reports the agent's local failure-logs setting.
+func (v DockerHostView) FailureLogsEnabled() bool {
+	if v.r == nil || v.r.Docker == nil {
+		return false
+	}
+	return v.r.Docker.FailureLogsEnabled
+}
+
 func (v DockerHostView) CPUs() int {
 	if v.r == nil || v.r.Docker == nil {
 		return 0

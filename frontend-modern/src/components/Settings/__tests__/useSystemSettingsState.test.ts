@@ -59,6 +59,8 @@ const buildTelemetryPreviewPayload = (
   availability_targets: 1,
   availability_probe_targets: 0,
   availability_probe_agents: 0,
+  agent_hosts_commands_enabled: 0,
+  docker_hosts_failure_logs_enabled: 0,
   ai_enabled: false,
   patrol_enabled: false,
   discovery_enabled: false,

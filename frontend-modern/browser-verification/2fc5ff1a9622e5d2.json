@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "base_sha": "487836df4ca55644c0fe3a7b7b2ffe37eace8dc0",
+  "verified_at": "2026-11-14T09:04:31Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/api/settings.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/api/settings.ts": "fd8a6d93e04ac36f871f75846c9c1b3647ccc07c9553ede10c8a35509cbe3417"
+  },
+  "routes": [
+    "/settings/system-general"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Private server built from this tree on pulse-dev, with one real agent built from this tree reporting a private Docker",
+    "Agent with --enable-commands and --enable-failure-logs: the telemetry preview API and the Preview payload panel show schema_version 22, agent_hosts 1, agent_hosts_commands_enabled 1, docker_hosts 1, docker_hosts_failure_logs_enabled 1",
+    "Same agent restarted without both flags: failure logs drop to 0; commands stay 1 because the agent's legacy authority re-applied the server's remote command setting, as its log shows",
+    "Preview payload panel at 1440 and 375 wide: the payload parses as JSON with both new keys, no page error, no horizontal page scroll"
+  ],
+  "interactions": [
+    "Headless browser on pulse-dev (the desktop app's browser pane tools were unavailable in this session): opened Settings > General, clicked Preview payload, parsed the payload text, took screenshots at both widths",
+    "Read the same counts from /api/system/settings/telemetry-preview before and after restarting the agent"
+  ]
+}

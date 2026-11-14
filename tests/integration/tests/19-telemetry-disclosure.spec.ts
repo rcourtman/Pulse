@@ -10,7 +10,7 @@ import {
 import { createAuthenticatedStorageState } from "./helpers";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const EXPECTED_TELEMETRY_SCHEMA_VERSION = 21;
+const EXPECTED_TELEMETRY_SCHEMA_VERSION = 22;
 
 type WorkerFixtures = {
   authStorageStatePath: string;

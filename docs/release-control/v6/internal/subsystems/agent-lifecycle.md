@@ -2743,6 +2743,13 @@ assignment) to every copied install command and does nothing else: it mints
 no token, changes no scope and reaches no installed agent. It still is not a
 server-side switch. The screen says what leaves the host, that masking can
 miss a secret, and how to turn it off.
+The Docker report's agent section carries the setting as
+`failureLogsEnabled` (`agentsdocker.AgentInfo.FailureLogsEnabled`, omitted
+when off), and the server keeps it on the Docker host. It is reported so the
+install can count it in telemetry (schema v22, security-privacy contract);
+it is never read back as an instruction, and no server response changes it.
+The typed helper reports do not set it: that profile has no Docker socket and
+reads no logs.
 Inside-guest Docker / Podman visibility is also a privacy boundary: full
 Docker / Podman inventory may come from a guest-local agent or another explicit
 guest reporting path. LXC Docker inventory may also come from the Proxmox host

@@ -3995,6 +3995,13 @@ agent cannot store more text, or less masked text, than a current one.
 `models.DockerContainer.FailureLog` lives with the container's current state
 and goes wherever that state goes: the resource API and the WebSocket state.
 Monitoring writes it to no metric history and no alert.
+The Docker report's `failureLogsEnabled` is stored on `models.DockerHost` as
+reported, on every report, so it follows the agent's current setting. The
+install snapshot (`InstallSnapshotCounts`, `accumulateInstallSnapshotCounts`)
+counts agent hosts reporting commands on and Docker hosts reporting failure
+logs on, through `countAgentHostsWithCommands` and
+`countDockerHostsWithFailureLogs`, for telemetry schema v22. Only the counts
+leave monitoring; no alert, metric or Patrol input reads them.
 Docker host identity collapse must be surfaced, not silently absorbed. Docker
 report ingest keys host identity on the agent-reported machine ID in unified
 mode, so cloned VMs that still share `/etc/machine-id` fold into one

@@ -2675,6 +2675,7 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 		IsLegacy:          isLegacyAgent(report.Agent.Type),
 		IdentityConflict:  identityConflict,
 	}
+	host.FailureLogsEnabled = report.Agent.FailureLogsEnabled
 	if !inventoryComplete && previousState.ID != "" {
 		preserveDockerInventorySnapshot(&host, previousState)
 	}

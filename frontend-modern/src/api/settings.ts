@@ -53,6 +53,8 @@ export interface TelemetryPingPreview {
   availability_targets: number;
   availability_probe_targets: number;
   availability_probe_agents: number;
+  agent_hosts_commands_enabled: number;
+  docker_hosts_failure_logs_enabled: number;
   ai_enabled: boolean;
   patrol_enabled: boolean;
   discovery_enabled: boolean;
