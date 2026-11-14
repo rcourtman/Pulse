@@ -110,6 +110,28 @@ func TestRootInstallRemovalKeepsOtherInstanceUntouched(t *testing.T) {
 	}
 }
 
+func TestRootInstallRemovalManagerTimeoutPreservesFiles(t *testing.T) {
+	t.Parallel()
+	for _, flow := range []string{"menu", "uninstall"} {
+		for _, mode := range []string{"query-hangs", "stop-hangs", "disable-hangs"} {
+			t.Run(flow+"/"+mode, func(t *testing.T) {
+				t.Parallel()
+				started := time.Now()
+				out, calls, err := runServerRemovalFixture(t, flow, mode, "pulse-update.timer", "active", false, false)
+				if err == nil || !strings.Contains(out, "refusing removal") ||
+					strings.Contains(calls, "DELETE ") || strings.Contains(calls, "start ") {
+					t.Fatalf("timed-out manager allowed removal/restart: %v\n%s\n%s", err, out, calls)
+				}
+				// The production five-second timeout, not a fabricated failure
+				// status from a double, must terminate the sleeping manager.
+				if elapsed := time.Since(started); elapsed < 4500*time.Millisecond {
+					t.Fatalf("manager deadline was bypassed: %s", elapsed)
+				}
+			})
+		}
+	}
+}
+
 func runServerRemovalFixture(t *testing.T, flow, mode, target, state string, custom, legacy bool) (string, string, error) {
 	t.Helper()
 	dir := t.TempDir()
@@ -153,7 +175,22 @@ func runServerRemovalFixture(t *testing.T, flow, mode, target, state string, cus
 	mock := `#!/bin/bash
 set -eu
 printf '%s\n' "$*" >> "$FIXTURE_DIR/calls"
+# Record completion separately: a call's presence is not a completed manager
+# observation. These private records survive the installer's stderr redirection.
+trap 'status=$?; printf "%s %s\n" "$status" "$*" >> "$FIXTURE_DIR/manager-results"' EXIT
 action=$1; unit=${2:-}
+if [[ "$unit" == "$TARGET" && "$MODE:$action" == query-hangs:show ||
+      "$unit" == "$TARGET" && "$MODE:$action" == stop-hangs:stop ||
+      "$unit" == "$TARGET" && "$MODE:$action" == disable-hangs:disable ]]; then
+    sleep 30
+fi
+# State belongs entirely to this double. Use shell builtins rather than
+# spawning cat/touch for every property and mutation under real deadlines.
+read_property() {
+    local value
+    IFS= read -r value < "$FIXTURE_DIR/$unit.$1"
+    printf '%s\n' "$value"
+}
 if [[ "$action" == show ]]; then
     prop=$3
     if [[ "$unit" == "$TARGET" ]]; then
@@ -173,14 +210,14 @@ if [[ "$action" == show ]]; then
         fi
     fi
     case "$prop" in
-      --property=LoadState) cat "$FIXTURE_DIR/$unit.load" ;;
-      --property=ActiveState) cat "$FIXTURE_DIR/$unit.active" ;;
-      --property=UnitFileState) cat "$FIXTURE_DIR/$unit.enabled" ;;
+      --property=LoadState) read_property load ;;
+      --property=ActiveState) read_property active ;;
+      --property=UnitFileState) read_property enabled ;;
       *) exit 2 ;;
     esac
 elif [[ "$action" == stop ]]; then
     [[ "$unit:$MODE" != "$TARGET:stop-fails" ]] || exit 1
-    touch "$FIXTURE_DIR/$unit.stopped"
+    : > "$FIXTURE_DIR/$unit.stopped"
     if [[ "$unit:$MODE" == "$TARGET:still-failed" ]]; then
         echo failed > "$FIXTURE_DIR/$unit.active"
     elif [[ "$unit:$MODE" != "$TARGET:stop-ignored" ]]; then
@@ -188,9 +225,10 @@ elif [[ "$action" == stop ]]; then
     fi
 elif [[ "$action" == disable ]]; then
     [[ "$unit:$MODE" != "$TARGET:disable-fails" ]] || exit 1
-    touch "$FIXTURE_DIR/$unit.disabled"
+    : > "$FIXTURE_DIR/$unit.disabled"
     if [[ "$unit:$MODE" != "$TARGET:disable-ignored" ]]; then
-        case "$(cat "$FIXTURE_DIR/$unit.enabled")" in masked) ;; *) echo disabled > "$FIXTURE_DIR/$unit.enabled" ;; esac
+        IFS= read -r enabled < "$FIXTURE_DIR/$unit.enabled"
+        case "$enabled" in masked) ;; *) echo disabled > "$FIXTURE_DIR/$unit.enabled" ;; esac
     fi
 elif [[ "$action" != daemon-reload ]]; then
     exit 2
@@ -259,7 +297,13 @@ if [[ "$FLOW" == menu ]]; then main; else uninstall_pulse; fi
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "bash", "-c", script)
 	cmd.Env = append(os.Environ(), "PATH="+binDir+":"+os.Getenv("PATH"), "INSTALLER_UNDER_TEST="+installer, "FIXTURE_DIR="+dir, "FLOW="+flow, "MODE="+mode, "TARGET="+target, "SERVICE="+service, "CUSTOM="+boolString(custom), "LEGACY="+boolString(legacy))
+	started := time.Now()
 	out, runErr := cmd.CombinedOutput()
+	if runErr != nil || ctx.Err() != nil {
+		completed, readErr := os.ReadFile(filepath.Join(dir, "manager-results"))
+		t.Logf("removal fixture elapsed=%s command_error=%v context=%v manager_completion_read=%v\n%s",
+			time.Since(started), runErr, ctx.Err(), readErr, completed)
+	}
 	if ctx.Err() != nil {
 		t.Fatalf("fixture deadline: %v\n%s", ctx.Err(), out)
 	}
