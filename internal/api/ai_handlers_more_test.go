@@ -15,6 +15,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/chat"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/cost"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
@@ -24,6 +25,7 @@ import (
 	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
+	"github.com/stretchr/testify/mock"
 )
 
 type stubMetadataProvider struct{}
@@ -1340,5 +1342,133 @@ func TestPatrolOperatorStateInheritsDescendantScopedMaintenance(t *testing.T) {
 	}
 	if projection, _ := provider.OperatorStateProjection(nodeID, patrolMaintenanceNow); projection.MaintenanceWindow == nil {
 		t.Fatal("resource-only node window no longer covers the node itself, so the guest control proves nothing")
+	}
+}
+
+// Assistant chat stays open to every signed-in user, but only a caller with
+// the canonical action-execute capability may have the model run commands on
+// hosts. These cases pin who gets that authority at the chat boundary.
+
+type assistantHostCommandCaller struct {
+	name       string
+	authorizer internalauth.Authorizer
+	prepare    func(t *testing.T, req *http.Request) *http.Request
+	want       bool
+}
+
+func assistantSessionCaller(user string) func(t *testing.T, req *http.Request) *http.Request {
+	return func(t *testing.T, req *http.Request) *http.Request {
+		t.Helper()
+		token := "assistant-host-command-" + user
+		GetSessionStore().CreateSession(token, time.Hour, "browser", "127.0.0.1", user)
+		req.AddCookie(&http.Cookie{Name: cookieNameSession, Value: token})
+		return req.WithContext(internalauth.WithUser(req.Context(), user))
+	}
+}
+
+func assistantTokenCaller(scopes ...string) func(t *testing.T, req *http.Request) *http.Request {
+	return func(t *testing.T, req *http.Request) *http.Request {
+		t.Helper()
+		record := ownerBoundActionToken("assistant-token-"+strings.Join(scopes, "-"), "admin", scopes...)
+		return req.WithContext(actionAuthorityContextFrom(req.Context(), record))
+	}
+}
+
+func actionAuthorityContextFrom(ctx context.Context, record *config.APITokenRecord) context.Context {
+	ctx = internalauth.WithUser(ctx, apiTokenAuthenticatedUser(record))
+	return internalauth.WithAPIToken(ctx, record)
+}
+
+func assistantHostCommandCallers() []assistantHostCommandCaller {
+	return []assistantHostCommandCaller{
+		{name: "viewer session", authorizer: &internalauth.DefaultAuthorizer{}, prepare: assistantSessionCaller("viewer"), want: false},
+		{name: "administrator session", authorizer: &internalauth.DefaultAuthorizer{}, prepare: assistantSessionCaller("admin"), want: true},
+		{name: "explicit action grant", authorizer: allowActionAuthorityAuthorizer{}, prepare: assistantSessionCaller("operator"), want: true},
+		{name: "RBAC denies execute", authorizer: fixedActionAuthorityAuthorizer(false), prepare: assistantSessionCaller("admin"), want: false},
+		{name: "ai:chat token", authorizer: &internalauth.DefaultAuthorizer{}, prepare: assistantTokenCaller(config.ScopeAIChat), want: false},
+		{name: "ai:chat and ai:execute token", authorizer: &internalauth.DefaultAuthorizer{}, prepare: assistantTokenCaller(config.ScopeAIChat, config.ScopeAIExecute), want: true},
+		{name: "ai:chat and actions:execute token", authorizer: &internalauth.DefaultAuthorizer{}, prepare: assistantTokenCaller(config.ScopeAIChat, config.ScopeActionsExecute), want: true},
+		{name: "token denied by RBAC", authorizer: fixedActionAuthorityAuthorizer(false), prepare: assistantTokenCaller(config.ScopeAIChat, config.ScopeAIExecute), want: false},
+	}
+}
+
+func TestRequestHasActionCapabilityForAssistantHostCommands(t *testing.T) {
+	InitSessionStore(t.TempDir())
+	cfg := &config.Config{AuthUser: "admin"}
+	for _, caller := range assistantHostCommandCallers() {
+		t.Run(caller.name, func(t *testing.T) {
+			req := caller.prepare(t, httptest.NewRequest(http.MethodPost, "/api/ai/chat", nil))
+			if got := requestHasActionCapability(cfg, caller.authorizer, req, internalauth.ActionExecute); got != caller.want {
+				t.Fatalf("requestHasActionCapability = %v, want %v", got, caller.want)
+			}
+		})
+	}
+}
+
+func TestRequestHasActionCapabilityRefusesNonAdminProxyUser(t *testing.T) {
+	cfg := &config.Config{
+		AuthUser:            "admin",
+		ProxyAuthSecret:     "proxy-secret",
+		ProxyAuthUserHeader: "X-Remote-User",
+		ProxyAuthRoleHeader: "X-Remote-Roles",
+		ProxyAuthAdminRole:  "admin",
+	}
+	for _, tc := range []struct {
+		role string
+		want bool
+	}{{role: "viewer", want: false}, {role: "admin", want: true}} {
+		req := httptest.NewRequest(http.MethodPost, "/api/ai/chat", nil)
+		req.Header.Set("X-Proxy-Secret", "proxy-secret")
+		req.Header.Set("X-Remote-User", "someone")
+		req.Header.Set("X-Remote-Roles", tc.role)
+		req = req.WithContext(internalauth.WithUser(req.Context(), "someone"))
+		if got := requestHasActionCapability(cfg, &internalauth.DefaultAuthorizer{}, req, internalauth.ActionExecute); got != tc.want {
+			t.Fatalf("proxy role %q: requestHasActionCapability = %v, want %v", tc.role, got, tc.want)
+		}
+	}
+}
+
+func TestAssistantChatBindsHostCommandAuthorityFromCallerRole(t *testing.T) {
+	InitSessionStore(t.TempDir())
+	cfg := &config.Config{AuthUser: "admin"}
+	for _, caller := range assistantHostCommandCallers() {
+		t.Run(caller.name, func(t *testing.T) {
+			h := newTestAIHandler(cfg, nil, nil)
+			svc := new(MockAIService)
+			h.defaultService = svc
+			svc.On("IsRunning").Return(true)
+			var got *chat.ExecuteRequest
+			svc.On("ExecuteStream", mock.Anything, mock.Anything, mock.Anything).Return(nil).Run(func(args mock.Arguments) {
+				req := args.Get(1).(chat.ExecuteRequest)
+				got = &req
+			})
+
+			req := caller.prepare(t, httptest.NewRequest(http.MethodPost, "/api/ai/chat", strings.NewReader(`{"prompt":"read the syslog on node1"}`)))
+			rec := httptest.NewRecorder()
+			withAssistantHostCommandAuthority(cfg, caller.authorizer, h.HandleChat)(rec, req)
+
+			if got == nil {
+				t.Fatalf("chat did not reach the service: status=%d body=%q", rec.Code, rec.Body.String())
+			}
+			if got.HasHostCommandAuthority != caller.want {
+				t.Fatalf("HasHostCommandAuthority = %v, want %v", got.HasHostCommandAuthority, caller.want)
+			}
+		})
+	}
+}
+
+func TestAssistantChatWithoutBindingHasNoHostCommandAuthority(t *testing.T) {
+	h := newTestAIHandler(&config.Config{}, nil, nil)
+	svc := new(MockAIService)
+	h.defaultService = svc
+	svc.On("IsRunning").Return(true)
+	var got *chat.ExecuteRequest
+	svc.On("ExecuteStream", mock.Anything, mock.Anything, mock.Anything).Return(nil).Run(func(args mock.Arguments) {
+		req := args.Get(1).(chat.ExecuteRequest)
+		got = &req
+	})
+	h.HandleChat(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/api/ai/chat", strings.NewReader(`{"prompt":"hi"}`)))
+	if got == nil || got.HasHostCommandAuthority {
+		t.Fatalf("unbound chat request must fail closed, got %+v", got)
 	}
 }

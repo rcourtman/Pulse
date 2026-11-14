@@ -100,8 +100,15 @@ type InvocationPolicy struct {
 	// Execute authority is bound at authenticated transport boundaries.
 	// Unbound policies are reserved for trusted internal/test callers;
 	// external request paths must always bind an explicit true/false value.
-	HasExecuteAuthority         bool
-	ExecuteAuthorityBound       bool
+	HasExecuteAuthority   bool
+	ExecuteAuthorityBound bool
+	// Host-command authority is the caller's canonical action-execute
+	// capability, bound at the authenticated chat boundary. It gates every
+	// invocation that runs a command on a host (InvocationClass.HostCommand),
+	// read-only ones included. Unbound policies are trusted internal callers
+	// such as Patrol and are not restricted here.
+	HasHostCommandAuthority     bool
+	HostCommandAuthorityBound   bool
 	DenyInfrastructureMutations bool
 	// PulseStateAllowlist restricts pulse-state mutations to the named
 	// tools. Nil and an empty map both deny all pulse-state mutations. An
@@ -144,6 +151,9 @@ func (p InvocationPolicy) Allows(toolName string, class agentcapabilities.Invoca
 	if isPatrolInvestigationOnlyTool(toolName) && p.Profile != ProfilePatrolInvestigation {
 		return false
 	}
+	if p.deniesHostCommand(class) {
+		return false
+	}
 	switch class.Mutation {
 	case agentcapabilities.MutationNone:
 		return true
@@ -157,6 +167,12 @@ func (p InvocationPolicy) Allows(toolName string, class agentcapabilities.Invoca
 	default:
 		return false
 	}
+}
+
+// deniesHostCommand reports whether the invocation runs a command on a host
+// for a caller bound without host-command authority.
+func (p InvocationPolicy) deniesHostCommand(class agentcapabilities.InvocationClass) bool {
+	return class.HostCommand && p.HostCommandAuthorityBound && !p.HasHostCommandAuthority
 }
 
 func isPatrolInvestigationOnlyTool(toolName string) bool {
@@ -430,6 +446,9 @@ func (r *ToolRegistry) Execute(ctx context.Context, e *PulseToolExecutor, name s
 	}
 	policy := e.invocationPolicy()
 	if !policy.Allows(name, class) {
+		if policy.deniesHostCommand(class) && policy.Profile.Valid() && class.Valid() && !isPatrolInvestigationOnlyTool(name) {
+			return agentcapabilities.NewHostCommandAuthorityRequiredToolResult(name), nil
+		}
 		if class.Mutation == agentcapabilities.MutationInfrastructure &&
 			!policy.DenyInfrastructureMutations &&
 			!agentcapabilities.ControlLevelAllowsControlTools(policy.ControlLevel) {

@@ -77,11 +77,16 @@ func TestCanonicalDescriptorsPinSafetyCriticalClassifications(t *testing.T) {
 			t.Fatalf("%s %v = %#v, want %#v", tool, args, got, want)
 		}
 	}
+	// Retired mutating subactions are no longer in the schema enum, so they
+	// classify fail-closed: an infrastructure write that also counts as a
+	// host command.
 	assertClass(PulseKubernetesToolName, map[string]interface{}{"type": "scale"},
-		InvocationClass{Kind: ToolCallKindWrite, Mutation: MutationInfrastructure})
+		InvocationClass{Kind: ToolCallKindWrite, Mutation: MutationInfrastructure, HostCommand: true})
 	assertClass(PulseDockerToolName, map[string]interface{}{"action": "update"},
-		InvocationClass{Kind: ToolCallKindWrite, Mutation: MutationInfrastructure})
+		InvocationClass{Kind: ToolCallKindWrite, Mutation: MutationInfrastructure, HostCommand: true})
 	assertClass(PulseDockerToolName, map[string]interface{}{"action": "check_updates"},
+		InvocationClass{Kind: ToolCallKindRead, Mutation: MutationNone, HostCommand: true})
+	assertClass(PulseDockerToolName, map[string]interface{}{"action": "updates"},
 		InvocationClass{Kind: ToolCallKindRead, Mutation: MutationNone})
 	assertClass(PulseAlertsToolName, map[string]interface{}{"action": "resolve"},
 		InvocationClass{Kind: ToolCallKindWrite, Mutation: MutationPulseState})
@@ -89,7 +94,15 @@ func TestCanonicalDescriptorsPinSafetyCriticalClassifications(t *testing.T) {
 		InvocationClass{Kind: ToolCallKindWrite, Mutation: MutationInfrastructure})
 	assertClass(PulseFileEditToolName, map[string]interface{}{"action": "write"},
 		InvocationClass{Kind: ToolCallKindWrite, Mutation: MutationInfrastructure})
-	assertClass(PulseReadToolName, map[string]interface{}{"action": "exec"},
+	// Every pulse_read subaction runs a command on a host, as does kubectl
+	// logs; both need host-command authority from interactive callers.
+	for _, action := range []string{"exec", "file", "find", "tail", "logs"} {
+		assertClass(PulseReadToolName, map[string]interface{}{"action": action},
+			InvocationClass{Kind: ToolCallKindRead, Mutation: MutationNone, HostCommand: true})
+	}
+	assertClass(PulseKubernetesToolName, map[string]interface{}{"type": "logs"},
+		InvocationClass{Kind: ToolCallKindRead, Mutation: MutationNone, HostCommand: true})
+	assertClass(PulseKubernetesToolName, map[string]interface{}{"type": "pods"},
 		InvocationClass{Kind: ToolCallKindRead, Mutation: MutationNone})
 	assertClass(PatrolAssessFindingToolName, map[string]interface{}{"verdict": "present"},
 		InvocationClass{Kind: ToolCallKindWrite, Mutation: MutationPulseState})

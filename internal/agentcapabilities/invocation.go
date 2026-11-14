@@ -28,6 +28,12 @@ const (
 type InvocationClass struct {
 	Kind     ToolCallKind
 	Mutation MutationTarget
+	// HostCommand marks an invocation that runs a command on a monitored
+	// host through a Pulse agent, as the agent's service user (root by
+	// default). It is independent of Mutation: a read-only command still
+	// executes on the host. Interactive callers need the canonical
+	// action-execute capability for these; see InvocationPolicy.
+	HostCommand bool
 }
 
 // Valid reports whether the class uses the closed kind and mutation
@@ -51,7 +57,7 @@ func (c InvocationClass) Valid() bool {
 // invocations classify as: a newly introduced or fabricated subaction can
 // never bypass governed-mutation checks by being unclassified.
 func FailClosedInvocationClass() InvocationClass {
-	return InvocationClass{Kind: ToolCallKindWrite, Mutation: MutationInfrastructure}
+	return InvocationClass{Kind: ToolCallKindWrite, Mutation: MutationInfrastructure, HostCommand: true}
 }
 
 // InvocationDescriptor is the registry-owned classification contract for
@@ -144,6 +150,11 @@ func staticClass(kind ToolCallKind, mutation MutationTarget) InvocationDescripto
 	return InvocationDescriptor{Static: &class}
 }
 
+func hostCommandClass(kind ToolCallKind, mutation MutationTarget) InvocationDescriptor {
+	class := InvocationClass{Kind: kind, Mutation: mutation, HostCommand: true}
+	return InvocationDescriptor{Static: &class}
+}
+
 // registryInvocationDescriptors is the canonical classification table for
 // every Pulse registry tool. Workflow kinds intentionally match the
 // historical shared classifier so FSM transitions do not change; mutation
@@ -160,8 +171,10 @@ var registryInvocationDescriptors = map[string]InvocationDescriptor{
 	PulseSummarizeToolName: staticClass(ToolCallKindRead, MutationNone),
 	// pulse_read's exec subaction dispatches only structurally read-only
 	// commands: the handler's execution-intent classifier rejects
-	// WriteOrUnknown commands before dispatch.
-	PulseReadToolName:    staticClass(ToolCallKindRead, MutationNone),
+	// WriteOrUnknown commands before dispatch. Every subaction (exec, file,
+	// find, tail, logs) still runs a command on a host, so the tool is a
+	// host-command tool as a whole.
+	PulseReadToolName:    hostCommandClass(ToolCallKindRead, MutationNone),
 	PulseControlToolName: staticClass(ToolCallKindWrite, MutationInfrastructure),
 	// pulse_file_edit is write-only: file inspection routes through
 	// pulse_read, so this tool never advertises a read subaction.
@@ -183,7 +196,8 @@ var registryInvocationDescriptors = map[string]InvocationDescriptor{
 			"nodes":       {Kind: ToolCallKindRead, Mutation: MutationNone},
 			"pods":        {Kind: ToolCallKindRead, Mutation: MutationNone},
 			"deployments": {Kind: ToolCallKindRead, Mutation: MutationNone},
-			"logs":        {Kind: ToolCallKindRead, Mutation: MutationNone},
+			// logs runs kubectl on the cluster's agent host.
+			"logs": {Kind: ToolCallKindRead, Mutation: MutationNone, HostCommand: true},
 		},
 	},
 	PulseDockerToolName: {
@@ -196,8 +210,10 @@ var registryInvocationDescriptors = map[string]InvocationDescriptor{
 			// check_updates queues a read-only scan command on the
 			// agent; it changes nothing on the container estate, so it
 			// is read for workflow purposes too (write would drive the
-			// FSM into verification for a non-mutating refresh).
-			"check_updates": {Kind: ToolCallKindRead, Mutation: MutationNone},
+			// FSM into verification for a non-mutating refresh). The scan
+			// still runs on the host (registry lookups can invoke the
+			// configured Docker credential helper), so it is a host command.
+			"check_updates": {Kind: ToolCallKindRead, Mutation: MutationNone, HostCommand: true},
 		},
 	},
 	PulseKnowledgeToolName: {

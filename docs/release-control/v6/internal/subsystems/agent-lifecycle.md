@@ -2608,6 +2608,13 @@ authority and still satisfy the separate agent execution/token-binding and
 control-level gates. Unknown or absent request scope never falls back to agent
 execution permission.
 
+Assistant tools that dispatch a command to an agent (`pulse_read`,
+`pulse_kubernetes` `logs`, `pulse_docker` `check_updates`) also require the
+chat caller's canonical action-execute capability, bound at `/api/ai/chat` as
+host-command authority.
+Agent command enablement alone never lets a caller who cannot run actions
+have the Assistant run a read command on that host.
+
 Commercial v5-to-v6 migration retry state may pass through `internal/api/`
 handlers that agent-lifecycle also references, but the ownership remains
 API/cloud-paid. Agent lifecycle surfaces may observe paid-migration posture for

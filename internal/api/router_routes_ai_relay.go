@@ -263,7 +263,8 @@ func (r *Router) registerAIRelayRoutesGroup() {
 	r.mux.HandleFunc("/api/ai/status", RequireAuth(r.config, RequireScope(config.ScopeAIChat, r.aiHandler.HandleStatus)))
 	r.mux.HandleFunc("/api/ai/workflow-prompts/activity", RequireAuth(r.config, RequireScope(config.ScopeAIChat, r.aiHandler.HandleRecordWorkflowPromptActivity)))
 	r.mux.HandleFunc("/api/ai/chat", RequireAuth(r.config, requireRelayMobileRuntimeRoute(relayMobileRouteChatSend,
-		retainTokenStreamAuthorityForScopes(r.config, relayMobileRuntimeRouteSpecFor(relayMobileRouteChatSend).compatibleScopes(), false, r.aiHandler.HandleChat))))
+		retainTokenStreamAuthorityForScopes(r.config, relayMobileRuntimeRouteSpecFor(relayMobileRouteChatSend).compatibleScopes(), false,
+			withAssistantHostCommandAuthority(r.config, r.authorizer, r.aiHandler.HandleChat)))))
 	r.mux.HandleFunc("/api/ai/sessions", RequireAuth(r.config, r.routeAISessionsCollection))
 	r.mux.HandleFunc("/api/ai/sessions/", RequireAuth(r.config, r.routeAISessions))
 

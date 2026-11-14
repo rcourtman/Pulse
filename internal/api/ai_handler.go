@@ -2696,18 +2696,21 @@ func (h *AIHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 		autonomousMode = chatApprovalRequiredAutonomousMode()
 	}
 	err := svc.ExecuteStream(ctx, chat.ExecuteRequest{
-		Prompt:               req.Prompt,
-		SessionID:            req.SessionID,
-		Model:                req.Model,
-		Mentions:             chatMentions,
-		FindingID:            findingID,
-		HandoffContext:       handoffContext,
-		HandoffResources:     handoffResources,
-		HandoffActions:       handoffActions,
-		HandoffMetadata:      handoffMetadata,
-		AutonomousMode:       autonomousMode,
-		HasExecuteAuthority:  assistantExecuteAuthority(ctx),
-		SuppressSessionEvent: true,
+		Prompt:              req.Prompt,
+		SessionID:           req.SessionID,
+		Model:               req.Model,
+		Mentions:            chatMentions,
+		FindingID:           findingID,
+		HandoffContext:      handoffContext,
+		HandoffResources:    handoffResources,
+		HandoffActions:      handoffActions,
+		HandoffMetadata:     handoffMetadata,
+		AutonomousMode:      autonomousMode,
+		HasExecuteAuthority: assistantExecuteAuthority(ctx),
+		// Bound by withAssistantHostCommandAuthority on the route; absent
+		// means the caller may not have the Assistant run host commands.
+		HasHostCommandAuthority: chat.HostCommandAuthorityFromContext(ctx),
+		SuppressSessionEvent:    true,
 	}, func(event chat.StreamEvent) {
 		if event.Type == "done" {
 			serviceSentDone = true
