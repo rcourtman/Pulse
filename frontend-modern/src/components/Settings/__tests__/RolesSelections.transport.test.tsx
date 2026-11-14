@@ -157,25 +157,27 @@ function expectSavedRows(expected: Role[]) {
     const row = rowFor(role);
     expect(row.getByText(role.name)).toBeInTheDocument();
     expect(row.getByText(role.id)).toBeInTheDocument();
-    for (const list of row.getAllByRole('list', {
-      name: `Permissions for ${role.name} (Role ID: ${role.id})`,
-    })) {
-      expect(within(list).getAllByRole('listitem')).toHaveLength(role.permissions.length);
-      for (const permission of role.permissions)
-        expect(
-          within(list).getByText(`${permission.action}:${permission.resource}`),
-        ).toBeInTheDocument();
+    for (const list of row.getAllByRole('list')) {
+      expect(list).toHaveAccessibleName(`Permissions for ${role.name} (Role ID: ${role.id})`);
+      // Snapshot the scoped items once. Repeated deep text queries add work
+      // without proving row ownership; ordered exact text also rejects extras.
+      expect(
+        within(list)
+          .getAllByRole('listitem')
+          .map((item) => item.textContent),
+      ).toEqual(
+        role.permissions.map((permission) => `${permission.action}:${permission.resource}`),
+      );
     }
+    const buttons = row.queryAllByRole('button');
     if (role.isBuiltIn) {
       expect(row.getByText('Read-only')).toBeInTheDocument();
-      expect(row.queryByRole('button')).not.toBeInTheDocument();
+      expect(buttons).toHaveLength(0);
     } else {
-      expect(
-        row.getByRole('button', { name: `Edit role ${role.name} (Role ID: ${role.id})` }),
-      ).toBeEnabled();
-      expect(
-        row.getByRole('button', { name: `Delete role ${role.name} (Role ID: ${role.id})` }),
-      ).toBeEnabled();
+      expect(buttons).toHaveLength(2);
+      expect(buttons[0]).toHaveAccessibleName(`Edit role ${role.name} (Role ID: ${role.id})`);
+      expect(buttons[1]).toHaveAccessibleName(`Delete role ${role.name} (Role ID: ${role.id})`);
+      buttons.forEach((button) => expect(button).toBeEnabled());
     }
   }
   for (const role of originalRoles)
