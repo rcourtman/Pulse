@@ -118,7 +118,9 @@ const mount = () => {
 };
 const loaded = async (estate = 'East') => {
   await screen.findByText(`${estate} selected sign-in`);
-  expect(row(`${estate} selected sign-in`).getByRole('button', { name: 'Verify' })).toBeEnabled();
+  expect(
+    row(`${estate} selected sign-in`).getByRole('button', { name: /^Verify signature: / }),
+  ).toBeEnabled();
 };
 const expectNoInventory = () => {
   expect(screen.queryByRole('table')).not.toBeInTheDocument();
@@ -172,6 +174,78 @@ afterEach(() => {
 });
 
 describe('Audit Log rendered controls through the real HTTP client', () => {
+  it('names same-user signature actions by their exact saved event ID', async () => {
+    const rows = events();
+    rows[1].timestamp = rows[0].timestamp;
+    read = () => json({ events: rows, total: 2, persistentLogging: true });
+    mount();
+    await loaded();
+    for (const event of rows) {
+      const action = screen.getByRole('button', {
+        name: `Verify signature: ${event.event} by ${event.user} at ${new Date(event.timestamp).toLocaleString()} (Event ID: ${event.id})`,
+      });
+      expect(action).toHaveTextContent('Verify');
+      expect(action).toBeEnabled();
+    }
+    expect(verificationRequests()).toHaveLength(0);
+  });
+
+  it.each([
+    {
+      trigger: 'Legend',
+      title: 'Audit signature verification',
+      description: 'Unsigned: no signature stored for this event',
+    },
+    {
+      trigger: 'Help: Auto-verify limit',
+      title: 'Auto-verify limit',
+      description: 'Large verification batches can add load. Use a smaller limit on busy systems.',
+    },
+  ])(
+    'opens $title as named help without verifying an event',
+    async ({ trigger, title, description }) => {
+      mount();
+      await loaded();
+      const action = screen.getByRole('button', { name: trigger });
+      expect(action).toHaveAttribute('type', 'button');
+      expect(action).toHaveAttribute('aria-expanded', 'false');
+      fireEvent.click(action);
+      const help = screen.getByRole('dialog', { name: title });
+      expect(action).toHaveAttribute('aria-expanded', 'true');
+      expect(help).toHaveAttribute('id', action.getAttribute('aria-controls'));
+      expect(help).toHaveTextContent(description);
+      if (trigger === 'Legend') {
+        for (const definition of [
+          'Unavailable: verification not supported by the logger',
+          'Not checked: signature exists but has not been verified',
+          'Failed: signature mismatch or tampering detected',
+          'Error: verification request failed',
+        ]) {
+          expect(help).toHaveTextContent(definition);
+        }
+      }
+      fireEvent.click(within(help).getByRole('button', { name: 'Close help' }));
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(action).toHaveFocus();
+      expect(action).toHaveAttribute('aria-expanded', 'false');
+      expect(verificationRequests()).toHaveLength(0);
+      expect(auditRequests()).toHaveLength(1);
+    },
+  );
+  it('withdraws open event help with the audit reader', async () => {
+    const { reader, setReader } = mount();
+    await loaded();
+    fireEvent.click(screen.getByRole('button', { name: 'Legend' }));
+    expect(
+      screen.getByRole('dialog', { name: 'Audit signature verification' }),
+    ).toBeInTheDocument();
+    setReader({ ...reader(), canRead: false });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Legend' })).not.toBeInTheDocument();
+    expectNoInventory();
+    expect(verificationRequests()).toHaveLength(0);
+  });
+
   it('verifies only the chosen grid row, with its complete opaque ID and saved reader', async () => {
     const completion = deferred<Response>();
     verify = () => completion.promise;
@@ -179,16 +253,16 @@ describe('Audit Log rendered controls through the real HTTP client', () => {
     await loaded();
     expectBoundRead(auditRequests()[0], '/api/audit?limit=100&offset=0');
 
-    fireEvent.click(row().getByRole('button', { name: 'Verify' }));
+    fireEvent.click(row().getByRole('button', { name: /^Verify signature: / }));
     await waitFor(() => expect(verificationRequests()).toHaveLength(1));
     expectBoundRead(
       verificationRequests()[0],
       `/api/audit/${encodeURIComponent(selectedID)}/verify`,
     );
     expect(row().getByText('Verifying…')).toBeInTheDocument();
-    expect(row().getByRole('button', { name: 'Verify' })).toBeDisabled();
+    expect(row().getByRole('button', { name: /^Verify signature: / })).toBeDisabled();
     expect(row('East first sign-in').getByText('Not checked')).toBeInTheDocument();
-    fireEvent.click(row().getByRole('button', { name: 'Verify' }));
+    fireEvent.click(row().getByRole('button', { name: /^Verify signature: / }));
     expect(verificationRequests()).toHaveLength(1);
 
     completion.resolve(json(verificationResult()));
@@ -196,7 +270,7 @@ describe('Audit Log rendered controls through the real HTTP client', () => {
     expect(row('East first sign-in').getByText('Not checked')).toBeInTheDocument();
     expect(screen.getByText('Verified: 1')).toBeInTheDocument();
     expect(screen.getByText('Unchecked: 1')).toBeInTheDocument();
-    expect(row().getByRole('button', { name: 'Verify' })).toBeEnabled();
+    expect(row().getByRole('button', { name: /^Verify signature: / })).toBeEnabled();
     expect(auditRequests()).toHaveLength(2);
   });
 
@@ -206,7 +280,7 @@ describe('Audit Log rendered controls through the real HTTP client', () => {
     verify = () => old.response;
     mount();
     await loaded();
-    fireEvent.click(row().getByRole('button', { name: 'Verify' }));
+    fireEvent.click(row().getByRole('button', { name: /^Verify signature: / }));
     await waitFor(() => expect(old.response.bodyUsed).toBe(true));
     const signal = verificationRequests()[0].init.signal;
 
@@ -215,7 +289,9 @@ describe('Audit Log rendered controls through the real HTTP client', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
     expect(signal?.aborted).toBe(true);
     await loaded('Refreshed');
-    fireEvent.click(row('Refreshed selected sign-in').getByRole('button', { name: 'Verify' }));
+    fireEvent.click(
+      row('Refreshed selected sign-in').getByRole('button', { name: /^Verify signature: / }),
+    );
     await waitFor(() => expect(verificationRequests()).toHaveLength(2));
 
     old.finish(verificationResult(false));
@@ -276,7 +352,7 @@ describe('Audit Log rendered controls through the real HTTP client', () => {
     verify = () => json({ error: 'rate_limited' }, 429, { 'Retry-After': '1' });
     mount();
     await loaded();
-    fireEvent.click(row().getByRole('button', { name: 'Verify' }));
+    fireEvent.click(row().getByRole('button', { name: /^Verify signature: / }));
     await waitFor(() => expect(row().getByText('Error')).toBeInTheDocument());
     expect(row('East first sign-in').getByText('Not checked')).toBeInTheDocument();
     expect(verificationRequests()).toHaveLength(1);
@@ -284,7 +360,7 @@ describe('Audit Log rendered controls through the real HTTP client', () => {
     expect(getOrgID()).toBe(orgID);
 
     verify = () => json(verificationResult());
-    fireEvent.click(row().getByRole('button', { name: 'Verify' }));
+    fireEvent.click(row().getByRole('button', { name: /^Verify signature: / }));
     await waitFor(() => expect(row().getByText('Verified')).toBeInTheDocument());
     expect(verificationRequests()).toHaveLength(2);
     for (const request of verificationRequests())
@@ -342,7 +418,9 @@ describe('Audit Log rendered controls through the real HTTP client', () => {
     old.finish(inventory());
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(screen.queryByText('East selected sign-in')).not.toBeInTheDocument();
-    fireEvent.click(row('West selected sign-in').getByRole('button', { name: 'Verify' }));
+    fireEvent.click(
+      row('West selected sign-in').getByRole('button', { name: /^Verify signature: / }),
+    );
     await waitFor(() =>
       expect(row('West selected sign-in').getByText('Verified')).toBeInTheDocument(),
     );

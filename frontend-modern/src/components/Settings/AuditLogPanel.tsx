@@ -1,12 +1,12 @@
 import { Show } from 'solid-js';
 import Shield from 'lucide-solid/icons/shield';
 import RefreshCw from 'lucide-solid/icons/refresh-cw';
-import Info from 'lucide-solid/icons/info';
 import Play from 'lucide-solid/icons/play';
 import ShieldAlert from 'lucide-solid/icons/shield-alert';
 import { Button } from '@/components/shared/Button';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { showTooltip, hideTooltip } from '@/components/shared/Tooltip';
+import { HelpIcon } from '@/components/shared/HelpIcon';
 import { UpgradeButtonLink } from '@/components/shared/UpgradeLink';
 import { FilterBar, type FilterDef, type FilterSelectOption } from '@/components/shared/FilterBar';
 import { FormSelect } from '@/components/shared/FormSelect';
@@ -281,41 +281,36 @@ export default function AuditLogPanel(props: AuditLogPanelProps) {
             onChange={(e) => setAutoVerifyEnabled(e.currentTarget.checked)}
           />
           <div class="flex flex-col gap-2 text-xs text-muted sm:flex-row sm:flex-wrap sm:items-center">
-            <label class="flex items-center gap-2">
-              <span>Auto-verify limit</span>
-              <input
-                type="number"
-                min="0"
-                value={autoVerifyLimit()}
-                disabled={!autoVerifyEnabled()}
-                onInput={(e) => {
-                  const raw = Number(e.currentTarget.value);
-                  if (!Number.isFinite(raw)) {
-                    setAutoVerifyLimit(0);
-                    return;
-                  }
-                  const clamped = Math.max(0, Math.min(500, Math.floor(raw)));
-                  setAutoVerifyLimit(clamped);
+            <div class="flex flex-wrap items-center gap-2">
+              <label class="flex items-center gap-2">
+                <span>Auto-verify limit</span>
+                <input
+                  type="number"
+                  min="0"
+                  value={autoVerifyLimit()}
+                  disabled={!autoVerifyEnabled()}
+                  onInput={(e) => {
+                    const raw = Number(e.currentTarget.value);
+                    if (!Number.isFinite(raw)) {
+                      setAutoVerifyLimit(0);
+                      return;
+                    }
+                    const clamped = Math.max(0, Math.min(500, Math.floor(raw)));
+                    setAutoVerifyLimit(clamped);
+                  }}
+                  class="min-h-10 sm:min-h-10 w-24 rounded-md border border-border bg-surface px-2.5 py-2 text-sm text-base-content"
+                />
+              </label>
+              <HelpIcon
+                inline={{
+                  title: 'Auto-verify limit',
+                  description:
+                    'Large verification batches can add load. Use a smaller limit on busy systems.',
                 }}
-                class="min-h-10 sm:min-h-10 w-24 rounded-md border border-border bg-surface px-2.5 py-2 text-sm text-base-content"
+                size="xs"
               />
-            </label>
+            </div>
             <span class="text-muted">0 disables, max 500</span>
-            <span
-              class="inline-flex items-center cursor-help"
-              onMouseEnter={(e) => {
-                const rect = e.currentTarget.getBoundingClientRect();
-                showTooltip(
-                  'Large verification batches can add load. Use a smaller limit on busy systems.',
-                  rect.left + rect.width / 2,
-                  rect.top,
-                  { align: 'center', direction: 'up', maxWidth: 260 },
-                );
-              }}
-              onMouseLeave={() => hideTooltip()}
-            >
-              <Info class="w-3 h-3" />
-            </span>
             <button
               onClick={resetPreferences}
               class="w-full sm:w-auto sm:ml-2 min-h-10 sm:min-h-10 px-3 py-2 text-sm font-medium text-muted border border-border rounded-md hover:bg-surface-hover"
@@ -366,28 +361,20 @@ export default function AuditLogPanel(props: AuditLogPanelProps) {
           <span>Errors: {verificationSummary().error}</span>
           <span>Unavailable: {verificationSummary().unavailable}</span>
           <span>Unchecked: {verificationSummary().unchecked}</span>
-          <span
-            class="inline-flex items-center gap-1 text-muted cursor-help"
-            onMouseEnter={(e) => {
-              const rect = e.currentTarget.getBoundingClientRect();
-              const content = [
+          <HelpIcon
+            triggerLabel="Legend"
+            inline={{
+              title: 'Audit signature verification',
+              description: [
                 'Unsigned: no signature stored for this event',
                 'Unavailable: verification not supported by the logger',
                 'Not checked: signature exists but has not been verified',
                 'Failed: signature mismatch or tampering detected',
                 'Error: verification request failed',
-              ].join('\n');
-              showTooltip(content, rect.left + rect.width / 2, rect.top, {
-                align: 'center',
-                direction: 'up',
-                maxWidth: 320,
-              });
+              ].join('\n'),
             }}
-            onMouseLeave={() => hideTooltip()}
-          >
-            <Info class="w-3 h-3" />
-            Legend
-          </span>
+            size="xs"
+          />
           <span class="w-full sm:w-auto sm:ml-auto text-muted">
             {pageRangeText()} • Page {pageNumber()} of {totalPages()}
           </span>
@@ -483,6 +470,8 @@ export default function AuditLogPanel(props: AuditLogPanelProps) {
                         <span class="text-xs text-muted">Verifying…</span>
                       </Show>
                       <button
+                        type="button"
+                        aria-label={`Verify signature: ${event.event} by ${event.user || 'Unknown user'} at ${formatTimestamp(event.timestamp)} (Event ID: ${event.id})`}
                         onClick={() => void verifyEvent(event)}
                         disabled={isVerifying}
                         class={AUDIT_VERIFY_ROW_BUTTON_CLASS}
