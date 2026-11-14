@@ -2177,7 +2177,11 @@ the `white_label` branding entitlement.
    runs host commands and can plan a fix, so `routeAIFindings` wraps it in
    `requireActionCapability` for both `auth.ActionPlan` and
    `auth.ActionExecute`. A route-level token scope is never the only gate for
-   such work, because browser and proxy sessions skip scope checks.
+   such work, because browser and proxy sessions skip scope checks. The
+   router installs `actionAuthority` as the action lifecycle's
+   `LiveCheckAuthorizer` too, so the agent preflight a plan, refresh, review
+   or approval would send needs the action-execute capability; plan-only and
+   approve-only grants never make the agent do work.
 4. Change security/auth/token transport behavior through the shared `frontend-modern/src/api/security.ts`, `frontend-modern/src/components/Settings/APITokenManager.tsx`, `frontend-modern/src/components/Settings/apiTokenManagerModel.ts`, `frontend-modern/src/components/Settings/useAPITokenManagerState.ts`, `internal/api/security.go`, `internal/api/security_tokens.go`, and `internal/api/system_settings.go` boundary.
    Local username/password verification in `internal/api/auth.go` and
    `internal/api/router.go` must snapshot `AuthUser` and `AuthPass` under

@@ -50,9 +50,50 @@ type AvailabilityChecker interface {
 // FeasibilityChecker is the trust-critical, operation-specific counterpart to
 // AvailabilityChecker. Availability is cheap enough for resource projection;
 // feasibility may perform bounded remote reads and is called only while
-// planning, approving, or dispatching a concrete action.
+// planning, approving, or dispatching a concrete action. Before dispatch it
+// runs only for callers the LiveCheckAuthorizer admits; dispatch always runs
+// it.
 type FeasibilityChecker interface {
 	CheckActionFeasible(ctx context.Context, actionID string, req unified.ActionRequest, resource unified.Resource) unified.ResourceActionReadiness
+}
+
+// LiveCheckAuthorizer decides whether actor may have Pulse ask the agent to
+// check an action before dispatch. A FeasibilityChecker runs on the agent, so
+// the lifecycle treats it as agent work: it needs the execute capability, not
+// only the plan or approve capability of the stage that asks. Without it the
+// stage still applies every Pulse-side gate (including AvailabilityChecker),
+// and dispatch always runs the agent check under the executor's authority.
+type LiveCheckAuthorizer interface {
+	AuthorizeLiveCheck(ctx context.Context, orgID string, actor unified.ActionActor) error
+}
+
+type LiveCheckAuthorizerFunc func(context.Context, string, unified.ActionActor) error
+
+func (f LiveCheckAuthorizerFunc) AuthorizeLiveCheck(ctx context.Context, orgID string, actor unified.ActionActor) error {
+	return f(ctx, orgID, actor)
+}
+
+type liveCheckAuthorityContextKey struct{}
+
+// WithLiveCheckAuthority binds, for an in-process broker that plans on a
+// person's behalf under its own service identity, whether that person may
+// have the agent check the action. A bound false withholds agent checks
+// whatever the actor; an absent binding leaves the decision to the
+// LiveCheckAuthorizer.
+func WithLiveCheckAuthority(ctx context.Context, allowed bool) context.Context {
+	return context.WithValue(ctx, liveCheckAuthorityContextKey{}, allowed)
+}
+
+// liveCheckAllowed reports whether a stage before dispatch may run the
+// executor's agent check for actor. It fails closed.
+func (s *Service) liveCheckAllowed(ctx context.Context, orgID string, actor unified.ActionActor) bool {
+	if allowed, bound := ctx.Value(liveCheckAuthorityContextKey{}).(bool); bound && !allowed {
+		return false
+	}
+	if s.LiveCheckAuthorizer == nil {
+		return false
+	}
+	return s.LiveCheckAuthorizer.AuthorizeLiveCheck(ctx, strings.TrimSpace(orgID), unified.NormalizeActionActor(actor)) == nil
 }
 
 // RefreshPlanner reconstructs broker-owned planning inputs for a replacement
@@ -101,6 +142,10 @@ type Service struct {
 	EmergencyStop       func(orgID string) (bool, error)
 	DecisionAuthorizer  DecisionAuthorizer
 	ExecutionAuthorizer ExecutionAuthorizer
+	// LiveCheckAuthorizer decides whether a caller who plans, refreshes,
+	// reviews or approves an action may have the agent check it
+	// (FeasibilityChecker). Nil means no agent checks before dispatch.
+	LiveCheckAuthorizer LiveCheckAuthorizer
 	StepUpVerifier      StepUpVerifier
 	RefreshPlanner      RefreshPlanner
 	// OnActionCompleted receives every terminal (completed/failed) audit
@@ -538,7 +583,7 @@ func (s *Service) PlanWithOptions(ctx context.Context, orgID string, req unified
 			}
 		}
 	}
-	if checker, ok := s.Executor.(FeasibilityChecker); ok {
+	if checker, ok := s.Executor.(FeasibilityChecker); ok && s.liveCheckAllowed(ctx, orgID, opts.Actor) {
 		if readiness := checker.CheckActionFeasible(ctx, plan.ActionID, req, *resource); readiness.Name != "" && !readiness.Available {
 			return unified.ActionPlan{}, &AvailabilityRefusedError{
 				ResourceID: req.ResourceID, CapabilityName: req.CapabilityName, Readiness: readiness,
@@ -600,6 +645,12 @@ func (s *Service) Refresh(ctx context.Context, orgID, actionID string, actor uni
 	req.RequestedBy = ""
 	req.Actor = unified.ActionActor{}
 	opts := PlanOptions{Actor: actor, Origin: previous.Origin}
+	// A refresh plans under the broker's identity when a broker proposed the
+	// action, but the person asking for it decides whether the agent checks
+	// the replacement.
+	if !s.liveCheckAllowed(ctx, orgID, actor) {
+		ctx = WithLiveCheckAuthority(ctx, false)
+	}
 	if s.RefreshPlanner != nil {
 		req, opts, err = s.RefreshPlanner(ctx, strings.TrimSpace(orgID), previous, actor, requestID)
 		if err != nil {
@@ -923,8 +974,9 @@ func (s *Service) Decide(ctx context.Context, orgID, actionID string, decision u
 	// when the exact reviewed plan can still pass the same live gates used at
 	// dispatch. Checking here (inside the lifecycle boundary) prevents an
 	// approval from being persisted during a resource/policy/readiness race.
+	liveCheck := decision.Outcome == unified.OutcomeApproved && s.liveCheckAllowed(ctx, orgID, decision.Actor)
 	if decision.Outcome == unified.OutcomeApproved {
-		if err := s.ValidateCurrentReadiness(ctx, orgID, record); err != nil {
+		if err := s.validateCurrentReadiness(ctx, orgID, record, liveCheck); err != nil {
 			return unified.ActionAuditRecord{}, err
 		}
 	}
@@ -975,7 +1027,7 @@ func (s *Service) Decide(ctx context.Context, orgID, actionID string, decision u
 					return unified.ActionAuditRecord{}, err
 				}
 				if decision.Outcome == unified.OutcomeApproved {
-					if err := s.ValidateCurrentReadiness(ctx, orgID, current); err != nil {
+					if err := s.validateCurrentReadiness(ctx, orgID, current, liveCheck); err != nil {
 						return unified.ActionAuditRecord{}, err
 					}
 				}
@@ -1009,6 +1061,12 @@ func (s *Service) Decide(ctx context.Context, orgID, actionID string, decision u
 // approval state itself, so pending actions can be checked before a human
 // decision and approved actions can be checked again before execution.
 func (s *Service) ValidateCurrentReadiness(ctx context.Context, orgID string, record unified.ActionAuditRecord) error {
+	return s.validateCurrentReadiness(ctx, orgID, record, true)
+}
+
+// validateCurrentReadiness is ValidateCurrentReadiness with the agent check
+// (FeasibilityChecker) run only when liveCheck is true.
+func (s *Service) validateCurrentReadiness(ctx context.Context, orgID string, record unified.ActionAuditRecord, liveCheck bool) error {
 	now := s.now()
 	switch record.State {
 	case unified.ActionStatePlanned, unified.ActionStatePending, unified.ActionStateApproved:
@@ -1047,7 +1105,7 @@ func (s *Service) ValidateCurrentReadiness(ctx context.Context, orgID string, re
 		}
 		return &PolicyCheckError{Err: err}
 	}
-	if err := s.ValidateExecutionAvailable(ctx, orgID, record); err != nil {
+	if err := s.validateExecutionAvailable(ctx, orgID, record, liveCheck); err != nil {
 		var unavailable *AvailabilityRefusedError
 		if errors.As(err, &unavailable) {
 			return err
@@ -1058,12 +1116,18 @@ func (s *Service) ValidateCurrentReadiness(ctx context.Context, orgID string, re
 }
 
 // AssessCurrentReadiness converts the canonical readiness gates into a stable
-// UI/API projection while retaining exact executor-owned refusal detail.
-func (s *Service) AssessCurrentReadiness(ctx context.Context, orgID string, record unified.ActionAuditRecord) ActionReadiness {
+// UI/API projection while retaining exact executor-owned refusal detail. The
+// agent check runs only when viewer may have the agent check the action.
+func (s *Service) AssessCurrentReadiness(ctx context.Context, orgID string, record unified.ActionAuditRecord, viewer unified.ActionActor) ActionReadiness {
 	checkedAt := s.now()
-	err := s.ValidateCurrentReadiness(ctx, orgID, record)
+	_, agentCheck := s.Executor.(FeasibilityChecker)
+	liveCheck := agentCheck && s.liveCheckAllowed(ctx, orgID, viewer)
+	err := s.validateCurrentReadiness(ctx, orgID, record, liveCheck)
 	readiness := ActionReadiness{Ready: err == nil, Code: "ready", Message: "Action is ready for approval and dispatch.", CheckedAt: checkedAt}
 	if err == nil {
+		if agentCheck && !liveCheck {
+			readiness.Message = "Action passed Pulse's checks. The agent checks it again before it runs."
+		}
 		return readiness
 	}
 	readiness.Ready = false
@@ -1773,8 +1837,13 @@ const (
 // the optional executor-owned readiness checker immediately before admission.
 // An absent checker or an empty readiness result preserves compatibility.
 func (s *Service) ValidateExecutionAvailable(ctx context.Context, orgID string, record unified.ActionAuditRecord) error {
+	return s.validateExecutionAvailable(ctx, orgID, record, true)
+}
+
+func (s *Service) validateExecutionAvailable(ctx context.Context, orgID string, record unified.ActionAuditRecord, liveCheck bool) error {
 	availability, hasAvailability := s.Executor.(AvailabilityChecker)
 	feasibility, hasFeasibility := s.Executor.(FeasibilityChecker)
+	hasFeasibility = hasFeasibility && liveCheck
 	if !hasAvailability && !hasFeasibility {
 		return nil
 	}

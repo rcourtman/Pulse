@@ -4106,9 +4106,24 @@ a new API state machine, queue contract, or verification-accounting field.
    read-only `action_preflight` for the exact action-bound operation digest.
    An infeasible, stale, mismatched, timed-out, or unsupported agent result
    returns the same `409 action_execution_unavailable` contract and cannot
-   persist an approval or enter `executing`. The preflight result is readiness
+   enter `executing`; it also refuses an approval when the approver's stage
+   ran the preflight (see below). The preflight result is readiness
    evidence only, never approval, dispatch authority, durable receipt,
    execution success, or verification.
+   The preflight is agent work, so before dispatch it runs only for a caller
+   the lifecycle's `LiveCheckAuthorizer` admits: `actionAuthority` answers
+   with the caller's action-execute capability, so a plan-only or
+   approve-only RBAC grant plans, refreshes, reviews (`GET
+   /api/actions/{id}` readiness) and approves without asking the agent, and
+   dispatch admission always calls the executor's `FeasibilityChecker`
+   (exported `ValidateCurrentReadiness` and `ValidateExecutionAvailable`
+   always run it and are for dispatch admission only). Every Pulse-side gate, including
+   `AvailabilityChecker`, still applies to those callers. Server-stamped
+   broker identities (Patrol) are admitted; a broker planning for a person
+   under its own identity binds that person's authority with
+   `actionlifecycle.WithLiveCheckAuthority` (the Assistant binds the chat
+   caller's host-command authority), and a refresh uses the refreshing
+   caller's authority. An unset authorizer runs no preflight before dispatch.
    Docker / Podman lifecycle execution resolves the command WebSocket by the
    report token when that session also holds the resource's agent ID or
    hostname, then by exact agent ID and hostname. A resource with no token uses

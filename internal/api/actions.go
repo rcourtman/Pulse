@@ -147,6 +147,7 @@ func (h *ResourceHandlers) ActionLifecycle() *actionlifecycle.Service {
 		EmergencyStop:       h.actionEmergencyStop,
 		DecisionAuthorizer:  h.actionDecisionAuthorizer,
 		ExecutionAuthorizer: h.actionExecutionAuthorizer,
+		LiveCheckAuthorizer: h.actionLiveCheckAuthorizer,
 		RefreshPlanner:      h.actionRefreshPlanner,
 	}
 }
@@ -315,7 +316,8 @@ func (h *ResourceHandlers) HandleGetAction(w http.ResponseWriter, r *http.Reques
 		writeJSONErrorWithDetails(w, http.StatusNotFound, agentcapabilities.AgentErrCodeActionNotFound, "Action not found", map[string]string{"actionId": actionID})
 		return
 	}
-	detail, found, err := h.ActionLifecycle().Detail(GetOrgID(r.Context()), actionID)
+	orgID := GetOrgID(r.Context())
+	detail, found, err := h.ActionLifecycle().Detail(orgID, actionID)
 	if err != nil {
 		writeActionLifecycleReadError(w, err, func() {
 			writeJSONError(w, http.StatusInternalServerError, agentcapabilities.AgentErrCodeActionDetailFailed, "Failed to query action detail")
@@ -326,13 +328,16 @@ func (h *ResourceHandlers) HandleGetAction(w http.ResponseWriter, r *http.Reques
 		writeJSONErrorWithDetails(w, http.StatusNotFound, agentcapabilities.AgentErrCodeActionNotFound, "Action not found", map[string]string{"actionId": actionID})
 		return
 	}
+	// The reader's identity decides whether readiness includes the agent
+	// check; a reader without one gets Pulse's own checks only.
+	viewer, _ := actionActorForRequest(h.cfg, r, orgID)
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(actionDetailResponse{
-		Audit:     h.projectActionAudit(GetOrgID(r.Context()), detail.Audit),
+		Audit:     h.projectActionAudit(orgID, detail.Audit),
 		Events:    detail.Events,
 		Attempt:   detail.Attempt,
 		Receipt:   detail.Receipt,
-		Readiness: h.ActionLifecycle().AssessCurrentReadiness(r.Context(), GetOrgID(r.Context()), detail.Audit),
+		Readiness: h.ActionLifecycle().AssessCurrentReadiness(r.Context(), orgID, detail.Audit, viewer),
 	}); err != nil {
 		writeJSONError(w, http.StatusInternalServerError, agentcapabilities.AgentErrCodeActionDetailEncodeFailed, "Failed to encode action detail")
 	}
@@ -586,7 +591,7 @@ func (h *ResourceHandlers) HandleRefreshAction(w http.ResponseWriter, r *http.Re
 		Events:    detail.Events,
 		Attempt:   detail.Attempt,
 		Receipt:   detail.Receipt,
-		Readiness: lifecycle.AssessCurrentReadiness(r.Context(), orgID, detail.Audit),
+		Readiness: lifecycle.AssessCurrentReadiness(r.Context(), orgID, detail.Audit, actor),
 	}); err != nil {
 		writeJSONError(w, http.StatusInternalServerError, agentcapabilities.AgentErrCodeActionDetailEncodeFailed, "Failed to encode replacement action detail")
 	}

@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/actionlifecycle"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/chat"
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
@@ -29,6 +31,10 @@ func (p assistantTypedActionPlanner) PlanTypedAction(ctx context.Context, orgID 
 		return nil, fmt.Errorf("%w: %s", unified.ErrResourceRemediationLocked, unified.CanonicalResourceID(req.ResourceID))
 	}
 
+	// The Assistant plans under its own service identity for the chat
+	// caller. Only a caller allowed to run host commands (action-execute)
+	// may have the agent check the plan; dispatch checks it either way.
+	ctx = actionlifecycle.WithLiveCheckAuthority(ctx, chat.HostCommandAuthorityFromContext(ctx))
 	plan, err := lifecycle.Plan(ctx, orgID, req, actor)
 	if err != nil {
 		return nil, err

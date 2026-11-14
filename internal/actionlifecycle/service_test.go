@@ -75,6 +75,7 @@ func serviceForStore(t *testing.T, store unified.ResourceStore, resource unified
 		Executor:            executor,
 		DecisionAuthorizer:  DecisionAuthorizerFunc(func(context.Context, string, unified.ActionAuditRecord, unified.ActionDecision) error { return nil }),
 		ExecutionAuthorizer: ExecutionAuthorizerFunc(func(context.Context, string, unified.ActionAuditRecord, unified.ActionActor) error { return nil }),
+		LiveCheckAuthorizer: LiveCheckAuthorizerFunc(func(context.Context, string, unified.ActionActor) error { return nil }),
 	}
 }
 
@@ -896,6 +897,8 @@ type stubExecutor struct {
 	received    unified.ActionAuditRecord
 	readiness   *unified.ResourceActionReadiness
 	feasibility *unified.ResourceActionReadiness
+	// feasibilityCalls counts agent checks (FeasibilityChecker calls).
+	feasibilityCalls int
 }
 
 type reconcilingExecutor struct {
@@ -980,6 +983,7 @@ func (s *stubExecutor) CheckActionAvailable(_ context.Context, _ unified.ActionR
 }
 
 func (s *stubExecutor) CheckActionFeasible(_ context.Context, _ string, _ unified.ActionRequest, _ unified.Resource) unified.ResourceActionReadiness {
+	s.feasibilityCalls++
 	if s.feasibility == nil {
 		return unified.ResourceActionReadiness{}
 	}
@@ -1042,6 +1046,7 @@ func newServiceEnv(t *testing.T, resource unified.Resource) *serviceEnv {
 		Executor:            env.executor,
 		DecisionAuthorizer:  DecisionAuthorizerFunc(func(context.Context, string, unified.ActionAuditRecord, unified.ActionDecision) error { return nil }),
 		ExecutionAuthorizer: ExecutionAuthorizerFunc(func(context.Context, string, unified.ActionAuditRecord, unified.ActionActor) error { return nil }),
+		LiveCheckAuthorizer: LiveCheckAuthorizerFunc(func(context.Context, string, unified.ActionActor) error { return nil }),
 		OnActionCompleted: func(record unified.ActionAuditRecord) {
 			env.completed = append(env.completed, record)
 		},
@@ -1266,7 +1271,7 @@ func TestApprovalRequiresCurrentReadinessButRejectionRemainsAvailable(t *testing
 		Reason:     "Connect the command agent for web-42.",
 	}
 
-	readiness := env.service.AssessCurrentReadiness(context.Background(), "default", mustActionRecord(t, env.service, plan.ActionID))
+	readiness := env.service.AssessCurrentReadiness(context.Background(), "default", mustActionRecord(t, env.service, plan.ActionID), testActionActor("operator", "default"))
 	if readiness.Ready || readiness.Code != "agent_disconnected" || readiness.Message != "Connect the command agent for web-42." {
 		t.Fatalf("readiness=%#v", readiness)
 	}
