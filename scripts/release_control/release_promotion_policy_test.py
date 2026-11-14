@@ -1724,6 +1724,60 @@ else:
             ["https://github.com/rcourtman/pulse-pro/actions/runs/104"],
         )
 
+    def test_private_pro_watchers_survive_transient_run_lookup_failures(self) -> None:
+        """Run both private Pro watchers against a gh double: a just-dispatched run that 404s
+        briefly (v6.8.0-rc.2, 10 November 2026) is still watched to its end, and only a lookup
+        failing for ten minutes straight ends the watch."""
+        fake_gh = (
+            "#!/bin/bash\n"
+            'count=$(( $(cat "$FIX/calls") + 1 )); echo "$count" > "$FIX/calls"\n'
+            'if (( count <= FAILS )); then echo "HTTP 404: Not Found" >&2; exit 1; fi\n'
+            "printf 'completed\\tsuccess\\thttps://example.invalid/runs/100\\n'\n"
+        )
+        watchers = (
+            (".github/workflows/create-release.yml", "stage_private_pro_runtime", "publish"),
+            (".github/workflows/promote-private-pro-runtime.yml", "promote", None),
+        )
+        for path, job_name, step_id in watchers:
+            steps = yaml.safe_load(read(path))["jobs"][job_name]["steps"]
+            step = next(s["run"] for s in steps
+                        if "run" in s and (step_id is None or s.get("id") == step_id)
+                        and "wait_for_workflow() {" in s["run"])
+            start = step.index("wait_for_workflow() {")
+            function = step[start:step.index("\n}\n", start) + 3]
+            # Sleeping advances bash's own clock, so the ten-minute window runs instantly.
+            script = (
+                'sleep() { SECONDS=$((SECONDS + ${1%.*})); }\n'
+                + function
+                + 'wait_for_workflow rcourtman/pulse-enterprise 100 "private Pro build" 10800\n'
+            )
+
+            def watch(fails: int) -> subprocess.CompletedProcess:
+                with tempfile.TemporaryDirectory() as directory:
+                    fix = Path(directory)
+                    (fix / "bin").mkdir()
+                    (fix / "bin" / "gh").write_text(fake_gh)
+                    (fix / "bin" / "gh").chmod(0o755)
+                    (fix / "calls").write_text("0\n")
+                    env = {**os.environ, "FIX": str(fix), "FAILS": str(fails),
+                           "PATH": f"{fix / 'bin'}{os.pathsep}{os.environ['PATH']}"}
+                    return subprocess.run(
+                        ["bash", "--noprofile", "--norc", "-eu", "-o", "pipefail", "-c", script],
+                        env=env, text=True, capture_output=True, timeout=60,
+                    )
+
+            with self.subTest(workflow=path):
+                result = watch(3)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertEqual(result.stdout.count("; retrying."), 3)
+                self.assertNotIn("::error::", result.stdout)
+
+                result = watch(10_000)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("::error::Could not read private Pro build run 100 for 10 minutes.",
+                              result.stdout)
+                self.assertEqual(len(re.findall(r"::error::", result.stdout)), 1)
+
     def test_release_promotion_policy_requires_live_rc_and_v5_policy(self) -> None:
         content = read("docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md")
         self.assertIn("`beta.N` is the normal user-testing stage", content)
