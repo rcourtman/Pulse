@@ -11,6 +11,19 @@ SPEC.loader.exec_module(MODULE)
 
 
 class TelemetrySchemaParityTest(unittest.TestCase):
+    def test_repository_preview_matches_public_payload(self):
+        # Fixture-only parser tests cannot catch drift in the shipped interface.
+        # Check every sender field and type without needing the private repo.
+        root = SCRIPT_PATH.parents[1]
+        public = MODULE.json_fields(
+            (root / "internal/telemetry/telemetry.go").read_text(), "type Ping struct"
+        )
+        frontend = MODULE.typescript_fields(
+            (root / "frontend-modern/src/api/settings.ts").read_text(),
+            "export interface TelemetryPingPreview",
+        )
+        self.assertEqual(public, frontend)
+
     def test_matching_contract(self):
         public = '''
 type Ping struct {
