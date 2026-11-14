@@ -24,6 +24,11 @@ type fakePVENode struct {
 	dump     map[string]bool
 	storage  float64
 	calls    []string
+	path     string
+	dirs     map[string]string
+	staged   map[string]bool
+	links    map[string]string
+	nextID   int
 }
 
 type fakePVEGuest struct {
@@ -32,11 +37,12 @@ type fakePVEGuest struct {
 	status   string
 	files    map[string]bool
 	baseDisk float64
+	dirs     map[string]string
 }
 
 func newFakePVENode() *fakePVENode {
 	guest := func(name string, disk float64) *fakePVEGuest {
-		return &fakePVEGuest{hostname: name, fixture: true, status: "running", files: map[string]bool{}, baseDisk: disk}
+		return &fakePVEGuest{hostname: name, fixture: true, status: "running", files: map[string]bool{}, baseDisk: disk, dirs: map[string]string{}}
 	}
 	return &fakePVENode{
 		marker:   pveLabMarkerPrefix + "pmxlab",
@@ -45,11 +51,23 @@ func newFakePVENode() *fakePVENode {
 		guests:   map[int]*fakePVEGuest{110: guest("pihole", 30), 111: guest("nextcloud", 40), 112: guest("gitea", 35)},
 		dump:     map[string]bool{},
 		storage:  40,
+		path:     "/var/lib/vz",
+		dirs:     map[string]string{},
+		staged:   map[string]bool{},
+		links:    map[string]string{},
 	}
 }
 
 func (n *fakePVENode) guestDisk(g *fakePVEGuest) float64 { return g.baseDisk + float64(len(g.files))*2 }
-func (n *fakePVENode) storageUsed() float64              { return n.storage + float64(len(n.dump))*2 }
+func (n *fakePVENode) storageUsed() float64 {
+	files := len(n.staged)
+	for file := range n.dump {
+		if _, linked := n.links[file]; !linked {
+			files++
+		}
+	}
+	return n.storage + float64(files)*2
+}
 
 var (
 	fakeVMIDArg  = regexp.MustCompile(`^pct (config|status|stop|start) (\d+)$`)
@@ -60,7 +78,77 @@ var (
 	// Both API paths arrive shell-quoted.
 	fakeStorageStatus = regexp.MustCompile(`^pvesh get '/nodes/pmxlab/storage/[a-z]+/status' --output-format json$`)
 	fakeGuestStatus   = regexp.MustCompile(`^pvesh get '/nodes/pmxlab/lxc/(\d+)/status/current' --output-format json$`)
+	fakeDirGuard      = regexp.MustCompile(`^\(?\[ ! -L '([^']+)' \] && \[ "\$\(stat -c '%d:%i' -- '([^']+)'\)" = '([0-9]+:[0-9]+)' \]\)? && `)
 )
+
+func fakeUnquote(s string) string {
+	return strings.ReplaceAll(strings.TrimSuffix(strings.TrimPrefix(s, "'"), "'"), `'"'"'`, "'")
+}
+
+// files models the fixed command forms without executing a shell, SSH, dd,
+// fallocate or unlink. Paths have inode-like identities, including hardlinks.
+func (n *fakePVENode) files(script string, guest *fakePVEGuest) (CommandResult, error) {
+	dirs, files := n.dirs, n.staged
+	if guest != nil {
+		dirs, files = guest.dirs, guest.files
+	}
+	ok := func(out string) (CommandResult, error) { return CommandResult{Stdout: out}, nil }
+	if match := fakeDirGuard.FindStringSubmatch(script); match != nil {
+		if match[1] != match[2] || dirs[match[1]] != match[3] {
+			return CommandResult{}, errors.New("directory identity changed")
+		}
+		script = strings.TrimPrefix(script, match[0])
+	}
+	quoted := fakeQuoted.FindAllStringSubmatch(script, -1)
+	switch {
+	case strings.HasPrefix(script, "mkdir -- "):
+		dir := quoted[0][1]
+		if dirs[dir] != "" {
+			return CommandResult{}, errors.New("directory exists")
+		}
+		n.nextID++
+		dirs[dir] = fmt.Sprintf("1:%d", n.nextID)
+		return ok(dirs[dir] + "\n")
+	case strings.HasPrefix(script, "fallocate "):
+		for _, q := range quoted {
+			if strings.HasSuffix(q[1], ".tar.zst") || strings.HasSuffix(q[1], ".log") {
+				files[q[1]] = true
+			}
+		}
+		return ok("")
+	case strings.HasPrefix(script, "ln -T -- "):
+		anchor, file := quoted[0][1], filepath.Base(quoted[1][1])
+		if !files[anchor] || n.dump[file] {
+			return CommandResult{}, errors.New("link source missing or destination exists")
+		}
+		n.dump[file], n.links[file] = true, anchor
+		return ok("")
+	case strings.HasPrefix(script, "{ if [ ! -e "):
+		file, anchor := filepath.Base(quoted[0][1]), quoted[3][1]
+		if n.dump[file] && n.links[file] != anchor {
+			return CommandResult{}, errors.New("destination is not owned")
+		}
+		delete(n.dump, file)
+		delete(n.links, file)
+		return ok("")
+	case strings.HasPrefix(script, "dd if=/dev/urandom"):
+		files[fakeDDTarget.FindStringSubmatch(script)[1]] = true
+		return ok("")
+	case strings.HasPrefix(script, "rm -f -- "), strings.HasPrefix(script, "rmdir -- "):
+		dir := quoted[len(quoted)-1][1]
+		for _, q := range quoted[:len(quoted)-1] {
+			delete(files, q[1])
+		}
+		for file := range files {
+			if strings.HasPrefix(file, dir+"/") {
+				return CommandResult{}, errors.New("directory is not empty")
+			}
+		}
+		delete(dirs, dir)
+		return ok("")
+	}
+	return CommandResult{}, fmt.Errorf("fake files has no answer for %q", script)
+}
 
 func (n *fakePVENode) Run(_ context.Context, name string, args ...string) (CommandResult, error) {
 	if name != "ssh" || len(args) < 6 {
@@ -80,7 +168,8 @@ func (n *fakePVENode) Run(_ context.Context, name string, args ...string) (Comma
 		}())
 		return ok(n.marker + "\n---\n" + n.hostname + "\n---\n" + string(nodes) + "\n")
 	case strings.HasPrefix(script, "pvesh get /storage/"):
-		return ok(`{"path":"/var/lib/vz","type":"dir"}`)
+		body, _ := json.Marshal(map[string]string{"path": n.path, "type": "dir"})
+		return ok(string(body))
 	case fakeStorageStatus.MatchString(script):
 		// Proxmox's own used and total, never df's Use%.
 		return ok(fmt.Sprintf(`{"active":1,"total":100000,"used":%d,"avail":%d,"type":"dir"}`, int(n.storageUsed()*1000), 100000-int(n.storageUsed()*1000)))
@@ -90,6 +179,26 @@ func (n *fakePVENode) Run(_ context.Context, name string, args ...string) (Comma
 		return ok(fmt.Sprintf(`{"status":%q,"disk":%d,"maxdisk":100000}`, guest.status, int(n.guestDisk(guest)*1000)))
 	case strings.HasPrefix(script, "mkdir -p "):
 		return ok("")
+	case strings.HasPrefix(script, "mkdir -- "), fakeDirGuard.MatchString(script):
+		return n.files(script, nil)
+	case strings.HasPrefix(script, "find "):
+		if !strings.HasPrefix(script, "find "+shellQuote(filepath.Join(n.path, "dump"))+" ") {
+			return CommandResult{}, errors.New("inventory used the wrong storage path")
+		}
+		var entries []string
+		for file := range n.dump {
+			entries = append(entries, file+"\x00f\x001\x001\x00\x00")
+		}
+		for file := range n.staged {
+			rel, _ := filepath.Rel(filepath.Join(n.path, "dump"), file)
+			entries = append(entries, rel+"\x00f\x001\x001\x00\x00")
+		}
+		for dir := range n.dirs {
+			rel, _ := filepath.Rel(filepath.Join(n.path, "dump"), dir)
+			entries = append(entries, rel+"\x00d\x001\x001\x00\x00")
+		}
+		sort.Strings(entries)
+		return ok(strings.Join(entries, ""))
 	case strings.HasPrefix(script, "fallocate "):
 		for _, quoted := range fakeQuoted.FindAllStringSubmatch(script, -1) {
 			if strings.HasSuffix(quoted[1], ".tar.zst") || strings.HasSuffix(quoted[1], ".log") {
@@ -113,6 +222,9 @@ func (n *fakePVENode) Run(_ context.Context, name string, args ...string) (Comma
 			lines = append(lines, fmt.Sprintf("%d:%s", vmid, guest.status))
 		}
 		sort.Strings(lines)
+		if script == "pct list" {
+			return ok("VMID Status Lock Name\n" + strings.ReplaceAll(strings.Join(lines, "\n"), ":", " ") + "\n")
+		}
 		var archives []string
 		for file := range n.dump {
 			archives = append(archives, file)
@@ -154,7 +266,10 @@ func (n *fakePVENode) Run(_ context.Context, name string, args ...string) (Comma
 		}
 		command := match[2]
 		if strings.HasPrefix(command, "sh -c '") && strings.HasSuffix(command, "'") {
-			command = strings.TrimSuffix(strings.TrimPrefix(command, "sh -c '"), "'")
+			command = fakeUnquote(strings.TrimPrefix(command, "sh -c "))
+		}
+		if strings.HasPrefix(command, "mkdir -- ") || fakeDirGuard.MatchString(command) {
+			return n.files(command, guest)
 		}
 		switch {
 		case strings.HasPrefix(command, "mkdir -p "):
@@ -273,8 +388,8 @@ func TestProxmoxLabFaultsApplyRevertAndCleanUp(t *testing.T) {
 	}
 }
 
-// A run that stops half way leaves its fill behind; the next Prepare removes
-// it, and Cleanup removes what a run recorded even if it never reverted.
+// Cleanup removes this run's fill even without RevertFault. A later Prepare
+// must preserve unknown old files: matching names do not establish ownership.
 func TestProxmoxLabNeverLeavesAFillBehind(t *testing.T) {
 	ctx := context.Background()
 	node := newFakePVENode()
@@ -304,8 +419,8 @@ func TestProxmoxLabNeverLeavesAFillBehind(t *testing.T) {
 	if _, err := NewProxmoxLab(node, pveTarget).Prepare(ctx, manifest, "run-2"); err != nil {
 		t.Fatal(err)
 	}
-	if len(node.guests[111].files) != 0 || len(node.dump) != 0 {
-		t.Fatalf("Prepare kept leftovers: %d guest files, %d archives", len(node.guests[111].files), len(node.dump))
+	if len(node.guests[111].files) != 1 || len(node.dump) != 1 {
+		t.Fatalf("Prepare removed unowned files: %d guest files, %d archives", len(node.guests[111].files), len(node.dump))
 	}
 }
 
