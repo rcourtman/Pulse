@@ -1,4 +1,4 @@
-import { Component, For, Show } from 'solid-js';
+import { Component, Index, Show } from 'solid-js';
 import { InlineNotice } from '@/components/shared/InlineNotice';
 import { Dialog } from '@/components/shared/Dialog';
 import { FormSelect } from '@/components/shared/FormSelect';
@@ -27,6 +27,9 @@ interface RolesEditorDialogProps {
   onSave: () => void;
   onUpdatePermission: (index: number, field: keyof Permission, value: string) => void;
 }
+
+// Catalog text is its exact value; share the static option renderer across rows.
+const renderCatalogOption = (value: string) => <option>{value}</option>;
 
 export const RolesEditorDialog: Component<RolesEditorDialogProps> = (props) => (
   <Show when={props.isOpen}>
@@ -129,59 +132,59 @@ export const RolesEditorDialog: Component<RolesEditorDialogProps> = (props) => (
               </div>
 
               <div class="space-y-2">
-                <For each={props.formPermissions}>
+                {/* Draft updates replace permission objects. Keep the indexed controls
+                    mounted so changing a value does not discard keyboard focus. */}
+                <Index each={props.formPermissions}>
                   {(permission, index) => (
                     <div class="flex flex-col sm:flex-row sm:items-center gap-2">
                       <FormSelect
-                        label={`Permission ${index() + 1} action`}
+                        label={`Permission ${index + 1} action`}
                         labelClass="sr-only"
                         fieldBaseClass="contents"
-                        value={permission.action}
+                        value={permission().action}
                         onChange={(event) =>
-                          props.onUpdatePermission(index(), 'action', event.currentTarget.value)
+                          props.onUpdatePermission(index, 'action', event.currentTarget.value)
                         }
                         selectBaseClass="w-full sm:flex-1 rounded-md border border-border bg-surface px-2 py-1.5 text-sm text-base-content"
                       >
                         <Show
                           when={
-                            !RBAC_PERMISSION_ACTIONS.some((action) => action === permission.action)
+                            !(RBAC_PERMISSION_ACTIONS as readonly string[]).includes(
+                              permission().action,
+                            )
                           }
                         >
-                          <option value={permission.action}>{permission.action}</option>
+                          <option value={permission().action}>{permission().action}</option>
                         </Show>
-                        <For each={RBAC_PERMISSION_ACTIONS}>
-                          {(action) => <option value={action}>{action}</option>}
-                        </For>
+                        {RBAC_PERMISSION_ACTIONS.map(renderCatalogOption)}
                       </FormSelect>
                       <span class="hidden sm:inline text-slate-400 text-sm">:</span>
                       <FormSelect
-                        label={`Permission ${index() + 1} resource`}
+                        label={`Permission ${index + 1} resource`}
                         labelClass="sr-only"
                         fieldBaseClass="contents"
-                        value={permission.resource}
+                        value={permission().resource}
                         onChange={(event) =>
-                          props.onUpdatePermission(index(), 'resource', event.currentTarget.value)
+                          props.onUpdatePermission(index, 'resource', event.currentTarget.value)
                         }
                         selectBaseClass="w-full sm:flex-1 rounded-md border bg-surface px-2 py-1.5 text-sm text-base-content"
                       >
                         <Show
                           when={
-                            !RBAC_PERMISSION_RESOURCES.some(
-                              (resource) => resource === permission.resource,
+                            !(RBAC_PERMISSION_RESOURCES as readonly string[]).includes(
+                              permission().resource,
                             )
                           }
                         >
-                          <option value={permission.resource}>{permission.resource}</option>
+                          <option value={permission().resource}>{permission().resource}</option>
                         </Show>
-                        <For each={RBAC_PERMISSION_RESOURCES}>
-                          {(resource) => <option value={resource}>{resource}</option>}
-                        </For>
+                        {RBAC_PERMISSION_RESOURCES.map(renderCatalogOption)}
                       </FormSelect>
                       <button
                         type="button"
-                        onClick={() => props.onRemovePermission(index())}
+                        onClick={() => props.onRemovePermission(index)}
                         disabled={props.formPermissions.length <= 1}
-                        aria-label="Remove permission"
+                        aria-label={`Remove permission ${index + 1}: ${permission().action}:${permission().resource}`}
                         title="Remove permission"
                         class="self-end sm:self-auto p-1.5 text-slate-400 hover:text-red-500 disabled:opacity-30"
                       >
@@ -189,7 +192,7 @@ export const RolesEditorDialog: Component<RolesEditorDialogProps> = (props) => (
                       </button>
                     </div>
                   )}
-                </For>
+                </Index>
               </div>
             </div>
           </fieldset>

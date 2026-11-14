@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "0f4164b68ce19d91c3a336c4528cabb134103a3e",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/RolesEditorDialog.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/RolesEditorDialog.tsx": "e48c89a2fc2cfdad8709ced0f75d1240dfee22d0006dfadd8a73e1465a0424b8"
+  },
+  "routes": [
+    "Settings > Security > Roles (real RolesPanel, state owner, RBACAPI and apiClient; synthetic offline transport)"
+  ],
+  "states": [
+    "Saved three-rule role including unknown options and saved constraints",
+    "Middle action/resource changes; same DOM nodes retain focus",
+    "First-rule removal, reindexed remaining rules, independent least-privilege append",
+    "One explicit PUT, exact serialized readback and reopened editor; cancellation without write"
+  ],
+  "interactions": [
+    "Focus and select native action/resource controls; Tab advances to the matching resource in Chromium and WebKit",
+    "Identify indexed current-value removal buttons, remove first rule, append and edit last rule",
+    "Save and reopen actual dispatched-body readback; cancel another draft without mutating saved state"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "verified_at": "2026-11-14T15:40:02Z",
+  "browsers": [
+    "Chromium 141.0.7390.37",
+    "WebKit 26.0"
+  ],
+  "playwright": "1.56.1",
+  "themes": [
+    "light",
+    "dark"
+  ],
+  "assertions": 169,
+  "baseline_assertions": 129,
+  "captures": "Eight final cases/169 assertions; original and each containing-parent generation retained.32 primary captures natively inspected across original, first, second and final source.",
+  "evidence": "RECEIPTS.md and PAIRS.json in current lane outcome; browser scripts are evidence only, not source.",
+  "limits": [
+    "Not full App/IdP, original-client recovery, installed acceptance or screen-reader speech testing.",
+    "An earlier separately retained exploratory run used a stale canonical dependency tree; final before/after runs used the exact locked graph."
+  ],
+  "scope_note": "Static option catalogs map directly and derive their value from identical literal text. Unknown values keep explicit bindings. This removes unnecessary reactive work without changing options, focus, payloads or limits."
+}

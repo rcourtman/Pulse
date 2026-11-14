@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { clearAuth, setOrgID } from '@/utils/apiClient';
 import { RolesPanel } from '../RolesPanel';
+import { RBAC_PERMISSION_ACTIONS, RBAC_PERMISSION_RESOURCES } from '@/utils/rbacPermissions';
 
 // Keep the rendered editor, indexed draft operations, RBACAPI and serialization
 // connected. Hook-only permission edits cannot catch a miswired form callback.
@@ -108,6 +109,140 @@ async function saveAndReopen(dialog: HTMLElement, expected: unknown) {
 }
 
 describe('saved permission transformations through the role editor', () => {
+  it('creates independent static option nodes for every permission row', async () => {
+    render(() => <RolesPanel currentUser="role-maintainer" canManage />);
+    const editor = within(await openEditor());
+    const actions = original.permissions.map(
+      (_, index) => editor.getByLabelText(`Permission ${index + 1} action`) as HTMLSelectElement,
+    );
+    const resources = original.permissions.map(
+      (_, index) => editor.getByLabelText(`Permission ${index + 1} resource`) as HTMLSelectElement,
+    );
+    // Sharing a renderer must never share or move its DOM options between rows.
+    for (const [selects, catalog] of [
+      [actions, RBAC_PERMISSION_ACTIONS],
+      [resources, RBAC_PERMISSION_RESOURCES],
+    ] as const) {
+      for (const value of catalog) {
+        const options = selects.map((select) =>
+          Array.from(select.options).find((option) => option.value === value),
+        );
+        options.forEach((option) => expect(option).toBeInTheDocument());
+        expect(new Set(options).size).toBe(selects.length);
+      }
+    }
+    fireEvent.change(actions[1], { target: { value: 'write' } });
+    expect(actions[0]).toHaveValue('read');
+    expect(actions[1]).toHaveValue('write');
+    expect(actions[2]).toHaveValue('future:inspect');
+    expect(resources[2]).toHaveValue('future/resource');
+    expect(saved).toEqual(original);
+    expect(writes()).toHaveLength(0);
+  });
+
+  it('keeps the same focused controls through repeated action and resource edits', async () => {
+    render(() => <RolesPanel currentUser="role-maintainer" canManage />);
+    const dialog = await openEditor();
+    const editor = within(dialog);
+    const action = editor.getByLabelText('Permission 2 action');
+    const resource = editor.getByLabelText('Permission 2 resource');
+
+    action.focus();
+    for (const value of ['write', 'admin', 'read']) {
+      fireEvent.change(action, { target: { value } });
+      expect(editor.getByLabelText('Permission 2 action')).toBe(action);
+      expect(action).toHaveFocus();
+      expect(action).toHaveValue(value);
+      expect(
+        editor.getByRole('button', { name: `Remove permission 2: ${value}:users` }),
+      ).toBeEnabled();
+    }
+    resource.focus();
+    for (const value of ['audit_logs', 'settings', 'nodes']) {
+      fireEvent.change(resource, { target: { value } });
+      expect(editor.getByLabelText('Permission 2 resource')).toBe(resource);
+      expect(resource).toHaveFocus();
+      expect(resource).toHaveValue(value);
+      expect(
+        editor.getByRole('button', { name: `Remove permission 2: read:${value}` }),
+      ).toBeEnabled();
+    }
+    // Stable DOM must not create a write or mutate another saved rule.
+    expect(writes()).toHaveLength(0);
+    expect(saved).toEqual(original);
+    expectPermissions(dialog, [
+      original.permissions[0],
+      { ...original.permissions[1], action: 'read', resource: 'nodes' },
+      original.permissions[2],
+    ]);
+    const reopened = await saveAndReopen(dialog, {
+      ...original,
+      permissions: [
+        original.permissions[0],
+        { ...original.permissions[1], action: 'read', resource: 'nodes' },
+        original.permissions[2],
+      ],
+    });
+    expectPermissions(reopened, [
+      original.permissions[0],
+      { ...original.permissions[1], action: 'read', resource: 'nodes' },
+      original.permissions[2],
+    ]);
+  });
+
+  it('keeps unknown options editable without replacing the select or a sibling rule', async () => {
+    render(() => <RolesPanel currentUser="role-maintainer" canManage />);
+    const editor = within(await openEditor());
+    const action = editor.getByLabelText('Permission 3 action');
+    const resource = editor.getByLabelText('Permission 3 resource');
+    expect(
+      editor.getByRole('button', { name: 'Remove permission 3: future:inspect:future/resource' }),
+    ).toBeEnabled();
+    action.focus();
+    fireEvent.change(action, { target: { value: 'read' } });
+    expect(action).toHaveFocus();
+    expect(editor.getByLabelText('Permission 3 action')).toBe(action);
+    expect(editor.queryByRole('option', { name: 'future:inspect' })).not.toBeInTheDocument();
+    resource.focus();
+    fireEvent.change(resource, { target: { value: 'nodes' } });
+    expect(resource).toHaveFocus();
+    expect(editor.getByLabelText('Permission 3 resource')).toBe(resource);
+    expect(editor.queryByRole('option', { name: 'future/resource' })).not.toBeInTheDocument();
+    expect(editor.getByRole('button', { name: 'Remove permission 3: read:nodes' })).toBeEnabled();
+    expect(editor.getByLabelText('Permission 2 action')).toHaveValue('delete');
+    expect(editor.getByLabelText('Permission 2 resource')).toHaveValue('users');
+    expect(writes()).toHaveLength(0);
+    expect(saved).toEqual(original);
+  });
+
+  it('distinguishes duplicate removal controls and updates their names after reindexing', async () => {
+    saved = {
+      ...structuredClone(original),
+      permissions: [original.permissions[0], original.permissions[0]],
+    };
+    render(() => <RolesPanel currentUser="role-maintainer" canManage />);
+    const dialog = await openEditor();
+    const editor = within(dialog);
+    expect(editor.getByRole('button', { name: 'Remove permission 1: read:nodes' })).toBeEnabled();
+    fireEvent.click(editor.getByRole('button', { name: 'Remove permission 2: read:nodes' }));
+    expect(editor.getByRole('button', { name: 'Remove permission 1: read:nodes' })).toBeDisabled();
+    expect(
+      editor.queryByRole('button', { name: 'Remove permission 2: read:nodes' }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(editor.getByRole('button', { name: 'Add Permission' }));
+    const action = editor.getByLabelText('Permission 2 action');
+    action.focus();
+    fireEvent.change(action, { target: { value: 'delete' } });
+    expect(action).toHaveFocus();
+    expect(editor.getByRole('button', { name: 'Remove permission 2: delete:nodes' })).toBeEnabled();
+    fireEvent.click(editor.getByRole('button', { name: 'Remove permission 1: read:nodes' }));
+    expect(editor.getByLabelText('Permission 1 action')).toHaveValue('delete');
+    expect(
+      editor.getByRole('button', { name: 'Remove permission 1: delete:nodes' }),
+    ).toBeDisabled();
+    expect(writes()).toHaveLength(0);
+  });
+
   it('edits only the middle rule through both fields and round-trips every saved constraint', async () => {
     render(() => <RolesPanel currentUser="role-maintainer" canManage />);
     const dialog = await openEditor();
@@ -132,7 +267,7 @@ describe('saved permission transformations through the role editor', () => {
     const dialog = await openEditor();
     const editor = within(dialog);
     expectPermissions(dialog, original.permissions);
-    fireEvent.click(editor.getAllByRole('button', { name: 'Remove permission' })[0]);
+    fireEvent.click(editor.getAllByRole('button', { name: /^Remove permission / })[0]);
     expectPermissions(dialog, original.permissions.slice(1));
     // The original middle rule is now first. Its constraints and the unlisted
     // sibling must survive a change through the newly indexed controls.

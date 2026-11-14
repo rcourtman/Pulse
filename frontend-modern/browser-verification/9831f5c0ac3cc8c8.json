@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "da3ad7c0352f8cd45cc2d79225a8fef2b6832bc2",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/RolesEditorDialog.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/RolesEditorDialog.tsx": "85156a7ec8c8f85fdeb57d51059e3fc2c3e2f5d2f6dc6fd2bccb770b158be9c0"
+  },
+  "routes": [
+    "Settings > Security > Roles (real RolesPanel, state owner, RBACAPI and apiClient; synthetic offline transport)"
+  ],
+  "states": [
+    "Saved three-rule role including unknown options and saved constraints",
+    "Middle action/resource changes; same DOM nodes retain focus",
+    "First-rule removal, reindexed remaining rules, independent least-privilege append",
+    "One explicit PUT, exact serialized readback and reopened editor; cancellation without write"
+  ],
+  "interactions": [
+    "Focus and select native action/resource controls; Tab advances to the matching resource in Chromium and WebKit",
+    "Identify indexed current-value removal buttons, remove first rule, append and edit last rule",
+    "Save and reopen actual dispatched-body readback; cancel another draft without mutating saved state"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "verified_at": "2026-11-14T15:52:59Z",
+  "browsers": [
+    "Chromium 141.0.7390.37",
+    "WebKit 26.0"
+  ],
+  "playwright": "1.56.1",
+  "themes": [
+    "light",
+    "dark"
+  ],
+  "assertions": 169,
+  "baseline_assertions": 129,
+  "captures": "Eight final cases/169 assertions; original and all containing-parent generations retained.40 primary capture files natively inspected across five source versions.",
+  "evidence": "RECEIPTS.md and PAIRS.json in current lane outcome; browser scripts are evidence only, not source.",
+  "limits": [
+    "Not full App/IdP, original-client recovery, installed acceptance or screen-reader speech testing.",
+    "An earlier separately retained exploratory run used a stale canonical dependency tree; final before/after runs used the exact locked graph."
+  ],
+  "scope_note": "A shared static catalog-option renderer removes duplicate callback allocation across permission rows. Unknown values keep explicit bindings; no option, focus, layout, payload or limit changes."
+}
