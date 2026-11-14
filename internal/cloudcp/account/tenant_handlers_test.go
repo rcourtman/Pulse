@@ -1,6 +1,12 @@
 package account
 
 import (
+	"errors"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
+	"io"
+	"reflect"
+
 	"bytes"
 	"context"
 	"crypto/ed25519"
@@ -57,7 +63,7 @@ func newTestTenantMuxWithWorkspaceLimitPolicy(t *testing.T, reg *registry.Tenant
 
 	listTenants := HandleListTenants(reg)
 	createTenant := HandleCreateTenantWithWorkspaceLimitPolicy(reg, provisioner, policy)
-	updateTenant := HandleUpdateTenant(reg)
+	updateTenant := HandleUpdateTenant(reg, provisioner)
 	deleteTenant := HandleDeleteTenant(reg, provisioner)
 
 	collection := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -786,5 +792,445 @@ func TestWorkspaceWritesRespectRuntimeLifecycle(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// The first body read is a deterministic interleaving, not a timing race. Real
+// MSP billing withdrawal must remain effective while the caller supplies JSON.
+type tenantEditBody struct {
+	io.Reader
+	beforeRead func()
+	once       sync.Once
+}
+
+func (b *tenantEditBody) Read(p []byte) (int, error) {
+	b.once.Do(b.beforeRead)
+	return b.Reader.Read(p)
+}
+func (b *tenantEditBody) Close() error { return nil }
+
+func TestWorkspacePatchPreservesWithdrawalDuringBodyRead(t *testing.T) {
+	for _, tc := range []struct {
+		name, body string
+		status     int
+		display    string
+	}{
+		{"rename", `{"display_name":"Renamed"}`, http.StatusOK, "Renamed"},
+		{"empty", `{}`, http.StatusOK, "Original"},
+		{"suspend", `{"display_name":"Renamed","state":"suspended"}`, http.StatusConflict, "Original"},
+		{"resume", `{"status":"active"}`, http.StatusConflict, "Original"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			reg := newTestRegistry(t)
+			if err := reg.CreateAccount(&registry.Account{ID: "a-withdraw", Kind: registry.AccountKindMSP}); err != nil {
+				t.Fatal(err)
+			}
+			createTestStripeAccount(t, reg, "a-withdraw", "msp_starter")
+			_, p := newTestTenantMux(t, reg, t.TempDir())
+			tenant, err := p.ProvisionWorkspace(context.Background(), "a-withdraw", "Original")
+			if err != nil {
+				t.Fatal(err)
+			}
+			var audit bytes.Buffer
+			oldLogger := log.Logger
+			log.Logger = zerolog.New(&audit)
+			defer func() { log.Logger = oldLogger }()
+			req := httptest.NewRequest(http.MethodPatch, "/", nil)
+			req.SetPathValue("account_id", tenant.AccountID)
+			req.SetPathValue("tenant_id", tenant.ID)
+			req.Body = &tenantEditBody{Reader: strings.NewReader(tc.body), beforeRead: func() {
+				// Older source may defer its billing-file update at the runtime lease;
+				// authority must already be withdrawn regardless of that deferred result.
+				_ = p.HandleMSPSubscriptionDeleted(context.Background(), cpstripe.Subscription{ID: "sub_canceled", Customer: "cus_test_a-withdraw"})
+				current, err := reg.Get(tenant.ID)
+				if err != nil || current.State != registry.TenantStateCanceled {
+					t.Fatalf("withdrawal did not run: %+v %v", current, err)
+				}
+			}}
+			res := httptest.NewRecorder()
+			HandleUpdateTenant(reg, tenantBillingFunc(func(context.Context, *registry.Tenant) error { return nil }))(res, req)
+			if res.Code != tc.status {
+				t.Fatalf("PATCH = %d %s, want %d", res.Code, res.Body.String(), tc.status)
+			}
+			current, err := reg.Get(tenant.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if current.State != registry.TenantStateCanceled || current.DisplayName != tc.display {
+				t.Fatalf("stale edit undid withdrawal or partially renamed: %+v", current)
+			}
+			sa, err := reg.GetStripeAccount(tenant.AccountID)
+			if err != nil || sa.SubscriptionState != "canceled" {
+				t.Fatalf("billing changed: %+v %v", sa, err)
+			}
+			entitlements, err := reg.ListHostedEntitlements()
+			if err != nil || len(entitlements) != 1 || entitlements[0].RevokedAt == nil {
+				t.Fatalf("refresh authority was recreated: %+v %v", entitlements, err)
+			}
+			if tc.status == http.StatusOK {
+				var returned registry.Tenant
+				if err := json.Unmarshal(res.Body.Bytes(), &returned); err != nil {
+					t.Fatal(err)
+				}
+				if !reflect.DeepEqual(returned, *current) {
+					t.Fatalf("response is stale: %+v != %+v", returned, current)
+				}
+				found := false
+				for _, line := range strings.Split(audit.String(), "\n") {
+					var event map[string]any
+					if json.Unmarshal([]byte(line), &event) != nil || event["audit_event"] != "cp_tenant_update" {
+						continue
+					}
+					if event["outcome"] == "success" {
+						found = true
+						if event["old_state"] != "canceled" || event["new_state"] != "canceled" || event["new_display_name"] != tc.display {
+							t.Fatalf("stale audit: %s", line)
+						}
+					}
+				}
+				if !found {
+					t.Fatalf("missing update success audit: %s", audit.String())
+				}
+			}
+		})
+	}
+}
+
+func TestWorkspacePatchDoesNotHoldRuntimeWhileReadingBody(t *testing.T) {
+	for _, action := range []string{"delete", "move_account"} {
+		t.Run(action, func(t *testing.T) {
+			reg := newTestRegistry(t)
+			for _, id := range []string{"a-current", "a-other"} {
+				if err := reg.CreateAccount(&registry.Account{ID: id, Kind: registry.AccountKindMSP}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			tenant := &registry.Tenant{ID: "t-body", AccountID: "a-current", DisplayName: "Original", State: registry.TenantStateActive, ContainerID: "original"}
+			if err := reg.Create(tenant); err != nil {
+				t.Fatal(err)
+			}
+			req := httptest.NewRequest(http.MethodPatch, "/", nil)
+			req.SetPathValue("account_id", tenant.AccountID)
+			req.SetPathValue("tenant_id", tenant.ID)
+			req.Body = &tenantEditBody{Reader: strings.NewReader(`{"display_name":"Stale","state":"active"}`), beforeRead: func() {
+				if action == "delete" {
+					del := httptest.NewRequest(http.MethodDelete, "/", nil)
+					del.SetPathValue("account_id", tenant.AccountID)
+					del.SetPathValue("tenant_id", tenant.ID)
+					response := httptest.NewRecorder()
+					HandleDeleteTenant(reg, nil)(response, del)
+					if response.Code != http.StatusNoContent {
+						t.Fatalf("slow body blocked DELETE: %d %s", response.Code, response.Body.String())
+					}
+				} else {
+					tenant.AccountID = "a-other"
+					if err := reg.Update(tenant); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}}
+			res := httptest.NewRecorder()
+			HandleUpdateTenant(reg, tenantBillingFunc(func(context.Context, *registry.Tenant) error { return nil }))(res, req)
+			want := http.StatusConflict
+			if action == "move_account" {
+				want = http.StatusNotFound
+			}
+			if res.Code != want {
+				t.Fatalf("late PATCH = %d %s, want %d", res.Code, res.Body.String(), want)
+			}
+			current, err := reg.Get(tenant.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if current.DisplayName != "Original" {
+				t.Fatalf("late rename applied: %+v", current)
+			}
+			if action == "delete" && (current.State != registry.TenantStateDeleted || current.ContainerID != "") {
+				t.Fatalf("deleted runtime revived: %+v", current)
+			}
+			if action == "move_account" && current.AccountID != "a-other" {
+				t.Fatalf("old account reclaimed client: %+v", current)
+			}
+		})
+	}
+}
+
+func TestWorkspacePatchStateAndResumePolicy(t *testing.T) {
+	for _, initial := range []registry.TenantState{registry.TenantStateProvisioning, registry.TenantStateActive, registry.TenantStateSuspended, registry.TenantStateCanceled, registry.TenantStateDeleting, registry.TenantStateDeleted, registry.TenantStateFailed, "unknown"} {
+		for _, next := range []string{"active", "suspended"} {
+			t.Run(string(initial)+"_to_"+next, func(t *testing.T) {
+				reg := newTestRegistry(t)
+				if err := reg.CreateAccount(&registry.Account{ID: "a-policy", Kind: registry.AccountKindMSP}); err != nil {
+					t.Fatal(err)
+				}
+				createTestStripeAccount(t, reg, "a-policy", "msp_starter")
+				tenant := &registry.Tenant{ID: "t-policy", AccountID: "a-policy", State: initial, ManualHold: initial == registry.TenantStateSuspended, DisplayName: "Original", ContainerID: "keep"}
+				if err := reg.Create(tenant); err != nil {
+					t.Fatal(err)
+				}
+				req := httptest.NewRequest(http.MethodPatch, "/", strings.NewReader(`{"display_name":"Renamed","state":"`+next+`"}`))
+				req.SetPathValue("account_id", tenant.AccountID)
+				req.SetPathValue("tenant_id", tenant.ID)
+				res := httptest.NewRecorder()
+				HandleUpdateTenant(reg, tenantBillingFunc(func(context.Context, *registry.Tenant) error { return nil }))(res, req)
+				allowed := initial == registry.TenantStateActive || initial == registry.TenantStateSuspended
+				want := http.StatusConflict
+				if allowed {
+					want = http.StatusOK
+				}
+				if res.Code != want {
+					t.Fatalf("state transition = %d %s, want %d", res.Code, res.Body.String(), want)
+				}
+				current, err := reg.Get(tenant.ID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if allowed {
+					if string(current.State) != next || current.DisplayName != "Renamed" {
+						t.Fatalf("valid change lost: %+v", current)
+					}
+				} else if current.State != initial || current.DisplayName != "Original" {
+					t.Fatalf("refused patch partly applied: %+v", current)
+				}
+				if current.ContainerID != "keep" {
+					t.Fatalf("runtime overwritten: %+v", current)
+				}
+				count, err := reg.CountActiveByAccountID(tenant.AccountID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if allowed && count != 1 {
+					t.Fatalf("manual transition released workspace capacity: %d", count)
+				}
+			})
+		}
+	}
+	for _, stored := range []string{"active", "trial", "past_due", "grace", "canceled", "suspended", "expired", "paused", "unknown", ""} {
+		t.Run("billing_"+stored, func(t *testing.T) {
+			reg := newTestRegistry(t)
+			if err := reg.CreateAccount(&registry.Account{ID: "a-policy", Kind: registry.AccountKindMSP}); err != nil {
+				t.Fatal(err)
+			}
+			if err := reg.CreateStripeAccount(&registry.StripeAccount{AccountID: "a-policy", StripeCustomerID: "cus_policy", SubscriptionState: stored}); err != nil {
+				t.Fatal(err)
+			}
+			tenant := &registry.Tenant{ID: "t-policy", AccountID: "a-policy", State: registry.TenantStateSuspended, ManualHold: true}
+			if err := reg.Create(tenant); err != nil {
+				t.Fatal(err)
+			}
+			req := httptest.NewRequest(http.MethodPatch, "/", strings.NewReader(`{"status":"active"}`))
+			req.SetPathValue("account_id", tenant.AccountID)
+			req.SetPathValue("tenant_id", tenant.ID)
+			res := httptest.NewRecorder()
+			HandleUpdateTenant(reg, tenantBillingFunc(func(context.Context, *registry.Tenant) error { return nil }))(res, req)
+			allowed := stored == "active" || stored == "trial" || stored == "past_due" || stored == "grace"
+			want := http.StatusConflict
+			if allowed {
+				want = http.StatusOK
+			}
+			if res.Code != want {
+				t.Fatalf("billing %q resume = %d %s, want %d", stored, res.Code, res.Body.String(), want)
+			}
+			current, _ := reg.Get(tenant.ID)
+			if (current.State == registry.TenantStateActive) != allowed {
+				t.Fatalf("billing %q state %+v", stored, current)
+			}
+		})
+	}
+}
+
+type deletionMutationProvisioner struct {
+	mutate func(*registry.Tenant) error
+	calls  int
+}
+
+func (*deletionMutationProvisioner) ProvisionWorkspace(context.Context, string, string) (*registry.Tenant, error) {
+	return nil, fmt.Errorf("unexpected creation")
+}
+func (p *deletionMutationProvisioner) DeprovisionWorkspaceContainer(_ context.Context, tenant *registry.Tenant) error {
+	p.calls++
+	return p.mutate(tenant)
+}
+
+func TestWorkspaceDeletePreservesLatestMetadataAndIsIdempotent(t *testing.T) {
+	reg := newTestRegistry(t)
+	if err := reg.CreateAccount(&registry.Account{ID: "a-delete", Kind: registry.AccountKindMSP}); err != nil {
+		t.Fatal(err)
+	}
+	tenant := &registry.Tenant{ID: "t-delete", AccountID: "a-delete", State: registry.TenantStateActive, DisplayName: "Original", ContainerID: "runtime"}
+	if err := reg.Create(tenant); err != nil {
+		t.Fatal(err)
+	}
+	p := &deletionMutationProvisioner{mutate: func(beingDeleted *registry.Tenant) error {
+		if beingDeleted.State != registry.TenantStateDeleting {
+			return fmt.Errorf("deprovision did not receive current deleting row: %+v", beingDeleted)
+		}
+		current, err := reg.Get(tenant.ID)
+		if err != nil {
+			return err
+		}
+		current.DisplayName = "Latest"
+		current.PlanVersion = "msp_max"
+		current.StripeSubscriptionID = "sub_latest"
+		current.CurrentImageDigest = "image_latest"
+		current.HealthCheckOK = false
+		return reg.Update(current)
+	}}
+	for i := 0; i < 2; i++ {
+		req := httptest.NewRequest(http.MethodDelete, "/", nil)
+		req.SetPathValue("account_id", tenant.AccountID)
+		req.SetPathValue("tenant_id", tenant.ID)
+		res := httptest.NewRecorder()
+		HandleDeleteTenant(reg, p)(res, req)
+		if res.Code != http.StatusNoContent {
+			t.Fatalf("DELETE = %d %s", res.Code, res.Body.String())
+		}
+		current, err := reg.Get(tenant.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if current.State != registry.TenantStateDeleted || current.ContainerID != "" || current.DisplayName != "Latest" || current.PlanVersion != "msp_max" || current.StripeSubscriptionID != "sub_latest" || current.CurrentImageDigest != "image_latest" {
+			t.Fatalf("finalization restored stale metadata: %+v", current)
+		}
+	}
+	if p.calls != 1 {
+		t.Fatalf("completed deletion deprovisioned %d times", p.calls)
+	}
+}
+
+type tenantBillingFunc func(context.Context, *registry.Tenant) error
+
+func (f tenantBillingFunc) ResumeWorkspaceBilling(ctx context.Context, tenant *registry.Tenant) error {
+	return f(ctx, tenant)
+}
+
+func TestWorkspaceManualResumeReconcilesRevokedBilling(t *testing.T) {
+	reg := newTestRegistry(t)
+	dir := t.TempDir()
+	mux, p := newTestTenantMux(t, reg, dir)
+	if err := reg.CreateAccount(&registry.Account{ID: "a-resume-real", Kind: registry.AccountKindMSP}); err != nil {
+		t.Fatal(err)
+	}
+	createTestStripeAccount(t, reg, "a-resume-real", "msp_starter")
+	tenant, err := p.ProvisionWorkspace(context.Background(), "a-resume-real", "Original")
+	if err != nil {
+		t.Fatal(err)
+	}
+	patch := func(state string) *httptest.ResponseRecorder {
+		return doRequest(t, mux, httptest.NewRequest(http.MethodPatch, "/api/accounts/"+tenant.AccountID+"/tenants/"+tenant.ID, strings.NewReader(`{"state":"`+state+`"}`)))
+	}
+	if res := patch("suspended"); res.Code != http.StatusOK {
+		t.Fatalf("suspend: %d %s", res.Code, res.Body.String())
+	}
+	sub := cpstripe.Subscription{ID: "sub_resume", Customer: "cus_test_a-resume-real", Status: "active", Metadata: map[string]string{"plan_version": "msp_starter"}}
+	if err := p.HandleMSPSubscriptionDeleted(context.Background(), sub); err != nil {
+		t.Fatal(err)
+	}
+	if err := p.HandleMSPSubscriptionUpdated(context.Background(), sub); err != nil {
+		t.Fatal(err)
+	}
+	current, err := reg.Get(tenant.ID)
+	if err != nil || current.State != registry.TenantStateSuspended || !current.ManualHold {
+		t.Fatalf("renewal cleared manual hold: %+v %v", current, err)
+	}
+	billingStore := config.NewFileBillingStore(filepath.Join(dir, tenant.ID))
+	held, err := billingStore.GetBillingState("default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if held.EntitlementJWT != "" || held.EntitlementRefreshToken != "" || held.SubscriptionState != pkglicensing.SubStateSuspended {
+		t.Fatal("renewal issued a paid lease while held")
+	}
+	rows, err := reg.ListHostedEntitlements()
+	if err != nil || len(rows) != 1 || rows[0].RevokedAt == nil {
+		t.Fatalf("held renewal recreated refresh authority: %v", err)
+	}
+	if res := patch("active"); res.Code != http.StatusOK {
+		t.Fatalf("resume: %d %s", res.Code, res.Body.String())
+	}
+	current, err = reg.Get(tenant.ID)
+	if err != nil || current.State != registry.TenantStateActive || current.ManualHold {
+		t.Fatalf("resume did not clear hold: %+v %v", current, err)
+	}
+	resumed, err := billingStore.GetBillingState("default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resumed.EntitlementJWT == "" || resumed.EntitlementRefreshToken == "" {
+		t.Fatal("successful resume left the revoked/missing paid lease")
+	}
+	row, err := reg.GetHostedEntitlementByRefreshToken(resumed.EntitlementRefreshToken)
+	if err != nil || row == nil || row.RevokedAt != nil {
+		t.Fatalf("resume did not issue current refresh authority: %v", err)
+	}
+}
+
+func TestWorkspaceResumeFailureKeepsHoldAndDoesNotReportSuccess(t *testing.T) {
+	for _, withdraw := range []bool{false, true} {
+		t.Run(fmt.Sprint(withdraw), func(t *testing.T) {
+			reg := newTestRegistry(t)
+			if err := reg.CreateAccount(&registry.Account{ID: "a-resume-fail", Kind: registry.AccountKindMSP}); err != nil {
+				t.Fatal(err)
+			}
+			tenant := &registry.Tenant{ID: "t-resume-fail", AccountID: "a-resume-fail", State: registry.TenantStateSuspended, ManualHold: true}
+			if err := reg.Create(tenant); err != nil {
+				t.Fatal(err)
+			}
+			reconciler := tenantBillingFunc(func(context.Context, *registry.Tenant) error {
+				if withdraw {
+					return errors.Join(reg.SetTenantState(tenant.ID, registry.TenantStateCanceled), fmt.Errorf("billing write failed"))
+				}
+				return fmt.Errorf("billing write failed")
+			})
+			req := httptest.NewRequest(http.MethodPatch, "/", strings.NewReader(`{"state":"active"}`))
+			req.SetPathValue("account_id", tenant.AccountID)
+			req.SetPathValue("tenant_id", tenant.ID)
+			res := httptest.NewRecorder()
+			HandleUpdateTenant(reg, reconciler)(res, req)
+			if res.Code != http.StatusServiceUnavailable {
+				t.Fatalf("false resume success: %d %s", res.Code, res.Body.String())
+			}
+			current, _ := reg.Get(tenant.ID)
+			want := registry.TenantStateSuspended
+			if withdraw {
+				want = registry.TenantStateCanceled
+			}
+			if current.State != want || (!withdraw && !current.ManualHold) {
+				t.Fatalf("compensation lost hold/withdrawal: %+v", current)
+			}
+		})
+	}
+}
+
+func TestWorkspaceFailedDeleteRetainsTerminalWithdrawal(t *testing.T) {
+	reg := newTestRegistry(t)
+	_, billing := newTestTenantMux(t, reg, t.TempDir())
+	if err := reg.CreateAccount(&registry.Account{ID: "a-delete-fail", Kind: registry.AccountKindMSP}); err != nil {
+		t.Fatal(err)
+	}
+	createTestStripeAccount(t, reg, "a-delete-fail", "msp_starter")
+	tenant, err := billing.ProvisionWorkspace(context.Background(), "a-delete-fail", "Original")
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := &deletionMutationProvisioner{mutate: func(*registry.Tenant) error {
+		_ = billing.HandleMSPSubscriptionDeleted(context.Background(), cpstripe.Subscription{ID: "sub_deleted", Customer: "cus_test_a-delete-fail"})
+		return fmt.Errorf("fixture teardown failed")
+	}}
+	req := httptest.NewRequest(http.MethodDelete, "/", nil)
+	req.SetPathValue("account_id", tenant.AccountID)
+	req.SetPathValue("tenant_id", tenant.ID)
+	res := httptest.NewRecorder()
+	HandleDeleteTenant(reg, p)(res, req)
+	if res.Code != http.StatusInternalServerError {
+		t.Fatalf("failed cleanup = %d", res.Code)
+	}
+	current, _ := reg.Get(tenant.ID)
+	if current.State != registry.TenantStateDeleting {
+		t.Fatalf("withdrawal erased failed-delete marker: %+v", current)
+	}
+	rows, err := reg.ListHostedEntitlements()
+	if err != nil || len(rows) != 1 || rows[0].RevokedAt == nil {
+		t.Fatalf("failed delete retained refresh authority: %v", err)
 	}
 }

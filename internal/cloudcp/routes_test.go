@@ -1,11 +1,18 @@
 package cloudcp
 
 import (
+	"crypto/ed25519"
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
+	cpauth "github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/auth"
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
 )
@@ -515,5 +522,67 @@ func TestNewHostedEntitlementsService_MarksProviderHosting(t *testing.T) {
 	}, reg)
 	if pulseHosted.ProviderHosted() {
 		t.Fatal("Pulse-hosted control plane must not be marked provider-hosted")
+	}
+}
+
+func TestRegisterRoutesManualResumeReconcilesBillingAndKeepsAccountRoles(t *testing.T) {
+	dir := t.TempDir()
+	reg, err := registry.NewTenantRegistry(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reg.Close()
+	if err := reg.CreateAccount(&registry.Account{ID: "a-route-resume", Kind: registry.AccountKindMSP}); err != nil {
+		t.Fatal(err)
+	}
+	for _, role := range []registry.MemberRole{registry.MemberRoleOwner, registry.MemberRoleReadOnly} {
+		if err := reg.CreateUser(&registry.User{ID: string(role), Email: string(role) + "@example.test"}); err != nil {
+			t.Fatal(err)
+		}
+		if err := reg.CreateMembership(&registry.AccountMembership{AccountID: "a-route-resume", UserID: string(role), Role: role}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	tenant := &registry.Tenant{ID: "t-route-resume", AccountID: "a-route-resume", State: registry.TenantStateSuspended, ManualHold: true, PlanVersion: "msp_starter"}
+	if err := reg.Create(tenant); err != nil {
+		t.Fatal(err)
+	}
+	_, private, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	session, err := cpauth.NewService(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer session.Close()
+	cfg := &CPConfig{DataDir: dir, BaseURL: "https://cloud.example.com", AdminKey: "fixture-only", TrialActivationPrivateKey: base64.StdEncoding.EncodeToString(private)}
+	mux := http.NewServeMux()
+	RegisterRoutes(mux, &Deps{Config: cfg, Registry: reg, MagicLinks: session})
+	for _, role := range []registry.MemberRole{registry.MemberRoleReadOnly, registry.MemberRoleOwner} {
+		token, err := session.GenerateSessionToken(string(role), string(role)+"@example.test", time.Hour)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req := httptest.NewRequest(http.MethodPatch, "https://cloud.example.com/api/accounts/"+tenant.AccountID+"/tenants/"+tenant.ID, strings.NewReader(`{"state":"active"}`))
+		req.AddCookie(&http.Cookie{Name: cpauth.SessionCookieName, Value: token})
+		res := httptest.NewRecorder()
+		mux.ServeHTTP(res, req)
+		if role == registry.MemberRoleReadOnly {
+			if res.Code != http.StatusForbidden {
+				t.Fatalf("reader reached resume: %d %s", res.Code, res.Body.String())
+			}
+			continue
+		}
+		if res.Code != http.StatusOK {
+			t.Fatalf("registered resume: %d %s", res.Code, res.Body.String())
+		}
+	}
+	state, err := config.NewFileBillingStore(filepath.Join(cfg.TenantsDir(), tenant.ID)).GetBillingState("default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state == nil || state.EntitlementJWT == "" || state.EntitlementRefreshToken == "" {
+		t.Fatal("registered resume reported success without current billing lease")
 	}
 }
