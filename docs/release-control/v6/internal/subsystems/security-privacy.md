@@ -5309,3 +5309,24 @@ no grant or frame after cancellation/deadline inside the verifier. In-memory
 compatibility, deferred creation/review/execution saves and all existing outer
 authentication/authorization checks remain. This is process-reload protection,
 not power-loss durability, evidence of exploitation or original-client recovery.
+
+### Tenant administrators and outbound connections (13 November 2026)
+
+An organization's owner or admin is not the instance operator, so the addresses
+they can make this server connect to are limited by
+`securityutil.TenantOutboundPolicy`: never loopback, link-local, unspecified,
+multicast or cloud metadata addresses (including IPv6 transition forms), and on
+Pulse Cloud no private address either. A host name is refused unless every
+address it resolves to passes (`pkg/securityutil.ValidateOutboundHost`).
+Private networks stay open on self-hosted shared-process installs and provider
+client runtimes, where tenants' systems sit on the LAN or behind a VPN. Availability checks are held to it even when assigned only to host agents,
+since a lapsed external probe entitlement moves them back to this server.
+TrueNAS and vCenter clients refuse redirects that change the host
+(`tlsutil.SameHostRedirectPolicy`), as Proxmox clients already refuse
+cross-origin redirects. Webhook and Apprise API destinations keep their own
+validation and the instance webhook allowlist, which is the operator's grant.
+Credentials combining an instance token or proxy admin with a tenant session
+cookie are judged by the cookie, the same as the Apprise CLI rule. The
+check runs when a destination is tested or saved; addresses saved before it,
+cluster member addresses a monitored Proxmox reports, and DNS changes after the
+check are not re-checked at poll time.

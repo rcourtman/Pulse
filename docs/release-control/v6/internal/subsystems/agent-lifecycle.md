@@ -11753,3 +11753,10 @@ through `connectionForOrganization`, once per agent per pass.
 `/api/notifications/` moved to `RequireOrgManager`, added in `internal/api/auth.go`
 and `internal/api/security_setup_fix.go`. Agent, install and connection routes keep
 `RequireOrgAdmin` and their token behavior; no agent lifecycle path changes.
+
+### Tenant outbound policy on org routes (13 November 2026)
+
+`RequireOrgAdmin` now carries a tenant outbound policy for callers without
+instance authority. Agent report, install, link and command routes read no
+destination from it, so agent lifecycle behavior does not change. The policy
+reads the provider-runtime flag through the licensing bridge.

@@ -9779,3 +9779,10 @@ callbacks and reconstructed active snapshots are not provider acceptance.
 The notification continuity integration controls exercise the constructor,
 reopened queues and real local HTTP delivery without claiming installed-provider
 or release qualification.
+
+### TrueNAS redirects stay on the configured host (13 November 2026)
+
+The TrueNAS API client (`internal/truenas/client.go`) now refuses a redirect
+that changes the host, through `tlsutil.SameHostRedirectPolicy`. A change of
+scheme, port or path on the same host, such as an HTTP to HTTPS upgrade, still
+follows. Polling, inventory and freshness are otherwise unchanged.

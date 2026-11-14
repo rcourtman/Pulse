@@ -3,6 +3,8 @@ package api
 import (
 	"crypto/ed25519"
 	"net/http"
+	"os"
+	"strings"
 	"time"
 
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
@@ -86,6 +88,12 @@ func upgradeURLForFeatureFromLicensing(feature string) string {
 
 func isProviderHostedWorkspaceFromLicensing(orgID string) bool {
 	return pkglicensing.IsProviderHostedWorkspace(orgID)
+}
+
+// isProviderHostedRuntimeFromLicensing reports whether this runtime is a
+// provider MSP client runtime, whichever organization a request names.
+func isProviderHostedRuntimeFromLicensing() bool {
+	return strings.EqualFold(strings.TrimSpace(os.Getenv(pkglicensing.ProviderHostedRuntimeEnvVar)), "true")
 }
 
 func proTrialSignupURLFromLicensing(override string) string {

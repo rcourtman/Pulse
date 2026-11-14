@@ -18,6 +18,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
@@ -295,6 +296,10 @@ func (h *NotificationHandlers) UpdateEmailConfig(w http.ResponseWriter, r *http.
 		return
 	}
 
+	if refuseTenantSMTPServer(w, r, config) {
+		return
+	}
+
 	monitor := h.requireConfiguredMonitor(w, r)
 	if monitor == nil {
 		return
@@ -362,6 +367,21 @@ func redactAppriseConfig(config notifications.AppriseConfig) appriseConfigRespon
 	response := appriseConfigResponse{AppriseConfig: config, HasAPIKey: config.APIKey != ""}
 	response.APIKey = ""
 	return response
+}
+
+// refuseTenantSMTPServer answers 403 when an organization administrator
+// without instance authority names an SMTP server the tenant outbound policy
+// excludes, such as a service on this server's own loopback.
+func refuseTenantSMTPServer(w http.ResponseWriter, r *http.Request, emailConfig notifications.EmailConfig) bool {
+	host := strings.TrimSpace(emailConfig.SMTPHost)
+	if host == "" {
+		return false
+	}
+	if err := securityutil.CheckTenantOutboundDestination(r.Context(), host); err != nil {
+		http.Error(w, securityutil.TenantOutboundRefusalMessage(r.Context(), err), http.StatusForbidden)
+		return true
+	}
+	return false
 }
 
 // GetAppriseConfig returns the current Apprise configuration.
@@ -954,6 +974,9 @@ func (h *NotificationHandlers) TestNotification(w http.ResponseWriter, r *http.R
 		var emailConfig notifications.EmailConfig
 		if err := json.Unmarshal(req.Config, &emailConfig); err != nil {
 			http.Error(w, fmt.Sprintf("Invalid email config: %v", err), http.StatusBadRequest)
+			return
+		}
+		if refuseTenantSMTPServer(w, r, emailConfig) {
 			return
 		}
 

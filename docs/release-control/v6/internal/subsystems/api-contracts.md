@@ -14472,3 +14472,18 @@ mark the resource type as a hint, and on `alert_cleared` it first calls
 or response change.
 The wiring also sets the bridge's sustained policy (`acceptsSustainedAlert`).
 The sustained rule adds no setting, route or payload field.
+
+### Tenant outbound destinations (13 November 2026)
+
+`RequireOrgAdmin` and `RequireOrgManager` (`internal/api/auth.go`) now attach a
+tenant outbound policy (`internal/api/tenant_outbound_policy.go`) to requests
+without instance authority. Routes that make this server connect to an address
+(node add, update, test and cluster refresh; `/api/connections/probe`;
+availability add, update and test; TrueNAS and vCenter add, update and test,
+and vCenter preview; the email SMTP server) answer 403 `destination_not_allowed` for a
+loopback, link-local or cloud metadata address, and on Pulse Cloud also for a
+private address. Availability checks are held to it on save whatever their observation
+locations. Instance administrators see no change. The provider-runtime test
+comes from `isProviderHostedRuntimeFromLicensing` in
+`internal/api/licensing_bridge.go`, so the policy file imports no licensing
+package. Proof: `internal/api/tenant_outbound_policy_test.go`.

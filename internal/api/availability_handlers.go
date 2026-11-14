@@ -170,6 +170,9 @@ func (h *AvailabilityHandlers) HandleAdd(w http.ResponseWriter, r *http.Request)
 		writeErrorResponse(w, http.StatusBadRequest, "validation_error", err.Error(), nil)
 		return
 	}
+	if refuseTenantAvailabilityDestination(w, r, target) {
+		return
+	}
 	if !h.requireProbeAssignment(w, r, target) {
 		return
 	}
@@ -244,6 +247,9 @@ func (h *AvailabilityHandlers) HandleUpdate(w http.ResponseWriter, r *http.Reque
 	}
 	if err := target.Validate(); err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "validation_error", err.Error(), nil)
+		return
+	}
+	if refuseTenantAvailabilityDestination(w, r, target) {
 		return
 	}
 	if !h.requireProbeAssignment(w, r, target) {
@@ -364,6 +370,11 @@ func (h *AvailabilityHandlers) testTarget(w http.ResponseWriter, r *http.Request
 		writeErrorResponse(w, http.StatusBadRequest, "validation_error", err.Error(), nil)
 		return
 	}
+	// A test always runs from this server, whichever locations the saved
+	// check is assigned to.
+	if refuseTenantAvailabilityDestination(w, r, target) {
+		return
+	}
 	start := time.Now()
 	result, err := monitoring.ProbeAvailabilityTargetDetailedResult(r.Context(), target)
 	latencyMs := time.Since(start).Milliseconds()
@@ -382,6 +393,19 @@ func (h *AvailabilityHandlers) testTarget(w http.ResponseWriter, r *http.Request
 		response.Error = err.Error()
 	}
 	writeJSON(w, http.StatusOK, response)
+}
+
+// refuseTenantAvailabilityDestination applies the tenant outbound policy to a
+// check's address. It applies to checks assigned only to host agents too: when
+// the external probe entitlement lapses, those resume on this server.
+func refuseTenantAvailabilityDestination(w http.ResponseWriter, r *http.Request, target config.AvailabilityTarget) bool {
+	destination := target.ProbeAddress()
+	if target.Protocol == config.AvailabilityProbeHTTP || target.Protocol == config.AvailabilityProbeHTTPS {
+		if u, err := target.HTTPURL(); err == nil {
+			destination = u.String()
+		}
+	}
+	return refuseTenantOutboundDestination(w, r, destination)
 }
 
 func decodeAvailabilityTargetRequest(w http.ResponseWriter, r *http.Request, base config.AvailabilityTarget) (config.AvailabilityTarget, bool) {

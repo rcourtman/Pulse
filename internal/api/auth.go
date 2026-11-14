@@ -1103,16 +1103,17 @@ func RequireAdmin(cfg *config.Config, handler http.HandlerFunc) http.HandlerFunc
 // manage that organization are admitted as well (ensureOrgAdminSession), and
 // tokens bound to it are judged by the route's scope alone. Use it
 // only after checking that the handler cannot reach instance-wide state or
-// another organization's data.
+// another organization's data. Callers without instance authority carry the
+// tenant outbound policy (withTenantOutboundPolicy).
 func RequireOrgAdmin(cfg *config.Config, handler http.HandlerFunc) http.HandlerFunc {
-	return requireAdminSession(cfg, ensureOrgAdminSession, handler)
+	return requireAdminSession(cfg, ensureOrgAdminSession, withTenantOutboundPolicy(cfg, handler))
 }
 
 // RequireOrgManager is RequireOrgAdmin for routes whose responses hold reusable
 // secrets: the organization's managers are admitted in a session, and tokens
 // bound to the organization stay refused whatever their scopes.
 func RequireOrgManager(cfg *config.Config, handler http.HandlerFunc) http.HandlerFunc {
-	return requireAdminSession(cfg, ensureOrgManagerSession, handler)
+	return requireAdminSession(cfg, ensureOrgManagerSession, withTenantOutboundPolicy(cfg, handler))
 }
 
 func requireAdminSession(cfg *config.Config, sessionCheck func(*config.Config, http.ResponseWriter, *http.Request) bool, handler http.HandlerFunc) http.HandlerFunc {

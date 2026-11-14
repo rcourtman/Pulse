@@ -86,6 +86,9 @@ func (h *VMwareHandlers) HandleAdd(w http.ResponseWriter, r *http.Request) {
 		writeErrorResponse(w, http.StatusBadRequest, "validation_error", err.Error(), nil)
 		return
 	}
+	if refuseTenantOutboundDestination(w, r, instance.Host) {
+		return
+	}
 
 	persistence := h.persistenceForRequest(w, r.Context())
 	if persistence == nil {
@@ -251,9 +254,10 @@ func (h *VMwareHandlers) HandleUpdate(w http.ResponseWriter, r *http.Request) {
 		preserve: func(updated *config.VMwareVCenterInstance, stored config.VMwareVCenterInstance) {
 			updated.PreserveMaskedSecrets(stored)
 		},
-		validate: func(inst config.VMwareVCenterInstance) error { return inst.Validate() },
-		redacted: func(inst config.VMwareVCenterInstance) any { return inst.Redacted() },
-		save:     persistence.SaveVMwareConfig,
+		validate:    func(inst config.VMwareVCenterInstance) error { return inst.Validate() },
+		destination: func(inst config.VMwareVCenterInstance) string { return inst.Host },
+		redacted:    func(inst config.VMwareVCenterInstance) any { return inst.Redacted() },
+		save:        persistence.SaveVMwareConfig,
 	})
 }
 
@@ -289,6 +293,9 @@ func (h *VMwareHandlers) HandlePreviewConnection(w http.ResponseWriter, r *http.
 		return
 	}
 
+	if refuseTenantOutboundDestination(w, r, instance.Host) {
+		return
+	}
 	records, invalidConfig, err := h.previewMonitoredSystemRecords(r.Context(), instance)
 	if err != nil {
 		h.writeConnectionFailure(w, invalidConfig, err)
@@ -377,6 +384,9 @@ func (h *VMwareHandlers) HandlePreviewSavedConnection(w http.ResponseWriter, r *
 			return
 		}
 
+		if refuseTenantOutboundDestination(w, r, next.Host) {
+			return
+		}
 		records, invalidConfig, err := h.previewMonitoredSystemRecords(r.Context(), next)
 		if err != nil {
 			h.writeConnectionFailure(w, invalidConfig, err)
@@ -467,6 +477,9 @@ func (h *VMwareHandlers) HandleTestSavedConnection(w http.ResponseWriter, r *htt
 			}
 			instance = payload
 		}
+		if refuseTenantOutboundDestination(w, r, instance.Host) {
+			return
+		}
 
 		summary, invalidConfig, err := h.testConnectionInstance(r, instance)
 		if err != nil {
@@ -501,6 +514,9 @@ func (h *VMwareHandlers) writeConnectionTestResult(
 	r *http.Request,
 	instance config.VMwareVCenterInstance,
 ) {
+	if refuseTenantOutboundDestination(w, r, instance.Host) {
+		return
+	}
 	summary, invalidConfig, err := h.testConnectionInstance(r, instance)
 	if err != nil {
 		h.writeConnectionFailure(w, invalidConfig, err)

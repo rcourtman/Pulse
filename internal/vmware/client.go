@@ -18,6 +18,8 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/pkg/tlsutil"
 )
 
 const (
@@ -140,9 +142,10 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 	return &Client{
 		baseURL: baseURL,
 		httpClient: &http.Client{
-			Timeout:   timeout,
-			Transport: transport,
-			Jar:       jar,
+			Timeout:       timeout,
+			Transport:     transport,
+			Jar:           jar,
+			CheckRedirect: tlsutil.SameHostRedirectPolicy,
 		},
 		username: strings.TrimSpace(cfg.Username),
 		password: strings.TrimSpace(cfg.Password),
