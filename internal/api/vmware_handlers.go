@@ -12,6 +12,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/vmware"
 )
@@ -582,6 +583,7 @@ func (h *VMwareHandlers) testConnectionInstance(
 	}
 
 	client, err := newClient(vmware.ClientConfig{
+		OutboundPolicy:     securityutil.ConnectionOutboundPolicyForContext(r.Context()),
 		Host:               instance.Host,
 		Port:               instance.Port,
 		Username:           instance.Username,
@@ -629,6 +631,7 @@ func decodeVMwareInstanceRequest(
 		return config.VMwareVCenterInstance{}, false
 	}
 
+	instance.OutboundPolicy = securityutil.ConnectionOutboundPolicyForContext(r.Context())
 	return instance, true
 }
 
@@ -637,7 +640,9 @@ func decodeOptionalVMwareInstanceRequest(
 	r *http.Request,
 	base config.VMwareVCenterInstance,
 ) (config.VMwareVCenterInstance, bool, bool) {
-	return decodeOptionalInstanceRequest(w, r, base)
+	instance, decoded, ok := decodeOptionalInstanceRequest(w, r, base)
+	instance.OutboundPolicy = securityutil.ConnectionOutboundPolicyForContext(r.Context())
+	return instance, decoded, ok
 }
 
 func (h *VMwareHandlers) featureEnabled(w http.ResponseWriter) bool {
@@ -685,6 +690,7 @@ func (h *VMwareHandlers) previewMonitoredSystemRecords(
 	}
 
 	client, err := vmware.NewClient(vmware.ClientConfig{
+		OutboundPolicy:     securityutil.ConnectionOutboundPolicyForContext(ctx),
 		Host:               instance.Host,
 		Port:               instance.Port,
 		Username:           instance.Username,

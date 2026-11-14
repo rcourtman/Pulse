@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/tlsutil"
 )
 
@@ -48,6 +49,7 @@ const maxAppLogTailLines = 500
 
 // ClientConfig configures the TrueNAS API client.
 type ClientConfig struct {
+	OutboundPolicy     securityutil.ConnectionOutboundPolicy
 	Host               string
 	Port               int
 	APIKey             string
@@ -63,10 +65,11 @@ type ClientConfig struct {
 // current SCALE releases use JSON-RPC 2.0 over WebSocket; REST is retained
 // only as a version-gated boundary for legacy SCALE and CORE appliances.
 type Client struct {
-	config     ClientConfig
-	httpClient *http.Client
-	baseURL    string
-	rpcURL     string
+	config              ClientConfig
+	httpClient          *http.Client
+	baseURL             string
+	rpcURL              string
+	outboundDialContext func(context.Context, string, string) (net.Conn, error)
 
 	rpcMu     rpcSessionMutex
 	rpc       *trueNASRPCClient
@@ -96,6 +99,12 @@ func (e *APIError) Error() string {
 
 // NewClient creates a new TrueNAS API client.
 func NewClient(config ClientConfig) (*Client, error) {
+	return newClientWithResolver(config, nil)
+}
+
+// Resolver injection is package-private and only used by offline transport
+// fixtures. Production always uses the normal resolver through the policy.
+func newClientWithResolver(config ClientConfig, resolve func(context.Context, string) ([]net.IPAddr, error)) (*Client, error) {
 	host := strings.TrimSpace(config.Host)
 	if host == "" {
 		return nil, fmt.Errorf("truenas host is required")
@@ -112,6 +121,14 @@ func NewClient(config ClientConfig) (*Client, error) {
 	}
 
 	transport := http.DefaultTransport.(*http.Transport).Clone()
+	outboundDial := config.OutboundPolicy.DialContext(timeout, resolve)
+	if outboundDial != nil {
+		// A proxy can resolve the original name itself, outside the pinned
+		// dial. Tenant-controlled destinations must use the validated direct
+		// path; instance/legacy proxy behavior is unchanged.
+		transport.Proxy = nil
+		transport.DialContext = outboundDial
+	}
 	if useHTTPS {
 		tlsConfig, err := buildTLSConfig(config.InsecureSkipVerify, config.Fingerprint)
 		if err != nil {
@@ -142,7 +159,8 @@ func NewClient(config ClientConfig) (*Client, error) {
 	}
 
 	client := &Client{
-		config: config,
+		config:              config,
+		outboundDialContext: outboundDial,
 		httpClient: &http.Client{
 			Timeout:       timeout,
 			Transport:     transport,
@@ -2509,6 +2527,10 @@ func (c *Client) dialRPC(ctx context.Context) (*websocket.Conn, error) {
 func (c *Client) dialRPCEndpoint(ctx context.Context, rpcURL string, useTLS bool) (*websocket.Conn, error) {
 	dialer := websocket.Dialer{
 		Proxy: http.ProxyFromEnvironment,
+	}
+	if c.outboundDialContext != nil {
+		dialer.Proxy = nil
+		dialer.NetDialContext = c.outboundDialContext
 	}
 	if useTLS {
 		tlsConfig, err := buildTLSConfig(c.config.InsecureSkipVerify, c.config.Fingerprint)

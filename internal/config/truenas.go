@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 )
 
 const trueNASSensitiveMask = "********"
@@ -18,6 +19,11 @@ func IsTrueNASSensitiveMask(value string) bool {
 
 // TrueNASInstance represents a configured TrueNAS endpoint.
 type TrueNASInstance struct {
+	// OutboundPolicy is server-owned save provenance, not an editable API
+	// field. Empty preserves legacy/instance-managed connections. Tenant
+	// handlers overwrite caller input and Redacted omits it from responses.
+	OutboundPolicy securityutil.ConnectionOutboundPolicy `json:"outboundPolicy,omitempty"`
+
 	ID                 string `json:"id"`
 	Name               string `json:"name"`
 	Host               string `json:"host"`
@@ -115,6 +121,7 @@ func (t *TrueNASInstance) Redacted() TrueNASInstance {
 	}
 
 	redacted := *t
+	redacted.OutboundPolicy = ""
 	if strings.TrimSpace(redacted.APIKey) != "" {
 		redacted.APIKey = trueNASSensitiveMask
 	}
