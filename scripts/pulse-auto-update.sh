@@ -649,6 +649,24 @@ perform_update() {
     # transaction trap below takes over only after that observation succeeds.
     trap 'trap - RETURN; exec {update_lock_fd}<&-' RETURN
 
+    # main's edition/version checks precede remote release discovery. Another
+    # transaction can finish in that interval and release this same lock before
+    # we acquire it. Revalidate the real community executable under the lock:
+    # stale discovery must not downgrade it or replace a newly installed Pro
+    # binary. Unknown identity grants no backup, installer or recovery action.
+    local locked_version=""
+    # The parent retains ownership; a version-probe child must not inherit the
+    # transaction descriptor and keep the installation locked after we return.
+    locked_version=$(get_current_version {update_lock_fd}<&-) || locked_version=unknown
+    if [[ -z "$locked_version" || "$locked_version" == unknown ]]; then
+        log error "Cannot verify installed community version after acquiring update lock; no update attempted"
+        return 1
+    fi
+    if ! version_greater_than "$new_version" "$locked_version"; then
+        log info "Update no longer needed: installed $locked_version is not older than $new_version; no installer run"
+        return 3  # Distinct no-change result; main must not claim installation.
+    fi
+
     local installer_tmp=""
     local signature_tmp=""
     local backup_dir=""
@@ -956,8 +974,13 @@ main() {
             # notification endpoint; a best-effort loopback POST cannot prove
             # delivery and must not hold this successful oneshot open.
         else
-            log error "Update failed"
-            exit 1
+            local update_status=$?
+            if [[ "$update_status" == 3 ]]; then
+                log info "No update needed after locked installed-version check"
+            else
+                log error "Update failed"
+                exit 1
+            fi
         fi
     else
         log info "Already running latest version"
