@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "base_sha": "dd54dcb7f8b57bdaa71093cc3209b90fc4fbc303",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/api/settings.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/api/settings.ts": "0902d0c4d131e142702ccfcf1e971fd2b5a9b664cc436f08319c0064ba99fa22"
+  },
+  "verified_at": "2026-11-14T11:42:05.468368Z",
+  "routes": [
+    "Settings > General > Usage data and privacy (isolated real GeneralSettingsPanel + useSystemSettingsState + SettingsAPI with synthetic HTTP responses; not the full authenticated App)"
+  ],
+  "states": [
+    "Chromium 141.0.7390.37 desktop 1440x900 and WebKit 26.0 narrow 390x844, Playwright 1.56.1 matching the integration lock; light and dark",
+    "Available reporting with nonzero counts and unavailable reporting with false/zero counters; opt-out warning and controls retained",
+    "16 captures / eight comparable before-after pairs opened with native view_image. Six pairs are byte-identical; two light disabled pairs differ in control focus/hover painting, not information or layout. Fixture JS/CSS bytes are identical before/after the declaration-only repair. Narrow JSON keeps its existing internal horizontal scrolling."
+  ],
+  "interactions": [
+    "Loaded settings through actual SettingsAPI and useSystemSettingsState, verified preview GET stays on-demand, clicked Preview payload",
+    "Compared all response fields and numeric/boolean reporting values against synthetic sender-shaped JSON; copied exact JSON through actual clipboard handler",
+    "Focused Refresh payload and pressed Enter, verified exactly two explicit preview GETs per state; no transmission, reset or preference mutation",
+    "Scrolled to the same reporting-key or disabled-warning anchor, checked no page horizontal overflow and no browser errors, inspected desktop and narrow light/dark captures"
+  ],
+  "evidence": [
+    "RECEIPTS.md",
+    "before-binding.json",
+    "after-binding.json",
+    "before-result.json",
+    "after-result.json",
+    "PAIRS.json"
+  ]
+}
