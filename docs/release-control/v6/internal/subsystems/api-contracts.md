@@ -6031,7 +6031,13 @@ token's spent grant recorded (`proxmox_registration_host_<type>`, or the
 unsuffixed record when its type matches). What the agent says about itself
 (`serverName`, candidate addresses, a rebindable `bound_hostname`, host
 reports) does not authorize a change, because every monitored host holds an
-agent token; anything else is a 403 that changes nothing. Only a server-authored config/hosted
+agent token; anything else is a 403 that changes nothing. Completion reads
+that authority before Pulse contacts any candidate address for a TLS
+fingerprint: setup tokens and install-grant holders may probe every candidate,
+an ungranted agent token only a candidate spelled as its spent grant recorded
+it (compared without resolving names), so the fetch is never a reachability
+probe for a caller that may not change the address.
+Only a server-authored config/hosted
 PVE/PBS install token may create one matching source, after durable first-host
 binding, and completion must consume that grant under the serialized
 auto-register mutation boundary.
