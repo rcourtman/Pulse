@@ -244,11 +244,15 @@ describe('VmwarePageSurface contract', () => {
 
       render(() => <VmwarePageSurface />);
 
-      const emptyTable = screen.getByTestId(absent === 'hosts' ? 'hosts-table' : 'workloads-surface');
+      const emptyTable = screen.getByTestId(
+        absent === 'hosts' ? 'hosts-table' : 'workloads-surface',
+      );
       expect(emptyTable).toHaveTextContent(
         "Check the vCenter connection's collection scope and status in Settings.",
       );
-      expect(screen.queryByText(/once the vCenter connection enumerates them/)).not.toBeInTheDocument();
+      expect(
+        screen.queryByText(/once the vCenter connection enumerates them/),
+      ).not.toBeInTheDocument();
       expect(screen.getByTestId('hosts-table')).toHaveAttribute(
         'data-rows',
         absent === 'hosts' ? '0' : '1',
@@ -274,7 +278,9 @@ describe('VmwarePageSurface contract', () => {
 
     const notice = await screen.findByTestId('vmware-inventory-completeness-notice');
     expect(notice).toHaveTextContent('vSphere inventory completeness is unavailable');
-    expect(notice).toHaveTextContent('cannot confirm that the current vCenter inventory is complete');
+    expect(notice).toHaveTextContent(
+      'cannot confirm that the current vCenter inventory is complete',
+    );
     expect(screen.getByTestId('workloads-surface')).toHaveTextContent(
       "Check the vCenter connection's collection scope and status in Settings.",
     );
