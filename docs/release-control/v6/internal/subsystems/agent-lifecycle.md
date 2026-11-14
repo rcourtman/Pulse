@@ -17,6 +17,30 @@
 
 ## Purpose
 
+### VMware destination refusals keep the admitted connection draft
+
+The existing connection editor treats an exact HTTP 403
+`destination_not_allowed` from create, update, test or impact-preview as a
+destination refusal, not lost settings access. The current reader and draft
+remain available for correction, with endpoint/instance-administrator guidance
+beside the form. Typed `invalid_config` and `vmware_invalid_config` failures
+use the same guidance rather than suggesting credential, VMware grant or TLS
+changes. Destination feedback in the editor is inline, without a duplicate
+toast covering the controls; a saved-row test still reports its result.
+
+This distinction does not grant access or change a request. Inventory/deletion
+403s, other action 403s, credential 401 sign-out, reader retirement, stale-draft
+checks and disabled automatic retries retain their existing rules. No backend
+policy, saved secret, TLS setting or collection scope is changed.
+
+`useVMwareSettingsPanelState.test.tsx` covers categorized guidance and unchanged
+authentication/TLS/network controls. `VMwareDestinationFeedback.transport.test.tsx`
+exercises real HTTP error parsing, new/saved actions, exact-code and denial
+controls, retained drafts/credentials, request ownership, stale completions and
+the real credential slot. Comparable desktop/phone light/dark browser fixtures
+exercise the state/HTTP producer through the editor, slot and Dialog; these are
+not full-App, installed-vCenter or original-estate recovery proof.
+
 ### Typed helper work consumes one operation budget
 
 The client retains one deadline across request preparation, dialing and socket

@@ -29,6 +29,21 @@ export const buildVMwareConnectionFailurePresentation = (
   const category = normalizeOptionalText(input.category);
   const message = normalizeOptionalText(input.message) ?? input.fallback;
 
+  if (
+    code === 'destination_not_allowed' ||
+    code === 'vmware_invalid_config' ||
+    category === 'invalid_config'
+  ) {
+    return {
+      code,
+      category,
+      guidance: 'Review the endpoint with your Pulse instance administrator before retrying.',
+      message,
+      title: 'Check the vCenter destination',
+      tone: 'warning',
+    };
+  }
+
   switch (category) {
     case 'unsupported_version':
       return {
@@ -81,17 +96,6 @@ export const buildVMwareConnectionFailurePresentation = (
       };
     default:
       break;
-  }
-
-  if (code === 'vmware_invalid_config') {
-    return {
-      code,
-      category,
-      guidance: 'Review the host, port, username, and password fields before retrying.',
-      message,
-      title: 'Connection configuration is invalid',
-      tone: 'danger',
-    };
   }
 
   return {

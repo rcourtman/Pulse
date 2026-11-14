@@ -382,6 +382,15 @@ describe('useVMwareSettingsPanelState', () => {
 
   it.each([
     {
+      category: 'invalid_config',
+      error: 'This VMware destination requires an instance administrator.',
+      expected: {
+        guidance: 'Review the endpoint with your Pulse instance administrator before retrying.',
+        title: 'Check the vCenter destination',
+        tone: 'warning',
+      },
+    },
+    {
       category: 'auth',
       error: 'VMware authentication failed while creating the VI JSON API session',
       expected: {
@@ -438,7 +447,8 @@ describe('useVMwareSettingsPanelState', () => {
       const succeeded = await result.testCurrentForm();
 
       expect(succeeded).toBe(false);
-      expect(notificationStore.error).toHaveBeenCalledWith(error);
+      if (category === 'invalid_config') expect(notificationStore.error).not.toHaveBeenCalled();
+      else expect(notificationStore.error).toHaveBeenCalledWith(error);
       expect(result.connectionFailure()).toEqual({
         category,
         code: 'vmware_connection_failed',

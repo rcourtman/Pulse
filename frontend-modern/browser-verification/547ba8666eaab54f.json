@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "base_sha": "487836df4ca55644c0fe3a7b7b2ffe37eace8dc0",
+  "verified_at": "2026-11-14T08:11:08Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/useVMwareSettingsPanelState.ts",
+    "frontend-modern/src/components/Settings/vmwareConnectionFailurePresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/vmwareConnectionFailurePresentation.ts": "818b35fa969e1b8e74c6d7b4f7ac5681a5d1b8cca013a956b1cc903924434686",
+    "frontend-modern/src/components/Settings/useVMwareSettingsPanelState.ts": "e60d646614f98d85982d313aa0a0dda4f728fbea82686242a26e5caf523104cb"
+  },
+  "routes": [
+    "/settings/infrastructure \u2014 existing VMware editor consumed in a local offline shell, not full-App routing"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Real useVMwareSettingsPanelState, VMwareAPI/HTTP parser, VMwareCredentialSlot, ConnectionEditor, Dialog and Toast; synthetic saved connection and HTTP responses. No appliance or full InfrastructureWorkspace/App execution.",
+    "Chromium 141.0.7390.37 desktop and WebKit 26.0 phone, Playwright 1.56.1 matching integration lock, light/dark. Before at the verified parent: 105 assertions and 16 captures; exact 403 policy preview/save discards draft, typed invalid_config suggests credentials.",
+    "Final runtime: retained draft, saved password placeholder, endpoint, port, username, TLS choice, enabled state and individual scope choices. Endpoint/instance-administrator guidance is inline with no duplicate destination toast covering controls. 32 before/after originals (16 comparable pairs) inspected with native view_image.",
+    "Composite final proof: initial driver completed 160 assertions and 15 captures, then timed out on the last phone/dark save feedback after logged test-file HMR/navigation. Runtime hashes stayed unchanged. Added fixture test-file watch exclusions matching normal Vite config; the last state alone completed 13 assertions and one capture. The original failure remains retained; no claim of one uninterrupted full driver pass.",
+    "Captured feedback and controls anchors preserve the saved header/name/HTTPS endpoint and Close. Existing phone vertical scrolling still reaches TLS, individual collection scopes and all four actions. No aggregate or hidden replacement for distinct information."
+  ],
+  "interactions": [
+    "Edit saved vCenter, change Name, explicitly test/preview/save through real HTTP transport with bound org, stored-secret marker, unchanged TLS/scope and exactly one write/no automatic replay.",
+    "Scroll to controls; cancel/reopen clears old feedback; delayed test completion cannot enter the next organisation and retired draft secrets clear. Background remains inert while the dialog is open.",
+    "Comparable initial feedback and action anchors use identical fixtures, viewport, theme and screenshot timing, with animations disabled. Capture and log archives retained in the lane outcome."
+  ]
+}
