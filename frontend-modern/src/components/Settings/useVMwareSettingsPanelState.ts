@@ -103,6 +103,11 @@ const getErrorMessage = (error: unknown, fallback: string): string => {
 const getVMwareErrorMessage = (error: unknown, fallback: string): string =>
   apiErrorDetailField(error, 'error') ?? getErrorMessage(error, fallback);
 
+const isDestinationConfigurationError = (error: unknown) =>
+  apiErrorCode(error) === 'destination_not_allowed' ||
+  apiErrorCode(error) === 'vmware_invalid_config' ||
+  apiErrorDetailField(error, 'category') === 'invalid_config';
+
 const buildConnectionTestWarning = (
   result: VMwareConnectionTestResult,
 ): VMwareConnectionTestWarning | null => {
@@ -391,7 +396,16 @@ export function useVMwareSettingsPanelState({
       setForm((current) => ({ ...current, ...patch }));
     });
   };
-  const notifyDenial = (error: unknown) => {
+  const notifyDenial = (error: unknown, connectionAttempt = false) => {
+    // This exact refusal describes the requested destination, not loss of
+    // settings access. Only connection attempts may retain their admitted
+    // reader/draft; inventory, deletion and every other 401/403 still withdraw.
+    if (
+      connectionAttempt &&
+      apiErrorStatus(error) === 403 &&
+      apiErrorCode(error) === 'destination_not_allowed'
+    )
+      return false;
     if (!withdrawOnDenial(error)) return false;
     notificationStore.error(loadingError()!);
     return true;
@@ -425,7 +439,7 @@ export function useVMwareSettingsPanelState({
     } catch (error) {
       if (!isCurrentReader(accepted)) return false;
       // A changed draft obsoletes its test result, but not this reader's denial.
-      if (notifyDenial(error) || !isCurrent()) return false;
+      if (notifyDenial(error, true) || !isCurrent()) return false;
       const failure = buildVMwareConnectionFailurePresentation({
         code: apiErrorCode(error),
         category: apiErrorDetailField(error, 'category'),
@@ -433,7 +447,9 @@ export function useVMwareSettingsPanelState({
         fallback: 'VMware connection failed',
       });
       setConnectionFailure(failure);
-      notificationStore.error(failure.message);
+      // Destination feedback is already beside this correctable draft. A
+      // duplicate toast can cover its actions, especially on a phone.
+      if (!isDestinationConfigurationError(error)) notificationStore.error(failure.message);
       logger.error('[VMware Settings] Connection test failed', error);
       return false;
     } finally {
@@ -463,7 +479,7 @@ export function useVMwareSettingsPanelState({
         );
       }
     } catch (error) {
-      if (!isCurrentReader(accepted) || notifyDenial(error)) return;
+      if (!isCurrentReader(accepted) || notifyDenial(error, true)) return;
       const failure = buildVMwareConnectionFailurePresentation({
         code: apiErrorCode(error),
         category: apiErrorDetailField(error, 'category'),
@@ -507,7 +523,7 @@ export function useVMwareSettingsPanelState({
       return preview;
     } catch (error) {
       if (!isCurrentReader(accepted)) return null;
-      if (notifyDenial(error) || !isCurrent()) return null;
+      if (notifyDenial(error, true) || !isCurrent()) return null;
       const unavailableState = monitoredSystemImpactPreviewUnavailableStateFromError(error);
       if (unavailableState) {
         setMonitoredSystemPreviewUnavailableState(unavailableState);
@@ -523,7 +539,7 @@ export function useVMwareSettingsPanelState({
       setMonitoredSystemPreviewGenericError(failure.message);
       if (
         apiErrorCode(error) === 'vmware_connection_failed' ||
-        apiErrorCode(error) === 'vmware_invalid_config'
+        isDestinationConfigurationError(error)
       )
         setConnectionFailure(failure);
       logger.error('[VMware Settings] Preview failed', error);
@@ -537,6 +553,7 @@ export function useVMwareSettingsPanelState({
     if (!canAct() || !dialogOpen()) return;
     const accepted = reader();
     setSaving(true);
+    setConnectionFailure(null);
     try {
       const payload = buildConnectionInput(form());
       const editingID = editingConnectionId();
@@ -550,9 +567,18 @@ export function useVMwareSettingsPanelState({
       setSaving(false);
       await loadConnections();
     } catch (error) {
-      if (!isCurrentReader(accepted) || notifyDenial(error)) return;
+      if (!isCurrentReader(accepted) || notifyDenial(error, true)) return;
       setMonitoredSystemPreviewUnavailableState(null);
-      notificationStore.error(getErrorMessage(error, 'Failed to save VMware connection'));
+      if (isDestinationConfigurationError(error)) {
+        setConnectionFailure(
+          buildVMwareConnectionFailurePresentation({
+            code: apiErrorCode(error),
+            category: apiErrorDetailField(error, 'category'),
+            message: getVMwareErrorMessage(error, 'Failed to save VMware connection'),
+            fallback: 'Failed to save VMware connection',
+          }),
+        );
+      } else notificationStore.error(getErrorMessage(error, 'Failed to save VMware connection'));
       logger.error('[VMware Settings] Save failed', error);
     } finally {
       if (isCurrentReader(accepted)) setSaving(false);
