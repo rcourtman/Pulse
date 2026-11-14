@@ -26,13 +26,13 @@ const makeResource = (resource: Partial<Resource> & Pick<Resource, 'id' | 'type'
 
 const setResources = (
   resources: Resource[],
-  options: { loading?: boolean; refetch?: ReturnType<typeof vi.fn> } = {},
+  options: { loading?: boolean; error?: Error; refetch?: ReturnType<typeof vi.fn> } = {},
 ) => {
   const refetch = options.refetch ?? vi.fn().mockResolvedValue(resources);
   mockUseUnifiedResources.mockReturnValue({
     resources: () => resources,
     loading: () => options.loading ?? false,
-    error: () => null,
+    error: () => options.error ?? null,
     refetch,
   });
   return refetch;
@@ -77,8 +77,15 @@ vi.mock('@/components/Workloads/WorkloadsFilter', () => ({
 }));
 
 vi.mock('@/components/Workloads/WorkloadsSurface', () => ({
-  WorkloadsSurface: (props: { tableTitle?: JSX.Element }) => (
-    <div data-testid="workloads-surface">{props.tableTitle}</div>
+  WorkloadsSurface: (props: {
+    tableTitle?: JSX.Element;
+    emptyStateDescription?: string;
+    state: { allGuests: () => unknown[] };
+  }) => (
+    <div data-testid="workloads-surface">
+      {props.tableTitle}
+      {props.state.allGuests().length === 0 && <p>{props.emptyStateDescription}</p>}
+    </div>
   ),
 }));
 
@@ -94,7 +101,15 @@ vi.mock('@/components/Workloads/useWorkloadsState', () => ({
 }));
 
 vi.mock('@/features/platformPage/sharedPlatformPage', () => ({
-  PlatformErrorState: () => <div data-testid="platform-error-state" />,
+  PlatformErrorState: (props: { title: string; description: string; onRefresh: () => void }) => (
+    <div data-testid="platform-error-state">
+      <h3>{props.title}</h3>
+      <p>{props.description}</p>
+      <button type="button" onClick={props.onRefresh}>
+        Refresh
+      </button>
+    </div>
+  ),
   PlatformSectionTabs: (props: {
     active: string;
     tabs: Array<{ id: string; label: string; path: string }>;
@@ -105,7 +120,12 @@ vi.mock('@/features/platformPage/sharedPlatformPage', () => ({
       data-tabs={props.tabs.map((tab) => tab.id).join(',')}
     />
   ),
-  PlatformTableEmptyState: () => <div data-testid="platform-table-empty-state" />,
+  PlatformTableEmptyState: (props: { title: string; description: string }) => (
+    <div data-testid="platform-table-empty-state">
+      <h3>{props.title}</h3>
+      <p>{props.description}</p>
+    </div>
+  ),
   PlatformTableLoadingState: () => <div data-testid="platform-table-loading-state" />,
 }));
 
@@ -124,6 +144,7 @@ vi.mock('../VsphereDatastoresTable', () => ({
 vi.mock('../VsphereHostsTable', () => ({
   VsphereHostsTable: (props: {
     hosts: Resource[];
+    emptyDescription: string;
     vmScope?: {
       sectionId: string;
       selectedHostId: () => string | null;
@@ -131,6 +152,7 @@ vi.mock('../VsphereHostsTable', () => ({
     };
   }) => (
     <div data-testid="hosts-table" data-rows={props.hosts.length}>
+      {props.hosts.length === 0 && <p>{props.emptyDescription}</p>}
       {props.hosts.map((host) => (
         <button
           type="button"
@@ -194,6 +216,99 @@ describe('VmwarePageSurface contract', () => {
         .compareDocumentPosition(screen.getByTestId('workloads-surface')) &
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
+  });
+
+  it.each(['hosts', 'VMs'] as const)(
+    'does not promise pending enumeration for absent %s with an unknown collection scope',
+    (absent) => {
+      // Viewer-safe runtime diagnostics do not expose saved host/VM scope flags.
+      // Empty inventory alone must not imply disabled monitoring or a future poll.
+      const resource = makeResource({
+        id: absent === 'hosts' ? 'vm-app-01' : 'esxi-01',
+        type: absent === 'hosts' ? 'vm' : 'agent',
+        vmware: {
+          entityType: absent === 'hosts' ? 'vm' : 'host',
+          managedObjectId: absent === 'hosts' ? 'vm-1' : 'host-1',
+          connectionId: 'vc-1',
+        },
+      });
+      setResources([resource]);
+      mockUseWorkloadsState.mockReturnValue({
+        surfaceConnected: () => false,
+        surfaceInitialDataReceived: () => false,
+        filteredGuests: () => [],
+        search: () => '',
+        setSearch: vi.fn(),
+        allGuests: () => (absent === 'hosts' ? [{ id: resource.id }] : []),
+      });
+
+      render(() => <VmwarePageSurface />);
+
+      const emptyTable = screen.getByTestId(
+        absent === 'hosts' ? 'hosts-table' : 'workloads-surface',
+      );
+      expect(emptyTable).toHaveTextContent(
+        "Check the vCenter connection's collection scope and status in Settings.",
+      );
+      expect(
+        screen.queryByText(/once the vCenter connection enumerates them/),
+      ).not.toBeInTheDocument();
+      expect(screen.getByTestId('hosts-table')).toHaveAttribute(
+        'data-rows',
+        absent === 'hosts' ? '0' : '1',
+      );
+      const stateOptions = mockUseWorkloadsState.mock.calls[0]?.[0] as {
+        resourceSnapshot: () => Resource[];
+      };
+      expect(stateOptions.resourceSnapshot()).toEqual([resource]);
+    },
+  );
+
+  it('keeps unavailable diagnostics separate from neutral empty inventory guidance', async () => {
+    mockListInventorySources.mockRejectedValue(new Error('diagnostics unavailable'));
+    setResources([
+      makeResource({
+        id: 'esxi-01',
+        type: 'agent',
+        vmware: { entityType: 'host', managedObjectId: 'host-1' },
+      }),
+    ]);
+
+    render(() => <VmwarePageSurface />);
+
+    const notice = await screen.findByTestId('vmware-inventory-completeness-notice');
+    expect(notice).toHaveTextContent('vSphere inventory completeness is unavailable');
+    expect(notice).toHaveTextContent(
+      'cannot confirm that the current vCenter inventory is complete',
+    );
+    expect(screen.getByTestId('workloads-surface')).toHaveTextContent(
+      "Check the vCenter connection's collection scope and status in Settings.",
+    );
+    expect(within(notice).getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+  });
+
+  it('keeps failed reads and refresh controls distinct from absent monitoring', () => {
+    const refetch = setResources([], { error: new Error('resource read failed') });
+
+    render(() => <VmwarePageSurface />);
+
+    expect(screen.getByTestId('platform-error-state')).toHaveTextContent(
+      'Could not load VMware resources',
+    );
+    expect(screen.queryByTestId('hosts-table')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('workloads-surface')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('preserves connection-setup guidance when the entire resource snapshot is empty', () => {
+    render(() => <VmwarePageSurface />);
+
+    expect(screen.getByTestId('platform-table-empty-state')).toHaveTextContent(
+      'Add a vCenter connection in Settings to populate this page.',
+    );
+    expect(screen.queryByTestId('hosts-table')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('workloads-surface')).not.toBeInTheDocument();
   });
 
   it('narrows the VM table to a host picked in the hosts table, as Proxmox does', () => {
