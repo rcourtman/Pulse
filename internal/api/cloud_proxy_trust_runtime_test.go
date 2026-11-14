@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -106,7 +107,7 @@ func TestHostedTenantProxyTrustPropagation(t *testing.T) {
 				t.Fatalf("NewManager: %v", err)
 			}
 			t.Cleanup(func() { _ = mgr.Close() })
-			if _, err := mgr.CreateAndStart(context.Background(), "t-synthetic", t.TempDir()); err != nil {
+			if _, err := mgr.CreateAndStart(context.Background(), "t-synthetic", newCloudTrustMountFixture(t)); err != nil {
 				t.Fatalf("CreateAndStart: %v", err)
 			}
 			engineMu.Lock()
@@ -169,4 +170,21 @@ func setRequiredCloudTrustEnv(t *testing.T) {
 	t.Setenv("STRIPE_WEBHOOK_SECRET", "whsec_test")
 	t.Setenv("CP_ENV", "development")
 	t.Setenv("CP_REQUIRE_EMAIL_PROVIDER", "false")
+}
+
+func newCloudTrustMountFixture(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "secrets"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	// CreateAndStart prepares these regular mount sources before emitting the
+	// Docker request. They are inert placeholders in this synthetic engine,
+	// not a billing credential, signed entitlement or running tenant.
+	for _, rel := range []string{"billing.json", "secrets/handoff.key", ".cloud_handoff_key"} {
+		if err := os.WriteFile(filepath.Join(dir, rel), []byte("synthetic-fixture"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return dir
 }
