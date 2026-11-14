@@ -46,6 +46,11 @@ type CommandPolicy struct {
 	// operand is under /var/log (see isAutoApprovedLogRead).
 	allowLogReads bool
 
+	// checkArgs refuses, for programs an auto-approve pattern names, the
+	// arguments that change the system or read or write other files (see
+	// autoApprovedArgsSafe).
+	checkArgs bool
+
 	// compiled regex patterns
 	autoApproveRe     []*regexp.Regexp
 	requireApprovalRe []*regexp.Regexp
@@ -143,6 +148,7 @@ func DefaultPolicy() *CommandPolicy {
 		Blocked:           slices.Clone(template.Blocked),
 		VerifyWindow:      template.VerifyWindow,
 		allowLogReads:     template.allowLogReads,
+		checkArgs:         template.checkArgs,
 		autoApproveRe:     template.autoApproveRe,
 		requireApprovalRe: template.requireApprovalRe,
 		blockedRe:         template.blockedRe,
@@ -153,6 +159,7 @@ func buildDefaultPolicy() *CommandPolicy {
 	p := &CommandPolicy{
 		VerifyWindow:  DefaultVerifyWindow,
 		allowLogReads: true,
+		checkArgs:     true,
 		AutoApprove: []string{
 			// System inspection
 			`^ps(\s|$)`,
@@ -168,8 +175,10 @@ func buildDefaultPolicy() *CommandPolicy {
 			`^lsof(\s|$)`,
 			`^netstat(\s|$)`,
 			`^ss(\s|$)`,
-			`^ip\s+(addr|route|link)`,
-			`^ifconfig`,
+			// ip and ifconfig: display forms only (see ipArgsSafe and
+			// ifconfigArgsSafe).
+			`^ip\s+(addr|address|route|link)(\s|$)`,
+			`^ifconfig(\s|$)`,
 			`^ping\s+-c\s*1\s+-w\s*1\s+([0-9]{1,3}\.){3}[0-9]{1,3}$`,
 			`^ping\s+-c\s*1\s+-w\s*1\s+[0-9a-f:]+$`,
 			`^w$`,
@@ -186,25 +195,25 @@ func buildDefaultPolicy() *CommandPolicy {
 			`^systemctl\s+is-active\s`,
 			`^systemctl\s+is-enabled\s`,
 			`^systemctl\s+list-units`,
-			`^service\s+\S+\s+status`,
+			`^service\s+[a-z0-9][a-z0-9@._-]*\s+status$`,
 
 			// Docker inspection (read-only)
-			`^docker\s+ps`,
+			`^docker\s+ps(\s|$)`,
 			`^docker\s+logs\s`,
 			`^docker\s+inspect\s`,
-			`^docker\s+stats\s+--no-stream`,
+			`^docker\s+stats\s+--no-stream(\s|$)`,
 			`^docker\s+top\s`,
-			`^docker\s+images`,
-			`^docker\s+network\s+ls`,
-			`^docker\s+volume\s+ls`,
-			`^podman\s+ps`,
+			`^docker\s+images(\s|$)`,
+			`^docker\s+network\s+ls(\s|$)`,
+			`^docker\s+volume\s+ls(\s|$)`,
+			`^podman\s+ps(\s|$)`,
 			`^podman\s+logs\s`,
 			`^podman\s+inspect\s`,
-			`^podman\s+stats\s+--no-stream`,
+			`^podman\s+stats\s+--no-stream(\s|$)`,
 			`^podman\s+top\s`,
-			`^podman\s+images`,
-			`^podman\s+network\s+ls`,
-			`^podman\s+volume\s+ls`,
+			`^podman\s+images(\s|$)`,
+			`^podman\s+network\s+ls(\s|$)`,
+			`^podman\s+volume\s+ls(\s|$)`,
 
 			// Proxmox inspection (read-only)
 			`^pct\s+list`,
@@ -215,9 +224,11 @@ func buildDefaultPolicy() *CommandPolicy {
 			`^qm\s+status\s`,
 			`^pvesh\s+get\s`,
 
-			// Disk/storage info
-			`^lsblk`,
-			`^blkid`,
+			// Disk/storage info. du, file, find, blkid, sar and the other
+			// programs autoApprovedArgsSafe names also have their arguments
+			// checked.
+			`^lsblk(\s|$)`,
+			`^blkid(\s|$)`,
 			`^fdisk\s+-l`,
 			`^du(\s|$)`,
 			`^ls(\s|$)`,
@@ -228,14 +239,14 @@ func buildDefaultPolicy() *CommandPolicy {
 			`^find\s+/.*-type`,  // Find by type
 
 			// Memory inspection
-			`^vmstat`,
+			`^vmstat(\s|$)`,
 			`^sar\s`,
-			`^iostat`,
-			`^mpstat`,
+			`^iostat(\s|$)`,
+			`^mpstat(\s|$)`,
 
 			// Docker inspection (read-only)
-			`^docker\s+system\s+df`,
-			`^podman\s+system\s+df`,
+			`^docker\s+system\s+df(\s|$)`,
+			`^podman\s+system\s+df(\s|$)`,
 
 			// APT inspection (read-only)
 			`^apt\s+list`,
@@ -380,9 +391,9 @@ const (
 // Evaluate checks a command against the policy
 func (p *CommandPolicy) Evaluate(command string) PolicyDecision {
 	command = strings.TrimSpace(command)
-	// Options can differ only by case (grep -F and -f), so the log read
-	// check works on the original text.
-	logReadCommand := command
+	// Options can differ only by case (grep -F and -f, ss -K and -k), so the
+	// log read and argument checks work on the original text.
+	argvCommand := command
 	command = strings.ToLower(command)
 
 	policyCommand := command
@@ -398,7 +409,7 @@ func (p *CommandPolicy) Evaluate(command string) PolicyDecision {
 				policyCommand = sudoCommand
 			}
 		}
-		logReadCommand = stripPlainSudo(logReadCommand)
+		argvCommand = stripPlainSudo(argvCommand)
 	}
 
 	// Check blocked first (highest priority)
@@ -423,11 +434,14 @@ func (p *CommandPolicy) Evaluate(command string) PolicyDecision {
 	}
 
 	// Check auto-approve
-	if p.allowLogReads && isAutoApprovedLogRead(logReadCommand) {
+	if p.allowLogReads && isAutoApprovedLogRead(argvCommand) {
 		return PolicyAllow
 	}
 	for _, re := range p.autoApproveRe {
 		if re.MatchString(policyCommand) {
+			if p.checkArgs && !autoApprovedArgsSafe(policyProgram(policyCommand), argvCommand) {
+				return PolicyRequireApproval
+			}
 			return PolicyAllow
 		}
 	}
@@ -449,6 +463,16 @@ func (p *CommandPolicy) NeedsApproval(command string) bool {
 // IsAutoApproved returns true if a command can run without approval
 func (p *CommandPolicy) IsAutoApproved(command string) bool {
 	return p.Evaluate(command) == PolicyAllow
+}
+
+// policyProgram returns the first word of the policy's lower-case view of a
+// command.
+func policyProgram(command string) string {
+	fields := strings.Fields(command)
+	if len(fields) == 0 {
+		return ""
+	}
+	return fields[0]
 }
 
 func containsShellControlOperators(command string) bool {

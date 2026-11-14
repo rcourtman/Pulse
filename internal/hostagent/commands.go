@@ -1800,7 +1800,8 @@ func (c *CommandClient) executeCommand(ctx context.Context, payload executeComma
 		cmd = execCommandContext(cmdCtx, "sh", "-c", command)
 	}
 	// Commands get the host's runtime environment, not the agent's own
-	// configuration; unapproved reads also lose credential-named variables.
+	// configuration; unapproved reads also lose credential-named variables
+	// and the variables that change how sh or grep read the command.
 	approvedOrTrusted := payload.Trusted || strings.TrimSpace(payload.ApprovalID) != ""
 	cmd.Env = commandEnvironment(os.Environ(), runtime.GOOS, approvedOrTrusted)
 

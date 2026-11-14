@@ -5,6 +5,7 @@ package hostagent
 import (
 	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -146,28 +147,41 @@ func TestCommandClient_executeCommand_CancelKillsProcessGroup(t *testing.T) {
 
 // Commands Pulse sends must not see the agent's own configuration, which for
 // an environment-configured agent includes its API token. Unapproved reads
-// also lose credential-named variables; approved commands keep them.
+// also lose credential-named variables and the variables that change how the
+// shell or grep read the command; approved commands keep them.
 func TestCommandClient_executeCommand_DoesNotExposeAgentEnvironment(t *testing.T) {
 	if runtime.GOOS != "linux" {
-		t.Skip("reads the shell environment through procps ps")
+		t.Skip("runs the read through the Linux sh")
 	}
 	t.Setenv("PULSE_TOKEN", "agent-token-value")
 	t.Setenv("PULSE_COMMAND_ENV_PROBE", "agent-config-value")
 	t.Setenv("WORKLOAD_DB_PASSWORD", "workload-secret")
+	t.Setenv("GREP_OPTIONS", "--file=/etc/shadow")
+	t.Setenv("BASH_FUNC_grep%%", "() {  id\n}")
 	t.Setenv("LANG", "C.UTF-8")
 
+	// "ps aux" is auto-approved by the default policy, so it runs like an
+	// AI read. The policy refuses every form that prints an environment, so
+	// the shell it starts prints the environment it received instead.
+	origExec := execCommandContext
+	t.Cleanup(func() { execCommandContext = origExec })
+	execCommandContext = func(ctx context.Context, name string, args ...string) *exec.Cmd {
+		if name == "sh" {
+			return exec.CommandContext(ctx, "sh", "-c", "env")
+		}
+		return exec.CommandContext(ctx, name, args...)
+	}
+
 	c := &CommandClient{}
-	// "ps" is auto-approved by the default policy, so it runs like an AI read;
-	// its own process environment is the one the shell received.
 	read := c.executeCommand(context.Background(), executeCommandPayload{
 		RequestID: "env-read",
-		Command:   "ps eww -p $$",
+		Command:   "ps aux",
 		Timeout:   10,
 	})
 	if !read.Success {
 		t.Fatalf("read command failed: %+v", read)
 	}
-	for _, withheld := range []string{"agent-token-value", "agent-config-value", "PULSE_", "workload-secret"} {
+	for _, withheld := range []string{"agent-token-value", "agent-config-value", "PULSE_", "workload-secret", "GREP_OPTIONS", "BASH_FUNC_"} {
 		if strings.Contains(read.Stdout, withheld) {
 			t.Fatalf("read command saw %q:\n%s", withheld, read.Stdout)
 		}
@@ -188,7 +202,7 @@ func TestCommandClient_executeCommand_DoesNotExposeAgentEnvironment(t *testing.T
 	if strings.Contains(trusted.Stdout, "agent-token-value") || strings.Contains(trusted.Stdout, "PULSE_") {
 		t.Fatalf("trusted command saw agent configuration:\n%s", trusted.Stdout)
 	}
-	if !strings.Contains(trusted.Stdout, "WORKLOAD_DB_PASSWORD=workload-secret") {
+	if !strings.Contains(trusted.Stdout, "WORKLOAD_DB_PASSWORD=workload-secret") || !strings.Contains(trusted.Stdout, "GREP_OPTIONS=") {
 		t.Fatalf("trusted command lost operator environment:\n%s", trusted.Stdout)
 	}
 }

@@ -14,6 +14,10 @@ const commandSearchPath = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sb
 // approval or a trusted Pulse-internal origin (the AI's read-only path) also
 // lose other credential-named variables; approved and trusted commands keep
 // them, because an operator-approved database or cloud CLI may rely on them.
+// The read-only path also drops variables that change how sh or grep behave
+// (exported shell functions, shell startup files and options, GREP_OPTIONS)
+// or point an approved program at another file or output (BLKID_FILE,
+// APT_CONFIG, PS_FORMAT), so the command runs as the policy read it.
 func commandEnvironment(environ []string, goos string, keepCredentials bool) []string {
 	out := make([]string, 0, len(environ)+1)
 	currentPath := ""
@@ -42,10 +46,34 @@ func commandEnvironmentWithholds(name string, keepCredentials bool) bool {
 	if keepCredentials {
 		return false
 	}
+	if commandEnvironmentChangesInterpretation(upper) {
+		return true
+	}
 	for _, marker := range []string{"TOKEN", "SECRET", "PASSWORD", "PASSWD", "PASSPHRASE", "API_KEY", "APIKEY", "ACCESS_KEY", "PRIVATE_KEY", "CREDENTIAL"} {
 		if strings.Contains(upper, marker) {
 			return true
 		}
+	}
+	return false
+}
+
+// commandEnvironmentChangesInterpretation reports variables that alter what a
+// command line does rather than describe the host: bash imports exported
+// functions (BASH_FUNC_name%%) that can stand in for a program name and reads
+// SHELLOPTS, BASHOPTS, BASH_ENV and ENV; PS4 is expanded under xtrace; grep
+// up to 2.20 (CentOS 7) prepends GREP_OPTIONS to its arguments; blkid and
+// apt-cache read their cache and configuration paths from BLKID_FILE,
+// BLKID_CONF and APT_CONFIG; procps ps takes its default columns and parsing
+// mode from PS_FORMAT, PS_PERSONALITY and CMD_ENV (PS_FORMAT=environ prints
+// every process's environment).
+func commandEnvironmentChangesInterpretation(upper string) bool {
+	if strings.HasPrefix(upper, "BASH_FUNC_") {
+		return true
+	}
+	switch upper {
+	case "GREP_OPTIONS", "BASH_ENV", "ENV", "SHELLOPTS", "BASHOPTS", "PS4",
+		"BLKID_FILE", "BLKID_CONF", "APT_CONFIG", "PS_FORMAT", "PS_PERSONALITY", "CMD_ENV":
+		return true
 	}
 	return false
 }
