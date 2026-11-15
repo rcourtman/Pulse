@@ -1073,11 +1073,6 @@ function renderAccountSurfaceHeader(account: PortalAccountSummary, showHeader: b
 function renderNoHostedWorkspacesSection(): string {
   return (
     '<section class="account-content-panel account-content-panel-workspaces">' +
-      '<div class="workspace-recovery" id="workspace-recovery-' + escapeAttr(account.id) + '" role="status" tabindex="-1" hidden>' +
-        '<strong id="workspace-recovery-title-' + escapeAttr(account.id) + '"></strong>' +
-        '<p id="workspace-recovery-message-' + escapeAttr(account.id) + '"></p>' +
-        '<button type="button" class="btn-secondary btn-compact" id="workspace-recovery-refresh-' + escapeAttr(account.id) + '" data-action="refresh-workspace-state" data-account-id="' + escapeAttr(account.id) + '">Refresh current state</button>' +
-      '</div>' +
       '<div class="empty-state">' +
         '<p>No hosted workspaces are attached to this account. Use Billing for self-hosted subscriptions and licenses.</p>' +
       '</div>' +

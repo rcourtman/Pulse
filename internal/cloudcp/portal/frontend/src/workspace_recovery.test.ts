@@ -227,3 +227,13 @@ it('keeps a server creation refusal and the unsubmitted client name visible', as
   expect(s.api.createWorkspace).toHaveBeenCalledTimes(1);
   expect(s.refreshBootstrap).not.toHaveBeenCalled();
 });
+
+it('does not call an accepted suspend completed when readback still reports active', async function() {
+  var s = setup();
+  s.refreshBootstrap.mockImplementation(async function() { s.store.setBootstrap(s.initial); return true; });
+  await s.runtime.manageWorkspaceAction('acct_1', 'ws_1', 'suspend', 'Acme Dental');
+  expect(s.api.suspendWorkspace).toHaveBeenCalledTimes(1);
+  expect(s.showToast).not.toHaveBeenCalled();
+  expect(element('workspace-recovery-acct_1').textContent).toContain('Latest state for "Acme Dental": active.');
+  expect(s.store.getAccountState().byAccountID.acct_1.selectedWorkspaceID).toBe('ws_1');
+});

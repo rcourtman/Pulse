@@ -235,6 +235,13 @@ describe('account runtime', function() {
     expect(document.getElementById('workspace-management-title-acct_1')?.textContent).toContain('Alpha Workspace');
     expect(document.getElementById('workspace-management-action-acct_1')?.textContent).toContain('Suspend client');
 
+    deps.refreshBootstrap.mockImplementation(async function() {
+      var bootstrap = deps.store.getBootstrap();
+      deps.store.setBootstrap({ ...bootstrap, accounts: bootstrap.accounts.map(function(account) {
+        return { ...account, workspaces: account.workspaces.map(function(workspace) { return workspace.id === 'ws_2' ? { ...workspace, state: 'suspended' } : workspace; }) };
+      }) });
+      return true;
+    });
     await runtime.manageWorkspaceAction('acct_1', 'ws_2', 'suspend', 'Alpha Workspace');
     await flushAsync();
 
@@ -299,6 +306,13 @@ describe('account runtime', function() {
     runtime.selectWorkspace('acct_1', 'ws_3');
     expect(document.getElementById('workspace-management-action-acct_1')?.textContent).toContain('Delete client');
 
+    deps.refreshBootstrap.mockImplementation(async function() {
+      var bootstrap = deps.store.getBootstrap();
+      deps.store.setBootstrap({ ...bootstrap, accounts: bootstrap.accounts.map(function(account) {
+        return { ...account, workspaces: account.workspaces.filter(function(workspace) { return workspace.id !== 'ws_3'; }) };
+      }) });
+      return true;
+    });
     await runtime.manageWorkspaceAction('acct_1', 'ws_3', 'delete', 'Paused Client');
     await flushAsync();
 
