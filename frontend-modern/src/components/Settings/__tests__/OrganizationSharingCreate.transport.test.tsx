@@ -214,8 +214,10 @@ function fillForm(entry: Entry, role: Role = 'viewer') {
 }
 function expectSavedGrant(entry: Entry, role: Role = 'viewer') {
   const payload = payloadFor(entry, role);
+  // A quick-pick draft also describes the same resource key. Assert the saved
+  // table row, not that still-visible draft description.
   const row = screen
-    .getByText(`vm:${payload.resourceId}`, { exact: true, selector: 'bdi' })
+    .getByText(`vm:${payload.resourceId}`, { exact: true, selector: 'tr bdi' })
     .closest('tr');
   expect(row).not.toBeNull();
   expect(row).toHaveTextContent(payload.resourceName);
