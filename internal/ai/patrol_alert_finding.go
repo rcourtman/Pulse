@@ -55,10 +55,12 @@ func (p *PatrolService) patrolInvestigatesFindings() bool {
 // finding itself then: the alert's resource, level and text, linked to the
 // alert so it is folded under it and closes when it clears.
 //
-// It applies only to an alert that woke Patrol when it fired. A warning that
-// only stayed active, a flapping alert, and a run a person or the schedule
-// started keep the model's judgment, and Watch only gets nothing, because a
-// finding nobody investigates would only repeat the alert.
+// It applies to an alert that woke Patrol when it fired, and to a warning that
+// woke it by staying active only when Pulse's own facts meet the rule that
+// check is given (sustainedAlertCallsForFinding). A flapping alert and a run a
+// person or the schedule started keep the model's judgment, and Watch only
+// gets nothing, because a finding nobody investigates would only repeat the
+// alert.
 //
 // It returns the stored finding when one is open afterwards, and nil when it
 // did nothing. The caller starts the investigation once the run is recorded.
@@ -66,7 +68,7 @@ func (p *PatrolService) openFindingForUnansweredAlert(scope PatrolScope, alert *
 	if p == nil || p.findings == nil || alert == nil {
 		return nil
 	}
-	if scope.Reason != TriggerReasonAlertFired || scope.AlertSustained {
+	if scope.Reason != TriggerReasonAlertFired {
 		return nil
 	}
 	if !p.patrolInvestigatesFindings() {
@@ -74,6 +76,9 @@ func (p *PatrolService) openFindingForUnansweredAlert(scope PatrolScope, alert *
 	}
 
 	state := p.currentPatrolRuntimeState()
+	if scope.AlertSustained && !p.sustainedAlertCallsForFinding(&scope, state, alert) {
+		return nil
+	}
 	binding, _ := patrolAlertReferenceResolver(state).ResolveAlertResourceReference(alert.ResourceID)
 	candidate := alertMirrorCandidate{ID: alert.ID, ResourceID: alert.ResourceID, Type: alert.Type}
 	if !binding.Component {
@@ -174,6 +179,74 @@ func (p *PatrolService) openFindingForUnansweredAlert(scope PatrolScope, alert *
 		Str("severity", string(stored.Severity)).
 		Msg("AI Patrol: The run filed no finding for the alert that started it, opened one from the alert")
 	return stored
+}
+
+// sustainedAlertCallsForFinding reports whether what Pulse collected meets the
+// rule a check on a warning that stayed active is given for reporting a
+// finding (patrolActiveAlertFindingRule): a Docker workload that failed and
+// will not come back by itself, or a disk alert on a host or guest Pulse can
+// read, whose investigation can find what fills it.
+//
+// That check keeps the model's judgment because the rule's quiet cases (a
+// finished job, a deliberate stop, an expected condition) need judging. A
+// model that describes the fault and files nothing has not judged it quiet.
+// On Docker fault set v1, qwen3:8b woke by itself on a worker that crashed
+// with a segfault (Exited 139) and on a full mount of a host with commands
+// on. It described both and filed neither, so neither was investigated.
+// Where Pulse's own facts say the rule calls for a finding, Pulse opens it.
+// A finished job raises no state alert (alerts.DockerContainerFinishedJob),
+// and a stop exits with a stop signal or 0, so neither is opened here.
+func (p *PatrolService) sustainedAlertCallsForFinding(scope *PatrolScope, snap patrolRuntimeState, alert *models.Alert) bool {
+	switch strings.ToLower(strings.TrimSpace(alert.Type)) {
+	case "docker-container-restart-loop", "docker-container-oom-kill", "docker-container-health":
+		return true
+	case "docker-container-state":
+		container, ok := patrolAlertDockerContainer(snap, alert.ResourceID)
+		return ok && dockerContainerFailed(container)
+	case "disk":
+		_, readable := p.patrolAlertSubjectReadPlace(scope, snap)
+		return readable
+	}
+	return false
+}
+
+// patrolAlertDockerContainer returns the container a Docker alert names.
+func patrolAlertDockerContainer(snap patrolRuntimeState, alertResourceID string) (models.DockerContainer, bool) {
+	alertResourceID = strings.TrimSpace(alertResourceID)
+	if alertResourceID == "" {
+		return models.DockerContainer{}, false
+	}
+	for _, host := range snap.DockerHosts {
+		for _, container := range host.Containers {
+			if dockerAlertScopeAlias(host.ID, container.ID, container.Name) == alertResourceID {
+				return container, true
+			}
+		}
+	}
+	return models.DockerContainer{}, false
+}
+
+// dockerContainerFailed reports whether a container stopped with an error
+// rather than being stopped: it is stuck restarting, the runtime says memory
+// killed it, or it exited with a code other than 0 or a stop signal. `docker
+// stop` sends SIGTERM (143) and SIGKILL (137) after the grace period, and an
+// interrupted foreground run exits with SIGINT (130).
+func dockerContainerFailed(container models.DockerContainer) bool {
+	switch strings.ToLower(strings.TrimSpace(container.State)) {
+	case "restarting":
+		return true
+	case "exited", "dead":
+	default:
+		return false
+	}
+	if container.OOMKilled != nil && *container.OOMKilled {
+		return true
+	}
+	switch container.ExitCode {
+	case 0, 130, 137, 143:
+		return false
+	}
+	return true
 }
 
 // alertFindingCategory places an alert-opened finding in the category a
