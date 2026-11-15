@@ -133,9 +133,9 @@ export const RolesEditorDialog: Component<RolesEditorDialogProps> = (props) => (
               </div>
 
               <p class="text-xs text-muted">
-                Effects and conditions are kept when you change action or resource. All conditions
-                must match request attributes. A missing attribute skips the rule, including a deny
-                rule.
+                Effects and conditions are kept when you change action or resource. Allows need
+                matching attributes. Missing attributes do not dismiss denies. A known mismatch
+                skips the rule.
               </p>
               <div class="space-y-2">
                 {/* Draft updates replace permission objects. Keep the indexed controls

@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "8832a6981afbfb486b8616656d04ed1d6c95f337",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/RolesPanel.tsx",
+    "frontend-modern/src/components/Settings/RolesEditorDialog.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/RolesPanel.tsx": "cecb87a34968fae4f875c19e0908f80ed379b65e87496ca276e2c8fa603b6c1e",
+    "frontend-modern/src/components/Settings/RolesEditorDialog.tsx": "13d26a590b00fa0ccd73a48c26fe05074a08f193b0f1ac4e83724a0b2c754bd8"
+  },
+  "routes": [
+    "Settings > Roles inventory and indexed role editor using the actual panels/state/RBACAPI, shipped CSS and local synthetic HTTP fixture; not full App/IdP."
+  ],
+  "states": [
+    "Comparable parent8832 guidance and final guidance, same parent/child policies with four distinct saved rules and literal production/test/development conditions, same viewport/theme/scroll/focus.",
+    "Guidance now explains that missing attributes cannot dismiss a deny while a known mismatch excludes it; literal rules and controls remain unchanged."
+  ],
+  "interactions": [
+    "Keyboard focuses the exact saved role, opens its native editor, reviews literal rules and closes/cancels. Third native action/resource and Close remain at glance; native selection keeps focus and Cancel preserves the saved rule.",
+    "Both browser passes are read-only. Two extra stable desktop native-permission/error frames repair an earlier dialog-transition capture; they are not new frontend source."
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "themes": [
+    "light",
+    "dark"
+  ],
+  "playwright": "1.56.1",
+  "browsers": [
+    "141.0.7390.37"
+  ],
+  "assertions": 38,
+  "verified_at": "2026-11-15T14:09:14Z",
+  "captures": "Eight comparable role PNGs/four pairs opened individually with native view_image; all originals retained in the lane dossier CAPTURE-INDEX.json. No at-glance information or control loss observed.",
+  "proof": "source-ro1n6vdx binds committed parent8832 and the exact final overlay, types,81 consuming tests, focused formatting/ESLint, copy audit, production build/embedding, all chunk budgets and the consuming fixture build. Complete output/hash and guest stop verified. Backend source is unchanged by this copy-only completion.",
+  "limits": [
+    "Synthetic component/HTTP proof, not original clients, installed recovery, full App/IdP or release availability.",
+    "Earlier transition captures and a mixed file/canonical-store fixture failure remain adverse evidence; neither was silently accepted or treated as actual client recovery."
+  ]
+}

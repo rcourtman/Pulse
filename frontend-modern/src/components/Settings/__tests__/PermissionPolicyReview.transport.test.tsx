@@ -100,12 +100,18 @@ describe('saved rule policy review through consuming access panels', () => {
       expect(rules[2]).toHaveTextContent('ops = "<img src=x onerror=alert(1)>"');
       expect(list.querySelector('img')).toBeNull();
     }
+    expect(screen.getByText(/Saved rules are not an access verdict/)).toHaveTextContent(
+      'Allows need matching attributes. Missing attributes do not dismiss denies. A known mismatch skips the rule.',
+    );
     expect(writes()).toHaveLength(0);
   });
 
   it('keeps effect and conditions visible while editing without altering their saved bytes', async () => {
     render(() => <RolesPanel currentUser="policy-reviewer" canManage />);
     const dialog = await editor();
+    expect(dialog.getByText(/Effects and conditions are kept/)).toHaveTextContent(
+      'Allows need matching attributes. Missing attributes do not dismiss denies. A known mismatch skips the rule.',
+    );
     expect(dialog.getByText('Deny')).toBeVisible();
     expect(dialog.getByText('"${user}"')).toBeVisible();
     expect(
