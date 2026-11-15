@@ -966,7 +966,16 @@ back to the installer or runtime-side Unified Agent:
 
 ### Agent Install Command
 `POST /api/agent-install-command` (admin, `settings:write`)
-Generates an API token and install command for agent-based Proxmox setup.
+Mints an install token for an agent. `type` is `host`, `pve` or `pbs`.
+
+- `{"type":"host","name":"docker-host"}` returns `token` for the unified agent
+  on any host (host metrics, Docker, Kubernetes). `command` is empty: pass the
+  token to `/install.sh` with `--token-file`, as in
+  [Scripted setup](INSTALL.md#scripted-setup-no-browser).
+- `{"type":"pve"}` or `{"type":"pbs"}` returns `token` and the Proxmox install
+  `command`.
+
+Add `"enableCommands": true` only when the agent should accept commands.
 
 ### Discovery
 `GET /api/discover` (admin, `settings:write`)
@@ -1370,13 +1379,18 @@ other token gets `403`.
 {
   "username": "admin",
   "password": "StrongPass!1",
-  "apiToken": "token",
+  "apiToken": "<48 hex characters>",
   "enableNotifications": false,
   "darkMode": false,
   "force": false,
   "setupToken": "optional-bootstrap-token"
 }
 ```
+
+`apiToken` is the secret itself, not a name: it becomes a full-access API token.
+Generate it (`openssl rand -hex 24`). A token shorter than 32 characters gets
+`400`. [Scripted setup](INSTALL.md#scripted-setup-no-browser) shows the whole
+first run.
 
 ### Apply Security Restart (Systemd Only)
 `POST /api/security/apply-restart`

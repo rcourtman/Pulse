@@ -2594,6 +2594,9 @@ start host work; they open no storage or recovery read or write path.
 The action lifecycle's agent preflight before dispatch (for example the
 storage cleanup inventory check) likewise needs the action-execute
 capability; it opens no storage or recovery path either.
+Quick security setup's minimum API token length and the install-command
+refusal naming `host` are request validation only; neither opens a storage or
+recovery path.
 
 1. `frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx` shared with `unified-resources`: Proxmox backup server table rows are both a storage/recovery backup-health surface and a unified-resource platform-table consumer boundary.
 2. `frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx` shared with `unified-resources`: Proxmox workload coverage rows are both a storage/recovery protection-posture surface and a unified-resource identity consumer boundary.

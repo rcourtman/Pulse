@@ -2832,7 +2832,9 @@ func (h *ConfigHandlers) handleAgentInstallCommand(w http.ResponseWriter, r *htt
 
 	installType, err := normalizeProxmoxInstallType(req.Type)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		// This endpoint also takes "host" (handled above), so name it: the
+		// Proxmox-only wording sent scripted installs looking elsewhere.
+		http.Error(w, "Type must be 'host', 'pve' or 'pbs'", http.StatusBadRequest)
 		return
 	}
 

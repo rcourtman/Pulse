@@ -2652,6 +2652,9 @@ The typed `action_preflight` the action lifecycle sends while planning,
 refreshing, reviewing or approving an action also needs the action-execute
 capability; callers with only plan or approve get the plan or decision
 without it, and dispatch admission always runs the executor's check.
+`POST /api/agent-install-command` names `host` with `pve` and `pbs` when it
+refuses an unknown type, so a scripted install finds the host token path;
+which tokens it mints, their scopes and their binding metadata are unchanged.
 
 Commercial v5-to-v6 migration retry state may pass through `internal/api/`
 handlers that agent-lifecycle also references, but the ownership remains

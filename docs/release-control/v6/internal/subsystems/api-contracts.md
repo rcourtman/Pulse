@@ -13870,6 +13870,20 @@ repairs a dropped supported value without introducing a new wire enum or changin
 backend routing. The notification adapter save/reload matrix verifies each
 supported severity in frontend-modern/src/api/__tests__/notifications.test.ts.
 
+### Quick security setup refuses short API tokens
+
+Quick security setup in `internal/api/security_setup_fix.go` refuses a
+caller-supplied `apiToken` shorter than 32 characters with `400` before any
+runtime or persistent state changes, because that value becomes a full-access
+API token. The setup wizard sends 48 hex characters and is unaffected.
+`POST /api/agent-install-command` in
+`internal/api/configapi/config_setup_handlers.go` names `host` with `pve` and
+`pbs` when it refuses an unknown type; minting, scopes and response shapes are
+unchanged. `docs/API.md` states the token minimum and the token-only `host`
+response, and `docs/INSTALL.md` carries the scripted first run. Regression
+coverage: `TestQuickSecuritySetupRejectsShortAPITokenBeforeStateChanges` and
+`TestHandleAgentInstallCommand_UnknownTypeNamesHost`.
+
 ### Quick security setup preserves unrelated settings
 
 Authenticated force setup in `internal/api/security_setup_fix.go` retains the

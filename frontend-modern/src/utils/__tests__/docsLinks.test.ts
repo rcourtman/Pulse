@@ -253,11 +253,14 @@ describe('docsLinks', () => {
     );
   });
 
-  it('documents network discovery without the removed AI Discovery routes', () => {
+  it('documents scripted setup and network discovery without the removed AI Discovery routes', () => {
     const api = apiReference();
     expect(api).toContain('`POST /api/discover` (admin, `settings:write`)');
     expect(api).not.toContain('/api/discovery');
     expect(api).not.toContain('### AI Discovery');
+    // A scripted first run chooses the setup token and needs the host type.
+    expect(api).toContain('A token shorter than 32 characters gets\n`400`');
+    expect(api).toContain('`{"type":"host","name":"docker-host"}` returns `token`');
   });
 
   it('documents action permissions on routes that start work on a host', () => {

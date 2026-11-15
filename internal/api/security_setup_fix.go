@@ -53,6 +53,10 @@ func validateBcryptHash(hash string) error {
 
 const maxLocalAuthUsernameRunes = 128
 
+// minSetupAPITokenLength is the shortest API token quick setup accepts from a
+// caller. The setup wizard sends 48 hex characters.
+const minSetupAPITokenLength = 32
+
 func validateLocalAuthUsername(username string) error {
 	if username == "" {
 		return fmt.Errorf("username is required")
@@ -566,6 +570,12 @@ func handleQuickSecuritySetupFixed(r *Router) http.HandlerFunc {
 		}
 		if err := validateLocalAuthUsername(setupRequest.Username); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		// The caller supplies the token and it becomes a full-access API
+		// token, so a short one is as weak as a short password.
+		if len(setupRequest.APIToken) < minSetupAPITokenLength {
+			http.Error(w, fmt.Sprintf("API token must be at least %d characters; generate one, for example with `openssl rand -hex 24`", minSetupAPITokenLength), http.StatusBadRequest)
 			return
 		}
 

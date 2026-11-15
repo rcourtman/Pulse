@@ -226,6 +226,61 @@ func TestQuickSecuritySetupRejectsUnsafeUsernamesBeforeStateChanges(t *testing.T
 	}
 }
 
+// A scripted install chooses the API token itself. On 15 November 2026 an
+// agent following the API reference sent "automation" and got a full-access
+// token, so a short token is refused before anything is saved.
+func TestQuickSecuritySetupRejectsShortAPITokenBeforeStateChanges(t *testing.T) {
+	for _, apiToken := range []string{"automation", strings.Repeat("a", minSetupAPITokenLength-1)} {
+		t.Run(apiToken, func(t *testing.T) {
+			t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "")
+			resetTrustedProxyConfig()
+
+			dataDir := t.TempDir()
+			cfg := &config.Config{DataPath: dataDir, ConfigPath: dataDir}
+			router := &Router{
+				config:      cfg,
+				persistence: config.NewConfigPersistence(dataDir),
+			}
+			router.initializeBootstrapToken()
+			InitPersistentAuthStores(dataDir)
+			bootstrapToken, _, _, err := bootstrap.Load(dataDir)
+			if err != nil {
+				t.Fatalf("load bootstrap token: %v", err)
+			}
+
+			body, err := json.Marshal(map[string]string{
+				"username": "admin",
+				"password": "StrongPass!1",
+				"apiToken": apiToken,
+			})
+			if err != nil {
+				t.Fatalf("marshal request: %v", err)
+			}
+
+			authLimiter.Reset("198.51.100.92")
+			req := httptest.NewRequest(http.MethodPost, "/api/security/quick-setup", strings.NewReader(string(body)))
+			req.RemoteAddr = "198.51.100.92:54321"
+			req.Header.Set(bootstrapTokenHeader, bootstrapToken)
+			rec := httptest.NewRecorder()
+
+			handleQuickSecuritySetupFixed(router)(rec, req)
+
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("status = %d, want 400 (%s)", rec.Code, rec.Body.String())
+			}
+			if !strings.Contains(rec.Body.String(), "API token must be at least 32 characters") {
+				t.Fatalf("response = %q, want the minimum token length", rec.Body.String())
+			}
+			if cfg.AuthUser != "" || cfg.AuthPass != "" || cfg.HasAPITokens() {
+				t.Fatalf("short API token changed runtime auth state: user=%q pass_set=%v tokens=%d", cfg.AuthUser, cfg.AuthPass != "", len(cfg.APITokens))
+			}
+			if _, err := os.Stat(resolveAuthEnvPath(dataDir)); !errors.Is(err, os.ErrNotExist) {
+				t.Fatalf("short API token created auth env file: %v", err)
+			}
+		})
+	}
+}
+
 func TestAuthConfigurationRenderersRejectStructuralInjection(t *testing.T) {
 	if _, err := quoteAuthEnvValue("admin'\nPULSE_AUTH_PASS='attacker"); err == nil {
 		t.Fatal("quoteAuthEnvValue accepted structural injection")
@@ -387,7 +442,7 @@ func TestQuickSecuritySetupAllowsRecoveryTokenRotation(t *testing.T) {
 
 	authLimiter.Reset("127.0.0.1")
 
-	body := `{"username":"rotated","password":"RotatedPassword!1","apiToken":"deadbeef","force":true}`
+	body := `{"username":"rotated","password":"RotatedPassword!1","apiToken":"` + strings.Repeat("deadbeef", 6) + `","force":true}`
 	req := httptest.NewRequest(http.MethodPost, "/api/security/quick-setup", strings.NewReader(body))
 	req.Header.Set("X-Recovery-Token", token)
 	req.RemoteAddr = "127.0.0.1:54321"
