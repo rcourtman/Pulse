@@ -42,6 +42,8 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
   const [tokenToRename, setTokenToRename] = createSignal<APITokenRecord | null>(null);
   const [renameInput, setRenameInput] = createSignal('');
   let dialogTrigger: HTMLButtonElement | undefined;
+  let inventoryRoot: HTMLDivElement | undefined;
+  let newTokenTrigger: HTMLButtonElement | undefined;
   let inventoryNotice: HTMLDivElement | undefined;
   let focusTimer: number | undefined;
   const {
@@ -220,10 +222,42 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
     }
   };
 
-  const revokeToken = (token: APITokenRecord) => {
+  const revokeToken = async (token: APITokenRecord) => {
+    const trigger = dialogTrigger;
+    const version = contextVersion();
+    const ids = sortedTokens().map((record) => record.id);
+    const index = ids.indexOf(token.id);
+    // A refusal retains this credential; a confirmed deletion continues at the
+    // next saved credential, or the preceding one when the last row is gone.
+    const returnIds = [token.id, ...ids.slice(index + 1), ...ids.slice(0, index).reverse()];
+    dialogTrigger = undefined;
     setTokenToRevoke(null);
-    restoreDialogTrigger();
-    void handleDelete(token);
+    await handleDelete(token);
+    const canReturn = () =>
+      version === contextVersion() &&
+      canManage() &&
+      !isMutating() &&
+      tokensLoaded() &&
+      !loadError() &&
+      !unconfirmedChange();
+    // Unknown outcomes already focus their recovery notice. Never override it
+    // or a newer reader, dialog, or deliberate keyboard move during the request.
+    if (!canReturn()) return;
+    window.clearTimeout(focusTimer);
+    focusTimer = window.setTimeout(() => {
+      if (!canReturn()) return;
+      const active = document.activeElement;
+      if (active && active !== document.body && active !== trigger && active.isConnected) return;
+      const buttons = Array.from(
+        inventoryRoot?.querySelectorAll<HTMLButtonElement>(
+          'button[data-api-token-action="revoke"]',
+        ) ?? [],
+      ).filter((button) => button.offsetParent !== null && !button.disabled);
+      const replacement = returnIds
+        .map((id) => buttons.find((button) => button.dataset.apiTokenId === id))
+        .find((button) => button !== undefined);
+      (replacement ?? (totalTokens() === 0 ? newTokenTrigger : undefined))?.focus();
+    }, 0);
   };
 
   const cancelRevoke = () => {
@@ -401,7 +435,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
   );
 
   return (
-    <div class="space-y-5">
+    <div ref={inventoryRoot} class="space-y-5">
       <Card padding="none" class="border border-border shadow-xs">
         <div class="flex flex-col gap-6 p-4 sm:p-6 lg:p-8">
           <div class="flex flex-wrap items-center justify-between gap-4">
@@ -419,6 +453,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
             </div>
             <button
               type="button"
+              ref={newTokenTrigger}
               onClick={focusCreateSection}
               disabled={!canManage()}
               class="inline-flex min-h-10 sm:min-h-10 items-center gap-2 rounded-md bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-xs transition hover:bg-blue-700 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 focus-visible:ring-offset-white"

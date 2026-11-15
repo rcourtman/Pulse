@@ -1,3 +1,4 @@
+import { createSignal } from 'solid-js';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import type { APITokenRecord } from '@/api/security';
@@ -406,6 +407,157 @@ describe.each<Layout>(['desktop row', 'compact card'])(
       expect(runtime.markRuntimes).not.toHaveBeenCalled();
       expect(reads()).toHaveLength(1);
       expectBoundRequests();
+    });
+    describe('revocation focus after the request settles', () => {
+      beforeEach(() => {
+        // JSDOM does not lay out either responsive inventory. Model exactly
+        // one visible surface here; real table/card visibility is browser-proved.
+        const visibleParent = function (this: HTMLElement) {
+          return this.closest(layout === 'desktop row' ? 'article' : 'tr')
+            ? null
+            : this.parentElement;
+        };
+        vi.spyOn(HTMLElement.prototype, 'offsetParent', 'get').mockImplementation(visibleParent);
+      });
+      afterEach(() => vi.restoreAllMocks());
+
+      const buttonFor = (token: APITokenRecord) =>
+        controlsFor(layout, token).getByRole('button', { name: /^Revoke / });
+      const confirmRemoval = async (selected: APITokenRecord) => {
+        const button = buttonFor(selected);
+        button.focus();
+        fireEvent.click(button);
+        const dialog = await screen.findByRole('dialog', { name: /^Revoke API token / });
+        fireEvent.click(within(dialog).getByRole('button', { name: 'Revoke token' }));
+        return button;
+      };
+      const delayDeletion = () => {
+        const handler = fetchMock.getMockImplementation()!;
+        let release!: () => void;
+        fetchMock.mockImplementation((url, init) => {
+          if (init?.method !== 'DELETE') return handler(url, init);
+          return new Promise<Response>((resolve) => {
+            release = () => resolve(handler(url, init));
+          });
+        });
+        return () => release();
+      };
+
+      it.each([0, 1, 2])(
+        'continues at the surviving token after revoking sorted position %s',
+        async (index) => {
+          await openPanel();
+          const selected = originals[index];
+          const next = originals[index === 2 ? 1 : index + 1];
+          await confirmRemoval(selected);
+          await waitFor(() => expect(buttonFor(next)).toHaveFocus());
+          expect(containerFor(layout, selected)).toBeUndefined();
+          expect(writes()).toHaveLength(1);
+          expect(writes()[0][0]).toBe(tokenPath(selected.id));
+          expect(reads()).toHaveLength(1);
+          expectBoundRequests();
+        },
+      );
+
+      it('returns to New token only when no saved credentials remain', async () => {
+        saved = [originals[0]];
+        await openPanel();
+        await confirmRemoval(originals[0]);
+        await waitFor(() =>
+          expect(screen.getByRole('button', { name: 'New token' })).toHaveFocus(),
+        );
+        expect(saved).toEqual([]);
+        expect(writes()).toHaveLength(1);
+        expect(screen.getByRole('button', { name: 'Generate' })).toBeDisabled();
+      });
+
+      it('returns a delayed explicit refusal to the retained credential without another request', async () => {
+        await openPanel();
+        let release!: (response: Response) => void;
+        fetchMock.mockImplementationOnce(
+          () =>
+            new Promise<Response>((resolve) => {
+              release = resolve;
+            }),
+        );
+        const selected = originals[1];
+        const button = await confirmRemoval(selected);
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        release(new Response(JSON.stringify({ error: 'synthetic refusal' }), { status: 403 }));
+        await waitFor(() => expect(button).toHaveFocus());
+        expect(saved).toEqual(originals);
+        expect(writes()).toHaveLength(1);
+        expect(changed).not.toHaveBeenCalled();
+        expect(runtime.markAgents).not.toHaveBeenCalled();
+      });
+
+      it('keeps an unknown outcome on its explicit read-only recovery notice', async () => {
+        await openPanel();
+        fetchMock.mockResolvedValueOnce(
+          new Response(JSON.stringify({ error: 'synthetic failure' }), { status: 503 }),
+        );
+        await confirmRemoval(originals[1]);
+        const notice = await screen.findByRole('alert');
+        await waitFor(() => expect(notice).toHaveFocus());
+        expect(within(notice).getByRole('button', { name: 'Check token inventory' })).toBeEnabled();
+        expect(screen.getAllByText('Unknown')).toHaveLength(3);
+        expect(writes()).toHaveLength(1);
+        expect(reads()).toHaveLength(1);
+        expect(changed).not.toHaveBeenCalled();
+      });
+
+      it('does not steal a deliberate focus move while revocation is pending', async () => {
+        await openPanel();
+        const release = delayDeletion();
+        await confirmRemoval(originals[1]);
+        const draft = screen.getByRole('textbox', { name: 'Token name' });
+        draft.focus();
+        release();
+        await waitFor(() => expect(containerFor(layout, originals[1])).toBeUndefined());
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        expect(draft).toHaveFocus();
+        expect(writes()).toHaveLength(1);
+      });
+
+      it('does not refocus withdrawn management when a delayed request finishes', async () => {
+        const [allowed, setAllowed] = createSignal(true);
+        render(() => (
+          <APITokenManager
+            currentUser="token-maintainer"
+            canManage={allowed()}
+            onTokensChanged={changed}
+          />
+        ));
+        await screen.findAllByText(hint(originals[0]));
+        const release = delayDeletion();
+        await confirmRemoval(originals[1]);
+        const signal = writes()[0][1]!.signal;
+        setAllowed(false);
+        expect(signal?.aborted).toBe(true);
+        release();
+        await waitFor(() => expect(reads()).toHaveLength(2));
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        for (const token of originals) expect(buttonFor(token)).toBeDisabled();
+        expect(document.activeElement?.getAttribute('data-api-token-action')).toBeNull();
+        expect(changed).not.toHaveBeenCalled();
+        expect(runtime.markAgents).not.toHaveBeenCalled();
+        expect(writes()).toHaveLength(1);
+      });
+
+      it('does not refocus another manager after unmount', async () => {
+        const view = await openPanel();
+        const release = delayDeletion();
+        await confirmRemoval(originals[1]);
+        view.unmount();
+        const anchor = document.createElement('button');
+        document.body.append(anchor);
+        anchor.focus();
+        release();
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        expect(anchor).toHaveFocus();
+        expect(changed).not.toHaveBeenCalled();
+        anchor.remove();
+      });
     });
   },
 );
