@@ -88,9 +88,13 @@ class DevRuntimeGovernanceTest(unittest.TestCase):
             "docs/release-control/v6/internal/subsystems/deployment-installability.md",
         )
         self.assertEqual(match["lane_context"]["lane_id"], "L1")
-        self.assertEqual(match["verification_requirement"]["id"], "dev-runtime-orchestration")
+        # The canonical identity migration deliberately moved this helper
+        # out of dev-runtime-orchestration. Its registered proof exercises
+        # the actual build/deploy recipe, not only static SSH options.
+        # SSHHostKeyPolicyTest continues to cover those options separately.
+        self.assertEqual(match["verification_requirement"]["id"], "agent-executable-identity")
         self.assertIn(
-            "scripts/release_control/ssh_host_key_policy_test.py",
+            "scripts/installtests/build_agents_test.go",
             match["verification_requirement"]["exact_files"],
         )
 

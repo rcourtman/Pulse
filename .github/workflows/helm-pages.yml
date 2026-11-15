@@ -274,9 +274,22 @@ jobs:
           trap 'rm -rf "${public_work}"' EXIT
           qualified_chart="dist/pulse-${VERSION}.tgz"
           test -f "${qualified_chart}"
-          for attempt in $(seq 1 30); do
+          # Pages builds asynchronously after the index push. A real build
+          # took 262 seconds while the former 30 x 2-second probe failed.
+          # Allow ten minutes of propagation, not a successful push in lieu
+          # of public readback. The job's 20-minute ceiling still applies.
+          public_attempts=120
+          public_deadline=$(( $(date +%s) + 600 ))
+          for attempt in $(seq 1 "${public_attempts}"); do
+            public_remaining=$(( public_deadline - $(date +%s) ))
+            if (( public_remaining <= 0 )); then
+              break
+            fi
             public_index="$(mktemp)"
-            if curl -fsSL --retry 2 --retry-delay 1 --retry-all-errors \
+            # The outer loop retries; cap each transfer by the remaining
+            # observation window rather than nesting unbounded curl waits.
+            if curl -fsSL --connect-timeout 5 \
+                 --max-time "$(( public_remaining < 15 ? public_remaining : 15 ))" \
                  -o "${public_index}" "${public_repo}/index.yaml" && \
                grep -q "version: ${VERSION}" "${public_index}"; then
               helm repo remove pulse-public >/dev/null 2>&1 || true
@@ -299,11 +312,15 @@ jobs:
               fi
             fi
             rm -f "${public_index}"
-            echo "Public Helm repository has not exposed ${VERSION} yet (${attempt}/30)."
-            sleep 2
+            echo "Public Helm repository has not exposed ${VERSION} yet (${attempt}/${public_attempts})."
+            public_remaining=$(( public_deadline - $(date +%s) ))
+            if (( public_remaining <= 0 )); then
+              break
+            fi
+            sleep "$(( public_remaining < 5 ? public_remaining : 5 ))"
           done
           if [[ "${public_ready}" != "true" ]]; then
-            echo "::error::Public Helm repository did not expose chart ${VERSION}."
+            echo "::error::Public Helm repository did not expose chart ${VERSION} within the 600-second observation window."
             exit 1
           fi
           echo "[OK] Public Helm repository serves the exact qualified pulse ${VERSION} package."

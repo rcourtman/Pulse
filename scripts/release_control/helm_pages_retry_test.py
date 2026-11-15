@@ -275,54 +275,136 @@ class HelmPagesRetryTests(unittest.TestCase):
 
 
 class PublicReceiptTests(unittest.TestCase):
-    def receipt(self, mode):
-        workflow = (ROOT / '.github/workflows/helm-pages.yml').read_text()
+    def receipt(self, mode, *, ready_after=0, fetch_seconds=0, workflow=None):
+        workflow = workflow or (ROOT / '.github/workflows/helm-pages.yml').read_text()
         step = workflow.split('      - name: Verify public Pages chart\n', 1)[1]
         script = textwrap.dedent(step.split('        run: |\n', 1)[1])
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             (root / 'dist').mkdir()
             (root / 'dist/pulse-6.4.3.tgz').write_bytes(b'qualified')
-            programs = {
-                'curl': '''#!/usr/bin/env python3
-import pathlib, sys
-pathlib.Path(sys.argv[sys.argv.index('-o')+1]).write_text('version: 6.4.3\\n')
-''',
-                'helm': '''#!/usr/bin/env python3
-import os, pathlib, sys
+            (root / 'clock').write_text('0')
+            # Execute the actual workflow shell. Only the external programs
+            # and clock are fixtures: late Pages readiness needs no real wait,
+            # network, workflow dispatch or replacement publication.
+            common = '''import json, os, pathlib, sys
+clock = pathlib.Path('clock')
+now = int(clock.read_text())
 args = sys.argv[1:]
+with open('calls.jsonl', 'a') as log:
+    log.write(json.dumps({'command': pathlib.Path(sys.argv[0]).name,
+                          'args': args, 'at': now}) + '\\n')
+'''
+            programs = {
+                'curl': common + '''
+assert args[-1] == 'https://rcourtman.github.io/Pulse/index.yaml', args
+cost = int(os.environ['FETCH_SECONDS'])
+limit = int(args[args.index('--max-time')+1]) if '--max-time' in args else cost
+clock.write_text(str(now + min(cost, limit)))
+if cost > limit: sys.exit(28)
+if os.environ['MODE'] == 'index_unavailable': sys.exit(22)
+version = '6.4.3' if now >= int(os.environ['READY_AFTER']) else '6.4.2'
+pathlib.Path(args[args.index('-o')+1]).write_text('version: ' + version + '\\n')
+''',
+                'helm': common + '''
 if args[0] == 'pull':
+    assert args[1:4] == ['pulse-public/pulse', '--version', '6.4.3'], args
     mode = os.environ['MODE']
     if mode == 'unavailable': sys.exit(1)
     if mode != 'missing':
         dest = pathlib.Path(args[args.index('--destination')+1])
         (dest / 'pulse-6.4.3.tgz').write_bytes(b'qualified' if mode == 'match' else b'wrong')
+elif args[:2] == ['show', 'chart']:
+    if not pathlib.Path(args[2]).is_file(): sys.exit(1)
 ''',
-                'sleep': '#!/bin/sh\nexit 0\n',
+                'date': common + '''
+assert args == ['+%s'], args
+print(now)
+''',
+                'sleep': common + '''
+delay = int(args[0])
+assert 0 < delay <= 5, args
+clock.write_text(str(now + delay))
+''',
             }
             for name, body in programs.items():
                 path = root / name
-                path.write_text(body)
+                path.write_text('#!/usr/bin/env python3\n' + body)
                 path.chmod(0o755)
-            return subprocess.run(['bash', '-c', script], cwd=root,
-                                  env={'PATH': f"{root}:{os.environ['PATH']}",
-                                       'VERSION': '6.4.3', 'MODE': mode},
-                                  capture_output=True, text=True)
+            result = subprocess.run(['bash', '-c', script], cwd=root,
+                                    env={'PATH': f"{root}:{os.environ['PATH']}",
+                                         'VERSION': '6.4.3', 'MODE': mode,
+                                         'READY_AFTER': str(ready_after),
+                                         'FETCH_SECONDS': str(fetch_seconds)},
+                                    capture_output=True, text=True, timeout=120)
+            calls = [json.loads(line) for line in (root / 'calls.jsonl').read_text().splitlines()]
+            return result, {'elapsed_seconds': int((root / 'clock').read_text()),
+                            'calls': calls}
 
     def test_matching_public_package_passes(self):
-        result = self.receipt('match')
+        result, _ = self.receipt('match')
         self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_same_version_wrong_bytes_fail(self):
-        result = self.receipt('wrong')
+        result, _ = self.receipt('wrong')
         self.assertNotEqual(result.returncode, 0)
         self.assertNotIn('[OK]', result.stdout)
 
     def test_missing_download_fails(self):
-        self.assertNotEqual(self.receipt('missing').returncode, 0)
+        result, _ = self.receipt('missing')
+        self.assertNotEqual(result.returncode, 0)
 
     def test_unavailable_download_fails(self):
-        self.assertNotEqual(self.receipt('unavailable').returncode, 0)
+        result, _ = self.receipt('unavailable')
+        self.assertNotEqual(result.returncode, 0)
+
+    def test_pages_build_finishing_after_four_minutes_is_observed(self):
+        # Build 1370229859 took 262003 ms, beyond the former ~60s loop.
+        result, proof = self.receipt('match', ready_after=263)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(proof['elapsed_seconds'], 265)
+        self.assertEqual(sum(c['command'] == 'curl' for c in proof['calls']), 54)
+        self.assertEqual(sum(c['command'] == 'helm' and c['args'][0] == 'pull'
+                             for c in proof['calls']), 1)
+
+    def test_delayed_wrong_package_still_fails_immediately(self):
+        result, proof = self.receipt('wrong', ready_after=263)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('bytes differ', result.stdout)
+        self.assertNotIn('[OK]', result.stdout)
+        self.assertEqual(proof['elapsed_seconds'], 265)
+        self.assertEqual(sum(c['command'] == 'helm' and c['args'][0] == 'pull'
+                             for c in proof['calls']), 1)
+
+    def test_index_that_never_exposes_version_fails_at_deadline(self):
+        result, proof = self.receipt('match', ready_after=601)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('600-second observation window', result.stdout)
+        self.assertNotIn('[OK]', result.stdout)
+        self.assertEqual(proof['elapsed_seconds'], 600)
+        self.assertFalse(any(c['command'] == 'helm' for c in proof['calls']))
+
+    def test_slow_unavailable_index_cannot_extend_probe_budget(self):
+        result, proof = self.receipt('index_unavailable', fetch_seconds=17)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(proof['elapsed_seconds'], 600)
+        probes = [c for c in proof['calls'] if c['command'] == 'curl']
+        self.assertEqual(len(probes), 30)
+        for call in probes:
+            args = call['args']
+            self.assertIn('--connect-timeout', args)
+            self.assertEqual(int(args[args.index('--connect-timeout')+1]), 5)
+            self.assertLessEqual(int(args[args.index('--max-time')+1]), 15)
+        self.assertFalse(any(c['command'] == 'helm' for c in proof['calls']))
+
+    def test_last_probe_and_sleep_use_only_remaining_time(self):
+        result, proof = self.receipt('match', ready_after=601, fetch_seconds=8)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(proof['elapsed_seconds'], 600)
+        probes = [c for c in proof['calls'] if c['command'] == 'curl']
+        last = probes[-1]
+        self.assertEqual(last['at'], 598)
+        self.assertEqual(int(last['args'][last['args'].index('--max-time')+1]), 2)
 
 
 if __name__ == "__main__":
