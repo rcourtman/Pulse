@@ -1653,14 +1653,26 @@ elif args[:2] == ["run", "view"] and "jobs" in args:
             {"name": run["failed_step"], "conclusion": "failure"}]})
     emit({"jobs": jobs})
 elif args[:2] == ["run", "view"]:
-    emit({"status": "completed", "conclusion": attempt(args[2])["conclusion"],
+    run = attempt(args[2])
+    if run.get("elapsed") and not run.get("elapsed_observed"):
+        run["elapsed_observed"] = True
+        with open(os.path.join(fix, "state.json"), "w") as handle:
+            json.dump(state, handle)
+        with open(os.path.join(fix, "seconds-jump"), "w") as handle:
+            handle.write(str(run["elapsed"]) + "\n")
+        emit({"status": "in_progress", "conclusion": None,
+              "url": f"https://github.com/rcourtman/pulse-pro/actions/runs/{args[2]}"})
+        sys.exit(0)
+    emit({"status": "completed", "conclusion": run["conclusion"],
           "url": f"https://github.com/rcourtman/pulse-pro/actions/runs/{args[2]}"})
 else:
     sys.exit(f"unexpected gh call: {args}")
 '''
         old_main, new_main = "a" * 40, "b" * 40
 
-        def run(main: str, attempts: list[dict]) -> tuple[subprocess.CompletedProcess, list[int]]:
+        def run(
+            main: str, attempts: list[dict], *, commands: str = script
+        ) -> tuple[subprocess.CompletedProcess, list[int]]:
             with tempfile.TemporaryDirectory() as directory:
                 fix = Path(directory)
                 (fix / "bin").mkdir()
@@ -1675,8 +1687,21 @@ else:
                        "PULSE_CONVERGENCE_RUN_ID": "7", "PULSE_OWNER_ASSET_NAME": "owner.json",
                        "PULSE_OWNER_ASSET_SHA256": "d" * 64,
                        "PATH": f"{fix / 'bin'}{os.pathsep}{os.environ['PATH']}"}
+                # Advance Bash's actual SECONDS clock at the real watcher's
+                # sleep boundary. Run the production dispatch/retry loop,
+                # without spending hours or altering its time comparisons.
+                clock = r'''
+sleep() {
+  if [[ -f "${FIX}/seconds-jump" ]]; then
+    local jump
+    read -r jump < "${FIX}/seconds-jump"
+    if (( jump > 0 )); then SECONDS=$((SECONDS + jump)); fi
+    printf '0\n' > "${FIX}/seconds-jump"
+  fi
+}
+'''
                 result = subprocess.run(
-                    ["bash", "--noprofile", "--norc", "-eu", "-o", "pipefail", "-c", script],
+                    ["bash", "--noprofile", "--norc", "-eu", "-o", "pipefail", "-c", clock + commands],
                     cwd=REPO_ROOT, env=env, text=True, capture_output=True, timeout=60,
                 )
                 dispatched = json.loads((fix / "state.json").read_text())["dispatched"]
@@ -1723,6 +1748,51 @@ else:
                        "\n".join(re.findall(r"::error::.*", result.stdout))),
             ["https://github.com/rcourtman/pulse-pro/actions/runs/104"],
         )
+
+        # Use a synthetic long-running child to exercise observation past
+        # one hour. These fixture times are not downstream configuration.
+        self.assertEqual(workflow["jobs"]["promote"]["timeout-minutes"], 185)
+        current_budget = "promotion_deadline=$((SECONDS + 10800))"
+        self.assertIn(current_budget, script)
+        valid_work_seconds = 6000
+        result, dispatched = run(new_main, [{**promoted, "elapsed": valid_work_seconds}])
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(dispatched, [100])
+
+        # Reproduce the recorded queue/source-refusal shape before a fresh
+        # child's complete work. Preserve this exact two-child identity.
+        delayed = [{**refused, "elapsed": 3473}, {**promoted, "elapsed": valid_work_seconds}]
+        result, dispatched = run(new_main, delayed)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(dispatched, [100, 101])
+        self.assertNotIn("::error::", result.stdout)
+        self.assertIn("re-dispatching on the current main", result.stdout)
+
+        # Negative witness: changing only the observer back to the old hour
+        # expires the same second child, rather than verifying completion.
+        old_script = script.replace(current_budget, "promotion_deadline=$((SECONDS + 3600))")
+        result, dispatched = run(new_main, delayed, commands=old_script)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(dispatched, [100, 101])
+        self.assertIn("Timed out waiting for private Pro live promotion", result.stdout)
+
+        # More observation time never turns a real validation/mutation failure
+        # into a retry or a success, even when its source differs from main.
+        result, dispatched = run(new_main, [{**mutated, "elapsed": 9000}])
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(dispatched, [100])
+        self.assertNotIn("re-dispatching on the current main", result.stdout)
+        self.assertIn("conclusion=failure", result.stdout)
+
+        # The larger shared window is still finite; an over-budget child
+        # cannot cause another POST or a false successful convergence.
+        result, dispatched = run(new_main, [{**promoted, "elapsed": 10801}])
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(dispatched, [100])
+        expiry = re.search(r"Timed out waiting for private Pro live promotion after ([0-9]+)s", result.stdout)
+        self.assertIsNotNone(expiry, result.stdout + result.stderr)
+        self.assertGreater(int(expiry[1]), 0)
+        self.assertLessEqual(int(expiry[1]), 10800)
 
     def test_private_pro_watchers_survive_transient_run_lookup_failures(self) -> None:
         """Run both private Pro watchers against a gh double: a just-dispatched run that 404s
