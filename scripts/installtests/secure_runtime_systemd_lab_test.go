@@ -215,6 +215,7 @@ type secureRuntimeLabReport struct {
 	Authority       string
 	TypedHelper     bool
 	CommandsEnabled bool
+	PackageUpdates  *agentshost.PackageUpdateStatus `json:",omitempty"`
 }
 
 type secureRuntimeDockerReport struct {
@@ -754,7 +755,8 @@ func (f *secureRuntimeLabFixture) handleReport(w http.ResponseWriter, r *http.Re
 			} `json:"privilege"`
 		} `json:"agent"`
 		Host struct {
-			Hostname string `json:"hostname"`
+			Hostname       string                          `json:"hostname"`
+			PackageUpdates *agentshost.PackageUpdateStatus `json:"packageUpdates"`
 		} `json:"host"`
 	}
 	if err := json.NewDecoder(body).Decode(&payload); err != nil {
@@ -768,6 +770,7 @@ func (f *secureRuntimeLabFixture) handleReport(w http.ResponseWriter, r *http.Re
 		UpdatedFrom:     strings.TrimSpace(payload.Agent.UpdatedFrom),
 		Hostname:        strings.TrimSpace(payload.Agent.Hostname),
 		CommandsEnabled: payload.Agent.CommandsEnabled,
+		PackageUpdates:  payload.Host.PackageUpdates,
 	}
 	if report.Hostname == "" {
 		report.Hostname = strings.TrimSpace(payload.Host.Hostname)

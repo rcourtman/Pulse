@@ -189,9 +189,15 @@ jobs:
           retention-days: 7
 
   installed-profile-systemd:
-    name: Signed installer and saved-CA profile recovery
+    name: Signed installer and saved-CA profile recovery (${{ matrix.scenario }})
     runs-on: ubuntu-24.04
     timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        # Separate fresh VMs: the collector-only case must never inherit the
+        # independently enrolled runner from the existing recovery exercise.
+        scenario: [recovery, collector-only-apt]
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -248,6 +254,7 @@ jobs:
         timeout-minutes: 12
         env:
           EXPECTED_SOURCE_SHA: ${{ github.sha }}
+          NATIVE_PROFILE_SCENARIO: ${{ matrix.scenario }}
         shell: bash
         run: |
           set -euo pipefail
@@ -256,6 +263,7 @@ jobs:
           sudo env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin LC_ALL=C \
             GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted GITHUB_REPOSITORY=rcourtman/Pulse \
             EXPECTED_SOURCE_SHA="$EXPECTED_SOURCE_SHA" RUNNER_TEMP="$RUNNER_TEMP" \
+            PULSE_NATIVE_PROFILE_SCENARIO="$NATIVE_PROFILE_SCENARIO" \
             PULSE_NATIVE_PROFILE_INPUTS="$PULSE_NATIVE_PROFILE_INPUTS" PULSE_NATIVE_INSTALLED_PROFILE=1 \
             "$PULSE_NATIVE_PROFILE_INPUTS/installtests.test" \
               -test.run '^TestAgentInstalledProfileSystemd$' -test.count=1 -test.timeout=11m -test.v
@@ -264,7 +272,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: native-installed-profile-${{ github.run_id }}-${{ github.run_attempt }}
+          name: native-installed-profile-${{ matrix.scenario }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/pulse-installed-profile.json
           if-no-files-found: warn
           retention-days: 7

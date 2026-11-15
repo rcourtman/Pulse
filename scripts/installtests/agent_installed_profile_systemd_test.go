@@ -97,6 +97,7 @@ type nativeProfilePhase struct {
 
 type nativeProfileReceipt struct {
 	Schema              int                  `json:"schema_version"`
+	Scenario            string               `json:"scenario"`
 	Source              string               `json:"source_sha"`
 	Scope               string               `json:"scope"`
 	InstallerHash       string               `json:"installer_template_sha256"`
@@ -361,6 +362,10 @@ func TestAgentInstalledProfileSystemd(t *testing.T) {
 	if os.Getenv("PULSE_NATIVE_INSTALLED_PROFILE") != "1" {
 		t.Skip("dedicated fresh public hosted VM only; not an installed acceptance result")
 	}
+	scenario, err := nativeProfileScenario(os.Getenv("PULSE_NATIVE_PROFILE_SCENARIO"))
+	if err != nil {
+		t.Fatal(err)
+	}
 	env := make(map[string]string)
 	for _, name := range []string{"PULSE_NATIVE_INSTALLED_PROFILE", "GITHUB_ACTIONS", "RUNNER_ENVIRONMENT", "GITHUB_REPOSITORY", "EXPECTED_SOURCE_SHA"} {
 		env[name] = os.Getenv(name)
@@ -445,7 +450,7 @@ func TestAgentInstalledProfileSystemd(t *testing.T) {
 	}}
 	server := httptest.NewTLSServer(downloads.wrap(fixture))
 	t.Cleanup(server.Close)
-	receipt := &nativeProfileReceipt{Schema: 1, Source: source, Scope: "current-source-signed-installer-verified-TLS-native-systemd-not-published-release",
+	receipt := &nativeProfileReceipt{Schema: 1, Scenario: scenario, Source: source, Scope: "current-source-signed-installer-verified-TLS-native-systemd-not-published-release",
 		InstallerHash: secureRuntimeHash(template), PinnedInstallerHash: secureRuntimeHash([]byte(installer)), Artifacts: make(map[string]string), Cleanup: map[string]any{"complete": false}}
 	for name, artifact := range artifacts {
 		receipt.Artifacts[name] = secureRuntimeHash(artifact)
@@ -474,6 +479,10 @@ func TestAgentInstalledProfileSystemd(t *testing.T) {
 		commandArgs := []string{installerPath, "--url", server.URL, "--token-file", token, "--cacert", ca,
 			"--interval", "2s", "--agent-id", secureRuntimeLabAgentID, "--hostname", secureRuntimeLabHostname, "--non-interactive"}
 		return nativeProfileCommand(t, receipt, "bash", append(commandArgs, args...)...)
+	}
+	if scenario == "collector-only-apt" {
+		nativeProfileAPT(t, receipt, fixture, caPath, versions["collector-v1"], install, phase)
+		return
 	}
 	if output, err := install(caPath, nativeProfileRootInstallArgs()...); err != nil {
 		t.Fatalf("initial signed TLS install: %v\n%s", err, output)
