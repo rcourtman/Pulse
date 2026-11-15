@@ -356,9 +356,12 @@ func TestSessionStore_UnreadStartupSnapshotFailureDoesNotRequarantine(t *testing
 	t.Cleanup(store.Shutdown)
 	// Preservation can succeed even when preparing the fresh snapshot fails.
 	// Its successful retirement must be recorded before persistSnapshot runs.
-	if err := os.Mkdir(path+".tmp", 0700); err != nil {
-		t.Fatal(err)
+	store.persistMu.Lock()
+	store.snapshotWrite = func(file *os.File, data []byte) (int, error) {
+		n, _ := file.Write(data[:1])
+		return n, os.ErrPermission
 	}
+	store.persistMu.Unlock()
 	store.CreateSession("new-session", time.Hour, "fixture", "127.0.0.1", "new-user")
 	store.persistMu.Lock()
 	needsPreservation := store.preserveBeforeSave
@@ -369,9 +372,10 @@ func TestSessionStore_UnreadStartupSnapshotFailureDoesNotRequarantine(t *testing
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		t.Fatalf("failed snapshot unexpectedly published: %v", err)
 	}
-	if err := os.Remove(path + ".tmp"); err != nil {
-		t.Fatal(err)
-	}
+	checkNoOwnedAuthTemps(t, dir, "sessions.json")
+	store.persistMu.Lock()
+	store.snapshotWrite = nil
+	store.persistMu.Unlock()
 	store.save()
 	store.Shutdown()
 	if len(sessionPreservedFiles(t, dir)) != 1 {

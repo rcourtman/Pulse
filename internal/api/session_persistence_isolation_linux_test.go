@@ -5,88 +5,28 @@ package api
 import (
 	"bytes"
 	"encoding/json"
-	"io"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"strings"
-	"sync"
-	"syscall"
 	"testing"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
 
-// pauseSessionDiskWrite stops the real sessions.json.tmp write, not a mock
-// persistence function. A large synthetic record fills the fixture FIFO after
-// the reader acknowledges the first byte. No elapsed-time guess starts the
-// assertions. Resuming drains and joins both goroutines, including on failure.
+// pauseSessionDiskWrite pauses the first real write to an exclusive owned
+// regular snapshot. Keep the original I/O-isolation, synchronous publication and
+// queued-withdrawal assertions without depending on an unsafe reusable FIFO path.
 func pauseSessionDiskWrite(t *testing.T, store *SessionStore, action func()) func() []byte {
 	t.Helper()
 	store.mu.Lock()
 	store.sessions[sessionHash("slow-disk-filler")].UserAgent = strings.Repeat("x", 1<<20)
 	store.mu.Unlock()
-	if err := syscall.Mkfifo(filepath.Join(store.dataPath, "sessions.json.tmp"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	release := make(chan struct{})
-	entered := make(chan error, 1)
-	readDone := make(chan []byte, 1)
-	actionDone := make(chan struct{})
-	go func() { defer close(actionDone); action() }()
-	go func() {
-		file, err := os.Open(filepath.Join(store.dataPath, "sessions.json.tmp"))
-		if err != nil {
-			entered <- err
-			readDone <- nil
-			return
-		}
-		defer file.Close()
-		var first [1]byte
-		_, err = io.ReadFull(file, first[:])
-		entered <- err
-		<-release
-		var data bytes.Buffer
-		data.Write(first[:])
-		_, _ = io.Copy(&data, file)
-		readDone <- data.Bytes()
-	}()
-	var once sync.Once
-	var captured []byte
-	resume := func() []byte {
-		t.Helper()
-		once.Do(func() {
-			close(release)
-			select {
-			case captured = <-readDone:
-			case <-time.After(5 * time.Second):
-				t.Error("fixture disk reader did not stop")
-			}
-			select {
-			case <-actionDone:
-			case <-time.After(5 * time.Second):
-				t.Error("session writer did not stop after releasing disk")
-			}
-		})
-		return captured
-	}
-	t.Cleanup(func() { resume() })
-	select {
-	case err := <-entered:
-		if err != nil {
-			t.Fatal(err)
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("session save did not reach the fixture disk write")
-	}
-	select {
-	case <-actionDone:
-		t.Error("session mutation returned before its persistence completed")
-	default:
-	}
-	return resume
+	return pauseAuthSnapshotWrite(t, func(write authSnapshotWriteFunc) {
+		store.persistMu.Lock()
+		store.snapshotWrite = write
+		store.persistMu.Unlock()
+	}, action)
 }
 
 func sessionDiskStore(t *testing.T) *SessionStore {

@@ -24,14 +24,15 @@ type CSRFToken struct {
 
 // CSRFTokenStore handles persistent CSRF token storage
 type CSRFTokenStore struct {
-	tokens     map[string][]*CSRFToken
-	mu         sync.RWMutex
-	saveMu     sync.Mutex // serializes snapshot selection and writes; never acquire while holding mu
-	dataPath   string
-	saveTicker *time.Ticker
-	stopChan   chan bool
-	workerDone chan struct{}
-	stopOnce   sync.Once
+	tokens        map[string][]*CSRFToken
+	mu            sync.RWMutex
+	saveMu        sync.Mutex // serializes snapshot selection and writes; never acquire while holding mu
+	dataPath      string
+	snapshotWrite authSnapshotWriteFunc // nil in runtime stores; per-instance real-I/O fixture seam
+	saveTicker    *time.Ticker
+	stopChan      chan bool
+	workerDone    chan struct{}
+	stopOnce      sync.Once
 }
 
 const maxCSRFTokensPerSession = 8
@@ -389,16 +390,8 @@ func (c *CSRFTokenStore) persistSnapshot(persisted []CSRFTokenData, sessions int
 		return
 	}
 
-	// Write to temporary file first
-	tmpFile := csrfFile + ".tmp"
-	if err := os.WriteFile(tmpFile, jsonData, 0600); err != nil {
-		log.Error().Err(err).Msg("Failed to write CSRF tokens file")
-		return
-	}
-
-	// Atomic rename
-	if err := os.Rename(tmpFile, csrfFile); err != nil {
-		log.Error().Err(err).Msg("Failed to rename CSRF tokens file")
+	if err := writePrivateAuthSnapshot(csrfFile, jsonData, c.snapshotWrite); err != nil {
+		log.Error().Err(err).Msg("Failed to publish private CSRF tokens file")
 		return
 	}
 

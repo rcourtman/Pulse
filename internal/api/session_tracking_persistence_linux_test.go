@@ -65,9 +65,8 @@ func trackingRequest(router *Router, raw, csrf string, write bool) *httptest.Res
 	return response
 }
 
-// The FIFO's bytes are the actual completed save, but its inode is not a regular
-// restart input after rename. Replay those exact bytes alongside the other
-// store's saved file in a separate restart directory. Do not add a repair save
+// Restart from the paused operation's actual descriptor bytes alongside the
+// other store's saved file in a separate directory. Do not add a repair save
 // that could mask a missing/incorrect snapshot from the operation under test.
 func restartTrackingSnapshot(t *testing.T, router *Router, disk string, captured []byte) (*SessionStore, *CSRFTokenStore) {
 	t.Helper()
