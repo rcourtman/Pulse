@@ -234,11 +234,15 @@ describe('User Access focus after a confirmed write and saved reread', () => {
       releaseWrite = resolve;
     });
     const { dialog, operator } = await openEditor();
-    // Real browsers can blur a disabled submit control. jsdom retains focus
-    // on it, so reproduce that observed blur before resolving the HTTP reply.
+    // Real browsers can blur a disabled submit control. jsdom's blur() on a
+    // disabled button is a no-op, so explicitly establish the observed BODY
+    // focus before resolving the HTTP reply. Do not mock the recovery itself.
     const save = dialog.getByRole('button', { name: 'Applying...' });
     expect(save).toBeDisabled();
-    save.blur();
+    document.body.tabIndex = -1;
+    document.body.focus();
+    document.body.removeAttribute('tabindex');
+    expect(document.body).toHaveFocus();
     releaseWrite(json({ error: 'Synthetic rejection' }, 403));
     const notice = await dialog.findByRole('alert');
     await waitFor(() => expect(notice).toHaveFocus());
