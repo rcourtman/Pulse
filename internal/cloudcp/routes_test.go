@@ -1,11 +1,18 @@
 package cloudcp
 
 import (
+	"crypto/ed25519"
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
+	cpauth "github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/auth"
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
 )
@@ -515,5 +522,145 @@ func TestNewHostedEntitlementsService_MarksProviderHosting(t *testing.T) {
 	}, reg)
 	if pulseHosted.ProviderHosted() {
 		t.Fatal("Pulse-hosted control plane must not be marked provider-hosted")
+	}
+}
+
+func TestRegisterRoutesManualResumeReconcilesBillingAndKeepsAccountRoles(t *testing.T) {
+	dir := t.TempDir()
+	reg, err := registry.NewTenantRegistry(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reg.Close()
+	if err := reg.CreateAccount(&registry.Account{ID: "a-route-resume", Kind: registry.AccountKindMSP}); err != nil {
+		t.Fatal(err)
+	}
+	for _, role := range []registry.MemberRole{registry.MemberRoleOwner, registry.MemberRoleReadOnly} {
+		if err := reg.CreateUser(&registry.User{ID: string(role), Email: string(role) + "@example.test"}); err != nil {
+			t.Fatal(err)
+		}
+		if err := reg.CreateMembership(&registry.AccountMembership{AccountID: "a-route-resume", UserID: string(role), Role: role}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := reg.CreateStripeAccount(&registry.StripeAccount{AccountID: "a-route-resume", StripeCustomerID: "cus_route", SubscriptionState: "active", PlanVersion: "msp_starter"}); err != nil {
+		t.Fatal(err)
+	}
+	tenant := &registry.Tenant{ID: "t-route-resume", AccountID: "a-route-resume", State: registry.TenantStateSuspended, ManualHold: true, PlanVersion: "msp_starter"}
+	if err := reg.Create(tenant); err != nil {
+		t.Fatal(err)
+	}
+	_, private, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	session, err := cpauth.NewService(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer session.Close()
+	cfg := &CPConfig{DataDir: dir, BaseURL: "https://cloud.example.com", AdminKey: "fixture-only", TrialActivationPrivateKey: base64.StdEncoding.EncodeToString(private)}
+	mux := http.NewServeMux()
+	RegisterRoutes(mux, &Deps{Config: cfg, Registry: reg, MagicLinks: session})
+	for _, role := range []registry.MemberRole{registry.MemberRoleReadOnly, registry.MemberRoleOwner} {
+		token, err := session.GenerateSessionToken(string(role), string(role)+"@example.test", time.Hour)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req := httptest.NewRequest(http.MethodPatch, "https://cloud.example.com/api/accounts/"+tenant.AccountID+"/tenants/"+tenant.ID, strings.NewReader(`{"state":"active"}`))
+		req.AddCookie(&http.Cookie{Name: cpauth.SessionCookieName, Value: token})
+		res := httptest.NewRecorder()
+		mux.ServeHTTP(res, req)
+		if role == registry.MemberRoleReadOnly {
+			if res.Code != http.StatusForbidden {
+				t.Fatalf("reader reached resume: %d %s", res.Code, res.Body.String())
+			}
+			continue
+		}
+		if res.Code != http.StatusOK {
+			t.Fatalf("registered resume: %d %s", res.Code, res.Body.String())
+		}
+	}
+	state, err := config.NewFileBillingStore(filepath.Join(cfg.TenantsDir(), tenant.ID)).GetBillingState("default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state == nil || state.EntitlementJWT == "" || state.EntitlementRefreshToken == "" {
+		t.Fatal("registered resume reported success without current billing lease")
+	}
+}
+
+func TestRegisterRoutesResumeUsesConfiguredBillingMode(t *testing.T) {
+	for _, mode := range []ControlPlaneMode{ControlPlaneModePulseHosted, ControlPlaneModePulseHostedMSP, ControlPlaneModeProviderHostedMSP} {
+		t.Run(string(mode), func(t *testing.T) {
+			dir := t.TempDir()
+			reg, err := registry.NewTenantRegistry(dir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer reg.Close()
+			if err := reg.CreateAccount(&registry.Account{ID: "a-mode", Kind: registry.AccountKindMSP}); err != nil {
+				t.Fatal(err)
+			}
+			if err := reg.CreateUser(&registry.User{ID: "u-mode", Email: "owner@example.test"}); err != nil {
+				t.Fatal(err)
+			}
+			if err := reg.CreateMembership(&registry.AccountMembership{AccountID: "a-mode", UserID: "u-mode", Role: registry.MemberRoleOwner}); err != nil {
+				t.Fatal(err)
+			}
+			if err := reg.Create(&registry.Tenant{ID: "t-mode", AccountID: "a-mode", State: registry.TenantStateSuspended, ManualHold: true, PlanVersion: "msp_starter"}); err != nil {
+				t.Fatal(err)
+			}
+			_, private, err := ed25519.GenerateKey(rand.Reader)
+			if err != nil {
+				t.Fatal(err)
+			}
+			session, err := cpauth.NewService(dir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer session.Close()
+			cfg := &CPConfig{DataDir: dir, BaseURL: "https://cloud.example.com", AdminKey: "fixture-only", ControlPlaneMode: mode, TrialActivationPrivateKey: base64.StdEncoding.EncodeToString(private)}
+			mux := http.NewServeMux()
+			RegisterRoutes(mux, &Deps{Config: cfg, Registry: reg, MagicLinks: session})
+			token, err := session.GenerateSessionToken("u-mode", "owner@example.test", time.Hour)
+			if err != nil {
+				t.Fatal(err)
+			}
+			patch := func(body string) *httptest.ResponseRecorder {
+				req := httptest.NewRequest(http.MethodPatch, "https://cloud.example.com/api/accounts/a-mode/tenants/t-mode", strings.NewReader(body))
+				req.AddCookie(&http.Cookie{Name: cpauth.SessionCookieName, Value: token})
+				res := httptest.NewRecorder()
+				mux.ServeHTTP(res, req)
+				return res
+			}
+			res := patch(`{"state":"active"}`)
+			want := http.StatusConflict
+			if cfg.IsMSPControlPlane() {
+				want = http.StatusOK
+			}
+			if res.Code != want {
+				t.Fatalf("mode %s resume = %d %s, want %d", mode, res.Code, res.Body.String(), want)
+			}
+			row, err := reg.Get("t-mode")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if cfg.IsMSPControlPlane() {
+				if row.State != registry.TenantStateActive || row.ManualHold {
+					t.Fatalf("configured local resume lost: %+v", row)
+				}
+				if _, err := config.NewFileBillingStore(filepath.Join(cfg.TenantsDir(), row.ID)).GetBillingState("default"); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				if row.State != registry.TenantStateSuspended || !row.ManualHold {
+					t.Fatalf("missing hosted billing recreated authority: %+v", row)
+				}
+				if again := patch(`{"state":"active","local_msp_billing":true}`); again.Code == http.StatusOK {
+					t.Fatal("request field configured local billing authority")
+				}
+			}
+		})
 	}
 }

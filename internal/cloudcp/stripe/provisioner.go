@@ -865,18 +865,11 @@ func (p *Provisioner) HandleCheckout(ctx context.Context, session CheckoutSessio
 }
 
 func normalizeStripeAccountSubscriptionState(status string) string {
-	switch strings.ToLower(strings.TrimSpace(status)) {
-	case "active":
-		return "active"
-	case "trialing":
-		return "trial"
-	case "canceled":
-		return "canceled"
-	case "past_due", "unpaid", "paused", "incomplete", "incomplete_expired":
-		return "past_due"
-	default:
+	state := MapSubscriptionStatus(status)
+	if state == pkglicensing.SubStateGrace {
 		return "past_due"
 	}
+	return string(state)
 }
 
 func applyStripeAccountGraceWindow(sa *registry.StripeAccount, subState pkglicensing.SubscriptionState, now time.Time) {
@@ -1104,19 +1097,9 @@ func (p *Provisioner) HandleSubscriptionUpdated(ctx context.Context, sub Subscri
 	}
 	planVersion = canonicalizeProvisionedPlanVersion(planVersion)
 
-	// Update registry
-	tenant.StripeSubscriptionID = strings.TrimSpace(sub.ID)
-	tenant.StripePriceID = priceID
-	tenant.PlanVersion = planVersion
-	if subState == pkglicensing.SubStateSuspended {
-		tenant.State = registry.TenantStateSuspended
-	} else if subState == pkglicensing.SubStateActive || subState == pkglicensing.SubStateTrial || subState == pkglicensing.SubStateGrace {
-		tenant.State = registry.TenantStateActive
-	} else if subState == pkglicensing.SubStateCanceled || subState == pkglicensing.SubStateExpired {
-		tenant.State = registry.TenantStateCanceled
-	}
-	if err := p.registry.Update(tenant); err != nil {
-		return fmt.Errorf("update tenant record: %w", err)
+	tenant, canGrant, err := p.registry.ApplyTenantBillingGrant(ctx, tenant.AccountID, tenant.ID, strings.TrimSpace(sub.ID), priceID, planVersion)
+	if err != nil {
+		return fmt.Errorf("update tenant billing: %w", err)
 	}
 
 	if sa, saErr := p.registry.GetStripeAccountByCustomerID(customerID); saErr == nil && sa != nil {
@@ -1131,6 +1114,12 @@ func (p *Provisioner) HandleSubscriptionUpdated(ctx context.Context, sub Subscri
 				Str("customer_id", customerID).
 				Msg("Failed to update stripe account mapping after subscription update")
 		}
+	}
+	if !canGrant {
+		return nil
+	}
+	if tenant.ManualHold {
+		subState = pkglicensing.SubStateSuspended
 	}
 	if err := p.writeHostedEntitlementLeaseState(tenant, subState, planVersion, customerID, strings.TrimSpace(sub.ID), priceID); err != nil {
 		return fmt.Errorf("write hosted entitlement state for tenant %s: %w", tenant.ID, err)
@@ -1171,12 +1160,6 @@ func (p *Provisioner) withdrawSubscription(ctx context.Context, sub Subscription
 	if tenant == nil {
 		return nil
 	}
-	if err := p.registry.SetTenantState(tenant.ID, withdrawnTenantState(state)); err != nil {
-		return err
-	}
-	if err := p.hostedEntitlements.RevokeTenantEntitlement(tenant.ID, time.Now().UTC()); err != nil {
-		return err
-	}
 	if sa, err := p.registry.GetStripeAccountByCustomerID(customerID); err != nil {
 		return err
 	} else if sa != nil {
@@ -1187,11 +1170,20 @@ func (p *Provisioner) withdrawSubscription(ctx context.Context, sub Subscription
 			return err
 		}
 	}
+	if err := p.registry.SetTenantState(tenant.ID, withdrawnTenantState(state)); err != nil {
+		return err
+	}
+	if err := p.hostedEntitlements.RevokeTenantEntitlement(tenant.ID, time.Now().UTC()); err != nil {
+		return err
+	}
 	ctx, lease, tenant, err := p.lockTenant(ctx, tenant.ID)
 	if err != nil {
 		return fmt.Errorf("authority withdrawn; billing file deferred: %w", err)
 	}
 	defer lease.Close()
+	if registry.IsTenantDeletionState(tenant.State) {
+		return nil
+	}
 	return p.writeHostedEntitlementLeaseState(tenant, state, tenant.PlanVersion, customerID, strings.TrimSpace(sub.ID), "")
 }
 
@@ -1290,19 +1282,20 @@ func (p *Provisioner) HandleMSPSubscriptionUpdated(ctx context.Context, sub Subs
 		if tenant == nil {
 			continue
 		}
-		tenant.PlanVersion = planVersion
-		switch subState {
-		case pkglicensing.SubStateSuspended:
-			tenant.State = registry.TenantStateSuspended
-		case pkglicensing.SubStateCanceled, pkglicensing.SubStateExpired:
-			tenant.State = registry.TenantStateCanceled
-		default:
-			tenant.State = registry.TenantStateActive
+		current, canGrant, err := p.registry.ApplyTenantBillingGrant(ctx, tenant.AccountID, tenant.ID, tenant.StripeSubscriptionID, tenant.StripePriceID, planVersion)
+		if err != nil {
+			return fmt.Errorf("update tenant billing: %w", err)
 		}
-		if err := p.registry.Update(tenant); err != nil {
-			return fmt.Errorf("update tenant record: %w", err)
+		if !canGrant {
+			continue
 		}
-		if err := p.writeHostedEntitlementLeaseState(tenant, subState, planVersion, customerID, strings.TrimSpace(sub.ID), priceID); err != nil {
+		tenant = current
+		effective := subState
+		if tenant.ManualHold {
+			effective = pkglicensing.SubStateSuspended
+		}
+
+		if err := p.writeHostedEntitlementLeaseState(tenant, effective, planVersion, customerID, strings.TrimSpace(sub.ID), priceID); err != nil {
 			return fmt.Errorf("write hosted entitlement state for tenant %s: %w", tenant.ID, err)
 		}
 	}
@@ -1385,6 +1378,9 @@ func (p *Provisioner) withdrawMSPSubscription(ctx context.Context, sub Subscript
 				return fmt.Errorf("authority withdrawn; billing file deferred: %w", err)
 			}
 			defer lease.Close()
+			if registry.IsTenantDeletionState(current.State) {
+				return nil
+			}
 			return p.writeHostedEntitlementLeaseState(current, state, current.PlanVersion, customerID, strings.TrimSpace(sub.ID), "")
 		}(); err != nil {
 			problems = append(problems, err)
@@ -1441,4 +1437,53 @@ func (p *Provisioner) lockAccountTenants(ctx context.Context, accountID string) 
 		current = append(current, tenant)
 	}
 	return current, release, nil
+}
+
+// ResumeWorkspaceBilling completes an explicit manual resume with the same
+// current billing authority as refresh. The account handler holds both leases
+// through its field patch and this local file/token reconciliation. The local
+// billing policy is the same server-owned configuration passed to the registry,
+// never a request field or an inference from missing billing. It performs
+// no external call and cannot restore a nonpayable or terminal tenant.
+func (p *Provisioner) ResumeWorkspaceBilling(ctx context.Context, tenant *registry.Tenant, localMSPBilling bool) error {
+	if p == nil || tenant == nil {
+		return fmt.Errorf("workspace billing is unavailable")
+	}
+	ctx, lease, current, err := p.lockTenant(ctx, tenant.ID)
+	if err != nil {
+		return err
+	}
+	defer lease.Close()
+	if current.AccountID != tenant.AccountID || current.State != registry.TenantStateActive || current.ManualHold {
+		return fmt.Errorf("workspace is not resumable")
+	}
+	sa, err := p.registry.GetStripeAccount(current.AccountID)
+	if err != nil {
+		return err
+	}
+	state := pkglicensing.SubStateActive
+	customer, subscription, price := current.StripeCustomerID, current.StripeSubscriptionID, current.StripePriceID
+	if sa != nil {
+		state = pkglicensing.ParseStoredSubscriptionState(sa.SubscriptionState)
+		customer, subscription = sa.StripeCustomerID, sa.StripeSubscriptionID
+	}
+	if sa == nil {
+		if !localMSPBilling {
+			return fmt.Errorf("workspace billing authority is unavailable")
+		}
+		account, err := p.registry.GetAccount(current.AccountID)
+		if err != nil {
+			return err
+		}
+		if account == nil || account.Kind != registry.AccountKindMSP || current.StripeCustomerID != "" || current.StripeSubscriptionID != "" || current.StripePriceID != "" {
+			return fmt.Errorf("workspace billing authority is unavailable")
+		}
+	} else if current.StripeCustomerID != "" && current.StripeCustomerID != sa.StripeCustomerID {
+		return fmt.Errorf("workspace billing identity changed")
+	}
+
+	if !ShouldGrantCapabilities(state) {
+		return fmt.Errorf("workspace subscription is inactive")
+	}
+	return p.writeHostedEntitlementLeaseState(current, state, current.PlanVersion, customer, subscription, price)
 }
