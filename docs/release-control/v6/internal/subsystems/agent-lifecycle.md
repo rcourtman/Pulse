@@ -2596,6 +2596,23 @@ resolved image proves either the expected local content ID or the expected
 registry `RepoDigest`. A tag that resolves to neither digest fails before the
 rename boundary; comparing only a registry digest to a daemon-local image ID is
 not sufficient proof and must not reject an otherwise matching pull.
+The image pull is a step that can fail, not a call that can only error. The
+daemon reports most pull failures (rate limits, denied access, missing
+manifests) inside the progress stream, and a stream cut off by its timeout ends
+early, so the module reads the stream to its end and fails the update on either
+before it stops the container. Discarding the stream let a failed pull stop and
+recreate the container on its old image and report a verified update. A pull
+that leaves the tag on the image the container already runs refuses with
+`image_unchanged` instead of restarting the service for nothing. Each step that
+stops an update before any change names itself with a bounded refusal code
+(`target_inspection_unavailable`, `target_precondition_failed`,
+`image_pull_failed`, `image_unchanged`, `container_stop_failed`,
+`container_rename_failed`). A failed stop or rename call is not proof that
+nothing changed, because the daemon may have acted before the response was
+lost. The module reads the container back first: only a container still
+running under its original name counts as unchanged. Otherwise it restores the
+original name, starts the container again, and reports that as a rollback
+with whether it succeeded.
 
 Automatic Patrol action admission wired through `internal/api/` is API/action-
 lifecycle authority, not agent enrollment or command authority. Agent command
@@ -3497,7 +3514,12 @@ refusal-code vocabulary reports pre-mutation refusals with no reason code at
 all. The API layer records those under the `preflight_refused` legacy aggregate
 and aggregate telemetry counts them as `uncoded` rather than `other`, so the
 share of the fleet still awaiting an agent capable of typed refusals stays
-measurable and is never mistaken for a categorization failure. Dispatch still repeats all local
+measurable and is never mistaken for a categorization failure. Field telemetry
+(15 November 2026) showed current agents landing there too: a typed Docker
+update that passed preflight and then failed at inspect, pull, stop or rename
+carried no code. Those steps now carry the Docker update codes above, so
+`uncoded` again means an agent without the vocabulary or a pre-change path that
+still reports none. Dispatch still repeats all local
 preconditions after durable admission because preflight evidence is not a
 lease and target state may race after approval.
 

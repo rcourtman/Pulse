@@ -32,6 +32,7 @@ func (a *Agent) TypedContainerUpdate(ctx context.Context, runtime, containerID, 
 		RollbackAttempted: result.RollbackAttempted,
 		RolledBack:        result.RolledBack,
 		Error:             result.Error,
+		ReasonCode:        result.ReasonCode,
 	}, nil
 }
 

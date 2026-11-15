@@ -11,7 +11,9 @@ import (
 	"time"
 
 	containertypes "github.com/moby/moby/api/types/container"
+	"github.com/moby/moby/api/types/jsonstream"
 	"github.com/moby/moby/api/types/network"
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 )
 
@@ -32,6 +34,10 @@ type ContainerUpdateResult struct {
 	RollbackAttempted bool   `json:"rollbackAttempted,omitempty"`
 	RolledBack        bool   `json:"rolledBack,omitempty"`
 	Error             string `json:"error,omitempty"`
+	// ReasonCode names the step that stopped a failed update before it
+	// changed the container (agentexec.ActionRefusal* codes). It stays empty
+	// on success and once a change has started.
+	ReasonCode string `json:"reasonCode,omitempty"`
 }
 
 type updateContainerCommandPayload struct {
@@ -303,6 +309,7 @@ func (a *Agent) updateContainerWithProgress(ctx context.Context, containerID str
 	})
 	if err != nil {
 		result.Error = fmt.Sprintf("Failed to inspect container: %v", annotateDockerConnectionError(err))
+		result.ReasonCode = agentexec.ActionRefusalTargetInspectionUnavailable
 		a.logger.Error().Err(err).Str("containerId", containerID).Msg("Failed to inspect container for update")
 		return result
 	}
@@ -314,6 +321,7 @@ func (a *Agent) updateContainerWithProgress(ctx context.Context, containerID str
 	// Reject updates for backup containers (created during previous updates)
 	if strings.Contains(result.ContainerName, backupContainerMarker) {
 		result.Error = "Cannot update backup containers - these are temporary and should be cleaned up"
+		result.ReasonCode = agentexec.ActionRefusalTargetPreconditionFailed
 		a.logger.Warn().
 			Str("container", result.ContainerName).
 			Msg("Rejecting update request for backup container")
@@ -323,6 +331,7 @@ func (a *Agent) updateContainerWithProgress(ctx context.Context, containerID str
 	recreatePlan, err := buildContainerRecreatePlan(inspect)
 	if err != nil {
 		result.Error = fmt.Sprintf("Failed to prepare container recreation: %v", err)
+		result.ReasonCode = agentexec.ActionRefusalTargetPreconditionFailed
 		a.logger.Error().Err(err).Str("container", result.ContainerName).Msg("Invalid inspect response for container update")
 		return result
 	}
@@ -338,20 +347,24 @@ func (a *Agent) updateContainerWithProgress(ctx context.Context, containerID str
 	reportProgress(fmt.Sprintf("Pulling image %s...", imageName))
 	a.logger.Info().Str("image", imageName).Msg("Pulling latest image")
 
-	pullCtx, pullCancel := context.WithTimeout(ctx, dockerUpdateCallTimeout)
-	pullResp, err := a.docker.ImagePull(pullCtx, imageName, dockerImagePullOptions{})
-	if err != nil {
-		pullCancel()
+	if err := a.pullUpdateImage(ctx, imageName); err != nil {
 		result.Error = fmt.Sprintf("Failed to pull image %s: %v", imageName, annotateDockerConnectionError(err))
+		result.ReasonCode = agentexec.ActionRefusalImagePullFailed
 		a.logger.Error().Err(err).Str("image", imageName).Msg("Failed to pull latest image")
 		return result
 	}
-	// Consume the pull response to ensure the pull completes
-	_, _ = io.Copy(io.Discard, pullResp)
-	_ = pullResp.Close()
-	pullCancel()
 
 	a.logger.Info().Str("image", imageName).Msg("Successfully pulled latest image")
+
+	// A pull that leaves the tag on the image the container already runs has
+	// nothing to replace. Recreating anyway restarts the service and reports
+	// an update that never happened, so stop here before touching it.
+	if pulledImageID := a.pulledImageID(ctx, imageName); pulledImageID != "" && strings.EqualFold(pulledImageID, strings.TrimSpace(inspect.Image)) {
+		result.Error = fmt.Sprintf("The registry has no newer image for %s; the container already runs it", imageName)
+		result.ReasonCode = agentexec.ActionRefusalImageUnchanged
+		a.logger.Warn().Str("container", result.ContainerName).Str("image", imageName).Msg("Update skipped: pulled image matches the running image")
+		return result
+	}
 
 	// 3. Stop the current container (only if it was running).
 	if wasRunning {
@@ -364,6 +377,7 @@ func (a *Agent) updateContainerWithProgress(ctx context.Context, containerID str
 		if err != nil {
 			result.Error = fmt.Sprintf("Failed to stop container: %v", annotateDockerConnectionError(err))
 			a.logger.Error().Err(err).Str("container", result.ContainerName).Msg("Failed to stop container")
+			a.settleFailedStop(ctx, containerID, &result)
 			return result
 		}
 
@@ -379,15 +393,7 @@ func (a *Agent) updateContainerWithProgress(ctx context.Context, containerID str
 	if err != nil {
 		result.Error = fmt.Sprintf("Failed to rename container for backup: %v", annotateDockerConnectionError(err))
 		a.logger.Error().Err(err).Str("container", result.ContainerName).Msg("Failed to rename container for backup")
-		if wasRunning {
-			// Try to restart the original container.
-			if restartErr := a.docker.ContainerStart(ctx, containerID, dockerContainerStartOptions{}); restartErr != nil {
-				a.logger.Warn().
-					Err(restartErr).
-					Str("container", result.ContainerName).
-					Msg("Rollback step failed: restart original container after backup rename failure")
-			}
-		}
+		a.settleFailedRename(ctx, containerID, result.ContainerName, wasRunning, &result)
 		return result
 	}
 
@@ -532,6 +538,127 @@ func (a *Agent) updateContainerWithProgress(ctx context.Context, containerID str
 		Msg("Container update completed successfully")
 
 	return result
+}
+
+// settleFailedStop decides what a failed stop left behind. The call can fail
+// after the daemon already stopped the container (a timeout or a lost
+// response), so the failure counts as changing nothing only when the container
+// is seen still running. Otherwise the service may be down, and starting it
+// again is a rollback whose outcome the result reports.
+func (a *Agent) settleFailedStop(ctx context.Context, containerID string, result *ContainerUpdateResult) {
+	inspect, err := dockerCallWithRetry(ctx, dockerUpdateCallTimeout, func(callCtx context.Context) (containertypes.InspectResponse, error) {
+		return a.docker.ContainerInspect(callCtx, containerID)
+	})
+	if err == nil && inspect.State != nil && inspect.State.Running {
+		result.ReasonCode = agentexec.ActionRefusalContainerStopFailed
+		return
+	}
+	result.RollbackAttempted = true
+	if startErr := a.startOriginalContainer(ctx, containerID); startErr != nil {
+		a.logger.Warn().Err(startErr).Str("container", result.ContainerName).Msg("Rollback step failed: restart original container after stop failure")
+		return
+	}
+	result.RolledBack = true
+}
+
+// settleFailedRename decides what a failed backup rename left behind. The
+// rename itself may have happened before its response was lost, so the
+// container's current name is read back: a renamed container gets its
+// original name back, a stopped one is started again, and only a container
+// that was neither renamed nor stopped counts as unchanged.
+func (a *Agent) settleFailedRename(ctx context.Context, containerID, originalName string, wasRunning bool, result *ContainerUpdateResult) {
+	inspect, err := dockerCallWithRetry(ctx, dockerUpdateCallTimeout, func(callCtx context.Context) (containertypes.InspectResponse, error) {
+		return a.docker.ContainerInspect(callCtx, containerID)
+	})
+	renamed := err != nil || strings.TrimPrefix(inspect.Name, "/") != originalName
+	if !renamed && !wasRunning {
+		result.ReasonCode = agentexec.ActionRefusalContainerRenameFailed
+		return
+	}
+	result.RollbackAttempted = true
+	restored := true
+	if renamed {
+		_, renameErr := dockerCallWithRetry(ctx, dockerUpdateCallTimeout, func(callCtx context.Context) (struct{}, error) {
+			return struct{}{}, a.docker.ContainerRename(callCtx, containerID, originalName)
+		})
+		if renameErr != nil {
+			restored = false
+			a.logger.Warn().Err(renameErr).Str("container", originalName).Msg("Rollback step failed: restore original name after backup rename failure")
+		}
+	}
+	if wasRunning {
+		if startErr := a.startOriginalContainer(ctx, containerID); startErr != nil {
+			restored = false
+			a.logger.Warn().Err(startErr).Str("container", originalName).Msg("Rollback step failed: restart original container after backup rename failure")
+		}
+	}
+	result.RolledBack = restored
+}
+
+func (a *Agent) startOriginalContainer(ctx context.Context, containerID string) error {
+	_, err := dockerCallWithRetry(ctx, dockerUpdateCallTimeout, func(callCtx context.Context) (struct{}, error) {
+		return struct{}{}, a.docker.ContainerStart(callCtx, containerID, dockerContainerStartOptions{})
+	})
+	return err
+}
+
+// pullUpdateImage downloads the image and waits for the daemon to finish.
+// The daemon reports most pull failures (rate limits, denied access, missing
+// manifests) inside the progress stream rather than as the call's error, and
+// a stream cut off by the timeout ends early without one, so the stream is
+// read to its end and both are treated as a failed pull.
+func (a *Agent) pullUpdateImage(ctx context.Context, imageName string) error {
+	pullCtx, cancel := context.WithTimeout(ctx, dockerImagePullTimeout)
+	defer cancel()
+	body, err := a.docker.ImagePull(pullCtx, imageName, dockerImagePullOptions{})
+	if err != nil {
+		return err
+	}
+	defer body.Close()
+	decoder := json.NewDecoder(body)
+	for {
+		// errorDetail is the structured form; the plain error string is the
+		// older field some daemons and API-compatible runtimes send alone.
+		var message struct {
+			ErrorDetail *jsonstream.Error `json:"errorDetail,omitempty"`
+			Error       string            `json:"error,omitempty"`
+		}
+		if err := decoder.Decode(&message); err != nil {
+			if errors.Is(err, io.EOF) {
+				// A deadline can close the stream between messages, which
+				// reads as a clean end.
+				return pullCtx.Err()
+			}
+			if ctxErr := pullCtx.Err(); ctxErr != nil {
+				return ctxErr
+			}
+			return fmt.Errorf("read pull progress: %w", err)
+		}
+		if message.ErrorDetail != nil || strings.TrimSpace(message.Error) != "" {
+			text := strings.TrimSpace(message.Error)
+			if message.ErrorDetail != nil && strings.TrimSpace(message.ErrorDetail.Message) != "" {
+				text = strings.TrimSpace(message.ErrorDetail.Message)
+			}
+			if text == "" {
+				text = "the daemon reported a pull failure"
+			}
+			return errors.New(text)
+		}
+	}
+}
+
+// pulledImageID resolves the image the tag points at after a pull. It returns
+// "" when the inspect fails, which leaves the update to proceed as before.
+func (a *Agent) pulledImageID(ctx context.Context, imageName string) string {
+	pulled, err := dockerCallWithRetry(ctx, dockerUpdateCallTimeout, func(callCtx context.Context) (string, error) {
+		inspect, _, err := a.docker.ImageInspectWithRaw(callCtx, imageName)
+		return inspect.ID, err
+	})
+	if err != nil {
+		a.logger.Warn().Err(err).Str("image", imageName).Msg("Could not inspect the pulled image; continuing the update")
+		return ""
+	}
+	return strings.TrimSpace(pulled)
 }
 
 const (

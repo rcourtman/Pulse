@@ -1943,7 +1943,7 @@ func (b *lateBoundDockerUpdater) TypedContainerUpdate(ctx context.Context, runti
 	updater := b.updater
 	b.mu.RUnlock()
 	if updater == nil {
-		return agentexec.DockerContainerUpdateOutcome{}, fmt.Errorf("docker module is not running on this agent")
+		return agentexec.DockerContainerUpdateOutcome{}, agentexec.NewActionPreflightError(agentexec.ActionRefusalCapabilityUnavailable, fmt.Errorf("docker module is not running on this agent"))
 	}
 	return updater.TypedContainerUpdate(ctx, runtime, containerID, expectedImageDigest, progress)
 }

@@ -289,10 +289,12 @@ func pulseIntelligenceApprovedActionRefusalCategory(reason string) string {
 		return "policy"
 	case "action_dry_run_only", "action_execution_unavailable", "agent_capability_unavailable":
 		return "capability"
-	case "target_state_changed", "target_precondition_failed", "package_inventory_changed", "cleanup_inventory_changed":
+	case "target_state_changed", "target_precondition_failed", "package_inventory_changed", "cleanup_inventory_changed",
+		"image_unchanged":
 		return "target_changed"
 	case "target_inspection_unavailable", "package_manager_busy", "package_index_refresh_failed",
-		"package_preflight_failed", "package_manager_unhealthy", "cleanup_preflight_failed":
+		"package_preflight_failed", "package_manager_unhealthy", "cleanup_preflight_failed",
+		"image_pull_failed", "container_stop_failed", "container_rename_failed":
 		return "prerequisite"
 	case "action_contract_invalid":
 		return "contract"

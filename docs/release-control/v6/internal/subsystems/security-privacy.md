@@ -2645,6 +2645,15 @@ database grew past it. `TestSQLiteLoggerUsesSharedPageCacheBound` and
 
 ## Current State
 
+### Docker update step codes add no new data to the agent boundary
+
+A typed Docker update that stops before changing the container now reports
+which step stopped it with a bounded machine code, and the pulse-agent bridge
+reports a missing Docker module as the existing `agent_capability_unavailable`
+refusal. The codes are fixed shapes validated by `IsActionRefusalReasonCode`;
+registry and daemon error text stays in the bounded result error the server
+already receives, and telemetry exports only the existing category counts.
+
 ### Token revocation preserves its saved inventory position
 
 Closing the existing revoke confirmation does not make its trigger a durable

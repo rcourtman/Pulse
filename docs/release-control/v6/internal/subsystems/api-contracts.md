@@ -13028,6 +13028,11 @@ as `other`. `other` means a typed code this server does not recognise, so
 collapsing the two made a partition starved by agent rollout read exactly like
 a partition that is wrong. The `uncoded` counter is a count only; the refusal's
 error text, command, target, and action payload stay on the install.
+The Docker update step codes (`image_pull_failed`, `container_stop_failed`,
+`container_rename_failed`) count as `prerequisite` and `image_unchanged` as
+`target_changed`. They fill existing counters, so the outbound schema and its
+field set do not change; before them a current agent's failed pull counted as
+`uncoded`, which read as agent rollout lag.
 
 Schema v10 adds `pulse_intelligence_patrol_blocked_cause`: the fixed machine
 cause code (for example `provider_not_configured`) exported only while an

@@ -5009,6 +5009,13 @@ vdev layout is reported` in
 
 ## Current State
 
+### Docker update pull truth opens no storage or recovery path
+
+The telemetry change under `internal/api/` maps the new Docker update step
+codes into existing refusal categories. It reads no storage or backup data and
+adds no recovery action; container rollback after a failed rename is the
+existing Docker update compensation path reporting what it already did.
+
 ### A guest start can run through the node's own Pulse agent
 
 `internal/api/proxmox_guest_action_executor.go` now sends that start only to
