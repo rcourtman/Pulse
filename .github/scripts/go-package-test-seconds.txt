@@ -1,44 +1,44 @@
-# Scheduling hints from complete successful Build and Test backend receipts.
-# Run 42494692291, main 5f33d3f024d49c7ff89d956876bff67d9ae4b21e,
-# 8 November 2026. Both backend-slices-rest-0/rest-1 receipts are complete;
-# all 171 ordinary package tasks returned exit 0 with none unobserved.
-# Whole-package hints are observed task wall times, including per-package Go
-# startup/compilation. They are one recent sample, not a workflow forecast.
-# The separate monitoring/installer slice boundaries and weights are unchanged.
-# The shared release queue still runs those two packages whole: retain their
-# 9 October whole-package hints, not the new partial-slice observations.
-# Checked-out go list alone defines coverage. Stale names cannot add or
-# remove packages; new packages use the mean measured sub-20s task cost.
+# Scheduling hints from two complete successful natural backend task receipts.
+# Build and Test runs 43680295403 (3447665579) and 43682114910 (c74be12bfd),
+# 15 November 2026. Both rest artifacts in each run account for every planned
+# task; all 174 ordinary packages returned exit 0 with none unobserved.
+# Hints are median task wall seconds, including Go startup/compilation. These
+# are scheduling observations, not proof of every ordinary test's completion.
+# Fixed-cost four-slot replay shortens the worst observed queue; real CI must
+# measure the result. One sampled run becomes slightly slower in that model.
+# Monitoring/installer slice boundaries and root weights are unchanged. The
+# release queue runs those packages whole: retain their 9 October whole-package
+# hints rather than substituting partial-slice timings.
+# Checked-out go list alone defines coverage; weights cannot add/remove tests.
+# New/small packages use the mean sub-20s median cost (minimum 0.01s each).
 # Preserve both required checks, four slots per shard and race/time limits.
-# Refresh only from complete passing receipts when imbalance returns.
-DEFAULT_WEIGHT 3.856
-github.com/rcourtman/pulse-go-rewrite/cmd/pulse-agent 331.820
-github.com/rcourtman/pulse-go-rewrite/internal/agentidentity 26.286
-github.com/rcourtman/pulse-go-rewrite/internal/agentupdate 62.129
-github.com/rcourtman/pulse-go-rewrite/internal/ai 30.327
-github.com/rcourtman/pulse-go-rewrite/internal/ai/chat 20.636
-github.com/rcourtman/pulse-go-rewrite/internal/alerts 317.915
-github.com/rcourtman/pulse-go-rewrite/internal/alerts/eventlog 35.598
-github.com/rcourtman/pulse-go-rewrite/internal/api/alerting 24.362
-github.com/rcourtman/pulse-go-rewrite/internal/api/configapi 132.817
-github.com/rcourtman/pulse-go-rewrite/internal/api/resourceapi 26.634
-github.com/rcourtman/pulse-go-rewrite/internal/config 237.658
-github.com/rcourtman/pulse-go-rewrite/internal/dockeragent 113.560
-github.com/rcourtman/pulse-go-rewrite/internal/hostagent 24.147
-github.com/rcourtman/pulse-go-rewrite/internal/mock 218.694
+DEFAULT_WEIGHT 3.526
+github.com/rcourtman/pulse-go-rewrite/cmd/pulse-agent 358.342
+github.com/rcourtman/pulse-go-rewrite/internal/agentidentity 30.157
+github.com/rcourtman/pulse-go-rewrite/internal/agentupdate 53.071
+github.com/rcourtman/pulse-go-rewrite/internal/ai 46.529
+github.com/rcourtman/pulse-go-rewrite/internal/ai/chat 24.852
+github.com/rcourtman/pulse-go-rewrite/internal/alerts 256.799
+github.com/rcourtman/pulse-go-rewrite/internal/alerts/eventlog 31.926
+github.com/rcourtman/pulse-go-rewrite/internal/api/configapi 145.162
+github.com/rcourtman/pulse-go-rewrite/internal/config 315.334
+github.com/rcourtman/pulse-go-rewrite/internal/dockeragent 100.976
+github.com/rcourtman/pulse-go-rewrite/internal/hostagent 25.958
+github.com/rcourtman/pulse-go-rewrite/internal/mock 133.060
 github.com/rcourtman/pulse-go-rewrite/internal/monitoring 314.522
-github.com/rcourtman/pulse-go-rewrite/internal/notifications 252.241
-github.com/rcourtman/pulse-go-rewrite/internal/recovery/store 29.312
-github.com/rcourtman/pulse-go-rewrite/internal/relay 71.685
-github.com/rcourtman/pulse-go-rewrite/internal/telemetry 62.131
-github.com/rcourtman/pulse-go-rewrite/internal/truenas 49.520
-github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources 140.177
-github.com/rcourtman/pulse-go-rewrite/internal/updates 32.894
-github.com/rcourtman/pulse-go-rewrite/internal/websocket 52.685
-github.com/rcourtman/pulse-go-rewrite/pkg/auth 31.408
-github.com/rcourtman/pulse-go-rewrite/pkg/db 61.101
-github.com/rcourtman/pulse-go-rewrite/pkg/metrics 543.039
-github.com/rcourtman/pulse-go-rewrite/pkg/proxmox 34.451
-github.com/rcourtman/pulse-go-rewrite/pkg/server 74.618
+github.com/rcourtman/pulse-go-rewrite/internal/notifications 274.090
+github.com/rcourtman/pulse-go-rewrite/internal/recovery/store 35.038
+github.com/rcourtman/pulse-go-rewrite/internal/relay 71.149
+github.com/rcourtman/pulse-go-rewrite/internal/telemetry 40.662
+github.com/rcourtman/pulse-go-rewrite/internal/truenas 51.357
+github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources 157.471
+github.com/rcourtman/pulse-go-rewrite/internal/updates 22.034
+github.com/rcourtman/pulse-go-rewrite/internal/websocket 55.764
+github.com/rcourtman/pulse-go-rewrite/pkg/auth 29.046
+github.com/rcourtman/pulse-go-rewrite/pkg/db 44.227
+github.com/rcourtman/pulse-go-rewrite/pkg/metrics 323.744
+github.com/rcourtman/pulse-go-rewrite/pkg/proxmox 35.189
+github.com/rcourtman/pulse-go-rewrite/pkg/pulsecli 24.785
+github.com/rcourtman/pulse-go-rewrite/pkg/server 44.826
 github.com/rcourtman/pulse-go-rewrite/scripts/installtests 360.228
-github.com/rcourtman/pulse-go-rewrite/tests/migration 106.159
+github.com/rcourtman/pulse-go-rewrite/tests/migration 48.920
