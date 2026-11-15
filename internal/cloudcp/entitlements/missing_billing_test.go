@@ -12,21 +12,29 @@ import (
 )
 
 func TestRefreshMissingBillingDoesNotRecreateAuthority(t *testing.T) {
-	for _, hasAccount := range []bool{false, true} {
-		name := "legacy_accountless"
-		if hasAccount {
-			name = "current_account"
-		}
-		t.Run(name, func(t *testing.T) {
+	for _, tc := range []struct {
+		name                   string
+		hasAccount             bool
+		customer, subscription string
+	}{
+		{name: "accountless_without_billing"},
+		{name: "accountless_customer_only", customer: "cus_missing"},
+		{name: "accountless_subscription_only", subscription: "sub_missing"},
+		{name: "accountless_blank_customer", customer: " \t", subscription: "sub_missing"},
+		{name: "accountless_blank_subscription", customer: "cus_missing", subscription: " \t"},
+		{name: "current_account", hasAccount: true},
+		{name: "current_account_stale_tenant_ids", hasAccount: true, customer: "cus_stale", subscription: "sub_stale"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
 			svc, _, reg := newTestService(t)
 			accountID := ""
-			if hasAccount {
+			if tc.hasAccount {
 				accountID = "a_MISSINGBILLING"
 				if err := reg.CreateAccount(&registry.Account{ID: accountID, Kind: registry.AccountKindIndividual, DisplayName: "Fixture"}); err != nil {
 					t.Fatal(err)
 				}
 			}
-			tenant := &registry.Tenant{ID: "t-MISSINGBILLING", AccountID: accountID, State: registry.TenantStateActive, PlanVersion: "cloud_starter", Email: "owner@example.com"}
+			tenant := &registry.Tenant{ID: "t-MISSINGBILLING", AccountID: accountID, State: registry.TenantStateActive, PlanVersion: "cloud_starter", Email: "owner@example.com", StripeCustomerID: tc.customer, StripeSubscriptionID: tc.subscription}
 			if err := reg.Create(tenant); err != nil {
 				t.Fatal(err)
 			}
@@ -36,8 +44,8 @@ func TestRefreshMissingBillingDoesNotRecreateAuthority(t *testing.T) {
 				t.Fatal(err)
 			}
 			result, err := svc.RefreshEntitlement("etr_missing_billing_fixture", "t-missingbilling.cloud.example.com")
-			if err == nil || result != nil {
-				t.Fatal("missing billing authority minted a new paid lease")
+			if !errors.Is(err, ErrHostedEntitlementBillingUnavailable) || result != nil {
+				t.Fatalf("wanted retryable missing billing authority, result present=%v err=%v", result != nil, err)
 			}
 			stored, err := reg.GetHostedEntitlementByRefreshToken("etr_missing_billing_fixture")
 			if err != nil {

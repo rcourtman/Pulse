@@ -302,16 +302,33 @@ func (s *Service) resolveTenantLeaseContext(tenant *registry.Tenant, requestedSu
 		ctx.planVersion = pkglicensing.CanonicalizePlanVersion(tenant.PlanVersion)
 	}
 
-	if strings.TrimSpace(tenant.AccountID) != "" {
+	accountID := strings.TrimSpace(tenant.AccountID)
+	// Before consolidated accounts, the tenant itself held the Stripe billing
+	// identity. The account_id migration leaves those rows accountless, and
+	// subscription webhooks still maintain their IDs, plan and lifecycle state.
+	// Do not mistake that supported representation for missing billing, or use
+	// stale tenant IDs to replace a missing current account's authority.
+	legacyStripeBilling := accountID == "" && strings.TrimSpace(tenant.StripeCustomerID) != "" && strings.TrimSpace(tenant.StripeSubscriptionID) != ""
+	if accountID != "" {
 		stripeAccount, err := s.registry.GetStripeAccount(tenant.AccountID)
 		if err != nil {
 			return nil, fmt.Errorf("load stripe account for tenant %s: %w", tenant.ID, err)
 		}
 		ctx.stripeAccount = stripeAccount
-		if ctx.planVersion == "" && stripeAccount != nil && strings.TrimSpace(stripeAccount.PlanVersion) != "" {
+	} else if legacyStripeBilling && requestedSubState == "" {
+		// If this customer has since acquired a consolidated billing row, that
+		// current state wins over legacy tenant state, including all denials.
+		stripeAccount, err := s.registry.GetStripeAccountByCustomerID(tenant.StripeCustomerID)
+		if err != nil {
+			return nil, fmt.Errorf("load legacy stripe account for tenant %s: %w", tenant.ID, err)
+		}
+		ctx.stripeAccount = stripeAccount
+	}
+	if stripeAccount := ctx.stripeAccount; stripeAccount != nil {
+		if ctx.planVersion == "" && strings.TrimSpace(stripeAccount.PlanVersion) != "" {
 			ctx.planVersion = pkglicensing.CanonicalizePlanVersion(stripeAccount.PlanVersion)
 		}
-		if ctx.subscriptionState == "" && stripeAccount != nil {
+		if ctx.subscriptionState == "" {
 			// stripeAccount.SubscriptionState holds the normalized stored form
 			// (e.g. "trial", "past_due") written by
 			// normalizeStripeAccountSubscriptionState; use the stored-form
@@ -321,19 +338,22 @@ func (s *Service) resolveTenantLeaseContext(tenant *registry.Tenant, requestedSu
 				ctx.subscriptionState = pkglicensing.SubStateActive
 			}
 		}
-		if ctx.planVersion == "" {
-			account, err := s.registry.GetAccount(tenant.AccountID)
-			if err != nil {
-				return nil, fmt.Errorf("load account for tenant %s: %w", tenant.ID, err)
-			}
-			if account != nil && account.Kind == registry.AccountKindMSP {
-				ctx.planVersion = "msp_starter"
-			}
+	}
+	if ctx.planVersion == "" && accountID != "" {
+		account, err := s.registry.GetAccount(tenant.AccountID)
+		if err != nil {
+			return nil, fmt.Errorf("load account for tenant %s: %w", tenant.ID, err)
+		}
+		if account != nil && account.Kind == registry.AccountKindMSP {
+			ctx.planVersion = "msp_starter"
 		}
 	}
 
 	if ctx.planVersion == "" {
 		ctx.planVersion = defaultCloudPlanVersion
+	}
+	if ctx.subscriptionState == "" && legacyStripeBilling {
+		ctx.subscriptionState = tenantSubscriptionState(tenant)
 	}
 	if ctx.subscriptionState == "" {
 		// A missing billing row cannot renew a paid lease just because the
