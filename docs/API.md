@@ -2086,7 +2086,7 @@ the API for automation.
 - `POST /api/availability-targets/test` (admin, `settings:write`) - Test an unsaved target. If the body includes the `id` of a saved target, that target's stored HTTP credentials are reused, but only while the HTTP scheme, host and port are unchanged.
 - `POST /api/availability-targets/{id}/test` (admin, `settings:write`) - Test a saved target.
 - `GET /api/availability-targets/docker-suggestions` (admin, `settings:read`) - List published container ports that have no check. Ports Pulse cannot check carry a `skipReason`: `loopback_only`, `not_http` or `no_host_address`.
-- `POST /api/availability-targets/docker-suggestions` (admin, `settings:write`) - Add an HTTPS or HTTP check for each listed port that answers from this server. Optional body `{"hostId": "..."}` limits it to one Docker host. Returns `created`, `unanswered` (with the probe error), `skipped` and `remaining`. A port that does not answer over HTTP gets no check.
+- `POST /api/availability-targets/docker-suggestions` (admin, `settings:write`) - Add an HTTPS or HTTP check for each listed port that answers from this server. Optional body fields: `ports` (a list of `{"hostId", "containerName", "privatePort"}` from the listing) adds only those, and `hostId` limits it to one Docker host. Returns `created`, `unanswered` (with the probe error), `skipped` and `remaining`. A port that does not answer over HTTP gets no check.
 
 Target payload fields:
 

@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -22,6 +24,7 @@ const (
 	// maxDockerPortChecksPerRequest bounds one "add checks" request. The rest
 	// stay offered and a second request adds them.
 	maxDockerPortChecksPerRequest = 100
+	maxDockerPortSelection        = 500
 	dockerPortProbeConcurrency    = 6
 	dockerPortProbeTimeout        = 3 * time.Second
 )
@@ -81,14 +84,25 @@ func (h *AvailabilityHandlers) HandleApplyDockerPortSuggestions(w http.ResponseW
 	}
 	var request struct {
 		HostID string `json:"hostId"`
+		// Ports limits the request to the ports the operator was shown. Empty
+		// means every suggested port.
+		Ports []config.AvailabilityDockerPortSource `json:"ports"`
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, 4*1024)
+	r.Body = http.MaxBytesReader(w, r.Body, 256*1024)
 	defer r.Body.Close()
 	if body, err := io.ReadAll(r.Body); err != nil || (len(strings.TrimSpace(string(body))) > 0 && json.Unmarshal(body, &request) != nil) {
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "Invalid JSON body", nil)
 		return
 	}
 	hostID := strings.TrimSpace(request.HostID)
+	if len(request.Ports) > maxDockerPortSelection {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", fmt.Sprintf("At most %d ports can be selected in one request", maxDockerPortSelection), nil)
+		return
+	}
+	selected := make(map[string]struct{}, len(request.Ports))
+	for _, port := range request.Ports {
+		selected[port.Key()] = struct{}{}
+	}
 
 	persistence := h.persistenceForRequest(w, r.Context())
 	if persistence == nil {
@@ -110,6 +124,11 @@ func (h *AvailabilityHandlers) HandleApplyDockerPortSuggestions(w http.ResponseW
 	for _, candidate := range monitoring.DockerPortCheckCandidates(hosts, targets) {
 		if hostID != "" && candidate.HostID != hostID {
 			continue
+		}
+		if len(selected) > 0 {
+			if _, ok := selected[candidate.Source().Key()]; !ok {
+				continue
+			}
 		}
 		switch {
 		case candidate.SkipReason != "":
@@ -147,9 +166,24 @@ func (h *AvailabilityHandlers) HandleApplyDockerPortSuggestions(w http.ResponseW
 	}
 	wg.Wait()
 
+	// Probing took a while. Load the saved checks again so a check an
+	// operator added, edited or removed meanwhile is neither overwritten nor
+	// duplicated.
+	targets, err = persistence.LoadAvailabilityTargets()
+	if err != nil {
+		writeErrorResponse(w, http.StatusInternalServerError, "availability_load_failed", "Failed to load availability targets", map[string]string{"error": err.Error()})
+		return
+	}
+	stillUncovered := make(map[string]struct{})
+	for _, candidate := range monitoring.DockerPortCheckCandidates(hosts, targets) {
+		stillUncovered[dockerPortCandidateKey(candidate)] = struct{}{}
+	}
 	for i, candidate := range checkable {
 		if built[i] == nil {
 			response.Unanswered = append(response.Unanswered, dockerPortUnansweredResponse{DockerPortCheckCandidate: candidate, Error: failures[i]})
+			continue
+		}
+		if _, ok := stillUncovered[dockerPortCandidateKey(candidate)]; !ok {
 			continue
 		}
 		targets = append(targets, *built[i])
@@ -179,6 +213,13 @@ func detectDockerPortCheck(ctx context.Context, probe dockerPortProbeFunc, candi
 	attempt := func(protocol config.AvailabilityProbeProtocol) (config.AvailabilityTarget, availabilityprobe.ProbeResult, error) {
 		target := base
 		target.Protocol = protocol
+		if protocol != config.AvailabilityProbeTCP {
+			// An HTTP address is parsed as a URL host, where a bare IPv6
+			// literal is malformed.
+			if ip := net.ParseIP(target.Address); ip != nil && ip.To4() == nil {
+				target.Address = "[" + ip.String() + "]"
+			}
+		}
 		target = config.NormalizeAvailabilityTarget(target)
 		if err := target.Validate(); err != nil {
 			return target, availabilityprobe.ProbeResult{}, err
@@ -254,6 +295,10 @@ func (h *AvailabilityHandlers) dockerContainerResourceIDs(ctx context.Context) m
 		}
 	}
 	return ids
+}
+
+func dockerPortCandidateKey(candidate monitoring.DockerPortCheckCandidate) string {
+	return candidate.Source().Key() + "\x00" + strconv.Itoa(candidate.PublicPort)
 }
 
 func dockerContainerResourceKey(hostID, containerID string) string {

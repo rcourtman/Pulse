@@ -219,13 +219,21 @@ export class AvailabilityTargetsAPI {
   }
 
   /**
-   * Adds a check for every suggested port that answers from this server.
-   * Pass a Docker host ID to limit it to that host.
+   * Adds a check for each of the given ports that answers from this server.
+   * Send the ports the operator was shown, so nothing else is added.
    */
-  static async addDockerPortChecks(hostId?: string): Promise<DockerPortChecksResult> {
+  static async addDockerPortChecks(
+    ports: DockerPortCheckSuggestion[],
+  ): Promise<DockerPortChecksResult> {
     return apiFetchJSON(`${AVAILABILITY_TARGETS_PATH}/docker-suggestions`, {
       method: 'POST',
-      body: JSON.stringify(hostId ? { hostId } : {}),
+      body: JSON.stringify({
+        ports: ports.map((port) => ({
+          hostId: port.hostId,
+          containerName: port.containerName,
+          privatePort: port.privatePort,
+        })),
+      }),
     });
   }
 }

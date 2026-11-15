@@ -71,10 +71,11 @@ describe('docker port check wording', () => {
   });
 
   it('lists ports per host and says why a loopback port is left out', () => {
-    const other = port('proxy', 443, { hostId: 'host-2', hostName: 'nas' });
-    expect(portLinesByHost([suggestions[0], suggestions[1], other])).toEqual([
-      'docker-vm: web 8081, cache 6379',
-      'nas: proxy 443',
+    const other = port('proxy', 443, { hostId: 'host-2', hostName: 'nas', address: '10.0.0.9' });
+    const bound = port('dns', 5380, { address: '192.168.1.21' });
+    expect(portLinesByHost([suggestions[0], suggestions[1], bound, other])).toEqual([
+      'docker-vm at 192.168.1.20: web 8081, cache 6379, dns 5380 (192.168.1.21)',
+      'nas at 10.0.0.9: proxy 443',
     ]);
     expect(skippedPortLines(suggestions)).toEqual([
       'Not a web port, so not offered: kv 6380.',
@@ -121,7 +122,7 @@ describe('DockerPortChecksNotice', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Show ports' }));
     const list = screen.getByTestId('docker-port-checks-list');
-    expect(list).toHaveTextContent('docker-vm: web 8081, cache 6379');
+    expect(list).toHaveTextContent('docker-vm at 192.168.1.20: web 8081, cache 6379');
     expect(list).toHaveTextContent('Published on 127.0.0.1 only');
   });
 
@@ -140,6 +141,13 @@ describe('DockerPortChecksNotice', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Add checks' }));
 
     const outcome = await screen.findByTestId('docker-port-checks-result');
+    // Exactly the two ports on offer were sent, not the ones Pulse skips.
+    expect(addDockerPortChecksMock).toHaveBeenCalledTimes(1);
+    expect(
+      (addDockerPortChecksMock.mock.calls[0][0] as DockerPortCheckSuggestion[]).map(
+        (sent) => sent.containerName,
+      ),
+    ).toEqual(['web', 'cache']);
     expect(outcome).toHaveTextContent('Added 1 availability check.');
     expect(outcome).toHaveTextContent('1 port did not answer over HTTP');
     expect(screen.getByRole('link', { name: /View checks/ })).toBeInTheDocument();

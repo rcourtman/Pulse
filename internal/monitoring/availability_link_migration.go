@@ -66,7 +66,11 @@ func migrateAvailabilityLinkedResources(targets []config.AvailabilityTarget, res
 	// A check created from a published container port names its host and
 	// container. Docker keeps a container name unique per host, so one live
 	// namesake on that host is the container the check belongs to.
-	containerIDsByKey := make(map[string][]string)
+	type dockerContainerCandidate struct {
+		id    string
+		ports []unifiedresources.DockerPortMeta
+	}
+	containersByKey := make(map[string][]dockerContainerCandidate)
 
 	for _, resource := range resources {
 		currentID := unifiedresources.CanonicalResourceID(resource.ID)
@@ -93,7 +97,7 @@ func migrateAvailabilityLinkedResources(targets []config.AvailabilityTarget, res
 
 		if resource.Docker != nil && unifiedresources.CanonicalResourceType(resource.Type) == unifiedresources.ResourceTypeAppContainer {
 			if key := dockerContainerLinkKey(resource.Docker.HostSourceID, resource.Name); key != "" {
-				containerIDsByKey[key] = append(containerIDsByKey[key], currentID)
+				containersByKey[key] = append(containersByKey[key], dockerContainerCandidate{id: currentID, ports: resource.Docker.Ports})
 			}
 		}
 
@@ -122,10 +126,14 @@ func migrateAvailabilityLinkedResources(targets []config.AvailabilityTarget, res
 		newID := successors[linkedID]
 		if newID == "" && target.DockerPort != nil {
 			// The container was recreated under a new Docker ID. Follow the
-			// name on the same host; two namesakes fail closed.
+			// name on the same host, but only while the namesake still
+			// publishes the port this check connects to: recreated with a
+			// different port, the old endpoint may now belong to something
+			// else. Two namesakes fail closed.
 			key := dockerContainerLinkKey(target.DockerPort.HostID, target.DockerPort.ContainerName)
-			if candidates := containerIDsByKey[key]; key != "" && len(candidates) == 1 {
-				newID = candidates[0]
+			if candidates := containersByKey[key]; key != "" && len(candidates) == 1 &&
+				dockerPortStillPublished(candidates[0].ports, target.DockerPort.PrivatePort, target.Port) {
+				newID = candidates[0].id
 			}
 		}
 		if newID == "" && linkedID != "" {
@@ -158,4 +166,14 @@ func dockerContainerLinkKey(hostID, containerName string) string {
 		return ""
 	}
 	return hostID + "\x00" + containerName
+}
+
+func dockerPortStillPublished(ports []unifiedresources.DockerPortMeta, privatePort, publicPort int) bool {
+	for _, port := range ports {
+		protocol := strings.ToLower(strings.TrimSpace(port.Protocol))
+		if port.PrivatePort == privatePort && port.PublicPort == publicPort && (protocol == "" || protocol == "tcp") {
+			return true
+		}
+	}
+	return false
 }

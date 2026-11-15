@@ -31,18 +31,34 @@ export const portOfferMessage = (count: number): string =>
 const portLabel = (suggestion: DockerPortCheckSuggestion): string =>
   `${suggestion.containerName} ${suggestion.publicPort}`;
 
-/** One line per Docker host: "docker-vm: web 8081, cache 6379". */
+/**
+ * One line per Docker host, naming the address Pulse will connect to:
+ * "docker-vm at 192.168.1.20: web 8081, dns 5380 (192.168.1.21)". The address
+ * comes from the agent's report, so it is shown before anything is added.
+ */
 export const portLinesByHost = (suggestions: DockerPortCheckSuggestion[]): string[] => {
-  const byHost = new Map<string, { name: string; ports: string[] }>();
+  const byHost = new Map<string, { name: string; ports: DockerPortCheckSuggestion[] }>();
   for (const suggestion of suggestions) {
     const entry = byHost.get(suggestion.hostId) ?? {
       name: suggestion.hostName || suggestion.hostId,
       ports: [],
     };
-    entry.ports.push(portLabel(suggestion));
+    entry.ports.push(suggestion);
     byHost.set(suggestion.hostId, entry);
   }
-  return [...byHost.values()].map((entry) => `${entry.name}: ${entry.ports.join(', ')}`);
+  return [...byHost.values()].map((entry) => {
+    const counts = new Map<string, number>();
+    for (const port of entry.ports) {
+      if (port.address) counts.set(port.address, (counts.get(port.address) ?? 0) + 1);
+    }
+    const hostAddress = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+    const ports = entry.ports.map((port) =>
+      port.address && port.address !== hostAddress
+        ? `${portLabel(port)} (${port.address})`
+        : portLabel(port),
+    );
+    return `${entry.name}${hostAddress ? ` at ${hostAddress}` : ''}: ${ports.join(', ')}`;
+  });
 };
 
 /** Why some published ports are not offered, in the user's terms. */

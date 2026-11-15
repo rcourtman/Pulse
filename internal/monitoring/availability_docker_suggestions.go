@@ -61,13 +61,15 @@ func (c DockerPortCheckCandidate) Source() config.AvailabilityDockerPortSource {
 // containers that no availability check covers yet, in host, container and
 // port order. It reads only what the Docker agent already reports.
 func DockerPortCheckCandidates(hosts []models.DockerHost, targets []config.AvailabilityTarget) []DockerPortCheckCandidate {
-	coveredSources := make(map[string]struct{}, len(targets))
+	sourceEndpoints := make(map[string][]string, len(targets))
 	coveredEndpoints := make(map[string]struct{}, len(targets))
 	for _, target := range targets {
+		endpoint := availabilityTargetEndpoint(target)
 		if target.DockerPort != nil {
-			coveredSources[target.DockerPort.Key()] = struct{}{}
+			key := target.DockerPort.Key()
+			sourceEndpoints[key] = append(sourceEndpoints[key], endpoint)
 		}
-		if endpoint := availabilityTargetEndpoint(target); endpoint != "" {
+		if endpoint != "" {
 			coveredEndpoints[endpoint] = struct{}{}
 		}
 	}
@@ -101,21 +103,23 @@ func DockerPortCheckCandidates(hosts []models.DockerHost, targets []config.Avail
 					PrivatePort:   published.privatePort,
 					PublicPort:    published.publicPort,
 				}
-				if _, covered := coveredSources[candidate.Source().Key()]; covered {
-					continue
-				}
 				_, nonHTTP := dockerNonHTTPPrivatePorts[published.privatePort]
 				switch {
 				case nonHTTP:
 					candidate.SkipReason = DockerPortSkipNotHTTP
 				case published.loopbackOnly:
 					candidate.SkipReason = DockerPortSkipLoopbackOnly
+				case published.noAddress:
+					candidate.SkipReason = DockerPortSkipNoHostAddress
 				case published.bindAddress != "":
 					candidate.Address = published.bindAddress
 				case hostAddress != "":
 					candidate.Address = hostAddress
 				default:
 					candidate.SkipReason = DockerPortSkipNoHostAddress
+				}
+				if dockerPortSourceCovers(sourceEndpoints[candidate.Source().Key()], candidate) {
+					continue
 				}
 				if candidate.Address != "" {
 					if _, covered := coveredEndpoints[endpointKey(candidate.Address, candidate.PublicPort)]; covered {
@@ -143,11 +147,37 @@ func DockerPortCheckCandidates(hosts []models.DockerHost, targets []config.Avail
 	return candidates
 }
 
+// dockerPortSourceCovers reports whether a check made for this container
+// port still covers it. It does while it connects to the published port, and
+// also when an operator repointed it somewhere else, such as a reverse proxy
+// name. It does not when it still connects to this host on a port the
+// container no longer publishes: the container was recreated on another port
+// and the old endpoint may belong to something else now.
+func dockerPortSourceCovers(endpoints []string, candidate DockerPortCheckCandidate) bool {
+	if len(endpoints) == 0 {
+		return false
+	}
+	if candidate.Address == "" {
+		return true
+	}
+	for _, endpoint := range endpoints {
+		host, port, err := net.SplitHostPort(endpoint)
+		if err != nil {
+			return true
+		}
+		if host != endpointHost(candidate.Address) || port == strconv.Itoa(candidate.PublicPort) {
+			return true
+		}
+	}
+	return false
+}
+
 type publishedDockerPort struct {
 	privatePort  int
 	publicPort   int
 	bindAddress  string // a specific non-loopback address the port is bound to
 	loopbackOnly bool
+	noAddress    bool // bound only to an address Pulse will not check
 }
 
 // publishedDockerTCPPorts folds Docker's per-address bindings (it reports
@@ -179,6 +209,9 @@ func publishedDockerTCPPorts(ports []models.DockerContainerPort) []publishedDock
 			entry.everywhere = true
 		case ip.IsLoopback():
 			entry.loopback = true
+		case !usableCheckIP(ip):
+			// A link-local or multicast bind is not an address Pulse should
+			// be steered to; the port falls back to "no address".
 		default:
 			// Prefer an IPv4 binding: it is what most Pulse servers can reach.
 			if entry.specific == "" || (ip.To4() != nil && net.ParseIP(entry.specific).To4() == nil) {
@@ -195,8 +228,10 @@ func publishedDockerTCPPorts(ports []models.DockerContainerPort) []publishedDock
 		case entry.everywhere:
 		case entry.specific != "":
 			published.bindAddress = entry.specific
+		case entry.loopback:
+			published.loopbackOnly = true
 		default:
-			published.loopbackOnly = entry.loopback
+			published.noAddress = true
 		}
 		out = append(out, published)
 	}
@@ -213,7 +248,7 @@ func dockerHostCheckAddress(host models.DockerHost) string {
 		virtual := isVirtualHostInterface(iface.Name)
 		for _, raw := range iface.Addresses {
 			ip := parseInterfaceAddress(raw)
-			if ip == nil || ip.IsLoopback() || ip.IsUnspecified() || ip.IsLinkLocalUnicast() || ip.IsMulticast() {
+			if !usableCheckIP(ip) {
 				continue
 			}
 			rank := 1
@@ -245,6 +280,14 @@ func isPulseServerImage(image string) bool {
 		image = image[:colon]
 	}
 	return image == "rcourtman/pulse" || strings.HasSuffix(image, "/rcourtman/pulse")
+}
+
+// usableCheckIP reports whether Pulse may check a published port on ip. The
+// address comes from an agent's report, so loopback, link-local (which holds
+// cloud metadata services) and multicast are never used.
+func usableCheckIP(ip net.IP) bool {
+	return ip != nil && !ip.IsLoopback() && !ip.IsUnspecified() && !ip.IsLinkLocalUnicast() &&
+		!ip.IsLinkLocalMulticast() && !ip.IsMulticast()
 }
 
 func parseInterfaceAddress(raw string) net.IP {
@@ -305,12 +348,17 @@ func availabilityTargetEndpoint(target config.AvailabilityTarget) string {
 }
 
 func endpointKey(host string, port int) string {
-	host = strings.ToLower(strings.Trim(strings.TrimSpace(host), "[]"))
+	host = endpointHost(host)
 	if host == "" || port <= 0 {
 		return ""
 	}
+	return net.JoinHostPort(host, strconv.Itoa(port))
+}
+
+func endpointHost(host string) string {
+	host = strings.ToLower(strings.Trim(strings.TrimSpace(host), "[]"))
 	if ip := net.ParseIP(host); ip != nil {
 		host = ip.String()
 	}
-	return net.JoinHostPort(host, strconv.Itoa(port))
+	return host
 }

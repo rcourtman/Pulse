@@ -23,6 +23,9 @@ type dockerPortProbeScript struct {
 	mu      sync.Mutex
 	answers map[string]error
 	calls   []string
+	// duringProbes runs once, on the first probe, to stand in for an
+	// operator changing checks while the request is still probing.
+	duringProbes func()
 }
 
 func (s *dockerPortProbeScript) probe(_ context.Context, target config.AvailabilityTarget) (availabilityprobe.ProbeResult, error) {
@@ -30,7 +33,12 @@ func (s *dockerPortProbeScript) probe(_ context.Context, target config.Availabil
 	s.mu.Lock()
 	s.calls = append(s.calls, key)
 	err, known := s.answers[key]
+	hook := s.duringProbes
+	s.duringProbes = nil
 	s.mu.Unlock()
+	if hook != nil {
+		hook()
+	}
 	if !known {
 		err = errors.New("connection refused")
 	}
@@ -222,5 +230,109 @@ func TestApplyDockerPortSuggestionsLimitsToTheRequestedHost(t *testing.T) {
 	}
 	if len(script.calls) != 0 {
 		t.Fatalf("probed %v for a host that was not asked for", script.calls)
+	}
+}
+
+// The operator is shown a list and adds exactly that: a port they dismissed
+// earlier, or one published since, is not added behind their back.
+func TestApplyDockerPortSuggestionsAddsOnlyTheSelectedPorts(t *testing.T) {
+	script := &dockerPortProbeScript{answers: map[string]error{
+		"tcp 192.168.1.20:8081": nil, "http 192.168.1.20:8081": nil,
+		"tcp 192.168.1.20:8443": nil, "https 192.168.1.20:8443": nil,
+	}}
+	handler, persistence := dockerPortSuggestionHandlers(t, script)
+
+	body := `{"ports":[{"hostId":"host-1","containerName":"web","privatePort":80}]}`
+	rec := httptest.NewRecorder()
+	handler.HandleApplyDockerPortSuggestions(rec, httptest.NewRequest(http.MethodPost, "/api/availability-targets/docker-suggestions", strings.NewReader(body)))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	saved, _ := persistence.LoadAvailabilityTargets()
+	if len(saved) != 1 || saved[0].Name != "web:8081" {
+		t.Fatalf("saved = %+v, want only the selected web port", saved)
+	}
+	for _, call := range script.calls {
+		if !strings.HasSuffix(call, ":8081") {
+			t.Fatalf("probed a port that was not selected: %q", call)
+		}
+	}
+}
+
+// Probing takes seconds. A check the operator adds or removes meanwhile must
+// survive the save, and a port they covered by hand must not get a second check.
+func TestApplyDockerPortSuggestionsKeepsChangesMadeWhileProbing(t *testing.T) {
+	script := &dockerPortProbeScript{answers: map[string]error{
+		"tcp 192.168.1.20:8081": nil, "http 192.168.1.20:8081": nil,
+		"tcp 192.168.1.20:8443": nil, "https 192.168.1.20:8443": nil,
+	}}
+	handler, persistence := dockerPortSuggestionHandlers(t, script)
+	existing := config.NormalizeAvailabilityTarget(config.AvailabilityTarget{ID: "doomed", Name: "old router", Protocol: config.AvailabilityProbeICMP, Address: "192.168.1.1", TargetKind: config.AvailabilityTargetDevice})
+	if err := persistence.SaveAvailabilityTargets([]config.AvailabilityTarget{existing}); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	script.duringProbes = func() {
+		// Meanwhile: the operator deletes "doomed" and adds their own check
+		// for the web port.
+		byHand := config.NormalizeAvailabilityTarget(config.AvailabilityTarget{ID: "by-hand", Name: "my web check", Protocol: config.AvailabilityProbeTCP, Address: "192.168.1.20", Port: 8081, TargetKind: config.AvailabilityTargetService})
+		if err := persistence.SaveAvailabilityTargets([]config.AvailabilityTarget{byHand}); err != nil {
+			t.Errorf("concurrent save: %v", err)
+		}
+	}
+
+	rec := httptest.NewRecorder()
+	handler.HandleApplyDockerPortSuggestions(rec, httptest.NewRequest(http.MethodPost, "/api/availability-targets/docker-suggestions", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	saved, _ := persistence.LoadAvailabilityTargets()
+	names := map[string]bool{}
+	for _, target := range saved {
+		names[target.Name] = true
+	}
+	if names["old router"] {
+		t.Fatalf("a check deleted while probing came back: %+v", names)
+	}
+	if !names["my web check"] || names["web:8081"] {
+		t.Fatalf("saved = %v, want the operator's web check kept and no second one", names)
+	}
+	if !names["secure:8443"] {
+		t.Fatalf("saved = %v, want the untouched port still added", names)
+	}
+}
+
+// A host reachable only over IPv6 gets a working HTTP check: a bare IPv6
+// literal is not a valid URL host.
+func TestApplyDockerPortSuggestionsBracketsAnIPv6Address(t *testing.T) {
+	script := &dockerPortProbeScript{answers: map[string]error{
+		"tcp 2001:db8::20:8081":    nil,
+		"http [2001:db8::20]:8081": nil,
+	}}
+	handler, persistence := dockerPortSuggestionHandlers(t, script)
+	handler.dockerHosts = func(context.Context) []models.DockerHost {
+		return []models.DockerHost{{
+			ID: "host-6", Hostname: "v6-only",
+			NetworkInterfaces: []models.HostNetworkInterface{{Name: "eth0", Addresses: []string{"2001:db8::20/64"}}},
+			Containers: []models.DockerContainer{
+				{ID: "c-web", Name: "web", State: "running", Ports: []models.DockerContainerPort{{PrivatePort: 80, PublicPort: 8081, Protocol: "tcp", IP: "::"}}},
+			},
+		}}
+	}
+
+	rec := httptest.NewRecorder()
+	handler.HandleApplyDockerPortSuggestions(rec, httptest.NewRequest(http.MethodPost, "/api/availability-targets/docker-suggestions", nil))
+	saved, _ := persistence.LoadAvailabilityTargets()
+	if len(saved) != 1 || saved[0].Protocol != config.AvailabilityProbeHTTP {
+		t.Fatalf("saved = %+v, body=%s", saved, rec.Body.String())
+	}
+	u, err := saved[0].HTTPURL()
+	if err != nil || u.String() != "http://[2001:db8::20]:8081" {
+		t.Fatalf("saved URL = %v (%v), want http://[2001:db8::20]:8081", u, err)
+	}
+	// It still counts as covered, so it is not offered twice.
+	rec = httptest.NewRecorder()
+	handler.HandleDockerPortSuggestions(rec, httptest.NewRequest(http.MethodGet, "/api/availability-targets/docker-suggestions", nil))
+	if !strings.Contains(rec.Body.String(), `"suggestions":[]`) {
+		t.Fatalf("an IPv6 port with a check was offered again: %s", rec.Body.String())
 	}
 }

@@ -71,11 +71,13 @@ export function DockerPortChecksNotice(props: DockerPortChecksNoticeProps) {
   };
 
   const addChecks = async () => {
-    if (adding()) return;
+    const ports = offered();
+    if (adding() || ports.length === 0) return;
     setAdding(true);
     setFailure('');
     try {
-      const outcome = await AvailabilityTargetsAPI.addDockerPortChecks();
+      // Only the ports on offer: one dismissed earlier is not added now.
+      const outcome = await AvailabilityTargetsAPI.addDockerPortChecks(ports);
       // A port that did not answer stays unchecked. Do not offer it again in
       // this browser; a port published later still gets its own offer.
       rememberDismissed(outcome.unanswered);

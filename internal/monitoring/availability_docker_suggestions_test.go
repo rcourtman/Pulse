@@ -96,6 +96,21 @@ func TestDockerPortCheckCandidatesLeaveOutPortsAlreadyChecked(t *testing.T) {
 	}
 }
 
+// The bind address comes from an agent's report. A link-local one, where
+// cloud metadata services live, is never turned into a check target.
+func TestDockerPortCheckCandidatesRefuseALinkLocalBind(t *testing.T) {
+	host := dockerSuggestionHost()
+	host.Containers = []models.DockerContainer{
+		{ID: "c-meta", Name: "meta", State: "running", Ports: []models.DockerContainerPort{
+			{PrivatePort: 80, PublicPort: 80, Protocol: "tcp", IP: "169.254.169.254"},
+		}},
+	}
+	candidates := DockerPortCheckCandidates([]models.DockerHost{host}, nil)
+	if len(candidates) != 1 || candidates[0].Address != "" || candidates[0].SkipReason != DockerPortSkipNoHostAddress {
+		t.Fatalf("candidates = %+v, want the link-local bind skipped with no address", candidates)
+	}
+}
+
 func TestDockerPortCheckCandidatesNeedAHostAddress(t *testing.T) {
 	host := dockerSuggestionHost()
 	host.NetworkInterfaces = []models.HostNetworkInterface{{Name: "lo", Addresses: []string{"127.0.0.1/8"}}}
@@ -161,12 +176,18 @@ func TestDockerHostCheckAddressPrefersARealInterface(t *testing.T) {
 	}
 }
 
-func dockerContainerLinkResource(hostID, containerID, name string) unifiedresources.Resource {
+// dockerContainerLinkResource is a container that publishes its port 80 on
+// publicPort.
+func dockerContainerLinkResource(hostID, containerID, name string, publicPort int) unifiedresources.Resource {
 	return unifiedresources.Resource{
-		ID:     unifiedresources.SourceSpecificID(unifiedresources.ResourceTypeAppContainer, unifiedresources.SourceDocker, hostID+"/container/"+containerID),
-		Type:   unifiedresources.ResourceTypeAppContainer,
-		Name:   name,
-		Docker: &unifiedresources.DockerData{HostSourceID: hostID, ContainerID: containerID},
+		ID:   unifiedresources.SourceSpecificID(unifiedresources.ResourceTypeAppContainer, unifiedresources.SourceDocker, hostID+"/container/"+containerID),
+		Type: unifiedresources.ResourceTypeAppContainer,
+		Name: name,
+		Docker: &unifiedresources.DockerData{
+			HostSourceID: hostID,
+			ContainerID:  containerID,
+			Ports:        []unifiedresources.DockerPortMeta{{PrivatePort: 80, PublicPort: publicPort, Protocol: "tcp", IP: "0.0.0.0"}},
+		},
 	}
 }
 
@@ -174,24 +195,28 @@ func dockerContainerLinkResource(hostID, containerID, name string) unifiedresour
 // new resource ID. A check created from its published port follows the
 // container's name on the same host and keeps its history.
 func TestMigrateAvailabilityLinkedResourcesFollowsARecreatedContainer(t *testing.T) {
-	oldWeb := dockerContainerLinkResource("host-1", "old-id", "web")
-	newWeb := dockerContainerLinkResource("host-1", "new-id", "web")
-	otherHostWeb := dockerContainerLinkResource("host-2", "x-id", "web")
-	twinA := dockerContainerLinkResource("host-1", "twin-a", "twin")
-	twinB := dockerContainerLinkResource("host-1", "twin-b", "twin")
+	oldWeb := dockerContainerLinkResource("host-1", "old-id", "web", 8081)
+	newWeb := dockerContainerLinkResource("host-1", "new-id", "web", 8081)
+	otherHostWeb := dockerContainerLinkResource("host-2", "x-id", "web", 8081)
+	twinA := dockerContainerLinkResource("host-1", "twin-a", "twin", 8081)
+	twinB := dockerContainerLinkResource("host-1", "twin-b", "twin", 8081)
+	// Recreated with a different published port: 8081 may now belong to
+	// another service, so the old check must not report against it.
+	moved := dockerContainerLinkResource("host-1", "moved-id", "moved", 9090)
 	source := func(host, name string) *config.AvailabilityDockerPortSource {
 		return &config.AvailabilityDockerPortSource{HostID: host, ContainerName: name, PrivatePort: 80}
 	}
 
 	targets := []config.AvailabilityTarget{
-		{ID: "recreated", LinkedResourceID: oldWeb.ID, DockerPort: source("host-1", "/web")},
-		{ID: "never-linked", DockerPort: source("host-1", "web")},
-		{ID: "still-live", LinkedResourceID: otherHostWeb.ID, DockerPort: source("host-2", "web")},
-		{ID: "two-namesakes", LinkedResourceID: "gone", DockerPort: source("host-1", "twin")},
-		{ID: "container-gone", LinkedResourceID: "gone", DockerPort: source("host-1", "removed")},
-		{ID: "typed-by-hand", LinkedResourceID: oldWeb.ID},
+		{ID: "recreated", Port: 8081, LinkedResourceID: oldWeb.ID, DockerPort: source("host-1", "/web")},
+		{ID: "never-linked", Port: 8081, DockerPort: source("host-1", "web")},
+		{ID: "still-live", Port: 8081, LinkedResourceID: otherHostWeb.ID, DockerPort: source("host-2", "web")},
+		{ID: "two-namesakes", Port: 8081, LinkedResourceID: "gone", DockerPort: source("host-1", "twin")},
+		{ID: "container-gone", Port: 8081, LinkedResourceID: "gone", DockerPort: source("host-1", "removed")},
+		{ID: "port-moved", Port: 8081, LinkedResourceID: "gone", DockerPort: source("host-1", "moved")},
+		{ID: "typed-by-hand", Port: 8081, LinkedResourceID: oldWeb.ID},
 	}
-	migrated, changed := migrateAvailabilityLinkedResources(targets, []unifiedresources.Resource{newWeb, otherHostWeb, twinA, twinB})
+	migrated, changed := migrateAvailabilityLinkedResources(targets, []unifiedresources.Resource{newWeb, otherHostWeb, twinA, twinB, moved})
 	if !changed {
 		t.Fatal("expected the recreated container's check to be re-attached")
 	}
@@ -201,6 +226,7 @@ func TestMigrateAvailabilityLinkedResourcesFollowsARecreatedContainer(t *testing
 		"still-live":     otherHostWeb.ID,
 		"two-namesakes":  "gone",
 		"container-gone": "gone",
+		"port-moved":     "gone",
 		// No source: an explicit link never follows a name.
 		"typed-by-hand": oldWeb.ID,
 	}
@@ -212,4 +238,20 @@ func TestMigrateAvailabilityLinkedResourcesFollowsARecreatedContainer(t *testing
 	if targets[0].LinkedResourceID != oldWeb.ID {
 		t.Fatal("migration mutated its input")
 	}
+}
+
+// A container recreated with a different published port is offered a new
+// check: the old one still connects to the old port.
+func TestDockerPortCheckCandidatesOfferARepublishedPortAgain(t *testing.T) {
+	host := dockerSuggestionHost()
+	stale := []config.AvailabilityTarget{
+		{ID: "old", Protocol: config.AvailabilityProbeHTTP, Address: "192.168.1.20", Port: 8080,
+			DockerPort: &config.AvailabilityDockerPortSource{HostID: "host-1", ContainerName: "web", PrivatePort: 80}},
+	}
+	for _, candidate := range DockerPortCheckCandidates([]models.DockerHost{host}, stale) {
+		if candidate.ContainerName == "web" && candidate.PublicPort == 8081 && candidate.SkipReason == "" {
+			return
+		}
+	}
+	t.Fatal("web on its new port 8081 was not offered while the old check still points at 8080")
 }

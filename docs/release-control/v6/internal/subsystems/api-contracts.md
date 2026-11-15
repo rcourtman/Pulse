@@ -14102,7 +14102,10 @@ status code changes; `degraded` is a new value of the existing `state` field.
 `settings:read`) lists published container ports that have no availability
 check. `POST` on the same path (org admin, `settings:write`) adds an HTTPS or
 HTTP check for each one that answers from this server, optionally limited by
-`hostId` and capped at 100 per request, with `remaining` counting the rest.
+`hostId` or to the `ports` the operator was shown, and capped at 100 per
+request, with `remaining` counting the rest. Saved checks are loaded again
+after probing, so a check changed meanwhile is neither overwritten nor
+duplicated.
 The response separates `created`, `unanswered` (with the probe error) and
 `skipped`. Each destination passes the tenant outbound policy before it is
 probed. Mock mode returns no suggestions and refuses the write.
