@@ -1957,6 +1957,7 @@ func (h *AISettingsHandler) configureInvestigationOrchestrator(orgID string, svc
 		log.Warn().Str("orgID", orgID).Msg("Findings store not available for orchestrator")
 		return
 	}
+	chatAdapter.findings = findingsStore
 	// A closed run's action is reconciled from the action audit, and the run
 	// finalized, under the investigation's lock (closePatrolInvestigationRun).
 	closeRun := func(findingID string, session *aicontracts.InvestigationSession) {
@@ -2029,6 +2030,22 @@ type orchestratorChatAdapter struct {
 	// validation, from the tenant-bound action lifecycle service.
 	catalog tools.ProposalCatalog
 	planner tools.ProposalPlanner
+	// findings is the tenant's own findings store. The run attaches the
+	// investigated finding's resource from it, so the resource never comes
+	// from the model or the orchestrator's payload.
+	findings *ai.FindingsStore
+}
+
+// findingResourceID returns the resource of a finding in the tenant's store,
+// or "" when it has none.
+func (a *orchestratorChatAdapter) findingResourceID(findingID string) string {
+	if a == nil || a.findings == nil {
+		return ""
+	}
+	if finding := a.findings.Get(strings.TrimSpace(findingID)); finding != nil {
+		return strings.TrimSpace(finding.ResourceID)
+	}
+	return ""
 }
 
 func (a *orchestratorChatAdapter) CreateSession(ctx context.Context) (*aicontracts.OrchestratorChatSession, error) {
@@ -2054,6 +2071,7 @@ func (a *orchestratorChatAdapter) ExecuteInvestigationStream(ctx context.Context
 		MaxEvidenceCalls: req.MaxEvidenceCalls,
 		ExecutionID:      req.ExecutionID,
 		ResourceType:     req.ResourceType,
+		ResourceID:       a.findingResourceID(req.FindingID),
 		Identity: tools.ProposalIdentity{
 			ProposalID:      req.ProposalID,
 			FindingID:       req.FindingID,

@@ -31,6 +31,11 @@ type InvestigationRunRequest struct {
 	// ResourceType is trusted finding metadata used only for least-manifest
 	// projection. Unknown types retain the normal governed profile.
 	ResourceType string
+	// ResourceID is the resource of the finding under investigation, read by
+	// core from its own findings store, never from the model or a transport
+	// payload. The run attaches it as current_resource, so a read that names
+	// no host reads there.
+	ResourceID string
 	// Identity is the trusted correlation identity injected into any
 	// captured proposal.
 	Identity tools.ProposalIdentity
@@ -143,6 +148,10 @@ func (s *Service) ExecuteInvestigationStream(ctx context.Context, req Investigat
 		return nil, fmt.Errorf("failed to ensure investigation session: %w", err)
 	}
 	executor.SetResolvedContext(sessions.GetResolvedContext(session.ID))
+	if resourceID := strings.TrimSpace(req.ResourceID); resourceID != "" && !executor.AttachResource(ctx, resourceID, req.ResourceType) {
+		log.Debug().Str("resource_id", resourceID).Str("resource_type", req.ResourceType).
+			Msg("Investigation: the finding's resource did not resolve; reads must name their host")
+	}
 	loop.SetKnowledgeAccumulator(sessions.NewKnowledgeAccumulatorForRun(session.ID))
 
 	userMsg := Message{

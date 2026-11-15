@@ -122,9 +122,7 @@ func (e *PulseToolExecutor) executeReadExec(ctx context.Context, args map[string
 	if command == "" {
 		return NewErrorResult(fmt.Errorf("command is required for exec action")), nil
 	}
-	if strings.TrimSpace(targetHost) == "" && IsCurrentResourceReference(resourceRef) {
-		targetHost = resourceRef
-	}
+	targetHost = e.readTargetHost(targetHost, resourceRef)
 	if targetHost == "" {
 		return NewErrorResult(fmt.Errorf("target_host is required")), nil
 	}
@@ -357,9 +355,7 @@ func (e *PulseToolExecutor) executeReadFile(ctx context.Context, args map[string
 	if path == "" {
 		return NewErrorResult(fmt.Errorf("path is required for file action")), nil
 	}
-	if strings.TrimSpace(targetHost) == "" && IsCurrentResourceReference(resourceRef) {
-		targetHost = resourceRef
-	}
+	targetHost = e.readTargetHost(targetHost, resourceRef)
 	if targetHost == "" {
 		return NewErrorResult(fmt.Errorf("target_host is required")), nil
 	}
@@ -392,9 +388,7 @@ func (e *PulseToolExecutor) executeReadFind(ctx context.Context, args map[string
 	if pattern == "" && path == "" {
 		return NewErrorResult(fmt.Errorf("pattern or path is required for find action")), nil
 	}
-	if strings.TrimSpace(targetHost) == "" && IsCurrentResourceReference(resourceRef) {
-		targetHost = resourceRef
-	}
+	targetHost = e.readTargetHost(targetHost, resourceRef)
 	if targetHost == "" {
 		return NewErrorResult(fmt.Errorf("target_host is required")), nil
 	}
@@ -443,9 +437,7 @@ func (e *PulseToolExecutor) executeReadTail(ctx context.Context, args map[string
 	if path == "" {
 		return NewErrorResult(fmt.Errorf("path is required for tail action")), nil
 	}
-	if strings.TrimSpace(targetHost) == "" && IsCurrentResourceReference(resourceRef) {
-		targetHost = resourceRef
-	}
+	targetHost = e.readTargetHost(targetHost, resourceRef)
 	if targetHost == "" {
 		return NewErrorResult(fmt.Errorf("target_host is required")), nil
 	}

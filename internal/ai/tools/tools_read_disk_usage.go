@@ -55,9 +55,7 @@ func (e *PulseToolExecutor) executeReadDiskUsage(ctx context.Context, args map[s
 	if strings.ContainsAny(dir, "*?[") {
 		return NewErrorResult(fmt.Errorf("disk_usage takes one directory, not a pattern: name the directory and it sizes every folder below it")), nil
 	}
-	if strings.TrimSpace(targetHost) == "" && IsCurrentResourceReference(resourceRef) {
-		targetHost = resourceRef
-	}
+	targetHost = e.readTargetHost(targetHost, resourceRef)
 	if targetHost == "" {
 		return NewErrorResult(fmt.Errorf("target_host is required")), nil
 	}
