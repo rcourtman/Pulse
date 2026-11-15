@@ -15,8 +15,9 @@ import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
 import { InlineNotice } from '@/components/shared/InlineNotice';
 import TriangleAlert from 'lucide-solid/icons/triangle-alert';
 import type { Role } from '@/types/rbac';
+import { PermissionPolicyDetails } from './PermissionPolicyDetails';
 
-// Keep the same complete grants in the desktop column and phone identity cell.
+// Keep the same complete saved rules in the desktop column and phone identity cell.
 const RolePermissions: Component<{ role: Role }> = (props) => (
   <Show
     when={props.role.permissions.length > 0}
@@ -29,7 +30,10 @@ const RolePermissions: Component<{ role: Role }> = (props) => (
       <For each={props.role.permissions}>
         {(permission) => (
           <li class="max-w-full rounded-md bg-surface-alt px-2 py-0.5 text-xs font-medium text-muted border border-border whitespace-normal [overflow-wrap:anywhere]">
-            {permission.action}:{permission.resource}
+            <span>
+              {permission.action}:{permission.resource}
+            </span>
+            <PermissionPolicyDetails permission={permission} />
           </li>
         )}
       </For>
@@ -148,6 +152,10 @@ export const RolesPanel: Component<RolesPanelProps> = (props) => {
             !state.unconfirmedChange()
           }
         >
+          <p class="px-3 py-3 text-xs text-muted sm:px-6">
+            Saved rules are not an access verdict. All conditions must match request attributes; a
+            missing attribute skips the rule, including a deny rule.
+          </p>
           <PulseDataGrid
             data={state.roles()}
             columns={[

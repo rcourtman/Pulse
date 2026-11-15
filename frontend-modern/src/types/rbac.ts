@@ -1,6 +1,8 @@
 export interface Permission {
   action: string;
   resource: string;
+  effect?: string;
+  conditions?: Record<string, string>;
 }
 
 export interface Role {

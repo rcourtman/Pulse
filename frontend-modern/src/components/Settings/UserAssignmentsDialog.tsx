@@ -179,7 +179,7 @@ export const UserAssignmentsDialog: Component<UserAssignmentsDialogProps> = (pro
                   Saved permissions
                 </h4>
                 <Show when={props.loadingPermissions}>
-                  <LoadingSpinner size="md" tone="info" label="Loading effective permissions" />
+                  <LoadingSpinner size="md" tone="info" label="Loading saved permissions" />
                 </Show>
               </div>
               <div
@@ -236,7 +236,9 @@ export const UserAssignmentsDialog: Component<UserAssignmentsDialogProps> = (pro
                   )}
                 </Show>
                 <p class="mt-4 text-xs text-muted">
-                  This read checks saved roles only. Unsaved role selections are not included.
+                  This summary can omit duplicate and inherited rules. Review individual rules in
+                  Roles. Unsaved role selections are not included. This is not an access check for a
+                  specific resource.
                 </p>
                 <Show when={unlistedRoleIds().length > 0}>
                   <div class="mt-3 space-y-1 text-xs text-muted">

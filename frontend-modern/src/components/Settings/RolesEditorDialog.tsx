@@ -1,8 +1,9 @@
-import { Component, Index, Show } from 'solid-js';
+import { Component, Index, Show, createUniqueId } from 'solid-js';
 import { InlineNotice } from '@/components/shared/InlineNotice';
 import { Dialog } from '@/components/shared/Dialog';
 import { FormSelect } from '@/components/shared/FormSelect';
 import type { Permission, Role } from '@/types/rbac';
+import { PermissionPolicyDetails } from './PermissionPolicyDetails';
 import { RBAC_PERMISSION_ACTIONS, RBAC_PERMISSION_RESOURCES } from '@/utils/rbacPermissions';
 import { getRoleIdentityLabel } from '@/utils/rbacPresentation';
 import Plus from 'lucide-solid/icons/plus';
@@ -25,7 +26,7 @@ interface RolesEditorDialogProps {
   onFormNameInput: (value: string) => void;
   onRemovePermission: (index: number) => void;
   onSave: () => void;
-  onUpdatePermission: (index: number, field: keyof Permission, value: string) => void;
+  onUpdatePermission: (index: number, field: 'action' | 'resource', value: string) => void;
 }
 
 // Catalog text is its exact value; share the static option renderer across rows.
@@ -131,67 +132,84 @@ export const RolesEditorDialog: Component<RolesEditorDialogProps> = (props) => (
                 </button>
               </div>
 
+              <p class="text-xs text-muted">
+                Effects and conditions are kept when you change action or resource. All conditions
+                must match request attributes; a missing attribute skips the rule, including a deny
+                rule.
+              </p>
               <div class="space-y-2">
                 {/* Draft updates replace permission objects. Keep the indexed controls
                     mounted so changing a value does not discard keyboard focus. */}
                 <Index each={props.formPermissions}>
-                  {(permission, index) => (
-                    <div class="flex flex-col sm:flex-row sm:items-center gap-2">
-                      <FormSelect
-                        label={`Permission ${index + 1} action`}
-                        labelClass="sr-only"
-                        fieldBaseClass="contents"
-                        value={permission().action}
-                        onChange={(event) =>
-                          props.onUpdatePermission(index, 'action', event.currentTarget.value)
-                        }
-                        selectBaseClass="w-full sm:flex-1 rounded-md border border-border bg-surface px-2 py-1.5 text-sm text-base-content"
-                      >
-                        <Show
-                          when={
-                            !(RBAC_PERMISSION_ACTIONS as readonly string[]).includes(
-                              permission().action,
-                            )
-                          }
-                        >
-                          <option value={permission().action}>{permission().action}</option>
-                        </Show>
-                        {RBAC_PERMISSION_ACTIONS.map(renderCatalogOption)}
-                      </FormSelect>
-                      <span class="hidden sm:inline text-slate-400 text-sm">:</span>
-                      <FormSelect
-                        label={`Permission ${index + 1} resource`}
-                        labelClass="sr-only"
-                        fieldBaseClass="contents"
-                        value={permission().resource}
-                        onChange={(event) =>
-                          props.onUpdatePermission(index, 'resource', event.currentTarget.value)
-                        }
-                        selectBaseClass="w-full sm:flex-1 rounded-md border bg-surface px-2 py-1.5 text-sm text-base-content"
-                      >
-                        <Show
-                          when={
-                            !(RBAC_PERMISSION_RESOURCES as readonly string[]).includes(
-                              permission().resource,
-                            )
-                          }
-                        >
-                          <option value={permission().resource}>{permission().resource}</option>
-                        </Show>
-                        {RBAC_PERMISSION_RESOURCES.map(renderCatalogOption)}
-                      </FormSelect>
-                      <button
-                        type="button"
-                        onClick={() => props.onRemovePermission(index)}
-                        disabled={props.formPermissions.length <= 1}
-                        aria-label={`Remove permission ${index + 1}: ${permission().action}:${permission().resource}`}
-                        title="Remove permission"
-                        class="self-end sm:self-auto p-1.5 text-slate-400 hover:text-red-500 disabled:opacity-30"
-                      >
-                        <Trash2 class="w-4 h-4" />
-                      </button>
-                    </div>
-                  )}
+                  {(permission, index) => {
+                    const policyID = createUniqueId();
+                    return (
+                      <div role="group" aria-label={`Permission ${index + 1}`} class="space-y-1">
+                        <div class="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-2">
+                          <FormSelect
+                            label={`Permission ${index + 1} action`}
+                            aria-describedby={policyID}
+                            labelClass="sr-only"
+                            fieldBaseClass="contents"
+                            value={permission().action}
+                            onChange={(event) =>
+                              props.onUpdatePermission(index, 'action', event.currentTarget.value)
+                            }
+                            selectBaseClass="min-w-0 w-full rounded-md border border-border bg-surface px-2 py-1.5 text-sm text-base-content"
+                          >
+                            <Show
+                              when={
+                                !(RBAC_PERMISSION_ACTIONS as readonly string[]).includes(
+                                  permission().action,
+                                )
+                              }
+                            >
+                              <option value={permission().action}>{permission().action}</option>
+                            </Show>
+                            {RBAC_PERMISSION_ACTIONS.map(renderCatalogOption)}
+                          </FormSelect>
+                          <FormSelect
+                            label={`Permission ${index + 1} resource`}
+                            aria-describedby={policyID}
+                            labelClass="sr-only"
+                            fieldBaseClass="contents"
+                            value={permission().resource}
+                            onChange={(event) =>
+                              props.onUpdatePermission(index, 'resource', event.currentTarget.value)
+                            }
+                            selectBaseClass="min-w-0 w-full rounded-md border bg-surface px-2 py-1.5 text-sm text-base-content"
+                          >
+                            <Show
+                              when={
+                                !(RBAC_PERMISSION_RESOURCES as readonly string[]).includes(
+                                  permission().resource,
+                                )
+                              }
+                            >
+                              <option value={permission().resource}>{permission().resource}</option>
+                            </Show>
+                            {RBAC_PERMISSION_RESOURCES.map(renderCatalogOption)}
+                          </FormSelect>
+                          <button
+                            type="button"
+                            onClick={() => props.onRemovePermission(index)}
+                            disabled={props.formPermissions.length <= 1}
+                            aria-label={`Remove permission ${index + 1}: ${permission().action}:${permission().resource}`}
+                            aria-describedby={policyID}
+                            title="Remove permission"
+                            class="p-1.5 text-slate-400 hover:text-red-500 disabled:opacity-30"
+                          >
+                            <Trash2 class="w-4 h-4" />
+                          </button>
+                        </div>
+                        <PermissionPolicyDetails
+                          id={policyID}
+                          permission={permission()}
+                          showTarget
+                        />
+                      </div>
+                    );
+                  }}
                 </Index>
               </div>
             </div>

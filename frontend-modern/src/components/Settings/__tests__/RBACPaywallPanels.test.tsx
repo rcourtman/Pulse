@@ -294,7 +294,7 @@ describe('RBAC paywall settings panels', () => {
     expect(await dialog.findByText('nodes')).toBeInTheDocument();
     expect(
       dialog.getByText(
-        'This read checks saved roles only. Unsaved role selections are not included.',
+        'This summary can omit duplicate and inherited rules. Review individual rules in Roles. Unsaved role selections are not included. This is not an access check for a specific resource.',
       ),
     ).toBeInTheDocument();
     expect(
@@ -653,7 +653,7 @@ describe('RBAC paywall settings panels', () => {
     const bobDialog = await screen.findByRole('dialog', { name: 'Manage access: bob' });
 
     expect(
-      within(bobDialog).getByRole('status', { name: 'Loading effective permissions' }),
+      within(bobDialog).getByRole('status', { name: 'Loading saved permissions' }),
     ).toBeInTheDocument();
     expect(within(bobDialog).queryByText('private-alice-resource')).not.toBeInTheDocument();
     pending.reject(new Error('private-provider-detail'));
@@ -683,7 +683,7 @@ describe('RBAC paywall settings panels', () => {
     fireEvent.click(within(dialog).getByRole('checkbox', { name: /Viewer/ }));
     fireEvent.click(within(dialog).getByRole('button', { name: 'Retry saved permissions' }));
     expect(
-      within(dialog).getByRole('status', { name: 'Loading effective permissions' }),
+      within(dialog).getByRole('status', { name: 'Loading saved permissions' }),
     ).toBeInTheDocument();
     expect(
       within(dialog).queryByRole('button', { name: 'Retry saved permissions' }),
@@ -758,7 +758,7 @@ describe('RBAC paywall settings panels', () => {
       await oldRead.promise.catch(() => undefined);
 
       expect(
-        within(dialog).getByRole('status', { name: 'Loading effective permissions' }),
+        within(dialog).getByRole('status', { name: 'Loading saved permissions' }),
       ).toBeInTheDocument();
       expect(dialog).not.toHaveTextContent('private-alice-resource');
       expect(dialog).not.toHaveTextContent('No effective permissions');

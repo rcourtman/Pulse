@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "367cd1c119fe7193cbca6b60d6d92c5fa3640b9c",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/PermissionPolicyDetails.tsx",
+    "frontend-modern/src/components/Settings/RolesEditorDialog.tsx",
+    "frontend-modern/src/components/Settings/RolesPanel.tsx",
+    "frontend-modern/src/components/Settings/UserAssignmentsDialog.tsx",
+    "frontend-modern/src/components/Settings/useRolesPanelState.ts",
+    "frontend-modern/src/types/rbac.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/PermissionPolicyDetails.tsx": "05e13b856cd05f8f58de2fda012d65ee5cc1324fc7d9221d32186a66fd52733c",
+    "frontend-modern/src/components/Settings/RolesEditorDialog.tsx": "eae740293c3403b61352e31af53c1802f6700e37c9b687314d5d8166db28ece5",
+    "frontend-modern/src/components/Settings/RolesPanel.tsx": "540fd4be86e99d490ac455daff92500c64e7a1ca83eb0926e1b27955bae19ebf",
+    "frontend-modern/src/components/Settings/UserAssignmentsDialog.tsx": "be79c1e20e262b1863fbf3bc96fc8c9b8018fc1f5f323fac8d882fa3173bc2f6",
+    "frontend-modern/src/components/Settings/useRolesPanelState.ts": "da957de51ae99470870b40c8a7e16930a8bca439c4b67065e4bb74e91806dc9f",
+    "frontend-modern/src/types/rbac.ts": "ae4c4744c5c088c53b0b6b1bc29edc1c1726c5c3d2164c8b96f08974ddb604a0"
+  },
+  "routes": [
+    "Settings > Roles inventory and native role editor; Settings > User Access > Manage Access > Saved permissions. Actual panels, state owners, RBACAPI/session HTTP transport, runtime-capability gate, shared controls/Dialog and shipped CSS consume safe local HTTP fixtures, not full App/IdP."
+  ],
+  "states": [
+    "Identical saved role IDs/names, default allow versus unconditional deny on read:nodes, conditional deny on write:settings with literal owner ${user}/tag production, unknown future effect; each rule remains distinct.",
+    "Comparable before/after list, focused third editor action and unchanged saved-permissions summary, at scroll0, en-GB/UTC, reduced motion, same viewport/theme/data and true native focus state."
+  ],
+  "interactions": [
+    "Keyboard opens exact saved role and saved user. Per-row effect and literal conditions remain readable; selectors/removal describe the same rule. Unknown effects remain unknown, malformed metadata has safe fallback.",
+    "Changing only the third action and deliberately saving sends one exact encoded org/session/CSRF-bound PUT, preserves effects/conditions/inheritance/priority/default-effect absence and reads that actual body back into reopened editor. No automatic write from review.",
+    "Cancellation does not delete; access withdrawal removes inventory/edit controls. Unsaved user-role selection does not rewrite the saved read or cause a write; summary expressly warns it may omit duplicate/inherited rules and is not an access check."
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "themes": [
+    "light",
+    "dark"
+  ],
+  "playwright": "1.56.1",
+  "browsers": [
+    "141.0.7390.37",
+    "26.0"
+  ],
+  "assertions": 299,
+  "browser_cases": 16,
+  "verified_at": "2026-11-15T10:24:44Z",
+  "captures": "24 final native-inspected PNGs /12 comparable pairs copied into current output; CAPTURE-INDEX.json binds every original, camera and observation. No prior at-glance identity, rule, action or control is hidden. Phone third-rule resource/removal gains visibility.",
+  "proof": "source-kmimyvg4 binds clean parent, exact overlay,69 passing affected tests, global types and immutable before/after builds; complete123815-byte output hash and guest stop verified. Browser corrected fixture client exit0, no page errors. Final source is byte-identical to compiled overlay; containing committed-source validation retained in lane RECEIPTS.md.",
+  "limits": [
+    "Offline synthetic policies only; no full App/IdP, live authorization/exposure, installed/original-client recovery or release availability established.",
+    "Backend saved-permissions aggregation and conditional-attribute questions remain with Core request0bf7ae20-4763-43f5-9a1f-9e52ea3c1607. UI does not repair them.",
+    "First executed overlay fails due duplicate evidence-test discovery; first browser fixture wrongly expected disabled rather than withdrawn inventory after access loss. Corrected fixtures and original failed evidence retained; no product access behavior weakened."
+  ]
+}
