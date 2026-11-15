@@ -8869,3 +8869,21 @@ refused. The wildcard and approval refusal hints name the action. It exists
 because a capacity investigation drilled one level per call and concluded one
 folder above the folder that held the space. Proof:
 `internal/ai/tools/tools_read_disk_usage_test.go`.
+
+### Alert checks on a readable agent host mount (15 November 2026)
+
+An alert on part of a resource, such as an agent's filesystem
+(`agent:<host>/disk:<mount>`), now gives its alert check the resource that
+owns the part as its subject (`patrolAlertSubjectResource`, through the
+canonical `ResolveAlertResourceReference` binding when it is a component).
+`patrolReadPlace` says where Pulse can read for that subject from the action
+catalog's read fact: inside a running Proxmox guest through its node's agent,
+or on an agent host when the read fact names that host itself with no guest.
+A disk alert on a host Pulse can read on gets the same seed line and the same
+finding-decision rule as a readable guest: the check cannot read, the
+investigation a finding starts can, so a disk reading whose cause the check
+could not see is recorded rather than closed as one that only repeats the
+alert. With commands off the seed says why Pulse cannot read and the question
+keeps its exit. It exists because on Docker fault set D6 the sustained check
+on a full mount closed with no finding and the finding came only when asked.
+Proof: `internal/ai/patrol_host_disk_wake_test.go`.

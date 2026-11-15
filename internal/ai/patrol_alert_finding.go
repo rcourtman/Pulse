@@ -266,11 +266,13 @@ func patrolAlertsSummaryName(alerts []models.Alert) string {
 // loop asks only when the run made no finding decision at all, and the turn
 // that answers may use the finding-decision tools only.
 //
-// A disk alert on a running Proxmox guest Pulse can read inside is not given
-// "a reading with nothing known beyond the alert" as a reason to record
-// nothing. The check cannot read inside the guest and the investigation a
-// finding starts can. On fault set pve-v1 P2 a sustained check was told so in
-// its seed, and this question's exit still closed it with nothing recorded.
+// A disk alert on a running Proxmox guest Pulse can read inside, or on an
+// agent host Pulse can read on, is not given "a reading with nothing known
+// beyond the alert" as a reason to record nothing. The check cannot read there
+// and the investigation a finding starts can. On fault set pve-v1 P2 a
+// sustained check was told so in its seed, and this question's exit still
+// closed it with nothing recorded; on Docker fault set D6 the same exit closed
+// the sustained check on a full mount of the agent host.
 func (p *PatrolService) patrolFindingDecisionPrompt(scope *PatrolScope, snap patrolRuntimeState) string {
 	if p == nil || scope == nil {
 		return ""
@@ -291,9 +293,11 @@ func (p *PatrolService) patrolFindingDecisionPrompt(scope *PatrolScope, snap pat
 		level = "a " + level
 	}
 	readable, quiet := "", "for example a finished one-shot job that exited cleanly, a deliberate stop, or a reading with nothing known beyond the alert itself"
-	if strings.EqualFold(strings.TrimSpace(alert.Type), "disk") && p.patrolAlertSubjectGuestReadable(scope, snap) {
-		readable = fmt.Sprintf("Pulse can read inside %q and this check cannot, so a disk reading whose cause you could not see is one to record: its investigation reads what fills the disk. ", name)
-		quiet = "for example a disk filled by something you found and that is expected"
+	if strings.EqualFold(strings.TrimSpace(alert.Type), "disk") {
+		if place, ok := p.patrolAlertSubjectReadPlace(scope, snap); ok {
+			readable = fmt.Sprintf("Pulse can read %s and this check cannot, so a disk reading whose cause you could not see is one to record: its investigation reads what fills the disk. ", place)
+			quiet = "for example a disk filled by something you found and that is expected"
+		}
 	}
 	return fmt.Sprintf("Before you finish: Pulse has %s alert active on %q (%s: %q), and you have not recorded a finding. "+
 		"If your analysis found a problem beyond what that alert already states, such as its cause, a workload that failed and will not come back by itself, or a separate fault on this resource, record it now with one %s call. "+
