@@ -82,6 +82,100 @@ afterEach(() => {
 });
 
 describe('no-organization invitation recovery', () => {
+  it('distinguishes same-named invitations and sends only the chosen exact ID', async () => {
+    const sameNames = invitations.map((invitation) => ({
+      ...invitation,
+      orgDisplayName: 'Operations',
+    }));
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(sameNames))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(jsonResponse([sameNames[0]]))
+      .mockResolvedValueOnce(jsonResponse({ kind: 'member' }));
+    const { onReload } = renderRecovery();
+    await screen.findAllByText('Operations');
+
+    for (const invitation of sameNames) {
+      const group = screen.getByRole('group', {
+        name: `Invitation to Operations (${invitation.orgId})`,
+      });
+      expect(within(group).getByText('Operations')).toBeVisible();
+      expect(within(group).getByText(invitation.orgId)).toBeVisible();
+      expect(within(group).getByText(invitation.role)).toBeVisible();
+      expect(
+        within(group).getByRole('button', {
+          name: `Accept invitation to Operations (${invitation.orgId})`,
+        }),
+      ).toBeEnabled();
+      expect(
+        within(group).getByRole('button', {
+          name: `Decline invitation to Operations (${invitation.orgId})`,
+        }),
+      ).toBeEnabled();
+    }
+    expect(fetchMock).toHaveBeenCalledOnce();
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Decline invitation to Operations (client/west)' }),
+    );
+    await waitFor(() => expect(screen.getAllByRole('group')).toHaveLength(1));
+    expectRequest(1, '/api/org-invitations/client%2Fwest', 'DELETE');
+    expectRequest(2, '/api/org-invitations', 'GET');
+    expect(screen.getByText('client/east')).toBeVisible();
+    expect(screen.queryByText('client/west')).toBeNull();
+    expect(onReload).not.toHaveBeenCalled();
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Accept invitation to Operations (client/east)' }),
+    );
+    await waitFor(() => expect(onReload).toHaveBeenCalledOnce());
+    expectRequest(3, '/api/org-invitations/client%2Feast/accept', 'POST');
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(getOrgID()).toBe('unusable-organization');
+    expect(getApiToken()).toBe('synthetic-independent-token');
+  });
+
+  it.each([undefined, '', 'client/east'])(
+    'shows an unnamed or ID-named invitation once without an invented party (%j)',
+    async (orgDisplayName) => {
+      fetchMock.mockResolvedValueOnce(jsonResponse([{ ...invitations[0], orgDisplayName }]));
+      renderRecovery();
+      const group = await screen.findByRole('group', { name: 'Invitation to client/east' });
+      expect(within(group).getAllByText('client/east')).toHaveLength(1);
+      expect(within(group).getByText('viewer')).toBeVisible();
+      expect(
+        within(group).getByRole('button', { name: 'Accept invitation to client/east' }),
+      ).toBeEnabled();
+      expect(
+        within(group).getByRole('button', { name: 'Decline invitation to client/east' }),
+      ).toBeEnabled();
+      expect(fetchMock).toHaveBeenCalledOnce();
+    },
+  );
+
+  it('keeps long, reserved and markup-looking identities literal and sends their exact encoded key', async () => {
+    const orgId = 'client/research-network?workspace=shared-services#west';
+    const orgDisplayName = '<img src=x onerror=alert(1)> Operations / مركز الأبحاث';
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse([{ ...invitations[0], orgId, orgDisplayName }]))
+      .mockResolvedValueOnce(jsonResponse({ kind: 'member' }));
+    const { onReload } = renderRecovery();
+    const group = await screen.findByRole('group', {
+      name: `Invitation to ${orgDisplayName} (${orgId})`,
+    });
+    expect(within(group).getByText(orgDisplayName).tagName).toBe('BDI');
+    expect(within(group).getByText(orgId).tagName).toBe('BDI');
+    expect(group.querySelector('img')).toBeNull();
+    expect(group.closest('li')).not.toBeNull();
+    fireEvent.click(
+      within(group).getByRole('button', {
+        name: `Accept invitation to ${orgDisplayName} (${orgId})`,
+      }),
+    );
+    await waitFor(() => expect(onReload).toHaveBeenCalledOnce());
+    expectRequest(1, `/api/org-invitations/${encodeURIComponent(orgId)}/accept`, 'POST');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it('keeps recovery exits available while reading without inventing an empty list or changing access', async () => {
     const read = deferred<Response>();
     fetchMock.mockReturnValueOnce(read.promise);
@@ -94,7 +188,7 @@ describe('no-organization invitation recovery', () => {
     expect(
       screen.queryByText('Ask a Pulse administrator to add you to an organization.'),
     ).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Accept' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Accept invitation to / })).toBeNull();
     expectRequest(0, '/api/org-invitations', 'GET');
 
     read.resolve(jsonResponse(invitations));
@@ -111,15 +205,17 @@ describe('no-organization invitation recovery', () => {
     const { onReload } = renderRecovery();
     await screen.findByText('East estate');
 
-    fireEvent.click(row('East estate').getByRole('button', { name: 'Accept' }));
+    fireEvent.click(row('East estate').getByRole('button', { name: /^Accept invitation to / }));
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expectRequest(1, '/api/org-invitations/client%2Feast/accept', 'POST');
     expect(onReload).not.toHaveBeenCalled();
-    for (const button of screen.getAllByRole('button', { name: /^(Accept|Decline)$/ })) {
+    for (const button of screen.getAllByRole('button', {
+      name: /^(Accept|Decline) invitation to /,
+    })) {
       expect(button).toBeDisabled();
     }
-    fireEvent.click(row('West estate').getByRole('button', { name: 'Accept' }));
-    fireEvent.click(row('East estate').getByRole('button', { name: 'Decline' }));
+    fireEvent.click(row('West estate').getByRole('button', { name: /^Accept invitation to / }));
+    fireEvent.click(row('East estate').getByRole('button', { name: /^Decline invitation to / }));
     expect(fetchMock).toHaveBeenCalledTimes(2);
 
     accept.resolve(jsonResponse({ kind: 'member' }));
@@ -139,13 +235,15 @@ describe('no-organization invitation recovery', () => {
       const { onReload } = renderRecovery();
       await screen.findByText('East estate');
 
-      fireEvent.click(row('East estate').getByRole('button', { name: 'Accept' }));
+      fireEvent.click(row('East estate').getByRole('button', { name: /^Accept invitation to / }));
       expect(await screen.findByRole('alert')).toHaveTextContent(
         'Could not accept the invitation.',
       );
       expect(screen.getByText('East estate')).toBeVisible();
       expect(screen.queryByText(/synthetic private detail/)).toBeNull();
-      expect(row('East estate').getByRole('button', { name: 'Accept' })).toBeEnabled();
+      expect(
+        row('East estate').getByRole('button', { name: /^Accept invitation to / }),
+      ).toBeEnabled();
       expect(fetchMock).toHaveBeenCalledTimes(2);
       expect(onReload).not.toHaveBeenCalled();
     },
@@ -160,10 +258,10 @@ describe('no-organization invitation recovery', () => {
     const { onReload } = renderRecovery();
     await screen.findByText('East estate');
 
-    fireEvent.click(row('East estate').getByRole('button', { name: 'Accept' }));
+    fireEvent.click(row('East estate').getByRole('button', { name: /^Accept invitation to / }));
     await screen.findByRole('alert');
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    fireEvent.click(row('East estate').getByRole('button', { name: 'Accept' }));
+    fireEvent.click(row('East estate').getByRole('button', { name: /^Accept invitation to / }));
     expect(screen.queryByRole('alert')).toBeNull();
     expect(fetchMock).toHaveBeenCalledTimes(3);
     expectRequest(2, '/api/org-invitations/client%2Feast/accept', 'POST');
@@ -183,14 +281,14 @@ describe('no-organization invitation recovery', () => {
     const { onReload } = renderRecovery();
     await screen.findByText('West estate');
 
-    fireEvent.click(row('West estate').getByRole('button', { name: 'Decline' }));
+    fireEvent.click(row('West estate').getByRole('button', { name: /^Decline invitation to / }));
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expectRequest(1, '/api/org-invitations/client%2Fwest', 'DELETE');
     decline.resolve(new Response(null, { status: 204 }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
     expectRequest(2, '/api/org-invitations', 'GET');
     expect(onReload).not.toHaveBeenCalled();
-    expect(screen.queryByRole('button', { name: 'Accept' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Accept invitation to / })).toBeNull();
     expect(
       screen.queryByText('Ask a Pulse administrator to add you to an organization.'),
     ).toBeNull();
@@ -198,7 +296,9 @@ describe('no-organization invitation recovery', () => {
     refresh.resolve(jsonResponse([invitations[0]]));
     expect(await screen.findByText('East estate')).toBeVisible();
     expect(screen.queryByText('West estate')).toBeNull();
-    expect(row('East estate').getByRole('button', { name: 'Accept' })).toBeEnabled();
+    expect(
+      row('East estate').getByRole('button', { name: /^Accept invitation to / }),
+    ).toBeEnabled();
     expect(onReload).not.toHaveBeenCalled();
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
@@ -210,11 +310,13 @@ describe('no-organization invitation recovery', () => {
     const { onReload } = renderRecovery();
     await screen.findByText('West estate');
 
-    fireEvent.click(row('West estate').getByRole('button', { name: 'Decline' }));
+    fireEvent.click(row('West estate').getByRole('button', { name: /^Decline invitation to / }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Could not decline the invitation.');
     expect(screen.getByText('West estate')).toBeVisible();
     expect(screen.queryByText(/synthetic private detail/)).toBeNull();
-    expect(row('West estate').getByRole('button', { name: 'Decline' })).toBeEnabled();
+    expect(
+      row('West estate').getByRole('button', { name: /^Decline invitation to / }),
+    ).toBeEnabled();
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expectRequest(1, '/api/org-invitations/client%2Fwest', 'DELETE');
     expect(onReload).not.toHaveBeenCalled();
@@ -253,7 +355,7 @@ describe('no-organization invitation recovery', () => {
       expect(
         screen.queryByText('Ask a Pulse administrator to add you to an organization.'),
       ).toBeNull();
-      expect(screen.queryByRole('button', { name: 'Accept' })).toBeNull();
+      expect(screen.queryByRole('button', { name: /^Accept invitation to / })).toBeNull();
       expect(screen.getByRole('button', { name: 'Retry invitations' })).toBeEnabled();
       expect(screen.getByRole('button', { name: 'Check again' })).toBeEnabled();
       expect(screen.getByRole('button', { name: 'Sign out' })).toBeEnabled();
@@ -281,7 +383,7 @@ describe('no-organization invitation recovery', () => {
       expect(screen.getByRole('status')).toHaveTextContent('Checking invitations');
       expect(screen.queryByRole('alert')).toBeNull();
       expect(screen.queryByRole('button', { name: 'Retry invitations' })).toBeNull();
-      expect(screen.queryByRole('button', { name: 'Accept' })).toBeNull();
+      expect(screen.queryByRole('button', { name: /^Accept invitation to / })).toBeNull();
       expect(
         screen.queryByText('Ask a Pulse administrator to add you to an organization.'),
       ).toBeNull();
@@ -294,8 +396,12 @@ describe('no-organization invitation recovery', () => {
       if (result === 'invitations') {
         expect(await screen.findByText('East estate')).toBeVisible();
         expect(screen.getByText('West estate')).toBeVisible();
-        expect(row('East estate').getByRole('button', { name: 'Accept' })).toBeEnabled();
-        expect(row('West estate').getByRole('button', { name: 'Decline' })).toBeEnabled();
+        expect(
+          row('East estate').getByRole('button', { name: /^Accept invitation to / }),
+        ).toBeEnabled();
+        expect(
+          row('West estate').getByRole('button', { name: /^Decline invitation to / }),
+        ).toBeEnabled();
         expect(
           screen.queryByText('Ask a Pulse administrator to add you to an organization.'),
         ).toBeNull();
@@ -303,7 +409,7 @@ describe('no-organization invitation recovery', () => {
         expect(
           await screen.findByText('Ask a Pulse administrator to add you to an organization.'),
         ).toBeVisible();
-        expect(screen.queryByRole('button', { name: 'Accept' })).toBeNull();
+        expect(screen.queryByRole('button', { name: /^Accept invitation to / })).toBeNull();
       }
       expect(screen.queryByRole('alert')).toBeNull();
       expect(screen.queryByRole('status')).toBeNull();
@@ -344,13 +450,13 @@ describe('no-organization invitation recovery', () => {
     const { onReload } = renderRecovery();
     await screen.findByText('West estate');
 
-    fireEvent.click(row('West estate').getByRole('button', { name: 'Decline' }));
+    fireEvent.click(row('West estate').getByRole('button', { name: /^Decline invitation to / }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Could not check your invitations.');
     expect(screen.queryByText('Could not decline the invitation.')).toBeNull();
     expect(
       screen.queryByText('Ask a Pulse administrator to add you to an organization.'),
     ).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Accept' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Accept invitation to / })).toBeNull();
     expect(fetchMock).toHaveBeenCalledTimes(3);
     expectRequest(1, '/api/org-invitations/client%2Fwest', 'DELETE');
     expectRequest(2, '/api/org-invitations', 'GET');

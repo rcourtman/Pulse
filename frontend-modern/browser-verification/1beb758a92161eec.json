@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "base_sha": "bf5e8489d3ce2738cd9107fe94ff6dd45b3773e4",
+  "verified_at": "2026-11-15T15:59:30.119598Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/NoOrganizationAccess.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/NoOrganizationAccess.tsx": "4bb8c798c5ad46129e11e9f552c09dcc01c67cfd78794b4867d4eb560edd8d11"
+  },
+  "routes": [
+    "Existing bootstrap fallback: AppBootstrapStatus failed -> production NoOrganizationAccess; same synthetic local invitation producer and real bootstrap/OrgsAPI/apiClient. Evidence-only Vite preview, not an application route."
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Playwright1.56.1 matches integration lock; Chromium141.0.7390.37 and WebKit26. Four parent and four final cases: desktop/light + phone/dark Chromium, desktop/dark + phone/light WebKit. All32 original captures opened with native view_image;16 comparable same-data/theme/viewport/interaction-state pairs.",
+    "Actual bootstrap probe consumes synthetic default_org_access_denied then renders the changed production invitation screen. Parent has absent exact keys and ambiguous/truncated names/actions. Final shows both full literal keys and names, distinct associated groups/actions, and individual viewer/editor roles. No information or control moved behind hover/disclosure.",
+    "Initial overview, refused acceptance, remaining sibling after decline/readback, and acknowledged acceptance/reload/empty are captured. Recovery exits remain in the same phone first view, names/keys wrap, 44px phone controls, no horizontal overflow or clipped identity. Empty state is unchanged.",
+    "440 browser assertions pass (parent146,final294); no page exceptions, off-origin or unexpected fixture endpoint. Browser/server close. Sealed runtime hash matches the committed containing source; all other preview source is the assigned base. This is browser source/presentation proof, not full-App admission, native speech, live IdP/backend authorization, original-client/installed recovery, publication or release acceptance."
+  ],
+  "interactions": [
+    "Keyboard Enter on first exact invitation issues its single encoded POST. A synthetic400 refusal keeps both invitations and does not reload or automatically replay.",
+    "Decline the second exact namesake via pointer/touch: one encoded DELETE, saved readback, first sibling/role retained. Then a deliberate accept of that first key is acknowledged and reloads once. No role/key normalization or name-derived target.",
+    "Invitation traffic uses session credentials, default unbound organization context and CSRF; the unrelated saved API token is absent. UI/request/state behavior outside presentation remains unchanged."
+  ]
+}
