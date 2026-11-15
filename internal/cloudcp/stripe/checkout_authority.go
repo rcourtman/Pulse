@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/entitlements"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
@@ -53,4 +54,24 @@ func (p *Provisioner) completeCheckoutProvisioning(ctx context.Context, tenant *
 		tenant.State = registry.TenantStateActive
 		return nil
 	})
+}
+
+// A signed granting event may reconcile existing billing after new provisioning
+// rolled back. The caller holds billing authority. Missing rows are never
+// recreated, and checkout itself still cannot grant from its stale metadata.
+func (p *Provisioner) updateUnprovisionedCheckoutBilling(sub Subscription) error {
+	current, err := p.registry.GetStripeAccountByCustomerID(strings.TrimSpace(sub.Customer))
+	if err != nil || current == nil {
+		return err
+	}
+	priceID := sub.FirstPriceID()
+	plan := DerivePlanVersion(sub.Metadata, priceID)
+	if priceID == "" && (plan == "" || plan == "stripe") {
+		plan = current.PlanVersion
+	}
+	current.StripeSubscriptionID = strings.TrimSpace(sub.ID)
+	current.PlanVersion = canonicalizeProvisionedPlanVersion(plan)
+	current.SubscriptionState = normalizeStripeAccountSubscriptionState(sub.Status)
+	applyStripeAccountGraceWindow(current, MapSubscriptionStatus(sub.Status), time.Now().UTC())
+	return p.registry.UpdateStripeAccount(current)
 }

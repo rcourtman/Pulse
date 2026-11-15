@@ -300,3 +300,58 @@ func TestCheckoutRefusesWithdrawnBillingBeforeMetadataBackfill(t *testing.T) {
 		t.Fatalf("denied checkout wrote files: %v/%v", entries, err)
 	}
 }
+
+func TestCheckoutCanRecoverOnlyAfterMatchingBillingGrant(t *testing.T) {
+	for _, status := range []string{"canceled", "paused"} {
+		t.Run(status, func(t *testing.T) {
+			f := newCheckoutRaceFixture(t, false)
+			f.schedule(t, "before_tenant_insert", status, func(code int) {
+				if code != 200 {
+					t.Fatalf("withdrawal status%d", code)
+				}
+			})
+			if code := f.event(t, "evt_checkout", "checkout.session.completed", f.session); code != 500 {
+				t.Fatalf("withdrawn checkout status%d", code)
+			}
+			original := f.session
+			sub := Subscription{ID: "sub_recovered", Customer: f.session.Customer, Status: "active", Metadata: f.session.Metadata}
+			if code := f.event(t, "evt_recover_billing", "customer.subscription.updated", sub); code != 200 {
+				t.Fatalf("grant status%d", code)
+			}
+			sa, err := f.reg.GetStripeAccount("a-checkout")
+			if err != nil || sa.SubscriptionState != "active" || sa.StripeSubscriptionID != sub.ID {
+				t.Fatalf("grant lost before tenant: %+v/%v", sa, err)
+			}
+			if code := f.event(t, "evt_stale_checkout", "checkout.session.completed", original); code != 500 {
+				t.Fatalf("old subscription checkout overrode new billing: status%d", code)
+			}
+			f.session.Subscription = sub.ID
+			if code := f.event(t, "evt_recovered_checkout", "checkout.session.completed", f.session); code != 200 {
+				t.Fatalf("matching checkout could not recover: status%d", code)
+			}
+			tenant, err := f.reg.GetByStripeCustomerID(f.session.Customer)
+			if err != nil || tenant == nil || tenant.State != registry.TenantStateActive {
+				t.Fatalf("recovered tenant: %+v/%v", tenant, err)
+			}
+			rows, err := f.reg.ListHostedEntitlements()
+			if err != nil || len(rows) != 1 {
+				t.Fatalf("recovered entitlement: %v", err)
+			}
+			result, err := f.p.hostedEntitlements.RefreshEntitlement(rows[0].RefreshToken, tenant.ID+".cloud.example.com")
+			if err != nil || result == nil {
+				t.Fatalf("matching grant cannot renew: %v", err)
+			}
+		})
+	}
+	t.Run("missing_billing_is_not_recreated", func(t *testing.T) {
+		reg := newStripeTestRegistry(t)
+		p := newTestProvisioner(t, reg, t.TempDir(), nil, true)
+		if err := p.HandleSubscriptionUpdated(context.Background(), Subscription{ID: "sub_unknown", Customer: "cus_unknown", Status: "active", Metadata: map[string]string{"plan_version": "cloud_starter"}}); err != nil {
+			t.Fatal(err)
+		}
+		rows, err := reg.ListStripeAccounts()
+		if err != nil || len(rows) != 0 {
+			t.Fatalf("grant manufactured missing billing: %+v/%v", rows, err)
+		}
+	})
+}

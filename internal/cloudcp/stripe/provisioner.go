@@ -1093,8 +1093,9 @@ func (p *Provisioner) HandleSubscriptionUpdated(ctx context.Context, sub Subscri
 		return fmt.Errorf("lookup tenant by customer: %w", err)
 	}
 	if tenant == nil {
-		log.Warn().Str("customer_id", customerID).Msg("subscription.updated: tenant not found")
-		return nil
+		// A failed/new checkout may not have a tenant yet. Do not acknowledge
+		// and lose a granting event needed to reconcile its known billing row.
+		return p.updateUnprovisionedCheckoutBilling(sub)
 	}
 	ctx, lease, tenant, err := p.lockTenant(ctx, tenant.ID)
 	if err != nil {
