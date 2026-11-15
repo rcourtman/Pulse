@@ -4,6 +4,7 @@ package installtests
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -454,20 +455,127 @@ log() { printf '%s\n' "$*"; }
 	if err != nil {
 		t.Fatal(err)
 	}
-	// A killed adopted child can briefly remain a zombie before guest init
-	// reaps it. That is not a live manager; no remaining command may execute.
 	if runtime.GOOS != "linux" {
 		// /proc absence on another OS cannot establish process absence.
 		return
 	}
-	stat, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/stat")
-	if err == nil {
-		_, tail, found := strings.Cut(string(stat), ") ")
-		if !found || !strings.HasPrefix(tail, "Z ") {
-			t.Fatalf("manager remains live after deadline: %q", stat)
-		}
-	} else if !os.IsNotExist(err) {
+	// timeout's KILL backstop kills its own process group, including itself.
+	// Reaping that parent does not synchronize the adopted manager's exit.
+	// Observe the manager's terminal state within the ORIGINAL overall deadline,
+	// rather than treating the first /proc snapshot as its terminal result.
+	if err := waitForAutoUpdateTimerExit(func() ([]byte, error) {
+		return os.ReadFile("/proc/" + strconv.Itoa(pid) + "/stat")
+	}, start.Add(9*time.Second)); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func waitForAutoUpdateTimerExit(readStat func() ([]byte, error), deadline time.Time) error {
+	var lastStat []byte
+	for time.Now().Before(deadline) {
+		stat, err := readStat()
+		if !time.Now().Before(deadline) {
+			lastStat = stat
+			break
+		}
+		if os.IsNotExist(err) {
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("read manager state: %w", err)
+		}
+		// comm can itself contain spaces or ')'. Only the final delimiter
+		// precedes the state. Unknown/malformed observations are never exit.
+		separator := strings.LastIndex(string(stat), ") ")
+		if separator < 0 || len(stat) < separator+4 || stat[separator+3] != ' ' {
+			return fmt.Errorf("invalid manager state: %q", stat)
+		}
+		if stat[separator+2] == 'Z' {
+			// A zombie cannot execute, even if guest init has yet to reap it.
+			return nil
+		}
+		lastStat = stat
+		time.Sleep(min(time.Millisecond, time.Until(deadline)))
+	}
+	return fmt.Errorf("manager remains live at deadline: %q", lastStat)
+}
+
+func TestAutoUpdateTimerExitObservation(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		states []string
+		err    error
+		want   string
+	}{
+		{name: "absent", err: os.ErrNotExist},
+		{name: "zombie", states: []string{"42 (sleep) Z 1"}},
+		{name: "exit_after_parent", states: []string{"42 (sleep) R 1", "42 (sleep) R 1", "42 (sleep) Z 1"}},
+		{name: "comm_with_delimiter", states: []string{"42 (a ) Z misleading name) R 1", "42 (a ) Z misleading name) Z 1"}},
+		{name: "unavailable", err: os.ErrPermission, want: "read manager state"},
+		{name: "malformed", states: []string{"not a stat"}, want: "invalid manager state"},
+		{name: "missing_state", states: []string{"42 (sleep) "}, want: "invalid manager state"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			reads := 0
+			err := waitForAutoUpdateTimerExit(func() ([]byte, error) {
+				reads++
+				if tc.err != nil {
+					return nil, tc.err
+				}
+				return []byte(tc.states[min(reads-1, len(tc.states)-1)]), nil
+			}, time.Now().Add(time.Second))
+			if (tc.want == "" && err != nil) || (tc.want != "" && (err == nil || !strings.Contains(err.Error(), tc.want))) {
+				t.Fatalf("observation: %v; want %q", err, tc.want)
+			}
+			if tc.want == "" && tc.err == nil && reads != len(tc.states) {
+				t.Fatalf("accepted before terminal observation: %d reads, want %d", reads, len(tc.states))
+			}
+		})
+	}
+	t.Run("expired_deadline", func(t *testing.T) {
+		err := waitForAutoUpdateTimerExit(func() ([]byte, error) {
+			t.Fatal("must not accept a late observation")
+			return nil, os.ErrNotExist
+		}, time.Now().Add(-time.Second))
+		if err == nil || !strings.Contains(err.Error(), "manager remains live at deadline") {
+			t.Fatalf("expired deadline accepted: %v", err)
+		}
+	})
+	t.Run("late_terminal_observation", func(t *testing.T) {
+		err := waitForAutoUpdateTimerExit(func() ([]byte, error) {
+			time.Sleep(5 * time.Millisecond)
+			return nil, os.ErrNotExist
+		}, time.Now().Add(time.Millisecond))
+		if err == nil || !strings.Contains(err.Error(), "manager remains live at deadline") {
+			t.Fatalf("late absence accepted: %v", err)
+		}
+	})
+}
+
+func TestAutoUpdateTimerExitRejectsLiveManager(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("live-process state control requires Linux /proc")
+	}
+	cmd := exec.Command("sleep", "60")
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := cmd.Process.Kill(); err != nil {
+			t.Errorf("stop owned live control: %v", err)
+		}
+		if err := cmd.Wait(); err == nil {
+			t.Error("live control unexpectedly exited successfully")
+		}
+	})
+	err := waitForAutoUpdateTimerExit(func() ([]byte, error) {
+		return os.ReadFile("/proc/" + strconv.Itoa(cmd.Process.Pid) + "/stat")
+	}, time.Now().Add(50*time.Millisecond))
+	if err == nil || !strings.Contains(err.Error(), "manager remains live at deadline") {
+		t.Fatalf("live manager accepted: %v", err)
+	}
+	if err := cmd.Process.Signal(syscall.Signal(0)); err != nil {
+		t.Fatalf("negative control did not remain alive: %v", err)
 	}
 }
 
