@@ -2,14 +2,18 @@ package stripe
 
 import (
 	"context"
+	"crypto/ed25519"
+	"encoding/base64"
 	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/lifecycle"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 )
 
 func seedWorkspaceBilling(t *testing.T, reg *registry.TenantRegistry, accountID string) {
@@ -166,5 +170,66 @@ func TestWorkspaceProvisioningRollsBackWhenAuthorityChangesBeforeLeaseWrite(t *t
 	rows, err := reg.ListHostedEntitlements()
 	if err != nil || len(rows) != 0 {
 		t.Fatalf("withdrawn provisioning issued lease identity: %+v/%v", rows, err)
+	}
+}
+
+func TestWorkspaceProvisioningKeepsUsableLeaseAndRefreshForAdmittedStates(t *testing.T) {
+	for _, tc := range []struct {
+		name, state string
+		trialEnd    bool
+		want        pkglicensing.SubscriptionState
+	}{
+		{"active", "active", false, pkglicensing.SubStateActive},
+		{"checkout-no-trial-end", "trial", false, pkglicensing.SubStateActive},
+		{"bounded-trial", "trial", true, pkglicensing.SubStateTrial},
+		{"payment-grace", "past_due", false, pkglicensing.SubStateGrace},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			reg := newStripeTestRegistry(t)
+			if err := reg.CreateAccount(&registry.Account{ID: "a-admission", Kind: registry.AccountKindMSP}); err != nil {
+				t.Fatal(err)
+			}
+			seedWorkspaceBilling(t, reg, "a-admission")
+			sa, err := reg.GetStripeAccount("a-admission")
+			if err != nil {
+				t.Fatal(err)
+			}
+			sa.SubscriptionState = tc.state
+			deadline := time.Now().Add(12 * time.Hour).Unix()
+			if tc.trialEnd {
+				sa.TrialEndsAt = &deadline
+			}
+			if err := reg.UpdateStripeAccount(sa); err != nil {
+				t.Fatal(err)
+			}
+			p := newTestProvisioner(t, reg, t.TempDir(), nil, true)
+			tenant, err := p.ProvisionWorkspace(context.Background(), "a-admission", "Client")
+			if err != nil {
+				t.Fatal(err)
+			}
+			raw := loadRawBillingState(t, p.tenantDataDir(tenant.ID))
+			key, err := base64.StdEncoding.DecodeString(os.Getenv("PULSE_TRIAL_ACTIVATION_PUBLIC_KEY"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			host := tenant.ID + ".cloud.example.com"
+			for _, refresh := range []bool{false, true} {
+				token := raw.EntitlementJWT
+				if refresh {
+					renewed, err := p.hostedEntitlements.RefreshEntitlement(raw.EntitlementRefreshToken, host)
+					if err != nil {
+						t.Fatal(err)
+					}
+					token = renewed.EntitlementJWT
+				}
+				claims, err := pkglicensing.VerifyEntitlementLeaseToken(token, ed25519.PublicKey(key), host, time.Now())
+				if err != nil || claims.SubscriptionState != tc.want {
+					t.Fatalf("unusable admitted lease (refresh=%t): %+v/%v", refresh, claims, err)
+				}
+				if tc.trialEnd && (claims.TrialEndsAt == nil || *claims.TrialEndsAt != deadline) {
+					t.Fatalf("trial deadline lost (refresh=%t): %+v", refresh, claims)
+				}
+			}
+		})
 	}
 }
