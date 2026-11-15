@@ -3,6 +3,7 @@ import { OrgsAPI, type UserOrganizationInvitation } from '@/api/orgs';
 import { Button } from '@/components/shared/Button';
 import { OrganizationRoleBadge } from '@/components/shared/OrganizationBadges';
 import { logger } from '@/utils/logger';
+import { getOrganizationInvitationPresentation } from '@/utils/organizationSettingsPresentation';
 import { normalizeRole } from '@/utils/orgUtils';
 
 interface NoOrganizationAccessProps {
@@ -104,30 +105,53 @@ export const NoOrganizationAccess: Component<NoOrganizationAccessProps> = (props
             >
               <ul class="mt-4 divide-y divide-border rounded-md border border-border">
                 <For each={invitationRead()?.invitations}>
-                  {(invitation) => (
-                    <li class="flex items-center gap-3 px-3 py-2">
-                      <span class="min-w-0 flex-1 truncate text-sm">
-                        {invitation.orgDisplayName || invitation.orgId}
-                      </span>
-                      <OrganizationRoleBadge role={normalizeRole(invitation.role)} />
-                      <Button
-                        variant="primary"
-                        size="sm"
-                        disabled={busyOrgID() !== null}
-                        onClick={() => void respond(invitation.orgId, true)}
-                      >
-                        Accept
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        disabled={busyOrgID() !== null}
-                        onClick={() => void respond(invitation.orgId, false)}
-                      >
-                        Decline
-                      </Button>
-                    </li>
-                  )}
+                  {(invitation) => {
+                    const presentation = () =>
+                      getOrganizationInvitationPresentation(
+                        invitation.orgId,
+                        invitation.orgDisplayName,
+                      );
+                    return (
+                      <li class="px-3 py-2">
+                        <div role="group" aria-label={presentation().groupLabel} class="space-y-2">
+                          <div class="flex items-start gap-3">
+                            <div class="min-w-0 flex-1 [overflow-wrap:anywhere]">
+                              <Show
+                                when={
+                                  invitation.orgDisplayName &&
+                                  invitation.orgDisplayName !== invitation.orgId
+                                }
+                              >
+                                <bdi class="block text-sm">{invitation.orgDisplayName}</bdi>
+                              </Show>
+                              <bdi class="block text-xs text-muted">{invitation.orgId}</bdi>
+                            </div>
+                            <OrganizationRoleBadge role={normalizeRole(invitation.role)} />
+                          </div>
+                          <div class="flex flex-wrap gap-2">
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              aria-label={presentation().acceptLabel}
+                              disabled={busyOrgID() !== null}
+                              onClick={() => void respond(invitation.orgId, true)}
+                            >
+                              Accept
+                            </Button>
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              aria-label={presentation().declineLabel}
+                              disabled={busyOrgID() !== null}
+                              onClick={() => void respond(invitation.orgId, false)}
+                            >
+                              Decline
+                            </Button>
+                          </div>
+                        </div>
+                      </li>
+                    );
+                  }}
                 </For>
               </ul>
             </Show>
