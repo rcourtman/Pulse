@@ -47,6 +47,8 @@ export const OrganizationAccessInvitationsSection: Component<
                       variant="primary"
                       size="mdCompact"
                       aria-label={presentation().acceptLabel}
+                      data-org-access-action="accept"
+                      data-org-access-target={invitation.orgId}
                       onClick={() => void props.state.acceptInvitation(invitation.orgId)}
                       disabled={!props.state.canChangeAccess()}
                     >
@@ -56,6 +58,8 @@ export const OrganizationAccessInvitationsSection: Component<
                       variant="dangerOutline"
                       size="mdCompact"
                       aria-label={presentation().declineLabel}
+                      data-org-access-action="decline"
+                      data-org-access-target={invitation.orgId}
                       onClick={() => void props.state.declineInvitation(invitation.orgId)}
                       disabled={!props.state.canChangeAccess()}
                     >
@@ -97,6 +101,8 @@ export const OrganizationAccessInvitationsSection: Component<
                     variant="dangerOutline"
                     size="mdCompact"
                     aria-label={`Revoke invitation for ${invitation.userId}`}
+                    data-org-access-action="revoke"
+                    data-org-access-target={invitation.userId}
                     onClick={() => void props.state.revokeInvitation(invitation.userId)}
                     disabled={!props.state.canChangeAccess()}
                   >

@@ -118,20 +118,29 @@ Comparable actual-App desktop/phone light/dark browser fixtures bind the display
 and exact one-write/saved-readback behavior. This is selection clarity, not live
 authorization, original-client recovery or release availability.
 
-### Keyboard recovery after an uncertain access change
+### Keyboard continuation through saved access rereads
 
-Organization Access hands lost panel focus to its existing unavailable warning
-when a focused control is removed after an uncertain change. The next Tab reaches
-the explicit read-only Reload access action. A reload that succeeds focuses the
-accepted organization summary; a failed reload focuses the new warning. Both
-targets are programmatically focusable, not additional Tab stops. Initial and
-background loads and successful-mutation refreshes do not focus the summary.
-Focus elsewhere is preserved, and context changes, hidden surfaces and disposal
-cancel stale handoffs. Visible information, mutation/authority fences, readback
-and no-write-retry behavior are unchanged. `OrganizationAccessPanel.test.tsx`
-covers failure, reload, no-steal, context and cleanup paths. Consuming-App browser
-proof covers keyboard recovery and exact one-write/read-only reload behavior at
-desktop and phone sizes in both themes; native screen-reader speech is unmeasured.
+Organization Access restores lost panel focus only within the same admitted
+organization, user, surface and read-only context. When a saved reread replaces
+controls, it restores the same exact action and identity. If that item was
+removed, it continues at the next, then previous same-kind control in the prior
+order, never the new row index or another action family. If none remains, it
+focuses the accepted organization summary. An untouched initial read never takes
+focus. A deliberate focus move elsewhere wins over a pending write or reread.
+
+An uncertain change still focuses the existing unavailable warning when the
+focused control disappears. The next Tab reaches the explicit read-only Reload
+access action. An explicit reload focuses the accepted summary or the new
+warning, never repeats the write. These recovery targets are programmatically
+focusable, not additional Tab stops. Organization/user round trips, read-only
+withdrawal, hidden surfaces and disposal retire stale focus intent.
+
+Visible information, mutation/authority fences, saved readback and no-write-retry
+behavior are unchanged. Registered panel and transport tests cover the saved
+controls, reordered/removed identities, native submission, uncertainty, reload,
+no-steal, context and cleanup paths. Actual consuming-panel/state/client browser
+fixtures and comparable desktop/phone light/dark captures verify the interactions;
+full App/IdP, original-client recovery and screen-reader speech are unmeasured.
 
 ### Saved role IDs distinguish namesake access decisions
 

@@ -39,6 +39,8 @@ export const OrganizationAccessManagementSection: Component<
                 <span class="block text-xs font-medium text-base-content">User ID</span>
                 <input
                   type="text"
+                  data-org-access-action="invite-user"
+                  data-org-access-target="draft"
                   aria-label="Invite user ID"
                   value={props.state.inviteUserID()}
                   onInput={(event) => props.state.setInviteUserID(event.currentTarget.value)}
@@ -48,6 +50,8 @@ export const OrganizationAccessManagementSection: Component<
               </label>
               <FormSelect
                 label="Role"
+                data-org-access-action="invite-role"
+                data-org-access-target="draft"
                 aria-label="Invite role"
                 labelClass="text-xs"
                 fieldBaseClass="min-w-0 space-y-1"
@@ -82,6 +86,8 @@ export const OrganizationAccessManagementSection: Component<
               </FormSelect>
               <Button
                 type="submit"
+                data-org-access-action="invite-submit"
+                data-org-access-target="draft"
                 variant="primary"
                 size="settingsAction"
                 class="w-full sm:w-auto"

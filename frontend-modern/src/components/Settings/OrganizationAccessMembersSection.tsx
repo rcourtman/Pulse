@@ -47,6 +47,8 @@ export const OrganizationAccessMembersSection: Component<OrganizationAccessMembe
                 >
                   <FormSelect
                     label={`Role for ${member.userId}`}
+                    data-org-access-action="role"
+                    data-org-access-target={member.userId}
                     labelClass="sr-only"
                     fieldBaseClass="contents"
                     value={role}
@@ -106,6 +108,8 @@ export const OrganizationAccessMembersSection: Component<OrganizationAccessMembe
                     size="xs"
                     class="gap-1"
                     aria-label={`Remove ${member.userId} from organization`}
+                    data-org-access-action="remove"
+                    data-org-access-target={member.userId}
                     onClick={() => {
                       void props.state.removeMember(member);
                     }}

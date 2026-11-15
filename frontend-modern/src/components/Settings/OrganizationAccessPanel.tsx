@@ -27,9 +27,21 @@ export const OrganizationAccessPanel: Component<OrganizationAccessPanelProps> = 
   const showOrganizationSurface = () =>
     isMultiTenantEnabled() && !presentationPolicyHidesOrganizationSurfaces();
   const warningTitleID = createUniqueId();
+  let panel: HTMLDivElement | undefined;
   let warning: HTMLDivElement | undefined;
   let summary: HTMLParagraphElement | undefined;
-  let lastFocused: { element: HTMLElement; orgID: string; user: string | undefined } | undefined;
+  let lastFocused:
+    | {
+        element: HTMLElement;
+        orgID: string;
+        user: string | undefined;
+        action?: string;
+        targets: string[];
+      }
+    | undefined;
+  let focusContext: [string, string | undefined, boolean, boolean] | undefined;
+  const controls = () =>
+    Array.from(panel?.querySelectorAll<HTMLElement>('[data-org-access-action]') ?? []);
   let reloadIntent: { orgID: string; user: string | undefined } | undefined;
   let focusTimer: number | undefined;
 
@@ -44,6 +56,13 @@ export const OrganizationAccessPanel: Component<OrganizationAccessPanelProps> = 
     const orgID = state.selectedOrgID();
     const user = props.currentUser;
     const enabled = showOrganizationSurface();
+    const context: typeof focusContext = [orgID, user, enabled, state.readOnly()];
+    // A round trip must not revive the old reader's keyboard intent.
+    if (focusContext?.some((value, index) => value !== context[index])) {
+      lastFocused = undefined;
+      reloadIntent = undefined;
+    }
+    focusContext = context;
     const loading = state.loading();
     const error = state.loadError();
     const org = state.org();
@@ -53,12 +72,11 @@ export const OrganizationAccessPanel: Component<OrganizationAccessPanelProps> = 
     if (!enabled || loading) return;
     const explicitReload = !!reloadIntent;
     reloadIntent = undefined;
-    if (!error && (!explicitReload || !org)) return;
+    if (!error && !org) return;
 
     focusTimer = window.setTimeout(() => {
-      const target = error ? warning : summary;
       if (
-        !target?.isConnected ||
+        !panel?.isConnected ||
         !showOrganizationSurface() ||
         state.loading() ||
         state.selectedOrgID() !== orgID ||
@@ -77,7 +95,19 @@ export const OrganizationAccessPanel: Component<OrganizationAccessPanelProps> = 
         (explicitReload || lostPanelFocus) &&
         (!document.activeElement || document.activeElement === document.body)
       ) {
-        target.focus();
+        // The refreshed controls are new DOM nodes. Match exact data values,
+        // never interpolate a saved identity into a CSS selector. If a row was
+        // removed, continue with the next (then previous) same-kind control.
+        const candidates = controls().filter(
+          (control) =>
+            control.dataset.orgAccessAction === lastFocused?.action &&
+            !control.matches(':disabled'),
+        );
+        const replacement = lastFocused?.targets
+          .map((id) => candidates.find((control) => control.dataset.orgAccessTarget === id))
+          .find(Boolean);
+        const target = error ? warning : explicitReload ? summary : (replacement ?? summary);
+        target?.focus();
       }
     }, 0);
   });
@@ -93,13 +123,21 @@ export const OrganizationAccessPanel: Component<OrganizationAccessPanelProps> = 
       }
     >
       <div
+        ref={panel}
         class="space-y-6"
         onFocusIn={(event) => {
           if (event.target instanceof HTMLElement) {
+            const action = event.target.dataset.orgAccessAction;
+            const ids = controls()
+              .filter((control) => control.dataset.orgAccessAction === action)
+              .map((control) => control.dataset.orgAccessTarget!);
+            const index = ids.indexOf(event.target.dataset.orgAccessTarget!);
             lastFocused = {
               element: event.target,
               orgID: state.selectedOrgID(),
               user: props.currentUser,
+              action,
+              targets: index < 0 ? [] : [...ids.slice(index), ...ids.slice(0, index).reverse()],
             };
           }
         }}
