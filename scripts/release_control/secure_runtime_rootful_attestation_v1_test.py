@@ -617,6 +617,18 @@ if module.MAX_RECEIPT_BYTES <= 0:
             with self.subTest(source=relative):
                 self.assertEqual(source_hashes.get(relative), sha((repo_root / relative).read_bytes()))
 
+    def test_manifest_reader_hashes_native_apt_compiled_inputs(self) -> None:
+        repo_root = Path(__file__).resolve().parents[2]
+        _, source_hashes = attester.load_source_manifest(
+            repo_root, repo_root / attester.SOURCE_MANIFEST_PATH,
+        )
+        for relative in (
+            "scripts/installtests/agent_installed_apt_controls_test.go",
+            "scripts/installtests/agent_installed_apt_systemd_test.go",
+        ):
+            with self.subTest(source=relative):
+                self.assertEqual(source_hashes.get(relative), sha((repo_root / relative).read_bytes()))
+
 
 if __name__ == "__main__":
     unittest.main()
