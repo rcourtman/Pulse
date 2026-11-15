@@ -244,8 +244,8 @@ func TestPortalDashboard(t *testing.T) {
 		t.Fatalf("account.kind = %q, want %q", resp.Account.Kind, registry.AccountKindMSP)
 	}
 
-	if len(resp.Workspaces) != 2 {
-		t.Fatalf("workspaces len = %d, want %d", len(resp.Workspaces), 2)
+	if len(resp.Workspaces) != 3 {
+		t.Fatalf("workspaces len = %d, want %d", len(resp.Workspaces), 3)
 	}
 
 	// Make assertions order-independent.
@@ -310,8 +310,14 @@ func TestPortalDashboard(t *testing.T) {
 		t.Fatalf("suspended.setup_status = %q, want review", susp.SetupStatus)
 	}
 
-	if resp.Summary.Total != 2 {
-		t.Fatalf("summary.total = %d, want %d", resp.Summary.Total, 2)
+	if pending := wsByID[tenantDeletingID]; pending.State != registry.TenantStateDeleting || pending.SetupStatus != "review" {
+		t.Fatalf("pending deletion lost its identity or review state: %+v", pending)
+	}
+	if _, ok := wsByID[tenantDeletedID]; ok {
+		t.Fatal("completed deletion remained visible")
+	}
+	if resp.Summary.Total != 3 {
+		t.Fatalf("summary.total = %d, want %d", resp.Summary.Total, 3)
 	}
 	if resp.Summary.Active != 1 {
 		t.Fatalf("summary.active = %d, want %d", resp.Summary.Active, 1)
@@ -719,6 +725,101 @@ func TestPortalWorkspaceDetailHidesDeletedWorkspaces(t *testing.T) {
 	rec := doRequest(t, mux, req)
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want %d (body=%q)", rec.Code, http.StatusNotFound, rec.Body.String())
+	}
+}
+
+func TestPendingDeletionRemainsVisibleUntilCleanupCompletes(t *testing.T) {
+	reg, sessions, token, accountID, _ := newPortalSessionFixture(t)
+	const tenantID = "t_pending_cleanup"
+	checked := time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC)
+	if err := reg.Create(&registry.Tenant{
+		ID: tenantID, AccountID: accountID, DisplayName: "Cleanup pending",
+		State: registry.TenantStateDeleting, ContainerID: "saved-runtime",
+		CreatedAt: checked, LastHealthCheck: &checked, HealthCheckOK: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	facts := staticSetupFactReader{tenantID: {
+		ActiveCriticalAlertCount: intPtr(3), ActiveWarningAlertCount: intPtr(1),
+	}}
+	const otherAccountID = "a_other_pending"
+	if err := reg.CreateAccount(&registry.Account{ID: otherAccountID, Kind: registry.AccountKindMSP}); err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.Create(&registry.Tenant{ID: "t_foreign_pending", AccountID: otherAccountID, State: registry.TenantStateDeleting}); err != nil {
+		t.Fatal(err)
+	}
+	wrongAccount := httptest.NewRequest(http.MethodGet, strings.ReplaceAll(PortalWorkspacePath, "{tenant_id}", tenantID)+"?account_id="+otherAccountID, nil)
+	wrongAccount.SetPathValue("tenant_id", tenantID)
+	refused := httptest.NewRecorder()
+	HandlePortalWorkspaceDetail(reg)(refused, wrongAccount)
+	if refused.Code != http.StatusNotFound {
+		t.Fatalf("pending detail crossed the account boundary: %d", refused.Code)
+	}
+	read := func(handler http.HandlerFunc, path string) *httptest.ResponseRecorder {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec := httptest.NewRecorder()
+		handler(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%s: %d %s", path, rec.Code, rec.Body.String())
+		}
+		return rec
+	}
+	checkBootstrap := func(raw string, want int) {
+		t.Helper()
+		var data BootstrapData
+		if err := json.Unmarshal([]byte(raw), &data); err != nil {
+			t.Fatal(err)
+		}
+		if len(data.Accounts) != 1 || data.Accounts[0].ID != accountID || len(data.Accounts[0].Workspaces) != want {
+			t.Fatalf("pending deletion lost its account or workspace: %+v", data.Accounts)
+		}
+		if want == 0 {
+			return
+		}
+		ws := data.Accounts[0].Workspaces[0]
+		if ws.ID != tenantID || ws.DisplayName != "Cleanup pending" || ws.State != "deleting" || ws.SetupStatus != "review" || !ws.Healthy || ws.LastHealthCheck == "" || ws.CreatedAt == "" {
+			t.Fatalf("pending deletion lost current state or saved facts: %+v", ws)
+		}
+		if derefInt(ws.ActiveCriticalAlertCount) != 3 || derefInt(ws.ActiveWarningAlertCount) != 1 {
+			t.Fatalf("pending deletion hid outstanding alerts: %+v", ws)
+		}
+	}
+	for _, complete := range []bool{false, true} {
+		if complete {
+			if _, _, err := reg.FinalizeTenantDeletionForAccount(context.Background(), accountID, tenantID); err != nil {
+				t.Fatal(err)
+			}
+		}
+		want := 1
+		if complete {
+			want = 0
+		}
+		bootstrap := read(HandlePortalBootstrapWithSignupPathAndSetupFacts(sessions, reg, nil, "/signup", facts), PortalBootstrapPath)
+		checkBootstrap(bootstrap.Body.String(), want)
+		page := read(HandlePortalPageWithSignupPathAndSetupFacts(sessions, reg, nil, "/fixture.svg", "/signup", facts), PortalPagePath)
+		checkBootstrap(extractPortalBootstrapJSONFromHTML(t, page.Body.String()), want)
+		dashboard := read(HandlePortalDashboardWithSetupFacts(reg, facts), PortalDashboardPath+"?account_id="+accountID)
+		var data dashboardResp
+		if err := json.Unmarshal(dashboard.Body.Bytes(), &data); err != nil {
+			t.Fatal(err)
+		}
+		if len(data.Workspaces) != want || data.Summary.Total != want {
+			t.Fatalf("dashboard disagrees with pending cleanup: %+v", data)
+		}
+		status := http.StatusOK
+		if complete {
+			status = http.StatusNotFound
+		}
+		req := httptest.NewRequest(http.MethodGet, strings.ReplaceAll(PortalWorkspacePath, "{tenant_id}", tenantID)+"?account_id="+accountID, nil)
+		req.SetPathValue("tenant_id", tenantID)
+		detail := httptest.NewRecorder()
+		HandlePortalWorkspaceDetail(reg)(detail, req)
+		if detail.Code != status {
+			t.Fatalf("detail status = %d, want %d", detail.Code, status)
+		}
 	}
 }
 

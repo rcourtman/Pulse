@@ -1,6 +1,10 @@
 package registry
 
 import (
+	"context"
+	"encoding/json"
+	"reflect"
+
 	"database/sql"
 	"errors"
 	"fmt"
@@ -1601,5 +1605,205 @@ func TestRuntimeStatePatchPreservesWithdrawnAuthority(t *testing.T) {
 	missing.ID = "t-absent"
 	if err := reg.UpdateRuntimeState(&missing); err == nil {
 		t.Fatal("missing runtime silently accepted")
+	}
+}
+
+func TestTenantFieldPatchScopesAndPreservesUneditableFields(t *testing.T) {
+	reg := newTestRegistry(t)
+	if err := reg.CreateAccount(&Account{ID: "a-fields", Kind: AccountKindMSP}); err != nil {
+		t.Fatal(err)
+	}
+	when := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
+	tenant := &Tenant{ID: "t-fields", AccountID: "a-fields", DisplayName: "Original", State: TenantStateActive, Email: "owner@example.test", PlanVersion: "msp_max", StripeCustomerID: "cus_fields", StripeSubscriptionID: "sub_fields", StripePriceID: "price_fields", ContainerID: "runtime", CurrentImageDigest: "current", DesiredImageDigest: "desired", HealthCheckOK: true, LastHealthCheck: &when}
+	if err := reg.Create(tenant); err != nil {
+		t.Fatal(err)
+	}
+	name := "Renamed"
+	previous, current, err := reg.PatchTenantForAccount(context.Background(), tenant.AccountID, tenant.ID, &name, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if previous.DisplayName != "Original" || current.DisplayName != "Renamed" {
+		t.Fatalf("wrong snapshots: %+v %+v", previous, current)
+	}
+	old := *previous
+	old.DisplayName = current.DisplayName
+	old.UpdatedAt = current.UpdatedAt
+	if !reflect.DeepEqual(old, *current) {
+		t.Fatalf("editable field patch changed protected fields: %+v %+v", old, current)
+	}
+	if _, _, err := reg.PatchTenantForAccount(context.Background(), "a-other", tenant.ID, &name, nil); !errors.Is(err, ErrTenantNotFound) {
+		t.Fatalf("cross-account patch = %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, _, err := reg.PatchTenantForAccount(ctx, tenant.AccountID, tenant.ID, &name, nil); err == nil {
+		t.Fatal("canceled request committed")
+	}
+	if err := reg.SetTenantState(tenant.ID, TenantStateDeleted); err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.SetTenantState(tenant.ID, TenantStateCanceled); err != nil {
+		t.Fatal(err)
+	}
+	current, _ = reg.Get(tenant.ID)
+	if current.State != TenantStateDeleted {
+		t.Fatalf("withdrawal erased deletion: %+v", current)
+	}
+}
+
+func TestTenantManualHoldResumeUsesCurrentBillingAndKnownCause(t *testing.T) {
+	for _, tc := range []struct {
+		name            string
+		kind            AccountKind
+		customer        string
+		accountCustomer string
+		billing         string
+		hold            bool
+		allowed         bool
+	}{
+		{"local_provider", AccountKindMSP, "", "", "", true, true},
+		{"unconfigured_msp_missing", AccountKindMSP, "", "", "", true, false},
+		{"individual_missing", AccountKindIndividual, "", "", "", true, false},
+		{"billed_missing", AccountKindMSP, "cus_missing", "", "", true, false},
+		{"mismatched_customer", AccountKindMSP, "cus_wrong", "cus_current", "active", true, false},
+		{"current_paid", AccountKindMSP, "cus_current", "cus_current", "active", true, true},
+		{"same_state_withdrawal", AccountKindMSP, "cus_current", "cus_current", "suspended", true, false},
+		{"unknown_legacy", AccountKindMSP, "cus_current", "cus_current", "past_due", false, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			reg := newTestRegistry(t)
+			if err := reg.CreateAccount(&Account{ID: "a-resume", Kind: tc.kind}); err != nil {
+				t.Fatal(err)
+			}
+			if tc.accountCustomer != "" {
+				if err := reg.CreateStripeAccount(&StripeAccount{AccountID: "a-resume", StripeCustomerID: tc.accountCustomer, SubscriptionState: tc.billing}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			tenant := &Tenant{ID: "t-resume", AccountID: "a-resume", State: TenantStateSuspended, StripeCustomerID: tc.customer, ManualHold: tc.hold}
+			if err := reg.Create(tenant); err != nil {
+				t.Fatal(err)
+			}
+			suspend := TenantStateSuspended
+			if _, _, err := reg.PatchTenantForAccount(context.Background(), tenant.AccountID, tenant.ID, nil, &suspend); err != nil {
+				t.Fatal(err)
+			}
+			active := TenantStateActive
+			_, current, err := reg.PatchTenantForAccount(context.Background(), tenant.AccountID, tenant.ID, nil, &active, tc.name != "unconfigured_msp_missing")
+			if tc.allowed {
+				if err != nil || current.State != TenantStateActive || current.ManualHold {
+					t.Fatalf("manual resume failed: %+v %v", current, err)
+				}
+			} else if !errors.Is(err, ErrTenantStateConflict) {
+				t.Fatalf("unknown/nonpayable authority resumed: %+v %v", current, err)
+			}
+		})
+	}
+}
+
+func TestTenantManualHoldMigrationIsConservativeAndDurable(t *testing.T) {
+	dir := t.TempDir()
+	reg, err := NewTenantRegistry(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, kind := range []AccountKind{AccountKindMSP, AccountKindIndividual} {
+		if err := reg.CreateAccount(&Account{ID: string(kind), Kind: kind}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := reg.CreateAccount(&Account{ID: "paid", Kind: AccountKindMSP}); err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateStripeAccount(&StripeAccount{AccountID: "paid", StripeCustomerID: "cus_paid", SubscriptionState: "past_due"}); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct{ id, account, customer string }{{"local", "msp", ""}, {"individual", "individual", ""}, {"billed_without_record", "msp", "cus_missing"}, {"ambiguous_paid", "paid", "cus_paid"}} {
+		if err := reg.Create(&Tenant{ID: tc.id, AccountID: tc.account, StripeCustomerID: tc.customer, DisplayName: tc.id, State: TenantStateSuspended, ContainerID: "preserved", PlanVersion: "msp_starter"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Recreate exactly the pre-change application schema, retaining every other
+	// value. This is a bounded migration fixture, not a driver/crash experiment.
+	if _, err := reg.db.Exec(`ALTER TABLE tenants DROP COLUMN manual_hold`); err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.Close(); err != nil {
+		t.Fatal(err)
+	}
+	for reopen := 0; reopen < 2; reopen++ {
+		reg, err = NewTenantRegistry(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, id := range []string{"local", "individual", "billed_without_record", "ambiguous_paid"} {
+			row, err := reg.Get(id)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if row.ManualHold != (id == "local") || row.State != TenantStateSuspended || row.ContainerID != "preserved" || row.DisplayName != id {
+				t.Fatalf("migration inferred/replaced authority: %+v", row)
+			}
+			body, err := json.Marshal(row)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if strings.Contains(string(body), "manual_hold") || strings.Contains(string(body), "ManualHold") {
+				t.Fatalf("private authority leaked to tenant JSON: %s", body)
+			}
+		}
+		if err := reg.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func TestTenantBillingGrantUsesCurrentHoldAndFieldOwnership(t *testing.T) {
+	reg := newTestRegistry(t)
+	if err := reg.CreateAccount(&Account{ID: "a-grant", Kind: AccountKindMSP}); err != nil {
+		t.Fatal(err)
+	}
+	tenant := &Tenant{ID: "t-grant", AccountID: "a-grant", State: TenantStateActive, DisplayName: "Original", ContainerID: "runtime", CurrentImageDigest: "image"}
+	if err := reg.Create(tenant); err != nil {
+		t.Fatal(err)
+	}
+	// Keep the old event snapshot while a current account edit changes both
+	// fields. The grant must consult persisted hold, not the old object's state.
+	old := *tenant
+	suspended := TenantStateSuspended
+	name := "Latest"
+	if _, _, err := reg.PatchTenantForAccount(context.Background(), tenant.AccountID, tenant.ID, &name, &suspended); err != nil {
+		t.Fatal(err)
+	}
+	current, applied, err := reg.ApplyTenantBillingGrant(context.Background(), old.AccountID, old.ID, "sub_new", "price_new", "msp_max")
+	if err != nil || !applied || current.State != TenantStateSuspended || !current.ManualHold || current.DisplayName != "Latest" || current.ContainerID != "runtime" || current.CurrentImageDigest != "image" || current.PlanVersion != "msp_max" {
+		t.Fatalf("stale billing grant replaced held/current fields: %+v %v %v", current, applied, err)
+	}
+}
+
+func TestTenantManualResumeRefusesEmptyStoredBilling(t *testing.T) {
+	reg := newTestRegistry(t)
+	if err := reg.CreateAccount(&Account{ID: "a-empty", Kind: AccountKindMSP}); err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateStripeAccount(&StripeAccount{AccountID: "a-empty", StripeCustomerID: "cus_empty", SubscriptionState: "active"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.Create(&Tenant{ID: "t-empty", AccountID: "a-empty", State: TenantStateSuspended, ManualHold: true}); err != nil {
+		t.Fatal(err)
+	}
+	// Constructors intentionally default a new empty state to trial. This is
+	// an actually empty legacy saved value, not construction of a new trial.
+	if _, err := reg.db.Exec(`UPDATE stripe_accounts SET subscription_state = '' WHERE account_id = ?`, "a-empty"); err != nil {
+		t.Fatal(err)
+	}
+	active := TenantStateActive
+	if _, _, err := reg.PatchTenantForAccount(context.Background(), "a-empty", "t-empty", nil, &active); !errors.Is(err, ErrTenantStateConflict) {
+		t.Fatalf("empty saved billing recreated authority: %v", err)
+	}
+	row, _ := reg.Get("t-empty")
+	if row.State != TenantStateSuspended || !row.ManualHold {
+		t.Fatalf("empty billing changed hold: %+v", row)
 	}
 }

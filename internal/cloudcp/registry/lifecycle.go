@@ -50,7 +50,7 @@ func (r *TenantRegistry) UpdateRuntimeState(t *Tenant) error {
 }
 
 func (r *TenantRegistry) SetTenantState(id string, state TenantState) error {
-	res, err := r.db.Exec(`UPDATE tenants SET state = ?, updated_at = ? WHERE id = ?`, string(state), time.Now().UTC().Unix(), id)
+	res, err := r.db.Exec(`UPDATE tenants SET state = CASE WHEN state IN ('deleting', 'deleted') THEN state ELSE ? END, updated_at = CASE WHEN state IN ('deleting', 'deleted') THEN updated_at ELSE ? END WHERE id = ?`, string(state), time.Now().UTC().Unix(), id)
 	if err != nil {
 		return err
 	}

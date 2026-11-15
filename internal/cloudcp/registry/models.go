@@ -98,6 +98,7 @@ type Tenant struct {
 	Email                string      `json:"email"`
 	DisplayName          string      `json:"display_name"`
 	State                TenantState `json:"state"`
+	ManualHold           bool        `json:"-"` // account suspension, independent of billing withdrawal
 	StripeCustomerID     string      `json:"stripe_customer_id"`
 	StripeSubscriptionID string      `json:"stripe_subscription_id"`
 	StripePriceID        string      `json:"stripe_price_id"`

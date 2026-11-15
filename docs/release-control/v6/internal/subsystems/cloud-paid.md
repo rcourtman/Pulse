@@ -4357,3 +4357,52 @@ focus to its result unless the user has moved on. Regression proof is in
 `internal/cloudcp/portal/frontend/src/workspace_recovery.test.ts` and the existing
 account controller, view, shell and store suites. Compiled assets and comparable
 desktop/narrow browser proof accompany the containing source.
+
+### Account lifecycle writes preserve current withdrawal and manual holds
+
+Account rename, suspend and delete handlers patch only their owned fields from
+an account-scoped current row. Request-body reads do not hold the runtime lease;
+a cancellation can withdraw authority while a slow edit is still arriving.
+A stale active/suspended request cannot replace canceled, deleting or deleted
+state. A rejected combined rename/state patch changes neither field. Rename
+alone preserves current billing, runtime identity and health metadata.
+
+Deletion enters a terminal state and revokes renewal before container cleanup.
+Cleanup failure leaves deletion pending, not active; completion clears only the
+container identity. Repeating completed deletion does not deprovision again.
+Granting billing events preserve deleting/deleted rows and do not issue fresh
+leases for them. Withdrawal can still revoke access behind a runtime-recovery
+hold and cannot replace terminal deletion with a weaker lifecycle state.
+
+Manual suspension has a private, persisted hold distinct from billing
+suspension. A granting billing event updates billing-owned metadata but keeps
+that hold and a non-granting runtime state. Deliberate resume requires a known
+manual hold and current granting billing; missing billing is not local-MSP
+permission. Only explicit server configuration allows the existing Stripe-free
+MSP path. Resume reconciles the runtime billing file and refresh identity before
+reporting success; failure re-holds a still-resumable row without undoing a newer
+withdrawal. Account roles, routes and request fields are unchanged.
+
+The additive hold migration infers only unbilled local-MSP legacy suspensions.
+Historical paid suspension causes and ambiguous stored `past_due` rows are not
+reconstructed. New-workspace admission/provision completion and original-client
+recovery are separate work, not established by these mutation safeguards.
+
+Registered account/registry/Stripe lifecycle tests and route tests cover slow
+body withdrawal, field ownership, terminal and failed/idempotent deletion,
+conservative migration, manual-hold renewal, current-policy resume and failed
+resume compensation. The containing Account consumer must also be exercised
+with the actual producer responses at desktop and narrow viewports; native
+component success alone is not rendered, installed or original-client recovery.
+
+Pending deletion remains visible through the portal dashboard, workspace detail,
+session bootstrap and server-rendered bootstrap until cleanup completes. A
+withdrawn workspace whose cleanup failed is a `deleting` review row, not an empty
+account or a completed deletion. Preserve its identity, last-known health and
+outstanding alert facts without enabling active handoffs or repeating a write.
+Completed `deleted` rows remain hidden; account membership and account-scoped
+lookup boundaries do not change. The portal's registered pending-cleanup test
+checks all four readers, saved facts, foreign-account refusal and the completed
+transition. Comparable browser recovery proof must use the real bootstrap
+producer, because a frontend-only fixture can otherwise invent a pending row
+that the server still suppresses.
