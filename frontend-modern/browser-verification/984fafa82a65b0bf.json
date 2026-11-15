@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "base_sha": "a9b56aebb5f203a786ecb98bc10f6393bb3e0c19",
+  "verified_at": "2026-11-15T17:21:24Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/UserAssignmentsDialog.tsx",
+    "frontend-modern/src/components/Settings/UserAssignmentsPanel.tsx",
+    "frontend-modern/src/components/Settings/useUserAssignmentsPanelState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/UserAssignmentsDialog.tsx": "2131d8a2defc8c02a0cef36653f38aed3f3a012c4dafcce4694de1d8c7f722ea",
+    "frontend-modern/src/components/Settings/UserAssignmentsPanel.tsx": "857e0fe999705c89313b19e60e5c564364b76a9e6acaef0fc515dc4701bb3d1f",
+    "frontend-modern/src/components/Settings/useUserAssignmentsPanelState.ts": "d60d8bb3060557dda29e351aa1f7e39b76f483882ae0173fd69c79c7dced26ab"
+  },
+  "routes": [
+    "/"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Actual User Access panel, grid, editor, state, RBACAPI and HTTP client; only entitlement availability and local HTTP data are synthetic. This is a consuming-panel fixture, not App, tenant authorization or installed IdP proof.",
+    "Same-name principals with literal SSO IDs, same-name roles and a preserved unlisted saved role. Saved/failed inventory reads, explicit Retry, rejected and uncertain writes, missing user, cancellation, deliberate focus move, user/organization round trip, permission withdrawal and unmount.",
+    "Chromium desktop/light and narrow/dark; WebKit desktop/dark and narrow/light. Playwright 1.56.1 matches integration lock. 32 PNGs/16 comparable pairs were opened through native image inspection: overview, saved, failed read and rejected save. Original and final fixture data, viewport, theme and interaction state match."
+  ],
+  "interactions": [
+    "Final containing frontend bytes pass 1110 browser assertions across 44 cases. Parent controls reproduce lost focus after saved and failed rereads; final focus returns to the exact literal principal or search if it disappeared. Retry reads once and returns to that same principal without another role write.",
+    "A rejected save preserves selected roles and keeps keyboard focus inside its editor, recovering to its existing feedback if the disabled submit control blurred. Unknown outcomes retain their own recovery notice. No restoration steals an active focus target or survives reader replacement, permission loss or unmount.",
+    "Each save uses one exact encoded-principal PUT with unchanged saved role IDs, API token, organization, cookies and CSRF behavior. All existing identities, roles and actions remain visible; no layout, information, route or grant changes. Browser, Vite and fixture server close; no uncaught page errors.",
+    "Earlier proof-only textbox locator failure, observed Chromium rejection blur and an unsettled WebKit frame are retained separately; screenshots wait for fonts/frames and finish animations consistently for comparable pixel review. Final error focus ring is inset so its panel does not clip it."
+  ]
+}

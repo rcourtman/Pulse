@@ -358,6 +358,7 @@ export function useUserAssignmentsPanelState(props: UserAssignmentsPanelProps = 
     successNotice,
     accessAllowed,
     canEdit,
+    readerKey: () => context as object,
     closeDeleteUser,
     closeModal,
     deletingUser,

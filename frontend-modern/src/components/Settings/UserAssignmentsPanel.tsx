@@ -26,6 +26,10 @@ export const UserAssignmentsPanel: Component<UserAssignmentsPanelProps> = (props
   const emptyStateCopy = () => getUserAssignmentsEmptyStateCopy();
   let searchInputRef: HTMLInputElement | undefined;
   let inventoryNotice: HTMLDivElement | undefined;
+  let loadFailureNotice: HTMLDivElement | undefined;
+  let editorFailureNotice: HTMLDivElement | undefined;
+  let panel: HTMLDivElement | undefined;
+  let savedUser: { reader: object; username?: string } | undefined;
   let focusTimer: number | undefined;
   createEffect(
     on(state.unconfirmedChange, (change) => {
@@ -39,8 +43,50 @@ export const UserAssignmentsPanel: Component<UserAssignmentsPanelProps> = (props
   );
   onCleanup(() => window.clearTimeout(focusTimer));
 
+  const saveOrReload = async (reload = false) => {
+    const reader = state.readerKey();
+    const username = reload
+      ? savedUser?.reader === reader
+        ? savedUser.username
+        : undefined
+      : state.editingUser()?.username;
+    if (!reload && !username) return;
+    await (reload ? state.loadData() : state.handleSaveAssignments());
+    // The state owner already replaces this identity on every reader change.
+    // In particular, an organization round trip cannot revive a return target.
+    if (reader !== state.readerKey() || state.unconfirmedChange()) return;
+    if (!state.showModal()) savedUser = { reader, username };
+    window.clearTimeout(focusTimer);
+    focusTimer = window.setTimeout(() => {
+      if (
+        reader !== state.readerKey() ||
+        !state.accessAllowed() ||
+        state.loading() ||
+        state.userPendingDeletion() ||
+        state.unconfirmedChange() ||
+        (document.activeElement && document.activeElement !== document.body)
+      )
+        return;
+      // A saved read replaces the original row; match the literal principal,
+      // not a mutable name or a selector interpolated from an opaque SSO ID.
+      let target: HTMLElement | undefined;
+      if (state.showModal()) {
+        if (state.editingUser()?.username === username && state.actionError())
+          target = editorFailureNotice;
+      } else if (state.loadError()) {
+        target = loadFailureNotice;
+      } else if (state.canEdit()) {
+        target =
+          Array.from(
+            panel?.querySelectorAll<HTMLButtonElement>('button[data-user-access]') ?? [],
+          ).find((button) => button.dataset.userAccess === username) ?? searchInputRef;
+      }
+      target?.focus();
+    }, 0);
+  };
+
   return (
-    <div class="space-y-6">
+    <div ref={panel} class="space-y-6">
       <SettingsPanel
         title="User Access"
         action={
@@ -111,13 +157,16 @@ export const UserAssignmentsPanel: Component<UserAssignmentsPanelProps> = (props
         <Show when={!state.loading() && state.accessAllowed() && state.loadError()}>
           {(message) => (
             <InlineNotice
+              ref={loadFailureNotice}
+              tabindex={-1}
               role="alert"
               aria-live="polite"
               tone="danger"
               layout="banner"
               icon={<TriangleAlert />}
               actionLabel={state.unconfirmedChange() ? undefined : 'Retry'}
-              actionOnClick={() => void state.loadData()}
+              actionOnClick={() => void saveOrReload(true)}
+              class="focus:outline-hidden focus:ring-2 focus:ring-inset focus:ring-blue-500"
             >
               {message()}
             </InlineNotice>
@@ -254,7 +303,8 @@ export const UserAssignmentsPanel: Component<UserAssignmentsPanelProps> = (props
                       aria-label={`Manage access for ${getUserIdentityLabel(assignment)}`}
                       title="Manage access"
                       disabled={!state.canEdit()}
-                      onClick={() => state.openManageAccess(assignment)}
+                      data-user-access={assignment.username}
+                      onClick={() => void state.openManageAccess(assignment)}
                     >
                       <Pencil class="w-4 h-4" />
                       <span class="hidden sm:inline">Manage Access</span>
@@ -286,6 +336,9 @@ export const UserAssignmentsPanel: Component<UserAssignmentsPanelProps> = (props
 
       <UserAssignmentsDialog
         actionError={state.actionError()}
+        actionErrorRef={(element) => {
+          editorFailureNotice = element;
+        }}
         editingUser={state.editingUser()}
         formRoleIds={state.formRoleIds()}
         isOpen={state.showModal()}
@@ -295,7 +348,7 @@ export const UserAssignmentsPanel: Component<UserAssignmentsPanelProps> = (props
         saving={state.saving()}
         userPermissions={state.userPermissions()}
         onClose={state.closeModal}
-        onSave={state.handleSaveAssignments}
+        onSave={() => void saveOrReload()}
         onRetryPermissions={() => void state.loadUserPermissions()}
         onToggleRole={state.toggleRole}
       />
