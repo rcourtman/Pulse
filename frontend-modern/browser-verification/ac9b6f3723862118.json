@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "base_sha": "a5b5ef17360262e6a9a455053e58ae4bc0daec19",
+  "verified_at": "2026-11-15T21:56:05Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/RolesEditorDialog.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/RolesEditorDialog.tsx": "fb73691ffb494212277df68d66343948b94f11cdaed50dea644e87b713e9e58f"
+  },
+  "routes": [
+    "/role-submit-proof/"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Actual Roles panel, editor, state owner, capability producer/gate, RBACAPI and authenticated HTTP client with synthetic local HTTP responses. No App, production authorization, installed client or IdP claim.",
+    "Chromium desktop/light and narrow/dark; WebKit desktop/dark and narrow/light. Playwright 1.56.1 matches integration lock. Same source-bound fixture, data, viewport, theme and interaction anchors before/after.",
+    "Whole saved-role inventory with literal namesake IDs, built-in read-only state and complete allow/deny/conditional/unlisted rules. Edit-ready, native Enter outcomes for edit/create, pending serialization, definite rejection and unknown outcome recovery."
+  ],
+  "interactions": [
+    "Four parent cases/180 assertions reproduce native Enter leaving valid create and edit drafts unsent; the existing visible button still succeeds. Four candidate cases/188 assertions complete the same native Enter journeys through the unchanged guarded action, with one exact encoded saved-role PUT or new-draft POST and saved inventory reread.",
+    "Exact saved metadata and every rule/condition preserved; new draft does not inherit saved metadata. API token, organization, CSRF and cookies remain unchanged. No duplicate pending submission, accidental DELETE, auxiliary-button submission or blank-name write. Definite rejection keeps draft; uncertainty requires read-only saved-role check without automatic write replay.",
+    "40 captures/20 comparable pairs were opened through native view_image: overview, edit-ready, edit Enter outcome, create Enter outcome, rejected. Overview and edit-ready retain information and controls; saved notices/readbacks now appear after Enter. Existing narrow rejection feedback still needs scrolling (partly clipped Chromium, below view WebKit); not repaired or caused by this change.",
+    "Browser contexts/browsers and Vite server closed in both complete passes; no uncaught page errors or horizontal page overflow. Earlier fixture glob/middleware failures are retained separately, not product failures or passing executions."
+  ]
+}

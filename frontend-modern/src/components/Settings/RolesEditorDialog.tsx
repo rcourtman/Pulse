@@ -43,7 +43,13 @@ export const RolesEditorDialog: Component<RolesEditorDialogProps> = (props) => (
         props.editingRole ? `Edit role: ${getRoleIdentityLabel(props.editingRole)}` : 'New role'
       }
     >
-      <div class="flex min-h-0 w-full flex-col">
+      <form
+        class="flex min-h-0 w-full flex-col"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (!props.saving && props.formName.trim()) props.onSave();
+        }}
+      >
         <div class="flex shrink-0 items-start justify-between gap-3 px-4 sm:px-6 py-4 border-b border-border">
           <div class="min-w-0 [overflow-wrap:anywhere]">
             <h3 class="text-lg font-semibold text-base-content">
@@ -231,15 +237,14 @@ export const RolesEditorDialog: Component<RolesEditorDialogProps> = (props) => (
             Cancel
           </button>
           <button
-            type="button"
-            onClick={props.onSave}
+            type="submit"
             disabled={props.saving || !props.formName.trim()}
             class="inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {props.saving ? 'Saving...' : props.editingRole ? 'Update Role' : 'Create Role'}
           </button>
         </div>
-      </div>
+      </form>
     </Dialog>
   </Show>
 );
