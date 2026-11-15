@@ -1378,3 +1378,32 @@ describe('Organization Access lifetime', () => {
     expect(orgGetMock).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('Default organization member form', () => {
+  it('keeps the labelled viewer-only Add flow on native submission', async () => {
+    getOrgIDMock.mockReturnValue('default');
+    orgGetMock.mockResolvedValue({ ...baseOrg, id: 'default', canManageMembers: true });
+    inviteMemberMock.mockResolvedValue({
+      kind: 'member',
+      member: { userId: 'new-user', role: 'viewer' },
+    });
+    renderPanel();
+    const form = await screen.findByRole('form', { name: 'Add member' });
+    const input = within(form).getByRole('textbox', { name: 'Invite user ID' }) as HTMLInputElement;
+    const role = within(form).getByRole('combobox', { name: 'Invite role' });
+    expect(Array.from(input.labels ?? [], (label) => label.textContent?.trim())).toContain(
+      'User ID',
+    );
+    expect(within(role).getAllByRole('option')).toHaveLength(1);
+    expect(role).toHaveValue('viewer');
+    expect(within(form).getByRole('button', { name: 'Add' })).toHaveAttribute('type', 'submit');
+    fireEvent.input(input, { target: { value: 'new-user' } });
+    fireEvent.submit(form);
+    await waitFor(() => expect(inviteMemberMock).toHaveBeenCalledTimes(1));
+    expect(inviteMemberMock).toHaveBeenCalledWith(
+      'default',
+      { userId: 'new-user', role: 'viewer' },
+      expect.objectContaining({ expectedOrgID: 'default', retry: false }),
+    );
+  });
+});

@@ -784,3 +784,71 @@ describe('organization access selections through rendered controls and real tran
     expectBoundRequests();
   });
 });
+
+describe('Organization invitation form submission', () => {
+  it.each(['viewer', 'editor', 'admin'] as const)(
+    'submits the labelled %s draft through the existing session-bound owner',
+    async (role) => {
+      await openPanel();
+      const input = screen.getByRole('textbox', { name: 'Invite user ID' }) as HTMLInputElement;
+      const select = screen.getByRole('combobox', { name: 'Invite role' }) as HTMLSelectElement;
+      expect(Array.from(input.labels ?? [], (label) => label.textContent?.trim())).toContain(
+        'User ID',
+      );
+      expect(Array.from(select.labels ?? [], (label) => label.textContent?.trim())).toContain(
+        'Role',
+      );
+      const form = screen.getByRole('form', { name: 'Invite member' });
+      const userId = 'sso/invited/operator?realm=north#saved';
+      fireEvent.input(input, { target: { value: `  ${userId}  ` } });
+      fireEvent.change(select, { target: { value: role } });
+      expect(within(form).getByRole('button', { name: 'Invite' })).toHaveAttribute(
+        'type',
+        'submit',
+      );
+      const event = new Event('submit', { bubbles: true, cancelable: true });
+      fireEvent(form, event);
+      expect(event.defaultPrevented).toBe(true);
+      await expectSavedReread();
+      expectWrite(`${orgPath}/members`, 'POST', { userId, role });
+      expect(members).toEqual(originalMembers);
+      expect(pending.filter((invitation) => invitation.userId !== userId)).toEqual(originalPending);
+      expect(within(pendingGroup(userId)).getByText(role)).toBeInTheDocument();
+    },
+  );
+
+  it('does not repeat an in-flight submission from the form', async () => {
+    await openPanel();
+    const completion = deferredResponse(json({}));
+    writeReply = () => completion.promise;
+    fireEvent.input(screen.getByRole('textbox', { name: 'Invite user ID' }), {
+      target: { value: 'second-invited-user' },
+    });
+    const form = screen.getByRole('form', { name: 'Invite member' });
+    fireEvent.submit(form);
+    expect(within(form).getByRole('button', { name: 'Saving...' })).toBeDisabled();
+    fireEvent.submit(form);
+    expectWrite(`${orgPath}/members`, 'POST', { userId: 'second-invited-user', role: 'viewer' });
+    const invitation = pending.find((item) => item.userId === 'second-invited-user')!;
+    completion.resolve(json({ kind: 'invitation', invitation }));
+    await expectSavedReread();
+    expect(writes()).toHaveLength(1);
+  });
+
+  it('retains ownership confirmation before a form submission can transfer access', async () => {
+    await openPanel();
+    fireEvent.input(screen.getByRole('textbox', { name: 'Invite user ID' }), {
+      target: { value: people[1] },
+    });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Invite role' }), {
+      target: { value: 'owner' },
+    });
+    fireEvent.submit(screen.getByRole('form', { name: 'Invite member' }));
+    expect(ownershipDialog().getByText(people[1])).toBeInTheDocument();
+    expect(writes()).toHaveLength(0);
+    fireEvent.click(ownershipDialog().getByRole('button', { name: 'Cancel' }));
+    expect(screen.getByRole('textbox', { name: 'Invite user ID' })).toHaveValue(people[1]);
+    expect(screen.getByRole('combobox', { name: 'Invite role' })).toHaveValue('owner');
+    expect(writes()).toHaveLength(0);
+  });
+});
