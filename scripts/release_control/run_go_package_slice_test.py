@@ -114,6 +114,8 @@ class ExecutedRunnerTest(unittest.TestCase):
 import json, os, re, sys
 from pathlib import Path
 args = sys.argv[1:]
+ordinary = args[-1].startswith('github.com/')
+json_mode = '-json' in args or '-json=true' in os.environ.get('GOFLAGS','').split()
 with Path(os.environ['CALLS']).open('a') as f: f.write(json.dumps(args)+'\\n')
 if args[0] == 'list':
     print('\\n'.join('github.com/rcourtman/pulse-go-rewrite/'+n for n in
@@ -126,13 +128,13 @@ if events and '-list' not in args:
     def event(kind):
         with open(events,'a') as f:
             fcntl.flock(f,fcntl.LOCK_EX)
-            f.write(json.dumps({'kind':kind,'pid':os.getpid(),'ordinary':'-json' not in args,
+            f.write(json.dumps({'kind':kind,'pid':os.getpid(),'ordinary':ordinary,
                                 'goflags':os.environ.get('GOFLAGS',''),
                                 'at':time.monotonic()})+'\\n')
     import atexit
     event('start'); atexit.register(event,'end')
-    time.sleep(0.06 if '-json' in args else 0.4)
-if '-list' not in args and '-json' not in args:
+    time.sleep(0.4 if ordinary else 0.06)
+if '-list' not in args and not json_mode:
     print('ok ordinary packages 0.01s')
     sys.exit(int(os.environ.get('ORDINARY_EXIT','0')))
 names = json.loads(os.environ.get('SOURCE_NAMES',
@@ -142,10 +144,11 @@ if '-list' in args:
         print('original listing failure', file=sys.stderr)
         sys.exit(int(os.environ['LISTING_EXIT']))
     print('\\n'.join(names)); print('ok package 0.01s'); sys.exit(0)
-flag = '-run' if '-run' in args else '-skip'
-pattern = args[args.index(flag)+1]
-names = [n for n in names if bool(re.fullmatch(pattern,n)) == (flag == '-run')]
-pkg = 'github.com/rcourtman/pulse-go-rewrite/'+args[-1][2:]
+if not ordinary:
+    flag = '-run' if '-run' in args else '-skip'
+    pattern = args[args.index(flag)+1]
+    names = [n for n in names if bool(re.fullmatch(pattern,n)) == (flag == '-run')]
+pkg = args[-1] if ordinary else 'github.com/rcourtman/pulse-go-rewrite/'+args[-1][2:]
 mode = os.environ.get('MODE','')
 if mode == 'wrong-package': pkg = 'example.invalid/other'
 if mode == 'extra': names.append('TestUnexpected')
@@ -159,7 +162,7 @@ for name in names:
         emit('skip' if mode == 'skip' else ('fail' if mode == 'failed-root' else 'pass'),
              Test=name,Elapsed=0.01)
 if mode != 'truncated': emit('pass',Elapsed=0.02)
-sys.exit(int(os.environ.get('TEST_EXIT','0')))
+sys.exit(int(os.environ.get('ORDINARY_EXIT' if ordinary else 'TEST_EXIT','0')))
 ''')
         go.chmod(0o700)
 
@@ -224,6 +227,76 @@ sys.exit(int(os.environ.get('TEST_EXIT','0')))
 
 
 class WorkflowTest(unittest.TestCase):
+    def test_coverage_failure_is_fatal_without_replacing_the_observed_go_exit(self):
+        spec = importlib.util.spec_from_file_location('ordinary_verdict', SHARD)
+        shard = importlib.util.module_from_spec(spec); spec.loader.exec_module(shard)
+        name = runner.MODULE + 'internal/ordinary'
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary)
+            for coverage_exit in (0, 1, None):
+                with self.subTest(coverage_exit=coverage_exit), \
+                        patch.object(shard, 'ordinary_packages', return_value=[name]), \
+                        patch.object(shard, 'tasks', return_value=[(name, ['unused'])]), \
+                        patch.object(shard, 'run_task', return_value={
+                            'package': name, 'started': True, 'exit': 0, 'coverage_exit': coverage_exit}), \
+                        patch.object(sys, 'stdin', io.StringIO(name + '\n')), \
+                        patch.object(sys, 'argv', [str(SHARD), '--index', '0', '--output', str(output),
+                                                   '--ordinary-command', shard.ORDINARY_COMMAND]), \
+                        contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(shard.main(), 0 if coverage_exit == 0 else 1)
+                    task = json.loads((output / 'ordinary-packages.json').read_text())['tasks'][0]
+                    self.assertEqual(task['exit'], 0)
+                    self.assertEqual(task['coverage_exit'], coverage_exit)
+
+    def test_ordinary_zero_exit_cannot_hide_listed_roots_or_invalid_events(self):
+        fixture = ExecutedRunnerTest()
+        fixture.setUp()
+        self.addCleanup(fixture.doCleanups)
+        spec = importlib.util.spec_from_file_location('ordinary_coverage', SHARD)
+        shard = importlib.util.module_from_spec(spec); spec.loader.exec_module(shard)
+        command = ['bash', '-euo', 'pipefail', '-c', shard.ORDINARY_COMMAND]
+        name = runner.MODULE + 'internal/ordinary'
+        for mode in ('', 'skip', 'wrong-package', 'extra', 'missing', 'duplicate',
+                     'unfinished', 'failed-root', 'truncated'):
+            with self.subTest(mode=mode), patch.dict(os.environ, {
+                    'PATH': str(fixture.root) + ':' + os.environ['PATH'],
+                    'CALLS': str(fixture.root / 'calls'), 'MODE': mode,
+                    'GOFLAGS': '-mod=readonly -json=true'}):
+                result = shard.run_task((name, command), fixture.root / 'output' / (mode or 'pass'))
+                self.assertTrue(result['started'])
+                self.assertEqual(result['exit'], 0, 'retain the actual Go exit, not a coverage verdict')
+                self.assertEqual(result['listing_exit'], 0)
+                self.assertEqual(result['listed_roots'], 5)
+                self.assertEqual(result['coverage_exit'], 0 if mode in ('', 'skip') else 1)
+                sidecar = fixture.root / 'output' / (mode or 'pass') / 'ordinary' / name / 'timings.txt.failures.json'
+                index = json.loads(sidecar.read_text())
+                if mode == 'missing':
+                    self.assertEqual(index['missing_selected_tests']['names'], ['TestLast'])
+                if mode == 'skip':
+                    self.assertEqual(index['skipped_top_level_tests']['observed_count'], 5)
+
+    def test_only_a_complete_empty_package_stream_matches_a_zero_root_listing(self):
+        spec = importlib.util.spec_from_file_location('ordinary_empty', SHARD)
+        shard = importlib.util.module_from_spec(spec); spec.loader.exec_module(shard)
+        package = 'example.invalid/empty'
+        def event(action, **fields):
+            return json.dumps({'Package': package, 'Action': action, **fields}) + '\n'
+        cases = [(event('start') + event(action), 0) for action in ('pass', 'skip')]
+        cases += [(stream, 1) for stream in (
+            '', 'not-json\n', event('start'), event('start') + event('fail'),
+            event('pass') + event('pass'), event('pass') + event('output', Output='late'),
+            event('start') + event('pass', Package='example.invalid/other'),
+            event('run', Test='TestUnexpected') + event('pass'),
+            event('start') + event('output', Output=[]) + event('pass'))]
+        with tempfile.TemporaryDirectory() as temporary:
+            for stream, expected in cases:
+                with self.subTest(stream=stream), contextlib.redirect_stdout(io.StringIO()), \
+                        contextlib.redirect_stderr(io.StringIO()):
+                    self.assertEqual(shard.empty_package_coverage(io.StringIO(stream), package, Path(temporary)),
+                                     expected)
+                    self.assertEqual(json.loads((Path(temporary) / 'empty-coverage.json').read_text())
+                                     ['coverage_exit'], expected)
+
     def test_main_workflow_keeps_frozen_classifier_recipe_compatible(self):
         # Patch preparations copy main's workflow/controls, not scripts/tests.
         # v6.6.0's test_ci_browser_proof_only.py uses this older extraction;
@@ -403,9 +476,12 @@ class WorkflowTest(unittest.TestCase):
                     # Partial output from a failed discovery admits no task.
                     self.assertEqual(observed, [['list', './...']])
                 else:
-                    self.assertEqual(sum('-list' in call for call in observed), 2)
+                    # Both slices and all six ordinary packages independently
+                    # list their expected roots, including on listing failure.
+                    self.assertEqual(sum('-list' in call for call in observed), 8)
                     self.assertEqual(sum('-json' not in call and '-list' not in call
-                                         and call[0]=='test' for call in observed), 6)
+                                         and call[0]=='test' for call in observed),
+                                     0 if 'LISTING_EXIT' in options else 6)
                     receipt = json.loads((root / f'output{index}/backend-slices/ordinary-packages.json').read_text())
                     self.assertEqual(receipt['slots'], 4)
                     self.assertEqual(len(receipt['tasks']), 8)
@@ -439,10 +515,10 @@ class WorkflowTest(unittest.TestCase):
         active = {}; peak = ordinary_peak = 0
         for event in map(json.loads,events.read_text().splitlines()):
             if event['ordinary']:
-                self.assertEqual(event['goflags'].split()[-11:],
+                self.assertEqual(event['goflags'].split()[-12:],
                                  ['-p=1', '-count=1', '-run=', '-skip=', '-list=',
                                   '-exec=', '-fuzz=', '-short=false', '-failfast=false',
-                                  '-c=false', '-n=false'])
+                                  '-c=false', '-n=false', '-json=true'])
             if event['kind']=='start': active[event['pid']] = event['ordinary']
             else: del active[event['pid']]
             peak = max(peak,len(active)); ordinary_peak = max(ordinary_peak,sum(active.values()))
@@ -482,17 +558,17 @@ class WorkflowTest(unittest.TestCase):
                           "-mod=readonly '-run=TestOnly' -skip=. -list=. -exec=/bin/true "
                           "-fuzz=FuzzOnly -short -failfast -c -n"):
             with self.subTest(inherited=inherited), patch.dict(os.environ, {'GOFLAGS': inherited}):
-                with patch.object(shard.subprocess, 'run',
-                                  return_value=subprocess.CompletedProcess(command, 0)) as execute:
+                with patch.object(shard, 'ordinary_execution',
+                                  return_value={'started': True, 'exit': 0, 'coverage_exit': 0}) as execute:
                     self.assertEqual(shard.run_task((runner.MODULE + 'internal/a', command))['exit'], 0)
-                environment = execute.call_args.kwargs['env']
+                environment = execute.call_args.args[2]
                 self.assertEqual(environment['GOFLAGS'].split(),
                                  inherited.split() + ['-p=1', '-count=1', '-run=', '-skip=',
                                                       '-list=', '-exec=', '-fuzz=',
                                                       '-short=false', '-failfast=false',
                                                       '-c=false', '-n=false'])
                 self.assertEqual(environment['pkgs'], runner.MODULE + 'internal/a')
-                self.assertEqual(execute.call_args.args[0], command)
+                self.assertEqual(execute.call_args.args[1], command)
                 self.assertEqual(os.environ['GOFLAGS'], inherited)
                 # The separate source-listed executor already fixes -count=1
                 # in its argv. Do not change its environment or admission.
