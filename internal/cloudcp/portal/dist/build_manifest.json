@@ -1,5 +1,5 @@
 {
-  "source_hash": "2339fbc279c6f62c241581b267d1e021c1e08f2f28badc3a87a0fb892f2de388",
+  "source_hash": "a431621fbac437f59f2e36df18d40e141f3b4668f4b0662a47ed30213e061b86",
   "build_inputs": [
     "package.json",
     "tsconfig.json",
@@ -48,6 +48,7 @@
     "src/verification_send.test.ts",
     "src/verification_send.ts",
     "src/workspace_presentation.test.ts",
-    "src/workspace_presentation.ts"
+    "src/workspace_presentation.ts",
+    "src/workspace_recovery.test.ts"
   ]
 }
