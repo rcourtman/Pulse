@@ -185,6 +185,103 @@ afterEach(() => {
 });
 
 describe('Audit Webhook rendered controls through the real HTTP client', () => {
+  it.each(['Cancel', 'Escape', 'backdrop'])(
+    'returns to the selected saved endpoint after %s without writing',
+    async (dismissal) => {
+      mount();
+      await loaded();
+      const trigger = screen.getByRole('button', {
+        name: `Remove webhook endpoint ${selectedURL}`,
+      });
+      trigger.focus();
+      const dialog = openRemove();
+      await waitFor(() =>
+        expect(within(dialog).getByRole('button', { name: 'Cancel' })).toHaveFocus(),
+      );
+      if (dismissal === 'Cancel') {
+        fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+      } else if (dismissal === 'Escape') {
+        fireEvent.keyDown(document, { key: 'Escape' });
+      } else {
+        fireEvent.click(document.querySelector('[data-dialog-backdrop]')!);
+      }
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(trigger).toHaveFocus();
+      expect(writes()).toHaveLength(0);
+      expect(inventory).toEqual([firstURL, selectedURL]);
+      expectAuthRetained();
+    },
+  );
+
+  it.each([
+    { urls: [firstURL, selectedURL, addedURL], target: addedURL, description: 'next endpoint' },
+    { urls: [firstURL, selectedURL], target: firstURL, description: 'preceding endpoint' },
+    { urls: [selectedURL], target: null, description: 'URL entry when no endpoints remain' },
+  ])('returns to $description after a confirmed removal', async ({ urls, target }) => {
+    inventory = [...urls];
+    primeCSRF();
+    mount();
+    await loaded(urls);
+    screen.getByRole('button', { name: `Remove webhook endpoint ${selectedURL}` }).focus();
+    openRemove();
+    confirmRemove();
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    const expected = target
+      ? screen.getByRole('button', { name: `Remove webhook endpoint ${target}` })
+      : input();
+    expect(expected).toHaveFocus();
+    expect(inventory).toEqual(urls.filter((url) => url !== selectedURL));
+    expect(writes()).toHaveLength(1);
+    expectWire(writes()[0], 'POST');
+    expectAuthRetained();
+  });
+
+  it('returns to the retained endpoint after a refused removal is cancelled', async () => {
+    writeReply = () => json({ error: 'synthetic forbidden' }, 403);
+    primeCSRF();
+    mount();
+    await loaded();
+    const trigger = screen.getByRole('button', {
+      name: `Remove webhook endpoint ${selectedURL}`,
+    });
+    trigger.focus();
+    const dialog = openRemove();
+    confirmRemove();
+    await within(dialog).findByRole('alert');
+    expect(inventory).toEqual([firstURL, selectedURL]);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    expect(trigger).toHaveFocus();
+    expect(writes()).toHaveLength(1);
+    expectAuthRetained();
+  });
+
+  it.each([
+    { next: { canRead: false }, description: 'reader withdrawal' },
+    { next: { canManage: false }, description: 'management withdrawal' },
+    { next: { currentUser: 'other-admin' }, description: 'reader replacement' },
+  ])(
+    'does not return focus into a replaced or disabled context after $description',
+    async ({ next }) => {
+      const { setReader } = mount();
+      await loaded();
+      const trigger = screen.getByRole('button', {
+        name: `Remove webhook endpoint ${selectedURL}`,
+      });
+      trigger.focus();
+      const dialog = openRemove();
+      await waitFor(() =>
+        expect(within(dialog).getByRole('button', { name: 'Cancel' })).toHaveFocus(),
+      );
+      setReader((current) => ({ ...current, ...next }));
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      expect(trigger).not.toHaveFocus();
+      const urlInput = screen.queryByRole('textbox', { name: 'Audit webhook URL' });
+      if (urlInput) expect(urlInput).not.toHaveFocus();
+      expect(writes()).toHaveLength(0);
+      expectAuthRetained();
+    },
+  );
+
   it('names each same-prefix destination before opening its exact removal confirmation', async () => {
     mount();
     await loaded();

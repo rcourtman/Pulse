@@ -49,6 +49,9 @@ const AuditWebhookNotificationsSignpost: Component = () => {
 
 export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
   let newUrlInputRef: HTMLInputElement | undefined;
+  let endpointListRef: HTMLDivElement | undefined;
+  let removalTrigger: HTMLButtonElement | undefined;
+  let removalIndex = 0;
   const {
     actionError,
     canEdit,
@@ -75,6 +78,15 @@ export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
     paidRuntimeRequired,
     webhookUrls,
   } = useAuditWebhookPanelState(props);
+  const removalReturnTarget = () => {
+    // A withdrawn reader must not move focus into a different saved context.
+    if (!canEdit()) return;
+    if (removalTrigger?.isConnected && !removalTrigger.disabled) return removalTrigger;
+    // A confirmed removal destroys its trigger. Keep the same list position,
+    // or the preceding endpoint when the last one was removed.
+    const buttons = endpointListRef?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)');
+    return buttons?.[Math.min(removalIndex, buttons.length - 1)] ?? newUrlInputRef;
+  };
   const featureGateCopy = () =>
     getAuditWebhookFeatureGateCopy({
       showCommercialCopy: showUpgradePrompts(),
@@ -158,7 +170,7 @@ export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
                     {getAuditWebhookLoadingState().text}
                   </p>
                 </Show>
-                <div class="space-y-2 sm:space-y-3">
+                <div ref={endpointListRef} class="space-y-2 sm:space-y-3">
                   <For each={webhookUrls()}>
                     {(url) => (
                       <div class={AUDIT_WEBHOOK_ENDPOINT_CARD_CLASS}>
@@ -176,7 +188,11 @@ export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
                         <button
                           type="button"
                           aria-label={`Remove webhook endpoint ${url}`}
-                          onClick={() => openRemoveWebhook(url)}
+                          onClick={(event) => {
+                            removalTrigger = event.currentTarget;
+                            removalIndex = webhookUrls().indexOf(url);
+                            openRemoveWebhook(url);
+                          }}
                           disabled={!canEdit() || saving()}
                           class="min-h-11 min-w-11 shrink-0 p-2 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/25 rounded-md transition-colors sm:min-h-0 sm:min-w-0"
                           title="Remove webhook endpoint"
@@ -252,7 +268,7 @@ export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
                 onClose={closeRemoveWebhook}
                 panelClass="max-w-md"
                 ariaLabel="Remove audit webhook"
-                returnFocus={() => newUrlInputRef}
+                returnFocus={removalReturnTarget}
               >
                 <div class="w-full p-6">
                   <h3 class="text-lg font-semibold text-base-content mb-2">
