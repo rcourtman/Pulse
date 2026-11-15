@@ -1002,7 +1002,10 @@ func (p *Provisioner) ProvisionWorkspaceForOwnerWithPolicy(ctx context.Context, 
 	}
 
 	if err := p.withWorkspaceAuthority(ctx, tenant, policy, func(admission *registry.WorkspaceAdmission) error {
-		return p.writeHostedEntitlementLeaseState(tenant, admission.SubscriptionState, admission.PlanVersion, admission.StripeCustomerID, admission.StripeSubscriptionID, "")
+		// Admission uses current billing authority, but the initial runtime
+		// file keeps its existing lease representation and does not copy the
+		// consolidated account's Stripe identity into a client workspace.
+		return p.writeHostedEntitlementLeaseState(tenant, pkglicensing.SubStateActive, admission.PlanVersion, "", "", "")
 	}); err != nil {
 		return nil, fmt.Errorf("write initial hosted entitlement state for tenant %s: %w", tenantID, err)
 	}

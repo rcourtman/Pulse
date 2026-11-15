@@ -208,6 +208,9 @@ func TestWorkspaceProvisioningKeepsUsableLeaseAndRefreshForAdmittedStates(t *tes
 				t.Fatal(err)
 			}
 			raw := loadRawBillingState(t, p.tenantDataDir(tenant.ID))
+			if raw.StripeCustomerID != "" || raw.StripeSubscriptionID != "" {
+				t.Fatal("initial workspace file copied the consolidated account's billing identity")
+			}
 			key, err := base64.StdEncoding.DecodeString(os.Getenv("PULSE_TRIAL_ACTIVATION_PUBLIC_KEY"))
 			if err != nil {
 				t.Fatal(err)
@@ -223,10 +226,14 @@ func TestWorkspaceProvisioningKeepsUsableLeaseAndRefreshForAdmittedStates(t *tes
 					token = renewed.EntitlementJWT
 				}
 				claims, err := pkglicensing.VerifyEntitlementLeaseToken(token, ed25519.PublicKey(key), host, time.Now())
-				if err != nil || claims.SubscriptionState != tc.want {
+				wantState := pkglicensing.SubStateActive // Preserve the existing initial writer; refresh resolves billing state.
+				if refresh {
+					wantState = tc.want
+				}
+				if err != nil || claims.SubscriptionState != wantState {
 					t.Fatalf("unusable admitted lease (refresh=%t): %+v/%v", refresh, claims, err)
 				}
-				if tc.trialEnd && (claims.TrialEndsAt == nil || *claims.TrialEndsAt != deadline) {
+				if tc.trialEnd && refresh && (claims.TrialEndsAt == nil || *claims.TrialEndsAt != deadline) {
 					t.Fatalf("trial deadline lost (refresh=%t): %+v", refresh, claims)
 				}
 			}
