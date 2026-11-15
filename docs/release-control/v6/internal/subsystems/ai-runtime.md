@@ -3518,6 +3518,18 @@ resolve canonical/source IDs and unique aliases before collection, reject
    non-live prompts must fail closed to normal model clarification/query
    behavior; this is not a prompt-keyword router and must not choose, retry, or
    execute the model's next investigative action.
+   A Patrol investigation attaches the resource of the finding it investigates
+   the same way (`PulseToolExecutor.AttachResource`, the registration a
+   `pulse_query` get makes). Core reads that resource from its own findings
+   store (`orchestratorChatAdapter.findingResourceID`), never from the model or
+   the orchestrator payload. An agent-routed `pulse_read` (`exec`, `file`,
+   `find`, `tail`, `disk_usage`) that names neither `target_host` nor
+   `resource_id` runs on the attached resource when exactly one resolves
+   (`readTargetHost`), and is refused as before when none or several do. On
+   Docker fault set D6, an investigation's first `disk_usage` call on the
+   finding's own mount named no host and was refused, costing one of its ten
+   evidence calls. Proofs: `internal/ai/tools/read_default_target_test.go` and
+   `internal/ai/chat/service_investigation_attach_test.go`.
    Context-only resource handoff turns must be enforced at the tool-manifest
    boundary, not only by prompt wording: unless the operator explicitly asks for
    live runtime verification or a read attempt, the

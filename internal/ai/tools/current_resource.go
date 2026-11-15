@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -157,4 +158,51 @@ func (e *PulseToolExecutor) resolveCurrentResourceCommandTarget(value string) (s
 		return "", err
 	}
 	return e.commandTargetForResolvedResource(resource)
+}
+
+// readTargetHost returns the host an agent-routed read runs on. A
+// current_resource resource_id stands for the host, and a read that names
+// neither a host nor a resource runs on the attached resource when exactly
+// one resolves. A Patrol investigation attaches its finding's resource
+// (AttachResource), and on Docker fault set D6 a model's first disk_usage
+// call on the finding's own mount named no host and was refused, which cost
+// one of its ten evidence calls.
+func (e *PulseToolExecutor) readTargetHost(targetHost, resourceRef string) string {
+	if strings.TrimSpace(targetHost) != "" {
+		return targetHost
+	}
+	if IsCurrentResourceReference(resourceRef) {
+		return resourceRef
+	}
+	if strings.TrimSpace(resourceRef) == "" {
+		if _, err := e.resolveCurrentResource(); err == nil {
+			return currentResourceHandle
+		}
+	}
+	return targetHost
+}
+
+// AttachResource makes a resource this run's attached resource
+// (current_resource), registered the way a pulse_query get registers one,
+// without a model tool call. It reports whether the resource resolved. A
+// Patrol investigation attaches the resource of the finding it investigates.
+func (e *PulseToolExecutor) AttachResource(ctx context.Context, resourceID, resourceType string) bool {
+	resourceID = strings.TrimSpace(resourceID)
+	if e == nil || e.resolvedContext == nil || resourceID == "" {
+		return false
+	}
+	attempts := make([]map[string]interface{}, 0, 2)
+	if resourceType = strings.TrimSpace(resourceType); resourceType != "" {
+		attempts = append(attempts, map[string]interface{}{"resource_id": resourceID, "resource_type": resourceType})
+	}
+	attempts = append(attempts, map[string]interface{}{"resource_id": resourceID})
+	for _, args := range attempts {
+		if result, err := e.executeGetResource(ctx, args); err != nil || result.IsError {
+			continue
+		}
+		if _, err := e.resolveCurrentResource(); err == nil {
+			return true
+		}
+	}
+	return false
 }
