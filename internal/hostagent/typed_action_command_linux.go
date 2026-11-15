@@ -191,6 +191,12 @@ func runTypedActionCommandUnder(ctx context.Context, supervisor typedActionSuper
 		result.err = errors.Join(errTypedActionContainmentIndeterminate, fmt.Errorf("typed action supervisor failed: %w", waitResult.err))
 		result.exitCode = -1
 	}
+	// The collector's inventory is compared with this independently contained
+	// simulation before a package mutation. Neither side may hash a truncated
+	// list as a complete inventory, even when the command and unit finished.
+	if catalog == typedActionCatalogPackage && name == "apt-get" && len(args) > 0 && args[0] == "-s" && (stdout.truncated || stderr.truncated) {
+		result.err = errors.Join(result.err, errors.New("typed package inspection output exceeded its limit"))
+	}
 	return result
 }
 

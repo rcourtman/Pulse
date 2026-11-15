@@ -3401,6 +3401,9 @@ the inventory inside containment for every preflight and verification.
 `TestPackageInspectionFailuresNeverPublishPartialInventory` and
 `TestPackageInspectionDoesNotChangeRunnerPreflightOrApply` in
 `internal/hostagent/package_inspection_linux_test.go` bind these boundaries.
+`TestContainedPackageInspectionRejectsTruncatedInventory` in that file checks
+that the independently contained runner simulation also refuses truncated
+stdout/stderr before it can be counted or hashed.
 The same file checks the exact environment, process-group deadline and
 inherited-pipe failure. Fixture proof is not installed root/unprivileged
 provider acceptance or live systemd hash parity.

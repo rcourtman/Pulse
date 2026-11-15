@@ -227,3 +227,41 @@ func TestPackageInspectionDoesNotChangeRunnerPreflightOrApply(t *testing.T) {
 		t.Fatalf("runner calls=%q, want %q", calls, want)
 	}
 }
+
+func TestContainedPackageInspectionRejectsTruncatedInventory(t *testing.T) {
+	for _, stream := range []string{"stdout", "stderr"} {
+		t.Run(stream, func(t *testing.T) {
+			withTypedActionLinuxHooks(t)
+			dir := t.TempDir()
+			t.Setenv("PULSE_AGENT_RUNNER_STATE_DIR", dir)
+			fakeRun := filepath.Join(dir, "systemd-run")
+			script := `#!/bin/sh
+result=""
+previous=""
+for arg in "$@"; do
+  if [ "$previous" = "--result-file" ]; then result="$arg"; break; fi
+  previous="$arg"
+done
+printf '%s' '{"version":1,"target_started":true,"exit_code":0,"scan_complete":true,"descendants_observed":false}' > "$result"
+chmod 600 "$result"
+`
+			if stream == "stderr" {
+				script += "head -c 1048577 /dev/zero >&2\n"
+			} else {
+				script += "head -c 1048577 /dev/zero\n"
+			}
+			if err := os.WriteFile(fakeRun, []byte(script), 0700); err != nil {
+				t.Fatal(err)
+			}
+			typedActionResolveSystemdTool = func(string) (string, error) { return fakeRun, nil }
+			typedActionCurrentExecutable = func() (string, error) { return fakeRun, nil }
+			typedActionQueryUnitLoadState = func(string, string) (string, error) { return "not-found", nil }
+			m := newPackageUpdateManager("linux", newPackageManagerLease())
+			m.lookPath = func(string) (string, error) { return "/usr/bin/apt-get", nil }
+			snapshot := m.Snapshot(context.Background(), true)
+			if snapshot.Error == "" || snapshot.InventoryHash != "" || snapshot.PendingCount != 0 || len(snapshot.Packages) != 0 {
+				t.Fatalf("contained simulation published truncated %s as inventory: %+v", stream, snapshot)
+			}
+		})
+	}
+}
