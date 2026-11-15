@@ -60,6 +60,8 @@
     var state = String(workspace.state || "");
     if (state === "suspended") return "This workspace is suspended.";
     if (state === "failed") return "This workspace is in a failed state.";
+    if (state === "canceled") return "This workspace is canceled. Review billing before continuing setup.";
+    if (state !== "active") return "This workspace is " + (state || "in an unknown state") + ". Review its state before continuing setup.";
     if (status === "healthy") return "Latest health check is healthy.";
     if (status === "unhealthy") return "Latest health check is unhealthy.";
     return "Latest health check is still pending.";
@@ -75,6 +77,7 @@
     var state = String(workspace.state || "");
     if (state === "suspended") return "Suspended";
     if (state === "failed") return "Failed";
+    if (state !== "active") return state === "canceled" ? "Canceled" : "Review state";
     if (status === "checking") return "Health check pending";
     if (status === "unhealthy") return "Unhealthy";
     var setup = workspaceSetupState(workspace);
@@ -131,8 +134,8 @@
   function workspaceSetupState(workspace) {
     var state = String(workspace.state || "");
     var health = workspaceHealthState(workspace);
-    if (state === "suspended" || state === "failed" || health === "unhealthy") return "review";
-    if (state !== "active" || health === "checking") return "setup_path";
+    if (state !== "active" || health === "unhealthy") return "review";
+    if (health === "checking") return "setup_path";
     var knowsAgentCount = hasNumber(workspace.agent_count);
     var knowsAlertCount = hasNumber(workspace.alert_route_count);
     var knowsReportCount = hasNumber(workspace.report_schedule_count);
@@ -351,10 +354,37 @@
     if (input) input.focus();
   }
   function workspaceActionLabel(workspace, clientLanguage = false) {
-    if (clientLanguage) {
-      return workspace.state === "active" ? "Suspend client" : "Delete client";
+    var entity = clientLanguage ? "client" : "workspace";
+    if (workspace.state === "active") return "Suspend " + entity;
+    if (workspace.state === "suspended" || workspace.state === "failed") return "Delete " + entity;
+    return "Review current state";
+  }
+  function renderWorkspaceRecovery(account, entry, accountAPIBasePath) {
+    var request = entry.manageWorkspace;
+    var banner = getElement("workspace-recovery-" + account.id);
+    var title = getElement("workspace-recovery-title-" + account.id);
+    var message = getElement("workspace-recovery-message-" + account.id);
+    var refresh = getElement("workspace-recovery-refresh-" + account.id);
+    if (banner && title && message && refresh) {
+      banner.hidden = !request.recoveryRequired && !request.notice;
+      banner.classList.toggle("workspace-recovery-unconfirmed", !!request.recoveryRequired);
+      title.textContent = request.recoveryRequired ? (request.outcome === "accepted" ? "Request accepted; current state not confirmed" : request.outcome === "rejected" ? "Change rejected; current state not confirmed" : "Change result not confirmed") + " \u2014 " + request.workspaceName : "Current state refreshed";
+      message.textContent = request.recoveryRequired ? request.error + " Last loaded facts may be out of date. Refresh checks the current state without repeating the change." : request.notice || "";
+      refresh.hidden = !request.recoveryRequired;
+      refresh.disabled = !!request.refreshing;
+      refresh.textContent = request.refreshing ? "Refreshing\u2026" : "Refresh current state";
+      banner.setAttribute("aria-busy", String(!!request.refreshing));
     }
-    return workspace.state === "active" ? "Suspend workspace" : "Delete workspace";
+    if (request.pending || request.recoveryRequired) {
+      var target = accountAPIBasePath + "/" + encodeURIComponent(account.id) + "/tenants/" + encodeURIComponent(request.workspaceID || "") + "/handoff";
+      document.querySelectorAll("form[action]").forEach(function(form) {
+        if ((form.getAttribute("action") || "").split("?")[0] === target) {
+          form.querySelectorAll("button").forEach(function(button) {
+            button.disabled = true;
+          });
+        }
+      });
+    }
   }
   function workspaceCreatedLabel(workspace) {
     if (!workspace.created_at) return "Unknown";
@@ -485,7 +515,7 @@
       return;
     }
     title.textContent = workspace.display_name;
-    meta.textContent = workspaceMeta(workspace);
+    meta.textContent = (entry.manageWorkspace.recoveryRequired ? "Last loaded: " : "") + workspaceMeta(workspace);
     summary.textContent = workspaceStatusCopy(workspace);
     health.textContent = workspaceHealthLabel(workspace);
     setup.textContent = workspaceSetupLabel(workspace);
@@ -513,7 +543,7 @@
       primaryTargetPath = workspaceOutputsTargetPath(workspace);
     }
     if (guidePrimaryButton) guidePrimaryButton.textContent = guide.primaryLabel;
-    setWorkspaceHandoffForm(guidePrimaryForm, guidePrimaryButton, accountAPIBasePath, account.id, workspace, primaryTargetPath, entry.manageWorkspace.pending);
+    setWorkspaceHandoffForm(guidePrimaryForm, guidePrimaryButton, accountAPIBasePath, account.id, workspace, primaryTargetPath, entry.manageWorkspace.pending || !!entry.manageWorkspace.recoveryRequired);
     var steps = workspaceSetupSteps(workspace);
     var stepByID = {
       workspace: checkCreated,
@@ -526,14 +556,17 @@
       setChecklistStatus(stepByID[steps[s].id], steps[s].tone, steps[s].label);
     }
     actionButton.textContent = workspaceActionLabel(workspace, account.kind === "msp");
-    actionButton.disabled = entry.manageWorkspace.pending;
+    var canAct = account.can_manage && (workspace.state === "active" || workspace.state === "suspended" || workspace.state === "failed");
+    var blocked = entry.manageWorkspace.pending || !!entry.manageWorkspace.recoveryRequired;
+    actionButton.disabled = blocked || !canAct;
     actionButton.setAttribute("data-workspace-id", workspace.id);
     actionButton.setAttribute("data-workspace-name", workspace.display_name);
-    actionButton.setAttribute("data-workspace-action", workspace.state === "active" ? "suspend" : "delete");
-    closeButton.disabled = entry.manageWorkspace.pending;
-    setWorkspaceHandoffForm(openForm, openButton, accountAPIBasePath, account.id, workspace, "", entry.manageWorkspace.pending);
-    setWorkspaceHandoffForm(installForm, installButton, accountAPIBasePath, account.id, workspace, WORKSPACE_INSTALL_TARGET_PATH, entry.manageWorkspace.pending);
-    setWorkspaceHandoffForm(reportingForm, reportingButton, accountAPIBasePath, account.id, workspace, WORKSPACE_REPORTING_TARGET_PATH, entry.manageWorkspace.pending);
+    if (canAct) actionButton.setAttribute("data-workspace-action", workspace.state === "active" ? "suspend" : "delete");
+    else actionButton.removeAttribute("data-workspace-action");
+    closeButton.disabled = false;
+    setWorkspaceHandoffForm(openForm, openButton, accountAPIBasePath, account.id, workspace, "", blocked);
+    setWorkspaceHandoffForm(installForm, installButton, accountAPIBasePath, account.id, workspace, WORKSPACE_INSTALL_TARGET_PATH, blocked);
+    setWorkspaceHandoffForm(reportingForm, reportingButton, accountAPIBasePath, account.id, workspace, WORKSPACE_REPORTING_TARGET_PATH, blocked);
   }
   function setContainerMessage(container, title, msg, isError) {
     container.textContent = "";
@@ -724,10 +757,15 @@
     var form = getElement("add-ws-form-" + accountID);
     var spinner = getElement("ws-spinner-" + accountID);
     if (!form) return;
+    var error = getElement("workspace-create-error-" + accountID);
+    if (error) {
+      error.hidden = !entry.createWorkspace.error;
+      error.textContent = entry.createWorkspace.error;
+    }
     form.classList.toggle("visible", entry.addWorkspaceOpen);
     form.setAttribute("aria-busy", String(entry.createWorkspace.pending));
     form.querySelectorAll("input, button").forEach(function(control) {
-      control.disabled = entry.createWorkspace.pending;
+      control.disabled = entry.createWorkspace.pending || entry.manageWorkspace.pending || !!entry.manageWorkspace.recoveryRequired;
     });
     if (spinner) {
       spinner.hidden = !entry.createWorkspace.pending;
@@ -807,6 +845,12 @@
     }
   }
   function renderAccountUI(accountState, accounts, accountAPIBasePath = "") {
+    var unavailable = getElement("workspace-account-unavailable");
+    if (unavailable) unavailable.hidden = !Object.keys(accountState.byAccountID).some(function(id) {
+      return accountState.byAccountID[id].manageWorkspace.recoveryRequired && !accounts.some(function(account2) {
+        return account2.id === id;
+      });
+    });
     var accountIDs = Object.keys(accountState.byAccountID);
     for (var i = 0; i < accountIDs.length; i += 1) {
       var accountID = accountIDs[i];
@@ -819,7 +863,13 @@
         }
       }
       renderAddWorkspaceSection(accountID, entry);
-      if (account) renderWorkspaceManagement(account, entry, accountAPIBasePath);
+      document.querySelectorAll('[data-action="toggle-add-workspace"]').forEach(function(button) {
+        if (button.getAttribute("data-account-id") === accountID) button.disabled = entry.manageWorkspace.pending || !!entry.manageWorkspace.recoveryRequired || entry.createWorkspace.pending;
+      });
+      if (account) {
+        renderWorkspaceManagement(account, entry, accountAPIBasePath);
+        renderWorkspaceRecovery(account, entry, accountAPIBasePath);
+      }
       renderAccessSection(accountID, entry, account ? account.has_billing === true : true);
     }
   }
@@ -883,6 +933,10 @@
           event.preventDefault();
           deps.setShellSection("workspaces");
           deps.runtime.clearWorkspaceSelection(accountID);
+          return;
+        case "refresh-workspace-state":
+          event.preventDefault();
+          void deps.runtime.refreshWorkspaceState(accountID);
           return;
         case "workspace-action":
           event.preventDefault();
@@ -1403,10 +1457,12 @@
       var viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
       if (!viewportHeight) return;
       var rect = element.getBoundingClientRect();
-      if (rect.top >= 0 && rect.top <= viewportHeight - 72 && rect.bottom > 0) {
+      var headerHeight = document.querySelector("header")?.getBoundingClientRect().height || 0;
+      if (rect.top >= headerHeight + 12 && rect.top <= viewportHeight - 72 && rect.bottom > 0) {
         return;
       }
       if (typeof element.scrollIntoView === "function") {
+        element.style.scrollMarginTop = headerHeight + 12 + "px";
         element.scrollIntoView({ block: "start", inline: "nearest" });
       }
     };
@@ -1541,7 +1597,8 @@
       return "Your plan limit for " + entity + " is reached" + counts + ". Remove a " + (clientLanguage ? "client" : "workspace") + " or move to a bigger plan to add more.";
     }
     var createWorkspace = async function(accountID) {
-      if (deps.store.getAccountState().byAccountID[accountID]?.createWorkspace.pending) return;
+      var currentEntry = deps.store.getAccountState().byAccountID[accountID];
+      if (currentEntry?.createWorkspace.pending || currentEntry?.manageWorkspace.pending || currentEntry?.manageWorkspace.recoveryRequired) return;
       var nameEl = getElement("ws-name-" + accountID);
       if (!nameEl) return;
       var name = nameEl.value.trim();
@@ -1590,41 +1647,134 @@
         deps.showToast(message, true);
       }
     };
-    var manageWorkspaceAction = async function(accountID, tenantID, action, name) {
-      var verb = action === "suspend" ? "Suspend" : action === "delete" ? "Delete" : "";
-      var pastVerb = action === "suspend" ? "Suspended" : action === "delete" ? "Deleted" : "";
-      if (!verb) return;
-      var entityName = accountUsesClientLanguage2(accountID) ? "client" : "workspace";
-      if (!window.confirm(verb + " " + entityName + ' "' + name + '"?')) return;
+    function findAccount(accountID) {
+      return deps.store.getBootstrap().accounts.find(function(account) {
+        return account.id === accountID;
+      });
+    }
+    function currentWorkspaceAction(accountID, workspaceID) {
+      var account = findAccount(accountID);
+      var workspace = account?.workspaces.find(function(item) {
+        return item.id === workspaceID;
+      });
+      if (!account?.can_manage || !workspace) return "";
+      if (workspace.state === "active") return "suspend";
+      if (workspace.state === "suspended" || workspace.state === "failed") return "delete";
+      return "";
+    }
+    function trackWorkspaceFocus(accountID) {
+      var origin = document.activeElement;
+      var moved = false;
+      var onFocus = function(event) {
+        if (event.target !== origin) moved = true;
+      };
+      document.addEventListener("focusin", onFocus);
+      return function(elementID) {
+        document.removeEventListener("focusin", onFocus);
+        if (elementID && !moved && deps.store.getShellState().activeSection === "workspaces") {
+          revealElementIfNeeded(getElement("workspace-recovery-" + accountID));
+          focusElement(elementID);
+        }
+      };
+    }
+    function isCurrentWorkspaceRequest(accountID, request) {
+      return deps.store.getBootstrap().authenticated && deps.store.getAccountState().byAccountID[accountID]?.manageWorkspace === request;
+    }
+    function recordWorkspaceRead(accountID, request) {
+      var account = findAccount(accountID);
+      if (!account) return false;
+      var workspace = account.workspaces.find(function(item) {
+        return item.id === request.workspaceID;
+      });
       deps.store.updateAccountState(function(accountState) {
         var entry = ensurePortalAccountUIEntry(accountState, accountID);
-        beginMutationState(entry.manageWorkspace);
+        request.pending = false;
+        request.refreshing = false;
+        request.recoveryRequired = false;
+        request.error = "";
+        request.notice = workspace ? 'Latest state for "' + workspace.display_name + '": ' + workspace.state + ". No action was repeated." : '"' + request.workspaceName + '" is no longer listed in this account. No action was repeated.';
+        if (!workspace && entry.selectedWorkspaceID === request.workspaceID) entry.selectedWorkspaceID = "";
       });
+      return true;
+    }
+    var refreshWorkspaceState = async function(accountID) {
+      var request = deps.store.getAccountState().byAccountID[accountID]?.manageWorkspace;
+      if (!request?.recoveryRequired || request.pending || request.refreshing) return;
+      var finishFocus = trackWorkspaceFocus(accountID);
+      deps.store.updateAccountState(function() {
+        request.refreshing = true;
+      });
+      var refreshed = false;
       try {
-        if (action === "suspend") {
-          await deps.api.suspendWorkspace(accountID, tenantID);
-        } else {
-          await deps.api.deleteWorkspace(accountID, tenantID);
+        refreshed = await deps.refreshBootstrap();
+      } catch {
+      }
+      if (isCurrentWorkspaceRequest(accountID, request)) {
+        if (!refreshed || !recordWorkspaceRead(accountID, request)) {
+          deps.store.updateAccountState(function() {
+            request.refreshing = false;
+            request.error = "Could not refresh the current state. The last loaded facts may be out of date. No action was repeated.";
+          });
         }
-        if (!await refreshOrRedirect()) {
-          deps.store.updateAccountState(function(accountState) {
-            var entry = ensurePortalAccountUIEntry(accountState, accountID);
-            resetMutationState(entry.manageWorkspace);
-          }, { notify: false });
-          return;
-        }
-        deps.store.updateAccountState(function(accountState) {
-          var entry = ensurePortalAccountUIEntry(accountState, accountID);
-          entry.selectedWorkspaceID = "";
-          succeedMutationState(entry.manageWorkspace);
+        finishFocus(request.recoveryRequired ? "workspace-recovery-refresh-" + accountID : "workspace-recovery-" + accountID);
+      } else {
+        finishFocus("");
+      }
+    };
+    var manageWorkspaceAction = async function(accountID, tenantID, action, name) {
+      var entry = deps.store.getAccountState().byAccountID[accountID];
+      if (action !== "suspend" && action !== "delete") return;
+      if (!entry || entry.manageWorkspace.pending || entry.manageWorkspace.recoveryRequired) return;
+      if (action !== currentWorkspaceAction(accountID, tenantID)) return;
+      var workspace = findAccount(accountID)?.workspaces.find(function(item) {
+        return item.id === tenantID;
+      });
+      if (!workspace) return;
+      name = workspace.display_name;
+      var verb = action === "suspend" ? "Suspend" : "Delete";
+      var entityName = accountUsesClientLanguage2(accountID) ? "client" : "workspace";
+      if (!window.confirm(verb + " " + entityName + ' "' + name + '"?')) return;
+      if (deps.store.getAccountState().byAccountID[accountID] !== entry || action !== currentWorkspaceAction(accountID, tenantID) || entry.manageWorkspace.pending || entry.manageWorkspace.recoveryRequired) return;
+      var request = entry.manageWorkspace;
+      var finishFocus = trackWorkspaceFocus(accountID);
+      deps.store.updateAccountState(function() {
+        beginMutationState(request);
+        request.workspaceID = tenantID;
+        request.workspaceName = name;
+        request.action = action;
+        request.notice = "";
+        request.outcome = "unknown";
+      });
+      var accepted = false;
+      try {
+        if (action === "suspend") await deps.api.suspendWorkspace(accountID, tenantID);
+        else await deps.api.deleteWorkspace(accountID, tenantID);
+        accepted = true;
+        if (!isCurrentWorkspaceRequest(accountID, request)) return;
+        request.outcome = "accepted";
+        var refreshed = await deps.refreshBootstrap();
+        if (!isCurrentWorkspaceRequest(accountID, request)) return;
+        if (!refreshed || !recordWorkspaceRead(accountID, request)) throw new Error("Could not load the latest account state.");
+        var current = findAccount(accountID)?.workspaces.find(function(item) {
+          return item.id === tenantID;
         });
-        deps.showToast(pastVerb + " " + entityName + ".");
+        if (action === "suspend" ? current?.state === "suspended" : !current) {
+          deps.store.updateAccountState(function(state) {
+            var currentEntry = ensurePortalAccountUIEntry(state, accountID);
+            if (currentEntry.selectedWorkspaceID === tenantID) currentEntry.selectedWorkspaceID = "";
+          });
+          deps.showToast((action === "suspend" ? "Suspended" : "Deleted") + " " + entityName + ".");
+        }
       } catch (error) {
-        deps.store.updateAccountState(function(accountState) {
-          var entry = ensurePortalAccountUIEntry(accountState, accountID);
-          failMutationState(entry.manageWorkspace, error instanceof Error ? error.message : "Failed to " + verb.toLowerCase() + " " + entityName + ".");
-        }, { notify: false });
-        deps.showToast(error instanceof Error ? error.message : "Failed to " + verb.toLowerCase() + " " + entityName + ".", true);
+        if (!isCurrentWorkspaceRequest(accountID, request)) return;
+        deps.store.updateAccountState(function() {
+          request.pending = false;
+          request.outcome = accepted ? "accepted" : error instanceof PortalAPIError && error.status >= 400 && error.status < 500 ? "rejected" : "unknown";
+          request.recoveryRequired = true;
+          request.error = error instanceof Error ? error.message : "The current result could not be confirmed.";
+        });
+      } finally {
+        finishFocus(isCurrentWorkspaceRequest(accountID, request) ? (request.recoveryRequired ? "workspace-recovery-refresh-" : "workspace-recovery-") + accountID : "");
       }
     };
     var openBilling = async function(accountID) {
@@ -1753,6 +1903,7 @@
       inviteMember,
       createWorkspace,
       manageWorkspaceAction,
+      refreshWorkspaceState,
       removeMember,
       changeRole
     };
@@ -3646,7 +3797,7 @@
     var results = [];
     for (var i = 0; i < entries.length; i += 1) {
       var status = workspaceHealthState(entries[i].workspace);
-      if (hasCriticalAlerts(entries[i].workspace) || status === "unhealthy" || status === "checking") {
+      if (!["active", "suspended"].includes(String(entries[i].workspace.state || "")) || hasCriticalAlerts(entries[i].workspace) || status === "unhealthy" || status === "checking") {
         results.push(entries[i]);
       }
     }
@@ -3711,6 +3862,8 @@
     var state = String(workspace.state || "");
     if (state === "suspended") return "This client is suspended.";
     if (state === "failed") return "This client is in a failed state.";
+    if (state === "canceled") return "This client is canceled. Review billing before continuing setup; adding a client does not restore this one.";
+    if (state !== "active") return "This client is " + (state || "in an unknown state") + ". Review its state before continuing setup.";
     return workspaceStatusCopy(workspace);
   }
   function workspaceSummaryContext(entry, includeAccountName, note) {
@@ -3748,12 +3901,12 @@
         clientLanguage ? "Review client" : "Review workspace",
         "btn-primary btn-compact workspace-summary-link"
       );
-      secondaryAction = renderWorkspaceHandoffForm(
+      secondaryAction = criticalEntry.workspace.state === "active" ? renderWorkspaceHandoffForm(
         criticalEntry.account.id,
         criticalEntry.workspace.id,
         accountAPIBasePath,
         clientLanguage ? "Open client" : "Open workspace"
-      );
+      ) : "";
     } else if (attention.length) {
       var attentionEntry = attention[0];
       title = "Review " + attentionEntry.workspace.display_name;
@@ -3763,7 +3916,7 @@
         clientLanguage ? "Review client" : "Review workspace",
         "btn-primary btn-compact workspace-summary-link"
       );
-      secondaryAction = attentionEntry.account.can_manage && (attentionEntry.workspace.state === "active" || attentionEntry.workspace.state === "suspended" || attentionEntry.workspace.state === "failed") ? '<button type="button" class="btn-secondary btn-compact" data-action="select-workspace" data-account-id="' + escapeAttr(attentionEntry.account.id) + '" data-workspace-id="' + escapeAttr(attentionEntry.workspace.id) + '">' + escapeHTML(clientLanguage ? "Client onboarding" : "Setup checklist") + "</button>" : '<button class="btn-secondary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="access">Open Access</button>';
+      secondaryAction = attentionEntry.account.can_manage && (attentionEntry.workspace.state === "active" || attentionEntry.workspace.state === "suspended" || attentionEntry.workspace.state === "failed") ? '<button type="button" class="btn-secondary btn-compact" data-action="select-workspace" data-account-id="' + escapeAttr(attentionEntry.account.id) + '" data-workspace-id="' + escapeAttr(attentionEntry.workspace.id) + '">' + escapeHTML(clientLanguage ? "Client onboarding" : "Setup checklist") + "</button>" : attentionEntry.account.has_billing ? '<button class="btn-secondary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="billing">Review billing</button>' : '<button class="btn-secondary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="access">Open Access</button>';
     } else if (suspended.length) {
       var suspendedEntry = suspended[0];
       title = "Review " + suspendedEntry.workspace.display_name;
@@ -3805,6 +3958,12 @@
         "btn-primary btn-compact"
       );
       secondaryAction = ready.length > 1 ? renderWorkspaceAnchorAction(workspaceListAnchorID(readyEntry.account.id), clientLanguage ? "See all clients" : "See all workspaces") : readyEntry.account.can_manage ? renderWorkspaceInstallHandoffForm(readyEntry.account.id, readyEntry.workspace.id, accountAPIBasePath) : "";
+    } else if (entries.length) {
+      var retained = entries[0];
+      title = "Review " + retained.workspace.display_name;
+      description = workspaceSummaryContext(retained, accounts.length > 1, workspaceSummaryStatusCopy(retained.workspace, clientLanguage));
+      primaryAction = renderWorkspaceAnchorAction(workspaceRowAnchorID(retained.account.id, retained.workspace.id), clientLanguage ? "Review client" : "Review workspace", "btn-primary btn-compact");
+      secondaryAction = '<button class="btn-secondary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="billing">Review billing</button>';
     } else if (creatableAccount) {
       title = clientLanguage ? "Add the first client" : "Create the first workspace";
       description = clientLanguage ? "No client is attached yet. Add the first client in " + creatableAccount.name + "." : "No hosted workspace is attached yet. Create the first workspace in " + creatableAccount.name + ".";
@@ -3937,7 +4096,7 @@
         workspaceHeaderActions += '<button type="button" class="btn-secondary btn-compact" data-action="toggle-add-workspace" data-account-id="' + escapeAttr(account.id) + '">' + escapeHTML(addEntityLabel) + "</button>";
       }
       if (account.kind === "msp") {
-        addWorkspaceForm = '<form class="add-workspace-form" data-account-form="create-workspace" data-account-id="' + escapeAttr(account.id) + '" id="add-ws-form-' + escapeAttr(account.id) + '"><label for="ws-name-' + escapeAttr(account.id) + '">' + escapeHTML(clientLanguage ? "Client name" : "Workspace name (for example, a client name)") + '</label><input type="text" id="ws-name-' + escapeAttr(account.id) + '" placeholder="Acme Corp" maxlength="80" autocomplete="off" required><div class="form-actions"><button type="submit" class="btn-primary">' + escapeHTML(addEntityLabel) + '</button><button type="button" class="btn-secondary" data-action="toggle-add-workspace" data-account-id="' + escapeAttr(account.id) + '">Cancel</button><div class="spinner" id="ws-spinner-' + escapeAttr(account.id) + '" hidden></div></div></form>';
+        addWorkspaceForm = '<form class="add-workspace-form" data-account-form="create-workspace" data-account-id="' + escapeAttr(account.id) + '" id="add-ws-form-' + escapeAttr(account.id) + '"><label for="ws-name-' + escapeAttr(account.id) + '">' + escapeHTML(clientLanguage ? "Client name" : "Workspace name (for example, a client name)") + '</label><input type="text" id="ws-name-' + escapeAttr(account.id) + '" placeholder="Acme Corp" maxlength="80" autocomplete="off" required><p id="workspace-create-error-' + escapeAttr(account.id) + '" role="alert" hidden></p><div class="form-actions"><button type="submit" class="btn-primary">' + escapeHTML(addEntityLabel) + '</button><button type="button" class="btn-secondary" data-action="toggle-add-workspace" data-account-id="' + escapeAttr(account.id) + '">Cancel</button><div class="spinner" id="ws-spinner-' + escapeAttr(account.id) + '" hidden></div></div></form>';
       }
       workspaceManagement = '<section class="workspace-management-panel workspace-management-panel-idle" id="workspace-management-' + escapeAttr(account.id) + '" hidden><div class="workspace-management-header"><div><h3>' + escapeHTML(onboardingLabel) + "</h3><p>" + escapeHTML(clientLanguage ? "Finish setup while each client keeps a separate workspace boundary." : "Finish the client setup steps without mixing client data across workspaces.") + '</p></div><button type="button" class="btn-secondary btn-compact" id="workspace-management-close-' + escapeAttr(account.id) + '" data-action="clear-workspace-selection" data-account-id="' + escapeAttr(account.id) + '">Close panel</button></div><div class="workspace-management-empty" id="workspace-management-empty-' + escapeAttr(account.id) + '"><div class="workspace-management-empty-shell"><div class="workspace-management-empty-actions-card"><div class="workspace-management-empty-actions-copy"><h4>' + escapeHTML(clientLanguage ? "Add a client" : "Create a workspace") + "</h4><p>" + escapeHTML(clientLanguage ? "Create an isolated client workspace for a customer." : "Add a new hosted workspace for a customer or operating boundary.") + "</p></div>" + addWorkspaceForm + '</div><div class="workspace-management-empty-note">' + escapeHTML(workspaceManagementEmptyNote) + '</div></div></div><div class="workspace-management-content" id="workspace-management-content-' + escapeAttr(account.id) + '" hidden><div class="workspace-management-meta" id="workspace-management-meta-' + escapeAttr(account.id) + '"></div><h4 id="workspace-management-title-' + escapeAttr(account.id) + '"></h4><p class="workspace-management-summary" id="workspace-management-summary-' + escapeAttr(account.id) + '"></p><div class="workspace-management-facts"><div class="workspace-management-fact"><span>Health</span><strong id="workspace-management-health-' + escapeAttr(account.id) + '"></strong></div><div class="workspace-management-fact"><span>Setup</span><strong id="workspace-management-setup-' + escapeAttr(account.id) + '"></strong></div><div class="workspace-management-fact"><span>Agents</span><strong id="workspace-management-agents-' + escapeAttr(account.id) + '"></strong></div><div class="workspace-management-fact"><span>Alert routes</span><strong id="workspace-management-alerts-' + escapeAttr(account.id) + '"></strong></div><div class="workspace-management-fact"><span>Report schedules</span><strong id="workspace-management-reports-' + escapeAttr(account.id) + '"></strong></div><div class="workspace-management-fact"><span>Created</span><strong id="workspace-management-created-' + escapeAttr(account.id) + '"></strong></div></div><div class="workspace-management-guidance" id="workspace-management-guidance-' + escapeAttr(account.id) + '"></div><div class="workspace-management-identity" id="workspace-management-identity-' + escapeAttr(account.id) + '"></div><div class="workspace-setup-guide" aria-label="' + escapeAttr(clientLanguage ? "Guided client onboarding" : "Guided workspace setup") + '"><div class="workspace-setup-guide-copy"><span>Current step</span><h4 id="workspace-management-guide-title-' + escapeAttr(account.id) + '"></h4><p id="workspace-management-guide-description-' + escapeAttr(account.id) + '"></p><ul id="workspace-management-guide-diagnostics-' + escapeAttr(account.id) + '"></ul></div><form method="POST" id="workspace-management-primary-form-' + escapeAttr(account.id) + '"><button type="submit" class="btn-primary btn-compact" id="workspace-management-primary-' + escapeAttr(account.id) + '">Continue setup</button></form></div><div class="workspace-setup-checklist" aria-label="' + escapeAttr(clientLanguage ? "Client onboarding checklist" : "Workspace setup checklist") + '"><div class="workspace-setup-step workspace-setup-step-created"><span class="workspace-setup-status" id="workspace-management-check-created-' + escapeAttr(account.id) + '"></span><div><strong>' + escapeHTML(clientLanguage ? "Client added" : "Workspace created") + "</strong><span>" + escapeHTML(clientLanguage ? "A separate workspace boundary keeps this client isolated." : "This client has a separate workspace boundary.") + '</span></div></div><div class="workspace-setup-step"><span class="workspace-setup-status" id="workspace-management-check-install-' + escapeAttr(account.id) + '"></span><div><strong>Install the first agent</strong><span>Use the workspace-bound install path so data lands in this client.</span></div></div><div class="workspace-setup-step"><span class="workspace-setup-status" id="workspace-management-check-alerts-' + escapeAttr(account.id) + '"></span><div><strong>Configure alert routes</strong><span>Keep notifications scoped to this client.</span></div></div><div class="workspace-setup-step"><span class="workspace-setup-status" id="workspace-management-check-reports-' + escapeAttr(account.id) + '"></span><div><strong>Schedule reports</strong><span>Send client performance reports from this workspace.</span></div></div><div class="workspace-setup-step"><span class="workspace-setup-status" id="workspace-management-check-access-' + escapeAttr(account.id) + '"></span><div><strong>Review access</strong><span>Invite your own staff from Access. Everyone there can see every client.</span></div></div></div><div class="workspace-management-next-steps" id="workspace-management-next-steps-' + escapeAttr(account.id) + '"><div class="workspace-next-step"><div><strong>' + escapeHTML(openEntityLabel) + "</strong><span>" + escapeHTML(clientLanguage ? "Work inside this client workspace boundary." : "Work inside this client boundary.") + '</span></div><form method="POST" id="workspace-management-open-form-' + escapeAttr(account.id) + '"><button type="submit" class="btn-primary btn-compact" id="workspace-management-open-' + escapeAttr(account.id) + '">' + escapeHTML(openEntityLabel) + '</button></form></div><div class="workspace-next-step"><div><strong>Install agents</strong><span>Open the workspace-bound install commands.</span></div><form method="POST" id="workspace-management-install-form-' + escapeAttr(account.id) + '"><button type="submit" class="btn-secondary btn-compact" id="workspace-management-install-' + escapeAttr(account.id) + '">Install agents</button></form></div><div class="workspace-next-step workspace-next-step-readonly"><div><strong>Alerts and reports</strong><span>Alerts and performance reports stay inside the client workspace.</span></div><form method="POST" id="workspace-management-reporting-form-' + escapeAttr(account.id) + '"><button type="submit" class="btn-secondary btn-compact" id="workspace-management-reporting-' + escapeAttr(account.id) + '">Open reports</button></form></div><div class="workspace-next-step workspace-next-step-readonly"><div><strong>Access</strong><span>Invite people or adjust roles from the account access boundary.</span></div><button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="access">Open Access</button></div></div><div class="workspace-management-actions"><button type="button" class="btn-danger" id="workspace-management-action-' + escapeAttr(account.id) + '" data-action="workspace-action" data-account-id="' + escapeAttr(account.id) + '">' + escapeHTML(clientLanguage ? "Manage client" : "Manage workspace") + "</button></div></div></section>";
     }
@@ -3946,7 +4105,7 @@
     }).join("") + "</div></div>" : '<div class="empty-state"><p>' + escapeHTML(
       account.can_manage ? clientLanguage ? "No clients yet. Add one to get started." : "No hosted workspaces yet. Create one to get started." : clientLanguage ? "No clients are attached yet. An owner or admin must add the first one." : "No hosted workspaces are attached yet. An owner or admin must create the first one."
     ) + "</p>" + (workspaceHeaderActions ? '<div style="margin-top: 8px">' + workspaceHeaderActions + "</div>" : "") + "</div>";
-    return '<section class="account-content-panel account-content-panel-workspaces"><div class="workspace-operations-shell workspace-operations-shell-idle" id="workspace-operations-shell-' + escapeAttr(account.id) + '"><div class="workspace-operations-detail" id="workspace-operations-detail-' + escapeAttr(account.id) + '" hidden>' + workspaceManagement + '</div><div class="workspace-operations-main">' + workspaceHTML + "</div></div></section>";
+    return '<section class="account-content-panel account-content-panel-workspaces"><div class="workspace-recovery" id="workspace-recovery-' + escapeAttr(account.id) + '" role="status" tabindex="-1" hidden><strong id="workspace-recovery-title-' + escapeAttr(account.id) + '"></strong><p id="workspace-recovery-message-' + escapeAttr(account.id) + '"></p><button type="button" class="btn-secondary btn-compact" id="workspace-recovery-refresh-' + escapeAttr(account.id) + '" data-action="refresh-workspace-state" data-account-id="' + escapeAttr(account.id) + '">Refresh current state</button></div><div class="workspace-operations-shell workspace-operations-shell-idle" id="workspace-operations-shell-' + escapeAttr(account.id) + '"><div class="workspace-operations-detail" id="workspace-operations-detail-' + escapeAttr(account.id) + '" hidden>' + workspaceManagement + '</div><div class="workspace-operations-main">' + workspaceHTML + "</div></div></section>";
   }
   function renderAccountAccessSection(account, emailSignInAvailable = true) {
     var clientLanguage = accountUsesClientLanguage(account);
@@ -4062,7 +4221,7 @@
         '<div class="subsection"><div id="data-export-root"></div></div><div class="subsection"><div id="data-delete-root"></div></div><div class="helper-text">Payment-card data stays with Stripe. For Stripe deletion support, contact <a href="mailto:' + escapeAttr(context.bootstrap.support_email || "") + '">' + escapeHTML(context.bootstrap.support_email || "") + "</a>.</div>"
       );
     }
-    return '<div class="portal-shell" data-shell-section="' + activeSection + '"><div class="portal-shell-main">' + renderIdentityBar(accounts, showSelfHostedCommercial) + renderTabBar(context.bootstrap, activeSection) + (hosted ? '<section class="portal-content-panel portal-content-panel-workspaces">' + workspaceSummaryContent + workspacesContent + '</section><section class="portal-content-panel portal-content-panel-access">' + accessContent + "</section>" : "") + (providerHostedPlanShown(context.bootstrap) ? '<section class="portal-content-panel portal-content-panel-billing billing-section" id="billing-section"><div id="' + PROVIDER_PLAN_ROOT_ID + '"><p class="billing-action-meta">Loading your plan\u2026</p></div></section>' : "") + (showBillingPanel && !providerHostedPlanShown(context.bootstrap) ? '<section class="portal-content-panel portal-content-panel-billing billing-section" id="billing-section">' + (hosted && hasHostedBilling ? renderHostedBillingCards(accounts, showSelfHostedCommercial) : "") + (showSelfHostedBillingShell ? '<div class="billing-shell billing-shell-idle"><div class="billing-shell-main"><div class="billing-shell-main-head"><h3>Self-hosted billing</h3><p>' + escapeHTML(selfHostedBillingLeadCopy) + '</p></div><div class="billing-action-list">' + selfHostedBillingActionsHTML + '</div><div class="billing-inline-support"><h4>Support</h4><p>' + selfHostedBillingEscalationCopy + '</p><div class="billing-inline-support-actions"><button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="support">Open support</button><a class="portal-support-link" href="mailto:' + escapeAttr(context.bootstrap.support_email || "") + '">' + escapeHTML(context.bootstrap.support_email || "") + '</a></div></div></div><div class="billing-shell-detail" id="billing-detail-shell" hidden>' + selfHostedBillingPanelsHTML + "</div></div>" : "") + "</section>" : "") + '<section class="portal-content-panel portal-content-panel-support">' + renderSupportSection(context) + "</section></div></div>";
+    return '<div class="portal-shell" data-shell-section="' + activeSection + '"><div class="portal-shell-main">' + renderIdentityBar(accounts, showSelfHostedCommercial) + '<p class="workspace-recovery" id="workspace-account-unavailable" role="status" hidden>Account access changed. The latest result of the client change is not confirmed. Review Access or sign in again; no change was repeated.</p>' + renderTabBar(context.bootstrap, activeSection) + (hosted ? '<section class="portal-content-panel portal-content-panel-workspaces">' + workspaceSummaryContent + workspacesContent + '</section><section class="portal-content-panel portal-content-panel-access">' + accessContent + "</section>" : "") + (providerHostedPlanShown(context.bootstrap) ? '<section class="portal-content-panel portal-content-panel-billing billing-section" id="billing-section"><div id="' + PROVIDER_PLAN_ROOT_ID + '"><p class="billing-action-meta">Loading your plan\u2026</p></div></section>' : "") + (showBillingPanel && !providerHostedPlanShown(context.bootstrap) ? '<section class="portal-content-panel portal-content-panel-billing billing-section" id="billing-section">' + (hosted && hasHostedBilling ? renderHostedBillingCards(accounts, showSelfHostedCommercial) : "") + (showSelfHostedBillingShell ? '<div class="billing-shell billing-shell-idle"><div class="billing-shell-main"><div class="billing-shell-main-head"><h3>Self-hosted billing</h3><p>' + escapeHTML(selfHostedBillingLeadCopy) + '</p></div><div class="billing-action-list">' + selfHostedBillingActionsHTML + '</div><div class="billing-inline-support"><h4>Support</h4><p>' + selfHostedBillingEscalationCopy + '</p><div class="billing-inline-support-actions"><button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="support">Open support</button><a class="portal-support-link" href="mailto:' + escapeAttr(context.bootstrap.support_email || "") + '">' + escapeHTML(context.bootstrap.support_email || "") + '</a></div></div></div><div class="billing-shell-detail" id="billing-detail-shell" hidden>' + selfHostedBillingPanelsHTML + "</div></div>" : "") + "</section>" : "") + '<section class="portal-content-panel portal-content-panel-support">' + renderSupportSection(context) + "</section></div></div>";
   }
   function renderAuthScopeRow(title, copy) {
     return '<article class="portal-auth-scope-row"><h3>' + escapeHTML(title) + "</h3><p>" + escapeHTML(copy) + "</p></article>";
@@ -4091,6 +4250,7 @@
 
   // src/shell.ts
   function installShell(deps) {
+    var renderedPrincipal = "";
     function revealActiveNavLink(activeLink) {
       if (!activeLink) return;
       var group = activeLink.closest(".portal-tab-bar");
@@ -4134,6 +4294,17 @@
       var root = document.getElementById("portal-app-root");
       if (!root) return;
       var portalBootstrap = deps.store.getBootstrap();
+      var principal = portalBootstrap.authenticated ? portalBootstrap.email.trim().toLowerCase() : "";
+      var drafts = {};
+      var active = document.activeElement;
+      var retainedFocus = principal && principal === renderedPrincipal && active && root.contains(active) && /^(ws-name-|invite-|workspace-management-close-)/.test(active.id) ? active : null;
+      var focusID = retainedFocus?.id || "";
+      var selection = retainedFocus instanceof HTMLInputElement && retainedFocus.type === "text" ? [retainedFocus.selectionStart, retainedFocus.selectionEnd] : null;
+      if (principal && principal === renderedPrincipal) {
+        root.querySelectorAll('[id^="ws-name-"], [id^="invite-email-"], [id^="invite-role-"]').forEach(function(input) {
+          drafts[input.id] = input.value;
+        });
+      }
       var context = {
         bootstrap: portalBootstrap,
         billingState: deps.store.getBillingState(),
@@ -4143,7 +4314,18 @@
         activeSection: deps.store.getShellState().activeSection
       };
       root.innerHTML = portalBootstrap.authenticated ? renderAuthenticatedPortalHTML(context) : renderSignedOutPortalHTML(context);
+      renderedPrincipal = principal;
+      Object.keys(drafts).forEach(function(id) {
+        var input = document.getElementById(id);
+        if (input) input.value = drafts[id];
+      });
+      renderAccountUI(deps.store.getAccountState(), portalBootstrap.accounts, portalBootstrap.account_api_base_path);
       syncShellSection();
+      var replacement = focusID ? document.getElementById(focusID) : null;
+      if (replacement && !replacement.disabled) {
+        replacement.focus({ preventScroll: true });
+        if (selection && replacement instanceof HTMLInputElement) replacement.setSelectionRange(selection[0], selection[1]);
+      }
     }
     deps.store.subscribeBootstrap(function() {
       renderPortalApp();
@@ -4216,7 +4398,10 @@
         return billingState;
       },
       setBootstrap: function(nextBootstrap) {
+        var previousPrincipal = bootstrapState.authenticated ? bootstrapState.email.trim().toLowerCase() : "";
         bootstrapState = normalizeBootstrap(bootstrapDefaults, nextBootstrap);
+        var nextPrincipal = bootstrapState.authenticated ? bootstrapState.email.trim().toLowerCase() : "";
+        if (previousPrincipal !== nextPrincipal || !bootstrapState.authenticated) accountState = createPortalAccountState();
         syncPortalAccountStateBootstrap(accountState, bootstrapState.accounts || []);
         syncLoginStateBootstrapEmail(loginState, bootstrapState.email || "");
         syncBillingStateBootstrapEmail(billingState, bootstrapState.email || "");

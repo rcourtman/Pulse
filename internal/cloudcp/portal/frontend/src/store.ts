@@ -102,7 +102,11 @@ export function createPortalStore(
       return billingState;
     },
     setBootstrap: function(nextBootstrap) {
+      var previousPrincipal = bootstrapState.authenticated ? bootstrapState.email.trim().toLowerCase() : '';
       bootstrapState = normalizeBootstrap(bootstrapDefaults, nextBootstrap);
+      var nextPrincipal = bootstrapState.authenticated ? bootstrapState.email.trim().toLowerCase() : '';
+      // A late lifecycle response must never reintroduce another session's facts.
+      if (previousPrincipal !== nextPrincipal || !bootstrapState.authenticated) accountState = createPortalAccountState();
       syncPortalAccountStateBootstrap(accountState, bootstrapState.accounts || []);
       syncLoginStateBootstrapEmail(loginState, bootstrapState.email || '');
       syncBillingStateBootstrapEmail(billingState, bootstrapState.email || '');

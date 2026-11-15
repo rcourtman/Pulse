@@ -4,7 +4,7 @@ import type { PortalAPI } from './api';
 import { focusElement, getElement, renderAccountUI as renderAccountUIState } from './account_view';
 import { ensurePortalAccountUIEntry } from './state';
 import type { PortalStore } from './store';
-import type { PortalAccessJob, PortalAccessMember } from './types';
+import type { PortalAccessJob, PortalAccessMember, PortalWorkspaceMutationState } from './types';
 
 export interface AccountRuntimeDeps {
   api: PortalAPI;
@@ -23,6 +23,7 @@ export interface AccountRuntime {
   clearAccessJob(accountID: string): void;
   inviteMember(accountID: string): Promise<void>;
   createWorkspace(accountID: string): Promise<void>;
+  refreshWorkspaceState(accountID: string): Promise<void>;
   manageWorkspaceAction(accountID: string, tenantID: string, action: string, name: string): Promise<void>;
   removeMember(accountID: string, userID: string, email: string): Promise<void>;
   changeRole(accountID: string, userID: string, newRole: string): Promise<void>;
@@ -38,10 +39,12 @@ export function installAccountRuntime(deps: AccountRuntimeDeps): AccountRuntime 
     var viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
     if (!viewportHeight) return;
     var rect = element.getBoundingClientRect();
-    if (rect.top >= 0 && rect.top <= viewportHeight - 72 && rect.bottom > 0) {
+    var headerHeight = document.querySelector('header')?.getBoundingClientRect().height || 0;
+    if (rect.top >= headerHeight + 12 && rect.top <= viewportHeight - 72 && rect.bottom > 0) {
       return;
     }
     if (typeof element.scrollIntoView === 'function') {
+      element.style.scrollMarginTop = (headerHeight + 12) + 'px';
       element.scrollIntoView({ block: 'start', inline: 'nearest' });
     }
   };
@@ -193,7 +196,8 @@ export function installAccountRuntime(deps: AccountRuntimeDeps): AccountRuntime 
   }
 
   var createWorkspace = async function(accountID: string): Promise<void> {
-    if (deps.store.getAccountState().byAccountID[accountID]?.createWorkspace.pending) return;
+    var currentEntry = deps.store.getAccountState().byAccountID[accountID];
+    if (currentEntry?.createWorkspace.pending || currentEntry?.manageWorkspace.pending || currentEntry?.manageWorkspace.recoveryRequired) return;
     var nameEl = getElement<HTMLInputElement>('ws-name-' + accountID);
     if (!nameEl) return;
     var name = nameEl.value.trim();
@@ -243,41 +247,128 @@ export function installAccountRuntime(deps: AccountRuntimeDeps): AccountRuntime 
     }
   };
 
-  var manageWorkspaceAction = async function(accountID: string, tenantID: string, action: string, name: string): Promise<void> {
-    var verb = action === 'suspend' ? 'Suspend' : action === 'delete' ? 'Delete' : '';
-    var pastVerb = action === 'suspend' ? 'Suspended' : action === 'delete' ? 'Deleted' : '';
-    if (!verb) return;
-    var entityName = accountUsesClientLanguage(accountID) ? 'client' : 'workspace';
-    if (!window.confirm(verb + ' ' + entityName + ' "' + name + '"?')) return;
+  function findAccount(accountID: string) {
+    return deps.store.getBootstrap().accounts.find(function(account) { return account.id === accountID; });
+  }
+
+  function currentWorkspaceAction(accountID: string, workspaceID: string): string {
+    var account = findAccount(accountID);
+    var workspace = account?.workspaces.find(function(item) { return item.id === workspaceID; });
+    if (!account?.can_manage || !workspace) return '';
+    if (workspace.state === 'active') return 'suspend';
+    if (workspace.state === 'suspended' || workspace.state === 'failed') return 'delete';
+    return '';
+  }
+
+  // Do not steal focus from someone who moved on while the request was pending.
+  function trackWorkspaceFocus(accountID: string) {
+    var origin = document.activeElement;
+    var moved = false;
+    var onFocus = function(event: FocusEvent) { if (event.target !== origin) moved = true; };
+    document.addEventListener('focusin', onFocus);
+    return function(elementID: string) {
+      document.removeEventListener('focusin', onFocus);
+      if (elementID && !moved && deps.store.getShellState().activeSection === 'workspaces') {
+        revealElementIfNeeded(getElement<HTMLElement>('workspace-recovery-' + accountID));
+        focusElement(elementID);
+      }
+    };
+  }
+
+  function isCurrentWorkspaceRequest(accountID: string, request: PortalWorkspaceMutationState): boolean {
+    return deps.store.getBootstrap().authenticated &&
+      deps.store.getAccountState().byAccountID[accountID]?.manageWorkspace === request;
+  }
+
+  function recordWorkspaceRead(accountID: string, request: PortalWorkspaceMutationState): boolean {
+    var account = findAccount(accountID);
+    if (!account) return false;
+    var workspace = account.workspaces.find(function(item) { return item.id === request.workspaceID; });
     deps.store.updateAccountState(function(accountState) {
       var entry = ensurePortalAccountUIEntry(accountState, accountID);
-      beginMutationState(entry.manageWorkspace);
+      request.pending = false;
+      request.refreshing = false;
+      request.recoveryRequired = false;
+      request.error = '';
+      request.notice = workspace
+        ? 'Latest state for "' + workspace.display_name + '": ' + workspace.state + '. No action was repeated.'
+        : '"' + request.workspaceName + '" is no longer listed in this account. No action was repeated.';
+      // A result for A must not close the panel the reader opened for B.
+      if (!workspace && entry.selectedWorkspaceID === request.workspaceID) entry.selectedWorkspaceID = '';
     });
+    return true;
+  }
+
+  var refreshWorkspaceState = async function(accountID: string): Promise<void> {
+    var request = deps.store.getAccountState().byAccountID[accountID]?.manageWorkspace;
+    if (!request?.recoveryRequired || request.pending || request.refreshing) return;
+    var finishFocus = trackWorkspaceFocus(accountID);
+    deps.store.updateAccountState(function() { request.refreshing = true; });
+    var refreshed = false;
+    try { refreshed = await deps.refreshBootstrap(); } catch { /* Keep the last loaded facts. */ }
+    if (isCurrentWorkspaceRequest(accountID, request)) {
+      if (!refreshed || !recordWorkspaceRead(accountID, request)) {
+        deps.store.updateAccountState(function() {
+          request.refreshing = false;
+          request.error = 'Could not refresh the current state. The last loaded facts may be out of date. No action was repeated.';
+        });
+      }
+      finishFocus(request.recoveryRequired ? 'workspace-recovery-refresh-' + accountID : 'workspace-recovery-' + accountID);
+    } else { finishFocus(''); }
+  };
+
+  var manageWorkspaceAction = async function(accountID: string, tenantID: string, action: string, name: string): Promise<void> {
+    var entry = deps.store.getAccountState().byAccountID[accountID];
+    if (action !== 'suspend' && action !== 'delete') return;
+    if (!entry || entry.manageWorkspace.pending || entry.manageWorkspace.recoveryRequired) return;
+    if (action !== currentWorkspaceAction(accountID, tenantID)) return;
+    var workspace = findAccount(accountID)?.workspaces.find(function(item) { return item.id === tenantID; });
+    if (!workspace) return;
+    name = workspace.display_name;
+    var verb = action === 'suspend' ? 'Suspend' : 'Delete';
+    var entityName = accountUsesClientLanguage(accountID) ? 'client' : 'workspace';
+    if (!window.confirm(verb + ' ' + entityName + ' "' + name + '"?')) return;
+    // Confirmation is not authority: the current identity/state still decides.
+    if (deps.store.getAccountState().byAccountID[accountID] !== entry || action !== currentWorkspaceAction(accountID, tenantID) || entry.manageWorkspace.pending || entry.manageWorkspace.recoveryRequired) return;
+    var request = entry.manageWorkspace;
+    var finishFocus = trackWorkspaceFocus(accountID);
+    deps.store.updateAccountState(function() {
+      beginMutationState(request);
+      request.workspaceID = tenantID;
+      request.workspaceName = name;
+      request.action = action as 'suspend' | 'delete';
+      request.notice = '';
+      request.outcome = 'unknown';
+    });
+    var accepted = false;
     try {
-      if (action === 'suspend') {
-        await deps.api.suspendWorkspace(accountID, tenantID);
-      } else {
-        await deps.api.deleteWorkspace(accountID, tenantID);
+      if (action === 'suspend') await deps.api.suspendWorkspace(accountID, tenantID);
+      else await deps.api.deleteWorkspace(accountID, tenantID);
+      accepted = true;
+      if (!isCurrentWorkspaceRequest(accountID, request)) return;
+      request.outcome = 'accepted';
+      var refreshed = await deps.refreshBootstrap();
+      if (!isCurrentWorkspaceRequest(accountID, request)) return;
+      if (!refreshed || !recordWorkspaceRead(accountID, request)) throw new Error('Could not load the latest account state.');
+      var current = findAccount(accountID)?.workspaces.find(function(item) { return item.id === tenantID; });
+      if (action === 'suspend' ? current?.state === 'suspended' : !current) {
+        deps.store.updateAccountState(function(state) {
+          var currentEntry = ensurePortalAccountUIEntry(state, accountID);
+          if (currentEntry.selectedWorkspaceID === tenantID) currentEntry.selectedWorkspaceID = '';
+        });
+        deps.showToast((action === 'suspend' ? 'Suspended' : 'Deleted') + ' ' + entityName + '.');
       }
-      if (!await refreshOrRedirect()) {
-        deps.store.updateAccountState(function(accountState) {
-          var entry = ensurePortalAccountUIEntry(accountState, accountID);
-          resetMutationState(entry.manageWorkspace);
-        }, { notify: false });
-        return;
-      }
-      deps.store.updateAccountState(function(accountState) {
-        var entry = ensurePortalAccountUIEntry(accountState, accountID);
-        entry.selectedWorkspaceID = '';
-        succeedMutationState(entry.manageWorkspace);
-      });
-      deps.showToast(pastVerb + ' ' + entityName + '.');
     } catch (error) {
-      deps.store.updateAccountState(function(accountState) {
-        var entry = ensurePortalAccountUIEntry(accountState, accountID);
-        failMutationState(entry.manageWorkspace, error instanceof Error ? error.message : 'Failed to ' + verb.toLowerCase() + ' ' + entityName + '.');
-      }, { notify: false });
-      deps.showToast(error instanceof Error ? error.message : 'Failed to ' + verb.toLowerCase() + ' ' + entityName + '.', true);
+      if (!isCurrentWorkspaceRequest(accountID, request)) return;
+      deps.store.updateAccountState(function() {
+        request.pending = false;
+        request.outcome = accepted ? 'accepted' : error instanceof PortalAPIError && error.status >= 400 && error.status < 500 ? 'rejected' : 'unknown';
+        request.recoveryRequired = true;
+        request.error = error instanceof Error ? error.message : 'The current result could not be confirmed.';
+      });
+    } finally {
+      finishFocus(isCurrentWorkspaceRequest(accountID, request)
+        ? (request.recoveryRequired ? 'workspace-recovery-refresh-' : 'workspace-recovery-') + accountID : '');
     }
   };
 
@@ -415,6 +506,7 @@ export function installAccountRuntime(deps: AccountRuntimeDeps): AccountRuntime 
     inviteMember: inviteMember,
     createWorkspace: createWorkspace,
     manageWorkspaceAction: manageWorkspaceAction,
+    refreshWorkspaceState: refreshWorkspaceState,
     removeMember: removeMember,
     changeRole: changeRole,
   };

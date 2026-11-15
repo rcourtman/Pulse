@@ -1,0 +1,70 @@
+{
+  "version": 1,
+  "base_sha": "3fab781b7ca97c49fac631c09f9e602b35687dd9",
+  "verified_at": "2026-11-15T03:45:43.823613Z",
+  "result": "passed",
+  "changed_paths": [
+    "internal/cloudcp/portal/dist/build_manifest.json",
+    "internal/cloudcp/portal/dist/portal_app.css",
+    "internal/cloudcp/portal/dist/portal_app.js",
+    "internal/cloudcp/portal/frontend/src/account_controller.ts",
+    "internal/cloudcp/portal/frontend/src/account_runtime.ts",
+    "internal/cloudcp/portal/frontend/src/account_view.ts",
+    "internal/cloudcp/portal/frontend/src/shell.ts",
+    "internal/cloudcp/portal/frontend/src/shell_view.ts",
+    "internal/cloudcp/portal/frontend/src/store.ts",
+    "internal/cloudcp/portal/frontend/src/styles.css",
+    "internal/cloudcp/portal/frontend/src/types.ts",
+    "internal/cloudcp/portal/frontend/src/workspace_presentation.ts"
+  ],
+  "content_sha256": {
+    "internal/cloudcp/portal/dist/build_manifest.json": "b70eb3d2c5bb81f3c504604395fd0213f659f3b6aab1ea57734670c596b18d84",
+    "internal/cloudcp/portal/dist/portal_app.css": "9241ea05808260a04eb28614d8810524a0d1065295a143560e48fac084524361",
+    "internal/cloudcp/portal/dist/portal_app.js": "685d6c663cfc494cf8a7aeca864e5e94dcdba2c20ef3dc6e0619f475a80f58ae",
+    "internal/cloudcp/portal/frontend/src/account_controller.ts": "d93afa31172443441c908c6683017f468acf0a482dff18a5fb56c78869835846",
+    "internal/cloudcp/portal/frontend/src/account_runtime.ts": "e66d2ab6ebe4483a701d5c9ce585cbe70d7450e798448c05f2c2e255a2399289",
+    "internal/cloudcp/portal/frontend/src/account_view.ts": "b47100c7736a0ce06d3f12ae80c3ea6c35af523b0649f759e4decdcc7035fe32",
+    "internal/cloudcp/portal/frontend/src/shell.ts": "5668f46d3ea1b9ac7d5c2b65849874d1f9fa4049a2f7da1006bbd733a10a062f",
+    "internal/cloudcp/portal/frontend/src/shell_view.ts": "08338d1187bf085955e2222dc23247c20b309d16d3111f1c104695336be7fa54",
+    "internal/cloudcp/portal/frontend/src/store.ts": "935e7c7ebb9ad5a9d2319c3226c9c0ed84a13125e5b32beb7f72b1e785b8c738",
+    "internal/cloudcp/portal/frontend/src/styles.css": "5a20fac8c0dd928ba3502e2078efbc6df475bf712371d202fb1b4f40f6c30942",
+    "internal/cloudcp/portal/frontend/src/types.ts": "da26320c94b85321174057e0c75332828cf4d0c62511e0f34a26e381299df35c",
+    "internal/cloudcp/portal/frontend/src/workspace_presentation.ts": "50731d70f8708fdb95cb29816a5a0b370e330cfb19e0762cb36fe56916111fe8"
+  },
+  "routes": [
+    "/portal (actual embedded Go template, compiled Portal assets and real API client; recorded native producer frames with declared safe fault fixtures)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "84 current captures individually opened through native view_image: 33 before/after pairs and 18 after-only read-recovery states. Same fixture, viewport, theme and task anchor; desktop light and phone light/dark. Before uses exact committed be009a70 assets (no fresh baseline rebuild pass); final JS/CSS match the qualified c98165e9 build and checked-in dist.",
+    "409 rejected suspend with canceled native final state; applied-delete proxy503 with native absence; native200 suspend with declared readback503; declared403 client-creation refusal. All failure captures outlast the four-second toast. Accepted-write before correctly serves the changed native SSR bootstrap after redirect; the earlier static-SSR diagnostic is not accepted proof.",
+    "Persistent named rejected/unknown/accepted-but-unconfirmed messages distinguish last-loaded facts; read failure retains them; deliberate successful GET shows canceled, absent or suspended without repeating the write. Canceled clients stay visible with Review/Billing rather than false empty/first-client copy.",
+    "Client identity, health, alerts, report schedule and creation date remain separate and discoverable. Narrow warnings move lower tiles but keep the same creation date in visible metadata; no per-item aggregation, removal or hover-only replacement. Disabled controls are visibly distinct and Close remains usable.",
+    "Chromium141.0.7390.37 / Playwright1.56.1 matches integration lock. Final main evidence combines two completed desktop journeys from a later fixture-selector-failed call with seven completed remainder journeys; accepted-write evidence is a separate six-journey successful call. Failed invocations are retained, not called passing. No page exceptions in completed proof."
+  ],
+  "interactions": [
+    "Select existing client, confirm one PATCH/DELETE, wait beyond4.3s, inspect disabled writes and enabled Close; focus goes to named read-recovery control, with actual responsive header clearance. Explicit failed then successful GET recovery preserves identity and does not replay the mutation.",
+    "Native accepted200 plus failed GET keeps the selected panel and marks accepted-but-unconfirmed instead of redirecting. After deliberate read, Suspended is shown truthfully and existing Delete action is appropriate; no automatic repeat or fabricated delete success.",
+    "Canceled readback offers no Delete or active handoff, keeps one client and its facts; genuine absent final state stays zero. Add client remains server-policy-bound rather than inferred from one canceled row. Declared403 retains the error, name draft and existing Add/Cancel controls.",
+    "Browser uses Core0762c7f5 recorded native frames, not a running combined server or an installed account. Main still needs Core's independent atomic producer repair. No App/IdP, real-client, mail, release or served-Pro-preview acceptance is claimed. Late session/selection and same-principal draft/caret preservation have registered unit proof, not a full browser matrix."
+  ],
+  "evidence": [
+    "RECEIPTS.md",
+    "SOURCE-BINDING.json",
+    "BROWSER-RESULTS.json",
+    "CAPTURES.md",
+    "PAIRS.json",
+    "PIXEL-REVIEW.md",
+    "BROWSER-INPUTS.tar.xz",
+    "BROWSER-HISTORY.tar.xz"
+  ]
+}

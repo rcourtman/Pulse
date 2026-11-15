@@ -2208,3 +2208,30 @@ header .logout-btn:hover,
 .provider-plan-catalogue-notice p {
   margin: 0 0 8px;
 }
+.workspace-recovery {
+  margin: 0 0 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-subtle);
+  color: var(--ink);
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+.workspace-recovery[hidden] {
+  display: none;
+}
+.workspace-recovery p {
+  margin: 6px 0 8px;
+  color: var(--ink-secondary);
+}
+.workspace-recovery-unconfirmed {
+  border-color: var(--warn-border);
+  background: var(--warn-subtle);
+}
+.portal-content-panel-workspaces button:disabled {
+  background: var(--bg-inset);
+  color: var(--ink-secondary);
+  border-color: var(--border);
+  cursor: not-allowed;
+}

@@ -140,13 +140,23 @@ export interface PortalMutationState {
   error: string;
 }
 
+export interface PortalWorkspaceMutationState extends PortalMutationState {
+  workspaceID?: string;
+  workspaceName?: string;
+  action?: 'suspend' | 'delete';
+  outcome?: 'rejected' | 'unknown' | 'accepted';
+  recoveryRequired?: boolean;
+  refreshing?: boolean;
+  notice?: string;
+}
+
 export type PortalAccessJob = '' | 'invite' | 'change_role' | 'remove';
 
 export interface PortalAccountUIEntry {
   addWorkspaceOpen: boolean;
   createWorkspace: PortalMutationState;
   selectedWorkspaceID: string;
-  manageWorkspace: PortalMutationState;
+  manageWorkspace: PortalWorkspaceMutationState;
   accessVisible: boolean;
   activeAccessJob: PortalAccessJob;
   accessQuery: PortalQueryState<PortalAccessMember[]>;

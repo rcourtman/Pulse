@@ -35,6 +35,8 @@ export function workspaceStatusCopy(workspace: PortalWorkspaceSummary): string {
   var state = String(workspace.state || '');
   if (state === 'suspended') return 'This workspace is suspended.';
   if (state === 'failed') return 'This workspace is in a failed state.';
+  if (state === 'canceled') return 'This workspace is canceled. Review billing before continuing setup.';
+  if (state !== 'active') return 'This workspace is ' + (state || 'in an unknown state') + '. Review its state before continuing setup.';
   if (status === 'healthy') return 'Latest health check is healthy.';
   if (status === 'unhealthy') return 'Latest health check is unhealthy.';
   return 'Latest health check is still pending.';
@@ -52,6 +54,7 @@ export function workspaceRowNote(workspace: PortalWorkspaceSummary): string {
   var state = String(workspace.state || '');
   if (state === 'suspended') return 'Suspended';
   if (state === 'failed') return 'Failed';
+  if (state !== 'active') return state === 'canceled' ? 'Canceled' : 'Review state';
   if (status === 'checking') return 'Health check pending';
   if (status === 'unhealthy') return 'Unhealthy';
   var setup = workspaceSetupState(workspace);
@@ -122,8 +125,8 @@ function explicitSetupStatus(workspace: PortalWorkspaceSummary): WorkspaceSetupS
 export function workspaceSetupState(workspace: PortalWorkspaceSummary): WorkspaceSetupState {
   var state = String(workspace.state || '');
   var health = workspaceHealthState(workspace);
-  if (state === 'suspended' || state === 'failed' || health === 'unhealthy') return 'review';
-  if (state !== 'active' || health === 'checking') return 'setup_path';
+  if (state !== 'active' || health === 'unhealthy') return 'review';
+  if (health === 'checking') return 'setup_path';
 
   var knowsAgentCount = hasNumber(workspace.agent_count);
   var knowsAlertCount = hasNumber(workspace.alert_route_count);

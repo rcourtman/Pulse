@@ -20,6 +20,7 @@ describe('account controller', function() {
       inviteMember: vi.fn(),
       createWorkspace: vi.fn(),
       manageWorkspaceAction: vi.fn(),
+      refreshWorkspaceState: vi.fn(),
       removeMember: vi.fn(),
       changeRole: vi.fn(),
     };
@@ -39,6 +40,7 @@ describe('account controller', function() {
       '<button id="select" data-action="select-workspace" data-account-id="acct_1" data-workspace-id="ws_1">Manage</button>' +
       '<button id="close" data-action="clear-workspace-selection" data-account-id="acct_1">Done</button>' +
       '<button id="manage" data-action="workspace-action" data-account-id="acct_1" data-workspace-id="ws_1" data-workspace-action="suspend" data-workspace-name="Alpha">Suspend</button>' +
+      '<button id="refresh" data-action="refresh-workspace-state" data-account-id="acct_1">Refresh</button>' +
       '<button id="remove" data-action="remove-member" data-account-id="acct_1" data-user-id="u1" data-member-email="owner@example.com">Remove</button>' +
       '<select id="role" data-action="change-role" data-account-id="acct_1" data-user-id="u1"><option value="admin">Admin</option></select>';
 
@@ -93,6 +95,9 @@ describe('account controller', function() {
 
     document.getElementById('manage')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     expect(runtime.manageWorkspaceAction).toHaveBeenCalledWith('acct_1', 'ws_1', 'suspend', 'Alpha');
+
+    document.getElementById('refresh')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(runtime.refreshWorkspaceState).toHaveBeenCalledWith('acct_1');
 
     document.getElementById('remove')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     expect(runtime.removeMember).toHaveBeenCalledWith('acct_1', 'u1', 'owner@example.com');

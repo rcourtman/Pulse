@@ -1,3 +1,4 @@
+import { renderAccountUI } from './account_view';
 import type { PortalStore } from './store';
 import {
   renderAuthenticatedPortalHTML,
@@ -12,6 +13,8 @@ export interface ShellDeps {
 }
 
 export function installShell(deps: ShellDeps): void {
+  var renderedPrincipal = '';
+
   function revealActiveNavLink(activeLink: HTMLElement | null) {
     if (!activeLink) return;
     var group = activeLink.closest('.portal-tab-bar') as HTMLElement | null;
@@ -58,6 +61,19 @@ export function installShell(deps: ShellDeps): void {
     var root = document.getElementById('portal-app-root');
     if (!root) return;
     var portalBootstrap = deps.store.getBootstrap();
+    var principal = portalBootstrap.authenticated ? portalBootstrap.email.trim().toLowerCase() : '';
+    var drafts: Record<string, string> = {};
+    var active = document.activeElement as HTMLInputElement | HTMLSelectElement | null;
+    var retainedFocus = principal && principal === renderedPrincipal && active && root.contains(active) && /^(ws-name-|invite-|workspace-management-close-)/.test(active.id) ? active : null;
+    var focusID = retainedFocus?.id || '';
+    var selection = retainedFocus instanceof HTMLInputElement && retainedFocus.type === 'text'
+      ? [retainedFocus.selectionStart, retainedFocus.selectionEnd] : null;
+    if (principal && principal === renderedPrincipal) {
+      // Only account form drafts, never passwords, verification codes or billing data.
+      root.querySelectorAll<HTMLInputElement | HTMLSelectElement>('[id^="ws-name-"], [id^="invite-email-"], [id^="invite-role-"]').forEach(function(input) {
+        drafts[input.id] = input.value;
+      });
+    }
     var context = {
       bootstrap: portalBootstrap,
       billingState: deps.store.getBillingState(),
@@ -69,7 +85,20 @@ export function installShell(deps: ShellDeps): void {
     root.innerHTML = portalBootstrap.authenticated
       ? renderAuthenticatedPortalHTML(context)
       : renderSignedOutPortalHTML(context);
+    renderedPrincipal = principal;
+    Object.keys(drafts).forEach(function(id) {
+      var input = document.getElementById(id) as HTMLInputElement | HTMLSelectElement | null;
+      if (input) input.value = drafts[id];
+    });
+    // Bootstrap replaces the shell. Apply retained account state to the new DOM,
+    // not just to the old nodes that existed before this subscriber ran.
+    renderAccountUI(deps.store.getAccountState(), portalBootstrap.accounts, portalBootstrap.account_api_base_path);
     syncShellSection();
+    var replacement = focusID ? document.getElementById(focusID) as HTMLInputElement | HTMLButtonElement | null : null;
+    if (replacement && !replacement.disabled) {
+      replacement.focus({ preventScroll: true });
+      if (selection && replacement instanceof HTMLInputElement) replacement.setSelectionRange(selection[0], selection[1]);
+    }
   }
 
   deps.store.subscribeBootstrap(function() {

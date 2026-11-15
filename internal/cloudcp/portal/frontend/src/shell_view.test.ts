@@ -257,87 +257,97 @@ describe('shell view', function() {
       })
     );
 
-    expect(html).toContain('portal-tab-bar');
-    expect(html).toContain('Access');
-    expect(html).toContain('Billing');
-    expect(html).toContain('Support');
-    expect(html).toContain('Clients');
-    expect(html).toContain('id="billing-section"');
-    expect(html).toContain('portal-identity-bar');
-    expect(html).toContain('Owner');
-    expect(html).toContain('MSP account');
-    expect(html).toContain('Acme MSP');
-    expect(html).toContain('workspace-summary-facts');
-    expect(html).toContain('1 account');
-    expect(html).toContain('3 clients');
-    expect(html).toContain('0 ready clients');
-    expect(html).toContain('1 client in setup');
-    expect(html).toContain('2 clients to review');
-    expect(html).toContain('Next:</strong> Review Beta Workspace');
-    expect(html).toContain('Clients in setup');
-    expect(html).toContain('Provider setup template');
-    expect(html).toContain('Client workspace is the identity boundary.');
-    expect(html).toContain('Add client');
-    expect(html).not.toContain('Create workspace');
-    expect(html).not.toContain('Manage billing');
-    expect(html).not.toContain('Manage team');
-    expect(html).toContain('Alpha Workspace');
-    expect(html).toContain('Beta Workspace');
-    expect(html).toContain('Gamma Workspace');
-    expect(html).toContain('Unhealthy</span>');
-    expect(html).toContain('Checking</span>');
-    expect(html).toContain('This client is in a failed state.');
-    expect(html).toContain('/api/accounts/acct_1/tenants/ws_active/handoff');
-    expect(html).toContain('/api/accounts/acct_1/tenants/ws_active/handoff?target_path=%2Fsettings%2Finfrastructure%3Fadd%3Dlinux-host');
-    expect(html).toContain('Open client');
-    expect(html).toContain('Install agents');
-    expect(html).toContain('Configure alert routes');
-    expect(html).toContain('Schedule reports');
-    expect(html).toContain('Open the workspace-bound install commands.');
-    expect(html).toContain('Alerts and performance reports stay inside the client workspace.');
-    expect(html).toContain('Invite your own staff from Access.');
-    expect(html).not.toContain('client users');
-    expect(html).toContain('data-action="select-workspace"');
-    expect(html).toContain('Add a client');
-    expect(html).toContain('Access changes stay in Access. Billing changes stay in Billing.');
-    expect(html).toContain('Close panel');
-    expect(html).toContain('id="workspace-management-acct_1" hidden');
-    expect(html).toContain('id="workspace-operations-detail-acct_1" hidden');
-    expect(html).toContain('data-action="clear-workspace-selection"');
-    expect(html).toContain('Invite people');
-    expect(html).toContain('Change roles');
-    expect(html).toContain('Remove access');
-    expect(html).toContain('data-action="set-access-job"');
-    expect(html).toContain('id="access-detail-acct_1" hidden');
-    expect(html).toContain('Choose the smallest role');
-    expect(html).toContain('Full account, billing, and access control.');
-    expect(html).toContain('Client control, billing, and roster management.');
-    expect(html).toContain('Client control without billing or roster ownership.');
-    expect(html).toContain('Review client status without control-plane changes.');
-    expect(html).not.toContain('Workspace control, billing, and roster management.');
-    expect(html).toContain('data-can-manage="true"');
-    expect(html).toContain('Remove stale access');
-    expect(html).toContain('data-action="workspace-action"');
-    expect(html).toContain('Hosted billing');
-    expect(html).toContain('Try first');
-    expect(html).toContain('Scope');
-    expect(html).toContain('Include');
-    expect(html).toContain('Billing');
-    expect(html).not.toContain('Hosted only');
-    expect(html).not.toContain('Self-hosted tools');
-    expect(html).not.toContain('Use self-hosted billing only for self-hosted purchases.');
-    expect(html).not.toContain('id="open-retrieve-billing"');
-    expect(html).not.toContain('id="billing-detail-shell" hidden');
-    expect(html).not.toContain('data-account-billing-action="clear-billing-panel"');
-    expect(html).not.toContain('id="data-billing-panel"');
-    expect(html).not.toContain('>Licenses<');
-    expect(html).not.toContain('>Refunds<');
-    expect(html).not.toContain('>Privacy<');
-    expect(html).not.toContain('section-context-strip');
-    expect(html).not.toContain('View roster');
-    expect(html).not.toContain('Owner or admin required');
-    expect(html).not.toContain('portal-content-panel-overview');
-    expect(html).not.toContain('data-shell-section="overview"');
+    // Report the missing contract fragments, not a diff of the entire page.
+    // All prior positive/negative checks remain, with one matcher invocation.
+    var required = [
+      'portal-tab-bar',
+      'Access',
+      'Billing',
+      'Support',
+      'Clients',
+      'id="billing-section"',
+      'portal-identity-bar',
+      'Owner',
+      'MSP account',
+      'Acme MSP',
+      'workspace-summary-facts',
+      '1 account',
+      '3 clients',
+      '0 ready clients',
+      '1 client in setup',
+      '2 clients to review',
+      'Next:</strong> Review Beta Workspace',
+      'Clients in setup',
+      'Provider setup template',
+      'Client workspace is the identity boundary.',
+      'Add client',
+      'Alpha Workspace',
+      'Beta Workspace',
+      'Gamma Workspace',
+      'Unhealthy</span>',
+      'Checking</span>',
+      'This client is in a failed state.',
+      '/api/accounts/acct_1/tenants/ws_active/handoff',
+      '/api/accounts/acct_1/tenants/ws_active/handoff?target_path=%2Fsettings%2Finfrastructure%3Fadd%3Dlinux-host',
+      'Open client',
+      'Install agents',
+      'Configure alert routes',
+      'Schedule reports',
+      'Open the workspace-bound install commands.',
+      'Alerts and performance reports stay inside the client workspace.',
+      'Invite your own staff from Access.',
+      'data-action="select-workspace"',
+      'Add a client',
+      'Access changes stay in Access. Billing changes stay in Billing.',
+      'Close panel',
+      'id="workspace-management-acct_1" hidden',
+      'id="workspace-operations-detail-acct_1" hidden',
+      'data-action="clear-workspace-selection"',
+      'Invite people',
+      'Change roles',
+      'Remove access',
+      'data-action="set-access-job"',
+      'id="access-detail-acct_1" hidden',
+      'Choose the smallest role',
+      'Full account, billing, and access control.',
+      'Client control, billing, and roster management.',
+      'Client control without billing or roster ownership.',
+      'Review client status without control-plane changes.',
+      'data-can-manage="true"',
+      'Remove stale access',
+      'data-action="workspace-action"',
+      'Hosted billing',
+      'Try first',
+      'Scope',
+      'Include',
+      'Billing',
+    ];
+    var forbidden = [
+      'Create workspace',
+      'Manage billing',
+      'Manage team',
+      'client users',
+      'Workspace control, billing, and roster management.',
+      'Hosted only',
+      'Self-hosted tools',
+      'Use self-hosted billing only for self-hosted purchases.',
+      'id="open-retrieve-billing"',
+      'id="billing-detail-shell" hidden',
+      'data-account-billing-action="clear-billing-panel"',
+      'id="data-billing-panel"',
+      '>Licenses<',
+      '>Refunds<',
+      '>Privacy<',
+      'section-context-strip',
+      'View roster',
+      'Owner or admin required',
+      'portal-content-panel-overview',
+      'data-shell-section="overview"',
+    ];
+    expect({
+      missing: required.filter(function(fragment) { return !html.includes(fragment); }),
+      unexpected: forbidden.filter(function(fragment) { return html.includes(fragment); }),
+    }).toEqual({ missing: [], unexpected: [] });
   });
 
   it('gives a provider-hosted platform a Plan section instead of hosted or self-hosted billing', function() {
