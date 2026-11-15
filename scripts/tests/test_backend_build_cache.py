@@ -219,6 +219,71 @@ raise SystemExit(result['exit'])
                     self.assertTrue(observation["started"])
                     self.assertEqual(observation["exit"], changed.returncode)
 
+    @unittest.skipUnless(shutil.which("go"), "native cache fixture requires Go (provided by script-smoke CI)")
+    def test_real_api_workflow_reexecutes_tests_after_an_external_fixture_changes(self):
+        # Execute the workflow's whole listing/selection/JSON-recorder recipe.
+        # Its Go binary is unchanged when a shell child's private input changes;
+        # neither a warm object cache nor an inherited -count=0 may hide it.
+        # This fixture executes no Pulse runtime/database tests.
+        steps = self.jobs["backend-api"]["steps"]
+        script = next(step["run"] for step in steps
+                      if step.get("name", "").startswith("Go unit tests (internal/api shard"))
+        for filter_kind in ("run", "skip"):
+            with self.subTest(filter_kind=filter_kind), tempfile.TemporaryDirectory(prefix="API Go cache ") as temporary:
+                root = Path(temporary)
+                marker = root / "external fixture"
+                package = root / "internal/api"
+                package.mkdir(parents=True)
+                (root / "go.mod").write_text("module example.invalid/apicache\n\ngo 1.23\n")
+                required = "TestFixture" if filter_kind == "run" else "Test" + "LongExternalFixture" * 8
+                controls = ["Test" + name for name in "ABCD"]
+                # Five equally weighted new roots put the first root alone in
+                # shard zero. A long root chooses the shorter -skip pattern.
+                selected_pattern = "^(" + required + ")$"
+                other_pattern = "^(" + "|".join(controls) + ")$"
+                self.assertEqual(len(selected_pattern) < len(other_pattern), filter_kind == "run")
+                (package / "cache_test.go").write_text(
+                    'package api\nimport ("os/exec"; "testing")\n'
+                    'func ' + required + '(t *testing.T) {\n'
+                    ' b, err := exec.Command("/bin/cat", ' + json.dumps(str(marker)) + ').Output()\n'
+                    ' if err != nil { t.Fatal(err) }\n'
+                    ' if string(b) != "current fixture\\n" { t.Fatal("external fixture changed") }\n}\n'
+                    + ''.join('func ' + name + '(t *testing.T) {}\n' for name in controls))
+                scripts = root / ".github/scripts"
+                scripts.mkdir(parents=True)
+                for name in ("select-internal-api-shard.sh", "internal-api-test-seconds.txt",
+                             "record-internal-api-test-seconds.py"):
+                    shutil.copyfile(ROOT / ".github/scripts" / name, scripts / name)
+                for flags in ("-mod=readonly", "-mod=readonly -count=0"):
+                    with self.subTest(inherited_flags=flags):
+                        receipts = root / "receipts"
+                        environment = {**os.environ, "GOWORK": "off", "GOENV": "off",
+                                       "GOPROXY": "off", "GOSUMDB": "off", "GOTOOLCHAIN": "local",
+                                       "GOMAXPROCS": "2", "GOFLAGS": flags,
+                                       "API_SHARD_COUNT": "5", "API_SHARD_INDEX": "0",
+                                       "RUNNER_TEMP": str(receipts)}
+
+                        def execute():
+                            return subprocess.run(["bash", "-euo", "pipefail", "-c", script],
+                                                  cwd=root, env=environment, capture_output=True,
+                                                  text=True, timeout=120)
+
+                        marker.write_text("current fixture\n")
+                        first = execute()
+                        self.assertEqual(first.returncode, 0, first.stdout + first.stderr)
+                        self.assertNotIn("(cached)", first.stdout)
+                        selected = receipts / "internal-api-test-seconds/api-0.selected"
+                        self.assertEqual(selected.read_text().splitlines(), [required])
+                        marker.write_text("changed fixture\n")
+                        changed = execute()
+                        self.assertNotEqual(changed.returncode, 0, changed.stdout + changed.stderr)
+                        self.assertIn("external fixture changed", changed.stdout)
+                        self.assertNotIn("(cached)", changed.stdout)
+                        index = json.loads((receipts / "internal-api-test-seconds/api-0.txt.failures.json").read_text())
+                        self.assertEqual(index["failed_top_level_tests"]["names"], [required])
+                        self.assertEqual(index["missing_selected_tests"]["names"], [])
+                        self.assertEqual(index["completed_top_level_test_count"], 1)
+
     @unittest.skipUnless(shutil.which("go"), "native execution fixture requires Go (provided by script-smoke CI)")
     def test_real_ordinary_worker_reconciles_listed_roots_with_completed_execution(self):
         driver = '''
