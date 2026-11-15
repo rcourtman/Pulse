@@ -28,6 +28,10 @@ type hostedAuthorityFixture struct {
 }
 
 func newHostedAuthorityFixture(t *testing.T) *hostedAuthorityFixture {
+	return newHostedAuthorityFixtureAt(t, time.Now().UTC())
+}
+
+func newHostedAuthorityFixtureAt(t *testing.T, now time.Time) *hostedAuthorityFixture {
 	t.Helper()
 	pub, priv, err := ed25519.GenerateKey(nil)
 	if err != nil {
@@ -49,7 +53,6 @@ func newHostedAuthorityFixture(t *testing.T) *hostedAuthorityFixture {
 	service := cloudcp.NewHostedEntitlementsService(&cloudcp.CPConfig{BaseURL: "https://cloud.example.com", TrialActivationPrivateKey: base64.StdEncoding.EncodeToString(priv)}, reg)
 	// An expired, legitimately issued lease may retain its refresh identity.
 	// The missing current billing row is not evidence authorizing its renewal.
-	now := time.Now().UTC()
 	service.SetNow(func() time.Time { return now.Add(-48 * time.Hour) })
 	original, err := service.IssueTenantBillingState(tenant, pkglicensing.SubStateActive, "cloud_starter", "", "", "")
 	if err != nil {
