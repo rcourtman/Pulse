@@ -18,14 +18,14 @@ func (e *PulseToolExecutor) registerReadTools() {
 	e.registry.registerBuiltin(RegisteredTool{
 		Definition: Tool{
 			Name:        agentcapabilities.PulseReadToolName,
-			Description: `Execute read-only operations on infrastructure (exec, file, find, tail, logs). Rejects write commands. Agent-routed actions require a command-capable agent; resource_id logs require a supported native log adapter. Use target_host for agent-routed reads, or resource_id for API-backed native resource logs such as supported TrueNAS app-containers. When Pulse has attached resource context, use target_host="current_resource" or resource_id="current_resource" for the attached resource instead of copying redacted identifiers. If the tool reports that the required capability is unavailable, do not retry the same capability; continue with provider evidence already available.`,
+			Description: `Execute read-only operations on infrastructure (exec, file, find, tail, logs, disk_usage). Rejects write commands. For a full disk or mount, disk_usage with path set to the mount follows the largest folder down in one call and names the folder that holds the space. Agent-routed actions require a command-capable agent; resource_id logs require a supported native log adapter. Use target_host for agent-routed reads, or resource_id for API-backed native resource logs such as supported TrueNAS app-containers. When Pulse has attached resource context, use target_host="current_resource" or resource_id="current_resource" for the attached resource instead of copying redacted identifiers. If the tool reports that the required capability is unavailable, do not retry the same capability; continue with provider evidence already available.`,
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]PropertySchema{
 					"action": {
 						Type:        "string",
-						Description: "Read action: exec, file, find, tail, logs",
-						Enum:        []string{"exec", "file", "find", "tail", "logs"},
+						Description: "Read action: exec, file, find, tail, logs, disk_usage",
+						Enum:        []string{"exec", "file", "find", "tail", "logs", "disk_usage"},
 					},
 					"target_host": {
 						Type:        "string",
@@ -41,7 +41,7 @@ func (e *PulseToolExecutor) registerReadTools() {
 					},
 					"path": {
 						Type:        "string",
-						Description: "For file/find/tail: the file path or glob pattern",
+						Description: "For file/find/tail: the file path or glob pattern. For disk_usage: the mount or directory to size",
 					},
 					"pattern": {
 						Type:        "string",
@@ -104,8 +104,10 @@ func (e *PulseToolExecutor) executeRead(ctx context.Context, args map[string]int
 		return e.executeReadTail(ctx, args)
 	case "logs":
 		return e.executeReadLogs(ctx, args)
+	case "disk_usage":
+		return e.executeReadDiskUsage(ctx, args)
 	default:
-		return NewErrorResult(fmt.Errorf("unknown action: %s. Use: exec, file, find, tail, logs", action)), nil
+		return NewErrorResult(fmt.Errorf("unknown action: %s. Use: exec, file, find, tail, logs, disk_usage", action)), nil
 	}
 }
 
@@ -135,94 +137,9 @@ func (e *PulseToolExecutor) executeReadExec(ctx context.Context, args map[string
 		return NewErrorResult(fmt.Errorf("app_container is no longer supported; use app-container")), nil
 	}
 
-	// Credential files, credential databases and process environments stay
-	// out of model context.
-	if blocked, reason := safety.CommandTouchesSensitivePath(command); blocked {
-		return sensitiveCommandBlocked(reason), nil
-	}
-
-	// STRUCTURAL ENFORCEMENT: Reject non-read-only commands at the tool layer
-	// This is enforced HERE, not in the model's prompt
-	// Uses ExecutionIntent: ReadOnlyCertain and explicitly inspected
-	// ReadOnlyConditional commands are allowed; WriteOrUnknown is rejected.
-	intentResult := ClassifyExecutionIntent(command)
-	if intentResult.Intent == IntentWriteOrUnknown {
-		hint := GetReadOnlyViolationHint(command, intentResult)
-		alternative := "Write operations require the governed control path"
-
-		details := map[string]interface{}{
-			"command":     truncateCommand(command, 100),
-			"reason":      intentResult.Reason,
-			"hint":        hint,
-			"alternative": alternative,
-		}
-
-		if niBlock := intentResult.NonInteractiveBlock; niBlock != nil {
-			details["category"] = niBlock.Category
-			details["policy_boundary"] = "pulse_read only accepts bounded, non-interactive, read-only commands."
-		}
-
-		return NewToolResponseResult(NewToolBlockedError(
-			"READ_ONLY_VIOLATION",
-			fmt.Sprintf("Command '%s' is not read-only. Write operations require the governed control path.", truncateCommand(command, 50)),
-			details,
-		)), nil
-	}
-
-	// Validate routing context - block if targeting a Proxmox host when child resources exist
-	// This prevents accidentally reading from the host when user meant to read from an LXC/VM
-	routingResult := e.validateRoutingContext(targetHost)
-	if routingResult.IsBlocked() {
-		return NewToolResponseResult(routingResult.RoutingError.ToToolResponse()), nil
-	}
-
-	// Validate resource is in resolved context
-	// For read-only exec, we allow if ANY resource has been discovered in the session
-	validation := e.validateResolvedResourceForExec(targetHost, command, true)
-	if validation.IsBlocked() {
-		return NewToolResponseResult(validation.StrictError.ToToolResponse()), nil
-	}
-
-	// Resolve target to the correct agent and routing info (with full provenance)
-	routing := e.resolveTargetForCommandFull(targetHost)
-	if routing.AgentID == "" {
-		return unavailableCommandConnection(targetHost, routing), nil
-	}
-	if e.commandTargetUsesBSDOptions(routing, dockerContainer) && safety.CommandReadsProcessEnvironment(command, true) {
-		return sensitiveCommandBlocked("ps -e and -E print process environments on this target; use ps -A or ps aux"), nil
-	}
-
-	// Build command (with optional Docker wrapper)
-	execCommand := command
-	if dockerContainer != "" {
-		// Validate container name
-		if !isValidContainerName(dockerContainer) {
-			return NewErrorResult(fmt.Errorf("invalid container name")), nil
-		}
-		execCommand = fmt.Sprintf("docker exec %s sh -c %s", shellEscape(dockerContainer), shellEscape(command))
-	}
-
-	log.Debug().
-		Str("command", truncateCommand(command, 100)).
-		Str("target", targetHost).
-		Str("agent", routing.AgentID).
-		Str("agent_host", routing.AgentHostname).
-		Str("target_type", routing.TargetType).
-		Str("target_id", routing.TargetID).
-		Str("transport", routing.Transport).
-		Str("resolved_kind", routing.ResolvedKind).
-		Msg("[pulse_read] Executing read-only command")
-
-	result, err := e.agentServer.ExecuteCommand(ctx, routing.AgentID, agentexec.ExecuteCommandPayload{
-		Command:    execCommand,
-		TargetType: routing.TargetType,
-		TargetID:   routing.TargetID,
-	})
-	if err != nil {
-		if errors.Is(err, agentexec.ErrCommandRequiresApproval) {
-			return approvalRequiredBlocked(command), nil
-		}
-		return NewErrorResult(fmt.Errorf("command execution failed: %w", err)), nil
+	result, refused := e.runReadOnlyCommand(ctx, targetHost, dockerContainer, command)
+	if refused != nil {
+		return *refused, nil
 	}
 
 	output := result.Stdout
@@ -247,6 +164,111 @@ func (e *PulseToolExecutor) executeReadExec(ctx context.Context, args map[string
 	return NewTextResult(output), nil
 }
 
+// runReadOnlyCommand runs one command on targetHost (inside dockerContainer
+// when it is set) after every pulse_read gate: sensitive paths, the read-only
+// classifier, routing and resolved-resource checks, and the agent's own
+// approval policy. It returns the agent's raw result, or the tool result that
+// refused it. Output is not redacted here; callers redact what they show.
+func (e *PulseToolExecutor) runReadOnlyCommand(ctx context.Context, targetHost, dockerContainer, command string) (*agentexec.CommandResultPayload, *CallToolResult) {
+	refuse := func(r CallToolResult) (*agentexec.CommandResultPayload, *CallToolResult) {
+		return nil, &r
+	}
+
+	// Credential files, credential databases and process environments stay
+	// out of model context.
+	if blocked, reason := safety.CommandTouchesSensitivePath(command); blocked {
+		return refuse(sensitiveCommandBlocked(reason))
+	}
+
+	// STRUCTURAL ENFORCEMENT: Reject non-read-only commands at the tool layer
+	// This is enforced HERE, not in the model's prompt
+	// Uses ExecutionIntent: ReadOnlyCertain and explicitly inspected
+	// ReadOnlyConditional commands are allowed; WriteOrUnknown is rejected.
+	intentResult := ClassifyExecutionIntent(command)
+	if intentResult.Intent == IntentWriteOrUnknown {
+		hint := GetReadOnlyViolationHint(command, intentResult)
+		alternative := "Write operations require the governed control path"
+
+		details := map[string]interface{}{
+			"command":     truncateCommand(command, 100),
+			"reason":      intentResult.Reason,
+			"hint":        hint,
+			"alternative": alternative,
+		}
+
+		if niBlock := intentResult.NonInteractiveBlock; niBlock != nil {
+			details["category"] = niBlock.Category
+			details["policy_boundary"] = "pulse_read only accepts bounded, non-interactive, read-only commands."
+		}
+
+		return refuse(NewToolResponseResult(NewToolBlockedError(
+			"READ_ONLY_VIOLATION",
+			fmt.Sprintf("Command '%s' is not read-only. Write operations require the governed control path.", truncateCommand(command, 50)),
+			details,
+		)))
+	}
+
+	// Validate routing context - block if targeting a Proxmox host when child resources exist
+	// This prevents accidentally reading from the host when user meant to read from an LXC/VM
+	routingResult := e.validateRoutingContext(targetHost)
+	if routingResult.IsBlocked() {
+		return refuse(NewToolResponseResult(routingResult.RoutingError.ToToolResponse()))
+	}
+
+	// Validate resource is in resolved context
+	// For read-only exec, we allow if ANY resource has been discovered in the session
+	validation := e.validateResolvedResourceForExec(targetHost, command, true)
+	if validation.IsBlocked() {
+		return refuse(NewToolResponseResult(validation.StrictError.ToToolResponse()))
+	}
+
+	// Resolve target to the correct agent and routing info (with full provenance)
+	routing := e.resolveTargetForCommandFull(targetHost)
+	if routing.AgentID == "" {
+		return refuse(unavailableCommandConnection(targetHost, routing))
+	}
+	if e.commandTargetUsesBSDOptions(routing, dockerContainer) && safety.CommandReadsProcessEnvironment(command, true) {
+		return refuse(sensitiveCommandBlocked("ps -e and -E print process environments on this target; use ps -A or ps aux"))
+	}
+
+	// Build command (with optional Docker wrapper)
+	execCommand := command
+	if dockerContainer != "" {
+		// Validate container name
+		if !isValidContainerName(dockerContainer) {
+			return refuse(NewErrorResult(fmt.Errorf("invalid container name")))
+		}
+		execCommand = fmt.Sprintf("docker exec %s sh -c %s", shellEscape(dockerContainer), shellEscape(command))
+	}
+
+	log.Debug().
+		Str("command", truncateCommand(command, 100)).
+		Str("target", targetHost).
+		Str("agent", routing.AgentID).
+		Str("agent_host", routing.AgentHostname).
+		Str("target_type", routing.TargetType).
+		Str("target_id", routing.TargetID).
+		Str("transport", routing.Transport).
+		Str("resolved_kind", routing.ResolvedKind).
+		Msg("[pulse_read] Executing read-only command")
+
+	result, err := e.agentServer.ExecuteCommand(ctx, routing.AgentID, agentexec.ExecuteCommandPayload{
+		Command:    execCommand,
+		TargetType: routing.TargetType,
+		TargetID:   routing.TargetID,
+	})
+	if err != nil {
+		if errors.Is(err, agentexec.ErrCommandRequiresApproval) {
+			return refuse(approvalRequiredBlocked(command))
+		}
+		return refuse(NewErrorResult(fmt.Errorf("command execution failed: %w", err)))
+	}
+	if result == nil {
+		return refuse(NewErrorResult(fmt.Errorf("command execution failed: no result from agent")))
+	}
+	return result, nil
+}
+
 // WildcardRefusalHint is what a refused wildcard should be asked as instead.
 // On 13 November 2026 Patrol's `du -sh /mnt/nvr/*` was refused, and with no
 // other form offered it sized three folders by name and stopped one level
@@ -256,11 +278,11 @@ func (e *PulseToolExecutor) executeReadExec(ctx context.Context, args map[string
 // evidence call one folder above the answer. It has no pipe, because the
 // agent's command policy never auto-approves a compound command, and a
 // replay that suggested `| sort -rh | head -20` spent four calls on
-// "command requires approval".
+// "command requires approval". Since 15 November 2026 it points at
+// disk_usage, which does the whole drill-down in one call.
 const WildcardRefusalHint = "Name the directory instead of using a wildcard. For folder sizes, " +
-	"`du -xh -d 3 <directory>` lists every folder up to three levels down with its size; " +
-	"run it again on the largest one to go deeper. Do not add a pipe: piped commands need approval. " +
-	"For a listing, use `ls -la <directory>`."
+	"call pulse_read with action disk_usage and the directory as path: it follows the largest folder " +
+	"down in one call. For a listing, use `ls -la <directory>`."
 
 // SingleCommandHint tells the model what pulse_read can run without approval.
 // It never sends an approval, so a command the agent's policy will not
@@ -269,7 +291,8 @@ const WildcardRefusalHint = "Name the directory instead of using a wildcard. For
 // one investigation, which then ran out of evidence calls.
 const SingleCommandHint = "pulse_read runs a command only when the agent auto-approves it, and it cannot ask for approval. " +
 	"Piped, chained or substituted commands (|, ;, &&, ||, $( )) always need approval. Run each part as its own " +
-	"command: for folder sizes, `du -xh -d 3 <directory>` instead of piping du into sort or head."
+	"command: for folder sizes, action disk_usage with the directory as path, or `du -xh -d 3 <directory>`, " +
+	"instead of piping du into sort or head."
 
 func approvalRequiredBlocked(command string) CallToolResult {
 	return NewToolResponseResult(NewToolBlockedError(
