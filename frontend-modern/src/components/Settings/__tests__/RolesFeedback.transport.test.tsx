@@ -21,6 +21,8 @@ const original = {
   description: 'Saved constrained role',
   parentId: 'viewer',
   priority: 17,
+  createdAt: '2026-10-01T09:00:00Z',
+  updatedAt: '2026-11-01T09:00:00Z',
   permissions: [
     { action: 'read', resource: 'nodes' },
     {
@@ -160,7 +162,9 @@ describe('role feedback through the consuming editor and real HTTP client', () =
 
   it('reveals repeated identical missing-ID validation without mounting a new notice or sending HTTP', async () => {
     mount();
-    fireEvent.click(await screen.findByRole('button', { name: 'New Role' }));
+    const create = await screen.findByRole('button', { name: 'New Role' });
+    await waitFor(() => expect(create).toBeEnabled());
+    fireEvent.click(create);
     const dialog = await screen.findByRole('dialog');
     fireEvent.input(within(dialog).getByLabelText('Role Name'), {
       target: { value: 'New auditor' },
