@@ -178,8 +178,15 @@ describe('workspace write recovery through the actual account shell', function()
     element<HTMLSelectElement>('invite-role-acct_2').value = 'tech';
     vi.mocked(s.api.suspendWorkspace).mockRejectedValue(new PortalAPIError('Conflict.', 409));
     await s.runtime.manageWorkspaceAction('acct_1', 'ws_1', 'suspend', 'Acme Dental');
-    s.refreshBootstrap.mockImplementation(async function() { s.store.setBootstrap(s.initial); return true; });
+    s.refreshBootstrap.mockImplementation(async function() {
+      // The reader moved to B while A's explicit GET was in flight.
+      element<HTMLInputElement>('ws-name-acct_2').focus();
+      element<HTMLInputElement>('ws-name-acct_2').setSelectionRange(4, 4);
+      s.store.setBootstrap(s.initial); return true;
+    });
     await s.runtime.refreshWorkspaceState('acct_1');
+    expect(document.activeElement?.id).toBe('ws-name-acct_2');
+    expect(element<HTMLInputElement>('ws-name-acct_2').selectionStart).toBe(4);
     expect(element<HTMLInputElement>('ws-name-acct_2').value).toBe('Unsubmitted client');
     expect(element<HTMLInputElement>('invite-email-acct_2').value).toBe('staff@example.test');
     expect(element<HTMLSelectElement>('invite-role-acct_2').value).toBe('tech');

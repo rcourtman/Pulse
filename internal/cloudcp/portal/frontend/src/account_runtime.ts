@@ -39,10 +39,12 @@ export function installAccountRuntime(deps: AccountRuntimeDeps): AccountRuntime 
     var viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
     if (!viewportHeight) return;
     var rect = element.getBoundingClientRect();
-    if (rect.top >= 0 && rect.top <= viewportHeight - 72 && rect.bottom > 0) {
+    var headerHeight = document.querySelector('header')?.getBoundingClientRect().height || 0;
+    if (rect.top >= headerHeight + 12 && rect.top <= viewportHeight - 72 && rect.bottom > 0) {
       return;
     }
     if (typeof element.scrollIntoView === 'function') {
+      element.style.scrollMarginTop = (headerHeight + 12) + 'px';
       element.scrollIntoView({ block: 'start', inline: 'nearest' });
     }
   };
