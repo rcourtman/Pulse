@@ -9493,6 +9493,15 @@ Verification: `truenasPageModel.test.ts`,
 limits, Off and last-known readings. Synthetic browser observations do not
 establish sustained native metrics, History, revocation or release availability.
 
+### Docker page offers checks for published ports (15 November 2026)
+
+`DockerPageSurface.tsx` mounts `DockerPortChecksNotice` on the overview tab.
+The notice reads its suggestions from the availability API, not from unified
+resources. It uses the page's container IDs only as a signal to ask again, and
+asks the page to refresh after checks are added. A new check is linked to its
+container's canonical resource ID when it is created, so it projects onto that
+container like any explicit link.
+
 ### Availability recovery replaces complete check records (10 October 2026)
 
 A present availability summary, its platformData mirror and plural check set

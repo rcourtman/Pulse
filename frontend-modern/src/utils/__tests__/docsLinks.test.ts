@@ -258,6 +258,11 @@ describe('docsLinks', () => {
     expect(api).toContain('`POST /api/discover` (admin, `settings:write`)');
     expect(api).not.toContain('/api/discovery');
     expect(api).not.toContain('### AI Discovery');
+    expect(api).toContain(
+      '`POST /api/availability-targets/docker-suggestions` (admin, `settings:write`) - Add an HTTPS or HTTP check',
+    );
+    // The operator's selection is part of the contract: only listed ports are added.
+    expect(api).toContain('`ports` (a list of `{"hostId", "containerName", "privatePort"}`');
     // A scripted first run chooses the setup token and needs the host type.
     expect(api).toContain('A token shorter than 32 characters gets\n`400`');
     expect(api).toContain('`{"type":"host","name":"docker-host"}` returns `token`');

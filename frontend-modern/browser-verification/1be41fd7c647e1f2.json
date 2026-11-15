@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "base_sha": "3daa53a0af8112fbd8002c9d72f72db17fdb7231",
+  "verified_at": "2026-11-15T15:19:04Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/api/availabilityTargets.ts",
+    "frontend-modern/src/features/docker/DockerPageSurface.tsx",
+    "frontend-modern/src/features/docker/DockerPortChecksNotice.tsx",
+    "frontend-modern/src/features/docker/dockerPortChecksModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/api/availabilityTargets.ts": "9ea03b795b823af5d90deb1a5ebf526837cc5cc02f1e743475f97d5e2cb3ac60",
+    "frontend-modern/src/features/docker/DockerPageSurface.tsx": "0384a712c25619e35472ccc73d7666b0f10dfbdb4454e32233e12366d0a0771e",
+    "frontend-modern/src/features/docker/DockerPortChecksNotice.tsx": "dde89fc0da1d4aa5b0d05d56a5ecd5714b8e86029f8bd4062a7a06aef694731f",
+    "frontend-modern/src/features/docker/dockerPortChecksModel.ts": "6951b15de50f61fc23dc39e3ba729cf0b9e16fd1449e4ade9a7ac3a3c46c25a9"
+  },
+  "routes": [
+    "/docker (Overview tab): the published-port check notice above the Docker hosts table, served by Vite from this commit against a real backend built from the same commit.",
+    "/standalone/availability reached through the notice's View checks link."
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Real Docker 29 host with a real Pulse agent and Pulse running in a container on it: nine containers, one published on 127.0.0.1 only, one Redis port, one published port with nothing listening.",
+    "Offer for five ports; expanded list naming the connect address (docker-vm at 172.17.0.3), the Redis port as not a web port and the loopback-only port as unreachable.",
+    "Offer dismissed (five keys remembered), then one container started later: the offer returned for that one port without a reload.",
+    "Result after adding: one check added on desktop; on the phone width four added and one port that did not answer named.",
+    "Dark theme at both widths; the notice was also checked in light theme at 1280 before the final corrections, which changed text and the request only."
+  ],
+  "interactions": [
+    "Show ports and Hide ports toggle the list.",
+    "Dismiss hides the offer and stores the offered ports.",
+    "Add checks with five ports dismissed and one on offer: the server saved exactly one check (late:8096), confirmed through the API.",
+    "View checks opened the availability page listing the new check as reachable.",
+    "At 375 px: no horizontal overflow, Add checks and Show ports are 44 px tall, Add checks saved four HTTP checks and reported dead 8090 as not answering."
+  ],
+  "limits": [
+    "One Docker host on a lab rig; no multi-host page and no Podman host were exercised.",
+    "The read-only viewer and refused-request cases are covered by component tests, not by this pass."
+  ]
+}

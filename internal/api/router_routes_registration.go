@@ -272,6 +272,22 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 		}
 	})
 
+	// Checks suggested from the published ports the Docker agent reports.
+	r.mux.HandleFunc("/api/availability-targets/docker-suggestions", func(w http.ResponseWriter, req *http.Request) {
+		if r.availabilityHandlers == nil {
+			writeErrorResponse(w, http.StatusServiceUnavailable, "availability_unavailable", "Availability target service unavailable", nil)
+			return
+		}
+		switch req.Method {
+		case http.MethodGet:
+			RequireOrgAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.availabilityHandlers.HandleDockerPortSuggestions))(w, req)
+		case http.MethodPost:
+			RequireOrgAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.availabilityHandlers.HandleApplyDockerPortSuggestions))(w, req)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
 	r.mux.HandleFunc("/api/availability-targets/test", func(w http.ResponseWriter, req *http.Request) {
 		if r.availabilityHandlers == nil {
 			writeErrorResponse(w, http.StatusServiceUnavailable, "availability_unavailable", "Availability target service unavailable", nil)
