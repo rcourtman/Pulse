@@ -124,6 +124,29 @@ main
 '''
 
 
+class FixtureProcessState:
+    """Read only this fixture's PID; missing procfs is not process exit."""
+
+    def __init__(self, pid, *, use_proc=True):
+        self.pid = pid
+        self.proc = Path(f"/proc/{pid}/stat") if use_proc and Path("/proc/self/stat").is_file() else None
+
+    def read_text(self):
+        if self.proc is not None:
+            return self.proc.read_text()
+        result = subprocess.run(["ps", "-p", str(self.pid), "-o", "stat="],
+                                capture_output=True, text=True, timeout=0.1)
+        state = result.stdout.strip()
+        if result.returncode == 1 and not state and not result.stderr:
+            raise FileNotFoundError("owned fixture PID is absent")
+        if result.returncode != 0 or result.stderr or not state or not state.isascii() or \
+                not state[0].isupper() or any(char.isspace() for char in state):
+            raise ValueError("owned fixture process state is unavailable")
+        # Keep the same state-parser interface as Linux procfs. BSD ps includes
+        # flags after the state (for example S+); only Z establishes termination.
+        return f"{self.pid} (fixture) {state[0]}"
+
+
 def wait_for_fixture_exit(process, timeout=1):
     """Observe termination, not just delivery of timeout's process-group kill.
 
@@ -184,11 +207,48 @@ class FixtureExitObservationTest(unittest.TestCase):
     def test_observer_does_not_stop_a_live_owned_process(self):
         with subprocess.Popen(["sleep", "30"]) as process:
             try:
-                self.assertFalse(wait_for_fixture_exit(Path(f"/proc/{process.pid}/stat"), timeout=0.02))
+                self.assertFalse(wait_for_fixture_exit(FixtureProcessState(process.pid), timeout=0.02))
                 self.assertIsNone(process.poll())
             finally:
                 process.kill()
                 process.wait(timeout=2)
+
+    def test_native_ps_observes_live_and_reaped_owned_process_without_procfs(self):
+        with subprocess.Popen(["sleep", "30"]) as process:
+            observer = FixtureProcessState(process.pid, use_proc=False)
+            try:
+                self.assertFalse(wait_for_fixture_exit(observer, timeout=0.02))
+                self.assertIsNone(process.poll())
+            finally:
+                process.kill()
+                process.wait(timeout=2)
+            self.assertTrue(wait_for_fixture_exit(observer))
+
+    def test_native_ps_states_preserve_live_and_zombie_distinctions(self):
+        for state, exited in (("S+\n", False), ("R\n", False), ("Z+\n", True)):
+            with self.subTest(state=state), patch("subprocess.run") as run:
+                run.return_value = subprocess.CompletedProcess([], 0, state, "")
+                observer = FixtureProcessState(123, use_proc=False)
+                self.assertEqual(wait_for_fixture_exit(observer, timeout=0), exited)
+                run.assert_called_once_with(["ps", "-p", "123", "-o", "stat="],
+                                            capture_output=True, text=True, timeout=0.1)
+
+    def test_native_ps_absence_requires_both_empty_output_and_the_absent_exit(self):
+        with patch("subprocess.run", return_value=subprocess.CompletedProcess([], 1, "", "")):
+            self.assertTrue(wait_for_fixture_exit(FixtureProcessState(123, use_proc=False)))
+
+    def test_native_ps_unknown_read_never_establishes_termination(self):
+        for status, stdout, stderr in ((0, "", ""), (0, "Z\nS\n", ""),
+                                        (0, "Z", "permission error"), (1, "Z", ""),
+                                        (2, "", ""), (0, "z", ""), (0, "ℤ", "")):
+            with self.subTest(status=status, stdout=stdout, stderr=stderr), patch("subprocess.run") as run:
+                run.return_value = subprocess.CompletedProcess([], status, stdout, stderr)
+                with self.assertRaises(ValueError):
+                    wait_for_fixture_exit(FixtureProcessState(123, use_proc=False))
+        for error in (PermissionError(), subprocess.TimeoutExpired("ps", 0.1)):
+            with self.subTest(error=type(error).__name__), patch("subprocess.run", side_effect=error):
+                with self.assertRaises(type(error)):
+                    wait_for_fixture_exit(FixtureProcessState(123, use_proc=False))
 
 
 class ServerUpdateTimerTest(unittest.TestCase):
@@ -540,7 +600,7 @@ echo COMPLETION_RETURNED
             pid = fixture / "pid"
             if pid.exists():
                 # This is only our confined manager double, never a live unit.
-                process = Path("/proc") / pid.read_text() / "stat"
+                process = FixtureProcessState(int(pid.read_text()))
                 self.assertTrue(wait_for_fixture_exit(process),
                                 "timer-query double is still running after the deadline")
             return result.stdout, calls, time.monotonic() - start
