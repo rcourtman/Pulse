@@ -23,23 +23,34 @@ export const OrganizationAccessManagementSection: Component<
     {(currentOrg) => (
       <>
         <Show when={props.state.canManageCurrentOrg()}>
-          <div class="rounded-md border border-border p-4 space-y-3">
+          <form
+            aria-label={isDefaultOrg(currentOrg()) ? 'Add member' : 'Invite member'}
+            onSubmit={(event) => {
+              event.preventDefault();
+              void props.state.inviteMember();
+            }}
+            class="rounded-md border border-border p-4 space-y-3"
+          >
             <h4 class="text-sm font-semibold text-base-content">
               {isDefaultOrg(currentOrg()) ? 'Add Member' : 'Invite Member'}
             </h4>
-            <div class="grid gap-2 sm:grid-cols-[1fr_auto_auto]">
-              <input
-                type="text"
-                aria-label="Invite user ID"
-                value={props.state.inviteUserID()}
-                onInput={(event) => props.state.setInviteUserID(event.currentTarget.value)}
-                placeholder="username"
-                class="w-full rounded-md border px-3 py-2 text-sm shadow-xs focus:border-blue-500 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
-              />
+            <div class="grid grid-cols-2 items-end gap-2 sm:grid-cols-[1fr_auto_auto]">
+              <label class="col-span-2 min-w-0 space-y-1 sm:col-span-1">
+                <span class="block text-xs font-medium text-base-content">User ID</span>
+                <input
+                  type="text"
+                  aria-label="Invite user ID"
+                  value={props.state.inviteUserID()}
+                  onInput={(event) => props.state.setInviteUserID(event.currentTarget.value)}
+                  placeholder="username"
+                  class="w-full rounded-md border px-3 py-2 text-sm shadow-xs focus:border-blue-500 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                />
+              </label>
               <FormSelect
-                label="Invite role"
-                labelClass="sr-only"
-                fieldBaseClass="contents"
+                label="Role"
+                aria-label="Invite role"
+                labelClass="text-xs"
+                fieldBaseClass="min-w-0 space-y-1"
                 value={props.state.inviteRole()}
                 onChange={(event) =>
                   props.state.setInviteRole(event.currentTarget.value as OrganizationRole)
@@ -70,10 +81,10 @@ export const OrganizationAccessManagementSection: Component<
                 </For>
               </FormSelect>
               <Button
+                type="submit"
                 variant="primary"
                 size="settingsAction"
                 class="w-full sm:w-auto"
-                onClick={props.state.inviteMember}
                 disabled={
                   props.state.saving() ||
                   (props.state.inviteRole() === 'owner' &&
@@ -83,7 +94,7 @@ export const OrganizationAccessManagementSection: Component<
                 {props.state.saving() ? 'Saving...' : isDefaultOrg(currentOrg()) ? 'Add' : 'Invite'}
               </Button>
             </div>
-          </div>
+          </form>
         </Show>
 
         <Show when={!props.state.canManageCurrentOrg()}>

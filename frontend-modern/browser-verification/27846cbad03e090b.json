@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "base_sha": "b2b4b738e8f9a6253dee03bc4c72885aa84fd254",
+  "verified_at": "2026-11-15T09:07:26Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/OrganizationAccessManagementSection.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/OrganizationAccessManagementSection.tsx": "05caafb4d366d8d4c80f2fad0acd6950f08c2f17a79e7a884238a383db1bac8c"
+  },
+  "routes": [
+    "Settings > Organization Access (actual panel/state/API client in offline consuming fixture; not full App/IdP)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Same-data parent/candidate pairs: empty invitation, typed editor invitation, saved-access recovery after a failed write, and default organization Viewer-only Add. Both light/dark; Chromium141 and WebKit26 / Playwright1.56.1 matching integration lock.",
+    "Persistent User ID and Role labels remain visible after typing. Phone role and submit share a row; selected identity, role, invitations, membership rows and controls stay at glance. No aggregation or hidden information.",
+    "32 final captures/16 pairs opened individually through native view_image. A bounded14-image correction waits actual summary focus and settled WebKit paint; superseded images/failed fixture attempts remain adverse evidence, not silently cleared."
+  ],
+  "interactions": [
+    "Native Enter submits exactly one trimmed user ID/selected role through the unchanged session/CSRF/org-bound owner; pending Enter does not repeat. Parent Enter is a no-op.",
+    "Failed change withdraws unconfirmed access. Explicit Reload access only reads and restores the same draft. Deliberate confirmed submission saves only the selected invitation/member.",
+    "Owner submission opens exact-recipient confirmation before any write; Cancel retains the draft. Default Add remains Viewer-only. Read-only withdrawal removes the form and Enter makes no request.",
+    "Primary553 browser assertions/16 cases and bounded104-assertion capture supplement pass with no page exceptions; not original estate or live IdP recovery."
+  ]
+}
