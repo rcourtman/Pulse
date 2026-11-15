@@ -9493,6 +9493,17 @@ Verification: `truenasPageModel.test.ts`,
 limits, Off and last-known readings. Synthetic browser observations do not
 establish sustained native metrics, History, revocation or release availability.
 
+### Docker container rows show a failing attached check (15 November 2026)
+
+`mapDockerContainerStatus` in `dockerPageModel.ts` reads the availability
+facet already projected onto a container. A running container whose attached
+check has failed past its threshold reads `Not responding` in the warning
+tone, through the same `hasFailedAttachedAvailabilityCheck` predicate as a
+guest row, and the Docker status filter counts it under Degraded. A stopped
+container and a failing Docker health check keep their own words. The
+container's unified status is unchanged, and the check remains the sole owner
+of its incident, alert and history.
+
 ### Docker page offers checks for published ports (15 November 2026)
 
 `DockerPageSurface.tsx` mounts `DockerPortChecksNotice` on the overview tab.

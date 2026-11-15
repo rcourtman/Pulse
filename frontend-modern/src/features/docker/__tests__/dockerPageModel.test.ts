@@ -874,6 +874,60 @@ describe('dockerPageModel', () => {
     });
   });
 
+  // The service inside a running container stopped answering its
+  // availability check: the Degraded chip counts it, as its row dot says.
+  describe('a running container that is not responding', () => {
+    const failingCheck = {
+      name: 'web:8081',
+      enabled: true,
+      available: false,
+      consecutiveFailures: 2,
+      failureThreshold: 2,
+      correlationState: 'attached' as const,
+    };
+    const rows: Resource[] = [
+      makeResource({
+        id: 'dead-service',
+        type: 'app-container',
+        status: 'online',
+        docker: { containerState: 'running' },
+        availabilityChecks: [failingCheck],
+      }),
+      makeResource({
+        id: 'fine',
+        type: 'app-container',
+        status: 'online',
+        docker: { containerState: 'running' },
+        availabilityChecks: [{ ...failingCheck, available: true, consecutiveFailures: 0 }],
+      }),
+      // A check linked to a host says nothing about a container chip.
+      makeResource({
+        id: 'host-with-check',
+        type: 'agent',
+        status: 'online',
+        availabilityChecks: [failingCheck],
+      }),
+    ];
+
+    it('is counted under Degraded and not under Healthy', () => {
+      expect(filterDockerResources(rows, '', 'degraded').map((r) => r.id)).toEqual([
+        'dead-service',
+      ]);
+      expect(filterDockerResources(rows, '', 'online').map((r) => r.id)).toEqual([
+        'fine',
+        'host-with-check',
+      ]);
+      expect(filterDockerResources(rows, '', 'all')).toHaveLength(3);
+    });
+
+    it('sorts ahead of healthy containers', () => {
+      expect([rows[1], rows[0]].sort(compareDockerContainers).map((r) => r.id)).toEqual([
+        'dead-service',
+        'fine',
+      ]);
+    });
+  });
+
   describe('filterDockerResources', () => {
     const rows: Resource[] = [
       makeResource({ id: 'web', type: 'app-container', status: 'online' }),

@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "base_sha": "4fa4a2a46334687b0c895090f23e58b08bb2eb37",
+  "verified_at": "2026-11-15T16:12:01Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/docker/dockerContainerStatePresentation.ts",
+    "frontend-modern/src/features/docker/dockerPageModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/docker/dockerContainerStatePresentation.ts": "4402c54513eea1d04bb144eaf8ed58a81d0820184cbbce2a0290e2273e3e1d71",
+    "frontend-modern/src/features/docker/dockerPageModel.ts": "31a2758d8ca45786f539c3e60b8c9f5c12f8ebd4e054b74fe0118cdd5f6b13b9"
+  },
+  "routes": [
+    "/docker (Overview tab): Docker hosts table, status chips, containers table and the container drawer, served by Vite from this working tree against a real backend built from main.",
+    "/docker?status=degraded reached through the Degraded chip."
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Real Docker 29 host with a real Pulse agent, ten running containers, an HTTP availability check attached to each published web port.",
+    "Before the failure: every container green, chips Healthy 10 and Degraded 0, no State column.",
+    "The app inside the svc container killed while the container kept running, after two failed checks: svc row amber, sorted first, State reads Not responding, hover reads 'Running, but its availability check is failing: svc:8095', chips Healthy 9 and Degraded 1, alerts badge 1.",
+    "Container drawer for svc: the Availability card shows the check as Down with its target and error.",
+    "After the container was restarted and the check passed: svc back to Running, default order, chips Healthy 10 and Degraded 0.",
+    "Dark theme at both widths."
+  ],
+  "interactions": [
+    "Degraded chip filtered the table to the one not-responding container.",
+    "Expand details opened the svc drawer and its Availability card.",
+    "At 375 px: Not responding sits beside the container name, rows stay 32 px high like their neighbours, no horizontal overflow.",
+    "At 1280 px every container row measured 33 px high with the State column shown."
+  ],
+  "limits": [
+    "One Docker host on a lab rig; Podman and multi-host pages were not exercised.",
+    "Light theme was not re-checked for this change, which adds no new colour: it reuses the existing warning tone."
+  ]
+}

@@ -2,6 +2,7 @@ import type { DockerHealthProbe, Resource } from '@/types/resource';
 import { asTrimmedString } from '@/utils/stringUtils';
 
 import {
+  DOCKER_CONTAINER_NOT_RESPONDING_LABEL,
   dockerContainerRestartAttentionLabel,
   dockerContainerRestartCountTitle,
   dockerContainerRunState,
@@ -59,9 +60,28 @@ const failingHealthCheckTitle = (resource: Resource, lead: string): string => {
   return streak > 1 ? `${lead}: ${why}, ${streak} in a row` : `${lead}: ${why}`;
 };
 
+// The checks that are failing, by name: "web:8081" or "web:8081, web:8443".
+const failingAvailabilityCheckNames = (resource: Resource): string =>
+  (resource.availabilityChecks ?? (resource.availability ? [resource.availability] : []))
+    .filter(
+      (check) =>
+        check.enabled !== false &&
+        check.available === false &&
+        check.correlationState === 'attached',
+    )
+    .map((check) => asTrimmedString(check.name) || asTrimmedString(check.address) || '')
+    .filter(Boolean)
+    .join(', ');
+
 const containerStateTitle = (resource: Resource, label: string): string => {
   const state = dockerContainerRunState(resource);
   const health = normalizedToken(resource.docker?.health);
+  if (label === DOCKER_CONTAINER_NOT_RESPONDING_LABEL) {
+    const names = failingAvailabilityCheckNames(resource);
+    return names
+      ? `Running, but its availability check is failing: ${names}`
+      : 'Running, but its availability check is failing';
+  }
   if (state === 'running') {
     if (health === 'unhealthy') {
       return failingHealthCheckTitle(resource, 'Running, but its health check is failing');
@@ -126,8 +146,11 @@ export const getDockerContainerRunStatePresentation = (
   resource: Resource,
 ): DockerContainerStatePresentation => {
   // The drawer shows the restart count on its own row too.
+  // The drawer lists the availability checks themselves as well.
   const status = mapDockerContainerStatus({
     ...resource,
+    availability: undefined,
+    availabilityChecks: undefined,
     docker: { ...resource.docker, health: undefined, restartCount: undefined },
   });
   return {

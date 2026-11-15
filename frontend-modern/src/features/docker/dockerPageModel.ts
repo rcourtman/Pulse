@@ -12,6 +12,7 @@ import {
   type ResourceBadge,
 } from '@/utils/resourceBadgePresentation';
 import { hasDockerRuntimeHostEvidence } from '@/utils/agentResources';
+import { hasFailedAttachedAvailabilityCheck } from '@/utils/availabilityProbePresentation';
 
 const DOCKER_HOST_TYPES = new Set<ResourceType>(['agent', 'docker-host']);
 const DOCKER_CONTAINER_TYPES = new Set<ResourceType>(['app-container']);
@@ -136,6 +137,13 @@ export const dockerContainerRestartAttentionLabel = (resource: Resource): string
 export const dockerContainerRestartCountTitle = (restarts: number): string =>
   `Docker has restarted it ${restarts} times in total, not necessarily recently`;
 
+export const DOCKER_CONTAINER_NOT_RESPONDING_LABEL = 'Not responding';
+
+// A running container whose attached availability check is failing. A stopped
+// container is left to its own state: nobody expects it to answer.
+export const dockerContainerNotResponding = (resource: Resource): boolean =>
+  dockerContainerRunState(resource) === 'running' && hasFailedAttachedAvailabilityCheck(resource);
+
 export function mapDockerContainerStatus(resource: Resource): StatusIndicator {
   const state = dockerContainerRunState(resource);
   const health = normalizeDockerToken(resource.docker?.health);
@@ -156,6 +164,13 @@ export function mapDockerContainerStatus(resource: Resource): StatusIndicator {
   if (state === 'restarting') return { variant: 'warning', label: 'Restarting' };
   if (state === 'running' && health === 'starting') {
     return { variant: 'warning', label: 'Starting' };
+  }
+  // Docker only knows the container is up. An availability check attached to
+  // it that has failed past its threshold says the service inside stopped
+  // answering, which a plain "Running" would hide. Same predicate and tone as
+  // a guest row, so the dot agrees with the alert the check raises.
+  if (dockerContainerNotResponding(resource)) {
+    return { variant: 'warning', label: DOCKER_CONTAINER_NOT_RESPONDING_LABEL };
   }
   const restartLabel = dockerContainerRestartAttentionLabel(resource);
   if (restartLabel) return { variant: 'warning', label: restartLabel };
@@ -303,6 +318,19 @@ const mapResourceStatusToTriad = (
   if (DEGRADED_STATUSES.has(normalized)) return 'degraded';
   if (OFFLINE_STATUSES.has(normalized)) return 'offline';
   return 'unknown';
+};
+
+// The Healthy / Degraded / Offline chip a row is counted under. A running
+// container whose service stopped answering its availability check counts as
+// degraded, so the chip agrees with the row's amber dot.
+const dockerResourceStatusTriad = (
+  resource: Resource,
+): Exclude<DockerResourceStatusFilter, 'all'> | 'unknown' => {
+  const triad = mapResourceStatusToTriad(resource.status);
+  if (triad === 'online' && resource.type === 'app-container') {
+    return dockerContainerNotResponding(resource) ? 'degraded' : triad;
+  }
+  return triad;
 };
 
 const numberToken = (value: number | undefined): string | undefined =>
@@ -611,8 +639,7 @@ export function filterDockerResources(
   const result: Resource[] = [];
   for (const resource of resources) {
     if (status !== 'all') {
-      const triad = mapResourceStatusToTriad(resource.status);
-      if (triad !== status) continue;
+      if (dockerResourceStatusTriad(resource) !== status) continue;
     }
     if (!hasSearch) {
       result.push(resource);

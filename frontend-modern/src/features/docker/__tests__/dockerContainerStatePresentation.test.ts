@@ -86,6 +86,74 @@ describe('getDockerContainerStatePresentation', () => {
   });
 });
 
+describe('a running container whose availability check is failing', () => {
+  const failingCheck = {
+    name: 'web:8081',
+    enabled: true,
+    available: false,
+    consecutiveFailures: 2,
+    failureThreshold: 2,
+    correlationState: 'attached' as const,
+  };
+  const withChecks = (
+    docker: NonNullable<Resource['docker']>,
+    checks: NonNullable<Resource['availabilityChecks']>,
+  ): Resource => ({ ...container(docker), availabilityChecks: checks });
+
+  it('says the service is not responding and names the check on hover', () => {
+    const resource = withChecks({ containerState: 'running' }, [failingCheck]);
+    expect(mapDockerContainerStatus(resource)).toEqual({
+      variant: 'warning',
+      label: 'Not responding',
+    });
+    expect(getDockerContainerStatePresentation(resource)).toEqual({
+      label: 'Not responding',
+      title: 'Running, but its availability check is failing: web:8081',
+      tone: 'warning',
+    });
+  });
+
+  it('waits for the failure threshold, like the alert', () => {
+    const resource = withChecks({ containerState: 'running' }, [
+      { ...failingCheck, consecutiveFailures: 1 },
+    ]);
+    expect(mapDockerContainerStatus(resource)).toEqual({ variant: 'success', label: 'Running' });
+  });
+
+  it('ignores a check that is disabled, passing or not attached to this container', () => {
+    for (const check of [
+      { ...failingCheck, enabled: false },
+      { ...failingCheck, available: true, consecutiveFailures: 0 },
+      { ...failingCheck, correlationState: 'standalone' as const },
+    ]) {
+      expect(
+        mapDockerContainerStatus(withChecks({ containerState: 'running' }, [check])).label,
+      ).toBe('Running');
+    }
+  });
+
+  it('leaves a stopped container and a failing Docker health check to their own words', () => {
+    expect(
+      mapDockerContainerStatus(
+        withChecks({ containerState: 'exited', exitCode: 0 }, [failingCheck]),
+      ).label,
+    ).toBe('Exited');
+    expect(
+      mapDockerContainerStatus(
+        withChecks({ containerState: 'running', health: 'unhealthy' }, [failingCheck]),
+      ),
+    ).toEqual({ variant: 'danger', label: 'Unhealthy' });
+  });
+
+  it('keeps the drawer run state plain, since the drawer lists the checks itself', () => {
+    expect(
+      getDockerContainerRunStatePresentation(
+        withChecks({ containerState: 'running' }, [failingCheck]),
+      ).label,
+    ).toBe('Running');
+  });
+});
+
 describe('a container whose agent reported no Docker state', () => {
   it('reads the online resource status as running, health check and uptime included', () => {
     expect(
