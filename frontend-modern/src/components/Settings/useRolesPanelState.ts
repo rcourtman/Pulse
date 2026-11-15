@@ -305,7 +305,7 @@ export function useRolesPanelState(props: RolesPanelProps = {}) {
     if (canEdit() && showModal())
       setFormPermissions(formPermissions().filter((_, current) => current !== index));
   };
-  const updatePermission = (index: number, field: keyof Permission, value: string) => {
+  const updatePermission = (index: number, field: 'action' | 'resource', value: string) => {
     if (canEdit() && showModal())
       setFormPermissions(
         formPermissions().map((permission, current) =>

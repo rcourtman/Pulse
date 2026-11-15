@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "929aae757e87065398fa5e1396cbf3c642667a95",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/RolesEditorDialog.tsx",
+    "frontend-modern/src/components/Settings/RolesPanel.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/RolesEditorDialog.tsx": "c2fe19c7d92dc8d51c8f1a24c47bfc2b20aee149c889a14e1ee8f868b7590dd2",
+    "frontend-modern/src/components/Settings/RolesPanel.tsx": "3468fe37acdf801f7f23a142c6b85a9434eda9bd5a2c4ae2552cc76e27b1f495"
+  },
+  "routes": [
+    "Settings > Roles inventory and role editor through actual panel/state/RBACAPI/session HTTP consumer, runtime capabilities, shared Dialog/FormSelect and shipped CSS. Bounded correction to the two user-visible paragraphs; not full App/IdP."
+  ],
+  "states": [
+    "Same saved Allow and Deny on read:nodes, conditional deny on write:settings with literal owner ${user}/tag production, unknown effect, identities/roles/actions and third native control focus.",
+    "Comparable containing-parent929aae757e versus copy-corrected source, same synthetic data, viewport/theme, en-GB/UTC, reduced motion and scroll0."
+  ],
+  "interactions": [
+    "Keyboard opens the exact saved role and focuses the unchanged third action. Review/capture is read-only and produces no mutation or replay of the primary save/delete/withdrawal proof.",
+    "Two semicolons become separate sentences with normal capitalization. Every formerly visible control and all policy values remain at glance; no metadata aggregation, hiding or new authorization behavior."
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "themes": [
+    "light",
+    "dark"
+  ],
+  "playwright": "1.56.1",
+  "browsers": [
+    "141.0.7390.37",
+    "26.0"
+  ],
+  "assertions": 135,
+  "browser_cases": 8,
+  "verified_at": "2026-11-15T11:38:33Z",
+  "captures": "16 containing-parent PNGs/8 pairs opened individually with native view_image; final32-image index also retains comparable original-base367cd1c119 views. All final originals copied into current output and linked in CAPTURE-INDEX.json.",
+  "proof": "source-8d5qondv binds parent929aae757e, exact overlay/retained base measurement input, full lint/format, production build/embedding, all budgets/integrity and immutable consuming builds. Complete125585-byte output/hash and guest stop verified. The original source-mfr4vwmw exact-base production build remains retained without replay.",
+  "limits": [
+    "Synthetic source/browser proof, not original clients, installed/IdP runtime or release availability.",
+    "Primary functional299-assertion proof remains bound to2cad55c46b; this correction changes only copy and two measured-cost budget anchors. Original adverse test/lint/budget and measurement-harness results remain retained."
+  ]
+}
