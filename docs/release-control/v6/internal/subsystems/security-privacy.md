@@ -2614,6 +2614,25 @@ database grew past it. `TestSQLiteLoggerUsesSharedPageCacheBound` and
 
 ## Current State
 
+### Token revocation preserves its saved inventory position
+
+Closing the existing revoke confirmation does not make its trigger a durable
+return target: the asynchronous successful DELETE removes that credential.
+After a current, settled response, keyboard focus returns to the same saved
+credential on an explicit refusal, the next surviving creation-sorted credential
+on success, or the preceding one when the last row is removed. Only a confirmed
+empty inventory uses New token; this does not choose scopes or issue credentials.
+The return targets only the visible table/card within the originating panel.
+
+An unknown outcome retains its explicit read-only inventory-check notice.
+Completion must not override that notice, a deliberate focus move while waiting,
+a newer principal/organization, withdrawn management or an unmounted panel.
+The existing single-request, selected-ID, CSRF, authorization and no-replay
+contracts are unchanged. Normal-suite `APITokenManager.test.tsx` and
+`APITokenSelections.transport.test.tsx` exercise empty/next/previous/retained
+focus, delayed failures and withdrawal through the consuming component.
+
+
 `internal/api/router.go` wires a read of a Proxmox node's task log for one
 guest into Patrol, resolved through the organization's own monitor on every
 call, so one organization never reads through another's connection. The read

@@ -1084,6 +1084,27 @@ describe('APITokenManager', () => {
     await waitFor(() => expect(revokeTrigger).toHaveFocus());
   });
 
+  it('returns a confirmed last-token revocation to New token without creating a replacement', async () => {
+    const token = makeToken();
+    listTokensMock.mockResolvedValue([token]);
+    render(() => <APITokenManager canManage />);
+    await screen.findAllByText(token.name!);
+    const trigger = within(getTokenTableRow(token.name!)).getByRole('button', { name: /^Revoke / });
+    trigger.focus();
+    fireEvent.click(trigger);
+    const dialog = await screen.findByRole('dialog', { name: /^Revoke API token / });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Revoke token' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'New token' })).toHaveFocus());
+    expect(trigger).not.toBeInTheDocument();
+    expect(deleteTokenMock).toHaveBeenCalledTimes(1);
+    expect(deleteTokenMock).toHaveBeenCalledWith(
+      token.id,
+      expect.objectContaining({ expectedOrgID: 'default', signal: expect.any(AbortSignal) }),
+    );
+    expect(createTokenMock).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Generate' })).toBeDisabled();
+  });
+
   it.each(['create', 'scope', 'rename', 'revoke'] as const)(
     'reconciles an applied %s with a read, not a repeated write after a lost response',
     async (operation) => {

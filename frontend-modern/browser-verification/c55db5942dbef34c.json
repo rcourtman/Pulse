@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "5f6c98ce293395b8ef411dcd57f36de9d5a672e6",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/APITokenManager.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/APITokenManager.tsx": "5b6bf3f56a6a9e3b4e407c5741b6e4248e2e7eb1399d350ffd8eecc92aa108e7"
+  },
+  "routes": [
+    "Settings > Security > API Access: real APITokenManager, state hook, SecurityAPI/authenticated HTTP client, lazy dialogs, shared Dialog/Toast and shipped CSS; offline synthetic HTTP fixture, not full App authentication."
+  ],
+  "states": [
+    "Three same-name credentials with separate saved opaque IDs, masked hints, scopes, Created, Last used and saved Expiry in the visible desktop table or phone cards.",
+    "Selected non-first token and Cancel-focused confirmation; middle, last and sole-token deletion; delayed explicit refusal and unknown outcome.",
+    "Before/after use the same fixture data, locale en-GB, UTC, fixed date, viewport, theme, controls and interaction. Unknown phone capture camera is aligned identically in supplemental before/after frames."
+  ],
+  "interactions": [
+    "Native keyboard open, Tab/Shift+Tab trapping and Escape cancellation preserve the selected credential and make zero writes.",
+    "Each confirmed deletion dispatches one org/auth/CSRF-bound DELETE to its encoded saved ID. After completion focus returns to the next saved credential, or the preceding credential when last; only confirmed empty uses New token without choosing scopes or creating credentials.",
+    "Delayed explicit refusal retains the selected credential; uncertainty keeps the read-only inventory-check notice. Late completion does not steal deliberate focus or refocus withdrawn management or a different principal."
+  ],
+  "viewports": [
+    {
+      "width": 1680,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "verified_at": "2026-11-15T04:36:13Z",
+  "playwright": "1.56.1",
+  "browsers": [
+    "Chromium141.0.7390.37",
+    "WebKit26.0"
+  ],
+  "themes": [
+    "light",
+    "dark"
+  ],
+  "assertions": 248,
+  "captures": "52 final original PNGs /26 comparable before-after pairs, plus4 retained original misaligned unknown-state phone frames. All56 were opened individually with native view_image and pixels inspected.",
+  "proof": "source-np04arew binds committed parent and exact overlay input, immutable before/after fixture builds, and complete stopped-guest output. Runtime final bytes equal that compiled overlay. Its175pass/1failed test run and type errors were test-only mistakes, corrected in the containing source; no overall source pass is inferred here. Browser CLI exits0; lane RECEIPTS.md retains complete results, actual captures and subsequent committed-source qualification.",
+  "limits": [
+    "Synthetic HTTP fixture exercises the actual consuming components/client, not original-client/installed recovery, full App/IdP or a release. No screen-reader speech or native mobile app proof.",
+    "Two original unknown-state phone pairs had different camera scroll offsets. Original frames and230-check run remain retained; a separate18-check run aligns only the camera for those two pairs without changing source, focus, transport or assertions.",
+    "Existing stacked success toasts temporarily cover lower phone content in both versions; this change does not alter or claim to repair that behavior."
+  ]
+}
