@@ -9559,6 +9559,14 @@ states show bounded guidance with no executable command. The focused proofs are
 `frontend-modern/src/components/Settings/__tests__/settingsHeaderMeta.branchcov0713.test.ts`,
 and `frontend-modern/src/utils/__tests__/updatesPresentation.test.ts`.
 
+### Docker container state names a failing availability check (15 November 2026)
+
+The Docker container row dot and its State words share one verdict. When the
+service inside a running container stops answering its attached availability
+check, both read `Not responding` in the warning tone and the hover names the
+failing checks. The row stays one line high at desktop and phone widths. The
+drawer's run state stays plain, because the drawer lists the checks itself.
+
 ### Docker port check notice (15 November 2026)
 
 `frontend-modern/src/features/docker/DockerPortChecksNotice.tsx` composes the
