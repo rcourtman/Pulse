@@ -6107,6 +6107,15 @@ also applies to API-backed canonical `app-container` resources such as
 TrueNAS apps: runtime routing must resolve the shared resource identity first
 and then read native config through the owned provider path rather than
 falling back to guest semantics.
+`action=config` reads the type from a canonical handle (`<type>-<hash>`,
+`resourceTypeFromCanonicalID`) when it names a type config knows, and that
+type wins over the one passed. For an agent host, Docker host, storage pool or
+physical disk (`configlessResourceKinds`) it refuses with what config covers
+and a pointer to `pulse_read` (`disk_usage`, `file`, `logs`) when that tool is
+offered, and to `action=resource`. On Docker fault set D6, qwen3:8b spent six
+of its ten evidence calls on config for an agent host, got refusals that named
+a type it had not sent or none, and never read the disk. Proof:
+`internal/ai/tools/tools_query_config_redirect_test.go`.
 Outbound model-bound context exports now also belong to this runtime
 boundary. When the AI service assembles unified-resource context for a model
 request, it must record a durable export audit with the active destination
