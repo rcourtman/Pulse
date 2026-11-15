@@ -168,8 +168,14 @@ func (r *APITokenRecord) CanAccessOrg(orgID string) bool {
 // BoundOnlyToOrg reports whether orgID is the one organization this token is
 // bound to. Multi-org and unbound tokens are not owned by any single org.
 func (r *APITokenRecord) BoundOnlyToOrg(orgID string) bool {
-	bound := r.GetBoundOrgs()
-	return orgID != "" && len(bound) == 1 && bound[0] == orgID
+	if orgID == "" {
+		return false
+	}
+	// This scalar ownership check needs no caller-owned binding snapshot.
+	if len(r.OrgIDs) > 0 {
+		return len(r.OrgIDs) == 1 && r.OrgIDs[0] == orgID
+	}
+	return r.OrgID == orgID
 }
 
 // IsLegacyToken returns true if this token has no org binding (deprecated/unbound).
@@ -177,11 +183,12 @@ func (r *APITokenRecord) IsLegacyToken() bool {
 	return r.OrgID == "" && len(r.OrgIDs) == 0
 }
 
-// GetBoundOrgs returns all organizations this token is bound to.
-// Returns nil for unbound legacy tokens.
+// GetBoundOrgs returns a caller-owned copy of the token's organization bindings,
+// or nil for unbound legacy tokens. Callers still need to synchronize reads
+// with concurrent changes to the record itself.
 func (r *APITokenRecord) GetBoundOrgs() []string {
 	if len(r.OrgIDs) > 0 {
-		return r.OrgIDs
+		return slices.Clone(r.OrgIDs)
 	}
 	if r.OrgID != "" {
 		return []string{r.OrgID}
