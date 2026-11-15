@@ -318,12 +318,12 @@ func (s *Service) ListInvestigationTools() []string {
 	return names
 }
 
-// investigationProposalPrompt is the one question an investigation that ends
-// in prose without a proposal or conclusion is asked
-// (AgenticLoop.SetInvestigationProposalPrompt). It names the actions Pulse can
-// run for the finding's resource, from the same catalog proposals are
-// validated against, and is empty when there are none: then there is nothing
-// to propose and the prose conclusion stands.
+// investigationProposalPrompt names the actions Pulse can run for the
+// finding's resource, from the same catalog proposals are validated against,
+// and asks for the smallest one that would fix what the investigation found
+// or a recorded conclusion (AgenticLoop.SetInvestigationProposalPrompt). The
+// loop puts it to a run that ends in prose and to the final turn. It is empty
+// when there are no actions: then there is nothing to propose.
 func investigationProposalPrompt(ctx context.Context, catalog tools.ProposalCatalog, resourceID string) string {
 	resourceID = strings.TrimSpace(resourceID)
 	if catalog == nil || resourceID == "" {
@@ -346,8 +346,7 @@ func investigationProposalPrompt(ctx context.Context, catalog tools.ProposalCata
 	if len(names) == 0 {
 		return ""
 	}
-	return fmt.Sprintf("Before you finish: you have not proposed an action or recorded your conclusion. "+
-		"Pulse can run these actions for %s: %s. "+
+	return fmt.Sprintf("Pulse can run these actions for %s: %s. "+
 		"If one of them would fix what your investigation found, propose the smallest one that would now, with one %s call. "+
 		"If none of them would, or only a person can fix it, record your conclusion with %s.",
 		resourceID, strings.Join(names, ", "), agentcapabilities.PatrolProposeActionToolName, agentcapabilities.PatrolConcludeInvestigationToolName)

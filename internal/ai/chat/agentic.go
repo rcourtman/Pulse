@@ -1008,12 +1008,21 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 			case turn >= maxTurns-1:
 				// Final turn (turn limit or deadline reserve): record a typed
 				// conclusion rather than leave the outcome to be inferred from
-				// prose. A proposal stays available only once evidence is spent,
-				// as before.
-				req.Tools = investigationTerminalTools(tools, evidenceBudgetSpent)
+				// prose. A proposal is offered once evidence is spent, as
+				// before, and whenever Pulse can run an action for the
+				// finding's resource. A slow model reaches this turn through
+				// the deadline reserve: on Docker fault set v1 D1, qwen3:8b
+				// found that the web worker had died, was given only the
+				// conclusion tool, and wrote "restart the container" in prose.
+				offerProposal := evidenceBudgetSpent || investigationProposalPrompt != ""
+				req.Tools = investigationTerminalTools(tools, offerProposal)
 				textOnlySafetyBrake = len(req.Tools) == 0
 				if !textOnlySafetyBrake {
-					req.System += investigationFinalConclusionSystemNote
+					if investigationProposalPrompt != "" && providerToolIsAdvertised(req.Tools, agentcapabilities.PatrolProposeActionToolName) {
+						req.System += investigationFinalDecisionSystemNote + investigationProposalPrompt
+					} else {
+						req.System += investigationFinalConclusionSystemNote
+					}
 				}
 				log.Warn().
 					Int("turn", turn).
@@ -1569,7 +1578,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 				!investigationRecordedDecision(resultMessages) && turn+1 < maxTurns {
 				investigationProposalAsked = true
 				investigationProposalPending = true
-				providerMessages = append(providerMessages, providers.Message{Role: "user", Content: prompt})
+				providerMessages = append(providerMessages, providers.Message{Role: "user", Content: investigationProposalQuestionPrefix + prompt})
 				turn++
 				continue
 			}
@@ -2011,3 +2020,11 @@ func applyInvestigationProposalDecisionRequest(req *providers.ChatRequest, profi
 	req.ToolChoice = nil
 	return true
 }
+
+// investigationProposalQuestionPrefix opens the question put to an
+// investigation that ends in prose without proposing or concluding.
+const investigationProposalQuestionPrefix = "Before you finish: you have not proposed an action or recorded your conclusion. "
+
+// investigationFinalDecisionSystemNote opens the final-turn note when the
+// final turn offers a proposal; investigationProposalPrompt follows it.
+const investigationFinalDecisionSystemNote = "\nThis is the investigation's final turn. Do not gather more evidence; use only the evidence already collected. "
