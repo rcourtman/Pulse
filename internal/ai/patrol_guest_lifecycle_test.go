@@ -400,3 +400,130 @@ func TestAlertRunSeedStatesWhatPulseCanRunForTheAlertsResource(t *testing.T) {
 		t.Errorf("a cleared alert's check asked which actions can run: %v", asked)
 	}
 }
+
+// guestOnRunnerlessNodeCatalog is the action broker's catalog for a running
+// Proxmox guest on a node whose agent has commands on and no action runner:
+// every power action is refused, and reads inside the guest go through the
+// node's agent.
+func guestOnRunnerlessNodeCatalog(node, guest string) aicontracts.ActionCapabilityCatalog {
+	reason := actionlifecycle.ProxmoxGuestRunnerOnlyReason(node)
+	catalog := aicontracts.ActionCapabilityCatalog{
+		Capabilities: []aicontracts.ActionCapabilityInfo{},
+		GuestActionsUnavailable: &aicontracts.GuestActionsUnavailable{
+			NodeName: node, Actions: []string{"reboot", "shutdown", "stop"}, Reason: reason,
+		},
+		Reads: &aicontracts.CommandReadHost{HostName: node, Guest: guest},
+	}
+	for _, action := range catalog.GuestActionsUnavailable.Actions {
+		catalog.Unavailable = append(catalog.Unavailable, aicontracts.ActionCapabilityRefusal{
+			Name: action, ReasonCode: actionlifecycle.ReasonCodeActionRunnerUnavailable, Reason: reason,
+		})
+	}
+	return catalog
+}
+
+// A guest disk alert on a node whose agent has commands on and no action
+// runner. The seed said only "Pulse cannot run an action ... Use Proxmox for
+// this", and a sustained run wrote that Pulse had no command or log access
+// there and raised nothing. A read inside the guest names what fills it, so
+// the seed says Pulse can read there, and leaves out the power actions no
+// disk alert needs.
+func TestAlertRunSeedSaysPulseCanReadInsideAGuestItCannotPowerCycle(t *testing.T) {
+	// seedAndDecision returns the run's seed and the finding-decision question
+	// the run would end with.
+	seedAndDecision := func(t *testing.T, alertType, status string, guestIsVM bool, catalog aicontracts.ActionCapabilityCatalog) (string, string) {
+		t.Helper()
+		yes := true
+		rig := newDeadGuestRig(t, config.PatrolAutonomyMonitor)
+		rig.ct.OnBoot = &yes
+		rig.ps.SetActionCapabilityLookup(func(context.Context, string) (aicontracts.ActionCapabilityCatalog, error) {
+			return catalog, nil
+		})
+		alert := models.Alert{ID: "homelab:delly:101-" + alertType, Type: alertType, Level: "warning", ResourceID: rig.ct.ID, ResourceName: "gitea", Message: "Container 'gitea' " + alertType}
+		resourceType := "system-container"
+		if guestIsVM {
+			alert = models.Alert{ID: "homelab:delly:160-" + alertType, Type: alertType, Level: "warning", ResourceID: rig.vm.ID, ResourceName: "builder", Message: "VM 'builder' " + alertType}
+			resourceType = "vm"
+		}
+		if guestIsVM {
+			rig.collect("running", status, alert)
+		} else {
+			rig.collect(status, "running", alert)
+		}
+		state := rig.ps.currentPatrolRuntimeState()
+		resolved, resolution := resolvePatrolScopeState(state, SustainedAlertPatrolScope(alert.ID, alert.ResourceID, resourceType, alert.Type))
+		if len(resolution.UnmatchedResourceIDs) != 0 || len(resolution.ResolvedResourceIDs) == 0 {
+			t.Fatalf("scope did not resolve: %+v", resolution)
+		}
+		output, _ := rig.ps.seedFindingsAndContextState(&resolved, filterPatrolStateByScopeState(state, resolved))
+		return output, rig.ps.patrolFindingDecisionPrompt(&resolved, state)
+	}
+	seed := func(t *testing.T, alertType, status string, guestIsVM bool, catalog aicontracts.ActionCapabilityCatalog) string {
+		t.Helper()
+		output, _ := seedAndDecision(t, alertType, status, guestIsVM, catalog)
+		return output
+	}
+	has := func(t *testing.T, name, seed string, wants ...string) {
+		t.Helper()
+		for _, want := range wants {
+			if !strings.Contains(seed, want) {
+				t.Errorf("%s: seed lacks %q:\n%s", name, want, seed)
+			}
+		}
+	}
+	lacks := func(t *testing.T, name, seed string, unwanted ...string) {
+		t.Helper()
+		for _, text := range unwanted {
+			if strings.Contains(seed, text) {
+				t.Errorf("%s: seed says %q:\n%s", name, text, seed)
+			}
+		}
+	}
+	const readsInside = `Pulse can read disk usage, files and logs inside "gitea" through the Pulse agent on delly. This check cannot read them; an investigation of a finding can.`
+	const reportOnDisk = "So when you cannot tell from here what fills the disk, report a finding: its investigation reads what does, and that is not a finding that only repeats the alert."
+
+	disk, diskDecision := seedAndDecision(t, "disk", "running", false, guestOnRunnerlessNodeCatalog("delly", "container"))
+	has(t, "disk alert", disk, readsInside+" "+reportOnDisk)
+	lacks(t, "disk alert", disk, "Use Proxmox", "cannot stop or restart", "Pulse cannot run an action", "Pulse has no action", "Start on boot")
+	// The closing question carries the same rule. Its "a reading with nothing
+	// known beyond the alert" exit closed a sustained check that had the
+	// read line in its seed.
+	has(t, "disk alert decision", diskDecision, `Pulse can read inside "gitea" and this check cannot, so a disk reading whose cause you could not see is one to record: its investigation reads what fills the disk.`)
+	lacks(t, "disk alert decision", diskDecision, "a reading with nothing known beyond the alert itself")
+
+	// A runnable action still bears on any alert and is still named.
+	withRunner := guestOnRunnerlessNodeCatalog("delly", "container")
+	withRunner.Capabilities = []aicontracts.ActionCapabilityInfo{{Name: "reboot"}}
+	runnerDisk := seed(t, "disk", "running", false, withRunner)
+	has(t, "disk alert, runnable action", runnerDisk, `Pulse can run these actions for "gitea": reboot.`, readsInside)
+
+	// Memory pressure can be a reason to restart, so the refusal stays.
+	memory, memoryDecision := seedAndDecision(t, "memory", "running", false, guestOnRunnerlessNodeCatalog("delly", "container"))
+	has(t, "memory alert decision", memoryDecision, "a reading with nothing known beyond the alert itself")
+	lacks(t, "memory alert decision", memoryDecision, "Pulse can read inside")
+	has(t, "memory alert", memory, `Pulse cannot run an action for "gitea". Pulse cannot stop or restart guests on delly`, readsInside, "Start on boot is on for this guest.")
+	lacks(t, "memory alert", memory, reportOnDisk)
+
+	// A stopped guest cannot be read inside.
+	stopped := seed(t, "powered-off", "stopped", false, guestOnRunnerlessNodeCatalog("delly", "container"))
+	has(t, "powered-off alert", stopped, "Pulse cannot stop or restart guests on delly")
+	lacks(t, "powered-off alert", stopped, "Pulse can read")
+
+	// A VM is read through its QEMU guest agent.
+	vm := seed(t, "disk", "running", true, guestOnRunnerlessNodeCatalog("delly", "vm"))
+	has(t, "vm disk alert", vm, `Pulse can read disk usage, files and logs inside "builder" through the Pulse agent on delly when the QEMU guest agent runs in it. This check cannot read them; an investigation of a finding can.`)
+
+	// Commands off wins: reads are refused there, whatever else the catalog says.
+	commandsOff := guestOnRunnerlessNodeCatalog("delly", "container")
+	commandsOff.CommandsDisabled = &aicontracts.CommandsDisabledHost{HostName: "delly", Reason: actionlifecycle.HostCommandsDisabledReason("delly")}
+	off, offDecision := seedAndDecision(t, "disk", "running", false, commandsOff)
+	has(t, "commands off decision", offDecision, "a reading with nothing known beyond the alert itself")
+	lacks(t, "commands off decision", offDecision, "Pulse can read inside")
+	has(t, "commands off", off, "Pulse cannot read logs or files on delly")
+	lacks(t, "commands off", off, "Pulse can read")
+
+	// Without the read fact the seed claims no read.
+	noReads := guestOnRunnerlessNodeCatalog("delly", "container")
+	noReads.Reads = nil
+	lacks(t, "no read fact", seed(t, "disk", "running", false, noReads), "Pulse can read", "Use Proxmox")
+}

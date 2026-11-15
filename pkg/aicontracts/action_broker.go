@@ -58,6 +58,21 @@ type ActionCapabilityCatalog struct {
 	// A start refused because the node's agent has commands off is not
 	// here: CommandsDisabled carries that, with its step.
 	GuestActionsUnavailable *GuestActionsUnavailable `json:"guest_actions_unavailable,omitempty"`
+	// Reads is set when the Pulse agent that reads from this resource's host
+	// reports commands on, so Pulse can read disk usage, files and logs for
+	// the resource. It is the other side of CommandsDisabled: a guest whose
+	// node refuses every action can still be read inside.
+	Reads *CommandReadHost `json:"reads,omitempty"`
+}
+
+// CommandReadHost names the host whose Pulse agent takes reads for a
+// resource, and whether they run inside a Proxmox guest through it.
+type CommandReadHost struct {
+	HostResourceID string `json:"host_resource_id,omitempty"`
+	HostName       string `json:"host_name"`
+	// Guest is "container" or "vm" when the reads run inside a Proxmox guest
+	// through its node's agent, and empty when they run on the host.
+	Guest string `json:"guest,omitempty"`
 }
 
 // ActionCapabilityRefusal is one declared capability planning would refuse.

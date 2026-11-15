@@ -43,6 +43,16 @@ const patrolActionCapabilityLookupTimeout = 5 * time.Second
 // the line carries the reason Pulse wrote for the refusal. When Pulse cannot
 // check, the seed says nothing about actions.
 //
+// It also says when Pulse can read inside a Proxmox guest through its node's
+// agent. A guest disk alert on a node with no action runner was told only
+// "Pulse cannot run an action ... Use Proxmox for this", and a run wrote that
+// Pulse had no command or log access there and raised nothing, though a read
+// inside the guest names the folder that filled it.
+//
+// A guest's power is left out of a space or age alert: no start, stop or
+// restart changes what fills a disk or how old a backup is, and a refusal of
+// them read as Pulse being able to do nothing for the guest at all.
+//
 // askedAlert is the alert active on the resource a person's targeted check
 // was asked about (patrolAskedResourceAlert). That run is given the same
 // facts.
@@ -50,15 +60,16 @@ func (p *PatrolService) patrolAlertSubjectFacts(scope *PatrolScope, snap patrolR
 	if scope == nil || scope.Reason == TriggerReasonAlertCleared {
 		return ""
 	}
-	var alertResourceID, alertResourceName string
+	var alertResourceID, alertResourceName, alertType string
 	switch {
 	case scope.AlertContext != nil:
-		alertResourceID, alertResourceName = scope.AlertContext.ResourceID, scope.AlertContext.ResourceName
+		alertResourceID, alertResourceName, alertType = scope.AlertContext.ResourceID, scope.AlertContext.ResourceName, scope.AlertContext.AlertType
 	case askedAlert != nil:
-		alertResourceID, alertResourceName = askedAlert.ResourceID, askedAlert.ResourceName
+		alertResourceID, alertResourceName, alertType = askedAlert.ResourceID, askedAlert.ResourceName, askedAlert.Type
 	default:
 		return ""
 	}
+	powerMatters := !patrolAlertIsAboutSpaceOrAge(alertType)
 	var lines []string
 
 	subject := patrolAlertSubjectResource(scope, snap)
@@ -76,10 +87,10 @@ func (p *PatrolService) patrolAlertSubjectFacts(scope *PatrolScope, snap patrolR
 		if name == "" {
 			name = strings.TrimSpace(alertResourceName)
 		}
-		lines = append(lines, p.patrolRunnableActionLines(subject.ID, name)...)
+		lines = append(lines, p.patrolRunnableActionLines(subject, name, alertType)...)
 	}
 
-	if onBoot, stopped, isGuest := patrolAlertGuestStartOnBoot(alertResourceID, snap); isGuest && onBoot != nil {
+	if onBoot, stopped, isGuest := patrolAlertGuestStartOnBoot(alertResourceID, snap); powerMatters && isGuest && onBoot != nil {
 		switch {
 		case *onBoot && stopped:
 			lines = append(lines, "Start on boot is on for this guest, so it is meant to be running.")
@@ -128,23 +139,46 @@ func patrolAlertSubjectResource(scope *PatrolScope, snap patrolRuntimeState) *un
 	return subject
 }
 
-// patrolRunnableActionLines states what Pulse can run for a resource, from the
-// same catalog an investigation is given.
-func (p *PatrolService) patrolRunnableActionLines(resourceID, name string) []string {
-	if p == nil {
+// patrolAlertIsAboutSpaceOrAge reports whether an alert is about how full
+// something is or how old a backup or snapshot is. Starting, stopping or
+// restarting a guest changes neither.
+func patrolAlertIsAboutSpaceOrAge(alertType string) bool {
+	switch strings.ToLower(strings.TrimSpace(alertType)) {
+	case "disk", "usage", "storage", "backup-age", "snapshot-age":
+		return true
+	}
+	return false
+}
+
+// patrolRunnableActionLines states what Pulse can run for a resource, and
+// what it can read inside a Proxmox guest, from the same catalog an
+// investigation is given. For a space or age alert the guest power actions
+// its node refuses are left out.
+func (p *PatrolService) patrolRunnableActionLines(subject *unifiedresources.Resource, name, alertType string) []string {
+	if p == nil || subject == nil {
 		return nil
 	}
-	p.mu.RLock()
-	lookup := p.actionCapabilityLookup
-	p.mu.RUnlock()
-	if lookup == nil {
+	powerMatters := !patrolAlertIsAboutSpaceOrAge(alertType)
+	catalog, ok := p.patrolActionCatalog(subject.ID)
+	if !ok {
 		return nil
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), patrolActionCapabilityLookupTimeout)
-	defer cancel()
-	catalog, err := lookup(ctx, resourceID)
-	if err != nil {
-		return nil
+
+	refusedForPower := false
+	if !powerMatters && catalog.GuestActionsUnavailable != nil {
+		power := make(map[string]bool, len(catalog.GuestActionsUnavailable.Actions))
+		for _, action := range catalog.GuestActionsUnavailable.Actions {
+			power[strings.TrimSpace(action)] = true
+		}
+		kept := catalog.Unavailable[:0:0]
+		for _, refusal := range catalog.Unavailable {
+			if !power[strings.TrimSpace(refusal.Name)] {
+				kept = append(kept, refusal)
+			}
+		}
+		catalog.Unavailable = kept
+		catalog.GuestActionsUnavailable = nil
+		refusedForPower = true
 	}
 
 	var lines []string
@@ -176,8 +210,31 @@ func (p *PatrolService) patrolRunnableActionLines(resourceID, name string) []str
 			line += " " + strings.Join(reasons, " ")
 		}
 		lines = append(lines, line)
+	case refusedForPower:
+		// The node refuses only power actions, which do not bear on this alert.
 	default:
 		lines = append(lines, fmt.Sprintf("Pulse has no action for %q.", name))
+	}
+	if reads := catalog.Reads; reads != nil && catalog.CommandsDisabled == nil && patrolResourceIsRunningProxmoxGuest(subject) {
+		hostName := strings.TrimSpace(reads.HostName)
+		if hostName == "" {
+			hostName = "its node"
+		}
+		through := "through the Pulse agent on " + hostName
+		if reads.Guest == "vm" {
+			through += " when the QEMU guest agent runs in it"
+		}
+		// This check has no agent reads (PatrolDetectionToolNamesForResourceTypes);
+		// the investigation a finding starts has them.
+		line := fmt.Sprintf("Pulse can read disk usage, files and logs inside %q %s. This check cannot read them; an investigation of a finding can.", name, through)
+		// Told only that a read was possible, a sustained check on a guest
+		// disk alert still kept to "do not report a finding that only repeats
+		// the alert's reading" and raised nothing. Here the finding is what
+		// gets the folder named.
+		if strings.EqualFold(strings.TrimSpace(alertType), "disk") {
+			line += " So when you cannot tell from here what fills the disk, report a finding: its investigation reads what does, and that is not a finding that only repeats the alert."
+		}
+		lines = append(lines, line)
 	}
 	if host := catalog.CommandsDisabled; host != nil {
 		hostName := strings.TrimSpace(host.HostName)
@@ -192,6 +249,48 @@ func (p *PatrolService) patrolRunnableActionLines(resourceID, name string) []str
 			reason, hostName))
 	}
 	return lines
+}
+
+// patrolActionCatalog asks the action broker's catalog for a resource. It
+// reports false when Pulse has no lookup or the lookup failed.
+func (p *PatrolService) patrolActionCatalog(resourceID string) (aicontracts.ActionCapabilityCatalog, bool) {
+	if p == nil {
+		return aicontracts.ActionCapabilityCatalog{}, false
+	}
+	p.mu.RLock()
+	lookup := p.actionCapabilityLookup
+	p.mu.RUnlock()
+	if lookup == nil {
+		return aicontracts.ActionCapabilityCatalog{}, false
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), patrolActionCapabilityLookupTimeout)
+	defer cancel()
+	catalog, err := lookup(ctx, resourceID)
+	if err != nil {
+		return aicontracts.ActionCapabilityCatalog{}, false
+	}
+	return catalog, true
+}
+
+// patrolAlertSubjectGuestReadable reports whether the resource an alert run
+// looks at is a running Proxmox guest Pulse can read inside.
+func (p *PatrolService) patrolAlertSubjectGuestReadable(scope *PatrolScope, snap patrolRuntimeState) bool {
+	subject := patrolAlertSubjectResource(scope, snap)
+	if !patrolResourceIsRunningProxmoxGuest(subject) {
+		return false
+	}
+	catalog, ok := p.patrolActionCatalog(subject.ID)
+	return ok && catalog.Reads != nil && catalog.CommandsDisabled == nil
+}
+
+// patrolResourceIsRunningProxmoxGuest reports whether a resource is a Proxmox
+// guest that is up. A read inside a guest runs in the guest, so a stopped one
+// cannot be read.
+func patrolResourceIsRunningProxmoxGuest(resource *unifiedresources.Resource) bool {
+	if resource == nil || resource.Status == unifiedresources.StatusOffline {
+		return false
+	}
+	return resource.Type == unifiedresources.ResourceTypeSystemContainer || resource.Type == unifiedresources.ResourceTypeVM
 }
 
 func patrolSortedDistinct(values []string) []string {

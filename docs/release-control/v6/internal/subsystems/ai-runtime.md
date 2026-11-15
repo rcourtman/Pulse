@@ -4873,6 +4873,26 @@ executors' in-memory availability checks, runs no agent preflight, and is
 bounded at 5 seconds. Proofs: `internal/ai/patrol_guest_lifecycle_test.go` and
 `internal/api/ai_alert_bridge_capabilities_test.go`.
 
+The seed also says when Pulse can read inside a running Proxmox guest, from
+the catalog's `Reads` (`tools.CommandReadHostForTarget`, which asks the same
+routing `pulse_read` uses, `pct exec` or `qm guest exec` through the node's
+agent). The alert check has no agent reads, so the line says the investigation
+a finding starts can read there. A guest disk alert on a node with commands on
+and no action runner was told only that Pulse cannot run an action and to use
+Proxmox, and runs wrote that Pulse had no command or log access and raised
+nothing. Given only the read fact, a sustained check still kept to "do not
+report a finding that only repeats the alert's reading", so on a disk alert
+the line also says to report a finding when the check cannot tell what fills
+the disk, because its investigation reads that. The run's closing
+finding-decision question (`patrolFindingDecisionPrompt`) had the last word
+and still offered "a reading with nothing known beyond the alert itself" as a
+reason to record nothing, so for that alert it now says the unseen cause is
+one to record and drops that exit. A disk, usage, storage, backup-age or snapshot-age alert
+(`patrolAlertIsAboutSpaceOrAge`) also leaves out the node's refused power
+actions and the start-on-boot line: no start, stop or restart changes them.
+Fault set `pve-v1` cell P2 is the replay. Proof:
+`TestAlertRunSeedSaysPulseCanReadInsideAGuestItCannotPowerCycle`.
+
 A finding belongs to the resource its ID names. `seedFindingsAndContextState`
 closes an open finding as `Resource no longer exists in infrastructure` when
 its resource has left the full inventory, and it runs before the model sees

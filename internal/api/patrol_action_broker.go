@@ -199,6 +199,9 @@ func (b *patrolActionBroker) Capabilities(ctx context.Context, resourceID string
 		})
 	}
 	catalog.GuestActionsUnavailable = b.guestActionsUnavailable(resourceID, lifecycleCatalog.Refused)
+	if catalog.CommandsDisabled == nil {
+		catalog.Reads = b.commandReadHost(resourceID)
+	}
 	for _, capability := range lifecycleCatalog.Runnable {
 		info := aicontracts.ActionCapabilityInfo{
 			Name:                 capability.Name,
@@ -245,6 +248,25 @@ func (b *patrolActionBroker) commandsDisabledHost(resourceID string) *aicontract
 		Reason:         actionlifecycle.HostCommandsDisabledReason(host.Name),
 		Step:           actionlifecycle.HostCommandsDisabledStep(host.Name),
 	}
+}
+
+// commandReadHost reports the host whose agent takes reads for the resource
+// when that agent says commands are on. It asks the AI read tools' own
+// routing, so the prompt cannot say a read works where pulse_read would go
+// somewhere else.
+func (b *patrolActionBroker) commandReadHost(resourceID string) *aicontracts.CommandReadHost {
+	if b.readState == nil {
+		return nil
+	}
+	readState, err := b.readState(b.orgID)
+	if err != nil || readState == nil {
+		return nil
+	}
+	host, ok := tools.CommandReadHostForTarget(readState, resourceID)
+	if !ok {
+		return nil
+	}
+	return &aicontracts.CommandReadHost{HostResourceID: host.ResourceID, HostName: host.Name, Guest: host.Guest}
 }
 
 // guestActionsUnavailable reports the guest actions the executor refused

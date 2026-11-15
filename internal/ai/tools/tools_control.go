@@ -354,9 +354,58 @@ type CommandsDisabledHost struct {
 // command would not use. Any other cause, a stopped agent or a dropped
 // session among them, answers false.
 func CommandsDisabledHostForTarget(rs unifiedresources.ReadState, target string) (CommandsDisabledHost, bool) {
+	served, ok := reportingCommandHostForTarget(rs, target)
+	if !ok || !actionlifecycle.HostCommandsDisabled(served.resource) {
+		return CommandsDisabledHost{}, false
+	}
+	return CommandsDisabledHost{ResourceID: served.id, Name: served.name}, true
+}
+
+// CommandReadHost names the host whose Pulse agent takes reads for a target.
+// Guest is "container" or "vm" when the reads run inside a Proxmox guest
+// through its node's agent, and empty when they run on the host itself.
+type CommandReadHost struct {
+	ResourceID string
+	Name       string
+	Guest      string
+}
+
+// CommandReadHostForTarget names the host whose Pulse agent a read for the
+// target would go to, when that agent is reporting with commands on. It is
+// the other side of CommandsDisabledHostForTarget and asks routing the same
+// way, so a prompt that says a read works and a refused read cannot disagree
+// about where it goes. A reporting agent is not a held session: a session
+// that dropped still refuses the read, with its own reason.
+func CommandReadHostForTarget(rs unifiedresources.ReadState, target string) (CommandReadHost, bool) {
+	served, ok := reportingCommandHostForTarget(rs, target)
+	if !ok {
+		return CommandReadHost{}, false
+	}
+	agent := served.resource
+	if agent == nil || agent.Agent == nil || agent.Agent.Stale || !agent.Agent.CommandsEnabled {
+		return CommandReadHost{}, false
+	}
+	read := CommandReadHost{ResourceID: served.id, Name: served.name}
+	if served.route.Transport == "pct_exec" || served.route.Transport == "qm_guest_exec" {
+		read.Guest = served.route.TargetType
+	}
+	return read, true
+}
+
+type reportingCommandHost struct {
+	id       string
+	name     string
+	resource *unifiedresources.Resource
+	route    CommandRoutingResult
+}
+
+// reportingCommandHostForTarget asks routing where a command for a target
+// would go if every reporting agent held a session, and returns that agent's
+// host.
+func reportingCommandHostForTarget(rs unifiedresources.ReadState, target string) (reportingCommandHost, bool) {
 	target = strings.TrimSpace(target)
 	if rs == nil || target == "" {
-		return CommandsDisabledHost{}, false
+		return reportingCommandHost{}, false
 	}
 	hosts := rs.Hosts()
 	reporting := make([]agentexec.ConnectedAgent, 0, len(hosts))
@@ -367,19 +416,20 @@ func CommandsDisabledHostForTarget(rs unifiedresources.ReadState, target string)
 	}
 	route := routeCommandTarget(rs, reporting, target)
 	if route.AgentID == "" {
-		return CommandsDisabledHost{}, false
+		return reportingCommandHost{}, false
 	}
 	for _, host := range hosts {
 		if host == nil || host.AgentID() != route.AgentID {
 			continue
 		}
-		resource := unifiedresources.ResolveResourceContext(rs, host.ID()).Resource
-		if !actionlifecycle.HostCommandsDisabled(resource) {
-			return CommandsDisabledHost{}, false
-		}
-		return CommandsDisabledHost{ResourceID: host.ID(), Name: firstNonEmptyString(host.Name(), host.Hostname())}, true
+		return reportingCommandHost{
+			id:       host.ID(),
+			name:     firstNonEmptyString(host.Name(), host.Hostname()),
+			resource: unifiedresources.ResolveResourceContext(rs, host.ID()).Resource,
+			route:    route,
+		}, true
 	}
-	return CommandsDisabledHost{}, false
+	return reportingCommandHost{}, false
 }
 
 // unavailableCommandConnection preserves monitoring context without inferring

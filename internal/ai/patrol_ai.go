@@ -676,7 +676,7 @@ func (p *PatrolService) runAIAnalysisState(ctx context.Context, snap patrolRunti
 			AllowedToolNames: patrolAllowedToolNamesForScope(scope),
 			// A run on a resource with an active alert that ends in prose and
 			// records nothing is asked once to record it or to decline.
-			FindingDecisionPrompt: p.patrolFindingDecisionPrompt(scope),
+			FindingDecisionPrompt: p.patrolFindingDecisionPrompt(scope, snap),
 		}, func(event ChatStreamEvent) {
 			switch event.Type {
 			case "content":
