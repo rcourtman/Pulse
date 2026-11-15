@@ -56,6 +56,7 @@ import {
 } from '@/features/platformPage/PlatformHostScope';
 import { collectIdentityConflictHosts } from './dockerIdentityConflict';
 import { DockerIdentityConflictNotice } from './DockerIdentityConflictNotice';
+import { DockerPortChecksNotice } from './DockerPortChecksNotice';
 import { updateStore } from '@/stores/updates';
 import {
   buildInfrastructureAgentUpdatesPath,
@@ -184,6 +185,13 @@ export function DockerPageSurface() {
   const refreshDockerResources = async () => {
     await refetch();
   };
+  // Lets the port-check offer notice a container that was started later.
+  const containerSignature = createMemo(() =>
+    model()
+      .containers.map((container) => container.id)
+      .sort()
+      .join('|'),
+  );
 
   return (
     <DockerHostIdentitiesProvider value={hostIdentities}>
@@ -243,6 +251,10 @@ export function DockerPageSurface() {
                 actionLabel="Open agent upgrade commands"
               />
               <Show when={activeTab() === 'overview'}>
+                <DockerPortChecksNotice
+                  containerSignature={containerSignature()}
+                  onChecksAdded={() => void refreshDockerResources()}
+                />
                 <div class="space-y-4">
                   <DockerOverview
                     hosts={model().hosts}

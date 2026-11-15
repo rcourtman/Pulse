@@ -50,7 +50,7 @@ func migrateAvailabilityLinkedResources(targets []config.AvailabilityTarget, res
 
 	hasLink := false
 	for _, target := range targets {
-		if strings.TrimSpace(target.LinkedResourceID) != "" {
+		if strings.TrimSpace(target.LinkedResourceID) != "" || target.DockerPort != nil {
 			hasLink = true
 			break
 		}
@@ -63,6 +63,14 @@ func migrateAvailabilityLinkedResources(targets []config.AvailabilityTarget, res
 	successors := make(map[string]string)
 	ambiguous := make(map[string]struct{})
 	guestIDsByKey := make(map[string][]string)
+	// A check created from a published container port names its host and
+	// container. Docker keeps a container name unique per host, so one live
+	// namesake on that host is the container the check belongs to.
+	type dockerContainerCandidate struct {
+		id    string
+		ports []unifiedresources.DockerPortMeta
+	}
+	containersByKey := make(map[string][]dockerContainerCandidate)
 
 	for _, resource := range resources {
 		currentID := unifiedresources.CanonicalResourceID(resource.ID)
@@ -87,6 +95,12 @@ func migrateAvailabilityLinkedResources(targets []config.AvailabilityTarget, res
 			successors[oldID] = currentID
 		}
 
+		if resource.Docker != nil && unifiedresources.CanonicalResourceType(resource.Type) == unifiedresources.ResourceTypeAppContainer {
+			if key := dockerContainerLinkKey(resource.Docker.HostSourceID, resource.Name); key != "" {
+				containersByKey[key] = append(containersByKey[key], dockerContainerCandidate{id: currentID, ports: resource.Docker.Ports})
+			}
+		}
+
 		if resource.Proxmox != nil && resource.Proxmox.VMID > 0 {
 			switch unifiedresources.CanonicalResourceType(resource.Type) {
 			case unifiedresources.ResourceTypeVM, unifiedresources.ResourceTypeSystemContainer:
@@ -102,7 +116,7 @@ func migrateAvailabilityLinkedResources(targets []config.AvailabilityTarget, res
 	out := targets
 	for i, target := range targets {
 		linkedID := strings.TrimSpace(target.LinkedResourceID)
-		if linkedID == "" {
+		if linkedID == "" && target.DockerPort == nil {
 			continue
 		}
 		if _, live := liveIDs[linkedID]; live {
@@ -110,7 +124,19 @@ func migrateAvailabilityLinkedResources(targets []config.AvailabilityTarget, res
 		}
 
 		newID := successors[linkedID]
-		if newID == "" {
+		if newID == "" && target.DockerPort != nil {
+			// The container was recreated under a new Docker ID. Follow the
+			// name on the same host, but only while the namesake still
+			// publishes the port this check connects to: recreated with a
+			// different port, the old endpoint may now belong to something
+			// else. Two namesakes fail closed.
+			key := dockerContainerLinkKey(target.DockerPort.HostID, target.DockerPort.ContainerName)
+			if candidates := containersByKey[key]; key != "" && len(candidates) == 1 &&
+				dockerPortStillPublished(candidates[0].ports, target.DockerPort.PrivatePort, target.Port) {
+				newID = candidates[0].id
+			}
+		}
+		if newID == "" && linkedID != "" {
 			if instance, _, vmid, ok := unifiedresources.ParseProxmoxGuestSourceID(linkedID); ok {
 				// Node segment deliberately ignored: the link must follow the
 				// guest across live migrations. Ambiguity fails closed.
@@ -131,4 +157,23 @@ func migrateAvailabilityLinkedResources(targets []config.AvailabilityTarget, res
 		out[i].LinkedResourceID = newID
 	}
 	return out, changed
+}
+
+func dockerContainerLinkKey(hostID, containerName string) string {
+	hostID = strings.TrimSpace(hostID)
+	containerName = config.NormalizeDockerContainerName(containerName)
+	if hostID == "" || containerName == "" {
+		return ""
+	}
+	return hostID + "\x00" + containerName
+}
+
+func dockerPortStillPublished(ports []unifiedresources.DockerPortMeta, privatePort, publicPort int) bool {
+	for _, port := range ports {
+		protocol := strings.ToLower(strings.TrimSpace(port.Protocol))
+		if port.PrivatePort == privatePort && port.PublicPort == publicPort && (protocol == "" || protocol == "tcp") {
+			return true
+		}
+	}
+	return false
 }

@@ -9041,6 +9041,33 @@ constructor activates a persisted disk-alert job without policy-cancelling it.
 The test uses a deliberately blocked local URL and does not claim provider
 acceptance or installed delivery.
 
+### Availability checks suggested from published container ports (15 November 2026)
+
+`internal/monitoring/availability_docker_suggestions.go` derives check
+candidates from what the Docker agent already reports: the published TCP ports
+of running containers, their bind address and the host's interface addresses.
+It adds no collection, no poll and no agent change. A port bound only to
+loopback, a container port that is not a web port and a host with no usable
+address come back with a skip reason and are never probed. The Pulse server's
+own container is left out.
+
+`AvailabilityTarget.DockerPort` in `internal/config/availability_docker_port.go`
+records the host, container name and container port on a check created this
+way. `migrateAvailabilityLinkedResources` uses it to re-attach the check to the
+one live namesake container on that host after a recreate, only while that
+container still publishes the port the check connects to, and fails closed on
+two namesakes. An explicit link without that source still never follows a name.
+Addresses come from an agent's report, so loopback, link-local and multicast
+addresses are never used as a check target.
+
+Only HTTPS and HTTP checks are created. Measured on Docker 29: when Pulse runs
+in a container on the same host, a plain connection to a published port is
+accepted by Docker's proxy with nothing listening, so a connection check would
+pass for a dead service. Regression coverage:
+`TestDockerPortCheckCandidatesFollowWhatDockerPublishes`,
+`TestMigrateAvailabilityLinkedResourcesFollowsARecreatedContainer` and
+`TestAvailabilityDockerPortSourceSurvivesNormalizeAndJSON`.
+
 ### Proxmox node unavailability is not credential evidence
 
 The Proxmox client treats HTTP 595 from a node-scoped API path as a resource

@@ -140,6 +140,9 @@ type AvailabilityTarget struct {
 	// header values are encrypted with the rest of availability target storage
 	// and are never returned by the API.
 	HTTP *AvailabilityHTTPConfig `json:"http,omitempty"`
+	// DockerPort is set on a check Pulse created from a container's published
+	// port. It is absent on checks an operator typed in.
+	DockerPort *AvailabilityDockerPortSource `json:"dockerPort,omitempty"`
 }
 
 // NewAvailabilityTarget returns a new target with generated ID and defaults.
@@ -400,6 +403,9 @@ func (t AvailabilityTarget) Validate() error {
 	if t.FailureThreshold > 0 && t.FailureThreshold > 10 {
 		return fmt.Errorf("availability failure threshold must be 10 or less")
 	}
+	if err := validateAvailabilityDockerPortSource(t.DockerPort); err != nil {
+		return err
+	}
 	locations := t.EffectiveObservationLocationIDs()
 	if len(locations) == 0 {
 		return fmt.Errorf("availability target requires at least one observation location")
@@ -530,6 +536,7 @@ func NormalizeAvailabilityTarget(target AvailabilityTarget) AvailabilityTarget {
 	if target.Protocol != AvailabilityProbeHTTP && target.Protocol != AvailabilityProbeHTTPS {
 		target.HTTP = nil
 	}
+	target.DockerPort = normalizeAvailabilityDockerPortSource(target.DockerPort)
 	target.ApplyDefaults()
 	return target
 }
