@@ -38,7 +38,14 @@ export const OrganizationSharingCreateSection: Component<OrganizationSharingCrea
   return (
     <>
       <Show when={props.state.canManageCurrentOrg()}>
-        <div class="p-4 sm:p-6">
+        <form
+          aria-label="Create Share"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void props.state.createShare();
+          }}
+          class="p-4 sm:p-6"
+        >
           <fieldset
             disabled={props.state.saving()}
             class="rounded-md border border-border p-3 space-y-2 sm:p-4 sm:space-y-3"
@@ -151,6 +158,7 @@ export const OrganizationSharingCreateSection: Component<OrganizationSharingCrea
                     Choose a discovered resource, or switch to manual entry.
                   </p>
                   <Button
+                    type="button"
                     variant="ghost"
                     size="xs"
                     class="text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200"
@@ -231,17 +239,17 @@ export const OrganizationSharingCreateSection: Component<OrganizationSharingCrea
 
             <div class="flex justify-end">
               <Button
+                type="submit"
                 variant="primary"
                 size="settingsAction"
                 class="w-full sm:w-auto"
-                onClick={props.state.createShare}
                 disabled={!props.state.canCreateShare()}
               >
                 {props.state.saving() ? 'Saving...' : 'Create Share'}
               </Button>
             </div>
           </fieldset>
-        </div>
+        </form>
       </Show>
 
       <Show when={!props.state.canManageCurrentOrg() && !props.state.readOnly()}>

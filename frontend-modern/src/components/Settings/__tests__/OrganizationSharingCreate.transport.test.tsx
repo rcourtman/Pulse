@@ -214,10 +214,12 @@ function fillForm(entry: Entry, role: Role = 'viewer') {
 }
 function expectSavedGrant(entry: Entry, role: Role = 'viewer') {
   const payload = payloadFor(entry, role);
+  // A quick-pick draft also describes the same resource key. Assert the saved
+  // table row, not that still-visible draft description.
   const row = screen
-    .getAllByRole('row')
-    .find((candidate) => within(candidate).queryByText(`vm:${payload.resourceId}`));
-  expect(row).toBeDefined();
+    .getByText(`vm:${payload.resourceId}`, { exact: true, selector: 'tr bdi' })
+    .closest('tr');
+  expect(row).not.toBeNull();
   expect(row).toHaveTextContent(payload.resourceName);
   expect(row).toHaveTextContent('Namesake organization');
   // jsdom includes both responsive presentations; each must show the saved role.
@@ -225,7 +227,11 @@ function expectSavedGrant(entry: Entry, role: Role = 'viewer') {
   const mobileAccess = within(row!).getByText('Access:').parentElement!;
   expect(within(mobileAccess).getByText(role, { exact: true })).toBeInTheDocument();
   expect(row).toHaveTextContent('Pending approval');
-  expect(within(row!).getByRole('button', { name: /^Remove share of / })).toBeEnabled();
+  expect(
+    within(row!).getByRole('button', {
+      name: `Remove share of vm:${payload.resourceId} to ${target.displayName} (${target.id})`,
+    }),
+  ).toBeEnabled();
   // This saved state comes from the actual dispatched body, not the intended
   // fixture choice. A wrong callback must produce a wrong saved grant.
   expect(outgoing).toHaveLength(1);
@@ -301,6 +307,34 @@ afterEach(async () => {
 });
 
 describe('rendered Create Share controls through the real transport', () => {
+  it.each(entries)('submits the %s draft through its named native form once', async (entry) => {
+    await openPanel();
+    fillForm(entry, 'editor');
+    const form = screen.getByRole('form', { name: 'Create Share' });
+    expect(createButton()).toHaveAttribute('type', 'submit');
+    expect(fireEvent.submit(form)).toBe(false); // Never navigate away from the saved view.
+    await waitFor(() => expect(inventoryReads()).toHaveLength(10));
+    await screen.findByRole('heading', { name: 'Outgoing Shares' });
+    expectWrite(entry, 'editor');
+    expectSavedGrant(entry, 'editor');
+  });
+
+  it('keeps incomplete drafts and manual-entry toggles from submitting a grant', async () => {
+    await openPanel();
+    const form = screen.getByRole('form', { name: 'Create Share' });
+    expect(fireEvent.submit(form)).toBe(false);
+    expect(writes()).toHaveLength(0);
+    expect(healthReads()).toHaveLength(0);
+    expect(createButton()).toBeDisabled();
+    for (const name of ['Enter manually', 'Hide manual entry']) {
+      const toggle = screen.getByRole('button', { name });
+      expect(toggle).toHaveAttribute('type', 'button');
+      fireEvent.click(toggle);
+      expect(writes()).toHaveLength(0);
+      expect(inventoryReads()).toHaveLength(5);
+    }
+  });
+
   it('identifies every namesake option by its full saved key without choosing for the reader', async () => {
     await openPanel();
     const destinations = Array.from((targetInput() as HTMLSelectElement).options);
@@ -437,7 +471,10 @@ describe('rendered Create Share controls through the real transport', () => {
         expect(resourceInput()).toHaveAccessibleDescription(
           `Resource: Namesake workload · vm:${selectedResourceID}`,
         );
-      for (const input of screen.getAllByRole('combobox')) expect(input).toBeDisabled();
+      // These are the submitted form's native selects, not every role in the
+      // saved inventories. Keep the disabled-control proof local to its owner.
+      for (const input of saving.closest('form')!.querySelectorAll('select'))
+        expect(input).toBeDisabled();
       fireEvent.click(saving);
       expect(writes()).toHaveLength(1);
       expect(notices.success).not.toHaveBeenCalled();
@@ -580,15 +617,21 @@ describe('rendered Create Share controls through the real transport', () => {
     document.cookie = 'pulse_csrf=; Max-Age=0; Path=/';
     await openPanel();
     fillForm('manual entry', 'admin');
-    fireEvent.click(createButton());
+    const form = screen.getByRole('form', { name: 'Create Share' });
+    fireEvent.submit(form);
     await waitFor(() => expect(healthReads()).toHaveLength(1));
     expect(writes()).toHaveLength(0);
     for (const input of [...screen.getAllByRole('combobox'), ...screen.getAllByRole('textbox')])
       expect(input).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Saving...' })).toBeDisabled();
+    fireEvent.submit(form);
+    expect(healthReads()).toHaveLength(1);
+    expect(writes()).toHaveLength(0);
     document.cookie = `pulse_csrf=${csrf}; Path=/`;
     health.resolve(json({}));
     await waitFor(() => expect(writes()).toHaveLength(1));
+    expectWrite('manual entry', 'admin');
+    fireEvent.submit(form);
     expectWrite('manual entry', 'admin');
     reply.resolve(new Response(null, { status: 204 }));
     await waitFor(() => expect(inventoryReads()).toHaveLength(10));
