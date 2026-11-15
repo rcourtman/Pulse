@@ -189,7 +189,9 @@ jobs:
           retention-days: 7
 
   installed-profile-systemd:
-    name: Signed installer and saved-CA profile recovery (${{ matrix.scenario }})
+    # Preserve the existing recovery check context; the new case has its own
+    # distinct name rather than replacing or masking that result.
+    name: ${{ matrix.scenario == 'recovery' && 'Signed installer and saved-CA profile recovery' || 'Collector-only APT reporting and profile recovery' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     strategy:

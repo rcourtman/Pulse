@@ -160,6 +160,7 @@ func TestNativeAPTPackageReportIsAuthenticated(t *testing.T) {
 func TestNativeAPTWorkflowIsolation(t *testing.T) {
 	var workflow struct {
 		Jobs map[string]struct {
+			Name     string
 			Strategy struct {
 				FailFast *bool `yaml:"fail-fast"`
 				Matrix   struct{ Scenario []string }
@@ -176,6 +177,9 @@ func TestNativeAPTWorkflowIsolation(t *testing.T) {
 		t.Fatal(err)
 	}
 	job := workflow.Jobs["installed-profile-systemd"]
+	if job.Name != "${{ matrix.scenario == 'recovery' && 'Signed installer and saved-CA profile recovery' || 'Collector-only APT reporting and profile recovery' }}" {
+		t.Fatal("preserve the original recovery check context and a distinct collector-only result")
+	}
 	if job.Strategy.FailFast == nil || *job.Strategy.FailFast || !reflect.DeepEqual(job.Strategy.Matrix.Scenario, []string{"recovery", "collector-only-apt"}) {
 		t.Fatal("both fixed scenarios require independent fresh VMs and terminal results")
 	}
