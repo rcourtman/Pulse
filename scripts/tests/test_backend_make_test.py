@@ -124,6 +124,11 @@ class RealGoTest(MakeFixture):
         real_go = shutil.which("go")
         self.assertIsNotNone(real_go, "make test controls require the supplied Go toolchain")
         self.go_adapter(real_go=real_go)
+        # These tiny fixture packages create no goroutines or background work.
+        # Keep the real -race compiler/runtime and every fresh-execution check,
+        # without paying its default one-second exit sleep for each of the
+        # 55 fixture binaries. This never changes Pulse's actual race suite.
+        self.env["GORACE"] = "atexit_sleep_ms=0"
         (self.root / "go.mod").write_text("module example.invalid/makeprobe\n\ngo 1.24.0\n")
         for package in PACKAGES:
             directory = self.root / package
