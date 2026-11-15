@@ -330,10 +330,18 @@ func TestRefreshPaidEntitlementGrantsLeaseForNormalizedTrialStored(t *testing.T)
 func TestRefreshPaidEntitlementCanonicalizesBaseURLForExpectedHost(t *testing.T) {
 	svc, pub, reg := newTestServiceWithBaseURL(t, "https://Cloud.Example.com:8443/admin")
 
+	accountID := "a_CANONICALHOST"
+	if err := reg.CreateAccount(&registry.Account{ID: accountID, Kind: registry.AccountKindIndividual}); err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateStripeAccount(&registry.StripeAccount{AccountID: accountID, SubscriptionState: "active"}); err != nil {
+		t.Fatal(err)
+	}
 	tenant := &registry.Tenant{
-		ID:    "T-SERVICE03",
-		Email: "owner@example.com",
-		State: registry.TenantStateActive,
+		AccountID: accountID,
+		ID:        "T-SERVICE03",
+		Email:     "owner@example.com",
+		State:     registry.TenantStateActive,
 	}
 	if err := reg.Create(tenant); err != nil {
 		t.Fatalf("Create: %v", err)

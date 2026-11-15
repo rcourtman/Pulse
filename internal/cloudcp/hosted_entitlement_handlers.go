@@ -69,6 +69,11 @@ func (h *HostedEntitlementHandlers) HandleRefresh(w http.ResponseWriter, r *http
 		// Retryable: the runtime keeps its refresh token and asks again.
 		http.Error(w, "hosted entitlement workspace is still provisioning", http.StatusServiceUnavailable)
 		return
+	case errors.Is(err, entitlements.ErrHostedEntitlementBillingUnavailable):
+		// Missing authority grants no new rights, but is not revocation. The
+		// runtime retains its token and the old lease's original expiry.
+		http.Error(w, "hosted entitlement billing authority is unavailable", http.StatusServiceUnavailable)
+		return
 	case errors.Is(err, entitlements.ErrHostedEntitlementInactive):
 		http.Error(w, "hosted entitlement is no longer active", http.StatusGone)
 		return

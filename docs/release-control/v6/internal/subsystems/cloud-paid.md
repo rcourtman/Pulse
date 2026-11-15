@@ -15,6 +15,33 @@
 
 ## Purpose
 
+### Missing hosted billing does not renew paid authority
+
+An active tenant row describes runtime lifecycle, not a paid subscription.
+Implicit hosted lease refresh needs a current billing row. When that row is
+absent, including a legacy accountless tenant, the issuer returns retryable
+HTTP 503, signs no replacement lease and leaves the saved refresh identity and
+last-success time unchanged. The runtime retains its token and old lease, whose
+original expiry still applies. Restoring authoritative billing permits renewal
+with the same identity; absence alone is not cancellation or permission to
+recreate billing.
+
+The exception is an explicitly configured Stripe-free MSP control plane, with
+a current MSP account and MSP plan. A plan name, provider capability ceiling
+or licence presence alone does not enable the exception. Any stored billing
+row takes precedence, including a stored denial. Provider-hosted capability
+ceilings, tenant/host binding, trial receipts, revocation and explicit internal
+billing transitions are unchanged. This does not invalidate already issued
+leases early or repair new-workspace admission/provisioning races.
+
+`entitlements/missing_billing_test.go`, `hosted_entitlement_authority_test.go`
+in both `internal/cloudcp` and `internal/api`, and the existing entitlement
+service suite cover the issuer, configured wiring, actual refresh HTTP client,
+unchanged encrypted state, same-token recovery and confirmed cancellation.
+Containing browser proof exercises the produced runtime entitlement payloads
+through Plans at desktop and narrow viewports; synthetic proof is not installed
+or original-client recovery.
+
 ### Commercial verification requests share a page-local mailbox window
 
 The existing Pulse Account manage, licence-retrieval, export and deletion
