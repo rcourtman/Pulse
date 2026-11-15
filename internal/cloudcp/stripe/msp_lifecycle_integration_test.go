@@ -665,6 +665,9 @@ func TestMSPLifecycle_TenantIsolation(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	seedWorkspaceBilling(t, reg, msp1ID)
+	seedWorkspaceBilling(t, reg, msp2ID)
+
 	// Provision a workspace under MSP One.
 	ws, err := provisioner.ProvisionWorkspace(context.Background(), msp1ID, "MSP One Client")
 	if err != nil {
