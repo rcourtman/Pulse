@@ -30,19 +30,21 @@ func newPackageManagerLease() *packageManagerLease {
 	return lease
 }
 
-func configurePackageManagers(platform string, updates *packageUpdateManager, cleanup *storageCleanupManager) (*packageUpdateManager, *storageCleanupManager) {
+func configurePackageManagers(platform string, updates *packageUpdateManager, cleanup *storageCleanupManager) (packageUpdateReporter, *storageCleanupManager) {
 	lease := newPackageManagerLease()
+	var reporter packageUpdateReporter
 	if updates == nil {
-		updates = newPackageUpdateManager(platform, lease)
+		reporter = newPackageUpdateInspector(platform, lease)
 	} else {
 		updates.lease = lease
+		reporter = updates
 	}
 	if cleanup == nil {
 		cleanup = newStorageCleanupManager(platform, lease)
 	} else {
 		cleanup.lease = lease
 	}
-	return updates, cleanup
+	return reporter, cleanup
 }
 
 func (l *packageManagerLease) init() {

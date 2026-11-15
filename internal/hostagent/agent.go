@@ -213,7 +213,7 @@ type Agent struct {
 	privilegeHelperHealth       *PrivilegeHelperStatus
 	newCommandClient            func(Config, string, string, string, string) *CommandClient
 	runCommandClient            func(*CommandClient, context.Context) error
-	packageUpdates              *packageUpdateManager
+	packageUpdates              packageUpdateReporter
 	storageCleanup              *storageCleanupManager
 	customSensors               *customSensorRuntime
 	availability                *availabilityProbeModule
@@ -424,10 +424,11 @@ func New(cfg Config) (*Agent, error) {
 			Msg("Agent was auto-updated")
 	}
 
-	packageUpdates := cfg.packageUpdates
-	storageCleanup := cfg.storageCleanup
-	packageUpdates, storageCleanup = configurePackageManagers(platform, packageUpdates, storageCleanup)
-	cfg.packageUpdates = packageUpdates
+	packageUpdates, storageCleanup := configurePackageManagers(platform, cfg.packageUpdates, cfg.storageCleanup)
+	// The collector's command client does not own package remediation. Its
+	// report-only inspector must not make legacy host_update calls feasible.
+	// NewActionRunnerClient supplies its own separately contained manager.
+	cfg.packageUpdates = nil
 	cfg.storageCleanup = storageCleanup
 	privilegeHelperHealth := cfg.PrivilegeHelperStatus
 	if privilegeHelperHealth == nil && cfg.PrivilegedTelemetry != nil {

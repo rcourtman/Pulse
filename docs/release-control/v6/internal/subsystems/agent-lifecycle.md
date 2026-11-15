@@ -3378,7 +3378,37 @@ so Pulse must re-plan against the widened or changed set. A reboot-required
 marker is reported as state, never acted upon by this capability. Generic
 agent command execution, Patrol prose, lifecycle UI, and external agents must
 not reconstruct or bypass this typed operation.
-Every fixed-catalog package and Proxmox guest invocation runs inside a
+Collector package reporting is independent of action-runner enrollment. Its
+report-only inspector runs the fixed local `apt-get -s -o Debug::NoLocking=1
+upgrade` simulation at the collector's existing uid, using the root-controlled
+`/usr/bin/apt-get`, the runner's fixed PATH and C locale, working directory `/`,
+no inherited environment or stdin, a 20-second maximum and bounded output.
+Nonzero exits, cancellation, incomplete pipe collection and output truncation
+produce an unknown/error observation, never a partial count or inventory hash.
+This is not typed containment: cancellation kills the process group, parent
+death kills the direct child, and inherited-pipe waiting is bounded; a descendant
+that creates a new session can outlive that group until the service stops.
+The host lease serializes package work within this process, not across the
+collector and separate runner. APT may update derived local caches as root;
+this path neither refreshes repository indexes nor installs packages.
+The reporter exposes only Snapshot. It is never supplied to the collector's
+command client, so restoring telemetry cannot enable legacy package actions.
+The separate runner retains the existing manager and independently recomputes
+the inventory inside containment for every preflight and verification.
+`TestCollectorPackageInspectionReportsWithoutRunner`,
+`TestCollectorPackageInspectionDoesNotReachCommandRemediation`,
+`TestPackageInspectionAdapterRefusesActionsAndCallerConfiguration`,
+`TestPackageInspectionFailuresNeverPublishPartialInventory` and
+`TestPackageInspectionDoesNotChangeRunnerPreflightOrApply` in
+`internal/hostagent/package_inspection_linux_test.go` bind these boundaries.
+`TestContainedPackageInspectionRejectsTruncatedInventory` in that file checks
+that the independently contained runner simulation also refuses truncated
+stdout/stderr before it can be counted or hashed.
+The same file checks the exact environment, process-group deadline and
+inherited-pipe failure. Fixture proof is not installed root/unprivileged
+provider acceptance or live systemd hash parity.
+
+Every fixed-catalog package remediation/preflight and Proxmox guest invocation runs inside a
 cryptographically named transient systemd service. PID 1 starts a hidden
 runner launcher that revalidates the closed tool/argument/environment catalog,
 mirrors the runner sandbox, caps output, and records direct-process and cgroup
