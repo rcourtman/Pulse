@@ -39,7 +39,7 @@ def prerequisite_script(source):
 
 
 class GoTestCompilationTest(unittest.TestCase):
-    def compile_fixture(self, files):
+    def compile_fixture(self, files, **environment):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / "go.mod").write_text("module example.invalid/compileproof\n\ngo 1.24\n")
@@ -50,7 +50,8 @@ class GoTestCompilationTest(unittest.TestCase):
             sentinel = root / "executed"
             result = subprocess.run(
                 ["bash", str(COMPILER)], cwd=root,
-                env={**os.environ, "GOWORK": "off", "GOPROXY": "off", "CI_COMPILE_SENTINEL": str(sentinel)},
+                env={**os.environ, "GOWORK": "off", "GOPROXY": "off", "CI_COMPILE_SENTINEL": str(sentinel),
+                     **environment},
                 capture_output=True, text=True, timeout=120,
             )
             self.assertFalse(sentinel.exists(), "compile-only admission executed fixture code")
@@ -91,6 +92,31 @@ func TestStaleFixture(t *testing.T) { _ = api.Resource{Alerts: []api.ResourceAle
         result = self.compile_fixture({"broken.go": "package compileproof\nvar _ = removedAPI\n"})
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("removedAPI", result.stderr)
+
+    def test_inherited_dry_run_cannot_admit_broken_source_or_test(self):
+        for name in ("broken.go", "broken_test.go"):
+            with self.subTest(name=name):
+                result = self.compile_fixture(
+                    {name: "package compileproof\nvar _ = removedAPI\n"},
+                    GOFLAGS="-mod=readonly -p=1 -n",
+                )
+                self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertIn("undefined: removedAPI", result.stderr)
+                self.assertNotIn("runtime tests remain required", result.stdout)
+
+    def test_inherited_dry_run_still_links_without_executing_fixture_code(self):
+        result = self.compile_fixture({
+            "proof_test.go": '''package compileproof
+import ("os"; "testing")
+func record() { os.WriteFile(os.Getenv("CI_COMPILE_SENTINEL"), []byte("executed"), 0600) }
+func init() { record(); panic("initialiser must not execute") }
+func TestMain(m *testing.M) { record(); os.Exit(99) }
+func TestMustNotExecute(t *testing.T) { record(); t.Fatal("test must not execute") }
+''',
+        }, GOFLAGS="-mod=readonly -p=1 -n -exec=/not-a-real-executor")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("example.invalid/compileproof", result.stdout)
+        self.assertIn("runtime tests remain required", result.stdout)
 
     def test_admission_is_reserved_for_go_affecting_source_and_control(self):
         required = ["internal/api/server.go", "pkg/model_test.go", "scripts/installtests/contract_test.go",
@@ -141,7 +167,7 @@ func TestStaleFixture(t *testing.T) { _ = api.Resource{Alerts: []api.ResourceAle
                                                  "Save backend race build objects\n")))
                 self.assertIn("uses: actions/cache/", step)
         self.assertIn("if: needs.changes.outputs.go_compile == 'true'", compile_job)
-        self.assertIn("go test -race -vet=off -count=1 -exec /bin/true ./...", COMPILER.read_text())
+        self.assertIn("go test -race -vet=off -count=1 -exec /bin/true -n=false ./...", COMPILER.read_text())
         # Frontend work does not wait for the Go-only gate.
         self.assertIn("needs: changes", job(source, "frontend-build"))
         self.assertIn("needs: [changes, frontend-build]", job(source, "frontend-unit"))
@@ -347,13 +373,14 @@ func ExampleMustNotExecute() { record(); panic("must not execute") }
                                 cwd=self.root, capture_output=True, text=True, check=True, timeout=10)
         return result.stdout.strip()
 
-    def compile(self, head, base=None):
+    def compile(self, head, base=None, **environment):
         with tempfile.TemporaryDirectory() as evidence:
             sentinel = Path(evidence) / "executed"
             result = subprocess.run(
                 ["bash", str(self.root / "scripts/compile-go-tests.sh")], cwd=self.root,
                 env={**os.environ, "GOWORK": "off", "GOPROXY": "off", "CI_COMPILE_SENTINEL": str(sentinel),
-                     "PULSE_GO_COMPILE_BASE": base or self.base, "PULSE_GO_COMPILE_HEAD": head},
+                     "PULSE_GO_COMPILE_BASE": base or self.base, "PULSE_GO_COMPILE_HEAD": head,
+                     **environment},
                 capture_output=True, text=True, timeout=120,
             )
             self.assertFalse(sentinel.exists(), "compile gate executed fixture code")
@@ -375,6 +402,21 @@ func ExampleMustNotExecute() { record(); panic("must not execute") }
         result = self.compile(head)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("removedAPI", result.stderr)
+        self.assertNotIn("runtime tests remain required", result.stdout)
+
+    def test_inherited_dry_run_preserves_exact_scope_and_compilation(self):
+        flags = "-mod=readonly -p=1 -n"
+        head = self.modify_test()
+        result = self.compile(head, GOFLAGS=flags)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("Compiling 1 changed-test package(s)", result.stdout)
+        self.assertIn("example.invalid/compileproof/child", result.stdout)
+        self.assertNotIn("example.invalid/compileproof/other", result.stdout)
+        broken = self.modify_test("\nvar _ = removedAPI\n")
+        result = self.compile(broken, GOFLAGS=flags)
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("Compiling 1 changed-test package(s)", result.stdout)
+        self.assertIn("undefined: removedAPI", result.stderr)
         self.assertNotIn("runtime tests remain required", result.stdout)
 
     def test_real_mixed_source_range_preserves_full_inert_compilation(self):
