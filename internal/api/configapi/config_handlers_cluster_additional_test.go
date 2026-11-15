@@ -559,6 +559,30 @@ func TestHandleAgentInstallCommand(t *testing.T) {
 	}
 }
 
+// The endpoint also mints host agent tokens. Its refusal used to name only
+// the Proxmox types, which sent a scripted install to build a token by hand.
+func TestHandleAgentInstallCommand_UnknownTypeNamesHost(t *testing.T) {
+	cfg := &config.Config{DataPath: t.TempDir(), AuthUser: "admin", AuthPass: "hashed-password"}
+	handler := newTestConfigHandlers(t, cfg)
+
+	for _, body := range []string{`{}`, `{"type":"docker"}`} {
+		req := httptest.NewRequest(http.MethodPost, "/api/agent-install-command", strings.NewReader(body))
+		req.Host = "example.com:8080"
+		rec := httptest.NewRecorder()
+		handler.HandleAgentInstallCommand(rec, req)
+
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("body %s: status = %d, want 400 (%s)", body, rec.Code, rec.Body.String())
+		}
+		if got := strings.TrimSpace(rec.Body.String()); got != "Type must be 'host', 'pve' or 'pbs'" {
+			t.Fatalf("body %s: response = %q, want the three accepted types", body, got)
+		}
+		if len(cfg.APITokens) != 0 {
+			t.Fatalf("body %s: refused request minted %d tokens", body, len(cfg.APITokens))
+		}
+	}
+}
+
 func TestHandleAgentInstallCommand_InsecureHTTPS(t *testing.T) {
 	cfg := &config.Config{DataPath: t.TempDir(), AuthUser: "admin", AuthPass: "hashed-password"}
 	handler := newTestConfigHandlers(t, cfg)
