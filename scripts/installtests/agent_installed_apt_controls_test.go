@@ -162,7 +162,7 @@ func TestNativeAPTWorkflowIsolation(t *testing.T) {
 		Jobs map[string]struct {
 			Strategy struct {
 				FailFast *bool `yaml:"fail-fast"`
-				Matrix   map[string][]string
+				Matrix   struct{ Scenario []string }
 			}
 			Steps []struct {
 				Name string
@@ -176,7 +176,7 @@ func TestNativeAPTWorkflowIsolation(t *testing.T) {
 		t.Fatal(err)
 	}
 	job := workflow.Jobs["installed-profile-systemd"]
-	if job.Strategy.FailFast == nil || *job.Strategy.FailFast || !reflect.DeepEqual(job.Strategy.Matrix["scenario"], []string{"recovery", "collector-only-apt"}) {
+	if job.Strategy.FailFast == nil || *job.Strategy.FailFast || !reflect.DeepEqual(job.Strategy.Matrix.Scenario, []string{"recovery", "collector-only-apt"}) {
 		t.Fatal("both fixed scenarios require independent fresh VMs and terminal results")
 	}
 	execute, retain := false, false
