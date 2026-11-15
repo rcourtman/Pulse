@@ -134,7 +134,7 @@ export const RolesEditorDialog: Component<RolesEditorDialogProps> = (props) => (
 
               <p class="text-xs text-muted">
                 Effects and conditions are kept when you change action or resource. All conditions
-                must match request attributes; a missing attribute skips the rule, including a deny
+                must match request attributes. A missing attribute skips the rule, including a deny
                 rule.
               </p>
               <div class="space-y-2">

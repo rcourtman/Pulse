@@ -153,7 +153,7 @@ export const RolesPanel: Component<RolesPanelProps> = (props) => {
           }
         >
           <p class="px-3 py-3 text-xs text-muted sm:px-6">
-            Saved rules are not an access verdict. All conditions must match request attributes; a
+            Saved rules are not an access verdict. All conditions must match request attributes. A
             missing attribute skips the rule, including a deny rule.
           </p>
           <PulseDataGrid
