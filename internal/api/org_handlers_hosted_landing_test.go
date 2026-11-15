@@ -9,6 +9,8 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 )
@@ -64,7 +66,13 @@ func TestHostedClientRuntimeRevisitLandsInItsWorkspace(t *testing.T) {
 	// The organization list names the workspace first, and an unlicensed
 	// provider client may read it: its workspace is open without a lease.
 	// The app reads the list with the default organization named.
-	h := NewOrgHandlers(persistence, nil)
+	mtm := monitoring.NewMultiTenantMonitor(&config.Config{}, persistence, nil)
+	t.Cleanup(mtm.Stop)
+	defaultMonitor, err := mtm.GetMonitor("default")
+	if err != nil {
+		t.Fatalf("default monitor: %v", err)
+	}
+	h := NewOrgHandlers(persistence, mtm)
 	h.SetHostedMode(true)
 	h.SetAccessPolicy(checker)
 	listOrgs := func() (int, string) {
@@ -87,8 +95,45 @@ func TestHostedClientRuntimeRevisitLandsInItsWorkspace(t *testing.T) {
 		}
 		return rec.Code, strings.Join(ids, ",")
 	}
+	// Without a resource store it cannot tell, so it keeps the list as it was.
 	if code, ids := listOrgs(); code != http.StatusOK || ids != "acme,default" {
-		t.Fatalf("org list: status %d ids %q, want acme first", code, ids)
+		t.Fatalf("org list before resources are wired: status %d ids %q, want acme,default", code, ids)
+	}
+	defaultMonitor.SetResourceStore(unifiedresources.NewMonitorAdapter(nil))
+
+	// While the default organization holds nothing it is not offered beside
+	// the workspace.
+	if code, ids := listOrgs(); code != http.StatusOK || ids != "acme" {
+		t.Fatalf("org list with an empty default: status %d ids %q, want acme alone", code, ids)
+	}
+
+	// Anything added to it keeps it listed: an agent reporting there, a
+	// configured node, or a saved connection.
+	// Wiring a store rebuilds it from the monitor's state, so seed it after.
+	reported := unifiedresources.NewMonitorAdapter(nil)
+	defaultMonitor.SetResourceStore(reported)
+	reported.PopulateFromSnapshot(models.StateSnapshot{Nodes: []models.Node{{ID: "pve-1", Name: "pve-1", Status: "online"}}})
+	if code, ids := listOrgs(); code != http.StatusOK || ids != "acme,default" {
+		t.Fatalf("org list with a resource in default: status %d ids %q, want acme,default", code, ids)
+	}
+	defaultMonitor.SetResourceStore(unifiedresources.NewMonitorAdapter(nil))
+	if _, ids := listOrgs(); ids != "acme" {
+		t.Fatalf("org list after the resource left: ids %q, want acme alone", ids)
+	}
+	defaultMonitor.GetConfig().PVEInstances = []config.PVEInstance{{Name: "pve-1", Host: "https://pve-1:8006"}}
+	if _, ids := listOrgs(); ids != "acme,default" {
+		t.Fatalf("org list with a node in default: ids %q, want acme,default", ids)
+	}
+	defaultMonitor.GetConfig().PVEInstances = nil
+	defaultPersistence, err := persistence.GetPersistence("default")
+	if err != nil {
+		t.Fatalf("default persistence: %v", err)
+	}
+	if err := defaultPersistence.SaveVMwareConfig([]config.VMwareVCenterInstance{{ID: "vc-1", Name: "vc-1", Host: "vc-1.local"}}); err != nil {
+		t.Fatalf("save vmware: %v", err)
+	}
+	if _, ids := listOrgs(); ids != "acme,default" {
+		t.Fatalf("org list with a vCenter in default: ids %q, want acme,default", ids)
 	}
 
 	// A Pulse Cloud runtime without a subscription stays closed.

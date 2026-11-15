@@ -14557,6 +14557,13 @@ the landing organization first. A new browser session that lost the handoff's
 workspace, not the empty default organization. An explicit selection, users
 outside the workspace and API tokens keep their routing.
 
+For that user, `GET /api/orgs` on a hosted runtime also leaves out the default
+organization while it holds nothing: no configured Proxmox, PBS, PMG, VMware or
+TrueNAS connection, no availability target and no resource in its unified store.
+Anything added there keeps it listed, and so does any read that cannot tell. The
+default organization stays reachable by explicit selection; self-hosted lists
+and users outside the workspace are unchanged.
+
 ### Notification destinations are organization-bound (6 November 2026)
 
 `/api/notifications/` uses `RequireOrgManager`: sessions of the request

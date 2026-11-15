@@ -11855,3 +11855,10 @@ reads `ledger.rows()` only to count Proxmox VE, Proxmox Backup Server and
 agent rows after the ledger has resolved once. It changes no row, add route,
 manage dialog, Agent Doctor scope, discovery state or agent command, and it
 never renders for read-only sessions.
+
+### Empty hosted default organization hidden (15 November 2026)
+
+`GET /api/orgs` on a hosted runtime leaves out an empty default organization for
+users who land in the `PULSE_TENANT_ID` workspace. A resource an agent reports
+into the default organization keeps it listed. Agent and API-token routing,
+enrolment and commands do not change.

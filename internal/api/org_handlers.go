@@ -236,10 +236,57 @@ func (h *OrgHandlers) HandleListOrgs(w http.ResponseWriter, r *http.Request) {
 					break
 				}
 			}
+			// A hosted runtime's default organization is a leftover of the
+			// shared runtime, not something its customer set up: while it
+			// holds nothing, listing it only offers an empty workspace beside
+			// theirs. It stays listed once anything was added there.
+			if h.hostedMode && landing == hostedRuntimeHomeOrgID() && len(filtered) > 0 && filtered[0].ID == landing && !h.defaultOrgHoldsData() {
+				kept := filtered[:0]
+				for _, org := range filtered {
+					if org.ID != "default" {
+						kept = append(kept, org)
+					}
+				}
+				filtered = kept
+			}
 		}
 	}
 
 	writeJSON(w, http.StatusOK, filtered)
+}
+
+// defaultOrgHoldsData reports whether the default organization has anything
+// someone added: a configured connection, an availability target, or any
+// resource reported by an agent or a poller. It answers true whenever it
+// cannot tell, so an organization holding data is never hidden.
+func (h *OrgHandlers) defaultOrgHoldsData() bool {
+	if h.mtMonitor == nil || h.persistence == nil {
+		return true
+	}
+	monitor, ok := h.mtMonitor.PeekMonitor("default")
+	if !ok || monitor == nil {
+		return true
+	}
+	if cfg := monitor.GetConfig(); cfg == nil || len(cfg.PVEInstances)+len(cfg.PBSInstances)+len(cfg.PMGInstances) > 0 {
+		return true
+	}
+	persistence, err := h.persistence.GetPersistence("default")
+	if err != nil {
+		return true
+	}
+	if vmware, err := persistence.LoadVMwareConfig(); err != nil || len(vmware) > 0 {
+		return true
+	}
+	if truenas, err := persistence.LoadTrueNASConfig(); err != nil || len(truenas) > 0 {
+		return true
+	}
+	if targets, err := persistence.LoadAvailabilityTargets(); err != nil || len(targets) > 0 {
+		return true
+	}
+	if monitor.GetUnifiedReadState() == nil {
+		return true
+	}
+	return len(monitor.GetUnifiedResources()) > 0
 }
 
 func (h *OrgHandlers) HandleCreateOrg(w http.ResponseWriter, r *http.Request) {

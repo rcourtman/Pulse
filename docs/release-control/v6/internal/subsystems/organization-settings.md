@@ -1211,3 +1211,13 @@ or the first membership of a user who cannot use the default organization. The
 list still filters by the same access policy. On a provider client runtime the
 list is readable without a lease; creating, changing and deleting organizations
 keep the subscription gate.
+
+### Empty default organization hidden on hosted runtimes (15 November 2026)
+
+On a hosted runtime, `GET /api/orgs` leaves out the default organization for a
+user who lands in the `PULSE_TENANT_ID` workspace while the default organization
+holds nothing: no configured Proxmox, PBS, PMG, VMware or TrueNAS connection, no
+availability target and no infrastructure in its unified read state. Anything
+added there keeps it listed, and when the check cannot tell it stays listed. The
+organization itself is unchanged and an explicit selection still reaches it.
+Self-hosted runtimes and users outside the workspace see the same list as before.
