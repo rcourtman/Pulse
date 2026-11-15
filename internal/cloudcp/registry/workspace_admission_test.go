@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"sync"
 	"testing"
+
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 )
 
 func seedWorkspaceAdmission(t *testing.T, reg *TenantRegistry, state, plan string) *StripeAccount {
@@ -46,6 +48,9 @@ func TestWorkspaceAdmissionUsesCurrentBillingBeforeLocalPolicy(t *testing.T) {
 			}
 			if err != nil {
 				t.Fatal(err)
+			}
+			if tc.state == "trial" && a.SubscriptionState != pkglicensing.SubStateActive {
+				t.Fatalf("checkout without trial end became invalid trial lease: %+v", a)
 			}
 			if a.PlanVersion == "msp_max" {
 				t.Fatal("local fallback replaced billing authority")
@@ -199,5 +204,19 @@ func TestWorkspaceInsertCannotEnlargeCurrentLimitAcrossRegistries(t *testing.T) 
 	}
 	if successes != 1 {
 		t.Fatalf("successful creates=%d, want current-plan limit 1", successes)
+	}
+}
+
+func TestWorkspaceAdmissionPreservesExplicitTrialDeadline(t *testing.T) {
+	reg := newTestRegistry(t)
+	sa := seedWorkspaceAdmission(t, reg, "trial", "msp_growth")
+	deadline := int64(1900000000)
+	sa.TrialEndsAt = &deadline
+	if err := reg.UpdateStripeAccount(sa); err != nil {
+		t.Fatal(err)
+	}
+	a, err := reg.ResolveWorkspaceAdmission(context.Background(), "a-admission", WorkspaceLimitPolicy{})
+	if err != nil || a.SubscriptionState != pkglicensing.SubStateTrial {
+		t.Fatalf("explicit trial changed: %+v/%v", a, err)
 	}
 }

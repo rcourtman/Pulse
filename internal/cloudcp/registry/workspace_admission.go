@@ -47,11 +47,12 @@ func (r *TenantRegistry) ResolveWorkspaceAdmission(ctx context.Context, accountI
 func resolveWorkspaceAdmission(ctx context.Context, reader workspaceAdmissionReader, accountID string, policy WorkspaceLimitPolicy) (*WorkspaceAdmission, error) {
 	var kind string
 	var billingAccount, plan, state, customer, subscription sql.NullString
+	var trialEnd sql.NullInt64
 	err := reader.QueryRowContext(ctx, `
 		SELECT a.kind, sa.account_id, sa.plan_version, sa.subscription_state,
-		       sa.stripe_customer_id, sa.stripe_subscription_id
+		       sa.stripe_customer_id, sa.stripe_subscription_id, sa.trial_ends_at
 		FROM accounts a LEFT JOIN stripe_accounts sa ON sa.account_id = a.id
-		WHERE a.id = ?`, strings.TrimSpace(accountID)).Scan(&kind, &billingAccount, &plan, &state, &customer, &subscription)
+		WHERE a.id = ?`, strings.TrimSpace(accountID)).Scan(&kind, &billingAccount, &plan, &state, &customer, &subscription, &trialEnd)
 	if err == sql.ErrNoRows {
 		return nil, &WorkspaceAdmissionError{"account_not_found", "account not found"}
 	}
@@ -65,6 +66,13 @@ func resolveWorkspaceAdmission(ctx context.Context, reader workspaceAdmissionRea
 		// Its suspension or incomplete metadata must never become local authority.
 		admission.PlanVersion = pkglicensing.CanonicalizePlanVersion(plan.String)
 		admission.SubscriptionState = pkglicensing.ParseStoredSubscriptionState(state.String)
+		// Checkout may store trial before its subscription webhook, without a
+		// trial deadline. Preserve the entitlement service's existing treatment
+		// of that representation as active, rather than issuing an invalid
+		// trial lease with no end date.
+		if admission.SubscriptionState == pkglicensing.SubStateTrial && !trialEnd.Valid {
+			admission.SubscriptionState = pkglicensing.SubStateActive
+		}
 		admission.StripeCustomerID = strings.TrimSpace(customer.String)
 		admission.StripeSubscriptionID = strings.TrimSpace(subscription.String)
 		if !pkglicensing.ShouldGrantPaidCapabilities(admission.SubscriptionState) {

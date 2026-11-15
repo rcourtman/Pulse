@@ -91,7 +91,11 @@ func WithDefaultMSPPlanVersion(planVersion string) ProvisionerOption {
 // WithWorkspaceLimitPolicy enables only explicitly configured local MSP
 // authority. WithDefaultMSPPlanVersion alone never enables that authority.
 func WithWorkspaceLimitPolicy(policy registry.WorkspaceLimitPolicy) ProvisionerOption {
-	return func(p *Provisioner) { p.workspaceLimitPolicy = policy }
+	return func(p *Provisioner) {
+		if p != nil {
+			p.workspaceLimitPolicy = policy
+		}
+	}
 }
 
 type provisioningCleanupState struct {
