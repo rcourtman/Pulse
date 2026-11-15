@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "0c5d4280a697030e32b7bcc6ffc2d0751e705214",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/UserAssignmentsDialog.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/UserAssignmentsDialog.tsx": "43537a8113f5215b8749894cdd708de49a5e8d47c5e847709fee280eccc22f1c"
+  },
+  "routes": [
+    "Settings > User Access > Manage Access > Saved permissions: real UserAssignmentsPanel, state, RBACAPI/authenticated HTTP transport, runtime capability gate, shared Dialog and shipped CSS in offline synthetic HTTP fixture; not full App/IdP."
+  ],
+  "states": [
+    "Same non-first opaque SSO identity among three namesakes, two same-name roles with distinct saved IDs, one unlisted saved role, unchanged saved-versus-draft guidance and footer controls.",
+    "Comparable before/after initial permission-read failure, delayed retry, saved grants, confirmed empty and repeated failure with identical fixtures, locale en-GB, timezone UTC, reduced motion, viewport, theme and scroll camera.",
+    "Deliberate unsaved role choice during pending read; Escape, access withdrawal, principal change, organization switch and unmount before late completion."
+  ],
+  "interactions": [
+    "Native keyboard opens the selected user, retries the failed saved-permissions read and continues with Tab/Shift+Tab/Escape. Baseline drops focus to BODY as Retry unmounts; repaired reader focuses the stable labelled result before that withdrawal, exposes aria-busy while pending and keeps focus there after the result.",
+    "Next Tab reaches Retry after failure or existing Cancel after success/empty, without a new sequential Tab stop; reverse Tab reaches role choices. Escape returns focus to the same selected saved user.",
+    "Every fixture request is read-only GET bound to the synthetic auth and selected organization; exactly one explicit retry and no role or assignment mutation. Saved identities, grants, role selections and unlisted IDs are unchanged.",
+    "Late results never steal deliberate role focus or reopen/refocus obsolete readers after Escape, permission/principal/org change or unmount."
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "verified_at": "2026-11-15T07:29:09Z",
+  "playwright": "1.56.1",
+  "browsers": [
+    "Chromium 141.0.7390.37",
+    "WebKit 26.0"
+  ],
+  "themes": [
+    "light",
+    "dark"
+  ],
+  "assertions": 643,
+  "browser_cases": 36,
+  "captures": "40 original PNGs / 20 comparable pairs, all opened individually with native view_image and pixels inspected. Current lane output CAPTURE-INDEX.json links each before/after original, camera, SHA256 and observations.",
+  "proof": "source-1_b4c3qf binds clean parent, exact overlay input, immutable before/after fixture builds and 10 passing real-transport regressions. Guest command exit 0, complete output hash verified, guest stop completed; line-bound flag remains recorded. Final runtime bytes equal compiled overlay. Browser client exit 0; lane RECEIPTS.md retains complete results and committed-source validation.",
+  "limits": [
+    "Offline synthetic data; no original-client or installed recovery, full App/IdP, release availability or screen-reader speech claimed.",
+    "The previous failed baseline witness source-5zhf57c2, fixture import/target failures and two explicit gateway-no-operation results remain in the prior account; none is erased or replayed."
+  ]
+}

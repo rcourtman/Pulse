@@ -1,4 +1,4 @@
-import { Component, createMemo, For, Show } from 'solid-js';
+import { Component, createMemo, createUniqueId, For, Show } from 'solid-js';
 import { Dialog } from '@/components/shared/Dialog';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { InlineNotice } from '@/components/shared/InlineNotice';
@@ -75,6 +75,14 @@ interface UserAssignmentsDialogProps {
 }
 
 export const UserAssignmentsDialog: Component<UserAssignmentsDialogProps> = (props) => {
+  const permissionsTitleID = createUniqueId();
+  let savedPermissions: HTMLDivElement | undefined;
+  const retrySavedPermissions = () => {
+    // The retry control withdraws during a read. Keep keyboard review at its
+    // stable result region, without refocusing after a later response.
+    savedPermissions?.focus();
+    props.onRetryPermissions();
+  };
   const unlistedRoleIds = createMemo(() =>
     props.formRoleIds.filter((id) => !props.roles.some((role) => role.id === id)),
   );
@@ -163,7 +171,10 @@ export const UserAssignmentsDialog: Component<UserAssignmentsDialogProps> = (pro
 
             <div class="space-y-4 pt-4 border-t border-border-subtle">
               <div class="flex items-center justify-between">
-                <h4 class="text-sm font-semibold text-base-content flex items-center gap-2">
+                <h4
+                  id={permissionsTitleID}
+                  class="text-sm font-semibold text-base-content flex items-center gap-2"
+                >
                   <BadgeCheck class="w-4 h-4 text-blue-500" />
                   Saved permissions
                 </h4>
@@ -171,14 +182,21 @@ export const UserAssignmentsDialog: Component<UserAssignmentsDialogProps> = (pro
                   <LoadingSpinner size="md" tone="info" label="Loading effective permissions" />
                 </Show>
               </div>
-              <div class="bg-surface-hover rounded-md p-4 border border-border-subtle">
+              <div
+                ref={savedPermissions}
+                role="region"
+                aria-labelledby={permissionsTitleID}
+                aria-busy={props.loadingPermissions}
+                tabIndex={-1}
+                class="bg-surface-hover rounded-md p-4 border border-border-subtle focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              >
                 <Show when={!props.loadingPermissions && props.permissionsError}>
                   {(message) => (
                     <InlineNotice tone="warning" role="alert" aria-live="polite">
                       {message()}
                       <button
                         type="button"
-                        onClick={props.onRetryPermissions}
+                        onClick={retrySavedPermissions}
                         disabled={props.saving}
                         class="mt-1 flex min-h-11 min-w-11 max-w-full items-center rounded-sm text-left text-xs font-semibold underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-0"
                       >
