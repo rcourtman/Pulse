@@ -25,6 +25,93 @@ MODULE = "github.com/rcourtman/pulse-go-rewrite/"
 SLICED = ("internal/monitoring", "scripts/installtests")
 SLOTS = 4
 ORDINARY_COMMAND = "go test -race -timeout 50m $pkgs"
+RECORDER = ROOT / ".github/scripts/record-internal-api-test-seconds.py"
+
+
+def empty_package_coverage(stream, name: str, output: Path) -> int:
+    """Verify a zero-root listing's package result without inventing a test.
+
+    The shared shard recorder deliberately rejects empty selections. Keep its
+    contract unchanged (including on stable patches) and admit only this exact
+    package's complete, zero-test JSON stream here.
+    """
+    terminal = None
+    terminal_count = invalid = 0
+    for raw in stream:
+        try:
+            event = json.loads(raw)
+        except ValueError:
+            event = None
+        if (not isinstance(event, dict) or event.get("Package") != name or
+                event.get("Test", "") != "" or terminal_count or
+                event.get("Action") not in ("start", "output", "pass", "skip")):
+            invalid += 1
+        if not isinstance(event, dict):
+            print(raw, end="", flush=True)
+            continue
+        text = event.get("Output", "")
+        if isinstance(text, str):
+            print(text, end="", flush=True)
+        else:
+            invalid += 1
+        if event.get("Action") in ("pass", "skip", "fail") and not event.get("Test"):
+            terminal = event["Action"]
+            terminal_count += 1
+    exit_code = 0 if terminal in ("pass", "skip") and terminal_count == 1 and invalid == 0 else 1
+    (output / "empty-coverage.json").write_text(json.dumps({
+        "listed_roots": 0, "package_terminal_action": terminal,
+        "package_terminal_count": terminal_count, "invalid_event_count": invalid,
+        "coverage_exit": exit_code,
+    }, indent=2) + "\n")
+    if exit_code:
+        print("Empty ordinary package evidence is incomplete or inconsistent.", file=sys.stderr)
+    return exit_code
+
+
+def ordinary_execution(name: str, command: list[str], env: dict,
+                       output: Path) -> dict:
+    """Require the listed roots, not just a successful Go driver exit.
+
+    A TestMain/helper can return zero without calling m.Run. Go then reports a
+    successful package even though listed tests never ran. Use the same recorder
+    as the sliced packages, preserving explicit skips and original Go exits.
+    The extra list reuses the same race build objects and occupies this task's
+    existing slot; it admits no additional parallel binary or cached verdict.
+    """
+    output.mkdir(parents=True, exist_ok=True)
+    listing = subprocess.run(["go", "test", "-race", "-json=false", "-list", ".", name],
+                             cwd=ROOT, env=env, capture_output=True, text=True)
+    if listing.returncode:
+        sys.stdout.write(listing.stdout)
+        sys.stderr.write(listing.stderr)
+        return {"started": False, "exit": None, "listing_exit": listing.returncode,
+                "coverage_exit": None}
+    names = [line for line in listing.stdout.splitlines()
+             if line.startswith(("Test", "Fuzz", "Example")) and line.isidentifier()]
+    if len(names) != len(set(names)):
+        print("Ordinary package listing repeats roots; no runtime tests started.", file=sys.stderr)
+        return {"started": False, "exit": None, "listing_exit": 0, "coverage_exit": 2}
+    selection = output / "listed.tests"
+    selection.write_text("".join(test + "\n" for test in names))
+    # Keep the stable-shipped literal command template. Explicit GOFLAGS owns
+    # JSON just as it already owns fresh, unfiltered ordinary test execution.
+    runtime_env = {**env, "GOFLAGS": env["GOFLAGS"] + " -json=true"}
+    recorder = [sys.executable, str(RECORDER), str(output / "timings.txt"), str(selection), name]
+    with subprocess.Popen(command, cwd=ROOT, env=runtime_env, stdout=subprocess.PIPE,
+                          stderr=subprocess.STDOUT, text=True) as process:
+        try:
+            coverage_exit = (subprocess.run(recorder, cwd=ROOT, stdin=process.stdout).returncode
+                             if names else empty_package_coverage(process.stdout, name, output))
+        except OSError as error:
+            # Runtime already started. A failed recorder/read/write must not
+            # be misreported as a Go process that never launched.
+            print(f"Ordinary coverage collection failed: {error}", file=sys.stderr)
+            coverage_exit = None
+        finally:
+            process.stdout.close()
+            test_exit = process.wait()
+    return {"started": True, "exit": test_exit, "listing_exit": 0,
+            "coverage_exit": coverage_exit, "listed_roots": len(names)}
 
 
 def ordinary_packages(index: int) -> list[str]:
@@ -61,7 +148,7 @@ def tasks(packages: list[str], index: int, output: Path,
                      for name in packages]
 
 
-def run_task(task: tuple[str, list[str]]) -> dict:
+def run_task(task: tuple[str, list[str]], output: Path | None = None) -> dict:
     name, command = task
     start = time.monotonic()
     try:
@@ -83,8 +170,17 @@ def run_task(task: tuple[str, list[str]]) -> dict:
             # Build-only and dry-run modes can also return success without any
             # test execution. Keep these distinct from the compile-only gate.
             env["GOFLAGS"] += " -c=false -n=false"
-        result = subprocess.run(command, cwd=ROOT, env=env)
-        observation = {"started": True, "exit": result.returncode}
+        if name not in SLICED and command == ["bash", "-euo", "pipefail", "-c", ORDINARY_COMMAND]:
+            if output is None:
+                # Direct callers get the same verification without retaining
+                # fixture artifacts in the source checkout.
+                with tempfile.TemporaryDirectory(prefix="ordinary-coverage-") as temporary:
+                    observation = ordinary_execution(name, command, env, Path(temporary))
+            else:
+                observation = ordinary_execution(name, command, env, output / "ordinary" / name)
+        else:
+            result = subprocess.run(command, cwd=ROOT, env=env)
+            observation = {"started": True, "exit": result.returncode}
     except OSError as error:
         print(f"Could not start backend package {name}: {error}", file=sys.stderr)
         # No process exit was observed. In particular, do not manufacture the
@@ -148,7 +244,7 @@ def main() -> int:
     # order so a slow first task cannot hide already returned results. Retained
     # snapshots still use source order, including the final legacy tasks list.
     with ThreadPoolExecutor(max_workers=SLOTS) as pool:
-        futures = {pool.submit(run_task, task): task[0] for task in admitted}
+        futures = {pool.submit(run_task, task, args.output): task[0] for task in admitted}
         for future in as_completed(futures):
             observed[futures[future]] = future.result()
             retain_results(args.output, args.index, planned, observed, start)
@@ -156,7 +252,8 @@ def main() -> int:
     # Keep the final ordered list and verdict recipe compatible with source
     # contracts on the current stable when these main controls are copied.
     results = [observed[name] for name in planned]
-    return 0 if all(result["exit"] == 0 for result in results) else 1
+    return 0 if (all(result["exit"] == 0 for result in results) and
+                 all(result.get("coverage_exit", 0) == 0 for result in results)) else 1
 
 
 if __name__ == "__main__":

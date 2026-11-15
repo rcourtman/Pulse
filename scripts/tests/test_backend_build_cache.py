@@ -220,6 +220,74 @@ raise SystemExit(result['exit'])
                     self.assertEqual(observation["exit"], changed.returncode)
 
     @unittest.skipUnless(shutil.which("go"), "native execution fixture requires Go (provided by script-smoke CI)")
+    def test_real_ordinary_worker_reconciles_listed_roots_with_completed_execution(self):
+        driver = '''
+import importlib.util, json, sys
+from pathlib import Path
+spec = importlib.util.spec_from_file_location('ordinary_coverage', sys.argv[1])
+worker = importlib.util.module_from_spec(spec); spec.loader.exec_module(worker)
+worker.ROOT = Path(sys.argv[2])
+result = worker.run_task(('example.invalid/ordinarycoverage' + sys.argv[4],
+                        ['bash', '-euo', 'pipefail', '-c', worker.ORDINARY_COMMAND]), Path(sys.argv[3]))
+print('OBSERVATION=' + json.dumps(result))
+raise SystemExit(0 if result['exit'] == result.get('coverage_exit') == 0 else 1)
+'''
+        with tempfile.TemporaryDirectory(prefix="ordinary root coverage ") as temporary:
+            root = Path(temporary)
+            (root / 'go.mod').write_text('module example.invalid/ordinarycoverage\n\ngo 1.24\n')
+            (root / 'coverage_test.go').write_text('''package ordinarycoverage
+import ("flag"; "os"; "testing")
+func TestMain(m *testing.M) {
+ flag.Parse()
+ if flag.Lookup("test.list").Value.String() == "" {
+  if os.Getenv("COVERAGE_MODE") == "missing" { os.Exit(0) }
+  if os.Getenv("COVERAGE_MODE") == "partial" { flag.Set("test.run", "^TestFirst$") }
+ }
+ os.Exit(m.Run())
+}
+func TestFirst(t *testing.T) {}
+func TestRequired(t *testing.T) {
+ switch os.Getenv("COVERAGE_MODE") {
+ case "skip": t.Skip("explicit fixture skip")
+ case "fail": t.Fatal("original required failure")
+ }
+}
+''')
+            (root / 'empty').mkdir()
+            (root / 'empty/empty.go').write_text('package empty\nconst Value = 1\n')
+            for mode in ('pass', 'missing', 'partial', 'skip', 'fail', 'empty'):
+                with self.subTest(mode=mode):
+                    output = root / mode
+                    result = subprocess.run(
+                        [sys.executable, '-I', '-c', driver, str(ROOT / 'scripts/release_control/run_go_rest_shard.py'),
+                         str(root), str(output), '/empty' if mode == 'empty' else ''],
+                        cwd=root, env={**os.environ, 'COVERAGE_MODE': mode, 'GOTOOLCHAIN': 'local',
+                                      'GOWORK': 'off', 'GOENV': 'off', 'GOPROXY': 'off', 'GOSUMDB': 'off',
+                                      'GOMAXPROCS': '2', 'GOFLAGS': '-mod=readonly -json=true'},
+                        capture_output=True, text=True, timeout=120)
+                    self.assertEqual(result.returncode, 1 if mode in ('missing', 'partial', 'fail') else 0,
+                                     result.stdout + result.stderr)
+                    observation = json.loads(next(line.split('=', 1)[1] for line in result.stdout.splitlines()
+                                                  if line.startswith('OBSERVATION=')))
+                    self.assertTrue(observation['started'])
+                    self.assertEqual(observation['exit'], 1 if mode == 'fail' else 0)
+                    target = output / 'ordinary' / ('example.invalid/ordinarycoverage/empty'
+                                                    if mode == 'empty' else 'example.invalid/ordinarycoverage')
+                    if mode != 'empty':
+                        self.assertEqual((target / 'listed.tests').read_text().splitlines(),
+                                         ['TestFirst', 'TestRequired'])
+                        index = json.loads((target / 'timings.txt.failures.json').read_text())
+                        self.assertEqual(index['completed_top_level_test_count'],
+                                         0 if mode == 'missing' else 1 if mode == 'partial' else 2)
+                        if mode in ('missing', 'partial'):
+                            self.assertIn('TestRequired', index['missing_selected_tests']['names'])
+                        if mode == 'skip':
+                            self.assertEqual(index['skipped_top_level_tests']['names'], ['TestRequired'])
+                    else:
+                        self.assertEqual(json.loads((target / 'empty-coverage.json').read_text())
+                                         ['package_terminal_action'], 'skip')
+
+    @unittest.skipUnless(shutil.which("go"), "native execution fixture requires Go (provided by script-smoke CI)")
     def test_real_ordinary_worker_cannot_inherit_a_partial_or_bypassed_test_verdict(self):
         # Exercise Go's actual flag precedence, including quoted and prefixed
         # forms. A mocked command or flag-string assertion cannot prove that
