@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { Route, Router } from '@solidjs/router';
 
@@ -171,6 +171,12 @@ describe('APITokenManager security surface', () => {
 });
 
 describe('APITokenManager', () => {
+  beforeAll(async () => {
+    // These assertions exercise token controls, not Vite's cold lazy-module transform.
+    // Keep the real dialog and the normal DOM wait; prepare its module first.
+    await import('../APITokenManagerDialogs');
+  });
+
   it('ages Created in both layouts without another list read, token write or losing a draft name', async () => {
     const start = Date.parse('2026-10-11T11:00:00Z');
     vi.useFakeTimers({ now: start });
