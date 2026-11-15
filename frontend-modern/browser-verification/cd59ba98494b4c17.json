@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "6fd973b549e52c8f9f2e2bd158f9a840b113a43c",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/AuditWebhookPanel.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/AuditWebhookPanel.tsx": "21a1af1d9cbc21eeb101614be5216f7362acae85f3ce8946815fe0e7833f5c3b"
+  },
+  "routes": [
+    "Settings > Security > Audit Webhooks (real AuditWebhookPanel, state, shared Dialog, capability store, HTTP client and shipped CSS with offline synthetic API responses)"
+  ],
+  "states": [
+    "Five complete saved same-prefix destinations; selected non-first endpoint; removal confirmation; cancelled, removed, refused-and-cancelled and last-removed states.",
+    "Confirmed empty inventory returns to URL entry; management and reader withdrawal retain no edit focus or writes.",
+    "Comparable before/after fixture data, viewport, theme and interaction states at desktop1365x900 and narrow touch390x844, light/dark, en-GB/UTC."
+  ],
+  "interactions": [
+    "Native Enter/Space open the selected full-URL confirmation. Cancel starts focused; Tab/Shift+Tab remain trapped. Escape and keyboard Cancel make zero writes and restore selected endpoint focus.",
+    "Confirm removes only the selected endpoint in one saved-org/CSRF-bound POST; focus returns to the next surviving endpoint, or the preceding one when last, or URL entry when none remain.",
+    "A refused save retains the endpoint and dialog; Cancel returns to its retained control. Loss of management/read access closes confirmation without a write or focus into disabled URL entry."
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "verified_at": "2026-11-15T00:31:08.823Z",
+  "playwright": "1.56.1",
+  "browsers": [
+    "141.0.7390.37",
+    "26.0"
+  ],
+  "themes": [
+    "light",
+    "dark"
+  ],
+  "assertions": 240,
+  "captures": "48 final original PNGs, individually opened with native view_image;24 comparable pairs across six states/four viewport-theme combinations.",
+  "proof": "source-jvz0dne2 binds committed parent plus exact two-file overlay input, both generated immutable preview payloads and91 affected passes. Browser serves these without source transforms. Final source bytes match the overlay. Lane RECEIPTS.md retains complete outputs, capture archives, pixel observations and subsequent containing-source proof.",
+  "limits": [
+    "Synthetic transport and real consuming component, not full authenticated App/IdP, original client recovery, external audit delivery or release availability. No screen-reader speech test.",
+    "Initial browser execution retained one fixture-only null-document theme-initializer error and six inspected baseline captures. The corrected initializer waits for document readiness; no product code or assertion was changed to obtain final proof.",
+    "Historical capability-unavailable execution/cleanup facts remain unknown; this new assignment does not reconstruct the old attempt."
+  ]
+}
