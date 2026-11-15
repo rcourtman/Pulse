@@ -1,6 +1,9 @@
 package stripe
 
 import (
+	"fmt"
+	"reflect"
+
 	"bytes"
 	"context"
 	"errors"
@@ -752,5 +755,124 @@ func TestCloudLifecycle_WorkspaceLimitEnforcement(t *testing.T) {
 	}
 	if countAfter != 1 {
 		t.Fatalf("workspace count after blocked creation = %d, want 1", countAfter)
+	}
+}
+
+func TestSubscriptionEventsPreserveDeletionAndManualSuspension(t *testing.T) {
+	for _, state := range []registry.TenantState{registry.TenantStateActive, registry.TenantStateSuspended, registry.TenantStateCanceled, registry.TenantStateDeleting, registry.TenantStateDeleted, registry.TenantStateFailed, registry.TenantStateProvisioning} {
+		t.Run(string(state), func(t *testing.T) {
+			reg := newStripeTestRegistry(t)
+			dir := t.TempDir()
+			p := newTestProvisioner(t, reg, dir, nil, true)
+			if err := reg.CreateAccount(&registry.Account{ID: "a-single", Kind: registry.AccountKindIndividual}); err != nil {
+				t.Fatal(err)
+			}
+			if err := reg.CreateStripeAccount(&registry.StripeAccount{AccountID: "a-single", StripeCustomerID: "cus_single", PlanVersion: "cloud_starter", SubscriptionState: "active"}); err != nil {
+				t.Fatal(err)
+			}
+			tenant, err := p.ProvisionWorkspace(context.Background(), "a-single", "Original")
+			if err != nil {
+				t.Fatal(err)
+			}
+			tenant.StripeCustomerID = "cus_single"
+			if err := reg.Update(tenant); err != nil {
+				t.Fatal(err)
+			}
+			if state == registry.TenantStateSuspended {
+				s := state
+				if _, _, err := reg.PatchTenantForAccount(context.Background(), tenant.AccountID, tenant.ID, nil, &s); err != nil {
+					t.Fatal(err)
+				}
+			} else if err := reg.SetTenantState(tenant.ID, state); err != nil {
+				t.Fatal(err)
+			}
+			if err := reg.RevokeHostedEntitlement(tenant.ID, time.Now().UTC()); err != nil {
+				t.Fatal(err)
+			}
+			old, err := reg.ListHostedEntitlements()
+			if err != nil {
+				t.Fatal(err)
+			}
+			sub := Subscription{ID: "sub_new", Customer: "cus_single", Status: "active", Metadata: map[string]string{"plan_version": "cloud_power"}}
+			if err := p.HandleSubscriptionUpdated(context.Background(), sub); err != nil {
+				t.Fatal(err)
+			}
+			current, err := reg.Get(tenant.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := state
+			if state == registry.TenantStateCanceled {
+				want = registry.TenantStateActive
+			}
+			if current.State != want {
+				t.Fatalf("billing changed protected state: %+v want %s", current, want)
+			}
+			if state == registry.TenantStateDeleting || state == registry.TenantStateDeleted || state == registry.TenantStateFailed || state == registry.TenantStateProvisioning {
+				rows, err := reg.ListHostedEntitlements()
+				if err != nil || !reflect.DeepEqual(old, rows) {
+					t.Fatalf("billing recreated authority: %+v %+v %v", old, rows, err)
+				}
+			}
+			if registry.IsTenantDeletionState(state) {
+				if err := p.HandleSubscriptionDeleted(context.Background(), sub); err != nil {
+					t.Fatal(err)
+				}
+				current, _ = reg.Get(tenant.ID)
+				if current.State != state {
+					t.Fatalf("withdrawal erased deletion: %+v", current)
+				}
+			}
+		})
+	}
+}
+
+func TestPausedSubscriptionCannotBeManuallyResumed(t *testing.T) {
+	for _, msp := range []bool{false, true} {
+		t.Run(fmt.Sprint(msp), func(t *testing.T) {
+			reg := newStripeTestRegistry(t)
+			p := newTestProvisioner(t, reg, t.TempDir(), nil, true)
+			kind := registry.AccountKindIndividual
+			if msp {
+				kind = registry.AccountKindMSP
+			}
+			if err := reg.CreateAccount(&registry.Account{ID: "a-pause", Kind: kind}); err != nil {
+				t.Fatal(err)
+			}
+			if err := reg.CreateStripeAccount(&registry.StripeAccount{AccountID: "a-pause", StripeCustomerID: "cus_pause", PlanVersion: "msp_starter", SubscriptionState: "active"}); err != nil {
+				t.Fatal(err)
+			}
+			tenant, err := p.ProvisionWorkspace(context.Background(), "a-pause", "Original")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !msp {
+				tenant.StripeCustomerID = "cus_pause"
+				if err := reg.Update(tenant); err != nil {
+					t.Fatal(err)
+				}
+			}
+			suspended := registry.TenantStateSuspended
+			if _, _, err := reg.PatchTenantForAccount(context.Background(), tenant.AccountID, tenant.ID, nil, &suspended); err != nil {
+				t.Fatal(err)
+			}
+			sub := Subscription{ID: "sub_pause", Customer: "cus_pause", Status: "paused"}
+			if msp {
+				err = p.HandleMSPSubscriptionUpdated(context.Background(), sub)
+			} else {
+				err = p.HandleSubscriptionUpdated(context.Background(), sub)
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			sa, err := reg.GetStripeAccount(tenant.AccountID)
+			if err != nil || sa.SubscriptionState != "suspended" {
+				t.Fatalf("pause stored as payable: %+v %v", sa, err)
+			}
+			active := registry.TenantStateActive
+			if _, _, err := reg.PatchTenantForAccount(context.Background(), tenant.AccountID, tenant.ID, nil, &active); !errors.Is(err, registry.ErrTenantStateConflict) {
+				t.Fatalf("same-state withdrawal was resumed: %v", err)
+			}
+		})
 	}
 }

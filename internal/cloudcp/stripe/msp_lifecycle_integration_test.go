@@ -1,6 +1,11 @@
 package stripe
 
 import (
+	"errors"
+	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/entitlements"
+	"reflect"
+	"time"
+
 	"bytes"
 	"context"
 	"encoding/json"
@@ -951,4 +956,112 @@ func loadRawBillingState(t *testing.T, tenantDataDir string) pkglicensing.Billin
 		t.Fatalf("Unmarshal(%s): %v", rawPath, err)
 	}
 	return state
+}
+
+func TestMSPBillingEventsPreserveDeletedAndManuallyHeldClients(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		state registry.TenantState
+		hold  bool
+		grant bool
+	}{
+		{"active", registry.TenantStateActive, false, true},
+		{"billing_suspended", registry.TenantStateSuspended, false, true},
+		{"manual_suspended", registry.TenantStateSuspended, true, true},
+		{"canceled", registry.TenantStateCanceled, false, true},
+		{"manual_and_canceled", registry.TenantStateCanceled, true, true},
+		{"deleting", registry.TenantStateDeleting, false, false},
+		{"deleted", registry.TenantStateDeleted, false, false},
+		{"failed", registry.TenantStateFailed, false, false},
+		{"provisioning", registry.TenantStateProvisioning, false, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			reg := newStripeTestRegistry(t)
+			dir := t.TempDir()
+			p := newTestProvisioner(t, reg, dir, nil, true)
+			if err := reg.CreateAccount(&registry.Account{ID: "a-events", Kind: registry.AccountKindMSP}); err != nil {
+				t.Fatal(err)
+			}
+			if err := reg.CreateStripeAccount(&registry.StripeAccount{AccountID: "a-events", StripeCustomerID: "cus_events", PlanVersion: "msp_starter", SubscriptionState: "active"}); err != nil {
+				t.Fatal(err)
+			}
+			tenant, err := p.ProvisionWorkspace(context.Background(), "a-events", "Original")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.hold {
+				state := registry.TenantStateSuspended
+				if _, _, err := reg.PatchTenantForAccount(context.Background(), tenant.AccountID, tenant.ID, nil, &state); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := reg.SetTenantState(tenant.ID, tc.state); err != nil {
+				t.Fatal(err)
+			}
+			if err := reg.RevokeHostedEntitlement(tenant.ID, time.Now().UTC()); err != nil {
+				t.Fatal(err)
+			}
+			oldRows, err := reg.ListHostedEntitlements()
+			if err != nil {
+				t.Fatal(err)
+			}
+			oldBilling, err := os.ReadFile(filepath.Join(dir, tenant.ID, "billing.json"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			sub := Subscription{ID: "sub_renewed", Customer: "cus_events", Status: "active", Metadata: map[string]string{"plan_version": "msp_max"}}
+			if err := p.HandleMSPSubscriptionUpdated(context.Background(), sub); err != nil {
+				t.Fatal(err)
+			}
+			current, err := reg.Get(tenant.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := tc.state
+			if tc.grant {
+				want = registry.TenantStateActive
+				if tc.hold {
+					want = registry.TenantStateSuspended
+				}
+			}
+			if current.State != want || current.ManualHold != tc.hold {
+				t.Fatalf("billing overrode runtime lifecycle: %+v want %s hold %v", current, want, tc.hold)
+			}
+			if !tc.grant {
+				newRows, err := reg.ListHostedEntitlements()
+				if err != nil {
+					t.Fatal(err)
+				}
+				if !reflect.DeepEqual(oldRows, newRows) {
+					t.Fatalf("renewal recreated excluded authority: %+v %+v", oldRows, newRows)
+				}
+				billing, err := os.ReadFile(filepath.Join(dir, tenant.ID, "billing.json"))
+				if err != nil || !bytes.Equal(oldBilling, billing) {
+					t.Fatalf("renewal rewrote excluded runtime billing: %v", err)
+				}
+			}
+			if tc.hold {
+				rows, err := reg.ListHostedEntitlements()
+				if err != nil {
+					t.Fatal(err)
+				}
+				if _, err := p.hostedEntitlements.RefreshEntitlement(rows[0].RefreshToken, "fixture.invalid"); !errors.Is(err, entitlements.ErrHostedEntitlementInactive) {
+					t.Fatalf("manually held row refreshed: %v", err)
+				}
+			}
+			sa, err := reg.GetStripeAccount(tenant.AccountID)
+			if err != nil || sa.PlanVersion != "msp_max" || sa.SubscriptionState != "active" {
+				t.Fatalf("terminal client blocked account billing continuity: %+v %v", sa, err)
+			}
+			if registry.IsTenantDeletionState(tc.state) {
+				if err := p.HandleMSPSubscriptionDeleted(context.Background(), sub); err != nil {
+					t.Fatal(err)
+				}
+				current, _ = reg.Get(tenant.ID)
+				if current.State != tc.state {
+					t.Fatalf("withdrawal erased deletion: %+v", current)
+				}
+			}
+		})
+	}
 }

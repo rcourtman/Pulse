@@ -343,6 +343,9 @@ func (r *TenantRegistry) initSchema() error {
 		return fmt.Errorf("migrate stripe_accounts: backfill grace_started_at: %w", err)
 	}
 
+	if err := r.migrateTenantManualHolds(); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -652,12 +655,12 @@ func insertTenant(ctx context.Context, execer tenantInsertExecer, t *Tenant) err
 			id, account_id, email, display_name, state,
 			stripe_customer_id, stripe_subscription_id, stripe_price_id,
 			plan_version, container_id, current_image_digest, desired_image_digest,
-			created_at, updated_at, last_health_check, health_check_ok
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			created_at, updated_at, last_health_check, health_check_ok, manual_hold
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) `,
 		t.ID, t.AccountID, t.Email, t.DisplayName, string(t.State),
 		t.StripeCustomerID, t.StripeSubscriptionID, t.StripePriceID,
 		t.PlanVersion, t.ContainerID, t.CurrentImageDigest, t.DesiredImageDigest,
-		t.CreatedAt.Unix(), t.UpdatedAt.Unix(), nullableTimeUnix(t.LastHealthCheck), boolToInt(t.HealthCheckOK),
+		t.CreatedAt.Unix(), t.UpdatedAt.Unix(), nullableTimeUnix(t.LastHealthCheck), boolToInt(t.HealthCheckOK), boolToInt(t.ManualHold),
 	)
 	if err != nil {
 		return err
@@ -671,7 +674,7 @@ func (r *TenantRegistry) Get(tenantID string) (*Tenant, error) {
 		id, account_id, email, display_name, state,
 		stripe_customer_id, stripe_subscription_id, stripe_price_id,
 		plan_version, container_id, current_image_digest, desired_image_digest,
-		created_at, updated_at, last_health_check, health_check_ok
+		created_at, updated_at, last_health_check, health_check_ok, manual_hold
 		FROM tenants WHERE id = ?`, tenantID)
 	return scanTenant(row)
 }
@@ -682,7 +685,7 @@ func (r *TenantRegistry) GetByStripeCustomerID(customerID string) (*Tenant, erro
 		id, account_id, email, display_name, state,
 		stripe_customer_id, stripe_subscription_id, stripe_price_id,
 		plan_version, container_id, current_image_digest, desired_image_digest,
-		created_at, updated_at, last_health_check, health_check_ok
+		created_at, updated_at, last_health_check, health_check_ok, manual_hold
 		FROM tenants WHERE stripe_customer_id = ?`, customerID)
 	return scanTenant(row)
 }
@@ -746,7 +749,7 @@ func (r *TenantRegistry) List() ([]*Tenant, error) {
 		id, account_id, email, display_name, state,
 		stripe_customer_id, stripe_subscription_id, stripe_price_id,
 		plan_version, container_id, current_image_digest, desired_image_digest,
-		created_at, updated_at, last_health_check, health_check_ok
+		created_at, updated_at, last_health_check, health_check_ok, manual_hold
 		FROM tenants ORDER BY created_at DESC`)
 	if err != nil {
 		return nil, fmt.Errorf("list tenants: %w", err)
@@ -761,7 +764,7 @@ func (r *TenantRegistry) ListByState(state TenantState) ([]*Tenant, error) {
 		id, account_id, email, display_name, state,
 		stripe_customer_id, stripe_subscription_id, stripe_price_id,
 		plan_version, container_id, current_image_digest, desired_image_digest,
-		created_at, updated_at, last_health_check, health_check_ok
+		created_at, updated_at, last_health_check, health_check_ok, manual_hold
 		FROM tenants WHERE state = ? ORDER BY created_at DESC`, string(state))
 	if err != nil {
 		return nil, fmt.Errorf("list tenants by state: %w", err)
@@ -776,7 +779,7 @@ func (r *TenantRegistry) ListByAccountID(accountID string) ([]*Tenant, error) {
 		id, account_id, email, display_name, state,
 		stripe_customer_id, stripe_subscription_id, stripe_price_id,
 		plan_version, container_id, current_image_digest, desired_image_digest,
-		created_at, updated_at, last_health_check, health_check_ok
+		created_at, updated_at, last_health_check, health_check_ok, manual_hold
 		FROM tenants WHERE account_id = ? ORDER BY created_at DESC`, accountID)
 	if err != nil {
 		return nil, fmt.Errorf("list tenants by account id: %w", err)
@@ -861,13 +864,13 @@ func scanTenant(s scanner) (*Tenant, error) {
 	var state string
 	var createdAt, updatedAt int64
 	var lastHealthCheck sql.NullInt64
-	var healthOK int
+	var healthOK, manualHold int
 
 	err := s.Scan(
 		&t.ID, &t.AccountID, &t.Email, &t.DisplayName, &state,
 		&t.StripeCustomerID, &t.StripeSubscriptionID, &t.StripePriceID,
 		&t.PlanVersion, &t.ContainerID, &t.CurrentImageDigest, &t.DesiredImageDigest,
-		&createdAt, &updatedAt, &lastHealthCheck, &healthOK,
+		&createdAt, &updatedAt, &lastHealthCheck, &healthOK, &manualHold,
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -885,6 +888,7 @@ func scanTenant(s scanner) (*Tenant, error) {
 		t.LastHealthCheck = &ts
 	}
 	t.HealthCheckOK = healthOK != 0
+	t.ManualHold = manualHold != 0
 	return &t, nil
 }
 

@@ -1,6 +1,8 @@
 package stripe
 
 import (
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
+
 	"context"
 	"net/url"
 	"strings"
@@ -281,5 +283,19 @@ func TestGenerateAndLogPortalMagicLinkIssuesPortalTargetedToken(t *testing.T) {
 	}
 	if validated.Email != "owner@example.com" {
 		t.Fatalf("token email=%q, want %q", validated.Email, "owner@example.com")
+	}
+}
+
+func TestStoredSubscriptionNormalizationNeverWidensAuthority(t *testing.T) {
+	for _, raw := range []string{"active", "trialing", "past_due", "unpaid", "canceled", "paused", "incomplete", "incomplete_expired", "unknown_status", "", " ACTIVE "} {
+		stored := normalizeStripeAccountSubscriptionState(raw)
+		parsed := pkglicensing.ParseStoredSubscriptionState(stored)
+		want := MapSubscriptionStatus(raw)
+		if parsed != want {
+			t.Fatalf("%q stored as %q = %q, want %q", raw, stored, parsed, want)
+		}
+		if ShouldGrantCapabilities(parsed) != ShouldGrantCapabilities(want) {
+			t.Fatalf("%q widened billing authority", raw)
+		}
 	}
 }
