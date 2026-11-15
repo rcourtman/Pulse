@@ -26,6 +26,13 @@ SAVE = "Save backend race build objects"
 COMPILE = "Compile affected Go race-test binaries without executing them"
 
 
+def fixture_go_environment():
+    # Only these tiny, synchronous fixture programs omit the race runtime's
+    # default one-second successful-exit sleep. Detection, failure exits and
+    # the actual production worker/workflow commands stay unchanged.
+    return {**os.environ, "GORACE": "atexit_sleep_ms=0"}
+
+
 class BackendBuildCacheTest(unittest.TestCase):
     def setUp(self):
         self.workflow = yaml.safe_load(WORKFLOW.read_text())
@@ -195,7 +202,7 @@ raise SystemExit(result['exit'])
             )
             for flags in ("-mod=readonly", "-mod=readonly -count=0 -p=8"):
                 with self.subTest(inherited_flags=flags):
-                    environment = {**os.environ, "GOWORK": "off", "GOPROXY": "off",
+                    environment = {**fixture_go_environment(), "GOWORK": "off", "GOPROXY": "off",
                                    "GOSUMDB": "off", "GOTOOLCHAIN": "local",
                                    "GOMAXPROCS": "2", "GOFLAGS": flags}
 
@@ -257,7 +264,7 @@ raise SystemExit(result['exit'])
                 for flags in ("-mod=readonly", "-mod=readonly -count=0"):
                     with self.subTest(inherited_flags=flags):
                         receipts = root / "receipts"
-                        environment = {**os.environ, "GOWORK": "off", "GOENV": "off",
+                        environment = {**fixture_go_environment(), "GOWORK": "off", "GOENV": "off",
                                        "GOPROXY": "off", "GOSUMDB": "off", "GOTOOLCHAIN": "local",
                                        "GOMAXPROCS": "2", "GOFLAGS": flags,
                                        "API_SHARD_COUNT": "5", "API_SHARD_INDEX": "0",
@@ -326,7 +333,7 @@ func TestRequired(t *testing.T) {
                     result = subprocess.run(
                         [sys.executable, '-I', '-c', driver, str(ROOT / 'scripts/release_control/run_go_rest_shard.py'),
                          str(root), str(output), '/empty' if mode == 'empty' else ''],
-                        cwd=root, env={**os.environ, 'COVERAGE_MODE': mode, 'GOTOOLCHAIN': 'local',
+                        cwd=root, env={**fixture_go_environment(), 'COVERAGE_MODE': mode, 'GOTOOLCHAIN': 'local',
                                       'GOWORK': 'off', 'GOENV': 'off', 'GOPROXY': 'off', 'GOSUMDB': 'off',
                                       'GOMAXPROCS': '2', 'GOFLAGS': '-mod=readonly -json=true'},
                         capture_output=True, text=True, timeout=120)
@@ -403,7 +410,7 @@ func TestTrailing(t *testing.T) { record(t) }
             for index, flags in enumerate(cases):
                 with self.subTest(inherited_flags=flags):
                     events = root / f"events-{index}"
-                    environment = {**os.environ, "GOWORK": "off", "GOPROXY": "off",
+                    environment = {**fixture_go_environment(), "GOWORK": "off", "GOPROXY": "off",
                                    "GOSUMDB": "off", "GOTOOLCHAIN": "local",
                                    "GOMAXPROCS": "2", "FIXTURE_EVENTS": str(events),
                                    "GOFLAGS": "-mod=readonly " + flags}
