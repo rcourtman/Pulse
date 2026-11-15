@@ -4251,3 +4251,31 @@ Rows restored from the in-memory query cache can show the line for one
 background fetch after an install drops below the threshold in the same
 browser session; that is accepted rather than delaying every first render. The demand
 ledger entry in pulse-pro `FEATURE_REQUESTS.md` grades it after 30 days.
+
+### Account client changes retain uncertainty until a deliberate read
+
+The existing Account portal distinguishes a rejected lifecycle request (4xx),
+an unknown result (transport/5xx), and an accepted request whose current state
+could not be read. A suspend/delete failure never automatically repeats the
+mutation or redirects past its result. An account/tenant/action-bound, persistent
+notice retains last-loaded facts and offers an explicit bootstrap read. Lifecycle
+changes remain blocked until that read succeeds. A successful read reports the
+latest state or that the client is no longer listed, not an invented success for
+an unknown write. Session withdrawal or a different principal cannot receive a
+late completion from the previous session.
+
+The selected panel permits the same actions as its row: active can suspend;
+suspended/failed can delete; canceled, deleting, provisioning and unknown states
+have no lifecycle action. Non-active clients remain visible as review states,
+never “no client attached”; their health and alert facts remain distinct. A
+canceled client is not evidence of account-wide creation policy. Existing
+creation controls remain subject to the server's policy, and refusals stay
+visible. This consumer contract does not replace the server's transactional
+cancellation/deletion enforcement.
+
+The read recovery preserves other account-form drafts for the same principal,
+keeps Close usable, does not close a different selected client, and restores
+focus to its result unless the user has moved on. Regression proof is in
+`internal/cloudcp/portal/frontend/src/workspace_recovery.test.ts` and the existing
+account controller, view, shell and store suites. Compiled assets and comparable
+desktop/narrow browser proof accompany the containing source.

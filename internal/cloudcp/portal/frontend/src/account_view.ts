@@ -34,10 +34,41 @@ export function focusElement(id: string): void {
 }
 
 function workspaceActionLabel(workspace: PortalWorkspaceSummary, clientLanguage = false): string {
-  if (clientLanguage) {
-    return workspace.state === 'active' ? 'Suspend client' : 'Delete client';
+  var entity = clientLanguage ? 'client' : 'workspace';
+  if (workspace.state === 'active') return 'Suspend ' + entity;
+  if (workspace.state === 'suspended' || workspace.state === 'failed') return 'Delete ' + entity;
+  return 'Review current state';
+}
+
+function renderWorkspaceRecovery(account: PortalAccountSummary, entry: PortalAccountUIEntry, accountAPIBasePath: string): void {
+  var request = entry.manageWorkspace;
+  var banner = getElement<HTMLElement>('workspace-recovery-' + account.id);
+  var title = getElement<HTMLElement>('workspace-recovery-title-' + account.id);
+  var message = getElement<HTMLElement>('workspace-recovery-message-' + account.id);
+  var refresh = getElement<HTMLButtonElement>('workspace-recovery-refresh-' + account.id);
+  if (banner && title && message && refresh) {
+    banner.hidden = !request.recoveryRequired && !request.notice;
+    banner.classList.toggle('workspace-recovery-unconfirmed', !!request.recoveryRequired);
+    title.textContent = request.recoveryRequired
+      ? (request.outcome === 'accepted' ? 'Request accepted; current state not confirmed' : request.outcome === 'rejected' ? 'Change rejected; current state not confirmed' : 'Change result not confirmed') + ' — ' + request.workspaceName
+      : 'Current state refreshed';
+    message.textContent = request.recoveryRequired
+      ? request.error + ' Last loaded facts may be out of date. Refresh checks the current state without repeating the change.'
+      : request.notice || '';
+    refresh.hidden = !request.recoveryRequired;
+    refresh.disabled = !!request.refreshing;
+    refresh.textContent = request.refreshing ? 'Refreshing…' : 'Refresh current state';
+    banner.setAttribute('aria-busy', String(!!request.refreshing));
   }
-  return workspace.state === 'active' ? 'Suspend workspace' : 'Delete workspace';
+  // Keep existing controls/facts discoverable, but do not act on stale state.
+  if (request.pending || request.recoveryRequired) {
+    var target = accountAPIBasePath + '/' + encodeURIComponent(account.id) + '/tenants/' + encodeURIComponent(request.workspaceID || '') + '/handoff';
+    document.querySelectorAll<HTMLFormElement>('form[action]').forEach(function(form) {
+      if ((form.getAttribute('action') || '').split('?')[0] === target) {
+        form.querySelectorAll<HTMLButtonElement>('button').forEach(function(button) { button.disabled = true; });
+      }
+    });
+  }
 }
 
 function workspaceCreatedLabel(workspace: PortalWorkspaceSummary): string {
@@ -217,7 +248,7 @@ export function renderWorkspaceManagement(account: PortalAccountSummary, entry: 
     primaryTargetPath = workspaceOutputsTargetPath(workspace);
   }
   if (guidePrimaryButton) guidePrimaryButton.textContent = guide.primaryLabel;
-  setWorkspaceHandoffForm(guidePrimaryForm, guidePrimaryButton, accountAPIBasePath, account.id, workspace, primaryTargetPath, entry.manageWorkspace.pending);
+  setWorkspaceHandoffForm(guidePrimaryForm, guidePrimaryButton, accountAPIBasePath, account.id, workspace, primaryTargetPath, entry.manageWorkspace.pending || !!entry.manageWorkspace.recoveryRequired);
   var steps = workspaceSetupSteps(workspace);
   var stepByID = {
     workspace: checkCreated,
@@ -230,14 +261,17 @@ export function renderWorkspaceManagement(account: PortalAccountSummary, entry: 
     setChecklistStatus(stepByID[steps[s].id], steps[s].tone, steps[s].label);
   }
   actionButton.textContent = workspaceActionLabel(workspace, account.kind === 'msp');
-  actionButton.disabled = entry.manageWorkspace.pending;
+  var canAct = account.can_manage && (workspace.state === 'active' || workspace.state === 'suspended' || workspace.state === 'failed');
+  var blocked = entry.manageWorkspace.pending || !!entry.manageWorkspace.recoveryRequired;
+  actionButton.disabled = blocked || !canAct;
   actionButton.setAttribute('data-workspace-id', workspace.id);
   actionButton.setAttribute('data-workspace-name', workspace.display_name);
-  actionButton.setAttribute('data-workspace-action', workspace.state === 'active' ? 'suspend' : 'delete');
-  closeButton.disabled = entry.manageWorkspace.pending;
-  setWorkspaceHandoffForm(openForm, openButton, accountAPIBasePath, account.id, workspace, '', entry.manageWorkspace.pending);
-  setWorkspaceHandoffForm(installForm, installButton, accountAPIBasePath, account.id, workspace, WORKSPACE_INSTALL_TARGET_PATH, entry.manageWorkspace.pending);
-  setWorkspaceHandoffForm(reportingForm, reportingButton, accountAPIBasePath, account.id, workspace, WORKSPACE_REPORTING_TARGET_PATH, entry.manageWorkspace.pending);
+  if (canAct) actionButton.setAttribute('data-workspace-action', workspace.state === 'active' ? 'suspend' : 'delete');
+  else actionButton.removeAttribute('data-workspace-action');
+  closeButton.disabled = false;
+  setWorkspaceHandoffForm(openForm, openButton, accountAPIBasePath, account.id, workspace, '', blocked);
+  setWorkspaceHandoffForm(installForm, installButton, accountAPIBasePath, account.id, workspace, WORKSPACE_INSTALL_TARGET_PATH, blocked);
+  setWorkspaceHandoffForm(reportingForm, reportingButton, accountAPIBasePath, account.id, workspace, WORKSPACE_REPORTING_TARGET_PATH, blocked);
 }
 
 function setContainerMessage(container: HTMLElement, title: string, msg: string, isError: boolean): void {
@@ -469,10 +503,12 @@ export function renderAddWorkspaceSection(accountID: string, entry: PortalAccoun
   var form = getElement<HTMLElement>('add-ws-form-' + accountID);
   var spinner = getElement<HTMLElement>('ws-spinner-' + accountID);
   if (!form) return;
+  var error = getElement<HTMLElement>('workspace-create-error-' + accountID);
+  if (error) { error.hidden = !entry.createWorkspace.error; error.textContent = entry.createWorkspace.error; }
   form.classList.toggle('visible', entry.addWorkspaceOpen);
   form.setAttribute('aria-busy', String(entry.createWorkspace.pending));
   form.querySelectorAll<HTMLInputElement | HTMLButtonElement>('input, button').forEach(function(control) {
-    control.disabled = entry.createWorkspace.pending;
+    control.disabled = entry.createWorkspace.pending || entry.manageWorkspace.pending || !!entry.manageWorkspace.recoveryRequired;
   });
   if (spinner) {
     spinner.hidden = !entry.createWorkspace.pending;
@@ -559,6 +595,10 @@ export function renderAccessSection(accountID: string, entry: PortalAccountUIEnt
 }
 
 export function renderAccountUI(accountState: PortalAccountState, accounts: PortalAccountSummary[], accountAPIBasePath = ''): void {
+  var unavailable = getElement<HTMLElement>('workspace-account-unavailable');
+  if (unavailable) unavailable.hidden = !Object.keys(accountState.byAccountID).some(function(id) {
+    return accountState.byAccountID[id].manageWorkspace.recoveryRequired && !accounts.some(function(account) { return account.id === id; });
+  });
   var accountIDs = Object.keys(accountState.byAccountID);
   for (var i = 0; i < accountIDs.length; i += 1) {
     var accountID = accountIDs[i];
@@ -571,7 +611,13 @@ export function renderAccountUI(accountState: PortalAccountState, accounts: Port
       }
     }
     renderAddWorkspaceSection(accountID, entry);
-    if (account) renderWorkspaceManagement(account, entry, accountAPIBasePath);
+    document.querySelectorAll<HTMLButtonElement>('[data-action="toggle-add-workspace"]').forEach(function(button) {
+      if (button.getAttribute('data-account-id') === accountID) button.disabled = entry.manageWorkspace.pending || !!entry.manageWorkspace.recoveryRequired || entry.createWorkspace.pending;
+    });
+    if (account) {
+      renderWorkspaceManagement(account, entry, accountAPIBasePath);
+      renderWorkspaceRecovery(account, entry, accountAPIBasePath);
+    }
     renderAccessSection(accountID, entry, account ? account.has_billing === true : true);
   }
 }

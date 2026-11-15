@@ -67,6 +67,10 @@ export function installAccountController(deps: AccountControllerDeps): void {
         deps.setShellSection('workspaces');
         deps.runtime.clearWorkspaceSelection(accountID);
         return;
+      case 'refresh-workspace-state':
+        event.preventDefault();
+        void deps.runtime.refreshWorkspaceState(accountID);
+        return;
       case 'workspace-action':
         event.preventDefault();
         deps.setShellSection('workspaces');

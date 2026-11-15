@@ -1,3 +1,4 @@
+import { renderAccountUI } from './account_view';
 import type { PortalStore } from './store';
 import {
   renderAuthenticatedPortalHTML,
@@ -12,6 +13,8 @@ export interface ShellDeps {
 }
 
 export function installShell(deps: ShellDeps): void {
+  var renderedPrincipal = '';
+
   function revealActiveNavLink(activeLink: HTMLElement | null) {
     if (!activeLink) return;
     var group = activeLink.closest('.portal-tab-bar') as HTMLElement | null;
@@ -58,6 +61,14 @@ export function installShell(deps: ShellDeps): void {
     var root = document.getElementById('portal-app-root');
     if (!root) return;
     var portalBootstrap = deps.store.getBootstrap();
+    var principal = portalBootstrap.authenticated ? portalBootstrap.email.trim().toLowerCase() : '';
+    var drafts: Record<string, string> = {};
+    if (principal && principal === renderedPrincipal) {
+      // Only account form drafts, never passwords, verification codes or billing data.
+      root.querySelectorAll<HTMLInputElement | HTMLSelectElement>('[id^="ws-name-"], [id^="invite-email-"], [id^="invite-role-"]').forEach(function(input) {
+        drafts[input.id] = input.value;
+      });
+    }
     var context = {
       bootstrap: portalBootstrap,
       billingState: deps.store.getBillingState(),
@@ -69,6 +80,14 @@ export function installShell(deps: ShellDeps): void {
     root.innerHTML = portalBootstrap.authenticated
       ? renderAuthenticatedPortalHTML(context)
       : renderSignedOutPortalHTML(context);
+    renderedPrincipal = principal;
+    Object.keys(drafts).forEach(function(id) {
+      var input = document.getElementById(id) as HTMLInputElement | HTMLSelectElement | null;
+      if (input) input.value = drafts[id];
+    });
+    // Bootstrap replaces the shell. Apply retained account state to the new DOM,
+    // not just to the old nodes that existed before this subscriber ran.
+    renderAccountUI(deps.store.getAccountState(), portalBootstrap.accounts, portalBootstrap.account_api_base_path);
     syncShellSection();
   }
 

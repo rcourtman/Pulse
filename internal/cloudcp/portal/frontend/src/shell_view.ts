@@ -614,7 +614,7 @@ function attentionWorkspaceEntries(entries: WorkspaceSummaryEntry[]): WorkspaceS
   var results: WorkspaceSummaryEntry[] = [];
   for (var i = 0; i < entries.length; i += 1) {
     var status = workspaceHealthState(entries[i].workspace);
-    if (hasCriticalAlerts(entries[i].workspace) || status === 'unhealthy' || status === 'checking') {
+    if (!['active', 'suspended'].includes(String(entries[i].workspace.state || '')) || hasCriticalAlerts(entries[i].workspace) || status === 'unhealthy' || status === 'checking') {
       results.push(entries[i]);
     }
   }
@@ -687,6 +687,8 @@ function workspaceSummaryStatusCopy(workspace: PortalWorkspaceSummary, clientLan
   var state = String(workspace.state || '');
   if (state === 'suspended') return 'This client is suspended.';
   if (state === 'failed') return 'This client is in a failed state.';
+  if (state === 'canceled') return 'This client is canceled. Review billing before continuing setup; adding a client does not restore this one.';
+  if (state !== 'active') return 'This client is ' + (state || 'in an unknown state') + '. Review its state before continuing setup.';
   return workspaceStatusCopy(workspace);
 }
 
@@ -740,12 +742,12 @@ function renderWorkspaceSummaryDecision(
       clientLanguage ? 'Review client' : 'Review workspace',
       'btn-primary btn-compact workspace-summary-link',
     );
-    secondaryAction = renderWorkspaceHandoffForm(
+    secondaryAction = criticalEntry.workspace.state === 'active' ? renderWorkspaceHandoffForm(
       criticalEntry.account.id,
       criticalEntry.workspace.id,
       accountAPIBasePath,
       clientLanguage ? 'Open client' : 'Open workspace',
-    );
+    ) : '';
   } else if (attention.length) {
     var attentionEntry = attention[0];
     title = 'Review ' + attentionEntry.workspace.display_name;
@@ -765,7 +767,9 @@ function renderWorkspaceSummaryDecision(
         '" data-workspace-id="' +
         escapeAttr(attentionEntry.workspace.id) +
         '">' + escapeHTML(clientLanguage ? 'Client onboarding' : 'Setup checklist') + '</button>'
-      : '<button class="btn-secondary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="access">Open Access</button>';
+      : attentionEntry.account.has_billing
+        ? '<button class="btn-secondary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="billing">Review billing</button>'
+        : '<button class="btn-secondary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="access">Open Access</button>';
   } else if (suspended.length) {
     var suspendedEntry = suspended[0];
     title = 'Review ' + suspendedEntry.workspace.display_name;
@@ -825,6 +829,12 @@ function renderWorkspaceSummaryDecision(
       : readyEntry.account.can_manage
         ? renderWorkspaceInstallHandoffForm(readyEntry.account.id, readyEntry.workspace.id, accountAPIBasePath)
         : '';
+  } else if (entries.length) {
+    var retained = entries[0];
+    title = 'Review ' + retained.workspace.display_name;
+    description = workspaceSummaryContext(retained, accounts.length > 1, workspaceSummaryStatusCopy(retained.workspace, clientLanguage));
+    primaryAction = renderWorkspaceAnchorAction(workspaceRowAnchorID(retained.account.id, retained.workspace.id), clientLanguage ? 'Review client' : 'Review workspace', 'btn-primary btn-compact');
+    secondaryAction = '<button class="btn-secondary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="billing">Review billing</button>';
   } else if (creatableAccount) {
     title = clientLanguage ? 'Add the first client' : 'Create the first workspace';
     description = clientLanguage
@@ -1063,6 +1073,11 @@ function renderAccountSurfaceHeader(account: PortalAccountSummary, showHeader: b
 function renderNoHostedWorkspacesSection(): string {
   return (
     '<section class="account-content-panel account-content-panel-workspaces">' +
+      '<div class="workspace-recovery" id="workspace-recovery-' + escapeAttr(account.id) + '" role="status" tabindex="-1" hidden>' +
+        '<strong id="workspace-recovery-title-' + escapeAttr(account.id) + '"></strong>' +
+        '<p id="workspace-recovery-message-' + escapeAttr(account.id) + '"></p>' +
+        '<button type="button" class="btn-secondary btn-compact" id="workspace-recovery-refresh-' + escapeAttr(account.id) + '" data-action="refresh-workspace-state" data-account-id="' + escapeAttr(account.id) + '">Refresh current state</button>' +
+      '</div>' +
       '<div class="empty-state">' +
         '<p>No hosted workspaces are attached to this account. Use Billing for self-hosted subscriptions and licenses.</p>' +
       '</div>' +
@@ -1121,6 +1136,7 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
           '<input type="text" id="ws-name-' +
           escapeAttr(account.id) +
           '" placeholder="Acme Corp" maxlength="80" autocomplete="off" required>' +
+          '<p id="workspace-create-error-' + escapeAttr(account.id) + '" role="alert" hidden></p>' +
           '<div class="form-actions">' +
             '<button type="submit" class="btn-primary">' + escapeHTML(addEntityLabel) + '</button>' +
             '<button type="button" class="btn-secondary" data-action="toggle-add-workspace" data-account-id="' +
@@ -1322,6 +1338,11 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
 
   return (
     '<section class="account-content-panel account-content-panel-workspaces">' +
+      '<div class="workspace-recovery" id="workspace-recovery-' + escapeAttr(account.id) + '" role="status" tabindex="-1" hidden>' +
+        '<strong id="workspace-recovery-title-' + escapeAttr(account.id) + '"></strong>' +
+        '<p id="workspace-recovery-message-' + escapeAttr(account.id) + '"></p>' +
+        '<button type="button" class="btn-secondary btn-compact" id="workspace-recovery-refresh-' + escapeAttr(account.id) + '" data-action="refresh-workspace-state" data-account-id="' + escapeAttr(account.id) + '">Refresh current state</button>' +
+      '</div>' +
       '<div class="workspace-operations-shell workspace-operations-shell-idle" id="workspace-operations-shell-' +
         escapeAttr(account.id) +
         '">' +
@@ -1714,6 +1735,7 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
     '<div class="portal-shell" data-shell-section="' + activeSection + '">' +
       '<div class="portal-shell-main">' +
         renderIdentityBar(accounts, showSelfHostedCommercial) +
+        '<p class="workspace-recovery" id="workspace-account-unavailable" role="status" hidden>Account access changed. The latest result of the client change is not confirmed. Review Access or sign in again; no change was repeated.</p>' +
         renderTabBar(context.bootstrap, activeSection) +
         (hosted
           ? (

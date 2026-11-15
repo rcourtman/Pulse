@@ -1979,3 +1979,18 @@ header .logout-btn:hover,
 }
 .provider-plan-catalogue-notice { margin-top: 12px; font-size: 13px; color: var(--ink-secondary); }
 .provider-plan-catalogue-notice p { margin: 0 0 8px; }
+
+/* The last loaded facts remain visible while a deliberate read resolves a change. */
+.workspace-recovery {
+  margin: 0 0 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-subtle);
+  color: var(--ink);
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+.workspace-recovery[hidden] { display: none; }
+.workspace-recovery p { margin: 6px 0 8px; color: var(--ink-secondary); }
+.workspace-recovery-unconfirmed { border-color: var(--warn-border); background: var(--warn-subtle); }
