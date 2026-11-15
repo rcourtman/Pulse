@@ -1015,6 +1015,10 @@ jobs:
           # The non-.txt suffix keeps selection names out of timing refreshes.
           printf '%s\n' "$selected" > "$timings/api-${API_SHARD_INDEX}.selected"
           package=$(go list ./internal/api)
+          # Shell/Python children read fixtures outside Go's result-cache
+          # tracking. Reuse compiled objects, never a previous passing verdict;
+          # append after ambient flags so even -count=0 cannot omit execution.
+          export GOFLAGS="${GOFLAGS:+$GOFLAGS }-count=1"
           go test -race -timeout 50m -json "${filter[@]}" ./internal/api \
             | python3 .github/scripts/record-internal-api-test-seconds.py "$timings/api-${API_SHARD_INDEX}.txt" \
                 "$timings/api-${API_SHARD_INDEX}.selected" "$package"
