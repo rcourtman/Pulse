@@ -214,3 +214,16 @@ it('retains critical alert facts on a canceled row without offering an active ha
   expect(document.body.textContent).toContain('1 warning');
   expect(document.querySelector('form[action="/api/accounts/acct_1/tenants/ws_1/handoff"]')).toBeNull();
 });
+
+it('keeps a server creation refusal and the unsubmitted client name visible', async function() {
+  var s = setup();
+  s.runtime.toggleAddWorkspace('acct_1');
+  element<HTMLInputElement>('ws-name-acct_1').value = 'New client draft';
+  vi.mocked(s.api.createWorkspace).mockRejectedValue(new PortalAPIError('Subscription is canceled.', 403, { error: 'subscription_canceled' }));
+  await s.runtime.createWorkspace('acct_1');
+  expect(element('workspace-create-error-acct_1').hidden).toBe(false);
+  expect(element('workspace-create-error-acct_1').textContent).toBe('Subscription is canceled.');
+  expect(element<HTMLInputElement>('ws-name-acct_1').value).toBe('New client draft');
+  expect(s.api.createWorkspace).toHaveBeenCalledTimes(1);
+  expect(s.refreshBootstrap).not.toHaveBeenCalled();
+});
