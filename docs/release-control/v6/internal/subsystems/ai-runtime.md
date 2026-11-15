@@ -8853,3 +8853,19 @@ copy once the orchestrator has closed it. A refresh of the record from a
 session that has not closed no longer reopens a record that finalization
 closed. Proofs: `internal/api/ai_handlers_investigation_additional_test.go` and
 `internal/ai/patrol_investigation_finalize_test.go`.
+
+### pulse_read disk_usage follows the largest folder (15 November 2026)
+
+`pulse_read` has a `disk_usage` action (`internal/ai/tools/tools_read_disk_usage.go`).
+Given a mount or directory on `target_host`, Pulse runs `du -x -k -d 1` level by
+level and follows the largest folder while it holds more than half of its
+parent, for at most 12 levels. One tool call returns the chain with sizes and
+shares, the folders beside each step, and why it stopped: no subfolders, no
+single folder holding most, the level limit, or a refused read. Every level
+goes through `runReadOnlyCommand`, the gates `exec` uses (sensitive paths, the
+read-only classifier, routing and resolved-resource checks, the agent's
+approval policy), and the output is redacted like `exec`. A pattern path is
+refused. The wildcard and approval refusal hints name the action. It exists
+because a capacity investigation drilled one level per call and concluded one
+folder above the folder that held the space. Proof:
+`internal/ai/tools/tools_read_disk_usage_test.go`.

@@ -38,7 +38,7 @@ func TestWildcardRefusalNamesAFormThatWorks(t *testing.T) {
 	} {
 		text := readExecResult(t, command)
 		assert.Contains(t, text, "SENSITIVE_COMMAND", command)
-		assert.Contains(t, text, "du -xh -d 3 \\u003cdirectory\\u003e", command)
+		assert.Contains(t, text, "action disk_usage", command)
 	}
 
 	// Other refusals have no wildcard to replace and get no hint.
@@ -55,7 +55,7 @@ func TestWildcardRefusalNamesAFormThatWorks(t *testing.T) {
 func TestWildcardRefusalHintPassesThePolicy(t *testing.T) {
 	policy := agentexec.DefaultPolicy()
 	forms := regexp.MustCompile("`([^`]+)`").FindAllStringSubmatch(WildcardRefusalHint+" "+SingleCommandHint, -1)
-	require.Len(t, forms, 3)
+	require.Len(t, forms, 2)
 	for _, form := range forms {
 		for _, dir := range []string{"/mnt/nvr", "/mnt/nvr/frigate/recordings", "/srv/media"} {
 			command := strings.ReplaceAll(form[1], "<directory>", dir)
@@ -104,6 +104,7 @@ func TestApprovalRefusalNamesASingleCommand(t *testing.T) {
 	text := run(t, agentexec.ErrCommandRequiresApproval)
 	assert.Contains(t, text, "APPROVAL_REQUIRED")
 	assert.Contains(t, text, "Run each part as its own command")
+	assert.Contains(t, text, "action disk_usage")
 	assert.Contains(t, text, "du -xh -d 3 \\u003cdirectory\\u003e")
 
 	// Any other failure is reported as it is, with no hint about approval.

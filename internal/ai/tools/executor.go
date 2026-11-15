@@ -1253,7 +1253,7 @@ func (e *PulseToolExecutor) registerTools() {
 	// pulse_alerts - list, findings, resolved, resolve, dismiss
 	e.registerAlertsTools()
 
-	// pulse_read - read-only operations (exec, file, find, tail, logs)
+	// pulse_read - read-only operations (exec, file, find, tail, logs, disk_usage)
 	// This is ALWAYS classified as ToolKindRead and never triggers VERIFYING
 	e.registerReadTools()
 
