@@ -933,6 +933,10 @@ func TestCreateWithAccountWorkspaceLimitEnforcesActiveCount(t *testing.T) {
 	if err := reg.CreateAccount(&Account{ID: accountID, Kind: AccountKindMSP, DisplayName: "Account"}); err != nil {
 		t.Fatal(err)
 	}
+	if err := reg.CreateStripeAccount(&StripeAccount{AccountID: accountID, StripeCustomerID: "cus_limit", PlanVersion: "msp_growth", SubscriptionState: "active"}); err != nil {
+		t.Fatal(err)
+	}
+
 	if err := reg.CreateWithAccountWorkspaceLimit(&Tenant{ID: "t-LIMIT001", AccountID: accountID, State: TenantStateActive}, 1); err != nil {
 		t.Fatalf("first create: %v", err)
 	}
@@ -967,6 +971,9 @@ func TestCreateWithAccountWorkspaceLimitCannotRacePastLimit(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := reg.CreateAccount(&Account{ID: accountID, Kind: AccountKindMSP, DisplayName: "Race Account"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateStripeAccount(&StripeAccount{AccountID: accountID, StripeCustomerID: "cus_limit", PlanVersion: "msp_growth", SubscriptionState: "active"}); err != nil {
 		t.Fatal(err)
 	}
 

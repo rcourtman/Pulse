@@ -556,14 +556,25 @@ func (r *TenantRegistry) Create(t *Tenant) error {
 // write transaction so multiple control-plane instances share the same final
 // source of truth instead of relying on per-process locks.
 func (r *TenantRegistry) CreateWithAccountWorkspaceLimit(t *Tenant, limit int) error {
+	if limit < 1 {
+		limit = 1
+	}
+	return r.createWithWorkspaceAdmission(t, WorkspaceLimitPolicy{}, limit)
+}
+
+// CreateWithWorkspaceAdmission resolves authority and the plan/count ceiling in
+// the same write transaction as insertion. A preflight check is not authority
+// to insert after an intervening cancellation, downgrade or mapping removal.
+func (r *TenantRegistry) CreateWithWorkspaceAdmission(t *Tenant, policy WorkspaceLimitPolicy) error {
+	return r.createWithWorkspaceAdmission(t, policy, 0)
+}
+
+func (r *TenantRegistry) createWithWorkspaceAdmission(t *Tenant, policy WorkspaceLimitPolicy, callerCeiling int) error {
 	if t == nil {
 		return fmt.Errorf("tenant is nil")
 	}
 	if strings.TrimSpace(t.AccountID) == "" {
 		return fmt.Errorf("account id is required")
-	}
-	if limit < 1 {
-		limit = 1
 	}
 	prepareTenantForCreate(t)
 
@@ -583,6 +594,17 @@ func (r *TenantRegistry) CreateWithAccountWorkspaceLimit(t *Tenant, limit int) e
 			_, _ = conn.ExecContext(ctx, "ROLLBACK")
 		}
 	}()
+
+	admission, err := resolveWorkspaceAdmission(ctx, conn, t.AccountID, policy)
+	if err != nil {
+		return err
+	}
+	limit := admission.Limit
+	// Legacy callers may tighten the ceiling, never enlarge current authority.
+	if callerCeiling > 0 && callerCeiling < limit {
+		limit = callerCeiling
+	}
+	t.PlanVersion = admission.PlanVersion
 
 	var current int
 	if err := conn.QueryRowContext(ctx, `

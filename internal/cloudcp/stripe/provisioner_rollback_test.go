@@ -134,9 +134,11 @@ func TestProvisionWorkspaceRollbackOnContainerFailure(t *testing.T) {
 		t.Fatalf("CreateAccount: %v", err)
 	}
 
+	seedWorkspaceBilling(t, reg, accountID)
+
 	p := newTestProvisioner(t, reg, tenantsDir, dockerMgr, false)
-	if _, err := p.ProvisionWorkspace(context.Background(), accountID, "Tenant One"); err == nil {
-		t.Fatal("expected container startup error")
+	if _, err := p.ProvisionWorkspace(context.Background(), accountID, "Tenant One"); err == nil || !strings.Contains(err.Error(), "start container") {
+		t.Fatalf("expected container startup error, got %v", err)
 	}
 
 	tenants, err := reg.ListByAccountID(accountID)
@@ -258,6 +260,8 @@ func TestProvisionWorkspaceAdmissionFailureHasNoProvisioningSideEffects(t *testi
 	}); err != nil {
 		t.Fatalf("CreateAccount: %v", err)
 	}
+
+	seedWorkspaceBilling(t, reg, accountID)
 
 	p := newTestProvisioner(t, reg, tenantsDir, nil, true)
 	p.admissionCheck = func(context.Context) error {
@@ -531,6 +535,8 @@ func TestProvisionWorkspaceForOwnerCreatesStableOwnerMembership(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("CreateAccount: %v", err)
 	}
+
+	seedWorkspaceBilling(t, reg, accountID)
 
 	p := newTestProvisioner(t, reg, tenantsDir, nil, true)
 	tenant, err := p.ProvisionWorkspaceForOwner(context.Background(), accountID, "Client One", "Owner@Example.com")

@@ -40,7 +40,7 @@ type Provisioner struct {
 	emailFrom                 string
 	trialActivationPrivateKey string
 	hostedEntitlements        *entitlements.Service
-	defaultMSPPlanVersion     string
+	workspaceLimitPolicy      registry.WorkspaceLimitPolicy
 	chownFile                 func(string, int, int) error
 	admissionCheck            AdmissionCheck
 }
@@ -83,9 +83,15 @@ func WithDefaultMSPPlanVersion(planVersion string) ProvisionerOption {
 		}
 		planVersion = canonicalizeProvisionedPlanVersion(planVersion)
 		if planVersion != "" {
-			p.defaultMSPPlanVersion = planVersion
+			p.workspaceLimitPolicy.ProviderMSPPlanVersion = planVersion
 		}
 	}
+}
+
+// WithWorkspaceLimitPolicy enables only explicitly configured local MSP
+// authority. WithDefaultMSPPlanVersion alone never enables that authority.
+func WithWorkspaceLimitPolicy(policy registry.WorkspaceLimitPolicy) ProvisionerOption {
+	return func(p *Provisioner) { p.workspaceLimitPolicy = policy }
 }
 
 type provisioningCleanupState struct {
@@ -99,16 +105,15 @@ type provisioningCleanupState struct {
 // NewProvisioner creates a Provisioner.
 func NewProvisioner(reg *registry.TenantRegistry, tenantsDir string, dockerMgr *docker.Manager, magicLinks *cpauth.Service, baseURL string, emailSender cpemail.Sender, emailFrom string, allowDockerless bool, opts ...ProvisionerOption) *Provisioner {
 	p := &Provisioner{
-		registry:              reg,
-		tenantsDir:            tenantsDir,
-		docker:                dockerMgr,
-		magicLinks:            magicLinks,
-		baseURL:               baseURL,
-		allowDockerless:       allowDockerless,
-		emailSender:           emailSender,
-		emailFrom:             strings.TrimSpace(emailFrom),
-		defaultMSPPlanVersion: "msp_starter",
-		chownFile:             os.Chown,
+		registry:        reg,
+		tenantsDir:      tenantsDir,
+		docker:          dockerMgr,
+		magicLinks:      magicLinks,
+		baseURL:         baseURL,
+		allowDockerless: allowDockerless,
+		emailSender:     emailSender,
+		emailFrom:       strings.TrimSpace(emailFrom),
+		chownFile:       os.Chown,
 	}
 	for _, opt := range opts {
 		if opt != nil {
@@ -872,10 +877,12 @@ func normalizeStripeAccountSubscriptionState(status string) string {
 		return "trial"
 	case "canceled":
 		return "canceled"
-	case "past_due", "unpaid", "paused", "incomplete", "incomplete_expired":
+	case "past_due", "unpaid":
 		return "past_due"
+	case "paused":
+		return "suspended"
 	default:
-		return "past_due"
+		return "expired"
 	}
 }
 
@@ -912,6 +919,10 @@ func (p *Provisioner) ProvisionWorkspace(ctx context.Context, accountID, display
 // ProvisionWorkspaceForOwner provisions a new workspace under an account and
 // seeds the acting owner identity when it is known at creation time.
 func (p *Provisioner) ProvisionWorkspaceForOwner(ctx context.Context, accountID, displayName, ownerEmail string) (tenant *registry.Tenant, err error) {
+	return p.ProvisionWorkspaceForOwnerWithPolicy(ctx, accountID, displayName, ownerEmail, p.workspaceLimitPolicy)
+}
+
+func (p *Provisioner) ProvisionWorkspaceForOwnerWithPolicy(ctx context.Context, accountID, displayName, ownerEmail string, policy registry.WorkspaceLimitPolicy) (tenant *registry.Tenant, err error) {
 	cpmetrics.ProvisioningTotal.WithLabelValues("attempt").Inc()
 	cleanup := provisioningCleanupState{}
 	defer func() {
@@ -935,8 +946,9 @@ func (p *Provisioner) ProvisionWorkspaceForOwner(ctx context.Context, accountID,
 		return nil, fmt.Errorf("missing display name")
 	}
 	ownerEmail = strings.ToLower(strings.TrimSpace(ownerEmail))
-	if err := p.ensureAccountOwnerMembership(accountID, ownerEmail); err != nil {
-		return nil, fmt.Errorf("ensure account owner membership: %w", err)
+	// Refuse before creating an owner identity, directories, keys or runtime.
+	if _, err := p.registry.ResolveWorkspaceAdmission(ctx, accountID, policy); err != nil {
+		return nil, err
 	}
 	if err := p.enforceAdmission(ctx, "hosted workspace provisioning"); err != nil {
 		return nil, err
@@ -951,6 +963,21 @@ func (p *Provisioner) ProvisionWorkspaceForOwner(ctx context.Context, accountID,
 		return nil, err
 	}
 	cleanup.release = func() { _ = lease.Close() }
+
+	tenant = &registry.Tenant{
+		ID:          tenantID,
+		AccountID:   accountID,
+		DisplayName: displayName,
+		State:       registry.TenantStateProvisioning,
+	}
+	if err := p.registry.CreateWithWorkspaceAdmission(tenant, policy); err != nil {
+		return nil, fmt.Errorf("create tenant record: %w", err)
+	}
+	cleanup.tenantID = tenantID
+	cleanup.tenantCreated = true
+	if err := p.ensureAccountOwnerMembership(accountID, ownerEmail); err != nil {
+		return nil, fmt.Errorf("ensure account owner membership: %w", err)
+	}
 
 	tenantDataDir, secretsDir, err := p.ensureTenantDirs(tenantID)
 	if err != nil {
@@ -970,47 +997,9 @@ func (p *Provisioner) ProvisionWorkspaceForOwner(ctx context.Context, accountID,
 		return nil, fmt.Errorf("seed tenant organization metadata for tenant %s: %w", tenantID, err)
 	}
 
-	// Look up the account's actual plan version from its Stripe billing record.
-	// Fail on DB errors (consistent with enforceWorkspaceLimit). Fall back to
-	// the configured local MSP plan only when no billing record exists.
-	sa, saErr := p.registry.GetStripeAccount(accountID)
-	if saErr != nil {
-		return nil, fmt.Errorf("look up billing record for account %s: %w", accountID, saErr)
-	}
-	planVersion := canonicalizeProvisionedPlanVersion(p.defaultMSPPlanVersion)
-	if planVersion == "" {
-		planVersion = "msp_starter"
-	}
-	if sa != nil && strings.TrimSpace(sa.PlanVersion) != "" {
-		planVersion = canonicalizeProvisionedPlanVersion(sa.PlanVersion)
-	} else {
-		reason := "no_billing_record"
-		if sa != nil {
-			reason = "empty_plan_version"
-		}
-		log.Warn().
-			Str("account_id", accountID).
-			Str("fallback_plan", planVersion).
-			Str("reason", reason).
-			Msg("Using default MSP plan for workspace")
-	}
-	tenant = &registry.Tenant{
-		ID:          tenantID,
-		AccountID:   accountID,
-		DisplayName: displayName,
-		State:       registry.TenantStateProvisioning,
-		PlanVersion: planVersion,
-	}
-	workspaceLimit, knownWorkspaceLimit := pkglicensing.WorkspaceLimitForPlan(planVersion)
-	if !knownWorkspaceLimit {
-		workspaceLimit = pkglicensing.UnknownPlanDefaultWorkspaceLimit
-	}
-	if err := p.registry.CreateWithAccountWorkspaceLimit(tenant, workspaceLimit); err != nil {
-		return nil, fmt.Errorf("create tenant record: %w", err)
-	}
-	cleanup.tenantID = tenantID
-	cleanup.tenantCreated = true
-	if err := p.writeHostedEntitlementLeaseState(tenant, pkglicensing.SubStateActive, planVersion, "", "", ""); err != nil {
+	if err := p.withWorkspaceAuthority(ctx, tenant, policy, func(admission *registry.WorkspaceAdmission) error {
+		return p.writeHostedEntitlementLeaseState(tenant, admission.SubscriptionState, admission.PlanVersion, admission.StripeCustomerID, admission.StripeSubscriptionID, "")
+	}); err != nil {
 		return nil, fmt.Errorf("write initial hosted entitlement state for tenant %s: %w", tenantID, err)
 	}
 
@@ -1021,8 +1010,7 @@ func (p *Provisioner) ProvisionWorkspaceForOwner(ctx context.Context, accountID,
 	}
 	if containerID == "" {
 		if p.allowDockerless {
-			tenant.State = registry.TenantStateActive
-			if err := p.registry.Update(tenant); err != nil {
+			if err := p.completeWorkspaceProvisioning(ctx, tenant, policy); err != nil {
 				return nil, fmt.Errorf("update tenant record: %w", err)
 			}
 			log.Warn().
@@ -1037,8 +1025,7 @@ func (p *Provisioner) ProvisionWorkspaceForOwner(ctx context.Context, accountID,
 	if !p.pollHealth(ctx, containerID) {
 		return nil, fmt.Errorf("tenant %s container failed health check", tenantID)
 	}
-	tenant.State = registry.TenantStateActive
-	if err := p.registry.Update(tenant); err != nil {
+	if err := p.completeWorkspaceProvisioning(ctx, tenant, policy); err != nil {
 		return nil, fmt.Errorf("update tenant record: %w", err)
 	}
 
