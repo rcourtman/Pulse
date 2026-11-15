@@ -18,8 +18,13 @@ import (
 )
 
 func TestLegacyStripeWebhookKeepsRenewalAndWithdrawalAuthoritative(t *testing.T) {
-	for _, withdrawal := range []string{"canceled", "unpaid"} {
+	for _, withdrawal := range []string{"canceled", "paused"} {
 		t.Run(withdrawal, func(t *testing.T) {
+			// Unpaid/past_due deliberately retain grace. Use actual terminal
+			// or suspended statuses to exercise withdrawal, not positive sync.
+			if ShouldGrantCapabilities(MapSubscriptionStatus(withdrawal)) {
+				t.Fatal("withdrawal fixture selected a granting Stripe status")
+			}
 			reg := newStripeTestRegistry(t)
 			dir := t.TempDir()
 			p := newTestProvisioner(t, reg, dir, nil, true)
