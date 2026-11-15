@@ -363,6 +363,43 @@ successful thaw.
 
 > **Note**: If you configure authentication via environment variables (`PULSE_AUTH_USER`/`PULSE_AUTH_PASS`), the bootstrap token is automatically removed and this step is skipped.
 
+### Scripted setup (no browser)
+
+The same setup runs through the API, for a provisioning script or an AI agent
+working over SSH. Run this as root on the Docker host once the `pulse`
+container is up. It needs `curl`, `jq` and `openssl`.
+
+```bash
+PULSE=http://localhost:7655
+SETUP_TOKEN=$(docker exec pulse /app/pulse bootstrap-token | grep -oE '[0-9a-f]{40,}' | head -1)
+ADMIN_PASSWORD=$(openssl rand -hex 16)
+API_TOKEN=$(openssl rand -hex 24)
+
+# 1. Create the admin account. apiToken is the secret itself and becomes a
+#    full-access API token, so generate it; do not pick a short one.
+curl -fsS -X POST "$PULSE/api/security/quick-setup" \
+  -H "X-Setup-Token: $SETUP_TOKEN" -H 'Content-Type: application/json' \
+  -d "{\"username\":\"admin\",\"password\":\"$ADMIN_PASSWORD\",\"apiToken\":\"$API_TOKEN\"}"
+
+# 2. Mint a token for this host's agent and install the agent. It reports the
+#    host and every Docker container, including ones started later.
+umask 077
+curl -fsS -X POST "$PULSE/api/agent-install-command" \
+  -H "X-API-Token: $API_TOKEN" -H 'Content-Type: application/json' \
+  -d '{"type":"host","name":"docker-host"}' | jq -r .token > /root/pulse-agent-token
+curl -fsS "$PULSE/install.sh" -o /root/pulse-agent-install.sh
+bash /root/pulse-agent-install.sh --url "$PULSE" --token-file /root/pulse-agent-token --enable-docker
+
+# 3. Start alert delivery. A new install holds notifications until you activate them.
+curl -fsS -X POST "$PULSE/api/alerts/activate" -H "X-API-Token: $API_TOKEN"
+```
+
+Store `ADMIN_PASSWORD` and `API_TOKEN` in your secret manager. Add a
+notification destination with `POST /api/notifications/webhooks`
+([Webhooks](WEBHOOKS.md)). A destination on a private address, such as Gotify
+or ntfy on your LAN, must first be allowed with
+[`webhookAllowedPrivateCIDRs`](CONFIGURATION.md).
+
 ---
 
 ## 🔄 Updates
