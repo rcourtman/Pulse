@@ -20,6 +20,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"io"
 	"math/big"
 	"net/http"
 	"net/http/httptest"
@@ -29,6 +30,7 @@ import (
 	"reflect"
 	"regexp"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -192,6 +194,114 @@ func nativeProfileOptionalFiles(t *testing.T, paths ...string) secureRuntimeStab
 		}
 	}
 	return result
+}
+
+// Diagnostic identities are separate from the strict acceptance snapshots above.
+// Observe every fixed protected path before an assertion can stop the journey;
+// never publish contents, symlink targets, raw errors or directory descendants.
+// The installer is the largest protected file; cap even a corrupt replacement.
+const nativeProfileReadbackMaxBytes = 1 << 20
+
+type nativeProfileProtectedIdentity struct {
+	Present bool        `json:"present"`
+	Type    string      `json:"type"`
+	Mode    os.FileMode `json:"mode"`
+	UID     uint32      `json:"uid"`
+	GID     uint32      `json:"gid"`
+	Hash    string      `json:"sha256,omitempty"`
+	Error   string      `json:"observation_error,omitempty"`
+}
+
+type nativeProfileRestoreEvidence struct {
+	Before       map[string]nativeProfileProtectedIdentity `json:"before"`
+	After        map[string]nativeProfileProtectedIdentity `json:"after"`
+	ChangedPaths []string                                  `json:"changed_paths"`
+}
+
+func nativeProfileObserveProtected(paths ...string) map[string]nativeProfileProtectedIdentity {
+	result := make(map[string]nativeProfileProtectedIdentity, len(paths))
+	for _, path := range paths {
+		result[path] = nativeProfileObserveProtectedPath(path)
+	}
+	return result
+}
+
+func nativeProfileObserveProtectedPath(path string) nativeProfileProtectedIdentity {
+	info, err := os.Lstat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nativeProfileProtectedIdentity{Type: "absent"}
+	}
+	if err != nil {
+		return nativeProfileProtectedIdentity{Type: "unknown", Error: "lstat-failed"}
+	}
+	identity := nativeProfileProtectedIdentity{Present: true, Mode: info.Mode(), Type: "unsupported"}
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	if !ok {
+		identity.Error = "ownership-unavailable"
+		return identity
+	}
+	identity.UID, identity.GID = stat.Uid, stat.Gid
+	switch {
+	case info.Mode().IsRegular():
+		identity.Type = "regular"
+	case info.IsDir():
+		identity.Type = "directory"
+		return identity
+	case info.Mode()&os.ModeSymlink != 0:
+		identity.Type = "symlink"
+		return identity
+	default:
+		return identity
+	}
+	// Lstat alone cannot prevent a swapped link or FIFO from being opened.
+	fd, err := syscall.Open(path, syscall.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK|syscall.O_CLOEXEC, 0)
+	if err != nil {
+		identity.Error = "open-failed"
+		return identity
+	}
+	file := os.NewFile(uintptr(fd), "protected-state")
+	defer file.Close()
+	opened, err := file.Stat()
+	if err != nil || !opened.Mode().IsRegular() || !os.SameFile(info, opened) {
+		identity.Error = "file-changed"
+		return identity
+	}
+	data, err := io.ReadAll(io.LimitReader(file, nativeProfileReadbackMaxBytes+1))
+	if err != nil {
+		identity.Error = "read-failed"
+		return identity
+	}
+	if len(data) > nativeProfileReadbackMaxBytes {
+		identity.Error = "file-too-large"
+		return identity
+	}
+	finished, err := file.Stat()
+	current, pathErr := os.Lstat(path)
+	if err != nil || pathErr != nil || !os.SameFile(opened, current) || opened.Size() != finished.Size() ||
+		!opened.ModTime().Equal(finished.ModTime()) || opened.Mode() != finished.Mode() ||
+		stat.Uid != finished.Sys().(*syscall.Stat_t).Uid || stat.Gid != finished.Sys().(*syscall.Stat_t).Gid ||
+		len(data) != int(finished.Size()) {
+		identity.Error = "file-changed"
+		return identity
+	}
+	identity.Hash = secureRuntimeHash(data)
+	return identity
+}
+
+func nativeProfileRestoreReadback(before map[string]nativeProfileProtectedIdentity) nativeProfileRestoreEvidence {
+	paths := make([]string, 0, len(before))
+	for path := range before {
+		paths = append(paths, path)
+	}
+	sort.Strings(paths)
+	after := nativeProfileObserveProtected(paths...)
+	evidence := nativeProfileRestoreEvidence{Before: before, After: after, ChangedPaths: []string{}}
+	for _, path := range paths {
+		if before[path] != after[path] {
+			evidence.ChangedPaths = append(evidence.ChangedPaths, path)
+		}
+	}
+	return evidence
 }
 
 // Mutable descendants are handed to the collector, not restored recursively
@@ -501,6 +611,8 @@ func TestAgentInstalledProfileSystemd(t *testing.T) {
 	lifecyclePaths := []string{"/etc/pulse-agent/connection.env", "/etc/pulse-agent/install.sh", "/etc/pulse-agent/install.sh.sha256"}
 	baselineLifecycle := nativeProfileOptionalFiles(t, lifecyclePaths...)
 	baselineRoot := nativeProfileDirectory(t, "/var/lib/pulse-agent")
+	protectedPaths := append(append(append([]string{}, statePaths...), lifecyclePaths...), "/var/lib/pulse-agent")
+	baselineReadback := nativeProfileObserveProtected(protectedPaths...)
 	baselineHistory := nativeProfileFiles(t, historyPath)[historyPath]
 	phase("signed-TLS-root-install", map[string]any{"units": nativeProfileState(t, receipt), "state": baselineState, "lifecycle": baselineLifecycle, "state_root": baselineRoot, "history": baselineHistory})
 	// The installer correctly forbids a legacy command collector and a new
@@ -529,6 +641,9 @@ func TestAgentInstalledProfileSystemd(t *testing.T) {
 		return history
 	}
 	assertRestoredState := func() {
+		// Retain all paths, including absence/type changes, before the unchanged
+		// strict checks can fail. A diagnostic read error never grants a pass.
+		phase("reverse-protected-state-readback", nativeProfileRestoreReadback(baselineReadback))
 		if !reflect.DeepEqual(baselineState, nativeProfileFiles(t, statePaths...)) ||
 			!reflect.DeepEqual(baselineLifecycle, nativeProfileOptionalFiles(t, lifecyclePaths...)) ||
 			baselineRoot != nativeProfileDirectory(t, "/var/lib/pulse-agent") {
