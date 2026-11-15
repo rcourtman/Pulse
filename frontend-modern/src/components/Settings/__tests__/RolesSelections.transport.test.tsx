@@ -159,14 +159,24 @@ function expectSavedRows(expected: Role[]) {
     expect(row.getByText(role.id)).toBeInTheDocument();
     for (const list of row.getAllByRole('list')) {
       expect(list).toHaveAccessibleName(`Permissions for ${role.name} (Role ID: ${role.id})`);
-      // Snapshot the scoped items once. Repeated deep text queries add work
-      // without proving row ownership; ordered exact text also rejects extras.
+      // Snapshot scoped items once, including each saved policy distinction.
+      // Ordered exact text rejects extras without repeated deep text queries.
       expect(
         within(list)
           .getAllByRole('listitem')
           .map((item) => item.textContent),
       ).toEqual(
-        role.permissions.map((permission) => `${permission.action}:${permission.resource}`),
+        role.permissions.map((permission) => {
+          const policy = permission.effect === 'deny' ? 'Deny' : 'Allow';
+          const conditions = permission.conditions ?? {};
+          const expectedConditions = Object.keys(conditions)
+            .sort()
+            .map((key) => `${key} = ${JSON.stringify(conditions[key])}`)
+            .join('');
+          return `${permission.action}:${permission.resource}${policy}${
+            expectedConditions ? `Conditions (all):${expectedConditions}` : ''
+          }`;
+        }),
       );
     }
     const buttons = row.queryAllByRole('button');
