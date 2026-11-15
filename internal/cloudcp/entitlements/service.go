@@ -23,8 +23,11 @@ var (
 	// Its runtime can ask before provisioning finishes, and an answer it treats as
 	// permanent would make it discard its refresh token for good.
 	ErrHostedEntitlementNotReady = errors.New("hosted entitlement workspace is still provisioning")
-	ErrHostedEntitlementInactive = errors.New("hosted entitlement inactive")
-	ErrHostedEntitlementInvalid  = errors.New("hosted entitlement is invalid")
+	// Missing billing is not a cancellation. Refuse renewal without erasing
+	// the saved refresh identity needed when authoritative state is restored.
+	ErrHostedEntitlementBillingUnavailable = errors.New("hosted entitlement billing authority is unavailable")
+	ErrHostedEntitlementInactive           = errors.New("hosted entitlement inactive")
+	ErrHostedEntitlementInvalid            = errors.New("hosted entitlement is invalid")
 )
 
 type Service struct {
@@ -38,7 +41,10 @@ type Service struct {
 	// provider deployment cannot back relay, mobile or push whether it is
 	// licensed or not, so it must never mint leases claiming them.
 	providerHosted bool
-	now            func() time.Time
+	// localMSPBilling is set only by an explicitly configured Stripe-free MSP
+	// control plane. A running runtime does not establish billing authority.
+	localMSPBilling bool
+	now             func() time.Time
 }
 
 type RefreshResult struct {
@@ -85,6 +91,15 @@ func (s *Service) SetProviderHosted(providerHosted bool) {
 		return
 	}
 	s.providerHosted = providerHosted
+}
+
+// SetLocalMSPBilling permits implicit lease renewal without a Stripe account
+// only for current MSP accounts on this Stripe-free control plane. This is
+// independent of provider hosting, which controls the capability ceiling.
+func (s *Service) SetLocalMSPBilling(enabled bool) {
+	if s != nil {
+		s.localMSPBilling = enabled
+	}
 }
 
 func (s *Service) IssueTenantBillingState(tenant *registry.Tenant, requestedSubState pkglicensing.SubscriptionState, requestedPlanVersion, stripeCustomerID, stripeSubscriptionID, stripePriceID string) (*pkglicensing.BillingState, error) {
@@ -321,6 +336,19 @@ func (s *Service) resolveTenantLeaseContext(tenant *registry.Tenant, requestedSu
 		ctx.planVersion = defaultCloudPlanVersion
 	}
 	if ctx.subscriptionState == "" {
+		// A missing billing row cannot renew a paid lease just because the
+		// runtime is still active. Keep this retryable: an absent source is
+		// not evidence of cancellation and must not discard the refresh token.
+		if !s.localMSPBilling || !isMSPPlanVersion(ctx.planVersion) || strings.TrimSpace(tenant.AccountID) == "" {
+			return nil, ErrHostedEntitlementBillingUnavailable
+		}
+		account, err := s.registry.GetAccount(tenant.AccountID)
+		if err != nil {
+			return nil, fmt.Errorf("load account for tenant %s: %w", tenant.ID, err)
+		}
+		if account == nil || account.Kind != registry.AccountKindMSP {
+			return nil, ErrHostedEntitlementBillingUnavailable
+		}
 		ctx.subscriptionState = tenantSubscriptionState(tenant)
 	}
 	return ctx, nil

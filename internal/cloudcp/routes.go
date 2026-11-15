@@ -342,6 +342,7 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 // mobile and push.
 func NewHostedEntitlementsService(cfg *CPConfig, reg *registry.TenantRegistry) *entitlements.Service {
 	svc := entitlements.NewService(reg, cfg.BaseURL, cfg.TrialActivationPrivateKey)
+	svc.SetLocalMSPBilling(cfg.IsMSPControlPlane())
 	if cfg.IsProviderHostedMSP() {
 		svc.SetProviderHosted(true)
 		svc.SetProviderLicense(cfg.ProviderMSPLicenseKey)
