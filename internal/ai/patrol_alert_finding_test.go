@@ -241,8 +241,11 @@ func TestAlertRunWithoutAFindingStaysQuietInWatchOnly(t *testing.T) {
 }
 
 func TestAlertRunWithoutAFindingKeepsTheModelsJudgment(t *testing.T) {
+	// Pulse cannot tell a stop from a fault it should open: the container
+	// exited with SIGTERM, as `docker stop` leaves it.
 	t.Run("a warning that stayed active", func(t *testing.T) {
 		rig := newAlertRunRig(t, config.PatrolAutonomyApproval)
+		rig.setExitedContainer(143, nil)
 		scope := SustainedAlertPatrolScope(rig.alert.ID, rig.alert.ResourceID, "app-container", rig.alert.Type)
 		scope.NoStream = true
 		run := rig.run(scope)

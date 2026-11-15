@@ -4733,7 +4733,18 @@ dismissal holds. It sends no finding notification, because the alert already
 notified. It is opened only where Patrol investigates (effective mode other
 than `monitor`, with an orchestrator), so Watch only and free installs never
 get it, and not when another unresolved finding already mirrors the alert.
-Sustained, flapping, scheduled and manual runs keep the model's judgment. Cost:
+Flapping, scheduled and manual runs keep the model's judgment. A sustained run
+keeps it too, unless Pulse's own facts meet the rule that run is given for
+reporting a finding (`sustainedAlertCallsForFinding`): a restart-loop,
+memory-kill or health alert, a `docker-container-state` alert on a container
+that is restarting, was killed for memory or exited with a code other than 0
+or a stop signal (130, 137, 143), or a `disk` alert on a host or guest Pulse
+can read (`patrolAlertSubjectReadPlace`). On Docker fault set v1, qwen3:8b woke
+by itself on D2 (Exited 139) and D6 (a full mount, commands on), described
+both and filed neither, so neither was investigated. A finished job raises no
+state alert and a stop exits 0 or with a stop signal, so neither is opened.
+Proofs: `internal/ai/patrol_alert_finding_sustained_test.go` and
+`internal/ai/patrol_alert_finding_test.go`. Cost:
 at most one such finding per `alert_fired` trigger, inside that trigger's caps
 (3 an hour and 6 in 24 hours per alert identifier), and its investigation goes
 through `ShouldInvestigate` like any other. A scoped run whose alert is still
