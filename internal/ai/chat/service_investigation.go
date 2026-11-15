@@ -152,6 +152,7 @@ func (s *Service) ExecuteInvestigationStream(ctx context.Context, req Investigat
 		log.Debug().Str("resource_id", resourceID).Str("resource_type", req.ResourceType).
 			Msg("Investigation: the finding's resource did not resolve; reads must name their host")
 	}
+	loop.SetInvestigationProposalPrompt(investigationProposalPrompt(ctx, req.Catalog, req.ResourceID))
 	loop.SetKnowledgeAccumulator(sessions.NewKnowledgeAccumulatorForRun(session.ID))
 
 	userMsg := Message{
@@ -315,4 +316,38 @@ func (s *Service) ListInvestigationTools() []string {
 		}
 	}
 	return names
+}
+
+// investigationProposalPrompt names the actions Pulse can run for the
+// finding's resource, from the same catalog proposals are validated against,
+// and asks for the smallest one that would fix what the investigation found
+// or a recorded conclusion (AgenticLoop.SetInvestigationProposalPrompt). The
+// loop puts it to a run that ends in prose and to the final turn. It is empty
+// when there are no actions: then there is nothing to propose.
+func investigationProposalPrompt(ctx context.Context, catalog tools.ProposalCatalog, resourceID string) string {
+	resourceID = strings.TrimSpace(resourceID)
+	if catalog == nil || resourceID == "" {
+		return ""
+	}
+	capabilities, err := catalog(ctx, resourceID)
+	if err != nil {
+		return ""
+	}
+	names := make([]string, 0, len(capabilities))
+	seen := make(map[string]bool, len(capabilities))
+	for _, capability := range capabilities {
+		name := strings.TrimSpace(capability.Name)
+		if name == "" || seen[name] {
+			continue
+		}
+		seen[name] = true
+		names = append(names, name)
+	}
+	if len(names) == 0 {
+		return ""
+	}
+	return fmt.Sprintf("Pulse can run these actions for %s: %s. "+
+		"If one of them would fix what your investigation found, propose the smallest one that would now, with one %s call. "+
+		"If none of them would, or only a person can fix it, record your conclusion with %s.",
+		resourceID, strings.Join(names, ", "), agentcapabilities.PatrolProposeActionToolName, agentcapabilities.PatrolConcludeInvestigationToolName)
 }

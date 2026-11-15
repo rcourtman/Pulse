@@ -662,6 +662,10 @@ type AgenticLoop struct {
 	// asks when it ends in prose without any finding decision. Empty for runs
 	// that do not ask (SetPatrolFindingDecisionPrompt).
 	patrolFindingDecisionPrompt string
+	// investigationProposalPrompt is the one follow-up question an
+	// investigation asks when it ends in prose without proposing an action or
+	// recording a conclusion (SetInvestigationProposalPrompt).
+	investigationProposalPrompt string
 	orgID                       string
 	executionID                 string
 	streamIdleTimeout           time.Duration
@@ -771,6 +775,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 	a.mu.Lock()
 	maxTurns := a.maxTurns
 	patrolFindingDecisionPrompt := a.patrolFindingDecisionPrompt
+	investigationProposalPrompt := a.investigationProposalPrompt
 	suppressProviderErrorEvents := a.suppressProviderErrorEvents
 	a.aborted[sessionID] = false
 	a.mu.Unlock()
@@ -794,6 +799,8 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 	patrolOutputLimitRecoveryAttempted := false
 	patrolFindingDecisionPending := false // The run ended in prose with no finding decision; ask once
 	patrolFindingDecisionAsked := false
+	investigationProposalPending := false // The investigation ended in prose with no proposal or conclusion; ask once
+	investigationProposalAsked := false
 	investigationOutputLimitRecoveryPending := false // A truncated investigation conclusion needs one evidence-only retry
 	investigationOutputLimitRecoveryAttempted := false
 	// Patrol core normally establishes the exact-scope active-finding snapshot
@@ -934,6 +941,15 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 					Msg("[AgenticLoop] Watch ended without a finding decision — asking once for one")
 			}
 		}
+		if investigationProposalPending {
+			investigationProposalPending = false
+			if applyInvestigationProposalDecisionRequest(&req, a.currentExecutionProfile(), tools) {
+				log.Info().
+					Int("turn", turn).
+					Str("session_id", sessionID).
+					Msg("[AgenticLoop] Investigation ended without a proposal or conclusion — asking once")
+			}
+		}
 		if !patrolOutputLimitRecoveryTurn && investigationOutputLimitRecoveryPending && !investigationOutputLimitRecoveryAttempted {
 			if !applyInvestigationOutputLimitRecoveryRequest(&req, a.currentExecutionProfile()) {
 				return resultMessages, fmt.Errorf("Patrol investigation exhausted its output budget before a conclusion, and its evidence-only recovery profile is unavailable")
@@ -992,12 +1008,21 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 			case turn >= maxTurns-1:
 				// Final turn (turn limit or deadline reserve): record a typed
 				// conclusion rather than leave the outcome to be inferred from
-				// prose. A proposal stays available only once evidence is spent,
-				// as before.
-				req.Tools = investigationTerminalTools(tools, evidenceBudgetSpent)
+				// prose. A proposal is offered once evidence is spent, as
+				// before, and whenever Pulse can run an action for the
+				// finding's resource. A slow model reaches this turn through
+				// the deadline reserve: on Docker fault set v1 D1, qwen3:8b
+				// found that the web worker had died, was given only the
+				// conclusion tool, and wrote "restart the container" in prose.
+				offerProposal := evidenceBudgetSpent || investigationProposalPrompt != ""
+				req.Tools = investigationTerminalTools(tools, offerProposal)
 				textOnlySafetyBrake = len(req.Tools) == 0
 				if !textOnlySafetyBrake {
-					req.System += investigationFinalConclusionSystemNote
+					if investigationProposalPrompt != "" && providerToolIsAdvertised(req.Tools, agentcapabilities.PatrolProposeActionToolName) {
+						req.System += investigationFinalDecisionSystemNote + investigationProposalPrompt
+					} else {
+						req.System += investigationFinalConclusionSystemNote
+					}
 				}
 				log.Warn().
 					Int("turn", turn).
@@ -1538,6 +1563,26 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 				continue
 			}
 
+			// An investigation can end in prose that names the fix ("use
+			// patrol_propose_action with update") and calls nothing, so the
+			// run ends needs_attention with no proposal to approve. On Docker
+			// fault set v1, qwen3:8b found the cause of a crashed worker this
+			// way and proposed nothing. It is asked once, in this conversation
+			// and with its evidence, to propose one of the actions Pulse can
+			// run for the resource or to conclude. The next turn offers those
+			// two tools only. A run that already proposed or concluded, or
+			// whose leaked tool call was dropped, is not asked.
+			if prompt := investigationProposalPrompt; prompt != "" &&
+				isPatrolInvestigationExecution(a.currentExecutionProfile()) &&
+				!investigationProposalAsked && !suppressLeakedToolContent &&
+				!investigationRecordedDecision(resultMessages) && turn+1 < maxTurns {
+				investigationProposalAsked = true
+				investigationProposalPending = true
+				providerMessages = append(providerMessages, providers.Message{Role: "user", Content: investigationProposalQuestionPrefix + prompt})
+				turn++
+				continue
+			}
+
 			log.Debug().Msg("agentic loop complete - no tool calls")
 			return a.ensureFinalTextResponse(ctx, sessionID, resultMessages, providerMessages, callback)
 		}
@@ -1939,3 +1984,47 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 	log.Warn().Int("max_turns", maxTurns).Str("session_id", sessionID).Msg("agentic loop hit max turns limit")
 	return a.ensureFinalTextResponse(ctx, sessionID, resultMessages, providerMessages, callback)
 }
+
+// investigationRecordedDecision reports whether an investigation already
+// proposed an action or recorded its conclusion through a tool.
+func investigationRecordedDecision(messages []Message) bool {
+	for _, msg := range messages {
+		for _, tc := range msg.ToolCalls {
+			switch strings.TrimSpace(tc.Name) {
+			case agentcapabilities.PatrolProposeActionToolName, agentcapabilities.PatrolConcludeInvestigationToolName:
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// applyInvestigationProposalDecisionRequest narrows an investigation turn to
+// the proposal and conclusion tools, for the one turn that answers
+// investigationProposalPrompt. It keeps the investigation's system prompt.
+func applyInvestigationProposalDecisionRequest(req *providers.ChatRequest, profile tools.ExecutionProfile, availableTools []providers.Tool) bool {
+	if req == nil || !isPatrolInvestigationExecution(profile) {
+		return false
+	}
+	decisionTools := make([]providers.Tool, 0, 2)
+	for _, tool := range availableTools {
+		switch strings.TrimSpace(tool.Name) {
+		case agentcapabilities.PatrolProposeActionToolName, agentcapabilities.PatrolConcludeInvestigationToolName:
+			decisionTools = append(decisionTools, tool)
+		}
+	}
+	if len(decisionTools) == 0 {
+		return false
+	}
+	req.Tools = decisionTools
+	req.ToolChoice = nil
+	return true
+}
+
+// investigationProposalQuestionPrefix opens the question put to an
+// investigation that ends in prose without proposing or concluding.
+const investigationProposalQuestionPrefix = "Before you finish: you have not proposed an action or recorded your conclusion. "
+
+// investigationFinalDecisionSystemNote opens the final-turn note when the
+// final turn offers a proposal; investigationProposalPrompt follows it.
+const investigationFinalDecisionSystemNote = "\nThis is the investigation's final turn. Do not gather more evidence; use only the evidence already collected. "
