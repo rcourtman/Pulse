@@ -15,7 +15,9 @@ import (
 	"testing"
 	"time"
 
+	"errors"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/docker"
+	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/entitlements"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	stripewebhook "github.com/stripe/stripe-go/v82/webhook"
@@ -136,7 +138,20 @@ func TestCheckoutWithdrawalCannotBeForgotten(t *testing.T) {
 			t.Run(window+"/"+status, func(t *testing.T) {
 				f := newCheckoutRaceFixture(t, window == "runtime_start")
 				seen := 0
-				f.schedule(t, window, status, func(code int) { seen = code })
+				var issued *registry.HostedEntitlement
+				if window == "runtime_start" {
+					f.beforeRuntime = func() {
+						rows, err := f.reg.ListHostedEntitlements()
+						if err != nil || len(rows) != 1 {
+							t.Errorf("expected initial lease before runtime start: %v", err)
+							return
+						}
+						issued = rows[0]
+						seen = f.withdraw(t, status)
+					}
+				} else {
+					f.schedule(t, window, status, func(code int) { seen = code })
+				}
 				if code := f.event(t, "evt_checkout", "checkout.session.completed", f.session); code != 500 {
 					t.Fatalf("withdrawn checkout status%d, want500", code)
 				}
@@ -172,10 +187,16 @@ func TestCheckoutWithdrawalCannotBeForgotten(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				for _, row := range rows {
-					result, err := f.p.hostedEntitlements.RefreshEntitlement(row.RefreshToken, row.TenantID+".cloud.example.com")
-					if result != nil || err == nil {
-						t.Fatal("withdrawn checkout renewed paid authority")
+				if len(rows) != 0 {
+					t.Fatal("new partial checkout retained an entitlement after owned rollback")
+				}
+				if window == "runtime_start" {
+					if issued == nil {
+						t.Fatal("missing initial lease witness")
+					}
+					result, err := f.p.hostedEntitlements.RefreshEntitlement(issued.RefreshToken, issued.TenantID+".cloud.example.com")
+					if result != nil || !errors.Is(err, entitlements.ErrHostedEntitlementNotFound) {
+						t.Fatalf("rolled-back checkout token was not refused: %v", err)
 					}
 				}
 				if window == "runtime_start" {
