@@ -4789,6 +4789,22 @@ and one closing call more when the answer is a recorded finding. Proofs:
 `internal/ai/patrol_alert_finding_test.go`.
 The run status value is unchanged. Proof:
 `internal/ai/patrol_alert_finding_test.go`.
+An investigation is asked the same way about its fix. `ExecuteInvestigationStream`
+builds `investigationProposalPrompt` from the run's proposal catalog for the
+finding's resource (`InvestigationRunRequest.ResourceID`), naming the actions
+Pulse can run there, and sets it on the loop
+(`AgenticLoop.SetInvestigationProposalPrompt`). When an investigation turn
+ends with text, no tool call, and no `patrol_propose_action` or
+`patrol_conclude_investigation` call so far, the loop appends the question and
+runs one more turn through `applyInvestigationProposalDecisionRequest`, which
+offers those two tools only and keeps the investigation's system prompt. The
+model proposes the smallest listed action that would fix what it found, or
+records its conclusion. It is asked at most once, never after a leaked tool
+call was dropped, and not at all when the catalog lists no action. On Docker
+fault set v1 D2, qwen3:8b found a crashed worker's segfault and ended with
+"use patrol_propose_action with the update capability" in prose and no call,
+so the run ended `needs_attention` with nothing to approve. Proof:
+`internal/ai/chat/investigation_proposal_question_test.go`.
 
 When an alert clears, `PatrolService.ResolveFindingsForClearedAlert` closes the
 open findings that restate it: a finding stamped as its mirror, linked by

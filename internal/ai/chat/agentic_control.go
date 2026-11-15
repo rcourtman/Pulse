@@ -137,6 +137,17 @@ func (a *AgenticLoop) SetPatrolFindingDecisionPrompt(prompt string) {
 	a.mu.Unlock()
 }
 
+// SetInvestigationProposalPrompt sets the one follow-up question an
+// investigation asks when it ends in prose without proposing an action or
+// recording a conclusion. The question is asked at most once, in the same
+// conversation, and the turn that answers it may use the proposal and
+// conclusion tools only.
+func (a *AgenticLoop) SetInvestigationProposalPrompt(prompt string) {
+	a.mu.Lock()
+	a.investigationProposalPrompt = strings.TrimSpace(prompt)
+	a.mu.Unlock()
+}
+
 // SetMaxEvidenceCalls bounds model-selected evidence gathering for a Patrol
 // investigation. The terminal patrol_propose_action call is not evidence and
 // remains available after this budget is exhausted.

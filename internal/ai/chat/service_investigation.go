@@ -152,6 +152,7 @@ func (s *Service) ExecuteInvestigationStream(ctx context.Context, req Investigat
 		log.Debug().Str("resource_id", resourceID).Str("resource_type", req.ResourceType).
 			Msg("Investigation: the finding's resource did not resolve; reads must name their host")
 	}
+	loop.SetInvestigationProposalPrompt(investigationProposalPrompt(ctx, req.Catalog, req.ResourceID))
 	loop.SetKnowledgeAccumulator(sessions.NewKnowledgeAccumulatorForRun(session.ID))
 
 	userMsg := Message{
@@ -315,4 +316,39 @@ func (s *Service) ListInvestigationTools() []string {
 		}
 	}
 	return names
+}
+
+// investigationProposalPrompt is the one question an investigation that ends
+// in prose without a proposal or conclusion is asked
+// (AgenticLoop.SetInvestigationProposalPrompt). It names the actions Pulse can
+// run for the finding's resource, from the same catalog proposals are
+// validated against, and is empty when there are none: then there is nothing
+// to propose and the prose conclusion stands.
+func investigationProposalPrompt(ctx context.Context, catalog tools.ProposalCatalog, resourceID string) string {
+	resourceID = strings.TrimSpace(resourceID)
+	if catalog == nil || resourceID == "" {
+		return ""
+	}
+	capabilities, err := catalog(ctx, resourceID)
+	if err != nil {
+		return ""
+	}
+	names := make([]string, 0, len(capabilities))
+	seen := make(map[string]bool, len(capabilities))
+	for _, capability := range capabilities {
+		name := strings.TrimSpace(capability.Name)
+		if name == "" || seen[name] {
+			continue
+		}
+		seen[name] = true
+		names = append(names, name)
+	}
+	if len(names) == 0 {
+		return ""
+	}
+	return fmt.Sprintf("Before you finish: you have not proposed an action or recorded your conclusion. "+
+		"Pulse can run these actions for %s: %s. "+
+		"If one of them would fix what your investigation found, propose the smallest one that would now, with one %s call. "+
+		"If none of them would, or only a person can fix it, record your conclusion with %s.",
+		resourceID, strings.Join(names, ", "), agentcapabilities.PatrolProposeActionToolName, agentcapabilities.PatrolConcludeInvestigationToolName)
 }
