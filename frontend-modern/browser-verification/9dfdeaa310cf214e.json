@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "base_sha": "bf5e8489d3ce2738cd9107fe94ff6dd45b3773e4",
+  "verified_at": "2026-11-15T15:08:39Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/OrganizationAccessInvitationsSection.tsx",
+    "frontend-modern/src/components/Settings/OrganizationAccessManagementSection.tsx",
+    "frontend-modern/src/components/Settings/OrganizationAccessMembersSection.tsx",
+    "frontend-modern/src/components/Settings/OrganizationAccessPanel.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/OrganizationAccessInvitationsSection.tsx": "80d7adf83617447b00ce6ce57c3c698d7d22fc537ef6bdf84fc3dece71306860",
+    "frontend-modern/src/components/Settings/OrganizationAccessManagementSection.tsx": "82c75ee43dd78396d273956f5135df5b7a759e3f226ac010bde109ac0483cf86",
+    "frontend-modern/src/components/Settings/OrganizationAccessMembersSection.tsx": "30ecb2248b65e94309e413d68e7ba6535a01c452e3b4ebf18d4589abb6938055",
+    "frontend-modern/src/components/Settings/OrganizationAccessPanel.tsx": "3c8f11a0e9a01e01689d823655692d49318af566eb8622e7ca3b472979a3cbad"
+  },
+  "routes": [
+    "Settings > Organization Access (actual production panel, state owner, OrgsAPI and session/CSRF HTTP client in offline consuming fixture; not full App/IdP)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Fresh comparable parent/candidate overview, saved-role, removed-member and submitted-draft captures, all32 copied into this turn output and individually native-inspected. Same safe fixtures, viewport/theme, locale/timezone, native interactions and normalized camera anchor.",
+    "Chromium141 /desktop-light and narrow-dark; WebKit26 /desktop-dark and narrow-light. Playwright1.56.1 matches the integration lock. Literal identities, saved roles, metadata, distinctions and prior at-glance controls remain. No layout/information removal.",
+    "source-mrmlvxyt builds both current parentbf5e8489 and exact candidate runtime from sealed input. Each consumed artifact hash is verified before browser execution; final runtime hashes match the containing source."
+  ],
+  "interactions": [
+    "493 assertions /8 before-after cases, no page exceptions. Confirmed role save restores the same exact saved control; Tab continues within its member. Removed/revoked/accepted/declined entries continue by prior same-action identity order or the saved summary. Native Enter invitation submission returns to the cleared draft.",
+    "Exactly seven deliberate success-path writes per case; Enter while saving and all focus movements cannot add writes. Path/body-derived readback preserves encoded selected organization/member/invitation, session-only auth and CSRF.",
+    "Outside focus during write/read is preserved; context round trips, reader withdrawal and late replies cannot revive stale intent. Uncertainty retains the warning and read-only Reload; ownership review/Cancel remains no-write. Registered tests also cover reordered/first/middle/last peers, hidden surfaces, unmount, and draft origins."
+  ]
+}

@@ -216,12 +216,16 @@ describe('OrganizationAccessPanel', () => {
       renderPanel();
 
       fireEvent.click(
-        await screen.findByRole('button', { name: `Revoke invitation for ${target}` }),
+        await screen.findByRole('button', {
+          name: `Revoke invitation for ${target}`,
+        }),
       );
 
       await waitFor(() =>
         expect(
-          screen.queryByRole('group', { name: `Pending invitation for ${target}` }),
+          screen.queryByRole('group', {
+            name: `Pending invitation for ${target}`,
+          }),
         ).not.toBeInTheDocument(),
       );
       expect(revokeInvitationMock).toHaveBeenCalledExactlyOnceWith(
@@ -230,7 +234,9 @@ describe('OrganizationAccessPanel', () => {
         expect.objectContaining({ expectedOrgID: 'org-a', retry: false }),
       );
       expect(
-        await screen.findByRole('group', { name: `Pending invitation for ${retained}` }),
+        await screen.findByRole('group', {
+          name: `Pending invitation for ${retained}`,
+        }),
       ).toBeVisible();
       expect(await screen.findByText('user-2', { exact: true })).toBeVisible();
       expect(removeMemberMock).not.toHaveBeenCalled();
@@ -253,13 +259,21 @@ describe('OrganizationAccessPanel', () => {
 
       for (const userId of ['user-2', 'user-3']) {
         expect(
-          await screen.findByRole('button', { name: `Remove ${userId} from organization` }),
+          await screen.findByRole('button', {
+            name: `Remove ${userId} from organization`,
+          }),
         ).toBeEnabled();
       }
       expect(
-        screen.queryByRole('button', { name: 'Remove user-1 from organization' }),
+        screen.queryByRole('button', {
+          name: 'Remove user-1 from organization',
+        }),
       ).not.toBeInTheDocument();
-      fireEvent.click(screen.getByRole('button', { name: `Remove ${target} from organization` }));
+      fireEvent.click(
+        screen.getByRole('button', {
+          name: `Remove ${target} from organization`,
+        }),
+      );
 
       expect(confirm).toHaveBeenCalledOnce();
       expect(vi.mocked(confirm).mock.calls[0][0]).toContain(target);
@@ -341,10 +355,14 @@ describe('OrganizationAccessPanel', () => {
         action === 'Accept' ? declineMyInvitationMock : acceptMyInvitationMock,
       ).not.toHaveBeenCalled();
       expect(
-        await screen.findByRole('group', { name: 'Invitation to Operations (client-east)' }),
+        await screen.findByRole('group', {
+          name: 'Invitation to Operations (client-east)',
+        }),
       ).toBeVisible();
       expect(
-        screen.queryByRole('group', { name: 'Invitation to Operations (client-west)' }),
+        screen.queryByRole('group', {
+          name: 'Invitation to Operations (client-west)',
+        }),
       ).not.toBeInTheDocument();
       expect(getOrgIDMock()).toBe('org-a');
       expect(inviteMemberMock).not.toHaveBeenCalled();
@@ -357,10 +375,14 @@ describe('OrganizationAccessPanel', () => {
     async (orgDisplayName) => {
       listMyInvitationsMock.mockResolvedValue([{ ...sameNamedInvitations()[0], orgDisplayName }]);
       renderPanel();
-      const invitation = await screen.findByRole('group', { name: 'Invitation to client-east' });
+      const invitation = await screen.findByRole('group', {
+        name: 'Invitation to client-east',
+      });
       expect(within(invitation).getByText('client-east')).toBeVisible();
       expect(
-        within(invitation).getByRole('button', { name: 'Accept invitation to client-east' }),
+        within(invitation).getByRole('button', {
+          name: 'Accept invitation to client-east',
+        }),
       ).toBeEnabled();
       expect(invitation).not.toHaveTextContent('client-east (client-east)');
       expectNoWrites();
@@ -378,7 +400,9 @@ describe('OrganizationAccessPanel', () => {
 
     orgDeferred.resolve(baseOrg);
 
-    const heading = await screen.findByText('Invite Member', { selector: 'h4' });
+    const heading = await screen.findByText('Invite Member', {
+      selector: 'h4',
+    });
     expect(heading).toBeVisible();
     expect(screen.getByRole('heading', { name: 'Invite Member' })).toBe(heading);
     expect(screen.queryByLabelText('Loading organization access')).not.toBeInTheDocument();
@@ -386,7 +410,9 @@ describe('OrganizationAccessPanel', () => {
 
   it('reviews an ownership change without displaying it as saved, and can cancel', async () => {
     renderPanel();
-    const role = await screen.findByRole('combobox', { name: 'Role for user-2' });
+    const role = await screen.findByRole('combobox', {
+      name: 'Role for user-2',
+    });
     fireEvent.change(role, { target: { value: 'owner' } });
     expect(
       screen.getByRole('dialog', { name: 'Transfer organization ownership' }),
@@ -408,7 +434,9 @@ describe('OrganizationAccessPanel', () => {
       })),
     });
     render(() => <OrganizationAccessPanel currentUser="user-2" />);
-    const ownerRole = await screen.findByRole('combobox', { name: 'Role for user-1' });
+    const ownerRole = await screen.findByRole('combobox', {
+      name: 'Role for user-1',
+    });
     expect(ownerRole).toHaveValue('owner');
     expect(ownerRole).toBeDisabled();
     expect(screen.getByRole('combobox', { name: 'Role for user-2' })).not.toHaveTextContent(
@@ -435,7 +463,11 @@ describe('OrganizationAccessPanel', () => {
           ),
         );
       } else {
-        fireEvent.click(screen.getByRole('button', { name: 'Remove user-2 from organization' }));
+        fireEvent.click(
+          screen.getByRole('button', {
+            name: 'Remove user-2 from organization',
+          }),
+        );
         await waitFor(() =>
           expect(removeMemberMock).toHaveBeenCalledWith(
             'org-a',
@@ -467,7 +499,9 @@ describe('OrganizationAccessPanel', () => {
       });
       renderPanel();
 
-      const input = await screen.findByRole('textbox', { name: 'Invite user ID' });
+      const input = await screen.findByRole('textbox', {
+        name: 'Invite user ID',
+      });
       expect(screen.getByText('user-2')).toBeInTheDocument();
       const binding = {
         expectedOrgID: scope,
@@ -479,12 +513,18 @@ describe('OrganizationAccessPanel', () => {
       }
       expect(listMyInvitationsMock).toHaveBeenCalledExactlyOnceWith(binding);
 
-      const roles = screen.getByRole('combobox', { name: 'Invite role' }) as HTMLSelectElement;
+      const roles = screen.getByRole('combobox', {
+        name: 'Invite role',
+      }) as HTMLSelectElement;
       if (scope === 'default') {
         expect(Array.from(roles.options, (option) => option.value)).toEqual(['viewer']);
       }
       fireEvent.input(input, { target: { value: 'new-user' } });
-      fireEvent.click(screen.getByRole('button', { name: scope === 'default' ? 'Add' : 'Invite' }));
+      fireEvent.click(
+        screen.getByRole('button', {
+          name: scope === 'default' ? 'Add' : 'Invite',
+        }),
+      );
       await waitFor(() =>
         expect(inviteMemberMock).toHaveBeenCalledExactlyOnceWith(
           scope,
@@ -502,7 +542,11 @@ describe('OrganizationAccessPanel', () => {
     'does not infer default member administration from an owner ID when canManageMembers is %s',
     async (canManageMembers) => {
       getOrgIDMock.mockReturnValue(' \t ');
-      orgGetMock.mockResolvedValue({ ...baseOrg, id: 'default', canManageMembers });
+      orgGetMock.mockResolvedValue({
+        ...baseOrg,
+        id: 'default',
+        canManageMembers,
+      });
       renderPanel();
 
       await screen.findByText('user-2');
@@ -533,10 +577,14 @@ describe('Organization Access keyboard recovery', () => {
       }[operation]!;
       change.mockReturnValueOnce(request.promise);
       renderPanel();
-      const input = await screen.findByRole('textbox', { name: 'Invite user ID' });
+      const input = await screen.findByRole('textbox', {
+        name: 'Invite user ID',
+      });
       fireEvent.input(input, { target: { value: 'new-user' } });
       if (operation === 'role') {
-        const control = screen.getByRole('combobox', { name: 'Role for user-2' });
+        const control = screen.getByRole('combobox', {
+          name: 'Role for user-2',
+        });
         control.focus();
         fireEvent.change(control, { target: { value: 'editor' } });
       } else {
@@ -568,10 +616,14 @@ describe('Organization Access keyboard recovery', () => {
         <OrganizationAccessPanel currentUser="user-1" />
       </>
     ));
-    const control = await screen.findByRole('combobox', { name: 'Role for user-2' });
+    const control = await screen.findByRole('combobox', {
+      name: 'Role for user-2',
+    });
     control.focus();
     fireEvent.change(control, { target: { value: 'editor' } });
-    const outside = screen.getByRole('button', { name: 'Outside access panel' });
+    const outside = screen.getByRole('button', {
+      name: 'Outside access panel',
+    });
     outside.focus();
     request.reject(new Error('response unavailable'));
     await screen.findByRole('alert');
@@ -600,7 +652,9 @@ describe('Organization Access keyboard recovery', () => {
     async (activation) => {
       orgGetMock.mockRejectedValueOnce(new Error('Unavailable'));
       renderPanel();
-      const reload = await screen.findByRole('button', { name: 'Reload access' });
+      const reload = await screen.findByRole('button', {
+        name: 'Reload access',
+      });
       if (activation === 'keyboard') reload.focus();
       fireEvent.click(reload);
       await waitFor(() => expect(summary()).toHaveFocus());
@@ -636,7 +690,9 @@ describe('Organization Access keyboard recovery', () => {
     const reload = await screen.findByRole('button', { name: 'Reload access' });
     reload.focus();
     fireEvent.click(reload);
-    const outside = screen.getByRole('button', { name: 'Outside access panel' });
+    const outside = screen.getByRole('button', {
+      name: 'Outside access panel',
+    });
     outside.focus();
     read.resolve(baseOrg);
     await screen.findByText('user-2');
@@ -652,7 +708,9 @@ describe('Organization Access keyboard recovery', () => {
       orgGetMock.mockRejectedValueOnce(new Error('Unavailable')).mockReturnValueOnce(read.promise);
       const [user, setUser] = createSignal('user-1');
       render(() => <OrganizationAccessPanel currentUser={user()} />);
-      const reload = await screen.findByRole('button', { name: 'Reload access' });
+      const reload = await screen.findByRole('button', {
+        name: 'Reload access',
+      });
       reload.focus();
       fireEvent.click(reload);
       if (context === 'organization') {
@@ -672,24 +730,210 @@ describe('Organization Access keyboard recovery', () => {
     },
   );
 
-  it('does not change successful-mutation refresh focus or retry its write', async () => {
+  it('restores the same saved role control after a successful refresh without repeating its write', async () => {
     renderPanel();
-    const control = await screen.findByRole('combobox', { name: 'Role for user-2' });
+    const control = await screen.findByRole('combobox', {
+      name: 'Role for user-2',
+    });
     control.focus();
     fireEvent.change(control, { target: { value: 'editor' } });
     await waitFor(() => expect(orgGetMock).toHaveBeenCalledTimes(2));
     await screen.findByText('user-2');
-    await settleFocus();
-    expect(document.body).toHaveFocus();
+    await waitFor(() =>
+      expect(screen.getByRole('combobox', { name: 'Role for user-2' })).toHaveFocus(),
+    );
+    expect(screen.getByRole('combobox', { name: 'Role for user-2' })).not.toBe(control);
     expect(updateMemberRoleMock).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
+
+  it.each(['invite-user', 'invite-role', 'invite-submit'])(
+    'returns to the same draft control after a successful %s submission',
+    async (origin) => {
+      renderPanel();
+      const input = await screen.findByRole('textbox', {
+        name: 'Invite user ID',
+      });
+      fireEvent.input(input, { target: { value: 'new-user' } });
+      const control = {
+        'invite-user': input,
+        'invite-role': screen.getByRole('combobox', { name: 'Invite role' }),
+        'invite-submit': screen.getByRole('button', { name: 'Invite' }),
+      }[origin]!;
+      control.focus();
+      fireEvent.submit(screen.getByRole('form', { name: 'Invite member' }));
+      await waitFor(() => expect(orgGetMock).toHaveBeenCalledTimes(2));
+      const fresh = await screen.findByRole('textbox', {
+        name: 'Invite user ID',
+      });
+      await waitFor(() =>
+        expect(document.activeElement).toHaveAttribute('data-org-access-action', origin),
+      );
+      expect(fresh).toHaveValue('');
+      expect(inviteMemberMock).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each([
+    ['first', 'middle'],
+    ['middle', 'last'],
+    ['last', 'middle'],
+  ])(
+    'continues removed member %s at %s, not the same displayed row index',
+    async (target, next) => {
+      let members = [
+        baseMembers[0],
+        ...['first', 'middle', 'last'].map((userId) => ({
+          ...baseMembers[1],
+          userId,
+        })),
+      ];
+      listMembersMock.mockImplementation(async () => members);
+      removeMemberMock.mockImplementation(async (_orgID, userId) => {
+        // The new snapshot changes order; continuation follows the old identities.
+        members = members.filter((member) => member.userId !== userId).reverse();
+      });
+      renderPanel();
+      const trigger = await screen.findByRole('button', {
+        name: `Remove ${target} from organization`,
+      });
+      trigger.focus();
+      fireEvent.click(trigger);
+      await waitFor(() =>
+        expect(
+          screen.getByRole('button', {
+            name: `Remove ${next} from organization`,
+          }),
+        ).toHaveFocus(),
+      );
+      expect(removeMemberMock).toHaveBeenCalledTimes(1);
+      expect(confirm).toHaveBeenCalledOnce();
+    },
+  );
+
+  it.each(['revoke', 'accept', 'decline'])(
+    'continues %s invitations by exact identity, falling back to the saved summary when none remain',
+    async (action) => {
+      let invitations = ['east/1?realm=saved#exact', 'west/2?realm=saved#exact'].map((id) => ({
+        userId: id,
+        orgId: id,
+        orgDisplayName: 'Operations',
+        role: 'viewer',
+        invitedBy: 'owner',
+        invitedAt: '2026-11-01T00:00:00Z',
+      }));
+      const request =
+        action === 'revoke'
+          ? revokeInvitationMock
+          : action === 'accept'
+            ? acceptMyInvitationMock
+            : declineMyInvitationMock;
+      if (action === 'revoke')
+        listPendingInvitationsMock.mockImplementation(async () => invitations);
+      else listMyInvitationsMock.mockImplementation(async () => invitations);
+      request.mockImplementation(async (orgID, userID) => {
+        const id = action === 'revoke' ? userID : orgID;
+        invitations = invitations.filter((invitation) => invitation.orgId !== id);
+        return { kind: 'member' };
+      });
+      renderPanel();
+      for (const id of invitations.map((invitation) => invitation.orgId)) {
+        const name =
+          action === 'revoke'
+            ? `Revoke invitation for ${id}`
+            : `${action === 'accept' ? 'Accept' : 'Decline'} invitation to Operations (${id})`;
+        const trigger = await screen.findByRole('button', { name });
+        trigger.focus();
+        fireEvent.click(trigger);
+        await waitFor(() => expect(request).toHaveBeenCalledTimes(id.startsWith('east') ? 1 : 2));
+        if (id.startsWith('east')) {
+          await waitFor(() =>
+            expect(document.activeElement).toHaveAttribute(
+              'data-org-access-target',
+              'west/2?realm=saved#exact',
+            ),
+          );
+          expect(document.activeElement).toHaveAttribute('data-org-access-action', action);
+        } else await waitFor(() => expect(summary()).toHaveFocus());
+      }
+    },
+  );
+
+  it.each(['pending write', 'saved reread'])(
+    'does not steal deliberate outside focus during the %s of a successful change',
+    async (phase) => {
+      const request = deferred<undefined>();
+      const read = deferred<typeof baseOrg>();
+      updateMemberRoleMock.mockReturnValueOnce(request.promise);
+      orgGetMock.mockReturnValueOnce(Promise.resolve(baseOrg)).mockReturnValueOnce(read.promise);
+      render(() => (
+        <>
+          <button>Outside access panel</button>
+          <OrganizationAccessPanel currentUser="user-1" />
+        </>
+      ));
+      const trigger = await screen.findByRole('combobox', {
+        name: 'Role for user-2',
+      });
+      trigger.focus();
+      fireEvent.change(trigger, { target: { value: 'editor' } });
+      if (phase === 'saved reread') {
+        request.resolve(undefined);
+        await screen.findByLabelText('Loading organization access');
+      }
+      const outside = screen.getByRole('button', {
+        name: 'Outside access panel',
+      });
+      outside.focus();
+      request.resolve(undefined);
+      read.resolve(baseOrg);
+      await screen.findByText('user-2');
+      await settleFocus();
+      expect(outside).toHaveFocus();
+      expect(updateMemberRoleMock).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each(['organization round trip', 'user round trip', 'read-only', 'hidden surface'])(
+    'retires saved-control focus on %s while a change is pending',
+    async (context) => {
+      const request = deferred<undefined>();
+      updateMemberRoleMock.mockReturnValueOnce(request.promise);
+      const [user, setUser] = createSignal('user-1');
+      render(() => <OrganizationAccessPanel currentUser={user()} />);
+      const trigger = await screen.findByRole('combobox', {
+        name: 'Role for user-2',
+      });
+      trigger.focus();
+      fireEvent.change(trigger, { target: { value: 'editor' } });
+      if (context === 'organization round trip') {
+        getOrgIDMock.mockReturnValue('org-b');
+        orgGetMock.mockResolvedValueOnce({ ...baseOrg, id: 'org-b' });
+        eventBusEmitMock('org_switched');
+        await screen.findByText('user-2');
+        getOrgIDMock.mockReturnValue('org-a');
+        eventBusEmitMock('org_switched');
+      } else if (context === 'user round trip') {
+        setUser('different-user');
+        await screen.findByText('user-2');
+        setUser('user-1');
+      } else if (context === 'read-only') setReadOnly(true);
+      else setHidden(true);
+      request.resolve(undefined);
+      if (context !== 'hidden surface') await screen.findByText('user-2');
+      await settleFocus();
+      expect(document.body).toHaveFocus();
+      expect(updateMemberRoleMock).toHaveBeenCalledTimes(1);
+    },
+  );
 
   it('cancels a pending focus handoff when the panel unmounts', async () => {
     const request = deferred<never>();
     updateMemberRoleMock.mockReturnValueOnce(request.promise);
     const view = renderPanel();
-    const control = await screen.findByRole('combobox', { name: 'Role for user-2' });
+    const control = await screen.findByRole('combobox', {
+      name: 'Role for user-2',
+    });
     control.focus();
     fireEvent.change(control, { target: { value: 'editor' } });
     request.reject(new Error('response unavailable'));
@@ -723,7 +967,11 @@ describe('Organization Access selection safety', () => {
     renderPanel();
     await waitFor(() => expect(listMembersMock).toHaveBeenCalledTimes(1));
     getOrgIDMock.mockReturnValue('org-b');
-    orgGetMock.mockResolvedValueOnce({ ...baseOrg, id: 'org-b', displayName: 'Organization B' });
+    orgGetMock.mockResolvedValueOnce({
+      ...baseOrg,
+      id: 'org-b',
+      displayName: 'Organization B',
+    });
     listMembersMock.mockResolvedValueOnce([{ ...baseMembers[1], userId: 'member-b' }]);
     eventBusEmitMock('org_switched');
     await screen.findByText('member-b');
@@ -789,7 +1037,9 @@ describe('Organization Access read admission', () => {
 
   it('preserves only the same-selection invitation draft through a failed refresh and reload', async () => {
     renderPanel();
-    const input = await screen.findByRole('textbox', { name: 'Invite user ID' });
+    const input = await screen.findByRole('textbox', {
+      name: 'Invite user ID',
+    });
     fireEvent.input(input, { target: { value: 'unsent-user' } });
     orgGetMock.mockRejectedValueOnce(new Error('Unavailable'));
     eventBusEmitMock('organizations_changed');
@@ -889,7 +1139,11 @@ describe('Organization Access read admission', () => {
 
   it('normalizes deliberate default selection without accepting another payload identity', async () => {
     getOrgIDMock.mockReturnValue(null);
-    orgGetMock.mockResolvedValue({ ...baseOrg, id: 'default', ownerUserId: undefined });
+    orgGetMock.mockResolvedValue({
+      ...baseOrg,
+      id: 'default',
+      ownerUserId: undefined,
+    });
     const { state } = renderState();
     await ready(state);
     expect(state.org()?.id).toBe('default');
@@ -1159,7 +1413,10 @@ describe('Organization Access change safety', () => {
       else
         result.resolve({
           kind: 'member',
-          member: { ...member, role: outcome === 'success' ? 'owner' : 'viewer' },
+          member: {
+            ...member,
+            role: outcome === 'success' ? 'owner' : 'viewer',
+          },
         });
       await change;
       if (outcome === 'success') {
@@ -1177,7 +1434,11 @@ describe('Organization Access change safety', () => {
       expect(updateMemberRoleMock).toHaveBeenCalledExactlyOnceWith(
         'org-a',
         { userId: member.userId, role: 'owner' },
-        expect.objectContaining({ expectedOrgID: 'org-a', retry: false, signal }),
+        expect.objectContaining({
+          expectedOrgID: 'org-a',
+          retry: false,
+          signal,
+        }),
       );
       expect(orgGetMock).toHaveBeenCalledTimes(2);
     },
@@ -1382,14 +1643,20 @@ describe('Organization Access lifetime', () => {
 describe('Default organization member form', () => {
   it('keeps the labelled viewer-only Add flow on native submission', async () => {
     getOrgIDMock.mockReturnValue('default');
-    orgGetMock.mockResolvedValue({ ...baseOrg, id: 'default', canManageMembers: true });
+    orgGetMock.mockResolvedValue({
+      ...baseOrg,
+      id: 'default',
+      canManageMembers: true,
+    });
     inviteMemberMock.mockResolvedValue({
       kind: 'member',
       member: { userId: 'new-user', role: 'viewer' },
     });
     renderPanel();
     const form = await screen.findByRole('form', { name: 'Add member' });
-    const input = within(form).getByRole('textbox', { name: 'Invite user ID' }) as HTMLInputElement;
+    const input = within(form).getByRole('textbox', {
+      name: 'Invite user ID',
+    }) as HTMLInputElement;
     const role = within(form).getByRole('combobox', { name: 'Invite role' });
     expect(Array.from(input.labels ?? [], (label) => label.textContent?.trim())).toContain(
       'User ID',
