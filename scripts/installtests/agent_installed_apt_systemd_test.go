@@ -3,8 +3,11 @@
 package installtests
 
 import (
+	"crypto/sha256"
 	"errors"
 	"fmt"
+	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -12,6 +15,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -153,12 +157,91 @@ func nativeAPTReference(t *testing.T, receipt *nativeProfileReceipt, root, user 
 
 func nativeAPTMachineState(t *testing.T) map[string]secureRuntimeStableIdentity {
 	t.Helper()
+	lists, err := nativeAPTSnapshotTree("/var/lib/apt/lists")
+	if err != nil {
+		t.Fatal(err)
+	}
 	return map[string]secureRuntimeStableIdentity{
 		"dpkg_status":  nativeProfileFiles(t, "/var/lib/dpkg/status"),
 		"dpkg_updates": nativeProfileTree(t, "/var/lib/dpkg/updates"),
-		"apt_lists":    nativeProfileTree(t, "/var/lib/apt/lists"),
+		"apt_lists":    lists,
 		"apt_state":    nativeProfileOptionalFiles(t, "/var/lib/apt/extended_states"),
 	}
+}
+
+// APT's auxfiles can contain symlinks on hosted images. Observe those entries'
+// literal link bytes and own metadata, never their referents. Keep the strict
+// nativeProfileTree used for saved identity and recovery files unchanged.
+// Directories (including the root), complete file bytes and full type/mode,
+// UID and GID all participate in the before/after comparison. This binds the
+// index tree itself; a link does not extend the observation to another tree.
+func nativeAPTSnapshotTree(path string) (secureRuntimeStableIdentity, error) {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return nil, err
+	}
+	if !info.IsDir() {
+		return nil, errors.New("APT snapshot root is not a directory")
+	}
+	root, err := os.OpenRoot(path)
+	if err != nil {
+		return nil, err
+	}
+	defer root.Close()
+	opened, err := root.Stat(".")
+	if err != nil || !os.SameFile(info, opened) {
+		return nil, errors.New("APT snapshot root changed while opening")
+	}
+	result := make(secureRuntimeStableIdentity)
+	err = fs.WalkDir(root.FS(), ".", func(name string, _ fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		info, err := root.Lstat(name)
+		if err != nil {
+			return err
+		}
+		stat, ok := info.Sys().(*syscall.Stat_t)
+		if !ok {
+			return errors.New("APT snapshot ownership is unavailable")
+		}
+		identity := secureRuntimeFileIdentity{Present: true, Mode: info.Mode(), UID: stat.Uid, GID: stat.Gid}
+		switch {
+		case info.Mode().IsRegular():
+			// Refuse a substituted link or special node, rather than following
+			// it or blocking on it. Root confines ancestor resolution too.
+			file, err := root.OpenFile(name, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+			if err != nil {
+				return err
+			}
+			opened, err := file.Stat()
+			if err != nil || !opened.Mode().IsRegular() || !os.SameFile(info, opened) {
+				file.Close()
+				return errors.New("APT snapshot file changed while opening")
+			}
+			hash := sha256.New()
+			_, readErr := io.Copy(hash, file)
+			if err := errors.Join(readErr, file.Close()); err != nil {
+				return err
+			}
+			identity.Hash = fmt.Sprintf("%x", hash.Sum(nil))
+		case info.Mode()&os.ModeSymlink != 0:
+			target, err := root.Readlink(name)
+			if err != nil {
+				return err
+			}
+			identity.Hash = secureRuntimeHash([]byte(target))
+		case info.IsDir():
+		default:
+			return fmt.Errorf("APT snapshot contains an unsupported node: %s", name)
+		}
+		result[name] = identity
+		return nil
+	})
+	if err != nil {
+		return nil, err // A partial inventory cannot establish unchanged state.
+	}
+	return result, nil
 }
 
 func nativeAPTNoRunner(t *testing.T, receipt *nativeProfileReceipt) {
@@ -191,6 +274,7 @@ func nativeProfileAPT(t *testing.T, receipt *nativeProfileReceipt, fixture *secu
 	install func(string, ...string) ([]byte, error), phase func(string, any)) {
 	t.Helper()
 	hostBefore := nativeAPTMachineState(t)
+	phase("host-package-state-before", hostBefore)
 	live := nativeAPTReference(t, receipt, "", "")
 	waitReport := func(want nativeAPTInventory, after time.Time, safe bool) secureRuntimeLabReport {
 		deadline := time.Now().Add(45 * time.Second)
@@ -334,10 +418,12 @@ func nativeProfileAPT(t *testing.T, receipt *nativeProfileReceipt, fixture *secu
 		!nativeProfileHistoryHandedOff(history, nativeProfileFiles(t, historyPath)[historyPath], uint32(uid), uint32(gid)) {
 		t.Fatal("no-runner rollback changed saved identity/CA/token/lifecycle/history or state-root metadata")
 	}
-	if !reflect.DeepEqual(hostBefore, nativeAPTMachineState(t)) || !reflect.DeepEqual(fixtureBefore, nativeProfileTree(t, root)) {
+	hostAfter := nativeAPTMachineState(t)
+	if !reflect.DeepEqual(hostBefore, hostAfter) || !reflect.DeepEqual(fixtureBefore, nativeProfileTree(t, root)) {
 		t.Fatal("APT inspection changed package database/index bytes or metadata")
 	}
 	phase("root-no-runner-restored", map[string]any{"authenticated_report": report, "state": state, "history_preserved": true,
-		"host_package_state_unchanged": true, "fixture_unchanged": true, "state_root": stateRoot, "lifecycle": lifecycle})
+		"host_package_state_unchanged": true, "host_package_state_after": hostAfter,
+		"fixture_unchanged": true, "state_root": stateRoot, "lifecycle": lifecycle})
 	receipt.Passed = true
 }

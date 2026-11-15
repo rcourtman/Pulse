@@ -7,8 +7,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -86,6 +88,167 @@ func TestNativeAPTReferenceSimulation(t *testing.T) {
 	}
 	if !reflect.DeepEqual(before, nativeProfileTree(t, root)) {
 		t.Fatal("reference simulation modified its private index or status")
+	}
+}
+
+func TestNativeAPTSnapshotPreservesLinksWithoutTraversal(t *testing.T) {
+	root, outside := t.TempDir(), t.TempDir()
+	if err := os.Mkdir(filepath.Join(root, "auxfiles"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "regular"), []byte("complete index bytes"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	externalFile := filepath.Join(outside, "apt-mirrors.txt")
+	if err := os.WriteFile(externalFile, []byte("not part of the index tree"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	links := map[string]string{
+		"auxfiles/_etc_apt_apt-mirrors.txt": externalFile,
+		"relative":                          "regular",
+		"dangling":                          "missing",
+		"directory":                         outside,
+	}
+	for name, target := range links {
+		if err := os.Symlink(target, filepath.Join(root, name)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	before, err := nativeAPTSnapshotTree(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(before) != 3+len(links) || before["regular"].Hash != secureRuntimeHash([]byte("complete index bytes")) {
+		t.Fatal("snapshot omitted entries/bytes or traversed a directory link")
+	}
+	for name, identity := range before {
+		info, err := os.Lstat(filepath.Join(root, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		stat := info.Sys().(*syscall.Stat_t)
+		if !identity.Present || identity.Mode != info.Mode() || identity.UID != stat.Uid || identity.GID != stat.Gid {
+			t.Fatalf("snapshot lost entry type, mode or ownership: %s", name)
+		}
+	}
+	for name, target := range links {
+		if before[name].Mode&os.ModeSymlink == 0 || before[name].Hash != secureRuntimeHash([]byte(target)) {
+			t.Fatalf("snapshot did not bind the literal link bytes: %s", name)
+		}
+	}
+	if before["."].Mode&os.ModeDir == 0 || before["auxfiles"].Mode&os.ModeDir == 0 {
+		t.Fatal("snapshot omitted directory identity")
+	}
+	// Neither an outside referent's bytes nor children of a directory link
+	// belong to this tree. Changing them must not expand or change its receipt.
+	if err := os.WriteFile(externalFile, []byte("changed outside the tree"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	after, err := nativeAPTSnapshotTree(root)
+	if err != nil || !reflect.DeepEqual(before, after) {
+		t.Fatalf("snapshot followed a link outside its tree: %v", err)
+	}
+}
+
+func TestNativeAPTSnapshotDetectsEntryChanges(t *testing.T) {
+	for _, name := range []string{
+		"file-bytes", "file-mode", "directory-mode", "root-mode", "link-target",
+		"link-removed", "link-to-file", "file-to-link", "link-to-directory",
+		"file-added", "empty-directory-added", "empty-directory-removed",
+	} {
+		t.Run(name, func(t *testing.T) {
+			root := t.TempDir()
+			file, link, dir := filepath.Join(root, "file"), filepath.Join(root, "link"), filepath.Join(root, "dir")
+			if err := os.WriteFile(file, []byte("file"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Symlink("file", link); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Mkdir(dir, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			before, err := nativeAPTSnapshotTree(root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			after, err := nativeAPTSnapshotTree(root)
+			if err != nil || !reflect.DeepEqual(before, after) {
+				t.Fatalf("unchanged tree differed: %v", err)
+			}
+			switch name {
+			case "file-bytes":
+				err = os.WriteFile(file, []byte("changed"), 0o600)
+			case "file-mode":
+				err = os.Chmod(file, 0o640)
+			case "directory-mode":
+				err = os.Chmod(dir, 0o750)
+			case "root-mode":
+				err = os.Chmod(root, 0o750)
+			case "file-added":
+				err = os.WriteFile(filepath.Join(root, "added"), []byte("file"), 0o600)
+			case "empty-directory-added":
+				err = os.Mkdir(filepath.Join(root, "added"), 0o700)
+			case "empty-directory-removed":
+				err = os.Remove(dir)
+			default:
+				target := link
+				if name == "file-to-link" {
+					target = file
+				}
+				if err := os.Remove(target); err != nil {
+					t.Fatal(err)
+				}
+				switch name {
+				case "link-target":
+					err = os.Symlink("./file", link) // Same referent, different literal link bytes.
+				case "link-to-file":
+					err = os.WriteFile(link, []byte("file"), 0o600) // Same hash, different type.
+				case "file-to-link":
+					err = os.Symlink("file", file) // A dangling self-link is still observed, not followed.
+				case "link-to-directory":
+					err = os.Mkdir(link, 0o700)
+				}
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			after, err = nativeAPTSnapshotTree(root)
+			if err != nil || reflect.DeepEqual(before, after) {
+				t.Fatalf("changed tree was not fully observed: %v", err)
+			}
+		})
+	}
+}
+
+func TestNativeAPTSnapshotRejectsIncompleteTrees(t *testing.T) {
+	for _, name := range []string{"missing-root", "file-root", "symlink-root", "fifo-child"} {
+		t.Run(name, func(t *testing.T) {
+			root := filepath.Join(t.TempDir(), "lists")
+			switch name {
+			case "file-root":
+				if err := os.WriteFile(root, nil, 0o600); err != nil {
+					t.Fatal(err)
+				}
+			case "symlink-root":
+				if err := os.Symlink(t.TempDir(), root); err != nil {
+					t.Fatal(err)
+				}
+			case "fifo-child":
+				if err := os.Mkdir(root, 0o700); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(filepath.Join(root, "a-regular"), []byte("observed first"), 0o600); err != nil {
+					t.Fatal(err)
+				}
+				if err := syscall.Mkfifo(filepath.Join(root, "z-fifo"), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if got, err := nativeAPTSnapshotTree(root); err == nil || got != nil {
+				t.Fatalf("unsupported or incomplete tree became state-preservation evidence: %v", err)
+			}
+		})
 	}
 }
 
