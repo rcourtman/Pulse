@@ -13,6 +13,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/lifecycle"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 )
 
@@ -211,15 +212,21 @@ func TestWorkspaceProvisioningKeepsUsableLeaseAndRefreshForAdmittedStates(t *tes
 			if raw.StripeCustomerID != "" || raw.StripeSubscriptionID != "" {
 				t.Fatal("initial workspace file copied the consolidated account's billing identity")
 			}
+			// The raw on-disk JWT and refresh identity are encrypted, not JWT
+			// wire strings. Exercise the real decrypting runtime consumer.
+			stored, err := config.NewFileBillingStore(p.tenantDataDir(tenant.ID)).GetBillingState("default")
+			if err != nil {
+				t.Fatal(err)
+			}
 			key, err := base64.StdEncoding.DecodeString(os.Getenv("PULSE_TRIAL_ACTIVATION_PUBLIC_KEY"))
 			if err != nil {
 				t.Fatal(err)
 			}
 			host := tenant.ID + ".cloud.example.com"
 			for _, refresh := range []bool{false, true} {
-				token := raw.EntitlementJWT
+				token := stored.EntitlementJWT
 				if refresh {
-					renewed, err := p.hostedEntitlements.RefreshEntitlement(raw.EntitlementRefreshToken, host)
+					renewed, err := p.hostedEntitlements.RefreshEntitlement(stored.EntitlementRefreshToken, host)
 					if err != nil {
 						t.Fatal(err)
 					}
