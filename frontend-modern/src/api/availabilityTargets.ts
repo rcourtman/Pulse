@@ -142,6 +142,28 @@ export interface AvailabilityTestResponse {
   certificate?: ResourceCertificateObservation;
 }
 
+/** A published container port that has no availability check yet. */
+export interface DockerPortCheckSuggestion {
+  hostId: string;
+  hostName: string;
+  containerId: string;
+  containerName: string;
+  privatePort: number;
+  publicPort: number;
+  /** Where Pulse would check it. Absent when `skipReason` is set. */
+  address?: string;
+  /** Why Pulse cannot check this port from outside its host. */
+  skipReason?: 'loopback_only' | 'no_host_address' | string;
+}
+
+export interface DockerPortChecksResult {
+  created: AvailabilityTarget[];
+  /** Ports that did not answer from this Pulse server; no check was added. */
+  unanswered: Array<DockerPortCheckSuggestion & { error: string }>;
+  skipped: DockerPortCheckSuggestion[];
+  remaining: number;
+}
+
 export class AvailabilityTargetsAPI {
   static async list(): Promise<AvailabilityTarget[]> {
     return apiFetchJSON(AVAILABILITY_TARGETS_PATH);
@@ -185,6 +207,25 @@ export class AvailabilityTargetsAPI {
   static async testSaved(id: string): Promise<AvailabilityTestResponse> {
     return apiFetchJSON(`${AVAILABILITY_TARGETS_PATH}/${encodeURIComponent(id)}/test`, {
       method: 'POST',
+    });
+  }
+
+  /** Published container ports that have no availability check. */
+  static async dockerPortSuggestions(): Promise<DockerPortCheckSuggestion[]> {
+    const response = await apiFetchJSON<{ suggestions?: DockerPortCheckSuggestion[] }>(
+      `${AVAILABILITY_TARGETS_PATH}/docker-suggestions`,
+    );
+    return response?.suggestions ?? [];
+  }
+
+  /**
+   * Adds a check for every suggested port that answers from this server.
+   * Pass a Docker host ID to limit it to that host.
+   */
+  static async addDockerPortChecks(hostId?: string): Promise<DockerPortChecksResult> {
+    return apiFetchJSON(`${AVAILABILITY_TARGETS_PATH}/docker-suggestions`, {
+      method: 'POST',
+      body: JSON.stringify(hostId ? { hostId } : {}),
     });
   }
 }

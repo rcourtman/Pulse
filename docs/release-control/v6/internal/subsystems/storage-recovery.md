@@ -8671,6 +8671,12 @@ not storage recovery authority: it prevents restart from reactivating a token
 that the live process had already discarded. The shared proof is
 `internal/monitoring/monitor_host_agent_removal_lifecycle_test.go`.
 
+### Docker port check suggestions open no storage path (15 November 2026)
+
+The routes under `/api/availability-targets/docker-suggestions` save ordinary
+availability targets through the existing encrypted target store. They open no
+storage or recovery path.
+
 ### Dead-man persistence is availability evidence, not recovery authority
 
 The shared configuration persistence and alert API now store the encrypted

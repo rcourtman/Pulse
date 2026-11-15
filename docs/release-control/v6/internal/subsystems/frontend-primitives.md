@@ -9559,6 +9559,15 @@ states show bounded guidance with no executable command. The focused proofs are
 `frontend-modern/src/components/Settings/__tests__/settingsHeaderMeta.branchcov0713.test.ts`,
 and `frontend-modern/src/utils/__tests__/updatesPresentation.test.ts`.
 
+### Docker port check notice (15 November 2026)
+
+`frontend-modern/src/features/docker/DockerPortChecksNotice.tsx` composes the
+shared `InlineNotice` in the info tone as one quiet line with a dismiss
+control, following `PlatformOutdatedAgentNotice`. It renders nothing for a
+read-only viewer, when the server refuses, when every port is covered and
+after dismissal, and it adds no table row height. Its two actions are 44 px
+tall on phones.
+
 ### Alert intent and three-state availability presentation
 
 The Alerts thresholds surface composes the versioned intent-policy editor from

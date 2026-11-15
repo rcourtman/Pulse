@@ -125,4 +125,40 @@ describe('AvailabilityTargetsAPI', () => {
       body: JSON.stringify(target),
     });
   });
+
+  it('reads and applies the checks suggested from published container ports', async () => {
+    const suggestion = {
+      hostId: 'host-1',
+      hostName: 'docker-vm',
+      containerId: 'c1',
+      containerName: 'web',
+      privatePort: 80,
+      publicPort: 8081,
+      address: '192.0.2.20',
+    };
+    mockedApiFetchJSON.mockResolvedValueOnce({ suggestions: [suggestion] });
+    await expect(AvailabilityTargetsAPI.dockerPortSuggestions()).resolves.toEqual([suggestion]);
+    expect(mockedApiFetchJSON).toHaveBeenLastCalledWith(
+      '/api/availability-targets/docker-suggestions',
+    );
+
+    // An older server answers without the list; the client reports none.
+    mockedApiFetchJSON.mockResolvedValueOnce({});
+    await expect(AvailabilityTargetsAPI.dockerPortSuggestions()).resolves.toEqual([]);
+
+    const result = { created: [], unanswered: [], skipped: [], remaining: 0 };
+    mockedApiFetchJSON.mockResolvedValueOnce(result);
+    await expect(AvailabilityTargetsAPI.addDockerPortChecks()).resolves.toEqual(result);
+    expect(mockedApiFetchJSON).toHaveBeenLastCalledWith(
+      '/api/availability-targets/docker-suggestions',
+      { method: 'POST', body: '{}' },
+    );
+
+    mockedApiFetchJSON.mockResolvedValueOnce(result);
+    await AvailabilityTargetsAPI.addDockerPortChecks('host-1');
+    expect(mockedApiFetchJSON).toHaveBeenLastCalledWith(
+      '/api/availability-targets/docker-suggestions',
+      { method: 'POST', body: '{"hostId":"host-1"}' },
+    );
+  });
 });

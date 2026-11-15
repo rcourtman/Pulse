@@ -14096,6 +14096,25 @@ status code changes; `degraded` is a new value of the existing `state` field.
 `connections_aggregator_test.go`, and the degraded-row case in
 `useConnectionsLedger.test.ts`, pin this.
 
+### Docker port check suggestions (15 November 2026)
+
+`GET /api/availability-targets/docker-suggestions` (org admin,
+`settings:read`) lists published container ports that have no availability
+check. `POST` on the same path (org admin, `settings:write`) adds an HTTPS or
+HTTP check for each one that answers from this server, optionally limited by
+`hostId` and capped at 100 per request, with `remaining` counting the rest.
+The response separates `created`, `unanswered` (with the probe error) and
+`skipped`. Each destination passes the tenant outbound policy before it is
+probed. Mock mode returns no suggestions and refuses the write.
+
+Saved targets carry the optional `dockerPort` source, and `PUT` keeps it when
+a client omits it. `frontend-modern/src/api/availabilityTargets.ts` owns the
+client calls and `docs/API.md` lists both routes. Regression coverage:
+`TestDockerPortSuggestionsListWhatHasNoCheck`,
+`TestApplyDockerPortSuggestionsAddsOnlyWhatAnswers`,
+`TestApplyDockerPortSuggestionsLimitsToTheRequestedHost` and
+`TestRouterRouteInventory`.
+
 ### Loaded availability Settings honours evidence expiry (10 October 2026)
 
 The existing availability Settings client passes the shared current time to

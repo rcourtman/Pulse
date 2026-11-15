@@ -5566,6 +5566,12 @@ proposal's reason. Neither touches an agent. The read goes through Pulse's own
 Proxmox API connection, never through an agent session, and no agent message,
 registration field or install step changes.
 
+### Docker port check suggestions read agent inventory only (15 November 2026)
+
+The routes under `/api/availability-targets/docker-suggestions` read the
+Docker inventory agents already report. They mint no token, send no agent
+command and change no agent admission or scope.
+
 ### A collector with commands enabled starts a stopped Proxmox guest
 
 A collector that has commands enabled can run one typed guest action: start.

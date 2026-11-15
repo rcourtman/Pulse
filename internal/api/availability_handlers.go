@@ -11,6 +11,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/availabilityprobe"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/tlsutil"
 )
@@ -21,6 +22,13 @@ type AvailabilityHandlers struct {
 	getPersistence  func(ctx context.Context) *config.ConfigPersistence
 	getMonitor      func(ctx context.Context) *monitoring.Monitor
 	licenseResolver licenseFeatureServiceResolver
+
+	// Seams for the checks suggested from published container ports. Nil
+	// means the monitor's Docker hosts, its container resources and a real
+	// probe from this server.
+	dockerHosts              func(ctx context.Context) []models.DockerHost
+	dockerContainerResources func(ctx context.Context) map[string]string
+	dockerPortProbe          dockerPortProbeFunc
 }
 
 type availabilityTargetResponse struct {
@@ -537,6 +545,10 @@ func sameAvailabilityHTTPOrigin(previous, next config.AvailabilityTarget) bool {
 func cloneAvailabilityTarget(target config.AvailabilityTarget) config.AvailabilityTarget {
 	clone := target
 	clone.ObservationLocationIDs = append([]string(nil), target.ObservationLocationIDs...)
+	if target.DockerPort != nil {
+		source := *target.DockerPort
+		clone.DockerPort = &source
+	}
 	if target.HTTP == nil {
 		return clone
 	}
