@@ -26,6 +26,11 @@ export const UserAssignmentsPanel: Component<UserAssignmentsPanelProps> = (props
   const emptyStateCopy = () => getUserAssignmentsEmptyStateCopy();
   let searchInputRef: HTMLInputElement | undefined;
   let inventoryNotice: HTMLDivElement | undefined;
+  let loadFailureNotice: HTMLDivElement | undefined;
+  let editorFailureNotice: HTMLDivElement | undefined;
+  let panel: HTMLDivElement | undefined;
+  let manageTrigger: HTMLButtonElement | undefined;
+  let savedUser: { version: number; username: string } | undefined;
   let focusTimer: number | undefined;
   createEffect(
     on(state.unconfirmedChange, (change) => {
@@ -39,8 +44,67 @@ export const UserAssignmentsPanel: Component<UserAssignmentsPanelProps> = (props
   );
   onCleanup(() => window.clearTimeout(focusTimer));
 
+  const restoreSavedFocus = (
+    version: number,
+    trigger: Element | null | undefined,
+    username?: string,
+  ) => {
+    const canReturn = () =>
+      panel?.isConnected &&
+      version === state.contextVersion() &&
+      state.accessAllowed() &&
+      !state.loading() &&
+      !state.userPendingDeletion() &&
+      !state.unconfirmedChange();
+    // A successful write withdraws the editor and replaces its original row
+    // during the saved read. The shared dialog cannot focus that detached node.
+    if (!canReturn()) return;
+    window.clearTimeout(focusTimer);
+    focusTimer = window.setTimeout(() => {
+      if (!canReturn()) return;
+      const active = document.activeElement;
+      if (active && active !== document.body && active !== trigger && active.isConnected) return;
+      if (state.showModal()) {
+        if (state.editingUser()?.username === username && state.actionError())
+          editorFailureNotice?.focus();
+      } else if (state.loadError()) {
+        loadFailureNotice?.focus();
+      } else if (state.canEdit()) {
+        // Match the literal principal, not a mutable name or a CSS selector
+        // constructed from an opaque SSO ID. A vanished/filtered user returns
+        // to search instead of selecting a different namesake.
+        const replacement = Array.from(
+          panel?.querySelectorAll<HTMLButtonElement>('button[data-user-access-manage]') ?? [],
+        ).find((button) => button.dataset.userAccessManage === username && !button.disabled);
+        (replacement ?? searchInputRef)?.focus();
+      }
+    }, 0);
+  };
+
+  const saveAssignments = async () => {
+    const user = state.editingUser();
+    if (!user) return;
+    const version = state.contextVersion();
+    const trigger = manageTrigger;
+    await state.handleSaveAssignments();
+    if (version !== state.contextVersion() || state.unconfirmedChange()) return;
+    if (!state.showModal()) savedUser = { version, username: user.username };
+    restoreSavedFocus(version, trigger, user.username);
+  };
+
+  const reloadAssignments = async () => {
+    const version = state.contextVersion();
+    const trigger = document.activeElement;
+    await state.loadData();
+    restoreSavedFocus(
+      version,
+      trigger,
+      savedUser?.version === version ? savedUser.username : undefined,
+    );
+  };
+
   return (
-    <div class="space-y-6">
+    <div ref={panel} class="space-y-6">
       <SettingsPanel
         title="User Access"
         action={
@@ -111,13 +175,16 @@ export const UserAssignmentsPanel: Component<UserAssignmentsPanelProps> = (props
         <Show when={!state.loading() && state.accessAllowed() && state.loadError()}>
           {(message) => (
             <InlineNotice
+              ref={loadFailureNotice}
+              tabindex={-1}
               role="alert"
               aria-live="polite"
               tone="danger"
               layout="banner"
               icon={<TriangleAlert />}
               actionLabel={state.unconfirmedChange() ? undefined : 'Retry'}
-              actionOnClick={() => void state.loadData()}
+              actionOnClick={() => void reloadAssignments()}
+              class="focus:outline-hidden focus:ring-2 focus:ring-inset focus:ring-blue-500"
             >
               {message()}
             </InlineNotice>
@@ -254,7 +321,11 @@ export const UserAssignmentsPanel: Component<UserAssignmentsPanelProps> = (props
                       aria-label={`Manage access for ${getUserIdentityLabel(assignment)}`}
                       title="Manage access"
                       disabled={!state.canEdit()}
-                      onClick={() => state.openManageAccess(assignment)}
+                      data-user-access-manage={assignment.username}
+                      onClick={(event) => {
+                        manageTrigger = event.currentTarget;
+                        void state.openManageAccess(assignment);
+                      }}
                     >
                       <Pencil class="w-4 h-4" />
                       <span class="hidden sm:inline">Manage Access</span>
@@ -286,6 +357,9 @@ export const UserAssignmentsPanel: Component<UserAssignmentsPanelProps> = (props
 
       <UserAssignmentsDialog
         actionError={state.actionError()}
+        actionErrorRef={(element) => {
+          editorFailureNotice = element;
+        }}
         editingUser={state.editingUser()}
         formRoleIds={state.formRoleIds()}
         isOpen={state.showModal()}
@@ -295,7 +369,7 @@ export const UserAssignmentsPanel: Component<UserAssignmentsPanelProps> = (props
         saving={state.saving()}
         userPermissions={state.userPermissions()}
         onClose={state.closeModal}
-        onSave={state.handleSaveAssignments}
+        onSave={() => void saveAssignments()}
         onRetryPermissions={() => void state.loadUserPermissions()}
         onToggleRole={state.toggleRole}
       />

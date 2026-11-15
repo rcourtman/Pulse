@@ -60,6 +60,7 @@ export const RoleAccessIdentity: Component<{
 
 interface UserAssignmentsDialogProps {
   actionError?: string | null;
+  actionErrorRef?: (element: HTMLDivElement) => void;
   editingUser: UserRoleAssignment | null;
   formRoleIds: string[];
   isOpen: boolean;
@@ -124,7 +125,14 @@ export const UserAssignmentsDialog: Component<UserAssignmentsDialogProps> = (pro
           <div class="min-h-0 overflow-y-auto px-4 sm:px-6 py-4 space-y-4 sm:py-6 sm:space-y-8">
             <Show when={props.actionError}>
               {(message) => (
-                <InlineNotice tone="danger" role="alert" aria-live="polite">
+                <InlineNotice
+                  ref={props.actionErrorRef}
+                  tabindex={-1}
+                  tone="danger"
+                  role="alert"
+                  aria-live="polite"
+                  class="focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                >
                   {message()}
                 </InlineNotice>
               )}
