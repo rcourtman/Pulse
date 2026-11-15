@@ -15,6 +15,49 @@
 
 ## Purpose
 
+### Missing hosted billing does not renew paid authority
+
+An active runtime alone does not establish a paid subscription. For a tenant
+associated with an account, implicit hosted lease refresh needs that account's
+current billing row. Its absence returns retryable HTTP 503 even if stale Stripe
+IDs remain on the tenant. The issuer signs no replacement lease and leaves the
+saved refresh identity and last-success time unchanged. The runtime retains its
+token and old lease, whose original expiry still applies. Restoring authoritative
+billing permits renewal with the same identity; absence alone is not cancellation
+or permission to recreate billing.
+
+Legacy individual Stripe billing is a supported representation, not missing
+authority: the account_id migration leaves these tenants accountless, with
+Stripe customer and subscription IDs, plan and lifecycle state maintained by
+the existing subscription webhook. Only that accountless representation with
+both server-stored IDs may renew from tenant state without a billing mapping.
+If a current mapping exists for its customer, its stored subscription state
+takes precedence, including denials. Missing either legacy ID is retryable
+unavailable; restoring it permits same-token recovery without a migration,
+account creation or backfill. Active legacy tenants continue renewing beyond
+the webhook-issued 24-hour lease. Webhook withdrawal still cancels/suspends the
+tenant and revokes its token before runtime file updates; revoked tokens do not
+recover merely by restoring IDs or runtime state.
+
+The exception is an explicitly configured Stripe-free MSP control plane, with
+a current MSP account and MSP plan. A plan name, provider capability ceiling
+or licence presence alone does not enable the exception. Any stored billing
+row takes precedence, including a stored denial. Provider-hosted capability
+ceilings, tenant/host binding, trial receipts, revocation and explicit internal
+billing transitions are unchanged. This does not invalidate already issued
+leases early or repair new-workspace admission/provisioning races.
+
+`entitlements/missing_billing_test.go`, `entitlements/legacy_billing_test.go`,
+`stripe/legacy_entitlement_renewal_test.go`, `hosted_entitlement_authority_test.go`
+in both `internal/cloudcp` and `internal/api`, `internal/api/hosted_entitlement_legacy_test.go`
+and the existing entitlement service suite cover the issuer, configured wiring,
+continuous legacy renewal, actual subscription webhook withdrawal, actual
+refresh HTTP client, unchanged encrypted state, same-token recovery and
+confirmed cancellation.
+Containing browser proof exercises the produced runtime entitlement payloads
+through Plans at desktop and narrow viewports; synthetic proof is not installed
+or original-client recovery.
+
 ### Commercial verification requests share a page-local mailbox window
 
 The existing Pulse Account manage, licence-retrieval, export and deletion
