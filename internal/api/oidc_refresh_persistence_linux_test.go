@@ -13,7 +13,7 @@ import (
 
 // OIDC completion must keep the landed detached-persistence contract: its live
 // decision is atomic, disk writes do not own the auth mutex, and a newer logout
-// wins the last saved snapshot. The existing FIFO fixture stops a real write.
+// wins the last saved snapshot. The shared descriptor fixture pauses a real private-snapshot write.
 func TestOIDCRefreshCompletionReleasesMemoryBeforePersistence(t *testing.T) {
 	for _, outcome := range []string{"success", "invalid-grant"} {
 		t.Run(outcome, func(t *testing.T) {

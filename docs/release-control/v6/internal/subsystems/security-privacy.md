@@ -565,6 +565,37 @@ Missing/invalid-token replacement remains a synchronous mutation. The outer
 account-revocation/eviction boundary is covered separately above. Global-store
 reconfiguration is not covered; no whole-runtime or original-client recovery is implied.
 
+### Session and CSRF snapshots publish from private owned descriptors
+
+The two stores encode their existing detached snapshots before creating a fresh
+exclusive mode-0600 regular file beside the canonical inventory. They write all
+bytes through that owned descriptor, check write and close errors, and only then
+rename it into place. The legacy `sessions.json.tmp` and `csrf_tokens.json.tmp`
+paths are never opened, renamed or removed, so a stale permissive file, symlink,
+directory or FIFO there cannot widen saved-file permissions, redirect writes or
+block normal publication. A failed publication cleans only its own temporary
+path; a failed cleanup is included in the logged error. This does not defend
+against an actor who can concurrently mutate the private data directory.
+
+Per-store serialization, fresh snapshot selection, live-lock release, JSON
+formats, session hashes, encrypted OIDC refresh tokens, CSRF token-set bounds
+and startup-preservation behavior are unchanged. Configured data-directory links
+still work; a canonical file link is atomically replaced, not followed. Failed
+storage still does not promise durable revocation or successful sign-in across
+restart. The two stores are not a crash-atomic transaction, and no directory
+fsync or power-loss guarantee is added.
+
+`auth_snapshot_regression_test.go` exercises both actual store publishers through
+stale paths, linked storage, complete withdrawal/reload and real filesystem
+failure/recovery. `auth_snapshot_test.go` holds short/failed writes, close/rename
+failure and explicit cleanup failure. The existing Linux session/CSRF,
+account-withdrawal and OIDC isolation fixtures now pause after the first real
+byte reaches that exclusive regular descriptor, then finish the real write and
+publication. They retain unrelated registered-request admission, synchronous
+save, queued/no-match revocation, encrypted snapshots and restart assertions,
+without depending on publishing an unsafe FIFO. These are synthetic local-file
+proofs, not evidence of exposure, installed recovery or a full IdP journey.
+
 ### Unread session inventories are preserved without restoring authority
 
 A startup read or complete decode failure cannot make the unknown `sessions.json`

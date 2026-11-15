@@ -5,14 +5,12 @@ package api
 import (
 	"bytes"
 	"encoding/json"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
-	"syscall"
 	"testing"
 	"time"
 
@@ -20,79 +18,18 @@ import (
 	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
 
-// Pause the real temporary-file write after its first byte, not a persistence
-// mock or an elapsed-time guess. A synthetic oversized hash fills the FIFO.
-// Resuming drains both goroutines. A later normal save replaces the FIFO with
-// a regular file before any restart; the captured first snapshot stays separate.
+// Pause a real write to the private regular snapshot through its owned
+// descriptor. Do not turn a reusable .tmp FIFO into canonical authority.
 func pauseCSRFDiskWrite(t *testing.T, store *CSRFTokenStore, action func()) func() []byte {
 	t.Helper()
 	store.mu.Lock()
 	store.tokens["synthetic-disk-filler"] = []*CSRFToken{{Hash: strings.Repeat("f", 1<<20), Expires: time.Now().Add(time.Hour)}}
 	store.mu.Unlock()
-	path := filepath.Join(store.dataPath, "csrf_tokens.json.tmp")
-	if err := syscall.Mkfifo(path, 0600); err != nil {
-		t.Fatal(err)
-	}
-	release := make(chan struct{})
-	entered := make(chan error, 1)
-	readerDone := make(chan []byte, 1)
-	writerDone := make(chan struct{})
-	go func() { defer close(writerDone); action() }()
-	go func() {
-		file, err := os.Open(path)
-		if err != nil {
-			entered <- err
-			readerDone <- nil
-			return
-		}
-		defer file.Close()
-		var first [1]byte
-		_, err = io.ReadFull(file, first[:])
-		entered <- err
-		<-release
-		var captured bytes.Buffer
-		captured.Write(first[:])
-		_, err = io.Copy(&captured, file)
-		if err != nil {
-			readerDone <- nil
-			return
-		}
-		readerDone <- captured.Bytes()
-	}()
-	var once sync.Once
-	var captured []byte
-	resume := func() []byte {
-		t.Helper()
-		once.Do(func() {
-			close(release)
-			select {
-			case captured = <-readerDone:
-			case <-time.After(5 * time.Second):
-				t.Error("CSRF fixture reader did not join")
-			}
-			select {
-			case <-writerDone:
-			case <-time.After(5 * time.Second):
-				t.Error("CSRF writer did not join after disk resumed")
-			}
-		})
-		return captured
-	}
-	t.Cleanup(func() { resume() })
-	select {
-	case err := <-entered:
-		if err != nil {
-			t.Fatal(err)
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("CSRF save did not reach its fixture write")
-	}
-	select {
-	case <-writerDone:
-		t.Error("mutation returned before its save completed")
-	default:
-	}
-	return resume
+	return pauseAuthSnapshotWrite(t, func(write authSnapshotWriteFunc) {
+		store.saveMu.Lock()
+		store.snapshotWrite = write
+		store.saveMu.Unlock()
+	}, action)
 }
 
 func csrfDiskStore(t *testing.T) (*CSRFTokenStore, string, string) {
@@ -107,7 +44,7 @@ func loadCSRFDiskStore(t *testing.T, dir string) *CSRFTokenStore {
 	t.Helper()
 	info, err := os.Stat(filepath.Join(dir, "csrf_tokens.json"))
 	if err != nil || !info.Mode().IsRegular() {
-		t.Fatalf("restart requires a regular snapshot, not the fixture FIFO: %v", err)
+		t.Fatalf("restart requires a regular snapshot: %v", err)
 	}
 	loaded := &CSRFTokenStore{tokens: make(map[string][]*CSRFToken), dataPath: dir}
 	loaded.load()

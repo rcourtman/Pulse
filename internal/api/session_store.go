@@ -17,15 +17,16 @@ import (
 
 // SessionStore handles persistent session storage
 type SessionStore struct {
-	sessions   map[string]*SessionData
-	mu         sync.RWMutex
-	persistMu  sync.Mutex // serializes snapshot selection and disk writes; never acquire while holding mu
-	dataPath   string
-	saveTicker *time.Ticker
-	stopChan   chan bool
-	workerDone chan struct{}
-	stopOnce   sync.Once
-	crypto     *crypto.CryptoManager
+	sessions      map[string]*SessionData
+	mu            sync.RWMutex
+	persistMu     sync.Mutex // serializes snapshot selection and disk writes; never acquire while holding mu
+	dataPath      string
+	snapshotWrite authSnapshotWriteFunc // nil in runtime stores; per-instance real-I/O fixture seam
+	saveTicker    *time.Ticker
+	stopChan      chan bool
+	workerDone    chan struct{}
+	stopOnce      sync.Once
+	crypto        *crypto.CryptoManager
 	// A failed startup read cannot authorize replacing the unknown inventory.
 	// load sets this before workers start; later access belongs to persistMu.
 	preserveBeforeSave    bool
@@ -757,16 +758,8 @@ func (s *SessionStore) persistSnapshot(persisted []sessionPersisted) {
 		return
 	}
 
-	// Write to temporary file first
-	tmpFile := sessionsFile + ".tmp"
-	if err := os.WriteFile(tmpFile, data, 0600); err != nil {
-		log.Error().Err(err).Msg("Failed to write sessions file")
-		return
-	}
-
-	// Atomic rename
-	if err := os.Rename(tmpFile, sessionsFile); err != nil {
-		log.Error().Err(err).Msg("Failed to rename sessions file")
+	if err := writePrivateAuthSnapshot(sessionsFile, data, s.snapshotWrite); err != nil {
+		log.Error().Err(err).Msg("Failed to publish private sessions file")
 		return
 	}
 
