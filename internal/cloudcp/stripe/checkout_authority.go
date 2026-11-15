@@ -64,6 +64,15 @@ func (p *Provisioner) updateUnprovisionedCheckoutBilling(sub Subscription) error
 	if err != nil || current == nil {
 		return err
 	}
+	// A missing customer-linked tenant does not imply an empty account:
+	// consolidated workspaces keep their owning billing/runtime path.
+	tenants, err := p.registry.ListByAccountID(current.AccountID)
+	if err != nil {
+		return err
+	}
+	if len(tenants) != 0 {
+		return nil
+	}
 	priceID := sub.FirstPriceID()
 	plan := DerivePlanVersion(sub.Metadata, priceID)
 	if priceID == "" && (plan == "" || plan == "stripe") {

@@ -355,3 +355,40 @@ func TestCheckoutCanRecoverOnlyAfterMatchingBillingGrant(t *testing.T) {
 		}
 	})
 }
+
+func TestUnprovisionedCheckoutGrantCannotBypassRegisteredWorkspace(t *testing.T) {
+	f := newCheckoutRaceFixture(t, false)
+	tenant := &registry.Tenant{ID: "t-registered", AccountID: "a-checkout", State: registry.TenantStateActive, PlanVersion: "cloud_starter"}
+	if err := f.reg.Create(tenant); err != nil {
+		t.Fatal(err)
+	}
+	billing, err := f.p.hostedEntitlements.IssueTenantBillingState(tenant, "", "", "", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	host := tenant.ID + ".cloud.example.com"
+	if result, err := f.p.hostedEntitlements.RefreshEntitlement(billing.EntitlementRefreshToken, host); err != nil || result == nil {
+		t.Fatalf("registered workspace control: %v", err)
+	}
+	_, lease, err := f.reg.AcquireRuntimeLifecycle(context.Background(), tenant.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer lease.Close()
+	if code := f.withdraw(t, "canceled"); code != 200 {
+		t.Fatalf("withdrawal status%d", code)
+	}
+	if result, err := f.p.hostedEntitlements.RefreshEntitlement(billing.EntitlementRefreshToken, host); result != nil || !errors.Is(err, entitlements.ErrHostedEntitlementInactive) {
+		t.Fatalf("withdrawal did not deny registered refresh: %v", err)
+	}
+	if code := f.event(t, "evt_existing_grant", "customer.subscription.updated", Subscription{ID: f.session.Subscription, Customer: f.session.Customer, Status: "active", Metadata: f.session.Metadata}); code != 200 {
+		t.Fatalf("grant status%d", code)
+	}
+	sa, err := f.reg.GetStripeAccount("a-checkout")
+	if err != nil || sa.SubscriptionState != "canceled" {
+		t.Fatalf("new-checkout fallback granted a registered workspace: %+v/%v", sa, err)
+	}
+	if result, err := f.p.hostedEntitlements.RefreshEntitlement(billing.EntitlementRefreshToken, host); result != nil || !errors.Is(err, entitlements.ErrHostedEntitlementInactive) {
+		t.Fatalf("registered workspace bypassed its billing/runtime path: %v", err)
+	}
+}
