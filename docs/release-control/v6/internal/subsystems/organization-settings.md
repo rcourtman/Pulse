@@ -662,6 +662,14 @@ create, review, and approve cross-organization shares.
 
 ## Shared Boundaries
 
+Saved user-permission inventory preserves inherited rules and different effects
+or condition maps for the same target. It remains separate from unsaved role
+selections and from resource-specific authorization. The permissions reader uses
+`auth.ErrorAwarePermissionReader` when present; an incomplete saved chain returns
+the existing 503 error rather than a reassuring subset. The actual JSON handler
+is covered by `TestRBACSavedPermissionsPreserveRules`; the existing User Access
+summary remains qualified and individual policy details remain in Roles.
+
 Organisation overview, access and sharing use the authenticated currentUsername for owner/member comparisons, including local sessions scoped to a non-default organisation. They must not infer the current principal from the privileged configured-administrator field when currentUsername is present. Existing owner/admin membership checks and server-side enforcement remain authoritative.
 
 1. `frontend-modern/src/api/orgs.ts` shared with `api-contracts`: the organization frontend client is both an organization settings control surface and a canonical API payload contract boundary.

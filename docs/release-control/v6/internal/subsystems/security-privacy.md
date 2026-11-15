@@ -637,6 +637,40 @@ source fixtures, not installed-client recovery or measured exposure.
 
 ### Authorization requires the complete saved inherited policy
 
+Saved-permission reads preserve every distinct action, resource, literal effect
+and condition map, including inherited rules. Only identical rules are removed,
+in parent-before-child/first-seen order; same-target grants cannot erase denies
+or differently conditioned rules. The SQLite summary reuses its complete,
+error-aware inherited-role reader. The file manager traverses saved parents with
+shared-parent deduplication and cycle/missing-role rejection. Its optional
+`ErrorAwarePermissionReader` lets both policy evaluation and the existing admin
+permissions endpoint preserve those errors without requiring unrelated inventory
+methods. Neither consumer publishes a readable subset of an incomplete policy;
+the HTTP endpoint returns its existing fixed 503 store-unavailable response.
+Returned condition maps do not alias saved file-backed state.
+
+Conditional allows require complete matching evidence. A matching-target deny
+with missing condition attributes (including referenced `${attr.key}` values)
+cannot be dismissed: authorization denies unless a known mismatching condition
+conclusively excludes that rule. All conditions are considered, so a missing
+attribute cannot make the result depend on map iteration order. Substitution
+reads saved placeholders once, without recursively interpreting attribute values.
+Plain `Authorize` supplies no attributes; public production callers do not
+provide ABAC facts. This repair adds no attribute source or automatic grants.
+Unconditional rules, nonmatching targets, known condition mismatches and local
+administrator recovery keep their existing behavior. Saved rules are inventory,
+not a final resource-specific access decision.
+
+`TestSavedPermissions*`, `TestFileSavedPermissionsRejectIncompleteInheritance`
+and `TestSavedPolicyConditionalDenyRequiresEvidence` cover both managers, exact
+metadata/distinctness, shared parents, caller isolation, incomplete-policy
+recovery and deny/allow ordering with nil/partial/matching/mismatching attributes.
+`TestRBACSavedPermissionsPreserveRules` exercises the actual admin JSON producer
+and its non-disclosing incomplete-policy response. Comparable desktop/narrow
+browser fixtures feed native producer responses through the existing User Access
+reader/dialog; they do not establish original-client, full-App/IdP or historical
+exposure recovery. No persistence schema, driver or migration changes.
+
 The core SQLite RBAC manager exposes an optional
 `ErrorAwareInheritedRoleReader`. User-role inheritance reads either return the
 complete, deduplicated parent-before-child chain or an error with no roles.

@@ -2453,6 +2453,14 @@ Compact Coverage age cells use the existing metadata-size text and reclaim numer
 
 ## Shared Boundaries
 
+Saved RBAC policy reads through the shared admin handler are all-or-error:
+inherited restrictions and differing condition maps cannot be lost behind a
+partial permissions summary. `auth.ErrorAwarePermissionReader` preserves missing
+or cyclic file-backed role-chain failures as the existing 503 response; the
+SQLite summary reuses its existing complete inherited reader. No persistence
+schema, engine, migration, metric history or backup/recovery behavior changes.
+Saved-policy/auth and native admin-handler tests verify this read-only boundary.
+
 Protected progress and synchronous reads use the API-owned non-executable media
 policy. Configuration-import replay admission retains guard-keyed request
 fingerprints without retaining archives or passphrases. These transport guards

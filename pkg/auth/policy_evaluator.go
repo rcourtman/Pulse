@@ -76,7 +76,7 @@ func (e *PolicyEvaluator) getUserEffectivePermissions(username string) ([]Permis
 
 	// Basic managers may also preserve read errors. Never evaluate a partial
 	// result or silently downgrade a failed read to an ordinary policy denial.
-	if reader, ok := e.manager.(ErrorAwareManager); ok {
+	if reader, ok := e.manager.(ErrorAwarePermissionReader); ok {
 		return reader.GetUserPermissionsWithError(username)
 	}
 	return e.manager.GetUserPermissions(username), nil
@@ -109,18 +109,15 @@ func (e *PolicyEvaluator) evaluateWithDenyPrecedence(permissions []Permission, u
 	var allowFound bool
 
 	for _, perm := range permissions {
-		// Check conditions
-		if !e.evaluateConditions(perm, username, attributes) {
-			continue // Condition not met, skip this permission
-		}
-
-		// Check effect
+		matches, complete := e.evaluateConditions(perm, username, attributes)
 		effect := perm.GetEffect()
-		if effect == EffectDeny {
-			return false // Explicit deny wins immediately
+		if effect == EffectDeny && (matches || !complete) {
+			// Missing evidence cannot dismiss a potentially applicable deny.
+			// A known mismatch, however, conclusively excludes this rule.
+			return false
 		}
 
-		if effect == EffectAllow {
+		if effect == EffectAllow && matches && complete {
 			allowFound = true
 		}
 	}
@@ -128,41 +125,57 @@ func (e *PolicyEvaluator) evaluateWithDenyPrecedence(permissions []Permission, u
 	return allowFound // Return true only if we found an allow
 }
 
-// evaluateConditions checks if all conditions in a permission are satisfied.
-func (e *PolicyEvaluator) evaluateConditions(perm Permission, username string, attributes map[string]string) bool {
-	if len(perm.Conditions) == 0 {
-		return true // No conditions = always matches
-	}
-
+// evaluateConditions distinguishes a known mismatch from incomplete evidence.
+// Inspect every condition: a known mismatch disproves a rule even when another
+// condition is unknown, regardless of Go map iteration order.
+func (e *PolicyEvaluator) evaluateConditions(perm Permission, username string, attributes map[string]string) (matches, complete bool) {
+	complete = true
 	for key, expectedValue := range perm.Conditions {
-		// Handle variable substitution
-		expectedValue = e.substituteVariables(expectedValue, username, attributes)
+		var resolved bool
+		expectedValue, resolved = e.substituteVariables(expectedValue, username, attributes)
 
 		// Get actual value from attributes
 		actualValue, exists := attributes[key]
-		if !exists {
-			return false // Required attribute missing
+		if !exists || !resolved {
+			complete = false
+			continue
 		}
 
 		if actualValue != expectedValue {
-			return false // Value doesn't match
+			return false, true // A known mismatch rules this permission out.
 		}
 	}
 
-	return true
+	return complete, complete
 }
 
 // substituteVariables replaces ${variable} placeholders in condition values.
-func (e *PolicyEvaluator) substituteVariables(value, username string, attributes map[string]string) string {
+func (e *PolicyEvaluator) substituteVariables(value, username string, attributes map[string]string) (string, bool) {
 	// Replace ${user} with the current username
 	value = strings.ReplaceAll(value, "${user}", username)
 
-	// Replace ${attr.key} with attribute values
-	for key, val := range attributes {
-		value = strings.ReplaceAll(value, "${attr."+key+"}", val)
+	// Resolve placeholders in the saved expression once, not recursively from
+	// attribute values. Missing references are unknown, never literal matches.
+	var result strings.Builder
+	for {
+		start := strings.Index(value, "${attr.")
+		if start < 0 {
+			result.WriteString(value)
+			return result.String(), true
+		}
+		result.WriteString(value[:start])
+		value = value[start+len("${attr."):]
+		end := strings.IndexByte(value, '}')
+		if end < 0 {
+			return "", false
+		}
+		attribute, exists := attributes[value[:end]]
+		if !exists {
+			return "", false
+		}
+		result.WriteString(attribute)
+		value = value[end+1:]
 	}
-
-	return value
 }
 
 // RBACAuthorizer wraps PolicyEvaluator to implement Authorizer for the RBAC system.

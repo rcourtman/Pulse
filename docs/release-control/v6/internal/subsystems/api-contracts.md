@@ -1900,6 +1900,14 @@ show `message`.
 
 ## Shared Boundaries
 
+The existing `GET /api/admin/users/{username}/permissions` returns complete distinct
+saved policy rules, including inherited effects/conditions, rather than collapsing
+same-target rules. The JSON shape and route admission stay unchanged. A manager's
+optional `auth.ErrorAwarePermissionReader` preserves a failed inherited read as the
+existing fixed 503 `rbac_store_unavailable` response, never a partial 200 inventory.
+`TestRBACSavedPermissionsPreserveRules` covers both public managers and the failure
+response; returned rules are not a resource-specific authorization decision.
+
 ### CLI API redirects retain their configured authority
 
 The existing authenticated `pulse fleet connections` and `pulse actions`

@@ -1133,7 +1133,7 @@ func (m *SQLiteManager) RemoveRole(username string, roleID string) error {
 	return err
 }
 
-// GetUserPermissions returns the effective permissions for a user.
+// GetUserPermissions returns complete saved rules, or nothing on a failed read.
 func (m *SQLiteManager) GetUserPermissions(username string) []Permission {
 	permissions, err := m.GetUserPermissionsWithError(username)
 	if err != nil {
@@ -1143,39 +1143,14 @@ func (m *SQLiteManager) GetUserPermissions(username string) []Permission {
 	return permissions
 }
 
-// GetUserPermissionsWithError returns effective permissions and preserves
-// storage failures.
+// GetUserPermissionsWithError preserves every distinct saved rule, including
+// inheritance, or returns an error without publishing a partial policy.
 func (m *SQLiteManager) GetUserPermissionsWithError(username string) ([]Permission, error) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
-	assignment, _, err := m.getUserAssignmentWithErrorUnsafe(username)
+	roles, err := m.GetRolesWithInheritanceWithError(username)
 	if err != nil {
 		return nil, err
 	}
-	if len(assignment.RoleIDs) == 0 {
-		return []Permission{}, nil
-	}
-
-	// Collect unique permissions from all assigned roles
-	permMap := make(map[string]Permission)
-	for _, roleID := range assignment.RoleIDs {
-		perms, err := m.loadRolePermissionsWithError(roleID)
-		if err != nil {
-			return nil, err
-		}
-		for _, perm := range perms {
-			key := perm.Action + ":" + perm.Resource + ":" + perm.GetEffect()
-			permMap[key] = perm
-		}
-	}
-
-	perms := make([]Permission, 0, len(permMap))
-	for _, perm := range permMap {
-		perms = append(perms, perm)
-	}
-
-	return perms, nil
+	return savedPermissions(roles), nil
 }
 
 // GetRoleWithInheritance returns a role and all inherited permissions.

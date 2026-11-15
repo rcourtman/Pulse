@@ -143,7 +143,7 @@ type Manager interface {
 	UpdateUserRoles(username string, roleIDs []string) error
 	RemoveRole(username string, roleID string) error
 
-	// Effective permissions
+	// Complete saved rules, not a final authorization decision.
 	GetUserPermissions(username string) []Permission
 }
 
@@ -173,6 +173,12 @@ type ErrorAwareManager interface {
 	GetRolesWithError() ([]Role, error)
 	GetUserAssignmentsWithError() ([]UserRoleAssignment, error)
 	GetUserAssignmentWithError(username string) (UserRoleAssignment, bool, error)
+	GetUserPermissionsWithError(username string) ([]Permission, error)
+}
+
+// ErrorAwarePermissionReader preserves permission-read failures even when a
+// manager does not implement every error-aware inventory/assignment method.
+type ErrorAwarePermissionReader interface {
 	GetUserPermissionsWithError(username string) ([]Permission, error)
 }
 

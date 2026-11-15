@@ -2462,6 +2462,14 @@ token-free command. No copy receipt establishes installed removal or a release.
 
 ## Shared Boundaries
 
+The shared RBAC admin handler's saved-permissions branch preserves complete
+inherited policy metadata and reports an incomplete policy through the existing
+503 response using `auth.ErrorAwarePermissionReader`. It does not modify agent
+identity, enrollment, command authority or lifecycle state. Policy evaluation
+requires positive complete allow evidence and does not dismiss a potentially
+matching deny for missing attributes; no agent attributes are inferred or added.
+The saved-policy/auth and native admin-handler tests cover this shared boundary.
+
 Server browser-session persistence preserves unread input outside active storage
 before replacing it. This is not an agent-token inventory, enrollment, binding or
 capability transition: collectors retain their existing credentials and transport

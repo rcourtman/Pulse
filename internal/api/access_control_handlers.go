@@ -427,10 +427,10 @@ func (h *RBACHandlers) HandleUserRoleActions(w http.ResponseWriter, r *http.Requ
 		w.WriteHeader(http.StatusNoContent)
 
 	case http.MethodGet:
-		// Get effective permissions
+		// Return saved rules, not an attribute-specific authorization decision.
 		if action == "permissions" {
 			var perms []auth.Permission
-			if errorAware, ok := manager.(auth.ErrorAwareManager); ok {
+			if errorAware, ok := manager.(auth.ErrorAwarePermissionReader); ok {
 				perms, err = errorAware.GetUserPermissionsWithError(username)
 				if err != nil {
 					writeRBACStoreError(w, err)

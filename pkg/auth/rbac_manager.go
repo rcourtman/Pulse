@@ -379,30 +379,52 @@ func (m *FileManager) RemoveRole(username string, roleID string) error {
 	return m.saveAssignments()
 }
 
-// GetUserPermissions returns the effective permissions for a user.
+// GetUserPermissions returns complete saved rules, or nothing on a failed read.
 func (m *FileManager) GetUserPermissions(username string) []Permission {
+	permissions, _ := m.GetUserPermissionsWithError(username)
+	return permissions
+}
+
+// GetUserPermissionsWithError includes inherited rules and never returns a
+// partial policy when a referenced role is missing or an inheritance cycle exists.
+func (m *FileManager) GetUserPermissionsWithError(username string) ([]Permission, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
 	a, ok := m.assignments[username]
 	if !ok {
-		return nil
+		return nil, nil
 	}
 
-	// Collect unique permissions from all assigned roles
-	permMap := make(map[string]Permission)
-	for _, roleID := range a.RoleIDs {
-		if role, ok := m.roles[roleID]; ok {
-			for _, perm := range role.Permissions {
-				key := perm.Action + ":" + perm.Resource
-				permMap[key] = perm
+	var roles []Role
+	visited, visiting := make(map[string]bool), make(map[string]bool)
+	var collect func(string) error
+	collect = func(id string) error {
+		if visited[id] {
+			return nil
+		}
+		if visiting[id] {
+			return fmt.Errorf("cyclic role inheritance at %s", id)
+		}
+		role, exists := m.roles[id]
+		if !exists {
+			return fmt.Errorf("referenced role not found: %s", id)
+		}
+		visiting[id] = true
+		defer delete(visiting, id)
+		if role.ParentID != "" {
+			if err := collect(role.ParentID); err != nil {
+				return err
 			}
 		}
+		roles = append(roles, role)
+		visited[id] = true
+		return nil
 	}
-
-	perms := make([]Permission, 0, len(permMap))
-	for _, perm := range permMap {
-		perms = append(perms, perm)
+	for _, roleID := range a.RoleIDs {
+		if err := collect(roleID); err != nil {
+			return nil, err
+		}
 	}
-	return perms
+	return savedPermissions(roles), nil
 }
