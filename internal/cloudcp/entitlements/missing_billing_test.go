@@ -1,7 +1,9 @@
 package entitlements
 
 import (
+	"database/sql"
 	"errors"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -154,7 +156,7 @@ func TestRefreshNoBillingRequiresConfiguredMSPAccountAndPlan(t *testing.T) {
 func TestLocalMSPBillingCannotOverrideStoredWithdrawal(t *testing.T) {
 	for _, state := range []string{"canceled", "expired", "suspended", "unknown", ""} {
 		t.Run("stored_"+state, func(t *testing.T) {
-			svc, _, reg := newTestService(t)
+			svc, _, reg, dir := newTestServiceWithBaseURLAndDir(t, "https://cloud.example.com")
 			svc.SetLocalMSPBilling(true)
 			const accountID = "a_WITHDRAWN"
 			if err := reg.CreateAccount(&registry.Account{ID: accountID, Kind: registry.AccountKindMSP}); err != nil {
@@ -162,6 +164,20 @@ func TestLocalMSPBillingCannotOverrideStoredWithdrawal(t *testing.T) {
 			}
 			if err := reg.CreateStripeAccount(&registry.StripeAccount{AccountID: accountID, StripeCustomerID: "cus_withdrawn_billing_fixture", SubscriptionState: state}); err != nil {
 				t.Fatal(err)
+			}
+			if state == "" {
+				// CreateStripeAccount intentionally defaults an omitted state to
+				// trial. Seed the actual blank legacy row we mean to test rather
+				// than mislabel that valid default as a stored denial.
+				db, err := sql.Open("sqlite", filepath.Join(dir, "tenants.db"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				_, err = db.Exec(`UPDATE stripe_accounts SET subscription_state = '' WHERE account_id = ?`, accountID)
+				closeErr := db.Close()
+				if err != nil || closeErr != nil {
+					t.Fatalf("seed blank subscription state: write=%v close=%v", err, closeErr)
+				}
 			}
 			tenant := &registry.Tenant{ID: "t-WITHDRAWN", AccountID: accountID, State: registry.TenantStateActive, PlanVersion: "msp_starter"}
 			if err := reg.Create(tenant); err != nil {
