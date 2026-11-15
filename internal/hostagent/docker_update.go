@@ -115,6 +115,12 @@ func (c *CommandClient) runDockerContainerUpdate(ctx context.Context, payload ag
 		if result.Error == "" {
 			result.Error = "container update did not complete"
 		}
+		// A failure before any change names its step so the server can tell a
+		// failed pull from an uncoded refusal; once mutation started the
+		// result contract carries no refusal code.
+		if !result.MutationStarted && agentexec.IsActionRefusalReasonCode(outcome.ReasonCode) {
+			result.ReasonCode = strings.TrimSpace(outcome.ReasonCode)
+		}
 		return result
 	}
 

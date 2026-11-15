@@ -390,6 +390,9 @@ type DockerContainerUpdateOutcome struct {
 	RollbackAttempted bool
 	RolledBack        bool
 	Error             string
+	// ReasonCode names the step that stopped a failed update before it
+	// changed the container. It is empty once mutation started.
+	ReasonCode string
 }
 
 // ProxmoxGuestLifecyclePayload is a closed guest lifecycle operation. GuestKind
@@ -603,6 +606,14 @@ const (
 	ActionRefusalPackageManagerUnhealthy     = "package_manager_unhealthy"
 	ActionRefusalCleanupPreflightFailed      = "cleanup_preflight_failed"
 	ActionRefusalCleanupInventoryChanged     = "cleanup_inventory_changed"
+	// The container update codes name the step that stopped an update before
+	// it changed the container. A pull failure carries the registry or daemon
+	// error in the result text; an unchanged image means the pulled image is
+	// the one the container already runs, so there is nothing to replace.
+	ActionRefusalImagePullFailed       = "image_pull_failed"
+	ActionRefusalImageUnchanged        = "image_unchanged"
+	ActionRefusalContainerStopFailed   = "container_stop_failed"
+	ActionRefusalContainerRenameFailed = "container_rename_failed"
 )
 
 // IsActionRefusalReasonCode validates the bounded machine-code shape accepted

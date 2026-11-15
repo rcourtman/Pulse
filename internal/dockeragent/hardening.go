@@ -32,7 +32,13 @@ const (
 	dockerSwarmListCallTimeout           = 20 * time.Second
 	dockerCleanupCallTimeout             = 15 * time.Second
 	dockerUpdateCallTimeout              = 2 * time.Minute
-	dockerUpdateOverallTimeout           = 15 * time.Minute
+	// dockerImagePullTimeout bounds the image download inside an update. A
+	// multi-gigabyte image on a slow link outlasts the per-call timeout, and
+	// a cut-off pull must fail the update rather than recreate the container
+	// on the old image. It stays well inside dockerUpdateOverallTimeout so the
+	// stop, recreate and health wait still fit.
+	dockerImagePullTimeout     = 8 * time.Minute
+	dockerUpdateOverallTimeout = 15 * time.Minute
 
 	// dockerCollectCycleTimeout bounds one whole collection cycle
 	// (buildReport). Every docker call inside the cycle already carries its

@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -49,12 +48,30 @@ func TestIntegrationContainerUpdateComposeNetworkLifecycle(t *testing.T) {
 		t.Skipf("Docker daemon is unavailable: %v", err)
 	}
 
-	pull, err := rawClient.ImagePull(ctx, "busybox:1.36", client.ImagePullOptions{})
-	if err != nil {
-		t.Fatalf("prepare integration image: %v", err)
+	// The services start on an older image carrying the tag the update pulls,
+	// so each update is a real old-to-new image change. Starting on the
+	// image the registry serves would be refused as image_unchanged.
+	for _, ref := range []string{"busybox:1.35", "busybox:1.36"} {
+		pull, err := rawClient.ImagePull(ctx, ref, client.ImagePullOptions{})
+		if err != nil {
+			t.Fatalf("prepare integration image %s: %v", ref, err)
+		}
+		if err := pull.Wait(ctx); err != nil {
+			t.Fatalf("pull integration image %s: %v", ref, err)
+		}
 	}
-	_, _ = io.Copy(io.Discard, pull)
-	_ = pull.Close()
+	currentImage, err := rawClient.ImageInspect(ctx, "busybox:1.36")
+	if err != nil {
+		t.Fatalf("inspect integration image: %v", err)
+	}
+	if _, err := rawClient.ImageTag(ctx, client.ImageTagOptions{Source: "busybox:1.35", Target: "busybox:1.36"}); err != nil {
+		t.Fatalf("point the integration tag at the older image: %v", err)
+	}
+	t.Cleanup(func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cleanupCancel()
+		_, _ = rawClient.ImageTag(cleanupCtx, client.ImageTagOptions{Source: currentImage.ID, Target: "busybox:1.36"})
+	})
 
 	externalOwnerName := project + "-external-owner"
 	externalOwner, err := rawClient.ContainerCreate(ctx, client.ContainerCreateOptions{
@@ -281,6 +298,26 @@ networks:
 			}
 		})
 	}
+
+	t.Run("unchanged image", func(t *testing.T) {
+		current := serviceID("bridge")
+		beforeResult, inspectErr := rawClient.ContainerInspect(ctx, current, client.ContainerInspectOptions{})
+		if inspectErr != nil {
+			t.Fatal(inspectErr)
+		}
+		result := agent.updateContainerWithProgress(ctx, current, nil)
+		if result.Success || result.ReasonCode != "image_unchanged" || result.BackupCreated {
+			t.Fatalf("second update of an up-to-date container = %+v, want an image_unchanged refusal", result)
+		}
+		stillResult, inspectErr := rawClient.ContainerInspect(ctx, current, client.ContainerInspectOptions{})
+		if inspectErr != nil {
+			t.Fatal(inspectErr)
+		}
+		before, still := beforeResult.Container, stillResult.Container
+		if still.State == nil || !still.State.Running || before.State == nil || still.State.StartedAt != before.State.StartedAt {
+			t.Fatalf("refused update restarted the container: before=%#v after=%#v", before.State, still.State)
+		}
+	})
 }
 
 func updateIntegrationSuffix(t *testing.T) string {
