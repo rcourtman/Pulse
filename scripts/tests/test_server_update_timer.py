@@ -14,6 +14,7 @@ import subprocess
 import tempfile
 import time
 import unittest
+from unittest.mock import Mock, patch
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -121,6 +122,73 @@ case "$FLOW" in
 esac
 main
 '''
+
+
+def wait_for_fixture_exit(process, timeout=1):
+    """Observe termination, not just delivery of timeout's process-group kill.
+
+    With --kill-after, GNU timeout can itself die before the manager double
+    has been scheduled to finish exiting. Never accept a still-live double;
+    bound the observation separately, inside the completion test's total limit.
+    """
+    deadline = time.monotonic() + timeout
+    while True:
+        try:
+            # A single read also handles disappearance during observation;
+            # exists() followed by read_text() would introduce another race.
+            state = process.read_text().rsplit(") ", 1)[1][0]
+        except FileNotFoundError:
+            return True
+        if state == "Z":
+            return True
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(0.01)
+
+
+class FixtureExitObservationTest(unittest.TestCase):
+    def test_absent_or_zombie_process_needs_no_wait(self):
+        for state in (FileNotFoundError(), "123 (fixture) Z 1"):
+            with self.subTest(state=state), patch("time.sleep") as sleep:
+                process = Mock()
+                process.read_text.side_effect = [state]
+                self.assertTrue(wait_for_fixture_exit(process))
+                sleep.assert_not_called()
+
+    def test_delayed_exit_is_observed_before_acceptance(self):
+        for final in (FileNotFoundError(), "123 (fixture) Z 1"):
+            with self.subTest(final=final), patch("time.monotonic", side_effect=[0, 0.01]), \
+                    patch("time.sleep") as sleep:
+                process = Mock()
+                process.read_text.side_effect = ["123 (fixture) R 1", final]
+                self.assertTrue(wait_for_fixture_exit(process))
+                self.assertEqual(process.read_text.call_count, 2)
+                sleep.assert_called_once_with(0.01)
+
+    def test_live_process_at_deadline_is_rejected(self):
+        with patch("time.monotonic", side_effect=[0, 0.5, 1]), patch("time.sleep") as sleep:
+            process = Mock()
+            process.read_text.return_value = "123 (fixture) S 1"
+            self.assertFalse(wait_for_fixture_exit(process))
+            self.assertEqual(process.read_text.call_count, 2)
+            sleep.assert_called_once_with(0.01)
+
+    def test_unreadable_or_malformed_state_is_not_termination(self):
+        for state, error in ((PermissionError(), PermissionError), ("malformed", IndexError)):
+            with self.subTest(state=state):
+                process = Mock()
+                process.read_text.side_effect = [state]
+                with self.assertRaises(error):
+                    wait_for_fixture_exit(process)
+
+    def test_observer_does_not_stop_a_live_owned_process(self):
+        with subprocess.Popen(["sleep", "30"]) as process:
+            try:
+                self.assertFalse(wait_for_fixture_exit(Path(f"/proc/{process.pid}/stat"), timeout=0.02))
+                self.assertIsNone(process.poll())
+            finally:
+                process.kill()
+                process.wait(timeout=2)
 
 
 class ServerUpdateTimerTest(unittest.TestCase):
@@ -463,7 +531,6 @@ echo COMPLETION_RETURNED
             start = time.monotonic()
             result = subprocess.run(["bash", "-c", script], env=env,
                                     capture_output=True, text=True, timeout=12)
-            elapsed = time.monotonic() - start
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertIn("COMPLETION_RETURNED", result.stdout)
             self.assertNotIn("private-fixture", result.stdout + result.stderr)
@@ -474,9 +541,9 @@ echo COMPLETION_RETURNED
             if pid.exists():
                 # This is only our confined manager double, never a live unit.
                 process = Path("/proc") / pid.read_text() / "stat"
-                self.assertTrue(not process.exists() or process.read_text().split(") ", 1)[1][0] == "Z",
+                self.assertTrue(wait_for_fixture_exit(process),
                                 "timer-query double is still running after the deadline")
-            return result.stdout, calls, elapsed
+            return result.stdout, calls, time.monotonic() - start
 
     def test_completion_separates_boot_setting_from_timer_activity(self):
         for setting in ("enabled", "enabled-runtime", "disabled", "static", "indirect",
