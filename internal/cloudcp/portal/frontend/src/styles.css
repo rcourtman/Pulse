@@ -1994,3 +1994,10 @@ header .logout-btn:hover,
 .workspace-recovery[hidden] { display: none; }
 .workspace-recovery p { margin: 6px 0 8px; color: var(--ink-secondary); }
 .workspace-recovery-unconfirmed { border-color: var(--warn-border); background: var(--warn-subtle); }
+
+.portal-content-panel-workspaces button:disabled {
+  background: var(--bg-inset);
+  color: var(--ink-secondary);
+  border-color: var(--border);
+  cursor: not-allowed;
+}

@@ -163,7 +163,7 @@ describe('workspace write recovery through the actual account shell', function()
     s.refreshBootstrap.mockImplementation(async function() { s.store.setBootstrap({ ...s.initial, accounts: [account('acct_1', [workspace('ws_1', 'suspended'), workspace('ws_2')])] }); return true; });
     element('workspace-management-action-acct_1').focus();
     var first = s.runtime.manageWorkspaceAction('acct_1', 'ws_1', 'suspend', 'Acme Dental');
-    s.runtime.selectWorkspace('acct_1', 'ws_2'); element('ws-name-acct_1').focus();
+    s.runtime.selectWorkspace('acct_1', 'ws_2'); element('workspace-management-close-acct_1').focus();
     mutation.resolve(undefined); await first;
     expect(s.store.getAccountState().byAccountID.acct_1.selectedWorkspaceID).toBe('ws_2');
     expect(element('workspace-management-title-acct_1').textContent).toBe('Other Client');
@@ -204,4 +204,13 @@ describe('workspace write recovery through the actual account shell', function()
     if (state !== 'failed') expect(element<HTMLButtonElement>('workspace-management-action-acct_1').disabled).toBe(true);
     expect(s.api.deleteWorkspace).not.toHaveBeenCalled();
   });
+});
+
+// Alert obligations remain visible even when the workspace itself cannot open.
+it('retains critical alert facts on a canceled row without offering an active handoff', function() {
+  var w = { ...workspace('ws_1', 'canceled'), active_critical_alert_count: 3, active_warning_alert_count: 1 };
+  setup([account('acct_1', [w])]);
+  expect(document.body.textContent).toContain('3 critical');
+  expect(document.body.textContent).toContain('1 warning');
+  expect(document.querySelector('form[action="/api/accounts/acct_1/tenants/ws_1/handoff"]')).toBeNull();
 });

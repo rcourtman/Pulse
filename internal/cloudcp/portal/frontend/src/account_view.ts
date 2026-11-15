@@ -220,7 +220,7 @@ export function renderWorkspaceManagement(account: PortalAccountSummary, entry: 
   }
 
   title.textContent = workspace.display_name;
-  meta.textContent = workspaceMeta(workspace);
+  meta.textContent = (entry.manageWorkspace.recoveryRequired ? 'Last loaded: ' : '') + workspaceMeta(workspace);
   summary.textContent = workspaceStatusCopy(workspace);
   health.textContent = workspaceHealthLabel(workspace);
   setup.textContent = workspaceSetupLabel(workspace);
