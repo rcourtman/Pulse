@@ -39,7 +39,8 @@ func TestSupportsAPTPlatformUsesCanonicalRuntimeIdentity(t *testing.T) {
 }
 
 func TestConfigurePackageManagersInjectsOneSharedLeaseAndSerializesRefresh(t *testing.T) {
-	updates, cleanup := configurePackageManagers("linux", nil, nil)
+	reporter, cleanup := configurePackageManagers("linux", nil, nil)
+	updates := reporter.(*packageUpdateInspector).manager
 	if updates.lease == nil || cleanup.lease == nil || updates.lease != cleanup.lease {
 		t.Fatalf("managers do not share one lease: update=%p cleanup=%p", updates.lease, cleanup.lease)
 	}
