@@ -334,7 +334,7 @@ func TestRefreshPaidEntitlementCanonicalizesBaseURLForExpectedHost(t *testing.T)
 	if err := reg.CreateAccount(&registry.Account{ID: accountID, Kind: registry.AccountKindIndividual}); err != nil {
 		t.Fatal(err)
 	}
-	if err := reg.CreateStripeAccount(&registry.StripeAccount{AccountID: accountID, SubscriptionState: "active"}); err != nil {
+	if err := reg.CreateStripeAccount(&registry.StripeAccount{AccountID: accountID, StripeCustomerID: "cus_canonical_host_fixture", SubscriptionState: "active"}); err != nil {
 		t.Fatal(err)
 	}
 	tenant := &registry.Tenant{

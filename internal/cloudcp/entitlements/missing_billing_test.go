@@ -66,7 +66,7 @@ func TestRefreshMissingBillingRecoversWithTheSameIdentity(t *testing.T) {
 	if _, err := svc.RefreshEntitlement("etr_recover_billing_fixture", "t-recoverbilling.cloud.example.com"); !errors.Is(err, ErrHostedEntitlementBillingUnavailable) {
 		t.Fatalf("missing authority error = %v", err)
 	}
-	if err := reg.CreateStripeAccount(&registry.StripeAccount{AccountID: accountID, SubscriptionState: "active", PlanVersion: "cloud_starter"}); err != nil {
+	if err := reg.CreateStripeAccount(&registry.StripeAccount{AccountID: accountID, StripeCustomerID: "cus_recover_billing_fixture", SubscriptionState: "active", PlanVersion: "cloud_starter"}); err != nil {
 		t.Fatal(err)
 	}
 	result, err := svc.RefreshEntitlement("etr_recover_billing_fixture", "t-recoverbilling.cloud.example.com")
@@ -160,7 +160,7 @@ func TestLocalMSPBillingCannotOverrideStoredWithdrawal(t *testing.T) {
 			if err := reg.CreateAccount(&registry.Account{ID: accountID, Kind: registry.AccountKindMSP}); err != nil {
 				t.Fatal(err)
 			}
-			if err := reg.CreateStripeAccount(&registry.StripeAccount{AccountID: accountID, SubscriptionState: state}); err != nil {
+			if err := reg.CreateStripeAccount(&registry.StripeAccount{AccountID: accountID, StripeCustomerID: "cus_withdrawn_billing_fixture", SubscriptionState: state}); err != nil {
 				t.Fatal(err)
 			}
 			tenant := &registry.Tenant{ID: "t-WITHDRAWN", AccountID: accountID, State: registry.TenantStateActive, PlanVersion: "msp_starter"}

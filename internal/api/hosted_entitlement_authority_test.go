@@ -78,7 +78,7 @@ func newHostedAuthorityFixtureAt(t *testing.T, now time.Time) *hostedAuthorityFi
 
 func (f *hostedAuthorityFixture) restoreBilling(t *testing.T) {
 	t.Helper()
-	if err := f.reg.CreateStripeAccount(&registry.StripeAccount{AccountID: "a_AUTHORITY", SubscriptionState: "active", PlanVersion: "cloud_starter"}); err != nil {
+	if err := f.reg.CreateStripeAccount(&registry.StripeAccount{AccountID: "a_AUTHORITY", StripeCustomerID: "cus_authority_fixture", SubscriptionState: "active", PlanVersion: "cloud_starter"}); err != nil {
 		t.Fatal(err)
 	}
 }
