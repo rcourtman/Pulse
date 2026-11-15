@@ -249,7 +249,10 @@ func isPortalVisibleTenant(t *registry.Tenant) bool {
 	if t == nil {
 		return false
 	}
-	return t.State != registry.TenantStateDeleted && t.State != registry.TenantStateDeleting
+	// Cleanup can fail after authority has been withdrawn. Keep that pending
+	// workspace visible for review until deletion actually completes; absence
+	// must not turn a failed cleanup into an apparently empty account.
+	return t.State != registry.TenantStateDeleted
 }
 
 func sortWorkspaceSummaries(workspaces []workspaceSummaryItem) {

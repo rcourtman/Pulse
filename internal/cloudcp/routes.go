@@ -256,7 +256,7 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 		workspaceLimitPolicy.ProviderMSPLicenseLapsed = func() bool { return deps.Config.ProviderMSPLicenseLapsed(time.Now()) }
 	}
 	createTenant := account.HandleCreateTenantWithWorkspaceLimitPolicy(deps.Registry, provisioner, workspaceLimitPolicy)
-	updateTenant := account.HandleUpdateTenant(deps.Registry)
+	updateTenant := account.HandleUpdateTenantWithPolicy(deps.Registry, account.TenantMutationPolicy{LocalMSPBilling: deps.Config.IsMSPControlPlane()}, provisioner)
 	deleteTenant := account.HandleDeleteTenant(deps.Registry, provisioner)
 
 	tenantsCollection := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
