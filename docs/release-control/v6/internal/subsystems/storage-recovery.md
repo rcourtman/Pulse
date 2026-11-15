@@ -9893,3 +9893,10 @@ environment flag and touches no licence state.
 Landing hosted sessions in their `PULSE_TENANT_ID` workspace and listing it first
 changes which organization a browser opens by default. It reads and writes no
 backup, restore or storage data, and opens no new storage or recovery path.
+
+### Empty hosted default organization hidden (15 November 2026)
+
+Hiding an empty default organization from a hosted runtime's `GET /api/orgs`
+list deletes nothing. A saved connection, an availability target or a resource
+in that organization keeps it listed, and it opens no backup, restore or storage
+path.
