@@ -667,16 +667,7 @@ func (p *Provisioner) HandleCheckout(ctx context.Context, session CheckoutSessio
 		email = strings.ToLower(strings.TrimSpace(session.CustomerDetails.Email))
 	}
 
-	// Consolidated billing: one Stripe customer per account.
-	// For individual Cloud signups, we create an "individual" account on first checkout.
 	accountID := ""
-	sa, err := p.registry.GetStripeAccountByCustomerID(customerID)
-	if err != nil {
-		return fmt.Errorf("lookup stripe account by customer: %w", err)
-	}
-	if sa != nil {
-		accountID = strings.TrimSpace(sa.AccountID)
-	}
 
 	// Check if a tenant already exists for this Stripe customer
 	existing, err := p.registry.GetByStripeCustomerID(customerID)
@@ -708,80 +699,99 @@ func (p *Provisioner) HandleCheckout(ctx context.Context, session CheckoutSessio
 
 	planVersion := DerivePlanVersion(session.Metadata, "")
 
-	// Ensure the account exists for this Stripe customer (individual Cloud signup path).
-	if accountID == "" {
-		kind := registry.AccountKindIndividual
-		if session.Metadata != nil {
-			switch strings.ToLower(strings.TrimSpace(session.Metadata["account_kind"])) {
-			case "msp":
-				kind = registry.AccountKindMSP
-			case "individual", "":
-				kind = registry.AccountKindIndividual
-			}
-		}
-
-		displayName := ""
-		if session.Metadata != nil {
-			displayName = strings.TrimSpace(session.Metadata["account_display_name"])
-			if displayName == "" {
-				displayName = strings.TrimSpace(session.Metadata["display_name"])
-			}
-		}
-		if displayName == "" {
-			displayName = email
-		}
-
-		newAccountID, err := registry.GenerateAccountID()
+	// Mapping/backfill is a short billing decision. Re-read after admission:
+	// neither a stale mapping nor checkout metadata can restore a withdrawal.
+	if err := func() error {
+		_, authority, err := p.registry.AcquireBillingAuthority(ctx, customerID)
 		if err != nil {
-			return fmt.Errorf("generate account id: %w", err)
+			return err
 		}
-		a := &registry.Account{
-			ID:          newAccountID,
-			Kind:        kind,
-			DisplayName: displayName,
+		defer authority.Close()
+		sa, err := p.registry.GetStripeAccountByCustomerID(customerID)
+		if err != nil {
+			return fmt.Errorf("lookup stripe account by customer: %w", err)
 		}
-		if err := p.registry.CreateAccount(a); err != nil {
-			return fmt.Errorf("create account: %w", err)
+		if sa != nil {
+			accountID = strings.TrimSpace(sa.AccountID)
+			if !ShouldGrantCapabilities(pkglicensing.ParseStoredSubscriptionState(sa.SubscriptionState)) {
+				return entitlements.ErrHostedEntitlementInactive
+			}
+		}
+		// Ensure the account exists for this Stripe customer (individual Cloud signup path).
+		if accountID == "" {
+			kind := registry.AccountKindIndividual
+			if session.Metadata != nil {
+				switch strings.ToLower(strings.TrimSpace(session.Metadata["account_kind"])) {
+				case "msp":
+					kind = registry.AccountKindMSP
+				case "individual", "":
+					kind = registry.AccountKindIndividual
+				}
+			}
+
+			displayName := ""
+			if session.Metadata != nil {
+				displayName = strings.TrimSpace(session.Metadata["account_display_name"])
+				if displayName == "" {
+					displayName = strings.TrimSpace(session.Metadata["display_name"])
+				}
+			}
+			if displayName == "" {
+				displayName = email
+			}
+
+			newAccountID, err := registry.GenerateAccountID()
+			if err != nil {
+				return fmt.Errorf("generate account id: %w", err)
+			}
+			a := &registry.Account{
+				ID:          newAccountID,
+				Kind:        kind,
+				DisplayName: displayName,
+			}
+			if err := p.registry.CreateAccount(a); err != nil {
+				return fmt.Errorf("create account: %w", err)
+			}
+
+			newSA := &registry.StripeAccount{
+				AccountID:                 a.ID,
+				StripeCustomerID:          customerID,
+				StripeSubscriptionID:      strings.TrimSpace(session.Subscription),
+				PlanVersion:               planVersion,
+				SubscriptionState:         InitialSubscriptionStateForCheckout(session.Metadata),
+				StripeSubItemWorkspacesID: "",
+			}
+			if err := p.registry.CreateStripeAccount(newSA); err != nil {
+				// Best-effort fallback: if a competing worker created the row, reuse it.
+				existingSA, getErr := p.registry.GetStripeAccountByCustomerID(customerID)
+				if getErr != nil || existingSA == nil {
+					return fmt.Errorf("create stripe account mapping: %w", err)
+				}
+				accountID = strings.TrimSpace(existingSA.AccountID)
+			} else {
+				accountID = a.ID
+			}
+		} else if sa != nil {
+			// Backfill subscription ID/plan version if the mapping exists but hasn't been updated yet.
+			changed := false
+			if strings.TrimSpace(sa.StripeSubscriptionID) == "" && strings.TrimSpace(session.Subscription) != "" {
+				sa.StripeSubscriptionID = strings.TrimSpace(session.Subscription)
+				changed = true
+			}
+			if strings.TrimSpace(sa.PlanVersion) == "" && strings.TrimSpace(planVersion) != "" {
+				sa.PlanVersion = strings.TrimSpace(planVersion)
+				changed = true
+			}
+			if changed {
+				if updateErr := p.registry.UpdateStripeAccount(sa); updateErr != nil {
+					return fmt.Errorf("backfill Stripe account metadata: %w", updateErr)
+				}
+			}
 		}
 
-		newSA := &registry.StripeAccount{
-			AccountID:                 a.ID,
-			StripeCustomerID:          customerID,
-			StripeSubscriptionID:      strings.TrimSpace(session.Subscription),
-			PlanVersion:               planVersion,
-			SubscriptionState:         InitialSubscriptionStateForCheckout(session.Metadata),
-			StripeSubItemWorkspacesID: "",
-		}
-		if err := p.registry.CreateStripeAccount(newSA); err != nil {
-			// Best-effort fallback: if a competing worker created the row, reuse it.
-			existingSA, getErr := p.registry.GetStripeAccountByCustomerID(customerID)
-			if getErr != nil || existingSA == nil {
-				return fmt.Errorf("create stripe account mapping: %w", err)
-			}
-			accountID = strings.TrimSpace(existingSA.AccountID)
-		} else {
-			accountID = a.ID
-		}
-	} else if sa != nil {
-		// Backfill subscription ID/plan version if the mapping exists but hasn't been updated yet.
-		changed := false
-		if strings.TrimSpace(sa.StripeSubscriptionID) == "" && strings.TrimSpace(session.Subscription) != "" {
-			sa.StripeSubscriptionID = strings.TrimSpace(session.Subscription)
-			changed = true
-		}
-		if strings.TrimSpace(sa.PlanVersion) == "" && strings.TrimSpace(planVersion) != "" {
-			sa.PlanVersion = strings.TrimSpace(planVersion)
-			changed = true
-		}
-		if changed {
-			if updateErr := p.registry.UpdateStripeAccount(sa); updateErr != nil {
-				log.Warn().
-					Err(updateErr).
-					Str("customer_id", customerID).
-					Str("account_id", sa.AccountID).
-					Msg("Failed to backfill Stripe account metadata")
-			}
-		}
+		return nil
+	}(); err != nil {
+		return err
 	}
 
 	if err := p.ensureAccountOwnerMembership(accountID, email); err != nil {
@@ -816,12 +826,22 @@ func (p *Provisioner) HandleCheckout(ctx context.Context, session CheckoutSessio
 		StripeSubscriptionID: strings.TrimSpace(session.Subscription),
 		PlanVersion:          planVersion,
 	}
-	if err := p.registry.Create(tenant); err != nil {
-		return fmt.Errorf("create tenant record: %w", err)
-	}
-	cleanup.tenantID = tenantID
-	cleanup.tenantCreated = true
-	if err := p.writeHostedEntitlementLeaseState(tenant, pkglicensing.SubStateActive, planVersion, customerID, strings.TrimSpace(session.Subscription), ""); err != nil {
+	if err := p.withCheckoutAuthority(ctx, tenant, func() error {
+		// Recheck before both insertion and signing, after slow file setup.
+		current, err := p.registry.GetByStripeCustomerID(customerID)
+		if err != nil {
+			return err
+		}
+		if current != nil {
+			return fmt.Errorf("checkout tenant already exists")
+		}
+		if err := p.registry.Create(tenant); err != nil {
+			return fmt.Errorf("create tenant record: %w", err)
+		}
+		cleanup.tenantID = tenantID
+		cleanup.tenantCreated = true
+		return p.writeHostedEntitlementLeaseState(tenant, pkglicensing.SubStateActive, planVersion, customerID, strings.TrimSpace(session.Subscription), "")
+	}); err != nil {
 		return fmt.Errorf("write initial hosted entitlement state for tenant %s: %w", tenantID, err)
 	}
 
@@ -837,8 +857,7 @@ func (p *Provisioner) HandleCheckout(ctx context.Context, session CheckoutSessio
 	// Poll health check before declaring the tenant active.
 	if containerID == "" {
 		if p.allowDockerless {
-			tenant.State = registry.TenantStateActive
-			if err := p.registry.Update(tenant); err != nil {
+			if err := p.completeCheckoutProvisioning(ctx, tenant); err != nil {
 				return fmt.Errorf("update tenant record: %w", err)
 			}
 			p.generateAndLogPortalMagicLink(email, tenantID)
@@ -850,8 +869,7 @@ func (p *Provisioner) HandleCheckout(ctx context.Context, session CheckoutSessio
 		return fmt.Errorf("container did not start for tenant %s", tenantID)
 	}
 	if p.pollHealth(ctx, containerID) {
-		tenant.State = registry.TenantStateActive
-		if err := p.registry.Update(tenant); err != nil {
+		if err := p.completeCheckoutProvisioning(ctx, tenant); err != nil {
 			return fmt.Errorf("update tenant record: %w", err)
 		}
 		p.generateAndLogPortalMagicLink(email, tenantID)
@@ -1075,8 +1093,9 @@ func (p *Provisioner) HandleSubscriptionUpdated(ctx context.Context, sub Subscri
 		return fmt.Errorf("lookup tenant by customer: %w", err)
 	}
 	if tenant == nil {
-		log.Warn().Str("customer_id", customerID).Msg("subscription.updated: tenant not found")
-		return nil
+		// A failed/new checkout may not have a tenant yet. Do not acknowledge
+		// and lose a granting event needed to reconcile its known billing row.
+		return p.updateUnprovisionedCheckoutBilling(sub)
 	}
 	ctx, lease, tenant, err := p.lockTenant(ctx, tenant.ID)
 	if err != nil {
@@ -1154,13 +1173,8 @@ func (p *Provisioner) withdrawSubscription(ctx context.Context, sub Subscription
 		return err
 	}
 	defer authority.Close()
-	tenant, err := p.registry.GetByStripeCustomerID(customerID)
-	if err != nil {
-		return err
-	}
-	if tenant == nil {
-		return nil
-	}
+	// Checkout can already have a billing row while its runtime/tenant is
+	// still being prepared. Acknowledging withdrawal must retain that fact.
 	if sa, err := p.registry.GetStripeAccountByCustomerID(customerID); err != nil {
 		return err
 	} else if sa != nil {
@@ -1170,6 +1184,13 @@ func (p *Provisioner) withdrawSubscription(ctx context.Context, sub Subscription
 		if err := p.registry.UpdateStripeAccount(sa); err != nil {
 			return err
 		}
+	}
+	tenant, err := p.registry.GetByStripeCustomerID(customerID)
+	if err != nil {
+		return err
+	}
+	if tenant == nil {
+		return nil
 	}
 	if err := p.registry.SetTenantState(tenant.ID, withdrawnTenantState(state)); err != nil {
 		return err
