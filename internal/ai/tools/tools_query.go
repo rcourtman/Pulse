@@ -5360,6 +5360,14 @@ func (e *PulseToolExecutor) executeGetResourceConfig(ctx context.Context, args m
 	resourceType, _ := args["resource_type"].(string)
 	resourceID, _ := args["resource_id"].(string)
 	resourceType = canonicalQueryResourceType(resourceType)
+	// A canonical handle ("agent-<hash>") names its own type, as for
+	// action=resource. It wins over a type the model guessed: on Docker fault
+	// set D6 a model passed an agent host's handle with agent, node, system,
+	// vm and system-container in turn and got four refusals that named the
+	// wrong type or none.
+	if inferred := canonicalQueryResourceType(resourceTypeFromCanonicalID(resourceID)); configKnownResourceType(inferred) {
+		resourceType = inferred
+	}
 
 	if resourceType == "" {
 		return NewErrorResult(fmt.Errorf("resource_type is required")), nil
@@ -5369,6 +5377,10 @@ func (e *PulseToolExecutor) executeGetResourceConfig(ctx context.Context, args m
 	}
 	if resourceType == "app-container" {
 		return e.executeNativeAppContainerConfig(ctx, strings.TrimSpace(resourceID))
+	}
+	if what, noConfig := configlessResourceKinds[resourceType]; noConfig {
+		return NewErrorResult(fmt.Errorf("action=config reads the configuration of Proxmox VMs (vm), LXC containers (system-container) and Docker containers (app-container); %q is %s, which has none here. "+
+			"For disk usage, files or logs on it, use pulse_read (action disk_usage, file or logs) if that tool is offered to you. For its current state, use action=resource", strings.TrimSpace(resourceID), what)), nil
 	}
 	if e.guestConfigProvider == nil {
 		return NewTextResult("Guest configuration not available."), nil
@@ -5419,6 +5431,29 @@ func (e *PulseToolExecutor) executeGetResourceConfig(ctx context.Context, args m
 	}
 
 	return NewJSONResult(response.NormalizeCollections()), nil
+}
+
+// configlessResourceKinds names the canonical resource types action=config
+// has nothing for, as the refusal describes them. Their refusal says what
+// config covers and where disk usage, files and logs are read instead.
+var configlessResourceKinds = map[string]string{
+	"agent":         "an agent host",
+	"docker-host":   "a Docker host",
+	"storage":       "a storage pool",
+	"physical-disk": "a physical disk",
+}
+
+// configKnownResourceType reports whether a type read from a canonical handle
+// is one action=config can answer for, either with a config or with the
+// refusal above. Any other prefix of a "<word>-<hex>" name is left alone: it
+// may be part of a guest's name.
+func configKnownResourceType(resourceType string) bool {
+	switch resourceType {
+	case "vm", "system-container", "app-container":
+		return true
+	}
+	_, ok := configlessResourceKinds[resourceType]
+	return ok
 }
 
 func (e *PulseToolExecutor) executeNativeAppContainerConfig(ctx context.Context, resourceRef string) (CallToolResult, error) {
