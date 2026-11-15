@@ -184,6 +184,24 @@ afterEach(() => {
 });
 
 describe('OrganizationSharingPanel', () => {
+  it('names the native creation form and keeps manual-entry toggles non-submitting', async () => {
+    renderPanel();
+    const form = await screen.findByRole('form', { name: 'Create Share' });
+    const create = screen.getByRole('button', { name: 'Create Share' });
+    expect(create.closest('form')).toBe(form);
+    expect(create).toHaveAttribute('type', 'submit');
+    expect(create).toBeDisabled();
+    const toggle = screen.getByRole('button', { name: 'Enter manually' });
+    expect(toggle.closest('form')).toBe(form);
+    expect(toggle).toHaveAttribute('type', 'button');
+    fireEvent.click(toggle);
+    expect(screen.getByRole('button', { name: 'Hide manual entry' })).toHaveAttribute(
+      'type',
+      'button',
+    );
+    expect(createShareMock).not.toHaveBeenCalled();
+  });
+
   it('renders loading skeleton first, then loaded content', async () => {
     const orgDeferred = deferred<typeof baseOrg>();
     orgGetMock.mockReturnValueOnce(orgDeferred.promise);

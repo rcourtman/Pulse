@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "base_sha": "d0881f710d0eafffdd95c6726aebe4763a1467dc",
+  "verified_at": "2026-11-15T20:21:27Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/OrganizationSharingCreateSection.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/OrganizationSharingCreateSection.tsx": "e5a1e997241fdd595f5be470a2623d550b83a2e0e9911b2ea741db224d5e0c90"
+  },
+  "routes": [
+    "Settings > Organization Sharing (production panel/state/OrgsAPI/client/CSS in offline consuming fixture; not full App/IdP)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Chromium141 and WebKit26; desktop-light/narrow-dark and desktop-dark/narrow-light. Playwright1.56.1 matches the integration lock. 40 native-inspected captures/20 pairs, copied to current lane output.",
+    "Comparable parent and candidate overview, ready manual draft, pending write, native-Enter result and unconfirmed change. Same safe fixtures, viewport/theme, locale/timezone and normalized camera anchor. Whole-page overview and full-state captures retain identities, roles, individual saved shares, status and actions."
+  ],
+  "interactions": [
+    "Parent native Enter leaves the valid manual draft unchanged on all four configurations; the candidate dispatches its exact selected payload once and renders server-returned pending approval. Manual-entry toggles do not submit.",
+    "Pending controls remain natively disabled; repeated requestSubmit during the candidate pending write adds no request. Pointer creation remains usable. Encoded org/path, CSRF and session-only headers match the selected draft; existing outgoing and incoming rows remain intact.",
+    "A separate HTTP503 change withdraws the form into the existing unconfirmed warning. Explicit Reload sharing reads saved grants and never repeats the write. No page exceptions, unexpected API requests or horizontal overflow.",
+    "Fixture-only compiler, module-routing and cold-CSRF timing assertion failures were repaired before the successful before/after runs and retained in lane evidence. No production state/API/client behavior was mocked or changed; only resource inventory and HTTP responses are synthetic."
+  ]
+}
