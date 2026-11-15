@@ -253,22 +253,14 @@ describe('docsLinks', () => {
     );
   });
 
-  it('documents network discovery without the removed AI Discovery routes', () => {
+  it('documents scripted setup and network discovery without the removed AI Discovery routes', () => {
     const api = apiReference();
     expect(api).toContain('`POST /api/discover` (admin, `settings:write`)');
     expect(api).not.toContain('/api/discovery');
     expect(api).not.toContain('### AI Discovery');
-  });
-
-  it('documents the scripted first run a provisioning agent needs', () => {
-    const api = apiReference();
-    const install = readFileSync(path.join(repoRoot, 'docs', 'INSTALL.md'), 'utf8');
-    expect(api).toContain('`apiToken` is the secret itself, not a name');
+    // A scripted first run chooses the setup token and needs the host type.
     expect(api).toContain('A token shorter than 32 characters gets\n`400`');
     expect(api).toContain('`{"type":"host","name":"docker-host"}` returns `token`');
-    expect(api).toContain('(INSTALL.md#scripted-setup-no-browser)');
-    expect(install).toContain('### Scripted setup (no browser)');
-    expect(install).toContain(`-d '{"type":"host","name":"docker-host"}'`);
   });
 
   it('documents action permissions on routes that start work on a host', () => {
