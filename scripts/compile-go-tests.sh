@@ -23,12 +23,15 @@ done
 # -run '^$' alone still runs init and TestMain. Vet and real test execution
 # remain in the existing required backend shards. Disable result caching so
 # the output cannot be mistaken for a previously executed test result.
+# Own actual compilation as well: an inherited GOFLAGS=-n otherwise reports
+# success without checking even a broken package. Preserve the caller's module,
+# compiler, tag and worker settings rather than replacing GOFLAGS wholesale.
 if [[ "$selection" == ./... ]]; then
     echo 'Compiling all Go race-test binaries; no test binary will execute.'
-    go test -race -vet=off -count=1 -exec /bin/true ./...
+    go test -race -vet=off -count=1 -exec /bin/true -n=false ./...
 else
     printf 'Compiling %s changed-test package(s) and their imports; no test binary will execute.\n' "${#packages[@]}"
     printf '  %s\n' "${packages[@]}"
-    go test -race -vet=off -count=1 -exec /bin/true "${packages[@]}"
+    go test -race -vet=off -count=1 -exec /bin/true -n=false "${packages[@]}"
 fi
 echo 'Selected Go race-test binaries compiled; runtime tests remain required.'

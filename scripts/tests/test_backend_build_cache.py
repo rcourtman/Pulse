@@ -103,7 +103,7 @@ class BackendBuildCacheTest(unittest.TestCase):
             # A cache success/failure is not an output of a validation job.
             self.assertNotIn("outputs", job)
         compiler = (ROOT / "scripts/compile-go-tests.sh").read_text()
-        self.assertIn("go test -race -vet=off -count=1 -exec /bin/true ./...", compiler)
+        self.assertIn("go test -race -vet=off -count=1 -exec /bin/true -n=false ./...", compiler)
         self.assertEqual(self.workflow["permissions"], {"contents": "read"})
 
     def test_cache_path_command_uses_actual_tool_and_quotes_spaced_paths(self):
