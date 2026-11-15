@@ -83,7 +83,7 @@ func TestConfigurePackageManagersRebindsInjectedManagersToOneAuthority(t *testin
 	updates := newPackageUpdateManager("linux", nil)
 	cleanup := newStorageCleanupManager("linux", nil)
 	gotUpdates, gotCleanup := configurePackageManagers("linux", updates, cleanup)
-	if gotUpdates != updates || gotCleanup != cleanup || gotUpdates.lease == nil || gotUpdates.lease != gotCleanup.lease {
+	if gotUpdates != updates || gotCleanup != cleanup || updates.lease == nil || updates.lease != gotCleanup.lease {
 		t.Fatal("runtime composition did not inject one shared package manager authority")
 	}
 }
