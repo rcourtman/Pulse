@@ -15,6 +15,24 @@
 
 ## Purpose
 
+### Sharing drafts support native form submission
+
+The existing Create Share section is a named native form. Enter from a manual
+resource field and activation of its submit button follow the same state-owner
+creation path without navigating away. The manual-entry toggle remains a
+non-submit button. The existing disabled fieldset and current-draft checks still
+prevent incomplete drafts or repeat submissions during CSRF preparation and a
+pending write from creating another grant.
+
+Recipient/resource choices, role, exact payload, reader and capability lifetime,
+saved readback, uncertainty recovery and no-write-retry rules are unchanged.
+Registered sharing-panel and real-client creation tests cover form semantics,
+manual/quick-pick submission and pending/invalid drafts. Comparable desktop and
+phone light/dark browser fixtures exercise native Enter, pointer creation and
+read-only recovery through the production panel/state/API client. This is a
+keyboard usability repair, not live authorization, original-client recovery or
+release availability.
+
 ### Pending User Access controls reflect the submitted draft
 
 While the existing role update is pending, each role checkbox, Close, Cancel
