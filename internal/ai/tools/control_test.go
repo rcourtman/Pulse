@@ -256,3 +256,21 @@ func TestCommandReadHostForTargetFollowsGuestRouting(t *testing.T) {
 		t.Error("no read state must not read")
 	}
 }
+
+// A read for an agent host, asked by the host's own resource ID, runs on that
+// host. Patrol's alert seed relies on the read fact naming the host itself
+// with no guest: that is how it tells a host it can read on from a Docker
+// container whose reads would run on its host instead.
+func TestCommandReadHostForTargetNamesAnAgentHostItself(t *testing.T) {
+	host := routingFixtureHost("66cd990e-host", "docker01", "")
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(models.StateSnapshot{Hosts: []models.Host{host}})
+	_, hostID, found := registry.GetByReference(host.ID)
+	if !found {
+		t.Fatal("fixture host missing")
+	}
+	read, ok := CommandReadHostForTarget(registry, hostID)
+	if !ok || read.ResourceID != hostID || read.Guest != "" || read.Name != "docker01" {
+		t.Fatalf("read for %s = %#v, %v, want a read on docker01 itself", hostID, read, ok)
+	}
+}

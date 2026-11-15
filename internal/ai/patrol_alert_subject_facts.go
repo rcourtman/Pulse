@@ -114,15 +114,30 @@ func (p *PatrolService) patrolAlertSubjectFacts(scope *PatrolScope, snap patrolR
 }
 
 // patrolAlertSubjectResource returns the one inventory resource an alert run
-// was asked about. A run asked about several has no single subject.
+// was asked about. A run asked about several has no single subject. An alert
+// on part of a resource, such as an agent's filesystem
+// ("agent:<host>/disk:<mount>"), is about the resource that owns the part:
+// the D6 disk alert named no inventory resource, so its seed said nothing
+// about what Pulse could read on the host.
 func patrolAlertSubjectResource(scope *PatrolScope, snap patrolRuntimeState) *unifiedresources.Resource {
 	if scope == nil || snap.unifiedResourceProvider == nil {
 		return nil
 	}
 	requested := make(map[string]bool, len(scope.ResourceIDs))
+	var resolver unifiedresources.AlertResourceReferenceResolver
 	for _, id := range scope.ResourceIDs {
-		if id = strings.TrimSpace(id); id != "" {
-			requested[id] = true
+		if id = strings.TrimSpace(id); id == "" {
+			continue
+		}
+		requested[id] = true
+		if !strings.Contains(id, "/") {
+			continue
+		}
+		if resolver == nil {
+			resolver = patrolAlertReferenceResolver(snap)
+		}
+		if binding, _ := resolver.ResolveAlertResourceReference(id); binding.Component && strings.TrimSpace(binding.ResourceID) != "" {
+			requested[strings.TrimSpace(binding.ResourceID)] = true
 		}
 	}
 	var subject *unifiedresources.Resource
@@ -151,7 +166,7 @@ func patrolAlertIsAboutSpaceOrAge(alertType string) bool {
 }
 
 // patrolRunnableActionLines states what Pulse can run for a resource, and
-// what it can read inside a Proxmox guest, from the same catalog an
+// where it can read, from the same catalog an
 // investigation is given. For a space or age alert the guest power actions
 // its node refuses are left out.
 func (p *PatrolService) patrolRunnableActionLines(subject *unifiedresources.Resource, name, alertType string) []string {
@@ -215,18 +230,10 @@ func (p *PatrolService) patrolRunnableActionLines(subject *unifiedresources.Reso
 	default:
 		lines = append(lines, fmt.Sprintf("Pulse has no action for %q.", name))
 	}
-	if reads := catalog.Reads; reads != nil && catalog.CommandsDisabled == nil && patrolResourceIsRunningProxmoxGuest(subject) {
-		hostName := strings.TrimSpace(reads.HostName)
-		if hostName == "" {
-			hostName = "its node"
-		}
-		through := "through the Pulse agent on " + hostName
-		if reads.Guest == "vm" {
-			through += " when the QEMU guest agent runs in it"
-		}
+	if place, through, ok := patrolReadPlace(subject, name, catalog); ok {
 		// This check has no agent reads (PatrolDetectionToolNamesForResourceTypes);
 		// the investigation a finding starts has them.
-		line := fmt.Sprintf("Pulse can read disk usage, files and logs inside %q %s. This check cannot read them; an investigation of a finding can.", name, through)
+		line := fmt.Sprintf("Pulse can read disk usage, files and logs %s %s. This check cannot read them; an investigation of a finding can.", place, through)
 		// Told only that a read was possible, a sustained check on a guest
 		// disk alert still kept to "do not report a finding that only repeats
 		// the alert's reading" and raised nothing. Here the finding is what
@@ -272,15 +279,47 @@ func (p *PatrolService) patrolActionCatalog(resourceID string) (aicontracts.Acti
 	return catalog, true
 }
 
-// patrolAlertSubjectGuestReadable reports whether the resource an alert run
-// looks at is a running Proxmox guest Pulse can read inside.
-func (p *PatrolService) patrolAlertSubjectGuestReadable(scope *PatrolScope, snap patrolRuntimeState) bool {
+// patrolReadPlace says where Pulse can read for an alert's subject, from the
+// catalog's read fact: inside a running Proxmox guest through its node's
+// agent, or on an agent host through its own agent. Reads on a host run on
+// that host, so a host is readable only when the read fact names the subject
+// itself; a Docker container's reads would run on its host, not in it.
+func patrolReadPlace(subject *unifiedresources.Resource, name string, catalog aicontracts.ActionCapabilityCatalog) (place, through string, ok bool) {
+	reads := catalog.Reads
+	if subject == nil || reads == nil || catalog.CommandsDisabled != nil {
+		return "", "", false
+	}
+	hostName := strings.TrimSpace(reads.HostName)
+	if patrolResourceIsRunningProxmoxGuest(subject) {
+		if hostName == "" {
+			hostName = "its node"
+		}
+		through = "through the Pulse agent on " + hostName
+		if reads.Guest == "vm" {
+			through += " when the QEMU guest agent runs in it"
+		}
+		return fmt.Sprintf("inside %q", name), through, true
+	}
+	if subject.Status == unifiedresources.StatusOffline || strings.TrimSpace(reads.Guest) != "" ||
+		strings.TrimSpace(reads.HostResourceID) != strings.TrimSpace(subject.ID) {
+		return "", "", false
+	}
+	return fmt.Sprintf("on %q", name), "through its Pulse agent", true
+}
+
+// patrolAlertSubjectReadPlace says where Pulse can read for the resource an
+// alert run looks at (inside "gitea", on "docker01"), or reports false.
+func (p *PatrolService) patrolAlertSubjectReadPlace(scope *PatrolScope, snap patrolRuntimeState) (string, bool) {
 	subject := patrolAlertSubjectResource(scope, snap)
-	if !patrolResourceIsRunningProxmoxGuest(subject) {
-		return false
+	if subject == nil {
+		return "", false
 	}
 	catalog, ok := p.patrolActionCatalog(subject.ID)
-	return ok && catalog.Reads != nil && catalog.CommandsDisabled == nil
+	if !ok {
+		return "", false
+	}
+	place, _, readable := patrolReadPlace(subject, strings.TrimSpace(subject.Name), catalog)
+	return place, readable
 }
 
 // patrolResourceIsRunningProxmoxGuest reports whether a resource is a Proxmox
