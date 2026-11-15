@@ -215,9 +215,9 @@ function fillForm(entry: Entry, role: Role = 'viewer') {
 function expectSavedGrant(entry: Entry, role: Role = 'viewer') {
   const payload = payloadFor(entry, role);
   const row = screen
-    .getAllByRole('row')
-    .find((candidate) => within(candidate).queryByText(`vm:${payload.resourceId}`));
-  expect(row).toBeDefined();
+    .getByText(`vm:${payload.resourceId}`, { exact: true, selector: 'bdi' })
+    .closest('tr');
+  expect(row).not.toBeNull();
   expect(row).toHaveTextContent(payload.resourceName);
   expect(row).toHaveTextContent('Namesake organization');
   // jsdom includes both responsive presentations; each must show the saved role.
@@ -225,7 +225,11 @@ function expectSavedGrant(entry: Entry, role: Role = 'viewer') {
   const mobileAccess = within(row!).getByText('Access:').parentElement!;
   expect(within(mobileAccess).getByText(role, { exact: true })).toBeInTheDocument();
   expect(row).toHaveTextContent('Pending approval');
-  expect(within(row!).getByRole('button', { name: /^Remove share of / })).toBeEnabled();
+  expect(
+    within(row!).getByRole('button', {
+      name: `Remove share of vm:${payload.resourceId} to ${target.displayName} (${target.id})`,
+    }),
+  ).toBeEnabled();
   // This saved state comes from the actual dispatched body, not the intended
   // fixture choice. A wrong callback must produce a wrong saved grant.
   expect(outgoing).toHaveLength(1);
@@ -465,7 +469,10 @@ describe('rendered Create Share controls through the real transport', () => {
         expect(resourceInput()).toHaveAccessibleDescription(
           `Resource: Namesake workload · vm:${selectedResourceID}`,
         );
-      for (const input of screen.getAllByRole('combobox')) expect(input).toBeDisabled();
+      // These are the submitted form's native selects, not every role in the
+      // saved inventories. Keep the disabled-control proof local to its owner.
+      for (const input of saving.closest('form')!.querySelectorAll('select'))
+        expect(input).toBeDisabled();
       fireEvent.click(saving);
       expect(writes()).toHaveLength(1);
       expect(notices.success).not.toHaveBeenCalled();

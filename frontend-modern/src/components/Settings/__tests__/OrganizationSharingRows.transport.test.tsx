@@ -144,10 +144,11 @@ let memberIsViewer: boolean;
 let reload: ReturnType<typeof deferred<Response>> | undefined;
 
 function rowFor(share: OrganizationShare): HTMLElement {
-  const section = screen.getByRole('heading', {
-    name: share.resourceId.startsWith('outgoing::') ? 'Outgoing Shares' : 'Incoming Shares',
-  }).parentElement!;
-  const row = within(section).getByText(`${share.resourceType}:${share.resourceId}`).closest('tr');
+  // The exact saved resource key uniquely identifies this fixture's row. Avoid
+  // repeating whole-panel accessibility walks for every namesake assertion.
+  const row = screen
+    .getByText(`${share.resourceType}:${share.resourceId}`, { exact: true, selector: 'bdi' })
+    .closest('tr');
   expect(row).not.toBeNull();
   return row!;
 }
@@ -363,22 +364,23 @@ describe('rendered namesake sharing rows through the real transport', () => {
         const name = directory.find((org) => org.id === share.targetOrgId)!.displayName;
         expect(within(row).getByText(name, { exact: true })).toBeInTheDocument();
         expect(within(row).getByText(share.targetOrgId, { exact: true }).tagName).toBe('BDI');
-        expect(
-          within(row).getByRole('button', {
-            name: `Remove share of vm:${share.resourceId} to ${name} (${share.targetOrgId})`,
-          }),
-        ).toBeEnabled();
+        const label = `Remove share of vm:${share.resourceId} to ${name} (${share.targetOrgId})`;
+        const action = within(row).getByLabelText(label, { selector: 'button' });
+        expect(action).toHaveAccessibleName(label);
+        expect(action).toBeVisible();
+        expect(action).toBeEnabled();
       }
       for (const share of incoming) {
         const row = rowFor(share);
         expect(within(row).getByText(share.sourceOrgName, { exact: true })).toBeInTheDocument();
         expect(within(row).getByText(share.sourceOrgId, { exact: true }).tagName).toBe('BDI');
-        for (const action of ['Accept', 'Decline'])
-          expect(
-            within(row).getByRole('button', {
-              name: `${action} share of vm:${share.resourceId} from ${share.sourceOrgName} (${share.sourceOrgId})`,
-            }),
-          ).toBeEnabled();
+        for (const verb of ['Accept', 'Decline']) {
+          const label = `${verb} share of vm:${share.resourceId} from ${share.sourceOrgName} (${share.sourceOrgId})`;
+          const action = within(row).getByLabelText(label, { selector: 'button' });
+          expect(action).toHaveAccessibleName(label);
+          expect(action).toBeVisible();
+          expect(action).toBeEnabled();
+        }
       }
     };
     expectIdentities();

@@ -429,7 +429,15 @@ describe('OrganizationSharingPanel', () => {
       expect(key.closest('td')).toHaveTextContent('viewer');
     }
 
-    fireEvent.click(screen.getByRole('button', { name: /^Accept share of / }));
+    const incomingAction = (action: 'Accept' | 'Decline') =>
+      screen.getByLabelText(`${action} share of view:alerts-high-cpu from Organization B (org-b)`, {
+        selector: 'button',
+      });
+    expect(incomingAction('Accept')).toHaveAccessibleName(
+      'Accept share of view:alerts-high-cpu from Organization B (org-b)',
+    );
+    expect(incomingAction('Accept')).toBeVisible();
+    fireEvent.click(incomingAction('Accept'));
 
     await waitFor(() => {
       expect(acceptIncomingShareMock).toHaveBeenCalledWith(
@@ -440,12 +448,14 @@ describe('OrganizationSharingPanel', () => {
     });
 
     await waitFor(() => {
-      expect(
-        (screen.getByRole('button', { name: /^Decline share of / }) as HTMLButtonElement).disabled,
-      ).toBe(false);
+      expect(incomingAction('Decline')).toBeEnabled();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /^Decline share of / }));
+    expect(incomingAction('Decline')).toHaveAccessibleName(
+      'Decline share of view:alerts-high-cpu from Organization B (org-b)',
+    );
+    expect(incomingAction('Decline')).toBeVisible();
+    fireEvent.click(incomingAction('Decline'));
 
     await waitFor(() => {
       expect(declineIncomingShareMock).toHaveBeenCalledWith(
