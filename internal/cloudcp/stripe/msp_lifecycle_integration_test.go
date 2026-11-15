@@ -665,6 +665,9 @@ func TestMSPLifecycle_TenantIsolation(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	seedWorkspaceBilling(t, reg, msp1ID)
+	seedWorkspaceBilling(t, reg, msp2ID)
+
 	// Provision a workspace under MSP One.
 	ws, err := provisioner.ProvisionWorkspace(context.Background(), msp1ID, "MSP One Client")
 	if err != nil {
@@ -804,52 +807,28 @@ func TestMSPLifecycle_PlanVersionFromAccount(t *testing.T) {
 	}
 }
 
-// TestMSPLifecycle_PlanVersionFallback verifies that ProvisionWorkspace falls
-// back to msp_starter when no StripeAccount exists for the account.
+// Missing Stripe metadata is not permission to invent an MSP subscription.
 func TestMSPLifecycle_PlanVersionFallback(t *testing.T) {
 	reg := newStripeTestRegistry(t)
 	tenantsDir := t.TempDir()
 	provisioner := newTestProvisioner(t, reg, tenantsDir, nil, true)
-
-	accountID, err := registry.GenerateAccountID()
-	if err != nil {
+	accountID := "a-missing-billing"
+	if err := reg.CreateAccount(&registry.Account{ID: accountID, Kind: registry.AccountKindMSP}); err != nil {
 		t.Fatal(err)
 	}
-	if err := reg.CreateAccount(&registry.Account{
-		ID:          accountID,
-		Kind:        registry.AccountKindMSP,
-		DisplayName: "No Billing MSP",
-	}); err != nil {
-		t.Fatalf("CreateAccount: %v", err)
+	if tenant, err := provisioner.ProvisionWorkspace(context.Background(), accountID, "Client"); err == nil || tenant != nil {
+		t.Fatalf("missing billing became fallback authority: %+v/%v", tenant, err)
 	}
-
-	// No StripeAccount created — should fall back to msp_starter.
-	ws, err := provisioner.ProvisionWorkspace(context.Background(), accountID, "Client")
-	if err != nil {
-		t.Fatalf("ProvisionWorkspace: %v", err)
+	entries, err := os.ReadDir(tenantsDir)
+	if err != nil || len(entries) != 0 {
+		t.Fatalf("refusal left provisioning files: %+v/%v", entries, err)
 	}
-	if ws.PlanVersion != "msp_starter" {
-		t.Fatalf("workspace.PlanVersion = %q, want %q (fallback)", ws.PlanVersion, "msp_starter")
-	}
-
-	store := config.NewFileBillingStore(provisioner.tenantDataDir(ws.ID))
-	bs, err := store.GetBillingState("default")
-	if err != nil {
-		t.Fatalf("GetBillingState: %v", err)
-	}
-	if bs == nil {
-		t.Fatal("billing state is nil")
-	}
-	if bs.PlanVersion != "msp_starter" {
-		t.Fatalf("billing.PlanVersion = %q, want %q", bs.PlanVersion, "msp_starter")
-	}
-	assertNoRetiredMonitoredSystemLimit(t, bs.Limits)
 }
 
 func TestMSPLifecycle_ConfiguredPlanVersionFallback(t *testing.T) {
 	reg := newStripeTestRegistry(t)
 	tenantsDir := t.TempDir()
-	provisioner := newTestProvisioner(t, reg, tenantsDir, nil, true, WithDefaultMSPPlanVersion("msp_growth"))
+	provisioner := newTestProvisioner(t, reg, tenantsDir, nil, true, WithWorkspaceLimitPolicy(registry.WorkspaceLimitPolicy{ProviderHostedMSP: true, ProviderMSPPlanVersion: "msp_growth"}))
 
 	accountID, err := registry.GenerateAccountID()
 	if err != nil {

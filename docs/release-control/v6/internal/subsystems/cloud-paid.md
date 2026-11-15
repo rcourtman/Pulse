@@ -1820,6 +1820,41 @@ its estate is, and no estate data crosses the bootstrap.
     scope-limited session even when kiosk is off.
 ## Current State
 
+### Workspace creation uses current admission authority
+
+The account workspace precheck and the final registry insert share
+`registry/workspace_admission.go`. Current Stripe plan/state wins over local
+MSP configuration. Active, trial and grace keep their existing admission;
+suspended, expired, canceled and unknown states do not create a workspace.
+An empty billing plan is not an MSP fallback. Unknown nonempty paid plans keep
+the existing one-workspace ceiling. Paused and incomplete/unknown Stripe events
+are stored as suspended/expired, not mislabeled as payment grace. Historical
+past_due rows cannot be retrospectively classified by this repair.
+
+Missing Stripe billing is local authority only for an explicitly configured
+MSP policy and an MSP account with a recognized MSP plan and unexpired provider
+licence/grace. A default plan string alone is not that policy. The real HTTP
+handler carries the existing server policy to the provisioner; direct provider
+proof callers must configure it explicitly. No legacy accountless renewal,
+migration, billing backfill or original-client recovery is implied.
+
+Before owner/file/runtime initialization, the final insert resolves the current
+account, billing state, plan and active count in the same existing application
+transaction. Caller plan/count hints cannot enlarge it. Provisioning lease
+issuance and completion recheck authority under a short, nonblocking billing
+lease; container startup/health does not hold that lease. Completion updates
+runtime fields and compares the provisioning state instead of writing a stale
+whole-tenant snapshot over withdrawal. New partial provisioning retains the
+existing owned rollback path; existing client data is not rebuilt or deleted.
+
+Registered workspace-admission, tenant-handler, provisioning rollback and MSP
+lifecycle tests exercise no-write refusal, stale preflight, multi-registry
+ceilings, local evaluation/paid compatibility, webhook withdrawal and stale
+completion. Browser evidence must consume actual handler responses through the
+existing portal create-workspace flow at desktop and narrow widths. Component
+proof does not establish installed, published or original-client recovery.
+
+
 The approved commercial contract is recorded in
 `docs/release-control/v6/internal/records/commercial-offer-lifecycle-contract-2026-07-14.md`.
 The local self-hosted license server now has an atomic commercial projection

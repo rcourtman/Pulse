@@ -216,7 +216,11 @@ func newProviderMSPProofRuntimeFromConfig(cfg *cloudcp.CPConfig) (*providerMSPPr
 		cpstripe.WithAdmissionCheck(func(checkCtx context.Context) error {
 			return cloudcp.EnforceStorageAdmission(checkCtx, cfg, dockerMgr)
 		}),
-		cpstripe.WithDefaultMSPPlanVersion(providerMSPProofPlanVersion(cfg)),
+		cpstripe.WithWorkspaceLimitPolicy(registry.WorkspaceLimitPolicy{
+			ProviderHostedMSP:        cfg.IsMSPControlPlane(),
+			ProviderMSPPlanVersion:   providerMSPProofPlanVersion(cfg),
+			ProviderMSPLicenseLapsed: func() bool { return cfg.ProviderMSPLicenseLapsed(time.Now()) },
+		}),
 	)
 
 	return &providerMSPProofRuntime{
