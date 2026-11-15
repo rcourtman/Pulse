@@ -44,7 +44,7 @@ jobs:
   promote:
     environment: release
     runs-on: ubuntu-24.04
-    timeout-minutes: 65
+    timeout-minutes: 185
     steps:
       - name: Promote and verify private Pro runtime
         env:
@@ -203,7 +203,16 @@ jobs:
             allow_ga_publish=true
           fi
           max_promotion_attempts=5
-          promotion_deadline=$((SECONDS + 3600))
+          # Observation includes time queued before the source guard runs.
+          # On 15 November a 57-minute queued source refusal left its
+          # replacement only 127 seconds to finish. Give this shared, finite
+          # window room for queued recovery and the replacement's complete
+          # work, not five fresh budgets. Keep the caller job five minutes
+          # longer for its lease/identity preflight and terminal reporting.
+          # This does not extend a private validation deadline or retry a
+          # failed qualification; only a pre-credential moved-main refusal
+          # remains eligible for the bounded redispatch below.
+          promotion_deadline=$((SECONDS + 10800))
           for attempt in $(seq 1 "${max_promotion_attempts}"); do
             echo "Dispatching live paid-runtime promotion for ${TAG} with R2 prefix ${R2_PREFIX} (attempt ${attempt}/${max_promotion_attempts})."
             promote_dispatch="$(
