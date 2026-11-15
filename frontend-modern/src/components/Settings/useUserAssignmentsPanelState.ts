@@ -39,7 +39,6 @@ export function useUserAssignmentsPanelState(props: UserAssignmentsPanelProps = 
   );
   const [inventoryLoaded, setInventoryLoaded] = createSignal(false);
   const [unconfirmedChange, setUnconfirmedChange] = createSignal<string | null>(null);
-  const [contextVersion, setContextVersion] = createSignal(0);
 
   const featureGate = useRBACFeatureGateState({
     kind: 'user-assignments',
@@ -173,7 +172,6 @@ export function useUserAssignmentsPanelState(props: UserAssignmentsPanelProps = 
     readController = mutationController = undefined;
     context = { org: currentOrg(), user: props.currentUser, allowed: accessAllowed() };
     batch(() => {
-      setContextVersion((version) => version + 1);
       clearEditor();
       setAssignments([]);
       setRoles([]);
@@ -360,7 +358,7 @@ export function useUserAssignmentsPanelState(props: UserAssignmentsPanelProps = 
     successNotice,
     accessAllowed,
     canEdit,
-    contextVersion,
+    readerKey: () => context as object,
     closeDeleteUser,
     closeModal,
     deletingUser,

@@ -29,8 +29,7 @@ export const UserAssignmentsPanel: Component<UserAssignmentsPanelProps> = (props
   let loadFailureNotice: HTMLDivElement | undefined;
   let editorFailureNotice: HTMLDivElement | undefined;
   let panel: HTMLDivElement | undefined;
-  let manageTrigger: HTMLButtonElement | undefined;
-  let savedUser: { version: number; username: string } | undefined;
+  let savedUser: { reader: object; username?: string } | undefined;
   let focusTimer: number | undefined;
   createEffect(
     on(state.unconfirmedChange, (change) => {
@@ -44,63 +43,46 @@ export const UserAssignmentsPanel: Component<UserAssignmentsPanelProps> = (props
   );
   onCleanup(() => window.clearTimeout(focusTimer));
 
-  const restoreSavedFocus = (
-    version: number,
-    trigger: Element | null | undefined,
-    username?: string,
-  ) => {
-    const canReturn = () =>
-      panel?.isConnected &&
-      version === state.contextVersion() &&
-      state.accessAllowed() &&
-      !state.loading() &&
-      !state.userPendingDeletion() &&
-      !state.unconfirmedChange();
-    // A successful write withdraws the editor and replaces its original row
-    // during the saved read. The shared dialog cannot focus that detached node.
-    if (!canReturn()) return;
+  const saveOrReload = async (reload = false) => {
+    const reader = state.readerKey();
+    const username = reload
+      ? savedUser?.reader === reader
+        ? savedUser.username
+        : undefined
+      : state.editingUser()?.username;
+    if (!reload && !username) return;
+    await (reload ? state.loadData() : state.handleSaveAssignments());
+    // The state owner already replaces this identity on every reader change.
+    // In particular, an organization round trip cannot revive a return target.
+    if (reader !== state.readerKey() || state.unconfirmedChange()) return;
+    if (!state.showModal()) savedUser = { reader, username };
     window.clearTimeout(focusTimer);
     focusTimer = window.setTimeout(() => {
-      if (!canReturn()) return;
-      const active = document.activeElement;
-      if (active && active !== document.body && active !== trigger && active.isConnected) return;
+      if (
+        reader !== state.readerKey() ||
+        !state.accessAllowed() ||
+        state.loading() ||
+        state.userPendingDeletion() ||
+        state.unconfirmedChange() ||
+        (document.activeElement && document.activeElement !== document.body)
+      )
+        return;
+      // A saved read replaces the original row; match the literal principal,
+      // not a mutable name or a selector interpolated from an opaque SSO ID.
+      let target: HTMLElement | undefined;
       if (state.showModal()) {
         if (state.editingUser()?.username === username && state.actionError())
-          editorFailureNotice?.focus();
+          target = editorFailureNotice;
       } else if (state.loadError()) {
-        loadFailureNotice?.focus();
+        target = loadFailureNotice;
       } else if (state.canEdit()) {
-        // Match the literal principal, not a mutable name or a CSS selector
-        // constructed from an opaque SSO ID. A vanished/filtered user returns
-        // to search instead of selecting a different namesake.
-        const replacement = Array.from(
-          panel?.querySelectorAll<HTMLButtonElement>('button[data-user-access-manage]') ?? [],
-        ).find((button) => button.dataset.userAccessManage === username && !button.disabled);
-        (replacement ?? searchInputRef)?.focus();
+        target =
+          Array.from(
+            panel?.querySelectorAll<HTMLButtonElement>('button[data-user-access]') ?? [],
+          ).find((button) => button.dataset.userAccess === username) ?? searchInputRef;
       }
+      target?.focus();
     }, 0);
-  };
-
-  const saveAssignments = async () => {
-    const user = state.editingUser();
-    if (!user) return;
-    const version = state.contextVersion();
-    const trigger = manageTrigger;
-    await state.handleSaveAssignments();
-    if (version !== state.contextVersion() || state.unconfirmedChange()) return;
-    if (!state.showModal()) savedUser = { version, username: user.username };
-    restoreSavedFocus(version, trigger, user.username);
-  };
-
-  const reloadAssignments = async () => {
-    const version = state.contextVersion();
-    const trigger = document.activeElement;
-    await state.loadData();
-    restoreSavedFocus(
-      version,
-      trigger,
-      savedUser?.version === version ? savedUser.username : undefined,
-    );
   };
 
   return (
@@ -183,7 +165,7 @@ export const UserAssignmentsPanel: Component<UserAssignmentsPanelProps> = (props
               layout="banner"
               icon={<TriangleAlert />}
               actionLabel={state.unconfirmedChange() ? undefined : 'Retry'}
-              actionOnClick={() => void reloadAssignments()}
+              actionOnClick={() => void saveOrReload(true)}
               class="focus:outline-hidden focus:ring-2 focus:ring-inset focus:ring-blue-500"
             >
               {message()}
@@ -321,11 +303,8 @@ export const UserAssignmentsPanel: Component<UserAssignmentsPanelProps> = (props
                       aria-label={`Manage access for ${getUserIdentityLabel(assignment)}`}
                       title="Manage access"
                       disabled={!state.canEdit()}
-                      data-user-access-manage={assignment.username}
-                      onClick={(event) => {
-                        manageTrigger = event.currentTarget;
-                        void state.openManageAccess(assignment);
-                      }}
+                      data-user-access={assignment.username}
+                      onClick={() => void state.openManageAccess(assignment)}
                     >
                       <Pencil class="w-4 h-4" />
                       <span class="hidden sm:inline">Manage Access</span>
@@ -369,7 +348,7 @@ export const UserAssignmentsPanel: Component<UserAssignmentsPanelProps> = (props
         saving={state.saving()}
         userPermissions={state.userPermissions()}
         onClose={state.closeModal}
-        onSave={() => void saveAssignments()}
+        onSave={() => void saveOrReload()}
         onRetryPermissions={() => void state.loadUserPermissions()}
         onToggleRole={state.toggleRole}
       />
