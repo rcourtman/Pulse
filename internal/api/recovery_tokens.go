@@ -458,7 +458,7 @@ func (r *RecoveryTokenStore) migrateLegacyTokens(data []byte, now time.Time) (bo
 func (r *RecoveryTokenStore) load() {
 	tokensFile := filepath.Join(r.dataPath, "recovery_tokens.json")
 
-	data, err := os.ReadFile(tokensFile)
+	data, err := readAuthSnapshot(tokensFile)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			// A dangling symlink also makes ReadFile report ENOENT, but it

@@ -5547,3 +5547,19 @@ current saved authority. `saml_initialization_ownership_test.go` holds the
 management, native-race, distinct-trust, public-URL and signed-callback controls.
 This repairs sign-in reliability; it does not establish an authentication
 bypass, measured exposure or recovery of an original user's sign-in.
+
+### Refuse nonregular auth inventories before opening them
+
+Session, CSRF and recovery-token startup readers check that the resolved target
+is a regular file before opening it. A direct or linked named pipe must not hold
+initialization waiting for a writer. The existing failed-read path admits no
+saved authority and holds disk saves while the unread nonregular entry remains.
+Sessions and CSRF tokens may still work in memory; recovery-token issuance still
+requires successful persistence. The entry is not moved, replaced or consumed.
+
+Readable links to regular hashed and legacy inventories keep working. Missing
+and dangling paths retain their existing distinction. This pre-open check adds
+no concurrent-path-replacement protection, unavailable-filesystem deadline,
+size limit, storage-format change or new grant. The actual initializer and
+save/shutdown controls in `auth_inventory_startup_linux_test.go`, plus the
+regular-link controls in the three store test files, hold these properties.
