@@ -2,6 +2,7 @@ package qualification
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -687,8 +688,8 @@ func TestScorecardGradesStoredRunsByTheCatalogRubric(t *testing.T) {
 	}
 	catalog := loadFaultSetCatalog(t)
 	current := catalog.ByID["response.pve-guest-died"]
-	if current.Version != 2 {
-		t.Fatalf("P4 is at v%d; this test pins the v2 rubric change", current.Version)
+	if current.Version < 2 {
+		t.Fatalf("P4 is at v%d; this test needs the v2 rubric change or later", current.Version)
 	}
 	if graded := GradeResponse(current, record.Evidence); graded.Grade != GradeHandedOver {
 		t.Fatalf("the v2 rubric grades the task-log wording %q, want handed_over (missing %v)", graded.Grade, graded.Checks.DecisiveMissing)
@@ -718,7 +719,7 @@ func TestScorecardGradesStoredRunsByTheCatalogRubric(t *testing.T) {
 	if len(card.Rows) != 1 || len(card.Rows[0].Cells) != 1 || len(card.Rows[0].Cells[0]) != 1 || card.Rows[0].Cells[0][0].Grade != GradeHandedOver {
 		t.Fatalf("scorecard after the rubric change = %+v", card.Rows)
 	}
-	if len(notes) != 1 || !strings.Contains(notes[0], "graded with the catalog's v2 rubric") {
+	if len(notes) != 1 || !strings.Contains(notes[0], fmt.Sprintf("graded with the catalog's v%d rubric", current.Version)) {
 		t.Fatalf("rubric notes = %q", notes)
 	}
 
@@ -731,5 +732,44 @@ func TestScorecardGradesStoredRunsByTheCatalogRubric(t *testing.T) {
 	card = BuildScorecard("pve-v1", reports)
 	if card.Rows[0].Cells[0][0].Grade != GradeHandedBack || len(notes) != 1 || !strings.Contains(notes[0], "keep their rubric") {
 		t.Fatalf("a run under other faults was regraded: %+v, %q", card.Rows[0].Cells, notes)
+	}
+}
+
+// On the 16 Nov pve-v1 replay a default agent's conclusion said "No Proxmox
+// stop/shutdown task appears in the task log". That is the decisive fact,
+// but "Proxmox" split the v2 phrase "no stop shutdown task", so the run
+// graded Handed back. P4 v3 accepts it.
+func TestP4AcceptsNoProxmoxStopShutdownTask(t *testing.T) {
+	payload, err := os.ReadFile(filepath.Join("testdata", "fault-set-pve-v1", "p4-default-agent-proxmox-stop-shutdown.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var record pveTaskLogRecord
+	if err := json.Unmarshal(payload, &record); err != nil {
+		t.Fatal(err)
+	}
+	catalog := loadFaultSetCatalog(t)
+	current := catalog.ByID["response.pve-guest-died"]
+	if current.Version < 3 {
+		t.Fatalf("P4 is at v%d; this test needs the v3 rubric", current.Version)
+	}
+	if graded := GradeResponse(current, record.Evidence); graded.Grade != GradeHandedOver {
+		t.Fatalf("the v3 rubric grades %q, want handed_over (missing %v)", graded.Grade, graded.Checks.DecisiveMissing)
+	}
+
+	// The v2 rubric, as the run recorded it.
+	recorded := current
+	recorded.Version = record.RecordedVersion
+	outcome := *current.Outcome
+	decisive := make([]string, 0, len(current.Outcome.DecisiveTerms[0]))
+	for _, term := range current.Outcome.DecisiveTerms[0] {
+		if term != "no proxmox stop shutdown task" && term != "no proxmox stop task" {
+			decisive = append(decisive, term)
+		}
+	}
+	outcome.DecisiveTerms = [][]string{decisive, current.Outcome.DecisiveTerms[1]}
+	recorded.Outcome = &outcome
+	if graded := GradeResponse(recorded, record.Evidence); graded.Grade != record.RecordedGrade {
+		t.Fatalf("the v2 rubric grades the record %q, want the recorded %q", graded.Grade, record.RecordedGrade)
 	}
 }
