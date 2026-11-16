@@ -2386,8 +2386,9 @@ smoke_test_pve_auto_register_token() {
     local smoke_output=""
     local smoke_status=0
 
+    # Keep the optional local API check finite, including its existing retries.
     set +e
-    smoke_output=$(printf 'Authorization: PVEAPIToken=%s=%s\n' "$token_id" "$token_value" | curl -q --retry 2 --retry-delay 1 -kfsS -H @- "${host_url%/}/api2/json/nodes" 2>&1)
+    smoke_output=$(printf 'Authorization: PVEAPIToken=%s=%s\n' "$token_id" "$token_value" | curl -q --retry 2 --retry-delay 1 --connect-timeout 5 --max-time 15 -kfsS -H @- "${host_url%/}/api2/json/nodes" 2>&1)
     smoke_status=$?
     set -e
 
@@ -2496,7 +2497,7 @@ PY
     set +xv
 
     local setup_response
-    if ! setup_response=$(curl -q --retry 3 --retry-delay 2 -fsS -X POST "$pulse_url/api/setup-script-url" -H "Content-Type: application/json" -d "$setup_payload"); then
+    if ! setup_response=$(curl -q --retry 3 --retry-delay 2 --connect-timeout 5 --max-time 15 -fsS -X POST "$pulse_url/api/setup-script-url" -H "Content-Type: application/json" -d "$setup_payload"); then
         AUTO_NODE_REGISTER_ERROR="setup token request failed"
         print_warn "Unable to request setup token from Pulse (${pulse_url}); skipping automatic node registration"
         return
@@ -2772,10 +2773,14 @@ print(json.dumps({
 PY
 )
 
+    # Registration can wait behind another registration and its host probe.
+    # Allow that headroom, but do not let an unresponsive peer hold installation
+    # forever. A timeout (including one hidden by a later retry response) cannot
+    # tell us whether Pulse already saved the node; do not rotate another token.
     local register_response
-    if ! register_response=$(printf %s "$register_payload" | curl -q --retry 3 --retry-delay 2 -fsS -X POST "$pulse_url/api/auto-register" -H "Content-Type: application/json" -d @-); then
-        AUTO_NODE_REGISTER_ERROR="auto-register request failed"
-        print_warn "Pulse auto-registration request failed; skipping automatic node registration"
+    if ! register_response=$(printf %s "$register_payload" | curl -q --retry 3 --retry-delay 2 --connect-timeout 5 --max-time 60 -fsS -X POST "$pulse_url/api/auto-register" -H "Content-Type: application/json" -d @-); then
+        AUTO_NODE_REGISTER_ERROR="auto-registration unconfirmed"
+        print_warn "Pulse auto-registration response was not confirmed; the node may already be registered. Check Pulse's node list before re-running the installer."
         return
     fi
 
