@@ -199,17 +199,14 @@ export const RolesEditorDialog: Component<RolesEditorDialogProps> = (props) => (
                           <button
                             type="button"
                             onClick={(event) => {
-                              const rules =
-                                event.currentTarget.closest('[role="group"]')?.parentElement;
+                              const controls = event.currentTarget.form?.querySelectorAll('select');
                               const count = props.formPermissions.length;
                               props.onRemovePermission(index);
-                              // Index keeps the next rule in this slot, or removes the
-                              // last slot. Continue at that rule's action, not BODY or
-                              // a now-disabled removal button. No delayed refocus.
-                              if (props.isOpen && props.formPermissions.length === count - 1) {
-                                rules?.children[Math.min(index, props.formPermissions.length - 1)]
-                                  ?.querySelector<HTMLSelectElement>('select')
-                                  ?.focus();
+                              // Index retains slots, each with action then resource.
+                              // Continue at the next action, or previous for the last
+                              // slot. A detached editor cannot receive this focus.
+                              if (props.formPermissions.length === count - 1) {
+                                controls?.[Math.min(index, count - 2) * 2]?.focus();
                               }
                             }}
                             disabled={props.formPermissions.length <= 1}

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { clearAuth, setOrgID } from '@/utils/apiClient';
 import { RolesPanel } from '../RolesPanel';
+import { RolesEditorDialog } from '../RolesEditorDialog';
 import { RBAC_PERMISSION_ACTIONS, RBAC_PERMISSION_RESOURCES } from '@/utils/rbacPermissions';
 
 // Keep the rendered editor, indexed draft operations, RBACAPI and serialization
@@ -109,6 +110,38 @@ async function saveAndReopen(dialog: HTMLElement, expected: unknown) {
 }
 
 describe('saved permission transformations through the role editor', () => {
+  it('does not move focus when its owner declines the requested removal', () => {
+    const onRemove = vi.fn();
+    render(() => (
+      <RolesEditorDialog
+        editingRole={original}
+        formDescription={original.description}
+        formId={original.id}
+        formName={original.name}
+        formPermissions={original.permissions}
+        isOpen
+        saving={false}
+        onAddPermission={vi.fn()}
+        onClose={vi.fn()}
+        onFormDescriptionInput={vi.fn()}
+        onFormIdInput={vi.fn()}
+        onFormNameInput={vi.fn()}
+        onRemovePermission={onRemove}
+        onSave={vi.fn()}
+        onUpdatePermission={vi.fn()}
+      />
+    ));
+    const remove = screen.getByRole('button', {
+      name: 'Remove permission 3: future:inspect:future/resource',
+    });
+    remove.focus();
+    fireEvent.click(remove);
+    expect(onRemove).toHaveBeenCalledTimes(1);
+    expect(onRemove).toHaveBeenCalledWith(2);
+    expect(remove).toHaveFocus();
+    expect(screen.getByLabelText('Permission 3 action')).toHaveValue('future:inspect');
+  });
+
   it.each([0, 1, 2])(
     'keeps keyboard focus on a surviving rule after removing rule index %i',
     async (index) => {
