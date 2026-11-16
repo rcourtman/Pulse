@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -565,6 +566,16 @@ func newCommandIdentityHarness(t *testing.T, presentedID string, interval time.D
 	}))
 	t.Cleanup(h.server.Close)
 
+	// Package telemetry is composed independently of Collector. Keep these
+	// identity tests off the machine's APT simulation and cache scan as well:
+	// those reads can consume the acknowledgement deadline before any report
+	// reaches the fake Pulse. The real report/acknowledgement path stays in use.
+	noPackageTool := func(string) (string, error) { return "", os.ErrNotExist }
+	updates := newPackageUpdateManager("linux", nil)
+	updates.lookPath = noPackageTool
+	cleanup := newStorageCleanupManager("linux", nil)
+	cleanup.lookPath = noPackageTool
+
 	logger := zerolog.Nop()
 	agent, err := New(Config{
 		APIToken:       "token",
@@ -575,6 +586,8 @@ func newCommandIdentityHarness(t *testing.T, presentedID string, interval time.D
 		StateDir:       t.TempDir(),
 		Collector:      &mockCollector{},
 		Logger:         &logger,
+		packageUpdates: updates,
+		storageCleanup: cleanup,
 		newCommandClientFn: func(cfg Config, agentID, hostname, platform, version string) *CommandClient {
 			h.mu.Lock()
 			h.built++
