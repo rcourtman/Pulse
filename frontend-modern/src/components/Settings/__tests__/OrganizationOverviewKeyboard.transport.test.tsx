@@ -92,10 +92,7 @@ const open = async (initialUser = owner) => {
 };
 const submit = () => {
   const form = screen.getByRole('form', { name: 'Organization display name' });
-  expect(screen.getByRole('button', { name: 'Save', exact: true })).toHaveAttribute(
-    'type',
-    'submit',
-  );
+  expect(screen.getByRole('button', { name: 'Save' })).toHaveAttribute('type', 'submit');
   expect(fireEvent.submit(form)).toBe(false);
 };
 const rename = async () => {
