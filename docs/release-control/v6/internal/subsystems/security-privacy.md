@@ -406,7 +406,8 @@ response-body write holds it. Superseded callbacks return existing invalid-state
 retry without cookies, role/identity writes or replacing an existing local
 session. Explicit IdP-initiated opt-in keeps its existing behavior; this is not
 a new replay gate for deliberately unsolicited responses. Already-issued
-sessions and the whole SAML service initialization lifecycle are not changed.
+sessions are not changed. SAML initialization ownership is maintained separately
+below; the callback fence remains mandatory regardless of cache admission.
 
 `TestSAMLCallbackPolicyWithdrawal` uses signed synthetic SAML and a real body-read
 barrier while management/persistence publish changes; it verifies both denied
@@ -5506,3 +5507,24 @@ text-only non-sentinel control, with saved configuration readback. VMware's
 tenant rebinding and policy-message tests retain zero sockets/requests and
 sanitized concise feedback. Comparable production-consumer browser pairs at
 desktop/phone and light/dark remain necessary; native tests alone are not pixels.
+
+### SAML metadata completion is not fresh provider authority (16 November 2026)
+
+Management replacement/removal invalidates in-flight SAML initialization for
+that provider, including work started while its service cache was empty. Native
+login and metadata requests use matching cache admission instead of resetting
+another initializer's pending browser-bound requests. Reuse after concurrent
+initialization requires identical captured configuration, metadata and SP/
+signing material, not just identical saved file paths or metadata URLs. A
+changed public base or incompatible newly published service refuses the old
+completion. The new comparisons do no network or signing-file I/O under the
+manager lock and never transfer pending requests across trust snapshots.
+
+The existing ACS checks for current saved config/policy, assertion signatures,
+issuer/audience, request/browser binding, single use and local session effects
+are unchanged. Explicit resets still replace a prior service even for identical
+settings, and failed resets retain that prior service without granting it
+current saved authority. `saml_initialization_ownership_test.go` holds the
+management, native-race, distinct-trust, public-URL and signed-callback controls.
+This repairs sign-in reliability; it does not establish an authentication
+bypass, measured exposure or recovery of an original user's sign-in.
