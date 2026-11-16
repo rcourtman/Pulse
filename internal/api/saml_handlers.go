@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
+	"io"
 	"net/http"
 	"strings"
 	"sync"
@@ -129,6 +130,31 @@ func (r *Router) handleSAMLLogin(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	returnTo := sanitizeOIDCReturnTo(req.URL.Query().Get("returnTo"))
+	if req.Method == http.MethodPost {
+		var payload struct {
+			ReturnTo string `json:"returnTo"`
+		}
+		// Validate the whole optional body, even when the query supplies the
+		// return path, before fetching metadata or creating a login binding.
+		if err := decodeSecurityRequestBody(w, req, &payload); err != nil && err != io.EOF {
+			writeErrorResponse(w, securityRequestErrorStatus(err), "invalid_request", "Invalid request body", nil)
+			return
+		}
+		if returnTo == "" {
+			returnTo = sanitizeOIDCReturnTo(payload.ReturnTo)
+		}
+
+		// A slow body read must not keep a withdrawn provider or its old
+		// initialized service alive for this new login. Resolve both only
+		// after the input is complete; do not hold configuration locks over I/O.
+		provider = r.getSSOProvider(providerID)
+		if provider == nil || provider.Type != config.SSOProviderTypeSAML || !provider.Enabled {
+			writeErrorResponse(w, http.StatusNotFound, "provider_not_found", "SAML provider not found or not enabled", nil)
+			return
+		}
+	}
+
 	if err := r.syncSAMLPublicURL(); err != nil {
 		log.Error().Err(err).Str("provider_id", providerID).Msg("Failed to synchronize SAML public URL")
 		writeErrorResponse(w, http.StatusInternalServerError, "saml_init_failed", "Failed to synchronize SAML provider", nil)
@@ -144,17 +170,6 @@ func (r *Router) handleSAMLLogin(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 		service = r.samlManager.GetService(providerID)
-	}
-
-	// Get return URL from query or form
-	returnTo := sanitizeOIDCReturnTo(req.URL.Query().Get("returnTo"))
-	if returnTo == "" && req.Method == http.MethodPost {
-		var payload struct {
-			ReturnTo string `json:"returnTo"`
-		}
-		if err := json.NewDecoder(req.Body).Decode(&payload); err == nil {
-			returnTo = sanitizeOIDCReturnTo(payload.ReturnTo)
-		}
 	}
 
 	// Create SAML AuthnRequest, bound to this browser's login cookie
