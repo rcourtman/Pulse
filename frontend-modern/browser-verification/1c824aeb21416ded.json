@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "base_sha": "2143f31b742d5078bda93b44f4fac179fef8d230",
+  "verified_at": "2026-11-16T13:29:04.891796Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/OrgSwitcher.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/OrgSwitcher.tsx": "5056c2b04348c30835214cf112f3b1ab09c3db27ea1d6306fb929761f0d53077"
+  },
+  "routes": [
+    "/settings/organization (fixture route, real AppLayout header)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Actual OrgSwitcher through unchanged consuming AppLayout, native FormSelect and production CSS, compiled with exact launch-selected f96239b2 frontend graph. Synthetic listed organizations and callback, no App runtime/backend/IdP/original estate/transport or assistive-technology speech claim. Only navigation-prefetch module is fixture-inert; no external requests.",
+    "Playwright1.56.1 matches integration lock. Chromium141.0.7390.37 desktop/phone and WebKit26.0 phone, light/dark. Six cases per side; 44 captures opened individually with native view_image:22 comparable pairs (18 duplicate-name selected/focus pairs,4 unique/single controls). Same data, viewport, theme, scroll and interaction state. Parent focus-only extension adds that newly relevant state without replacing the original16 baseline captures.",
+    "Before both west/east selections render identical Customer operations with no described identity. Final retains the name and exposes each full exact selected ID at12px, wrapping within176px. Header grows40px on desktop and44px on phone; all existing controls, navigation and body content remain visible. All desktop/phone pages fit their viewport. Unique/single labels and actions remain, though the native selector width in a list containing longer duplicate labels expands to the existing176px cap.",
+    "Intermediate first variant completed four cases then failed WebKit phone initial width507>390. Bounded same-page interventions isolated long native option contents (no-help507,short-options390,parent-clip390; select-only overflow/fixedwidth507). Final local selector wrapper clips that unpainted native overflow and uses an inset native focus ring; final full pass reports390/390 in both phone engines and visible focused borders. Adverse captures/diagnostics retained separately."
+  ],
+  "interactions": [
+    "Native ArrowDown then Tab in real consuming AppLayout changes west\u2192east with exactly one callback containing the original exact eastID; option values/order preserved. Unique-name choice then sends only internal. No data mutation or organization request is made by this fixture; it does not prove runtime switching or access recovery.",
+    "Busy flag disables selector without changing current ID or callback history. Selected duplicate ID is associated through aria-describedby; unique choice removes that description; supplied single-org list restores existing static label. Keyboard focus/Logout/kiosk/status/navigation remain visible in comparable captures."
+  ]
+}

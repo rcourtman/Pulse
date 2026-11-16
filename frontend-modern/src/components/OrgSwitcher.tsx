@@ -10,8 +10,27 @@ interface OrgSwitcherProps {
 }
 
 export function OrgSwitcher(props: OrgSwitcherProps) {
+  const organizationName = (org: Organization) => org.displayName || org.id;
+  const nameKey = (org: Organization) => organizationName(org).trim().replace(/\s+/g, ' ');
+  const nameCounts = createMemo(() => {
+    const counts = new Map<string, number>();
+    for (const org of props.orgs) {
+      const key = nameKey(org);
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return counts;
+  });
+  const hasAmbiguousNames = createMemo(() =>
+    Array.from(nameCounts().values()).some((count) => count > 1),
+  );
+  const needsIdentity = (org: Organization) => (nameCounts().get(nameKey(org)) ?? 0) > 1;
+  const selectedOrg = createMemo(() => props.orgs.find((org) => org.id === props.selectedOrgId));
+  const selectedNeedsIdentity = createMemo(() => {
+    const selected = selectedOrg();
+    return selected ? needsIdentity(selected) : false;
+  });
   const selectedOrgName = createMemo(() => {
-    const selected = props.orgs.find((org) => org.id === props.selectedOrgId);
+    const selected = selectedOrg();
     return selected?.displayName || props.selectedOrgId || 'Default';
   });
 
@@ -33,15 +52,30 @@ export function OrgSwitcher(props: OrgSwitcherProps) {
           id="org-switcher-select"
           label="Organization"
           labelClass="sr-only"
-          fieldBaseClass="contents"
+          fieldBaseClass={hasAmbiguousNames() ? 'min-w-0 max-w-44 overflow-clip' : 'contents'}
+          selectClass={hasAmbiguousNames() ? 'focus:ring-inset' : undefined}
           selectBaseClass="h-7 max-w-44 rounded-md border border-border bg-surface px-2 text-xs text-base-content shadow-xs transition-colors focus:border-blue-500 focus:outline-hidden focus:ring-1 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+          help={
+            selectedNeedsIdentity() ? (
+              <>
+                Organization ID: <bdi>{props.selectedOrgId}</bdi>
+              </>
+            ) : undefined
+          }
+          helpClass="mt-1 max-w-44 text-xs leading-4 [overflow-wrap:anywhere]"
           aria-label="Organization"
           value={props.selectedOrgId}
           disabled={Boolean(props.loading)}
           onChange={(event) => props.onChange(event.currentTarget.value)}
         >
           <For each={props.orgs}>
-            {(org) => <option value={org.id}>{org.displayName || org.id}</option>}
+            {(org) => (
+              <option value={org.id}>
+                {needsIdentity(org)
+                  ? `${organizationName(org)} (${org.id})`
+                  : organizationName(org)}
+              </option>
+            )}
           </For>
         </FormSelect>
       </Show>
