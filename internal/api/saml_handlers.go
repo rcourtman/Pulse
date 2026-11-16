@@ -23,6 +23,10 @@ type SAMLServiceManager struct {
 	mu       sync.RWMutex
 	services map[string]*SAMLService
 	baseURL  string
+	// Explicit management changes fence older metadata work. Concurrent native
+	// initializers share a lifecycle, but never replace a matching live owner.
+	generations    map[string]uint64
+	nextGeneration uint64
 }
 
 // NewSAMLServiceManager creates a new SAML service manager
@@ -69,12 +73,40 @@ func (m *SAMLServiceManager) GetService(providerID string) *SAMLService {
 	return m.services[providerID]
 }
 
-// InitializeProvider creates or updates a SAML service for a provider
+// InitializeProvider explicitly replaces a provider after a management change,
+// even when its settings are unchanged. Failed resets still fence older work.
 func (m *SAMLServiceManager) InitializeProvider(ctx context.Context, providerID string, cfg *config.SAMLProviderConfig) error {
-	m.mu.RLock()
-	baseURL := m.baseURL
-	m.mu.RUnlock()
+	return m.initializeProvider(ctx, providerID, cfg, false)
+}
 
+// EnsureProvider initializes a native login/metadata consumer without discarding
+// pending requests belonging to another native initializer with the same config.
+// This is cache admission, not an explicit metadata/trust refresh.
+func (m *SAMLServiceManager) EnsureProvider(ctx context.Context, providerID string, cfg *config.SAMLProviderConfig) error {
+	return m.initializeProvider(ctx, providerID, cfg, true)
+}
+
+func (m *SAMLServiceManager) initializeProvider(ctx context.Context, providerID string, cfg *config.SAMLProviderConfig, reuseMatching bool) error {
+	m.mu.Lock()
+	previous := m.services[providerID]
+	if reuseMatching && previous != nil && previous.matchesConfig(cfg) {
+		m.mu.Unlock()
+		return nil
+	}
+	if m.generations == nil {
+		m.generations = make(map[string]uint64)
+	}
+	generation, exists := m.generations[providerID]
+	if !exists || !reuseMatching {
+		m.nextGeneration++
+		generation = m.nextGeneration
+		m.generations[providerID] = generation
+	}
+	baseURL := m.baseURL
+	m.mu.Unlock()
+
+	// Metadata and signing-file I/O must not hold up management withdrawal,
+	// public URL changes or an independent browser/provider.
 	service, err := NewSAMLService(ctx, providerID, cfg, baseURL)
 	if err != nil {
 		return fmt.Errorf("initialize SAML provider %q: %w", providerID, err)
@@ -82,6 +114,18 @@ func (m *SAMLServiceManager) InitializeProvider(ctx context.Context, providerID 
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if m.generations[providerID] != generation || m.baseURL != baseURL {
+		return fmt.Errorf("initialize SAML provider %q: initialization superseded by management", providerID)
+	}
+	if current := m.services[providerID]; current != previous {
+		// Another initializer in this lifecycle already owns pending requests.
+		// Reuse it only for the same captured metadata, SP and configuration;
+		// never copy requests across changed trust or replace that live owner.
+		if current != nil && current.matchesInitializedService(service) {
+			return nil
+		}
+		return fmt.Errorf("initialize SAML provider %q: initialized service changed", providerID)
+	}
 	m.services[providerID] = service
 
 	log.Info().
@@ -95,6 +139,8 @@ func (m *SAMLServiceManager) InitializeProvider(ctx context.Context, providerID 
 func (m *SAMLServiceManager) RemoveProvider(providerID string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	// Fence even cold metadata work; a later re-enable receives a new lifecycle.
+	delete(m.generations, providerID)
 	delete(m.services, providerID)
 }
 
@@ -162,14 +208,18 @@ func (r *Router) handleSAMLLogin(w http.ResponseWriter, req *http.Request) {
 	}
 
 	service := r.samlManager.GetService(providerID)
-	if service == nil {
-		// Try to initialize the provider
-		if err := r.samlManager.InitializeProvider(req.Context(), providerID, provider.SAML); err != nil {
+	if service == nil || !service.matchesConfig(provider.SAML) {
+		if err := r.samlManager.EnsureProvider(req.Context(), providerID, provider.SAML); err != nil {
 			log.Error().Err(err).Str("provider_id", providerID).Msg("Failed to initialize SAML provider")
 			writeErrorResponse(w, http.StatusInternalServerError, "saml_init_failed", "Failed to initialize SAML provider", nil)
 			return
 		}
 		service = r.samlManager.GetService(providerID)
+	}
+
+	if service == nil {
+		writeErrorResponse(w, http.StatusInternalServerError, "saml_init_failed", "SAML provider is unavailable", nil)
+		return
 	}
 
 	// Create SAML AuthnRequest, bound to this browser's login cookie
@@ -416,10 +466,10 @@ func (r *Router) handleSAMLMetadata(w http.ResponseWriter, req *http.Request) {
 	}
 
 	service := r.samlManager.GetService(providerID)
-	if service == nil {
-		// Try to initialize the provider
+	if service == nil || !service.matchesConfig(provider.SAML) {
+		service = nil
 		if provider.SAML != nil {
-			if err := r.samlManager.InitializeProvider(req.Context(), providerID, provider.SAML); err != nil {
+			if err := r.samlManager.EnsureProvider(req.Context(), providerID, provider.SAML); err != nil {
 				log.Error().Err(err).Str("provider_id", providerID).Msg("Failed to initialize SAML provider for metadata")
 				writeErrorResponse(w, http.StatusInternalServerError, "saml_init_failed", "Failed to initialize SAML provider", nil)
 				return

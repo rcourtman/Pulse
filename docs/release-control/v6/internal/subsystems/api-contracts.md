@@ -14708,3 +14708,33 @@ during slow input. This does not change ACS/SLO parsing, signatures or policy
 fencing. `internal/api/saml_login_request_test.go` covers native requests, secure
 bindings, pending-login preservation, public route dispatch, exact-limit input,
 cold/warm rejection without metadata work and synchronized body-delay controls.
+
+### SAML initialization belongs to its live provider (16 November 2026)
+
+`SAMLServiceManager` separates explicit management initialization from native
+login/metadata cache admission. Every explicit initialization (including a
+failed reset) and removal fences older metadata completions for that provider.
+A removed cold provider cannot be republished by an already-started fetch, and
+an unrelated provider remains independent. A changed public base also refuses
+publication of endpoints constructed for the old base; a fresh request can
+initialize against the current base. Metadata and signing-file I/O remain
+outside the manager lock.
+
+Concurrent native login/metadata initializers reuse the first live service only
+when their captured configuration, IdP metadata and SP/signing snapshot match.
+A management initializer may likewise reuse a matching new owner established
+in its own lifecycle, but never one predating that reset. A losing incompatible
+snapshot fails through the existing initialization error instead of erasing
+another browser's pending requests or combining trust and request stores.
+Warm native consumers reject a cached service whose saved SAML config differs,
+and retry initialization from the current snapshot. Failure still leaves the
+prior service stored; ACS's existing current-config and saved-policy fences
+remain authoritative and cannot authorize that old verifier under new settings.
+No session, saved provider, role or credential is deleted or recreated here.
+
+`internal/api/saml_initialization_ownership_test.go` uses real blocked local
+metadata HTTP, explicit management changes, concurrent GET/POST login and
+metadata consumers, and a signed ACS/session/replay handover. It holds current
+pending-request ownership, distinct trust snapshots, public-base recovery and
+unchanged callback protections. Source fixtures are not original-client,
+external-IdP, installed or release acceptance.

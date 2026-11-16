@@ -247,6 +247,19 @@ func (s *SAMLService) matchesConfig(cfg *config.SAMLProviderConfig) bool {
 	return cfg != nil && reflect.DeepEqual(s.config, cfg)
 }
 
+// matchesInitializedService compares already captured effective settings, not
+// just saved paths/URLs: their signing files or metadata may have changed while
+// two initializers ran. candidate is unpublished and immutable. Request stores
+// and refresh timestamps are deliberately not part of this comparison.
+func (s *SAMLService) matchesInitializedService(candidate *SAMLService) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return candidate != nil && s.baseURL == candidate.baseURL &&
+		reflect.DeepEqual(s.config, candidate.config) &&
+		reflect.DeepEqual(s.idpMetadata, candidate.idpMetadata) &&
+		reflect.DeepEqual(s.sp, candidate.sp)
+}
+
 func newSAMLHTTPClient() *http.Client {
 	return newSSOHTTPClient(30*time.Second, nil)
 }
