@@ -2467,6 +2467,16 @@ Compact Coverage age cells use the existing metadata-size text and reclaim numer
 
 ## Shared Boundaries
 
+The shared public OIDC login POST rejects oversized or ambiguous JSON before
+IdP discovery or pending-state creation, preserving any existing login. Its
+16 KiB limit includes ignored fields and whitespace; empty bounded bodies and
+valid GET/POST sign-in remain compatible. Rejection does not write saved
+credentials, delete recovery state or create recovery authority. API-owned
+`oidc_login_request_test.go` covers cold/warm admission and state preservation.
+After reading a valid POST, sign-in re-resolves current provider settings; a
+concurrent withdrawal or client replacement cannot be undone by discovery
+from the earlier snapshot. This adds no saved-authority recreation path.
+
 Protected progress and synchronous reads use the API-owned non-executable media
 policy. Configuration-import replay admission retains guard-keyed request
 fingerprints without retaining archives or passphrases. These transport guards

@@ -337,13 +337,42 @@ func (r *Router) handleSSOOIDCLogin(w http.ResponseWriter, req *http.Request) {
 	}
 
 	provider := r.getSSOProvider(providerID)
-	if provider == nil || provider.Type != config.SSOProviderTypeOIDC || !provider.Enabled {
+	if !isEnabledOIDCProvider(provider) {
 		writeErrorResponse(w, http.StatusNotFound, "provider_not_found", "OIDC provider not found or not enabled", nil)
 		return
 	}
 	if provider.OIDC == nil {
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_config", "OIDC configuration is missing", nil)
 		return
+	}
+
+	// This public route accepts only a small optional return path. Bound the
+	// whole POST document before discovery or issuing any pending login state.
+	// Empty bodies remain compatible with callers that send no returnTo.
+	var returnTo string
+	if req.Method == http.MethodPost {
+		var payload struct {
+			ReturnTo string `json:"returnTo"`
+		}
+		if err := decodeSecurityRequestBody(w, req, &payload); err != nil && err != io.EOF {
+			writeErrorResponse(w, securityRequestErrorStatus(err), "invalid_request", "Invalid request payload", nil)
+			return
+		}
+		returnTo = sanitizeOIDCReturnTo(payload.ReturnTo)
+		// Body reads can wait while management withdraws or replaces a client.
+		// Re-resolve it before discovery; never initialize the earlier snapshot
+		// after that wait, even if its old cached service has been removed.
+		provider = r.getSSOProvider(providerID)
+		if !isEnabledOIDCProvider(provider) {
+			writeErrorResponse(w, http.StatusNotFound, "provider_not_found", "OIDC provider not found or not enabled", nil)
+			return
+		}
+		if provider.OIDC == nil {
+			writeErrorResponse(w, http.StatusBadRequest, "invalid_config", "OIDC configuration is missing", nil)
+			return
+		}
+	} else {
+		returnTo = sanitizeOIDCReturnTo(req.URL.Query().Get("returnTo"))
 	}
 
 	redirectURL := buildSSOOIDCCallbackURL(req, providerID, provider.OIDC.RedirectURL, r.ssoPublicURL())
@@ -385,20 +414,6 @@ func (r *Router) handleSSOOIDCLogin(w http.ResponseWriter, req *http.Request) {
 		}
 		writeErrorResponse(w, http.StatusInternalServerError, "oidc_init_failed", "OIDC provider is unavailable", nil)
 		return
-	}
-
-	var returnTo string
-	if req.Method == http.MethodPost {
-		var payload struct {
-			ReturnTo string `json:"returnTo"`
-		}
-		if err := json.NewDecoder(req.Body).Decode(&payload); err != nil && err != io.EOF {
-			writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "Invalid request payload", nil)
-			return
-		}
-		returnTo = sanitizeOIDCReturnTo(payload.ReturnTo)
-	} else {
-		returnTo = sanitizeOIDCReturnTo(req.URL.Query().Get("returnTo"))
 	}
 
 	state, entry, err := service.newStateEntry(providerID, returnTo)

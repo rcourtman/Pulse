@@ -21,6 +21,27 @@
 
 ## Purpose
 
+### OIDC login POST admission is bounded before discovery (16 November 2026)
+
+The existing public `POST /api/oidc/{providerID}/login` (including the legacy
+login alias) accepts one optional JSON document of at most 16 KiB, counting
+trailing whitespace and unknown fields. A larger body returns HTTP 413;
+malformed or concatenated JSON returns HTTP 400. Both retain the fixed
+`invalid_request` / `Invalid request payload` error, without echoing input or
+reader errors. Method/provider validation still precedes body reads. Rejected
+input performs no IdP discovery and issues no pending login state or cookie.
+After a valid POST body is read, the enabled OIDC provider is resolved again.
+A withdrawal/protocol change during that read cannot revive the old client; a
+replacement uses the current client rather than overwriting its service.
+
+Empty/whitespace bodies within the limit, JSON null, empty objects, unknown
+fields within the limit and sanitized local `returnTo` paths remain supported.
+The GET redirect used by Pulse's Login page is unchanged; it does not parse a
+body. Client/callback binding, nonce, S256 PKCE, single-use state and existing
+pending logins are preserved. Registered `oidc_login_request_test.go` exercises
+cold and warm services through the registered public route and guest-local
+IdP discovery, alongside existing callback and initialization tests.
+
 ### Provider Plan reports catalogue completeness separately from usable offers
 
 `GET /api/accounts/{account_id}/provider-msp/plan` adds optional
