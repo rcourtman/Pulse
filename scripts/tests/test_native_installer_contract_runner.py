@@ -11,7 +11,6 @@ import sys
 import tempfile
 import threading
 import time
-from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -76,6 +75,123 @@ class OwnedChildObservationControls(unittest.TestCase):
                     output_child_stopped(123)
 
 
+class PreparationControls(unittest.TestCase):
+    def test_preparation_rejects_unbounded_limits_before_start(self):
+        for timeout in (0, -1, float("inf"), float("nan")):
+            with self.subTest(timeout=timeout), patch.object(runner.subprocess, "Popen") as start:
+                with self.assertRaises(ValueError):
+                    runner.prepare(["unused"], phase="discovery", cwd="unused", timeout=timeout)
+                start.assert_not_called()
+
+    def test_output_and_original_exit_survive_both_preparation_modes(self):
+        for capture in (False, True):
+            for code in (0, 23):
+                with self.subTest(capture=capture, code=code), tempfile.TemporaryDirectory() as root:
+                    output, errors = io.StringIO(), io.StringIO()
+                    result = None
+                    command = [sys.executable, "-I", "-S", "-c",
+                               "import sys; print('stdout Σ'); print('stderr Σ', file=sys.stderr); "
+                               f"sys.exit({code})"]
+                    with contextlib.redirect_stdout(output), contextlib.redirect_stderr(errors):
+                        if code:
+                            with self.assertRaises(subprocess.CalledProcessError) as failure:
+                                runner.prepare(command, phase="fixture", cwd=root, timeout=5, capture=capture)
+                            self.assertEqual(failure.exception.returncode, code)
+                            self.assertEqual(failure.exception.cmd, command)
+                        else:
+                            result = runner.prepare(command, phase="fixture", cwd=root, timeout=5, capture=capture)
+                            self.assertEqual(result, "stdout Σ\n" if capture else None)
+                    self.assertEqual('stdout Σ' in output.getvalue(), not capture or code != 0)
+                    self.assertEqual(errors.getvalue(), "stderr Σ\n")
+                    self.assertNotIn('stderr', result if code == 0 and capture else '')
+
+    def test_stalled_compilation_or_discovery_starts_no_checks_and_retains_output(self):
+        for phase in ("compile", "discover"):
+            with self.subTest(phase=phase), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                (root / "scripts/installtests").mkdir(parents=True)
+                discovery = (f"#!{sys.executable}\nimport sys, time\n"
+                             "print('discovery stdout Σ', flush=True)\n"
+                             "print('discovery stderr Σ', file=sys.stderr, flush=True)\ntime.sleep(60)\n")
+                go = root / "go"
+                go.write_text(f"#!{sys.executable}\nimport pathlib, sys, time\n" +
+                              ("print('compile stdout Σ', flush=True)\n"
+                               "print('compile stderr Σ', file=sys.stderr, flush=True)\ntime.sleep(60)\n"
+                               if phase == "compile" else
+                               f"p=pathlib.Path(sys.argv[sys.argv.index('-o')+1]); p.write_text({discovery!r}); p.chmod(0o700)\n"))
+                go.chmod(0o700)
+                output, errors = io.StringIO(), io.StringIO()
+                actual_start = subprocess.Popen
+                started = []
+                def start(*args, **kwargs):
+                    process = actual_start(*args, **kwargs)
+                    started.append(process)
+                    return process
+                before = time.monotonic()
+                with patch.object(runner, "ROOT", root), \
+                        patch.object(runner, "COMPILE_TIMEOUT_SECONDS", .5), \
+                        patch.object(runner, "DISCOVERY_TIMEOUT_SECONDS", .5), \
+                        patch.dict(os.environ, {"PATH":str(root)+os.pathsep+os.environ["PATH"]}), \
+                        patch.object(runner.subprocess, "Popen", side_effect=start), \
+                        patch.object(runner, "run_checks") as checks, \
+                        contextlib.redirect_stdout(output), contextlib.redirect_stderr(errors):
+                    with self.assertRaises(subprocess.TimeoutExpired) as failure:
+                        runner.main("all")
+                    checks.assert_not_called()
+                self.assertEqual(failure.exception.timeout, .5)
+                self.assertLess(time.monotonic() - before, 4)
+                self.assertEqual(len(started), 1 if phase == "compile" else 2)
+                self.assertTrue(all(p.poll() is not None for p in started))
+                self.assertEqual(started[-1].returncode, -signal.SIGKILL)
+                label = "compile" if phase == "compile" else "discovery"
+                self.assertIn(label + " stdout Σ", output.getvalue())
+                self.assertIn(label + " stderr Σ", errors.getvalue())
+                self.assertNotIn("Native Unix installer all:", output.getvalue())
+
+    @unittest.skipUnless(os.name == "posix", "native Unix process-group control")
+    def test_inherited_output_does_not_hold_preparation_or_clear_descendant_failure(self):
+        for code in (0, 23):
+            with self.subTest(code=code), tempfile.TemporaryDirectory() as root:
+                child = ("import pathlib, sys, time; print('owned preparation child Σ', flush=True); "
+                         "pathlib.Path('child-ready').touch(); time.sleep(60)")
+                parent = ("import pathlib, subprocess, sys, time; "
+                          f"p=subprocess.Popen([sys.executable,'-I','-S','-c',{child!r}]); "
+                          "pathlib.Path('child-pid').write_text(str(p.pid)); "
+                          "deadline=time.monotonic()+4\n"
+                          "while not pathlib.Path('child-ready').exists():\n"
+                          "    assert time.monotonic()<deadline; time.sleep(.01)\n"
+                          f"sys.exit({code})")
+                output, errors = io.StringIO(), io.StringIO()
+                # A separate owned sentinel must survive this phase's group cleanup.
+                sentinel = subprocess.Popen([sys.executable, "-I", "-S", "-c", "import time; time.sleep(60)"])
+                self.addCleanup(sentinel.wait)
+                self.addCleanup(sentinel.kill)
+                try:
+                    before = time.monotonic()
+                    with contextlib.redirect_stdout(output), contextlib.redirect_stderr(errors):
+                        with self.assertRaises(subprocess.CalledProcessError if code else RuntimeError) as failure:
+                            runner.prepare([sys.executable,"-I","-S","-c",parent], phase="discovery",
+                                           cwd=root, timeout=5, capture=True)
+                    self.assertLess(time.monotonic() - before, 4)
+                    if code:
+                        self.assertEqual(failure.exception.returncode, code)
+                    else:
+                        self.assertIn("left an owned process group: discovery", str(failure.exception))
+                    self.assertIn("owned preparation child Σ", output.getvalue())
+                    pid = int(Path(root, "child-pid").read_text())
+                    deadline = time.monotonic() + 2
+                    while not output_child_stopped(pid) and time.monotonic() < deadline:
+                        time.sleep(.01)
+                    self.assertTrue(output_child_stopped(pid))
+                    self.assertIsNone(sentinel.poll())
+                finally:
+                    if Path(root, "child-pid").exists():
+                        try:
+                            os.kill(int(Path(root, "child-pid").read_text()), signal.SIGKILL)
+                        except ProcessLookupError:
+                            pass
+
+
 class InventoryControls(unittest.TestCase):
     def test_process_deadline_preserves_go_alarm_and_rejects_unbounded_input(self):
         for duration, seconds in (("10m", 600), ("100ms", .1), ("1m2.5s", 62.5), ("1h", 3600)):
@@ -116,11 +232,13 @@ class InventoryControls(unittest.TestCase):
         calls, checks = [], []
         def command(argv, **kwargs):
             calls.append(argv)
-            self.assertTrue(kwargs["check"])
+            self.assertEqual(kwargs["phase"], "compilation" if len(calls) == 1 else "discovery")
+            self.assertEqual(kwargs["timeout"], 600 if len(calls) == 1 else 30)
+            self.assertEqual(kwargs.get("capture", False), len(calls) > 1)
             self.assertEqual(kwargs["cwd"], runner.ROOT if len(calls) == 1 else runner.ROOT / "scripts/installtests")
             if len(calls) == failure_at:
                 raise subprocess.CalledProcessError(23, argv)
-            return SimpleNamespace(stdout=self.inventory)
+            return self.inventory
         def check(binary, name, **kwargs):
             checks.append(name)
             self.assertEqual(kwargs["cwd"], runner.ROOT / "scripts/installtests")
@@ -129,7 +247,7 @@ class InventoryControls(unittest.TestCase):
         def selected(binary, names, **kwargs):
             for name in names:
                 check(binary, name, **kwargs)
-        with patch.object(runner.subprocess, "run", side_effect=command), patch.object(runner, "run_checks", side_effect=selected), contextlib.redirect_stdout(io.StringIO()):
+        with patch.object(runner, "prepare", side_effect=command), patch.object(runner, "run_checks", side_effect=selected), contextlib.redirect_stdout(io.StringIO()):
             if failure_at:
                 with self.assertRaises(subprocess.CalledProcessError):
                     runner.main(phase)
@@ -161,7 +279,7 @@ class InventoryControls(unittest.TestCase):
                     self.assertEqual(attempted, expected[:max(0, failure - 2)])
 
     def test_unknown_phase_starts_no_go_process(self):
-        with patch.object(runner.subprocess, "run") as run:
+        with patch.object(runner, "prepare") as run:
             with self.assertRaises(ValueError):
                 runner.main("skip")
             run.assert_not_called()
@@ -171,7 +289,7 @@ class InventoryControls(unittest.TestCase):
         self.assertIn("invalid choice", result.stderr)
 
     def test_all_finishes_preflight_before_admitting_remaining_checks(self):
-        with patch.object(runner.subprocess, "run", return_value=SimpleNamespace(stdout=self.inventory)), \
+        with patch.object(runner, "prepare", return_value=self.inventory), \
                 patch.object(runner, "run_checks") as checks, contextlib.redirect_stdout(io.StringIO()):
             runner.main("all")
         self.assertEqual(checks.call_count, 2)
