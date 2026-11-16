@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -213,7 +214,105 @@ func (e *PulseToolExecutor) executeListBackups(ctx context.Context, args map[str
 		skip = 0
 	}
 
+	// The model sees only the start of a long result, and the newest points
+	// come first, so the totals that say what fills a storage go ahead of them.
+	// They cover the points read here (every match when the list fits the
+	// limit) and say so when there are more. A later page has no summary.
+	if offset == 0 && len(response.Points) > 0 {
+		response.Summary = summarizeBackups(response.Points, response.Pagination.Total)
+	}
+
 	return NewJSONResult(response.NormalizeCollections()), nil
+}
+
+// backupSummaryMaxSubjects and backupSummaryMaxLabel keep the summary small
+// enough to survive the cut of a long result; the largest subjects are kept.
+const (
+	backupSummaryMaxSubjects = 20
+	backupSummaryMaxLabel    = 80
+)
+
+func summarizeBackups(points []recovery.RecoveryPoint, total int) *BackupsSummary {
+	summary := &BackupsSummary{Backups: total, BySubject: []BackupSubjectSummary{}}
+	if len(points) < total {
+		summary.Summarized = len(points)
+	}
+	index := map[string]int{}
+	for _, p := range points {
+		// The recovery subject key, so a name that changes between backups
+		// is still one subject.
+		key := recovery.SubjectKeyForPoint(p)
+		if key == "" {
+			key = "label:" + backupSubjectLabel(p)
+		}
+		i, ok := index[key]
+		if !ok {
+			i = len(summary.BySubject)
+			index[key] = i
+			summary.BySubject = append(summary.BySubject, BackupSubjectSummary{Subject: backupSubjectLabel(p), ResourceID: strings.TrimSpace(p.SubjectResourceID)})
+		}
+		s := &summary.BySubject[i]
+		s.Backups++
+		if p.SizeBytes == nil {
+			s.UnknownSize++
+			summary.UnknownSize++
+		} else if *p.SizeBytes > 0 {
+			s.SizeBytes += *p.SizeBytes
+			summary.SizeBytes += *p.SizeBytes
+		}
+		at := p.CompletedAt
+		if at == nil {
+			at = p.StartedAt
+		}
+		if at != nil {
+			if s.Oldest == nil || at.Before(*s.Oldest) {
+				s.Oldest = at
+			}
+			if s.Newest == nil || at.After(*s.Newest) {
+				s.Newest = at
+			}
+		}
+	}
+	sort.SliceStable(summary.BySubject, func(i, j int) bool {
+		a, b := summary.BySubject[i], summary.BySubject[j]
+		if a.SizeBytes != b.SizeBytes {
+			return a.SizeBytes > b.SizeBytes
+		}
+		if a.Backups != b.Backups {
+			return a.Backups > b.Backups
+		}
+		return a.Subject < b.Subject
+	})
+	summary.Subjects = len(summary.BySubject)
+	if len(summary.BySubject) > backupSummaryMaxSubjects {
+		summary.BySubject = summary.BySubject[:backupSummaryMaxSubjects]
+	}
+	return summary
+}
+
+// backupSubjectLabel names a backup's subject for the summary, cut to
+// backupSummaryMaxLabel runes.
+func backupSubjectLabel(p recovery.RecoveryPoint) string {
+	var label string
+	if p.Display != nil {
+		label = strings.TrimSpace(p.Display.SubjectLabel)
+	}
+	if label == "" && p.SubjectRef != nil {
+		label = strings.TrimSpace(p.SubjectRef.Name)
+	}
+	if label == "" {
+		label = strings.TrimSpace(p.SubjectResourceID)
+	}
+	if label == "" && p.SubjectRef != nil {
+		label = strings.TrimSpace(p.SubjectRef.ID)
+	}
+	if label == "" {
+		return "unknown"
+	}
+	if runes := []rune(label); len(runes) > backupSummaryMaxLabel {
+		label = string(runes[:backupSummaryMaxLabel-1]) + "…"
+	}
+	return label
 }
 
 // storageResourcesFor returns the storage resources an ID names, or that a
