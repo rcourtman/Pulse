@@ -4,8 +4,10 @@
 import json
 import os
 from pathlib import Path
+import shlex
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -17,6 +19,10 @@ ROOT = Path(__file__).resolve().parents[2]
 INSTALLER = ROOT / "scripts/install.sh"
 TOKEN = "synthetic-argument-test-not-a-credential"
 OPTIONS = ("--token-file", "--action-token-file")
+# This is a fixture-process watchdog, not an installer latency contract. The
+# documented consumer starts Python after parsing the full installer; five
+# seconds interrupted that unchanged consumer during candidate preflight.
+FIXTURE_TIMEOUT = 15
 
 
 class AgentInstallerCredentialPathsTest(unittest.TestCase):
@@ -53,7 +59,7 @@ main "$@"
         command = [shutil.which("bash"), str(self.parser if parser else INSTALLER),
                    "--non-interactive", "--output", output, *arguments]
         result = subprocess.run(command, env=self.env, cwd=self.home,
-                                capture_output=True, text=True, timeout=5)
+                                capture_output=True, text=True, timeout=FIXTURE_TIMEOUT)
         self.assertFalse(self.operations.exists(), "argument parsing attempted an install operation")
         self.assertNotIn(TOKEN, result.stdout + result.stderr, "diagnostic exposed an earlier credential")
         return result
@@ -158,6 +164,33 @@ main "$@"
         with patch.object(agent_installer_test_support, "INSTALLER", changed):
             with self.assertRaisesRegex(AssertionError, "parser boundary missing"):
                 agent_installer_test_support.credential_path_parser_fixture()
+
+    def test_documented_consumer_observes_delayed_validator_completion(self):
+        token = self.home / "documented token"
+        token.write_text(TOKEN + "\n")
+        token.chmod(0o600)
+        receipt = self.home / "delayed-consumer.json"
+        self.env.update(EXPECTED_TOKEN=TOKEN, INSTALL_RECEIPT=str(receipt))
+        self.parser.write_text(agent_installer_test_support.credential_path_parser_fixture())
+        # Deliberate interpreter startup delay, not a claim about the cause of
+        # the historical timeout. Run the real private-file validator after it;
+        # elapsed time, an exception or a missing receipt is never acceptance.
+        python = self.home / "tools" / "python3"
+        python.write_text("#!/bin/sh\nsleep 6\nexec " + shlex.quote(sys.executable) + ' "$@"\n')
+        python.chmod(0o700)
+        result = self.run_script(["--token-file", str(token)], parser=True)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(json.loads(receipt.read_text()), [
+            "--non-interactive", "--output", "json", "--token-file", str(token),
+        ])
+        self.assertEqual(token.read_text(), TOKEN + "\n")
+        self.assertEqual(token.stat().st_mode & 0o777, 0o600)
+
+    def test_fixture_timeout_remains_an_error_not_a_negative_control_pass(self):
+        with patch.object(subprocess, "run", side_effect=subprocess.TimeoutExpired("fixture", 15)) as run:
+            with self.assertRaises(subprocess.TimeoutExpired):
+                self.run_script([], parser=True)
+        self.assertEqual(run.call_args.kwargs["timeout"], 15)
 
 
 if __name__ == "__main__":
