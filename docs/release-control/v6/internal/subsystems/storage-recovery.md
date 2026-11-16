@@ -9970,3 +9970,11 @@ PVE class before, and the repository key built from it is stored, not queried.
 `internal/recovery/store/store_repository_filter_test.go`,
 `internal/recovery/points_query_repository_test.go` and
 `internal/recovery/mapper/proxmox/mapper_storage_node_test.go`.
+
+### Durable notification rehearsal evidence (16 November 2026)
+
+Rehearsal history and run/job associations live in the existing notification
+SQLite owner. Expiry cancels owned notification work through ordinary occurrence
+gates before removing seven-day evidence. Evidence failure cannot authorize a
+direct send or inferred success. These notification routes acquire no backup,
+restore, filesystem, recovery administration or cross-organization authority.

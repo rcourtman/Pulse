@@ -2627,6 +2627,7 @@
               "frontend-modern/src/features/alerts/__tests__/useAlertOverridesState.test.tsx",
               "frontend-modern/src/features/alerts/__tests__/useAlertOverviewState.test.tsx",
               "frontend-modern/src/features/alerts/AlertDeliveryHealthCard.test.tsx",
+              "frontend-modern/src/features/alerts/AlertDeliveryRehearsal.test.tsx",
               "frontend-modern/src/features/alerts/identity.test.ts",
               "frontend-modern/src/features/alerts/thresholds/__tests__/helpers.test.ts",
               "frontend-modern/src/features/alerts/thresholds/hooks/__tests__/truenasThresholdPersistence.test.tsx",

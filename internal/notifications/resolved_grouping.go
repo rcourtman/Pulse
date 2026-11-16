@@ -27,6 +27,11 @@ func (nq *NotificationQueue) enqueueResolvedGroup(notif *QueuedNotification, win
 	}
 	now := time.Now()
 	method := "resolved-group"
+	if len(notif.Alerts) > 0 {
+		if id := rehearsalID(notif.Alerts[0]); id != "" {
+			method += ":rehearsal:" + id
+		}
+	}
 	if notif.NextRetryAt != nil {
 		method += ":" + notif.NextRetryAt.UTC().Format(time.RFC3339Nano)
 	}

@@ -1429,7 +1429,89 @@ func (h *NotificationHandlers) HandleNotifications(w http.ResponseWriter, r *htt
 			return
 		}
 		h.GetDeliveryLog(w, r)
+	case path == "/rehearsals" || strings.HasPrefix(path, "/rehearsals/"):
+		if r.Method == http.MethodGet {
+			if !requireAnyScope(config.ScopeSettingsRead, config.ScopeSettingsRead, config.ScopeSettingsWrite) {
+				return
+			}
+		} else if !requireAnyScope(config.ScopeSettingsWrite, config.ScopeSettingsWrite) {
+			return
+		}
+		h.handleDeliveryRehearsals(w, r, strings.TrimPrefix(path, "/rehearsals"))
 	default:
 		http.Error(w, "Not found", http.StatusNotFound)
 	}
+}
+
+// Rehearsals use only this organization's saved destinations. They cannot
+// accept ad-hoc URLs/credentials or borrow the default organization's runtime.
+func (h *NotificationHandlers) handleDeliveryRehearsals(w http.ResponseWriter, r *http.Request, path string) {
+	monitor := h.requireMonitor(w, r)
+	if monitor == nil {
+		return
+	}
+	manager, ok := monitor.GetNotificationManager().(interface {
+		StartDeliveryRehearsal(notifications.RehearsalRequest) (*notifications.DeliveryRehearsal, error)
+		ListDeliveryRehearsals() ([]notifications.DeliveryRehearsal, error)
+		GetDeliveryRehearsal(string) (*notifications.DeliveryRehearsal, error)
+		RecoverDeliveryRehearsal(string) (*notifications.DeliveryRehearsal, error)
+	})
+	if !ok {
+		http.Error(w, "Delivery rehearsal is unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	var result interface{}
+	var err error
+	switch {
+	case path == "" && r.Method == http.MethodGet:
+		result, err = manager.ListDeliveryRehearsals()
+	case path == "" && r.Method == http.MethodPost:
+		r.Body = http.MaxBytesReader(w, r.Body, 4096)
+		decoder := json.NewDecoder(r.Body)
+		decoder.DisallowUnknownFields()
+		var request notifications.RehearsalRequest
+		if decodeErr := decoder.Decode(&request); decodeErr != nil {
+			http.Error(w, "Use a rehearsal ID, level and at most 32 short tags", http.StatusBadRequest)
+			return
+		}
+		var trailing interface{}
+		if decoder.Decode(&trailing) != io.EOF {
+			http.Error(w, "A single rehearsal request is required", http.StatusBadRequest)
+			return
+		}
+		// Validate input before admitting any queue work. Error messages from
+		// storage and transports are never copied into the HTTP boundary.
+		if len(request.ID) != 36 || (request.Level != "info" && request.Level != "warning" && request.Level != "critical") || len(request.Tags) > 32 {
+			http.Error(w, "Choose a valid rehearsal ID, level and tags", http.StatusBadRequest)
+			return
+		}
+		for _, tag := range request.Tags {
+			if len(tag) > 64 {
+				http.Error(w, "Each tag must be at most 64 bytes", http.StatusBadRequest)
+				return
+			}
+		}
+		result, err = manager.StartDeliveryRehearsal(request)
+	case strings.HasPrefix(path, "/") && r.Method == http.MethodGet && !strings.Contains(path[1:], "/"):
+		result, err = manager.GetDeliveryRehearsal(path[1:])
+	case strings.HasSuffix(path, "/recover") && r.Method == http.MethodPost && strings.Count(path, "/") == 2:
+		result, err = manager.RecoverDeliveryRehearsal(strings.TrimSuffix(strings.TrimPrefix(path, "/"), "/recover"))
+	default:
+		http.Error(w, "Not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		if errors.Is(err, notifications.ErrInvalidRehearsalRequest) {
+			http.Error(w, "Choose a valid rehearsal ID, level and tags. A recorded ID cannot be reused with different inputs.", http.StatusBadRequest)
+		} else if errors.Is(err, notifications.ErrRehearsalNotFound) {
+			http.Error(w, "Delivery rehearsal not found", http.StatusNotFound)
+		} else if errors.Is(err, notifications.ErrRehearsalConflict) {
+			http.Error(w, err.Error(), http.StatusConflict)
+		} else {
+			http.Error(w, "Delivery rehearsal evidence is unavailable. Refresh to reconcile the recorded request before trying again.", http.StatusServiceUnavailable)
+		}
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
 }

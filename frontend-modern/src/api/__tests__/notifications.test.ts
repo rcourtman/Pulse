@@ -14,6 +14,88 @@ describe('NotificationsAPI', () => {
     apiFetchJSONMock.mockReset();
   });
 
+  it('keeps rehearsal mutations tenant-bound and non-retrying, and retains suppressed outcomes', async () => {
+    const outcome = {
+      status: 'suppressed',
+      reason: 'tags',
+      message: 'Tags do not match.',
+      attempts: 0,
+      diagnostic: 'Saved tag routing excluded this sample.',
+    };
+    const run = {
+      id: 'rehearsal-id',
+      createdAt: '2026-11-16T12:00:00Z',
+      level: 'warning',
+      tags: ['production'],
+      policy: { ...outcome, status: 'passed', reason: 'admitted' },
+      destinations: [
+        {
+          id: 'webhook:ops',
+          name: 'Ops',
+          firing: outcome,
+          recovery: { ...outcome, status: 'not_started' },
+        },
+      ],
+    };
+    const context = { expectedOrgID: 'tenant-a', retry: true } as const;
+    const request = { id: run.id, level: 'warning' as const, tags: run.tags };
+    apiFetchJSONMock.mockResolvedValue(run);
+    const started = await NotificationsAPI.startRehearsal(request, context);
+    expect(started.destinations[0].firing.status).toBe('suppressed');
+    expect(started.destinations[0].firing.diagnostic).toBe(outcome.diagnostic);
+    expect(apiFetchJSONMock).toHaveBeenLastCalledWith('/api/notifications/rehearsals', {
+      expectedOrgID: 'tenant-a',
+      retry: false,
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+    await NotificationsAPI.recoverRehearsal('run/other', context);
+    expect(apiFetchJSONMock).toHaveBeenLastCalledWith(
+      '/api/notifications/rehearsals/run%2Fother/recover',
+      { expectedOrgID: 'tenant-a', retry: false, method: 'POST' },
+    );
+  });
+
+  it('refuses malformed rehearsal evidence instead of hiding a failed destination', async () => {
+    const outcome = {
+      status: 'failed',
+      reason: 'rejected',
+      message: 'Rejected by receiver.',
+      attempts: 1,
+    };
+    const run = {
+      id: 'run',
+      createdAt: '2026-11-16T12:00:00Z',
+      level: 'warning',
+      tags: [],
+      policy: outcome,
+      destinations: [{ id: 'ops', name: 'Ops', firing: outcome, recovery: outcome }],
+    };
+    for (const malformed of [
+      null,
+      {},
+      { ...run, destinations: null },
+      { ...run, destinations: [...run.destinations, { id: 'bad' }] },
+      {
+        ...run,
+        destinations: [{ ...run.destinations[0], firing: { ...outcome, status: 'success' } }],
+      },
+      { ...run, destinations: [{ ...run.destinations[0], firing: { ...outcome, attempts: -1 } }] },
+      { ...run, createdAt: 'invalid' },
+      {
+        ...run,
+        destinations: [
+          { ...run.destinations[0], firing: { ...outcome, diagnostic: { unsafe: true } } },
+        ],
+      },
+    ]) {
+      apiFetchJSONMock.mockResolvedValueOnce(malformed);
+      await expect(NotificationsAPI.getRehearsal('run')).rejects.toThrow('evidence is invalid');
+    }
+    apiFetchJSONMock.mockResolvedValueOnce(null);
+    await expect(NotificationsAPI.listRehearsals()).rejects.toThrow('history is unavailable');
+  });
+
   it('retains the admitted workspace and retry policy through every destination configuration adapter', async () => {
     const context = { expectedOrgID: 'tenant-a', retry: false } as const;
     const email = {

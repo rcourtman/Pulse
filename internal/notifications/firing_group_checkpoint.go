@@ -37,6 +37,7 @@ func (n *NotificationManager) checkpointPendingFiringGroupLocked(queue *Notifica
 	}
 	jobs := buildNotificationDeliveryJobsForTarget(copyEmailConfig(n.emailConfig), copyWebhookConfigs(n.webhooks),
 		copyAppriseConfig(n.appriseConfig), n.pendingAlerts, eventAlert, time.Time{}, n.initialTarget)
+	var admittedJobs []notificationDeliveryJob
 	for _, job := range jobs {
 		var dueAlerts []*alerts.Alert
 		for _, alert := range job.Alerts {
@@ -49,6 +50,7 @@ func (n *NotificationManager) checkpointPendingFiringGroupLocked(queue *Notifica
 		if len(dueAlerts) == 0 {
 			continue
 		}
+		admittedJobs = append(admittedJobs, job)
 		epoch, err := queue.activateDeliveryDestination(notificationDeliveryDestinationKey(job), notificationDeliveryConfigurationFingerprint(job))
 		if err != nil {
 			n.logNotificationJobError(job, err, "failed to preserve notification destination generation")
@@ -79,4 +81,5 @@ func (n *NotificationManager) checkpointPendingFiringGroupLocked(queue *Notifica
 			}
 		}
 	}
+	queue.rehearsalRouting(n.pendingAlerts, n.emailConfig, n.webhooks, n.appriseConfig, n.initialTarget, jobs, admittedJobs, "firing")
 }

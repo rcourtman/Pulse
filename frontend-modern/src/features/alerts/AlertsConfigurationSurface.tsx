@@ -20,7 +20,9 @@ import {
   type AlertsConfigurationSurfaceProps,
 } from './useAlertsConfigurationState';
 
-export function AlertsConfigurationSurface(props: AlertsConfigurationSurfaceProps) {
+export function AlertsConfigurationSurface(
+  props: AlertsConfigurationSurfaceProps & { requestedRehearsalID?: () => string | undefined },
+) {
   const state = useAlertsConfigurationState(props);
   const escalationDestinations = createMemo(() => [
     {
@@ -270,6 +272,8 @@ export function AlertsConfigurationSurface(props: AlertsConfigurationSurfaceProp
 
       <Show when={props.activeTab() === 'destinations' && state.isConfigLoaded()}>
         <DestinationsTab
+          requestedRehearsalID={props.requestedRehearsalID}
+          hasUnsavedChanges={props.hasUnsavedChanges}
           setHasUnsavedChanges={state.guardedSetHasUnsavedChanges}
           deadManPingUrl={state.deadManPingUrl}
           setDeadManPingUrl={state.setDeadManPingUrl}

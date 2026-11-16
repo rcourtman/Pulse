@@ -52,6 +52,23 @@ func TestQuietHoursDeliverySnapshotIsCurrentIndependentAndReadOnly(t *testing.T)
 	}
 }
 
+func TestDeliveryRehearsalUsesPerformanceQuietHoursPolicy(t *testing.T) {
+	now := time.Date(2026, 11, 16, 18, 0, 0, 0, time.UTC)
+	for _, suppressCritical := range []bool{false, true} {
+		quiet := QuietHours{Enabled: true, Start: "17:00", End: "20:00", Timezone: "UTC",
+			Days: map[string]bool{"monday": true}, Suppress: QuietHoursSuppression{Performance: suppressCritical}}
+		m := fixedQuietHoursTestManager(now, quiet)
+		for _, level := range []AlertLevel{AlertLevelInfo, AlertLevelWarning, AlertLevelCritical} {
+			at := m.QuietHoursNotificationPolicy()(&Alert{Type: "notification-rehearsal", Level: level}, now)
+			wantHeld := level != AlertLevelCritical || suppressCritical
+			if (at != nil) != wantHeld {
+				t.Fatalf("level=%s suppressCritical=%t held=%t", level, suppressCritical, at != nil)
+			}
+		}
+		m.Stop()
+	}
+}
+
 func TestQuietHoursDeliverySnapshotConcurrentConfigUpdates(t *testing.T) {
 	now := time.Date(2026, 10, 2, 0, 0, 0, 0, time.UTC)
 	m := newManagerWithQuietHoursSuppress(QuietHoursSuppression{})

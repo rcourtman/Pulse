@@ -14757,3 +14757,19 @@ metadata consumers, and a signed ACS/session/replay handover. It holds current
 pending-request ownership, distinct trust snapshots, public-base recovery and
 unchanged callback protections. Source fixtures are not original-client,
 external-IdP, installed or release acceptance.
+
+### Organization-bound alert-delivery rehearsals (16 November 2026)
+
+`/api/notifications/rehearsals` supports GET history and POST creation.
+`/:id` reads a report and `/:id/recover` finishes through ordinary recovery
+admission. The existing notification organization-manager boundary applies.
+Read requests require settings read or write scope; mutations require settings
+write scope. Runtime lookup never falls back to another organization. Creation
+accepts only a canonical UUID, an info/warning/critical level and bounded routing
+tags, with a strict 4096-byte body. It accepts no destinations, transport secrets
+or draft notification configuration. Missing runs return 404, unfinished-run
+conflicts 409, invalid inputs 400 and unavailable evidence a redacted 503.
+
+`internal/api/notifications_org_authority_test.go` covers own/foreign/default
+organization separation, viewer refusal, strict input and idempotent recovery.
+Notification runtime tests independently exercise real queue/provider evidence.

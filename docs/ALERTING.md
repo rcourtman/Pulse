@@ -40,6 +40,40 @@ For an incident that occurs naturally, check all three steps:
 3. Confirm that the intended recipient received the message. Provider
    acceptance alone does not establish receipt or that a person read it.
 
+### Rehearse the saved delivery path
+
+In **Alerts → Notifications**, expand **Delivery rehearsal**. Save or discard
+settings edits first: the rehearsal uses saved email, webhook and Apprise
+destinations, never an unsaved destination draft.
+
+1. Choose a severity and optional comma-separated routing tags, then select
+   **Send rehearsal alert**. The message is clearly labelled as a rehearsal.
+2. Inspect **Notification admission** and each destination's firing result.
+   **Passed** means the destination accepted the delivery. **Failed** means a
+   delivery failed. **Suppressed** means policy prevented delivery. **Pending**
+   and **Deferred** remain unfinished, including grouping, quiet hours and retries.
+   **Unavailable** means evidence cannot establish the outcome.
+3. Confirm receipt in the intended inbox or service. When ready, select
+   **Send recovery and finish rehearsal**. This cancels pending firing messages
+   and sends recovery only to destinations with a successful firing receipt for
+   that rehearsal occurrence, subject to the saved recovery policy.
+
+Rehearsals use the ordinary routing, grouping, persistent queue, transports,
+retry budgets and recovery receipts. They create no infrastructure incident and
+do not test metric detection, resource acknowledgement/maintenance, push delivery,
+or the independent external watchdog. Failed queue admission never falls back
+to a direct rehearsal send. Recent delivery activity retains actual attempts.
+Failed rehearsals affect ordinary delivery health. Expand **Delivery details**
+for redacted transport diagnostics and failure categories.
+The sample uses the performance-alert quiet-hours category, including the saved
+setting for suppressing critical performance alerts.
+
+Results survive reloads and restarts. The latest 20 rehearsals are shown from a
+seven-day history. Finish the current rehearsal before starting another. An
+unconfirmed request must be refreshed or retried with its original ID, never
+assumed failed and resent as a new rehearsal. Expiration cancels remaining
+rehearsal work without inventing delivery or recovery.
+
 If the Test succeeds but the incident does not arrive, follow
 [missing alert notifications](TROUBLESHOOTING.md#test-succeeds-but-real-alerts-are-missing)
 and [severity and tag routing](CONFIGURATION.md#destination-severity-and-tag-routing).

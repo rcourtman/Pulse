@@ -488,6 +488,9 @@ export function Alerts(props: { securityStatus?: SecurityStatus | null }) {
               >
                 {(acceptedReader) => (
                   <AlertsConfigurationSurface
+                    requestedRehearsalID={() =>
+                      new URLSearchParams(location.search).get('rehearsal') || undefined
+                    }
                     isCurrentReader={() => configurationReader() === acceptedReader}
                     activeTab={activeTab}
                     allResources={allResources}

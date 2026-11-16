@@ -42,6 +42,12 @@ func alertLinkURL(publicURL string, alert *alerts.Alert) string {
 	if alert == nil {
 		return ""
 	}
+	if id := rehearsalID(alert); id != "" {
+		if base := trimmedPublicURL(publicURL); base != "" {
+			return base + "/alerts/notifications?" + url.Values{"rehearsal": {id}}.Encode()
+		}
+		return ""
+	}
 	if isPatrolFindingAlert(alert) {
 		if base := trimmedPublicURL(publicURL); base != "" {
 			return base + patrolPath
