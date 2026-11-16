@@ -88,6 +88,10 @@ func (p *PatrolService) patrolAlertSubjectFacts(scope *PatrolScope, snap patrolR
 			name = strings.TrimSpace(alertResourceName)
 		}
 		lines = append(lines, p.patrolRunnableActionLines(subject, name, alertType)...)
+		if patrolAlertIsAboutStorageSpace(alertType) && patrolStorageHoldsBackups(subject) {
+			lines = append(lines, fmt.Sprintf("Pulse lists the backups kept on %q: pulse_storage with type \"backups\" shows each guest's backups there, with their sizes and dates. "+
+				"Look there for what fills it. When you cannot tell from here, report a finding: its investigation reads the list, and that is not a finding that only repeats the alert.", name))
+		}
 	}
 
 	if onBoot, stopped, isGuest := patrolAlertGuestStartOnBoot(alertResourceID, snap); powerMatters && isGuest && onBoot != nil {
@@ -163,6 +167,54 @@ func patrolAlertIsAboutSpaceOrAge(alertType string) bool {
 		return true
 	}
 	return false
+}
+
+// patrolAlertIsAboutStorageSpace reports whether an alert is about how full a
+// storage is.
+func patrolAlertIsAboutStorageSpace(alertType string) bool {
+	switch strings.ToLower(strings.TrimSpace(alertType)) {
+	case "usage", "storage":
+		return true
+	}
+	return false
+}
+
+// patrolStorageHoldsBackups reports whether a resource is a storage that
+// holds backups, which pulse_storage lists with their guests and sizes.
+//
+// On pve-v1 P3, a node's local storage filled with old backups of one guest.
+// With commands off the sustained check on its usage alert can read nothing
+// on the node, and was told nothing about the backup list. Runs that listed
+// the backups named the guest and filed; runs that read only the pool's size
+// recorded nothing, because the rule forbids a finding that only repeats the
+// reading.
+func patrolStorageHoldsBackups(resource *unifiedresources.Resource) bool {
+	if resource == nil || resource.Type != unifiedresources.ResourceTypeStorage || resource.Storage == nil {
+		return false
+	}
+	for _, content := range resource.Storage.ContentTypes {
+		if strings.EqualFold(strings.TrimSpace(content), "backup") {
+			return true
+		}
+	}
+	return false
+}
+
+// patrolAlertStorageBackupsListed returns the name of the storage a run on a
+// space alert looks at, when that storage holds backups Pulse lists.
+func patrolAlertStorageBackupsListed(scope *PatrolScope, snap patrolRuntimeState) (string, bool) {
+	if scope == nil || scope.AlertContext == nil || !patrolAlertIsAboutStorageSpace(scope.AlertContext.AlertType) {
+		return "", false
+	}
+	subject := patrolAlertSubjectResource(scope, snap)
+	if !patrolStorageHoldsBackups(subject) {
+		return "", false
+	}
+	name := strings.TrimSpace(subject.Name)
+	if name == "" {
+		name = strings.TrimSpace(scope.AlertContext.ResourceName)
+	}
+	return name, true
 }
 
 // patrolRunnableActionLines states what Pulse can run for a resource, and

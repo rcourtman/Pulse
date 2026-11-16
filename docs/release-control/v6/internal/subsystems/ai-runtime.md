@@ -4754,12 +4754,20 @@ keeps it too, unless Pulse's own facts meet the rule that run is given for
 reporting a finding (`sustainedAlertCallsForFinding`): a restart-loop,
 memory-kill or health alert, a `docker-container-state` alert on a container
 that is restarting, was killed for memory or exited with a code other than 0
-or a stop signal (130, 137, 143), or a `disk` alert on a host or guest Pulse
-can read (`patrolAlertSubjectReadPlace`). On Docker fault set v1, qwen3:8b woke
-by itself on D2 (Exited 139) and D6 (a full mount, commands on), described
-both and filed neither, so neither was investigated. A finished job raises no
-state alert and a stop exits 0 or with a stop signal, so neither is opened.
-Proofs: `internal/ai/patrol_alert_finding_sustained_test.go` and
+or a stop signal (130, 137, 143), a `disk` alert on a host or guest Pulse
+can read (`patrolAlertSubjectReadPlace`), or a `usage` alert on a storage
+whose content includes backups (`patrolAlertStorageBackupsListed`). On Docker
+fault set v1, qwen3:8b woke by itself on D2 (Exited 139) and D6 (a full mount,
+commands on), described both and filed neither, so neither was investigated.
+On pve-v1 P3 with commands off, Sonnet's sustained check on a local storage
+full of old backups read only the pool's size in 2 of 2 runs on 16 Nov and
+recorded nothing; the 14 Nov runs that listed the backups filed. That check's
+seed and closing question now say Pulse lists the backups on that storage
+(`pulse_storage` type `backups`) and that its investigation reads them, and
+drop the alert-only exit for it. A storage without backups keeps both. A
+finished job raises no state alert and a stop exits 0 or with a stop signal,
+so neither is opened. Proofs: `internal/ai/patrol_alert_finding_sustained_test.go`,
+`internal/ai/patrol_storage_alert_wake_test.go` and
 `internal/ai/patrol_alert_finding_test.go`. Cost:
 at most one such finding per `alert_fired` trigger, inside that trigger's caps
 (3 an hour and 6 in 24 hours per alert identifier), and its investigation goes

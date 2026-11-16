@@ -184,8 +184,9 @@ func (p *PatrolService) openFindingForUnansweredAlert(scope PatrolScope, alert *
 // sustainedAlertCallsForFinding reports whether what Pulse collected meets the
 // rule a check on a warning that stayed active is given for reporting a
 // finding (patrolActiveAlertFindingRule): a Docker workload that failed and
-// will not come back by itself, or a disk alert on a host or guest Pulse can
-// read, whose investigation can find what fills it.
+// will not come back by itself, a disk alert on a host or guest Pulse can
+// read, or a space alert on a storage that holds backups Pulse lists. The
+// investigation of either space alert can find what fills it.
 //
 // That check keeps the model's judgment because the rule's quiet cases (a
 // finished job, a deliberate stop, an expected condition) need judging. A
@@ -206,6 +207,9 @@ func (p *PatrolService) sustainedAlertCallsForFinding(scope *PatrolScope, snap p
 	case "disk":
 		_, readable := p.patrolAlertSubjectReadPlace(scope, snap)
 		return readable
+	case "usage", "storage":
+		_, listed := patrolAlertStorageBackupsListed(scope, snap)
+		return listed
 	}
 	return false
 }
@@ -370,6 +374,12 @@ func (p *PatrolService) patrolFindingDecisionPrompt(scope *PatrolScope, snap pat
 		if place, ok := p.patrolAlertSubjectReadPlace(scope, snap); ok {
 			readable = fmt.Sprintf("Pulse can read %s and this check cannot, so a disk reading whose cause you could not see is one to record: its investigation reads what fills the disk. ", place)
 			quiet = "for example a disk filled by something you found and that is expected"
+		}
+	}
+	if patrolAlertIsAboutStorageSpace(alert.Type) {
+		if name, ok := patrolAlertStorageBackupsListed(scope, snap); ok {
+			readable = fmt.Sprintf("Pulse lists the backups kept on %q, so a storage reading whose cause you could not see is one to record: its investigation reads whose backups fill it. ", name)
+			quiet = "for example storage filled by something you found and that is expected"
 		}
 	}
 	return fmt.Sprintf("Before you finish: Pulse has %s alert active on %q (%s: %q), and you have not recorded a finding. "+
