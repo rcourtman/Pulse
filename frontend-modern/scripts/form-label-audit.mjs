@@ -33,6 +33,32 @@ const getTagName = (node, sourceFile) => node.tagName.getText(sourceFile);
 const getAttributeValue = (attribute, sourceFile) =>
   attribute.initializer?.getText(sourceFile).replace(/^['"]|['"]$/g, '');
 
+const getStaticString = (initializer) => {
+  let value = ts.isJsxExpression(initializer) ? initializer.expression : initializer;
+  while (value && ts.isParenthesizedExpression(value)) value = value.expression;
+  return value && (ts.isStringLiteral(value) || ts.isNoSubstitutionTemplateLiteral(value))
+    ? value.text
+    : undefined;
+};
+
+const isLabelableControl = (element, sourceFile) => {
+  const tag = getTagName(element, sourceFile);
+  if (!labelableElements.has(tag)) return false;
+  if (tag !== 'input') return true;
+
+  const attributes = element.attributes.properties;
+  const typeIndex = attributes.findLastIndex(
+    (attribute) => ts.isJsxAttribute(attribute) && attribute.name.getText(sourceFile) === 'type',
+  );
+  if (typeIndex < 0) return true;
+  // A later spread can change the type; do not infer its runtime value. A
+  // static hidden input, unlike other native inputs, cannot be a label target.
+  if (attributes.slice(typeIndex + 1).some(ts.isJsxSpreadAttribute)) return true;
+  const initializer = attributes[typeIndex].initializer;
+  const type = initializer && getStaticString(initializer);
+  return type?.toLowerCase() !== 'hidden';
+};
+
 const hasLabelTarget = (element, sourceFile, labelableIds) => {
   const attributes = element.openingElement.attributes.properties;
   const forAttribute = attributes.find(
@@ -48,9 +74,8 @@ const hasLabelTarget = (element, sourceFile, labelableIds) => {
   let containsLabelableElement = false;
   const visit = (node) => {
     if (
-      (ts.isJsxElement(node) &&
-        labelableElements.has(getTagName(node.openingElement, sourceFile))) ||
-      (ts.isJsxSelfClosingElement(node) && labelableElements.has(getTagName(node, sourceFile)))
+      (ts.isJsxElement(node) && isLabelableControl(node.openingElement, sourceFile)) ||
+      (ts.isJsxSelfClosingElement(node) && isLabelableControl(node, sourceFile))
     ) {
       containsLabelableElement = true;
       return;
@@ -78,7 +103,7 @@ for (const sourcePath of sourceFiles.sort()) {
       : ts.isJsxSelfClosingElement(node)
         ? node
         : undefined;
-    if (element && labelableElements.has(getTagName(element, sourceFile))) {
+    if (element && isLabelableControl(element, sourceFile)) {
       const idAttribute = element.attributes.properties.find(
         (attribute) => ts.isJsxAttribute(attribute) && attribute.name.getText(sourceFile) === 'id',
       );
@@ -100,7 +125,7 @@ for (const sourcePath of sourceFiles.sort()) {
       const position = sourceFile.getLineAndCharacterOfPosition(node.openingElement.getStart());
       diagnostics.push(
         `${path.relative(process.cwd(), sourcePath)}:${position.line + 1}:${position.character + 1} ` +
-          'label must target an ID on a native labelable control or contain that control',
+          'label must target an ID on a native labelable control or contain that control; hidden inputs are not labelable',
       );
     }
     ts.forEachChild(node, visit);
