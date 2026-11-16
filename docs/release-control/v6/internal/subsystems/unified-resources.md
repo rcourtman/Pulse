@@ -9497,7 +9497,7 @@ establish sustained native metrics, History, revocation or release availability.
 
 `mapDockerContainerStatus` in `dockerPageModel.ts` reads the availability
 facet already projected onto a container. A running container whose attached
-check has failed past its threshold reads `Not responding` in the warning
+check has failed past its threshold reads `No answer` in the warning
 tone, through the same `hasFailedAttachedAvailabilityCheck` predicate as a
 guest row, and the Docker status filter counts it under Degraded. A stopped
 container and a failing Docker health check keep their own words. The

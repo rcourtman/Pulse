@@ -1,0 +1,74 @@
+{
+  "version": 1,
+  "base_sha": "963ea87f8ea2f798d128fe16f896727e55472879",
+  "verified_at": "2026-11-16T11:19:36Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/docker/dockerPageModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/docker/dockerPageModel.ts": "905a9505052be1b9240d22ed228a14b3ddbeb1f0842715776892314c81a86987"
+  },
+  "routes": [
+    "/docker (Overview tab): status chips and the containers table, served by Vite from this working tree against a real v6.9.0-beta.2 backend."
+  ],
+  "viewports": [
+    {
+      "width": 1920,
+      "height": 1080
+    },
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 1024,
+      "height": 800
+    },
+    {
+      "width": 980,
+      "height": 800
+    },
+    {
+      "width": 768,
+      "height": 800
+    },
+    {
+      "width": 500,
+      "height": 800
+    },
+    {
+      "width": 474,
+      "height": 800
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 340,
+      "height": 740
+    }
+  ],
+  "states": [
+    "Real Docker host with a real Pulse agent and seven running containers; HTTP availability checks attached to three published ports by the page's own Add checks action.",
+    "nginx inside the web container moved off its published port while the container kept running; after two failed checks the web row is amber, sorted first, State reads No answer, chips Healthy 6 and Degraded 1, alerts badge 1.",
+    "Before the change, on the released v6.9.0-beta.2 bundle against the same backend: the label measured 83px in a 67px cell at 500px (shown as 'Not respo...') and 89px in 85px at 1024px.",
+    "After the change the label's scroll width equals its client width at all ten widths; the only truncated cells left are image and port values, which truncate by design.",
+    "Dark theme at every width."
+  ],
+  "interactions": [
+    "Resized through the ten widths, measuring scrollWidth against clientWidth for the State label and listing every truncated leaf cell in the table at each one.",
+    "Read the label's hover title: 'Running, but its availability check is failing: web:8081'.",
+    "At 340px the label sits beside the container name and the row stays 32px high like its neighbours."
+  ],
+  "limits": [
+    "One Docker host on a lab rig, so the Host and Engine columns were hidden; with several hosts the State column is narrower and was not measured.",
+    "Light theme was not re-checked: the change is the label's text only.",
+    "Recovery to Running was observed on the released bundle before the change, not repeated after it."
+  ]
+}
