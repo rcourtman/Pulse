@@ -77,6 +77,7 @@ export function DockerPortChecksNotice(props: DockerPortChecksNoticeProps) {
     setDismissed(next);
     writeDismissedPortChecks(next, [...all(), ...ports]);
     // Once the old offer is handled, later ports may get their own offer.
+    setFailure('');
     setDisplayed(suggestions.latest ?? []);
   };
 

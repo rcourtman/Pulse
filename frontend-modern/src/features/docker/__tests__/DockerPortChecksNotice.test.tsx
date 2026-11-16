@@ -203,6 +203,7 @@ describe('DockerPortChecksNotice', () => {
     await waitFor(() =>
       expect(screen.getByTestId('docker-port-checks-list')).toHaveTextContent('replacement 9081'),
     );
+    expect(screen.queryByText('Could not add checks: Published container ports changed.')).toBeNull();
   });
 
   it('clears a retained offer when a later read is refused', async () => {
