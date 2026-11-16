@@ -5695,6 +5695,26 @@ func (rr *ResourceRegistry) buildCanonicalIdentityIndexLocked() {
 	rr.canonicalIdentityIndex = index
 }
 
+// pbsDatastoreStorageSubjectLocked returns the poller's storage ID
+// ("pbs-<name>-<datastore>") for a PBS datastore collected under its
+// canonical "<instance-id>/<datastore>" source ID, the ID that datastore's
+// storage alerts carry. Only a datastore parented to its PBS instance has one.
+func (rr *ResourceRegistry) pbsDatastoreStorageSubjectLocked(sourceID string, resource *Resource) (string, bool) {
+	instanceID, datastore, isDatastore := strings.Cut(sourceID, "/")
+	if !isDatastore || datastore == "" || resource == nil || resource.ParentID == nil ||
+		CanonicalResourceType(resource.Type) != ResourceTypeStorage {
+		return "", false
+	}
+	if name, pollerID := strings.CutPrefix(instanceID, "pbs-"); !pollerID || name == "" {
+		return "", false
+	}
+	parentID := rr.bySource[SourcePBS][instanceID]
+	if parent := rr.resources[parentID]; parent == nil || parent.PBS == nil || *resource.ParentID != parentID {
+		return "", false
+	}
+	return instanceID + "-" + datastore, true
+}
+
 // forEachAlertSubjectReferenceLocked bridges the connection and PBS storage
 // subjects to the same resources the operator-state API uses. These are lookup
 // references, not new resources or replacements for alert/history IDs. Feed
@@ -5714,7 +5734,7 @@ func (rr *ResourceRegistry) forEachAlertSubjectReferenceLocked(visit func(string
 		if resource == nil {
 			continue
 		}
-		instanceID, datastore, isDatastore := strings.Cut(sourceID, "/")
+		instanceID, _, isDatastore := strings.Cut(sourceID, "/")
 		// The PBS poller uses pbs-<configured name>, while its connection
 		// uses pbs:<configured name>. Do not infer this from a display name
 		// or from a PVE mount that merely has storage type "pbs".
@@ -5724,11 +5744,8 @@ func (rr *ResourceRegistry) forEachAlertSubjectReferenceLocked(visit func(string
 		}
 		if !isDatastore && resource.PBS != nil {
 			visit("pbs:"+name, resourceID)
-		} else if isDatastore && datastore != "" && CanonicalResourceType(resource.Type) == ResourceTypeStorage && resource.ParentID != nil {
-			parentID := rr.bySource[SourcePBS][instanceID]
-			if parent := rr.resources[parentID]; parent != nil && parent.PBS != nil && *resource.ParentID == parentID {
-				visit(instanceID+"-"+datastore, resourceID)
-			}
+		} else if subject, ok := rr.pbsDatastoreStorageSubjectLocked(sourceID, resource); ok {
+			visit(subject, resourceID)
 		}
 	}
 }

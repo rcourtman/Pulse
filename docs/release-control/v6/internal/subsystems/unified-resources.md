@@ -918,6 +918,24 @@ History recording is unchanged: `RecordChange` resolves complete container IDs
 before this resolver and the journal backfill skips container references.
 Proof: `TestAlertResourceReferenceBindsCollectedDockerContainer` in
 `history_identity_test.go`, from a snapshot and from unified rows.
+A PBS datastore's storage alert carries the PBS poller's storage ID
+(`pbs-<name>-<datastore>`, every storage alert's `ResourceID` is
+`storage.ID`), which the registry folds into the canonical
+`<instance-id>/<datastore>` datastore instead of ingesting (#1591). It binds
+that datastore through the rule the alert subject bridge already used for
+operator state (`pbsDatastoreStorageSubjectLocked`): a datastore parented to
+its PBS instance. Before 16 November 2026 it bound nothing, so Patrol refused
+every check a full PBS datastore started as "scope could not be resolved".
+The rule applies to `ResolveAlertResourceReference` only, after every durable
+identity failed to claim the reference: history recording keeps its own
+resolution, so an event for a removed resource whose source ID reads like
+`pbs-a-main` keeps the binding it recorded. Only `pbs-` references reach the
+rule, and they scan PBS sources only. A hyphenated reference that names two
+stores is claimed and binds neither. Proof:
+`TestPBSDatastoreStorageAlertResolvesToTheDatastore`,
+`TestAmbiguousPBSDatastoreStorageAlertStaysUnresolved`,
+`TestPBSDatastoreStorageSubjectDoesNotBindHistory` and
+`TestPresentResourceOutranksPBSDatastoreStorageSubject`.
 A binding reached through a component's owner (an agent's filesystem, disk
 temperature, RAID device or custom sensor; a storage's ZFS pool or device)
 carries `Component`: its owner is shared by sibling components, so consumers

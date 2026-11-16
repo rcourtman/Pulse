@@ -64,6 +64,9 @@ func (rr *ResourceRegistry) ResolveAlertResourceReference(ref string) (AlertReso
 	}
 	result := withViewCache(rr, func() resolution {
 		id, claimed, component := rr.resolveAlertReferenceLocked(ref)
+		if id == "" && !claimed {
+			id, claimed = rr.pbsDatastoreStorageAlertOwnerLocked(ref)
+		}
 		if id == "" {
 			return resolution{claimed: claimed}
 		}
@@ -390,6 +393,40 @@ func (rr *ResourceRegistry) durableHistoryMatchesLocked(ref string) map[string]s
 		}
 	}
 	return matches
+}
+
+// pbsDatastoreStorageAlertOwnerLocked binds a PBS datastore's storage alert.
+// Every storage alert carries storage.ID, and for a PBS datastore that is the
+// poller's "pbs-<name>-<datastore>", which the registry no longer ingests as a
+// resource (#1591). Such an alert resolved to nothing, and Patrol refused each
+// check it started as "scope could not be resolved". The rule that bridges the
+// ID to the datastore for operator state binds it here.
+//
+// It answers alert references only, after every durable identity failed to
+// claim the reference. History keeps its own resolution: a history event for a
+// removed resource whose source ID happens to read "pbs-a-main" must keep the
+// binding it recorded, not move to a datastore "main" on PBS "a". A hyphenated
+// reference that names two stores is claimed and binds neither. Only "pbs-"
+// references pay the scan, and only over PBS sources.
+func (rr *ResourceRegistry) pbsDatastoreStorageAlertOwnerLocked(ref string) (string, bool) {
+	ref = CanonicalResourceID(ref)
+	if !strings.HasPrefix(strings.ToLower(ref), "pbs-") {
+		return "", false
+	}
+	key := canonicalIdentityFoldKey(ref)
+	owner := ""
+	for sourceID, resourceID := range rr.bySource[SourcePBS] {
+		subject, ok := rr.pbsDatastoreStorageSubjectLocked(sourceID, rr.resources[resourceID])
+		if !ok || canonicalIdentityFoldKey(subject) != key {
+			continue
+		}
+		resourceID = rr.linkHoldTargetLocked(resourceID)
+		if owner != "" && owner != resourceID {
+			return "", true
+		}
+		owner = resourceID
+	}
+	return owner, owner != ""
 }
 
 // resourceHistoryIdentityWriter binds a source reference to the canonical
