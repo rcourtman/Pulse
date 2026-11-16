@@ -1,6 +1,6 @@
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { BillingAdminPanel } from '../BillingAdminPanel';
 import {
   BILLING_ADMIN_READ_ERROR,
@@ -183,11 +183,17 @@ describe('Billing Admin accepted inventory and billing reads', () => {
     expect(screen.getByRole('status')).toHaveTextContent(BILLING_ADMIN_READ_ERROR);
     expect(screen.queryByText(/"loading": true/)).not.toBeInTheDocument();
     const before = mocks.put.mock.calls.length;
+    // The failed row and its expanded details both offer reload for the same organization.
+    const failedRow = screen.getByRole('alert').closest('tr');
+    expect(failedRow).not.toBeNull();
     await fireEvent.click(
-      screen.getByRole('button', { name: 'Reload billing for Organization org-a (org-a)' }),
+      within(failedRow!).getByRole('button', {
+        name: 'Reload billing for Organization org-a (org-a)',
+      }),
     );
     await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
     expect(mocks.get).toHaveBeenCalledTimes(3);
+    expect(mocks.get.mock.calls.map(([orgID]) => orgID)).toEqual(['org-a', 'org-b', 'org-a']);
     expect(mocks.put).toHaveBeenCalledTimes(before);
   });
 
