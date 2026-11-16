@@ -26941,3 +26941,7 @@ func TestRecoveryTokenPersistenceHTTP(t *testing.T) {
 		}
 	})
 }
+
+func TestContract_RecoveryUnreadStartupHTTP(t *testing.T) {
+	testRecoveryUnreadStartupHTTP(t)
+}

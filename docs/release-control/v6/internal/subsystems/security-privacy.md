@@ -290,6 +290,19 @@ and publication, so concurrent consumers cannot authorize the same token.
 An accepted use remains consumed when the store is reloaded after an ordinary
 process restart. This does not promise directory-fsync/power-loss durability.
 
+A failed startup read or decode is not an empty saved inventory. Before any
+later snapshot can replace it, the regular canonical `recovery_tokens.json` is
+moved byte-for-byte into an exclusive owner-private
+`.recovery-tokens-unread-*` directory. Its file mode is set to owner-only; if
+that fails, the private directory still protects it and a warning records the
+backup-readability gap. The retained inventory is not loaded automatically and
+cannot restore unknown/consumed
+recovery authority. A missing canonical path permits fresh issuance; an unread
+symlink (including a dangling one), nonregular path or preservation failure
+stays untouched and returns no new token. A deliberate operation can recover
+after storage repair or operator removal of the unread path. The existing
+store lock serializes preservation and subsequent complete publications.
+
 Known legacy tokens remain in memory when their hashed rewrite fails, but a
 later consumption must publish the complete hashed inventory before granting
 anything. Cleanup/migration failures are logged as failures, not saved success.
@@ -299,6 +312,12 @@ CSRF, tenant/scope checks and raw-secret exclusions remain unchanged.
 rollback, unrelated authority, concurrent use and reload; the registered
 `TestRecoveryTokenPersistenceHTTP` in `contract_test.go` checks existing
 issuance/refusal payloads and recovery, quick-setup and RBAC consuming boundaries.
+`recovery_unread_inventory_test.go` checks byte-exact/private preservation,
+failed reads/decodes, failed preservation and recovery, nonregular-path refusal,
+concurrent issuance/reload and non-resurrection. Registered
+`TestContract_RecoveryUnreadStartupHTTP` covers the existing native recovery
+route's loopback-only issuance, generic refusal, recovery and unchanged
+credentials/IP binding. No rendered frontend fields or journeys change.
 
 
 ### Update checks do not turn delivery uncertainty into success
