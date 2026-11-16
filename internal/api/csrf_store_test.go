@@ -1072,8 +1072,18 @@ func TestCSRFTokenStore_UnreadStartupNonregular(t *testing.T) {
 			fresh := store.GenerateCSRFToken("current-session")
 			store.save()
 			current, err := os.Lstat(path)
-			if err != nil || !os.SameFile(original, current) || !store.ValidateCSRFToken("current-session", fresh) {
+			if err != nil {
+				t.Fatal(err)
+			}
+			// Multiple atomic saves can recycle the old entry's inode. Inode
+			// equality alone does not prove that a link stayed a link.
+			if current.Mode().Type() != original.Mode().Type() || !os.SameFile(original, current) || !store.ValidateCSRFToken("current-session", fresh) {
 				t.Fatal("unread path was changed or current memory-only token rejected")
+			}
+			if kind != "directory" {
+				if got, err := os.Readlink(path); err != nil || got != target {
+					t.Fatal("save replaced or retargeted the unread link")
+				}
 			}
 			if kind == "dangling-symlink" {
 				if _, err := os.Lstat(target); !os.IsNotExist(err) {
