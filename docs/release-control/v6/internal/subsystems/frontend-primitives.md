@@ -9563,9 +9563,17 @@ and `frontend-modern/src/utils/__tests__/updatesPresentation.test.ts`.
 
 The Docker container row dot and its State words share one verdict. When the
 service inside a running container stops answering its attached availability
-check, both read `Not responding` in the warning tone and the hover names the
+check, both read `No answer` in the warning tone and the hover names the
 failing checks. The row stays one line high at desktop and phone widths. The
 drawer's run state stays plain, because the drawer lists the checks itself.
+
+The words were `Not responding` until 16 November 2026. At 12px that is 90px
+wide, against 70px for `Exited (139)`, the longest state the column was sized
+for, so v6.9.0-beta.2 cut it to `Not respo…` in a 500px window and by 4px at
+the narrow end of the compact layout. `No answer` is 61px and fits every
+layout that fits the other states, measured from 340px to 1920px. A state
+label longer than `Exited (139)` needs the column widths retuned first;
+`dockerContainerStatePresentation.test.ts` holds this label to that length.
 
 ### Docker port check notice (15 November 2026)
 

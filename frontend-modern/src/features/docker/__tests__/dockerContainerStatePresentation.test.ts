@@ -7,7 +7,10 @@ import {
   getDockerContainerStatePresentation,
   getDockerContainerUptimeSeconds,
 } from '../dockerContainerStatePresentation';
-import { mapDockerContainerStatus } from '../dockerPageModel';
+import {
+  DOCKER_CONTAINER_NOT_RESPONDING_LABEL,
+  mapDockerContainerStatus,
+} from '../dockerPageModel';
 
 const container = (docker: NonNullable<Resource['docker']>, status = 'online'): Resource =>
   ({
@@ -100,14 +103,21 @@ describe('a running container whose availability check is failing', () => {
     checks: NonNullable<Resource['availabilityChecks']>,
   ): Resource => ({ ...container(docker), availabilityChecks: checks });
 
+  // The State column is sized for words up to "Exited (139)"; a longer label
+  // is cut short at phone-landscape and narrow laptop widths.
+  it('keeps the failing-check label within the State column budget', () => {
+    const label = DOCKER_CONTAINER_NOT_RESPONDING_LABEL;
+    expect(label.length).toBeLessThanOrEqual('Exited (139)'.length);
+  });
+
   it('says the service is not responding and names the check on hover', () => {
     const resource = withChecks({ containerState: 'running' }, [failingCheck]);
     expect(mapDockerContainerStatus(resource)).toEqual({
       variant: 'warning',
-      label: 'Not responding',
+      label: 'No answer',
     });
     expect(getDockerContainerStatePresentation(resource)).toEqual({
-      label: 'Not responding',
+      label: 'No answer',
       title: 'Running, but its availability check is failing: web:8081',
       tone: 'warning',
     });

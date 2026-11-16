@@ -137,7 +137,10 @@ export const dockerContainerRestartAttentionLabel = (resource: Resource): string
 export const dockerContainerRestartCountTitle = (restarts: number): string =>
   `Docker has restarted it ${restarts} times in total, not necessarily recently`;
 
-export const DOCKER_CONTAINER_NOT_RESPONDING_LABEL = 'Not responding';
+// Short on purpose: the State column is sized for words up to about
+// "Exited (139)". "Not responding" was cut to "Not respo…" in a 500px window
+// and at the narrow end of the laptop layout; the hover carries the detail.
+export const DOCKER_CONTAINER_NOT_RESPONDING_LABEL = 'No answer';
 
 // A running container whose attached availability check is failing. A stopped
 // container is left to its own state: nobody expects it to answer.
