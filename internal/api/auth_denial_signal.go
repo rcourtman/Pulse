@@ -26,8 +26,8 @@ const (
 	authDenialWindow        = time.Minute
 	authDenialWarnThreshold = 20
 	// Cap on tracked callers. A flood of spoofed forwarded-for values must not
-	// grow this map without bound; once full, untracked callers still log at
-	// debug level, they just do not contribute to the escalation signal.
+	// grow this map without bound. At capacity, expired counters are removed,
+	// or the oldest live half is evicted to make room for new callers.
 	authDenialMaxTracked = 4096
 )
 
@@ -70,7 +70,13 @@ func recordAuthDenial(key string) (crossed bool, count int) {
 	entry, ok := authDenials[key]
 	if !ok || now.Sub(entry.windowStart) >= authDenialWindow {
 		if !ok {
-			pruneAuthDenialsLocked(now)
+			// Reused keys reset their own expired window above. Scan the
+			// whole map only when a new key needs room, not for every new
+			// caller while the set is still growing. Stale unused counters
+			// remain bounded by the same cap and cannot produce a warning.
+			if len(authDenials) >= authDenialMaxTracked {
+				pruneAuthDenialsLocked(now)
+			}
 			entry = &authDenialCounter{}
 			authDenials[key] = entry
 		}
