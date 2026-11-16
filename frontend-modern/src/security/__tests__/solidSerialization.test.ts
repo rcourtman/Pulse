@@ -17,6 +17,7 @@ const lock = JSON.parse(
 describe('actual Solid resource serialization consumer', () => {
   it.each([
     'exact-installed-graph',
+    'lock-edge-oracle',
     'synchronous-resource',
     'async-suspense',
     'late-stream',

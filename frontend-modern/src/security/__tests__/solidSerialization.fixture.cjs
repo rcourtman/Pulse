@@ -11,14 +11,41 @@ const solid = require('solid-js');
 const server = require('solid-js/web');
 const fromServer = createRequire(require.resolve('solid-js/web'));
 
-const versions = Object.fromEntries(
+const installedManifests = Object.fromEntries(
   ['solid-js', 'seroval', 'seroval-plugins'].map((name) => [
     name,
     JSON.parse(
       readFileSync(resolve(__dirname, '../../../node_modules', name, 'package.json'), 'utf8'),
-    ).version,
+    ),
   ]),
 );
+const versions = Object.fromEntries(
+  Object.entries(installedManifests).map(([name, manifest]) => [name, manifest.version]),
+);
+
+function readLock() {
+  return JSON.parse(readFileSync(resolve(__dirname, '../../../package-lock.json'), 'utf8'));
+}
+
+function assertInstalledGraph(lock) {
+  for (const [name, manifest] of Object.entries(installedManifests)) {
+    const entry = lock.packages[`node_modules/${name}`];
+    assert.ok(entry, `${name} must have a locked entry`);
+    assert.equal(manifest.name, name, `${name} installed package identity`);
+    assert.equal(manifest.version, entry.version, `${name} installed version`);
+    // Overrides can make npm install a graph that violates a declared range.
+    // The pre-install checker needs the real published requirements, not just
+    // a lock with the right versions and stale or edited dependency metadata.
+    for (const field of [
+      'dependencies',
+      'optionalDependencies',
+      'peerDependencies',
+      'peerDependenciesMeta',
+    ]) {
+      assert.deepEqual(entry[field], manifest[field], `${name} locked ${field}`);
+    }
+  }
+}
 
 function fixture() {
   const buffer = new ArrayBuffer(12);
@@ -122,10 +149,43 @@ function expectFixture(restored) {
 
 const cases = {
   async 'exact-installed-graph'() {
-    const lock = JSON.parse(readFileSync(resolve(__dirname, '../../../package-lock.json'), 'utf8'));
-    for (const [name, version] of Object.entries(versions)) {
-      assert.equal(version, lock.packages[`node_modules/${name}`].version);
+    assertInstalledGraph(readLock());
+  },
+  async 'lock-edge-oracle'() {
+    const original = readLock();
+    assertInstalledGraph(original);
+    const mutations = [
+      [
+        'solid-js',
+        'dependencies',
+        { ...installedManifests['solid-js'].dependencies, seroval: '~0.0.0' },
+      ],
+      [
+        'solid-js',
+        'dependencies',
+        { ...installedManifests['solid-js'].dependencies, 'seroval-plugins': '~0.0.0' },
+      ],
+      ['solid-js', 'dependencies', undefined],
+      ['seroval-plugins', 'peerDependencies', { seroval: '^99.0' }],
+      ['seroval-plugins', 'peerDependencies', undefined],
+      ['seroval-plugins', 'peerDependenciesMeta', { seroval: { optional: true } }],
+      ['seroval', 'dependencies', { 'seroval-plugins': '*' }],
+      ['seroval', 'optionalDependencies', { 'seroval-plugins': '*' }],
+    ];
+    for (const [name, field, value] of mutations) {
+      const changed = structuredClone(original);
+      changed.packages[`node_modules/${name}`][field] = value;
+      // These controls keep every installed version unchanged. Version-only
+      // checks cannot distinguish them from the valid graph above.
+      for (const [dependency, version] of Object.entries(versions)) {
+        assert.equal(changed.packages[`node_modules/${dependency}`].version, version);
+      }
+      assert.throws(() => assertInstalledGraph(changed), {
+        code: 'ERR_ASSERTION',
+        message: new RegExp(`^${name} locked ${field}\\n`),
+      });
     }
+    assertInstalledGraph(original);
   },
   async 'synchronous-resource'() {
     const errors = [];
