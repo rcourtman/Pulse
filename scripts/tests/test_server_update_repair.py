@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 import stat
 import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -169,50 +170,67 @@ class ServerUpdateRepair(unittest.TestCase):
                         env=env_file.read_text() if env_file.exists() else "",
                         unit=(f / "units/pulse.service").read_text() if (f / "units/pulse.service").exists() else "")
 
-    def test_real_unit_publication_failures_stop_both_main_update_paths(self):
-        for pinned in (True, False):
-            for automatic in (True, False):
-                for fault in ("allocation", "write-1", "write-2", "mode", "rename"):
-                    with self.subTest(pinned=pinned, automatic=automatic, fault=fault):
-                        e = self.exercise(pinned=pinned, automatic=automatic, unit_fault=fault)
-                        r = e["result"]
-                        self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
-                        self.assertIn("INJECTED_UNIT_", r.stderr)
-                        self.assertIn("installation is incomplete", r.stdout + r.stderr)
-                        self.assertNotIn("start pulse", e["events"])
-                        self.assertNotIn("marker", e["events"])
-                        self.assertNotIn("complete", e["events"])
-                        self.assertNotIn(["daemon-reload"], e["calls"])
-                        self.assertEqual(e["unit"], "")
-                        self.assertIn("PULSE_MOCK_MODE=false", e["env"])
+    def check_publication_failure(self, *, pinned, automatic, fault):
+        e = self.exercise(pinned=pinned, automatic=automatic, unit_fault=fault)
+        r = e["result"]
+        self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+        self.assertIn("INJECTED_UNIT_", r.stderr)
+        self.assertIn("installation is incomplete", r.stdout + r.stderr)
+        self.assertNotIn("start pulse", e["events"])
+        self.assertNotIn("marker", e["events"])
+        self.assertNotIn("complete", e["events"])
+        self.assertNotIn(["daemon-reload"], e["calls"])
+        self.assertEqual(e["unit"], "")
+        self.assertIn("PULSE_MOCK_MODE=false", e["env"])
 
-    def test_both_update_paths_repair_config_and_unit_before_activation(self):
-        for pinned in (True, False):
-            for automatic in (True, False):
-                with self.subTest(pinned=pinned, automatic=automatic):
-                    e = self.exercise(pinned=pinned, automatic=automatic)
-                    self.assertEqual(e["result"].returncode, 0, e["result"].stdout + e["result"].stderr)
-                    self.assertEqual(e["calls"].count(["show", "pulse", "--property=ActiveState", "--value"]), 1)
-                    self.assertEqual(e["config_mode"], 0o700)
-                    self.assertEqual(e["env_mode"], 0o600)
-                    self.assertIn("PULSE_MOCK_MODE=false", e["env"])
-                    self.assertIn("EnvironmentFile=", e["unit"])
-                    self.assertIn("/install/bin/pulse", e["unit"])
-                    self.assertIn(["daemon-reload"], e["calls"])
-                    self.assertEqual(e["events"], ["preflight", "backup", "user", "download", "helper"] +
-                                     (["timer"] if automatic else []) + ["start pulse", "marker", "complete"])
+    def check_repair(self, *, pinned, automatic):
+        e = self.exercise(pinned=pinned, automatic=automatic)
+        self.assertEqual(e["result"].returncode, 0, e["result"].stdout + e["result"].stderr)
+        self.assertEqual(e["calls"].count(["show", "pulse", "--property=ActiveState", "--value"]), 1)
+        self.assertEqual(e["config_mode"], 0o700)
+        self.assertEqual(e["env_mode"], 0o600)
+        self.assertIn("PULSE_MOCK_MODE=false", e["env"])
+        self.assertIn("EnvironmentFile=", e["unit"])
+        self.assertIn("/install/bin/pulse", e["unit"])
+        self.assertIn(["daemon-reload"], e["calls"])
+        self.assertEqual(e["events"], ["preflight", "backup", "user", "download", "helper"] +
+                         (["timer"] if automatic else []) + ["start pulse", "marker", "complete"])
 
-    def test_failed_unit_repair_stops_timer_start_and_false_completion(self):
-        for pinned in (True, False):
-            for automatic in (True, False):
-                with self.subTest(pinned=pinned, automatic=automatic):
-                    e = self.exercise(pinned=pinned, automatic=automatic, unit_error=True)
-                    self.assertEqual(e["result"].returncode, 1, e["result"].stdout + e["result"].stderr)
-                    self.assertEqual(e["calls"].count(["show", "pulse", "--property=ActiveState", "--value"]), 1)
-                    self.assertEqual(e["events"], ["preflight", "backup", "user", "download", "helper", "refused-unit"])
-                    self.assertEqual(e["unit"], "")
-                    self.assertNotIn(["daemon-reload"], e["calls"])
+    def check_refused_unit(self, *, pinned, automatic):
+        e = self.exercise(pinned=pinned, automatic=automatic, unit_error=True)
+        self.assertEqual(e["result"].returncode, 1, e["result"].stdout + e["result"].stderr)
+        self.assertEqual(e["calls"].count(["show", "pulse", "--property=ActiveState", "--value"]), 1)
+        self.assertEqual(e["events"], ["preflight", "backup", "user", "download", "helper", "refused-unit"])
+        self.assertEqual(e["unit"], "")
+        self.assertNotIn(["daemon-reload"], e["calls"])
+
+
+def add_case(name, check, **parameters):
+    def run(self):
+        check(self, **parameters)
+    run.__name__ = name
+    setattr(ServerUpdateRepair, name, run)
+
+
+# Real unit-publication controls expanded the original four-path repair matrix
+# to 28 fixtures. Expose each as a normal unittest identity so the native Go
+# caller can bound it independently instead of killing a growing aggregate.
+# Direct script/smoke execution still discovers and runs the complete matrix.
+for pinned in (True, False):
+    for automatic in (True, False):
+        suffix = ("pinned" if pinned else "latest") + "__" + ("automatic" if automatic else "manual")
+        for check in (ServerUpdateRepair.check_repair, ServerUpdateRepair.check_refused_unit):
+            add_case("test_" + check.__name__.removeprefix("check_") + "__" + suffix,
+                     check, pinned=pinned, automatic=automatic)
+        for fault in ("allocation", "write-1", "write-2", "mode", "rename"):
+            add_case("test_publication_failure__" + suffix + "__" + fault.replace("-", "_"),
+                     ServerUpdateRepair.check_publication_failure,
+                     pinned=pinned, automatic=automatic, fault=fault)
 
 
 if __name__ == "__main__":
-    unittest.main()
+    if sys.argv[1:] == ["--list-cases"]:
+        print(json.dumps(["ServerUpdateRepair." + name for name in
+                          unittest.defaultTestLoader.getTestCaseNames(ServerUpdateRepair)]))
+    else:
+        unittest.main()

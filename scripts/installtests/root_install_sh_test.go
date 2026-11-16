@@ -2,6 +2,7 @@ package installtests
 
 import (
 	"context"
+	"encoding/json"
 	"encoding/pem"
 	"io"
 	"net/http"
@@ -2556,13 +2557,57 @@ esac
 // must recreate the config dir and the unit, and start_pulse must fail
 // loudly when the unit does not exist at all.
 func TestRootInstallScriptUpdateFlowsRepairHalfRemovedInstall(t *testing.T) {
+	// Each fixture retains its ten-second shell deadline and the original
+	// thirty-second Python-process deadline. Inventory growth must not consume
+	// another fixture's budget, especially on native macOS Intel workers.
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_server_update_repair.py"), "-v")
-	cmd.Env = append(os.Environ(), "PULSE_INSTALLER_UNDER_TEST="+repoFile("install.sh"))
+	script := repoFile("scripts", "tests", "test_server_update_repair.py")
+	cmd := exec.CommandContext(ctx, "python3", script, "--list-cases")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		t.Fatalf("half-removed installer update/repair controls: %v\n%s", err, out)
+		t.Fatalf("discover half-removed installer update/repair controls: %v\n%s", err, out)
+	}
+	var checks []string
+	if err := json.Unmarshal(out, &checks); err != nil {
+		t.Fatalf("invalid repair fixture inventory: %v\n%s", err, out)
+	}
+	// Bind coverage, not only a passing exit from a possibly empty selection.
+	want := make(map[string]bool)
+	for _, version := range []string{"pinned", "latest"} {
+		for _, updates := range []string{"automatic", "manual"} {
+			suffix := version + "__" + updates
+			for _, kind := range []string{"repair", "refused_unit"} {
+				want["ServerUpdateRepair.test_"+kind+"__"+suffix] = true
+			}
+			for _, fault := range []string{"allocation", "write_1", "write_2", "mode", "rename"} {
+				want["ServerUpdateRepair.test_publication_failure__"+suffix+"__"+fault] = true
+			}
+		}
+	}
+	if len(checks) != len(want) {
+		t.Fatalf("repair fixture inventory has %d controls, want %d: %q", len(checks), len(want), checks)
+	}
+	for _, check := range checks {
+		if !want[check] {
+			t.Fatalf("unknown or duplicate repair fixture %q", check)
+		}
+		delete(want, check)
+	}
+	for _, check := range checks {
+		t.Run(strings.TrimPrefix(check, "ServerUpdateRepair.test_"), func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			cmd := exec.CommandContext(ctx, "python3", script, "-v", check)
+			cmd.Env = append(os.Environ(), "PULSE_INSTALLER_UNDER_TEST="+repoFile("install.sh"))
+			out, err := cmd.CombinedOutput()
+			if err != nil {
+				t.Fatalf("half-removed installer update/repair control %s: %v\n%s", check, err, out)
+			}
+			if !strings.Contains(string(out), "Ran 1 test") || !strings.HasSuffix(strings.TrimSpace(string(out)), "OK") {
+				t.Fatalf("repair control %s did not finish successfully:\n%s", check, out)
+			}
+		})
 	}
 }
 
