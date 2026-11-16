@@ -277,35 +277,36 @@ func TestAutoUpdateLogSinkFailures(t *testing.T) {
 
 // A real owned process retains its old executable after its disk path changes.
 // This tests Linux process identity, not a native systemd/application journey.
+// Each private transaction keeps the existing 20-second bound; 48 independent
+// transactions must not spend one cumulative watchdog. Discovery admits future
+// controls too, while the required inventory prevents losing an existing case.
 func TestAutoUpdateRunningExecutableIdentity(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("Linux /proc executable identity; portable transaction controls remain required")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_auto_update_service_state.py"), "-v", "RunningExecutable")
-	cmd.Env = append(os.Environ(), "PULSE_AUTO_UPDATER_UNDER_TEST="+repoFile("scripts", "pulse-auto-update.sh"))
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("running executable identity controls: %v\n%s", err, out)
+	required := []string{"test_identity_read_timeout_is_bounded_and_owned_process_is_reaped"}
+	for _, binary := range []string{"same", "same-copy", "symlink", "legacy", "different", "nonexecutable", "missing", "broken-primary"} {
+		required = append(required, "test_actual_process_"+strings.ReplaceAll(binary, "-", "_"))
 	}
-	for _, name := range []string{
-		"test_actual_process_not_replaced_disk_path_is_checked",
-		"test_complete_stable_main_pid_tuple_is_required",
-		"test_final_manager_read_cannot_hide_installed_executable_drift",
-		"test_manager_diagnostics_refuse_either_running_identity_read",
-		"test_identity_read_timeout_is_bounded_and_owned_process_is_reaped",
-	} {
-		passed := false
-		for _, line := range strings.Split(string(out), "\n") {
-			if strings.HasPrefix(line, name+" (") && strings.HasSuffix(line, " ... ok") {
-				passed = true
+	for _, mode := range []string{"normal", "masked", "error", "missing", "duplicate", "extra", "inactive", "not-found", "pid-zero", "pid-negative", "pid-path", "pid-missing-process", "pid-moved", "state-moved"} {
+		required = append(required, "test_main_pid_tuple_"+strings.ReplaceAll(mode, "-", "_"))
+	}
+	for _, binary := range []string{"same", "legacy", "symlink"} {
+		for _, fault := range []string{"different", "nonexecutable", "missing", "wrong-symlink", "directory", "same-copy"} {
+			// Never chmod the shared interpreter behind a symlink.
+			if binary == "symlink" && fault == "nonexecutable" {
+				continue
 			}
-		}
-		if !passed {
-			t.Fatalf("required running executable control %s did not pass:\n%s", name, out)
+			required = append(required, "test_final_read_drift_"+binary+"_"+strings.ReplaceAll(fault, "-", "_"))
 		}
 	}
+	for _, fault := range []string{"stderr-warning", "stderr-blank", "stdout-blank", "stdout-unterminated"} {
+		for _, reading := range []int{1, 2} {
+			required = append(required, fmt.Sprintf("test_manager_diagnostic_%s_%d", strings.ReplaceAll(fault, "-", "_"), reading))
+		}
+	}
+	runParallelPythonFixtureControls(t, repoFile("scripts", "tests", "test_auto_update_service_state.py"), "RunningExecutable", required,
+		20*time.Second, "PULSE_AUTO_UPDATER_UNDER_TEST="+repoFile("scripts", "pulse-auto-update.sh"))
 }
 
 func extractAutoUpdateServiceFunctions(t *testing.T) string {
