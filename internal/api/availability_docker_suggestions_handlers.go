@@ -7,7 +7,6 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -75,8 +74,23 @@ func (h *AvailabilityHandlers) HandleDockerPortSuggestions(w http.ResponseWriter
 	writeJSON(w, http.StatusOK, dockerPortSuggestionsResponse{Suggestions: candidates})
 }
 
-// HandleApplyDockerPortSuggestions adds a check for each published port that
-// answers from this server. An optional hostId limits it to one Docker host.
+// dockerPortCheckSelection binds one reviewed offer to its exact container and
+// endpoint. The saved DockerPort source deliberately has a different lifetime:
+// its name-based key reattaches an existing check after container replacement.
+// It must not be used as consent to probe a newly published endpoint.
+type dockerPortCheckSelection struct {
+	HostID        string `json:"hostId"`
+	ContainerID   string `json:"containerId"`
+	ContainerName string `json:"containerName"`
+	PrivatePort   int    `json:"privatePort"`
+	PublicPort    int    `json:"publicPort"`
+	Address       string `json:"address"`
+}
+
+const dockerPortsChangedMessage = "Published container ports changed. Refresh the page to review them before adding checks. No checks were added."
+
+// HandleApplyDockerPortSuggestions adds a check only for the exact ports the
+// operator reviewed. An optional hostId further limits it to one Docker host.
 func (h *AvailabilityHandlers) HandleApplyDockerPortSuggestions(w http.ResponseWriter, r *http.Request) {
 	if mock.IsMockEnabled() {
 		writeErrorResponse(w, http.StatusForbidden, "mock_mode_enabled", "Cannot modify connections in mock mode", nil)
@@ -84,9 +98,8 @@ func (h *AvailabilityHandlers) HandleApplyDockerPortSuggestions(w http.ResponseW
 	}
 	var request struct {
 		HostID string `json:"hostId"`
-		// Ports limits the request to the ports the operator was shown. Empty
-		// means every suggested port.
-		Ports []config.AvailabilityDockerPortSource `json:"ports"`
+		// Ports is required: no request may silently select the latest inventory.
+		Ports []dockerPortCheckSelection `json:"ports"`
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 256*1024)
 	defer r.Body.Close()
@@ -95,13 +108,22 @@ func (h *AvailabilityHandlers) HandleApplyDockerPortSuggestions(w http.ResponseW
 		return
 	}
 	hostID := strings.TrimSpace(request.HostID)
-	if len(request.Ports) > maxDockerPortSelection {
-		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", fmt.Sprintf("At most %d ports can be selected in one request", maxDockerPortSelection), nil)
+	if len(request.Ports) == 0 || len(request.Ports) > maxDockerPortSelection {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", fmt.Sprintf("Select between 1 and %d listed container ports, including their container IDs, addresses and published ports. Refresh the page to review them first.", maxDockerPortSelection), nil)
 		return
 	}
-	selected := make(map[string]struct{}, len(request.Ports))
+	selected := make(map[dockerPortCheckSelection]struct{}, len(request.Ports))
 	for _, port := range request.Ports {
-		selected[port.Key()] = struct{}{}
+		if strings.TrimSpace(port.HostID) == "" || strings.TrimSpace(port.ContainerID) == "" ||
+			strings.TrimSpace(port.ContainerName) == "" || port.PrivatePort < 1 || port.PrivatePort > 65535 ||
+			port.PublicPort < 1 || port.PublicPort > 65535 ||
+			port.HostID != strings.TrimSpace(port.HostID) || port.ContainerID != strings.TrimSpace(port.ContainerID) ||
+			port.ContainerName != strings.TrimPrefix(strings.TrimSpace(port.ContainerName), "/") ||
+			port.Address != strings.TrimSpace(port.Address) || (hostID != "" && port.HostID != hostID) {
+			writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "Select the listed container IDs, addresses and published ports. Refresh the page to review them first.", nil)
+			return
+		}
+		selected[port] = struct{}{}
 	}
 
 	persistence := h.persistenceForRequest(w, r.Context())
@@ -115,6 +137,10 @@ func (h *AvailabilityHandlers) HandleApplyDockerPortSuggestions(w http.ResponseW
 	}
 
 	hosts := h.dockerHostsForRequest(r.Context())
+	if !dockerPortSelectionsCurrent(hosts, selected, hostID) {
+		writeErrorResponse(w, http.StatusConflict, "docker_ports_changed", dockerPortsChangedMessage, nil)
+		return
+	}
 	response := dockerPortApplyResponse{
 		Created:    []availabilityTargetResponse{},
 		Unanswered: []dockerPortUnansweredResponse{},
@@ -125,10 +151,8 @@ func (h *AvailabilityHandlers) HandleApplyDockerPortSuggestions(w http.ResponseW
 		if hostID != "" && candidate.HostID != hostID {
 			continue
 		}
-		if len(selected) > 0 {
-			if _, ok := selected[candidate.Source().Key()]; !ok {
-				continue
-			}
+		if _, ok := selected[dockerPortCandidateKey(candidate)]; !ok {
+			continue
 		}
 		switch {
 		case candidate.SkipReason != "":
@@ -174,7 +198,14 @@ func (h *AvailabilityHandlers) HandleApplyDockerPortSuggestions(w http.ResponseW
 		writeErrorResponse(w, http.StatusInternalServerError, "availability_load_failed", "Failed to load availability targets", map[string]string{"error": err.Error()})
 		return
 	}
-	stillUncovered := make(map[string]struct{})
+	// Inventory can also change while probing. Never save a check against a
+	// replacement or a no-longer-published endpoint, even when it answered.
+	hosts = h.dockerHostsForRequest(r.Context())
+	if !dockerPortSelectionsCurrent(hosts, selected, hostID) {
+		writeErrorResponse(w, http.StatusConflict, "docker_ports_changed", dockerPortsChangedMessage, nil)
+		return
+	}
+	stillUncovered := make(map[dockerPortCheckSelection]struct{})
 	for _, candidate := range monitoring.DockerPortCheckCandidates(hosts, targets) {
 		stillUncovered[dockerPortCandidateKey(candidate)] = struct{}{}
 	}
@@ -297,8 +328,28 @@ func (h *AvailabilityHandlers) dockerContainerResourceIDs(ctx context.Context) m
 	return ids
 }
 
-func dockerPortCandidateKey(candidate monitoring.DockerPortCheckCandidate) string {
-	return candidate.Source().Key() + "\x00" + strconv.Itoa(candidate.PublicPort)
+func dockerPortCandidateKey(candidate monitoring.DockerPortCheckCandidate) dockerPortCheckSelection {
+	return dockerPortCheckSelection{
+		HostID: candidate.HostID, ContainerID: candidate.ContainerID, ContainerName: candidate.ContainerName,
+		PrivatePort: candidate.PrivatePort, PublicPort: candidate.PublicPort, Address: candidate.Address,
+	}
+}
+
+// Validate against inventory, not just uncovered suggestions: an exact offer
+// another request has already covered is an idempotent no-op, not a conflict.
+func dockerPortSelectionsCurrent(hosts []models.DockerHost, selected map[dockerPortCheckSelection]struct{}, hostID string) bool {
+	current := make(map[dockerPortCheckSelection]struct{})
+	for _, candidate := range monitoring.DockerPortCheckCandidates(hosts, nil) {
+		if hostID == "" || candidate.HostID == hostID {
+			current[dockerPortCandidateKey(candidate)] = struct{}{}
+		}
+	}
+	for selection := range selected {
+		if _, ok := current[selection]; !ok {
+			return false
+		}
+	}
+	return true
 }
 
 func dockerContainerResourceKey(hostID, containerID string) string {

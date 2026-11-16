@@ -220,7 +220,7 @@ export class AvailabilityTargetsAPI {
 
   /**
    * Adds a check for each of the given ports that answers from this server.
-   * Send the ports the operator was shown, so nothing else is added.
+   * Bind the shown endpoint and container, so a republish requires a new review.
    */
   static async addDockerPortChecks(
     ports: DockerPortCheckSuggestion[],
@@ -230,8 +230,11 @@ export class AvailabilityTargetsAPI {
       body: JSON.stringify({
         ports: ports.map((port) => ({
           hostId: port.hostId,
+          containerId: port.containerId,
           containerName: port.containerName,
           privatePort: port.privatePort,
+          publicPort: port.publicPort,
+          address: port.address,
         })),
       }),
     });

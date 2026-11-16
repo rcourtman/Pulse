@@ -149,12 +149,12 @@ describe('AvailabilityTargetsAPI', () => {
     const result = { created: [], unanswered: [], skipped: [], remaining: 0 };
     mockedApiFetchJSON.mockResolvedValueOnce(result);
     await expect(AvailabilityTargetsAPI.addDockerPortChecks([suggestion])).resolves.toEqual(result);
-    // Only the identity of each port the operator was shown is sent.
+    // Include the exact displayed endpoint and container, not just the durable name.
     expect(mockedApiFetchJSON).toHaveBeenLastCalledWith(
       '/api/availability-targets/docker-suggestions',
       {
         method: 'POST',
-        body: '{"ports":[{"hostId":"host-1","containerName":"web","privatePort":80}]}',
+        body: '{"ports":[{"hostId":"host-1","containerId":"c1","containerName":"web","privatePort":80,"publicPort":8081,"address":"192.0.2.20"}]}',
       },
     );
   });

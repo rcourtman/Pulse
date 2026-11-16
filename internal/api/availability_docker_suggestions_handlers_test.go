@@ -84,6 +84,38 @@ func dockerPortSuggestionHandlers(t *testing.T, script *dockerPortProbeScript) (
 	return handler, persistence
 }
 
+// Submit the actual listing, as the browser does, instead of reconstructing a
+// name-based identity that could silently select a different endpoint.
+func dockerPortSelectionBody(t *testing.T, handler *AvailabilityHandlers, names ...string) string {
+	t.Helper()
+	rec := httptest.NewRecorder()
+	handler.HandleDockerPortSuggestions(rec, httptest.NewRequest(http.MethodGet, "/api/availability-targets/docker-suggestions", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("list status = %d: %s", rec.Code, rec.Body.String())
+	}
+	var payload dockerPortSuggestionsResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatal(err)
+	}
+	var selected []monitoring.DockerPortCheckCandidate
+	for _, candidate := range payload.Suggestions {
+		if len(names) == 0 {
+			selected = append(selected, candidate)
+			continue
+		}
+		for _, name := range names {
+			if candidate.ContainerName == name {
+				selected = append(selected, candidate)
+			}
+		}
+	}
+	body, err := json.Marshal(map[string]any{"ports": selected})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(body)
+}
+
 func TestDockerPortSuggestionsListWhatHasNoCheck(t *testing.T) {
 	handler, _ := dockerPortSuggestionHandlers(t, &dockerPortProbeScript{})
 
@@ -128,7 +160,7 @@ func TestApplyDockerPortSuggestionsAddsOnlyWhatAnswers(t *testing.T) {
 	handler, persistence := dockerPortSuggestionHandlers(t, script)
 
 	rec := httptest.NewRecorder()
-	handler.HandleApplyDockerPortSuggestions(rec, httptest.NewRequest(http.MethodPost, "/api/availability-targets/docker-suggestions", strings.NewReader(`{"hostId":"host-1"}`)))
+	handler.HandleApplyDockerPortSuggestions(rec, httptest.NewRequest(http.MethodPost, "/api/availability-targets/docker-suggestions", strings.NewReader(dockerPortSelectionBody(t, handler))))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
 	}
@@ -203,7 +235,7 @@ func TestApplyDockerPortSuggestionsAddsOnlyWhatAnswers(t *testing.T) {
 	// A second request offers only what is still unchecked and adds nothing
 	// twice.
 	rec = httptest.NewRecorder()
-	handler.HandleApplyDockerPortSuggestions(rec, httptest.NewRequest(http.MethodPost, "/api/availability-targets/docker-suggestions", nil))
+	handler.HandleApplyDockerPortSuggestions(rec, httptest.NewRequest(http.MethodPost, "/api/availability-targets/docker-suggestions", strings.NewReader(dockerPortSelectionBody(t, handler))))
 	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
 		t.Fatalf("decode second apply: %v", err)
 	}
@@ -216,13 +248,13 @@ func TestApplyDockerPortSuggestionsAddsOnlyWhatAnswers(t *testing.T) {
 	}
 }
 
-func TestApplyDockerPortSuggestionsLimitsToTheRequestedHost(t *testing.T) {
+func TestApplyDockerPortSuggestionsRejectsAConflictingRequestedHost(t *testing.T) {
 	script := &dockerPortProbeScript{answers: map[string]error{"tcp 192.168.1.20:8081": nil, "http 192.168.1.20:8081": nil}}
 	handler, persistence := dockerPortSuggestionHandlers(t, script)
 
 	rec := httptest.NewRecorder()
-	handler.HandleApplyDockerPortSuggestions(rec, httptest.NewRequest(http.MethodPost, "/api/availability-targets/docker-suggestions", strings.NewReader(`{"hostId":"another-host"}`)))
-	if rec.Code != http.StatusOK {
+	handler.HandleApplyDockerPortSuggestions(rec, httptest.NewRequest(http.MethodPost, "/api/availability-targets/docker-suggestions", strings.NewReader(strings.Replace(dockerPortSelectionBody(t, handler), `{"ports":`, `{"hostId":"another-host","ports":`, 1))))
+	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
 	}
 	if saved, _ := persistence.LoadAvailabilityTargets(); len(saved) != 0 {
@@ -242,7 +274,7 @@ func TestApplyDockerPortSuggestionsAddsOnlyTheSelectedPorts(t *testing.T) {
 	}}
 	handler, persistence := dockerPortSuggestionHandlers(t, script)
 
-	body := `{"ports":[{"hostId":"host-1","containerName":"web","privatePort":80}]}`
+	body := dockerPortSelectionBody(t, handler, "web")
 	rec := httptest.NewRecorder()
 	handler.HandleApplyDockerPortSuggestions(rec, httptest.NewRequest(http.MethodPost, "/api/availability-targets/docker-suggestions", strings.NewReader(body)))
 	if rec.Code != http.StatusOK {
@@ -281,7 +313,7 @@ func TestApplyDockerPortSuggestionsKeepsChangesMadeWhileProbing(t *testing.T) {
 	}
 
 	rec := httptest.NewRecorder()
-	handler.HandleApplyDockerPortSuggestions(rec, httptest.NewRequest(http.MethodPost, "/api/availability-targets/docker-suggestions", nil))
+	handler.HandleApplyDockerPortSuggestions(rec, httptest.NewRequest(http.MethodPost, "/api/availability-targets/docker-suggestions", strings.NewReader(dockerPortSelectionBody(t, handler))))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
 	}
@@ -320,7 +352,7 @@ func TestApplyDockerPortSuggestionsBracketsAnIPv6Address(t *testing.T) {
 	}
 
 	rec := httptest.NewRecorder()
-	handler.HandleApplyDockerPortSuggestions(rec, httptest.NewRequest(http.MethodPost, "/api/availability-targets/docker-suggestions", nil))
+	handler.HandleApplyDockerPortSuggestions(rec, httptest.NewRequest(http.MethodPost, "/api/availability-targets/docker-suggestions", strings.NewReader(dockerPortSelectionBody(t, handler))))
 	saved, _ := persistence.LoadAvailabilityTargets()
 	if len(saved) != 1 || saved[0].Protocol != config.AvailabilityProbeHTTP {
 		t.Fatalf("saved = %+v, body=%s", saved, rec.Body.String())
@@ -334,5 +366,249 @@ func TestApplyDockerPortSuggestionsBracketsAnIPv6Address(t *testing.T) {
 	handler.HandleDockerPortSuggestions(rec, httptest.NewRequest(http.MethodGet, "/api/availability-targets/docker-suggestions", nil))
 	if !strings.Contains(rec.Body.String(), `"suggestions":[]`) {
 		t.Fatalf("an IPv6 port with a check was offered again: %s", rec.Body.String())
+	}
+}
+
+func TestApplyDockerPortSuggestionsRejectsChangedOffersBeforeAnyProbe(t *testing.T) {
+	for name, change := range map[string]func(*models.DockerHost){
+		"host address":                           func(h *models.DockerHost) { h.NetworkInterfaces[0].Addresses = []string{"192.168.1.21/24"} },
+		"public port":                            func(h *models.DockerHost) { h.Containers[0].Ports[0].PublicPort = 9081 },
+		"container replacement at same endpoint": func(h *models.DockerHost) { h.Containers[0].ID = "replacement" },
+		"container name":                         func(h *models.DockerHost) { h.Containers[0].Name = "renamed" },
+		"private port":                           func(h *models.DockerHost) { h.Containers[0].Ports[0].PrivatePort = 81 },
+		"bind address":                           func(h *models.DockerHost) { h.Containers[0].Ports[0].IP = "192.168.1.21" },
+		"loopback only":                          func(h *models.DockerHost) { h.Containers[0].Ports[0].IP = "127.0.0.1" },
+		"link local only":                        func(h *models.DockerHost) { h.Containers[0].Ports[0].IP = "169.254.169.254" },
+		"stopped":                                func(h *models.DockerHost) { h.Containers[0].State = "exited" },
+		"removed port":                           func(h *models.DockerHost) { h.Containers[0].Ports = nil },
+		"removed address":                        func(h *models.DockerHost) { h.NetworkInterfaces = nil },
+		"different host":                         func(h *models.DockerHost) { h.ID = "host-2" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			script := &dockerPortProbeScript{answers: map[string]error{"tcp 192.168.1.20:8443": nil, "https 192.168.1.20:8443": nil}}
+			handler, persistence := dockerPortSuggestionHandlers(t, script)
+			// An unchanged secure port is in the same selection. A stale item
+			// refuses the whole batch before even that valid port is probed.
+			body := dockerPortSelectionBody(t, handler, "web", "secure")
+			host := handler.dockerHosts(context.Background())[0]
+			change(&host)
+			handler.dockerHosts = func(context.Context) []models.DockerHost { return []models.DockerHost{host} }
+			existing := config.NormalizeAvailabilityTarget(config.AvailabilityTarget{ID: "keep", Name: "router", Protocol: config.AvailabilityProbeICMP, Address: "192.168.1.1"})
+			if err := persistence.SaveAvailabilityTargets([]config.AvailabilityTarget{existing}); err != nil {
+				t.Fatal(err)
+			}
+
+			rec := httptest.NewRecorder()
+			handler.HandleApplyDockerPortSuggestions(rec, httptest.NewRequest(http.MethodPost, "/api/availability-targets/docker-suggestions", strings.NewReader(body)))
+			if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), `"code":"docker_ports_changed"`) || !strings.Contains(rec.Body.String(), "Refresh the page") {
+				t.Fatalf("stale apply = %d %s", rec.Code, rec.Body.String())
+			}
+			if len(script.calls) != 0 {
+				t.Fatalf("stale selection probed %v", script.calls)
+			}
+			saved, err := persistence.LoadAvailabilityTargets()
+			if err != nil || len(saved) != 1 || saved[0].ID != existing.ID {
+				t.Fatalf("existing checks changed: %+v, %v", saved, err)
+			}
+		})
+	}
+}
+
+func TestApplyDockerPortSuggestionsRequiresExplicitBoundSelection(t *testing.T) {
+	for _, body := range []string{
+		``, `{}`, `{"hostId":"host-1"}`, `{"ports":null}`, `{"ports":[]}`,
+		`{"ports":[{"hostId":"host-1","containerName":"web","privatePort":80}]}`,
+		`{"ports":[{"hostId":"host-1","containerId":"c-web","containerName":"web","privatePort":80}]}`,
+		`{"ports":[{"hostId":"host-1","containerName":"web","privatePort":80,"publicPort":8081,"address":"192.168.1.20"}]}`,
+		`{"ports":[{"hostId":"host-1","containerId":"c-web","containerName":"web","privatePort":80,"publicPort":65536,"address":"192.168.1.20"}]}`,
+		`{"ports":[{"hostId":"host-1","containerId":"c-web","containerName":"web","privatePort":0,"publicPort":8081,"address":"192.168.1.20"}]}`,
+		`{"ports":[{"hostId":" host-1","containerId":"c-web","containerName":"web","privatePort":80,"publicPort":8081,"address":"192.168.1.20"}]}`,
+		`{"ports":[{"hostId":"host-1","containerId":"c-web ","containerName":"web","privatePort":80,"publicPort":8081,"address":"192.168.1.20"}]}`,
+		`{"ports":[{"hostId":"host-1","containerId":"c-web","containerName":"/web","privatePort":80,"publicPort":8081,"address":"192.168.1.20"}]}`,
+		`{"ports":[{"hostId":"host-1","containerId":"c-web","containerName":"web","privatePort":80,"publicPort":8081,"address":"192.168.1.20 "}]}`,
+	} {
+		t.Run(body, func(t *testing.T) {
+			script := &dockerPortProbeScript{}
+			handler, persistence := dockerPortSuggestionHandlers(t, script)
+			rec := httptest.NewRecorder()
+			handler.HandleApplyDockerPortSuggestions(rec, httptest.NewRequest(http.MethodPost, "/api/availability-targets/docker-suggestions", strings.NewReader(body)))
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("unbound apply = %d %s", rec.Code, rec.Body.String())
+			}
+			if len(script.calls) != 0 {
+				t.Fatalf("unbound selection probed %v", script.calls)
+			}
+			if saved, _ := persistence.LoadAvailabilityTargets(); len(saved) != 0 {
+				t.Fatalf("unbound selection saved %+v", saved)
+			}
+		})
+	}
+}
+
+func TestApplyDockerPortSuggestionsDoesNotSelectANewMappingOfTheSamePort(t *testing.T) {
+	script := &dockerPortProbeScript{answers: map[string]error{
+		"tcp 192.168.1.20:8081": nil, "http 192.168.1.20:8081": nil,
+		"tcp 192.168.1.20:9081": nil, "http 192.168.1.20:9081": nil,
+	}}
+	handler, persistence := dockerPortSuggestionHandlers(t, script)
+	body := dockerPortSelectionBody(t, handler, "web")
+	host := handler.dockerHosts(context.Background())[0]
+	host.Containers[0].Ports = append(host.Containers[0].Ports, models.DockerContainerPort{PrivatePort: 80, PublicPort: 9081, Protocol: "tcp", IP: "0.0.0.0"})
+	handler.dockerHosts = func(context.Context) []models.DockerHost { return []models.DockerHost{host} }
+
+	for repeat := 0; repeat < 2; repeat++ {
+		rec := httptest.NewRecorder()
+		handler.HandleApplyDockerPortSuggestions(rec, httptest.NewRequest(http.MethodPost, "/api/availability-targets/docker-suggestions", strings.NewReader(body)))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("apply = %d %s", rec.Code, rec.Body.String())
+		}
+	}
+	saved, _ := persistence.LoadAvailabilityTargets()
+	if len(saved) != 1 || saved[0].Port != 8081 {
+		t.Fatalf("selected one endpoint, saved %+v", saved)
+	}
+	for _, call := range script.calls {
+		if !strings.HasSuffix(call, ":8081") {
+			t.Fatalf("probed new unreviewed mapping: %s", call)
+		}
+	}
+	if len(script.calls) != 3 {
+		t.Fatalf("exact retry should not probe again: %v", script.calls)
+	}
+}
+
+func TestApplyDockerPortSuggestionsRejectsInventoryChangeDuringProbes(t *testing.T) {
+	for _, replacement := range []bool{false, true} {
+		t.Run(fmt.Sprintf("replacement=%t", replacement), func(t *testing.T) {
+			script := &dockerPortProbeScript{answers: map[string]error{"tcp 192.168.1.20:8081": nil, "http 192.168.1.20:8081": nil}}
+			handler, persistence := dockerPortSuggestionHandlers(t, script)
+			body := dockerPortSelectionBody(t, handler, "web")
+			host := handler.dockerHosts(context.Background())[0]
+			handler.dockerHosts = func(context.Context) []models.DockerHost { return []models.DockerHost{host} }
+			script.duringProbes = func() {
+				if replacement {
+					host.Containers[0].ID = "replacement"
+				} else {
+					host.Containers[0].Ports[0].PublicPort = 9081
+				}
+			}
+			rec := httptest.NewRecorder()
+			handler.HandleApplyDockerPortSuggestions(rec, httptest.NewRequest(http.MethodPost, "/api/availability-targets/docker-suggestions", strings.NewReader(body)))
+			if rec.Code != http.StatusConflict {
+				t.Fatalf("changed during probes = %d %s", rec.Code, rec.Body.String())
+			}
+			if saved, _ := persistence.LoadAvailabilityTargets(); len(saved) != 0 {
+				t.Fatalf("stale check saved: %+v", saved)
+			}
+			for _, call := range script.calls {
+				if !strings.HasSuffix(call, ":8081") {
+					t.Fatalf("substituted endpoint during probes: %s", call)
+				}
+			}
+		})
+	}
+}
+
+func TestApplyDockerPortSuggestionsBoundsSelectionAndDeduplicates(t *testing.T) {
+	for _, count := range []int{2, maxDockerPortSelection + 1} {
+		t.Run(fmt.Sprintf("count=%d", count), func(t *testing.T) {
+			script := &dockerPortProbeScript{answers: map[string]error{"tcp 192.168.1.20:8081": nil, "http 192.168.1.20:8081": nil}}
+			handler, persistence := dockerPortSuggestionHandlers(t, script)
+			var request struct {
+				Ports []monitoring.DockerPortCheckCandidate `json:"ports"`
+			}
+			if err := json.Unmarshal([]byte(dockerPortSelectionBody(t, handler, "web")), &request); err != nil {
+				t.Fatal(err)
+			}
+			first := request.Ports[0]
+			request.Ports = make([]monitoring.DockerPortCheckCandidate, count)
+			for i := range request.Ports {
+				request.Ports[i] = first
+			}
+			body, _ := json.Marshal(request)
+			rec := httptest.NewRecorder()
+			handler.HandleApplyDockerPortSuggestions(rec, httptest.NewRequest(http.MethodPost, "/api/availability-targets/docker-suggestions", strings.NewReader(string(body))))
+			saved, _ := persistence.LoadAvailabilityTargets()
+			if count > maxDockerPortSelection {
+				if rec.Code != http.StatusBadRequest || len(script.calls) != 0 || len(saved) != 0 {
+					t.Fatalf("oversized = %d, probes=%v, saved=%+v", rec.Code, script.calls, saved)
+				}
+			} else if rec.Code != http.StatusOK || len(saved) != 1 || len(script.calls) != 3 {
+				t.Fatalf("duplicate = %d, probes=%v, saved=%+v", rec.Code, script.calls, saved)
+			}
+		})
+	}
+}
+
+func TestApplyDockerPortSuggestionsNeverPromotesASkippedSelection(t *testing.T) {
+	for _, address := range []string{"192.168.1.20/24", "2001:db8::20/64"} {
+		t.Run(address, func(t *testing.T) {
+			script := &dockerPortProbeScript{}
+			handler, persistence := dockerPortSuggestionHandlers(t, script)
+			host := handler.dockerHosts(context.Background())[0]
+			host.NetworkInterfaces = nil
+			handler.dockerHosts = func(context.Context) []models.DockerHost { return []models.DockerHost{host} }
+			body := dockerPortSelectionBody(t, handler, "web")
+			host.NetworkInterfaces = []models.HostNetworkInterface{{Name: "eth0", Addresses: []string{address}}}
+			rec := httptest.NewRecorder()
+			handler.HandleApplyDockerPortSuggestions(rec, httptest.NewRequest(http.MethodPost, "/api/availability-targets/docker-suggestions", strings.NewReader(body)))
+			if rec.Code != http.StatusConflict || len(script.calls) != 0 {
+				t.Fatalf("previously uncheckable selection = %d %s, probes=%v", rec.Code, rec.Body.String(), script.calls)
+			}
+			if saved, err := persistence.LoadAvailabilityTargets(); err != nil || len(saved) != 0 {
+				t.Fatalf("unreviewed endpoint saved: %+v (%v)", saved, err)
+			}
+		})
+	}
+}
+
+func TestApplyDockerPortSuggestionsDoesNotSelectAnotherAddressOfTheSamePort(t *testing.T) {
+	script := &dockerPortProbeScript{answers: map[string]error{"tcp 192.168.1.20:8081": nil, "http 192.168.1.20:8081": nil}}
+	handler, persistence := dockerPortSuggestionHandlers(t, script)
+	body := dockerPortSelectionBody(t, handler, "web")
+	host := handler.dockerHosts(context.Background())[0]
+	host.Containers[0].Ports = append(host.Containers[0].Ports, models.DockerContainerPort{PrivatePort: 80, PublicPort: 9081, Protocol: "tcp", IP: "192.168.1.21"})
+	handler.dockerHosts = func(context.Context) []models.DockerHost { return []models.DockerHost{host} }
+	rec := httptest.NewRecorder()
+	handler.HandleApplyDockerPortSuggestions(rec, httptest.NewRequest(http.MethodPost, "/api/availability-targets/docker-suggestions", strings.NewReader(body)))
+	if rec.Code != http.StatusOK || len(script.calls) != 3 {
+		t.Fatalf("exact mapping = %d %s, probes=%v", rec.Code, rec.Body.String(), script.calls)
+	}
+	saved, err := persistence.LoadAvailabilityTargets()
+	if err != nil || len(saved) != 1 || saved[0].Address != "192.168.1.20" || saved[0].Port != 8081 {
+		t.Fatalf("another address selected: %+v (%v)", saved, err)
+	}
+}
+
+func TestApplyDockerPortSuggestionsRetainsThePerRequestLimit(t *testing.T) {
+	script := &dockerPortProbeScript{answers: map[string]error{}}
+	handler, persistence := dockerPortSuggestionHandlers(t, script)
+	host := handler.dockerHosts(context.Background())[0]
+	host.Containers = nil
+	for i := 0; i < maxDockerPortChecksPerRequest+1; i++ {
+		port := 8000 + i
+		host.Containers = append(host.Containers, models.DockerContainer{ID: fmt.Sprintf("container-%d", i), Name: fmt.Sprintf("web-%d", i), State: "running", Ports: []models.DockerContainerPort{{PrivatePort: 80, PublicPort: port, Protocol: "tcp", IP: "0.0.0.0"}}})
+		script.answers[fmt.Sprintf("tcp 192.168.1.20:%d", port)] = nil
+		script.answers[fmt.Sprintf("https 192.168.1.20:%d", port)] = nil
+	}
+	handler.dockerHosts = func(context.Context) []models.DockerHost { return []models.DockerHost{host} }
+	body := dockerPortSelectionBody(t, handler)
+	for _, want := range []int{maxDockerPortChecksPerRequest, 1} {
+		rec := httptest.NewRecorder()
+		handler.HandleApplyDockerPortSuggestions(rec, httptest.NewRequest(http.MethodPost, "/api/availability-targets/docker-suggestions", strings.NewReader(body)))
+		var response dockerPortApplyResponse
+		if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+			t.Fatal(err)
+		}
+		if rec.Code != http.StatusOK || len(response.Created) != want {
+			t.Fatalf("capped apply=%d %+v", rec.Code, response)
+		}
+		if want == maxDockerPortChecksPerRequest && response.Remaining != 1 {
+			t.Fatalf("remaining=%d", response.Remaining)
+		}
+	}
+	saved, err := persistence.LoadAvailabilityTargets()
+	if err != nil || len(saved) != maxDockerPortChecksPerRequest+1 || len(script.calls) != 2*len(saved) {
+		t.Fatalf("incremental selection lost or repeated checks: count=%d probes=%d err=%v", len(saved), len(script.calls), err)
 	}
 }
