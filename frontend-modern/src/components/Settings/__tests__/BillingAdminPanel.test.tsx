@@ -74,6 +74,62 @@ describe('BillingAdminPanel', () => {
     cleanup();
   });
 
+  it.each([
+    { suspended: true, soft_deleted: false, badge: 'suspended' },
+    { suspended: true, soft_deleted: true, badge: 'soft-deleted' },
+  ])('retains the $badge inventory badge in the details name', async (status) => {
+    listOrganizationsMock.mockResolvedValue([
+      {
+        org_id: 'org-1',
+        display_name: 'Org One',
+        owner_user_id: 'user-1',
+        created_at: '2024-01-01T00:00:00Z',
+        suspended: status.suspended,
+        soft_deleted: status.soft_deleted,
+      },
+    ]);
+    getBillingStateMock.mockResolvedValue({
+      capabilities: [],
+      limits: {},
+      subscription_state: 'suspended',
+    });
+    render(() => <BillingAdminPanel />);
+    const name = `Billing details for Org One (org-1), ${status.badge}`;
+    const details = await screen.findByRole('button', { name });
+    expect(details).toHaveTextContent(status.badge);
+    await fireEvent.click(details);
+    expect(screen.getByRole('region', { name })).toHaveAttribute(
+      'id',
+      details.getAttribute('aria-controls'),
+    );
+  });
+
+  it.each(['', 'org-1'])('uses the exact ID once when the display name is %j', async (name) => {
+    listOrganizationsMock.mockResolvedValue([
+      {
+        org_id: 'org-1',
+        display_name: name,
+        owner_user_id: 'user-1',
+        created_at: '2024-01-01T00:00:00Z',
+        suspended: false,
+        soft_deleted: false,
+      },
+    ]);
+    getBillingStateMock.mockResolvedValue({
+      capabilities: [],
+      limits: {},
+      subscription_state: 'active',
+    });
+    render(() => <BillingAdminPanel />);
+    const suspend = await screen.findByRole('button', { name: 'Suspend Org for org-1' });
+    await waitFor(() => expect(suspend).toBeEnabled());
+    expect(screen.getByRole('button', { name: 'Activate Org for org-1' })).toBeDisabled();
+    await fireEvent.click(screen.getByRole('button', { name: 'Billing details for org-1' }));
+    expect(screen.getByRole('region', { name: 'Billing details for org-1' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Reload billing for org-1' })).toBeEnabled();
+    expect(putBillingStateMock).not.toHaveBeenCalled();
+  });
+
   it('does not fabricate plan_version from subscription state when billing state has no plan', async () => {
     const stateWithoutPlan = {
       capabilities: ['multi_tenant'],
@@ -93,7 +149,7 @@ describe('BillingAdminPanel', () => {
       expect(screen.getByText('Org One')).toBeInTheDocument();
     });
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Suspend Org' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Suspend Org for Org One (org-1)' }));
 
     await waitFor(() => {
       expect(putBillingStateMock).toHaveBeenCalledTimes(1);
@@ -123,7 +179,7 @@ describe('BillingAdminPanel', () => {
       expect(screen.getByText('Org One')).toBeInTheDocument();
     });
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Suspend Org' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Suspend Org for Org One (org-1)' }));
 
     await waitFor(() => {
       expect(putBillingStateMock).toHaveBeenCalledTimes(1);
@@ -155,13 +211,19 @@ describe('BillingAdminPanel', () => {
     });
     putBillingStateMock.mockImplementation(async (_orgID, payload) => payload);
     render(() => <BillingAdminPanel />);
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Suspend Org' })).toBeEnabled());
-    expect(screen.getAllByRole('button', { name: 'Suspend Org' })).toHaveLength(1);
-    expect(screen.getAllByRole('button', { name: 'Activate Org' })).toHaveLength(1);
-    expect(screen.getByRole('button', { name: 'Suspend Org' }).closest('td')).toHaveTextContent(
-      'Active',
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Suspend Org for Org One (org-1)' })).toBeEnabled(),
     );
-    await fireEvent.click(screen.getByRole('button', { name: 'Suspend Org' }));
+    expect(screen.getAllByRole('button', { name: 'Suspend Org for Org One (org-1)' })).toHaveLength(
+      1,
+    );
+    expect(
+      screen.getAllByRole('button', { name: 'Activate Org for Org One (org-1)' }),
+    ).toHaveLength(1);
+    expect(
+      screen.getByRole('button', { name: 'Suspend Org for Org One (org-1)' }).closest('td'),
+    ).toHaveTextContent('Active');
+    await fireEvent.click(screen.getByRole('button', { name: 'Suspend Org for Org One (org-1)' }));
     await waitFor(() => expect(putBillingStateMock).toHaveBeenCalledTimes(1));
     expect(putBillingStateMock.mock.calls[0][0]).toBe('org-1');
     expect(putBillingStateMock.mock.calls[0][1].subscription_state).toBe('suspended');
