@@ -1107,57 +1107,78 @@ class RunningExecutable(unittest.TestCase):
                 child.communicate(timeout=5)
                 self.assertIsNotNone(child.returncode)
 
-    def test_actual_process_not_replaced_disk_path_is_checked(self):
-        for binary in ("same", "same-copy", "symlink", "legacy", "different", "nonexecutable", "missing", "broken-primary"):
-            with self.subTest(binary=binary):
-                r, _, observations = self.run_identity(binary_mode=binary)
-                accepted = binary in ("same", "same-copy", "symlink", "legacy")
-                self.assertEqual(r.returncode, 0 if accepted else 2, r.stderr)
-                self.assertIn(b"IDENTITY_STATUS=0" if accepted else b"IDENTITY_STATUS=2", r.stdout)
-                self.assertEqual(observations, 2 if accepted else 1)
+    def assert_actual_process_identity(self, binary):
+        r, _, observations = self.run_identity(binary_mode=binary)
+        accepted = binary in ("same", "same-copy", "symlink", "legacy")
+        self.assertEqual(r.returncode, 0 if accepted else 2, r.stderr)
+        self.assertIn(b"IDENTITY_STATUS=0" if accepted else b"IDENTITY_STATUS=2", r.stdout)
+        self.assertEqual(observations, 2 if accepted else 1)
 
-    def test_complete_stable_main_pid_tuple_is_required(self):
-        for mode in ("normal", "masked", "error", "missing", "duplicate", "extra", "inactive", "not-found",
-                     "pid-zero", "pid-negative", "pid-path", "pid-missing-process", "pid-moved", "state-moved"):
-            with self.subTest(mode=mode):
-                r, _, observations = self.run_identity(mode=mode)
-                accepted = mode in ("normal", "masked")
-                self.assertEqual(r.returncode, 0 if accepted else 2, r.stderr)
-                self.assertEqual(observations, 2 if accepted or mode in ("pid-moved", "state-moved") else 1)
+    def assert_main_pid_tuple(self, mode):
+        r, _, observations = self.run_identity(mode=mode)
+        accepted = mode in ("normal", "masked")
+        self.assertEqual(r.returncode, 0 if accepted else 2, r.stderr)
+        self.assertEqual(observations, 2 if accepted or mode in ("pid-moved", "state-moved") else 1)
 
-    def test_final_manager_read_cannot_hide_installed_executable_drift(self):
+    def assert_final_read_drift(self, binary, fault):
         # The first real /proc comparison succeeds. Change only the selected
         # installation path during the second manager read, leaving the owned
         # process/PID active. Equal-byte atomic replacement remains supported.
-        for binary in ("same", "legacy", "symlink"):
-            for fault in ("different", "nonexecutable", "missing", "wrong-symlink", "directory", "same-copy"):
-                # Never chmod the shared interpreter behind a symlink.
-                if binary == "symlink" and fault == "nonexecutable":
-                    continue
-                with self.subTest(binary=binary, fault=fault):
-                    result, _, observations = self.run_identity(mode="disk-drift:" + fault, binary_mode=binary)
-                    expected = 0 if fault == "same-copy" else 2
-                    self.assertEqual(result.returncode, expected, result.stderr)
-                    self.assertIn(f"IDENTITY_STATUS={expected}".encode(), result.stdout)
-                    self.assertEqual(observations, 2)
+        result, _, observations = self.run_identity(mode="disk-drift:" + fault, binary_mode=binary)
+        expected = 0 if fault == "same-copy" else 2
+        self.assertEqual(result.returncode, expected, result.stderr)
+        self.assertIn(f"IDENTITY_STATUS={expected}".encode(), result.stdout)
+        self.assertEqual(observations, 2)
 
-    def test_manager_diagnostics_refuse_either_running_identity_read(self):
+    def assert_manager_diagnostic(self, fault, reading):
         # These read the actual private child's /proc executable before and
         # after the unchanged byte comparison, not a simulated version file.
-        for fault in ("stderr-warning", "stderr-blank", "stdout-blank", "stdout-unterminated"):
-            for reading in (1, 2):
-                with self.subTest(fault=fault, reading=reading):
-                    r, _, observations = self.run_identity(mode=f"diagnostic:{fault}:{reading}")
-                    self.assertEqual(r.returncode, 2, r.stderr)
-                    self.assertIn(b"IDENTITY_STATUS=2", r.stdout)
-                    self.assertEqual(observations, reading)
-                    self.assertNotIn(b"private fixture manager diagnostic", r.stdout + r.stderr)
+        r, _, observations = self.run_identity(mode=f"diagnostic:{fault}:{reading}")
+        self.assertEqual(r.returncode, 2, r.stderr)
+        self.assertIn(b"IDENTITY_STATUS=2", r.stdout)
+        self.assertEqual(observations, reading)
+        self.assertNotIn(b"private fixture manager diagnostic", r.stdout + r.stderr)
 
     def test_identity_read_timeout_is_bounded_and_owned_process_is_reaped(self):
         r, elapsed, observations = self.run_identity(mode="hang")
         self.assertEqual(r.returncode, 2)
         self.assertEqual(observations, 1)
         self.assertLess(elapsed, 8)
+
+
+# Register each unchanged transaction independently, rather than five loops
+# sharing one Go watchdog. The Go inventory independently requires every name;
+# discovery also executes future controls. Each uses only its private files
+# and explicitly owned PIDs, so Go's bounded parallel scheduler can admit it.
+def register_running_identity_control(name, assertion, *args):
+    if hasattr(RunningExecutable, name):
+        raise ValueError("duplicate running identity control: " + name)
+
+    def control(self):
+        getattr(self, assertion)(*args)
+
+    control.__name__ = name
+    setattr(RunningExecutable, name, control)
+
+
+for _binary in ("same", "same-copy", "symlink", "legacy", "different", "nonexecutable", "missing", "broken-primary"):
+    register_running_identity_control("test_actual_process_" + _binary.replace("-", "_"),
+                                      "assert_actual_process_identity", _binary)
+for _mode in ("normal", "masked", "error", "missing", "duplicate", "extra", "inactive", "not-found",
+              "pid-zero", "pid-negative", "pid-path", "pid-missing-process", "pid-moved", "state-moved"):
+    register_running_identity_control("test_main_pid_tuple_" + _mode.replace("-", "_"),
+                                      "assert_main_pid_tuple", _mode)
+for _binary in ("same", "legacy", "symlink"):
+    for _fault in ("different", "nonexecutable", "missing", "wrong-symlink", "directory", "same-copy"):
+        # This deliberately excluded pair would chmod the shared interpreter.
+        if _binary == "symlink" and _fault == "nonexecutable":
+            continue
+        register_running_identity_control("test_final_read_drift_" + _binary + "_" + _fault.replace("-", "_"),
+                                          "assert_final_read_drift", _binary, _fault)
+for _fault in ("stderr-warning", "stderr-blank", "stdout-blank", "stdout-unterminated"):
+    for _reading in (1, 2):
+        register_running_identity_control(f"test_manager_diagnostic_{_fault.replace('-', '_')}_{_reading}",
+                                          "assert_manager_diagnostic", _fault, _reading)
 
 
 # Exclusion uses real file locks, independent of the manager double above.
