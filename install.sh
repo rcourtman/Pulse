@@ -2395,7 +2395,7 @@ smoke_test_pve_auto_register_token() {
     if [[ $smoke_status -ne 0 ]]; then
         AUTO_NODE_REGISTER_ERROR="token smoke check failed"
         print_warn "Created Proxmox monitoring token, but a local API smoke check failed; skipping automatic node registration"
-        print_warn "Smoke check error: ${smoke_output}"
+        print_warn "Local API smoke check failed (curl exit ${smoke_status}); check the Proxmox API URL and monitoring-token permissions. Response details are omitted to protect credentials."
         return 1
     fi
 
@@ -2816,7 +2816,7 @@ PY
 
     if [[ "$register_status" != "success" ]] || [[ "$register_action" != "use_token" ]] || [[ "$register_type" != "pve" ]] || [[ "$register_source" != "script" ]] || [[ "$register_host" != "$normalized_host_url" ]] || [[ "$register_token_id" != "$token_id" ]] || [[ "$register_token_value" != "$token_value" ]] || [[ -z "$register_node_id" ]] || [[ -z "$register_node_name" ]] || [[ "$register_node_id" != "$register_node_name" ]]; then
         AUTO_NODE_REGISTER_ERROR="auto-register unsuccessful"
-        print_warn "Pulse auto-registration reported an error: $register_response"
+        print_warn "Pulse auto-registration response could not be verified; response details are omitted to protect credentials. Check Pulse's node list before re-running the installer."
         return
     fi
 
