@@ -770,7 +770,7 @@ func (s *SessionStore) persistSnapshot(persisted []sessionPersisted) {
 func (s *SessionStore) load() {
 	sessionsFile := filepath.Join(s.dataPath, "sessions.json")
 
-	data, err := os.ReadFile(sessionsFile)
+	data, err := readAuthSnapshot(sessionsFile)
 	if err != nil {
 		missing := os.IsNotExist(err)
 		if missing {
