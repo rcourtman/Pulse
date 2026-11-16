@@ -32,9 +32,11 @@ sample data and signs you in automatically.
 - **Alerts you when it matters.** Set thresholds for CPU, memory, disk,
   temperature and more, and get notified by email or through Discord, Slack,
   Teams, Telegram, ntfy, Gotify, Pushover, PagerDuty or any webhook.
+  [Set up rules, verify delivery and handle incidents](docs/ALERTING.md).
 - **Checks the things that can't run an agent.** Ping, TCP, UDP and HTTP(S)
   availability checks cover routers, printers and web services, with
   certificate-expiry warnings.
+  [Choose local checks or Pro remote observation locations](docs/AVAILABILITY.md).
 - **Keeps history.** Every guest, container and host has charts: seven days in
   Community, ninety in Pro.
 - **Optional AI checks.** Connect your own AI provider or a local model and
