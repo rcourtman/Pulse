@@ -14669,3 +14669,21 @@ locations. Instance administrators see no change. The provider-runtime test
 comes from `isProviderHostedRuntimeFromLicensing` in
 `internal/api/licensing_bridge.go`, so the policy file imports no licensing
 package. Proof: `internal/api/tenant_outbound_policy_test.go`.
+
+### SAML login POST admission (16 November 2026)
+
+`POST /api/saml/{providerID}/login` validates the whole optional JSON body
+through `decodeSecurityRequestBody` before synchronizing public URLs, fetching
+IdP metadata or creating a browser-bound request. The existing 16 KiB security
+limit includes trailing whitespace, even when a query `returnTo` is usable.
+Malformed/type/read errors and extra JSON values return 400 `invalid_request`;
+oversized input returns 413. Neither rejection writes a cookie, changes pending
+requests nor initializes or rebinds a SAML service. Empty/whitespace, `null`,
+bounded objects and unknown fields remain accepted. A safe query return path
+still takes precedence over a safe body path; GET remains the navigation handoff.
+After a valid POST body read, the handler resolves the current enabled SAML
+provider and service, respecting a completed management withdrawal or replacement
+during slow input. This does not change ACS/SLO parsing, signatures or policy
+fencing. `internal/api/saml_login_request_test.go` covers native requests, secure
+bindings, pending-login preservation, public route dispatch, exact-limit input,
+cold/warm rejection without metadata work and synchronized body-delay controls.

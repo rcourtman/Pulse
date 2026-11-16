@@ -9930,3 +9930,13 @@ Hiding an empty default organization from a hosted runtime's `GET /api/orgs`
 list deletes nothing. A saved connection, an availability target or a resource
 in that organization keeps it listed, and it opens no backup, restore or storage
 path.
+
+### SAML login admission and recovery state (16 November 2026)
+
+The shared API SAML login POST now rejects oversized or malformed optional
+JSON before service initialization or browser-binding creation and resolves
+current provider ownership after a slow valid read. `saml_login_request_test.go`
+checks that rejection and unchanged accepted input preserve existing pending
+login paths, bindings and expiry. This touches no backup, restore, saved
+monitoring identity or storage/History state; SAML callback validation and
+recovery authority remain unchanged.

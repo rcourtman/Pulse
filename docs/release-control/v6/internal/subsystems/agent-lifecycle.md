@@ -11939,3 +11939,13 @@ never renders for read-only sessions.
 users who land in the `PULSE_TENANT_ID` workspace. A resource an agent reports
 into the default organization keeps it listed. Agent and API-token routing,
 enrolment and commands do not change.
+
+### SAML login admission and agent boundaries (16 November 2026)
+
+The shared `internal/api/saml_handlers.go` login POST validates its optional
+JSON body before IdP work and resolves the provider/service after valid input.
+Its 16 KiB limit does not apply to agent reports or enrollment, SAML assertions
+or logout responses. Malformed login input neither alters pending browser
+requests nor issues credentials; no agent token, saved identity, cadence or
+command authority is changed. `saml_login_request_test.go` verifies these login
+admission and pending-request boundaries.
