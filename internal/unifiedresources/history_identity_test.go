@@ -1249,3 +1249,102 @@ func TestMonitorAdapterRestartDoesNotRediscoverKnownResources(t *testing.T) {
 		})
 	}
 }
+
+func pbsDatastoreSnapshot(now time.Time, instances ...models.PBSInstance) models.StateSnapshot {
+	snapshot := models.StateSnapshot{PBSInstances: instances}
+	for _, instance := range instances {
+		for _, datastore := range instance.Datastores {
+			// The PBS poller's storage conversion (monitor_pbs_pmg).
+			snapshot.Storage = append(snapshot.Storage, models.Storage{
+				ID:       instance.ID + "-" + datastore.Name,
+				AliasIDs: []string{instance.ID + "/" + datastore.Name},
+				Name:     datastore.Name, Node: instance.Name, Instance: instance.ID, Type: "pbs",
+				Status: "available", Total: datastore.Total, Used: datastore.Used, Free: datastore.Free, Usage: datastore.Usage,
+				Content: "backup", Shared: true, Enabled: true, Active: true, LastSeen: now,
+			})
+		}
+	}
+	return snapshot
+}
+
+func pbsInstanceWithDatastores(id, name string, now time.Time, datastores ...string) models.PBSInstance {
+	instance := models.PBSInstance{ID: id, Name: name, Host: "https://" + name + ".lan:8007", Status: "online", LastSeen: now}
+	for _, datastore := range datastores {
+		instance.Datastores = append(instance.Datastores, models.PBSDatastore{Name: datastore, Total: 1000, Used: 910, Free: 90, Usage: 91, Status: "available"})
+	}
+	return instance
+}
+
+// A PBS datastore's storage alert carries the poller's storage ID
+// ("pbs-<name>-<datastore>"), which the registry folds into the canonical
+// datastore instead of ingesting it (#1591). The alert must still resolve to
+// that datastore, or every consumer of the alert's resource, Patrol among
+// them, finds nothing.
+func TestPBSDatastoreStorageAlertResolvesToTheDatastore(t *testing.T) {
+	now := time.Now()
+	registry := NewRegistry(nil)
+	registry.IngestSnapshot(pbsDatastoreSnapshot(now, pbsInstanceWithDatastores("pbs-pbs-docker", "pbs-docker", now, "main")))
+
+	var datastoreID string
+	for _, resource := range registry.List() {
+		if resource.Type == ResourceTypeStorage && resource.Name == "main" {
+			datastoreID = resource.ID
+		}
+	}
+	if datastoreID == "" {
+		t.Fatal("no datastore resource")
+	}
+
+	binding, claimed := registry.ResolveAlertResourceReference("pbs-pbs-docker-main")
+	if !claimed || binding.ResourceID != datastoreID || binding.Component {
+		t.Fatalf("storage alert reference = %+v (claimed %v), want the datastore %s", binding, claimed, datastoreID)
+	}
+}
+
+// "pbs-a-b-c" names datastore "b-c" on instance "a" and datastore "c" on
+// instance "a-b". It must not pick either.
+func TestAmbiguousPBSDatastoreStorageAlertStaysUnresolved(t *testing.T) {
+	now := time.Now()
+	registry := NewRegistry(nil)
+	registry.IngestSnapshot(pbsDatastoreSnapshot(now,
+		pbsInstanceWithDatastores("pbs-a", "a", now, "b-c"),
+		pbsInstanceWithDatastores("pbs-a-b", "a-b", now, "c"),
+	))
+
+	binding, claimed := registry.ResolveAlertResourceReference("pbs-a-b-c")
+	if binding.ResourceID != "" || !claimed {
+		t.Fatalf("ambiguous storage alert reference = %+v (claimed %v), want unresolved and claimed", binding, claimed)
+	}
+}
+
+// The rule binds alert references only. History keeps its own resolution, so
+// an event recorded for a removed resource whose source ID reads like a PBS
+// datastore's storage ID keeps the binding it recorded.
+func TestPBSDatastoreStorageSubjectDoesNotBindHistory(t *testing.T) {
+	now := time.Now()
+	registry := NewRegistry(nil)
+	registry.IngestSnapshot(pbsDatastoreSnapshot(now, pbsInstanceWithDatastores("pbs-pbs-docker", "pbs-docker", now, "main")))
+
+	if id, claimed := registry.resolveHistoryReference("pbs-pbs-docker-main"); id != "" || claimed {
+		t.Fatalf("history reference bound through the PBS storage subject: %q (claimed %v)", id, claimed)
+	}
+}
+
+// A resource that answers to the reference itself wins over the PBS rule.
+func TestPresentResourceOutranksPBSDatastoreStorageSubject(t *testing.T) {
+	now := time.Now()
+	snapshot := pbsDatastoreSnapshot(now, pbsInstanceWithDatastores("pbs-pbs-docker", "pbs-docker", now, "main"))
+	snapshot.Nodes = []models.Node{{ID: "pve1-node1", Name: "node1", Instance: "pve1", Status: "online", LastSeen: now}}
+	snapshot.Storage = append(snapshot.Storage, models.Storage{
+		ID: "pbs-pbs-docker-main", Name: "main", Node: "node1", Instance: "pve1", Type: "dir",
+		Status: "available", Total: 1000, Used: 100, Free: 900, Usage: 10, Content: "images", Enabled: true, Active: true, LastSeen: now,
+	})
+	registry := NewRegistry(nil)
+	registry.IngestSnapshot(snapshot)
+
+	binding, _ := registry.ResolveAlertResourceReference("pbs-pbs-docker-main")
+	resource, ok := registry.Get(binding.ResourceID)
+	if !ok || resource.Storage == nil || resource.Storage.Type == "pbs-datastore" {
+		t.Fatalf("storage alert reference = %+v, want the Proxmox storage that carries the ID", binding)
+	}
+}

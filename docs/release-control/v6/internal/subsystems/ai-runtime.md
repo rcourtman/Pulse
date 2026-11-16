@@ -4764,10 +4764,14 @@ full of old backups read only the pool's size in 2 of 2 runs on 16 Nov and
 recorded nothing; the 14 Nov runs that listed the backups filed. That check's
 seed and closing question now say Pulse lists the backups on that storage
 (`pulse_storage` type `backups`) and that its investigation reads them, and
-drop the alert-only exit for it. A storage without backups keeps both. A
+drop the alert-only exit for it. A storage without backups keeps both. A full
+PBS datastore gets the same check: until 16 Nov its storage alert named an ID
+the inventory no longer held, so the check refused its scope and never ran (see
+unified-resources, PBS datastore storage alerts). A
 finished job raises no state alert and a stop exits 0 or with a stop signal,
 so neither is opened. Proofs: `internal/ai/patrol_alert_finding_sustained_test.go`,
-`internal/ai/patrol_storage_alert_wake_test.go` and
+`internal/ai/patrol_storage_alert_wake_test.go`,
+`internal/ai/patrol_pbs_datastore_alert_scope_test.go` and
 `internal/ai/patrol_alert_finding_test.go`. Cost:
 at most one such finding per `alert_fired` trigger, inside that trigger's caps
 (3 an hour and 6 in 24 hours per alert identifier), and its investigation goes
