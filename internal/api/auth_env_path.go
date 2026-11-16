@@ -22,6 +22,9 @@ func resolveAuthEnvWritePaths(configPath string, dataPath string) []string {
 	return paths
 }
 
+// writeAuthEnvFile publishes complete owner-private credentials, never a partial
+// in-place rewrite or a write through a canonical symlink/hard link. The configured
+// directory may still be a symlink. Keep preferred/fallback path selection intact.
 func writeAuthEnvFile(configPath string, dataPath string, content []byte) (string, error) {
 	paths := resolveAuthEnvWritePaths(configPath, dataPath)
 	var lastErr error
@@ -30,7 +33,7 @@ func writeAuthEnvFile(configPath string, dataPath string, content []byte) (strin
 			lastErr = err
 			continue
 		}
-		if err := os.WriteFile(envPath, content, 0600); err != nil {
+		if err := writePrivateAuthSnapshot(envPath, content, nil); err != nil {
 			lastErr = err
 			continue
 		}
@@ -56,7 +59,6 @@ func removeAuthEnvFiles(configPath string, dataPath string) error {
 type authEnvFileSnapshot struct {
 	path   string
 	data   []byte
-	mode   os.FileMode
 	exists bool
 }
 
@@ -72,20 +74,17 @@ func snapshotAuthEnvFiles(configPath string, dataPath string) ([]authEnvFileSnap
 		if err != nil {
 			return nil, fmt.Errorf("read auth environment file %s: %w", path, err)
 		}
-		info, err := os.Stat(path)
-		if err != nil {
-			return nil, fmt.Errorf("stat auth environment file %s: %w", path, err)
-		}
 		snapshots = append(snapshots, authEnvFileSnapshot{
 			path:   path,
 			data:   data,
-			mode:   info.Mode().Perm(),
 			exists: true,
 		})
 	}
 	return snapshots, nil
 }
 
+// A failed reset restores exact bytes with the same private publication boundary
+// as a normal save, not the old inode or its potentially wider permissions.
 func restoreAuthEnvFiles(snapshots []authEnvFileSnapshot) error {
 	var restoreErr error
 	for _, snapshot := range snapshots {
@@ -99,7 +98,7 @@ func restoreAuthEnvFiles(snapshots []authEnvFileSnapshot) error {
 			restoreErr = errors.Join(restoreErr, fmt.Errorf("recreate auth environment directory for %s: %w", snapshot.path, err))
 			continue
 		}
-		if err := os.WriteFile(snapshot.path, snapshot.data, snapshot.mode); err != nil {
+		if err := writePrivateAuthSnapshot(snapshot.path, snapshot.data, nil); err != nil {
 			restoreErr = errors.Join(restoreErr, fmt.Errorf("restore auth environment file %s: %w", snapshot.path, err))
 		}
 	}

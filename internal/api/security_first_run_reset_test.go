@@ -163,6 +163,10 @@ func TestResetFirstRunSecurityPreservesLiveCredentialsWhenTokenPersistenceFails(
 	if err != nil {
 		t.Fatalf("write auth environment file: %v", err)
 	}
+	// Restoring a failed reset must not reproduce legacy wider permissions.
+	if err := os.Chmod(authEnvPath, 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	persistence := config.NewConfigPersistence(cfg.DataPath)
 	if err := persistence.SaveAPITokens(cfg.APITokens); err != nil {
@@ -205,6 +209,7 @@ func TestResetFirstRunSecurityPreservesLiveCredentialsWhenTokenPersistenceFails(
 	if string(gotAuthEnv) != string(authEnvContent) {
 		t.Fatalf("restored auth environment file = %q, want %q", gotAuthEnv, authEnvContent)
 	}
+	checkAuthEnvPublication(t, authEnvPath, authEnvContent)
 	for key, want := range map[string]string{
 		"PULSE_AUTH_USER": "admin",
 		"PULSE_AUTH_PASS": "hashed-password",
