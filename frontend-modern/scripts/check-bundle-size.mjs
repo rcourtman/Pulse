@@ -18,7 +18,7 @@
  *   7. Exits 0 on pass, 1 on any violation
  */
 
-import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { lstatSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { gzipSync } from 'node:zlib';
 import { fileURLToPath } from 'node:url';
@@ -56,12 +56,27 @@ function fmtKB(bytes) {
 // ---------------------------------------------------------------------------
 
 function measureBuild() {
-  let files;
+  const files = [];
+  function collectAssets(directory, prefix = '') {
+    if (!lstatSync(directory).isDirectory()) throw new Error('irregular asset directory');
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const relative = `${prefix}${entry.name}`;
+      if (entry.isDirectory()) {
+        collectAssets(join(directory, entry.name), `${relative}/`);
+      } else if (!entry.isFile()) {
+        // A link can alias a whole subtree. Neither follow it outside the
+        // build nor silently certify a total that omits its contents.
+        throw new Error('irregular asset entry');
+      } else if (entry.name.endsWith('.js') || entry.name.endsWith('.css')) {
+        files.push(relative);
+      }
+    }
+  }
   try {
-    files = readdirSync(DIST_ASSETS);
+    collectAssets(DIST_ASSETS);
   } catch {
     console.error(
-      'Error: dist/assets/ not found. Run "npx vite build" first.',
+      'Error: dist/assets/ is missing, unreadable or irregular. Run "npm run build" from frontend-modern first.',
     );
     process.exit(1);
   }

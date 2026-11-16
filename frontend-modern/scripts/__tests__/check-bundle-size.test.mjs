@@ -6,12 +6,15 @@ import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writ
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { gzipSync } from 'node:zlib';
 import { afterEach, describe, expect, it } from 'vitest';
 
 const checker = fileURLToPath(new URL('../check-bundle-size.mjs', import.meta.url));
 const temporaryRoots = [];
 const digest = (content, algorithm = 'sha384') =>
   `${algorithm}-${createHash(algorithm).update(content).digest('base64')}`;
+const inventoryError =
+  'Error: dist/assets/ is missing, unreadable or irregular. Run "npm run build" from frontend-modern first.\n';
 
 function fixture(algorithm = 'sha384') {
   const root = mkdtempSync(path.join(os.tmpdir(), 'pulse-bundle-check-'));
@@ -60,7 +63,7 @@ function fixture(algorithm = 'sha384') {
       chunks: { index: { baselineGzip: 1000 } },
       totals: { js: { baselineGzip: 10000 }, css: { baselineGzip: 10000 } },
     },
-    run() {
+    run({ stderr = '' } = {}) {
       const mapTag = `<script type="importmap">${JSON.stringify(f.map)}</script>`;
       const html = f.transformHTML(`<!-- Generated build fixture -->\n${f.commentedMap ? `<!--${mapTag}-->` : mapTag}\n${mapTag.repeat(f.extraMaps)}\n<script type="module" src="/assets/${f.entryFile}" ${f.entryAttribute}="${f.entry}"></script>\n${Object.entries(
         f.preloads,
@@ -84,7 +87,7 @@ function fixture(algorithm = 'sha384') {
       // The checker is read-only even when rejecting a build.
       expect(readFileSync(path.join(root, 'dist/index.html'))).toEqual(htmlBytes);
       expect(readFileSync(path.join(root, '.bundlesize.json'), 'utf8')).toBe(baseline);
-      expect(result.stderr).toBe('');
+      expect(result.stderr).toBe(stderr);
       return result;
     },
   };
@@ -93,6 +96,104 @@ function fixture(algorithm = 'sha384') {
 
 afterEach(() => {
   while (temporaryRoots.length) rmSync(temporaryRoots.pop(), { recursive: true, force: true });
+});
+
+describe('complete asset budget inventory', () => {
+  // Deterministic incompressible content makes each nested asset alone exceed
+  // the unchanged 10 kB fixture total, independently of minifier/clock state.
+  const largeAsset = Buffer.concat(
+    Array.from({ length: 2048 }, (_, index) =>
+      createHash('sha256').update(String(index)).digest(),
+    ),
+  );
+
+  it.each(['js', 'css'])('counts nested %s in its total budget', (extension) => {
+    const f = fixture();
+    const name = `nested/deeper/feature-eeeeeeee.${extension}`;
+    mkdirSync(path.join(f.root, 'dist/assets/nested/deeper'), { recursive: true });
+    writeFileSync(path.join(f.root, 'dist/assets', name), largeAsset);
+    if (extension === 'js') f.map.integrity[`/assets/${name}`] = digest(largeAsset);
+
+    const result = f.run();
+    expect(result.status).toBe(1);
+    expect(result.stdout).toContain(`total-${extension}:`);
+    expect(result.stdout).toContain('exceeds max');
+    expect(result.stdout).toContain('integrity match JS asset bytes.');
+  });
+
+  it('tracks nested chunks by their relative path, including matching basenames', () => {
+    const f = fixture();
+    for (const directory of ['first', 'second']) {
+      const name = `${directory}/feature-eeeeeeee.js`;
+      mkdirSync(path.join(f.root, 'dist/assets', directory));
+      const bytes = `export const name = '${directory}';\n`;
+      writeFileSync(path.join(f.root, 'dist/assets', name), bytes);
+      f.map.integrity[`/assets/${name}`] = digest(bytes);
+      f.baseline.chunks[`${directory}/feature`] = { baselineGzip: 1000 };
+    }
+
+    const result = f.run();
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('first/feature');
+    expect(result.stdout).toContain('second/feature');
+    expect(result.stdout).toContain('All chunks within budget.');
+  });
+
+  it('uses the complete inventory when intentionally generating a baseline', () => {
+    const f = fixture();
+    mkdirSync(path.join(f.root, 'dist/assets/nested/deeper'), { recursive: true });
+    for (const extension of ['js', 'css']) {
+      const name = `nested/deeper/feature-eeeeeeee.${extension}`;
+      writeFileSync(path.join(f.root, 'dist/assets', name), largeAsset);
+      if (extension === 'js') f.map.integrity[`/assets/${name}`] = digest(largeAsset);
+    }
+    expect(f.run().status).toBe(1);
+
+    const result = spawnSync(
+      process.execPath,
+      [path.join(f.root, 'scripts/check-bundle-size.mjs'), '--update-baseline'],
+      { encoding: 'utf8', cwd: f.root, timeout: 15000 },
+    );
+    expect(result.error).toBeUndefined();
+    expect(result.signal).toBeNull();
+    expect(result.stderr).toBe('');
+    expect(result.status).toBe(0);
+    const baseline = JSON.parse(readFileSync(path.join(f.root, '.bundlesize.json'), 'utf8'));
+    const largeGzip = gzipSync(largeAsset, { level: 6 }).length;
+    expect(baseline.chunks['nested/deeper/feature'].baselineGzip).toBe(largeGzip);
+    expect(baseline.totals.js.baselineGzip).toBe(
+      largeGzip +
+        Object.values(f.files).reduce(
+          (total, bytes) => total + gzipSync(bytes, { level: 6 }).length,
+          0,
+        ),
+    );
+    expect(baseline.totals.css.baselineGzip).toBe(largeGzip);
+  });
+
+  it('counts code below a directory whose name ends in .js instead of reading it as a file', () => {
+    const f = fixture();
+    const directory = path.join(f.root, 'dist/assets/styles.js');
+    mkdirSync(directory);
+    writeFileSync(path.join(directory, 'feature-eeeeeeee.css'), largeAsset);
+    const result = f.run();
+    expect(result.status).toBe(1);
+    expect(result.stdout).toContain('total-css:');
+  });
+
+  it.each(['js', 'css', 'png', 'directory'])(
+    'rejects a symlinked %s entry without rewriting the baseline or build',
+    (extension) => {
+      const f = fixture();
+      const target = path.join(f.root, 'outside-assets');
+      if (extension === 'directory') mkdirSync(target);
+      else writeFileSync(target, largeAsset);
+      symlinkSync(target, path.join(f.root, 'dist/assets', `alias.${extension}`));
+      const result = f.run({ stderr: inventoryError });
+      expect(result.status).toBe(1);
+      expect(result.stdout).not.toContain('All chunks within budget.');
+    },
+  );
 });
 
 describe('built JavaScript integrity checks', () => {

@@ -418,11 +418,17 @@ describe.each(['CLI', 'builder'])('%s embed publication preserves usable output'
     expectNoDebris(f);
   });
 
-  it('creates the first valid embed but never creates an incomplete one', () => {
+  // These are independent first-publication states, each running a real CLI.
+  // Keep their default deadlines independent too, rather than charging the
+  // successful publication for the time already spent on a rejected build.
+  it('never creates the first embed from an incomplete build', () => {
     const rejected = fixture({}, { previous: false });
     expect(rejected.run(mode).status).toBe(1);
     expect(tree(rejected.target)).toBeNull();
     expectNoDebris(rejected);
+  });
+
+  it('creates the first embed from a valid build', () => {
     const accepted = fixture(validFiles, { previous: false });
     expect(accepted.run(mode).status).toBe(0);
     expect(tree(accepted.target)).toEqual(tree(accepted.source));
