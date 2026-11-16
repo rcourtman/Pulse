@@ -91,6 +91,20 @@ func (rl *RateLimiter) Allow(ip string) bool {
 	return allowed
 }
 
+// retainRateLimitAttempts reuses the caller's private storage while the limiter's
+// exclusive mutex is held. Scan every entry and preserve order: request times
+// can be sampled before waiting for the mutex, so expiry is not always a prefix.
+func retainRateLimitAttempts(attempts []time.Time, cutoff time.Time) []time.Time {
+	valid := attempts[:0]
+	for _, attempt := range attempts {
+		if attempt.After(cutoff) {
+			valid = append(valid, attempt)
+		}
+	}
+	clear(attempts[len(valid):])
+	return valid
+}
+
 // allowAt checks whether a request is allowed at the provided time and reports
 // how long the caller should wait before retrying when the limit is exceeded.
 func (rl *RateLimiter) allowAt(ip string, now time.Time) (bool, time.Duration) {
@@ -102,13 +116,7 @@ func (rl *RateLimiter) allowAt(ip string, now time.Time) (bool, time.Duration) {
 	// Get attempts for this IP
 	attempts := rl.attempts[ip]
 
-	// Filter out old attempts
-	var validAttempts []time.Time
-	for _, attempt := range attempts {
-		if attempt.After(cutoff) {
-			validAttempts = append(validAttempts, attempt)
-		}
-	}
+	validAttempts := retainRateLimitAttempts(attempts, cutoff)
 
 	// Check if under limit
 	if len(validAttempts) >= rl.limit {
@@ -137,12 +145,7 @@ func (rl *RateLimiter) cleanup() {
 	cutoff := time.Now().Add(-rl.window)
 
 	for ip, attempts := range rl.attempts {
-		var validAttempts []time.Time
-		for _, attempt := range attempts {
-			if attempt.After(cutoff) {
-				validAttempts = append(validAttempts, attempt)
-			}
-		}
+		validAttempts := retainRateLimitAttempts(attempts, cutoff)
 
 		if len(validAttempts) == 0 {
 			delete(rl.attempts, ip)
