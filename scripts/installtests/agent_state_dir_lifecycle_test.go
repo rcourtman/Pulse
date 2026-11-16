@@ -48,6 +48,7 @@ type agentLifecycleSnapshot struct {
 	lastCommands    bool
 	requests        string
 	firstReport     string
+	reportIdentity  string
 }
 
 func (s *agentLifecycleControlPlane) setCredentials(bootstrapToken, runtimeToken, canonicalID string) {
@@ -76,6 +77,8 @@ func (s *agentLifecycleControlPlane) snapshot() agentLifecycleSnapshot {
 	for _, key := range keys {
 		counts = append(counts, fmt.Sprintf("%s=%d", key, s.requests[key]))
 	}
+	// These timestamps describe the first enrollment/report over the fixture's
+	// lifetime, not a new latency sample on restart, outage or credential rotation.
 	firstReport := "no-report-attempt"
 	if !s.firstReportAt.IsZero() {
 		firstReport = "no-successful-enrollment"
@@ -87,9 +90,17 @@ func (s *agentLifecycleControlPlane) snapshot() agentLifecycleSnapshot {
 			}
 		}
 	}
+	reportIdentity := "missing"
+	if s.lastReportID != "" {
+		reportIdentity = "other"
+		if s.lastReportID == s.canonicalID {
+			reportIdentity = "canonical"
+		}
+	}
 	return agentLifecycleSnapshot{
 		requests:        strings.Join(counts, ","),
 		firstReport:     firstReport,
+		reportIdentity:  reportIdentity,
 		online:          s.online,
 		enrollmentCount: s.enrollmentCount,
 		reportCount:     s.reportCount,
@@ -248,8 +259,8 @@ func waitForLifecycleState(t *testing.T, timeout time.Duration, describe string,
 }
 
 func (s agentLifecycleSnapshot) diagnostic() string {
-	return fmt.Sprintf("enrollments=%d reports=%d commands=%t requests=[%s] first_report_after_enrollment=%s",
-		s.enrollmentCount, s.reportCount, s.lastCommands, s.requests, s.firstReport)
+	return fmt.Sprintf("enrollments=%d reports=%d commands=%t requests=[%s] first_report_after_first_enrollment=%s report_id=%s",
+		s.enrollmentCount, s.reportCount, s.lastCommands, s.requests, s.firstReport, s.reportIdentity)
 }
 
 func buildLifecycleAgent(t *testing.T) string {

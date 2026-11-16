@@ -179,7 +179,7 @@ func TestLifecycleRequestObservationTiming(t *testing.T) {
 				lastReportID: "private-fixture-report-id", lastReportToken: "private-fixture-token",
 			}
 			got := state.snapshot()
-			if got.firstReport != tc.want || !strings.Contains(got.diagnostic(), "first_report_after_enrollment="+tc.want) {
+			if got.firstReport != tc.want || !strings.Contains(got.diagnostic(), "first_report_after_first_enrollment="+tc.want) {
 				t.Fatalf("ambiguous first report timing: %s, want %s", got.diagnostic(), tc.want)
 			}
 			if strings.Contains(got.diagnostic(), "private-fixture") {
@@ -220,9 +220,9 @@ func TestLifecycleRequestFailureEvidence(t *testing.T) {
 		t.Fatal("request failure control unexpectedly returned")
 		return
 	}
-	for _, tc := range []struct{ mode, counts string }{
-		{"rejected", "reports=0 commands=false requests=[enrollment/200=1,enrollment/started=1,report/401=1,report/started=1]"},
-		{"unexpected-id", "reports=1 commands=false requests=[enrollment/200=1,enrollment/started=1,report/200=1,report/started=1]"},
+	for _, tc := range []struct{ mode, counts, identity string }{
+		{"rejected", "reports=0 commands=false requests=[enrollment/200=1,enrollment/started=1,report/401=1,report/started=1]", "missing"},
+		{"unexpected-id", "reports=1 commands=false requests=[enrollment/200=1,enrollment/started=1,report/200=1,report/started=1]", "other"},
 	} {
 		t.Run(tc.mode, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
@@ -235,7 +235,7 @@ func TestLifecycleRequestFailureEvidence(t *testing.T) {
 				t.Fatalf("request control did not retain the expected failure: context=%v err=%v\n%s", ctx.Err(), err, output)
 			}
 			for _, want := range []string{"timed out waiting for canonical report; enrollments=1", tc.counts,
-				"first_report_after_enrollment=", "process result: signal: killed"} {
+				"first_report_after_first_enrollment=", "report_id=" + tc.identity, "process result: signal: killed"} {
 				if !strings.Contains(string(output), want) {
 					t.Errorf("request failure lost %q:\n%s", want, output)
 				}
@@ -263,7 +263,7 @@ func TestLifecycleRequestObservationsKeepRejectedAttempts(t *testing.T) {
 		}
 	}
 	request("/api/agents/agent/report", "wrong-fixture-token", nil, http.StatusUnauthorized)
-	if got := state.snapshot(); got.reportCount != 0 || got.firstReport != "no-successful-enrollment" ||
+	if got := state.snapshot(); got.reportCount != 0 || got.firstReport != "no-successful-enrollment" || got.reportIdentity != "missing" ||
 		got.requests != "report/401=1,report/started=1" {
 		t.Fatalf("rejected report became no attempt: %+v", got)
 	}
@@ -285,13 +285,23 @@ func TestLifecycleRequestObservationsKeepRejectedAttempts(t *testing.T) {
 	got := state.snapshot()
 	want := "config/200=1,config/started=1,enrollment/200=1,enrollment/400=1,enrollment/401=1,enrollment/started=3,lookup/404=1,lookup/started=1,other/404=1,other/started=1,report/200=1,report/401=1,report/503=1,report/started=3"
 	if got.requests != want || got.enrollmentCount != 1 || got.reportCount != 1 || got.lastReportID != "agent-one" ||
-		got.lastReportToken != "runtime-one" || got.firstReport != "before-successful-enrollment" {
+		got.lastReportToken != "runtime-one" || got.firstReport != "before-successful-enrollment" ||
+		got.reportIdentity != "canonical" || !strings.Contains(got.diagnostic(), "report_id=canonical") {
 		t.Fatalf("fixture changed admission or lost observations: %+v", got)
 	}
 	for _, private := range []string{"bootstrap-one", "runtime-one", "private-fixture"} {
 		if strings.Contains(got.diagnostic(), private) {
 			t.Fatal("request diagnostic includes a request secret/path/identifier")
 		}
+	}
+	// A prior report is no longer canonical after credential/identity rotation;
+	// the timing must still identify its lifetime-first sample explicitly.
+	state.setCredentials("bootstrap-two", "runtime-two", "agent-two")
+	rotated := state.snapshot()
+	if rotated.reportIdentity != "other" || rotated.firstReport != got.firstReport ||
+		!strings.Contains(rotated.diagnostic(), "first_report_after_first_enrollment="+got.firstReport) ||
+		!strings.Contains(rotated.diagnostic(), "report_id=other") {
+		t.Fatal("rotation lost report identity classification or mislabeled lifetime timing")
 	}
 }
 
