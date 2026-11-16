@@ -100,7 +100,7 @@ async function openEdit() {
   return dialog;
 }
 function save(dialog: HTMLElement, operation = 'Update Role') {
-  const button = within(dialog).getByRole('button', { name: operation, exact: true });
+  const button = within(dialog).getByRole('button', { name: operation });
   button.focus();
   fireEvent.click(button);
 }
@@ -150,7 +150,7 @@ describe('role feedback through the consuming editor and real HTTP client', () =
       expect(within(dialog).getByLabelText('Role Name')).toHaveValue('Rejected draft');
       expect(within(dialog).getByLabelText('Permission 3 resource')).toHaveValue('future/resource');
       for (const name of ['Close role editor', 'Cancel', 'Update Role'])
-        expect(within(dialog).getByRole('button', { name, exact: true })).toBeEnabled();
+        expect(within(dialog).getByRole('button', { name })).toBeEnabled();
       const description = within(dialog).getByLabelText('Description', { exact: true });
       description.focus();
       fireEvent.input(description, { target: { value: 'Still editable' } });
