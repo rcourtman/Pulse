@@ -233,7 +233,11 @@ func TestDeliveryRehearsalRetryUsesOrdinaryQueueAndKeepsAttemptEvidence(t *testi
 	var run *DeliveryRehearsal
 	require.Eventually(t, func() bool {
 		run, err = m.GetDeliveryRehearsal(input.ID)
-		return err == nil && run.Destinations[0].Firing.Attempts == 1 && run.Destinations[0].Firing.Status == "deferred"
+		// Retry scheduling is published before its audit row. Observe both
+		// records before asserting the retained provider classification.
+		return err == nil && run.Destinations[0].Firing.Attempts == 1 &&
+			run.Destinations[0].Firing.Status == "deferred" &&
+			run.Destinations[0].Firing.FailureClass == "server_error"
 	}, 10*time.Second, 10*time.Millisecond)
 	require.Equal(t, "server_error", run.Destinations[0].Firing.FailureClass)
 	require.Eventually(t, func() bool {
