@@ -8076,6 +8076,18 @@ gave up. The refusal names the in-scope resources whose names appear as whole
 words in the submitted ID or name, with their IDs, and asks for one finding per
 resource. Those words only build the hint; nothing is filed until the model
 retries with an exact ID (`TestPatrolFindingUnknownIDNamesTheResourcesItMeant`).
+A `resource_id` that is exactly one resource's name, of the submitted type and
+in the lifecycle scope, and none of its IDs, is filed under that resource's ID,
+so the ID owns deduplication. The ID is the record's first in-scope ID (its
+canonical ID), so full and scoped runs agree. An ambiguous name, or a name
+that already has findings filed under it (whose lineage, dismissal or snooze
+must carry on), is left as submitted
+(`TestPatrolFindingNameAsIDIsFiledUnderTheResourcesID`). The unknown-ID repair
+above applies to any unknown ID, not only registry-shaped ones, so a guess such
+as `node/pmxlab` admitted by its exact name is filed under the node's ID. An
+ID with findings already filed under it, in any state (snoozed, dismissed and
+resolved included, `FindingsStore.HasFindingsForResource`), keeps them
+(`TestPatrolFindingGuessedNodeIDIsFiledUnderTheNodesID`).
 
 ### Mobile destination links do not expand AI authority
 
