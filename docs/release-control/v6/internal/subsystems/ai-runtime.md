@@ -8069,6 +8069,13 @@ then owns deduplication and persistence. A submitted ID that identifies any
 real out-of-scope resource, an ambiguous name, a type mismatch, or a name that
 does not resolve inside the lifecycle scope remains rejected. No fuzzy name or
 ID matching is permitted at this boundary.
+A rejected `resource_id` that names no runtime resource is not reported as out
+of scope: the triage tables name resources without IDs, and a model that filed
+`ct/gitea` for three guests was told the resource was outside the scope and
+gave up. The refusal names the in-scope resources whose names appear as whole
+words in the submitted ID or name, with their IDs, and asks for one finding per
+resource. Those words only build the hint; nothing is filed until the model
+retries with an exact ID (`TestPatrolFindingUnknownIDNamesTheResourcesItMeant`).
 
 ### Mobile destination links do not expand AI authority
 

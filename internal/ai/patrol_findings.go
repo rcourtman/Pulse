@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
@@ -607,7 +608,7 @@ func (a *patrolFindingCreatorAdapter) CreateFinding(input tools.PatrolFindingInp
 		input = canonical
 	}
 	if !a.findingInCurrentScope(&Finding{ResourceID: input.ResourceID, ResourceName: input.ResourceName}) {
-		return "", false, fmt.Errorf("resource %s is outside the requested patrol finding scope", input.ResourceID)
+		return "", false, a.findingScopeRejection(input)
 	}
 
 	// Map severity
@@ -773,6 +774,74 @@ func (a *patrolFindingCreatorAdapter) validateFindingResourceIdentity(input tool
 		)
 	}
 	return nil
+}
+
+// findingScopeRejection explains a refused report. A resource_id that names
+// no resource is not out of scope, it is a guess: the triage tables name
+// resources without IDs, and a model filed "ct/gitea" for three guests at once,
+// was told the resource was outside the scope, and gave up. That answer names
+// the in-scope resources the report mentions, with their IDs.
+func (a *patrolFindingCreatorAdapter) findingScopeRejection(input tools.PatrolFindingInput) error {
+	idToken := canonicalPatrolScopeToken(input.ResourceID)
+	mentioned := " " + patrolFindingWords(input.ResourceID+" "+input.ResourceName) + " "
+	known := false
+	var candidates []string
+	seen := map[string]bool{}
+	// Lifecycle scope as findingInCurrentScope reads it, built once.
+	inScope := func(id string) bool { return a.findingScope[id] }
+	if len(a.findingScope) == 0 {
+		scoped := patrolRuntimeKnownResources(a.snap)
+		inScope = func(id string) bool { return len(scoped) == 0 || scoped[id] }
+	}
+	patrolVisitRuntimeResources(a.snap, func(record patrolRuntimeResourceRecord) bool {
+		for _, value := range append(append([]string(nil), record.ids...), record.aliases...) {
+			if idToken != "" && canonicalPatrolScopeToken(value) == idToken {
+				known = true
+			}
+		}
+		id := ""
+		for _, candidate := range record.ids {
+			if candidate = strings.TrimSpace(candidate); candidate == "" {
+				continue
+			}
+			if id == "" || a.findingScope[candidate] {
+				id = candidate
+			}
+		}
+		if id == "" || seen[id] {
+			return true
+		}
+		for _, alias := range record.aliases {
+			words := patrolFindingWords(alias)
+			if len(words) < 3 || !strings.Contains(mentioned, " "+words+" ") || !inScope(id) {
+				continue
+			}
+			seen[id] = true
+			candidates = append(candidates, fmt.Sprintf("%s is %s (%s)", strings.TrimSpace(alias), id, record.resourceType))
+			break
+		}
+		return true
+	})
+	if known {
+		return fmt.Errorf("resource %s is outside the requested patrol finding scope", input.ResourceID)
+	}
+	sort.Strings(candidates)
+	if len(candidates) > 5 {
+		candidates = candidates[:5]
+	}
+	hint := "pulse_query gives each resource's ID."
+	if len(candidates) > 0 {
+		hint = "In this run: " + strings.Join(candidates, "; ") + "."
+	}
+	return fmt.Errorf("resource_id %q is not a Pulse resource ID. %s File one finding per resource, under its own resource_id and resource_name", input.ResourceID, hint)
+}
+
+// patrolFindingWords lowercases a value and keeps only its letters and digits,
+// one space between words.
+func patrolFindingWords(value string) string {
+	return strings.Join(strings.FieldsFunc(strings.ToLower(value), func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsDigit(r)
+	}), " ")
 }
 
 // canonicalizeUnknownFindingResource repairs only a redundant model-authored
