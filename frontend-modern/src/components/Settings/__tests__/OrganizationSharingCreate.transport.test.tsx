@@ -545,7 +545,8 @@ describe('rendered Create Share controls through the real transport', () => {
     await waitFor(() => expect(inventoryReads()).toHaveLength(10));
     await screen.findByRole('heading', { name: 'Create Share' });
     expect(targetInput()).toHaveValue('');
-    expect(targetInput()).not.toHaveAttribute('aria-describedby');
+    expect(targetInput()).toHaveAttribute('aria-invalid', 'true');
+    expect(targetInput()).toHaveAccessibleDescription('Target organization is required');
     expect(resourceInput()).toHaveValue(quickPickValue);
     expect(createButton()).toBeDisabled();
     directory = [originalOrg, ...peers];
@@ -553,10 +554,14 @@ describe('rendered Create Share controls through the real transport', () => {
     await waitFor(() => expect(inventoryReads()).toHaveLength(15));
     await screen.findByRole('heading', { name: 'Create Share' });
     expect(targetInput()).toHaveValue('');
+    expect(targetInput()).toHaveAttribute('aria-invalid', 'true');
+    expect(targetInput()).toHaveAccessibleDescription('Target organization is required');
     expect(createButton()).toBeDisabled();
     fireEvent.click(createButton());
     expect(writes()).toHaveLength(0);
     fireEvent.change(targetInput(), { target: { value: target.id } });
+    expect(targetInput()).not.toHaveAttribute('aria-invalid');
+    expect(targetInput()).toHaveAccessibleDescription(`${target.displayName} · ID: ${target.id}`);
     expect(createButton()).toBeEnabled();
     fireEvent.click(createButton());
     await waitFor(() => expect(inventoryReads()).toHaveLength(20));

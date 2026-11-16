@@ -1,4 +1,4 @@
-import { Component, For, Show, createMemo } from 'solid-js';
+import { Component, For, Show, createMemo, createUniqueId } from 'solid-js';
 import { Button } from '@/components/shared/Button';
 import { FormSelect } from '@/components/shared/FormSelect';
 import { CANONICAL_RESOURCE_TYPES } from '@/utils/canonicalResourceTypes';
@@ -19,6 +19,11 @@ interface OrganizationSharingCreateSectionProps {
 export const OrganizationSharingCreateSection: Component<OrganizationSharingCreateSectionProps> = (
   props,
 ) => {
+  const fieldID = createUniqueId();
+  const targetOrgID = `${fieldID}-target-org`;
+  const resourceTypeID = `${fieldID}-resource-type`;
+  const resourceID = `${fieldID}-resource-id`;
+  // Keep names stable; expose changing validation as each control's description.
   // Describe only a current choice, not leftover draft fields after withdrawal.
   const selectedTarget = createMemo(() =>
     props.state.targetOrgOptions().find((target) => target.id === props.state.targetOrgId()),
@@ -55,7 +60,12 @@ export const OrganizationSharingCreateSection: Component<OrganizationSharingCrea
             <div class="grid gap-2 sm:gap-3 lg:grid-cols-2">
               <div class="space-y-1">
                 <FormSelect
+                  id={targetOrgID}
                   label="Target Organization"
+                  aria-invalid={props.state.targetOrgError() ? true : undefined}
+                  aria-describedby={
+                    props.state.targetOrgError() ? `${targetOrgID}-error` : undefined
+                  }
                   labelClass="text-xs font-medium uppercase tracking-wide text-muted"
                   value={props.state.targetOrgId()}
                   onChange={(event) => props.state.updateTargetOrg(event.currentTarget.value)}
@@ -91,7 +101,7 @@ export const OrganizationSharingCreateSection: Component<OrganizationSharingCrea
                   </For>
                 </FormSelect>
                 <Show when={props.state.targetOrgError() !== ''}>
-                  <p class="text-xs text-red-600 dark:text-red-400">
+                  <p id={`${targetOrgID}-error`} class="text-xs text-red-600 dark:text-red-400">
                     {props.state.targetOrgError()}
                   </p>
                 </Show>
@@ -186,11 +196,19 @@ export const OrganizationSharingCreateSection: Component<OrganizationSharingCrea
               }
             >
               <div class="grid gap-3 lg:grid-cols-3">
-                <label class="space-y-1">
-                  <span class="text-xs font-medium uppercase tracking-wide text-muted">
+                <div class="space-y-1">
+                  <label
+                    for={resourceTypeID}
+                    class="text-xs font-medium uppercase tracking-wide text-muted"
+                  >
                     Resource Type
-                  </span>
+                  </label>
                   <input
+                    id={resourceTypeID}
+                    aria-invalid={props.state.resourceTypeError() ? true : undefined}
+                    aria-describedby={
+                      props.state.resourceTypeError() ? `${resourceTypeID}-error` : undefined
+                    }
                     type="text"
                     value={props.state.resourceType()}
                     onInput={(event) => props.state.updateResourceType(event.currentTarget.value)}
@@ -198,17 +216,28 @@ export const OrganizationSharingCreateSection: Component<OrganizationSharingCrea
                     class={`w-full rounded-md border bg-surface px-3 py-2 text-sm text-base-content shadow-xs focus:border-blue-500 focus:outline-hidden focus:ring-2 focus:ring-blue-500 ${props.state.resourceTypeError() ? 'border-red-400 dark:border-red-500' : 'border-border'}`}
                   />
                   <Show when={props.state.resourceTypeError() !== ''}>
-                    <p class="text-xs text-red-600 dark:text-red-400">
+                    <p
+                      id={`${resourceTypeID}-error`}
+                      class="text-xs text-red-600 dark:text-red-400"
+                    >
                       {props.state.resourceTypeError()}
                     </p>
                   </Show>
-                </label>
+                </div>
 
-                <label class="space-y-1">
-                  <span class="text-xs font-medium uppercase tracking-wide text-muted">
+                <div class="space-y-1">
+                  <label
+                    for={resourceID}
+                    class="text-xs font-medium uppercase tracking-wide text-muted"
+                  >
                     Resource ID
-                  </span>
+                  </label>
                   <input
+                    id={resourceID}
+                    aria-invalid={props.state.resourceIdError() ? true : undefined}
+                    aria-describedby={
+                      props.state.resourceIdError() ? `${resourceID}-error` : undefined
+                    }
                     type="text"
                     value={props.state.resourceId()}
                     onInput={(event) => props.state.updateResourceId(event.currentTarget.value)}
@@ -216,11 +245,11 @@ export const OrganizationSharingCreateSection: Component<OrganizationSharingCrea
                     class={`w-full rounded-md border bg-surface px-3 py-2 text-sm text-base-content shadow-xs focus:border-blue-500 focus:outline-hidden focus:ring-2 focus:ring-blue-500 ${props.state.resourceIdError() ? 'border-red-400 dark:border-red-500' : 'border-border'}`}
                   />
                   <Show when={props.state.resourceIdError() !== ''}>
-                    <p class="text-xs text-red-600 dark:text-red-400">
+                    <p id={`${resourceID}-error`} class="text-xs text-red-600 dark:text-red-400">
                       {props.state.resourceIdError()}
                     </p>
                   </Show>
-                </label>
+                </div>
 
                 <label class="space-y-1">
                   <span class="text-xs font-medium uppercase tracking-wide text-muted">

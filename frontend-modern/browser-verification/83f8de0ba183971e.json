@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "963ea87f8ea2f798d128fe16f896727e55472879",
+  "verified_at": "2026-11-16T11:26:39.087Z",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/OrganizationSharingCreateSection.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/OrganizationSharingCreateSection.tsx": "da707a354baf0a8d46aa77fc40bb55fdf4c49342caacea34ca8c8ed06f37de66"
+  },
+  "routes": [
+    "/settings (Organization Sharing actual consuming panel, precompiled synthetic HTTP fixture)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Invalid target organization, invalid manual resource type and missing resource ID; corrected Viewer share pending approval. Actual panel/state/FormSelect/OrgsAPI/apiClient/toasts and production CSS. Discovery hook alone supplies one synthetic VM.",
+    "Chromium light/dark and WebKit light at desktop/phone: 6 cases per side, 16 individually inspected Chromium captures / 8 comparable full-page pairs. 59 bound production source/manifest inputs. Visible fields, full errors, org/resource identity, role, pending approval, Remove and both share sections preserved."
+  ],
+  "interactions": [
+    "Select then clear recipient, enter invalid type and whitespace ID: zero writes, Create Share remains disabled. Final fields have distinct live error descriptions and invalid state; names remain Resource Type and Resource ID rather than including full errors.",
+    "Correct recipient/type/ID; invalid/described-by error links disappear and valid recipient identity help remains. Keyboard Enter submits exactly one trimmed encoded-org Viewer POST with expected-org header, CSRF and session auth without unrelated API token. Pending share is read back without changing authority."
+  ],
+  "evidence": "Candidate BROWSER-VERIFICATION.json, CAPTURES-BEFORE.tar.xz, CAPTURES-AFTER.tar.xz and RECEIPTS.md. Fixture/compiled assets are evidence-only, not committed. No real screen-reader speech, live estate or IdP acceptance claimed.",
+  "browser_versions": {
+    "chromium": "141.0.7390.37",
+    "webkit": "26.0"
+  },
+  "playwright": "1.56.1; matches integration lock"
+}
