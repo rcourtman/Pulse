@@ -802,6 +802,12 @@ stopped "with no corresponding entry in the Proxmox task log", so v2 also
 accepts the task-log wordings Patrol used across the stored runs. v3 adds
 "no Proxmox stop/shutdown task", which split v2's "no stop shutdown task".
 
+P3 is at version 2. v1 passed any conclusion that named nextcloud and a backup
+word, so a guess that only said to prune old backups "if backups are the
+cause" was Handed over. v2 also needs the conclusion to say the backups piled
+up, and saying they cannot account for the fill sends the user the wrong way.
+Three of the 15 stored P3 runs drop to Partial.
+
 P2 with commands on is the open cell. Patrol's alert check is told Pulse cannot
 run an action on the guest and concludes it cannot look inside either, so it
 raises nothing. In an earlier run of the same cell it did raise a finding, and

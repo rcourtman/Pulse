@@ -2108,6 +2108,11 @@ A decisive term is a contiguous phrase, so a word inside it misses: P4 v3
 adds "no proxmox stop shutdown task" after a default-agent conclusion said
 "No Proxmox stop/shutdown task appears in the task log" and graded Handed
 back under v2 (`TestP4AcceptsNoProxmoxStopShutdownTask`).
+P3 v2 needs a piled-up word ("unpruned", "accumulated", "retained") beside
+the guest and backup groups, and lists "cannot account for" and similar as
+misdirection: v1 handed over a conclusion that only guessed and two that said
+the backups did not explain the fill
+(`TestP3HandsOverOnlyAConclusionThatFoundThePiledUpBackups`).
 
 Patrol model qualification extends only through
 `internal/ai/qualification/`, `cmd/patrol-qualify/`, and reviewed manifests
