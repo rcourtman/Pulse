@@ -104,6 +104,10 @@ def execute_suite(command: list[str], environment: dict, interruption: Interrupt
             break
         try:
             process.wait(timeout=0.1)
+            # The handler can run while wait() observes a returning leader.
+            # Its descendants may still hold output; do not lose that stop.
+            if interruption.received_signal is not None:
+                stop = stop_suite(process, interruption.received_signal)
             break
         except subprocess.TimeoutExpired:
             continue

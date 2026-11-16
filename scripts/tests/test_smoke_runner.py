@@ -284,7 +284,13 @@ class SmokeRunnerTest(unittest.TestCase):
         # A remaining zombie is not a running descendant, or whole-VM cleanup.
         child = Path('/proc') / child_ready.read_text() / 'stat'
         deadline = time.monotonic() + 2
-        while child.exists() and child.read_text().split(') ', 1)[1][0] != 'Z':
+        while True:
+            try:
+                state = child.read_text().split(') ', 1)[1][0]
+            except FileNotFoundError:
+                break
+            if state == 'Z':
+                break
             self.assertLess(time.monotonic(), deadline, 'owned fixture descendant still runs')
             time.sleep(.01)
 
@@ -893,6 +899,22 @@ class InterruptionObservationTest(unittest.TestCase):
         self.assertEqual(stop, {'requested_signal': signal.SIGTERM, 'sent_signals': [],
                                 'leader_reaped': False, 'process_group_absent': None,
                                 'stop_error_errno': 1})
+
+    def test_signal_while_wait_returns_still_stops_the_owned_group(self):
+        interruption = self.module.Interruption()
+        process = Mock(pid=123, returncode=0)
+
+        def returned(*_args, **_kwargs):
+            interruption.receive(signal.SIGTERM, None)
+            return 0
+
+        process.wait.side_effect = returned
+        with patch.object(self.module.subprocess, 'Popen', return_value=process), \
+                patch.object(self.module, 'stop_suite', return_value={'leader_reaped': True}) as stop:
+            result = self.module.execute_suite(['unused'], {}, interruption)
+        stop.assert_called_once_with(process, signal.SIGTERM)
+        self.assertEqual((result['started'], result['exit_code'], result['signal']), (True, 0, None))
+        self.assertTrue(result['interruption_stop']['leader_reaped'])
 
     def test_unreaped_child_remains_unobserved_and_never_admits_another_suite(self):
         process = Mock(pid=123, returncode=None)
