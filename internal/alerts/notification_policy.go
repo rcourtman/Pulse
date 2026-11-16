@@ -565,7 +565,7 @@ func quietHoursCategoryForAlert(alert *Alert) string {
 	}
 
 	switch alert.Type {
-	case "cpu", "memory", "disk", "diskRead", "diskWrite", "networkIn", "networkOut", "temperature":
+	case "cpu", "memory", "disk", "diskRead", "diskWrite", "networkIn", "networkOut", "temperature", "notification-rehearsal":
 		return "performance"
 	case "queue-depth", "queue-deferred", "queue-hold", "message-age",
 		"docker-container-health", "docker-container-restart-loop",

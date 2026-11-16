@@ -11578,3 +11578,18 @@ action, which supplies `noopener noreferrer` for the new tab, and the shared
 `ActionIconButton` close control, which keeps a 44px touch target below the
 `sm` breakpoint. No copy, link styling or threshold is drafted in the
 workspace.
+
+### Inspect delivery rehearsals from notifications (16 November 2026)
+
+The Alerts page passes its reactive rehearsal query identifier through the
+configuration surface and Destinations tab. AlertDeliveryRehearsal owns the
+labelled firing/recovery interaction, disclosure, exact linked-report selection,
+and outcome cards using shared SettingsPanel and Button. Status is explicit
+text as well as colour. Polling pauses while collapsed or the document is
+hidden. Unsaved settings and unknown current evidence disable mutations.
+Rehearsal component and API tests cover uncertain requests, reader changes and
+linked history without introducing resource-incident state.
+
+Rehearsal outcomes separate the human explanation from redacted transport
+diagnostics. The outcome card demotes raw queue/provider details into a keyboard
+operable disclosure. Rehearsal failures remain ordinary delivery-health evidence.

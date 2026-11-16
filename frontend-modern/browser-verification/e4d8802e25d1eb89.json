@@ -1,0 +1,75 @@
+{
+  "version": 1,
+  "base_sha": "c29fe107cb55e68a6e9a96bf3023015f14d135fe",
+  "verified_at": "2026-11-16T19:46:26Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/api/notifications.ts",
+    "frontend-modern/src/features/alerts/AlertDeliveryRehearsal.tsx",
+    "frontend-modern/src/features/alerts/AlertsConfigurationSurface.tsx",
+    "frontend-modern/src/features/alerts/tabs/DestinationsTab.tsx",
+    "frontend-modern/src/pages/Alerts.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/api/notifications.ts": "5446b7f33755454d65aac639c010618565f0bb88c5106cf9e7826fc94462b247",
+    "frontend-modern/src/features/alerts/AlertDeliveryRehearsal.tsx": "a10e2d2b17fba00b341cce96d3920923a47f46783ef21fa8e57b477c1f3c46dc",
+    "frontend-modern/src/features/alerts/AlertsConfigurationSurface.tsx": "e6299fffb71222b73587d7948733464de5a51d0c6f1de071e0002c343665e3dc",
+    "frontend-modern/src/features/alerts/tabs/DestinationsTab.tsx": "7fd038765edd2c37716b8e855cb798ca012689ffce58d576b00c28ed00517c5e",
+    "frontend-modern/src/pages/Alerts.tsx": "35b22cd3574eb163d937014b3b2e882f7dd3af6b4dae83248c65a0123d9c8b78"
+  },
+  "routes": [
+    "/alerts/notifications",
+    "/alerts/notifications?rehearsal=<id>"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 768,
+      "height": 1024
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Collapsed and keyboard-expanded rehearsal panel, initial loading and empty history",
+    "Saved-settings gate while SMTP edits are unsaved, followed by discard",
+    "Same-run accepted firing, terminal HTTP rejection and severity suppression with independent recovery outcomes",
+    "Real two-second grouping deadline, actual grouped firing and recovery acceptance",
+    "Critical performance quiet-hours deferral and early finish with no receiver call",
+    "Tag-filter and paused-delivery suppression with no receiver call",
+    "Accepted firing with saved recovery notifications disabled",
+    "HTTP 503 retry followed by provider acceptance and two recorded attempts",
+    "Lost POST response after durable admission, reconciled to one run and one firing call",
+    "Unavailable history reads mark retained results stale and disable further mutations",
+    "Grouped firing survives a real process restart with its original deadline and finishes without an early send",
+    "Distinct retained history IDs, selecting an older run and resuming the active run",
+    "Exact received report link selects and focuses the correct report, including an unavailable-link return action",
+    "No saved destinations before and after finishing a rehearsal",
+    "Redacted diagnostics remain expanded through a fresh read and subsequent polling",
+    "Desktop two-column, tablet and stacked phone outcomes with no horizontal overflow"
+  ],
+  "interactions": [
+    "Send labelled warning and critical rehearsals through saved destinations and the real queue to loopback HTTP receivers",
+    "Inspect per-destination firing and recovery statuses, actual attempt counts and the prompt to confirm receiver receipt",
+    "Expand and collapse rehearsal and diagnostic disclosures with Enter and Space, then verify refresh preserves the open diagnostic node",
+    "Choose severity and routing tags, inspect policy holds, finish held work and confirm no recovery without a firing receipt",
+    "Drop a POST response after backend admission, refresh the recorded UUID and inspect receiver calls to exclude a duplicate firing",
+    "Inject an evidence-read failure, verify the stale warning and disabled finish action, restore reads and resume",
+    "Restart the task-owned backend with a pending ten-minute group, reopen its exact report and confirm zero early receiver calls",
+    "Start another run, verify unique history option IDs, select an older result and resume/finish the active run",
+    "Follow the actual URL emitted in a received notification and verify report-heading focus rather than a nonexistent incident",
+    "Inspect actual screenshots and document width at 1280, 768 and 390 pixels; open the long redacted error on phone and desktop"
+  ],
+  "browsers": [
+    "Chromium"
+  ],
+  "limitations": [
+    "Transport browser checks used real loopback HTTP receivers. External SMTP and Apprise providers, mobile push and the independent watchdog were not exercised in this fixture.",
+    "Cross-organization authorization, stale-reader rejection, expiry and queue/evidence-store fault injection are additionally covered by API, component and notification runtime regressions."
+  ]
+}

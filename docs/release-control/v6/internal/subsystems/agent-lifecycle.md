@@ -11959,3 +11959,10 @@ or logout responses. Malformed login input neither alters pending browser
 requests nor issues credentials; no agent token, saved identity, cadence or
 command authority is changed. `saml_login_request_test.go` verifies these login
 admission and pending-request boundaries.
+
+### Delivery rehearsal authority (16 November 2026)
+
+The rehearsal reads and mutations under `/api/notifications/rehearsals` keep
+notification organization-manager and settings-scope authority. A rehearsal is
+a notification producer, with no agent installation, command, connection or
+lifecycle mutation. Request organization lookup cannot borrow another runtime.

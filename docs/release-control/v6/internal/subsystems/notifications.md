@@ -2020,3 +2020,42 @@ metadata address (or, on Pulse Cloud, a private address). The check is
 `securityutil.CheckTenantOutboundDestination` in
 `internal/api/alerting/notifications.go`. Webhook and Apprise API targets keep
 their existing outbound validation.
+
+### Alert-delivery rehearsal (16 November 2026)
+
+`StartDeliveryRehearsal` admits an identified, labelled notification producer
+through `SendAlert`, the shared routing/grouping planner, persistent queue,
+current destination policy, provider transport, retries and delivery receipts.
+It never creates an infrastructure incident or evaluates a resource threshold.
+Each rehearsal is partitioned from ordinary alert messages while retaining the
+ordinary grouping deadline. There is no direct-send fallback if durable queue
+admission fails. Finishing calls ordinary occurrence cancellation and
+`SendResolvedAlert`. Recovery requires the same successful firing receipt as any
+other producer and respects saved recovery and delivery policy.
+
+The queue owns durable rehearsal admission and indexed run/job associations.
+Reports combine explicit admission/routing exclusions with retained queue rows
+and attempt audit evidence. Pending, deferred, failed, suppressed and unavailable
+remain distinct. Passed means provider acceptance, not observed inbox receipt.
+Finishing does not erase a terminal provider failure. Unreadable evidence fails
+closed; a failed evidence write fences that rehearsal until restart. An
+interrupted admission without retained queue evidence is unavailable, never
+assumed delivered or silently resent. Same-ID creation and recovery requests are
+idempotent. History is bounded to seven days and 100 runs, with one unfinished
+run per organization. Expiration uses ordinary occurrence cancellation before
+removing its evidence and does not fabricate a recovery.
+
+`internal/notifications/rehearsal_test.go` exercises real local HTTP firing and
+recovery, ordinary retries, rejection diagnostics, restart, same-ID idempotency,
+routing/schedule holds, early finish, separate grouped messages, expiry and
+queue/evidence failure. These controls do not qualify external providers,
+physical crash recovery, resource evaluation, escalation, mobile push or the
+independent external watchdog.
+
+Rehearsal notification links open the exact result at
+`/alerts/notifications?rehearsal=<id>`, including an older retained run outside
+the recent list. They never point at a nonexistent infrastructure incident.
+
+Rehearsal outcomes separate the human explanation from redacted transport
+diagnostics. The outcome card demotes raw queue/provider details into a keyboard
+operable disclosure. Rehearsal failures remain ordinary delivery-health evidence.

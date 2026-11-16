@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -28,6 +29,8 @@ func notificationAuthorityRouter(t *testing.T) *Router {
 		t.Fatalf("hash password: %v", err)
 	}
 	dataDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", dataDir)
+	t.Setenv("PULSE_LEGACY_KEY_PATH", filepath.Join(dataDir, "absent-legacy-key"))
 	cfg := &config.Config{DataPath: dataDir, ConfigPath: dataDir, AuthUser: "platform-admin", AuthPass: hashed}
 	mtp := config.NewMultiTenantPersistence(dataDir)
 	for _, id := range []string{"org-a", "org-b"} {
@@ -80,6 +83,7 @@ func TestNotificationDestinationsAreOrganizationBound(t *testing.T) {
 		"/api/notifications/email-providers",
 		"/api/notifications/health",
 		"/api/notifications/delivery-log",
+		"/api/notifications/rehearsals",
 	} {
 		for _, tc := range []struct {
 			user   string
@@ -94,6 +98,48 @@ func TestNotificationDestinationsAreOrganizationBound(t *testing.T) {
 			if rec.Code != tc.status {
 				t.Fatalf("%s as %s in %s = %d, want %d: %s", path, tc.user, tc.org, rec.Code, tc.status, rec.Body.String())
 			}
+		}
+	}
+}
+
+func TestDeliveryRehearsalsStayWithinTheRequestOrganization(t *testing.T) {
+	router := notificationAuthorityRouter(t)
+	const id = "372b7394-8945-46d1-a6ce-18a7cf32cbe3"
+	const body = `{"id":"` + id + `","level":"warning","tags":[]}`
+	for _, actor := range []string{"org-a-viewer", "org-b-owner"} {
+		for _, path := range []string{"/api/notifications/rehearsals", "/api/notifications/rehearsals/" + id + "/recover"} {
+			if rec := notificationAuthorityRequest(t, router, http.MethodPost, path, body, actor, "org-a"); rec.Code != http.StatusForbidden {
+				t.Fatalf("%s by %s = %d: %s", path, actor, rec.Code, rec.Body.String())
+			}
+		}
+	}
+	rec := notificationAuthorityRequest(t, router, http.MethodPost, "/api/notifications/rehearsals", body, "org-a-owner", "org-a")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("start = %d: %s", rec.Code, rec.Body.String())
+	}
+	for _, org := range []string{"org-b", "default"} {
+		actor := "org-b-owner"
+		if org == "default" {
+			actor = "platform-admin"
+		}
+		for _, method := range []string{http.MethodGet, http.MethodPost} {
+			path := "/api/notifications/rehearsals/" + id
+			if method == http.MethodPost {
+				path += "/recover"
+			}
+			if got := notificationAuthorityRequest(t, router, method, path, "{}", actor, org); got.Code != http.StatusNotFound {
+				t.Fatalf("foreign %s in %s = %d: %s", method, org, got.Code, got.Body.String())
+			}
+		}
+	}
+	for range 2 {
+		if got := notificationAuthorityRequest(t, router, http.MethodPost, "/api/notifications/rehearsals/"+id+"/recover", "{}", "org-a-owner", "org-a"); got.Code != http.StatusOK {
+			t.Fatalf("recover = %d: %s", got.Code, got.Body.String())
+		}
+	}
+	for _, invalid := range []string{`{"id":"not-a-valid-uuid-but-exactly-36-chars!!","level":"warning"}`, `{"id":"` + id + `","level":"urgent"}`, `{"id":"` + id + `","level":"warning","config":{"url":"http://127.0.0.1/"}}`, body + ` {}`} {
+		if got := notificationAuthorityRequest(t, router, http.MethodPost, "/api/notifications/rehearsals", invalid, "org-a-owner", "org-a"); got.Code != http.StatusBadRequest {
+			t.Fatalf("invalid rehearsal = %d: %s", got.Code, got.Body.String())
 		}
 	}
 }

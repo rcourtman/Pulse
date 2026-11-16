@@ -5,6 +5,7 @@ import { sessionCanReadRelaySettings } from '@/stores/sessionSettingsCapabilitie
 import { AlertAppriseDestinationsSection } from '../AlertAppriseDestinationsSection';
 import { AlertDeliveryHealthCard } from '../AlertDeliveryHealthCard';
 import { AlertDeliveryLogCard } from '../AlertDeliveryLogCard';
+import { AlertDeliveryRehearsal } from '../AlertDeliveryRehearsal';
 import { AlertDeliveryPausedCard } from '../AlertDeliveryPausedCard';
 import { AlertDeadManDestinationSection } from '../AlertDeadManDestinationSection';
 import { AlertDestinationsLoadErrorCard } from '../AlertDestinationsLoadErrorCard';
@@ -20,6 +21,8 @@ import {
 } from '../useAlertDestinationsTabState';
 
 export interface DestinationsTabProps extends AlertDestinationsTabStateProps {
+  requestedRehearsalID?: () => string | undefined;
+  hasUnsavedChanges?: () => boolean;
   setHasUnsavedChanges: (value: boolean) => void;
   setEmailConfig: (config: ReturnType<AlertDestinationsTabStateProps['emailConfig']>) => void;
   deadManPingUrl: () => string;
@@ -132,6 +135,12 @@ function LoadedDestinationsTab(props: DestinationsTabProps) {
           />
         </Show>
 
+        <Show when={!state.hasLoadError()}>
+          <AlertDeliveryRehearsal
+            hasUnsavedChanges={props.hasUnsavedChanges}
+            requestedRehearsalID={props.requestedRehearsalID}
+          />
+        </Show>
         <Show when={!state.deliveryNeedsAttention()}>{deliveryLog()}</Show>
 
         <Show when={!state.hasLoadError()}>
