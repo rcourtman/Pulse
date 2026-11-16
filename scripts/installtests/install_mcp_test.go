@@ -1,6 +1,8 @@
 package installtests
 
 import (
+	"bytes"
+	"context"
 	"crypto/sha256"
 	"fmt"
 	"os"
@@ -9,9 +11,84 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
 
 const productionMCPReleaseKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMZd/DaH+BldzOkq1A8KVTcFk73nAyrE8aJOyf7i00jm pulse-installer"
+
+func TestInstallMCPArgumentsDoNotStartInstallation(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		args []string
+		exit int
+	}{
+		{"long help", []string{"--help"}, 0},
+		{"short help", []string{"-h"}, 0},
+		{"unknown option", []string{"--version"}, 2},
+		{"positional argument", []string{"private-value-do-not-echo"}, 2},
+		{"help with extra argument", []string{"--help", "private-value-do-not-echo"}, 2},
+		{"short help with extra argument", []string{"-h", "private-value-do-not-echo"}, 2},
+		{"option terminator", []string{"--"}, 2},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			tmp := t.TempDir()
+			binDir := filepath.Join(tmp, "bin")
+			if err := os.Mkdir(binDir, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			calls := filepath.Join(tmp, "installer-calls")
+			// No network, platform probe, trust tool or destination preparation
+			// may run. Do not depend on the real machine's platform or tools.
+			for _, name := range []string{"curl", "uname", "install", "mv", "ssh-keygen", "mktemp", "mkdir"} {
+				writeTestFile(t, filepath.Join(binDir, name), []byte("#!/bin/sh\nprintf 'called\\n' >> \"$INSTALLER_CALLS\"\nexit 93\n"), 0o755)
+			}
+			// Keep a saved adapter beside the not-yet-created default directory.
+			adapter := filepath.Join(tmp, "pulse-mcp")
+			saved := []byte("existing adapter\n")
+			writeTestFile(t, adapter, saved, 0o700)
+			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			defer cancel()
+			cmd := exec.CommandContext(ctx, "bash", append([]string{repoFile("scripts", "install-mcp.sh")}, tt.args...)...)
+			cmd.Env = append(os.Environ(), "PATH="+binDir+string(os.PathListSeparator)+os.Getenv("PATH"),
+				"HOME="+tmp, "INSTALLER_CALLS="+calls, "PULSE_MCP_BIN_DIR="+tmp)
+			var stdout, stderr bytes.Buffer
+			cmd.Stdout, cmd.Stderr = &stdout, &stderr
+			runErr := cmd.Run()
+			if ctx.Err() != nil {
+				t.Fatalf("argument handling did not finish: %v", ctx.Err())
+			}
+			output := stdout.String() + stderr.String()
+			exit := 0
+			if runErr != nil {
+				exitErr, ok := runErr.(*exec.ExitError)
+				if !ok {
+					t.Fatal(runErr)
+				}
+				exit = exitErr.ExitCode()
+			}
+			if exit != tt.exit || !strings.Contains(output, "Usage: install-mcp.sh") {
+				t.Fatalf("exit=%d, want=%d; output:\n%s", exit, tt.exit, output)
+			}
+			if (tt.exit == 0 && stderr.Len() != 0) || (tt.exit != 0 && stdout.Len() != 0) {
+				t.Fatalf("unexpected output stream: stdout=%q stderr=%q", stdout.String(), stderr.String())
+			}
+			if strings.Contains(output, "private-value-do-not-echo") {
+				t.Fatalf("unsupported argument was echoed:\n%s", output)
+			}
+			if _, err := os.Stat(calls); !os.IsNotExist(err) {
+				t.Fatalf("argument handling invoked installer tools: %v", err)
+			}
+			content, err := os.ReadFile(adapter)
+			info, statErr := os.Stat(adapter)
+			if err != nil || statErr != nil || string(content) != string(saved) || info.Mode().Perm() != 0o700 {
+				t.Fatalf("saved adapter changed: read=%v stat=%v", err, statErr)
+			}
+			if _, err := os.Lstat(filepath.Join(tmp, ".local")); !os.IsNotExist(err) {
+				t.Fatalf("argument handling prepared the default directory: %v", err)
+			}
+		})
+	}
+}
 
 func TestInstallMCPRequiresSignedChecksumEvidence(t *testing.T) {
 	for _, command := range []string{"bash", "ssh-keygen"} {
