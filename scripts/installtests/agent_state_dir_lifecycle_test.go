@@ -6,6 +6,8 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -141,13 +143,17 @@ func (s *agentLifecycleControlPlane) serveHTTP(w http.ResponseWriter, r *http.Re
 	}
 }
 
-func waitForLifecycleState(t *testing.T, timeout time.Duration, describe string, predicate func(agentLifecycleSnapshot) bool, state *agentLifecycleControlPlane) {
+func waitForLifecycleState(t *testing.T, timeout time.Duration, describe string, predicate func(agentLifecycleSnapshot) bool, state *agentLifecycleControlPlane, proc *runningLifecycleAgent) {
 	t.Helper()
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
 		snapshot := state.snapshot()
 		if predicate(snapshot) {
 			return
+		}
+		if result, exited := proc.result(); exited {
+			t.Fatalf("pulse-agent exited before %s: %s; enrollments=%d reports=%d report_id=%q commands=%t",
+				describe, result, snapshot.enrollmentCount, snapshot.reportCount, snapshot.lastReportID, snapshot.lastCommands)
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
@@ -254,9 +260,85 @@ func renderLifecycleService(t *testing.T, stateDir, stateSource, unitPath, pulse
 	}
 }
 
+// Failure diagnostics may snapshot output while the child is still running.
+type lifecycleAgentOutput struct {
+	mu     sync.Mutex
+	buffer bytes.Buffer
+}
+
+func (b *lifecycleAgentOutput) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buffer.Write(p)
+}
+
+func (b *lifecycleAgentOutput) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buffer.String()
+}
+
 type runningLifecycleAgent struct {
-	cmd  *exec.Cmd
-	logs *bytes.Buffer
+	cmd     *exec.Cmd
+	logs    *lifecycleAgentOutput
+	done    chan struct{}
+	waitErr error // Read only after done closes; exactly one goroutine calls Wait.
+	stopped bool
+}
+
+func (p *runningLifecycleAgent) result() (string, bool) {
+	select {
+	case <-p.done:
+		if p.waitErr != nil {
+			return p.waitErr.Error(), true
+		}
+		return "exit status 0", true
+	default:
+		return "exit not observed", false
+	}
+}
+
+func (p *runningLifecycleAgent) diagnostics() string {
+	result, _ := p.result()
+	// Only these synthetic credentials are supplied by this fixture. Retain raw
+	// output separately for the integration test's credential-leak assertions.
+	output := strings.NewReplacer(
+		"bootstrap-one", "[fixture credential]", "runtime-one", "[fixture credential]",
+		"bootstrap-two", "[fixture credential]", "runtime-two", "[fixture credential]",
+	).Replace(p.logs.String())
+	return fmt.Sprintf("process result: %s\n%s", result, output)
+}
+
+func startLifecycleProcess(t *testing.T, cmd *exec.Cmd) *runningLifecycleAgent {
+	t.Helper()
+	p := &runningLifecycleAgent{cmd: cmd, logs: &lifecycleAgentOutput{}, done: make(chan struct{})}
+	cmd.Stdout, cmd.Stderr = p.logs, p.logs
+	// A descendant holding a pipe must not prevent the one Wait observer from
+	// returning after the leader exits. ErrWaitDelay remains a failed result.
+	cmd.WaitDelay = 2 * time.Second
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("start pulse-agent: %v", err)
+	}
+	go func() {
+		p.waitErr = cmd.Wait()
+		close(p.done)
+	}()
+	t.Cleanup(func() {
+		if _, exited := p.result(); !exited {
+			if err := cmd.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
+				t.Errorf("kill lifecycle agent during cleanup: %v", err)
+			}
+			select {
+			case <-p.done:
+			case <-time.After(10 * time.Second):
+				t.Error("lifecycle agent cleanup did not observe process exit and output drainage")
+			}
+		}
+		if t.Failed() {
+			t.Logf("pulse-agent failure evidence (owned leader/output only):\n%s", p.diagnostics())
+		}
+	})
+	return p
 }
 
 func startLifecycleAgent(t *testing.T, binaryPath, pulseURL, stateDir string, commandsEnabled bool) *runningLifecycleAgent {
@@ -276,48 +358,38 @@ func startLifecycleAgent(t *testing.T, binaryPath, pulseURL, stateDir string, co
 	if commandsEnabled {
 		args = append(args, "--enable-commands")
 	}
-	logs := &bytes.Buffer{}
 	cmd := exec.Command(binaryPath, args...)
 	cmd.Env = append(os.Environ(), "PULSE_AGENT_CONFIG_SIGNATURE_REQUIRED=false")
-	cmd.Stdout = logs
-	cmd.Stderr = logs
-	if err := cmd.Start(); err != nil {
-		t.Fatalf("start pulse-agent: %v", err)
-	}
-	t.Cleanup(func() {
-		if cmd.Process != nil {
-			_ = cmd.Process.Kill()
-			_, _ = cmd.Process.Wait()
-		}
-	})
+	p := startLifecycleProcess(t, cmd)
 	for _, arg := range cmd.Args {
 		if strings.Contains(arg, "bootstrap-") || strings.Contains(arg, "runtime-") {
 			t.Fatalf("agent argv leaked token: %q", cmd.Args)
 		}
 	}
-	return &runningLifecycleAgent{cmd: cmd, logs: logs}
+	return p
 }
 
 func (p *runningLifecycleAgent) stop(t *testing.T) string {
 	t.Helper()
-	if p.cmd.Process == nil {
+	if p.stopped {
 		return p.logs.String()
+	}
+	if result, exited := p.result(); exited {
+		t.Fatalf("pulse-agent exited before requested shutdown: %s\n%s", result, p.diagnostics())
 	}
 	if err := p.cmd.Process.Signal(syscall.SIGTERM); err != nil {
 		t.Fatalf("signal pulse-agent: %v", err)
 	}
-	done := make(chan error, 1)
-	go func() { done <- p.cmd.Wait() }()
 	select {
-	case err := <-done:
-		if err != nil {
-			t.Fatalf("pulse-agent shutdown: %v\n%s", err, p.logs.String())
+	case <-p.done:
+		if p.waitErr != nil {
+			t.Fatalf("pulse-agent shutdown: %s", p.diagnostics())
 		}
 	case <-time.After(10 * time.Second):
 		_ = p.cmd.Process.Kill()
-		t.Fatalf("pulse-agent did not stop\n%s", p.logs.String())
+		t.Fatalf("pulse-agent did not stop\n%s", p.diagnostics())
 	}
-	p.cmd.Process = nil
+	p.stopped = true
 	return p.logs.String()
 }
 
@@ -361,7 +433,7 @@ func TestPulseAgentStateDirLifecycleIntegration(t *testing.T) {
 			controlPlane := &agentLifecycleControlPlane{online: true}
 			controlPlane.setCredentials("bootstrap-one", "runtime-one", "agent-one")
 			server := httptest.NewServer(http.HandlerFunc(controlPlane.serveHTTP))
-			defer server.Close()
+			t.Cleanup(server.Close) // Stop/drain the agent before closing its fixture server.
 
 			stateSource := "default"
 			if tc.customState {
@@ -388,7 +460,7 @@ func TestPulseAgentStateDirLifecycleIntegration(t *testing.T) {
 				return state.enrollmentCount == 1 && state.reportCount >= 1 &&
 					state.lastReportToken == "runtime-one" && state.lastReportID == "agent-one" &&
 					state.lastCommands == tc.commandsEnabled
-			}, controlPlane)
+			}, controlPlane, proc)
 			logOutput := proc.stop(t)
 
 			for path, mode := range map[string]os.FileMode{
@@ -406,7 +478,7 @@ func TestPulseAgentStateDirLifecycleIntegration(t *testing.T) {
 			waitForLifecycleState(t, 20*time.Second, "restart report with persisted identity", func(state agentLifecycleSnapshot) bool {
 				return state.reportCount > beforeRestart.reportCount &&
 					state.lastReportToken == "runtime-one" && state.lastReportID == "agent-one"
-			}, controlPlane)
+			}, controlPlane, proc)
 			if got := controlPlane.snapshot().enrollmentCount; got != 1 {
 				t.Fatalf("ordinary restart re-enrolled unexpectedly: enrollments=%d", got)
 			}
@@ -417,7 +489,7 @@ func TestPulseAgentStateDirLifecycleIntegration(t *testing.T) {
 			controlPlane.setOnline(true)
 			waitForLifecycleState(t, 20*time.Second, "report recovery after server restart", func(state agentLifecycleSnapshot) bool {
 				return state.reportCount > reportsBeforeOutage && state.lastReportToken == "runtime-one"
-			}, controlPlane)
+			}, controlPlane, proc)
 			logOutput += proc.stop(t)
 
 			renderLifecycleService(t, stateDir, stateSource, unitPath, server.URL, "bootstrap-one", tc.commandsEnabled, true)
@@ -434,7 +506,7 @@ func TestPulseAgentStateDirLifecycleIntegration(t *testing.T) {
 			waitForLifecycleState(t, 20*time.Second, "re-enrollment and canonical report", func(state agentLifecycleSnapshot) bool {
 				return state.enrollmentCount == 2 && state.lastReportToken == "runtime-two" &&
 					state.lastReportID == "agent-two" && state.lastCommands == tc.commandsEnabled
-			}, controlPlane)
+			}, controlPlane, proc)
 			logOutput += proc.stop(t)
 
 			for _, secret := range []string{"bootstrap-one", "runtime-one", "bootstrap-two", "runtime-two"} {
