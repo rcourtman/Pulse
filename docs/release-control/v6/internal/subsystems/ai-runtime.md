@@ -3558,6 +3558,12 @@ resolve canonical/source IDs and unique aliases before collection, reject
    diagnosis, proof that unflagged resources are healthy, or a reason to
    prohibit the model from choosing governed tools for adjacent evidence
    relevant to its own findings.
+   The triage flag table and the node, guest, pool and disk inventory tables
+   carry each resource's canonical ID (`TriageFlag.ReportID`, resolved once
+   per triage through runtime record IDs and the alert resolver; "—" when a
+   reference resolves to nothing), as the scoped app-container table already
+   did. Without it a model filing a finding guessed `ct/gitea` or
+   `node/pmxlab` (`TestPatrolTriageTablesCarryTheIDAFindingIsFiledUnder`).
    Patrol runtime failures are part of that runtime contract: provider, model,
    tool-calling, auth, quota, rate-limit, context-window, and connectivity
    failures must be classified in `internal/ai/` before they reach operators,

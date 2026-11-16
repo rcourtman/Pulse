@@ -756,7 +756,7 @@ func TestFormatTriageBriefing(t *testing.T) {
 	if !strings.Contains(out, "# Deterministic Triage Results") {
 		t.Fatalf("expected title in output, got:\n%s", out)
 	}
-	if !strings.Contains(out, "| Resource | Type | Flag | Severity | Detail |") {
+	if !strings.Contains(out, "| Resource | Resource ID | Type | Flag | Severity | Detail |") {
 		t.Fatalf("expected table header in output, got:\n%s", out)
 	}
 	if !strings.Contains(out, "web-01") || !strings.Contains(out, "High Memory") {
