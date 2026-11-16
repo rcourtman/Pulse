@@ -3,8 +3,13 @@
 package installtests
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
 	"errors"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"strings"
@@ -132,5 +137,226 @@ func TestLifecycleAgentConcurrentOutputSnapshots(t *testing.T) {
 	workers.Wait()
 	if got := strings.Count(logs.String(), "fixture output\n"); got != 400 {
 		t.Fatalf("snapshots lost child output: got %d lines, want 400", got)
+	}
+}
+
+func TestLifecycleAgentDiagnosticOutputRedactsBeforeBounding(t *testing.T) {
+	input := "bootstrap-one runtime-one bootstrap-two runtime-two\n" + strings.Repeat("x", 300*1024)
+	output := lifecycleDiagnosticOutput(input)
+	if !strings.Contains(output, "output_truncated=true omitted_bytes=") || len(output) > 257*1024 ||
+		strings.Count(output, "[fixture credential]") != 4 {
+		t.Fatal("diagnostic lost its redactions or explicit output bound")
+	}
+	for _, token := range []string{"bootstrap-one", "runtime-one", "bootstrap-two", "runtime-two"} {
+		if strings.Contains(output, token) {
+			t.Fatal("bounded diagnostic contains a fixture credential")
+		}
+	}
+	// Bounding raw bytes first would leave a partial credential at the edge.
+	const limit = 256 * 1024
+	prefix := strings.Repeat("x", limit-5)
+	if got := lifecycleDiagnosticOutput(prefix + "bootstrap-one"); got !=
+		"output_truncated=true omitted_bytes=15\n"+prefix+"[fixt" {
+		t.Fatal("diagnostic did not redact the credential crossing its output boundary")
+	}
+}
+
+func TestLifecycleRequestObservationTiming(t *testing.T) {
+	start := time.Unix(1_000, 0)
+	for _, tc := range []struct {
+		name, want         string
+		enrollment, report time.Time
+	}{
+		{name: "no requests", want: "no-report-attempt"},
+		{name: "enrolled without report", enrollment: start, want: "no-report-attempt"},
+		{name: "report without enrollment", report: start, want: "no-successful-enrollment"},
+		{name: "report before enrollment", enrollment: start.Add(time.Second), report: start, want: "before-successful-enrollment"},
+		{name: "report after enrollment", enrollment: start, report: start.Add(250 * time.Millisecond), want: "250ms"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			state := &agentLifecycleControlPlane{
+				enrolledAt: tc.enrollment, firstReportAt: tc.report,
+				lastReportID: "private-fixture-report-id", lastReportToken: "private-fixture-token",
+			}
+			got := state.snapshot()
+			if got.firstReport != tc.want || !strings.Contains(got.diagnostic(), "first_report_after_enrollment="+tc.want) {
+				t.Fatalf("ambiguous first report timing: %s, want %s", got.diagnostic(), tc.want)
+			}
+			if strings.Contains(got.diagnostic(), "private-fixture") {
+				t.Fatal("timing diagnostic contains a reported identity or token")
+			}
+		})
+	}
+}
+
+func TestLifecycleRequestFailureEvidence(t *testing.T) {
+	if mode := os.Getenv("PULSE_LIFECYCLE_REQUEST_CONTROL"); mode != "" {
+		proc := startLifecycleProcess(t, exec.Command("bash", "-c", "printf 'fixture ready\\n'; exec sleep 60"))
+		waitForLifecycleOutput(t, proc, "fixture ready")
+		state := &agentLifecycleControlPlane{online: true}
+		state.setCredentials("bootstrap-one", "runtime-one", "private-fixture-canonical-id")
+		enroll := httptest.NewRequest(http.MethodPost, "/api/agents/agent/enroll", strings.NewReader(`{"commandsEnabled":false}`))
+		enroll.Header.Set("X-API-Token", "bootstrap-one")
+		state.serveHTTP(httptest.NewRecorder(), enroll)
+		var body bytes.Buffer
+		gz := gzip.NewWriter(&body)
+		_, _ = gz.Write([]byte(`{"agent":{"id":"private-fixture-report-id"}}`))
+		if err := gz.Close(); err != nil {
+			t.Fatal(err)
+		}
+		report := httptest.NewRequest(http.MethodPost, "/api/agents/agent/report?secret=private-fixture-query", &body)
+		switch mode {
+		case "rejected":
+			report.Header.Set("X-API-Token", "private-fixture-wrong-token")
+		case "unexpected-id":
+			report.Header.Set("X-API-Token", "runtime-one")
+		default:
+			t.Fatalf("unknown request control %q", mode)
+		}
+		state.serveHTTP(httptest.NewRecorder(), report)
+		waitForLifecycleState(t, 100*time.Millisecond, "canonical report", func(s agentLifecycleSnapshot) bool {
+			return s.reportCount > 0 && s.lastReportID == "agent-one"
+		}, state, proc)
+		t.Fatal("request failure control unexpectedly returned")
+		return
+	}
+	for _, tc := range []struct{ mode, counts string }{
+		{"rejected", "reports=0 commands=false requests=[enrollment/200=1,enrollment/started=1,report/401=1,report/started=1]"},
+		{"unexpected-id", "reports=1 commands=false requests=[enrollment/200=1,enrollment/started=1,report/200=1,report/started=1]"},
+	} {
+		t.Run(tc.mode, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+			defer cancel()
+			cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestLifecycleRequestFailureEvidence$", "-test.v", "-test.timeout=15s")
+			cmd.Env = append(os.Environ(), "PULSE_LIFECYCLE_REQUEST_CONTROL="+tc.mode)
+			output, err := cmd.CombinedOutput()
+			var exit *exec.ExitError
+			if ctx.Err() != nil || !errors.As(err, &exit) || exit.ExitCode() != 1 {
+				t.Fatalf("request control did not retain the expected failure: context=%v err=%v\n%s", ctx.Err(), err, output)
+			}
+			for _, want := range []string{"timed out waiting for canonical report; enrollments=1", tc.counts,
+				"first_report_after_enrollment=", "process result: signal: killed"} {
+				if !strings.Contains(string(output), want) {
+					t.Errorf("request failure lost %q:\n%s", want, output)
+				}
+			}
+			for _, private := range []string{"private-fixture", "bootstrap-one", "runtime-one", "WARNING: DATA RACE"} {
+				if strings.Contains(string(output), private) {
+					t.Errorf("request failure disclosed private fixture data or raced:\n%s", output)
+				}
+			}
+		})
+	}
+}
+
+func TestLifecycleRequestObservationsKeepRejectedAttempts(t *testing.T) {
+	state := &agentLifecycleControlPlane{online: true}
+	state.setCredentials("bootstrap-one", "runtime-one", "agent-one")
+	request := func(path, token string, body []byte, want int) {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodPost, path, bytes.NewReader(body))
+		req.Header.Set("X-API-Token", token)
+		reply := httptest.NewRecorder()
+		state.serveHTTP(reply, req)
+		if reply.Code != want {
+			t.Fatalf("fixture status=%d, want %d", reply.Code, want)
+		}
+	}
+	request("/api/agents/agent/report", "wrong-fixture-token", nil, http.StatusUnauthorized)
+	if got := state.snapshot(); got.reportCount != 0 || got.firstReport != "no-successful-enrollment" ||
+		got.requests != "report/401=1,report/started=1" {
+		t.Fatalf("rejected report became no attempt: %+v", got)
+	}
+	request("/api/agents/agent/enroll", "wrong-fixture-token", nil, http.StatusUnauthorized)
+	request("/api/agents/agent/enroll", "bootstrap-one", []byte("not JSON"), http.StatusBadRequest)
+	request("/api/agents/agent/enroll", "bootstrap-one", []byte(`{"commandsEnabled":false}`), http.StatusOK)
+	request("/api/agents/agent/lookup", "", nil, http.StatusNotFound)
+	request("/api/agents/agent/private-fixture-id/config", "", nil, http.StatusOK)
+	request("/private-fixture-path?secret=private-fixture-query", "", nil, http.StatusNotFound)
+	var compressed bytes.Buffer
+	gz := gzip.NewWriter(&compressed)
+	_, _ = gz.Write([]byte(`{"agent":{"id":"agent-one"}}`))
+	if err := gz.Close(); err != nil {
+		t.Fatal(err)
+	}
+	request("/api/agents/agent/report", "runtime-one", compressed.Bytes(), http.StatusOK)
+	state.setOnline(false)
+	request("/api/agents/agent/report", "runtime-one", nil, http.StatusServiceUnavailable)
+	got := state.snapshot()
+	want := "config/200=1,config/started=1,enrollment/200=1,enrollment/400=1,enrollment/401=1,enrollment/started=3,lookup/404=1,lookup/started=1,other/404=1,other/started=1,report/200=1,report/401=1,report/503=1,report/started=3"
+	if got.requests != want || got.enrollmentCount != 1 || got.reportCount != 1 || got.lastReportID != "agent-one" ||
+		got.lastReportToken != "runtime-one" || got.firstReport != "before-successful-enrollment" {
+		t.Fatalf("fixture changed admission or lost observations: %+v", got)
+	}
+	for _, private := range []string{"bootstrap-one", "runtime-one", "private-fixture"} {
+		if strings.Contains(got.diagnostic(), private) {
+			t.Fatal("request diagnostic includes a request secret/path/identifier")
+		}
+	}
+}
+
+func TestLifecycleRequestObservationsAreConcurrent(t *testing.T) {
+	state := &agentLifecycleControlPlane{online: true}
+	state.setCredentials("bootstrap-one", "runtime-one", "agent-one")
+	var requests sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		requests.Add(1)
+		go func() {
+			defer requests.Done()
+			for j := 0; j < 10; j++ {
+				req := httptest.NewRequest(http.MethodPost, "/api/agents/agent/report", nil)
+				state.serveHTTP(httptest.NewRecorder(), req)
+				_ = state.snapshot()
+			}
+		}()
+	}
+	requests.Wait()
+	if got := state.snapshot(); got.reportCount != 0 || got.requests != "report/401=80,report/started=80" {
+		t.Fatalf("concurrent request observations lost or accepted a report: %+v", got)
+	}
+}
+
+func TestLifecycleRequestObservationsKeepIncompleteRequests(t *testing.T) {
+	state := &agentLifecycleControlPlane{online: true}
+	state.setCredentials("bootstrap-one", "runtime-one", "agent-one")
+	reader, writer := io.Pipe()
+	defer reader.Close()
+	defer writer.Close()
+	req := httptest.NewRequest(http.MethodPost, "/api/agents/agent/enroll", reader)
+	req.Header.Set("X-API-Token", "bootstrap-one")
+	reply := httptest.NewRecorder()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		state.serveHTTP(reply, req)
+	}()
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		got := state.snapshot()
+		if got.requests != "" {
+			if got.requests != "enrollment/started=1" || got.enrollmentCount != 0 {
+				t.Fatalf("incomplete body became a response/enrollment: %+v", got)
+			}
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("fixture did not receive request")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	if _, err := io.WriteString(writer, `{"commandsEnabled":false}`); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("fixture did not finish response")
+	}
+	if got := state.snapshot(); reply.Code != http.StatusOK || got.enrollmentCount != 1 ||
+		got.requests != "enrollment/200=1,enrollment/started=1" || got.firstReport != "no-report-attempt" {
+		t.Fatalf("completed request lost response or fabricated report timing: %+v", got)
 	}
 }
