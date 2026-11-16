@@ -14717,8 +14717,8 @@ failed reset) and removal fences older metadata completions for that provider.
 A removed cold provider cannot be republished by an already-started fetch, and
 an unrelated provider remains independent. A changed public base also refuses
 publication of endpoints constructed for the old base; a fresh request can
-initialize against the current base. Metadata and signing-file I/O remain
-outside the manager lock.
+initialize against the current base. Initialization's metadata and signing-file
+I/O run outside the manager lock; existing public-base rebinding is unchanged.
 
 Concurrent native login/metadata initializers reuse the first live service only
 when their captured configuration, IdP metadata and SP/signing snapshot match.
