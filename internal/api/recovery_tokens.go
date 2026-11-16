@@ -46,6 +46,10 @@ type RecoveryTokenStore struct {
 	stopCleanup chan struct{}
 	cleanupDone chan struct{}
 	stopOnce    sync.Once
+	// A failed startup read is not an empty saved inventory. Before any later
+	// save, retain that unknown file outside active authority. Access belongs
+	// to mu after initialization, just like the token inventory itself.
+	preserveBeforeSave bool
 }
 
 var (
@@ -294,6 +298,19 @@ func (r *RecoveryTokenStore) cleanup() {
 // without undoing an acknowledged write. This does not promise directory-fsync
 // durability across sudden power loss.
 func (r *RecoveryTokenStore) saveUnsafe() (retErr error) {
+	if r.preserveBeforeSave {
+		preserved, err := r.preserveUnreadTokens()
+		if err != nil {
+			return fmt.Errorf("preserve unread recovery tokens before saving: %w", err)
+		}
+		r.preserveBeforeSave = false
+		if preserved != "" {
+			log.Warn().Str("preserved_file", preserved).Msg("Unread recovery token file preserved outside active storage; it will not be loaded automatically. Generate a new recovery token rather than restoring stale authority")
+		} else {
+			log.Warn().Msg("Unread recovery token file is no longer in active storage; saving only current known recovery tokens")
+		}
+	}
+
 	tokensFile := filepath.Join(r.dataPath, "recovery_tokens.json")
 	if err := os.MkdirAll(r.dataPath, 0700); err != nil {
 		return fmt.Errorf("create recovery tokens directory: %w", err)
@@ -344,6 +361,42 @@ func (r *RecoveryTokenStore) saveUnsafe() (retErr error) {
 	}
 	published = true
 	return nil
+}
+
+// preserveUnreadTokens retains the original bytes before a fresh snapshot can
+// replace them. Only canonical recovery_tokens.json is loaded on startup; the
+// preserved inventory must never silently restore unknown or consumed grants.
+// A private directory protects even legacy files with permissive modes. Refuse
+// nonregular paths rather than following, moving or replacing them. Called only
+// under mu (or by the unpublished initializer), like saveUnsafe itself.
+func (r *RecoveryTokenStore) preserveUnreadTokens() (string, error) {
+	path := filepath.Join(r.dataPath, "recovery_tokens.json")
+	info, err := os.Lstat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		// An operator may have deliberately removed/moved the unread file.
+		// Absence authorizes no old tokens and need not hold fresh issuance.
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("inspect unread recovery tokens: %w", err)
+	}
+	if !info.Mode().IsRegular() {
+		return "", errors.New("unread recovery token path is not a regular file; leaving it untouched")
+	}
+	dir, err := os.MkdirTemp(r.dataPath, ".recovery-tokens-unread-*")
+	if err != nil {
+		return "", fmt.Errorf("prepare private recovery token preservation directory: %w", err)
+	}
+	preserved := filepath.Join(dir, "recovery_tokens.json")
+	if err := os.Rename(path, preserved); err != nil {
+		return "", errors.Join(fmt.Errorf("preserve unread recovery tokens: %w", err), os.Remove(dir))
+	}
+	if err := os.Chmod(preserved, 0600); err != nil {
+		// Its exclusive private directory still protects the retained file.
+		// Do not put unknown authority back in the active startup location.
+		log.Warn().Err(err).Str("preserved_file", preserved).Msg("Unread recovery token file preserved privately; backup readers may need filesystem repair")
+	}
+	return preserved, nil
 }
 
 func (r *RecoveryTokenStore) loadCanonicalTokens(tokens []*RecoveryToken, now time.Time) int {
@@ -407,9 +460,15 @@ func (r *RecoveryTokenStore) load() {
 
 	data, err := os.ReadFile(tokensFile)
 	if err != nil {
-		if !os.IsNotExist(err) {
-			log.Error().Err(err).Msg("Failed to read recovery tokens file")
+		if errors.Is(err, os.ErrNotExist) {
+			// A dangling symlink also makes ReadFile report ENOENT, but it
+			// is not an absent canonical path we are entitled to replace.
+			if _, statErr := os.Lstat(tokensFile); errors.Is(statErr, os.ErrNotExist) {
+				return
+			}
 		}
+		r.preserveBeforeSave = true
+		log.Error().Err(err).Msg("Failed to read recovery tokens file; it must be preserved before saving new tokens")
 		return
 	}
 
@@ -427,5 +486,6 @@ func (r *RecoveryTokenStore) load() {
 		}
 		return
 	}
-	log.Error().Msg("Failed to decode recovery tokens file; unsupported format")
+	r.preserveBeforeSave = true
+	log.Error().Msg("Failed to decode recovery tokens file; it must be preserved before saving new tokens")
 }
