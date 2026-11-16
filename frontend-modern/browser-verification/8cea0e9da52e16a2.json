@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "base_sha": "55c175144b84d15fbfb6f371bf4928dac8b11d91",
+  "verified_at": "2026-11-16T10:40:02.055Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/OrganizationAccessManagementSection.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/OrganizationAccessManagementSection.tsx": "6f579c2e865077a4ddbf730f652c902c161440dc50ca87ec72c9d568863eba31"
+  },
+  "routes": [
+    "/settings (Organization Access consumer, precompiled synthetic HTTP fixture)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Default Add and nondefault Invite, Chromium light/dark and WebKit light, actual OrganizationAccessPanel/state/OrgsAPI/apiClient and production CSS. 12 cases per before/after;32 inspected Chromium captures/16 comparable pairs;51 bound consuming source/manifest inputs.",
+    "Missing User ID focuses its required native field rather than leaving Add/Invite focused with an app toast; roles, org identity, members and invitation readback remain available. Native popup is in its fade in retained pixels; focus and validationMessage are independently checked."
+  ],
+  "interactions": [
+    "Submit empty through keyboard; no mutation and Viewer unchanged. Final source emits one native invalid event, valueMissing, nonempty native message and field focus without an app error toast.",
+    "Correct and submit by Enter; exactly one trimmed existing encoded-org request with expected organization header and CSRF, session auth/no unrelated token, matching readback and Viewer reset.",
+    "Dismiss earlier feedback via native controls, then whitespace Enter; exactly one new existing local trim error and no second write."
+  ],
+  "evidence": "Candidate outcome BROWSER-VERIFICATION.json, CAPTURES-BEFORE.tar.xz and CAPTURES-AFTER.tar.xz; evidence-only fixture is not source.",
+  "browser_versions": {
+    "chromium": "141.0.7390.37",
+    "webkit": "26.0"
+  },
+  "playwright": "1.56.1; matches integration lock"
+}
