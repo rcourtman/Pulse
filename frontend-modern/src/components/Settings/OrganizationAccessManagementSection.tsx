@@ -39,6 +39,7 @@ export const OrganizationAccessManagementSection: Component<
                 <span class="block text-xs font-medium text-base-content">User ID</span>
                 <input
                   type="text"
+                  required
                   data-org-access-action="invite-user"
                   data-org-access-target="draft"
                   aria-label="Invite user ID"

@@ -172,6 +172,45 @@ afterEach(() => {
 });
 
 describe('OrganizationAccessPanel', () => {
+  it.each(['org-a', 'default'])(
+    'uses native required-field recovery before submitting an empty %s member draft',
+    async (orgID) => {
+      getOrgIDMock.mockReturnValue(orgID);
+      orgGetMock.mockResolvedValue({ ...baseOrg, id: orgID, canManageMembers: true });
+      renderPanel();
+
+      const input = (await screen.findByRole('textbox', {
+        name: 'Invite user ID',
+      })) as HTMLInputElement;
+      const form = screen.getByRole('form', {
+        name: orgID === 'default' ? 'Add member' : 'Invite member',
+      }) as HTMLFormElement;
+      const invalid = vi.fn();
+      input.addEventListener('invalid', invalid);
+      expect(input).toBeRequired();
+      expect(input.validity.valueMissing).toBe(true);
+
+      form.requestSubmit();
+      expect(invalid).toHaveBeenCalledTimes(1);
+      expect(inviteMemberMock).not.toHaveBeenCalled();
+      expect(notificationErrorMock).not.toHaveBeenCalled();
+      expect(listMembersMock).toHaveBeenCalledTimes(1);
+      expect(screen.getByRole('combobox', { name: 'Invite role' })).toHaveValue('viewer');
+
+      fireEvent.input(input, { target: { value: '  new-user  ' } });
+      expect(input.validity.valid).toBe(true);
+      form.requestSubmit();
+      await waitFor(() => {
+        expect(inviteMemberMock).toHaveBeenCalledExactlyOnceWith(
+          orgID,
+          { userId: 'new-user', role: 'viewer' },
+          expect.objectContaining({ expectedOrgID: orgID, retry: false }),
+        );
+      });
+      expect(invalid).toHaveBeenCalledTimes(1);
+    },
+  );
+
   const pendingInvitations = () =>
     [
       'provisioningserviceaccountfortheoperationsdepartmentanddisasterrecoveryteam@example.test',
