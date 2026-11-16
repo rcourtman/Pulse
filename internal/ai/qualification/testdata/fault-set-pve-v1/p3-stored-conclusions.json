@@ -1,0 +1,877 @@
+{
+  "source": "every graded P3 run of the pve-v1 replays, 14-16 Nov 2026",
+  "records": [
+    {
+      "archive": "pve-main1115",
+      "run_id": "q-20261116-015612-46009b25",
+      "recorded_manifest_version": 1,
+      "recorded_grade": "handed_over",
+      "want_grade": "partial",
+      "evidence": {
+        "agent_profile": {
+          "name": "commands-off",
+          "commands_enabled": false,
+          "declared": "commands-off",
+          "host_name": "pmxlab",
+          "host_resource_id": "agent-cb92e49a2a913d3b"
+        },
+        "alerts": [
+          {
+            "id": "pmxlab-local::metric-threshold:usage",
+            "type": "usage",
+            "level": "warning",
+            "resource_alias": "local",
+            "resource_name": "local",
+            "message": "Storage at 91.0%",
+            "start_time": "2026-11-16T01:58:01.858534Z"
+          }
+        ],
+        "wake": {
+          "mode": "asked",
+          "trigger_reason": "manual",
+          "run_id": "1794795079512430000",
+          "asked": "scoped_run",
+          "investigation_start": "self",
+          "alert_after_ns": 5964400773,
+          "finding_after_ns": 821896960276,
+          "settled_after_ns": 1161057678494
+        },
+        "findings": [
+          {
+            "id": "16145f022b02825d",
+            "severity": "warning",
+            "category": "capacity",
+            "resource_alias": "local",
+            "resource_name": "local",
+            "title": "Storage \"local\" usage jumped from 24% to 91% in a ~2-minute window, not gradual growth",
+            "investigation_status": "completed",
+            "investigation_outcome": "needs_attention",
+            "turn_count": 7,
+            "evidence_call_count": 10,
+            "tools_used": [
+              "pulse_query",
+              "pulse_storage",
+              "pulse_read",
+              "patrol_conclude_investigation"
+            ],
+            "conclusion": "### Investigation Summary\nStorage \"local\" on node pmxlab (storage-2a2d5335411b9ccc) jumped from 24.19% to 91.00% usage (28.48GB of 31.3GB) in the 01:57-01:58 UTC window on 2026-11-16, and has held flat since. I checked the storage pool's content types (backup, images, iso, rootdir, snippets, vztmpl), the node's recent backup task history, and the Proxmox backup/recovery-point inventory. The three LXC guests on pmxlab (gitea vmid 112, nextcloud vmid 111, pihole vmid 110) all have backup jobs logged against the \"local\" repository, but the most recent completed backups ran on 2026-11-14T12:44:46-50Z - over 36 hours before the spike - and no snapshots exist (0 returned). No backup, recovery-point, or snapshot event in Pulse's records aligns with the 01:57-01:58 timestamp, so the vzdump/snapshot hypothesis is not supported by the available evidence. I then attempted to identify the specific directory consuming the space: a direct disk_usage call on /var/lib/vz was refused (STRICT_RESOLUTION - \"pmxlab\" matched multiple monitored resources and required an exact canonical resource ID), and subsequent attempts to query per-resource disk usage (resource_disks) for the node and for the backup-associated container were rejected as an unsupported query type. The evidence budget is now exhausted, so the specific file or folder responsible for the roughly 21GB of growth could not be isolated.\n\n### Root Cause\nObserved mechanism: a sudden ~21GB write landed on the \"local\" dir storage pool (storage-2a2d5335411b9ccc) on node pmxlab within a roughly 2-minute window (01:57-01:58 UTC on 2026-11-16), consistent with a single large write, upload, or dump rather than gradual organic growth.\n\nWhat the evidence does not establish: no backup job, recovery point, or snapshot in Pulse's inventory corresponds to that timestamp - the last logged backups for the three hosted LXCs (gitea, nextcloud, pihole) were from 2026-11-14, over a day earlier, ruling out a routine vzdump as the trigger as far as Pulse's records show. The actual writer (a manual/ad-hoc backup not yet reflected in inventory, an ISO or container-template upload, a large log/dump file, or some other process) and the exact subdirectory of /var/lib/vz that absorbed the space remain unidentified, because the disk_usage tool could not resolve an unambiguous target for pmxlab and the resource_disks query type was not accepted for the node or for the nextcloud container. No evidence of a different causal resource (e.g., another VM/container or external actor) was found or ruled out beyond the three guests whose backup history was checked.\n\n### Affected Resources\n- storage-2a2d5335411b9ccc (\"local\", dir storage on node pmxlab): directly affected - usage at 91.0% (28.48GB/31.3GB), 2.8GB free, active alert \"Storage at 91.0%\" since the spike.\n- Node pmxlab: hosts the affected storage; general topology confirmed, no node-level fault identified beyond hosting the full pool.\n- LXC guests gitea (vmid 112), nextcloud (vmid 111), pihole (vmid 110): use \"local\" as their backup repository, but their most recent backup activity (2026-11-14) does not correlate with the spike time and is not shown to be the cause.\n\n### Recommendation\nAn operator with direct node access should log into pmxlab and run `du -sh` (or an equivalent file-system inspection) across the /var/lib/vz subdirectories (dump, images, template/iso, template/cache, private, snippets) to find what was written between 01:57 and 01:58 UTC on 2026-11-16. Once the specific artifact is identified: if it is a one-off backup, ISO, or template upload, prune or relocate it to recover headroom; if it is an unexpected or runaway file (e.g., a log or core dump), investigate why it was created and remove it. No typed remediation capability is advertised for storage-2a2d5335411b9ccc, and no alternate causal resource could be confirmed with sufficient evidence to check its action capabilities, so no automated action is proposed. Given the storage is already at 91% with only 2.8GB free, this should be treated as time-sensitive to avoid the pool filling completely and breaking guest backups or operations.\n\n### Conclusion\nNEEDS_ATTENTION: The ~21GB spike on storage \"local\" (storage-2a2d5335411b9ccc, node pmxlab) has no corresponding backup, snapshot, or recovery-point event in Pulse's records near the 01:57-01:58 UTC spike time, and the specific file/directory responsible could not be identified because disk_usage on /var/lib/vz was refused for ambiguous target resolution and per-resource disk-usage queries for the node and its containers returned unsupported-type errors. An operator must log into pmxlab directly to run `du -sh` across /var/lib/vz subdirectories, identify the artifact written in that window, and prune or relocate it; the pool has only 2.8GB free remaining."
+          }
+        ]
+      }
+    },
+    {
+      "archive": "pve-main1115",
+      "run_id": "q-20261116-003453-ee277a7a",
+      "recorded_manifest_version": 1,
+      "recorded_grade": "handed_over",
+      "want_grade": "handed_over",
+      "evidence": {
+        "agent_profile": {
+          "name": "commands-on",
+          "commands_enabled": true,
+          "declared": "commands-on",
+          "host_name": "pmxlab",
+          "host_resource_id": "agent-cb92e49a2a913d3b"
+        },
+        "alerts": [
+          {
+            "id": "pmxlab-local::metric-threshold:usage",
+            "type": "usage",
+            "level": "warning",
+            "resource_alias": "local",
+            "resource_name": "local",
+            "message": "Storage at 91.0%",
+            "start_time": "2026-11-16T00:36:54.539789Z"
+          }
+        ],
+        "wake": {
+          "mode": "self",
+          "trigger_reason": "alert_fired",
+          "run_id": "1794790019722760000",
+          "investigation_start": "self",
+          "alert_after_ns": 11625504314,
+          "finding_after_ns": 638310430968,
+          "settled_after_ns": 937036365441
+        },
+        "findings": [
+          {
+            "id": "fc08bd7530abd0db",
+            "severity": "warning",
+            "category": "backup",
+            "resource_alias": "local",
+            "resource_name": "local",
+            "title": "Local storage at 91% is filling up due to retained vzdump backup archives, not system growth",
+            "investigation_status": "completed",
+            "investigation_outcome": "cannot_fix",
+            "turn_count": 6,
+            "evidence_call_count": 5,
+            "tools_used": [
+              "pulse_query",
+              "pulse_storage",
+              "patrol_action_capabilities",
+              "patrol_conclude_investigation"
+            ],
+            "conclusion": "### Investigation Summary\nStorage `local` (storage-2a2d5335411b9ccc) on node pmxlab is a non-shared `dir` storage with only 31.3GB total capacity, currently at 91% usage (28.5GB used, 2.8GB free). The pool's backup inventory confirms the finding: 8+ full vzdump archives for nextcloud (CT 111, system-container-05818b40c3dd944c) at roughly 802MB each, dated 2026-11-07 through 2026-11-14, are retained simultaneously, alongside smaller daily backups for gitea (CT 112) and pihole (CT 110), all targeting repository local on node pmxlab. These nextcloud archives alone account for roughly 6.4GB of the 28.5GB used, with no evidence of any pruning policy removing older copies. The host agent (agent-cb92e49a2a913d3b / pmxlab) confirms disk usage matches (95% disk reported at the node level, consistent with this same local volume).\n\nI checked typed-action capabilities on each resource in the causal chain: the storage resource itself (none advertised per the finding), the nextcloud container that is the primary backup subject (system-container-05818b40c3dd944c, empty capability list), and the hosting node/agent (agent-cb92e49a2a913d3b, empty capability list). No resource in this chain exposes a typed action to prune backups, adjust vzdump retention, or relocate the backup target.\n\n### Root Cause\nObserved mechanism: un-pruned vzdump backup retention on storage local (storage-2a2d5335411b9ccc, node pmxlab) - daily full backups for CT 111 (nextcloud), CT 112 (gitea), and CT 110 (pihole) accumulate with no keep-count enforcement, confirmed by 8+ simultaneous ~802MB nextcloud archives spanning 2026-11-07 to 2026-11-14.\nUnestablished: why retention/pruning was never configured (misconfigured backup job vs. no job ever set) is not observed in the evidence; no backup-job configuration or scheduler record was retrieved to confirm this.\n\n### Affected Resources\n- storage-2a2d5335411b9ccc (local, node pmxlab): symptom - 91% capacity, 2.8GB free, direct target of the finding.\n- system-container-05818b40c3dd944c (nextcloud, CT 111): causal contributor - largest retained backup volume (8+ full copies, ~802MB each).\n- system-container-fe24c58f228eedf1 (gitea, CT 112) and system-container-1f739f80f1ff9ec1 (pihole, CT 110): minor contributors - smaller daily backups on the same pool.\n- agent-cb92e49a2a913d3b (pmxlab node/host): reflects the same disk pressure at the host level since local is this node's root filesystem-backed storage.\n\n### Recommendation\nNo typed Pulse action exists to prune vzdump archives, change backup retention/keep-count, or redirect the backup target. A person with Proxmox access should manually: (1) delete the older nextcloud vzdump archives (2026-11-07 through 2026-11-12, keeping the most recent 2-3) via the Proxmox UI or pct backup management, freeing roughly 4-5GB immediately; and (2) configure a retention/keep-count policy on the vzdump job for CT 111/112/110, or redirect these backups to a dedicated PBS/remote storage target so local only holds node-local data going forward.\n\n### Conclusion\nCANNOT_FIX: Problem is confirmed real (un-pruned vzdump backups filling storage-2a2d5335411b9ccc), but no advertised typed action exists on the storage resource, the causal workload (system-container-05818b40c3dd944c), or the hosting node/agent (agent-cb92e49a2a913d3b) to prune backups, adjust retention, or relocate the backup target. Remediation requires manual operator action outside Pulse's typed action catalog."
+          }
+        ]
+      }
+    },
+    {
+      "archive": "pve-main1115",
+      "run_id": "q-20261116-030757-c79baa7b",
+      "recorded_manifest_version": 1,
+      "recorded_grade": "handed_over",
+      "want_grade": "handed_over",
+      "evidence": {
+        "agent_profile": {
+          "name": "commands-off",
+          "commands_enabled": false,
+          "declared": "commands-off",
+          "host_name": "pmxlab",
+          "host_resource_id": "agent-cb92e49a2a913d3b"
+        },
+        "alerts": [
+          {
+            "id": "pmxlab-local::metric-threshold:usage",
+            "type": "usage",
+            "level": "warning",
+            "resource_alias": "local",
+            "resource_name": "local",
+            "message": "Storage at 91.0%",
+            "start_time": "2026-11-16T03:09:33.822847Z"
+          }
+        ],
+        "wake": {
+          "mode": "asked",
+          "trigger_reason": "manual",
+          "run_id": "1794799368176857000",
+          "asked": "scoped_run",
+          "investigation_start": "self",
+          "alert_after_ns": 11614685537,
+          "finding_after_ns": 825992631477,
+          "settled_after_ns": 1063992766370
+        },
+        "findings": [
+          {
+            "id": "16145f022b02825d",
+            "severity": "warning",
+            "category": "capacity",
+            "resource_alias": "local",
+            "resource_name": "local",
+            "title": "Local storage at 91% is filling up from accumulated vzdump backup archives with no apparent pruning",
+            "investigation_status": "completed",
+            "investigation_outcome": "needs_attention",
+            "turn_count": 4,
+            "evidence_call_count": 7,
+            "tools_used": [
+              "pulse_query",
+              "pulse_storage",
+              "pulse_read",
+              "patrol_action_capabilities",
+              "patrol_conclude_investigation"
+            ],
+            "conclusion": "Local storage pool 'local' on node pmxlab (storage-2a2d5335411b9ccc) is at 91% usage (28.48GB/31.3GB) due to retained vzdump backups for nextcloud LXC 111 (~801.7MB each, 8+ daily copies from 2026-11-07 through 2026-11-14) plus smaller gitea/pihole backups, accumulating faster than pruning. No governed remediation is available: the finding resource advertises no typed actions, and patrol_action_capabilities for the causal nextcloud container (system-container-05818b40c3dd944c) returned an empty capability list with commands_disabled for host pmxlab (Pulse agent installed without command access), confirming no action can execute there. A person must manually reduce the vzdump backup job's 'Keep' retention for VMID 111 in Proxmox and/or redirect nextcloud/other container backups to PBS or larger remote storage, then prune existing local archives and verify usage drops below the 90% threshold."
+          }
+        ]
+      }
+    },
+    {
+      "archive": "pve-main1115",
+      "run_id": "q-20261116-023941-6906151d",
+      "recorded_manifest_version": 1,
+      "recorded_grade": "handed_over",
+      "want_grade": "handed_over",
+      "evidence": {
+        "agent_profile": {
+          "name": "commands-on",
+          "commands_enabled": true,
+          "declared": "commands-on",
+          "host_name": "pmxlab",
+          "host_resource_id": "agent-cb92e49a2a913d3b"
+        },
+        "alerts": [
+          {
+            "id": "pmxlab-local::metric-threshold:usage",
+            "type": "usage",
+            "level": "warning",
+            "resource_alias": "local",
+            "resource_name": "local",
+            "message": "Storage at 91.0%",
+            "start_time": "2026-11-16T02:41:54.18356Z"
+          }
+        ],
+        "wake": {
+          "mode": "self",
+          "trigger_reason": "alert_fired",
+          "run_id": "1794797518481234000",
+          "investigation_start": "self",
+          "alert_after_ns": 6475160714,
+          "finding_after_ns": 640249541369,
+          "settled_after_ns": 1011770394158
+        },
+        "findings": [
+          {
+            "id": "16145f022b02825d",
+            "severity": "warning",
+            "category": "capacity",
+            "resource_alias": "local",
+            "resource_name": "local (pmxlab)",
+            "title": "Local storage at 91% usage, driven by accumulating un-pruned vzdump backups",
+            "investigation_status": "completed",
+            "investigation_outcome": "cannot_fix",
+            "turn_count": 6,
+            "evidence_call_count": 7,
+            "tools_used": [
+              "pulse_query",
+              "pulse_storage",
+              "pulse_read",
+              "patrol_action_capabilities",
+              "patrol_conclude_investigation"
+            ],
+            "conclusion": "Confirmed: storage-2a2d5335411b9ccc (local, pmxlab) is at 91% usage (28.48GB/31.3GB). Node-level disk_usage on agent-cb92e49a2a913d3b shows /var/lib/vz/dump holds 21G, 95% of the /var/lib/vz filesystem, with no further subfolder breakdown (its own vzdump files hold the space) -- confirming the backup dump directory, not some other path, is the capacity driver. pulse_storage backups for nextcloud (system-container-05818b40c3dd944c, vmid 111) show daily full vzdump backups of ~801.7MB retained on repository 'local' going back to at least 2026-11-05 (10+ full copies, 8GB+), plus smaller gitea/pihole backups, with no retention/prune policy evident -- matching the finding's described mechanism exactly. However, patrol_action_capabilities returned an empty capability list for both the causal workload (system-container-05818b40c3dd944c / nextcloud) and the node/agent holding the storage (agent-cb92e49a2a913d3b / pmxlab), and the finding resource itself (storage-2a2d5335411b9ccc) was stated to have no advertised typed actions. No typed action exists anywhere in the chain to prune old vzdump archives, set a backup retention policy, or redirect the backup target. The problem is real and fully evidenced, but there is no advertised capability to remediate it through a typed action."
+          }
+        ]
+      }
+    },
+    {
+      "archive": "pve-qwen-off-4476",
+      "run_id": "q-20261116-112833-ddd5e511",
+      "recorded_manifest_version": 1,
+      "recorded_grade": "handed_over",
+      "want_grade": "partial",
+      "evidence": {
+        "agent_profile": {
+          "name": "commands-off",
+          "commands_enabled": false,
+          "declared": "commands-off",
+          "host_name": "pmxlab",
+          "host_resource_id": "agent-cb92e49a2a913d3b"
+        },
+        "alerts": [
+          {
+            "id": "pmxlab-local::metric-threshold:usage",
+            "type": "usage",
+            "level": "warning",
+            "resource_alias": "local",
+            "resource_name": "local",
+            "message": "Storage at 91.0%",
+            "start_time": "2026-11-16T11:30:33.630751Z"
+          }
+        ],
+        "wake": {
+          "mode": "self",
+          "trigger_reason": "alert_fired",
+          "run_id": "1794829336653972000",
+          "asked": "scoped_run",
+          "investigation_start": "self",
+          "alert_after_ns": 11625021075,
+          "finding_after_ns": 837352978964,
+          "settled_after_ns": 1344843708553
+        },
+        "findings": [
+          {
+            "id": "16145f022b02825d",
+            "severity": "critical",
+            "category": "capacity",
+            "resource_alias": "local",
+            "resource_name": "local",
+            "title": "High Disk Usage on Storage Pool 'local'",
+            "investigation_status": "completed",
+            "investigation_outcome": "needs_attention",
+            "turn_count": 5,
+            "evidence_call_count": 3,
+            "tools_used": [
+              "pulse_query",
+              "pulse_storage"
+            ],
+            "conclusion": "### Investigation Summary\nThe storage pool 'local' (ID: storage-2a2d5335411b9ccc) is at 91% disk usage, matching the alert threshold. Read-only tools confirmed the storage pool's status and listed three containers (gitea, nextcloud, pihole) hosted on the same node. However, no direct evidence linked the storage usage to specific files or backups.  \n\n### Root Cause\nThe high disk usage is likely due to one or more containers (gitea, nextcloud, pihole) or their associated data (e.g., VM images, backups, logs). The storage pool's content includes backups, but `pulse_storage` did not return actionable backup data. Without deeper inspection of individual container filesystems or storage paths, the exact cause remains unidentified.  \n\n### Affected Resources\n- **Storage Pool**: `storage-2a2d5335411b9ccc` (91% usage, 28.49 GB used of 31.30 GB total)  \n- **Containers**: `gitea`, `nextcloud`, `pihole` (hosted on node `pmxlab`)  \n\n### Recommendation\n1. Use `pulse_read` to inspect disk usage of each container's filesystem (e.g., check `/var/lib/libvirt/images/` or container-specific data directories).  \n2. Verify if backups or VM images are consuming space by examining the storage pool's content paths.  \n3. If backups are the cause, consider pruning old backups or migrating them to a different storage pool.  \n\n### Conclusion\nNEEDS_ATTENTION: Missing evidence to pinpoint the exact cause of disk usage. Use `pulse_read` on containers and storage paths to identify the source of the space consumption."
+          }
+        ]
+      }
+    },
+    {
+      "archive": "pve-qwen-sf-4490",
+      "run_id": "q-20261116-155556-7880a0a9",
+      "recorded_manifest_version": 1,
+      "recorded_grade": "handed_over",
+      "want_grade": "handed_over",
+      "evidence": {
+        "agent_profile": {
+          "name": "commands-off",
+          "commands_enabled": false,
+          "declared": "commands-off",
+          "host_name": "pmxlab",
+          "host_resource_id": "agent-cb92e49a2a913d3b"
+        },
+        "alerts": [
+          {
+            "id": "pmxlab-local::metric-threshold:usage",
+            "type": "usage",
+            "level": "warning",
+            "resource_alias": "local",
+            "resource_name": "local",
+            "message": "Storage at 91.0%",
+            "start_time": "2026-11-16T15:57:37.778842Z"
+          }
+        ],
+        "wake": {
+          "mode": "self",
+          "trigger_reason": "alert_fired",
+          "run_id": "1794845260760559000",
+          "investigation_start": "self",
+          "alert_after_ns": 5992300800,
+          "finding_after_ns": 685566799905,
+          "settled_after_ns": 1044412064343
+        },
+        "findings": [
+          {
+            "id": "16145f022b02825d",
+            "severity": "critical",
+            "category": "capacity",
+            "resource_alias": "local",
+            "resource_name": "local",
+            "title": "High Storage Usage on 'local' Pool",
+            "investigation_status": "completed",
+            "investigation_outcome": "needs_attention",
+            "turn_count": 2,
+            "evidence_call_count": 1,
+            "tools_used": [
+              "pulse_storage"
+            ],
+            "conclusion": "### Investigation Summary\nThe storage pool 'local' is at 91% usage, primarily due to multiple backups of the 'nextcloud' container. These backups, while necessary, are consuming significant space. The total storage used by backups is 28.5 GB out of 31.3 GB, indicating a critical threshold approaching.\n\n### Root Cause\nThe causal resource is the 'local' storage pool, which is being filled by backups of the 'nextcloud' container. The evidence shows multiple backups stored on 'local', with the largest individual backup size being 801MB. However, the cumulative size of these backups, combined with other potential data, is pushing the storage to 91% capacity.\n\n### Affected Resources\n- **Resource**: storage-2a2d5335411b9ccc (storage pool 'local')\n- **Symptoms**: 91% storage usage, critical threshold exceeded\n- **Causal Resource**: storage-2a2d5335411b9ccc (storage pool 'local') due to backup accumulation\n\n### Recommendation\nInvestigate and clean up old backups on the 'local' storage pool, particularly those of the 'nextcloud' container. Consider pruning unnecessary backups or moving them to another storage pool to free up space.\n\n### Conclusion\nNEEDS_ATTENTION: The storage pool 'local' is nearing critical capacity due to accumulated backups. Immediate action is required to manage or reduce storage usage to prevent potential outages."
+          }
+        ]
+      }
+    },
+    {
+      "archive": "pve-sf-4490",
+      "run_id": "q-20261116-150211-dc699e5b",
+      "recorded_manifest_version": 1,
+      "recorded_grade": "handed_over",
+      "want_grade": "handed_over",
+      "evidence": {
+        "agent_profile": {
+          "name": "commands-off",
+          "commands_enabled": false,
+          "declared": "commands-off",
+          "host_name": "pmxlab",
+          "host_resource_id": "agent-cb92e49a2a913d3b"
+        },
+        "alerts": [
+          {
+            "id": "pmxlab-local::metric-threshold:usage",
+            "type": "usage",
+            "level": "warning",
+            "resource_alias": "local",
+            "resource_name": "local",
+            "message": "Storage at 91.0%",
+            "start_time": "2026-11-16T15:04:31.126663Z"
+          }
+        ],
+        "wake": {
+          "mode": "self",
+          "trigger_reason": "alert_fired",
+          "run_id": "1794842072323210000",
+          "investigation_start": "self",
+          "alert_after_ns": 11370029283,
+          "finding_after_ns": 627142007019,
+          "settled_after_ns": 901111639429
+        },
+        "findings": [
+          {
+            "id": "16145f022b02825d",
+            "severity": "warning",
+            "category": "capacity",
+            "resource_alias": "local",
+            "resource_name": "local",
+            "title": "Local storage at 91% due to unpruned daily vzdump backups accumulating with no retention policy",
+            "investigation_status": "completed",
+            "investigation_outcome": "needs_attention",
+            "turn_count": 5,
+            "evidence_call_count": 5,
+            "tools_used": [
+              "pulse_query",
+              "pulse_storage",
+              "pulse_read",
+              "patrol_action_capabilities",
+              "patrol_conclude_investigation"
+            ],
+            "conclusion": "### Investigation Summary\nThe 'local' dir storage on node pmxlab (canonical ID storage-2a2d5335411b9ccc) is confirmed at 91% usage (28.48GB/31.3GB used, only 2.82GB free). Querying the backup inventory for this storage confirmed 8 consecutive full daily vzdump backups of the nextcloud LXC (vmid 111, system-container-05818b40c3dd944c), each 801,064,409 bytes (~764MiB), dated 2026-11-07 through 2026-11-14, all still retained with no pruning evidence — roughly 6.4GB on its own. By contrast, gitea (vmid 112) and pihole (vmid 110) backups on the same storage are only ~4.4MB each, confirming nextcloud's daily full backups are the dominant and growing consumer of this small 31.3GB pool. 'local' is a single-node, non-shared dir storage scoped to pmxlab and is the configured backup repository (content type includes \"backup\") for all three LXCs, confirming the storage-to-workload dependency is real and current, not stale.\n\nAn attempt to drill into the actual folder usage on the host (/var/lib/vz, where vzdump archives live) was blocked by a STRICT_RESOLUTION policy refusal because \"pmxlab\" matched multiple monitored resources rather than one canonical host target. A follow-up capability lookup on the causal resource (the nextcloud container) returned no advertised typed actions and reported commands_disabled on the pmxlab Pulse agent host, meaning Pulse cannot execute reads, prunes, deletes, or configuration changes on that host at all.\n\n### Root Cause\nCausal mechanism: the nextcloud LXC's scheduled vzdump backup job writes a full ~764MiB archive daily to storage-2a2d5335411b9ccc ('local' on pmxlab), and no retention/prune policy (e.g. vzdump maxfiles or keep-daily) is configured to rotate out old archives. This is confirmed by the backup inventory: 8 consecutive dated backups (2026-11-07 through 2026-11-14) all still present, versus the much smaller, apparently-rotated or infrequent gitea/pihole archives on the same storage.\n\nWhat the evidence does not establish: why no retention policy was ever configured (never set up vs. recently disabled or changed), whether a prune job exists but is silently failing, and the live per-folder breakdown of /var/lib/vz on pmxlab, since the disk_usage read was blocked by an ambiguous host-resolution policy refusal rather than resolved against a single canonical host ID. A proposed remedy was not possible to execute or verify in this investigation; no change has been made and no recovery has occurred.\n\n### Affected Resources\n- storage-2a2d5335411b9ccc (\"local\" on node pmxlab): exhibits the symptom — 91% used, 2.82GB free, at risk of filling and blocking further backups or guest writes if trend continues.\n- system-container-05818b40c3dd944c (nextcloud LXC, vmid 111): causal resource whose unpruned daily full backups are consuming ~6.4GB of the 31.3GB pool, the dominant share of used space.\n- system-container-fe24c58f228eedf1 (gitea, vmid 112) and system-container-1f739f80f1ff9ec1 (pihole, vmid 110): share the same storage but contribute negligible space (~4.4MB each) and are not implicated in the capacity issue.\n\n### Recommendation\nA person must configure a vzdump retention policy (e.g., maxfiles or keep-daily/keep-last) for backups targeting 'local' on pmxlab, and/or manually delete the oldest nextcloud archives (2026-11-07 through 2026-11-10, reclaiming roughly 3.2GB) via Datacenter > Storage > local > Backups in the Proxmox UI. Longer term, consider redirecting nextcloud's backup target to larger or deduplicating storage (e.g., PBS) given the small 31.3GB size of 'local'. Separately, enabling command execution on the pmxlab Pulse agent would let Pulse read actual folder usage and execute governed prune/delete actions in future investigations — no typed remediation capability is currently advertised for either the storage resource or the nextcloud container, so no action could be proposed through Pulse in this run.\n\n### Conclusion\nNEEDS_ATTENTION: No typed action capability is advertised for storage-2a2d5335411b9ccc or for the causal resource system-container-05818b40c3dd944c (capability lookup returned an empty list with commands_disabled on the pmxlab host agent), so Pulse cannot execute a prune, delete, or retention-policy change. A person must manually configure vzdump retention for 'local' and/or delete the oldest nextcloud backups via the Proxmox UI, and should consider enabling command execution on the pmxlab agent to allow governed remediation going forward."
+          }
+        ]
+      }
+    },
+    {
+      "archive": "pve-sf-4490",
+      "run_id": "q-20261116-152333-e0aa9681",
+      "recorded_manifest_version": 1,
+      "recorded_grade": "handed_over",
+      "want_grade": "handed_over",
+      "evidence": {
+        "agent_profile": {
+          "name": "commands-on",
+          "commands_enabled": true,
+          "declared": "commands-on",
+          "host_name": "pmxlab",
+          "host_resource_id": "agent-cb92e49a2a913d3b"
+        },
+        "alerts": [
+          {
+            "id": "pmxlab-local::metric-threshold:usage",
+            "type": "usage",
+            "level": "warning",
+            "resource_alias": "local",
+            "resource_name": "local",
+            "message": "Storage at 91.0%",
+            "start_time": "2026-11-16T15:25:21.297841Z"
+          }
+        ],
+        "wake": {
+          "mode": "self",
+          "trigger_reason": "alert_fired",
+          "run_id": "1794843327193456000",
+          "investigation_start": "self",
+          "alert_after_ns": 11599467925,
+          "finding_after_ns": 668258720986,
+          "settled_after_ns": 925672921863
+        },
+        "findings": [
+          {
+            "id": "d29e93980cee0c74",
+            "severity": "warning",
+            "category": "capacity",
+            "resource_alias": "local",
+            "resource_name": "local",
+            "title": "Storage at 91.0%",
+            "investigation_status": "completed",
+            "investigation_outcome": "needs_attention",
+            "turn_count": 8,
+            "evidence_call_count": 7,
+            "tools_used": [
+              "pulse_query",
+              "pulse_storage",
+              "pulse_read",
+              "patrol_action_capabilities",
+              "patrol_conclude_investigation"
+            ],
+            "conclusion": "### Investigation Summary\nStorage \"local\" (storage-2a2d5335411b9ccc) on node pmxlab is a 31.3GB directory-type Proxmox storage sitting at 91.0% used (28.48GB used, 2.82GB free), above the 85% warning threshold. The storage holds backup, images, iso, rootdir, snippets, and vztmpl content for three LXC containers (gitea, nextcloud, pihole). A disk_usage drill-down on the hosting agent (agent-cb92e49a2a913d3b) confirms the space is concentrated in one folder: /var/lib/vz/dump holds 21G of the 22G filesystem (95%), versus 1019M in images and 3.3M in template. The backup inventory corroborates this: daily full vzdump backups of the nextcloud LXC (~801MB each) running at least Nov 7–14, plus backups of gitea and pihole, are all retained locally on this same small storage with no evidence of a retention/pruning policy trimming older copies.\n\n### Root Cause\nObserved mechanism: accumulated local vzdump backup archives in /var/lib/vz/dump are consuming 95% of the \"local\" storage's filesystem on node pmxlab, driving usage to 91%. This is an unmanaged retention issue, not a workload data-growth issue — the backups belong to LXC containers 110 (pihole), 111 (nextcloud), 112 (gitea), none of which run large persistent volumes on this storage. Unestablished by current evidence: the backup job's configured retention/keep-count setting (whether one exists and is misconfigured, or none exists at all), and whether any single backup run or job-definition change at a specific time introduced the buildup, since the full backup list was truncated before all entries could be reviewed.\n\n### Affected Resources\n- storage-2a2d5335411b9ccc (\"local\", pmxlab): symptom — 91.0% used, 2.82GB free, triggering the capacity finding.\n- agent-cb92e49a2a913d3b (node pmxlab): causal filesystem location — /var/lib/vz/dump holds the bulk of the consumed space.\n- system-container-05818b40c3dd944c (nextcloud, vmid 111), system-container-fe24c58f228eedf1 (gitea, vmid 112), system-container-1f739f80f1ff9ec1 (pihole, vmid 110): backup subjects whose archives occupy the space; not themselves malfunctioning.\n\n### Recommendation\nA person should review and prune the backup retention for storage \"local\" on node pmxlab — either reduce the keep-count/retention policy for the vzdump backup job so older nextcloud/gitea/pihole archives are rotated out, or relocate backups to a remote/PBS storage target with more capacity. No typed remediation capability is advertised for either the finding resource (storage-2a2d5335411b9ccc) or the causal node (agent-cb92e49a2a913d3b), so this cannot be automated by Pulse; it requires manual review of which backups are safe to remove and reconfiguration of the backup job outside Pulse's governed action set. With only 2.82GB free, the next scheduled backup run risks failing or filling local storage entirely.\n\n### Conclusion\nNEEDS_ATTENTION: Backup retention for the local storage on node pmxlab must be reviewed and pruned (or backups relocated) by a person; no advertised Pulse capability exists on either the storage resource or the hosting node to remediate this automatically."
+          }
+        ]
+      }
+    },
+    {
+      "archive": "pve-st-4476",
+      "run_id": "q-20261116-083801-3c24dd9f",
+      "recorded_manifest_version": 1,
+      "recorded_grade": "handed_over",
+      "want_grade": "handed_over",
+      "evidence": {
+        "agent_profile": {
+          "name": "commands-off",
+          "commands_enabled": false,
+          "declared": "commands-off",
+          "host_name": "pmxlab",
+          "host_resource_id": "agent-cb92e49a2a913d3b"
+        },
+        "alerts": [
+          {
+            "id": "pmxlab-local::metric-threshold:usage",
+            "type": "usage",
+            "level": "warning",
+            "resource_alias": "local",
+            "resource_name": "local",
+            "message": "Storage at 91.0%",
+            "start_time": "2026-11-16T08:39:42.516255Z"
+          }
+        ],
+        "wake": {
+          "mode": "self",
+          "trigger_reason": "alert_fired",
+          "run_id": "1794818988471818000",
+          "investigation_start": "self",
+          "alert_after_ns": 11541329266,
+          "finding_after_ns": 627298233463,
+          "settled_after_ns": 852717144252
+        },
+        "findings": [
+          {
+            "id": "fc08bd7530abd0db",
+            "severity": "warning",
+            "category": "backup",
+            "resource_alias": "local",
+            "resource_name": "local (pmxlab)",
+            "title": "Unpruned daily nextcloud (CT 111) vzdump backups are filling \"local\" storage to 91%",
+            "investigation_status": "completed",
+            "investigation_outcome": "needs_attention",
+            "turn_count": 5,
+            "evidence_call_count": 3,
+            "tools_used": [
+              "pulse_storage",
+              "pulse_query",
+              "patrol_action_capabilities",
+              "patrol_conclude_investigation"
+            ],
+            "conclusion": "### Investigation Summary\nConfirmed the finding: storage \"local\" (storage-2a2d5335411b9ccc) on node pmxlab is at 91.0% usage (28.48 GB used / 31.30 GB total, 2.82 GB free), matching the alert. Querying the backup inventory for this storage (pulse_storage type=backups) confirms the mechanism: CT 111 (nextcloud, system-container-05818b40c3dd944c) has a daily full vzdump job writing ~801.7 MB each to \"local\" with no retention/pruning in effect, 8 full copies observed from 2026-11-07 through 2026-11-14 (~6.4 GB total, roughly 20% of the volume). Backups for gitea (CT 112) and pihole (CT 110) on the same storage are tiny (4-25 MB each) and confirmed negligible contributors. Node/storage scope is confirmed: \"local\" is a non-shared dir storage local to pmxlab, and nextcloud (CT 111) runs on pmxlab, so the dependency (workload to storage) and node membership are verified; this is not a cross-node or orphaned-backup situation.\n\nI then checked whether any typed action exists on the causal resource. The finding resource (storage) advertises no typed actions. patrol_action_capabilities on the causal resource (nextcloud, system-container-05818b40c3dd944c) returned an empty capability list with commands_disabled: the Pulse agent on pmxlab does not have commands enabled, so Pulse cannot read files/logs or execute any action (including configuring backup retention or deleting old vzdump archives) on that host.\n\n### Root Cause\nObserved mechanism: a daily vzdump backup job for nextcloud (CT 111, canonical resource system-container-05818b40c3dd944c) on node pmxlab writes a full ~801.7 MB backup to storage \"local\" (storage-2a2d5335411b9ccc) every day with no prune/retention policy applied, so old copies are never removed and usage grows by ~800 MB/day.\nNot established by evidence: who configured the backup job without retention, when retention was last changed or removed, and whether retention was ever configured and later disabled versus never configured. No logs or job-config history were available to confirm origin; this is inferred purely from the retained-backup inventory pattern, not from a change log.\n\n### Affected Resources\n- local (pmxlab) / storage-2a2d5335411b9ccc: symptom is a 91% full dir storage with 2.82 GB free, approaching hard failure for any further backup or disk operation on pmxlab.\n- nextcloud (CT 111) / system-container-05818b40c3dd944c: causal resource; its unpruned daily vzdump job is the dominant consumer of the storage; the container itself is online and not otherwise impaired by this finding.\n\n### Recommendation\nA person must manually remediate because Pulse cannot execute commands on pmxlab (agent commands disabled) and no typed action is advertised for either the storage or the container to fix backup retention:\n1. In the Proxmox web UI (or CLI on pmxlab), edit the vzdump backup job for CT 111 (nextcloud) and set a retention/prune policy, e.g. keep-last 2-3, or move its target storage to PBS/remote storage instead of local dir storage.\n2. Alternatively, manually delete older vzdump-lxc-111-*.tar.zst files on \"local\" to immediately free space.\n3. After pruning, re-check usage with pulse_storage type=pools, storage_id=local to confirm it drops well below the 85% warning threshold.\n4. Separately, consider enabling commands on the Pulse agent for pmxlab so future findings like this can be remediated automatically through Pulse.\n\n### Conclusion\nNEEDS_ATTENTION: No typed action is available to fix backup retention on either the storage (storage-2a2d5335411b9ccc) or the causal resource nextcloud/CT 111 (system-container-05818b40c3dd944c); the Pulse agent on pmxlab has commands disabled, so Pulse cannot configure pruning or delete old backups. A person must manually set a keep-last retention policy on the CT 111 vzdump job (or move it to PBS/remote storage) and verify usage drops below 85% afterward."
+          }
+        ]
+      }
+    },
+    {
+      "archive": "pve-st-4476",
+      "run_id": "q-20261116-090235-41b3be65",
+      "recorded_manifest_version": 1,
+      "recorded_grade": "handed_over",
+      "want_grade": "handed_over",
+      "evidence": {
+        "agent_profile": {
+          "name": "commands-off",
+          "commands_enabled": false,
+          "declared": "commands-off",
+          "host_name": "pmxlab",
+          "host_resource_id": "agent-cb92e49a2a913d3b"
+        },
+        "alerts": [
+          {
+            "id": "pmxlab-local::metric-threshold:usage",
+            "type": "usage",
+            "level": "warning",
+            "resource_alias": "local",
+            "resource_name": "local",
+            "message": "Storage at 91.0%",
+            "start_time": "2026-11-16T09:04:21.522911Z"
+          }
+        ],
+        "wake": {
+          "mode": "self",
+          "trigger_reason": "alert_fired",
+          "run_id": "1794820467293188000",
+          "investigation_start": "self",
+          "alert_after_ns": 11189449488,
+          "finding_after_ns": 627062991294,
+          "settled_after_ns": 842638450746
+        },
+        "findings": [
+          {
+            "id": "16145f022b02825d",
+            "severity": "warning",
+            "category": "capacity",
+            "resource_alias": "local",
+            "resource_name": "local",
+            "title": "Local storage at 91% usage due to accumulated unpruned nextcloud backups",
+            "investigation_status": "completed",
+            "investigation_outcome": "cannot_fix",
+            "turn_count": 3,
+            "evidence_call_count": 4,
+            "tools_used": [
+              "pulse_storage",
+              "pulse_query",
+              "patrol_action_capabilities",
+              "patrol_conclude_investigation"
+            ],
+            "conclusion": "Storage 'local' on pmxlab is at 91% usage (28.49GB/31.30GB) due to 8 consecutive unpruned daily full vzdump backups of the nextcloud LXC (vmid 111, system-container-05818b40c3dd944c), ~801.7MB each, totaling over 5.6GB, with no retention/keep-last policy rotating them out. patrol_action_capabilities on the causal resource (nextcloud container) returned an empty capability list with commands_disabled ('Commands are not enabled on the Pulse agent on pmxlab'), and the finding resource (storage-2a2d5335411b9ccc) advertises no typed actions either. No Pulse-governed remediation path exists; a person with direct Proxmox access must configure a Max Backups/keep-last retention policy on the nextcloud backup job or manually delete the older vzdump-lxc-111-* files on 'local' to reclaim space."
+          }
+        ]
+      }
+    },
+    {
+      "archive": "pve-st-4476",
+      "run_id": "q-20261116-092720-bb83f0c3",
+      "recorded_manifest_version": 1,
+      "recorded_grade": "handed_over",
+      "want_grade": "handed_over",
+      "evidence": {
+        "agent_profile": {
+          "name": "commands-on",
+          "commands_enabled": true,
+          "declared": "commands-on",
+          "host_name": "pmxlab",
+          "host_resource_id": "agent-cb92e49a2a913d3b"
+        },
+        "alerts": [
+          {
+            "id": "pmxlab-local::metric-threshold:usage",
+            "type": "usage",
+            "level": "warning",
+            "resource_alias": "local",
+            "resource_name": "local",
+            "message": "Storage at 91.0%",
+            "start_time": "2026-11-16T09:29:03.650638Z"
+          }
+        ],
+        "wake": {
+          "mode": "self",
+          "trigger_reason": "alert_fired",
+          "run_id": "1794821999669027000",
+          "investigation_start": "asked",
+          "alert_after_ns": 11518260291,
+          "finding_after_ns": 689612437704,
+          "settled_after_ns": 1198136846939
+        },
+        "findings": [
+          {
+            "id": "16145f022b02825d",
+            "severity": "warning",
+            "category": "capacity",
+            "resource_alias": "local",
+            "resource_name": "local",
+            "title": "Local storage at 91% due to un-pruned daily vzdump backups accumulating on the pool",
+            "investigation_status": "completed",
+            "investigation_outcome": "cannot_fix",
+            "turn_count": 6,
+            "evidence_call_count": 7,
+            "tools_used": [
+              "pulse_query",
+              "pulse_storage",
+              "pulse_read",
+              "patrol_action_capabilities",
+              "patrol_conclude_investigation"
+            ],
+            "conclusion": "Confirmed: 'local' storage on pmxlab (storage-2a2d5335411b9ccc) is at 91% (28.48GB/31.30GB) due to 8 un-pruned daily nextcloud (system-container-05818b40c3dd944c) vzdump backups totaling ~6.4GB, dated 2026-11-07 through 2026-11-14, with no retention policy removing older archives. patrol_action_capabilities returned empty capability lists for both the causal workload (system-container-05818b40c3dd944c) and the hosting agent (agent-cb92e49a2a913d3b), so no Pulse-governed typed action (prune, retention config, or file deletion) is available to remediate this automatically. A person must configure vzdump keep-daily/keep-last retention on 'local' or manually delete the oldest nextcloud backup archives via Proxmox, then re-check storage usage."
+          }
+        ]
+      }
+    },
+    {
+      "archive": "pve1-off",
+      "run_id": "q-20261114-155839-11abcc24",
+      "recorded_manifest_version": 1,
+      "recorded_grade": "handed_over",
+      "want_grade": "handed_over",
+      "evidence": {
+        "agent_profile": {
+          "name": "commands-off",
+          "commands_enabled": false,
+          "declared": "commands-off",
+          "host_name": "pmxlab",
+          "host_resource_id": "agent-cb92e49a2a913d3b"
+        },
+        "alerts": [
+          {
+            "id": "pmxlab-local::metric-threshold:usage",
+            "type": "usage",
+            "level": "warning",
+            "resource_alias": "local",
+            "resource_name": "local",
+            "message": "Storage at 91.0%",
+            "start_time": "2026-11-14T16:00:20.703442Z"
+          }
+        ],
+        "wake": {
+          "mode": "self",
+          "trigger_reason": "alert_fired",
+          "run_id": "1794672626511819000",
+          "investigation_start": "self",
+          "alert_after_ns": 16761958804,
+          "finding_after_ns": 636846953139,
+          "settled_after_ns": 903385787435
+        },
+        "findings": [
+          {
+            "id": "16145f022b02825d",
+            "severity": "warning",
+            "category": "capacity",
+            "resource_alias": "local",
+            "resource_name": "local",
+            "title": "Local storage at 91% due to accumulating unpruned vzdump backups",
+            "investigation_status": "completed",
+            "investigation_outcome": "needs_attention",
+            "turn_count": 6,
+            "evidence_call_count": 8,
+            "tools_used": [
+              "pulse_query",
+              "pulse_storage",
+              "pulse_read",
+              "patrol_action_capabilities",
+              "patrol_conclude_investigation"
+            ],
+            "conclusion": "### Investigation Summary\nStorage 'local' on node pmxlab is confirmed at 91.0% usage (28.49GB/31.30GB, 2.81GB free), matching the finding. The pulse_storage backup inventory for the nextcloud LXC (vmid 111, resource system-container-05818b40c3dd944c) confirms 12 consecutive daily vzdump backups on this storage from 2026-11-03 through 2026-11-14, each roughly 803.58MB (the most recent entry is ~25.4MB, likely incremental or partial), all with mode \"local\" and isPBS:false, meaning no remote or PBS target is configured and nothing is pruning old copies. The Nov 14 batch additionally includes fresh backups of gitea (112) and pihole (110) on the same 'local' storage, consistent with the finding's description. This is a retention/accumulation problem, not a storage-membership or guest-mount issue: the storage is local (shared:false, single node), content types include \"backup\", and the dump directory is the direct cause of growth, so no further topology ambiguity exists.\n\nAttempting direct filesystem inspection (du on /var/lib/vz/dump) was blocked by STRICT_RESOLUTION (ambiguous host target), and the capability lookup for the backup subject (nextcloud, system-container-05818b40c3dd944c) returned zero advertised capabilities plus an explicit commands_disabled flag for host pmxlab: \"Commands are not enabled on the Pulse agent on pmxlab... Pulse cannot read logs or files, or run commands or actions, on this host.\" This rules out any typed remediation path, such as file deletion, retention policy change, or backup job edit, via Pulse for this host.\n\n### Root Cause\nCausal mechanism: unpruned vzdump backup retention on storage 'local' (storage-2a2d5335411b9ccc) on node pmxlab. The backup job(s) for LXCs 111 (nextcloud), 112 (gitea), and 110 (pihole) write full daily or periodic tar.zst archives to this local dir storage with no retention or keep-last limit and no PBS or remote repository configured; every recovery point shows isPBS:false and mode:local. Each nextcloud backup averages about 803.58MB, and 7 or more consecutive daily copies plus a newer multi-container batch account for most of the 28.49GB used.\n\nWhat the evidence does not establish: the exact vzdump or backup-job retention configuration (keep-last or keep-daily settings) that allowed this accumulation, and whether a scheduled job or manual triggers produced the Nov 14 batch. No host-level file listing was obtainable because commands are disabled on pmxlab, so individual file sizes and ages beyond what the backup inventory reports are not independently confirmed.\n\n### Affected Resources\n- storage-2a2d5335411b9ccc, \"local\" on pmxlab: observed symptom is 91.0% capacity, 2.81GB free, warning threshold breached.\n- system-container-05818b40c3dd944c, nextcloud vmid 111: source of the majority of accumulated backup volume, 12 daily archives.\n- gitea (vmid 112) and pihole (vmid 110) LXCs: contribute additional backup volume from the Nov 14 batch, same storage, same lack of pruning.\n\n### Recommendation\nA person with direct Proxmox or host access must reduce vzdump retention for storage 'local' via Datacenter > Storage > local > Backup Retention (for example keep-last 2-3), or redirect backups to a PBS or remote target with proper pruning, and manually delete older vzdump-lxc-111-*.tar.zst files, and equivalents for 110 and 112, to immediately free space below the 85% warning threshold. This cannot be done through Pulse because commands are disabled on the pmxlab agent and no typed action capability is advertised for the backup subject or the storage resource, so Pulse can neither read the dump directory nor execute retention or deletion operations on this host.\n\n### Conclusion\nNEEDS_ATTENTION: Backup accumulation on storage 'local' (pmxlab) is confirmed as the cause of the 91% usage, but no governed remediation is available. The Pulse agent on pmxlab has commands disabled, so it cannot read files or execute actions there, and the backup subject resource advertises zero typed capabilities. A person with direct Proxmox access must manually set backup retention on Datacenter > Storage > local and/or delete old vzdump-lxc-111-*.tar.zst files to resolve this."
+          }
+        ]
+      }
+    },
+    {
+      "archive": "pve1-on-c",
+      "run_id": "q-20261114-142001-e758ffb4",
+      "recorded_manifest_version": 1,
+      "recorded_grade": "handed_over",
+      "want_grade": "handed_over",
+      "evidence": {
+        "agent_profile": {
+          "name": "commands-on",
+          "commands_enabled": true,
+          "declared": "commands-on",
+          "host_name": "pmxlab",
+          "host_resource_id": "agent-cb92e49a2a913d3b"
+        },
+        "alerts": [
+          {
+            "id": "pmxlab-local::metric-threshold:usage",
+            "type": "usage",
+            "level": "warning",
+            "resource_alias": "local",
+            "resource_name": "local",
+            "message": "Storage at 91.0%",
+            "start_time": "2026-11-14T14:23:16.497097Z"
+          }
+        ],
+        "wake": {
+          "mode": "self",
+          "trigger_reason": "alert_fired",
+          "run_id": "1794666854048183000",
+          "investigation_start": "asked",
+          "alert_after_ns": 12423682322,
+          "finding_after_ns": 719883675067,
+          "settled_after_ns": 1410947338695
+        },
+        "findings": [
+          {
+            "id": "16145f022b02825d",
+            "severity": "warning",
+            "category": "capacity",
+            "resource_alias": "local",
+            "resource_name": "local",
+            "title": "Local storage at 91% due to un-pruned daily nextcloud backups",
+            "investigation_status": "completed",
+            "investigation_outcome": "cannot_fix",
+            "turn_count": 10,
+            "evidence_call_count": 9,
+            "tools_used": [
+              "pulse_query",
+              "pulse_storage",
+              "pulse_read",
+              "patrol_action_capabilities",
+              "patrol_conclude_investigation"
+            ],
+            "conclusion": "### Investigation Summary\nThe 'local' directory storage (storage-2a2d5335411b9ccc) on node pmxlab is confirmed at 91.0% usage (28.48GB/31.30GB, only ~2.8GB free). Backup inventory confirms the mechanism described in the finding: since 'local' is plain directory storage (not PBS), every vzdump run writes a full standalone tar.zst with no incremental chaining and no automatic pruning. Nextcloud CT111 (system-container-05818b40c3dd944c) has 8+ full daily backups retained, each ~803.79MB, dated 2026-11-05 through 2026-11-14 — roughly 6.4GB+ of redundant full copies for one workload. Gitea CT112 and pihole CT110 backups are present but small (~4.4MB each) and do not meaningfully contribute to the pool pressure. CT111 itself is healthy and online (disk 3.3% used, memory 2% used), ruling out the guest's own disk as the problem — the pressure is entirely on the Proxmox host's 'local' storage pool holding the accumulated backup archives.\n\nI then checked for an advertised remediation. The host node (agent-cb92e49a2a913d3b, \"pmxlab\") and the causal workload (system-container-05818b40c3dd944c, nextcloud CT111) were each checked with patrol_action_capabilities; both returned empty capability lists. No typed action exists to delete/prune stale backup archives or to edit a vzdump job's retention (keep-daily) policy on either canonical resource, so no proposal could be made.\n\n### Root Cause\nObserved mechanism: unbounded accumulation of full, non-incremental vzdump backups of nextcloud CT111 (system-container-05818b40c3dd944c) on storage 'local' (storage-2a2d5335411b9ccc, node pmxlab), driven by a backup job with no retention/keep limit, combined with 'local' being a plain directory store that lacks incremental or dedup support.\n\nNot established by evidence: the exact backup job/schedule configuration (its keep settings, if configured at all) was not directly inspected — the inventory shows the effect (8+ retained full copies spanning 2026-11-05 to 2026-11-14) but not the job definition, so whether this is a misconfigured keep policy or simply no policy at all is unconfirmed. No typed action/capability exists on either the storage, the node, or the CT111 workload to inspect or modify that job definition through this tool surface, which is also why no prune or reconfigure action could be proposed.\n\n### Affected Resources\n- storage-2a2d5335411b9ccc (\"local\", node pmxlab): symptom — 91.0% full, 2.8GB free, approaching the critical 90%+ threshold already crossed.\n- system-container-05818b40c3dd944c (nextcloud CT111): causal workload whose backup job is generating the unpruned archives; the guest itself is healthy and not the affected party.\n- system-container-fe24c58f228eedf1 (gitea CT112) and system-container-1f739f80f1ff9ec1 (pihole CT110): minor contributors (~4.4MB each daily), not materially responsible for the capacity pressure.\n\n### Recommendation\nA person should open the vzdump backup job for CT111 in Proxmox (Datacenter > Backup) and set a bounded retention policy (e.g., keep-daily=3), then manually remove the older local:backup/vzdump-lxc-111-*.tar.zst files once confirmed non-essential, to bring 'local' back under the 85% warning threshold. Longer term, point this job at PBS or incremental-capable storage to prevent recurrence. This cannot be done through Pulse's current typed-action catalog: patrol_action_capabilities returned no actions for both the node (agent-cb92e49a2a913d3b) and the CT111 workload (system-container-05818b40c3dd944c), so no automated proposal is available.\n\n### Conclusion\nCANNOT_FIX: The capacity problem is confirmed and its cause (unbounded full vzdump backups of nextcloud CT111 on non-incremental directory storage 'local') is established, but no typed action is advertised for either the causal workload (system-container-05818b40c3dd944c) or the host node (agent-cb92e49a2a913d3b) to prune backups or edit the job's retention policy. A person must manually adjust the backup job's keep-daily setting or delete the stale vzdump-lxc-111-* archives in Proxmox."
+          }
+        ],
+        "other_findings": [
+          {
+            "id": "2a787a089ff6cf6d",
+            "severity": "warning",
+            "category": "capacity",
+            "resource_alias": "nextcloud",
+            "resource_name": "nextcloud",
+            "title": "Nextcloud container disk usage is still at 92%, despite alert being marked resolved"
+          }
+        ]
+      }
+    },
+    {
+      "archive": "pve2-off",
+      "run_id": "q-20261114-194240-4a41c679",
+      "recorded_manifest_version": 1,
+      "recorded_grade": "handed_over",
+      "want_grade": "partial",
+      "evidence": {
+        "agent_profile": {
+          "name": "commands-off",
+          "commands_enabled": false,
+          "declared": "commands-off",
+          "host_name": "pmxlab",
+          "host_resource_id": "agent-cb92e49a2a913d3b"
+        },
+        "alerts": [
+          {
+            "id": "pmxlab-local::metric-threshold:usage",
+            "type": "usage",
+            "level": "warning",
+            "resource_alias": "local",
+            "resource_name": "local",
+            "message": "Storage at 91.0%",
+            "start_time": "2026-11-14T19:44:25.03811Z"
+          }
+        ],
+        "wake": {
+          "mode": "self",
+          "trigger_reason": "alert_fired",
+          "run_id": "1794686070886438000",
+          "investigation_start": "self",
+          "alert_after_ns": 6041374132,
+          "finding_after_ns": 656998600115,
+          "settled_after_ns": 1361869354109
+        },
+        "findings": [
+          {
+            "id": "16145f022b02825d",
+            "severity": "warning",
+            "category": "capacity",
+            "resource_alias": "local",
+            "resource_name": "local (pmxlab)",
+            "title": "Local vzdump backup storage filled rapidly due to unpruned container backups",
+            "investigation_status": "completed",
+            "investigation_outcome": "needs_attention",
+            "turn_count": 7,
+            "evidence_call_count": 10,
+            "tools_used": [
+              "pulse_query",
+              "pulse_storage",
+              "pulse_read",
+              "pulse_metrics",
+              "patrol_conclude_investigation"
+            ],
+            "conclusion": "### Investigation Summary\nStorage `local` (storage-2a2d5335411b9ccc, node pmxlab, 31.3 GB dir storage) is currently at 91.0% used (28.48 GB used, 2.82 GB free). Metrics confirm a sharp step: 24.07% at 19:43:00Z, 33.24% moments later, 82.63% at 19:44:00Z, 91.00% at 19:45:00Z — roughly a 21 GB increase within about two minutes, then flat ever since (91.00–91.15% through 20:01Z). This is a single abrupt jump, not a gradual leak.\n\nBackup inventory confirms this storage holds vzdump archives for three LXCs: gitea (112), nextcloud (111), pihole (110). Three backup_tasks completed today, but all at 12:44:46–12:44:50Z — about 7 hours before the usage spike — with a combined size of only ~32.7 MB (gitea 4.42 MB + nextcloud 25.4 MB + pihole 4.42 MB). The seven older daily nextcloud backups (Nov 5–11, 803,207,202 bytes each) total ~5.24 GB and were already on disk days before today's spike window. Summed, all known vzdump archives on this storage amount to roughly 5.3 GB — far short of both the 28.48 GB currently used and the ~21 GB single-step jump observed at 19:43–19:45Z. The pool's declared content types (backup, images, iso, rootdir, snippets, vztmpl) mean non-backup data — ISO uploads, container templates, VM disk images, rootdir snapshots — can also occupy this storage, and none of that was ruled in or out.\n\nAn attempt to list host directories (e.g. /var/lib/vz/dump) on pmxlab to identify what actually grew was blocked by a STRICT_RESOLUTION policy refusal because \"pmxlab\" matched multiple monitored resources; a disambiguated retry was not completed before the evidence budget was exhausted.\n\n### Root Cause\nNot established with confidence. The finding's stated mechanism — unpruned nextcloud vzdump backups accumulating day over day — is not well supported by the timing or magnitude of the evidence gathered: the only backup activity recorded today completed at 12:44Z and totaled ~33 MB, while the actual capacity event was a ~21 GB jump at 19:43–19:45Z, roughly seven hours later. The pre-existing nextcloud/gitea/pihole backups (~5.3 GB combined) were already on disk before the spike and cannot by themselves account for either the full 28.48 GB used or the abrupt 21 GB step. What specifically wrote ~21 GB to the `local` storage in that two-minute window (e.g. an ISO/template upload, a VM disk image, a rootdir snapshot, or an unrecorded backup job) is not established — the host-level directory listing needed to identify it was blocked by a policy refusal, and the evidence budget was exhausted before a disambiguated retry could be made.\n\n### Affected Resources\n- **storage-2a2d5335411b9ccc** (local, node pmxlab): observed symptom — 91.0% used, 2.82 GB free, with a ~21 GB single-step usage jump at 19:43–19:45Z today. This is the finding resource and the resource exhibiting the symptom.\n- **system-container-05818b40c3dd944c** (nextcloud, vmid 111), **system-container-fe24c58f228eedf1** (gitea, vmid 112), **system-container-1f739f80f1ff9ec1** (pihole, vmid 110): confirmed dependents that write vzdump backups to `local`, but their combined known backup footprint (~5.3 GB) does not explain the magnitude or timing of today's spike, so they are not confirmed as the proximate cause of the current 91% condition.\n\n### Recommendation\nA person should: (1) directly inspect the pmxlab host filesystem under /var/lib/vz (dump, images, template/iso, private/rootdir subdirectories) with an unambiguous resource target to identify what grew by ~21 GB between 19:43 and 19:45Z today — this is the missing evidence needed to confirm root cause; (2) regardless of root cause, relieve the immediate 91% condition by manually pruning old vzdump archives on `local` (the ~5.3 GB of nextcloud backups from Nov 5–11 are good prune candidates) and verify usage drops; (3) separately, as a longer-term step, reduce vzdump retention/keep-count for jobs targeting `local` or redirect container backups to a larger/remote target (e.g. PBS) so recurring backups do not recontend for this small 31.3 GB volume. No typed action is proposed here because the causal resource for today's spike is not confirmed, and no capability lookup could be justified without first identifying which resource actually wrote the data.\n\n### Conclusion\nNEEDS_ATTENTION: The 91% usage on storage 'local' (pmxlab) is confirmed, and the three LXCs (gitea/111, nextcloud/112, pihole/110... correction 111=nextcloud/112=gitea) are confirmed dependents via backup inventory, but the known vzdump backup data (~5.3 GB total) cannot account for the abrupt ~21 GB jump observed at 19:43–19:45Z today, nor does it align in time with the 12:44Z backup tasks. A person must inspect the pmxlab host filesystem directly (blocked here by an ambiguous-target policy refusal) to identify what actually consumed the space before any prune/retention remediation is proposed."
+          }
+        ]
+      }
+    },
+    {
+      "archive": "pve2-on",
+      "run_id": "q-20261114-182013-9cfc0fac",
+      "recorded_manifest_version": 1,
+      "recorded_grade": "handed_over",
+      "want_grade": "handed_over",
+      "evidence": {
+        "agent_profile": {
+          "name": "commands-on",
+          "commands_enabled": true,
+          "declared": "commands-on",
+          "host_name": "pmxlab",
+          "host_resource_id": "agent-cb92e49a2a913d3b"
+        },
+        "alerts": [
+          {
+            "id": "pmxlab-local::metric-threshold:usage",
+            "type": "usage",
+            "level": "warning",
+            "resource_alias": "local",
+            "resource_name": "local",
+            "message": "Storage at 91.0%",
+            "start_time": "2026-11-14T18:21:56.093794Z"
+          }
+        ],
+        "wake": {
+          "mode": "self",
+          "trigger_reason": "alert_fired",
+          "run_id": "1794681132219567000",
+          "investigation_start": "self",
+          "alert_after_ns": 5967756256,
+          "finding_after_ns": 639232331216,
+          "settled_after_ns": 1141515955463
+        },
+        "findings": [
+          {
+            "id": "16145f022b02825d",
+            "severity": "warning",
+            "category": "capacity",
+            "resource_alias": "local",
+            "resource_name": "local (pmxlab)",
+            "title": "Local storage at 91% is being filled by unpruned daily nextcloud vzdump backups",
+            "investigation_status": "completed",
+            "investigation_outcome": "needs_attention",
+            "turn_count": 8,
+            "evidence_call_count": 10,
+            "tools_used": [
+              "pulse_query",
+              "pulse_storage",
+              "patrol_action_capabilities",
+              "pulse_read",
+              "patrol_conclude_investigation"
+            ],
+            "conclusion": "Evidence: storage-2a2d5335411b9ccc ('local' on pmxlab) is at 91% (28.48/31.3 GB, 2.8 GB free). Host du confirms /var/lib/vz/dump = ~21 GB of the ~22 GB /var/lib/vz total, with no single sub-folder beneath dump holding most of that space (it is a flat directory of backup archives) -- this is the folder that gained the space, not images (only ~1019 MB, nextcloud's own disk is 929 MB). Backup inventory confirms the dump directory holds at least 7 consecutive nightly full vzdump backups of the nextcloud LXC (vmid 111, system-container-05818b40c3dd944c), ~803 MB each (2026-11-05 through 2026-11-11, plus later ones), none pruned, alongside smaller gitea/pihole backups. The nextcloud LXC is confirmed online on pmxlab and is genuinely backed up to this storage (dependency confirmed: storage scoped to node pmxlab only, content type includes backup, workload exists and is active). patrol_action_capabilities on the causal resource (system-container-05818b40c3dd944c) returned an empty capability list, and the finding resource has no advertised typed actions either, so no governed action exists to adjust retention or prune files. A person must manually reduce the vzdump retention for the nextcloud (vmid 111) backup job to keep-last 2-3 via Proxmox Datacenter > Backup, delete the older vzdump-lxc-111-*.tar.zst files on 'local' to reclaim space immediately, and verify usage drops below 85%. Longer term, consider moving nextcloud backups to larger storage (NFS/PBS)."
+          }
+        ]
+      }
+    }
+  ]
+}

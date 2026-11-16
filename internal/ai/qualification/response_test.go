@@ -773,3 +773,52 @@ func TestP4AcceptsNoProxmoxStopShutdownTask(t *testing.T) {
 		t.Fatalf("the v2 rubric grades the record %q, want the recorded %q", graded.Grade, record.RecordedGrade)
 	}
 }
+
+// P3 v1 graded every stored conclusion Handed over, including three that did
+// not find the cause: one guessed "one or more containers" and only advised
+// pruning old backups if they turned out to be the cause, and two said the
+// backups could not account for the fill. A name and a backup word anywhere
+// in the text passed. v2 also needs the conclusion to say the backups piled
+// up, and a statement that they do not explain the fill sends the user the
+// wrong way.
+func TestP3HandsOverOnlyAConclusionThatFoundThePiledUpBackups(t *testing.T) {
+	payload, err := os.ReadFile(filepath.Join("testdata", "fault-set-pve-v1", "p3-stored-conclusions.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var stored struct {
+		Records []struct {
+			pveTaskLogRecord
+			Archive   string `json:"archive"`
+			WantGrade Grade  `json:"want_grade"`
+		} `json:"records"`
+	}
+	if err := json.Unmarshal(payload, &stored); err != nil {
+		t.Fatal(err)
+	}
+	catalog := loadFaultSetCatalog(t)
+	current := catalog.ByID["response.pve-storage-old-backups"]
+	if current.Version < 2 {
+		t.Fatalf("P3 is at v%d; this test needs the v2 rubric", current.Version)
+	}
+	handedOver, partial := 0, 0
+	for _, record := range stored.Records {
+		graded := GradeResponse(current, record.Evidence)
+		if graded.Grade != record.WantGrade {
+			t.Errorf("%s %s: v%d grades %q (%s; missing %v, misdirection %v), want %q", record.Archive, record.RunID,
+				current.Version, graded.Grade, graded.Reason, graded.Checks.DecisiveMissing, graded.Checks.Misdirection, record.WantGrade)
+		}
+		if record.RecordedGrade != GradeHandedOver {
+			t.Errorf("%s %s: recorded %q; every stored P3 run was graded handed_over under v1", record.Archive, record.RunID, record.RecordedGrade)
+		}
+		switch record.WantGrade {
+		case GradeHandedOver:
+			handedOver++
+		case GradePartial:
+			partial++
+		}
+	}
+	if handedOver != 12 || partial != 3 {
+		t.Fatalf("stored P3 runs: %d handed over, %d partial; want 12 and 3", handedOver, partial)
+	}
+}
