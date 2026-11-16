@@ -4767,7 +4767,22 @@ seed and closing question now say Pulse lists the backups on that storage
 drop the alert-only exit for it. A storage without backups keeps both. A full
 PBS datastore gets the same check: until 16 Nov its storage alert named an ID
 the inventory no longer held, so the check refused its scope and never ran (see
-unified-resources, PBS datastore storage alerts). A
+unified-resources, PBS datastore storage alerts). `pulse_storage` type
+`backups` lists the backups kept on a storage when given `storage_id` (its ID,
+or a name for that storage on every node) or the storage's own ID as
+`resource_id`, matched to each backup's repository (see storage-recovery).
+Before 16 Nov it filtered only by guest: qwen3:8b's P3 investigation passed the
+storage's ID, got no backups and guessed the cause, while `storage_id` was
+ignored and returned every backup. An unknown `storage_id` is an error, not the
+whole inventory. A clustered connection's storage carries the cluster's name
+while its backups carry the connection's, so the tool matches the one
+connection in that cluster; with two connections in one cluster name, storage
+keeps each connection's name and nothing is borrowed. A Proxmox storage of type
+`pbs` answers with a note that its backups may be listed on the PBS datastore,
+because polling skips them there when Pulse also connects to that PBS. Demo
+mode's curated backups name a storage the demo inventory does not have, so they
+are not listed by storage. Proof:
+`internal/ai/tools/tools_storage_backups_by_storage_test.go`. A
 finished job raises no state alert and a stop exits 0 or with a stop signal,
 so neither is opened. Proofs: `internal/ai/patrol_alert_finding_sustained_test.go`,
 `internal/ai/patrol_storage_alert_wake_test.go`,

@@ -87,6 +87,10 @@ func (s *Store) ListPointsSeries(ctx context.Context, opts recovery.ListPointsOp
 		where = append(where, "item_type = ?")
 		args = append(args, strings.TrimSpace(opts.ItemType))
 	}
+	if clause, clauseArgs := repositoryFilterSQL(opts.Repositories); clause != "" {
+		where = append(where, clause)
+		args = append(args, clauseArgs...)
+	}
 	if opts.WorkloadOnly {
 		where = append(where, "is_workload = 1")
 	}
@@ -274,6 +278,10 @@ func (s *Store) ListPointsFacets(ctx context.Context, opts recovery.ListPointsOp
 	if strings.TrimSpace(opts.ItemType) != "" {
 		where = append(where, "item_type = ?")
 		args = append(args, strings.TrimSpace(opts.ItemType))
+	}
+	if clause, clauseArgs := repositoryFilterSQL(opts.Repositories); clause != "" {
+		where = append(where, clause)
+		args = append(args, clauseArgs...)
 	}
 	if opts.WorkloadOnly {
 		where = append(where, "is_workload = 1")

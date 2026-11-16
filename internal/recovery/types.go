@@ -50,6 +50,7 @@ type RecoveryPoint = model.RecoveryPoint
 type RecoveryPointDisplay = model.RecoveryPointDisplay
 type ProtectionRollup = model.ProtectionRollup
 type ListPointsOptions = model.ListPointsOptions
+type RepositoryFilter = model.RepositoryFilter
 type PointsSeriesBucket = model.PointsSeriesBucket
 type PointsFacets = model.PointsFacets
 

@@ -1667,6 +1667,39 @@ func nullStringToAny(s sql.NullString) any {
 }
 
 // ListPoints returns recovery points matching filters, ordered by completed_at desc (NULLS last).
+// repositoryFilterSQL keeps points kept in any of the named repositories,
+// matching recovery.RepositoryFilter.Matches. A filter without a type or
+// name matches nothing, so a list of only those returns no points rather
+// than every point.
+func repositoryFilterSQL(filters []recovery.RepositoryFilter) (string, []any) {
+	if len(filters) == 0 {
+		return "", nil
+	}
+	clauses := make([]string, 0, len(filters))
+	args := make([]any, 0, len(filters)*4)
+	for _, f := range filters {
+		typ, name := strings.TrimSpace(f.Type), strings.TrimSpace(f.Name)
+		if typ == "" || name == "" {
+			continue
+		}
+		clause := "(TRIM(json_extract(repository_ref_json, '$.type')) = ? AND TRIM(json_extract(repository_ref_json, '$.name')) = ?"
+		args = append(args, typ, name)
+		if ns := strings.TrimSpace(f.Namespace); ns != "" {
+			clause += " AND TRIM(json_extract(repository_ref_json, '$.namespace')) = ?"
+			args = append(args, ns)
+		}
+		if class := strings.TrimSpace(f.Class); class != "" {
+			clause += " AND TRIM(json_extract(repository_ref_json, '$.class')) = ?"
+			args = append(args, class)
+		}
+		clauses = append(clauses, clause+")")
+	}
+	if len(clauses) == 0 {
+		return "0", nil
+	}
+	return "(" + strings.Join(clauses, " OR ") + ")", args
+}
+
 func (s *Store) ListPoints(ctx context.Context, opts recovery.ListPointsOptions) ([]recovery.RecoveryPoint, int, error) {
 	if err := s.ensureInitialized(); err != nil {
 		return nil, 0, err
@@ -1730,6 +1763,10 @@ func (s *Store) ListPoints(ctx context.Context, opts recovery.ListPointsOptions)
 	if strings.TrimSpace(opts.ItemType) != "" {
 		where = append(where, "item_type = ?")
 		args = append(args, strings.TrimSpace(opts.ItemType))
+	}
+	if clause, clauseArgs := repositoryFilterSQL(opts.Repositories); clause != "" {
+		where = append(where, clause)
+		args = append(args, clauseArgs...)
 	}
 	if opts.WorkloadOnly {
 		where = append(where, "is_workload = 1")
@@ -1994,6 +2031,10 @@ func (s *Store) ListRollups(ctx context.Context, opts recovery.ListPointsOptions
 	if strings.TrimSpace(opts.ItemType) != "" {
 		where = append(where, "item_type = ?")
 		args = append(args, strings.TrimSpace(opts.ItemType))
+	}
+	if clause, clauseArgs := repositoryFilterSQL(opts.Repositories); clause != "" {
+		where = append(where, clause)
+		args = append(args, clauseArgs...)
 	}
 	if opts.WorkloadOnly {
 		where = append(where, "is_workload = 1")

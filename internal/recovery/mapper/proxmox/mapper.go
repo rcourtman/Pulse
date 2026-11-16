@@ -299,7 +299,7 @@ func FromPVEStorageBackups(backups []models.StorageBackup, guestInfoByKey map[st
 				Type:      "proxmox-storage",
 				Namespace: instanceName,
 				Name:      strings.TrimSpace(b.Storage),
-				Class:     nodeName,
+				Class:     storageBackupRepositoryNode(b),
 			},
 			Details: map[string]any{
 				"storage":      strings.TrimSpace(b.Storage),
@@ -324,6 +324,16 @@ func FromPVEStorageBackups(backups []models.StorageBackup, guestInfoByKey map[st
 // and attaches the point-level evidence consumed by canonical protection
 // posture. Collection completeness and permission state remain separate
 // ProtectionProviderObservation facts owned by the polling caller.
+// storageBackupRepositoryNode is the node a backup's storage is on. A
+// non-shared storage is a different repository on each node, and the row's
+// Node follows the guest when it migrates, so the disk's node comes first.
+func storageBackupRepositoryNode(b models.StorageBackup) string {
+	if node := strings.TrimSpace(b.StorageNode); node != "" {
+		return node
+	}
+	return strings.TrimSpace(b.Node)
+}
+
 func FromPVEStorageBackupsWithEvidence(
 	backups []models.StorageBackup,
 	guestInfoByKey map[string]GuestInfo,

@@ -79,6 +79,9 @@ func FilterPoints(all []RecoveryPoint, opts ListPointsOptions) []RecoveryPoint {
 		if itemType != "" && strings.TrimSpace(getDisplayItemType(p.Display)) != itemType {
 			continue
 		}
+		if len(opts.Repositories) > 0 && !pointInRepositories(p, opts.Repositories) {
+			continue
+		}
 		if workloadOnly && !(disp != nil && disp.IsWorkload) {
 			continue
 		}
@@ -192,4 +195,13 @@ func PaginatePoints(points []RecoveryPoint, page, limit int) []RecoveryPoint {
 		end = len(points)
 	}
 	return points[offset:end]
+}
+
+func pointInRepositories(p RecoveryPoint, repositories []RepositoryFilter) bool {
+	for _, repository := range repositories {
+		if repository.Matches(p.RepositoryRef) {
+			return true
+		}
+	}
+	return false
 }
