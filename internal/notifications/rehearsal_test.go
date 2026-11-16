@@ -335,6 +335,29 @@ func TestDeliveryRehearsalInterruptedPartialAdmissionIsPerDestination(t *testing
 	}
 }
 
+func TestDeliveryRehearsalRetainsDestinationsAfterCheckpointEvidenceFailure(t *testing.T) {
+	dir := t.TempDir()
+	m := openRehearsalManager(t, dir, "https://example.invalid/one")
+	m.SetGroupingConfig(true, 600, false, false)
+	input := RehearsalRequest{ID: uuid.NewString(), Level: alerts.AlertLevelWarning}
+	_, err := m.StartDeliveryRehearsal(input)
+	require.NoError(t, err)
+	m.AddWebhook(WebhookConfig{ID: "added-during-group", Name: "Added while grouping", URL: "https://example.invalid/two", Enabled: true, Service: "generic"})
+	_, err = m.GetQueue().db.Exec(`CREATE TRIGGER refuse_checkpoint_evidence BEFORE UPDATE ON notification_rehearsals BEGIN SELECT RAISE(ABORT,'test report write failure'); END`)
+	require.NoError(t, err)
+	m.Stop()
+	m = openRehearsalManager(t, dir, "https://example.invalid/one")
+	m.AddWebhook(WebhookConfig{ID: "added-during-group", Name: "Added while grouping", URL: "https://example.invalid/two", Enabled: true, Service: "generic"})
+	rows := quietReplayRows(t, m.GetQueue())
+	require.Len(t, rows, 2, "the real shutdown checkpoint retained both destination jobs")
+	run, err := m.GetDeliveryRehearsal(input.ID)
+	require.NoError(t, err)
+	require.Len(t, run.Destinations, 2, "a failed report write must never hide retained queue evidence")
+	require.Equal(t, "webhook:added-during-group", run.Destinations[1].ID)
+	require.Equal(t, "Added while grouping", run.Destinations[1].Name)
+	require.NotEqual(t, "passed", run.Destinations[1].Firing.Status, "a checkpoint does not establish provider acceptance")
+}
+
 func TestDeliveryRehearsalCheckpointAndMessageIsolation(t *testing.T) {
 	dir := t.TempDir()
 	m := openRehearsalManager(t, dir, "https://example.invalid/hook")

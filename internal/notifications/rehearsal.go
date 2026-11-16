@@ -174,25 +174,37 @@ func (q *NotificationQueue) writeRehearsalLocked(run *storedRehearsal) error {
 	return err
 }
 
+func rehearsalDestination(job notificationDeliveryJob) RehearsalDestination {
+	name := "Destination"
+	switch job.Type {
+	case "email":
+		name = "Email"
+	case "apprise":
+		name = "Apprise"
+	case "webhook":
+		name = "Webhook"
+		if job.WebhookConfig != nil && strings.TrimSpace(job.WebhookConfig.Name) != "" {
+			name = strings.TrimSpace(job.WebhookConfig.Name)
+		}
+	}
+	return RehearsalDestination{ID: notificationDestinationIDForJob(job), Name: name,
+		Firing:   rehearsalOutcome("pending", "admission", "Waiting for notification policy and grouping."),
+		Recovery: rehearsalOutcome("not_started", "not_started", "Send recovery after inspecting the firing result.")}
+}
+
 func rehearsalDestinations(email EmailConfig, webhooks []WebhookConfig, apprise AppriseConfig) []RehearsalDestination {
 	result := []RehearsalDestination{}
-	add := func(job notificationDeliveryJob, name string) {
-		result = append(result, RehearsalDestination{ID: notificationDestinationIDForJob(job), Name: name,
-			Firing:   rehearsalOutcome("pending", "admission", "Waiting for notification policy and grouping."),
-			Recovery: rehearsalOutcome("not_started", "not_started", "Send recovery after inspecting the firing result.")})
+	add := func(job notificationDeliveryJob) {
+		result = append(result, rehearsalDestination(job))
 	}
 	if email.Enabled || email.SMTPHost != "" || len(email.To) > 0 {
-		add(notificationDeliveryJob{Type: "email", EmailConfig: &email}, "Email")
+		add(notificationDeliveryJob{Type: "email", EmailConfig: &email})
 	}
 	for _, webhook := range webhooks {
-		name := strings.TrimSpace(webhook.Name)
-		if name == "" {
-			name = "Webhook"
-		}
-		add(notificationDeliveryJob{Type: "webhook", WebhookConfig: &webhook}, name)
+		add(notificationDeliveryJob{Type: "webhook", WebhookConfig: &webhook})
 	}
 	if apprise.Enabled || len(apprise.Targets) > 0 {
-		add(notificationDeliveryJob{Type: "apprise", AppriseConfig: &apprise}, "Apprise")
+		add(notificationDeliveryJob{Type: "apprise", AppriseConfig: &apprise})
 	}
 	return result
 }
@@ -622,6 +634,10 @@ func (n *NotificationManager) GetDeliveryRehearsal(id string) (*DeliveryRehearsa
 		policy = provider()
 	}
 	firingEvidence, recoveryEvidence := make(map[string]bool), make(map[string]bool)
+	destinationIndices := make(map[string]int, len(run.Destinations))
+	for i, destination := range run.Destinations {
+		destinationIndices[destination.ID] = i
+	}
 	for _, row := range jobs {
 		job, decodeErr := retainedDeliveryJob(row.Type, row.Config)
 		if decodeErr != nil {
@@ -629,6 +645,16 @@ func (n *NotificationManager) GetDeliveryRehearsal(id string) (*DeliveryRehearsa
 		}
 		_, event := normalizeQueueType(row.Type)
 		destination := notificationDestinationIDForJob(job)
+		index, known := destinationIndices[destination]
+		if !known {
+			// A checkpoint can commit queue work before its report projection.
+			// Retained queue evidence must remain visible after that write fails.
+			retained := rehearsalDestination(job)
+			retained.Firing = rehearsalOutcome("unavailable", "admission_unknown", "Retained firing delivery evidence is unavailable for this destination.")
+			index = len(run.Destinations)
+			run.Destinations = append(run.Destinations, retained)
+			destinationIndices[destination] = index
+		}
 		if event == eventResolved {
 			recoveryEvidence[destination] = true
 		} else {
@@ -694,14 +720,10 @@ func (n *NotificationManager) GetDeliveryRehearsal(id string) (*DeliveryRehearsa
 				}
 			}
 		}
-		for i := range run.Destinations {
-			if run.Destinations[i].ID == destination {
-				if event == eventResolved {
-					run.Destinations[i].Recovery = out
-				} else {
-					run.Destinations[i].Firing = out
-				}
-			}
+		if event == eventResolved {
+			run.Destinations[index].Recovery = out
+		} else {
+			run.Destinations[index].Firing = out
 		}
 	}
 	interrupted := false

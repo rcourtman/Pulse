@@ -2059,3 +2059,8 @@ the recent list. They never point at a nonexistent infrastructure incident.
 Rehearsal outcomes separate the human explanation from redacted transport
 diagnostics. The outcome card demotes raw queue/provider details into a keyboard
 operable disclosure. Rehearsal failures remain ordinary delivery-health evidence.
+
+Reports also reconstruct destination identity from retained queue jobs when a
+shutdown checkpoint commits work before a failed report write. A missing report
+projection cannot omit that destination or its actual queue outcome after reopen.
+The checkpoint evidence-failure regression covers this interrupted boundary.
