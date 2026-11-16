@@ -169,7 +169,12 @@ describe('AvailabilityTargetsAPI', () => {
       '/api/availability-targets/docker-suggestions',
       context,
     );
-    mockedApiFetchJSON.mockResolvedValueOnce({ created: [], unanswered: [], skipped: [], remaining: 0 });
+    mockedApiFetchJSON.mockResolvedValueOnce({
+      created: [],
+      unanswered: [],
+      skipped: [],
+      remaining: 0,
+    });
     await AvailabilityTargetsAPI.addDockerPortChecks([], context);
     expect(mockedApiFetchJSON).toHaveBeenLastCalledWith(
       '/api/availability-targets/docker-suggestions',

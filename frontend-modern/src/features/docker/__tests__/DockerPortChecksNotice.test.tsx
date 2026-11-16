@@ -12,12 +12,14 @@ import {
   summarizePortChecksResult,
 } from '../dockerPortChecksModel';
 
-const { dockerPortSuggestionsMock, addDockerPortChecksMock, readOnlyMock, orgMock } = vi.hoisted(() => ({
-  dockerPortSuggestionsMock: vi.fn(),
-  addDockerPortChecksMock: vi.fn(),
-  readOnlyMock: vi.fn(() => false),
-  orgMock: vi.fn(() => 'default'),
-}));
+const { dockerPortSuggestionsMock, addDockerPortChecksMock, readOnlyMock, orgMock } = vi.hoisted(
+  () => ({
+    dockerPortSuggestionsMock: vi.fn(),
+    addDockerPortChecksMock: vi.fn(),
+    readOnlyMock: vi.fn(() => false),
+    orgMock: vi.fn(() => 'default'),
+  }),
+);
 
 vi.mock('@/api/availabilityTargets', () => ({
   AvailabilityTargetsAPI: {
@@ -211,7 +213,9 @@ describe('DockerPortChecksNotice', () => {
     await waitFor(() =>
       expect(screen.getByTestId('docker-port-checks-list')).toHaveTextContent('replacement 9081'),
     );
-    expect(screen.queryByText('Could not add checks: Published container ports changed.')).toBeNull();
+    expect(
+      screen.queryByText('Could not add checks: Published container ports changed.'),
+    ).toBeNull();
   });
 
   it('clears a retained offer when a later read is refused', async () => {
@@ -254,7 +258,11 @@ describe('DockerPortChecksNotice', () => {
     eventBus.emit('org_switched', 'other');
     await waitFor(() => expect(dockerPortSuggestionsMock).toHaveBeenCalledTimes(2));
     expect(options.signal.aborted).toBe(true);
-    finish(result({ created: [{ id: 'old', name: 'old', address: 'x', protocol: 'http', enabled: true }] }));
+    finish(
+      result({
+        created: [{ id: 'old', name: 'old', address: 'x', protocol: 'http', enabled: true }],
+      }),
+    );
     await Promise.resolve();
     await Promise.resolve();
     expect(onChecksAdded).not.toHaveBeenCalled();
