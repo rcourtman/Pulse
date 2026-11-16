@@ -152,6 +152,34 @@ afterEach(() => {
 });
 
 describe('password dialog through the native settings status reader and dialog binding', () => {
+  it('keeps fields, failure guidance and actions in one bounded scrollable form below the heading', async () => {
+    await mount();
+    const dialog = screen.getByRole('dialog', { name: 'Change password' });
+    const form = dialog.querySelector('form')!;
+    expect(form).toHaveClass('min-h-0', 'overflow-y-auto');
+    expect(form.parentElement).toHaveClass('flex', 'min-h-0', 'flex-col');
+    expect(screen.getByRole('button', { name: 'Close password dialog' }).parentElement).toHaveClass(
+      'shrink-0',
+    );
+    for (const name of ['Current Password', 'New Password', 'Confirm New Password']) {
+      expect((screen.getByLabelText(name) as HTMLInputElement).form).toBe(form);
+    }
+    expect(
+      (screen.getByRole('button', { name: 'Change Password' }) as HTMLButtonElement).form,
+    ).toBe(form);
+    fill();
+    nextWrite = () => json({}, 503);
+    submit();
+    const guidance = await screen.findByRole('alert');
+    expect(form).toContainElement(guidance);
+    expect(guidance).toHaveTextContent('could not be confirmed');
+    expect(form).toContainElement(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Change Password' })).toBeDisabled();
+    submit();
+    expect(writes()).toHaveLength(1);
+  });
+
   it('preserves the same reader draft, disables it during refresh and resumes after equal facts', async () => {
     await mount();
     fill();
