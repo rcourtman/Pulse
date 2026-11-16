@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "base_sha": "149ab4340f85e4146c753c0177b2b3513bbc00d4",
+  "verified_at": "2026-11-16T02:07:59Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/api/availabilityTargets.ts",
+    "frontend-modern/src/features/docker/DockerPortChecksNotice.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/api/availabilityTargets.ts": "249a207aa90bd54acab785469e8b745af623554f733047197b1132a31d41007d",
+    "frontend-modern/src/features/docker/DockerPortChecksNotice.tsx": "79ab2a013f99ac7c86c403879cb2f36ea8697577f013fa199d85fab8441a0fa5"
+  },
+  "routes": [
+    "/docker",
+    "/docs/API#target-management"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Production DockerPortChecksNotice, API serializer/client and styles in an offline evidence-only shell, using actual final native handler payloads from source-pfv0rzmh; injected network probes and real temporary persistence, not a live Docker estate or full App.",
+    "Before runtime files and Markdown are exact 7efceaf3 inputs compiled with the unchanged surrounding source. Baseline response fixtures are explicitly source-derived, not claimed native baseline execution.",
+    "Light/dark desktop and narrow: review at 192.0.2.20:8081 remains stable after a real background GET returns 192.0.2.21:9081. Native 409 is displayed with refresh guidance; the old endpoint, Add checks, Hide ports and dismissal stay visible. No success notice, automatic mutation retry or dismissed marker on refusal.",
+    "Explicit reload and review display 192.0.2.21:9081; native 200 yields the existing success notice and View checks destination. Every final browser POST byte string equals its corresponding native producer input.",
+    "Production Docs renderer consumes both exact Markdown versions at the same POST anchor. Required six-field selection, 400/409 and no-write guidance fit without moving the existing target-field inventory below its prior anchor.",
+    "40 final inspected captures: 16 comparable pairs plus eight explicit-review destination states. All captures opened with native view_image. Chromium 141.0.7390.37 and Playwright 1.56.1, matching the integration lock. Transitions disabled and evidence-shell colors normalized consistently, including after reload.",
+    "Frontend source/build identity is 419adc0a; containing parent differs only by locked-formatter output in two TS tests. No full-App, organization/IdP/cross-tab, installed-host, release or original-estate recovery claim."
+  ],
+  "interactions": [
+    "Expand Show ports and inspect endpoint text at both widths/themes.",
+    "Dispatch an evidence-only inventory event that changes the real component resource signature and observes its actual GET.",
+    "Click Add checks on the unchanged reviewed offer; verify native conflict, visible guidance and no hidden POST retry.",
+    "Explicitly reload, review the changed endpoint and click Add checks; verify native success and the existing View checks href.",
+    "Open /docs/API#target-management and compare the affected paragraph at the same anchor, viewport and theme."
+  ],
+  "evidence": {
+    "frontend_source": "419adc0a9ea64006243f8daea0ece7b80e0e39d3",
+    "frontend_receipt": "source-2akv3ywf",
+    "native_receipt": "source-pfv0rzmh",
+    "current_worker_outputs": "20261116T003824Z-core-runtime",
+    "retained_account": "RECEIPTS.md",
+    "limitation": "Baseline responses are source-derived; final payloads are native. Full unselected API package and normal containing CI remain separate requirements."
+  }
+}

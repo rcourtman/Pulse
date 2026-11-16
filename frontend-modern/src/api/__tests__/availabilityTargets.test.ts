@@ -140,6 +140,7 @@ describe('AvailabilityTargetsAPI', () => {
     await expect(AvailabilityTargetsAPI.dockerPortSuggestions()).resolves.toEqual([suggestion]);
     expect(mockedApiFetchJSON).toHaveBeenLastCalledWith(
       '/api/availability-targets/docker-suggestions',
+      {},
     );
 
     // An older server answers without the list; the client reports none.
@@ -149,13 +150,35 @@ describe('AvailabilityTargetsAPI', () => {
     const result = { created: [], unanswered: [], skipped: [], remaining: 0 };
     mockedApiFetchJSON.mockResolvedValueOnce(result);
     await expect(AvailabilityTargetsAPI.addDockerPortChecks([suggestion])).resolves.toEqual(result);
-    // Only the identity of each port the operator was shown is sent.
+    // Include the exact displayed endpoint and container, not just the durable name.
     expect(mockedApiFetchJSON).toHaveBeenLastCalledWith(
       '/api/availability-targets/docker-suggestions',
       {
         method: 'POST',
-        body: '{"ports":[{"hostId":"host-1","containerName":"web","privatePort":80}]}',
+        body: '{"ports":[{"hostId":"host-1","containerId":"c1","containerName":"web","privatePort":80,"publicPort":8081,"address":"192.0.2.20"}]}',
       },
+    );
+  });
+
+  it('forwards the reviewed organization and cancellation to both suggestion operations', async () => {
+    const controller = new AbortController();
+    const context = { expectedOrgID: 'reviewed', retry: false, signal: controller.signal };
+    mockedApiFetchJSON.mockResolvedValueOnce({ suggestions: [] });
+    await AvailabilityTargetsAPI.dockerPortSuggestions(context);
+    expect(mockedApiFetchJSON).toHaveBeenLastCalledWith(
+      '/api/availability-targets/docker-suggestions',
+      context,
+    );
+    mockedApiFetchJSON.mockResolvedValueOnce({
+      created: [],
+      unanswered: [],
+      skipped: [],
+      remaining: 0,
+    });
+    await AvailabilityTargetsAPI.addDockerPortChecks([], context);
+    expect(mockedApiFetchJSON).toHaveBeenLastCalledWith(
+      '/api/availability-targets/docker-suggestions',
+      { ...context, method: 'POST', body: '{"ports":[]}' },
     );
   });
 });

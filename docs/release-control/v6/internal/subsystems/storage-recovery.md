@@ -21,6 +21,20 @@
 
 ## Purpose
 
+### Docker-port creation preserves saved checks on stale review
+
+The Docker-port availability creation route uses a request-only complete
+endpoint/container selector; it does not extend the stored `dockerPort`
+source. A stale selection, including a change during probes, returns a conflict
+without saving any check from that batch. The route still reloads saved targets
+after probes so an operator's intervening edits remain intact, and an exact
+retry against already-covered inventory adds nothing. Registered handler tests
+cover unchanged saved checks on refusal, intervening edits, fresh creation,
+retries and incremental capped batches. Existing target IDs, History, stored
+source keys, reattachment and secret-preserving updates are unchanged; no
+backup, restore, storage data or new recovery path is opened.
+
+
 ### `DockerData` gains a host-only failure-logs setting (14 November 2026)
 
 `internal/unifiedresources/types.go` gains `DockerData.FailureLogsEnabled`,

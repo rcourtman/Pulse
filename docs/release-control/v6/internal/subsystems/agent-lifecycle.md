@@ -17,6 +17,22 @@
 
 ## Purpose
 
+### Docker-port creation does not change established-check reattachment
+
+A new Docker-port availability check requires the reviewed container ID,
+normalized container name, private port, address and public port in its own
+host. The creation handler re-reads inventory after probing and refuses a
+whole stale selection before saving; a newly reported replacement is not
+creation consent, even at the same address. `availability_docker_suggestions_handlers_test.go`
+covers replacements before and during probes, disappearing publications and
+explicit fresh selections. This changes no agent report, enrolment, command or
+container-update operation. Saved `AvailabilityDockerPortSource` remains
+host/name/private-port based, so `migrateAvailabilityLinkedResources` keeps
+reattaching an established check to exactly one replacement publishing its
+saved port. Existing targets/History are neither deleted nor re-keyed, and
+neither creation consent nor reattachment rewrites a saved address or port.
+
+
 ### VMware destination refusals keep the admitted connection draft
 
 The existing connection editor treats an exact HTTP 403

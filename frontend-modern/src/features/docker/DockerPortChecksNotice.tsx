@@ -1,4 +1,4 @@
-import { For, Show, createMemo, createResource, createSignal } from 'solid-js';
+import { For, Show, createMemo, createResource, createSignal, onCleanup } from 'solid-js';
 import { ArrowRight, CircleCheck, Info } from 'lucide-solid';
 import {
   AvailabilityTargetsAPI,
@@ -8,6 +8,8 @@ import {
 import { InlineNotice } from '@/components/shared/InlineNotice';
 import { buildStandalonePath } from '@/routing/resourceLinks';
 import { presentationPolicyIsReadOnly } from '@/stores/sessionPresentationPolicy';
+import { eventBus } from '@/stores/events';
+import { getOrgID } from '@/utils/apiClient';
 import {
   dockerPortCheckKey,
   offeredPortSuggestions,
@@ -38,24 +40,75 @@ const NOTICE_TOGGLE_CLASS = `font-medium ${NOTICE_LINK_CLASS}`;
 // It stays out of the way: nothing renders when every port is covered, when
 // the viewer cannot change settings, or once the offer is dismissed.
 export function DockerPortChecksNotice(props: DockerPortChecksNoticeProps) {
+  const [dismissed, setDismissed] = createSignal(readDismissedPortChecks());
+  const [displayed, setDisplayed] = createSignal<DockerPortCheckSuggestion[]>([]);
+  let generation = 0;
+  let active = true;
+  let request = new AbortController();
+  let offeredOrg: string | undefined;
+  const currentOrg = () => getOrgID() || 'default';
+  const captureContext = () => ({ generation, org: currentOrg(), controller: request });
+  const isCurrent = (run: ReturnType<typeof captureContext>) =>
+    active &&
+    run.generation === generation &&
+    run.org === currentOrg() &&
+    !run.controller.signal.aborted;
+  const optionsFor = (run: ReturnType<typeof captureContext>) => ({
+    expectedOrgID: run.org,
+    retry: false,
+    signal: run.controller.signal,
+  });
   const [suggestions, { refetch }] = createResource(
     () => (presentationPolicyIsReadOnly() ? undefined : props.containerSignature),
     async (): Promise<DockerPortCheckSuggestion[]> => {
+      const run = captureContext();
       try {
-        return await AvailabilityTargetsAPI.dockerPortSuggestions();
+        const latest = await AvailabilityTargetsAPI.dockerPortSuggestions(optionsFor(run));
+        if (!isCurrent(run)) return [];
+        // A background inventory refresh must not replace the choice someone
+        // is reviewing. The server checks that this exact offer is still current.
+        setDisplayed((current) => {
+          if (offeredOrg === run.org && offeredPortSuggestions(current, dismissed()).length > 0)
+            return current;
+          offeredOrg = run.org;
+          return latest;
+        });
+        return latest;
       } catch {
         // Viewers without settings access get a refusal; they see no offer.
+        if (isCurrent(run)) setDisplayed([]);
         return [];
       }
     },
   );
-  const [dismissed, setDismissed] = createSignal(readDismissedPortChecks());
   const [showPorts, setShowPorts] = createSignal(false);
   const [adding, setAdding] = createSignal(false);
   const [result, setResult] = createSignal<DockerPortChecksResult | null>(null);
   const [failure, setFailure] = createSignal('');
 
-  const all = createMemo(() => suggestions.latest ?? []);
+  const invalidate = () => {
+    generation++;
+    request.abort();
+    request = new AbortController();
+    offeredOrg = undefined;
+    setDisplayed([]);
+    setResult(null);
+    setFailure('');
+    setShowPorts(false);
+    setAdding(false);
+    void refetch();
+  };
+  const offOrg = eventBus.on('org_switched', invalidate);
+  const offMembership = eventBus.on('organizations_changed', invalidate);
+  onCleanup(() => {
+    active = false;
+    generation++;
+    request.abort();
+    offOrg();
+    offMembership();
+  });
+
+  const all = displayed;
   const offered = createMemo(() => offeredPortSuggestions(all(), dismissed()));
   const skippedLines = createMemo(() => skippedPortLines(all()));
   const summary = createMemo(() => {
@@ -68,27 +121,38 @@ export function DockerPortChecksNotice(props: DockerPortChecksNoticeProps) {
     for (const port of ports) next.add(dockerPortCheckKey(port));
     setDismissed(next);
     writeDismissedPortChecks(next, [...all(), ...ports]);
+    // Once the old offer is handled, later ports may get their own offer.
+    setFailure('');
+    setDisplayed(suggestions.latest ?? []);
   };
 
   const addChecks = async () => {
     const ports = offered();
     if (adding() || ports.length === 0) return;
+    if (offeredOrg !== currentOrg()) return invalidate();
+    const run = captureContext();
     setAdding(true);
     setFailure('');
     try {
       // Only the ports on offer: one dismissed earlier is not added now.
-      const outcome = await AvailabilityTargetsAPI.addDockerPortChecks(ports);
+      const outcome = await AvailabilityTargetsAPI.addDockerPortChecks(ports, optionsFor(run));
+      if (!isCurrent(run)) return;
       // A port that did not answer stays unchecked. Do not offer it again in
       // this browser; a port published later still gets its own offer.
       rememberDismissed(outcome.unanswered);
       setResult(outcome);
       setShowPorts(false);
       if (outcome.created.length > 0) props.onChecksAdded?.();
+      setDisplayed([]);
       await refetch();
     } catch (error) {
+      if (!isCurrent(run)) {
+        if (active && run.generation === generation) invalidate();
+        return;
+      }
       setFailure(error instanceof Error && error.message ? error.message : 'The request failed.');
     } finally {
-      setAdding(false);
+      if (isCurrent(run)) setAdding(false);
     }
   };
 

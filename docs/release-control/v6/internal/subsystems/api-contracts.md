@@ -14106,9 +14106,16 @@ status code changes; `degraded` is a new value of the existing `state` field.
 `GET /api/availability-targets/docker-suggestions` (org admin,
 `settings:read`) lists published container ports that have no availability
 check. `POST` on the same path (org admin, `settings:write`) adds an HTTPS or
-HTTP check for each one that answers from this server, optionally limited by
-`hostId` or to the `ports` the operator was shown, and capped at 100 per
-request, with `remaining` counting the rest. Saved checks are loaded again
+HTTP check for each reviewed port that answers from this server. The required
+`ports` array contains 1..500 explicit selectors with `hostId`, `containerId`,
+`containerName`, `privatePort`, `publicPort` and the listed `address`; optional
+`hostId` only narrows that selection. Empty, host-only and legacy three-field
+requests return `400 invalid_request`, never apply-all. Selections must match
+current inventory before any probe and freshly re-read inventory before saving.
+A changed endpoint, container or publication refuses the whole batch with
+`409 docker_ports_changed`, no added checks, and refresh/review guidance.
+Exact already-covered retries remain successful no-ops. Creation is capped at
+100 checks per request, with `remaining` counting the rest. Saved checks are loaded again
 after probing, so a check changed meanwhile is neither overwritten nor
 duplicated.
 The response separates `created`, `unanswered` (with the probe error) and
@@ -14120,8 +14127,21 @@ a client omits it. `frontend-modern/src/api/availabilityTargets.ts` owns the
 client calls and `docs/API.md` lists both routes. Regression coverage:
 `TestDockerPortSuggestionsListWhatHasNoCheck`,
 `TestApplyDockerPortSuggestionsAddsOnlyWhatAnswers`,
-`TestApplyDockerPortSuggestionsLimitsToTheRequestedHost` and
-`TestRouterRouteInventory`.
+`TestApplyDockerPortSuggestionsRejectsAConflictingRequestedHost`,
+`TestApplyDockerPortSuggestionsRejectsChangedOffersBeforeAnyProbe`,
+`TestApplyDockerPortSuggestionsRejectsInventoryChangeDuringProbes`,
+`TestApplyDockerPortSuggestionsRequiresExplicitBoundSelection`,
+`TestApplyDockerPortSuggestionsNeverPromotesASkippedSelection`,
+`TestApplyDockerPortSuggestionsDoesNotSelectANewMappingOfTheSamePort`,
+`TestApplyDockerPortSuggestionsDoesNotSelectAnotherAddressOfTheSamePort`,
+`TestApplyDockerPortSuggestionsBoundsSelectionAndDeduplicates`,
+`TestApplyDockerPortSuggestionsRetainsThePerRequestLimit` and
+`TestRouterRouteInventory`. The consumer test in `availabilityTargets.test.ts`
+pins the complete selector. `DockerPortChecksNotice.test.tsx` retains the
+reviewed list and controls after refusal without a dismissal or automatic
+selection refresh; an explicit page reload lets the operator review again.
+The saved `config.AvailabilityDockerPortSource` shape and key are unchanged;
+creation-only endpoint/container consent is not stored as a new lifecycle key.
 
 ### Loaded availability Settings honours evidence expiry (10 October 2026)
 
