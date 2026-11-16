@@ -18,6 +18,7 @@ import {
   type RehearsalStatus,
 } from '@/api/notifications';
 import { Button } from '@/components/shared/Button';
+import { FormSelect } from '@/components/shared/FormSelect';
 import { SettingsPanel } from '@/components/shared/SettingsPanel';
 import { getOrgID } from '@/utils/apiClient';
 
@@ -320,22 +321,21 @@ export function AlertDeliveryRehearsal(props: {
             </Button>
           </Show>
           <div class="flex flex-wrap items-end gap-3">
-            <label class="min-w-36 flex-1 space-y-1 text-sm" for={`${inputID}-level`}>
-              <span>Rehearsal severity</span>
-              <select
-                id={`${inputID}-level`}
-                class="min-h-11 w-full rounded-md border border-border bg-surface px-3 text-base-content"
-                value={level()}
-                disabled={busy() || !!active() || uncertainStart()}
-                onChange={(event) =>
-                  setLevel(event.currentTarget.value as DeliveryRehearsal['level'])
-                }
-              >
-                <option value="info">Info</option>
-                <option value="warning">Warning</option>
-                <option value="critical">Critical</option>
-              </select>
-            </label>
+            <FormSelect
+              id={`${inputID}-level`}
+              label="Rehearsal severity"
+              fieldClass="min-w-36 flex-1"
+              selectClass="min-h-11"
+              value={level()}
+              disabled={busy() || !!active() || uncertainStart()}
+              onChange={(event) =>
+                setLevel(event.currentTarget.value as DeliveryRehearsal['level'])
+              }
+            >
+              <option value="info">Info</option>
+              <option value="warning">Warning</option>
+              <option value="critical">Critical</option>
+            </FormSelect>
             <label class="min-w-44 flex-[2] space-y-1 text-sm" for={`${inputID}-tags`}>
               <span>Routing tags (optional, comma-separated)</span>
               <input
@@ -383,40 +383,36 @@ export function AlertDeliveryRehearsal(props: {
             </p>
           </Show>
           <Show when={history().length > 1 || selectedOutsideHistory()}>
-            <label class="block space-y-1 text-sm" for={`${inputID}-history`}>
-              <span>
-                {selectedOutsideHistory()
+            <FormSelect
+              id={`${inputID}-history`}
+              label={
+                selectedOutsideHistory()
                   ? 'Recent rehearsals and linked result'
-                  : 'Recent rehearsals (up to 20, retained for seven days)'}
-              </span>
-              <select
-                id={`${inputID}-history`}
-                class="min-h-11 w-full rounded-md border border-border bg-surface px-3 text-base-content"
-                value={selected()?.id}
-                disabled={busy()}
-                onChange={(event) => {
-                  linkedRequestID = undefined;
-                  ++selectionVersion;
-                  setSelected(
-                    history().find((row) => row.id === event.currentTarget.value) ?? null,
-                  );
-                }}
-              >
-                <Show when={selectedOutsideHistory()}>
-                  <option value={selected()!.id}>
-                    Linked rehearsal · {new Date(selected()!.createdAt).toLocaleString()}
+                  : 'Recent rehearsals (up to 20, retained for seven days)'
+              }
+              selectClass="min-h-11"
+              value={selected()?.id}
+              disabled={busy()}
+              onChange={(event) => {
+                linkedRequestID = undefined;
+                ++selectionVersion;
+                setSelected(history().find((row) => row.id === event.currentTarget.value) ?? null);
+              }}
+            >
+              <Show when={selectedOutsideHistory()}>
+                <option value={selected()!.id}>
+                  Linked rehearsal · {new Date(selected()!.createdAt).toLocaleString()}
+                </option>
+              </Show>
+              <For each={history()}>
+                {(run) => (
+                  <option value={run.id}>
+                    {new Date(run.createdAt).toLocaleString()} · {run.level}
+                    {run.recoveredAt ? ' · finished' : ' · current'}
                   </option>
-                </Show>
-                <For each={history()}>
-                  {(run) => (
-                    <option value={run.id}>
-                      {new Date(run.createdAt).toLocaleString()} · {run.level}
-                      {run.recoveredAt ? ' · finished' : ' · current'}
-                    </option>
-                  )}
-                </For>
-              </select>
-            </label>
+                )}
+              </For>
+            </FormSelect>
           </Show>
           <Show when={selected()}>
             {(run) => (

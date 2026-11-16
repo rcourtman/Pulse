@@ -5804,7 +5804,9 @@ client workspace. Alert policy and destination behavior are otherwise unchanged.
 
 `AlertDeliveryRehearsal` under `/alerts/notifications` offers a labelled firing,
 per-destination firing/recovery evidence and an explicit recovery/finish action.
-Saved settings govern delivery. Unsaved edits, unavailable reads and uncertain
+Saved settings govern delivery. Severity and retained-history selectors compose
+the shared `FormSelect` for labels and reactive option synchronization.
+Unsaved edits, unavailable reads and uncertain
 mutations gate subsequent actions. An uncertain creation retries the same UUID
 or reconciles its history entry rather than sending a new alert. Reads and
 mutations capture organization authority and discard stale context replies.

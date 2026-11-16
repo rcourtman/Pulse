@@ -11584,7 +11584,9 @@ workspace.
 The Alerts page passes its reactive rehearsal query identifier through the
 configuration surface and Destinations tab. AlertDeliveryRehearsal owns the
 labelled firing/recovery interaction, disclosure, exact linked-report selection,
-and outcome cards using shared SettingsPanel and Button. Status is explicit
+and outcome cards using shared SettingsPanel, Button and FormSelect. Severity
+and retained-history selectors inherit shared label wiring and reactive option
+synchronization instead of recreating native select controls. Status is explicit
 text as well as colour. Polling pauses while collapsed or the document is
 hidden. Unsaved settings and unknown current evidence disable mutations.
 Rehearsal component and API tests cover uncertain requests, reader changes and
