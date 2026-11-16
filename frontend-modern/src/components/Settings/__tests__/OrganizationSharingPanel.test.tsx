@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { syncSessionPresentationPolicy } from '@/stores/sessionPresentationPolicy';
 import type { Resource } from '@/types/resource';
@@ -200,6 +200,86 @@ describe('OrganizationSharingPanel', () => {
       'type',
       'button',
     );
+    expect(createShareMock).not.toHaveBeenCalled();
+  });
+
+  it('links inline sharing errors without changing field names or valid submission', async () => {
+    renderPanel();
+    const target = await screen.findByRole('combobox', { name: 'Target Organization' });
+    fireEvent.click(screen.getByRole('button', { name: 'Enter manually' }));
+    const type = screen.getByRole('textbox', { name: 'Resource Type' });
+    const id = screen.getByRole('textbox', { name: 'Resource ID' });
+    const create = screen.getByRole('button', { name: 'Create Share' });
+
+    fireEvent.change(target, { target: { value: 'org-b' } });
+    fireEvent.change(target, { target: { value: '' } });
+    fireEvent.input(type, { target: { value: 'storage-poool' } });
+    fireEvent.input(id, { target: { value: '   ' } });
+
+    expect(target).toHaveAttribute('aria-invalid', 'true');
+    expect(target).toHaveAccessibleDescription('Target organization is required');
+    expect(type).toHaveAttribute('aria-invalid', 'true');
+    expect(type).toHaveAccessibleName('Resource Type');
+    expect(type).toHaveAccessibleDescription(/Invalid resource type\. Valid types:/);
+    expect(id).toHaveAttribute('aria-invalid', 'true');
+    expect(id).toHaveAccessibleName('Resource ID');
+    expect(id).toHaveAccessibleDescription('Resource ID is required');
+    expect(create).toBeDisabled();
+    expect(createShareMock).not.toHaveBeenCalled();
+
+    fireEvent.change(target, { target: { value: 'org-b' } });
+    fireEvent.input(type, { target: { value: 'vm' } });
+    fireEvent.input(id, { target: { value: '  vm-123  ' } });
+    expect(target).not.toHaveAttribute('aria-invalid');
+    expect(target).toHaveAccessibleDescription('Organization B · ID: org-b');
+    for (const input of [type, id]) {
+      expect(input).not.toHaveAttribute('aria-invalid');
+      expect(input).not.toHaveAttribute('aria-describedby');
+    }
+    expect(create).toBeEnabled();
+    fireEvent.click(create);
+    await waitFor(() => expect(createShareMock).toHaveBeenCalledTimes(1));
+    expect(createShareMock).toHaveBeenCalledWith(
+      'org-a',
+      {
+        targetOrgId: 'org-b',
+        resourceType: 'vm',
+        resourceId: 'vm-123',
+        resourceName: '',
+        accessRole: 'viewer',
+      },
+      expect.objectContaining({
+        expectedOrgID: 'org-a',
+        retry: false,
+        signal: expect.any(AbortSignal),
+      }),
+    );
+  });
+
+  it('keeps error descriptions local to each mounted sharing form', async () => {
+    const views = [renderPanel(), renderPanel()];
+    const ids: string[] = [];
+    for (const view of views) {
+      const panel = within(view.container);
+      const target = await panel.findByRole('combobox', { name: 'Target Organization' });
+      fireEvent.click(panel.getByRole('button', { name: 'Enter manually' }));
+      const type = panel.getByRole('textbox', { name: 'Resource Type' });
+      const id = panel.getByRole('textbox', { name: 'Resource ID' });
+      fireEvent.change(target, { target: { value: '' } });
+      fireEvent.input(type, { target: { value: 'invalid' } });
+      fireEvent.input(id, { target: { value: ' ' } });
+      for (const field of [target, type, id]) {
+        const descriptionID = field.getAttribute('aria-describedby');
+        expect(descriptionID).toBeTruthy();
+        expect(field).toHaveAttribute('aria-invalid', 'true');
+        const description = document.getElementById(descriptionID!);
+        expect(description).toBeInTheDocument();
+        expect(view.container).toContainElement(description);
+        ids.push(field.id, descriptionID!);
+      }
+    }
+    expect(ids.every(Boolean)).toBe(true);
+    expect(new Set(ids).size).toBe(ids.length);
     expect(createShareMock).not.toHaveBeenCalled();
   });
 
