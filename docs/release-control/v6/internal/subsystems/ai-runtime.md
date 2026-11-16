@@ -4797,7 +4797,15 @@ count, bytes, oldest and newest, largest first, ahead of the pagination and
 points. Subjects group by the recovery subject key, backups with no recorded
 size are counted as `unknown_size` rather than read as zero bytes, and labels
 are cut to 80 runes. It adds no store query.
-Proof: `internal/ai/tools/tools_storage_backups_summary_test.go`. A
+Proof: `internal/ai/tools/tools_storage_backups_summary_test.go`. Backups
+record their subject by canonical ID, and a commands-on Patrol passed guests'
+names as `resource_id`, got empty lists and filed "No backup records exist"
+for three guests that had backups. A `resource_id` that is no VM, container,
+pod or host ID is now resolved by name or VMID: one match lists that
+resource's backups with a note naming its ID, two are an error naming both,
+and a reference that matches nothing and lists nothing is an error, while the
+ID of a subject Pulse no longer monitors still lists its backups. Proof:
+`internal/ai/tools/tools_storage_backups_by_name_test.go`. A
 finished job raises no state alert and a stop exits 0 or with a stop signal,
 so neither is opened. Proofs: `internal/ai/patrol_alert_finding_sustained_test.go`,
 `internal/ai/patrol_storage_alert_wake_test.go`,
