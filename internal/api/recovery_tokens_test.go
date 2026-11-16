@@ -884,3 +884,7 @@ func containsTokenSubstring(s, substr string) bool {
 	}
 	return false
 }
+
+func TestRecoveryTokenStore_StartupRegularInventoryLink(t *testing.T) {
+	testAuthInventoryRegularLink(t, "recovery_tokens")
+}

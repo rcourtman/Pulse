@@ -1423,3 +1423,7 @@ func TestSessionStore_ShutdownReturnsWithoutWaitingForWorkerReceive(t *testing.T
 		t.Fatal("Shutdown should not block waiting for the background worker to receive a stop signal")
 	}
 }
+
+func TestSessionStore_StartupRegularInventoryLink(t *testing.T) {
+	testAuthInventoryRegularLink(t, "sessions")
+}

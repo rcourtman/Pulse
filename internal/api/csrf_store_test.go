@@ -1172,3 +1172,7 @@ func TestCSRFTokenStore_UnreadStartupRegisteredAdmission(t *testing.T) {
 		t.Fatal("restart restored withdrawn tokens from preserved material")
 	}
 }
+
+func TestCSRFTokenStore_StartupRegularInventoryLink(t *testing.T) {
+	testAuthInventoryRegularLink(t, "csrf_tokens")
+}

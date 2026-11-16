@@ -462,7 +462,7 @@ func (c *CSRFTokenStore) persistSnapshot(persisted []CSRFTokenData, sessions int
 func (c *CSRFTokenStore) load() {
 	csrfFile := filepath.Join(c.dataPath, "csrf_tokens.json")
 
-	data, err := os.ReadFile(csrfFile)
+	data, err := readAuthSnapshot(csrfFile)
 	if err != nil {
 		_, entryErr := os.Lstat(csrfFile)
 		if !os.IsNotExist(err) || !os.IsNotExist(entryErr) {
