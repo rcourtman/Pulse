@@ -21,6 +21,7 @@
     "scripts/installtests/agent_installed_apt_controls_test.go",
     "scripts/installtests/agent_installed_apt_systemd_test.go",
     "scripts/installtests/agent_installed_profile_controls_test.go",
+    "scripts/installtests/agent_installed_profile_persistence_test.go",
     "scripts/installtests/agent_installed_profile_readback_test.go",
     "scripts/installtests/agent_installed_profile_systemd_test.go",
     "scripts/installtests/agent_installed_removal_transport_test.go",

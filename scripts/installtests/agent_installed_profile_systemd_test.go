@@ -289,19 +289,95 @@ func nativeProfileObserveProtectedPath(path string) nativeProfileProtectedIdenti
 }
 
 func nativeProfileRestoreReadback(before map[string]nativeProfileProtectedIdentity) nativeProfileRestoreEvidence {
+	return nativeProfileCompareProtected(before, nativeProfileObserveProtected(nativeProfileProtectedPaths(before)...))
+}
+
+func nativeProfileProtectedPaths(before map[string]nativeProfileProtectedIdentity) []string {
 	paths := make([]string, 0, len(before))
 	for path := range before {
 		paths = append(paths, path)
 	}
 	sort.Strings(paths)
-	after := nativeProfileObserveProtected(paths...)
+	return paths
+}
+
+func nativeProfileCompareProtected(before, after map[string]nativeProfileProtectedIdentity) nativeProfileRestoreEvidence {
 	evidence := nativeProfileRestoreEvidence{Before: before, After: after, ChangedPaths: []string{}}
-	for _, path := range paths {
-		if before[path] != after[path] {
+	paths := make(map[string]nativeProfileProtectedIdentity, len(before)+len(after))
+	for path := range before {
+		paths[path] = nativeProfileProtectedIdentity{}
+	}
+	for path := range after {
+		paths[path] = nativeProfileProtectedIdentity{}
+	}
+	for _, path := range nativeProfileProtectedPaths(paths) {
+		original, wasPresent := before[path]
+		current, isPresent := after[path]
+		if wasPresent != isPresent || original != current {
 			evidence.ChangedPaths = append(evidence.ChangedPaths, path)
 		}
 	}
 	return evidence
+}
+
+type nativeProfilePersistenceEvidence struct {
+	Initial      nativeProfileRestoreEvidence `json:"initial"`
+	Final        nativeProfileRestoreEvidence `json:"final"`
+	Observations int                          `json:"observations"`
+	Matched      bool                         `json:"matched"`
+}
+
+// A received report is not a consumed acknowledgement. Startup saves ID+LF;
+// the host collector saves the acknowledged ID without LF. Observe that exact
+// fixture transition before comparing rollback bytes, not a lucky instant
+// between the two writers. No other byte, metadata, type or absence may differ.
+// Keep the first observation even when the final byte-exact check succeeds.
+func nativeProfileAwaitAcknowledgedState(ctx context.Context, before map[string]nativeProfileProtectedIdentity, idPath string,
+	observe func() map[string]nativeProfileProtectedIdentity) (nativeProfilePersistenceEvidence, error) {
+	var evidence nativeProfilePersistenceEvidence
+	want, exists := before[idPath]
+	if !exists || !want.Present || want.Type != "regular" || want.Error != "" ||
+		want.Hash != secureRuntimeHash([]byte(secureRuntimeLabAgentID)) {
+		return evidence, errors.New("native baseline is not the acknowledged fixture identity")
+	}
+	pending := want
+	pending.Hash = secureRuntimeHash([]byte(secureRuntimeLabAgentID + "\n"))
+	for {
+		if err := ctx.Err(); err != nil {
+			return evidence, err
+		}
+		after := observe()
+		readback := nativeProfileCompareProtected(before, after)
+		evidence.Observations++
+		if evidence.Observations == 1 {
+			evidence.Initial = readback
+		}
+		evidence.Final = readback
+		if err := ctx.Err(); err != nil {
+			return evidence, err
+		}
+		if len(after) != len(before) {
+			return evidence, errors.New("native protected-state inventory changed")
+		}
+		for path, expected := range before {
+			got, present := after[path]
+			if !present || expected.Error != "" || got.Error != "" ||
+				(got != expected && (path != idPath || got != pending)) {
+				return evidence, errors.New("native protected state changed beyond pending acknowledgement")
+			}
+		}
+		if len(readback.ChangedPaths) == 0 {
+			evidence.Matched = true
+			return evidence, nil
+		}
+		timer := time.NewTimer(100 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return evidence, ctx.Err()
+		case <-timer.C:
+		}
+	}
 }
 
 // Mutable descendants are handed to the collector, not restored recursively
@@ -568,6 +644,18 @@ func TestAgentInstalledProfileSystemd(t *testing.T) {
 	phase := func(name string, evidence any) {
 		receipt.Phases = append(receipt.Phases, nativeProfilePhase{name, time.Now().UTC().Format(time.RFC3339Nano), evidence})
 	}
+	awaitAcknowledgedState := func(name string, before map[string]nativeProfileProtectedIdentity) {
+		t.Helper()
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		evidence, err := nativeProfileAwaitAcknowledgedState(ctx, before, "/var/lib/pulse-agent/agent-id", func() map[string]nativeProfileProtectedIdentity {
+			return nativeProfileObserveProtected(nativeProfileProtectedPaths(before)...)
+		})
+		phase(name, evidence)
+		if err != nil {
+			t.Fatalf("protected state did not reach the exact acknowledged baseline: %v", err)
+		}
+	}
 	// From this point every fixed install path was observed absent and is owned
 	// solely by this lab. Failed stop or remaining process prevents deletion.
 	if err := os.Mkdir(nativeProfileRoot, 0o755); err != nil {
@@ -599,6 +687,10 @@ func TestAgentInstalledProfileSystemd(t *testing.T) {
 	}
 	secureRuntimeWaitForReports(t, fixture, 1, 45*time.Second)
 	secureRuntimeAssertRootCommandProfile(t)
+	awaitAcknowledgedState("root-install-identity-persistence", map[string]nativeProfileProtectedIdentity{
+		"/var/lib/pulse-agent/agent-id": {Present: true, Type: "regular", Mode: 0o600,
+			Hash: secureRuntimeHash([]byte(secureRuntimeLabAgentID))},
+	})
 	historyPath := "/var/lib/pulse-agent/native-history"
 	if err := os.WriteFile(historyPath, []byte("existing-history-must-survive\n"), 0o640); err != nil {
 		t.Fatal(err)
@@ -641,6 +733,7 @@ func TestAgentInstalledProfileSystemd(t *testing.T) {
 		return history
 	}
 	assertRestoredState := func() {
+		awaitAcknowledgedState("reverse-identity-persistence", baselineReadback)
 		// Retain all paths, including absence/type changes, before the unchanged
 		// strict checks can fail. A diagnostic read error never grants a pass.
 		phase("reverse-protected-state-readback", nativeProfileRestoreReadback(baselineReadback))
