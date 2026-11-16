@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "base_sha": "8f12dce1080ba7b72a00578e4164a6e5454b2fda",
+  "verified_at": "2026-11-16T12:35:46Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/AuditLogPanel.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/AuditLogPanel.tsx": "c3e5618a4c86f9b23886e5f195d292b58af7d0df47165a8704e78976777c8acc"
+  },
+  "routes": [
+    "/settings/security-audit"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Actual AuditLogPanel, audit reader state, HTTP client, licence store, shared grid and production CSS precompiled with exact launch-selected f96239b2 graph.84 consumed source/manifest identities; only the changed panel differs from parent. Synthetic HTTP fixtures, not full App, real backend, installed estate, IdP or assistive-technology speech proof.",
+    "Playwright1.56.1 matches integration lock; Chromium141.0.7390.37 desktop/phone and WebKit26.0 phone, light/dark.12 final cases across before/after.36 captures individually opened natively:12 settled row pairs and5 page pairs, plus one WebKit/light page pair whose baseline is intermediate and is not used for acceptance. Identical viewport/theme/fixture and settled table anchor140px (Chromium phone139.5px). Fixture-only trailing empty body scroll space permits the same anchor on both sources.",
+    "Long synthetic account rows initially force1739px inside1196px desktop and972px inside322px phone. Final fits1196/1196 and322/322 with full identity, exact separate timestamp, event outcome and both signature controls still visible. No identity/column/value/control is aggregated, removed or hidden; existing desktop icons gain sr-only outcome text."
+  ],
+  "interactions": [
+    "Keyboard Enter verifies two exact saved IDs independently: a failed login has a verified signature; a successful configuration change has a failed signature. Event outcome remains unchanged; unknown user/unsigned row remains. Two GET verification requests per case, exact selected org/synthetic token headers and no writes.",
+    "Existing user search narrows to one exact account then clearing restores3events; old signature results withdraw as before. All header actions,filter/preferences,summary and pagination remain present; stable row captures show every event identity/time alongside its matching verification result/action."
+  ]
+}

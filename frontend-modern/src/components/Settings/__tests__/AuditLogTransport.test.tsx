@@ -174,6 +174,57 @@ afterEach(() => {
 });
 
 describe('Audit Log rendered controls through the real HTTP client', () => {
+  it('exposes each event outcome independently of its signature verification result', async () => {
+    const rows = events();
+    rows[0].success = false;
+    read = () => json({ events: rows, total: 2, persistentLogging: true });
+    verify = (url) => json(verificationResult(url.includes(encodeURIComponent(firstID))));
+    mount();
+    await loaded();
+    const first = row('East first sign-in');
+    const second = row();
+    expect(first.getAllByRole('cell')[0]).toHaveTextContent(/^Failed$/);
+    expect(second.getAllByRole('cell')[0]).toHaveTextContent(/^Success$/);
+    fireEvent.click(first.getByRole('button', { name: /^Verify signature: / }));
+    await first.findByText('Verified', { exact: true });
+    fireEvent.click(second.getByRole('button', { name: /^Verify signature: / }));
+    await second.findByText('Failed', { exact: true, selector: 'span:not(.sr-only)' });
+    expect(first.getAllByRole('cell')[0]).toHaveTextContent(/^Failed$/);
+    expect(second.getAllByRole('cell')[0]).toHaveTextContent(/^Success$/);
+    expect(verificationRequests()).toHaveLength(2);
+    for (const [index, event] of rows.entries()) {
+      expectBoundRead(
+        verificationRequests()[index],
+        `/api/audit/${encodeURIComponent(event.id)}/verify`,
+      );
+    }
+  });
+
+  it('keeps full mobile account identities and exact event times as separate text', async () => {
+    const rows = events();
+    rows[0].user =
+      'external.audit.operator.with.a.long.shared.federated.identity.primary@example.invalid';
+    rows[1].user = undefined;
+    read = () => json({ events: rows, total: 2, persistentLogging: true });
+    mount();
+    await loaded();
+    for (const [index, event] of rows.entries()) {
+      const savedRow = row(index === 0 ? 'East first sign-in' : 'East selected sign-in');
+      const eventCell = savedRow.getAllByRole('cell')[2];
+      const timestamp = within(eventCell).getByText(new Date(event.timestamp).toLocaleString(), {
+        selector: 'time',
+      });
+      expect(timestamp).toHaveAttribute('datetime', event.timestamp);
+      expect(timestamp.parentElement).toContainElement(
+        within(eventCell).getByText(event.user || 'Unknown user', { selector: 'bdi' }),
+      );
+      expect(savedRow.getAllByRole('cell')[3]).toHaveTextContent(event.user || '-');
+      expect(savedRow.getByRole('button', { name: /^Verify signature: / })).toBeEnabled();
+    }
+    expect(verificationRequests()).toHaveLength(0);
+    expect(auditRequests()).toHaveLength(1);
+  });
+
   it('names same-user signature actions by their exact saved event ID', async () => {
     const rows = events();
     rows[1].timestamp = rows[0].timestamp;

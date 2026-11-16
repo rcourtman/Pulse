@@ -392,7 +392,12 @@ export default function AuditLogPanel(props: AuditLogPanelProps) {
                 render: (event) => {
                   const presentation = getAuditEventStatusPresentation(event.success);
                   const Icon = presentation.icon;
-                  return <Icon class={presentation.className} />;
+                  return (
+                    <>
+                      <Icon class={presentation.className} />
+                      <span class="sr-only">{event.success ? 'Success' : 'Failed'}</span>
+                    </>
+                  );
                 },
               },
               {
@@ -413,9 +418,14 @@ export default function AuditLogPanel(props: AuditLogPanelProps) {
                     >
                       {event.event}
                     </span>
-                    <div class="mt-1 truncate text-[11px] text-muted sm:hidden">
-                      {event.success ? 'Success' : 'Failed'} · {event.user || 'Unknown user'} ·{' '}
-                      {formatTimestamp(event.timestamp)}
+                    <div class="mt-1 space-y-0.5 whitespace-normal text-[11px] text-muted [overflow-wrap:anywhere] sm:hidden">
+                      <div>
+                        {event.success ? 'Success' : 'Failed'} ·{' '}
+                        <bdi>{event.user || 'Unknown user'}</bdi>
+                      </div>
+                      <time class="block" dateTime={event.timestamp}>
+                        {formatTimestamp(event.timestamp)}
+                      </time>
                     </div>
                   </div>
                 ),
@@ -424,7 +434,11 @@ export default function AuditLogPanel(props: AuditLogPanelProps) {
                 key: 'user',
                 label: 'User',
                 hiddenOnMobile: true,
-                render: (event) => <span class="text-base-content">{event.user || '-'}</span>,
+                render: (event) => (
+                  <bdi class="block max-w-48 whitespace-normal text-base-content [overflow-wrap:anywhere]">
+                    {event.user || '-'}
+                  </bdi>
+                ),
               },
               {
                 key: 'ip',
