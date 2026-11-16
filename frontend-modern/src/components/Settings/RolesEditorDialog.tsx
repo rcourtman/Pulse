@@ -198,7 +198,20 @@ export const RolesEditorDialog: Component<RolesEditorDialogProps> = (props) => (
                           </FormSelect>
                           <button
                             type="button"
-                            onClick={() => props.onRemovePermission(index)}
+                            onClick={(event) => {
+                              const rules =
+                                event.currentTarget.closest('[role="group"]')?.parentElement;
+                              const count = props.formPermissions.length;
+                              props.onRemovePermission(index);
+                              // Index keeps the next rule in this slot, or removes the
+                              // last slot. Continue at that rule's action, not BODY or
+                              // a now-disabled removal button. No delayed refocus.
+                              if (props.isOpen && props.formPermissions.length === count - 1) {
+                                rules?.children[Math.min(index, props.formPermissions.length - 1)]
+                                  ?.querySelector<HTMLSelectElement>('select')
+                                  ?.focus();
+                              }
+                            }}
                             disabled={props.formPermissions.length <= 1}
                             aria-label={`Remove permission ${index + 1}: ${permission().action}:${permission().resource}`}
                             aria-describedby={policyID}
