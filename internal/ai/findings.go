@@ -2960,6 +2960,19 @@ func (s *FindingsStore) Get(id string) *Finding {
 	return nil
 }
 
+// HasFindingsForResource reports whether any finding, in any state (snoozed,
+// dismissed and resolved included), is filed under a resource ID.
+func (s *FindingsStore) HasFindingsForResource(resourceID string) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, id := range s.byResource[resourceID] {
+		if _, exists := s.findings[id]; exists {
+			return true
+		}
+	}
+	return false
+}
+
 // GetByResource returns all active findings for a resource
 func (s *FindingsStore) GetByResource(resourceID string) []*Finding {
 	s.mu.RLock()

@@ -4,6 +4,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -64,5 +65,83 @@ func TestPatrolFindingUnknownIDNamesTheResourcesItMeant(t *testing.T) {
 	report.ResourceID, report.ResourceName = match[1], "gitea"
 	if id, _, err := adapter.CreateFinding(report); err != nil || id == "" {
 		t.Fatalf("retry with the named ID = (%q, %v), want a finding", id, err)
+	}
+}
+
+// Patrol also filed "gitea" as resource_id, with resource_name "gitea,
+// nextcloud, pihole (pmxlab)". The name admitted it, and the finding was
+// stored under "gitea", so a later report of the same guest by its ID would
+// be a second finding. A resource's exact name as resource_id is filed under
+// that resource's ID; an ambiguous name is left as it was.
+func TestPatrolFindingNameAsIDIsFiledUnderTheResourcesID(t *testing.T) {
+	state := newPatrolRuntimeState(models.StateSnapshot{
+		Containers: []models.Container{
+			{ID: "pve1-pmxlab-112", VMID: 112, Name: "gitea", Node: "pmxlab", Instance: "pve1", Status: "running", Type: "lxc"},
+			{ID: "pve1-pmxlab-113", VMID: 113, Name: "twin", Node: "pmxlab", Instance: "pve1", Status: "running", Type: "lxc"},
+			{ID: "pve1-pmxlab-114", VMID: 114, Name: "twin", Node: "pmxlab", Instance: "pve1", Status: "running", Type: "lxc"},
+		},
+	})
+	ps := NewPatrolService(nil, nil)
+	adapter := newPatrolFindingCreatorAdapterState(ps, state)
+	report := func(id, name string) tools.PatrolFindingInput {
+		return tools.PatrolFindingInput{
+			ResourceID: id, ResourceName: name, ResourceType: "system-container",
+			Key: "backup-stale-" + id, Severity: "warning", Category: "backup", Title: "Not backed up for 54h",
+			Description: "Last backup 54h ago", Evidence: "triage: last backup 54h ago", Recommendation: "Run the backup job",
+		}
+	}
+
+	id, _, err := adapter.CreateFinding(report("gitea", "gitea, nextcloud, pihole (pmxlab)"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := ps.findings.Get(id); got == nil || got.ResourceID != "pve1-pmxlab-112" {
+		t.Fatalf("finding filed under %+v, want pve1-pmxlab-112", got)
+	}
+
+	// Findings already filed under a name keep that lineage.
+	legacyStore := NewPatrolService(nil, nil)
+	legacyStore.findings.Add(&Finding{ID: "legacy-gitea", Key: "old", Severity: FindingSeverityWarning, Category: FindingCategoryBackup,
+		ResourceID: "gitea", ResourceName: "gitea", ResourceType: "system-container", Title: "old", Description: "d", Evidence: "e"})
+	if !legacyStore.findings.Snooze("legacy-gitea", time.Hour) || len(legacyStore.findings.GetByResource("gitea")) != 0 {
+		t.Fatal("the legacy finding should be snoozed, so no longer active")
+	}
+	legacy := newPatrolFindingCreatorAdapterState(legacyStore, state)
+	if got, ok := legacy.canonicalizeNameAsFindingID(report("gitea", "gitea")); ok {
+		t.Fatalf("a name with a snoozed finding must keep it: %+v", got)
+	}
+	if _, ok := adapter.canonicalizeNameAsFindingID(report("gitea", "gitea")); !ok {
+		t.Fatal("the same report without stored findings is filed under the ID")
+	}
+
+	id, _, err = adapter.CreateFinding(report("twin", "twin"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := ps.findings.Get(id); got == nil || got.ResourceID != "twin" {
+		t.Fatalf("an ambiguous name must not pick one resource: %+v", got)
+	}
+}
+
+// Patrol often files a host finding as "node/pmxlab". That ID names nothing,
+// but the name admitted it, and only registry-shaped IDs were repaired, so it
+// was stored under "node/pmxlab" apart from findings filed under the node's
+// ID. An unknown ID with a unique exact name is filed under that name's ID.
+func TestPatrolFindingGuessedNodeIDIsFiledUnderTheNodesID(t *testing.T) {
+	state := newPatrolRuntimeState(models.StateSnapshot{
+		Nodes: []models.Node{{ID: "pve1-pmxlab", Name: "pmxlab", Instance: "pve1", Status: "online"}},
+	})
+	ps := NewPatrolService(nil, nil)
+	adapter := newPatrolFindingCreatorAdapterState(ps, state)
+	id, _, err := adapter.CreateFinding(tools.PatrolFindingInput{
+		ResourceID: "node/pmxlab", ResourceName: "pmxlab", ResourceType: "node",
+		Key: "backup-schedule", Severity: "warning", Category: "backup", Title: "Backup schedule slower than 48h",
+		Description: "d", Evidence: "e", Recommendation: "r",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := ps.findings.Get(id); got == nil || got.ResourceID != "pve1-pmxlab" {
+		t.Fatalf("finding filed under %+v, want pve1-pmxlab", got)
 	}
 }
