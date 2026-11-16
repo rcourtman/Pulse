@@ -106,6 +106,8 @@ export const OrganizationIncomingSharesSection: Component<
                     <Button
                       variant="successGhost"
                       size="xs"
+                      data-org-sharing-action="accept-incoming"
+                      data-org-sharing-target={share.id}
                       aria-label={`Accept share of ${share.resourceType}:${share.resourceId} from ${getShareOrganizationLabel(share.sourceOrgId, share.sourceOrgName)}`}
                       onClick={() => {
                         void props.state.acceptIncomingShare(share);
@@ -118,6 +120,10 @@ export const OrganizationIncomingSharesSection: Component<
                   <Button
                     variant="dangerGhost"
                     size="xs"
+                    data-org-sharing-action={
+                      share.status === 'pending' ? 'decline-incoming' : 'remove-incoming'
+                    }
+                    data-org-sharing-target={share.id}
                     aria-label={`${share.status === 'pending' ? 'Decline' : 'Remove'} share of ${share.resourceType}:${share.resourceId} from ${getShareOrganizationLabel(share.sourceOrgId, share.sourceOrgName)}`}
                     onClick={() => {
                       void props.state.declineIncomingShare(share);
