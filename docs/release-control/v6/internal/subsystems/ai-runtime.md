@@ -4782,7 +4782,17 @@ keeps each connection's name and nothing is borrowed. A Proxmox storage of type
 because polling skips them there when Pulse also connects to that PBS. Demo
 mode's curated backups name a storage the demo inventory does not have, so they
 are not listed by storage. Proof:
-`internal/ai/tools/tools_storage_backups_by_storage_test.go`. A
+`internal/ai/tools/tools_storage_backups_by_storage_test.go`. A model reads
+only the first 16,000 characters of a tool result, about nine backups, and the
+newest come first: two P3 investigations summed those nine and concluded the
+backups could not explain the fill. The first page of a backups result now
+opens with a summary of the backups it read (every match when the list fits
+the limit, else how many of the total): count, bytes, and per subject the
+count, bytes, oldest and newest, largest first, ahead of the pagination and
+points. Subjects group by the recovery subject key, backups with no recorded
+size are counted as `unknown_size` rather than read as zero bytes, and labels
+are cut to 80 runes. It adds no store query.
+Proof: `internal/ai/tools/tools_storage_backups_summary_test.go`. A
 finished job raises no state alert and a stop exits 0 or with a stop signal,
 so neither is opened. Proofs: `internal/ai/patrol_alert_finding_sustained_test.go`,
 `internal/ai/patrol_storage_alert_wake_test.go`,

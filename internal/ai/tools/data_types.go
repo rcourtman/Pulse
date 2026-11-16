@@ -1120,10 +1120,37 @@ func (r PatternsResponse) NormalizeCollections() PatternsResponse {
 // RecoveryPoint preserves provider identity, repository references and unknown
 // verification instead of collapsing them into vendor-specific summary lists.
 type BackupsResponse struct {
-	Points     []recovery.RecoveryPoint `json:"points"`
-	Pagination *PaginationInfo          `json:"pagination"`
+	// Summary, Note and Pagination come before Points: a long list is cut to
+	// fit the model's context, and the cut keeps the start.
+	Summary *BackupsSummary `json:"summary,omitempty"`
 	// Note says where else to look when a storage's list may be incomplete.
-	Note string `json:"note,omitempty"`
+	Note       string                   `json:"note,omitempty"`
+	Pagination *PaginationInfo          `json:"pagination"`
+	Points     []recovery.RecoveryPoint `json:"points"`
+}
+
+// BackupsSummary totals the matched backups by subject, newest and oldest
+// included, so a model can tell what fills a storage without reading every
+// point.
+type BackupsSummary struct {
+	Backups int `json:"backups"`
+	// Summarized is set when fewer than all matched backups were totalled.
+	Summarized int   `json:"summarized,omitempty"`
+	SizeBytes  int64 `json:"size_bytes"`
+	// UnknownSize counts backups with no recorded size, left out of SizeBytes.
+	UnknownSize int                    `json:"unknown_size,omitempty"`
+	Subjects    int                    `json:"subjects"`
+	BySubject   []BackupSubjectSummary `json:"by_subject"`
+}
+
+type BackupSubjectSummary struct {
+	Subject     string     `json:"subject"`
+	ResourceID  string     `json:"resource_id,omitempty"`
+	Backups     int        `json:"backups"`
+	SizeBytes   int64      `json:"size_bytes"`
+	UnknownSize int        `json:"unknown_size,omitempty"`
+	Oldest      *time.Time `json:"oldest,omitempty"`
+	Newest      *time.Time `json:"newest,omitempty"`
 }
 
 func EmptyBackupsResponse() BackupsResponse {
