@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "base_sha": "433c677827329a3fb66718c08f541ccb903a20b1",
+  "verified_at": "2026-11-16T05:38:04.085589Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/ChangePasswordModal.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/ChangePasswordModal.tsx": "487cec9f5dc39d0db2b0ac99f02ff7be37490506e9dffa010fd6137a455b80a2"
+  },
+  "routes": [
+    "/tmp/password-proof/index.html"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 390,
+      "height": 568
+    },
+    {
+      "width": 844,
+      "height": 390
+    }
+  ],
+  "states": [
+    "Production SecurityAuthPanel entry -> ChangePasswordModal, native shared Dialog and real guarded API client, with synthetic local account/status/HTTP responses only. Not full App/IdP, original clients, installed authentication or release acceptance.",
+    "Playwright1.56.1 matches integration lock. Chromium desktop/light, phone/dark, short/light and landscape/dark; WebKit desktop/dark, phone/light, short/dark and landscape/light.",
+    "48 retained PNGs /24 comparable pairs natively opened: empty form, confirmed refusal and unconfirmed result. Same data, viewport, theme and keyboard/wheel state in both phases. Before landscape clips actions/guidance and loses the heading/Close after keyboard scrolling. The bounded form can now scroll to the complete guidance/actions while keeping the heading/Close available; desktop/phone information and initial layout are retained."
+  ],
+  "interactions": [
+    "Eight parent cases /288 assertions and eight candidate cases /320 assertions. Actual native Enter sends one configured-local-account Basic/CSRF/org-bound password change; pending fields and Cancel stay disabled, Escape/Enter cannot repeat the pending write. Only the explicit second submission follows a confirmed403.",
+    "A503 remains unconfirmed with all password fields and submit disabled; Enter does not retry. Ordinary in-dialog wheel scrolling exposes the complete message, Cancel and disabled action, without background scroll or horizontal overflow. No fields, guidance, controls or distinctions are removed or hidden behind disclosure.",
+    "Escape closes an idle/uncertain dialog and restores the Authentication entry control. Reopening clears the draft/error; withdrawn write access closes the dialog and issues no new write. Zero page errors; browsers and preview server close. Source tests retain reader/context/late-response/success coverage; screen-reader speech, real mobile keyboards and original-client recovery remain unmeasured."
+  ]
+}

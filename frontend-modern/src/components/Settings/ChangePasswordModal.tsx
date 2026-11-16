@@ -209,8 +209,8 @@ export const ChangePasswordModal: Component<ChangePasswordModalProps> = (props) 
       closeOnBackdrop={!loading()}
       ariaLabel="Change password"
     >
-      <div class="w-full">
-        <div class="flex items-center justify-between p-6 border-b border-border">
+      <div class="flex min-h-0 w-full flex-col">
+        <div class="flex shrink-0 items-center justify-between p-6 border-b border-border">
           <SectionHeader title="Change password" size="lg" class="flex-1" />
           <button
             type="button"
@@ -237,7 +237,7 @@ export const ChangePasswordModal: Component<ChangePasswordModalProps> = (props) 
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} class="p-6 space-y-4">
+        <form onSubmit={handleSubmit} class="min-h-0 overflow-y-auto p-6 space-y-4">
           <Show when={props.securityStatusLoading}>
             <p role="status" class="text-xs text-muted">
               Checking settings access… Your draft is kept while this reader is verified.

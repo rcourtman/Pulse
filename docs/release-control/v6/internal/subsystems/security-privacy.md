@@ -453,6 +453,17 @@ single writes, explicit refusals, uncertain results and owned reload timers.
 password refusal. Native Settings shell/panel/dialog browser comparisons remain
 required. These are source/fixture guarantees, not original-client or IdP recovery.
 
+The password dialog's existing form is a bounded vertical scroll area below a
+non-shrinking heading and Close control. Short and landscape viewports must
+allow ordinary in-dialog scrolling to every field, refusal or unconfirmed-result
+message, Cancel and submission action without scrolling the background or
+clipping away recovery. It remains one native form; layout does not change
+validation, credential handling, pending/uncertain disabling or reader lifetime.
+The registered transport test retains this structure and its unknown-result
+no-replay behavior. Comparable Chromium/WebKit desktop, phone, short and
+landscape browser fixtures exercise the Authentication panel entry, native
+submission, pending controls, refusal, uncertainty, close and fresh draft.
+
 ### Authentication refresh preserves only the current reader's draft
 
 The Authentication panel labels a pending security-status read and keeps its
