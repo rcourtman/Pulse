@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "base_sha": "ec608cfd357022f3a33896f23c44f828846cd4ff",
+  "verified_at": "2026-11-16T04:28:38.934746Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/OrganizationOverviewDetailsSection.tsx",
+    "frontend-modern/src/components/Settings/OrganizationOverviewPanel.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/OrganizationOverviewPanel.tsx": "ed8b4b3bcde5b6ba02a2346e128d03fff2fc5cf62846c2a8f1cc6542b317b8c9",
+    "frontend-modern/src/components/Settings/OrganizationOverviewDetailsSection.tsx": "0eeb779ee4011e59acb700cb5c227b180cf001ecddcc21278969978066e1b57a"
+  },
+  "routes": [
+    "/tmp/overview-keyboard/index.html",
+    "/tmp/overview-keyboard/index.html?viewer=1"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Production Organization Overview, shared controls, guarded state, OrgsAPI, HTTP client and capability/presentation stores in an offline evidence-only shell for the existing Settings panel. Synthetic organizations, members and responses; not full App, IdP, cross-tab, original-client or installed authorization acceptance.",
+    "Exact baseline 2d8b63f1 original Panel/Details blobs are loaded at their original module paths with unchanged surrounding consuming source. Both phases use matching launch-snapshot offline-installed dependencies: Solid1.9.17, seroval1.7.3, Vite6.4.5. A stale canonical-tree diagnostic was explicitly superseded, not counted as exact dependency proof.",
+    "Chromium141.0.7390.37 and WebKit26.0 via Playwright1.56.1 matching the integration lock; light/dark desktop and narrow. Native Enter previously sent0 writes and now sends exactly1 PUT with the trimmed name, exact organization/CSRF and no API-token fallback. Pending Enter does not send another write.",
+    "Applied-but-unconfirmed response withdraws the editor and focuses its named warning; explicit keyboard Reload performs saved reads only and focuses the saved editable name. Confirmed save reloads and focuses the saved name. Deliberate outside focus and changed organization win; read-only controls stay disabled.",
+    "Nonmanager initial read failures do not take focus. Explicit recovery focuses the existing saved-name summary, keeping input/Save disabled and the existing membership guidance. No write occurs.",
+    "48 retained captures,24 comparable pairs, all opened natively with view_image and reviewed. Whole-page initial states preserve organization name/ID/created date/member count, exact member identities, roles and desktop dates. Recovery rings do not move or hide content; no aggregation or loss."
+  ],
+  "interactions": [
+    "Review the complete Overview, edit Display Name and press native Enter. Baseline pointer fallback permits the same later-state comparison, without claiming baseline Enter worked.",
+    "Hold the mutation, inspect disabled controls, then return uncertainty after a synthetic apply and inspect the warning/focus.",
+    "Activate Reload with the keyboard and verify saved readback, no write replay and usable focus.",
+    "Submit a confirmed second rename and inspect its resulting saved snapshot.",
+    "Move focus outside during a held read and change the selected organization; verify no focus is reclaimed.",
+    "Recover an initially unavailable nonmanager read; inspect the saved-name focus and unchanged disabled controls."
+  ],
+  "evidence": {
+    "runtime_source": "61ad479005686621a8909a4eac60028b3dfdc8a3",
+    "compiled_source_observation": "1772c702779281ce70d187d03831763beffd1ca1 (message-only repaired to61ad479005; runtime bytes identical)",
+    "test_format_parent": "ec608cfd357022f3a33896f23c44f828846cd4ff",
+    "worker_outputs": "web-product-5njrma4l",
+    "dossier": "RECEIPTS.md",
+    "limitation": "Source suite/build and independent source/pixel review remain distinct from browser verification; no delivery or release claim."
+  }
+}

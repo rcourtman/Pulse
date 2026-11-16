@@ -18,7 +18,11 @@ export const OrganizationOverviewDetailsSection: Component<
         <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div class="rounded-md border border-border p-3">
             <p class="text-xs uppercase tracking-wide text-muted">Organization</p>
-            <p class="mt-1 text-sm font-medium text-base-content">
+            <p
+              data-org-overview-name
+              tabIndex={-1}
+              class="mt-1 text-sm font-medium text-base-content focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+            >
               {currentOrg().displayName || currentOrg().id}
             </p>
           </div>
@@ -38,7 +42,14 @@ export const OrganizationOverviewDetailsSection: Component<
           </div>
         </div>
 
-        <div class="space-y-2">
+        <form
+          aria-label="Organization display name"
+          class="space-y-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void props.state.saveDisplayName();
+          }}
+        >
           <label class="block text-sm font-medium text-base-content" for="org-display-name-input">
             Display Name
           </label>
@@ -52,10 +63,10 @@ export const OrganizationOverviewDetailsSection: Component<
               class="w-full rounded-md border px-3 py-2 text-sm shadow-xs focus:border-blue-500 focus:outline-hidden focus:ring-2 focus:ring-blue-500 "
             />
             <Button
+              type="submit"
               variant="primary"
               size="settingsAction"
               class="w-full sm:w-auto"
-              onClick={props.state.saveDisplayName}
               disabled={!props.state.canManageCurrentOrg() || props.state.saving()}
             >
               {props.state.saving() ? 'Saving...' : 'Save'}
@@ -66,7 +77,7 @@ export const OrganizationOverviewDetailsSection: Component<
               {getOrganizationOverviewManageRequiredMessage(presentationPolicyIsReadOnly())}
             </p>
           </Show>
-        </div>
+        </form>
       </div>
     )}
   </Show>
