@@ -14,7 +14,7 @@ import subprocess
 import tempfile
 import time
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -182,42 +182,134 @@ class SmokeRunnerTest(unittest.TestCase):
         self.assertEqual(destination.read_text(), 'previous observation\n')
         self.assertEqual(self.observed_calls(), [])
 
-    def test_interruption_preserves_prior_results_and_unobserved_selection_without_liveness_claim(self):
-        destination = self.enable_receipt()
+    def held_runner(self, *, ignore=False, exit_zero=False, descendant=False, receipt=True):
+        """Start only disposable fixture processes, retaining their exact groups."""
+        destination = self.enable_receipt() if receipt else self.root / 'receipt.json'
         self.python_fixture('test_first.py', 9)
         self.python_fixture('test_second.py')
         held = self.python_fixture('test_third.py')
         ready = self.root / 'ready'
-        held.write_text(f"from pathlib import Path\nimport time\nPath({str(ready)!r}).touch()\n"
+        child_ready = self.root / 'child-ready'
+        child_source = ("import os, signal, time\nfrom pathlib import Path\n"
+                        "signal.signal(signal.SIGTERM, signal.SIG_IGN)\n"
+                        "signal.signal(signal.SIGINT, signal.SIG_IGN)\n"
+                        f"Path({str(child_ready)!r}).write_text(str(os.getpid()))\n"
                         "time.sleep(30)\n")
+        held.write_text(
+            "from pathlib import Path\nimport json, os, signal, subprocess, sys, time\n" +
+            ("signal.signal(signal.SIGTERM, signal.SIG_IGN)\n"
+             "signal.signal(signal.SIGINT, signal.SIG_IGN)\n" if ignore else '') +
+            ("signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))\n"
+             "signal.signal(signal.SIGINT, lambda *_: sys.exit(0))\n" if exit_zero else '') +
+            (f"child = subprocess.Popen([sys.executable, '-c', {child_source!r}])\n"
+             f"while not Path({str(child_ready)!r}).exists(): time.sleep(.01)\n" if descendant else '') +
+            f"Path({str(ready)!r}).write_text(json.dumps({{'pid': os.getpid(), 'pgid': os.getpgrp()}}))\n"
+            "time.sleep(30)\n")
         self.python_fixture('test_fourth.py')
         process = subprocess.Popen(['bash', str(self.runner), 'test_first.py', 'test_second.py',
                                     'test_third.py', 'test_fourth.py'], cwd=self.root,
                                    env=self.environment, stdout=subprocess.PIPE,
                                    stderr=subprocess.PIPE, text=True, start_new_session=True)
-        try:
-            deadline = time.monotonic() + 10
-            while not ready.exists() and process.poll() is None and time.monotonic() < deadline:
-                time.sleep(0.01)
-            self.assertTrue(ready.exists(), 'controlled suite did not reach its own hold point')
-            before = destination.read_bytes()
-            os.killpg(process.pid, signal.SIGTERM)
-            stdout, stderr = process.communicate(timeout=5)
-            self.assertNotEqual(process.returncode, 0, stdout + stderr)
-            self.assertEqual(destination.read_bytes(), before)
-            record = json.loads(before)
-            self.assertFalse(record['collection_complete'])
-            self.assertEqual([item['exit_code'] for item in record['observations']], [9, 0])
-            self.assertEqual(record['pending_invocation'], 2)
-            self.assertEqual(record['unobserved_indexes'], [2, 3])
-            self.assertNotIn('Summary:', stdout)
-            self.assertEqual(self.observed_calls(), ['test_first.py', 'test_second.py'])
-        finally:
-            try:
-                os.killpg(process.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
+
+        def cleanup():
+            groups = {process.pid}
+            if ready.exists():
+                groups.add(json.loads(ready.read_text())['pgid'])
+            for group in groups:
+                self.assertNotEqual(group, os.getpgrp(), 'fixture may never target the caller group')
+                try:
+                    os.killpg(group, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
             process.communicate(timeout=5)
+        self.addCleanup(cleanup)
+        deadline = time.monotonic() + 10
+        while not ready.exists() and process.poll() is None and time.monotonic() < deadline:
+            time.sleep(0.01)
+        self.assertTrue(ready.exists(), 'controlled suite did not reach its own hold point')
+        return process, destination, json.loads(ready.read_text()), child_ready
+
+    def assert_interrupted(self, process, destination, number):
+        stdout, stderr = process.communicate(timeout=8)
+        self.assertEqual(process.returncode, 128 + number, stdout + stderr)
+        record = json.loads(destination.read_text())
+        self.assertFalse(record['collection_complete'])
+        self.assertEqual(record['interruption_signal'], number)
+        self.assertEqual([item['exit_code'] for item in record['observations'][:2]], [9, 0])
+        self.assertEqual(len(record['observations']), 3)
+        self.assertIsNone(record['pending_invocation'])
+        self.assertEqual(record['unobserved_indexes'], [3])
+        active = record['observations'][2]
+        self.assertTrue(active['started'])
+        self.assertEqual(active['interruption_stop']['requested_signal'], number)
+        self.assertTrue(active['interruption_stop']['leader_reaped'])
+        self.assertNotIn('Summary:', stdout)
+        self.assertIn('no passing verdict', stderr)
+        self.assertEqual(self.observed_calls(), ['test_first.py', 'test_second.py'])
+        return active
+
+    def test_group_interruption_retains_active_exit_and_prior_results_without_running_successor(self):
+        process, destination, _, _ = self.held_runner()
+        os.killpg(process.pid, signal.SIGTERM)
+        active = self.assert_interrupted(process, destination, signal.SIGTERM)
+        self.assertEqual((active['exit_code'], active['signal']), (None, signal.SIGTERM))
+
+    def test_targeted_sigterm_observes_zero_child_exit_without_a_passing_verdict(self):
+        process, destination, identity, _ = self.held_runner(exit_zero=True)
+        # run.sh execs the sequencer; a PID-only cancellation must reach it.
+        self.assertNotEqual(identity['pgid'], process.pid)
+        self.assertEqual(identity['pgid'], identity['pid'])
+        os.kill(process.pid, signal.SIGTERM)
+        active = self.assert_interrupted(process, destination, signal.SIGTERM)
+        self.assertEqual((active['exit_code'], active['signal']), (0, None))
+        self.assertEqual(active['interruption_stop']['sent_signals'], [signal.SIGTERM])
+        self.assertTrue(active['interruption_stop']['process_group_absent'])
+
+    def test_targeted_sigint_is_forwarded_and_retained_separately_from_child_exit(self):
+        process, destination, _, _ = self.held_runner(exit_zero=True)
+        os.kill(process.pid, signal.SIGINT)
+        active = self.assert_interrupted(process, destination, signal.SIGINT)
+        self.assertEqual((active['exit_code'], active['signal']), (0, None))
+        self.assertEqual(active['interruption_stop']['sent_signals'], [signal.SIGINT])
+
+    def test_repeated_cancellation_bounds_ignored_signal_and_owned_descendant(self):
+        process, destination, _, child_ready = self.held_runner(ignore=True, descendant=True)
+        os.kill(process.pid, signal.SIGTERM)
+        # Wait for the runner to consume the first signal before sending another.
+        time.sleep(.2)
+        os.kill(process.pid, signal.SIGINT)
+        active = self.assert_interrupted(process, destination, signal.SIGTERM)
+        self.assertEqual((active['exit_code'], active['signal']), (None, signal.SIGKILL))
+        self.assertEqual(active['interruption_stop']['sent_signals'], [signal.SIGTERM, signal.SIGKILL])
+        # A remaining zombie is not a running descendant, or whole-VM cleanup.
+        child = Path('/proc') / child_ready.read_text() / 'stat'
+        deadline = time.monotonic() + 2
+        while child.exists() and child.read_text().split(') ', 1)[1][0] != 'Z':
+            self.assertLess(time.monotonic(), deadline, 'owned fixture descendant still runs')
+            time.sleep(.01)
+
+    def test_uncatchable_kill_leaves_active_result_unknown_not_reconstructed(self):
+        process, destination, _, _ = self.held_runner()
+        before = destination.read_bytes()
+        os.kill(process.pid, signal.SIGKILL)
+        process.wait(timeout=5)
+        self.assertEqual(process.returncode, -signal.SIGKILL)
+        self.assertEqual(destination.read_bytes(), before)
+        record = json.loads(before)
+        self.assertFalse(record['collection_complete'])
+        self.assertIsNone(record['interruption_signal'])
+        self.assertEqual([item['exit_code'] for item in record['observations']], [9, 0])
+        self.assertEqual(record['pending_invocation'], 2)
+        self.assertEqual(record['unobserved_indexes'], [2, 3])
+
+    def test_interruption_without_optional_receipt_still_stops_and_refuses_successor(self):
+        process, destination, _, _ = self.held_runner(exit_zero=True, receipt=False)
+        os.kill(process.pid, signal.SIGTERM)
+        stdout, stderr = process.communicate(timeout=8)
+        self.assertEqual(process.returncode, 143, stdout + stderr)
+        self.assertEqual(self.observed_calls(), ['test_first.py', 'test_second.py'])
+        self.assertFalse(destination.exists())
+        self.assertNotIn('Summary:', stdout)
 
     def assert_discovery_rejected(self, result):
         self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -722,6 +814,122 @@ class ReceiptSnapshotTest(unittest.TestCase):
                     module.snapshot(destination, {'observations': [9, 0], 'collection_complete': True})
             self.assertEqual(destination.read_bytes(), before)
             self.assertEqual(list(Path(directory).iterdir()), [destination])
+
+
+class InterruptionObservationTest(unittest.TestCase):
+    def setUp(self):
+        spec = importlib.util.spec_from_file_location('script_suites', ROOT / 'scripts/run-script-tests.py')
+        self.module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.module)
+
+    def test_first_signal_is_retained_and_original_handlers_are_restored_even_after_error(self):
+        original = {number: signal.getsignal(number) for number in (signal.SIGINT, signal.SIGTERM)}
+        with self.assertRaisesRegex(RuntimeError, 'fixture'):
+            with self.module.Interruption() as interruption:
+                interruption.receive(signal.SIGTERM, None)
+                interruption.receive(signal.SIGINT, None)
+                self.assertEqual(interruption.received_signal, signal.SIGTERM)
+                raise RuntimeError('fixture')
+        self.assertEqual({number: signal.getsignal(number) for number in original}, original)
+        self.assertIsNone(self.module.Interruption().received_signal)
+
+    def cancelled_run(self, when):
+        with tempfile.TemporaryDirectory() as directory:
+            destination = Path(directory) / 'receipt.json'
+            interruption = self.module.Interruption()
+            snapshot = self.module.snapshot
+
+            def publish(path, receipt):
+                if when == 'pending' and receipt['pending_invocation'] is not None:
+                    interruption.receive(signal.SIGTERM, None)
+                snapshot(path, receipt)
+
+            if when == 'before':
+                interruption.receive(signal.SIGTERM, None)
+            with patch.dict(os.environ, {'PULSE_SCRIPT_TEST_RECEIPT': str(destination)}), \
+                    patch.object(self.module, 'source_identity', return_value='a' * 40), \
+                    patch.object(self.module, 'snapshot', side_effect=publish), \
+                    patch.object(self.module.subprocess, 'Popen') as start:
+                status = self.module.run(['unused.py', 'unstarted.py'], interruption)
+            self.assertEqual(status, 143)
+            start.assert_not_called()
+            record = json.loads(destination.read_text())
+            self.assertEqual(record['interruption_signal'], signal.SIGTERM)
+            self.assertFalse(record['collection_complete'])
+            self.assertEqual(record['observations'], [])
+            self.assertEqual(record['unobserved_indexes'], [0, 1])
+            self.assertEqual(record['pending_invocation'], 0 if when == 'pending' else None)
+
+    def test_signal_before_suite_admission_starts_no_process(self):
+        self.cancelled_run('before')
+
+    def test_signal_during_pending_snapshot_starts_no_process(self):
+        self.cancelled_run('pending')
+
+    def test_signal_during_spawn_cannot_hide_successful_child_exit_or_start_successor(self):
+        interruption = self.module.Interruption()
+        process = Mock(pid=123, returncode=0)
+
+        def spawned(*_args, **_kwargs):
+            interruption.receive(signal.SIGTERM, None)
+            return process
+
+        with patch.object(self.module.subprocess, 'Popen', side_effect=spawned) as start, \
+                patch.object(self.module, 'stop_suite', return_value={'leader_reaped': True}) as stop, \
+                patch.dict(os.environ, {}, clear=True):
+            status = self.module.run(['unused.py', 'unstarted.py'], interruption)
+        self.assertEqual(status, 143)
+        self.assertEqual(start.call_count, 1)
+        self.assertTrue(start.call_args.kwargs['start_new_session'])
+        stop.assert_called_once_with(process, signal.SIGTERM)
+
+    def test_signalling_refusal_retains_unknown_result_without_alternate_stop(self):
+        process = Mock(pid=123)
+        process.poll.return_value = None
+        with patch.object(self.module.os, 'killpg', side_effect=PermissionError(1, 'fixture')) as send:
+            stop = self.module.stop_suite(process, signal.SIGTERM)
+        send.assert_called_once_with(123, signal.SIGTERM)
+        process.wait.assert_not_called()
+        self.assertEqual(stop, {'requested_signal': signal.SIGTERM, 'sent_signals': [],
+                                'leader_reaped': False, 'process_group_absent': None,
+                                'stop_error_errno': 1})
+
+    def test_unreaped_child_remains_unobserved_and_never_admits_another_suite(self):
+        process = Mock(pid=123, returncode=None)
+        process.poll.return_value = None
+        process.wait.side_effect = subprocess.TimeoutExpired('fixture', 0)
+        with patch.object(self.module, 'STOP_GRACE_SECONDS', 0), \
+                patch.object(self.module.os, 'killpg') as send:
+            stop = self.module.stop_suite(process, signal.SIGTERM)
+        self.assertEqual([call.args for call in send.call_args_list],
+                         [(123, signal.SIGTERM), (123, 0), (123, signal.SIGKILL), (123, 0)])
+        self.assertFalse(stop['leader_reaped'])
+        self.assertFalse(stop['process_group_absent'])
+        with tempfile.TemporaryDirectory() as directory:
+            destination = Path(directory) / 'receipt.json'
+            interruption = self.module.Interruption()
+
+            def spawned(*_args, **_kwargs):
+                interruption.receive(signal.SIGTERM, None)
+                return process
+
+            with patch.dict(os.environ, {'PULSE_SCRIPT_TEST_RECEIPT': str(destination)}), \
+                    patch.object(self.module, 'source_identity', return_value='a' * 40), \
+                    patch.object(self.module.subprocess, 'Popen', side_effect=spawned) as start, \
+                    patch.object(self.module, 'stop_suite', return_value=stop):
+                status = self.module.run(['unused.py', 'unstarted.py'], interruption)
+            self.assertEqual(status, 143)
+            self.assertEqual(start.call_count, 1)
+            record = json.loads(destination.read_text())
+            self.assertFalse(record['collection_complete'])
+            self.assertEqual(record['pending_invocation'], 0)
+            self.assertEqual(record['unobserved_indexes'], [0, 1])
+            self.assertEqual(len(record['observations']), 1)
+            active = record['observations'][0]
+            self.assertTrue(active['started'])
+            self.assertIsNone(active['exit_code'])
+            self.assertIsNone(active['signal'])
+            self.assertFalse(active['interruption_stop']['leader_reaped'])
 
 
 if __name__ == "__main__":
