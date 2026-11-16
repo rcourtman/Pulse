@@ -30,11 +30,11 @@ func (e *PulseToolExecutor) registerStorageTools() {
 					},
 					"storage_id": {
 						Type:        "string",
-						Description: "Filter by storage ID (for pools)",
+						Description: "Filter by storage ID or name (for pools, and for backups: the backups kept on that storage or PBS datastore)",
 					},
 					"resource_id": {
 						Type:        "string",
-						Description: "Filter by resource ID (canonical subject ID for backups and backup_tasks; VM/container ID for snapshots, resource_disks)",
+						Description: "Filter by resource ID (canonical subject ID for backups and backup_tasks, or a storage's ID for the backups kept on it; VM/container ID for snapshots, resource_disks)",
 					},
 					"guest_id": {
 						Type:        "string",
@@ -139,6 +139,8 @@ func (e *PulseToolExecutor) executeStorage(ctx context.Context, args map[string]
 
 func (e *PulseToolExecutor) executeListBackups(ctx context.Context, args map[string]interface{}) (CallToolResult, error) {
 	resourceID, _ := args["resource_id"].(string)
+	storageID, _ := args["storage_id"].(string)
+	resourceID, storageID = strings.TrimSpace(resourceID), strings.TrimSpace(storageID)
 	limit := intArg(args, "limit", 100)
 	offset := intArg(args, "offset", 0)
 	if limit <= 0 {
@@ -154,8 +156,34 @@ func (e *PulseToolExecutor) executeListBackups(ctx context.Context, args map[str
 		return NewErrorResult(fmt.Errorf("backup inventory unavailable: recovery points provider not configured")), nil
 	}
 
+	// A storage's own ID is never a backup subject, so a storage named either
+	// way lists the backups kept on it.
+	var repositories []recovery.RepositoryFilter
+	var matched []unifiedresources.Resource
+	if storageID != "" {
+		matched = e.storageResourcesFor(storageID, true)
+		if len(matched) == 0 {
+			return NewErrorResult(fmt.Errorf("no storage matches storage_id %q; pulse_storage with type \"pools\" lists each storage's ID", storageID)), nil
+		}
+		repositories = e.backupRepositoriesForStorage(matched)
+		if len(repositories) == 0 {
+			return NewErrorResult(fmt.Errorf("backups are not listed by storage for %q: only Proxmox storage and PBS datastores record which storage keeps a backup", storageID)), nil
+		}
+	} else if resourceID != "" {
+		storages := e.storageResourcesFor(resourceID, false)
+		if found := e.backupRepositoriesForStorage(storages); len(found) > 0 {
+			repositories, resourceID, matched = found, "", storages
+		}
+	}
+
 	response := EmptyBackupsResponse()
 	response.Pagination = &PaginationInfo{Limit: limit, Offset: offset}
+	for _, r := range matched {
+		if r.Proxmox != nil && r.Storage != nil && strings.EqualFold(strings.TrimSpace(r.Storage.Type), "pbs") {
+			response.Note = fmt.Sprintf("%q is a Proxmox storage backed by PBS. When Pulse also connects to that PBS, its backups are listed on the PBS datastore: pass that datastore's storage_id.", r.Name)
+			break
+		}
+	}
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
@@ -166,7 +194,7 @@ func (e *PulseToolExecutor) executeListBackups(ctx context.Context, args map[str
 	page, skip := offset/pageLimit+1, offset%pageLimit
 	for len(response.Points) < limit {
 		points, total, err := e.recoveryPointsProvider.ListPoints(ctx, recovery.ListPointsOptions{
-			Kind: recovery.KindBackup, SubjectResourceID: strings.TrimSpace(resourceID),
+			Kind: recovery.KindBackup, SubjectResourceID: resourceID, Repositories: repositories,
 			Page: page, Limit: pageLimit,
 		})
 		if err != nil {
@@ -186,6 +214,85 @@ func (e *PulseToolExecutor) executeListBackups(ctx context.Context, args map[str
 	}
 
 	return NewJSONResult(response.NormalizeCollections()), nil
+}
+
+// storageResourcesFor returns the storage resources an ID names, or that a
+// name names too when byName is set (one name can be the same storage on
+// several nodes).
+func (e *PulseToolExecutor) storageResourcesFor(ref string, byName bool) []unifiedresources.Resource {
+	if e.unifiedResourceProvider == nil || ref == "" {
+		return nil
+	}
+	var out []unifiedresources.Resource
+	for _, r := range e.unifiedResourceProvider.GetByType(unifiedresources.ResourceTypeStorage) {
+		if r.Storage != nil && (r.ID == ref || (byName && r.Name == ref)) {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// backupRepositoriesForStorage names, for each storage, the repository its
+// backups record (see the Proxmox recovery mapper): a Proxmox storage by its
+// connection, name and, unless shared, node; a PBS datastore by its PBS
+// connection and name.
+func (e *PulseToolExecutor) backupRepositoriesForStorage(storages []unifiedresources.Resource) []recovery.RepositoryFilter {
+	var out []recovery.RepositoryFilter
+	var connections map[string][]string
+	for _, r := range storages {
+		name := strings.TrimSpace(r.Name)
+		if r.Storage == nil || name == "" {
+			continue
+		}
+		if strings.EqualFold(strings.TrimSpace(r.Storage.Type), "pbs-datastore") {
+			out = append(out, recovery.RepositoryFilter{Type: "proxmox-pbs-datastore", Namespace: strings.TrimSpace(r.ParentName), Name: name})
+			continue
+		}
+		if r.Proxmox == nil || strings.TrimSpace(r.Proxmox.Instance) == "" {
+			continue
+		}
+		if connections == nil {
+			connections = e.pveConnectionsByStorageScope()
+		}
+		scope := strings.TrimSpace(r.Proxmox.Instance)
+		namespaces := []string{scope}
+		// Monitoring names storage after a cluster only when one connection
+		// is in it; with more, storage keeps the connection's name.
+		if members := connections[strings.ToLower(scope)]; len(members) == 1 && members[0] != scope {
+			namespaces = append(namespaces, members[0])
+		}
+		for _, connection := range namespaces {
+			filter := recovery.RepositoryFilter{Type: "proxmox-storage", Namespace: connection, Name: name}
+			if !r.Storage.Shared {
+				filter.Class = strings.TrimSpace(r.Proxmox.NodeName)
+			}
+			out = append(out, filter)
+		}
+	}
+	return out
+}
+
+// pveConnectionsByStorageScope maps a cluster's name to the Proxmox
+// connections in it. A clustered connection's storage carries the cluster's
+// name, while its backups carry the connection's name.
+func (e *PulseToolExecutor) pveConnectionsByStorageScope() map[string][]string {
+	out := map[string][]string{}
+	if e.unifiedResourceProvider == nil {
+		return out
+	}
+	seen := map[string]bool{}
+	for _, r := range e.unifiedResourceProvider.GetByType(unifiedresources.ResourceTypeAgent) {
+		if r.Proxmox == nil {
+			continue
+		}
+		cluster, connection := strings.ToLower(strings.TrimSpace(r.Proxmox.ClusterName)), strings.TrimSpace(r.Proxmox.Instance)
+		if cluster == "" || connection == "" || seen[cluster+"\x00"+connection] {
+			continue
+		}
+		seen[cluster+"\x00"+connection] = true
+		out[cluster] = append(out[cluster], connection)
+	}
+	return out
 }
 
 func (e *PulseToolExecutor) executeListStorage(_ context.Context, args map[string]interface{}) (CallToolResult, error) {

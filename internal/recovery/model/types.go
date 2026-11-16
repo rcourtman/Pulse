@@ -1,6 +1,7 @@
 package model
 
 import (
+	"strings"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
@@ -201,8 +202,36 @@ type ListPointsOptions struct {
 	// Verification filters by tri-state verification fields ("verified", "unverified", "unknown").
 	Verification string
 
+	// Repositories keeps points kept in any of these repositories. It matches
+	// RepositoryRef, because mappers name the storage there and never set
+	// RepositoryResourceID.
+	Repositories []RepositoryFilter
+
 	Page  int
 	Limit int
+}
+
+// RepositoryFilter matches a point's RepositoryRef. Type and Name must match;
+// an empty Namespace or Class matches any value.
+type RepositoryFilter struct {
+	Type      string
+	Namespace string
+	Name      string
+	Class     string
+}
+
+// Matches reports whether ref is in the repository this filter names.
+func (f RepositoryFilter) Matches(ref *ExternalRef) bool {
+	if ref == nil || strings.TrimSpace(f.Type) == "" || strings.TrimSpace(f.Name) == "" {
+		return false
+	}
+	same := func(want, got string) bool {
+		want = strings.TrimSpace(want)
+		return want == "" || want == strings.TrimSpace(got)
+	}
+	return strings.TrimSpace(f.Type) == strings.TrimSpace(ref.Type) &&
+		strings.TrimSpace(f.Name) == strings.TrimSpace(ref.Name) &&
+		same(f.Namespace, ref.Namespace) && same(f.Class, ref.Class)
 }
 
 // List pagination bounds shared by every recovery list serving path. The API

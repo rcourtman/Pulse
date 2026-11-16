@@ -1122,6 +1122,8 @@ func (r PatternsResponse) NormalizeCollections() PatternsResponse {
 type BackupsResponse struct {
 	Points     []recovery.RecoveryPoint `json:"points"`
 	Pagination *PaginationInfo          `json:"pagination"`
+	// Note says where else to look when a storage's list may be incomplete.
+	Note string `json:"note,omitempty"`
 }
 
 func EmptyBackupsResponse() BackupsResponse {

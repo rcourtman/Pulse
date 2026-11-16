@@ -9950,3 +9950,23 @@ checks that rejection and unchanged accepted input preserve existing pending
 login paths, bindings and expiry. This touches no backup, restore, saved
 monitoring identity or storage/History state; SAML callback validation and
 recovery authority remain unchanged.
+
+### Recovery points filtered by the storage that keeps them (16 November 2026)
+
+`ListPointsOptions.Repositories` keeps points whose `RepositoryRef` names one
+of the given repositories: type and name must match, and an empty namespace or
+class matches any value. The store list, rollups, series and facets honour it
+through `repositoryFilterSQL`, and the in-memory `FilterPoints` matches the
+same way through `RepositoryFilter.Matches`. A filter with no type or name
+matches nothing, so a caller never gets the whole inventory back. The match
+reads `RepositoryRef` because mappers never set `RepositoryResourceID`.
+A Proxmox storage backup's repository class is now the node whose disk holds the
+archive (`StorageBackup.StorageNode`) when the storage is not shared. `Node`
+follows the guest after a migration, and the class had followed it too, so a
+non-shared storage's backups were attributed to the guest's new node. Shared
+storage and rows with no storage node keep the guest's node. Nothing read the
+PVE class before, and the repository key built from it is stored, not queried.
+`pulse_storage` type `backups` uses this filter (see ai-runtime). Proofs:
+`internal/recovery/store/store_repository_filter_test.go`,
+`internal/recovery/points_query_repository_test.go` and
+`internal/recovery/mapper/proxmox/mapper_storage_node_test.go`.
