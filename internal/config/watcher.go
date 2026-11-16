@@ -467,13 +467,15 @@ func (cw *ConfigWatcher) reloadConfig() {
 	callback := cw.onMockReload
 	defer cw.mu.Unlock()
 
-	// Update auth settings
-	oldAuthUser := cw.config.AuthUser
-	oldAuthPass := cw.config.AuthPass
 	newMockEnv := extractMockEnv(envMap)
 
-	// Apply auth user
+	// Compare and apply one configuration snapshot. The watcher mutex only
+	// serializes reloads; other credential and token writers share Mu.
 	Mu.Lock()
+	oldAuthUser := cw.config.AuthUser
+	oldAuthPass := cw.config.AuthPass
+
+	// Apply auth user
 	newUser := strings.Trim(envMap["PULSE_AUTH_USER"], "'\"")
 	if newUser != oldAuthUser {
 		cw.config.AuthUser = newUser
@@ -500,6 +502,10 @@ func (cw *ConfigWatcher) reloadConfig() {
 			changes = append(changes, "auth password updated")
 		}
 	}
+	// Snapshot the later change log's flags so it neither reads live fields
+	// after unlock nor needs Mu across its output.
+	hasAuth := cw.config.AuthUser != "" && cw.config.AuthPass != ""
+	hasToken := cw.config.HasAPITokens()
 	Mu.Unlock()
 
 	mockChanged := cw.applyMockEnv(newMockEnv)
@@ -514,8 +520,8 @@ func (cw *ConfigWatcher) reloadConfig() {
 	if len(changes) > 0 {
 		log.Info().
 			Strs("changes", changes).
-			Bool("has_auth", cw.config.AuthUser != "" && cw.config.AuthPass != "").
-			Bool("has_token", cw.config.HasAPITokens()).
+			Bool("has_auth", hasAuth).
+			Bool("has_token", hasToken).
 			Msg("Applied .env file changes to runtime config")
 	} else {
 		log.Debug().Msg("No relevant changes detected in .env file")
