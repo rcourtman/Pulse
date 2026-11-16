@@ -318,6 +318,32 @@ store/client tests cover these distinctions and restored writable-owner use;
 comparable desktop/narrow browser proof retains the summary cards, controls and
 membership distinctions. This is not original SSO or installed-client recovery.
 
+### Overview keeps native keyboard name changes usable
+
+The existing Display Name control and Save button belong to a named native
+form. Enter and pointer/keyboard Save submit the same guarded state-owner
+operation without navigation. Blank or unchanged names, nonmanagers,
+read-only sessions and repeated pending submission still produce no write;
+trimming, exact org/CSRF binding and no-write-retry semantics are unchanged.
+
+When a focused Overview control is removed by a saved read or uncertain
+completion, focus continues to the named inline warning or the refreshed name
+input (the existing saved-name summary for a nonmanager). An explicit Reload
+continues to its read result even when pointer activation did not focus its
+button. Initial/background failures do not take focus from elsewhere. A
+principal, organization, surface, capability or read-only round trip retires
+old focus intent, and deliberate external focus wins. The visible organization,
+ID, date, member count, editable name and membership distinctions remain.
+
+`OrganizationOverviewKeyboard.transport.test.tsx` runs in the normal frontend
+suite with the production panel, state, stores, OrgsAPI and HTTP client. It
+covers native form semantics, exact single writes, saved/uncertain/reload
+continuation, failed recovery, nonmanager/read-only refusal, external focus and
+reader withdrawal. Comparable desktop and narrow light/dark browser fixtures
+exercise actual Enter, pointer fallback, single-write uncertainty and saved
+readback. These are usability/source safeguards, not original-client, full-App,
+IdP, cross-tab or installed authorization acceptance.
+
 ### Equal-reader refreshes preserve pending organization changes
 
 Organization Overview, Access and Sharing hold same-reader events, repeated
