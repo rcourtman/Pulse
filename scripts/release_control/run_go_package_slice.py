@@ -79,8 +79,17 @@ def main() -> int:
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
     package = "./" + args.package
-    listing = subprocess.run(["go", "test", "-race", "-list", ".", package],
-                             cwd=ROOT, capture_output=True, text=True)
+    # Like ordinary packages, slices own runtime admission rather than inherit
+    # a caller's selection, wrapper, short/fail-fast mode or compile-only run.
+    # Append overrides instead of parsing GOFLAGS: retain quoted compiler and
+    # module flags exactly. The command's one source-derived filter follows
+    # these empty selectors; listing and execution must see the same universe.
+    environment = dict(os.environ)
+    environment["GOFLAGS"] = environment.get("GOFLAGS", "") + (
+        " -run= -skip= -list= -exec= -fuzz= -short=false -failfast=false"
+        " -c=false -n=false -bench= -shuffle=off")
+    listing = subprocess.run(["go", "test", "-race", "-json=false", "-list", ".", package],
+                             cwd=ROOT, env=environment, capture_output=True, text=True)
     if listing.returncode:
         sys.stdout.write(listing.stdout)
         sys.stderr.write(listing.stderr)
@@ -103,7 +112,7 @@ def main() -> int:
                *filters, package]
     print(f"{args.package} slice {args.index}/2: {len(selected)} of {len(names)} roots "
           f"({selected[0]} .. {selected[-1]})", flush=True)
-    with subprocess.Popen(command, cwd=ROOT, stdout=subprocess.PIPE,
+    with subprocess.Popen(command, cwd=ROOT, env=environment, stdout=subprocess.PIPE,
                           stderr=subprocess.STDOUT) as process:
         recorded = subprocess.run(
             [sys.executable, str(RECORDER), str(args.output / "timings.txt"),

@@ -117,6 +117,9 @@ args = sys.argv[1:]
 ordinary = args[-1].startswith('github.com/')
 json_mode = '-json' in args or '-json=true' in os.environ.get('GOFLAGS','').split()
 with Path(os.environ['CALLS']).open('a') as f: f.write(json.dumps(args)+'\\n')
+if os.environ.get('ENV_CALLS'):
+    with Path(os.environ['ENV_CALLS']).open('a') as f:
+        f.write(json.dumps(os.environ.get('GOFLAGS', ''))+'\\n')
 if args[0] == 'list':
     print('\\n'.join('github.com/rcourtman/pulse-go-rewrite/'+n for n in
           ['internal/api','internal/monitoring','scripts/installtests']+
@@ -197,6 +200,36 @@ sys.exit(int(os.environ.get('ORDINARY_EXIT' if ordinary else 'TEST_EXIT','0')))
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         sidecar = json.loads((target / "timings.txt.failures.json").read_text())
         self.assertEqual(sidecar['skipped_top_level_tests']['names'], ['FuzzB', 'TestA', 'TestZ'])
+
+    def test_slices_own_execution_modes_but_preserve_compiler_and_module_flags(self):
+        overrides = ['-run=', '-skip=', '-list=', '-exec=', '-fuzz=',
+                     '-short=false', '-failfast=false', '-c=false', '-n=false',
+                     '-bench=', '-shuffle=off']
+        for package in runner.PACKAGES:
+            for index in (0, 1):
+                for inherited in ('', '-p=2 -mod=readonly -json=true',
+                                  "-tags='fixture tag' -run=TestOnly -skip=. -list=. "
+                                  '-exec=/bin/true -fuzz=FuzzOnly -short -failfast '
+                                  '-c -n -bench=. -shuffle=1 -count=0'):
+                    with self.subTest(package=package, index=index, inherited=inherited):
+                        calls = self.root / 'calls'
+                        environments = self.root / 'environments'
+                        calls.write_text('')
+                        environments.write_text('')
+                        result, target = self.execute(package, index, GOFLAGS=inherited,
+                                                      ENV_CALLS=str(environments))
+                        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                        actual = [json.loads(line) for line in calls.read_text().splitlines()]
+                        observed = [json.loads(line) for line in environments.read_text().splitlines()]
+                        expected = inherited + ' ' + ' '.join(overrides)
+                        self.assertEqual(observed, [expected, expected])
+                        self.assertEqual(actual[0], ['test', '-race', '-json=false',
+                                                     '-list', '.', './' + package])
+                        self.assertIn('-count=1', actual[1])
+                        self.assertIn('-json', actual[1])
+                        self.assertEqual(sum(flag in actual[1] for flag in ('-run', '-skip')), 1)
+                        self.assertEqual(json.loads((target / 'receipt.json').read_text())
+                                         ['test_exit'], 0)
 
     def test_actual_runner_uses_package_weights_not_their_names_as_an_allowlist(self):
         for package, weights in runner.WEIGHTS.items():
