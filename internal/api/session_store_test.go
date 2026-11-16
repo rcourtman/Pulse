@@ -109,7 +109,11 @@ func TestSessionStore_UnreadStartupPreservesBeforeEverySave(t *testing.T) {
 				if _, err := os.Lstat(path + ".tmp"); !os.IsNotExist(err) {
 					t.Fatalf("session temporary file remained: %v", err)
 				}
-				if strings.Count(logs.String(), "Failed to decode sessions file;") != 1 || strings.Count(logs.String(), "Unread session file preserved outside active storage;") != 1 {
+				startupDiagnostic := "Failed to decode sessions file;"
+				if name == "missing-key" || name == "null-row" {
+					startupDiagnostic = "Incomplete session credential record;"
+				}
+				if strings.Count(logs.String(), startupDiagnostic) != 1 || strings.Count(logs.String(), "Unread session file preserved outside active storage;") != 1 {
 					t.Fatal("startup and preservation diagnostics were not emitted once")
 				}
 				if strings.Contains(logs.String(), "old-synthetic-session") || strings.Contains(logs.String(), "synthetic-session-content") {
