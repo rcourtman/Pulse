@@ -156,6 +156,8 @@ describe('organization billing through its real read transport', () => {
       reply = async () => json({}, 503);
       mount();
       const retry = await screen.findByRole('button', { name: 'Reload billing' });
+      const panel = retry.closest('[role="region"]');
+      expect(panel).toHaveAccessibleName('Billing & Usage');
       expect(document.body).toHaveFocus();
       const pending = deferred<Response>();
       reply = async (source, org) =>
@@ -165,13 +167,13 @@ describe('organization billing through its real read transport', () => {
       expect(retry).not.toBeInTheDocument();
       expect(document.body).toHaveFocus();
       pending.resolve(outcome === 'failed' ? json({}, 503) : json(licenseFor(north)));
+      if (outcome === 'accepted') await accepted();
       const target =
         outcome === 'failed'
           ? await screen.findByRole('alert', { name: 'Organization billing unavailable' })
-          : await screen.findByRole('region', { name: 'Billing & Usage' });
+          : panel;
       await waitFor(() => expect(target).toHaveFocus());
-      if (outcome === 'accepted') await accepted();
-      else expectUnknown();
+      if (outcome === 'failed') expectUnknown();
       expect(billingReads()).toHaveLength(6);
       expectBoundReads(north, billingReads().slice(3));
     },
