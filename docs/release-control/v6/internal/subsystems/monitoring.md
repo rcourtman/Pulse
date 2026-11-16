@@ -6385,6 +6385,19 @@ history visibly breaks at the new proof definition instead of blending unlike
 checks.
 The explicit availability-target create path is the activation boundary for
 saved availability probes.
+A TCP availability probe proves a listener, not only a handshake. After
+connecting, `internal/availabilityprobe` waits up to 250 ms, never past the
+check's own timeout, for the first read. Data, or silence until the wait ends,
+is reachable. A connection closed or reset with nothing sent is unreachable,
+because a forwarder with nothing behind it completes the handshake and then
+closes: Docker's published-port proxy does this within about 3 ms (measured on
+Docker 29.8), which made a dead service on the same Docker host as Pulse or
+its agent read as reachable. A dial that fails with a reset has the same
+verdict, and a refusal is reported as such. Neither may go to the `nc`
+fallback, which exists only for a host the Go dialer cannot route to and tests
+only the connect. A forwarder that takes longer than the wait to give up still
+reads as reachable; that limit is known and must not be hidden by lengthening
+the wait without measuring what it costs silent services.
 HTTPS checks also author one canonical certificate observation from the same
 probe execution. `internal/availabilityprobe` captures the presented leaf and
 `pkg/tlsutil/certificate.go` derives subject, issuer, SANs, SHA-256 fingerprint,

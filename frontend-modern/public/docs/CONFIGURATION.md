@@ -996,6 +996,13 @@ new targets. Availability targets publish `network-endpoint` resources and can
 raise downtime alerts after the configured failure threshold and certificate
 alerts inside the configured expiry window.
 
+A TCP check passes when the port accepts a connection and either sends
+something or keeps the connection open. A port that accepts the connection and
+closes it within a quarter of a second, having sent nothing, counts as down.
+Docker does this for a published port when nothing in the container is
+listening, as does any forwarder whose backend refuses. A service that drops
+clients it does not allow in the same way also reads as down.
+
 Example API payload for simple ping monitoring:
 
 ```json

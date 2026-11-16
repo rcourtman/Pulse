@@ -13,6 +13,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -22,6 +23,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -240,14 +242,105 @@ func probeTCP(ctx context.Context, target config.AvailabilityTarget) error {
 	dialer := net.Dialer{}
 	conn, err := dialer.DialContext(ctx, "tcp", addr)
 	if err == nil {
-		conn.Close()
-		return nil
+		defer conn.Close()
+		return confirmTCPStaysOpen(ctx, conn)
 	}
 	if ctxErr := ctx.Err(); ctxErr != nil {
 		return ctxErr
 	}
+	if answer := tcpDialAnswer(err, runtime.GOOS); answer != nil {
+		return answer
+	}
 
 	return probeTCPViaSystem(ctx, host, target.Port, target.EffectiveTimeoutMillis())
+}
+
+var (
+	errTCPClosedAtOnce = errors.New("tcp probe: the port accepted the connection and closed it at once without sending anything, which a proxy such as Docker's does when nothing is listening behind it")
+	errTCPRefused      = errors.New("tcp probe: connection refused, nothing is listening on the port")
+)
+
+// Winsock reports resets and refusals with its own codes, which the syscall
+// package's Unix-named constants do not equal on Windows.
+const (
+	wsaConnReset   syscall.Errno = 10054
+	wsaConnRefused syscall.Errno = 10061
+)
+
+// tcpDialAnswer returns the probe's verdict when a failed dial already shows
+// that the far side answered, and nil when it does not. The system fallback is
+// for a host the Go dialer cannot route to; it must not run for these, because
+// its connect-only test would call a port open that reset the connection, and
+// it reports a refusal only as "exit status 1".
+//
+// A reset that lands between the handshake and the dialer's own check surfaces
+// as a dial error. That is the same case as a close straight after connecting.
+func tcpDialAnswer(err error, goos string) error {
+	var errno syscall.Errno
+	if !errors.As(err, &errno) {
+		return nil
+	}
+	reset, refused := syscall.ECONNRESET, syscall.ECONNREFUSED
+	if goos == "windows" {
+		reset, refused = wsaConnReset, wsaConnRefused
+	}
+	switch errno {
+	case reset:
+		return errTCPClosedAtOnce
+	case refused:
+		return errTCPRefused
+	}
+	return nil
+}
+
+// tcpAcceptGrace is how long a TCP probe waits after connecting to see whether
+// the far side closes the connection straight away. A variable so tests can
+// widen or narrow it.
+var tcpAcceptGrace = 250 * time.Millisecond
+
+// confirmTCPStaysOpen separates a listening service from a forwarder with
+// nothing behind it. A completed handshake does not prove a listener: Docker's
+// published-port proxy accepts the connection, fails to reach the container
+// port, and closes it. Measured on Docker 29.8, that close arrives within about
+// 3 ms, while a real service either sends something or keeps the connection
+// open. So the probe waits a short moment for the first read:
+//
+//   - data, or silence until the grace runs out: reachable;
+//   - closed or reset with nothing sent: unreachable.
+//
+// A forwarder that takes longer than the grace to give up (its backend drops
+// packets instead of refusing) still reads as reachable.
+func confirmTCPStaysOpen(ctx context.Context, conn net.Conn) error {
+	wait := tcpAcceptGrace
+	if deadline, ok := ctx.Deadline(); ok {
+		if remaining := time.Until(deadline); remaining < wait {
+			wait = remaining
+		}
+	}
+	if wait <= 0 {
+		return nil
+	}
+	if err := conn.SetReadDeadline(time.Now().Add(wait)); err != nil {
+		return nil
+	}
+	// A read does not watch the context, so end it early on cancellation.
+	stop := context.AfterFunc(ctx, func() { _ = conn.SetReadDeadline(time.Now()) })
+	defer stop()
+	var first [1]byte
+	n, err := conn.Read(first[:])
+	if n > 0 || err == nil {
+		return nil
+	}
+	// Cancelled is not a verdict. Running out of the check's own time while
+	// the connection stayed open is: the port connected and did not close.
+	if ctxErr := ctx.Err(); errors.Is(ctxErr, context.Canceled) {
+		return ctxErr
+	}
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		return nil
+	}
+	return errTCPClosedAtOnce
 }
 
 func probeTCPViaSystem(ctx context.Context, host string, port, timeoutMillis int) error {
