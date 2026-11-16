@@ -1,4 +1,4 @@
-import { apiFetchJSON } from '@/utils/apiClient';
+import { apiFetchJSON, type APIContextOptions } from '@/utils/apiClient';
 import type { ResourceCertificateObservation } from '@/types/resource';
 
 const AVAILABILITY_TARGETS_PATH = '/api/availability-targets';
@@ -211,9 +211,12 @@ export class AvailabilityTargetsAPI {
   }
 
   /** Published container ports that have no availability check. */
-  static async dockerPortSuggestions(): Promise<DockerPortCheckSuggestion[]> {
+  static async dockerPortSuggestions(
+    context: APIContextOptions = {},
+  ): Promise<DockerPortCheckSuggestion[]> {
     const response = await apiFetchJSON<{ suggestions?: DockerPortCheckSuggestion[] }>(
       `${AVAILABILITY_TARGETS_PATH}/docker-suggestions`,
+      context,
     );
     return response?.suggestions ?? [];
   }
@@ -224,8 +227,10 @@ export class AvailabilityTargetsAPI {
    */
   static async addDockerPortChecks(
     ports: DockerPortCheckSuggestion[],
+    context: APIContextOptions = {},
   ): Promise<DockerPortChecksResult> {
     return apiFetchJSON(`${AVAILABILITY_TARGETS_PATH}/docker-suggestions`, {
+      ...context,
       method: 'POST',
       body: JSON.stringify({
         ports: ports.map((port) => ({

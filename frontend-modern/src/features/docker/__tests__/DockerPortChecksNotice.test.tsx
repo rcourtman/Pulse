@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createSignal } from 'solid-js';
+import { eventBus } from '@/stores/events';
 import type { DockerPortCheckSuggestion, DockerPortChecksResult } from '@/api/availabilityTargets';
 import { DockerPortChecksNotice } from '../DockerPortChecksNotice';
 import {
@@ -11,10 +12,11 @@ import {
   summarizePortChecksResult,
 } from '../dockerPortChecksModel';
 
-const { dockerPortSuggestionsMock, addDockerPortChecksMock, readOnlyMock } = vi.hoisted(() => ({
+const { dockerPortSuggestionsMock, addDockerPortChecksMock, readOnlyMock, orgMock } = vi.hoisted(() => ({
   dockerPortSuggestionsMock: vi.fn(),
   addDockerPortChecksMock: vi.fn(),
   readOnlyMock: vi.fn(() => false),
+  orgMock: vi.fn(() => 'default'),
 }));
 
 vi.mock('@/api/availabilityTargets', () => ({
@@ -27,6 +29,8 @@ vi.mock('@/api/availabilityTargets', () => ({
 vi.mock('@/stores/sessionPresentationPolicy', () => ({
   presentationPolicyIsReadOnly: readOnlyMock,
 }));
+
+vi.mock('@/utils/apiClient', () => ({ getOrgID: orgMock }));
 
 const port = (
   containerName: string,
@@ -109,6 +113,7 @@ describe('DockerPortChecksNotice', () => {
   beforeEach(() => {
     window.localStorage.clear();
     readOnlyMock.mockReturnValue(false);
+    orgMock.mockReset().mockReturnValue('default');
     dockerPortSuggestionsMock.mockReset().mockResolvedValue(suggestions);
     addDockerPortChecksMock.mockReset();
   });
@@ -195,7 +200,10 @@ describe('DockerPortChecksNotice', () => {
     addDockerPortChecksMock.mockRejectedValueOnce(new Error('Published container ports changed.'));
     fireEvent.click(screen.getByRole('button', { name: 'Add checks' }));
     await screen.findByText('Could not add checks: Published container ports changed.');
-    expect(addDockerPortChecksMock).toHaveBeenCalledWith(suggestions.slice(0, 2));
+    expect(addDockerPortChecksMock).toHaveBeenCalledWith(
+      suggestions.slice(0, 2),
+      expect.objectContaining({ expectedOrgID: 'default', retry: false }),
+    );
     expect(screen.getByTestId('docker-port-checks-list').textContent).toBe(listed);
     expect(addDockerPortChecksMock).toHaveBeenCalledTimes(1);
 
@@ -214,6 +222,66 @@ describe('DockerPortChecksNotice', () => {
     setSignature('b');
     await waitFor(() => expect(dockerPortSuggestionsMock).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(screen.queryByTestId('docker-port-checks-offer')).toBeNull());
+  });
+
+  it('does not dispatch an old offer in a silently changed organization', async () => {
+    render(() => <DockerPortChecksNotice containerSignature="a" />);
+    await screen.findByTestId('docker-port-checks-offer');
+    orgMock.mockReturnValue('other');
+    dockerPortSuggestionsMock.mockResolvedValue([port('other-web', 9081)]);
+    fireEvent.click(screen.getByRole('button', { name: 'Add checks' }));
+    await waitFor(() => expect(dockerPortSuggestionsMock).toHaveBeenCalledTimes(2));
+    expect(addDockerPortChecksMock).not.toHaveBeenCalled();
+    expect(dockerPortSuggestionsMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ expectedOrgID: 'other', retry: false }),
+    );
+  });
+
+  it('retires an in-flight acknowledgement when the organization changes', async () => {
+    let finish!: (value: DockerPortChecksResult) => void;
+    addDockerPortChecksMock.mockImplementationOnce(
+      () => new Promise<DockerPortChecksResult>((resolve) => (finish = resolve)),
+    );
+    const onChecksAdded = vi.fn();
+    render(() => <DockerPortChecksNotice containerSignature="a" onChecksAdded={onChecksAdded} />);
+    await screen.findByTestId('docker-port-checks-offer');
+    fireEvent.click(screen.getByRole('button', { name: 'Add checks' }));
+    const options = addDockerPortChecksMock.mock.calls[0][1];
+    expect(options.expectedOrgID).toBe('default');
+
+    orgMock.mockReturnValue('other');
+    dockerPortSuggestionsMock.mockResolvedValue([port('other-web', 9081)]);
+    eventBus.emit('org_switched', 'other');
+    await waitFor(() => expect(dockerPortSuggestionsMock).toHaveBeenCalledTimes(2));
+    expect(options.signal.aborted).toBe(true);
+    finish(result({ created: [{ id: 'old', name: 'old', address: 'x', protocol: 'http', enabled: true }] }));
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(onChecksAdded).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('docker-port-checks-result')).toBeNull();
+    expect(window.localStorage.getItem('pulse.dockerPortChecks.dismissed')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Add checks' })).toBeEnabled();
+  });
+
+  it('does not restore a retired membership read over its replacement', async () => {
+    let finish!: (value: DockerPortCheckSuggestion[]) => void;
+    dockerPortSuggestionsMock.mockImplementationOnce(
+      () => new Promise<DockerPortCheckSuggestion[]>((resolve) => (finish = resolve)),
+    );
+    render(() => <DockerPortChecksNotice containerSignature="a" />);
+    await waitFor(() => expect(dockerPortSuggestionsMock).toHaveBeenCalledTimes(1));
+    const oldOptions = dockerPortSuggestionsMock.mock.calls[0][0];
+    dockerPortSuggestionsMock.mockResolvedValue([port('current', 9081)]);
+    eventBus.emit('organizations_changed');
+    await screen.findByTestId('docker-port-checks-offer');
+    fireEvent.click(screen.getByRole('button', { name: 'Show ports' }));
+    expect(screen.getByTestId('docker-port-checks-list')).toHaveTextContent('current 9081');
+    expect(oldOptions.signal.aborted).toBe(true);
+    finish(suggestions);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(screen.getByTestId('docker-port-checks-list')).toHaveTextContent('current 9081');
+    expect(screen.getByTestId('docker-port-checks-list')).not.toHaveTextContent('cache 6379');
   });
 
   it('shows nothing to a read-only viewer or when the server refuses', async () => {
