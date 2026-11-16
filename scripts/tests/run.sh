@@ -21,6 +21,9 @@ new suites receive a default scheduling weight.
 Failed runs finish with the selected suite names and their observed exit codes.
 CI can retain atomic, output-free suite observations with PULSE_SCRIPT_TEST_RECEIPT
 and PULSE_SCRIPT_TEST_SOURCE_SHA. Incomplete collection never establishes a pass.
+SIGINT/SIGTERM stop the active suite's owned process group with bounded grace,
+retain observed child results separately from the runner's signal, and admit no
+later suite. Detached descendants and uncatchable signals remain unverified.
 EOF
 }
 
@@ -73,7 +76,7 @@ resolve_test_path() {
 run_tests() {
   # One sequencer preserves selection/order and streams original child output.
   # Returned observations are saved before a later suite can block the summary.
-  python3 "${ROOT_DIR}/scripts/run-script-tests.py" "$@"
+  exec python3 "${ROOT_DIR}/scripts/run-script-tests.py" "$@"
 }
 
 main() {
