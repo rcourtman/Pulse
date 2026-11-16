@@ -10,7 +10,9 @@ independent processes together, retaining complete, discovery-ordered output.
 Refill a free slot without waiting for its sibling. An observed failure stops
 admission and drains every already-started check before returning failure.
 Observe process exit independently of inherited output descriptors; a timed-out
-test's child must not keep a proof slot waiting for pipe EOF.
+test's child must not keep a proof slot waiting for pipe EOF. Compilation and
+exact-binary discovery have separate preparation bounds, before any test alarm
+exists; their failures retain output and cannot admit checks.
 """
 
 import argparse
@@ -30,6 +32,46 @@ PACKAGE = "./scripts/installtests"
 PREFLIGHT = ("TestInstallSHNASBootOwnersQuiesceBeforeRecoveryErasure",)
 MAX_CHECKS = 2
 PROCESS_EXIT_GRACE_SECONDS = 5
+COMPILE_TIMEOUT_SECONDS = 10 * 60
+DISCOVERY_TIMEOUT_SECONDS = 30
+
+
+def prepare(command, *, phase, cwd, timeout, capture=False):
+    # No Go test alarm exists while the compiler or TestMain/listing runs.
+    # Own only this phase's process group and observe its leader independently
+    # of inherited output descriptors. Keep stderr out of the test inventory.
+    if not 0 < timeout < float("inf"):
+        raise ValueError("native installer preparation bound must be finite and positive")
+    print(f"Native Unix installer {phase}: limit {timeout}s", flush=True)
+    descendants = False
+    with tempfile.TemporaryFile(mode="w+", encoding="utf-8") as output, \
+            tempfile.TemporaryFile(mode="w+", encoding="utf-8") as errors:
+        process = subprocess.Popen(command, cwd=cwd, stdout=output, stderr=errors,
+                                   start_new_session=True)
+        try:
+            try:
+                code = process.wait(timeout=timeout)
+            finally:
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                    descendants = True
+                except ProcessLookupError:
+                    pass
+                process.wait(timeout=PROCESS_EXIT_GRACE_SECONDS)
+        finally:
+            output.seek(0)
+            if not capture or process.returncode != 0 or descendants:
+                shutil.copyfileobj(output, sys.stdout)
+                sys.stdout.flush()
+            errors.seek(0)
+            shutil.copyfileobj(errors, sys.stderr)
+            sys.stderr.flush()
+        if code:
+            raise subprocess.CalledProcessError(code, command)
+        if descendants:
+            raise RuntimeError("native installer preparation left an owned process group: " + phase)
+        # Only successful, fully retired discovery stdout can define coverage.
+        return output.read() if capture else None
 
 
 def process_deadline(timeout):
@@ -160,11 +202,12 @@ def main(phase="all"):
         raise ValueError("unknown native installer phase")
     with tempfile.TemporaryDirectory(prefix="pulse-native-contracts-") as directory:
         binary = Path(directory) / "installtests.test"
-        subprocess.run(["go", "test", "-c", "-o", str(binary), PACKAGE],
-                       cwd=ROOT, check=True)
-        inventory = subprocess.run([str(binary), "-test.list=."], cwd=ROOT / "scripts/installtests",
-                                   check=True, capture_output=True, text=True)
-        early, remaining = partition(inventory.stdout)
+        prepare(["go", "test", "-c", "-o", str(binary), PACKAGE], phase="compilation",
+                cwd=ROOT, timeout=COMPILE_TIMEOUT_SECONDS)
+        inventory = prepare([str(binary), "-test.list=."], phase="discovery",
+                            cwd=ROOT / "scripts/installtests", timeout=DISCOVERY_TIMEOUT_SECONDS,
+                            capture=True)
+        early, remaining = partition(inventory)
         selected = early if phase == "preflight" else remaining if phase == "remaining" else early + remaining
         print(f"Native Unix installer {phase}: {len(selected)} discovered checks", flush=True)
         if phase == "all":
