@@ -11,6 +11,7 @@ import stat
 import subprocess
 import tempfile
 import unittest
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -166,13 +167,70 @@ case "$FLOW" in
         download_container_installer script_source container_script_temp_dir
         exit 42
         ;;
-    connected_container) create_lxc_container ;;
+    connected_container)
+        # Only the synthetic fixture is traced, after sourcing the installer.
+        # Keep stderr (and fd 3, used by safe_read) unchanged so a timeout can
+        # show its last operation without changing the controlling-tty path.
+        PS4='+fixture ${EPOCHREALTIME:-$SECONDS}:${LINENO}:${FUNCNAME[0]:-entry}: '
+        set -x
+        create_lxc_container
+        ;;
     local_container)
         ARCHIVE_OVERRIDE="$FIXTURE/pulse-v6.6.0-linux-amd64.tar.gz"
         create_lxc_container
         ;;
 esac
 '''
+
+
+def run_installer_fixture(command, env, flow, fault):
+    try:
+        return subprocess.run(command, env=env, text=True,
+                              capture_output=True, timeout=15)
+    except subprocess.TimeoutExpired as error:
+        # TimeoutExpired's default traceback prints the entire shell program,
+        # but omits the captured output that identifies the unfinished step.
+        # Python can return bytes here even with text=True. This is still a
+        # failed control, not the expected nonzero signature-refusal result.
+        def text(value):
+            return value.decode(errors="replace") if isinstance(value, bytes) else value or ""
+
+        raise AssertionError(
+            f"installer fixture exceeded {error.timeout}s: flow={flow}, fault={fault or 'none'}; "
+            "no installer exit or descendant cleanup result was returned\n"
+            f"stdout:\n{text(error.stdout)}\nstderr:\n{text(error.stderr)}"
+        ) from None
+
+
+class TemporaryInputFailureReportingTest(unittest.TestCase):
+    def test_timeout_keeps_partial_output_and_exact_case_without_dumping_the_program(self):
+        command = ["bash", "-c", "entire fixture program must not replace the observations"]
+        env = {"fixture": "synthetic"}
+        for stdout, stderr in ((b"fixture-started", b"last-operation"),
+                               ("fixture-started", "last-operation"), (None, None)):
+            with self.subTest(output_type=type(stdout).__name__):
+                error = subprocess.TimeoutExpired(command, 15, output=stdout, stderr=stderr)
+                with mock.patch.object(subprocess, "run", side_effect=error) as run:
+                    with self.assertRaises(AssertionError) as caught:
+                        run_installer_fixture(command, env, "connected_container", "bad_signature")
+                run.assert_called_once_with(command, env=env, text=True,
+                                            capture_output=True, timeout=15)
+                message = str(caught.exception)
+                self.assertIn("exceeded 15s: flow=connected_container, fault=bad_signature", message)
+                self.assertIn("no installer exit or descendant cleanup result", message)
+                self.assertNotIn(command[-1], message)
+                if stdout is not None:
+                    self.assertIn("fixture-started", message)
+                    self.assertIn("last-operation", message)
+                self.assertTrue(caught.exception.__suppress_context__)
+
+    def test_observed_exit_is_returned_unchanged(self):
+        command = ["bash", "-c", "synthetic"]
+        for code in (0, 1, 143):
+            with self.subTest(exit=code):
+                result = subprocess.CompletedProcess(command, code, "out", "err")
+                with mock.patch.object(subprocess, "run", return_value=result):
+                    self.assertIs(run_installer_fixture(command, {}, "bootstrap", ""), result)
 
 
 class ServerInstallerTemporaryInputsTest(unittest.TestCase):
@@ -202,8 +260,7 @@ class ServerInstallerTemporaryInputsTest(unittest.TestCase):
             command = ["bash", "-c", HARNESS]
             if flow == "local_container":
                 command.append(str(fixture / "installer-input"))
-            result = subprocess.run(command, env=env, text=True,
-                                    capture_output=True, timeout=15)
+            result = run_installer_fixture(command, env, flow, fault)
             observed = {}
             for name in ("archive-path", "returned", "inferred", "calls", "transport", "directory-modes",
                          "templates", "headroom-path"):

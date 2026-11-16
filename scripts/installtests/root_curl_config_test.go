@@ -344,7 +344,12 @@ func rootCurlFixtureEnvironment(t *testing.T, root, origin string) []string {
 
 func runRootCurlFixture(t *testing.T, script string, env []string) int {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
+	return runRootCurlFixtureWithin(t, script, env, 12*time.Second)
+}
+
+func runRootCurlFixtureWithin(t *testing.T, script string, env []string, deadline time.Duration) int {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), deadline)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "bash", "-c", script)
 	cmd.Env = env
