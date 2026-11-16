@@ -8,6 +8,7 @@ import { NodeModalMonitoringSection } from '../NodeModalMonitoringSection';
 function renderMonitoring(
   nodeType: NodeModalProps['nodeType'] = 'pve',
   trust: { verifySSL?: boolean; fingerprint?: string; host?: string } = {},
+  disks: { enabled?: boolean; minutes?: number } = {},
 ) {
   const onSave = vi.fn();
   const fetch = vi.fn();
@@ -31,7 +32,8 @@ function renderMonitoring(
           monitorContainers: true,
           monitorStorage: true,
           monitorBackups: true,
-          monitorPhysicalDisks: false,
+          monitorPhysicalDisks: disks.enabled ?? false,
+          physicalDiskPollingMinutes: disks.minutes,
         }
       : nodeType === 'pbs'
         ? {
@@ -166,6 +168,79 @@ describe('NodeModalMonitoringSection collection safety', () => {
     expect(disable).toHaveAttribute('aria-pressed', 'true');
     expect(disable).toHaveAccessibleDescription(warning);
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it.each([5, 15, 30, 60, 180, 360, 720, 1440])(
+    'saves a %i-minute disk interval without disabling collection or changing saved access',
+    (minutes) => {
+      const { onSave, fetch } = renderMonitoring('pve', {}, { enabled: true, minutes: 60 });
+      const interval = screen.getByRole('combobox', {
+        name: 'Physical disk health polling interval',
+      });
+      expect(interval).toHaveValue('60');
+      expect(interval).toHaveAccessibleDescription(/This will spin up idle HDDs/);
+      fireEvent.change(interval, { target: { value: String(minutes) } });
+      fireEvent.click(screen.getByRole('button', { name: 'Save fixture' }));
+      expect(onSave).toHaveBeenCalledOnce();
+      expect(onSave.mock.calls[0][0]).toMatchObject({
+        type: 'pve',
+        physicalDiskPollingMinutes: minutes,
+        monitorPhysicalDisks: true,
+        monitorVMs: true,
+        monitorContainers: true,
+        monitorStorage: true,
+        monitorBackups: true,
+        verifySSL: true,
+      });
+      expect(onSave.mock.calls[0][0]).not.toHaveProperty('tokenValue');
+      expect(onSave.mock.calls[0][0]).not.toHaveProperty('password');
+      expect(fetch).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([120, 90, 2880])(
+    'displays and preserves a saved %i-minute custom interval',
+    (minutes) => {
+      const { onSave } = renderMonitoring('pve', {}, { enabled: true, minutes });
+      const interval = screen.getByRole('combobox', {
+        name: 'Physical disk health polling interval',
+      });
+      expect(interval).toHaveValue(String(minutes));
+      expect(within(interval).getByRole('option', { selected: true })).toHaveTextContent(
+        `${minutes} minutes (saved)`,
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Save fixture' }));
+      expect(onSave.mock.calls[0][0].physicalDiskPollingMinutes).toBe(minutes);
+      fireEvent.change(interval, { target: { value: '720' } });
+      expect(interval).toHaveValue('720');
+    },
+  );
+
+  it.each([0, undefined])(
+    'shows the implicit five-minute default without rewriting %s',
+    (minutes) => {
+      const { onSave } = renderMonitoring('pve', {}, { enabled: true, minutes });
+      expect(
+        screen.getByRole('combobox', { name: 'Physical disk health polling interval' }),
+      ).toHaveValue('5');
+      fireEvent.click(screen.getByRole('button', { name: 'Save fixture' }));
+      expect(onSave.mock.calls[0][0].physicalDiskPollingMinutes).toBe(minutes ?? 5);
+    },
+  );
+
+  it('retains the chosen interval when disk monitoring is disabled and re-enabled', () => {
+    const { onSave } = renderMonitoring('pve', {}, { enabled: true, minutes: 1440 });
+    fireEvent.click(screen.getByRole('button', { name: 'Disable physical disk monitoring' }));
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Save fixture' }));
+    expect(onSave.mock.calls[0][0]).toMatchObject({
+      monitorPhysicalDisks: false,
+      physicalDiskPollingMinutes: 1440,
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Enable physical disk monitoring' }));
+    expect(
+      screen.getByRole('combobox', { name: 'Physical disk health polling interval' }),
+    ).toHaveValue('1440');
   });
 
   it('keeps safety descriptions local to each mounted editor', () => {
