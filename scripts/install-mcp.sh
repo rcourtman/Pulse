@@ -25,6 +25,36 @@
 
 set -euo pipefail
 
+usage() {
+    cat <<'EOF'
+Usage: install-mcp.sh [--help | -h]
+
+Install the Pulse MCP adapter for this platform after verifying its signed
+checksum manifest and binary digest. Run without arguments to install.
+
+Configure installation with environment variables:
+  PULSE_MCP_VERSION  Release tag to install (default: latest stable release).
+  PULSE_MCP_BIN_DIR  Destination directory (default: $HOME/.local/bin when
+                     writable, otherwise /usr/local/bin).
+  PULSE_MCP_REPO     GitHub repository (default: rcourtman/Pulse).
+
+--help and -h show this message without preparing or changing an installation.
+Other arguments are not supported. No installation is attempted if supplied.
+EOF
+}
+
+# Inspect arguments before platform/destination discovery or any download.
+# A help request or a misspelled option must never replace an existing adapter.
+if [ "$#" -gt 0 ]; then
+    if [ "$#" -eq 1 ] && { [ "$1" = --help ] || [ "$1" = -h ]; }; then
+        usage
+        exit 0
+    fi
+    printf '[install-mcp] error: unsupported arguments; no installation attempted\n' >&2
+    usage >&2
+    exit 2
+fi
+
 REPO="${PULSE_MCP_REPO:-rcourtman/Pulse}"
 VERSION="${PULSE_MCP_VERSION:-latest}"
 SIGNATURE_IDENTITY="pulse-installer"
