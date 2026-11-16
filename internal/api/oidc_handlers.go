@@ -346,6 +346,23 @@ func (r *Router) handleSSOOIDCLogin(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	// This public route accepts only a small optional return path. Bound the
+	// whole POST document before discovery or issuing any pending login state.
+	// Empty bodies remain compatible with callers that send no returnTo.
+	var returnTo string
+	if req.Method == http.MethodPost {
+		var payload struct {
+			ReturnTo string `json:"returnTo"`
+		}
+		if err := decodeSecurityRequestBody(w, req, &payload); err != nil && err != io.EOF {
+			writeErrorResponse(w, securityRequestErrorStatus(err), "invalid_request", "Invalid request payload", nil)
+			return
+		}
+		returnTo = sanitizeOIDCReturnTo(payload.ReturnTo)
+	} else {
+		returnTo = sanitizeOIDCReturnTo(req.URL.Query().Get("returnTo"))
+	}
+
 	redirectURL := buildSSOOIDCCallbackURL(req, providerID, provider.OIDC.RedirectURL, r.ssoPublicURL())
 	if redirectURL == "" {
 		if req.Method == http.MethodGet {
@@ -385,20 +402,6 @@ func (r *Router) handleSSOOIDCLogin(w http.ResponseWriter, req *http.Request) {
 		}
 		writeErrorResponse(w, http.StatusInternalServerError, "oidc_init_failed", "OIDC provider is unavailable", nil)
 		return
-	}
-
-	var returnTo string
-	if req.Method == http.MethodPost {
-		var payload struct {
-			ReturnTo string `json:"returnTo"`
-		}
-		if err := json.NewDecoder(req.Body).Decode(&payload); err != nil && err != io.EOF {
-			writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "Invalid request payload", nil)
-			return
-		}
-		returnTo = sanitizeOIDCReturnTo(payload.ReturnTo)
-	} else {
-		returnTo = sanitizeOIDCReturnTo(req.URL.Query().Get("returnTo"))
 	}
 
 	state, entry, err := service.newStateEntry(providerID, returnTo)

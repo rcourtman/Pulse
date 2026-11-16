@@ -2478,6 +2478,13 @@ token-free command. No copy receipt establishes installed removal or a release.
 
 ## Shared Boundaries
 
+The shared public OIDC login POST admits one optional JSON document within
+16 KiB before contacting an IdP or allocating pending login state. Invalid
+input cannot replace a live OIDC service or discard another login. The GET
+browser handoff and valid bounded POST retain their bindings; this admission
+neither enrolls an agent nor changes collector credentials or capabilities.
+The API-owned `oidc_login_request_test.go` holds cold/warm route compatibility.
+
 Server browser-session persistence preserves unread input outside active storage
 before replacing it. This is not an agent-token inventory, enrollment, binding or
 capability transition: collectors retain their existing credentials and transport

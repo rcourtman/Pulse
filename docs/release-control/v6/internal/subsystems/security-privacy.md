@@ -18,6 +18,24 @@
 
 ## Purpose
 
+### Public OIDC login bounds input before IdP work (16 November 2026)
+
+`handleSSOOIDCLogin` reuses the existing whole-document 16 KiB security JSON
+admission for its optional POST body, before callback resolution, cached-service
+matching or lazy IdP discovery. The limit does not trust Content-Length and
+also covers ignored fields and trailing whitespace. Oversized input returns
+413 and malformed/extra documents return 400 with fixed errors; neither can
+create state, replace a service, erase another pending login or set a cookie.
+Method and enabled-provider checks still run before reading the body.
+
+The ordinary GET login used by the web UI and valid bounded POST calls retain
+the existing return-path sanitization, client/redirect binding, nonce, S256
+PKCE and single-use state. No permissions, trust settings, credentials or saved
+configuration change. `internal/api/oidc_login_request_test.go` uses cold/warm
+services, observed streaming readers and a guest-local IdP to verify admission
+and compatibility. These are source-fixture controls, not historical exposure,
+original-client recovery or installed protection.
+
 ### Tenant appliance policy follows each connection (14 November 2026)
 
 The existing tenant destination rule is enforced at each new TrueNAS REST or
