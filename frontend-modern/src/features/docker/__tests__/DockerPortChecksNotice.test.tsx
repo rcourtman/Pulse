@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createSignal } from 'solid-js';
 import type { DockerPortCheckSuggestion, DockerPortChecksResult } from '@/api/availabilityTargets';
 import { DockerPortChecksNotice } from '../DockerPortChecksNotice';
 import {
@@ -176,6 +177,42 @@ describe('DockerPortChecksNotice', () => {
     expect(await screen.findByTestId('docker-port-checks-offer')).toHaveTextContent(
       '1 published container port has no availability check.',
     );
+  });
+
+  it('keeps the displayed selection across background inventory refreshes', async () => {
+    const [signature, setSignature] = createSignal('a');
+    render(() => <DockerPortChecksNotice containerSignature={signature()} />);
+    await screen.findByTestId('docker-port-checks-offer');
+    fireEvent.click(screen.getByRole('button', { name: 'Show ports' }));
+    const listed = screen.getByTestId('docker-port-checks-list').textContent;
+
+    dockerPortSuggestionsMock.mockResolvedValue([port('replacement', 9081)]);
+    setSignature('b');
+    await waitFor(() => expect(dockerPortSuggestionsMock).toHaveBeenCalledTimes(2));
+    await Promise.resolve();
+    expect(screen.getByTestId('docker-port-checks-list').textContent).toBe(listed);
+
+    addDockerPortChecksMock.mockRejectedValueOnce(new Error('Published container ports changed.'));
+    fireEvent.click(screen.getByRole('button', { name: 'Add checks' }));
+    await screen.findByText('Could not add checks: Published container ports changed.');
+    expect(addDockerPortChecksMock).toHaveBeenCalledWith(suggestions.slice(0, 2));
+    expect(screen.getByTestId('docker-port-checks-list').textContent).toBe(listed);
+    expect(addDockerPortChecksMock).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss the availability check offer' }));
+    await waitFor(() =>
+      expect(screen.getByTestId('docker-port-checks-list')).toHaveTextContent('replacement 9081'),
+    );
+  });
+
+  it('clears a retained offer when a later read is refused', async () => {
+    const [signature, setSignature] = createSignal('a');
+    render(() => <DockerPortChecksNotice containerSignature={signature()} />);
+    await screen.findByTestId('docker-port-checks-offer');
+    dockerPortSuggestionsMock.mockRejectedValueOnce(new Error('forbidden'));
+    setSignature('b');
+    await waitFor(() => expect(dockerPortSuggestionsMock).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByTestId('docker-port-checks-offer')).toBeNull());
   });
 
   it('shows nothing to a read-only viewer or when the server refuses', async () => {
