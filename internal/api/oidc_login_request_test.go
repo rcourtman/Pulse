@@ -8,8 +8,10 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
@@ -261,5 +263,108 @@ func TestSSOOIDCLoginRequestLegacyAlias(t *testing.T) {
 	w, _ = oidcLoginRequest(t, r, http.MethodPost, "/api/oidc/login", strings.NewReader(`{}`))
 	if w.Code != http.StatusOK || discoveries.Load() != 1 {
 		t.Fatalf("valid legacy alias failed: status %d, discoveries %d", w.Code, discoveries.Load())
+	}
+}
+
+type oidcLoginBarrierBody struct {
+	reader           io.Reader
+	entered, release chan struct{}
+	once             sync.Once
+}
+
+func (b *oidcLoginBarrierBody) Read(p []byte) (int, error) {
+	b.once.Do(func() {
+		close(b.entered)
+		<-b.release
+	})
+	return b.reader.Read(p)
+}
+
+func TestSSOOIDCLoginRequestProviderReadOwnership(t *testing.T) {
+	for _, warm := range []bool{false, true} {
+		mode := "cold"
+		if warm {
+			mode = "warm"
+		}
+		t.Run(mode, func(t *testing.T) {
+			for _, action := range []string{"disable", "remove", "switch-protocol", "missing-config", "replace-client"} {
+				t.Run(action, func(t *testing.T) {
+					r, discoveries, _ := newOIDCLoginRequestFixture(t, warm)
+					entered, release := make(chan struct{}), make(chan struct{})
+					var once sync.Once
+					unblock := func() { once.Do(func() { close(release) }) }
+					t.Cleanup(unblock)
+					done := make(chan *httptest.ResponseRecorder, 1)
+					go func() {
+						w, _ := oidcLoginRequest(t, r, http.MethodPost, "/api/oidc/bounded-login/login", &oidcLoginBarrierBody{
+							reader: strings.NewReader(`{"returnTo":"/alerts"}`), entered: entered, release: release,
+						})
+						done <- w
+					}()
+					select {
+					case <-entered:
+					case <-time.After(10 * time.Second):
+						t.Fatal("login did not reach request-body barrier")
+					}
+					applyErr, saveErr := r.commitSSOConfig(func(next *config.SSOConfig) error {
+						p := next.GetProvider("bounded-login")
+						switch action {
+						case "disable":
+							p.Enabled = false
+						case "remove":
+							next.Providers = nil
+						case "switch-protocol":
+							p.Type = config.SSOProviderTypeSAML
+						case "missing-config":
+							p.OIDC = nil
+						case "replace-client":
+							p.OIDC.ClientID = "synthetic-current-client"
+						}
+						return nil
+					})
+					if applyErr != nil || saveErr != nil {
+						t.Fatalf("management publication failed: %v / %v", applyErr, saveErr)
+					}
+					if action == "replace-client" {
+						p := r.getSSOProvider("bounded-login")
+						if err := r.oidcManager.InitializeProvider(t.Context(), p.ID, p, p.OIDC.RedirectURL); err != nil {
+							t.Fatal(err)
+						}
+					} else {
+						r.oidcManager.RemoveService("bounded-login")
+					}
+					current, before := r.oidcManager.GetService("bounded-login"), discoveries.Load()
+					unblock()
+					var w *httptest.ResponseRecorder
+					select {
+					case w = <-done:
+					case <-time.After(10 * time.Second):
+						t.Fatal("login did not finish after request-body release")
+					}
+					if discoveries.Load() != before || r.oidcManager.GetService("bounded-login") != current {
+						t.Error("slow input revived or replaced a management-owned client")
+					}
+					want := http.StatusNotFound
+					if action == "missing-config" {
+						want = http.StatusBadRequest
+					} else if action == "replace-client" {
+						want = http.StatusOK
+						var result struct {
+							URL string `json:"authorizationUrl"`
+						}
+						if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
+							t.Fatal(err)
+						}
+						u, err := url.Parse(result.URL)
+						if err != nil || u.Query().Get("client_id") != "synthetic-current-client" {
+							t.Errorf("slow input used the replaced client: %s (%v)", result.URL, err)
+						}
+					}
+					if w.Code != want {
+						t.Errorf("status = %d, want %d", w.Code, want)
+					}
+				})
+			}
+		})
 	}
 }

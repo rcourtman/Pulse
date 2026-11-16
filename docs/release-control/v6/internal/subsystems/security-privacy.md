@@ -27,6 +27,10 @@ also covers ignored fields and trailing whitespace. Oversized input returns
 413 and malformed/extra documents return 400 with fixed errors; neither can
 create state, replace a service, erase another pending login or set a cookie.
 Method and enabled-provider checks still run before reading the body.
+Valid POSTs re-resolve the enabled provider after that potentially slow read,
+so a management withdrawal, missing OIDC config or replacement during input
+cannot be undone by lazy initialization of the earlier client snapshot. The
+request ownership regression holds this boundary for cold and warm services.
 
 The ordinary GET login used by the web UI and valid bounded POST calls retain
 the existing return-path sanitization, client/redirect binding, nonce, S256

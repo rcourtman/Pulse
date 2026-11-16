@@ -30,6 +30,9 @@ malformed or concatenated JSON returns HTTP 400. Both retain the fixed
 `invalid_request` / `Invalid request payload` error, without echoing input or
 reader errors. Method/provider validation still precedes body reads. Rejected
 input performs no IdP discovery and issues no pending login state or cookie.
+After a valid POST body is read, the enabled OIDC provider is resolved again.
+A withdrawal/protocol change during that read cannot revive the old client; a
+replacement uses the current client rather than overwriting its service.
 
 Empty/whitespace bodies within the limit, JSON null, empty objects, unknown
 fields within the limit and sanitized local `returnTo` paths remain supported.

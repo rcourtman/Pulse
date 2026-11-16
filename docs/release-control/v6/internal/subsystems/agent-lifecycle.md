@@ -2484,6 +2484,9 @@ input cannot replace a live OIDC service or discard another login. The GET
 browser handoff and valid bounded POST retain their bindings; this admission
 neither enrolls an agent nor changes collector credentials or capabilities.
 The API-owned `oidc_login_request_test.go` holds cold/warm route compatibility.
+Its valid slow-POST controls also retain management ownership: sign-in
+re-resolves the provider after reading input, without reviving an old client
+or introducing any agent credential or enrollment fallback.
 
 Server browser-session persistence preserves unread input outside active storage
 before replacing it. This is not an agent-token inventory, enrollment, binding or

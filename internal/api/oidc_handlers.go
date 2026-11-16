@@ -337,7 +337,7 @@ func (r *Router) handleSSOOIDCLogin(w http.ResponseWriter, req *http.Request) {
 	}
 
 	provider := r.getSSOProvider(providerID)
-	if provider == nil || provider.Type != config.SSOProviderTypeOIDC || !provider.Enabled {
+	if !isEnabledOIDCProvider(provider) {
 		writeErrorResponse(w, http.StatusNotFound, "provider_not_found", "OIDC provider not found or not enabled", nil)
 		return
 	}
@@ -359,6 +359,18 @@ func (r *Router) handleSSOOIDCLogin(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 		returnTo = sanitizeOIDCReturnTo(payload.ReturnTo)
+		// Body reads can wait while management withdraws or replaces a client.
+		// Re-resolve it before discovery; never initialize the earlier snapshot
+		// after that wait, even if its old cached service has been removed.
+		provider = r.getSSOProvider(providerID)
+		if !isEnabledOIDCProvider(provider) {
+			writeErrorResponse(w, http.StatusNotFound, "provider_not_found", "OIDC provider not found or not enabled", nil)
+			return
+		}
+		if provider.OIDC == nil {
+			writeErrorResponse(w, http.StatusBadRequest, "invalid_config", "OIDC configuration is missing", nil)
+			return
+		}
 	} else {
 		returnTo = sanitizeOIDCReturnTo(req.URL.Query().Get("returnTo"))
 	}

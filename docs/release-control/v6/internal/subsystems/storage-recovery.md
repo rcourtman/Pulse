@@ -2473,6 +2473,9 @@ IdP discovery or pending-state creation, preserving any existing login. Its
 valid GET/POST sign-in remain compatible. Rejection does not write saved
 credentials, delete recovery state or create recovery authority. API-owned
 `oidc_login_request_test.go` covers cold/warm admission and state preservation.
+After reading a valid POST, sign-in re-resolves current provider settings; a
+concurrent withdrawal or client replacement cannot be undone by discovery
+from the earlier snapshot. This adds no saved-authority recreation path.
 
 Protected progress and synchronous reads use the API-owned non-executable media
 policy. Configuration-import replay admission retains guard-keyed request
