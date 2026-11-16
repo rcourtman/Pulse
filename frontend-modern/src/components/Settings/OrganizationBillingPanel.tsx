@@ -1,4 +1,4 @@
-import { Component, For, Show } from 'solid-js';
+import { Component, For, Show, createEffect, createUniqueId, onCleanup } from 'solid-js';
 import { Button } from '@/components/shared/Button';
 import { Card } from '@/components/shared/Card';
 import {
@@ -27,6 +27,50 @@ export const OrganizationBillingPanel: Component<OrganizationBillingPanelProps> 
     reloadBillingData,
     selectedOrgID,
   } = useOrganizationBillingPanelState(props);
+  const warningTitleID = createUniqueId();
+  let panel: HTMLDivElement | undefined;
+  let warning: HTMLDivElement | undefined;
+  let reloadOrgID: string | undefined;
+  let focusOrgID: string | undefined;
+  let focusTimer: number | undefined;
+
+  const reloadBilling = () => {
+    if (loading()) return;
+    // Record the explicit action even when pointer activation does not focus
+    // the button. Background reads must not acquire this keyboard intent.
+    reloadOrgID = selectedOrgID();
+    reloadBillingData();
+  };
+
+  createEffect(() => {
+    window.clearTimeout(focusTimer);
+    const orgID = selectedOrgID();
+    const available = isBillingAvailable();
+    const pending = loading();
+    const error = loadError();
+    if (!available || (focusOrgID !== undefined && focusOrgID !== orgID)) {
+      reloadOrgID = undefined;
+    }
+    focusOrgID = orgID;
+    if (!available || pending || reloadOrgID !== orgID) return;
+    reloadOrgID = undefined;
+    focusTimer = window.setTimeout(() => {
+      if (
+        !panel?.isConnected ||
+        !isBillingAvailable() ||
+        loading() ||
+        selectedOrgID() !== orgID ||
+        loadError() !== error
+      )
+        return;
+      // Loading replaces the retry control. Recover only its lost focus,
+      // never a deliberate move elsewhere while the read was pending.
+      if (!document.activeElement || document.activeElement === document.body) {
+        (error ? warning : panel)?.focus();
+      }
+    }, 0);
+  });
+  onCleanup(() => window.clearTimeout(focusTimer));
 
   return (
     <Show
@@ -37,7 +81,13 @@ export const OrganizationBillingPanel: Component<OrganizationBillingPanelProps> 
         </div>
       }
     >
-      <div class="space-y-6">
+      <div
+        ref={panel}
+        role="region"
+        aria-label="Billing & Usage"
+        tabIndex={-1}
+        class="space-y-6 rounded-md focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+      >
         <CommercialBillingShell
           title="Billing & Usage"
           loading={loading()}
@@ -45,13 +95,21 @@ export const OrganizationBillingPanel: Component<OrganizationBillingPanelProps> 
         >
           <Show when={loadError()}>
             <Card tone="warning" padding="md">
-              <div role="alert" class="space-y-3 text-sm">
-                <p class="font-semibold">Organization billing unavailable</p>
+              <div
+                ref={warning}
+                role="alert"
+                aria-labelledby={warningTitleID}
+                tabIndex={-1}
+                class="space-y-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              >
+                <p id={warningTitleID} class="font-semibold">
+                  Organization billing unavailable
+                </p>
                 <p>{loadError()}</p>
                 <p class="break-words">
                   Reload checks billing and plan details for {selectedOrgID()}.
                 </p>
-                <Button onClick={reloadBillingData} class="w-full sm:w-auto">
+                <Button onClick={reloadBilling} class="w-full sm:w-auto">
                   Reload billing
                 </Button>
               </div>

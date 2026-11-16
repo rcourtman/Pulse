@@ -150,6 +150,121 @@ afterEach(() => {
 });
 
 describe('organization billing through its real read transport', () => {
+  it.each(['failed', 'accepted'] as const)(
+    'recovers lost reload focus at the %s result without repeating a write',
+    async (outcome) => {
+      reply = async () => json({}, 503);
+      mount();
+      const retry = await screen.findByRole('button', { name: 'Reload billing' });
+      expect(document.body).toHaveFocus();
+      const pending = deferred<Response>();
+      reply = async (source, org) =>
+        source === 'license' ? pending.promise : json(dataFor(source, org));
+      retry.focus();
+      fireEvent.click(retry);
+      expect(retry).not.toBeInTheDocument();
+      expect(document.body).toHaveFocus();
+      pending.resolve(outcome === 'failed' ? json({}, 503) : json(licenseFor(north)));
+      const target =
+        outcome === 'failed'
+          ? await screen.findByRole('alert', { name: 'Organization billing unavailable' })
+          : await screen.findByRole('region', { name: 'Billing & Usage' });
+      await waitFor(() => expect(target).toHaveFocus());
+      if (outcome === 'accepted') await accepted();
+      else expectUnknown();
+      expect(billingReads()).toHaveLength(6);
+      expectBoundReads(north, billingReads().slice(3));
+    },
+  );
+
+  it('does not move focus away from another control during an explicit reload', async () => {
+    reply = async () => json({}, 503);
+    render(() => (
+      <>
+        <button type="button">Other settings</button>
+        <OrganizationBillingPanel nodeUsage={5} guestUsage={2} />
+      </>
+    ));
+    const retry = await screen.findByRole('button', { name: 'Reload billing' });
+    const pending = deferred<Response>();
+    reply = async (source, org) =>
+      source === 'license' ? pending.promise : json(dataFor(source, org));
+    retry.focus();
+    fireEvent.click(retry);
+    const outside = screen.getByRole('button', { name: 'Other settings' });
+    outside.focus();
+    pending.resolve(json(licenseFor(north)));
+    await accepted();
+    await settle();
+    expect(outside).toHaveFocus();
+    expect(billingReads()).toHaveLength(6);
+  });
+
+  it('does not transfer an old reload intent through a workspace round trip', async () => {
+    reply = async () => json({}, 503);
+    mount();
+    const retry = await screen.findByRole('button', { name: 'Reload billing' });
+    const pending = deferred<Response>();
+    reply = async (source, org) =>
+      source === 'license' ? pending.promise : json(dataFor(source, org));
+    retry.focus();
+    fireEvent.click(retry);
+    reply = async (source, org) => json(dataFor(source, org));
+    switchOrg(south);
+    await accepted(south);
+    switchOrg(north);
+    await accepted();
+    pending.resolve(json({ ...licenseFor(north), email: 'obsolete@example.test' }));
+    await settle();
+    expect(document.body).toHaveFocus();
+    expect(screen.queryByText('obsolete@example.test')).not.toBeInTheDocument();
+  });
+
+  it.each(['capability', 'demo'] as const)(
+    'forgets reload focus when %s withdraws the billing surface',
+    async (withdrawal) => {
+      reply = async () => json({}, 503);
+      mount();
+      const retry = await screen.findByRole('button', { name: 'Reload billing' });
+      const pending = deferred<Response>();
+      reply = async (source, org) =>
+        source === 'license' ? pending.promise : json(dataFor(source, org));
+      retry.focus();
+      fireEvent.click(retry);
+      if (withdrawal === 'demo') setPolicy({ demoMode: true });
+      else {
+        capabilityAvailable = false;
+        await loadRuntimeCapabilities(true);
+      }
+      await screen.findByText('Organization settings are not available on this server.');
+      reply = async (source, org) => json(dataFor(source, org));
+      capabilityAvailable = true;
+      if (withdrawal === 'demo') syncSessionPresentationPolicy(null);
+      else await loadRuntimeCapabilities(true);
+      await accepted();
+      pending.resolve(json({ ...licenseFor(north), email: 'obsolete@example.test' }));
+      await settle();
+      expect(document.body).toHaveFocus();
+      expect(screen.queryByText('obsolete@example.test')).not.toBeInTheDocument();
+    },
+  );
+
+  it('leaves background refreshes and their failures out of the keyboard flow', async () => {
+    mount();
+    await accepted();
+    expect(document.body).toHaveFocus();
+    reply = async () => json({}, 503);
+    eventBus.emit('organizations_changed');
+    await screen.findByRole('alert');
+    await settle();
+    expect(document.body).toHaveFocus();
+    reply = async (source, org) => json(dataFor(source, org));
+    eventBus.emit('organizations_changed');
+    await accepted();
+    await settle();
+    expect(document.body).toHaveFocus();
+  });
+
   it('consumes one complete session-bound snapshot without substituting the stored API token', async () => {
     mount();
     await accepted();
