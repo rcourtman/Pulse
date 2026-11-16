@@ -161,7 +161,7 @@ describe('saved permission transformations through the role editor', () => {
     fireEvent.click(remove);
     expect(editor.getByLabelText('Permission 3 action')).toHaveFocus();
     expectPermissions(dialog, original.permissions);
-    fireEvent.click(editor.getByRole('button', { name: 'Cancel', exact: true }));
+    fireEvent.click(editor.getByRole('button', { name: 'Cancel' }));
     const reopened = await openEditor();
     expectPermissions(reopened, original.permissions);
     expect(writes()).toHaveLength(0);
