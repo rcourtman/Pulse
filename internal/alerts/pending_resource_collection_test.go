@@ -1,7 +1,10 @@
 package alerts
 
 import (
+	"context"
 	"fmt"
+	"os"
+	"os/exec"
 	"reflect"
 	"strings"
 	"testing"
@@ -223,8 +226,28 @@ func TestHostPendingResourceCollectionMatchesLegacySets(t *testing.T) {
 }
 
 func TestHostPendingResourceCollectionAllocationsStayHostLocal(t *testing.T) {
+	// AllocsPerRun reads process-wide Mallocs, including asynchronous work
+	// left by other alert tests. This fixture starts no workers; measure it
+	// alone in the same test binary, retaining any race instrumentation.
+	const childEnv = "PULSE_HOST_PENDING_COLLECTION_ALLOCATION_CHILD"
+	const complete = "host-local allocation guard and fleet-copy controls completed"
+	if os.Getenv(childEnv) != "1" {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		cmd := exec.CommandContext(ctx, os.Args[0],
+			"-test.run=^TestHostPendingResourceCollectionAllocationsStayHostLocal$",
+			"-test.count=1", "-test.v", "-test.timeout=20s")
+		cmd.Env = append(os.Environ(), childEnv+"=1")
+		output, err := cmd.CombinedOutput()
+		t.Logf("isolated host cleanup allocation check:\n%s", output)
+		if err != nil || !strings.Contains(string(output), complete) {
+			t.Fatalf("isolated host cleanup allocation guard/controls did not complete: %v", err)
+		}
+		return
+	}
+
 	for _, mode := range []string{"pending", "firing", "mixed"} {
-		for _, path := range []string{"native-sensors", "disk-temperature-gap", "filesystem-gap"} {
+		for _, path := range []string{"native-sensors", "disk-temperature-gap", "filesystem-gap", "fleet-copy-control"} {
 			t.Run(mode+"/"+path, func(t *testing.T) {
 				measure := func(hosts int) float64 {
 					m := pendingCollectionFixture(hosts, mode)
@@ -236,6 +259,8 @@ func TestHostPendingResourceCollectionAllocationsStayHostLocal(t *testing.T) {
 							pendingCollectionResult = m.hostNativeSensorTrackedResourcesNoLock("host-0000")
 						} else if path == "filesystem-gap" {
 							m.reconcileHostFilesystemObservationGaps(host, filesystems)
+						} else if path == "fleet-copy-control" {
+							pendingCollectionResult = legacyDiskTemperatureResources(m, hostDiskTemperatureResourcePrefix("host-0000"))
 						} else {
 							m.interruptHostDiskTemperatureRunsExcept("host-0000", seen)
 						}
@@ -243,10 +268,19 @@ func TestHostPendingResourceCollectionAllocationsStayHostLocal(t *testing.T) {
 				}
 				small, fleet := measure(1), measure(1000)
 				t.Logf("one host %.0f allocations, 1000 hosts %.0f", small, fleet)
+				if path == "fleet-copy-control" {
+					// The old collect-then-filter implementation must exceed
+					// the very same budget: isolation cannot hide fleet copies.
+					if fleet <= small+4 {
+						t.Fatal("fixture did not detect unrelated fleet copying")
+					}
+					return
+				}
 				if fleet > small+4 {
 					t.Fatalf("temporary allocations grew with unrelated fleet: %.0f -> %.0f", small, fleet)
 				}
 			})
 		}
 	}
+	t.Log(complete)
 }
