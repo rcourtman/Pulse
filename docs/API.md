@@ -1048,6 +1048,10 @@ Sends one test notification through a single channel per request, not all config
 - `PUT /api/notifications/webhooks/<id>` (admin, `settings:write`)
 - `DELETE /api/notifications/webhooks/<id>` (admin, `settings:write`)
 - `POST /api/notifications/webhooks/test` (admin, `settings:write`)
+  - Tests the webhook configuration sent in the body (the same fields as
+    create: `name`, `url`, `service` and so on), saved or not. It does not
+    look a webhook up by ID. To test a saved webhook, send
+    `{"method":"webhook","webhookId":"<id>"}` to `POST /api/notifications/test`.
 - `GET /api/notifications/webhook-templates` (admin, `settings:read`; `settings:write` also accepted)
 - `GET /api/notifications/webhook-history` (admin, `settings:read`; `settings:write` also accepted)
 - `GET /api/notifications/email-providers` (admin, `settings:read`; `settings:write` also accepted)
