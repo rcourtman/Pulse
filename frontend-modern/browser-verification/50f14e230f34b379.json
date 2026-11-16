@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "d665be45b1f693948181d2f6fe2bc9bf8d364fba",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx": "8809396a8e12a70aad94f7103a175d7e99db9c5918bee0207a545799c6bedc50"
+  },
+  "routes": [
+    "Organization Settings > Billing & Usage (real panel, stores and HTTP clients with offline synthetic responses)"
+  ],
+  "states": [
+    "Initial unavailable billing with focused Reload billing",
+    "Explicit reload loading replaces the control",
+    "Repeated read failure with focused, named warning",
+    "Accepted plan and usage with focused Billing & Usage region",
+    "Deliberate outside focus during a pending read"
+  ],
+  "interactions": [
+    "Keyboard Enter performs one read-only reload; repeated failure returns focus to warning and Tab reaches Reload billing",
+    "Accepted reload restores focus to the existing result region",
+    "Deliberate focus elsewhere wins over the pending completion; GET-only context-bound reads and no stored-token fallback"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "browsers": [
+    {
+      "engine": "chromium",
+      "version": "141.0.7390.37"
+    },
+    {
+      "engine": "chromium",
+      "version": "141.0.7390.37"
+    },
+    {
+      "engine": "chromium",
+      "version": "141.0.7390.37"
+    },
+    {
+      "engine": "webkit",
+      "version": "26.0"
+    }
+  ],
+  "verified_at": "2026-11-16T16:35:31.056496Z",
+  "notes": "Playwright 1.56.1; Chromium desktop/light and phone/light/dark, WebKit phone/light. 40 baseline and 44 repaired checks. All 24 final captures (12 comparable pairs) opened with native view_image. All billing fields, counts and controls remain; only focus/accessible region metadata changes. Full-page consumer fixture, not full App/IdP, installed billing or customer recovery. See lane RECEIPTS.md for captures and retained preparation failures."
+}
