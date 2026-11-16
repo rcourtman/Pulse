@@ -57,6 +57,21 @@ export const RolesPanel: Component<RolesPanelProps> = (props) => {
   );
   onCleanup(() => window.clearTimeout(focusTimer));
 
+  const saveRole = async () => {
+    const editor = document.activeElement?.closest('[role="dialog"]');
+    await state.handleSaveRole();
+    // A withdrawn/replaced editor must not take focus from its recovery notice.
+    if (!editor?.isConnected) return;
+    const notice = editor.querySelector<HTMLElement>('[role="alert"]');
+    if (!notice) return;
+    notice.tabIndex = -1;
+    notice.classList.add('focus:outline-2', 'focus:-outline-offset-2');
+    notice.focus({ preventScroll: true });
+    // Keep the fixed header/footer and outer viewport still, including on phones.
+    const scroller = notice.parentElement!;
+    scroller.scrollTop = scroller.scrollHeight;
+  };
+
   return (
     <div class="space-y-6">
       <SettingsPanel
@@ -246,7 +261,7 @@ export const RolesPanel: Component<RolesPanelProps> = (props) => {
         onFormIdInput={state.setFormId}
         onFormNameInput={state.setFormName}
         onRemovePermission={state.removePermission}
-        onSave={state.handleSaveRole}
+        onSave={saveRole}
         onUpdatePermission={state.updatePermission}
       />
       <Show keyed when={state.rolePendingDeletion()}>

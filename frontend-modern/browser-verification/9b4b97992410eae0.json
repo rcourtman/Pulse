@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "base_sha": "4fb4fbbb61a9f4a31b787ff47dda60783edc4909",
+  "verified_at": "2026-11-15T22:43:45.156816Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/RolesPanel.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/RolesPanel.tsx": "7d323bcdfac500727984b6eeaad0731d1a9f87dad39fe7f16296ced89e4d7f34"
+  },
+  "routes": [
+    "/"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Actual RolesPanel, RolesEditorDialog, saved draft state, RBACAPI, authenticated client, Dialog and InlineNotice; only local HTTP inventory and entitlement availability are synthetic. Not full App, IdP, installed authorization or original-client acceptance.",
+    "Chromium desktop/light and narrow/dark; WebKit desktop/dark and narrow/light. Playwright1.56.1 matches integration lock. Parent/candidate fixtures use identical saved identities, independent allow/deny/unknown rules and conditions, theme, viewport and interactions.",
+    "Forty retained PNGs /20 comparable pairs were opened natively: overview, edit-ready, natural post-refusal, deliberate Description focus/scroll return, and missing-ID validation. Phone errors previously clipped or below view; final errors fully visible and focused above unchanged fixed controls. Every saved rule/effect/condition remains exposed; fixed literal ID and Close/Cancel/Save remain in view."
+  ],
+  "interactions": [
+    "Four parent cases/256 assertions and four final cases/296 assertions. One explicit encoded org/CSRF/token-bound PUT per deliberate save; unchanged full metadata/rules. Rejected draft remains editable, repeated refusal and repeated local missing-ID validation reveal feedback without automatic retry or inventory reread.",
+    "The existing panel action owner captures the submitting dialog, awaits its guarded state action and reveals only its still-connected local error. Focus uses preventScroll; only the inner scroller moves. Root anchor and outer dialog scrolling remain unchanged. Error Enter does not replay; Tab reaches Cancel, then Save, then trapped Close. Deliberate input focus is not stolen.",
+    "Unknown503 outcomes retain their separate focused read-only Check saved roles recovery. Organization withdrawal and a late refusal cannot revive the old editor or its notice. No accidental DELETE, uncaught page error or horizontal overflow. Browsers and preview server close.",
+    "No pending-proposal source is composed or modified: RolesEditorDialog and its Enter-key proposal stay untouched. This proof uses the currently landed visible save action, not unlanded native form submission. Real mobile virtual keyboard and screen-reader announcements are unmeasured."
+  ]
+}
