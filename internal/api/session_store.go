@@ -772,7 +772,14 @@ func (s *SessionStore) load() {
 
 	data, err := os.ReadFile(sessionsFile)
 	if err != nil {
-		if !os.IsNotExist(err) {
+		missing := os.IsNotExist(err)
+		if missing {
+			// A missing symlink target is not a missing inventory entry. Only
+			// lstat can establish absence without following that unread path.
+			_, inspectErr := os.Lstat(sessionsFile)
+			missing = os.IsNotExist(inspectErr)
+		}
+		if !missing {
 			s.preserveBeforeSave = true
 			log.Error().Err(err).Msg("Failed to read sessions file; existing sessions were not loaded. The next save or shutdown will preserve it outside active storage, not restore it; sign in again")
 		}
