@@ -1,0 +1,56 @@
+{
+  "source": "pve-v1 replay on Pulse main 7efceaf3a, default agent, 16 Nov 2026",
+  "run_id": "q-20261116-022111-48d61fcf",
+  "recorded_manifest_version": 2,
+  "recorded_grade": "handed_back",
+  "evidence": {
+    "agent_profile": {
+      "name": "commands-off",
+      "commands_enabled": false,
+      "declared": "commands-off",
+      "host_name": "pmxlab",
+      "host_resource_id": "agent-cb92e49a2a913d3b"
+    },
+    "alerts": [
+      {
+        "id": "pmxlab:pmxlab:112::pmxlab:pmxlab:112-powered-state",
+        "type": "powered-off",
+        "level": "warning",
+        "resource_alias": "gitea",
+        "resource_name": "gitea",
+        "message": "Container 'gitea' is powered off",
+        "start_time": "2026-11-16T02:22:14.818916Z"
+      }
+    ],
+    "wake": {
+      "mode": "self",
+      "trigger_reason": "alert_fired",
+      "run_id": "1794796351426661000",
+      "investigation_start": "self",
+      "alert_after_ns": 21797200741,
+      "finding_after_ns": 632965964448,
+      "settled_after_ns": 819110979958
+    },
+    "findings": [
+      {
+        "id": "proxmox:guest:stopped:system-container-fe24c58f228eedf1",
+        "severity": "warning",
+        "category": "reliability",
+        "resource_alias": "gitea",
+        "resource_name": "gitea",
+        "title": "Proxmox LXC gitea stopped",
+        "investigation_status": "completed",
+        "investigation_outcome": "needs_attention",
+        "turn_count": 3,
+        "evidence_call_count": 6,
+        "tools_used": [
+          "pulse_query",
+          "pulse_metrics",
+          "pulse_storage",
+          "patrol_conclude_investigation"
+        ],
+        "conclusion": "gitea (system-container-fe24c58f228eedf1, lxc 112 on pmxlab) is confirmed offline and remains so. The host pmxlab is online with normal CPU (~3-35%) and memory (~51-55%) throughout the 02:20-02:33 window, ruling out a host crash, resource exhaustion, or overload as the cause. No Proxmox stop/shutdown task appears in the task log for this period (per finding evidence), and the container's own backup task history shows only a routine OK backup two days earlier (2026-11-14), uncorrelated with the stop. The container's disk/memory metrics prior to the stop were flat and low (disk ~1.2%, mem ~1.1%), showing no resource-pressure signature leading up to the event. Guest-level root cause (service crash, init failure, OOM inside the container, kernel panic, etc.) cannot be confirmed because commands are not enabled on the pmxlab Pulse agent: Pulse cannot read guest logs/journal or host task details beyond what is already surfaced, and no typed action (start) can be planned or run for this resource for the same reason. Operational memory shows this is the 2nd detection of this finding, suggesting a possible recurring guest-level issue rather than a one-off, but this is not confirmed by available telemetry. A person with direct access to pmxlab should inspect the guest (console/pct status, container boot logs) to determine why it halted, decide whether to start it again, and watch for recurrence given this is the second occurrence."
+      }
+    ]
+  }
+}

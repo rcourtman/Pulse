@@ -797,9 +797,10 @@ nested Proxmox VE 9.2 node:
 | P4 | Fixed, woke by itself | Handed over, woke by itself |
 | Score | 3 of 4 | 3 of 4 |
 
-P4 is at version 2. Its first rubric missed a conclusion that said the guest
+P4 is at version 3. Its first rubric missed a conclusion that said the guest
 stopped "with no corresponding entry in the Proxmox task log", so v2 also
-accepts the task-log wordings Patrol used across the stored runs.
+accepts the task-log wordings Patrol used across the stored runs. v3 adds
+"no Proxmox stop/shutdown task", which split v2's "no stop shutdown task".
 
 P2 with commands on is the open cell. Patrol's alert check is told Pulse cannot
 run an action on the guest and concludes it cannot look inside either, so it

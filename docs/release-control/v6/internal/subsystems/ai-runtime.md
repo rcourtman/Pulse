@@ -2104,6 +2104,10 @@ when a newer manifest version changed nothing but its `outcome`
 (`ApplyCatalogRubrics`); evidence gathered under other faults, resources or lab
 keeps its recorded rubric, and the scorecard lists both cases.
 `TestScorecardGradesStoredRunsByTheCatalogRubric` regrades a kept pve-v1 run.
+A decisive term is a contiguous phrase, so a word inside it misses: P4 v3
+adds "no proxmox stop shutdown task" after a default-agent conclusion said
+"No Proxmox stop/shutdown task appears in the task log" and graded Handed
+back under v2 (`TestP4AcceptsNoProxmoxStopShutdownTask`).
 
 Patrol model qualification extends only through
 `internal/ai/qualification/`, `cmd/patrol-qualify/`, and reviewed manifests
