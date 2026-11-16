@@ -177,11 +177,30 @@ func (e *PulseToolExecutor) executeListBackups(ctx context.Context, args map[str
 		}
 	}
 
+	// Backups record their subject by canonical ID. Models also pass a
+	// guest's name or VMID, which matched nothing and read as "no backups
+	// exist", so a reference that is no known ID is resolved by name.
+	var subjectNote string
+	nameRef := ""
+	if resourceID != "" {
+		subject, unknown, err := e.backupSubjectFor(resourceID)
+		if err != nil {
+			return NewErrorResult(err), nil
+		}
+		if unknown {
+			nameRef = resourceID
+		} else if subject.ID != resourceID {
+			subjectNote = fmt.Sprintf("resource_id %q is the name of %s; listed the backups of its ID %s.", resourceID, subject.Type, subject.ID)
+			resourceID = subject.ID
+		}
+	}
+
 	response := EmptyBackupsResponse()
 	response.Pagination = &PaginationInfo{Limit: limit, Offset: offset}
+	response.Note = subjectNote
 	for _, r := range matched {
 		if r.Proxmox != nil && r.Storage != nil && strings.EqualFold(strings.TrimSpace(r.Storage.Type), "pbs") {
-			response.Note = fmt.Sprintf("%q is a Proxmox storage backed by PBS. When Pulse also connects to that PBS, its backups are listed on the PBS datastore: pass that datastore's storage_id.", r.Name)
+			response.Note = strings.TrimSpace(response.Note + " " + fmt.Sprintf("%q is a Proxmox storage backed by PBS. When Pulse also connects to that PBS, its backups are listed on the PBS datastore: pass that datastore's storage_id.", r.Name))
 			break
 		}
 	}
@@ -213,6 +232,9 @@ func (e *PulseToolExecutor) executeListBackups(ctx context.Context, args map[str
 		page++
 		skip = 0
 	}
+	if nameRef != "" && response.Pagination.Total == 0 {
+		return NewErrorResult(fmt.Errorf("no backups have subject %q, and no VM, container, pod or host has that ID, name or VMID; pulse_query gives each resource's canonical ID", nameRef)), nil
+	}
 
 	// The model sees only the start of a long result, and the newest points
 	// come first, so the totals that say what fills a storage go ahead of them.
@@ -223,6 +245,46 @@ func (e *PulseToolExecutor) executeListBackups(ctx context.Context, args map[str
 	}
 
 	return NewJSONResult(response.NormalizeCollections()), nil
+}
+
+// backupSubjectTypes are the resources a backup is taken of.
+var backupSubjectTypes = []unifiedresources.ResourceType{
+	unifiedresources.ResourceTypeVM, unifiedresources.ResourceTypeSystemContainer,
+	unifiedresources.ResourceTypeAppContainer, unifiedresources.ResourceTypePod,
+	unifiedresources.ResourceTypeAgent,
+}
+
+// backupSubjectFor returns the one backup subject a resource_id names: the
+// resource with that ID, else the one with that name or VMID. unknown is set
+// when nothing matches, so the caller can still try the reference as the ID
+// of a subject Pulse no longer monitors. Two matches are an error.
+func (e *PulseToolExecutor) backupSubjectFor(ref string) (subject unifiedresources.Resource, unknown bool, err error) {
+	if e.unifiedResourceProvider == nil {
+		return unifiedresources.Resource{ID: ref}, false, nil
+	}
+	var matches []unifiedresources.Resource
+	for _, resourceType := range backupSubjectTypes {
+		for _, r := range e.unifiedResourceProvider.GetByType(resourceType) {
+			if r.ID == ref {
+				return r, false, nil
+			}
+			if matchesCanonicalResourceReference(r, ref, r.Name, resourceDisplayName(r), canonicalGuestManagedID(r)) {
+				matches = append(matches, r)
+			}
+		}
+	}
+	switch len(matches) {
+	case 0:
+		return unifiedresources.Resource{}, true, nil
+	case 1:
+		return matches[0], false, nil
+	}
+	ids := make([]string, 0, len(matches))
+	for _, r := range matches {
+		ids = append(ids, fmt.Sprintf("%s (%s)", r.ID, r.Type))
+	}
+	sort.Strings(ids)
+	return unifiedresources.Resource{}, false, fmt.Errorf("resource_id %q names %d resources: %s; pass one of those IDs", ref, len(matches), strings.Join(ids, ", "))
 }
 
 // backupSummaryMaxSubjects and backupSummaryMaxLabel keep the summary small
