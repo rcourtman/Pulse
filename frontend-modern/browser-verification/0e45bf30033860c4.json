@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "base_sha": "77766591d0fbe45c72f4a2bcd6e48b3c24232f46",
+  "verified_at": "2026-11-16T03:34:37.971397Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/OrganizationIncomingSharesSection.tsx",
+    "frontend-modern/src/components/Settings/OrganizationOutgoingSharesSection.tsx",
+    "frontend-modern/src/components/Settings/OrganizationSharingCreateSection.tsx",
+    "frontend-modern/src/components/Settings/OrganizationSharingPanel.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/OrganizationIncomingSharesSection.tsx": "99060b76a8c6400916bca37fd36f1f3206ed0128b5eba3ac9bc58b8d3c3707ba",
+    "frontend-modern/src/components/Settings/OrganizationOutgoingSharesSection.tsx": "9f8168d10e466792a1d433a20a16bcaafe932dbb265130b5e434181b08999f3f",
+    "frontend-modern/src/components/Settings/OrganizationSharingCreateSection.tsx": "844e34c2604196a8793a8d31d2e7208656269360cabfa307ed6945eb53e5f34c",
+    "frontend-modern/src/components/Settings/OrganizationSharingPanel.tsx": "734d20ea93f3ed2ef693096172cf3bfd1f732c03f8f9216266b400dcabe9a18f"
+  },
+  "routes": [
+    "/tmp/sharing-focus/index.html"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Actual Organization Sharing panel, grids, guarded state, OrgsAPI, authenticated session client and capability store; only HTTP inventories and resource discovery are synthetic. Not full App, IdP or installed sharing acceptance.",
+    "Chromium desktop/light and narrow/dark; WebKit desktop/dark and narrow/light. Playwright 1.56.1 matches the integration lock. Identical fixtures, viewport, theme and interactions before and after.",
+    "32 retained PNGs /16 comparable pairs opened natively: initial whole page, natural unconfirmed outcome, explicit saved-sharing reload and successful row removal. Warning, saved organization and next exact same-kind row now have visible keyboard focus; all names, IDs, roles, statuses and controls retain their presentation."
+  ],
+  "interactions": [
+    "Four parent cases /76 assertions reproduce BODY focus after uncertainty, reload and removal; four candidate cases /96 assertions focus the existing warning, saved organization summary and next same-kind row respectively. Enter on the warning does not replay; the next Tab reaches Reload sharing.",
+    "One explicit encoded POST accept and one explicit encoded DELETE per case, session/CSRF/org-bound without the unrelated API token. Uncertain responses withdraw rows, and reload reads the saved inventory without repeating a write.",
+    "Reordered/opaque identities, fallback order, creation, untouched reads, user/context round trips and cleanup have normal-suite coverage. Browser checks retain deliberate external focus and retire the old intent on an organization switch. No page error or horizontal overflow; browser and preview server close. Screen-reader speech and real mobile keyboards are unmeasured."
+  ]
+}

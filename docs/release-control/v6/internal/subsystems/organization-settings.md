@@ -138,8 +138,8 @@ authorization, original-client recovery or release availability.
 
 ### Keyboard continuation through saved access rereads
 
-Organization Access restores lost panel focus only within the same admitted
-organization, user, surface and read-only context. When a saved reread replaces
+Organization Access and Sharing restore lost panel focus only within the same
+admitted organization, user, surface and read-only context. When a saved reread replaces
 controls, it restores the same exact action and identity. If that item was
 removed, it continues at the next, then previous same-kind control in the prior
 order, never the new row index or another action family. If none remains, it
@@ -148,10 +148,18 @@ focus. A deliberate focus move elsewhere wins over a pending write or reread.
 
 An uncertain change still focuses the existing unavailable warning when the
 focused control disappears. The next Tab reaches the explicit read-only Reload
-access action. An explicit reload focuses the accepted summary or the new
+access/sharing action. An explicit reload focuses the accepted summary or the new
 warning, never repeats the write. These recovery targets are programmatically
 focusable, not additional Tab stops. Organization/user round trips, read-only
 withdrawal, hidden surfaces and disposal retire stale focus intent.
+
+Sharing identifies each saved control by its exact opaque share ID and action
+family, independently of names or current row order. Accepting an incoming
+share continues at the next available Accept control, never the newly exposed
+Remove action. Removing the last same-kind share falls back to the saved
+organization summary. Create Share can regain its own submit control after
+readback. The warning and summary show a visible focus ring without becoming
+ordinary Tab stops; no fields, row details or controls move behind disclosure.
 
 Visible information, mutation/authority fences, saved readback and no-write-retry
 behavior are unchanged. Registered panel and transport tests cover the saved

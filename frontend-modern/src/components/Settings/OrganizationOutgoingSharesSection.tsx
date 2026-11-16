@@ -113,6 +113,8 @@ export const OrganizationOutgoingSharesSection: Component<
                   variant="dangerGhost"
                   size="xs"
                   class="gap-1"
+                  data-org-sharing-action="remove-outgoing"
+                  data-org-sharing-target={share.id}
                   aria-label={`Remove share of ${share.resourceType}:${share.resourceId} to ${getShareOrganizationLabel(share.targetOrgId, props.state.orgNameById().get(share.targetOrgId))}`}
                   onClick={() => {
                     void props.state.deleteShare(share);

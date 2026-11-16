@@ -240,6 +240,8 @@ export const OrganizationSharingCreateSection: Component<OrganizationSharingCrea
             <div class="flex justify-end">
               <Button
                 type="submit"
+                data-org-sharing-action="create"
+                data-org-sharing-target="draft"
                 variant="primary"
                 size="settingsAction"
                 class="w-full sm:w-auto"

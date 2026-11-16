@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-li
 import { createSignal } from 'solid-js';
 import { syncSessionPresentationPolicy } from '@/stores/sessionPresentationPolicy';
 import type { Resource } from '@/types/resource';
+import type { IncomingOrganizationShare, OrganizationShare } from '@/api/orgs';
 import { useOrganizationSharingPanelState } from '../useOrganizationSharingPanelState';
 import { OrganizationSharingPanel } from '../OrganizationSharingPanel';
 
@@ -1264,5 +1265,305 @@ describe('sharing changes require an admitted current snapshot', () => {
     expect(state.canCreateShare()).toBe(false);
     await state.createShare();
     expect(createShareMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('keyboard continuation through sharing rereads', () => {
+  const rows = (): OrganizationShare[] =>
+    ['first', 'second', 'third'].map((id) => ({
+      id: `share/${id}?opaque="::]`,
+      targetOrgId: targetOrg.id,
+      resourceType: 'vm',
+      resourceId: `outgoing::${id}/101`,
+      resourceName: 'Namesake VM',
+      accessRole: 'viewer',
+      status: 'pending',
+      createdAt: '2026-11-01T00:00:00Z',
+      createdBy: 'user-1',
+    }));
+  let outgoing: OrganizationShare[];
+  let incoming: IncomingOrganizationShare[];
+  const operations = [
+    'remove outgoing',
+    'accept incoming',
+    'decline incoming',
+    'remove incoming',
+  ] as const;
+  type Operation = (typeof operations)[number];
+  const summary = () => screen.getByText(/Sharing for/, { selector: 'p' });
+  const warning = () => screen.getByRole('alert', { name: 'Organization sharing unavailable' });
+  const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 10));
+  const method = (operation: Operation) =>
+    operation === 'remove outgoing'
+      ? deleteShareMock
+      : operation === 'accept incoming'
+        ? acceptIncomingShareMock
+        : declineIncomingShareMock;
+  const shareFor = (operation: Operation) =>
+    operation === 'remove outgoing' ? outgoing[1] : incoming[1];
+  function action(operation: Operation, share = shareFor(operation)) {
+    const verb =
+      operation === 'accept incoming'
+        ? 'Accept'
+        : operation === 'decline incoming'
+          ? 'Decline'
+          : 'Remove';
+    const party = operation === 'remove outgoing' ? 'to' : 'from';
+    return screen.getByLabelText(
+      `${verb} share of vm:${share.resourceId} ${party} ${targetOrg.displayName} (${targetOrg.id})`,
+      { selector: 'button' },
+    );
+  }
+  async function mount(operation: Operation = 'remove outgoing') {
+    if (operation === 'remove incoming') incoming[1] = { ...incoming[1], status: 'accepted' };
+    const view = renderPanel();
+    await screen.findByText('Outgoing Shares', { exact: true, selector: 'h4' });
+    return view;
+  }
+  beforeEach(() => {
+    outgoing = rows();
+    incoming = rows().map((share) => ({
+      ...share,
+      id: `incoming/${share.id}`,
+      resourceId: share.resourceId.replace('outgoing', 'incoming'),
+      targetOrgId: baseOrg.id,
+      sourceOrgId: targetOrg.id,
+      sourceOrgName: targetOrg.displayName,
+    }));
+    listSharesMock.mockImplementation(async () => outgoing);
+    listIncomingSharesMock.mockImplementation(async () => incoming);
+  });
+
+  it.each(operations)(
+    'focuses the existing unavailable warning after an uncertain %s',
+    async (operation) => {
+      const pending = deferred<unknown>();
+      method(operation).mockReturnValueOnce(pending.promise);
+      await mount(operation);
+      const control = action(operation);
+      control.focus();
+      fireEvent.click(control);
+      await waitFor(() => expect(method(operation)).toHaveBeenCalledTimes(1));
+      pending.reject(new Error('Synthetic response unavailable'));
+      await waitFor(() => expect(warning()).toHaveFocus());
+      expect(warning()).toHaveTextContent('does not repeat a sharing change');
+      expect(warning()).toHaveAttribute('tabindex', '-1');
+      expect(screen.getByRole('button', { name: 'Reload sharing' })).toBeEnabled();
+      expect(orgGetMock).toHaveBeenCalledTimes(1);
+      expect(method(operation)).toHaveBeenCalledTimes(1);
+      expect(notificationSuccessMock).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['success', 'failure'])(
+    'does not take focus on an untouched initial or background %s read',
+    async (outcome) => {
+      if (outcome === 'failure')
+        orgGetMock.mockRejectedValue(new Error('Synthetic read unavailable'));
+      renderPanel();
+      if (outcome === 'failure') await screen.findByRole('alert');
+      else await screen.findByText('Outgoing Shares', { exact: true, selector: 'h4' });
+      await settle();
+      expect(document.body).toHaveFocus();
+      emit('organizations_changed');
+      await waitFor(() => expect(orgGetMock).toHaveBeenCalledTimes(2));
+      await settle();
+      expect(document.body).toHaveFocus();
+    },
+  );
+
+  it.each(['focused button', 'pointer without button focus'])(
+    'focuses saved context after an explicit reload from a %s',
+    async (activation) => {
+      orgGetMock.mockRejectedValueOnce(new Error('Synthetic read unavailable'));
+      renderPanel();
+      const reload = await screen.findByRole('button', { name: 'Reload sharing' });
+      if (activation === 'focused button') reload.focus();
+      fireEvent.click(reload);
+      await waitFor(() => expect(summary()).toHaveFocus());
+      expect(summary()).toHaveTextContent('Organization A (org-a)');
+      expect(summary()).toHaveAttribute('tabindex', '-1');
+      for (const mock of [
+        createShareMock,
+        deleteShareMock,
+        acceptIncomingShareMock,
+        declineIncomingShareMock,
+      ])
+        expect(mock).not.toHaveBeenCalled();
+    },
+  );
+
+  it('focuses the replacement warning when an explicit reload also fails', async () => {
+    orgGetMock.mockRejectedValue(new Error('Synthetic read unavailable'));
+    renderPanel();
+    const reload = await screen.findByRole('button', { name: 'Reload sharing' });
+    reload.focus();
+    fireEvent.click(reload);
+    await waitFor(() => expect(warning()).toHaveFocus());
+    expect(reload.isConnected).toBe(false);
+    expect(orgGetMock).toHaveBeenCalledTimes(2);
+  });
+
+  it.each(['write', 'reload'])(
+    'does not steal focus deliberately moved outside during a %s',
+    async (phase) => {
+      const outside = document.createElement('button');
+      document.body.append(outside);
+      try {
+        const pending = deferred<unknown>();
+        if (phase === 'write') {
+          deleteShareMock.mockReturnValueOnce(pending.promise);
+          await mount();
+          const control = action('remove outgoing');
+          control.focus();
+          fireEvent.click(control);
+        } else {
+          orgGetMock
+            .mockRejectedValueOnce(new Error('Synthetic read unavailable'))
+            .mockReturnValueOnce(pending.promise);
+          renderPanel();
+          const reload = await screen.findByRole('button', { name: 'Reload sharing' });
+          reload.focus();
+          fireEvent.click(reload);
+        }
+        outside.focus();
+        if (phase === 'write') pending.reject(new Error('Synthetic response unavailable'));
+        else pending.resolve(baseOrg);
+        if (phase === 'write') await screen.findByRole('alert');
+        else await screen.findByText('Outgoing Shares', { exact: true, selector: 'h4' });
+        await settle();
+        expect(outside).toHaveFocus();
+      } finally {
+        outside.remove();
+      }
+    },
+  );
+
+  it('restores the exact opaque row/action after a reordered same-reader reread', async () => {
+    await mount();
+    const saved = outgoing[1];
+    const control = action('remove outgoing', saved);
+    control.focus();
+    outgoing = [...outgoing].reverse().map((share) => ({ ...share, resourceName: 'Renamed VM' }));
+    emit('organizations_changed');
+    await waitFor(() => expect(action('remove outgoing', saved)).toHaveFocus());
+    expect(action('remove outgoing', saved)).not.toBe(control);
+    expect(deleteShareMock).not.toHaveBeenCalled();
+  });
+
+  it.each(['middle', 'last', 'only'])(
+    'continues at the next, previous or summary after removing the %s outgoing row',
+    async (position) => {
+      if (position === 'only') outgoing = outgoing.slice(0, 1);
+      await mount();
+      const index = position === 'middle' ? 1 : outgoing.length - 1;
+      const removed = outgoing[index];
+      const replacement = outgoing[index + 1] ?? outgoing[index - 1];
+      const pending = deferred<unknown>();
+      deleteShareMock.mockReturnValueOnce(pending.promise);
+      const control = action('remove outgoing', removed);
+      control.focus();
+      fireEvent.click(control);
+      await waitFor(() => expect(deleteShareMock).toHaveBeenCalledTimes(1));
+      outgoing = outgoing.filter((share) => share.id !== removed.id);
+      pending.resolve(undefined);
+      await waitFor(() =>
+        expect(replacement ? action('remove outgoing', replacement) : summary()).toHaveFocus(),
+      );
+      expect(acceptIncomingShareMock).not.toHaveBeenCalled();
+      expect(deleteShareMock).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it('keeps accepted-share continuation in the Accept family, not a new destructive action', async () => {
+    await mount('accept incoming');
+    const control = action('accept incoming');
+    control.focus();
+    const pending = deferred<unknown>();
+    acceptIncomingShareMock.mockReturnValueOnce(pending.promise);
+    fireEvent.click(control);
+    incoming = incoming.map((share, index) =>
+      index === 1 ? { ...share, status: 'accepted' } : share,
+    );
+    pending.resolve(undefined);
+    await waitFor(() => expect(action('accept incoming', incoming[2])).toHaveFocus());
+    expect(declineIncomingShareMock).not.toHaveBeenCalled();
+  });
+
+  it.each(['organization', 'user', 'capability', 'read-only', 'hidden'])(
+    'forgets old keyboard intent across a %s round trip',
+    async (kind) => {
+      const [user, setUser] = createSignal('user-1');
+      const [enabled, setEnabled] = createSignal(true);
+      isMultiTenantEnabledMock.mockImplementation(enabled);
+      render(() => <OrganizationSharingPanel currentUser={user()} />);
+      await screen.findByText('Outgoing Shares', { exact: true, selector: 'h4' });
+      action('remove outgoing').focus();
+      const pending = deferred<typeof baseOrg>();
+      orgGetMock.mockReturnValueOnce(pending.promise);
+      emit('organizations_changed');
+      if (kind === 'organization') {
+        getOrgIDMock.mockReturnValue('org-b');
+        emit('org_switched');
+        getOrgIDMock.mockReturnValue('org-a');
+        emit('org_switched');
+      }
+      if (kind === 'user') {
+        setUser('other-user');
+        setUser('user-1');
+      }
+      if (kind === 'capability') {
+        setEnabled(false);
+        setEnabled(true);
+      }
+      if (kind === 'read-only' || kind === 'hidden') {
+        syncSessionPresentationPolicy({
+          presentationPolicy: {
+            demoMode: kind === 'hidden',
+            readOnly: true,
+            hideCommercial: kind === 'hidden',
+            hideUpgrade: true,
+          },
+        });
+        syncSessionPresentationPolicy(null);
+      }
+      pending.resolve(baseOrg);
+      await screen.findByText('Outgoing Shares', { exact: true, selector: 'h4' });
+      await settle();
+      expect(document.body).toHaveFocus();
+      expect(deleteShareMock).not.toHaveBeenCalled();
+    },
+  );
+
+  it('restores the Create Share submit control after its saved reread', async () => {
+    await mount();
+    fireEvent.change(screen.getByLabelText('Target Organization'), {
+      target: { value: targetOrg.id },
+    });
+    fireEvent.change(screen.getByLabelText('Quick Pick Resource'), {
+      target: { value: 'vm::vm-100' },
+    });
+    const create = screen.getByText('Create Share', { selector: 'button' });
+    const pending = deferred<unknown>();
+    createShareMock.mockReturnValueOnce(pending.promise);
+    create.focus();
+    fireEvent.click(create);
+    await waitFor(() => expect(createShareMock).toHaveBeenCalledTimes(1));
+    pending.resolve({});
+    await waitFor(() =>
+      expect(screen.getByText('Create Share', { selector: 'button' })).toHaveFocus(),
+    );
+    expect(screen.getByText('Create Share', { selector: 'button' })).not.toBe(create);
+    expect(createShareMock).toHaveBeenCalledTimes(1);
+  });
+  it('cancels a scheduled focus handoff when the panel unmounts', async () => {
+    const view = await mount();
+    const control = action('remove outgoing');
+    control.focus();
+    emit('organizations_changed');
+    view.unmount();
+    await settle();
+    expect(document.body).toHaveFocus();
+    expect(deleteShareMock).not.toHaveBeenCalled();
   });
 });

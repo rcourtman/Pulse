@@ -1,4 +1,4 @@
-import { Component, Show } from 'solid-js';
+import { Component, Show, createEffect, createUniqueId, onCleanup } from 'solid-js';
 import { Button } from '@/components/shared/Button';
 import { Card } from '@/components/shared/Card';
 import SettingsPanel from '@/components/shared/SettingsPanel';
@@ -25,6 +25,88 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
   const state = useOrganizationSharingPanelState(props);
   const showOrganizationSurface = () =>
     isMultiTenantEnabled() && !presentationPolicyHidesOrganizationSurfaces();
+  const warningTitleID = createUniqueId();
+  let panel: HTMLDivElement | undefined;
+  let warning: HTMLDivElement | undefined;
+  let summary: HTMLParagraphElement | undefined;
+  let lastFocused:
+    | {
+        element: HTMLElement;
+        orgID: string;
+        user: string | undefined;
+        action?: string;
+        targets: string[];
+      }
+    | undefined;
+  let focusContext: [string, string | undefined, boolean, boolean] | undefined;
+  let reloadIntent: { orgID: string; user: string | undefined } | undefined;
+  let focusTimer: number | undefined;
+  const controls = () =>
+    Array.from(panel?.querySelectorAll<HTMLElement>('[data-org-sharing-action]') ?? []);
+  const reloadSharing = () => {
+    // Safari pointer activation need not focus the button first.
+    reloadIntent = { orgID: state.selectedOrgID(), user: props.currentUser };
+    void state.loadSharingData();
+  };
+
+  createEffect(() => {
+    window.clearTimeout(focusTimer);
+    const orgID = state.selectedOrgID();
+    const user = props.currentUser;
+    const enabled = showOrganizationSurface();
+    const context: typeof focusContext = [orgID, user, enabled, state.readOnly()];
+    if (focusContext?.some((value, index) => value !== context[index])) {
+      lastFocused = undefined;
+      reloadIntent = undefined;
+    }
+    focusContext = context;
+    const loading = state.loading();
+    const error = state.loadError();
+    const org = state.org();
+    if (!enabled || reloadIntent?.orgID !== orgID || reloadIntent.user !== user) {
+      reloadIntent = undefined;
+    }
+    if (!enabled || loading) return;
+    const explicitReload = !!reloadIntent;
+    reloadIntent = undefined;
+    if (!error && !org) return;
+
+    focusTimer = window.setTimeout(() => {
+      if (
+        !panel?.isConnected ||
+        !showOrganizationSurface() ||
+        state.loading() ||
+        state.selectedOrgID() !== orgID ||
+        props.currentUser !== user ||
+        state.loadError() !== error ||
+        state.org() !== org
+      )
+        return;
+      const lostPanelFocus =
+        lastFocused?.orgID === orgID &&
+        lastFocused.user === user &&
+        !lastFocused.element.isConnected;
+      // A reread replaces controls. Recover only the focus it removed, never
+      // an untouched initial read or a deliberate move to another control.
+      if (
+        (explicitReload || lostPanelFocus) &&
+        (!document.activeElement || document.activeElement === document.body)
+      ) {
+        const candidates = controls().filter(
+          (control) =>
+            control.dataset.orgSharingAction === lastFocused?.action &&
+            !control.matches(':disabled'),
+        );
+        // Opaque keys are values, not CSS selectors or current row indices.
+        const replacement = lastFocused?.targets
+          .map((id) => candidates.find((control) => control.dataset.orgSharingTarget === id))
+          .find(Boolean);
+        const target = error ? warning : explicitReload ? summary : (replacement ?? summary);
+        target?.focus();
+      }
+    }, 0);
+  });
+  onCleanup(() => window.clearTimeout(focusTimer));
 
   return (
     <Show
@@ -35,18 +117,53 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
         </div>
       }
     >
-      <div class="space-y-6">
+      <div
+        ref={panel}
+        class="space-y-6"
+        onFocusIn={(event) => {
+          if (event.target instanceof HTMLElement) {
+            const action = event.target.dataset.orgSharingAction;
+            const ids = controls()
+              .filter((control) => control.dataset.orgSharingAction === action)
+              .map((control) => control.dataset.orgSharingTarget!);
+            const index = ids.indexOf(event.target.dataset.orgSharingTarget!);
+            lastFocused = {
+              element: event.target,
+              orgID: state.selectedOrgID(),
+              user: props.currentUser,
+              action,
+              targets: index < 0 ? [] : [...ids.slice(index), ...ids.slice(0, index).reverse()],
+            };
+          }
+        }}
+        onFocusOut={(event) => {
+          if (
+            event.relatedTarget instanceof Node &&
+            !event.currentTarget.contains(event.relatedTarget)
+          ) {
+            lastFocused = undefined;
+          }
+        }}
+      >
         <SettingsPanel title="Organization Sharing" noPadding bodyClass="divide-y divide-border">
           <Show when={!state.loading()} fallback={<OrganizationSharingLoadingState />}>
             <Show when={state.loadError()}>
               <div class="p-4 sm:p-6">
                 <Card tone="warning" padding="md">
-                  <div role="alert" class="space-y-3 text-sm">
-                    <p class="font-semibold">{ORGANIZATION_SHARING_UNAVAILABLE_TITLE}</p>
+                  <div
+                    ref={warning}
+                    role="alert"
+                    aria-labelledby={warningTitleID}
+                    tabIndex={-1}
+                    class="space-y-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                  >
+                    <p id={warningTitleID} class="font-semibold">
+                      {ORGANIZATION_SHARING_UNAVAILABLE_TITLE}
+                    </p>
                     <p>{state.loadError()}</p>
                     <p>{getOrganizationSharingReloadMessage(state.selectedOrgID())}</p>
                     <Button
-                      onClick={() => void state.loadSharingData()}
+                      onClick={reloadSharing}
                       disabled={state.loading() || state.saving()}
                       class="w-full sm:w-auto"
                     >
@@ -60,7 +177,11 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
               {(currentOrg) => (
                 <>
                   <div class="p-4 sm:px-6 space-y-2 text-sm text-muted break-words">
-                    <p>
+                    <p
+                      ref={summary}
+                      tabIndex={-1}
+                      class="focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                    >
                       Sharing for{' '}
                       <span class="font-medium text-base-content" data-sharing-organization>
                         {currentOrg().displayName || currentOrg().id}
