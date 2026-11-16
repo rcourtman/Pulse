@@ -130,7 +130,7 @@ const writes = () => requests.filter(({ init }) => init.method === 'PUT');
 const healthReads = () => requests.filter(({ url }) => url === '/api/health');
 const row = (id = selectedID) => screen.getByText(id, { exact: true }).closest('tr')!;
 const action = (name: 'Suspend Org' | 'Activate Org', id = selectedID) =>
-  within(row(id)).getByRole('button', { name });
+  screen.getByRole('button', { name: `${name} for Same organization name (${id})` });
 const loaded = async () => {
   await waitFor(() => expect(action('Suspend Org')).toBeEnabled());
   expect(action('Suspend Org', firstID)).toBeEnabled();
@@ -220,6 +220,79 @@ afterEach(() => {
 });
 
 describe('Billing Admin rendered controls through real HTTP', () => {
+  it.each([1440, 390])(
+    'names each namesake action and exposes its exact expanded billing region at width %i',
+    async (width) => {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: width });
+      render(() => <BillingAdminPanel />);
+      await loaded();
+      const details = (id: string) =>
+        screen.getByRole('button', {
+          name: `Billing details for Same organization name (${id})`,
+        });
+      for (const id of [firstID, selectedID]) {
+        expect(action('Suspend Org', id)).toBeEnabled();
+        expect(action('Activate Org', id)).toHaveTextContent('Activate Org');
+        expect(details(id)).toHaveAttribute('aria-expanded', 'false');
+        expect(details(id)).not.toHaveAttribute('aria-controls');
+      }
+
+      fireEvent.click(details(firstID));
+      const firstRegion = screen.getByRole('region', {
+        name: `Billing details for Same organization name (${firstID})`,
+      });
+      expect(details(firstID)).toHaveAttribute('aria-controls', firstRegion.id);
+      expect(details(firstID)).toHaveAttribute('aria-expanded', 'true');
+      fireEvent.click(details(selectedID));
+      const selectedRegion = screen.getByRole('region', {
+        name: `Billing details for Same organization name (${selectedID})`,
+      });
+      expect(details(selectedID)).toHaveAttribute('aria-controls', selectedRegion.id);
+      expect(details(selectedID)).toHaveAttribute('aria-expanded', 'true');
+      expect(selectedRegion.id).not.toBe(firstRegion.id);
+      expect(firstRegion).not.toBeInTheDocument();
+      expect(details(firstID)).toHaveAttribute('aria-expanded', 'false');
+      expect(details(firstID)).not.toHaveAttribute('aria-controls');
+      expect(selectedRegion).toHaveTextContent('saved-selected-plan');
+
+      fireEvent.click(
+        screen.getByRole('button', {
+          name: `Reload billing for Same organization name (${selectedID})`,
+        }),
+      );
+      await waitFor(() => expect(reads(selectedID)).toHaveLength(2));
+      await waitFor(() => expect(action('Suspend Org')).toBeEnabled());
+      expect(reads(firstID)).toHaveLength(1);
+      expect(writes()).toHaveLength(0);
+      expectAuthRetained();
+      fireEvent.click(details(selectedID));
+      expect(details(selectedID)).toHaveAttribute('aria-expanded', 'false');
+      expect(details(selectedID)).not.toHaveAttribute('aria-controls');
+      expect(selectedRegion).not.toBeInTheDocument();
+    },
+  );
+
+  it('distinguishes failed namesake reads by ID and reloads only the named organization', async () => {
+    readReply = () => json({ error: 'synthetic-unavailable' }, 503);
+    render(() => <BillingAdminPanel />);
+    await waitFor(() => expect(screen.getAllByRole('alert')).toHaveLength(2));
+    const reload = (id: string) =>
+      screen.getByRole('button', {
+        name: `Reload billing for Same organization name (${id})`,
+      });
+    expect(reload(firstID)).toBeEnabled();
+    expect(reload(selectedID)).toBeEnabled();
+    readReply = (id) => json(states[id]);
+    fireEvent.click(reload(selectedID));
+    await waitFor(() => expect(action('Suspend Org')).toBeEnabled());
+    expect(reads(selectedID)).toHaveLength(2);
+    expect(reads(firstID)).toHaveLength(1);
+    expect(action('Suspend Org', firstID)).toBeDisabled();
+    expect(within(row(firstID)).getByRole('alert')).toHaveTextContent(BILLING_ADMIN_READ_ERROR);
+    expect(writes()).toHaveLength(0);
+    expectAuthRetained();
+  });
+
   it.each([1440, 390])(
     'suspends and reactivates only the non-first namesake organization at width %i',
     async (width) => {

@@ -1,4 +1,4 @@
-import { Show, type Component } from 'solid-js';
+import { Show, createUniqueId, type Component } from 'solid-js';
 import { Button } from '@/components/shared/Button';
 import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
@@ -36,6 +36,17 @@ export const BillingAdminOrganizationsTable: Component<BillingAdminOrganizations
   props,
 ) => {
   const { isMobile } = useBreakpoint();
+  const tableID = createUniqueId();
+  const detailsID = (orgID: string) => `${tableID}-billing-${encodeURIComponent(orgID)}`;
+  const organizationLabel = (org: HostedOrganizationSummary) =>
+    org.display_name && org.display_name !== org.org_id
+      ? `${org.display_name} (${org.org_id})`
+      : org.org_id;
+  const detailsLabel = (org: HostedOrganizationSummary) =>
+    [
+      `Billing details for ${organizationLabel(org)}`,
+      ...getBillingAdminOrganizationBadges(org).map((badge) => badge.label),
+    ].join(', ');
   const unreadLabel = (orgID: string) =>
     props.billingLoadingByOrgID[orgID] ? 'Loading' : 'Unavailable';
   const actionsDisabled = (orgID: string) =>
@@ -44,7 +55,8 @@ export const BillingAdminOrganizationsTable: Component<BillingAdminOrganizations
     !!props.billingErrorByOrgID[orgID] ||
     props.savingByOrgID[orgID] ||
     props.billingLoadingByOrgID[orgID];
-  const subscriptionActions = (orgID: string) => {
+  const subscriptionActions = (org: HostedOrganizationSummary) => {
+    const orgID = (org.org_id || '').trim();
     const currentSubState = () =>
       (props.billingByOrgID[orgID]?.subscription_state || '').toLowerCase();
     return (
@@ -52,6 +64,7 @@ export const BillingAdminOrganizationsTable: Component<BillingAdminOrganizations
         <Button
           variant="secondary"
           size="sm"
+          aria-label={`Suspend Org for ${organizationLabel(org)}`}
           onClick={() => props.onSuspendOrganization(orgID)}
           disabled={actionsDisabled(orgID) || currentSubState() === 'suspended'}
         >
@@ -60,6 +73,7 @@ export const BillingAdminOrganizationsTable: Component<BillingAdminOrganizations
         <Button
           variant="secondary"
           size="sm"
+          aria-label={`Activate Org for ${organizationLabel(org)}`}
           onClick={() => props.onActivateOrganization(orgID)}
           disabled={actionsDisabled(orgID) || currentSubState() === 'active'}
         >
@@ -84,6 +98,9 @@ export const BillingAdminOrganizationsTable: Component<BillingAdminOrganizations
               <button
                 type="button"
                 class="text-left w-full whitespace-normal [overflow-wrap:anywhere]"
+                aria-label={detailsLabel(org)}
+                aria-expanded={props.expandedOrgID === orgID}
+                aria-controls={props.expandedOrgID === orgID ? detailsID(orgID) : undefined}
                 onClick={() => {
                   props.onToggleOrganization(orgID);
                 }}
@@ -132,14 +149,14 @@ export const BillingAdminOrganizationsTable: Component<BillingAdminOrganizations
                   <Button
                     variant="secondary"
                     size="xs"
-                    aria-label={`Reload billing for ${org.display_name || orgID}`}
+                    aria-label={`Reload billing for ${organizationLabel(org)}`}
                     onClick={() => props.onReloadOrganization(orgID)}
                     disabled={props.billingLoadingByOrgID[orgID] || props.savingByOrgID[orgID]}
                   >
                     Reload billing
                   </Button>
                 </Show>
-                <Show when={isMobile()}>{subscriptionActions(orgID)}</Show>
+                <Show when={isMobile()}>{subscriptionActions(org)}</Show>
               </div>
             );
           },
@@ -176,7 +193,7 @@ export const BillingAdminOrganizationsTable: Component<BillingAdminOrganizations
           label: 'Actions',
           hiddenOnMobile: true,
           align: 'right',
-          render: (org) => <Show when={!isMobile()}>{subscriptionActions(org.org_id)}</Show>,
+          render: (org) => <Show when={!isMobile()}>{subscriptionActions(org)}</Show>,
         },
       ]}
       keyExtractor={(org) => org.org_id}
@@ -184,13 +201,19 @@ export const BillingAdminOrganizationsTable: Component<BillingAdminOrganizations
       expandedRender={(org) => {
         const orgID = (org.org_id || '').trim();
         return (
-          <div class="px-3 pb-3 bg-surface-alt whitespace-normal">
+          <div
+            id={detailsID(orgID)}
+            role="region"
+            aria-label={detailsLabel(org)}
+            class="px-3 pb-3 bg-surface-alt whitespace-normal"
+          >
             <div class="rounded-md border border-border bg-surface-alt p-3">
               <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-2">
                 <div class="text-xs font-semibold text-muted">Billing state JSON</div>
                 <Button
                   variant="secondary"
                   size="xs"
+                  aria-label={`Reload billing for ${organizationLabel(org)}`}
                   disabled={props.billingLoadingByOrgID[orgID] || props.savingByOrgID[orgID]}
                   onClick={() => {
                     props.onReloadOrganization(orgID);
