@@ -15,6 +15,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"sync"
 	"syscall"
@@ -33,6 +34,9 @@ type agentLifecycleControlPlane struct {
 	lastReportToken string
 	lastReportID    string
 	lastCommands    bool
+	requests        map[string]int
+	enrolledAt      time.Time
+	firstReportAt   time.Time
 }
 
 type agentLifecycleSnapshot struct {
@@ -42,6 +46,9 @@ type agentLifecycleSnapshot struct {
 	lastReportToken string
 	lastReportID    string
 	lastCommands    bool
+	requests        string
+	firstReport     string
+	reportIdentity  string
 }
 
 func (s *agentLifecycleControlPlane) setCredentials(bootstrapToken, runtimeToken, canonicalID string) {
@@ -61,7 +68,39 @@ func (s *agentLifecycleControlPlane) setOnline(online bool) {
 func (s *agentLifecycleControlPlane) snapshot() agentLifecycleSnapshot {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	keys := make([]string, 0, len(s.requests))
+	for key := range s.requests {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	counts := make([]string, 0, len(keys))
+	for _, key := range keys {
+		counts = append(counts, fmt.Sprintf("%s=%d", key, s.requests[key]))
+	}
+	// These timestamps describe the first enrollment/report over the fixture's
+	// lifetime, not a new latency sample on restart, outage or credential rotation.
+	firstReport := "no-report-attempt"
+	if !s.firstReportAt.IsZero() {
+		firstReport = "no-successful-enrollment"
+		if !s.enrolledAt.IsZero() {
+			if s.firstReportAt.Before(s.enrolledAt) {
+				firstReport = "before-successful-enrollment"
+			} else {
+				firstReport = s.firstReportAt.Sub(s.enrolledAt).String()
+			}
+		}
+	}
+	reportIdentity := "missing"
+	if s.lastReportID != "" {
+		reportIdentity = "other"
+		if s.lastReportID == s.canonicalID {
+			reportIdentity = "canonical"
+		}
+	}
 	return agentLifecycleSnapshot{
+		requests:        strings.Join(counts, ","),
+		firstReport:     firstReport,
+		reportIdentity:  reportIdentity,
 		online:          s.online,
 		enrollmentCount: s.enrollmentCount,
 		reportCount:     s.reportCount,
@@ -71,7 +110,63 @@ func (s *agentLifecycleControlPlane) snapshot() agentLifecycleSnapshot {
 	}
 }
 
+// Keep only fixed path classes and numeric statuses, never request paths,
+// headers or bodies. A report attempt is observable even when token admission
+// fails, the server is offline, or the response has not yet completed.
 func (s *agentLifecycleControlPlane) serveHTTP(w http.ResponseWriter, r *http.Request) {
+	kind := "other"
+	switch {
+	case r.URL.Path == "/api/agents/agent/report":
+		kind = "report"
+	case r.URL.Path == "/api/agents/agent/enroll":
+		kind = "enrollment"
+	case r.URL.Path == "/api/agents/agent/lookup":
+		kind = "lookup"
+	case strings.HasPrefix(r.URL.Path, "/api/agents/agent/") && strings.HasSuffix(r.URL.Path, "/config"):
+		kind = "config"
+	}
+	s.mu.Lock()
+	if s.requests == nil {
+		s.requests = make(map[string]int)
+	}
+	s.requests[kind+"/started"]++
+	if kind == "report" && s.firstReportAt.IsZero() {
+		s.firstReportAt = time.Now()
+	}
+	s.mu.Unlock()
+	status := &lifecycleStatusWriter{ResponseWriter: w}
+	defer func() {
+		code := status.code
+		if code == 0 {
+			code = http.StatusOK
+		}
+		s.mu.Lock()
+		s.requests[fmt.Sprintf("%s/%d", kind, code)]++
+		s.mu.Unlock()
+	}()
+	s.serveRequest(status, r)
+}
+
+type lifecycleStatusWriter struct {
+	http.ResponseWriter
+	code int
+}
+
+func (w *lifecycleStatusWriter) WriteHeader(code int) {
+	if w.code == 0 {
+		w.code = code
+		w.ResponseWriter.WriteHeader(code)
+	}
+}
+
+func (w *lifecycleStatusWriter) Write(data []byte) (int, error) {
+	if w.code == 0 {
+		w.WriteHeader(http.StatusOK)
+	}
+	return w.ResponseWriter.Write(data)
+}
+
+func (s *agentLifecycleControlPlane) serveRequest(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	if !s.online {
 		s.mu.Unlock()
@@ -103,6 +198,9 @@ func (s *agentLifecycleControlPlane) serveHTTP(w http.ResponseWriter, r *http.Re
 		}
 		s.mu.Lock()
 		s.enrollmentCount++
+		if s.enrolledAt.IsZero() {
+			s.enrolledAt = time.Now()
+		}
 		s.lastCommands = payload.CommandsEnabled
 		s.mu.Unlock()
 		w.Header().Set("Content-Type", "application/json")
@@ -152,14 +250,17 @@ func waitForLifecycleState(t *testing.T, timeout time.Duration, describe string,
 			return
 		}
 		if result, exited := proc.result(); exited {
-			t.Fatalf("pulse-agent exited before %s: %s; enrollments=%d reports=%d report_id=%q commands=%t",
-				describe, result, snapshot.enrollmentCount, snapshot.reportCount, snapshot.lastReportID, snapshot.lastCommands)
+			t.Fatalf("pulse-agent exited before %s: %s; %s", describe, result, snapshot.diagnostic())
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
 	final := state.snapshot()
-	t.Fatalf("timed out waiting for %s; enrollments=%d reports=%d report_id=%q commands=%t",
-		describe, final.enrollmentCount, final.reportCount, final.lastReportID, final.lastCommands)
+	t.Fatalf("timed out waiting for %s; %s", describe, final.diagnostic())
+}
+
+func (s agentLifecycleSnapshot) diagnostic() string {
+	return fmt.Sprintf("enrollments=%d reports=%d commands=%t requests=[%s] first_report_after_first_enrollment=%s report_id=%s",
+		s.enrollmentCount, s.reportCount, s.lastCommands, s.requests, s.firstReport, s.reportIdentity)
 }
 
 func buildLifecycleAgent(t *testing.T) string {
@@ -300,13 +401,21 @@ func (p *runningLifecycleAgent) result() (string, bool) {
 
 func (p *runningLifecycleAgent) diagnostics() string {
 	result, _ := p.result()
-	// Only these synthetic credentials are supplied by this fixture. Retain raw
-	// output separately for the integration test's credential-leak assertions.
-	output := strings.NewReplacer(
+	return fmt.Sprintf("process result: %s\n%s", result, lifecycleDiagnosticOutput(p.logs.String()))
+}
+
+// Only these synthetic credentials are supplied by this fixture. Keep the raw
+// output for credential-leak assertions; redact before bounding failure output.
+func lifecycleDiagnosticOutput(output string) string {
+	output = strings.NewReplacer(
 		"bootstrap-one", "[fixture credential]", "runtime-one", "[fixture credential]",
 		"bootstrap-two", "[fixture credential]", "runtime-two", "[fixture credential]",
-	).Replace(p.logs.String())
-	return fmt.Sprintf("process result: %s\n%s", result, output)
+	).Replace(output)
+	const limit = 256 * 1024
+	if len(output) > limit {
+		return fmt.Sprintf("output_truncated=true omitted_bytes=%d\n%s", len(output)-limit, output[:limit])
+	}
+	return "output_truncated=false\n" + output
 }
 
 func startLifecycleProcess(t *testing.T, cmd *exec.Cmd) *runningLifecycleAgent {
