@@ -5241,9 +5241,12 @@ func TestRootInstallExistingMenuRequiresExactAutomaticIntent(t *testing.T) {
 func TestRootInstallTemporaryInputsRemainPrivateAndAuthenticated(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_server_installer_temporary_inputs.py"), "-v")
-	cmd.Env = append(os.Environ(), "PULSE_INSTALLER_UNDER_TEST="+repoFile("install.sh"))
-	out, err := cmd.CombinedOutput()
+	// Keep the existing deadline and controlling session, but use the shared
+	// group owner so a failed Python control cannot leave descendants holding
+	// the result pipe beyond that deadline.
+	out, err := pythonFixtureOutput(ctx,
+		[]string{repoFile("scripts", "tests", "test_server_installer_temporary_inputs.py"), "-v"},
+		[]string{"PULSE_INSTALLER_UNDER_TEST=" + repoFile("install.sh")})
 	if err != nil {
 		t.Fatalf("installer private/authenticated temporary-input controls: %v\n%s", err, out)
 	}
