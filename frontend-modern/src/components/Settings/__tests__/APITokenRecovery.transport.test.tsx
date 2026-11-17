@@ -407,6 +407,14 @@ describe('API token recovery through the real HTTP client', () => {
 });
 
 describe('API token inventory keyboard recovery', () => {
+  const expectConfirmedWithdrawal = () => {
+    // A complete inventory that excludes the linked token must still reach
+    // its consumers. Only failed/partial reads leave revocation unconfirmed.
+    expect(environment.markAgents).toHaveBeenCalledExactlyOnceWith(original.id, ['agent-one']);
+    expect(environment.markRuntimes).toHaveBeenCalledExactlyOnceWith(original.id, [
+      'docker-host-one',
+    ]);
+  };
   const startRetry = async () => {
     const retry = await screen.findByRole('button', { name: 'Retry token inventory' });
     retry.focus();
@@ -417,7 +425,7 @@ describe('API token inventory keyboard recovery', () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
     return region;
   };
-  const expectScopedReads = () => {
+  const expectScopedReads = (confirmedWithdrawal = false) => {
     expect(requests()).toEqual([
       ['GET', '/api/security/tokens'],
       ['GET', '/api/security/tokens'],
@@ -428,7 +436,8 @@ describe('API token inventory keyboard recovery', () => {
         headers: { 'X-Pulse-Org-ID': 'org-a', 'X-API-Token': 'synthetic-only-auth' },
       });
     }
-    expectNoRevocations();
+    if (confirmedWithdrawal) expectConfirmedWithdrawal();
+    else expectNoRevocations();
     expect(onChanged).not.toHaveBeenCalled();
     expect(reveal()).toBeNull();
   };
@@ -461,7 +470,7 @@ describe('API token inventory keyboard recovery', () => {
         expect(screen.getByRole('button', { name: 'Retry token inventory' })).not.toBeDisabled();
         expectUnknown();
       }
-      expectScopedReads();
+      expectScopedReads(result === 'empty');
     },
   );
 
@@ -551,6 +560,10 @@ describe('API token inventory keyboard recovery', () => {
         });
       expect(fetchMock.mock.calls[1][1]?.signal?.aborted).toBe(true);
       const stableFocus = document.activeElement;
+      const confirmedWithdrawals = [
+        environment.markAgents.mock.calls.length,
+        environment.markRuntimes.mock.calls.length,
+      ];
       // The fixture intentionally ignores abort; decode the old response fully
       // before asserting it cannot replace the new reader or move its focus.
       pending.resolve(lateResponse);
@@ -565,7 +578,13 @@ describe('API token inventory keyboard recovery', () => {
       ).not.toBeInTheDocument();
       if (change !== 'unmount') expect(outside).toHaveFocus();
       expect(requests().every(([method]) => method === 'GET')).toBe(true);
-      expectNoRevocations();
+      expect(requests()).toHaveLength(change === 'unmount' ? 2 : 3);
+      expect([
+        environment.markAgents.mock.calls.length,
+        environment.markRuntimes.mock.calls.length,
+      ]).toEqual(confirmedWithdrawals);
+      if (change === 'unmount') expectNoRevocations();
+      else expectConfirmedWithdrawal();
       expect(onChanged).not.toHaveBeenCalled();
       expect(reveal()).toBeNull();
     },
