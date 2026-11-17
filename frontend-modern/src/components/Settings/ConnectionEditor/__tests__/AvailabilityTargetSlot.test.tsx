@@ -188,35 +188,95 @@ describe('AvailabilityTargetSlot', () => {
     );
   });
 
-  it('creates response-validated UDP checks', async () => {
+  it('creates literal-response UDP checks without implying DNS validation', async () => {
     const onSaved = vi.fn();
     render(() => <AvailabilityTargetSlot onCancel={vi.fn()} onSaved={onSaved} />);
 
     fireEvent.change(screen.getByLabelText('Probe'), { target: { value: 'udp' } });
-    fireEvent.input(screen.getByLabelText('Name'), { target: { value: 'DNS health' } });
-    fireEvent.input(screen.getByLabelText(/^Address/), { target: { value: 'dns.internal' } });
-    fireEvent.input(screen.getByLabelText('Port'), { target: { value: '53' } });
-    fireEvent.input(screen.getByLabelText(/^Request payload/), { target: { value: 'PING' } });
+    fireEvent.input(screen.getByLabelText('Name'), { target: { value: 'UDP echo' } });
+    fireEvent.input(screen.getByLabelText(/^Address/), { target: { value: 'echo.internal' } });
+    fireEvent.input(screen.getByLabelText('Port'), { target: { value: '9000' } });
+    fireEvent.input(screen.getByLabelText(/^Request payload/), { target: { value: 'PING\\n' } });
     fireEvent.input(screen.getByLabelText(/^Expected response \(optional\)/), {
-      target: { value: 'PONG' },
+      target: { value: 'PONG\\n' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Add service/device check' }));
 
     await waitFor(() =>
       expect(mockedCreate).toHaveBeenCalledWith(
         expect.objectContaining({
-          name: 'DNS health',
-          address: 'dns.internal',
+          name: 'UDP echo',
+          address: 'echo.internal',
           protocol: 'udp',
-          port: 53,
+          port: 9000,
           udpMode: 'response_required',
-          udpRequest: 'PING',
-          udpExpectedResponse: 'PONG',
+          udpRequest: 'PING\\n',
+          udpExpectedResponse: 'PONG\\n',
         }),
       ),
     );
     expect(onSaved).toHaveBeenCalledTimes(1);
   });
+
+  it('explains UDP limits beside both policies without adding them to other probes', () => {
+    render(() => <AvailabilityTargetSlot onCancel={vi.fn()} onSaved={vi.fn()} />);
+    const policyHelp =
+      'No DNS-answer validation. Open or filtered keeps silence indeterminate. Port-unreachable replies still fail.';
+    const requestHelp = 'Literal UTF-8 only, up to 512 bytes. No hex or escape decoding.';
+    const responseHelp = 'Exact UTF-8 match. Empty accepts any reply.';
+
+    expect(screen.queryByText(policyHelp)).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Probe'), { target: { value: 'udp' } });
+    expect(screen.getByLabelText('UDP result policy')).toHaveValue('response_required');
+    expect(screen.getByLabelText('UDP result policy')).toHaveAccessibleDescription(policyHelp);
+    expect(screen.getByText(requestHelp)).toBeInTheDocument();
+    expect(screen.getByText(responseHelp)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('UDP result policy'), {
+      target: { value: 'open_or_filtered' },
+    });
+    expect(screen.getByLabelText('UDP result policy')).toHaveAccessibleDescription(policyHelp);
+
+    for (const protocol of ['tcp', 'https']) {
+      fireEvent.change(screen.getByLabelText('Probe'), { target: { value: protocol } });
+      expect(screen.queryByLabelText('UDP result policy')).not.toBeInTheDocument();
+      for (const help of [policyHelp, requestHelp, responseHelp]) {
+        expect(screen.queryByText(help)).not.toBeInTheDocument();
+      }
+    }
+  });
+
+  it.each(['response_required', 'open_or_filtered'])(
+    'keeps an empty response expectation and literal request in %s mode',
+    async (udpMode) => {
+      render(() => <AvailabilityTargetSlot onCancel={vi.fn()} onSaved={vi.fn()} />);
+      fireEvent.change(screen.getByLabelText('Probe'), { target: { value: 'udp' } });
+      fireEvent.input(screen.getByLabelText('Name'), { target: { value: 'UDP reply' } });
+      fireEvent.input(screen.getByLabelText(/^Address/), {
+        target: { value: 'echo.internal' },
+      });
+      fireEvent.input(screen.getByLabelText('Port'), { target: { value: '9000' } });
+      fireEvent.change(screen.getByLabelText('UDP result policy'), {
+        target: { value: udpMode },
+      });
+      fireEvent.input(screen.getByLabelText(/^Request payload/), {
+        target: { value: 'PING\\n\\x00' },
+      });
+      expect(screen.getByLabelText(/^Expected response \(optional\)/)).toHaveValue('');
+      fireEvent.click(screen.getByRole('button', { name: 'Add service/device check' }));
+
+      await waitFor(() =>
+        expect(mockedCreate).toHaveBeenCalledWith(
+          expect.objectContaining({
+            protocol: 'udp',
+            port: 9000,
+            udpMode,
+            udpRequest: 'PING\\n\\x00',
+            udpExpectedResponse: '',
+          }),
+        ),
+      );
+    },
+  );
 
   it('enables HTTPS certificate monitoring with a 30-day warning by default', async () => {
     render(() => <AvailabilityTargetSlot onCancel={vi.fn()} onSaved={vi.fn()} />);
