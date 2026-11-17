@@ -324,7 +324,14 @@ describe('Organization Overview native submission and keyboard continuation', ()
         policy(true);
         policy(false);
       } else if (kind === 'hidden surface') {
-        syncSessionPresentationPolicy({ presentationPolicy: { demoMode: true } });
+        syncSessionPresentationPolicy({
+          presentationPolicy: {
+            demoMode: true,
+            readOnly: true,
+            hideCommercial: false,
+            hideUpgrade: true,
+          },
+        });
         policy();
       } else if (kind === 'capability') {
         const fetchMock = vi.mocked(fetch);

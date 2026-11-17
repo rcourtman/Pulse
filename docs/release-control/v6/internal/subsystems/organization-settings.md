@@ -344,8 +344,8 @@ Tab then reaches the returned name input or Reload action. Pointer activation
 does not have to focus the button first. Leaving the region retires manual
 continuation: a late result never schedules a focus jump, even if the outside
 control subsequently blurs. Initial/background failures do not take focus from
-elsewhere. A
-principal, organization, surface, capability or read-only round trip retires
+elsewhere. A principal, organization, surface, capability or read-only round trip
+retires
 old focus intent, and deliberate external focus wins. The visible organization,
 ID, date, member count, editable name and membership distinctions remain.
 
@@ -355,8 +355,8 @@ covers native form semantics, exact single writes, saved/uncertain/reload
 continuation, pending manual reads, failed recovery, nonmanager/read-only refusal,
 external focus (including a subsequent blur), passive initial reads and reader
 withdrawal. Comparable desktop and narrow light/dark browser fixtures
-exercise actual Enter, Tab/Shift+Tab, pointer fallback, single-write uncertainty and saved
-readback. These are usability/source safeguards, not original-client, full-App,
+exercise actual Enter, Tab/Shift+Tab, pointer fallback, single-write uncertainty
+and saved readback. These are usability/source safeguards, not original-client, full-App,
 IdP, cross-tab or installed authorization acceptance.
 
 ### Equal-reader refreshes preserve pending organization changes
