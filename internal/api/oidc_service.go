@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"os"
 	"reflect"
 	"strings"
 	"sync"
@@ -465,7 +464,9 @@ func hashCABundle(path string) (string, error) {
 		return "", nil
 	}
 
-	data, err := os.ReadFile(path)
+	// Revalidate with the same normalized, regular-file and size admission as
+	// initialization. A cache check must not invent another trust-file policy.
+	data, err := readSSORegularFile(path)
 	if err != nil {
 		return "", err
 	}
