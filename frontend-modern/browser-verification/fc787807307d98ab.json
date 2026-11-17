@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "fde29138ba6444f3990abe254d61c0a8089dfbd4",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/OrganizationOverviewPanel.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/OrganizationOverviewPanel.tsx": "323a7d014ebe811e88769280019265572466c6a4422bd7a820cfba74ae57834d"
+  },
+  "routes": [
+    "/settings/organization/overview (production panel/state/OrgsAPI/client/capability/policy/CSS; fixture shell and safe HTTP data)"
+  ],
+  "states": [
+    "Passive initial unavailable read",
+    "Explicit reload pending and failed",
+    "Saved organization details and full membership",
+    "Unconfirmed native Enter rename and explicit saved reconciliation"
+  ],
+  "interactions": [
+    "Native Enter on Reload keeps focus on stable named busy region, not BODY",
+    "Native Enter rename dispatches one trimmed org/CSRF-bound write; unconfirmed result still focuses warning",
+    "Read completion keeps details focus; Tab reaches returned name; Shift+Tab leaves pending region",
+    "A late result cannot steal focus after outside control blurs; no automatic rename replay"
+  ],
+  "viewports": [
+    {
+      "width": 1680,
+      "height": 1050
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "verified_at": "2026-11-17T09:41:44.661876Z",
+  "browser": "Chromium 141.0.7390.37; Playwright 1.56.1, matches integration lock",
+  "themes": [
+    "light",
+    "dark"
+  ],
+  "evidence": "RECEIPTS.md, BROWSER-BINDING.json, OVERVIEW-BEFORE.tar.xz and OVERVIEW-AFTER.tar.xz in current worker output",
+  "pixel_review": "All 56 captures / 28 comparable pairs opened with native view_image. Same fixtures/themes/viewports/interaction states. Pending and completed explicit reads now show inset focus outline. All useful text, controls, IDs, roles and pre-existing date visibility retain geometry; author review, not independent acceptance."
+}
