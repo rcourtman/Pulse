@@ -22,7 +22,7 @@ PINNED_RELEASE_SSH_PUBLIC_KEY="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMZd/DaH+Bldz
 log() {
     local level=$1
     shift
-    local logger_status=0 output_status=0
+    local logger_status=0 output_status=0 timestamp=""
     # Conditional callers disable errexit throughout this function. Try both
     # sinks, but never let successful stdout hide a failed journal write (or
     # vice versa). The installer collector owns draining and the first error.
@@ -30,7 +30,13 @@ log() {
     # recovery path until systemd kills the whole update. Keep a TERM deadline
     # and KILL backstop; timeout's observed failure still wins over stdout.
     timeout -k 1 5 logger -t "$LOG_TAG" -p "user.$level" "$@" || logger_status=$?
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$level] $@" || output_status=$?
+    # Installer output can contain many lines. Format the same local timestamp
+    # without a subshell and date process for each one. Older Bash versions
+    # without the time conversion keep the existing date path and semantics.
+    if ! printf -v timestamp '%(%Y-%m-%d %H:%M:%S)T' -1 2>/dev/null; then
+        timestamp=$(date '+%Y-%m-%d %H:%M:%S') || :
+    fi
+    echo "[$timestamp] [$level] $@" || output_status=$?
     if [[ "$logger_status" != 0 ]]; then
         return "$logger_status"
     fi
