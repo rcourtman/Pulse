@@ -94,11 +94,6 @@ func (r *APITokenRecord) ensureID() {
 // ensureScopes normalizes stored/runtime scopes, applying defaults and
 // rewriting any legacy aliases into canonical scope identifiers.
 func (r *APITokenRecord) ensureScopes() {
-	if len(r.Scopes) == 0 {
-		r.Scopes = []string{ScopeWildcard}
-		return
-	}
-
 	r.Scopes = normalizeScopes(r.Scopes)
 }
 
@@ -113,7 +108,7 @@ func (r *APITokenRecord) IsExpired() bool {
 // Clone returns a detached copy of the record's mutable fields.
 func (r *APITokenRecord) Clone() APITokenRecord {
 	clone := *r
-	clone.Scopes = append([]string(nil), r.Scopes...)
+	clone.Scopes = normalizeScopes(r.Scopes) // The canonical result already owns its storage.
 	if r.LastUsedAt != nil {
 		t := *r.LastUsedAt
 		clone.LastUsedAt = &t
@@ -122,7 +117,6 @@ func (r *APITokenRecord) Clone() APITokenRecord {
 		t := *r.ExpiresAt
 		clone.ExpiresAt = &t
 	}
-	clone.ensureScopes()
 
 	// Deep copy OrgIDs slice
 	if r.OrgIDs != nil {
@@ -430,12 +424,11 @@ func (c *Config) IsValidAPIToken(rawToken string) bool {
 			if record.IsExpired() {
 				return false
 			}
-			record.ensureScopes()
+			// Admission only reads the normalized values. Keep common scope
+			// lists in scratch owned by this call, never in the live record.
+			var scratch [8]string
 			role := strings.TrimSpace(record.Metadata[auth.RuntimeRoleMetadataKey])
-			if err := auth.ValidateRoleScopes(role, record.Scopes); err != nil {
-				return false
-			}
-			return true
+			return auth.ValidateRoleScopes(role, normalizeScopesInto(scratch[:0], record.Scopes)) == nil
 		}
 	}
 	return false
@@ -489,11 +482,20 @@ func (c *Config) SortAPITokens() {
 // normalizeScopes applies defaults and returns a canonical safe copy of the
 // input slice for persistence and runtime storage.
 func normalizeScopes(scopes []string) []string {
+	return normalizeScopesInto(nil, scopes)
+}
+
+// normalizeScopesInto uses caller-owned scratch, which must not overlap scopes.
+// Pass nil when the result must have its own storage.
+func normalizeScopesInto(scratch, scopes []string) []string {
 	if len(scopes) == 0 {
-		return []string{ScopeWildcard}
+		return append(scratch[:0], ScopeWildcard)
+	}
+	result := scratch[:0]
+	if cap(result) < len(scopes) {
+		result = make([]string, 0, len(scopes))
 	}
 	seen := make(map[string]struct{}, len(scopes))
-	result := make([]string, 0, len(scopes))
 	for _, scope := range scopes {
 		scope = canonicalizeScopeAlias(scope)
 		if _, exists := seen[scope]; exists {
