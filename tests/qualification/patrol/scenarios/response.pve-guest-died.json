@@ -1,7 +1,7 @@
 {
   "schema_version": "patrol.qual/v1",
   "id": "response.pve-guest-died",
-  "version": 3,
+  "version": 4,
   "title": "container died by itself",
   "description": "The gitea container's init is killed from outside. The container is down and the node logged no stop or shutdown task, so nobody stopped it. Starting it fixes it.",
   "owner": "ai-runtime",
@@ -224,7 +224,11 @@
         "outside of any proxmox initiated task",
         "not requested through proxmox",
         "no proxmox stop shutdown task",
-        "no proxmox stop task"
+        "no proxmox stop task",
+        "no stop shutdown request",
+        "no stop or shutdown request",
+        "no stop request",
+        "no shutdown request"
       ],
       [
         "start the container",

@@ -822,3 +822,44 @@ func TestP3HandsOverOnlyAConclusionThatFoundThePiledUpBackups(t *testing.T) {
 		t.Fatalf("stored P3 runs: %d handed over, %d partial; want 12 and 3", handedOver, partial)
 	}
 }
+
+// On the 17 Nov pve-v1 replay a default agent's conclusion said "Proxmox's own
+// task log shows no stop/shutdown request" for the dead guest, "consistent
+// with an in-guest stop or crash". That is the decisive fact, but v3 listed
+// only "task" phrasings, so the run graded Handed back. P4 v4 accepts the
+// "request" phrasings.
+func TestP4AcceptsNoStopShutdownRequest(t *testing.T) {
+	payload, err := os.ReadFile(filepath.Join("testdata", "fault-set-pve-v1", "p4-default-agent-stop-shutdown-request.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var record pveTaskLogRecord
+	if err := json.Unmarshal(payload, &record); err != nil {
+		t.Fatal(err)
+	}
+	catalog := loadFaultSetCatalog(t)
+	current := catalog.ByID["response.pve-guest-died"]
+	if current.Version < 4 {
+		t.Fatalf("P4 is at v%d; this test needs the v4 rubric", current.Version)
+	}
+	if graded := GradeResponse(current, record.Evidence); graded.Grade != GradeHandedOver {
+		t.Fatalf("the v4 rubric grades %q, want handed_over (missing %v)", graded.Grade, graded.Checks.DecisiveMissing)
+	}
+
+	// The v3 rubric, as the run recorded it.
+	added := map[string]bool{"no stop shutdown request": true, "no stop or shutdown request": true, "no stop request": true, "no shutdown request": true}
+	recorded := current
+	recorded.Version = record.RecordedVersion
+	outcome := *current.Outcome
+	decisive := make([]string, 0, len(current.Outcome.DecisiveTerms[0]))
+	for _, term := range current.Outcome.DecisiveTerms[0] {
+		if !added[term] {
+			decisive = append(decisive, term)
+		}
+	}
+	outcome.DecisiveTerms = [][]string{decisive, current.Outcome.DecisiveTerms[1]}
+	recorded.Outcome = &outcome
+	if graded := GradeResponse(recorded, record.Evidence); graded.Grade != record.RecordedGrade {
+		t.Fatalf("the v3 rubric grades the record %q, want the recorded %q", graded.Grade, record.RecordedGrade)
+	}
+}

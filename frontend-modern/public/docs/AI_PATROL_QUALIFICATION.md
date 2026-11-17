@@ -797,10 +797,12 @@ nested Proxmox VE 9.2 node:
 | P4 | Fixed, woke by itself | Handed over, woke by itself |
 | Score | 3 of 4 | 3 of 4 |
 
-P4 is at version 3. Its first rubric missed a conclusion that said the guest
+P4 is at version 4. Its first rubric missed a conclusion that said the guest
 stopped "with no corresponding entry in the Proxmox task log", so v2 also
 accepts the task-log wordings Patrol used across the stored runs. v3 adds
 "no Proxmox stop/shutdown task", which split v2's "no stop shutdown task".
+v4 adds "no stop/shutdown request" and the like, after a conclusion said the
+task log showed "no stop/shutdown request".
 
 P3 is at version 2. v1 passed any conclusion that named nextcloud and a backup
 word, so a guess that only said to prune old backups "if backups are the
