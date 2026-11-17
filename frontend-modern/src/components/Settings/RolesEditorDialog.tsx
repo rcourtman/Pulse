@@ -198,7 +198,17 @@ export const RolesEditorDialog: Component<RolesEditorDialogProps> = (props) => (
                           </FormSelect>
                           <button
                             type="button"
-                            onClick={() => props.onRemovePermission(index)}
+                            onClick={(event) => {
+                              const controls = event.currentTarget.form?.querySelectorAll('select');
+                              const count = props.formPermissions.length;
+                              props.onRemovePermission(index);
+                              // Index retains slots, each with action then resource.
+                              // Continue at the next action, or previous for the last
+                              // slot. A detached editor cannot receive this focus.
+                              if (props.formPermissions.length === count - 1) {
+                                controls?.[Math.min(index, count - 2) * 2]?.focus();
+                              }
+                            }}
                             disabled={props.formPermissions.length <= 1}
                             aria-label={`Remove permission ${index + 1}: ${permission().action}:${permission().resource}`}
                             aria-describedby={policyID}

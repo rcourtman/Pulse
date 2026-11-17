@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "3de3f6709a9cbc0e5a05454802a53c8c4b907a15",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/RolesEditorDialog.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/RolesEditorDialog.tsx": "4651ee2529e863d4184e0e0c5eb7c7ece952c4a4b49e81a29f8a729d2b9a906e"
+  },
+  "routes": [
+    "Settings > Security > Roles > Edit Role (actual RolesPanel/state/RBACAPI with local HTTP fixture-backed saved readback)"
+  ],
+  "states": [
+    "Three saved rules, including deny conditions and unknown action/resource",
+    "Keyboard remove last rule and two-to-one with last removal disabled",
+    "First/middle rule removal, explicit save/reopen with preserved metadata and remaining constraints"
+  ],
+  "interactions": [
+    "Native Enter activates the exact permission removal; focus stays on the next action at this index or previous action for the removed last slot",
+    "Native Tab continues from the remaining action to its resource",
+    "Draft removals make no write; only explicit Update Role sends one real serialized PUT, followed by saved inventory readback and reopen",
+    "61 baseline and 106 final browser checks; all 30 captures / 15 comparable pairs opened with native view_image"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "verified_at": "2026-11-16T22:32:01.430Z",
+  "browsers": {
+    "playwright": "1.56.1",
+    "chromium": "141.0.7390.37",
+    "webkit": "26.0"
+  },
+  "evidence": [
+    "RECEIPTS.md",
+    "BROWSER-BEFORE.json",
+    "BROWSER-AFTER.json",
+    "PIXEL-REVIEW.json",
+    "CAPTURES-BEFORE.tar.xz",
+    "CAPTURES-AFTER.tar.xz"
+  ],
+  "limitations": [
+    "Synthetic local HTTP role persistence, not a live organisation or full Settings App/IdP journey.",
+    "No reporter/client recovery, containing release or screen-reader auditory acceptance claimed.",
+    "Existing initial phone WebKit inner scroll for final conditions is preserved, not removed or declared fixed."
+  ]
+}
