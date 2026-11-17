@@ -14,12 +14,19 @@ import (
 
 func TestPowerShellParserDiagnosticCommand(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "checkout ' $()", "install.ps1")
+	t.Setenv("PSModulePath", "parent-engine-only")
 	cmd := newPowerShellParserCheck("pwsh", path)
 	if !reflect.DeepEqual(cmd.Args, []string{"pwsh", "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", powerShellParserCommand}) {
 		t.Fatalf("parser command changed: %q", cmd.Args)
 	}
 	if strings.Contains(cmd.Args[5], path) || !strings.Contains(strings.Join(cmd.Env, "\n"), "PULSE_PARSER_CHECK_PATH="+path) {
 		t.Fatal("script path must be an environment value, never interpolated PowerShell")
+	}
+	for _, entry := range cmd.Env {
+		key, _, _ := strings.Cut(entry, "=")
+		if strings.EqualFold(key, "PSModulePath") {
+			t.Fatal("parser inherited a different PowerShell engine's module path")
+		}
 	}
 	parse := strings.Index(powerShellParserCommand, "[System.Management.Automation.Language.Parser]::ParseFile(")
 	flush := strings.Index(powerShellParserCommand, "[Console]::Out.Flush()")

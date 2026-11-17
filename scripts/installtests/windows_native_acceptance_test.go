@@ -1,9 +1,9 @@
 package installtests
 
 import (
+	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"strings"
 	"testing"
 )
@@ -156,7 +156,7 @@ func TestWindowsAgentLifecycleAcceptancePreservesBoundariesWithCRLF(t *testing.T
 
 func TestWindowsAgentLifecycleObservationRuntime(t *testing.T) {
 	powerShell := nativeInstallerPowerShell(t)
-	cmd := exec.Command(powerShell, "-NoLogo", "-NoProfile", "-NonInteractive", "-File",
+	cmd := nativeInstallerCommand(context.Background(), powerShell, "-NoLogo", "-NoProfile", "-NonInteractive", "-File",
 		repoFile("scripts", "installtests", "windows_lifecycle_observation_controls.ps1"),
 		"-HarnessPath", repoFile("scripts", "installtests", "windows_agent_lifecycle.ps1"))
 	output, err := cmd.CombinedOutput()

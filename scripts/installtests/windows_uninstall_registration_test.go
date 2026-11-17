@@ -51,7 +51,7 @@ func TestInstallPS1UninstallRegistrationRuntime(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 			defer cancel()
-			cmd := exec.CommandContext(ctx, powerShell, "-NoLogo", "-NoProfile", "-NonInteractive", "-File",
+			cmd := nativeInstallerCommand(ctx, powerShell, "-NoLogo", "-NoProfile", "-NonInteractive", "-File",
 				repoFile("scripts", "installtests", "windows_uninstall_registration_controls.ps1"),
 				"-InstallerPath", repoFile("scripts", "install.ps1"), "-Scenario", test.name)
 			output, err := cmd.CombinedOutput()
