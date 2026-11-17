@@ -85,69 +85,6 @@ func TestBranchcov0722PM_CommunityRuntimeIdentityFromLicensing(t *testing.T) {
 	}
 }
 
-func TestBranchcov0722PM_NormalizeDowngradeRetentionStateFromLicensing(t *testing.T) {
-	t.Run("already_normal_returned_unchanged", func(t *testing.T) {
-		in := downgradeRetentionStateModel{
-			PreviousTier:         "pro",
-			CurrentTier:          "free",
-			PreviousHistoryDays:  90,
-			CurrentHistoryDays:   7,
-			DetectedAt:           111,
-			RecoveryGuaranteedTo: 222,
-			PurgeEligibleAt:      333,
-		}
-		got := normalizeDowngradeRetentionStateFromLicensing(in)
-		if got != in {
-			t.Errorf("already-normal state was mutated: got %+v, want %+v", got, in)
-		}
-	})
-
-	t.Run("previous_tier_clamped", func(t *testing.T) {
-		in := downgradeRetentionStateModel{
-			PreviousTier:        "  PRO  ",
-			CurrentTier:         "free",
-			PreviousHistoryDays: 90,
-			DetectedAt:          111,
-		}
-		got := normalizeDowngradeRetentionStateFromLicensing(in)
-		if got.PreviousTier != "pro" {
-			t.Errorf("PreviousTier = %q, want %q", got.PreviousTier, "pro")
-		}
-		if got.CurrentTier != "free" {
-			t.Errorf("CurrentTier = %q, want %q", got.CurrentTier, "free")
-		}
-		if got.PreviousHistoryDays != 90 || got.DetectedAt != 111 {
-			t.Errorf("non-tier field changed: got %+v", got)
-		}
-	})
-
-	t.Run("current_tier_clamped", func(t *testing.T) {
-		in := downgradeRetentionStateModel{
-			PreviousTier:       "pro",
-			CurrentTier:        "\tFREE\n",
-			CurrentHistoryDays: 7,
-		}
-		got := normalizeDowngradeRetentionStateFromLicensing(in)
-		if got.CurrentTier != "free" {
-			t.Errorf("CurrentTier = %q, want %q", got.CurrentTier, "free")
-		}
-		if got.PreviousTier != "pro" {
-			t.Errorf("PreviousTier = %q, want %q", got.PreviousTier, "pro")
-		}
-	})
-
-	t.Run("both_tiers_uppercase_trimmed", func(t *testing.T) {
-		in := downgradeRetentionStateModel{
-			PreviousTier: "RELAY",
-			CurrentTier:  "FREE",
-		}
-		got := normalizeDowngradeRetentionStateFromLicensing(in)
-		if got.PreviousTier != "relay" || got.CurrentTier != "free" {
-			t.Errorf("tiers = (%q,%q), want (relay,free)", got.PreviousTier, got.CurrentTier)
-		}
-	})
-}
-
 func TestBranchcov0722PM_WantsMockFixturesFromEnv(t *testing.T) {
 	tests := []struct {
 		name  string

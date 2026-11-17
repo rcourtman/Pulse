@@ -1403,7 +1403,7 @@ func TestEvaluatorMatrix(t *testing.T) {
 			t.Fatalf("Status().Tier=%q, want %q", status.Tier, TierPro)
 		}
 		// Hosted path unions free-tier baseline capabilities with evaluator-provided capabilities.
-		assertFeatureSetEq(t, status.Features, []string{FeatureUpdateAlerts, FeatureSSO, FeatureAdvancedSSO, FeatureAIPatrol, FeatureAIAutoFix})
+		assertFeatureSetEq(t, status.Features, []string{FeatureUpdateAlerts, FeatureSSO, FeatureAdvancedSSO, FeatureAIPatrol, FeatureLongTermMetrics, FeatureAIAutoFix})
 		if status.MaxGuests != 13 {
 			t.Fatalf("Status().MaxGuests=%d, want %d", status.MaxGuests, 13)
 		}

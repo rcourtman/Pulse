@@ -458,7 +458,7 @@ func (s *Store) deleteAvailabilityTargets(targetIDs []string) {
 func (s *Store) runAvailabilityRetention() {
 	now := time.Now().UTC()
 	if _, err := s.db.Exec(`DELETE FROM availability_observations WHERE timeline_at_ns < ?`,
-		now.Add(-s.effectiveRetention(availabilityRawRetention, now)).UnixNano()); err != nil {
+		now.Add(-availabilityRawRetention).UnixNano()); err != nil {
 		log.Warn().Err(err).Msg("Failed to prune raw availability observations")
 	}
 	for _, tier := range []struct {
@@ -469,12 +469,12 @@ func (s *Store) runAvailabilityRetention() {
 		{string(TierHourly), availabilityHourlyRetention},
 		{string(TierDaily), availabilityDailyRetention},
 	} {
-		cutoff := now.Add(-s.effectiveRetention(tier.retention, now)).Unix()
+		cutoff := now.Add(-tier.retention).Unix()
 		if _, err := s.db.Exec(`DELETE FROM availability_history_buckets WHERE tier = ? AND bucket_start < ?`, tier.name, cutoff); err != nil {
 			log.Warn().Err(err).Str("tier", tier.name).Msg("Failed to prune availability history buckets")
 		}
 	}
-	cutoff := now.Add(-s.effectiveRetention(availabilityDailyRetention, now)).UnixNano()
+	cutoff := now.Add(-availabilityDailyRetention).UnixNano()
 	if _, err := s.db.Exec(`DELETE FROM availability_revision_boundaries WHERE started_at_ns < ?`, cutoff); err != nil {
 		log.Warn().Err(err).Msg("Failed to prune availability revision boundaries")
 	}

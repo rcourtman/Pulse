@@ -169,7 +169,6 @@ async function stubCommercialMigrationFixture(page: Page, migration: MigrationFi
         capabilities: [],
         limits: [],
         hosted_mode: false,
-        max_history_days: 7,
         runtime: {
           build: 'community',
           label: 'Pulse Community runtime',

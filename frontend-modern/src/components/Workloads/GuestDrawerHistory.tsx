@@ -7,7 +7,6 @@ import {
   createUniqueId,
   on,
   onCleanup,
-  onMount,
   type Component,
 } from 'solid-js';
 
@@ -15,7 +14,6 @@ import { type AggregatedMetricPoint, type HistoryTimeRange } from '@/api/charts'
 import { FormSelect } from '@/components/shared/FormSelect';
 import { filterSelectClass } from '@/components/shared/FilterToolbar';
 import { Button } from '@/components/shared/Button';
-import { HistoryLockPlanLink } from '@/components/shared/HistoryLockPlanLink';
 import { InlineNotice } from '@/components/shared/InlineNotice';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { PhoneChartsToggle } from '@/components/shared/PhoneChartsToggle';
@@ -29,7 +27,6 @@ import {
   type HistorySource,
   withoutRepeatedHistoryAxisLabels,
 } from '@/components/shared/historyChartModel';
-import { isRangeLocked, loadRuntimeCapabilities, maxHistoryDays } from '@/stores/license';
 import { getAPIReadAccessErrorMessage } from '@/utils/apiAccessError';
 import { formatCompactSpeed } from '@/utils/format';
 
@@ -1066,15 +1063,10 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
   // every panel; the class only applies below the sm breakpoint.
   const [showAllOnPhone, setShowAllOnPhone] = createSignal(false);
   const gridId = `history-groups-${createUniqueId()}`;
-  onMount(() => {
-    void loadRuntimeCapabilities();
-  });
-
-  const locked = createMemo(() => isRangeLocked(props.range));
   const historySource = createGuestDrawerHistorySource(
     () => props.target,
     () => props.range,
-    () => !locked() && props.enabled !== false,
+    () => props.enabled !== false,
     () => props.liveReadingsAvailable !== false,
   );
   const historyQuery = createGuestDrawerHistoryQuery(historySource);
@@ -1171,7 +1163,7 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
             aria-live="polite"
             aria-atomic="true"
           >
-            <Show when={!locked() && historyQuery.error()}>
+            <Show when={historyQuery.error()}>
               <InlineNotice tone={hasHistoryPoints() ? 'warning' : 'danger'}>
                 {getAPIReadAccessErrorMessage(historyQuery.error()) ||
                   (hasHistoryPoints()
@@ -1187,7 +1179,7 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
           </Show>
           {/* The charts poll every 30 seconds, so a manual refresh is offered
               only to recover from a failed read. */}
-          <Show when={!locked() && historyQuery.error()}>
+          <Show when={historyQuery.error()}>
             {(_error) => {
               onCleanup(() => {
                 retryHadFocus = retryRef !== undefined && document.activeElement === retryRef;
@@ -1214,57 +1206,44 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
             }}
           </Show>
         </div>
-        <Show
-          when={!locked()}
-          fallback={
-            <>
-              <div class="rounded-xs border border-border bg-surface p-5 text-sm text-muted">
-                {formatHistoryRangeOptionLabel(props.range)} history requires a higher license plan.
-                This instance's plan retains {maxHistoryDays()} days. <HistoryLockPlanLink />
-              </div>
-              {liveReadings()}
-            </>
-          }
-        >
-          <Show when={!historyQuery.error() || hasHistoryPoints()} fallback={liveReadings()}>
-            {/* A reply that is not stored history says so once, above its charts. */}
-            <Show when={hasHistoryPoints() && getHistorySourceNotice(historyQuery.value().source)}>
-              {(notice) => (
-                <p class="text-xs text-muted" data-testid="history-source-notice">
-                  {notice().detail}
-                </p>
-              )}
-            </Show>
-            <div
-              id={gridId}
-              class={`grid gap-3 md:grid-cols-2 ${groups().length > 3 ? 'xl:grid-cols-4' : 'xl:grid-cols-3'}`}
-            >
-              <For each={groups()}>
-                {(group, index) => (
-                  <GuestDrawerHistoryGroupChart
-                    alerts={props.alerts}
-                    hiddenOnPhone={isPhoneCollapsed(group, index())}
-                    group={group}
-                    loading={historyQuery.loading() && !historyQuery.resolvedOnce()}
-                    metrics={metrics()}
-                    currentMetrics={liveCurrentMetrics()}
-                    deferredMetrics={props.deferredMetrics}
-                    range={props.range}
-                    source={historyQuery.value().source}
-                    sourceKey={`${props.target?.resourceType}:${props.target?.resourceId}:${props.range}`}
-                    timeBounds={timeBounds()}
-                    touchInspection={touchInspection()}
-                  />
-                )}
-              </For>
-            </div>
-            <PhoneChartsToggle
-              hiddenLabels={phoneCollapsedGroups().map((group) => group.label)}
-              expanded={showAllOnPhone()}
-              onToggle={() => setShowAllOnPhone((open) => !open)}
-              controls={gridId}
-            />
+        <Show when={!historyQuery.error() || hasHistoryPoints()} fallback={liveReadings()}>
+          {/* A reply that is not stored history says so once, above its charts. */}
+          <Show when={hasHistoryPoints() && getHistorySourceNotice(historyQuery.value().source)}>
+            {(notice) => (
+              <p class="text-xs text-muted" data-testid="history-source-notice">
+                {notice().detail}
+              </p>
+            )}
           </Show>
+          <div
+            id={gridId}
+            class={`grid gap-3 md:grid-cols-2 ${groups().length > 3 ? 'xl:grid-cols-4' : 'xl:grid-cols-3'}`}
+          >
+            <For each={groups()}>
+              {(group, index) => (
+                <GuestDrawerHistoryGroupChart
+                  alerts={props.alerts}
+                  hiddenOnPhone={isPhoneCollapsed(group, index())}
+                  group={group}
+                  loading={historyQuery.loading() && !historyQuery.resolvedOnce()}
+                  metrics={metrics()}
+                  currentMetrics={liveCurrentMetrics()}
+                  deferredMetrics={props.deferredMetrics}
+                  range={props.range}
+                  source={historyQuery.value().source}
+                  sourceKey={`${props.target?.resourceType}:${props.target?.resourceId}:${props.range}`}
+                  timeBounds={timeBounds()}
+                  touchInspection={touchInspection()}
+                />
+              )}
+            </For>
+          </div>
+          <PhoneChartsToggle
+            hiddenLabels={phoneCollapsedGroups().map((group) => group.label)}
+            expanded={showAllOnPhone()}
+            onToggle={() => setShowAllOnPhone((open) => !open)}
+            controls={gridId}
+          />
         </Show>
       </div>
     </Show>

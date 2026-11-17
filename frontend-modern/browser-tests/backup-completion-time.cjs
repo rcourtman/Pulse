@@ -128,7 +128,6 @@ let server;
             body = {
               capabilities: [],
               limits: [],
-              max_history_days: 90,
               runtime: { build: 'community', label: 'Fixture community' },
             };
           else if (url.pathname === '/api/alerts/active') body = [];

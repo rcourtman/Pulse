@@ -26,9 +26,7 @@ vi.mock('@/api/resourceOperatorState', async () => {
   return { ...actual, getResourceOperatorState: vi.fn().mockResolvedValue(null) };
 });
 vi.mock('@/stores/license', () => ({
-  isRangeLocked: () => false,
   loadRuntimeCapabilities: vi.fn(),
-  maxHistoryDays: () => 90,
 }));
 
 const start = Date.parse('2026-10-12T12:00:00Z');

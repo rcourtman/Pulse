@@ -53,7 +53,6 @@ async function mockFreeSelfHostedCommercialPosture(page: Page) {
         capabilities: [],
         limits: [],
         hosted_mode: false,
-        max_history_days: 7,
       }),
     });
   });

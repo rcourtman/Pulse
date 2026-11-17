@@ -68,7 +68,7 @@ beforeEach(async () => {
       requests.push({ url, method, options });
       if (url === '/api/license/runtime-capabilities') {
         if (failCapabilities) throw new Error('Synthetic unavailable capabilities');
-        return response({ capabilities: ['multi_tenant'], limits: [], max_history_days: 7 });
+        return response({ capabilities: ['multi_tenant'], limits: [] });
       }
       if (method === 'PUT') {
         mutationSignal = options.signal as AbortSignal;

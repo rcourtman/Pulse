@@ -20,8 +20,8 @@ func TestDeriveCapabilitiesFromTier(t *testing.T) {
 			tier:             TierFree,
 			explicitFeatures: nil,
 			wantLen:          len(freeFeatures),
-			wantContains:     []string{FeatureUpdateAlerts, FeatureSSO, FeatureAdvancedSSO, FeatureAIPatrol},
-			wantNotContains:  []string{FeatureRelay, FeatureAIAutoFix, FeatureLongTermMetrics},
+			wantContains:     []string{FeatureUpdateAlerts, FeatureSSO, FeatureAdvancedSSO, FeatureAIPatrol, FeatureLongTermMetrics},
+			wantNotContains:  []string{FeatureRelay, FeatureAIAutoFix},
 		},
 		{
 			name:             "relay_tier_includes_remote_access",
@@ -170,25 +170,23 @@ func TestSelfHostedPaidFeatureClaimMatrix(t *testing.T) {
 	tests := []struct {
 		name                     string
 		tier                     Tier
-		wantHistoryDays          int
 		wantIncludedCapabilities []string
 		wantExcludedCapabilities []string
 	}{
 		{
-			name:            "community keeps core monitoring free and does not claim paid extras",
-			tier:            TierFree,
-			wantHistoryDays: 7,
+			name: "community keeps core monitoring and metric history free and does not claim paid extras",
+			tier: TierFree,
 			wantIncludedCapabilities: []string{
 				FeatureUpdateAlerts,
 				FeatureSSO,
 				FeatureAdvancedSSO,
 				FeatureAIPatrol,
+				FeatureLongTermMetrics,
 			},
 			wantExcludedCapabilities: []string{
 				FeatureRelay,
 				FeatureMobileApp,
 				FeaturePushNotifications,
-				FeatureLongTermMetrics,
 				FeatureAIAlerts,
 				FeatureAIAutoFix,
 				FeatureRBAC,
@@ -196,9 +194,8 @@ func TestSelfHostedPaidFeatureClaimMatrix(t *testing.T) {
 			},
 		},
 		{
-			name:            "relay sells remote access mobile handoff push and fourteen day history",
-			tier:            TierRelay,
-			wantHistoryDays: 14,
+			name: "relay keeps remote access mobile handoff and push",
+			tier: TierRelay,
 			wantIncludedCapabilities: []string{
 				FeatureUpdateAlerts,
 				FeatureSSO,
@@ -218,9 +215,8 @@ func TestSelfHostedPaidFeatureClaimMatrix(t *testing.T) {
 			},
 		},
 		{
-			name:            "pro sells operator extras and preserves relay capabilities",
-			tier:            TierPro,
-			wantHistoryDays: 90,
+			name: "pro sells operator extras and preserves relay capabilities",
+			tier: TierPro,
 			wantIncludedCapabilities: []string{
 				FeatureRelay,
 				FeatureMobileApp,
@@ -243,18 +239,6 @@ func TestSelfHostedPaidFeatureClaimMatrix(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			gotHistoryDays, ok := TierHistoryDays[tt.tier]
-			if !ok {
-				t.Fatalf("TierHistoryDays missing entry for tier %q", tt.tier)
-			}
-			if gotHistoryDays != tt.wantHistoryDays {
-				t.Fatalf(
-					"TierHistoryDays[%q] = %d, want %d",
-					tt.tier,
-					gotHistoryDays,
-					tt.wantHistoryDays,
-				)
-			}
 
 			capabilities := make(map[string]struct{})
 			for _, capability := range TierFeatures[tt.tier] {
@@ -388,7 +372,7 @@ func TestGetFeatureDisplayName(t *testing.T) {
 		{FeatureMobileApp, "Pulse Mobile Pairing"},
 		{FeaturePushNotifications, "Push Notifications"},
 		{FeatureAdvancedReporting, "PDF/CSV Reporting"},
-		{FeatureLongTermMetrics, "Extended Metric History"},
+		{FeatureLongTermMetrics, "Metric History"},
 		{"unknown_feature", "unknown_feature"},
 	}
 
@@ -496,32 +480,6 @@ func sortedFeatureSet(features []string) []string {
 	return out
 }
 
-func TestTierHistoryDays(t *testing.T) {
-	tests := []struct {
-		tier Tier
-		want int
-	}{
-		{TierFree, 7},
-		{TierRelay, 14},
-		{TierPro, 90},
-		{TierProPlus, 90},
-		{TierCloud, 90},
-	}
-
-	for _, tt := range tests {
-		tt := tt
-		t.Run(string(tt.tier), func(t *testing.T) {
-			got, ok := TierHistoryDays[tt.tier]
-			if !ok {
-				t.Fatalf("TierHistoryDays missing entry for tier %q", tt.tier)
-			}
-			if got != tt.want {
-				t.Errorf("TierHistoryDays[%q] = %d, want %d", tt.tier, got, tt.want)
-			}
-		})
-	}
-}
-
 // TestTierFeatureInheritance verifies that higher tiers include all features from lower tiers.
 func TestTierFeatureInheritance(t *testing.T) {
 	asSet := func(features []string) map[string]bool {
@@ -600,16 +558,6 @@ func TestFilterPublicCapabilitiesStripsInternalOnlyFeatures(t *testing.T) {
 	for i, feature := range want {
 		if got[i] != feature {
 			t.Fatalf("FilterPublicCapabilities()[%d]=%q, want %q", i, got[i], feature)
-		}
-	}
-}
-
-// TestAllTiersHaveHistoryDays ensures every tier in TierFeatures also has a
-// metrics-retention entry. Core monitoring volume limits are retired.
-func TestAllTiersHaveHistoryDays(t *testing.T) {
-	for tier := range TierFeatures {
-		if _, ok := TierHistoryDays[tier]; !ok {
-			t.Errorf("TierHistoryDays missing entry for tier %q", tier)
 		}
 	}
 }
@@ -881,10 +829,6 @@ func TestBusinessTierContractShape(t *testing.T) {
 		if businessSet[i] != feature {
 			t.Fatalf("Business feature[%d] = %q, want Pro's %q", i, businessSet[i], feature)
 		}
-	}
-
-	if got := TierHistoryDays[TierBusiness]; got != 365 {
-		t.Fatalf("TierHistoryDays[TierBusiness] = %d, want 365", got)
 	}
 
 	if !IsSelfHostedCoreMonitoringUncappedTier(TierBusiness) {

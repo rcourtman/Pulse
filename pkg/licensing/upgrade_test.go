@@ -104,10 +104,9 @@ func TestResolvePulseAccountPortalURL_RejectsInvalidOverrides(t *testing.T) {
 
 func TestOperatorOutcomeUpgradeReasonsRemainCanonical(t *testing.T) {
 	expected := map[string]string{
-		FeatureLongTermMetrics: "Upgrade to Pro for 90 days of metric history, so you can see what changed before and after an incident.",
-		FeatureAIAlerts:        "Upgrade to Pro so Patrol can investigate issues instead of handing you a stack of symptoms.",
-		FeatureAIAutoFix:       "Upgrade to Pro so Patrol can investigate issues, apply safe fixes within Patrol mode, and verify the result.",
-		FeatureExternalProbe:   "Upgrade to Pro to run availability checks from an agent outside the monitored site and report the results back to Pulse for alerting.",
+		FeatureAIAlerts:      "Upgrade to Pro so Patrol can investigate issues instead of handing you a stack of symptoms.",
+		FeatureAIAutoFix:     "Upgrade to Pro so Patrol can investigate issues, apply safe fixes within Patrol mode, and verify the result.",
+		FeatureExternalProbe: "Upgrade to Pro to run availability checks from an agent outside the monitored site and report the results back to Pulse for alerting.",
 	}
 
 	found := make(map[string]bool, len(expected))
@@ -157,7 +156,6 @@ func TestCompatibilityOnlyFeatureUpgradeURLsFallBackToGenericPricing(t *testing.
 
 func TestUpgradeReasonMatrixDerivesFromCanonicalFeatureMetadata(t *testing.T) {
 	expectedOrder := []string{
-		FeatureLongTermMetrics,
 		FeatureAIAutoFix,
 		FeatureAIAlerts,
 		FeatureRBAC,

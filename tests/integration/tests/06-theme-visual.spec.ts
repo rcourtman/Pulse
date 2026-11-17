@@ -57,7 +57,6 @@ const AUTH_VISUAL_RUNTIME_CAPABILITIES = {
   capabilities: ["update_alerts", "sso", "ai_patrol", "multi_tenant"],
   limits: [],
   hosted_mode: false,
-  max_history_days: 7,
   runtime: { build: "community", label: "Pulse Community runtime" },
   blocked_capabilities: [],
 };

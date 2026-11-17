@@ -1911,7 +1911,7 @@ Query params:
 - `range` (optional): `1h`, `6h`, `12h`, `24h`, `1d`, `7d`, `30d`, `90d` (default `24h`; duration strings also accepted)
 - `maxPoints` (optional): Downsample to a target number of points
 
-> **License**: Requests beyond Community's `7d` floor require the paid `long_term_metrics` entitlement. Relay unlocks `14d`, Pro and legacy Pro+ unlock `90d`, and requests beyond the active tier's limit return `402 Payment Required`.
+> **Plans**: Every range is served on every plan; the answer holds what storage retention still keeps.
 An explicit `metric` returns a `points` array; omitting it returns a `metrics`
 object keyed by metric name. Use the source ID and type from the affected
 chart's request, not its display name or an internal store type. Older
@@ -2143,7 +2143,7 @@ The create response and subsequent reads return `"protocol": "icmp"`.
 
 ### History
 
-- `POST /api/availability-history` (`monitoring:read`) - Recent state and latency history for up to 200 availability targets in one request. Body: `{"targetIds": ["<target-id>"], "range": "24h"}`. `targetIds` is required; blank and duplicate IDs are dropped, and at most 200 unique IDs are accepted. `range` is optional (default `24h`). Allowed ranges are `1h`, `6h`, `12h`, `24h`, `7d`, `14d`, `30d`, `90d`, and `365d`. A range longer than the licence's metrics history retention returns `402` (free tier: 7 days). Non-POST methods return `405`.
+- `POST /api/availability-history` (`monitoring:read`) - Recent state and latency history for up to 200 availability targets in one request. Body: `{"targetIds": ["<target-id>"], "range": "24h"}`. `targetIds` is required; blank and duplicate IDs are dropped, and at most 200 unique IDs are accepted. `range` is optional (default `24h`). Allowed ranges are `1h`, `6h`, `12h`, `24h`, `7d`, `14d`, `30d`, `90d`, and `365d`. Ranges are not plan-limited; the response holds what storage retention still keeps. Non-POST methods return `405`.
 
 Response (`200`): `start` and `end` (UTC, end truncated to the minute) and `targets`. Each target has `targetId` and either `summary` (`reachableSeconds`, `unreachableSeconds`, `indeterminateSeconds`, `unknownSeconds`, `coveragePercent`, optional `availabilityPercent`, optional `reachableLatencyMillis`) with `buckets` (at most 120) and, only when present, `revisionBoundaries`; or an `error` with code `not_found` when the ID is not a configured target. An unknown ID does not fail the batch.
 

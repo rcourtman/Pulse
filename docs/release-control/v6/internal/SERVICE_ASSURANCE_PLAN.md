@@ -490,13 +490,13 @@ Validation question:
 ## Packaging Principles
 
 - Core local verification remains part of Pulse's monitoring foundation.
-- Availability-history access follows the existing `max_history_days`
-  entitlement rather than introducing a separate retention table.
+- Availability history is not plan-limited (17 November 2026); storage
+  retention decides how far back it goes.
 - Assigned external execution continues to use the existing `external_probe`
   entitlement until a broader commercial contract is deliberately approved.
 - Data correctness, evidence freshness, incident truth, and recovery state are
   never degraded to create an upgrade prompt.
-- Commercial value should come from longer history, multi-location operation,
+- Commercial value should come from multi-location operation,
   fleet and customer boundaries, governed collaboration, and operational
   convenience rather than an arbitrary monitored-service tax.
 - MSP pricing, customer tenancy, sales claims, and checkout work belong in

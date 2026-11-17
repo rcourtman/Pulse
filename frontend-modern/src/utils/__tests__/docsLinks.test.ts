@@ -667,7 +667,7 @@ describe('docsLinks', () => {
     expect(apiReference).toContain('](#resource-maintenance-and-operator-state)');
   });
 
-  it('ships the Pulse Mobile retirement in the published API reference', () => {
+  it('ships the Pulse Mobile retirement and plan-free history ranges in the published API reference', () => {
     const apiReference = readFileSync(path.join(repoRoot, 'docs', 'API.md'), 'utf8');
     const shippedAPIReference = readFileSync(
       path.join(frontendRoot, 'public', 'docs', 'API.md'),
@@ -677,6 +677,9 @@ describe('docsLinks', () => {
     expect(shippedAPIReference).toBe(apiReference);
     expect(apiReference).toContain('## 📱 Relay / Pulse Mobile (retiring 31 March 2027)');
     expect(apiReference).not.toContain('Mobile Remote Access');
+    const availability = apiReference.split('`POST /api/availability-history`')[1].split('\n')[0];
+    expect(availability).toContain('Ranges are not plan-limited');
+    expect(availability).not.toContain('402');
   });
 
   it('keeps report narration behind both POST and the token spending scope', () => {

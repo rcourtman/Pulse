@@ -52,9 +52,7 @@ vi.mock('@/api/charts', async () => {
 });
 
 vi.mock('@/stores/license', () => ({
-  isRangeLocked: () => false,
   loadRuntimeCapabilities: vi.fn(),
-  maxHistoryDays: () => 90,
 }));
 
 // Records whether the guest's physical disks may read, without their own

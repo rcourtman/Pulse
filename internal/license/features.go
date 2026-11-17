@@ -48,9 +48,6 @@ const (
 // TierFeatures maps each tier to its included features.
 var TierFeatures = licensing.TierFeatures
 
-// TierHistoryDays defines the maximum metrics history retention per tier.
-var TierHistoryDays = licensing.TierHistoryDays
-
 // DeriveEntitlements derives capabilities and limits from tier and canonical monitored-system fields.
 func DeriveEntitlements(tier Tier, features []string, maxMonitoredSystems int, maxGuests int) (capabilities []string, limits map[string]int64) {
 	return licensing.DeriveEntitlements(tier, features, maxMonitoredSystems, maxGuests)

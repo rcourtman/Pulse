@@ -9990,3 +9990,12 @@ SQLite owner. Expiry cancels owned notification work through ordinary occurrence
 gates before removing seven-day evidence. Evidence failure cannot authorize a
 direct send or inferred success. These notification routes acquire no backup,
 restore, filesystem, recovery administration or cross-organization authority.
+
+### No history or report purge on plan downgrade (17 November 2026)
+
+The downgrade retention state, the metrics store commercial ceiling and
+`purgeGeneratedReportsAfterDowngrade` are removed. A plan that ends no longer
+schedules deletion of metric history, availability history or generated
+reports; storage retention settings alone decide what is kept. Older
+activation files that still carry `downgrade_retention` load without acting on
+it.

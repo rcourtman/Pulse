@@ -8061,9 +8061,9 @@ output bound, so short windows and fallback reads can return native
 samples). It resolves the resource's `MetricsTarget` through the
 registry (`ResourceRegistry.MetricsTarget`, as the resources API does)
 and delegates to
-`handleMetricsHistory`, so its payload, tiers, fallbacks and licensed
-history limit are exactly the chart history route's: a window beyond
-the install's licensed history returns 402 `license_required`. An
+`handleMetricsHistory`, so its payload, tiers and fallbacks are exactly
+the chart history route's. Since 17 November 2026 no plan limits the
+window. An
 unknown resource, or one without a `MetricsTarget`, is a 404 with a
 reason; a missing `resourceId`, unknown range or non-positive
 `maxPoints` is a 400. The response's `resourceId` is the metrics-store
@@ -8567,13 +8567,13 @@ the canonical cluster source key, node history on
 `k8s:<cluster>:pod:<uid-or-namespace/name>`, and deployment history on
 `<cluster>:deployment:<uid-or-namespace/name>`, so demo and live workload
 detail charts all resolve through one governed identity contract.
-That same metrics-history contract also owns commercial history-range
-enforcement. `frontend-modern/src/api/charts.ts` may expose `14d` as a
-first-class `HistoryTimeRange`, and `/api/metrics-store/history` must parse
-positive day ranges before querying the store so entitlement checks cannot be
-bypassed with duration syntax. Community instances must remain capped at seven
-days, Relay must allow 14 days and reject longer history, and Pro-tier
-entitlements must continue to allow 90-day history.
+That same metrics-history contract owns history-range parsing.
+`frontend-modern/src/api/charts.ts` may expose `14d` as a first-class
+`HistoryTimeRange`, and `/api/metrics-store/history` parses positive day
+ranges before querying the store. Since 17 November 2026 no plan limits the
+range: every tier, including Community with no licence, is served any
+supported range, and storage retention alone decides how far back the answer
+goes (`TestHandleMetricsHistory_EveryPlanServesEveryRange`).
 The Pulse Account commercial shell now also owns a dedicated bootstrap
 contract in `internal/cloudcp/portal/page.go`, `internal/cloudcp/portal/handlers.go`,
 and `internal/cloudcp/portal/handlers_test.go`. `/api/portal/bootstrap` and

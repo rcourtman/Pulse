@@ -42,7 +42,6 @@ const ACTIVE_ENTITLEMENTS = {
   valid: true,
   is_lifetime: false,
   days_remaining: 30,
-  max_history_days: 90,
   runtime: PRO_RUNTIME_IDENTITY,
 };
 
@@ -50,14 +49,12 @@ const INACTIVE_RUNTIME_CAPABILITIES = {
   capabilities: [],
   limits: [],
   hosted_mode: false,
-  max_history_days: 7,
 };
 
 const ACTIVE_RUNTIME_CAPABILITIES = {
   capabilities: ACTIVE_ENTITLEMENTS.capabilities,
   limits: ACTIVE_ENTITLEMENTS.limits,
   hosted_mode: false,
-  max_history_days: 90,
   runtime: PRO_RUNTIME_IDENTITY,
 };
 

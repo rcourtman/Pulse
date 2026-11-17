@@ -6531,7 +6531,6 @@
               "frontend-modern/src/components/shared/__tests__/DrawerAttentionSection.test.tsx",
               "frontend-modern/src/components/shared/__tests__/HelpIcon.test.tsx",
               "frontend-modern/src/components/shared/__tests__/HistoryChart.test.tsx",
-              "frontend-modern/src/components/shared/__tests__/HistoryLockPlanLink.test.tsx",
               "frontend-modern/src/components/shared/__tests__/InlineDetailTableRow.test.tsx",
               "frontend-modern/src/components/shared/__tests__/MobileNavBar.test.tsx",
               "frontend-modern/src/components/shared/__tests__/PulseDataGrid.test.tsx",

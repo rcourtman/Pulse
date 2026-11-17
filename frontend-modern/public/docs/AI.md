@@ -1,6 +1,6 @@
 # Pulse Intelligence
 
-Pulse Patrol is available to everyone on the Community plan with BYOK (your own AI provider). Pro adds hands-on Patrol modes, issue investigation, governed fixes, verified outcomes, and 90-day history, while hosted Cloud carries those capabilities for hosted environments. Learn more at <https://pulserelay.pro> or see [PULSE_PRO.md](PULSE_PRO.md).
+Pulse Patrol is available to everyone on the Community plan with BYOK (your own AI provider). Pro adds hands-on Patrol modes, issue investigation, governed fixes, and verified outcomes, while hosted Cloud carries those capabilities for hosted environments. Learn more at <https://pulserelay.pro> or see [PULSE_PRO.md](PULSE_PRO.md).
 
 ---
 

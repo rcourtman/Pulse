@@ -8514,7 +8514,7 @@ func TestContract_EntitlementPayloadMonitoredSystemUsageJSONSnapshot(t *testing.
 	}
 
 	const want = `{
-		"capabilities":["update_alerts","sso","advanced_sso","ai_patrol","relay","mobile_app","push_notifications","long_term_metrics","ai_alerts","ai_autofix","kubernetes_ai","agent_profiles","rbac","audit_logging","advanced_reporting","external_probe"],
+		"capabilities":["update_alerts","sso","advanced_sso","ai_patrol","long_term_metrics","relay","mobile_app","push_notifications","ai_alerts","ai_autofix","kubernetes_ai","agent_profiles","rbac","audit_logging","advanced_reporting","external_probe"],
 		"limits":[],
 		"subscription_state":"active",
 		"upgrade_reasons":[],
@@ -8524,7 +8524,6 @@ func TestContract_EntitlementPayloadMonitoredSystemUsageJSONSnapshot(t *testing.
 		"is_lifetime":false,
 		"days_remaining":0,
 		"trial_eligible":false,
-		"max_history_days":90,
 			"legacy_connections":{"proxmox_nodes":2,"docker_hosts":1,"kubernetes_clusters":1},
 			"has_migration_gap":false
 		}`
@@ -8557,11 +8556,10 @@ func TestContract_SelfHostedCommunityEntitlementsJSONSnapshot(t *testing.T) {
 	}
 
 	const want = `{
-		"capabilities":["update_alerts","sso","advanced_sso","ai_patrol"],
+		"capabilities":["update_alerts","sso","advanced_sso","ai_patrol","long_term_metrics"],
 		"limits":[],
 		"subscription_state":"active",
 		"upgrade_reasons":[
-			{"key":"long_term_metrics","reason":"Upgrade to Pro for 90 days of metric history, so you can see what changed before and after an incident.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=long_term_metrics"},
 			{"key":"ai_autofix","reason":"Upgrade to Pro so Patrol can investigate issues, apply safe fixes within Patrol mode, and verify the result.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=ai_autofix"},
 			{"key":"ai_alerts","reason":"Upgrade to Pro so Patrol can investigate issues instead of handing you a stack of symptoms.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=ai_alerts"},
 			{"key":"rbac","reason":"Upgrade to Pro when more than one operator needs safe access boundaries around infrastructure changes.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=rbac"},
@@ -8575,7 +8573,6 @@ func TestContract_SelfHostedCommunityEntitlementsJSONSnapshot(t *testing.T) {
 		"is_lifetime":false,
 		"days_remaining":0,
 		"trial_eligible":false,
-		"max_history_days":7,
 		"overflow_days_remaining":14,
 			"legacy_connections":{"proxmox_nodes":0,"docker_hosts":0,"kubernetes_clusters":0},
 			"has_migration_gap":false,
@@ -8615,10 +8612,9 @@ func TestContract_SelfHostedCommunityRuntimeCapabilitiesJSONSnapshot(t *testing.
 	}
 
 	const want = `{
-		"capabilities":["update_alerts","sso","advanced_sso","ai_patrol"],
+		"capabilities":["update_alerts","sso","advanced_sso","ai_patrol","long_term_metrics"],
 			"limits":[],
 			"hosted_mode":false,
-			"max_history_days":7,
 			"runtime":{"build":"community","label":"Pulse Community runtime"}
 		}`
 
@@ -8641,7 +8637,7 @@ func TestContract_EntitlementPayloadMonitoredSystemUsageUnavailableJSONSnapshot(
 	}
 
 	const want = `{
-		"capabilities":["update_alerts","sso","advanced_sso","ai_patrol","relay","mobile_app","push_notifications","long_term_metrics","ai_alerts","ai_autofix","kubernetes_ai","agent_profiles","rbac","audit_logging","advanced_reporting","external_probe"],
+		"capabilities":["update_alerts","sso","advanced_sso","ai_patrol","long_term_metrics","relay","mobile_app","push_notifications","ai_alerts","ai_autofix","kubernetes_ai","agent_profiles","rbac","audit_logging","advanced_reporting","external_probe"],
 		"limits":[],
 		"subscription_state":"active",
 		"upgrade_reasons":[],
@@ -8652,7 +8648,6 @@ func TestContract_EntitlementPayloadMonitoredSystemUsageUnavailableJSONSnapshot(
 		"is_lifetime":false,
 		"days_remaining":0,
 		"trial_eligible":false,
-		"max_history_days":90,
 		"legacy_connections":{"proxmox_nodes":0,"docker_hosts":0,"kubernetes_clusters":0},
 		"has_migration_gap":false
 	}`
@@ -8683,7 +8678,7 @@ func TestContract_EntitlementPayloadLifetimeJSONSnapshot(t *testing.T) {
 	}
 
 	const want = `{
-		"capabilities":["update_alerts","sso","advanced_sso","ai_patrol","relay","mobile_app","push_notifications","long_term_metrics","ai_alerts","ai_autofix","kubernetes_ai","agent_profiles","rbac","audit_logging","advanced_reporting","external_probe"],
+		"capabilities":["update_alerts","sso","advanced_sso","ai_patrol","long_term_metrics","relay","mobile_app","push_notifications","ai_alerts","ai_autofix","kubernetes_ai","agent_profiles","rbac","audit_logging","advanced_reporting","external_probe"],
 		"limits":[],
 		"subscription_state":"active",
 		"upgrade_reasons":[],
@@ -8694,7 +8689,6 @@ func TestContract_EntitlementPayloadLifetimeJSONSnapshot(t *testing.T) {
 		"is_lifetime":true,
 		"days_remaining":0,
 		"trial_eligible":false,
-		"max_history_days":90,
 			"legacy_connections":{"proxmox_nodes":1,"docker_hosts":1,"kubernetes_clusters":0},
 			"has_migration_gap":false
 		}`

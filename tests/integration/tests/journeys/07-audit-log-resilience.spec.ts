@@ -4,7 +4,6 @@ const capabilities = {
   capabilities: ["audit_logging"],
   limits: [],
   hosted_mode: false,
-  max_history_days: 90,
   runtime: {
     build: "pro",
     label: "Pulse Pro runtime",

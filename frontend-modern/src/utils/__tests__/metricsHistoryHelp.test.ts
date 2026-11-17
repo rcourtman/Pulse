@@ -100,31 +100,23 @@ describe('History interpretation help', () => {
     );
   });
 
-  it('separates storage from runtime access and does not sell the retired Relay compatibility tier', () => {
+  it('keeps metric history free on every plan and does not sell the retired Relay tier', () => {
     const section = guide.split('## Retention and accessible range')[1].split('\n## ')[0];
     const rendered = render(section, 'METRICS_HISTORY');
-    expect(text(rendered)).toContain('Community supports up to 7 days');
-    expect(text(rendered)).toContain('Pro and legacy Pro+ entitlements support up to 90 days');
+    expect(text(rendered)).toContain('Metric history is free on every plan');
+    expect(text(rendered)).toContain('no plan unlocks more history');
     expect(text(rendered)).toContain('Relay is no longer sold');
     expect(text(rendered)).toContain('Continuing Relay subscribers receive Pro features');
-    expect(text(rendered)).toContain('14-day compatibility limit');
-    expect(text(rendered)).toContain('not a plan to buy');
-    expect(text(rendered)).toContain('402 Payment Required, not an empty history');
-    expect(text(rendered)).toContain('do not buy another licence, reset history or reinstall');
-    expect(text(rendered)).toContain('cannot recover observations that were never stored');
+    expect(text(rendered)).not.toContain('402 Payment Required');
+    expect(text(rendered)).toContain('do not buy a licence, reset history or reinstall');
+    expect(text(rendered)).toContain('no plan can recover observations that were never stored');
     expect(guide).not.toContain('Relay unlocks');
     const link = rendered.querySelector('a[href="/docs/PULSE_PRO#self-hosted-commercial-model"]');
     expect(link?.textContent).toBe('plans and legacy subscriptions');
     expect(
       render(read('docs/PULSE_PRO.md'), 'PULSE_PRO').querySelector('#self-hosted-commercial-model'),
     ).not.toBeNull();
-    const limits = read('pkg/licensing/features.go');
-    expect(limits).toMatch(/TierFree:\s+7,/);
-    expect(limits).toMatch(/TierRelay:\s+14,/);
-    expect(limits).toMatch(/TierPro:\s+90,/);
-    expect(limits).toMatch(/TierProPlus:\s+90,/);
-    expect(read('frontend-modern/src/stores/license.ts')).toContain(
-      'runtimeCapabilities()?.max_history_days',
-    );
+    expect(read('pkg/licensing/features.go')).not.toContain('TierHistoryDays');
+    expect(read('frontend-modern/src/stores/license.ts')).not.toContain('max_history_days');
   });
 });

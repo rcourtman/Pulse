@@ -13,7 +13,6 @@ export interface HistoryChartProps {
   onRangeChange?: (range: HistoryTimeRange) => void;
   hideSelector?: boolean;
   compact?: boolean;
-  hideLock?: boolean;
   data?: AggregatedMetricPoint[];
   /**
    * False pauses stored reads and polling while keeping the readings already
@@ -81,7 +80,6 @@ const HISTORY_CHART_RANGE_LABELS: Record<HistoryTimeRange, string> = {
 export interface HistoryChartAccessibleDescriptionInput {
   data: AggregatedMetricPoint[];
   error: string | null;
-  isLocked: boolean;
   loading: boolean;
   range: HistoryTimeRange;
   unit?: string;
@@ -103,7 +101,6 @@ export function getHistoryChartAccessibleLabel(label?: string): string {
 export function getHistoryChartAccessibleDescription({
   data,
   error,
-  isLocked,
   loading,
   range,
   unit,
@@ -111,7 +108,6 @@ export function getHistoryChartAccessibleDescription({
   const rangeLabel = HISTORY_CHART_RANGE_LABELS[range] ?? `${range} history`;
   if (loading) return `Loading ${rangeLabel} history data.`;
   if (error) return `${rangeLabel} history data could not be loaded.`;
-  if (isLocked) return `${rangeLabel} history data is unavailable on the current plan.`;
   if (data.length === 0) return `No ${rangeLabel} history data is available.`;
 
   const first = data[0];

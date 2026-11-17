@@ -370,7 +370,6 @@ async function mockRuntimeCapabilities(
         capabilities,
         limits: [],
         hosted_mode: false,
-        max_history_days: 7,
         runtime: {
           build: "community",
           label: "Pulse Community runtime",
@@ -714,7 +713,6 @@ test.describe("Patrol runtime-state browser contract", () => {
           capabilities: ["ai_patrol", "ai_alerts"],
           limits: [],
           hosted_mode: false,
-          max_history_days: 7,
           runtime: {
             build: "community",
             label: "Pulse Community runtime",

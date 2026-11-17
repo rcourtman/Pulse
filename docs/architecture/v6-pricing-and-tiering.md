@@ -113,7 +113,7 @@ than sold by monitored-system volume.
 | Alerts | Threshold-based |
 | SSO | OIDC/SAML with multi-provider support |
 | Update notifications | Yes |
-| Metrics history | **7 days** |
+| Metrics history | **Included** (storage retention decides the range; 90 days by default) |
 | AI Patrol | Watch-only findings with the operator's configured provider or local model |
 | Patrol governed fixes | **No** (must apply fixes manually) |
 | Alert investigation | No |
@@ -147,14 +147,14 @@ outcomes, and record what happened.
 | Pulse Mobile handoff pairing | **Yes** (handoff and push notifications) |
 | Push notifications | **Yes** |
 | Customer-specific Relay URL | No; Relay uses the standard outbound relay service for v6 GA |
-| Metrics history | **14 days** |
+| Metrics history | Included with Community |
 | Patrol governed fixes | No |
 | Alert investigation | No |
 | RBAC/Audit/Reporting | No |
 | Reporting | No |
 
 **Positioning:** Relay is the access service. Present it when someone wants secure remote
-access, Pulse Mobile handoff pairing, push notifications, and longer history without changing
+access, Pulse Mobile handoff pairing, and push notifications without changing
 their self-hosted monitoring scope. Do not recommend Relay over Pro, or describe Relay as a
 step toward Pro; the products solve different jobs.
 
@@ -168,7 +168,7 @@ step toward Pro; the products solve different jobs.
 | Patrol modes | **Yes** (choose how much Patrol can do) |
 | Issue investigation | **Yes** |
 | Governed fixes | **Yes** (approved execution, safety preflight, rollback, verification) |
-| Metrics history | **90 days** |
+| Metrics history | Included with Community |
 | RBAC | **Yes** |
 | Audit logging | **Yes** |
 | SAML SSO | Included with Community |
@@ -178,10 +178,13 @@ step toward Pro; the products solve different jobs.
 
 **Positioning:** Pro is the operations product for self-hosted operators who want Pulse to
 move from monitoring into investigation and governed action. It is not "more Relay." The
-marketing pitch focuses on three things:
+marketing pitch focuses on two things:
 1. "Choose Patrol mode" (how much Patrol can do)
 2. "Let Patrol investigate and fix governed issues" (issue investigation, governed fixes, verification)
-3. "Keep longer operating memory" (90-day history)
+
+Metric history was a Pro pillar until 17 November 2026. It is now free on every
+plan: free installs already stored the data, and only a minority of paid installs
+read past seven days.
 
 Relay connectivity and the team extras (RBAC, audit logging, reporting, and agent profiles)
 are bundled, but they are supporting entitlements rather than evidence of a product ladder.
@@ -337,7 +340,7 @@ request-assisted and must not imply immediate Pulse-hosted provisioning.
 ### 1. Operations-value ladder
 Self-hosted conversion should come from clear operational upgrades, not monitored-system
 capacity pressure. Community proves the core monitoring loop, Relay sells convenience,
-and Pro sells safe operations, longer history, and team/admin controls.
+and Pro sells safe operations and team/admin controls.
 
 ### 2. AI fix previews (strongest lever)
 Free/Relay users see exactly what Patrol found and how to fix it (specific commands), but
@@ -346,15 +349,15 @@ Patrol finding is a conversion moment.
 
 ### 3. Provider setup stays self-managed
 AI setup on self-hosted installs should point operators at their own provider connection or
-local model endpoint. Paid operations features such as governed fixes,
-issue investigation, and longer history remain opt-in extras; they do not
+local model endpoint. Paid operations features such as governed fixes
+and issue investigation remain opt-in extras; they do not
 replace the self-managed AI runtime path.
 
 ### 4. Relay as optional convenience ($39/yr)
 Gives remote-access and mobile users a small paid convenience option without turning core
 self-hosted monitoring into a capacity tier.
-Remote access through the standard outbound Relay service + mobile + push notifications +
-14-day history should make it an easy purchase for users who want Pulse available outside
+Remote access through the standard outbound Relay service + mobile + push notifications
+should make it an easy purchase for users who want Pulse available outside
 their LAN.
 
 ### 5. Opt-in commercial discovery
@@ -376,7 +379,7 @@ High-intent product moments should stay useful without becoming sales surfaces:
 ### 6. No self-hosted monitored-system overflow gate
 Self-hosted Community users should not need a temporary monitored-system overflow path because
 core self-hosted monitoring is included by default and not metered. Onboarding can still surface
-Relay and Pro value when users try remote access, push notifications, longer history, alert
+Relay and Pro value when users try remote access, push notifications, alert
 investigation, or governed fixes.
 
 ### 7. Transparent monitored-system ledger
@@ -409,9 +412,8 @@ inputs until the governed reopening gate passes.
 Combined transitions use the most restrictive timing rule. Voluntary
 cancellation has a seven-day recovery-only window after paid entitlement ends;
 payment failure has a separate seven-day functional grace period. Downgrades
-preserve configuration, report definitions, and audit records. Out-of-tier
-history and generated artifacts soft-hide for 30 days and become
-purge-eligible after 60 days.
+preserve configuration, report definitions, audit records, metric history, and
+generated reports; nothing is purged because a plan ended.
 
 ---
 
@@ -495,14 +497,14 @@ explain monitored-system identity:
 ### Plan taglines
 
 - **Community:** Monitor your self-hosted infrastructure for free.
-- **Relay:** Monitor from anywhere with remote access, mobile, push, and longer history.
+- **Relay:** Monitor from anywhere with remote access, mobile, and push.
 - **Pro:** Pulse does not just watch your infrastructure. It helps operate it.
 - **Pro+:** Legacy continuity tier for existing holders.
 
 ### Boundary-upgrade copy
 
-- **Community → Relay:** Want Pulse outside your LAN? Upgrade to Relay for secure remote access, mobile, push notifications, and 14-day history.
-- **Relay → Pro:** Want Pulse to do more than alert? Upgrade to Pro for hands-on Patrol modes, issue investigation, governed fixes, verified outcomes, and 90-day history.
+- **Community → Relay:** Want Pulse outside your LAN? Upgrade to Relay for secure remote access, mobile, and push notifications.
+- **Relay → Pro:** Want Pulse to do more than alert? Upgrade to Pro for hands-on Patrol modes, issue investigation, governed fixes, and verified outcomes.
 - **Existing self-hosted monitoring:** Your monitored systems keep working. Paid self-hosted tiers add convenience and operations features, not more monitoring room.
 
 ---

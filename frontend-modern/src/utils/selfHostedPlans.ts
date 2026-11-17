@@ -10,7 +10,6 @@ export interface SelfHostedPlanDefinition {
   name: string;
   price: string;
   subline: string;
-  metricHistoryDays: number;
   billingExtrasSummary: string;
   entitlementSummary: string;
   entitlementHighlights: readonly string[];
@@ -42,11 +41,10 @@ const PRO_COMPARISON_GROUPS: readonly SelfHostedPlanComparisonGroup[] = [
     ],
   },
   {
-    title: 'Patrol and history',
+    title: 'Patrol',
     items: [
       'Patrol modes: Ask first, Safe auto-fix, or Autopilot',
       'Patrol fixes issues and verifies the result',
-      '90-day metric history (Community keeps 7 days)',
     ],
   },
 ];
@@ -77,24 +75,8 @@ export interface SelfHostedCommercialPresentation {
   footerLinks: readonly SelfHostedLinkCTA[];
 }
 
-const getTierMetricHistoryHighlight = (tier: SelfHostedTierKey, metricHistoryDays: number) =>
-  tier === 'relay' || tier === 'pro' ? `${metricHistoryDays}-day metric history` : null;
-
-const getTierEntitlementHighlights = (
-  tier: SelfHostedTierKey,
-  metricHistoryDays: number,
-): readonly string[] => {
-  const highlights = getSelfHostedFeaturesForRole(tier, 'primary_pillar').map((entry) =>
-    entry.key === 'long_term_metrics'
-      ? `${metricHistoryDays}-day metric history`
-      : entry.comparisonName,
-  );
-  const metricHistoryHighlight = getTierMetricHistoryHighlight(tier, metricHistoryDays);
-  if (!metricHistoryHighlight || highlights.includes(metricHistoryHighlight)) {
-    return highlights;
-  }
-  return [...highlights, metricHistoryHighlight];
-};
+const getTierEntitlementHighlights = (tier: SelfHostedTierKey): readonly string[] =>
+  getSelfHostedFeaturesForRole(tier, 'primary_pillar').map((entry) => entry.comparisonName);
 
 const getTierIncludedExtras = (tier: SelfHostedTierKey): readonly string[] =>
   getSelfHostedFeaturesForRole(tier, 'included_extra').map((entry) => entry.displayName);
@@ -111,11 +93,11 @@ export function getSelfHostedPlanEntitlementSummary(
 ): string {
   switch (tier) {
     case 'community':
-      return `${planLabel} is active on this instance. It includes self-hosted monitoring, 7-day metric history, watch-only Patrol, update alerts, and SSO.`;
+      return `${planLabel} is active on this instance. It includes self-hosted monitoring, 90-day metric history, watch-only Patrol, update alerts, and SSO.`;
     case 'relay':
-      return `${planLabel} is active on this instance. It includes Pulse Mobile pairing and push notifications until 31 March 2027, and 14-day metric history.`;
+      return `${planLabel} is active on this instance. It includes Pulse Mobile pairing and push notifications until 31 March 2027.`;
     case 'pro':
-      return `${planLabel} is active on this instance. It includes Patrol modes (Ask first, Safe auto-fix, Autopilot), 90-day metric history, RBAC, audit logging, reporting, agent profiles, and Pulse Mobile pairing until 31 March 2027.`;
+      return `${planLabel} is active on this instance. It includes Patrol modes (Ask first, Safe auto-fix, Autopilot), RBAC, audit logging, reporting, agent profiles, and Pulse Mobile pairing until 31 March 2027.`;
   }
 }
 
@@ -134,12 +116,11 @@ export const SELF_HOSTED_PLAN_DEFINITIONS: readonly SelfHostedPlanDefinition[] =
     name: 'Community',
     price: 'Free forever',
     subline: 'Core monitoring included',
-    metricHistoryDays: 7,
     billingExtrasSummary: 'Watch-only Patrol, alerts, and SSO',
     entitlementSummary: getSelfHostedPlanEntitlementSummary('community'),
     entitlementHighlights: [
       'Real-time monitoring',
-      '7-day metric history',
+      '90-day metric history',
       'Watch-only Patrol',
       'Update alerts',
     ],
@@ -148,7 +129,7 @@ export const SELF_HOSTED_PLAN_DEFINITIONS: readonly SelfHostedPlanDefinition[] =
       'Community covers self-hosted monitoring and watch-only Patrol on this instance.',
     highlights: [
       'Real-time monitoring',
-      '7-day metric history',
+      '90-day metric history',
       'Watch-only Patrol',
       'Update alerts',
       'SSO (OIDC/SAML)',
@@ -160,33 +141,27 @@ export const SELF_HOSTED_PLAN_DEFINITIONS: readonly SelfHostedPlanDefinition[] =
     name: 'Relay',
     price: '$39/year',
     subline: 'or $4.99/month',
-    metricHistoryDays: 14,
     billingExtrasSummary: 'Pulse Mobile pairing and push',
     entitlementSummary: getSelfHostedPlanEntitlementSummary('relay'),
-    entitlementHighlights: getTierEntitlementHighlights('relay', 14),
+    entitlementHighlights: getTierEntitlementHighlights('relay'),
     includedExtras: [],
     comparisonSummary:
-      'Retired plan: Pulse Mobile pairing and push notifications until 31 March 2027, and 14-day metric history.',
-    highlights: [
-      'Pulse Mobile pairing until 31 March 2027',
-      'Push notifications',
-      '14-day metric history',
-    ],
+      'Retired plan: Pulse Mobile pairing and push notifications until 31 March 2027.',
+    highlights: ['Pulse Mobile pairing until 31 March 2027', 'Push notifications'],
   },
   {
     tier: 'pro',
     name: 'Pro',
     price: '$79/year',
     subline: 'or $8.99/month',
-    metricHistoryDays: 90,
-    billingExtrasSummary: 'Patrol modes, history, and team controls',
+    billingExtrasSummary: 'Patrol modes and team controls',
     entitlementSummary: getSelfHostedPlanEntitlementSummary('pro'),
-    entitlementHighlights: getTierEntitlementHighlights('pro', 90),
+    entitlementHighlights: getTierEntitlementHighlights('pro'),
     includedExtras: getTierIncludedExtras('pro'),
     // Pro is sold as the plan for teams and larger estates: organisation
-    // features lead, Patrol autonomy and longer history follow.
+    // features lead, Patrol autonomy follows.
     comparisonSummary:
-      'For small teams and larger estates: team access with audit logging, reporting, checks from outside your network, and support, plus Patrol fixes and 90-day history.',
+      'For small teams and larger estates: team access with audit logging, reporting, checks from outside your network, and support, plus Patrol fixes.',
     comparisonTagline: 'For small teams and larger estates',
     comparisonGroups: PRO_COMPARISON_GROUPS,
     highlights: PRO_COMPARISON_GROUPS.flatMap((group) => group.items),
@@ -255,13 +230,6 @@ export const SELF_HOSTED_FEATURE_ROWS: readonly SelfHostedFeatureRow[] = [
     community: 'Included',
     relay: 'Included',
     pro: 'Included',
-  },
-  {
-    key: 'history',
-    name: 'Metric History',
-    community: `${SELF_HOSTED_PLAN_BY_TIER.community.metricHistoryDays} days`,
-    relay: `${SELF_HOSTED_PLAN_BY_TIER.relay.metricHistoryDays} days`,
-    pro: `${SELF_HOSTED_PLAN_BY_TIER.pro.metricHistoryDays} days`,
   },
   ...buildSelfHostedComparisonFeatureRows(),
 ] as const;

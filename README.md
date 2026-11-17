@@ -37,8 +37,8 @@ sample data and signs you in automatically.
   availability checks cover routers, printers and web services, with
   certificate-expiry warnings.
   [Choose local checks or Pro remote observation locations](docs/AVAILABILITY.md).
-- **Keeps history.** Every guest, container and host has charts: seven days in
-  Community, ninety in Pro.
+- **Keeps history.** Every guest, container and host has charts going back
+  ninety days, on every plan.
 - **Optional AI checks.** Connect your own AI provider or a local model and
   Pulse Patrol runs scheduled checks for problems a dashboard only shows if
   someone is looking.
@@ -141,11 +141,11 @@ at each privilege level.
 
 ## Editions
 
-- **Community** (free, this repository): self-hosted monitoring, seven days
+- **Community** (free, this repository): self-hosted monitoring, ninety days
   of metric history, core SSO, update alerts, and Patrol with your own AI
   provider or a local model.
-- **Pro**: Community plus Patrol investigation and fixes, ninety days
-  of history, centralized agent profiles, RBAC, audit logging and reporting.
+- **Pro**: Community plus Patrol investigation and fixes, centralized agent
+  profiles, RBAC, audit logging and reporting.
 - **MSP**: one Pulse Account running isolated workspaces for each client, with
   separate dashboards, alerts, users, audit history and reports. Try it free
   for sixty days with two clients at [Pulse for MSPs](https://pulserelay.pro/msp).

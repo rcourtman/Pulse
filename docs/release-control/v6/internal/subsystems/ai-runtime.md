@@ -2521,8 +2521,7 @@ agents (`GET /api/agent/metric-history`, `monitoring:read`). It takes the
 canonical resource id the other agent reads return, resolves the resource's
 `MetricsTarget` through the registry, and delegates to the chart history read
 (`handleMetricsHistory`), so an agent and the history charts share tiers,
-fallbacks, downsampling and the licensed history limit; a window beyond that
-limit returns the same `license_required` error. It counts as resource-context
+fallbacks and downsampling. Since 17 November 2026 no plan limits the window. It counts as resource-context
 external-agent activity rather than a new telemetry activity. A range outside
 `MetricHistoryRanges` or a non-positive `maxPoints` is a 400. `maxPoints` (capped
 at 200) is the downsampling target, not an output bound: short windows and

@@ -67,11 +67,13 @@ func TestAgentMetricHistory_ResolvesCanonicalIDToTheChartSeries(t *testing.T) {
 	}
 }
 
-func TestAgentMetricHistory_PassesTheLicensedHistoryLimitThrough(t *testing.T) {
+// Metric history is free on every plan, so an agent on Community reads a
+// thirty-day window like the charts do.
+func TestAgentMetricHistory_CommunityReadsLongWindows(t *testing.T) {
 	router := metricHistoryFixture(t, []unified.Resource{metricHistoryVM})
 	rec := getAgentMetricHistory(router, url.Values{"resourceId": {"vm:101"}, "metric": {"cpu"}, "range": {"30d"}})
-	if rec.Code != http.StatusPaymentRequired || !strings.Contains(rec.Body.String(), "license_required") {
-		t.Fatalf("30d on Community: status = %d, body=%s; want the chart read's license_required", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusOK || strings.Contains(rec.Body.String(), "license_required") {
+		t.Fatalf("30d on Community: status = %d, body=%s; want the chart read's answer", rec.Code, rec.Body.String())
 	}
 }
 

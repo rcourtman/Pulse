@@ -67,7 +67,6 @@ const DEMO_PUBLIC_RUNTIME_CAPABILITIES = {
     },
   ],
   hosted_mode: false,
-  max_history_days: 90,
 };
 
 const truthy = (value: unknown): boolean =>
@@ -182,8 +181,7 @@ function expectPublicDemoRuntimeCapabilities(response: BrowserProbeResult): void
   expect((response.body as { capabilities?: string[] }).capabilities).toEqual(
     expect.arrayContaining(['ai_patrol', 'relay']),
   );
-  expect((response.body as { max_history_days?: number }).max_history_days).toEqual(expect.any(Number));
-  expect((response.body as { max_history_days?: number }).max_history_days).toBeGreaterThan(0);
+  expect(response.body).not.toHaveProperty('max_history_days');
   expect(response.body).not.toHaveProperty('licensed_email');
   expect(response.body).not.toHaveProperty('tier');
   expect(response.body).not.toHaveProperty('subscription_state');

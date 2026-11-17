@@ -129,7 +129,6 @@ const hash = (p) => crypto.createHash('sha256').update(fs.readFileSync(p)).diges
           data = {
             capabilities: [],
             limits: [],
-            max_history_days: 7,
             hosted_mode: false,
             blocked_capabilities: [],
             runtime: { build: 'community' },

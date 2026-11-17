@@ -137,28 +137,6 @@ func TestHandleMetricsHistory_MissingParams(t *testing.T) {
 	}
 }
 
-func TestHandleMetricsHistory_LicenseRequired(t *testing.T) {
-	monitor, _, _ := newTestMonitor(t)
-	mtp := config.NewMultiTenantPersistence(t.TempDir())
-	if _, err := mtp.GetPersistence("default"); err != nil {
-		t.Fatalf("failed to init persistence: %v", err)
-	}
-
-	router := &Router{
-		monitor:         monitor,
-		licenseHandlers: NewLicenseHandlers(mtp, false),
-	}
-
-	req := httptest.NewRequest(http.MethodGet, "/api/metrics-store/history?resourceType=vm&resourceId=vm-1&range=30d", nil)
-	rec := httptest.NewRecorder()
-
-	router.handleMetricsHistory(rec, req)
-
-	if rec.Code != http.StatusPaymentRequired {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusPaymentRequired)
-	}
-}
-
 func TestParseMetricsHistoryDurationSupportsDayRanges(t *testing.T) {
 	tests := []struct {
 		input string
@@ -197,20 +175,23 @@ func setMetricsHistoryLicenseTier(t *testing.T, handlers *LicenseHandlers, tier 
 	})
 }
 
-func TestHandleMetricsHistory_TierAwareHistoryRanges(t *testing.T) {
+// Metric history is free on every plan: no tier, including Community with no
+// licence at all, is refused a range. Storage retention alone decides how far
+// back the answer goes.
+func TestHandleMetricsHistory_EveryPlanServesEveryRange(t *testing.T) {
 	tests := []struct {
 		name   string
 		tier   pkglicensing.Tier
 		range_ string
 		want   int
 	}{
-		{name: "community allows free seven day history", range_: "7d", want: http.StatusOK},
-		{name: "community blocks relay history", range_: "14d", want: http.StatusPaymentRequired},
-		{name: "relay allows 14 days", tier: pkglicensing.TierRelay, range_: "14d", want: http.StatusOK},
-		{name: "relay allows equivalent hour range", tier: pkglicensing.TierRelay, range_: "336h", want: http.StatusOK},
-		{name: "relay blocks longer day range", tier: pkglicensing.TierRelay, range_: "15d", want: http.StatusPaymentRequired},
-		{name: "pro allows 90 days", tier: pkglicensing.TierPro, range_: "90d", want: http.StatusOK},
-		{name: "pro blocks longer than 90 days", tier: pkglicensing.TierPro, range_: "91d", want: http.StatusPaymentRequired},
+		{name: "community serves seven days", range_: "7d", want: http.StatusOK},
+		{name: "community serves fourteen days", range_: "14d", want: http.StatusOK},
+		{name: "community serves thirty days", range_: "30d", want: http.StatusOK},
+		{name: "community serves ninety days", range_: "90d", want: http.StatusOK},
+		{name: "community serves an equivalent hour range", range_: "2160h", want: http.StatusOK},
+		{name: "relay serves ninety days", tier: pkglicensing.TierRelay, range_: "90d", want: http.StatusOK},
+		{name: "pro serves past ninety days", tier: pkglicensing.TierPro, range_: "91d", want: http.StatusOK},
 	}
 
 	for _, tt := range tests {

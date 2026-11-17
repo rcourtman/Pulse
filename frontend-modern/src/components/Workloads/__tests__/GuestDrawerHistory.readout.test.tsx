@@ -8,8 +8,6 @@ import { GUEST_DRAWER_HISTORY_POLL_MS } from '../guestDrawerHistoryQuery';
 
 vi.mock('@/stores/license', () => ({
   loadRuntimeCapabilities: vi.fn(async () => undefined),
-  maxHistoryDays: () => 90,
-  isRangeLocked: () => false,
 }));
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });

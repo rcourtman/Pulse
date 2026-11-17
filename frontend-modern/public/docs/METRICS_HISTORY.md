@@ -92,23 +92,19 @@ share raw responses, credentials or a full network export.
 
 ## Retention and accessible range
 
-Storage retention and the range your running instance can serve are separate.
-Community supports up to **7 days**; Pro and legacy Pro+ entitlements support
-up to **90 days**. The panel uses the active runtime's history limit, not the
-length of time the database has existed. A longer retention setting does not
-grant access, and a licence cannot recover observations that were never stored.
+Metric history is free on every plan. Charts can show any supported range,
+up to **90 days**, and return whatever storage retention still holds. With the
+default settings that is 90 days of daily averages. A range longer than the
+database has existed, or than retention keeps, shows only what was stored, and
+no plan can recover observations that were never stored.
 
-**Relay is no longer sold.** Continuing Relay subscribers receive Pro features,
-including 90-day history, at their existing price. Older Relay payloads can
-still show a 14-day compatibility limit; that is not a plan to buy or proof
-that a continuing subscription has received its current entitlement. See
+**Relay is no longer sold.** Continuing Relay subscribers receive Pro features
+at their existing price. See
 [plans and legacy subscriptions](PULSE_PRO.md#self-hosted-commercial-model).
 
-An API request beyond the active limit returns **402 Payment Required**, not
-an empty history or a failed collector. Use an allowed range and the existing
-licence/range display first; do not buy another licence, reset history or
-reinstall merely to diagnose it. Storage defaults below do not guarantee that
-every resource has data for every allowed range.
+A short or empty chart is not a plan limit: no plan unlocks more history.
+Storage defaults below do not guarantee that every resource has data for every
+range; do not buy a licence, reset history or reinstall merely to diagnose a gap.
 
 ## Storage Location
 
@@ -271,9 +267,9 @@ durable historical coverage. An HTTP 200 with no points proves neither zero
 usage nor successful collection, and a non-zero current value does not prove
 every historical interval is present.
 
-> **History limit**: Requests beyond the active runtime's allowed range return
-> `402 Payment Required`. See [retention and accessible range](#retention-and-accessible-range);
-> stored retention is not access or proof of collected observations.
+> **History range**: Any supported range is served on every plan; Pulse returns
+> what storage retention still holds. See [retention and accessible range](#retention-and-accessible-range);
+> stored retention is not proof of collected observations.
 > **Older examples**: `container`, `dockerHost`, `dockerContainer`, `guest` and
 > `docker` are not current `resourceType` query values. Use the chart's current
 > type rather than a display label or internal storage name.

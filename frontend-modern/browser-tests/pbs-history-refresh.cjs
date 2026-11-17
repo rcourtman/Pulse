@@ -92,7 +92,6 @@ const { chromium } = require('playwright');
               json: {
                 capabilities: [],
                 limits: [],
-                max_history_days: 7,
                 hosted_mode: false,
                 runtime: { build: 'community', label: 'Pulse Community runtime' },
                 blocked_capabilities: [],
@@ -249,14 +248,14 @@ const { chromium } = require('playwright');
           0,
         );
         const dimensions = await checkLayout();
-        const beforeLocked = requests.length;
+        // Metric history is free on every plan: 14 days is read, never locked.
+        const beforeLongRange = requests.length;
         await detail.getByTestId('guest-history-range-control').selectOption('14d');
-        await detail.getByText(/14 days history requires a higher license plan/).waitFor();
-        assert.equal(
-          await detail.getByRole('button', { name: 'Retry history', exact: true }).count(),
-          0,
-        );
-        assert.equal(requests.length, beforeLocked);
+        for (let tick = 0; tick < 50 && requests.length <= beforeLongRange; tick += 1) {
+          await page.waitForTimeout(100);
+        }
+        assert.ok(requests.length > beforeLongRange, '14d did not read history');
+        assert.equal(await detail.getByText(/requires a higher license plan/).count(), 0);
         assert.ok(requests.every((r) => r.method === 'GET'));
         assert.deepEqual(errors, []);
         observations.push({ width, theme, requests, failures, dimensions, lateResponse, errors });

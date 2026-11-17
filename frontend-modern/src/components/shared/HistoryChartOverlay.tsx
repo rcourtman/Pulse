@@ -1,11 +1,9 @@
 import { Component, Show } from 'solid-js';
-import { HistoryLockPlanLink } from './HistoryLockPlanLink';
 import { LoadingSpinner } from './LoadingSpinner';
 import type { HistoryChartState } from './useHistoryChartState';
 
 interface HistoryChartOverlayProps {
   chart: HistoryChartState;
-  hideLock?: boolean;
 }
 
 export const HistoryChartOverlay: Component<HistoryChartOverlayProps> = (props) => {
@@ -52,34 +50,6 @@ export const HistoryChartOverlay: Component<HistoryChartOverlayProps> = (props) 
           <p role="alert" class="px-3 text-center text-sm text-red-500">
             {props.chart.error()}
           </p>
-        </div>
-      </Show>
-
-      <Show when={props.chart.isLocked() && !props.hideLock}>
-        <div class="absolute inset-0 z-10 flex flex-col items-center justify-center bg-surface rounded-md">
-          <div class="bg-indigo-500 rounded-full p-3 shadow-xs mb-3">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="white"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-              <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-            </svg>
-          </div>
-          <h3 class="text-lg font-bold text-base-content mb-1">
-            {props.chart.lockDays()}-Day History
-          </h3>
-          <p class="text-sm text-muted text-center max-w-[220px] mb-4">
-            Historical data beyond {props.chart.lockDays()} days requires a higher license plan.
-          </p>
-          <HistoryLockPlanLink class="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400" />
         </div>
       </Show>
     </>

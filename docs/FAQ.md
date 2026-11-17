@@ -100,7 +100,7 @@ passwords and tokens.
 ## 🔍 Monitoring & Metrics
 
 ### What do Pro and Cloud unlock?
-Pro and Cloud unlock **hands-on Patrol modes, issue investigation, governed fixes, verified outcomes, and 90-day history** along with the broader operations feature set. Existing legacy Pro+ holders keep their current continuity, but self-hosted pricing no longer sells more monitoring volume. Pulse Patrol is available to everyone on Community with BYOK and provides scheduled, cross-system analysis that correlates real-time state, recent metrics history, and diagnostics to surface actionable findings.
+Pro and Cloud unlock **hands-on Patrol modes, issue investigation, governed fixes, and verified outcomes** along with the broader operations feature set. Existing legacy Pro+ holders keep their current continuity, but self-hosted pricing no longer sells more monitoring volume. Pulse Patrol is available to everyone on Community with BYOK and provides scheduled, cross-system analysis that correlates real-time state, recent metrics history, and diagnostics to surface actionable findings.
 
 Example output includes trend-based capacity warnings, backup regressions, Kubernetes cluster analysis, and correlated container failures that simple threshold alerts miss.
 See [Pulse Intelligence](AI.md), [Plans and entitlements](PULSE_PRO.md), and <https://pulserelay.pro>.

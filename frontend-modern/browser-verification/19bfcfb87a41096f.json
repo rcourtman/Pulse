@@ -1,0 +1,70 @@
+{
+  "version": 1,
+  "base_sha": "40dfdcd05a1adf8b06376385414e1567a5fd8aea",
+  "verified_at": "2026-11-17T20:11:39Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/api/license.ts",
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx",
+    "frontend-modern/src/components/shared/HistoryChart.tsx",
+    "frontend-modern/src/components/shared/HistoryChartOverlay.tsx",
+    "frontend-modern/src/components/shared/HistoryLockPlanLink.tsx",
+    "frontend-modern/src/components/shared/historyChartModel.ts",
+    "frontend-modern/src/components/shared/useHistoryChartState.ts",
+    "frontend-modern/src/stores/license.ts",
+    "frontend-modern/src/utils/commercialBillingModel.ts",
+    "frontend-modern/src/utils/licensePresentation.ts",
+    "frontend-modern/src/utils/pricingHandoff.ts",
+    "frontend-modern/src/utils/selfHostedFeatureCatalog.generated.ts",
+    "frontend-modern/src/utils/selfHostedPlans.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/api/license.ts": "16f54a19ffe3f8609e9a7f04eaa498f58c9599edd862656dce9258c96b974e39",
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx": "5c8864cdd51418426bfa24e3d5ceb856084055570ee5b29dc811f84939a8e819",
+    "frontend-modern/src/components/shared/HistoryChart.tsx": "34629384241f735abeda8c6f440330ee395e9363267fb09ee3be892494777951",
+    "frontend-modern/src/components/shared/HistoryChartOverlay.tsx": "cc3e320ec6f83017e0fa490f78d5cba6618ab47eba4c08c8197697acb321a90d",
+    "frontend-modern/src/components/shared/HistoryLockPlanLink.tsx": "deleted",
+    "frontend-modern/src/components/shared/historyChartModel.ts": "9a3c70fc0dbfa5f20fa4ee0627919d7d464186f8e6b0a8a2436eff809098d3f2",
+    "frontend-modern/src/components/shared/useHistoryChartState.ts": "f43ceaf4a7e0bad240ec80a361d3d843e21d99e13d6f5bda48719553fc98daac",
+    "frontend-modern/src/stores/license.ts": "e62187ba2b5debd13e43b147dc60e26fcacfa23275034417482324601ef60dee",
+    "frontend-modern/src/utils/commercialBillingModel.ts": "47e6ca70572c858f2be825d57d9357872480cb21cf69682cb7040d0de63bb91b",
+    "frontend-modern/src/utils/licensePresentation.ts": "422225e8b73c3de9712a48894d2a261d81a4102240383178784ad64ff919993c",
+    "frontend-modern/src/utils/pricingHandoff.ts": "c13266f393f260d3e4852204858113f9c048c4eb6bda185d2d0ceaf24c710042",
+    "frontend-modern/src/utils/selfHostedFeatureCatalog.generated.ts": "0dfc6f91f1b6ab1bf8f7d26d9776983d96b6a6a434f4b53b47d7b378308afedc",
+    "frontend-modern/src/utils/selfHostedPlans.ts": "2673dde4c6b7bfdaf9cb61b4199558657034a3049ccb51918c57fd2c305e95a7"
+  },
+  "routes": [
+    "/proxmox/overview: a VM row's drawer Overview history (Utilization, Network I/O, Disk I/O) at 30 and 90 days, served by Vite from an export of HEAD plus this change against a mock Community backend built from the same tree with no licence.",
+    "/settings/pulse-intelligence/billing/plan: Community current-plan copy and the Pro card."
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 800,
+      "height": 600
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Unlicensed Community runtime: runtime-capabilities lists long_term_metrics, carries no max_history_days, and entitlements list no history upgrade reason.",
+    "/api/metrics-store/history for the VM's cpu returned 200 with data for 7d, 14d, 30d and 90d; the 90-day answer starts 19 Aug.",
+    "Drawer at 30 and 90 days draws seven series paths across the three panels, with no 'requires a higher license plan' panel and no Plans & Billing link.",
+    "Plans & Billing on Community reads 'self-hosted monitoring, 90-day metric history, watch-only Patrol' and lists 90-day metric history as included; the Pro card's groups are For your team, For larger estates and Patrol, with no history line.",
+    "Dark theme."
+  ],
+  "interactions": [
+    "Opened the VM row, chose 30 days then 90 days in the drawer's range select and read the rendered plot paths and page text after each change.",
+    "Repeated the 90-day selection at 375px: plots drawn, no horizontal page scroll."
+  ],
+  "limits": [
+    "Mock backend: the history is synthetic (source mock_synthetic), so the check proves the range is served and drawn, not real storage depth.",
+    "Light theme was not checked; the change removes UI rather than restyling it.",
+    "The availability-history route was exercised by Go tests, not in the browser (a hand-made POST hit CSRF before the handler)."
+  ]
+}

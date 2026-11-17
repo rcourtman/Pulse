@@ -28,12 +28,12 @@ func TestBranchCovGetFeatureMinTierName(t *testing.T) {
 		{name: "free_sso", feature: FeatureSSO, want: "Community"},
 		{name: "free_advanced_sso", feature: FeatureAdvancedSSO, want: "Community"},
 		{name: "free_ai_patrol", feature: FeatureAIPatrol, want: "Community"},
+		{name: "free_long_term_metrics", feature: FeatureLongTermMetrics, want: "Community"},
 
 		// Relay-only features (absent from Free) resolve to "Relay".
 		{name: "relay_remote_access", feature: FeatureRelay, want: "Relay"},
 		{name: "relay_mobile_app", feature: FeatureMobileApp, want: "Relay"},
 		{name: "relay_push_notifications", feature: FeaturePushNotifications, want: "Relay"},
-		{name: "relay_long_term_metrics", feature: FeatureLongTermMetrics, want: "Relay"},
 
 		// Pro-only features (absent from Free/Relay) resolve to "Pro".
 		{name: "pro_ai_alerts", feature: FeatureAIAlerts, want: "Pro"},

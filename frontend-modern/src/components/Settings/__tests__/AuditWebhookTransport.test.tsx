@@ -163,8 +163,7 @@ beforeEach(async () => {
     vi.fn(async (request: string | URL | Request, init: RequestInit = {}) => {
       const url = String(request);
       requests.push({ url, init });
-      if (url === '/api/license/runtime-capabilities')
-        return json({ capabilities, limits: [], max_history_days: 7 });
+      if (url === '/api/license/runtime-capabilities') return json({ capabilities, limits: [] });
       if (url === '/api/health' && init.method === 'GET') return healthReply();
       if (url === endpoint && !init.method) return readReply();
       if (url === endpoint && init.method === 'POST') return writeReply(init);

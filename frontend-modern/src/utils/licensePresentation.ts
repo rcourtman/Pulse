@@ -745,7 +745,7 @@ export const getSelfHostedCurrentPlanPresentation = ({
       title: 'Current plan: Community',
       body:
         getSelfHostedActivePlanSummary('Community', planDefinition) ||
-        'Community is active on this instance. Self-hosted monitoring, 7-day metric history, watch-only Patrol, and update alerts are included here.',
+        'Community is active on this instance. Self-hosted monitoring, 90-day metric history, watch-only Patrol, and update alerts are included here.',
       unlockedFeaturesLabel,
       unlockedFeatures,
       includedExtras,
@@ -858,9 +858,6 @@ export const getSelfHostedPlanStatusPresentation = (
   if (!entitlements || !planDefinition || planDefinition.tier === 'community') {
     return null;
   }
-  if (typeof entitlements.max_history_days !== 'number') {
-    return null;
-  }
 
   const normalizedState = (entitlements.subscription_state || '').trim().toLowerCase();
   if (normalizedState !== 'active' && normalizedState !== 'grace' && normalizedState !== 'trial') {
@@ -896,28 +893,6 @@ export const getSelfHostedPlanStatusPresentation = (
         'Pulse Mobile pairing or push notifications are not available yet. Refresh the plan or open recovery before relying on Pulse Mobile.',
     }),
   );
-
-  const requiredHistoryDays = planDefinition.metricHistoryDays;
-  const actualHistoryDays = entitlements.max_history_days;
-  const historyState =
-    actualHistoryDays >= requiredHistoryDays
-      ? 'active'
-      : actualHistoryDays > 0
-        ? 'partial'
-        : 'missing';
-  items.push({
-    label: `${requiredHistoryDays}-day metric history`,
-    state: historyState,
-    statusLabel: getStatusStateLabel(historyState),
-    detail:
-      historyState === 'active'
-        ? isProPlan
-          ? `Patrol has ${actualHistoryDays} days of metric history available for investigation context.`
-          : `This instance has ${actualHistoryDays} days of metric history available.`
-        : historyState === 'partial'
-          ? `This instance reports ${actualHistoryDays} days of metric history, below the expected ${requiredHistoryDays} days.`
-          : `This instance does not have metric-history access yet. Expected ${requiredHistoryDays} days.`,
-  });
 
   if (planDefinition.tier === 'pro') {
     items.push(

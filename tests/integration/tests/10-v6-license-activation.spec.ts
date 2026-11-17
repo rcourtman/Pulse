@@ -127,7 +127,8 @@ test.describe.serial("V6 license activation flow", () => {
     });
     await expect(page.getByText("Current plan: Community")).toHaveCount(0);
     await expect(page.getByText(/^Active$/).first()).toBeVisible();
-    await expect(page.getByText("90-day metric history").first()).toBeVisible();
+    // Metric history is free on every plan, so the Pro status no longer lists it.
+    await expect(page.getByText(/-day metric history/)).toHaveCount(0);
     // The managed backend is a community build: the licence is accepted, and
     // the page says which runtime the Pro-only hooks need.
     await expect(page.getByText("Pro runtime missing").first()).toBeVisible();
