@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createSignal, Show } from 'solid-js';
 import { HelpIcon } from '@/components/shared/HelpIcon';
 
 vi.mock('@/content/help', () => ({
@@ -18,8 +19,124 @@ vi.mock('@/content/help', () => ({
 
 describe('HelpIcon', () => {
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
+  });
+
+  const deferOpeningFrames = () => {
+    const frames = new Map<number, FrameRequestCallback>();
+    let nextFrame = 0;
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      frames.set(++nextFrame, callback);
+      return nextFrame;
+    });
+    vi.stubGlobal('cancelAnimationFrame', (id: number) => frames.delete(id));
+    return () => {
+      const pending = [...frames.values()];
+      frames.clear();
+      pending.forEach((callback) => callback(0));
+    };
+  };
+
+  it('accepts Escape immediately, before any timer or opening focus frame', () => {
+    vi.useFakeTimers();
+    const flushFrames = deferOpeningFrames();
+    render(() => <HelpIcon inline={{ title: 'Immediate help', description: 'Description' }} />);
+    const trigger = screen.getByRole('button', { name: 'Help: Immediate help' });
+    trigger.focus();
+    fireEvent.click(trigger);
+    expect(screen.getByRole('dialog', { name: 'Immediate help' })).toBeInTheDocument();
+    expect(trigger).toHaveAttribute('aria-expanded', 'true');
+
+    fireEvent.keyDown(trigger, { key: 'Escape' });
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    expect(trigger).not.toHaveAttribute('aria-controls');
+    expect(trigger).toHaveFocus();
+    vi.runOnlyPendingTimers();
+    flushFrames();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+  });
+
+  it('honors an immediate outside click without a delayed focus steal', () => {
+    vi.useFakeTimers();
+    const flushFrames = deferOpeningFrames();
+    render(() => (
+      <>
+        <button type="button">Outside help</button>
+        <HelpIcon inline={{ title: 'Immediate help', description: 'Description' }} />
+      </>
+    ));
+    const trigger = screen.getByRole('button', { name: 'Help: Immediate help' });
+    const outside = screen.getByRole('button', { name: 'Outside help' });
+    trigger.focus();
+    fireEvent.click(trigger);
+    outside.focus();
+    fireEvent.click(outside);
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    vi.runOnlyPendingTimers();
+    flushFrames();
+    expect(outside).toHaveFocus();
+  });
+
+  it('keeps opening and inside clicks while allowing immediate trigger dismissal', () => {
+    vi.useFakeTimers();
+    const flushFrames = deferOpeningFrames();
+    render(() => <HelpIcon inline={{ title: 'Immediate help', description: 'Description' }} />);
+    const trigger = screen.getByRole('button', { name: 'Help: Immediate help' });
+    trigger.focus();
+    fireEvent.click(trigger);
+    fireEvent.click(screen.getByText('Description'));
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: 'ArrowDown' });
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    fireEvent.click(trigger);
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    vi.runOnlyPendingTimers();
+    flushFrames();
+    expect(trigger).toHaveFocus();
+    fireEvent.click(trigger);
+    fireEvent.keyDown(trigger, { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('removes immediate dismissal listeners and opening focus work on unmount', () => {
+    vi.useFakeTimers();
+    const flushFrames = deferOpeningFrames();
+    const add = vi.spyOn(document, 'addEventListener');
+    const remove = vi.spyOn(document, 'removeEventListener');
+    const [shown, setShown] = createSignal(true);
+    render(() => (
+      <>
+        <button type="button">Outside help</button>
+        <Show when={shown()}>
+          <HelpIcon inline={{ title: 'Removable help', description: 'Description' }} />
+        </Show>
+      </>
+    ));
+    fireEvent.click(screen.getByRole('button', { name: 'Help: Removable help' }));
+    const listeners = add.mock.calls.filter(([type]) => type === 'click' || type === 'keydown');
+    expect(listeners.some(([type]) => type === 'keydown')).toBe(true);
+    expect(listeners.some(([type]) => type === 'click')).toBe(true);
+    setShown(false);
+
+    listeners.forEach(([type, handler]) => {
+      expect(remove).toHaveBeenCalledWith(type, handler);
+    });
+    const outside = screen.getByRole('button', { name: 'Outside help' });
+    outside.focus();
+    vi.runOnlyPendingTimers();
+    flushFrames();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    fireEvent.click(outside);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(outside).toHaveFocus();
   });
 
   it('renders inline help content in the popover', async () => {
