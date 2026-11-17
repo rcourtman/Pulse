@@ -185,19 +185,45 @@ describe('keyboard-safe saved Roles recovery through the consuming transport', (
     },
   );
 
-  it('retains truthful uncertainty and another explicit check when the recovery read fails', async () => {
-    const { pending, inventory } = await checkAfterUnknownWrite('save');
-    pending.resolve(json({ error: 'Synthetic private upstream detail' }, 503));
-    const check = await screen.findByRole('button', { name: 'Check saved roles' });
-    expect(inventory).toHaveFocus();
-    expect(check).toBeEnabled();
-    expect(screen.getByRole('button', { name: 'New Role' })).toBeDisabled();
-    expect(screen.getByText(/It may already have been applied/)).toBeInTheDocument();
-    expect(screen.getByText('Failed to load roles', { exact: true })).toBeInTheDocument();
-    expect(screen.queryByText('Synthetic private upstream detail')).not.toBeInTheDocument();
-    expect(writes()).toHaveLength(1);
-    expect(reads()).toHaveLength(2);
-  });
+  it.each(['save', 'delete'] as const)(
+    'retries only the saved inventory after an uncertain %s and failed recovery read',
+    async (operation) => {
+      const { pending, inventory } = await checkAfterUnknownWrite(operation);
+      pending.resolve(json({ error: 'Synthetic private upstream detail' }, 503));
+      const check = await screen.findByRole('button', { name: 'Check saved roles' });
+      expect(inventory).toHaveFocus();
+      expect(check).toBeEnabled();
+      expect(screen.getByRole('button', { name: 'New Role' })).toBeDisabled();
+      expect(screen.getByText(/It may already have been applied/)).toBeInTheDocument();
+      expect(screen.getByText('Failed to load roles', { exact: true })).toBeInTheDocument();
+      expect(screen.queryByText('Synthetic private upstream detail')).not.toBeInTheDocument();
+      expect(writes()).toHaveLength(1);
+      expect(reads()).toHaveLength(2);
+
+      const nextRead = deferred();
+      readReply = () => nextRead.promise;
+      check.focus();
+      fireEvent.click(check);
+      expect(inventory).toHaveFocus();
+      expect(inventory).toHaveAttribute('aria-busy', 'true');
+      await waitFor(() => expect(reads()).toHaveLength(3));
+      expect(reads()[2][1]).toMatchObject({
+        headers: { 'X-Pulse-Org-ID': 'estate/north', 'X-API-Token': 'synthetic-role-recovery-token' },
+        signal: expect.any(AbortSignal),
+      });
+      expect(writes()).toHaveLength(1);
+
+      nextRead.resolve(json(roles));
+      await waitFor(() => expect(inventory).toHaveAttribute('aria-busy', 'false'));
+      expect(inventory).toHaveFocus();
+      expect(screen.queryByRole('button', { name: 'Check saved roles' })).toBeNull();
+      expect(screen.getByRole('button', { name: 'New Role' })).toBeEnabled();
+      expect(screen.getByText(roles[1].id, { exact: true })).toBeInTheDocument();
+      expect(reads()).toHaveLength(3);
+      expect(writes()).toHaveLength(1);
+      expect(fetchMock).toHaveBeenCalledTimes(4);
+    },
+  );
 
   it('does not pull focus back after the reader deliberately moves elsewhere', async () => {
     mount();
