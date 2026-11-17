@@ -74,11 +74,13 @@ func TestSecurityTokens_CreateInheritsOwnerUserIDFromTokenCaller(t *testing.T) {
 		persistence: persistence,
 	}
 
-	caller, err := config.NewAPITokenRecord("caller-token-123.12345678", "caller", []string{config.ScopeMonitoringRead})
+	caller, err := config.NewAPITokenRecord("caller-token-123.12345678", "caller", []string{config.ScopeSettingsWrite, config.ScopeMonitoringRead})
 	if err != nil {
 		t.Fatalf("new caller token record: %v", err)
 	}
 	caller.Metadata = map[string]string{apiTokenMetadataOwnerUserID: "alice"}
+	caller.OrgID = "acme"
+	cfg.UpsertAPIToken(*caller)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/security/tokens", strings.NewReader(`{"name":"child","scopes":["monitoring:read"]}`))
 	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "acme"))
@@ -98,13 +100,14 @@ func TestSecurityTokens_CreateInheritsOwnerUserIDFromTokenCaller(t *testing.T) {
 	if createResp.Record.OwnerUserID != "alice" {
 		t.Fatalf("child ownerUserId = %q, want alice", createResp.Record.OwnerUserID)
 	}
-	if len(cfg.APITokens) != 1 {
-		t.Fatalf("expected one stored token, got %d", len(cfg.APITokens))
+	if len(cfg.APITokens) != 2 {
+		t.Fatalf("expected parent and child, got %d stored tokens", len(cfg.APITokens))
 	}
-	if got := cfg.APITokens[0].Metadata[apiTokenMetadataOwnerUserID]; got != "alice" {
+	child := findAPITokenByID(t, cfg.APITokens, createResp.Record.ID)
+	if got := child.Metadata[apiTokenMetadataOwnerUserID]; got != "alice" {
 		t.Fatalf("stored child owner_user_id = %q, want alice", got)
 	}
-	if got := cfg.APITokens[0].OrgID; got != "acme" {
+	if got := child.OrgID; got != "acme" {
 		t.Fatalf("stored child org = %q, want acme", got)
 	}
 }

@@ -10403,43 +10403,77 @@ func TestContract_HostedDirectCloudHandoffUsesExistingTenantMembership(t *testin
 }
 
 func TestContract_APITokenDeleteRejectsScopeEscalation(t *testing.T) {
-	router := &Router{
-		config: &config.Config{
-			APITokens: []config.APITokenRecord{
-				{
-					ID:        "broad-token",
-					Name:      "broad",
-					Hash:      "hash-broad",
-					CreatedAt: time.Now().Add(-time.Hour),
-					Scopes:    []string{config.ScopeWildcard},
-					OrgID:     "default",
-				},
-			},
+	for _, tc := range []struct {
+		name       string
+		withdraw   bool
+		wantStatus int
+		wantBody   string
+	}{
+		{
+			name:       "live limited caller",
+			wantStatus: http.StatusForbidden,
+			wantBody:   `Cannot delete token with scope "*"`,
 		},
-	}
+		{
+			name:       "withdrawn caller",
+			withdraw:   true,
+			wantStatus: http.StatusUnauthorized,
+			wantBody:   "Invalid API token",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			router := &Router{
+				config: &config.Config{
+					APITokens: []config.APITokenRecord{
+						{
+							ID:        "broad-token",
+							Name:      "broad",
+							Hash:      "hash-broad",
+							CreatedAt: time.Now().Add(-time.Hour),
+							Scopes:    []string{config.ScopeWildcard},
+							OrgID:     "default",
+						},
+					},
+				},
+			}
 
-	caller, err := config.NewAPITokenRecord(
-		"limited-caller-token-123.12345678",
-		"limited",
-		[]string{config.ScopeSettingsWrite},
-	)
-	if err != nil {
-		t.Fatalf("NewAPITokenRecord: %v", err)
-	}
+			caller, err := config.NewAPITokenRecord(
+				"limited-caller-token-123.12345678",
+				"limited",
+				[]string{config.ScopeSettingsWrite},
+			)
+			if err != nil {
+				t.Fatalf("NewAPITokenRecord: %v", err)
+			}
+			// Model the live inventory that admitted the request, not a caller
+			// invented only in context. A later withdrawal keeps that detached
+			// context but must be rejected before the target-scope check.
+			router.config.UpsertAPIToken(*caller)
+			req := httptest.NewRequest(http.MethodDelete, "/api/security/tokens/broad-token", nil)
+			req = req.WithContext(authpkg.WithAPIToken(req.Context(), caller))
+			if tc.withdraw {
+				if removed := router.config.RemoveAPIToken(caller.ID); removed == nil {
+					t.Fatal("failed to withdraw the admitted caller")
+				}
+			}
+			before := make([]config.APITokenRecord, len(router.config.APITokens))
+			for i := range before {
+				before[i] = router.config.APITokens[i].Clone()
+			}
 
-	req := httptest.NewRequest(http.MethodDelete, "/api/security/tokens/broad-token", nil)
-	req = req.WithContext(authpkg.WithAPIToken(req.Context(), caller))
-	rec := httptest.NewRecorder()
-	router.handleDeleteAPIToken(rec, req)
+			rec := httptest.NewRecorder()
+			router.handleDeleteAPIToken(rec, req)
 
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusForbidden)
-	}
-	if !strings.Contains(rec.Body.String(), `Cannot delete token with scope "*"`) {
-		t.Fatalf("expected delete scope-escalation contract message, got %q", rec.Body.String())
-	}
-	if len(router.config.APITokens) != 1 || router.config.APITokens[0].ID != "broad-token" {
-		t.Fatalf("expected broader token to remain configured, got %+v", router.config.APITokens)
+			if rec.Code != tc.wantStatus {
+				t.Fatalf("status = %d, want %d: %s", rec.Code, tc.wantStatus, rec.Body.String())
+			}
+			if !strings.Contains(rec.Body.String(), tc.wantBody) {
+				t.Fatalf("expected delete contract message %q, got %q", tc.wantBody, rec.Body.String())
+			}
+			if !reflect.DeepEqual(router.config.APITokens, before) {
+				t.Fatal("denied delete changed the target or caller inventory")
+			}
+		})
 	}
 }
 

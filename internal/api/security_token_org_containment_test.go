@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -47,6 +48,9 @@ func newOrgTokenFixture(t *testing.T) *orgTokenFixture {
 // call runs a token-management handler as the given caller token.
 func (f *orgTokenFixture) call(caller *config.APITokenRecord, method, path string, handler func(http.ResponseWriter, *http.Request)) *httptest.ResponseRecorder {
 	req := httptest.NewRequest(method, path, strings.NewReader(`{"name":"renamed"}`))
+	if caller != nil && len(caller.OrgIDs) == 0 && caller.OrgID != "" {
+		req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, caller.OrgID))
+	}
 	attachAPITokenRecord(req, caller)
 	rec := httptest.NewRecorder()
 	handler(rec, req)
