@@ -53,7 +53,7 @@ func TestLoadConfigBuildsReportOnlyObserverTargets(t *testing.T) {
 }
 
 func TestObserverRefusalPreservesPrimarySavedAuthority(t *testing.T) {
-	for _, refusal := range []string{"oversized-token", "invalid-config", "missing-token"} {
+	for _, refusal := range []string{"oversized-token", "invalid-config", "missing-token", "duplicate-field", "duplicate-list"} {
 		t.Run(refusal, func(t *testing.T) {
 			dir := t.TempDir()
 			tokenPath, configPath := filepath.Join(dir, "observer.token"), filepath.Join(dir, "observers.json")
@@ -64,8 +64,13 @@ func TestObserverRefusalPreservesPrimarySavedAuthority(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			validConfig := append([]byte(nil), config...)
 			if refusal == "invalid-config" {
 				config = append(config, '{', '}')
+			} else if refusal == "duplicate-field" {
+				config = []byte(strings.Replace(string(config), `"provisionProxmox":false`, `"provisionProxmox":false,"PROVISIONPROXMOX":true`, 1))
+			} else if refusal == "duplicate-list" {
+				config = append([]byte(`{"observers":[],`), config[1:]...)
 			}
 			if err := os.WriteFile(configPath, config, 0600); err != nil {
 				t.Fatal(err)
@@ -120,8 +125,7 @@ func TestObserverRefusalPreservesPrimarySavedAuthority(t *testing.T) {
 			if err := os.WriteFile(tokenPath, []byte("restored-synthetic-observer-token"), 0600); err != nil {
 				t.Fatal(err)
 			}
-			config = []byte(strings.TrimSuffix(string(config), "{}"))
-			if err := os.WriteFile(configPath, config, 0600); err != nil {
+			if err := os.WriteFile(configPath, validConfig, 0600); err != nil {
 				t.Fatal(err)
 			}
 			cfg, err := loadConfig([]string{"--url", "https://primary.example.test", "--state-dir", state, "--observers-file", configPath, "--enroll"}, func(string) string { return "" })

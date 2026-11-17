@@ -17,6 +17,26 @@
 
 ## Purpose
 
+### Observer files retain one deliberate value per setting (17 November 2026)
+
+The existing private observer-file loader refuses repeated root or destination
+members, including case-folded and JSON-escaped aliases, before resolving any
+observer token file. It no longer chooses the last of competing destination,
+TLS, plaintext-consent or Proxmox-provisioning settings. The fixed diagnostic
+quotes neither keys nor values. Singleton aliases, defaults, supported values,
+the size/count limits and private-file checks remain unchanged. An invalid
+observer file still stops startup without changing saved primary identity or
+credentials; correcting that file restores the existing choices without
+re-enrollment. No live observer, primary grant, report field, rendered state or
+new destination feature is added.
+
+`internal/agenttarget/config_test.go` covers all ten schema members with exact,
+case-folded and escaped competing/equal duplicates, whole-file admission before
+token resolution and singleton alias compatibility. The real CLI admission in
+`cmd/pulse-agent/observers_config_test.go` checks refusal and correction while
+preserving primary saved bytes, file identities, modes and modification times.
+These are synthetic source checks, not original-client or installed recovery.
+
 ### Recovery requests retain their one-use admission boundary (17 November 2026)
 
 The public administrative recovery handler refuses already-ended requests at
