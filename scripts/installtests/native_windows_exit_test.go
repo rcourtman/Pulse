@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"regexp"
 	"runtime"
 	"strings"
@@ -152,7 +151,7 @@ func TestWindowsAgentLifecycleNativeExitChecksStopFollowingCommands(t *testing.T
 			nativeExit(0) + "\nWrite-Output 'FOLLOWING_COMMAND_RAN'\nexit $LASTEXITCODE\n"
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
-		cmd := exec.CommandContext(ctx, powerShell, "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script)
+		cmd := nativeInstallerCommand(ctx, powerShell, "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script)
 		return cmd.CombinedOutput()
 	}
 	t.Run("unguarded parent control", func(t *testing.T) {
