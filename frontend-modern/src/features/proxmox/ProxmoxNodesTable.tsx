@@ -67,7 +67,7 @@ import {
   TEMPERATURE_SPARKLINE_UNIT,
   type WorkloadTableMetricHistoryRange,
 } from '@/components/Workloads/workloadMetricHistoryModel';
-import { formatTemperature } from '@/utils/temperature';
+import { formatTemperature, getTemperatureTextClass } from '@/utils/temperature';
 import type { Disk, Node as LegacyNode } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import { hasCurrentProxmoxUpdateEvidence } from '@/utils/proxmoxUpdateEvidence';
@@ -839,6 +839,22 @@ export const ProxmoxNodesTable: Component<{
                               <MetricMiniSparkline
                                 series={temperatureSeries()}
                                 valueLabel={formatTemperature(temperature())}
+                                // The value keeps the gauge's threshold tone; the line
+                                // colour is the temperature series identity, as in the drawer.
+                                valueContent={
+                                  <span
+                                    class={getTemperatureTextClass(
+                                      temperature(),
+                                      temperatureThresholds(),
+                                      'temperature',
+                                      temperatureAlertSeverity(),
+                                    )}
+                                    title={temperatureAlertTitle()}
+                                    data-temperature-sparkline-value
+                                  >
+                                    {formatTemperature(temperature())}
+                                  </span>
+                                }
                                 unit={TEMPERATURE_SPARKLINE_UNIT}
                                 formatValue={(value) => formatTemperature(value)}
                                 title={`${name()} temperature history`}

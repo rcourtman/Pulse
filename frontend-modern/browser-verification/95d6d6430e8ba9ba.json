@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "base_sha": "478e15bc4d937004ad6600a4f2989f1ad533b738",
+  "verified_at": "2026-11-17T20:15:53Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx": "3f97702e028118c5b1b2ee39a0f2f4e8e530ee13dd733291b62b7c784cecfcec"
+  },
+  "routes": [
+    "/proxmox (Overview tab): the nodes table, served by a mock-mode backend built from this change with the frontend embedded, on a private port on pulse-dev."
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 800,
+      "height": 600
+    },
+    {
+      "width": 768,
+      "height": 1000
+    }
+  ],
+  "states": [
+    "Mock estate of 50 Proxmox nodes with the node temperature trigger lowered to 46/44\u00b0C on this private stack, so readings fall in all three bands.",
+    "Trends: each node's temperature value beside its sparkline is green at 38-42\u00b0C, amber at 45\u00b0C and red at 47-54\u00b0C, the same classes the Bars gauge uses.",
+    "Before this change the same values were plain text beside a red line on every node.",
+    "1280px: the same tones, rows 33px, no value clipped.",
+    "768px: rows stay 33px and no temperature value is clipped (25px wide)."
+  ],
+  "interactions": [
+    "Read every temperature value's class from the DOM in Trends.",
+    "Resized to 768px and measured row heights and value overflow."
+  ],
+  "limits": [
+    "Only the value's tone changed; the line keeps the temperature series colour the drawer charts use.",
+    "Open-alert tone below the trigger is covered by the shared helper's tests, not re-checked here.",
+    "Dark theme only."
+  ]
+}
