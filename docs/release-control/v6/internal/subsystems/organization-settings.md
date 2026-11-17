@@ -15,6 +15,34 @@
 
 ## Purpose
 
+### Optional hosted lifecycle bodies are complete decisions
+
+Hosted organization suspension and soft deletion accept an omitted or JSON-
+whitespace-only body as their existing default options. A supplied body must
+instead be one complete JSON object within the existing 64 KiB limit. A valid
+prefix followed by another value, junk, truncated input, excess bytes or a read
+failure cannot authorize a lifecycle change. JSON null and other non-object
+roots are not omission. Competing recognized controls, including escaped keys
+and case-folded aliases, are rejected rather than choosing a reason or retention
+period. Singleton aliases, unknown fields, field-level null defaults and valid
+positive retention settings retain their previous behavior.
+
+The shared admin-object decoder owns this admission. Only its exact empty-input
+EOF sentinel permits defaults; a wrapped read error is not absence. Rejection
+returns the existing generic 400 invalid_request without persisting selected or
+peer organization changes or echoing supplied values. Method/hosted/persistence,
+default-organization and lookup checks retain their ordering. Unsuspend has no
+parameter body and is unchanged, as are authentication, authorization, conflict
+checks, successful response fields and the 30-day deletion default.
+
+Registered org_lifecycle_handlers_test.go exercises real selected/peer saved
+metadata, damaged/duplicate/oversized/read-failed bodies, supported defaults and
+options, gate ordering, and native HTTP rejection followed by deliberate valid
+changes to the same organization. This is input-safety proof, not live hosted
+client recovery or release availability; no public frontend consumer calls these
+parameter-bearing lifecycle routes.
+
+
 ### Sharing drafts support native form submission
 
 The existing Create Share section is a named native form. Enter from a manual
