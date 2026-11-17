@@ -91,20 +91,18 @@ func TestWebhookPayloadStockTransportConsumers(t *testing.T) {
 				if provider.Service == "telegram" && got.query != "" {
 					t.Fatalf("chat_id leaked from payload into query: %q", got.query)
 				}
-				// The separate legacy ntfy recovery producer does not pass through
-				// the shared template/signed sender and is unchanged by this repair.
-				if provider.Service != "ntfy" || path != "resolved" {
-					event := "alert"
-					if path == "resolved" {
-						event = "resolved"
-					}
-					if got.headers.Get("X-Pulse-Event-ID") != "synthetic-incident-1:"+event {
-						t.Fatal("delivery changed its event identity")
-					}
-					timestamp := got.headers.Get("X-Pulse-Timestamp")
-					if timestamp == "" || got.headers.Get("X-Pulse-Signature") != "v1="+signWebhookPayload(webhook.SigningSecret, timestamp, got.body) {
-						t.Fatal("delivery signature does not bind the actual rendered bytes")
-					}
+				// Every provider carries the same correlation and signing contract,
+				// including ntfy's plain-text recovery path.
+				event := "alert"
+				if path == "resolved" {
+					event = "resolved"
+				}
+				if got.headers.Get("X-Pulse-Event-ID") != "synthetic-incident-1:"+event {
+					t.Fatal("delivery changed its event identity")
+				}
+				timestamp := got.headers.Get("X-Pulse-Timestamp")
+				if timestamp == "" || got.headers.Get("X-Pulse-Signature") != "v1="+signWebhookPayload(webhook.SigningSecret, timestamp, got.body) {
+					t.Fatal("delivery signature does not bind the actual rendered bytes")
 				}
 			})
 		}
