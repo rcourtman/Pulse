@@ -1017,14 +1017,15 @@ verify_agent_started() {
 # Finish the cross-filesystem copy and executable mode before disrupting an
 # existing collector. A writable /tmp and a headroom check do not establish
 # that the installation filesystem will accept the replacement. Publication
-# below then moves an already prepared file on that same filesystem.
+# below then moves an already prepared file on that same filesystem. Moving
+# rather than copying here also avoids a second payload when /tmp is on it.
 stage_agent_binary_for_install() {
     STAGED_AGENT_BIN=""
     mkdir -p "$INSTALL_DIR" || return 1
     [[ ! -d "${INSTALL_DIR}/${BINARY_NAME}" ]] || return 1
     STAGED_AGENT_BIN=$(mktemp "${INSTALL_DIR}/.${BINARY_NAME}.install.XXXXXX") || return 1
     TMP_FILES+=("$STAGED_AGENT_BIN")
-    cp "$TMP_BIN" "$STAGED_AGENT_BIN" || return 1
+    mv "$TMP_BIN" "$STAGED_AGENT_BIN" || return 1
     chmod 0755 "$STAGED_AGENT_BIN" || return 1
 }
 

@@ -34,7 +34,7 @@ func TestAgentInstallerStagesCollectorBeforeStop(t *testing.T) {
 	oldBinary := "#!/bin/sh\nprintf 'old-fixture-version\\n'\n"
 	newBinary := "#!/bin/sh\nprintf 'new-fixture-version\\n'\n"
 	for _, upgrade := range []bool{false, true} {
-		for _, fault := range []string{"none", "directory-creation", "allocation", "partial-copy", "executable-mode", "destination-directory", "publication"} {
+		for _, fault := range []string{"none", "directory-creation", "allocation", "partial-transfer", "executable-mode", "destination-directory", "publication"} {
 			t.Run(fmt.Sprintf("upgrade=%t/%s", upgrade, fault), func(t *testing.T) {
 				root := t.TempDir()
 				installDir := filepath.Join(root, "installation with spaces")
@@ -60,6 +60,10 @@ func TestAgentInstallerStagesCollectorBeforeStop(t *testing.T) {
 				}
 				download := filepath.Join(root, "verified-download")
 				writeTestFile(t, download, []byte(newBinary), 0755)
+				downloadInfo, err := os.Stat(download)
+				if err != nil {
+					t.Fatal(err)
+				}
 				trace := filepath.Join(root, "operations")
 				writeTestFile(t, trace, nil, 0600)
 				script := `set -euo pipefail
@@ -85,29 +89,30 @@ mktemp() {
     [[ "$FAULT" != allocation ]] || return 1
     command mktemp "$@"
 }
-cp() {
-    printf 'copy\n' >> "$TRACE"
-    if [[ "$FAULT" == partial-copy ]]; then
-        printf 'incomplete replacement' > "$2"
-        return 1
-    fi
-    command cp "$@"
-}
 chmod() {
     printf 'mode\n' >> "$TRACE"
     [[ "$FAULT" != executable-mode ]] || return 1
     command chmod "$@"
 }
 stop_existing_agent_service() {
-    # Copy and mode must already be complete when disruption becomes possible.
-    [[ -f "$STAGED_AGENT_BIN" && -x "$STAGED_AGENT_BIN" ]]
-    cmp "$TMP_BIN" "$STAGED_AGENT_BIN"
+    # Transfer and mode must already be complete when disruption becomes possible.
+    [[ -f "$STAGED_AGENT_BIN" && -x "$STAGED_AGENT_BIN" ]] || exit 96
+    [[ "$("$STAGED_AGENT_BIN" --version)" == new-fixture-version ]] || exit 96
     printf 'stop\n' >> "$TRACE"
 }
 systemctl() { return 1; }
 pkill() { printf 'kill\n' >> "$TRACE"; }
 sleep() { :; }
 mv() {
+    if [[ "$1" == "$TMP_BIN" && "$2" == "$INSTALL_DIR"/.pulse-agent.install.* ]]; then
+        printf 'transfer\n' >> "$TRACE"
+        if [[ "$FAULT" == partial-transfer ]]; then
+            printf 'incomplete replacement' > "$2"
+            return 1
+        fi
+        command mv "$@"
+        return
+    fi
     # The ordinary collector publication must not perform another /tmp copy.
     [[ "${1%/*}" == "$INSTALL_DIR" && "$2" == "$INSTALL_DIR/pulse-agent" ]]
     printf 'publish\n' >> "$TRACE"
@@ -147,7 +152,7 @@ mv() {
 						t.Fatalf("missing early refusal diagnostic:\n%s", output)
 					}
 				} else {
-					want := "directory\nallocate\ncopy\nmode\n"
+					want := "directory\nallocate\ntransfer\nmode\n"
 					if upgrade {
 						want += "stop\nkill\n"
 					}
@@ -177,6 +182,9 @@ mv() {
 					info, err := os.Stat(installed)
 					if err != nil || info.Mode().Perm() != 0755 {
 						t.Fatalf("installed mode not retained: %v %v", info, err)
+					}
+					if fault == "none" && !os.SameFile(downloadInfo, info) {
+						t.Fatal("same-filesystem staging unnecessarily copied the downloaded payload")
 					}
 				} else if _, err := os.Lstat(installed); !errors.Is(err, os.ErrNotExist) {
 					t.Fatalf("failed fresh install created a collector: %v", err)
