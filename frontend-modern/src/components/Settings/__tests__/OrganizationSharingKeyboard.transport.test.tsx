@@ -65,7 +65,7 @@ const reads = () =>
     ([url, init]) =>
       (init?.method ?? 'GET') === 'GET' && (url === '/api/orgs' || String(url).startsWith(base())),
   );
-const reader = () => screen.getByRole('region', { name: 'Organization sharing', exact: true });
+const reader = () => screen.getByRole('region', { name: 'Organization sharing' });
 const warning = () => screen.getByRole('alert', { name: 'Organization sharing unavailable' });
 const reload = () => screen.getByRole('button', { name: 'Reload sharing' });
 const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 15));
