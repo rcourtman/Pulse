@@ -225,6 +225,7 @@ func TestAutoUpdateTransactionLock(t *testing.T) {
 // matrix below; no native service or published input is used by this fixture.
 func TestAutoUpdateServiceStateFailsClosed(t *testing.T) {
 	runParallelPythonFixtureControls(t, repoFile("scripts", "tests", "test_auto_update_service_state.py"), "UpdateServiceState", []string{
+		"test_manager_double_retains_exact_calls_phases_and_state",
 		"test_fixture_timeout_retains_partial_output_and_owned_cleanup",
 		"test_transaction_model_clock_is_not_advanced_by_wall_time",
 		"test_poll_timeout_retains_backup_without_start_or_rollback",

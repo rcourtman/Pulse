@@ -25,16 +25,23 @@ UPDATER = Path(os.environ.get("PULSE_AUTO_UPDATER_UNDER_TEST", ROOT / "scripts/p
 
 MANAGER = r'''#!/usr/bin/env python3
 import json, os, sys, time
-from pathlib import Path
-f = Path(os.environ["FIXTURE"])
+# This executable runs for every modeled manager read. Keep startup independent
+# of pathlib's transitive imports; the private fixture only needs named files.
+f = os.environ["FIXTURE"]
+def read(name):
+    with open(os.path.join(f, name)) as source:
+        return source.read()
+def write(name, text):
+    with open(os.path.join(f, name), "w") as target:
+        target.write(text)
 args = sys.argv[1:]
-with (f / "calls").open("a") as out:
+with open(os.path.join(f, "calls"), "a") as out:
     out.write(json.dumps(args) + "\n")
 mode = os.environ["MODE"]
-after = (f / "installer-ran").exists()
-stopped = (f / "stop-ran").exists()
-state = (f / "state").read_text().strip()
-with (f / "call-observations").open("a") as out:
+after = os.path.exists(os.path.join(f, "installer-ran"))
+stopped = os.path.exists(os.path.join(f, "stop-ran"))
+state = read("state").strip()
+with open(os.path.join(f, "call-observations"), "a") as out:
     out.write(json.dumps(dict(args=args, state=state, after_install=after,
                               after_stop=stopped, monotonic_ns=time.monotonic_ns())) + "\n")
 if args[0] == "show":
@@ -70,14 +77,14 @@ if args[0] == "show":
 if args[0] == "is-active":
     sys.exit(0 if state == "active" and not mode.startswith("initial-") else 1)
 if args[0] == "stop":
-    (f / "stop-ran").write_text("attempted\n")
+    write("stop-ran", "attempted\n")
     if mode == "stop-hang": time.sleep(30)
     if mode == "stop-error": sys.exit(1)
-    if mode != "stop-noop": (f / "state").write_text("inactive\n")
+    if mode != "stop-noop": write("state", "inactive\n")
     sys.exit(0)
 if args[0] == "start":
-    (f / "start-ran").write_text("attempted\n")
-    (f / "state").write_text("active\n")
+    write("start-ran", "attempted\n")
+    write("state", "active\n")
     sys.exit(0)
 sys.exit(97)
 '''
@@ -749,6 +756,53 @@ child.wait()
 
 
 class UpdateServiceState(UpdaterFixture):
+    def test_manager_double_retains_exact_calls_phases_and_state(self):
+        # The low-startup-cost manager is still a separate process. Verify its
+        # real private-file protocol independently of the updater's verdict so
+        # an optimization cannot silently erase recovery or phase evidence.
+        with tempfile.TemporaryDirectory(prefix="pulse-updater-manager-") as directory:
+            f = Path(directory)
+            manager = f / "manager.py"
+            manager.write_text(MANAGER)
+            (f / "state").write_text("active\n")
+            env = dict(os.environ, FIXTURE=str(f), MODE="normal", LOAD_STATE="loaded")
+            service = 'pulse-custom@quoted " \\ and\ttab\nnext ü'
+            show = ["show", service, "--no-pager", "--property=LoadState", "--property=ActiveState"]
+            commands, expected = [], []
+
+            def command(args, state, *, installed=False, stopped=False, status=0, output=b""):
+                result = subprocess.run([sys.executable, "-I", "-S", str(manager)] + args,
+                                        env=env, capture_output=True, timeout=5)
+                self.assertEqual((result.returncode, result.stdout, result.stderr), (status, output, b""))
+                commands.append(args)
+                expected.append(dict(args=args, state=state, after_install=installed, after_stop=stopped))
+
+            active = b"ActiveState=active\nLoadState=loaded\n"
+            inactive = b"ActiveState=inactive\nLoadState=loaded\n"
+            command(show, "active", output=active)
+            (f / "installer-ran").write_text("attempted\n")
+            (f / "state").write_text("inactive\n")
+            command(show, "inactive", installed=True, output=inactive)
+            command(["start", service], "inactive", installed=True)
+            self.assertEqual((f / "start-ran").read_text(), "attempted\n")
+            self.assertEqual((f / "state").read_text(), "active\n")
+            command(show, "active", installed=True, output=active)
+            command(["stop", service], "active", installed=True)
+            self.assertEqual((f / "stop-ran").read_text(), "attempted\n")
+            self.assertEqual((f / "state").read_text(), "inactive\n")
+            command(show, "inactive", installed=True, stopped=True, output=inactive)
+            command(["is-active", service], "inactive", installed=True, stopped=True, status=1)
+            command(["unsupported", service], "inactive", installed=True, stopped=True, status=97)
+            protocol = read_fixture_protocol(f)
+            self.assertEqual(protocol["protocol_errors"], {})
+            self.assertEqual(protocol["calls"], commands)
+            observations = protocol["call_observations"]
+            times = [item["monotonic_ns"] for item in observations]
+            self.assertTrue(all(isinstance(value, int) and value > 0 for value in times))
+            self.assertTrue(all(a < b for a, b in zip(times, times[1:])))
+            self.assertEqual([{key: value for key, value in item.items() if key != "monotonic_ns"}
+                              for item in observations], expected)
+
     def test_fixture_timeout_retains_partial_output_and_owned_cleanup(self):
         result, execution = capture_fixture_command(
             ["bash", "-c", "printf 'partial stdout\\n'; printf 'partial stderr\\n' >&2; "
