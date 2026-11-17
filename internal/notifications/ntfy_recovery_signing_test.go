@@ -74,6 +74,7 @@ func TestNtfyRecoverySigningContract(t *testing.T) {
 			for key, value := range headers {
 				originalHeaders[key] = value
 			}
+			resolvedAt := time.Date(2026, 11, 17, 9, 0, 0, 0, time.UTC)
 			var requests atomic.Int32
 			server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				requests.Add(1)
@@ -99,11 +100,19 @@ func TestNtfyRecoverySigningContract(t *testing.T) {
 					}
 				}
 				wantTitle := "RESOLVED: " + primary.ResourceName
+				wantBody := "Resolved: " + primary.ResourceName + " on " + primary.Node + " is now healthy"
 				if len(batch) > 1 {
-					wantTitle = "RESOLVED: " + strconv.Itoa(len(batch)) + " alerts"
+					count := strconv.Itoa(len(batch))
+					wantTitle = "RESOLVED: " + count + " alerts"
+					wantBody = count + " alerts resolved at " + resolvedAt.Format(time.RFC822) + ":\n"
+					for _, alert := range batch {
+						if alert != nil {
+							wantBody += "- " + alert.ResourceName + " on " + alert.Node + "\n"
+						}
+					}
 				}
-				if r.Header.Get("Title") != wantTitle || !strings.Contains(string(body), primary.ResourceName) || !strings.Contains(string(body), "is now healthy") {
-					t.Error("integrity headers changed recovery content")
+				if r.Header.Get("Title") != wantTitle || string(body) != wantBody {
+					t.Errorf("recovery content = %q / %q; want %q / %q", r.Header.Get("Title"), body, wantTitle, wantBody)
 				}
 				w.WriteHeader(http.StatusNoContent)
 			}))
@@ -113,7 +122,7 @@ func TestNtfyRecoverySigningContract(t *testing.T) {
 				t.Fatal(err)
 			}
 			hook := WebhookConfig{ID: "ops", Enabled: true, Service: "ntfy", URL: server.URL + "/topic", SigningSecret: tc.secret, Headers: headers}
-			if err := manager.sendResolvedWebhook(hook, batch, time.Now()); err != nil {
+			if err := manager.sendResolvedWebhook(hook, batch, resolvedAt); err != nil {
 				t.Error(err)
 			}
 			if requests.Load() != 1 {
