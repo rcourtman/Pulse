@@ -148,10 +148,19 @@ focus. A deliberate focus move elsewhere wins over a pending write or reread.
 
 An uncertain change still focuses the existing unavailable warning when the
 focused control disappears. The next Tab reaches the explicit read-only Reload
-access/sharing action. An explicit reload focuses the accepted summary or the new
-warning, never repeats the write. These recovery targets are programmatically
+access/sharing action. An explicit Access reload focuses the accepted summary or
+the new warning, never repeats the write. These recovery targets are programmatically
 focusable, not additional Tab stops. Organization/user round trips, read-only
 withdrawal, hidden surfaces and disposal retire stale focus intent.
+
+An explicit Sharing reload focuses its stable **Organization sharing** region
+before the button is replaced. The region exposes loading through `aria-busy`,
+retains a visible inset outline through success or failure and adds no Tab stop.
+Tab reaches the returned controls without a post-response focus jump. Leaving
+the panel, including a later outside blur, prevents delayed focus theft. Initial
+reads do not take focus. This does not change saved-action recovery below or
+repeat a sharing write. `OrganizationSharingKeyboard.transport.test.tsx` binds
+the interaction to the actual panel, state, capability owner, API and client.
 
 Sharing identifies each saved control by its exact opaque share ID and action
 family, independently of names or current row order. Accepting an incoming

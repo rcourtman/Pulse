@@ -39,13 +39,14 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
       }
     | undefined;
   let focusContext: [string, string | undefined, boolean, boolean] | undefined;
-  let reloadIntent: { orgID: string; user: string | undefined } | undefined;
   let focusTimer: number | undefined;
   const controls = () =>
     Array.from(panel?.querySelectorAll<HTMLElement>('[data-org-sharing-action]') ?? []);
   const reloadSharing = () => {
+    // The explicit read replaces its button. Keep a stable keyboard position
+    // through loading instead of losing focus and moving it after the response.
     // Safari pointer activation need not focus the button first.
-    reloadIntent = { orgID: state.selectedOrgID(), user: props.currentUser };
+    panel?.focus();
     void state.loadSharingData();
   };
 
@@ -57,18 +58,12 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
     const context: typeof focusContext = [orgID, user, enabled, state.readOnly()];
     if (focusContext?.some((value, index) => value !== context[index])) {
       lastFocused = undefined;
-      reloadIntent = undefined;
     }
     focusContext = context;
     const loading = state.loading();
     const error = state.loadError();
     const org = state.org();
-    if (!enabled || reloadIntent?.orgID !== orgID || reloadIntent.user !== user) {
-      reloadIntent = undefined;
-    }
     if (!enabled || loading) return;
-    const explicitReload = !!reloadIntent;
-    reloadIntent = undefined;
     if (!error && !org) return;
 
     focusTimer = window.setTimeout(() => {
@@ -88,10 +83,7 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
         !lastFocused.element.isConnected;
       // A reread replaces controls. Recover only the focus it removed, never
       // an untouched initial read or a deliberate move to another control.
-      if (
-        (explicitReload || lostPanelFocus) &&
-        (!document.activeElement || document.activeElement === document.body)
-      ) {
+      if (lostPanelFocus && (!document.activeElement || document.activeElement === document.body)) {
         const candidates = controls().filter(
           (control) =>
             control.dataset.orgSharingAction === lastFocused?.action &&
@@ -101,7 +93,7 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
         const replacement = lastFocused?.targets
           .map((id) => candidates.find((control) => control.dataset.orgSharingTarget === id))
           .find(Boolean);
-        const target = error ? warning : explicitReload ? summary : (replacement ?? summary);
+        const target = error ? warning : (replacement ?? summary);
         target?.focus();
       }
     }, 0);
@@ -119,7 +111,11 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
     >
       <div
         ref={panel}
-        class="space-y-6"
+        role="region"
+        aria-label="Organization sharing"
+        aria-busy={state.loading()}
+        tabIndex={-1}
+        class="space-y-6 rounded-lg focus:outline-2 focus:-outline-offset-2 focus:outline-blue-500 dark:focus:outline-blue-400"
         onFocusIn={(event) => {
           if (event.target instanceof HTMLElement) {
             const action = event.target.dataset.orgSharingAction;
