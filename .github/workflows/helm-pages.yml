@@ -274,12 +274,13 @@ jobs:
           trap 'rm -rf "${public_work}"' EXIT
           qualified_chart="dist/pulse-${VERSION}.tgz"
           test -f "${qualified_chart}"
-          # Pages builds asynchronously after the index push. A real build
-          # took 262 seconds while the former 30 x 2-second probe failed.
-          # Allow ten minutes of propagation, not a successful push in lieu
-          # of public readback. The job's 20-minute ceiling still applies.
-          public_attempts=120
-          public_deadline=$(( $(date +%s) + 600 ))
+          # The v6.9.0-beta.3 index build took 746 seconds after the push.
+          # Allow 15 minutes for public index propagation; publication alone
+          # is not readback. The 20-minute job ceiling still applies to Helm.
+          public_wait_seconds=900
+          public_poll_seconds=5
+          public_attempts=$(( public_wait_seconds / public_poll_seconds ))
+          public_deadline=$(( $(date +%s) + public_wait_seconds ))
           for attempt in $(seq 1 "${public_attempts}"); do
             public_remaining=$(( public_deadline - $(date +%s) ))
             if (( public_remaining <= 0 )); then
@@ -317,10 +318,10 @@ jobs:
             if (( public_remaining <= 0 )); then
               break
             fi
-            sleep "$(( public_remaining < 5 ? public_remaining : 5 ))"
+            sleep "$(( public_remaining < public_poll_seconds ? public_remaining : public_poll_seconds ))"
           done
           if [[ "${public_ready}" != "true" ]]; then
-            echo "::error::Public Helm repository did not expose chart ${VERSION} within the 600-second observation window."
+            echo "::error::Public Helm repository did not expose chart ${VERSION} within the ${public_wait_seconds}-second observation window."
             exit 1
           fi
           echo "[OK] Public Helm repository serves the exact qualified pulse ${VERSION} package."
