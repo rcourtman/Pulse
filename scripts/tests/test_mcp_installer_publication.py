@@ -159,6 +159,60 @@ sys.exit(subprocess.run([os.environ["REAL_MV"], *sys.argv[1:]]).returncode)
                 move = json.loads((self.root / "mv-event").read_text())
                 self.assertEqual(move[-2:], [str(staged), str(self.binary)])
 
+    def test_missing_custom_directory_is_created_and_installs_verified_bytes(self):
+        self.destination = self.root / "new parent" / "adapter bin"
+        self.binary = self.destination / "pulse-mcp"
+        self.environment["PULSE_MCP_BIN_DIR"] = str(self.destination)
+        self.assertFalse(self.destination.exists())
+        result = self.run_installer()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("release signature verified", result.stdout)
+        self.assertIn("sha256 verified", result.stdout)
+        self.assertIn("installed:", result.stdout)
+        self.assertEqual(self.binary.read_bytes(), NEW_BINARY)
+        self.assertEqual(stat.S_IMODE(self.binary.stat().st_mode), 0o755)
+        move = json.loads((self.root / "mv-event").read_text())
+        self.assertEqual(Path(move[-2]).parent.parent, self.destination)
+        self.assertEqual(move[-1], str(self.binary))
+        self.assertEqual(len((self.root / "curl-events").read_text().splitlines()), 3)
+
+    def test_blocked_custom_directory_fails_before_transport(self):
+        blocker = self.root / "not a directory"
+        blocker.write_bytes(OLD_BINARY)
+        self.destination = blocker / "adapter bin"
+        self.binary = self.destination / "pulse-mcp"
+        self.environment["PULSE_MCP_BIN_DIR"] = str(self.destination)
+        result = self.run_installer()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertNotIn("installed:", result.stdout)
+        self.assertEqual(blocker.read_bytes(), OLD_BINARY)
+        self.assertFalse((self.root / "curl-events").exists(), "refuse before downloading")
+        self.assertIn("could not create the install directory", result.stderr)
+        self.assertFalse((self.root / "install-event").exists())
+        self.assertFalse((self.root / "mv-event").exists())
+
+    def test_existing_bin_directory_mode_and_contents_are_preserved(self):
+        self.destination.chmod(0o751)
+        witness = self.destination / "unrelated"
+        witness.write_bytes(OLD_BINARY)
+        result = self.run_installer()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.binary.read_bytes(), NEW_BINARY)
+        self.assertEqual(stat.S_IMODE(self.destination.stat().st_mode), 0o751)
+        self.assertEqual(witness.read_bytes(), OLD_BINARY)
+
+    def test_new_directory_download_failure_cleans_only_owned_stage(self):
+        self.destination = self.root / "new parent" / "adapter bin"
+        self.binary = self.destination / "pulse-mcp"
+        self.environment["PULSE_MCP_BIN_DIR"] = str(self.destination)
+        result = self.run_installer("download-checksums.txt")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("could not fetch checksums.txt", result.stderr)
+        self.assertTrue(self.destination.is_dir())
+        self.assertEqual(list(self.destination.iterdir()), [])
+        self.assertFalse((self.root / "install-event").exists())
+        self.assertFalse((self.root / "mv-event").exists())
+
     def test_failed_copy_preserves_previous_binary_and_mode(self):
         self.existing_binary()
         result = self.run_installer("copy")
@@ -189,6 +243,7 @@ sys.exit(subprocess.run([os.environ["REAL_MV"], *sys.argv[1:]]).returncode)
         self.existing_binary()
         result = self.run_installer("allocation")
         self.assertNotEqual(result.returncode, 0)
+        self.assertFalse((self.root / "curl-events").exists(), "refuse before downloading")
         self.assertNotIn("installed:", result.stdout)
         self.assertEqual(self.binary.read_bytes(), OLD_BINARY)
         self.assertFalse((self.root / "install-event").exists())

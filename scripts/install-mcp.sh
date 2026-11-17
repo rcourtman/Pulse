@@ -180,6 +180,8 @@ main() {
     require_cmd uname
     require_cmd install
     require_cmd mv
+    require_cmd mkdir
+    require_cmd mktemp
     require_cmd ssh-keygen
 
     local platform install_dir destination base bin_name url checksums_url
@@ -188,6 +190,16 @@ main() {
     install_dir="$(choose_install_dir)"
     destination="${install_dir}/pulse-mcp"
     check_destination "${destination}"
+    # A custom bin directory can be new, just like the default ~/.local/bin.
+    # Confirm that its same-filesystem stage can be created before downloading
+    # anything. mkdir -p preserves existing directory permissions and contents.
+    if ! mkdir -p -- "${install_dir}"; then
+        err "could not create the install directory; existing adapter left unchanged"
+    fi
+    trap cleanup EXIT
+    if ! install_stage="$(mktemp -d "${install_dir}/.pulse-mcp.XXXXXX")"; then
+        err "could not prepare the install directory; existing adapter left unchanged"
+    fi
     base="$(resolve_release_base)"
     bin_name="pulse-mcp-${platform}"
     url="${base}/${bin_name}"
@@ -197,7 +209,6 @@ main() {
     log "downloading: ${url}"
 
     tmp="$(mktemp -t pulse-mcp.XXXXXX)"
-    trap cleanup EXIT
 
     if ! download_asset "${url}" "${tmp}"; then
         err "download failed: ${url}
@@ -255,9 +266,6 @@ Build from source: go install github.com/rcourtman/pulse-go-rewrite/cmd/pulse-mc
     # A failed copy must not truncate or remove a working adapter. Stage on
     # the destination filesystem, verify the copied bytes, then publish with
     # a single rename. This is not a concurrent-writer or power-loss guarantee.
-    if ! install_stage="$(mktemp -d "${install_dir}/.pulse-mcp.XXXXXX")"; then
-        err "could not prepare the install directory; existing adapter left unchanged"
-    fi
     if ! install -m 0755 "${tmp}" "${install_stage}/pulse-mcp"; then
         err "could not stage the adapter; existing adapter left unchanged"
     fi
