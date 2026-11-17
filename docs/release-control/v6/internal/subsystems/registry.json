@@ -1163,6 +1163,14 @@
       ]
     },
     {
+      "path": "pkg/aicontracts/investigation_telemetry.go",
+      "rationale": "closed investigation handoff attribution is shared runtime metadata and an additive API contract; it never grants action authority",
+      "subsystems": [
+        "ai-runtime",
+        "api-contracts"
+      ]
+    },
+    {
       "path": "pkg/aicontracts/orchestrator_deps.go",
       "rationale": "the public investigation orchestrator dependency contract is both an AI runtime handoff boundary and a canonical API payload contract for Assistant and Patrol tool-call history",
       "subsystems": [
@@ -2117,6 +2125,7 @@
         "pkg/aicontracts/action_broker.go",
         "pkg/aicontracts/fix_execution.go",
         "pkg/aicontracts/investigation.go",
+        "pkg/aicontracts/investigation_telemetry.go",
         "pkg/aicontracts/orchestrator_deps.go",
         "pkg/extensions/ai_autofix.go",
         "pkg/reporting/evidence.go",
@@ -2263,7 +2272,8 @@
               "internal/api/ai_intelligence_handlers_test.go",
               "internal/api/issue1640_readiness_gate_test.go",
               "internal/api/issue1640_readiness_transport_test.go",
-              "internal/api/patrol_autopilot_test.go"
+              "internal/api/patrol_autopilot_test.go",
+              "internal/api/patrol_investigation_telemetry_test.go"
             ]
           },
           {
@@ -2356,7 +2366,8 @@
             "label": "AI investigation record contract proof",
             "match_prefixes": [],
             "match_files": [
-              "pkg/aicontracts/investigation.go"
+              "pkg/aicontracts/investigation.go",
+              "pkg/aicontracts/investigation_telemetry.go"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
@@ -2904,6 +2915,7 @@
         "pkg/aicontracts/action_broker.go",
         "pkg/aicontracts/fix_execution.go",
         "pkg/aicontracts/investigation.go",
+        "pkg/aicontracts/investigation_telemetry.go",
         "pkg/aicontracts/orchestrator_deps.go",
         "pkg/extensions/ai_autofix.go",
         "pkg/extensions/audit_admin.go",
@@ -3158,7 +3170,8 @@
             "label": "AI investigation record API contract proof",
             "match_prefixes": [],
             "match_files": [
-              "pkg/aicontracts/investigation.go"
+              "pkg/aicontracts/investigation.go",
+              "pkg/aicontracts/investigation_telemetry.go"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
@@ -3560,6 +3573,7 @@
               "internal/api/issue1640_readiness_transport_test.go",
               "internal/api/metadata_handlers_test.go",
               "internal/api/patrol_autopilot_test.go",
+              "internal/api/patrol_investigation_telemetry_test.go",
               "internal/api/runtime_inventory_sources_test.go",
               "internal/api/telemetry_history_reads_test.go",
               "internal/api/truenas_disk_history_integration_test.go",
@@ -8347,6 +8361,7 @@
         "internal/cloudcp/auth/magiclink_store.go",
         "internal/config/config.go",
         "internal/config/history_read_activity.go",
+        "internal/config/patrol_investigation_telemetry.go",
         "internal/config/reporting_activity.go",
         "internal/config/watcher.go",
         "internal/crypto/crypto.go",
@@ -8355,6 +8370,7 @@
         "internal/securityutil/private_path_other.go",
         "internal/securityutil/private_path_windows.go",
         "internal/securityutil/secure_storage_dir.go",
+        "internal/telemetry/patrol_investigation_runs.go",
         "internal/telemetry/service_health.go",
         "internal/telemetry/telemetry.go",
         "pkg/audit/async_logger.go",
@@ -8443,7 +8459,9 @@
               "docs/PRIVACY.md",
               "frontend-modern/public/docs/PRIVACY.md",
               "internal/config/history_read_activity.go",
+              "internal/config/patrol_investigation_telemetry.go",
               "internal/config/reporting_activity.go",
+              "internal/telemetry/patrol_investigation_runs.go",
               "internal/telemetry/service_health.go",
               "internal/telemetry/telemetry.go",
               "pkg/server/service_health.go",
@@ -8456,11 +8474,14 @@
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/stores/__tests__/systemSettings.test.ts",
+              "internal/api/patrol_investigation_telemetry_test.go",
               "internal/api/reporting_activity_test.go",
               "internal/api/system_settings_telemetry_test.go",
               "internal/api/telemetry_history_reads_test.go",
               "internal/config/history_read_activity_test.go",
+              "internal/config/patrol_investigation_telemetry_test.go",
               "internal/config/reporting_activity_test.go",
+              "internal/telemetry/patrol_investigation_runs_test.go",
               "internal/telemetry/service_health_test.go",
               "internal/telemetry/telemetry_test.go",
               "pkg/server/service_health_test.go",

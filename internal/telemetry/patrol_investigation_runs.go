@@ -1,0 +1,68 @@
+package telemetry
+
+import (
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
+)
+
+func ApplyPatrolInvestigationTelemetry(s *Snapshot, summary config.PatrolInvestigationTelemetrySummary) {
+	if s == nil {
+		return
+	}
+	s.PulseIntelligencePatrolInvestigationTelemetryAvailable = summary.Available
+	if !summary.Available {
+		return
+	}
+	s.PulseIntelligencePatrolInvestigationObservationDays = summary.ObservationDays
+	s.PulseIntelligencePatrolInvestigationRuns30d = summary.Runs
+	s.PulseIntelligencePatrolInvestigationRunsResolved30d = summary.Outcomes["resolved"]
+	s.PulseIntelligencePatrolInvestigationRunsFixQueued30d = summary.Outcomes["fix_queued"]
+	s.PulseIntelligencePatrolInvestigationRunsFixExecuted30d = summary.Outcomes["fix_executed"]
+	s.PulseIntelligencePatrolInvestigationRunsFixRejected30d = summary.Outcomes["fix_rejected"]
+	s.PulseIntelligencePatrolInvestigationRunsFixFailed30d = summary.Outcomes["fix_failed"]
+	s.PulseIntelligencePatrolInvestigationRunsFixVerified30d = summary.Outcomes["fix_verified"]
+	s.PulseIntelligencePatrolInvestigationRunsFixVerificationFailed30d = summary.Outcomes["fix_verification_failed"]
+	s.PulseIntelligencePatrolInvestigationRunsFixVerificationUnknown30d = summary.Outcomes["fix_verification_unknown"]
+	s.PulseIntelligencePatrolInvestigationRunsNeedsAttention30d = summary.Outcomes["needs_attention"]
+	s.PulseIntelligencePatrolInvestigationRunsCannotFix30d = summary.Outcomes["cannot_fix"]
+	s.PulseIntelligencePatrolInvestigationRunsTimedOut30d = summary.Outcomes["timed_out"]
+	s.PulseIntelligencePatrolInvestigationRunsInterrupted30d = summary.Outcomes["interrupted"]
+	s.PulseIntelligencePatrolInvestigationRunsUnclassified30d = summary.Outcomes["unclassified"]
+	s.PulseIntelligencePatrolInvestigationRunsFailed30d = summary.Outcomes["failed"]
+	s.PulseIntelligencePatrolInvestigationHandoffHumanDecision30d = summary.Handoffs[aicontracts.InvestigationHandoffReason("human_decision")]
+	s.PulseIntelligencePatrolInvestigationHandoffMissingEvidence30d = summary.Handoffs[aicontracts.InvestigationHandoffReason("missing_evidence")]
+	s.PulseIntelligencePatrolInvestigationHandoffUnsupportedRemediation30d = summary.Handoffs[aicontracts.InvestigationHandoffReason("unsupported_remediation")]
+	s.PulseIntelligencePatrolInvestigationHandoffUnspecified30d = summary.Handoffs[aicontracts.InvestigationHandoffReason("unspecified")]
+	s.PulseIntelligencePatrolInvestigationHandoffCommandsDisabled30d = summary.Handoffs[aicontracts.InvestigationHandoffReason("commands_disabled")]
+	s.PulseIntelligencePatrolInvestigationHandoffGuestActionsUnavailable30d = summary.Handoffs[aicontracts.InvestigationHandoffReason("guest_actions_unavailable")]
+	s.PulseIntelligencePatrolInvestigationHandoffActionExpired30d = summary.Handoffs[aicontracts.InvestigationHandoffReason("action_expired")]
+	s.PulseIntelligencePatrolInvestigationHandoffPlanningFailed30d = summary.Handoffs[aicontracts.InvestigationHandoffReason("planning_failed")]
+}
+
+func applyInvestigationRunSnapshot(p *Ping, s Snapshot) {
+	p.PulseIntelligencePatrolInvestigationTelemetryAvailable = s.PulseIntelligencePatrolInvestigationTelemetryAvailable
+	p.PulseIntelligencePatrolInvestigationObservationDays = s.PulseIntelligencePatrolInvestigationObservationDays
+	p.PulseIntelligencePatrolInvestigationRuns30d = s.PulseIntelligencePatrolInvestigationRuns30d
+	p.PulseIntelligencePatrolInvestigationRunsResolved30d = s.PulseIntelligencePatrolInvestigationRunsResolved30d
+	p.PulseIntelligencePatrolInvestigationRunsFixQueued30d = s.PulseIntelligencePatrolInvestigationRunsFixQueued30d
+	p.PulseIntelligencePatrolInvestigationRunsFixExecuted30d = s.PulseIntelligencePatrolInvestigationRunsFixExecuted30d
+	p.PulseIntelligencePatrolInvestigationRunsFixRejected30d = s.PulseIntelligencePatrolInvestigationRunsFixRejected30d
+	p.PulseIntelligencePatrolInvestigationRunsFixFailed30d = s.PulseIntelligencePatrolInvestigationRunsFixFailed30d
+	p.PulseIntelligencePatrolInvestigationRunsFixVerified30d = s.PulseIntelligencePatrolInvestigationRunsFixVerified30d
+	p.PulseIntelligencePatrolInvestigationRunsFixVerificationFailed30d = s.PulseIntelligencePatrolInvestigationRunsFixVerificationFailed30d
+	p.PulseIntelligencePatrolInvestigationRunsFixVerificationUnknown30d = s.PulseIntelligencePatrolInvestigationRunsFixVerificationUnknown30d
+	p.PulseIntelligencePatrolInvestigationRunsNeedsAttention30d = s.PulseIntelligencePatrolInvestigationRunsNeedsAttention30d
+	p.PulseIntelligencePatrolInvestigationRunsCannotFix30d = s.PulseIntelligencePatrolInvestigationRunsCannotFix30d
+	p.PulseIntelligencePatrolInvestigationRunsTimedOut30d = s.PulseIntelligencePatrolInvestigationRunsTimedOut30d
+	p.PulseIntelligencePatrolInvestigationRunsInterrupted30d = s.PulseIntelligencePatrolInvestigationRunsInterrupted30d
+	p.PulseIntelligencePatrolInvestigationRunsUnclassified30d = s.PulseIntelligencePatrolInvestigationRunsUnclassified30d
+	p.PulseIntelligencePatrolInvestigationRunsFailed30d = s.PulseIntelligencePatrolInvestigationRunsFailed30d
+	p.PulseIntelligencePatrolInvestigationHandoffHumanDecision30d = s.PulseIntelligencePatrolInvestigationHandoffHumanDecision30d
+	p.PulseIntelligencePatrolInvestigationHandoffMissingEvidence30d = s.PulseIntelligencePatrolInvestigationHandoffMissingEvidence30d
+	p.PulseIntelligencePatrolInvestigationHandoffUnsupportedRemediation30d = s.PulseIntelligencePatrolInvestigationHandoffUnsupportedRemediation30d
+	p.PulseIntelligencePatrolInvestigationHandoffUnspecified30d = s.PulseIntelligencePatrolInvestigationHandoffUnspecified30d
+	p.PulseIntelligencePatrolInvestigationHandoffCommandsDisabled30d = s.PulseIntelligencePatrolInvestigationHandoffCommandsDisabled30d
+	p.PulseIntelligencePatrolInvestigationHandoffGuestActionsUnavailable30d = s.PulseIntelligencePatrolInvestigationHandoffGuestActionsUnavailable30d
+	p.PulseIntelligencePatrolInvestigationHandoffActionExpired30d = s.PulseIntelligencePatrolInvestigationHandoffActionExpired30d
+	p.PulseIntelligencePatrolInvestigationHandoffPlanningFailed30d = s.PulseIntelligencePatrolInvestigationHandoffPlanningFailed30d
+}

@@ -18,9 +18,10 @@ const maxConclusionReasonRunes = 2000
 // recorded. Outcome is aicontracts.OutcomeResolved, OutcomeCannotFix or
 // OutcomeNeedsAttention.
 type CapturedConclusion struct {
-	Outcome      aicontracts.InvestigationOutcome
-	Reason       string
-	InvocationID string
+	Outcome       aicontracts.InvestigationOutcome
+	Reason        string
+	InvocationID  string
+	HandoffReason aicontracts.InvestigationHandoffReason
 }
 
 // ParseConclusionOutcome maps a model-authored outcome onto the closed
@@ -41,7 +42,7 @@ func ParseConclusionOutcome(value string) (aicontracts.InvestigationOutcome, boo
 // RecordConclusion keeps the first conclusion for the run. Replaying the same
 // outcome is accepted; a different outcome is refused so the recorded
 // conclusion cannot flip after the model has acted on it.
-func (c *ProposalCapture) RecordConclusion(invocationID string, outcome aicontracts.InvestigationOutcome, reason string) (*CapturedConclusion, error) {
+func (c *ProposalCapture) RecordConclusion(invocationID string, outcome aicontracts.InvestigationOutcome, reason string, labels ...aicontracts.InvestigationHandoffReason) (*CapturedConclusion, error) {
 	if c == nil {
 		return nil, errors.New("investigation conclusions are not available in this run")
 	}
@@ -58,7 +59,14 @@ func (c *ProposalCapture) RecordConclusion(invocationID string, outcome aicontra
 		}
 		return &existing, fmt.Errorf("this investigation already concluded %s; a different conclusion needs a new investigation", existing.Outcome)
 	}
-	c.conclusion = &CapturedConclusion{Outcome: outcome, Reason: reason, InvocationID: invocationID}
+	label := aicontracts.HandoffUnspecified
+	if len(labels) > 0 && labels[0].Valid() {
+		label = labels[0]
+	}
+	if outcome == aicontracts.OutcomeResolved {
+		label = ""
+	}
+	c.conclusion = &CapturedConclusion{Outcome: outcome, Reason: reason, InvocationID: invocationID, HandoffReason: label}
 	recorded := *c.conclusion
 	return &recorded, nil
 }
@@ -108,6 +116,11 @@ If you proposed an action, its planning result is the investigation outcome and 
 						Type:        "string",
 						Description: "The evidence for this conclusion and, for needs_attention, what the person should do",
 					},
+					"handoff_reason": {
+						Type:        "string",
+						Description: "For needs_attention or cannot_fix, classify why you handed the problem back: human_decision (a person must choose or act), missing_evidence (diagnosis cannot be completed), unsupported_remediation (no advertised capability can fix it), or unspecified. This is a measurement label, never authority to act. Do not include customer text.",
+						Enum:        []string{"human_decision", "missing_evidence", "unsupported_remediation", "unspecified"},
+					},
 				},
 				Required: []string{"outcome", "reason"},
 			},
@@ -138,7 +151,16 @@ func (e *PulseToolExecutor) executeConcludeInvestigation(ctx context.Context, ar
 	if reason == "" {
 		return NewErrorResult(fmt.Errorf("reason is required")), nil
 	}
-	recorded, err := capture.RecordConclusion(InvocationIDFromContext(ctx), outcome, reason)
+	label := aicontracts.InvestigationHandoffReason(stringArg(args, "handoff_reason"))
+	switch label {
+	case "", aicontracts.HandoffHumanDecision, aicontracts.HandoffMissingEvidence, aicontracts.HandoffUnsupportedRemediation, aicontracts.HandoffUnspecified:
+	default:
+		// Attribution is optional measurement metadata. Never spend another
+		// model turn or reject a valid conclusion over an unknown label, and
+		// never preserve that free text in the measurement.
+		label = aicontracts.HandoffUnspecified
+	}
+	recorded, err := capture.RecordConclusion(InvocationIDFromContext(ctx), outcome, reason, label)
 	if err != nil {
 		return NewErrorResult(err), nil
 	}

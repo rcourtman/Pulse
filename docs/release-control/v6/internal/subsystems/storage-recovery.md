@@ -2459,6 +2459,17 @@ The compact By date layout reserves enough age space for the full cautionary Unk
 
 Compact Coverage age cells use the existing metadata-size text and reclaim numeric-age gutters so the full Unknown word stays visible even beside a Job column at 320px; text-range checks account for cell padding, not only the outer box.
 
+### Independent investigation measurements are adjacent metadata (17 November 2026)
+
+The shared AI handler and action reconciliation hooks record content-free
+closed-run measurements before finding lookup, so finding cleanup cannot
+erase an investigation's outcome. Fixed handoff categories report existing
+command/guest-action availability and action expiry facts without granting
+access or changing any agent, approval, dispatch, verification or recovery
+boundary. The security-privacy contract owns ledger retention, availability
+and the outbound schema23 projection. Measurement failure never authorizes a
+retry of an infrastructure action or changes its recorded result.
+
 ## Canonical Files
 
 1. `internal/recovery/index.go`

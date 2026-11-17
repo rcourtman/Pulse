@@ -1913,6 +1913,40 @@ outbound JSON field individually. Grouped prose may explain related aggregates,
 but it cannot replace field-level disclosure or make a newly added counter
 invisible to operators reviewing exactly what Pulse sends.
 
+### Independent content-free investigation measurements (17 November 2026)
+
+Schema v23 counts closed investigation runs in a private installation-scoped
+30-day ledger, independently of finding cleanup. The canonical writer is
+`internal/config/patrol_investigation_telemetry.go`; core's
+`internal/api/patrol_investigation_telemetry.go` records a closed session and
+later canonical action transitions before any finding lookup. Organization/run
+identity is hashed locally for deduplication; only counts, fixed categories,
+availability and observation age leave the installation. Replays update one
+run and do not extend its original completion window. Distinct retries remain
+distinct. Startup replays retained post-observation sessions for crash recovery
+without backfilling a falsely complete pre-upgrade window. Read/write failures
+remain unavailable, and a failed observation is retried before coverage returns.
+
+`InvestigationHandoffReason` in `pkg/aicontracts/investigation_telemetry.go`
+is a closed vocabulary. Model conclusions may classify human decision,
+missing evidence or unsupported remediation; known command/guest-action access,
+expiry and planning-continuation facts own their runtime categories. No
+heuristic reads customer prose to classify a handoff. Unknown attribution is
+unspecified. Labels do not grant authority or score model quality.
+`internal/telemetry/patrol_investigation_runs.go` owns the outbound projection.
+Old surviving-finding counters retain their old semantics solely for published
+wire compatibility; schema23 aggregate reports keep a separate denominator,
+coverage and release cohort. Sender, preview type, private receiver, migration,
+aggregate query and authenticated reader must evolve together. Privacy and the
+pending schema23 release note disclose the exact fields and rollout boundary.
+
+Proofs: `TestPatrolInvestigationTelemetry*`,
+`TestPatrolInvestigationMeasurementsDoNotRequireSurvivingFindings`,
+`TestConcludeInvestigationHandoffAttributionIsClosedAndReplaySafe`, and
+`TestPatrolInvestigationRunTelemetryPreviewIsAggregateOnly`. Receiver tests
+reject inconsistent partitions and older-schema spoofing. Aggregate proofs
+retain null counts for unmeasured/older installs and reject extra content.
+
 ## Canonical Files
 
 1. `SECURITY.md`
@@ -1973,6 +2007,9 @@ invisible to operators reviewing exactly what Pulse sends.
 55. `pkg/server/server.go`
 56. `pkg/securityutil/outbound_http.go`
 57. `pkg/securityutil/pinned_dial.go`
+58. `internal/config/patrol_investigation_telemetry.go`
+59. `internal/telemetry/patrol_investigation_runs.go`
+
 
 ## Shared Boundaries
 
@@ -4618,7 +4655,7 @@ carry the schema notice for the first release that includes this field.
 
 ### Telemetry ingestion matches the released sender while storage stays compatible
 
-The active outbound contract is schema v22. Schema v8 added content-free
+The active outbound contract is schema v23. Schema v8 added content-free
 approved-action refusal counters for target change, prerequisite failure, and
 invalid typed contract so agent-side pre-mutation failures no longer collapse
 into `other`. Schema v9 completes that split with a content-free `uncoded`

@@ -1219,3 +1219,24 @@ func TestApplyAIConfigTelemetrySnapshot_LeavesNetworkDiscoveryFlagAlone(t *testi
 		t.Fatalf("nil AI config changed the snapshot: %+v", snap)
 	}
 }
+
+func TestPatrolInvestigationTelemetryUsesIndependentInstallationLedger(t *testing.T) {
+	now := time.Now().UTC()
+	p := config.NewConfigPersistence(t.TempDir())
+	if err := p.EnsurePatrolInvestigationTelemetry(now.Add(-48 * time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	completed := now.Add(-24 * time.Hour)
+	run := &aicontracts.InvestigationSession{ID: "run", FindingID: "removed", Status: aicontracts.InvestigationStatusCompleted, CompletedAt: &completed, Outcome: aicontracts.OutcomeFixVerified}
+	if err := p.RecordPatrolInvestigationMeasurement("tenant", run, now); err != nil {
+		t.Fatal(err)
+	}
+	if err := p.SaveAIFindings(map[string]*config.AIFindingRecord{}); err != nil {
+		t.Fatal(err)
+	}
+	var snap telemetry.Snapshot
+	applyPulseIntelligenceTelemetrySnapshot(&snap, p, nil, telemetry.PulseIntelligenceActionSnapshot{}, now)
+	if !snap.PulseIntelligencePatrolInvestigationTelemetryAvailable || snap.PulseIntelligencePatrolInvestigationObservationDays != 2 || snap.PulseIntelligencePatrolInvestigationRuns30d != 1 || snap.PulseIntelligencePatrolInvestigationRunsFixVerified30d != 1 || snap.PulseIntelligencePatrolInvestigations30d != 0 {
+		t.Fatalf("independent counts lost or mixed with findings: %+v", snap)
+	}
+}

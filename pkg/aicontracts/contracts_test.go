@@ -510,3 +510,25 @@ func TestUnclassifiedAndInterruptedAreCanonicalWireValues(t *testing.T) {
 		t.Fatal("the optional concurrency updater must keep SetInvestigationConcurrencyLimit")
 	}
 }
+
+func TestInvestigationHandoffReasonIsClosedAdditiveMetadata(t *testing.T) {
+	for _, reason := range []InvestigationHandoffReason{HandoffHumanDecision, HandoffMissingEvidence, HandoffUnsupportedRemediation, HandoffUnspecified, HandoffCommandsDisabled, HandoffGuestActionsUnavailable, HandoffActionExpired, HandoffPlanningFailed} {
+		if !reason.Valid() {
+			t.Fatalf("rejected fixed reason %q", reason)
+		}
+	}
+	if InvestigationHandoffReason("customer-private-text").Valid() {
+		t.Fatal("accepted customer text as attribution")
+	}
+	payload, err := json.Marshal(InvestigationConclusion{Outcome: OutcomeNeedsAttention, Reason: "local-only narrative", HandoffReason: HandoffMissingEvidence})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(payload), `"handoff_reason":"missing_evidence"`) {
+		t.Fatalf("missing typed attribution: %s", payload)
+	}
+	legacy, _ := json.Marshal(InvestigationConclusion{Outcome: OutcomeResolved})
+	if strings.Contains(string(legacy), "handoff_reason") {
+		t.Fatalf("empty attribution changed old wire shape: %s", legacy)
+	}
+}

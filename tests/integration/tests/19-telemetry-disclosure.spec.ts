@@ -10,7 +10,7 @@ import {
 import { createAuthenticatedStorageState } from "./helpers";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const EXPECTED_TELEMETRY_SCHEMA_VERSION = 22;
+const EXPECTED_TELEMETRY_SCHEMA_VERSION = 23;
 
 type WorkerFixtures = {
   authStorageStatePath: string;
@@ -56,8 +56,14 @@ async function expectPopupDoc(
   await expect(popup.locator("body")).toContainText("successful_history_reads_over_7d_30d");
   await expect(popup.locator("body")).toContainText("Selecting a long range alone does not count");
   await expect(popup.locator("body")).toContainText("reporting_repeat_backup_health_periods_30d");
-  await popup.getByText("Schema v20 adds", { exact: false }).scrollIntoViewIfNeeded();
+  await expect(popup.locator("body")).toContainText("Independent investigation measurements (schema v23)");
+  await expect(popup.locator("body")).toContainText("pulse_intelligence_patrol_investigation_handoff_missing_evidence_30d");
+  await popup.getByText("Schema v23 starts", { exact: false }).scrollIntoViewIfNeeded();
   await popup.screenshot({ path: test.info().outputPath("privacy-history-counter.png") });
+  await popup.setViewportSize({ width: 390, height: 844 });
+  await expect(popup.locator("body")).toContainText("Schema v23 starts");
+  expect(await popup.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  await popup.screenshot({ path: test.info().outputPath("privacy-investigation-counter-narrow.png") });
   await popup.close();
 }
 
@@ -78,16 +84,19 @@ async function readTelemetryPreview(page: Page) {
     reporting_generated_backup_health_30d: number;
     reporting_telemetry_available: boolean;
     reporting_observation_days: number;
+    pulse_intelligence_patrol_investigation_telemetry_available: boolean;
+    pulse_intelligence_patrol_investigation_observation_days: number;
+    pulse_intelligence_patrol_investigation_runs_30d: number;
   };
 }
 
-async function showExtendedHistoryCount(page: Page) {
+async function showInvestigationRunCount(page: Page) {
   await page.locator('pre[aria-label="Telemetry payload preview"]').evaluate((pre) => {
     const node = pre.firstChild!;
-    const offset = (node.textContent ?? "").indexOf("reporting_generated_backup_health_30d");
+    const offset = (node.textContent ?? "").indexOf("pulse_intelligence_patrol_investigation_runs_30d");
     const range = document.createRange();
     range.setStart(node, offset);
-    range.setEnd(node, offset + "reporting_generated_backup_health_30d".length);
+    range.setEnd(node, offset + "pulse_intelligence_patrol_investigation_runs_30d".length);
     for (let parent = pre.parentElement; parent; parent = parent.parentElement) {
       if (parent.scrollHeight > parent.clientHeight && /auto|scroll/.test(getComputedStyle(parent).overflowY)) {
         parent.scrollTop += range.getBoundingClientRect().top - parent.getBoundingClientRect().top - parent.clientHeight / 2;
@@ -189,6 +198,12 @@ test.describe("Telemetry disclosure", () => {
 
     const initialPreview = await readTelemetryPreview(page);
     expect(initialPreview.event).toBe("heartbeat");
+    expect(typeof initialPreview.pulse_intelligence_patrol_investigation_telemetry_available).toBe("boolean");
+    expect(initialPreview.pulse_intelligence_patrol_investigation_observation_days).toBeGreaterThanOrEqual(0);
+    expect(initialPreview.pulse_intelligence_patrol_investigation_runs_30d).toBeGreaterThanOrEqual(0);
+    if (!initialPreview.pulse_intelligence_patrol_investigation_telemetry_available) {
+      expect(initialPreview.pulse_intelligence_patrol_investigation_runs_30d).toBe(0);
+    }
     expect(initialPreview.install_id).toBeTruthy();
     expect(initialPreview.schema_version).toBe(
       EXPECTED_TELEMETRY_SCHEMA_VERSION,
@@ -220,10 +235,15 @@ test.describe("Telemetry disclosure", () => {
     expect(initialPreview.reporting_generated_backup_health_30d).toBe(0);
     expect(initialPreview.reporting_telemetry_available).toBe(true);
     expect(initialPreview.reporting_observation_days).toBeGreaterThanOrEqual(1);
+    await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+    await page.getByRole("button", { name: "Copy JSON" }).click();
+    const copiedPayload = JSON.parse(await page.evaluate(() => navigator.clipboard.readText()));
+    expect(copiedPayload.schema_version).toBe(EXPECTED_TELEMETRY_SCHEMA_VERSION);
+    expect(copiedPayload.pulse_intelligence_patrol_investigation_runs_30d).toBe(initialPreview.pulse_intelligence_patrol_investigation_runs_30d);
     await page.getByRole("button", { name: "Refresh payload" }).click();
     expect((await readTelemetryPreview(page)).successful_history_reads_over_7d_30d).toBe(0);
     // Fixture data must not create real extended-history usage.
-    await showExtendedHistoryCount(page);
+    await showInvestigationRunCount(page);
     await page.screenshot({ path: testInfo.outputPath("telemetry-preview-desktop.png") });
 
     await page.setViewportSize({ width: 390, height: 844 });
@@ -248,10 +268,10 @@ test.describe("Telemetry disclosure", () => {
       })
       .not.toBe(initialPreview.install_id);
     expect((await readTelemetryPreview(page)).successful_history_reads_over_7d_30d).toBe(0);
-    await showExtendedHistoryCount(page);
+    await showInvestigationRunCount(page);
     await page.screenshot({ path: testInfo.outputPath("telemetry-preview-narrow.png") });
     await page.setViewportSize({ width: 768, height: 1024 });
-    await showExtendedHistoryCount(page);
+    await showInvestigationRunCount(page);
     await page.screenshot({ path: testInfo.outputPath("telemetry-preview-intermediate.png") });
   });
 });

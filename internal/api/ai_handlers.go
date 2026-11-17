@@ -1939,6 +1939,7 @@ func (h *AISettingsHandler) configureInvestigationOrchestrator(orgID string, svc
 
 	// Mirror default-org router wiring for per-org services so patrol/investigation
 	// executions always use the chat backend path with mid-run budget enforcement.
+	h.initializeInvestigationMeasurements(orgID, store)
 	svc.SetChatService(&chatServiceAdapter{svc: chatService})
 	chatService.SetBudgetChecker(func() error {
 		return svc.CheckBudget("patrol")
@@ -1970,6 +1971,9 @@ func (h *AISettingsHandler) configureInvestigationOrchestrator(orgID string, svc
 		store:    &findingsStoreWrapper{store: findingsStore},
 		sessions: store,
 		closed:   closeRun,
+		measured: func(session *aicontracts.InvestigationSession) {
+			h.recordInvestigationMeasurement(orgID, h.hydratePatrolInvestigationAction(orgID, session))
+		},
 	}
 
 	// Get config for investigation settings
@@ -2116,8 +2120,9 @@ func (a *orchestratorChatAdapter) ExecuteInvestigationStream(ctx context.Context
 	}
 	if runResult.Conclusion != nil {
 		result.Conclusion = &aicontracts.InvestigationConclusion{
-			Outcome: runResult.Conclusion.Outcome,
-			Reason:  runResult.Conclusion.Reason,
+			Outcome:       runResult.Conclusion.Outcome,
+			Reason:        runResult.Conclusion.Reason,
+			HandoffReason: runResult.Conclusion.HandoffReason,
 		}
 	}
 	return result, err
@@ -2171,6 +2176,8 @@ type orchestratorFindingsAdapter struct {
 	sessions aicontracts.InvestigationStore
 	// closed finalizes a run once its close has landed on the finding.
 	closed func(findingID string, session *aicontracts.InvestigationSession)
+	// measured observes every closed session independently of finding lifetime.
+	measured func(session *aicontracts.InvestigationSession)
 }
 
 func (a *orchestratorFindingsAdapter) Get(id string) *aicontracts.Finding {
@@ -2208,12 +2215,15 @@ func (a *orchestratorFindingsAdapter) Get(id string) *aicontracts.Finding {
 // that lands finalizes the run, whether it succeeded or failed and whether
 // Patrol or an operator started it.
 func (a *orchestratorFindingsAdapter) Update(f *aicontracts.Finding) bool {
-	if a.store == nil || f == nil {
+	if f == nil {
 		return false
 	}
 	runStartedAt := a.runStartedAt(f.ID, f.InvestigationSessionID)
 	switch aicontracts.InvestigationStatus(f.InvestigationStatus) {
 	case aicontracts.InvestigationStatusPending, aicontracts.InvestigationStatusRunning:
+		if a.store == nil {
+			return false
+		}
 		return a.store.StartInvestigation(
 			f.ID,
 			f.InvestigationSessionID,
@@ -2223,6 +2233,16 @@ func (a *orchestratorFindingsAdapter) Update(f *aicontracts.Finding) bool {
 			f.LastInvestigatedAt,
 			f.InvestigationAttempts,
 		)
+	}
+	// Closing a real investigation is measurable even when cleanup or a new
+	// occurrence means its original finding can no longer accept a projection.
+	if a.measured != nil {
+		if session := a.session(f.ID, f.InvestigationSessionID); session != nil {
+			a.measured(session)
+		}
+	}
+	if a.store == nil {
+		return false
 	}
 	if !a.store.CompleteInvestigation(
 		f.ID,

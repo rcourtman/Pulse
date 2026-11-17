@@ -124,3 +124,19 @@ func TestConcludeInvestigationRefusesInvalidArguments(t *testing.T) {
 	}
 	assert.False(t, exec.InvestigationConcluded(), "refused calls must not record a conclusion")
 }
+
+func TestConcludeInvestigationHandoffAttributionIsClosedAndReplaySafe(t *testing.T) {
+	unknown := NewProposalCapture(ProposalIdentity{ProposalID: "unknown", FindingID: "f1", InvestigationID: "i1"}, nil)
+	unknownExec := newInvestigationExecutor(t, unknown)
+	result := executeConclude(t, unknownExec, "unknown", map[string]interface{}{"outcome": "needs_attention", "reason": "evidence missing", "handoff_reason": "customer-host/private-error"})
+	require.False(t, result.IsError, "measurement metadata must not block a valid conclusion")
+	require.Equal(t, aicontracts.HandoffUnspecified, unknown.Conclusion().HandoffReason)
+
+	capture := NewProposalCapture(ProposalIdentity{ProposalID: "p1", FindingID: "f1", InvestigationID: "i1"}, nil)
+	exec := newInvestigationExecutor(t, capture)
+	good := executeConclude(t, exec, "good", map[string]interface{}{"outcome": "needs_attention", "reason": "evidence missing", "handoff_reason": "missing_evidence"})
+	require.False(t, good.IsError)
+	require.Equal(t, aicontracts.HandoffMissingEvidence, capture.Conclusion().HandoffReason)
+	executeConclude(t, exec, "replay", map[string]interface{}{"outcome": "needs_attention", "reason": "different text", "handoff_reason": "human_decision"})
+	require.Equal(t, aicontracts.HandoffMissingEvidence, capture.Conclusion().HandoffReason)
+}

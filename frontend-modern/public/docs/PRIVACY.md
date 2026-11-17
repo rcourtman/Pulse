@@ -40,7 +40,7 @@ Every field is listed below with the reason it exists. Nothing else is included 
 
 | Field | Example | Purpose |
 |-------|---------|---------|
-| Schema version | `22` | Identify the exact payload contract so old and new signals are not mixed silently |
+| Schema version | `23` | Identify the exact payload contract so old and new signals are not mixed silently |
 | Sent at | `2026-07-23T08:30:00Z` | Date the individual heartbeat without sending a history of client activity |
 | Install ID | `a1b2c3d4-...` | Distinguish active installations within one rotation window without tying telemetry to an account or person |
 | Version | `6.0.0-rc.1` | Track the canonical release identity currently deployed |
@@ -230,6 +230,31 @@ Every field is listed below with the reason it exists. Nothing else is included 
 | Pulse Intelligence Patrol AI calls 30d | `6` | Count Patrol model calls in the current 30-day telemetry window without sending provider-bound context or findings text |
 | Pulse Intelligence Patrol runs 30d | `12` | Count Patrol investigations in the current 30-day telemetry window |
 | Pulse Intelligence Patrol new findings 30d | `5` | Count new findings produced by Patrol in the current 30-day telemetry window without sending finding IDs or details |
+| Pulse Intelligence Patrol investigation telemetry available | `true`/`false` | Whether the independent investigation ledger can be read completely; false means unmeasured, never zero outcomes |
+| Pulse Intelligence Patrol investigation observation days | `0` to `30` | Elapsed age of the independent observation window, capped at 30; not continuous uptime or historical coverage before upgrade |
+| Pulse Intelligence Patrol investigation runs 30d | `12` | Count distinct closed investigation runs independently of finding cleanup; repeated investigations count separately, replay and later action transitions update the same run |
+| `pulse_intelligence_patrol_investigation_runs_resolved_30d` | `0` | Count closed runs whose current outcome is `resolved`; these fixed buckets partition the run total |
+| `pulse_intelligence_patrol_investigation_runs_fix_queued_30d` | `0` | Count closed runs whose current outcome is `fix_queued`; these fixed buckets partition the run total |
+| `pulse_intelligence_patrol_investigation_runs_fix_executed_30d` | `0` | Count closed runs whose current outcome is `fix_executed`; these fixed buckets partition the run total |
+| `pulse_intelligence_patrol_investigation_runs_fix_rejected_30d` | `0` | Count closed runs whose current outcome is `fix_rejected`; these fixed buckets partition the run total |
+| `pulse_intelligence_patrol_investigation_runs_fix_failed_30d` | `0` | Count closed runs whose current outcome is `fix_failed`; these fixed buckets partition the run total |
+| `pulse_intelligence_patrol_investigation_runs_fix_verified_30d` | `0` | Count closed runs whose current outcome is `fix_verified`; these fixed buckets partition the run total |
+| `pulse_intelligence_patrol_investigation_runs_fix_verification_failed_30d` | `0` | Count closed runs whose current outcome is `fix_verification_failed`; these fixed buckets partition the run total |
+| `pulse_intelligence_patrol_investigation_runs_fix_verification_unknown_30d` | `0` | Count closed runs whose current outcome is `fix_verification_unknown`; these fixed buckets partition the run total |
+| `pulse_intelligence_patrol_investigation_runs_needs_attention_30d` | `0` | Count closed runs whose current outcome is `needs_attention`; these fixed buckets partition the run total |
+| `pulse_intelligence_patrol_investigation_runs_cannot_fix_30d` | `0` | Count closed runs whose current outcome is `cannot_fix`; these fixed buckets partition the run total |
+| `pulse_intelligence_patrol_investigation_runs_timed_out_30d` | `0` | Count closed runs whose current outcome is `timed_out`; these fixed buckets partition the run total |
+| `pulse_intelligence_patrol_investigation_runs_interrupted_30d` | `0` | Count closed runs whose current outcome is `interrupted`; these fixed buckets partition the run total |
+| `pulse_intelligence_patrol_investigation_runs_unclassified_30d` | `0` | Count closed runs whose current outcome is `unclassified`; these fixed buckets partition the run total |
+| `pulse_intelligence_patrol_investigation_runs_failed_30d` | `0` | Count closed runs whose current outcome is `failed`; these fixed buckets partition the run total |
+| `pulse_intelligence_patrol_investigation_handoff_human_decision_30d` | `0` | Count attention/cannot-fix handoffs attributed to `human_decision`; fixed categories only, no reason text |
+| `pulse_intelligence_patrol_investigation_handoff_missing_evidence_30d` | `0` | Count attention/cannot-fix handoffs attributed to `missing_evidence`; fixed categories only, no reason text |
+| `pulse_intelligence_patrol_investigation_handoff_unsupported_remediation_30d` | `0` | Count attention/cannot-fix handoffs attributed to `unsupported_remediation`; fixed categories only, no reason text |
+| `pulse_intelligence_patrol_investigation_handoff_unspecified_30d` | `0` | Count attention/cannot-fix handoffs attributed to `unspecified`; fixed categories only, no reason text |
+| `pulse_intelligence_patrol_investigation_handoff_commands_disabled_30d` | `0` | Count attention/cannot-fix handoffs attributed to `commands_disabled`; fixed categories only, no reason text |
+| `pulse_intelligence_patrol_investigation_handoff_guest_actions_unavailable_30d` | `0` | Count attention/cannot-fix handoffs attributed to `guest_actions_unavailable`; fixed categories only, no reason text |
+| `pulse_intelligence_patrol_investigation_handoff_action_expired_30d` | `0` | Count attention/cannot-fix handoffs attributed to `action_expired`; fixed categories only, no reason text |
+| `pulse_intelligence_patrol_investigation_handoff_planning_failed_30d` | `0` | Count attention/cannot-fix handoffs attributed to `planning_failed`; fixed categories only, no reason text |
 | Pulse Intelligence Patrol investigations 30d | `3` | Count findings investigated by Patrol in the current 30-day telemetry window without sending finding IDs, resource IDs, or details |
 | Pulse Intelligence Patrol resolved findings 30d | `2` | Count findings resolved or fix-verified in the current 30-day telemetry window without sending finding IDs, resource IDs, fix details, or verification detail |
 | Pulse Intelligence Patrol blocked cause | `provider_not_configured` | See one fixed machine cause code when Patrol is enabled but blocked from running, so an install whose Patrol can never work is distinguishable from one that runs and finds nothing, without sending blocked-reason text, provider endpoints, model names, error text, or configuration |
@@ -340,7 +365,7 @@ occurrence exists, leaving no trustworthy fired-alert denominator. Detected
 flapping episodes are not reported because their diagnostic event path may be
 dropped under pressure. Configuration adoption is reported instead.
 
-The current telemetry contract is schema version 20. Schema v16 adds four
+The current telemetry contract is schema version 23. Schema v16 adds four
 workload-history adoption counts. The browser
 sends only one closed milestone name to the local Pulse server and deduplicates
 each milestone once per browser session. Pulse stores bounded UTC-day counts
@@ -459,6 +484,7 @@ Every change to the payload bumps the schema version, is listed here with its da
 
 | Schema | Date | Change |
 |--------|------|--------|
+| 23 | 2026-11-17 | Independent closed-investigation-run outcomes, fixed handoff reasons and explicit observation coverage; no customer content or new outbound identifiers |
 | 22 | 2026-11-14 | Counts of agent hosts with commands on and Docker hosts with failure logs on; never which hosts |
 | 21 | 2026-10-29 | Content-free count of distinct days on which an external agent or MCP client successfully read change or metric history |
 | 20 | 2026-10-17 | Content-free aggregate report generation, delivery outcomes, source-data states and distinct-period repeat use, with measurement availability and elapsed observation days |
@@ -531,3 +557,32 @@ Turning off **Outbound usage telemetry** does not stop AI provider requests or
 delete locally retained AI history. Local inference also does not disable the
 other outbound connections above. See [AI privacy](AI.md#privacy), including the
 separate data flow of external MCP clients, before enabling model-backed work.
+
+### Independent investigation measurements (schema v23)
+
+The schema-v17 investigation counts describe surviving findings investigated
+within the window, not every investigation run. Resolved findings can be
+removed after 24 hours, so those legacy fields must not be used as an
+investigation success rate or combined with the independent run denominator.
+
+Schema v23 starts a separate observation window on upgrade. A private local
+ledger retains one record per closed run for 30 days, independently of finding
+or conversation cleanup. It contains only a SHA-256 tenant/run deduplication
+key, completion time, fixed outcome and fixed handoff category. Keys and times
+stay local. A later action approval, rejection, expiry or verification updates
+the same run, without extending its original measurement window. Each distinct
+retry is a distinct run. No pre-upgrade history is reconstructed from capped
+session history. Startup replays only post-observation retained sessions to
+recover a close interrupted before its measurement write.
+
+Only aggregate counts, availability and elapsed observation days leave the
+installation. Outcomes partition the run count; handoff categories partition
+needs-attention and cannot-fix outcomes. Human decision, missing evidence and
+unsupported remediation are model-reported classifications. Commands disabled,
+guest actions unavailable, action expiry and planning continuation failure are
+runtime facts when known; otherwise the category is unspecified. These labels
+are measurements, never permission or an assessment of diagnostic correctness.
+Missing, corrupt or failed ledger reads/writes are unmeasured. Coverage begins
+at zero elapsed days, remains partial until 30 days, and does not prove uptime.
+No summary, narrative reason, finding/resource/session/tenant/action identity,
+command, log, evidence, model name, endpoint or credential is exported.

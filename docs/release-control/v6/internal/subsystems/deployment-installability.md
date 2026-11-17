@@ -2666,6 +2666,16 @@ rules for Linux, Windows and macOS; cross-compilation of the complete installer
 test package must also succeed. This does not substitute for execution of the
 Windows lifecycle controls or macOS installer and logging checks on native CI.
 
+### Investigation telemetry release notice (17 November 2026)
+
+`docs/releases/TELEMETRY_SCHEMA_V23.md` is the pending disclosure for the first
+client release carrying independent investigation-run telemetry. Its Changed
+and Before you upgrade sections survive the actual What’s New parser, keeping
+the content-free scope and receiver/client rollout boundary visible. The note
+is source disclosure, not a release qualification or permission to deploy.
+`whatsNewModel.test.ts` verifies the notice and rollout limits remain in the
+post-update packet. Existing exact-candidate release gates remain unchanged.
+
 ## Canonical Files
 
 1. `cmd/verify-agent-release/` validates the final copied collector artifacts before release packaging.

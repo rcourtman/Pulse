@@ -6,6 +6,32 @@ export interface SystemSettingsResponse extends SystemConfig {
 }
 
 export interface TelemetryPingPreview {
+  pulse_intelligence_patrol_investigation_telemetry_available: boolean;
+  pulse_intelligence_patrol_investigation_observation_days: number;
+  pulse_intelligence_patrol_investigation_runs_30d: number;
+  pulse_intelligence_patrol_investigation_runs_resolved_30d: number;
+  pulse_intelligence_patrol_investigation_runs_fix_queued_30d: number;
+  pulse_intelligence_patrol_investigation_runs_fix_executed_30d: number;
+  pulse_intelligence_patrol_investigation_runs_fix_rejected_30d: number;
+  pulse_intelligence_patrol_investigation_runs_fix_failed_30d: number;
+  pulse_intelligence_patrol_investigation_runs_fix_verified_30d: number;
+  pulse_intelligence_patrol_investigation_runs_fix_verification_failed_30d: number;
+  pulse_intelligence_patrol_investigation_runs_fix_verification_unknown_30d: number;
+  pulse_intelligence_patrol_investigation_runs_needs_attention_30d: number;
+  pulse_intelligence_patrol_investigation_runs_cannot_fix_30d: number;
+  pulse_intelligence_patrol_investigation_runs_timed_out_30d: number;
+  pulse_intelligence_patrol_investigation_runs_interrupted_30d: number;
+  pulse_intelligence_patrol_investigation_runs_unclassified_30d: number;
+  pulse_intelligence_patrol_investigation_runs_failed_30d: number;
+  pulse_intelligence_patrol_investigation_handoff_human_decision_30d: number;
+  pulse_intelligence_patrol_investigation_handoff_missing_evidence_30d: number;
+  pulse_intelligence_patrol_investigation_handoff_unsupported_remediation_30d: number;
+  pulse_intelligence_patrol_investigation_handoff_unspecified_30d: number;
+  pulse_intelligence_patrol_investigation_handoff_commands_disabled_30d: number;
+  pulse_intelligence_patrol_investigation_handoff_guest_actions_unavailable_30d: number;
+  pulse_intelligence_patrol_investigation_handoff_action_expired_30d: number;
+  pulse_intelligence_patrol_investigation_handoff_planning_failed_30d: number;
+
   schema_version: number;
   sent_at: string;
   install_id: string;
