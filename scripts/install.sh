@@ -1029,6 +1029,23 @@ stage_agent_binary_for_install() {
     chmod 0755 "$STAGED_AGENT_BIN" || return 1
 }
 
+# A helper-backed collector update has two verified executables, potentially
+# on different filesystems. Finish helper transfer, ownership and mode too
+# before stopping or publishing the collector. Keep migration's own snapshot
+# and rollback path separate; this is preparation for ordinary installation.
+stage_privileged_helper_for_install() {
+    STAGED_HELPER_BIN=""
+    mkdir -p "$PRIVILEGE_HELPER_DIR" || return 1
+    [[ ! -d "$PRIVILEGED_HELPER_BINARY_PATH" ]] || return 1
+    chown root:root "$PRIVILEGE_HELPER_DIR" || return 1
+    chmod 0755 "$PRIVILEGE_HELPER_DIR" || return 1
+    STAGED_HELPER_BIN=$(mktemp "${PRIVILEGED_HELPER_BINARY_PATH}.install.XXXXXX") || return 1
+    TMP_FILES+=("$STAGED_HELPER_BIN")
+    mv "$TMP_HELPER_BIN" "$STAGED_HELPER_BIN" || return 1
+    chown root:root "$STAGED_HELPER_BIN" || return 1
+    chmod 0755 "$STAGED_HELPER_BIN" || return 1
+}
+
 stop_existing_agent_service() {
     if command -v systemctl >/dev/null 2>&1; then
         if systemctl is-active --quiet "${AGENT_NAME}" 2>/dev/null; then
@@ -7548,6 +7565,9 @@ if [[ "$SAFE_PROFILE_ACTION" != "apply" ]]; then
     if ! stage_agent_binary_for_install; then
         fail "Could not stage the verified agent on the installation filesystem. The existing agent has not been stopped or replaced; saved state is retained." "$EXIT_GENERAL"
     fi
+    if [[ "$PRIVILEGED_HELPER_ENABLED" == "true" ]] && ! stage_privileged_helper_for_install; then
+        fail "Could not stage the verified typed helper on the installation filesystem. The existing agent has not been stopped or replaced; saved state is retained." "$EXIT_GENERAL"
+    fi
 fi
 
 # --- Upgrade Detection ---
@@ -7613,20 +7633,20 @@ else
 fi
 
 if [[ "$PRIVILEGED_HELPER_ENABLED" == "true" ]]; then
-    mkdir -p "$PRIVILEGE_HELPER_DIR"
-    chown root:root "$PRIVILEGE_HELPER_DIR"
-    chmod 0755 "$PRIVILEGE_HELPER_DIR"
     if [[ "$SAFE_PROFILE_ACTION" == "apply" ]]; then
+        mkdir -p "$PRIVILEGE_HELPER_DIR"
+        chown root:root "$PRIVILEGE_HELPER_DIR"
+        chmod 0755 "$PRIVILEGE_HELPER_DIR"
         SAFE_PROFILE_STAGED_HELPER="${PRIVILEGED_HELPER_BINARY_PATH}.safe-profile-new.$$"
         TMP_FILES+=("$SAFE_PROFILE_STAGED_HELPER")
         install -o root -g root -m 0755 "$TMP_HELPER_BIN" "$SAFE_PROFILE_STAGED_HELPER"
         mv "$SAFE_PROFILE_STAGED_HELPER" "$PRIVILEGED_HELPER_BINARY_PATH"
+        chown root:root "$PRIVILEGED_HELPER_BINARY_PATH"
+        chmod 0755 "$PRIVILEGED_HELPER_BINARY_PATH"
     else
-        mv "$TMP_HELPER_BIN" "$PRIVILEGED_HELPER_BINARY_PATH"
+        mv "$STAGED_HELPER_BIN" "$PRIVILEGED_HELPER_BINARY_PATH"
     fi
     TMP_HELPER_BIN=""
-    chown root:root "$PRIVILEGED_HELPER_BINARY_PATH"
-    chmod 0755 "$PRIVILEGED_HELPER_BINARY_PATH"
 fi
 
 if [[ "$UPGRADE_MODE" == "true" ]]; then
