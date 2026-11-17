@@ -2408,7 +2408,7 @@ func TestInstallSHSetsAgentBinaryModeExplicitly(t *testing.T) {
 	script := string(content)
 	for _, want := range []string{
 		`chmod 0755 "$TMP_BIN"`,
-		`chmod 0755 "${INSTALL_DIR}/${BINARY_NAME}"`,
+		`chmod 0755 "$STAGED_AGENT_BIN"`,
 	} {
 		if !strings.Contains(script, want) {
 			t.Fatalf("install.sh does not pin executable mode with %q", want)
