@@ -81,17 +81,17 @@ function mount() {
   return { view, setUser, setAllowed };
 }
 async function retry() {
-  const button = await screen.findByRole('button', { name: 'Retry', exact: true });
+  const button = await screen.findByRole('button', { name: 'Retry' });
   const pending = deferred();
   readReply = () => pending.promise;
   button.focus();
   fireEvent.click(button);
-  const inventory = screen.getByRole('region', { name: 'Roles inventory', exact: true });
+  const inventory = screen.getByRole('region', { name: 'Roles inventory' });
   expect(inventory).toHaveFocus();
   expect(inventory).toHaveAttribute('tabindex', '-1');
   expect(inventory).toHaveAttribute('aria-busy', 'true');
   await waitFor(() => expect(reads()).toHaveLength(2));
-  expect(screen.queryByRole('button', { name: 'Retry', exact: true })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
   expect(writes()).toHaveLength(0);
   expect(reads()[1][1]).toMatchObject({
     headers: { 'X-Pulse-Org-ID': 'estate/north', 'X-API-Token': 'synthetic-role-recovery-token' },
@@ -105,23 +105,21 @@ async function checkAfterUnknownWrite(operation: 'save' | 'delete') {
   fireEvent.click(
     await screen.findByRole('button', {
       name: `${operation === 'save' ? 'Edit' : 'Delete'} role Fleet auditor (Role ID: ${roles[1].id})`,
-      exact: true,
     }),
   );
   const dialog = await screen.findByRole('dialog');
   const action = within(dialog).getByRole('button', {
     name: operation === 'save' ? 'Update Role' : 'Delete Role',
-    exact: true,
   });
   action.focus();
   fireEvent.click(action);
-  const check = await screen.findByRole('button', { name: 'Check saved roles', exact: true });
+  const check = await screen.findByRole('button', { name: 'Check saved roles' });
   await waitFor(() => expect(screen.getByRole('alert')).toHaveFocus());
   const pending = deferred();
   readReply = () => pending.promise;
   check.focus();
   fireEvent.click(check);
-  const inventory = screen.getByRole('region', { name: 'Roles inventory', exact: true });
+  const inventory = screen.getByRole('region', { name: 'Roles inventory' });
   expect(inventory).toHaveFocus();
   expect(inventory).toHaveAttribute('aria-busy', 'true');
   await waitFor(() => expect(reads()).toHaveLength(2));
@@ -165,8 +163,8 @@ describe('keyboard-safe saved Roles recovery through the consuming transport', (
       if (status === 200) {
         expect(await screen.findByText(roles[1].id, { exact: true })).toBeInTheDocument();
         expect(screen.getAllByText('Fleet auditor', { exact: true })).toHaveLength(2);
-        expect(screen.getByRole('button', { name: 'New Role', exact: true })).toBeEnabled();
-      } else expect(screen.getByRole('button', { name: 'Retry', exact: true })).toBeEnabled();
+        expect(screen.getByRole('button', { name: 'New Role' })).toBeEnabled();
+      } else expect(screen.getByRole('button', { name: 'Retry' })).toBeEnabled();
       expect(screen.queryByText('Synthetic private upstream detail')).not.toBeInTheDocument();
       expect(reads()).toHaveLength(2);
       expect(writes()).toHaveLength(0);
@@ -190,10 +188,10 @@ describe('keyboard-safe saved Roles recovery through the consuming transport', (
   it('retains truthful uncertainty and another explicit check when the recovery read fails', async () => {
     const { pending, inventory } = await checkAfterUnknownWrite('save');
     pending.resolve(json({ error: 'Synthetic private upstream detail' }, 503));
-    const check = await screen.findByRole('button', { name: 'Check saved roles', exact: true });
+    const check = await screen.findByRole('button', { name: 'Check saved roles' });
     expect(inventory).toHaveFocus();
     expect(check).toBeEnabled();
-    expect(screen.getByRole('button', { name: 'New Role', exact: true })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'New Role' })).toBeDisabled();
     expect(screen.getByText(/It may already have been applied/)).toBeInTheDocument();
     expect(screen.getByText('Failed to load roles', { exact: true })).toBeInTheDocument();
     expect(screen.queryByText('Synthetic private upstream detail')).not.toBeInTheDocument();
