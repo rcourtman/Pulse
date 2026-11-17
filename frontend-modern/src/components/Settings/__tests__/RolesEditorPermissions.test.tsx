@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { clearAuth, setOrgID } from '@/utils/apiClient';
+import type { Role } from '@/types/rbac';
 import { RolesPanel } from '../RolesPanel';
+import { RolesEditorDialog } from '../RolesEditorDialog';
 import { RBAC_PERMISSION_ACTIONS, RBAC_PERMISSION_RESOURCES } from '@/utils/rbacPermissions';
 
 // Keep the rendered editor, indexed draft operations, RBACAPI and serialization
@@ -14,7 +16,7 @@ vi.mock('../useRBACFeatureGateState', () => ({
   }),
 }));
 
-const original = {
+const original: Role & { parentId: string; priority: number } = {
   id: 'scoped/auditor:production',
   name: 'Constrained auditor',
   description: 'Synthetic saved role',
@@ -109,6 +111,97 @@ async function saveAndReopen(dialog: HTMLElement, expected: unknown) {
 }
 
 describe('saved permission transformations through the role editor', () => {
+  it('does not move focus when its owner declines the requested removal', () => {
+    const onRemove = vi.fn();
+    render(() => (
+      <RolesEditorDialog
+        editingRole={original}
+        formDescription={original.description}
+        formId={original.id}
+        formName={original.name}
+        formPermissions={original.permissions}
+        isOpen
+        saving={false}
+        onAddPermission={vi.fn()}
+        onClose={vi.fn()}
+        onFormDescriptionInput={vi.fn()}
+        onFormIdInput={vi.fn()}
+        onFormNameInput={vi.fn()}
+        onRemovePermission={onRemove}
+        onSave={vi.fn()}
+        onUpdatePermission={vi.fn()}
+      />
+    ));
+    const remove = screen.getByRole('button', {
+      name: 'Remove permission 3: future:inspect:future/resource',
+    });
+    remove.focus();
+    fireEvent.click(remove);
+    expect(onRemove).toHaveBeenCalledTimes(1);
+    expect(onRemove).toHaveBeenCalledWith(2);
+    expect(remove).toHaveFocus();
+    expect(screen.getByLabelText('Permission 3 action')).toHaveValue('future:inspect');
+  });
+
+  it.each([0, 1, 2])(
+    'keeps keyboard focus on a surviving rule after removing rule index %i',
+    async (index) => {
+      render(() => <RolesPanel currentUser="role-maintainer" canManage />);
+      const dialog = await openEditor();
+      const editor = within(dialog);
+      const remove = editor.getAllByRole('button', { name: /^Remove permission / })[index];
+      remove.focus();
+      fireEvent.click(remove);
+
+      const permissions = original.permissions.filter((_, current) => current !== index);
+      const target = Math.min(index, permissions.length - 1) + 1;
+      const action = editor.getByLabelText(`Permission ${target} action`);
+      expect(action).toHaveFocus();
+      expect(action).toHaveValue(permissions[target - 1].action);
+      expectPermissions(dialog, permissions);
+      expect(saved).toEqual(original);
+      expect(writes()).toHaveLength(0);
+
+      // The handoff must not schedule a later refocus over the user's next choice.
+      const description = editor.getByLabelText('Description', { exact: true });
+      description.focus();
+      await Promise.resolve();
+      expect(description).toHaveFocus();
+
+      const reopened = await saveAndReopen(dialog, { ...original, permissions });
+      expectPermissions(reopened, permissions);
+    },
+  );
+
+  it('focuses the enabled surviving action when removal leaves one rule', async () => {
+    saved = { ...structuredClone(original), permissions: original.permissions.slice(0, 2) };
+    render(() => <RolesPanel currentUser="role-maintainer" canManage />);
+    const editor = within(await openEditor());
+    const remove = editor.getByRole('button', { name: 'Remove permission 2: delete:users' });
+    remove.focus();
+    fireEvent.click(remove);
+    expect(editor.getByLabelText('Permission 1 action')).toHaveFocus();
+    expect(editor.getByRole('button', { name: 'Remove permission 1: read:nodes' })).toBeDisabled();
+    expect(writes()).toHaveLength(0);
+  });
+
+  it('returns from a newly added last rule without saving a cancelled draft', async () => {
+    render(() => <RolesPanel currentUser="role-maintainer" canManage />);
+    const dialog = await openEditor();
+    const editor = within(dialog);
+    fireEvent.click(editor.getByRole('button', { name: 'Add Permission' }));
+    const remove = editor.getByRole('button', { name: 'Remove permission 4: read:nodes' });
+    remove.focus();
+    fireEvent.click(remove);
+    expect(editor.getByLabelText('Permission 3 action')).toHaveFocus();
+    expectPermissions(dialog, original.permissions);
+    fireEvent.click(editor.getByRole('button', { name: 'Cancel' }));
+    const reopened = await openEditor();
+    expectPermissions(reopened, original.permissions);
+    expect(writes()).toHaveLength(0);
+    expect(saved).toEqual(original);
+  });
+
   it('creates independent static option nodes for every permission row', async () => {
     render(() => <RolesPanel currentUser="role-maintainer" canManage />);
     const editor = within(await openEditor());
