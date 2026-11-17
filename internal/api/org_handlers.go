@@ -313,9 +313,8 @@ func (h *OrgHandlers) HandleCreateOrg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	r.Body = http.MaxBytesReader(w, r.Body, orgRequestBodyLimit)
 	var req createOrganizationRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeAdminJSONObject(w, r, &req, orgRequestBodyLimit); err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "Invalid request body", nil)
 		return
 	}
@@ -421,9 +420,8 @@ func (h *OrgHandlers) HandleUpdateOrg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	r.Body = http.MaxBytesReader(w, r.Body, orgRequestBodyLimit)
 	var req updateOrganizationRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeAdminJSONObject(w, r, &req, orgRequestBodyLimit); err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "Invalid request body", nil)
 		return
 	}
@@ -570,9 +568,8 @@ func (h *OrgHandlers) HandleInviteMember(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	r.Body = http.MaxBytesReader(w, r.Body, orgRequestBodyLimit)
 	var req inviteMemberRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeAdminJSONObject(w, r, &req, orgRequestBodyLimit); err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "Invalid request body", nil)
 		return
 	}
@@ -1223,9 +1220,8 @@ func (h *OrgHandlers) HandleCreateShare(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	r.Body = http.MaxBytesReader(w, r.Body, orgRequestBodyLimit)
 	var req createShareRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeAdminJSONObject(w, r, &req, orgRequestBodyLimit); err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "Invalid request body", nil)
 		return
 	}
@@ -1758,9 +1754,8 @@ func (h *OrgHandlers) handleAddDefaultOrgMember(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	r.Body = http.MaxBytesReader(w, r.Body, orgRequestBodyLimit)
 	var req inviteMemberRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeAdminJSONObject(w, r, &req, orgRequestBodyLimit); err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "Invalid request body", nil)
 		return
 	}
