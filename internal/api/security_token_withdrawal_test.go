@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/audit"
 )
 
@@ -199,6 +201,16 @@ func TestSecurityTokenMutationTransactionsFollowCallerWithdrawal(t *testing.T) {
 				if !CheckAuth(cfg, httptest.NewRecorder(), req) {
 					t.Fatal("original caller was not admitted")
 				}
+				if change == "invalid runtime role" {
+					// Persistence already refuses invalid roles. Keep that valid
+					// saved baseline, then exercise an in-memory authority fault.
+					config.Mu.Lock()
+					err := router.persistence.SaveAPITokens(cfg.APITokens)
+					config.Mu.Unlock()
+					if err != nil {
+						t.Fatal(err)
+					}
+				}
 				config.Mu.Lock()
 				wantStatus := http.StatusUnauthorized
 				for i := range cfg.APITokens {
@@ -228,7 +240,10 @@ func TestSecurityTokenMutationTransactionsFollowCallerWithdrawal(t *testing.T) {
 					break
 				}
 				cfg.SortAPITokens()
-				err := router.persistence.SaveAPITokens(cfg.APITokens)
+				var err error
+				if change != "invalid runtime role" {
+					err = router.persistence.SaveAPITokens(cfg.APITokens)
+				}
 				config.Mu.Unlock()
 				if err != nil {
 					t.Fatal(err)
@@ -370,6 +385,99 @@ func TestSecurityTokenMutationKeepsLiveSelfWithdrawal(t *testing.T) {
 			}
 			if check.Code != denied {
 				t.Errorf("old authority remains usable: status=%d, want %d", check.Code, denied)
+			}
+		})
+	}
+}
+
+func TestSecurityTokenMutationRejectsShadowedCredential(t *testing.T) {
+	router, cfg, caller, target := tokenWithdrawalFixture(t)
+	req := httptest.NewRequest(http.MethodPost, "/api/security/tokens/"+target.ID+"/rotate", nil)
+	req.Header.Set("X-API-Token", "synthetic-withdrawal-caller.12345678")
+	if !CheckAuth(cfg, httptest.NewRecorder(), req) {
+		t.Fatal("original credential was not admitted")
+	}
+	shadow := caller.Clone()
+	shadow.ID = "different-first-matching-record"
+	shadow.CreatedAt = time.Now().Add(time.Hour)
+	config.Mu.Lock()
+	cfg.UpsertAPIToken(shadow)
+	config.Mu.Unlock()
+	before := tokenWithdrawalInventory(t, router)
+	rec := httptest.NewRecorder()
+	router.handleRotateAPIToken(rec, req)
+	if rec.Code != http.StatusUnauthorized || strings.Contains(rec.Body.String(), `"token":`) {
+		t.Error("old context chose authority behind the first matching credential")
+	}
+	if string(tokenWithdrawalInventory(t, router)) != string(before) {
+		t.Error("shadowed caller changed the inventory")
+	}
+}
+
+func TestSecurityTokenMutationSharedIssuerKeepsTenantInventoryOwner(t *testing.T) {
+	for _, change := range []string{"live", "revoked", "owner removed", "owner replaced"} {
+		t.Run(change, func(t *testing.T) {
+			const orgID, raw = "tenant-a", "synthetic-tenant-mutation.12345678"
+			record := newTokenRecord(t, raw, []string{config.ScopeSettingsWrite, config.ScopeRelayMobileAccess}, nil)
+			record.OrgID = orgID
+			base := newTestConfigWithTokens(t, record.Clone())
+			tenant := &config.Config{APITokens: []config.APITokenRecord{record.Clone()}}
+			persistence := config.NewMultiTenantPersistence(t.TempDir())
+			if _, err := persistence.GetPersistence(orgID); err != nil {
+				t.Fatal(err)
+			}
+			makeManager := func(cfg *config.Config) *monitoring.MultiTenantMonitor {
+				t.Helper()
+				manager := monitoring.NewMultiTenantMonitor(base, persistence, nil)
+				// Cached owners suffice: no monitor, database, appliance or Mobile
+				// runtime is started to exercise the shared credential transaction.
+				owner := &monitoring.Monitor{}
+				setUnexportedField(t, owner, "config", cfg)
+				setUnexportedField(t, manager, "monitors", map[string]*monitoring.Monitor{orgID: owner})
+				t.Cleanup(manager.Stop)
+				return manager
+			}
+			manager := makeManager(tenant)
+			req := httptest.NewRequest(http.MethodPost, "/api/security/tokens/relay-mobile", nil)
+			req.Header.Set("X-Pulse-Org-ID", orgID)
+			req.Header.Set("X-API-Token", raw)
+			req = extractAndStoreAuthContext(base, manager, req)
+			req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, orgID))
+			if getAPITokenRecordFromRequest(req) == nil {
+				t.Fatal("tenant credential was not admitted")
+			}
+			liveManager := manager
+			source, ok := req.Context().Value(tenantTokenSourceContextKey).(tenantTokenSource)
+			if !ok {
+				t.Fatal("tenant credential lost its owning inventory")
+			}
+			source.resolveManager = func() *monitoring.MultiTenantMonitor { return liveManager }
+			req = req.WithContext(context.WithValue(req.Context(), tenantTokenSourceContextKey, source))
+			switch change {
+			case "revoked":
+				config.Mu.Lock()
+				tenant.RemoveAPIToken(record.ID)
+				config.Mu.Unlock()
+			case "owner removed":
+				liveManager = nil
+			case "owner replaced":
+				liveManager = makeManager(&config.Config{})
+			}
+			router := &Router{config: base, persistence: config.NewConfigPersistence(base.DataPath)}
+			before := tokenWithdrawalInventory(t, router)
+			token, created, err := router.createAPITokenRecord(req, "Mobile access", relayMobileAccessTokenScopes(), nil, nil)
+			if change == "live" {
+				if err != nil || token == "" || created == nil || created.OrgID != orgID || !created.HasScope(config.ScopeRelayMobileAccess) || created.HasScope(config.ScopeSettingsWrite) {
+					t.Fatal("live shared issuer lost its existing org-scoped compatibility")
+				}
+			} else {
+				failure, ok := err.(*tokenMutationFailure)
+				if !ok || failure.status != http.StatusUnauthorized || token != "" || created != nil {
+					t.Error("shared issuer fell back from withdrawn tenant owner to a global copy")
+				}
+				if string(tokenWithdrawalInventory(t, router)) != string(before) {
+					t.Error("withdrawn tenant caller changed the global inventory")
+				}
 			}
 		})
 	}

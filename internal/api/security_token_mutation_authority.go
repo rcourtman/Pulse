@@ -49,8 +49,13 @@ func (r *Router) currentTokenMutationCallerLocked(req *http.Request) (*config.AP
 	}
 	for i := range live.APITokens {
 		current := &live.APITokens[i]
-		if current.ID != admitted.ID || !constantTimeStringEqual(current.Hash, admitted.Hash) {
+		if !constantTimeStringEqual(current.Hash, admitted.Hash) {
 			continue
+		}
+		// Authentication chooses the first matching credential hash. A newly
+		// shadowing record must not let an older context choose a later grant.
+		if current.ID != admitted.ID {
+			return nil, invalid
 		}
 		role := strings.TrimSpace(current.Metadata[internalauth.RuntimeRoleMetadataKey])
 		if current.IsExpired() || apiTokenAuthenticatedUser(current) != apiTokenAuthenticatedUser(admitted) ||
