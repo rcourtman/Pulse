@@ -189,7 +189,7 @@ describe('HelpIcon', () => {
     expect(trigger).toHaveFocus();
   });
 
-  it('uses distinct labels when more than one help dialog is open', async () => {
+  it('uses distinct labels when moving between help triggers', async () => {
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       callback(0);
       return 1;
@@ -202,12 +202,18 @@ describe('HelpIcon', () => {
     ));
 
     fireEvent.click(screen.getByRole('button', { name: 'Help: First help' }));
+    const first = await screen.findByRole('dialog', { name: 'First help' });
     fireEvent.click(screen.getByRole('button', { name: 'Help: Second help' }));
 
-    const first = await screen.findByRole('dialog', { name: 'First help' });
     const second = await screen.findByRole('dialog', { name: 'Second help' });
+    // The second trigger is outside the first help. Its click must dismiss
+    // that help immediately, without relying on a listener-registration timer.
+    expect(first).not.toBeInTheDocument();
     expect(first.id).not.toBe(second.id);
     expect(first.getAttribute('aria-labelledby')).not.toBe(second.getAttribute('aria-labelledby'));
+    expect(document.getElementById(second.getAttribute('aria-labelledby')!)).toHaveTextContent(
+      'Second help',
+    );
   });
 
   it('contains the full dialog box through animation, resize and scrolling', async () => {
