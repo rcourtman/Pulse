@@ -574,6 +574,47 @@ exec sleep 30
 
     # Keep the expensive real-collector matrix separate from manager timeout
     # controls, without widening their deadline or dropping any combinations.
+    def test_real_log_timestamp_avoids_date_startup_and_preserves_legacy_fallback(self):
+        for legacy, date_exit in ((False, 0), (True, 0), (True, 23)):
+            with self.subTest(legacy=legacy, date_exit=date_exit):
+                with tempfile.TemporaryDirectory(prefix="pulse-updater-timestamp-") as directory:
+                    f = Path(directory)
+                    (f / "logger").write_text('#!/bin/sh\nexit 0\n')
+                    (f / "date").write_text(
+                        '#!/bin/sh\nprintf "%s\\n" "$*" >> "$FIXTURE/date-calls"\n'
+                        'printf "legacy timestamp\\n"\nexit "$DATE_EXIT"\n')
+                    for name in ("logger", "date"):
+                        (f / name).chmod(0o755)
+                    env = dict(os.environ, UPDATER=str(UPDATER), FIXTURE=str(f), DATE_EXIT=str(date_exit),
+                               PATH=str(f) + os.pathsep + os.environ["PATH"], TZ="UTC0")
+                    script = 'source "$UPDATER"\n'
+                    if legacy:
+                        # Model only an unsupported time conversion. All other
+                        # printf calls retain the real shell builtin, and log()
+                        # still runs the actual timeout/sink and stdout write.
+                        script += r'''
+printf() {
+    if [[ "${1:-}" == -v && "${3:-}" == '%(%Y-%m-%d %H:%M:%S)T' ]]; then return 1; fi
+    builtin printf "$@"
+}
+'''
+                    script += "log info 'timestamp boundary'\n"
+                    before = time.time()
+                    result = subprocess.run(["bash", "-c", script], env=env, capture_output=True, text=True, timeout=5)
+                    after = time.time()
+                    self.assertEqual((result.returncode, result.stderr), (0, ""))
+                    if legacy:
+                        self.assertEqual(result.stdout, "[legacy timestamp] [info] timestamp boundary\n")
+                        self.assertEqual((f / "date-calls").read_text(), "+%Y-%m-%d %H:%M:%S\n")
+                    else:
+                        self.assertFalse((f / "date-calls").exists(), "one date process per log line remains")
+                        stamp = result.stdout[:21]
+                        self.assertEqual(result.stdout[21:], " [info] timestamp boundary\n")
+                        import calendar
+                        observed = calendar.timegm(time.strptime(stamp, "[%Y-%m-%d %H:%M:%S]"))
+                        self.assertLessEqual(int(before), observed)
+                        self.assertLessEqual(observed, int(after))
+
     def test_real_log_retains_each_sink_failure_in_conditional_calls(self):
         for logger_exit, closed_stdout, expected in ((0, False, 0), (73, False, 73),
                                                       (0, True, 1), (73, True, 73)):

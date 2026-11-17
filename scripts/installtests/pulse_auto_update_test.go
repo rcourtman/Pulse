@@ -265,6 +265,7 @@ func TestAutoUpdateLogSinkFailures(t *testing.T) {
 		"test_fixture_timeout_cannot_be_hidden_by_interrupted_protocol_writes",
 		"test_fixture_success_cannot_hide_malformed_protocol",
 		"test_logger_double_keeps_complete_argument_frames_and_exit_sequence",
+		"test_real_log_timestamp_avoids_date_startup_and_preserves_legacy_fallback",
 		"test_real_log_retains_each_sink_failure_in_conditional_calls",
 		"test_real_logger_deadline_preserves_stdout_exit_and_owned_cleanup",
 	}
