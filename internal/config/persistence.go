@@ -2175,7 +2175,10 @@ func (c *ConfigPersistence) LoadPersistedSSOConfig() (*SSOConfig, error) {
 }
 
 func (c *ConfigPersistence) loadSSOConfigLocked(allowLegacy bool) (*SSOConfig, error) {
-	var settings SSOConfig
+	// A present file must contain a settings object. Decoding JSON null into a
+	// struct succeeds with a zero value, which would look like known-empty
+	// authority and could even be rewritten by the plaintext migration below.
+	var settings *SSOConfig
 	migratedPlaintext, _, err := loadEncryptedJSONLocked(c, c.ssoFile, &settings, "sso config")
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -2185,6 +2188,9 @@ func (c *ConfigPersistence) loadSSOConfigLocked(allowLegacy bool) (*SSOConfig, e
 			return nil, nil
 		}
 		return nil, err
+	}
+	if settings == nil {
+		return nil, errors.New("decode sso config: expected a settings object")
 	}
 
 	if migratedPlaintext {
@@ -2198,11 +2204,11 @@ func (c *ConfigPersistence) loadSSOConfigLocked(allowLegacy bool) (*SSOConfig, e
 	}
 
 	log.Info().Str("file", c.ssoFile).Int("providers", len(settings.Providers)).Msg("SSO configuration loaded")
-	return &settings, nil
+	return settings, nil
 }
 
 func (c *ConfigPersistence) loadLegacyOIDCConfigAsSSOLocked() (*SSOConfig, error) {
-	var legacy OIDCConfig
+	var legacy *OIDCConfig
 	_, _, err := loadEncryptedJSONLocked(c, c.oidcFile, &legacy, "legacy oidc config")
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -2210,8 +2216,11 @@ func (c *ConfigPersistence) loadLegacyOIDCConfigAsSSOLocked() (*SSOConfig, error
 		}
 		return nil, err
 	}
+	if legacy == nil {
+		return nil, errors.New("decode legacy oidc config: expected a settings object")
+	}
 
-	settings, ok := LegacyOIDCConfigToSSOConfig(&legacy, "")
+	settings, ok := LegacyOIDCConfigToSSOConfig(legacy, "")
 	if !ok {
 		if legacy.Enabled {
 			log.Warn().Str("file", c.oidcFile).Msg("Legacy OIDC config is enabled but incomplete; skipping SSO migration")

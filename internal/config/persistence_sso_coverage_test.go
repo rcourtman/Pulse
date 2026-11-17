@@ -201,3 +201,58 @@ func TestLoadSSOConfig_FallbackAndErrors(t *testing.T) {
 		assert.Nil(t, cfg)
 	})
 }
+
+func TestLoadSSOConfigRejectsNullWithoutMigration(t *testing.T) {
+	for _, source := range []string{"modern", "legacy"} {
+		t.Run(source, func(t *testing.T) {
+			for _, storage := range []string{"plaintext", "encrypted"} {
+				t.Run(storage, func(t *testing.T) {
+					cp := NewConfigPersistence(t.TempDir())
+					require.NotNil(t, cp.crypto)
+					payload := []byte(" \nnull\t")
+					if storage == "encrypted" {
+						var err error
+						payload, err = cp.crypto.Encrypt(payload)
+						require.NoError(t, err)
+					}
+					path := cp.oidcFile
+					if source == "modern" {
+						path = cp.ssoFile
+						// A damaged current snapshot is not permission to restore
+						// authority from an otherwise eligible legacy provider.
+						legacy := []byte(`{"enabled":true,"issuerUrl":"https://legacy.example.test","clientId":"legacy"}`)
+						require.NoError(t, os.WriteFile(cp.oidcFile, legacy, 0o600))
+					}
+					require.NoError(t, os.WriteFile(path, payload, 0o600))
+
+					got, err := cp.LoadSSOConfig()
+					require.ErrorContains(t, err, "expected a settings object")
+					require.Nil(t, got)
+					got, err = cp.LoadPersistedSSOConfig()
+					if source == "modern" {
+						require.ErrorContains(t, err, "expected a settings object")
+					} else {
+						require.NoError(t, err, "explicit recovery does not read the legacy file")
+						require.NoFileExists(t, cp.ssoFile)
+					}
+					require.Nil(t, got)
+					after, err := os.ReadFile(path)
+					require.NoError(t, err)
+					require.Equal(t, payload, after, "invalid snapshot was rewritten")
+				})
+			}
+		})
+	}
+}
+
+func TestLoadSSOConfigAcceptsAnEmptyObject(t *testing.T) {
+	cp := NewConfigPersistence(t.TempDir())
+	require.NotNil(t, cp.crypto)
+	require.NoError(t, os.WriteFile(cp.ssoFile, []byte(`{}`), 0o600))
+	for _, load := range []func() (*SSOConfig, error){cp.LoadSSOConfig, cp.LoadPersistedSSOConfig} {
+		got, err := load()
+		require.NoError(t, err)
+		require.NotNil(t, got)
+		require.Empty(t, got.Providers)
+	}
+}
