@@ -1,3 +1,4 @@
+import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import type { APITokenRecord } from '@/api/security';
@@ -87,6 +88,13 @@ const ready = async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Kiosk / Monitoring' }));
   return card;
 };
+const deferredRead = () => {
+  let resolve!: (response: Response) => void;
+  const promise = new Promise<Response>((finish) => {
+    resolve = finish;
+  });
+  return { promise, resolve };
+};
 type Operation = 'create' | 'scope' | 'rename' | 'revoke';
 const confirm = async (operation: Operation, card: HTMLElement) => {
   if (operation === 'create') {
@@ -137,6 +145,7 @@ describe('API token recovery through the real HTTP client', () => {
     async ({ operation, applied }) => {
       let inventory = [original];
       let reads = 0;
+      const recoveryRead = deferredRead();
       const writePath =
         operation === 'create' ? '/api/security/tokens' : '/api/security/tokens/token%2Fone';
       const method = { create: 'POST', scope: 'PATCH', rename: 'PATCH', revoke: 'DELETE' }[
@@ -158,8 +167,9 @@ describe('API token recovery through the real HTTP client', () => {
       fetchMock.mockImplementation(async (_url, options) => {
         if ((options?.method ?? 'GET') === 'GET') {
           reads += 1;
-          // The first recovery read is incomplete, not a confirmed empty list.
-          return json({ tokens: reads === 2 ? [original, null] : inventory });
+          // Hold the first explicit recovery read so its pending focus is proved.
+          // Its eventual partial list is not a confirmed empty inventory.
+          return reads === 2 ? recoveryRead.promise : json({ tokens: inventory });
         }
         inventory = expectedInventory;
         // Exercise distinct real parsing/transport outcomes, not a rejected mock
@@ -194,18 +204,29 @@ describe('API token recovery through the real HTTP client', () => {
       expect(write.headers).toMatchObject({ 'X-CSRF-Token': 'synthetic-only-csrf' });
       expect(write.body ? JSON.parse(String(write.body)) : undefined).toEqual(body);
 
+      check.focus();
       fireEvent.click(check);
+      const inventoryRegion = screen.getByRole('region', { name: 'API token inventory' });
+      expect(inventoryRegion).toHaveFocus();
+      expect(inventoryRegion).toHaveAttribute('aria-busy', 'true');
+      recoveryRead.resolve(json({ tokens: [original, null] }));
       await screen.findByRole('button', { name: 'Check token inventory' });
       await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
       expectUnknown();
+      expect(inventoryRegion).toHaveFocus();
+      expect(inventoryRegion).toHaveAttribute('aria-busy', 'false');
       expect(screen.getByRole('button', { name: 'Generate' })).toBeDisabled();
-      fireEvent.click(screen.getByRole('button', { name: 'Check token inventory' }));
+      const nextCheck = screen.getByRole('button', { name: 'Check token inventory' });
+      nextCheck.focus();
+      fireEvent.click(nextCheck);
       // Loading also replaces Unknown. Wait for the completed recovery, not
       // merely for the absence of the earlier unknown-state text.
       await waitFor(() =>
         expect(screen.getByRole('button', { name: 'Generate' })).not.toBeDisabled(),
       );
       expect(screen.queryAllByText('Unknown')).toHaveLength(0);
+      expect(inventoryRegion).toHaveFocus();
+      expect(inventoryRegion).toHaveAttribute('aria-busy', 'false');
       expect(requests()).toEqual([
         ['GET', '/api/security/tokens'],
         [method, writePath],
@@ -383,4 +404,189 @@ describe('API token recovery through the real HTTP client', () => {
     ]);
     expectNoRevocations();
   });
+});
+
+describe('API token inventory keyboard recovery', () => {
+  const expectConfirmedWithdrawal = () => {
+    // A complete inventory that excludes the linked token must still reach
+    // its consumers. Only failed/partial reads leave revocation unconfirmed.
+    expect(environment.markAgents).toHaveBeenCalledExactlyOnceWith(original.id, ['agent-one']);
+    expect(environment.markRuntimes).toHaveBeenCalledExactlyOnceWith(original.id, [
+      'docker-host-one',
+    ]);
+  };
+  const startRetry = async () => {
+    const retry = await screen.findByRole('button', { name: 'Retry token inventory' });
+    retry.focus();
+    fireEvent.click(retry);
+    const region = screen.getByRole('region', { name: 'API token inventory' });
+    expect(region).toHaveFocus();
+    expect(region).toHaveAttribute('aria-busy', 'true');
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    return region;
+  };
+  const expectScopedReads = (confirmedWithdrawal = false) => {
+    expect(requests()).toEqual([
+      ['GET', '/api/security/tokens'],
+      ['GET', '/api/security/tokens'],
+    ]);
+    for (const [, options] of fetchMock.mock.calls) {
+      expect(options).toMatchObject({
+        credentials: 'include',
+        headers: { 'X-Pulse-Org-ID': 'org-a', 'X-API-Token': 'synthetic-only-auth' },
+      });
+    }
+    if (confirmedWithdrawal) expectConfirmedWithdrawal();
+    else expectNoRevocations();
+    expect(onChanged).not.toHaveBeenCalled();
+    expect(reveal()).toBeNull();
+  };
+
+  it.each(['saved', 'empty', 'failed'] as const)(
+    'retains a named, non-tab-stop inventory while Retry settles as %s',
+    async (result) => {
+      const pending = deferredRead();
+      fetchMock
+        .mockResolvedValueOnce(json({ error: 'synthetic upstream detail' }, 503))
+        .mockReturnValueOnce(pending.promise);
+      render(() => <APITokenManager currentUser="synthetic-user" canManage />);
+      const region = await startRetry();
+      expect(region).toHaveAttribute('tabindex', '-1');
+      pending.resolve(
+        result === 'failed'
+          ? json({ error: 'synthetic upstream detail' }, 503)
+          : json({ tokens: result === 'empty' ? [] : [original] }),
+      );
+      await waitFor(() => expect(region).toHaveAttribute('aria-busy', 'false'));
+      expect(region).toHaveFocus();
+      if (result === 'saved')
+        expect(
+          screen.getByRole('article', {
+            name: `API token ${original.name} (${original.prefix}…${original.suffix})`,
+          }),
+        ).toBeInTheDocument();
+      else if (result === 'empty') expect(screen.getByText(/No tokens yet/)).toBeInTheDocument();
+      else {
+        expect(screen.getByRole('button', { name: 'Retry token inventory' })).not.toBeDisabled();
+        expectUnknown();
+      }
+      expectScopedReads(result === 'empty');
+    },
+  );
+
+  it('does not move focus when the initial read fails', async () => {
+    const pending = deferredRead();
+    fetchMock.mockReturnValueOnce(pending.promise);
+    render(() => (
+      <>
+        <button type="button">Outside task</button>
+        <APITokenManager canManage />
+      </>
+    ));
+    const outside = screen.getByRole('button', { name: 'Outside task' });
+    outside.focus();
+    pending.resolve(json({ error: 'synthetic upstream detail' }, 503));
+    await screen.findByRole('button', { name: 'Retry token inventory' });
+    expect(outside).toHaveFocus();
+    expect(requests()).toEqual([['GET', '/api/security/tokens']]);
+  });
+
+  it('keeps read-only inventory recovery usable without granting management', async () => {
+    const pending = deferredRead();
+    fetchMock.mockResolvedValueOnce(json({}, 503)).mockReturnValueOnce(pending.promise);
+    render(() => <APITokenManager canManage={false} />);
+    const region = await startRetry();
+    pending.resolve(json({ tokens: [original] }));
+    await waitFor(() => expect(region).toHaveAttribute('aria-busy', 'false'));
+    expect(region).toHaveFocus();
+    expect(screen.getByRole('button', { name: 'New token' })).toBeDisabled();
+    for (const revoke of screen.getAllByRole('button', { name: /^Revoke / }))
+      expect(revoke).toBeDisabled();
+    expectScopedReads();
+  });
+
+  it.each([true, false])(
+    'never takes focus back after a deliberate move (success: %s)',
+    async (success) => {
+      const pending = deferredRead();
+      fetchMock.mockResolvedValueOnce(json({}, 503)).mockReturnValueOnce(pending.promise);
+      render(() => (
+        <>
+          <button type="button">Outside task</button>
+          <APITokenManager canManage />
+        </>
+      ));
+      const region = await startRetry();
+      const outside = screen.getByRole('button', { name: 'Outside task' });
+      outside.focus();
+      pending.resolve(success ? json({ tokens: [original] }) : json({}, 503));
+      await waitFor(() => expect(region).toHaveAttribute('aria-busy', 'false'));
+      expect(outside).toHaveFocus();
+      expectScopedReads();
+    },
+  );
+
+  it.each(['organisation', 'principal', 'management', 'unmount'] as const)(
+    'does not refocus a retired reader after %s changes',
+    async (change) => {
+      const pending = deferredRead();
+      const lateResponse = json({ tokens: [original] });
+      const readLateBody = vi.spyOn(lateResponse, 'text');
+      const other = { ...original, id: 'other-token', name: 'Other reader credential' };
+      fetchMock
+        .mockResolvedValueOnce(json({}, 503))
+        .mockReturnValueOnce(pending.promise)
+        .mockResolvedValue(json({ tokens: [other] }));
+      const [user, setUser] = createSignal('synthetic-user');
+      const [manage, setManage] = createSignal(true);
+      const view = render(() => (
+        <>
+          <button type="button">Outside task</button>
+          <APITokenManager currentUser={user()} canManage={manage()} />
+        </>
+      ));
+      await startRetry();
+      const outside = screen.getByRole('button', { name: 'Outside task' });
+      outside.focus();
+      if (change === 'organisation') {
+        setOrgID('org-b');
+        eventBus.emit('org_switched', 'org-b');
+      } else if (change === 'principal') setUser('another-user');
+      else if (change === 'management') setManage(false);
+      else view.unmount();
+      if (change !== 'unmount')
+        await screen.findByRole('article', {
+          name: `API token ${other.name} (${other.prefix}…${other.suffix})`,
+        });
+      expect(fetchMock.mock.calls[1][1]?.signal?.aborted).toBe(true);
+      const stableFocus = document.activeElement;
+      const confirmedWithdrawals = [
+        environment.markAgents.mock.calls.length,
+        environment.markRuntimes.mock.calls.length,
+      ];
+      // The fixture intentionally ignores abort; decode the old response fully
+      // before asserting it cannot replace the new reader or move its focus.
+      pending.resolve(lateResponse);
+      await waitFor(() => expect(readLateBody).toHaveBeenCalledTimes(1));
+      await readLateBody.mock.results[0].value;
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      expect(document.activeElement).toBe(stableFocus);
+      expect(
+        screen.queryByRole('article', {
+          name: `API token ${original.name} (${original.prefix}…${original.suffix})`,
+        }),
+      ).not.toBeInTheDocument();
+      if (change !== 'unmount') expect(outside).toHaveFocus();
+      expect(requests().every(([method]) => method === 'GET')).toBe(true);
+      expect(requests()).toHaveLength(change === 'unmount' ? 2 : 3);
+      expect([
+        environment.markAgents.mock.calls.length,
+        environment.markRuntimes.mock.calls.length,
+      ]).toEqual(confirmedWithdrawals);
+      if (change === 'unmount') expectNoRevocations();
+      else expectConfirmedWithdrawal();
+      expect(onChanged).not.toHaveBeenCalled();
+      expect(reveal()).toBeNull();
+    },
+  );
 });

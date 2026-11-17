@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "base_sha": "65a525b0d92a71068ab635a1c99bdca9eadb5817",
+  "verified_at": "2026-11-17T06:00:58Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/APITokenManager.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/APITokenManager.tsx": "4ae03d2fb9cf3e36edcd867739b2192714aed90fcf8ee5a2a3cc09b81a7d1cc9"
+  },
+  "routes": [
+    "/settings/security/api"
+  ],
+  "viewports": [
+    {
+      "width": 1680,
+      "height": 1050
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Actual API Access panel, state, SecurityAPI, HTTP client and production CSS in an offline prebuilt consuming fixture; resource/WebSocket context only is synthetic. Not full App, live IdP, real credential or installed-user recovery.",
+    "Matched baseline/final light and dark: failed initial inventory, keyboard Retry pending/failing and retry-success; unconfirmed rename warning, explicit Check pending and reconciled saved inventory. Unknown/loading/counts, both credential hints, scopes, usage, expiry/no-expiry and creation draft/preset remain.",
+    "Chromium 141.0.7390.37 / Playwright 1.56.1; 28 baseline/final pairs (56 captures) all opened with native view_image from current worker output. Final paint-synchronized outline assertion; earlier immediate-style assertion failure retained separately."
+  ],
+  "interactions": [
+    "Focus Retry/Check, press Enter: baseline loses focus to BODY in all eight journeys; final focuses named busy API token inventory synchronously. Success/failure clear busy without an asynchronous focus move; next Tab reaches New token.",
+    "Exact scoped authenticated rename and explicit inventory GETs, no mutation replay, false success or premature revocation; draft and monitoring-only preset preserved.",
+    "Compare all 56 captured desktop/table and phone/card pixels: external 2px focus outline, no new clipping, hidden fields, control loss or horizontal page overflow. Existing table horizontal extent and phone scroll anchors remain; no aggregation or layout change."
+  ]
+}
