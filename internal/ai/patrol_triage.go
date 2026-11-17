@@ -22,6 +22,10 @@ type TriageFlag struct {
 	Metric       string  // "cpu", "memory", "disk", "usage" (optional, empty if N/A)
 	Value        float64 // Current value as percent (optional)
 	Threshold    float64 // Threshold exceeded as percent (optional)
+	// ReportID is the canonical ID a finding about this resource is filed
+	// under, empty when ResourceID resolves to no runtime resource. The
+	// triage tables show it so a model does not guess one.
+	ReportID string
 }
 
 // TriageResult is the output of deterministic triage.
@@ -82,6 +86,10 @@ func (p *PatrolService) runDeterministicTriageState(
 	flags = append(flags, triageConnectivityChecksState(snap, guestIntel, scopedSet)...)
 	flags = append(flags, triageRecentChanges(intel)...)
 	flags = deduplicateTriageFlags(flags)
+	reportIDs := patrolReportIDResolver(snap)
+	for i := range flags {
+		flags[i].ReportID = reportIDs(flags[i].ResourceID)
+	}
 
 	flaggedIDs := make(map[string]bool, len(flags))
 	for _, flag := range flags {
@@ -660,12 +668,13 @@ func formatTriageFlagsSection(triage *TriageResult) string {
 
 	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("## Flagged Resources (%d)\n", len(flags)))
-	sb.WriteString("| Resource | Type | Flag | Severity | Detail |\n")
-	sb.WriteString("|----------|------|------|----------|--------|\n")
+	sb.WriteString("| Resource | Resource ID | Type | Flag | Severity | Detail |\n")
+	sb.WriteString("|----------|-------------|------|------|----------|--------|\n")
 	for _, flag := range flags {
 		resource := triageResourceName(flag.ResourceName, flag.ResourceID)
-		sb.WriteString(fmt.Sprintf("| %s | %s | %s | %s | %s |\n",
+		sb.WriteString(fmt.Sprintf("| %s | %s | %s | %s | %s | %s |\n",
 			triageTableEscape(resource),
+			triageTableEscape(patrolSeedID(flag.ReportID)),
 			triageTableEscape(flag.ResourceType),
 			triageTableEscape(triageFlagLabel(flag)),
 			triageTableEscape(flag.Severity),
@@ -697,6 +706,9 @@ func formatTriageFlagsSummary(triage *TriageResult) string {
 		}
 		if i < 8 {
 			resource := triageResourceName(flag.ResourceName, flag.ResourceID)
+			if flag.ReportID != "" {
+				resource += " [" + flag.ReportID + "]"
+			}
 			entries = append(entries, fmt.Sprintf("%s (%s, %s)", resource, triageFlagLabel(flag), flag.Severity))
 		}
 	}
@@ -1135,4 +1147,53 @@ func triageUniqueFlaggedByTypes(flags []TriageFlag, resourceTypes ...string) int
 		}
 	}
 	return len(unique)
+}
+
+// patrolReportIDResolver maps a triage resource reference to the canonical ID
+// a finding about it is filed under: a runtime record's first ID when the
+// reference is one of its IDs, else the alert resolver's owner when that is a
+// runtime record. It indexes the inventory once per triage.
+func patrolReportIDResolver(snap patrolRuntimeState) func(string) string {
+	canonical := map[string]string{}
+	patrolVisitRuntimeResources(snap, func(record patrolRuntimeResourceRecord) bool {
+		first := ""
+		for _, id := range record.ids {
+			if id = strings.TrimSpace(id); id != "" {
+				first = id
+				break
+			}
+		}
+		if first == "" {
+			return true
+		}
+		for _, id := range record.ids {
+			if token := canonicalPatrolScopeToken(id); token != "" {
+				if _, taken := canonical[token]; !taken {
+					canonical[token] = first
+				}
+			}
+		}
+		return true
+	})
+	return func(ref string) string {
+		if id, ok := canonical[canonicalPatrolScopeToken(ref)]; ok {
+			return id
+		}
+		if snap.alertResourceResolver != nil && strings.TrimSpace(ref) != "" {
+			if binding, ok := snap.alertResourceResolver.ResolveAlertResourceReference(ref); ok {
+				if id, ok := canonical[canonicalPatrolScopeToken(binding.ResourceID)]; ok {
+					return id
+				}
+			}
+		}
+		return ""
+	}
+}
+
+// patrolSeedID is the Resource ID cell of a seed table.
+func patrolSeedID(id string) string {
+	if id = strings.TrimSpace(id); id != "" {
+		return id
+	}
+	return "—"
 }

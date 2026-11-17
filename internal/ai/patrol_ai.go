@@ -2805,8 +2805,8 @@ func (p *PatrolService) seedResourceInventoryState(snap patrolRuntimeState, scop
 					len(scopedNodes), status, minCPU, maxCPU, minMem, maxMem))
 			} else {
 				sb.WriteString("# Node Metrics\n")
-				sb.WriteString("| Node | Status | CPU | Mem | Disk | Load (1/5/15) | Uptime | Updates |\n")
-				sb.WriteString("|------|--------|-----|-----|------|---------------|--------|---------|\n")
+				sb.WriteString("| Node | Resource ID | Status | CPU | Mem | Disk | Load (1/5/15) | Uptime | Updates |\n")
+				sb.WriteString("|------|-------------|--------|-----|-----|------|---------------|--------|---------|\n")
 				for _, n := range scopedNodes {
 					load := "—"
 					if len(n.load) >= 3 {
@@ -2817,8 +2817,8 @@ func (p *PatrolService) seedResourceInventoryState(snap patrolRuntimeState, scop
 					if n.pendingUpdates > 0 {
 						updates = fmt.Sprintf("%d", n.pendingUpdates)
 					}
-					sb.WriteString(fmt.Sprintf("| %s | %s | %.0f%% | %.0f%% | %.0f%% | %s | %s | %s |\n",
-						n.name, n.status, n.cpu, n.mem, n.disk, load, uptime, updates))
+					sb.WriteString(fmt.Sprintf("| %s | %s | %s | %.0f%% | %.0f%% | %.0f%% | %s | %s | %s |\n",
+						n.name, patrolSeedID(n.id), n.status, n.cpu, n.mem, n.disk, load, uptime, updates))
 				}
 				sb.WriteString("\n")
 			}
@@ -2869,15 +2869,15 @@ func (p *PatrolService) seedResourceInventoryState(snap patrolRuntimeState, scop
 			}
 		} else {
 			sb.WriteString("# Guest Metrics\n")
-			sb.WriteString("| Name | Type | Node | CPU | Mem | Disk | Status | Reachable | Last Backup |\n")
-			sb.WriteString("|------|------|------|-----|-----|------|--------|-----------|-------------|\n")
+			sb.WriteString("| Name | Resource ID | Type | Node | CPU | Mem | Disk | Status | Reachable | Last Backup |\n")
+			sb.WriteString("|------|-------------|------|------|-----|-----|------|--------|-----------|-------------|\n")
 			for _, g := range guests {
 				backup := "never"
 				if !g.lastBackup.IsZero() {
 					backup = seedFormatTimeAgo(now, g.lastBackup)
 				}
-				sb.WriteString(fmt.Sprintf("| %s | %s | %s | %.0f%% | %s | %.0f%% | %s | %s | %s |\n",
-					g.name, g.gType, g.node, g.cpu, g.memory.display(), g.disk, g.status, g.reachable, backup))
+				sb.WriteString(fmt.Sprintf("| %s | %s | %s | %s | %.0f%% | %s | %.0f%% | %s | %s | %s |\n",
+					g.name, patrolSeedID(g.id), g.gType, g.node, g.cpu, g.memory.display(), g.disk, g.status, g.reachable, backup))
 			}
 			sb.WriteString("\n")
 
@@ -2999,8 +2999,8 @@ func (p *PatrolService) seedResourceInventoryState(snap patrolRuntimeState, scop
 				sb.WriteString("# Storage\n")
 				if len(poolRows) > 0 {
 					sb.WriteString("## Pools\n")
-					sb.WriteString("| Pool | Type | Node | Usage | Used | Total | Status |\n")
-					sb.WriteString("|------|------|------|-------|------|-------|--------|\n")
+					sb.WriteString("| Pool | Resource ID | Type | Node | Usage | Used | Total | Status |\n")
+					sb.WriteString("|------|-------------|------|------|-------|------|-------|--------|\n")
 					for _, row := range poolRows {
 						usedStr, totalStr := "—", "—"
 						if row.hasBytes {
@@ -3010,8 +3010,8 @@ func (p *PatrolService) seedResourceInventoryState(snap patrolRuntimeState, scop
 						if node == "" {
 							node = "—"
 						}
-						sb.WriteString(fmt.Sprintf("| %s | %s | %s | %.0f%% | %s | %s | %s |\n",
-							row.name, row.stype, node, row.usage, usedStr, totalStr, row.status))
+						sb.WriteString(fmt.Sprintf("| %s | %s | %s | %s | %.0f%% | %s | %s | %s |\n",
+							row.name, patrolSeedID(row.id), row.stype, node, row.usage, usedStr, totalStr, row.status))
 					}
 					for _, row := range poolRows {
 						if row.hasZFSErrors {
@@ -3025,8 +3025,8 @@ func (p *PatrolService) seedResourceInventoryState(snap patrolRuntimeState, scop
 						sb.WriteString("\n")
 					}
 					sb.WriteString("## Physical Disks\n")
-					sb.WriteString("| Disk | Node | Type | Size | Health | Wear | Temp | Status |\n")
-					sb.WriteString("|------|------|------|------|--------|------|------|--------|\n")
+					sb.WriteString("| Disk | Resource ID | Node | Type | Size | Health | Wear | Temp | Status |\n")
+					sb.WriteString("|------|-------------|------|------|------|--------|------|------|--------|\n")
 					for _, row := range diskRows {
 						diskName := row.devPath
 						if diskName == "" {
@@ -3055,8 +3055,8 @@ func (p *PatrolService) seedResourceInventoryState(snap patrolRuntimeState, scop
 						if text := row.temperature.Format("C"); text != "" {
 							temp = text
 						}
-						sb.WriteString(fmt.Sprintf("| %s | %s | %s | %s | %s | %s | %s | %s |\n",
-							diskName, node, diskType, size, row.health, wear, temp, row.status))
+						sb.WriteString(fmt.Sprintf("| %s | %s | %s | %s | %s | %s | %s | %s | %s |\n",
+							diskName, patrolSeedID(row.id), node, diskType, size, row.health, wear, temp, row.status))
 					}
 				}
 				sb.WriteString("\n\n")
