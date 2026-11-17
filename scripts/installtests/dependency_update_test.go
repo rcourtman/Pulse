@@ -32,9 +32,9 @@ func assertDigestPinnedDockerStage(t *testing.T, dockerfile, prefix, suffix stri
 	}
 }
 
-const alpine324RuntimeDigest = "be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a"
+const alpine324RuntimeDigest = "f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf"
 
-const node24Amd64FrontendDigest = "a34ab6d7f6f4813f4d0c5469d74685604b962fbdbf5793a7bc7b4998ecb867c8"
+const node24Amd64FrontendDigest = "116b800c3754b440ee0aa3ed2f20f5bf3d99a554bfd9adeea09ea8017f6e85f5"
 
 const go12611AlpineBuilderDigest = "ae52b5bc6ed045a9ed26ab03dc19327a802a9cc9aa8b27ed57f5c6b60579b0bb"
 

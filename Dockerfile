@@ -4,7 +4,7 @@ ARG APPRISE_VERSION=1.12.0
 
 # Build stage for frontend (must be built first for embedding)
 # Force amd64 platform to avoid slow QEMU emulation during multi-arch builds
-FROM --platform=linux/amd64 node:24-alpine@sha256:a34ab6d7f6f4813f4d0c5469d74685604b962fbdbf5793a7bc7b4998ecb867c8 AS frontend-builder
+FROM --platform=linux/amd64 node:24-alpine@sha256:116b800c3754b440ee0aa3ed2f20f5bf3d99a554bfd9adeea09ea8017f6e85f5 AS frontend-builder
 
 WORKDIR /app/frontend-modern
 
@@ -214,7 +214,7 @@ RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
 
 
 # Runtime image for the Docker agent (offered via --target agent_runtime)
-FROM alpine:3.24@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a AS agent_runtime
+FROM alpine:3.24@sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf AS agent_runtime
 
 # Use TARGETARCH to select the correct binary for the build platform
 ARG TARGETARCH
@@ -255,7 +255,7 @@ ENTRYPOINT ["/usr/local/bin/pulse-agent"]
 
 # Build the pinned Apprise CLI separately so release runtimes only retain the
 # Python interpreter and installed notification dependencies, not pip.
-FROM alpine:3.24@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a AS apprise-builder
+FROM alpine:3.24@sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf AS apprise-builder
 
 ARG APPRISE_VERSION
 
@@ -266,7 +266,7 @@ RUN apk --no-cache add python3 py3-pip && \
 
 # Base operating-system surface shared by source-built and candidate-assembled
 # Pulse server images.
-FROM alpine:3.24@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a AS pulse-runtime-foundation
+FROM alpine:3.24@sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf AS pulse-runtime-foundation
 # Read by the provider MSP control plane: this runtime accepts a private address
 # for entitlement lease renewal, so Traefik can answer the portal's name on the
 # client's own network. Older runtimes lack it and keep renewing over the host.
@@ -403,7 +403,7 @@ RUN if [ "$TARGETARCH" = "arm64" ]; then \
 # Normalise executable metadata outside the runtime's retained layers. The
 # agent glob includes detached sidecars: COPY --chmod on that glob would make
 # signatures executable too. Keep every candidate byte and sidecar unchanged.
-FROM alpine:3.24@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a AS prebuilt-downloads
+FROM alpine:3.24@sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf AS prebuilt-downloads
 
 COPY --from=release_payload /amd64/scripts/ /payload/scripts/
 COPY --from=release_payload /amd64/bin/pulse-agent-* /payload/bin/
@@ -440,7 +440,7 @@ RUN if [ "$TARGETARCH" = "arm64" ]; then \
     find /opt/pulse/bin -maxdepth 1 -type l -exec chown -h pulse:pulse {} +
 
 # Unified Agent image assembled from the same immutable candidate payload.
-FROM alpine:3.24@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a AS agent_runtime_prebuilt
+FROM alpine:3.24@sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf AS agent_runtime_prebuilt
 
 ARG TARGETARCH
 ARG TARGETVARIANT
