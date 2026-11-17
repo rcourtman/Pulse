@@ -693,14 +693,12 @@ func TestCSRFTokenStore_Load_MigratesLegacyFormat(t *testing.T) {
 	}
 }
 
-func TestCSRFTokenStore_Load_CurrentFormat_SkipsNilAndExpired(t *testing.T) {
+func TestCSRFTokenStore_Load_CurrentFormat_SkipsExpired(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// Create current format JSON with expired and nil entries (snake_case fields)
-	// to verify nil records and expired tokens are ignored during load.
+	// Complete expired records remain ordinary cleanup, not unread inventory.
 	currentJSON := `[
 		{"token_hash": "hash1", "session_key": "key1", "expires_at": "2099-12-31T23:59:59Z"},
-		null,
 		{"token_hash": "hash2", "session_key": "key2", "expires_at": "2020-01-01T00:00:00Z"}
 	]`
 	csrfFile := filepath.Join(tmpDir, "csrf_tokens.json")
@@ -716,7 +714,8 @@ func TestCSRFTokenStore_Load_CurrentFormat_SkipsNilAndExpired(t *testing.T) {
 	store.load()
 
 	// Should load only the valid, non-expired token (key1)
-	// null entry and expired entry (key2) should be skipped
+	// The expired entry (key2) should be skipped. Null rows are covered by
+	// TestAuthInventoryIncompleteRecordsPreserveOriginal instead of being lost.
 	if len(store.tokens) != 1 {
 		t.Errorf("expected 1 token after filtering, got %d", len(store.tokens))
 	}
@@ -896,6 +895,9 @@ func TestCSRFTokenStore_UnreadStartupEverySave(t *testing.T) {
 		{"zero", ""}, {"whitespace", " \n\t"}, {"invalid", "{broken"},
 		{"partial-current", `[{"token_hash":"unknown","session_key":"unknown"},`},
 		{"wrong-type", `"not an inventory"`}, {"partial-legacy", `{"unknown":{"token":"unknown"},`},
+		{"missing-token-hash", `[{"session_key":"unknown","expires_at":"2099-01-01T00:00:00Z"}]`},
+		{"missing-session-key", `[{"token_hash":"unknown","expires_at":"2099-01-01T00:00:00Z"}]`},
+		{"legacy-missing-token", `{"unknown":{"session_id":"unknown","expires_at":"2099-01-01T00:00:00Z"}}`},
 	} {
 		for _, trigger := range []string{"save", "generate", "delete-no-match", "delete-keys-no-match", "periodic", "shutdown"} {
 			t.Run(data.name+"/"+trigger, func(t *testing.T) {

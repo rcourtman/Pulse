@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 )
 
+var errIncompleteAuthInventory = errors.New("auth inventory contains an incomplete credential record")
+
 // authSnapshotWriteFunc keeps the actual descriptor write independently
 // exercisable by per-store fixtures, without replacing snapshot publication or
 // sharing a mutable global hook. Runtime stores use the default file.Write.

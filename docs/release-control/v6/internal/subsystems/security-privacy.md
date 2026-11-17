@@ -5563,3 +5563,26 @@ no concurrent-path-replacement protection, unavailable-filesystem deadline,
 size limit, storage-format change or new grant. The actual initializer and
 save/shutdown controls in `auth_inventory_startup_linux_test.go`, plus the
 regular-link controls in the three store test files, hold these properties.
+
+
+### Preserve incomplete browser-auth credential inventories
+
+Session, CSRF and recovery-token startup readers validate every credential row
+before admitting any saved authority or publishing a legacy migration. A null
+row, absent or whitespace-only required credential identity, or a CSRF row with
+no effective session binding makes the whole inventory unknown. It is not a
+partial success: the existing preservation-before-save path retains its exact
+bytes/inode privately, and never automatically restores that retained authority.
+Failed preservation continues to hold disk writes; session/CSRF grants may work
+in memory, while recovery issuance and consumption still require persistence.
+
+Whole-file `null`, empty arrays/objects and missing inventories retain existing
+compatibility. Complete expired/used records still follow ordinary filtering.
+Legacy map-key/field fallback precedence, optional metadata and readable regular
+links remain supported; no new hash syntax or storage format is required. This
+repairs loss of original evidence, not already-erased credentials or original
+client recovery. `auth_inventory_records_test.go` exercises actual initializers,
+whole-input rejection, exact private retention, fresh/independent authority,
+durable withdrawal/consumption and reload, plus complete-format/fallback controls.
+The per-store unread-inventory suites retain save/shutdown and failed-preservation
+controls for these semantic failures as well as read/JSON failures.

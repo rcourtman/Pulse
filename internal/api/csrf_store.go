@@ -70,6 +70,19 @@ func (c *CSRFTokenStore) migrateLegacyTokens(data []byte, now time.Time) (bool, 
 	if err := json.Unmarshal(data, &legacy); err != nil {
 		return false, err
 	}
+	// Do not partially load or immediately migrate an incomplete inventory.
+	for rawSessionID, record := range legacy {
+		if record == nil || strings.TrimSpace(record.Token) == "" {
+			return false, errIncompleteAuthInventory
+		}
+		sessionID := rawSessionID
+		if sessionID == "" {
+			sessionID = record.SessionID
+		}
+		if strings.TrimSpace(sessionID) == "" {
+			return false, errIncompleteAuthInventory
+		}
+	}
 
 	loaded := 0
 	for rawSessionID, record := range legacy {
@@ -476,6 +489,13 @@ func (c *CSRFTokenStore) load() {
 
 	var current []*CSRFTokenData
 	if err := json.Unmarshal(data, &current); err == nil {
+		for _, record := range current {
+			if record == nil || strings.TrimSpace(record.SessionKey) == "" || strings.TrimSpace(record.TokenHash) == "" {
+				c.preserveBeforeSave = true
+				log.Error().Msg("Incomplete CSRF credential record; existing tokens were not loaded. The next save or shutdown will preserve the file outside active storage, not restore it; refresh CSRF tokens")
+				return
+			}
+		}
 		now := time.Now()
 		loaded := 0
 		for _, record := range current {

@@ -42,6 +42,9 @@ func TestSessionStore_UnreadStartupPreservesBeforeEverySave(t *testing.T) {
 		"truncated-array":  "[" + validPrefix + ",",
 		"partial-element":  "[" + validPrefix + `,{"key":42}]`,
 		"truncated-legacy": `{"old-synthetic-session":{"expires_at":"2099-01-01T00:00:00Z"},`,
+		"missing-key":      "[" + validPrefix + `,{"expires_at":"2099-01-01T00:00:00Z"}]`,
+		"null-row":         "[" + validPrefix + `,null]`,
+		"legacy-empty-key": `{"old-synthetic-session":{"expires_at":"2099-01-01T00:00:00Z"},"":{"expires_at":"2099-01-01T00:00:00Z"}}`,
 		"scalar":           `"synthetic-session-content"`,
 		"zero-bytes":       "",
 		"whitespace":       " \n\t",
@@ -106,7 +109,11 @@ func TestSessionStore_UnreadStartupPreservesBeforeEverySave(t *testing.T) {
 				if _, err := os.Lstat(path + ".tmp"); !os.IsNotExist(err) {
 					t.Fatalf("session temporary file remained: %v", err)
 				}
-				if strings.Count(logs.String(), "Failed to decode sessions file;") != 1 || strings.Count(logs.String(), "Unread session file preserved outside active storage;") != 1 {
+				startupDiagnostic := "Failed to decode sessions file;"
+				if name == "missing-key" || name == "null-row" {
+					startupDiagnostic = "Incomplete session credential record;"
+				}
+				if strings.Count(logs.String(), startupDiagnostic) != 1 || strings.Count(logs.String(), "Unread session file preserved outside active storage;") != 1 {
 					t.Fatal("startup and preservation diagnostics were not emitted once")
 				}
 				if strings.Contains(logs.String(), "old-synthetic-session") || strings.Contains(logs.String(), "synthetic-session-content") {

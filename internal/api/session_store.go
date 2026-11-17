@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -142,14 +143,14 @@ func (s *SessionStore) loadHashedSessions(persisted []sessionPersisted, now time
 	return loaded
 }
 
-func (s *SessionStore) loadLegacySessions(legacy map[string]SessionData, now time.Time) int {
+func (s *SessionStore) loadLegacySessions(legacy map[string]*SessionData, now time.Time) int {
 	loaded := 0
 	for rawToken, entry := range legacy {
-		if rawToken == "" || now.After(entry.ExpiresAt) {
+		if entry == nil || rawToken == "" || now.After(entry.ExpiresAt) {
 			continue
 		}
 
-		session := entry
+		session := *entry
 		s.sessions[sessionHash(rawToken)] = &session
 		loaded++
 	}
@@ -157,9 +158,16 @@ func (s *SessionStore) loadLegacySessions(legacy map[string]SessionData, now tim
 }
 
 func (s *SessionStore) migrateLegacySessions(data []byte, now time.Time) (bool, error) {
-	var legacy map[string]SessionData
+	var legacy map[string]*SessionData
 	if err := json.Unmarshal(data, &legacy); err != nil {
 		return false, err
+	}
+	// Validate every row before admitting a session or publishing migration.
+	// A missing identity is unknown inventory, not an expired credential.
+	for rawToken, entry := range legacy {
+		if entry == nil || strings.TrimSpace(rawToken) == "" {
+			return false, errIncompleteAuthInventory
+		}
 	}
 
 	loaded := s.loadLegacySessions(legacy, now)
@@ -791,6 +799,13 @@ func (s *SessionStore) load() {
 
 	var persisted []sessionPersisted
 	if err := json.Unmarshal(data, &persisted); err == nil {
+		for _, entry := range persisted {
+			if strings.TrimSpace(entry.Key) == "" {
+				s.preserveBeforeSave = true
+				log.Error().Msg("Incomplete session credential record; existing sessions were not loaded. The next save or shutdown will preserve the file outside active storage, not restore it; sign in again")
+				return
+			}
+		}
 		loaded := s.loadHashedSessions(persisted, now)
 		log.Info().Int("loaded", loaded).Int("total", len(persisted)).Msg("Sessions loaded from disk (hashed format)")
 		return
