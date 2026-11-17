@@ -420,7 +420,7 @@ func TestSecurityTokenMutationSharedIssuerKeepsTenantInventoryOwner(t *testing.T
 			const orgID, raw = "tenant-a", "synthetic-tenant-mutation.12345678"
 			record := newTokenRecord(t, raw, []string{config.ScopeSettingsWrite, config.ScopeRelayMobileAccess}, nil)
 			record.OrgID = orgID
-			base := newTestConfigWithTokens(t, record.Clone())
+			base := newTestConfigWithTokens(t)
 			tenant := &config.Config{APITokens: []config.APITokenRecord{record.Clone()}}
 			persistence := config.NewMultiTenantPersistence(t.TempDir())
 			if _, err := persistence.GetPersistence(orgID); err != nil {
@@ -453,6 +453,12 @@ func TestSecurityTokenMutationSharedIssuerKeepsTenantInventoryOwner(t *testing.T
 			}
 			source.resolveManager = func() *monitoring.MultiTenantMonitor { return liveManager }
 			req = req.WithContext(context.WithValue(req.Context(), tenantTokenSourceContextKey, source))
+			// Global credentials intentionally take precedence at initial auth.
+			// Introduce the identical global copy only AFTER tenant admission,
+			// so it tests forbidden fallback rather than bypassing this fixture.
+			config.Mu.Lock()
+			base.UpsertAPIToken(record)
+			config.Mu.Unlock()
 			switch change {
 			case "revoked":
 				config.Mu.Lock()
