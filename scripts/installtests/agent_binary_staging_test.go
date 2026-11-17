@@ -19,14 +19,18 @@ import (
 // doubles; no native service, network, installer entrypoint or customer files
 // are operated here. In particular, do not substitute a model of the ordering.
 func TestAgentInstallerStagesCollectorBeforeStop(t *testing.T) {
-	testAgentInstallerStaging(t, false)
+	testAgentInstallerStaging(t, false, false)
 }
 
 func TestAgentInstallerStagesHelperBeforeStop(t *testing.T) {
-	testAgentInstallerStaging(t, true)
+	testAgentInstallerStaging(t, true, false)
 }
 
-func testAgentInstallerStaging(t *testing.T, helper bool) {
+func TestAgentInstallerPreservesStorageRuntimeRelocation(t *testing.T) {
+	testAgentInstallerStaging(t, false, true)
+}
+
+func testAgentInstallerStaging(t *testing.T, helper, relocated bool) {
 	t.Helper()
 	installer, err := os.ReadFile("../install.sh")
 	if err != nil {
@@ -67,9 +71,15 @@ esac
 			"helper-allocation", "helper-partial-transfer", "helper-owner", "helper-mode",
 			"helper-destination-directory", "helper-publication")
 	}
+	if relocated {
+		// Storage need not execute on TrueNAS. Its existing later platform path
+		// chooses an executable runtime; this fixture proves only that handoff.
+		faults = []string{"none", "destination-command-failure", "destination-not-executable"}
+	}
 	for _, upgrade := range []bool{false, true} {
 		for _, fault := range faults {
 			t.Run(fmt.Sprintf("upgrade=%t/%s", upgrade, fault), func(t *testing.T) {
+				wantSuccess := fault == "none" || relocated
 				root := t.TempDir()
 				installDir := filepath.Join(root, "installation with spaces")
 				if err := os.Mkdir(installDir, 0755); err != nil {
@@ -242,7 +252,7 @@ mv() {
 				cmd.Env = append(os.Environ(), "INSTALL_DIR="+installDir, "TMP_BIN="+download,
 					"TRACE="+trace, "FAULT="+fault, "PRIVILEGE_HELPER_DIR="+helperDir,
 					"PRIVILEGED_HELPER_BINARY_PATH="+installedHelper, "TMP_HELPER_BIN="+helperDownload,
-					fmt.Sprintf("PRIVILEGED_HELPER_ENABLED=%t", helper))
+					fmt.Sprintf("PRIVILEGED_HELPER_ENABLED=%t", helper), fmt.Sprintf("TRUENAS=%t", relocated))
 				output, runErr := cmd.CombinedOutput()
 				exit := 0
 				if runErr != nil {
@@ -252,10 +262,10 @@ mv() {
 					}
 					exit = exitErr.ExitCode()
 				}
-				if ctx.Err() != nil || (exit == 0) != (fault == "none") {
+				if ctx.Err() != nil || (exit == 0) != wantSuccess {
 					t.Fatalf("fault=%s exit=%d context=%v error=%v\n%s", fault, exit, ctx.Err(), runErr, output)
 				}
-				if (fault == "destination-command-failure" || fault == "destination-not-executable") &&
+				if !relocated && (fault == "destination-command-failure" || fault == "destination-not-executable") &&
 					(exit != 14 || !strings.Contains(string(output), `"exitCode":14`)) {
 					t.Fatalf("destination execution refusal did not retain preflight exit 14: %d\n%s", exit, output)
 				}
@@ -264,7 +274,7 @@ mv() {
 					t.Fatal(err)
 				}
 				sequence := string(operations)
-				if fault != "none" && fault != "publication" && fault != "helper-publication" {
+				if !wantSuccess && fault != "publication" && fault != "helper-publication" {
 					for _, forbidden := range []string{"stop\n", "kill\n", "publish\n", "helper-publish\n"} {
 						if strings.Contains(sequence, forbidden) {
 							t.Fatalf("staging failure disrupted installation (%s):\n%s\n%s", forbidden, sequence, output)
@@ -282,7 +292,9 @@ mv() {
 					if helper {
 						want += "helper-directory\nhelper-directory-owner\nhelper-directory-mode\nhelper-allocate\nhelper-transfer\nhelper-owner\nhelper-mode\n"
 					}
-					want += "destination-admission\n"
+					if !relocated {
+						want += "destination-admission\n"
+					}
 					if upgrade {
 						want += "stop\nkill\n"
 					}
@@ -295,7 +307,7 @@ mv() {
 						t.Fatalf("publication order = %q, want %q\n%s", sequence, want, output)
 					}
 				}
-				if strings.Contains(string(output), "publication-complete") != (fault == "none") {
+				if strings.Contains(string(output), "publication-complete") != wantSuccess {
 					t.Fatalf("completion did not match publication result:\n%s", output)
 				}
 				if fault == "destination-directory" {
@@ -303,20 +315,24 @@ mv() {
 					if err != nil || string(body) != "retain directory contents" {
 						t.Fatalf("destination directory changed: %v %q", err, body)
 					}
-				} else if fault == "none" || fault == "helper-publication" || upgrade {
+				} else if wantSuccess || fault == "helper-publication" || upgrade {
 					body, err := os.ReadFile(installed)
 					want := oldBinary
-					if fault == "none" || fault == "helper-publication" {
+					if wantSuccess || fault == "helper-publication" {
 						want = newBinary
 					}
 					if err != nil || string(body) != want {
 						t.Fatalf("installed bytes changed incorrectly: %v %q", err, body)
 					}
 					info, err := os.Stat(installed)
-					if err != nil || info.Mode().Perm() != 0755 {
+					wantMode := os.FileMode(0755)
+					if relocated && fault == "destination-not-executable" {
+						wantMode = 0644
+					}
+					if err != nil || info.Mode().Perm() != wantMode {
 						t.Fatalf("installed mode not retained: %v %v", info, err)
 					}
-					if fault == "none" && !os.SameFile(downloadInfo, info) {
+					if wantSuccess && !os.SameFile(downloadInfo, info) {
 						t.Fatal("same-filesystem staging unnecessarily copied the downloaded payload")
 					}
 				} else if _, err := os.Lstat(installed); !errors.Is(err, os.ErrNotExist) {
