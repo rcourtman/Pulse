@@ -69,6 +69,10 @@ func (h *RBACHandlers) HandleRBACAdminReset(w http.ResponseWriter, r *http.Reque
 		writeErrorResponse(w, http.StatusNotImplemented, "rbac_unavailable", "RBAC management is not available", nil)
 		return
 	}
+	if r.Context().Err() != nil {
+		writeErrorResponse(w, http.StatusRequestTimeout, "request_cancelled", "Request ended before administrator recovery began", nil)
+		return
+	}
 
 	var req struct {
 		OrgID         string `json:"org_id"`
@@ -109,7 +113,15 @@ func (h *RBACHandlers) HandleRBACAdminReset(w http.ResponseWriter, r *http.Reque
 	}
 
 	store := GetRecoveryTokenStore()
-	if !store.ValidateRecoveryTokenConstantTime(req.RecoveryToken, GetClientIP(r)) {
+	clientIP := GetClientIP(r)
+	// A complete buffered body can decode after its caller has left. Refuse
+	// before consuming the one-use token, not between consumption and reset:
+	// cancellation of an admitted operation cannot make its token reusable.
+	if r.Context().Err() != nil {
+		writeErrorResponse(w, http.StatusRequestTimeout, "request_cancelled", "Request ended before administrator recovery began", nil)
+		return
+	}
+	if !store.ValidateRecoveryTokenConstantTime(req.RecoveryToken, clientIP) {
 		writeErrorResponse(w, http.StatusForbidden, "invalid_token", "Invalid or expired recovery token", nil)
 		return
 	}

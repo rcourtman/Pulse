@@ -21,6 +21,26 @@
 
 ## Purpose
 
+### Ended administrator recovery is refused before admission (17 November 2026)
+
+The public `POST /api/admin/rbac/reset-admin` handler checks request cancellation
+or deadline after method/provider checks and immediately before one-use token
+validation. An ended request observed there returns fixed **408
+`request_cancelled`**, without consuming recovery or changing selected/peer roles,
+even when a complete buffered body still decodes. Existing JSON, authenticated
+organisation, client-IP/token and exact principal rules remain in force. No UI
+calls this direct command, and live rendered responses are unchanged.
+
+Validation consumes the token on success. Once it begins, cancellation does not
+interrupt the existing consume-and-reset operation or make a used token reusable.
+A lost response is not proof that recovery did not run. Registered
+`rbac_admin_request_lifetime_test.go` exercises entry cancellation/deadline, body
+and org-selection cancellation, unchanged persisted recovery/roles, same-token
+live recovery/reuse refusal and cancellation after consumption but before role
+admission. These source controls do not establish external impact, installed
+protection or original-client recovery.
+
+
 ### OIDC login POST admission is bounded before discovery (16 November 2026)
 
 The existing public `POST /api/oidc/{providerID}/login` (including the legacy
