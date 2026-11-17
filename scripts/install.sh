@@ -1014,6 +1014,20 @@ verify_agent_started() {
     return 1
 }
 
+# Finish the cross-filesystem copy and executable mode before disrupting an
+# existing collector. A writable /tmp and a headroom check do not establish
+# that the installation filesystem will accept the replacement. Publication
+# below then moves an already prepared file on that same filesystem.
+stage_agent_binary_for_install() {
+    STAGED_AGENT_BIN=""
+    mkdir -p "$INSTALL_DIR" || return 1
+    [[ ! -d "${INSTALL_DIR}/${BINARY_NAME}" ]] || return 1
+    STAGED_AGENT_BIN=$(mktemp "${INSTALL_DIR}/.${BINARY_NAME}.install.XXXXXX") || return 1
+    TMP_FILES+=("$STAGED_AGENT_BIN")
+    cp "$TMP_BIN" "$STAGED_AGENT_BIN" || return 1
+    chmod 0755 "$STAGED_AGENT_BIN" || return 1
+}
+
 stop_existing_agent_service() {
     if command -v systemctl >/dev/null 2>&1; then
         if systemctl is-active --quiet "${AGENT_NAME}" 2>/dev/null; then
@@ -7526,6 +7540,15 @@ if [[ -n "$SERVER_VERSION" && -n "$NEW_VERSION" && "$NEW_VERSION" != "unknown" &
     log_warn "Downloaded agent version (${NEW_VERSION}) does not match Pulse server version (${SERVER_VERSION}). Check that Pulse is upgraded and that any reverse proxy is not serving a stale cached binary."
 fi
 
+# Prepare the ordinary collector replacement before any upgrade stop/kill.
+# Safe-profile migration already prepared its verified collector above and
+# retains its separate snapshot, authority-reduction and rollback transaction.
+if [[ "$SAFE_PROFILE_ACTION" != "apply" ]]; then
+    if ! stage_agent_binary_for_install; then
+        fail "Could not stage the verified agent on the installation filesystem. The existing agent has not been stopped or replaced; saved state is retained." "$EXIT_GENERAL"
+    fi
+fi
+
 # --- Upgrade Detection ---
 # Check if pulse-agent is already installed and handle upgrade gracefully
 EXISTING_VERSION=""
@@ -7585,8 +7608,7 @@ if [[ "$SAFE_PROFILE_ACTION" == "apply" ]]; then
     mv "$SAFE_PROFILE_STAGED_COLLECTOR" "${INSTALL_DIR}/${BINARY_NAME}"
     COLLECTOR_LIFECYCLE_BINARY_PATH="${INSTALL_DIR}/${BINARY_NAME}"
 else
-    mv "$TMP_BIN" "${INSTALL_DIR}/${BINARY_NAME}"
-    chmod 0755 "${INSTALL_DIR}/${BINARY_NAME}"
+    mv "$STAGED_AGENT_BIN" "${INSTALL_DIR}/${BINARY_NAME}"
 fi
 
 if [[ "$PRIVILEGED_HELPER_ENABLED" == "true" ]]; then
