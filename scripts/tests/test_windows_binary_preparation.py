@@ -59,7 +59,10 @@ def preparation_contract(script: str) -> None:
     if not checksum < signature < prepare < stop < swap < service:
         raise ValueError("preparation must follow trust checks and precede service disruption")
     boundary = caller[prepare:stop]
-    require("$PreparedBinaryPath = New-PulsePreparedBinary -SourcePath $TempPath -DestinationDirectory $InstallDir -ExpectedChecksum $localChecksum", boundary)
+    prepared = require("$PreparedBinaryPath = New-PulsePreparedBinary -SourcePath $TempPath -DestinationDirectory $InstallDir -ExpectedChecksum $localChecksum", boundary)
+    released = require("Remove-Item -LiteralPath $TempPath -Force -ErrorAction Stop", boundary)
+    if released <= prepared:
+        raise ValueError("original download released before successful preparation")
     if not re.search(r"\} catch \{\s+Cleanup\s+Show-Error .*?\s+Exit 1\s+\}", boundary):
         raise ValueError("preparation failure can fall through to service removal")
     publication = caller[swap:service]
@@ -87,6 +90,7 @@ class WindowsBinaryPreparation(unittest.TestCase):
             "$sourceStream.Dispose()",
             "Get-FileChecksum $preparedPath",
             "-ExpectedChecksum $localChecksum",
+            "Remove-Item -LiteralPath $TempPath -Force -ErrorAction Stop",
             "Move-Item $PreparedBinaryPath $DestPath -Force",
         ):
             with self.subTest(boundary=fragment), self.assertRaises(ValueError):
@@ -108,7 +112,7 @@ class WindowsBinaryPreparation(unittest.TestCase):
             preparation_contract(changed)
 
     def test_native_runtime_fixture_is_on_the_existing_ci_path(self) -> None:
-        go = (ROOT / "scripts/installtests/windows_binary_preparation_test.go").read_text()
+        go = (ROOT / "scripts/installtests/install_ps1_test.go").read_text()
         workflow = (ROOT / ".github/workflows/unified-agent-native.yml").read_text()
         self.assertIn("func TestInstallPS1PreparedBinaryRuntime(t *testing.T)", go)
         self.assertIn("nativeInstallerPowerShell(t)", go)
@@ -117,7 +121,7 @@ class WindowsBinaryPreparation(unittest.TestCase):
         fixture = (ROOT / "scripts/installtests/windows_binary_preparation_controls.ps1").read_text()
         self.assertIn("Invoke-Expression $functions[0].Extent.Text", fixture)
         self.assertIn("Invoke-Expression $replacement", fixture)
-        for case in ("installed-success", "fresh-success", "missing-source", "locked-source", "changed-source",
+        for case in ("installed-success", "fresh-success", "missing-source", "locked-source", "source-cleanup-locked", "changed-source",
                      "invalid-checksum", "destination-denied", "stop-refused", "publication-locked"):
             self.assertIn("'" + case + "'", fixture)
         for observation in ("File-Hash $dest", "service-removed", "$before[$path]", "GetSecurityDescriptorSddlForm('Access')",

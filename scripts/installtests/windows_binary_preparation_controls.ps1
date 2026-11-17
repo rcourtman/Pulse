@@ -46,6 +46,9 @@ if ($Scenario -ne '') {
         if ($Scenario -eq 'locked-source') {
             $locked = [System.IO.File]::Open($TempPath, 'Open', 'Read', 'None')
         }
+        if ($Scenario -eq 'source-cleanup-locked') {
+            $locked = [System.IO.File]::Open($TempPath, 'Open', 'Read', 'Read')
+        }
         if ($Scenario -eq 'publication-locked') {
             $locked = [System.IO.File]::Open($DestPath, 'Open', 'Read', 'Read')
         }
@@ -94,7 +97,7 @@ function Invoke-Control {
     }
 }
 
-$cases = @('installed-success', 'fresh-success', 'missing-source', 'locked-source',
+$cases = @('installed-success', 'fresh-success', 'missing-source', 'locked-source', 'source-cleanup-locked',
     'changed-source', 'invalid-checksum', 'destination-denied', 'stop-refused', 'publication-locked')
 foreach ($script:caseName in $cases) {
     $root = Join-Path $TempDir $script:caseName
@@ -140,6 +143,7 @@ foreach ($script:caseName in $cases) {
     Assert-Control ($removed -eq ($success -or $script:caseName -eq 'publication-locked')) 'incorrect service mutation ordering'
     if ($success) {
         Assert-Control ((File-Hash $dest) -ceq $sourceHash) 'published bytes differ from the verified source'
+        Assert-Control (-not (Test-Path -LiteralPath $source)) 'original owned download remains after successful preparation'
     } else {
         Assert-Control ([System.IO.File]::ReadAllText($dest) -ceq 'original executable') 'failure changed the original executable'
         if ($script:caseName -notin @('stop-refused', 'publication-locked')) {
@@ -185,4 +189,4 @@ $handle.Dispose()
 Cleanup
 Assert-Control ((-not (Test-Path -LiteralPath $one)) -and (-not (Test-Path -LiteralPath $two)) -and
     (Test-Path -LiteralPath $source) -and (Test-Path -LiteralPath $reference)) 'cleanup did not respect exact ownership'
-Write-Output 'PASS all 9 Windows binary preparation controls and inherited-ACL/unique-stage controls'
+Write-Output 'PASS all 10 Windows binary preparation controls and inherited-ACL/unique-stage controls'

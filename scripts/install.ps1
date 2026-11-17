@@ -1083,6 +1083,9 @@ if ($CommandAuthority -eq 'monitoring-only' -and $EnableCommands) {
 # --- Prepare Verified Binary ---
 try {
     $PreparedBinaryPath = New-PulsePreparedBinary -SourcePath $TempPath -DestinationDirectory $InstallDir -ExpectedChecksum $localChecksum
+    # Interactive iex does not exit PowerShell when installation finishes.
+    # Release the original owned download now, not only on engine exit.
+    Remove-Item -LiteralPath $TempPath -Force -ErrorAction Stop
 } catch {
     Cleanup
     Show-Error "Cannot prepare the agent binary; the existing service, executable and saved agent state have not been changed. $_"
