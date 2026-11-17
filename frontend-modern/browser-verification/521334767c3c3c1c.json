@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "base_sha": "f975505528de12813f735d0d177438ccf6ad5257",
+  "verified_at": "2026-11-17T00:33:03Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/alerts/AlertDeliveryRehearsal.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/alerts/AlertDeliveryRehearsal.tsx": "8a14b74a9ac5b1cc14ecf28f7917cdf3254d70452f64a5e418f8da5378cdfe60"
+  },
+  "routes": [
+    "/alerts/notifications",
+    "/alerts/notifications?rehearsal=5c7c096b-954d-4d72-a32b-0ce893c8a467"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 768,
+      "height": 1024
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Collapsed and expanded rehearsal, empty history, loading evidence with disabled send",
+    "Saved severity and routing tags, excessive tag length rejected, unsaved destination settings gate",
+    "Mixed accepted, rejected and severity-suppressed destinations with separate alert and recovery columns",
+    "Active run hides new-run form and exposes recovery action",
+    "Expanded destination evidence with attempts, failure category and redacted transport diagnostics",
+    "Grouping and quiet-hours deferred firing, retry accepted after two attempts",
+    "Recovery pending, deferred and passed after finish request without a premature finished claim",
+    "Unavailable evidence preserves stale report with explicit warning and disabled recovery",
+    "Lost start response with disabled inputs and same-request guidance, reconciled to one real result",
+    "Older history selection, active run resume, exact linked report and focus",
+    "Paused policy callout and no saved destinations guidance",
+    "Desktop aligned columns, tablet wrapping and mobile two-column phase labels with long destination names"
+  ],
+  "interactions": [
+    "Expand and collapse rehearsal, delivery details, recent rehearsals and How this works",
+    "Keyboard Enter toggles delivery details, explicit start/recovery and linked report focus the result heading",
+    "Manual refresh and routine polling retain expanded evidence and do not steal focus",
+    "Select severity, enter routing tags, submit invalid and valid inputs",
+    "Start real queued delivery, inspect mixed outcomes, request receipt-gated recovery",
+    "Select older report and resume current rehearsal",
+    "Discard adjacent unsaved email change restores send availability",
+    "Reconcile lost response using Refresh without duplicate synthetic firing deliveries",
+    "Inspect actual pixels at 1280x900, 768x1024 and 390x844, mobile document scrollWidth equals viewport width",
+    "Disclosures have no modal, outside-click or Escape dismissal behavior to verify"
+  ]
+}

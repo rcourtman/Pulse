@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createSignal } from 'solid-js';
 import { NotificationsAPI, type DeliveryRehearsal } from '@/api/notifications';
@@ -51,6 +51,94 @@ describe('AlertDeliveryRehearsal', () => {
     vi.mocked(NotificationsAPI.listRehearsals).mockResolvedValue([]);
   });
   afterEach(cleanup);
+
+  it('summarizes firing separately from recovery and keeps destination evidence expandable', async () => {
+    const run = fixture();
+    run.recoveredAt = '2026-11-16T12:05:00Z';
+    run.destinations = [
+      {
+        ...run.destinations[0],
+        id: 'accepted',
+        name: 'Accepted receiver',
+        firing: { status: 'passed', reason: 'accepted', message: 'Alert accepted.', attempts: 1 },
+        recovery: {
+          status: 'passed',
+          reason: 'accepted',
+          message: 'Recovery accepted.',
+          attempts: 1,
+        },
+      },
+      {
+        ...run.destinations[0],
+        id: 'rejected',
+        name: 'Rejected receiver',
+        firing: {
+          ...run.destinations[0].firing,
+          diagnostic: 'Provider HTTP 400, response body withheld.',
+        },
+        recovery: {
+          status: 'suppressed',
+          reason: 'no_receipt',
+          message: 'No firing receipt for recovery.',
+          attempts: 0,
+        },
+      },
+      {
+        ...run.destinations[0],
+        id: 'filtered',
+        name: 'Critical-only receiver',
+        firing: {
+          status: 'suppressed',
+          reason: 'severity',
+          message: 'Below the minimum severity.',
+          attempts: 0,
+        },
+        recovery: {
+          status: 'suppressed',
+          reason: 'no_receipt',
+          message: 'No firing receipt for recovery.',
+          attempts: 0,
+        },
+      },
+    ];
+    vi.mocked(NotificationsAPI.listRehearsals).mockResolvedValue([run]);
+    render(() => <AlertDeliveryRehearsal />);
+    open();
+    expect(await screen.findByText(/1 passed · 1 failed · 1 suppressed/)).toBeInTheDocument();
+    expect(screen.getAllByRole('listitem')).toHaveLength(3);
+    const rejected = within(screen.getByRole('listitem', { name: 'Rejected receiver' }));
+    expect(rejected.getByText('Receiver rejected the message.')).toBeVisible();
+    expect(rejected.getByText('No firing receipt for recovery.')).not.toBeVisible();
+    expect(rejected.getByText('Provider HTTP 400, response body withheld.')).not.toBeVisible();
+    fireEvent.click(rejected.getByText('Delivery details', { exact: true }));
+    expect(rejected.getByText('No firing receipt for recovery.')).toBeVisible();
+    expect(rejected.getByText('Provider HTTP 400, response body withheld.')).toBeVisible();
+  });
+
+  it('keeps deferred recovery visible after a finish request', async () => {
+    const run = fixture();
+    run.recoveredAt = '2026-11-16T12:05:00Z';
+    run.destinations[0].firing = {
+      status: 'passed',
+      reason: 'accepted',
+      message: 'Alert accepted.',
+      attempts: 1,
+    };
+    run.destinations[0].recovery = {
+      status: 'deferred',
+      reason: 'quiet_hours',
+      message: 'Quiet hours are holding recovery.',
+      attempts: 0,
+      nextAt: '2026-11-17T00:00:00Z',
+    };
+    vi.mocked(NotificationsAPI.listRehearsals).mockResolvedValue([run]);
+    render(() => <AlertDeliveryRehearsal />);
+    open();
+    expect(await screen.findByText('Recovery requested', { exact: true })).toBeInTheDocument();
+    expect(screen.getByText('Deferred', { exact: true })).toBeVisible();
+    expect(screen.getByText('Quiet hours are holding recovery.')).toBeVisible();
+    expect(screen.queryByText('Finished', { exact: true })).not.toBeInTheDocument();
+  });
 
   it('retains separate history identities when starting and selecting another run', async () => {
     const older = { ...fixture(), tags: ['retained-old'], recoveredAt: '2026-11-16T12:02:00Z' };
@@ -141,6 +229,10 @@ describe('AlertDeliveryRehearsal', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: 'Send rehearsal alert' }));
     expect(await screen.findByText('Failed')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: /Rehearsal started/ })).toHaveFocus(),
+    );
+    expect(screen.queryByRole('combobox', { name: 'Rehearsal severity' })).not.toBeInTheDocument();
     expect(screen.getByText('Receiver rejected the message.')).toBeInTheDocument();
     expect(screen.getByText('Provider HTTP 400, response body withheld.')).not.toBeVisible();
     fireEvent.click(screen.getByText('Delivery details', { exact: true }));
@@ -158,6 +250,9 @@ describe('AlertDeliveryRehearsal', () => {
     ).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Send recovery and finish rehearsal' }));
     expect(await screen.findByText('Suppressed')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: /Rehearsal started/ })).toHaveFocus(),
+    );
     expect(screen.getByText('No successful firing receipt.')).toBeInTheDocument();
     expect(NotificationsAPI.recoverRehearsal).toHaveBeenCalledWith('run-a', {
       expectedOrgID: 'org-a',

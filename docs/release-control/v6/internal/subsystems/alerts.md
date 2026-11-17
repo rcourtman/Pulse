@@ -5829,3 +5829,14 @@ and both critical-policy outcomes through the real shared schedule snapshot.
 Rehearsal notification links open the exact result at
 `/alerts/notifications?rehearsal=<id>`, including an older retained run outside
 the recent list. They never point at a nonexistent infrastructure incident.
+
+### Compact rehearsal result presentation (17 November 2026)
+
+The rehearsal answers destination delivery first: one row per destination aligns
+alert and recovery statuses, with the most relevant unfinished or failed phase
+explained in the row. Complete phase messages, attempts, deadlines and redacted
+transport diagnostics remain available in the destination disclosure. The saved
+input form stays compact, recovery is the primary action on the active report,
+and history and policy explanations use secondary disclosures. Provider
+acceptance remains distinct from recipient confirmation. No delivery or
+authority behavior changes.

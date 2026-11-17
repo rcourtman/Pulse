@@ -18,7 +18,12 @@ import {
   type RehearsalStatus,
 } from '@/api/notifications';
 import { Button } from '@/components/shared/Button';
+import { CalloutCard } from '@/components/shared/CalloutCard';
+import { StatusIndicatorBadge } from '@/components/shared/StatusIndicatorBadge';
+import { TechnicalDetailsDisclosure } from '@/components/shared/TechnicalDetailsDisclosure';
+import type { StatusIndicatorVariant } from '@/utils/status';
 import { FormSelect } from '@/components/shared/FormSelect';
+import { formControl, formField, formLabel } from '@/components/shared/Form';
 import { SettingsPanel } from '@/components/shared/SettingsPanel';
 import { getOrgID } from '@/utils/apiClient';
 
@@ -31,48 +36,147 @@ const outcomeLabels: Record<RehearsalStatus, string> = {
   suppressed: 'Suppressed',
   unavailable: 'Unavailable',
 };
-const outcomeColors: Record<RehearsalStatus, string> = {
-  not_started: 'text-muted',
-  pending: 'text-blue-700 dark:text-blue-300',
-  deferred: 'text-amber-800 dark:text-amber-200',
-  passed: 'text-emerald-700 dark:text-emerald-300',
-  failed: 'text-red-700 dark:text-red-300',
-  suppressed: 'text-amber-800 dark:text-amber-200',
-  unavailable: 'text-red-700 dark:text-red-300',
+const outcomeVariants: Record<RehearsalStatus, StatusIndicatorVariant> = {
+  not_started: 'muted',
+  pending: 'info',
+  deferred: 'info',
+  passed: 'success',
+  failed: 'danger',
+  suppressed: 'muted',
+  unavailable: 'danger',
 };
-function Outcome(props: { title: string; outcome: RehearsalOutcome }) {
+
+function OutcomeBadge(props: { outcome: RehearsalOutcome }) {
   return (
-    <div class="min-w-0 space-y-1 rounded-md border border-border p-3">
-      <div class="flex flex-wrap items-baseline justify-between gap-2">
-        <h4 class="font-medium">{props.title}</h4>
-        <span class={`text-sm font-semibold ${outcomeColors[props.outcome.status]}`}>
-          {outcomeLabels[props.outcome.status]}
-        </span>
-      </div>
-      <p class="break-words text-sm text-muted">{props.outcome.message}</p>
-      <Show when={props.outcome.nextAt}>
-        <p class="text-xs text-muted">
-          Next eligible check: {new Date(props.outcome.nextAt!).toLocaleString()}
+    <StatusIndicatorBadge
+      variant={outcomeVariants[props.outcome.status]}
+      label={outcomeLabels[props.outcome.status]}
+      title={props.outcome.message}
+      dot
+    />
+  );
+}
+
+function OutcomeDetails(props: {
+  title: string;
+  outcome: RehearsalOutcome;
+  hideMessage?: boolean;
+}) {
+  return (
+    <div class="min-w-0 space-y-2">
+      <h5 class="text-sm font-medium text-base-content">{props.title}</h5>
+      <Show when={!props.hideMessage}>
+        <p class="break-words text-sm text-muted">{props.outcome.message}</p>
+      </Show>
+      <dl class="space-y-1 text-xs text-muted">
+        <Show when={props.outcome.attempts > 0}>
+          <div class="flex gap-2">
+            <dt>Attempts</dt>
+            <dd>{props.outcome.attempts}</dd>
+          </div>
+        </Show>
+        <Show when={props.outcome.nextAt}>
+          <div>
+            <dt class="inline">Next eligible check: </dt>
+            <dd class="inline">{new Date(props.outcome.nextAt!).toLocaleString()}</dd>
+          </div>
+        </Show>
+        <Show when={props.outcome.failureClass}>
+          <div>
+            <dt class="inline">Failure category: </dt>
+            <dd class="inline">{props.outcome.failureClass!.replaceAll('_', ' ')}</dd>
+          </div>
+        </Show>
+      </dl>
+      <Show when={props.outcome.diagnostic}>
+        <p class="break-words rounded-sm bg-surface-alt p-2 text-xs leading-relaxed text-muted">
+          {props.outcome.diagnostic}
         </p>
-      </Show>
-      <Show when={props.outcome.attempts > 0}>
-        <p class="text-xs text-muted">Recorded attempts: {props.outcome.attempts}</p>
-      </Show>
-      <Show when={props.outcome.diagnostic || props.outcome.failureClass}>
-        <details class="text-xs text-muted">
-          <summary class="cursor-pointer rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2">
-            Delivery details
-          </summary>
-          <Show when={props.outcome.failureClass}>
-            <p class="mt-2">Failure category: {props.outcome.failureClass!.replaceAll('_', ' ')}</p>
-          </Show>
-          <Show when={props.outcome.diagnostic}>
-            <p class="mt-2 break-words">{props.outcome.diagnostic}</p>
-          </Show>
-        </details>
       </Show>
     </div>
   );
+}
+
+function DestinationResult(props: {
+  destination: DeliveryRehearsal['destinations'][number];
+  policy: RehearsalOutcome;
+  id: string;
+}) {
+  const note = () => {
+    const { firing, recovery } = props.destination;
+    if (
+      firing.status !== 'passed' &&
+      firing.status !== 'not_started' &&
+      firing.message !== props.policy.message
+    )
+      return { phase: 'firing', label: 'Alert', outcome: firing };
+    if (
+      recovery.status !== 'passed' &&
+      recovery.status !== 'not_started' &&
+      recovery.message !== props.policy.message
+    )
+      return { phase: 'recovery', label: 'Recovery', outcome: recovery };
+    return undefined;
+  };
+  return (
+    <li class="min-w-0 py-4" aria-labelledby={props.id}>
+      <div class="grid min-w-0 grid-cols-2 items-start gap-x-4 gap-y-2 md:grid-cols-[minmax(0,1fr)_7rem_7rem]">
+        <div class="col-span-2 min-w-0 md:col-span-1">
+          <h4 id={props.id} class="break-words text-sm font-medium text-base-content">
+            {props.destination.name}
+          </h4>
+          <Show when={note()}>
+            {(reason) => (
+              <p class="mt-1 break-words text-xs leading-relaxed text-muted">
+                <span class="font-medium">{reason().label}: </span>
+                {reason().outcome.message}
+              </p>
+            )}
+          </Show>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="text-xs text-muted md:sr-only">Alert</span>
+          <OutcomeBadge outcome={props.destination.firing} />
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="text-xs text-muted md:sr-only">Recovery</span>
+          <OutcomeBadge outcome={props.destination.recovery} />
+        </div>
+      </div>
+      <TechnicalDetailsDisclosure
+        title="Delivery details"
+        subtitle=""
+        dataTestId={`${props.id}-details`}
+        class="mt-2 text-muted"
+        contentClass="mt-3 grid min-w-0 gap-4 border-t border-border pt-3 md:grid-cols-2"
+        keepMounted
+      >
+        <OutcomeDetails
+          title="Firing notification"
+          outcome={props.destination.firing}
+          hideMessage={note()?.phase === 'firing'}
+        />
+        <OutcomeDetails
+          title="Recovery notification"
+          outcome={props.destination.recovery}
+          hideMessage={note()?.phase === 'recovery'}
+        />
+      </TechnicalDetailsDisclosure>
+    </li>
+  );
+}
+
+function firingSummary(run: DeliveryRehearsal) {
+  return (
+    ['passed', 'failed', 'pending', 'deferred', 'suppressed', 'unavailable', 'not_started'] as const
+  )
+    .map((status) => ({
+      status,
+      count: run.destinations.filter((destination) => destination.firing.status === status).length,
+    }))
+    .filter(({ count }) => count > 0)
+    .map(({ status, count }) => `${count} ${outcomeLabels[status].toLowerCase()}`)
+    .join(' · ');
 }
 
 export function AlertDeliveryRehearsal(props: {
@@ -115,8 +219,8 @@ export function AlertDeliveryRehearsal(props: {
   let selectionVersion = 0;
   const current = () => !disposed && (getOrgID() || 'default') === org;
   const active = createMemo(() => history().find((run) => !run.recoveredAt));
-  const focusLinkedResult = (id: string, version: number) => {
-    if (focusedLinkID === id) return;
+  const focusReport = (id: string, version: number, force = false) => {
+    if (!force && focusedLinkID === id) return;
     queueMicrotask(() => {
       if (!current() || version !== selectionVersion) return;
       (reportHeading?.isConnected ? reportHeading : summaryElement)?.focus();
@@ -155,16 +259,17 @@ export function AlertDeliveryRehearsal(props: {
         setUncertainStart(false);
         mergeRun(reconciled);
         setError('');
+        focusReport(reconciled.id, selectionVersion);
       } else if (version === selectionVersion) {
         setSelected(wanted ?? runs[0] ?? null);
         linkedRequestID = undefined;
-        if (requestedLink) focusLinkedResult(requestedLink, version);
+        if (requestedLink) focusReport(requestedLink, version);
       }
     } catch {
       if (current() && sequence === readSequence) {
         setUnavailable(true);
         setError('Rehearsal evidence is unavailable. Refresh before taking another action.');
-        if (requestedLink) focusLinkedResult(requestedLink, version);
+        if (requestedLink) focusReport(requestedLink, version);
       }
     } finally {
       if (current() && sequence === readSequence) setLoading(false);
@@ -196,6 +301,7 @@ export function AlertDeliveryRehearsal(props: {
       ++selectionVersion;
       mergeRun(run);
       setUnavailable(false);
+      focusReport(run.id, selectionVersion);
     } catch {
       if (current()) {
         setUncertainStart(true);
@@ -226,6 +332,7 @@ export function AlertDeliveryRehearsal(props: {
       if (!current()) return;
       ++selectionVersion;
       mergeRun(result);
+      focusReport(result.id, selectionVersion, true);
     } catch {
       if (current()) {
         setUnavailable(true);
@@ -265,7 +372,18 @@ export function AlertDeliveryRehearsal(props: {
   return (
     <SettingsPanel
       title="Delivery rehearsal"
-      description="Exercise your saved notification routes, queue and recovery."
+      description="Check a sample alert and recovery through your saved destinations."
+      bodyClass="space-y-4"
+      action={
+        <Button
+          size="sm"
+          aria-label="Refresh rehearsal"
+          disabled={busy()}
+          onClick={() => void refresh()}
+        >
+          Refresh
+        </Button>
+      }
     >
       <details
         class="group"
@@ -283,30 +401,24 @@ export function AlertDeliveryRehearsal(props: {
         >
           Rehearse alert delivery
         </summary>
-        <div class="mt-4 space-y-4">
-          <p class="text-sm text-muted">
-            Sends clearly labelled messages to saved email, webhook and Apprise destinations using
-            real routing, grouping, quiet hours, retries and recovery receipts. It creates no
-            infrastructure incident.
-          </p>
-          <p class="text-sm text-muted">
-            This sample follows the performance-alert quiet-hours category. Critical severity
-            follows your saved setting for suppressing critical performance alerts.
-          </p>
-          <p class="text-sm text-muted">
-            A passed delivery means the destination accepted it. Check your inbox or service to
-            confirm receipt. Metric detection, resource maintenance, push notifications and the
-            external watchdog are separate checks.
-          </p>
+        <div class="mt-4 space-y-5">
           <Show when={props.hasUnsavedChanges?.()}>
-            <p role="status" class="text-sm text-amber-800 dark:text-amber-200">
-              Save or discard your settings changes before rehearsing. Only saved settings are used.
-            </p>
+            <CalloutCard
+              tone="warning"
+              scale="compact"
+              padding="sm"
+              role="status"
+              description="Save or discard your settings changes before rehearsing. Only saved settings are used."
+            />
           </Show>
           <Show when={error()}>
-            <p role="alert" class="break-words text-sm text-red-700 dark:text-red-300">
-              {error()}
-            </p>
+            <CalloutCard
+              tone="danger"
+              scale="compact"
+              padding="sm"
+              role="alert"
+              description={error()}
+            />
           </Show>
           <Show when={unavailable() && !!linkedRequestID}>
             <Button
@@ -320,110 +432,105 @@ export function AlertDeliveryRehearsal(props: {
               Show recent rehearsals
             </Button>
           </Show>
-          <div class="flex flex-wrap items-end gap-3">
-            <FormSelect
-              id={`${inputID}-level`}
-              label="Rehearsal severity"
-              fieldClass="min-w-36 flex-1"
-              selectClass="min-h-11"
-              value={level()}
-              disabled={busy() || !!active() || uncertainStart()}
-              onChange={(event) =>
-                setLevel(event.currentTarget.value as DeliveryRehearsal['level'])
-              }
-            >
-              <option value="info">Info</option>
-              <option value="warning">Warning</option>
-              <option value="critical">Critical</option>
-            </FormSelect>
-            <label class="min-w-44 flex-[2] space-y-1 text-sm" for={`${inputID}-tags`}>
-              <span>Routing tags (optional, comma-separated)</span>
-              <input
-                id={`${inputID}-tags`}
-                class="min-h-11 w-full rounded-md border border-border bg-surface px-3 text-base-content"
-                value={tags()}
-                maxLength={2080}
+          <Show when={!active() || uncertainStart()}>
+            <div class="flex flex-wrap items-end gap-3">
+              <FormSelect
+                id={`${inputID}-level`}
+                label="Rehearsal severity"
+                fieldClass="min-w-32 flex-1 sm:max-w-40"
+                value={level()}
                 disabled={busy() || !!active() || uncertainStart()}
-                onInput={(event) => setTags(event.currentTarget.value)}
-              />
-            </label>
-          </div>
-          <div class="flex flex-wrap gap-2">
+                onChange={(event) =>
+                  setLevel(event.currentTarget.value as DeliveryRehearsal['level'])
+                }
+              >
+                <option value="info">Info</option>
+                <option value="warning">Warning</option>
+                <option value="critical">Critical</option>
+              </FormSelect>
+              <label class={`${formField} min-w-40 flex-[2]`} for={`${inputID}-tags`}>
+                <span class={formLabel}>
+                  Routing tags{' '}
+                  <span class="text-xs font-normal text-muted">optional, comma-separated</span>
+                </span>
+                <input
+                  id={`${inputID}-tags`}
+                  class={formControl}
+                  value={tags()}
+                  maxLength={2080}
+                  disabled={busy() || !!active() || uncertainStart()}
+                  onInput={(event) => setTags(event.currentTarget.value)}
+                />
+              </label>
+              <Button
+                variant={active() ? 'secondary' : 'primary'}
+                isLoading={busy()}
+                disabled={loading() || unavailable() || !!active() || !!props.hasUnsavedChanges?.()}
+                onClick={() => void start()}
+              >
+                {uncertainStart() ? 'Retry same rehearsal request' : 'Send rehearsal alert'}
+              </Button>
+            </div>
+          </Show>
+          <Show when={active() && selected()?.id !== active()?.id}>
             <Button
               variant="primary"
-              isLoading={busy()}
-              disabled={loading() || unavailable() || !!active() || !!props.hasUnsavedChanges?.()}
-              onClick={() => void start()}
+              onClick={() => {
+                linkedRequestID = undefined;
+                ++selectionVersion;
+                setSelected(active()!);
+              }}
             >
-              {uncertainStart() ? 'Retry same rehearsal request' : 'Send rehearsal alert'}
+              Resume current rehearsal
             </Button>
-            <Button disabled={busy()} onClick={() => void refresh()}>
-              Refresh rehearsal
-            </Button>
-            <Show when={active() && selected()?.id !== active()?.id}>
-              <Button
-                onClick={() => {
-                  linkedRequestID = undefined;
-                  ++selectionVersion;
-                  setSelected(active()!);
-                }}
-              >
-                Resume current rehearsal
-              </Button>
-            </Show>
-          </div>
+          </Show>
           <Show when={loading()}>
             <p role="status" class="text-sm text-muted">
               Loading rehearsal evidence…
             </p>
           </Show>
           <Show when={!loading() && !selected() && !unavailable()}>
-            <p class="text-sm text-muted">
+            <p class="py-4 text-sm text-muted">
               No rehearsal in the last seven days. Start with a warning to check your saved routes.
             </p>
           </Show>
-          <Show when={history().length > 1 || selectedOutsideHistory()}>
-            <FormSelect
-              id={`${inputID}-history`}
-              label={
-                selectedOutsideHistory()
-                  ? 'Recent rehearsals and linked result'
-                  : 'Recent rehearsals (up to 20, retained for seven days)'
-              }
-              selectClass="min-h-11"
-              value={selected()?.id}
-              disabled={busy()}
-              onChange={(event) => {
-                linkedRequestID = undefined;
-                ++selectionVersion;
-                setSelected(history().find((row) => row.id === event.currentTarget.value) ?? null);
-              }}
-            >
-              <Show when={selectedOutsideHistory()}>
-                <option value={selected()!.id}>
-                  Linked rehearsal · {new Date(selected()!.createdAt).toLocaleString()}
-                </option>
-              </Show>
-              <For each={history()}>
-                {(run) => (
-                  <option value={run.id}>
-                    {new Date(run.createdAt).toLocaleString()} · {run.level}
-                    {run.recoveredAt ? ' · finished' : ' · current'}
-                  </option>
-                )}
-              </For>
-            </FormSelect>
-          </Show>
           <Show when={selected()}>
             {(run) => (
-              <div class="space-y-4" aria-live="polite" aria-busy={busy()}>
-                <div class="space-y-1">
-                  <h3 ref={reportHeading} tabIndex={-1} class="font-semibold">
-                    Rehearsal started {new Date(run().createdAt).toLocaleString()}
-                  </h3>
-                  <p class="break-words text-xs text-muted">
-                    {run().level} · {run().tags.length ? run().tags.join(', ') : 'No routing tags'}
-                  </p>
+              <div
+                class="space-y-4"
+                aria-live="polite"
+                aria-busy={busy()}
+                data-testid="rehearsal-report"
+              >
+                <div class="flex flex-wrap items-start justify-between gap-3 border-t border-border pt-4">
+                  <div class="min-w-0 space-y-1">
+                    <h3
+                      ref={reportHeading}
+                      tabIndex={-1}
+                      class="text-base font-semibold"
+                      aria-label={`Delivery results. Rehearsal started ${new Date(run().createdAt).toLocaleString()}`}
+                    >
+                      Delivery results
+                    </h3>
+                    <p class="text-xs text-muted">{new Date(run().createdAt).toLocaleString()}</p>
+                    <p class="break-words text-xs text-muted">
+                      {run().level} ·{' '}
+                      {run().tags.length ? run().tags.join(', ') : 'No routing tags'}
+                    </p>
+                  </div>
+                  <Show
+                    when={!run().recoveredAt}
+                    fallback={<span class="text-xs text-muted">Recovery requested</span>}
+                  >
+                    <Button
+                      variant="primary"
+                      aria-label="Send recovery and finish rehearsal"
+                      disabled={busy() || unavailable() || !!props.hasUnsavedChanges?.()}
+                      onClick={() => void recover()}
+                    >
+                      Send recovery and finish
+                    </Button>
+                  </Show>
                 </div>
                 <Show when={unavailable()}>
                   <p class="text-sm text-red-700 dark:text-red-300">
@@ -431,54 +538,152 @@ export function AlertDeliveryRehearsal(props: {
                     unknown.
                   </p>
                 </Show>
-                <Outcome title="Notification admission" outcome={run().policy} />
-                <Show when={run().destinations.length === 0}>
-                  <p class="text-sm text-amber-800 dark:text-amber-200">
-                    No saved destinations were available. Configure and save a destination for your
-                    next rehearsal.
-                  </p>
+                <Show when={run().policy.status !== 'passed'}>
+                  <CalloutCard
+                    tone={
+                      run().policy.status === 'unavailable' || run().policy.status === 'failed'
+                        ? 'danger'
+                        : 'warning'
+                    }
+                    scale="compact"
+                    padding="sm"
+                    title={outcomeLabels[run().policy.status]}
+                    description={run().policy.message}
+                  />
                 </Show>
-                <For each={run().destinations}>
-                  {(destination) => (
-                    <section class="min-w-0 space-y-2">
-                      <h3 class="break-words font-semibold">{destination.name}</h3>
-                      <div class="grid min-w-0 gap-2 md:grid-cols-2">
-                        <Outcome title="Firing notification" outcome={destination.firing} />
-                        <Outcome title="Recovery notification" outcome={destination.recovery} />
-                      </div>
-                    </section>
-                  )}
-                </For>
                 <Show
-                  when={!run().recoveredAt}
+                  when={run().destinations.length > 0}
                   fallback={
-                    <p class="text-sm text-muted">
-                      Recovery was requested {new Date(run().recoveredAt!).toLocaleString()}.
-                      Pending deliveries continue under the saved queue policy.
-                    </p>
+                    <CalloutCard
+                      tone="warning"
+                      scale="compact"
+                      padding="sm"
+                      description="No saved destinations were available. Configure and save a destination for your next rehearsal."
+                    />
                   }
                 >
-                  <div class="space-y-2 border-t border-border pt-4">
-                    <p class="text-sm text-muted">
-                      When ready, finish this rehearsal. Pending firing messages will be cancelled.
-                      Recovery is sent only where this occurrence has a successful firing receipt
-                      and recovery notifications are enabled.
-                    </p>
-                    <Button
-                      disabled={busy() || unavailable() || !!props.hasUnsavedChanges?.()}
-                      onClick={() => void recover()}
+                  <p class="text-sm text-base-content">
+                    <span class="text-muted">Alert delivery: </span>
+                    {firingSummary(run())}
+                  </p>
+                  <div>
+                    <div
+                      aria-hidden="true"
+                      class="hidden grid-cols-[minmax(0,1fr)_7rem_7rem] gap-4 border-b border-border pb-2 text-xs font-medium text-muted md:grid"
                     >
-                      Send recovery and finish rehearsal
-                    </Button>
+                      <span>Destination</span>
+                      <span>Alert</span>
+                      <span>Recovery</span>
+                    </div>
+                    <ul class="divide-y divide-border" aria-label="Destination delivery results">
+                      <For each={run().destinations}>
+                        {(destination) => (
+                          <DestinationResult
+                            destination={destination}
+                            policy={run().policy}
+                            id={`${inputID}-${encodeURIComponent(destination.id)}`}
+                          />
+                        )}
+                      </For>
+                    </ul>
                   </div>
                 </Show>
-                <p class="text-xs text-muted">
-                  Use Recent delivery activity for individual attempts. These messages share
-                  ordinary destination rate limits, queue policy and delivery health.
-                </p>
+                <div class="space-y-1 text-xs leading-relaxed text-muted">
+                  <p>
+                    A passed delivery means the destination accepted it. Confirm receipt in your
+                    inbox or service.
+                  </p>
+                  <Show
+                    when={!run().recoveredAt}
+                    fallback={
+                      <p>
+                        Recovery requested {new Date(run().recoveredAt!).toLocaleString()}. Pending
+                        deliveries continue under your saved policies.
+                      </p>
+                    }
+                  >
+                    <p>
+                      Finishing cancels pending alert sends. Only destinations that accepted the
+                      alert can receive recovery.
+                    </p>
+                  </Show>
+                </div>
               </div>
             )}
           </Show>
+          <div class="space-y-3 border-t border-border pt-3">
+            <Show when={history().length > 1 || selectedOutsideHistory()}>
+              <TechnicalDetailsDisclosure
+                title="Recent rehearsals"
+                subtitle="Saved for seven days"
+                dataTestId={`${inputID}-history-disclosure`}
+                class="text-muted"
+                keepMounted
+              >
+                <FormSelect
+                  id={`${inputID}-history`}
+                  label={
+                    selectedOutsideHistory()
+                      ? 'Recent rehearsals and linked result'
+                      : 'Recent rehearsals (up to 20, retained for seven days)'
+                  }
+                  value={selected()?.id}
+                  disabled={busy()}
+                  onChange={(event) => {
+                    linkedRequestID = undefined;
+                    ++selectionVersion;
+                    setSelected(
+                      history().find((row) => row.id === event.currentTarget.value) ?? null,
+                    );
+                  }}
+                >
+                  <Show when={selectedOutsideHistory()}>
+                    <option value={selected()!.id}>
+                      Linked rehearsal · {new Date(selected()!.createdAt).toLocaleString()}
+                    </option>
+                  </Show>
+                  <For each={history()}>
+                    {(run) => (
+                      <option value={run.id}>
+                        {new Date(run.createdAt).toLocaleString()} · {run.level}
+                        {run.recoveredAt ? ' · recovery requested' : ' · current'}
+                      </option>
+                    )}
+                  </For>
+                </FormSelect>
+              </TechnicalDetailsDisclosure>
+            </Show>
+            <TechnicalDetailsDisclosure
+              title="How this works"
+              subtitle="Routes, policies and recovery"
+              dataTestId={`${inputID}-help`}
+              class="text-muted"
+              keepMounted
+            >
+              <div class="space-y-3 text-sm leading-relaxed text-muted">
+                <p>
+                  Sends clearly labelled messages to saved email, webhook and Apprise destinations
+                  through real routing, grouping, quiet hours and retries. It creates no
+                  infrastructure incident.
+                </p>
+                <p>
+                  This sample follows the performance-alert quiet-hours category, including your
+                  saved setting for suppressing critical performance alerts.
+                </p>
+                <p>
+                  Metric detection, resource maintenance, push notifications and the external
+                  watchdog are separate checks. Rehearsals share ordinary destination rate limits
+                  and delivery health.
+                </p>
+                <p>
+                  Use Recent delivery activity for individual attempts and transport diagnostics.
+                </p>
+                <Show when={selected()?.policy.status === 'passed'}>
+                  <p>{selected()!.policy.message}</p>
+                </Show>
+              </div>
+            </TechnicalDetailsDisclosure>
+          </div>
         </div>
       </details>
     </SettingsPanel>
