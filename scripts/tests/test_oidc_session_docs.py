@@ -139,6 +139,26 @@ def assert_role_assignment_audit_scope(case, guide, callback):
     ))
 
 
+def assert_provider_inventory_check(case, panel):
+    # Follow the visible recovery control, not an obsolete inline spelling.
+    # This is source consistency only; transport/browser tests prove execution.
+    notice = panel.split("const InventoryCheckNotice:", 1)[1].split("\n  return (", 1)[0]
+    case.assertIn("'Check saved providers'", notice)
+    if "onClick={() => void loadProviders()}" in notice:
+        return
+    handlers = re.findall(r"onClick=\{(\w+)\}", notice)
+    case.assertEqual(len(handlers), 1)
+    callback = re.search(
+        rf"const {re.escape(handlers[0])} = \(\) => \{{(.*?)\n  \}};",
+        panel, re.DOTALL,
+    )
+    case.assertIsNotNone(callback)
+    body = re.sub(r"//[^\n]*", "", callback.group(1))
+    calls = re.findall(r"\b(\w+)\s*\(", body)
+    case.assertEqual(calls.count("loadProviders"), 1)
+    case.assertLessEqual(set(calls), {"loadProviders", "clearTimeout", "focus"})
+
+
 def assert_refresh_source(case, auth, store):
     # Follow the captured store through scheduling and conditional completion.
     # The old free-function/global-write spellings cannot establish these
@@ -277,8 +297,7 @@ class OIDCSessionDocsTest(unittest.TestCase):
     def test_provider_check_instructions_match_the_read_only_control(self):
         state = (ROOT / "frontend-modern/src/components/Settings/useSSOProvidersState.ts").read_text()
         panel = (ROOT / "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx").read_text()
-        self.assertIn("'Check saved providers'", panel)
-        self.assertIn("onClick={() => void loadProviders()}", panel)
+        assert_provider_inventory_check(self, panel)
         self.assertIn("retry: false", state)
         inventory = state.split("const loadProviders = async () => {", 1)[1].split("const resetContext", 1)[0]
         self.assertIn("if (unconfirmedChange()) {\n      clearEditor();", inventory)
@@ -290,6 +309,23 @@ class OIDCSessionDocsTest(unittest.TestCase):
         detail = state.split("const openEditModal = async", 1)[1].split("const beginMutation", 1)[0]
         self.assertIn("requestOptions(controller)", detail)
         self.assertNotIn("method:", detail)
+
+    def test_provider_check_accepts_inline_read_and_rejects_write_or_duplicate_read(self):
+        panel = (ROOT / "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx").read_text()
+        assert_provider_inventory_check(
+            self, panel.replace("onClick={checkSavedProviders}", "onClick={() => void loadProviders()}", 1),
+        )
+        for before, after in (
+            ("onClick={checkSavedProviders}", "onClick={handleSave}"),
+            ("void loadProviders();", "void handleSave();"),
+            ("void loadProviders();", "void loadProviders();\n    handleDelete('saved');"),
+            ("void loadProviders();", "void loadProviders();\n    apiFetch('/api/security/sso/providers', { method: 'POST' });"),
+            ("void loadProviders();", "void loadProviders();\n    void loadProviders();"),
+        ):
+            with self.subTest(regression=after):
+                self.assertIn(before, panel)
+                with self.assertRaises(AssertionError):
+                    assert_provider_inventory_check(self, panel.replace(before, after, 1))
 
     def test_role_assignment_audit_does_not_promise_events_for_cleared_roles(self):
         callback = (ROOT / "internal/api/oidc_handlers.go").read_text()

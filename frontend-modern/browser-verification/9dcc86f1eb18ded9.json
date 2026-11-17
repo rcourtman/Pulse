@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "aed021460bb9d7088da0dfab9be6639e91c7a23b",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx": "192a60b0894e2dc152da5859a5465583ddad13060b3a2fa6c5b4471dff624776"
+  },
+  "routes": [
+    "Offline actual SSOProvidersPanel consumer at /settings/security-sso with real state owner, authenticated API client, dialogs and CSS; synthetic HTTP service, not full App/IdP."
+  ],
+  "states": [
+    "Desktop 1365x900 and phone 390x844; Chromium desktop/light and phone/dark, WebKit desktop/dark and phone/light.",
+    "Unknown initial read, pending explicit read, saved namesake OIDC/SAML providers, failure, known empty and read-only recovery.",
+    "Uncertain toggle/edit/deletion: release active modal, pending and failed saved reads, then saved outcome consumed without another mutation; organization withdrawal and late completion."
+  ],
+  "interactions": [
+    "Keyboard Enter Retry, local Tab continuation after success/failure, programmatic named busy-region focus, deliberate departure during reads preserved.",
+    "Explicit checks after each uncertain mutation preserve no-replay and write-admission boundaries; real synthetic read-back, new org header and old-reader rejection.",
+    "292 baseline / 356 final assertions; 12 comparable pairs / 24 captures all presented through native view_image. Visible namesake summaries, saved enabled/disabled labels, full available OIDC callback, and per-provider controls retain positions. Independent acceptance remains."
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "verified_at": "2026-11-17T15:49:33.616Z"
+}
