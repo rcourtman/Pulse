@@ -78,7 +78,7 @@ else:
 if len(args) == 1:
     url, out = args[0], None
 elif len(args) == 3 and args[1] == "-o":
-    url, out = args[0], pathlib.Path(args[2])
+    url, out = args[0], None if args[2] == "-" else pathlib.Path(args[2])
 else:
     sys.exit(97)
 allowed = {"https://github.com/rcourtman/Pulse/releases/latest/download/install.sh": "installer"}

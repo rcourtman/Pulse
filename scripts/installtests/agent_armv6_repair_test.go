@@ -163,7 +163,7 @@ func TestAgentInstallerSavedStateRepairVerifiedReplacement(t *testing.T) {
  STATE_DIR="$1"; STATE_DIR_SOURCE=explicit; INSTALL_DIR="$2"; BINARY_NAME=pulse-agent; AGENT_NAME=pulse-agent
  PULSE_URL=""; PULSE_TOKEN=""; AGENT_ID=""; HOSTNAME_OVERRIDE=""; REPORT_IP=""; INSECURE=false; SERVER_FINGERPRINT=""; CURL_CA_BUNDLE=""
  TMP_FILES=(); SAFE_PROFILE_ACTION=""; PRIVILEGED_HELPER_ENABLED=false; ACTION_RUNNER_ENABLED=false; UPDATE_ONLY=true
- EXIT_DOWNLOAD_FAILED=10; EXIT_CHECKSUM_FAILED=11; EXIT_SIGNATURE_FAILED=12; EXIT_PREFLIGHT_FAILED=13; EXIT_MISSING_ARGS=14
+ EXIT_GENERAL=1; EXIT_DOWNLOAD_FAILED=10; EXIT_CHECKSUM_FAILED=11; EXIT_SIGNATURE_FAILED=12; EXIT_PREFLIGHT_FAILED=13; EXIT_MISSING_ARGS=14
  INSTALL_SIGNATURE_IDENTITY=pulse-release; INSTALL_SIGNATURE_NAMESPACE=pulse-install; PINNED_INSTALLER_SSH_PUBLIC_KEY="$3"
  trap 'for path in "${TMP_FILES[@]}";do rm -f "$path";done' EXIT
  log_info(){ :; }; log_warn(){ :; }; json_event(){ :; }; fail(){ printf '%s\n' "$1" >&2;exit 99; }
@@ -171,7 +171,7 @@ func TestAgentInstallerSavedStateRepairVerifiedReplacement(t *testing.T) {
  pkill(){ printf 'stop-process\n' >> "$STATE_DIR/effects"; }
  sleep(){ :; }
  ` + extractLifecycleTrustShellFunctions(t) + "\n" + extractTokenRecoveryShellFunctions(t) + "\n"
-	for _, name := range []string{"read_connection_state_value", "recover_connection_state", "final_response_header_value", "installer_file_sha256", "has_pinned_installer_signature_key", "decode_base64_to_file", "verify_download_signature", "validate_staged_agent_url"} {
+	for _, name := range []string{"read_connection_state_value", "recover_connection_state", "final_response_header_value", "installer_file_sha256", "has_pinned_installer_signature_key", "decode_base64_to_file", "verify_download_signature", "validate_staged_agent_url", "stage_agent_binary_for_install"} {
 		script += extractInstallShellFunction(t, name) + "\n"
 	}
 	script += `recover_connection_state "$STATE_DIR/connection.env"

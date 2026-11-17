@@ -138,9 +138,14 @@ curl() {
         case "$1" in -o) out="$2"; shift ;; https://*) url="$1" ;; esac
         shift
     done
+    [[ "$out" != - ]] || out=/dev/stdout
     printf '%s\n' "$url" >> "$FIXTURE/downloads"
     if [[ "$DOWNLOAD_FAULT" == installer:* && "$url" != *.sshsig ]] ||
        [[ "$DOWNLOAD_FAULT" == signature:* && "$url" == *.sshsig ]]; then
+        if [[ "$DOWNLOAD_FAULT" == *:oversize ]]; then
+            command head -c 2162688 /dev/zero > "$out"
+            return 0
+        fi
         printf 'partial unverified input\n' > "$out"
         return "${DOWNLOAD_FAULT#*:}"
     fi
@@ -412,7 +417,7 @@ class UpdateDownloads(UpdaterFixture):
                                          "--proto-redir", "=https"])
             self.assertEqual(len(args), 13)
             self.assertTrue(args[10].startswith("https://github.com/rcourtman/Pulse/releases/download/v6.6.0/"))
-            self.assertEqual(args[11], "-o")
+            self.assertEqual(args[11:], ["-o", "-"])
 
     def test_both_complete_downloads_keep_the_exact_signed_installer_handoff(self):
         result = self.run_fixture(success=True, installer_state="active")
@@ -440,6 +445,24 @@ class UpdateDownloads(UpdaterFixture):
                         self.assertEqual(len(result["curl_calls"]), 1 if asset == "installer" else 2)
                         self.assert_download_policy(result["curl_calls"])
                         self.assertIn("Failed to download installer", result["output"])
+
+    def test_oversized_bootstrap_assets_refuse_before_installer_and_clean_partials(self):
+        for asset in ("installer", "signature"):
+            for state in ("active", "inactive"):
+                with self.subTest(asset=asset, state=state):
+                    result = self.run_fixture(state=state, download_fault=f"{asset}:oversize")
+                    self.assertEqual(result["exit"], 1, result)
+                    self.assertFalse(result["installed"])
+                    self.assertFalse(result["stopped"])
+                    self.assertFalse(result["started"])
+                    self.assertEqual(result["state"], state)
+                    self.assertEqual(result["binary"], b"#!/bin/sh\necho 'Pulse v6.5.0'\n")
+                    self.assertEqual(result["version"], "v6.5.0\n")
+                    self.assertEqual(result["temporary_files"], [])
+                    self.assertEqual(result["backups"], [])
+                    self.assertEqual(len(result["curl_calls"]), 1 if asset == "installer" else 2)
+                    self.assert_download_policy(result["curl_calls"])
+                    self.assertIn("Failed to download installer", result["output"])
 
 
 class UpdateLogSinks(UpdaterFixture):

@@ -178,6 +178,7 @@ func TestAutoUpdateDownloadFailures(t *testing.T) {
 	for _, name := range []string{
 		"test_both_complete_downloads_keep_the_exact_signed_installer_handoff",
 		"test_partial_failed_downloads_never_execute_or_mutate_the_install",
+		"test_oversized_bootstrap_assets_refuse_before_installer_and_clean_partials",
 	} {
 		if !strings.Contains(string(out), fmt.Sprintf("%s (", name)) {
 			t.Fatalf("missing updater download control %s:\n%s", name, out)
@@ -738,14 +739,16 @@ verify_release_signature() { return 0; }
 # fails outright, like the real one aborting on a read-only filesystem after
 # it has stopped the service.
 curl() {
-  local out="" prev="" arg
+  local out="" prev="" url="" arg
   for arg in "$@"; do
     if [[ "$prev" == "-o" ]]; then out="$arg"; fi
+    [[ "$arg" != *install.sh* ]] || url="$arg"
     prev="$arg"
   done
   if [[ -n "$out" ]]; then
-    case "$out" in
-      *.sig.*) printf 'dummy-signature\n' > "$out" ;;
+    [[ "$out" != - ]] || out=/dev/stdout
+    case "$url" in
+      *.sshsig) printf 'dummy-signature\n' > "$out" ;;
       *) printf '#!/usr/bin/env bash\necho inactive > "${PULSE_INSTALL_DIR}/service-state"\nexit 1\n' > "$out" ;;
     esac
   fi
@@ -886,14 +889,16 @@ verify_release_signature() { return 0; }
 # curl writes the installer / signature to the -o target; the fake installer
 # bumps VERSION to the new version, simulating a successful install.
 curl() {
-  local out="" prev="" arg
+  local out="" prev="" url="" arg
   for arg in "$@"; do
     if [[ "$prev" == "-o" ]]; then out="$arg"; fi
+    [[ "$arg" != *install.sh* ]] || url="$arg"
     prev="$arg"
   done
   if [[ -n "$out" ]]; then
-    case "$out" in
-      *.sig.*) printf 'dummy-signature\n' > "$out" ;;
+    [[ "$out" != - ]] || out=/dev/stdout
+    case "$url" in
+      *.sshsig) printf 'dummy-signature\n' > "$out" ;;
       *)
         cat > "$out" <<'INSTALLER'
 #!/usr/bin/env bash
@@ -1181,6 +1186,7 @@ curl() {
   arg="$1"; shift
   case "$arg" in -o) out="$1"; shift ;; https://*) url="$arg" ;; esac
  done
+ [[ "$out" != - ]] || out=/dev/stdout
  printf '%s\n' "$url" >> "$FIXTURE_DIR/downloads"
  if [[ "$url" == *.sshsig ]]; then
   [[ "$FAULT" != download_signature ]] || return 1

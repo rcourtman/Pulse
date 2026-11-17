@@ -2408,7 +2408,7 @@ func TestInstallSHSetsAgentBinaryModeExplicitly(t *testing.T) {
 	script := string(content)
 	for _, want := range []string{
 		`chmod 0755 "$TMP_BIN"`,
-		`chmod 0755 "${INSTALL_DIR}/${BINARY_NAME}"`,
+		`chmod 0755 "$STAGED_AGENT_BIN"`,
 	} {
 		if !strings.Contains(script, want) {
 			t.Fatalf("install.sh does not pin executable mode with %q", want)
@@ -6195,6 +6195,7 @@ while [[ $# -gt 0 ]]; do
         *) [[ -z "$url" ]] || exit 95; url="$1"; shift ;;
     esac
 done
+[[ "$out" != - ]] || out=/dev/stdout
 case "$url" in
     "https://github.com/rcourtman/Pulse/releases/download/v9.9.9/install.sh")
         cat > "$out" <<'INSTALLER'

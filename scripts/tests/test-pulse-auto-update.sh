@@ -186,15 +186,17 @@ EOF
   # curl writes the installer / signature to the -o target. The fake installer
   # bumps VERSION to the new version, simulating a successful install.
   curl() {
-    local out="" prev=""
+    local out="" prev="" url=""
     local arg
     for arg in "$@"; do
       if [[ "$prev" == "-o" ]]; then out="$arg"; fi
+      [[ "$arg" != *install.sh* ]] || url="$arg"
       prev="$arg"
     done
     if [[ -n "$out" ]]; then
-      case "$out" in
-        *.sig.*) printf 'dummy-signature\n' > "$out" ;;
+      [[ "$out" != - ]] || out=/dev/stdout
+      case "$url" in
+        *.sshsig) printf 'dummy-signature\n' > "$out" ;;
         *)
           cat > "$out" <<'INSTALLER'
 #!/usr/bin/env bash
@@ -327,15 +329,17 @@ EOF
   # fails outright, like the /bin/update heredoc aborting on a read-only
   # filesystem after the real installer has already stopped the service.
   curl() {
-    local out="" prev=""
+    local out="" prev="" url=""
     local arg
     for arg in "$@"; do
       if [[ "$prev" == "-o" ]]; then out="$arg"; fi
+      [[ "$arg" != *install.sh* ]] || url="$arg"
       prev="$arg"
     done
     if [[ -n "$out" ]]; then
-      case "$out" in
-        *.sig.*) printf 'dummy-signature\n' > "$out" ;;
+      [[ "$out" != - ]] || out=/dev/stdout
+      case "$url" in
+        *.sshsig) printf 'dummy-signature\n' > "$out" ;;
         *)
           cat > "$out" <<'INSTALLER'
 #!/usr/bin/env bash
@@ -432,14 +436,16 @@ EOF
   get_current_version() { tr -d '\r\n' < "${INSTALL_DIR}/VERSION"; }
 
   curl() {
-    local out="" prev="" arg
+    local out="" prev="" url="" arg
     for arg in "$@"; do
       if [[ "$prev" == "-o" ]]; then out="$arg"; fi
+      [[ "$arg" != *install.sh* ]] || url="$arg"
       prev="$arg"
     done
     if [[ -n "$out" ]]; then
-      case "$out" in
-        *.sig.*) printf 'dummy-signature\n' > "$out" ;;
+      [[ "$out" != - ]] || out=/dev/stdout
+      case "$url" in
+        *.sshsig) printf 'dummy-signature\n' > "$out" ;;
         *)
           cat > "$out" <<'INSTALLER'
 #!/usr/bin/env bash

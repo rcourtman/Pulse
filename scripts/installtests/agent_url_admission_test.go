@@ -117,7 +117,7 @@ func TestAgentURLAdmissionPrecedesInstallMutation(t *testing.T) {
 	if gate < 0 || trust < 0 || trust >= gate {
 		t.Fatal("URL admission must execute the verified staged agent")
 	}
-	for _, mutation := range []string{"safe_profile_begin_transaction", "reduce_safe_profile_collector_authority", "stop_existing_agent_service", `systemctl stop "${AGENT_NAME}"`, `mv "$TMP_BIN" "${INSTALL_DIR}/${BINARY_NAME}"`} {
+	for _, mutation := range []string{"safe_profile_begin_transaction", "reduce_safe_profile_collector_authority", "stage_agent_binary_for_install", "stop_existing_agent_service", `systemctl stop "${AGENT_NAME}"`, `mv "$STAGED_AGENT_BIN" "${INSTALL_DIR}/${BINARY_NAME}"`} {
 		if index := strings.Index(text, mutation); index < 0 || index <= gate {
 			t.Errorf("URL admission must precede %s", mutation)
 		}
