@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"strings"
@@ -17,16 +18,63 @@ import (
 
 func TestInstallPS1PreparedBinaryRuntime(t *testing.T) {
 	powerShell := nativeInstallerPowerShell(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, powerShell, "-NoLogo", "-NoProfile", "-NonInteractive", "-File",
-		repoFile("scripts", "installtests", "windows_binary_preparation_controls.ps1"),
-		"-InstallerPath", repoFile("scripts", "install.ps1"), "-TempDir", t.TempDir())
-	output, err := cmd.CombinedOutput()
-	if err != nil || !strings.Contains(string(output), "PASS all 10 Windows binary preparation controls and inherited-ACL/unique-stage controls") {
-		t.Fatalf("production Windows binary preparation controls failed: %v\n%s", err, output)
+	for _, conflictingModule := range []bool{false, true} {
+		name := "ambient environment"
+		if conflictingModule {
+			name = "conflicting parent module"
+		}
+		t.Run(name, func(t *testing.T) {
+			if conflictingModule {
+				// Model a parent engine's incompatible Utility module. A Go
+				// child must not inherit it into Windows PowerShell 5.1.
+				modules := t.TempDir()
+				module := filepath.Join(modules, "Microsoft.PowerShell.Utility")
+				if err := os.Mkdir(module, 0700); err != nil {
+					t.Fatal(err)
+				}
+				for file, source := range map[string]string{
+					"Microsoft.PowerShell.Utility.psd1": "@{ RootModule = 'Microsoft.PowerShell.Utility.psm1'; ModuleVersion = '99.0.0'; FunctionsToExport = @('Get-FileHash') }",
+					"Microsoft.PowerShell.Utility.psm1": "function Get-FileHash { throw 'Unexpected parent Utility module' }\nExport-ModuleMember -Function Get-FileHash\n",
+				} {
+					if err := os.WriteFile(filepath.Join(module, file), []byte(source), 0600); err != nil {
+						t.Fatal(err)
+					}
+				}
+				t.Setenv("PSModulePath", modules+string(os.PathListSeparator)+os.Getenv("PSModulePath"))
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+			defer cancel()
+			cmd := nativeInstallerCommand(ctx, powerShell, "-NoLogo", "-NoProfile", "-NonInteractive", "-File",
+				repoFile("scripts", "installtests", "windows_binary_preparation_controls.ps1"),
+				"-InstallerPath", repoFile("scripts", "install.ps1"), "-TempDir", t.TempDir())
+			output, err := cmd.CombinedOutput()
+			if err != nil || !strings.Contains(string(output), "PASS all 10 Windows binary preparation controls and inherited-ACL/unique-stage controls") {
+				t.Fatalf("production Windows binary preparation controls failed: %v\n%s", err, output)
+			}
+			t.Logf("%s", output)
+		})
 	}
-	t.Logf("%s", output)
+}
+
+// A Go process launched from PowerShell 7 can inherit that engine's module
+// search path. Unlike a direct pwsh -> powershell.exe launch, Go does not
+// remove it. Let Windows PowerShell 5.1 rebuild its own native module path;
+// preserve all other environment entries, including fixture input variables.
+func nativeInstallerEnvironment(inherited []string) []string {
+	env := make([]string, 0, len(inherited))
+	for _, entry := range inherited {
+		key, _, _ := strings.Cut(entry, "=")
+		if !strings.EqualFold(key, "PSModulePath") {
+			env = append(env, entry)
+		}
+	}
+	return env
+}
+
+func nativeInstallerCommand(ctx context.Context, powerShell string, args ...string) *exec.Cmd {
+	cmd := exec.CommandContext(ctx, powerShell, args...)
+	cmd.Env = nativeInstallerEnvironment(os.Environ())
+	return cmd
 }
 
 var errInstallerPowerShellPlatform = errors.New("installer runtime checks require native Windows PowerShell 5.1")
@@ -52,7 +100,7 @@ func nativeInstallerPowerShell(t *testing.T) string {
 	if err != nil {
 		t.Fatalf("native Windows installer proof requires Windows PowerShell 5.1: %v", err)
 	}
-	cmd := exec.Command(powerShell, "-NoLogo", "-NoProfile", "-NonInteractive", "-Command",
+	cmd := nativeInstallerCommand(context.Background(), powerShell, "-NoLogo", "-NoProfile", "-NonInteractive", "-Command",
 		`if ($PSVersionTable.PSEdition -ne 'Desktop' -or $PSVersionTable.PSVersion.Major -ne 5 -or $PSVersionTable.PSVersion.Minor -ne 1) { throw 'Windows PowerShell 5.1 required' }; Write-Output $PSVersionTable.PSVersion.ToString()`)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -85,9 +133,9 @@ const powerShellParserCommand = `try {
 $errors = $null; [System.Management.Automation.Language.Parser]::ParseFile($env:PULSE_PARSER_CHECK_PATH, [ref]$null, [ref]$errors) > $null; if ($errors.Count) { $errors | ForEach-Object { Write-Error $_.ToString() }; exit 1 }`
 
 func newPowerShellParserCheck(powerShell, scriptPath string) *exec.Cmd {
-	cmd := exec.Command(powerShell, "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", powerShellParserCommand)
+	cmd := nativeInstallerCommand(context.Background(), powerShell, "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", powerShellParserCommand)
 	// The path stays data even when a checkout name contains PowerShell syntax.
-	cmd.Env = append(os.Environ(), "PULSE_PARSER_CHECK_PATH="+scriptPath)
+	cmd.Env = append(cmd.Environ(), "PULSE_PARSER_CHECK_PATH="+scriptPath)
 	return cmd
 }
 
@@ -867,7 +915,7 @@ func TestWindowsAgentLifecycleHarnessChecksEveryNativeExit(t *testing.T) {
 // existing Windows native workflow selects these tests and uses PowerShell 5.1.
 func TestInstallPS1ServiceRemovalRuntime(t *testing.T) {
 	powerShell := nativeInstallerPowerShell(t)
-	cmd := exec.Command(powerShell, "-NoLogo", "-NoProfile", "-NonInteractive", "-File",
+	cmd := nativeInstallerCommand(context.Background(), powerShell, "-NoLogo", "-NoProfile", "-NonInteractive", "-File",
 		repoFile("scripts", "installtests", "windows_service_removal_controls.ps1"),
 		"-InstallerPath", repoFile("scripts", "install.ps1"))
 	output, err := cmd.CombinedOutput()

@@ -6,6 +6,19 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+# These independent hash/ACL oracles are native engine prerequisites, not
+# optional controls. Keep their identities when a parent engine's environment
+# would otherwise prevent the script-backed Get-FileHash from loading.
+foreach ($entry in @(
+    @('Get-FileHash', 'Microsoft.PowerShell.Utility'),
+    @('Get-Acl', 'Microsoft.PowerShell.Security'),
+    @('Set-Acl', 'Microsoft.PowerShell.Security')
+)) {
+    $command = Get-Command -Name $entry[0] -ErrorAction Stop
+    if ($command.Source -cne $entry[1]) { throw "Unexpected native prerequisite source: $($entry[0])" }
+    Write-Output "NATIVE_PREPARATION_COMMAND $($entry[0]) source=$($command.Source) version=$($command.Version)"
+}
+
 # Execute the actual production functions and replacement caller. No network,
 # executable launch or real SCM operation is admitted by this local file test.
 $errors = $null
