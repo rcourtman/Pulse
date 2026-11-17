@@ -29,13 +29,13 @@ export const OrganizationOverviewPanel: Component<OrganizationOverviewPanelProps
   let warning: HTMLDivElement | undefined;
   let lastFocused: { element: HTMLElement; orgID: string; user: string | undefined } | undefined;
   let focusContext: [string, string | undefined, boolean, boolean] | undefined;
-  let reloadIntent = false;
   let focusTimer: number | undefined;
 
   const reloadOrganization = () => {
     if (state.loading() || state.saving()) return;
-    // Pointer activation need not focus the button, notably in Safari.
-    reloadIntent = true;
+    // Keep a stable keyboard anchor before the read replaces its Reload button,
+    // including pointer activation that did not focus the button in Safari.
+    panel?.focus();
     state.reloadOrganization();
   };
 
@@ -48,15 +48,12 @@ export const OrganizationOverviewPanel: Component<OrganizationOverviewPanelProps
     // Reader/authority round trips must not revive a previous keyboard intent.
     if (focusContext?.some((value, index) => value !== context[index])) {
       lastFocused = undefined;
-      reloadIntent = false;
     }
     focusContext = context;
     const loading = state.loading();
     const error = state.loadError();
     const org = state.org();
     if (!enabled || loading) return;
-    const explicitReload = reloadIntent;
-    reloadIntent = false;
     if (!error && !org) return;
 
     focusTimer = window.setTimeout(() => {
@@ -75,10 +72,7 @@ export const OrganizationOverviewPanel: Component<OrganizationOverviewPanelProps
         lastFocused.user === user &&
         !lastFocused.element.isConnected;
       // Recover only replaced local controls, never deliberate outside focus.
-      if (
-        (explicitReload || lostPanelFocus) &&
-        (!document.activeElement || document.activeElement === document.body)
-      ) {
+      if (lostPanelFocus && (!document.activeElement || document.activeElement === document.body)) {
         const input = panel.querySelector<HTMLInputElement>('#org-display-name-input');
         const target = error
           ? warning
@@ -102,7 +96,11 @@ export const OrganizationOverviewPanel: Component<OrganizationOverviewPanelProps
     >
       <div
         ref={panel}
-        class="space-y-6"
+        role="region"
+        aria-label="Organization details"
+        aria-busy={state.loading()}
+        tabIndex={-1}
+        class="space-y-6 focus:outline-2 focus:-outline-offset-2 focus:outline-blue-500"
         onFocusIn={(event) => {
           if (event.target instanceof HTMLElement) {
             lastFocused = {
