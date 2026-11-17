@@ -42,8 +42,8 @@ let saved: (typeof provider)[];
 const reads = () => fetchMock.mock.calls.filter(([url, init]) => url === listURL && !init?.method);
 const writes = () => fetchMock.mock.calls.filter(([, init]) => (init?.method ?? 'GET') !== 'GET');
 const panel = () => screen.getByRole('region', { name: 'Single Sign-On Providers' });
-const retry = () => screen.getByRole('button', { name: 'Retry', exact: true });
-const add = () => screen.getByRole('button', { name: 'Add OIDC', exact: true });
+const retry = () => screen.getByRole('button', { name: 'Retry' });
+const add = () => screen.getByRole('button', { name: 'Add OIDC' });
 function expectBoundReads() {
   for (const [, init] of reads()) {
     const headers = new Headers(init?.headers);
@@ -88,7 +88,7 @@ describe('explicit SSO provider read recovery', () => {
       `keeps the stable inventory focused after %s recovery (canManage=${canManage})`,
       async (outcome) => {
         render(() => <SSOProvidersPanel currentUser="fixture-reader" canManage={canManage} />);
-        const button = await screen.findByRole('button', { name: 'Retry', exact: true });
+        const button = await screen.findByRole('button', { name: 'Retry' });
         const pending = deferred<Response>();
         read = () => pending.promise;
         button.focus();
@@ -129,7 +129,7 @@ describe('explicit SSO provider read recovery', () => {
           <button type="button">Next setting</button>
         </>
       ));
-      const button = await screen.findByRole('button', { name: 'Retry', exact: true });
+      const button = await screen.findByRole('button', { name: 'Retry' });
       const pending = deferred<Response>();
       read = () => pending.promise;
       button.focus();
@@ -168,8 +168,7 @@ describe('explicit SSO provider read recovery', () => {
             target: { value: 'Changed sign-in' },
           });
           fireEvent.submit(dialog.getByRole('button', { name: 'Save Changes' }).closest('form')!);
-        } else
-          fireEvent.click(dialog.getByRole('button', { name: 'Delete Provider', exact: true }));
+        } else fireEvent.click(dialog.getByRole('button', { name: 'Delete Provider' }));
       }
       const check = await screen.findByRole('button', {
         name: operation === 'edit' ? 'Close draft and check providers' : 'Check saved providers',
@@ -220,7 +219,7 @@ describe('explicit SSO provider read recovery', () => {
         <button type="button">Next setting</button>
       </>
     ));
-    const button = await screen.findByRole('button', { name: 'Retry', exact: true });
+    const button = await screen.findByRole('button', { name: 'Retry' });
     const pending = deferred<Response>();
     read = () => pending.promise;
     button.focus();
