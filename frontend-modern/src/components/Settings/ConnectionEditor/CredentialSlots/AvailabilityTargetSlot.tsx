@@ -1018,7 +1018,7 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
             onChange={(event) =>
               updateForm({ udpMode: event.currentTarget.value as AvailabilityUDPMode })
             }
-            help="Response required is alert-safe. Open or filtered reports silence as indeterminate and only fails on an explicit port-unreachable response."
+            help="No DNS-answer validation. Open or filtered keeps silence indeterminate. Port-unreachable replies still fail."
           >
             <option value="response_required">Require a response</option>
             <option value="open_or_filtered">Accept open or filtered</option>
@@ -1031,7 +1031,9 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
               onInput={(event) => updateForm({ udpRequest: event.currentTarget.value })}
               placeholder={form().udpMode === 'response_required' ? 'PING' : 'Optional'}
             />
-            <span class={formHelpText}>UTF-8 bytes, up to 512 bytes.</span>
+            <span class={formHelpText}>
+              Literal UTF-8 only, up to 512 bytes. No hex or escape decoding.
+            </span>
           </label>
           <label class={`${formField} sm:col-span-2`}>
             <span class={formLabel}>Expected response (optional)</span>
@@ -1041,9 +1043,7 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
               onInput={(event) => updateForm({ udpExpectedResponse: event.currentTarget.value })}
               placeholder="PONG"
             />
-            <span class={formHelpText}>
-              When set, the response must match these UTF-8 bytes exactly.
-            </span>
+            <span class={formHelpText}>Exact UTF-8 match. Empty accepts any reply.</span>
           </label>
         </Show>
         <label class={formField}>

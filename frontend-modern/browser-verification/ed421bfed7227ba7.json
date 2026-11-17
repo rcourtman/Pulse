@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "base_sha": "fde29138ba6444f3990abe254d61c0a8089dfbd4",
+  "verified_at": "2026-11-17T09:06:49Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/AvailabilityTargetSlot.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/AvailabilityTargetSlot.tsx": "d185eb5235e1d3d85d967851d3c163ca880da89383e9245de5cf2b5b04609ffb"
+  },
+  "routes": [
+    "/settings/monitoring/availability?add=target&targetKind=service"
+  ],
+  "viewports": [
+    {
+      "width": 1680,
+      "height": 1050
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Actual AvailabilitySettingsPanel and AvailabilityTargetSlot in the production Dialog, router, API/session/capability consumers and CSS. Safe resource inventory and local HTTP fixtures only, not full App, live UDP/DNS or original-client recovery.",
+    "Desktop/phone, light/dark: settled top-of-dialog, same UDP-policy anchor with literal PING\\n and PONG\\n, and same indeterminate-result anchor. 12 comparable pairs/24 captures, all opened with native view_image.",
+    "Final no-DNS-answer-validation, literal UTF-8/no hex or escape decoding and empty-expectation guidance remains readable beside its fields. Existing silence/port-rejection distinctions, fields, values and controls remain visible at the same anchors. Phone policy and response guidance are shorter, retaining the timeout value above the fixed footer."
+  ],
+  "interactions": [
+    "Before 136 / final 144 assertions in four viewport/theme cases. Select TCP and HTTPS: no UDP policy. Select UDP, fill echo.example.test:9000, inspect accessible policy description and all 13 named controls.",
+    "Test literal response-required and open-or-filtered payloads through the actual API client to safe fixture HTTP. Assert exact request/response backslashes, numeric port and protocol, successful and indeterminate UI results. Empty the expected response, save once, assert empty expectation and literal request in the one create payload. No page errors or document horizontal overflow.",
+    "Opening animation awaited and screenshots taken with finite animations disabled in both final capture sets. Initial ambiguous fixture selectors and animated captures remain adverse/superseded evidence. Final browser proof rebuilt and exercised the exact formatted runtime SHA256 recorded here; 64 consumed source hashes retained."
+  ]
+}
