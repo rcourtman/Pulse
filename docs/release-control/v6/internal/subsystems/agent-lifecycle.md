@@ -30,6 +30,19 @@ the public handler. No agent credential, enrollment, collection, command profile
 report payload or rendered status changes; private binder acceptance and installed
 client recovery remain separate.
 
+### Hosted lifecycle decisions use complete optional JSON bodies
+
+The shared hosted suspension/soft-deletion handlers in
+`internal/api/org_lifecycle_handlers.go` reuse the bounded admin-object decoder
+before changing saved organization lifecycle. Omitted or whitespace-only bodies
+keep default options, but competing known controls, non-object roots, trailing
+data, over-limit input and failed reads cannot become a lifecycle decision.
+Only the decoder's exact empty-input EOF sentinel permits defaults. Existing
+route authority, method/hosted/default-org gates, successful fields and the
+parameterless unsuspend operation do not change. The registered
+`internal/api/org_lifecycle_handlers_test.go` proves rejection against real
+selected/peer saved metadata and native HTTP, plus valid/default operations.
+This is source input safety, not original-client or installed recovery.
 
 ### Docker-port creation does not change established-check reattachment
 
