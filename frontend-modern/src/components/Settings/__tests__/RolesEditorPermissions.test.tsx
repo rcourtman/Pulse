@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { clearAuth, setOrgID } from '@/utils/apiClient';
+import type { Role } from '@/types/rbac';
 import { RolesPanel } from '../RolesPanel';
 import { RolesEditorDialog } from '../RolesEditorDialog';
 import { RBAC_PERMISSION_ACTIONS, RBAC_PERMISSION_RESOURCES } from '@/utils/rbacPermissions';
@@ -15,7 +16,7 @@ vi.mock('../useRBACFeatureGateState', () => ({
   }),
 }));
 
-const original = {
+const original: Role & { parentId: string; priority: number } = {
   id: 'scoped/auditor:production',
   name: 'Constrained auditor',
   description: 'Synthetic saved role',
