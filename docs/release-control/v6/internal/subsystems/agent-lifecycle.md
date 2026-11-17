@@ -4896,6 +4896,9 @@ unauthenticated bootstrap behavior.
     presentation hot paths, but lifecycle surfaces must not reinterpret
     omitted disk or network series as missing lifecycle telemetry, missing
     agent capabilities, or reduced fleet freshness truth.
+    An opt-in `temperature` series on that payload is host presentation
+    history only; lifecycle surfaces must not read its presence or absence
+    as sensor setup, agent capability, or freshness evidence.
     The same rule now applies to retired compact dashboard summary payloads.
     Shared `internal/api/resourceapi/resources.go` routes must not restore
     `/api/resources/dashboard-summary` as a compatibility read; lifecycle

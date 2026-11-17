@@ -2394,6 +2394,13 @@ interactions remain session deduplicated so the presentation layer cannot
 create per-row or per-frame telemetry traffic. Provider-native inventories
 that do not render `WorkloadsFilter` are outside this guest-row contract and
 must not imitate only part of it under a second page-local View vocabulary.
+The Proxmox overview's nodes table honours that same hover binding for its
+own rows: in History hover a hovered node row swaps CPU, memory, disk and
+temperature to row-synchronised sparklines in place, without changing row
+height, and returns to its bars and temperature gauge on leave; Details
+hover keeps the bars. Temperature sparklines scale around their own
+readings with a minimum span rather than from zero, and format through the
+operator's temperature unit.
 Object-detail navigation follows that same canonical split across platform and
 feature owners. `Overview` is the stable landing tab for current operational
 facts, while stored metric charts appear only after selecting an evidence-gated

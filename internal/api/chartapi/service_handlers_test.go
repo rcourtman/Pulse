@@ -433,6 +433,48 @@ func TestHandleInfrastructureCharts_MetricFilter(t *testing.T) {
 	}
 }
 
+func TestHandleInfrastructureCharts_NodeTemperatureIsOptIn(t *testing.T) {
+	monitor, state, metricsHistory := newTestMonitor(t)
+	state.Nodes = []models.Node{{
+		ID:     "node-1",
+		Name:   "node-one",
+		Status: "online",
+		CPU:    0.1,
+		Memory: models.Memory{Usage: 12.0},
+		Disk:   models.Disk{Usage: 34.0},
+	}}
+	syncTestResourceStore(t, monitor, state)
+	now := time.Now()
+	metricsHistory.AddNodeMetric("node-1", "temperature", 71, now.Add(-2*time.Minute))
+	metricsHistory.AddNodeMetric("node-1", "temperature", 74, now.Add(-time.Minute))
+	service := NewService(fixedMonitorResolver{monitor: monitor})
+
+	fetch := func(t *testing.T, url string) InfrastructureChartsResponse {
+		t.Helper()
+		rec := httptest.NewRecorder()
+		service.HandleInfrastructureCharts(rec, httptest.NewRequest(http.MethodGet, url, nil))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected status %d, got %d: %s", http.StatusOK, rec.Code, rec.Body.String())
+		}
+		var decoded InfrastructureChartsResponse
+		if err := json.Unmarshal(rec.Body.Bytes(), &decoded); err != nil {
+			t.Fatalf("unmarshal InfrastructureChartsResponse: %v", err)
+		}
+		return decoded
+	}
+
+	requested := fetch(t, "/api/charts/infrastructure?range=5m&metrics=cpu,temperature")
+	points := requested.NodeData["node-1"]["temperature"]
+	if len(points) != 2 || points[0].Value != 71 || points[1].Value != 74 {
+		t.Fatalf("expected the node's two temperature points, got %+v", points)
+	}
+
+	defaults := fetch(t, "/api/charts/infrastructure?range=5m")
+	if _, ok := defaults.NodeData["node-1"]["temperature"]; ok {
+		t.Fatalf("expected temperature to stay out of the default payload")
+	}
+}
+
 func TestHandleInfrastructureCharts_UsesCanonicalMockUnifiedReadStateForVMwareHosts(t *testing.T) {
 	setMockModeForTest(t, true)
 
