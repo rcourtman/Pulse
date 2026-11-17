@@ -18,6 +18,33 @@
 
 ## Purpose
 
+### API-token control follows live authority through its transaction (17 November 2026)
+
+An admitted token snapshot does not grant a later credential mutation. Token
+creation, metadata/scope edits, revocation and rotation resolve that caller's
+live ID, credential hash and principal while holding the same configuration
+writer lock as the saved inventory transition. A slow request body or a wait
+for configuration ownership cannot outlive credential withdrawal. Current
+expiry, runtime-role validity, settings-write scope, organization access and
+the admitted instance boundary apply before target/grant checks or mutation.
+Those target and grant checks use the current caller, not its earlier scopes.
+Revoked, expired, replaced or differently owned credentials receive 401;
+a still-valid credential that lost a needed privilege receives 403. Refused
+writes neither issue a secret nor change the live or saved credential inventory.
+
+Valid self-rotation, self-revocation and self-narrowing remain possible. The
+shared issuer retains its existing organization-scoped relay compatibility;
+this adds no Mobile capability. Session/proxy admission stays with existing
+route policy. Body reads, audit destinations and HTTP output remain outside
+configuration ownership, and persistence failure retains existing rollback.
+`internal/api/security_token_withdrawal_test.go` exercises paused registered
+routes with independent durable admin withdrawal, old admitted transactions,
+current grant containment and live self-change. Existing token tests retain
+their target/organization, private snapshot, failed-save and I/O boundaries.
+These synthetic proofs do not establish historical exposure, original-client
+recovery or installed availability.
+
+
 ### Public OIDC login bounds input before IdP work (16 November 2026)
 
 `handleSSOOIDCLogin` reuses the existing whole-document 16 KiB security JSON

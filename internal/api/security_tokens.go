@@ -193,14 +193,6 @@ func (r *Router) createAPITokenRecord(
 	expiresIn *string,
 	metadata map[string]string,
 ) (string, *config.APITokenRecord, error) {
-	if callerToken := getAPITokenRecordFromRequest(req); callerToken != nil {
-		for _, requested := range scopes {
-			if !callerToken.HasScope(requested) {
-				return "", nil, fmt.Errorf("Cannot grant scope %q: your token does not have this scope", requested)
-			}
-		}
-	}
-
 	rawToken, err := internalauth.GenerateAPIToken()
 	if err != nil {
 		return "", nil, fmt.Errorf("generate raw token: %w", err)
@@ -214,14 +206,6 @@ func (r *Router) createAPITokenRecord(
 	if record.OrgID == "" {
 		record.OrgID = "default"
 	}
-	// A full-access token in the default organization is instance-wide. A
-	// caller that is not itself instance-wide must not mint one, even if it
-	// holds every scope, because it would escape its own organization binding.
-	if callerToken := getAPITokenRecordFromRequest(req); callerToken != nil &&
-		tokenHasInstanceWideAuthority(record) && !tokenHasInstanceWideAuthority(callerToken) {
-		return "", nil, fmt.Errorf("Cannot grant scope %q in the default organization: your token is not an instance-wide full-access token", config.ScopeWildcard)
-	}
-	setAPITokenOwnerUserID(record, apiTokenOwnerUserIDForRequest(r.config, req))
 	if err := mergeAPITokenMetadata(record, metadata); err != nil {
 		return "", nil, err
 	}
@@ -240,6 +224,27 @@ func (r *Router) createAPITokenRecord(
 
 	config.Mu.Lock()
 	defer config.Mu.Unlock()
+
+	callerToken, failure := r.currentTokenMutationCallerLocked(req)
+	if failure != nil {
+		return "", nil, failure
+	}
+	if callerToken != nil {
+		for _, requested := range scopes {
+			if !callerToken.HasScope(requested) {
+				return "", nil, fmt.Errorf("Cannot grant scope %q: your token does not have this scope", requested)
+			}
+		}
+	}
+
+	// A full-access token in the default organization is instance-wide. A
+	// caller that is not itself instance-wide must not mint one, even if it
+	// holds every scope, because it would escape its own organization binding.
+	if callerToken != nil &&
+		tokenHasInstanceWideAuthority(record) && !tokenHasInstanceWideAuthority(callerToken) {
+		return "", nil, fmt.Errorf("Cannot grant scope %q in the default organization: your token is not an instance-wide full-access token", config.ScopeWildcard)
+	}
+	setAPITokenOwnerUserID(record, apiTokenOwnerUserIDForRequest(r.config, req))
 
 	previousTokens := append([]config.APITokenRecord(nil), r.config.APITokens...)
 	r.config.APITokens = append(r.config.APITokens, *record)
@@ -424,6 +429,11 @@ func (r *Router) handleCreateAPIToken(w http.ResponseWriter, req *http.Request) 
 
 	rawToken, record, err := r.createAPITokenRecord(req, name, scopes, payload.ExpiresIn, nil)
 	if err != nil {
+		if failure, ok := err.(*tokenMutationFailure); ok {
+			r.auditTokenEvent(req, "token_created", false, "Caller authority changed before token creation")
+			failure.write(w)
+			return
+		}
 		switch {
 		case strings.HasPrefix(err.Error(), "Cannot grant scope "):
 			r.auditTokenEvent(req, "token_created", false, "Scope escalation denied for token creation")
@@ -515,6 +525,14 @@ func (r *Router) handleUpdateAPIToken(w http.ResponseWriter, req *http.Request) 
 	// Keep validation and durable save/rollback atomic, but never retain
 	// configuration ownership across audit destinations or HTTP output.
 
+	callerToken, failure := r.currentTokenMutationCallerLocked(req)
+	if failure != nil {
+		config.Mu.Unlock()
+		r.auditTokenEvent(req, "token_updated", false, "Caller authority changed before token update")
+		failure.write(w)
+		return
+	}
+
 	tokenIndex := -1
 	for idx := range r.config.APITokens {
 		if r.config.APITokens[idx].ID == tokenID {
@@ -529,7 +547,7 @@ func (r *Router) handleUpdateAPIToken(w http.ResponseWriter, req *http.Request) 
 		return
 	}
 
-	if !callerTokenMayManage(getAPITokenRecordFromRequest(req), &r.config.APITokens[tokenIndex]) {
+	if !callerTokenMayManage(callerToken, &r.config.APITokens[tokenIndex]) {
 		config.Mu.Unlock()
 		r.auditTokenEvent(req, "token_updated", false, fmt.Sprintf("Organization boundary denied: caller cannot manage token id=%s", tokenID))
 		http.Error(w, "Token not found", http.StatusNotFound)
@@ -545,7 +563,7 @@ func (r *Router) handleUpdateAPIToken(w http.ResponseWriter, req *http.Request) 
 	// the requested scopes prevents widening a token beyond the caller's own
 	// authority, including when editing itself.
 	if payload.Scopes != nil {
-		if callerToken := getAPITokenRecordFromRequest(req); callerToken != nil {
+		if callerToken != nil {
 			for _, scope := range oldRecord.Scopes {
 				if !callerToken.HasScope(scope) {
 					config.Mu.Unlock()
@@ -643,6 +661,11 @@ func (r *Router) handleCreateRelayMobileAccessToken(w http.ResponseWriter, req *
 		map[string]string{apiTokenMetadataPurpose: apiTokenPurposeRelayMobileAccess},
 	)
 	if err != nil {
+		if failure, ok := err.(*tokenMutationFailure); ok {
+			r.auditTokenEvent(req, "token_created", false, "Caller authority changed before relay token creation")
+			failure.write(w)
+			return
+		}
 		switch {
 		case strings.HasPrefix(err.Error(), "Cannot grant scope "):
 			r.auditTokenEvent(req, "token_created", false, "Relay mobile scope escalation denied")
@@ -698,6 +721,14 @@ func (r *Router) handleDeleteAPIToken(w http.ResponseWriter, req *http.Request) 
 	// Keep validation and durable save/rollback atomic, but never retain
 	// configuration ownership across audit destinations or HTTP output.
 
+	callerToken, failure := r.currentTokenMutationCallerLocked(req)
+	if failure != nil {
+		config.Mu.Unlock()
+		r.auditTokenEvent(req, "token_deleted", false, "Caller authority changed before token deletion")
+		failure.write(w)
+		return
+	}
+
 	previousTokens := append([]config.APITokenRecord(nil), r.config.APITokens...)
 	removed := r.config.RemoveAPIToken(tokenID)
 	if removed == nil {
@@ -711,7 +742,7 @@ func (r *Router) handleDeleteAPIToken(w http.ResponseWriter, req *http.Request) 
 	// delete tokens whose scopes are a subset of their own. This prevents a
 	// limited-scope token from deleting a broader token and forcing rotation or
 	// lockout on a more privileged credential.
-	if callerToken := getAPITokenRecordFromRequest(req); callerToken != nil {
+	if callerToken != nil {
 		if !callerTokenMayManage(callerToken, removed) {
 			// Put the record back before returning so the in-memory config is unchanged.
 			r.config.APITokens = append(r.config.APITokens, *removed)
@@ -786,6 +817,14 @@ func (r *Router) handleRotateAPIToken(w http.ResponseWriter, req *http.Request) 
 	// Keep validation and durable save/rollback atomic, but never retain
 	// configuration ownership across audit destinations or HTTP output.
 
+	callerToken, failure := r.currentTokenMutationCallerLocked(req)
+	if failure != nil {
+		config.Mu.Unlock()
+		r.auditTokenEvent(req, "token_rotated", false, "Caller authority changed before token rotation")
+		failure.write(w)
+		return
+	}
+
 	// Find existing token
 	var oldRecord config.APITokenRecord
 	found := false
@@ -809,7 +848,7 @@ func (r *Router) handleRotateAPIToken(w http.ResponseWriter, req *http.Request) 
 	// The same applies to organizations: a caller bound to one organization
 	// must not rotate, and so obtain the raw value of, another organization's
 	// token.
-	if callerToken := getAPITokenRecordFromRequest(req); callerToken != nil {
+	if callerToken != nil {
 		if !callerTokenMayManage(callerToken, &oldRecord) {
 			config.Mu.Unlock()
 			r.auditTokenEvent(req, "token_rotated", false,
