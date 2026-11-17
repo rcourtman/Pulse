@@ -32,6 +32,21 @@ consumed token: no after-validation guard, token restoration, transaction rollba
 or power-loss durability guarantee is added. This changes HTTP admission, not
 storage internals or the disposition of an unavailable original client.
 
+### Damaged lifecycle input preserves saved organization metadata
+
+The shared hosted suspension/soft-deletion handlers in
+`internal/api/org_lifecycle_handlers.go` must admit a complete bounded optional
+JSON object before saving lifecycle changes. An omitted or whitespace-only body
+keeps its existing defaults; null roots, duplicate recognized controls, trailing
+documents/junk, overflow and read errors are rejected rather than selecting a
+reason or retention period from a prefix. A wrapped read error is not the
+decoder's exact empty-input sentinel. Rejection preserves selected and peer
+`org.json` bytes. Existing positive retention options, the 30-day default,
+authority/gate ordering, save-version conflicts and unsuspend behavior remain.
+The registered `internal/api/org_lifecycle_handlers_test.go` exercises real
+persistence, damaged/valid/default inputs and native HTTP continuation with the
+same saved organization. This does not claim live hosted recovery or restore
+previously lost state.
 
 ### Docker-port creation preserves saved checks on stale review
 
@@ -2884,6 +2899,8 @@ coverage, restore capability, recovery-job proof, storage-health verification,
 or evidence that a specific resource was protected or recovered.
 Proxmox page stale-agent notices are adjacent frontend and agent-lifecycle
 plumbing even though `ProxmoxPageSurface` is a storage/recovery canonical file.
+The page also passes the guest table's row-hover mode to its nodes table;
+that is presentation wiring only and carries no storage or recovery state.
 Those notices may link an operator to scoped agent update commands for the
 latest fixes and node details (the notice's own wording; command execution is
 a separate setting the update does not change), but they must not be

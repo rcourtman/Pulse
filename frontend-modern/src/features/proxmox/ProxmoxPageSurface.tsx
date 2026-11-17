@@ -571,6 +571,7 @@ function ProxmoxOverview(props: ProxmoxOverviewProps) {
           guests={currentModel().guests}
           search={workloadsState.search}
           metricDisplayMode={props.metricDisplayMode}
+          metricHoverMode={workloadsState.workloadMetricHoverMode}
           metricHistoryRange={props.metricHistoryRange}
           layoutWidth={overviewWidth.width}
           emptyIcon={<ProxmoxIcon class="h-6 w-6 text-slate-400" />}

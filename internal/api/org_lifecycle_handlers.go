@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -212,15 +211,14 @@ func (h *OrgLifecycleHandlers) HandleSoftDeleteOrg(w http.ResponseWriter, r *htt
 }
 
 func decodeOptionalLifecycleRequest(w http.ResponseWriter, r *http.Request, out any) error {
-	r.Body = http.MaxBytesReader(w, r.Body, orgRequestBodyLimit)
-	decoder := json.NewDecoder(r.Body)
-	if err := decoder.Decode(out); err != nil {
-		if errors.Is(err, io.EOF) {
-			return nil
-		}
-		return fmt.Errorf("decode lifecycle request body: %w", err)
+	err := decodeAdminJSONObject(w, r, out, orgRequestBodyLimit)
+	// These operations deliberately allow an omitted body. Only the decoder's
+	// empty-input sentinel means default options, not JSON null, a failed read,
+	// competing controls or unread bytes after an otherwise valid object.
+	if err == io.EOF {
+		return nil
 	}
-	return nil
+	return err
 }
 
 func (h *OrgLifecycleHandlers) loadOrganization(orgID string) (*models.Organization, error) {

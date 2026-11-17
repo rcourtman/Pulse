@@ -15,13 +15,66 @@ import {
   getWorkloadChartKeyCandidates,
   isWorkloadTableMetricHistoryRange,
   MIN_RATE_SCALE_CEILING,
+  MIN_TEMPERATURE_SCALE_SPAN,
   normalizeWorkloadChartKey,
+  TEMPERATURE_SPARKLINE_UNIT,
   WORKLOAD_TABLE_HISTORY_DEFAULT_RANGE,
   WORKLOAD_TABLE_HISTORY_MAX_POINTS,
   WORKLOAD_TABLE_HISTORY_RANGES,
 } from '../workloadMetricHistoryModel';
 
 describe('workloadMetricHistoryModel', () => {
+  it('charts a host temperature series and drops missing-sensor zeros', () => {
+    const [series] = getMetricSparklineSeriesFromChartData(
+      {
+        temperature: [
+          { timestamp: 3, value: 74 },
+          { timestamp: 1, value: 71 },
+          { timestamp: 2, value: 0 },
+        ],
+      },
+      'temperature',
+    );
+    expect(series.id).toBe('temperature');
+    expect(series.points).toEqual([
+      { timestamp: 1, value: 71 },
+      { timestamp: 3, value: 74 },
+    ]);
+  });
+
+  it('scales temperature around its readings rather than from zero', () => {
+    const steady = [
+      {
+        id: 'temperature',
+        label: 'Temperature',
+        color: '#000',
+        points: [
+          { timestamp: 1, value: 59 },
+          { timestamp: 2, value: 60 },
+        ],
+      },
+    ];
+    // A one-degree wobble keeps the minimum span, so it reads as flat.
+    expect(getMetricMiniSparklineScale(steady, TEMPERATURE_SPARKLINE_UNIT)).toEqual({
+      minValue: 49,
+      maxValue: 49 + MIN_TEMPERATURE_SCALE_SPAN,
+    });
+
+    const spike = [
+      {
+        ...steady[0],
+        points: [
+          { timestamp: 1, value: 60 },
+          { timestamp: 2, value: 94 },
+        ],
+      },
+    ];
+    expect(getMetricMiniSparklineScale(spike, TEMPERATURE_SPARKLINE_UNIT)).toEqual({
+      minValue: 50,
+      maxValue: 99,
+    });
+  });
+
   it('canonicalizes legacy Proxmox chart keys', () => {
     expect(normalizeWorkloadChartKey('pve-101')).toBe('pve:pve:101');
     expect(normalizeWorkloadChartKey('cluster-a-pve-101')).toBe('cluster-a:pve:101');
