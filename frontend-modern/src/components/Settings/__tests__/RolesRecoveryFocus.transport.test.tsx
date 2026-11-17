@@ -208,7 +208,10 @@ describe('keyboard-safe saved Roles recovery through the consuming transport', (
       expect(inventory).toHaveAttribute('aria-busy', 'true');
       await waitFor(() => expect(reads()).toHaveLength(3));
       expect(reads()[2][1]).toMatchObject({
-        headers: { 'X-Pulse-Org-ID': 'estate/north', 'X-API-Token': 'synthetic-role-recovery-token' },
+        headers: {
+          'X-Pulse-Org-ID': 'estate/north',
+          'X-API-Token': 'synthetic-role-recovery-token',
+        },
         signal: expect.any(AbortSignal),
       });
       expect(writes()).toHaveLength(1);
