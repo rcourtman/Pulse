@@ -40,12 +40,28 @@ func testAgentInstallerStaging(t *testing.T, helper bool) {
 	publication := string(installer[start:end])
 	functions := extractInstallShellFunction(t, "cleanup") + "\n" +
 		extractInstallShellFunction(t, "stage_agent_binary_for_install") + "\n" +
-		extractInstallShellFunction(t, "stage_privileged_helper_for_install") + "\n"
+		extractInstallShellFunction(t, "stage_privileged_helper_for_install") + "\n" +
+		extractInstallShellFunction(t, "validate_staged_agent_url") + "\n" +
+		extractInstallShellFunction(t, "fail") + "\n" +
+		extractInstallShellFunction(t, "json_event") + "\n"
 	oldBinary := "#!/bin/sh\nprintf 'old-fixture-version\\n'\n"
-	newBinary := "#!/bin/sh\nprintf 'new-fixture-version\\n'\n"
+	newBinary := `#!/bin/sh
+case "$1" in
+    --validate-url)
+        [ "$#" -eq 4 ] && [ "$2" = --url ] &&
+            [ "$3" = https://pulse.example.invalid ] &&
+            [ "$4" = --allow-plaintext-http=false ] || exit 95
+        case "$0" in "$INSTALL_DIR"/.pulse-agent.install.*) ;; *) exit 95 ;; esac
+        printf 'destination-admission\n' >> "$TRACE"
+        [ "$FAULT" != destination-command-failure ] || exit 86
+        ;;
+    --version) printf 'new-fixture-version\n' ;;
+    *) exit 95 ;;
+esac
+`
 	oldHelper := "#!/bin/sh\nprintf 'old-helper-version\\n'\n"
 	newHelper := "#!/bin/sh\nprintf 'new-helper-version\\n'\n"
-	faults := []string{"none", "directory-creation", "allocation", "partial-transfer", "executable-mode", "destination-directory", "publication"}
+	faults := []string{"none", "directory-creation", "allocation", "partial-transfer", "executable-mode", "destination-directory", "destination-command-failure", "destination-not-executable", "publication"}
 	if helper {
 		faults = append(faults, "helper-directory-creation", "helper-directory-owner", "helper-directory-mode",
 			"helper-allocation", "helper-partial-transfer", "helper-owner", "helper-mode",
@@ -112,11 +128,14 @@ ACTION_RUNNER_ENABLED=false
 UPDATE_ONLY=false
 EXIT_GENERAL=1
 EXIT_MISSING_ARGS=2
+EXIT_PREFLIGHT_FAILED=14
+OUTPUT_FORMAT=json
+NON_INTERACTIVE=true
+PULSE_URL=https://pulse.example.invalid
 AGENT_NAME=pulse-agent
 BINARY_NAME=pulse-agent
 NEW_VERSION=new-fixture-version
 log_info() { :; }
-fail() { printf '%s\n' "$1" >&2; exit "$2"; }
 mkdir() {
     if [[ "${@: -1}" == "$PRIVILEGE_HELPER_DIR" ]]; then
         printf 'helper-directory\n' >> "$TRACE"
@@ -162,12 +181,19 @@ chmod() {
         printf 'mode\n' >> "$TRACE"
         [[ "$FAULT" != executable-mode ]] || return 1
     fi
-    command chmod "$@"
+    command chmod "$@" || return
+    # Revoke actual execution after the successful mode operation. This checks
+    # kernel refusal, not a claim to reproduce a native noexec mount or ACL.
+    if [[ "$FAULT" == destination-not-executable && "$2" == "$INSTALL_DIR"/.pulse-agent.install.* ]]; then
+        command chmod 0644 "$2"
+    fi
 }
 stop_existing_agent_service() {
     # Transfer and mode must already be complete when disruption becomes possible.
-    [[ -f "$STAGED_AGENT_BIN" && -x "$STAGED_AGENT_BIN" ]] || exit 96
-    [[ "$("$STAGED_AGENT_BIN" --version)" == new-fixture-version ]] || exit 96
+    [[ -f "$STAGED_AGENT_BIN" ]] || exit 96
+    if [[ "$FAULT" != destination-not-executable ]]; then
+        [[ -x "$STAGED_AGENT_BIN" && "$("$STAGED_AGENT_BIN" --version)" == new-fixture-version ]] || exit 96
+    fi
     if [[ "$PRIVILEGED_HELPER_ENABLED" == true ]]; then
         [[ -f "$STAGED_HELPER_BIN" && -x "$STAGED_HELPER_BIN" ]] || exit 96
         [[ "$("$STAGED_HELPER_BIN" --version)" == new-helper-version ]] || exit 96
@@ -229,6 +255,10 @@ mv() {
 				if ctx.Err() != nil || (exit == 0) != (fault == "none") {
 					t.Fatalf("fault=%s exit=%d context=%v error=%v\n%s", fault, exit, ctx.Err(), runErr, output)
 				}
+				if (fault == "destination-command-failure" || fault == "destination-not-executable") &&
+					(exit != 14 || !strings.Contains(string(output), `"exitCode":14`)) {
+					t.Fatalf("destination execution refusal did not retain preflight exit 14: %d\n%s", exit, output)
+				}
 				operations, err := os.ReadFile(trace)
 				if err != nil {
 					t.Fatal(err)
@@ -240,7 +270,11 @@ mv() {
 							t.Fatalf("staging failure disrupted installation (%s):\n%s\n%s", forbidden, sequence, output)
 						}
 					}
-					if !strings.Contains(string(output), "has not been stopped or replaced; saved state is retained") {
+					message := "has not been stopped or replaced; saved state is retained"
+					if fault == "destination-command-failure" || fault == "destination-not-executable" {
+						message = "The installed service and saved credentials have not been changed"
+					}
+					if !strings.Contains(string(output), message) {
 						t.Fatalf("missing early refusal diagnostic:\n%s", output)
 					}
 				} else {
@@ -248,6 +282,7 @@ mv() {
 					if helper {
 						want += "helper-directory\nhelper-directory-owner\nhelper-directory-mode\nhelper-allocate\nhelper-transfer\nhelper-owner\nhelper-mode\n"
 					}
+					want += "destination-admission\n"
 					if upgrade {
 						want += "stop\nkill\n"
 					}

@@ -7568,6 +7568,10 @@ if [[ "$SAFE_PROFILE_ACTION" != "apply" ]]; then
     if [[ "$PRIVILEGED_HELPER_ENABLED" == "true" ]] && ! stage_privileged_helper_for_install; then
         fail "Could not stage the verified typed helper on the installation filesystem. The existing agent has not been stopped or replaced; saved state is retained." "$EXIT_GENERAL"
     fi
+    # A successful mode change does not establish that this filesystem permits
+    # execution (for example after a noexec mount change). Exercise the existing
+    # read-only admission command here too, before disrupting the predecessor.
+    validate_staged_agent_url "$STAGED_AGENT_BIN"
 fi
 
 # --- Upgrade Detection ---
