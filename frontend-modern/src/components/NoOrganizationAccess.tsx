@@ -36,6 +36,14 @@ export const NoOrganizationAccess: Component<NoOrganizationAccessProps> = (props
   });
   const [busyOrgID, setBusyOrgID] = createSignal<string | null>(null);
   const [actionError, setActionError] = createSignal<string | null>(null);
+  let invitationRegion: HTMLElement | undefined;
+
+  const retryInvitations = () => {
+    // Retry removes its own button while reading. Keep the keyboard in the
+    // invitation region now; a late result must not take focus back.
+    invitationRegion?.focus();
+    void refetch();
+  };
 
   const reload = () => (props.onReload ? props.onReload() : window.location.reload());
 
@@ -74,89 +82,101 @@ export const NoOrganizationAccess: Component<NoOrganizationAccessProps> = (props
           You are signed in, but you are not a member of an organization on this Pulse server.
         </p>
 
-        <Show
-          when={!invitationRead.loading}
-          fallback={
-            <p class="mt-4 text-sm leading-6 text-muted" role="status">
-              Checking invitations…
-            </p>
-          }
+        <section
+          ref={invitationRegion}
+          aria-label="Organization invitations"
+          aria-busy={invitationRead.loading}
+          tabIndex={-1}
+          class="rounded-md focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
         >
           <Show
-            when={invitationRead()?.kind === 'loaded'}
+            when={!invitationRead.loading}
             fallback={
-              <div class="mt-4">
-                <p class="text-sm leading-6 text-red-600 dark:text-red-400" role="alert">
-                  Could not check your invitations.
-                </p>
-                <Button variant="secondary" size="sm" class="mt-2" onClick={() => void refetch()}>
-                  Retry invitations
-                </Button>
-              </div>
+              <p class="mt-4 text-sm leading-6 text-muted" role="status">
+                Checking invitations…
+              </p>
             }
           >
             <Show
-              when={(invitationRead()?.invitations ?? []).length > 0}
+              when={invitationRead()?.kind === 'loaded'}
               fallback={
-                <p class="mt-4 text-sm leading-6 text-muted">
-                  Ask a Pulse administrator to add you to an organization.
-                </p>
+                <div class="mt-4">
+                  <p class="text-sm leading-6 text-red-600 dark:text-red-400" role="alert">
+                    Could not check your invitations.
+                  </p>
+                  <Button variant="secondary" size="sm" class="mt-2" onClick={retryInvitations}>
+                    Retry invitations
+                  </Button>
+                </div>
               }
             >
-              <ul class="mt-4 divide-y divide-border rounded-md border border-border">
-                <For each={invitationRead()?.invitations}>
-                  {(invitation) => {
-                    const presentation = () =>
-                      getOrganizationInvitationPresentation(
-                        invitation.orgId,
-                        invitation.orgDisplayName,
-                      );
-                    return (
-                      <li class="px-3 py-2">
-                        <div role="group" aria-label={presentation().groupLabel} class="space-y-2">
-                          <div class="flex items-start gap-3">
-                            <div class="min-w-0 flex-1 [overflow-wrap:anywhere]">
-                              <Show
-                                when={
-                                  invitation.orgDisplayName &&
-                                  invitation.orgDisplayName !== invitation.orgId
-                                }
-                              >
-                                <bdi class="block text-sm">{invitation.orgDisplayName}</bdi>
-                              </Show>
-                              <bdi class="block text-xs text-muted">{invitation.orgId}</bdi>
+              <Show
+                when={(invitationRead()?.invitations ?? []).length > 0}
+                fallback={
+                  <p class="mt-4 text-sm leading-6 text-muted">
+                    Ask a Pulse administrator to add you to an organization.
+                  </p>
+                }
+              >
+                <ul class="mt-4 divide-y divide-border rounded-md border border-border">
+                  <For each={invitationRead()?.invitations}>
+                    {(invitation) => {
+                      const presentation = () =>
+                        getOrganizationInvitationPresentation(
+                          invitation.orgId,
+                          invitation.orgDisplayName,
+                        );
+                      return (
+                        <li class="px-3 py-2">
+                          <div
+                            role="group"
+                            aria-label={presentation().groupLabel}
+                            class="space-y-2"
+                          >
+                            <div class="flex items-start gap-3">
+                              <div class="min-w-0 flex-1 [overflow-wrap:anywhere]">
+                                <Show
+                                  when={
+                                    invitation.orgDisplayName &&
+                                    invitation.orgDisplayName !== invitation.orgId
+                                  }
+                                >
+                                  <bdi class="block text-sm">{invitation.orgDisplayName}</bdi>
+                                </Show>
+                                <bdi class="block text-xs text-muted">{invitation.orgId}</bdi>
+                              </div>
+                              <OrganizationRoleBadge role={normalizeRole(invitation.role)} />
                             </div>
-                            <OrganizationRoleBadge role={normalizeRole(invitation.role)} />
+                            <div class="flex flex-wrap gap-2">
+                              <Button
+                                variant="primary"
+                                size="sm"
+                                aria-label={presentation().acceptLabel}
+                                disabled={busyOrgID() !== null}
+                                onClick={() => void respond(invitation.orgId, true)}
+                              >
+                                Accept
+                              </Button>
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                aria-label={presentation().declineLabel}
+                                disabled={busyOrgID() !== null}
+                                onClick={() => void respond(invitation.orgId, false)}
+                              >
+                                Decline
+                              </Button>
+                            </div>
                           </div>
-                          <div class="flex flex-wrap gap-2">
-                            <Button
-                              variant="primary"
-                              size="sm"
-                              aria-label={presentation().acceptLabel}
-                              disabled={busyOrgID() !== null}
-                              onClick={() => void respond(invitation.orgId, true)}
-                            >
-                              Accept
-                            </Button>
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              aria-label={presentation().declineLabel}
-                              disabled={busyOrgID() !== null}
-                              onClick={() => void respond(invitation.orgId, false)}
-                            >
-                              Decline
-                            </Button>
-                          </div>
-                        </div>
-                      </li>
-                    );
-                  }}
-                </For>
-              </ul>
+                        </li>
+                      );
+                    }}
+                  </For>
+                </ul>
+              </Show>
             </Show>
           </Show>
-        </Show>
+        </section>
 
         <Show when={actionError()}>
           {(message) => (
