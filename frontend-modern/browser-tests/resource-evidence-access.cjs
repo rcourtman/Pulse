@@ -38,7 +38,7 @@ const parent = false;
           requests.push({ path: url.pathname, mode: actionMode });
           return actionMode === '503' ? route.fulfill({ status: 503, json: { error: 'Fixture actions unavailable' } }) : route.fulfill({ json: { audits: [], count: 0 } });
         }
-        return route.fulfill({ json: url.pathname === '/api/license/runtime-capabilities' ? { capabilities: [], limits: [], max_history_days: 7, hosted_mode: false, runtime: { build: 'community' }, blocked_capabilities: [] } : { capabilities: [], relationships: [], recentChanges: [], audits: [], count: 0, data: [], enabled: false } });
+        return route.fulfill({ json: url.pathname === '/api/license/runtime-capabilities' ? { capabilities: [], limits: [], hosted_mode: false, runtime: { build: 'community' }, blocked_capabilities: [] } : { capabilities: [], relationships: [], recentChanges: [], audits: [], count: 0, data: [], enabled: false } });
       });
       const record = (name, pass) => { checks.push({ name, pass }); };
       const screenshot = state => page.screenshot({ path: path.join(artifacts, `${name}-${state}.png`), fullPage: true });

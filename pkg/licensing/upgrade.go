@@ -81,8 +81,6 @@ func UpgradeURLForFeature(feature string) string {
 		return DefaultUpgradeURL + "&feature=mobile_app"
 	case FeaturePushNotifications:
 		return DefaultUpgradeURL + "&feature=push_notifications"
-	case FeatureLongTermMetrics:
-		return DefaultUpgradeURL + "&feature=long_term_metrics"
 	case FeatureAIAutoFix:
 		return DefaultUpgradeURL + "&feature=ai_autofix"
 	case FeatureAIAlerts:

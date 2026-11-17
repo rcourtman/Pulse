@@ -6183,25 +6183,6 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 		}
 	}
 
-	// Enforce tier-aware history limits (e.g. Free=7d, Relay=14d, Pro=90d).
-	{
-		maxHistDays := freeHistoryDaysDefault
-		if r.licenseHandlers != nil {
-			if licSvc := r.licenseHandlers.Service(req.Context()); licSvc != nil {
-				status := licSvc.Status()
-				if status.Valid {
-					maxHistDays = tierHistoryDaysFromLicensing(status.Tier)
-				}
-				// When !status.Valid, maxHistDays stays at free-tier default.
-			}
-		}
-		maxDuration := time.Duration(maxHistDays) * 24 * time.Hour
-		if duration > maxDuration {
-			WriteLicenseRequired(w, featureLongTermMetricsValue, "Extended metrics history requires a higher-tier Pulse license")
-			return
-		}
-	}
-
 	end := time.Now()
 	start := end.Add(-duration)
 

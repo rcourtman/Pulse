@@ -122,7 +122,7 @@ func metricHistoryInputSchema() json.RawMessage {
 	return agentObjectInputSchema([]string{ResourceIDArgumentName}, map[string]any{
 		ResourceIDArgumentName: stringOption("Canonical resource id from get_fleet_context, list_recent_changes or get_resource_context."),
 		"metric":               stringOption("One recorded metric, such as cpu, memory, disk, netin, netout, diskread or diskwrite (storage records usage, used, avail and total). Omit to get every metric the resource records."),
-		"range":                stringEnumOption(MetricHistoryRanges, "Window ending now. Defaults to "+MetricHistoryDefaultRange+". Windows beyond the install's licensed history return license_required."),
+		"range":                stringEnumOption(MetricHistoryRanges, "Window ending now. Defaults to "+MetricHistoryDefaultRange+"."),
 		"maxPoints": map[string]any{
 			"type":        "integer",
 			"minimum":     1,
@@ -933,7 +933,7 @@ var canonicalManifest = Manifest{
 		{
 			Name:           GetMetricHistoryCapabilityName,
 			Title:          "Get metric history",
-			Description:    "Return how one resource's metrics moved over a window, from the history Pulse records while it monitors: 'did this disk fill gradually or suddenly?', 'was memory climbing before the restart?'. Pass the canonical resourceId from get_fleet_context, list_recent_changes or get_resource_context. Omit metric to get every metric the resource records, which also tells you their names. Points are averaged into about maxPoints buckets (window edges can add one), each with min and max. Windows longer than the install's licensed history (7 days on Community) return a license_required error.",
+			Description:    "Return how one resource's metrics moved over a window, from the history Pulse records while it monitors: 'did this disk fill gradually or suddenly?', 'was memory climbing before the restart?'. Pass the canonical resourceId from get_fleet_context, list_recent_changes or get_resource_context. Omit metric to get every metric the resource records, which also tells you their names. Points are averaged into about maxPoints buckets (window edges can add one), each with min and max. Windows go up to 90d and return whatever the install's storage retention still keeps.",
 			Category:       "context",
 			Method:         http.MethodGet,
 			Path:           MetricHistoryCapabilityPath,

@@ -43,12 +43,12 @@ Self-hosted pricing is:
 
 | Plan | Price | Core monitoring | Metric history | Purpose |
 |---|---:|---|---:|---|
-| Community | Free | Included | 7 days | Full self-hosted monitoring for normal homelab use |
+| Community | Free | Included | 90 days | Full self-hosted monitoring for normal homelab use |
 | Pro | $79/yr or $8.99/mo | Included | 90 days | AI operations and advanced admin features |
 
-Legacy Relay payloads can still show 14-day history. That compatibility limit is
-not the entitlement for continuing Relay subscribers, who now receive Pro
-features, including 90-day history, at their existing price.
+Metric history is free on every plan: charts go back as far as storage
+retention keeps (90 days by default). Continuing Relay subscribers receive Pro
+features at their existing price.
 
 Counted examples:
 - Proxmox PVE node
@@ -91,7 +91,7 @@ Migration policy:
 | Existing Relay subscriber | The continuing subscription receives Pro entitlements without a new purchase. | The existing price stays in place for as long as the subscription continues. Pro features continue after Pulse Mobile and Relay retire on 31 March 2027. |
 | Legacy paid v5 license migrated into v6 outside the recurring grandfathered path | The install can still exchange into the v6 activation model without forcing a repurchase. Migration records can still preserve the original cohort for support and audit. | Self-hosted monitoring stays available; monitored-system volume is no longer sold as a paid gate on current v6 self-hosted plans. |
 | Former recurring subscriber who already canceled or later lapses/cancels | A later return is treated as a new paid purchase, not as a grandfathered renewal. | The old grandfathered price does not resume automatically; current public v6 pricing applies for paid features while self-hosted monitoring remains included without a monitored-system volume gate. |
-| New self-hosted v6 purchase | Community monitoring is free; Pro is the current paid self-hosted plan. | Core monitoring is included by default; paid value comes from AI, history, and advanced admin features. Relay is no longer sold. |
+| New self-hosted v6 purchase | Community monitoring is free; Pro is the current paid self-hosted plan. | Core monitoring is included by default; paid value comes from AI and advanced admin features. Relay is no longer sold. |
 
 Support rule:
 - If any self-hosted v6 install shows a finite monitored-system, guest, or child-resource volume limit after activation or migration, treat it as a bug rather than as intended policy.
@@ -107,7 +107,6 @@ These are the current self-hosted Pro pillars that Pulse should keep
 investing in, surfacing, and marketing:
 - Patrol investigates issues.
 - Patrol handles safe fixes through approval-backed execution and Patrol mode.
-- 90-day history.
 - Included team/admin extras: RBAC, audit logging, reporting, and agent
   profiles. SSO is included with Community and higher tiers.
 
@@ -139,7 +138,7 @@ surface upgrade prompts unless the user deliberately enters a commercial path.
 | Self-hosted monitoring is not sold by monitored-system or child-resource volume. | `pkg/licensing/features.go` and `pkg/licensing/entitlement_payload.go` normalize self-hosted limits to the current no-volume-gate policy. | `pkg/licensing/grant_claims_contract_test.go`, `pkg/licensing/activation_types_test.go`, and `internal/api/licensing_handlers_auto_migrate_test.go` prove self-hosted paid/legacy continuity does not surface finite monitored-system allowances. |
 | Existing Pulse Mobile pairing and push continue until 31 March 2027; Relay does not provide remote access to the web UI. | `pkg/licensing/features.go` retains `relay`, `mobile_app`, and `push_notifications` for compatible paid payloads; relay onboarding/settings routes remain license-gated. These keys do not make Relay a plan to buy. | `pkg/licensing/features_test.go`, `pkg/licensing/entitlement_payload_test.go`, `internal/api/relay_sso_license_gating_test.go`, and `frontend-modern/src/components/Settings/__tests__/RelaySettingsPanel.runtime.test.tsx`. |
 | Pro includes Patrol issue investigation and verified fix actions. | `internal/api/ai_handlers.go` gates alert-triggered analysis behind `ai_alerts` and fix/autonomy behavior behind `ai_autofix`; `internal/ai/service.go` enforces the same capabilities in service-level paths. | `pkg/licensing/features_test.go`, `internal/api/router_routes_ai_execute_stream_test.go`, `internal/api/ai_intelligence_handlers_remediation_more_test.go`, and `frontend-modern/src/pages/__tests__/AIIntelligence.test.tsx`. |
-| Pro includes 90-day history. | `pkg/licensing/features.go` sets `TierHistoryDays[pro] == 90`; `pkg/licensing/entitlement_payload.go` emits `max_history_days`; `frontend-modern/src/stores/license.ts` and `frontend-modern/src/components/shared/useHistoryChartState.ts` lock ranges above the entitlement. | `pkg/licensing/features_test.go`, `pkg/licensing/entitlement_payload_test.go`, and `frontend-modern/src/stores/__tests__/license.test.ts`. |
+| Metric history is free on every plan. | `pkg/licensing/features.go` includes `long_term_metrics` in Community; `internal/api/router.go` (`handleMetricsHistory`) and `internal/api/availability_history_handlers.go` serve every supported range without a plan check; storage retention alone decides how far back data goes. | `pkg/licensing/upgrade_retirement_test.go`, `internal/api/router_version_tenant_metrics_test.go` (`TestHandleMetricsHistory_EveryPlanServesEveryRange`), and `frontend-modern/src/components/shared/__tests__/useHistoryChartState.test.tsx`. |
 | Pro includes business/admin extras: RBAC, audit logging, reporting, and agent profiles. | Router and settings gates use `rbac`, `audit_logging`, `advanced_reporting`, and `agent_profiles`; audit capture is SQLite-backed in `pkg/server/server.go` and `pkg/audit/sqlite_factory.go`, while query/export remains license-gated. | `internal/api/security_regression_test.go`, `internal/api/rbac_lifecycle_test.go`, `pkg/reporting/catalog_test.go`, and `frontend-modern/src/components/Settings/__tests__/settingsNavigation.integration.test.tsx`. |
 
 ## Feature Matrix
@@ -168,7 +167,7 @@ keys and old 14-day limit remain in code without changing that policy.
 | `FeatureRBAC` | `rbac` | Role-Based Access Control (RBAC) | N | N | Y | Y | Custom-role and manual user-assignment administration is gated via `RequireLicenseFeature(..., rbac, ...)`. |
 | `FeatureAuditLogging` | `audit_logging` | Audit Logging | N | N | Y | Y | API route gating for audit query, verify, and export endpoints. |
 | `FeatureAdvancedReporting` | `advanced_reporting` | PDF/CSV Reporting | N | N | Y | Y | API route gating via `RequireLicenseFeature(..., advanced_reporting, ...)`. |
-| `FeatureLongTermMetrics` | `long_term_metrics` | Extended Metric History | N | Y | Y | Y | Runtime history limits are tier-aware through `max_history_days`: Community `7`, Relay `14`, Pro `90`. |
+| `FeatureLongTermMetrics` | `long_term_metrics` | Metric History | Y | Y | Y | Y | Compatibility key. Metric history is not plan-limited; storage retention settings decide how far back it goes. |
 | `FeatureMultiUser` | `multi_user` | Multi-User Mode | N | N | N | Y* | Enterprise/custom only. |
 | `FeatureMultiTenant` | `multi_tenant` | Multi-Tenant Mode | N | N | N | Y* | Requires both `PULSE_MULTI_TENANT_ENABLED=true` and the `multi_tenant` capability for non-default orgs. |
 | `FeatureUnlimited` | `unlimited` | Hosted Capacity Policy | N | N | N | Y | Hosted/enterprise capacity policy only; not a self-hosted core monitoring gate. |
@@ -189,7 +188,7 @@ Patrol mode decides how far Pulse can go after Patrol finds something that needs
 
 ### Community
 - Core self-hosted monitoring included without a monitored-system volume gate.
-- 7-day history.
+- 90-day metric history.
 - Pulse Patrol with your own provider or local model.
 - Core SSO and update alerts.
 
@@ -205,7 +204,6 @@ Patrol mode decides how far Pulse can go after Patrol finds something that needs
 - Patrol handles safe fixes through Patrol mode.
 - Centralized agent profiles.
 - RBAC, audit logging, and advanced reporting.
-- 90-day history.
 - Existing Pulse Mobile pairing and push notifications until 31 March 2027.
 
 ### Legacy Pro+

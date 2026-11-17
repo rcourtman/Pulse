@@ -95,7 +95,7 @@ func TestGetFeatureDisplayNameCoversKnownFeaturesAndFallback(t *testing.T) {
 		{feature: FeatureMobileApp, want: "Pulse Mobile Pairing"},
 		{feature: FeaturePushNotifications, want: "Push Notifications"},
 		{feature: FeatureAdvancedReporting, want: "PDF/CSV Reporting"},
-		{feature: FeatureLongTermMetrics, want: "Extended Metric History"},
+		{feature: FeatureLongTermMetrics, want: "Metric History"},
 		{feature: "custom_feature", want: "custom_feature"},
 	}
 

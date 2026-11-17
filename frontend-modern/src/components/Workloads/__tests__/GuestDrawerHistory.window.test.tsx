@@ -13,8 +13,6 @@ import { GUEST_DRAWER_HISTORY_POLL_MS } from '../guestDrawerHistoryQuery';
 
 vi.mock('@/stores/license', () => ({
   loadRuntimeCapabilities: vi.fn(async () => undefined),
-  maxHistoryDays: () => 7,
-  isRangeLocked: (range: HistoryTimeRange) => ['14d', '30d', '90d'].includes(range),
 }));
 
 afterEach(() => {

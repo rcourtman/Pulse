@@ -195,7 +195,6 @@ beforeEach(async () => {
           capabilities: multi ? ['multi_tenant'] : [],
           hosted_mode: hosted,
           limits: [],
-          max_history_days: 7,
         });
       if (url === listURL && !init.method) return listReply();
       if (url === '/api/health' && init.method === 'GET') return healthReply();

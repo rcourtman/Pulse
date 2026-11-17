@@ -399,8 +399,6 @@ func TestInstallationStatusSuspensionDropsPaidAccessAndRecoversWithScopedActivat
 	}
 	if recovered := svc.GetActivationState(); recovered == nil || recovered.LicenseVersion != 2 || recovered.GrantJTI != "grt_recovered" {
 		t.Fatalf("activation did not advance after recovery: %+v", recovered)
-	} else if recovered.Continuity.DowngradeRetention == nil {
-		t.Fatalf("suspended Pro-to-Relay recovery lost downgrade retention: %+v", recovered.Continuity)
 	}
 	persistedRecovery, err := persistence.LoadActivationState()
 	if err != nil {

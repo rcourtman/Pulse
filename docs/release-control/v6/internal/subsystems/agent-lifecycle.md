@@ -12016,3 +12016,12 @@ The rehearsal reads and mutations under `/api/notifications/rehearsals` keep
 notification organization-manager and settings-scope authority. A rehearsal is
 a notification producer, with no agent installation, command, connection or
 lifecycle mutation. Request organization lookup cannot borrow another runtime.
+
+### Metric history is free on every plan (17 November 2026)
+
+`/api/metrics-store/history`, `/api/availability-history` and the agent
+`get_metric_history` read in `internal/api/agent_metric_history.go` no longer
+check a plan history limit; `router.go` and `licensing_bridge.go` drop the tier
+lookup, and `report_schedules.go` no longer applies the downgrade purge. No
+agent token, installation, command or lifecycle authority changes: these reads
+keep their existing scopes.

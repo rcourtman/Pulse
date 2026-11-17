@@ -5303,8 +5303,8 @@ it could not already read through `list_recent_changes`. Proof:
 the same scope as `/api/metrics-store/history`. It resolves the canonical
 resource id through the request organization's registry and hands a cloned
 request, with the organization context intact, to `handleMetricsHistory`, so
-tenant resolution, the licensed history limit and the response are the chart
-route's own. The rewritten query carries only resourceType, resourceId, range,
+tenant resolution and the response are the chart route's own (no plan limits
+the window since 17 November 2026). The rewritten query carries only resourceType, resourceId, range,
 maxPoints and metric; any other parameter the caller sent is dropped. A
 monitoring-read token therefore reads nothing through it that it could not
 already read from the chart route. `normalizeMetricsHistoryResourceType` now

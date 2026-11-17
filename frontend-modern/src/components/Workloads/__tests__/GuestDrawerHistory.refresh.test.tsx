@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { Route, Router } from '@solidjs/router';
 import { createSignal, type JSX } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -10,8 +10,6 @@ import type { GuestDrawerHistoryTarget } from '../guestDrawerModel';
 
 vi.mock('@/stores/license', () => ({
   loadRuntimeCapabilities: vi.fn(async () => undefined),
-  maxHistoryDays: () => 7,
-  isRangeLocked: (range: HistoryTimeRange) => ['14d', '30d', '90d'].includes(range),
 }));
 
 afterEach(() => {
@@ -44,10 +42,6 @@ const renderInRouter = (component: () => JSX.Element) =>
       <Route path="/*" component={component} />
     </Router>
   ));
-const setPresentationPolicy = (policy: { hideCommercial: boolean; hideUpgrade: boolean }) =>
-  syncSessionPresentationPolicy({
-    presentationPolicy: { demoMode: false, readOnly: false, ...policy },
-  } as Parameters<typeof syncSessionPresentationPolicy>[0]);
 const paths = (container: HTMLElement) =>
   container.querySelectorAll('[data-testid="guest-history-plot"] path');
 
@@ -367,40 +361,17 @@ describe('GuestDrawerHistory refresh recovery', () => {
     await waitFor(() => expect(paths(container)).toHaveLength(1));
     expect(screen.queryByTestId('guest-history-live-readings')).not.toBeInTheDocument();
 
+    // Every range is free, so a longer range reads history like any other.
     setRange('14d');
-    await screen.findByText(/14 days history requires a higher license plan/);
-    expect(screen.getByTestId('guest-history-live-readings')).toHaveTextContent('CPU12.0%current');
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(3));
+    expect(screen.queryByText(/requires a higher license plan/)).not.toBeInTheDocument();
   });
 
-  it('offers no refresh when the target is absent or the range is locked', async () => {
+  it('offers no refresh and reads nothing when the target is absent', async () => {
     const fetch = vi.spyOn(ChartsAPI, 'getMetricsHistory');
-    const [currentTarget, setTarget] = createSignal<GuestDrawerHistoryTarget | null>(null);
-    renderInRouter(() => <GuestDrawerHistory target={currentTarget()} range="14d" />);
-    expect(screen.queryByRole('button', { name: /history/i })).not.toBeInTheDocument();
-    setTarget(target);
-    await screen.findByText(/14 days history requires a higher license plan/);
+    renderInRouter(() => <GuestDrawerHistory target={null} range="14d" />);
     expect(screen.queryByRole('button', { name: /history/i })).not.toBeInTheDocument();
     expect(fetch).not.toHaveBeenCalled();
-  });
-
-  it('links a locked range to Plans & Billing even when upgrade prompts are hidden', async () => {
-    // Free self-hosted installs hide proactive upgrade prompts; the lock the
-    // operator opened by choosing a range still says where the plan lives.
-    setPresentationPolicy({ hideCommercial: false, hideUpgrade: true });
-    renderInRouter(() => <GuestDrawerHistory target={target} range="30d" />);
-    const lock = await screen.findByText(/30 days history requires a higher license plan/);
-    expect(lock).toHaveTextContent("This instance's plan retains 7 days.");
-    expect(within(lock).getByRole('link', { name: 'Plans & Billing' })).toHaveAttribute(
-      'href',
-      '/settings/pulse-intelligence/billing/plan',
-    );
-  });
-
-  it('keeps the plan lock text only when commercial surfaces are hidden', async () => {
-    setPresentationPolicy({ hideCommercial: true, hideUpgrade: true });
-    renderInRouter(() => <GuestDrawerHistory target={target} range="30d" />);
-    const lock = await screen.findByText(/30 days history requires a higher license plan/);
-    expect(within(lock).queryByRole('link')).toBeNull();
   });
 });
 

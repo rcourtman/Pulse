@@ -44,7 +44,8 @@ The plan-locked range in `GuestDrawerHistory` ends with a Plans & Billing link
 from `HistoryLockPlanLink`. It resolves a static in-product route, reads the
 session presentation policy the shell already holds, and issues no request:
 no commercial-posture fetch, poll or timer. A locked range still starts no
-history read.
+history read. Superseded on 17 November 2026: history ranges are no longer
+plan-locked and `HistoryLockPlanLink` is deleted, so every range reads history.
 
 ### Missing backup completion remains a presentation-only uncertainty
 
@@ -4789,3 +4790,10 @@ Hosted runtimes without the multi-tenant capability now read `GET /api/orgs` onc
 during bootstrap, as multi-tenant runtimes already did, to land in the client
 workspace. Self-hosted single-organization runtimes make no extra request, and
 no polling, socket or render path changes.
+
+### Metrics store retention has no commercial ceiling (17 November 2026)
+
+`pkg/metrics/store.go` and `availability_history.go` drop
+`SetCommercialHistoryRetention` and `effectiveRetention`: cleanup uses the
+configured tier retention only, so a plan ending no longer shortens it.
+Cleanup cadence, query paths and write paths are unchanged.

@@ -91,7 +91,6 @@ test.describe('Organization sharing approval UI', () => {
         capabilities: ['multi_tenant', 'rbac', 'relay'],
         limits: [],
         hosted_mode: false,
-        max_history_days: 30,
       }));
     });
 

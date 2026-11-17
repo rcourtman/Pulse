@@ -21,7 +21,7 @@ const requiredStatus = { code: "acknowledgement_required", active: false, curren
 
 test("Autopilot records a versioned server acknowledgement before effective full mode and supports revocation", async ({ page }, testInfo) => {
   let active = false;
-  await page.route("**/api/license/runtime-capabilities", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ capabilities: ["ai_patrol", "ai_autofix"], limits: [], hosted_mode: false, max_history_days: 365, runtime: { build: "enterprise", label: "Pulse Pro runtime" }, blocked_capabilities: [] }) }));
+  await page.route("**/api/license/runtime-capabilities", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ capabilities: ["ai_patrol", "ai_autofix"], limits: [], hosted_mode: false, runtime: { build: "enterprise", label: "Pulse Pro runtime" }, blocked_capabilities: [] }) }));
   await page.route("**/api/ai/patrol/autonomy/acknowledgements", async (route) => {
     const body = route.request().postDataJSON();
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ created: true, acknowledgement: { ...requiredStatus, code: "active", active: true, acknowledgementVersion: 1, acknowledgementId: body.acknowledgement_id, acceptedAt: "2026-07-12T00:00:00Z" } }) });

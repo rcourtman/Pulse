@@ -488,7 +488,7 @@ describe('ProLicensePanel', () => {
     expect(screen.queryByText('Relay plan')).not.toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'Pulse Pro plan' })).toBeInTheDocument();
     expect(screen.queryByText(/remote web access/i)).not.toBeInTheDocument();
-    // Team and estate value leads; Patrol and history follow.
+    // Team and estate value leads; Patrol follows. History is free on every plan.
     const highlightTexts = [
       'For your team',
       '3 named team seats',
@@ -498,13 +498,13 @@ describe('ProLicensePanel', () => {
       'Reporting and agent profiles',
       'External probes from another site',
       'Commercial support, typically within two business days',
-      'Patrol and history',
+      'Patrol',
       'Patrol modes: Ask first, Safe auto-fix, or Autopilot',
       'Patrol fixes issues and verifies the result',
-      '90-day metric history (Community keeps 7 days)',
     ];
     expect(screen.getByText('$79/year')).toBeInTheDocument();
-    const rendered = highlightTexts.map((text) => screen.getByText(text));
+    const proPlan = screen.getByRole('region', { name: 'Pulse Pro plan' });
+    const rendered = highlightTexts.map((text) => within(proPlan).getByText(text));
     for (let i = 1; i < rendered.length; i += 1) {
       expect(
         rendered[i - 1].compareDocumentPosition(rendered[i]) & Node.DOCUMENT_POSITION_FOLLOWING,
@@ -634,7 +634,6 @@ describe('ProLicensePanel', () => {
       upgrade_reasons: [],
       tier: 'pro',
       licensed_email: 'owner@example.com',
-      max_history_days: 90,
       trial_eligible: false,
       runtime: PRO_RUNTIME_IDENTITY,
     };
@@ -693,7 +692,6 @@ describe('ProLicensePanel', () => {
       upgrade_reasons: [],
       tier: 'pro',
       licensed_email: 'owner@example.com',
-      max_history_days: 90,
       trial_eligible: false,
       runtime: PRO_RUNTIME_IDENTITY,
     };
@@ -746,7 +744,6 @@ describe('ProLicensePanel', () => {
       upgrade_reasons: [],
       tier: 'pro',
       licensed_email: 'owner@example.com',
-      max_history_days: 90,
       trial_eligible: false,
       runtime: PRO_RUNTIME_IDENTITY,
     };
@@ -803,7 +800,6 @@ describe('ProLicensePanel', () => {
       upgrade_reasons: [],
       tier: 'pro',
       licensed_email: 'owner@example.com',
-      max_history_days: 90,
       trial_eligible: false,
       runtime: PRO_RUNTIME_IDENTITY,
     };
@@ -1000,7 +996,6 @@ describe('ProLicensePanel', () => {
       tier: 'pro',
       plan_version: 'pro_monthly',
       licensed_email: 'owner@example.com',
-      max_history_days: 90,
       trial_eligible: false,
       runtime: PRO_RUNTIME_IDENTITY,
     };
@@ -1008,16 +1003,15 @@ describe('ProLicensePanel', () => {
     renderPanel();
 
     await waitFor(() => {
-      expect(screen.getByText('Metric History')).toBeInTheDocument();
+      expect(screen.getByText('Core Monitoring')).toBeInTheDocument();
     });
 
-    expect(screen.getByText('Core Monitoring')).toBeInTheDocument();
-    expect(screen.getByText('Metric History')).toBeInTheDocument();
+    expect(screen.queryByText('Metric History')).not.toBeInTheDocument();
     expect(screen.getByText('Included Extras')).toBeInTheDocument();
     expect(screen.getByText('Current plan: Pulse Pro')).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Pulse Pro is active on this instance. It includes Patrol modes (Ask first, Safe auto-fix, Autopilot), 90-day metric history, RBAC, audit logging, reporting, agent profiles, and Pulse Mobile pairing until 31 March 2027.',
+        'Pulse Pro is active on this instance. It includes Patrol modes (Ask first, Safe auto-fix, Autopilot), RBAC, audit logging, reporting, agent profiles, and Pulse Mobile pairing until 31 March 2027.',
       ),
     ).toBeInTheDocument();
     expect(screen.getByText('Primary capabilities')).toBeInTheDocument();
@@ -1029,7 +1023,7 @@ describe('ProLicensePanel', () => {
     ).toBeInTheDocument();
     expect(screen.getByText('Included extras')).toBeInTheDocument();
     expect(screen.getByText('Capability details')).toBeInTheDocument();
-    expect(screen.getByText('(5 items ready)')).toBeInTheDocument();
+    expect(screen.getByText('(4 items ready)')).toBeInTheDocument();
     const readinessDetails = screen
       .getByText('Capability details')
       .closest('details') as HTMLDetailsElement | null;
@@ -1058,8 +1052,7 @@ describe('ProLicensePanel', () => {
     expect(screen.queryByText(/entitlement payload/i)).not.toBeInTheDocument();
     expect(screen.queryByText('Needs attention')).not.toBeInTheDocument();
     expect(screen.queryByText('Available plans')).not.toBeInTheDocument();
-    expect(screen.getByText('90 days')).toBeInTheDocument();
-    expect(screen.getByText('Patrol modes, history, and team controls')).toBeInTheDocument();
+    expect(screen.getByText('Patrol modes and team controls')).toBeInTheDocument();
     expect(screen.queryByText('Guest Capacity')).not.toBeInTheDocument();
     expect(screen.queryByText('Included Monitored Systems')).not.toBeInTheDocument();
     expect(screen.queryByText('Monitored-system policy')).not.toBeInTheDocument();
@@ -1075,7 +1068,6 @@ describe('ProLicensePanel', () => {
       tier: 'relay',
       plan_version: 'relay_monthly',
       licensed_email: 'owner@example.com',
-      max_history_days: 14,
       trial_eligible: false,
     };
 
@@ -1087,7 +1079,7 @@ describe('ProLicensePanel', () => {
 
     expect(
       screen.getByText(
-        'Relay is active on this instance. It includes Pulse Mobile pairing and push notifications until 31 March 2027, and 14-day metric history.',
+        'Relay is active on this instance. It includes Pulse Mobile pairing and push notifications until 31 March 2027.',
       ),
     ).toBeInTheDocument();
     expect(screen.queryByText('Available plans')).not.toBeInTheDocument();
@@ -1096,7 +1088,7 @@ describe('ProLicensePanel', () => {
     expect(screen.queryByRole('link', { name: 'View plans' })).not.toBeInTheDocument();
     expect(screen.getByText('Relay status')).toBeInTheDocument();
     expect(screen.getAllByText('Pulse Mobile pairing and push').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('14-day metric history').length).toBeGreaterThan(0);
+    expect(screen.queryByText(/day metric history/)).not.toBeInTheDocument();
     expect(screen.getByText('Pulse Relay (Mobile Connection)')).toBeInTheDocument();
     expect(screen.getByText('Pulse Mobile Pairing')).toBeInTheDocument();
     expect(screen.getByText('Push Notifications')).toBeInTheDocument();
@@ -1288,7 +1280,7 @@ describe('ProLicensePanel', () => {
     expect(screen.getByText('Pulse Relay (Mobile Connection)')).toBeInTheDocument();
     expect(screen.getByText('Pulse Mobile Pairing')).toBeInTheDocument();
     expect(screen.getByText('Push Notifications')).toBeInTheDocument();
-    expect(screen.getByText('Extended Metric History')).toBeInTheDocument();
+    expect(screen.queryByText(/Metric History/)).not.toBeInTheDocument();
     expect(screen.queryByText('Multi-Tenant Mode')).not.toBeInTheDocument();
     expect(screen.queryByText('Kubernetes AI Analysis (Compatibility)')).not.toBeInTheDocument();
     expect(screen.queryByText('Multi-User Mode')).not.toBeInTheDocument();

@@ -37,8 +37,7 @@ def write_public_copy_fixture(root: Path) -> tuple[Path, Path]:
     (pulse_dir / "docs" / "PULSE_PRO.md").write_text(
         """
         monitored-system volume is no longer the paid gate.
-        Relay gives 14-day history.
-        Pro gives 90-day history.
+        Metric history is free on every plan.
         Patrol investigates issues.
         Patrol handles safe fixes.
         """,
@@ -47,7 +46,7 @@ def write_public_copy_fixture(root: Path) -> tuple[Path, Path]:
     (pulse_dir / "docs" / "AI.md").write_text(
         """
         Pulse Patrol is available to everyone on the Community plan with BYOK.
-        Pro adds hands-on Patrol modes, issue investigation, governed fixes, verified outcomes, and 90-day history.
+        Pro adds hands-on Patrol modes, issue investigation, governed fixes, and verified outcomes.
         Community and Relay installs can still run scheduled Patrol findings with BYOK.
         """,
         encoding="utf-8",
@@ -55,8 +54,6 @@ def write_public_copy_fixture(root: Path) -> tuple[Path, Path]:
     (pulse_dir / "docs" / "UPGRADE_v6.md").write_text(
         """
         monitoring stays available across Community, Relay, and Pro.
-        Relay raises history to 14 days.
-        Pro raises it to 90 days.
         Self-hosted v6 does not expose a general in-app trial.
         """,
         encoding="utf-8",
@@ -66,8 +63,7 @@ def write_public_copy_fixture(root: Path) -> tuple[Path, Path]:
         monitored systems are not the paid gate.
         Customer-specific Relay URL is not part of the standard outbound relay service.
         Self-hosted trial acquisition: No.
-        Metrics history: 14 days for Relay.
-        Metrics history: 90 days for Pro.
+        Metric history was a Pro pillar until 17 November 2026.
         """,
         encoding="utf-8",
     )
@@ -75,8 +71,7 @@ def write_public_copy_fixture(root: Path) -> tuple[Path, Path]:
         """
         Self-hosted Pulse includes core monitoring and watch-only Patrol for free.
         Remote web access, pairing, and push.
-        14-day metric history.
-        hands-on Patrol modes, verified fixes, 90-day history.
+        90-day metric history.
         admin/reporting extras.
         """,
         encoding="utf-8",
@@ -93,8 +88,8 @@ def write_public_copy_fixture(root: Path) -> tuple[Path, Path]:
     (pulse_pro_dir / "landing-page" / "index.html").write_text(
         """
         Community keeps core monitoring free.
-        Pulse Mobile pairing for handoff, push notifications, and 14-day history.
-        hands-on Patrol modes, issue investigation, verified fixes, and 90-day history.
+        Pulse Mobile pairing for handoff and push notifications.
+        hands-on Patrol modes, issue investigation, and verified fixes.
         Do Relay or Pro charge by server?
         Existing Pulse Pro and legacy Pro+ holders keep their paid runtime access.
         """,
@@ -103,8 +98,8 @@ def write_public_copy_fixture(root: Path) -> tuple[Path, Path]:
     (pulse_pro_dir / "license-server" / "public_pricing.go").write_text(
         """
         Community keeps core monitoring free.
-        Pulse Mobile pairing for handoff, push notifications, and 14-day history.
-        hands-on Patrol modes, issue investigation, verified fixes, team controls, and 90-day history.
+        Pulse Mobile pairing for handoff and push notifications.
+        hands-on Patrol modes, issue investigation, verified fixes, and team controls.
         not as the self-hosted paid gate.
         """,
         encoding="utf-8",
@@ -177,7 +172,7 @@ class PaidFeatureClaimsProofTest(unittest.TestCase):
             self.assertEqual(specs[8].cwd, str(pulse_enterprise_dir.resolve()))
             names = {spec.name for spec in specs}
             self.assertIn("pulse-licensing-paid-feature-contract", names)
-            self.assertIn("pulse-api-history-entitlement-enforcement", names)
+            self.assertIn("pulse-api-free-metric-history", names)
             self.assertIn("pulse-pro-admin-extras-api-contract", names)
             self.assertIn("pulse-pro-admin-extras-core-packages", names)
             self.assertIn("pulse-frontend-paid-claim-contract", names)

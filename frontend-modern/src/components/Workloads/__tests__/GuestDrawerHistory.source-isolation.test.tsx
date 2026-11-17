@@ -12,8 +12,6 @@ import type { GuestDrawerHistoryTarget } from '../guestDrawerModel';
 
 vi.mock('@/stores/license', () => ({
   loadRuntimeCapabilities: vi.fn(async () => undefined),
-  maxHistoryDays: () => 7,
-  isRangeLocked: (range: HistoryTimeRange) => ['14d', '30d', '90d'].includes(range),
 }));
 
 afterEach(() => {
@@ -215,27 +213,25 @@ describe('GuestDrawerHistory source isolation', () => {
     expect(screen.getByText('History unavailable')).toBeInTheDocument();
   });
 
-  it('aborts a pending read when its range is locked or its drawer unmounts', async () => {
+  it('aborts a pending read when its range changes or its drawer unmounts', async () => {
     const fetch = vi
       .spyOn(ChartsAPI, 'getMetricsHistory')
       .mockImplementation(() => new Promise(() => {}));
     const [range, setRange] = createSignal<HistoryTimeRange>('24h');
     const target: GuestDrawerHistoryTarget = { resourceType: 'agent', resourceId: 'host-old' };
-    // The plan lock links to Plans & Billing, which needs a router.
     const view = render(() => (
       <Router>
         <Route path="/*" component={() => <GuestDrawerHistory target={target} range={range()} />} />
       </Router>
     ));
     await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+    // Every range is free, so a longer range replaces the read instead of
+    // stopping at a plan lock.
     setRange('14d');
-    await screen.findByText(/14 days history requires a higher license plan/);
-    expect(screen.getByRole('link', { name: 'Plans & Billing' })).toBeInTheDocument();
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
     expect(fetch.mock.calls[0][0].signal).toBeInstanceOf(AbortSignal);
     expect(fetch.mock.calls[0][0].signal!.aborted).toBe(true);
-    expect(fetch).toHaveBeenCalledTimes(1);
-    setRange('24h');
-    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+    expect(screen.queryByText(/requires a higher license plan/)).not.toBeInTheDocument();
     const active = fetch.mock.calls[1][0].signal;
     expect(active!.aborted).toBe(false);
     view.unmount();

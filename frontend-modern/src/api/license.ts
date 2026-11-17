@@ -60,7 +60,6 @@ export interface LicenseRuntimeCapabilities {
   capabilities: string[];
   limits: EntitlementLimitStatus[];
   hosted_mode?: boolean;
-  max_history_days?: number;
   runtime?: LicenseRuntimeIdentity;
   blocked_capabilities?: LicenseRuntimeCapabilityBlock[];
 }
@@ -93,7 +92,6 @@ export interface LicenseCommercialEntitlements extends LicenseCommercialPosture 
   days_remaining?: number;
   in_grace_period?: boolean;
   grace_period_end?: string;
-  max_history_days?: number;
   runtime?: LicenseRuntimeIdentity;
 }
 

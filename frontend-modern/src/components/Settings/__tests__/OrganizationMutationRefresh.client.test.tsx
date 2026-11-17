@@ -61,7 +61,7 @@ beforeEach(async () => {
       requests.push({ url, method });
       if (url === '/api/license/runtime-capabilities') {
         if (failCapabilities) throw new Error('Synthetic capability read failure');
-        return response({ capabilities: ['multi_tenant'], limits: [], max_history_days: 7 });
+        return response({ capabilities: ['multi_tenant'], limits: [] });
       }
       if (method === 'POST') {
         mutationSignal = init.signal as AbortSignal;

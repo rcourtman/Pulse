@@ -125,9 +125,8 @@ describe('pricingHandoff (branch coverage)', () => {
     it('maps known in-product feature keys to their plan/selection hrefs', () => {
       expect(getInProductPricingDestination('relay')).toBe(SELF_HOSTED_PRO_BILLING_PLAN_HREF);
       expect(getInProductPricingDestination('mobile_app')).toBe(SELF_HOSTED_PRO_BILLING_PLAN_HREF);
-      expect(getInProductPricingDestination('long_term_metrics')).toBe(
-        SELF_HOSTED_PRO_BILLING_PLAN_HREF,
-      );
+      // Metric history is free on every plan, so it has no pricing destination.
+      expect(getInProductPricingDestination('long_term_metrics')).toBeUndefined();
       expect(getInProductPricingDestination('agent_profiles')).toBe(
         SELF_HOSTED_PRO_BILLING_PLAN_HREF,
       );

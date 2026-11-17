@@ -17,12 +17,10 @@ import {
   hasFeature,
   isHostedModeEnabled,
   isMultiTenantEnabled,
-  isRangeLocked,
   isRuntimeCapabilityBlocked,
   runtimeCapabilitiesLoadError as runtimeLicenseLoadError,
   runtimeCapabilitiesLoaded as runtimeLicenseLoaded,
   loadRuntimeCapabilities,
-  maxHistoryDays,
   runtimeCapabilities,
 } from '@/stores/license';
 import {
@@ -58,7 +56,6 @@ describe('license stores', () => {
     capabilities: ['feature1', 'feature2', 'multi_tenant'],
     limits: [{ key: 'limit1', limit: 100, current: 25, state: 'ok' }],
     hosted_mode: false,
-    max_history_days: 90,
     runtime: { build: 'community', label: 'Pulse Community runtime' },
     blocked_capabilities: [
       {
@@ -88,14 +85,12 @@ describe('license stores', () => {
     capabilities: mockRuntimeCapabilities.capabilities,
     limits: mockRuntimeCapabilities.limits,
     hosted_mode: false,
-    max_history_days: 90,
   };
 
   const mockFreeRuntimeCapabilities: LicenseRuntimeCapabilities = {
     capabilities: [],
     limits: [],
     hosted_mode: false,
-    max_history_days: 7,
     runtime: { build: 'community', label: 'Pulse Community runtime' },
     blocked_capabilities: [],
   };
@@ -142,7 +137,6 @@ describe('license stores', () => {
         capabilities: ['update_alerts', 'sso', 'ai_patrol'],
         limits: [],
         hosted_mode: false,
-        max_history_days: 7,
         runtime: {
           build: 'community',
           label: 'Pulse Community runtime',
@@ -218,62 +212,6 @@ describe('license stores', () => {
       vi.mocked(LicenseAPI.getRuntimeCapabilities).mockResolvedValue(mockRuntimeCapabilities);
       await loadRuntimeCapabilities(true);
       expect(getRuntimeLimit('limit1')?.limit).toBe(100);
-    });
-
-    it('returns false for ranges within free limit (7d)', async () => {
-      vi.mocked(LicenseAPI.getRuntimeCapabilities).mockResolvedValue({
-        ...mockFreeRuntimeCapabilities,
-        max_history_days: 7,
-      });
-      await loadRuntimeCapabilities(true);
-      expect(isRangeLocked('1h')).toBe(false);
-      expect(isRangeLocked('7d')).toBe(false);
-      expect(isRangeLocked('168h')).toBe(false);
-    });
-
-    it('returns true for ranges exceeding free limit (7d)', async () => {
-      vi.mocked(LicenseAPI.getRuntimeCapabilities).mockResolvedValue({
-        ...mockFreeRuntimeCapabilities,
-        max_history_days: 7,
-      });
-      await loadRuntimeCapabilities(true);
-      expect(isRangeLocked('8d')).toBe(true);
-      expect(isRangeLocked('200h')).toBe(true);
-    });
-
-    it('uses tier-specific max_history_days (relay = 14d)', async () => {
-      vi.mocked(LicenseAPI.getRuntimeCapabilities).mockResolvedValue({
-        ...mockRuntimeCapabilities,
-        max_history_days: 14,
-      });
-      await loadRuntimeCapabilities(true);
-      expect(isRangeLocked('14d')).toBe(false);
-      expect(isRangeLocked('15d')).toBe(true);
-      expect(maxHistoryDays()).toBe(14);
-    });
-
-    it('uses tier-specific max_history_days (pro = 90d)', async () => {
-      vi.mocked(LicenseAPI.getRuntimeCapabilities).mockResolvedValue(mockRuntimeCapabilities);
-      await loadRuntimeCapabilities(true);
-      expect(isRangeLocked('90d')).toBe(false);
-      expect(isRangeLocked('91d')).toBe(true);
-      expect(maxHistoryDays()).toBe(90);
-    });
-
-    it('defaults to 7 days when max_history_days is not set', async () => {
-      vi.mocked(LicenseAPI.getRuntimeCapabilities).mockResolvedValue({
-        ...mockFreeRuntimeCapabilities,
-        max_history_days: undefined,
-      });
-      await loadRuntimeCapabilities(true);
-      expect(maxHistoryDays()).toBe(7);
-      expect(isRangeLocked('8d')).toBe(true);
-    });
-
-    it('handles invalid range strings', async () => {
-      vi.mocked(LicenseAPI.getRuntimeCapabilities).mockResolvedValue(mockFreeRuntimeCapabilities);
-      await loadRuntimeCapabilities(true);
-      expect(isRangeLocked('invalid')).toBe(false);
     });
   });
 

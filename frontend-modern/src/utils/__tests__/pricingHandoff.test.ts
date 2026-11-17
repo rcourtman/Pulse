@@ -76,7 +76,6 @@ describe('pricingHandoff', () => {
       'push_notifications',
       'ai_alerts',
       'ai_autofix',
-      'long_term_metrics',
       'rbac',
       'audit_logging',
       'advanced_reporting',

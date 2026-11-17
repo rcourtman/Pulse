@@ -31,7 +31,7 @@ const { chromium, webkit } = require('playwright');
           if (mode === 'failed') return route.fulfill({status: 503, json: {error: 'Synthetic unavailable'}});
           return route.fulfill({json: {points: mode === 'empty' ? [] : [0,1,2].map(i => ({timestamp: 1790942400000 + i*60000, value: 20+i*10, min: 20+i*10, max: 20+i*10})), source: 'store'}});
         }
-        return route.fulfill({json: url.pathname === '/api/license/runtime-capabilities' ? {capabilities: [], limits: [], max_history_days: 7, hosted_mode: false, runtime: {build:'community'}, blocked_capabilities: []} : {data: [], enabled: false}});
+        return route.fulfill({json: url.pathname === '/api/license/runtime-capabilities' ? {capabilities: [], limits: [], hosted_mode: false, runtime: {build:'community'}, blocked_capabilities: []} : {data: [], enabled: false}});
       });
       await page.clock.install();
       await page.goto('http://127.0.0.1:5224/browser-tests/history-status.html');

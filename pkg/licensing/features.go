@@ -23,7 +23,7 @@ const (
 	FeatureRelay             = "relay"              // Relay remote access
 	FeatureMobileApp         = "mobile_app"         // Mobile app access
 	FeaturePushNotifications = "push_notifications" // Push notifications
-	FeatureLongTermMetrics   = "long_term_metrics"  // Extended historical metrics (14d Relay, 90d Pro)
+	FeatureLongTermMetrics   = "long_term_metrics"  // Compatibility key for metric history; included in Community
 
 	// Pro tier features (everything in Relay, plus:)
 	FeatureAIAlerts          = "ai_alerts"          // AI analysis when alerts fire
@@ -56,7 +56,7 @@ const (
 	TierProPlus    Tier = "pro_plus"
 	TierProAnnual  Tier = "pro_annual" // Legacy: same features as TierPro
 	TierLifetime   Tier = "lifetime"   // Legacy: same features as TierPro
-	TierBusiness   Tier = "business"   // Pro features; differentiated by user limit, retention, and support
+	TierBusiness   Tier = "business"   // Pro features; differentiated by user limit and support
 	TierCloud      Tier = "cloud"
 	TierMSP        Tier = "msp"
 	TierEnterprise Tier = "enterprise"
@@ -223,26 +223,13 @@ func WorkspaceLimitForPlan(planVersion string) (limit int, known bool) {
 	return UnknownPlanDefaultWorkspaceLimit, false
 }
 
-// TierHistoryDays defines the maximum metrics history retention per tier.
-var TierHistoryDays = map[Tier]int{
-	TierFree:       7,
-	TierRelay:      14,
-	TierPro:        90,
-	TierProPlus:    90,
-	TierProAnnual:  90,
-	TierLifetime:   90,
-	TierBusiness:   365,
-	TierCloud:      90,
-	TierMSP:        90,
-	TierEnterprise: 90,
-}
-
 // freeFeatures are the base capabilities available to all users.
 var freeFeatures = []string{
 	FeatureUpdateAlerts,
 	FeatureSSO,
 	FeatureAdvancedSSO,
-	FeatureAIPatrol, // Patrol is free with BYOK; governed fixes require Pro.
+	FeatureAIPatrol,        // Patrol is free with BYOK; governed fixes require Pro.
+	FeatureLongTermMetrics, // Metric history is free; storage retention settings decide how far back it goes.
 }
 
 // relayFeatures adds remote access and mobile on top of free.
@@ -250,7 +237,6 @@ var relayFeatures = appendFeatures(freeFeatures,
 	FeatureRelay,
 	FeatureMobileApp,
 	FeaturePushNotifications,
-	FeatureLongTermMetrics, // 14 days (vs 7 for free)
 )
 
 // proFeatures adds AI automation, fleet management, and compliance on top of relay.
@@ -292,7 +278,7 @@ var TierFeatures = map[Tier][]string{
 	TierProPlus:    proFeatures, // Legacy compatibility tier; same runtime features as Pro
 	TierProAnnual:  proFeatures, // Legacy: same features as Pro
 	TierLifetime:   proFeatures, // Legacy: same features as Pro
-	TierBusiness:   proFeatures, // Same features as Pro; differentiated by max_users limit, 365-day history, and support
+	TierBusiness:   proFeatures, // Same features as Pro; differentiated by max_users limit and support
 	TierCloud:      proFeatures, // Cloud includes all Pro features + managed hosting
 	TierMSP:        mspFeatures,
 	TierEnterprise: enterpriseFeatures,

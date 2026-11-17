@@ -75,15 +75,15 @@ class ProductionRolloutDocsTest(unittest.TestCase):
 
     def test_current_plan_copy_keeps_free_sso_and_history_distinct(self):
         text = section("## Community and Pro boundaries")
-        self.assertIn("seven days of metric history", text)
-        self.assertIn("Pro adds 90-day history", text)
+        self.assertIn("90 days of metric history", text)
+        self.assertNotIn("Pro adds 90-day history", text)
         self.assertIn("SSO is included with Community and higher tiers", text)
         features = (ROOT / "pkg/licensing/features.go").read_text()
         free = features.split("var freeFeatures = []string{", 1)[1].split("}", 1)[0]
         self.assertRegex(free, r"\bFeatureSSO\b")
-        history = features.split("var TierHistoryDays = map[Tier]int{", 1)[1].split("}", 1)[0]
-        self.assertRegex(history, r"TierFree:\s+7,")
-        self.assertRegex(history, r"TierPro:\s+90,")
+        # Metric history is free on every plan: no tier history map remains.
+        self.assertRegex(free, r"\bFeatureLongTermMetrics\b")
+        self.assertNotIn("TierHistoryDays", features)
 
     def test_rollout_does_not_inject_failures_or_hide_faults_on_live_workloads(self):
         text = section("## Production rollout checklist")

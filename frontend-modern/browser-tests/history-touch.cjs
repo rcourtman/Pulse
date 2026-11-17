@@ -59,7 +59,7 @@ const { chromium, webkit } = require('playwright');
           } });
         }
         return route.fulfill({ json: url.pathname === '/api/license/runtime-capabilities'
-          ? { capabilities: [], limits: [], max_history_days: 7, hosted_mode: false, runtime: { build: 'community' }, blocked_capabilities: [] }
+          ? { capabilities: [], limits: [], hosted_mode: false, runtime: { build: 'community' }, blocked_capabilities: [] }
           : { data: [], enabled: false } });
       });
       await page.goto('http://127.0.0.1:5227/browser-tests/history-touch.html');

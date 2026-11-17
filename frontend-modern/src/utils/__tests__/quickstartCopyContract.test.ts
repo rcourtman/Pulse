@@ -100,7 +100,7 @@ describe('quickstart copy contract', () => {
 
     const plans = readRepoFile('docs/PULSE_PRO.md');
     expect(plans).toContain('Relay (legacy)');
-    expect(plans).toContain('Legacy Relay payloads can still show 14-day history');
+    expect(plans).toContain('Metric history is free on every plan');
     expect(plans).toContain('Continuing Relay subscribers receive the **Pro** column');
     expect(plans).toContain('Existing Relay subscriber');
   });

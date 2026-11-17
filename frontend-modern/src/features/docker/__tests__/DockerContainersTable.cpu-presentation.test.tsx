@@ -15,8 +15,6 @@ vi.mock('@/contexts/appRuntime', async (importOriginal) => ({
 vi.mock('@/stores/license', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/stores/license')>()),
   loadRuntimeCapabilities: vi.fn(async () => undefined),
-  maxHistoryDays: () => 7,
-  isRangeLocked: () => false,
 }));
 
 const containerResource = (id: string, cpu: number | undefined, running = true): Resource => ({

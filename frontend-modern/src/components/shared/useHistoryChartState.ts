@@ -1,8 +1,7 @@
-import { batch, createEffect, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
+import { batch, createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
 import { ChartsAPI, type HistoryTimeRange } from '@/api/charts';
 import { getAPIReadAccessErrorMessage } from '@/utils/apiAccessError';
 import { eventBus } from '@/stores/events';
-import { isRangeLocked, loadRuntimeCapabilities, maxHistoryDays } from '@/stores/license';
 import { calculateOptimalPoints } from '@/utils/downsample';
 import { setupCanvasDPR } from '@/utils/canvasRenderQueue';
 import {
@@ -69,10 +68,6 @@ export function useHistoryChartState(
 
   const refreshIntervalMs = createMemo(() => getHistoryChartRefreshIntervalMs(range()));
 
-  onMount(() => {
-    loadRuntimeCapabilities();
-  });
-
   createEffect(() => {
     if (props.range) {
       setRange(props.range);
@@ -83,27 +78,6 @@ export function useHistoryChartState(
     setRange(nextRange);
     props.onRangeChange?.(nextRange);
   };
-
-  const isLocked = createMemo(() => isRangeLocked(range()));
-  const lockDays = createMemo(() => {
-    switch (range()) {
-      case '14d':
-        return '14';
-      case '30d':
-        return '30';
-      case '90d':
-        return '90';
-      default:
-        return '14';
-    }
-  });
-  const lockTierLabel = createMemo(() => {
-    const max = maxHistoryDays();
-    const targetDays =
-      range() === '14d' ? 14 : range() === '30d' ? 30 : range() === '90d' ? 90 : 14;
-    if (max <= 7 && targetDays <= 14) return 'Relay';
-    return 'Pro';
-  });
 
   const dataMin = createMemo(() => getHistoryChartDataMin(data()));
   const dataMax = createMemo(() => getHistoryChartDataMax(data()));
@@ -122,7 +96,6 @@ export function useHistoryChartState(
     const metric = props.metric;
     const chartRange = range();
     const pointsCap = maxPoints();
-    const locked = isLocked();
     const interval = refreshIntervalMs();
     const orgSelection = orgVersion();
     const enabled = props.enabled !== false;
@@ -146,7 +119,6 @@ export function useHistoryChartState(
       resourceId,
       metric,
       chartRange,
-      locked,
       suppliedData !== undefined,
     ]);
     const selection = JSON.stringify([series, pointsCap]);
@@ -169,7 +141,7 @@ export function useHistoryChartState(
       setKeyboardInspecting(false);
     }
     previousSelection = selection;
-    if (suppliedData !== undefined || locked || !resourceId || !resourceType) return;
+    if (suppliedData !== undefined || !resourceId || !resourceType) return;
     // A paused chart (inside a hidden drawer tab) reads nothing until resumed.
     if (!enabled) return;
     let hasLoaded = loadedSeries === series;
@@ -603,10 +575,7 @@ export function useHistoryChartState(
     chartHeight,
     chartWidth,
     hoveredPoint,
-    isLocked,
     loading,
-    lockDays,
-    lockTierLabel,
     range,
     ranges: HISTORY_CHART_RANGES,
     source,

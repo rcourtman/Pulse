@@ -34,16 +34,9 @@ describe('history chart text alternatives', () => {
   });
 
   it.each([
-    [{ loading: true, error: null, isLocked: false }, 'Loading 24-hour history data.'],
-    [
-      { loading: false, error: 'request failed', isLocked: false },
-      '24-hour history data could not be loaded.',
-    ],
-    [
-      { loading: false, error: null, isLocked: true },
-      '24-hour history data is unavailable on the current plan.',
-    ],
-    [{ loading: false, error: null, isLocked: false }, 'No 24-hour history data is available.'],
+    [{ loading: true, error: null }, 'Loading 24-hour history data.'],
+    [{ loading: false, error: 'request failed' }, '24-hour history data could not be loaded.'],
+    [{ loading: false, error: null }, 'No 24-hour history data is available.'],
   ])('describes an unavailable chart state', (state, expected) => {
     expect(
       getHistoryChartAccessibleDescription({
@@ -58,7 +51,6 @@ describe('history chart text alternatives', () => {
     const description = getHistoryChartAccessibleDescription({
       data: [pt(1_000, 23.6, 20, 25)],
       error: null,
-      isLocked: false,
       loading: false,
       range: '30m',
       unit: 'C',
@@ -72,7 +64,6 @@ describe('history chart text alternatives', () => {
     const description = getHistoryChartAccessibleDescription({
       data: [pt(1_000, 10, 8, 12), pt(2_000, 10, 7, 14)],
       error: null,
-      isLocked: false,
       loading: false,
       range: '7d',
       unit: 'rpm',
@@ -87,7 +78,6 @@ describe('history chart text alternatives', () => {
     const description = getHistoryChartAccessibleDescription({
       data: [pt(1_000, 30, 25, 35), pt(2_000, 10, 8, 12)],
       error: null,
-      isLocked: false,
       loading: false,
       range: '6h',
       unit: '%',

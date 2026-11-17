@@ -155,7 +155,6 @@ const { chromium, firefox, webkit } = require('playwright');
             json: {
               capabilities: [],
               limits: [],
-              max_history_days: 7,
               hosted_mode: false,
               runtime: { build: 'community', label: 'Pulse Community runtime' },
               blocked_capabilities: [],
@@ -427,11 +426,14 @@ const { chromium, firefox, webkit } = require('playwright');
         .first()
         .waitFor({ state: 'attached' });
       await verifyWindow(detail, '7d');
-      const readsBeforeLock = requests.length;
+      // Metric history is free on every plan: 14 days reads like 7 days.
+      const readsBeforeLongRange = requests.length;
       await detail.getByRole('combobox', { name: 'History range' }).selectOption('14d');
-      await detail.getByText(/14 days history requires a higher license plan/).waitFor();
-      assert.equal(requests.length, readsBeforeLock);
-      assert.equal(await detail.getByTestId('guest-history-time-window').count(), 0);
+      for (let tick = 0; tick < 50 && requests.length <= readsBeforeLongRange; tick += 1) {
+        await page.waitForTimeout(100);
+      }
+      assert.ok(requests.length > readsBeforeLongRange, '14d did not read history');
+      assert.equal(await detail.getByText(/requires a higher license plan/).count(), 0);
       assert.equal(errors.length, 0, errors.join('\n'));
       // The direct production renderer deliberately supplies current readings.
       // A live fallback must be labelled, never plotted or attributed to a stored time.

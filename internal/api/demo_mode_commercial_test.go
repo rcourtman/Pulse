@@ -49,8 +49,7 @@ func TestSanitizeRuntimeCapabilitiesPayloadForPublicDemo(t *testing.T) {
 				State:   "enforced",
 			},
 		},
-		HostedMode:     true,
-		MaxHistoryDays: 90,
+		HostedMode: true,
 	})
 
 	if len(sanitized.Capabilities) != 2 {
@@ -62,8 +61,8 @@ func TestSanitizeRuntimeCapabilitiesPayloadForPublicDemo(t *testing.T) {
 	if sanitized.Limits[0].Limit != 0 || sanitized.Limits[0].Current != 0 || sanitized.Limits[0].State != "ok" {
 		t.Fatalf("sanitized limit=%+v, want limit=0 current=0 state=ok", sanitized.Limits[0])
 	}
-	if sanitized.MaxHistoryDays != 90 || !sanitized.HostedMode {
-		t.Fatalf("non-commercial runtime capability fields should be preserved, got max_history_days=%d hosted_mode=%v", sanitized.MaxHistoryDays, sanitized.HostedMode)
+	if !sanitized.HostedMode {
+		t.Fatalf("non-commercial runtime capability fields should be preserved, got hosted_mode=%v", sanitized.HostedMode)
 	}
 }
 

@@ -5455,12 +5455,10 @@ production table, router and styles; it does not qualify full-app scrolling.
     discovery, trial CTAs, plan upsells, monitored-system limit pressure,
     feature upgrade links, and plan-lock Patrol banners must require hosted
     mode, explicit handoff, or active entitlement. A lock the operator opens
-    is not a proactive prompt: plan-locked lines in Settings and the locked
-    long-range history states (`HistoryChartOverlay` and the guest drawer
-    history lock, both through
-    `frontend-modern/src/components/shared/HistoryLockPlanLink.tsx`) link to
+    is not a proactive prompt: plan-locked lines in Settings link to
     Plans & Billing whenever `presentationPolicy.hideCommercial` is false,
-    and stay text only under demo and white-label runtimes. Cloud interest links from
+    and stay text only under demo and white-label runtimes. History ranges
+    are never plan-locked (17 November 2026). Cloud interest links from
     self-hosted plan surfaces must hand
     off to Pulse Account/public Cloud ownership rather than route to an
     in-product Cloud trial/signup page.
@@ -11624,3 +11622,13 @@ The input form is hidden during an active rehearsal. Starting or finishing a
 run, or reconciling an uncertain start, moves keyboard focus to its result
 heading. Ordinary progress refreshes preserve focus. Routing input styling uses
 the shared form tokens alongside FormSelect.
+
+### History charts have no plan lock (17 November 2026)
+
+`useHistoryChartState`, `HistoryChart`, `HistoryChartOverlay` and
+`GuestDrawerHistory` no longer read a runtime history limit, so no range shows a
+lock overlay or a "requires a higher license plan" panel, and
+`HistoryLockPlanLink` is deleted. Every range reads history like any other; an
+empty or short answer keeps the existing empty and partial states.
+`historyChartModel` drops the locked text alternative. Component tests cover
+the 90-day read and the drawer's range change.

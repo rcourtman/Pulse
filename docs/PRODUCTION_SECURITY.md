@@ -193,7 +193,7 @@ the documented v5-to-v6 first-update limitation.
 
 Current self-hosted plans do not sell monitoring capacity by node, VM,
 container, or other child-resource volume. Community includes core self-hosted
-monitoring and seven days of metric history. Pro adds 90-day history, Patrol
+monitoring and 90 days of metric history. Pro adds Patrol
 investigation and governed fixes, RBAC, audit logging, reporting and centralized
 agent profiles. SSO is included with Community and higher tiers.
 

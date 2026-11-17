@@ -255,7 +255,6 @@ const observations = (mode) => [
             json: {
               capabilities: [],
               limits: [],
-              max_history_days: 7,
               hosted_mode: false,
               blocked_capabilities: [],
               runtime: { build: 'community' },

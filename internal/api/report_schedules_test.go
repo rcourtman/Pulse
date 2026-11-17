@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -62,33 +61,6 @@ func TestRunReportScheduleRequiresCurrentAdvancedReportingEntitlement(t *testing
 	}
 	if updated.LastRunStatus != config.ReportScheduleLastRunFailed || !strings.Contains(updated.LastError, "advanced reporting entitlement required") {
 		t.Fatalf("unexpected unentitled result: %+v", updated)
-	}
-}
-
-func TestPurgeGeneratedReportsAfterDowngradePreservesDefinitionsAndRejectsSymlinks(t *testing.T) {
-	baseDir := t.TempDir()
-	persistence := config.NewConfigPersistence(baseDir)
-	schedule := config.NormalizeReportSchedule(config.ReportSchedule{ID: "report-schedule-purge", Name: "Purge proof"})
-	report := generatedMultiReport{Filename: "report.pdf", Format: reporting.FormatPDF, Data: []byte("report")}
-	path, err := saveGeneratedReport(persistence, schedule, report)
-	if err != nil {
-		t.Fatalf("save report: %v", err)
-	}
-	outside := filepath.Join(t.TempDir(), "outside.pdf")
-	if err := os.WriteFile(outside, []byte("keep"), 0o600); err != nil {
-		t.Fatalf("write outside: %v", err)
-	}
-	if err := os.Symlink(outside, filepath.Join(filepath.Dir(path), "outside-link.pdf")); err != nil {
-		t.Fatalf("symlink: %v", err)
-	}
-	if err := purgeGeneratedReportsAfterDowngrade(persistence); err != nil {
-		t.Fatalf("purge: %v", err)
-	}
-	if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("generated report still exists: %v", err)
-	}
-	if data, err := os.ReadFile(outside); err != nil || string(data) != "keep" {
-		t.Fatalf("outside target changed: data=%q err=%v", data, err)
 	}
 }
 

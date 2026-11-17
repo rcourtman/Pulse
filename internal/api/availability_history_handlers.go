@@ -87,20 +87,6 @@ func (r *Router) handleAvailabilityHistory(w http.ResponseWriter, req *http.Requ
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_range", "Unsupported availability history range", nil)
 		return
 	}
-	maxHistoryDays := freeHistoryDaysDefault
-	if r.licenseHandlers != nil {
-		if service := r.licenseHandlers.Service(req.Context()); service != nil {
-			status := service.Status()
-			if status.Valid {
-				maxHistoryDays = tierHistoryDaysFromLicensing(status.Tier)
-			}
-		}
-	}
-	if duration > time.Duration(maxHistoryDays)*24*time.Hour {
-		WriteLicenseRequired(w, featureLongTermMetricsValue, "Extended availability history requires a higher-tier Pulse license")
-		return
-	}
-
 	configured := make(map[string]config.AvailabilityTarget)
 	if mock.IsMockEnabled() {
 		for _, response := range mockAvailabilityTargetResponses() {

@@ -57,7 +57,6 @@ const PRO_PLAN_ENTITLEMENTS = {
   days_remaining: 30,
   in_grace_period: false,
   grace_period_end: null,
-  max_history_days: 90,
   runtime: PRO_RUNTIME_IDENTITY,
 };
 
@@ -76,7 +75,6 @@ const PRO_PLAN_RUNTIME_CAPABILITIES = {
   limits: PRO_PLAN_ENTITLEMENTS.limits,
   monitored_system_capacity: PRO_PLAN_ENTITLEMENTS.monitored_system_capacity,
   hosted_mode: false,
-  max_history_days: 90,
   runtime: PRO_RUNTIME_IDENTITY,
 };
 

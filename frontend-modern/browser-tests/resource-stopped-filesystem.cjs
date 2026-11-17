@@ -122,7 +122,6 @@ async function verify(original = false) {
               ? {
                   capabilities: [],
                   limits: [],
-                  max_history_days: 90,
                   hosted_mode: false,
                   runtime: { build: 'community' },
                   blocked_capabilities: [],

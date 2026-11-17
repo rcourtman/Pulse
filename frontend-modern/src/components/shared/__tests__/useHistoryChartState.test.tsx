@@ -6,11 +6,6 @@ import { eventBus } from '@/stores/events';
 import type { HistoryChartProps } from '../historyChartModel';
 import { useHistoryChartState, type HistoryChartState } from '../useHistoryChartState';
 
-vi.mock('@/stores/license', () => ({
-  isRangeLocked: (range: string) => range === '90d',
-  loadRuntimeCapabilities: vi.fn(),
-  maxHistoryDays: () => 7,
-}));
 vi.mock('@/api/charts', () => ({ ChartsAPI: { getMetricsHistory: vi.fn() } }));
 const request = vi.mocked(ChartsAPI.getMetricsHistory);
 const points = (value: number) => [{ timestamp: 1000, value, min: value, max: value }];
@@ -192,7 +187,7 @@ describe('History request ownership', () => {
     expect(state.data()).toEqual(points(30));
   });
 
-  it.each([{ range: '90d' }, { resourceId: '' }])(
+  it.each([{ resourceId: '' }])(
     'invalidates in-flight work for unavailable selection %j',
     async (next) => {
       const old = deferred();
@@ -417,7 +412,7 @@ describe('History organisation ownership', () => {
     expect(request).toHaveBeenCalledTimes(4);
   });
 
-  it('preserves caller-owned supplied samples and does not fetch locked or missing targets on a switch', async () => {
+  it('preserves caller-owned supplied samples and does not fetch missing targets on a switch', async () => {
     request.mockReturnValueOnce(deferred().promise);
     const view = mount();
     view.change({ data: points(42) });
@@ -425,14 +420,23 @@ describe('History organisation ownership', () => {
     eventBus.emit('org_switched', 'org-b');
     expect(view.state.data()).toEqual(points(42));
     expect(view.state.source()).toBe('live');
-    view.change({ data: undefined, range: '90d' });
-    eventBus.emit('org_switched', 'org-c');
-    expect(view.state.isLocked()).toBe(true);
-    expect(view.state.data()).toEqual([]);
-    view.change({ range: '1h', resourceId: '' });
+    view.change({ data: undefined, range: '1h', resourceId: '' });
     eventBus.emit('org_switched', 'org-d');
     await vi.advanceTimersByTimeAsync(30_000);
     expect(request).toHaveBeenCalledTimes(initialCalls);
+  });
+
+  // Metric history is free on every plan: a ninety-day range is read like any
+  // other, never held back behind a plan lock.
+  it('reads a ninety-day range without a plan lock', async () => {
+    request.mockReturnValue(deferred().promise);
+    const view = mount();
+    const before = request.mock.calls.length;
+    view.change({ range: '90d' });
+    await settle();
+    expect(request.mock.calls.length).toBe(before + 1);
+    expect(request.mock.calls.at(-1)?.[0]).toMatchObject({ range: '90d' });
+    expect('isLocked' in view.state).toBe(false);
   });
 });
 

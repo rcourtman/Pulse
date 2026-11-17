@@ -556,13 +556,6 @@ func TestGetTenantComponents_AutoExchangeLeavesSelfHostedMonitoringUncapped(t *t
 	if payload.Tier != string(pkglicensing.TierPro) {
 		t.Fatalf("entitlements.tier=%q, want %q", payload.Tier, pkglicensing.TierPro)
 	}
-	if payload.MaxHistoryDays != pkglicensing.TierHistoryDays[pkglicensing.TierPro] {
-		t.Fatalf(
-			"entitlements.max_history_days=%d, want %d for migrated v5 Pro continuity",
-			payload.MaxHistoryDays,
-			pkglicensing.TierHistoryDays[pkglicensing.TierPro],
-		)
-	}
 	capabilities := make(map[string]bool, len(payload.Capabilities))
 	for _, capability := range payload.Capabilities {
 		capabilities[capability] = true

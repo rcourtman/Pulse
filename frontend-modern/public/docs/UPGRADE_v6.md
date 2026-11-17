@@ -463,7 +463,7 @@ Pulse v6 does not work that way. This is a breaking change for paid installs:
   the last successful refresh (72 hour grant lifetime plus 7 day grace).
   After that, paid features drop to Community behavior until connectivity
   returns. Core monitoring keeps running throughout; this affects paid
-  surfaces such as extended history and AI operations, not data collection.
+  surfaces such as Patrol fixes and team controls, not data collection.
 - **Recovery is automatic.** When connectivity returns, the background
   refresh (or a restart) reactivates the license without re-entering the key.
 - **Who is affected.** Every paid self-hosted install, including Lifetime.

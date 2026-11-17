@@ -13,12 +13,13 @@ let events: typeof import('@/stores/events');
 let releases: (() => void)[];
 let loads: Promise<void>[];
 const endpoint = '/api/license/runtime-capabilities';
-const payload = (enabled: boolean, days = enabled ? 90 : 7): LicenseRuntimeCapabilities => ({
+// `generation` only tells otherwise identical payloads apart, so a stale
+// response that overwrote a newer one would be visible.
+const payload = (enabled: boolean, generation = enabled ? 90 : 7): LicenseRuntimeCapabilities => ({
   capabilities: enabled ? ['rbac', 'multi_tenant'] : [],
   limits: [],
   hosted_mode: enabled,
-  max_history_days: days,
-  runtime: { build: enabled ? 'pro' : 'community', label: 'Synthetic runtime' },
+  runtime: { build: enabled ? 'pro' : 'community', label: `Synthetic runtime ${generation}` },
   blocked_capabilities: [],
 });
 const json = (value: unknown, status = 200) =>
@@ -54,7 +55,6 @@ function expectCurrent(value: LicenseRuntimeCapabilities) {
   expect(store.runtimeCapabilitiesLoading()).toBe(false);
   expect(store.runtimeCapabilitiesLoadError()).toBeNull();
   expect(store.hasFeature('rbac')).toBe(value.capabilities.includes('rbac'));
-  expect(store.maxHistoryDays()).toBe(value.max_history_days);
 }
 
 beforeEach(async () => {
@@ -188,7 +188,6 @@ describe('runtime capabilities keep the latest read owner through the real trans
     await older;
     expect(store.runtimeCapabilities()).toBe(fallback);
     expect(store.runtimeCapabilitiesLoadError()).toBe(error);
-    expect(store.maxHistoryDays()).toBe(7);
     expect(log.error).toHaveBeenCalledTimes(1);
   });
 

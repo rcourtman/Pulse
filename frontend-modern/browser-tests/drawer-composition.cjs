@@ -74,7 +74,7 @@ async function box(locator) {
           ]]));
           return route.fulfill({ json: { resourceType: url.searchParams.get('resourceType'), resourceId: url.searchParams.get('resourceId'), range: '24h', start, end, metrics, source: 'mock_synthetic' } });
         }
-        if (url.pathname === '/api/license/runtime-capabilities') return route.fulfill({ json: { capabilities: [], hosted_mode: false, max_history_days: 7, runtime: { build: 'free' }, blocked_capabilities: [] } });
+        if (url.pathname === '/api/license/runtime-capabilities') return route.fulfill({ json: { capabilities: [], hosted_mode: false, runtime: { build: 'free' }, blocked_capabilities: [] } });
         return route.fulfill({ json: { success: true, data: [], alerts: [], anomalies: [], config: null } });
       });
       const capture = async (suffix, target = page, fullPage = true) => {

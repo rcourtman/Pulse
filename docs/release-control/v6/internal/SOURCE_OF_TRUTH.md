@@ -622,9 +622,9 @@ Assertion design rules:
     customer-harm emergency is recorded through the hotfix exception.
 16. The canonical self-hosted offer is job-based rather than a
     good/better/best ladder: Community is the free local monitoring foundation,
-    Relay is remote access plus Pulse Mobile pairing, push, and 14-day history,
-    and Pro is Patrol-powered investigation and governed operations with
-    90-day history and Relay bundled. One Relay or Pro subscription covers one
+    Relay is remote access plus Pulse Mobile pairing and push, and Pro is
+    Patrol-powered investigation and governed operations with Relay bundled.
+    Metric history is free on every plan (17 November 2026). One Relay or Pro subscription covers one
     owner-operated environment with unmetered monitored-system and child-
     resource volume plus three concurrent primary/migration/recovery
     activations. It does not cover independently operated client environments.
