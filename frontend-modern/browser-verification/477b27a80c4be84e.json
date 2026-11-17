@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "base_sha": "d2610b03619ee25f3862db8f4d6ee95fce7214b2",
+  "verified_at": "2026-11-17T04:41:13.179370Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/RolesPanel.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/RolesPanel.tsx": "f178ab3a519fc92c4b1b7775bdb4b1bc8e9af2d3ed93b2dc9ea55f9865525d3e"
+  },
+  "routes": [
+    "Ephemeral local RolesPanel fixture at /?theme=light|dark; actual panel/state/RBACAPI/authenticated client and production CSS, not an application route"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Playwright 1.56.1 matches integration lock; Chromium 141.0.7390.37, light/dark desktop and phone. Exact parent and final source/manifest/static-asset hashes retained outside source. All 96 captures (48 comparable before/after pairs) opened with native view_image and inspected.",
+    "Retry after a failed inventory read and Check saved roles after one uncertain exact-role save both lose focus to BODY on the parent. Final focuses the stable named busy Roles inventory synchronously before the button disappears, keeps it after successful or failed read, and does not refocus after a deliberate move outside.",
+    "Namesake role names/IDs, descriptions, individual saved allow/deny rules, conditions, unknown permission values, misleading-verdict caution, uncertainty warning and all controls remain in the same visible positions. The external 2px focus outline remains visible at desktop and 390px without obscuring content; no glance loss.",
+    "Local synthetic browser evidence, not full application/IdP/original-client recovery, physical-device, publication or release acceptance. Source suite proof is separate."
+  ],
+  "interactions": [
+    "Keyboard Enter activates Retry/Check; exactly one scoped read follows and no recovery write or automatic GET retry. The uncertain save retains the exact literal second role ID and metadata with organization/CSRF headers.",
+    "On settled success, next Tab reaches New Role; on a repeated failed read, next Tab reaches Retry. A deliberate Outside task focus move remains after the response. No page errors, unexpected API paths or horizontal overflow; browser/server close.",
+    "Two baseline fixture mistakes and one immediate-outline sample assertion failed and are retained in evidence. Corrected permission label/saved timestamp inputs and settled-style measurement are explicit; no previous output-bound browser script or uncertain User Access/SSO proof replayed."
+  ]
+}
