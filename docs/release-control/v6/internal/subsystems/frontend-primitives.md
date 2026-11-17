@@ -11584,7 +11584,8 @@ workspace.
 The Alerts page passes its reactive rehearsal query identifier through the
 configuration surface and Destinations tab. AlertDeliveryRehearsal owns the
 labelled firing/recovery interaction, disclosure, exact linked-report selection,
-and outcome cards using shared SettingsPanel, Button and FormSelect. Severity
+and destination outcome rows using shared SettingsPanel, Button and FormSelect.
+Severity
 and retained-history selectors inherit shared label wiring and reactive option
 synchronization instead of recreating native select controls. Status is explicit
 text as well as colour. Polling pauses while collapsed or the document is
@@ -11593,5 +11594,24 @@ Rehearsal component and API tests cover uncertain requests, reader changes and
 linked history without introducing resource-incident state.
 
 Rehearsal outcomes separate the human explanation from redacted transport
-diagnostics. The outcome card demotes raw queue/provider details into a keyboard
-operable disclosure. Rehearsal failures remain ordinary delivery-health evidence.
+diagnostics. Destination rows demote complete phase evidence and raw queue/provider
+details into a keyboard-operable shared disclosure. Rehearsal failures remain
+ordinary delivery-health evidence.
+
+### Rehearsal result hierarchy (17 November 2026)
+
+`AlertDeliveryRehearsal` composes `SettingsPanel`, `FormSelect`, `Button`,
+`StatusIndicatorBadge`, `CalloutCard` and `TechnicalDetailsDisclosure`. Results
+use a responsive destination list rather than nested phase cards. The desktop
+columns align alert and recovery badges. Phone rows retain explicit phase labels.
+Expected suppression uses a muted badge, failed/unavailable evidence uses the
+shared danger tone, and waiting work uses the shared information tone. History
+and explanatory copy remain keyboard-accessible without dominating the result.
+The existing reconciliation contract preserves expanded destination details
+through refresh. Component regressions and source-bound browser evidence cover
+these states, including the empty, uncertain and stale-evidence paths.
+
+The input form is hidden during an active rehearsal. Starting or finishing a
+run, or reconciling an uncertain start, moves keyboard focus to its result
+heading. Ordinary progress refreshes preserve focus. Routing input styling uses
+the shared form tokens alongside FormSelect.
