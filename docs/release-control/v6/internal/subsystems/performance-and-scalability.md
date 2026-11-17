@@ -2443,7 +2443,12 @@ each. In Bars the Proxmox nodes table follows the page's row-hover mode
 (`workloadMetricHoverMode` from the embedded workloads state): with History
 hover it starts its infrastructure-summary reader on the first node-row
 hover and keeps that one reader polling afterwards; with Details hover, or
-before any hover, it reads no node history. A `useWorkloadsState` owner that omits these overrides keeps the
+before any hover, it reads no node history. The on-demand per-row reads
+behind the guest-row lens live in `rowMetricHistoryQueue.ts` (four
+concurrent single-resource reads, eighteen cached rows, the hovered row's
+neighbours warmed next, the cache dropped on a range change). The Docker
+page's lens reuses that queue for its host and container rows, starts it on
+the first History hover, and never polls an estate-wide summary. A `useWorkloadsState` owner that omits these overrides keeps the
 original persistent-signal-backed behavior; `WorkloadsSurface` builds no
 state of its own, so it always renders the owner its page passes.
 Every toolbar that controls a `WorkloadsSurface` consumes

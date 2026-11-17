@@ -28,6 +28,7 @@ import { DockerVolumesTable } from './DockerVolumesTable';
 import {
   DOCKER_TAB_SPECS,
   buildDockerPageModel,
+  compareDockerContainers,
   filterDockerResources,
   getDockerPageTabSpecs,
   hasDockerEngineStorageUsage,
@@ -57,6 +58,7 @@ import {
 import { collectIdentityConflictHosts } from './dockerIdentityConflict';
 import { DockerIdentityConflictNotice } from './DockerIdentityConflictNotice';
 import { DockerPortChecksNotice } from './DockerPortChecksNotice';
+import { createDockerRowHistoryLens } from './dockerRowHistoryLens';
 import { updateStore } from '@/stores/updates';
 import {
   buildInfrastructureAgentUpdatesPath,
@@ -513,6 +515,11 @@ function DockerOverview(props: {
     setSearchParams({ [DOCKER_QUERY_PARAMS.host]: null });
     containersFocus.focus();
   };
+  // One row-hover History lens for both tables, set from the containers View.
+  const historyLens = createDockerRowHistoryLens({
+    hosts: () => props.hosts,
+    containers: createMemo(() => [...props.containers].sort(compareDockerContainers)),
+  });
 
   return (
     <div class="space-y-4">
@@ -530,6 +537,7 @@ function DockerOverview(props: {
           </Show>
         }
         showToolbar={false}
+        historyLens={historyLens}
         containerScope={{
           sectionId: DOCKER_CONTAINERS_SECTION_ID,
           isSelected: isScopedHost,
@@ -559,6 +567,7 @@ function DockerOverview(props: {
           emptyTitle="No Docker or Podman containers"
           emptyDescription="Containers appear here when a Docker or Podman host reports workload inventory."
           onLifecycleActionSettled={props.onLifecycleActionSettled}
+          historyLens={historyLens}
         />
       </section>
       <Show when={props.incidents.length > 0}>

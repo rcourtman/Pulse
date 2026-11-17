@@ -8,6 +8,9 @@ import { DockerHostDrawer } from './DockerHostDrawer';
 import { ResponsiveMetricCell } from '@/components/shared/responsive';
 import { StackedMemoryBar } from '@/components/Workloads/StackedMemoryBar';
 import { StackedDiskBar } from '@/components/Workloads/StackedDiskBar';
+import { MetricMiniSparkline } from '@/components/Workloads/MetricMiniSparkline';
+import { TEMPERATURE_SPARKLINE_UNIT } from '@/components/Workloads/workloadMetricHistoryModel';
+import { formatTemperature } from '@/utils/temperature';
 import { TableCell, TableRow } from '@/components/shared/Table';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { getUnifiedResourceAlertStyles } from '@/utils/alerts';
@@ -29,6 +32,7 @@ import {
   PlatformTableToolbar,
   createPlatformTableFilterState,
   createPlatformTableSortState,
+  formatPlatformTablePercentValue,
   formatPlatformTableUptimeValue,
   getPlatformTableFiniteMetric,
   getPlatformTableCellClassForKind,
@@ -53,6 +57,7 @@ import {
   getDockerHostRowName,
   useDockerHostIdentities,
 } from './dockerHostIdentity';
+import { createDockerRowLensState, type DockerRowHistoryLens } from './dockerRowHistoryLens';
 
 // Docker / Podman hosts are container hosts, not generic Pulse Agents.
 // The operator columns that matter are runtime version, container count,
@@ -188,6 +193,8 @@ export const DockerHostsTable: Component<{
     isSelected: (host: Resource) => boolean;
     onShow: (host: Resource) => void;
   };
+  /** The page's row-hover History lens; host rows preview their own history. */
+  historyLens?: DockerRowHistoryLens;
 }> = (props) => {
   const { activeAlerts } = useWebSocket();
   const alertsActivation = useAlertsActivation();
@@ -404,6 +411,20 @@ export const DockerHostsTable: Component<{
                     const disks = () => normalizeDiskArray(host.agent?.disks);
                     const hasDiskMetric = () =>
                       aggregateDisk() !== undefined || (disks()?.length ?? 0) > 0;
+                    const memoryPercent = () =>
+                      memoryTotal() > 0
+                        ? (memoryUsed() / memoryTotal()) * 100
+                        : memoryPercentOnly();
+                    const temperature = () => host.temperature ?? docker()?.temperature;
+                    const lens = createDockerRowLensState(props.historyLens, host, [
+                      'cpu',
+                      'memory',
+                      'disk',
+                      'temperature',
+                    ]);
+                    // The lens shows only live readings; a stale or offline
+                    // host keeps its last values and their marking.
+                    const showsHistory = () => lens.visible() && canRenderMetrics() && !staleness();
                     const detailRowId = () => `docker-host-drawer-${host.id}`;
                     const isSelected = () => selectedHostId() === host.id;
                     const toggleDrawer = () =>
@@ -441,7 +462,9 @@ export const DockerHostsTable: Component<{
                           }`}
                           data-docker-host-row={host.id}
                           data-summary-row-active={isContainerScopeSelected() ? 'true' : undefined}
+                          data-history-lens-active={showsHistory() ? 'true' : undefined}
                           onClick={rowInteraction.onClick}
+                          {...lens.handlers}
                         >
                           <TableCell class={getPlatformTableCellClassForKind('name')}>
                             <div
@@ -510,15 +533,27 @@ export const DockerHostsTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('metric-bar')} ${staleMetricClass()}`}
                           >
-                            <ResponsiveMetricCell
-                              class="w-full"
-                              value={cpuPercent() ?? 0}
-                              type="cpu"
-                              resourceId={metricsKey()}
-                              isRunning={canRenderMetrics() && cpuPercent() !== undefined}
-                              showMobile={false}
-                              thresholds={cpuThresholds()}
-                            />
+                            <Show
+                              when={showsHistory()}
+                              fallback={
+                                <ResponsiveMetricCell
+                                  class="w-full"
+                                  value={cpuPercent() ?? 0}
+                                  type="cpu"
+                                  resourceId={metricsKey()}
+                                  isRunning={canRenderMetrics() && cpuPercent() !== undefined}
+                                  showMobile={false}
+                                  thresholds={cpuThresholds()}
+                                />
+                              }
+                            >
+                              <MetricMiniSparkline
+                                series={lens.series('cpu')}
+                                valueLabel={formatPlatformTablePercentValue(cpuPercent())}
+                                title={`${name()} CPU history`}
+                                {...lens.cursorProps()}
+                              />
+                            </Show>
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('metric-bar')} ${staleMetricClass()}`}
@@ -527,13 +562,25 @@ export const DockerHostsTable: Component<{
                               when={canRenderMetrics() && hasMemoryMetric()}
                               fallback={<PlatformTableMetricFallback />}
                             >
-                              <StackedMemoryBar
-                                used={memoryUsed()}
-                                total={memoryTotal()}
-                                unavailable={memoryUnavailableFor(host)}
-                                percentOnly={memoryPercentOnly()}
-                                thresholds={memoryThresholds()}
-                              />
+                              <Show
+                                when={showsHistory() && !memoryUnavailableFor(host)}
+                                fallback={
+                                  <StackedMemoryBar
+                                    used={memoryUsed()}
+                                    total={memoryTotal()}
+                                    unavailable={memoryUnavailableFor(host)}
+                                    percentOnly={memoryPercentOnly()}
+                                    thresholds={memoryThresholds()}
+                                  />
+                                }
+                              >
+                                <MetricMiniSparkline
+                                  series={lens.series('memory')}
+                                  valueLabel={formatPlatformTablePercentValue(memoryPercent())}
+                                  title={`${name()} memory history`}
+                                  {...lens.cursorProps()}
+                                />
+                              </Show>
                             </Show>
                           </TableCell>
                           <TableCell
@@ -543,12 +590,26 @@ export const DockerHostsTable: Component<{
                               when={canRenderMetrics() && hasDiskMetric()}
                               fallback={<PlatformTableMetricFallback />}
                             >
-                              <StackedDiskBar
-                                mode={(disks()?.length ?? 0) > 1 ? 'vertical-bars' : undefined}
-                                disks={disks()}
-                                aggregateDisk={aggregateDisk()}
-                                thresholds={diskThresholds()}
-                              />
+                              <Show
+                                when={showsHistory()}
+                                fallback={
+                                  <StackedDiskBar
+                                    mode={(disks()?.length ?? 0) > 1 ? 'vertical-bars' : undefined}
+                                    disks={disks()}
+                                    aggregateDisk={aggregateDisk()}
+                                    thresholds={diskThresholds()}
+                                  />
+                                }
+                              >
+                                <MetricMiniSparkline
+                                  series={lens.series('disk')}
+                                  valueLabel={formatPlatformTablePercentValue(
+                                    aggregateDisk()?.usage,
+                                  )}
+                                  title={`${name()} disk history`}
+                                  {...lens.cursorProps()}
+                                />
+                              </Show>
                             </Show>
                           </TableCell>
                           <TableCell
@@ -576,13 +637,27 @@ export const DockerHostsTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} platform-table-narrow-hidden hidden text-base-content min-[360px]:table-cell md:table-cell`}
                           >
-                            <PlatformTableTemperatureValue
-                              value={
-                                canRenderMetrics()
-                                  ? (host.temperature ?? docker()?.temperature)
-                                  : undefined
+                            <Show
+                              when={
+                                showsHistory() &&
+                                typeof temperature() === 'number' &&
+                                (temperature() as number) > 0
                               }
-                            />
+                              fallback={
+                                <PlatformTableTemperatureValue
+                                  value={canRenderMetrics() ? temperature() : undefined}
+                                />
+                              }
+                            >
+                              <MetricMiniSparkline
+                                series={lens.series('temperature')}
+                                valueLabel={formatTemperature(temperature(), { decimals: 1 })}
+                                unit={TEMPERATURE_SPARKLINE_UNIT}
+                                formatValue={(value) => formatTemperature(value, { decimals: 1 })}
+                                title={`${name()} temperature history`}
+                                {...lens.cursorProps()}
+                              />
+                            </Show>
                           </TableCell>
                           <Show when={showSwarmColumn()}>
                             <TableCell

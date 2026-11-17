@@ -2394,6 +2394,15 @@ interactions remain session deduplicated so the presentation layer cannot
 create per-row or per-frame telemetry traffic. Provider-native inventories
 that do not render `WorkloadsFilter` are outside this guest-row contract and
 must not imitate only part of it under a second page-local View vocabulary.
+The Docker page is the one provider-native inventory that carries the hover
+lens, and it takes the whole lens rather than a part: its containers toolbar
+View holds the shared `MetricHoverModeSegmentedControl` and
+`MetricHistoryRangeSegmentedControl` under the same saved Row hover and range
+preferences as the workloads tables (hidden on phones, which have no hover),
+and `dockerRowHistoryLens.tsx` drives both its host and container rows.
+Container rows swap CPU and memory, host rows CPU, memory, disk and
+temperature, each row's sparklines sharing one cursor without changing row
+height. A stale or offline host keeps its last values and their marking.
 The Proxmox overview's nodes table honours that same hover binding for its
 own rows: in History hover a hovered node row swaps CPU, memory, disk and
 temperature to row-synchronised sparklines in place, without changing row
