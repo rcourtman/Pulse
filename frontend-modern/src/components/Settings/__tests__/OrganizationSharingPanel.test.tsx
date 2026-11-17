@@ -1453,14 +1453,15 @@ describe('keyboard continuation through sharing rereads', () => {
   );
 
   it.each(['focused button', 'pointer without button focus'])(
-    'focuses saved context after an explicit reload from a %s',
+    'keeps sharing context through an explicit reload from a %s',
     async (activation) => {
       orgGetMock.mockRejectedValueOnce(new Error('Synthetic read unavailable'));
       renderPanel();
       const reload = await screen.findByRole('button', { name: 'Reload sharing' });
       if (activation === 'focused button') reload.focus();
       fireEvent.click(reload);
-      await waitFor(() => expect(summary()).toHaveFocus());
+      await waitFor(() => expect(summary()).toBeInTheDocument());
+      expect(screen.getByRole('region', { name: 'Organization sharing' })).toHaveFocus();
       expect(summary()).toHaveTextContent('Organization A (org-a)');
       expect(summary()).toHaveAttribute('tabindex', '-1');
       for (const mock of [
@@ -1473,13 +1474,15 @@ describe('keyboard continuation through sharing rereads', () => {
     },
   );
 
-  it('focuses the replacement warning when an explicit reload also fails', async () => {
+  it('keeps the reader focused when an explicit reload also fails', async () => {
     orgGetMock.mockRejectedValue(new Error('Synthetic read unavailable'));
     renderPanel();
     const reload = await screen.findByRole('button', { name: 'Reload sharing' });
     reload.focus();
     fireEvent.click(reload);
-    await waitFor(() => expect(warning()).toHaveFocus());
+    await waitFor(() => expect(orgGetMock).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(warning()).toBeInTheDocument());
+    expect(screen.getByRole('region', { name: 'Organization sharing' })).toHaveFocus();
     expect(reload.isConnected).toBe(false);
     expect(orgGetMock).toHaveBeenCalledTimes(2);
   });
