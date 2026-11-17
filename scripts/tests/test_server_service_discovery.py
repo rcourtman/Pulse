@@ -148,6 +148,7 @@ case "$FLOW" in
             curl() {
                 # Fixed fixture response, never a provider request.
                 local target="${@: -1}"
+                [[ "$target" != - ]] || target=/dev/stdout
                 if [[ "$*" == *.sshsig* ]]; then
                     printf 'fixture signature\n' > "$target"
                 else

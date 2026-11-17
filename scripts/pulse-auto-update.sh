@@ -416,10 +416,29 @@ resolve_install_script_url() {
 # entire ten-minute budget before installation/recovery can even start. Ignore
 # ambient curl configuration with legacy-compatible first-option -q and
 # refuse a redirect that downgrades HTTPS.
+# Also bound the bytes written to disk, including chunked/unknown-length
+# responses on older curl versions. These are bootstrap text/signature files,
+# not release archives; 2 MiB leaves ample room for the signed installer.
 # Signature verification remains mandatory after both complete transfers.
 download_update_asset() {
-    curl -q -fsSL --connect-timeout 5 --max-time 60 \
-        --proto '=https' --proto-redir '=https' "$1" -o "$2"
+    local max_bytes=2097152 downloaded_bytes=""
+    local -a download_status=()
+    # Keep one extra detection byte. Do not drain/discard an oversized body
+    # until the time limit, or rely on Content-Length to enforce this bound.
+    # Test both statuses explicitly: conditional callers disable errexit, and
+    # sourcing callers need not enable pipefail. A successful head must never
+    # hide a failed/partial curl, nor may curl hide a failed destination write.
+    if curl -q -fsSL --connect-timeout 5 --max-time 60 \
+        --proto '=https' --proto-redir '=https' "$1" -o - |
+        head -c "$((max_bytes + 1))" > "$2"; then
+        download_status=("${PIPESTATUS[@]}")
+    else
+        download_status=("${PIPESTATUS[@]}")
+    fi
+    [[ "${download_status[0]}" == 0 ]] || return "${download_status[0]}"
+    [[ "${download_status[1]}" == 0 ]] || return "${download_status[1]}"
+    downloaded_bytes=$(wc -c < "$2") || return 1
+    [[ "$downloaded_bytes" -le "$max_bytes" ]]
 }
 
 # Read a complete, bounded manager observation. An is-active failure conflates
