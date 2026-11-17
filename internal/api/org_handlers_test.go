@@ -1646,7 +1646,7 @@ func TestOrgHandlersWriteBodyRejectsIncompleteOrCompetingDecisions(t *testing.T)
 					}
 					rec := httptest.NewRecorder()
 					route.handler(rec, orgWriteBodyRequest(route, reader))
-					if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), `"error":"invalid_request"`) {
+					if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), `"code":"invalid_request"`) {
 						t.Errorf("invalid body = %d %s, want generic 400 invalid_request", rec.Code, rec.Body)
 					}
 					if strings.Contains(rec.Body.String(), "private") || strings.Contains(rec.Body.String(), "competing-value") {
