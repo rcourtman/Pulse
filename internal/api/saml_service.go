@@ -783,9 +783,13 @@ func (s *SAMLService) AllowsIDPInitiated() bool {
 // returns to its posted RelayState, as before request binding existed.
 func (s *SAMLService) ProcessResponse(r *http.Request, browserKey string) (*SAMLAuthResult, string, error) {
 	s.mu.RLock()
-	defer s.mu.RUnlock()
-
 	requestSP, err := s.serviceProviderForRequestLocked(r)
+	owner := s.sp
+	// Published SPs and their trust/configuration are immutable. Keep this
+	// verifier for the request, not the service lock: ParseResponse can wait on
+	// IdP artifact resolution. Holding the lock there can also pin the manager
+	// behind SetPublicURL, blocking withdrawal and independent providers.
+	s.mu.RUnlock()
 	if err != nil {
 		return nil, "", err
 	}
@@ -818,6 +822,16 @@ func (s *SAMLService) ProcessResponse(r *http.Request, browserKey string) (*SAML
 	assertion, err := sp.ParseResponse(r, possibleRequestIDs)
 	if err != nil {
 		return nil, relayState, fmt.Errorf("failed to validate saml response: %w", err)
+	}
+
+	// Completion is not permission to revive a replaced verifier. Rebinding
+	// the public URL or refreshing trust publishes another SP. Fence local
+	// effects before spending the browser's request; saved provider-policy
+	// withdrawal is independently fenced by the router at session admission.
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.sp != owner {
+		return nil, relayState, fmt.Errorf("%w: service provider changed during response validation", errSAMLResponseUnbound)
 	}
 
 	if !requestSP.AllowIDPInitiated {
