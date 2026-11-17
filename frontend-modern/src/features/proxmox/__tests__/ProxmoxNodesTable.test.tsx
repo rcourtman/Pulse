@@ -1,9 +1,10 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import { createSignal } from 'solid-js';
+import { createSignal, type JSX } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Resource } from '@/types/resource';
+import { getTemperatureTextClass } from '@/utils/temperature';
 import { ProxmoxNodesTable } from '../ProxmoxNodesTable';
 
 const nodeDrawerMock = vi.hoisted(() => vi.fn());
@@ -47,8 +48,10 @@ vi.mock('@/components/Workloads/StackedDiskBar', () => ({
 }));
 
 vi.mock('@/components/Workloads/MetricMiniSparkline', () => ({
-  MetricMiniSparkline: (props: { title?: string }) => (
-    <div data-testid="metric-mini-sparkline" data-title={props.title} />
+  MetricMiniSparkline: (props: { title?: string; valueContent?: JSX.Element }) => (
+    <div data-testid="metric-mini-sparkline" data-title={props.title}>
+      {props.valueContent}
+    </div>
   ),
 }));
 
@@ -837,6 +840,39 @@ describe('ProxmoxNodesTable', () => {
     fireEvent.pointerEnter(row, { pointerType: 'mouse' });
     expect(screen.queryByTestId('metric-mini-sparkline')).not.toBeInTheDocument();
     expect(options.enabled()).toBe(false);
+  });
+
+  it('keeps the threshold tone on the temperature value beside its sparkline', () => {
+    nodeMetricSeriesMock.mockImplementation((_node: unknown, metric: string) => [
+      {
+        id: metric,
+        label: metric,
+        color: '#000',
+        points: [
+          { timestamp: 1, value: 60 },
+          { timestamp: 2, value: 90 },
+        ],
+      },
+    ]);
+    const { container } = render(() => (
+      <ProxmoxNodesTable
+        nodes={[makeNodeResource({ temperature: 90 })]}
+        guests={[]}
+        metricDisplayMode={() => 'sparklines'}
+        emptyIcon={<span />}
+        emptyTitle="No Proxmox VE nodes"
+        emptyDescription="No nodes"
+      />
+    ));
+
+    const value = container.querySelector('[data-temperature-sparkline-value]');
+    expect(value).not.toBeNull();
+    expect(value?.className).toBe(
+      getTemperatureTextClass(90, { warning: 80, critical: 85 }, 'temperature', null),
+    );
+    expect(value?.className).not.toBe(
+      getTemperatureTextClass(40, { warning: 80, critical: 85 }, 'temperature', null),
+    );
   });
 
   it('updates every availability signal when a live row becomes offline', () => {

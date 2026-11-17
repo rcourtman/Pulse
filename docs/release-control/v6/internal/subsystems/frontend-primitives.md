@@ -2400,7 +2400,9 @@ temperature to row-synchronised sparklines in place, without changing row
 height, and returns to its bars and temperature gauge on leave; Details
 hover keeps the bars. Temperature sparklines scale around their own
 readings with a minimum span rather than from zero, and format through the
-operator's temperature unit.
+operator's temperature unit. The value beside a temperature sparkline keeps
+the gauge's threshold and open-alert tone through `getTemperatureTextClass`;
+the line itself keeps the temperature series colour the drawer charts use.
 Object-detail navigation follows that same canonical split across platform and
 feature owners. `Overview` is the stable landing tab for current operational
 facts, while stored metric charts appear only after selecting an evidence-gated
