@@ -3668,7 +3668,8 @@ func (n *NotificationManager) sendResolvedWebhookNtfy(webhook WebhookConfig, ale
 		method = "POST"
 	}
 
-	req, err := http.NewRequest(method, webhook.URL, bytes.NewBufferString(body.String()))
+	payload := []byte(body.String())
+	req, err := http.NewRequest(method, webhook.URL, bytes.NewReader(payload))
 	if err != nil {
 		return fmt.Errorf("failed to create ntfy request: %w", err)
 	}
@@ -3685,6 +3686,17 @@ func (n *NotificationManager) sendResolvedWebhookNtfy(webhook WebhookConfig, ale
 			req.Header.Set(key, value)
 		}
 	}
+
+	// Recovery follows the same signing contract as firing, over the exact
+	// plain-text bytes ntfy receives. Custom headers cannot replace integrity.
+	eventID := ""
+	for _, alert := range alertList {
+		if alert != nil {
+			eventID = webhookEventID(alert.ID, "resolved")
+			break
+		}
+	}
+	setWebhookIntegrityHeaders(req, webhook.SigningSecret, eventID, payload)
 
 	resp, err := n.webhookClient.Do(req)
 	if err != nil {
@@ -3835,16 +3847,7 @@ func (n *NotificationManager) executeWebhookRequest(webhook WebhookConfig, paylo
 		req.Header.Set(key, value)
 	}
 
-	// Delivery integrity headers are set after custom headers so user-provided
-	// header maps cannot shadow them.
-	if opts.eventID != "" {
-		req.Header.Set("X-Pulse-Event-ID", opts.eventID)
-	}
-	if secret := strings.TrimSpace(webhook.SigningSecret); secret != "" {
-		timestamp := strconv.FormatInt(time.Now().Unix(), 10)
-		req.Header.Set("X-Pulse-Timestamp", timestamp)
-		req.Header.Set("X-Pulse-Signature", "v1="+signWebhookPayload(secret, timestamp, payload))
-	}
+	setWebhookIntegrityHeaders(req, webhook.SigningSecret, opts.eventID, payload)
 
 	client := n.webhookClient
 	if client == nil || (opts.timeout > 0 && opts.timeout != WebhookTimeout) {
@@ -3967,6 +3970,20 @@ func isEmptyInterface(value interface{}) bool {
 		return true
 	default:
 		return false
+	}
+}
+
+// setWebhookIntegrityHeaders applies the shared delivery contract after all
+// custom headers. Both JSON webhooks and ntfy's plain-text recovery sign the
+// actual wire payload, without changing empty-secret (unsigned) behavior.
+func setWebhookIntegrityHeaders(req *http.Request, secret, eventID string, payload []byte) {
+	if eventID != "" {
+		req.Header.Set("X-Pulse-Event-ID", eventID)
+	}
+	if secret = strings.TrimSpace(secret); secret != "" {
+		timestamp := strconv.FormatInt(time.Now().Unix(), 10)
+		req.Header.Set("X-Pulse-Timestamp", timestamp)
+		req.Header.Set("X-Pulse-Signature", "v1="+signWebhookPayload(secret, timestamp, payload))
 	}
 }
 

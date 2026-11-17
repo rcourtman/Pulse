@@ -38,6 +38,16 @@ func testQueuedNtfyRecoveryAfterProviderRejection(t *testing.T, status int, clas
 		if err != nil {
 			t.Errorf("read body: %v", err)
 		}
+		if !ntfyRecoveryRequestVerified(r, body, "synthetic-outage-signing-key") {
+			t.Error("retry/restart delivery lost the signature over its wire bytes")
+		}
+		expectedEvent := "cpu:alert"
+		if strings.HasPrefix(r.Header.Get("Title"), "RESOLVED:") {
+			expectedEvent = "cpu:resolved"
+		}
+		if r.Header.Get("X-Pulse-Event-ID") != expectedEvent {
+			t.Error("retry/restart delivery changed its event correlation")
+		}
 		if unavailable.Load() {
 			w.WriteHeader(status)
 			return
@@ -52,7 +62,7 @@ func testQueuedNtfyRecoveryAfterProviderRejection(t *testing.T, status int, clas
 	}))
 	defer server.Close()
 	dir := t.TempDir()
-	webhook := WebhookConfig{ID: "ops", Name: "ops", URL: server.URL + "/topic", Enabled: true, Service: "ntfy"}
+	webhook := WebhookConfig{ID: "ops", Name: "ops", URL: server.URL + "/topic", Enabled: true, Service: "ntfy", SigningSecret: "synthetic-outage-signing-key"}
 	open := func() *NotificationManager {
 		m := NewNotificationManagerWithDataDir("", dir)
 		m.webhookClient = server.Client()
