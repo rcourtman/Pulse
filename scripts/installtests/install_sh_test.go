@@ -6195,6 +6195,7 @@ while [[ $# -gt 0 ]]; do
         *) [[ -z "$url" ]] || exit 95; url="$1"; shift ;;
     esac
 done
+[[ "$out" != - ]] || out=/dev/stdout
 case "$url" in
     "https://github.com/rcourtman/Pulse/releases/download/v9.9.9/install.sh")
         cat > "$out" <<'INSTALLER'

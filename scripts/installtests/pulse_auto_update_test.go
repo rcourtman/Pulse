@@ -1186,6 +1186,7 @@ curl() {
   arg="$1"; shift
   case "$arg" in -o) out="$1"; shift ;; https://*) url="$arg" ;; esac
  done
+ [[ "$out" != - ]] || out=/dev/stdout
  printf '%s\n' "$url" >> "$FIXTURE_DIR/downloads"
  if [[ "$url" == *.sshsig ]]; then
   [[ "$FAULT" != download_signature ]] || return 1
