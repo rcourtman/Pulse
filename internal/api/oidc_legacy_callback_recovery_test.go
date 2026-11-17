@@ -322,11 +322,14 @@ func TestSSOOIDCCallbackLegacyProviderStillServed(t *testing.T) {
 		t.Fatalf("newStateEntry error: %v", err)
 	}
 
-	// No code parameter: reaching missing_code with the state's returnTo
-	// proves the provider resolved and the state was consumed as before.
+	// No code parameter: the migrated provider still resolves and preserves
+	// its return path, but incomplete input must not spend its pending login.
 	rec := doOIDCCallback(t, router, testLegacyCallbackRedirect+"?state="+state)
 	want := "/legacy-home?oidc=error&oidc_error=missing_code"
 	if loc := rec.Header().Get("Location"); loc != want {
 		t.Fatalf("Location = %q, want %q", loc, want)
+	}
+	if _, ok := svc.peekState(state); !ok || len(rec.Result().Cookies()) != 0 {
+		t.Fatal("incomplete migrated callback spent state or wrote a session cookie")
 	}
 }
