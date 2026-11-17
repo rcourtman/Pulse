@@ -19,14 +19,18 @@ import (
 // doubles; no native service, network, installer entrypoint or customer files
 // are operated here. In particular, do not substitute a model of the ordering.
 func TestAgentInstallerStagesCollectorBeforeStop(t *testing.T) {
-	testAgentInstallerStaging(t, false)
+	testAgentInstallerStaging(t, false, false)
 }
 
 func TestAgentInstallerStagesHelperBeforeStop(t *testing.T) {
-	testAgentInstallerStaging(t, true)
+	testAgentInstallerStaging(t, true, false)
 }
 
-func testAgentInstallerStaging(t *testing.T, helper bool) {
+func TestAgentInstallerPreservesStorageRuntimeRelocation(t *testing.T) {
+	testAgentInstallerStaging(t, false, true)
+}
+
+func testAgentInstallerStaging(t *testing.T, helper, relocated bool) {
 	t.Helper()
 	installer, err := os.ReadFile("../install.sh")
 	if err != nil {
@@ -40,20 +44,42 @@ func testAgentInstallerStaging(t *testing.T, helper bool) {
 	publication := string(installer[start:end])
 	functions := extractInstallShellFunction(t, "cleanup") + "\n" +
 		extractInstallShellFunction(t, "stage_agent_binary_for_install") + "\n" +
-		extractInstallShellFunction(t, "stage_privileged_helper_for_install") + "\n"
+		extractInstallShellFunction(t, "stage_privileged_helper_for_install") + "\n" +
+		extractInstallShellFunction(t, "validate_staged_agent_url") + "\n" +
+		extractInstallShellFunction(t, "fail") + "\n" +
+		extractInstallShellFunction(t, "json_event") + "\n"
 	oldBinary := "#!/bin/sh\nprintf 'old-fixture-version\\n'\n"
-	newBinary := "#!/bin/sh\nprintf 'new-fixture-version\\n'\n"
+	newBinary := `#!/bin/sh
+case "$1" in
+    --validate-url)
+        [ "$#" -eq 4 ] && [ "$2" = --url ] &&
+            [ "$3" = https://pulse.example.invalid ] &&
+            [ "$4" = --allow-plaintext-http=false ] || exit 95
+        case "$0" in "$INSTALL_DIR"/.pulse-agent.install.*) ;; *) exit 95 ;; esac
+        printf 'destination-admission\n' >> "$TRACE"
+        [ "$FAULT" != destination-command-failure ] || exit 86
+        ;;
+    --version) printf 'new-fixture-version\n' ;;
+    *) exit 95 ;;
+esac
+`
 	oldHelper := "#!/bin/sh\nprintf 'old-helper-version\\n'\n"
 	newHelper := "#!/bin/sh\nprintf 'new-helper-version\\n'\n"
-	faults := []string{"none", "directory-creation", "allocation", "partial-transfer", "executable-mode", "destination-directory", "publication"}
+	faults := []string{"none", "directory-creation", "allocation", "partial-transfer", "executable-mode", "destination-directory", "destination-command-failure", "destination-not-executable", "publication"}
 	if helper {
 		faults = append(faults, "helper-directory-creation", "helper-directory-owner", "helper-directory-mode",
 			"helper-allocation", "helper-partial-transfer", "helper-owner", "helper-mode",
 			"helper-destination-directory", "helper-publication")
 	}
+	if relocated {
+		// Storage need not execute on TrueNAS. Its existing later platform path
+		// chooses an executable runtime; this fixture proves only that handoff.
+		faults = []string{"none", "destination-command-failure", "destination-not-executable"}
+	}
 	for _, upgrade := range []bool{false, true} {
 		for _, fault := range faults {
 			t.Run(fmt.Sprintf("upgrade=%t/%s", upgrade, fault), func(t *testing.T) {
+				wantSuccess := fault == "none" || relocated
 				root := t.TempDir()
 				installDir := filepath.Join(root, "installation with spaces")
 				if err := os.Mkdir(installDir, 0755); err != nil {
@@ -112,11 +138,14 @@ ACTION_RUNNER_ENABLED=false
 UPDATE_ONLY=false
 EXIT_GENERAL=1
 EXIT_MISSING_ARGS=2
+EXIT_PREFLIGHT_FAILED=14
+OUTPUT_FORMAT=json
+NON_INTERACTIVE=true
+PULSE_URL=https://pulse.example.invalid
 AGENT_NAME=pulse-agent
 BINARY_NAME=pulse-agent
 NEW_VERSION=new-fixture-version
 log_info() { :; }
-fail() { printf '%s\n' "$1" >&2; exit "$2"; }
 mkdir() {
     if [[ "${@: -1}" == "$PRIVILEGE_HELPER_DIR" ]]; then
         printf 'helper-directory\n' >> "$TRACE"
@@ -162,12 +191,19 @@ chmod() {
         printf 'mode\n' >> "$TRACE"
         [[ "$FAULT" != executable-mode ]] || return 1
     fi
-    command chmod "$@"
+    command chmod "$@" || return
+    # Revoke actual execution after the successful mode operation. This checks
+    # kernel refusal, not a claim to reproduce a native noexec mount or ACL.
+    if [[ "$FAULT" == destination-not-executable && "$2" == "$INSTALL_DIR"/.pulse-agent.install.* ]]; then
+        command chmod 0644 "$2"
+    fi
 }
 stop_existing_agent_service() {
     # Transfer and mode must already be complete when disruption becomes possible.
-    [[ -f "$STAGED_AGENT_BIN" && -x "$STAGED_AGENT_BIN" ]] || exit 96
-    [[ "$("$STAGED_AGENT_BIN" --version)" == new-fixture-version ]] || exit 96
+    [[ -f "$STAGED_AGENT_BIN" ]] || exit 96
+    if [[ "$FAULT" != destination-not-executable ]]; then
+        [[ -x "$STAGED_AGENT_BIN" && "$("$STAGED_AGENT_BIN" --version)" == new-fixture-version ]] || exit 96
+    fi
     if [[ "$PRIVILEGED_HELPER_ENABLED" == true ]]; then
         [[ -f "$STAGED_HELPER_BIN" && -x "$STAGED_HELPER_BIN" ]] || exit 96
         [[ "$("$STAGED_HELPER_BIN" --version)" == new-helper-version ]] || exit 96
@@ -216,7 +252,7 @@ mv() {
 				cmd.Env = append(os.Environ(), "INSTALL_DIR="+installDir, "TMP_BIN="+download,
 					"TRACE="+trace, "FAULT="+fault, "PRIVILEGE_HELPER_DIR="+helperDir,
 					"PRIVILEGED_HELPER_BINARY_PATH="+installedHelper, "TMP_HELPER_BIN="+helperDownload,
-					fmt.Sprintf("PRIVILEGED_HELPER_ENABLED=%t", helper))
+					fmt.Sprintf("PRIVILEGED_HELPER_ENABLED=%t", helper), fmt.Sprintf("TRUENAS=%t", relocated))
 				output, runErr := cmd.CombinedOutput()
 				exit := 0
 				if runErr != nil {
@@ -226,27 +262,38 @@ mv() {
 					}
 					exit = exitErr.ExitCode()
 				}
-				if ctx.Err() != nil || (exit == 0) != (fault == "none") {
+				if ctx.Err() != nil || (exit == 0) != wantSuccess {
 					t.Fatalf("fault=%s exit=%d context=%v error=%v\n%s", fault, exit, ctx.Err(), runErr, output)
+				}
+				if !relocated && (fault == "destination-command-failure" || fault == "destination-not-executable") &&
+					(exit != 14 || !strings.Contains(string(output), `"exitCode":14`)) {
+					t.Fatalf("destination execution refusal did not retain preflight exit 14: %d\n%s", exit, output)
 				}
 				operations, err := os.ReadFile(trace)
 				if err != nil {
 					t.Fatal(err)
 				}
 				sequence := string(operations)
-				if fault != "none" && fault != "publication" && fault != "helper-publication" {
+				if !wantSuccess && fault != "publication" && fault != "helper-publication" {
 					for _, forbidden := range []string{"stop\n", "kill\n", "publish\n", "helper-publish\n"} {
 						if strings.Contains(sequence, forbidden) {
 							t.Fatalf("staging failure disrupted installation (%s):\n%s\n%s", forbidden, sequence, output)
 						}
 					}
-					if !strings.Contains(string(output), "has not been stopped or replaced; saved state is retained") {
+					message := "has not been stopped or replaced; saved state is retained"
+					if fault == "destination-command-failure" || fault == "destination-not-executable" {
+						message = "The installed service and saved credentials have not been changed"
+					}
+					if !strings.Contains(string(output), message) {
 						t.Fatalf("missing early refusal diagnostic:\n%s", output)
 					}
 				} else {
 					want := "directory\nallocate\ntransfer\nmode\n"
 					if helper {
 						want += "helper-directory\nhelper-directory-owner\nhelper-directory-mode\nhelper-allocate\nhelper-transfer\nhelper-owner\nhelper-mode\n"
+					}
+					if !relocated {
+						want += "destination-admission\n"
 					}
 					if upgrade {
 						want += "stop\nkill\n"
@@ -260,7 +307,7 @@ mv() {
 						t.Fatalf("publication order = %q, want %q\n%s", sequence, want, output)
 					}
 				}
-				if strings.Contains(string(output), "publication-complete") != (fault == "none") {
+				if strings.Contains(string(output), "publication-complete") != wantSuccess {
 					t.Fatalf("completion did not match publication result:\n%s", output)
 				}
 				if fault == "destination-directory" {
@@ -268,20 +315,24 @@ mv() {
 					if err != nil || string(body) != "retain directory contents" {
 						t.Fatalf("destination directory changed: %v %q", err, body)
 					}
-				} else if fault == "none" || fault == "helper-publication" || upgrade {
+				} else if wantSuccess || fault == "helper-publication" || upgrade {
 					body, err := os.ReadFile(installed)
 					want := oldBinary
-					if fault == "none" || fault == "helper-publication" {
+					if wantSuccess || fault == "helper-publication" {
 						want = newBinary
 					}
 					if err != nil || string(body) != want {
 						t.Fatalf("installed bytes changed incorrectly: %v %q", err, body)
 					}
 					info, err := os.Stat(installed)
-					if err != nil || info.Mode().Perm() != 0755 {
+					wantMode := os.FileMode(0755)
+					if relocated && fault == "destination-not-executable" {
+						wantMode = 0644
+					}
+					if err != nil || info.Mode().Perm() != wantMode {
 						t.Fatalf("installed mode not retained: %v %v", info, err)
 					}
-					if fault == "none" && !os.SameFile(downloadInfo, info) {
+					if wantSuccess && !os.SameFile(downloadInfo, info) {
 						t.Fatal("same-filesystem staging unnecessarily copied the downloaded payload")
 					}
 				} else if _, err := os.Lstat(installed); !errors.Is(err, os.ErrNotExist) {
