@@ -21,6 +21,18 @@
 
 ## Purpose
 
+### Ended reset requests do not spend saved recovery (17 November 2026)
+
+Public reset-admin cancellation observed before one-use validation returns fixed
+408 `request_cancelled` without changing persisted recovery or selected/peer
+roles. `internal/api/rbac_admin_request_lifetime_test.go` reopens ordinary saved
+state, then exercises deliberate recovery with the same token and rejects reuse.
+A controlled cancellation after consumption keeps the admitted role reset and
+consumed token: no after-validation guard, token restoration, transaction rollback
+or power-loss durability guarantee is added. This changes HTTP admission, not
+storage internals or the disposition of an unavailable original client.
+
+
 ### Docker-port creation preserves saved checks on stale review
 
 The Docker-port availability creation route uses a request-only complete

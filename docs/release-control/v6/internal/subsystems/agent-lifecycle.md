@@ -17,6 +17,20 @@
 
 ## Purpose
 
+### Recovery requests retain their one-use admission boundary (17 November 2026)
+
+The public administrative recovery handler refuses already-ended requests at
+entry and immediately before token validation, including complete buffered input.
+It preserves the token for a subsequent deliberate live recovery rather than
+performing a late role reset. Method/provider, organisation and IP binding remain
+unchanged. Once validation starts, admitted recovery still completes or fails
+under its existing rules; disconnect is not rollback or renewed token authority.
+`internal/api/rbac_admin_request_lifetime_test.go` holds that distinction through
+the public handler. No agent credential, enrollment, collection, command profile,
+report payload or rendered status changes; private binder acceptance and installed
+client recovery remain separate.
+
+
 ### Docker-port creation does not change established-check reattachment
 
 A new Docker-port availability check requires the reviewed container ID,
