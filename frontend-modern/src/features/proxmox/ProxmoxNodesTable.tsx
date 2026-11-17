@@ -24,6 +24,7 @@ import { StackedMemoryBar } from '@/components/Workloads/StackedMemoryBar';
 import { StackedDiskBar } from '@/components/Workloads/StackedDiskBar';
 import { MetricMiniSparkline } from '@/components/Workloads/MetricMiniSparkline';
 import { TemperatureGauge } from '@/components/shared/TemperatureGauge';
+import { createSummaryInteractiveRowPreviewHandlers } from '@/components/shared/summaryInteractionA11y';
 import { hostOverrideIdCandidates } from '@/features/alerts/alertOverridesModel';
 import { getMetricAlertPresentation } from '@/features/alerts/metricAlertPresentation';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
@@ -57,8 +58,16 @@ import {
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
 import { PlatformHostScopeNameButton } from '@/features/platformPage/PlatformHostScope';
 import { type ProxmoxEstateTopology } from '@/features/platformPage/platformEstateOverviewModel';
-import { type WorkloadsMetricDisplayMode } from '@/components/Workloads/workloadsFilterModel';
-import { type WorkloadTableMetricHistoryRange } from '@/components/Workloads/workloadMetricHistoryModel';
+import {
+  type WorkloadsMetricDisplayMode,
+  type WorkloadsMetricHoverMode,
+} from '@/components/Workloads/workloadsFilterModel';
+import {
+  hasRenderableMetricSeries,
+  TEMPERATURE_SPARKLINE_UNIT,
+  type WorkloadTableMetricHistoryRange,
+} from '@/components/Workloads/workloadMetricHistoryModel';
+import { formatTemperature } from '@/utils/temperature';
 import type { Disk, Node as LegacyNode } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import { hasCurrentProxmoxUpdateEvidence } from '@/utils/proxmoxUpdateEvidence';
@@ -218,6 +227,7 @@ export const ProxmoxNodesTable: Component<{
   guests: Resource[];
   search?: Accessor<string>;
   metricDisplayMode?: Accessor<WorkloadsMetricDisplayMode>;
+  metricHoverMode?: Accessor<WorkloadsMetricHoverMode>;
   metricHistoryRange?: Accessor<WorkloadTableMetricHistoryRange>;
   layoutWidth?: Accessor<number | null | undefined>;
   emptyIcon: JSX.Element;
@@ -262,6 +272,13 @@ export const ProxmoxNodesTable: Component<{
   const visibleColumnIds = createMemo(() => visibleColumns().map((column) => column.id));
   const displayMode = () => props.metricDisplayMode?.() ?? 'bars';
   const isSparklineMode = () => displayMode() === 'sparklines';
+  // Row hover follows the guest table's setting: in History mode a hovered
+  // node row previews its own history in place of the bars.
+  const hoverHistoryEnabled = () =>
+    !isSparklineMode() && (props.metricHoverMode?.() ?? 'history') === 'history';
+  // Fetch node history on the first hover, then keep it polled so later
+  // hovers are instant.
+  const [hoverHistoryRequested, setHoverHistoryRequested] = createSignal(false);
   const filteredNodes = createMemo(() =>
     filterProxmoxNodes(props.nodes, props.guests, props.search?.() ?? ''),
   );
@@ -286,7 +303,7 @@ export const ProxmoxNodesTable: Component<{
   // table draws node rows only, so it polls the infrastructure summary and
   // leaves the guest history to the workloads table below.
   const metricHistory = useWorkloadTableMetricHistory({
-    enabled: isSparklineMode,
+    enabled: () => isSparklineMode() || (hoverHistoryEnabled() && hoverHistoryRequested()),
     range: () => props.metricHistoryRange?.() ?? '1h',
     series: 'nodes',
   });
@@ -564,6 +581,37 @@ export const ProxmoxNodesTable: Component<{
                 const memorySeries = () =>
                   metricHistory.getNodeMetricSeries(legacyNode(), 'memory');
                 const diskSeries = () => metricHistory.getNodeMetricSeries(legacyNode(), 'disk');
+                const temperatureSeries = () =>
+                  metricHistory.getNodeMetricSeries(legacyNode(), 'temperature');
+                const [historyLensActive, setHistoryLensActive] = createSignal(false);
+                const [historyCursorRatio, setHistoryCursorRatio] = createSignal<number | null>(
+                  null,
+                );
+                const historyLensVisible = createMemo(
+                  () =>
+                    hoverHistoryEnabled() &&
+                    historyLensActive() &&
+                    [cpuSeries(), memorySeries(), diskSeries(), temperatureSeries()].some(
+                      hasRenderableMetricSeries,
+                    ),
+                );
+                const showsHistory = () => isSparklineMode() || historyLensVisible();
+                const rowPreviewHandlers = createSummaryInteractiveRowPreviewHandlers({
+                  onPreview: () => {
+                    if (!hoverHistoryEnabled()) return;
+                    setHoverHistoryRequested(true);
+                    setHistoryLensActive(true);
+                  },
+                  onPreviewClear: () => {
+                    setHistoryLensActive(false);
+                    setHistoryCursorRatio(null);
+                  },
+                });
+                const historyCursorProps = () => ({
+                  cursorRatio: historyCursorRatio(),
+                  onCursorRatioChange: setHistoryCursorRatio,
+                  showTooltip: true,
+                });
                 const renderColumnCell = (column: ProxmoxHostTableColumn): JSX.Element => {
                   switch (column.id) {
                     case 'node':
@@ -660,7 +708,7 @@ export const ProxmoxNodesTable: Component<{
                         <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
                           <Show when={isOnline()} fallback={<PlatformTableMetricFallback />}>
                             <Show
-                              when={isSparklineMode()}
+                              when={showsHistory()}
                               fallback={
                                 <ResponsiveMetricCell
                                   class="w-full"
@@ -680,6 +728,7 @@ export const ProxmoxNodesTable: Component<{
                                   clamp: true,
                                 })}
                                 title={`${name()} CPU history`}
+                                {...historyCursorProps()}
                               />
                             </Show>
                           </Show>
@@ -693,7 +742,7 @@ export const ProxmoxNodesTable: Component<{
                             fallback={<PlatformTableMetricFallback />}
                           >
                             <Show
-                              when={isSparklineMode()}
+                              when={showsHistory()}
                               fallback={
                                 <StackedMemoryBar
                                   used={memoryUsed()}
@@ -719,6 +768,7 @@ export const ProxmoxNodesTable: Component<{
                                       })
                                 }
                                 title={`${name()} memory history`}
+                                {...historyCursorProps()}
                               />
                             </Show>
                           </Show>
@@ -732,7 +782,7 @@ export const ProxmoxNodesTable: Component<{
                             fallback={<PlatformTableMetricFallback />}
                           >
                             <Show
-                              when={isSparklineMode()}
+                              when={showsHistory()}
                               fallback={
                                 <StackedDiskBar
                                   mode={
@@ -758,6 +808,7 @@ export const ProxmoxNodesTable: Component<{
                                   clamp: true,
                                 })}
                                 title={`${name()} disk history`}
+                                {...historyCursorProps()}
                               />
                             </Show>
                           </Show>
@@ -774,12 +825,26 @@ export const ProxmoxNodesTable: Component<{
                             }
                             fallback={<span class="text-xs text-muted">—</span>}
                           >
-                            <TemperatureGauge
-                              value={temperature() as number}
-                              thresholds={temperatureThresholds()}
-                              alertSeverity={temperatureAlertSeverity()}
-                              title={temperatureAlertTitle()}
-                            />
+                            <Show
+                              when={showsHistory()}
+                              fallback={
+                                <TemperatureGauge
+                                  value={temperature() as number}
+                                  thresholds={temperatureThresholds()}
+                                  alertSeverity={temperatureAlertSeverity()}
+                                  title={temperatureAlertTitle()}
+                                />
+                              }
+                            >
+                              <MetricMiniSparkline
+                                series={temperatureSeries()}
+                                valueLabel={formatTemperature(temperature())}
+                                unit={TEMPERATURE_SPARKLINE_UNIT}
+                                formatValue={(value) => formatTemperature(value)}
+                                title={`${name()} temperature history`}
+                                {...historyCursorProps()}
+                              />
+                            </Show>
                           </Show>
                         </TableCell>
                       );
@@ -828,7 +893,9 @@ export const ProxmoxNodesTable: Component<{
                       data-proxmox-host-row={node.id}
                       data-workload-alert-accent={alertAccentTone()}
                       data-summary-row-active={isGuestFilterSelected() ? 'true' : undefined}
+                      data-history-lens-active={historyLensVisible() ? 'true' : undefined}
                       onClick={rowInteraction.onClick}
+                      {...rowPreviewHandlers}
                     >
                       <For each={visibleColumns()}>{(column) => renderColumnCell(column)}</For>
                     </TableRow>

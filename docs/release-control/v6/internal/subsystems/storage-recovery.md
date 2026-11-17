@@ -2884,6 +2884,8 @@ coverage, restore capability, recovery-job proof, storage-health verification,
 or evidence that a specific resource was protected or recovered.
 Proxmox page stale-agent notices are adjacent frontend and agent-lifecycle
 plumbing even though `ProxmoxPageSurface` is a storage/recovery canonical file.
+The page also passes the guest table's row-hover mode to its nodes table;
+that is presentation wiring only and carries no storage or recovery state.
 Those notices may link an operator to scoped agent update commands for the
 latest fixes and node details (the notice's own wording; command execution is
 a separate setting the update does not change), but they must not be

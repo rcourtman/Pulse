@@ -5010,6 +5010,11 @@ a new API state machine, queue contract, or verification-accounting field.
     `/api/charts/infrastructure`; the deprecated `getInfrastructureCharts`
     alias, which could not pass `metrics`, is removed and must not return as a
     second unfiltered entry point.
+    `temperature` is an opt-in member of that filter: the service accepts
+    it by name but never adds it to the default unfiltered payload. When
+    requested, node and agent host series carry their stored temperature
+    history, so host tables can chart it without widening every other
+    summary consumer's payload.
 39. Keep the retired compact dashboard overview route absent from that same
     shared API surface. `internal/api/resourceapi/resources.go`,
     `internal/api/router_routes_monitoring.go`, and

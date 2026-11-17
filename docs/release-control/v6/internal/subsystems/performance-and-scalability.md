@@ -2438,7 +2438,11 @@ changes without deduplicating requests. A
 reader therefore must not poll a summary its rows do not render. In Trends
 the vSphere overview polls only the workloads history, and the Proxmox
 overview polls the workloads history and the infrastructure summary once
-each. A `useWorkloadsState` owner that omits these overrides keeps the
+each. In Bars the Proxmox nodes table follows the page's row-hover mode
+(`workloadMetricHoverMode` from the embedded workloads state): with History
+hover it starts its infrastructure-summary reader on the first node-row
+hover and keeps that one reader polling afterwards; with Details hover, or
+before any hover, it reads no node history. A `useWorkloadsState` owner that omits these overrides keeps the
 original persistent-signal-backed behavior; `WorkloadsSurface` builds no
 state of its own, so it always renders the owner its page passes.
 Every toolbar that controls a `WorkloadsSurface` consumes
