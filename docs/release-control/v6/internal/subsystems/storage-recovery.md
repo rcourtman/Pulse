@@ -21,6 +21,22 @@
 
 ## Purpose
 
+### Damaged lifecycle input preserves saved organization metadata
+
+The shared hosted suspension/soft-deletion handlers in
+`internal/api/org_lifecycle_handlers.go` must admit a complete bounded optional
+JSON object before saving lifecycle changes. An omitted or whitespace-only body
+keeps its existing defaults; null roots, duplicate recognized controls, trailing
+documents/junk, overflow and read errors are rejected rather than selecting a
+reason or retention period from a prefix. A wrapped read error is not the
+decoder's exact empty-input sentinel. Rejection preserves selected and peer
+`org.json` bytes. Existing positive retention options, the 30-day default,
+authority/gate ordering, save-version conflicts and unsuspend behavior remain.
+The registered `internal/api/org_lifecycle_handlers_test.go` exercises real
+persistence, damaged/valid/default inputs and native HTTP continuation with the
+same saved organization. This does not claim live hosted recovery or restore
+previously lost state.
+
 ### Docker-port creation preserves saved checks on stale review
 
 The Docker-port availability creation route uses a request-only complete
