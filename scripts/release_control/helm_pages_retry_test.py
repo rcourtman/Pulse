@@ -367,29 +367,38 @@ clock.write_text(str(now + delay))
         self.assertEqual(sum(c['command'] == 'helm' and c['args'][0] == 'pull'
                              for c in proof['calls']), 1)
 
+    def test_pages_build_finishing_after_ten_minutes_is_observed(self):
+        # The beta.3 index deployment took 746091 ms after the push.
+        result, proof = self.receipt('match', ready_after=747)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('serves the exact qualified pulse 6.4.3 package', result.stdout)
+        self.assertEqual(proof['elapsed_seconds'], 750)
+        pulls = [c for c in proof['calls'] if c['command'] == 'helm' and c['args'][0] == 'pull']
+        self.assertEqual([c['at'] for c in pulls], [750])
+
     def test_delayed_wrong_package_still_fails_immediately(self):
-        result, proof = self.receipt('wrong', ready_after=263)
+        result, proof = self.receipt('wrong', ready_after=747)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('bytes differ', result.stdout)
         self.assertNotIn('[OK]', result.stdout)
-        self.assertEqual(proof['elapsed_seconds'], 265)
+        self.assertEqual(proof['elapsed_seconds'], 750)
         self.assertEqual(sum(c['command'] == 'helm' and c['args'][0] == 'pull'
                              for c in proof['calls']), 1)
 
     def test_index_that_never_exposes_version_fails_at_deadline(self):
-        result, proof = self.receipt('match', ready_after=601)
+        result, proof = self.receipt('match', ready_after=901)
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn('600-second observation window', result.stdout)
+        self.assertIn('900-second observation window', result.stdout)
         self.assertNotIn('[OK]', result.stdout)
-        self.assertEqual(proof['elapsed_seconds'], 600)
+        self.assertEqual(proof['elapsed_seconds'], 900)
         self.assertFalse(any(c['command'] == 'helm' for c in proof['calls']))
 
     def test_slow_unavailable_index_cannot_extend_probe_budget(self):
         result, proof = self.receipt('index_unavailable', fetch_seconds=17)
         self.assertNotEqual(result.returncode, 0)
-        self.assertEqual(proof['elapsed_seconds'], 600)
+        self.assertEqual(proof['elapsed_seconds'], 900)
         probes = [c for c in proof['calls'] if c['command'] == 'curl']
-        self.assertEqual(len(probes), 30)
+        self.assertEqual(len(probes), 45)
         for call in probes:
             args = call['args']
             self.assertIn('--connect-timeout', args)
@@ -398,13 +407,13 @@ clock.write_text(str(now + delay))
         self.assertFalse(any(c['command'] == 'helm' for c in proof['calls']))
 
     def test_last_probe_and_sleep_use_only_remaining_time(self):
-        result, proof = self.receipt('match', ready_after=601, fetch_seconds=8)
+        result, proof = self.receipt('match', ready_after=901, fetch_seconds=8)
         self.assertNotEqual(result.returncode, 0)
-        self.assertEqual(proof['elapsed_seconds'], 600)
+        self.assertEqual(proof['elapsed_seconds'], 900)
         probes = [c for c in proof['calls'] if c['command'] == 'curl']
         last = probes[-1]
-        self.assertEqual(last['at'], 598)
-        self.assertEqual(int(last['args'][last['args'].index('--max-time')+1]), 2)
+        self.assertEqual(last['at'], 897)
+        self.assertEqual(int(last['args'][last['args'].index('--max-time')+1]), 3)
 
 
 if __name__ == "__main__":
