@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "88cb40dd25182b59eaaa11bc6f01c1071fbe99e1",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx": "9d6229482b563547570482d0a44c33ae36c3a0d341cb5d4189995c25f7417cbb"
+  },
+  "routes": [
+    "/settings/security-sso offline fixture using the product SettingsPageShell, real SSOProvidersPanel/state/API client and product CSS. Synthetic HTTP responses, not a live IdP or full application startup."
+  ],
+  "states": [
+    "Desktop 1365x900/light and phone 390x844/dark (touch) in Chromium 141.0.7390.37 / Playwright 1.56.1.",
+    "OIDC discovery success, SAML metadata failure with guidance, SAML metadata success with current and expired certificates. Matched pending/settled/detail and SAML dismissal states."
+  ],
+  "interactions": [
+    "Enter starts one test; repeat Enter while pending does not dispatch a second request or save. Test retains focus; a deliberate return to a draft field is respected.",
+    "Header pass/fail action opens the existing details by keyboard or touch while the editor title and Save/Cancel stay in frame. Tab reaches Dismiss, which clears the result and restores Test focus.",
+    "12 completed journeys, 272 checks and 18 comparable pairs (36 PNGs native-inspected). Previously visible fields and controls remain visible before opting into details."
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "verified_at": "2026-11-18T19:49:48Z"
+}

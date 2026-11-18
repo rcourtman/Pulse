@@ -298,6 +298,92 @@ describe('SSO provider read and editor ownership', () => {
     expect(dialog.getByRole('button', { name: 'Test' })).toBeEnabled();
   });
 
+  it('keeps OIDC test focus and opens the details only on request', async () => {
+    const pending = deferred();
+    const base = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation((url: string, options?: RequestInit) =>
+      url.endsWith('/test') ? pending.promise : base(url, options),
+    );
+    render(() => <SSOProvidersPanel />);
+    const dialog = await edit();
+    const button = dialog.getByRole('button', { name: 'Test' });
+    button.focus();
+    fireEvent.click(button);
+    expect(dialog.getByRole('button', { name: 'Testing...' })).toBe(button);
+    expect(button).toHaveFocus();
+    expect(button).not.toBeDisabled();
+    expect(button).toHaveAttribute('aria-disabled', 'true');
+    fireEvent.click(button);
+    await waitFor(() => expect(writes()).toHaveLength(1));
+
+    const tokenEndpoint = 'https://idp.example.test/discovery/realm/protocol/openid/token';
+    pending.resolve(
+      json({ success: true, message: 'Discovery succeeded', details: { tokenEndpoint } }),
+    );
+    const result = await dialog.findByRole('status');
+    expect(result).toHaveTextContent('Discovery succeeded');
+    expect(result).toHaveTextContent(tokenEndpoint);
+    expect(button).toHaveFocus();
+    expect(button).not.toHaveAttribute('aria-disabled');
+    expect(button).toHaveAccessibleDescription('Test passed');
+    expect(dialog.getByLabelText('Client Secret').compareDocumentPosition(result)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+
+    const scroller = result.closest('fieldset')!.parentElement!;
+    vi.spyOn(scroller, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 100, 320, 500));
+    vi.spyOn(result, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 800, 320, 100));
+    const view = dialog.getByRole('button', { name: 'Test passed — view result' });
+    expect(view).toHaveAttribute('aria-controls', result.id);
+    fireEvent.click(view);
+    expect(result).toHaveFocus();
+    expect(scroller.scrollTop).toBe(688);
+
+    const dismiss = within(result).getByRole('button', { name: 'Dismiss test result' });
+    dismiss.focus();
+    fireEvent.click(dismiss);
+    expect(result).not.toBeInTheDocument();
+    expect(view).not.toBeInTheDocument();
+    expect(button).toHaveFocus();
+    expect(writes()).toHaveLength(1);
+  });
+
+  it('shows the SAML failure without reclaiming focus from draft fields', async () => {
+    const pending = deferred();
+    const base = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation((url: string, options?: RequestInit) =>
+      url.endsWith('/test') ? pending.promise : base(url, options),
+    );
+    render(() => <SSOProvidersPanel />);
+    await screen.findByText('first provider');
+    fireEvent.click(screen.getByRole('button', { name: 'Add SAML' }));
+    const dialog = within(await screen.findByRole('dialog', { name: 'Add SAML provider' }));
+    const metadata = dialog.getByLabelText('IdP Metadata URL');
+    fireEvent.input(metadata, { target: { value: 'https://idp.example.test/metadata' } });
+    const button = dialog.getByRole('button', { name: 'Test' });
+    button.focus();
+    fireEvent.click(button);
+    await waitFor(() => expect(writes()).toHaveLength(1));
+
+    metadata.focus();
+    pending.resolve(json({ success: false, message: 'Metadata could not be read' }));
+    const result = await dialog.findByRole('alert');
+    expect(result).toHaveTextContent('Metadata could not be read');
+    expect(metadata).toHaveFocus();
+    expect(dialog.getByLabelText('IdP SSO URL').compareDocumentPosition(result)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    const view = dialog.getByRole('button', { name: 'Test failed — view result' });
+    expect(view).toHaveAttribute('aria-controls', result.id);
+    const preview = dialog.getByRole('button', { name: 'Preview' });
+    expect(preview).toBeEnabled();
+
+    fireEvent.input(metadata, { target: { value: 'https://idp.example.test/new-metadata' } });
+    expect(result).not.toBeInTheDocument();
+    expect(view).not.toBeInTheDocument();
+    expect(writes()).toHaveLength(1);
+  });
+
   it.each(['save', 'toggle', 'delete'] as const)(
     'serialises %s writes and ignores completion after withdrawal',
     async (kind) => {
