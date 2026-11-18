@@ -10958,7 +10958,7 @@ func TestCheckPMGQueueDepths(t *testing.T) {
 
 		// No thresholds configured (all 0)
 		defaults := PMGThresholdConfig{}
-		m.checkPMGQueueDepths(pmg, defaults)
+		m.checkPMGQueueDepths(pmg, defaults, exactPMGNodeQueueObservation)
 
 		m.mu.RLock()
 		totalAlerts := len(m.activeAlerts)
@@ -10987,7 +10987,7 @@ func TestCheckPMGQueueDepths(t *testing.T) {
 			QueueTotalWarning:  500,
 			QueueTotalCritical: 1000,
 		}
-		m.checkPMGQueueDepths(pmg, defaults)
+		m.checkPMGQueueDepths(pmg, defaults, exactPMGNodeQueueObservation)
 
 		m.mu.RLock()
 		alert := testRequireActiveAlert(t, m, totalQueueState)
@@ -11021,7 +11021,7 @@ func TestCheckPMGQueueDepths(t *testing.T) {
 			QueueTotalWarning:  500,
 			QueueTotalCritical: 1000,
 		}
-		m.checkPMGQueueDepths(pmg, defaults)
+		m.checkPMGQueueDepths(pmg, defaults, exactPMGNodeQueueObservation)
 
 		m.mu.RLock()
 		alert := testRequireActiveAlert(t, m, totalQueueState)
@@ -11055,7 +11055,7 @@ func TestCheckPMGQueueDepths(t *testing.T) {
 			DeferredQueueWarn:     200,
 			DeferredQueueCritical: 500,
 		}
-		m.checkPMGQueueDepths(pmg, defaults)
+		m.checkPMGQueueDepths(pmg, defaults, exactPMGNodeQueueObservation)
 
 		m.mu.RLock()
 		alert := testRequireActiveAlert(t, m, deferredQueueState)
@@ -11089,7 +11089,7 @@ func TestCheckPMGQueueDepths(t *testing.T) {
 			DeferredQueueWarn:     200,
 			DeferredQueueCritical: 500,
 		}
-		m.checkPMGQueueDepths(pmg, defaults)
+		m.checkPMGQueueDepths(pmg, defaults, exactPMGNodeQueueObservation)
 
 		m.mu.RLock()
 		alert := testRequireActiveAlert(t, m, deferredQueueState)
@@ -11120,7 +11120,7 @@ func TestCheckPMGQueueDepths(t *testing.T) {
 			HoldQueueWarn:     100,
 			HoldQueueCritical: 300,
 		}
-		m.checkPMGQueueDepths(pmg, defaults)
+		m.checkPMGQueueDepths(pmg, defaults, exactPMGNodeQueueObservation)
 
 		m.mu.RLock()
 		alert := testRequireActiveAlert(t, m, holdQueueState)
@@ -11154,7 +11154,7 @@ func TestCheckPMGQueueDepths(t *testing.T) {
 			HoldQueueWarn:     100,
 			HoldQueueCritical: 300,
 		}
-		m.checkPMGQueueDepths(pmg, defaults)
+		m.checkPMGQueueDepths(pmg, defaults, exactPMGNodeQueueObservation)
 
 		m.mu.RLock()
 		alert := testRequireActiveAlert(t, m, holdQueueState)
@@ -11194,7 +11194,7 @@ func TestCheckPMGQueueDepths(t *testing.T) {
 			QueueTotalWarning:  500,
 			QueueTotalCritical: 1000,
 		}
-		m.checkPMGQueueDepths(pmg, defaults)
+		m.checkPMGQueueDepths(pmg, defaults, exactPMGNodeQueueObservation)
 
 		m.mu.RLock()
 		alert := testRequireActiveAlert(t, m, totalQueueState)
@@ -11234,7 +11234,7 @@ func TestCheckPMGQueueDepths(t *testing.T) {
 			QueueTotalWarning:  500,
 			QueueTotalCritical: 1000,
 		}
-		m.checkPMGQueueDepths(pmg, defaults)
+		m.checkPMGQueueDepths(pmg, defaults, exactPMGNodeQueueObservation)
 
 		m.mu.RLock()
 		_, exists := testLookupActiveAlert(t, m, totalQueueState)
@@ -11262,7 +11262,7 @@ func TestCheckPMGQueueDepths(t *testing.T) {
 			QueueTotalWarning: 500,
 		}
 		// Should not panic
-		m.checkPMGQueueDepths(pmg, defaults)
+		m.checkPMGQueueDepths(pmg, defaults, exactPMGNodeQueueObservation)
 
 		m.mu.RLock()
 		_, exists := testLookupActiveAlert(t, m, totalQueueState)
@@ -13600,7 +13600,7 @@ func TestCheckPMGNodeQueues(t *testing.T) {
 		}
 
 		// Should not panic
-		m.checkPMGNodeQueues(pmg, defaults)
+		m.checkPMGNodeQueues(pmg, defaults, exactPMGNodeQueueObservation)
 
 		m.mu.RLock()
 		count := len(m.activeAlerts)
@@ -13627,7 +13627,7 @@ func TestCheckPMGNodeQueues(t *testing.T) {
 			QueueTotalWarning: 100,
 		}
 
-		m.checkPMGNodeQueues(pmg, defaults)
+		m.checkPMGNodeQueues(pmg, defaults, exactPMGNodeQueueObservation)
 
 		m.mu.RLock()
 		count := len(m.activeAlerts)
@@ -13655,7 +13655,7 @@ func TestCheckPMGNodeQueues(t *testing.T) {
 			QueueTotalCritical: 200, // 80% scaled = 160
 		}
 
-		m.checkPMGNodeQueues(pmg, defaults)
+		m.checkPMGNodeQueues(pmg, defaults, exactPMGNodeQueueObservation)
 
 		m.mu.RLock()
 		alert := testRequireActiveAlert(t, m, totalQueueState)
@@ -13689,7 +13689,7 @@ func TestCheckPMGNodeQueues(t *testing.T) {
 			QueueTotalCritical: 200, // 80% scaled = 160
 		}
 
-		m.checkPMGNodeQueues(pmg, defaults)
+		m.checkPMGNodeQueues(pmg, defaults, exactPMGNodeQueueObservation)
 
 		m.mu.RLock()
 		alert := testRequireActiveAlert(t, m, totalQueueState)
@@ -13720,7 +13720,7 @@ func TestCheckPMGNodeQueues(t *testing.T) {
 			DeferredQueueCritical: 100,
 		}
 
-		m.checkPMGNodeQueues(pmg, defaults)
+		m.checkPMGNodeQueues(pmg, defaults, exactPMGNodeQueueObservation)
 
 		m.mu.RLock()
 		alert := testRequireActiveAlert(t, m, "pmg1-node1-queue-deferred")
@@ -13751,7 +13751,7 @@ func TestCheckPMGNodeQueues(t *testing.T) {
 			HoldQueueCritical: 60,
 		}
 
-		m.checkPMGNodeQueues(pmg, defaults)
+		m.checkPMGNodeQueues(pmg, defaults, exactPMGNodeQueueObservation)
 
 		m.mu.RLock()
 		alert := testRequireActiveAlert(t, m, "pmg1-node1-queue-hold")
@@ -13782,7 +13782,7 @@ func TestCheckPMGNodeQueues(t *testing.T) {
 			OldestMessageCritMins: 90,
 		}
 
-		m.checkPMGNodeQueues(pmg, defaults)
+		m.checkPMGNodeQueues(pmg, defaults, exactPMGNodeQueueObservation)
 
 		m.mu.RLock()
 		alert := testRequireActiveAlert(t, m, "pmg1-node1-oldest-message")
@@ -13821,7 +13821,7 @@ func TestCheckPMGNodeQueues(t *testing.T) {
 			QueueTotalCritical: 200,
 		}
 
-		m.checkPMGNodeQueues(pmg, defaults)
+		m.checkPMGNodeQueues(pmg, defaults, exactPMGNodeQueueObservation)
 
 		m.mu.RLock()
 		_, exists := testLookupActiveAlert(t, m, totalQueueState)
@@ -13851,7 +13851,7 @@ func TestCheckPMGNodeQueues(t *testing.T) {
 			QueueTotalCritical: 200,
 		}
 
-		m.checkPMGNodeQueues(pmg, defaults)
+		m.checkPMGNodeQueues(pmg, defaults, exactPMGNodeQueueObservation)
 
 		m.mu.RLock()
 		alert := testRequireActiveAlert(t, m, "pmg1-node3-queue-total")
@@ -13879,7 +13879,7 @@ func TestCheckPMGNodeQueues(t *testing.T) {
 
 		defaults := PMGThresholdConfig{} // All zero
 
-		m.checkPMGNodeQueues(pmg, defaults)
+		m.checkPMGNodeQueues(pmg, defaults, exactPMGNodeQueueObservation)
 
 		m.mu.RLock()
 		count := len(m.activeAlerts)
@@ -13918,7 +13918,7 @@ func TestCheckPMGNodeQueues(t *testing.T) {
 			QueueTotalCritical: 200, // 80% scaled = 160
 		}
 
-		m.checkPMGNodeQueues(pmg, defaults)
+		m.checkPMGNodeQueues(pmg, defaults, exactPMGNodeQueueObservation)
 
 		m.mu.RLock()
 		alert := testRequireActiveAlert(t, m, totalQueueState)

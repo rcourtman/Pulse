@@ -1434,7 +1434,7 @@ func TestCheckPMGQueueDepthAnnotatesCanonicalSpecMetadata(t *testing.T) {
 	m.checkPMGQueueDepths(pmg, PMGThresholdConfig{
 		QueueTotalWarning:  500,
 		QueueTotalCritical: 1000,
-	})
+	}, exactPMGNodeQueueObservation)
 
 	alert := activeAlert(t, m, "pmg-1-queue-total")
 	if got := alert.Metadata["canonicalAlertKind"]; got != "severity-threshold" {
@@ -1487,7 +1487,7 @@ func TestCheckPMGNodeQueueAnnotatesCanonicalSpecMetadata(t *testing.T) {
 	m.checkPMGNodeQueues(pmg, PMGThresholdConfig{
 		QueueTotalWarning:  100,
 		QueueTotalCritical: 200,
-	})
+	}, exactPMGNodeQueueObservation)
 
 	alert := activeAlert(t, m, "pmg-1-node-a-queue-total")
 	if got := alert.Metadata["canonicalAlertKind"]; got != "severity-threshold" {

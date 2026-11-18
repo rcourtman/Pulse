@@ -63,6 +63,10 @@ type canonicalStatefulAlertParams struct {
 	NotifyOnSeverityChange       bool
 	AddToHistoryOnSeverityChange bool
 	DispatchAsync                bool
+
+	// A matching lower bound can establish a warning without disproving
+	// critical. Do not downgrade an existing critical incident on that reading.
+	SeverityIsLowerBound bool
 }
 
 func buildCanonicalConnectivitySpec(resourceID, title string, resourceType unifiedresources.ResourceType, severity AlertLevel, confirmations int, disabled bool) (alertspecs.ResourceAlertSpec, error) {
@@ -663,6 +667,14 @@ func (m *Manager) evaluateCanonicalStatefulAlert(params canonicalStatefulAlertPa
 	}
 
 	matched, matchSeverity, matchReason := alertspecs.Match(params.Spec, params.Evidence)
+
+	if params.SeverityIsLowerBound && matched && matchSeverity == alertspecs.AlertSeverityWarning {
+		incident, known := m.core.Incident(params.Spec.ResourceID, params.Spec.ID)
+		if (existing != nil && existing.Level == AlertLevelCritical) ||
+			(known && incident.State == reducer.StateFiring && incident.Severity == reducer.SeverityCritical) {
+			return alertspecs.EvaluationResult{}, false
+		}
+	}
 
 	// An existing alert the core does not know about means it was firing:
 	// adopt it, as everywhere else.
