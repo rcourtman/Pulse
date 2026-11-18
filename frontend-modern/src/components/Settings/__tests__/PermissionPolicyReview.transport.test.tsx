@@ -150,6 +150,55 @@ describe('saved rule policy review through consuming access panels', () => {
     expect(writes()).toHaveLength(0);
   });
 
+  it('qualifies each returned rule without deciding access or incorporating an unsaved draft', async () => {
+    permissionReply = [
+      { action: 'read', resource: 'nodes' },
+      { action: 'delete', resource: 'nodes', effect: 'deny' },
+      { action: 'delete', resource: 'nodes', effect: 'deny', conditions: { tag: 'critical' } },
+      { action: 'write', resource: 'storage', effect: 'allow', conditions: { tag: '' } },
+      { action: 'read', resource: 'tasks', effect: '', conditions: {} },
+      { action: 'read', resource: 'guests', effect: 'future-effect', conditions: { owner: 'ops' } },
+      { action: 'read', resource: 'events', effect: null },
+      { action: 'write', resource: 'settings', effect: 'deny', conditions: { tag: 1 } },
+      { action: 'read', resource: 'metrics', conditions: ['tag'] },
+      { action: 'read', resource: 'backups', conditions: null },
+    ];
+    render(() => <UserAssignmentsPanel currentUser="policy-reviewer" canManage />);
+    fireEvent.click(await screen.findByRole('button', { name: /^Manage access for/ }));
+    const dialog = within(await screen.findByRole('dialog'));
+    const returned = await dialog.findByRole('list', { name: 'Returned rules' });
+    const rules = within(returned).getAllByRole('listitem');
+    const expected = [
+      'read:nodes Allow',
+      'delete:nodes Deny',
+      'delete:nodes Deny · Conditional',
+      'write:storage Allow · Conditional',
+      'read:tasks Allow',
+      'read:guests Effect unknown · Conditional',
+      'read:events Effect unknown',
+      'write:settings Deny · Conditions unknown',
+      'read:metrics Allow · Conditions unknown',
+      'read:backups Allow · Conditions unknown',
+    ];
+    expect(rules).toHaveLength(expected.length);
+    rules.forEach((rule, index) => expect(rule).toHaveTextContent(expected[index]));
+    expect(returned).not.toHaveTextContent('critical');
+    const role = dialog.getByRole('checkbox', { name: /^Constrained auditor/ });
+    expect(role).toBeChecked();
+    fireEvent.click(role);
+    expect(role).not.toBeChecked();
+    expect(dialog.getByRole('button', { name: 'Save Changes' })).toBeEnabled();
+    expect(within(returned).getAllByRole('listitem')).toEqual(rules);
+    const path = `/api/admin/users/${encodeURIComponent('sso:lab/saved')}/permissions`;
+    const reads = fetchMock.mock.calls.filter(([url]) => url === path);
+    expect(reads).toHaveLength(1);
+    expect(reads[0][1]).toMatchObject({
+      credentials: 'include',
+      headers: { 'X-Pulse-Org-ID': 'estate/north' },
+    });
+    expect(writes()).toHaveLength(0);
+  });
+
   it.each([
     { effect: undefined, expected: 'Allow' },
     { effect: '', expected: 'Allow' },

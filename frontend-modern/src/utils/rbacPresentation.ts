@@ -1,3 +1,5 @@
+import type { Permission } from '@/types/rbac';
+
 export interface RBACFeatureGateCopy {
   title: string;
   body: string;
@@ -116,4 +118,23 @@ export function getUserAssignmentsDeleteErrorMessage(error?: unknown): string {
     }
   }
   return 'Failed to remove user access';
+}
+
+// Both panels describe saved rules, not a client-side authorization verdict.
+export function savedRuleEffect(effect: unknown) {
+  if (effect === undefined || effect === '' || effect === 'allow') return 'Allow';
+  return effect === 'deny' ? 'Deny' : null;
+}
+
+export function savedRuleConditions(conditions: unknown): [string, string][] | null {
+  if (conditions === undefined) return [];
+  if (!conditions || typeof conditions !== 'object' || Array.isArray(conditions)) return null;
+  const entries = Object.entries(conditions);
+  return entries.every(([, value]) => typeof value === 'string') ? entries : null;
+}
+
+export function savedRuleQualifier(permission: Permission): string {
+  const effect = savedRuleEffect(permission.effect) ?? 'Effect unknown';
+  const count = savedRuleConditions(permission.conditions)?.length;
+  return effect + (count === undefined ? ' · Conditions unknown' : count ? ' · Conditional' : '');
 }

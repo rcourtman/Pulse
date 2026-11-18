@@ -1,5 +1,6 @@
 import { Component, For, Show, createMemo } from 'solid-js';
 import type { Permission } from '@/types/rbac';
+import { savedRuleConditions, savedRuleEffect } from '@/utils/rbacPresentation';
 
 // Describe saved rules, not a client-side authorization verdict. Unknown
 // metadata must stay unknown instead of looking like an unconditional allow.
@@ -10,19 +11,16 @@ export const PermissionPolicyDetails: Component<{
 }> = (props) => {
   const effect = () => {
     const value: unknown = props.permission.effect;
-    if (value === undefined || value === null || value === '' || value === 'allow') return 'Allow';
-    if (value === 'deny') return 'Deny';
-    return typeof value === 'string' ? `Unknown effect: ${value}` : 'Effect unavailable';
+    return (
+      savedRuleEffect(value ?? undefined) ??
+      (typeof value === 'string' ? `Unknown effect: ${value}` : 'Effect unavailable')
+    );
   };
-  const conditions = createMemo(() => {
-    const value: unknown = props.permission.conditions;
-    if (value === undefined || value === null) return [];
-    if (typeof value !== 'object' || Array.isArray(value)) return null;
-    const entries = Object.entries(value).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-    return entries.every(([, expected]) => typeof expected === 'string')
-      ? (entries as [string, string][])
-      : null;
-  });
+  const conditions = createMemo(() =>
+    savedRuleConditions(props.permission.conditions ?? undefined)?.sort(([a], [b]) =>
+      a < b ? -1 : a > b ? 1 : 0,
+    ),
+  );
   return (
     <span
       id={props.id}
