@@ -244,7 +244,7 @@ describe('securityScorePresentation', () => {
     });
   });
 
-  it('returns canonical security posture items and network subtitle', () => {
+  it('returns canonical security posture items', () => {
     expect(
       getSecurityPostureItems({
         hasAuthentication: true,
@@ -271,34 +271,26 @@ describe('securityScorePresentation', () => {
           key: 'export',
           description: 'Token + passphrase required',
         }),
-        // Publicly reachable, so HTTPS counts as critical.
+        // Not classified as private, so HTTPS still counts as critical.
         expect.objectContaining({ key: 'https', critical: true }),
       ]),
     );
-
-    expect(
-      getSecurityNetworkAccessSubtitle({
-        hasAuthentication: true,
-        apiTokenConfigured: true,
-        exportProtected: true,
-        hasAuditLogging: true,
-        requiresAuth: true,
-        publicAccess: true,
-        isPrivateNetwork: false,
-      }),
-    ).toBe('Public network access detected');
-    expect(
-      getSecurityNetworkAccessSubtitle({
-        hasAuthentication: true,
-        apiTokenConfigured: true,
-        exportProtected: true,
-        hasAuditLogging: true,
-        requiresAuth: true,
-        publicAccess: false,
-        isPrivateNetwork: true,
-      }),
-    ).toBe('Private network access');
   });
+
+  it.each([
+    ['100.64.0.5', true, false, 'Request not classified as private'],
+    ['10.0.0.5', false, true, 'Request IP: private'],
+    ['', true, false, 'Request IP classification unavailable'],
+    [undefined, false, true, 'Request IP classification unavailable'],
+    ['10.0.0.5', undefined, undefined, 'Request IP classification unavailable'],
+  ])(
+    'labels only the observed request classification for %s',
+    (clientIP, publicAccess, isPrivateNetwork, label) => {
+      expect(getSecurityNetworkAccessSubtitle({ clientIP, publicAccess, isPrivateNetwork })).toBe(
+        label,
+      );
+    },
+  );
 });
 
 describe('Issue1650 truncated security status must not raise the global warning', () => {

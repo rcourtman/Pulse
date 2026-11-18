@@ -78,10 +78,10 @@ export const SecurityOverviewPanel: Component<SecurityOverviewPanelProps> = (pro
   );
   const hardeningDescription = createMemo(() => {
     if (criticalHardeningActions() > 0) {
-      return `Resolve the ${criticalHardeningActions() === 1 ? 'critical exposure' : `${criticalHardeningActions()} critical exposures`} below before using this Pulse instance for live infrastructure.`;
+      return `Address ${criticalHardeningActions() === 1 ? 'the critical item' : `all ${criticalHardeningActions()} critical items`} below before using Pulse for live infrastructure.`;
     }
 
-    return 'Authentication is enabled and this instance appears private, but it still needs a few production hardening steps.';
+    return 'Review these recommendations before using Pulse for live infrastructure.';
   });
   const actionLinkFor = (action: SecurityHardeningAction) => {
     switch (action.key) {

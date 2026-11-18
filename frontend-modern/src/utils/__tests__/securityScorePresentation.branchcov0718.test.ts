@@ -20,7 +20,7 @@ import {
 //   2. formatList branches: 1-item, 3-item oxford-comma, and 0-item (default
 //      "Review the remaining..." message retained).
 //   3. The publicAccess+authenticated arm of the warning message
-//      ("reachable from a public network and is still missing ...").
+//      (request not classified as private, with named missing controls).
 //   4. The non-Moderate posture arm in the warning background/border ternary
 //      (Strong or Weak score still yields a RED background, not yellow).
 //   5. The `unprotectedExportAllowed` second operand of the
@@ -28,9 +28,7 @@ import {
 //      getSecurityHardeningActions, plus the empty-actions case.
 //   6. The "Not configured" / "HTTP only" / "Not enabled" / "Unprotected"
 //      negative description arms of every getSecurityPostureItems entry.
-//   7. The publicAccess=true && isPrivateNetwork=true arm of
-//      getSecurityNetworkAccessSubtitle (returns "Private" because
-//      !isPrivateNetwork is false).
+//   7. Contradictory request flags cannot label a request as private.
 
 describe('securityScorePresentation — branch coverage (batch 0718)', () => {
   describe('getSecurityScorePresentation — boundary values for the 80/50 thresholds', () => {
@@ -141,7 +139,7 @@ describe('securityScorePresentation — branch coverage (batch 0718)', () => {
       expect(out.border).toBe('border-red-200 dark:border-red-800');
     });
 
-    it('uses the public-reachability message arm when publicAccess && hasAuthentication', () => {
+    it('describes the request and names the missing controls when publicAccess is true', () => {
       const out = getSecurityWarningPresentation({
         score: 60,
         publicAccess: true,
@@ -151,7 +149,7 @@ describe('securityScorePresentation — branch coverage (batch 0718)', () => {
         hasHTTPS: false,
       });
       expect(out.message).toBe(
-        'This Pulse instance is reachable from a public network and is still missing HTTPS and an API token.',
+        'This request was not classified as private. Pulse is still missing HTTPS and an API token.',
       );
     });
 
@@ -307,34 +305,15 @@ describe('securityScorePresentation — branch coverage (batch 0718)', () => {
     });
   });
 
-  describe('getSecurityNetworkAccessSubtitle — public+private overlap arm', () => {
-    it('returns "Private network access" when publicAccess is true but isPrivateNetwork is also true', () => {
-      // The `!isPrivateNetwork` operand flips the AND to false.
+  describe('getSecurityNetworkAccessSubtitle — contradictory observations', () => {
+    it.each([true, false])('cannot classify the address when both flags are %s', (flag) => {
       expect(
         getSecurityNetworkAccessSubtitle({
-          hasAuthentication: true,
-          apiTokenConfigured: true,
-          exportProtected: true,
-          hasAuditLogging: true,
-          requiresAuth: true,
-          publicAccess: true,
-          isPrivateNetwork: true,
+          clientIP: '10.0.0.5',
+          publicAccess: flag,
+          isPrivateNetwork: flag,
         }),
-      ).toBe('Private network access');
-    });
-
-    it('returns "Private network access" when publicAccess is false (isPrivateNetwork operand never evaluated)', () => {
-      expect(
-        getSecurityNetworkAccessSubtitle({
-          hasAuthentication: true,
-          apiTokenConfigured: true,
-          exportProtected: true,
-          hasAuditLogging: true,
-          requiresAuth: true,
-          publicAccess: false,
-          isPrivateNetwork: false,
-        }),
-      ).toBe('Private network access');
+      ).toBe('Request IP classification unavailable');
     });
   });
 });
