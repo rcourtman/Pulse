@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "base_sha": "e599b547aa61e12559de82e51b701e79557bd31f",
+  "verified_at": "2026-11-18T09:11:27Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx",
+    "frontend-modern/src/utils/securityScorePresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx": "709434c628ba6384eef2aea9cb07c8ee54b648127b50c5541fc50b8ab2529b34",
+    "frontend-modern/src/utils/securityScorePresentation.ts": "4e9e26509ae2eef6922808d495eb59346467ad16fe4b297e08fce327061bde07"
+  },
+  "routes": [
+    "/settings/security-overview (production application and app-wide security warning, synthetic same-origin status)"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Private request with HTTP; non-private HTTPS request with recommendations only; CGNAT over HTTP; missing peer; authentication changes after bootstrap.",
+    "Existing scores, severity, raw address when returned, hardening links and warning details stay present."
+  ],
+  "interactions": [
+    "Expanded and closed the existing warning details by keyboard (Chromium) and touch (WebKit).",
+    "Read hardening actions and linked destinations; no permission or setting was modified."
+  ],
+  "playwright": "1.56.1",
+  "evidence": "132 completed script assertions and 26 native-inspected screenshots in 13 matched pairs. The browser gateway response was not received; the completed in-script matrix and fresh captures survive. Outer execution exit and tree cleanup are unconfirmed.",
+  "limits": "Offline synthetic status and self-signed loopback HTTPS only, not measurement of internet exposure, live access, TLS validation, deployment or a release."
+}

@@ -48,7 +48,7 @@ describe('SecurityPostureSummary', () => {
     expect(screen.getByText('Weak')).toBeInTheDocument();
   });
 
-  it('only calls plain HTTP critical once the instance is publicly reachable', () => {
+  it('retains the established HTTP scores across the two request classifications', () => {
     const status = {
       hasAuthentication: true,
       ssoEnabled: false,
@@ -61,18 +61,24 @@ describe('SecurityPostureSummary', () => {
       requiresAuth: true,
     };
     const { unmount } = render(() => (
-      <SecurityPostureSummary status={{ ...status, publicAccess: false, isPrivateNetwork: true }} />
+      <SecurityPostureSummary
+        status={{ ...status, clientIP: '10.0.0.5', publicAccess: false, isPrivateNetwork: true }}
+      />
     ));
     // Private network: HTTPS is a recommended step, so no Critical tag and the
     // critical share of the score is complete (0.7 + 2 of 7 x 0.3 = 79).
     expect(screen.queryByText('Critical')).toBeNull();
     expect(screen.getByText('79%')).toBeInTheDocument();
+    expect(screen.getByText('Request IP: private')).toBeInTheDocument();
     unmount();
 
     render(() => (
-      <SecurityPostureSummary status={{ ...status, publicAccess: true, isPrivateNetwork: false }} />
+      <SecurityPostureSummary
+        status={{ ...status, clientIP: '100.64.0.5', publicAccess: true, isPrivateNetwork: false }}
+      />
     ));
     expect(screen.getByText('Critical')).toBeInTheDocument();
     expect(screen.getByText('55%')).toBeInTheDocument();
+    expect(screen.getByText('Request not classified as private')).toBeInTheDocument();
   });
 });

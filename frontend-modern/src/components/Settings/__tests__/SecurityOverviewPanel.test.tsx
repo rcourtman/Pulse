@@ -58,6 +58,32 @@ describe('SecurityOverviewPanel', () => {
     expect(screen.getAllByText('Act now')).toHaveLength(3);
   });
 
+  it('does not infer private exposure from a non-private HTTPS request with recommendations only', () => {
+    render(() => (
+      <SecurityOverviewPanel
+        securityStatus={() => ({
+          detailLevel: 'privileged',
+          hasAuthentication: true,
+          apiTokenConfigured: false,
+          exportProtected: true,
+          hasHTTPS: true,
+          hasAuditLogging: true,
+          requiresAuth: true,
+          publicAccess: true,
+          isPrivateNetwork: false,
+          clientIP: '203.0.113.5',
+        })}
+        securityStatusLoading={() => false}
+      />
+    ));
+
+    expect(screen.getByText('Request not classified as private')).toBeInTheDocument();
+    expect(screen.getByText('Recommended hardening steps')).toBeInTheDocument();
+    expect(screen.getByText('Create an API token')).toBeInTheDocument();
+    expect(screen.queryByText(/appears private/i)).not.toBeInTheDocument();
+    expect(screen.queryByText('Act now')).not.toBeInTheDocument();
+  });
+
   // A truncated status response omits the settings-derived posture fields, so
   // scoring it would show false negatives to non-admin roles (#1675).
   it('hides the posture score behind an explanation for non-privileged viewers', () => {

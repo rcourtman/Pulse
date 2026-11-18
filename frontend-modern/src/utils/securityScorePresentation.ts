@@ -149,8 +149,7 @@ export function getSecurityWarningPresentation(options: {
     return {
       background: 'bg-red-50 dark:bg-red-900/25',
       border: 'border-red-200 dark:border-red-800',
-      message:
-        'WARNING: PUBLIC NETWORK ACCESS DETECTED - Your Proxmox credentials are exposed to the internet!',
+      message: 'Authentication is off. Anyone who can reach Pulse could read stored credentials.',
       messageClass: 'font-semibold text-red-700 dark:text-red-300',
     };
   }
@@ -185,7 +184,7 @@ export function getSecurityWarningPresentation(options: {
   } else if (missingControls.length > 0) {
     const missingSummary = formatList(missingControls);
     message = options.publicAccess
-      ? `This Pulse instance is reachable from a public network and is still missing ${missingSummary}.`
+      ? `This request was not classified as private. Pulse is still missing ${missingSummary}.`
       : `Authentication is enabled, but this Pulse instance is still missing ${missingSummary}.`;
   }
 
@@ -327,7 +326,7 @@ export function getSecurityHardeningActions(
       severity: 'critical',
       title: 'Enable HTTPS for public access',
       description:
-        'This Pulse instance is reachable from a public network and still serves over HTTP. Put it behind TLS before exposing it beyond your private network.',
+        'This request was not classified as private. Use HTTPS before accessing Pulse from outside your private network.',
     });
   } else if (!status.hasHTTPS) {
     actions.push({
@@ -394,10 +393,8 @@ export function getSecurityPostureItems(status: SecurityPostureStatus): Security
       label: 'HTTPS',
       enabled: Boolean(status.hasHTTPS),
       description: status.hasHTTPS ? 'Encrypted' : 'HTTP only',
-      // Same rule as the hardening steps below the grid: plain HTTP is
-      // critical once the instance is publicly reachable, and a recommended
-      // step on a private network. Marking it critical there put a red
-      // Critical tile above a Recommended card for the same control.
+      // Match the hardening steps: HTTP is critical when the status did not
+      // classify the request as private. This is not a reachability check.
       critical: Boolean(status.publicAccess),
     },
     {
@@ -410,10 +407,18 @@ export function getSecurityPostureItems(status: SecurityPostureStatus): Security
   ];
 }
 
-export function getSecurityNetworkAccessSubtitle(status: SecurityPostureStatus): string {
-  return status.publicAccess && !status.isPrivateNetwork
-    ? 'Public network access detected'
-    : 'Private network access';
+export function getSecurityNetworkAccessSubtitle({
+  clientIP,
+  isPrivateNetwork,
+  publicAccess,
+}: Pick<SecurityPostureStatus, 'clientIP' | 'isPrivateNetwork' | 'publicAccess'>): string {
+  // This describes Pulse's classification of the current client address.
+  // An absent or inconsistent observation does not prove a private network.
+  if (clientIP?.trim() && publicAccess !== isPrivateNetwork) {
+    if (isPrivateNetwork === true) return 'Request IP: private';
+    if (publicAccess === true) return 'Request not classified as private';
+  }
+  return 'Request IP classification unavailable';
 }
 
 export function getSecurityScoreSymbol(score: number): '✓' | '!' | '!!' {

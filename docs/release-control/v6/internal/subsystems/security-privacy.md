@@ -2657,8 +2657,11 @@ tokens, and path-normalization variants.
    owns skeleton animation, fill tokens, and placeholder shell consistency.
    Posture severity is one rule across the Security Overview: the HTTPS tile
    counts as critical, in its label and in the posture score, only when the
-   instance is publicly reachable, matching the hardening step that calls
-   HTTPS critical for public access and recommended on a private network.
+   status response does not classify the request as private (`publicAccess`),
+   matching the hardening step. That classification describes the client
+   address seen by Pulse, not whether other clients can reach the instance.
+   Do not display a private classification without an observed address and
+   consistent status flags. Missing observations do not change severity.
 6a. Keep API token refresh/loading indicators on the shared `LoadingSpinner`
     primitive. Security/privacy owns the token-management trust copy and
     refresh semantics; frontend-primitives owns spinner shell, tone, and
@@ -3908,8 +3911,9 @@ reserved for active exposure states rather than generic setup debt:
 `frontend-modern/src/components/SecurityWarning.tsx` and
 `frontend-modern/src/utils/securityScorePresentation.ts` may surface an
 always-visible app-wide warning when authentication is disabled, export
-protection is disabled, or a publicly reachable instance is still serving over
-HTTP, but private authenticated runtimes that are only missing optional
+protection is disabled, or a request not classified as private uses HTTP.
+Warning copy must not treat that classification as an internet exposure test.
+Private authenticated requests that are only missing optional
 hardening controls such as HTTPS on localhost or an API token must route that
 guidance through the governed Security Overview posture surfaces instead of
 covering the primary app chrome with a persistent warning.

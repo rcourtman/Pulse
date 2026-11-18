@@ -79,7 +79,8 @@ describe('SecurityWarning', () => {
       expect(screen.getByText(/Security score:/i)).toBeInTheDocument();
     });
 
-    expect(screen.getByText(/public network access detected/i)).toBeInTheDocument();
+    expect(screen.getByText(/authentication is off/i)).toHaveClass('font-semibold');
+    expect(screen.getByText(/could read stored credentials/i)).toBeInTheDocument();
     const banner = screen.getByRole('status');
     expect(banner).not.toHaveClass('fixed');
     expect(screen.getByRole('link', { name: 'Learn More' })).toHaveAttribute(
