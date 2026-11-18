@@ -307,6 +307,8 @@ class GitTreeScopeTest(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.repo = Path(self.temp.name)
         self.git("init", "-q", "--initial-branch=main")
+        # Match the real checkout when the selector imports a sibling module.
+        self.write(".gitignore", "__pycache__/\n")
         for name in ("scripts/ci_browser_proof_only.py", "scripts/ci_component_only.py", "scripts/ci_triage_only.py",
                      "scripts/ci_completion_only.py",
                      "scripts/go-test-compile-required.sh"):
