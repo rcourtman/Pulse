@@ -53,6 +53,9 @@ func applyPulseIntelligenceTelemetrySnapshot(
 	applyPulseIntelligenceAIUsageSnapshot(snap, persistence, since)
 	applyPulseIntelligencePatrolRunSnapshot(snap, persistence, since)
 	applyPulseIntelligenceFindingSnapshot(snap, persistence, since)
+	if persistence != nil {
+		telemetry.ApplyPatrolInvestigationTelemetry(snap, persistence.PatrolInvestigationTelemetry(now))
+	}
 	applyPulseIntelligenceExternalAgentSnapshot(snap, persistence, currentCfg, since, now)
 	applyPulseIntelligenceWorkflowPromptSnapshot(snap, persistence, since)
 

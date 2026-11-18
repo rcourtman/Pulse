@@ -398,29 +398,51 @@ describe('isReleaseVersion', () => {
   });
 });
 
-describe('current candidate notification packet', () => {
-  it('keeps manual workload column sizing in the customer-facing release packet', () => {
-    const releaseNotes = readFileSync(
-      path.resolve(process.cwd(), '../docs/releases/RELEASE_NOTES_v6.4.0-rc.1.md'),
-      'utf8',
-    );
-
-    expect(releaseNotes).toContain('Workload table columns can be resized');
-    expect(releaseNotes).toContain('keeps every selected column reachable');
-    expect(releaseNotes).toContain('shared through the page URL or reset');
-  });
-
-  it('keeps translation-ready webhook support in both release summaries', () => {
-    const releaseNotes = readFileSync(
-      path.resolve(process.cwd(), '../docs/releases/RELEASE_NOTES_v6.4.0-rc.3.md'),
-      'utf8',
-    );
-    const changelog = readFileSync(
-      path.resolve(process.cwd(), '../docs/releases/V6_CHANGELOG_v6.4.0-rc.3.md'),
-      'utf8',
-    );
-
-    expect(releaseNotes).toContain('Translation-ready webhooks');
-    expect(changelog).toContain('stable language-neutral message key');
-  });
+describe('authored release notification packets', () => {
+  it.each([
+    {
+      file: 'RELEASE_NOTES_v6.4.0-rc.1.md',
+      version: '6.4.0-rc.1',
+      changes: [
+        'Workload table columns can be resized',
+        'keeps every selected column reachable',
+        'shared through the page URL or reset',
+      ],
+      upgradeNotes: [],
+    },
+    {
+      file: 'RELEASE_NOTES_v6.4.0-rc.3.md',
+      version: '6.4.0-rc.3',
+      changes: ['Translation-ready webhooks'],
+      upgradeNotes: [],
+    },
+    {
+      file: 'V6_CHANGELOG_v6.4.0-rc.3.md',
+      version: '6.4.0-rc.3',
+      changes: ['stable language-neutral message key'],
+      upgradeNotes: [],
+    },
+    {
+      file: 'TELEMETRY_SCHEMA_V23.md',
+      version: '6.9.0',
+      changes: ['schema v23', 'No customer content'],
+      upgradeNotes: [
+        'Measurement starts after upgrading',
+        'source landing alone does not activate fleet measurement',
+      ],
+    },
+  ])(
+    'preserves authored customer information from $file',
+    ({ file, version, changes, upgradeNotes }) => {
+      const notice = readFileSync(path.resolve(process.cwd(), '../docs/releases', file), 'utf8');
+      const packet = extractWhatsNew(notice, version);
+      expect(packet).not.toBeNull();
+      for (const change of changes) {
+        expect(packet?.changes?.replace(/\s+/g, ' ')).toContain(change);
+      }
+      for (const note of upgradeNotes) {
+        expect(packet?.upgradeNotes?.replace(/\s+/g, ' ')).toContain(note);
+      }
+    },
+  );
 });

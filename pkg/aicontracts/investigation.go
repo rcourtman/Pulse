@@ -62,8 +62,9 @@ const (
 // OutcomeResolved, OutcomeCannotFix or OutcomeNeedsAttention. Remediation
 // still travels only as a typed action proposal.
 type InvestigationConclusion struct {
-	Outcome InvestigationOutcome `json:"outcome"`
-	Reason  string               `json:"reason"`
+	Outcome       InvestigationOutcome       `json:"outcome"`
+	Reason        string                     `json:"reason"`
+	HandoffReason InvestigationHandoffReason `json:"handoff_reason,omitempty"`
 }
 
 // ErrVerificationUnknown indicates the verifier could not conclusively determine
@@ -189,10 +190,11 @@ type InvestigationSession struct {
 	// TurnCount is the number of completed model responses. Evidence gathering
 	// is recorded separately because one model response may contain several
 	// tool calls.
-	TurnCount         int                  `json:"turn_count"`
-	EvidenceCallCount int                  `json:"evidence_call_count"`
-	ToolCallCount     int                  `json:"tool_call_count"`
-	Outcome           InvestigationOutcome `json:"outcome,omitempty"`
+	TurnCount         int                        `json:"turn_count"`
+	EvidenceCallCount int                        `json:"evidence_call_count"`
+	ToolCallCount     int                        `json:"tool_call_count"`
+	Outcome           InvestigationOutcome       `json:"outcome,omitempty"`
+	HandoffReason     InvestigationHandoffReason `json:"handoff_reason,omitempty"`
 	// ProposedFix and ApprovalID are migration-only: persisted legacy
 	// command-shaped fixes stay readable as non-executable narrative, but
 	// new investigations never populate them. Typed remediation lives in

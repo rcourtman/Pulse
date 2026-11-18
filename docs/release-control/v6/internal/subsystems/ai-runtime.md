@@ -1745,6 +1745,40 @@ logged at Info for production visibility. Proof: `TestBuildAnthropicSystem`,
 model-facing content, tool exposure, or approval authority, and it does not claim
 a measured cost reduction or installed-deployment cache-read rate.
 
+### Independent content-free investigation measurements (17 November 2026)
+
+Schema v23 counts closed investigation runs in a private installation-scoped
+30-day ledger, independently of finding cleanup. The canonical writer is
+`internal/config/patrol_investigation_telemetry.go`; core's
+`internal/api/patrol_investigation_telemetry.go` records a closed session and
+later canonical action transitions before any finding lookup. Organization/run
+identity is hashed locally for deduplication; only counts, fixed categories,
+availability and observation age leave the installation. Replays update one
+run and do not extend its original completion window. Distinct retries remain
+distinct. Startup replays retained post-observation sessions for crash recovery
+without backfilling a falsely complete pre-upgrade window. Read/write failures
+remain unavailable, and a failed observation is retried before coverage returns.
+
+`InvestigationHandoffReason` in `pkg/aicontracts/investigation_telemetry.go`
+is a closed vocabulary. Model conclusions may classify human decision,
+missing evidence or unsupported remediation; known command/guest-action access,
+expiry and planning-continuation facts own their runtime categories. No
+heuristic reads customer prose to classify a handoff. Unknown attribution is
+unspecified. Labels do not grant authority or score model quality.
+`internal/telemetry/patrol_investigation_runs.go` owns the outbound projection.
+Old surviving-finding counters retain their old semantics solely for published
+wire compatibility; schema23 aggregate reports keep a separate denominator,
+coverage and release cohort. Sender, preview type, private receiver, migration,
+aggregate query and authenticated reader must evolve together. Privacy and the
+pending schema23 release note disclose the exact fields and rollout boundary.
+
+Proofs: `TestPatrolInvestigationTelemetry*`,
+`TestPatrolInvestigationMeasurementsDoNotRequireSurvivingFindings`,
+`TestConcludeInvestigationHandoffAttributionIsClosedAndReplaySafe`, and
+`TestPatrolInvestigationRunTelemetryPreviewIsAggregateOnly`. Receiver tests
+reject inconsistent partitions and older-schema spoofing. Aggregate proofs
+retain null counts for unmeasured/older installs and reject extra content.
+
 ## Canonical Files
 
 - `pulse-enterprise:internal/investigation/orchestrator.go`: private investigation execution and current-occurrence follow-up context.
@@ -1787,6 +1821,8 @@ a measured cost reduction or installed-deployment cache-read rate.
 24. `cmd/patrol-qualify/`
 25. `tests/qualification/patrol/`
 26. `docs/AI_PATROL_QUALIFICATION.md`
+27. `pkg/aicontracts/investigation_telemetry.go`
+
 
 ## Shared Boundaries
 
@@ -1867,6 +1903,7 @@ a measured cost reduction or installed-deployment cache-read rate.
 39. `pkg/aicontracts/action_broker.go` shared with `api-contracts`: the public typed action-proposal broker contract is both an AI runtime proposal boundary (the only sanctioned Patrol route to an infrastructure mutation) and a canonical API dependency contract over the shared action lifecycle service.
 40. `pkg/aicontracts/fix_execution.go` shared with `api-contracts`: the public approved-fix execution contract is both an AI runtime approved-action boundary and a canonical API dependency contract for Patrol and enterprise auto-fix binders.
 41. `pkg/aicontracts/investigation.go` shared with `api-contracts`: the public Patrol investigation record and finding contract is both an AI runtime handoff boundary and a canonical API payload contract for Patrol, Assistant, unified findings, persistence, and audit surfaces.
+1. `pkg/aicontracts/investigation_telemetry.go` shared with `api-contracts`: closed investigation handoff attribution is shared runtime metadata and an additive API contract; it never grants action authority.
 42. `pkg/aicontracts/orchestrator_deps.go` shared with `api-contracts`: the public investigation orchestrator dependency contract is both an AI runtime handoff boundary and a canonical API payload contract for Assistant and Patrol tool-call history.
 43. `pkg/extensions/ai_autofix.go` shared with `api-contracts`: the enterprise auto-fix extension dependency seam is both an AI runtime approved-action boundary and a canonical API extension contract over Assistant and Patrol execution dependencies.
 44. `scripts/generate-pulse-intelligence-docs.go` shared with `api-contracts`: the Pulse Intelligence manifest docs generator is both an AI runtime docs/onboarding projection and a canonical API contract projection over the agent capabilities manifest and Pulse MCP surface tool contract.

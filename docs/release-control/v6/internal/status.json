@@ -9935,7 +9935,7 @@
     },
     {
       "id": "patrol-telemetry-provider-cost-outcome-visibility",
-      "summary": "The 2026-09-01 Patrol assessment could not answer from telemetry which share of Patrol installs run local, cloud, or hosted models, what Patrol costs an install per month (issue 1789 estimates about 104k input tokens per full run at about 5.5 runs a day, above the Pro fee on non-Flash tiers), how the 240 of 255 fleet investigations that produced no plan actually ended, or which effective Patrol autonomy level an install runs. Schema v17 adds a closed provider-class bucket, the effective autonomy level, coarse 30-day Patrol input and output token buckets, and per-outcome investigation counts, all sourced from existing local usage and finding records with no model names, endpoints, prompts, finding IDs, or resource IDs.",
+      "summary": "The 2026-09-01 Patrol assessment could not answer from telemetry which share of Patrol installs run local, cloud, or hosted models, what Patrol costs an install per month (issue 1789 estimates about 104k input tokens per full run at about 5.5 runs a day, above the Pro fee on non-Flash tiers), how the 240 of 255 fleet investigations that produced no plan actually ended, or which effective Patrol autonomy level an install runs. Schema v17 adds a closed provider-class bucket, the effective autonomy level, coarse 30-day Patrol input and output token buckets, and per-outcome investigation counts, all sourced from existing local usage and finding records with no model names, endpoints, prompts, finding IDs, or resource IDs. The 17 November review found that the outcome denominator counted surviving findings, with resolved findings purged after 24 hours, and could not attribute human handoffs. Schema23 adds an independent closed-run ledger, fixed handoff categories and explicit observation coverage. Its source proof does not establish deployed receiver, released client or representative fleet outcomes; those remain rollout evidence.",
       "owner": "project-owner",
       "status": "triaged",
       "recorded_at": "2026-09-01",
@@ -9951,7 +9951,27 @@
       "evidence": [
         {
           "repo": "pulse",
+          "path": "docs/releases/TELEMETRY_SCHEMA_V23.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/patrol_investigation_telemetry_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "internal/api/telemetry_pulse_intelligence.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/config/patrol_investigation_telemetry.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/config/patrol_investigation_telemetry_test.go",
           "kind": "file"
         },
         {

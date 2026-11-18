@@ -284,6 +284,24 @@ verifies receiver round-trip, schema/availability gates and bounds. Public
 snapshot, privacy and adoption-query tests verify the shared semantics. Receiver
 deployment and a client release are necessary before collecting fleet evidence.
 
+### Independent investigation measurements retain cohort meaning
+
+Schema v23 exports closed investigation outcomes and fixed handoff categories
+from the installation's independent 30-day ledger. The install-quality
+predicate treats these counts as observed feature activity. Measurement
+availability and elapsed observation age are passive metadata; an empty
+window alone must not qualify a single-ping installation as active. Existing
+production, mock and retention exclusions still apply before cohort counts.
+The measurements introduce no customer text, run identifiers, commercial
+identity joins or entitlement authority. Model-reported handoff categories
+remain diagnostic attribution, distinct from objective runtime restrictions.
+
+`pulse-pro:license-server/intelligence_value_test.go` checks numeric activity
+coverage, and `pulse-pro:license-server/product_telemetry_investigation_runs_test.go`
+checks that coverage metadata alone remains inactive while an actual closed run
+qualifies. Receiver deployment and a compatible client release precede fleet
+measurement; source landing does not reconstruct historical outcomes.
+
 ### Retired mobile settings keep information separate from entitlement
 
 Pulse Mobile retirement guidance is a full-text labelled note, not a paid

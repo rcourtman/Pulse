@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "base_sha": "9695c62aac7a08e4cd09fa92e69240cedb7781ad",
+  "verified_at": "2026-11-17T23:19:58Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/api/settings.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/api/settings.ts": "be61a8bc33116ffd55f5fb49bff9027b77eb358ddb954a9f77fcbf04ac9dd67f"
+  },
+  "routes": [
+    "/settings/system-general",
+    "/docs/PRIVACY"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 768,
+      "height": 1024
+    }
+  ],
+  "states": [
+    "Current schema 23 heartbeat preview including independent investigation counters and unavailable coverage",
+    "Saved and reloaded usage telemetry opt-out",
+    "Shipped privacy disclosure with fixed handoff vocabulary at desktop and narrow widths",
+    "No outer-page horizontal overflow at supported viewports"
+  ],
+  "interactions": [
+    "Open heartbeat preview by keyboard and inspect scrollable payload",
+    "Copy JSON and compare clipboard payload with preview",
+    "Refresh payload and reset installation ID",
+    "Disable telemetry and reload to verify persistence",
+    "Open Full details and inspect privacy disclosure in its page"
+  ]
+}

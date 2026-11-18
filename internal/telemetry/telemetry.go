@@ -230,7 +230,7 @@ const (
 	// Schema v20 adds aggregate reporting outcomes and distinct-period reuse.
 	// Schema v21 adds only the count of distinct days, 0 to 30, on which an
 	// external agent successfully read change or metric history.
-	TelemetrySchemaVersion = 22
+	TelemetrySchemaVersion = 23
 )
 
 type installIDRecord struct {
@@ -273,6 +273,33 @@ const (
 // Ping is the payload sent to the telemetry endpoint.
 // Every field is documented here so users can audit exactly what leaves their server.
 type Ping struct {
+	// Schema v23: durable closed-run outcomes and content-free handoff attribution.
+	PulseIntelligencePatrolInvestigationTelemetryAvailable                bool `json:"pulse_intelligence_patrol_investigation_telemetry_available"`
+	PulseIntelligencePatrolInvestigationObservationDays                   int  `json:"pulse_intelligence_patrol_investigation_observation_days"`
+	PulseIntelligencePatrolInvestigationRuns30d                           int  `json:"pulse_intelligence_patrol_investigation_runs_30d"`
+	PulseIntelligencePatrolInvestigationRunsResolved30d                   int  `json:"pulse_intelligence_patrol_investigation_runs_resolved_30d"`
+	PulseIntelligencePatrolInvestigationRunsFixQueued30d                  int  `json:"pulse_intelligence_patrol_investigation_runs_fix_queued_30d"`
+	PulseIntelligencePatrolInvestigationRunsFixExecuted30d                int  `json:"pulse_intelligence_patrol_investigation_runs_fix_executed_30d"`
+	PulseIntelligencePatrolInvestigationRunsFixRejected30d                int  `json:"pulse_intelligence_patrol_investigation_runs_fix_rejected_30d"`
+	PulseIntelligencePatrolInvestigationRunsFixFailed30d                  int  `json:"pulse_intelligence_patrol_investigation_runs_fix_failed_30d"`
+	PulseIntelligencePatrolInvestigationRunsFixVerified30d                int  `json:"pulse_intelligence_patrol_investigation_runs_fix_verified_30d"`
+	PulseIntelligencePatrolInvestigationRunsFixVerificationFailed30d      int  `json:"pulse_intelligence_patrol_investigation_runs_fix_verification_failed_30d"`
+	PulseIntelligencePatrolInvestigationRunsFixVerificationUnknown30d     int  `json:"pulse_intelligence_patrol_investigation_runs_fix_verification_unknown_30d"`
+	PulseIntelligencePatrolInvestigationRunsNeedsAttention30d             int  `json:"pulse_intelligence_patrol_investigation_runs_needs_attention_30d"`
+	PulseIntelligencePatrolInvestigationRunsCannotFix30d                  int  `json:"pulse_intelligence_patrol_investigation_runs_cannot_fix_30d"`
+	PulseIntelligencePatrolInvestigationRunsTimedOut30d                   int  `json:"pulse_intelligence_patrol_investigation_runs_timed_out_30d"`
+	PulseIntelligencePatrolInvestigationRunsInterrupted30d                int  `json:"pulse_intelligence_patrol_investigation_runs_interrupted_30d"`
+	PulseIntelligencePatrolInvestigationRunsUnclassified30d               int  `json:"pulse_intelligence_patrol_investigation_runs_unclassified_30d"`
+	PulseIntelligencePatrolInvestigationRunsFailed30d                     int  `json:"pulse_intelligence_patrol_investigation_runs_failed_30d"`
+	PulseIntelligencePatrolInvestigationHandoffHumanDecision30d           int  `json:"pulse_intelligence_patrol_investigation_handoff_human_decision_30d"`
+	PulseIntelligencePatrolInvestigationHandoffMissingEvidence30d         int  `json:"pulse_intelligence_patrol_investigation_handoff_missing_evidence_30d"`
+	PulseIntelligencePatrolInvestigationHandoffUnsupportedRemediation30d  int  `json:"pulse_intelligence_patrol_investigation_handoff_unsupported_remediation_30d"`
+	PulseIntelligencePatrolInvestigationHandoffUnspecified30d             int  `json:"pulse_intelligence_patrol_investigation_handoff_unspecified_30d"`
+	PulseIntelligencePatrolInvestigationHandoffCommandsDisabled30d        int  `json:"pulse_intelligence_patrol_investigation_handoff_commands_disabled_30d"`
+	PulseIntelligencePatrolInvestigationHandoffGuestActionsUnavailable30d int  `json:"pulse_intelligence_patrol_investigation_handoff_guest_actions_unavailable_30d"`
+	PulseIntelligencePatrolInvestigationHandoffActionExpired30d           int  `json:"pulse_intelligence_patrol_investigation_handoff_action_expired_30d"`
+	PulseIntelligencePatrolInvestigationHandoffPlanningFailed30d          int  `json:"pulse_intelligence_patrol_investigation_handoff_planning_failed_30d"`
+
 	// Identity
 	SchemaVersion      int    `json:"schema_version"`               // Versioned payload contract
 	SentAt             string `json:"sent_at"`                      // UTC send/preview time; no client clock history
@@ -594,6 +621,32 @@ type Ping struct {
 // The telemetry package calls a user-provided SnapshotFunc to populate this,
 // keeping the package decoupled from monitor/config internals.
 type Snapshot struct {
+	PulseIntelligencePatrolInvestigationTelemetryAvailable                bool
+	PulseIntelligencePatrolInvestigationObservationDays                   int
+	PulseIntelligencePatrolInvestigationRuns30d                           int
+	PulseIntelligencePatrolInvestigationRunsResolved30d                   int
+	PulseIntelligencePatrolInvestigationRunsFixQueued30d                  int
+	PulseIntelligencePatrolInvestigationRunsFixExecuted30d                int
+	PulseIntelligencePatrolInvestigationRunsFixRejected30d                int
+	PulseIntelligencePatrolInvestigationRunsFixFailed30d                  int
+	PulseIntelligencePatrolInvestigationRunsFixVerified30d                int
+	PulseIntelligencePatrolInvestigationRunsFixVerificationFailed30d      int
+	PulseIntelligencePatrolInvestigationRunsFixVerificationUnknown30d     int
+	PulseIntelligencePatrolInvestigationRunsNeedsAttention30d             int
+	PulseIntelligencePatrolInvestigationRunsCannotFix30d                  int
+	PulseIntelligencePatrolInvestigationRunsTimedOut30d                   int
+	PulseIntelligencePatrolInvestigationRunsInterrupted30d                int
+	PulseIntelligencePatrolInvestigationRunsUnclassified30d               int
+	PulseIntelligencePatrolInvestigationRunsFailed30d                     int
+	PulseIntelligencePatrolInvestigationHandoffHumanDecision30d           int
+	PulseIntelligencePatrolInvestigationHandoffMissingEvidence30d         int
+	PulseIntelligencePatrolInvestigationHandoffUnsupportedRemediation30d  int
+	PulseIntelligencePatrolInvestigationHandoffUnspecified30d             int
+	PulseIntelligencePatrolInvestigationHandoffCommandsDisabled30d        int
+	PulseIntelligencePatrolInvestigationHandoffGuestActionsUnavailable30d int
+	PulseIntelligencePatrolInvestigationHandoffActionExpired30d           int
+	PulseIntelligencePatrolInvestigationHandoffPlanningFailed30d          int
+
 	PVENodes                                                             int
 	PBSInstances                                                         int
 	PMGInstances                                                         int
@@ -1542,6 +1595,7 @@ func applySnapshot(base Ping, fn SnapshotFunc) Ping {
 	ping.PulseIntelligenceAssistantContextAICalls30d = s.PulseIntelligenceAssistantContextAICalls30d
 	ping.PulseIntelligenceAssistantToolCalls30d = s.PulseIntelligenceAssistantToolCalls30d
 	ping.PulseIntelligencePatrolAICalls30d = s.PulseIntelligencePatrolAICalls30d
+	applyInvestigationRunSnapshot(&ping, s)
 	ping.PulseIntelligencePatrolRuns30d = s.PulseIntelligencePatrolRuns30d
 	ping.PulseIntelligencePatrolNewFindings30d = s.PulseIntelligencePatrolNewFindings30d
 	ping.PulseIntelligencePatrolInvestigations30d = s.PulseIntelligencePatrolInvestigations30d

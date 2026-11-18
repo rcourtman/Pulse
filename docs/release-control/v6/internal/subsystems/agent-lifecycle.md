@@ -2418,6 +2418,17 @@ is unchanged. Windows installer confirmation/failure retention remains owned
 by Delivery: its current suppressed unregister failure is not made safe by a
 token-free command. No copy receipt establishes installed removal or a release.
 
+### Independent investigation measurements are adjacent metadata (17 November 2026)
+
+The shared AI handler and action reconciliation hooks record content-free
+closed-run measurements before finding lookup, so finding cleanup cannot
+erase an investigation's outcome. Fixed handoff categories report existing
+command/guest-action availability and action expiry facts without granting
+access or changing any agent, approval, dispatch, verification or recovery
+boundary. The security-privacy contract owns ledger retention, availability
+and the outbound schema23 projection. Measurement failure never authorizes a
+retry of an infrastructure action or changes its recorded result.
+
 ## Canonical Files
 
 1. `scripts/verify-agent-executable-identity.sh` builds the exact staged-source packet and requires full format, installer and ARM execution proofs.

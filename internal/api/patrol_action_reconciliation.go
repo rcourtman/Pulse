@@ -100,7 +100,9 @@ func (h *AISettingsHandler) closePatrolInvestigationRun(orgID string, session *a
 		stored.Status != aicontracts.InvestigationStatusPending && stored.Status != aicontracts.InvestigationStatusRunning {
 		session = stored
 	}
-	finalize(h.hydratePatrolInvestigationActionLocked(orgID, session))
+	closed := h.hydratePatrolInvestigationActionLocked(orgID, session)
+	h.recordInvestigationMeasurement(orgID, closed)
+	finalize(closed)
 }
 
 // hydratePatrolInvestigationAction repairs a missed transition callback before
@@ -209,6 +211,7 @@ func (h *AISettingsHandler) applyPatrolActionAudit(orgID string, audit unifiedre
 		if stored := store.Get(investigation.ID); stored != nil {
 			investigation = stored
 		}
+		h.recordInvestigationMeasurement(orgID, investigation)
 		ctx := context.WithValue(context.Background(), OrgIDContextKey, orgID)
 		h.updateFindingInvestigationOutcome(ctx, orgID, origin.FindingID, string(outcome), investigation)
 	}
