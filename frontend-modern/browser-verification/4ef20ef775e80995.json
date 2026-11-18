@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "base_sha": "11f1546b94b09de6f9a782d7f99f51bf410a8c24",
+  "verified_at": "2026-11-18T14:34:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapDiagram.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapModel.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapNetworks.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapServices.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapDiagram.ts": "b499c2010d9665b549a52fb5c06f172036c901b33b5c7da2a2894172ff61f6c0",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapModel.ts": "bdcb4643941896c938a50eb3ebae0ec4c39d2010920d7a24a8924a05a74e889f",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapNetworks.ts": "aad67508c09c17b502261d54993dbb06bfdfd0a18073357f8d9578828729f145",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapServices.ts": "30221ac88641a17072646cb114c22b70b693fe38c79f495a895baa83cfd46faa"
+  },
+  "routes": [
+    "/map"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "private mock backend on pulse-dev (demo mode, default mock estate: 8 Proxmox clusters and 2 standalone nodes, 929 guests, about 68 networks) serving an embedded production build of these final files on main, reached through an SSH tunnel on localhost:7847 in the in-app browser, dark theme",
+    "network pills at 1440: six pills and '+33 more' on one row. Each of the six is one bridge with its VLANs folded in, and reads the cluster because every cluster has a vmbr0: 'vmbr0 \u00b7 Branch Services \u00b7 116 connected' down to 'vmbr0 \u00b7 Edge Sites \u00b7 96 connected'",
+    "tile marks: 252 tiles carry a mark in six distinct colours, one per pill; tiles on the networks behind '+33 more' carry none",
+    "no page scroll with the demo and update banners dismissed: document scroll height equals the window height at 1440x900 (900), 1280x720 (720) and 375x812 (812); scroll width equals the window width at 1280 and 375. With both banners showing, the page is 82px taller than the window at 1440x900; the banners are outside this change",
+    "names hidden: pills read 'Network 1 \u00b7 53 connected', 'Network 2 \u00b7 48 addresses' and so on with '+61 more' (nothing is folded), six mark colours on 114 tiles, and no bridge name, VLAN, address or cluster name is left in the drawing",
+    "console: 401 responses from polling before the demo sign-in, nothing after it"
+  ],
+  "interactions": [
+    "opened /map, signed in with the stack's demo login, dismissed the demo and update banners, and read the pills, the mark colours and the document scroll height at each of the three sizes",
+    "hovered tiles: a container with no address reads 'on vmbr0'; on the rehearsal build of the same files a VM read '10.20.163.96 on vmbr0 \u00b7 VLAN 20 and vmbr1'; a Kubernetes pod shows no network line",
+    "pressed Hide names, read the pills and searched the drawing's text for bridge, VLAN, address and cluster names, then pressed it again to restore"
+  ],
+  "limits": [
+    "light theme, Firefox and Safari were not checked",
+    "mock data only: the real instance runs a released backend that does not send bridge or VLAN yet, and reaching it needs a sign-in this pass did not have. Its shapes (a node vmbr0 with a /24 and a VPN address, a container without a prefix, VMs that report nothing) are covered by a unit test, which gives one network 'vmbr0 \u00b7 192.168.0.0/24'",
+    "an estate with six networks or fewer, where nothing folds, was checked by unit tests only; the default mock always has more",
+    "the saved image was not exported in this pass"
+  ]
+}

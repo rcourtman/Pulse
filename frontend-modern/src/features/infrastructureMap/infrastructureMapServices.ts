@@ -12,7 +12,11 @@ import type {
   MapItem,
   MapPool,
 } from './infrastructureMapModel';
-import { OTHER_SEGMENT_ID } from './infrastructureMapNetworks';
+import {
+  OTHER_SEGMENT_ID,
+  type MapSegment,
+  type MapSegmentKind,
+} from './infrastructureMapNetworks';
 
 /**
  * The estate as a service diagram: what it runs, boxed by what each thing is
@@ -56,9 +60,20 @@ export interface DiagramGroup {
 export interface DiagramNetwork {
   id: string;
   label: string;
+  /** What the network was read from: a Proxmox bridge counts what is plugged in. */
+  kind: MapSegmentKind;
+  /** The subnet a bridge carries, whose bridge it is, or the VLANs folded into it. */
+  detail?: string;
   memberCount: number;
   colorIndex: number;
 }
+
+/**
+ * How many networks the diagram names. Each one has a colour of its own, and
+ * a tile is marked only with the colour of a network that is named, so two
+ * unrelated networks never share a mark.
+ */
+export const DIAGRAM_MAX_NETWORKS = 6;
 
 export interface ServiceDiagram {
   /** Set when something running exists to reach the Internet. */
@@ -109,7 +124,125 @@ const plural = (count: number, one: string, many: string): string =>
 const hostsOf = (model: InfrastructureMapModel): MapHost[] =>
   model.blocks.flatMap((block) => (block.kind === 'group' ? block.group.hosts : [block.host]));
 
-const serviceTile = (item: MapItem, host: MapHost): DiagramTile => ({
+interface NetworkPlan {
+  networks: DiagramNetwork[];
+  /** The named network a tile on a segment is marked with. */
+  networkOf: (segmentId: string | undefined) => string | undefined;
+  /** The address a tile answers on, with the bridge or port group it is on. */
+  where: (
+    address: string | undefined,
+    segmentIds: readonly string[] | undefined,
+  ) => string | undefined;
+}
+
+// The tags a bridge carries, short enough for a pill. The bridge's own name
+// already stands for its untagged network.
+const vlanPhrase = (vlans: number[]): string => {
+  const tags = vlans.filter((vlan) => vlan > 0).sort((a, b) => a - b);
+  if (tags.length === 0) return '';
+  const shown = tags.slice(0, 4).join(', ') + (tags.length > 4 ? ` +${tags.length - 4}` : '');
+  return `${tags.length === 1 ? 'VLAN' : 'VLANs'} ${shown}`;
+};
+
+/**
+ * Which networks the diagram names. Up to the cap, each network is one. Past
+ * it, the VLANs of one Proxmox bridge are named together, the way its owner
+ * says it ("vmbr0, VLANs 20, 30 and 40"), and what still does not fit is left
+ * to the "+N more" pill, unmarked. A tile's hover always names the exact
+ * bridge and VLAN, so folding hides nothing.
+ */
+const planNetworks = (model: InfrastructureMapModel): NetworkPlan => {
+  const segments = model.segments.filter((segment) => segment.id !== OTHER_SEGMENT_ID);
+  // A subnet or range only repeats the address beside it.
+  const names = new Map(
+    segments
+      .filter((segment) => segment.kind === 'bridge' || segment.kind === 'portgroup')
+      .map((segment) => [segment.id, segment.label]),
+  );
+  const where: NetworkPlan['where'] = (address, segmentIds) => {
+    const on = (segmentIds ?? []).flatMap((id) => names.get(id) ?? []);
+    return (
+      [address, on.length > 0 ? `on ${on.join(' and ')}` : ''].filter(Boolean).join(' ') ||
+      undefined
+    );
+  };
+  const plain = ({ id, label, kind, detail, memberCount, colorIndex }: MapSegment) => ({
+    id,
+    label,
+    kind,
+    ...(detail ? { detail } : {}),
+    memberCount,
+    colorIndex,
+  });
+  if (segments.length <= DIAGRAM_MAX_NETWORKS) {
+    return { networks: segments.map(plain), networkOf: (segmentId) => segmentId, where };
+  }
+
+  // Fold the networks of one bridge. A bridge with a single network gains
+  // nothing from it and keeps its own name.
+  const byBridge = new Map<string, MapSegment[]>();
+  for (const segment of segments) {
+    if (!segment.bridge) continue;
+    const key = `bridge:${segment.bridge.scope}:${segment.bridge.name}`;
+    byBridge.set(key, [...(byBridge.get(key) ?? []), segment]);
+  }
+  const foldOf = new Map<string, string>();
+  for (const [key, members] of byBridge) {
+    if (members.length < 2) continue;
+    for (const member of members) foldOf.set(member.id, key);
+  }
+  // A guest on two VLANs of one bridge is connected to that bridge once.
+  const connected = new Map<string, Set<string>>();
+  const count = (id: string, segmentIds: readonly string[] | undefined) => {
+    for (const segmentId of segmentIds ?? []) {
+      const fold = foldOf.get(segmentId);
+      if (!fold) continue;
+      connected.set(fold, (connected.get(fold) ?? new Set<string>()).add(id));
+    }
+  };
+  for (const host of hostsOf(model)) {
+    count(host.id, host.ownSegmentIds);
+    for (const section of host.sections) {
+      for (const item of section.items) count(item.id, item.segmentIds);
+    }
+  }
+  const folded: DiagramNetwork[] = [...byBridge]
+    .filter(([, members]) => members.length > 1)
+    .map(([key, members]) => ({
+      id: key,
+      label: members[0].bridge?.name ?? members[0].label,
+      kind: 'bridge' as const,
+      detail: vlanPhrase(members.map((member) => member.bridge?.vlan ?? 0)),
+      memberCount:
+        connected.get(key)?.size ?? members.reduce((sum, member) => sum + member.memberCount, 0),
+      colorIndex: 0,
+    }));
+  const scopeOf = new Map(
+    [...byBridge].map(([key, members]) => [key, members[0].bridge?.scope ?? '']),
+  );
+  const kept = segments.filter((segment) => !foldOf.has(segment.id)).map(plain);
+  // Two clusters can both have a `vmbr0`; say whose each one is.
+  const uses = new Map<string, number>();
+  for (const network of [...folded, ...kept]) {
+    uses.set(network.label, (uses.get(network.label) ?? 0) + 1);
+  }
+  const networks = [
+    ...folded.map((network) => {
+      // One fact per pill: whose bridge it is where that tells two apart,
+      // otherwise the tags. A tile's hover has the exact VLAN either way.
+      const whose = (uses.get(network.label) ?? 0) > 1 ? scopeOf.get(network.id) : '';
+      const { detail: tags, ...rest } = network;
+      const detail = whose || tags;
+      return { ...rest, ...(detail ? { detail } : {}) };
+    }),
+    ...kept,
+  ]
+    .sort((a, b) => b.memberCount - a.memberCount || collator.compare(a.label, b.label))
+    .map((network, index) => ({ ...network, colorIndex: index }));
+  return { networks, networkOf: (segmentId) => foldOf.get(segmentId ?? '') ?? segmentId, where };
+};
+
+const serviceTile = (item: MapItem, host: MapHost, plan: NetworkPlan): DiagramTile => ({
   id: item.id,
   name: item.name,
   caption: item.app?.role ?? host.name,
@@ -117,10 +250,10 @@ const serviceTile = (item: MapItem, host: MapHost): DiagramTile => ({
   status: item.status,
   health: item.health,
   ...(item.app?.icon ? { icon: item.app.icon } : {}),
-  ...(item.segmentIds?.[0] ? { segmentId: item.segmentIds[0] } : {}),
+  ...(item.segmentIds?.[0] ? { segmentId: plan.networkOf(item.segmentIds[0]) } : {}),
   cpu: item.cpu,
   memory: item.memory,
-  address: item.address,
+  address: plan.where(item.address, item.segmentIds),
   detail: item.detail,
   navigable: true,
 });
@@ -209,6 +342,7 @@ export function buildServiceDiagram(
   const checks: DiagramTile[] = [];
   let serviceCount = 0;
   let foldedOff = 0;
+  const plan = planNetworks(model);
 
   for (const block of model.blocks) {
     if (block.kind === 'group') {
@@ -230,7 +364,7 @@ export function buildServiceDiagram(
         }
         if (item.app?.role && item.health !== 'off') roles.add(item.app.role);
         const list = byCategory.get(category) ?? [];
-        list.push(serviceTile(item, host));
+        list.push(serviceTile(item, host, plan));
         byCategory.set(category, list);
       }
     }
@@ -264,10 +398,10 @@ export function buildServiceDiagram(
       status: host.status,
       health: host.health,
       platform: host.platform,
-      ...(host.ownSegmentIds[0] ? { segmentId: host.ownSegmentIds[0] } : {}),
+      ...(host.ownSegmentIds[0] ? { segmentId: plan.networkOf(host.ownSegmentIds[0]) } : {}),
       cpu: host.cpu,
       memory: host.memory,
-      address: host.address,
+      address: plan.where(host.address, host.ownSegmentIds),
       navigable: true,
     };
     (host.platform === 'backup' ? backupServers : hardware).push(tile);
@@ -307,9 +441,7 @@ export function buildServiceDiagram(
   return {
     ...(internetRoles.length > 0 ? { internet: { label: internetRoles.join(' · ') } } : {}),
     ...(access ? { access } : {}),
-    networks: model.segments
-      .filter((segment) => segment.id !== OTHER_SEGMENT_ID)
-      .map(({ id, label, memberCount, colorIndex }) => ({ id, label, memberCount, colorIndex })),
+    networks: plan.networks,
     groups,
     ...(storageTiles.length > 0 ? { storage: box('storage', 'Storage', storageTiles, max) } : {}),
     ...(backupTiles.length > 0 ? { backups: box('backups', 'Backups', backupTiles, max) } : {}),

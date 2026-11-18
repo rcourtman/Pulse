@@ -11,11 +11,12 @@ import {
   type MapTone,
   type SceneNode,
 } from './infrastructureMapLayout';
-import type {
-  DiagramGroup,
-  DiagramNetwork,
-  DiagramTile,
-  ServiceDiagram,
+import {
+  DIAGRAM_MAX_NETWORKS,
+  type DiagramGroup,
+  type DiagramNetwork,
+  type DiagramTile,
+  type ServiceDiagram,
 } from './infrastructureMapServices';
 
 /**
@@ -51,7 +52,6 @@ const BUS_DROP = 18;
 const GUTTER = 16;
 const PILL_HEIGHT = 24;
 const MAX_COLUMNS = 8;
-const MAX_NETWORKS = 6;
 const MIN_WIDTH = 300;
 const NETWORK_TONES: readonly MapNetworkTone[] = ['net0', 'net1', 'net2', 'net3', 'net4', 'net5'];
 const LOWER_LABEL: Record<string, string> = {
@@ -383,10 +383,17 @@ const connectorLabel = (labels: SceneNode[], text: string, x: number, y: number)
   });
 };
 
+// A Proxmox bridge counts what is plugged into it, since a guest there may
+// report no address at all. Its detail is the subnet it carries, or whose
+// bridge it is when two clusters both have a `vmbr0`.
 const networkText = (network: DiagramNetwork): string =>
-  `${network.label} · ${network.memberCount.toLocaleString()} ${
-    network.memberCount === 1 ? 'address' : 'addresses'
-  }`;
+  network.kind === 'bridge'
+    ? [network.label, network.detail, `${network.memberCount.toLocaleString()} connected`]
+        .filter(Boolean)
+        .join(' · ')
+    : `${network.label} · ${network.memberCount.toLocaleString()} ${
+        network.memberCount === 1 ? 'address' : 'addresses'
+      }`;
 
 // One pill per network, centred and wrapped. Returns the bottom of the row.
 const drawNetworks = (
@@ -397,7 +404,7 @@ const drawNetworks = (
   y: number,
   toneOf: (network: DiagramNetwork) => MapTone,
 ): number => {
-  const shown = networks.slice(0, MAX_NETWORKS);
+  const shown = networks.slice(0, DIAGRAM_MAX_NETWORKS);
   const hidden = networks.length - shown.length;
   const pills = shown.map((network) => {
     const text = fitMapText(networkText(network), width - 44, 12, 400);
@@ -473,8 +480,10 @@ export function layoutServiceDiagram(diagram: ServiceDiagram, options: MapLayout
   const labels: SceneNode[] = [];
   const mid = width / 2;
 
+  // Only a network with a pill has a colour. A tile on any other network is
+  // left unmarked, so a recycled colour never claims two networks are one.
   const toneByNetwork = new Map<string, MapNetworkTone>();
-  for (const network of diagram.networks) {
+  for (const network of diagram.networks.slice(0, DIAGRAM_MAX_NETWORKS)) {
     toneByNetwork.set(
       network.id,
       network.colorIndex < 0

@@ -632,6 +632,9 @@ export function anonymizeInfrastructureMapModel(
     segments: model.segments.map((segment) => ({
       ...segment,
       label: segment.kind === 'other' ? segment.label : next('Network'),
+      // A subnet, a cluster name or a bridge name says as much as the label.
+      detail: undefined,
+      bridge: undefined,
     })),
     blocks: model.blocks.map((block) =>
       block.kind === 'host'

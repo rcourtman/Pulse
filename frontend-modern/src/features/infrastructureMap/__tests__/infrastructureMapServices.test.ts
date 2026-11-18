@@ -230,7 +230,167 @@ describe('buildServiceDiagram', () => {
       ['Tower', '1 service'],
     ]);
     expect(diagram.networks).toEqual([
-      { id: 'net:192.168.10.0/24', label: '192.168.10.0/24', memberCount: 2, colorIndex: 0 },
+      {
+        id: 'net:192.168.10.0/24',
+        label: '192.168.10.0/24',
+        kind: 'subnet',
+        memberCount: 2,
+        colorIndex: 0,
+      },
+    ]);
+  });
+
+  describe('more networks than the diagram names', () => {
+    const plugged = (
+      name: string,
+      scope: string,
+      vlans: number[],
+      extra: Partial<Resource> = {},
+    ): Resource =>
+      guest(name, 'pve', {
+        ...extra,
+        proxmox: {
+          clusterName: scope,
+          networkInterfaces: vlans.map((vlan, index) => ({
+            name: `net${index}`,
+            addresses: [],
+            bridge: 'vmbr0',
+            ...(vlan ? { vlan } : {}),
+          })),
+        },
+      });
+    const tileNamed = (diagram: ReturnType<typeof diagramOf>, name: string) =>
+      diagram.groups.flatMap((group) => group.tiles).find((tile) => tile.name === name);
+
+    it('names the VLANs of one bridge together and counts each guest once', () => {
+      const vlans = [0, 10, 20, 30, 40, 50, 60];
+      const diagram = diagramOf(
+        [
+          ...homelab(),
+          ...vlans.map((vlan) => plugged(`svc-${vlan}`, 'homelab', [vlan])),
+          // On two VLANs of the bridge, and still one thing connected to it.
+          plugged('multi-homed', 'homelab', [10, 20]),
+        ],
+        60,
+      );
+      expect(diagram.networks).toEqual([
+        {
+          id: 'bridge:homelab:vmbr0',
+          label: 'vmbr0',
+          kind: 'bridge',
+          detail: 'VLANs 10, 20, 30, 40 +2',
+          memberCount: 8,
+          colorIndex: 0,
+        },
+        {
+          id: 'net:192.168.10.0/24',
+          label: '192.168.10.0/24',
+          kind: 'subnet',
+          memberCount: 2,
+          colorIndex: 1,
+        },
+      ]);
+      // The tile takes the bridge's colour, and its hover keeps the exact VLAN.
+      expect(tileNamed(diagram, 'svc-30')).toMatchObject({
+        segmentId: 'bridge:homelab:vmbr0',
+        address: 'on vmbr0 · VLAN 30',
+      });
+      expect(tileNamed(diagram, 'multi-homed')?.address).toBe(
+        'on vmbr0 · VLAN 10 and vmbr0 · VLAN 20',
+      );
+      expect(tileNamed(diagram, 'jellyfin')?.address).toBe('192.168.10.50');
+    });
+
+    it('says whose bridge it is when two clusters fold to the same name', () => {
+      const diagram = diagramOf(
+        [
+          ...homelab(),
+          ...[10, 20, 30, 40].map((vlan) => plugged(`east-${vlan}`, 'east', [vlan])),
+          ...[10, 20, 30].map((vlan) => plugged(`west-${vlan}`, 'west', [vlan])),
+        ],
+        60,
+      );
+      expect(
+        diagram.networks.map(({ label, detail, memberCount }) => [label, detail, memberCount]),
+      ).toEqual([
+        ['vmbr0', 'east', 4],
+        ['vmbr0', 'west', 3],
+        ['192.168.10.0/24', undefined, 2],
+      ]);
+    });
+
+    it('leaves a bridge with one network under its own name', () => {
+      const diagram = diagramOf(
+        [
+          ...homelab(),
+          ...[10, 20, 30, 40, 50].map((vlan) => plugged(`east-${vlan}`, 'east', [vlan])),
+          plugged('lone', 'shed', [70]),
+        ],
+        60,
+      );
+      expect(diagram.networks.map((network) => network.label)).toEqual([
+        'vmbr0',
+        '192.168.10.0/24',
+        'vmbr0 · VLAN 70',
+      ]);
+      expect(tileNamed(diagram, 'lone')?.segmentId).toBe('bridge:shed:vmbr0:70');
+    });
+
+    it('does not fold while every network can be named', () => {
+      const diagram = diagramOf([
+        ...homelab(),
+        ...[10, 20, 30, 40, 50].map((vlan) => plugged(`svc-${vlan}`, 'homelab', [vlan])),
+      ]);
+      expect(diagram.networks).toHaveLength(6);
+      expect(diagram.networks.filter((network) => network.kind === 'bridge')).toHaveLength(5);
+      expect(tileNamed(diagram, 'svc-30')?.segmentId).toBe('bridge:homelab:vmbr0:30');
+    });
+
+    it('folds nothing once names are hidden, and names no bridge', () => {
+      const hidden = buildServiceDiagram(
+        anonymizeInfrastructureMapModel(
+          buildInfrastructureMapModel([
+            ...homelab(),
+            ...[0, 10, 20, 30, 40, 50, 60].map((vlan) => plugged(`svc-${vlan}`, 'homelab', [vlan])),
+          ]),
+        ),
+      );
+      expect(hidden.networks).toHaveLength(8);
+      const shown = hidden.networks.map(({ label, detail }) => [label, detail]);
+      expect(JSON.stringify(shown)).not.toMatch(/vmbr|VLAN|homelab|192\.168/);
+    });
+  });
+
+  it('carries a Proxmox bridge as a network of its own kind', () => {
+    const onVlan = (name: string) =>
+      guest(name, 'pve', {
+        proxmox: {
+          clusterName: 'homelab',
+          networkInterfaces: [{ name: 'eth0', addresses: [], bridge: 'vmbr0', vlan: 30 }],
+        },
+      });
+    const diagram = diagramOf([...homelab(), onVlan('frigate'), onVlan('esphome')]);
+    expect(diagram.networks.find((network) => network.kind === 'bridge')).toMatchObject({
+      id: 'bridge:homelab:vmbr0:30',
+      label: 'vmbr0 · VLAN 30',
+      memberCount: 2,
+    });
+    // A bridge that carries a known subnet says which.
+    const onLan = guest('paperless', 'pve', {
+      proxmox: {
+        clusterName: 'homelab',
+        networkInterfaces: [{ name: 'eth0', addresses: ['192.168.10.60'], bridge: 'vmbr0' }],
+      },
+    });
+    expect(diagramOf([...homelab(), onLan]).networks).toEqual([
+      {
+        id: 'net:192.168.10.0/24',
+        label: 'vmbr0',
+        kind: 'bridge',
+        detail: '192.168.10.0/24',
+        memberCount: 3,
+        colorIndex: 0,
+      },
     ]);
   });
 
