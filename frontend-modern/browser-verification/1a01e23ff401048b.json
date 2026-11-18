@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "base_sha": "5b12f1a060a0cd631d1db7516626112daa18c56c",
+  "verified_at": "2026-11-18T09:57:24Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapNetworks.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapNetworks.ts": "f8d4c6c01e07b6b7b4f8acffe4abac876027cd63df8baf688dfeb3b2b6864097"
+  },
+  "routes": [
+    "/map"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "the map's frontend served by a Vite dev server on the Mac, proxied to a real Pulse 6.9.0-beta.3 instance that monitors a real homelab (3 Proxmox nodes, an Unraid Docker host, a Mac, 12 VMs, 28 LXCs, 9 containers), in the in-app browser, final runtime bytes",
+    "before the fix, same instance: the Connections view drew one line, Other addresses with 9 addresses, hosts were captioned with their VPN address and most guests had no address, because the Unraid host has a macvlan Docker network on the LAN's subnet",
+    "after the fix, 1440 dark theme: one line for the LAN subnet with 34 addresses and one for Other addresses with 8, all five hosts tied to the LAN line and captioned with their LAN address, each guest row showing its LAN address (ten guests read back by name, including ones that also hold a bridge, podman, VPN or tunnel address)",
+    "375px phone: one column, document scroll width 375, same two lines",
+    "console: no error after the final reload",
+    "not checked in a browser: light theme for this change, an estate with an ipvlan network (unit test only), Firefox and Safari"
+  ],
+  "interactions": [
+    "opened /map and read the drawing's text: network names, member counts, host captions and the address on each guest's row",
+    "pressed Hide names: no IPv4 address and no hostname remained in the drawing, the LAN read Network 1; pressed again to restore",
+    "switched to Hosts and back to Connections with the toolbar buttons (Hosts 551px tall with 86 links)"
+  ]
+}
