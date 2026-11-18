@@ -548,6 +548,8 @@ function App() {
                             organizations={runtime.organizations}
                             activeOrgID={runtime.activeOrgID}
                             orgsLoading={runtime.orgsLoading}
+                            organizationListIssue={runtime.organizationListIssue}
+                            onRetryOrganizationList={runtime.retryOrganizationList}
                             showOrgSwitcher={runtime.showOrgSwitcher}
                             onSwitchOrg={runtime.handleOrgSwitch}
                           >

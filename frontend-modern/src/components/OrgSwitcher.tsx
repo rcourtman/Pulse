@@ -1,11 +1,15 @@
 import { For, Show, createMemo } from 'solid-js';
 import type { Organization } from '@/api/orgs';
+import type { OrganizationListIssue } from '@/useAppRuntimeState';
 import { FormSelect } from '@/components/shared/FormSelect';
+import { Button } from '@/components/shared/Button';
 
 interface OrgSwitcherProps {
   orgs: Organization[];
   selectedOrgId: string;
   loading?: boolean;
+  listIssue?: OrganizationListIssue | null;
+  onRetry?: () => void;
   onChange: (orgId: string) => void;
 }
 
@@ -33,53 +37,96 @@ export function OrgSwitcher(props: OrgSwitcherProps) {
     const selected = selectedOrg();
     return selected?.displayName || props.selectedOrgId || 'Default';
   });
+  let switcher: HTMLDivElement | undefined;
+  const retryList = () => {
+    // The retry control disappears when the real choices come back. Keep a
+    // local keyboard anchor without taking focus after an asynchronous read.
+    switcher?.focus({ preventScroll: true });
+    props.onRetry?.();
+  };
 
   return (
-    <div class="flex items-center gap-2">
+    <div
+      ref={switcher}
+      role="group"
+      aria-label="Organization selection"
+      tabIndex={-1}
+      class="flex min-w-0 items-center gap-2 focus:outline-2 focus:-outline-offset-2 focus:outline-blue-500"
+    >
       <span class="hidden lg:inline text-xs text-muted">Org</span>
       <Show
-        when={props.orgs.length > 1}
+        when={props.listIssue}
         fallback={
-          <span
-            class="inline-flex h-7 items-center rounded-md border border-border bg-surface px-2 text-xs font-medium text-base-content"
-            title={selectedOrgName()}
+          <Show
+            when={props.orgs.length > 1}
+            fallback={
+              <span
+                class="inline-flex h-7 items-center rounded-md border border-border bg-surface px-2 text-xs font-medium text-base-content"
+                title={selectedOrgName()}
+              >
+                {selectedOrgName()}
+              </span>
+            }
           >
-            {selectedOrgName()}
-          </span>
+            <FormSelect
+              id="org-switcher-select"
+              label="Organization"
+              labelClass="sr-only"
+              fieldBaseClass={hasAmbiguousNames() ? 'min-w-0 max-w-44 overflow-clip' : 'contents'}
+              selectClass={hasAmbiguousNames() ? 'focus:ring-inset' : undefined}
+              selectBaseClass="h-7 max-w-44 rounded-md border border-border bg-surface px-2 text-xs text-base-content shadow-xs transition-colors focus:border-blue-500 focus:outline-hidden focus:ring-1 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+              help={
+                selectedNeedsIdentity() ? (
+                  <>
+                    Organization ID: <bdi>{props.selectedOrgId}</bdi>
+                  </>
+                ) : undefined
+              }
+              helpClass="mt-1 max-w-44 text-xs leading-4 [overflow-wrap:anywhere]"
+              aria-label="Organization"
+              value={props.selectedOrgId}
+              disabled={Boolean(props.loading)}
+              onChange={(event) => props.onChange(event.currentTarget.value)}
+            >
+              <For each={props.orgs}>
+                {(org) => (
+                  <option value={org.id}>
+                    {needsIdentity(org)
+                      ? `${organizationName(org)} (${org.id})`
+                      : organizationName(org)}
+                  </option>
+                )}
+              </For>
+            </FormSelect>
+          </Show>
         }
       >
-        <FormSelect
-          id="org-switcher-select"
-          label="Organization"
-          labelClass="sr-only"
-          fieldBaseClass={hasAmbiguousNames() ? 'min-w-0 max-w-44 overflow-clip' : 'contents'}
-          selectClass={hasAmbiguousNames() ? 'focus:ring-inset' : undefined}
-          selectBaseClass="h-7 max-w-44 rounded-md border border-border bg-surface px-2 text-xs text-base-content shadow-xs transition-colors focus:border-blue-500 focus:outline-hidden focus:ring-1 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
-          help={
-            selectedNeedsIdentity() ? (
-              <>
-                Organization ID: <bdi>{props.selectedOrgId}</bdi>
-              </>
-            ) : undefined
-          }
-          helpClass="mt-1 max-w-44 text-xs leading-4 [overflow-wrap:anywhere]"
-          aria-label="Organization"
-          value={props.selectedOrgId}
-          disabled={Boolean(props.loading)}
-          onChange={(event) => props.onChange(event.currentTarget.value)}
-        >
-          <For each={props.orgs}>
-            {(org) => (
-              <option value={org.id}>
-                {needsIdentity(org)
-                  ? `${organizationName(org)} (${org.id})`
-                  : organizationName(org)}
-              </option>
-            )}
-          </For>
-        </FormSelect>
+        <div class="min-w-0 max-w-44 space-y-1 text-xs leading-4">
+          <div role="status" class="space-y-0.5">
+            <p class="font-medium text-amber-700 dark:text-amber-300">
+              {props.loading
+                ? 'Checking organizations…'
+                : props.listIssue === 'empty'
+                  ? 'No organizations listed'
+                  : 'Organization list unavailable'}
+            </p>
+            <Show when={props.selectedOrgId}>
+              <p class="text-muted [overflow-wrap:anywhere]">
+                Selected ID: <bdi>{props.selectedOrgId}</bdi>
+              </p>
+            </Show>
+          </div>
+          <Button
+            size="xs"
+            class="min-h-9 whitespace-normal"
+            onClick={retryList}
+            disabled={props.loading}
+          >
+            Retry organization list
+          </Button>
+        </div>
       </Show>
-      <Show when={props.loading}>
+      <Show when={props.loading && !props.listIssue}>
         <svg
           class="h-3.5 w-3.5 animate-spin text-slate-400"
           fill="none"
