@@ -185,7 +185,9 @@ func preserveVMOptionalEnrichment(current models.VM, previous *models.VM) models
 	if len(current.IPAddresses) == 0 {
 		current.IPAddresses = cloneStringSlice(previous.IPAddresses)
 	}
-	if len(current.NetworkInterfaces) == 0 {
+	// A row built without guest detail can still carry devices known from
+	// configuration; those alone do not replace what the guest last reported.
+	if len(guestReportedInterfaces(current.NetworkInterfaces)) == 0 && len(previous.NetworkInterfaces) > 0 {
 		current.NetworkInterfaces = cloneGuestNetworkInterfaces(previous.NetworkInterfaces)
 	}
 	if current.OSName == "" {

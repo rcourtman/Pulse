@@ -6180,6 +6180,43 @@ completed cycle.
 The core poll therefore records success after an authoritative inventory even
 when those optional collectors time out independently.
 
+### Proxmox guest devices carry where they are plugged in (18 November 2026)
+
+Each Proxmox guest interface may carry the bridge, VLAN tag and firewall flag
+of the device behind it, read from the guest's own configuration (`netN`
+lines). The values are what Proxmox is configured to do; they are not a tested
+path, and Pulse still sees no switch, router or firewall rule.
+
+- LXC: `parseContainerConfigNetworks` reads them from the configuration
+  `enrichContainerMetadata` already fetches for every container each poll, and
+  from the live status when it lists them. No request is added.
+- Stopped VM: `fetchStoppedVMConfig` takes them from the configuration read
+  that already answers start-on-boot. No request is added.
+- Running VM: `runningVMNICConfig` reads the configuration when the last
+  reading is older than five minutes plus up to 150 seconds of per-guest
+  jitter. Against the status read every running VM already costs each poll,
+  that is about one extra request per guest every thirty to forty-five polls
+  at the default 10-second interval.
+  After a start the first reads are spread over a minute so they do not double
+  the first poll, a failed read backs off two minutes and keeps the earlier
+  reading, and a closed enrichment budget sends nothing. The read runs inside
+  the guest's existing worker slot and the sixty-second enrichment budget.
+
+`applyVMNICConfig` matches a configured device to the interfaces the guest
+agent reported by hardware address. A device with no match (no guest agent, or
+the VM is stopped) becomes an interface named after its key (`net0`) with no
+address, so the guest still has a place on a network. Such placement-only
+entries are not evidence that a guest agent answered: `guestReportedInterfaces`
+removes them before agent-evidence import, the locked-VM carry and the
+exhausted-budget carry look at the interface list. A device with no bridge
+(user-mode networking) has no placement, and a tag outside 1-4094 is untagged.
+
+`internal/monitoring/guest_nic_config_test.go` covers the parsing, the merge,
+the read cadence, the failure and closed-budget paths and both LXC sources.
+The mock estate plugs its guests into `vmbr0` untagged and VLANs 20, 30 and
+40, with a second device on `vmbr1`; `internal/mock/generator_test.go` checks
+the spread.
+
 ### Local libvirt guests are bounded host-agent observations
 
 Authenticated Linux host reports may carry a read-only libvirt inventory for

@@ -42,6 +42,7 @@ type vmBuildState struct {
 	individualDisks         []models.Disk
 	ipAddresses             []string
 	networkInterfaces       []models.GuestNetworkInterface
+	nicConfig               []containerNetworkDetails // From VM configuration; applied after agent evidence is judged.
 	osName                  string
 	osVersion               string
 	agentVersion            string
@@ -378,7 +379,9 @@ func (m *Monitor) buildVMFromClusterResource(
 			}
 			if prevVM != nil {
 				state.ipAddresses = cloneStringSlice(prevVM.IPAddresses)
-				state.networkInterfaces = cloneGuestNetworkInterfaces(prevVM.NetworkInterfaces)
+				// Only what the guest reported is carried; where its devices are
+				// plugged in is re-applied from configuration below.
+				state.networkInterfaces = guestReportedInterfaces(prevVM.NetworkInterfaces)
 				state.osName, state.osVersion, state.agentVersion = prevVM.OSName, prevVM.OSVersion, prevVM.AgentVersion
 			}
 		}
@@ -432,7 +435,11 @@ func (m *Monitor) buildVMFromClusterResource(
 	if res.Status != "running" {
 		state.memorySource = "powered-off"
 		state.memUsed = 0
-		state.onBoot = m.fetchVMOnBoot(ctx, client, res.Node, res.VMID)
+		// One configuration read answers both start-on-boot and where the
+		// network devices are plugged in.
+		state.onBoot, state.nicConfig = m.fetchStoppedVMConfig(ctx, client, instanceName, res.Node, res.VMID)
+	} else {
+		state.nicConfig = m.runningVMNICConfig(ctx, client, instanceName, res.Node, res.VMID)
 	}
 
 	var snapshotNotes []string
@@ -571,7 +578,7 @@ func (m *Monitor) buildVMFromClusterResource(
 		OSName:             state.osName,
 		OSVersion:          state.osVersion,
 		AgentVersion:       state.agentVersion,
-		NetworkInterfaces:  state.networkInterfaces,
+		NetworkInterfaces:  applyVMNICConfig(state.networkInterfaces, state.nicConfig),
 		NetworkIn:          networkInValue,
 		NetworkOut:         networkOutValue,
 		DiskRead:           diskReadValue,
@@ -616,27 +623,28 @@ func (m *Monitor) buildVMFromClusterResource(
 	return vm, state.guestRaw, state.memorySource, snapshotNotes, sampleTime, true
 }
 
-// fetchVMOnBoot retrieves the onboot (autostart) setting for a stopped VM by
-// fetching its config. Returns nil only when the config is unavailable or the
-// value is unrecognised. When onboot is absent from a valid config, returns
-// false because Proxmox's default is "do not start on boot". Uses a type assertion because PVEClientInterface does not include
+// fetchStoppedVMConfig reads a stopped VM's configuration once for its onboot
+// (autostart) setting and for where its network devices are plugged in. onboot
+// is nil only when the config is unavailable or the value is unrecognised;
+// when it is absent from a valid config it is false, because Proxmox's default
+// is "do not start on boot". A failed read keeps the last known device
+// placement. Uses a type assertion because PVEClientInterface does not include
 // GetVMConfig (it is only on the concrete client, matching the pattern in
 // guest_config.go).
-func (m *Monitor) fetchVMOnBoot(ctx context.Context, client PVEClientInterface, node string, vmid int) *bool {
-	type vmConfigClient interface {
-		GetVMConfig(ctx context.Context, node string, vmid int) (map[string]interface{}, error)
-	}
-	vmClient, ok := client.(vmConfigClient)
+func (m *Monitor) fetchStoppedVMConfig(ctx context.Context, client PVEClientInterface, instanceName, node string, vmid int) (*bool, []containerNetworkDetails) {
+	key := guestMetadataCacheKey(instanceName, node, vmid)
+	known, _ := m.vmNICConfig.due(key, time.Now())
+	vmClient, ok := client.(vmConfigReader)
 	if !ok {
-		return nil
+		return nil, known
 	}
 	configCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	configData, err := vmClient.GetVMConfig(configCtx, node, vmid)
 	if err != nil || len(configData) == 0 {
-		return nil
+		return nil, known
 	}
-	return parseProxmoxOnBoot(configData)
+	return parseProxmoxOnBoot(configData), m.rememberVMNICConfig(instanceName, node, vmid, configData)
 }
 
 type vmFSInfoSummary struct {
