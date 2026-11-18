@@ -21,6 +21,10 @@
 
 ## Purpose
 
+The Compose deployment history read reports an unavailable action store through
+the existing audit-history error. An unreadable store cannot confirm that an
+application has no previous deployments.
+
 Local Compose updates retain the prior source beside the registered file.
 Their receipts and recovery instructions distinguish reverting a service
 image from recovering application data. Git proposals have their own review

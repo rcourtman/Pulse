@@ -17,6 +17,10 @@
 
 ## Purpose
 
+An agent client reading Compose history supplies both the runtime and project.
+An incomplete scope receives the shared invalid action-list view error before
+Pulse reads the action store or contacts a runtime.
+
 An operator can register local Compose files and Git deployment checkouts on
 the Docker agent. A version-two update binds the service, source revision and
 immutable image to the reviewed command. A registered source refuses the

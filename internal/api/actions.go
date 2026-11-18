@@ -254,7 +254,7 @@ func (h *ResourceHandlers) HandleListActions(w http.ResponseWriter, r *http.Requ
 	if view == "compose" {
 		runtime, project := r.URL.Query().Get("runtime"), r.URL.Query().Get("project")
 		if runtime == "" || project == "" || len(runtime) > 512 || len(project) > 128 {
-			writeJSONError(w, http.StatusBadRequest, "invalid_project", "An exact Docker runtime and Compose project are required")
+			writeJSONError(w, http.StatusBadRequest, agentcapabilities.AgentErrCodeInvalidActionListView, "An exact Docker runtime and Compose project are required")
 			return
 		}
 		var records []unified.ActionAuditRecord
@@ -272,7 +272,9 @@ func (h *ResourceHandlers) HandleListActions(w http.ResponseWriter, r *http.Requ
 			var err error
 			records, err = h.ActionLifecycle().ComposeActions(orgID, runtime, project, limit)
 			if err != nil {
-				writeJSONError(w, http.StatusServiceUnavailable, "deployment_history_unavailable", "Deployment history unavailable")
+				writeActionLifecycleReadError(w, err, func() {
+					writeJSONError(w, http.StatusInternalServerError, agentcapabilities.AgentErrCodeActionListFailed, "Failed to query Compose deployments")
+				})
 				return
 			}
 			if len(records) > 0 {
@@ -285,7 +287,9 @@ func (h *ResourceHandlers) HandleListActions(w http.ResponseWriter, r *http.Requ
 			projected[i].ComposeObservation = observations.observe(projected[i].ActionAuditRecord, time.Now().UTC())
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(actionInboxResponse{View: view, Actions: projected, Count: len(projected), ReadOnly: mock.IsMockEnabled()})
+		if err := json.NewEncoder(w).Encode(actionInboxResponse{View: view, Actions: projected, Count: len(projected), ReadOnly: mock.IsMockEnabled()}); err != nil {
+			writeJSONError(w, http.StatusInternalServerError, agentcapabilities.AgentErrCodeActionListEncodeFailed, "Failed to encode actions")
+		}
 		return
 	}
 	if mock.IsMockEnabled() {
@@ -293,7 +297,7 @@ func (h *ResourceHandlers) HandleListActions(w http.ResponseWriter, r *http.Requ
 		if view == actionlifecycle.ActionListSettled {
 			states = []unified.ActionState{unified.ActionStateRejected, unified.ActionStateExpired, unified.ActionStateCompleted, unified.ActionStateFailed}
 		} else if view != actionlifecycle.ActionListPending {
-			writeJSONError(w, http.StatusBadRequest, agentcapabilities.AgentErrCodeInvalidActionListView, "Action list view must be pending or settled")
+			writeJSONError(w, http.StatusBadRequest, agentcapabilities.AgentErrCodeInvalidActionListView, "Action list view must be pending, settled, or compose")
 			return
 		}
 		actions := mockActionAuditsByState(limit, states...)
@@ -307,7 +311,7 @@ func (h *ResourceHandlers) HandleListActions(w http.ResponseWriter, r *http.Requ
 	actions, err := h.ActionLifecycle().List(GetOrgID(r.Context()), view, limit)
 	if err != nil {
 		if strings.Contains(err.Error(), "unsupported action list view") {
-			writeJSONError(w, http.StatusBadRequest, agentcapabilities.AgentErrCodeInvalidActionListView, "Action list view must be pending or settled")
+			writeJSONError(w, http.StatusBadRequest, agentcapabilities.AgentErrCodeInvalidActionListView, "Action list view must be pending, settled, or compose")
 			return
 		}
 		writeActionLifecycleReadError(w, err, func() {
