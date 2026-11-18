@@ -1,7 +1,7 @@
 {
   "schema_version": "patrol.qual/v1",
   "id": "response.pve-storage-old-backups",
-  "version": 1,
+  "version": 2,
   "title": "node storage full of old backups of one guest",
   "description": "A month of nightly backup archives of the nextcloud container piles up in the node's local storage until it is past 91%. No action exists for it. The product is that old backups of that one guest filled it.",
   "owner": "ai-runtime",
@@ -188,6 +188,30 @@
       [
         "111",
         "nextcloud"
+      ],
+      [
+        "unpruned",
+        "un pruned",
+        "none pruned",
+        "not pruned",
+        "never pruned",
+        "no pruning",
+        "without pruning",
+        "nothing is pruning",
+        "no retention",
+        "without retention",
+        "accumulated",
+        "accumulating",
+        "accumulate",
+        "accumulates",
+        "accumulation",
+        "retained",
+        "piled up",
+        "piling up",
+        "pile up",
+        "build up",
+        "building up",
+        "built up"
       ]
     ],
     "area_terms": [
@@ -202,7 +226,14 @@
       "agent is disconnected",
       "agent is not connected",
       "agent connection",
-      "agent connectivity"
+      "agent connectivity",
+      "not well supported",
+      "hypothesis is not supported",
+      "cannot by themselves account",
+      "cannot account for",
+      "not shown to be the cause",
+      "not confirmed as the proximate cause",
+      "ruling out a routine vzdump"
     ]
   },
   "security": {

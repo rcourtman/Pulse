@@ -7,6 +7,8 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -33,6 +35,10 @@ type CSRFTokenStore struct {
 	stopChan      chan bool
 	workerDone    chan struct{}
 	stopOnce      sync.Once
+	// Set only by startup load, then owned by saveMu. An unread inventory
+	// must be retained outside active storage before any fresh snapshot.
+	preserveBeforeSave    bool
+	preserveFailureLogged bool
 }
 
 const maxCSRFTokensPerSession = 8
@@ -63,6 +69,19 @@ func (c *CSRFTokenStore) migrateLegacyTokens(data []byte, now time.Time) (bool, 
 	var legacy map[string]*legacyCSRFTokenData
 	if err := json.Unmarshal(data, &legacy); err != nil {
 		return false, err
+	}
+	// Do not partially load or immediately migrate an incomplete inventory.
+	for rawSessionID, record := range legacy {
+		if record == nil || strings.TrimSpace(record.Token) == "" {
+			return false, errIncompleteAuthInventory
+		}
+		sessionID := rawSessionID
+		if sessionID == "" {
+			sessionID = record.SessionID
+		}
+		if strings.TrimSpace(sessionID) == "" {
+			return false, errIncompleteAuthInventory
+		}
 	}
 
 	loaded := 0
@@ -347,8 +366,59 @@ func (c *CSRFTokenStore) save() {
 	c.saveMu.Lock()
 	defer c.saveMu.Unlock()
 
+	if c.preserveBeforeSave {
+		preserved, err := c.preserveUnreadTokens()
+		if err != nil {
+			if !c.preserveFailureLogged {
+				log.Error().Err(err).Msg("Cannot preserve unread CSRF token file; disk saves are disabled until it can be preserved. New CSRF tokens are memory-only and token revocations are not durable. Preserve or move csrf_tokens.json before restarting; do not restore stale tokens")
+				c.preserveFailureLogged = true
+			}
+			return
+		}
+		c.preserveBeforeSave = false
+		if preserved != "" {
+			log.Warn().Str("preserved_file", preserved).Msg("Unread CSRF token file preserved outside active storage; it will not be loaded automatically. Refresh CSRF tokens rather than restoring stale tokens")
+		} else {
+			log.Warn().Msg("Unread CSRF token file is no longer in active storage; saving only current CSRF tokens")
+		}
+	}
+
 	persisted, sessions := c.persistenceSnapshot()
 	c.persistSnapshot(persisted, sessions)
+}
+
+// preserveUnreadTokens retains the original inode without reading it. Only the
+// canonical file is loaded; private retained files are never active authority.
+// Called under saveMu, never the token mutex. Nonregular paths stay untouched,
+// and failure holds fresh publication until storage recovers or an operator
+// moves the unread entry. No protection against concurrent directory tampering
+// or promise of crash/power-loss durability is added.
+func (c *CSRFTokenStore) preserveUnreadTokens() (string, error) {
+	path := filepath.Join(c.dataPath, "csrf_tokens.json")
+	info, err := os.Lstat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("inspect unread CSRF token file: %w", err)
+	}
+	if !info.Mode().IsRegular() {
+		return "", errors.New("unread CSRF token path is not a regular file; leaving it untouched")
+	}
+	dir, err := os.MkdirTemp(c.dataPath, ".csrf-tokens-unread-*")
+	if err != nil {
+		return "", fmt.Errorf("prepare private CSRF preservation directory: %w", err)
+	}
+	preserved := filepath.Join(dir, "csrf_tokens.json")
+	if err := os.Rename(path, preserved); err != nil {
+		return "", errors.Join(fmt.Errorf("preserve unread CSRF token file: %w", err), os.Remove(dir))
+	}
+	if err := os.Chmod(preserved, 0600); err != nil {
+		// The private parent still protects the original. Do not put unknown
+		// tokens back into live storage if ownership prevents normalization.
+		log.Warn().Err(err).Str("preserved_file", preserved).Msg("CSRF token file retained in a private directory but its permissions could not be normalized; backup readers may need filesystem repair")
+	}
+	return preserved, nil
 }
 
 // persistenceSnapshot copies token values, not pointers or live slice headers.
@@ -405,10 +475,12 @@ func (c *CSRFTokenStore) persistSnapshot(persisted []CSRFTokenData, sessions int
 func (c *CSRFTokenStore) load() {
 	csrfFile := filepath.Join(c.dataPath, "csrf_tokens.json")
 
-	data, err := os.ReadFile(csrfFile)
+	data, err := readAuthSnapshot(csrfFile)
 	if err != nil {
-		if !os.IsNotExist(err) {
-			log.Error().Err(err).Msg("Failed to read CSRF tokens file")
+		_, entryErr := os.Lstat(csrfFile)
+		if !os.IsNotExist(err) || !os.IsNotExist(entryErr) {
+			c.preserveBeforeSave = true
+			log.Error().Err(err).Msg("Failed to read CSRF tokens file; existing tokens were not loaded. The next save or shutdown will preserve it outside active storage, not restore it; refresh CSRF tokens")
 		}
 		return
 	}
@@ -417,6 +489,13 @@ func (c *CSRFTokenStore) load() {
 
 	var current []*CSRFTokenData
 	if err := json.Unmarshal(data, &current); err == nil {
+		for _, record := range current {
+			if record == nil || strings.TrimSpace(record.SessionKey) == "" || strings.TrimSpace(record.TokenHash) == "" {
+				c.preserveBeforeSave = true
+				log.Error().Msg("Incomplete CSRF credential record; existing tokens were not loaded. The next save or shutdown will preserve the file outside active storage, not restore it; refresh CSRF tokens")
+				return
+			}
+		}
 		now := time.Now()
 		loaded := 0
 		for _, record := range current {
@@ -440,5 +519,6 @@ func (c *CSRFTokenStore) load() {
 	if migrated, err := c.migrateLegacyTokens(data, time.Now()); err == nil && migrated {
 		return
 	}
-	log.Error().Msg("Failed to decode CSRF tokens file; unsupported format")
+	c.preserveBeforeSave = true
+	log.Error().Msg("Failed to decode CSRF tokens file; existing tokens were not loaded. The next save or shutdown will preserve it outside active storage, not restore it; refresh CSRF tokens")
 }

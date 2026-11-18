@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -52,7 +53,7 @@ func TestSecurityTokenMutationIOReleasesConfig(t *testing.T) {
 		for _, scenario := range scenarios {
 			t.Run(operation+"/"+scenario, func(t *testing.T) {
 				f := newOrgTokenFixture(t)
-				caller, target := f.def.Clone(), f.orgB.Clone()
+				caller, target := newTokenRecord(t, "synthetic-isolation-caller.12345678", []string{config.ScopeWildcard}, nil), f.orgB.Clone()
 				body := `{"name":"edited","scopes":["monitoring:read"]}`
 				wantStatus, wantBody := http.StatusOK, ""
 				switch scenario {
@@ -83,6 +84,7 @@ func TestSecurityTokenMutationIOReleasesConfig(t *testing.T) {
 						wantBody = "Cannot grant scope \"*\" in the default organization: your token is not an instance-wide full-access token\n"
 					}
 				}
+				f.cfg.UpsertAPIToken(caller)
 				f.cfg.SortAPITokens()
 				before := make([]config.APITokenRecord, len(f.cfg.APITokens))
 				for i := range f.cfg.APITokens {
@@ -136,6 +138,9 @@ func TestSecurityTokenMutationIOReleasesConfig(t *testing.T) {
 				logger := installTokenMutationAuditProbe(t, func() { probe("audit") })
 				writer := &tokenReadProbeWriter{ResponseRecorder: httptest.NewRecorder(), probe: func() { probe("response") }}
 				req := httptest.NewRequest(method, path, strings.NewReader(body))
+				if caller.OrgID != "" {
+					req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, caller.OrgID))
+				}
 				attachAPITokenRecord(req, &caller)
 				handler(writer, req)
 				if !writer.probed || writer.Code != wantStatus {

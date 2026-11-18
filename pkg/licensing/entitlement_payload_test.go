@@ -247,49 +247,6 @@ func TestBuildEntitlementPayload_LifetimeOmitsCommercialCaps(t *testing.T) {
 	}
 }
 
-func TestBuildEntitlementPayload_MaxHistoryDays(t *testing.T) {
-	tests := []struct {
-		name     string
-		tier     Tier
-		wantDays int
-	}{
-		{"free tier gets 7 days", TierFree, 7},
-		{"relay tier gets 14 days", TierRelay, 14},
-		{"pro tier gets 90 days", TierPro, 90},
-		{"pro_plus tier gets 90 days", TierProPlus, 90},
-		{"pro_annual tier gets 90 days", TierProAnnual, 90},
-		{"lifetime tier gets 90 days", TierLifetime, 90},
-		{"cloud tier gets 90 days", TierCloud, 90},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			status := &LicenseStatus{
-				Valid:    true,
-				Tier:     tc.tier,
-				Features: append([]string(nil), TierFeatures[tc.tier]...),
-			}
-			payload := BuildEntitlementPayload(status, "")
-			if payload.MaxHistoryDays != tc.wantDays {
-				t.Fatalf("expected MaxHistoryDays=%d for tier %q, got %d", tc.wantDays, tc.tier, payload.MaxHistoryDays)
-			}
-		})
-	}
-}
-
-func TestBuildEntitlementPayload_NilStatus_MaxHistoryDays(t *testing.T) {
-	payload := BuildEntitlementPayloadWithUsage(nil, "", EntitlementUsageSnapshot{}, nil)
-	if payload.MaxHistoryDays != TierHistoryDays[TierFree] {
-		t.Fatalf("expected MaxHistoryDays=%d for nil status, got %d", TierHistoryDays[TierFree], payload.MaxHistoryDays)
-	}
-	if payload.HasMigrationGap {
-		t.Fatal("expected has_migration_gap=false for nil status payload")
-	}
-	if payload.LegacyConnections.Total() != 0 {
-		t.Fatalf("expected zero legacy connections for nil status payload, got %+v", payload.LegacyConnections)
-	}
-}
-
 func TestBuildCommercialPosturePayloadWithUsage_CurrentValues(t *testing.T) {
 	status := &LicenseStatus{
 		Valid:       true,
@@ -391,9 +348,6 @@ func TestBuildRuntimeCapabilitiesPayloadWithUsage_CurrentValues(t *testing.T) {
 	if !reflect.DeepEqual(payload.Capabilities, status.Features) {
 		t.Fatalf("expected capabilities to match status features")
 	}
-	if payload.MaxHistoryDays != TierHistoryDays[TierCloud] {
-		t.Fatalf("expected cloud max history days %d, got %d", TierHistoryDays[TierCloud], payload.MaxHistoryDays)
-	}
 	if len(payload.Limits) != 1 {
 		t.Fatalf("expected one runtime limit, got %d", len(payload.Limits))
 	}
@@ -486,9 +440,6 @@ func TestFilterCapabilitiesForRuntimeIdentity_PreservesPrivateRuntimeCapabilitie
 
 func TestBuildRuntimeCapabilitiesPayload_NilStatusDefaultsToFreeTier(t *testing.T) {
 	payload := BuildRuntimeCapabilitiesPayload(nil, "")
-	if payload.MaxHistoryDays != TierHistoryDays[TierFree] {
-		t.Fatalf("expected MaxHistoryDays=%d for nil status, got %d", TierHistoryDays[TierFree], payload.MaxHistoryDays)
-	}
 	if len(payload.Capabilities) != 0 {
 		t.Fatalf("expected no runtime capabilities for nil status, got %+v", payload.Capabilities)
 	}

@@ -156,7 +156,7 @@ beforeEach(async () => {
       const url = String(input);
       requestLog.push({ url, init });
       if (url === '/api/license/runtime-capabilities')
-        return json({ capabilities: ['audit_logging'], limits: [], max_history_days: 7 });
+        return json({ capabilities: ['audit_logging'], limits: [] });
       if (url.startsWith('/api/audit?')) return read();
       if (url.startsWith('/api/audit/') && url.endsWith('/verify')) return verify(url);
       throw new Error(`Unexpected synthetic request: ${url}`);

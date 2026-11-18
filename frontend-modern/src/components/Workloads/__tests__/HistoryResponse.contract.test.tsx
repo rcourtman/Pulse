@@ -17,8 +17,6 @@ vi.mock('@/utils/apiClient', () => ({
 }));
 vi.mock('@/stores/license', () => ({
   loadRuntimeCapabilities: vi.fn(),
-  maxHistoryDays: () => 7,
-  isRangeLocked: () => false,
 }));
 
 const target = { resourceType: 'agent' as const, resourceId: 'pbs-current' };

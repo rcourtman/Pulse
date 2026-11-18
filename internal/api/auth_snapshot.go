@@ -8,10 +8,28 @@ import (
 	"path/filepath"
 )
 
+var errIncompleteAuthInventory = errors.New("auth inventory contains an incomplete credential record")
+
 // authSnapshotWriteFunc keeps the actual descriptor write independently
 // exercisable by per-store fixtures, without replacing snapshot publication or
 // sharing a mutable global hook. Runtime stores use the default file.Write.
 type authSnapshotWriteFunc func(*os.File, []byte) (int, error)
+
+// readAuthSnapshot refuses nonregular targets before opening them: ReadFile on
+// a named pipe can wait forever before the store's failed-read handling runs.
+// Follow links as ReadFile did, so existing links to regular inventories keep
+// working. This is a startup check, not protection against concurrent path
+// replacement or a timeout for an unavailable filesystem.
+func readAuthSnapshot(path string) ([]byte, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("auth inventory is not a regular file: %s", path)
+	}
+	return os.ReadFile(path)
+}
 
 // writePrivateAuthSnapshot publishes already-encoded authority using a new
 // owner-private regular file. Never reuse path+".tmp": WriteFile would follow a

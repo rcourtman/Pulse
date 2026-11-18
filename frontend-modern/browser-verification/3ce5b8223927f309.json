@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "base_sha": "85601faf3a51593467186d10d0cf347cce9591f5",
+  "verified_at": "2026-11-16T17:41:35Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/BillingAdminOrganizationsTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/BillingAdminOrganizationsTable.tsx": "c8ec42a12ce6543a33ddb7e82481a918e43f330e1ac906a390ae1330efc5b50f"
+  },
+  "routes": [
+    "/ (offline fixture consuming existing Settings > Billing Admin panel, state owner, stores and real HTTP client)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Two organizations sharing one display name but different opaque IDs, with accepted Trial and Active billing states; collapsed row actions and expanded billing JSON.",
+    "Selected-row read failed and recovered; read-only gates. Desktop light and phone light/dark in Chromium; phone light in WebKit.",
+    "Suspended and soft-deleted inventory badge labels remain in final accessible details names; supplemental DOM interaction checks, not additional capture states."
+  ],
+  "interactions": [
+    "52 baseline checks on base 85601faf and 64 repaired checks through real consuming panel with safe synthetic HTTP responses.",
+    "Keyboard Enter suspends then reactivates only the non-first namesake. Only the two explicit encoded-ID PUT requests occur; payload fields and sibling state retained.",
+    "Expand/collapse selected organization; aria-expanded tracks visibility, aria-controls identifies one exact named region; selected details reload and failed-row retry read only that ID.",
+    "Read-only disables all subscription writes; no stored-token fallback on billing and health endpoints. Runtime-capability bootstrap retains its ordinary stored-token behavior.",
+    "12 comparable before/after pairs retained in current outcome archives. Actual image content reviewed with native view_image; visible fields, identities, statuses, JSON and controls retained without layout change. No screen-reader, full App, installed paid journey or release claim."
+  ]
+}

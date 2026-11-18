@@ -773,3 +773,93 @@ func TestP4AcceptsNoProxmoxStopShutdownTask(t *testing.T) {
 		t.Fatalf("the v2 rubric grades the record %q, want the recorded %q", graded.Grade, record.RecordedGrade)
 	}
 }
+
+// P3 v1 graded every stored conclusion Handed over, including three that did
+// not find the cause: one guessed "one or more containers" and only advised
+// pruning old backups if they turned out to be the cause, and two said the
+// backups could not account for the fill. A name and a backup word anywhere
+// in the text passed. v2 also needs the conclusion to say the backups piled
+// up, and a statement that they do not explain the fill sends the user the
+// wrong way.
+func TestP3HandsOverOnlyAConclusionThatFoundThePiledUpBackups(t *testing.T) {
+	payload, err := os.ReadFile(filepath.Join("testdata", "fault-set-pve-v1", "p3-stored-conclusions.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var stored struct {
+		Records []struct {
+			pveTaskLogRecord
+			Archive   string `json:"archive"`
+			WantGrade Grade  `json:"want_grade"`
+		} `json:"records"`
+	}
+	if err := json.Unmarshal(payload, &stored); err != nil {
+		t.Fatal(err)
+	}
+	catalog := loadFaultSetCatalog(t)
+	current := catalog.ByID["response.pve-storage-old-backups"]
+	if current.Version < 2 {
+		t.Fatalf("P3 is at v%d; this test needs the v2 rubric", current.Version)
+	}
+	handedOver, partial := 0, 0
+	for _, record := range stored.Records {
+		graded := GradeResponse(current, record.Evidence)
+		if graded.Grade != record.WantGrade {
+			t.Errorf("%s %s: v%d grades %q (%s; missing %v, misdirection %v), want %q", record.Archive, record.RunID,
+				current.Version, graded.Grade, graded.Reason, graded.Checks.DecisiveMissing, graded.Checks.Misdirection, record.WantGrade)
+		}
+		if record.RecordedGrade != GradeHandedOver {
+			t.Errorf("%s %s: recorded %q; every stored P3 run was graded handed_over under v1", record.Archive, record.RunID, record.RecordedGrade)
+		}
+		switch record.WantGrade {
+		case GradeHandedOver:
+			handedOver++
+		case GradePartial:
+			partial++
+		}
+	}
+	if handedOver != 12 || partial != 3 {
+		t.Fatalf("stored P3 runs: %d handed over, %d partial; want 12 and 3", handedOver, partial)
+	}
+}
+
+// On the 17 Nov pve-v1 replay a default agent's conclusion said "Proxmox's own
+// task log shows no stop/shutdown request" for the dead guest, "consistent
+// with an in-guest stop or crash". That is the decisive fact, but v3 listed
+// only "task" phrasings, so the run graded Handed back. P4 v4 accepts the
+// "request" phrasings.
+func TestP4AcceptsNoStopShutdownRequest(t *testing.T) {
+	payload, err := os.ReadFile(filepath.Join("testdata", "fault-set-pve-v1", "p4-default-agent-stop-shutdown-request.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var record pveTaskLogRecord
+	if err := json.Unmarshal(payload, &record); err != nil {
+		t.Fatal(err)
+	}
+	catalog := loadFaultSetCatalog(t)
+	current := catalog.ByID["response.pve-guest-died"]
+	if current.Version < 4 {
+		t.Fatalf("P4 is at v%d; this test needs the v4 rubric", current.Version)
+	}
+	if graded := GradeResponse(current, record.Evidence); graded.Grade != GradeHandedOver {
+		t.Fatalf("the v4 rubric grades %q, want handed_over (missing %v)", graded.Grade, graded.Checks.DecisiveMissing)
+	}
+
+	// The v3 rubric, as the run recorded it.
+	added := map[string]bool{"no stop shutdown request": true, "no stop or shutdown request": true, "no stop request": true, "no shutdown request": true}
+	recorded := current
+	recorded.Version = record.RecordedVersion
+	outcome := *current.Outcome
+	decisive := make([]string, 0, len(current.Outcome.DecisiveTerms[0]))
+	for _, term := range current.Outcome.DecisiveTerms[0] {
+		if !added[term] {
+			decisive = append(decisive, term)
+		}
+	}
+	outcome.DecisiveTerms = [][]string{decisive, current.Outcome.DecisiveTerms[1]}
+	recorded.Outcome = &outcome
+	if graded := GradeResponse(recorded, record.Evidence); graded.Grade != record.RecordedGrade {
+		t.Fatalf("the v3 rubric grades the record %q, want the recorded %q", graded.Grade, record.RecordedGrade)
+	}
+}

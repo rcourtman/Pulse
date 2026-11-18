@@ -8514,7 +8514,7 @@ func TestContract_EntitlementPayloadMonitoredSystemUsageJSONSnapshot(t *testing.
 	}
 
 	const want = `{
-		"capabilities":["update_alerts","sso","advanced_sso","ai_patrol","relay","mobile_app","push_notifications","long_term_metrics","ai_alerts","ai_autofix","kubernetes_ai","agent_profiles","rbac","audit_logging","advanced_reporting","external_probe"],
+		"capabilities":["update_alerts","sso","advanced_sso","ai_patrol","long_term_metrics","relay","mobile_app","push_notifications","ai_alerts","ai_autofix","kubernetes_ai","agent_profiles","rbac","audit_logging","advanced_reporting","external_probe"],
 		"limits":[],
 		"subscription_state":"active",
 		"upgrade_reasons":[],
@@ -8524,7 +8524,6 @@ func TestContract_EntitlementPayloadMonitoredSystemUsageJSONSnapshot(t *testing.
 		"is_lifetime":false,
 		"days_remaining":0,
 		"trial_eligible":false,
-		"max_history_days":90,
 			"legacy_connections":{"proxmox_nodes":2,"docker_hosts":1,"kubernetes_clusters":1},
 			"has_migration_gap":false
 		}`
@@ -8557,11 +8556,10 @@ func TestContract_SelfHostedCommunityEntitlementsJSONSnapshot(t *testing.T) {
 	}
 
 	const want = `{
-		"capabilities":["update_alerts","sso","advanced_sso","ai_patrol"],
+		"capabilities":["update_alerts","sso","advanced_sso","ai_patrol","long_term_metrics"],
 		"limits":[],
 		"subscription_state":"active",
 		"upgrade_reasons":[
-			{"key":"long_term_metrics","reason":"Upgrade to Pro for 90 days of metric history, so you can see what changed before and after an incident.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=long_term_metrics"},
 			{"key":"ai_autofix","reason":"Upgrade to Pro so Patrol can investigate issues, apply safe fixes within Patrol mode, and verify the result.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=ai_autofix"},
 			{"key":"ai_alerts","reason":"Upgrade to Pro so Patrol can investigate issues instead of handing you a stack of symptoms.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=ai_alerts"},
 			{"key":"rbac","reason":"Upgrade to Pro when more than one operator needs safe access boundaries around infrastructure changes.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=rbac"},
@@ -8575,7 +8573,6 @@ func TestContract_SelfHostedCommunityEntitlementsJSONSnapshot(t *testing.T) {
 		"is_lifetime":false,
 		"days_remaining":0,
 		"trial_eligible":false,
-		"max_history_days":7,
 		"overflow_days_remaining":14,
 			"legacy_connections":{"proxmox_nodes":0,"docker_hosts":0,"kubernetes_clusters":0},
 			"has_migration_gap":false,
@@ -8615,10 +8612,9 @@ func TestContract_SelfHostedCommunityRuntimeCapabilitiesJSONSnapshot(t *testing.
 	}
 
 	const want = `{
-		"capabilities":["update_alerts","sso","advanced_sso","ai_patrol"],
+		"capabilities":["update_alerts","sso","advanced_sso","ai_patrol","long_term_metrics"],
 			"limits":[],
 			"hosted_mode":false,
-			"max_history_days":7,
 			"runtime":{"build":"community","label":"Pulse Community runtime"}
 		}`
 
@@ -8641,7 +8637,7 @@ func TestContract_EntitlementPayloadMonitoredSystemUsageUnavailableJSONSnapshot(
 	}
 
 	const want = `{
-		"capabilities":["update_alerts","sso","advanced_sso","ai_patrol","relay","mobile_app","push_notifications","long_term_metrics","ai_alerts","ai_autofix","kubernetes_ai","agent_profiles","rbac","audit_logging","advanced_reporting","external_probe"],
+		"capabilities":["update_alerts","sso","advanced_sso","ai_patrol","long_term_metrics","relay","mobile_app","push_notifications","ai_alerts","ai_autofix","kubernetes_ai","agent_profiles","rbac","audit_logging","advanced_reporting","external_probe"],
 		"limits":[],
 		"subscription_state":"active",
 		"upgrade_reasons":[],
@@ -8652,7 +8648,6 @@ func TestContract_EntitlementPayloadMonitoredSystemUsageUnavailableJSONSnapshot(
 		"is_lifetime":false,
 		"days_remaining":0,
 		"trial_eligible":false,
-		"max_history_days":90,
 		"legacy_connections":{"proxmox_nodes":0,"docker_hosts":0,"kubernetes_clusters":0},
 		"has_migration_gap":false
 	}`
@@ -8683,7 +8678,7 @@ func TestContract_EntitlementPayloadLifetimeJSONSnapshot(t *testing.T) {
 	}
 
 	const want = `{
-		"capabilities":["update_alerts","sso","advanced_sso","ai_patrol","relay","mobile_app","push_notifications","long_term_metrics","ai_alerts","ai_autofix","kubernetes_ai","agent_profiles","rbac","audit_logging","advanced_reporting","external_probe"],
+		"capabilities":["update_alerts","sso","advanced_sso","ai_patrol","long_term_metrics","relay","mobile_app","push_notifications","ai_alerts","ai_autofix","kubernetes_ai","agent_profiles","rbac","audit_logging","advanced_reporting","external_probe"],
 		"limits":[],
 		"subscription_state":"active",
 		"upgrade_reasons":[],
@@ -8694,7 +8689,6 @@ func TestContract_EntitlementPayloadLifetimeJSONSnapshot(t *testing.T) {
 		"is_lifetime":true,
 		"days_remaining":0,
 		"trial_eligible":false,
-		"max_history_days":90,
 			"legacy_connections":{"proxmox_nodes":1,"docker_hosts":1,"kubernetes_clusters":0},
 			"has_migration_gap":false
 		}`
@@ -10403,43 +10397,77 @@ func TestContract_HostedDirectCloudHandoffUsesExistingTenantMembership(t *testin
 }
 
 func TestContract_APITokenDeleteRejectsScopeEscalation(t *testing.T) {
-	router := &Router{
-		config: &config.Config{
-			APITokens: []config.APITokenRecord{
-				{
-					ID:        "broad-token",
-					Name:      "broad",
-					Hash:      "hash-broad",
-					CreatedAt: time.Now().Add(-time.Hour),
-					Scopes:    []string{config.ScopeWildcard},
-					OrgID:     "default",
-				},
-			},
+	for _, tc := range []struct {
+		name       string
+		withdraw   bool
+		wantStatus int
+		wantBody   string
+	}{
+		{
+			name:       "live limited caller",
+			wantStatus: http.StatusForbidden,
+			wantBody:   `Cannot delete token with scope "*"`,
 		},
-	}
+		{
+			name:       "withdrawn caller",
+			withdraw:   true,
+			wantStatus: http.StatusUnauthorized,
+			wantBody:   "Invalid API token",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			router := &Router{
+				config: &config.Config{
+					APITokens: []config.APITokenRecord{
+						{
+							ID:        "broad-token",
+							Name:      "broad",
+							Hash:      "hash-broad",
+							CreatedAt: time.Now().Add(-time.Hour),
+							Scopes:    []string{config.ScopeWildcard},
+							OrgID:     "default",
+						},
+					},
+				},
+			}
 
-	caller, err := config.NewAPITokenRecord(
-		"limited-caller-token-123.12345678",
-		"limited",
-		[]string{config.ScopeSettingsWrite},
-	)
-	if err != nil {
-		t.Fatalf("NewAPITokenRecord: %v", err)
-	}
+			caller, err := config.NewAPITokenRecord(
+				"limited-caller-token-123.12345678",
+				"limited",
+				[]string{config.ScopeSettingsWrite},
+			)
+			if err != nil {
+				t.Fatalf("NewAPITokenRecord: %v", err)
+			}
+			// Model the live inventory that admitted the request, not a caller
+			// invented only in context. A later withdrawal keeps that detached
+			// context but must be rejected before the target-scope check.
+			router.config.UpsertAPIToken(*caller)
+			req := httptest.NewRequest(http.MethodDelete, "/api/security/tokens/broad-token", nil)
+			req = req.WithContext(authpkg.WithAPIToken(req.Context(), caller))
+			if tc.withdraw {
+				if removed := router.config.RemoveAPIToken(caller.ID); removed == nil {
+					t.Fatal("failed to withdraw the admitted caller")
+				}
+			}
+			before := make([]config.APITokenRecord, len(router.config.APITokens))
+			for i := range before {
+				before[i] = router.config.APITokens[i].Clone()
+			}
 
-	req := httptest.NewRequest(http.MethodDelete, "/api/security/tokens/broad-token", nil)
-	req = req.WithContext(authpkg.WithAPIToken(req.Context(), caller))
-	rec := httptest.NewRecorder()
-	router.handleDeleteAPIToken(rec, req)
+			rec := httptest.NewRecorder()
+			router.handleDeleteAPIToken(rec, req)
 
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusForbidden)
-	}
-	if !strings.Contains(rec.Body.String(), `Cannot delete token with scope "*"`) {
-		t.Fatalf("expected delete scope-escalation contract message, got %q", rec.Body.String())
-	}
-	if len(router.config.APITokens) != 1 || router.config.APITokens[0].ID != "broad-token" {
-		t.Fatalf("expected broader token to remain configured, got %+v", router.config.APITokens)
+			if rec.Code != tc.wantStatus {
+				t.Fatalf("status = %d, want %d: %s", rec.Code, tc.wantStatus, rec.Body.String())
+			}
+			if !strings.Contains(rec.Body.String(), tc.wantBody) {
+				t.Fatalf("expected delete contract message %q, got %q", tc.wantBody, rec.Body.String())
+			}
+			if !reflect.DeepEqual(router.config.APITokens, before) {
+				t.Fatal("denied delete changed the target or caller inventory")
+			}
+		})
 	}
 }
 

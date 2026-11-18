@@ -25,6 +25,12 @@ interface NodeModalMonitoringSectionProps {
 export const NodeModalMonitoringSection: Component<NodeModalMonitoringSectionProps> = (props) => {
   const { modalProps, state } = props;
   const descriptionId = createUniqueId();
+  const customDiskInterval = createMemo(() => {
+    const minutes = state.formData().physicalDiskPollingMinutes;
+    return minutes > 0 && ![5, 15, 30, 60, 180, 360, 720, 1440].includes(minutes)
+      ? minutes
+      : undefined;
+  });
   const tlsPolicy = createMemo(() => {
     // Match the TLS client's precedence, not the checkbox alone. This is a
     // description of form inputs, never evidence that a peer was verified.
@@ -266,7 +272,12 @@ export const NodeModalMonitoringSection: Component<NodeModalMonitoringSectionPro
                   labelClass="sr-only"
                   fieldBaseClass="contents"
                   selectBaseClass="rounded-sm border bg-surface px-2 py-1 text-xs text-base-content"
-                  value={state.formData().physicalDiskPollingMinutes}
+                  aria-describedby={`${descriptionId}-physical-disks-help`}
+                  value={
+                    state.formData().physicalDiskPollingMinutes > 0
+                      ? state.formData().physicalDiskPollingMinutes
+                      : 5
+                  }
                   onChange={(event) =>
                     state.updateField(
                       'physicalDiskPollingMinutes',
@@ -278,6 +289,13 @@ export const NodeModalMonitoringSection: Component<NodeModalMonitoringSectionPro
                   <option value={15}>15 minutes</option>
                   <option value={30}>30 minutes</option>
                   <option value={60}>1 hour</option>
+                  <option value={180}>3 hours</option>
+                  <option value={360}>6 hours</option>
+                  <option value={720}>12 hours</option>
+                  <option value={1440}>24 hours</option>
+                  <Show when={customDiskInterval()}>
+                    {(minutes) => <option value={minutes()}>{minutes()} minutes (saved)</option>}
+                  </Show>
                 </FormSelect>
               </div>
             </Show>

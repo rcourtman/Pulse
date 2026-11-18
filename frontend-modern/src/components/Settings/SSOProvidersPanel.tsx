@@ -109,6 +109,8 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
   const deletingProvider = () => providers().find((provider) => provider.id === deleteConfirm());
   const summaryIdPrefix = createUniqueId();
   const summaryId = (id: string) => `${summaryIdPrefix}-${encodeURIComponent(id)}`;
+  const inventoryTitleId = `${summaryIdPrefix}-inventory-title`;
+  let inventoryRegion: HTMLDivElement | undefined;
   let metadataPreviewButton: HTMLButtonElement | undefined;
   let recoveryNotice: HTMLDivElement | undefined;
   let recoveryFocusTimer: number | undefined;
@@ -126,6 +128,15 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
   });
   onCleanup(() => window.clearTimeout(recoveryFocusTimer));
 
+  const checkSavedProviders = () => {
+    // Starting the read releases an uncertain draft/confirmation and its inert
+    // background. Keep its continuation in the surviving inventory immediately
+    // after that release. No later response may reclaim focus.
+    void loadProviders();
+    window.clearTimeout(recoveryFocusTimer);
+    inventoryRegion?.focus({ preventScroll: true });
+  };
+
   const InventoryCheckNotice: Component<{ lastRead?: boolean }> = (notice) => (
     <InlineNotice ref={recoveryNotice} tabindex={-1} role="alert" tone="warning">
       <p>{unconfirmedChange()}</p>
@@ -140,7 +151,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
         size="sm"
         class="min-h-11 underline underline-offset-2 sm:min-h-0"
         disabled={loading() || mutating()}
-        onClick={() => void loadProviders()}
+        onClick={checkSavedProviders}
       >
         {loading() ? 'Checking saved providers…' : 'Check saved providers'}
       </Button>
@@ -151,7 +162,14 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
     <div class="space-y-6">
       {/* Main panel */}
       <SettingsPanel
+        ref={inventoryRegion}
         title="Single Sign-On Providers"
+        titleId={inventoryTitleId}
+        role="region"
+        aria-labelledby={inventoryTitleId}
+        aria-busy={loading()}
+        tabindex={-1}
+        class="focus:outline-hidden focus:ring-2 focus:ring-inset focus:ring-blue-500"
         action={
           <div class="flex flex-wrap justify-end gap-2">
             <Button
@@ -204,7 +222,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
             tone="danger"
             layout="banner"
             actionLabel={unconfirmedChange() ? undefined : 'Retry'}
-            actionOnClick={() => void loadProviders()}
+            actionOnClick={checkSavedProviders}
           >
             {getSSOProvidersLoadErrorMessage()} Configured providers are unknown.
           </InlineNotice>
@@ -947,7 +965,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                     variant="primary"
                     size="md"
                     disabled={loading() || mutating()}
-                    onClick={() => void loadProviders()}
+                    onClick={checkSavedProviders}
                   >
                     Close draft and check providers
                   </Button>

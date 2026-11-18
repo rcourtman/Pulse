@@ -48,6 +48,7 @@ const AuditWebhookNotificationsSignpost: Component = () => {
 };
 
 export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
+  let configurationPanelRef: HTMLDivElement | undefined;
   let newUrlInputRef: HTMLInputElement | undefined;
   let endpointListRef: HTMLDivElement | undefined;
   let removalTrigger: HTMLButtonElement | undefined;
@@ -78,6 +79,12 @@ export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
     paidRuntimeRequired,
     webhookUrls,
   } = useAuditWebhookPanelState(props);
+  const retryConfigurationRead = () => {
+    // The read removes its retry button. Keep a stable local position now,
+    // rather than moving focus after a response when the user may have left.
+    configurationPanelRef?.focus({ preventScroll: true });
+    void fetchWebhooks();
+  };
   const removalReturnTarget = () => {
     // A withdrawn reader must not move focus into a different saved context.
     if (!canEdit()) return;
@@ -126,7 +133,17 @@ export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
         }
       >
         <div class="space-y-6">
-          <SettingsPanel title="Audit Webhooks" noPadding bodyClass="divide-y divide-border">
+          <SettingsPanel
+            ref={configurationPanelRef}
+            title="Audit Webhooks"
+            role="region"
+            aria-label="Audit webhook configuration"
+            aria-busy={loading()}
+            tabIndex={-1}
+            class="focus:outline-2 focus:-outline-offset-2 focus:outline-blue-500 dark:focus:outline-blue-400"
+            noPadding
+            bodyClass="divide-y divide-border"
+          >
             <div class="space-y-4 p-3 sm:space-y-6 sm:p-6">
               <Show when={!canManage()}>
                 <div class={AUDIT_WEBHOOK_READONLY_NOTICE_CLASS}>
@@ -155,7 +172,7 @@ export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
                   <div role="alert" class="space-y-2 text-sm">
                     <p class="font-medium">{readErrorCopy().title}</p>
                     <p>{readErrorCopy().body}</p>
-                    <Button onClick={() => void fetchWebhooks()} disabled={loading() || saving()}>
+                    <Button onClick={retryConfigurationRead} disabled={loading() || saving()}>
                       {readErrorCopy().retryLabel}
                     </Button>
                   </div>

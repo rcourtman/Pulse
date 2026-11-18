@@ -1178,7 +1178,7 @@ responsive shell appear to ignore an operator.
    $39/year price, with $4.99/month as the secondary option, so Relay reads as
    an optional support/convenience tier rather than a pressure upgrade. Relay
    copy must describe secure remote access to the Pulse web UI, Pulse Mobile
-   pairing for handoff, push notifications, and 14-day history; it must not imply that the
+   pairing for handoff, and push notifications; it must not imply that the
    native mobile app is a full monitoring dashboard until that product surface
    exists.
    Portal sessions and sign-in delivery are part of this boundary. Session
@@ -1395,7 +1395,7 @@ responsive shell appear to ignore an operator.
     pricing contract, and owned upgrade reasons. Customer-facing self-hosted
     copy must keep the ladder explicit as `Community = monitor`, `Relay = reach
 Pulse from anywhere plus pair Pulse Mobile for handoff`, and `Pro =
-hands-on Patrol modes, issue investigation, verified fixes, and 90-day history`.
+hands-on Patrol modes, issue investigation, and verified fixes`.
     Team/admin extras such as
     RBAC, SSO, audit logging, reporting, and agent profiles may remain present,
     but they are secondary included value and must not displace that operator
@@ -1425,7 +1425,7 @@ utils/selfHostedPlans.ts` may still map onto internal capabilities such as
     customer-facing plan cards, top-summary highlights, and comparison rows
     must lead with the canonical plan story: `Community = monitor`, `Relay =
 reach Pulse from anywhere plus pair Pulse Mobile for handoff`, and `Pro =
-hands-on Patrol modes, issue investigation, verified fixes, and longer history`.
+hands-on Patrol modes, issue investigation, and verified fixes`.
     Team/admin capabilities such as
     RBAC, audit logging, reporting, and agent profiles may appear as
     secondary included extras. Their customer-facing plan summary label is
@@ -1435,11 +1435,12 @@ hands-on Patrol modes, issue investigation, verified fixes, and longer history`.
     as `kubernetes_ai` must not be elevated into a marquee marketed Pro line
     item. Pro comparison and plan-selection copy must frame Patrol around what
     it may handle automatically, issue investigation, policy-bounded action,
-    verified fixes, and history rather than as an abstract governed operator or
+    and verified fixes rather than as an abstract governed operator or
     a choice about how much control Patrol has.
     When free-plan copy mentions Patrol, it must describe watch-only/background
     health checks; investigation, approval-backed fixes, autonomous action,
-    outcome verification, and extended history are Pro value.
+    and outcome verification are Pro value. Metric history is free on every
+    plan and is never presented as Pro value.
     Legacy packaging nouns such as
     `incident memory`, `scheduled remediations`, and `execution audit trail`
     must likewise stay out of current v6 commercial copy unless Pulse ships a
@@ -1522,8 +1523,9 @@ hands-on Patrol modes, issue investigation, verified fixes, and longer history`.
     defining a cloud-paid-specific order.
 26. Introduce the self-hosted `business` tier only through this shape:
     `TierBusiness` in `pkg/licensing/features.go` carries exactly the Pro
-    feature set (no feature-level differentiation), 365-day history
-    retention in `TierHistoryDays`, membership in the self-hosted
+    feature set (no feature-level differentiation; the 365-day history
+    retention it once carried went away with plan-limited history on
+    17 November 2026), membership in the self-hosted
     core-monitoring-uncapped tier and plan-version sets (`business`,
     `business_annual`), the `Business` display name, and a slot between Pro
     and MSP in the min-tier ordering. Business differentiates commercially
@@ -4406,3 +4408,17 @@ checks all four readers, saved facts, foreign-account refusal and the completed
 transition. Comparable browser recovery proof must use the real bootstrap
 producer, because a frontend-only fixture can otherwise invent a pending row
 that the server still suppresses.
+
+### Metric history is free on every plan (17 November 2026)
+
+Richard approved removing the plan-based history cap. Free installs already
+stored 90 days of daily averages and 366 days of availability history, but the
+chart, availability and agent reads refused anything past seven days. Telemetry
+for the 30 days to 17 November showed 12 of 88 covered paid installs reading
+past seven days, and the in-app upgrade campaign recorded no checkout clicks.
+`long_term_metrics` is now a Community compatibility key with no upgrade
+reason; `TierHistoryDays`, `max_history_days` and the downgrade purge
+(`DowngradeRetentionState`, the metrics-store commercial ceiling and the
+generated-report purge) are removed, so nothing deletes history or reports
+because a plan ended. Plan copy, the billing summary and the comparison table
+no longer list history as a paid line. Continuing subscribers lose nothing.

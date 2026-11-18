@@ -35,7 +35,6 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
     getHistoryChartAccessibleDescription({
       data: chart.data(),
       error: chart.error(),
-      isLocked: chart.isLocked(),
       loading: chart.loading(),
       range: chart.range(),
       unit: props.unit,
@@ -93,7 +92,7 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
             ? `${new Date(chart.hoveredPoint()!.timestamp).toLocaleString()}: ${formatHistoryChartTooltipValue(chart.hoveredPoint()!.value, props.unit)}`
             : ''}
         </p>
-        <HistoryChartOverlay chart={chart} hideLock={props.hideLock} />
+        <HistoryChartOverlay chart={chart} />
         <HistoryChartTooltip
           hoveredPoint={chart.hoveredPoint()}
           chartWidth={chart.chartWidth()}

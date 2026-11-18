@@ -55,7 +55,6 @@ const MONITORED_SYSTEM_RUNTIME_CAPABILITIES = {
   capabilities: [],
   limits: [],
   hosted_mode: false,
-  max_history_days: 90,
 };
 
 const MONITORED_SYSTEM_COMMERCIAL_POSTURE = {
@@ -94,7 +93,6 @@ const ACTIVATED_PLAN_ENTITLEMENTS = {
   valid: true,
   is_lifetime: false,
   days_remaining: 30,
-  max_history_days: 90,
   runtime: PRO_RUNTIME_IDENTITY,
 };
 
@@ -102,7 +100,6 @@ const ACTIVATED_PLAN_RUNTIME_CAPABILITIES = {
   capabilities: ACTIVATED_PLAN_ENTITLEMENTS.capabilities,
   limits: ACTIVATED_PLAN_ENTITLEMENTS.limits,
   hosted_mode: false,
-  max_history_days: 90,
   runtime: PRO_RUNTIME_IDENTITY,
 };
 

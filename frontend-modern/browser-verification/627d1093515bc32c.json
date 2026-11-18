@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "base_sha": "cd9838474d6265aa7524d92968321d05c2d2d85c",
+  "verified_at": "2026-11-17T15:10:27.731Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/AuditWebhookPanel.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/AuditWebhookPanel.tsx": "bdc87708c0524b90ea9cfb8248eea32eff23e01ad383b1f430ec5bf32e1ebd4c"
+  },
+  "routes": [
+    "/settings/security-audit-webhooks"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Actual AuditWebhookPanel, state, real API client, capability/presentation stores, shared controls and shipped CSS consuming safe local HTTP fixtures; not full-App/IdP or installed-receiver acceptance",
+    "Chromium desktop/narrow in light/dark, WebKit desktop light/narrow dark; unknown configuration, pending retry, loaded endpoints, explicit empty, failed retry and read-only access",
+    "12 comparable pairs / 24 captures, all natively inspected; saved URLs, controls, draft and caution remain inline without new horizontal overflow"
+  ],
+  "interactions": [
+    "Enter, Space and pointer Retry before its button is removed; stable named busy-region focus through loading, success, empty and failure",
+    "Tab continues through local alert-notification link; deliberate inside/outside focus changes survive late success/failure",
+    "Read-only retry never enables edits; retry issues only one explicit GET and no POST; equal capabilities preserve surviving draft and focus; read withdrawal ignores obsolete completion"
+  ]
+}

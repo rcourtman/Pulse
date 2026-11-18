@@ -497,7 +497,42 @@ func (r *Router) handleSSOOIDCCallback(w http.ResponseWriter, req *http.Request)
 		return
 	}
 
+	if errParam := query.Get("error"); errParam != "" {
+		log.Warn().Str("error", errParam).Str("provider_id", providerID).Msg("OIDC provider returned error")
+		LogAuditEventForTenant(GetOrgID(req.Context()), "sso_oidc_login", "", GetClientIP(req), req.URL.Path, false, "Provider error: "+errParam)
+		r.redirectOIDCError(w, req, "", errParam)
+		return
+	}
+
+	state := query.Get("state")
+	if state == "" {
+		LogAuditEventForTenant(GetOrgID(req.Context()), "sso_oidc_login", "", GetClientIP(req), req.URL.Path, false, "Missing state parameter")
+		r.redirectOIDCError(w, req, "", "missing_state")
+		return
+	}
+
 	service := r.oidcManager.GetService(providerID)
+	// State belongs only to an existing in-memory service. Rediscovery cannot
+	// recover absent/expired state and can evict a different pending login when
+	// this unusable callback supplies another derived origin. Peek only; the
+	// later Consume and provider/trust checks still own single-use admission.
+	pending, ok := service.peekState(state)
+	if !ok {
+		LogAuditEventForTenant(GetOrgID(req.Context()), "sso_oidc_login", "", GetClientIP(req), req.URL.Path, false, "Invalid or expired state")
+		r.redirectOIDCError(w, req, "", "invalid_state")
+		return
+	}
+	// Without a code this callback cannot reach token exchange. Refuse it
+	// before trust I/O, rediscovery or spending the pending state: a malformed
+	// callback must not strand this login or evict another browser's binding.
+	// A later complete callback still consumes once and passes every current
+	// provider, trust, PKCE, nonce, signature and saved-policy check below.
+	code := query.Get("code")
+	if code == "" {
+		LogAuditEventForTenant(GetOrgID(req.Context()), "sso_oidc_login", "", GetClientIP(req), req.URL.Path, false, "Missing authorization code")
+		r.redirectOIDCError(w, req, pending.ReturnTo, "missing_code")
+		return
+	}
 	if service != nil {
 		expectedCfg := ssoProviderToOIDCConfig(provider, redirectURL)
 		if !service.Matches(expectedCfg) {
@@ -518,20 +553,6 @@ func (r *Router) handleSSOOIDCCallback(w http.ResponseWriter, req *http.Request)
 		return
 	}
 
-	if errParam := query.Get("error"); errParam != "" {
-		log.Warn().Str("error", errParam).Str("provider_id", providerID).Msg("OIDC provider returned error")
-		LogAuditEventForTenant(GetOrgID(req.Context()), "sso_oidc_login", "", GetClientIP(req), req.URL.Path, false, "Provider error: "+errParam)
-		r.redirectOIDCError(w, req, "", errParam)
-		return
-	}
-
-	state := query.Get("state")
-	if state == "" {
-		LogAuditEventForTenant(GetOrgID(req.Context()), "sso_oidc_login", "", GetClientIP(req), req.URL.Path, false, "Missing state parameter")
-		r.redirectOIDCError(w, req, "", "missing_state")
-		return
-	}
-
 	entry, ok := service.consumeState(state)
 	if !ok {
 		LogAuditEventForTenant(GetOrgID(req.Context()), "sso_oidc_login", "", GetClientIP(req), req.URL.Path, false, "Invalid or expired state")
@@ -545,13 +566,6 @@ func (r *Router) handleSSOOIDCCallback(w http.ResponseWriter, req *http.Request)
 		log.Warn().Str("state_provider", entry.ProviderID).Str("path_provider", providerID).Msg("OIDC provider ID mismatch between state and callback path")
 		LogAuditEventForTenant(GetOrgID(req.Context()), "sso_oidc_login", "", GetClientIP(req), req.URL.Path, false, "Provider ID mismatch")
 		r.redirectOIDCError(w, req, entry.ReturnTo, "provider_mismatch")
-		return
-	}
-
-	code := query.Get("code")
-	if code == "" {
-		LogAuditEventForTenant(GetOrgID(req.Context()), "sso_oidc_login", "", GetClientIP(req), req.URL.Path, false, "Missing authorization code")
-		r.redirectOIDCError(w, req, entry.ReturnTo, "missing_code")
 		return
 	}
 

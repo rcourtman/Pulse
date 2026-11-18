@@ -28,24 +28,15 @@ func TestRetiredRelayCapabilitiesHaveNoUpgradeOffer(t *testing.T) {
 	}
 }
 
-func TestHistoryUpgradeOffersOnlyCurrentProPlan(t *testing.T) {
-	const want = "Upgrade to Pro for 90 days of metric history, so you can see what changed before and after an incident."
-	found := false
-	for _, reason := range GenerateUpgradeReasons(TierFeatures[TierFree]) {
-		if reason.Feature == FeatureLongTermMetrics {
-			found = true
-			if reason.Reason != want {
-				t.Errorf("history upgrade = %q, want %q", reason.Reason, want)
-			}
-			if reason.ActionURL != UpgradeURLForFeature(FeatureLongTermMetrics) {
-				t.Error("history upgrade lost its current feature destination")
-			}
-		}
+// Metric history is free on every plan, so no tier is ever offered it.
+func TestHistoryIsNeverOfferedAsAnUpgrade(t *testing.T) {
+	if !TierHasFeature(TierFree, FeatureLongTermMetrics) {
+		t.Fatal("Community must include metric history")
 	}
-	if !found {
-		t.Fatal("Community must retain its current Pro history upgrade")
+	if got := UpgradeURLForFeature(FeatureLongTermMetrics); got != DefaultUpgradeURL {
+		t.Fatalf("history upgrade URL = %q, want generic pricing %q", got, DefaultUpgradeURL)
 	}
-	for _, tier := range []Tier{TierRelay, TierPro, TierProAnnual, TierLifetime} {
+	for _, tier := range []Tier{TierFree, TierRelay, TierPro, TierProAnnual, TierLifetime} {
 		for _, reason := range GenerateUpgradeReasons(TierFeatures[tier]) {
 			if reason.Feature == FeatureLongTermMetrics {
 				t.Errorf("entitled %s must not offer an already granted capability", tier)

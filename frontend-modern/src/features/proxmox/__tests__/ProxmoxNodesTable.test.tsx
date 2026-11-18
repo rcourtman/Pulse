@@ -1,9 +1,10 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import { createSignal } from 'solid-js';
+import { createSignal, type JSX } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Resource } from '@/types/resource';
+import { getTemperatureTextClass } from '@/utils/temperature';
 import { ProxmoxNodesTable } from '../ProxmoxNodesTable';
 
 const nodeDrawerMock = vi.hoisted(() => vi.fn());
@@ -11,6 +12,9 @@ const activeAlertsMock = vi.hoisted(() => ({ value: {} as Record<string, unknown
 const getMetricThresholdsMock = vi.hoisted(() => vi.fn());
 const temperatureGaugeMock = vi.hoisted(() => vi.fn());
 const metricHistoryMock = vi.hoisted(() => vi.fn());
+const nodeMetricSeriesMock = vi.hoisted(() =>
+  vi.fn((_node: unknown, _metric: string): unknown[] => []),
+);
 
 vi.mock('@/hooks/useBreakpoint', () => ({
   useBreakpoint: () => ({
@@ -44,7 +48,11 @@ vi.mock('@/components/Workloads/StackedDiskBar', () => ({
 }));
 
 vi.mock('@/components/Workloads/MetricMiniSparkline', () => ({
-  MetricMiniSparkline: () => <div data-testid="metric-mini-sparkline" />,
+  MetricMiniSparkline: (props: { title?: string; valueContent?: JSX.Element }) => (
+    <div data-testid="metric-mini-sparkline" data-title={props.title}>
+      {props.valueContent}
+    </div>
+  ),
 }));
 
 vi.mock('@/components/shared/TemperatureGauge', () => ({
@@ -68,7 +76,7 @@ vi.mock('@/components/Workloads/useWorkloadTableMetricHistory', () => ({
   useWorkloadTableMetricHistory: (options: unknown) => {
     metricHistoryMock(options);
     return {
-      getNodeMetricSeries: () => [],
+      getNodeMetricSeries: nodeMetricSeriesMock,
     };
   },
 }));
@@ -116,6 +124,7 @@ const makeNodeResources = (count: number): Resource[] =>
 
 beforeEach(() => {
   vi.clearAllMocks();
+  nodeMetricSeriesMock.mockImplementation(() => []);
   getMetricThresholdsMock.mockReturnValue({ warning: 80, critical: 85 });
   activeAlertsMock.value = {};
 });
@@ -777,6 +786,93 @@ describe('ProxmoxNodesTable', () => {
     expect(options.enabled()).toBe(false);
     setMode('sparklines');
     expect(options.enabled()).toBe(true);
+  });
+
+  it('previews node history, temperature included, on row hover in History hover mode', () => {
+    const [hoverMode, setHoverMode] = createSignal<'details' | 'history'>('history');
+    nodeMetricSeriesMock.mockImplementation((_node: unknown, metric: string) => [
+      {
+        id: metric,
+        label: metric,
+        color: '#000',
+        points: [
+          { timestamp: 1, value: 60 },
+          { timestamp: 2, value: 70 },
+        ],
+      },
+    ]);
+    const { container } = render(() => (
+      <ProxmoxNodesTable
+        nodes={[makeNodeResource({ temperature: 76 })]}
+        guests={[]}
+        metricDisplayMode={() => 'bars'}
+        metricHoverMode={hoverMode}
+        emptyIcon={<span />}
+        emptyTitle="No Proxmox VE nodes"
+        emptyDescription="No nodes"
+      />
+    ));
+    const options = metricHistoryMock.mock.calls[0][0] as { enabled: () => boolean };
+    const row = container.querySelector('[data-proxmox-host-row]') as HTMLElement;
+
+    // No history is read until someone hovers a row.
+    expect(options.enabled()).toBe(false);
+    expect(screen.queryByTestId('metric-mini-sparkline')).not.toBeInTheDocument();
+
+    fireEvent.pointerEnter(row, { pointerType: 'mouse' });
+    expect(options.enabled()).toBe(true);
+    expect(row).toHaveAttribute('data-history-lens-active', 'true');
+    expect(
+      screen.getAllByTestId('metric-mini-sparkline').map((el) => el.getAttribute('data-title')),
+    ).toEqual([
+      'pve-node-1 CPU history',
+      'pve-node-1 memory history',
+      'pve-node-1 disk history',
+      'pve-node-1 temperature history',
+    ]);
+    expect(screen.queryByTestId('temperature-gauge')).not.toBeInTheDocument();
+
+    fireEvent.pointerLeave(row, { pointerType: 'mouse' });
+    expect(screen.queryByTestId('metric-mini-sparkline')).not.toBeInTheDocument();
+    expect(screen.getByTestId('temperature-gauge')).toBeInTheDocument();
+
+    setHoverMode('details');
+    fireEvent.pointerEnter(row, { pointerType: 'mouse' });
+    expect(screen.queryByTestId('metric-mini-sparkline')).not.toBeInTheDocument();
+    expect(options.enabled()).toBe(false);
+  });
+
+  it('keeps the threshold tone on the temperature value beside its sparkline', () => {
+    nodeMetricSeriesMock.mockImplementation((_node: unknown, metric: string) => [
+      {
+        id: metric,
+        label: metric,
+        color: '#000',
+        points: [
+          { timestamp: 1, value: 60 },
+          { timestamp: 2, value: 90 },
+        ],
+      },
+    ]);
+    const { container } = render(() => (
+      <ProxmoxNodesTable
+        nodes={[makeNodeResource({ temperature: 90 })]}
+        guests={[]}
+        metricDisplayMode={() => 'sparklines'}
+        emptyIcon={<span />}
+        emptyTitle="No Proxmox VE nodes"
+        emptyDescription="No nodes"
+      />
+    ));
+
+    const value = container.querySelector('[data-temperature-sparkline-value]');
+    expect(value).not.toBeNull();
+    expect(value?.className).toBe(
+      getTemperatureTextClass(90, { warning: 80, critical: 85 }, 'temperature', null),
+    );
+    expect(value?.className).not.toBe(
+      getTemperatureTextClass(40, { warning: 80, critical: 85 }, 'temperature', null),
+    );
   });
 
   it('updates every availability signal when a live row becomes offline', () => {

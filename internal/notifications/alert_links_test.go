@@ -21,6 +21,20 @@ func TestAlertHistoryURLMatchesTheFrontendAddress(t *testing.T) {
 	}
 }
 
+func TestDeliveryRehearsalLinksItsReportInsteadOfAnIncident(t *testing.T) {
+	const id = "6ba7b810-9dad-41d1-80b4-00c04fd430c8"
+	alert := &alerts.Alert{ID: "delivery-rehearsal:" + id, Metadata: map[string]interface{}{rehearsalMetadataKey: id}}
+	want := "https://pulse.example/alerts/notifications?rehearsal=" + id
+	for _, resolved := range []bool{false, true} {
+		if got := alertsPageURL("https://pulse.example/", []*alerts.Alert{alert}, resolved); got != want {
+			t.Fatalf("rehearsal link = %q, want %q", got, want)
+		}
+	}
+	if got := alertLinkURL("", alert); got != "" {
+		t.Fatalf("rehearsal without configured public URL acquired link %q", got)
+	}
+}
+
 func TestAlertsPageURLLinksOneAlertOrTheListingPage(t *testing.T) {
 	one := []*alerts.Alert{{ID: "a-1"}}
 	two := []*alerts.Alert{{ID: "a-1"}, nil, {ID: "a-2"}}

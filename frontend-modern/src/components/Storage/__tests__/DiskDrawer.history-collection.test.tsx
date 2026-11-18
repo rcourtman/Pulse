@@ -5,7 +5,6 @@ import {
   ChartsAPI,
   type AggregatedMetricPoint,
   type AllMetricsHistoryResponse,
-  type HistoryTimeRange,
   type MetricsHistoryParams,
 } from '@/api/charts';
 import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSuspendingQuery';
@@ -21,9 +20,7 @@ vi.mock('@/api/charts', async (importOriginal) => ({
   ChartsAPI: { getMetricsHistory: vi.fn() },
 }));
 vi.mock('@/stores/license', () => ({
-  isRangeLocked: (range: HistoryTimeRange) => ['14d', '30d', '90d'].includes(range),
   loadRuntimeCapabilities: vi.fn(async () => undefined),
-  maxHistoryDays: () => 7,
 }));
 vi.mock('@/stores/alertsActivation', () => ({
   useAlertsActivation: () => ({ getDiskTemperatureThresholds: () => null }),

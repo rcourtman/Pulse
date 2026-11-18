@@ -677,19 +677,6 @@ describe('getSelfHostedPlanStatusPresentation - null-return branches', () => {
         capabilities: [],
         limits: [],
         upgrade_reasons: [],
-        max_history_days: 90,
-      }),
-    ).toBeNull();
-  });
-
-  it('returns null when max_history_days is missing', () => {
-    expect(
-      getSelfHostedPlanStatusPresentation({
-        tier: 'relay',
-        subscription_state: 'active',
-        capabilities: ['relay'],
-        limits: [],
-        upgrade_reasons: [],
       }),
     ).toBeNull();
   });
@@ -702,13 +689,12 @@ describe('getSelfHostedPlanStatusPresentation - null-return branches', () => {
         capabilities: ['relay'],
         limits: [],
         upgrade_reasons: [],
-        max_history_days: 14,
       }),
     ).toBeNull();
   });
 });
 
-describe('getSelfHostedPlanStatusPresentation - trial and missing-history states', () => {
+describe('getSelfHostedPlanStatusPresentation - trial states', () => {
   it('builds status for a trial Relay plan', () => {
     const result = getSelfHostedPlanStatusPresentation({
       tier: 'relay',
@@ -716,42 +702,10 @@ describe('getSelfHostedPlanStatusPresentation - trial and missing-history states
       capabilities: ['relay', 'mobile_app', 'push_notifications'],
       limits: [],
       upgrade_reasons: [],
-      max_history_days: 14,
     });
     expect(result?.title).toBe('Relay status');
-    expect(result?.items).toHaveLength(2);
+    expect(result?.items).toHaveLength(1);
     expect(result?.items.every((i) => i.state === 'active')).toBe(true);
-  });
-
-  it('reports missing metric history when max_history_days is 0', () => {
-    const result = getSelfHostedPlanStatusPresentation({
-      tier: 'relay',
-      subscription_state: 'active',
-      capabilities: ['relay', 'mobile_app', 'push_notifications'],
-      limits: [],
-      upgrade_reasons: [],
-      max_history_days: 0,
-    });
-    const historyItem = result?.items.find((i) => i.label.includes('metric history'));
-    expect(historyItem).toMatchObject({
-      state: 'missing',
-      statusLabel: 'Needs attention',
-    });
-    expect(historyItem?.detail).toContain('does not have metric-history access yet');
-  });
-
-  it('reports partial metric history when days are below the required amount', () => {
-    const result = getSelfHostedPlanStatusPresentation({
-      tier: 'relay',
-      subscription_state: 'active',
-      capabilities: ['relay', 'mobile_app', 'push_notifications'],
-      limits: [],
-      upgrade_reasons: [],
-      max_history_days: 7,
-    });
-    const historyItem = result?.items.find((i) => i.label.includes('metric history'));
-    expect(historyItem?.state).toBe('partial');
-    expect(historyItem?.detail).toContain('below the expected');
   });
 });
 
@@ -876,7 +830,6 @@ describe('getSelfHostedActivationSuccessPresentation - highlights dedup', () => 
       displayableCapabilities: [
         'Patrol Investigates Issues and Explains the Root Cause',
         'Patrol Applies Safe Fixes and Verifies the Result',
-        '90-day metric history',
       ],
       source: 'manual',
     });

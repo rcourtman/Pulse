@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"strings"
 	"testing"
 	"time"
@@ -140,7 +139,7 @@ func TestWindowsAgentLifecycleSavedRemovalInvokerRuntime(t *testing.T) {
 	powerShell := nativeInstallerPowerShell(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, powerShell, "-NoLogo", "-NoProfile", "-NonInteractive", "-File",
+	cmd := nativeInstallerCommand(ctx, powerShell, "-NoLogo", "-NoProfile", "-NonInteractive", "-File",
 		repoFile("scripts", "installtests", "windows_saved_removal_controls.ps1"),
 		"-HarnessPath", repoFile("scripts", "installtests", "windows_agent_lifecycle.ps1"),
 		"-InstallerPath", repoFile("scripts", "install.ps1"), "-TempDir", t.TempDir())

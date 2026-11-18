@@ -196,7 +196,6 @@ describe('getSelfHostedPlanStatusPresentation - absent subscription_state (line 
         capabilities: ['relay'],
         limits: [],
         upgrade_reasons: [],
-        max_history_days: 14,
       } as unknown as LicenseCommercialEntitlements),
     ).toBeNull();
   });
@@ -210,7 +209,6 @@ describe('getSelfHostedPlanStatusPresentation - absent capabilities (line 861)',
       capabilities: undefined,
       limits: [],
       upgrade_reasons: [],
-      max_history_days: 14,
     } as unknown as LicenseCommercialEntitlements);
     expect(result).not.toBeNull();
     // (entitlements.capabilities || []) takes the [] arm → empty capability Set

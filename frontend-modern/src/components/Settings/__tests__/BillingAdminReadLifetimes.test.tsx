@@ -1,6 +1,6 @@
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { BillingAdminPanel } from '../BillingAdminPanel';
 import {
   BILLING_ADMIN_READ_ERROR,
@@ -106,16 +106,28 @@ describe('Billing Admin accepted inventory and billing reads', () => {
     mocks.get.mockReturnValueOnce(pending.promise);
     render(() => <BillingAdminPanel />);
     await waitFor(() => expect(mocks.get).toHaveBeenCalledTimes(1));
-    expect(screen.getByRole('button', { name: 'Suspend Org' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Activate Org' })).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: 'Suspend Org for Organization org-a (org-a)' }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: 'Activate Org for Organization org-a (org-a)' }),
+    ).toBeDisabled();
     expect(screen.queryByText('N/A')).not.toBeInTheDocument();
     pending.resolve(billing());
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Suspend Org' })).toBeEnabled());
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Suspend Org for Organization org-a (org-a)' }),
+      ).toBeEnabled(),
+    );
   });
 
   it('removes the former inventory on refresh and distinguishes failure from an empty inventory', async () => {
     render(() => <BillingAdminPanel />);
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Suspend Org' })).toBeEnabled());
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Suspend Org for Organization org-a (org-a)' }),
+      ).toBeEnabled(),
+    );
     const pending = deferred<unknown>();
     mocks.list.mockReturnValueOnce(pending.promise);
     await fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
@@ -165,15 +177,23 @@ describe('Billing Admin accepted inventory and billing reads', () => {
     await settle();
     expect(mocks.get).toHaveBeenCalledTimes(2);
     expect(screen.queryByText(/SYNTHETIC PRIVATE/)).not.toBeInTheDocument();
-    await fireEvent.click(screen.getByRole('button', { name: 'Organization org-a org-a' }));
+    await fireEvent.click(
+      screen.getByRole('button', { name: 'Billing details for Organization org-a (org-a)' }),
+    );
     expect(screen.getByRole('status')).toHaveTextContent(BILLING_ADMIN_READ_ERROR);
     expect(screen.queryByText(/"loading": true/)).not.toBeInTheDocument();
     const before = mocks.put.mock.calls.length;
+    // The failed row and its expanded details both offer reload for the same organization.
+    const failedRow = screen.getByRole('alert').closest('tr');
+    expect(failedRow).not.toBeNull();
     await fireEvent.click(
-      screen.getByRole('button', { name: 'Reload billing for Organization org-a' }),
+      within(failedRow!).getByRole('button', {
+        name: 'Reload billing for Organization org-a (org-a)',
+      }),
     );
     await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
     expect(mocks.get).toHaveBeenCalledTimes(3);
+    expect(mocks.get.mock.calls.map(([orgID]) => orgID)).toEqual(['org-a', 'org-b', 'org-a']);
     expect(mocks.put).toHaveBeenCalledTimes(before);
   });
 

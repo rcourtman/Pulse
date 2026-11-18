@@ -31,6 +31,7 @@ export interface ChartData {
   diskwrite?: MetricPoint[];
   netin?: MetricPoint[];
   netout?: MetricPoint[];
+  temperature?: MetricPoint[];
 }
 
 export interface ChartStats {
@@ -72,7 +73,7 @@ export interface InfrastructureChartsResponse {
 }
 
 export type InfrastructureSummaryMetric =
-  'cpu' | 'memory' | 'disk' | 'diskread' | 'diskwrite' | 'netin' | 'netout';
+  'cpu' | 'memory' | 'disk' | 'diskread' | 'diskwrite' | 'netin' | 'netout' | 'temperature';
 
 export interface WorkloadChartsResponse {
   data: Record<string, ChartData>;

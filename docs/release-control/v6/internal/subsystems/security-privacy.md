@@ -18,6 +18,33 @@
 
 ## Purpose
 
+### API-token control follows live authority through its transaction (17 November 2026)
+
+An admitted token snapshot does not grant a later credential mutation. Token
+creation, metadata/scope edits, revocation and rotation resolve that caller's
+live ID, credential hash and principal while holding the same configuration
+writer lock as the saved inventory transition. A slow request body or a wait
+for configuration ownership cannot outlive credential withdrawal. Current
+expiry, runtime-role validity, settings-write scope, organization access and
+the admitted instance boundary apply before target/grant checks or mutation.
+Those target and grant checks use the current caller, not its earlier scopes.
+Revoked, expired, replaced or differently owned credentials receive 401;
+a still-valid credential that lost a needed privilege receives 403. Refused
+writes neither issue a secret nor change the live or saved credential inventory.
+
+Valid self-rotation, self-revocation and self-narrowing remain possible. The
+shared issuer retains its existing organization-scoped relay compatibility;
+this adds no Mobile capability. Session/proxy admission stays with existing
+route policy. Body reads, audit destinations and HTTP output remain outside
+configuration ownership, and persistence failure retains existing rollback.
+`internal/api/security_token_withdrawal_test.go` exercises paused registered
+routes with independent durable admin withdrawal, old admitted transactions,
+current grant containment and live self-change. Existing token tests retain
+their target/organization, private snapshot, failed-save and I/O boundaries.
+These synthetic proofs do not establish historical exposure, original-client
+recovery or installed availability.
+
+
 ### Public OIDC login bounds input before IdP work (16 November 2026)
 
 `handleSSOOIDCLogin` reuses the existing whole-document 16 KiB security JSON
@@ -5276,8 +5303,8 @@ it could not already read through `list_recent_changes`. Proof:
 the same scope as `/api/metrics-store/history`. It resolves the canonical
 resource id through the request organization's registry and hands a cloned
 request, with the organization context intact, to `handleMetricsHistory`, so
-tenant resolution, the licensed history limit and the response are the chart
-route's own. The rewritten query carries only resourceType, resourceId, range,
+tenant resolution and the response are the chart route's own (no plan limits
+the window since 17 November 2026). The rewritten query carries only resourceType, resourceId, range,
 maxPoints and metric; any other parameter the caller sent is dropped. A
 monitoring-read token therefore reads nothing through it that it could not
 already read from the chart route. `normalizeMetricsHistoryResourceType` now
@@ -5547,3 +5574,42 @@ current saved authority. `saml_initialization_ownership_test.go` holds the
 management, native-race, distinct-trust, public-URL and signed-callback controls.
 This repairs sign-in reliability; it does not establish an authentication
 bypass, measured exposure or recovery of an original user's sign-in.
+
+### Refuse nonregular auth inventories before opening them
+
+Session, CSRF and recovery-token startup readers check that the resolved target
+is a regular file before opening it. A direct or linked named pipe must not hold
+initialization waiting for a writer. The existing failed-read path admits no
+saved authority and holds disk saves while the unread nonregular entry remains.
+Sessions and CSRF tokens may still work in memory; recovery-token issuance still
+requires successful persistence. The entry is not moved, replaced or consumed.
+
+Readable links to regular hashed and legacy inventories keep working. Missing
+and dangling paths retain their existing distinction. This pre-open check adds
+no concurrent-path-replacement protection, unavailable-filesystem deadline,
+size limit, storage-format change or new grant. The actual initializer and
+save/shutdown controls in `auth_inventory_startup_linux_test.go`, plus the
+regular-link controls in the three store test files, hold these properties.
+
+
+### Preserve incomplete browser-auth credential inventories
+
+Session, CSRF and recovery-token startup readers validate every credential row
+before admitting any saved authority or publishing a legacy migration. A null
+row, absent or whitespace-only required credential identity, or a CSRF row with
+no effective session binding makes the whole inventory unknown. It is not a
+partial success: the existing preservation-before-save path retains its exact
+bytes/inode privately, and never automatically restores that retained authority.
+Failed preservation continues to hold disk writes; session/CSRF grants may work
+in memory, while recovery issuance and consumption still require persistence.
+
+Whole-file `null`, empty arrays/objects and missing inventories retain existing
+compatibility. Complete expired/used records still follow ordinary filtering.
+Legacy map-key/field fallback precedence, optional metadata and readable regular
+links remain supported; no new hash syntax or storage format is required. This
+repairs loss of original evidence, not already-erased credentials or original
+client recovery. `auth_inventory_records_test.go` exercises actual initializers,
+whole-input rejection, exact private retention, fresh/independent authority,
+durable withdrawal/consumption and reload, plus complete-format/fallback controls.
+The per-store unread-inventory suites retain save/shutdown and failed-preservation
+controls for these semantic failures as well as read/JSON failures.

@@ -121,7 +121,6 @@ try {
           capabilities: ["multi_tenant"],
           limits: [],
           hosted_mode: false,
-          max_history_days: 7,
         });
       if (path === "/api/security/status")
         return json({ hasAuthentication: true, sessionCapabilities: {} });

@@ -40,7 +40,7 @@ const { chromium, webkit } = require('playwright');
           return route.fulfill({ json: { points: samples, source: 'store' } });
         }
         return route.fulfill({ json: url.pathname === '/api/license/runtime-capabilities'
-          ? { capabilities: [], limits: [], max_history_days: 7, hosted_mode: false, runtime: { build: 'community' }, blocked_capabilities: [] }
+          ? { capabilities: [], limits: [], hosted_mode: false, runtime: { build: 'community' }, blocked_capabilities: [] }
           : { data: [], enabled: false } });
       });
       await page.clock.install();

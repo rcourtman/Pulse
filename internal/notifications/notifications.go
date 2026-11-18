@@ -1552,7 +1552,13 @@ func (n *NotificationManager) sendAlert(alert *alerts.Alert, options alertSendOp
 
 	if !n.enabled || n.configurationError != nil {
 		log.Debug().Msg("notifications disabled or configuration unavailable, skipping")
+		configurationUnavailable := n.configurationError != nil
 		n.mu.Unlock()
+		if configurationUnavailable {
+			n.rehearsalGate(alert, "firing", "unavailable", "configuration_unavailable", "Saved notification configuration is unavailable. No rehearsal delivery was admitted.")
+		} else {
+			n.rehearsalGate(alert, "firing", "suppressed", "notifications_disabled", "Notification delivery is paused. The rehearsal respects that pause.")
+		}
 		return
 	}
 	// The lease covers the queue read below until its write completes, so Stop
@@ -1560,6 +1566,7 @@ func (n *NotificationManager) sendAlert(alert *alerts.Alert, options alertSendOp
 	if !n.lifecycle.admit() {
 		log.Debug().Str("alertID", alert.ID).Msg("notification manager stopping, alert not admitted")
 		n.mu.Unlock()
+		n.rehearsalGate(alert, "firing", "unavailable", "manager_stopping", "The notification manager stopped before admission.")
 		return
 	}
 	defer n.lifecycle.release()
@@ -1572,6 +1579,7 @@ func (n *NotificationManager) sendAlert(alert *alerts.Alert, options alertSendOp
 		n.mu.Lock()
 		if !n.enabled {
 			n.mu.Unlock()
+			n.rehearsalGate(alert, "firing", "suppressed", "notifications_disabled", "Notification delivery was paused before admission.")
 			return
 		}
 		if revision == n.destinationRevision {
@@ -1581,6 +1589,7 @@ func (n *NotificationManager) sendAlert(alert *alerts.Alert, options alertSendOp
 	}
 	if exists && !options.bypassCooldown {
 		n.mu.Unlock()
+		n.rehearsalGate(alert, "firing", "suppressed", "cooldown", "The occurrence is in its delivery cooldown.")
 		return
 	}
 	queue := n.queue
@@ -1603,6 +1612,7 @@ func (n *NotificationManager) sendAlert(alert *alerts.Alert, options alertSendOp
 	n.mu.Lock()
 	if !n.enabled {
 		n.mu.Unlock()
+		n.rehearsalGate(alert, "firing", "suppressed", "notifications_disabled", "Notification delivery was paused before admission.")
 		return
 	}
 
@@ -1613,6 +1623,7 @@ func (n *NotificationManager) sendAlert(alert *alerts.Alert, options alertSendOp
 		queue := n.queue
 		n.mu.Unlock()
 
+		n.rehearsalGate(alert, "firing", "passed", "admitted", "Notification delivery is enabled. The ordinary routing and queue path owns delivery.")
 		n.dispatchFiringAlerts(emailConfig, webhooks, appriseConfig, []*alerts.Alert{alert}, options.target, options.destinationIDs, queue, options.bypassCooldown)
 		return
 	}
@@ -1641,7 +1652,12 @@ func (n *NotificationManager) sendAlert(alert *alerts.Alert, options alertSendOp
 			Dur("groupWindow", n.groupWindow).
 			Msg("started alert grouping timer")
 	}
+	deadline := n.groupDeadline
 	n.mu.Unlock()
+	n.rehearsalGate(alert, "firing", "passed", "admitted", "Notification delivery is enabled. The configured grouping window applies.")
+	if rehearsalID(alert) != "" && queue != nil {
+		queue.rehearsalGrouping(alert, deadline)
+	}
 }
 
 type pendingFiringOccurrence struct {
@@ -1763,11 +1779,13 @@ func (n *NotificationManager) dispatchFiringAlerts(
 		target,
 		destinationIDs,
 	)
+	before := jobs
 	if len(bypassCooldown) == 0 || !bypassCooldown[0] {
 		jobs = n.filterFiringJobsByCooldown(jobs)
 	} else {
 		jobs = n.bindDeliveryEpochs(jobs)
 	}
+	queue.rehearsalRouting(alertsToSend, emailConfig, webhooks, appriseConfig, target, before, jobs, "firing")
 	if len(jobs) == 0 {
 		return
 	}
@@ -1948,6 +1966,7 @@ func (n *NotificationManager) filterResolvedJobsByDeliveryReceipt(jobs []notific
 				_, epoch, eligible, err = queue.deliveryReceiptWithEpoch(alert, key)
 				if err != nil {
 					log.Error().Err(err).Msg("Failed to read notification delivery receipt; suppressing recovery")
+					queue.rehearsalReceiptUnavailable(alert, notificationDestinationIDForJob(job))
 					continue
 				}
 			} else {
@@ -1998,7 +2017,17 @@ func (n *NotificationManager) SendResolvedAlert(resolved *alerts.ResolvedAlert) 
 
 	n.mu.Lock()
 	if !n.enabled || n.configurationError != nil || !n.notifyOnResolve || !n.lifecycle.accepting() {
+		enabled, configured, recoveries := n.enabled, n.configurationError == nil, n.notifyOnResolve
 		n.mu.Unlock()
+		status, reason, message := "unavailable", "manager_stopping", "The notification manager stopped before recovery admission."
+		if !configured {
+			reason, message = "configuration_unavailable", "Saved notification configuration is unavailable."
+		} else if !enabled {
+			status, reason, message = "suppressed", "notifications_disabled", "Notification delivery is paused. Recovery was not sent."
+		} else if !recoveries {
+			status, reason, message = "suppressed", "recovery_disabled", "Recovery notifications are disabled in the saved alert policy."
+		}
+		n.rehearsalGate(alertCopy, "recovery", status, reason, message)
 		return
 	}
 	if n.queue == nil && n.groupingEnabled && n.groupWindow > 0 {
@@ -2060,9 +2089,11 @@ func (n *NotificationManager) dispatchResolvedAlerts(alertList []*alerts.Alert) 
 	// Synchronous occurrence cancellation owns resolution disposition. Dispatch
 	// can be delayed past a refire and must never relabel that newer firing.
 	jobs := buildNotificationDeliveryJobs(emailConfig, webhooks, appriseConfig, alertList, eventResolved, resolvedTimeFromAlerts(alertList))
+	before := jobs
 	// Filter each destination independently at dispatch, not merely when the
 	// alert enters the window. Never announce a recovery for an undelivered firing.
 	jobs = n.filterResolvedJobsByDeliveryReceipt(jobs)
+	queue.rehearsalRouting(alertList, emailConfig, webhooks, appriseConfig, notificationDeliveryTargetAll, before, jobs, "recovery")
 	if queue != nil {
 		n.enqueueNotificationJobs(queue, jobs)
 	} else {
@@ -2266,6 +2297,14 @@ func buildNotificationDeliveryJobsForSelection(
 	target notificationDeliveryTarget,
 	destinationIDs []string,
 ) []notificationDeliveryJob {
+	var jobs []notificationDeliveryJob
+	for _, batch := range partitionRehearsalAlerts(alertsToSend) {
+		jobs = append(jobs, buildNotificationDeliveryJobsForSelectionBatch(emailConfig, webhooks, appriseConfig, batch, event, resolvedAt, target, destinationIDs)...)
+	}
+	return jobs
+}
+
+func buildNotificationDeliveryJobsForSelectionBatch(emailConfig EmailConfig, webhooks []WebhookConfig, appriseConfig AppriseConfig, alertsToSend []*alerts.Alert, event notificationEvent, resolvedAt time.Time, target notificationDeliveryTarget, destinationIDs []string) []notificationDeliveryJob {
 	if target == "" {
 		target = notificationDeliveryTargetAll
 	}
@@ -2470,6 +2509,12 @@ func (n *NotificationManager) enqueueNotificationJobs(queue *NotificationQueue, 
 			}
 			if err := enqueueErr; err != nil {
 				anyFailed = true
+				if len(bucket.job.Alerts) > 0 && rehearsalID(bucket.job.Alerts[0]) != "" {
+					// A rehearsal cannot establish queue delivery by taking the
+					// ordinary best-effort direct fallback around a failed queue.
+					queue.rehearsalGate(bucket.job.Alerts[0], rehearsalPhase(job.Event), "unavailable", "queue_unavailable", "Queue admission failed. No direct rehearsal fallback was sent.")
+					continue
+				}
 				if !bucket.job.ReceiptEpochBound {
 					// Storage is unavailable. Preserve the established best-effort
 					// direct fallback without giving its completion a current generation.
@@ -3623,7 +3668,8 @@ func (n *NotificationManager) sendResolvedWebhookNtfy(webhook WebhookConfig, ale
 		method = "POST"
 	}
 
-	req, err := http.NewRequest(method, webhook.URL, bytes.NewBufferString(body.String()))
+	payload := []byte(body.String())
+	req, err := http.NewRequest(method, webhook.URL, bytes.NewReader(payload))
 	if err != nil {
 		return fmt.Errorf("failed to create ntfy request: %w", err)
 	}
@@ -3640,6 +3686,17 @@ func (n *NotificationManager) sendResolvedWebhookNtfy(webhook WebhookConfig, ale
 			req.Header.Set(key, value)
 		}
 	}
+
+	// Recovery follows the same signing contract as firing, over the exact
+	// plain-text bytes ntfy receives. Custom headers cannot replace integrity.
+	eventID := ""
+	for _, alert := range alertList {
+		if alert != nil {
+			eventID = webhookEventID(alert.ID, "resolved")
+			break
+		}
+	}
+	setWebhookIntegrityHeaders(req, webhook.SigningSecret, eventID, payload)
 
 	resp, err := n.webhookClient.Do(req)
 	if err != nil {
@@ -3790,16 +3847,7 @@ func (n *NotificationManager) executeWebhookRequest(webhook WebhookConfig, paylo
 		req.Header.Set(key, value)
 	}
 
-	// Delivery integrity headers are set after custom headers so user-provided
-	// header maps cannot shadow them.
-	if opts.eventID != "" {
-		req.Header.Set("X-Pulse-Event-ID", opts.eventID)
-	}
-	if secret := strings.TrimSpace(webhook.SigningSecret); secret != "" {
-		timestamp := strconv.FormatInt(time.Now().Unix(), 10)
-		req.Header.Set("X-Pulse-Timestamp", timestamp)
-		req.Header.Set("X-Pulse-Signature", "v1="+signWebhookPayload(secret, timestamp, payload))
-	}
+	setWebhookIntegrityHeaders(req, webhook.SigningSecret, opts.eventID, payload)
 
 	client := n.webhookClient
 	if client == nil || (opts.timeout > 0 && opts.timeout != WebhookTimeout) {
@@ -3922,6 +3970,20 @@ func isEmptyInterface(value interface{}) bool {
 		return true
 	default:
 		return false
+	}
+}
+
+// setWebhookIntegrityHeaders applies the shared delivery contract after all
+// custom headers. Both JSON webhooks and ntfy's plain-text recovery sign the
+// actual wire payload, without changing empty-secret (unsigned) behavior.
+func setWebhookIntegrityHeaders(req *http.Request, secret, eventID string, payload []byte) {
+	if eventID != "" {
+		req.Header.Set("X-Pulse-Event-ID", eventID)
+	}
+	if secret = strings.TrimSpace(secret); secret != "" {
+		timestamp := strconv.FormatInt(time.Now().Unix(), 10)
+		req.Header.Set("X-Pulse-Timestamp", timestamp)
+		req.Header.Set("X-Pulse-Signature", "v1="+signWebhookPayload(secret, timestamp, payload))
 	}
 }
 
@@ -4752,6 +4814,14 @@ func (n *NotificationManager) ProcessQueuedNotification(notif *QueuedNotificatio
 	if q := n.GetQueue(); q != nil && notif.ProviderAcceptedAt != nil {
 		if found, err := q.settleAcknowledgedNotification(notif.ID); found || err != nil {
 			return notificationSettlementError(err)
+		}
+	}
+	if notif.ProviderAcceptedAt == nil && rehearsalExpired(notif.Alerts, time.Now()) {
+		return ErrNotificationDeliverySkipped
+	}
+	if notif.ProviderAcceptedAt == nil {
+		if q := n.GetQueue(); q != nil && q.rehearsalEvidenceUnavailable(notif.Alerts) {
+			return ErrNotificationDeliverySkipped
 		}
 	}
 	if notif.ReceiptEpoch != nil {

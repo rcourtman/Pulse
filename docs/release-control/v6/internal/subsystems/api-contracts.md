@@ -21,6 +21,53 @@
 
 ## Purpose
 
+### Ended administrator recovery is refused before admission (17 November 2026)
+
+The public `POST /api/admin/rbac/reset-admin` handler checks request cancellation
+or deadline after method/provider checks and immediately before one-use token
+validation. An ended request observed there returns fixed **408
+`request_cancelled`**, without consuming recovery or changing selected/peer roles,
+even when a complete buffered body still decodes. Existing JSON, authenticated
+organisation, client-IP/token and exact principal rules remain in force. No UI
+calls this direct command, and live rendered responses are unchanged.
+
+Validation consumes the token on success. Once it begins, cancellation does not
+interrupt the existing consume-and-reset operation or make a used token reusable.
+A lost response is not proof that recovery did not run. Registered
+`rbac_admin_request_lifetime_test.go` exercises entry cancellation/deadline, body
+and org-selection cancellation, unchanged persisted recovery/roles, same-token
+live recovery/reuse refusal and cancellation after consumption but before role
+admission. These source controls do not establish external impact, installed
+protection or original-client recovery.
+
+### Optional hosted lifecycle bodies are complete decisions
+
+Hosted organization suspension and soft deletion accept an omitted or JSON-
+whitespace-only body as their existing default options. A supplied body must
+instead be one complete JSON object within the existing 64 KiB limit. A valid
+prefix followed by another value, junk, truncated input, excess bytes or a read
+failure cannot authorize a lifecycle change. JSON null and other non-object
+roots are not omission. Competing recognized controls, including escaped keys
+and case-folded aliases, are rejected rather than choosing a reason or retention
+period. Singleton aliases, unknown fields, field-level null defaults and valid
+positive retention settings retain their previous behavior.
+
+The shared admin-object decoder owns this admission. Only its exact empty-input
+EOF sentinel permits defaults; a wrapped read error is not absence. Rejection
+returns the existing generic 400 invalid_request without persisting selected or
+peer organization changes or echoing supplied values. Method/hosted/persistence,
+default-organization and lookup checks retain their ordering. Unsuspend has no
+parameter body and is unchanged, as are authentication, authorization, conflict
+checks, successful response fields and the 30-day deletion default.
+
+Registered org_lifecycle_handlers_test.go exercises real selected/peer saved
+metadata, damaged/duplicate/oversized/read-failed bodies, supported defaults and
+options, gate ordering, and native HTTP rejection followed by deliberate valid
+changes to the same organization. This is input-safety proof, not live hosted
+client recovery or release availability; no public frontend consumer calls these
+parameter-bearing lifecycle routes.
+
+
 ### OIDC login POST admission is bounded before discovery (16 November 2026)
 
 The existing public `POST /api/oidc/{providerID}/login` (including the legacy
@@ -4990,6 +5037,11 @@ a new API state machine, queue contract, or verification-accounting field.
     `/api/charts/infrastructure`; the deprecated `getInfrastructureCharts`
     alias, which could not pass `metrics`, is removed and must not return as a
     second unfiltered entry point.
+    `temperature` is an opt-in member of that filter: the service accepts
+    it by name but never adds it to the default unfiltered payload. When
+    requested, node and agent host series carry their stored temperature
+    history, so host tables can chart it without widening every other
+    summary consumer's payload.
 39. Keep the retired compact dashboard overview route absent from that same
     shared API surface. `internal/api/resourceapi/resources.go`,
     `internal/api/router_routes_monitoring.go`, and
@@ -8041,9 +8093,9 @@ output bound, so short windows and fallback reads can return native
 samples). It resolves the resource's `MetricsTarget` through the
 registry (`ResourceRegistry.MetricsTarget`, as the resources API does)
 and delegates to
-`handleMetricsHistory`, so its payload, tiers, fallbacks and licensed
-history limit are exactly the chart history route's: a window beyond
-the install's licensed history returns 402 `license_required`. An
+`handleMetricsHistory`, so its payload, tiers and fallbacks are exactly
+the chart history route's. Since 17 November 2026 no plan limits the
+window. An
 unknown resource, or one without a `MetricsTarget`, is a 404 with a
 reason; a missing `resourceId`, unknown range or non-positive
 `maxPoints` is a 400. The response's `resourceId` is the metrics-store
@@ -8547,13 +8599,13 @@ the canonical cluster source key, node history on
 `k8s:<cluster>:pod:<uid-or-namespace/name>`, and deployment history on
 `<cluster>:deployment:<uid-or-namespace/name>`, so demo and live workload
 detail charts all resolve through one governed identity contract.
-That same metrics-history contract also owns commercial history-range
-enforcement. `frontend-modern/src/api/charts.ts` may expose `14d` as a
-first-class `HistoryTimeRange`, and `/api/metrics-store/history` must parse
-positive day ranges before querying the store so entitlement checks cannot be
-bypassed with duration syntax. Community instances must remain capped at seven
-days, Relay must allow 14 days and reject longer history, and Pro-tier
-entitlements must continue to allow 90-day history.
+That same metrics-history contract owns history-range parsing.
+`frontend-modern/src/api/charts.ts` may expose `14d` as a first-class
+`HistoryTimeRange`, and `/api/metrics-store/history` parses positive day
+ranges before querying the store. Since 17 November 2026 no plan limits the
+range: every tier, including Community with no licence, is served any
+supported range, and storage retention alone decides how far back the answer
+goes (`TestHandleMetricsHistory_EveryPlanServesEveryRange`).
 The Pulse Account commercial shell now also owns a dedicated bootstrap
 contract in `internal/cloudcp/portal/page.go`, `internal/cloudcp/portal/handlers.go`,
 and `internal/cloudcp/portal/handlers_test.go`. `/api/portal/bootstrap` and
@@ -14757,3 +14809,19 @@ metadata consumers, and a signed ACS/session/replay handover. It holds current
 pending-request ownership, distinct trust snapshots, public-base recovery and
 unchanged callback protections. Source fixtures are not original-client,
 external-IdP, installed or release acceptance.
+
+### Organization-bound alert-delivery rehearsals (16 November 2026)
+
+`/api/notifications/rehearsals` supports GET history and POST creation.
+`/:id` reads a report and `/:id/recover` finishes through ordinary recovery
+admission. The existing notification organization-manager boundary applies.
+Read requests require settings read or write scope; mutations require settings
+write scope. Runtime lookup never falls back to another organization. Creation
+accepts only a canonical UUID, an info/warning/critical level and bounded routing
+tags, with a strict 4096-byte body. It accepts no destinations, transport secrets
+or draft notification configuration. Missing runs return 404, unfinished-run
+conflicts 409, invalid inputs 400 and unavailable evidence a redacted 503.
+
+`internal/api/notifications_org_authority_test.go` covers own/foreign/default
+organization separation, viewer refusal, strict input and idempotent recovery.
+Notification runtime tests independently exercise real queue/provider evidence.

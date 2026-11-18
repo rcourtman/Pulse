@@ -65,6 +65,9 @@ func TestRecoveryUnreadDecodePreservesBytes(t *testing.T) {
 		"truncated":         []byte(`[{"token_hash":"synthetic-incomplete`),
 		"unsupported_shape": []byte(`"synthetic unsupported inventory"`),
 		"invalid_legacy":    []byte(`{"synthetic-legacy":42}`),
+		"missing_hash":      []byte(`[{"ip":"loopback","expires_at":"2099-01-01T00:00:00Z"}]`),
+		"null_row":          []byte(`[null]`),
+		"legacy_empty_key":  []byte(`{"":{"ip":"loopback","expires_at":"2099-01-01T00:00:00Z"}}`),
 	} {
 		t.Run(name, func(t *testing.T) {
 			store := recoveryUnreadInventory(t, data)

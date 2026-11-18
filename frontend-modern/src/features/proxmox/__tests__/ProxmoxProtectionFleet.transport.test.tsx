@@ -25,7 +25,6 @@ vi.mock('@/api/license', () => ({
       limits: [],
       blocked_capabilities: [],
       hosted_mode: false,
-      max_history_days: 7,
       runtime: { build: 'community', label: 'Synthetic Community runtime' },
     }),
   },

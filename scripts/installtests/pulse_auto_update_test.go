@@ -178,6 +178,7 @@ func TestAutoUpdateDownloadFailures(t *testing.T) {
 	for _, name := range []string{
 		"test_both_complete_downloads_keep_the_exact_signed_installer_handoff",
 		"test_partial_failed_downloads_never_execute_or_mutate_the_install",
+		"test_oversized_bootstrap_assets_refuse_before_installer_and_clean_partials",
 	} {
 		if !strings.Contains(string(out), fmt.Sprintf("%s (", name)) {
 			t.Fatalf("missing updater download control %s:\n%s", name, out)
@@ -224,6 +225,7 @@ func TestAutoUpdateTransactionLock(t *testing.T) {
 // matrix below; no native service or published input is used by this fixture.
 func TestAutoUpdateServiceStateFailsClosed(t *testing.T) {
 	runParallelPythonFixtureControls(t, repoFile("scripts", "tests", "test_auto_update_service_state.py"), "UpdateServiceState", []string{
+		"test_manager_double_retains_exact_calls_phases_and_state",
 		"test_fixture_timeout_retains_partial_output_and_owned_cleanup",
 		"test_transaction_model_clock_is_not_advanced_by_wall_time",
 		"test_poll_timeout_retains_backup_without_start_or_rollback",
@@ -263,6 +265,7 @@ func TestAutoUpdateLogSinkFailures(t *testing.T) {
 		"test_fixture_timeout_cannot_be_hidden_by_interrupted_protocol_writes",
 		"test_fixture_success_cannot_hide_malformed_protocol",
 		"test_logger_double_keeps_complete_argument_frames_and_exit_sequence",
+		"test_real_log_timestamp_avoids_date_startup_and_preserves_legacy_fallback",
 		"test_real_log_retains_each_sink_failure_in_conditional_calls",
 		"test_real_logger_deadline_preserves_stdout_exit_and_owned_cleanup",
 	}
@@ -277,35 +280,36 @@ func TestAutoUpdateLogSinkFailures(t *testing.T) {
 
 // A real owned process retains its old executable after its disk path changes.
 // This tests Linux process identity, not a native systemd/application journey.
+// Each private transaction keeps the existing 20-second bound; 48 independent
+// transactions must not spend one cumulative watchdog. Discovery admits future
+// controls too, while the required inventory prevents losing an existing case.
 func TestAutoUpdateRunningExecutableIdentity(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("Linux /proc executable identity; portable transaction controls remain required")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_auto_update_service_state.py"), "-v", "RunningExecutable")
-	cmd.Env = append(os.Environ(), "PULSE_AUTO_UPDATER_UNDER_TEST="+repoFile("scripts", "pulse-auto-update.sh"))
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("running executable identity controls: %v\n%s", err, out)
+	required := []string{"test_identity_read_timeout_is_bounded_and_owned_process_is_reaped"}
+	for _, binary := range []string{"same", "same-copy", "symlink", "legacy", "different", "nonexecutable", "missing", "broken-primary"} {
+		required = append(required, "test_actual_process_"+strings.ReplaceAll(binary, "-", "_"))
 	}
-	for _, name := range []string{
-		"test_actual_process_not_replaced_disk_path_is_checked",
-		"test_complete_stable_main_pid_tuple_is_required",
-		"test_final_manager_read_cannot_hide_installed_executable_drift",
-		"test_manager_diagnostics_refuse_either_running_identity_read",
-		"test_identity_read_timeout_is_bounded_and_owned_process_is_reaped",
-	} {
-		passed := false
-		for _, line := range strings.Split(string(out), "\n") {
-			if strings.HasPrefix(line, name+" (") && strings.HasSuffix(line, " ... ok") {
-				passed = true
+	for _, mode := range []string{"normal", "masked", "error", "missing", "duplicate", "extra", "inactive", "not-found", "pid-zero", "pid-negative", "pid-path", "pid-missing-process", "pid-moved", "state-moved"} {
+		required = append(required, "test_main_pid_tuple_"+strings.ReplaceAll(mode, "-", "_"))
+	}
+	for _, binary := range []string{"same", "legacy", "symlink"} {
+		for _, fault := range []string{"different", "nonexecutable", "missing", "wrong-symlink", "directory", "same-copy"} {
+			// Never chmod the shared interpreter behind a symlink.
+			if binary == "symlink" && fault == "nonexecutable" {
+				continue
 			}
-		}
-		if !passed {
-			t.Fatalf("required running executable control %s did not pass:\n%s", name, out)
+			required = append(required, "test_final_read_drift_"+binary+"_"+strings.ReplaceAll(fault, "-", "_"))
 		}
 	}
+	for _, fault := range []string{"stderr-warning", "stderr-blank", "stdout-blank", "stdout-unterminated"} {
+		for _, reading := range []int{1, 2} {
+			required = append(required, fmt.Sprintf("test_manager_diagnostic_%s_%d", strings.ReplaceAll(fault, "-", "_"), reading))
+		}
+	}
+	runParallelPythonFixtureControls(t, repoFile("scripts", "tests", "test_auto_update_service_state.py"), "RunningExecutable", required,
+		20*time.Second, "PULSE_AUTO_UPDATER_UNDER_TEST="+repoFile("scripts", "pulse-auto-update.sh"))
 }
 
 func extractAutoUpdateServiceFunctions(t *testing.T) string {
@@ -737,14 +741,16 @@ verify_release_signature() { return 0; }
 # fails outright, like the real one aborting on a read-only filesystem after
 # it has stopped the service.
 curl() {
-  local out="" prev="" arg
+  local out="" prev="" url="" arg
   for arg in "$@"; do
     if [[ "$prev" == "-o" ]]; then out="$arg"; fi
+    [[ "$arg" != *install.sh* ]] || url="$arg"
     prev="$arg"
   done
   if [[ -n "$out" ]]; then
-    case "$out" in
-      *.sig.*) printf 'dummy-signature\n' > "$out" ;;
+    [[ "$out" != - ]] || out=/dev/stdout
+    case "$url" in
+      *.sshsig) printf 'dummy-signature\n' > "$out" ;;
       *) printf '#!/usr/bin/env bash\necho inactive > "${PULSE_INSTALL_DIR}/service-state"\nexit 1\n' > "$out" ;;
     esac
   fi
@@ -885,14 +891,16 @@ verify_release_signature() { return 0; }
 # curl writes the installer / signature to the -o target; the fake installer
 # bumps VERSION to the new version, simulating a successful install.
 curl() {
-  local out="" prev="" arg
+  local out="" prev="" url="" arg
   for arg in "$@"; do
     if [[ "$prev" == "-o" ]]; then out="$arg"; fi
+    [[ "$arg" != *install.sh* ]] || url="$arg"
     prev="$arg"
   done
   if [[ -n "$out" ]]; then
-    case "$out" in
-      *.sig.*) printf 'dummy-signature\n' > "$out" ;;
+    [[ "$out" != - ]] || out=/dev/stdout
+    case "$url" in
+      *.sshsig) printf 'dummy-signature\n' > "$out" ;;
       *)
         cat > "$out" <<'INSTALLER'
 #!/usr/bin/env bash
@@ -1180,6 +1188,7 @@ curl() {
   arg="$1"; shift
   case "$arg" in -o) out="$1"; shift ;; https://*) url="$arg" ;; esac
  done
+ [[ "$out" != - ]] || out=/dev/stdout
  printf '%s\n' "$url" >> "$FIXTURE_DIR/downloads"
  if [[ "$url" == *.sshsig ]]; then
   [[ "$FAULT" != download_signature ]] || return 1

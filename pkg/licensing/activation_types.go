@@ -39,22 +39,12 @@ type ActivationContinuity struct {
 	// LegacyMigration marks installations activated from a supported v5 license
 	// exchange rather than a native v6 activation key.
 	LegacyMigration bool `json:"legacy_migration,omitempty"`
-
-	// DowngradeRetention records the local data-preservation window created by
-	// a reduction in history entitlement. It is local continuity metadata, not
-	// a server-granted capability.
-	DowngradeRetention *DowngradeRetentionState `json:"downgrade_retention,omitempty"`
 }
 
+// normalizeActivationContinuity keeps only current continuity fields. Older
+// activation files may still carry downgrade_retention from when metric
+// history was plan-limited; it is dropped on load and never acted on.
 func normalizeActivationContinuity(continuity ActivationContinuity) ActivationContinuity {
-	if continuity.DowngradeRetention != nil {
-		normalized := NormalizeDowngradeRetentionState(*continuity.DowngradeRetention)
-		if normalized.CurrentHistoryDays <= 0 || normalized.PurgeEligibleAt <= normalized.DetectedAt {
-			continuity.DowngradeRetention = nil
-		} else {
-			continuity.DowngradeRetention = &normalized
-		}
-	}
 	return continuity
 }
 

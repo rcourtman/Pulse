@@ -419,6 +419,18 @@ func (r *RecoveryTokenStore) migrateLegacyTokens(data []byte, now time.Time) (bo
 	if err := json.Unmarshal(data, &legacy); err != nil {
 		return false, err
 	}
+	// Check the complete inventory before publishing any legacy migration.
+	for rawToken, token := range legacy {
+		if token == nil {
+			return false, errIncompleteAuthInventory
+		}
+		if rawToken == "" {
+			rawToken = token.Token
+		}
+		if strings.TrimSpace(rawToken) == "" {
+			return false, errIncompleteAuthInventory
+		}
+	}
 
 	loaded := 0
 	for rawToken, token := range legacy {
@@ -458,7 +470,7 @@ func (r *RecoveryTokenStore) migrateLegacyTokens(data []byte, now time.Time) (bo
 func (r *RecoveryTokenStore) load() {
 	tokensFile := filepath.Join(r.dataPath, "recovery_tokens.json")
 
-	data, err := os.ReadFile(tokensFile)
+	data, err := readAuthSnapshot(tokensFile)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			// A dangling symlink also makes ReadFile report ENOENT, but it
@@ -475,6 +487,13 @@ func (r *RecoveryTokenStore) load() {
 	now := time.Now()
 	var tokens []*RecoveryToken
 	if err := json.Unmarshal(data, &tokens); err == nil {
+		for _, token := range tokens {
+			if token == nil || strings.TrimSpace(token.TokenHash) == "" {
+				r.preserveBeforeSave = true
+				log.Error().Msg("Incomplete recovery credential record; existing tokens were not loaded. The file must be preserved before saving new tokens")
+				return
+			}
+		}
 		loaded := r.loadCanonicalTokens(tokens, now)
 		log.Info().Int("loaded", loaded).Int("total", len(tokens)).Msg("Recovery tokens loaded from disk (hashed format)")
 		return

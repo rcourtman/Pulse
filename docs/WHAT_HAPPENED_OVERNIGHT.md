@@ -83,8 +83,8 @@ minimum and maximum:
 }
 ```
 
-Community keeps seven days of metric history; a longer `range` returns
-`license_required`.
+Metric history is free on every plan. `range` goes up to `90d`, and the
+answer holds whatever storage retention still keeps.
 
 ### 3. Where things stand now: `get_fleet_context` and `get_resource_context`
 
@@ -118,8 +118,8 @@ empty or short answer.
   other MCP reads above don't return raw Proxmox task logs, system journals or
   container logs. Your agent needs separate authorised host access to read
   those directly; a Pulse token doesn't grant it.
-- **Retention.** The change history keeps 30 days. Metric history keeps seven
-  days on Community.
+- **Retention.** The change history keeps 30 days. Metric history keeps 90
+  days of daily averages by default, on every plan.
 - **An empty answer is not proof that nothing happened.** It means Pulse
   recorded nothing in that window.
 

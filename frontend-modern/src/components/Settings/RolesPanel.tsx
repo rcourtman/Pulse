@@ -43,6 +43,7 @@ const RolePermissions: Component<{ role: Role }> = (props) => (
 
 export const RolesPanel: Component<RolesPanelProps> = (props) => {
   const state = useRolesPanelState(props);
+  let inventoryRoot: HTMLDivElement | undefined;
   let inventoryNotice: HTMLDivElement | undefined;
   let focusTimer: number | undefined;
   createEffect(
@@ -56,6 +57,13 @@ export const RolesPanel: Component<RolesPanelProps> = (props) => {
     }),
   );
   onCleanup(() => window.clearTimeout(focusTimer));
+
+  const checkSavedRoles = () => {
+    // Retry/Check removes its own button while reading. Move focus before
+    // that happens, not when a late response could interrupt another task.
+    inventoryRoot?.focus();
+    void state.loadRoles();
+  };
 
   const saveRole = async () => {
     const editor = document.activeElement?.closest('[role="dialog"]');
@@ -73,7 +81,14 @@ export const RolesPanel: Component<RolesPanelProps> = (props) => {
   };
 
   return (
-    <div class="space-y-6">
+    <div
+      ref={inventoryRoot}
+      role="region"
+      aria-label="Roles inventory"
+      aria-busy={state.loading()}
+      tabIndex={-1}
+      class="space-y-6 rounded-lg focus:outline-2 focus:outline-offset-2 focus:outline-blue-500 dark:focus:outline-blue-400"
+    >
       <SettingsPanel
         title="Roles"
         action={
@@ -124,7 +139,7 @@ export const RolesPanel: Component<RolesPanelProps> = (props) => {
               class="break-words"
               icon={<TriangleAlert />}
               actionLabel={state.loading() ? undefined : 'Check saved roles'}
-              actionOnClick={() => void state.loadRoles()}
+              actionOnClick={checkSavedRoles}
             >
               {message()}
             </InlineNotice>
@@ -152,7 +167,7 @@ export const RolesPanel: Component<RolesPanelProps> = (props) => {
               layout="banner"
               icon={<TriangleAlert />}
               actionLabel={state.unconfirmedChange() ? undefined : 'Retry'}
-              actionOnClick={() => void state.loadRoles()}
+              actionOnClick={checkSavedRoles}
             >
               {message()}
             </InlineNotice>

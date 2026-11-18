@@ -24,7 +24,7 @@ func TestMetricsHistoryTelemetryRequiresServedExtendedData(t *testing.T) {
 		{"old single metric", "&metric=cpu&range=30d", 8 * 24 * time.Hour, true, 1},
 		{"old all metrics", "&range=90d", 8 * 24 * time.Hour, true, 1},
 		{"recent data in long range", "&metric=cpu&range=30d", 24 * time.Hour, true, 0},
-		{"denied range", "&metric=cpu&range=30d", 8 * 24 * time.Hour, false, 0},
+		{"community range", "&metric=cpu&range=30d", 8 * 24 * time.Hour, false, 1},
 		{"empty long range", "&metric=missing&range=30d", 8 * 24 * time.Hour, true, 0},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -44,7 +44,7 @@ func TestMetricsHistoryTelemetryRequiresServedExtendedData(t *testing.T) {
 			router := &Router{monitor: monitor, persistence: persistence, licenseHandlers: handlers}
 			rec := httptest.NewRecorder()
 			router.handleMetricsHistory(rec, httptest.NewRequest(http.MethodGet, "/api/metrics-store/history?resourceType=vm&resourceId=private-resource"+tc.query, nil))
-			if tc.licensed && rec.Code != http.StatusOK {
+			if rec.Code != http.StatusOK {
 				t.Fatalf("status %d: %s", rec.Code, rec.Body.String())
 			}
 			now := time.Now().UTC()

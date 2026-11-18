@@ -86,6 +86,9 @@ func LoadObservers(path string, primaryURL string) ([]Observer, error) {
 	if len(parsed.Observers) > maxObservers {
 		return nil, fmt.Errorf("observer config has %d destinations; maximum is %d", len(parsed.Observers), maxObservers)
 	}
+	if err := rejectDuplicateObserverFields(data, true); err != nil {
+		return nil, err
+	}
 
 	normalizedPrimary := ""
 	if strings.TrimSpace(primaryURL) != "" {
@@ -119,6 +122,53 @@ func LoadObservers(path string, primaryURL string) ([]Observer, error) {
 		result = append(result, observer)
 	}
 	return result, nil
+}
+
+// The strict schema/type/EOF pass above runs first, so these objects contain
+// only the fixed root or destination fields. Do not let encoding/json's
+// last-value-wins rule choose competing destinations or trust/provisioning
+// settings. EqualFold preserves its singleton field aliases, including Unicode
+// aliases, while also detecting JSON-escaped duplicates. Check the whole file
+// before resolving any token file; diagnostics must not echo keys or values.
+func rejectDuplicateObserverFields(data []byte, root bool) error {
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	start, err := decoder.Token()
+	if err != nil {
+		return err
+	}
+	if start != json.Delim('{') {
+		return nil // A null destination retains its ordinary validation error.
+	}
+	var names []string
+	for decoder.More() {
+		token, err := decoder.Token()
+		if err != nil {
+			return err
+		}
+		name := token.(string) // The schema pass already validated object syntax.
+		for _, previous := range names {
+			if strings.EqualFold(name, previous) {
+				return errors.New("observer config contains repeated JSON fields; use each field once")
+			}
+		}
+		names = append(names, name)
+		var value json.RawMessage
+		if err := decoder.Decode(&value); err != nil {
+			return err
+		}
+		if root && strings.EqualFold(name, "observers") {
+			var destinations []json.RawMessage
+			if err := json.Unmarshal(value, &destinations); err != nil {
+				return err
+			}
+			for _, destination := range destinations {
+				if err := rejectDuplicateObserverFields(destination, false); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
 }
 
 func resolveObserver(item observerFileTarget) (Observer, error) {

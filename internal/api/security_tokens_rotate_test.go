@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -126,6 +127,7 @@ func TestSecurityTokens_RotateRejectsScopeEscalation(t *testing.T) {
 	}
 
 	req := httptest.NewRequest(http.MethodPost, "/api/security/tokens/"+old.ID+"/rotate", nil)
+	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "acme"))
 	req = req.WithContext(authpkg.WithAPIToken(req.Context(), &caller))
 	rec := httptest.NewRecorder()
 	router.handleRotateAPIToken(rec, req)

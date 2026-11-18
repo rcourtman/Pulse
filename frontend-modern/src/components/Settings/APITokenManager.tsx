@@ -125,6 +125,14 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
   );
   onCleanup(() => window.clearTimeout(focusTimer));
 
+  const checkTokenInventory = () => {
+    // Retry/Check removes its own button. Keep focus on the stable inventory
+    // before reading, never when a late response could interrupt another task.
+    window.clearTimeout(focusTimer);
+    inventoryRoot?.focus();
+    void loadTokens();
+  };
+
   const effectiveScopes = (token: APITokenRecord) =>
     token.scopes && token.scopes.length > 0 ? token.scopes : ['*'];
 
@@ -435,7 +443,14 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
   );
 
   return (
-    <div ref={inventoryRoot} class="space-y-5">
+    <div
+      ref={inventoryRoot}
+      role="region"
+      aria-label="API token inventory"
+      aria-busy={loading()}
+      tabIndex={-1}
+      class="space-y-5 rounded-md focus:outline-2 focus:outline-offset-2 focus:outline-blue-500 dark:focus:outline-blue-400"
+    >
       <Card padding="none" class="border border-border shadow-xs">
         <div class="flex flex-col gap-6 p-4 sm:p-6 lg:p-8">
           <div class="flex flex-wrap items-center justify-between gap-4">
@@ -554,7 +569,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
             role="alert"
             tone="danger"
             actionLabel={unconfirmedChange() ? 'Check token inventory' : 'Retry token inventory'}
-            actionOnClick={() => void loadTokens()}
+            actionOnClick={checkTokenInventory}
           >
             <p>{message()}</p>
             <Show

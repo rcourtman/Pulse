@@ -178,6 +178,7 @@ type QueuedNotification struct {
 // NotificationQueue manages persistent notification delivery with retries and DLQ
 type NotificationQueue struct {
 	mu                      sync.RWMutex
+	rehearsalAdmissionMu    sync.Mutex // Serializes producer creation/finish without holding the queue policy lock.
 	deliveryGateMu          sync.Mutex
 	deliveryGates           map[string]*notificationDeliveryGate
 	stopOnce                sync.Once
@@ -197,6 +198,8 @@ type NotificationQueue struct {
 	deliveryHealthChanged   func()              // Reconcile the monitoring-owned delivery alert after health-changing transitions
 	workerSem               chan struct{}       // Semaphore for limiting concurrent workers
 	processingNotifications map[string]struct{} // Owned row attempts; guarded by mu.
+	rehearsalErrors         map[string]struct{} // Evidence failures fence this producer until restart; guarded by mu.
+	rehearsalOwner          string              // This queue incarnation owns new rehearsal admissions.
 }
 
 // notificationDeliveryGate orders delivery and cancellation for a single
@@ -499,7 +502,10 @@ func (nq *NotificationQueue) initSchema() error {
 	); err != nil {
 		return err
 	}
-	return nq.migrateDeliveryFacts()
+	if err := nq.migrateDeliveryFacts(); err != nil {
+		return err
+	}
+	return nq.migrateRehearsals()
 }
 
 func (nq *NotificationQueue) recordDeliveryReceipt(alertID string, alertStart time.Time, destinationKey string, deliveredAt time.Time, severity int, epoch string, queueIDs ...string) error {
@@ -755,6 +761,11 @@ func (nq *NotificationQueue) Enqueue(notif *QueuedNotification) error {
 func (nq *NotificationQueue) enqueueLocked(notif *QueuedNotification) error {
 	if notif == nil {
 		return fmt.Errorf("notification cannot be nil")
+	}
+	for _, alert := range notif.Alerts {
+		if _, failed := nq.rehearsalErrors[rehearsalID(alert)]; failed {
+			return fmt.Errorf("rehearsal evidence is unavailable")
+		}
 	}
 
 	notif.Type = strings.TrimSpace(notif.Type)
@@ -2267,6 +2278,9 @@ func (nq *NotificationQueue) cleanupOldEntries() {
 
 // performCleanup removes notifications older than retention period
 func (nq *NotificationQueue) performCleanup() {
+	if err := nq.expireRehearsals(); err != nil {
+		log.Error().Msg("Failed to expire notification rehearsal evidence")
+	}
 	nq.cleanupDeliveryReceipts()
 	nq.mu.Lock()
 	defer nq.mu.Unlock()

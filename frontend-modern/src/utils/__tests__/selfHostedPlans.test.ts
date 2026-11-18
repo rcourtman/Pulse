@@ -13,12 +13,8 @@ import {
   SELF_HOSTED_FEATURE_CATALOG,
 } from '../selfHostedFeatureCatalog.generated';
 
-const primaryPillarClaimLabels = (tier: 'relay' | 'pro', metricHistoryDays: number) =>
-  getSelfHostedFeaturesForRole(tier, 'primary_pillar').map((entry) =>
-    entry.key === 'long_term_metrics'
-      ? `${metricHistoryDays}-day metric history`
-      : entry.comparisonName,
-  );
+const primaryPillarClaimLabels = (tier: 'relay' | 'pro') =>
+  getSelfHostedFeaturesForRole(tier, 'primary_pillar').map((entry) => entry.comparisonName);
 
 describe('selfHostedPlans', () => {
   it('keeps core monitoring aligned as an included self-hosted baseline', () => {
@@ -98,7 +94,7 @@ describe('selfHostedPlans', () => {
     );
     expect(SELF_HOSTED_PLAN_BY_TIER.community.entitlementHighlights).toEqual([
       'Real-time monitoring',
-      '7-day metric history',
+      '90-day metric history',
       'Watch-only Patrol',
       'Update alerts',
     ]);
@@ -107,10 +103,10 @@ describe('selfHostedPlans', () => {
       'Pulse Mobile pairing and push',
     );
     expect(SELF_HOSTED_PLAN_BY_TIER.relay.entitlementSummary).toContain(
-      'Pulse Mobile pairing and push notifications until 31 March 2027, and 14-day metric history.',
+      'Pulse Mobile pairing and push notifications until 31 March 2027.',
     );
     expect(SELF_HOSTED_PLAN_BY_TIER.relay.comparisonSummary).toBe(
-      'Retired plan: Pulse Mobile pairing and push notifications until 31 March 2027, and 14-day metric history.',
+      'Retired plan: Pulse Mobile pairing and push notifications until 31 March 2027.',
     );
     // Relay never gave remote web access; no plan copy may claim it.
     for (const plan of Object.values(SELF_HOSTED_PLAN_BY_TIER)) {
@@ -122,7 +118,6 @@ describe('selfHostedPlans', () => {
       'Pulse Relay (Mobile Connection)',
       'Pulse Mobile Pairing',
       'Push Notifications',
-      '14-day metric history',
     ]);
     expect(SELF_HOSTED_PLAN_BY_TIER.relay.includedExtras).toEqual([]);
     expect(SELF_HOSTED_PLAN_BY_TIER.relay.highlights).toContain(
@@ -132,19 +127,18 @@ describe('selfHostedPlans', () => {
       /yourlab\.pulserelay\.pro|custom\s+(?:url|subdomain|domain)/i,
     );
     expect(SELF_HOSTED_PLAN_BY_TIER.pro.billingExtrasSummary).toBe(
-      'Patrol modes, history, and team controls',
+      'Patrol modes and team controls',
     );
     expect(SELF_HOSTED_PLAN_BY_TIER.pro.entitlementSummary).toContain(
-      'Patrol modes (Ask first, Safe auto-fix, Autopilot), 90-day metric history, RBAC, audit logging, reporting, agent profiles, and Pulse Mobile pairing until 31 March 2027.',
+      'Patrol modes (Ask first, Safe auto-fix, Autopilot), RBAC, audit logging, reporting, agent profiles, and Pulse Mobile pairing until 31 March 2027.',
     );
     expect(SELF_HOSTED_PLAN_BY_TIER.pro.comparisonSummary).toBe(
-      'For small teams and larger estates: team access with audit logging, reporting, checks from outside your network, and support, plus Patrol fixes and 90-day history.',
+      'For small teams and larger estates: team access with audit logging, reporting, checks from outside your network, and support, plus Patrol fixes.',
     );
     expect(SELF_HOSTED_PLAN_BY_TIER.pro.comparisonSummary).not.toContain('how much control');
     expect(SELF_HOSTED_PLAN_BY_TIER.pro.entitlementHighlights).toEqual([
       'Patrol Investigates Issues and Explains the Root Cause',
       'Patrol Applies Safe Fixes and Verifies the Result',
-      '90-day metric history',
     ]);
     expect(SELF_HOSTED_PLAN_BY_TIER.pro.includedExtras).toEqual([
       'Role-Based Access Control (RBAC)',
@@ -159,7 +153,9 @@ describe('selfHostedPlans', () => {
     expect(SELF_HOSTED_PLAN_BY_TIER.community.highlights).not.toContain(
       'Hosted Patrol quickstart with activated entitlement: 25 runs, no API key',
     );
-    expect(SELF_HOSTED_PLAN_BY_TIER.relay.highlights).toContain('14-day metric history');
+    expect(SELF_HOSTED_PLAN_BY_TIER.relay.highlights.join('\n')).not.toMatch(/metric history/i);
+    expect(SELF_HOSTED_PLAN_BY_TIER.pro.highlights.join('\n')).not.toMatch(/metric history/i);
+    expect(SELF_HOSTED_PLAN_BY_TIER.community.highlights).toContain('90-day metric history');
     expect(SELF_HOSTED_PLAN_BY_TIER.pro.highlights.join('\n')).not.toMatch(
       /unlimited.*self-hosted.*monitoring/i,
     );
@@ -179,14 +175,14 @@ describe('selfHostedPlans', () => {
       getSelfHostedPlanEntitlementSummary('pro'),
     );
     expect(getSelfHostedPlanEntitlementSummary('pro', 'Legacy Pulse Pro+')).toBe(
-      'Legacy Pulse Pro+ is active on this instance. It includes Patrol modes (Ask first, Safe auto-fix, Autopilot), 90-day metric history, RBAC, audit logging, reporting, agent profiles, and Pulse Mobile pairing until 31 March 2027.',
+      'Legacy Pulse Pro+ is active on this instance. It includes Patrol modes (Ask first, Safe auto-fix, Autopilot), RBAC, audit logging, reporting, agent profiles, and Pulse Mobile pairing until 31 March 2027.',
     );
 
     expect(SELF_HOSTED_PLAN_BY_TIER.relay.entitlementHighlights).toEqual(
-      primaryPillarClaimLabels('relay', SELF_HOSTED_PLAN_BY_TIER.relay.metricHistoryDays),
+      primaryPillarClaimLabels('relay'),
     );
     expect(SELF_HOSTED_PLAN_BY_TIER.pro.entitlementHighlights).toEqual(
-      primaryPillarClaimLabels('pro', SELF_HOSTED_PLAN_BY_TIER.pro.metricHistoryDays),
+      primaryPillarClaimLabels('pro'),
     );
     expect(SELF_HOSTED_PLAN_BY_TIER.pro.includedExtras).toEqual(
       getSelfHostedFeaturesForRole('pro', 'included_extra').map((entry) => entry.displayName),
@@ -204,7 +200,6 @@ describe('selfHostedPlans', () => {
       'push_notifications',
       'ai_alerts',
       'ai_autofix',
-      'long_term_metrics',
       'rbac',
       'audit_logging',
       'advanced_reporting',
@@ -214,25 +209,15 @@ describe('selfHostedPlans', () => {
     expect(
       SELF_HOSTED_PLAN_DEFINITIONS.map((plan) => ({
         tier: plan.tier,
-        historyDays: plan.metricHistoryDays,
         extras: plan.billingExtrasSummary,
       })),
     ).toEqual([
-      { tier: 'community', historyDays: 7, extras: 'Watch-only Patrol, alerts, and SSO' },
-      {
-        tier: 'relay',
-        historyDays: 14,
-        extras: 'Pulse Mobile pairing and push',
-      },
-      { tier: 'pro', historyDays: 90, extras: 'Patrol modes, history, and team controls' },
+      { tier: 'community', extras: 'Watch-only Patrol, alerts, and SSO' },
+      { tier: 'relay', extras: 'Pulse Mobile pairing and push' },
+      { tier: 'pro', extras: 'Patrol modes and team controls' },
     ]);
-    expect(SELF_HOSTED_FEATURE_ROWS.find((row) => row.key === 'history')).toEqual({
-      key: 'history',
-      name: 'Metric History',
-      community: '7 days',
-      relay: '14 days',
-      pro: '90 days',
-    });
+    // Metric history is free on every plan, so it is not a comparison row.
+    expect(SELF_HOSTED_FEATURE_ROWS.find((row) => row.key === 'history')).toBeUndefined();
 
     const paidClaimText = [
       SELF_HOSTED_COMMERCIAL_PRESENTATION.pageDescription,

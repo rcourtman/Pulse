@@ -314,11 +314,11 @@ describe('licensePresentation', () => {
       }),
     ).toEqual({
       title: 'Current plan: Community',
-      body: 'Community is active on this instance. It includes self-hosted monitoring, 7-day metric history, watch-only Patrol, update alerts, and SSO.',
+      body: 'Community is active on this instance. It includes self-hosted monitoring, 90-day metric history, watch-only Patrol, update alerts, and SSO.',
       unlockedFeaturesLabel: 'Included on this instance',
       unlockedFeatures: [
         'Real-time monitoring',
-        '7-day metric history',
+        '90-day metric history',
         'Watch-only Patrol',
         'Update alerts',
       ],
@@ -345,7 +345,7 @@ describe('licensePresentation', () => {
       }),
     ).toMatchObject({
       title: 'Current plan: Pulse Pro',
-      body: 'Pulse Pro is active on this instance. It includes Patrol modes (Ask first, Safe auto-fix, Autopilot), 90-day metric history, RBAC, audit logging, reporting, agent profiles, and Pulse Mobile pairing until 31 March 2027.',
+      body: 'Pulse Pro is active on this instance. It includes Patrol modes (Ask first, Safe auto-fix, Autopilot), RBAC, audit logging, reporting, agent profiles, and Pulse Mobile pairing until 31 March 2027.',
       supplementalBadges: [],
       supplementalSummary: '',
     });
@@ -368,12 +368,11 @@ describe('licensePresentation', () => {
       }),
     ).toEqual({
       title: 'Current plan: Pulse Pro',
-      body: 'Pulse Pro is active on this instance. It includes Patrol modes (Ask first, Safe auto-fix, Autopilot), 90-day metric history, RBAC, audit logging, reporting, agent profiles, and Pulse Mobile pairing until 31 March 2027.',
+      body: 'Pulse Pro is active on this instance. It includes Patrol modes (Ask first, Safe auto-fix, Autopilot), RBAC, audit logging, reporting, agent profiles, and Pulse Mobile pairing until 31 March 2027.',
       unlockedFeaturesLabel: 'Primary capabilities',
       unlockedFeatures: [
         'Patrol Investigates Issues and Explains the Root Cause',
         'Patrol Applies Safe Fixes and Verifies the Result',
-        '90-day metric history',
       ],
       includedExtrasLabel: 'Included extras',
       includedExtras: [
@@ -643,12 +642,11 @@ describe('licensePresentation', () => {
       }),
     ).toMatchObject({
       title: 'Current plan: Legacy Pulse Pro+',
-      body: 'Legacy Pulse Pro+ is active on this instance. It includes Patrol modes (Ask first, Safe auto-fix, Autopilot), 90-day metric history, RBAC, audit logging, reporting, agent profiles, and Pulse Mobile pairing until 31 March 2027.',
+      body: 'Legacy Pulse Pro+ is active on this instance. It includes Patrol modes (Ask first, Safe auto-fix, Autopilot), RBAC, audit logging, reporting, agent profiles, and Pulse Mobile pairing until 31 March 2027.',
       unlockedFeaturesLabel: 'Primary capabilities',
       unlockedFeatures: [
         'Patrol Investigates Issues and Explains the Root Cause',
         'Patrol Applies Safe Fixes and Verifies the Result',
-        '90-day metric history',
       ],
     });
 
@@ -667,12 +665,11 @@ describe('licensePresentation', () => {
       }),
     ).toEqual({
       title: 'Current plan: Pulse Pro',
-      body: 'Pulse Pro is active on this instance. It includes Patrol modes (Ask first, Safe auto-fix, Autopilot), 90-day metric history, RBAC, audit logging, reporting, agent profiles, and Pulse Mobile pairing until 31 March 2027.',
+      body: 'Pulse Pro is active on this instance. It includes Patrol modes (Ask first, Safe auto-fix, Autopilot), RBAC, audit logging, reporting, agent profiles, and Pulse Mobile pairing until 31 March 2027.',
       unlockedFeaturesLabel: 'Primary capabilities',
       unlockedFeatures: [
         'Patrol Investigates Issues and Explains the Root Cause',
         'Patrol Applies Safe Fixes and Verifies the Result',
-        '90-day metric history',
       ],
       includedExtrasLabel: 'Included extras',
       includedExtras: [
@@ -699,7 +696,6 @@ describe('licensePresentation', () => {
         build: 'community',
         label: 'Pulse Community runtime',
       },
-      max_history_days: 90,
     };
 
     expect(hasPulseProRuntimeMismatch(entitlements)).toBe(true);
@@ -746,7 +742,6 @@ describe('licensePresentation', () => {
       capabilities: ['relay', 'audit_logging', 'rbac', 'ai_autofix'],
       limits: [],
       upgrade_reasons: [],
-      max_history_days: 90,
     };
 
     expect(hasPulseProRuntimeMismatch(entitlements)).toBe(true);
@@ -925,11 +920,10 @@ describe('licensePresentation', () => {
               ],
             },
             {
-              title: 'Patrol and history',
+              title: 'Patrol',
               items: [
                 'Patrol modes: Ask first, Safe auto-fix, or Autopilot',
                 'Patrol fixes issues and verifies the result',
-                '90-day metric history (Community keeps 7 days)',
               ],
             },
           ],
@@ -970,7 +964,6 @@ describe('licensePresentation', () => {
         capabilities: ['relay', 'mobile_app', 'push_notifications', 'long_term_metrics'],
         limits: [],
         upgrade_reasons: [],
-        max_history_days: 14,
       }),
     ).toEqual({
       title: 'Relay status',
@@ -982,12 +975,6 @@ describe('licensePresentation', () => {
           state: 'active',
           detail:
             'Pulse Mobile pairing and push notifications are available on this instance until Pulse Mobile is retired on 31 March 2027.',
-        },
-        {
-          label: '14-day metric history',
-          statusLabel: 'Active',
-          state: 'active',
-          detail: 'This instance has 14 days of metric history available.',
         },
       ],
     });
@@ -1011,7 +998,6 @@ describe('licensePresentation', () => {
         ],
         limits: [],
         upgrade_reasons: [],
-        max_history_days: 90,
         runtime: { build: 'pro', label: 'Pulse Pro runtime' },
       }),
     ).toMatchObject({
@@ -1020,7 +1006,6 @@ describe('licensePresentation', () => {
       items: [
         { label: 'Pulse Pro runtime', statusLabel: 'Active' },
         { label: 'Pulse Mobile pairing and push', statusLabel: 'Active' },
-        { label: '90-day metric history', statusLabel: 'Active' },
         { label: 'Patrol investigation and remediation', statusLabel: 'Active' },
         { label: 'Team controls', statusLabel: 'Active' },
       ],
@@ -1032,13 +1017,11 @@ describe('licensePresentation', () => {
       capabilities: ['relay', 'ai_autofix'],
       limits: [],
       upgrade_reasons: [],
-      max_history_days: 14,
       runtime: { build: 'pro', label: 'Pulse Pro runtime' },
     });
     expect(partialProStatus?.items.map((item) => [item.label, item.statusLabel])).toEqual([
       ['Pulse Pro runtime', 'Active'],
       ['Pulse Mobile pairing and push', 'Partial'],
-      ['90-day metric history', 'Partial'],
       ['Patrol investigation and remediation', 'Partial'],
       ['Team controls', 'Needs attention'],
     ]);
@@ -1088,14 +1071,12 @@ describe('licensePresentation', () => {
       ],
       limits: [],
       upgrade_reasons: [],
-      max_history_days: 90,
       runtime: { build: 'pro', label: 'Pulse Pro runtime' },
     };
 
     const expectedCapabilityItems = [
       ['Pulse Pro runtime', 'Active'],
       ['Pulse Mobile pairing and push', 'Active'],
-      ['90-day metric history', 'Active'],
       ['Patrol investigation and remediation', 'Active'],
       ['Team controls', 'Active'],
     ];
@@ -1252,7 +1233,6 @@ describe('licensePresentation', () => {
       highlights: [
         'Patrol Investigates Issues and Explains the Root Cause',
         'Patrol Applies Safe Fixes and Verifies the Result',
-        '90-day metric history',
         'Role-Based Access Control (RBAC)',
         'Audit Logging',
         'PDF/CSV Reporting',
@@ -1285,12 +1265,7 @@ describe('licensePresentation', () => {
       title: 'Relay is now active',
       body: 'The license key was accepted and this instance is now running Relay.',
       highlightsLabel: 'Available now on this instance',
-      highlights: [
-        'Pulse Relay (Mobile Connection)',
-        'Pulse Mobile Pairing',
-        'Push Notifications',
-        '14-day metric history',
-      ],
+      highlights: ['Pulse Relay (Mobile Connection)', 'Pulse Mobile Pairing', 'Push Notifications'],
     });
 
     expect(

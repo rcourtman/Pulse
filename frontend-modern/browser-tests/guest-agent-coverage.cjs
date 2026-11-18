@@ -103,7 +103,7 @@ const initial = {
         if (url.pathname === '/api/resources')
           return route.fulfill({ json: { data: [], total: 0, page: 1, limit: 500 } });
         if (url.pathname.includes('license'))
-          return route.fulfill({ json: { capabilities: [], limits: [], max_history_days: 90 } });
+          return route.fulfill({ json: { capabilities: [], limits: [] } });
         if (url.pathname.includes('metadata')) return route.fulfill({ json: {} });
         return route.fulfill({
           json: { success: true, data: [], alerts: [], anomalies: [], config: null },

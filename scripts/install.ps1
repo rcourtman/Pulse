@@ -279,6 +279,40 @@ function Get-FileChecksum {
     }
 }
 
+function New-PulsePreparedBinary {
+    param(
+        [Parameter(Mandatory = $true)][string]$SourcePath,
+        [Parameter(Mandatory = $true)][string]$DestinationDirectory,
+        [Parameter(Mandatory = $true)][ValidatePattern('^[0-9a-fA-F]{64}$')][string]$ExpectedChecksum
+    )
+
+    # The download can be on another volume. Finish that copy while the old
+    # service still exists, not during the final executable replacement. A new
+    # file inherits the install directory's ACL instead of the temp file's ACL.
+    $preparedPath = Join-Path $DestinationDirectory ('.pulse-agent-' + [Guid]::NewGuid().ToString('N') + '.exe')
+    $sourceStream = $null
+    $preparedStream = $null
+    try {
+        $sourceStream = [System.IO.File]::Open($SourcePath,
+            [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::Read)
+        $preparedStream = [System.IO.File]::Open($preparedPath,
+            [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
+        # Only a file created by this invocation belongs to its cleanup.
+        $script:TempFiles += $preparedPath
+        $sourceStream.CopyTo($preparedStream)
+    } finally {
+        try {
+            if ($null -ne $preparedStream) { $preparedStream.Dispose() }
+        } finally {
+            if ($null -ne $sourceStream) { $sourceStream.Dispose() }
+        }
+    }
+    if ((Get-FileChecksum $preparedPath) -cne $ExpectedChecksum.ToLowerInvariant()) {
+        throw 'Prepared agent binary does not match the verified download.'
+    }
+    return $preparedPath
+}
+
 function Test-HasPinnedInstallerSignatureKey {
     return (-not [string]::IsNullOrWhiteSpace($PinnedInstallerSshPublicKey)) -and ($PinnedInstallerSshPublicKey -ne "__PULSE_INSTALLER_SSH_PUBLIC_KEY__")
 }
@@ -1046,6 +1080,18 @@ if ($CommandAuthority -eq 'monitoring-only' -and $EnableCommands) {
     Exit 1
 }
 
+# --- Prepare Verified Binary ---
+try {
+    $PreparedBinaryPath = New-PulsePreparedBinary -SourcePath $TempPath -DestinationDirectory $InstallDir -ExpectedChecksum $localChecksum
+    # Interactive iex does not exit PowerShell when installation finishes.
+    # Release the original owned download now, not only on engine exit.
+    Remove-Item -LiteralPath $TempPath -Force -ErrorAction Stop
+} catch {
+    Cleanup
+    Show-Error "Cannot prepare the agent binary; the existing service, executable and saved agent state have not been changed. $_"
+    Exit 1
+}
+
 # Confirm existing service stopped and absent before changing the executable,
 # token or persisted connection. A failed read/stop/delete is not an upgrade.
 try {
@@ -1064,7 +1110,7 @@ try {
         Move-Item $DestPath $BackupPath -Force -ErrorAction SilentlyContinue
     }
 
-    Move-Item $TempPath $DestPath -Force
+    Move-Item $PreparedBinaryPath $DestPath -Force
 } catch {
     # Restore backup on failure
     if (Test-Path "$DestPath.backup") {

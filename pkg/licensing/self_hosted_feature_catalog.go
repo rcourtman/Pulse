@@ -128,17 +128,15 @@ var featureMetadataCatalog = map[string]FeatureMetadata{
 	},
 	FeatureLongTermMetrics: {
 		Key:                   FeatureLongTermMetrics,
-		DisplayName:           "Extended Metric History",
-		ComparisonName:        "Extended Metric History",
+		DisplayName:           "Metric History",
+		ComparisonName:        "Metric History",
 		ShowInComparisonTable: false,
-		DisplayableInPlanUI:   true,
+		DisplayableInPlanUI:   false,
 		SelfHostedRoles: SelfHostedFeatureRoles{
-			Community: SelfHostedFeatureRoleHidden,
-			Relay:     SelfHostedFeatureRolePrimaryPillar,
-			Pro:       SelfHostedFeatureRolePrimaryPillar,
+			Community: SelfHostedFeatureRoleIncluded,
+			Relay:     SelfHostedFeatureRoleIncluded,
+			Pro:       SelfHostedFeatureRoleIncluded,
 		},
-		UpgradeReason:   "Upgrade to Pro for 90 days of metric history, so you can see what changed before and after an incident.",
-		UpgradePriority: 2,
 	},
 	FeatureAIAlerts: {
 		Key:                   FeatureAIAlerts,

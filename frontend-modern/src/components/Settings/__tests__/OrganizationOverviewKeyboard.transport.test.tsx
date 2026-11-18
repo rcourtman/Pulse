@@ -164,7 +164,7 @@ describe('Organization Overview native submission and keyboard continuation', ()
   });
 
   it.each([false, true])(
-    'focuses uncertain feedback, then the explicit %s recovery result without replay',
+    'focuses uncertain feedback, then keeps explicit %s recovery local without replay',
     async (failedRecovery) => {
       await rename();
       savedName = 'Operations North';
@@ -174,23 +174,36 @@ describe('Organization Overview native submission and keyboard continuation', ()
       expect(warning).toHaveAccessibleName('Organization details unavailable');
       expect(warning).toHaveTextContent('The last name change could not be confirmed.');
       failRead = failedRecovery;
+      readGate = deferred<void>();
+      const inventory = screen.getByRole('region', { name: 'Organization details' });
       const reload = screen.getByRole('button', { name: 'Reload organization' });
       reload.focus();
       fireEvent.click(reload);
+      expect(inventory).toHaveFocus();
+      expect(inventory).toHaveAttribute('aria-busy', 'true');
+      expect(inventory).toHaveAttribute('tabindex', '-1');
+      expect(reload.isConnected).toBe(false);
+      expect(reads()).toHaveLength(2);
+      expect(writes()).toHaveLength(1);
+      readGate.resolve();
       if (failedRecovery) {
         await waitFor(() =>
           expect(screen.getByRole('alert')).toHaveTextContent(
             'Unable to load organization details.',
           ),
         );
-        await waitFor(() => expect(screen.getByRole('alert')).toHaveFocus());
+        expect(inventory).toHaveFocus();
+        expect(inventory).toHaveAttribute('aria-busy', 'false');
         failRead = false;
         // Simulate Safari's pointer activation, which need not focus a button.
         document.body.focus();
         fireEvent.click(screen.getByRole('button', { name: 'Reload organization' }));
       }
       const input = await screen.findByRole('textbox', { name: 'Display Name' });
-      await waitFor(() => expect(input).toHaveFocus());
+      await settleFocus();
+      expect(inventory).toHaveFocus();
+      expect(screen.getByRole('region', { name: 'Organization details' })).toBe(inventory);
+      expect(inventory).toHaveAttribute('aria-busy', 'false');
       expect(input).toHaveValue(savedName);
       expect(writes()).toHaveLength(1);
       expect(reads()).toHaveLength(failedRecovery ? 3 : 2);
@@ -243,6 +256,98 @@ describe('Organization Overview native submission and keyboard continuation', ()
     },
   );
 
+  it.each([false, true])(
+    'keeps the initial pending read and its failure %s passive',
+    async (failedRead) => {
+      failRead = failedRead;
+      readGate = deferred<void>();
+      render(() => <OrganizationOverviewPanel currentUser={owner} />);
+      const inventory = screen.getByRole('region', { name: 'Organization details' });
+      expect(inventory).toHaveAttribute('aria-busy', 'true');
+      expect(document.activeElement).toBe(document.body);
+      readGate.resolve();
+      if (failedRead) await screen.findByRole('alert');
+      else await screen.findByRole('textbox', { name: 'Display Name' });
+      await settleFocus();
+      expect(inventory).toHaveAttribute('aria-busy', 'false');
+      expect(document.activeElement).toBe(document.body);
+      expect(writes()).toHaveLength(0);
+    },
+  );
+
+  it.each([false, true])(
+    'does not revive abandoned manual focus after recovery failure %s',
+    async (failedRead) => {
+      await rename();
+      completion.resolve(response({}, 503));
+      await screen.findByRole('alert');
+      readGate = deferred<void>();
+      fireEvent.click(screen.getByRole('button', { name: 'Reload organization' }));
+      const inventory = screen.getByRole('region', { name: 'Organization details' });
+      expect(inventory).toHaveFocus();
+      const outside = screen.getByRole('button', { name: 'Outside overview' });
+      outside.focus();
+      outside.blur();
+      expect(document.activeElement).toBe(document.body);
+      failRead = failedRead;
+      readGate.resolve();
+      if (failedRead) await screen.findByRole('alert');
+      else await screen.findByRole('textbox', { name: 'Display Name' });
+      await settleFocus();
+      expect(inventory).toHaveAttribute('aria-busy', 'false');
+      expect(document.activeElement).toBe(document.body);
+      expect(writes()).toHaveLength(1);
+    },
+  );
+
+  it.each(['organization', 'principal', 'read-only', 'hidden surface', 'capability', 'disposal'])(
+    'never revives a manual read after %s retirement',
+    async (kind) => {
+      const { setUser, unmount } = await rename();
+      completion.resolve(response({}, 503));
+      await screen.findByRole('alert');
+      readGate = deferred<void>();
+      fireEvent.click(screen.getByRole('button', { name: 'Reload organization' }));
+      expect(screen.getByRole('region', { name: 'Organization details' })).toHaveFocus();
+      const outside = screen.getByRole('button', { name: 'Outside overview' });
+      outside.focus();
+      outside.blur();
+      if (kind === 'organization') {
+        setOrgID('operations/west');
+        eventBus.emit('org_switched');
+        setOrgID(orgID);
+        eventBus.emit('org_switched');
+      } else if (kind === 'principal') {
+        setUser('replacement@example.test');
+        setUser(owner);
+      } else if (kind === 'read-only') {
+        policy(true);
+        policy(false);
+      } else if (kind === 'hidden surface') {
+        syncSessionPresentationPolicy({
+          presentationPolicy: {
+            demoMode: true,
+            readOnly: true,
+            hideCommercial: false,
+            hideUpgrade: true,
+          },
+        });
+        policy();
+      } else if (kind === 'capability') {
+        const fetchMock = vi.mocked(fetch);
+        fetchMock.mockResolvedValueOnce(response({ capabilities: [], limits: [] }));
+        await loadRuntimeCapabilities(true);
+        fetchMock.mockResolvedValueOnce(response({ capabilities: ['multi_tenant'], limits: [] }));
+        await loadRuntimeCapabilities(true);
+      } else unmount();
+      readGate.resolve();
+      if (kind !== 'disposal') await screen.findByRole('textbox', { name: 'Display Name' });
+      await settleFocus();
+      expect(document.activeElement).toBe(document.body);
+      expect(writes()).toHaveLength(1);
+    },
+  );
+
   it('keeps an initial read failure passive, but makes explicit nonmanager recovery readable', async () => {
     failRead = true;
     render(() => <OrganizationOverviewPanel currentUser="viewer@example.test" />);
@@ -253,8 +358,11 @@ describe('Organization Overview native submission and keyboard continuation', ()
     fireEvent.click(screen.getByRole('button', { name: 'Reload organization' }));
     const input = await screen.findByRole('textbox', { name: 'Display Name' });
     expect(input).toBeDisabled();
-    const summary = screen.getByText('Operations East', { exact: true });
-    await waitFor(() => expect(summary).toHaveFocus());
+    const inventory = screen.getByRole('region', { name: 'Organization details' });
+    await settleFocus();
+    expect(inventory).toHaveFocus();
+    expect(inventory).toHaveAttribute('aria-busy', 'false');
+    expect(screen.getByText('Operations East', { exact: true })).toBeInTheDocument();
     expect(writes()).toHaveLength(0);
   });
 });

@@ -84,13 +84,13 @@ export function useHelpIconState(props: HelpIconProps) {
       }
     };
 
-    const timeoutId = setTimeout(() => {
-      document.addEventListener('click', handleClickOutside);
-      document.addEventListener('keydown', handleEscape);
-    }, 0);
+    // The trigger already stops its opening click from reaching document.
+    // Listen immediately so a quick Escape or outside click is not lost
+    // while the opening frame is still waiting to move focus.
+    document.addEventListener('click', handleClickOutside);
+    document.addEventListener('keydown', handleEscape);
 
     onCleanup(() => {
-      clearTimeout(timeoutId);
       document.removeEventListener('click', handleClickOutside);
       document.removeEventListener('keydown', handleEscape);
     });

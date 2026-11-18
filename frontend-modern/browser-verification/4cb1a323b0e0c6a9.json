@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "a7baa62e5a3b5d8e65f4b3d0b8ec96b6e52bee74",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/NodeModalMonitoringSection.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/NodeModalMonitoringSection.tsx": "72571a4e0abdbc0593e9f44baa776e81191eb41e48d1ba4551d6268eeb41486b"
+  },
+  "routes": [
+    "Settings > Infrastructure > Proxmox VE > Manage (actual NodeCredentialSlot with safe local API persistence fixture)"
+  ],
+  "states": [
+    "Saved60 unchanged",
+    "API-saved120 blank before / visible120minutes(saved) after",
+    "All5/15/30/60/180/360/720/1440-minute values save and reload selected with SMART enabled",
+    "Implicit0 default renders5minutes and stays0 on untouched save",
+    "SMART off/on retains1440",
+    "Desktop and phone light captures comparable; dark captures retain content but theme transition prevents colour-pair claims"
+  ],
+  "interactions": [
+    "Real useNodeModalState and NodesAPI GET/PUT fixture-backed persistence",
+    "All8 option selections/save/reload in Chromium desktop/phone light/dark and WebKit phone",
+    "Custom120 untouched save and0-default preservation",
+    "Toggle disabled/enabled and native keyboard Home/ArrowDown/Tab",
+    "Native view_image inspection of all20 retained captures;6 comparable light pairs plus dark states and4new24-hour captures"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "verified_at": "2026-11-16T20:15:25Z",
+  "browsers": {
+    "playwright": "1.56.1",
+    "chromium": "141.0.7390.37",
+    "webkit": "26.0"
+  },
+  "evidence": [
+    "RECEIPTS.md",
+    "BROWSER-BEFORE.json",
+    "BROWSER-AFTER.json",
+    "PIXEL-REVIEW.json",
+    "SMART-BROWSER-STOP.json"
+  ],
+  "limitations": [
+    "Fixture-backed HTTP boundary, not a real Proxmox installation or HDD wake-up measurement; no agent-only mode",
+    "Outer client143 was initially observed before late complete output and artifacts arrived; browser script reports passed and awaited close, host terminal facts remain with Delivery; no replay.",
+    "Dark paint transitions differ between pairs, so no comparable dark-colour acceptance is claimed; light desktop/phone/WebKit pairs establish preserved layout/content."
+  ]
+}

@@ -24,9 +24,9 @@ import {
   WORKLOAD_TABLE_HISTORY_INFRA_METRICS,
   WORKLOAD_TABLE_HISTORY_MAX_POINTS,
   WORKLOAD_TABLE_HISTORY_POLL_MS,
+  type HostTableMetric,
   type WorkloadMetricHistoryReader,
   type WorkloadTableMetricHistoryRange,
-  type WorkloadTableMetric,
 } from './workloadMetricHistoryModel';
 
 interface WorkloadTableMetricHistoryOptions {
@@ -333,7 +333,7 @@ export function useWorkloadTableMetricHistory(
     return getMetricSparklineSeriesFromChartData(chartData, metric, seriesOptions);
   };
 
-  const getNodeMetricSeries = (node: Node, metric: WorkloadTableMetric) => {
+  const getNodeMetricSeries = (node: Node, metric: HostTableMetric) => {
     const chartData = findChartDataForCandidates(getNodeChartKeyCandidates(node), [
       infrastructureHistory.value(),
     ]);

@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "base_sha": "f6f01c98ef05a855b4c774535e8979f0d0c2c77c",
+  "verified_at": "2026-11-17T19:09:21Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/api/charts.ts",
+    "frontend-modern/src/components/Workloads/useWorkloadTableMetricHistory.ts",
+    "frontend-modern/src/components/Workloads/workloadMetricHistoryModel.ts",
+    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/api/charts.ts": "9d8dd67e8afb9eb2163fa0f2baae829616858cfdbeaf4772a56c98d4f55f6a82",
+    "frontend-modern/src/components/Workloads/useWorkloadTableMetricHistory.ts": "0e694002bde1fc81a544e3e47d99da6518c390f9ea3ff399243ad6f361d0c90a",
+    "frontend-modern/src/components/Workloads/workloadMetricHistoryModel.ts": "eada4b06239bae391c4ff1f2ae4447f726c6c1298f405a60137a9ca1d35c4cbe",
+    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx": "ec07266cf5527b0b91ed857b778ca7ec1af3145e60bc9aa4be42c6bfaa4f1b18",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx": "4d216eb4484e77934c673df4445564df1a6492e6313409503cb17d6789a3b58d"
+  },
+  "routes": [
+    "/proxmox (Overview tab): the nodes table, served by a mock-mode backend built from this change with the frontend embedded, on a private port on pulse-dev."
+  ],
+  "viewports": [
+    {
+      "width": 1600,
+      "height": 1000
+    },
+    {
+      "width": 768,
+      "height": 1000
+    }
+  ],
+  "states": [
+    "Mock estate: 50 Proxmox nodes, every node carrying stored temperature history.",
+    "Bars + History hover (the default): a hovered node row shows CPU, memory, disk and temperature sparklines; the row stays 33px high, like its neighbours.",
+    "Pointer leaves the row: bars and the temperature gauge return, and no row keeps the lens.",
+    "Trends: every node row charts temperature (43px line in the 88px Temp column at 1600px).",
+    "Bars + Details hover: hovering a node row keeps the bars, and the page made no /api/charts/infrastructure request.",
+    "768px with a mouse (columns Node, CPU, Mem, Disk, Temp, Age): hovering Analytics B shows all four sparklines, the row stays 33px, and the temperature line is 62px wide.",
+    "API: metrics=cpu,temperature returned temperature for all 50 nodes and 77 agent hosts; the default payload carried no temperature series."
+  ],
+  "interactions": [
+    "Hovered Analytics B, then hovered inside the CPU sparkline: tooltip with time and CPU value.",
+    "Hovered inside the temperature sparkline: tooltip 'Temperature 45\u00b0C', accessible label 'Analytics B temperature history, current 45\u00b0C'.",
+    "Moved the pointer off the table and confirmed no row kept data-history-lens-active."
+  ],
+  "limits": [
+    "Mock temperatures are nearly flat, so a real spike shape was not seen; the scale for a 60-to-94\u00b0C spike is covered by a unit test.",
+    "Hover previews do not run on touch, so phone widths (which use touch) were not checked for the lens.",
+    "Dark theme only."
+  ]
+}

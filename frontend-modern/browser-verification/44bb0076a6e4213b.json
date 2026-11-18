@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "base_sha": "d0818c907e57a84b4132b9a1ff1fc929b1838b00",
+  "verified_at": "2026-11-16T15:06:51.374302Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/RecoverySettingsPanel.tsx",
+    "frontend-modern/src/components/shared/toggleModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/RecoverySettingsPanel.tsx": "11dda1c19fd0c3116e666175f9c2d6f27cd9c0dd858eb9e8edb5c2116ff1b534",
+    "frontend-modern/src/components/shared/toggleModel.ts": "66bd76156bcc5b228cd64a81bf93e95a49c31d58a4c881398a9cab94ad96dde9"
+  },
+  "routes": [
+    "/settings/recovery (real RecoverySettingsPanel inside SettingsPageShell; safe local signal fixtures)",
+    "/settings/general (real DockerRuntimeSettingsCard inside SettingsPageShell; safe local signal fixtures)",
+    "/alerts/thresholds/docker (real Swarm-service threshold section and shared Toggle; safe local signal fixtures)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Compiled exact parent and final browser-consumed source separately with the same fixture, production CSS and matching f96239b2 frontend dependency graph. Playwright 1.56.1 matches the integration lock; Chromium 141.0.7390.37 desktop/phone and WebKit 26.0 phone, light/dark. No full App, backend, persistence, original estate or assistive-technology speech claim.",
+    "42 final captures / 21 comparable pairs opened individually with native view_image. On-state keyboard focus across both Settings consumers in all six engine/viewport/theme cases; off-state focus on desktop/light and WebKit phone/dark; labeled alert-section focus on desktop/light and WebKit phone/dark; disabled-tab continuation on Chromium phone/dark; forced-colors focus on Chromium desktop. Before/after retain identical fixture state and measured control geometry without horizontal overflow.",
+    "Before ordinary-theme keyboard focus has no visible track indicator. Final has a two-pixel offset blue outline in light mode and lighter blue in dark, distinct from the on/off track, with no information or control removed or moved. Forced colors retains a visible system-colored outline. Disabled runtime state remains dimmed; the disabled Recovery capture shows keyboard continuation to transfer content, not the off-screen switch.",
+    "Two preceding evidence-harness failures are retained, not passing proof: fixture build omitted production esnext target (zero captures); then a hidden-checkbox pointer selector timed out after two captures, and the fixture interval summary used the wrong helper arguments. Final uses the production target, actual visible label for pointer activation and correct existing presenter arguments. No product behavior, expectations, retries or limits were weakened."
+  ],
+  "interactions": [
+    "Native Tab navigation reaches each enabled control without writing. Space flips checked state once per activation and back once, preserving focus; subsequent Tab leaves the switch. The real labeled alert section also handles Enter and Space with one callback per activation and unsaved state.",
+    "Real visible-label/button pointer activation remains functional and does not produce focus-visible styling. Environment-locked Recovery and runtime controls remain disabled, excluded from Tab traversal and do not write. All requests were local and there were no page errors."
+  ]
+}

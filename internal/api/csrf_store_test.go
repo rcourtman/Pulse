@@ -1,11 +1,19 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
 
 func TestCsrfSessionKey(t *testing.T) {
@@ -685,14 +693,12 @@ func TestCSRFTokenStore_Load_MigratesLegacyFormat(t *testing.T) {
 	}
 }
 
-func TestCSRFTokenStore_Load_CurrentFormat_SkipsNilAndExpired(t *testing.T) {
+func TestCSRFTokenStore_Load_CurrentFormat_SkipsExpired(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// Create current format JSON with expired and nil entries (snake_case fields)
-	// to verify nil records and expired tokens are ignored during load.
+	// Complete expired records remain ordinary cleanup, not unread inventory.
 	currentJSON := `[
 		{"token_hash": "hash1", "session_key": "key1", "expires_at": "2099-12-31T23:59:59Z"},
-		null,
 		{"token_hash": "hash2", "session_key": "key2", "expires_at": "2020-01-01T00:00:00Z"}
 	]`
 	csrfFile := filepath.Join(tmpDir, "csrf_tokens.json")
@@ -708,7 +714,8 @@ func TestCSRFTokenStore_Load_CurrentFormat_SkipsNilAndExpired(t *testing.T) {
 	store.load()
 
 	// Should load only the valid, non-expired token (key1)
-	// null entry and expired entry (key2) should be skipped
+	// The expired entry (key2) should be skipped. Null rows are covered by
+	// TestAuthInventoryIncompleteRecordsPreserveOriginal instead of being lost.
 	if len(store.tokens) != 1 {
 		t.Errorf("expected 1 token after filtering, got %d", len(store.tokens))
 	}
@@ -837,4 +844,337 @@ func TestCSRFTokenStore_ShutdownReturnsWithoutWaitingForWorkerReceive(t *testing
 	case <-time.After(500 * time.Millisecond):
 		t.Fatal("Shutdown should not block waiting for the background worker to receive a stop signal")
 	}
+}
+
+func csrfStartupStore(dir string) *CSRFTokenStore {
+	store := &CSRFTokenStore{tokens: make(map[string][]*CSRFToken), dataPath: dir}
+	store.load()
+	return store
+}
+
+func csrfUnreadFixture(t *testing.T, data []byte) (*CSRFTokenStore, os.FileInfo) {
+	t.Helper()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "csrf_tokens.json")
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return csrfStartupStore(dir), info
+}
+
+// Check retained bytes through an ordinary private backup read, not by opening
+// the original before a formerly unreadable mode has been normalized.
+func csrfCheckPreserved(t *testing.T, dir string, original os.FileInfo, data []byte) string {
+	t.Helper()
+	dirs, err := filepath.Glob(filepath.Join(dir, ".csrf-tokens-unread-*"))
+	if err != nil || len(dirs) != 1 {
+		t.Fatalf("expected exactly one preserved original, found %d: %v", len(dirs), err)
+	}
+	info, err := os.Stat(dirs[0])
+	if err != nil || !info.IsDir() || info.Mode().Perm() != 0700 {
+		t.Fatalf("preservation directory is not private: %v", err)
+	}
+	path := filepath.Join(dirs[0], "csrf_tokens.json")
+	info, err = os.Stat(path)
+	if err != nil || !os.SameFile(original, info) || info.Mode().Perm() != 0600 {
+		t.Fatalf("original inode was not retained owner-private: %v", err)
+	}
+	got, err := os.ReadFile(path)
+	if err != nil || !bytes.Equal(got, data) {
+		t.Fatalf("retained original is not byte-exact/readable: %v", err)
+	}
+	return path
+}
+
+func TestCSRFTokenStore_UnreadStartupEverySave(t *testing.T) {
+	for _, data := range []struct{ name, raw string }{
+		{"zero", ""}, {"whitespace", " \n\t"}, {"invalid", "{broken"},
+		{"partial-current", `[{"token_hash":"unknown","session_key":"unknown"},`},
+		{"wrong-type", `"not an inventory"`}, {"partial-legacy", `{"unknown":{"token":"unknown"},`},
+		{"missing-token-hash", `[{"session_key":"unknown","expires_at":"2099-01-01T00:00:00Z"}]`},
+		{"missing-session-key", `[{"token_hash":"unknown","expires_at":"2099-01-01T00:00:00Z"}]`},
+		{"legacy-missing-token", `{"unknown":{"session_id":"unknown","expires_at":"2099-01-01T00:00:00Z"}}`},
+	} {
+		for _, trigger := range []string{"save", "generate", "delete-no-match", "delete-keys-no-match", "periodic", "shutdown"} {
+			t.Run(data.name+"/"+trigger, func(t *testing.T) {
+				store, original := csrfUnreadFixture(t, []byte(data.raw))
+				if len(store.tokens) != 0 {
+					t.Fatal("incomplete input admitted partial token authority")
+				}
+				var fresh string
+				switch trigger {
+				case "generate":
+					fresh = store.GenerateCSRFToken("current-session")
+				case "delete-no-match":
+					store.DeleteCSRFToken("unknown-session")
+				case "delete-keys-no-match":
+					store.DeleteCSRFSessionKeys([]string{csrfSessionKey("unknown-session")})
+				case "periodic", "shutdown":
+					store.saveTicker = time.NewTicker(time.Millisecond)
+					store.stopChan = make(chan bool)
+					store.workerDone = make(chan struct{})
+					go store.backgroundWorker()
+					t.Cleanup(store.Shutdown)
+					if trigger == "periodic" {
+						observed := false
+						deadline := time.Now().Add(3 * time.Second)
+						for time.Now().Before(deadline) {
+							paths, _ := filepath.Glob(filepath.Join(store.dataPath, ".csrf-tokens-unread-*", "csrf_tokens.json"))
+							if len(paths) == 1 {
+								observed = true
+								break
+							}
+							time.Sleep(time.Millisecond)
+						}
+						if !observed {
+							t.Fatal("periodic worker did not preserve the original before shutdown")
+						}
+					}
+					store.Shutdown()
+				default:
+					store.save()
+				}
+				csrfCheckPreserved(t, store.dataPath, original, []byte(data.raw))
+				store.save()
+				csrfCheckPreserved(t, store.dataPath, original, []byte(data.raw))
+				loaded := csrfStartupStore(store.dataPath)
+				if len(loaded.tokens) != 0 && fresh == "" {
+					t.Fatal("restart loaded unknown retained authority")
+				}
+				if fresh != "" && !loaded.ValidateCSRFToken("current-session", fresh) {
+					t.Fatal("preservation blocked fresh canonical token persistence")
+				}
+			})
+		}
+	}
+}
+
+func TestCSRFTokenStore_UnreadStartupReadFailure(t *testing.T) {
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("requires ordinary-user POSIX file permissions")
+	}
+	dir := t.TempDir()
+	path := filepath.Join(dir, "csrf_tokens.json")
+	data, err := json.Marshal([]CSRFTokenData{{SessionKey: csrfSessionKey("old-session"), TokenHash: csrfTokenHash("old-token"), ExpiresAt: time.Now().Add(time.Hour)}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, data, 0000); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.ReadFile(path); err == nil {
+		t.Fatal("fixture did not fail a real read")
+	}
+	original, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := csrfStartupStore(dir)
+	fresh := store.GenerateCSRFToken("current-session")
+	csrfCheckPreserved(t, dir, original, data)
+	for _, current := range []*CSRFTokenStore{store, csrfStartupStore(dir)} {
+		if current.ValidateCSRFToken("old-session", "old-token") || !current.ValidateCSRFToken("current-session", fresh) {
+			t.Fatal("read recovery restored unknown tokens or lost current tokens")
+		}
+	}
+}
+
+func TestCSRFTokenStore_UnreadStartupFailureRecovery(t *testing.T) {
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("requires ordinary-user POSIX directory permissions")
+	}
+	const raw = "synthetic broken inventory"
+	store, original := csrfUnreadFixture(t, []byte(raw))
+	t.Cleanup(func() { _ = os.Chmod(store.dataPath, 0700) })
+	if err := os.Chmod(store.dataPath, 0500); err != nil {
+		t.Fatal(err)
+	}
+	target := store.GenerateCSRFToken("target-session")
+	control := store.GenerateCSRFToken("control-session")
+	store.DeleteCSRFToken("target-session")
+	store.DeleteCSRFSessionKeys([]string{csrfSessionKey("already-absent")})
+	if store.ValidateCSRFToken("target-session", target) || !store.ValidateCSRFToken("control-session", control) {
+		t.Fatal("preservation failure blocked live withdrawal/validation")
+	}
+	path := filepath.Join(store.dataPath, "csrf_tokens.json")
+	got, err := os.ReadFile(path)
+	if err != nil || string(got) != raw {
+		t.Fatal("failed preservation overwrote the unknown original")
+	}
+	if err := os.Chmod(store.dataPath, 0700); err != nil {
+		t.Fatal(err)
+	}
+	store.save()
+	csrfCheckPreserved(t, store.dataPath, original, []byte(raw))
+	loaded := csrfStartupStore(store.dataPath)
+	if loaded.ValidateCSRFToken("target-session", target) || !loaded.ValidateCSRFToken("control-session", control) {
+		t.Fatal("later storage repair lost control or revived withdrawn tokens")
+	}
+}
+
+func TestCSRFTokenStore_UnreadStartupSnapshotFailureRecovery(t *testing.T) {
+	const raw = "synthetic broken inventory"
+	store, original := csrfUnreadFixture(t, []byte(raw))
+	store.snapshotWrite = func(*os.File, []byte) (int, error) { return 0, nil }
+	target := store.GenerateCSRFToken("target-session")
+	preserved := csrfCheckPreserved(t, store.dataPath, original, []byte(raw))
+	if _, err := os.Stat(filepath.Join(store.dataPath, "csrf_tokens.json")); !os.IsNotExist(err) {
+		t.Fatal("failed fresh snapshot was published")
+	}
+	if !store.ValidateCSRFToken("target-session", target) {
+		t.Fatal("failed publication rejected current memory-only token")
+	}
+	store.DeleteCSRFToken("target-session")
+	store.snapshotWrite = nil
+	control := store.GenerateCSRFToken("control-session")
+	if got := csrfCheckPreserved(t, store.dataPath, original, []byte(raw)); got != preserved {
+		t.Fatal("later save moved the already-preserved original again")
+	}
+	loaded := csrfStartupStore(store.dataPath)
+	if loaded.ValidateCSRFToken("target-session", target) || !loaded.ValidateCSRFToken("control-session", control) {
+		t.Fatal("snapshot recovery revived withdrawal or lost current tokens")
+	}
+	data, err := os.ReadFile(filepath.Join(store.dataPath, "csrf_tokens.json"))
+	if err != nil || bytes.Contains(data, []byte(control)) || bytes.Contains(data, []byte("control-session")) {
+		t.Fatal("fresh canonical snapshot disclosed a raw token or session")
+	}
+}
+
+func TestCSRFTokenStore_UnreadStartupNonregular(t *testing.T) {
+	for _, kind := range []string{"directory", "symlink", "dangling-symlink"} {
+		t.Run(kind, func(t *testing.T) {
+			if runtime.GOOS == "windows" && kind != "directory" {
+				t.Skip("requires unprivileged symlink creation")
+			}
+			dir := t.TempDir()
+			path := filepath.Join(dir, "csrf_tokens.json")
+			target := filepath.Join(dir, "unowned-target")
+			if kind == "directory" {
+				if err := os.Mkdir(path, 0700); err != nil {
+					t.Fatal(err)
+				}
+				target = filepath.Join(path, "marker")
+			} else if err := os.Symlink(target, path); err != nil {
+				t.Fatal(err)
+			}
+			if kind != "dangling-symlink" {
+				if err := os.WriteFile(target, []byte("synthetic unread inventory"), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			original, err := os.Lstat(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			store := csrfStartupStore(dir)
+			fresh := store.GenerateCSRFToken("current-session")
+			store.save()
+			current, err := os.Lstat(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			// Multiple atomic saves can recycle the old entry's inode. Inode
+			// equality alone does not prove that a link stayed a link.
+			if current.Mode().Type() != original.Mode().Type() || !os.SameFile(original, current) || !store.ValidateCSRFToken("current-session", fresh) {
+				t.Fatal("unread path was changed or current memory-only token rejected")
+			}
+			if kind != "directory" {
+				if got, err := os.Readlink(path); err != nil || got != target {
+					t.Fatal("save replaced or retargeted the unread link")
+				}
+			}
+			if kind == "dangling-symlink" {
+				if _, err := os.Lstat(target); !os.IsNotExist(err) {
+					t.Fatal("save created the unknown target")
+				}
+			} else if got, err := os.ReadFile(target); err != nil || string(got) != "synthetic unread inventory" {
+				t.Fatal("save changed a nonregular path's target/contents")
+			}
+			// Moving the unread entry, not making its target readable, releases
+			// the hold. Never implicitly load the newly available unknown tokens.
+			if err := os.Rename(path, path+".operator-moved"); err != nil {
+				t.Fatal(err)
+			}
+			store.DeleteCSRFToken("current-session")
+			control := store.GenerateCSRFToken("control-session")
+			loaded := csrfStartupStore(dir)
+			if loaded.ValidateCSRFToken("current-session", fresh) || !loaded.ValidateCSRFToken("control-session", control) {
+				t.Fatal("operator movement did not persist exactly current authority")
+			}
+		})
+	}
+}
+
+func TestCSRFTokenStore_ReadableStartupCompatibility(t *testing.T) {
+	for _, raw := range []string{"[]", "null", "{}"} {
+		t.Run(raw, func(t *testing.T) {
+			store, _ := csrfUnreadFixture(t, []byte(raw))
+			token := store.GenerateCSRFToken("current-session")
+			if !csrfStartupStore(store.dataPath).ValidateCSRFToken("current-session", token) {
+				t.Fatal("complete empty format blocked ordinary fresh persistence")
+			}
+			dirs, err := filepath.Glob(filepath.Join(store.dataPath, ".csrf-tokens-unread-*"))
+			if err != nil || len(dirs) != 0 {
+				t.Fatal("valid empty input was unnecessarily preserved")
+			}
+		})
+	}
+}
+
+// A real registered write must still require a session-bound CSRF token. The
+// malformed body reaches body admission (400) only after both auth checks.
+func TestCSRFTokenStore_UnreadStartupRegisteredAdmission(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "csrf_tokens.json")
+	const raw = "synthetic unread inventory"
+	if err := os.WriteFile(path, []byte(raw), 0644); err != nil {
+		t.Fatal(err)
+	}
+	original, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PULSE_DATA_DIR", dir)
+	hash, err := internalauth.HashPassword("SyntheticPassword!1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := &config.Config{DataPath: dir, ConfigPath: dir, AuthUser: "synthetic-admin", AuthPass: hash}
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "test")
+	cleanupTestRouter(t, router)
+	const session = "synthetic-unread-csrf-session"
+	router.sessionStore.CreateSession(session, time.Hour, "fixture", "192.0.2.1", "synthetic-admin")
+	token := router.csrfStore.GenerateCSRFToken(session)
+	csrfCheckPreserved(t, dir, original, []byte(raw))
+	for _, tc := range []struct {
+		name, token string
+		want        int
+	}{{"valid", token, http.StatusBadRequest}, {"missing", "", http.StatusForbidden}, {"wrong", "wrong", http.StatusForbidden}, {"other-session", router.csrfStore.GenerateCSRFToken("other-session"), http.StatusForbidden}, {"revoked", token, http.StatusForbidden}} {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.name == "revoked" {
+				router.csrfStore.DeleteCSRFSessionKeys([]string{csrfSessionKey(session)})
+			}
+			request := httptest.NewRequest(http.MethodPost, "https://pulse.example.test/api/security/tokens", strings.NewReader("{not-json"))
+			request.Header.Set("Origin", "https://pulse.example.test")
+			request.Header.Set("Sec-Fetch-Site", "same-origin")
+			request.Header.Set("X-CSRF-Token", tc.token)
+			request.AddCookie(&http.Cookie{Name: sessionCookieName(true), Value: session})
+			response := httptest.NewRecorder()
+			router.Handler().ServeHTTP(response, request)
+			if response.Code != tc.want {
+				t.Fatalf("registered admission: got %d want %d", response.Code, tc.want)
+			}
+		})
+	}
+	if csrfStartupStore(dir).ValidateCSRFToken(session, token) {
+		t.Fatal("restart restored withdrawn tokens from preserved material")
+	}
+}
+
+func TestCSRFTokenStore_StartupRegularInventoryLink(t *testing.T) {
+	testAuthInventoryRegularLink(t, "csrf_tokens")
 }

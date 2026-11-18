@@ -384,8 +384,8 @@ func TestSecurityTokens_Create_RejectsScopeEscalationForTokenCaller(t *testing.T
 	}{
 		{
 			name:         "explicit scope escalation",
-			body:         `{"name":"escalated","scopes":["monitoring:read","settings:write"]}`,
-			wantFragment: `Cannot grant scope "settings:write"`,
+			body:         `{"name":"escalated","scopes":["monitoring:read","monitoring:write"]}`,
+			wantFragment: `Cannot grant scope "monitoring:write"`,
 		},
 		{
 			name:         "omitted scopes defaults to wildcard escalation",
@@ -403,8 +403,9 @@ func TestSecurityTokens_Create_RejectsScopeEscalationForTokenCaller(t *testing.T
 				persistence: persistence,
 			}
 
-			caller := newTokenRecord(t, "limited-caller-token-123.12345678", []string{config.ScopeMonitoringRead}, nil)
+			caller := newTokenRecord(t, "limited-caller-token-123.12345678", []string{config.ScopeSettingsWrite, config.ScopeMonitoringRead}, nil)
 			caller.OrgID = "acme"
+			cfg.UpsertAPIToken(caller)
 
 			req := httptest.NewRequest(http.MethodPost, "/api/security/tokens", strings.NewReader(tt.body))
 			req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "acme"))
@@ -418,8 +419,8 @@ func TestSecurityTokens_Create_RejectsScopeEscalationForTokenCaller(t *testing.T
 			if !strings.Contains(rr.Body.String(), tt.wantFragment) {
 				t.Fatalf("expected response to contain %q, got %q", tt.wantFragment, rr.Body.String())
 			}
-			if len(cfg.APITokens) != 0 {
-				t.Fatalf("expected no tokens to be stored after denied creation, got %d", len(cfg.APITokens))
+			if len(cfg.APITokens) != 1 || cfg.APITokens[0].ID != caller.ID {
+				t.Fatal("denied creation changed the saved caller inventory")
 			}
 		})
 	}
@@ -442,6 +443,7 @@ func TestSecurityTokens_Delete_RejectsScopeEscalationForTokenCaller(t *testing.T
 
 	caller := newTokenRecord(t, "limited-caller-token-123.12345678", []string{config.ScopeSettingsWrite}, nil)
 	caller.OrgID = "default"
+	cfg.UpsertAPIToken(caller)
 
 	req := httptest.NewRequest(http.MethodDelete, "/api/security/tokens/broad-token", nil)
 	req = req.WithContext(authpkg.WithAPIToken(req.Context(), &caller))
@@ -454,7 +456,7 @@ func TestSecurityTokens_Delete_RejectsScopeEscalationForTokenCaller(t *testing.T
 	if !strings.Contains(rr.Body.String(), config.ScopeWildcard) {
 		t.Fatalf("expected forbidden response to mention missing scope, got %q", rr.Body.String())
 	}
-	if len(cfg.APITokens) != 1 || cfg.APITokens[0].ID != "broad-token" {
-		t.Fatalf("expected target token to remain configured, got %+v", cfg.APITokens)
+	if len(cfg.APITokens) != 2 || findAPITokenByID(t, cfg.APITokens, "broad-token").Hash != "hash-broad" {
+		t.Fatal("denied deletion changed the target or saved caller")
 	}
 }

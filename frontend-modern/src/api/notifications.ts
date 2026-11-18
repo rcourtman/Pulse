@@ -255,8 +255,146 @@ function normalizeFailureClassCounts(value: unknown): NotificationFailureClassCo
   return counts;
 }
 
+export type RehearsalStatus =
+  'not_started' | 'pending' | 'deferred' | 'passed' | 'failed' | 'suppressed' | 'unavailable';
+export interface RehearsalOutcome {
+  status: RehearsalStatus;
+  reason: string;
+  message: string;
+  attempts: number;
+  nextAt?: string;
+  failureClass?: NotificationFailureClass;
+  diagnostic?: string;
+}
+export interface DeliveryRehearsal {
+  id: string;
+  createdAt: string;
+  recoveredAt?: string;
+  level: 'info' | 'warning' | 'critical';
+  tags: string[];
+  policy: RehearsalOutcome;
+  destinations: {
+    id: string;
+    name: string;
+    firing: RehearsalOutcome;
+    recovery: RehearsalOutcome;
+  }[];
+}
+const rehearsalStatuses: RehearsalStatus[] = [
+  'not_started',
+  'pending',
+  'deferred',
+  'passed',
+  'failed',
+  'suppressed',
+  'unavailable',
+];
+function rehearsalTime(value: unknown): string {
+  const text = strictString(value);
+  if (!text || !Number.isFinite(Date.parse(text)))
+    throw new Error('Delivery rehearsal evidence is invalid.');
+  return text;
+}
+function normalizeRehearsalOutcome(value: unknown): RehearsalOutcome {
+  const row = apiRecord(value);
+  const status = row.status as RehearsalStatus;
+  const reason = strictString(row.reason);
+  const message = strictString(row.message);
+  const attempts = nonNegativeCount(row.attempts);
+  if (!rehearsalStatuses.includes(status) || !reason || !message || attempts === undefined)
+    throw new Error('Delivery rehearsal evidence is invalid.');
+  const result: RehearsalOutcome = { status, reason, message, attempts };
+  if (row.diagnostic !== undefined) {
+    if (typeof row.diagnostic !== 'string')
+      throw new Error('Delivery rehearsal evidence is invalid.');
+    result.diagnostic = row.diagnostic;
+  }
+  if (row.nextAt !== undefined) result.nextAt = rehearsalTime(row.nextAt);
+  if (row.failureClass !== undefined && row.failureClass !== '') {
+    if (!notificationFailureClasses.includes(row.failureClass as NotificationFailureClass))
+      throw new Error('Delivery rehearsal evidence is invalid.');
+    result.failureClass = row.failureClass as NotificationFailureClass;
+  }
+  return result;
+}
+function normalizeDeliveryRehearsal(value: unknown): DeliveryRehearsal {
+  const row = apiRecord(value);
+  const id = strictString(row.id);
+  const level = row.level as DeliveryRehearsal['level'];
+  if (
+    !id ||
+    !['info', 'warning', 'critical'].includes(level) ||
+    !Array.isArray(row.destinations) ||
+    !Array.isArray(row.tags)
+  )
+    throw new Error('Delivery rehearsal evidence is invalid.');
+  const destinations = arrayOrEmpty<unknown>(row.destinations).map((value) => {
+    const destination = apiRecord(value);
+    const id = strictString(destination.id),
+      name = strictString(destination.name);
+    if (!id || !name) throw new Error('Delivery rehearsal evidence is invalid.');
+    return {
+      id,
+      name,
+      firing: normalizeRehearsalOutcome(destination.firing),
+      recovery: normalizeRehearsalOutcome(destination.recovery),
+    };
+  });
+  if (
+    new Set(destinations.map((row) => row.id)).size !== destinations.length ||
+    row.tags.some((tag) => typeof tag !== 'string')
+  )
+    throw new Error('Delivery rehearsal evidence is invalid.');
+  const result: DeliveryRehearsal = {
+    id,
+    level,
+    createdAt: rehearsalTime(row.createdAt),
+    tags: stringArray(row.tags),
+    policy: normalizeRehearsalOutcome(row.policy),
+    destinations,
+  };
+  if (row.recoveredAt !== undefined) result.recoveredAt = rehearsalTime(row.recoveredAt);
+  return result;
+}
+
 export class NotificationsAPI {
   private static baseUrl = '/api/notifications';
+
+  static async listRehearsals(options?: APIContextOptions): Promise<DeliveryRehearsal[]> {
+    const payload = await apiFetchJSON<unknown>(`${this.baseUrl}/rehearsals`, options);
+    if (!Array.isArray(payload)) throw new Error('Delivery rehearsal history is unavailable.');
+    return arrayOrEmpty<unknown>(payload).map(normalizeDeliveryRehearsal);
+  }
+  static async getRehearsal(id: string, options?: APIContextOptions): Promise<DeliveryRehearsal> {
+    return normalizeDeliveryRehearsal(
+      await apiFetchJSON(`${this.baseUrl}/rehearsals/${encodeURIComponent(id)}`, options),
+    );
+  }
+  static async startRehearsal(
+    request: { id: string; level: DeliveryRehearsal['level']; tags: string[] },
+    options?: APIContextOptions,
+  ): Promise<DeliveryRehearsal> {
+    return normalizeDeliveryRehearsal(
+      await apiFetchJSON(`${this.baseUrl}/rehearsals`, {
+        ...options,
+        method: 'POST',
+        body: JSON.stringify(request),
+        retry: false,
+      }),
+    );
+  }
+  static async recoverRehearsal(
+    id: string,
+    options?: APIContextOptions,
+  ): Promise<DeliveryRehearsal> {
+    return normalizeDeliveryRehearsal(
+      await apiFetchJSON(`${this.baseUrl}/rehearsals/${encodeURIComponent(id)}/recover`, {
+        ...options,
+        method: 'POST',
+        retry: false,
+      }),
+    );
+  }
 
   static async getAppriseConfig(options?: APIContextOptions): Promise<AppriseConfig> {
     return apiFetchJSON(`${this.baseUrl}/apprise`, options);

@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "base_sha": "d21846ff2dfdb0617e3ac5036dec40b7d26a177e",
+  "verified_at": "2026-11-17T10:28:30Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/OrganizationSharingPanel.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/OrganizationSharingPanel.tsx": "c7e9b16a73412223f02808160bdd49541723472e5a08a6cd3be59954ade7b559"
+  },
+  "routes": [
+    "/settings/organization/sharing"
+  ],
+  "viewports": [
+    {
+      "width": 1680,
+      "height": 1050
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Actual OrganizationSharingPanel, its four section/loading producers, state owner, OrgsAPI, session client, capability/policy stores, shared grid and production CSS. Real resource hook consumes safe synthetic HTTP/WebSocket inventory; not full App/IdP, original-client recovery or screen-reader speech.",
+    "36 comparable desktop/phone light/dark pairs. 40 baseline / 36 final captures opened individually using native view_image; incoming pairs use the corrected neutral-pointer bottom anchor, not the earlier insufficiently scrolled captures. Exact control identities/values/geometry/viewport visibility match in every pair.",
+    "Visible inset region outline persists through explicit read loading, failure, success and recovery. Existing warning, exact org/resource keys, outgoing/incoming pending/accepted roles and controls remain in place."
+  ],
+  "interactions": [
+    "Before 132 main plus 8 targeted bottom-section assertions; final 148 checks. Keyboard Reload focuses the stable named busy region before removing its control, remains local through the response and Tab reaches returned Reload. No delayed focus theft after outside departure plus later blur. Unfocused activation, outside focus, untouched reads and disposal covered.",
+    "A keyboard-selected outgoing removal is applied to its exact opaque key in safe HTTP, then deliberately returns 503. The existing uncertain warning still receives focus. Explicit Reload reads the saved removal without replay: exactly one original org/CSRF-bound DELETE, no stored API token. Browser and server close normally; no page errors or horizontal document overflow."
+  ]
+}

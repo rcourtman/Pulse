@@ -69,8 +69,10 @@ func TestLicenseHTTPRetirementCopyPreservesEntitlements(t *testing.T) {
 			if entitlement.Tier != string(tier) || posture.Tier != string(tier) {
 				t.Fatal("marketing correction changed the active tier")
 			}
-			if entitlement.MaxHistoryDays != pkglicensing.TierHistoryDays[tier] || runtime.MaxHistoryDays != entitlement.MaxHistoryDays {
-				t.Fatalf("history compatibility changed: entitlement %d, runtime %d", entitlement.MaxHistoryDays, runtime.MaxHistoryDays)
+			for _, payload := range []string{"entitlements", "runtime-capabilities"} {
+				if strings.Contains(string(fixtures[payload]), `"max_history_days"`) {
+					t.Fatalf("%s still reports a plan history limit: %s", payload, fixtures[payload])
+				}
 			}
 			// Signed activation canonicalizes capability order; grants are a set.
 			wantCapabilities := slices.Clone(pkglicensing.TierFeatures[tier])
@@ -116,23 +118,16 @@ func TestLicenseHTTPRetirementCopyPreservesEntitlements(t *testing.T) {
 			if !reflect.DeepEqual(posture.UpgradeReasons, entitlement.UpgradeReasons) {
 				t.Fatal("commercial projection disagrees with full entitlement reasons")
 			}
-			foundHistory := false
 			for _, reason := range posture.UpgradeReasons {
 				switch reason.Key {
 				case pkglicensing.FeatureRelay, pkglicensing.FeatureMobileApp, pkglicensing.FeaturePushNotifications:
 					t.Errorf("%s still markets retired %s", tier, reason.Key)
 				case pkglicensing.FeatureLongTermMetrics:
-					foundHistory = true
-					if reason.Reason != "Upgrade to Pro for 90 days of metric history, so you can see what changed before and after an incident." {
-						t.Errorf("obsolete history offer: %q", reason.Reason)
-					}
+					t.Errorf("%s still markets metric history, which is free on every plan", tier)
 				}
 				if strings.Contains(reason.Reason, "Get Relay") {
 					t.Errorf("retired offer: %q", reason.Reason)
 				}
-			}
-			if foundHistory != (tier == pkglicensing.TierFree) {
-				t.Error("history upgrade must only appear for a missing capability")
 			}
 			for _, forbidden := range []string{"licensed_email", "plan_version", "max_history_days", "capabilities"} {
 				var fields map[string]json.RawMessage

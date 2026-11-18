@@ -2574,6 +2574,7 @@ None yet.
                         "frontend-modern/src/components/Alerts/__tests__/InvestigateAlertButton.test.tsx",
                         "frontend-modern/src/components/Alerts/__tests__/ThresholdsTable.test.tsx",
                         "frontend-modern/src/features/alerts/AlertDeliveryHealthCard.test.tsx",
+                        "frontend-modern/src/features/alerts/AlertDeliveryRehearsal.test.tsx",
                         "frontend-modern/src/features/alerts/__tests__/AlertDeadManDestinationSection.test.tsx",
                         "frontend-modern/src/features/alerts/__tests__/AlertHistoryFrequencyCard.test.tsx",
                         "frontend-modern/src/features/alerts/__tests__/AlertHistoryMobileList.test.tsx",

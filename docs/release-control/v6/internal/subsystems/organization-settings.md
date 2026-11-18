@@ -15,6 +15,34 @@
 
 ## Purpose
 
+### Optional hosted lifecycle bodies are complete decisions
+
+Hosted organization suspension and soft deletion accept an omitted or JSON-
+whitespace-only body as their existing default options. A supplied body must
+instead be one complete JSON object within the existing 64 KiB limit. A valid
+prefix followed by another value, junk, truncated input, excess bytes or a read
+failure cannot authorize a lifecycle change. JSON null and other non-object
+roots are not omission. Competing recognized controls, including escaped keys
+and case-folded aliases, are rejected rather than choosing a reason or retention
+period. Singleton aliases, unknown fields, field-level null defaults and valid
+positive retention settings retain their previous behavior.
+
+The shared admin-object decoder owns this admission. Only its exact empty-input
+EOF sentinel permits defaults; a wrapped read error is not absence. Rejection
+returns the existing generic 400 invalid_request without persisting selected or
+peer organization changes or echoing supplied values. Method/hosted/persistence,
+default-organization and lookup checks retain their ordering. Unsuspend has no
+parameter body and is unchanged, as are authentication, authorization, conflict
+checks, successful response fields and the 30-day deletion default.
+
+Registered org_lifecycle_handlers_test.go exercises real selected/peer saved
+metadata, damaged/duplicate/oversized/read-failed bodies, supported defaults and
+options, gate ordering, and native HTTP rejection followed by deliberate valid
+changes to the same organization. This is input-safety proof, not live hosted
+client recovery or release availability; no public frontend consumer calls these
+parameter-bearing lifecycle routes.
+
+
 ### Sharing drafts support native form submission
 
 The existing Create Share section is a named native form. Enter from a manual
@@ -148,10 +176,19 @@ focus. A deliberate focus move elsewhere wins over a pending write or reread.
 
 An uncertain change still focuses the existing unavailable warning when the
 focused control disappears. The next Tab reaches the explicit read-only Reload
-access/sharing action. An explicit reload focuses the accepted summary or the new
-warning, never repeats the write. These recovery targets are programmatically
+access/sharing action. An explicit Access reload focuses the accepted summary or
+the new warning, never repeats the write. These recovery targets are programmatically
 focusable, not additional Tab stops. Organization/user round trips, read-only
 withdrawal, hidden surfaces and disposal retire stale focus intent.
+
+An explicit Sharing reload focuses its stable **Organization sharing** region
+before the button is replaced. The region exposes loading through `aria-busy`,
+retains a visible inset outline through success or failure and adds no Tab stop.
+Tab reaches the returned controls without a post-response focus jump. Leaving
+the panel, including a later outside blur, prevents delayed focus theft. Initial
+reads do not take focus. This does not change saved-action recovery below or
+repeat a sharing write. `OrganizationSharingKeyboard.transport.test.tsx` binds
+the interaction to the actual panel, state, capability owner, API and client.
 
 Sharing identifies each saved control by its exact opaque share ID and action
 family, independently of names or current row order. Accepting an incoming
@@ -337,19 +374,26 @@ trimming, exact org/CSRF binding and no-write-retry semantics are unchanged.
 When a focused Overview control is removed by a saved read or uncertain
 completion, focus continues to the named inline warning or the refreshed name
 input (the existing saved-name summary for a nonmanager). An explicit Reload
-continues to its read result even when pointer activation did not focus its
-button. Initial/background failures do not take focus from elsewhere. A
-principal, organization, surface, capability or read-only round trip retires
+instead focuses the stable, named Organization details region before its button
+is replaced. The region reports loading with `aria-busy`, stays out of the Tab
+order and retains focus through either saved details or another read failure.
+Tab then reaches the returned name input or Reload action. Pointer activation
+does not have to focus the button first. Leaving the region retires manual
+continuation: a late result never schedules a focus jump, even if the outside
+control subsequently blurs. Initial/background failures do not take focus from
+elsewhere. A principal, organization, surface, capability or read-only round trip
+retires
 old focus intent, and deliberate external focus wins. The visible organization,
 ID, date, member count, editable name and membership distinctions remain.
 
 `OrganizationOverviewKeyboard.transport.test.tsx` runs in the normal frontend
 suite with the production panel, state, stores, OrgsAPI and HTTP client. It
 covers native form semantics, exact single writes, saved/uncertain/reload
-continuation, failed recovery, nonmanager/read-only refusal, external focus and
-reader withdrawal. Comparable desktop and narrow light/dark browser fixtures
-exercise actual Enter, pointer fallback, single-write uncertainty and saved
-readback. These are usability/source safeguards, not original-client, full-App,
+continuation, pending manual reads, failed recovery, nonmanager/read-only refusal,
+external focus (including a subsequent blur), passive initial reads and reader
+withdrawal. Comparable desktop and narrow light/dark browser fixtures
+exercise actual Enter, Tab/Shift+Tab, pointer fallback, single-write uncertainty
+and saved readback. These are usability/source safeguards, not original-client, full-App,
 IdP, cross-tab or installed authorization acceptance.
 
 ### Equal-reader refreshes preserve pending organization changes

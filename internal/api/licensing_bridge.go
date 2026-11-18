@@ -47,7 +47,6 @@ type commercialMigrationStatusModel = pkglicensing.CommercialMigrationStatus
 type purchaseReturnClaimsModel = pkglicensing.PurchaseReturnClaims
 type entitlementLeaseClaimsModel = pkglicensing.EntitlementLeaseClaims
 
-type downgradeRetentionStateModel = pkglicensing.DowngradeRetentionState
 type licenseTier = pkglicensing.Tier
 type checkoutPortalHandoffRequestModel = pkglicensing.CheckoutPortalHandoffRequest
 type checkoutPortalHandoffResponseModel = pkglicensing.CheckoutPortalHandoffResponse
@@ -62,7 +61,6 @@ const (
 	featureAdvancedReportingValue  = pkglicensing.FeatureAdvancedReporting
 	featureExternalProbeValue      = pkglicensing.FeatureExternalProbe
 	featureWhiteLabelValue         = pkglicensing.FeatureWhiteLabel
-	featureLongTermMetricsValue    = pkglicensing.FeatureLongTermMetrics
 	featureDemoFixturesValue       = pkglicensing.FeatureDemoFixtures
 	maxUsersLicenseGateKey         = pkglicensing.MaxUsersLicenseGateKey
 	subscriptionStateActiveValue   = pkglicensing.SubStateActive
@@ -287,10 +285,6 @@ func parseEntitlementLeaseTokenFromLicensing(token string, key ed25519.PublicKey
 	return pkglicensing.ParseEntitlementLeaseToken(token, key, expectedInstanceHost)
 }
 
-func normalizeDowngradeRetentionStateFromLicensing(state downgradeRetentionStateModel) downgradeRetentionStateModel {
-	return pkglicensing.NormalizeDowngradeRetentionState(state)
-}
-
 func writePaymentRequiredFromLicensing(w http.ResponseWriter, payload map[string]interface{}) {
 	pkglicensing.WritePaymentRequired(w, payload)
 }
@@ -305,15 +299,4 @@ const licenseTierFreeValue = pkglicensing.TierFree
 // overflowDaysRemainingFromLicensing returns the number of days remaining in the overflow window.
 func overflowDaysRemainingFromLicensing(tier licenseTier, overflowGrantedAt *int64, now time.Time) int {
 	return pkglicensing.OverflowDaysRemaining(tier, overflowGrantedAt, now)
-}
-
-// freeHistoryDaysDefault is the fallback history days when no license service is available.
-var freeHistoryDaysDefault = pkglicensing.TierHistoryDays[pkglicensing.TierFree]
-
-func tierHistoryDaysFromLicensing(tier pkglicensing.Tier) int {
-	days := pkglicensing.TierHistoryDays[tier]
-	if days == 0 {
-		days = freeHistoryDaysDefault
-	}
-	return days
 }

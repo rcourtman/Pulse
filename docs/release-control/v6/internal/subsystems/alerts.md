@@ -5799,3 +5799,44 @@ can read them (`sessionCanReadRelaySettings`), and `DestinationsTab` shows the p
 panel on the same rule. The relay route is instance administration, so one refused
 relay read would otherwise fail the whole destinations load for a provider inside a
 client workspace. Alert policy and destination behavior are otherwise unchanged.
+
+### Rehearse delivery from saved destinations (16 November 2026)
+
+`AlertDeliveryRehearsal` under `/alerts/notifications` offers a labelled firing,
+per-destination firing/recovery evidence and an explicit recovery/finish action.
+Saved settings govern delivery. Severity and retained-history selectors compose
+the shared `FormSelect` for labels and reactive option synchronization.
+Unsaved edits, unavailable reads and uncertain
+mutations gate subsequent actions. An uncertain creation retries the same UUID
+or reconciles its history entry rather than sending a new alert. Reads and
+mutations capture organization authority and discard stale context replies.
+History survives reload, shows the latest 20 runs from seven days and polls
+ordinary queue progress. Suppression, deferral and provider failure retain
+specific explanations. Provider acceptance explicitly asks the user to confirm
+receipt in the receiving service. Resource threshold evaluation, maintenance,
+acknowledgement, mobile push and external watchdog checks are outside this flow.
+
+`AlertDeliveryRehearsal.test.tsx` and API adapter tests cover outcomes, saved-edit
+and unavailable gates, uncertain request reconciliation, malformed evidence and
+stale organization replies. Content-bound browser evidence is recorded beside
+the frontend verification receipts after desktop and narrow-screen interaction.
+
+The rehearsal producer belongs to the performance quiet-hours category, so a
+critical rehearsal obeys the saved critical-performance suppression toggle.
+`TestDeliveryRehearsalUsesPerformanceQuietHoursPolicy` covers warning/info holds
+and both critical-policy outcomes through the real shared schedule snapshot.
+
+Rehearsal notification links open the exact result at
+`/alerts/notifications?rehearsal=<id>`, including an older retained run outside
+the recent list. They never point at a nonexistent infrastructure incident.
+
+### Compact rehearsal result presentation (17 November 2026)
+
+The rehearsal answers destination delivery first: one row per destination aligns
+alert and recovery statuses, with the most relevant unfinished or failed phase
+explained in the row. Complete phase messages, attempts, deadlines and redacted
+transport diagnostics remain available in the destination disclosure. The saved
+input form stays compact, recovery is the primary action on the active report,
+and history and policy explanations use secondary disclosures. Provider
+acceptance remains distinct from recipient confirmation. No delivery or
+authority behavior changes.

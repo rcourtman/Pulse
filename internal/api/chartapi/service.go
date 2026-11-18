@@ -1049,6 +1049,24 @@ var infrastructureSummaryMetricOrder = []string{
 	"netout",
 }
 
+// infrastructureSummaryOptInMetrics are host series a summary caller may ask
+// for by name but that are not in the default payload. Temperature is a host
+// reading, so only the host tables that draw it request it.
+var infrastructureSummaryOptInMetrics = map[string]bool{
+	"temperature": true,
+}
+
+// infrastructureSummaryNodeMetricOrder lists the series the node summary loop
+// reads. Node disk throughput comes from a linked agent, not the node itself.
+var infrastructureSummaryNodeMetricOrder = []string{
+	"cpu",
+	"memory",
+	"disk",
+	"netin",
+	"netout",
+	"temperature",
+}
+
 var guestSparklineMetricOrder = []string{
 	"cpu",
 	"memory",
@@ -1090,7 +1108,7 @@ func parseInfrastructureSummaryRequestedMetrics(
 			if metricType == "" {
 				continue
 			}
-			if !sparklineMetrics[metricType] {
+			if !sparklineMetrics[metricType] && !infrastructureSummaryOptInMetrics[metricType] {
 				invalid = append(invalid, metricType)
 				continue
 			}
@@ -1861,8 +1879,8 @@ func (r *Service) HandleInfrastructureCharts(w http.ResponseWriter, req *http.Re
 	oldestTimestamp := currentTime
 
 	// Process Nodes - batch-load historical data (1-2 SQL calls instead of N×5).
-	nodeMetricTypes := make([]string, 0, 5)
-	for _, metricType := range []string{"cpu", "memory", "disk", "netin", "netout"} {
+	nodeMetricTypes := make([]string, 0, len(infrastructureSummaryNodeMetricOrder))
+	for _, metricType := range infrastructureSummaryNodeMetricOrder {
 		if requestedMetrics[metricType] {
 			nodeMetricTypes = append(nodeMetricTypes, metricType)
 		}

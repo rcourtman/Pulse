@@ -74,7 +74,6 @@ const { chromium } = require('playwright');
             json: {
               capabilities: [],
               limits: [],
-              max_history_days: 7,
               hosted_mode: false,
               runtime: { build: 'community', label: 'Pulse Community runtime' },
               blocked_capabilities: [],

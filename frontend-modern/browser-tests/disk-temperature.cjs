@@ -26,7 +26,7 @@ const { chromium, webkit } = require('playwright');
           const q = url.searchParams;
           return route.fulfill({json: {resourceType: q.get('resourceType'), resourceId: q.get('resourceId'), range: q.get('range'), start: Date.now() - 86400000, end: Date.now(), source: 'store', metrics: {}}});
         }
-        return route.fulfill({json: url.pathname === '/api/license/runtime-capabilities' ? {capabilities: [], limits: [], max_history_days: 7, hosted_mode: false, runtime: {build:'community'}, blocked_capabilities: []} : {data: [], enabled: false}});
+        return route.fulfill({json: url.pathname === '/api/license/runtime-capabilities' ? {capabilities: [], limits: [], hosted_mode: false, runtime: {build:'community'}, blocked_capabilities: []} : {data: [], enabled: false}});
       });
       await page.goto('http://127.0.0.1:5225/browser-tests/disk-temperature.html');
       if (name === 'webkit') await page.evaluate(() => document.documentElement.classList.add('dark'));

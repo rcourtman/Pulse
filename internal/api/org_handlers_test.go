@@ -4,10 +4,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -1504,5 +1508,303 @@ func TestHandleListInvitationsListsNoneAsEmptyArray(t *testing.T) {
 
 	if rec.Code != http.StatusOK || strings.TrimSpace(rec.Body.String()) != "[]" {
 		t.Fatalf("listing invitations: %d %q, want an empty array", rec.Code, rec.Body.String())
+	}
+}
+
+// An organization write is one complete decision, not the first JSON value
+// a reader happens to deliver. Keep this table at the actual handlers so each
+// route (including the separate default-member branch) uses the same boundary.
+type orgWriteBodyRoute struct {
+	name, method, path, orgID, user, body, field string
+	status                                       int
+	handler                                      http.HandlerFunc
+}
+
+func orgWriteBodyFixture(t *testing.T) (*config.MultiTenantPersistence, *OrgHandlers, []orgWriteBodyRoute) {
+	t.Helper()
+	enableSharedMultiOrgForTest(t)
+	t.Setenv("PULSE_DEV", "true")
+	persistence, checker := newOrgAccessFixture(t, false)
+	saveDefaultOrgMembers(t, persistence, "default-reader")
+	if err := persistence.SaveOrganization(&models.Organization{ID: "beta", DisplayName: "Beta", OwnerUserID: "blair"}); err != nil {
+		t.Fatal(err)
+	}
+	org, err := persistence.LoadOrganizationStrict("acme")
+	if err != nil {
+		t.Fatal(err)
+	}
+	org.SharedResources = []models.OrganizationShare{{ID: "retained-share", TargetOrgID: "beta", ResourceType: "vm", ResourceID: "vm-1", ResourceName: "Backup VM", AccessRole: models.OrgRoleViewer, Status: models.OrganizationShareStatusAccepted, AcceptedBy: "blair"}}
+	if err := persistence.SaveOrganization(org); err != nil {
+		t.Fatal(err)
+	}
+	h := NewOrgHandlers(persistence, nil)
+	h.SetAccessPolicy(checker)
+	return persistence, h, []orgWriteBodyRoute{
+		{"create", http.MethodPost, "/api/orgs", "", "alice", `{"id":"new-org","displayName":"New organization"}`, "id", http.StatusCreated, h.HandleCreateOrg},
+		{"rename", http.MethodPut, "/api/orgs/acme", "acme", "alice", `{"displayName":"Renamed organization"}`, "displayName", http.StatusOK, h.HandleUpdateOrg},
+		{"invitation", http.MethodPost, "/api/orgs/acme/members", "acme", "alice", `{"userId":"carol","role":"editor"}`, "role", http.StatusAccepted, h.HandleInviteMember},
+		{"member-role", http.MethodPost, "/api/orgs/acme/members", "acme", "alice", `{"userId":"bob","role":"editor"}`, "userId", http.StatusOK, h.HandleInviteMember},
+		{"share-create", http.MethodPost, "/api/orgs/acme/shares", "acme", "alice", `{"targetOrgId":"beta","resourceType":"vm","resourceId":"vm-2","accessRole":"editor"}`, "resourceId", http.StatusCreated, h.HandleCreateShare},
+		{"share-update", http.MethodPost, "/api/orgs/acme/shares", "acme", "alice", `{"targetOrgId":"beta","resourceType":"vm","resourceId":"vm-1","accessRole":"editor"}`, "accessRole", http.StatusOK, h.HandleCreateShare},
+		{"default-member", http.MethodPost, "/api/orgs/default/members", "default", orgAccessTestAdmin, `{"userId":"new-reader","role":"viewer"}`, "userId", http.StatusOK, h.HandleInviteMember},
+	}
+}
+
+func orgWriteBodyRequest(route orgWriteBodyRoute, body io.Reader) *http.Request {
+	req := withUser(httptest.NewRequest(route.method, route.path, body), route.user)
+	if route.orgID != "" {
+		req.SetPathValue("id", route.orgID)
+	}
+	return req
+}
+
+func orgWriteSavedFiles(t *testing.T, base string) map[string]string {
+	t.Helper()
+	files := make(map[string]string)
+	if err := filepath.WalkDir(base, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		relative, err := filepath.Rel(base, path)
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			files[relative+"/"] = ""
+			return nil
+		}
+		data, err := os.ReadFile(path)
+		if err == nil {
+			files[relative] = string(data)
+		}
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return files
+}
+
+type orgWriteBodyReadFailure struct{ io.Reader }
+
+func (b orgWriteBodyReadFailure) Read(p []byte) (int, error) {
+	n, err := b.Reader.Read(p)
+	if err == io.EOF {
+		return n, errors.New("private reader detail must not reach the response")
+	}
+	return n, err
+}
+
+func TestOrgHandlersWriteBodyRejectsIncompleteOrCompetingDecisions(t *testing.T) {
+	for routeIndex := 0; routeIndex < 7; routeIndex++ {
+		_, _, routes := orgWriteBodyFixture(t)
+		route := routes[routeIndex]
+		t.Run(route.name, func(t *testing.T) {
+			for _, name := range []string{"second-object", "junk-tail", "overflow-whitespace", "late-read-failure", "empty", "null", "array", "truncated", "wrong-type", "duplicate", "escaped-duplicate", "folded-duplicate"} {
+				t.Run(name, func(t *testing.T) {
+					persistence, _, routes := orgWriteBodyFixture(t)
+					route := routes[routeIndex]
+					before := orgWriteSavedFiles(t, persistence.BaseDataDir())
+					body := route.body
+					switch name {
+					case "second-object":
+						body += `{}`
+					case "junk-tail":
+						body += `private-unread-tail`
+					case "overflow-whitespace":
+						body += strings.Repeat(" ", orgRequestBodyLimit-len(body)+1)
+					case "empty":
+						body = " \n\t"
+					case "null":
+						body = "null"
+					case "array":
+						body = "[]"
+					case "truncated":
+						body = body[:len(body)-1]
+					case "wrong-type":
+						var fields map[string]any
+						if err := json.Unmarshal([]byte(body), &fields); err != nil {
+							t.Fatal(err)
+						}
+						fields[route.field] = true
+						raw, err := json.Marshal(fields)
+						if err != nil {
+							t.Fatal(err)
+						}
+						body = string(raw)
+					case "duplicate", "escaped-duplicate", "folded-duplicate":
+						field := route.field
+						if name == "escaped-duplicate" {
+							field = fmt.Sprintf(`\u%04x%s`, field[0], field[1:])
+						} else if name == "folded-duplicate" {
+							field = strings.ToUpper(field)
+						}
+						body = body[:len(body)-1] + `,"` + field + `":"competing-value"}`
+					}
+					var reader io.Reader = strings.NewReader(body)
+					if name == "late-read-failure" {
+						reader = orgWriteBodyReadFailure{reader}
+					}
+					rec := httptest.NewRecorder()
+					route.handler(rec, orgWriteBodyRequest(route, reader))
+					if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), `"code":"invalid_request"`) {
+						t.Errorf("invalid body = %d %s, want generic 400 invalid_request", rec.Code, rec.Body)
+					}
+					if strings.Contains(rec.Body.String(), "private") || strings.Contains(rec.Body.String(), "competing-value") {
+						t.Error("request or reader detail escaped in error response")
+					}
+					if !reflect.DeepEqual(before, orgWriteSavedFiles(t, persistence.BaseDataDir())) {
+						t.Error("rejected decision changed saved organization files or directories")
+					}
+				})
+			}
+		})
+	}
+}
+
+func TestOrgHandlersWriteBodyRetainsUnambiguousDecisions(t *testing.T) {
+	for routeIndex := 0; routeIndex < 7; routeIndex++ {
+		for _, name := range []string{"ordinary", "singleton-alias", "unknown-fields", "exact-limit", "default-role"} {
+			persistence, _, routes := orgWriteBodyFixture(t)
+			route := routes[routeIndex]
+			t.Run(route.name+"/"+name, func(t *testing.T) {
+				body := route.body
+				switch name {
+				case "singleton-alias":
+					body = strings.Replace(body, `"`+route.field+`":`, `"`+strings.ToUpper(route.field)+`":`, 1)
+				case "unknown-fields":
+					body = body[:len(body)-1] + `,"future":{"role":"ignored","ROLE":false}}`
+				case "exact-limit":
+					body += strings.Repeat(" ", orgRequestBodyLimit-len(body))
+				case "default-role":
+					body = strings.ReplaceAll(body, `,"role":"editor"`, "")
+					body = strings.ReplaceAll(body, `,"role":"viewer"`, "")
+					body = strings.ReplaceAll(body, `,"accessRole":"editor"`, "")
+				}
+				peerBefore := orgWriteSavedFiles(t, filepath.Join(persistence.BaseDataDir(), "orgs", "beta"))
+				rec := httptest.NewRecorder()
+				route.handler(rec, orgWriteBodyRequest(route, strings.NewReader(body)))
+				if rec.Code != route.status {
+					t.Fatalf("valid body = %d %s, want %d", rec.Code, rec.Body, route.status)
+				}
+				if !reflect.DeepEqual(peerBefore, orgWriteSavedFiles(t, filepath.Join(persistence.BaseDataDir(), "orgs", "beta"))) {
+					t.Fatal("valid write changed the peer organization")
+				}
+				orgID := route.orgID
+				if orgID == "" {
+					orgID = "new-org"
+				}
+				org, err := persistence.LoadOrganizationStrict(orgID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				wantRole := models.OrgRoleEditor
+				if name == "default-role" {
+					wantRole = models.OrgRoleViewer
+				}
+				switch route.name {
+				case "create", "rename":
+					want := "New organization"
+					if route.name == "rename" {
+						want = "Renamed organization"
+					}
+					if org.DisplayName != want || org.OwnerUserID != "alice" || !org.HasMemberUserID("alice") {
+						t.Fatalf("saved organization = %+v", org)
+					}
+				case "invitation":
+					if org.HasMemberUserID("carol") || len(org.PendingInvitations) != 1 || org.PendingInvitations[0].Role != wantRole {
+						t.Fatalf("invitation did not remain pending editor: %+v", org)
+					}
+				case "member-role":
+					if organizationRoleForUser(org, "bob") != wantRole || org.OwnerUserID != "alice" {
+						t.Fatalf("saved role or owner = %+v", org)
+					}
+				case "share-create", "share-update":
+					share := org.SharedResources[len(org.SharedResources)-1]
+					if share.TargetOrgID != "beta" || share.AccessRole != wantRole || (share.Status != models.OrganizationShareStatusPending && !(route.name == "share-update" && name == "default-role" && share.Status == models.OrganizationShareStatusAccepted)) {
+						t.Fatalf("saved share = %+v", share)
+					}
+				case "default-member":
+					if organizationRoleForUser(org, "new-reader") != models.OrgRoleViewer || !org.HasMemberUserID("default-reader") {
+						t.Fatalf("saved default membership = %+v", org)
+					}
+				}
+			})
+		}
+	}
+}
+
+type orgWriteUnreadBody struct{ reads int }
+
+func (b *orgWriteUnreadBody) Read([]byte) (int, error) {
+	b.reads++
+	return 0, errors.New("body should not be read before authority checks")
+}
+
+func TestOrgHandlersWriteBodyDoesNotReplaceAuthorityChecks(t *testing.T) {
+	for routeIndex := 0; routeIndex < 7; routeIndex++ {
+		persistence, _, routes := orgWriteBodyFixture(t)
+		route := routes[routeIndex]
+		t.Run(route.name, func(t *testing.T) {
+			before := orgWriteSavedFiles(t, persistence.BaseDataDir())
+			route.user = "token:synthetic-reader"
+			body := &orgWriteUnreadBody{}
+			rec := httptest.NewRecorder()
+			route.handler(rec, orgWriteBodyRequest(route, body))
+			if rec.Code != http.StatusForbidden || body.reads != 0 {
+				t.Fatalf("token principal reached body: status=%d reads=%d", rec.Code, body.reads)
+			}
+			if !reflect.DeepEqual(before, orgWriteSavedFiles(t, persistence.BaseDataDir())) {
+				t.Fatal("refused principal changed saved organization state")
+			}
+		})
+	}
+}
+
+func TestOrgHandlersWriteBodyNativeHTTP(t *testing.T) {
+	for routeIndex := 0; routeIndex < 7; routeIndex++ {
+		for _, invalid := range []bool{true, false} {
+			persistence, _, routes := orgWriteBodyFixture(t)
+			route := routes[routeIndex]
+			t.Run(fmt.Sprintf("%s/invalid=%t", route.name, invalid), func(t *testing.T) {
+				before := orgWriteSavedFiles(t, persistence.BaseDataDir())
+				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					r = withUser(r, route.user)
+					if route.orgID != "" {
+						r.SetPathValue("id", route.orgID)
+					}
+					route.handler(w, r)
+				}))
+				defer server.Close()
+				body := route.body
+				if invalid {
+					body += `{}`
+				}
+				req, err := http.NewRequest(route.method, server.URL+route.path, strings.NewReader(body))
+				if err != nil {
+					t.Fatal(err)
+				}
+				req.Header.Set("Content-Type", "application/json")
+				response, err := server.Client().Do(req)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer response.Body.Close()
+				raw, err := io.ReadAll(response.Body)
+				if err != nil {
+					t.Fatal(err)
+				}
+				want := route.status
+				if invalid {
+					want = http.StatusBadRequest
+				}
+				if response.StatusCode != want {
+					t.Errorf("HTTP write = %d %s, want %d", response.StatusCode, raw, want)
+				}
+				unchanged := reflect.DeepEqual(before, orgWriteSavedFiles(t, persistence.BaseDataDir()))
+				if unchanged != invalid {
+					t.Errorf("HTTP write saved-state unchanged = %t, invalid = %t", unchanged, invalid)
+				}
+			})
+		}
 	}
 }

@@ -2394,6 +2394,15 @@ interactions remain session deduplicated so the presentation layer cannot
 create per-row or per-frame telemetry traffic. Provider-native inventories
 that do not render `WorkloadsFilter` are outside this guest-row contract and
 must not imitate only part of it under a second page-local View vocabulary.
+The Proxmox overview's nodes table honours that same hover binding for its
+own rows: in History hover a hovered node row swaps CPU, memory, disk and
+temperature to row-synchronised sparklines in place, without changing row
+height, and returns to its bars and temperature gauge on leave; Details
+hover keeps the bars. Temperature sparklines scale around their own
+readings with a minimum span rather than from zero, and format through the
+operator's temperature unit. The value beside a temperature sparkline keeps
+the gauge's threshold and open-alert tone through `getTemperatureTextClass`;
+the line itself keeps the temperature series colour the drawer charts use.
 Object-detail navigation follows that same canonical split across platform and
 feature owners. `Overview` is the stable landing tab for current operational
 facts, while stored metric charts appear only after selecting an evidence-gated
@@ -5446,12 +5455,10 @@ production table, router and styles; it does not qualify full-app scrolling.
     discovery, trial CTAs, plan upsells, monitored-system limit pressure,
     feature upgrade links, and plan-lock Patrol banners must require hosted
     mode, explicit handoff, or active entitlement. A lock the operator opens
-    is not a proactive prompt: plan-locked lines in Settings and the locked
-    long-range history states (`HistoryChartOverlay` and the guest drawer
-    history lock, both through
-    `frontend-modern/src/components/shared/HistoryLockPlanLink.tsx`) link to
+    is not a proactive prompt: plan-locked lines in Settings link to
     Plans & Billing whenever `presentationPolicy.hideCommercial` is false,
-    and stay text only under demo and white-label runtimes. Cloud interest links from
+    and stay text only under demo and white-label runtimes. History ranges
+    are never plan-locked (17 November 2026). Cloud interest links from
     self-hosted plan surfaces must hand
     off to Pulse Account/public Cloud ownership rather than route to an
     in-product Cloud trial/signup page.
@@ -11578,3 +11585,50 @@ action, which supplies `noopener noreferrer` for the new tab, and the shared
 `ActionIconButton` close control, which keeps a 44px touch target below the
 `sm` breakpoint. No copy, link styling or threshold is drafted in the
 workspace.
+
+### Inspect delivery rehearsals from notifications (16 November 2026)
+
+The Alerts page passes its reactive rehearsal query identifier through the
+configuration surface and Destinations tab. AlertDeliveryRehearsal owns the
+labelled firing/recovery interaction, disclosure, exact linked-report selection,
+and destination outcome rows using shared SettingsPanel, Button and FormSelect.
+Severity
+and retained-history selectors inherit shared label wiring and reactive option
+synchronization instead of recreating native select controls. Status is explicit
+text as well as colour. Polling pauses while collapsed or the document is
+hidden. Unsaved settings and unknown current evidence disable mutations.
+Rehearsal component and API tests cover uncertain requests, reader changes and
+linked history without introducing resource-incident state.
+
+Rehearsal outcomes separate the human explanation from redacted transport
+diagnostics. Destination rows demote complete phase evidence and raw queue/provider
+details into a keyboard-operable shared disclosure. Rehearsal failures remain
+ordinary delivery-health evidence.
+
+### Rehearsal result hierarchy (17 November 2026)
+
+`AlertDeliveryRehearsal` composes `SettingsPanel`, `FormSelect`, `Button`,
+`StatusIndicatorBadge`, `CalloutCard` and `TechnicalDetailsDisclosure`. Results
+use a responsive destination list rather than nested phase cards. The desktop
+columns align alert and recovery badges. Phone rows retain explicit phase labels.
+Expected suppression uses a muted badge, failed/unavailable evidence uses the
+shared danger tone, and waiting work uses the shared information tone. History
+and explanatory copy remain keyboard-accessible without dominating the result.
+The existing reconciliation contract preserves expanded destination details
+through refresh. Component regressions and source-bound browser evidence cover
+these states, including the empty, uncertain and stale-evidence paths.
+
+The input form is hidden during an active rehearsal. Starting or finishing a
+run, or reconciling an uncertain start, moves keyboard focus to its result
+heading. Ordinary progress refreshes preserve focus. Routing input styling uses
+the shared form tokens alongside FormSelect.
+
+### History charts have no plan lock (17 November 2026)
+
+`useHistoryChartState`, `HistoryChart`, `HistoryChartOverlay` and
+`GuestDrawerHistory` no longer read a runtime history limit, so no range shows a
+lock overlay or a "requires a higher license plan" panel, and
+`HistoryLockPlanLink` is deleted. Every range reads history like any other; an
+empty or short answer keeps the existing empty and partial states.
+`historyChartModel` drops the locked text alternative. Component tests cover
+the 90-day read and the drawer's range change.

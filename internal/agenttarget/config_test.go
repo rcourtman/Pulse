@@ -1,13 +1,133 @@
 package agenttarget
 
 import (
+	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/pkg/securityutil"
 )
+
+func observerJSONValue(t *testing.T, value any) string {
+	t.Helper()
+	data, err := json.Marshal(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
+}
+
+func TestLoadObserversRejectsCompetingJSONFields(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "observers.json")
+	tokenPath := filepath.Join(dir, "observer.token")
+	otherTokenPath := filepath.Join(dir, "other.token")
+	writePrivateFile(t, tokenPath, "synthetic-observer-token")
+	writePrivateFile(t, otherTokenPath, "synthetic-other-token")
+	base := []string{`"name":"dev"`, `"url":"https://observer.example.test"`, `"tokenFile":` + observerJSONValue(t, tokenPath)}
+	row := "{" + strings.Join(base, ",") + "}"
+	fields := []struct{ name, first, last string }{
+		{"version", "0", "1"},
+		{"observers", "[]", "[" + row + "]"},
+		{"name", `"other"`, `"dev"`},
+		{"url", `"https://other.example.test"`, `"https://observer.example.test"`},
+		{"tokenFile", observerJSONValue(t, otherTokenPath), observerJSONValue(t, tokenPath)},
+		{"insecureSkipVerify", "false", "true"},
+		{"allowPlaintextHTTP", "false", "true"},
+		{"caCertPath", `"/synthetic/first.pem"`, `"/synthetic/last.pem"`},
+		{"serverFingerprint", `"first-synthetic-pin"`, `"last-synthetic-pin"`},
+		{"provisionProxmox", "false", "true"},
+	}
+	for _, field := range fields {
+		for _, alias := range []string{"exact", "folded", "escaped"} {
+			for _, equal := range []bool{false, true} {
+				t.Run(fmt.Sprintf("%s/%s/equal=%t", field.name, alias, equal), func(t *testing.T) {
+					key := field.name
+					switch alias {
+					case "folded":
+						key = strings.ToUpper(key)
+					case "escaped":
+						key = fmt.Sprintf(`\u%04x%s`, key[0], key[1:])
+					}
+					first := field.first
+					if equal {
+						first = field.last
+					}
+					pair := `"` + field.name + `":` + first + `,"` + key + `":` + field.last
+					var body string
+					if field.name == "version" {
+						body = "{" + pair + `,"observers":[` + row + "]}"
+					} else if field.name == "observers" {
+						body = `{"version":1,` + pair + "}"
+					} else {
+						members := []string{pair}
+						for _, member := range base {
+							if !strings.HasPrefix(member, `"`+field.name+`":`) {
+								members = append(members, member)
+							}
+						}
+						body = `{"version":1,"observers":[{` + strings.Join(members, ",") + "}]}"
+					}
+					writePrivateFile(t, configPath, body)
+					got, err := LoadObservers(configPath, "https://primary.example.test")
+					if got != nil || err == nil || err.Error() != "observer config contains repeated JSON fields; use each field once" {
+						t.Fatalf("competing observer fields were not refused without exposing their content: %v", err)
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestLoadObserversChecksWholeDocumentBeforeTokenResolution(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "observers.json")
+	missing := observerJSONValue(t, filepath.Join(dir, "missing-private-token"))
+	// Even an earlier destination must not resolve its token before a later
+	// duplicate is refused. The error is fixed, not a missing private path.
+	writePrivateFile(t, configPath, `{"version":1,"observers":[{"name":"first","url":"https://first.example.test","tokenFile":`+missing+`},{"name":"second","url":"https://second.example.test","tokenFile":`+missing+`,"provisionProxmox":false,"PROVISIONPROXMOX":true}]}`)
+	got, err := LoadObservers(configPath, "https://primary.example.test")
+	if got != nil || err == nil || err.Error() != "observer config contains repeated JSON fields; use each field once" {
+		t.Fatalf("token resolution preceded complete duplicate validation: %v", err)
+	}
+}
+
+func TestLoadObserversPreservesSingletonJSONAliases(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "observers.json")
+	tokenPath := filepath.Join(dir, "observer.token")
+	writePrivateFile(t, tokenPath, "synthetic-observer-token")
+	fields := map[string]any{"name": "dev", "url": "http://192.168.50.10:7655", "tokenFile": tokenPath, "insecureSkipVerify": true, "allowPlaintextHTTP": true, "caCertPath": "/synthetic/ca.pem", "serverFingerprint": "synthetic-pin", "provisionProxmox": false}
+	writePrivateFile(t, configPath, observerJSONValue(t, map[string]any{"version": 1, "observers": []any{fields}}))
+	want, err := LoadObservers(configPath, "https://primary.example.test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, alias := range []string{"upper", "unicode-fold", "escaped"} {
+		t.Run(alias, func(t *testing.T) {
+			body := observerJSONValue(t, map[string]any{"version": 1, "observers": []any{fields}})
+			for _, name := range []string{"version", "observers", "name", "url", "tokenFile", "insecureSkipVerify", "allowPlaintextHTTP", "caCertPath", "serverFingerprint", "provisionProxmox"} {
+				key := strings.ToUpper(name)
+				if alias == "unicode-fold" {
+					key = strings.ReplaceAll(key, "S", "ſ")
+				} else if alias == "escaped" {
+					key = fmt.Sprintf(`\u%04x%s`, name[0], name[1:])
+				}
+				body = strings.ReplaceAll(body, `"`+name+`":`, `"`+key+`":`)
+			}
+			writePrivateFile(t, configPath, body)
+			got, err := LoadObservers(configPath, "https://primary.example.test")
+			if err != nil || !reflect.DeepEqual(got, want) {
+				t.Fatalf("singleton alias changed destination choices: %v", err)
+			}
+		})
+	}
+}
 
 func writePrivateFile(t *testing.T, path string, content string) {
 	t.Helper()

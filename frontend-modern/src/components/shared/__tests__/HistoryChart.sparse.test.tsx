@@ -6,9 +6,7 @@ import { HistoryChart } from '../HistoryChart';
 import { formatHistoryChartTimeLabel } from '../historyChartModel';
 
 vi.mock('@/stores/license', () => ({
-  isRangeLocked: () => false,
   loadRuntimeCapabilities: vi.fn(),
-  maxHistoryDays: () => 7,
 }));
 vi.mock('@/api/charts', () => ({ ChartsAPI: { getMetricsHistory: vi.fn() } }));
 

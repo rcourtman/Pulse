@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -176,11 +177,30 @@ func (e *PulseToolExecutor) executeListBackups(ctx context.Context, args map[str
 		}
 	}
 
+	// Backups record their subject by canonical ID. Models also pass a
+	// guest's name or VMID, which matched nothing and read as "no backups
+	// exist", so a reference that is no known ID is resolved by name.
+	var subjectNote string
+	nameRef := ""
+	if resourceID != "" {
+		subject, unknown, err := e.backupSubjectFor(resourceID)
+		if err != nil {
+			return NewErrorResult(err), nil
+		}
+		if unknown {
+			nameRef = resourceID
+		} else if subject.ID != resourceID {
+			subjectNote = fmt.Sprintf("resource_id %q is the name of %s; listed the backups of its ID %s.", resourceID, subject.Type, subject.ID)
+			resourceID = subject.ID
+		}
+	}
+
 	response := EmptyBackupsResponse()
 	response.Pagination = &PaginationInfo{Limit: limit, Offset: offset}
+	response.Note = subjectNote
 	for _, r := range matched {
 		if r.Proxmox != nil && r.Storage != nil && strings.EqualFold(strings.TrimSpace(r.Storage.Type), "pbs") {
-			response.Note = fmt.Sprintf("%q is a Proxmox storage backed by PBS. When Pulse also connects to that PBS, its backups are listed on the PBS datastore: pass that datastore's storage_id.", r.Name)
+			response.Note = strings.TrimSpace(response.Note + " " + fmt.Sprintf("%q is a Proxmox storage backed by PBS. When Pulse also connects to that PBS, its backups are listed on the PBS datastore: pass that datastore's storage_id.", r.Name))
 			break
 		}
 	}
@@ -212,8 +232,149 @@ func (e *PulseToolExecutor) executeListBackups(ctx context.Context, args map[str
 		page++
 		skip = 0
 	}
+	if nameRef != "" && response.Pagination.Total == 0 {
+		return NewErrorResult(fmt.Errorf("no backups have subject %q, and no VM, container, pod or host has that ID, name or VMID; pulse_query gives each resource's canonical ID", nameRef)), nil
+	}
+
+	// The model sees only the start of a long result, and the newest points
+	// come first, so the totals that say what fills a storage go ahead of them.
+	// They cover the points read here (every match when the list fits the
+	// limit) and say so when there are more. A later page has no summary.
+	if offset == 0 && len(response.Points) > 0 {
+		response.Summary = summarizeBackups(response.Points, response.Pagination.Total)
+	}
 
 	return NewJSONResult(response.NormalizeCollections()), nil
+}
+
+// backupSubjectTypes are the resources a backup is taken of.
+var backupSubjectTypes = []unifiedresources.ResourceType{
+	unifiedresources.ResourceTypeVM, unifiedresources.ResourceTypeSystemContainer,
+	unifiedresources.ResourceTypeAppContainer, unifiedresources.ResourceTypePod,
+	unifiedresources.ResourceTypeAgent,
+}
+
+// backupSubjectFor returns the one backup subject a resource_id names: the
+// resource with that ID, else the one with that name or VMID. unknown is set
+// when nothing matches, so the caller can still try the reference as the ID
+// of a subject Pulse no longer monitors. Two matches are an error.
+func (e *PulseToolExecutor) backupSubjectFor(ref string) (subject unifiedresources.Resource, unknown bool, err error) {
+	if e.unifiedResourceProvider == nil {
+		return unifiedresources.Resource{ID: ref}, false, nil
+	}
+	var matches []unifiedresources.Resource
+	for _, resourceType := range backupSubjectTypes {
+		for _, r := range e.unifiedResourceProvider.GetByType(resourceType) {
+			if r.ID == ref {
+				return r, false, nil
+			}
+			if matchesCanonicalResourceReference(r, ref, r.Name, resourceDisplayName(r), canonicalGuestManagedID(r)) {
+				matches = append(matches, r)
+			}
+		}
+	}
+	switch len(matches) {
+	case 0:
+		return unifiedresources.Resource{}, true, nil
+	case 1:
+		return matches[0], false, nil
+	}
+	ids := make([]string, 0, len(matches))
+	for _, r := range matches {
+		ids = append(ids, fmt.Sprintf("%s (%s)", r.ID, r.Type))
+	}
+	sort.Strings(ids)
+	return unifiedresources.Resource{}, false, fmt.Errorf("resource_id %q names %d resources: %s; pass one of those IDs", ref, len(matches), strings.Join(ids, ", "))
+}
+
+// backupSummaryMaxSubjects and backupSummaryMaxLabel keep the summary small
+// enough to survive the cut of a long result; the largest subjects are kept.
+const (
+	backupSummaryMaxSubjects = 20
+	backupSummaryMaxLabel    = 80
+)
+
+func summarizeBackups(points []recovery.RecoveryPoint, total int) *BackupsSummary {
+	summary := &BackupsSummary{Backups: total, BySubject: []BackupSubjectSummary{}}
+	if len(points) < total {
+		summary.Summarized = len(points)
+	}
+	index := map[string]int{}
+	for _, p := range points {
+		// The recovery subject key, so a name that changes between backups
+		// is still one subject.
+		key := recovery.SubjectKeyForPoint(p)
+		if key == "" {
+			key = "label:" + backupSubjectLabel(p)
+		}
+		i, ok := index[key]
+		if !ok {
+			i = len(summary.BySubject)
+			index[key] = i
+			summary.BySubject = append(summary.BySubject, BackupSubjectSummary{Subject: backupSubjectLabel(p), ResourceID: strings.TrimSpace(p.SubjectResourceID)})
+		}
+		s := &summary.BySubject[i]
+		s.Backups++
+		if p.SizeBytes == nil {
+			s.UnknownSize++
+			summary.UnknownSize++
+		} else if *p.SizeBytes > 0 {
+			s.SizeBytes += *p.SizeBytes
+			summary.SizeBytes += *p.SizeBytes
+		}
+		at := p.CompletedAt
+		if at == nil {
+			at = p.StartedAt
+		}
+		if at != nil {
+			if s.Oldest == nil || at.Before(*s.Oldest) {
+				s.Oldest = at
+			}
+			if s.Newest == nil || at.After(*s.Newest) {
+				s.Newest = at
+			}
+		}
+	}
+	sort.SliceStable(summary.BySubject, func(i, j int) bool {
+		a, b := summary.BySubject[i], summary.BySubject[j]
+		if a.SizeBytes != b.SizeBytes {
+			return a.SizeBytes > b.SizeBytes
+		}
+		if a.Backups != b.Backups {
+			return a.Backups > b.Backups
+		}
+		return a.Subject < b.Subject
+	})
+	summary.Subjects = len(summary.BySubject)
+	if len(summary.BySubject) > backupSummaryMaxSubjects {
+		summary.BySubject = summary.BySubject[:backupSummaryMaxSubjects]
+	}
+	return summary
+}
+
+// backupSubjectLabel names a backup's subject for the summary, cut to
+// backupSummaryMaxLabel runes.
+func backupSubjectLabel(p recovery.RecoveryPoint) string {
+	var label string
+	if p.Display != nil {
+		label = strings.TrimSpace(p.Display.SubjectLabel)
+	}
+	if label == "" && p.SubjectRef != nil {
+		label = strings.TrimSpace(p.SubjectRef.Name)
+	}
+	if label == "" {
+		label = strings.TrimSpace(p.SubjectResourceID)
+	}
+	if label == "" && p.SubjectRef != nil {
+		label = strings.TrimSpace(p.SubjectRef.ID)
+	}
+	if label == "" {
+		return "unknown"
+	}
+	if runes := []rune(label); len(runes) > backupSummaryMaxLabel {
+		label = string(runes[:backupSummaryMaxLabel-1]) + "…"
+	}
+	return label
 }
 
 // storageResourcesFor returns the storage resources an ID names, or that a

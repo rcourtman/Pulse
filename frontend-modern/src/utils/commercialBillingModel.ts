@@ -29,10 +29,7 @@ export interface SelfHostedCommercialModelInput {
   planTerms?: string;
   expires: string;
   daysRemaining: string | number;
-  retailPlanDefinition?: Pick<
-    SelfHostedPlanDefinition,
-    'billingExtrasSummary' | 'metricHistoryDays'
-  > | null;
+  retailPlanDefinition?: Pick<SelfHostedPlanDefinition, 'billingExtrasSummary'> | null;
 }
 
 export interface HostedCommercialModelInput {
@@ -88,10 +85,6 @@ export const buildSelfHostedCommercialPlanModel = (
         {
           label: 'Core Monitoring',
           value: 'Included',
-        },
-        {
-          label: 'Metric History',
-          value: `${input.retailPlanDefinition.metricHistoryDays} days`,
         },
         {
           label: 'Included Extras',

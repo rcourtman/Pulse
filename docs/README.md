@@ -59,6 +59,10 @@ integration against their own vCenter before production use.
 
 ## Monitoring and operations
 
+- [Set up alerting](ALERTING.md): rules, destinations, delivery checks,
+  acknowledgement, snooze, recovery, and an independent watchdog for Pulse.
+- [Check websites, services and devices](AVAILABILITY.md): local checks,
+  Pro remote observation locations, and what each check can establish.
 - [Metrics history](METRICS_HISTORY.md)
 - [Recovery data](RECOVERY.md)
 - [Webhooks](WEBHOOKS.md)

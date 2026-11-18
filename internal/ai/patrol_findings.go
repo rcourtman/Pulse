@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
@@ -606,8 +607,15 @@ func (a *patrolFindingCreatorAdapter) CreateFinding(input tools.PatrolFindingInp
 			Msg("AI Patrol: Repaired unknown finding resource ID from exact scoped identity")
 		input = canonical
 	}
+	if canonical, repaired := a.canonicalizeNameAsFindingID(input); repaired {
+		log.Info().
+			Str("submitted_resource_id", input.ResourceID).
+			Str("canonical_resource_id", canonical.ResourceID).
+			Msg("AI Patrol: Filed a finding given a resource name as its ID under that resource's ID")
+		input = canonical
+	}
 	if !a.findingInCurrentScope(&Finding{ResourceID: input.ResourceID, ResourceName: input.ResourceName}) {
-		return "", false, fmt.Errorf("resource %s is outside the requested patrol finding scope", input.ResourceID)
+		return "", false, a.findingScopeRejection(input)
 	}
 
 	// Map severity
@@ -775,6 +783,133 @@ func (a *patrolFindingCreatorAdapter) validateFindingResourceIdentity(input tool
 	return nil
 }
 
+// canonicalizeNameAsFindingID files a report whose resource_id is a
+// resource's exact name, and none of its IDs, under that resource's ID. The
+// name admits the report to scope either way, but the ID owns deduplication:
+// a guest reported once as "gitea" and once by its ID was two findings. The
+// name must name exactly one runtime resource of the submitted type, and that
+// resource must be in the lifecycle scope.
+func (a *patrolFindingCreatorAdapter) canonicalizeNameAsFindingID(input tools.PatrolFindingInput) (tools.PatrolFindingInput, bool) {
+	if a == nil {
+		return input, false
+	}
+	idToken := canonicalPatrolScopeToken(input.ResourceID)
+	typeToken := canonicalPatrolScopeToken(input.ResourceType)
+	if idToken == "" {
+		return input, false
+	}
+	// A resource already has findings filed under this name: keep their
+	// lineage (and any dismissal or snooze) rather than start a second one.
+	if a.patrol != nil && a.patrol.findings != nil && a.patrol.findings.HasFindingsForResource(strings.TrimSpace(input.ResourceID)) {
+		return input, false
+	}
+	inScope := a.lifecycleScope()
+	isID := false
+	named := 0
+	canonicalID := ""
+	patrolVisitRuntimeResources(a.snap, func(record patrolRuntimeResourceRecord) bool {
+		for _, id := range record.ids {
+			if canonicalPatrolScopeToken(id) == idToken {
+				isID = true
+			}
+		}
+		if typeToken != "" && canonicalPatrolScopeToken(record.resourceType) != typeToken {
+			return true
+		}
+		for _, alias := range record.aliases {
+			if canonicalPatrolScopeToken(alias) != idToken {
+				continue
+			}
+			named++
+			canonicalID = patrolRecordScopedID(record, inScope)
+			break
+		}
+		return true
+	})
+	if isID || named != 1 || canonicalID == "" {
+		return input, false
+	}
+	input.ResourceID = canonicalID
+	return input, true
+}
+
+// lifecycleScope reports whether an ID is in the finding lifecycle scope, as
+// findingInCurrentScope reads it for an ID alone, with the inventory built once.
+func (a *patrolFindingCreatorAdapter) lifecycleScope() func(string) bool {
+	if len(a.findingScope) > 0 {
+		return func(id string) bool { return a.findingScope[id] }
+	}
+	scoped := patrolRuntimeKnownResources(a.snap)
+	return func(id string) bool { return len(scoped) == 0 || scoped[id] }
+}
+
+// patrolRecordScopedID is a record's first ID in the lifecycle scope. Records
+// list their canonical ID first, so a full run and a scoped run file under the
+// same ID.
+func patrolRecordScopedID(record patrolRuntimeResourceRecord, inScope func(string) bool) string {
+	for _, id := range record.ids {
+		if id = strings.TrimSpace(id); id != "" && inScope(id) {
+			return id
+		}
+	}
+	return ""
+}
+
+// findingScopeRejection explains a refused report. A resource_id that names
+// no resource is not out of scope, it is a guess: the triage tables name
+// resources without IDs, and a model filed "ct/gitea" for three guests at once,
+// was told the resource was outside the scope, and gave up. That answer names
+// the in-scope resources the report mentions, with their IDs.
+func (a *patrolFindingCreatorAdapter) findingScopeRejection(input tools.PatrolFindingInput) error {
+	idToken := canonicalPatrolScopeToken(input.ResourceID)
+	mentioned := " " + patrolFindingWords(input.ResourceID+" "+input.ResourceName) + " "
+	known := false
+	var candidates []string
+	seen := map[string]bool{}
+	inScope := a.lifecycleScope()
+	patrolVisitRuntimeResources(a.snap, func(record patrolRuntimeResourceRecord) bool {
+		for _, value := range append(append([]string(nil), record.ids...), record.aliases...) {
+			if idToken != "" && canonicalPatrolScopeToken(value) == idToken {
+				known = true
+			}
+		}
+		id := patrolRecordScopedID(record, inScope)
+		if id == "" || seen[id] {
+			return true
+		}
+		for _, alias := range record.aliases {
+			words := patrolFindingWords(alias)
+			if len(words) < 3 || !strings.Contains(mentioned, " "+words+" ") {
+				continue
+			}
+			seen[id] = true
+			candidates = append(candidates, fmt.Sprintf("%s is %s (%s)", strings.TrimSpace(alias), id, record.resourceType))
+			break
+		}
+		return true
+	})
+	if known {
+		return fmt.Errorf("resource %s is outside the requested patrol finding scope", input.ResourceID)
+	}
+	sort.Strings(candidates)
+	if len(candidates) > 5 {
+		candidates = candidates[:5]
+	}
+	hint := "pulse_query gives each resource's ID."
+	if len(candidates) > 0 {
+		hint = "In this run: " + strings.Join(candidates, "; ") + "."
+	}
+	return fmt.Errorf("resource_id %q is not a Pulse resource ID. %s File one finding per resource, under its own resource_id and resource_name", input.ResourceID, hint)
+}
+
+// patrolFindingWords lowercases a value and keeps only its letters and digits,
+// one space between words.
+func patrolFindingWords(value string) string {
+	return strings.Join(strings.FieldsFunc(strings.ToLower(value), func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsDigit(r)
+	}), " ")
+}
+
 // canonicalizeUnknownFindingResource repairs only a redundant model-authored
 // ID transcription error. The submitted ID must match no current resource,
 // while the exact submitted name must resolve to one same-type runtime record
@@ -786,13 +921,16 @@ func (a *patrolFindingCreatorAdapter) canonicalizeUnknownFindingResource(input t
 	if a == nil || strings.TrimSpace(input.ResourceID) == "" || strings.TrimSpace(input.ResourceName) == "" {
 		return input, false
 	}
-	if a.findingInCurrentScope(&Finding{ResourceID: input.ResourceID, ResourceName: input.ResourceName}) {
-		// The name alone can admit a report. A registry ID that names nothing
-		// is still a miscopy then, and a finding filed under it would be closed
-		// as removed by the next run (findingResourceInInventory).
-		if !patrolRegistryMintedResourceID(input.ResourceID) || a.findingInCurrentScope(&Finding{ResourceID: input.ResourceID}) {
-			return input, false
-		}
+	if a.findingInCurrentScope(&Finding{ResourceID: input.ResourceID}) {
+		return input, false
+	}
+	// The name alone can admit a report, and an ID that names nothing is a
+	// miscopy or a guess either way: a registry ID filed as is would be closed
+	// as removed by the next run (findingResourceInInventory), and a guess such
+	// as "node/pmxlab" would split the resource's findings from those filed
+	// under its ID. Findings already filed under the submitted ID keep it.
+	if a.patrol != nil && a.patrol.findings != nil && a.patrol.findings.HasFindingsForResource(strings.TrimSpace(input.ResourceID)) {
+		return input, false
 	}
 
 	resourceIDToken := canonicalPatrolScopeToken(input.ResourceID)

@@ -163,8 +163,7 @@ beforeEach(async () => {
     vi.fn(async (request: string | URL | Request, init: RequestInit = {}) => {
       const url = String(request);
       requests.push({ url, init });
-      if (url === '/api/license/runtime-capabilities')
-        return json({ capabilities, limits: [], max_history_days: 7 });
+      if (url === '/api/license/runtime-capabilities') return json({ capabilities, limits: [] });
       if (url === '/api/health' && init.method === 'GET') return healthReply();
       if (url === endpoint && !init.method) return readReply();
       if (url === endpoint && init.method === 'POST') return writeReply(init);
@@ -607,5 +606,152 @@ describe('Audit Webhook rendered controls through the real HTTP client', () => {
     expect(screen.queryByTitle(selectedURL)).not.toBeInTheDocument();
     expect(input()).toHaveValue(addedURL);
     expect(writes()).toHaveLength(1);
+  });
+});
+
+describe('Audit Webhook read-recovery keyboard position', () => {
+  const region = () => screen.getByRole('region', { name: 'Audit webhook configuration' });
+  const retry = () => screen.getByRole('button', { name: 'Retry loading' });
+  const failedRead = () => json({ error: 'Synthetic unavailable' }, 503);
+  const startRecovery = async (canManage = true) => {
+    readReply = failedRead;
+    const view = mount({ canManage });
+    await screen.findByText(readError);
+    const response = deferred<Response>();
+    readReply = () => response.promise;
+    // Real browsers remove the focused retry with its error block. Move to
+    // a surviving local region before dispatch, not after its result arrives.
+    retry().focus();
+    fireEvent.click(retry());
+    expect(region()).toHaveFocus();
+    expect(region()).toHaveAttribute('aria-busy', 'true');
+    expect(screen.queryByRole('button', { name: 'Retry loading' })).not.toBeInTheDocument();
+    await waitFor(() => expect(reads()).toHaveLength(2));
+    return { view, response };
+  };
+
+  it.each([
+    ['loaded', true],
+    ['empty', true],
+    ['failed', true],
+    ['loaded', false],
+    ['empty', false],
+    ['failed', false],
+  ] as const)(
+    'keeps the explicit retry local after %s with manage=%s',
+    async (result, canManage) => {
+      const { response } = await startRecovery(canManage);
+      response.resolve(
+        result === 'failed' ? failedRead() : json({ urls: result === 'empty' ? [] : inventory }),
+      );
+      await waitFor(() => expect(region()).toHaveAttribute('aria-busy', 'false'));
+      expect(region()).toHaveFocus();
+      if (result === 'failed') {
+        expect(retry()).toBeEnabled();
+        expect(screen.queryByText(empty)).not.toBeInTheDocument();
+      } else if (result === 'empty') {
+        expect(screen.getByText(empty)).toBeInTheDocument();
+      } else {
+        expect(screen.getByTitle(selectedURL)).toBeInTheDocument();
+      }
+      if (canManage) expect(input()).toBeEnabled();
+      else expect(input()).toBeDisabled();
+      expect(writes()).toHaveLength(0);
+      expect(healthReads()).toHaveLength(0);
+      for (const request of reads()) expectWire(request, 'GET');
+      expectAuthRetained();
+    },
+  );
+
+  it('also keeps pointer retry local when activation never focused its button', async () => {
+    readReply = failedRead;
+    mount();
+    await screen.findByText(readError);
+    input().focus();
+    const response = deferred<Response>();
+    readReply = () => response.promise;
+    fireEvent.click(retry());
+    expect(region()).toHaveFocus();
+    response.resolve(json({ urls: inventory }));
+    await loaded();
+    expect(region()).toHaveFocus();
+    expect(writes()).toHaveLength(0);
+  });
+
+  it.each(['loaded', 'failed'] as const)(
+    'never takes focus back after the user leaves during a %s retry',
+    async (result) => {
+      const { response } = await startRecovery();
+      const outside = document.createElement('button');
+      outside.textContent = 'Next setting';
+      document.body.append(outside);
+      try {
+        outside.focus();
+        response.resolve(result === 'failed' ? failedRead() : json({ urls: inventory }));
+        await waitFor(() => expect(region()).toHaveAttribute('aria-busy', 'false'));
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        expect(outside).toHaveFocus();
+        expect(writes()).toHaveLength(0);
+      } finally {
+        outside.remove();
+      }
+    },
+  );
+
+  it('preserves a deliberate local focus move while a retry completes', async () => {
+    const { response } = await startRecovery();
+    input().focus();
+    fireEvent.input(input(), { target: { value: addedURL } });
+    response.resolve(json({ urls: inventory }));
+    await loaded();
+    expect(input()).toHaveFocus();
+    expect(input()).toHaveValue(addedURL);
+    expect(writes()).toHaveLength(0);
+  });
+
+  it('does not focus an untouched initial read or an equal capability refresh', async () => {
+    const first = deferred<Response>();
+    readReply = () => first.promise;
+    const outside = document.createElement('button');
+    document.body.append(outside);
+    try {
+      outside.focus();
+      mount();
+      first.resolve(json({ urls: inventory }));
+      await loaded();
+      expect(outside).toHaveFocus();
+      input().focus();
+      fireEvent.input(input(), { target: { value: addedURL } });
+      await loadRuntimeCapabilities(true);
+      expect(input()).toHaveFocus();
+      expect(input()).toHaveValue(addedURL);
+      expect(screen.getByTitle(selectedURL)).toBeInTheDocument();
+      expect(writes()).toHaveLength(0);
+    } finally {
+      outside.remove();
+    }
+  });
+
+  it('cannot restore a withdrawn reader or steal focus when its old retry completes', async () => {
+    const { response, view } = await startRecovery();
+    const request = reads()[1];
+    view.setReader({ ...view.reader(), canRead: false, canManage: false });
+    expect(
+      screen.queryByRole('region', { name: 'Audit webhook configuration' }),
+    ).not.toBeInTheDocument();
+    expect(request.init.signal?.aborted).toBe(true);
+    const outside = document.createElement('button');
+    document.body.append(outside);
+    try {
+      outside.focus();
+      response.resolve(json({ urls: inventory }));
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(outside).toHaveFocus();
+      expect(screen.queryByTitle(selectedURL)).not.toBeInTheDocument();
+      expect(reads()).toHaveLength(2);
+      expect(writes()).toHaveLength(0);
+    } finally {
+      outside.remove();
+    }
   });
 });

@@ -66,9 +66,6 @@ type EntitlementPayload struct {
 	// TrialEligibilityReason is retained for compatibility with retired self-hosted trial clients.
 	TrialEligibilityReason string `json:"trial_eligibility_reason,omitempty"`
 
-	// MaxHistoryDays is the maximum metrics history retention in days for the current tier.
-	MaxHistoryDays int `json:"max_history_days"`
-
 	// OverflowDaysRemaining is set when the onboarding overflow (+1 host) is active.
 	// Indicates the number of days remaining in the 14-day overflow window.
 	OverflowDaysRemaining *int `json:"overflow_days_remaining,omitempty"`
@@ -142,9 +139,6 @@ type RuntimeCapabilitiesPayload struct {
 
 	// HostedMode indicates that this server is running in Pulse hosted mode.
 	HostedMode bool `json:"hosted_mode"`
-
-	// MaxHistoryDays is the maximum metrics history retention in days for the current tier.
-	MaxHistoryDays int `json:"max_history_days"`
 
 	// Runtime identifies the binary/channel serving the runtime capability contract.
 	Runtime *RuntimeIdentity `json:"runtime,omitempty"`
@@ -344,10 +338,9 @@ func BuildRuntimeCapabilitiesPayloadWithUsage(
 ) RuntimeCapabilitiesPayload {
 	entitlementPayload := BuildEntitlementPayloadWithUsage(status, subscriptionState, usage, nil)
 	return RuntimeCapabilitiesPayload{
-		Capabilities:   cloneCapabilityKeys(entitlementPayload.Capabilities),
-		Limits:         cloneLimitStatuses(entitlementPayload.Limits),
-		HostedMode:     entitlementPayload.HostedMode,
-		MaxHistoryDays: entitlementPayload.MaxHistoryDays,
+		Capabilities: cloneCapabilityKeys(entitlementPayload.Capabilities),
+		Limits:       cloneLimitStatuses(entitlementPayload.Limits),
+		HostedMode:   entitlementPayload.HostedMode,
 	}
 }
 
@@ -404,13 +397,7 @@ func BuildEntitlementPayloadWithUsage(
 			SubscriptionState: string(SubStateExpired),
 			UpgradeReasons:    []UpgradeReason{},
 			Tier:              string(TierFree),
-			MaxHistoryDays:    TierHistoryDays[TierFree],
 		}
-	}
-
-	maxHistDays := TierHistoryDays[status.Tier]
-	if maxHistDays == 0 {
-		maxHistDays = TierHistoryDays[TierFree]
 	}
 
 	payload := EntitlementPayload{
@@ -426,7 +413,6 @@ func BuildEntitlementPayloadWithUsage(
 		DaysRemaining:     status.DaysRemaining,
 		InGracePeriod:     status.InGracePeriod,
 		GracePeriodEnd:    status.GracePeriodEnd,
-		MaxHistoryDays:    maxHistDays,
 		LegacyConnections: usage.LegacyConnections,
 		HasMigrationGap:   false,
 	}
@@ -448,11 +434,6 @@ func BuildEntitlementPayloadWithUsage(
 
 	if payload.SubscriptionState == string(SubStateTrial) {
 		applyTrialWindow(&payload, status, trialEndsAtUnix, time.Now().Unix())
-	}
-
-	// When subscription state doesn't grant paid features, cap history to free tier.
-	if !subscriptionStateHasPaidFeatures(SubscriptionState(payload.SubscriptionState)) {
-		payload.MaxHistoryDays = TierHistoryDays[TierFree]
 	}
 
 	// Build hosted-only runtime limits. Self-hosted commercial volume caps are retired.

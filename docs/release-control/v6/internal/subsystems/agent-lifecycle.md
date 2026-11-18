@@ -17,6 +17,53 @@
 
 ## Purpose
 
+### Observer files retain one deliberate value per setting (17 November 2026)
+
+The existing private observer-file loader refuses repeated root or destination
+members, including case-folded and JSON-escaped aliases, before resolving any
+observer token file. It no longer chooses the last of competing destination,
+TLS, plaintext-consent or Proxmox-provisioning settings. The fixed diagnostic
+quotes neither keys nor values. Singleton aliases, defaults, supported values,
+the size/count limits and private-file checks remain unchanged. An invalid
+observer file still stops startup without changing saved primary identity or
+credentials; correcting that file restores the existing choices without
+re-enrollment. No live observer, primary grant, report field, rendered state or
+new destination feature is added.
+
+`internal/agenttarget/config_test.go` covers all ten schema members with exact,
+case-folded and escaped competing/equal duplicates, whole-file admission before
+token resolution and singleton alias compatibility. The real CLI admission in
+`cmd/pulse-agent/observers_config_test.go` checks refusal and correction while
+preserving primary saved bytes, file identities, modes and modification times.
+These are synthetic source checks, not original-client or installed recovery.
+
+### Recovery requests retain their one-use admission boundary (17 November 2026)
+
+The public administrative recovery handler refuses already-ended requests at
+entry and immediately before token validation, including complete buffered input.
+It preserves the token for a subsequent deliberate live recovery rather than
+performing a late role reset. Method/provider, organisation and IP binding remain
+unchanged. Once validation starts, admitted recovery still completes or fails
+under its existing rules; disconnect is not rollback or renewed token authority.
+`internal/api/rbac_admin_request_lifetime_test.go` holds that distinction through
+the public handler. No agent credential, enrollment, collection, command profile,
+report payload or rendered status changes; private binder acceptance and installed
+client recovery remain separate.
+
+### Hosted lifecycle decisions use complete optional JSON bodies
+
+The shared hosted suspension/soft-deletion handlers in
+`internal/api/org_lifecycle_handlers.go` reuse the bounded admin-object decoder
+before changing saved organization lifecycle. Omitted or whitespace-only bodies
+keep default options, but competing known controls, non-object roots, trailing
+data, over-limit input and failed reads cannot become a lifecycle decision.
+Only the decoder's exact empty-input EOF sentinel permits defaults. Existing
+route authority, method/hosted/default-org gates, successful fields and the
+parameterless unsuspend operation do not change. The registered
+`internal/api/org_lifecycle_handlers_test.go` proves rejection against real
+selected/peer saved metadata and native HTTP, plus valid/default operations.
+This is source input safety, not original-client or installed recovery.
+
 ### Docker-port creation does not change established-check reattachment
 
 A new Docker-port availability check requires the reviewed container ID,
@@ -4849,6 +4896,9 @@ unauthenticated bootstrap behavior.
     presentation hot paths, but lifecycle surfaces must not reinterpret
     omitted disk or network series as missing lifecycle telemetry, missing
     agent capabilities, or reduced fleet freshness truth.
+    An opt-in `temperature` series on that payload is host presentation
+    history only; lifecycle surfaces must not read its presence or absence
+    as sensor setup, agent capability, or freshness evidence.
     The same rule now applies to retired compact dashboard summary payloads.
     Shared `internal/api/resourceapi/resources.go` routes must not restore
     `/api/resources/dashboard-summary` as a compatibility read; lifecycle
@@ -11959,3 +12009,19 @@ or logout responses. Malformed login input neither alters pending browser
 requests nor issues credentials; no agent token, saved identity, cadence or
 command authority is changed. `saml_login_request_test.go` verifies these login
 admission and pending-request boundaries.
+
+### Delivery rehearsal authority (16 November 2026)
+
+The rehearsal reads and mutations under `/api/notifications/rehearsals` keep
+notification organization-manager and settings-scope authority. A rehearsal is
+a notification producer, with no agent installation, command, connection or
+lifecycle mutation. Request organization lookup cannot borrow another runtime.
+
+### Metric history is free on every plan (17 November 2026)
+
+`/api/metrics-store/history`, `/api/availability-history` and the agent
+`get_metric_history` read in `internal/api/agent_metric_history.go` no longer
+check a plan history limit; `router.go` and `licensing_bridge.go` drop the tier
+lookup, and `report_schedules.go` no longer applies the downgrade purge. No
+agent token, installation, command or lifecycle authority changes: these reads
+keep their existing scopes.

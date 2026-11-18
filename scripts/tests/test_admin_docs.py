@@ -184,15 +184,17 @@ class AdminDocsTest(unittest.TestCase):
         section = guide.split("### A role or user change could not be confirmed\n", 1)[1].split("\n---", 1)[0]
         readable = " ".join(section.replace("**", "").split())
         frontend = ROOT / "frontend-modern/src/components/Settings"
-        for label, panel, reader in (
-            ("Check saved roles", "RolesPanel.tsx", "state.loadRoles()"),
-            ("Check saved access", "UserAssignmentsPanel.tsx", "state.loadData()"),
+        for label, panel in (
+            ("Check saved roles", "RolesPanel.tsx"),
+            ("Check saved access", "UserAssignmentsPanel.tsx"),
         ):
             with self.subTest(label=label):
                 self.assertIn(label, readable)
                 source = (frontend / panel).read_text()
-                self.assertIn(f"'{label}'", source)
-                self.assertIn(f"actionOnClick={{() => void {reader}}}", source)
+                # Match the documented control, not inline callback syntax.
+                # The panels' transport tests exercise the read and no-replay
+                # boundary, including named keyboard-recovery handlers.
+                self.assertRegex(source, rf"actionLabel=\{{[^}}]*'{re.escape(label)}'\}}")
         for boundary in (
             "after Pulse has saved a role or removed access",
             "Do not repeat the Save or Delete",

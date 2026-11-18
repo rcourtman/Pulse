@@ -865,9 +865,9 @@ func TestSeedResourceInventoryState_UsesRuntimeReadStateForNodesAndGuests(t *tes
 	out := ps.seedResourceInventoryState(runtimeState, nil, cfg, now, false, nil)
 	for _, part := range []string{
 		"# Node Metrics",
-		"| node-1 | online | 55% | 65% | 40%",
+		"| node-1 | node-1 | online | 55% | 65% | 40%",
 		"# Guest Metrics",
-		fmt.Sprintf("| vm-1 | VM | node-1 | 10%% | 30%% (current; source available-field; observed %s; cache-aware guest usage) | 20%% | running | - | 2h ago |", now.UTC().Format(time.RFC3339)),
+		fmt.Sprintf("| vm-1 | qemu/101 | VM | node-1 | 10%% | 30%% (current; source available-field; observed %s; cache-aware guest usage) | 20%% | running | - | 2h ago |", now.UTC().Format(time.RFC3339)),
 		"# Docker",
 		"| docker-1 | 2 | 1 | 1 |",
 		"docker-1/web: health=unhealthy",

@@ -13,8 +13,6 @@ import {
 
 vi.mock('@/stores/license', () => ({
   loadRuntimeCapabilities: vi.fn(async () => undefined),
-  maxHistoryDays: () => 7,
-  isRangeLocked: (range: HistoryTimeRange) => ['14d', '30d', '90d'].includes(range),
 }));
 
 afterEach(() => {
@@ -265,20 +263,16 @@ describe('GuestDrawerHistory stored-observation inspection', () => {
     },
   );
 
-  it('offers no inspection or reads for an absent target or locked range', async () => {
+  it('offers no inspection or reads for an absent target', async () => {
     const fetch = vi.spyOn(ChartsAPI, 'getMetricsHistory');
-    const [current, setTarget] = createSignal<GuestDrawerHistoryTarget | null>(null);
-    // The plan lock links to Plans & Billing, which needs a router.
     render(() => (
       <Router>
-        <Route path="/*" component={() => <GuestDrawerHistory target={current()} range="14d" />} />
+        <Route path="/*" component={() => <GuestDrawerHistory target={null} range="14d" />} />
       </Router>
     ));
     expect(screen.queryByRole('slider')).not.toBeInTheDocument();
-    setTarget(target);
-    await screen.findByText(/14 days history requires/);
-    expect(screen.queryByRole('slider')).not.toBeInTheDocument();
     expect(fetch).not.toHaveBeenCalled();
+    expect(screen.queryByText(/requires a higher license plan/)).not.toBeInTheDocument();
   });
 });
 

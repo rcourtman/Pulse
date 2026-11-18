@@ -13,9 +13,8 @@ import (
 // handleAgentMetricHistory serves get_metric_history. Agents hold canonical
 // resource ids, while the metrics store keys history by each resource's
 // MetricsTarget. This resolves one into the other and hands the read to
-// handleMetricsHistory, which owns tiers, fallbacks, downsampling and the
-// licensed history limit, so an agent and the history charts read the same
-// series under the same entitlement.
+// handleMetricsHistory, which owns tiers, fallbacks and downsampling, so an
+// agent and the history charts read the same series.
 func (r *Router) handleAgentMetricHistory(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)

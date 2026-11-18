@@ -2108,6 +2108,14 @@ A decisive term is a contiguous phrase, so a word inside it misses: P4 v3
 adds "no proxmox stop shutdown task" after a default-agent conclusion said
 "No Proxmox stop/shutdown task appears in the task log" and graded Handed
 back under v2 (`TestP4AcceptsNoProxmoxStopShutdownTask`).
+P4 v4 adds "no stop shutdown request" and its variants after a default-agent
+conclusion said the task log showed "no stop/shutdown request" and graded
+Handed back under v3 (`TestP4AcceptsNoStopShutdownRequest`).
+P3 v2 needs a piled-up word ("unpruned", "accumulated", "retained") beside
+the guest and backup groups, and lists "cannot account for" and similar as
+misdirection: v1 handed over a conclusion that only guessed and two that said
+the backups did not explain the fill
+(`TestP3HandsOverOnlyAConclusionThatFoundThePiledUpBackups`).
 
 Patrol model qualification extends only through
 `internal/ai/qualification/`, `cmd/patrol-qualify/`, and reviewed manifests
@@ -2513,8 +2521,7 @@ agents (`GET /api/agent/metric-history`, `monitoring:read`). It takes the
 canonical resource id the other agent reads return, resolves the resource's
 `MetricsTarget` through the registry, and delegates to the chart history read
 (`handleMetricsHistory`), so an agent and the history charts share tiers,
-fallbacks, downsampling and the licensed history limit; a window beyond that
-limit returns the same `license_required` error. It counts as resource-context
+fallbacks and downsampling. Since 17 November 2026 no plan limits the window. It counts as resource-context
 external-agent activity rather than a new telemetry activity. A range outside
 `MetricHistoryRanges` or a non-positive `maxPoints` is a 400. `maxPoints` (capped
 at 200) is the downsampling target, not an output bound: short windows and
@@ -3553,6 +3560,12 @@ resolve canonical/source IDs and unique aliases before collection, reject
    diagnosis, proof that unflagged resources are healthy, or a reason to
    prohibit the model from choosing governed tools for adjacent evidence
    relevant to its own findings.
+   The triage flag table and the node, guest, pool and disk inventory tables
+   carry each resource's canonical ID (`TriageFlag.ReportID`, resolved once
+   per triage through runtime record IDs and the alert resolver; "—" when a
+   reference resolves to nothing), as the scoped app-container table already
+   did. Without it a model filing a finding guessed `ct/gitea` or
+   `node/pmxlab` (`TestPatrolTriageTablesCarryTheIDAFindingIsFiledUnder`).
    Patrol runtime failures are part of that runtime contract: provider, model,
    tool-calling, auth, quota, rate-limit, context-window, and connectivity
    failures must be classified in `internal/ai/` before they reach operators,
@@ -4782,7 +4795,25 @@ keeps each connection's name and nothing is borrowed. A Proxmox storage of type
 because polling skips them there when Pulse also connects to that PBS. Demo
 mode's curated backups name a storage the demo inventory does not have, so they
 are not listed by storage. Proof:
-`internal/ai/tools/tools_storage_backups_by_storage_test.go`. A
+`internal/ai/tools/tools_storage_backups_by_storage_test.go`. A model reads
+only the first 16,000 characters of a tool result, about nine backups, and the
+newest come first: two P3 investigations summed those nine and concluded the
+backups could not explain the fill. The first page of a backups result now
+opens with a summary of the backups it read (every match when the list fits
+the limit, else how many of the total): count, bytes, and per subject the
+count, bytes, oldest and newest, largest first, ahead of the pagination and
+points. Subjects group by the recovery subject key, backups with no recorded
+size are counted as `unknown_size` rather than read as zero bytes, and labels
+are cut to 80 runes. It adds no store query.
+Proof: `internal/ai/tools/tools_storage_backups_summary_test.go`. Backups
+record their subject by canonical ID, and a commands-on Patrol passed guests'
+names as `resource_id`, got empty lists and filed "No backup records exist"
+for three guests that had backups. A `resource_id` that is no VM, container,
+pod or host ID is now resolved by name or VMID: one match lists that
+resource's backups with a note naming its ID, two are an error naming both,
+and a reference that matches nothing and lists nothing is an error, while the
+ID of a subject Pulse no longer monitors still lists its backups. Proof:
+`internal/ai/tools/tools_storage_backups_by_name_test.go`. A
 finished job raises no state alert and a stop exits 0 or with a stop signal,
 so neither is opened. Proofs: `internal/ai/patrol_alert_finding_sustained_test.go`,
 `internal/ai/patrol_storage_alert_wake_test.go`,
@@ -8054,6 +8085,25 @@ then owns deduplication and persistence. A submitted ID that identifies any
 real out-of-scope resource, an ambiguous name, a type mismatch, or a name that
 does not resolve inside the lifecycle scope remains rejected. No fuzzy name or
 ID matching is permitted at this boundary.
+A rejected `resource_id` that names no runtime resource is not reported as out
+of scope: the triage tables name resources without IDs, and a model that filed
+`ct/gitea` for three guests was told the resource was outside the scope and
+gave up. The refusal names the in-scope resources whose names appear as whole
+words in the submitted ID or name, with their IDs, and asks for one finding per
+resource. Those words only build the hint; nothing is filed until the model
+retries with an exact ID (`TestPatrolFindingUnknownIDNamesTheResourcesItMeant`).
+A `resource_id` that is exactly one resource's name, of the submitted type and
+in the lifecycle scope, and none of its IDs, is filed under that resource's ID,
+so the ID owns deduplication. The ID is the record's first in-scope ID (its
+canonical ID), so full and scoped runs agree. An ambiguous name, or a name
+that already has findings filed under it (whose lineage, dismissal or snooze
+must carry on), is left as submitted
+(`TestPatrolFindingNameAsIDIsFiledUnderTheResourcesID`). The unknown-ID repair
+above applies to any unknown ID, not only registry-shaped ones, so a guess such
+as `node/pmxlab` admitted by its exact name is filed under the node's ID. An
+ID with findings already filed under it, in any state (snoozed, dismissed and
+resolved included, `FindingsStore.HasFindingsForResource`), keeps them
+(`TestPatrolFindingGuessedNodeIDIsFiledUnderTheNodesID`).
 
 ### Mobile destination links do not expand AI authority
 

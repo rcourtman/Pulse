@@ -53,7 +53,6 @@ const MONITORED_SYSTEM_RUNTIME_CAPABILITIES = {
     existing_monitoring_continues: true,
   },
   hosted_mode: false,
-  max_history_days: 90,
 };
 
 const UNAVAILABLE_MONITORED_SYSTEM_LIMIT = {

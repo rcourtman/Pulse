@@ -2612,7 +2612,11 @@ during search and independent of the inventory-count preference, so the
 cluster identity is never lost. Its Trends sparklines read node history
 through `useWorkloadTableMetricHistory` with `series: 'nodes'`; guest history
 stays with the embedded workloads table below it, so the nodes table adds no
-guest-history poll to the page. Workload status buckets read the canonical
+guest-history poll to the page. The same node reader backs the History
+hover lens on node rows and requests the node `temperature` series with
+CPU, memory and disk, so the Temp column charts the node's own stored
+readings. The value beside that line keeps the node's own temperature
+thresholds and open-alert tone, matching the gauge it replaces. Workload status buckets read the canonical
 health too: a running workload whose unified health names an open
 `warning_alert` or `critical_alert` reason counts under Attention, while
 `backup_stale` and other non-alert reasons do not.

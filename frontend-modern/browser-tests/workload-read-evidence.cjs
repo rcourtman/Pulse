@@ -147,7 +147,6 @@ const resource = (read) => {
                 ? {
                     capabilities: [],
                     limits: [],
-                    max_history_days: 7,
                     hosted_mode: false,
                     runtime: { build: 'community' },
                     blocked_capabilities: [],

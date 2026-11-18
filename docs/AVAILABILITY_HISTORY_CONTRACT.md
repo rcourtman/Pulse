@@ -138,9 +138,9 @@ semantics and would lose the observation contract.
 Raw observations roll up into buckets that retain, at minimum, state durations,
 observation counts by outcome, unknown duration, and reachable-latency
 count/sum/min/max. Rollups must preserve totals across raw -> minute -> hourly
--> daily transitions. The runtime's active `max_history_days` entitlement
-controls history access; do not hard-code a separate availability-history tier
-list. This capability
+-> daily transitions. Availability history is not plan-limited: every supported range is served,
+and storage retention decides how far back it goes. Do not add an
+availability-history tier list. This capability
 does not introduce a new entitlement. Assigned execution continues to require
 the existing `external_probe` entitlement.
 

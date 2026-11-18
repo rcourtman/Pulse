@@ -54,7 +54,7 @@ func requireSSOLoadUnavailable(t *testing.T, w *httptest.ResponseRecorder) {
 }
 
 func TestSSOLoadFailureReadAndRecovery(t *testing.T) {
-	for _, mode := range []string{"unreadable", "malformed", "decrypt"} {
+	for _, mode := range []string{"unreadable", "malformed", "decrypt", "null"} {
 		t.Run(mode, func(t *testing.T) {
 			r, file, saved := ssoLoadFixture(t)
 			switch mode {
@@ -65,10 +65,17 @@ func TestSSOLoadFailureReadAndRecovery(t *testing.T) {
 				require.NoError(t, os.WriteFile(file, []byte(`{"providers":`), 0600))
 			case "decrypt":
 				require.NoError(t, os.WriteFile(file, []byte("invalid-encrypted-configuration"), 0600))
+			case "null":
+				require.NoError(t, os.WriteFile(file, []byte("null"), 0600))
 			}
 			requireSSOLoadUnavailable(t, ssoLoadRequest(r, http.MethodGet, "/api/security/sso/providers"))
 			requireSSOLoadUnavailable(t, ssoLoadRequest(r, http.MethodGet, "/api/security/sso/providers/saved"))
 			requireSSOLoadUnavailable(t, ssoLoadRequest(r, http.MethodGet, "/api/security/sso/providers/not-saved"))
+			if mode == "null" {
+				got, err := os.ReadFile(file)
+				require.NoError(t, err)
+				require.Equal(t, []byte("null"), got)
+			}
 			require.True(t, r.ssoAuthenticationLoadFailed())
 			fallback := r.currentSSOConfig()
 			require.Empty(t, fallback.Providers)

@@ -1,0 +1,55 @@
+{
+  "source": "pve-v1 replay on Pulse main 7dfb7bec8 plus PRs 4505, 4511 and 4513, default agent, 17 Nov 2026",
+  "run_id": "q-20261117-021249-9258094f",
+  "recorded_manifest_version": 3,
+  "recorded_grade": "handed_back",
+  "evidence": {
+    "agent_profile": {
+      "name": "commands-off",
+      "commands_enabled": false,
+      "declared": "commands-off",
+      "host_name": "pmxlab",
+      "host_resource_id": "agent-cb92e49a2a913d3b"
+    },
+    "alerts": [
+      {
+        "id": "pmxlab:pmxlab:112::pmxlab:pmxlab:112-powered-state",
+        "type": "powered-off",
+        "level": "warning",
+        "resource_alias": "gitea",
+        "resource_name": "gitea",
+        "message": "Container 'gitea' is powered off",
+        "start_time": "2026-11-17T02:13:35.616504Z"
+      }
+    ],
+    "wake": {
+      "mode": "self",
+      "trigger_reason": "alert_fired",
+      "run_id": "1794882222930063000",
+      "investigation_start": "self",
+      "alert_after_ns": 11555405551,
+      "finding_after_ns": 611076015786,
+      "settled_after_ns": 743077548454
+    },
+    "findings": [
+      {
+        "id": "proxmox:guest:stopped:system-container-fe24c58f228eedf1",
+        "severity": "warning",
+        "category": "reliability",
+        "resource_alias": "gitea",
+        "resource_name": "gitea",
+        "title": "Proxmox LXC gitea stopped",
+        "investigation_status": "completed",
+        "investigation_outcome": "needs_attention",
+        "turn_count": 4,
+        "evidence_call_count": 4,
+        "tools_used": [
+          "pulse_query",
+          "pulse_metrics",
+          "patrol_conclude_investigation"
+        ],
+        "conclusion": "### Investigation Summary\nLXC 112 \"gitea\" (system-container-fe24c58f228eedf1) on node pmxlab is confirmed offline. Proxmox's own task log shows no stop/shutdown request for it in the relevant window, consistent with an in-guest stop or crash rather than an administrative action. Metrics taken right up to the stop (02:11:42–02:13:25 UTC) show flat ~1.1-1.3% memory and 0% CPU — no resource spike, OOM pressure, or runaway load preceding the stop. The pmxlab host itself is healthy (online, CPU 2.8%, Mem 50.7%, disk 25%), and the two sibling containers on the same node (nextcloud, pihole) are both online and unaffected, which rules out a host-wide outage or resource-exhaustion event as the cause. This isolates the fault to the gitea guest itself.\n\nThe pmxlab Pulse agent has command execution disabled by its owner's choice (not a connectivity problem), so Pulse cannot read in-guest logs (e.g. Gitea/Alpine syslog, OOM killer messages, panic traces) that would reveal the actual internal trigger (application crash, init/supervisor exit, disk issue inside the container, etc.). No typed action can be executed against this host for the same reason, so no Start/remediation can be proposed or run from here.\n\n### Root Cause\nCausal resource: system-container-fe24c58f228eedf1 (gitea, LXC 112 on pmxlab) — the stop originated inside the guest itself (process exit, crash, or guest-initiated shutdown), not from a Proxmox-level or host-level action.\nUnestablished: the specific internal trigger (application fault, Gitea service crash, Alpine init issue, disk/filesystem error, or something else) cannot be determined without guest-level logs, which Pulse cannot currently collect from pmxlab (no command-capable agent). Host-level causes (resource exhaustion, node instability) are ruled out by healthy host metrics and healthy sibling containers at the same time.\n\n### Affected Resources\n- system-container-fe24c58f228eedf1 (gitea, LXC 112): offline since the window 2026-11-17 02:12–02:23 UTC; this is the directly affected resource and the subject of the active \"Container gitea is powered off\" alert.\n- pmxlab (node, agent-cb92e49a2a913d3b): unaffected — online and healthy, included only to rule out a host-level cause.\n- nextcloud (LXC 111), pihole (LXC 110): unaffected — both online, confirming the issue is scoped to gitea alone, not the node.\n\n### Recommendation\nA person should check the gitea container directly (e.g. via the Proxmox console/pct for LXC 112 on pmxlab) to confirm whether it should be running and, if so, start it and inspect in-guest logs to identify the actual crash/exit cause. Pulse cannot execute a Start or read guest logs here because the pmxlab agent has commands disabled; that is the capability gap, not a broken or disconnected agent. This is the second recorded detection for this finding, so if it recurs, capturing in-guest logs at the moment of failure (once a command-capable path exists) would materially narrow the root cause.\n\n### Conclusion\nNEEDS_ATTENTION: gitea (LXC 112) stopped from inside the guest with no Proxmox-initiated action and remains offline; host and sibling containers are healthy, ruling out a node-level cause, but the specific in-guest trigger requires a log read or Start action that Pulse cannot perform on pmxlab (command agent not enabled), so a person must check the guest and start it if it should be running."
+      }
+    ]
+  }
+}

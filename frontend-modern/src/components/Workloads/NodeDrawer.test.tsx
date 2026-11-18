@@ -20,9 +20,7 @@ vi.mock('@/api/charts', async () => {
 });
 
 vi.mock('@/stores/license', () => ({
-  isRangeLocked: () => false,
   loadRuntimeCapabilities: vi.fn(),
-  maxHistoryDays: () => 90,
 }));
 
 import { NodeDrawer } from './NodeDrawer';

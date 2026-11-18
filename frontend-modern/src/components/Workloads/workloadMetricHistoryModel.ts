@@ -4,6 +4,8 @@ import type { WorkloadGuest } from '@/types/workloads';
 import { getCanonicalWorkloadId } from '@/utils/workloads';
 
 export type WorkloadTableMetric = 'cpu' | 'memory' | 'disk' | 'netIo' | 'diskIo';
+// Host rows also chart their temperature; guests have no reading of their own.
+export type HostTableMetric = Exclude<WorkloadTableMetric, 'netIo' | 'diskIo'> | 'temperature';
 export type WorkloadTableMetricHistoryRange = Extract<TimeRange, '1h' | '12h' | '24h' | '7d'>;
 
 export interface WorkloadMetricSparklineSeries {
@@ -25,7 +27,7 @@ export interface WorkloadMetricHistoryReader {
     metric: WorkloadTableMetric,
     options?: WorkloadGuestMetricSeriesOptions,
   ) => WorkloadMetricSparklineSeries[];
-  getNodeMetricSeries: (node: Node, metric: WorkloadTableMetric) => WorkloadMetricSparklineSeries[];
+  getNodeMetricSeries: (node: Node, metric: HostTableMetric) => WorkloadMetricSparklineSeries[];
 }
 
 export interface MetricMiniSparklineScale {
@@ -60,6 +62,7 @@ const NET_IN_COLOR = '#10b981';
 const NET_OUT_COLOR = '#fb923c';
 const DISK_READ_COLOR = '#3b82f6';
 const DISK_WRITE_COLOR = '#f59e0b';
+const TEMPERATURE_COLOR = '#ef4444';
 
 export const WORKLOAD_TABLE_HISTORY_RANGES: WorkloadTableMetricHistoryRange[] = [
   '1h',
@@ -85,6 +88,11 @@ export const MIN_PERCENT_SCALE_CEILING = 5;
 // 500 MB/s. Background chatter stays near the axis below this ceiling.
 export const MIN_RATE_SCALE_CEILING = 100 * 1024;
 export const WORKLOAD_TABLE_HISTORY_POLL_MS = 30_000;
+export const TEMPERATURE_SPARKLINE_UNIT = '°C';
+// A temperature line floats in a window around its own readings: zero-floored,
+// a steady 60°C would sit as a flat line near the top, and a span tighter than
+// this would draw a one-degree wobble as a cliff.
+export const MIN_TEMPERATURE_SCALE_SPAN = 25;
 
 export type WorkloadRateMetric = Extract<WorkloadTableMetric, 'netIo' | 'diskIo'>;
 
@@ -118,6 +126,7 @@ export const WORKLOAD_TABLE_HISTORY_INFRA_METRICS = [
   'diskwrite',
   'netin',
   'netout',
+  'temperature',
 ] as const;
 
 export const isWorkloadTableMetricHistoryRange = (
@@ -284,7 +293,7 @@ const sanitizeMetricPoints = (
 
 export const getMetricSparklineSeriesFromChartData = (
   chartData: ChartData | undefined,
-  metric: WorkloadTableMetric,
+  metric: WorkloadTableMetric | HostTableMetric,
   options?: WorkloadGuestMetricSeriesOptions,
 ): WorkloadMetricSparklineSeries[] => {
   if (!chartData) return [];
@@ -365,6 +374,19 @@ export const getMetricSparklineSeriesFromChartData = (
           points: sanitizeMetricPoints(chartData.diskwrite, clampNonNegative),
         },
       ];
+    case 'temperature':
+      return [
+        {
+          id: 'temperature',
+          label: 'Temperature',
+          color: TEMPERATURE_COLOR,
+          // A zero reading is a missing sensor, not a cold host.
+          points: sanitizeMetricPoints(
+            chartData.temperature?.filter((point) => point.value > 0),
+            clampNonNegative,
+          ),
+        },
+      ];
     default:
       return [];
   }
@@ -396,6 +418,25 @@ export const getMetricMiniSparklineScale = (
     return {
       minValue: 0,
       maxValue: Math.min(100, Math.max(MIN_PERCENT_SCALE_CEILING, maxValue * 1.15)),
+    };
+  }
+
+  if (unit === TEMPERATURE_SPARKLINE_UNIT) {
+    let minValue = Number.POSITIVE_INFINITY;
+    for (const item of series) {
+      for (const point of item.points) {
+        if (Number.isFinite(point.value) && point.value < minValue) {
+          minValue = point.value;
+        }
+      }
+    }
+    if (!Number.isFinite(minValue) || maxValue <= 0) {
+      return { minValue: 0, maxValue: 100 };
+    }
+    const floor = Math.max(0, Math.floor(minValue - 10));
+    return {
+      minValue: floor,
+      maxValue: Math.max(floor + MIN_TEMPERATURE_SCALE_SPAN, Math.ceil(maxValue + 5)),
     };
   }
 

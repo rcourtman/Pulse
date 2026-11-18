@@ -33,7 +33,6 @@ describe('LicenseAPI', () => {
       capabilities: ['relay'],
       limits: [],
       hosted_mode: false,
-      max_history_days: 14,
       runtime: { build: 'community', label: 'Pulse Community runtime' },
       blocked_capabilities: [
         { key: 'audit_logging', reason: 'paid_runtime_required', action_url: '/download' },
@@ -45,7 +44,6 @@ describe('LicenseAPI', () => {
     expect(apiFetchJSON).toHaveBeenCalledWith('/api/license/runtime-capabilities');
     expect(result).toMatchObject({
       capabilities: ['relay'],
-      max_history_days: 14,
       runtime: { build: 'community', label: 'Pulse Community runtime' },
       blocked_capabilities: [
         { key: 'audit_logging', reason: 'paid_runtime_required', action_url: '/download' },
@@ -58,7 +56,6 @@ describe('LicenseAPI', () => {
       capabilities: null,
       limits: null,
       hosted_mode: false,
-      max_history_days: 7,
       blocked_capabilities: null,
     });
 
