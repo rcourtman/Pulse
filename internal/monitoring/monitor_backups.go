@@ -273,13 +273,14 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 	storageQueryErrors := 0              // Number of nodes where storage list could not be queried
 	hadPermissionError := false          // Track if any permission errors occurred this cycle
 	permissionFailureCount := 0          // Number of node/storage reads rejected by authorization
-	storagePreserveNeeded := map[string]struct{}{}
+	sharedPreserveNeeded := map[string]struct{}{}
 	confirmationPreserveNeeded := map[string]struct{}{}
 	unreadNodes := map[string]struct{}{}
 	failedLocalStorages := map[pveLocalBackupStorage]struct{}{}
-	storageSuccess := map[string]struct{}{}
+	storageNamesRead := map[string]struct{}{}
 	sharedStorageSuccess := map[string]struct{}{}
-	unqueryableStorages := map[string]struct{}{}
+	var pbsStorageSuccess map[string]struct{}
+	skippedSharedStorages := map[string]struct{}{}
 	skippedLocalStorages := map[pveLocalBackupStorage]struct{}{}
 	// Where unread reads were attempted, so the provider observation can name
 	// them. A denied entry with no storage is a rejected node storage list.
@@ -411,6 +412,8 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 			if storage.Shared == 0 && !isInherentlySharedStorageType(storage.Type) {
 				storageNode = node.Node
 			}
+			// Classify by the backend, never the storage name (#1592).
+			isPBSStorage := storage.Type == "pbs"
 			if !storageContentQueryable(storage) {
 				// Do not query disabled content to resolve its membership. A
 				// shared read may cover a skipped peer, but local assignment
@@ -418,9 +421,12 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 				if storageNode != "" {
 					skippedLocalStorages[pveLocalBackupStorage{node: storageNode, storage: storage.Storage}] = struct{}{}
 				} else {
-					unqueryableStorages[storage.Storage] = struct{}{}
-					storagePreserveNeeded[storage.Storage] = struct{}{}
+					skippedSharedStorages[storage.Storage] = struct{}{}
+					sharedPreserveNeeded[storage.Storage] = struct{}{}
 					sharedUnreadReads[pveLocalBackupStorage{node: node.Node, storage: storage.Storage}] = struct{}{}
+				}
+				if isPBSStorage {
+					confirmationPreserveNeeded[storage.Storage] = struct{}{}
 				}
 				continue
 			}
@@ -452,19 +458,27 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 				if storageNode != "" {
 					failedLocalStorages[pveLocalBackupStorage{node: storageNode, storage: storage.Storage}] = struct{}{}
 				} else {
-					storagePreserveNeeded[storage.Storage] = struct{}{}
+					sharedPreserveNeeded[storage.Storage] = struct{}{}
 					sharedUnreadReads[pveLocalBackupStorage{node: node.Node, storage: storage.Storage}] = struct{}{}
+				}
+				if isPBSStorage {
+					confirmationPreserveNeeded[storage.Storage] = struct{}{}
 				}
 				contentFailures++
 				continue
 			}
 
 			contentSuccess++
-			storageSuccess[storage.Storage] = struct{}{}
+			storageNamesRead[storage.Storage] = struct{}{}
 			if storageNode == "" {
 				sharedStorageSuccess[storage.Storage] = struct{}{}
 			}
-			delete(storagePreserveNeeded, storage.Storage)
+			if isPBSStorage {
+				if pbsStorageSuccess == nil {
+					pbsStorageSuccess = make(map[string]struct{})
+				}
+				pbsStorageSuccess[storage.Storage] = struct{}{}
+			}
 
 			// Convert to models
 			for _, content := range contents {
@@ -499,11 +513,6 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 					}
 					// If not found in map, fall back to queried node (shouldn't happen normally)
 				}
-				// Classify by storage type only. A dir/NFS storage is free to be
-				// NAMED "pbs-…" (e.g. "pbs-backup"), and treating the name prefix
-				// as PBS silently dropped its vzdump backups whenever a direct PBS
-				// connection was also configured (#1592).
-				isPBSStorage := storage.Type == "pbs"
 				if isPBSStorage && hasPBSDirectConnection {
 					// The direct PBS connection is authoritative for the
 					// backup list, but which storage view listed a snapshot
@@ -607,7 +616,7 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 		if ctx.Err() != nil {
 			break
 		}
-		if _, readElsewhere := storageSuccess[scope.storage]; !readElsewhere {
+		if _, readElsewhere := storageNamesRead[scope.storage]; !readElsewhere {
 			continue
 		}
 		if configured, err := client.GetAllStorage(ctx); err == nil && ctx.Err() == nil {
@@ -642,37 +651,37 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 		contentFailures++
 	}
 
-	// A shared storage skipped on one node is unread only if no node listed it.
-	for storageName := range unqueryableStorages {
-		if _, ok := storageSuccess[storageName]; !ok {
+	// A skipped shared view is covered only by a read of that shared
+	// repository. A same-named local disk cannot make the scan complete.
+	for storageName := range skippedSharedStorages {
+		if _, ok := sharedStorageSuccess[storageName]; !ok {
 			contentFailures++
 		}
 	}
 
-	// Resolve name-wide skips/shared failures after every node, regardless of
-	// order. A local disk failure remains scoped to its own node below.
+	// Resolve shared scopes after every node, regardless of order.
+	for storageName := range sharedStorageSuccess {
+		delete(sharedPreserveNeeded, storageName)
+	}
 	if len(unreadNodes) > 0 {
 		// Confirmation rows have no node provenance. An unread node cannot
 		// establish their absence, even after its live storage inventory was
-		// replaced. A successful read of that storage below still wins.
+		// replaced. An accepted PBS view of that storage still wins.
 		for _, confirmation := range m.state.PBSGuestConfirmationsForInstance(instanceName) {
 			confirmationPreserveNeeded[confirmation.Storage] = struct{}{}
 		}
 	}
-	for storageName := range storageSuccess {
-		delete(storagePreserveNeeded, storageName)
-	}
-	for storageName := range storagePreserveNeeded {
+	for storageName := range sharedPreserveNeeded {
 		confirmationPreserveNeeded[storageName] = struct{}{}
 	}
-	for storageName := range storageSuccess {
+	for storageName := range pbsStorageSuccess {
 		delete(confirmationPreserveNeeded, storageName)
 	}
 
 	unreadScopes := pveUnreadProtectionScopes(pveUnreadReads{
 		nodes:       unreadNodes,
 		local:       failedLocalStorages,
-		shared:      storagePreserveNeeded,
+		shared:      sharedPreserveNeeded,
 		sharedReads: sharedUnreadReads,
 		denied:      deniedReads,
 	})
@@ -681,7 +690,7 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 	// Only rows actually returned this poll may renew point-level evidence.
 	observedBackups := allBackups
 	allBackups, preservedStorages := preserveFailedStorageBackups(instanceName, previousBackups.StorageBackups, pveBackupReadFailures{
-		storages:      storagePreserveNeeded,
+		storages:      sharedPreserveNeeded,
 		nodes:         unreadNodes,
 		local:         failedLocalStorages,
 		sharedSuccess: sharedStorageSuccess,
@@ -991,15 +1000,15 @@ type pveBackupReadFailures struct {
 }
 
 func (f pveBackupReadFailures) preserves(backup models.StorageBackup) bool {
-	if _, ok := f.storages[backup.Storage]; ok {
-		return true
-	}
 	if backup.StorageNode != "" {
 		if _, ok := f.nodes[backup.StorageNode]; ok {
 			return true
 		}
 		_, ok := f.local[pveLocalBackupStorage{node: backup.StorageNode, storage: backup.Storage}]
 		return ok
+	}
+	if _, ok := f.storages[backup.Storage]; ok {
+		return true
 	}
 	if _, ok := f.sharedSuccess[backup.Storage]; ok {
 		return false

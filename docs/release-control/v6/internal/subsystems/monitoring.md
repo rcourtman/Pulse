@@ -1003,6 +1003,26 @@ covers the collect path without network access, and
 fixtures to the same shape.
 
 
+### A local backup read does not cover an unread shared repository
+
+If two PVE node views advertise the same storage ID but only one is shared,
+an accepted local listing (including an empty list) answers only for that
+node's disk. A disabled or failed shared view with no accepted shared read
+retains its last known live files and names the unread scope. Carry-forward
+does not renew the stored point's evidence or confirm protection; a skipped
+shared view keeps the scan incomplete and prevents durable reconciliation.
+The shared carry rule does not retain a known local file from an accepted
+empty read. An accepted view of the shared repository still answers for
+skipped peers, and a complete accepted empty scan still reconciles absence.
+
+An unread PVE view of a direct-PBS datastore may retain its existing guest
+confirmation. A successful same-name local listing cannot replace it;
+an accepted PBS listing can, including one that contains no snapshots.
+Read admission, access-denial reporting and credentials are unchanged.
+`pve_protection_observation_test.go` covers both node orders, warm and cold
+state, skipped and rejected reads, independent local changes, PBS guest
+confirmations, and complete recovery and removal through poll and ingest.
+
 ### Partial PVE backup scans cannot delete durable history
 
 Only a successfully built, complete PVE backup-history observation admits
