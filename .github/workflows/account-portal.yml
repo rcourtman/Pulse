@@ -1,6 +1,8 @@
 name: Account portal frontend
 
 on:
+  schedule:
+    - cron: '43 5 * * *'
   push:
     branches: [main]
     paths:
@@ -20,12 +22,14 @@ permissions:
   contents: read
 
 concurrency:
-  group: account-portal-${{ github.ref }}
+  # The scheduled observation must not replace a pending main build.
+  group: account-portal-${{ github.event_name == 'schedule' && 'advisory-watch' || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   portal-frontend:
     name: Account portal typecheck, tests and embed
+    if: ${{ github.event_name != 'schedule' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -61,3 +65,47 @@ jobs:
           npm run build
           sha256sum --check "$RUNNER_TEMP/account-portal-assets.sha256"
           git diff --exit-code -- ../dist
+
+  portal-advisories:
+    name: Account portal dependency advisory watch
+    if: ${{ github.event_name == 'schedule' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact main source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Set up Node without caching
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+
+      # The full weekly scan already checks this separate graph. Do not wait
+      # a week for a new advisory against an unchanged portal lockfile.
+      - name: Audit complete account frontend dependency graph
+        env:
+          EXPECTED_SOURCE_REF: ${{ github.ref }}
+          EXPECTED_SOURCE_SHA: ${{ github.sha }}
+          NPM_AUDIT_REQUIRE_RESULT: 'true'
+        run: |
+          set -euo pipefail
+          if [[ "$EXPECTED_SOURCE_REF" != refs/heads/main ||
+                ! "$EXPECTED_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ||
+                "$(git rev-parse HEAD)" != "$EXPECTED_SOURCE_SHA" ]]; then
+            echo "::error::Account portal dependency audit requires the exact scheduled main source."
+            exit 1
+          fi
+          audited="$(mktemp -d "$RUNNER_TEMP/account-portal-audit.XXXXXX")"
+          for file in package.json package-lock.json; do
+            git show "$EXPECTED_SOURCE_SHA:internal/cloudcp/portal/frontend/$file" > "$audited/$file"
+          done
+          printf 'AUDITED_MAIN_SHA=%s\n' "$EXPECTED_SOURCE_SHA"
+          echo "The scheduled account audit requires a fresh result even when the lockfile is unchanged."
+          # Copy only data; do not use the checkout's npm configuration,
+          # install dependencies, or execute code from the lockfile.
+          cd "$audited"
+          bash "$GITHUB_WORKSPACE/scripts/npm-audit-retry.sh" all --package-lock-only
