@@ -10076,3 +10076,13 @@ and `TestHostReportCadenceRemainsPerReporterAndUpdates` in `adapters_test.go`
 exercise all five host-backed builders, default/configured floors, exact boundary,
 missed reports, recovery, JSON rebuilding, shorter intervals and independent
 agent/Proxmox controls through the repository's normal Go test command.
+
+### Linked agents keep a node's Proxmox-only ports (18 November 2026)
+
+`nodeFromResource` in `frontend-modern/src/utils/resourceStateAdapters.ts`
+used a linked agent's network interface list in place of the Proxmox one. The
+agent lists only interfaces it reports, so a physical port bridged into
+`vmbr0` vanished once an agent was linked. The adapter now keeps the agent's
+list first, then appends Proxmox interfaces whose names the agent did not
+report. Agent data still wins for any name both sources carry.
+`resourceStateAdapters.test.ts` pins the order and the precedence.

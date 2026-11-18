@@ -11642,3 +11642,17 @@ lock overlay or a "requires a higher license plan" panel, and
 empty or short answer keeps the existing empty and partial states.
 `historyChartModel` drops the locked text alternative. Component tests cover
 the 90-day read and the drawer's range change.
+
+### Node hardware strip on node identity rows (18 November 2026)
+
+`frontend-modern/src/components/shared/NodeHardwareStrip.tsx` renders what a
+Proxmox node is as neutral pills: CPU model and thread count, installed memory,
+one glyph per physical port (Wi-Fi drawn as Wi-Fi, link speed when reported)
+and a fan count, with exact figures in hover titles. The model lives in
+`frontend-modern/src/features/proxmox/nodeHardwareSummary.ts`. `NodeGroupHeader`
+places it beside the cluster and Agent badges from `md` widths up, on the same
+single line, so the identity row keeps its height and live host stats stay in
+the platform host table. `NodeDrawerOverview` shows the same strip above its
+charts and drops the CPU sentence from its facts line. Inventory is not a
+column: the strip has no sort or picker entry. `NodeGroupHeader.test.tsx`
+covers the strip on the header and its empty state.

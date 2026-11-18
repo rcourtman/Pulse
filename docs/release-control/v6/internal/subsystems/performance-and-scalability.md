@@ -4803,3 +4803,10 @@ no polling, socket or render path changes.
 `SetCommercialHistoryRetention` and `effectiveRetention`: cleanup uses the
 configured tier retention only, so a plan ending no longer shortens it.
 Cleanup cadence, query paths and write paths are unchanged.
+
+### Node interface merge stays linear (18 November 2026)
+
+`nodeFromResource` in `resourceStateAdapters.ts` now merges a linked agent's
+network interfaces with the Proxmox list instead of replacing it: one name set
+from the agent list, one filter over the Proxmox list, per node per update. No
+extra request, subscription or render path is added.

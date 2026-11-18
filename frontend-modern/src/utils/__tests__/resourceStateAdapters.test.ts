@@ -270,7 +270,7 @@ describe('resourceStateAdapters nodeFromResource', () => {
     expect(node?.diskWrite).toBe(8192);
   });
 
-  it('uses Proxmox network inventory unless a linked agent has richer interface data', () => {
+  it("prefers a linked agent's interface data and keeps the ports only Proxmox lists", () => {
     const proxmoxOnly = nodeFromResource({
       ...createNodeResource({}),
       proxmox: {
@@ -290,14 +290,22 @@ describe('resourceStateAdapters nodeFromResource', () => {
       ...createNodeResource({}),
       proxmox: {
         nodeName: 'pve-node-2',
-        networkInterfaces: [{ name: 'vmbr0', addresses: ['192.168.10.21/24'] }],
+        networkInterfaces: [
+          { name: 'eno1', addresses: [] },
+          { name: 'vmbr0', addresses: ['192.168.10.21/24'] },
+        ],
       },
       agent: {
-        networkInterfaces: [{ name: 'eth0', addresses: ['192.168.10.22'] }],
+        networkInterfaces: [
+          { name: 'vmbr0', addresses: ['192.168.10.21/24'], rxBytes: 10 },
+          { name: 'tailscale0', addresses: ['100.64.0.2/32'] },
+        ],
       },
     } as Resource);
     expect(linkedAgent?.networkInterfaces).toEqual([
-      { name: 'eth0', addresses: ['192.168.10.22'] },
+      { name: 'vmbr0', addresses: ['192.168.10.21/24'], rxBytes: 10 },
+      { name: 'tailscale0', addresses: ['100.64.0.2/32'] },
+      { name: 'eno1', addresses: [] },
     ]);
   });
 
