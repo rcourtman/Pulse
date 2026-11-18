@@ -66,20 +66,19 @@ export const MAP_PALETTES: { light: MapPalette; dark: MapPalette } = {
   },
 };
 
-const token = (name: string): string => `var(--color-${name})`;
-
 // On the page the structure is drawn with references to the theme's own
-// variables, so it follows the theme like any other surface. The stylesheet
+// variables, so it follows the theme like any other surface. Each is written
+// out whole, so a search for a token's variable finds the map. The stylesheet
 // only defines variables for the semantic tokens, so status and accent
 // colours stay the literal values above.
 const pagePalette = (literal: MapPalette): MapPalette => ({
   ...literal,
-  base: token('bg-base'),
-  surface: token('bg-surface'),
-  surfaceAlt: token('bg-surface-alt'),
-  border: token('border-base'),
-  text: token('text-base'),
-  muted: token('text-muted'),
+  base: 'var(--color-bg-base)',
+  surface: 'var(--color-bg-surface)',
+  surfaceAlt: 'var(--color-bg-surface-alt)',
+  border: 'var(--color-border-base)',
+  text: 'var(--color-text-base)',
+  muted: 'var(--color-text-muted)',
 });
 
 export const MAP_PAGE_PALETTES: { light: MapPalette; dark: MapPalette } = {
