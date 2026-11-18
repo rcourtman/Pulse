@@ -1,13 +1,7 @@
 import { layoutServiceDiagram } from './infrastructureMapDiagram';
-import {
-  layoutInfrastructureMap,
-  layoutInfrastructureNetworkMap,
-  type MapDensity,
-  type MapLayoutOptions,
-  type MapView,
-} from './infrastructureMapLayout';
+import type { MapDensity } from './infrastructureMapLayout';
 import { formatMapTotalLabel, type InfrastructureMapModel } from './infrastructureMapModel';
-import { renderMapSceneToSvg, type MapPalette } from './infrastructureMapRender';
+import { MAP_PALETTES, renderMapSceneToSvg, type MapPalette } from './infrastructureMapRender';
 import { buildServiceDiagram, DIAGRAM_MAX_TILES_PER_GROUP } from './infrastructureMapServices';
 
 /**
@@ -16,9 +10,8 @@ import { buildServiceDiagram, DIAGRAM_MAX_TILES_PER_GROUP } from './infrastructu
  * file is built and saved locally.
  */
 
-const EXPORT_COLUMN = 300;
-// The service diagram reads best wide: its boxes sit side by side in a row.
-const EXPORT_DIAGRAM_WIDTH = 1480;
+// The diagram reads best wide: its boxes sit side by side in a row.
+const EXPORT_WIDTH = 1480;
 const EXPORT_SCALE = 2;
 // Browsers refuse canvases past roughly 16k pixels a side; beyond that the
 // image is still saved, as the SVG it was drawn from.
@@ -26,35 +19,43 @@ const MAX_CANVAS_SIDE = 16000;
 
 export interface MapExportOptions {
   title: string;
-  view: MapView;
   density: MapDensity;
   palette: MapPalette;
   now?: Date;
 }
 
-const countCards = (model: InfrastructureMapModel): number =>
-  model.blocks.reduce(
-    (sum, block) => sum + (block.kind === 'group' ? block.group.hosts.length : 1),
-    0,
-  );
-
-/** A width that lands near a 4:3 poster for the number of cards drawn. */
-export const resolveMapExportWidth = (model: InfrastructureMapModel): number => {
-  const columns = Math.min(6, Math.max(2, Math.round(Math.sqrt(countCards(model) * 1.6))));
-  return columns * EXPORT_COLUMN + 56;
-};
-
 /** Small tiles hold twice as many to a box before the rest fold into one. */
 export const resolveDiagramTileLimit = (density: MapDensity): number =>
   density === 'marks' ? DIAGRAM_MAX_TILES_PER_GROUP * 2 : DIAGRAM_MAX_TILES_PER_GROUP;
+
+/**
+ * The page draws with references to the theme's variables. A saved file has
+ * no theme to refer to, so each reference is read off the page into the
+ * literal colour it currently stands for.
+ */
+export const resolveMapPalette = (palette: MapPalette, dark: boolean): MapPalette => {
+  const fallback = dark ? MAP_PALETTES.dark : MAP_PALETTES.light;
+  if (typeof document === 'undefined') return fallback;
+  const style = getComputedStyle(document.documentElement);
+  const resolved = { ...fallback };
+  for (const key of Object.keys(palette) as Array<keyof MapPalette>) {
+    const name = /^var\((--[\w-]+)\)$/.exec(palette[key])?.[1];
+    const value = name ? style.getPropertyValue(name).trim() : '';
+    if (value) resolved[key] = value;
+  }
+  return resolved;
+};
 
 export function buildMapExportSvg(
   model: InfrastructureMapModel,
   options: MapExportOptions,
 ): { svg: string; width: number; height: number } {
   const date = (options.now ?? new Date()).toISOString().slice(0, 10);
-  const layoutOptions: MapLayoutOptions = {
-    width: options.view === 'services' ? EXPORT_DIAGRAM_WIDTH : resolveMapExportWidth(model),
+  const diagram = buildServiceDiagram(model, {
+    maxTilesPerGroup: resolveDiagramTileLimit(options.density),
+  });
+  const scene = layoutServiceDiagram(diagram, {
+    width: EXPORT_WIDTH,
     density: options.density,
     header: {
       title: options.title,
@@ -63,18 +64,7 @@ export function buildMapExportSvg(
       ),
       footer: `Drawn by Pulse · ${date}`,
     },
-  };
-  const scene =
-    options.view === 'services'
-      ? layoutServiceDiagram(
-          buildServiceDiagram(model, {
-            maxTilesPerGroup: resolveDiagramTileLimit(options.density),
-          }),
-          layoutOptions,
-        )
-      : options.view === 'networks'
-        ? layoutInfrastructureNetworkMap(model, layoutOptions)
-        : layoutInfrastructureMap(model, layoutOptions);
+  });
   return {
     svg: renderMapSceneToSvg(scene, options.palette),
     width: scene.width,

@@ -231,12 +231,12 @@ describe('buildInfrastructureMapModel', () => {
     expect(node.pools[0]).toMatchObject({ usedPercent: 40, sizeLabel: '100 GB' });
   });
 
-  it('describes a host from what it reports', () => {
+  it('describes a host by what kind of thing it is and how it is doing', () => {
     const blocks = buildInfrastructureMapModel(estate()).blocks;
-    expect(hostNamed(blocks, 'pve-b').subtitle).toBe('PVE 8.2.4 · 8 cores · 32 GB RAM');
+    expect(hostNamed(blocks, 'pve-b')).toMatchObject({ typeLabel: 'Proxmox node', health: 'ok' });
     expect(hostNamed(blocks, 'pve-b').cpu).toBeCloseTo(12.4);
-    expect(hostNamed(blocks, 'apps').subtitle).toBe('Podman 5.1');
-    expect(hostNamed(blocks, 'backups').subtitle).toBe('Proxmox Backup Server');
+    expect(hostNamed(blocks, 'apps').typeLabel).toBe('Docker host');
+    expect(hostNamed(blocks, 'backups').typeLabel).toBe('Backup server');
   });
 
   it('keeps only what a reader would call a workload inside a Docker host', () => {
@@ -246,17 +246,16 @@ describe('buildInfrastructureMapModel', () => {
     expect(docker.sections[0].items.map((item) => item.name)).toEqual(['jellyfin']);
   });
 
-  it('puts Kubernetes nodes and namespaced pods inside their cluster', () => {
+  it('puts namespaced pods inside their cluster and draws no node as a host of its own', () => {
     const blocks = buildInfrastructureMapModel(estate()).blocks;
     const cluster = hostNamed(blocks, 'k3s');
-    expect(cluster.sections.map((section) => section.label)).toEqual(['Nodes', 'kube-system']);
+    expect(cluster.sections.map((section) => section.label)).toEqual(['kube-system']);
     expect(hostsOf(blocks).map((host) => host.name)).not.toContain('k3s-1');
   });
 
-  it('gives a TrueNAS system its apps, pools and the disks behind those pools', () => {
+  it('gives a TrueNAS system its apps and pools and leaves single disks out', () => {
     const nas = hostNamed(buildInfrastructureMapModel(estate()).blocks, 'truenas');
-    expect(nas.sections.map((section) => section.label)).toEqual(['Apps', 'Disks']);
-    expect(nas.sections[1]).toMatchObject({ marksOnly: true });
+    expect(nas.sections.map((section) => section.label)).toEqual(['Apps']);
     expect(nas.pools.map((pool) => pool.name)).toEqual(['tank']);
   });
 
@@ -269,7 +268,7 @@ describe('buildInfrastructureMapModel', () => {
     expect(shared.pools.map((pool) => pool.name)).toEqual(['ceph']);
   });
 
-  it('lists availability checks as their own card', () => {
+  it('keeps availability checks together, apart from any host', () => {
     const checks = hostNamed(buildInfrastructureMapModel(estate()).blocks, 'Availability checks');
     expect(checks.isResource).toBe(false);
     expect(checks.health).toBe('critical');
@@ -285,10 +284,9 @@ describe('buildInfrastructureMapModel', () => {
       Containers: 2,
       Pods: 1,
       Storage: 5,
-      Disks: 1,
       Checks: 1,
     });
-    expect(model.totals.find((total) => total.key === 'disks')).toMatchObject({ singular: 'Disk' });
+    expect(model.totals.find((total) => total.key === 'vms')).toMatchObject({ singular: 'VM' });
     // The stale-backup VM and the failed check.
     expect(model.attentionCount).toBe(2);
   });
@@ -376,7 +374,6 @@ describe('anonymizeInfrastructureMapModel', () => {
         .map((item) => item.name),
     ).toContain('VM 1');
     expect(node.sections[0].items[1].health).toBe('attention');
-    expect(hostsOf(anonymous.blocks)[1].subtitle).toBe('PVE 8.2.4 · 8 cores · 32 GB RAM');
     expect(anonymous.totals).toEqual(model.totals);
     expect(hostNamed(anonymous.blocks, 'Availability checks').sections[0].items[0].name).toBe(
       'Check 1',

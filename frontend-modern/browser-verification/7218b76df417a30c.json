@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "base_sha": "2dd8b12a1f04a5274ad7fa46066b80f476ad24e4",
+  "verified_at": "2026-11-18T12:30:58Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapRender.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapRender.ts": "af594c64928b2403a1dd3f3205ddee6231581e265ebea99a4e7a9fcfbfb63d02"
+  },
+  "routes": [
+    "/map"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "this file's final bytes served by a Vite dev server inside the fit-to-screen build that is stacked on this commit, in the in-app browser, against a real Pulse 6.9.0-beta.3 instance; the file is identical in both builds",
+    "1440x900 dark: the drawing's markup still carried the theme's variables (78 references to the surface variable, 19 to the base one, 69 to the border, 124 to muted text, 72 to text), a card's computed fill and stroke were rgb(30, 41, 59) and rgb(51, 65, 85), and an initials square's fill was rgb(15, 23, 42), the same values as before the change",
+    "375x812 light: the same counts of variable references in the markup, a card's computed fill and stroke were rgb(255, 255, 255) and rgb(226, 232, 240) and an initials square's fill was rgb(241, 245, 249), so the references follow the light theme; the page did not scroll in either direction",
+    "console: no error from the map after either reload",
+    "not checked in a browser: Firefox and Safari"
+  ],
+  "interactions": [
+    "opened /map at each size and theme and read the drawing's markup and the computed colours of a card and an initials square"
+  ]
+}

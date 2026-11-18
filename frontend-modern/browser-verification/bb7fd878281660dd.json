@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "base_sha": "18221f60d58c54f46a69b85f52832c65196fddec",
+  "verified_at": "2026-11-18T11:46:49Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapSurface.tsx",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapDiagram.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapExport.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapLayout.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapModel.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapRender.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapServices.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapSurface.tsx": "61b7b26d3852b43b30504827acc24b80825b9036a18496c9a11b6367b1250050",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapDiagram.ts": "9e9fa2932de0fe693959c1ec3be8a5414e311432d9caa5fc5aa027d754d2fd14",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapExport.ts": "b108af902ada28854d7625110ae5e08dcbd156d990c2814623c9a4a612b54d7c",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapLayout.ts": "42705a20898af41bc29f9dc1e345a0250b7af52385c5c6e20c71890d18241554",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapModel.ts": "261b4eeb1b4abef9365bf837b2f612750dfae5dfe1ec5930bc11758e0ebc32e6",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapRender.ts": "8e22770166059a012377e3cd64961f7d32b438c87055f93858f8d6dd6aef10bd",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapServices.ts": "4b5f36733877e17fb238e4879f3c030a610d1b30b876c05ba7ff9bc3d7b54106"
+  },
+  "routes": [
+    "/map",
+    "/proxmox/overview",
+    "/proxmox/overview?resource=<guest id>"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 1271,
+      "height": 1164
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "final runtime bytes served by a Vite dev server from a copy of main plus this change, in the in-app browser, against a real Pulse 6.9.0-beta.3 instance monitoring a real homelab (5 hosts, 12 VMs, 28 LXCs, 9 containers, one flat LAN)",
+    "compared with /proxmox/overview on the same instance, whose section cards measure a 6px radius, a 1px slate-700 border on slate-800, 11px semibold uppercase muted headers and 12px rows: the map's boxes are now cards with the same radius, border and header strip, each headed by its name in capitals and its count (MEDIA 11, HARDWARE 5)",
+    "1440 dark and light: no view switch, a toolbar of Names and Compact, Hide names and Save image as shared buttons, a need-attention badge, and no totals row; card fill and border are var(--color-bg-surface) and var(--color-border-base) in the markup, and the drawing inherits the page's font",
+    "status dots sit on each icon's corner in the shared status dot's colours; an app with no logo is its initials on the page background; the legend is drawn with the shared status dot",
+    "375 dark: one box per row, document scroll width 375, header map button shown",
+    "console: no error from the map after the final reload; the 400 responses in the log are the older backend refusing requests newer pages make",
+    "not checked in a browser: the Save image download (the saved document and the colour lookup are covered by unit tests only), the mock estate with this final styling, kiosk mode, Firefox and Safari"
+  ],
+  "interactions": [
+    "opened /map: one drawing, the service diagram, with no Connections or Hosts choice",
+    "pressed Hide names: no IPv4 address, hostname or network name remained in the drawing or the link labels, recognised apps kept their own names, the network pill read Network 1; pressed again to restore",
+    "switched Names to Compact and back: 884px tall against 1324px, same 62 links, headers kept, tile names dropped",
+    "clicked the jellyfin tile at desktop width: the app navigated without a reload to that guest's page with its drawer open",
+    "an earlier build in this pass drew every status dot and connector black because the stylesheet defines no variable for the emerald, amber, red and blue palette colours; read the computed values, moved those tones to literal colours and confirmed the dots and connectors drew"
+  ]
+}
