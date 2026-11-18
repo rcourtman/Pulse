@@ -38,9 +38,10 @@ func TestNativeUnixContractRunnerPartitionsWithoutDroppingChecks(t *testing.T) {
 }
 
 // Exercise the whole installer with real curl, TLS, signatures and publication.
-// The curl shim changes only the fixed release URL to an isolated local peer;
-// arguments, transport bounds and certificate verification stay real. The one
-// source substitution is the same disposable signing key as the existing tests.
+// The curl shim checks the shipped request before directing it to an isolated
+// local peer. Only the stalled fixture shortens two timeout values: real curl
+// still has to expire, retry and exhaust the window on a partial TLS body.
+// The sole source substitution is a disposable signing key.
 // This is a synthetic Unix install, not a released binary or native client proof.
 func TestInstallMCPTransport(t *testing.T) {
 	t.Parallel()
@@ -102,7 +103,7 @@ func TestInstallMCPTransport(t *testing.T) {
 				t.Fatal(err)
 			}
 			assets := map[string][]byte{binaryName: replacement, "checksums.txt": manifest, "checksums.txt.sshsig": signature}
-			var httpRequests, tlsRequests atomic.Int32
+			var httpRequests, tlsRequests, stalledResponses atomic.Int32
 			insecure := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				httpRequests.Add(1)
 				_, _ = w.Write(assets[filepath.Base(r.URL.Path)])
@@ -128,8 +129,10 @@ func TestInstallMCPTransport(t *testing.T) {
 							return
 						case "stalled":
 							w.Header().Set("Content-Length", "100")
-							_, _ = io.WriteString(w, "partial bytes")
-							w.(http.Flusher).Flush()
+							if _, err := io.WriteString(w, "partial bytes"); err == nil {
+								w.(http.Flusher).Flush()
+								stalledResponses.Add(1)
+							}
 							<-r.Context().Done()
 							return
 						}
@@ -152,20 +155,39 @@ func TestInstallMCPTransport(t *testing.T) {
 			writeTestFile(t, filepath.Join(root, ".curlrc"), []byte(curlrc), 0600)
 			writeTestFile(t, filepath.Join(tools, "curl"), []byte(`#!/bin/bash
 set -euo pipefail
-args=()
-for arg in "$@"; do
-    case "$arg" in
-        https://github.com/rcourtman/Pulse/releases/download/v-transport/*)
-            arg="${MCP_TEST_PEER}/${arg##*/}" ;;
-    esac
-    args+=("$arg")
+unexpected_transport() {
+    echo 'unexpected shipped MCP curl arguments' >&2
+    exit 97
+}
+[[ $# -eq 17 && "${15:-}" == https://github.com/rcourtman/Pulse/releases/download/v-transport/* && "${16:-}" == -o ]] || unexpected_transport
+args=("$@")
+expected=(-q -fsSL --connect-timeout 5 --max-time 60 --retry 3 --retry-max-time 120 --proto '=https' --proto-redir '=https')
+for ((i=0; i<${#expected[@]}; i++)); do
+    [[ "${args[i]}" == "${expected[i]}" ]] || unexpected_transport
 done
+args[14]="${MCP_TEST_PEER}/${args[14]##*/}"
+if [[ "$MCP_TEST_MODE" == stalled ]]; then
+    # Shorten only the already verified transfer/retry clocks in this local
+    # control. With the first 1s backoff, 5/10 permits one retry but not a
+    # third attempt (after the second transfer expires).
+    args[5]=5
+    args[9]=10
+    status=0
+    "$MCP_TEST_CURL" "${args[@]}" || status=$?
+    printf '%s\n' "$status" > "$MCP_TEST_CURL_RESULT"
+    exit "$status"
+fi
 exec "$MCP_TEST_CURL" "${args[@]}"
 `), 0700)
 			installed := filepath.Join(destination, "pulse-mcp")
+			curlResult := filepath.Join(root, "curl-exit")
 			old := []byte("previous working adapter\n")
 			writeTestFile(t, installed, old, 0700)
-			ctx, cancel := context.WithTimeout(context.Background(), 210*time.Second)
+			limit := 210 * time.Second
+			if tc.mode == "stalled" {
+				limit = 30 * time.Second
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), limit)
 			defer cancel()
 			cmd := exec.CommandContext(ctx, "bash", scriptPath)
 			cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
@@ -175,7 +197,8 @@ exec "$MCP_TEST_CURL" "${args[@]}"
 				"HOME="+root, "CURL_HOME="+root, "XDG_CONFIG_HOME="+root,
 				"TMPDIR="+downloads, "PULSE_MCP_BIN_DIR="+destination,
 				"PULSE_MCP_VERSION=v-transport", "PULSE_MCP_REPO=rcourtman/Pulse",
-				"MCP_TEST_CURL="+realCurl, "MCP_TEST_PEER="+peer.URL,
+				"MCP_TEST_CURL="+realCurl, "MCP_TEST_PEER="+peer.URL, "MCP_TEST_MODE="+tc.mode,
+				"MCP_TEST_CURL_RESULT="+curlResult,
 				"HTTPS_PROXY=", "https_proxy=", "HTTP_PROXY=", "http_proxy=", "ALL_PROXY=", "all_proxy=",
 				"NO_PROXY=", "no_proxy=", "SSL_CERT_FILE=", "CURL_CA_BUNDLE=")
 			if tc.trusted {
@@ -184,6 +207,9 @@ exec "$MCP_TEST_CURL" "${args[@]}"
 			started := time.Now()
 			output, runErr := cmd.CombinedOutput()
 			elapsed := time.Since(started)
+			if strings.Contains(string(output), "unexpected shipped MCP curl arguments") {
+				t.Fatalf("shipped argument check refused the request:\n%s", output)
+			}
 			if ctx.Err() != nil {
 				t.Fatalf("installer exceeded its transport bound: %v\n%s", ctx.Err(), output)
 			}
@@ -229,9 +255,12 @@ exec "$MCP_TEST_CURL" "${args[@]}"
 				t.Fatalf("staged cleanup incomplete: %v %v", stages, err)
 			}
 			if tc.mode == "stalled" {
-				if elapsed < 55*time.Second || elapsed > 185*time.Second || tlsRequests.Load() < 1 || !strings.Contains(string(output), "curl: (28)") {
-					t.Fatalf("deadline/retry result elapsed=%v requests=%d\n%s", elapsed, tlsRequests.Load(), output)
+				curlExit, readErr := os.ReadFile(curlResult)
+				if readErr != nil || string(curlExit) != "28\n" || tlsRequests.Load() != 2 || stalledResponses.Load() != 2 {
+					t.Fatalf("deadline/retry result elapsed=%v requests=%d partial_responses=%d curl_exit=%q read=%v\n%s",
+						elapsed, tlsRequests.Load(), stalledResponses.Load(), curlExit, readErr, output)
 				}
+				t.Logf("two partial responses, curl exit 28; shipped transfer/retry values 60s/120s checked, loopback fixture 5s/10s")
 			}
 			t.Logf("success=%v tls_requests=%d http_requests=%d elapsed=%s previous_preserved=%v owned_cleanup=complete", tc.success, tlsRequests.Load(), httpRequests.Load(), elapsed.Round(time.Millisecond), !tc.success)
 		})
