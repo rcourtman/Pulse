@@ -682,6 +682,7 @@ func Run(ctx context.Context, version string) (runErr error) {
 				router.ApplyUpdateTelemetrySnapshot(&snap, now)
 				router.ApplyLicensedFeatureTelemetrySnapshot(&snap, now)
 				router.ApplyWorkloadHistoryTelemetrySnapshot(&snap, now)
+				router.ApplyInfrastructureMapTelemetrySnapshot(&snap, now)
 			}
 			applyNodeTestTelemetrySnapshot(&snap, telemetryPersistence, now)
 			var actionSnapshot telemetry.PulseIntelligenceActionSnapshot

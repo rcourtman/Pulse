@@ -91,11 +91,45 @@ describe('nodeHardwareModel', () => {
     });
     expect(model.memory?.label).toBe('128 GB');
     expect(model.ports).toEqual([
-      { name: 'enp1s0', wireless: false, speedLabel: '10G', title: 'enp1s0, 10 Gb/s' },
-      { name: 'eno1', wireless: false, speedLabel: '2.5G', title: 'eno1, 2.5 Gb/s' },
-      { name: 'wlp2s0', wireless: true, speedLabel: undefined, title: 'wlp2s0 (Wi-Fi)' },
+      {
+        name: 'enp1s0',
+        wireless: false,
+        noLink: false,
+        speedLabel: '10G',
+        title: 'enp1s0, 10 Gb/s',
+      },
+      { name: 'eno1', wireless: false, noLink: false, speedLabel: '2.5G', title: 'eno1, 2.5 Gb/s' },
+      {
+        name: 'wlp2s0',
+        wireless: true,
+        noLink: false,
+        speedLabel: undefined,
+        title: 'wlp2s0 (Wi-Fi)',
+      },
     ]);
     expect(model.fans).toEqual({ label: '2 fans', title: '2 fans at 820–1,450 RPM' });
+  });
+
+  it('marks ports the agent reports without a link, and only those', () => {
+    const ports = nodeHardwareModel(
+      node({
+        networkInterfaces: [
+          { name: 'enp3s0', addresses: [], speedMbps: 1000, linkUp: true },
+          { name: 'enp1s0', addresses: [], speedMbps: 1000, linkUp: false },
+          { name: 'wlp2s0', addresses: [], linkUp: false },
+          { name: 'eno2', addresses: [] },
+        ],
+      } as Partial<Node>),
+    ).ports;
+
+    expect(ports.map((port) => [port.name, port.noLink, port.speedLabel, port.title])).toEqual([
+      ['enp3s0', false, '1G', 'enp3s0, 1 Gb/s'],
+      // A stale speed beside no link is not shown.
+      ['enp1s0', true, undefined, 'enp1s0, no link'],
+      ['wlp2s0', true, undefined, 'wlp2s0 (Wi-Fi), no link'],
+      // Proxmox alone cannot say, so the port is not guessed down.
+      ['eno2', false, undefined, 'eno2'],
+    ]);
   });
 
   it('names the socket count on a multi-socket node', () => {

@@ -825,6 +825,54 @@ list the three fields, and `ResourceDockerMeta` now lists `cpus` and
 `internal/unifiedresources/adapters_test.go` covers the adapter and the wire
 shape; `frontend-modern/src/types/__tests__/resource.test.ts` covers the types.
 
+### App containers carry the runtime's network mode (18 November 2026)
+
+`DockerData` gains optional `networkMode`, set only on an app-container
+resource by `resourceFromDockerContainer` from
+`models.DockerContainer.NetworkMode`. It is the runtime's own word for how the
+container is networked. `container:<id>` is the one form that names another
+resource: the container whose network namespace this one uses, by its full
+container ID on the same Docker host. Such a container has no `networks` and
+no `ports`, so before this field nothing in the payload said where its traffic
+went. An empty value means the agent did not report a mode. Consumers must not
+read it as `none`, and must not infer a shared network from an absent network
+list. A reference that matches no container on the same host names nothing,
+which is what a dependent left behind by a recreated container looks like.
+
+The field is a plain string, so `cloneDockerData` keeps it. Identity, status,
+metrics, relationships and History coordinates do not change. The frontend
+type follows on `ResourceDockerMeta`.
+`TestDockerContainerResourceCarriesNetworkMode` in
+`internal/unifiedresources/adapters_test.go` covers the adapter, the wire
+shape and the clone; `frontend-modern/src/types/__tests__/resource.test.ts`
+covers the type.
+
+### Agent facets carry the host's default gateways and DNS servers (18 November 2026)
+
+`AgentData` gains optional `defaultGateways` (a list of `NetworkGateway`:
+`address` and optional `interface`) and `dnsServers` (a list of addresses).
+`resourceFromHost` sets them from `models.Host.DefaultGateways` and
+`models.Host.DNSServers`, which hold what the host agent read from the host's
+own route table and resolver configuration. They are the only statement in the
+payload of where a machine sends traffic bound for other networks and where
+it resolves names.
+
+A missing list means the agent did not report that fact: an older agent, or a
+platform whose route table it cannot read. Consumers must not read it as "no
+gateway" or "no DNS", and must not infer either from interface addresses or a
+subnet. A gateway or resolver address may match a monitored resource's own
+address, and that match is the one way these lists name another resource; an
+address that matches none names something Pulse does not monitor.
+
+`cloneAgentData` copies both lists, and `HostView.DefaultGateways` and
+`HostView.DNSServers` return copies, so a previous-state round trip keeps
+them. Identity, status, metrics, relationships and History coordinates do not
+change. The frontend type follows on `ResourceAgentMeta`.
+`TestHostResourceCarriesDefaultGatewaysAndDNSServers` in
+`internal/unifiedresources/adapters_test.go` covers the adapter, the wire
+shape, the clone and the view;
+`frontend-modern/src/types/__tests__/resource.test.ts` covers the type.
+
 ### Independently known PBS remains available in Backups (13 October 2026)
 
 The resource-owned PBS table is outside backup-inventory loading/error gates.
@@ -3037,6 +3085,10 @@ and legend are the shared `PageHeader`, `FilterButtonGroup`, `Button`,
 those components use. App logos are the only colours that are not the
 theme's. A saved image reads the same variables off the page into literal
 colours (`resolveMapPalette`).
+The page reports its own use through
+`frontend-modern/src/api/infrastructureMapActivity.ts`: that it was opened,
+that an image was saved, and that one was saved with names hidden. Those calls
+take no value from the model, and the page must never pass one.
 `infrastructureMapCatalogue.ts` is the one place the map reads a name. It
 recognises a well-known app from the container image first and the name
 second, on whole words, and that decides only the tile's logo and its box. A
@@ -3084,8 +3136,8 @@ about the estate.
 A field the map needs belongs on the shared `Resource` type. The map holds no
 local cast of a resource, and none may be added.
 Proof is owned by `infrastructureMapModel.test.ts`,
-`infrastructureMapNetworks.test.ts`, `infrastructureMapServices.test.ts` and
-`infrastructureMapDiagram.test.ts` in
+`infrastructureMapNetworks.test.ts`, `infrastructureMapServices.test.ts`,
+`infrastructureMapDiagram.test.ts` and `InfrastructureMapSurface.test.tsx` in
 `frontend-modern/src/features/infrastructureMap/__tests__/`.
 
 1. Add new resource types and identity fields in `internal/unifiedresources/types.go`
@@ -4308,9 +4360,9 @@ about 160 apps. What the diagram does not draw is any connector between two
 apps: Pulse does not know which app talks to which, so it does not say.
 
 `infrastructureMapServices.test.ts` and `infrastructureMapDiagram.test.ts` join
-the `infrastructure-map` proof policy. No test renders
-`InfrastructureMapSurface.tsx` yet, so a change to it must still stage a change
-to one of the proof files.
+the `infrastructure-map` proof policy. `InfrastructureMapSurface.test.tsx`,
+added with the use counters (telemetry schema v24), renders the page and is in
+the policy too.
 
 ### The infrastructure map has an owner (18 November 2026)
 
@@ -4323,9 +4375,7 @@ the map breaks when the resource model changes, not when a shell primitive
 does. frontend-primitives stays a dependent through its
 `frontend-modern/src/features/` entry, and the shell entry points in
 `AppLayout.tsx` keep their existing owners. The `infrastructure-map` registry
-policy accepts the three colocated test files as proof. No test renders
-`InfrastructureMapSurface.tsx` yet, so a change to it must stage a change to
-one of those files.
+policy accepts the colocated test files as proof.
 
 ### Update on a stopped container says it stays stopped (10 November 2026)
 
@@ -10213,3 +10263,9 @@ agent lists only interfaces it reports, so a physical port bridged into
 list first, then appends Proxmox interfaces whose names the agent did not
 report. Agent data still wins for any name both sources carry.
 `resourceStateAdapters.test.ts` pins the order and the precedence.
+
+### Unified network interfaces keep link state (18 November 2026)
+
+`convertInterfaces` in `internal/unifiedresources/adapters.go` carries a host
+interface's `LinkUp`, and `clone.go` deep-copies it. The dead `Status` field
+stays unset. The frontend reads it as `linkUp` on agent and node interfaces.

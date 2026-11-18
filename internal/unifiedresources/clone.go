@@ -280,6 +280,8 @@ func cloneAgentData(in *AgentData) *AgentData {
 	out.NetworkInterfaces = cloneNetworkInterfaces(in.NetworkInterfaces)
 	out.Disks = cloneDiskInfos(in.Disks)
 	out.Sensors = cloneHostSensorMeta(in.Sensors)
+	out.DefaultGateways = append([]NetworkGateway(nil), in.DefaultGateways...)
+	out.DNSServers = cloneStringSlice(in.DNSServers)
 	out.RAID = cloneHostRAIDMetaSlice(in.RAID)
 	out.Unraid = cloneHostUnraidMeta(in.Unraid)
 	out.DiskIO = cloneHostDiskIOMetaSlice(in.DiskIO)
@@ -1034,6 +1036,7 @@ func cloneNetworkInterfaces(in []NetworkInterface) []NetworkInterface {
 		out[i] = in[i]
 		out[i].Addresses = cloneStringSlice(in[i].Addresses)
 		out[i].SpeedMbps = cloneInt64Ptr(in[i].SpeedMbps)
+		out[i].LinkUp = cloneBoolPtr(in[i].LinkUp)
 	}
 	return out
 }

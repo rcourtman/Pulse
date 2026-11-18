@@ -9747,6 +9747,15 @@ Rendered table proof belongs in
 drawer grouping and fallback proof belongs in
 `frontend-modern/src/components/Infrastructure/__tests__/resourceDetailDrawerMetricsHistoryModel.branchcov0712.test.ts`.
 
+### The map page reports its own use (18 November 2026)
+
+`InfrastructureMapSurface.tsx` records content-free milestones through
+`frontend-modern/src/api/infrastructureMapActivity.ts`: the page was opened,
+an image was saved, and an image was saved with names hidden. No shared primitive changes. A feature page that
+counts its own use follows this shape and the workload-history one: a closed
+milestone, deduplicated per browser session in an `src/api/` module, never a
+generic event call from a shared component.
+
 ### The Proxmox nodes table reads node history only
 
 `frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx` draws its Trends
@@ -11666,3 +11675,11 @@ grouped; a flat list has no node rows, so the control disappears.
 passes the persisted choice through `WorkloadPanel`. The node drawer always
 shows the strip. `WorkloadsFilter.test.tsx` and `NodeGroupHeader.test.tsx`
 cover the control and the hidden header.
+
+### Hardware strip dims ports with no link (18 November 2026)
+
+`nodeHardwareModel` marks a port `noLink` only when its agent reports
+`linkUp: false`; `NodeHardwareStrip` draws that port at 40% opacity, drops any
+stale speed and says "no link" in the hover title and screen-reader text. A
+port with unknown link state (Proxmox-only, older agents) draws as before.
+`nodeHardwareSummary.test.ts` and `NodeGroupHeader.test.tsx` cover it.

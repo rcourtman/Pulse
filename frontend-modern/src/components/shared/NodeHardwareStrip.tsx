@@ -66,7 +66,11 @@ export const NodeHardwareStrip: Component<NodeHardwareStripProps> = (props) => {
           >
             <For each={hardware().ports}>
               {(port) => (
-                <span class="inline-flex items-center gap-0.5">
+                <span
+                  class="inline-flex items-center gap-0.5"
+                  classList={{ 'opacity-40': port.noLink }}
+                  data-port-link={port.noLink ? 'down' : undefined}
+                >
                   <Show
                     when={port.wireless}
                     fallback={<EthernetPortIcon class={ICON_CLASS} aria-hidden="true" />}

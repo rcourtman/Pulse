@@ -91,6 +91,24 @@ describe('NodeGroupHeader', () => {
     expect(strip).not.toHaveTextContent('vmbr0');
   });
 
+  it('dims a port its agent reports without a link', () => {
+    render(() => (
+      <NodeHardwareStrip
+        node={makeNode({
+          networkInterfaces: [
+            { name: 'enp3s0', addresses: [], speedMbps: 1000, linkUp: true },
+            { name: 'enp1s0', addresses: [], linkUp: false },
+          ],
+        })}
+      />
+    ));
+    const strip = screen.getByTestId('node-hardware-strip');
+    const down = strip.querySelectorAll('[data-port-link="down"]');
+    expect(down).toHaveLength(1);
+    expect(down[0]).toHaveClass('opacity-40');
+    expect(strip).toHaveTextContent('Network ports: enp3s0, 1 Gb/s, enp1s0, no link');
+  });
+
   it('leaves the hardware strip out when the View menu hides it', () => {
     render(() => <NodeGroupHeader node={makeNode()} showHardware={false} />);
     expect(screen.getByText('pve1')).toBeInTheDocument();
@@ -111,6 +129,7 @@ describe('NodeGroupHeader', () => {
     const strip = screen.getByTestId('node-hardware-strip');
     expect(strip).toHaveTextContent('2.5G');
     expect(strip).toHaveTextContent('Network ports: enp1s0, 2.5 Gb/s, wlp2s0 (Wi-Fi)');
+    expect(strip.querySelectorAll('[data-port-link="down"]')).toHaveLength(0);
 
     const { container } = render(() => (
       <NodeHardwareStrip

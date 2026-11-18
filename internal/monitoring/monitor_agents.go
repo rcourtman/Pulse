@@ -2420,6 +2420,7 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 			RestartCount:       payload.RestartCount,
 			ExitCode:           payload.ExitCode,
 			RestartPolicy:      strings.ToLower(strings.TrimSpace(payload.RestartPolicy)),
+			NetworkMode:        dockerNetworkModeFromReport(payload.NetworkMode),
 			OOMKilled:          cloneReportBoolPtr(payload.OOMKilled),
 			CreatedAt:          payload.CreatedAt,
 			StartedAt:          payload.StartedAt,
@@ -2614,6 +2615,7 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 			RXBytes:   iface.RXBytes,
 			TXBytes:   iface.TXBytes,
 			SpeedMbps: iface.SpeedMbps,
+			LinkUp:    iface.LinkUp,
 		})
 	}
 
@@ -3491,8 +3493,11 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 			RXBytes:   nic.RXBytes,
 			TXBytes:   nic.TXBytes,
 			SpeedMbps: nic.SpeedMbps,
+			LinkUp:    nic.LinkUp,
 		})
 	}
+
+	defaultGateways, dnsServers := hostRoutingFromReport(report.Routing)
 
 	raid := make([]models.HostRAIDArray, 0, len(report.RAID))
 	for _, array := range report.RAID {
@@ -3645,6 +3650,8 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		ZFSPools:          hostZFSPools,
 		DiskIO:            diskIO,
 		NetworkInterfaces: network,
+		DefaultGateways:   defaultGateways,
+		DNSServers:        dnsServers,
 		Sensors: models.HostSensorSummary{
 			TemperatureCelsius: cloneStringFloatMap(report.Sensors.TemperatureCelsius),
 			FanRPM:             cloneStringFloatMap(report.Sensors.FanRPM),

@@ -13213,6 +13213,19 @@ identity. The schema parity checker remains the executable cross-repository
 proof that the browser preview and private allowlisted receiver cannot drift
 from the public runtime payload.
 
+### Infrastructure map use is a closed aggregate contract at schema v24 (18 November 2026)
+
+`POST /api/usage/infrastructure-map` takes exactly
+`{ "activity": <closed enum> }`, where the value is `open`, `export` or
+`export_names_hidden`. It is
+authenticated with `monitoring:read`, rejects unknown fields, unknown values
+and trailing JSON with 400, and returns 204.
+`frontend-modern/src/api/infrastructureMapActivity.ts` deduplicates each value
+once per browser session before the request. `TelemetryPingPreview` gains the
+three `infrastructure_map_*_sessions_30d` integers. The Go sender, the Settings
+preview type and the Pulse Pro receiver keep the same names and types. No
+resource, name, address or network is part of the request or the heartbeat.
+
 ### Workload history telemetry is a closed aggregate contract at schema v16
 
 Schema v16 adds four numeric 30-day counters for workload-history preview,
@@ -13637,6 +13650,42 @@ treat a missing bridge as an unknown placement rather than as no network.
 and `HostNetworkInterface`; `frontend-modern/src/api/__tests__/resources.test.ts`
 holds a typed payload that carries them through the resource read unchanged.
 No route, permission, request or status code changes.
+
+### Docker containers may carry the runtime's network mode (18 November 2026)
+
+`agentsdocker.Container` gains an optional `networkMode` string, `omitempty`,
+so reports from older agents still decode and read as "not reported". The same
+field appears as `docker.networkMode` on an app-container resource and as
+`networkMode` on the legacy Docker container row. Its value is the runtime's
+own: `bridge`, `host`, `none`, a network name, or `container:<id>`, where the
+ID is the full ID of the container whose network namespace this one uses. A
+container in that last mode has no `networks` and no `ports` of its own.
+Clients must treat a missing value as unknown, never as `none`, and must treat
+a `container:` reference that matches no reported container as naming nothing.
+
+`frontend-modern/src/types/resource.ts` lists the field on
+`ResourceDockerMeta` and `frontend-modern/src/types/api.ts` on
+`DockerContainer`; `frontend-modern/src/api/__tests__/resources.test.ts` holds
+a typed payload that carries it through the resource read unchanged. No route,
+permission, request or status code changes.
+
+### Host reports and agent facets may carry default gateways and DNS servers (18 November 2026)
+
+`agentshost.Report` gains an optional `routing` object with
+`defaultGateways` (a list of `{address, interface?}`) and `dnsServers` (a list
+of address strings). Both are `omitempty`, so reports from older agents still
+decode. The agent facet of a resource (`agent.defaultGateways`,
+`agent.dnsServers`) and the internal `models.Host` carry the same two lists.
+Every address is an IP address in canonical text form; a gateway's
+`interface` is the name of the interface its route leaves by. The legacy host
+row sent to the frontend state is unchanged.
+
+Clients must treat a missing list as unknown, never as a host with no gateway
+or no DNS. `frontend-modern/src/types/resource.ts` lists both on
+`ResourceAgentMeta`, and
+`frontend-modern/src/api/__tests__/resources.test.ts` holds a typed payload
+that carries them through the resource read unchanged. No route, permission,
+request or status code changes.
 
 ### API token creation and deletion commit durable state before reporting success
 
@@ -14895,3 +14944,9 @@ conflicts 409, invalid inputs 400 and unavailable evidence a redacted 503.
 `internal/api/notifications_org_authority_test.go` covers own/foreign/default
 organization separation, viewer refusal, strict input and idempotent recovery.
 Notification runtime tests independently exercise real queue/provider evidence.
+
+### Network interfaces carry optional `linkUp` (18 November 2026)
+
+Host and unified network interfaces gain an optional boolean `linkUp`
+(`omitempty`), set only from a host agent for a physical port. Absent means
+unknown, not down; existing fields and their meaning are unchanged.

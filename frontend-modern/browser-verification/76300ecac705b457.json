@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "base_sha": "2da9f115056601820fc26c2d4254b2d633992c80",
+  "verified_at": "2026-11-18T13:29:26Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/types/resource.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/types/resource.ts": "151cdc81e3467908aa503e3b6299b1f36b43f15db8c67ff8fda9706e6750615f"
+  },
+  "routes": [
+    "/machines and /map, served by a Pulse binary built from this working tree, fed by a pulse-agent built from the same tree running its host module on a real Ubuntu 24.04 machine."
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "One real Linux host reporting through the branch agent. GET /api/resources from the page: its agent facet carries defaultGateways [{address 192.168.0.1, interface eth0}] and dnsServers [192.168.0.1, 1.1.1.1] (the forwarders behind the host's systemd-resolved stub), which match the host's own `ip route show default` and resolver files read over SSH.",
+    "The change adds two optional type fields and no rendering, so the pages draw as before: the machines table lists the host and its drawer opens, and the map draws it."
+  ],
+  "interactions": [
+    "Opened the host's row on /machines at both widths.",
+    "Opened /map at both widths: no horizontal overflow at 390.",
+    "Read the browser console on both pages at both widths: no script errors. It held two connection-reset lines from the moment the rig's server was restarted on the new build while the tab was open."
+  ],
+  "limits": [
+    "Nothing draws the new fields yet, so there is no visual difference to compare.",
+    "Light theme was not checked: no styling changes.",
+    "Linux only. No macOS, Windows or FreeBSD agent was run; on those the agent reports no gateway by design."
+  ]
+}

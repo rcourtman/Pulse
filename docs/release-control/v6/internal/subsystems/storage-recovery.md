@@ -103,6 +103,20 @@ and `Firewall`, set only by the Proxmox VM and container adapters. They are
 empty on every storage, backup and recovery resource and change no storage or
 recovery projection, clone path or identity.
 
+### `DockerData` gains the container network mode (18 November 2026)
+
+`internal/unifiedresources/types.go` gains `DockerData.NetworkMode`, set only
+by the app-container adapter. It is empty on every storage, backup and
+recovery resource and changes no storage or recovery projection, clone path or
+identity.
+
+### `AgentData` gains default gateways and DNS servers (18 November 2026)
+
+`internal/unifiedresources/types.go` gains `NetworkGateway`,
+`AgentData.DefaultGateways` and `AgentData.DNSServers`, set only by the host
+agent adapter. They are empty on every storage, backup and recovery resource
+and change no storage or recovery projection, clone path or identity.
+
 ### Unknown saved sessions retain bytes, not automatic authority
 
 After an unread or undecodable session inventory, the next session save retains
@@ -2486,6 +2500,13 @@ access or changing any agent, approval, dispatch, verification or recovery
 boundary. The security-privacy contract owns ledger retention, availability
 and the outbound schema23 projection. Measurement failure never authorizes a
 retry of an infrastructure action or changes its recorded result.
+
+### Infrastructure map use counting is adjacent metadata (18 November 2026)
+
+`POST /api/usage/infrastructure-map` in `internal/api/` records one closed map
+milestone as a local daily count in its own tally file. It opens no storage,
+backup or recovery read or write path and changes no projection. The
+security-privacy contract owns the tally and the schema v24 fields.
 
 ## Canonical Files
 
@@ -10057,3 +10078,9 @@ setter to `WorkloadsFilter`, so the Proxmox guest table's View menu can hide
 the hardware strip on node rows. Only the Proxmox page offers it, because
 only Proxmox node rows render `NodeGroupHeader`. No storage or recovery read
 changes.
+
+### Network interface link state passes through unified types (18 November 2026)
+
+`internal/unifiedresources/types.go` and `useUnifiedResources.ts` gain an
+optional `linkUp` on network interfaces. No storage or recovery read, model or
+surface uses it; the shared types only carry it to the node hardware strip.

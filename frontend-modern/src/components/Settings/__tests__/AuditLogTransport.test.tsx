@@ -310,6 +310,100 @@ describe('Audit Log rendered controls through the real HTTP client', () => {
     expect(verificationRequests()).toHaveLength(0);
   });
 
+  it('keeps the same focused user filter through a pending and failed read', async () => {
+    const response = deferred<Response>();
+    read = (url) => (url.includes('user=') ? response.promise : json(inventory()));
+    mount();
+    await loaded();
+    const filter = screen.getByPlaceholderText('Filter by user...');
+    filter.focus();
+    fireEvent.input(filter, { target: { value: 'sam' } });
+    await waitFor(() => expect(auditRequests()).toHaveLength(2));
+    expectBoundRead(auditRequests()[1], '/api/audit?limit=100&offset=0&user=sam');
+    expect(screen.getByPlaceholderText('Filter by user...')).toBe(filter);
+    expect(filter).toHaveFocus();
+    expectNoInventory();
+
+    response.resolve(json({ code: 'audit_store_busy' }, 503));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Audit log storage is busy.');
+    expect(filter).toHaveFocus();
+    expectNoInventory();
+    expect(auditRequests()).toHaveLength(2);
+
+    fireEvent.click(screen.getByRole('button', { name: /^Clear filters$/ }));
+    await loaded();
+    expect(filter).toHaveValue('');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(auditRequests()).toHaveLength(3);
+    expectBoundRead(auditRequests()[2], '/api/audit?limit=100&offset=0');
+    expect(verificationRequests()).toHaveLength(0);
+  });
+
+  it('retires a superseded response body as soon as the user edits the query again', async () => {
+    const old = pendingBody();
+    const replacement = deferred<Response>();
+    read = (url) =>
+      url.includes('user=')
+        ? url.endsWith('user=sam')
+          ? old.response
+          : replacement.promise
+        : json(inventory());
+    mount();
+    await loaded();
+    const filter = screen.getByPlaceholderText('Filter by user...');
+    filter.focus();
+    fireEvent.input(filter, { target: { value: 'sam' } });
+    await waitFor(() => expect(old.response.bodyUsed).toBe(true));
+    const oldRead = auditRequests()[1];
+    expectBoundRead(oldRead, '/api/audit?limit=100&offset=0&user=sam');
+
+    fireEvent.input(filter, { target: { value: 'sam-reader' } });
+    await waitFor(() => expect(oldRead.init.signal?.aborted).toBe(true));
+    old.finish(inventory('Obsolete'));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expectNoInventory();
+    expect(screen.queryByText('Obsolete selected sign-in')).not.toBeInTheDocument();
+    expect(filter).toHaveFocus();
+
+    await waitFor(() => expect(auditRequests()).toHaveLength(3));
+    expectBoundRead(auditRequests()[2], '/api/audit?limit=100&offset=0&user=sam-reader');
+    replacement.resolve(json(inventory('Current')));
+    await loaded('Current');
+    expect(filter).toHaveFocus();
+    expect(verificationRequests()).toHaveLength(0);
+  });
+
+  it('withdraws the filter bar on an organization switch before accepting new data', async () => {
+    const old = deferred<Response>();
+    const next = deferred<Response>();
+    read = (url) => (url.includes('user=') ? old.promise : json(inventory()));
+    mount();
+    await loaded();
+    fireEvent.input(screen.getByPlaceholderText('Filter by user...'), {
+      target: { value: 'previous-estate-reviewer' },
+    });
+    await waitFor(() => expect(auditRequests()).toHaveLength(2));
+    read = () => next.promise;
+    setOrgID('estate/west');
+    eventBus.emit('org_switched', 'estate/west');
+    expect(auditRequests()[1].init.signal?.aborted).toBe(true);
+    expect(screen.queryByRole('group', { name: 'Audit log filters' })).not.toBeInTheDocument();
+    expectNoInventory();
+    await waitFor(() => expect(auditRequests()).toHaveLength(3));
+    expectBoundRead(auditRequests()[2], '/api/audit?limit=100&offset=0', 'estate/west');
+
+    old.resolve(json(inventory('Obsolete')));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(screen.queryByRole('group', { name: 'Audit log filters' })).not.toBeInTheDocument();
+    expectNoInventory();
+    next.resolve(json(inventory('West')));
+    await loaded('West');
+    expect(screen.getByPlaceholderText('Filter by user...')).toHaveValue('');
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    expect(auditRequests()).toHaveLength(3);
+    expect(verificationRequests()).toHaveLength(0);
+  });
+
   it('withdraws the page and its verification counts while a read is pending or refused', async () => {
     window.history.replaceState({}, '', '/settings/security-audit?verification=failed');
     mount();
@@ -319,6 +413,7 @@ describe('Audit Log rendered controls through the real HTTP client', () => {
     const refresh = deferred<Response>();
     read = () => refresh.promise;
     fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    expect(screen.getByRole('group', { name: 'Audit log filters' })).toBeVisible();
     expectNoInventory();
     expect(screen.queryByText('Unchecked: 2')).not.toBeInTheDocument();
     expect(screen.queryByText('Loaded 1-2 of 2 • Page 1 of 1')).not.toBeInTheDocument();
@@ -326,6 +421,7 @@ describe('Audit Log rendered controls through the real HTTP client', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'Audit log access could not be confirmed.',
     );
+    expect(screen.queryByRole('group', { name: 'Audit log filters' })).not.toBeInTheDocument();
     expectNoInventory();
     expect(screen.queryByText('Unchecked: 2')).not.toBeInTheDocument();
     expect(auditRequests()).toHaveLength(2);
@@ -480,6 +576,7 @@ describe('Audit Log rendered controls through the real HTTP client', () => {
       expect(await screen.findByRole('alert')).toHaveTextContent(
         'Audit log access could not be confirmed. Refresh after access is restored.',
       );
+      expect(screen.queryByRole('group', { name: 'Audit log filters' })).not.toBeInTheDocument();
       expectNoInventory();
       expect(screen.queryByText(/synthetic-private-detail/)).not.toBeInTheDocument();
       expect(screen.queryByText(/Verified 2/)).not.toBeInTheDocument();
