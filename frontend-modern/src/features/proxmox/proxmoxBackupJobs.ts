@@ -76,11 +76,15 @@ const parseWindow = (
   if (!record || !keys.every((key) => isCount(record[key]))) {
     return { counts: { ...ZERO_COUNTS }, historyState: 'unavailable' };
   }
+  const stateValue = historyState(state);
   return {
-    counts: Object.fromEntries(
-      keys.map((key) => [key, record[key]]),
-    ) as unknown as BackupJobsCounts,
-    historyState: historyState(state),
+    counts:
+      stateValue === 'unavailable'
+        ? { ...ZERO_COUNTS }
+        : (Object.fromEntries(
+            keys.map((key) => [key, record[key]]),
+          ) as unknown as BackupJobsCounts),
+    historyState: stateValue,
   };
 };
 
@@ -95,21 +99,44 @@ const parseFailures = (failures: unknown): BackupJobsFailure[] =>
 
 export function parseBackupJobsPayload(body: unknown): BackupJobsPayload | null {
   const data = isRecord(body) && isRecord(body.data) ? body.data : null;
-  if (!data || !Array.isArray(data.days)) return null;
+  if (!data || !Array.isArray(data.days) || data.days.length === 0) return null;
+  // Do not silently drop malformed or duplicate days and call the remaining
+  // calendar a successful read. In particular, an empty calendar is not a
+  // valid "no jobs" response: the server sends observed/unobserved days.
+  const dates = new Set<string>();
+  for (const day of data.days) {
+    if (!isRecord(day) || typeof day.date !== 'string') return null;
+    const date = new Date(`${day.date}T00:00:00Z`);
+    if (
+      !/^\d{4}-\d{2}-\d{2}$/.test(day.date) ||
+      !Number.isFinite(date.valueOf()) ||
+      date.toISOString().slice(0, 10) !== day.date ||
+      dates.has(day.date)
+    ) {
+      return null;
+    }
+    dates.add(day.date);
+  }
   const last = isRecord(data.last24h) ? data.last24h : {};
-  return {
+  const lastWindow = parseWindow(last.counts, last.historyState);
+  const payload: BackupJobsPayload = {
     historyState: historyState(data.historyState),
     timezone: text(data.timezone),
     last24h: {
-      ...parseWindow(last.counts, last.historyState),
-      failures: parseFailures(last.failures),
+      ...lastWindow,
+      failures: lastWindow.historyState === 'unavailable' ? [] : parseFailures(last.failures),
     },
-    days: data.days.filter(isRecord).map((day) => ({
-      date: text(day.date),
-      ...parseWindow(day.counts, day.historyState),
-      failures: parseFailures(day.failures),
-    })),
+    days: data.days.map((day) => {
+      const record = day as Record<string, unknown>;
+      const window = parseWindow(record.counts, record.historyState);
+      return {
+        date: text(record.date),
+        ...window,
+        failures: window.historyState === 'unavailable' ? [] : parseFailures(record.failures),
+      };
+    }),
   };
+  return payload.historyState === 'unavailable' ? backupJobsUnavailable(payload) : payload;
 }
 
 export async function fetchBackupJobs(signal: AbortSignal): Promise<BackupJobsPayload | null> {
@@ -126,7 +153,9 @@ export async function fetchBackupJobs(signal: AbortSignal): Promise<BackupJobsPa
       status: response.status,
     });
   }
-  return parseBackupJobsPayload(await response.json());
+  const payload = parseBackupJobsPayload(await response.json());
+  if (!payload) throw new Error('Backup job history response is invalid.');
+  return payload;
 }
 
 export const backupJobsTotal = (counts: BackupJobsCounts): number =>
@@ -142,17 +171,20 @@ export const backupJobsDayObserved = (day: BackupJobsDay): boolean =>
 export const backupJobsHasHistory = (payload: BackupJobsPayload | null): boolean =>
   payload !== null &&
   (payload.historyState === 'unavailable' ||
+    payload.last24h.historyState === 'unavailable' ||
+    payload.days.some((day) => day.historyState === 'unavailable') ||
     backupJobsTotal(payload.last24h.counts) > 0 ||
     payload.days.some((day) => backupJobsTotal(day.counts) > 0));
 
 // A failed read after history was shown keeps the card, marked unavailable.
-export const backupJobsUnavailable = (previous: BackupJobsPayload): BackupJobsPayload => ({
-  ...previous,
+export const backupJobsUnavailable = (previous: BackupJobsPayload | null): BackupJobsPayload => ({
   historyState: 'unavailable',
+  timezone: previous?.timezone ?? '',
   last24h: { historyState: 'unavailable', counts: { ...ZERO_COUNTS }, failures: [] },
-  days: previous.days.map((day) => ({
-    ...day,
+  days: (previous?.days ?? []).map((day) => ({
+    date: day.date,
     historyState: 'unavailable',
     counts: { ...ZERO_COUNTS },
+    failures: [],
   })),
 });
