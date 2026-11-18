@@ -77,6 +77,7 @@ export default function AuditLogPanel(props: AuditLogPanelProps) {
     setSuccessFilter,
     setUserFilter,
     setVerificationFilter,
+    showLogFilters,
     showUpgradePaywall,
     showFeatureGateAction,
     submitPageInput,
@@ -239,7 +240,7 @@ export default function AuditLogPanel(props: AuditLogPanelProps) {
         </div>
       </Show>
 
-      <Show when={isPersistent()}>
+      <Show when={showLogFilters()}>
         <FilterBar
           role="group"
           ariaLabel="Audit log filters"
