@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Full frontend proof stays required across isolated file-level unit shards."""
+"""The complete unit suite and the real frontend build must both reach the required verdict."""
 
 import os
 from pathlib import Path
@@ -43,7 +43,7 @@ class FrontendWorkflowOrderTest(unittest.TestCase):
                                 cwd=ROOT, text=True, capture_output=True, timeout=15)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
-    def test_type_build_and_size_admit_the_unit_suite_in_order(self):
+    def test_type_build_and_size_admit_native_runtime_in_order(self):
         names = [step.get("name") for step in self.steps]
         ordered = [
             "Install frontend dependencies",
@@ -52,7 +52,7 @@ class FrontendWorkflowOrderTest(unittest.TestCase):
             "Check frontend bundle size budget",
             "Bind the validated frontend embed",
             "Transfer the validated frontend embed",
-            "Admit frontend unit shards",
+            "Admit frontend runtime",
             "Require frontend dependency audit",
         ]
         for name in ordered:
@@ -91,15 +91,15 @@ class FrontendWorkflowOrderTest(unittest.TestCase):
         self.assertIn('if [ "${COMPLETE_AUDIT_RESULT}" != success ]; then', required["run"])
         self.assertIn("exit 1", required["run"])
 
-    def test_unit_admission_is_after_bundle_transfer_but_before_the_audit_verdict(self):
-        admission = self.step("Admit frontend unit shards")
-        self.assertEqual(admission["id"], "unit-admission")
+    def test_runtime_admission_is_after_bundle_transfer_but_before_the_audit_verdict(self):
+        admission = self.step("Admit frontend runtime")
+        self.assertEqual(admission["id"], "runtime-admission")
         self.assertEqual(admission["env"], {
             "EMBED_ARTIFACT_ID": "${{ steps.embed-upload.outputs.artifact-id }}",
         })
         self.assertIn('echo \'admitted=true\' >> "$GITHUB_OUTPUT"', admission["run"])
         self.assertEqual(self.job["outputs"], {
-            "unit_admitted": "${{ steps.unit-admission.outputs.admitted }}",
+            "runtime_admitted": "${{ steps.runtime-admission.outputs.admitted }}",
             "embed_sha256": "${{ steps.embed-packet.outputs.sha256 }}",
             "embed_artifact_id": "${{ steps.embed-upload.outputs.artifact-id }}",
         })
@@ -107,7 +107,7 @@ class FrontendWorkflowOrderTest(unittest.TestCase):
         self.assertEqual(self.job["if"], "needs.changes.outputs.code == 'true'")
         self.assertEqual(self.job["timeout-minutes"], 30)
         # GitHub's default success() is essential: a failed/hidden build or transfer
-        # phase must never produce the output admitting expensive unit shards.
+        # phase must never produce the output admitting native runtime.
         for step in self.steps:
             if step["name"].startswith("Retain bounded "):
                 self.assertEqual(step["if"], "always()")
@@ -117,13 +117,11 @@ class FrontendWorkflowOrderTest(unittest.TestCase):
                 self.assertNotIn("continue-on-error", step)
         self.assertEqual(self.steps[-1]["name"], "Require frontend dependency audit")
 
-    def test_four_isolated_shards_use_complete_vitest_inventory(self):
+    def test_one_unit_runner_starts_at_classification_and_runs_the_complete_inventory(self):
         unit = self.jobs["frontend-unit"]
-        self.assertEqual(unit["needs"], ["changes", "frontend-build"])
-        self.assertEqual(unit["if"], "${{ !cancelled() && needs.changes.outputs.code == 'true' && needs.frontend-build.outputs.unit_admitted == 'true' }}")
-        self.assertEqual(unit["strategy"], {
-            "fail-fast": False, "matrix": {"shard": [1, 2, 3, 4]},
-        })
+        self.assertEqual(unit["needs"], "changes")
+        self.assertEqual(unit["if"], "needs.changes.outputs.code == 'true'")
+        self.assertNotIn("strategy", unit)
         self.assertEqual(unit["runs-on"], "ubuntu-24.04")
         self.assertEqual(unit["timeout-minutes"], 30)
         self.assertNotIn("continue-on-error", unit)
@@ -141,18 +139,18 @@ class FrontendWorkflowOrderTest(unittest.TestCase):
         self.assertEqual(steps[-2], {
             "name": "Frontend unit tests", "working-directory": "frontend-modern",
             "env": {
-                "PULSE_UNIT_RECEIPT": "${{ runner.temp }}/frontend-unit-${{ matrix.shard }}-${{ github.run_attempt }}.json",
+                "PULSE_UNIT_RECEIPT": "${{ runner.temp }}/frontend-unit-${{ github.run_attempt }}.json",
                 "PULSE_UNIT_SOURCE_SHA": "${{ github.sha }}",
             },
-            "run": "npm run test -- --shard=${{ matrix.shard }}/4 "
+            "run": "npm run test -- "
                    "--reporter=default --reporter=./scripts/ci-unit-receipts.mjs",
         })
         self.assertEqual(steps[-1], {
             "name": "Retain frontend unit observations", "if": "always()",
             "uses": "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9",
             "with": {
-                "name": "frontend-unit-${{ matrix.shard }}-${{ github.run_attempt }}",
-                "path": "${{ runner.temp }}/frontend-unit-${{ matrix.shard }}-${{ github.run_attempt }}.json",
+                "name": "frontend-unit-${{ github.run_attempt }}",
+                "path": "${{ runner.temp }}/frontend-unit-${{ github.run_attempt }}.json",
                 "if-no-files-found": "warn", "retention-days": 7,
             },
         })
@@ -171,7 +169,8 @@ class FrontendWorkflowOrderTest(unittest.TestCase):
         runtime = self.jobs["frontend-checks"]
         unit = self.jobs["frontend-unit"]
         self.assertEqual(runtime["needs"], ["changes", "frontend-build"])
-        self.assertEqual(runtime["if"], unit["if"])
+        self.assertEqual(unit["needs"], "changes")
+        self.assertEqual(runtime["if"], "${{ !cancelled() && needs.changes.outputs.code == 'true' && needs.frontend-build.outputs.runtime_admitted == 'true' }}")
         self.assertEqual(runtime["runs-on"], "ubuntu-24.04")
         self.assertEqual(runtime["timeout-minutes"], 30)
         self.assertNotIn("continue-on-error", runtime)
@@ -198,7 +197,7 @@ class FrontendWorkflowOrderTest(unittest.TestCase):
         return subprocess.run(["bash", "-e", "-u", "-o", "pipefail", "-c", step["run"]],
                               env=env, text=True, capture_output=True, timeout=5)
 
-    def test_required_name_depends_on_classification_checks_and_every_shard(self):
+    def test_required_name_depends_on_classification_checks_and_unit_suite(self):
         verdict = self.jobs["frontend"]
         self.assertEqual(verdict["name"], "Frontend")
         self.assertEqual(sum(job.get("name") == "Frontend" for job in self.jobs.values()), 1)
@@ -218,7 +217,7 @@ class FrontendWorkflowOrderTest(unittest.TestCase):
         })
         result = self.verdict()
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertIn("every unit shard passed", result.stdout)
+        self.assertIn("the unit suite passed", result.stdout)
         for name in ("CHANGE_RESULT", "BUILD_RESULT", "CHECKS_RESULT", "UNIT_RESULT"):
             for state in ("failure", "cancelled", "skipped", "", "unknown", "pending", "SUCCESS"):
                 with self.subTest(name=name, state=state):
@@ -242,7 +241,7 @@ class FrontendWorkflowOrderTest(unittest.TestCase):
                 with self.subTest(name=name, state=state):
                     self.assertNotEqual(self.verdict(**{**values, name: state}).returncode, 0)
 
-    def test_complete_audit_failure_still_fails_after_build_admits_units(self):
+    def test_complete_audit_failure_still_fails_after_build_admits_runtime(self):
         required = self.step("Require frontend dependency audit")
         for state in ("success", "failure", "cancelled", "skipped", "", "unknown"):
             with self.subTest(state=state):

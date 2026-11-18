@@ -459,7 +459,7 @@ class GitTreeScopeTest(unittest.TestCase):
         self.assertEqual(jobs["changes"]["outputs"]["component_only"], "${{ steps.component.outputs.only }}")
         for name in ("frontend-build", "frontend-unit", "frontend-checks", "frontend", "script-smoke", "scripts-and-build"):
             self.assertNotIn("component_only", str(jobs[name]))
-        self.assertEqual(jobs["frontend-unit"]["strategy"]["matrix"]["shard"], [1, 2, 3, 4])
+        self.assertNotIn("strategy", jobs["frontend-unit"])
         self.assertEqual(jobs["script-smoke"]["strategy"]["matrix"]["shard"], [0, 1])
 
     def test_component_rest_shards_run_the_source_reading_packages_and_propagate_failures(self):

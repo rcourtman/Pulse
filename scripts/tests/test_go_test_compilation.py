@@ -170,7 +170,7 @@ func TestMustNotExecute(t *testing.T) { record(); t.Fatal("test must not execute
         self.assertIn("go test -race -vet=off -count=1 -exec /bin/true -n=false ./...", COMPILER.read_text())
         # Frontend work does not wait for the Go-only gate.
         self.assertIn("needs: changes", job(source, "frontend-build"))
-        self.assertIn("needs: [changes, frontend-build]", job(source, "frontend-unit"))
+        self.assertIn("needs: changes", job(source, "frontend-unit"))
         self.assertIn("needs: [changes, frontend-build, frontend-checks, frontend-unit]", job(source, "frontend"))
 
     def test_required_checks_admit_only_explicit_consistent_results(self):

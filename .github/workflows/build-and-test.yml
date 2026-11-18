@@ -326,11 +326,10 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-24.04
-    # Fail type/build/size admission before spending on unit or runtime jobs.
-    # Their independent work can then overlap without repeating this build.
+    # This job owns the checked bundle used by the native runtime proof.
     timeout-minutes: 30
     outputs:
-      unit_admitted: ${{ steps.unit-admission.outputs.admitted }}
+      runtime_admitted: ${{ steps.runtime-admission.outputs.admitted }}
       embed_sha256: ${{ steps.embed-packet.outputs.sha256 }}
       embed_artifact_id: ${{ steps.embed-upload.outputs.artifact-id }}
     env:
@@ -448,12 +447,9 @@ jobs:
           # storage without changing the hash-bound tar or consumer admission.
           compression-level: 6
 
-      # A failed audit must still permit unit proof, as in the serial job.
-      # Only successful type/build/size/packet phases admit these jobs.
-      # Runtime proof is independently required by the final Frontend verdict.
-      # A missing output never grants admission.
-      - name: Admit frontend unit shards
-        id: unit-admission
+      # Runtime may use the checked packet even if the deferred audit fails.
+      - name: Admit frontend runtime
+        id: runtime-admission
         env:
           EMBED_ARTIFACT_ID: ${{ steps.embed-upload.outputs.artifact-id }}
         run: |
@@ -476,7 +472,7 @@ jobs:
   frontend-checks:
     name: Frontend backend and runtime
     needs: [changes, frontend-build]
-    if: ${{ !cancelled() && needs.changes.outputs.code == 'true' && needs.frontend-build.outputs.unit_admitted == 'true' }}
+    if: ${{ !cancelled() && needs.changes.outputs.code == 'true' && needs.frontend-build.outputs.runtime_admitted == 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -604,15 +600,14 @@ jobs:
           retention-days: 7
 
   frontend-unit:
-    name: Frontend unit tests (${{ matrix.shard }}/4)
-    needs: [changes, frontend-build]
-    if: ${{ !cancelled() && needs.changes.outputs.code == 'true' && needs.frontend-build.outputs.unit_admitted == 'true' }}
+    name: Frontend unit tests
+    # Vitest needs source and locked dependencies. It does not consume the
+    # built bundle. Request one runner when code is classified, alongside
+    # the build, so the suite and separate native proof can overlap.
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2, 3, 4]
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -631,16 +626,13 @@ jobs:
         # The unchanged complete audit in frontend-build owns its verdict.
         run: npm ci --no-audit
 
-      # Vitest partitions its complete file inventory, preserving the existing
-      # config, isolation and assertions. No test allowlist or changed-file
-      # filter can silently leave part of the suite behind.
       - name: Frontend unit tests
         working-directory: frontend-modern
         env:
-          PULSE_UNIT_RECEIPT: ${{ runner.temp }}/frontend-unit-${{ matrix.shard }}-${{ github.run_attempt }}.json
+          PULSE_UNIT_RECEIPT: ${{ runner.temp }}/frontend-unit-${{ github.run_attempt }}.json
           PULSE_UNIT_SOURCE_SHA: ${{ github.sha }}
         run: >-
-          npm run test -- --shard=${{ matrix.shard }}/4
+          npm run test --
           --reporter=default --reporter=./scripts/ci-unit-receipts.mjs
 
       # Flush after each module, not only at run end. A partial receipt names
@@ -649,12 +641,12 @@ jobs:
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: frontend-unit-${{ matrix.shard }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/frontend-unit-${{ matrix.shard }}-${{ github.run_attempt }}.json
+          name: frontend-unit-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/frontend-unit-${{ github.run_attempt }}.json
           if-no-files-found: warn
           retention-days: 7
 
-  # Preserve the required check name; a failed/cancelled/skipped shard or a
+  # Preserve the required check name; a failed/cancelled/skipped unit suite or a
   # failed audit/build/runtime check must never produce a green Frontend.
   frontend:
     name: Frontend
@@ -673,11 +665,11 @@ jobs:
         run: |
           case "$CHANGE_RESULT:$CODE_CHANGED:$BUILD_RESULT:$CHECKS_RESULT:$UNIT_RESULT" in
             success:true:success:success:success)
-              echo "Frontend build, complete audit, runtime and every unit shard passed." ;;
+              echo "Frontend build, complete audit, runtime and the unit suite passed." ;;
             success:false:skipped:skipped:skipped)
               echo "Application runtime checks are not applicable to this classified change; no frontend tests ran." ;;
             *)
-              echo "::error::Frontend proof is incomplete or failed. Inspect changed-area classification, build/audit/runtime and all four unit shards."
+              echo "::error::Frontend proof is incomplete or failed. Inspect changed-area classification, build/audit/runtime and unit suite."
               exit 1 ;;
           esac
 

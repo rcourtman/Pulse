@@ -146,7 +146,7 @@ class SmokeWorkflowTest(unittest.TestCase):
         # transfer, declared compiler, readonly build/vet recipe and ordering.
         real_embed_recipe(self.source)
         backend = jobs["frontend-checks"]
-        self.assertEqual(backend["if"], "${{ !cancelled() && needs.changes.outputs.code == 'true' && needs.frontend-build.outputs.unit_admitted == 'true' }}")
+        self.assertEqual(backend["if"], "${{ !cancelled() && needs.changes.outputs.code == 'true' && needs.frontend-build.outputs.runtime_admitted == 'true' }}")
         self.assertNotIn("continue-on-error", backend)
         required = {"Verify backend with real frontend embed",
                     "Check current-source unattended recovery on native systemd",

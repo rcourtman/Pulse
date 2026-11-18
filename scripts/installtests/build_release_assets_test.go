@@ -4682,6 +4682,12 @@ func TestFrontendDependencySecurityAuditsAreRequired(t *testing.T) {
 			t.Fatalf("frontend build/audit producer missing %s", needle)
 		}
 	}
+	// Moving units alongside the build still uses the locked graph. The
+	// producer owns the mandatory audit for both jobs.
+	unitJob := workflowJobBlock(t, string(workflow), "frontend-unit")
+	if !strings.Contains(unitJob, "run: npm ci --no-audit") || !strings.Contains(unitJob, "npm run test --") {
+		t.Fatal("the independent unit suite must use the locked frontend dependencies")
+	}
 	if !strings.Contains(frontendJob, "timeout-minutes: 30") {
 		t.Fatal("frontend build/audit producer must keep a bounded timeout above the audit budget")
 	}
