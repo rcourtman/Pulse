@@ -1339,9 +1339,6 @@ func (c *Client) GetJobHealthEvidence(ctx context.Context, datastores []string, 
 		}
 		for _, cfg := range configs {
 			fact := jobEvidenceFromConfigMap(family, cfg)
-			if fact.ID == "" {
-				fact.ID = fallbackJobEvidenceID(fact)
-			}
 			fact.Enabled = !boolJobField(cfg, "disable", "disabled")
 			fact.EvidenceSource = JobEvidenceSourcePBSJobConfig
 			fact.EvidenceScope = JobEvidenceScopeConfiguredJob
@@ -1444,15 +1441,22 @@ func (c *Client) listJobConfigMaps(ctx context.Context, path string) ([]map[stri
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-
-	var result struct {
-		Data []map[string]interface{} `json:"data"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	// An accepted list can withdraw a previously observed job failure. Use
+	// the same admission as backup inventories so a partial response is not
+	// mistaken for a complete, empty family.
+	configs, err := readBackupInventory[map[string]interface{}](resp)
+	if err != nil {
 		return nil, err
 	}
-	return result.Data, nil
+	seen := make(map[string]struct{}, len(configs))
+	for _, config := range configs {
+		id := configuredJobID(config)
+		if _, duplicate := seen[id]; id == "" || duplicate {
+			return nil, errInvalidBackupInventoryResponse
+		}
+		seen[id] = struct{}{}
+	}
+	return configs, nil
 }
 
 func (c *Client) getJobConfigMap(ctx context.Context, path string) (map[string]interface{}, error) {
@@ -1704,9 +1708,13 @@ func taskHistoryDedupKey(task JobHealthEvidence) string {
 	}, "\x00")
 }
 
+func configuredJobID(raw map[string]interface{}) string {
+	return stringJobField(raw, "id", "job-id", "job_id", "name")
+}
+
 func jobEvidenceFromConfigMap(family string, raw map[string]interface{}) JobHealthEvidence {
 	return JobHealthEvidence{
-		ID:             stringJobField(raw, "id", "job-id", "job_id", "name"),
+		ID:             configuredJobID(raw),
 		Family:         family,
 		Store:          stringJobField(raw, "store", "datastore", "remote-store", "remote_store"),
 		Remote:         stringJobField(raw, "remote", "remote-store", "remote_store"),
