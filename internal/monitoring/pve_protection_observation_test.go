@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
@@ -161,6 +162,183 @@ func TestIsPVEBackupPermissionError(t *testing.T) {
 	}
 	if isPVEBackupPermissionError(errors.New("connection timed out")) {
 		t.Fatal("transient timeout must not be classified as a permission failure")
+	}
+}
+
+// Per-node PVE views can disagree during a storage reconfiguration. The
+// local disk and the shared repository are not interchangeable despite
+// advertising the same storage ID.
+type pveMixedBackupRepositoryClient struct {
+	*pveReconciliationClient
+	sharedType   string
+	skipShared   bool
+	contentReads map[string]int
+}
+
+func (c *pveMixedBackupRepositoryClient) GetStorage(ctx context.Context, node string) ([]proxmox.Storage, error) {
+	rows, err := c.pveReconciliationClient.GetStorage(ctx, node)
+	for i := range rows {
+		rows[i].Storage = "archive"
+		if node == "node-b" {
+			rows[i].Type = c.sharedType
+			if c.skipShared {
+				rows[i].Enabled = 0
+			}
+		}
+	}
+	return rows, err
+}
+
+func (c *pveMixedBackupRepositoryClient) GetStorageContent(ctx context.Context, node, storage string) ([]proxmox.StorageContent, error) {
+	c.contentReads[node]++
+	return c.pveReconciliationClient.GetStorageContent(ctx, node, storage)
+}
+
+func TestPVEBackupSharedScopeNeedsSharedRead(t *testing.T) {
+	for _, mode := range []string{"skipped", "failed", "denied"} {
+		for _, reverse := range []bool{false, true} {
+			for _, cold := range []bool{false, true} {
+				t.Run(fmt.Sprintf("%s/reverse=%t/cold=%t", mode, reverse, cold), func(t *testing.T) {
+					f := newPVEReconciliationFixture(t)
+					c := &pveMixedBackupRepositoryClient{pveReconciliationClient: f.client, sharedType: "nfs",
+						contentReads: make(map[string]int)}
+					if reverse {
+						f.nodes[0], f.nodes[1] = f.nodes[1], f.nodes[0]
+					}
+					poll := func() {
+						f.m.pollStorageBackupsWithNodes(context.Background(), "cluster", c, f.nodes, f.online)
+						f.wait(t)
+					}
+					poll()
+					before := f.points(t)
+					var oldShared models.StorageBackup
+					for _, row := range f.m.state.GetPVEBackups().StorageBackups {
+						if row.VMID == 102 {
+							oldShared = row
+						}
+					}
+					pointID := "pve-backup:" + oldShared.ID
+					if oldShared.ID == "" || oldShared.StorageNode != "" || len(before) != 2 || before[pointID].ID != pointID {
+						t.Fatal("fixture did not record the shared archive and independent local copy")
+					}
+					if cold {
+						f.coldState()
+					}
+					wantPermissions := operationaltrust.EvidencePermissionsUnknown
+					wantSharedReads := 1
+					switch mode {
+					case "skipped":
+						c.skipShared = true
+						wantSharedReads = 0
+					case "failed":
+						f.client.contentErr = errors.New("503 unavailable")
+					case "denied":
+						f.client.contentErr = errors.New("403 forbidden")
+						wantPermissions = operationaltrust.EvidencePermissionsPartial
+					}
+					wantUnread := []recovery.ProtectionUnreadScope{{
+						Kind: recovery.ProtectionUnreadScopeStorage, Node: "node-b", Storage: "archive", AccessDenied: mode == "denied",
+					}}
+					c.contentReads = make(map[string]int)
+					f.client.at = f.client.at.Add(15 * time.Minute)
+					for cycle := range 2 {
+						// First accept an updated local archive, then a successful
+						// empty local read. Neither answers for the shared copy.
+						f.client.emptyAll = cycle == 1
+						poll()
+						points := f.points(t)
+						if !reflect.DeepEqual(points[pointID], before[pointID]) {
+							t.Error("unread shared point was deleted or renewed by local evidence")
+						}
+						var gotShared models.StorageBackup
+						localRows := 0
+						for _, row := range f.m.state.GetPVEBackups().StorageBackups {
+							if row.ID == oldShared.ID {
+								gotShared = row
+							} else if row.StorageNode == "node-a" {
+								localRows++
+								if !row.Time.Equal(f.client.at) {
+									t.Error("independent local time did not advance")
+								}
+							}
+						}
+						if !cold && !reflect.DeepEqual(gotShared, oldShared) {
+							t.Error("unread shared archive vanished from the live view")
+						}
+						if (cold && gotShared.ID != "") || localRows != 1-cycle {
+							t.Errorf("shared carry fabricated a live row or kept accepted-empty local content: shared=%q local=%d", gotShared.ID, localRows)
+						}
+						f.assertHistory(t, recovery.ProtectionHistoryPartial, wantPermissions)
+						for _, p := range f.postures(t) {
+							if len(p.ProviderStates) != 1 || !reflect.DeepEqual(p.ProviderStates[0].UnreadScopes, wantUnread) {
+								t.Errorf("shared scope not named correctly: %+v", p.ProviderStates)
+							}
+							if p.SubjectResourceID == f.ids[0] && cycle == 0 && p.State != recovery.ProtectionStateProtected {
+								t.Error("readable local copy lost protection beside an unread repository")
+							}
+						}
+					}
+					if c.contentReads["node-a"] != 2 || c.contentReads["node-b"] != 2*wantSharedReads {
+						t.Fatalf("unexpected content reads: %+v", c.contentReads)
+					}
+					c.skipShared = false
+					f.client.contentErr = nil
+					f.client.emptyAll = false
+					poll()
+					f.assertHistory(t, recovery.ProtectionHistoryComplete, operationaltrust.EvidencePermissionsSufficient)
+					f.client.emptyB = true
+					poll()
+					if live, durable := len(f.m.state.GetPVEBackups().StorageBackups), len(f.points(t)); live != 1 || durable != 1 {
+						t.Fatalf("accepted empty shared listing did not remove only its archive: live=%d durable=%d", live, durable)
+					}
+					if _, exists := f.points(t)[pointID]; exists {
+						t.Error("confirmed-absent shared point still recorded")
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestPVEBackupPBSConfirmationNeedsPBSRead(t *testing.T) {
+	for _, unread := range []string{"skipped", "content", "catalogue"} {
+		t.Run(unread, func(t *testing.T) {
+			f := newPVEReconciliationFixture(t)
+			f.m.config = &config.Config{PBSInstances: []config.PBSInstance{{Name: "backup-server"}}}
+			c := &pveMixedBackupRepositoryClient{pveReconciliationClient: f.client, sharedType: "pbs",
+				contentReads: make(map[string]int)}
+			poll := func() {
+				f.m.pollStorageBackupsWithNodes(context.Background(), "cluster", c, f.nodes, f.online)
+				f.wait(t)
+			}
+			poll()
+			want := []models.PBSGuestConfirmation{{Storage: "archive", BackupType: "vm", VMID: 102, Time: f.client.at.Unix()}}
+			if got := f.m.state.PBSGuestConfirmationsForInstance("cluster"); !reflect.DeepEqual(got, want) {
+				t.Fatalf("fixture did not establish direct-PBS attribution: %+v", got)
+			}
+			switch unread {
+			case "skipped":
+				c.skipShared = true
+			case "content":
+				f.client.contentErr = errors.New("503 unavailable")
+			case "catalogue":
+				f.client.nodeErr = errors.New("503 unavailable")
+			}
+			poll()
+			if got := f.m.state.PBSGuestConfirmationsForInstance("cluster"); !reflect.DeepEqual(got, want) {
+				t.Errorf("unread PBS association was overwritten by local scope: %+v", got)
+			}
+			// The local copy is still present, but the real PBS scope
+			// has now returned a complete empty list.
+			c.skipShared = false
+			f.client.contentErr = nil
+			f.client.nodeErr = nil
+			f.client.emptyB = true
+			poll()
+			if got := f.m.state.PBSGuestConfirmationsForInstance("cluster"); len(got) != 0 {
+				t.Errorf("accepted empty PBS read did not retire its association: %+v", got)
+			}
+		})
 	}
 }
 
