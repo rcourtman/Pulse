@@ -2,6 +2,7 @@ import { For, Show } from 'solid-js';
 
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { PlatformWindowedList } from '@/features/platformPage/PlatformWindowedList';
+import { t } from '@/i18n';
 import type { Alert } from '@/types/api';
 import {
   getAlertOverviewAcknowledgedToggleLabel,
@@ -19,7 +20,33 @@ import { AlertOverviewStatsCards } from './AlertOverviewStatsCards';
 import { useAlertGroupExpansion } from './useAlertGroupExpansion';
 import { AlertIncidentSynthesisSummary } from './AlertIncidentSynthesisSummary';
 import type { AlertIncidentTimelineState } from './useAlertIncidentTimelineState';
-import type { AlertOverviewState } from './useAlertOverviewState';
+import type { AlertGroup, AlertOverviewState } from './useAlertOverviewState';
+
+function pmgMessageAgeScope(alert: Alert): 'gateway' | 'node' | undefined {
+  if (alert.type !== 'message-age' || alert.metadata?.resourceType !== 'pmg' || !alert.resourceId) {
+    return undefined;
+  }
+  // The PMG evaluator uses the gateway resource for both readings. The
+  // canonical spec, not the alert text or the node display name, names scope.
+  if (alert.canonicalSpecId === `${alert.resourceId}-oldest-message`) return 'gateway';
+  if (alert.node && alert.canonicalSpecId === `${alert.resourceId}-${alert.node}-oldest-message`) {
+    return 'node';
+  }
+  return undefined;
+}
+
+function pmgMessageAgeCompanion(group: AlertGroup) {
+  const scope = pmgMessageAgeScope(group.primary);
+  if (group.correlated || !scope) return undefined;
+  // Keep the existing severity/time order, and use only rows already shown
+  // by the acknowledgement filter. Other related alerts stay in the group.
+  const companionScope = scope === 'gateway' ? 'node' : 'gateway';
+  const alert = group.related.find((alert) => pmgMessageAgeScope(alert) === companionScope);
+  return alert ? ({ alert, scope, companionScope } as const) : undefined;
+}
+
+const pmgScopeLabel = (scope: 'gateway' | 'node') =>
+  t(scope === 'gateway' ? 'alerts.overview.group.pmgGateway' : 'alerts.overview.group.pmgNode');
 
 interface AlertOverviewActiveAlertsSectionProps {
   state: AlertOverviewState;
@@ -133,62 +160,91 @@ export function AlertOverviewActiveAlertsSection(props: AlertOverviewActiveAlert
             enableThreshold={24}
             windowSize={32}
           >
-            {(group) => (
-              <div>
-                <AlertIncidentSynthesisSummary alert={group.primary} />
-                <AlertOverviewAlertCard
-                  alert={group.primary}
-                  state={props.state}
-                  timelineState={props.timelineState}
-                  deliveryPausedGlobally={props.deliveryPausedGlobally}
-                />
-                <Show when={group.related.length > 0}>
-                  <div class="ml-4 border-l-2 border-border pl-3 mt-1">
-                    <div class="flex items-center gap-3 py-1">
-                      <button
-                        type="button"
-                        class="text-xs text-muted hover:text-base-content transition-colors"
-                        onClick={() => toggleGroup(group.key)}
+            {(group) => {
+              const companion = pmgMessageAgeCompanion(group);
+              const folded = companion
+                ? group.related.filter((alert) => alert !== companion.alert)
+                : group.related;
+              return (
+                <div>
+                  <AlertIncidentSynthesisSummary alert={group.primary} />
+                  <AlertOverviewAlertCard
+                    alert={group.primary}
+                    scopeLabel={companion && pmgScopeLabel(companion.scope)}
+                    state={props.state}
+                    timelineState={props.timelineState}
+                    deliveryPausedGlobally={props.deliveryPausedGlobally}
+                  />
+                  <Show when={group.related.length > 0}>
+                    <div class="ml-4 border-l-2 border-border pl-3 mt-1">
+                      <Show
+                        when={
+                          folded.length > 0 ||
+                          [group.primary, ...group.related].some((a) => !a.acknowledged)
+                        }
                       >
-                        {getAlertOverviewGroupDisclosureLabel({
-                          count: group.related.length,
-                          correlated: group.correlated,
-                          expanded: isGroupExpanded(group.key),
-                        })}
-                      </button>
-                      <Show when={[group.primary, ...group.related].some((a) => !a.acknowledged)}>
-                        <button
-                          type="button"
-                          class="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
-                          onClick={() => {
-                            void props.state.handleGroupAcknowledge([
-                              group.primary,
-                              ...group.related,
-                            ]);
-                          }}
-                        >
-                          {getAlertOverviewGroupAcknowledgeLabel(group.related.length + 1)}
-                        </button>
+                        <div class="flex items-center gap-3 py-1">
+                          <Show when={folded.length > 0}>
+                            <button
+                              type="button"
+                              class="text-xs text-muted hover:text-base-content transition-colors"
+                              onClick={() => toggleGroup(group.key)}
+                            >
+                              {getAlertOverviewGroupDisclosureLabel({
+                                count: folded.length,
+                                correlated: group.correlated,
+                                expanded: isGroupExpanded(group.key),
+                              })}
+                            </button>
+                          </Show>
+                          <Show
+                            when={[group.primary, ...group.related].some((a) => !a.acknowledged)}
+                          >
+                            <button
+                              type="button"
+                              class="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
+                              onClick={() => {
+                                void props.state.handleGroupAcknowledge([
+                                  group.primary,
+                                  ...group.related,
+                                ]);
+                              }}
+                            >
+                              {getAlertOverviewGroupAcknowledgeLabel(group.related.length + 1)}
+                            </button>
+                          </Show>
+                        </div>
+                      </Show>
+                      <Show when={companion}>
+                        {(row) => (
+                          <AlertOverviewAlertCard
+                            alert={row().alert}
+                            scopeLabel={pmgScopeLabel(row().companionScope)}
+                            state={props.state}
+                            timelineState={props.timelineState}
+                            deliveryPausedGlobally={props.deliveryPausedGlobally}
+                          />
+                        )}
+                      </Show>
+                      <Show when={folded.length > 0 && isGroupExpanded(group.key)}>
+                        <div class="space-y-2 mt-1">
+                          <For each={folded}>
+                            {(alert) => (
+                              <AlertOverviewAlertCard
+                                alert={alert}
+                                state={props.state}
+                                timelineState={props.timelineState}
+                                deliveryPausedGlobally={props.deliveryPausedGlobally}
+                              />
+                            )}
+                          </For>
+                        </div>
                       </Show>
                     </div>
-                    <Show when={isGroupExpanded(group.key)}>
-                      <div class="space-y-2 mt-1">
-                        <For each={group.related}>
-                          {(alert) => (
-                            <AlertOverviewAlertCard
-                              alert={alert}
-                              state={props.state}
-                              timelineState={props.timelineState}
-                              deliveryPausedGlobally={props.deliveryPausedGlobally}
-                            />
-                          )}
-                        </For>
-                      </div>
-                    </Show>
-                  </div>
-                </Show>
-              </div>
-            )}
+                  </Show>
+                </div>
+              );
+            }}
           </PlatformWindowedList>
         </div>
       </Show>

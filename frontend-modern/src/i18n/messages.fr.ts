@@ -46,6 +46,8 @@ export const FR_MESSAGE_OVERRIDES = {
   'alerts.overview.group.hide': 'Masquer',
   'alerts.overview.group.linkedSignal': '+{count} signal lié',
   'alerts.overview.group.linkedSignals': '+{count} signaux liés',
+  'alerts.overview.group.pmgGateway': 'Toute la passerelle',
+  'alerts.overview.group.pmgNode': 'Propre au nœud',
   'alerts.overview.group.related': '+{count} en lien',
   'alerts.overview.synthesis.title.supported': "Cause d'infrastructure étayée",
   'alerts.overview.synthesis.title.observationSet': "Ensemble d'observations liées",

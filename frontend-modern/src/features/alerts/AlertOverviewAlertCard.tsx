@@ -66,6 +66,7 @@ import {
 
 interface AlertOverviewAlertCardProps {
   alert: Alert;
+  scopeLabel?: string;
   state: AlertOverviewState;
   timelineState: AlertIncidentTimelineState;
   // True while the page states that delivery is off for every alert; the
@@ -380,6 +381,9 @@ export function AlertOverviewAlertCard(props: AlertOverviewAlertCardProps) {
                 </A>
               </Show>
               <span class="text-xs text-muted">({alertTypeDisplayLabel(props.alert.type)})</span>
+              <Show when={props.scopeLabel}>
+                {(scope) => <span class="text-xs text-muted">{scope()}</span>}
+              </Show>
               <Show when={!props.alert.acknowledged}>
                 <span class={getAlertSeverityBadgeClass(props.alert.level)}>
                   {formatAlertSeverityLabel(props.alert.level)}

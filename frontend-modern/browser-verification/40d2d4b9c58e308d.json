@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "base_sha": "95aa0ed84fedcf55014838af52feb6ba0c362b36",
+  "verified_at": "2026-11-18T21:02:34Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/alerts/AlertOverviewActiveAlertsSection.tsx",
+    "frontend-modern/src/features/alerts/AlertOverviewAlertCard.tsx",
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapSurface.tsx",
+    "frontend-modern/src/i18n/messages.de.ts",
+    "frontend-modern/src/i18n/messages.es.ts",
+    "frontend-modern/src/i18n/messages.fr.ts",
+    "frontend-modern/src/i18n/messages.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/alerts/AlertOverviewActiveAlertsSection.tsx": "d5b93bc7adb8b1f9acf5c9380fd55057af4c61f2a1a647e3bf7904b41086304d",
+    "frontend-modern/src/features/alerts/AlertOverviewAlertCard.tsx": "db6334bf412cc51f2d93bf3db812122b5d2a9386304c1e385a5ba3a04451a14b",
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapSurface.tsx": "efc3b3097f0d70150a0a3211a93e40b694527c1cbee04a404559b0b9ba406c9a",
+    "frontend-modern/src/i18n/messages.de.ts": "1c2cd5814256c8282e03752fb56f9e467d5a43de533ce8cdaac1ddaf7464a76f",
+    "frontend-modern/src/i18n/messages.es.ts": "b7f577626dfc9952b2319f72677e964c24333a26bffe03e6ef8d519f57470fd2",
+    "frontend-modern/src/i18n/messages.fr.ts": "ff66e0c31a9f7efc0109abced25278f82fdd551d8962da79e446f43d7bdbbee6",
+    "frontend-modern/src/i18n/messages.ts": "20fc6404c644446631d1471ee8f98f9aafda429cd2adbf9ae3505e82941b7b84"
+  },
+  "routes": [
+    "/alerts/overview",
+    "/map"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Offline compiled App from current main and exact changed frontend bytes; Chromium desktop and Chromium or WebKit narrow, light. Inspected 27 matched before/after pairs including four actual downloaded PNGs.",
+    "Map: with the real DemoBanner, one synthetic seven-resource snapshot and no control change, first draw gives eight targets at both widths, on direct entry, on navigation from loaded Alerts and with inventory deliberately held until the route mounts. In the baseline desktop run direct and preloaded entry gave zero.",
+    "Alerts: same exact producer frames for each UI comparison. On desktop and phone the default two-node Warning view shows both 20-minute readings and the distinct gateway and node thresholds (15 and 9 minutes) with scope, severity, elapsed time and per-alert controls, regardless of primary order.",
+    "Alerts: an acknowledged gateway follows the existing visibility toggle and verified drain leaves no active cards. With stacked banners on the phone, both scoped cards and actions fit at the same ordinary Alerts-list scroll position, not at the very top."
+  ],
+  "interactions": [
+    "Select Compact, tab to a dependent tile, check the partner ring and preserve focus through a refit. Dismiss the DemoBanner, keep Compact and the diagram and legend unobstructed, then hide names and open the PNG actually downloaded by Save image.",
+    "Open and close More independently on each PMG incident. Toggle acknowledged visibility and inspect the existing group acknowledge control without sending a mutation."
+  ]
+}

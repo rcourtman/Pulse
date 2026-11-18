@@ -46,6 +46,8 @@ export const DE_MESSAGE_OVERRIDES = {
   'alerts.overview.group.hide': 'Ausblenden',
   'alerts.overview.group.linkedSignal': '+{count} verknuepftes Signal',
   'alerts.overview.group.linkedSignals': '+{count} verknuepfte Signale',
+  'alerts.overview.group.pmgGateway': 'Gesamtes Gateway',
+  'alerts.overview.group.pmgNode': 'Knotenspezifisch',
   'alerts.overview.group.related': '+{count} zugehoerig',
   'alerts.overview.synthesis.title.supported': 'Gestuetzte Infrastrukturursache',
   'alerts.overview.synthesis.title.observationSet': 'Zusammenhaengende Beobachtungen',
