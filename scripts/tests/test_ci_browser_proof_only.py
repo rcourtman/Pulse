@@ -408,10 +408,12 @@ class GitTreeScopeTest(unittest.TestCase):
         self.write(test, "fixture")
         evidence = self.commit()
         self.assertEqual(self.component_scope(self.base, evidence), "only=false")
+        self.git("reset", "--soft", self.base)
         self.write(component, "component")
         admitted = self.commit()
         self.assertEqual(self.component_scope(self.base, admitted), "only=true")
-        self.assertEqual(self.component_scope(admitted, self.base), "only=true")
+        (self.repo / component).unlink()
+        self.assertEqual(self.component_scope(admitted, self.commit()), "only=true")
         self.assertEqual(self.component_scope(admitted, admitted), "only=false")
         self.assertEqual(self.component_scope("0" * 40, admitted), "only=false")
         for path in ("frontend-modern/src/components/Settings/model.ts",
@@ -421,6 +423,7 @@ class GitTreeScopeTest(unittest.TestCase):
                      "frontend-modern/src/components/Bad\nName.tsx"):
             with self.subTest(path=path):
                 self.git("reset", "--hard", admitted)
+                self.git("reset", "--soft", self.base)
                 if path == "scripts/ci_component_only.py":
                     with (self.repo / path).open("a") as script:
                         script.write("\n# changed admission control\n")
@@ -434,6 +437,17 @@ class GitTreeScopeTest(unittest.TestCase):
         self.git("reset", "--hard", admitted)
         self.git("mv", "internal/api/fixture.go", "frontend-modern/src/components/Renamed.tsx")
         self.assertEqual(self.component_scope(admitted, self.commit()), "only=false")
+
+    def test_stale_event_base_cannot_hide_backend_revert_in_tested_merge(self):
+        backend = "internal/api/fixture.go"
+        self.write(backend, "package fixture\nvar Updated = true\n")
+        main = self.commit()
+        self.write(backend, "package fixture\n")
+        self.write("frontend-modern/src/components/SettingsPanel.tsx", "component")
+        topic = self.commit()
+        merge = self.git("commit-tree", topic + "^{tree}", "-p", main, "-p", topic, "-m", "Tested merge")
+        self.assertEqual(self.component_scope(self.base, merge), "only=false")
+        self.assertEqual(self.component_scope(main, merge), "only=false")
 
     def test_component_path_preserves_frontend_smoke_and_scopes_only_main_prs(self):
         jobs = yaml.safe_load(BUILD.read_text())["jobs"]

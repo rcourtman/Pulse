@@ -24,6 +24,11 @@ def component_only_diff(base, head):
     if not COMMIT.fullmatch(base) or not COMMIT.fullmatch(head):
         return False
     try:
+        # A stale event base can hide a backend revert in the tested merge.
+        # The raw first parent is available even in Actions' depth-one clone.
+        commit = subprocess.check_output(["git", "cat-file", "commit", head], timeout=30)
+        if commit.split(b"\n", 2)[1:2] != [b"parent " + base.encode("ascii")]:
+            return False
         raw = subprocess.check_output(
             ["git", "diff", "--raw", "--no-ext-diff", "--no-renames", "-z", base, head, "--"],
             timeout=30,

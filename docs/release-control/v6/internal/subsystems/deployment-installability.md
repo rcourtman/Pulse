@@ -9570,7 +9570,8 @@ full compilation. Frontend-only changes skip this Go-only preflight.
 `scripts/go-test-compile-required.sh` consumes the complete file list.
 
 On pull requests targeting main, `scripts/ci_component_only.py` checks the
-complete diff from the PR base to the tested merge tree. A regular component
+complete diff from the PR base to the tested merge tree. The event base must
+match the tested commit's first parent for scoped validation. A regular component
 under components or features, accompanied only by other components, their
 test files or browser receipts, qualifies for scoped Go validation. The two
 rest jobs run the unifiedresources and telemetry packages, whose tests read
