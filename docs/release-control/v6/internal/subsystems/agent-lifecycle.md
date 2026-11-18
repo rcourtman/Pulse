@@ -6914,11 +6914,12 @@ must flow through the canonical `/api/metrics-store/history` boundary and the
 disk `MetricsTarget.ResourceID` that monitoring projects for the resource,
 rather than reviving a browser-local collector or a lifecycle-only
 agent/device identity.
-That shared metrics-history boundary may enforce commercial history windows
-such as Relay 14-day and Pro 90-day retention for operator charts, but lifecycle
-surfaces must treat those windows as presentation entitlements only. Agent
-registration, heartbeat, installer status, and fleet freshness must not infer
-lifecycle truth from whether a longer chart range is enabled or denied.
+That shared metrics-history boundary admits the same technical window up to
+365 days for operator/API reads on every plan. The agent-facing
+`get_metric_history` keeps its own 90-day range and point limits. Neither chart
+admission nor retention is agent registration, heartbeat, installer status
+or fleet freshness. `TestContractMetricsHistoryRangeAdmission` anchors the
+shared bound without changing agent auth or lifecycle.
 That same adjacent API boundary now also owns internal demo-fixture runtime
 gating. Lifecycle-adjacent install, reporting, and demo-facing flows may
 share mock-mode handlers in dev and test, but release builds must authorize

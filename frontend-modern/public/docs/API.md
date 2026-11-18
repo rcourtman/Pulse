@@ -1908,10 +1908,10 @@ Query params:
 - `resourceType` (required): `node`, `storage`, `agent`, `disk`, `k8s` (or the Kubernetes kinds `pod`, `k8s-cluster`, `k8s-node`, `k8s-deployment`, which read the same history), `vm`, `system-container`, `oci-container`, `app-container`, `docker-host`
 - `resourceId` (required)
 - `metric` (optional): `cpu`, `memory`, `disk`, etc. Omit for all metrics
-- `range` (optional): `1h`, `6h`, `12h`, `24h`, `1d`, `7d`, `30d`, `90d` (default `24h`; duration strings also accepted)
+- `range` (optional): Positive whole days (for example `7d`, `90d`) or a duration like `30m` or `24h`. Omitted or blank defaults to `24h`. Maximum `365d` (`8760h`) per request; invalid or longer ranges return `400`.
 - `maxPoints` (optional): Downsample to a target number of points
 
-> **Plans**: Every range is served on every plan; the answer holds what storage retention still keeps.
+> **Plans**: The same request limit applies on every plan. The answer includes only observations that storage retention still keeps.
 An explicit `metric` returns a `points` array; omitting it returns a `metrics`
 object keyed by metric name. Use the source ID and type from the affected
 chart's request, not its display name or an internal store type. Older

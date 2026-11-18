@@ -8648,11 +8648,18 @@ the canonical cluster source key, node history on
 detail charts all resolve through one governed identity contract.
 That same metrics-history contract owns history-range parsing.
 `frontend-modern/src/api/charts.ts` may expose `14d` as a first-class
-`HistoryTimeRange`, and `/api/metrics-store/history` parses positive day
-ranges before querying the store. Since 17 November 2026 no plan limits the
-range: every tier, including Community with no licence, is served any
-supported range, and storage retention alone decides how far back the answer
-goes (`TestHandleMetricsHistory_EveryPlanServesEveryRange`).
+`HistoryTimeRange`. Before inventory or store work,
+`/api/metrics-store/history` accepts positive whole-day or duration syntax
+through 365 days (8760 hours), inclusive. Day counts are checked before
+conversion to nanoseconds. Blank or omitted defaults to 24 hours; malformed,
+nonpositive, overflowing and longer windows return 400 instead of substituting
+a different range. The ceiling is independent of `maxPoints` and applies
+equally on every plan, including Community with no licence. Retention decides
+which observations are available in the requested interval, not the request
+ceiling. `TestParseMetricsHistoryDuration`,
+`TestContractMetricsHistoryRangeAdmission` and
+`TestHandleMetricsHistory_EveryPlanServesEveryRange` prove syntax, pre-query
+refusal and authorized, plan-neutral readback.
 The Pulse Account commercial shell now also owns a dedicated bootstrap
 contract in `internal/cloudcp/portal/page.go`, `internal/cloudcp/portal/handlers.go`,
 and `internal/cloudcp/portal/handlers_test.go`. `/api/portal/bootstrap` and

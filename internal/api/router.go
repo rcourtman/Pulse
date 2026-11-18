@@ -6083,33 +6083,31 @@ func (r *Router) handleMetricsStoreStats(w http.ResponseWriter, req *http.Reques
 	}
 }
 
-func parseMetricsHistoryDuration(timeRange string) time.Duration {
-	normalizedRange := strings.ToLower(strings.TrimSpace(timeRange))
-	switch normalizedRange {
-	case "30m":
-		return 30 * time.Minute
-	case "1h":
-		return time.Hour
-	case "6h":
-		return 6 * time.Hour
-	case "12h":
-		return 12 * time.Hour
-	case "24h", "1d", "":
-		return 24 * time.Hour
-	}
+const maxMetricsHistoryDays = 365
+const maxMetricsHistoryDuration = maxMetricsHistoryDays * 24 * time.Hour
 
+var errInvalidMetricsHistoryRange = errors.New("range must be a positive duration of at most 365d (8760h)")
+
+func parseMetricsHistoryDuration(timeRange string) (time.Duration, error) {
+	normalizedRange := strings.ToLower(strings.TrimSpace(timeRange))
+	if normalizedRange == "" {
+		return 24 * time.Hour, nil
+	}
 	if strings.HasSuffix(normalizedRange, "d") {
-		days, err := strconv.Atoi(strings.TrimSuffix(normalizedRange, "d"))
-		if err == nil && days > 0 {
-			return time.Duration(days) * 24 * time.Hour
+		days, err := strconv.ParseInt(strings.TrimSuffix(normalizedRange, "d"), 10, 64)
+		// Check the day count before converting to nanoseconds; an
+		// out-of-range count must not wrap into an admitted duration.
+		if err != nil || days <= 0 || days > maxMetricsHistoryDays {
+			return 0, errInvalidMetricsHistoryRange
 		}
+		return time.Duration(days) * 24 * time.Hour, nil
 	}
 
 	duration, err := time.ParseDuration(normalizedRange)
-	if err != nil || duration <= 0 {
-		return 24 * time.Hour
+	if err != nil || duration <= 0 || duration > maxMetricsHistoryDuration {
+		return 0, errInvalidMetricsHistoryRange
 	}
-	return duration
+	return duration, nil
 }
 
 // handleMetricsHistory returns historical metrics from the persistent SQLite store
@@ -6118,21 +6116,18 @@ func parseMetricsHistoryDuration(timeRange string) time.Duration {
 //     "docker-host", "k8s", "storage", or "disk" (required)
 //   - resourceId: the resource identifier (required)
 //   - metric: "cpu", "memory", "disk", etc. (optional, omit for all metrics)
-//   - range: time range like "1h", "24h", "7d", "14d", "30d", "90d" (optional, default "24h")
+//   - range: positive duration up to 365d, or empty for the default "24h"
 func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	// Use tenant-aware monitor
-	monitor := r.getTenantMonitor(req.Context())
-	if monitor == nil {
-		http.Error(w, "Monitor not available", http.StatusInternalServerError)
+	query, err := url.ParseQuery(req.URL.RawQuery)
+	if err != nil {
+		http.Error(w, "Invalid metrics history query", http.StatusBadRequest)
 		return
 	}
-
-	query := req.URL.Query()
 	resourceTypeInput := strings.ToLower(strings.TrimSpace(query.Get("resourceType")))
 	resourceID := query.Get("resourceId")
 	metricType := query.Get("metric")
@@ -6148,18 +6143,28 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	resourceID = canonicalizeMetricsHistoryResourceID(runtimeResourceType, resourceID)
+	duration, err := parseMetricsHistoryDuration(timeRange)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 
-	duration := parseMetricsHistoryDuration(timeRange)
+	// Reject malformed or oversized windows before consulting any history source.
+	monitor := r.getTenantMonitor(req.Context())
+	if monitor == nil {
+		http.Error(w, "Monitor not available", http.StatusInternalServerError)
+		return
+	}
+	resourceID = canonicalizeMetricsHistoryResourceID(runtimeResourceType, resourceID)
 	var stepSecs int64 = 0 // Default to no downsampling (use tier resolution)
 
 	// Optional downsampling based on requested max points.
 	// When omitted, we return the native tier resolution.
 	if maxPointsStr := query.Get("maxPoints"); maxPointsStr != "" {
 		if maxPoints, err := strconv.Atoi(maxPointsStr); err == nil && maxPoints > 0 {
-			durationSecs := int64(duration.Seconds())
+			durationSecs := int64(duration / time.Second)
 			if durationSecs > 0 {
-				stepSecs = (durationSecs + int64(maxPoints) - 1) / int64(maxPoints)
+				stepSecs = 1 + (durationSecs-1)/int64(maxPoints)
 				if stepSecs <= 1 {
 					stepSecs = 0
 				} else {
