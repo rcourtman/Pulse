@@ -68,6 +68,7 @@ describe('useAppRuntimeState', () => {
   let setOrgIDMock: ReturnType<typeof vi.fn>;
   let clearAuthMock: ReturnType<typeof vi.fn>;
   let shutdownGlobalWebSocketStoreMock: ReturnType<typeof vi.fn>;
+  let switchSocketMock: ReturnType<typeof vi.fn>;
   let showToastMock: ReturnType<typeof vi.fn>;
   let aiAvailabilitySetEnabledMock: ReturnType<typeof vi.fn>;
   let aiAvailabilityRefreshMock: ReturnType<typeof vi.fn>;
@@ -77,7 +78,7 @@ describe('useAppRuntimeState', () => {
   let applyServerModeMock: ReturnType<typeof vi.fn>;
   let updateRuntimeDisplayFromResponseMock: ReturnType<typeof vi.fn>;
   let markSystemSettingsLoadedWithDefaultsMock: ReturnType<typeof vi.fn>;
-  let apiFetchJSONMock: ReturnType<typeof vi.fn>;
+  let apiFetchJSONMock: ReturnType<typeof vi.fn<(url: string) => Promise<unknown>>>;
   let websocketState: State;
   let websocketConnected: boolean;
   let websocketReconnecting: boolean;
@@ -151,6 +152,7 @@ describe('useAppRuntimeState', () => {
       window.localStorage.removeItem('org_id');
     });
     shutdownGlobalWebSocketStoreMock = vi.fn();
+    switchSocketMock = vi.fn();
     showToastMock = vi.fn();
     aiAvailabilitySetEnabledMock = vi.fn();
     aiAvailabilityRefreshMock = vi.fn().mockResolvedValue(undefined);
@@ -176,7 +178,7 @@ describe('useAppRuntimeState', () => {
           initialDataReceived: () => websocketInitialDataReceived,
           resourceSnapshotReceived: () => websocketInitialDataReceived,
           reconnect: vi.fn(),
-          switchUrl: vi.fn(),
+          switchUrl: switchSocketMock,
         };
         onStoreAcquired?.();
         return store;
@@ -621,9 +623,11 @@ describe('useAppRuntimeState', () => {
     const { hookState, dispose } = mountHook();
 
     await waitFor(() => {
-      expect(setOrgIDMock).toHaveBeenCalledWith('t-client');
+      expect(hookState.organizationListIssue()).toBe('unavailable');
     });
+    expect(setOrgIDMock).not.toHaveBeenCalled();
     expect(hookState.activeOrgID()).toBe('t-client');
+    expect(hookState.organizations()).toEqual([]);
     expect(showToastMock).not.toHaveBeenCalledWith(
       'error',
       'Failed to load organizations. Using default.',
@@ -640,6 +644,7 @@ describe('useAppRuntimeState', () => {
     await waitFor(() => expect(orgsListMock).toHaveBeenCalledOnce());
     await waitFor(() => expect(first.hookState.orgsLoading()).toBe(false));
     expect(setOrgIDMock).not.toHaveBeenCalled();
+    expect(first.hookState.activeOrgID()).toBe('');
     first.dispose();
 
     // The next load reads the list again and lands in the client workspace.
@@ -651,6 +656,147 @@ describe('useAppRuntimeState', () => {
     await waitFor(() => expect(setOrgIDMock).toHaveBeenCalledWith('t-client'));
     expect(second.hookState.activeOrgID()).toBe('t-client');
     second.dispose();
+  });
+
+  it.each([
+    { list: [], issue: 'empty' },
+    { list: null, issue: 'unavailable' },
+    { list: [{ id: 'acme' }], issue: 'unavailable' },
+    { list: [{ id: '..', displayName: 'Broken identity' }], issue: 'unavailable' },
+    {
+      list: [
+        { id: 'acme', displayName: 'One' },
+        { id: 'acme', displayName: 'Two' },
+      ],
+      issue: 'unavailable',
+    },
+  ])(
+    'keeps a selected workspace when choices settle as $issue ($list)',
+    async ({ list, issue }) => {
+      isMultiTenantEnabledMock.mockReturnValue(true);
+      getOrgIDMock.mockReturnValue('acme');
+      orgsListMock.mockResolvedValue(list);
+      const acquired = vi.fn(() => expect(setOrgIDMock).not.toHaveBeenCalled());
+      onStoreAcquired = acquired;
+      const { hookState, dispose } = mountHook();
+      await waitFor(() => expect(hookState.isLoading()).toBe(false));
+      expect(hookState.activeOrgID()).toBe('acme');
+      expect(hookState.organizationListIssue()).toBe(issue);
+      expect(hookState.organizations()).toEqual([]);
+      expect(acquired).toHaveBeenCalledOnce();
+      hookState.handleOrgSwitch('default');
+      expect(setOrgIDMock).not.toHaveBeenCalled();
+      expect(switchSocketMock).not.toHaveBeenCalled();
+      expect(clearAuthMock).not.toHaveBeenCalled();
+      dispose();
+    },
+  );
+
+  it('preserves the unbound bootstrap recovery if the next list read fails', async () => {
+    isMultiTenantEnabledMock.mockReturnValue(true);
+    orgsListMock.mockRejectedValue(new Error('503'));
+    const originalFetch = apiFetchMock.getMockImplementation()!;
+    apiFetchMock.mockImplementation((url, options) => {
+      if (url === '/api/state/summary') getOrgIDMock.mockReturnValue(null);
+      return originalFetch(url, options);
+    });
+    const { hookState, dispose } = mountHook();
+    await waitFor(() => expect(hookState.isLoading()).toBe(false));
+    expect(hookState.activeOrgID()).toBe('');
+    expect(hookState.organizationListIssue()).toBe('unavailable');
+    expect(setOrgIDMock).not.toHaveBeenCalled();
+    dispose();
+  });
+
+  it('refreshes unavailable choices without reopening the current monitoring stream', async () => {
+    isMultiTenantEnabledMock.mockReturnValue(true);
+    getOrgIDMock.mockReturnValue('acme');
+    orgsListMock.mockRejectedValueOnce(new Error('503'));
+    const { hookState, dispose } = mountHook();
+    await waitFor(() => expect(hookState.isLoading()).toBe(false));
+    const originalAdmission = hookState.platformAdmission();
+    expect(originalAdmission).not.toBeNull();
+    expect(hookState.organizationListIssue()).toBe('unavailable');
+    expect(setOrgIDMock).not.toHaveBeenCalled();
+    let finish!: (value: unknown) => void;
+    orgsListMock.mockImplementationOnce(() => new Promise((resolve) => (finish = resolve)));
+    hookState.retryOrganizationList();
+    hookState.retryOrganizationList();
+    expect(hookState.orgsLoading()).toBe(true);
+    expect(hookState.platformAdmission()).toBe(originalAdmission);
+    expect(hookState.organizationListIssue()).toBe('unavailable');
+    expect(orgsListMock).toHaveBeenCalledTimes(2);
+    finish([
+      { id: 'default', displayName: 'Default' },
+      { id: 'acme', displayName: 'Acme' },
+    ]);
+    await waitFor(() => expect(hookState.organizationListIssue()).toBeNull());
+    expect(hookState.orgsLoading()).toBe(false);
+    expect(hookState.activeOrgID()).toBe('acme');
+    expect(setOrgIDMock).toHaveBeenCalledExactlyOnceWith('acme');
+    expect(switchSocketMock).not.toHaveBeenCalled();
+    expect(hookState.platformAdmission()).toBe(originalAdmission);
+    dispose();
+  });
+
+  it('withdraws old choices on a failed live refresh without changing the selected reader', async () => {
+    isMultiTenantEnabledMock.mockReturnValue(true);
+    getOrgIDMock.mockReturnValue('acme');
+    orgsListMock.mockResolvedValue([
+      { id: 'acme', displayName: 'Acme' },
+      { id: 'other', displayName: 'Other' },
+    ]);
+    const { eventBus } = await import('@/stores/events');
+    const { hookState, dispose } = mountHook();
+    await waitFor(() => expect(hookState.isLoading()).toBe(false));
+    const originalAdmission = hookState.platformAdmission();
+    const changed = (eventBus.on as ReturnType<typeof vi.fn>).mock.calls.find(
+      ([event]) => event === 'organizations_changed',
+    )![1] as () => void;
+    setOrgIDMock.mockClear();
+    orgsListMock.mockRejectedValueOnce(new Error('503'));
+    changed();
+    hookState.handleOrgSwitch('other');
+    await waitFor(() => expect(hookState.organizationListIssue()).toBe('unavailable'));
+    expect(hookState.organizations()).toEqual([]);
+    expect(hookState.activeOrgID()).toBe('acme');
+    expect(hookState.platformAdmission()).toBe(originalAdmission);
+    hookState.handleOrgSwitch('other');
+    expect(setOrgIDMock).not.toHaveBeenCalled();
+    expect(switchSocketMock).not.toHaveBeenCalled();
+    expect(eventBus.emit).not.toHaveBeenCalledWith('org_switched', expect.any(String));
+    dispose();
+  });
+
+  it('ignores an older organization refresh and rebinds only to the latest valid list', async () => {
+    isMultiTenantEnabledMock.mockReturnValue(true);
+    getOrgIDMock.mockReturnValue('acme');
+    const { eventBus } = await import('@/stores/events');
+    const { hookState, dispose } = mountHook();
+    await waitFor(() => expect(hookState.isLoading()).toBe(false));
+    const changed = (eventBus.on as ReturnType<typeof vi.fn>).mock.calls.find(
+      ([event]) => event === 'organizations_changed',
+    )![1] as () => void;
+    let first!: (value: unknown) => void;
+    orgsListMock.mockImplementationOnce(() => new Promise((resolve) => (first = resolve)));
+    changed();
+    expect(hookState.orgsLoading()).toBe(true);
+    orgsListMock.mockResolvedValueOnce([{ id: 'north', displayName: 'North' }]);
+    changed();
+    await waitFor(() => expect(hookState.activeOrgID()).toBe('north'));
+    expect(setOrgIDMock).toHaveBeenLastCalledWith('north');
+    expect(switchSocketMock).toHaveBeenCalledExactlyOnceWith(expect.any(String), {
+      organizationChanged: true,
+    });
+    expect(eventBus.emit).toHaveBeenCalledWith('org_switched', 'north');
+    first([{ id: 'default', displayName: 'Default' }]);
+    await flushAsync();
+    expect(hookState.organizations()).toEqual([{ id: 'north', displayName: 'North' }]);
+    expect(hookState.activeOrgID()).toBe('north');
+    expect(hookState.organizationListIssue()).toBeNull();
+    expect(hookState.orgsLoading()).toBe(false);
+    expect(switchSocketMock).toHaveBeenCalledTimes(1);
+    dispose();
   });
 
   it('opts into unbound default recovery then activates membership before acquiring the socket', async () => {
@@ -1498,6 +1644,10 @@ describe('useAppRuntimeState', () => {
 
   it('drops the previous tenant admission when the organization changes', async () => {
     isMultiTenantEnabledMock.mockReturnValue(true);
+    orgsListMock.mockResolvedValue([
+      { id: 'default', displayName: 'Default' },
+      { id: 'acme', displayName: 'Acme' },
+    ]);
     const { dispose, hookState } = mountHook();
 
     await waitFor(() => {
@@ -1572,6 +1722,10 @@ describe('useAppRuntimeState', () => {
 
   it('does not retain outgoing tenant admission if the new tenant request fails', async () => {
     isMultiTenantEnabledMock.mockReturnValue(true);
+    orgsListMock.mockResolvedValue([
+      { id: 'default', displayName: 'Default' },
+      { id: 'acme', displayName: 'Acme' },
+    ]);
     const { dispose, hookState } = mountHook();
     await waitFor(() => {
       expect(hookState.platformAdmission()).not.toBeNull();
@@ -1589,6 +1743,10 @@ describe('useAppRuntimeState', () => {
     'ignores an outgoing tenant refresh after a %s tenant switch request',
     async (completion) => {
       isMultiTenantEnabledMock.mockReturnValue(true);
+      orgsListMock.mockResolvedValue([
+        { id: 'default', displayName: 'Default' },
+        { id: 'acme', displayName: 'Acme' },
+      ]);
       const eventsModule = await import('@/stores/events');
       const { dispose, hookState } = mountHook();
       await waitFor(() => {
@@ -1596,6 +1754,10 @@ describe('useAppRuntimeState', () => {
         expect(hookState.organizations().some((org) => org.id === 'acme')).toBe(true);
       });
       const outgoing = hookState.platformAdmission();
+      const admissionPath = '/api/resources?page=1&limit=1';
+      const admissionReadCount = () =>
+        apiFetchJSONMock.mock.calls.filter(([path]) => path === admissionPath).length;
+      const initialReads = admissionReadCount();
       let finishOutgoing!: (value: unknown) => void;
       apiFetchJSONMock.mockImplementationOnce(
         () =>
@@ -1607,21 +1769,21 @@ describe('useAppRuntimeState', () => {
         ([event]) => event === 'websocket_reconnected',
       )![1] as () => void;
       reconnect();
+      expect(admissionReadCount()).toBe(initialReads + 1);
       const emptyAdmission = Object.fromEntries(Object.keys(outgoing!).map((key) => [key, false]));
-      let finishIncoming!: (value: unknown) => void;
-      if (completion === 'failed') {
-        apiFetchJSONMock.mockRejectedValue(new Error('503 admission unavailable'));
-      } else if (completion === 'successful') {
-        apiFetchJSONMock.mockResolvedValue({ aggregations: { platformAdmission: emptyAdmission } });
-      } else {
-        apiFetchJSONMock.mockImplementation(
-          () =>
-            new Promise((resolve) => {
-              finishIncoming = resolve;
-            }),
-        );
-      }
+      let finishIncoming: ((value: unknown) => void) | undefined;
+      const originalRead = apiFetchJSONMock.getMockImplementation()!;
+      apiFetchJSONMock.mockImplementation((url: string) => {
+        if (url !== admissionPath) return originalRead(url);
+        if (completion === 'failed') return Promise.reject(new Error('503 admission unavailable'));
+        if (completion === 'successful')
+          return Promise.resolve({ aggregations: { platformAdmission: emptyAdmission } });
+        return new Promise((resolve) => {
+          finishIncoming = resolve;
+        });
+      });
       hookState.handleOrgSwitch(hookState.activeOrgID() === 'acme' ? 'default' : 'acme');
+      expect(admissionReadCount()).toBe(initialReads + 2);
       await flushAsync();
       expect(hookState.platformAdmission()).toEqual(
         completion === 'successful' ? emptyAdmission : null,
@@ -1632,9 +1794,9 @@ describe('useAppRuntimeState', () => {
         completion === 'successful' ? emptyAdmission : null,
       );
       if (completion === 'pending') {
-        finishIncoming({ aggregations: { platformAdmission: emptyAdmission } });
-        await flushAsync();
-        expect(hookState.platformAdmission()).toEqual(emptyAdmission);
+        expect(finishIncoming).toBeTypeOf('function');
+        finishIncoming?.({ aggregations: { platformAdmission: emptyAdmission } });
+        await waitFor(() => expect(hookState.platformAdmission()).toEqual(emptyAdmission));
       }
       dispose();
     },
