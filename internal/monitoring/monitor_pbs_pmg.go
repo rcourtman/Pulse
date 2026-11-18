@@ -1011,10 +1011,11 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 						if nodeQueueObservations == nil {
 							nodeQueueObservations = make(map[string]alerts.PMGNodeQueueObservation, len(cluster))
 						}
-						totalObserved, deferredObserved, holdObserved := queueData.CountObservations()
+						subtotal, totalObserved, deferredObserved, holdObserved := queueData.CountObservations()
 						upper, bounded := queueData.OldestAgeUpperMinutes()
 						nodeQueueObservations[entry.Name] = alerts.PMGNodeQueueObservation{
-							TotalObserved: totalObserved, DeferredObserved: deferredObserved, HoldObserved: holdObserved,
+							TotalLowerBound: int(subtotal),
+							TotalObserved:   totalObserved, DeferredObserved: deferredObserved, HoldObserved: holdObserved,
 							AgeUpperMinutes: upper, AgeBounded: bounded,
 						}
 					}

@@ -930,12 +930,14 @@ func TestPMGQueueAgeBounds(t *testing.T) {
 				t.Fatalf("hold=%d lower=%d upper=(%d,%v); want hold=1 lower=%d upper=(%d,%v)",
 					queue.Hold.Int(), queue.OldestAge.Int64(), maximum, bounded, tc.lower, tc.upper, tc.bounded)
 			}
-			total, deferred, hold := queue.CountObservations()
+			subtotal, total, deferred, hold := queue.CountObservations()
 			if total == tc.unobservedCount || !deferred || !hold {
 				t.Fatalf("observed total/deferred/hold=%v/%v/%v; want %v/true/true", total, deferred, hold, !tc.unobservedCount)
 			}
-			if tc.unobservedCount && (queue.Active.Int() != 0 || queue.Incoming.Int() != 0) {
-				t.Fatalf("unobserved count contributed to subtotal: %+v", queue)
+			if tc.unobservedCount && subtotal != 1 {
+				// Only the one observed held entry can contribute, even if
+				// the numeric projection contains a rounded or negative value.
+				t.Fatalf("subtotal=%d; unobserved count contributed to the one held entry", subtotal)
 			}
 		})
 	}

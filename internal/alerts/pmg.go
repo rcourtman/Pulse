@@ -70,6 +70,7 @@ func (m *Manager) clearPMGMetricAlerts(pmgID string) {
 // PMGNodeQueueObservation carries completeness alongside the live numeric
 // queue projection. A partial total is a lower bound, not recovery evidence.
 type PMGNodeQueueObservation struct {
+	TotalLowerBound  int
 	TotalObserved    bool
 	DeferredObserved bool
 	HoldObserved     bool
@@ -85,7 +86,8 @@ func (m *Manager) CheckPMG(pmg models.PMGInstance) {
 
 func exactPMGNodeQueueObservation(node models.PMGNodeStatus) PMGNodeQueueObservation {
 	return PMGNodeQueueObservation{
-		TotalObserved: true, DeferredObserved: true, HoldObserved: true,
+		TotalLowerBound: node.QueueStatus.Total,
+		TotalObserved:   true, DeferredObserved: true, HoldObserved: true,
 		AgeUpperMinutes: node.QueueStatus.OldestAge / 60, AgeBounded: true,
 	}
 }
@@ -253,8 +255,7 @@ func (m *Manager) checkPMGQueueDepths(pmg models.PMGInstance, defaults PMGThresh
 			continue
 		}
 		observation := observe(node)
-		// The live total includes only observed component counts.
-		totalQueue += queue.Total
+		totalQueue += observation.TotalLowerBound
 		totalComplete = totalComplete && observation.TotalObserved
 		if observation.DeferredObserved {
 			totalDeferred += queue.Deferred
@@ -580,8 +581,8 @@ func (m *Manager) checkPMGNodeQueues(pmg models.PMGInstance, defaults PMGThresho
 		}
 
 		observation := observe(node)
-		if pmgQueueMetricEvaluable(observation.TotalObserved, queue.Total, scaledQueueWarn, scaledQueueCrit) {
-			m.evaluatePMGNodeQueueAlert(pmg, node.Name, "queue-total", "queue", "total messages in queue", queue.Total, scaledQueueWarn, scaledQueueCrit, medianTotal)
+		if pmgQueueMetricEvaluable(observation.TotalObserved, observation.TotalLowerBound, scaledQueueWarn, scaledQueueCrit) {
+			m.evaluatePMGNodeQueueAlert(pmg, node.Name, "queue-total", "queue", "total messages in queue", observation.TotalLowerBound, scaledQueueWarn, scaledQueueCrit, medianTotal)
 		}
 		if observation.DeferredObserved {
 			m.evaluatePMGNodeQueueAlert(pmg, node.Name, "queue-deferred", "deferred queue", "deferred messages", queue.Deferred, scaledDeferredWarn, scaledDeferredCrit, medianDeferred)

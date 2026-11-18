@@ -155,6 +155,7 @@ type QueueStatusEntry struct {
 
 	oldestAgeMaxMinutes int64
 	oldestAgeBounded    bool
+	countLowerBound     int64
 	totalCountObserved  bool
 	deferredObserved    bool
 	holdObserved        bool
@@ -167,10 +168,11 @@ func (q QueueStatusEntry) OldestAgeUpperMinutes() (int64, bool) {
 	return q.oldestAgeMaxMinutes, q.oldestAgeBounded
 }
 
-// CountObservations reports which counts were observed in the live qshape
-// rows. The total is complete only if all four queues supplied a count.
-func (q QueueStatusEntry) CountObservations() (total, deferred, hold bool) {
-	return q.totalCountObserved, q.deferredObserved, q.holdObserved
+// CountObservations returns the sum of observed counts and their completeness
+// separately from the existing numeric projection. A complete total requires
+// a count from all four live qshape rows.
+func (q QueueStatusEntry) CountObservations() (subtotal int64, total, deferred, hold bool) {
+	return q.countLowerBound, q.totalCountObserved, q.deferredObserved, q.holdObserved
 }
 
 type queueShapeTotalCount struct {
@@ -667,8 +669,9 @@ func (c *Client) GetQueueStatus(ctx context.Context, node string) (*QueueStatusE
 		if !ok {
 			return nil, fmt.Errorf("PMG GetQueueStatus %s queue response missing TOTAL row", queue.name)
 		}
+		*queue.count = total.Total.flexibleInt
 		if total.Total.observed {
-			*queue.count = total.Total.flexibleInt
+			status.countLowerBound += total.Total.Int64()
 		}
 		if queue.observed != nil {
 			*queue.observed = total.Total.observed

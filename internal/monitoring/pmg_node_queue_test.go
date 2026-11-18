@@ -172,7 +172,7 @@ func newPMGNodeQueuePoller(t *testing.T, warning int) (*alerts.Manager, func(pmg
 	if err != nil {
 		t.Fatal(err)
 	}
-	m := pmgScopeMonitor(config.PMGInstance{Host: server.URL, MonitoringConfigured: true, MonitorQueues: true})
+	m := pmgScopeMonitor(config.PMGInstance{Host: "https://pmg.example.invalid", MonitoringConfigured: true, MonitorQueues: true})
 	m.alertManager = alerts.NewManager()
 	t.Cleanup(m.alertManager.Stop)
 	cfg := m.alertManager.GetConfig()
