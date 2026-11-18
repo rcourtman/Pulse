@@ -321,6 +321,135 @@ func TestFixtureNodeAndLinkedAgentShareOnePrimaryCPUTemperature(t *testing.T) {
 	check("refresh", refreshAt, true)
 }
 
+// A real agent reports the network mode of every container and, on Linux,
+// the host's default route and resolver. Mock data that leaves them out makes
+// every screen built on them look empty in the demo.
+func TestBuildFixtureStateReportsNetworkModeAndHostRoutes(t *testing.T) {
+	cfg := DefaultConfig
+	cfg.DockerHostCount = 3
+	cfg.DockerContainersPerHost = 6
+	cfg.GenericHostCount = 8
+	cfg.RandomMetrics = false
+
+	data := buildFixtureState(cfg)
+
+	containers := 0
+	for _, host := range data.DockerHosts {
+		for _, container := range host.Containers {
+			containers++
+			if strings.TrimSpace(container.NetworkMode) == "" {
+				t.Fatalf("container %s on %s reports no network mode", container.Name, host.Hostname)
+			}
+		}
+	}
+	if containers == 0 {
+		t.Fatal("expected docker containers in mock data")
+	}
+
+	linux, other := 0, 0
+	for _, host := range data.Hosts {
+		switch host.Platform {
+		case "windows", "macos":
+			other++
+			if len(host.DefaultGateways) != 0 || len(host.DNSServers) != 0 {
+				t.Fatalf("%s host %s reports gateways %+v and resolvers %v; the agent reads them on Linux only", host.Platform, host.Hostname, host.DefaultGateways, host.DNSServers)
+			}
+			continue
+		}
+		if len(host.NetworkInterfaces) == 0 {
+			continue
+		}
+		linux++
+		if len(host.DefaultGateways) != 1 {
+			t.Fatalf("linux host %s reports %d default gateways, want 1", host.Hostname, len(host.DefaultGateways))
+		}
+		gateway := host.DefaultGateways[0]
+		address := strings.Split(host.NetworkInterfaces[0].Addresses[0], "/")[0]
+		subnet := address[:strings.LastIndex(address, ".")]
+		if gateway.Address != subnet+".1" {
+			t.Fatalf("linux host %s at %s names gateway %s, want %s.1", host.Hostname, address, gateway.Address, subnet)
+		}
+		if gateway.Interface != host.NetworkInterfaces[0].Name {
+			t.Fatalf("linux host %s gateway leaves by %q, want %q", host.Hostname, gateway.Interface, host.NetworkInterfaces[0].Name)
+		}
+		if len(host.DNSServers) != 1 || host.DNSServers[0] != gateway.Address {
+			t.Fatalf("linux host %s resolvers = %v, want the gateway %s", host.Hostname, host.DNSServers, gateway.Address)
+		}
+	}
+	if linux == 0 {
+		t.Fatal("expected linux hosts with interfaces in mock data")
+	}
+	if other == 0 {
+		t.Log("no windows or macos host in this draw; the linux-only rule was not exercised")
+	}
+}
+
+// The nodes of one Kubernetes cluster are on one subnet, so their agents name
+// one gateway. A different router per node is a shape no cluster has.
+func TestBuildFixtureStatePutsAClustersNodesBehindOneGateway(t *testing.T) {
+	cfg := DefaultConfig
+	cfg.K8sClusterCount = 2
+	cfg.K8sNodesPerCluster = 3
+	cfg.RandomMetrics = false
+
+	data := buildFixtureState(cfg)
+
+	hostsByName := make(map[string]models.Host, len(data.Hosts))
+	for _, host := range data.Hosts {
+		hostsByName[strings.ToLower(host.Hostname)] = host
+	}
+	checked := 0
+	for _, cluster := range data.KubernetesClusters {
+		gateways := make(map[string]int)
+		addresses := make(map[string]string)
+		for _, node := range cluster.Nodes {
+			host, ok := hostsByName[strings.ToLower(node.Name)]
+			if !ok || len(host.DefaultGateways) == 0 {
+				continue
+			}
+			gateways[host.DefaultGateways[0].Address]++
+			address := host.NetworkInterfaces[0].Addresses[0]
+			if other, taken := addresses[address]; taken {
+				t.Fatalf("nodes %s and %s of cluster %s share the address %s", other, node.Name, cluster.Name, address)
+			}
+			addresses[address] = node.Name
+		}
+		if len(addresses) < 2 {
+			continue
+		}
+		checked++
+		if len(gateways) != 1 {
+			t.Fatalf("cluster %s names %d gateways across its nodes (%v), want 1", cluster.Name, len(gateways), gateways)
+		}
+	}
+	if checked == 0 {
+		t.Fatal("expected a cluster with at least two node hosts that report a gateway")
+	}
+}
+
+func TestMockDefaultGatewaySkipsAddressesThatNameNoRouter(t *testing.T) {
+	cases := []struct {
+		name       string
+		interfaces []models.HostNetworkInterface
+		gateway    string
+		iface      string
+	}{
+		{"cidr address", []models.HostNetworkInterface{{Name: "vmbr0", Addresses: []string{"192.168.10.21/24"}}}, "192.168.10.1", "vmbr0"},
+		{"bare address", []models.HostNetworkInterface{{Name: "eth0", Addresses: []string{"10.30.114.24"}}}, "10.30.114.1", "eth0"},
+		{"loopback and ipv6 first", []models.HostNetworkInterface{{Name: "lo", Addresses: []string{"127.0.0.1/8", "::1/128"}}, {Name: "eth1", Addresses: []string{"fe80::1/64", "172.16.4.9/24"}}}, "172.16.4.1", "eth1"},
+		{"the host is the first address", []models.HostNetworkInterface{{Name: "eth0", Addresses: []string{"192.168.5.1/24"}}}, "", ""},
+		{"no address", []models.HostNetworkInterface{{Name: "eth0"}}, "", ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			gateway, iface := mockDefaultGateway(tc.interfaces)
+			if gateway != tc.gateway || iface != tc.iface {
+				t.Fatalf("mockDefaultGateway = %q via %q, want %q via %q", gateway, iface, tc.gateway, tc.iface)
+			}
+		})
+	}
+}
+
 func TestBuildFixtureStatePopulatesHostIORates(t *testing.T) {
 	cfg := DefaultConfig
 	cfg.NodeCount = 6

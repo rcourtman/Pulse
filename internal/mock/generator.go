@@ -5,6 +5,7 @@ import (
 	"hash/fnv"
 	"math"
 	"math/rand"
+	"net"
 	"sort"
 	"strings"
 	"time"
@@ -502,6 +503,7 @@ func buildFixtureState(config MockConfig) models.StateSnapshot {
 	ensureMockNodeHostLinks(&data)
 	ensureMockKubernetesNodeHostLinks(&data)
 	ensureMockFixtureHostIORates(&data)
+	ensureMockHostRoutes(&data)
 
 	// Generate physical disks for each node
 	for _, node := range data.Nodes {
@@ -1175,6 +1177,47 @@ func mockLinkedHostInterfaces(node models.Node, hostIndex int) []models.HostNetw
 		RXBytes:   uint64(1_000_000_000 + rand.Int63n(5_000_000_000)),
 		TXBytes:   uint64(750_000_000 + rand.Int63n(4_000_000_000)),
 	}}
+}
+
+// ensureMockHostRoutes gives every Linux host the default route and resolver
+// its agent would read from it: the first address of the subnet its first
+// IPv4 interface is on, which is where a router usually sits. Hosts on one
+// subnet therefore name the same gateway, as machines behind one router do.
+// Windows and macOS hosts report neither, because the agent reads the route
+// table and resolver configuration on Linux only.
+func ensureMockHostRoutes(data *models.StateSnapshot) {
+	for i := range data.Hosts {
+		host := &data.Hosts[i]
+		switch strings.ToLower(strings.TrimSpace(host.Platform)) {
+		case "windows", "macos", "darwin":
+			continue
+		}
+		gateway, iface := mockDefaultGateway(host.NetworkInterfaces)
+		if gateway == "" {
+			continue
+		}
+		host.DefaultGateways = []models.HostDefaultGateway{{Address: gateway, Interface: iface}}
+		host.DNSServers = []string{gateway}
+	}
+}
+
+// mockDefaultGateway returns the .1 address of the first IPv4 subnet a host
+// has an interface on, and that interface's name.
+func mockDefaultGateway(interfaces []models.HostNetworkInterface) (string, string) {
+	for _, nic := range interfaces {
+		for _, raw := range nic.Addresses {
+			address := strings.TrimSpace(raw)
+			if slash := strings.IndexByte(address, '/'); slash >= 0 {
+				address = address[:slash]
+			}
+			ip := net.ParseIP(address).To4()
+			if ip == nil || ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip[3] == 1 {
+				continue
+			}
+			return fmt.Sprintf("%d.%d.%d.1", ip[0], ip[1], ip[2]), nic.Name
+		}
+	}
+	return "", ""
 }
 
 // generateNodeTemperature generates realistic temperature data for a node
@@ -4215,8 +4258,15 @@ func buildMockLinkedHostFromKubernetesNode(
 			{
 				Name: "eth0",
 				MAC:  fmt.Sprintf("02:6f:%02x:%02x:%02x:%02x", hostIndex%255, (hostIndex*17)%255, (hostIndex*31)%255, (hostIndex*41)%255),
+				// The nodes of one cluster sit on one subnet, behind one
+				// router, as they do in a real cluster.
 				Addresses: []string{
-					fmt.Sprintf("10.%d.%d.%d", 20+(hostIndex%90), 10+rand.Intn(120), 20+rand.Intn(200)),
+					fmt.Sprintf(
+						"10.%d.%d.%d",
+						20+int(mockStableHash64(cluster.ID, "node-subnet-a")%90),
+						10+int(mockStableHash64(cluster.ID, "node-subnet-b")%120),
+						20+(hostIndex%200),
+					),
 				},
 			},
 		},
@@ -4905,6 +4955,9 @@ func generateDockerContainers(hostName string, hostIdx int, config MockConfig, p
 			Labels:        labels,
 			Networks:      generateDockerNetworks(hostIdx, i),
 		}
+		// The agent reports the runtime's network mode for every container.
+		// One started on the default network reports that network's name.
+		container.NetworkMode = container.Networks[0].Name
 
 		container.UpdateStatus = generateDockerContainerUpdateStatus(now)
 

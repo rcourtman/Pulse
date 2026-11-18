@@ -562,6 +562,114 @@ func dockerHostNameExists(graph FixtureGraph, want string) bool {
 	return false
 }
 
+// The demo estate has to state how its containers are connected in the shape
+// a real agent reports it, or the map has nothing true to draw there.
+func TestDemoDockerScenarioStatesHowContainersAreConnected(t *testing.T) {
+	cfg := DefaultConfig
+	cfg.RandomMetrics = false
+	now := time.Date(2026, time.April, 1, 12, 0, 0, 0, time.UTC)
+	graph := buildFixtureGraph(cfg, now)
+
+	host := func(hostname string) models.DockerHost {
+		t.Helper()
+		for _, candidate := range graph.State.DockerHosts {
+			if candidate.Hostname == hostname {
+				return candidate
+			}
+		}
+		t.Fatalf("docker host %q missing from the demo graph", hostname)
+		return models.DockerHost{}
+	}
+	named := func(host models.DockerHost, name string) models.DockerContainer {
+		t.Helper()
+		for _, container := range host.Containers {
+			if container.Name == name {
+				return container
+			}
+		}
+		t.Fatalf("container %q missing from %s", name, host.Hostname)
+		return models.DockerContainer{}
+	}
+	onNetwork := func(container models.DockerContainer, network string) bool {
+		for _, link := range container.Networks {
+			if link.Name == network {
+				return true
+			}
+		}
+		return false
+	}
+
+	edge := host("edge-apps-01")
+	proxy := named(edge, "edge-proxy")
+	if proxy.Image != "traefik:v3.1" || !onNetwork(proxy, demoProxyNetwork) {
+		t.Fatalf("edge-proxy = image %q networks %+v, want Traefik on %q", proxy.Image, proxy.Networks, demoProxyNetwork)
+	}
+	for name, hostname := range map[string]string{
+		"customer-portal": "portal.example.test",
+		"inventory-api":   "inventory.example.test",
+		"vaultwarden":     "vault.example.test",
+		"uptime-kuma":     "status.example.test",
+	} {
+		routed := named(edge, name)
+		rule := routed.Labels["traefik.http.routers."+name+".rule"]
+		if rule != "Host(`"+hostname+"`)" {
+			t.Fatalf("%s router rule = %q, want Host(`%s`)", name, rule, hostname)
+		}
+		if routed.Labels["traefik.enable"] != "true" {
+			t.Fatalf("%s is routed without traefik.enable=true", name)
+		}
+		if !onNetwork(routed, demoProxyNetwork) || routed.NetworkMode != demoProxyNetwork {
+			t.Fatalf("%s = mode %q networks %+v, want it on %q with the proxy", name, routed.NetworkMode, routed.Networks, demoProxyNetwork)
+		}
+		if len(routed.Ports) != 0 {
+			t.Fatalf("%s publishes %+v although the proxy reaches it", name, routed.Ports)
+		}
+	}
+	// The labels name a proxy only when one Traefik can reach the container.
+	proxies := 0
+	for _, container := range edge.Containers {
+		if strings.HasPrefix(container.Image, "traefik:") && onNetwork(container, demoProxyNetwork) {
+			proxies++
+		}
+	}
+	if proxies != 1 {
+		t.Fatalf("%d Traefik containers share %q with the routed containers, want exactly 1", proxies, demoProxyNetwork)
+	}
+
+	ops := host("ops-services-01")
+	vpn := named(ops, "partner-vpn")
+	if len(vpn.ID) != 64 || strings.Trim(vpn.ID, "0123456789abcdef") != "" {
+		t.Fatalf("partner-vpn id %q is not the 64 hex digits a container reference names", vpn.ID)
+	}
+	if vpn.State != "running" || len(vpn.Networks) == 0 {
+		t.Fatalf("partner-vpn = state %q networks %+v, want a running container with a network of its own", vpn.State, vpn.Networks)
+	}
+	for _, name := range []string{"sftp-ingest", "backup-coordinator"} {
+		carried := named(ops, name)
+		if carried.NetworkMode != "container:"+vpn.ID {
+			t.Fatalf("%s network mode = %q, want container:%s", name, carried.NetworkMode, vpn.ID)
+		}
+		if len(carried.Networks) != 0 || len(carried.Ports) != 0 {
+			t.Fatalf("%s reports networks %+v and ports %+v; a container inside another's network has neither", name, carried.Networks, carried.Ports)
+		}
+	}
+
+	// The scenario runs on every refresh and must not add a second sidecar.
+	applyDemoDockerScenario(&graph.State, now.Add(time.Minute))
+	sidecars := 0
+	for _, container := range host("ops-services-01").Containers {
+		if container.Name == "partner-vpn" {
+			sidecars++
+		}
+	}
+	if sidecars != 1 {
+		t.Fatalf("partner-vpn appears %d times after a second pass, want 1", sidecars)
+	}
+	if got := named(host("ops-services-01"), "sftp-ingest").NetworkMode; got != "container:"+vpn.ID {
+		t.Fatalf("sftp-ingest network mode after a second pass = %q", got)
+	}
+}
+
 func dockerContainerNameExists(graph FixtureGraph, want string) bool {
 	for _, host := range graph.State.DockerHosts {
 		for _, container := range host.Containers {
