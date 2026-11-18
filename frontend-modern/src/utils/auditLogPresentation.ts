@@ -139,11 +139,12 @@ export function getAuditLogFeatureGateCopy(options: AuditLogFeatureGateCopyOptio
   } as const;
 }
 
-export function getAuditLogEmptyState(activeFilterCount: number): AuditLogEmptyStatePresentation {
-  return activeFilterCount > 0
+export function getAuditLogEmptyState(hasLogFilters: boolean): AuditLogEmptyStatePresentation {
+  return hasLogFilters
     ? {
         title: 'No audit events found',
-        description: 'No events match your current filters. Try adjusting or clearing them.',
+        description:
+          'No events match the Event, User or Outcome filters. Try adjusting or clearing them.',
       }
     : {
         title: 'No audit events found',

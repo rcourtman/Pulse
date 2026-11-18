@@ -55,6 +55,7 @@ export default function AuditLogPanel(props: AuditLogPanelProps) {
     goToLastPage,
     goToNextPage,
     goToPreviousPage,
+    hasLogFilters,
     hasNextPage,
     hasResumeEvents,
     hasSignedEvents,
@@ -104,6 +105,9 @@ export default function AuditLogPanel(props: AuditLogPanelProps) {
   };
   const featureGateCopy = () =>
     getAuditLogFeatureGateCopy({ paidRuntimeRequired: paidRuntimeRequired() });
+  const hasPageVerificationFilter = () => verificationFilter() !== 'all';
+  const loadedEventCount = () => verificationSummary().total;
+  const logEmptyState = () => getAuditLogEmptyState(hasLogFilters());
 
   const auditEventOptions = (): FilterSelectOption[] => [
     { value: '', label: AUDIT_EVENT_FILTER_ALL_LABEL },
@@ -352,8 +356,14 @@ export default function AuditLogPanel(props: AuditLogPanelProps) {
         </div>
       </Show>
 
-      <Show when={!loading() && isPersistent() && filteredEvents().length > 0}>
-        <div class="flex flex-wrap items-center gap-3 text-xs text-muted">
+      <Show when={!loading() && isPersistent() && loadedEventCount() > 0}>
+        <div
+          class="flex flex-wrap items-center gap-x-3 text-xs text-muted"
+          classList={{
+            'gap-y-0 sm:gap-y-3': hasPageVerificationFilter(),
+            'gap-y-3': !hasPageVerificationFilter(),
+          }}
+        >
           <span>Total: {totalEvents()}</span>
           <span>Signed: {verificationSummary().signed}</span>
           <span>Verified: {verificationSummary().verified}</span>
@@ -378,7 +388,16 @@ export default function AuditLogPanel(props: AuditLogPanelProps) {
           <span class="w-full sm:w-auto sm:ml-auto text-muted">
             {pageRangeText()} • Page {pageNumber()} of {totalPages()}
           </span>
+          <Show when={hasPageVerificationFilter()}>
+            <p role="status" aria-label="Verification filter results" class="w-full">
+              Verification filters this page only: {filteredEvents().length} of {loadedEventCount()}{' '}
+              events shown.
+            </p>
+          </Show>
         </div>
+      </Show>
+
+      <Show when={!loading() && isPersistent() && filteredEvents().length > 0}>
         <div class="mt-4">
           <PulseDataGrid
             data={filteredEvents()}
@@ -490,22 +509,45 @@ export default function AuditLogPanel(props: AuditLogPanelProps) {
       </Show>
 
       <Show when={!loading() && isPersistent() && filteredEvents().length === 0}>
-        <EmptyState
-          variant="panel"
-          icon={
-            activeFilterCount() > 0 ? <ShieldAlert class="h-5 w-5" /> : <Shield class="h-5 w-5" />
+        <Show
+          when={hasPageVerificationFilter() && loadedEventCount() > 0}
+          fallback={
+            <EmptyState
+              variant="panel"
+              icon={
+                activeFilterCount() > 0 ? (
+                  <ShieldAlert class="h-5 w-5" />
+                ) : (
+                  <Shield class="h-5 w-5" />
+                )
+              }
+              title={logEmptyState().title}
+              description={logEmptyState().description}
+              tone={activeFilterCount() > 0 ? 'info' : 'default'}
+              actions={
+                activeFilterCount() > 0 ? (
+                  <Button type="button" variant="info" size="mdCompact" onClick={clearFilters}>
+                    Clear all filters
+                  </Button>
+                ) : undefined
+              }
+            />
           }
-          title={getAuditLogEmptyState(activeFilterCount()).title}
-          description={getAuditLogEmptyState(activeFilterCount()).description}
-          tone={activeFilterCount() > 0 ? 'info' : 'default'}
-          actions={
-            activeFilterCount() > 0 ? (
-              <Button type="button" variant="info" size="mdCompact" onClick={clearFilters}>
-                Clear all filters
-              </Button>
-            ) : undefined
-          }
-        />
+        >
+          <InlineNotice
+            tone="info"
+            icon={<ShieldAlert />}
+            actionLabel="Clear all filters"
+            actionOnClick={clearFilters}
+          >
+            <h3 class="font-semibold">No events match Verification on this page</h3>
+            <p>
+              {totalPages() > 1
+                ? 'Check another page or change the Verification filter.'
+                : 'Change the Verification filter to see other events on this page.'}
+            </p>
+          </InlineNotice>
+        </Show>
       </Show>
 
       <Show when={!loading() && isPersistent()}>
