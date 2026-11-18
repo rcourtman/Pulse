@@ -8,6 +8,11 @@ import (
 	"time"
 )
 
+const (
+	backupHistoryPageSize  = 200
+	backupHistoryPageLimit = 30
+)
+
 // BackupTaskHistory preserves collection quality alongside execution evidence.
 // A successful HTTP response can still contain only the caller's own tasks.
 type BackupTaskHistory struct {
@@ -37,10 +42,10 @@ func (c *Client) GetBackupTaskHistory(ctx context.Context, since time.Time) (Bac
 			history.Nodes = append(history.Nodes, observation)
 			continue
 		}
-		seen := map[string]bool{}
+		seen := make(map[string]struct{})
 		var nodeTasks []Task
-		for page := 0; page < 30; page++ {
-			params := url.Values{"typefilter": {"vzdump"}, "source": {"all"}, "limit": {"200"}, "start": {fmt.Sprint(page * 200)}, "since": {fmt.Sprint(since.Unix())}, "until": {fmt.Sprint(until)}}
+		for page := 0; page < backupHistoryPageLimit; page++ {
+			params := url.Values{"typefilter": {"vzdump"}, "source": {"all"}, "limit": {fmt.Sprint(backupHistoryPageSize)}, "start": {fmt.Sprint(page * backupHistoryPageSize)}, "since": {fmt.Sprint(since.Unix())}, "until": {fmt.Sprint(until)}}
 			resp, readErr := c.get(ctx, "/nodes/"+url.PathEscape(node.Node)+"/tasks?"+params.Encode())
 			if readErr != nil {
 				observation.Reason = "collection_failed"
@@ -54,25 +59,34 @@ func (c *Client) GetBackupTaskHistory(ctx context.Context, since time.Time) (Bac
 				observation.Reason = "collection_failed"
 				break
 			}
-			added := 0
+			overlap := false
+			before := len(nodeTasks)
 			for _, task := range tasks {
-				if task.Type != "vzdump" || task.UPID == "" || seen[task.UPID] {
+				if _, alreadySeen := seen[task.UPID]; alreadySeen {
+					overlap = true
 					continue
 				}
-				seen[task.UPID] = true
-				if task.Node == "" {
-					task.Node = node.Node
+				seen[task.UPID] = struct{}{}
+				if task.Type == "vzdump" {
+					nodeTasks = append(nodeTasks, task)
 				}
-				nodeTasks = append(nodeTasks, task)
-				added++
 			}
-			if len(tasks) < 200 {
-				observation.Complete = true
+			// Overlap can leave a gap in the window even when later pages
+			// supply new jobs. Keep those jobs without qualifying coverage
+			// or advancing the checkpoint, including when we reach the cap.
+			if overlap {
+				observation.Reason = "collection_failed"
+			}
+			if len(tasks) < backupHistoryPageSize {
+				observation.Complete = observation.Reason == ""
 				break
 			}
-			if added == 0 || page == 29 {
+			if len(nodeTasks) == before {
+				observation.Reason = "collection_failed"
+				break
+			}
+			if page == backupHistoryPageLimit-1 && observation.Reason == "" {
 				observation.Reason = "history_truncated"
-				break
 			}
 		}
 		if observation.Complete && !c.backupHistoryAuditPermission(ctx, node.Node) {
