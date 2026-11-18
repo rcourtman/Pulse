@@ -12,6 +12,7 @@ import (
 	gopsutilcommon "github.com/shirou/gopsutil/v4/common"
 	godisk "github.com/shirou/gopsutil/v4/disk"
 	gomem "github.com/shirou/gopsutil/v4/mem"
+	gonet "github.com/shirou/gopsutil/v4/net"
 )
 
 func TestMountEnumerationContextUsesAgentNamespaceOnNativeLinux(t *testing.T) {
@@ -474,5 +475,142 @@ func TestIssue1875MountinfoToExplicitDiskCollection(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// A Proxmox host bridges its physical port into vmbr0, so eno1 has no address
+// of its own. It must still be reported, with its link speed, as inventory,
+// while traffic stays on the addressed bridge so the host's network rate
+// (the sum of every reported counter) does not double.
+func TestCollectNetworkReportsAddresslessPhysicalPortsAsInventory(t *testing.T) {
+	origInterfaces, origCounters, origLinkInfo := netInterfaces, netIOCounters, readLinkInfo
+	t.Cleanup(func() {
+		netInterfaces, netIOCounters, readLinkInfo = origInterfaces, origCounters, origLinkInfo
+	})
+
+	netInterfaces = func(context.Context) (gonet.InterfaceStatList, error) {
+		return gonet.InterfaceStatList{
+			{Name: "lo", Flags: []string{"up", "loopback"}, Addrs: gonet.InterfaceAddrList{{Addr: "127.0.0.1/8"}}},
+			{Name: "eno1", HardwareAddr: "aa:bb:cc:00:00:01", Flags: []string{"up"}},
+			{Name: "enp2s0", HardwareAddr: "aa:bb:cc:00:00:02"},
+			{Name: "vmbr0", HardwareAddr: "aa:bb:cc:00:00:01", Flags: []string{"up"}, Addrs: gonet.InterfaceAddrList{{Addr: "192.0.2.10/24"}}},
+			{Name: "veth100i0", Flags: []string{"up"}},
+			{Name: "tap101i0", Flags: []string{"up"}},
+		}, nil
+	}
+	netIOCounters = func(context.Context, bool) ([]gonet.IOCountersStat, error) {
+		return []gonet.IOCountersStat{
+			{Name: "eno1", BytesRecv: 900, BytesSent: 800},
+			{Name: "vmbr0", BytesRecv: 900, BytesSent: 800},
+			{Name: "veth100i0", BytesRecv: 50, BytesSent: 40},
+		}, nil
+	}
+	readLinkInfo = func(name string) (bool, int64) {
+		switch name {
+		case "eno1":
+			return true, 2500
+		case "enp2s0":
+			return true, 0 // no cable
+		}
+		return false, 0
+	}
+
+	got := collectNetwork(context.Background())
+
+	names := make([]string, 0, len(got))
+	for _, iface := range got {
+		names = append(names, iface.Name)
+	}
+	if want := []string{"eno1", "enp2s0", "vmbr0"}; !reflect.DeepEqual(names, want) {
+		t.Fatalf("interfaces = %v, want %v", names, want)
+	}
+
+	eno1, unplugged, bridge := got[0], got[1], got[2]
+	if eno1.SpeedMbps == nil || *eno1.SpeedMbps != 2500 || eno1.MAC != "aa:bb:cc:00:00:01" {
+		t.Fatalf("eno1 = %+v, want its MAC at 2500 Mb/s", eno1)
+	}
+	if eno1.RXBytes != 0 || eno1.TXBytes != 0 || len(eno1.Addresses) != 0 {
+		t.Fatalf("eno1 = %+v, want inventory without addresses or counters", eno1)
+	}
+	if unplugged.SpeedMbps != nil {
+		t.Fatalf("unplugged port speed = %d, want none", *unplugged.SpeedMbps)
+	}
+	if bridge.RXBytes != 900 || bridge.TXBytes != 800 || bridge.SpeedMbps != nil {
+		t.Fatalf("vmbr0 = %+v, want its counters and no speed", bridge)
+	}
+
+	var rx uint64
+	for _, iface := range got {
+		rx += iface.RXBytes
+	}
+	if rx != 900 {
+		t.Fatalf("summed RX = %d, want 900 (bridge traffic counted once)", rx)
+	}
+}
+
+func TestCollectNetworkReportsSpeedOfAnAddressedPhysicalPort(t *testing.T) {
+	origInterfaces, origCounters, origLinkInfo := netInterfaces, netIOCounters, readLinkInfo
+	t.Cleanup(func() {
+		netInterfaces, netIOCounters, readLinkInfo = origInterfaces, origCounters, origLinkInfo
+	})
+
+	netInterfaces = func(context.Context) (gonet.InterfaceStatList, error) {
+		return gonet.InterfaceStatList{{Name: "eth0", Addrs: gonet.InterfaceAddrList{{Addr: "192.0.2.20/24"}}}}, nil
+	}
+	netIOCounters = func(context.Context, bool) ([]gonet.IOCountersStat, error) {
+		return []gonet.IOCountersStat{{Name: "eth0", BytesRecv: 7, BytesSent: 8}}, nil
+	}
+	readLinkInfo = func(string) (bool, int64) { return true, 10000 }
+
+	got := collectNetwork(context.Background())
+	if len(got) != 1 || got[0].SpeedMbps == nil || *got[0].SpeedMbps != 10000 || got[0].RXBytes != 7 {
+		t.Fatalf("interfaces = %+v, want eth0 at 10000 Mb/s with its counters", got)
+	}
+}
+
+func TestReadPhysicalLinkInfoFromSysfs(t *testing.T) {
+	root := t.TempDir()
+	port := func(name, speed string, device bool) {
+		t.Helper()
+		dir := filepath.Join(root, name)
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if device {
+			if err := os.Mkdir(filepath.Join(dir, "device"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if speed != "" {
+			if err := os.WriteFile(filepath.Join(dir, "speed"), []byte(speed+"\n"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	port("eno1", "2500", true)
+	port("enp3s0", "-1", true)        // cable out
+	port("wlp2s0", "", true)          // Wi-Fi has no readable speed
+	port("veth100i0", "10000", false) // software link with an invented speed
+	port("vmbr0", "", false)
+
+	cases := []struct {
+		name     string
+		physical bool
+		speed    int64
+	}{
+		{"eno1", true, 2500},
+		{"enp3s0", true, 0},
+		{"wlp2s0", true, 0},
+		{"veth100i0", false, 0},
+		{"vmbr0", false, 0},
+		{"missing0", false, 0},
+		{"../eno1", false, 0},
+		{"..", false, 0},
+	}
+	for _, tc := range cases {
+		physical, speed := readPhysicalLinkInfoFrom(root, tc.name)
+		if physical != tc.physical || speed != tc.speed {
+			t.Errorf("%s = (%v, %d), want (%v, %d)", tc.name, physical, speed, tc.physical, tc.speed)
+		}
 	}
 }

@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -33,6 +35,7 @@ var (
 	diskIOCounters = godisk.IOCountersWithContext
 	netInterfaces  = gonet.InterfacesWithContext
 	netIOCounters  = gonet.IOCountersWithContext
+	readLinkInfo   = readPhysicalLinkInfo
 	readZFSARCSize = readARCSize
 )
 
@@ -529,9 +532,6 @@ func collectNetwork(ctx context.Context) []agentshost.NetworkInterface {
 	interfaces := make([]agentshost.NetworkInterface, 0, len(ifaces))
 
 	for _, iface := range ifaces {
-		if len(iface.Addrs) == 0 {
-			continue
-		}
 		if isLoopback(iface.Flags) {
 			continue
 		}
@@ -542,17 +542,31 @@ func collectNetwork(ctx context.Context) []agentshost.NetworkInterface {
 				addresses = append(addresses, addr.Addr)
 			}
 		}
-		if len(addresses) == 0 {
-			continue
-		}
+		physical, speedMbps := readLinkInfo(iface.Name)
 
-		counter := ioMap[iface.Name]
 		ifaceEntry := agentshost.NetworkInterface{
 			Name:      iface.Name,
 			MAC:       iface.HardwareAddr,
 			Addresses: addresses,
-			RXBytes:   counter.BytesRecv,
-			TXBytes:   counter.BytesSent,
+		}
+		if speedMbps > 0 {
+			ifaceEntry.SpeedMbps = &speedMbps
+		}
+
+		switch {
+		case len(addresses) > 0:
+			counter := ioMap[iface.Name]
+			ifaceEntry.RXBytes = counter.BytesRecv
+			ifaceEntry.TXBytes = counter.BytesSent
+		case physical:
+			// A port with no address of its own (eno1 enslaved to vmbr0, a
+			// bond member) is still hardware the host has. Report it as
+			// inventory without counters: its traffic is already counted
+			// on the addressed bridge or bond, and the server sums every
+			// reported counter into the host's network rate.
+			ifaceEntry.Addresses = nil
+		default:
+			continue
 		}
 
 		interfaces = append(interfaces, ifaceEntry)
@@ -561,6 +575,41 @@ func collectNetwork(ctx context.Context) []agentshost.NetworkInterface {
 	sort.Slice(interfaces, func(i, j int) bool { return interfaces[i].Name < interfaces[j].Name })
 	log.Debug().Int("count", len(interfaces)).Msg("network: collected interfaces")
 	return interfaces
+}
+
+const sysClassNet = "/sys/class/net"
+
+// readPhysicalLinkInfo reports whether a network interface is backed by a
+// device (a NIC, Wi-Fi card, USB adapter or a VM's virtual NIC) rather than
+// a software interface such as a bridge, bond, veth, tap or tunnel, and its
+// negotiated link speed in Mb/s when the driver reports one. It reads Linux
+// sysfs; elsewhere the path is absent and every interface reads as software.
+//
+// Software interfaces return no speed even when the kernel invents one (a
+// veth reads 10000), so a container never claims a 10G link.
+func readPhysicalLinkInfo(name string) (physical bool, speedMbps int64) {
+	return readPhysicalLinkInfoFrom(sysClassNet, name)
+}
+
+func readPhysicalLinkInfoFrom(root, name string) (bool, int64) {
+	if name == "" || name == "." || name == ".." || strings.ContainsAny(name, `/\`) {
+		return false, 0
+	}
+	dir := filepath.Join(root, name)
+	if _, err := os.Stat(filepath.Join(dir, "device")); err != nil {
+		return false, 0
+	}
+	// A link that is down, or a driver without link settings (Wi-Fi), fails
+	// the read with EINVAL or returns -1.
+	raw, err := os.ReadFile(filepath.Join(dir, "speed"))
+	if err != nil {
+		return true, 0
+	}
+	speed, err := strconv.ParseInt(strings.TrimSpace(string(raw)), 10, 64)
+	if err != nil || speed <= 0 {
+		return true, 0
+	}
+	return true, speed
 }
 
 func isLoopback(flags []string) bool {
