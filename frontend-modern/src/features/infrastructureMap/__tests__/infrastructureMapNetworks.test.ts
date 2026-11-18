@@ -1,12 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Resource } from '@/types/resource';
 import {
-  layoutInfrastructureMap,
-  layoutInfrastructureNetworkMap,
-  type MapScene,
-  type SceneNode,
-} from '../infrastructureMapLayout';
-import {
   anonymizeInfrastructureMapModel,
   buildInfrastructureMapModel,
   type MapHost,
@@ -279,11 +273,10 @@ const hostsOf = (resources: Resource[]): MapHost[] =>
   );
 
 describe('networks on the map model', () => {
-  it('records where a host is and which networks only its guests are on', () => {
+  it('records where a host is and which network each of its guests is on', () => {
     const node = hostNamed(hostsOf(lab()), 'pve');
     expect(node.address).toBe('192.168.10.11');
     expect(node.ownSegmentIds).toEqual([LAN]);
-    expect(node.guestSegmentIds).toEqual([IOT, OTHER_SEGMENT_ID]);
     const vms = node.sections[0].items;
     expect(vms.find((item) => item.name === 'haos')).toMatchObject({
       address: '10.0.30.5',
@@ -293,47 +286,11 @@ describe('networks on the map model', () => {
     expect(hostNamed(hostsOf(lab()), 'bare').ownSegmentIds).toEqual([]);
   });
 
-  it('groups a Docker host’s containers by the container network they share', () => {
+  it('lists a Docker host’s containers with the ports each publishes', () => {
     const docker = hostNamed(hostsOf(lab()), 'apps');
     expect(docker.sections[0].items.map((item) => item.name)).toEqual(['jellyfin', 'traefik']);
-    expect(
-      docker.networkSections?.map((section) => [
-        section.label,
-        section.note,
-        section.items.map((item) => item.name),
-      ]),
-    ).toEqual([
-      ['media', undefined, ['jellyfin', 'traefik']],
-      ['proxy', '172.20.0.0/24', ['traefik']],
-    ]);
     expect(docker.sections[0].items[1].detail).toBe(':80, 443');
     expect(docker.sections[0].items[0].detail).toBeUndefined();
-  });
-
-  it('lists what a Kubernetes cluster exposes outside itself', () => {
-    const cluster = hostNamed(
-      hostsOf([
-        resource({ id: 'k8s', type: 'k8s-cluster', name: 'k3s', platformType: 'kubernetes' }),
-        resource({
-          id: 'svc-in',
-          type: 'k8s-service',
-          name: 'internal',
-          parentId: 'k8s',
-          kubernetes: { serviceType: 'ClusterIP', servicePorts: [{ port: 80 }] },
-        }),
-        resource({
-          id: 'svc-out',
-          type: 'k8s-service',
-          name: 'web',
-          parentId: 'k8s',
-          kubernetes: { serviceType: 'NodePort', servicePorts: [{ port: 443, nodePort: 30443 }] },
-        }),
-      ]),
-      'k3s',
-    );
-    expect(cluster.sections).toHaveLength(1);
-    expect(cluster.sections[0]).toMatchObject({ label: 'Exposed' });
-    expect(cluster.sections[0].items).toMatchObject([{ name: 'web', detail: ':30443' }]);
   });
 
   it('hides addresses and network names with the rest when names are hidden', () => {
@@ -364,100 +321,5 @@ describe('networks on the map model', () => {
       'Network 2',
       'Other addresses',
     ]);
-    const docker = anonymous.blocks.flatMap((block) =>
-      block.kind === 'host' ? [block.host] : [],
-    )[1];
-    // One container keeps one stand-in name under both of its networks.
-    const names = docker.networkSections!.flatMap((section) =>
-      section.items.map((item) => item.name),
-    );
-    expect(new Set(names).size).toBe(2);
-    expect(names).toHaveLength(3);
-  });
-});
-
-type Rect = Extract<SceneNode, { kind: 'rect' }>;
-const rects = (scene: MapScene, fill: string): Rect[] =>
-  scene.nodes.filter((node): node is Rect => node.kind === 'rect' && node.fill === fill);
-const texts = (scene: MapScene): string[] =>
-  scene.nodes.flatMap((node) => (node.kind === 'text' ? [node.text] : []));
-
-describe('layoutInfrastructureNetworkMap', () => {
-  const model = buildInfrastructureMapModel(lab());
-  const scene = layoutInfrastructureNetworkMap(model, { width: 1200, density: 'names' });
-
-  it('draws one full-width line per network, named, above the machines', () => {
-    const cards = rects(scene, 'card');
-    const firstCardTop = Math.min(...cards.map((card) => card.y));
-    for (const tone of ['net0', 'net1', 'netOther']) {
-      const line = rects(scene, tone).find((rect) => rect.w === scene.width);
-      expect(line).toBeDefined();
-      expect(line!.y).toBeLessThan(firstCardTop);
-    }
-    expect(texts(scene)).toEqual(
-      expect.arrayContaining(['192.168.10.0/24', '10.0.30.x', 'Other addresses']),
-    );
-    expect(texts(scene)).toContain('address range · 2 addresses');
-  });
-
-  it('ties a machine to its own network and to each network its guests are on', () => {
-    const cards = rects(scene, 'card');
-    const node = cards[0];
-    const tiesInto = (card: Rect, tone: string) =>
-      rects(scene, tone).filter(
-        (rect) => rect.h === 2 && Math.abs(rect.x + rect.w - card.x) < 0.01,
-      );
-    expect(tiesInto(node, 'net0')).toHaveLength(1);
-    expect(tiesInto(node, 'net1')).toHaveLength(1);
-    expect(tiesInto(node, 'netOther')).toHaveLength(1);
-    const dockerCard = cards[1];
-    expect(tiesInto(dockerCard, 'net0')).toHaveLength(1);
-    expect(tiesInto(dockerCard, 'net1')).toHaveLength(0);
-    // The machine with no address is drawn, tied to nothing.
-    const bare = cards[2];
-    for (const tone of ['net0', 'net1', 'netOther']) expect(tiesInto(bare, tone)).toHaveLength(0);
-  });
-
-  it('marks each guest with its network and writes its address beside it', () => {
-    expect(texts(scene)).toEqual(
-      expect.arrayContaining(['10.0.30.5', '192.168.10.50', ':80, 443']),
-    );
-    expect(texts(scene)).toContain('192.168.10.11 · Proxmox VE');
-    // Section headings for the Docker host are its container networks.
-    expect(texts(scene)).toEqual(expect.arrayContaining(['MEDIA', 'PROXY', '172.20.0.0/24']));
-    const hosts = layoutInfrastructureMap(model, { width: 1200, density: 'names' });
-    expect(texts(hosts)).not.toContain('10.0.30.5');
-    expect(texts(hosts)).toContain('CONTAINERS');
-  });
-
-  it('keeps cards apart and inside the scene at every width', () => {
-    for (const width of [320, 760, 1900]) {
-      const sized = layoutInfrastructureNetworkMap(model, { width, density: 'names' });
-      const cards = rects(sized, 'card');
-      expect(cards).toHaveLength(3);
-      cards.forEach((card, index) => {
-        expect(card.x).toBeGreaterThan(0);
-        expect(card.x + card.w).toBeLessThanOrEqual(sized.width + 0.01);
-        expect(card.y + card.h).toBeLessThanOrEqual(sized.height);
-        for (const other of cards.slice(index + 1)) {
-          const apart =
-            card.x + card.w <= other.x ||
-            other.x + other.w <= card.x ||
-            card.y + card.h <= other.y ||
-            other.y + other.h <= card.y;
-          expect(apart).toBe(true);
-        }
-      });
-    }
-  });
-
-  it('draws every machine and no lines when nothing reports an address', () => {
-    const silent = buildInfrastructureMapModel([
-      resource({ id: 'bare', type: 'agent', name: 'bare', platformType: 'agent' }),
-    ]);
-    expect(silent.segments).toEqual([]);
-    const empty = layoutInfrastructureNetworkMap(silent, { width: 800, density: 'names' });
-    expect(rects(empty, 'card')).toHaveLength(1);
-    expect(rects(empty, 'net0')).toHaveLength(0);
   });
 });

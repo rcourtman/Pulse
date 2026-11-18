@@ -25,7 +25,9 @@ import type {
  * between single tiles, so the picture stays readable at any size and every
  * line states something Pulse knows.
  *
- * Like the other map layouts it is a function of the model and a width.
+ * The boxes are drawn the way the rest of the product draws a section: a
+ * bordered card with a small uppercase header strip and its count, in the
+ * theme's own colours.
  */
 
 interface Metrics {
@@ -34,27 +36,20 @@ interface Metrics {
   icon: number;
   gap: number;
   pad: number;
-  head: number;
   named: boolean;
 }
 
-const NAMED: Metrics = { tileW: 84, tileH: 78, icon: 34, gap: 8, pad: 12, head: 26, named: true };
-const COMPACT: Metrics = {
-  tileW: 42,
-  tileH: 42,
-  icon: 26,
-  gap: 6,
-  pad: 10,
-  head: 26,
-  named: false,
-};
+const NAMED: Metrics = { tileW: 92, tileH: 72, icon: 32, gap: 4, pad: 8, named: true };
+const COMPACT: Metrics = { tileW: 40, tileH: 40, icon: 26, gap: 4, pad: 8, named: false };
 
-const GROUP_GAP = 20;
-const LAYER_GAP = 46;
-const ROW_GAP = 46;
+const HEADER = 26;
+const CARD_RADIUS = 6;
+const GROUP_GAP = 16;
+const LAYER_GAP = 44;
+const ROW_GAP = 44;
 const BUS_DROP = 18;
 const GUTTER = 16;
-const BAND_HEIGHT = 26;
+const PILL_HEIGHT = 24;
 const MAX_COLUMNS = 8;
 const MAX_NETWORKS = 6;
 const MIN_WIDTH = 300;
@@ -62,14 +57,6 @@ const NETWORK_TONES: readonly MapNetworkTone[] = ['net0', 'net1', 'net2', 'net3'
 
 const labelWidth = (text: string, size: number): number =>
   estimateTextWidth(text, { fontPx: size });
-
-const hueOf = (text: string): number => {
-  let hash = 0;
-  for (let index = 0; index < text.length; index += 1) {
-    hash = (hash * 31 + text.charCodeAt(index)) % 360;
-  }
-  return hash;
-};
 
 // Two letters that stand for a name with no logo: the initials of its first
 // two words, or its first two letters when it is one word.
@@ -97,6 +84,11 @@ interface Sized {
   h: number;
 }
 
+const headerText = (group: DiagramGroup): { title: string; count: string } => ({
+  title: group.label.toUpperCase(),
+  count: group.count.toLocaleString(),
+});
+
 const sizeGroup = (group: DiagramGroup, metrics: Metrics, maxWidth: number): Sized => {
   const count = group.tiles.length;
   const pitch = metrics.tileW + metrics.gap;
@@ -109,12 +101,13 @@ const sizeGroup = (group: DiagramGroup, metrics: Metrics, maxWidth: number): Siz
   const columns = Math.max(1, Math.min(count, fit, MAX_COLUMNS * (metrics.named ? 1 : 2), wanted));
   const rows = Math.ceil(count / columns);
   const tilesWidth = columns * pitch - metrics.gap;
-  const titleWidth = Math.min(maxWidth, labelWidth(group.label, 11) + metrics.pad * 2);
+  const { title, count: total } = headerText(group);
+  const titleWidth = Math.min(maxWidth, labelWidth(title, 11) + labelWidth(total, 11) + 36);
   return {
     group,
     columns,
     w: Math.max(tilesWidth + metrics.pad * 2, titleWidth),
-    h: metrics.head + rows * (metrics.tileH + metrics.gap) - metrics.gap + metrics.pad,
+    h: HEADER + metrics.pad + rows * (metrics.tileH + metrics.gap) - metrics.gap + metrics.pad,
   };
 };
 
@@ -128,24 +121,29 @@ const drawTile = (painter: Painter, tile: DiagramTile, x: number, y: number, das
   const { out, metrics } = painter;
   const off = tile.health === 'off';
   const cx = x + metrics.tileW / 2;
-  out.nodes.push({
-    kind: 'rect',
-    x,
-    y,
-    w: metrics.tileW,
-    h: metrics.tileH,
-    r: 8,
-    fill: 'card',
-    stroke: 'border',
-    ...(dashed ? { dashed } : {}),
-  });
-  const iconY = metrics.named ? y + 9 : y + (metrics.tileH - metrics.icon) / 2;
+  // What stands for several things, or for something Pulse does not monitor,
+  // has one line of text and no page of its own.
+  const real = tile.navigable;
+  if (dashed) {
+    out.nodes.push({
+      kind: 'rect',
+      x,
+      y,
+      w: metrics.tileW,
+      h: metrics.tileH,
+      r: CARD_RADIUS,
+      fill: 'none',
+      stroke: 'border',
+      dashed: true,
+    });
+  }
+  const iconY = metrics.named ? y + 7 : y + (metrics.tileH - metrics.icon) / 2;
   if (tile.platform) {
-    const size = metrics.icon - 8;
+    const size = metrics.icon - 10;
     out.nodes.push({
       kind: 'icon',
       x: cx - size / 2,
-      y: iconY + 4,
+      y: iconY + 5,
       size,
       platform: tile.platform,
     });
@@ -157,7 +155,6 @@ const drawTile = (painter: Painter, tile: DiagramTile, x: number, y: number, das
       size: metrics.icon,
       ...(tile.icon ? { icon: tile.icon } : {}),
       letters: lettersOf(tile.name),
-      hue: hueOf(tile.name),
       ...(off ? { dim: true } : {}),
     });
   }
@@ -165,56 +162,50 @@ const drawTile = (painter: Painter, tile: DiagramTile, x: number, y: number, das
     out.nodes.push({
       kind: 'text',
       x: cx,
-      y: y + 57,
-      // A tile that stands for several shows their count as its mark, so
-      // its one line of text says what they are.
-      text: fitMapText(
-        tile.navigable || dashed ? tile.name : tile.caption,
-        metrics.tileW - 8,
-        10.5,
-        600,
-      ),
-      size: 10.5,
-      weight: 600,
-      fill: off ? 'faint' : 'text',
+      y: y + 53,
+      text: fitMapText(real || dashed ? tile.name : tile.caption, metrics.tileW - 6, 12, 500),
+      size: 12,
+      weight: 500,
+      fill: off ? 'muted' : 'text',
       anchor: 'middle',
+      ...(off ? { dim: true } : {}),
     });
-    if (tile.navigable || dashed) {
+    if (real || dashed) {
       out.nodes.push({
         kind: 'text',
         x: cx,
-        y: y + 70,
-        text: fitMapText(tile.caption, metrics.tileW - 8, 9, 400),
-        size: 9,
+        y: y + 66,
+        text: fitMapText(tile.caption, metrics.tileW - 6, 10, 400),
+        size: 10,
         weight: 400,
-        fill: off ? 'faint' : 'muted',
+        fill: 'muted',
         anchor: 'middle',
+        ...(off ? { dim: true } : {}),
       });
     }
   }
   const tone = painter.toneFor(tile.segmentId);
-  if (tone) out.nodes.push({ kind: 'rect', x: x + 5, y: y + 6, w: 3, h: 10, r: 1.5, fill: tone });
-  if (!dashed) {
-    out.nodes.push({
-      kind: 'dot',
-      x: x + metrics.tileW - 9,
-      y: y + 9,
-      r: 3.5,
-      health: tile.health,
-    });
-  }
+  if (tone) out.nodes.push({ kind: 'rect', x: x + 4, y: y + 6, w: 3, h: 10, r: 1.5, fill: tone });
   if (dashed) return;
+  if (real) {
+    // The status dot sits on the icon's corner, ringed in the card's colour,
+    // the way a badge sits on an avatar.
+    const dotX = cx + metrics.icon / 2 - 1;
+    const dotY = iconY + 1;
+    out.nodes.push({ kind: 'rect', x: dotX - 6, y: dotY - 6, w: 12, h: 12, r: 6, fill: 'surface' });
+    out.nodes.push({ kind: 'dot', x: dotX, y: dotY, r: 4, health: tile.health });
+  }
   out.hits.push({
     kind: 'hit',
     x,
     y,
     w: metrics.tileW,
     h: metrics.tileH,
-    r: 8,
+    r: 4,
     hit: {
       id: tile.id,
       name: tile.name,
-      meta: tile.navigable
+      meta: real
         ? [mapHitMeta(tile.typeLabel, tile.status, tile.health), tile.caption]
             .filter(Boolean)
             .join(' · ')
@@ -224,11 +215,13 @@ const drawTile = (painter: Painter, tile: DiagramTile, x: number, y: number, das
       memory: tile.memory,
       address: tile.address,
       detail: tile.detail,
-      navigable: tile.navigable,
+      navigable: real,
     },
   });
 };
 
+// A section card: border, header strip, uppercase label and count, as a
+// table section is drawn elsewhere in the product.
 const drawGroup = (painter: Painter, sized: Sized, x: number, y: number): Box => {
   const { out, metrics } = painter;
   out.nodes.push({
@@ -237,19 +230,52 @@ const drawGroup = (painter: Painter, sized: Sized, x: number, y: number): Box =>
     y,
     w: sized.w,
     h: sized.h,
-    r: 10,
-    fill: 'frame',
+    r: CARD_RADIUS,
+    fill: 'surface',
     stroke: 'border',
   });
+  // The strip is rounded with the card at the top and square where it meets
+  // the body, so it is drawn as a rounded piece with its lower half squared.
+  out.nodes.push({
+    kind: 'rect',
+    x: x + 0.5,
+    y: y + 0.5,
+    w: sized.w - 1,
+    h: HEADER - 0.5,
+    r: CARD_RADIUS - 0.5,
+    fill: 'surfaceAlt',
+  });
+  out.nodes.push({
+    kind: 'rect',
+    x: x + 0.5,
+    y: y + HEADER / 2,
+    w: sized.w - 1,
+    h: HEADER / 2,
+    r: 0,
+    fill: 'surfaceAlt',
+  });
+  out.nodes.push({ kind: 'rect', x, y: y + HEADER, w: sized.w, h: 1, r: 0, fill: 'border' });
+  const { title, count } = headerText(sized.group);
+  const fitted = fitMapText(title, sized.w - 24 - labelWidth(count, 11) - 8, 11, 600);
   out.nodes.push({
     kind: 'text',
-    x: x + sized.w / 2,
+    x: x + 10,
     y: y + 17,
-    text: fitMapText(sized.group.label, sized.w - 12, 11, 600),
+    text: fitted,
     size: 11,
     weight: 600,
     fill: 'muted',
-    anchor: 'middle',
+    caps: true,
+  });
+  out.nodes.push({
+    kind: 'text',
+    // Tracked-out capitals run wider than the plain estimate.
+    x: x + 10 + labelWidth(fitted, 11) + fitted.length * 0.6 + 8,
+    y: y + 17,
+    text: count,
+    size: 11,
+    weight: 600,
+    fill: 'text',
   });
   const pitchX = metrics.tileW + metrics.gap;
   const pitchY = metrics.tileH + metrics.gap;
@@ -260,7 +286,7 @@ const drawGroup = (painter: Painter, sized: Sized, x: number, y: number): Box =>
       painter,
       tile,
       left + (index % sized.columns) * pitchX,
-      y + metrics.head + Math.floor(index / sized.columns) * pitchY,
+      y + HEADER + metrics.pad + Math.floor(index / sized.columns) * pitchY,
     );
   });
   return { x, y, w: sized.w, h: sized.h };
@@ -331,16 +357,16 @@ const line = (
 };
 
 const connectorLabel = (labels: SceneNode[], text: string, x: number, y: number) => {
-  const w = labelWidth(text, 10) + 12;
-  labels.push({ kind: 'rect', x: x - w / 2, y: y - 8, w, h: 16, r: 4, fill: 'canvas' });
+  const w = labelWidth(text, 11) + 12;
+  labels.push({ kind: 'rect', x: x - w / 2, y: y - 8, w, h: 16, r: 4, fill: 'surface' });
   labels.push({
     kind: 'text',
     x,
-    y: y + 3.5,
+    y: y + 4,
     text,
-    size: 10,
+    size: 11,
     weight: 400,
-    fill: 'accent',
+    fill: 'muted',
     anchor: 'middle',
   });
 };
@@ -350,7 +376,7 @@ const networkText = (network: DiagramNetwork): string =>
     network.memberCount === 1 ? 'address' : 'addresses'
   }`;
 
-// One pill per network, centred and wrapped. Returns the bottom of the band.
+// One pill per network, centred and wrapped. Returns the bottom of the row.
 const drawNetworks = (
   out: MapCursor,
   networks: DiagramNetwork[],
@@ -361,19 +387,13 @@ const drawNetworks = (
 ): number => {
   const shown = networks.slice(0, MAX_NETWORKS);
   const hidden = networks.length - shown.length;
-  const single = networks.length === 1;
   const pills = shown.map((network) => {
-    const text = fitMapText(
-      single ? `Network · ${networkText(network)}` : networkText(network),
-      width - 40,
-      11,
-      400,
-    );
-    return { text, tone: toneOf(network), w: labelWidth(text, 11) + 34 };
+    const text = fitMapText(networkText(network), width - 44, 12, 400);
+    return { text, tone: toneOf(network), w: labelWidth(text, 12) + 36 };
   });
   if (hidden > 0) {
     const text = `+${hidden} more`;
-    pills.push({ text, tone: 'netOther', w: labelWidth(text, 11) + 34 });
+    pills.push({ text, tone: 'netOther', w: labelWidth(text, 12) + 36 });
   }
   const rows: Array<typeof pills> = [];
   let row: typeof pills = [];
@@ -393,27 +413,22 @@ const drawNetworks = (
   let top = y;
   for (const entries of rows) {
     const total = entries.reduce((sum, pill) => sum + pill.w, 0) + 8 * (entries.length - 1);
-    // A lone network is drawn as one bar across the layer, like the rail
-    // everything below hangs from.
-    const stretch = single ? Math.max(total, width) : total;
-    let x = left + (width - stretch) / 2;
+    let x = left + (width - total) / 2;
     for (const pill of entries) {
-      const w = single ? stretch : pill.w;
       out.nodes.push({
         kind: 'rect',
         x,
         y: top,
-        w,
-        h: BAND_HEIGHT,
-        r: BAND_HEIGHT / 2,
-        fill: 'frame',
-        stroke: pill.tone,
+        w: pill.w,
+        h: PILL_HEIGHT,
+        r: PILL_HEIGHT / 2,
+        fill: 'surfaceAlt',
+        stroke: 'border',
       });
-      const textX = x + w / 2 + 7;
       out.nodes.push({
         kind: 'rect',
-        x: textX - labelWidth(pill.text, 11) / 2 - 14,
-        y: top + BAND_HEIGHT / 2 - 4,
+        x: x + 10,
+        y: top + PILL_HEIGHT / 2 - 4,
         w: 8,
         h: 8,
         r: 4,
@@ -421,17 +436,16 @@ const drawNetworks = (
       });
       out.nodes.push({
         kind: 'text',
-        x: textX,
-        y: top + 17,
+        x: x + 24,
+        y: top + 16,
         text: pill.text,
-        size: 11,
+        size: 12,
         weight: 400,
         fill: 'text',
-        anchor: 'middle',
       });
-      x += w + 8;
+      x += pill.w + 8;
     }
-    top += BAND_HEIGHT + 6;
+    top += PILL_HEIGHT + 6;
   }
   return top - 6;
 };
@@ -511,7 +525,7 @@ export function layoutServiceDiagram(diagram: ServiceDiagram, options: MapLayout
       y,
       (network) => toneByNetwork.get(network.id) ?? 'netOther',
     );
-    if (source)
+    if (source) {
       line(
         lines,
         [
@@ -520,6 +534,7 @@ export function layoutServiceDiagram(diagram: ServiceDiagram, options: MapLayout
         ],
         { arrow: true },
       );
+    }
     source = { x: mid, y: bandBottom };
     y = bandBottom + LAYER_GAP;
   }
@@ -678,24 +693,24 @@ export function layoutServiceDiagram(diagram: ServiceDiagram, options: MapLayout
     const box = drawGroup(painter, sized, mid - sized.w / 2, y);
     if (source && lower.length > 0) {
       const bendY = box.y - BUS_DROP;
-      const points: Array<[number, number]> =
-        Math.abs(source.x - mid) < 1
-          ? [
-              [source.x, source.y],
-              [mid, box.y],
-            ]
-          : [
-              [source.x, source.y],
-              [source.x, bendY],
-              [mid, bendY],
-              [mid, box.y],
-            ];
+      const straight = Math.abs(source.x - mid) < 1;
+      const points: Array<[number, number]> = straight
+        ? [
+            [source.x, source.y],
+            [mid, box.y],
+          ]
+        : [
+            [source.x, source.y],
+            [source.x, bendY],
+            [mid, bendY],
+            [mid, box.y],
+          ];
       line(lines, points, { arrow: true });
       connectorLabel(
         labels,
         'hosted on',
         (source.x + mid) / 2,
-        Math.abs(source.x - mid) < 1 ? (source.y + box.y) / 2 : bendY,
+        straight ? (source.y + box.y) / 2 : bendY,
       );
     } else if (placed.length > 0) {
       // No storage to pass through: what runs sits straight on the hardware.

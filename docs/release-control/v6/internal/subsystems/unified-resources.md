@@ -2991,9 +2991,21 @@ Nesting comes from `parentId` and cluster frames from `clusterId`. Which
 host, cluster or network a thing is drawn with never depends on its name.
 Health is `resource.health.verdict`, and raw status is read only when a
 resource carries no verdict, so a stopped guest is off, not failed.
-The default view is the service diagram (`infrastructureMapServices.ts`,
+The map is one drawing, the service diagram (`infrastructureMapServices.ts`,
 `infrastructureMapDiagram.ts`): one tile per guest or container, boxed by
 purpose, between the ways in above and storage, backups and hardware below.
+It has no second view. A drawing that re-lays what a platform page already
+lists (hosts with their guests, networks with their members) does not belong
+on it.
+The map is drawn in the product's own style and must not grow one of its own.
+On the page every structural colour is a reference to a semantic token
+variable (`MAP_PAGE_PALETTES` in `infrastructureMapRender.ts`), a box is a
+section card with the uppercase header strip and its count, and the toolbar
+and legend are the shared `PageHeader`, `FilterButtonGroup`, `Button`,
+`MetadataBadge` and `StatusDot`. Status and accent colours are the pairs
+those components use. App logos are the only colours that are not the
+theme's. A saved image reads the same variables off the page into literal
+colours (`resolveMapPalette`).
 `infrastructureMapCatalogue.ts` is the one place the map reads a name. It
 recognises a well-known app from the container image first and the name
 second, on whole words, and that decides only the tile's logo and its box. A
@@ -3010,9 +3022,11 @@ A network is a vSphere port group, a subnet an interface reports with its
 prefix, or a range of addresses that more than one machine shares, and a range
 is labelled as a range. An address nothing else shares makes no network, and a
 host's own container bridges place nothing. A macvlan or ipvlan container
-network is the host's own network and hides no address. The page must keep saying what
-Pulse cannot see (firewall rules, switches, VLAN tags) and must not present two
-networks drawn apart as tested isolation.
+network is the host's own network and hides no address. Networks are drawn as
+pills above the boxes and, when there is more than one, as a mark on each
+tile. The map makes no claim that two networks are isolated, because Pulse
+does not see firewall rules, switches or VLAN tags.
+Endpoints Pulse only probes (a router, a site) are tiles in a Checks box.
 Hide names replaces every reported name, address and network name on the page
 and in the saved image, which is built in the browser. A tile the catalogue
 recognised then reads as the app's own name, which says what runs and nothing
@@ -3022,8 +3036,8 @@ A field the map needs belongs on the shared `Resource` type.
 the Docker host interfaces and core count the wire already carries; remove it
 when the type lists them and add no second cast.
 Proof is owned by `infrastructureMapModel.test.ts`,
-`infrastructureMapNetworks.test.ts`, `infrastructureMapLayout.test.ts`,
-`infrastructureMapServices.test.ts` and `infrastructureMapDiagram.test.ts` in
+`infrastructureMapNetworks.test.ts`, `infrastructureMapServices.test.ts` and
+`infrastructureMapDiagram.test.ts` in
 `frontend-modern/src/features/infrastructureMap/__tests__/`.
 
 1. Add new resource types and identity fields in `internal/unifiedresources/types.go`
@@ -4203,6 +4217,22 @@ application resource-provider or WebSocket lifecycle.
     (`TestStore_OpenBackfillsLegacyUnresolvedProxmoxPBSGuestRows`).
 
 ## Current State
+
+### The map is the service diagram only, in the product's style (18 November 2026)
+
+The maintainer looked at the three views and kept one. The host view re-laid
+the inventory the platform pages already show, and the network view was one
+line on a flat LAN and dozens of lines on a large estate. Both are removed,
+with the layouts, the view switch and the model fields only they used. What
+the network view knew survives where it helps the diagram: the network pills
+and the per-tile network mark.
+
+The diagram also drew with a palette, corner radius and controls of its own.
+It now takes its structure colours from the semantic token variables, draws a
+box as a section card with the uppercase header strip, and uses the shared
+button, badge and status dot. `infrastructureMapLayout.test.ts` is gone with
+the layouts it covered, and the `infrastructure-map` proof policy lists the
+four remaining files.
 
 ### The map's default view is a service diagram (18 November 2026)
 

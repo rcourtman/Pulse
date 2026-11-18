@@ -4,7 +4,12 @@ import { layoutServiceDiagram } from '../infrastructureMapDiagram';
 import { buildMapExportSvg } from '../infrastructureMapExport';
 import type { MapDensity, MapScene, SceneNode } from '../infrastructureMapLayout';
 import { buildInfrastructureMapModel } from '../infrastructureMapModel';
-import { MAP_PALETTES, renderMapSceneToSvg } from '../infrastructureMapRender';
+import {
+  MAP_PAGE_PALETTES,
+  MAP_PALETTES,
+  renderMapSceneBody,
+  renderMapSceneToSvg,
+} from '../infrastructureMapRender';
 import { buildServiceDiagram } from '../infrastructureMapServices';
 
 const resource = (partial: Partial<Resource> & Pick<Resource, 'id' | 'type' | 'name'>): Resource =>
@@ -88,18 +93,19 @@ describe('layoutServiceDiagram', () => {
   it('draws a tile for everything that runs, under a box for each purpose', () => {
     const scene = sceneOf(estate(), 1400);
     const drawn = texts(scene);
+    // Each box is headed the way a table section is: its name in capitals.
     for (const title of [
-      'Ways in',
-      'Media',
-      'Home automation',
-      'Apps',
-      'Monitoring',
-      'Databases',
-      'Development',
-      'Other',
-      'Storage',
-      'Backups',
-      'Hardware',
+      'WAYS IN',
+      'MEDIA',
+      'HOME AUTOMATION',
+      'APPS',
+      'MONITORING',
+      'DATABASES',
+      'DEVELOPMENT',
+      'OTHER',
+      'STORAGE',
+      'BACKUPS',
+      'HARDWARE',
     ]) {
       expect(drawn).toContain(title);
     }
@@ -124,7 +130,7 @@ describe('layoutServiceDiagram', () => {
     // Only the Internet, which Pulse does not monitor, hangs on a dashed line.
     expect(lines.filter((node) => node.dashed)).toHaveLength(1);
     expect(drawn).toContain('Internet');
-    expect(drawn).toContain('Network · 192.168.10.0/24 · 11 addresses');
+    expect(drawn).toContain('192.168.10.0/24 · 11 addresses');
   });
 
   it('opens a resource from its tile and nothing from a fold or the Internet', () => {
@@ -169,7 +175,9 @@ describe('layoutServiceDiagram', () => {
 
   it('stacks the boxes on a phone and sets them side by side on a wide screen', () => {
     const boxes = (scene: MapScene) =>
-      ofKind(scene, 'rect').filter((node) => node.fill === 'frame' && node.r === 10);
+      ofKind(scene, 'rect').filter(
+        (node) => node.fill === 'surface' && node.stroke === 'border' && node.r === 6,
+      );
     const wide = boxes(sceneOf(estate(), 1900));
     const phone = boxes(sceneOf(estate(), 375));
     expect(wide).toHaveLength(phone.length);
@@ -183,7 +191,7 @@ describe('layoutServiceDiagram', () => {
     const named = sceneOf(estate(), 1400);
     const compact = sceneOf(estate(), 1400, 'marks');
     expect(texts(compact)).not.toContain('jellyfin');
-    expect(texts(compact)).toContain('Media');
+    expect(texts(compact)).toContain('MEDIA');
     expect(ofKind(compact, 'app')).toHaveLength(ofKind(named, 'app').length);
     expect(compact.height).toBeLessThan(named.height);
   });
@@ -218,9 +226,9 @@ describe('layoutServiceDiagram', () => {
       1200,
     );
     const drawn = texts(bare);
-    expect(drawn).toContain('Media');
+    expect(drawn).toContain('MEDIA');
     expect(drawn).toContain('runs on');
-    for (const absent of ['Internet', 'Ways in', 'Storage', 'Backups', 'hosted on']) {
+    for (const absent of ['Internet', 'WAYS IN', 'STORAGE', 'BACKUPS', 'hosted on']) {
       expect(drawn).not.toContain(absent);
     }
     expect(sceneOf([], 1200).nodes).toEqual([]);
@@ -239,7 +247,6 @@ describe('layoutServiceDiagram', () => {
   it('exports the same diagram as a poster', () => {
     const { svg, width } = buildMapExportSvg(buildInfrastructureMapModel(estate()), {
       title: 'Infrastructure map',
-      view: 'services',
       density: 'names',
       palette: MAP_PALETTES.light,
       now: new Date('2026-11-18T12:00:00Z'),
@@ -247,7 +254,28 @@ describe('layoutServiceDiagram', () => {
     expect(width).toBe(1480);
     expect(svg).toContain('Infrastructure map');
     expect(svg).toContain('Drawn by Pulse · 2026-11-18');
-    expect(svg).toContain('Home automation');
+    expect(svg).toContain('HOME AUTOMATION');
     expect(svg).toContain('fill="#00A4DC"');
+  });
+
+  it('draws with the theme’s own variables on the page and with literal colours in a file', () => {
+    const scene = sceneOf(estate(), 1400);
+    const page = renderMapSceneBody(scene, MAP_PAGE_PALETTES.dark, () => null);
+    expect(page).toContain('fill="var(--color-bg-surface)" stroke="var(--color-border-base)"');
+    expect(page).toContain('fill="var(--color-text-muted)"');
+    const file = renderMapSceneToSvg(scene, MAP_PALETTES.dark);
+    expect(file).not.toContain('var(');
+    expect(file).toContain('fill="#1e293b" stroke="#334155"');
+    // An unknown app is its initials on the page's own background.
+    expect(file).toMatch(/fill="#0f172a" stroke="#334155"\/><text[^>]*>PC<\/text>/);
+  });
+
+  it('heads each box with how many things it holds, folded ones included', () => {
+    const drawn = texts(sceneOf(estate(), 1400));
+    const at = (title: string) => drawn[drawn.indexOf(title) + 1];
+    expect(at('MEDIA')).toBe('3');
+    expect(at('OTHER')).toBe('2');
+    expect(at('HARDWARE')).toBe('1');
+    expect(drawn).toContain('switched off');
   });
 });

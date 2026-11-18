@@ -262,6 +262,35 @@ describe('buildServiceDiagram', () => {
     expect(drawn).not.toMatch(/delly|minipc|Tower|rstack|ps4|authentik|192\.168/);
   });
 
+  it('counts what each box holds and gives probed endpoints a box of their own', () => {
+    const diagram = diagramOf([
+      ...homelab(),
+      resource({
+        id: 'check-router',
+        type: 'network-endpoint',
+        name: 'Router',
+        platformType: 'availability',
+        availability: { address: '192.168.10.1' },
+      }),
+    ]);
+    expect(diagram.groups.map((group) => [group.key, group.count])).toEqual([
+      ['media', 2],
+      ['data', 1],
+      ['ai', 1],
+      // One running thing and the two switched off that fold into one tile.
+      ['other', 3],
+      ['checks', 1],
+    ]);
+    expect(diagram.groups.at(-1)).toMatchObject({ label: 'Checks' });
+    expect(diagram.groups.at(-1)?.tiles[0]).toMatchObject({
+      name: 'Router',
+      platform: 'checks',
+      navigable: true,
+    });
+    expect(diagram.storage?.count).toBe(1);
+    expect(diagram.hardware?.count).toBe(3);
+  });
+
   it('is empty for an empty estate', () => {
     const diagram = diagramOf([]);
     expect(diagram).toEqual({ networks: [], groups: [], serviceCount: 0 });
