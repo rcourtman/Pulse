@@ -65,7 +65,7 @@ import { patrolAttentionStore } from '@/stores/patrolAttention';
 import { isPro } from '@/stores/licenseCommercial';
 import { runtimeBranding } from '@/stores/systemSettings';
 import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
-import type { AppConnectionStatus } from '@/useAppRuntimeState';
+import type { AppConnectionStatus, OrganizationListIssue } from '@/useAppRuntimeState';
 import { buildInfrastructureWorkspacePath } from '@/components/Settings/infrastructureWorkspaceModel';
 import {
   InfrastructureMapEdgeTab,
@@ -156,6 +156,8 @@ export interface AppLayoutProps {
   organizations: () => Organization[];
   activeOrgID: () => string;
   orgsLoading: () => boolean;
+  organizationListIssue: () => OrganizationListIssue | null;
+  onRetryOrganizationList: () => void;
   showOrgSwitcher: () => boolean;
   onSwitchOrg: (orgID: string) => void;
   children?: JSX.Element;
@@ -787,6 +789,8 @@ export function AppLayout(props: AppLayoutProps) {
                   orgs={props.organizations()}
                   selectedOrgId={props.activeOrgID()}
                   loading={props.orgsLoading()}
+                  listIssue={props.organizationListIssue()}
+                  onRetry={props.onRetryOrganizationList}
                   onChange={props.onSwitchOrg}
                 />
               </Show>

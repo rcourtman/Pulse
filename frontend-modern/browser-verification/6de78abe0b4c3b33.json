@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "base_sha": "ea12b6b817eb1d9fc5c928089114a133b98daa43",
+  "verified_at": "2026-11-18T18:29:39Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/api/alerts.ts",
+    "frontend-modern/src/features/alerts/useAlertDeliveryPausedReason.ts",
+    "frontend-modern/src/pages/Alerts.tsx",
+    "frontend-modern/src/stores/alertsActivation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/api/alerts.ts": "7f5315813f2f960ec0c3fdf39efafd8db150a1391590687b66dd1634b329f268",
+    "frontend-modern/src/features/alerts/useAlertDeliveryPausedReason.ts": "9d8de8e59a31cf31d094b1624274e7adc043a78453960d09f6c8f6cf75a06082",
+    "frontend-modern/src/pages/Alerts.tsx": "d8521818bd3063e3d17f619aca2081e01a24d2119e765acd86bb172dea43b188",
+    "frontend-modern/src/stores/alertsActivation.ts": "f3fa29ced652398a23b330f542ff50bcafa31c3b1a237c132da6e619895d0cd3"
+  },
+  "routes": [
+    "/alerts"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Compiled Alerts Overview and identical synthetic loopback API/WebSocket state on both sides. Playwright 1.56.1, desktop Chromium 141.0.7390.37 light and narrow WebKit 26.0 dark. Twenty native-inspected captures in ten matched pairs, with matching theme, width, scroll and chooser focus.",
+    "Retry replaces West with East while West's notification-off PUT is in flight. East detection is paused and the settled switch belongs to East. On the baseline the late West success changes paused alerting to a green No active alerts and shows a West success toast. The fix preserves East's paused state without stale feedback.",
+    "Deliberate selection loads East's on switch and East-only warning. A buffered West response then arrives after the replacement has settled, even though its signal was aborted. The fix keeps East's enabled switch, current warning and usable controls; the baseline turns delivery off in its presentation and posts a stale toast.",
+    "A buffered West activation from Turn on delivery cannot start an extra East policy GET or busy its switch. East's real paused banner, active warning and queue warning remain visible in both comparisons."
+  ],
+  "interactions": [
+    "Switch Send notifications off by keyboard with West selected. Retry a 503 list with Enter, then Tab to the restored chooser, or deliberately choose East. Wait for the destination socket and policy. Release West's held success afterwards; exercise native interruption via Retry and queued response body via explicit selection.",
+    "Click Turn on delivery in West and hold the already received fixture response at the body delivery boundary. Choose East and load its policy. Release the old success; verify the candidate has no extra GET, toast, policy change or replay.",
+    "In an unbound session, the same switch still sends exactly one PUT without a fabricated organization header, and its own confirmation remains visible. All writes in this proof are synthetic; this is not server rollback or notification delivery verification."
+  ]
+}

@@ -1,8 +1,10 @@
 import {
+  batch,
   createEffect,
   createMemo,
   createSignal,
   getOwner,
+  on,
   onCleanup,
   onMount,
   runWithOwner,
@@ -74,11 +76,33 @@ export type AppConnectionStatus = {
   tone: 'healthy' | 'warning' | 'offline';
 };
 
+export type OrganizationListIssue = 'unavailable' | 'empty';
+
 const isPreAuthLoginBootstrapPath = (pathname: string): boolean =>
   pathname === '/' || pathname === '/login';
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null;
+
+const isOrganizationList = (value: unknown): value is Organization[] => {
+  if (!Array.isArray(value)) return false;
+  const ids = new Set<string>();
+  return value.every((item: unknown) => {
+    if (
+      !isRecord(item) ||
+      typeof item.id !== 'string' ||
+      !/^[A-Za-z0-9._-]{1,64}$/.test(item.id) ||
+      item.id === '.' ||
+      item.id === '..' ||
+      ids.has(item.id) ||
+      typeof item.displayName !== 'string'
+    ) {
+      return false;
+    }
+    ids.add(item.id);
+    return true;
+  });
+};
 
 export const useAppRuntimeState = () => {
   initKioskMode();
@@ -185,8 +209,14 @@ export const useAppRuntimeState = () => {
   const [organizations, setOrganizations] = createSignal<Organization[]>([
     { id: 'default', displayName: 'Default Organization' },
   ]);
-  const [activeOrgID, setActiveOrgID] = createSignal(getSelectedOrgID() || 'default');
+  const [activeOrgID, setActiveOrgID] = createSignal(getSelectedOrgID() ?? '');
   const [orgsLoading, setOrgsLoading] = createSignal(false);
+  const [organizationListIssue, setOrganizationListIssue] =
+    createSignal<OrganizationListIssue | null>(null);
+  let organizationListRead = 0;
+  onCleanup(() => {
+    organizationListRead += 1;
+  });
   const [securityStatus, setSecurityStatus] = createSignal<SecurityStatus | null>(null);
   const [proxyAuthInfo, setProxyAuthInfo] = createSignal<{
     username?: string;
@@ -406,118 +436,25 @@ export const useAppRuntimeState = () => {
     }
   };
 
-  // The security status bootstrap read AI availability for the organization
-  // the page started with; when loading settles on another one, re-read it.
-  const activateLoadedOrg = (orgID: string) => {
+  const activateOrganization = (orgID: string) => {
     const changed = orgID !== activeOrgID();
     setSelectedOrgID(orgID);
     setActiveOrgID(orgID);
-    if (changed) {
+    if (!changed) return;
+
+    const store = wsStore();
+    if (!store) {
+      // The bootstrap security status preceded the selected workspace.
       void aiAvailabilityStore.refreshEnabledFromServer();
-    }
-  };
-
-  const loadOrganizations = async () => {
-    setOrgsLoading(true);
-    try {
-      if (!runtimeCapabilitiesLoaded()) {
-        await loadRuntimeCapabilities();
-      }
-
-      if (presentationPolicyHidesOrganizationSurfaces()) {
-        const storedOrgID = getSelectedOrgID();
-        const hiddenOrgID =
-          isHostedModeEnabled() && storedOrgID && storedOrgID !== 'default'
-            ? storedOrgID
-            : 'default';
-        setOrganizations([
-          {
-            id: hiddenOrgID,
-            displayName: hiddenOrgID === 'default' ? 'Default Organization' : hiddenOrgID,
-          },
-        ]);
-        setSelectedOrgID(hiddenOrgID);
-        setActiveOrgID(hiddenOrgID);
-        return;
-      }
-
-      // A hosted runtime serves its customer's workspace, not the default
-      // organization, whatever its licence: the server lists that workspace
-      // first, so a session with no stored selection lands there.
-      if (!isMultiTenantEnabled() && !isHostedModeEnabled()) {
-        setOrganizations([{ id: 'default', displayName: 'Default Organization' }]);
-        activateLoadedOrg('default');
-        return;
-      }
-
-      const fetched = await OrgsAPI.list();
-      const organizationList =
-        fetched.length > 0 ? fetched : [{ id: 'default', displayName: 'Default Organization' }];
-      setOrganizations(organizationList);
-
-      const storedOrgID = getSelectedOrgID();
-      const selectedOrg =
-        (storedOrgID && organizationList.some((org) => org.id === storedOrgID)
-          ? storedOrgID
-          : null) ||
-        organizationList[0]?.id ||
-        'default';
-
-      activateLoadedOrg(selectedOrg);
-    } catch (error) {
-      // A hosted runtime keeps the workspace this browser already selected.
-      // With none, it stores no guess: requests that name no organization
-      // land in the client workspace, and the next load reads the list again.
-      if (isHostedModeEnabled()) {
-        const storedOrgID = getSelectedOrgID();
-        logger.warn('Failed to load organizations, keeping the hosted selection', error);
-        if (storedOrgID) {
-          setOrganizations([
-            {
-              id: storedOrgID,
-              displayName: storedOrgID === 'default' ? 'Default Organization' : storedOrgID,
-            },
-          ]);
-          activateLoadedOrg(storedOrgID);
-        } else {
-          setOrganizations([{ id: 'default', displayName: 'Default Organization' }]);
-          setActiveOrgID('default');
-        }
-        return;
-      }
-      logger.warn('Failed to load organizations, falling back to default org', error);
-      showToast('error', 'Failed to load organizations. Using default.');
-      const fallback = [{ id: 'default', displayName: 'Default Organization' }];
-      setOrganizations(fallback);
-      activateLoadedOrg('default');
-    } finally {
-      setOrgsLoading(false);
-    }
-  };
-
-  const handleOrgSwitch = (nextOrgID: string) => {
-    const target = nextOrgID?.trim() || 'default';
-    if (target === activeOrgID()) {
       return;
     }
 
-    if (target !== 'default' && !organizations().some((org) => org.id === target)) {
-      showToast('error', 'Organization no longer exists');
-      return;
-    }
-
-    setSelectedOrgID(target);
-    setActiveOrgID(target);
-    // Drop the previous tenant's admission before anything can render from it:
-    // a stale facet here would show the other tenant's platform tabs until the
-    // new runtime state arrives.
+    // Both an explicit choice and a replacement from a valid list retire
+    // outgoing reads and snapshots. The cookie can change while /ws stays
+    // the same URL, so a URL equality check is not a scope check.
+    platformAdmissionRequest += 1;
     setPlatformAdmission(null);
-    void loadPlatformAdmission();
-    // AI availability is organization-scoped: the new tenant may have a
-    // different provider setup, so Patrol entry points follow its answer.
     aiAvailabilityStore.clear();
-    void aiAvailabilityStore.refreshEnabledFromServer();
-    eventBus.emit('org_switched', target);
 
     try {
       localStorage.removeItem(STORAGE_KEYS.GUEST_METADATA);
@@ -527,13 +464,91 @@ export const useAppRuntimeState = () => {
       // Ignore storage errors.
     }
 
+    store.switchUrl(getPulseWebSocketUrl(), { organizationChanged: true });
+    eventBus.emit('org_switched', orgID);
+    void loadPlatformAdmission();
+    void aiAvailabilityStore.refreshEnabledFromServer();
+  };
+
+  const loadOrganizations = async () => {
+    const read = ++organizationListRead;
+    const isCurrent = () => read === organizationListRead && !needsAuth();
+    const showListIssue = (issue: OrganizationListIssue) =>
+      batch(() => {
+        // Bootstrap may have recovered a stale default successfully by
+        // dropping the binding. Display that absence; do not persist a guess.
+        if (!wsStore()) setActiveOrgID(getSelectedOrgID() ?? '');
+        setOrganizations([]);
+        setOrganizationListIssue(issue);
+      });
+    const applyChoices = (choices: Organization[], orgID: string) =>
+      batch(() => {
+        setOrganizations(choices);
+        setOrganizationListIssue(null);
+        activateOrganization(orgID);
+      });
+
+    setOrgsLoading(true);
     try {
-      const store = wsStore();
-      if (store && typeof store.switchUrl === 'function') {
-        store.switchUrl(getPulseWebSocketUrl());
-      } else {
-        store?.reconnect();
+      if (!runtimeCapabilitiesLoaded()) await loadRuntimeCapabilities();
+      if (!isCurrent()) return;
+
+      if (presentationPolicyHidesOrganizationSurfaces()) {
+        const storedOrgID = getSelectedOrgID();
+        const hiddenOrgID = isHostedModeEnabled() && storedOrgID ? storedOrgID : 'default';
+        applyChoices(
+          [
+            {
+              id: hiddenOrgID,
+              displayName: hiddenOrgID === 'default' ? 'Default Organization' : hiddenOrgID,
+            },
+          ],
+          hiddenOrgID,
+        );
+        return;
       }
+
+      if (!isMultiTenantEnabled() && !isHostedModeEnabled()) {
+        applyChoices([{ id: 'default', displayName: 'Default Organization' }], 'default');
+        return;
+      }
+
+      const fetched: unknown = await OrgsAPI.list();
+      if (!isCurrent() || presentationPolicyHidesOrganizationSurfaces()) return;
+      if (!isOrganizationList(fetched)) throw new Error('Invalid organization list');
+      if (!fetched.length) {
+        showListIssue('empty');
+        return;
+      }
+
+      // The server lists its landing workspace first, including for Community
+      // clients on hosted runtimes. Prefer the current selection if listed.
+      const selected = wsStore() ? activeOrgID() : getSelectedOrgID();
+      const target = fetched.find((org) => org.id === selected) ?? fetched[0];
+      applyChoices(fetched, target.id);
+    } catch (error) {
+      if (!isCurrent()) return;
+      logger.warn('Failed to load organization list', error);
+      showListIssue('unavailable');
+    } finally {
+      if (read === organizationListRead) setOrgsLoading(false);
+    }
+  };
+
+  const retryOrganizationList = () => {
+    if (!orgsLoading() && !needsAuth() && !isLoggingOut()) void loadOrganizations();
+  };
+
+  const handleOrgSwitch = (nextOrgID: string) => {
+    if (orgsLoading() || organizationListIssue() || nextOrgID === activeOrgID()) return;
+
+    if (!organizations().some((org) => org.id === nextOrgID)) {
+      showToast('error', 'Organization no longer exists');
+      return;
+    }
+
+    try {
+      batch(() => activateOrganization(nextOrgID));
       showToast('success', 'Organization switched');
     } catch (error) {
       logger.error('Failed to switch organization', error);
@@ -583,18 +598,14 @@ export const useAppRuntimeState = () => {
     void syncVersionInfoFromUpdateStore();
   });
 
-  let alertsInitialized = false;
-  createEffect(() => {
-    const ready = !isLoading() && !needsAuth();
-    if (ready && !alertsInitialized) {
-      alertsInitialized = true;
-      void alertsActivation.refreshConfig();
-      void alertsActivation.refreshActiveAlerts();
-    }
-    if (!ready) {
-      alertsInitialized = false;
-    }
-  });
+  const alertReaderReady = () => !isLoading() && !needsAuth();
+  // The first successful socket in a new workspace isn't a reconnect. Read
+  // its alert policy after the selection batch has retired the previous one.
+  createEffect(
+    on([alertReaderReady, activeOrgID], ([ready]) => {
+      if (ready) void alertsActivation.refreshConfig();
+    }),
+  );
 
   createEffect(() => {
     activeOrgID();
@@ -677,13 +688,13 @@ export const useAppRuntimeState = () => {
 
     const handleWebSocketReconnected = () => {
       logger.info('WebSocket reconnected, refreshing alert configuration');
-      void alertsActivation.refreshConfig();
-      void alertsActivation.refreshActiveAlerts();
+      if (alertReaderReady()) void alertsActivation.refreshConfig();
       // The estate can gain or lose a platform while the socket is down.
       void loadPlatformAdmission();
     };
 
     const handleOrganizationsChanged = () => {
+      if (!wsStore() || needsAuth()) return;
       logger.info('Organization membership changed, refreshing organization list');
       void loadOrganizations();
     };
@@ -874,6 +885,7 @@ export const useAppRuntimeState = () => {
       }
       controller.signal.throwIfAborted();
 
+      organizationListRead += 1;
       // One blocked storage operation must not prevent the remaining cleanup.
       let cleanupFailed = false;
       const clean = (operation: () => void) => {
@@ -946,6 +958,8 @@ export const useAppRuntimeState = () => {
     organizations,
     activeOrgID,
     orgsLoading,
+    organizationListIssue,
+    retryOrganizationList,
     securityStatus,
     proxyAuthInfo,
     state,
