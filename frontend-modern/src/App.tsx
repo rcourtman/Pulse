@@ -38,6 +38,7 @@ import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useKioskMode } from '@/hooks/useKioskMode';
 import {
   DOCKER_PATH,
+  INFRASTRUCTURE_MAP_PATH,
   KUBERNETES_PATH,
   PATROL_PATH,
   PROXMOX_PATH,
@@ -107,6 +108,7 @@ const StandalonePage = lazy(() => import('./pages/Standalone'));
 const AIIntelligencePage = lazy(() =>
   import('./pages/AIIntelligence').then((module) => ({ default: module.AIIntelligence })),
 );
+const InfrastructureMapPage = lazy(() => import('./pages/InfrastructureMap'));
 const NotFoundPage = lazy(() => import('./pages/NotFound'));
 const DocsPage = lazy(() => import('./pages/Docs'));
 const PricingHandoffPage = lazy(() => import('./pages/PricingHandoff'));
@@ -608,6 +610,8 @@ function App() {
       <Route path={`${VMWARE_PATH}/*`} component={VmwarePage} />
       <Route path={STANDALONE_PATH} component={StandalonePage} />
       <Route path={`${STANDALONE_PATH}/*`} component={StandalonePage} />
+
+      <Route path={INFRASTRUCTURE_MAP_PATH} component={InfrastructureMapPage} />
 
       <Route path="/alerts/*" component={AlertsRoute} />
       <Route path="/actions/*" component={ActionsPage} />
