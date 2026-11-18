@@ -810,6 +810,7 @@ var allRouteAllowlist = []string{
 	"/api/agent/ws",
 	"POST /api/agent/workflow-prompt-activity",
 	"POST /api/usage/workload-history",
+	"POST /api/usage/infrastructure-map",
 	"/api/agents/agent/enroll",
 	"/api/agents/host/enroll",
 	"/api/clusters/",

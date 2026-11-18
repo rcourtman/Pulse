@@ -148,6 +148,12 @@ export interface TelemetryPingPreview {
   workload_history_scrub_sessions_30d: number;
   workload_history_range_change_sessions_30d: number;
   workload_history_details_selection_sessions_30d: number;
+  infrastructure_map_open_sessions_30d: number;
+  infrastructure_map_export_sessions_30d: number;
+  infrastructure_map_export_services_sessions_30d: number;
+  infrastructure_map_export_connections_sessions_30d: number;
+  infrastructure_map_export_hosts_sessions_30d: number;
+  infrastructure_map_export_names_hidden_sessions_30d: number;
   alerts_fired_30d: number;
   alerts_acknowledged_30d: number;
   alerts_resolved_30d: number;

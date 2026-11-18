@@ -47,6 +47,9 @@
 //   - Coarse update funnel counters and last failure category over the current install-ID rotation window
 //   - Workload-history preview, scrub, range-change, and Details-selection
 //     session counts over the current install-ID rotation window
+//   - Infrastructure map open and image-export session counts over the
+//     current install-ID rotation window, with the exported view and whether
+//     names were hidden
 //   - Patrol, Assistant, and external-agent usage counters over the current install-ID rotation window:
 //     configured/active/governed-action/approved-execution/resolved-loop state,
 //     Patrol control completed-loop and resolved-loop proof reported through
@@ -230,7 +233,11 @@ const (
 	// Schema v20 adds aggregate reporting outcomes and distinct-period reuse.
 	// Schema v21 adds only the count of distinct days, 0 to 30, on which an
 	// external agent successfully read change or metric history.
-	TelemetrySchemaVersion = 23
+	// Schema v24 adds six content-free infrastructure map counters: browser
+	// sessions that opened the map, sessions that saved an image, and of those
+	// which view was saved and whether names were hidden. Nothing the map
+	// draws (names, addresses, networks) enters the tally or the payload.
+	TelemetrySchemaVersion = 24
 )
 
 type installIDRecord struct {
@@ -430,6 +437,16 @@ type Ping struct {
 	WorkloadHistoryScrubSessions30d            int `json:"workload_history_scrub_sessions_30d"`
 	WorkloadHistoryRangeChangeSessions30d      int `json:"workload_history_range_change_sessions_30d"`
 	WorkloadHistoryDetailsSelectionSessions30d int `json:"workload_history_details_selection_sessions_30d"`
+
+	// Infrastructure map use over the install-ID rotation window. The browser
+	// reports each closed milestone at most once per session; no resource,
+	// name, address or network the map draws enters the tally or payload.
+	InfrastructureMapOpenSessions30d              int `json:"infrastructure_map_open_sessions_30d"`
+	InfrastructureMapExportSessions30d            int `json:"infrastructure_map_export_sessions_30d"`
+	InfrastructureMapExportServicesSessions30d    int `json:"infrastructure_map_export_services_sessions_30d"`
+	InfrastructureMapExportConnectionsSessions30d int `json:"infrastructure_map_export_connections_sessions_30d"`
+	InfrastructureMapExportHostsSessions30d       int `json:"infrastructure_map_export_hosts_sessions_30d"`
+	InfrastructureMapExportNamesHiddenSessions30d int `json:"infrastructure_map_export_names_hidden_sessions_30d"`
 
 	// Core product outcomes. Alert history is retained locally for 30 days;
 	// notification delivery rows are locally retention-bounded to seven days.
@@ -708,6 +725,12 @@ type Snapshot struct {
 	WorkloadHistoryScrubSessions30d                                      int
 	WorkloadHistoryRangeChangeSessions30d                                int
 	WorkloadHistoryDetailsSelectionSessions30d                           int
+	InfrastructureMapOpenSessions30d                                     int
+	InfrastructureMapExportSessions30d                                   int
+	InfrastructureMapExportServicesSessions30d                           int
+	InfrastructureMapExportConnectionsSessions30d                        int
+	InfrastructureMapExportHostsSessions30d                              int
+	InfrastructureMapExportNamesHiddenSessions30d                        int
 	AuthConfigured                                                       bool
 	ConfiguredConnections                                                int
 	AlertsFired30d                                                       int
@@ -1515,6 +1538,12 @@ func applySnapshot(base Ping, fn SnapshotFunc) Ping {
 	ping.WorkloadHistoryScrubSessions30d = s.WorkloadHistoryScrubSessions30d
 	ping.WorkloadHistoryRangeChangeSessions30d = s.WorkloadHistoryRangeChangeSessions30d
 	ping.WorkloadHistoryDetailsSelectionSessions30d = s.WorkloadHistoryDetailsSelectionSessions30d
+	ping.InfrastructureMapOpenSessions30d = s.InfrastructureMapOpenSessions30d
+	ping.InfrastructureMapExportSessions30d = s.InfrastructureMapExportSessions30d
+	ping.InfrastructureMapExportServicesSessions30d = s.InfrastructureMapExportServicesSessions30d
+	ping.InfrastructureMapExportConnectionsSessions30d = s.InfrastructureMapExportConnectionsSessions30d
+	ping.InfrastructureMapExportHostsSessions30d = s.InfrastructureMapExportHostsSessions30d
+	ping.InfrastructureMapExportNamesHiddenSessions30d = s.InfrastructureMapExportNamesHiddenSessions30d
 	ping.AuthConfigured = s.AuthConfigured
 	ping.ConfiguredConnections = s.ConfiguredConnections
 	ping.AlertsFired30d = s.AlertsFired30d

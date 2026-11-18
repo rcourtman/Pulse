@@ -3021,9 +3021,15 @@ A field the map needs belongs on the shared `Resource` type.
 `dockerHostWire` in `infrastructureMapNetworks.ts` is the one local cast, for
 the Docker host interfaces and core count the wire already carries; remove it
 when the type lists them and add no second cast.
+The page reports its own use through
+`frontend-modern/src/api/infrastructureMapActivity.ts`: that it was opened, and
+that an image was saved, with the saved view and whether names were hidden.
+Those calls take no value from the model, and the page must never pass one. A
+new view needs its own entry in that module, or its saves carry no view count.
 Proof is owned by `infrastructureMapModel.test.ts`,
 `infrastructureMapNetworks.test.ts`, `infrastructureMapLayout.test.ts`,
-`infrastructureMapServices.test.ts` and `infrastructureMapDiagram.test.ts` in
+`infrastructureMapServices.test.ts`, `infrastructureMapDiagram.test.ts` and
+`InfrastructureMapSurface.test.tsx` in
 `frontend-modern/src/features/infrastructureMap/__tests__/`.
 
 1. Add new resource types and identity fields in `internal/unifiedresources/types.go`
@@ -4220,9 +4226,9 @@ about 160 apps. What the diagram does not draw is any connector between two
 apps: Pulse does not know which app talks to which, so it does not say.
 
 `infrastructureMapServices.test.ts` and `infrastructureMapDiagram.test.ts` join
-the `infrastructure-map` proof policy. No test renders
-`InfrastructureMapSurface.tsx` yet, so a change to it must still stage a change
-to one of the proof files.
+the `infrastructure-map` proof policy. `InfrastructureMapSurface.test.tsx`,
+added with the use counters (telemetry schema v24), renders the page and is in
+the policy too.
 
 ### The infrastructure map has an owner (18 November 2026)
 
@@ -4235,9 +4241,7 @@ the map breaks when the resource model changes, not when a shell primitive
 does. frontend-primitives stays a dependent through its
 `frontend-modern/src/features/` entry, and the shell entry points in
 `AppLayout.tsx` keep their existing owners. The `infrastructure-map` registry
-policy accepts the three colocated test files as proof. No test renders
-`InfrastructureMapSurface.tsx` yet, so a change to it must stage a change to
-one of those files.
+policy accepts the colocated test files as proof.
 
 ### Update on a stopped container says it stays stopped (10 November 2026)
 

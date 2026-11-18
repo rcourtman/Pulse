@@ -9747,6 +9747,15 @@ Rendered table proof belongs in
 drawer grouping and fallback proof belongs in
 `frontend-modern/src/components/Infrastructure/__tests__/resourceDetailDrawerMetricsHistoryModel.branchcov0712.test.ts`.
 
+### The map page reports its own use (18 November 2026)
+
+`InfrastructureMapSurface.tsx` records two content-free milestones through
+`frontend-modern/src/api/infrastructureMapActivity.ts`: the page was opened,
+and an image was saved. No shared primitive changes. A feature page that
+counts its own use follows this shape and the workload-history one: a closed
+milestone, deduplicated per browser session in an `src/api/` module, never a
+generic event call from a shared component.
+
 ### The Proxmox nodes table reads node history only
 
 `frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx` draws its Trends

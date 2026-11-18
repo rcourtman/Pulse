@@ -40,7 +40,7 @@ Every field is listed below with the reason it exists. Nothing else is included 
 
 | Field | Example | Purpose |
 |-------|---------|---------|
-| Schema version | `23` | Identify the exact payload contract so old and new signals are not mixed silently |
+| Schema version | `24` | Identify the exact payload contract so old and new signals are not mixed silently |
 | Sent at | `2026-07-23T08:30:00Z` | Date the individual heartbeat without sending a history of client activity |
 | Install ID | `a1b2c3d4-...` | Distinguish active installations within one rotation window without tying telemetry to an account or person |
 | Version | `6.0.0-rc.1` | Track the canonical release identity currently deployed |
@@ -317,6 +317,12 @@ Every field is listed below with the reason it exists. Nothing else is included 
 | Workload history scrub sessions 30d | `9` | Count browser sessions that inspected a point on a workload history graph, deduplicated locally once per session without sending coordinates, values, guests, or browser identity |
 | Workload history range change sessions 30d | `6` | Count browser sessions that changed the workload history range, deduplicated locally once per session without sending the selected range or browser identity |
 | Workload history details selection sessions 30d | `4` | Count browser sessions that chose the legacy Details hover mode, deduplicated locally once per session without sending subsequent interactions or browser identity |
+| Infrastructure map open sessions 30d | `5` | Count browser sessions that opened the infrastructure map, deduplicated locally once per session without sending anything the map draws |
+| Infrastructure map export sessions 30d | `2` | Count browser sessions that saved the map as an image, deduplicated locally once per session; the image is built and saved in the browser and is never sent |
+| Infrastructure map export services sessions 30d | `1` | Count browser sessions that saved an image of the Services view, deduplicated locally once per session |
+| Infrastructure map export connections sessions 30d | `1` | Count browser sessions that saved an image of the Connections view, deduplicated locally once per session |
+| Infrastructure map export hosts sessions 30d | `1` | Count browser sessions that saved an image of the Hosts view, deduplicated locally once per session |
+| Infrastructure map export names hidden sessions 30d | `1` | Count browser sessions that saved an image with names hidden, deduplicated locally once per session without sending any name, address or network |
 
 Telemetry schema v3 corrects the meaning of `notification_failures_7d`: v2
 counted every unsuccessful queue attempt, including attempts that later
@@ -365,13 +371,21 @@ occurrence exists, leaving no trustworthy fired-alert denominator. Detected
 flapping episodes are not reported because their diagnostic event path may be
 dropped under pressure. Configuration adoption is reported instead.
 
-The current telemetry contract is schema version 23. Schema v16 adds four
+The current telemetry contract is schema version 24. Schema v16 adds four
 workload-history adoption counts. The browser
 sends only one closed milestone name to the local Pulse server and deduplicates
 each milestone once per browser session. Pulse stores bounded UTC-day counts
 locally and includes only their rolling 30-day totals in the existing heartbeat;
 there is no browser identifier, raw event stream, guest identity, selected
 range, cursor coordinate, value, route, or interaction timing.
+
+Schema v24 adds six infrastructure map counts in the same way: browser
+sessions that opened the map, sessions that saved it as an image, and of those
+which view was saved and whether names were hidden. The browser sends one
+closed milestone name to the local Pulse server, once per session. The map
+image is built and saved in the browser. No resource, name, address, network,
+port or image leaves the browser for this count, and none is stored in the
+local tally.
 
 Schema v20 adds the reporting fields listed above. Counters cover the current
 UTC day and previous 29 UTC days and travel only in the existing startup/daily
@@ -484,6 +498,7 @@ Every change to the payload bumps the schema version, is listed here with its da
 
 | Schema | Date | Change |
 |--------|------|--------|
+| 24 | 2026-11-18 | Six content-free infrastructure map counters: sessions that opened the map, sessions that saved an image, the saved view, and whether names were hidden |
 | 23 | 2026-11-17 | Independent closed-investigation-run outcomes, fixed handoff reasons and explicit observation coverage; no customer content or new outbound identifiers |
 | 22 | 2026-11-14 | Counts of agent hosts with commands on and Docker hosts with failure logs on; never which hosts |
 | 21 | 2026-10-29 | Content-free count of distinct days on which an external agent or MCP client successfully read change or metric history |

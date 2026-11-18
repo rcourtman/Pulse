@@ -10,7 +10,7 @@ import {
 import { createAuthenticatedStorageState } from "./helpers";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const EXPECTED_TELEMETRY_SCHEMA_VERSION = 23;
+const EXPECTED_TELEMETRY_SCHEMA_VERSION = 24;
 
 type WorkerFixtures = {
   authStorageStatePath: string;
@@ -58,6 +58,7 @@ async function expectPopupDoc(
   await expect(popup.locator("body")).toContainText("reporting_repeat_backup_health_periods_30d");
   await expect(popup.locator("body")).toContainText("Independent investigation measurements (schema v23)");
   await expect(popup.locator("body")).toContainText("pulse_intelligence_patrol_investigation_handoff_missing_evidence_30d");
+  await expect(popup.locator("body")).toContainText("Schema v24 adds six infrastructure map counts");
   await popup.getByText("Schema v23 starts", { exact: false }).scrollIntoViewIfNeeded();
   await popup.screenshot({ path: test.info().outputPath("privacy-history-counter.png") });
   await popup.setViewportSize({ width: 390, height: 844 });

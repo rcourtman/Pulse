@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "base_sha": "8d4ddfe6690db24a3978ec536ceb8ad69c828b72",
+  "verified_at": "2026-11-18T10:28:28Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/api/infrastructureMapActivity.ts",
+    "frontend-modern/src/api/sessionActivity.ts",
+    "frontend-modern/src/api/settings.ts",
+    "frontend-modern/src/api/workloadHistoryActivity.ts",
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapSurface.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/api/infrastructureMapActivity.ts": "ceceb1fc01c5f715ca75e5a6624058827c87f263dda6489a734a089cae694cc7",
+    "frontend-modern/src/api/sessionActivity.ts": "5f1faeb7eb0f968f6375a0c8ee85ce97a92322dc362cf916dcb9e65418c4578e",
+    "frontend-modern/src/api/settings.ts": "76de061ca5f8e79cc7ec5d5170fa77ace2aae51e5e1d797c571440b0b86a09cd",
+    "frontend-modern/src/api/workloadHistoryActivity.ts": "37144dd4638f7744a3e31c7c56bce7726085eae4a50c9ae400697b7e539ae855",
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapSurface.tsx": "41fde152d881ed38e78de91de7a102127929f7ca3c34168386c023ef4c88d048"
+  },
+  "routes": [
+    "/map",
+    "/proxmox/overview",
+    "/api/system/settings/telemetry-preview",
+    "/docs/PRIVACY.md"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "private mock backend on 127.0.0.1:7743 built from this tree (PULSE_MOCK_MODE, telemetry sending off, fresh data directory), served through this clone's Vite dev server on 127.0.0.1:5207 in the in-app browser, final runtime bytes",
+    "1280x800 dark theme: /map opens on the Services view with the title, totals and controls unchanged; one POST /api/usage/infrastructure-map was answered 204 after the client's usual CSRF retry (the first attempt of a session is a 403), and the tally file held open: 1",
+    "1280x800: after the saves below the telemetry preview read schema_version 24 with infrastructure_map_open, export, export_services, export_connections, export_hosts and export_names_hidden sessions all at 1",
+    "1280x800 /proxmox/overview: the workload-history counter still posts through the shared recorder (range_change answered 204, preview payload workload_history_range_change_sessions_30d 1)",
+    "375x812 phone: /map renders the Services view with Save image visible and no horizontal scroll (document scroll width equals client width)",
+    "/docs/PRIVACY.md served by the stack lists schema version 24, the dated v24 row and the six infrastructure map rows",
+    "the stack's websocket proxy was not connected (the header showed Sync reconnecting and the console repeated a ws://localhost:5207/ws failure), so the pages drew from the REST snapshot; this is the private rig, not this change",
+    "not checked in a browser: a real file download (the download link's click was intercepted so nothing was written to disk), the SVG fallback for an oversized image, Firefox and Safari",
+    "an earlier pass on this change before it was rebased over the service diagram reloaded /map in one session and saw no second open posted; that reload check was not repeated on the final bytes, where the unit test for the recorder covers it"
+  ],
+  "interactions": [
+    "opened /map from the address bar after clearing the session's activity keys: one open was posted",
+    "pressed Save image in the Services view: the toast read Map image saved and two posts followed (export, export_services)",
+    "switched to Connections and pressed Save image: one more post (export_connections)",
+    "pressed Hide names, switched to Hosts and pressed Save image: two more posts (export_hosts, export_names_hidden); a further Save image posted nothing",
+    "on /proxmox/overview pressed the 12h sparkline range: one POST /api/usage/workload-history answered 204",
+    "at 375px opened /map and read the toolbar buttons and the document scroll width"
+  ]
+}
