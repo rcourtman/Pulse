@@ -182,7 +182,7 @@ class FrontendEmbedTransfer(unittest.TestCase):
             "artifact-ids": "${{ needs.frontend-build.outputs.embed_artifact_id }}",
             "path": "${{ runner.temp }}/frontend-embed", "merge-multiple": True,
         })
-        self.assertEqual(self.producer["Admit frontend unit shards"]["env"], {
+        self.assertEqual(self.producer["Admit frontend runtime"]["env"], {
             "EMBED_ARTIFACT_ID": "${{ steps.embed-upload.outputs.artifact-id }}",
         })
         self.assertEqual(self.consumer["Check validated frontend embed identity"]["env"], {
@@ -279,7 +279,7 @@ class FrontendEmbedTransfer(unittest.TestCase):
 
     def test_missing_or_malformed_identity_never_admits_or_downloads(self):
         for artifact_id in ("", "0", "-1", "1,2", "1.5", " 1001", "1001\n1002", "latest", "${{ missing }}"):
-            for name, step in (("producer", self.producer["Admit frontend unit shards"]),
+            for name, step in (("producer", self.producer["Admit frontend runtime"]),
                                ("consumer", self.consumer["Check validated frontend embed identity"])):
                 with self.subTest(phase=name, artifact_id=artifact_id):
                     result, output = self.check_identity(step, {"EMBED_ARTIFACT_ID": artifact_id, "EXPECTED_EMBED_SHA256": "a" * 64})
@@ -290,7 +290,7 @@ class FrontendEmbedTransfer(unittest.TestCase):
                 result, _ = self.check_identity(self.consumer["Check validated frontend embed identity"],
                                                 {"EMBED_ARTIFACT_ID": "1001", "EXPECTED_EMBED_SHA256": digest})
                 self.assertNotEqual(result.returncode, 0)
-        result, output = self.check_identity(self.producer["Admit frontend unit shards"], {"EMBED_ARTIFACT_ID": "1001"})
+        result, output = self.check_identity(self.producer["Admit frontend runtime"], {"EMBED_ARTIFACT_ID": "1001"})
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(output, "admitted=true\n")
 

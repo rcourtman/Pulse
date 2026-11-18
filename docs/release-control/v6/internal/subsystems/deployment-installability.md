@@ -980,7 +980,7 @@ candidate commit; an unowned or unreachable route is not proof coverage.
 ### Ordinary CI compiles the backend with the same checkout's real frontend
 
 The required `Frontend` check aggregates the complete build/audit job, the
-backend/runtime job and every one of four isolated Vitest file shards. Missing,
+backend/runtime job and the complete Vitest inventory on one unit-test runner. Missing,
 failed, cancelled or skipped proof fails that check; only an explicit, consistent
 non-runtime classification admits inapplicable checks. Each execution job retains
 the 30-minute ceiling; the aggregate has a five-minute orchestration deadline.
@@ -996,9 +996,10 @@ and transferred as an immutable, one-day artifact named for this run's source
 and producer attempt. The producer exports the upload's immutable artifact ID
 and the packet's SHA256 separately; missing or malformed upload identity cannot
 emit admission. Successful build/size/transfer phases emit the explicit admission
-output. Unit shards and `frontend-checks` then run independently, rather than making every unit shard
-wait for backend compilation and runtime checks. An audit failure still permits
-that diagnostic proof but always fails the required aggregate.
+output for `frontend-checks`. The unit job needs source and locked dependencies
+and starts alongside the build once CI classifies a code change. Both must pass
+the aggregate. A failed build can still produce unit diagnostics, and a failed
+audit always fails the aggregate.
 
 The runtime job requires a single positive artifact ID and a valid producer
 digest before downloading only that ID from the current run, with no alternate
@@ -1015,10 +1016,9 @@ bundle. Go comes from `go.mod`; build and server/API vet retain the read-only
 graph and two workers. The log records the checkout and binary digest; the
 binary stays in the runner's temporary directory. Native updater and ordinary
 notification/restart proof remain required with their unchanged commands and
-bounded receipts. Shards retain the same lock, configuration and assertions,
-using only Vitest's complete file partition. No maintained file list,
-changed-file filter, shared mutable runner or extra in-runner concurrency is
-introduced. Type/build/size failure still stops the expensive suite early.
+bounded receipts. The unit job uses the existing Vitest configuration and source-bound
+reporter for its full inventory. Type, build or size failures prevent native runtime
+admission and fail the required frontend verdict.
 
 `TestFrontendCIRequiresSameCheckoutRealEmbedBackend` executes the exact phase
 with private assets and Git/compiler doubles, covering mismatch refusal,
@@ -1031,7 +1031,7 @@ selection failure; they do not reproduce hosted GitHub rerun/transport behaviour
 `TestFrontendCIBuildTransferIsSourceBound` runs those transfer controls explicitly
 in the Go install-test suite, separately from compiler/asset admission. These
 controls are not real compilation. `TestFrontendCIRequiresCompleteIsolatedUnitProof`
-executes the workflow-order, complete-shard and actual fail-closed audit/verdict
+executes the workflow-order, complete-suite and actual fail-closed audit/verdict
 controls in `scripts/tests/test_frontend_workflow_order.py`, including execution
 of the actual pre-install Node test/check recipe so a stale workflow selector
 cannot escape this registered proof route. `TestFrontendDependencySecurityAuditsAreRequired`
@@ -9577,7 +9577,7 @@ test files or browser receipts, qualifies for scoped Go validation. The two
 rest jobs run the unifiedresources and telemetry packages, whose tests read
 frontend source. One API worker runs the agent capabilities contract that reads
 the integration panel. New cross-language test dependencies belong here too.
-Frontend build, lint, type checking, all four unit shards, real-embed runtime,
+Frontend build, lint, type checking, the full unit suite, real-embed runtime,
 script smoke and browser evidence retain their usual checks. Dependency,
 shared TypeScript, installer and CI edits take their existing validation paths.
 Full Go runtime and benchmark coverage still run on the main push.
