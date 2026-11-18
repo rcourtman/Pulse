@@ -320,6 +320,32 @@ the bare error message. Substring matching had called "broken pipe" a
 success and left failures without the words "fail" or "error" unknown. This keeps the datastore job alert from flapping (#1815).
 Mock PBS instances report job results with one failed secondary sync.
 
+### An unread PBS job list does not retire its last failure
+
+Sync, verify and prune lists from `/admin/{family}` and the existing
+`/config/{family}` fallback share whole-response admission with PBS backup
+inventories. A successful list is a fully read and closed, bounded HTTP 200
+response with an explicit, unambiguous `data` array. Every row must identify
+one distinct job within its family using the existing ID spellings. Null
+lists, unidentified or duplicate jobs, and incomplete or erroneous envelopes
+yield the existing family-level partial error, not evidence that a configured
+job was removed. Readable families still advance. The retained failure and
+datastore incident keep the original run time, including after a Pulse restart.
+An unread poll does not refresh the in-memory observation time or mint one for
+a reopened retained record. A valid empty list still reconciles removal and a
+measured successful run still clears the failed posture. Existing endpoint
+selection, HTTP error classification, task-history and garbage-collection
+reads are unchanged.
+
+`TestClient_GetJobHealthEvidence_RequiresIdentifiableJobInventory` covers the
+admin and fallback paths, explicit identity and independent-job controls.
+The shared inventory tests cover bounded transport, whole-envelope admission
+and genuine empty lists.
+`TestPBSConfiguredJobInventoryRetainsFailureUntilReadable` drives the real PBS
+poll into saved failure records, canonical datastore incidents and active
+alerts, with unread, restart, successful-run and removal phases. The same canonical
+resource frames are the input for desktop and narrow Backup Servers proof.
+
 ### PBS job run status comes from the admin endpoints (2 November 2026)
 
 `pkg/pbs.Client.GetJobHealthEvidence` reads configured sync, verify and prune

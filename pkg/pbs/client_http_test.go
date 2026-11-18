@@ -1113,8 +1113,8 @@ func TestClient_GetNodeStatus_MetricCompleteness(t *testing.T) {
 	}
 }
 
-// All three listings carry inventory authority: an accepted empty list may
-// remove previous backup evidence. A decodable prefix is not a complete read.
+// These listings carry inventory authority: an accepted empty list may
+// remove previous backup or job evidence. A decodable prefix is not a complete read.
 func backupInventoryReaders() []struct {
 	name string
 	read func(*Client) (bool, error)
@@ -1135,6 +1135,68 @@ func backupInventoryReaders() []struct {
 			rows, err := c.ListBackupSnapshots(context.Background(), "archive", "tenant", "vm", "101")
 			return rows == nil, err
 		}},
+		{"configured jobs", func(c *Client) (bool, error) {
+			rows, err := c.listJobConfigMaps(context.Background(), "/admin/sync")
+			return rows == nil, err
+		}},
+	}
+}
+
+func TestClient_GetJobHealthEvidence_RequiresIdentifiableJobInventory(t *testing.T) {
+	for _, body := range []string{
+		`null`, `{}`, `{"data":null}`,
+		`{"data":[{"id":"readable"},null]}`,
+		`{"data":[{"id":"readable"},{}]}`,
+		`{"data":[{"id":"readable"},{"store":"fast","id":" "}]}`,
+		`{"data":[{"id":"daily"},{"name":"daily","last-run-state":"OK"}]}`,
+	} {
+		for _, adminAvailable := range []bool{true, false} {
+			t.Run(fmt.Sprintf("admin=%t/%s", adminAvailable, body), func(t *testing.T) {
+				var adminReads, configReads atomic.Int32
+				client, server := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+					if r.Method != http.MethodGet {
+						t.Errorf("unexpected method %q", r.Method)
+					}
+					switch r.URL.Path {
+					case "/api2/json/nodes/localhost/tasks":
+						_, _ = w.Write([]byte(`{"data":[]}`))
+					case "/api2/json/admin/sync":
+						adminReads.Add(1)
+						if !adminAvailable {
+							w.WriteHeader(http.StatusNotFound)
+							return
+						}
+						_, _ = w.Write([]byte(body))
+					case "/api2/json/config/sync":
+						configReads.Add(1)
+						_, _ = w.Write([]byte(body))
+					case "/api2/json/admin/verify":
+						_, _ = w.Write([]byte(`{"data":[{"job-id":"daily","store":"local","last-run-state":"OK"}]}`))
+					default:
+						t.Errorf("unexpected request %s", r.URL.Path)
+						w.WriteHeader(http.StatusNotFound)
+					}
+				})
+				defer server.Close()
+				facts, err := client.GetJobHealthEvidence(context.Background(), []string{"local"}, JobHealthOptions{
+					MonitorSyncJobs: true, MonitorVerifyJobs: true,
+				})
+				if err != nil {
+					t.Fatal(err)
+				}
+				if len(facts) != 2 || facts[0].ID != "sync:partial" || facts[0].Confidence != JobEvidenceConfidencePartialError ||
+					facts[1].Family != "verify" || facts[1].ID != "daily" || facts[1].LastRunState != "OK" {
+					t.Fatalf("unread sync scope must not yield rows or mask verify evidence: %+v", facts)
+				}
+				wantConfig := int32(0)
+				if !adminAvailable {
+					wantConfig = 1
+				}
+				if adminReads.Load() != 1 || configReads.Load() != wantConfig {
+					t.Errorf("admin/config reads = %d/%d, want 1/%d", adminReads.Load(), configReads.Load(), wantConfig)
+				}
+			})
+		}
 	}
 }
 
