@@ -90,6 +90,8 @@ export const useAuditLogPanelState = (props: AuditLogPanelProps = {}) => {
   const [loading, setLoading] = createSignal(true);
   const [error, setError] = createSignal<string | null>(null);
   const [isPersistent, setIsPersistent] = createSignal(false);
+  // A replacement read withdraws the page, not the same reader's query controls.
+  const [hasPersistentLog, setHasPersistentLog] = createSignal(false);
 
   const updateSearchParam = (mutate: (params: URLSearchParams) => void): void => {
     const params = new URLSearchParams(location.search);
@@ -254,18 +256,34 @@ export const useAuditLogPanelState = (props: AuditLogPanelProps = {}) => {
     setIsPersistent(false);
     setError(null);
   };
+  const reportAccessRefusal = () => {
+    setHasPersistentLog(false);
+    setError('Audit log access could not be confirmed. Refresh after access is restored.');
+  };
+  const invalidateAuditRead = () => {
+    auditRequestController?.abort();
+    auditRequestController = null;
+    return ++auditRequestGeneration;
+  };
+  const cancelUserFilterDebounce = () => {
+    if (userFilterDebounceHandle !== null) window.clearTimeout(userFilterDebounceHandle);
+    userFilterDebounceHandle = null;
+  };
+  const beginPageLoad = () => {
+    const generation = invalidateAuditRead();
+    batch(() => {
+      clearInventory();
+      setLoading(!runtimeCapabilitiesLoaded() || accessAllowed());
+    });
+    return generation;
+  };
 
   const fetchAuditEvents = async (options?: { limit?: number; offset?: number }) => {
     if (!ensureCurrentReader()) return;
-    auditRequestController?.abort();
-    auditRequestController = null;
-    const requestGeneration = ++auditRequestGeneration;
+    cancelUserFilterDebounce();
+    const requestGeneration = beginPageLoad();
     const acceptedReader = reader();
-    batch(clearInventory);
-    if (!accessAllowed()) {
-      setLoading(!runtimeCapabilitiesLoaded());
-      return;
-    }
+    if (!accessAllowed()) return;
 
     const limit = options?.limit ?? pageSize();
     const offset = options?.offset ?? pageOffset();
@@ -277,7 +295,6 @@ export const useAuditLogPanelState = (props: AuditLogPanelProps = {}) => {
       acceptedReader === reader() &&
       requestGeneration === auditRequestGeneration &&
       auditRequestController === controller;
-    setLoading(true);
 
     try {
       const params = new URLSearchParams();
@@ -293,7 +310,7 @@ export const useAuditLogPanelState = (props: AuditLogPanelProps = {}) => {
       });
       if (!isCurrentRead()) return;
       if ([401, 402, 403].includes(response.status)) {
-        setError('Audit log access could not be confirmed. Refresh after access is restored.');
+        batch(reportAccessRefusal);
         return;
       }
       if (!response.ok) {
@@ -347,6 +364,7 @@ export const useAuditLogPanelState = (props: AuditLogPanelProps = {}) => {
 
       setEvents(data.events);
       setIsPersistent(data.persistentLogging);
+      setHasPersistentLog(data.persistentLogging);
       setTotalEvents(data.total);
 
       if (data.persistentLogging && autoVerifyEnabled()) {
@@ -418,7 +436,7 @@ export const useAuditLogPanelState = (props: AuditLogPanelProps = {}) => {
       if ([401, 402, 403].includes(response.status)) {
         batch(() => {
           clearInventory();
-          setError('Audit log access could not be confirmed. Refresh after access is restored.');
+          reportAccessRefusal();
         });
         return;
       }
@@ -754,13 +772,11 @@ export const useAuditLogPanelState = (props: AuditLogPanelProps = {}) => {
   });
 
   const resetReader = () => {
-    auditRequestController?.abort();
-    auditRequestController = null;
-    auditRequestGeneration += 1;
-    if (userFilterDebounceHandle !== null) window.clearTimeout(userFilterDebounceHandle);
-    userFilterDebounceHandle = null;
+    invalidateAuditRead();
+    cancelUserFilterDebounce();
     batch(() => {
       setReader(currentReader());
+      setHasPersistentLog(false);
       clearInventory();
       if (readerInitialized) {
         resetPaging();
@@ -789,15 +805,17 @@ export const useAuditLogPanelState = (props: AuditLogPanelProps = {}) => {
   createEffect(
     on([eventFilter, successFilter, userFilter], ([event, success], previous) => {
       if (!previous) return; // The reader owns the initial read.
-      if (userFilterDebounceHandle !== null) window.clearTimeout(userFilterDebounceHandle);
-      userFilterDebounceHandle = null;
+      cancelUserFilterDebounce();
       if (!accessAllowed()) return;
       if (event !== previous[0] || success !== previous[1]) {
         refetchFromFirstPage();
       } else {
+        // The old query can finish during the debounce. Withdraw its page and
+        // signature work now, even though dispatch of the new read is delayed.
+        resetPaging();
+        beginPageLoad();
         userFilterDebounceHandle = window.setTimeout(() => {
-          userFilterDebounceHandle = null;
-          refetchFromFirstPage();
+          void fetchAuditEvents({ offset: 0 });
         }, USER_FILTER_DEBOUNCE_MS);
       }
     }),
@@ -807,11 +825,8 @@ export const useAuditLogPanelState = (props: AuditLogPanelProps = {}) => {
     disposed = true;
     unsubscribeOrg();
     setIsMounted(false);
-    auditRequestController?.abort();
-    auditRequestController = null;
-    auditRequestGeneration += 1;
-    if (userFilterDebounceHandle !== null) window.clearTimeout(userFilterDebounceHandle);
-    userFilterDebounceHandle = null;
+    invalidateAuditRead();
+    cancelUserFilterDebounce();
     batch(clearInventory);
   });
 
@@ -856,6 +871,7 @@ export const useAuditLogPanelState = (props: AuditLogPanelProps = {}) => {
     setSuccessFilter,
     setUserFilter,
     setVerificationFilter,
+    showLogFilters: () => accessAllowed() && hasPersistentLog(),
     showUpgradePaywall,
     showUpgradePrompts,
     showFeatureGateAction,

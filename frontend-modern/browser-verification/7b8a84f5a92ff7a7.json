@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "base_sha": "18827e682d285e698219de82549b9e424f972280",
+  "verified_at": "2026-11-18T14:07:52.592Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/AuditLogPanel.tsx",
+    "frontend-modern/src/components/Settings/useAuditLogPanelState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/AuditLogPanel.tsx": "2679084334b884f03576a0b3918db9b474596fbffe8217996c1f940b49b4d6dc",
+    "frontend-modern/src/components/Settings/useAuditLogPanelState.ts": "3aa736d099b5c925de46383f21e067252658fa46e396823634a8161b4f04d722"
+  },
+  "routes": [
+    "/settings/security-audit"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Compiled Pulse Settings with the existing Audit Log panel, real client and a loopback synthetic session, two audit events and explicit signature verification.",
+    "Playwright 1.56.1 matches the integration lock; Chromium 141.0.7390.37. Desktop light and 390 px dark touch emulation, matched scroll and data.",
+    "19 journeys and 25 native-inspected captures (11 comparison pairs) include loading, storage busy, access refusal, matched expanded/collapsed mobile results and clear/recovery."
+  ],
+  "interactions": [
+    "Start with an admitted page and working signature check. Typing triggers a debounced read. Search, focus and the selected mobile disclosure stay in place through same-reader loading and a 503 while rows, verification and totals are withdrawn.",
+    "Clear filters makes one fresh unfiltered read; only the current rows and unchecked status return. A 403 still withdraws the filter bar and audit page. A successful filtered read preserves focus without changing the result or the disclosure layout.",
+    "Type into a held read without refocusing: the obsolete request is canceled, its late rows do not appear, and the last query gets the only new result. Fixture requests are bound reads with a synthetic session and no API-token or write."
+  ]
+}
