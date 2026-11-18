@@ -66,29 +66,31 @@ func newSteadyStateStore(tb testing.TB, layout string) (*Store, string) {
 	if err != nil {
 		tb.Fatalf("begin history seed: %v", err)
 	}
-	stmt, err := tx.Prepare(`
-		INSERT INTO metrics(resource_type, resource_id, metric_type, value, timestamp, tier)
-		VALUES('vm', ?, ?, ?, ?, 'raw')
-	`)
-	if err != nil {
-		_ = tx.Rollback()
-		tb.Fatalf("prepare history seed: %v", err)
+	defer tx.Rollback()
+	// Seed one ordered poll at a time. Keeping the original insertion order
+	// matters because the test measures writes to the resulting B-trees.
+	if _, err := tx.Exec(`CREATE TEMP TABLE seed_series (resource_id TEXT, metric_type TEXT, metric_index INTEGER)`); err != nil {
+		tb.Fatal(err)
 	}
-	for sample := 0; sample < steadyStateHistory; sample++ {
-		ts := steadyStateBase.Add(time.Duration(sample) * 10 * time.Second).Unix()
-		for resource := 0; resource < steadyStateResources; resource++ {
-			for i, metric := range steadyStateMetricTypes {
-				if _, err := stmt.Exec(steadyStateResourceID(resource), metric, float64((sample+i)%100), ts); err != nil {
-					_ = stmt.Close()
-					_ = tx.Rollback()
-					tb.Fatalf("seed history: %v", err)
-				}
+	for resource := 0; resource < steadyStateResources; resource++ {
+		for i, metric := range steadyStateMetricTypes {
+			if _, err := tx.Exec(`INSERT INTO seed_series VALUES (?, ?, ?)`, steadyStateResourceID(resource), metric, i); err != nil {
+				tb.Fatalf("seed series: %v", err)
 			}
 		}
 	}
-	if err := stmt.Close(); err != nil {
-		_ = tx.Rollback()
-		tb.Fatalf("close history seed: %v", err)
+	for sample := 0; sample < steadyStateHistory; sample++ {
+		ts := steadyStateBase.Add(time.Duration(sample) * 10 * time.Second).Unix()
+		if _, err := tx.Exec(`
+			INSERT INTO metrics(resource_type, resource_id, metric_type, value, timestamp, tier)
+			SELECT 'vm', resource_id, metric_type, (? + metric_index) % 100, ?, 'raw'
+			FROM seed_series ORDER BY rowid
+		`, sample, ts); err != nil {
+			tb.Fatalf("seed history: %v", err)
+		}
+	}
+	if _, err := tx.Exec(`DROP TABLE temp.seed_series`); err != nil {
+		tb.Fatal(err)
 	}
 	if err := tx.Commit(); err != nil {
 		tb.Fatalf("commit history seed: %v", err)
