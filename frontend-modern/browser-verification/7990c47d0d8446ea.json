@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "base_sha": "5045360d7da30056db1e8727ef079cc02aa03557",
+  "result": "passed",
+  "verified_at": "2026-11-18T16:20:32Z",
+  "changed_paths": [
+    "frontend-modern/src/types/api.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/types/api.ts": "92d0f15b9457129bb8c06e65f12af47cac676bb1b626e7379bb9b5b6f7105156"
+  },
+  "routes": [
+    "/proxmox/overview",
+    "/docker/overview",
+    "/standalone/machines",
+    "/map (after choosing Compact)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Combined tree with both the port link-state and Docker network-mode declarations. An offline Go monitor ingested synthetic agent reports and serialized its real unified-resource projection; a local fixture served those rows over the browser's inventory transports.",
+    "Proxmox drawer shows 2.5G on the linked port, a dimmed icon only for the explicitly unplugged port, and an undimmed icon for the port with unreported state.",
+    "Docker shows three containers and opens the shared-network container's overview without inventing a published port. Its wire mode retains the full peer ID; the older row omits mode.",
+    "Machines shows the reporting and older hosts. Gateway and DNS are present only on the reporting host. Neither field is rendered as a new control or label.",
+    "After choosing Compact, Map draws and focuses both network-sharing service tiles. The initial Names view was blank with a sized SVG in this fixture; cold Map paint is not verified."
+  ],
+  "interactions": [
+    "Open and close the linked Proxmox node's details and check the physical port states.",
+    "Expand and collapse the shared-network container overview, then open the Linux machine drawer.",
+    "Switch Map to Compact and focus the downloader's tile; confirm its tooltip. No horizontal document overflow in the exercised states."
+  ],
+  "browser": "Chromium 141.0.7390.37 / Playwright 1.56.1",
+  "themes": [
+    "light"
+  ],
+  "limits": [
+    "This adds a receipt for already merged content; no runtime code or user-facing content changed.",
+    "Synthetic reports and presentation preview only. Does not qualify native hardware collection, Map initial paint, export, History, authorization, installation or release."
+  ]
+}
