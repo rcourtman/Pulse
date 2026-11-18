@@ -10046,3 +10046,10 @@ polls, scoped carry-forward, durable evidence and recovery.
 `TestPBSExplicitZeroGroupCountConfirmsAbsence` checks that zero reconciles only
 the identified absent group. Source-bound Backups browser proof consumes
 actual inventory/posture frames on desktop and narrow layouts.
+
+### Host agent link state reaches the host model (18 November 2026)
+
+`monitor_agents.go` copies an agent report's `linkUp` onto each
+`models.HostNetworkInterface`, and `monitor.go` keeps it when rebuilding host
+interfaces from the unified read-state view. It is copied, never inferred: a
+Proxmox-listed interface without agent data keeps it unset.

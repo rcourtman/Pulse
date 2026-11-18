@@ -11666,3 +11666,11 @@ grouped; a flat list has no node rows, so the control disappears.
 passes the persisted choice through `WorkloadPanel`. The node drawer always
 shows the strip. `WorkloadsFilter.test.tsx` and `NodeGroupHeader.test.tsx`
 cover the control and the hidden header.
+
+### Hardware strip dims ports with no link (18 November 2026)
+
+`nodeHardwareModel` marks a port `noLink` only when its agent reports
+`linkUp: false`; `NodeHardwareStrip` draws that port at 40% opacity, drops any
+stale speed and says "no link" in the hover title and screen-reader text. A
+port with unknown link state (Proxmox-only, older agents) draws as before.
+`nodeHardwareSummary.test.ts` and `NodeGroupHeader.test.tsx` cover it.

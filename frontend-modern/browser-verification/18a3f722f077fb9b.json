@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "base_sha": "18221f60d58c54f46a69b85f52832c65196fddec",
+  "verified_at": "2026-11-18T11:56:58Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/shared/NodeHardwareStrip.tsx",
+    "frontend-modern/src/features/proxmox/nodeHardwareSummary.ts",
+    "frontend-modern/src/hooks/useUnifiedResources.ts",
+    "frontend-modern/src/types/api.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/shared/NodeHardwareStrip.tsx": "36b7580dd6dc84a4cba9efa675d2fe19c4d98e673773dab6543cd101223779ce",
+    "frontend-modern/src/features/proxmox/nodeHardwareSummary.ts": "de9ff70b446426ddd337ba42a15416ec255a003dcdfb85684bf25dffae742cfb",
+    "frontend-modern/src/hooks/useUnifiedResources.ts": "47b4b96b4ee13eb1b68b3ca7f9863f291a85b91c88dc4076783b2c44de3315c5",
+    "frontend-modern/src/types/api.ts": "903ef8908dffb553b32f482acae150b72b3a97b917759d81f9ea4faa8c08e91f"
+  },
+  "routes": [
+    "/proxmox (Overview; Vite dev build of this tree against a private mock-mode Pulse built from this tree, whose mock linked agents also report eno1 linkUp=true 1000 Mb/s and eno2 linkUp=false; the mock tweak was verification-only and is not committed)"
+  ],
+  "viewports": [
+    {
+      "width": 1271,
+      "height": 732
+    },
+    {
+      "width": 760,
+      "height": 900
+    }
+  ],
+  "states": [
+    "Node rows: eno1 shows 1G at full strength, eno2 drawn at 40% opacity with no speed",
+    "Hover title on the ports pill reads 'eno1, 1 Gb/s' and 'eno2, no link'; screen-reader text matches",
+    "Node drawer (expanded from the nodes table) shows the same dimmed eno2",
+    "760px: row strips not rendered, drawer strip keeps the dimmed port on one line, no horizontal scroll",
+    "Earlier production read (agents without linkUp): ports draw undimmed, unchanged from before"
+  ],
+  "interactions": [
+    "Expand details for a node in the nodes table to open its drawer overview",
+    "Resize from desktop to 760px and back",
+    "Temporary 2.5x page zoom to inspect the dimmed glyph, then reset"
+  ],
+  "browser": "Claude desktop built-in browser pane (Chromium)",
+  "themes": [
+    "dark"
+  ]
+}

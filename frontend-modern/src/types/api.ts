@@ -593,6 +593,8 @@ export interface HostNetworkInterface {
   rxBytes?: number;
   txBytes?: number;
   speedMbps?: number;
+  /** A physical port's link state from its agent; absent when unknown. */
+  linkUp?: boolean;
 }
 
 export interface HostSensorSummary {

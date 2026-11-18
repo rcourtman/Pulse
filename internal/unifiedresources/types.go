@@ -2073,6 +2073,9 @@ type NetworkInterface struct {
 	TXBytes   uint64   `json:"txBytes,omitempty"`
 	SpeedMbps *int64   `json:"speedMbps,omitempty"`
 	Status    string   `json:"status,omitempty"`
+	// LinkUp is a physical port's link state from its host agent; nil when
+	// unknown.
+	LinkUp *bool `json:"linkUp,omitempty"`
 }
 
 // DiskInfo describes disk usage.

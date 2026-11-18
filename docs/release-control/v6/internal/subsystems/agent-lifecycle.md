@@ -12077,3 +12077,13 @@ Other platforms have no sysfs and keep reporting addressed interfaces only.
 No agent token, installation, command or lifecycle authority changes.
 `collector_test.go` covers the bridge case, the summed rate, the addressed
 port speed and the sysfs reader.
+
+### Agents report each physical port's link state (18 November 2026)
+
+`collectNetwork` in `internal/hostmetrics/collector.go` also reads Linux sysfs
+`carrier` for each device-backed port and reports `linkUp` in
+`pkg/agents/host/report.go`: true with a link, false with no cable, no partner
+or an administratively down port. Software interfaces leave it unset. A speed
+the driver still reports on a port with no link is dropped as stale. No agent
+token, installation, command or lifecycle authority changes. `collector_test.go`
+covers carrier up, down and unreadable, and the stale speed.
