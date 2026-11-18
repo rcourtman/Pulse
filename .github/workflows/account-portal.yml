@@ -104,6 +104,7 @@ jobs:
             git show "$EXPECTED_SOURCE_SHA:internal/cloudcp/portal/frontend/$file" > "$audited/$file"
           done
           printf 'AUDITED_MAIN_SHA=%s\n' "$EXPECTED_SOURCE_SHA"
+          echo "The scheduled account audit requires a fresh result even when the lockfile is unchanged."
           # Copy only data; do not use the checkout's npm configuration,
           # install dependencies, or execute code from the lockfile.
           cd "$audited"

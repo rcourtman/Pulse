@@ -300,7 +300,7 @@ else
 fi
 
 if [ "${graph_unchanged}" != "true" ]; then
-  echo "::error::npm audit (${SCOPE}) could not reach the advisory endpoint ${gave_up}. A fresh strict result is required; no clean verdict can be assumed."
+  echo "::error::npm audit (${SCOPE}) could not reach the advisory endpoint ${gave_up}, and this change touches the dependency graph, so the result cannot be assumed."
   exit 1
 fi
 

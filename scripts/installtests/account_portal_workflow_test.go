@@ -153,7 +153,7 @@ func TestAccountPortalDailyAdvisoryWatch(t *testing.T) {
 	}{
 		{"clean", "no vulnerabilities", 2, true, true},
 		{"finding", "audit finding ", 2, true, false},
-		{"unavailable", "A fresh strict result is required", 2, true, false},
+		{"unavailable", "could not reach the advisory endpoint", 2, true, false},
 		{"wrong-ref", "requires the exact scheduled main source", 0, false, false},
 		{"wrong-sha", "requires the exact scheduled main source", 0, false, false},
 		{"bad-sha", "requires the exact scheduled main source", 0, false, false},
@@ -211,7 +211,8 @@ esac
 				"NPM_AUDIT_REQUIRE_RESULT="+audit.Env["NPM_AUDIT_REQUIRE_RESULT"])
 			out, err := cmd.CombinedOutput()
 			if (err == nil) != tc.pass || !strings.Contains(string(out), tc.wantMessage) ||
-				strings.Contains(string(out), "AUDITED_MAIN_SHA="+sha) != tc.npm {
+				strings.Contains(string(out), "AUDITED_MAIN_SHA="+sha) != tc.npm ||
+				strings.Contains(string(out), "The scheduled account audit requires a fresh result even when the lockfile is unchanged.") != tc.npm {
 				t.Fatalf("wrong audit verdict: %v\n%s", err, out)
 			}
 			want := []string{
