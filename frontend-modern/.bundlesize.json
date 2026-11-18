@@ -26,7 +26,7 @@
       "baselineGzip": 74093
     },
     "useWorkloadsState": {
-      "baselineGzip": 55651
+      "baselineGzip": 50986
     },
     "Docker": {
       "baselineGzip": 29593
@@ -128,7 +128,7 @@
       "baselineGzip": 5296
     },
     "PlatformHostScope": {
-      "baselineGzip": 5286
+      "baselineGzip": 10775
     },
     "RelaySettingsPanel": {
       "baselineGzip": 5263
