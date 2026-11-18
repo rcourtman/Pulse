@@ -43,6 +43,7 @@ import { getActiveTabForPath } from '@/routing/navigation';
 import { preloadRouteModule } from '@/routing/routePreload';
 import {
   DOCKER_PATH,
+  INFRASTRUCTURE_MAP_PATH,
   KUBERNETES_PATH,
   PROXMOX_PATH,
   STANDALONE_PATH,
@@ -66,6 +67,10 @@ import { runtimeBranding } from '@/stores/systemSettings';
 import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
 import type { AppConnectionStatus } from '@/useAppRuntimeState';
 import { buildInfrastructureWorkspacePath } from '@/components/Settings/infrastructureWorkspaceModel';
+import {
+  InfrastructureMapEdgeTab,
+  InfrastructureMapHeaderButton,
+} from '@/features/infrastructureMap/InfrastructureMapEntry';
 
 const ROOT_PROXMOX_PATH = buildProxmoxPath();
 const ROOT_DOCKER_PATH = buildDockerPath();
@@ -293,7 +298,9 @@ export function AppLayout(props: AppLayoutProps) {
   createEffect(() => {
     const active = getActiveTabForPath(location.pathname);
     if (!active) {
-      document.title = browserBrandName();
+      // The map is reached from the window edge, not from a tab.
+      const onMap = location.pathname.replace(/\/+$/, '') === INFRASTRUCTURE_MAP_PATH;
+      document.title = onMap ? `Map · ${browserBrandName()}` : browserBrandName();
       return;
     }
     // The standalone (Machines) section has sub-tabs with their own labels.
@@ -770,6 +777,9 @@ export function AppLayout(props: AppLayoutProps) {
         <div
           class={`header-controls flex max-w-full flex-wrap items-center gap-1 sm:flex-nowrap sm:gap-2 ${kioskMode() ? '' : 'justify-end sm:col-start-3 sm:col-end-4 sm:w-auto sm:justify-end sm:justify-self-end'}`}
         >
+          <Show when={!kioskMode()}>
+            <InfrastructureMapHeaderButton />
+          </Show>
           <Show when={props.hasAuth() && !props.needsAuth()}>
             <div class="flex items-center gap-1 sm:gap-2">
               <Show when={props.showOrgSwitcher()}>
@@ -839,6 +849,10 @@ export function AppLayout(props: AppLayoutProps) {
           <ConnectionStatusBadge connectionStatus={props.connectionStatus} class="shrink-0" />
         </div>
       </div>
+
+      <Show when={!kioskMode()}>
+        <InfrastructureMapEdgeTab />
+      </Show>
 
       <Show when={!kioskMode()}>
         <nav
