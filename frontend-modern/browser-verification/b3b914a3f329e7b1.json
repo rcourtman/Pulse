@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "base_sha": "18cbc37facf4218e5a26bfa87e6aafd16e4a3612",
+  "verified_at": "2026-11-18T14:51:20Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapSurface.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapSurface.tsx": "afba3687301e08d467899d50b7f3bc7bb8f830d01142f098b6183d4300a06ccd"
+  },
+  "routes": [
+    "/map"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "final runtime bytes served by a Vite dev server from a copy of the counters branch plus this change, in the in-app browser, against a real Pulse 6.9.0-beta.3 instance monitoring a real homelab",
+    "measure used: the bottom edge of main#main (the drawing plus its legend) against the window height, less the fixed bottom navigation bar on a phone. The document's own scroll height says nothing here, because the app scrolls inside .app-scroll-shell",
+    "the banner was a stand-in: a plain block of the stated height inserted in #root just above the app's h-screen container, where App.tsx renders UpdateBanner and DemoBanner. No real banner was showing on this instance",
+    "before this change, 1440x900 dark: with a 41px block the drawing stayed 1191x657 and main ended at 929 of 900, 29px below the window; with 82px it ended at 970",
+    "after, 1440x900 dark, no banner: drawing 1191x657, main ends at 888 of 900",
+    "after, 1440x900 dark, 41px block: drawing refitted to 1117x616, main ends at 888",
+    "after, 1440x900 dark, 82px block: drawing refitted to 1043x575, main ends at 888",
+    "after, 1440x900 dark, block removed: drawing back to 1191x657, main ends at 888",
+    "after, 375x812 dark, reloaded at that size, no banner: icons alone, drawing 298x472, main ends at 756 with the navigation bar starting at 767, so the legend is above the bar. Before this change the drawing here was 359x567 and the legend sat under the bar",
+    "after, 375x812 dark, 41px block: the fit chose a wider, shorter layout, 359x392, main ends at 717",
+    "console: no error event, and no resize-loop report, through every step",
+    "the in-app browser pane was hidden, where the browser runs neither animation frames nor resize observers; frames were driven by taking screenshots between steps. Not checked: a real UpdateBanner, light theme (no colour or markup changes), Firefox and Safari"
+  ],
+  "interactions": [
+    "inserted and removed the stand-in block without reloading and read the drawing's size and the bottom edge of main after each step",
+    "resized the open page from 1440x900 to 375x812 and reloaded at 375x812; both gave the same fitted drawing"
+  ]
+}
