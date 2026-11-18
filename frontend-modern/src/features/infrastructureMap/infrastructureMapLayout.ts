@@ -44,8 +44,14 @@ export interface MapDrawStyle {
 
 export type MapDensity = 'names' | 'marks';
 
-/** `networks` draws what is connected to what; `hosts` what runs where. */
-export type MapView = 'networks' | 'hosts';
+/**
+ * `services` draws what the estate is for, `networks` what is connected to
+ * what, and `hosts` what runs where.
+ */
+export type MapView = 'services' | 'networks' | 'hosts';
+
+/** Everything the map has an outline glyph for: each platform, and the Internet. */
+export type MapGlyphKey = MapPlatform | 'internet';
 
 export interface MapHit {
   id: string;
@@ -70,6 +76,7 @@ export type SceneNode =
       r: number;
       fill: MapTone | MapHealth;
       stroke?: MapTone | MapHealth;
+      dashed?: boolean;
     }
   | {
       kind: 'text';
@@ -79,12 +86,31 @@ export type SceneNode =
       size: number;
       weight: 400 | 600;
       fill: MapTone;
-      anchor?: 'start' | 'end';
+      anchor?: 'start' | 'middle' | 'end';
       caps?: boolean;
     }
   | { kind: 'dot'; x: number; y: number; r: number; health: MapHealth }
   | { kind: 'mark'; x: number; y: number; size: number; health: MapHealth }
-  | { kind: 'icon'; x: number; y: number; size: number; platform: MapPlatform }
+  | { kind: 'icon'; x: number; y: number; size: number; platform: MapGlyphKey }
+  | {
+      /** An app's logo on its brand colour, or its initials when it has none. */
+      kind: 'app';
+      x: number;
+      y: number;
+      size: number;
+      icon?: string;
+      letters: string;
+      hue: number;
+      dim?: boolean;
+    }
+  | {
+      /** A connector through the given corners, with an arrowhead at the end. */
+      kind: 'line';
+      points: Array<[number, number]>;
+      tone: MapTone;
+      dashed?: boolean;
+      arrow?: boolean;
+    }
   | { kind: 'hit'; x: number; y: number; w: number; h: number; r: number; hit: MapHit };
 
 export interface MapScene {
@@ -165,7 +191,7 @@ const HEALTH_WORD: Record<MapHealth, string> = {
 const titleCase = (value: string): string =>
   value ? value.charAt(0).toUpperCase() + value.slice(1) : value;
 
-const hitMeta = (typeLabel: string, status: string, health: MapHealth): string => {
+export const mapHitMeta = (typeLabel: string, status: string, health: MapHealth): string => {
   const state = health === 'ok' || health === 'off' ? titleCase(status) : HEALTH_WORD[health];
   return [typeLabel, state || HEALTH_WORD[health]].filter(Boolean).join(' · ');
 };
@@ -173,7 +199,7 @@ const hitMeta = (typeLabel: string, status: string, health: MapHealth): string =
 const itemHit = (item: MapItem): MapHit => ({
   id: item.id,
   name: item.name,
-  meta: hitMeta(item.typeLabel, item.status, item.health),
+  meta: mapHitMeta(item.typeLabel, item.status, item.health),
   health: item.health,
   cpu: item.cpu,
   memory: item.memory,
@@ -185,10 +211,11 @@ const itemHit = (item: MapItem): MapHit => ({
 const usageHealth = (percent: number): MapHealth =>
   percent >= 90 ? 'critical' : percent >= 80 ? 'attention' : 'ok';
 
-interface Cursor {
+export interface MapCursor {
   nodes: SceneNode[];
   hits: SceneNode[];
 }
+type Cursor = MapCursor;
 
 const drawBar = (
   out: Cursor,
@@ -463,7 +490,7 @@ const drawHost = (
     hit: {
       id: host.id,
       name: host.name,
-      meta: hitMeta(host.typeLabel, host.status, host.health),
+      meta: mapHitMeta(host.typeLabel, host.status, host.health),
       health: host.health,
       cpu: host.cpu,
       memory: host.memory,
@@ -656,7 +683,7 @@ const drawGroup = (
 
 type PosterHeader = MapLayoutOptions['header'];
 
-const drawPosterHeader = (
+export const drawPosterHeader = (
   out: Cursor,
   header: PosterHeader,
   margin: number,
@@ -684,7 +711,7 @@ const drawPosterHeader = (
   return margin + 64;
 };
 
-const drawPosterFooter = (
+export const drawPosterFooter = (
   out: Cursor,
   header: PosterHeader,
   margin: number,
