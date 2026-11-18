@@ -125,6 +125,8 @@ const renderLayout = (
       organizations={() => []}
       activeOrgID={() => 'default'}
       orgsLoading={() => false}
+      organizationListIssue={() => null}
+      onRetryOrganizationList={() => {}}
       showOrgSwitcher={() => false}
       onSwitchOrg={() => {}}
     >

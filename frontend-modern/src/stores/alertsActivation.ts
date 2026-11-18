@@ -1,8 +1,8 @@
-import { createSignal } from 'solid-js';
+import { batch, createSignal } from 'solid-js';
 import { AlertsAPI } from '@/api/alerts';
 import type { AlertConfig, ActivationState as ActivationStateType } from '@/types/alerts';
-import type { Alert } from '@/types/api';
 import type { Resource } from '@/types/resource';
+import { getOrgID } from '@/utils/apiClient';
 import { setGlobalAlertsDetectionEnabled } from '@/utils/alertsActivation';
 import { FACTORY_NODE_DEFAULTS } from '@/utils/alertThresholdDefaults';
 import { logger } from '@/utils/logger';
@@ -19,7 +19,6 @@ import { eventBus } from './events';
 const [config, setConfig] = createSignal<AlertConfig | null>(null);
 const [activationState, setActivationStateSignal] = createSignal<ActivationStateType | null>(null);
 const [isLoading, setIsLoading] = createSignal(false);
-const [activeAlerts, setActiveAlerts] = createSignal<Alert[]>([]);
 const [lastError, setLastError] = createSignal<string | null>(null);
 const detectionEnabled = () => config()?.enabled ?? true;
 const notificationDeliveryEnabled = () => detectionEnabled() && activationState() === 'active';
@@ -37,41 +36,42 @@ const ensureConfigLoaded = async (): Promise<AlertConfig | null> => {
   return current;
 };
 
-// Each config read and each organisation switch takes a new generation. A
-// read installs its answer only while it is still the latest, so a slow reply
-// for the previous organisation, or an older read overtaken by a newer one,
-// cannot overwrite what the page now shows.
-let configGeneration = 0;
+let configRead: AbortController | undefined;
 
 // Refresh config from API
 const refreshConfig = async (): Promise<void> => {
-  const generation = ++configGeneration;
-  const isLatest = () => generation === configGeneration;
+  configRead?.abort();
+  const controller = new AbortController();
+  configRead = controller;
+  const { signal } = controller;
+  const orgID = getOrgID();
+  const ownsRead = () => !signal.aborted && getOrgID() === orgID;
   try {
     setIsLoading(true);
     setLastError(null);
-    const alertConfig = await AlertsAPI.getConfig();
-    if (!isLatest()) return;
-    setConfig(alertConfig);
-    setGlobalAlertsDetectionEnabled(alertConfig.enabled);
-    applyActivationState(alertConfig.activationState || 'active');
+    const alertConfig = await AlertsAPI.getConfig({
+      signal,
+      cache: 'no-store',
+      expectedOrgID: orgID ?? undefined,
+      // An unbound bootstrap must keep the header absent, while still using
+      // the API client's abort-aware response handling.
+      retry: orgID !== null,
+    });
+    if (!ownsRead()) return;
+    batch(() => {
+      setConfig(alertConfig);
+      applyActivationState(alertConfig.activationState || 'active');
+      setGlobalAlertsDetectionEnabled(alertConfig.enabled);
+    });
   } catch (error) {
-    if (!isLatest()) return;
+    if (!ownsRead()) return;
     logger.error('Failed to fetch alert config:', error);
     setLastError(error instanceof Error ? error.message : 'Unknown error');
   } finally {
-    if (isLatest()) setIsLoading(false);
-  }
-};
-
-// Fetch active alerts (for violation count)
-const refreshActiveAlerts = async (): Promise<void> => {
-  try {
-    const alerts = await AlertsAPI.getActive();
-    setActiveAlerts(alerts);
-  } catch (error) {
-    logger.error('Failed to fetch active alerts:', error);
-    // Don't set error state for this - it's not critical
+    if (configRead === controller) {
+      configRead = undefined;
+      setIsLoading(false);
+    }
   }
 };
 
@@ -183,11 +183,11 @@ const getTrueNASDiskTemperatureThresholds = (disk: Pick<Resource, 'id' | 'physic
 };
 
 eventBus.on('org_switched', () => {
-  configGeneration++;
+  configRead?.abort();
+  configRead = undefined;
   setConfig(null);
   setGlobalAlertsDetectionEnabled(null);
   applyActivationState(null);
-  setActiveAlerts([]);
   setLastError(null);
   setIsLoading(false);
 });
@@ -200,7 +200,6 @@ export const useAlertsActivation = () => ({
   detectionEnabled,
   notificationDeliveryEnabled,
   isLoading,
-  activeAlerts,
   lastError,
 
   // Computed
@@ -213,7 +212,6 @@ export const useAlertsActivation = () => ({
 
   // Actions
   refreshConfig,
-  refreshActiveAlerts,
   activate,
   deactivate,
   snooze,

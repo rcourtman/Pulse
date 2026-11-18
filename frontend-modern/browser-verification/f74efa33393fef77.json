@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "base_sha": "e5a1b33e83585caf0f27274060c6246acad24b7c",
+  "verified_at": "2026-11-18T17:49:33Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/pages/Alerts.tsx",
+    "frontend-modern/src/stores/alertsActivation.ts",
+    "frontend-modern/src/useAppRuntimeState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/pages/Alerts.tsx": "2a6d9d3d97cb03ae63f81bdb09743edd2421fd62e03b3b422a073a27d370319b",
+    "frontend-modern/src/stores/alertsActivation.ts": "4b6ed8f0b0462ddd07e225852a301838e3f6cfe95e6a0c3bef3a95ff428d78ea",
+    "frontend-modern/src/useAppRuntimeState.ts": "2f6420c6805fdb5a7d93ebfa0b423e64718b4e617317ecdc96b190e815d78cb6"
+  },
+  "routes": [
+    "/alerts"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Playwright 1.56.1; compiled Alerts Overview against identical, synthetic loopback API and WebSocket fixtures. Chromium 141.0.7390.37 desktop light; WebKit 26.0 narrow dark. 24 native-inspected captures in 12 pairs with matched viewport, theme, focus and scroll.",
+    "Explicitly select East with an already-open West session. East's first socket shows its existing alert in both builds; the repaired build also enables the Send notifications switch after East's policy read completes.",
+    "A 503 retains West, its alert and notification setting. A read-only retry returns East as the replacement. After the same policy release checkpoint the repaired build explains paused detection instead of the predecessor's green No active alerts state; the West alert is absent in both.",
+    "While East's policy is held, both keep live East alert rows when present. The repaired switch is disabled while reading; empty active-alert projection still uses the existing empty state until config returns. The fixture's separate unavailable delivery-queue status stays visible."
+  ],
+  "interactions": [
+    "Force a genuine transient close in West; the successful West reconnect starts a delayed GET. Switch from the organization chooser or by Enter on Retry with a new valid membership list. Tab reaches the restored chooser. The destination uses one successful first handshake, not a reconnect.",
+    "Release East config, then complete the old West reply. Before: the editor reads East but cannot settle the global switch. After: a destination-bound shell read settles detection and notification configuration; West's fetch is aborted. No stale West rows, credential changes, or writes (fixture API observed only GET).",
+    "Empty and malformed list responses retain the unbound session without a Default header on the shell config read. Retrying restores the listed chooser and selected workspace. No real delivery, account grants, or cross-tab acceptance is claimed."
+  ]
+}

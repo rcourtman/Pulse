@@ -91,7 +91,6 @@ vi.mock('@/stores/alertsActivation', () => ({
     isLoading: () => false,
     activate: vi.fn(async () => true),
     deactivate: vi.fn(async () => true),
-    refreshActiveAlerts: vi.fn(async () => undefined),
     refreshConfig: vi.fn(async () => undefined),
     config: () => null,
   }),
