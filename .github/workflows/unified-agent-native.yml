@@ -48,7 +48,7 @@ on:
       - 'go.mod'
       - 'go.sum'
   pull_request:
-    branches: [main]
+    branches: [main, ci/rest-4631-control-base, ci/rest-4631-fix-base]
     paths:
       - '.github/workflows/unified-agent-native.yml'
       - 'cmd/pulse-agent/**'

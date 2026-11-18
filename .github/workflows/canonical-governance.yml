@@ -8,6 +8,8 @@ on:
   pull_request:
     branches:
       - main
+      - ci/rest-4631-control-base
+      - ci/rest-4631-fix-base
       - 'release/v*'
   workflow_dispatch:
 
