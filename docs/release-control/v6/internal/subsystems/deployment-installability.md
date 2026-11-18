@@ -2713,7 +2713,7 @@ post-update packet. Existing exact-candidate release gates remain unchanged.
 13. `.github/workflows/build-release-candidate.yml`
 13a. `.github/workflows/compile-release-payload.yml`
 13b. `.github/workflows/qualify-secure-runtime-release.yml`
-14. `.github/workflows/build-and-test.yml`
+14. `.github/workflows/build-and-test.yml` uses `scripts/ci_component_only.py` to select the component-only PR checks.
 14a. `scripts/release_control/run_go_package_slice.py`
 14. `.github/workflows/create-release.yml`
 14. `.github/workflows/deploy-demo-server.yml`
@@ -9566,10 +9566,20 @@ acceptance verdict. Full required race-test shards retain those responsibilities
 
 The diff classifier reserves this admission for Go source/manifests, backend
 embedded files and its own workflow/scripts. Unavailable diffs fail open into
-full compilation. Frontend-only changes do not pay for this Go-only preflight
-(the measured VM pass took 386 seconds); their existing backend runtime
-checks still run. `scripts/go-test-compile-required.sh` consumes the complete
-file list without an early-close/SIGPIPE path.
+full compilation. Frontend-only changes skip this Go-only preflight.
+`scripts/go-test-compile-required.sh` consumes the complete file list.
+
+On pull requests targeting main, `scripts/ci_component_only.py` checks the
+complete diff from the PR base to the tested merge tree. A regular component
+under components or features, accompanied only by other components, their
+test files or browser receipts, qualifies for scoped Go validation. The two
+rest jobs run the unifiedresources and telemetry packages, whose tests read
+frontend source. One API worker runs the agent capabilities contract that reads
+the integration panel. New cross-language test dependencies belong here too.
+Frontend build, lint, type checking, all four unit shards, real-embed runtime,
+script smoke and browser evidence retain their usual checks. Dependency,
+shared TypeScript, installer and CI edits take their existing validation paths.
+Full Go runtime and benchmark coverage still run on the main push.
 
 Both backend matrices admit only three explicit classifier/compiler tuples:
 code=true/compile=true/success, code=true/compile=false/skipped, or

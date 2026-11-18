@@ -24,7 +24,7 @@ class BenchmarkWorkflowContractTest(unittest.TestCase):
         collector = jobs["benchmarks"]
         self.assertEqual(collector["name"], "Benchmarks (shard ${{ matrix.shard }})")
         self.assertEqual(collector["needs"], "changes")
-        self.assertEqual(collector["if"], "needs.changes.outputs.code == 'true'")
+        self.assertEqual(collector["if"], "needs.changes.outputs.code == 'true' && needs.changes.outputs.component_only != 'true'")
         self.assertEqual(collector["strategy"]["matrix"], {"shard": [0, 1, 2]})
         self.assertIs(collector["strategy"]["fail-fast"], False)
         self.assertFalse(collector.get("continue-on-error", False))
@@ -57,7 +57,7 @@ class BenchmarkWorkflowContractTest(unittest.TestCase):
         verdict = jobs["benchmarks-verdict"]
         self.assertEqual(verdict["name"], "Benchmarks")
         self.assertEqual(verdict["needs"], ["changes", "benchmarks"])
-        self.assertEqual(verdict["if"], "always() && needs.changes.outputs.code == 'true'")
+        self.assertEqual(verdict["if"], "always() && needs.changes.outputs.code == 'true' && needs.changes.outputs.component_only != 'true'")
         self.assertFalse(verdict.get("continue-on-error", False))
         self.assertEqual(verdict["steps"][0]["env"]["SHARD_RESULT"], "${{ needs.benchmarks.result }}")
         for step in verdict["steps"]:

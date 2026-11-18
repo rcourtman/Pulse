@@ -307,7 +307,7 @@ class GitTreeScopeTest(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.repo = Path(self.temp.name)
         self.git("init", "-q", "--initial-branch=main")
-        for name in ("scripts/ci_browser_proof_only.py", "scripts/ci_triage_only.py",
+        for name in ("scripts/ci_browser_proof_only.py", "scripts/ci_component_only.py", "scripts/ci_triage_only.py",
                      "scripts/ci_completion_only.py",
                      "scripts/go-test-compile-required.sh"):
             path = self.repo / name
@@ -389,6 +389,80 @@ class GitTreeScopeTest(unittest.TestCase):
                                                                "GOVERNANCE_TARGET_BRANCH": target_branch})
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             return dict(line.split("=", 1) for line in output.read_text().splitlines())
+
+    def component_scope(self, base, head):
+        step = step_script(job_block(BUILD.read_text(), "changes"), "Identify component-only pull requests")
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "outputs"
+            subprocess.run(["bash", "-eu", "-o", "pipefail", "-c", step], cwd=self.repo,
+                           env={**os.environ, "BASE_SHA": base, "TESTED_SHA": head, "GITHUB_OUTPUT": str(output)},
+                           check=True, capture_output=True, timeout=10)
+            return output.read_text().strip()
+
+    def test_component_admission_requires_complete_regular_component_tree(self):
+        component = "frontend-modern/src/components/Settings/UserAssignmentsPanel.tsx"
+        test = "frontend-modern/src/components/Settings/__tests__/UserAccessSavedFocus.transport.test.tsx"
+        self.write(RECEIPT, "{}")
+        self.write(test, "fixture")
+        evidence = self.commit()
+        self.assertEqual(self.component_scope(self.base, evidence), "only=false")
+        self.write(component, "component")
+        admitted = self.commit()
+        self.assertEqual(self.component_scope(self.base, admitted), "only=true")
+        self.assertEqual(self.component_scope(admitted, self.base), "only=true")
+        self.assertEqual(self.component_scope(admitted, admitted), "only=false")
+        self.assertEqual(self.component_scope("0" * 40, admitted), "only=false")
+        for path in ("frontend-modern/src/components/Settings/model.ts",
+                     "frontend-modern/src/types/resource.ts", "frontend-modern/package-lock.json",
+                     "frontend-modern/src/App.tsx", "go.mod", "install.sh", "internal/api/server.go",
+                     ".github/workflows/build-and-test.yml", "scripts/ci_component_only.py",
+                     "frontend-modern/src/components/Bad\nName.tsx"):
+            with self.subTest(path=path):
+                self.git("reset", "--hard", admitted)
+                if path == "scripts/ci_component_only.py":
+                    with (self.repo / path).open("a") as script:
+                        script.write("\n# changed admission control\n")
+                else:
+                    self.write(path, "mixed input")
+                self.assertEqual(self.component_scope(self.base, self.commit()), "only=false")
+        self.git("reset", "--hard", admitted)
+        (self.repo / component).unlink()
+        (self.repo / component).symlink_to("Other.tsx")
+        self.assertEqual(self.component_scope(admitted, self.commit()), "only=false")
+        self.git("reset", "--hard", admitted)
+        self.git("mv", "internal/api/fixture.go", "frontend-modern/src/components/Renamed.tsx")
+        self.assertEqual(self.component_scope(admitted, self.commit()), "only=false")
+
+    def test_component_path_preserves_frontend_smoke_and_scopes_only_main_prs(self):
+        jobs = yaml.safe_load(BUILD.read_text())["jobs"]
+        scope = next(step for step in jobs["changes"]["steps"] if step.get("id") == "component")
+        self.assertEqual(scope["if"], "github.event_name == 'pull_request' && github.base_ref == 'main' "
+                         "&& steps.filter.outputs.code == 'true' && steps.filter.outputs.go_compile == 'false'")
+        self.assertEqual(scope["env"], {"BASE_SHA": "${{ github.event.pull_request.base.sha }}",
+                                        "TESTED_SHA": "${{ github.sha }}"})
+        self.assertEqual(jobs["changes"]["outputs"]["component_only"], "${{ steps.component.outputs.only }}")
+        for name in ("frontend-build", "frontend-unit", "frontend-checks", "frontend", "script-smoke", "scripts-and-build"):
+            self.assertNotIn("component_only", str(jobs[name]))
+        self.assertEqual(jobs["frontend-unit"]["strategy"]["matrix"]["shard"], [1, 2, 3, 4])
+        self.assertEqual(jobs["script-smoke"]["strategy"]["matrix"]["shard"], [0, 1])
+
+    def test_component_rest_shards_run_the_source_reading_packages_and_propagate_failures(self):
+        script = step_script(job_block(BUILD.read_text(), "backend"), "Go unit tests (shard ${{ matrix.shard }})")
+        with tempfile.TemporaryDirectory() as directory:
+            go = Path(directory) / "go"
+            go.write_text('#!/bin/sh\nprintf "%s\\n" "$@"\nexit "$GO_EXIT"\n')
+            go.chmod(0o755)
+            for shard, package in (("rest-0", "./internal/unifiedresources"), ("rest-1", "./internal/telemetry")):
+                for exit_code in (0, 17):
+                    with self.subTest(shard=shard, exit_code=exit_code):
+                        result = subprocess.run(["bash", "-c", interpolate(script, {"matrix.shard": shard})],
+                            cwd=self.repo, capture_output=True, text=True, timeout=10,
+                            env={**os.environ, "PATH": directory + os.pathsep + os.environ["PATH"],
+                                 "COMPONENT_ONLY": "true", "GO_EXIT": str(exit_code)})
+                        self.assertEqual(result.returncode, exit_code, result.stderr)
+                        self.assertIn("-race", result.stdout.splitlines())
+                        self.assertIn("-count=1", result.stdout.splitlines())
+                        self.assertEqual(result.stdout.splitlines()[-1], package)
 
     def test_actual_build_classifier_omits_only_receipt_runtime_checks(self):
         self.write(RECEIPT, "{}\n")
