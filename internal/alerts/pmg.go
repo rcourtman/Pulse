@@ -67,8 +67,42 @@ func (m *Manager) clearPMGMetricAlerts(pmgID string) {
 	}
 }
 
-// CheckPMG checks a Proxmox Mail Gateway instance against thresholds
+// PMGNodeQueueObservation carries completeness alongside the live numeric
+// queue projection. A partial total is a lower bound, not recovery evidence.
+type PMGNodeQueueObservation struct {
+	TotalLowerBound  int
+	TotalObserved    bool
+	DeferredObserved bool
+	HoldObserved     bool
+	AgeUpperMinutes  int64
+	AgeBounded       bool
+}
+
+// CheckPMG evaluates synthetic PMG readings, whose queue measurements are exact.
+// Live qshape polls use CheckPMGWithNodeQueueObservations instead.
 func (m *Manager) CheckPMG(pmg models.PMGInstance) {
+	m.checkPMG(pmg, exactPMGNodeQueueObservation)
+}
+
+func exactPMGNodeQueueObservation(node models.PMGNodeStatus) PMGNodeQueueObservation {
+	return PMGNodeQueueObservation{
+		TotalLowerBound: node.QueueStatus.Total,
+		TotalObserved:   true, DeferredObserved: true, HoldObserved: true,
+		AgeUpperMinutes: node.QueueStatus.OldestAge / 60, AgeBounded: true,
+	}
+}
+
+// CheckPMGWithNodeQueueObservations evaluates a live poll, using only that
+// poll's completeness and inclusive upper age bounds for this gateway.
+func (m *Manager) CheckPMGWithNodeQueueObservations(pmg models.PMGInstance, observations map[string]PMGNodeQueueObservation) {
+	m.checkPMG(pmg, func(node models.PMGNodeStatus) PMGNodeQueueObservation {
+		return observations[node.Name]
+	})
+}
+
+type pmgQueueObservationFunc func(models.PMGNodeStatus) PMGNodeQueueObservation
+
+func (m *Manager) checkPMG(pmg models.PMGInstance, observe pmgQueueObservationFunc) {
 	m.mu.RLock()
 	if !m.config.Enabled {
 		m.mu.RUnlock()
@@ -124,7 +158,7 @@ func (m *Manager) CheckPMG(pmg models.PMGInstance) {
 	}
 
 	// Check queue depths across all nodes
-	m.checkPMGQueueDepths(pmg, pmgDefaults)
+	m.checkPMGQueueDepths(pmg, pmgDefaults, observe)
 	// Check oldest message age across all nodes
 	m.checkPMGOldestMessage(pmg, pmgDefaults)
 	// Check quarantine backlog and growth
@@ -132,7 +166,7 @@ func (m *Manager) CheckPMG(pmg models.PMGInstance) {
 	// Check spam/virus rate anomalies
 	m.checkPMGAnomalies(pmg, pmgDefaults)
 	// Check per-node queue health
-	m.checkPMGNodeQueues(pmg, pmgDefaults)
+	m.checkPMGNodeQueues(pmg, pmgDefaults, observe)
 }
 
 // checkPMGOffline creates an alert for offline PMG instances
@@ -180,8 +214,8 @@ func (m *Manager) clearPMGOfflineAlert(pmg models.PMGInstance) {
 	m.clearResourceOfflineAlert(pmg.ID, pmg.Name, pmg.Host, "PMG", offlineRecoveryConfirmationsDefault)
 }
 
-// pmgQueuesComplete requires observations from every discovered node before
-// evaluating aggregate queue health. Missing/disabled collection is not zero.
+// pmgQueuesComplete reports whether every discovered node answered the
+// queue reads. Count checks additionally require the relevant counts.
 func pmgQueuesComplete(pmg models.PMGInstance) bool {
 	if len(pmg.Nodes) == 0 {
 		return false
@@ -197,8 +231,8 @@ func pmgQueuesComplete(pmg models.PMGInstance) bool {
 // A partial non-negative queue reading is a lower bound. It can establish the
 // highest configured severity, but never recovery or a lower severity that
 // could downgrade an alert supported by the missing node.
-func pmgQueueMetricEvaluable(pmg models.PMGInstance, value, warning, critical int) bool {
-	if pmgQueuesComplete(pmg) {
+func pmgQueueMetricEvaluable(complete bool, value, warning, critical int) bool {
+	if complete {
 		return true
 	}
 	if critical > 0 {
@@ -209,27 +243,41 @@ func pmgQueueMetricEvaluable(pmg models.PMGInstance, value, warning, critical in
 
 // checkPMGQueueDepths checks PMG mail queue depths and creates alerts
 // Evaluates all queue types (total, deferred, hold) independently
-func (m *Manager) checkPMGQueueDepths(pmg models.PMGInstance, defaults PMGThresholdConfig) {
+func (m *Manager) checkPMGQueueDepths(pmg models.PMGInstance, defaults PMGThresholdConfig, observe pmgQueueObservationFunc) {
 	// Aggregate queue totals across all nodes
 	var totalQueue, totalDeferred, totalHold int
-
+	hasNodes := len(pmg.Nodes) > 0
+	totalComplete, deferredComplete, holdComplete := hasNodes, hasNodes, hasNodes
 	for _, node := range pmg.Nodes {
-		if node.QueueStatus != nil {
-			totalQueue += node.QueueStatus.Total
-			totalDeferred += node.QueueStatus.Deferred
-			totalHold += node.QueueStatus.Hold
+		queue := node.QueueStatus
+		if queue == nil {
+			totalComplete, deferredComplete, holdComplete = false, false, false
+			continue
+		}
+		observation := observe(node)
+		totalQueue += observation.TotalLowerBound
+		totalComplete = totalComplete && observation.TotalObserved
+		if observation.DeferredObserved {
+			totalDeferred += queue.Deferred
+		} else {
+			deferredComplete = false
+		}
+		if observation.HoldObserved {
+			totalHold += queue.Hold
+		} else {
+			holdComplete = false
 		}
 	}
 
-	if pmgQueueMetricEvaluable(pmg, totalQueue, defaults.QueueTotalWarning, defaults.QueueTotalCritical) {
+	if pmgQueueMetricEvaluable(totalComplete, totalQueue, defaults.QueueTotalWarning, defaults.QueueTotalCritical) {
 		m.checkPMGQueueDepth(pmg, defaults.QueueTotalWarning, defaults.QueueTotalCritical, totalQueue, "queue-total", "queue-depth",
 			"PMG %s has %d total messages in queue (threshold: %d)", "total_queue")
 	}
-	if pmgQueueMetricEvaluable(pmg, totalDeferred, defaults.DeferredQueueWarn, defaults.DeferredQueueCritical) {
+	if pmgQueueMetricEvaluable(deferredComplete, totalDeferred, defaults.DeferredQueueWarn, defaults.DeferredQueueCritical) {
 		m.checkPMGQueueDepth(pmg, defaults.DeferredQueueWarn, defaults.DeferredQueueCritical, totalDeferred, "queue-deferred", "queue-deferred",
 			"PMG %s has %d deferred messages (threshold: %d)", "deferred_queue")
 	}
-	if pmgQueueMetricEvaluable(pmg, totalHold, defaults.HoldQueueWarn, defaults.HoldQueueCritical) {
+	if pmgQueueMetricEvaluable(holdComplete, totalHold, defaults.HoldQueueWarn, defaults.HoldQueueCritical) {
 		m.checkPMGQueueDepth(pmg, defaults.HoldQueueWarn, defaults.HoldQueueCritical, totalHold, "queue-hold", "queue-hold",
 			"PMG %s has %d held messages (threshold: %d)", "hold_queue")
 	}
@@ -370,7 +418,7 @@ func (m *Manager) checkPMGOldestMessage(pmg models.PMGInstance, defaults PMGThre
 		}
 	}
 
-	if !pmgQueueMetricEvaluable(pmg, int(oldestAge/60), defaults.OldestMessageWarnMins, defaults.OldestMessageCritMins) {
+	if !pmgQueueMetricEvaluable(pmgQueuesComplete(pmg), int(oldestAge/60), defaults.OldestMessageWarnMins, defaults.OldestMessageCritMins) {
 		return
 	}
 
@@ -433,19 +481,17 @@ func (m *Manager) checkPMGOldestMessage(pmg models.PMGInstance, defaults PMGThre
 // evaluatePMGNodeQueueAlert runs one per-node PMG queue threshold check
 // (total / deferred / hold share this shape). messageNoun is the operator
 // phrasing ("total messages in queue", "deferred messages", "held messages")
-// and specLabel feeds the invalid-spec log line. It returns true when the
-// caller must skip the node's remaining checks — either the below-threshold
-// clear or an invalid spec — preserving the historical per-node
-// short-circuit semantics.
-func (m *Manager) evaluatePMGNodeQueueAlert(pmg models.PMGInstance, nodeName, metric, specLabel, messageNoun string, observed, scaledWarn, scaledCrit, median int) bool {
+// and specLabel feeds the invalid-spec log line. A healthy or disabled
+// metric must not stop the node's other queue checks.
+func (m *Manager) evaluatePMGNodeQueueAlert(pmg models.PMGInstance, nodeName, metric, specLabel, messageNoun string, observed, scaledWarn, scaledCrit, median int) {
 	if scaledWarn <= 0 && scaledCrit <= 0 {
-		return false
+		return
 	}
 
 	alertID := fmt.Sprintf("%s-%s-%s", pmg.ID, nodeName, metric)
 	if (scaledCrit <= 0 || observed < scaledCrit) && (scaledWarn <= 0 || observed < scaledWarn) {
 		m.clearAlert(buildCanonicalStateID(pmg.ID, alertID))
-		return true
+		return
 	}
 
 	// Add outlier indicator to message if applicable
@@ -458,7 +504,7 @@ func (m *Manager) evaluatePMGNodeQueueAlert(pmg models.PMGInstance, nodeName, me
 	spec, err := buildCanonicalSeverityThresholdSpec(alertID, pmg.ID, pmg.Name, unifiedresources.ResourceTypePMG, metric, float64(scaledWarn), float64(scaledCrit), false)
 	if err != nil {
 		log.Warn().Err(err).Str("pmg", pmg.Name).Str("alertID", alertID).Msg("Skipping invalid canonical PMG node " + specLabel + " spec")
-		return true
+		return
 	}
 	_, _ = m.evaluateCanonicalStatefulAlert(canonicalStatefulAlertParams{
 		Spec: spec,
@@ -482,12 +528,11 @@ func (m *Manager) evaluatePMGNodeQueueAlert(pmg models.PMGInstance, nodeName, me
 		},
 		DispatchAsync: true,
 	})
-	return false
 }
 
 // checkPMGNodeQueues checks individual PMG node queue health
 // Uses scaled thresholds (60% warn, 80% crit) and outlier detection
-func (m *Manager) checkPMGNodeQueues(pmg models.PMGInstance, defaults PMGThresholdConfig) {
+func (m *Manager) checkPMGNodeQueues(pmg models.PMGInstance, defaults PMGThresholdConfig, observe pmgQueueObservationFunc) {
 	if len(pmg.Nodes) == 0 {
 		return
 	}
@@ -498,10 +543,19 @@ func (m *Manager) checkPMGNodeQueues(pmg models.PMGInstance, defaults PMGThresho
 	nodeQueueHold := make([]int, 0, len(pmg.Nodes))
 
 	for _, node := range pmg.Nodes {
-		if node.QueueStatus != nil {
-			nodeQueueTotals = append(nodeQueueTotals, node.QueueStatus.Total)
-			nodeQueueDeferred = append(nodeQueueDeferred, node.QueueStatus.Deferred)
-			nodeQueueHold = append(nodeQueueHold, node.QueueStatus.Hold)
+		queue := node.QueueStatus
+		if queue == nil {
+			continue
+		}
+		observation := observe(node)
+		if observation.TotalObserved {
+			nodeQueueTotals = append(nodeQueueTotals, queue.Total)
+		}
+		if observation.DeferredObserved {
+			nodeQueueDeferred = append(nodeQueueDeferred, queue.Deferred)
+		}
+		if observation.HoldObserved {
+			nodeQueueHold = append(nodeQueueHold, queue.Hold)
 		}
 	}
 
@@ -521,66 +575,72 @@ func (m *Manager) checkPMGNodeQueues(pmg models.PMGInstance, defaults PMGThresho
 
 	// Check each node
 	for _, node := range pmg.Nodes {
-		if node.QueueStatus == nil {
+		queue := node.QueueStatus
+		if queue == nil {
 			continue
 		}
 
-		// Check total queue - always check thresholds
-		if m.evaluatePMGNodeQueueAlert(pmg, node.Name, "queue-total", "queue", "total messages in queue", node.QueueStatus.Total, scaledQueueWarn, scaledQueueCrit, medianTotal) {
-			continue
+		observation := observe(node)
+		if pmgQueueMetricEvaluable(observation.TotalObserved, observation.TotalLowerBound, scaledQueueWarn, scaledQueueCrit) {
+			m.evaluatePMGNodeQueueAlert(pmg, node.Name, "queue-total", "queue", "total messages in queue", observation.TotalLowerBound, scaledQueueWarn, scaledQueueCrit, medianTotal)
 		}
-
-		// Check deferred queue - always check thresholds
-		if m.evaluatePMGNodeQueueAlert(pmg, node.Name, "queue-deferred", "deferred queue", "deferred messages", node.QueueStatus.Deferred, scaledDeferredWarn, scaledDeferredCrit, medianDeferred) {
-			continue
+		if observation.DeferredObserved {
+			m.evaluatePMGNodeQueueAlert(pmg, node.Name, "queue-deferred", "deferred queue", "deferred messages", queue.Deferred, scaledDeferredWarn, scaledDeferredCrit, medianDeferred)
 		}
-
-		// Check hold queue - always check thresholds
-		if m.evaluatePMGNodeQueueAlert(pmg, node.Name, "queue-hold", "hold queue", "held messages", node.QueueStatus.Hold, scaledHoldWarn, scaledHoldCrit, medianHold) {
-			continue
+		if observation.HoldObserved {
+			m.evaluatePMGNodeQueueAlert(pmg, node.Name, "queue-hold", "hold queue", "held messages", queue.Hold, scaledHoldWarn, scaledHoldCrit, medianHold)
 		}
-
-		// Check oldest message age per node
-		if scaledAgeWarn > 0 || scaledAgeCrit > 0 {
-			oldestAge := node.QueueStatus.OldestAge
-			if oldestAge > 0 {
-				oldestMinutes := oldestAge / 60
-				alertID := fmt.Sprintf("%s-%s-oldest-message", pmg.ID, node.Name)
-				if (scaledAgeCrit <= 0 || oldestMinutes < int64(scaledAgeCrit)) && (scaledAgeWarn <= 0 || oldestMinutes < int64(scaledAgeWarn)) {
-					m.clearAlert(buildCanonicalStateID(pmg.ID, alertID))
-					continue
-				}
-
-				spec, err := buildCanonicalSeverityThresholdSpec(alertID, pmg.ID, pmg.Name, unifiedresources.ResourceTypePMG, "message-age", float64(scaledAgeWarn), float64(scaledAgeCrit), false)
-				if err != nil {
-					log.Warn().Err(err).Str("pmg", pmg.Name).Str("alertID", alertID).Msg("Skipping invalid canonical PMG node message-age spec")
-					continue
-				}
-				_, _ = m.evaluateCanonicalStatefulAlert(canonicalStatefulAlertParams{
-					Spec: spec,
-					Evidence: alertspecs.AlertEvidence{
-						ObservedAt: time.Now(),
-						SeverityThreshold: &alertspecs.SeverityThresholdEvidence{
-							Metric:    "message-age",
-							Direction: alertspecs.ThresholdDirectionAbove,
-							Observed:  float64(oldestMinutes),
-						},
-					},
-					AlertID:      alertID,
-					AlertType:    "message-age",
-					ResourceID:   pmg.ID,
-					ResourceName: pmg.Name,
-					Node:         node.Name,
-					Instance:     pmg.Name,
-					MessageBuilder: func(result alertspecs.EvaluationResult) (string, float64, float64) {
-						currentThreshold := thresholdForCanonicalSeverity(result.State.Severity, float64(scaledAgeWarn), float64(scaledAgeCrit))
-						return fmt.Sprintf("PMG node %s on %s has messages queued for %d minutes (threshold: %d min, node-specific)", node.Name, pmg.Name, oldestMinutes, int(currentThreshold)), float64(oldestMinutes), currentThreshold
-					},
-					DispatchAsync: true,
-				})
-			}
-		}
+		m.evaluatePMGNodeQueueAge(pmg, node.Name, queue.OldestAge, observation.AgeUpperMinutes, observation.AgeBounded, scaledAgeWarn, scaledAgeCrit)
 	}
+}
+
+func (m *Manager) evaluatePMGNodeQueueAge(pmg models.PMGInstance, nodeName string, oldestAge, maxAgeMinutes int64, bounded bool, warn, crit int) {
+	if oldestAge < 0 || (warn <= 0 && crit <= 0) {
+		return
+	}
+	oldestMinutes := oldestAge / 60
+	bounded = bounded && maxAgeMinutes >= oldestMinutes
+	belowWarning := func(age int64) bool { return warn <= 0 || age < int64(warn) }
+	belowCritical := func(age int64) bool { return crit <= 0 || age < int64(crit) }
+	alertID := fmt.Sprintf("%s-%s-oldest-message", pmg.ID, nodeName)
+
+	// Only the lower bound can establish a breach. When it does not, clear
+	// only if the whole observed range is below both configured thresholds.
+	if belowWarning(oldestMinutes) && belowCritical(oldestMinutes) {
+		if bounded && belowWarning(maxAgeMinutes) && belowCritical(maxAgeMinutes) {
+			m.clearAlert(buildCanonicalStateID(pmg.ID, alertID))
+		}
+		return
+	}
+
+	spec, err := buildCanonicalSeverityThresholdSpec(alertID, pmg.ID, pmg.Name, unifiedresources.ResourceTypePMG, "message-age", float64(warn), float64(crit), false)
+	if err != nil {
+		log.Warn().Err(err).Str("pmg", pmg.Name).Str("alertID", alertID).Msg("Skipping invalid canonical PMG node message-age spec")
+		return
+	}
+	_, _ = m.evaluateCanonicalStatefulAlert(canonicalStatefulAlertParams{
+		Spec: spec,
+		Evidence: alertspecs.AlertEvidence{
+			ObservedAt: time.Now(),
+			SeverityThreshold: &alertspecs.SeverityThresholdEvidence{
+				Metric:    "message-age",
+				Direction: alertspecs.ThresholdDirectionAbove,
+				Observed:  float64(oldestMinutes),
+			},
+		},
+		SeverityIsLowerBound: crit > 0 && (!bounded || !belowCritical(maxAgeMinutes)),
+		AlertID:              alertID,
+		AlertType:            "message-age",
+		ResourceID:           pmg.ID,
+		ResourceName:         pmg.Name,
+		Node:                 nodeName,
+		Instance:             pmg.Name,
+		MessageBuilder: func(result alertspecs.EvaluationResult) (string, float64, float64) {
+			currentThreshold := thresholdForCanonicalSeverity(result.State.Severity, float64(warn), float64(crit))
+			return fmt.Sprintf("PMG node %s on %s has messages queued for %d minutes (threshold: %d min, node-specific)", nodeName, pmg.Name, oldestMinutes, int(currentThreshold)), float64(oldestMinutes), currentThreshold
+		},
+		DispatchAsync: true,
+	})
 }
 
 // isQueueOutlier determines if a node's queue value is a significant outlier

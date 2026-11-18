@@ -26,7 +26,7 @@ func TestPMGCollectionMissingReadingsPreserveAlerts(t *testing.T) {
 			m.mu.Unlock()
 			v := models.PMGInstance{ID: "gateway", Status: "online", ConnectionHealth: "healthy", Nodes: tc.nodes}
 			thresholds := PMGThresholdConfig{QueueTotalWarning: 1, DeferredQueueWarn: 1, HoldQueueWarn: 1, OldestMessageWarnMins: 1}
-			m.checkPMGQueueDepths(v, thresholds)
+			m.checkPMGQueueDepths(v, thresholds, exactPMGNodeQueueObservation)
 			m.checkPMGOldestMessage(v, thresholds)
 			m.checkPMGQuarantineBacklog(v, thresholds)
 			m.mu.RLock()
@@ -60,7 +60,7 @@ func TestPMGCollectionObservedZeroRecoversOldest(t *testing.T) {
 func TestPMGCollectionPartialQueueLowerBound(t *testing.T) {
 	m := newTestManager(t)
 	v := models.PMGInstance{ID: "gateway", Name: "gateway", Nodes: []models.PMGNodeStatus{{Name: "one", QueueStatus: &models.PMGQueueStatus{Total: 200}}, {Name: "two"}}}
-	m.checkPMGQueueDepths(v, PMGThresholdConfig{QueueTotalWarning: 10, QueueTotalCritical: 50})
+	m.checkPMGQueueDepths(v, PMGThresholdConfig{QueueTotalWarning: 10, QueueTotalCritical: 50}, exactPMGNodeQueueObservation)
 	key := buildCanonicalStateID("gateway", "gateway-queue-total")
 	m.mu.RLock()
 	alert := testRequireActiveAlert(t, m, key)
@@ -70,7 +70,7 @@ func TestPMGCollectionPartialQueueLowerBound(t *testing.T) {
 	}
 	// The next partial lower bound must not resolve or downgrade critical state.
 	v.Nodes[0].QueueStatus.Total = 20
-	m.checkPMGQueueDepths(v, PMGThresholdConfig{QueueTotalWarning: 10, QueueTotalCritical: 50})
+	m.checkPMGQueueDepths(v, PMGThresholdConfig{QueueTotalWarning: 10, QueueTotalCritical: 50}, exactPMGNodeQueueObservation)
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	after := testRequireActiveAlert(t, m, key)

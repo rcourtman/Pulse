@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -151,42 +152,92 @@ type QueueStatusEntry struct {
 	Hold      flexibleInt `json:"hold"`
 	Incoming  flexibleInt `json:"incoming"`
 	OldestAge flexibleInt `json:"oldest_age,omitempty"` // Lower bound, in seconds, on the oldest active, deferred or incoming message
+
+	oldestAgeMaxMinutes int64
+	oldestAgeBounded    bool
+	countLowerBound     int64
+	totalCountObserved  bool
+	deferredObserved    bool
+	holdObserved        bool
+}
+
+// OldestAgeUpperMinutes returns the greatest possible whole-minute age of the
+// oldest active, deferred or incoming entry (zero if all three are empty).
+// A missing, inconsistent or open-ended observation may have no upper bound.
+func (q QueueStatusEntry) OldestAgeUpperMinutes() (int64, bool) {
+	return q.oldestAgeMaxMinutes, q.oldestAgeBounded
+}
+
+// CountObservations returns the sum of observed counts and their completeness
+// separately from the existing numeric projection. A complete total requires
+// a count from all four live qshape rows.
+func (q QueueStatusEntry) CountObservations() (subtotal int64, total, deferred, hold bool) {
+	return q.countLowerBound, q.totalCountObserved, q.deferredObserved, q.holdObserved
+}
+
+type queueShapeTotalCount struct {
+	flexibleInt
+	observed bool
+}
+
+func (c *queueShapeTotalCount) UnmarshalJSON(data []byte) error {
+	if err := c.flexibleInt.UnmarshalJSON(data); err != nil {
+		return err
+	}
+	// Keep existing count decoding, but a defaulted null/blank or a
+	// non-integer value is not evidence that every entry is accounted for.
+	raw := string(data)
+	if strings.HasPrefix(raw, `"`) {
+		raw, _ = strconv.Unquote(raw)
+	}
+	n, err := strconv.ParseInt(strings.TrimSpace(raw), 10, 64)
+	c.observed = err == nil && n >= 0 && n == c.Int64()
+	return nil
 }
 
 // queueShapeRow is one row of PMG's qshape output. Counts are recipients, and
 // each bucket holds entries older than the previous bucket's limit and younger
 // than its own, in minutes; 1280m+ has no upper limit.
 type queueShapeRow struct {
-	Domain  string      `json:"domain"`
-	Total   flexibleInt `json:"total"`
-	B5      flexibleInt `json:"5m"`
-	B10     flexibleInt `json:"10m"`
-	B20     flexibleInt `json:"20m"`
-	B40     flexibleInt `json:"40m"`
-	B80     flexibleInt `json:"80m"`
-	B160    flexibleInt `json:"160m"`
-	B320    flexibleInt `json:"320m"`
-	B640    flexibleInt `json:"640m"`
-	B1280   flexibleInt `json:"1280m"`
-	B1280Up flexibleInt `json:"1280m+"`
+	Domain  string               `json:"domain"`
+	Total   queueShapeTotalCount `json:"total"`
+	B5      flexibleInt          `json:"5m"`
+	B10     flexibleInt          `json:"10m"`
+	B20     flexibleInt          `json:"20m"`
+	B40     flexibleInt          `json:"40m"`
+	B80     flexibleInt          `json:"80m"`
+	B160    flexibleInt          `json:"160m"`
+	B320    flexibleInt          `json:"320m"`
+	B640    flexibleInt          `json:"640m"`
+	B1280   flexibleInt          `json:"1280m"`
+	B1280Up flexibleInt          `json:"1280m+"`
 }
 
-// minAgeSeconds returns the lower limit of the oldest non-empty bucket, which
-// is the most qshape proves about the oldest entry's age.
-func (r queueShapeRow) minAgeSeconds() int64 {
+func (r queueShapeRow) ageBoundsMinutes() (lower, upper int64, bounded bool) {
 	buckets := []struct {
-		count      flexibleInt
-		minMinutes int64
+		count flexibleInt
+		limit int64 // Exclusive upper limit; zero only for the open-ended bucket.
 	}{
-		{r.B1280Up, 1280}, {r.B1280, 640}, {r.B640, 320}, {r.B320, 160}, {r.B160, 80},
-		{r.B80, 40}, {r.B40, 20}, {r.B20, 10}, {r.B10, 5},
+		{r.B5, 5}, {r.B10, 10}, {r.B20, 20}, {r.B40, 40}, {r.B80, 80},
+		{r.B160, 160}, {r.B320, 320}, {r.B640, 640}, {r.B1280, 1280}, {r.B1280Up, 0},
 	}
+	var previousLimit int64
+	remaining, bounded := r.Total.Int64(), r.Total.observed
 	for _, b := range buckets {
-		if b.count.Int64() > 0 {
-			return b.minMinutes * 60
+		count := b.count.Int64()
+		if count > 0 {
+			lower, upper = previousLimit, b.limit-1
 		}
+		// Without a matching total, other entries could be older than the
+		// last observed bucket. Subtract to avoid overflow when checking it.
+		if count < 0 || count > remaining {
+			bounded = false
+		} else {
+			remaining -= count
+		}
+		previousLimit = b.limit
 	}
-	return 0
+	return lower, upper, bounded && remaining == 0 && upper >= 0
 }
 
 // DomainStatisticsEntry represents aggregated statistics for a single domain.
@@ -595,16 +646,17 @@ func (c *Client) GetQuarantineStatus(ctx context.Context, category string) (*Qua
 // GetQueueStatus reads each Postfix queue's TOTAL row from qshape. The
 // /postfix/queue path is only a directory index of queue names (#2960).
 func (c *Client) GetQueueStatus(ctx context.Context, node string) (*QueueStatusEntry, error) {
-	status := &QueueStatusEntry{}
+	status := &QueueStatusEntry{oldestAgeBounded: true, totalCountObserved: true}
 	queues := []struct {
-		name    string
-		count   *flexibleInt
-		ageless bool
+		name     string
+		count    *flexibleInt
+		observed *bool
+		ageless  bool
 	}{
 		{name: "active", count: &status.Active},
-		{name: "deferred", count: &status.Deferred},
+		{name: "deferred", count: &status.Deferred, observed: &status.deferredObserved},
 		// Held mail waits for an operator by design, so its age is not a delivery delay.
-		{name: "hold", count: &status.Hold, ageless: true},
+		{name: "hold", count: &status.Hold, observed: &status.holdObserved, ageless: true},
 		{name: "incoming", count: &status.Incoming},
 	}
 	path := fmt.Sprintf("/nodes/%s/postfix/qshape", url.PathEscape(node))
@@ -617,9 +669,19 @@ func (c *Client) GetQueueStatus(ctx context.Context, node string) (*QueueStatusE
 		if !ok {
 			return nil, fmt.Errorf("PMG GetQueueStatus %s queue response missing TOTAL row", queue.name)
 		}
-		*queue.count = total.Total
-		if age := total.minAgeSeconds(); !queue.ageless && age > status.OldestAge.Int64() {
-			status.OldestAge = flexibleInt(age)
+		*queue.count = total.Total.flexibleInt
+		if total.Total.observed {
+			status.countLowerBound += total.Total.Int64()
+		}
+		if queue.observed != nil {
+			*queue.observed = total.Total.observed
+		}
+		status.totalCountObserved = status.totalCountObserved && total.Total.observed
+		if !queue.ageless {
+			lower, upper, bounded := total.ageBoundsMinutes()
+			status.OldestAge = max(status.OldestAge, flexibleInt(lower*60))
+			status.oldestAgeMaxMinutes = max(status.oldestAgeMaxMinutes, upper)
+			status.oldestAgeBounded = status.oldestAgeBounded && bounded
 		}
 	}
 	return status, nil

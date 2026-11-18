@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/logging"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -931,7 +932,7 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 
 		// Check PMG offline status against alert thresholds
 		if m.alertManager != nil {
-			m.alertManager.CheckPMG(pmgInst)
+			m.alertManager.CheckPMGWithNodeQueueObservations(pmgInst, nil)
 		}
 
 		if errors.IsAuthError(err) {
@@ -966,6 +967,7 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 	}
 
 	backupNodes := make(map[string]struct{})
+	var nodeQueueObservations map[string]alerts.PMGNodeQueueObservation
 
 	if len(cluster) > 0 {
 		nodes := make([]models.PMGNodeStatus, 0, len(cluster))
@@ -1002,6 +1004,20 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 						Total:     int(total),
 						OldestAge: queueData.OldestAge.Int64(),
 						UpdatedAt: time.Now(),
+					}
+					// Keep completeness and age bounds with this poll, not
+					// in the published model where a later read could reuse them.
+					if m.alertManager != nil {
+						if nodeQueueObservations == nil {
+							nodeQueueObservations = make(map[string]alerts.PMGNodeQueueObservation, len(cluster))
+						}
+						subtotal, totalObserved, deferredObserved, holdObserved := queueData.CountObservations()
+						upper, bounded := queueData.OldestAgeUpperMinutes()
+						nodeQueueObservations[entry.Name] = alerts.PMGNodeQueueObservation{
+							TotalLowerBound: int(subtotal),
+							TotalObserved:   totalObserved, DeferredObserved: deferredObserved, HoldObserved: holdObserved,
+							AgeUpperMinutes: upper, AgeBounded: bounded,
+						}
 					}
 				}
 			}
@@ -1238,7 +1254,7 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 
 	// Check PMG metrics against alert thresholds
 	if m.alertManager != nil {
-		m.alertManager.CheckPMG(pmgInst)
+		m.alertManager.CheckPMGWithNodeQueueObservations(pmgInst, nodeQueueObservations)
 	}
 }
 

@@ -889,3 +889,56 @@ func TestPMGCollectionObservedZeroData(t *testing.T) {
 		t.Fatalf("quarantine=%+v err=%v", v, err)
 	}
 }
+
+func TestPMGQueueAgeBounds(t *testing.T) {
+	empty := `{"domain":"TOTAL","total":0}`
+	for _, tc := range []struct {
+		name             string
+		active, incoming string
+		lower, upper     int64
+		bounded          bool
+		unobservedCount  bool
+	}{
+		{name: "held mail is not delivery age", active: empty, incoming: empty, bounded: true},
+		{name: "youngest bucket rather than empty", active: `{"domain":"TOTAL","total":"2","5m":"2"}`, incoming: empty, upper: 4, bounded: true},
+		{name: "oldest bucket across delivery queues", active: `{"domain":"TOTAL","total":1,"10m":1}`, incoming: `{"domain":"TOTAL","total":"2","20m":2}`, lower: 600, upper: 19, bounded: true},
+		{name: "open ended bucket", active: empty, incoming: `{"domain":"TOTAL","total":1,"1280m+":1}`, lower: 1280 * 60},
+		{name: "missing buckets cannot prove recovery", active: `{"domain":"TOTAL","total":2,"10m":1}`, incoming: empty, lower: 300},
+		{name: "too many bucket entries", active: `{"domain":"TOTAL","total":0,"5m":1}`, incoming: empty},
+		{name: "missing total is not verified zero", active: `{"domain":"TOTAL"}`, incoming: empty, unobservedCount: true},
+		{name: "null total is not verified zero", active: `{"domain":"TOTAL","total":null}`, incoming: empty, unobservedCount: true},
+		{name: "string null total is not verified zero", active: `{"domain":"TOTAL","total":"null"}`, incoming: empty, unobservedCount: true},
+		{name: "fractional total is not a count", active: `{"domain":"TOTAL","total":2.5}`, incoming: empty, unobservedCount: true},
+		{name: "negative incoming total is not a count", active: empty, incoming: `{"domain":"TOTAL","total":-1}`, unobservedCount: true},
+		{name: "negative bucket", active: `{"domain":"TOTAL","total":0,"40m":-1}`, incoming: empty},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rows := map[string]string{
+				"active": tc.active, "incoming": tc.incoming, "deferred": empty,
+				"hold": `{"domain":"TOTAL","total":1,"1280m+":1}`,
+			}
+			client := &Client{baseURL: "https://example.invalid", auth: auth{tokenName: "synthetic", tokenValue: "synthetic", user: "fixture", realm: "pmg"}, httpClient: &http.Client{Transport: pmgCollectionTransport(func(r *http.Request) (*http.Response, error) {
+				body := `{"data":[` + rows[r.URL.Query().Get("queue")] + `]}`
+				return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(body)), Request: r}, nil
+			})}}
+			queue, err := client.GetQueueStatus(context.Background(), "relay")
+			if err != nil {
+				t.Fatal(err)
+			}
+			maximum, bounded := queue.OldestAgeUpperMinutes()
+			if queue.Hold.Int() != 1 || queue.OldestAge.Int64() != tc.lower || bounded != tc.bounded || (bounded && maximum != tc.upper) {
+				t.Fatalf("hold=%d lower=%d upper=(%d,%v); want hold=1 lower=%d upper=(%d,%v)",
+					queue.Hold.Int(), queue.OldestAge.Int64(), maximum, bounded, tc.lower, tc.upper, tc.bounded)
+			}
+			subtotal, total, deferred, hold := queue.CountObservations()
+			if total == tc.unobservedCount || !deferred || !hold {
+				t.Fatalf("observed total/deferred/hold=%v/%v/%v; want %v/true/true", total, deferred, hold, !tc.unobservedCount)
+			}
+			if tc.unobservedCount && subtotal != 1 {
+				// Only the one observed held entry can contribute, even if
+				// the numeric projection contains a rounded or negative value.
+				t.Fatalf("subtotal=%d; unobserved count contributed to the one held entry", subtotal)
+			}
+		})
+	}
+}
