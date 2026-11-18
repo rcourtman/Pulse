@@ -386,14 +386,8 @@ func (a *Agent) applyLocalCompose(ctx context.Context, req agentexec.DockerConta
 		return out
 	}
 	out.SourceStage = "source_write"
-	backup := source + ".pulse-before-" + req.ActionID
-	if err = os.Link(source, backup); err != nil {
-		out.Error = "could not retain the previous Compose source for recovery"
-		return out
-	}
-	if err = os.Rename(staged, source); err != nil {
-		_ = os.Remove(backup)
-		out.Error = "could not install the reviewed Compose source"
+	if err = installReviewedComposeSource(source, staged, req.ActionID); err != nil {
+		out.Error = err.Error()
 		return out
 	}
 	out.SourceMutationStarted = true
@@ -427,6 +421,29 @@ func (a *Agent) applyLocalCompose(ctx context.Context, req agentexec.DockerConta
 	out.NewImageDigest = want
 	out.Success = true
 	return out
+}
+
+// Bind installation and recovery to the registered source directory. An existing
+// recovery copy belongs to the earlier attempt and must never be replaced.
+func installReviewedComposeSource(source, staged, actionID string) error {
+	if !composeServiceName.MatchString(actionID) || filepath.Dir(staged) != filepath.Dir(source) {
+		return errors.New("invalid Compose source installation identity")
+	}
+	root, err := os.OpenRoot(filepath.Dir(source))
+	if err != nil {
+		return errors.New("could not open the registered Compose source directory")
+	}
+	defer root.Close()
+	name := filepath.Base(source)
+	backup := name + ".pulse-before-" + filepath.Base(actionID)
+	if err := root.Link(name, backup); err != nil {
+		return errors.New("could not retain the previous Compose source for recovery")
+	}
+	if err := root.Rename(filepath.Base(staged), name); err != nil {
+		_ = root.Remove(backup)
+		return errors.New("could not install the reviewed Compose source")
+	}
+	return nil
 }
 
 func writeStagedCompose(path string, data []byte) error {

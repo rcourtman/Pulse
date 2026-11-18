@@ -229,3 +229,37 @@ func TestComposeLiveReviewedServiceUpdate(t *testing.T) {
 	}
 	t.Logf("project %s HTTP before %q after %q, replacement %s, peer and data volume retained", project, beforeBody, afterBody, out.NewContainerID)
 }
+
+func TestInstallReviewedComposeSourceKeepsRecoveryBesideRegisteredFile(t *testing.T) {
+	dir := t.TempDir()
+	source := filepath.Join(dir, "compose.yaml")
+	staged := filepath.Join(dir, "staged.yaml")
+	write := func(path, body string) {
+		t.Helper()
+		if err := os.WriteFile(path, []byte(body), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	check := func(path, want string) {
+		t.Helper()
+		got, err := os.ReadFile(path)
+		if err != nil || string(got) != want {
+			t.Fatalf("read %s: got %q, want %q (error %v)", filepath.Base(path), got, want, err)
+		}
+	}
+	write(source, "first")
+	write(staged, "second")
+	if err := installReviewedComposeSource(source, staged, "invalid/action"); err == nil {
+		t.Fatal("accepted non-component action ID")
+	}
+	if err := installReviewedComposeSource(source, staged, "review-1"); err != nil {
+		t.Fatal(err)
+	}
+	write(staged, "third")
+	if err := installReviewedComposeSource(source, staged, "review-1"); err == nil {
+		t.Fatal("reused an existing recovery copy")
+	}
+	check(source, "second")
+	check(source+".pulse-before-review-1", "first")
+	check(staged, "third")
+}

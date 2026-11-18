@@ -27,6 +27,11 @@ branch under its existing controller.
 
 The direct Docker agent accepts a log-tail request from its primary reporting destination only when the host operator enables live logs. It inspects the exact container ID and masks and bounds the result before returning it.
 
+Local Compose installation opens the registered file's parent directory and
+uses filenames relative to that directory for the recovery link, replacement
+and cleanup. A repeated action preserves the earlier recovery copy and leaves
+the current source intact.
+
 The Docker installer links a connected agent to Compose applications and Docker
 overview. The operator chooses the observed runtime and project before reviewing
 its published ports. The lookup identifies an agent registration, which can

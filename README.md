@@ -21,11 +21,8 @@ offline.
 
 ![Pulse Proxmox overview](docs/images/pulse-workspace.png)
 
-Explore [Docker applications](https://demo.pulserelay.pro/docker/applications)
-or the [Proxmox overview](https://demo.pulserelay.pro) in the live demo.
-Open **document-ingest** to trace a failed readiness check to the worker log
-and compare the API deployment with its endpoint result. The demo uses sample
-data and signs you in automatically.
+Explore [Docker applications](https://demo.pulserelay.pro/docker/applications) or the [Proxmox overview](https://demo.pulserelay.pro) in the live demo.
+Open **document-ingest** to trace a failed check to its worker log and compare the deployed image with its HTTP result. The demo signs you in automatically and uses sample data.
 
 ## What Pulse does
 
