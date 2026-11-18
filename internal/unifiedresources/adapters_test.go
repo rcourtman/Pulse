@@ -2498,3 +2498,108 @@ func TestProxmoxGuestInterfacesCarryBridgeAndVLAN(t *testing.T) {
 		t.Fatalf("empty placement fields must be omitted: %s", wire)
 	}
 }
+
+// A container that uses another container's network has no attachments and no
+// ports of its own. The network mode is the only fact that says whose network
+// it is on, so it has to reach the resource as the runtime wrote it.
+func TestDockerContainerResourceCarriesNetworkMode(t *testing.T) {
+	vpnID := strings.Repeat("ab", 32)
+	host := models.DockerHost{ID: "docker-host-1", AgentID: "agent-1", Hostname: "tower", CPUs: 4}
+
+	shared, _ := resourceFromDockerContainer(models.DockerContainer{ID: "c-torrent", Name: "qbittorrent", State: "running", NetworkMode: " container:" + vpnID + " "}, host)
+	named, _ := resourceFromDockerContainer(models.DockerContainer{ID: "c-app", Name: "app", State: "running", NetworkMode: "Media_Net", Networks: []models.DockerContainerNetworkLink{{Name: "Media_Net", IPv4: "172.20.0.4"}}}, host)
+	unreported, _ := resourceFromDockerContainer(models.DockerContainer{ID: "c-old", Name: "legacy", State: "running"}, host)
+
+	if shared.Docker == nil || shared.Docker.NetworkMode != "container:"+vpnID {
+		t.Fatalf("shared network mode = %+v", shared.Docker)
+	}
+	if len(shared.Docker.Networks) != 0 || len(shared.Docker.Ports) != 0 {
+		t.Fatalf("a container in another's network has none of its own: %+v", shared.Docker)
+	}
+	if named.Docker == nil || named.Docker.NetworkMode != "Media_Net" {
+		t.Fatalf("a network name must keep its case: %+v", named.Docker)
+	}
+	if unreported.Docker == nil || unreported.Docker.NetworkMode != "" {
+		t.Fatalf("an unreported mode must stay empty: %+v", unreported.Docker)
+	}
+
+	wire, err := json.Marshal(shared.Docker)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(wire), `"networkMode":"container:`+vpnID+`"`) {
+		t.Fatalf("wire payload lacks the network mode: %s", wire)
+	}
+	old, err := json.Marshal(unreported.Docker)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(old), `"networkMode"`) {
+		t.Fatalf("an unreported mode must be omitted: %s", old)
+	}
+
+	// The clone the registry hands to readers keeps it.
+	if clone := cloneDockerData(shared.Docker); clone == nil || clone.NetworkMode != shared.Docker.NetworkMode {
+		t.Fatalf("clone dropped the network mode: %+v", clone)
+	}
+}
+
+// A host's default gateway and DNS servers are the only statement Pulse has
+// of where a machine sends traffic for other networks and where it resolves
+// names, so they reach the agent facet unchanged and survive the clone and
+// the read-state view.
+func TestHostResourceCarriesDefaultGatewaysAndDNSServers(t *testing.T) {
+	host := models.Host{
+		ID:              "host-1",
+		Hostname:        "tower",
+		Status:          "online",
+		DefaultGateways: []models.HostDefaultGateway{{Address: " 192.168.0.1 ", Interface: "eth0"}, {Address: "  "}},
+		DNSServers:      []string{"192.168.0.53", "1.1.1.1"},
+	}
+	resource, _ := resourceFromHost(host)
+	if resource.Agent == nil {
+		t.Fatal("host resource has no agent facet")
+	}
+	wantGateways := []NetworkGateway{{Address: "192.168.0.1", Interface: "eth0"}}
+	if !reflect.DeepEqual(resource.Agent.DefaultGateways, wantGateways) {
+		t.Fatalf("gateways = %+v, want %+v", resource.Agent.DefaultGateways, wantGateways)
+	}
+	if !reflect.DeepEqual(resource.Agent.DNSServers, []string{"192.168.0.53", "1.1.1.1"}) {
+		t.Fatalf("DNS servers = %v", resource.Agent.DNSServers)
+	}
+
+	wire, err := json.Marshal(resource.Agent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(wire), `"defaultGateways":[{"address":"192.168.0.1","interface":"eth0"}]`) ||
+		!strings.Contains(string(wire), `"dnsServers":["192.168.0.53","1.1.1.1"]`) {
+		t.Fatalf("wire payload lacks the routing fields: %s", wire)
+	}
+
+	clone := cloneAgentData(resource.Agent)
+	resource.Agent.DefaultGateways[0].Address = "mutated"
+	resource.Agent.DNSServers[0] = "mutated"
+	if clone.DefaultGateways[0].Address != "192.168.0.1" || clone.DNSServers[0] != "192.168.0.53" {
+		t.Fatalf("clone shares the routing lists: %+v %v", clone.DefaultGateways, clone.DNSServers)
+	}
+
+	view := HostView{r: &Resource{Agent: clone}}
+	if got := view.DefaultGateways(); !reflect.DeepEqual(got, wantGateways) {
+		t.Fatalf("view gateways = %+v", got)
+	}
+	if got := view.DNSServers(); !reflect.DeepEqual(got, []string{"192.168.0.53", "1.1.1.1"}) {
+		t.Fatalf("view DNS servers = %v", got)
+	}
+
+	// An agent that reported neither leaves both absent from the payload.
+	older, _ := resourceFromHost(models.Host{ID: "host-2", Hostname: "mac-mini", Status: "online"})
+	olderWire, err := json.Marshal(older.Agent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if older.Agent.DefaultGateways != nil || older.Agent.DNSServers != nil ||
+		strings.Contains(string(olderWire), "defaultGateways") || strings.Contains(string(olderWire), "dnsServers") {
+		t.Fatalf("unreported routing must be omitted: %s", olderWire)
+	}
+}

@@ -157,6 +157,9 @@ type Snapshot struct {
 	Disks           []agentshost.Disk
 	DiskIO          []agentshost.DiskIO
 	Network         []agentshost.NetworkInterface
+	// Routing is the host's default gateways and DNS servers; nil when the
+	// host states neither or the platform exposes neither.
+	Routing *agentshost.NetworkRouting
 	// IOCountersCollectedAt is when the cumulative DiskIO and Network counters
 	// were read: stamped right after the network read, which follows the disk
 	// read with only the interface listing between them.
@@ -283,6 +286,7 @@ func (c *Collector) CollectWithDiskFilters(ctx context.Context, diskExclude, dis
 	snapshot.DiskIO = collectDiskIO(collectCtx, diskExclude)
 	snapshot.Network = collectNetwork(collectCtx)
 	snapshot.IOCountersCollectedAt = ioCountersReadNow()
+	snapshot.Routing = collectRouting()
 
 	return snapshot, nil
 }

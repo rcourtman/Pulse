@@ -437,6 +437,8 @@ export interface DockerContainer {
   labels?: Record<string, string>;
   env?: string[];
   networks?: DockerContainerNetwork[];
+  /** The runtime's network mode; `container:<id>` means it uses that container's network. */
+  networkMode?: string;
   writableLayerBytes?: number;
   rootFilesystemBytes?: number;
   blockIo?: DockerContainerBlockIO;

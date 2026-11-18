@@ -999,6 +999,8 @@ type AgentData struct {
 	NetworkInterfaces       []NetworkInterface       `json:"networkInterfaces,omitempty"`
 	Disks                   []DiskInfo               `json:"disks,omitempty"`
 	Memory                  *AgentMemoryMeta         `json:"memory,omitempty"`
+	DefaultGateways         []NetworkGateway         `json:"defaultGateways,omitempty"` // IPv4 default routes the host agent read from the host; nil when not reported
+	DNSServers              []string                 `json:"dnsServers,omitempty"`      // Resolver addresses the host is configured with; nil when not reported
 	Sensors                 *HostSensorMeta          `json:"sensors,omitempty"`
 	RAID                    []HostRAIDMeta           `json:"raid,omitempty"`
 	Unraid                  *HostUnraidMeta          `json:"unraid,omitempty"`
@@ -1188,6 +1190,7 @@ type DockerData struct {
 	Ports                   []DockerPortMeta                 `json:"ports,omitempty"`
 	Labels                  map[string]string                `json:"labels,omitempty"`
 	Networks                []DockerNetworkMeta              `json:"networks,omitempty"`
+	NetworkMode             string                           `json:"networkMode,omitempty"` // The runtime's network mode as the agent reported it; container:<id> means the container uses that container's network. Empty when not reported.
 	Mounts                  []DockerMountMeta                `json:"mounts,omitempty"`
 	Filesystems             []filesystem.Observation         `json:"filesystems,omitempty"`
 	ComposeSourceRegistered bool                             `json:"composeSourceRegistered,omitempty"`
@@ -2062,6 +2065,13 @@ type CPUInfo struct {
 	Model   string `json:"model,omitempty"`
 	Cores   int    `json:"cores,omitempty"`
 	Sockets int    `json:"sockets,omitempty"`
+}
+
+// NetworkGateway is one default route a host agent read from the host's route
+// table: the next hop and the interface the route leaves by.
+type NetworkGateway struct {
+	Address   string `json:"address"`
+	Interface string `json:"interface,omitempty"`
 }
 
 // NetworkInterface describes a network interface.

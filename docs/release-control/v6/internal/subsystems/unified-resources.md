@@ -825,6 +825,54 @@ list the three fields, and `ResourceDockerMeta` now lists `cpus` and
 `internal/unifiedresources/adapters_test.go` covers the adapter and the wire
 shape; `frontend-modern/src/types/__tests__/resource.test.ts` covers the types.
 
+### App containers carry the runtime's network mode (18 November 2026)
+
+`DockerData` gains optional `networkMode`, set only on an app-container
+resource by `resourceFromDockerContainer` from
+`models.DockerContainer.NetworkMode`. It is the runtime's own word for how the
+container is networked. `container:<id>` is the one form that names another
+resource: the container whose network namespace this one uses, by its full
+container ID on the same Docker host. Such a container has no `networks` and
+no `ports`, so before this field nothing in the payload said where its traffic
+went. An empty value means the agent did not report a mode. Consumers must not
+read it as `none`, and must not infer a shared network from an absent network
+list. A reference that matches no container on the same host names nothing,
+which is what a dependent left behind by a recreated container looks like.
+
+The field is a plain string, so `cloneDockerData` keeps it. Identity, status,
+metrics, relationships and History coordinates do not change. The frontend
+type follows on `ResourceDockerMeta`.
+`TestDockerContainerResourceCarriesNetworkMode` in
+`internal/unifiedresources/adapters_test.go` covers the adapter, the wire
+shape and the clone; `frontend-modern/src/types/__tests__/resource.test.ts`
+covers the type.
+
+### Agent facets carry the host's default gateways and DNS servers (18 November 2026)
+
+`AgentData` gains optional `defaultGateways` (a list of `NetworkGateway`:
+`address` and optional `interface`) and `dnsServers` (a list of addresses).
+`resourceFromHost` sets them from `models.Host.DefaultGateways` and
+`models.Host.DNSServers`, which hold what the host agent read from the host's
+own route table and resolver configuration. They are the only statement in the
+payload of where a machine sends traffic bound for other networks and where
+it resolves names.
+
+A missing list means the agent did not report that fact: an older agent, or a
+platform whose route table it cannot read. Consumers must not read it as "no
+gateway" or "no DNS", and must not infer either from interface addresses or a
+subnet. A gateway or resolver address may match a monitored resource's own
+address, and that match is the one way these lists name another resource; an
+address that matches none names something Pulse does not monitor.
+
+`cloneAgentData` copies both lists, and `HostView.DefaultGateways` and
+`HostView.DNSServers` return copies, so a previous-state round trip keeps
+them. Identity, status, metrics, relationships and History coordinates do not
+change. The frontend type follows on `ResourceAgentMeta`.
+`TestHostResourceCarriesDefaultGatewaysAndDNSServers` in
+`internal/unifiedresources/adapters_test.go` covers the adapter, the wire
+shape, the clone and the view;
+`frontend-modern/src/types/__tests__/resource.test.ts` covers the type.
+
 ### Independently known PBS remains available in Backups (13 October 2026)
 
 The resource-owned PBS table is outside backup-inventory loading/error gates.

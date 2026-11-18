@@ -1435,6 +1435,7 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 		Disks:          append([]agentshost.Disk(nil), snapshot.Disks...),
 		DiskIO:         append([]agentshost.DiskIO(nil), snapshot.DiskIO...),
 		Network:        append([]agentshost.NetworkInterface(nil), snapshot.Network...),
+		Routing:        snapshot.Routing.Clone(),
 		Sensors:        sensorData,
 		RAID:           raidData,
 		Unraid:         unraidData,

@@ -13638,6 +13638,42 @@ and `HostNetworkInterface`; `frontend-modern/src/api/__tests__/resources.test.ts
 holds a typed payload that carries them through the resource read unchanged.
 No route, permission, request or status code changes.
 
+### Docker containers may carry the runtime's network mode (18 November 2026)
+
+`agentsdocker.Container` gains an optional `networkMode` string, `omitempty`,
+so reports from older agents still decode and read as "not reported". The same
+field appears as `docker.networkMode` on an app-container resource and as
+`networkMode` on the legacy Docker container row. Its value is the runtime's
+own: `bridge`, `host`, `none`, a network name, or `container:<id>`, where the
+ID is the full ID of the container whose network namespace this one uses. A
+container in that last mode has no `networks` and no `ports` of its own.
+Clients must treat a missing value as unknown, never as `none`, and must treat
+a `container:` reference that matches no reported container as naming nothing.
+
+`frontend-modern/src/types/resource.ts` lists the field on
+`ResourceDockerMeta` and `frontend-modern/src/types/api.ts` on
+`DockerContainer`; `frontend-modern/src/api/__tests__/resources.test.ts` holds
+a typed payload that carries it through the resource read unchanged. No route,
+permission, request or status code changes.
+
+### Host reports and agent facets may carry default gateways and DNS servers (18 November 2026)
+
+`agentshost.Report` gains an optional `routing` object with
+`defaultGateways` (a list of `{address, interface?}`) and `dnsServers` (a list
+of address strings). Both are `omitempty`, so reports from older agents still
+decode. The agent facet of a resource (`agent.defaultGateways`,
+`agent.dnsServers`) and the internal `models.Host` carry the same two lists.
+Every address is an IP address in canonical text form; a gateway's
+`interface` is the name of the interface its route leaves by. The legacy host
+row sent to the frontend state is unchanged.
+
+Clients must treat a missing list as unknown, never as a host with no gateway
+or no DNS. `frontend-modern/src/types/resource.ts` lists both on
+`ResourceAgentMeta`, and
+`frontend-modern/src/api/__tests__/resources.test.ts` holds a typed payload
+that carries them through the resource read unchanged. No route, permission,
+request or status code changes.
+
 ### API token creation and deletion commit durable state before reporting success
 
 `POST /api/security/tokens` returns a newly generated credential only after

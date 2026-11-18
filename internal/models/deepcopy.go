@@ -415,6 +415,8 @@ func cloneHost(src Host) Host {
 	dest.DiskIO = append([]DiskIO(nil), src.DiskIO...)
 	dest.NetworkInterfaces = cloneHostNetworkInterfaces(src.NetworkInterfaces)
 	dest.Sensors = cloneHostSensorSummary(src.Sensors)
+	dest.DefaultGateways = append([]HostDefaultGateway(nil), src.DefaultGateways...)
+	dest.DNSServers = append([]string(nil), src.DNSServers...)
 	dest.RAID = cloneHostRAIDArrays(src.RAID)
 	dest.Unraid = cloneHostUnraidStorage(src.Unraid)
 	dest.Ceph = cloneHostCephCluster(src.Ceph)

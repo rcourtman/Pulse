@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiFetchJSON } from '@/utils/apiClient';
 import { ResourceAPI } from '@/api/resources';
-import type { GuestNetworkInterface, HostNetworkInterface } from '@/types/api';
+import type { DockerContainer, GuestNetworkInterface, HostNetworkInterface } from '@/types/api';
 
 vi.mock('@/utils/apiClient', () => ({
   apiFetchJSON: vi.fn(),
@@ -254,5 +254,62 @@ describe('ResourceAPI', () => {
       firewall: false,
     };
     expect(legacy.vlan).toBe(20);
+  });
+
+  it('carries a container network mode through the resource read unchanged', async () => {
+    const vpnId = 'ab'.repeat(32);
+    // What the server sends for a container that uses another container's
+    // network: the mode, and no networks or ports of its own.
+    vi.mocked(apiFetchJSON).mockResolvedValueOnce({
+      id: 'app-container-1',
+      type: 'app-container',
+      docker: {
+        hostname: 'tower',
+        containerId: 'c-torrent',
+        containerState: 'running',
+        networkMode: `container:${vpnId}`,
+      },
+    });
+
+    const resource = await ResourceAPI.getResource('app-container-1');
+    expect(resource.docker?.networkMode).toBe(`container:${vpnId}`);
+    expect(resource.docker?.networks).toBeUndefined();
+    expect(resource.docker?.ports).toBeUndefined();
+
+    // The legacy container row lists the same field.
+    const legacy: Pick<DockerContainer, 'id' | 'networkMode'> = {
+      id: 'c-torrent',
+      networkMode: 'host',
+    };
+    expect(legacy.networkMode).toBe('host');
+  });
+
+  it('carries a host default gateway and DNS servers through the resource read unchanged', async () => {
+    // What the server sends for a machine whose agent read both from the host.
+    vi.mocked(apiFetchJSON).mockResolvedValueOnce({
+      id: 'agent-1',
+      type: 'agent',
+      agent: {
+        hostname: 'tower',
+        defaultGateways: [{ address: '192.168.0.1', interface: 'eth0' }],
+        dnsServers: ['192.168.0.53', '1.1.1.1'],
+      },
+    });
+
+    const resource = await ResourceAPI.getResource('agent-1');
+    expect(resource.agent?.defaultGateways).toEqual([
+      { address: '192.168.0.1', interface: 'eth0' },
+    ]);
+    expect(resource.agent?.dnsServers).toEqual(['192.168.0.53', '1.1.1.1']);
+
+    // An agent that reported neither: both stay absent, which is unknown.
+    vi.mocked(apiFetchJSON).mockResolvedValueOnce({
+      id: 'agent-2',
+      type: 'agent',
+      agent: { hostname: 'mac-mini' },
+    });
+    const older = await ResourceAPI.getResource('agent-2');
+    expect(older.agent?.defaultGateways).toBeUndefined();
+    expect(older.agent?.dnsServers).toBeUndefined();
   });
 });

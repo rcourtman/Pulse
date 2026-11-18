@@ -779,6 +779,7 @@ func (a *Agent) collectContainerWithSource(ctx context.Context, summary containe
 		Labels:              labels,
 		Env:                 maskSensitiveEnvVars(inspect.Config.Env),
 		Networks:            networks,
+		NetworkMode:         containerNetworkMode(inspect.HostConfig),
 		NetworkRXBytes:      networkRX,
 		NetworkTXBytes:      networkTX,
 		WritableLayerBytes:  writableLayerBytes,
@@ -1552,6 +1553,20 @@ func maskSensitiveEnvVars(envVars []string) []string {
 	}
 
 	return result
+}
+
+// containerNetworkMode reports how the runtime networks a container, in the
+// runtime's own words: bridge, host, none, a network name, or container:<id>
+// for a container that uses another container's network namespace. That last
+// form is the only place the runtime says so: such a container has no network
+// attachments and no published ports of its own, because both belong to the
+// container it borrows from. A missing host config leaves the field empty,
+// which means not reported, never "no network".
+func containerNetworkMode(hostConfig *containertypes.HostConfig) string {
+	if hostConfig == nil {
+		return ""
+	}
+	return strings.TrimSpace(string(hostConfig.NetworkMode))
 }
 
 // containerRestartPolicyName reports Docker's restart policy for a container
