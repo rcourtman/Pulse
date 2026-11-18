@@ -229,7 +229,7 @@ These endpoints require authentication with the `monitoring:read` scope.
 - `resourceId` (required): the source identifier used by that chart, not its
   display name (for Proxmox guests this is normally `instance:node:vmid`)
 - `metric` (optional): `cpu`, `memory`, `disk`, etc. Omit to return all metrics for the resource.
-- `range` (optional): `1h`, `6h`, `12h`, `24h`, `1d`, `7d`, `30d`, `90d` (default `24h`; duration strings also accepted)
+- `range` (optional): Positive whole days (for example `7d`, `90d`) or a duration like `30m` or `24h`. Omitted or blank defaults to `24h`. Maximum `365d` (`8760h`) per request on every plan; invalid or longer ranges return `400`. This is a read limit, not a retention setting.
 - `maxPoints` (optional): Downsample to a target number of points
 
 For a one-off check, open the affected resource's History panel in your signed-in

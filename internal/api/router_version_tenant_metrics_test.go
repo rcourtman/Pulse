@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -14,6 +15,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
+	"github.com/stretchr/testify/require"
 )
 
 func TestGetTenantMonitor_Default(t *testing.T) {
@@ -137,25 +139,93 @@ func TestHandleMetricsHistory_MissingParams(t *testing.T) {
 	}
 }
 
-func TestParseMetricsHistoryDurationSupportsDayRanges(t *testing.T) {
+func TestParseMetricsHistoryDuration(t *testing.T) {
 	tests := []struct {
 		input string
 		want  time.Duration
 	}{
 		{input: "", want: 24 * time.Hour},
+		{input: "  ", want: 24 * time.Hour},
+		{input: "30m", want: 30 * time.Minute},
 		{input: "24h", want: 24 * time.Hour},
 		{input: "7d", want: 7 * 24 * time.Hour},
 		{input: "14d", want: 14 * 24 * time.Hour},
 		{input: "15d", want: 15 * 24 * time.Hour},
 		{input: "336h", want: 14 * 24 * time.Hour},
-		{input: "nonsense", want: 24 * time.Hour},
+		{input: " 365D ", want: 365 * 24 * time.Hour},
+		{input: "8760h", want: 365 * 24 * time.Hour},
+		{input: "8759h59m59.999999999s", want: 365*24*time.Hour - time.Nanosecond},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
-			if got := parseMetricsHistoryDuration(tt.input); got != tt.want {
-				t.Fatalf("parseMetricsHistoryDuration(%q) = %v, want %v", tt.input, got, tt.want)
+			got, err := parseMetricsHistoryDuration(tt.input)
+			require.NoError(t, err)
+			require.Equal(t, tt.want, got)
+		})
+	}
+	for _, input := range []string{"0d", "-1d", "0h", "-1h", "nonsense", "366d", "8760h1ns",
+		"213504d", "213505d", "9223372036854775808d", "9223372036854775808ns"} {
+		t.Run(input, func(t *testing.T) {
+			duration, err := parseMetricsHistoryDuration(input)
+			require.ErrorIs(t, err, errInvalidMetricsHistoryRange)
+			require.Zero(t, duration)
+		})
+	}
+}
+
+func TestContractMetricsHistoryRangeAdmission(t *testing.T) {
+	// With no monitor these requests would fail with 500 if they reached
+	// runtime lookup. Reject bad ranges without consulting inventory or storage.
+	router := &Router{}
+	const path = "/api/metrics-store/history?resourceType=vm&resourceId=vm-1"
+	for _, raw := range []string{"366d", "8760h1ns", "213504d", "213505d", "0d", "bad", "%FF", "%ZZ"} {
+		t.Run(raw, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, path+"&range="+raw, nil)
+			rec := httptest.NewRecorder()
+			router.handleMetricsHistory(rec, req)
+			require.Equal(t, http.StatusBadRequest, rec.Code, rec.Body.String())
+			require.NotContains(t, rec.Body.String(), raw)
+		})
+	}
+
+	const token = "synthetic-history-window.12345678"
+	cfg := newTestConfigWithTokens(t, newTokenRecord(t, token, []string{config.ScopeMonitoringRead}, nil))
+	monitor, _, _ := newTestMonitor(t)
+	storeConfig := metrics.DefaultConfig(t.TempDir())
+	storeConfig.RetentionDaily = 400 * 24 * time.Hour
+	store, err := metrics.NewStore(storeConfig)
+	require.NoError(t, err)
+	t.Cleanup(func() { store.Close() })
+	now := time.Now()
+	for _, age := range []int{364, 366} {
+		store.WriteBatchSync([]metrics.WriteMetric{{
+			ResourceType: "vm", ResourceID: "vm-1", MetricType: "cpu", Value: float64(age),
+			Timestamp: now.Add(-time.Duration(age) * 24 * time.Hour), Tier: metrics.TierDaily,
+		}})
+	}
+	retained, err := store.Query("vm", "vm-1", "cpu", now.Add(-367*24*time.Hour), now, 0)
+	require.NoError(t, err)
+	require.Len(t, retained, 2, "the API window must not depend on trimming retained data")
+	setUnexportedField(t, monitor, "metricsStore", store)
+	registered := newTestRouter(t, cfg, monitor, nil, nil, nil, "test")
+	for _, rangeStr := range []string{"365d", "8760h"} {
+		t.Run(rangeStr, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, path+"&range="+url.QueryEscape(rangeStr)+"&metric=cpu", nil)
+			req.Header.Set("X-API-Token", token)
+			rec := httptest.NewRecorder()
+			registered.Handler().ServeHTTP(rec, req)
+			require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+			var response struct {
+				Start, End int64
+				Source     string
+				Points     []struct{ Value float64 }
 			}
+			require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+			require.EqualValues(t, (365 * 24 * time.Hour).Milliseconds(), response.End-response.Start)
+			require.Equal(t, "store", response.Source)
+			require.Len(t, response.Points, 1)
+			require.EqualValues(t, 364, response.Points[0].Value)
 		})
 	}
 }
@@ -176,8 +246,8 @@ func setMetricsHistoryLicenseTier(t *testing.T, handlers *LicenseHandlers, tier 
 }
 
 // Metric history is free on every plan: no tier, including Community with no
-// licence at all, is refused a range. Storage retention alone decides how far
-// back the answer goes.
+// licence at all, is refused a supported range. Storage retention determines
+// what observations are available within it.
 func TestHandleMetricsHistory_EveryPlanServesEveryRange(t *testing.T) {
 	tests := []struct {
 		name   string

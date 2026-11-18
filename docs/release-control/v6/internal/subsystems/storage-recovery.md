@@ -6660,11 +6660,14 @@ payload as runtime executable truth only. A `paid_runtime_required` block may
 explain why a licensed private Pro hook is unavailable in the community
 runtime, but it must not become recovery protection state, restore identity,
 capacity posture, or storage-history entitlement proof.
-Storage detail surfaces with page-local history selectors must also treat that
-runtime retention truth as the selector contract: pool and disk detail ranges
-must filter and clamp through the storage-owned range access helper so ordinary
-self-hosted users see only usable history windows, while Relay/Pro longer
-history remains available only when the runtime capability advertises it.
+Storage detail surfaces with page-local history selectors use their existing
+supported chart windows on every plan. The underlying
+`/api/metrics-store/history` admission rejects invalid or longer-than-365-day
+reads before work without changing any retention or pruning. A valid request
+shows only the observations available within its interval; neither a window
+refusal nor sparse results establish missing backups or unavailable restore
+data. `TestContractMetricsHistoryRangeAdmission` checks retained observations
+on both sides of the read boundary.
 That same adjacent commercial boundary also owns one-time checkout-return
 lookup. Storage and recovery may coexist with the shared purchase return routes
 in the app shell, but they must not cache, derive, or replay the

@@ -680,6 +680,11 @@ describe('docsLinks', () => {
     const availability = apiReference.split('`POST /api/availability-history`')[1].split('\n')[0];
     expect(availability).toContain('Ranges are not plan-limited');
     expect(availability).not.toContain('402');
+    const history = apiReference.split('`GET /api/metrics-store/history`')[1].split('\n---')[0];
+    expect(history).toContain('Omitted or blank defaults to `24h`');
+    expect(history).toContain('Maximum `365d` (`8760h`) per request');
+    expect(history).toContain('invalid or longer ranges return `400`');
+    expect(history).toContain('The same request limit applies on every plan');
   });
 
   it('keeps report narration behind both POST and the token spending scope', () => {
