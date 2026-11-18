@@ -105,6 +105,7 @@ type Container struct {
 	Labels                  map[string]string        `json:"labels,omitempty"`
 	Env                     []string                 `json:"env,omitempty"`
 	Networks                []ContainerNetwork       `json:"networks,omitempty"`
+	NetworkMode             string                   `json:"networkMode,omitempty"` // The runtime's network mode: bridge, host, none, a network name, or container:<id> when the container uses another's network; empty when not reported
 	NetworkRXBytes          uint64                   `json:"networkRxBytes,omitempty"`
 	NetworkTXBytes          uint64                   `json:"networkTxBytes,omitempty"`
 	WritableLayerBytes      int64                    `json:"writableLayerBytes,omitempty"`

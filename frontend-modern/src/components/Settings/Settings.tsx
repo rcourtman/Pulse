@@ -10,6 +10,7 @@ import {
 import { Dynamic } from 'solid-js/web';
 import { useNavigate, useLocation } from '@solidjs/router';
 import { useWebSocket } from '@/contexts/appRuntime';
+import { SettingsAccessRecovery } from './SettingsAccessRecovery';
 import { SettingsDialogs } from './SettingsDialogs';
 import { SettingsPageShell } from './SettingsPageShell';
 import { eventBus } from '@/stores/events';
@@ -27,7 +28,6 @@ import { useSettingsNavigation } from './useSettingsNavigation';
 import { getSettingsLoadingState } from '@/utils/settingsShellPresentation';
 import { isRouteableSettingsLocation } from './settingsNavigationModel';
 import { canMountSettingsPanel } from './settingsNavVisibility';
-import { Button } from '@/components/shared/Button';
 import NotFound from '@/pages/NotFound';
 
 import { getRuntimeLimit, loadRuntimeCapabilities } from '@/stores/license';
@@ -203,37 +203,23 @@ const SettingsWorkspace: Component<SettingsProps> = (props) => {
         setActiveTab={setActiveTab}
         isPro={isPro}
       >
-        <Show when={securityStatusError()}>
-          <div
-            role="alert"
-            class="mb-4 space-y-3 rounded-md border border-border bg-surface-hover p-4 text-sm"
-          >
-            <p class="font-medium text-base-content">Settings access could not be verified</p>
-            <p class="text-muted">
-              Restricted settings are hidden until a fresh check succeeds. Retrying does not change
-              your permissions.
-            </p>
-            <Button
-              variant="secondary"
-              size="settingsAction"
-              disabled={securityStatusLoading()}
-              onClick={() => void loadSecurityStatus()}
-            >
-              {securityStatusLoading() ? 'Checking access…' : 'Retry access check'}
-            </Button>
-          </div>
-        </Show>
-        <Show
-          when={activeSettingsPanelEntry()}
-          fallback={securityStatusLoading() ? <SettingsPanelLoadingFallback /> : null}
+        <SettingsAccessRecovery
+          failed={securityStatusError()}
+          checking={securityStatusLoading()}
+          retry={loadSecurityStatus}
         >
-          <Suspense fallback={<SettingsPanelLoadingFallback />}>
-            <Dynamic
-              component={activeSettingsPanelEntry()?.component}
-              {...(activeSettingsPanelEntry()?.getProps?.() ?? {})}
-            />
-          </Suspense>
-        </Show>
+          <Show
+            when={activeSettingsPanelEntry()}
+            fallback={securityStatusLoading() ? <SettingsPanelLoadingFallback /> : null}
+          >
+            <Suspense fallback={<SettingsPanelLoadingFallback />}>
+              <Dynamic
+                component={activeSettingsPanelEntry()?.component}
+                {...(activeSettingsPanelEntry()?.getProps?.() ?? {})}
+              />
+            </Suspense>
+          </Show>
+        </SettingsAccessRecovery>
       </SettingsPageShell>
 
       <SettingsDialogs

@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "base_sha": "11f1546b94b09de6f9a782d7f99f51bf410a8c24",
+  "verified_at": "2026-11-18T14:50:57Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/Settings.tsx",
+    "frontend-modern/src/components/Settings/SettingsAccessRecovery.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/Settings.tsx": "5022e6002533c410ce8eae74764fa98a46331ed75d8bc263c419dae89c6949e3",
+    "frontend-modern/src/components/Settings/SettingsAccessRecovery.tsx": "db1c601a8926c4e372529b3e11fe1875fd3ac5bd26f220c67b35a9c67bd7f9d2"
+  },
+  "routes": [
+    "/settings/security-overview (compiled application; real Settings access reader and same-origin synthetic status server)"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Unavailable access, held retry, another 503, successful same-reader access check, delayed 403 after the user chooses a different focus target",
+    "Matched recovered viewport before another Tab, preserving the posture and action positions"
+  ],
+  "interactions": [
+    "Enter activates the same existing read and keeps focus at Settings content while Retry is disabled. The next Tab reaches Retry after failure and the existing visible action after success.",
+    "390 px WebKit also exercises touch activation. No completion moves focus after the reader deliberately focuses Settings navigation. The refused posture remains withdrawn."
+  ],
+  "playwright": "1.56.1",
+  "evidence": "Completed three governed browser invocations, with 24 natively inspected screenshots in 12 matched pairs. Desktop Chromium light; narrow WebKit dark.",
+  "limits": "Offline synthetic fixture. No production authorization, tenant recovery, writes, or release observation. A separate inherited bundle-size gate remains recorded outside this browser receipt."
+}

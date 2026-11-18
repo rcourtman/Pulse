@@ -113,6 +113,39 @@ agent enrolment, report admission, removal blocks, tombstones and identity
 aliases read neither, and monitor construction needs no new initialisation
 because the cache is usable from its zero value.
 
+### Docker agents report each container's network mode (18 November 2026)
+
+`internal/dockeragent/collect.go` reports the runtime's network mode for every
+inspected container as `networkMode`, exactly as the runtime wrote it:
+`bridge`, `host`, `none`, a network name, or `container:<id>` when the
+container uses another container's network namespace. The value is trimmed and
+nothing else. It is empty only when inspect returned no host config or the
+runtime wrote no mode, and absent from reports of agents older than the field.
+It is read from the inspect the agent already makes, so it adds no request, no
+permission and no new report cadence. Enrolment, report admission, removal
+blocks, tombstones and identity aliases do not read it.
+
+### Host agents report the default gateway and DNS servers (18 November 2026)
+
+`internal/hostmetrics/routing.go` reads two facts the host states itself and
+`internal/hostagent/agent.go` sends them as `routing` on every host report:
+the IPv4 default routes that go through a gateway, from `/proc/net/route`,
+lowest metric first, each with its interface; and the nameserver addresses of
+`/etc/resolv.conf`, in the file's order. When resolv.conf holds only loopback
+addresses and `/run/systemd/resolve/resolv.conf` names servers, those are
+reported instead, because the systemd-resolved stub says nothing about where
+names are resolved. A host with its own resolver on loopback and no such file
+keeps the loopback address.
+
+The route table is Linux procfs, so no gateway is reported on other
+platforms; DNS servers are reported wherever resolv.conf exists. IPv6 default
+routes are not read. The block is omitted when the host states neither fact,
+so a server must read its absence as unknown. Each list is bounded at eight
+entries. The reads are two or three small local files per report: no command
+is run, no socket is opened, and no new permission or flag is needed.
+Enrolment, report admission, removal blocks, tombstones and identity aliases
+do not read the block.
+
 ### VMware destination refusals keep the admitted connection draft
 
 The existing connection editor treats an exact HTTP 403
@@ -12086,3 +12119,13 @@ Other platforms have no sysfs and keep reporting addressed interfaces only.
 No agent token, installation, command or lifecycle authority changes.
 `collector_test.go` covers the bridge case, the summed rate, the addressed
 port speed and the sysfs reader.
+
+### Agents report each physical port's link state (18 November 2026)
+
+`collectNetwork` in `internal/hostmetrics/collector.go` also reads Linux sysfs
+`carrier` for each device-backed port and reports `linkUp` in
+`pkg/agents/host/report.go`: true with a link, false with no cable, no partner
+or an administratively down port. Software interfaces leave it unset. A speed
+the driver still reports on a port with no link is dropped as stale. No agent
+token, installation, command or lifecycle authority changes. `collector_test.go`
+covers carrier up, down and unreadable, and the stale speed.

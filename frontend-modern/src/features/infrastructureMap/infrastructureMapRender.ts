@@ -7,22 +7,25 @@ import type { MapGlyphKey, MapScene, MapTone, SceneNode } from './infrastructure
 import type { MapHealth } from './infrastructureMapModel';
 
 /**
- * What the page and the exported image share: one palette, one glyph per
+ * What the page and the exported image share: the colours, one glyph per
  * platform, and the text of an SVG file built from a laid-out scene.
  */
 
-export type MapPalette = Record<MapTone | MapHealth, string>;
+export type MapPalette = Record<MapTone | MapHealth | 'none', string>;
 
+// The theme as literal colours. Structure is the semantic tokens' values;
+// status and accent are the pairs the shared status dot and links use
+// (emerald, amber and red at 500 on light and 400 on dark, blue at 600 and
+// 400). A saved image uses these when the page's own values cannot be read.
 export const MAP_PALETTES: { light: MapPalette; dark: MapPalette } = {
   light: {
-    canvas: '#ffffff',
-    frame: '#f8fafc',
-    card: '#ffffff',
+    none: 'none',
+    base: '#f1f5f9',
+    surface: '#ffffff',
+    surfaceAlt: '#f1f5f9',
     border: '#e2e8f0',
-    track: '#e2e8f0',
     text: '#0f172a',
     muted: '#475569',
-    faint: '#94a3b8',
     accent: '#2563eb',
     net0: '#2563eb',
     net1: '#7c3aed',
@@ -34,19 +37,18 @@ export const MAP_PALETTES: { light: MapPalette; dark: MapPalette } = {
     ok: '#10b981',
     attention: '#f59e0b',
     critical: '#ef4444',
-    off: '#cbd5e1',
+    off: '#94a3b8',
     stale: '#94a3b8',
     unknown: '#94a3b8',
   },
   dark: {
-    canvas: '#1e293b',
-    frame: '#172033',
-    card: '#0f172a',
+    none: 'none',
+    base: '#0f172a',
+    surface: '#1e293b',
+    surfaceAlt: '#1e293b',
     border: '#334155',
-    track: '#334155',
     text: '#f1f5f9',
-    muted: '#94a3b8',
-    faint: '#64748b',
+    muted: '#cbd5e1',
     accent: '#60a5fa',
     net0: '#60a5fa',
     net1: '#a78bfa',
@@ -54,18 +56,39 @@ export const MAP_PALETTES: { light: MapPalette; dark: MapPalette } = {
     net3: '#22d3ee',
     net4: '#818cf8',
     net5: '#e879f9',
-    netOther: '#64748b',
+    netOther: '#94a3b8',
     ok: '#34d399',
     attention: '#fbbf24',
     critical: '#f87171',
-    off: '#475569',
-    stale: '#64748b',
-    unknown: '#64748b',
+    off: '#94a3b8',
+    stale: '#94a3b8',
+    unknown: '#94a3b8',
   },
 };
 
-export const MAP_FONT_FAMILY =
-  "ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif";
+// On the page the structure is drawn with references to the theme's own
+// variables, so it follows the theme like any other surface. Each is written
+// out whole, so a search for a token's variable finds the map. The stylesheet
+// only defines variables for the semantic tokens, so status and accent
+// colours stay the literal values above.
+const pagePalette = (literal: MapPalette): MapPalette => ({
+  ...literal,
+  base: 'var(--color-bg-base)',
+  surface: 'var(--color-bg-surface)',
+  surfaceAlt: 'var(--color-bg-surface-alt)',
+  border: 'var(--color-border-base)',
+  text: 'var(--color-text-base)',
+  muted: 'var(--color-text-muted)',
+});
+
+export const MAP_PAGE_PALETTES: { light: MapPalette; dark: MapPalette } = {
+  light: pagePalette(MAP_PALETTES.light),
+  dark: pagePalette(MAP_PALETTES.dark),
+};
+
+// The product's own sans stack, written out for a saved image. On the page
+// the drawing inherits it.
+export const MAP_FONT_FAMILY = 'ui-sans-serif, system-ui, sans-serif';
 
 export interface MapGlyph {
   d: string;
@@ -119,15 +142,17 @@ const readsDarkOn = (hex: string): boolean => {
   return 0.2126 * channel(0) + 0.7152 * channel(2) + 0.0722 * channel(4) > 0.62;
 };
 
+// A known app is its logo on its brand colour. Anything else is its initials
+// on the page's own background, so the logos are the only colour that is not
+// the product's.
 const appToSvg = (node: Extract<SceneNode, { kind: 'app' }>, palette: MapPalette): string => {
   const logo = resolveMapAppLogo(node.icon);
-  const fill = logo ? `#${logo.hex}` : `hsl(${n(node.hue)} 42% 40%)`;
-  const ink = logo && readsDarkOn(logo.hex) ? '#0f172a' : '#ffffff';
-  const square = `<rect x="${n(node.x)}" y="${n(node.y)}" width="${n(node.size)}" height="${n(node.size)}" rx="${n(node.size * 0.24)}" fill="${fill}" stroke="${palette.border}"/>`;
+  const corner = n(node.size * 0.2);
+  const square = `<rect x="${n(node.x)}" y="${n(node.y)}" width="${n(node.size)}" height="${n(node.size)}" rx="${corner}" fill="${logo ? `#${logo.hex}` : palette.base}" stroke="${palette.border}"/>`;
   const inset = node.size * 0.21;
   const mark = logo
-    ? `<path transform="translate(${n(node.x + inset)} ${n(node.y + inset)}) scale(${n((node.size - inset * 2) / 24)})" d="${logo.d}" fill="${ink}"/>`
-    : `<text x="${n(node.x + node.size / 2)}" y="${n(node.y + node.size * 0.64)}" font-size="${n(node.size * 0.4)}" font-weight="600" text-anchor="middle" fill="${ink}">${escapeXml(node.letters)}</text>`;
+    ? `<path transform="translate(${n(node.x + inset)} ${n(node.y + inset)}) scale(${n((node.size - inset * 2) / 24)})" d="${logo.d}" fill="${readsDarkOn(logo.hex) ? '#0f172a' : '#ffffff'}"/>`
+    : `<text x="${n(node.x + node.size / 2)}" y="${n(node.y + node.size * 0.64)}" font-size="${n(node.size * 0.38)}" font-weight="600" text-anchor="middle" fill="${palette.muted}">${escapeXml(node.letters)}</text>`;
   return node.dim ? `<g opacity="0.45">${square}${mark}</g>` : square + mark;
 };
 
@@ -168,7 +193,7 @@ const nodeToSvg = (node: SceneNode, palette: MapPalette): string => {
           : node.anchor === 'middle'
             ? ' text-anchor="middle"'
             : ''
-      }${node.caps ? ' letter-spacing="0.6"' : ''}>${escapeXml(node.text)}</text>`;
+      }${node.caps ? ' letter-spacing="0.6"' : ''}${node.dim ? ' opacity="0.6"' : ''}>${escapeXml(node.text)}</text>`;
     case 'app':
       return appToSvg(node, palette);
     case 'line':
@@ -177,10 +202,6 @@ const nodeToSvg = (node: SceneNode, palette: MapPalette): string => {
       return node.health === 'off'
         ? `<circle cx="${n(node.x)}" cy="${n(node.y)}" r="${n(node.r - 0.75)}" fill="none" stroke="${palette.off}" stroke-width="1.5"/>`
         : `<circle cx="${n(node.x)}" cy="${n(node.y)}" r="${n(node.r)}" fill="${palette[node.health]}"/>`;
-    case 'mark':
-      return node.health === 'off'
-        ? `<rect x="${n(node.x + 0.75)}" y="${n(node.y + 0.75)}" width="${n(node.size - 1.5)}" height="${n(node.size - 1.5)}" rx="1.5" fill="none" stroke="${palette.off}" stroke-width="1.5"/>`
-        : `<rect x="${n(node.x)}" y="${n(node.y)}" width="${n(node.size)}" height="${n(node.size)}" rx="2" fill="${palette[node.health]}"/>`;
     case 'icon': {
       const glyph = MAP_GLYPHS[node.platform];
       const paint =
@@ -199,7 +220,7 @@ export const MAP_HIT_ATTRIBUTE = 'data-map-hit';
 // The hover and focus treatment of everything on the map that answers the
 // pointer. Kept as one literal so the stylesheet build can see the classes.
 const HIT_CLASS =
-  'cursor-pointer fill-transparent stroke-transparent outline-none transition-colors hover:fill-sky-500/15 focus-visible:fill-sky-500/15 focus-visible:stroke-sky-500';
+  'cursor-pointer fill-transparent stroke-transparent outline-none transition-colors hover:fill-slate-400/15 focus-visible:fill-slate-400/15 focus-visible:stroke-blue-500';
 
 /**
  * The inside of the on-page map: the drawn marks, then one target per
@@ -233,6 +254,6 @@ export function renderMapSceneToSvg(scene: MapScene, palette: MapPalette): strin
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" width="${scene.width}" height="${scene.height}" ` +
     `viewBox="0 0 ${scene.width} ${scene.height}" font-family="${escapeXml(MAP_FONT_FAMILY)}">` +
-    `<rect width="${scene.width}" height="${scene.height}" fill="${palette.canvas}"/>${body}</svg>`
+    `<rect width="${scene.width}" height="${scene.height}" fill="${palette.surface}"/>${body}</svg>`
   );
 }

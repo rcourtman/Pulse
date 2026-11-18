@@ -536,3 +536,25 @@ func TestPhysicalDiskAgentSMARTReportedStaysInternal(t *testing.T) {
 		}
 	}
 }
+
+func TestCloneHost_OwnsItsGatewayAndDNSLists(t *testing.T) {
+	src := Host{
+		ID:              "host-1",
+		DefaultGateways: []HostDefaultGateway{{Address: "192.168.0.1", Interface: "vmbr0"}},
+		DNSServers:      []string{"192.168.0.53", "1.1.1.1"},
+	}
+
+	got := cloneHost(src)
+	src.DefaultGateways[0].Address = "mutated"
+	src.DNSServers[0] = "mutated"
+	if len(got.DefaultGateways) != 1 || got.DefaultGateways[0].Address != "192.168.0.1" || got.DefaultGateways[0].Interface != "vmbr0" {
+		t.Fatalf("gateways = %+v", got.DefaultGateways)
+	}
+	if len(got.DNSServers) != 2 || got.DNSServers[0] != "192.168.0.53" {
+		t.Fatalf("DNS servers = %v", got.DNSServers)
+	}
+
+	if clean := cloneHost(Host{ID: "older-agent"}); clean.DefaultGateways != nil || clean.DNSServers != nil {
+		t.Fatalf("an unreported gateway or resolver list must stay nil: %+v %v", clean.DefaultGateways, clean.DNSServers)
+	}
+}

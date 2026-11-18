@@ -48,6 +48,8 @@ export interface DiagramTile {
 export interface DiagramGroup {
   key: string;
   label: string;
+  /** How many things the box holds, including any folded into one tile. */
+  count: number;
   tiles: DiagramTile[];
 }
 
@@ -144,6 +146,20 @@ const capTiles = (key: string, tiles: DiagramTile[], max: number): DiagramTile[]
   return [...tiles.slice(0, max - 1), foldTile(`${key}:more`, `+${rest}`, 'more')];
 };
 
+// A box of tiles, cut to size, that still knows how many things it stands for.
+const box = (
+  key: string,
+  label: string,
+  tiles: DiagramTile[],
+  max: number,
+  folded = 0,
+): DiagramGroup => ({
+  key,
+  label,
+  count: tiles.filter((tile) => tile.navigable).length + folded,
+  tiles: capTiles(key, tiles, max),
+});
+
 const poolTiles = (
   pools: Array<{ pool: MapPool; owner: string }>,
   platform: MapGlyphKey,
@@ -190,6 +206,7 @@ export function buildServiceDiagram(
   const pools: Array<{ pool: MapPool; owner: string }> = [];
   const hardware: DiagramTile[] = [];
   const backupServers: DiagramTile[] = [];
+  const checks: DiagramTile[] = [];
   let serviceCount = 0;
   let foldedOff = 0;
 
@@ -218,6 +235,25 @@ export function buildServiceDiagram(
       }
     }
     serviceCount += services;
+    // What Pulse probes from outside (a router, a site) is not a service on
+    // any host here, so each check is a tile in a box of its own.
+    if (host.platform === 'checks' && !host.isResource) {
+      for (const section of host.sections) {
+        for (const item of section.items) {
+          checks.push({
+            id: item.id,
+            name: item.name,
+            caption: item.address ?? 'check',
+            typeLabel: item.typeLabel,
+            status: item.status,
+            health: item.health,
+            platform: 'checks',
+            address: item.address,
+            navigable: true,
+          });
+        }
+      }
+    }
     for (const pool of host.pools) pools.push({ pool, owner: host.isResource ? host.name : '' });
     if (!host.isResource) continue;
     const tile: DiagramTile = {
@@ -239,15 +275,10 @@ export function buildServiceDiagram(
 
   const group = (category: MapCategoryId): DiagramGroup | undefined => {
     const tiles = [...(byCategory.get(category) ?? [])].sort(byRunningThenName);
-    if (category === 'other' && foldedOff > 0) {
-      tiles.push(foldTile('other:off', `+${foldedOff}`, 'switched off'));
-    }
+    const folded = category === 'other' ? foldedOff : 0;
+    if (folded > 0) tiles.push(foldTile('other:off', `+${folded}`, 'switched off'));
     if (tiles.length === 0) return undefined;
-    return {
-      key: category,
-      label: MAP_CATEGORY_LABEL[category],
-      tiles: capTiles(category, tiles, max),
-    };
+    return box(category, MAP_CATEGORY_LABEL[category], tiles, max, folded);
   };
 
   const groups: DiagramGroup[] = [];
@@ -256,6 +287,7 @@ export function buildServiceDiagram(
     const built = group(category);
     if (built) groups.push(built);
   }
+  if (checks.length > 0) groups.push(box('checks', 'Checks', checks, max));
 
   const storageTiles = poolTiles(
     pools.filter(({ pool }) => !pool.backup),
@@ -279,35 +311,16 @@ export function buildServiceDiagram(
       .filter((segment) => segment.id !== OTHER_SEGMENT_ID)
       .map(({ id, label, memberCount, colorIndex }) => ({ id, label, memberCount, colorIndex })),
     groups,
-    ...(storageTiles.length > 0
-      ? {
-          storage: {
-            key: 'storage',
-            label: 'Storage',
-            tiles: capTiles('storage', storageTiles, max),
-          },
-        }
-      : {}),
-    ...(backupTiles.length > 0
-      ? {
-          backups: {
-            key: 'backups',
-            label: 'Backups',
-            tiles: capTiles('backups', backupTiles, max),
-          },
-        }
-      : {}),
+    ...(storageTiles.length > 0 ? { storage: box('storage', 'Storage', storageTiles, max) } : {}),
+    ...(backupTiles.length > 0 ? { backups: box('backups', 'Backups', backupTiles, max) } : {}),
     ...(hardware.length > 0
       ? {
-          hardware: {
-            key: 'hardware',
-            label: 'Hardware',
-            tiles: capTiles(
-              'hardware',
-              hardware.sort((a, b) => collator.compare(a.name, b.name)),
-              max,
-            ),
-          },
+          hardware: box(
+            'hardware',
+            'Hardware',
+            hardware.sort((a, b) => collator.compare(a.name, b.name)),
+            max,
+          ),
         }
       : {}),
     serviceCount,

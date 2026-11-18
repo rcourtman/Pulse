@@ -655,6 +655,14 @@ export interface ResourceAgentMeta {
   loadAverage?: number[];
   memory?: Partial<Memory>;
   networkInterfaces?: HostNetworkInterface[];
+  /**
+   * The IPv4 default routes the host agent read from the host's own route
+   * table, lowest metric first. Missing when the agent did not report them,
+   * which is unknown and never "no gateway".
+   */
+  defaultGateways?: Array<{ address: string; interface?: string }>;
+  /** The resolver addresses the host is configured with. Missing when not reported. */
+  dnsServers?: string[];
   diskIO?: HostDiskIO[];
   diskIo?: HostDiskIO[];
   disks?: ResourceAgentDisk[];
@@ -927,6 +935,13 @@ export interface ResourceDockerMeta {
     ipv4?: string;
     ipv6?: string;
   }>;
+  /**
+   * The runtime's network mode for a container: `bridge`, `host`, `none`, a
+   * network name, or `container:<id>` when it uses another container's
+   * network and so has no `networks` or `ports` of its own. Missing when the
+   * agent did not report it.
+   */
+  networkMode?: string;
   updateStatus?: {
     updateAvailable?: boolean;
     currentDigest?: string;

@@ -71,6 +71,8 @@ const WIRELESS_INTERFACE = /^(?:wl|wlan|wifi)/i;
 export interface NodeHardwarePort {
   name: string;
   wireless: boolean;
+  /** The agent reports no link (no cable, or a dead partner): drawn dimmed. */
+  noLink: boolean;
   /** "10G", "2.5G", "100M" when the agent reports a link speed. */
   speedLabel?: string;
   title: string;
@@ -122,13 +124,19 @@ export const nodeHardwareModel = (node: Node | null | undefined): NodeHardwareMo
   }
 
   model.ports = physicalNetworkInterfaces(node.networkInterfaces).map((port) => {
-    const speed = positive(port.speedMbps ?? undefined) ? (port.speedMbps as number) : undefined;
+    // Only the agent knows link state; a port Proxmox alone lists stays
+    // undimmed rather than guessed down.
+    const noLink = port.linkUp === false;
+    const speed =
+      !noLink && positive(port.speedMbps ?? undefined) ? (port.speedMbps as number) : undefined;
     const wireless = WIRELESS_INTERFACE.test(port.name);
+    const detail = noLink ? ', no link' : speed ? `, ${formatLinkSpeed(speed)}` : '';
     return {
       name: port.name,
       wireless,
+      noLink,
       speedLabel: speed ? shortLinkSpeed(speed) : undefined,
-      title: `${port.name}${wireless ? ' (Wi-Fi)' : ''}${speed ? `, ${formatLinkSpeed(speed)}` : ''}`,
+      title: `${port.name}${wireless ? ' (Wi-Fi)' : ''}${detail}`,
     };
   });
 

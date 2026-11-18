@@ -437,6 +437,8 @@ export interface DockerContainer {
   labels?: Record<string, string>;
   env?: string[];
   networks?: DockerContainerNetwork[];
+  /** The runtime's network mode; `container:<id>` means it uses that container's network. */
+  networkMode?: string;
   writableLayerBytes?: number;
   rootFilesystemBytes?: number;
   blockIo?: DockerContainerBlockIO;
@@ -604,6 +606,8 @@ export interface HostNetworkInterface {
   bridge?: string;
   vlan?: number;
   firewall?: boolean;
+  /** A physical port's link state from its agent; absent when unknown. */
+  linkUp?: boolean;
 }
 
 export interface HostSensorSummary {

@@ -1,78 +1,75 @@
-import { For, Show, createEffect, createMemo, createSignal, on } from 'solid-js';
-import { A } from '@solidjs/router';
+import {
+  For,
+  Show,
+  createEffect,
+  createMemo,
+  createSignal,
+  on,
+  onCleanup,
+  onMount,
+} from 'solid-js';
 import DownloadIcon from 'lucide-solid/icons/download';
 import EyeOffIcon from 'lucide-solid/icons/eye-off';
 import MapIcon from 'lucide-solid/icons/map';
+import { Button, ButtonLink } from '@/components/shared/Button';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { FilterButtonGroup } from '@/components/shared/FilterButtonGroup';
+import { MetadataBadge } from '@/components/shared/MetadataBadge';
 import { PageHeader } from '@/components/shared/PageHeader';
+import { StatusDot } from '@/components/shared/StatusDot';
 import { TooltipPortal } from '@/components/shared/TooltipPortal';
 import { buildInfrastructureWorkspacePath } from '@/components/Settings/infrastructureWorkspaceModel';
 import { useDarkMode } from '@/contexts/appRuntime';
 import { buildResourcePagePath } from '@/features/platformNavigation/resourcePagePath';
 import { useObservedElementWidth } from '@/hooks/useObservedElementWidth';
 import { useResources } from '@/hooks/useResources';
+import type { StatusIndicatorVariant } from '@/utils/status';
 import { showError, showSuccess } from '@/utils/toast';
-import { layoutServiceDiagram } from './infrastructureMapDiagram';
-import { downloadMapImage, resolveDiagramTileLimit } from './infrastructureMapExport';
+import { fitServiceDiagram } from './infrastructureMapDiagram';
 import {
-  layoutInfrastructureMap,
-  layoutInfrastructureNetworkMap,
-  resolveDefaultMapDensity,
-  type MapDensity,
-  type MapHit,
-  type MapView,
-} from './infrastructureMapLayout';
+  downloadMapImage,
+  resolveDiagramTileLimit,
+  resolveMapPalette,
+} from './infrastructureMapExport';
+import { resolveDefaultMapDensity, type MapDensity, type MapHit } from './infrastructureMapLayout';
 import {
   anonymizeInfrastructureMapModel,
   buildInfrastructureMapModel,
-  formatMapTotalLabel,
-  type MapHealth,
 } from './infrastructureMapModel';
-import { buildServiceDiagram } from './infrastructureMapServices';
 import {
-  MAP_FONT_FAMILY,
   MAP_HIT_ATTRIBUTE,
-  MAP_PALETTES,
+  MAP_PAGE_PALETTES,
   renderMapSceneBody,
 } from './infrastructureMapRender';
+import { buildServiceDiagram } from './infrastructureMapServices';
 
-const TOOLBAR_BUTTON_CLASS =
-  'inline-flex h-7 items-center gap-1.5 rounded-md border border-border px-2.5 text-xs font-medium transition-colors focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 disabled:cursor-wait disabled:opacity-60';
-
-const LEGEND: Array<[MapHealth, string]> = [
-  ['ok', 'Healthy'],
-  ['attention', 'Needs attention'],
-  ['critical', 'Critical'],
-  ['off', 'Off'],
-  ['stale', 'Not reporting'],
-];
-
-const VIEW_OPTIONS: Array<{ value: MapView; label: string; title: string }> = [
-  {
-    value: 'services',
-    label: 'Services',
-    title: 'What the estate runs, boxed by what each thing is for',
-  },
-  {
-    value: 'networks',
-    label: 'Connections',
-    title: 'Each network as a line, with every machine tied to the networks it is on',
-  },
-  { value: 'hosts', label: 'Hosts', title: 'Each host with everything that runs on it' },
+// The same dots the tiles carry, drawn with the shared status dot.
+const LEGEND: Array<[StatusIndicatorVariant, string]> = [
+  ['success', 'Healthy'],
+  ['warning', 'Needs attention'],
+  ['danger', 'Critical'],
+  ['muted', 'Not reporting'],
 ];
 
 const DENSITY_OPTIONS: Array<{ value: MapDensity; label: string; title: string }> = [
   { value: 'names', label: 'Names', title: 'Write the name of every guest and container' },
-  { value: 'marks', label: 'Compact', title: 'Draw each guest and container as one square' },
+  { value: 'marks', label: 'Compact', title: 'Draw each guest and container as its icon only' },
 ];
+
+// What the page keeps below the drawing: the legend and the panel's padding,
+// and on a narrow window the navigation bar fixed to its bottom edge.
+const SPACE_BELOW = 60;
+const SPACE_BELOW_NARROW = 84;
+const NARROW_WINDOW = 768;
+const MIN_MAP_HEIGHT = 240;
+// Below this, names are too small to read and icons alone say more.
+const READABLE_SCALE = 0.62;
 
 export function InfrastructureMapSurface() {
   const { resources, loading } = useResources();
   const darkMode = useDarkMode();
   const observed = useObservedElementWidth();
 
-  const [viewChoice, setViewChoice] = createSignal<MapView>('services');
   const [densityChoice, setDensityChoice] = createSignal<MapDensity | null>(null);
   const [namesHidden, setNamesHidden] = createSignal(false);
   const [exporting, setExporting] = createSignal(false);
@@ -85,30 +82,48 @@ export function InfrastructureMapSurface() {
   const model = createMemo(() =>
     namesHidden() ? anonymizeInfrastructureMapModel(liveModel()) : liveModel(),
   );
-  const density = createMemo(() => densityChoice() ?? resolveDefaultMapDensity(liveModel()));
-  // With no address reported anywhere there are no networks to draw.
-  const hasNetworks = createMemo(() => liveModel().segments.length > 0);
-  const viewOptions = createMemo(() =>
-    VIEW_OPTIONS.filter((option) => option.value !== 'networks' || hasNetworks()),
-  );
-  const view = createMemo<MapView>(() =>
-    viewChoice() === 'networks' && !hasNetworks() ? 'services' : viewChoice(),
-  );
-  const palette = createMemo(() => (darkMode() ? MAP_PALETTES.dark : MAP_PALETTES.light));
+  // On the page every colour is a reference to the theme's own variable.
+  const palette = createMemo(() => (darkMode() ? MAP_PAGE_PALETTES.dark : MAP_PAGE_PALETTES.light));
 
-  const scene = createMemo(() => {
+  // The map is fitted to what is left of the window under its toolbar, so
+  // all of it is on screen at once and nothing is read by scrolling.
+  let frameRef: HTMLDivElement | undefined;
+  const [space, setSpace] = createSignal<{ width: number; height: number } | null>(null);
+  const measure = () => {
     const width = observed.width();
-    if (!width || model().isEmpty) return null;
-    const options = { width, density: density() };
-    if (view() === 'services') {
-      const diagram = buildServiceDiagram(model(), {
-        maxTilesPerGroup: resolveDiagramTileLimit(density()),
-      });
-      return layoutServiceDiagram(diagram, options);
-    }
-    const layout = view() === 'networks' ? layoutInfrastructureNetworkMap : layoutInfrastructureMap;
-    return layout(model(), options);
+    if (!frameRef || !width) return;
+    const top = frameRef.getBoundingClientRect().top + window.scrollY;
+    const below = SPACE_BELOW + (window.innerWidth < NARROW_WINDOW ? SPACE_BELOW_NARROW : 0);
+    setSpace({ width, height: Math.max(MIN_MAP_HEIGHT, window.innerHeight - top - below) });
+  };
+  createEffect(on(observed.width, measure));
+  onMount(() => {
+    window.addEventListener('resize', measure);
+    onCleanup(() => window.removeEventListener('resize', measure));
   });
+
+  const fitted = createMemo(() => {
+    const room = space();
+    if (!room || model().isEmpty) return null;
+    const fit = (chosen: MapDensity) => ({
+      density: chosen,
+      ...fitServiceDiagram(
+        buildServiceDiagram(model(), { maxTilesPerGroup: resolveDiagramTileLimit(chosen) }),
+        room,
+        chosen,
+      ),
+    });
+    const chosen = densityChoice();
+    if (chosen) return fit(chosen);
+    const preferred = fit(resolveDefaultMapDensity(liveModel()));
+    if (preferred.density === 'marks' || preferred.scale >= READABLE_SCALE) return preferred;
+    const compact = fit('marks');
+    return compact.scale > preferred.scale ? compact : preferred;
+  });
+  const density = createMemo<MapDensity>(
+    () => fitted()?.density ?? densityChoice() ?? resolveDefaultMapDensity(liveModel()),
+  );
+  const scene = createMemo(() => fitted()?.scene ?? null);
   const hits = createMemo(() => {
     const out: MapHit[] = [];
     for (const node of scene()?.nodes ?? []) if (node.kind === 'hit') out.push(node.hit);
@@ -170,9 +185,8 @@ export function InfrastructureMapSurface() {
     try {
       const format = await downloadMapImage(model(), {
         title: 'Infrastructure map',
-        view: view(),
         density: density(),
-        palette: palette(),
+        palette: resolveMapPalette(palette(), darkMode()),
       });
       showSuccess(
         'Map image saved',
@@ -192,31 +206,13 @@ export function InfrastructureMapSurface() {
       <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
         {/* AppLayout already titles the tab for this route with the brand name. */}
         <PageHeader title="Map" updateDocumentTitle={false} />
-        <ul class="flex flex-wrap items-center gap-1.5" aria-label="What is on the map">
-          <For each={liveModel().totals}>
-            {(total) => (
-              <li class="inline-flex items-center gap-1 rounded-full bg-surface-alt px-2 py-0.5 text-[11px] text-muted ring-1 ring-border-subtle">
-                <span class="font-semibold text-base-content">{total.count.toLocaleString()}</span>
-                {formatMapTotalLabel(total)}
-              </li>
-            )}
-          </For>
-          <Show when={liveModel().attentionCount > 0}>
-            <li class="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800 dark:bg-amber-900/25 dark:text-amber-200">
-              <span class="font-semibold">{liveModel().attentionCount.toLocaleString()}</span>
-              need attention
-            </li>
-          </Show>
-        </ul>
+        <Show when={liveModel().attentionCount > 0}>
+          <MetadataBadge tone="warning" size="sm" shape="pill">
+            {liveModel().attentionCount.toLocaleString()} need attention
+          </MetadataBadge>
+        </Show>
         <Show when={!liveModel().isEmpty}>
           <div class="ml-auto flex flex-wrap items-center gap-2">
-            <FilterButtonGroup
-              variant="compact"
-              ariaLabel="What the map shows"
-              options={viewOptions()}
-              value={view()}
-              onChange={(value) => setViewChoice(value)}
-            />
             <FilterButtonGroup
               variant="compact"
               ariaLabel="Map detail"
@@ -224,37 +220,41 @@ export function InfrastructureMapSurface() {
               value={density()}
               onChange={(value) => setDensityChoice(value)}
             />
-            <button
-              type="button"
-              class={`${TOOLBAR_BUTTON_CLASS} ${
-                namesHidden()
-                  ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/25 dark:text-blue-300'
-                  : 'bg-surface text-base-content hover:bg-surface-hover'
-              }`}
+            <Button
+              variant={namesHidden() ? 'primaryFlat' : 'secondary'}
+              size="sm"
+              class="gap-1.5"
               aria-pressed={namesHidden()}
               title="Replace every name with what the thing is, so the image is safe to post"
               onClick={() => setNamesHidden((hidden) => !hidden)}
             >
               <EyeOffIcon class="h-3.5 w-3.5" aria-hidden="true" />
               Hide names
-            </button>
-            <button
-              type="button"
-              class={`${TOOLBAR_BUTTON_CLASS} bg-surface text-base-content hover:bg-surface-hover`}
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              class="gap-1.5"
               disabled={exporting()}
               title="Save this map as an image file"
               onClick={() => void handleDownload()}
             >
               <DownloadIcon class="h-3.5 w-3.5" aria-hidden="true" />
               Save image
-            </button>
+            </Button>
           </div>
         </Show>
       </div>
 
-      <div ref={observed.setElement} class="min-w-0">
+      <div
+        ref={(element) => {
+          frameRef = element;
+          observed.setElement(element);
+        }}
+        class="min-w-0"
+      >
         <Show
-          when={scene()}
+          when={fitted()}
           fallback={
             <Show
               when={!loading() && liveModel().isEmpty}
@@ -265,12 +265,13 @@ export function InfrastructureMapSurface() {
                 title="Nothing to draw yet"
                 description="The map draws itself from the systems Pulse monitors. Add one and it appears here."
                 actions={
-                  <A
+                  <ButtonLink
                     href={buildInfrastructureWorkspacePath()}
-                    class={`${TOOLBAR_BUTTON_CLASS} bg-surface text-base-content hover:bg-surface-hover`}
+                    variant="secondary"
+                    size="sm"
                   >
                     Add a system
-                  </A>
+                  </ButtonLink>
                 }
               />
             </Show>
@@ -279,11 +280,10 @@ export function InfrastructureMapSurface() {
           {(current) => (
             <svg
               ref={svgRef}
-              class="block max-w-full select-none"
-              width={current().width}
-              height={current().height}
-              viewBox={`0 0 ${current().width} ${current().height}`}
-              font-family={MAP_FONT_FAMILY}
+              class="mx-auto block max-w-full select-none"
+              width={Math.floor(current().scene.width * current().scale)}
+              height={Math.floor(current().scene.height * current().scale)}
+              viewBox={`0 0 ${current().scene.width} ${current().scene.height}`}
               role="group"
               aria-label="Infrastructure map"
               onPointerOver={showFor}
@@ -297,41 +297,26 @@ export function InfrastructureMapSurface() {
 
       <Show when={scene()}>
         <ul
-          class="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted"
+          class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted"
           aria-label="Legend"
         >
           <For each={LEGEND}>
-            {([health, label]) => (
+            {([variant, label]) => (
               <li class="inline-flex items-center gap-1.5">
-                <svg class="h-2.5 w-2.5" viewBox="0 0 10 10" aria-hidden="true">
-                  <Show
-                    when={health !== 'off'}
-                    fallback={
-                      <rect
-                        x="1"
-                        y="1"
-                        width="8"
-                        height="8"
-                        rx="2"
-                        fill="none"
-                        stroke={palette().off}
-                        stroke-width="1.5"
-                      />
-                    }
-                  >
-                    <rect width="10" height="10" rx="2" fill={palette()[health]} />
-                  </Show>
-                </svg>
+                <StatusDot variant={variant} size="sm" />
                 {label}
               </li>
             )}
           </For>
+          <li class="inline-flex items-center gap-1.5">
+            <span
+              class="inline-block h-2 w-2 shrink-0 rounded-full border-[1.5px] border-slate-400"
+              aria-hidden="true"
+            />
+            Off
+          </li>
           <li class="ml-auto">
-            {view() === 'services'
-              ? 'Apps are recognised by their image or name. The Internet is drawn but not monitored.'
-              : view() === 'networks'
-                ? 'Each line is a network. Machines are placed by the addresses they report. Pulse does not see firewall rules.'
-                : 'Everything here is read from what Pulse monitors. Select anything to open it.'}
+            Apps are recognised by their image or name. The Internet is drawn but not monitored.
           </li>
         </ul>
       </Show>

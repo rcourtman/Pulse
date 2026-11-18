@@ -8,7 +8,6 @@ import {
   type MapCategoryId,
 } from './infrastructureMapCatalogue';
 import {
-  dockerHostWire,
   resolveMapNetworks,
   type MapAttachment,
   type MapSegment,
@@ -45,7 +44,7 @@ export interface MapItem {
   memory?: number;
   /** The address the item answers on, when Pulse knows one. */
   address?: string;
-  /** Published ports, for a container or an exposed service. */
+  /** Published ports, for a container. */
   detail?: string;
   /** The networks the item is on, as ids into the model's segments. */
   segmentIds?: string[];
@@ -58,10 +57,6 @@ export interface MapItem {
 export interface MapSection {
   key: string;
   label: string;
-  /** A fact about the section itself, such as a container network's subnet. */
-  note?: string;
-  /** Sections that only ever draw as marks (physical disks). */
-  marksOnly?: boolean;
   items: MapItem[];
 }
 
@@ -77,27 +72,21 @@ export interface MapPool {
 
 export interface MapHost {
   id: string;
-  /** False for the cards the map composes itself (shared storage, checks). */
+  /** False for the holders the map composes itself (shared storage, checks). */
   isResource: boolean;
   name: string;
   platform: MapPlatform;
   typeLabel: string;
-  subtitle: string;
   health: MapHealth;
   status: string;
   cpu?: number;
   memory?: number;
-  disk?: number;
   sections: MapSection[];
-  /** A Docker host's containers again, grouped by the network they share. */
-  networkSections?: MapSection[];
   pools: MapPool[];
   /** The address the host itself answers on. */
   address?: string;
-  /** Networks the host has an address on. The first is where it is drawn. */
+  /** Networks the host has an address on. */
   ownSegmentIds: string[];
-  /** Networks only its guests are on, which it therefore carries. */
-  guestSegmentIds: string[];
 }
 
 export interface MapGroup {
@@ -221,72 +210,6 @@ const hostPlatform = (resource: Resource): MapPlatform | null => {
   }
 };
 
-const joinFacts = (facts: Array<string | undefined | false>): string =>
-  facts.filter((fact): fact is string => Boolean(fact)).join(' · ');
-
-const coresFact = (count: number | undefined): string | undefined =>
-  typeof count === 'number' && count > 0 ? `${count} ${count === 1 ? 'core' : 'cores'}` : undefined;
-
-const memoryFact = (resource: Resource): string | undefined => {
-  const total = resource.memory?.total;
-  return typeof total === 'number' && total > 0 ? `${formatBytes(total, 0)} RAM` : undefined;
-};
-
-const osFact = (resource: Resource): string | undefined => {
-  const name = clean(resource.agent?.osName);
-  const version = clean(resource.agent?.osVersion);
-  if (!name) return undefined;
-  return version && !name.includes(version) ? `${name} ${version}` : name;
-};
-
-const hostSubtitle = (resource: Resource, platform: MapPlatform): string => {
-  switch (platform) {
-    case 'proxmox': {
-      const version = clean(resource.proxmox?.pveVersion).replace(/^pve-manager\//, '');
-      return joinFacts([
-        version ? `PVE ${version.split('/')[0]}` : 'Proxmox VE',
-        coresFact(resource.agent?.cpuCount ?? resource.proxmox?.cpus),
-        memoryFact(resource),
-      ]);
-    }
-    case 'docker': {
-      const runtime =
-        clean(resource.docker?.runtime).toLowerCase() === 'podman' ? 'Podman' : 'Docker';
-      const version =
-        clean(resource.docker?.runtimeVersion) || clean(resource.docker?.dockerVersion);
-      return joinFacts([
-        version ? `${runtime} ${version}` : runtime,
-        coresFact(dockerHostWire(resource).cpus),
-        memoryFact(resource),
-      ]);
-    }
-    case 'kubernetes':
-      return joinFacts(['Kubernetes', clean(resource.kubernetes?.version)]);
-    case 'backup': {
-      const version = clean(resource.pbs?.version);
-      return version ? `Proxmox Backup Server ${version}` : 'Proxmox Backup Server';
-    }
-    case 'mail': {
-      const version = clean(resource.pmg?.version);
-      return version ? `Proxmox Mail Gateway ${version}` : 'Proxmox Mail Gateway';
-    }
-    case 'truenas':
-      return joinFacts([osFact(resource) ?? 'TrueNAS', memoryFact(resource)]);
-    case 'vmware':
-      return joinFacts([
-        osFact(resource) ?? 'VMware ESXi',
-        coresFact(resource.agent?.cpuCount),
-        memoryFact(resource),
-      ]);
-    default:
-      return joinFacts([
-        osFact(resource),
-        coresFact(resource.agent?.cpuCount),
-        memoryFact(resource),
-      ]);
-  }
-};
-
 type Attachments = ReadonlyMap<string, MapAttachment[]>;
 
 const publishedPorts = (resource: Resource): string | undefined => {
@@ -350,43 +273,23 @@ interface HostDraft {
   host: MapHost;
   resource: Resource;
   sections: Map<string, MapSection>;
-  containers: Resource[];
-  containerNetworks: Resource[];
 }
 
-const sectionFor = (
-  draft: HostDraft,
-  key: string,
-  label: string,
-  marksOnly = false,
-): MapSection => {
+const sectionFor = (draft: HostDraft, key: string, label: string): MapSection => {
   let section = draft.sections.get(key);
   if (!section) {
-    section = { key, label, items: [], ...(marksOnly ? { marksOnly } : {}) };
+    section = { key, label, items: [] };
     draft.sections.set(key, section);
   }
   return section;
 };
 
-// The order sections read in on a card: what runs there first, then what it
-// is made of.
+// The order a host's sections are kept in.
 const SECTION_RANK = (key: string): number => {
-  if (key === 'nodes') return 0;
   if (key === 'vms') return 1;
   if (key === 'lxcs') return 2;
   if (key === 'containers') return 3;
-  if (key.startsWith('ns:')) return 4;
-  if (key === 'exposed') return 8;
-  if (key === 'disks') return 9;
-  return 5;
-};
-
-const exposedServiceDetail = (resource: Resource): string | undefined => {
-  const ports = resource.kubernetes?.servicePorts ?? [];
-  const numbers = ports
-    .map((port) => port.nodePort ?? port.port)
-    .filter((port): port is number => typeof port === 'number' && port > 0);
-  return numbers.length > 0 ? `:${numbers.slice(0, 3).join(', ')}` : undefined;
+  return 4;
 };
 
 const placeChild = (
@@ -411,7 +314,6 @@ const placeChild = (
     sectionFor(draft, 'containers', app ? 'Apps' : 'Containers').items.push(
       toService(child, app ? 'App' : 'Container', attachments),
     );
-    if (platform === 'docker') draft.containers.push(child);
     return 'placed';
   }
   if (child.type === 'pod') {
@@ -421,35 +323,9 @@ const placeChild = (
     );
     return 'placed';
   }
-  if (child.type === 'k8s-node' || (child.type === 'agent' && platform === 'kubernetes')) {
-    sectionFor(draft, 'nodes', 'Nodes').items.push(toItem(child, 'Node', attachments));
-    return 'placed';
-  }
-  if (child.type === 'physical_disk') {
-    sectionFor(draft, 'disks', 'Disks', true).items.push(toItem(child, 'Disk', attachments));
-    return 'placed';
-  }
   if (POOL_TYPES.has(child.type)) {
     draft.host.pools.push(toPool(child));
     return 'pool';
-  }
-  if (child.type === 'docker-network') {
-    draft.containerNetworks.push(child);
-    return 'skipped';
-  }
-  // What a cluster offers outside itself: a service with a node port or a
-  // load balancer, and every ingress.
-  const serviceType = child.kubernetes?.serviceType;
-  if (
-    child.type === 'k8s-ingress' ||
-    (child.type === 'k8s-service' && (serviceType === 'NodePort' || serviceType === 'LoadBalancer'))
-  ) {
-    const exposed = child.type === 'k8s-ingress' ? 'Ingress' : 'Service';
-    sectionFor(draft, 'exposed', 'Exposed').items.push({
-      ...toItem(child, exposed, attachments),
-      ...(exposedServiceDetail(child) ? { detail: exposedServiceDetail(child) } : {}),
-    });
-    return 'placed';
   }
   return 'skipped';
 };
@@ -466,52 +342,6 @@ const groupKeyFor = (resource: Resource, platform: MapPlatform): string | null =
 };
 
 const isProblem = (health: MapHealth): boolean => health === 'attention' || health === 'critical';
-
-/**
- * A Docker host's containers grouped by the container network they share,
- * which is the isolation Docker itself enforces: two containers with no
- * network in common cannot reach each other by name. A container on several
- * networks is listed under each, because that is what joins them.
- */
-const containerNetworkSections = (draft: HostDraft, attachments: Attachments): MapSection[] => {
-  const facts = new Map<string, string>();
-  for (const network of draft.containerNetworks) {
-    const subnet = network.docker?.subnets?.[0]?.subnet;
-    const driver = clean(network.docker?.driver);
-    facts.set(
-      clean(network.name),
-      [subnet, driver && driver !== 'bridge' ? driver : ''].filter(Boolean).join(' · '),
-    );
-  }
-  const sections = new Map<string, MapSection>();
-  for (const container of draft.containers) {
-    const names = (container.docker?.networks ?? []).map((network) => clean(network.name));
-    const joined = names.filter(Boolean);
-    for (const name of joined.length > 0 ? joined : ['']) {
-      const key = `net:${name}`;
-      let section = sections.get(key);
-      if (!section) {
-        const note = facts.get(name);
-        section = {
-          key,
-          label: name || 'No network reported',
-          items: [],
-          ...(note ? { note } : {}),
-        };
-        sections.set(key, section);
-      }
-      section.items.push(toItem(container, 'Container', attachments));
-    }
-  }
-  return [...sections.values()]
-    .map((section) => ({ ...section, items: [...section.items].sort(byName) }))
-    .sort(
-      (a, b) =>
-        Number(a.key === 'net:') - Number(b.key === 'net:') ||
-        b.items.length - a.items.length ||
-        collator.compare(a.label, b.label),
-    );
-};
 
 export function buildInfrastructureMapModel(
   resources: readonly Resource[],
@@ -533,39 +363,27 @@ export function buildInfrastructureMapModel(
     drafts.set(resource.id, {
       resource,
       sections: new Map(),
-      containers: [],
-      containerNetworks: [],
       host: {
         id: resource.id,
         isResource: true,
         name: displayName(resource),
         platform,
         typeLabel: HOST_TYPE_LABEL[platform],
-        subtitle: hostSubtitle(resource, platform),
         health: resolveMapHealth(resource),
         status: resource.status,
         cpu: finitePercent(resource.cpu?.current),
         memory: finitePercent(getMemoryPercent(resource)),
-        disk: finitePercent(getDiskPercent(resource)),
         sections: [],
         pools: [],
         ...(own[0]?.address ? { address: own[0].address } : {}),
         ownSegmentIds: own.map((entry) => entry.segmentId),
-        guestSegmentIds: [],
       },
     });
   }
 
-  // The host a resource sits on: its parent, or its parent's parent for a
-  // disk that reports the pool it belongs to.
-  const owningDraft = (resource: Resource): HostDraft | undefined => {
-    const parent = resource.parentId ? byId.get(resource.parentId) : undefined;
-    if (!parent) return undefined;
-    const direct = drafts.get(parent.id);
-    if (direct) return direct;
-    if (resource.type !== 'physical_disk' || !parent.parentId) return undefined;
-    return drafts.get(parent.parentId);
-  };
+  // The host a resource sits on is the parent the registry gives it.
+  const owningDraft = (resource: Resource): HostDraft | undefined =>
+    resource.parentId ? drafts.get(resource.parentId) : undefined;
 
   const sharedPools: Resource[] = [];
   const checks: MapItem[] = [];
@@ -591,24 +409,12 @@ export function buildInfrastructureMapModel(
     host.sections = [...draft.sections.values()]
       .map((section) => ({
         ...section,
-        items: section.marksOnly ? section.items : [...section.items].sort(byName),
+        items: [...section.items].sort(byName),
       }))
       .sort(
         (a, b) => SECTION_RANK(a.key) - SECTION_RANK(b.key) || collator.compare(a.label, b.label),
       );
     host.pools.sort(byName);
-    const carried = new Set<string>();
-    for (const section of host.sections) {
-      for (const item of section.items) {
-        for (const id of item.segmentIds ?? [])
-          if (!host.ownSegmentIds.includes(id)) carried.add(id);
-      }
-    }
-    host.guestSegmentIds = [...carried];
-    if (host.platform === 'docker' && draft.containers.length > 0) {
-      host.networkSections = containerNetworkSections(draft, attachments);
-    }
-
     const key = groupKeyFor(draft.resource, host.platform);
     if (!key) {
       looseHosts.push(host);
@@ -685,13 +491,11 @@ export function buildInfrastructureMapModel(
         name: 'Shared storage',
         platform: 'storage',
         typeLabel: HOST_TYPE_LABEL.storage,
-        subtitle: `${pools.length} ${pools.length === 1 ? 'pool' : 'pools'}`,
         health: worstHealth(pools.map((pool) => pool.health)),
         status: '',
         sections: [],
         pools,
         ownSegmentIds: [],
-        guestSegmentIds: [],
       },
     });
   }
@@ -705,13 +509,11 @@ export function buildInfrastructureMapModel(
         name: 'Availability checks',
         platform: 'checks',
         typeLabel: HOST_TYPE_LABEL.checks,
-        subtitle: `${checks.length} ${checks.length === 1 ? 'endpoint' : 'endpoints'} Pulse probes`,
         health: worstHealth(checks.map((check) => check.health)),
         status: '',
         sections: [{ key: 'checks', label: 'Endpoints', items: checks }],
         pools: [],
         ownSegmentIds: [],
-        guestSegmentIds: [...new Set(checks.flatMap((check) => check.segmentIds ?? []))],
       },
     });
   }
@@ -769,7 +571,6 @@ function summarize(blocks: MapBlock[], segments: MapSegment[]): InfrastructureMa
     ['containers', 'Containers', 'Container'],
     ['pods', 'Pods', 'Pod'],
     ['pools', 'Storage', 'Storage'],
-    ['disks', 'Disks', 'Disk'],
     ['checks', 'Checks', 'Check'],
   ];
   const totals = TOTAL_LABELS.map(([key, label, singular]) => ({
@@ -824,15 +625,6 @@ export function anonymizeInfrastructureMapModel(
       label: section.key.startsWith('ns:') ? next('Namespace') : section.label,
       items: anonymizeItems(section.items),
     })),
-    ...(host.networkSections
-      ? {
-          networkSections: host.networkSections.map(({ note: _note, ...section }) => ({
-            ...section,
-            label: section.key === 'net:' ? section.label : next('Container network'),
-            items: anonymizeItems(section.items),
-          })),
-        }
-      : {}),
   });
 
   return {
