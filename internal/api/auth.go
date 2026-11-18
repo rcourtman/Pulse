@@ -522,10 +522,14 @@ func validateFreshBrowserSession(r *http.Request, username, action string, maxAg
 }
 
 func requestMatchesRecoverySession(r *http.Request, session *SessionData) bool {
-	if r == nil || session == nil || !session.RecoveryBypass || !isDirectLoopbackRequest(r) {
+	return session != nil && session.RecoveryBypass && requestMatchesRecoveryBinding(r, session.IP)
+}
+
+func requestMatchesRecoveryBinding(r *http.Request, boundIP string) bool {
+	if !isDirectLoopbackRequest(r) {
 		return false
 	}
-	expectedIP := normalizeRecoveryBindingIP(session.IP)
+	expectedIP := normalizeRecoveryBindingIP(boundIP)
 	actualIP := normalizeRecoveryBindingIP(GetClientIP(r))
 	return expectedIP != "" && actualIP != "" && constantTimeStringEqual(expectedIP, actualIP)
 }

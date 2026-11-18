@@ -72,11 +72,20 @@ class RecoveryAPIReferenceTest(unittest.TestCase):
         proxy_headers = trust.split("var loopbackProxyHeaders", 1)[1].split("\n}", 1)[0]
         for marker in ('"X-Forwarded-For"', '"Forwarded"', '"X-Real-IP"'):
             self.assertIn(marker, proxy_headers)
-        auth = (ROOT / "internal/api/auth.go").read_text().split(
-            "func requestMatchesRecoverySession(", 1)[1].split("\nfunc ", 1)[0]
-        for marker in ("session.RecoveryBypass", "isDirectLoopbackRequest(r)",
-                       "constantTimeStringEqual(expectedIP, actualIP)"):
-            self.assertIn(marker, auth)
+        auth = (ROOT / "internal/api/auth.go").read_text()
+        admission = auth.split("func requestMatchesRecoverySession(", 1)[1].split("\nfunc ", 1)[0]
+        self.assertIn("return session != nil && session.RecoveryBypass && "
+                      "requestMatchesRecoveryBinding(r, session.IP)", " ".join(admission.split()))
+        self.assertIn("if requestMatchesRecoverySession(r, session) && "
+                      "ValidateAndExtendSession(cookie.Value)", auth)
+        binding = auth.split("func requestMatchesRecoveryBinding(", 1)[1].split("\nfunc ", 1)[0]
+        for marker in (
+            "bool { if !isDirectLoopbackRequest(r) { return false }",
+            "expectedIP := normalizeRecoveryBindingIP(boundIP)",
+            "actualIP := normalizeRecoveryBindingIP(GetClientIP(r))",
+            'return expectedIP != "" && actualIP != "" && constantTimeStringEqual(expectedIP, actualIP)',
+        ):
+            self.assertIn(marker, " ".join(binding.split()))
         self.assertIn("r.establishRecoverySession(w, req, recoveryUser)", self.handler)
         self.assertIn("r.clearSession(w, req)", self.handler)
         text = " ".join(self.guide.split())
@@ -85,6 +94,15 @@ class RecoveryAPIReferenceTest(unittest.TestCase):
                        "does not unlock a separate browser", "Do not transfer session cookies",
                        "command arguments, URLs or reports", "working administrator session"):
             self.assertIn(marker, text)
+
+    def test_live_recovery_reads_keep_original_request_and_current_binding(self):
+        authority = (ROOT / "internal/api/session_read_authority.go").read_text()
+        guard, store = authority.split("\nfunc (s *SessionStore) sessionReadBinding(", 1)
+        self.assertIn("original = req.Clone(req.Context())", guard)
+        self.assertIn("ip, ok := currentStore.sessionReadBinding(key, createdAt, username, recovery)", guard)
+        self.assertIn("return ok && (!recovery || requestMatchesRecoveryBinding(original, ip))", guard)
+        self.assertIn("current.RecoveryBypass != recovery", store)
+        self.assertIn("if recovery { return current.IP, true }", " ".join(store.split()))
 
     def test_shipped_reference_matches_the_canonical_document(self):
         self.assertEqual((ROOT / "docs/API.md").read_bytes(),

@@ -65,12 +65,48 @@ func TestSessionReadSnapshot(t *testing.T) {
 				}
 				// Returning middleware/header changes cannot retarget the reader.
 				req.Header.Set("Cookie", cookieName+"=different")
+				if !allowed() {
+					t.Fatal("current read no longer follows the original session")
+				}
 				mutateReadSession(raw, change)
 				if allowed() {
 					t.Fatal("old read retained changed session authority")
 				}
 			})
 		}
+	}
+}
+
+func TestSessionReadOrdinaryCheckDoesNotAllocate(t *testing.T) {
+	InitSessionStore(t.TempDir())
+	const raw = "synthetic-read-allocation"
+	GetSessionStore().CreateSession(raw, time.Hour, "fixture", "127.0.0.1", "operator")
+	req := httptest.NewRequest(http.MethodGet, "http://127.0.0.1/api/state", nil)
+	req.AddCookie(&http.Cookie{Name: cookieNameSession, Value: raw})
+	if !CheckAuth(&config.Config{}, httptest.NewRecorder(), req) {
+		t.Fatal("session admission failed")
+	}
+	allowed := sessionReadRevalidator(req)
+	if allowed == nil {
+		t.Fatal("missing admitted session")
+	}
+	if got := testing.AllocsPerRun(100, func() {
+		if !allowed() {
+			t.Fatal("live session was denied")
+		}
+	}); got != 0 {
+		t.Fatalf("rechecking a live ordinary session allocated %.0f times per check, want 0", got)
+	}
+}
+
+func TestSessionReadIncompleteAdmissionDenies(t *testing.T) {
+	InitSessionStore(t.TempDir())
+	const raw = "synthetic-incomplete-admission"
+	GetSessionStore().CreateSession(raw, time.Hour, "fixture", "127.0.0.1", "operator")
+	req := httptest.NewRequest(http.MethodGet, "http://127.0.0.1/api/state", nil)
+	attachSessionReadAdmission(req, raw, nil)
+	if allowed := sessionReadRevalidator(req); allowed == nil || allowed() {
+		t.Fatal("incomplete admission must retain a denying check, not use live store data as admission")
 	}
 }
 
@@ -128,6 +164,13 @@ func TestSessionReadStoreReplacementAndRecoveryBinding(t *testing.T) {
 			allowed := sessionReadRevalidator(req)
 			if allowed == nil || !allowed() {
 				t.Fatal("missing recovery admission")
+			}
+			// Only the session's binding stays live; later request changes do
+			// not redefine the original direct-loopback request.
+			req.Header.Set("Via", "synthetic proxy")
+			req.RemoteAddr = "192.0.2.2:1234"
+			if !allowed() {
+				t.Fatal("recovery binding did not keep the original request")
 			}
 			if change == "store" {
 				InitSessionStore(t.TempDir())

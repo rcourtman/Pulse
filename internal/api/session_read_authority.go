@@ -41,23 +41,45 @@ func sessionReadRevalidator(req *http.Request) func() bool {
 	if marker == nil {
 		return nil
 	}
-	admitted := *marker
-	// A recovery binding is evaluated against the original immutable request,
-	// not a request that returning middleware may still be observing.
-	original := req.Clone(req.Context())
+	if !marker.valid {
+		return func() bool { return false }
+	}
+	// One lookup key for this read; each check still consults live authority.
+	key := sessionHash(marker.token)
+	store := marker.store
+	createdAt, username, recovery := marker.createdAt, marker.username, marker.recovery
+	var original *http.Request
+	if recovery {
+		// Check the current binding against the original immutable request.
+		// Ordinary sessions do not need any of the request headers.
+		original = req.Clone(req.Context())
+	}
 	return func() bool {
 		sessionStoreMu.Lock()
 		currentStore := sessionStore
 		sessionStoreMu.Unlock()
-		if !admitted.valid || currentStore == nil || currentStore != admitted.store {
+		if currentStore == nil || currentStore != store {
 			return false
 		}
-		current := currentStore.GetSession(admitted.token)
-		if current == nil || !time.Now().Before(current.ExpiresAt) ||
-			!current.CreatedAt.Equal(admitted.createdAt) || current.Username != admitted.username ||
-			current.RecoveryBypass != admitted.recovery {
-			return false
-		}
-		return !current.RecoveryBypass || requestMatchesRecoverySession(original, current)
+		ip, ok := currentStore.sessionReadBinding(key, createdAt, username, recovery)
+		return ok && (!recovery || requestMatchesRecoveryBinding(original, ip))
 	}
+}
+
+// sessionReadBinding checks the live session without copying its full data
+// (including identity-provider credentials). Only the recovery binding can
+// leave the lock, and request inspection stays outside the lock.
+func (s *SessionStore) sessionReadBinding(key string, createdAt time.Time, username string, recovery bool) (string, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	current := s.sessions[key]
+	if current == nil || !time.Now().Before(current.ExpiresAt) ||
+		!current.CreatedAt.Equal(createdAt) || current.Username != username ||
+		current.RecoveryBypass != recovery {
+		return "", false
+	}
+	if recovery {
+		return current.IP, true
+	}
+	return "", true
 }
