@@ -117,6 +117,10 @@ test.describe('Multi-tenant E2E flows', () => {
 
     const mtEnabled = await isMultiTenantEnabled(page);
     let tempOrgID: string | null = null;
+    // The switcher is a group named "Organization selection" around the
+    // select named "Organization". A bare label match is a substring match
+    // and finds both, so name each by role.
+    const orgSwitcher = page.getByRole('group', { name: 'Organization selection', exact: true });
 
     try {
       if (mtEnabled) {
@@ -126,9 +130,11 @@ test.describe('Multi-tenant E2E flows', () => {
         await page.reload({ waitUntil: 'domcontentloaded' });
         await waitForAppShell(page);
 
-        await expect(page.getByLabel('Organization')).toBeVisible();
+        await expect(
+          orgSwitcher.getByRole('combobox', { name: 'Organization', exact: true }),
+        ).toBeVisible();
       } else {
-        await expect(page.getByLabel('Organization')).toHaveCount(0);
+        await expect(orgSwitcher).toHaveCount(0);
       }
     } finally {
       if (tempOrgID) {
