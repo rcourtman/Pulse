@@ -209,6 +209,11 @@ func newHistoryReadFixture(t *testing.T) *historyReadFixture {
 		f.services[store.org].SetChatService(messagesByOrg[store.org])
 		return &historyReadOrchestrator{store: store}
 	})
+	// Model an initialized installation before recovery snapshots are taken.
+	// Subsequent runtime setup must preserve this measurement metadata too.
+	if err := f.handler.defaultPersistence.EnsurePatrolInvestigationTelemetry(time.Now().UTC()); err != nil {
+		t.Fatal(err)
+	}
 	return f
 }
 

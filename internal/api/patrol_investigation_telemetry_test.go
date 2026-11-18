@@ -1,11 +1,15 @@
 package api
 
 import (
+	"os"
+	"path/filepath"
+	"reflect"
+	"testing"
+	"time"
+
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
-	"testing"
-	"time"
 )
 
 func TestPatrolInvestigationMeasurementsDoNotRequireSurvivingFindings(t *testing.T) {
@@ -64,5 +68,38 @@ func TestPatrolInvestigationMeasurementClosesAfterFindingWasRemoved(t *testing.T
 	got := p.PatrolInvestigationTelemetry(time.Now().UTC())
 	if !got.Available || got.Runs != 1 || got.Handoffs[aicontracts.HandoffHumanDecision] != 1 {
 		t.Fatalf("cleanup erased closing measurement: %+v", got)
+	}
+}
+
+// First startup may create only the content-free ledger. It must neither
+// rewrite retained customer state nor fabricate outcomes for old sessions.
+func TestPatrolInvestigationMeasurementInitializationPreservesRetainedHistory(t *testing.T) {
+	f := newHistoryReadFixture(t)
+	p := f.handler.defaultPersistence
+	ledger := filepath.Join(p.SharedInstallationDataDir(), "patrol_investigation_telemetry.json")
+	if err := os.Remove(ledger); err != nil {
+		t.Fatal(err)
+	}
+	before := historyFixtureFiles(t, f.root)
+	f.handler.setupInvestigationOrchestrator("default", f.services["default"])
+	after := historyFixtureFiles(t, f.root)
+	relative, err := filepath.Rel(f.root, ledger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, created := after[relative]; !created {
+		t.Fatal("first setup did not create measurement metadata")
+	}
+	delete(after, relative)
+	if !reflect.DeepEqual(before, after) {
+		t.Fatal("measurement initialization changed retained history, chat or credentials")
+	}
+	info, err := os.Stat(ledger)
+	if err != nil || info.Mode().Perm() != 0600 {
+		t.Fatal("measurement history must remain private to this installation")
+	}
+	got := p.PatrolInvestigationTelemetry(time.Now().UTC())
+	if !got.Available || got.ObservationDays != 0 || got.Runs != 0 {
+		t.Fatalf("old retained sessions were backfilled into a new observation window: %+v", got)
 	}
 }
