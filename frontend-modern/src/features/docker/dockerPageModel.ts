@@ -25,7 +25,8 @@ const DOCKER_SWARM_NODE_TYPES = new Set<ResourceType>(['docker-swarm-node']);
 const DOCKER_SECRET_TYPES = new Set<ResourceType>(['docker-secret']);
 const DOCKER_CONFIG_TYPES = new Set<ResourceType>(['docker-config']);
 
-export type DockerPageTabId = 'overview' | 'images' | 'storage' | 'networks' | 'swarm';
+export type DockerPageTabId =
+  'overview' | 'applications' | 'images' | 'storage' | 'networks' | 'swarm';
 
 export type DockerTabSpec = {
   id: DockerPageTabId;
@@ -38,6 +39,7 @@ export const DOCKER_TAB_SPECS: readonly DockerTabSpec[] = [
   // runtime hosts plus primary container workloads; detailed supporting object
   // inventory belongs in the Images, Storage, Networks, and Swarm workflows.
   { id: 'overview', label: 'Overview', path: '/docker/overview' },
+  { id: 'applications', label: 'Applications', path: '/docker/applications' },
   { id: 'images', label: 'Images', path: '/docker/images' },
   { id: 'storage', label: 'Storage', path: '/docker/storage' },
   { id: 'networks', label: 'Networks', path: '/docker/networks' },
@@ -531,12 +533,31 @@ const dockerPrefixedToken = (prefix: string, value: string | undefined): string 
   return trimmed ? `${prefix}:${trimmed}` : undefined;
 };
 
+export function dockerComposeMembership(docker?: Resource['docker']) {
+  const labels = docker?.labels;
+  return {
+    project:
+      docker?.composeProject?.trim() ||
+      docker?.podman?.composeProject?.trim() ||
+      labels?.['com.docker.compose.project']?.trim() ||
+      labels?.['io.podman.compose.project']?.trim() ||
+      '',
+    service:
+      docker?.composeService?.trim() ||
+      docker?.podman?.composeService?.trim() ||
+      labels?.['com.docker.compose.service']?.trim() ||
+      labels?.['io.podman.compose.service']?.trim() ||
+      '',
+  };
+}
+
 // Builds the lowercase search haystack a Docker page table consults when
 // filtering rows. The shared platformPage helper carries only generic Resource
 // fields; docker.* lookups live here so the cross-platform helper does not
 // have to know which platforms exist.
 export function dockerResourceSearchHaystack(resource: Resource): string {
   const docker = resource.docker;
+  const { project, service } = dockerComposeMembership(docker);
   return [
     resource.id,
     resource.name,
@@ -593,14 +614,14 @@ export function dockerResourceSearchHaystack(resource: Resource): string {
     docker?.swarm?.localState,
     docker?.podman?.podName,
     docker?.podman?.podId,
-    docker?.podman?.composeProject,
-    docker?.podman?.composeService,
+    project,
+    service,
     docker?.podman?.autoUpdatePolicy,
     docker?.podman?.userNamespace,
     dockerPrefixedToken('pod', docker?.podman?.podName),
     dockerPrefixedToken('pod', docker?.podman?.podId),
-    dockerPrefixedToken('compose', docker?.podman?.composeProject),
-    dockerPrefixedToken('compose', docker?.podman?.composeService),
+    dockerPrefixedToken('compose', project),
+    dockerPrefixedToken('compose', service),
     ...(docker?.ports?.flatMap((port) => [
       dockerPortToken(port),
       port.ip,
@@ -920,6 +941,8 @@ const hasDockerTabInventory = (
   switch (tab) {
     case 'overview':
       return true;
+    case 'applications':
+      return model.containers.length > 0 || hasDockerTypeEvidence(typeCounts, 'app-container');
     case 'images':
       return model.images.length > 0 || hasDockerTypeEvidence(typeCounts, 'docker-image');
     case 'storage':

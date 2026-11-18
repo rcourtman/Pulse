@@ -25,6 +25,7 @@ type DockerPortChecksNoticeProps = {
   // Changes when the set of containers on the page changes, so a container
   // started later is offered without a reload.
   containerSignature: string;
+  includesPort?: (port: DockerPortCheckSuggestion) => boolean;
   // Called after checks are added, so the page can show them on their rows.
   onChecksAdded?: () => void;
 };
@@ -68,7 +69,13 @@ export function DockerPortChecksNotice(props: DockerPortChecksNoticeProps) {
         // A background inventory refresh must not replace the choice someone
         // is reviewing. The server checks that this exact offer is still current.
         setDisplayed((current) => {
-          if (offeredOrg === run.org && offeredPortSuggestions(current, dismissed()).length > 0)
+          if (
+            offeredOrg === run.org &&
+            offeredPortSuggestions(
+              props.includesPort ? current.filter(props.includesPort) : current,
+              dismissed(),
+            ).length > 0
+          )
             return current;
           offeredOrg = run.org;
           return latest;
@@ -108,7 +115,9 @@ export function DockerPortChecksNotice(props: DockerPortChecksNoticeProps) {
     offMembership();
   });
 
-  const all = displayed;
+  const all = createMemo(() =>
+    props.includesPort ? displayed().filter(props.includesPort) : displayed(),
+  );
   const offered = createMemo(() => offeredPortSuggestions(all(), dismissed()));
   const skippedLines = createMemo(() => skippedPortLines(all()));
   const summary = createMemo(() => {
@@ -120,7 +129,7 @@ export function DockerPortChecksNotice(props: DockerPortChecksNoticeProps) {
     const next = new Set(dismissed());
     for (const port of ports) next.add(dockerPortCheckKey(port));
     setDismissed(next);
-    writeDismissedPortChecks(next, [...all(), ...ports]);
+    writeDismissedPortChecks(next, [...displayed(), ...ports]);
     // Once the old offer is handled, later ports may get their own offer.
     setFailure('');
     setDisplayed(suggestions.latest ?? []);

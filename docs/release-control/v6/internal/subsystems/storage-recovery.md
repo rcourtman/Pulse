@@ -4217,7 +4217,9 @@ recovery scope, or a storage/recovery-owned secret source.
     Docker / Podman `DockerData` container lifecycle, Podman metadata, and
     cumulative block I/O totals, including nullable runtime-authored OOM state
     and secret-free health-check target hostnames, remain unified-resource
-    runtime context.
+    runtime context. Compose project and service membership may label the
+    application that uses a mount. Recovery coverage still requires backup
+    evidence for its data, including after an image change.
     Storage and recovery may use those fields only as workload description
     when linking to an owning runtime/platform page; they must not reinterpret
     health-check targets as protection topology, or container block I/O totals

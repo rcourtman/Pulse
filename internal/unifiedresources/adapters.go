@@ -2524,6 +2524,14 @@ func resourceFromDockerContainer(ct models.DockerContainer, host models.DockerHo
 			UserNamespace:    strings.TrimSpace(ct.Podman.UserNamespace),
 		}
 	}
+	// Project and service describe membership only. A reported Compose label
+	// does not grant access to a deployment file or authority to change it.
+	var podmanProject, podmanService string
+	if docker.Podman != nil {
+		podmanProject, podmanService = docker.Podman.ComposeProject, docker.Podman.ComposeService
+	}
+	docker.ComposeProject = firstNonEmpty(podmanProject, ct.Labels["com.docker.compose.project"], ct.Labels["io.podman.compose.project"])
+	docker.ComposeService = firstNonEmpty(podmanService, ct.Labels["com.docker.compose.service"], ct.Labels["io.podman.compose.service"])
 	if len(ct.Ports) > 0 {
 		docker.Ports = make([]DockerPortMeta, len(ct.Ports))
 		for i, p := range ct.Ports {

@@ -121,6 +121,25 @@ describe('DockerPortChecksNotice', () => {
   });
   afterEach(cleanup);
 
+  it('posts only the shown application members even when another runtime has the same container name', async () => {
+    const web = suggestions[0];
+    const other = { ...web, hostId: 'another-runtime' };
+    dockerPortSuggestionsMock.mockResolvedValue([web, other, suggestions[1]]);
+    addDockerPortChecksMock.mockResolvedValue(result());
+    render(() => (
+      <DockerPortChecksNotice
+        containerSignature="one-project"
+        includesPort={(entry) =>
+          entry.hostId === web.hostId && entry.containerId === web.containerId
+        }
+      />
+    ));
+    fireEvent.click(await screen.findByRole('button', { name: 'Show ports' }));
+    expect(screen.getByTestId('docker-port-checks-list')).not.toHaveTextContent('cache');
+    fireEvent.click(screen.getByRole('button', { name: 'Add checks' }));
+    expect(addDockerPortChecksMock.mock.calls[0][0]).toEqual([web]);
+  });
+
   it('offers the unchecked ports and names them on request', async () => {
     render(() => <DockerPortChecksNotice containerSignature="a" />);
 

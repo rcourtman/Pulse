@@ -21,8 +21,9 @@ offline.
 
 ![Pulse Proxmox overview](docs/images/pulse-workspace.png)
 
-Want to look around first? The [live demo](https://demo.pulserelay.pro) runs on
-sample data and signs you in automatically.
+Explore the [Docker hosts and containers](https://demo.pulserelay.pro/docker/overview)
+or the [Proxmox overview](https://demo.pulserelay.pro) in the live demo. Both
+use sample data and sign you in automatically.
 
 ## What Pulse does
 
@@ -112,6 +113,12 @@ Open `http://<your-ip>:7655` and paste the one-time setup token. Get it with
 `sudo pulse bootstrap-token` on Linux (the LXC installer prints the exact
 command). Create your admin account, then add your first system with
 **Add infrastructure** under **Settings → Infrastructure**.
+
+For a Docker host, choose **Docker / Podman** and run its generated installer
+on the machine running the containers. Leave command access off for monitoring.
+Open **Docker → Applications** to find an existing Compose project, review its
+services, and add a check for a published web port. Standalone containers
+appear under **Docker → Overview**.
 
 ### Do you need an agent?
 

@@ -14,6 +14,7 @@ import {
   withPlatformStatusCounts,
 } from '@/features/platformPage/sharedPlatformPage';
 import { DockerAlertsTable } from './DockerAlertsTable';
+import { DockerApplications } from './DockerApplications';
 import { DockerConfigsTable } from './DockerConfigsTable';
 import { DockerContainersTable } from './DockerContainersTable';
 import { DockerHostsTable } from './DockerHostsTable';
@@ -68,7 +69,7 @@ import { isPulseAgentPlatformResource } from '@/utils/agentResources';
 import type { Resource } from '@/types/resource';
 import { buildPlatformResourceSearchSuggestions } from '@/features/platformPage/platformSearchSuggestions';
 
-const DOCKER_RESOURCE_QUERY_BY_TAB: Record<DockerPageTabId, string> = {
+const DOCKER_RESOURCE_QUERY_BY_TAB: Record<Exclude<DockerPageTabId, 'applications'>, string> = {
   overview: 'type=agent,docker-host,vm,system-container,app-container&source=docker',
   images: 'type=agent,docker-host,vm,system-container,app-container,docker-image&source=docker',
   storage: 'type=agent,docker-host,vm,system-container,docker-volume&source=docker',
@@ -107,8 +108,8 @@ export function DockerPageSurface() {
     query: DOCKER_RESOURCE_QUERY_BY_TAB.overview,
     cacheKey: 'docker-overview',
     initialHydration: 'prefer-ws-then-rest',
-    enabled: () => shouldHydrateTab('overview'),
-    realtimeEnabled: () => shouldHydrateTab('overview'),
+    enabled: () => shouldHydrateTab('overview') || shouldHydrateTab('applications'),
+    realtimeEnabled: () => shouldHydrateTab('overview') || shouldHydrateTab('applications'),
   });
   const imageResources = useUnifiedResources({
     query: DOCKER_RESOURCE_QUERY_BY_TAB.images,
@@ -265,6 +266,13 @@ export function DockerPageSurface() {
                     onLifecycleActionSettled={refreshDockerResources}
                   />
                 </div>
+              </Show>
+              <Show when={activeTab() === 'applications'}>
+                <DockerApplications
+                  hosts={model().hosts}
+                  containers={model().containers}
+                  refresh={refreshDockerResources}
+                />
               </Show>
               <Show when={activeTab() === 'images'}>
                 <DockerImagesTable

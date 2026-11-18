@@ -48,6 +48,15 @@ timed/scope policy, notification callbacks and unchanged recovery/history IDs.
 
 ### Docker hosts carry their failure-logs setting (14 November 2026)
 
+Compose membership on app-container resources uses the runtime host source ID,
+project and service. The adapter reads typed Podman metadata first, then standard
+Docker and Podman Compose labels. Labels describe observed membership. They do
+not identify a trusted writable path, Git repository or deployment owner.
+Applications on hosts with a shared hostname stay separate. Endpoint results
+belong to the checks attached to the member container. The application view
+combines timestamps reported for its current containers with opt-in failure
+logs, preserving the difference between an absent check and a failed check.
+
 `DockerData.FailureLogsEnabled` (JSON `docker.failureLogsEnabled`) is the
 Docker agent's local failure-logs setting, copied from `models.DockerHost` by
 `resourceFromDockerHost` and read through `DockerHostView.FailureLogsEnabled`.

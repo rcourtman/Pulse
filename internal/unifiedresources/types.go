@@ -1167,6 +1167,8 @@ type DockerData struct {
 	IdentityConflict      *models.DockerHostIdentityConflict `json:"identityConflict,omitempty"`
 
 	// Container-specific fields (populated when Resource.Type == ResourceTypeAppContainer)
+	ComposeProject     string                      `json:"composeProject,omitempty"`
+	ComposeService     string                      `json:"composeService,omitempty"`
 	ContainerState     string                      `json:"containerState,omitempty"`
 	Health             string                      `json:"health,omitempty"`
 	HealthcheckTargets []string                    `json:"healthcheckTargets,omitempty"`

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { Resource } from '@/types/resource';
+import { buildDockerComposeApplications, composeActivity } from '../dockerComposeApplication';
 import {
   DOCKER_TAB_SPECS,
   buildDockerIncidentRows,
@@ -39,6 +40,30 @@ const makeResource = (resource: Partial<Resource> & Pick<Resource, 'id' | 'type'
 });
 
 describe('dockerPageModel', () => {
+  it('keeps same-named projects on different runtimes separate through container replacement', () => {
+    const child = (id: string, hostSourceId: string) =>
+      makeResource({
+        id,
+        type: 'app-container',
+        docker: {
+          hostSourceId,
+          hostname: 'docker',
+          labels: { 'com.docker.compose.project': 'paperless' },
+        },
+      });
+    const web = child('old-web', 'runtime-a');
+    const broker = child('broker', 'runtime-a');
+    const other = child('other-web', 'runtime-b');
+    const apps = buildDockerComposeApplications([], [web, other, broker, child('unscoped', '')]);
+    expect(apps.map((app) => app.containers.map((c) => c.id))).toEqual([
+      ['old-web', 'broker'],
+      ['other-web'],
+    ]);
+    expect(buildDockerComposeApplications([], [child('new-web', 'runtime-a')])[0].hostId).toBe(
+      apps[0].hostId,
+    );
+    expect(composeActivity([web])).toEqual([]);
+  });
   it.each(['vm', 'system-container'] as const)(
     'keeps a linked %s runtime without adopting a same-named guest or its containers',
     (type) => {
@@ -136,6 +161,7 @@ describe('dockerPageModel', () => {
   it('declares operator workflow tabs for Docker runtime inventory', () => {
     expect(DOCKER_TAB_SPECS.map((tab) => tab.id)).toEqual([
       'overview',
+      'applications',
       'images',
       'storage',
       'networks',
@@ -359,6 +385,7 @@ describe('dockerPageModel', () => {
     expect(getDockerPageTabSpecs(hostOnlyModel).map((tab) => tab.id)).toEqual(['overview']);
     expect(getDockerPageTabSpecs(runtimeInventoryModel).map((tab) => tab.id)).toEqual([
       'overview',
+      'applications',
       'images',
       'storage',
       'networks',
@@ -1073,6 +1100,7 @@ describe('dockerPageModel', () => {
         'podman-web',
       ]);
       expect(filterDockerResources(labelled, 'compose:orion', 'all').map((r) => r.id)).toEqual([
+        'compose-db',
         'podman-web',
       ]);
       expect(filterDockerResources(labelled, 'keep-id', 'all').map((r) => r.id)).toEqual([

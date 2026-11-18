@@ -836,6 +836,26 @@ func TestResourceFromDockerContainerIncludesContainerID(t *testing.T) {
 	}
 }
 
+func TestResourceFromDockerContainerComposeLabels(t *testing.T) {
+	host := models.DockerHost{ID: "runtime-east"}
+	container := models.DockerContainer{
+		Labels: map[string]string{
+			"com.docker.compose.project": " paperless ",
+			"com.docker.compose.service": " db ",
+			"com.docker.stack.namespace": "other",
+		},
+	}
+	resource, _ := resourceFromDockerContainer(container, host)
+	if resource.Docker.HostSourceID != host.ID || resource.Docker.ComposeProject != "paperless" || resource.Docker.ComposeService != "db" {
+		t.Fatal("Compose identity must preserve the reporting runtime, project and service")
+	}
+	delete(container.Labels, "com.docker.compose.project")
+	resource, _ = resourceFromDockerContainer(container, host)
+	if resource.Docker.ComposeProject != "" {
+		t.Fatalf("Swarm namespace projected as Compose project %q", resource.Docker.ComposeProject)
+	}
+}
+
 func TestResourceFromDockerContainerPreservesRuntimeMetadata(t *testing.T) {
 	startedAt := time.Date(2026, 6, 11, 8, 15, 30, 0, time.FixedZone("UTC-5", -5*60*60))
 	finishedAt := startedAt.Add(45 * time.Minute)
@@ -870,6 +890,9 @@ func TestResourceFromDockerContainerPreservesRuntimeMetadata(t *testing.T) {
 	}
 	if got, want := resource.Docker.Runtime, "podman"; got != want {
 		t.Fatalf("runtime = %q, want %q", got, want)
+	}
+	if resource.Docker.ComposeProject != "orion" || resource.Docker.ComposeService != "web" {
+		t.Fatalf("missing Compose membership: %q/%q", resource.Docker.ComposeProject, resource.Docker.ComposeService)
 	}
 	if resource.Docker.StartedAt == nil {
 		t.Fatal("expected startedAt")

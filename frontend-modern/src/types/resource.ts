@@ -815,6 +815,8 @@ export interface DockerFailureLog {
 }
 
 export interface ResourceDockerMeta {
+  composeProject?: string;
+  composeService?: string;
   serviceId?: string;
   serviceName?: string;
   hostSourceId?: string;

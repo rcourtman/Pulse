@@ -361,7 +361,10 @@ describe('DockerPageSurface', () => {
       'href',
       '/standalone/machines',
     );
-    expect(screen.getByTestId('docker-section-tabs')).toHaveAttribute('data-tabs', 'overview');
+    expect(screen.getByTestId('docker-section-tabs')).toHaveAttribute(
+      'data-tabs',
+      'overview,applications',
+    );
     expect(screen.getByTestId('docker-containers-table')).toHaveAttribute(
       'data-resource-count',
       '1',
@@ -542,7 +545,7 @@ describe('DockerPageSurface', () => {
 
     expect(screen.getByTestId('docker-section-tabs')).toHaveAttribute(
       'data-tabs',
-      'overview,images,storage,networks',
+      'overview,applications,images,storage,networks',
     );
   });
 

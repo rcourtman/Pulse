@@ -3085,7 +3085,10 @@ must be evidence-gated by their owning row or signal model. `Overview` is the
 stable landing surface; supporting workflow tabs appear only when the current
 setup has native inventory or signal for that workflow, and legacy object URLs
 resolve to their owning workflow only when that workflow is visible. Docker /
-Podman may expose `Overview`, `Images`, `Storage`, `Networks`, and `Swarm`,
+Podman may expose `Overview`, `Applications`, `Images`, `Storage`, `Networks`, and `Swarm`.
+Applications shares the container inventory subscription with Overview and
+groups Compose workloads by runtime and project. A bookmarked application
+opens that exact pair, including when another host uses the same project name,
 while legacy `/docker/containers` resolves to the Overview landing surface
 rather than remaining a separate visible tab. Kubernetes may expose `Overview`,
 `Nodes`, `Workloads`, `Services`, `Storage`, `Configuration`, and `Events`;
