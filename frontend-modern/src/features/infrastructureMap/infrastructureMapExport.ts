@@ -1,11 +1,14 @@
+import { layoutServiceDiagram } from './infrastructureMapDiagram';
 import {
   layoutInfrastructureMap,
   layoutInfrastructureNetworkMap,
   type MapDensity,
+  type MapLayoutOptions,
   type MapView,
 } from './infrastructureMapLayout';
 import { formatMapTotalLabel, type InfrastructureMapModel } from './infrastructureMapModel';
 import { renderMapSceneToSvg, type MapPalette } from './infrastructureMapRender';
+import { buildServiceDiagram, DIAGRAM_MAX_TILES_PER_GROUP } from './infrastructureMapServices';
 
 /**
  * The shareable image: the same model the page draws, laid out at a poster
@@ -14,6 +17,8 @@ import { renderMapSceneToSvg, type MapPalette } from './infrastructureMapRender'
  */
 
 const EXPORT_COLUMN = 300;
+// The service diagram reads best wide: its boxes sit side by side in a row.
+const EXPORT_DIAGRAM_WIDTH = 1480;
 const EXPORT_SCALE = 2;
 // Browsers refuse canvases past roughly 16k pixels a side; beyond that the
 // image is still saved, as the SVG it was drawn from.
@@ -39,15 +44,17 @@ export const resolveMapExportWidth = (model: InfrastructureMapModel): number => 
   return columns * EXPORT_COLUMN + 56;
 };
 
+/** Small tiles hold twice as many to a box before the rest fold into one. */
+export const resolveDiagramTileLimit = (density: MapDensity): number =>
+  density === 'marks' ? DIAGRAM_MAX_TILES_PER_GROUP * 2 : DIAGRAM_MAX_TILES_PER_GROUP;
+
 export function buildMapExportSvg(
   model: InfrastructureMapModel,
   options: MapExportOptions,
 ): { svg: string; width: number; height: number } {
   const date = (options.now ?? new Date()).toISOString().slice(0, 10);
-  const layout =
-    options.view === 'networks' ? layoutInfrastructureNetworkMap : layoutInfrastructureMap;
-  const scene = layout(model, {
-    width: resolveMapExportWidth(model),
+  const layoutOptions: MapLayoutOptions = {
+    width: options.view === 'services' ? EXPORT_DIAGRAM_WIDTH : resolveMapExportWidth(model),
     density: options.density,
     header: {
       title: options.title,
@@ -56,7 +63,18 @@ export function buildMapExportSvg(
       ),
       footer: `Drawn by Pulse · ${date}`,
     },
-  });
+  };
+  const scene =
+    options.view === 'services'
+      ? layoutServiceDiagram(
+          buildServiceDiagram(model, {
+            maxTilesPerGroup: resolveDiagramTileLimit(options.density),
+          }),
+          layoutOptions,
+        )
+      : options.view === 'networks'
+        ? layoutInfrastructureNetworkMap(model, layoutOptions)
+        : layoutInfrastructureMap(model, layoutOptions);
   return {
     svg: renderMapSceneToSvg(scene, options.palette),
     width: scene.width,

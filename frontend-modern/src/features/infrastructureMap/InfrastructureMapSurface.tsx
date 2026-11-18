@@ -13,7 +13,8 @@ import { buildResourcePagePath } from '@/features/platformNavigation/resourcePag
 import { useObservedElementWidth } from '@/hooks/useObservedElementWidth';
 import { useResources } from '@/hooks/useResources';
 import { showError, showSuccess } from '@/utils/toast';
-import { downloadMapImage } from './infrastructureMapExport';
+import { layoutServiceDiagram } from './infrastructureMapDiagram';
+import { downloadMapImage, resolveDiagramTileLimit } from './infrastructureMapExport';
 import {
   layoutInfrastructureMap,
   layoutInfrastructureNetworkMap,
@@ -28,6 +29,7 @@ import {
   formatMapTotalLabel,
   type MapHealth,
 } from './infrastructureMapModel';
+import { buildServiceDiagram } from './infrastructureMapServices';
 import {
   MAP_FONT_FAMILY,
   MAP_HIT_ATTRIBUTE,
@@ -48,6 +50,11 @@ const LEGEND: Array<[MapHealth, string]> = [
 
 const VIEW_OPTIONS: Array<{ value: MapView; label: string; title: string }> = [
   {
+    value: 'services',
+    label: 'Services',
+    title: 'What the estate runs, boxed by what each thing is for',
+  },
+  {
     value: 'networks',
     label: 'Connections',
     title: 'Each network as a line, with every machine tied to the networks it is on',
@@ -65,7 +72,7 @@ export function InfrastructureMapSurface() {
   const darkMode = useDarkMode();
   const observed = useObservedElementWidth();
 
-  const [viewChoice, setViewChoice] = createSignal<MapView>('networks');
+  const [viewChoice, setViewChoice] = createSignal<MapView>('services');
   const [densityChoice, setDensityChoice] = createSignal<MapDensity | null>(null);
   const [namesHidden, setNamesHidden] = createSignal(false);
   const [exporting, setExporting] = createSignal(false);
@@ -81,14 +88,26 @@ export function InfrastructureMapSurface() {
   const density = createMemo(() => densityChoice() ?? resolveDefaultMapDensity(liveModel()));
   // With no address reported anywhere there are no networks to draw.
   const hasNetworks = createMemo(() => liveModel().segments.length > 0);
-  const view = createMemo<MapView>(() => (hasNetworks() ? viewChoice() : 'hosts'));
+  const viewOptions = createMemo(() =>
+    VIEW_OPTIONS.filter((option) => option.value !== 'networks' || hasNetworks()),
+  );
+  const view = createMemo<MapView>(() =>
+    viewChoice() === 'networks' && !hasNetworks() ? 'services' : viewChoice(),
+  );
   const palette = createMemo(() => (darkMode() ? MAP_PALETTES.dark : MAP_PALETTES.light));
 
   const scene = createMemo(() => {
     const width = observed.width();
     if (!width || model().isEmpty) return null;
+    const options = { width, density: density() };
+    if (view() === 'services') {
+      const diagram = buildServiceDiagram(model(), {
+        maxTilesPerGroup: resolveDiagramTileLimit(density()),
+      });
+      return layoutServiceDiagram(diagram, options);
+    }
     const layout = view() === 'networks' ? layoutInfrastructureNetworkMap : layoutInfrastructureMap;
-    return layout(model(), { width, density: density() });
+    return layout(model(), options);
   });
   const hits = createMemo(() => {
     const out: MapHit[] = [];
@@ -191,15 +210,13 @@ export function InfrastructureMapSurface() {
         </ul>
         <Show when={!liveModel().isEmpty}>
           <div class="ml-auto flex flex-wrap items-center gap-2">
-            <Show when={hasNetworks()}>
-              <FilterButtonGroup
-                variant="compact"
-                ariaLabel="What the map shows"
-                options={VIEW_OPTIONS}
-                value={view()}
-                onChange={(value) => setViewChoice(value)}
-              />
-            </Show>
+            <FilterButtonGroup
+              variant="compact"
+              ariaLabel="What the map shows"
+              options={viewOptions()}
+              value={view()}
+              onChange={(value) => setViewChoice(value)}
+            />
             <FilterButtonGroup
               variant="compact"
               ariaLabel="Map detail"
@@ -310,9 +327,11 @@ export function InfrastructureMapSurface() {
             )}
           </For>
           <li class="ml-auto">
-            {view() === 'networks'
-              ? 'Each line is a network. Machines are placed by the addresses they report. Pulse does not see firewall rules.'
-              : 'Everything here is read from what Pulse monitors. Select anything to open it.'}
+            {view() === 'services'
+              ? 'Apps are recognised by their image or name. The Internet is drawn but not monitored.'
+              : view() === 'networks'
+                ? 'Each line is a network. Machines are placed by the addresses they report. Pulse does not see firewall rules.'
+                : 'Everything here is read from what Pulse monitors. Select anything to open it.'}
           </li>
         </ul>
       </Show>

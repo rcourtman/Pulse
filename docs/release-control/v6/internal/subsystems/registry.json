@@ -9383,9 +9383,11 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
+              "frontend-modern/src/features/infrastructureMap/__tests__/infrastructureMapDiagram.test.ts",
               "frontend-modern/src/features/infrastructureMap/__tests__/infrastructureMapLayout.test.ts",
               "frontend-modern/src/features/infrastructureMap/__tests__/infrastructureMapModel.test.ts",
-              "frontend-modern/src/features/infrastructureMap/__tests__/infrastructureMapNetworks.test.ts"
+              "frontend-modern/src/features/infrastructureMap/__tests__/infrastructureMapNetworks.test.ts",
+              "frontend-modern/src/features/infrastructureMap/__tests__/infrastructureMapServices.test.ts"
             ]
           },
           {
