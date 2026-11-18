@@ -13213,6 +13213,19 @@ identity. The schema parity checker remains the executable cross-repository
 proof that the browser preview and private allowlisted receiver cannot drift
 from the public runtime payload.
 
+### Infrastructure map use is a closed aggregate contract at schema v24 (18 November 2026)
+
+`POST /api/usage/infrastructure-map` takes exactly
+`{ "activity": <closed enum> }`, where the value is `open`, `export` or
+`export_names_hidden`. It is
+authenticated with `monitoring:read`, rejects unknown fields, unknown values
+and trailing JSON with 400, and returns 204.
+`frontend-modern/src/api/infrastructureMapActivity.ts` deduplicates each value
+once per browser session before the request. `TelemetryPingPreview` gains the
+three `infrastructure_map_*_sessions_30d` integers. The Go sender, the Settings
+preview type and the Pulse Pro receiver keep the same names and types. No
+resource, name, address or network is part of the request or the heartbeat.
+
 ### Workload history telemetry is a closed aggregate contract at schema v16
 
 Schema v16 adds four numeric 30-day counters for workload-history preview,

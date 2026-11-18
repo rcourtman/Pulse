@@ -2015,6 +2015,7 @@ retain null counts for unmeasured/older installs and reject extra content.
 57. `pkg/securityutil/pinned_dial.go`
 58. `internal/config/patrol_investigation_telemetry.go`
 59. `internal/telemetry/patrol_investigation_runs.go`
+60. `internal/config/infrastructure_map_activity_tally.go`
 
 
 ## Shared Boundaries
@@ -4665,7 +4666,7 @@ carry the schema notice for the first release that includes this field.
 
 ### Telemetry ingestion matches the released sender while storage stays compatible
 
-The active outbound contract is schema v23. Schema v8 added content-free
+The active outbound contract is schema v24. Schema v8 added content-free
 approved-action refusal counters for target change, prerequisite failure, and
 invalid typed contract so agent-side pre-mutation failures no longer collapse
 into `other`. Schema v9 completes that split with a content-free `uncoded`
@@ -4684,6 +4685,20 @@ stored only as a bounded UTC-day count, and exported only as a rolling 30-day
 total. The contract forbids raw browser events, event-level clickstream data,
 guest/user identity, routes, selected ranges, cursor coordinates or values,
 interaction timing, and browser identity.
+Schema v24 adds three infrastructure map counts by the same route:
+`infrastructure_map_open_sessions_30d`,
+`infrastructure_map_export_sessions_30d` and
+`infrastructure_map_export_names_hidden_sessions_30d`. The browser sends one
+closed milestone per session to `POST /api/usage/infrastructure-map`.
+`internal/config/infrastructure_map_activity_tally.go` keeps bounded UTC-day
+counts and drops any key outside the closed set on read and on write. The map
+draws names, addresses and networks and the saved image contains them, so the
+contract forbids any of them, and the image, its size and its format, from the
+request, the tally and the payload. The receiver stores the fields only from
+schema v24 and caps saves with names hidden at the saves. Proofs:
+`TestInfrastructureMapActivityTally*`, `TestHandleInfrastructureMapActivity*`,
+`TestApplyInfrastructureMapTelemetrySnapshotAggregatesRollingCounts` and
+`TestPingCarriesInfrastructureMapCounts`.
 Schema v17 adds four closed Patrol posture strings and thirteen investigation
 outcome counts so the fleet can be read for local versus cloud model routes,
 approximate Patrol cost, effective autonomy mode, and how investigations end.
