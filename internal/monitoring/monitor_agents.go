@@ -2614,6 +2614,7 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 			RXBytes:   iface.RXBytes,
 			TXBytes:   iface.TXBytes,
 			SpeedMbps: iface.SpeedMbps,
+			LinkUp:    iface.LinkUp,
 		})
 	}
 
@@ -3491,6 +3492,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 			RXBytes:   nic.RXBytes,
 			TXBytes:   nic.TXBytes,
 			SpeedMbps: nic.SpeedMbps,
+			LinkUp:    nic.LinkUp,
 		})
 	}
 

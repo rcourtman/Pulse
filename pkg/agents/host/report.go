@@ -365,6 +365,9 @@ type NetworkInterface struct {
 	RXBytes   uint64   `json:"rxBytes,omitempty"`
 	TXBytes   uint64   `json:"txBytes,omitempty"`
 	SpeedMbps *int64   `json:"speedMbps,omitempty"`
+	// LinkUp is set only for a device-backed port: whether it has a link
+	// (cable and partner) right now. Software interfaces leave it nil.
+	LinkUp *bool `json:"linkUp,omitempty"`
 }
 
 // Sensors captures optional sensor readings reported by the agent.

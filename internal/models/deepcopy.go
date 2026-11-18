@@ -211,6 +211,7 @@ func cloneHostNetworkInterfaces(src []HostNetworkInterface) []HostNetworkInterfa
 		nicCopy := nic
 		nicCopy.Addresses = append([]string(nil), nic.Addresses...)
 		nicCopy.SpeedMbps = cloneInt64Ptr(nic.SpeedMbps)
+		nicCopy.LinkUp = cloneBoolPtr(nic.LinkUp)
 		dest[i] = nicCopy.NormalizeCollections()
 	}
 	return dest

@@ -505,14 +505,14 @@ func TestCollectNetworkReportsAddresslessPhysicalPortsAsInventory(t *testing.T) 
 			{Name: "veth100i0", BytesRecv: 50, BytesSent: 40},
 		}, nil
 	}
-	readLinkInfo = func(name string) (bool, int64) {
+	readLinkInfo = func(name string) linkInfo {
 		switch name {
 		case "eno1":
-			return true, 2500
+			return linkInfo{physical: true, speedMbps: 2500, linkUp: true}
 		case "enp2s0":
-			return true, 0 // no cable
+			return linkInfo{physical: true} // no cable
 		}
-		return false, 0
+		return linkInfo{}
 	}
 
 	got := collectNetwork(context.Background())
@@ -534,6 +534,15 @@ func TestCollectNetworkReportsAddresslessPhysicalPortsAsInventory(t *testing.T) 
 	}
 	if unplugged.SpeedMbps != nil {
 		t.Fatalf("unplugged port speed = %d, want none", *unplugged.SpeedMbps)
+	}
+	if eno1.LinkUp == nil || !*eno1.LinkUp {
+		t.Fatalf("eno1 link = %v, want up", eno1.LinkUp)
+	}
+	if unplugged.LinkUp == nil || *unplugged.LinkUp {
+		t.Fatalf("unplugged port link = %v, want down", unplugged.LinkUp)
+	}
+	if bridge.LinkUp != nil {
+		t.Fatalf("vmbr0 link = %v, want unknown for a software interface", *bridge.LinkUp)
 	}
 	if bridge.RXBytes != 900 || bridge.TXBytes != 800 || bridge.SpeedMbps != nil {
 		t.Fatalf("vmbr0 = %+v, want its counters and no speed", bridge)
@@ -560,7 +569,7 @@ func TestCollectNetworkReportsSpeedOfAnAddressedPhysicalPort(t *testing.T) {
 	netIOCounters = func(context.Context, bool) ([]gonet.IOCountersStat, error) {
 		return []gonet.IOCountersStat{{Name: "eth0", BytesRecv: 7, BytesSent: 8}}, nil
 	}
-	readLinkInfo = func(string) (bool, int64) { return true, 10000 }
+	readLinkInfo = func(string) linkInfo { return linkInfo{physical: true, speedMbps: 10000, linkUp: true} }
 
 	got := collectNetwork(context.Background())
 	if len(got) != 1 || got[0].SpeedMbps == nil || *got[0].SpeedMbps != 10000 || got[0].RXBytes != 7 {
@@ -570,7 +579,7 @@ func TestCollectNetworkReportsSpeedOfAnAddressedPhysicalPort(t *testing.T) {
 
 func TestReadPhysicalLinkInfoFromSysfs(t *testing.T) {
 	root := t.TempDir()
-	port := func(name, speed string, device bool) {
+	port := func(name, speed, carrier string, device bool) {
 		t.Helper()
 		dir := filepath.Join(root, name)
 		if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -581,36 +590,41 @@ func TestReadPhysicalLinkInfoFromSysfs(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
-		if speed != "" {
-			if err := os.WriteFile(filepath.Join(dir, "speed"), []byte(speed+"\n"), 0o644); err != nil {
+		for file, value := range map[string]string{"speed": speed, "carrier": carrier} {
+			if value == "" {
+				continue
+			}
+			if err := os.WriteFile(filepath.Join(dir, file), []byte(value+"\n"), 0o644); err != nil {
 				t.Fatal(err)
 			}
 		}
 	}
-	port("eno1", "2500", true)
-	port("enp3s0", "-1", true)        // cable out
-	port("wlp2s0", "", true)          // Wi-Fi has no readable speed
-	port("veth100i0", "10000", false) // software link with an invented speed
-	port("vmbr0", "", false)
+	port("eno1", "2500", "1", true)
+	port("enp3s0", "-1", "0", true)        // cable out
+	port("enp4s0", "1000", "0", true)      // stale speed left by the driver
+	port("enp5s0", "", "", true)           // administratively down: neither file reads
+	port("wlp2s0", "", "1", true)          // associated Wi-Fi has no readable speed
+	port("veth100i0", "10000", "1", false) // software link with an invented speed
+	port("vmbr0", "", "1", false)
 
 	cases := []struct {
-		name     string
-		physical bool
-		speed    int64
+		name string
+		want linkInfo
 	}{
-		{"eno1", true, 2500},
-		{"enp3s0", true, 0},
-		{"wlp2s0", true, 0},
-		{"veth100i0", false, 0},
-		{"vmbr0", false, 0},
-		{"missing0", false, 0},
-		{"../eno1", false, 0},
-		{"..", false, 0},
+		{"eno1", linkInfo{physical: true, speedMbps: 2500, linkUp: true}},
+		{"enp3s0", linkInfo{physical: true}},
+		{"enp4s0", linkInfo{physical: true}},
+		{"enp5s0", linkInfo{physical: true}},
+		{"wlp2s0", linkInfo{physical: true, linkUp: true}},
+		{"veth100i0", linkInfo{}},
+		{"vmbr0", linkInfo{}},
+		{"missing0", linkInfo{}},
+		{"../eno1", linkInfo{}},
+		{"..", linkInfo{}},
 	}
 	for _, tc := range cases {
-		physical, speed := readPhysicalLinkInfoFrom(root, tc.name)
-		if physical != tc.physical || speed != tc.speed {
-			t.Errorf("%s = (%v, %d), want (%v, %d)", tc.name, physical, speed, tc.physical, tc.speed)
+		if got := readPhysicalLinkInfoFrom(root, tc.name); got != tc.want {
+			t.Errorf("%s = %+v, want %+v", tc.name, got, tc.want)
 		}
 	}
 }

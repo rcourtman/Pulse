@@ -4247,6 +4247,7 @@ func hostNetworkInterfacesFromReadStateView(interfaces []unifiedresources.Networ
 			RXBytes:   iface.RXBytes,
 			TXBytes:   iface.TXBytes,
 			SpeedMbps: int64PtrCopy(iface.SpeedMbps),
+			LinkUp:    boolPtrCopy(iface.LinkUp),
 		})
 	}
 	return out
@@ -4635,6 +4636,14 @@ func maxInt64(a, b int64) int64 {
 		return a
 	}
 	return b
+}
+
+func boolPtrCopy(in *bool) *bool {
+	if in == nil {
+		return nil
+	}
+	out := *in
+	return &out
 }
 
 func int64PtrCopy(in *int64) *int64 {

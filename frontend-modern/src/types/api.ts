@@ -604,6 +604,8 @@ export interface HostNetworkInterface {
   bridge?: string;
   vlan?: number;
   firewall?: boolean;
+  /** A physical port's link state from its agent; absent when unknown. */
+  linkUp?: boolean;
 }
 
 export interface HostSensorSummary {

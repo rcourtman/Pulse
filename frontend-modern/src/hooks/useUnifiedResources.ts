@@ -95,6 +95,7 @@ type APIAgentNetworkInterface = {
   rxBytes?: number;
   txBytes?: number;
   speedMbps?: number;
+  linkUp?: boolean;
 };
 
 type APIAgentDiskIO = {

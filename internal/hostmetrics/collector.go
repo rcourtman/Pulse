@@ -542,15 +542,21 @@ func collectNetwork(ctx context.Context) []agentshost.NetworkInterface {
 				addresses = append(addresses, addr.Addr)
 			}
 		}
-		physical, speedMbps := readLinkInfo(iface.Name)
+		link := readLinkInfo(iface.Name)
+		physical := link.physical
 
 		ifaceEntry := agentshost.NetworkInterface{
 			Name:      iface.Name,
 			MAC:       iface.HardwareAddr,
 			Addresses: addresses,
 		}
-		if speedMbps > 0 {
-			ifaceEntry.SpeedMbps = &speedMbps
+		if link.speedMbps > 0 {
+			speed := link.speedMbps
+			ifaceEntry.SpeedMbps = &speed
+		}
+		if physical {
+			linkUp := link.linkUp
+			ifaceEntry.LinkUp = &linkUp
 		}
 
 		switch {
@@ -579,37 +585,54 @@ func collectNetwork(ctx context.Context) []agentshost.NetworkInterface {
 
 const sysClassNet = "/sys/class/net"
 
-// readPhysicalLinkInfo reports whether a network interface is backed by a
-// device (a NIC, Wi-Fi card, USB adapter or a VM's virtual NIC) rather than
-// a software interface such as a bridge, bond, veth, tap or tunnel, and its
-// negotiated link speed in Mb/s when the driver reports one. It reads Linux
-// sysfs; elsewhere the path is absent and every interface reads as software.
+// linkInfo is what sysfs says about one network interface.
+type linkInfo struct {
+	// physical is true for a port backed by a device (a NIC, Wi-Fi card, USB
+	// adapter or a VM's virtual NIC) rather than a software interface such
+	// as a bridge, bond, veth, tap or tunnel.
+	physical bool
+	// speedMbps is the negotiated link speed, 0 when the driver reports none.
+	speedMbps int64
+	// linkUp is true when the port has carrier: a cable and a live partner,
+	// or an associated Wi-Fi link.
+	linkUp bool
+}
+
+// readPhysicalLinkInfo reads an interface's link facts from Linux sysfs;
+// elsewhere the path is absent and every interface reads as software.
 //
 // Software interfaces return no speed even when the kernel invents one (a
 // veth reads 10000), so a container never claims a 10G link.
-func readPhysicalLinkInfo(name string) (physical bool, speedMbps int64) {
+func readPhysicalLinkInfo(name string) linkInfo {
 	return readPhysicalLinkInfoFrom(sysClassNet, name)
 }
 
-func readPhysicalLinkInfoFrom(root, name string) (bool, int64) {
+func readPhysicalLinkInfoFrom(root, name string) linkInfo {
 	if name == "" || name == "." || name == ".." || strings.ContainsAny(name, `/\`) {
-		return false, 0
+		return linkInfo{}
 	}
 	dir := filepath.Join(root, name)
 	if _, err := os.Stat(filepath.Join(dir, "device")); err != nil {
-		return false, 0
+		return linkInfo{}
+	}
+	info := linkInfo{physical: true}
+	// carrier reads 1 with a link and 0 without; an administratively down
+	// port fails the read with EINVAL, which is no link either.
+	if raw, err := os.ReadFile(filepath.Join(dir, "carrier")); err == nil {
+		info.linkUp = strings.TrimSpace(string(raw)) == "1"
 	}
 	// A link that is down, or a driver without link settings (Wi-Fi), fails
 	// the read with EINVAL or returns -1.
-	raw, err := os.ReadFile(filepath.Join(dir, "speed"))
-	if err != nil {
-		return true, 0
+	if raw, err := os.ReadFile(filepath.Join(dir, "speed")); err == nil {
+		if speed, err := strconv.ParseInt(strings.TrimSpace(string(raw)), 10, 64); err == nil && speed > 0 {
+			info.speedMbps = speed
+		}
 	}
-	speed, err := strconv.ParseInt(strings.TrimSpace(string(raw)), 10, 64)
-	if err != nil || speed <= 0 {
-		return true, 0
+	// Without a link the driver's speed is a leftover, not a fact.
+	if !info.linkUp {
+		info.speedMbps = 0
 	}
-	return true, speed
+	return info
 }
 
 func isLoopback(flags []string) bool {

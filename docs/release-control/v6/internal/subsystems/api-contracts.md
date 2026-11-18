@@ -14895,3 +14895,9 @@ conflicts 409, invalid inputs 400 and unavailable evidence a redacted 503.
 `internal/api/notifications_org_authority_test.go` covers own/foreign/default
 organization separation, viewer refusal, strict input and idempotent recovery.
 Notification runtime tests independently exercise real queue/provider evidence.
+
+### Network interfaces carry optional `linkUp` (18 November 2026)
+
+Host and unified network interfaces gain an optional boolean `linkUp`
+(`omitempty`), set only from a host agent for a physical port. Absent means
+unknown, not down; existing fields and their meaning are unchanged.
