@@ -5,6 +5,7 @@ import EyeOffIcon from 'lucide-solid/icons/eye-off';
 import MapIcon from 'lucide-solid/icons/map';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { FilterButtonGroup } from '@/components/shared/FilterButtonGroup';
+import { PageHeader } from '@/components/shared/PageHeader';
 import { TooltipPortal } from '@/components/shared/TooltipPortal';
 import { buildInfrastructureWorkspacePath } from '@/components/Settings/infrastructureWorkspaceModel';
 import { useDarkMode } from '@/contexts/appRuntime';
@@ -170,10 +171,8 @@ export function InfrastructureMapSurface() {
   return (
     <div class="flex flex-col gap-3" data-testid="infrastructure-map">
       <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <h1 class="flex items-center gap-2 text-sm font-semibold text-base-content">
-          <MapIcon class="h-4 w-4 text-muted" aria-hidden="true" />
-          Map
-        </h1>
+        {/* AppLayout already titles the tab for this route with the brand name. */}
+        <PageHeader title="Map" updateDocumentTitle={false} />
         <ul class="flex flex-wrap items-center gap-1.5" aria-label="What is on the map">
           <For each={liveModel().totals}>
             {(total) => (

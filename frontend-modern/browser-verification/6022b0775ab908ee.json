@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "base_sha": "247f807c723a7767c24bdb4a3c82f4347ef6679f",
+  "verified_at": "2026-11-18T08:32:36Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapSurface.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapSurface.tsx": "399db720d92925a24351b58c9be7e5b36453bf1220029c3cf03ed70c9daf377f"
+  },
+  "routes": [
+    "/map",
+    "/vmware/overview?resource=<vm id>"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "private mock backend on 127.0.0.1:7691 with a homelab-sized estate (22 hosts, 33 VMs, 27 LXCs, 36 containers) served through the sidecar's Vite dev server in the in-app browser, final runtime bytes",
+    "1440 light theme: the page shows one h1 reading Map drawn by the shared page header, on one 32px row with the nine totals pills and the controls at the right; the browser tab title still reads Map \u00b7 Pulse; the drawing is unchanged (1732px tall, 183 links)",
+    "1280 dark theme: title and totals on the first row, the controls wrap to a second row at the right (68px in all); the edge tab is shown; no horizontal scroll",
+    "375px phone, light theme: the title sits on its own row with the totals wrapping below it and the controls below those; document scroll width 375, the header map button shown and the edge tab hidden",
+    "console: no error after the final reload; one PageHeader is not defined error appeared earlier from hot reload between two edits of the same file and did not recur",
+    "not checked in a browser: kiosk mode (the shared header hides itself there), Firefox and Safari"
+  ],
+  "interactions": [
+    "opened /map from the address bar at each width and read the header's height, the h1 count and the document scroll width",
+    "switched to Hosts and back to Connections with the toolbar buttons and read the drawing's height and link count after each (Hosts 1471px with 190 links)",
+    "pressed Hide names and read the drawing text: no IPv4 address remained and aria-pressed was true; pressed again to restore",
+    "clicked the edge-api-01 guest row: the app navigated to /vmware/overview?resource=<its id> and that guest's drawer opened"
+  ]
+}
