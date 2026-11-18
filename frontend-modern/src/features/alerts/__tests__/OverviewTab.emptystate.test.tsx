@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { DEFAULT_LOCALE, setActiveLocale } from '@/i18n';
 
 vi.mock('@solidjs/router', () => ({
@@ -8,9 +8,10 @@ vi.mock('@solidjs/router', () => ({
 }));
 
 const getConfigMock = vi.hoisted(() => vi.fn());
+const activateMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/api/alerts', () => ({
-  AlertsAPI: { getConfig: getConfigMock },
+  AlertsAPI: { getConfig: getConfigMock, activate: activateMock },
 }));
 
 vi.mock('@/stores/notifications', () => ({
@@ -28,6 +29,8 @@ vi.mock('@/components/Alerts/InvestigateAlertButton', () => ({
 import { OverviewTab } from '../OverviewTab';
 import { createAlertAcknowledgementRequests } from '@/stores/alertAcknowledgementRequests';
 import { useAlertsActivation } from '@/stores/alertsActivation';
+import { eventBus } from '@/stores/events';
+import { setOrgID } from '@/utils/apiClient';
 
 function defaultProps(overrides: Record<string, unknown> = {}) {
   return {
@@ -101,6 +104,8 @@ describe('OverviewTab empty state', () => {
 describe('OverviewTab delivery paused banner', () => {
   afterEach(() => {
     cleanup();
+    setOrgID(null);
+    eventBus.emit('org_switched');
   });
 
   it.each([
@@ -117,5 +122,33 @@ describe('OverviewTab delivery paused banner', () => {
 
     expect(screen.getByText(/Notification delivery is turned off\./)).toBeInTheDocument();
     expect(screen.queryByText(/for this install yet/)).not.toBeInTheDocument();
+  });
+
+  it('keeps the new workspace resume button usable while the old request is outstanding', async () => {
+    setOrgID('west');
+    getConfigMock.mockClear();
+    getConfigMock.mockResolvedValue({ enabled: true, activationState: 'pending_review' });
+    let finishOutgoing!: (result: { success: boolean }) => void;
+    activateMock.mockReturnValueOnce(
+      new Promise<{ success: boolean }>((resolve) => {
+        finishOutgoing = resolve;
+      }),
+    );
+    const store = useAlertsActivation();
+    await store.refreshConfig();
+    render(() => <OverviewTab {...defaultProps()} />);
+
+    const resume = () => screen.getByRole('button', { name: 'Turn on delivery' });
+    fireEvent.click(resume());
+    expect(resume()).toBeDisabled();
+    setOrgID('east');
+    eventBus.emit('org_switched', 'east');
+    await store.refreshConfig();
+    expect(resume()).toBeEnabled();
+
+    finishOutgoing({ success: true });
+    await Promise.resolve();
+    expect(getConfigMock).toHaveBeenCalledTimes(2);
+    expect(resume()).toBeEnabled();
   });
 });

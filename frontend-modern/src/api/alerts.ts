@@ -172,8 +172,11 @@ export class AlertsAPI {
     }) as Promise<{ success: boolean; configured: boolean }>;
   }
 
-  static async activate(): Promise<{ success: boolean; state: string; activationTime?: string }> {
+  static async activate(
+    options?: APIContextOptions,
+  ): Promise<{ success: boolean; state: string; activationTime?: string }> {
     return apiFetchJSON(`${this.baseUrl}/activate`, {
+      ...options,
       method: 'POST',
     });
   }

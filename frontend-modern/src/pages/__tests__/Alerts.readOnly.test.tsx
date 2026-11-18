@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { Alerts } from '@/pages/Alerts';
@@ -6,6 +6,8 @@ import { createAlertAcknowledgementRequests } from '@/stores/alertAcknowledgemen
 import { createSignal, onCleanup } from 'solid-js';
 import type { SecurityStatus } from '@/types/config';
 import { eventBus } from '@/stores/events';
+import { notificationStore } from '@/stores/notifications';
+import { getAlertDeactivationSuccess } from '@/utils/alertActivationPresentation';
 import { setOrgID } from '@/utils/apiClient';
 
 const navigateSpy = vi.hoisted(() => vi.fn());
@@ -16,6 +18,8 @@ const leaveGuards = vi.hoisted(() => ({
 }));
 const presentationPolicyIsReadOnlyMock = vi.hoisted(() => vi.fn(() => false));
 const activationStateMock = vi.hoisted(() => vi.fn(() => 'active'));
+const activateMock = vi.hoisted(() => vi.fn(async () => true));
+const deactivateMock = vi.hoisted(() => vi.fn(async () => true));
 const locationState = vi.hoisted(() => ({
   pathname: '/alerts',
   hash: '',
@@ -89,8 +93,8 @@ vi.mock('@/stores/alertsActivation', () => ({
     detectionEnabled: () => true,
     notificationDeliveryEnabled: () => activationStateMock() === 'active',
     isLoading: () => false,
-    activate: vi.fn(async () => true),
-    deactivate: vi.fn(async () => true),
+    activate: activateMock,
+    deactivate: deactivateMock,
     refreshConfig: vi.fn(async () => undefined),
     config: () => null,
   }),
@@ -135,6 +139,10 @@ describe('Alerts read-only presentation', () => {
     presentationPolicyIsReadOnlyMock.mockReturnValue(false);
     activationStateMock.mockReset();
     activationStateMock.mockReturnValue('active');
+    activateMock.mockReset().mockResolvedValue(true);
+    deactivateMock.mockReset().mockResolvedValue(true);
+    vi.mocked(notificationStore.success).mockClear();
+    vi.mocked(notificationStore.error).mockClear();
     overviewTabSpy.mockClear();
     historyTabSpy.mockClear();
     configurationSurfaceSpy.mockClear();
@@ -392,4 +400,40 @@ describe('Alerts read-only presentation', () => {
     expect(screen.getByRole('checkbox', { name: 'Send notifications' })).toBeChecked();
     expect(screen.queryByText('Notifications enabled')).not.toBeInTheDocument();
   });
+
+  it.each([true, false])(
+    'only gives delivery feedback to the initiating workspace (old save: %s)',
+    async (success) => {
+      let finishOutgoing!: (result: boolean) => void;
+      deactivateMock.mockReturnValueOnce(
+        new Promise<boolean>((resolve) => {
+          finishOutgoing = resolve;
+        }),
+      );
+      setOrgID('west');
+      render(() => <Alerts securityStatus={admittedStatus} />);
+      const toggle = screen.getByRole('checkbox', { name: 'Send notifications' });
+      fireEvent.click(toggle);
+      expect(deactivateMock).toHaveBeenCalledOnce();
+
+      // An equal-looking policy still belongs to a different editor. Do not
+      // turn a retired result into either a success or a failure here.
+      setOrgID('east');
+      eventBus.emit('org_switched', 'east');
+      finishOutgoing(success);
+      await Promise.resolve();
+      expect(notificationStore.success).not.toHaveBeenCalled();
+      expect(notificationStore.error).not.toHaveBeenCalled();
+
+      // The destination's own action still gives the existing feedback.
+      fireEvent.change(toggle, { target: { checked: false } });
+      await waitFor(() =>
+        expect(notificationStore.success).toHaveBeenCalledExactlyOnceWith(
+          getAlertDeactivationSuccess(),
+        ),
+      );
+      expect(deactivateMock).toHaveBeenCalledTimes(2);
+      expect(notificationStore.error).not.toHaveBeenCalled();
+    },
+  );
 });

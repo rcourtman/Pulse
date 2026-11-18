@@ -64,13 +64,16 @@ export function Alerts(props: { securityStatus?: SecurityStatus | null }) {
   const navigate = useNavigate();
   const location = useLocation();
   const alertsActivation = useAlertsActivation();
-  const [isSwitchingActivation, setIsSwitchingActivation] = createSignal(false);
   const readOnlySession = createMemo(() => presentationPolicyIsReadOnly());
   const [workspaceRevision, setWorkspaceRevision] = createSignal(0);
+  let disposed = false;
   const unsubscribeWorkspace = eventBus.on('org_switched', () => {
     setWorkspaceRevision((revision) => revision + 1);
   });
-  onCleanup(unsubscribeWorkspace);
+  onCleanup(() => {
+    disposed = true;
+    unsubscribeWorkspace();
+  });
   // A copied status with the same facts must preserve drafts and focus. A new
   // reader must never inherit destination credentials or an in-flight editor.
   const configurationReader = createMemo(() => {
@@ -99,44 +102,30 @@ export function Alerts(props: { securityStatus?: SecurityStatus | null }) {
   const alertActivationPresentation = createMemo(() =>
     getAlertActivationPresentation({
       isActive: isNotificationDeliveryActive(),
-      isBusy: alertsActivation.isLoading() || isSwitchingActivation(),
+      isBusy: alertsActivation.isLoading(),
     }),
   );
 
-  const handleActivateAlerts = async () => {
-    if (alertsActivation.isLoading() || isSwitchingActivation()) {
-      return;
-    }
-    setIsSwitchingActivation(true);
+  const handleNotificationDeliveryChange = async (enable: boolean) => {
+    if (alertsActivation.isLoading() || readOnlySession()) return;
+    const revision = workspaceRevision();
+    const orgID = getOrgID();
+    const ownsFeedback = () =>
+      !disposed && workspaceRevision() === revision && getOrgID() === orgID && !readOnlySession();
+    const successMessage = enable ? getAlertActivationSuccess : getAlertDeactivationSuccess;
+    const failureMessage = enable ? getAlertActivationFailure : getAlertDeactivationFailure;
     try {
-      const success = await alertsActivation.activate();
+      const success = await (enable ? alertsActivation.activate() : alertsActivation.deactivate());
+      if (!ownsFeedback()) return;
       if (success) {
-        notificationStore.success(getAlertActivationSuccess());
+        notificationStore.success(successMessage());
       } else {
-        notificationStore.error(getAlertActivationFailure());
-      }
-    } finally {
-      setIsSwitchingActivation(false);
-    }
-  };
-
-  const handleDeactivateAlerts = async () => {
-    if (isSwitchingActivation()) {
-      return;
-    }
-    setIsSwitchingActivation(true);
-    try {
-      const success = await alertsActivation.deactivate();
-      if (success) {
-        notificationStore.success(getAlertDeactivationSuccess());
-      } else {
-        notificationStore.error(getAlertDeactivationFailure());
+        notificationStore.error(failureMessage());
       }
     } catch (error) {
-      logger.error('Deactivate alerts failed', error);
-      notificationStore.error(getAlertDeactivationFailure());
-    } finally {
-      setIsSwitchingActivation(false);
+      if (!ownsFeedback()) return;
+      logger.error('Failed to change alert notification delivery', error);
+      notificationStore.error(failureMessage());
     }
   };
 
@@ -275,13 +264,9 @@ export function Alerts(props: { securityStatus?: SecurityStatus | null }) {
                   type="checkbox"
                   class="sr-only peer"
                   checked={isNotificationDeliveryActive()}
-                  disabled={alertsActivation.isLoading() || isSwitchingActivation()}
+                  disabled={alertsActivation.isLoading()}
                   onChange={(event) => {
-                    if (event.currentTarget.checked) {
-                      void handleActivateAlerts();
-                    } else {
-                      void handleDeactivateAlerts();
-                    }
+                    void handleNotificationDeliveryChange(event.currentTarget.checked);
                   }}
                 />
                 <span class={alertActivationPresentation().trackClass}>

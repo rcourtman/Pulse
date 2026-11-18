@@ -2,7 +2,7 @@ import { batch, createSignal } from 'solid-js';
 import { AlertsAPI } from '@/api/alerts';
 import type { AlertConfig, ActivationState as ActivationStateType } from '@/types/alerts';
 import type { Resource } from '@/types/resource';
-import { getOrgID } from '@/utils/apiClient';
+import { getOrgID, type APIContextOptions } from '@/utils/apiClient';
 import { setGlobalAlertsDetectionEnabled } from '@/utils/alertsActivation';
 import { FACTORY_NODE_DEFAULTS } from '@/utils/alertThresholdDefaults';
 import { logger } from '@/utils/logger';
@@ -18,8 +18,10 @@ import { eventBus } from './events';
 // Create signals for activation state
 const [config, setConfig] = createSignal<AlertConfig | null>(null);
 const [activationState, setActivationStateSignal] = createSignal<ActivationStateType | null>(null);
-const [isLoading, setIsLoading] = createSignal(false);
+const [isReadingConfig, setIsReadingConfig] = createSignal(false);
+const [isWritingActivation, setIsWritingActivation] = createSignal(false);
 const [lastError, setLastError] = createSignal<string | null>(null);
+const isLoading = () => isReadingConfig() || isWritingActivation();
 const detectionEnabled = () => config()?.enabled ?? true;
 const notificationDeliveryEnabled = () => detectionEnabled() && activationState() === 'active';
 
@@ -27,16 +29,8 @@ const applyActivationState = (state: ActivationStateType | null) => {
   setActivationStateSignal(state);
 };
 
-const ensureConfigLoaded = async (): Promise<AlertConfig | null> => {
-  let current = config();
-  if (!current) {
-    await refreshConfig();
-    current = config();
-  }
-  return current;
-};
-
 let configRead: AbortController | undefined;
+let activationWrite: AbortController | undefined;
 
 // Refresh config from API
 const refreshConfig = async (): Promise<void> => {
@@ -47,7 +41,7 @@ const refreshConfig = async (): Promise<void> => {
   const orgID = getOrgID();
   const ownsRead = () => !signal.aborted && getOrgID() === orgID;
   try {
-    setIsLoading(true);
+    setIsReadingConfig(true);
     setLastError(null);
     const alertConfig = await AlertsAPI.getConfig({
       signal,
@@ -70,57 +64,73 @@ const refreshConfig = async (): Promise<void> => {
   } finally {
     if (configRead === controller) {
       configRead = undefined;
-      setIsLoading(false);
+      setIsReadingConfig(false);
     }
   }
 };
 
-// Activate alert notifications
-const activate = async (): Promise<boolean> => {
+const runActivationWrite = async (
+  failureMessage: string,
+  write: (options: APIContextOptions, ownsWrite: () => boolean) => Promise<boolean>,
+): Promise<boolean> => {
+  if (activationWrite) return false;
+  const controller = new AbortController();
+  activationWrite = controller;
+  const orgID = getOrgID();
+  const ownsWrite = () => activationWrite === controller && getOrgID() === orgID;
   try {
-    setIsLoading(true);
-    setLastError(null);
-    const result = await AlertsAPI.activate();
-
-    if (result.success) {
-      // Refresh config to get updated state
-      await refreshConfig();
-      return true;
-    }
-    return false;
+    batch(() => {
+      setIsWritingActivation(true);
+      setLastError(null);
+    });
+    if (!ownsWrite()) return false;
+    // An unbound workspace still sends no org header. Never replay an explicit
+    // confirmation through the client's automatic org or CSRF recovery.
+    return await write(
+      { expectedOrgID: orgID ?? undefined, retry: false, signal: controller.signal },
+      ownsWrite,
+    );
   } catch (error) {
-    logger.error('Failed to activate alerts:', error);
-    setLastError(error instanceof Error ? error.message : 'Unknown error');
+    if (ownsWrite()) {
+      logger.error(failureMessage, error);
+      setLastError(error instanceof Error ? error.message : 'Unknown error');
+    }
     return false;
   } finally {
-    setIsLoading(false);
+    if (activationWrite === controller) {
+      activationWrite = undefined;
+      setIsWritingActivation(false);
+    }
   }
 };
 
-const updateActivationState = async (state: ActivationStateType): Promise<boolean> => {
-  try {
-    setIsLoading(true);
-    setLastError(null);
-    const current = await ensureConfigLoaded();
+// A completed outgoing activation must not cause a follow-up read for its
+// replacement workspace.
+const activate = () =>
+  runActivationWrite('Failed to activate alerts:', async (options, ownsWrite) => {
+    const result = await AlertsAPI.activate(options);
+    if (!ownsWrite() || !result.success) return false;
+    await refreshConfig();
+    return ownsWrite();
+  });
+
+const updateActivationState = (state: ActivationStateType) =>
+  runActivationWrite('Failed to update activation state:', async (options, ownsWrite) => {
+    if (!config()) await refreshConfig();
+    if (!ownsWrite()) return false;
+    const current = config();
     if (!current) {
       throw new Error('Alert configuration is unavailable');
     }
     const updated: AlertConfig = { ...current, activationState: state };
-    const result = await AlertsAPI.updateConfig(updated);
-    if (!result.success) {
-      return false;
-    }
-    setConfig(updated);
-    applyActivationState(state);
+    const result = await AlertsAPI.updateConfig(updated, options);
+    if (!ownsWrite() || !result.success) return false;
+    batch(() => {
+      setConfig(updated);
+      applyActivationState(state);
+    });
     return true;
-  } catch (error) {
-    logger.error('Failed to update activation state:', error);
-    setLastError(error instanceof Error ? error.message : 'Unknown error');
-    return false;
-  } finally {
-    setIsLoading(false);
-  }
-};
+  });
 
 const deactivate = async (): Promise<boolean> => updateActivationState('pending_review');
 
@@ -185,11 +195,18 @@ const getTrueNASDiskTemperatureThresholds = (disk: Pick<Resource, 'id' | 'physic
 eventBus.on('org_switched', () => {
   configRead?.abort();
   configRead = undefined;
-  setConfig(null);
-  setGlobalAlertsDetectionEnabled(null);
-  applyActivationState(null);
-  setLastError(null);
-  setIsLoading(false);
+  // Retire the outgoing browser operation, not the server-side write it may
+  // already have received. Even a response that outlives abort loses ownership.
+  activationWrite?.abort();
+  activationWrite = undefined;
+  batch(() => {
+    setConfig(null);
+    setGlobalAlertsDetectionEnabled(null);
+    applyActivationState(null);
+    setLastError(null);
+    setIsReadingConfig(false);
+    setIsWritingActivation(false);
+  });
 });
 
 // Export the store
@@ -200,6 +217,7 @@ export const useAlertsActivation = () => ({
   detectionEnabled,
   notificationDeliveryEnabled,
   isLoading,
+  isWritingActivation,
   lastError,
 
   // Computed

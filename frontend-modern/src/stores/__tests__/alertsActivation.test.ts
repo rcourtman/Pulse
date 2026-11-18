@@ -16,6 +16,21 @@ const alertConfig = (
     activationState,
   }) as AlertConfig;
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason: Error) => void;
+  const promise = new Promise<T>((done, fail) => {
+    resolve = done;
+    reject = fail;
+  });
+  return { promise, resolve, reject };
+}
+
+function switchWorkspace(orgID: string) {
+  setOrgID(orgID);
+  eventBus.emit('org_switched', orgID);
+}
+
 describe('alerts activation ownership boundary', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -170,4 +185,153 @@ describe('alerts activation ownership boundary', () => {
     expect(new Headers(fetchMock.mock.calls[0]?.[1]?.headers).has('X-Pulse-Org-ID')).toBe(false);
     expect(getOrgID()).toBeNull();
   });
+
+  it('does not install a retired delivery save over the destination policy', async () => {
+    switchWorkspace('west');
+    const west = alertConfig('active');
+    const east = alertConfig('snoozed', false);
+    vi.spyOn(AlertsAPI, 'getConfig').mockResolvedValueOnce(west).mockResolvedValueOnce(east);
+    const pending = deferred<{ success: boolean }>();
+    const save = vi.spyOn(AlertsAPI, 'updateConfig').mockReturnValue(pending.promise);
+    const store = useAlertsActivation();
+    await store.refreshConfig();
+
+    const outgoing = store.deactivate();
+    expect(store.isLoading()).toBe(true);
+    expect(save).toHaveBeenCalledWith(
+      { ...west, activationState: 'pending_review' },
+      { expectedOrgID: 'west', retry: false, signal: expect.any(AbortSignal) },
+    );
+    const signal = save.mock.calls[0]?.[1]?.signal;
+    switchWorkspace('east');
+    expect(signal?.aborted).toBe(true);
+    expect(store.isLoading()).toBe(false);
+    await store.refreshConfig();
+
+    // Even a response which was already queued before abort must be ignored.
+    pending.resolve({ success: true });
+    expect(await outgoing).toBe(false);
+    expect(store.config()).toBe(east);
+    expect(store.detectionEnabled()).toBe(false);
+    expect(store.activationState()).toBe('snoozed');
+    expect(store.notificationDeliveryEnabled()).toBe(false);
+    expect(window.__pulseAlertsDetectionEnabled).toBe(false);
+    expect(store.lastError()).toBeNull();
+    expect(save).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not report a retired write error or clear a destination read in progress', async () => {
+    switchWorkspace('west');
+    const east = deferred<AlertConfig>();
+    vi.spyOn(AlertsAPI, 'getConfig')
+      .mockResolvedValueOnce(alertConfig('active'))
+      .mockReturnValueOnce(east.promise);
+    const pending = deferred<{ success: boolean }>();
+    vi.spyOn(AlertsAPI, 'updateConfig').mockReturnValue(pending.promise);
+    const store = useAlertsActivation();
+    await store.refreshConfig();
+
+    const outgoing = store.snooze();
+    switchWorkspace('east');
+    const destination = store.refreshConfig();
+    pending.reject(new Error('outgoing save failed'));
+    expect(await outgoing).toBe(false);
+    expect(store.lastError()).toBeNull();
+    expect(store.isLoading()).toBe(true);
+    east.resolve(alertConfig('active'));
+    await destination;
+    expect(store.isLoading()).toBe(false);
+    expect(store.notificationDeliveryEnabled()).toBe(true);
+  });
+
+  it('does not issue an unsent confirmation with the new workspace config', async () => {
+    switchWorkspace('west');
+    const westRead = deferred<AlertConfig>();
+    const east = alertConfig('active', false);
+    vi.spyOn(AlertsAPI, 'getConfig')
+      .mockReturnValueOnce(westRead.promise)
+      .mockResolvedValueOnce(east);
+    const save = vi.spyOn(AlertsAPI, 'updateConfig');
+    const store = useAlertsActivation();
+
+    const confirmation = store.deactivate();
+    switchWorkspace('east');
+    await store.refreshConfig();
+    westRead.resolve(alertConfig('active'));
+
+    expect(await confirmation).toBe(false);
+    expect(store.config()).toBe(east);
+    expect(save).not.toHaveBeenCalled();
+    expect(store.lastError()).toBeNull();
+  });
+
+  it('does not refresh from an old activation or clear a newer write after switching back', async () => {
+    switchWorkspace('west');
+    const west = alertConfig('active');
+    const read = vi.spyOn(AlertsAPI, 'getConfig').mockResolvedValue(west);
+    const activation = deferred<Awaited<ReturnType<typeof AlertsAPI.activate>>>();
+    const activate = vi.spyOn(AlertsAPI, 'activate').mockReturnValue(activation.promise);
+    const nextSave = deferred<{ success: boolean }>();
+    const update = vi.spyOn(AlertsAPI, 'updateConfig').mockReturnValue(nextSave.promise);
+    const store = useAlertsActivation();
+
+    const outgoing = store.activate();
+    expect(activate).toHaveBeenCalledWith({
+      expectedOrgID: 'west',
+      retry: false,
+      signal: expect.any(AbortSignal),
+    });
+    switchWorkspace('east');
+    switchWorkspace('west');
+    await store.refreshConfig();
+    const current = store.deactivate();
+    // The header and resume card share the write owner.
+    expect(await store.activate()).toBe(false);
+    expect(activate).toHaveBeenCalledTimes(1);
+    activation.resolve({ success: true, state: 'active' });
+    expect(await outgoing).toBe(false);
+    expect(read).toHaveBeenCalledTimes(1);
+    expect(store.isWritingActivation()).toBe(true);
+    expect(store.isLoading()).toBe(true);
+    expect(store.config()).toBe(west);
+
+    nextSave.resolve({ success: true });
+    expect(await current).toBe(true);
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(store.isLoading()).toBe(false);
+    expect(store.notificationDeliveryEnabled()).toBe(false);
+  });
+
+  it.each([
+    ['west', 400, 'invalid_org'],
+    [null, 403, 'csrf_failure'],
+  ] as const)(
+    'does not replay a rejected confirmation in workspace %s',
+    async (org, status, code) => {
+      setOrgID(org);
+      const transport = vi
+        .fn<typeof fetch>()
+        .mockResolvedValueOnce(Response.json(alertConfig('active')))
+        .mockResolvedValueOnce(
+          Response.json(
+            { error: code },
+            { status, headers: { 'X-CSRF-Token': 'fixture-refresh' } },
+          ),
+        );
+      vi.stubGlobal('fetch', transport);
+      const store = useAlertsActivation();
+      await store.refreshConfig();
+
+      expect(await store.deactivate()).toBe(false);
+      expect(getOrgID()).toBe(org);
+      expect(transport).toHaveBeenCalledTimes(2);
+      const [route, put] = transport.mock.calls[1]!;
+      expect(route).toBe('/api/alerts/config');
+      expect(put?.method).toBe('PUT');
+      expect(new Headers(put?.headers).get('X-Pulse-Org-ID')).toBe(org);
+      expect(store.lastError()).not.toBeNull();
+      expect(store.notificationDeliveryEnabled()).toBe(true);
+      expect(store.isLoading()).toBe(false);
+    },
+  );
 });

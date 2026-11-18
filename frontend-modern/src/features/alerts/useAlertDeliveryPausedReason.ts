@@ -1,8 +1,7 @@
-import { createMemo, createSignal, type Accessor } from 'solid-js';
+import { createMemo, type Accessor } from 'solid-js';
 
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import type { AlertDestinationsDeliveryPausedReason } from '@/utils/alertDestinationsPresentation';
-import { logger } from '@/utils/logger';
 
 export interface AlertDeliveryPausedState {
   pausedReason: Accessor<AlertDestinationsDeliveryPausedReason | null>;
@@ -15,7 +14,6 @@ export interface AlertDeliveryPausedState {
 // the same gate in the same words.
 export function useAlertDeliveryPausedReason(): AlertDeliveryPausedState {
   const alertsActivation = useAlertsActivation();
-  const [activating, setActivating] = createSignal(false);
 
   const pausedReason = createMemo<AlertDestinationsDeliveryPausedReason | null>(() => {
     // Until the alert config resolves, activation state is null and would read
@@ -36,18 +34,8 @@ export function useAlertDeliveryPausedReason(): AlertDeliveryPausedState {
   });
 
   const activate = async () => {
-    if (activating()) {
-      return;
-    }
-    setActivating(true);
-    try {
-      await alertsActivation.activate();
-    } catch (error) {
-      logger.error('Failed to activate notification delivery', error);
-    } finally {
-      setActivating(false);
-    }
+    await alertsActivation.activate();
   };
 
-  return { pausedReason, activating, activate };
+  return { pausedReason, activating: alertsActivation.isWritingActivation, activate };
 }
