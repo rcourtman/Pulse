@@ -54,6 +54,9 @@ type demoDockerHostProfile struct {
 	Hostname    string
 	DisplayName string
 	Containers  []demoDockerContainerProfile
+	// Sidecar is a container that carries other containers' traffic: they run
+	// inside its network instead of on one of their own.
+	Sidecar *demoDockerSidecarProfile
 }
 
 type demoDockerContainerProfile struct {
@@ -62,6 +65,17 @@ type demoDockerContainerProfile struct {
 	Tags        []string
 	Health      string
 	Description string
+	// Proxy marks the reverse proxy that routes this host's containers.
+	Proxy bool
+	// Route is the hostname the host's proxy routes to this container.
+	Route string
+}
+
+type demoDockerSidecarProfile struct {
+	Name    string
+	Image   string
+	Tags    []string
+	Carries []string
 }
 
 type demoKubernetesNodeProfile struct {
@@ -150,11 +164,11 @@ var demoDockerHostProfiles = []demoDockerHostProfile{
 		Hostname:    "edge-apps-01",
 		DisplayName: "Edge Apps 01",
 		Containers: []demoDockerContainerProfile{
-			{Name: "customer-portal", Image: "ghcr.io/pulse-demo/customer-portal:2026.04", Tags: []string{"web", "customer-facing", "production"}, Health: "healthy"},
-			{Name: "inventory-api", Image: "ghcr.io/pulse-demo/inventory-api:2026.04", Tags: []string{"api", "production", "platform"}, Health: "healthy"},
-			{Name: "edge-proxy", Image: "traefik:v3.1", Tags: []string{"ingress", "edge", "production"}, Health: "healthy"},
-			{Name: "vaultwarden", Image: "vaultwarden/server:1.32.7", Tags: []string{"security", "internal"}, Health: "healthy"},
-			{Name: "uptime-kuma", Image: "louislam/uptime-kuma:1.23.16", Tags: []string{"monitoring", "internal"}, Health: "healthy"},
+			{Name: "customer-portal", Image: "ghcr.io/pulse-demo/customer-portal:2026.04", Tags: []string{"web", "customer-facing", "production"}, Health: "healthy", Route: "portal.example.test"},
+			{Name: "inventory-api", Image: "ghcr.io/pulse-demo/inventory-api:2026.04", Tags: []string{"api", "production", "platform"}, Health: "healthy", Route: "inventory.example.test"},
+			{Name: "edge-proxy", Image: "traefik:v3.1", Tags: []string{"ingress", "edge", "production"}, Health: "healthy", Proxy: true},
+			{Name: "vaultwarden", Image: "vaultwarden/server:1.32.7", Tags: []string{"security", "internal"}, Health: "healthy", Route: "vault.example.test"},
+			{Name: "uptime-kuma", Image: "louislam/uptime-kuma:1.23.16", Tags: []string{"monitoring", "internal"}, Health: "healthy", Route: "status.example.test"},
 		},
 	},
 	{
@@ -166,6 +180,13 @@ var demoDockerHostProfiles = []demoDockerHostProfile{
 			{Name: "sftp-ingest", Image: "atmoz/sftp:latest", Tags: []string{"transfer", "integration", "internal"}, Health: "healthy"},
 			{Name: "prometheus", Image: "prom/prometheus:v2.54.1", Tags: []string{"monitoring", "platform"}, Health: "healthy"},
 			{Name: "grafana-agent", Image: "grafana/agent:v0.42.0", Tags: []string{"monitoring", "agent", "platform"}, Health: "healthy"},
+		},
+		// Partner files and offsite backups leave through one VPN container.
+		Sidecar: &demoDockerSidecarProfile{
+			Name:    "partner-vpn",
+			Image:   "tailscale/tailscale:v1.76.6",
+			Tags:    []string{"vpn", "edge", "integration"},
+			Carries: []string{"sftp-ingest", "backup-coordinator"},
 		},
 	},
 	{
@@ -634,8 +655,14 @@ func applyDemoDockerScenario(state *models.StateSnapshot, now time.Time) {
 			host.DisplayName = fmt.Sprintf("%s (%d)", hostProfile.DisplayName, round+1)
 		}
 		host.Status = "online"
-		host.Containers = slices.DeleteFunc(host.Containers, func(c models.DockerContainer) bool { return c.Labels["io.pulse.demo.compose"] == demoComposeProject })
+		host.Containers = slices.DeleteFunc(host.Containers, func(c models.DockerContainer) bool {
+			return c.Labels["io.pulse.demo.compose"] == demoComposeProject || c.Labels[demoSidecarLabel] != ""
+		})
 		host.Containers = applyDemoDockerContainerProfiles(host.Containers, hostProfile.Containers, now)
+		applyDemoDockerRoutes(host.Containers, hostProfile.Containers)
+		if round == 0 {
+			applyDemoDockerSidecar(host, hostProfile.Sidecar, now)
+		}
 		if !composePlaced {
 			composePlaced = applyDemoComposeProject(host, now)
 		}
@@ -681,6 +708,113 @@ func applyDemoOfflineDockerContainers(containers []models.DockerContainer, now t
 		containers[i].FinishedAt = &finishedAt
 	}
 	return containers
+}
+
+const (
+	// demoProxyNetwork is the Docker network a host's reverse proxy shares
+	// with the containers it routes, and with nothing else.
+	demoProxyNetwork = "edge"
+	// demoSidecarLabel marks the sidecar the demo adds to a host, so the next
+	// pass replaces it instead of adding another.
+	demoSidecarLabel = "io.pulse.demo.sidecar"
+)
+
+// applyDemoDockerRoutes gives a host's reverse proxy the routes a real one
+// has: each routed container carries Traefik's router labels and sits on a
+// network it shares with the proxy. Only the first copy of the proxy joins
+// that network. A second one sharing it would leave the labels unable to say
+// which proxy routes a container, and a monitor that guesses nothing then
+// says nothing.
+func applyDemoDockerRoutes(containers []models.DockerContainer, profiles []demoDockerContainerProfile) {
+	if len(profiles) == 0 {
+		return
+	}
+	proxy := -1
+	for i := range containers {
+		if i < len(profiles) && profiles[i].Proxy {
+			proxy = i
+			break
+		}
+	}
+	if proxy < 0 {
+		return
+	}
+	join := func(container *models.DockerContainer, lastOctet int) {
+		container.Networks = []models.DockerContainerNetworkLink{{
+			Name: demoProxyNetwork,
+			IPv4: fmt.Sprintf("172.20.0.%d", lastOctet),
+		}}
+		container.NetworkMode = demoProxyNetwork
+	}
+	join(&containers[proxy], 2)
+	containers[proxy].Ports = []models.DockerContainerPort{
+		{PrivatePort: 80, PublicPort: 80, Protocol: "tcp", IP: "0.0.0.0"},
+		{PrivatePort: 443, PublicPort: 443, Protocol: "tcp", IP: "0.0.0.0"},
+	}
+	for i := range containers {
+		profile := profiles[i%len(profiles)]
+		if profile.Route == "" {
+			continue
+		}
+		join(&containers[i], 10+i)
+		// Reached through the proxy, so it publishes no port of its own.
+		containers[i].Ports = nil
+		labels := cloneStringMap(containers[i].Labels)
+		if labels == nil {
+			labels = make(map[string]string, 3)
+		}
+		labels["traefik.enable"] = "true"
+		labels["traefik.http.routers."+profile.Name+".rule"] = "Host(`" + profile.Route + "`)"
+		labels["traefik.http.services."+profile.Name+".loadbalancer.server.port"] = "8080"
+		containers[i].Labels = labels
+	}
+}
+
+// applyDemoDockerSidecar adds a container whose network other containers run
+// inside, the way a VPN sidecar is used: each carried container reports
+// network mode container:<id> and, having no network of its own, no networks
+// and no published ports.
+func applyDemoDockerSidecar(host *models.DockerHost, sidecar *demoDockerSidecarProfile, now time.Time) {
+	if host == nil || sidecar == nil {
+		return
+	}
+	started := now
+	if started.IsZero() {
+		started = time.Now()
+	}
+	started = started.Add(-9 * time.Hour)
+	id := mockStableHexString(64, host.ID, "demo-sidecar", sidecar.Name)
+	carried := 0
+	for i := range host.Containers {
+		if !slices.Contains(sidecar.Carries, host.Containers[i].Name) {
+			continue
+		}
+		host.Containers[i].NetworkMode = "container:" + id
+		host.Containers[i].Networks = nil
+		host.Containers[i].Ports = nil
+		carried++
+	}
+	if carried == 0 {
+		return
+	}
+	memoryLimit := int64(512 * 1024 * 1024)
+	host.Containers = append(host.Containers, models.DockerContainer{
+		ID:            id,
+		Name:          sidecar.Name,
+		Image:         sidecar.Image,
+		State:         "running",
+		Status:        "Up",
+		CPUPercent:    0.6,
+		MemoryUsage:   memoryLimit / 8,
+		MemoryLimit:   memoryLimit,
+		MemoryPercent: 12.5,
+		UptimeSeconds: int64((9 * time.Hour).Seconds()),
+		CreatedAt:     started,
+		StartedAt:     &started,
+		Labels:        mergeScenarioLabelSet(map[string]string{demoSidecarLabel: sidecar.Name}, sidecar.Tags),
+		Networks:      []models.DockerContainerNetworkLink{{Name: "bridge", IPv4: "172.18.0.250"}},
+		NetworkMode:   "bridge",
+	})
 }
 
 // demoContainerProfileName keeps container names unique per host. Docker
