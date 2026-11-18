@@ -24,6 +24,8 @@ import { Dialog } from '@/components/shared/Dialog';
 export const UserAssignmentsPanel: Component<UserAssignmentsPanelProps> = (props) => {
   const state = useUserAssignmentsPanelState(props);
   const emptyStateCopy = () => getUserAssignmentsEmptyStateCopy();
+  const inventoryReady = () =>
+    !state.loading() && state.accessAllowed() && !state.loadError() && !state.unconfirmedChange();
   let searchInputRef: HTMLInputElement | undefined;
   let inventoryNotice: HTMLDivElement | undefined;
   let loadFailureNotice: HTMLDivElement | undefined;
@@ -50,7 +52,13 @@ export const UserAssignmentsPanel: Component<UserAssignmentsPanelProps> = (props
         ? savedUser.username
         : undefined
       : state.editingUser()?.username;
-    if (!reload && !username) return;
+    if (reload) {
+      // The recovery action disappears during the read. Keep its place in the
+      // inventory, and don't reuse an older save target for an uncertain write.
+      window.clearTimeout(focusTimer);
+      panel?.focus({ preventScroll: true });
+      if (state.unconfirmedChange()) return state.loadData();
+    } else if (!username) return;
     await (reload ? state.loadData() : state.handleSaveAssignments());
     // The state owner already replaces this identity on every reader change.
     // In particular, an organization round trip cannot revive a return target.
@@ -64,7 +72,7 @@ export const UserAssignmentsPanel: Component<UserAssignmentsPanelProps> = (props
         state.loading() ||
         state.userPendingDeletion() ||
         state.unconfirmedChange() ||
-        (document.activeElement && document.activeElement !== document.body)
+        document.activeElement !== (reload ? panel : document.body)
       )
         return;
       // A saved read replaces the original row; match the literal principal,
@@ -86,7 +94,7 @@ export const UserAssignmentsPanel: Component<UserAssignmentsPanelProps> = (props
   };
 
   return (
-    <div ref={panel} class="space-y-6">
+    <section ref={panel} aria-label="User Access" tabIndex={-1} class="focus:outline-2">
       <SettingsPanel
         title="User Access"
         action={
@@ -135,7 +143,7 @@ export const UserAssignmentsPanel: Component<UserAssignmentsPanelProps> = (props
               class="break-words"
               icon={<TriangleAlert />}
               actionLabel={state.loading() ? undefined : 'Check saved access'}
-              actionOnClick={() => void state.loadData()}
+              actionOnClick={() => void saveOrReload(true)}
             >
               {message()}
             </InlineNotice>
@@ -173,15 +181,7 @@ export const UserAssignmentsPanel: Component<UserAssignmentsPanelProps> = (props
           )}
         </Show>
 
-        <Show
-          when={
-            !state.loading() &&
-            state.accessAllowed() &&
-            !state.loadError() &&
-            !state.unconfirmedChange() &&
-            state.assignmentCount() > 0
-          }
-        >
+        <Show when={inventoryReady() && state.assignmentCount() > 0}>
           <div
             role="status"
             aria-label="User search results"
@@ -199,15 +199,7 @@ export const UserAssignmentsPanel: Component<UserAssignmentsPanelProps> = (props
           </div>
         </Show>
 
-        <Show
-          when={
-            !state.loading() &&
-            state.accessAllowed() &&
-            !state.loadError() &&
-            !state.unconfirmedChange() &&
-            state.filteredAssignments().length === 0
-          }
-        >
+        <Show when={inventoryReady() && state.filteredAssignments().length === 0}>
           <div class="text-center py-12 px-6">
             <Users class="w-12 h-12 mx-auto text-slate-300 mb-4" />
             <Show
@@ -246,15 +238,7 @@ export const UserAssignmentsPanel: Component<UserAssignmentsPanelProps> = (props
           </div>
         </Show>
 
-        <Show
-          when={
-            !state.loading() &&
-            state.accessAllowed() &&
-            !state.loadError() &&
-            !state.unconfirmedChange() &&
-            state.filteredAssignments().length > 0
-          }
-        >
+        <Show when={inventoryReady() && state.filteredAssignments().length > 0}>
           <PulseDataGrid
             data={state.filteredAssignments()}
             columns={[
@@ -400,7 +384,7 @@ export const UserAssignmentsPanel: Component<UserAssignmentsPanelProps> = (props
           </Dialog>
         )}
       </Show>
-    </div>
+    </section>
   );
 };
 

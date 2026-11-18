@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "base_sha": "18221f60d58c54f46a69b85f52832c65196fddec",
+  "verified_at": "2026-11-18T12:12:45.040Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/UserAssignmentsPanel.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/UserAssignmentsPanel.tsx": "e2e5bee59ad60f48cab16523be2eec73e09b3c0b42ffbbf13f97b0ffc6856a7d"
+  },
+  "routes": [
+    "/settings/security-users"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Compiled Pulse Settings, actual User Access, RBAC client and session binding with a loopback HTTP fixture; three users with the same display name, distinct saved IDs and an unlisted saved role.",
+    "Check saved access while a scoped user/role read is pending and after success or failure; Retry following a confirmed write and failed saved reread.",
+    "Playwright 1.56.1 and Chromium 141.0.7390.37. Desktop/light and 390 px/dark touch-emulated Settings > Users; twenty inspected screenshots, ten paired states with the same fixtures, viewport, theme and interaction."
+  ],
+  "interactions": [
+    "Tab and Enter from the existing warning or failure notice. On the base both actions drop focus to the document body while the read is pending; success after an ambiguous write sends the next Tab to a different same-name user. On the final source, the outline stays on User Access. Next Tab reaches Search on success or Check saved access if the read fails.",
+    "A confirmed-save Retry still returns to the exact saved user when the list is reordered. The warning, spinner, failed-read message, full user IDs, saved role IDs and available actions stay visible in the same states.",
+    "Each case uses one exact organization-bound, CSRF-protected synthetic role write, then only the named inventory reads. No stale list, automatic write replay, live tenant or identity-provider claim. Desktop and narrow browser cases completed; the initial narrow direct-entry case timed out before User Access, and narrow proof uses the real Settings navigation."
+  ]
+}
