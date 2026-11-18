@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "base_sha": "2dd8b12a1f04a5274ad7fa46066b80f476ad24e4",
+  "verified_at": "2026-11-18T12:20:10Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapSurface.tsx",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapDiagram.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapSurface.tsx": "3b422f87e1c34d1eec9365ebac1960f5bb2b956936cc510279c2184ed0803d2e",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapDiagram.ts": "655adcd61e53ea094fe83275da8cf93e6f627524c76729793d258e70cee2c00f"
+  },
+  "routes": [
+    "/map",
+    "/proxmox/overview?resource=<guest id>"
+  ],
+  "viewports": [
+    {
+      "width": 1920,
+      "height": 1080
+    },
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "final runtime bytes served by a Vite dev server from a copy of main plus this change, in the in-app browser, against a real Pulse 6.9.0-beta.3 instance monitoring a real homelab (5 hosts, 12 VMs, 28 LXCs, 9 containers)",
+    "at every size the document's scroll height equalled the window's height, so the page did not scroll and the whole drawing with its legend was on screen",
+    "1920x1080 dark: names, drawn at 98 percent (1748x837 on screen from a 1776x850 layout)",
+    "1440x900 dark and light: names, drawn at 77 percent (1191x657 from 1542x850); before this change the same estate was 1324px tall at this size and ran well below the fold",
+    "1280x720 dark: the page chose icons alone because names would have been under 62 percent, drawn at 80 percent (1175x374 from 1468x468)",
+    "375x812 dark: icons alone at 63 percent (359x567), bottom edge above the fixed navigation bar; the bottom layer wrapped and Hardware was reached by a connector down the right edge labelled runs on",
+    "layout: the Internet tile sits to the left of the Ways in card on a dashed connector at desktop widths and above it on the phone; Storage, Backups and Hardware share the bottom row at desktop widths",
+    "console: no error from the map after the final reload",
+    "not checked in a browser: the mock estate or any estate large enough to reach the 30 percent floor, window resizing while the page is open (covered only by reloading at each size), the Save image download, kiosk mode, Firefox and Safari"
+  ],
+  "interactions": [
+    "opened /map at each size and read the drawing's on-screen size, its layout size, the selected density and the document scroll height",
+    "pressed Hide names at 1440x900: no IPv4 address, hostname or network name remained, recognised apps kept their own names, and the page still did not scroll; pressed again to restore",
+    "pressed Compact at 1440x900: icons alone at full size (1322x626), still on one screen",
+    "clicked the jellyfin tile on the map drawn at 77 percent: the app navigated without a reload to that guest's page with its drawer open, so links land correctly on a scaled drawing"
+  ]
+}
