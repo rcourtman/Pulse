@@ -3968,6 +3968,7 @@ func convertInterfaces(interfaces []models.HostNetworkInterface) []NetworkInterf
 			RXBytes:   iface.RXBytes,
 			TXBytes:   iface.TXBytes,
 			SpeedMbps: iface.SpeedMbps,
+			LinkUp:    iface.LinkUp,
 		})
 	}
 	return out

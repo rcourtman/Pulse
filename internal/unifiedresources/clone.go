@@ -1034,6 +1034,7 @@ func cloneNetworkInterfaces(in []NetworkInterface) []NetworkInterface {
 		out[i] = in[i]
 		out[i].Addresses = cloneStringSlice(in[i].Addresses)
 		out[i].SpeedMbps = cloneInt64Ptr(in[i].SpeedMbps)
+		out[i].LinkUp = cloneBoolPtr(in[i].LinkUp)
 	}
 	return out
 }

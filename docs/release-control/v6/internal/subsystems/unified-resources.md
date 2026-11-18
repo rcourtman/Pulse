@@ -10150,3 +10150,9 @@ agent lists only interfaces it reports, so a physical port bridged into
 list first, then appends Proxmox interfaces whose names the agent did not
 report. Agent data still wins for any name both sources carry.
 `resourceStateAdapters.test.ts` pins the order and the precedence.
+
+### Unified network interfaces keep link state (18 November 2026)
+
+`convertInterfaces` in `internal/unifiedresources/adapters.go` carries a host
+interface's `LinkUp`, and `clone.go` deep-copies it. The dead `Status` field
+stays unset. The frontend reads it as `linkUp` on agent and node interfaces.

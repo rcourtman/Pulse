@@ -2079,6 +2079,9 @@ type NetworkInterface struct {
 	Bridge   string `json:"bridge,omitempty"`
 	VLAN     int    `json:"vlan,omitempty"`
 	Firewall bool   `json:"firewall,omitempty"`
+	// LinkUp is a physical port's link state from its host agent; nil when
+	// unknown.
+	LinkUp *bool `json:"linkUp,omitempty"`
 }
 
 // DiskInfo describes disk usage.

@@ -746,6 +746,9 @@ type HostNetworkInterface struct {
 	RXBytes   uint64   `json:"rxBytes,omitempty"`
 	TXBytes   uint64   `json:"txBytes,omitempty"`
 	SpeedMbps *int64   `json:"speedMbps,omitempty"`
+	// LinkUp is the agent's link state for a physical port; nil when the
+	// source does not know (software interfaces, Proxmox-only rows).
+	LinkUp *bool `json:"linkUp,omitempty"`
 }
 
 func (i HostNetworkInterface) NormalizeCollections() HostNetworkInterface {
