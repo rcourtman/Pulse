@@ -62,4 +62,31 @@ describe('NodeGroupHeader', () => {
     expect(screen.queryByText(/°[CF]/)).not.toBeInTheDocument();
     expect(screen.queryByText('2h')).not.toBeInTheDocument();
   });
+
+  it('shows what the node is as a hardware strip beside its identity', () => {
+    render(() => (
+      <NodeGroupHeader
+        node={makeNode({
+          cpuInfo: {
+            model: 'Intel(R) Core(TM) i5-10600 CPU @ 3.30GHz',
+            cores: 12,
+            sockets: 1,
+            mhz: '3300',
+          },
+          memory: { total: 15.3 * 1024 ** 3, used: 0, free: 0, usage: 0 },
+          networkInterfaces: [
+            { name: 'eno1', addresses: [] },
+            { name: 'vmbr0', addresses: ['192.168.0.5/24'] },
+          ],
+        })}
+      />
+    ));
+
+    const strip = screen.getByTestId('node-hardware-strip');
+    expect(strip).toHaveTextContent('Intel Core i5-10600');
+    expect(strip).toHaveTextContent('×12');
+    expect(strip).toHaveTextContent('16 GB');
+    expect(strip).toHaveTextContent('eno1');
+    expect(strip).not.toHaveTextContent('vmbr0');
+  });
 });

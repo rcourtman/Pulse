@@ -35,6 +35,8 @@ import { getMemoryObservationPresentation } from '@/utils/memoryObservation';
 import { getProxmoxUpdateEvidencePresentation } from '@/utils/proxmoxUpdateEvidence';
 import { formatTemperature, getTemperatureTextClass } from '@/utils/temperature';
 
+import { NodeHardwareStrip } from '@/components/shared/NodeHardwareStrip';
+
 import { buildDrawerDiskListItems } from './DrawerDiskListCard';
 import {
   collectDrawerExceptionRows,
@@ -562,15 +564,12 @@ export function NodeDrawerOverview(props: NodeDrawerOverviewProps) {
   };
 
   const facts = () => {
-    const model = cleanText(props.node.cpuInfo?.model);
-    const cores = props.node.cpuInfo?.cores;
     const firstAddress = (props.node.networkInterfaces || [])
       .flatMap((networkInterface) => networkInterface.addresses || [])
       .map((address) => cleanText(address))
       .find(Boolean);
     return [
       versionLabel() ? `Proxmox VE ${versionLabel()}` : '',
-      [model, hasPositiveNumber(cores) ? `${cores} logical CPUs` : ''].filter(Boolean).join(' · '),
       sizeFact(
         props.node.memory?.total,
         // Only a current reading states a used amount; a retained one is
@@ -607,6 +606,10 @@ export function NodeDrawerOverview(props: NodeDrawerOverviewProps) {
       </Show>
 
       <DrawerExceptionList testId="node-drawer-exceptions" rows={exceptionRows()} />
+
+      {/* What the box is, always visible; the facts line below the charts
+          leaves the CPU to it. */}
+      <NodeHardwareStrip node={props.node} class="flex-wrap gap-y-1" />
 
       <Show when={props.historyTarget}>
         <Show when={liveReadingsWithheld()}>

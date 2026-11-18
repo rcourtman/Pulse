@@ -8,6 +8,7 @@ import {
   getGroupedTableRowCellClass,
   getGroupedTableRowClass,
 } from './groupedTableRowPresentation';
+import { NodeHardwareStrip } from './NodeHardwareStrip';
 import { ResourceNameWithWebInterfaceLink } from './WebInterfaceLink';
 
 interface NodeGroupHeaderProps {
@@ -69,6 +70,10 @@ export const NodeGroupHeader: Component<NodeGroupHeaderProps> = (props) => {
           Agent
         </span>
       </Show>
+
+      {/* What the box is reads beside who it is; live host stats stay in
+          the platform host table above. Wide rows only, so it never wraps. */}
+      <NodeHardwareStrip node={props.node} class="hidden border-l border-border pl-3 md:flex" />
     </div>
   );
 
