@@ -553,16 +553,12 @@ func collectNetwork(ctx context.Context) []agentshost.NetworkInterface {
 			Name:      iface.Name,
 			MAC:       iface.HardwareAddr,
 			Addresses: addresses,
+			LinkUp:    link.linkUp,
 		}
 		if link.speedMbps > 0 {
 			speed := link.speedMbps
 			ifaceEntry.SpeedMbps = &speed
 		}
-		if physical {
-			linkUp := link.linkUp
-			ifaceEntry.LinkUp = &linkUp
-		}
-
 		switch {
 		case len(addresses) > 0:
 			counter := ioMap[iface.Name]
@@ -597,9 +593,8 @@ type linkInfo struct {
 	physical bool
 	// speedMbps is the negotiated link speed, 0 when the driver reports none.
 	speedMbps int64
-	// linkUp is true when the port has carrier: a cable and a live partner,
-	// or an associated Wi-Fi link.
-	linkUp bool
+	// linkUp is nil when link state was not observed.
+	linkUp *bool
 }
 
 // readPhysicalLinkInfo reads an interface's link facts from Linux sysfs;
@@ -620,10 +615,30 @@ func readPhysicalLinkInfoFrom(root, name string) linkInfo {
 		return linkInfo{}
 	}
 	info := linkInfo{physical: true}
-	// carrier reads 1 with a link and 0 without; an administratively down
-	// port fails the read with EINVAL, which is no link either.
+	// Only the two carrier values establish link state. A read error can
+	// also be a missing file, a permission issue or a driver limitation.
 	if raw, err := os.ReadFile(filepath.Join(dir, "carrier")); err == nil {
-		info.linkUp = strings.TrimSpace(string(raw)) == "1"
+		switch strings.TrimSpace(string(raw)) {
+		case "0":
+			info.linkUp = new(false)
+		case "1":
+			info.linkUp = new(true)
+		}
+	}
+	// Linux may not report carrier on an administratively down port. Keep
+	// reporting down in that case only when sysfs independently confirms it.
+	if info.linkUp == nil {
+		const iffUp = 1 // Linux IFF_UP, from the sysfs flags bitmask.
+		if raw, err := os.ReadFile(filepath.Join(dir, "flags")); err == nil {
+			if flags, err := strconv.ParseUint(strings.TrimSpace(string(raw)), 0, 32); err == nil && flags&iffUp == 0 {
+				info.linkUp = new(false)
+			}
+		}
+	}
+	// A speed after confirmed link loss can be stale. Unavailable carrier
+	// alone does not invalidate an otherwise usable speed.
+	if info.linkUp != nil && !*info.linkUp {
+		return info
 	}
 	// A link that is down, or a driver without link settings (Wi-Fi), fails
 	// the read with EINVAL or returns -1.
@@ -631,10 +646,6 @@ func readPhysicalLinkInfoFrom(root, name string) linkInfo {
 		if speed, err := strconv.ParseInt(strings.TrimSpace(string(raw)), 10, 64); err == nil && speed > 0 {
 			info.speedMbps = speed
 		}
-	}
-	// Without a link the driver's speed is a leftover, not a fact.
-	if !info.linkUp {
-		info.speedMbps = 0
 	}
 	return info
 }

@@ -493,6 +493,7 @@ func TestCollectNetworkReportsAddresslessPhysicalPortsAsInventory(t *testing.T) 
 			{Name: "lo", Flags: []string{"up", "loopback"}, Addrs: gonet.InterfaceAddrList{{Addr: "127.0.0.1/8"}}},
 			{Name: "eno1", HardwareAddr: "aa:bb:cc:00:00:01", Flags: []string{"up"}},
 			{Name: "enp2s0", HardwareAddr: "aa:bb:cc:00:00:02"},
+			{Name: "enp3s0", HardwareAddr: "aa:bb:cc:00:00:03", Flags: []string{"up"}},
 			{Name: "vmbr0", HardwareAddr: "aa:bb:cc:00:00:01", Flags: []string{"up"}, Addrs: gonet.InterfaceAddrList{{Addr: "192.0.2.10/24"}}},
 			{Name: "veth100i0", Flags: []string{"up"}},
 			{Name: "tap101i0", Flags: []string{"up"}},
@@ -501,6 +502,7 @@ func TestCollectNetworkReportsAddresslessPhysicalPortsAsInventory(t *testing.T) 
 	netIOCounters = func(context.Context, bool) ([]gonet.IOCountersStat, error) {
 		return []gonet.IOCountersStat{
 			{Name: "eno1", BytesRecv: 900, BytesSent: 800},
+			{Name: "enp3s0", BytesRecv: 300, BytesSent: 200},
 			{Name: "vmbr0", BytesRecv: 900, BytesSent: 800},
 			{Name: "veth100i0", BytesRecv: 50, BytesSent: 40},
 		}, nil
@@ -508,9 +510,11 @@ func TestCollectNetworkReportsAddresslessPhysicalPortsAsInventory(t *testing.T) 
 	readLinkInfo = func(name string) linkInfo {
 		switch name {
 		case "eno1":
-			return linkInfo{physical: true, speedMbps: 2500, linkUp: true}
+			return linkInfo{physical: true, speedMbps: 2500, linkUp: new(true)}
 		case "enp2s0":
-			return linkInfo{physical: true} // no cable
+			return linkInfo{physical: true, linkUp: new(false)}
+		case "enp3s0":
+			return linkInfo{physical: true, speedMbps: 1000}
 		}
 		return linkInfo{}
 	}
@@ -521,11 +525,11 @@ func TestCollectNetworkReportsAddresslessPhysicalPortsAsInventory(t *testing.T) 
 	for _, iface := range got {
 		names = append(names, iface.Name)
 	}
-	if want := []string{"eno1", "enp2s0", "vmbr0"}; !reflect.DeepEqual(names, want) {
+	if want := []string{"eno1", "enp2s0", "enp3s0", "vmbr0"}; !reflect.DeepEqual(names, want) {
 		t.Fatalf("interfaces = %v, want %v", names, want)
 	}
 
-	eno1, unplugged, bridge := got[0], got[1], got[2]
+	eno1, unplugged, unobserved, bridge := got[0], got[1], got[2], got[3]
 	if eno1.SpeedMbps == nil || *eno1.SpeedMbps != 2500 || eno1.MAC != "aa:bb:cc:00:00:01" {
 		t.Fatalf("eno1 = %+v, want its MAC at 2500 Mb/s", eno1)
 	}
@@ -541,6 +545,25 @@ func TestCollectNetworkReportsAddresslessPhysicalPortsAsInventory(t *testing.T) 
 	if unplugged.LinkUp == nil || *unplugged.LinkUp {
 		t.Fatalf("unplugged port link = %v, want down", unplugged.LinkUp)
 	}
+	if unobserved.LinkUp != nil || unobserved.SpeedMbps == nil || *unobserved.SpeedMbps != 1000 || len(unobserved.Addresses) != 0 {
+		t.Fatalf("port without carrier evidence = %+v, want unknown carrier at 1000 Mb/s", unobserved)
+	}
+	raw, err := json.Marshal(got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var wire []map[string]any
+	if err := json.Unmarshal(raw, &wire); err != nil {
+		t.Fatal(err)
+	}
+	if wire[0]["linkUp"] != true || wire[1]["linkUp"] != false {
+		t.Fatalf("observed carrier states missing from report: %s", raw)
+	}
+	for _, idx := range []int{2, 3} {
+		if _, ok := wire[idx]["linkUp"]; ok {
+			t.Fatalf("unobserved link state sent for %s: %s", got[idx].Name, raw)
+		}
+	}
 	if bridge.LinkUp != nil {
 		t.Fatalf("vmbr0 link = %v, want unknown for a software interface", *bridge.LinkUp)
 	}
@@ -548,12 +571,13 @@ func TestCollectNetworkReportsAddresslessPhysicalPortsAsInventory(t *testing.T) 
 		t.Fatalf("vmbr0 = %+v, want its counters and no speed", bridge)
 	}
 
-	var rx uint64
+	var rx, tx uint64
 	for _, iface := range got {
 		rx += iface.RXBytes
+		tx += iface.TXBytes
 	}
-	if rx != 900 {
-		t.Fatalf("summed RX = %d, want 900 (bridge traffic counted once)", rx)
+	if rx != 900 || tx != 800 {
+		t.Fatalf("summed RX/TX = %d/%d, want 900/800 (bridge traffic counted once)", rx, tx)
 	}
 }
 
@@ -569,7 +593,7 @@ func TestCollectNetworkReportsSpeedOfAnAddressedPhysicalPort(t *testing.T) {
 	netIOCounters = func(context.Context, bool) ([]gonet.IOCountersStat, error) {
 		return []gonet.IOCountersStat{{Name: "eth0", BytesRecv: 7, BytesSent: 8}}, nil
 	}
-	readLinkInfo = func(string) linkInfo { return linkInfo{physical: true, speedMbps: 10000, linkUp: true} }
+	readLinkInfo = func(string) linkInfo { return linkInfo{physical: true, speedMbps: 10000, linkUp: new(true)} }
 
 	got := collectNetwork(context.Background())
 	if len(got) != 1 || got[0].SpeedMbps == nil || *got[0].SpeedMbps != 10000 || got[0].RXBytes != 7 {
@@ -579,7 +603,7 @@ func TestCollectNetworkReportsSpeedOfAnAddressedPhysicalPort(t *testing.T) {
 
 func TestReadPhysicalLinkInfoFromSysfs(t *testing.T) {
 	root := t.TempDir()
-	port := func(name, speed, carrier string, device bool) {
+	port := func(name, speed, carrier, flags string, device bool) {
 		t.Helper()
 		dir := filepath.Join(root, name)
 		if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -590,7 +614,7 @@ func TestReadPhysicalLinkInfoFromSysfs(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
-		for file, value := range map[string]string{"speed": speed, "carrier": carrier} {
+		for file, value := range map[string]string{"speed": speed, "carrier": carrier, "flags": flags} {
 			if value == "" {
 				continue
 			}
@@ -599,23 +623,38 @@ func TestReadPhysicalLinkInfoFromSysfs(t *testing.T) {
 			}
 		}
 	}
-	port("eno1", "2500", "1", true)
-	port("enp3s0", "-1", "0", true)        // cable out
-	port("enp4s0", "1000", "0", true)      // stale speed left by the driver
-	port("enp5s0", "", "", true)           // administratively down: neither file reads
-	port("wlp2s0", "", "1", true)          // associated Wi-Fi has no readable speed
-	port("veth100i0", "10000", "1", false) // software link with an invented speed
-	port("vmbr0", "", "1", false)
+	port("eno1", "2500", "1", "", true)
+	port("enp3s0", "-1", "0", "", true)   // cable out
+	port("enp4s0", "1000", "0", "", true) // stale speed left by the driver
+	port("enp5s0", "1000", "", "", true)  // carrier file missing, speed still valid
+	port("enp6s0", "2500", "unknown", "0x1003", true)
+	port("enp7s0", "10000", "", "0x1003", true)
+	port("enp8s0", "1000", "", "0x1002", true) // independently observed admin down
+	port("enp9s0", "100", "2", "bad", true)    // neither read establishes link state
+	port("wlp2s0", "", "1", "", true)          // associated Wi-Fi has no readable speed
+	port("veth100i0", "10000", "1", "", false) // software link with an invented speed
+	port("vmbr0", "", "1", "", false)
+	for _, name := range []string{"enp7s0", "enp8s0"} {
+		// A directory yields a native read error, even when the test runs
+		// as a privileged guest. Missing files are covered separately.
+		if err := os.Mkdir(filepath.Join(root, name, "carrier"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
 
 	cases := []struct {
 		name string
 		want linkInfo
 	}{
-		{"eno1", linkInfo{physical: true, speedMbps: 2500, linkUp: true}},
-		{"enp3s0", linkInfo{physical: true}},
-		{"enp4s0", linkInfo{physical: true}},
-		{"enp5s0", linkInfo{physical: true}},
-		{"wlp2s0", linkInfo{physical: true, linkUp: true}},
+		{"eno1", linkInfo{physical: true, speedMbps: 2500, linkUp: new(true)}},
+		{"enp3s0", linkInfo{physical: true, linkUp: new(false)}},
+		{"enp4s0", linkInfo{physical: true, linkUp: new(false)}},
+		{"enp5s0", linkInfo{physical: true, speedMbps: 1000}},
+		{"enp6s0", linkInfo{physical: true, speedMbps: 2500}},
+		{"enp7s0", linkInfo{physical: true, speedMbps: 10000}},
+		{"enp8s0", linkInfo{physical: true, linkUp: new(false)}},
+		{"enp9s0", linkInfo{physical: true, speedMbps: 100}},
+		{"wlp2s0", linkInfo{physical: true, linkUp: new(true)}},
 		{"veth100i0", linkInfo{}},
 		{"vmbr0", linkInfo{}},
 		{"missing0", linkInfo{}},
@@ -623,7 +662,7 @@ func TestReadPhysicalLinkInfoFromSysfs(t *testing.T) {
 		{"..", linkInfo{}},
 	}
 	for _, tc := range cases {
-		if got := readPhysicalLinkInfoFrom(root, tc.name); got != tc.want {
+		if got := readPhysicalLinkInfoFrom(root, tc.name); !reflect.DeepEqual(got, tc.want) {
 			t.Errorf("%s = %+v, want %+v", tc.name, got, tc.want)
 		}
 	}
