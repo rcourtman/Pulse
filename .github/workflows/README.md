@@ -225,18 +225,25 @@ throughout the measurement or recovery of a reported estate. The job reports mem
 writes without gating, and uploads `memory-regression-agents`. The scheduled
 issue reporter reads only the mock job.
 
-`dependency-advisory-watch.yml` runs the required build-and-test frontend audit
-daily against `main` and every active `release/v<major>.<minor>` line (the
-latest stable's line and newer), because a new npm advisory against an
-unchanged lockfile otherwise surfaces only as a warning on that branch's pull
-requests; this watch is where it fails. Each line is a separate matrix job that reads only that line's
-`frontend-modern/package.json` and `package-lock.json` (it never checks out,
-installs or runs another branch's code in the default branch's scope) and audits
-them with the same Node.js pin and `scripts/npm-audit-retry.sh all`. A failing job names
-the branch and advisories in its step summary and annotation; the fix is
-`npm audit fix --package-lock-only` on that line plus raised floors in
-`frontend-modern/src/security/__tests__/dependencySecurity.test.ts`. It is
-read-only, hosted-only, uses no secrets and uploads nothing.
+`dependency-advisory-watch.yml` strictly audits the product frontend on
+`main` every day. A newly disclosed advisory can affect an unchanged lockfile;
+it may only warn on an unrelated pull request, but it fails this watch.
+The job records `AUDITED_MAIN_SHA` and reads only that commit's
+`frontend-modern/package.json` and `package-lock.json` for the audit. Repair
+the smallest compatible graph on `main` and update the corresponding floors
+in `frontend-modern/src/security/__tests__/dependencySecurity.test.ts`.
+Confirm a patched version before acting on npm's suggestions; do not force an
+upgrade or downgrade. There is no backport to a retained release branch.
+
+The separate account frontend has its own daily strict audit in
+`account-portal.yml`. It records `AUDITED_MAIN_SHA` and audits the two
+`internal/cloudcp/portal/frontend` manifests from that scheduled main commit.
+The scheduled job does not replace or run the portal's PR/main build, tests
+and committed-embed checks. Both watches include development dependencies,
+use the same bounded npm audit runner, and fail when a usable answer is
+missing. They use hosted, read-only jobs without dependency installs, secrets,
+persisted checkout credentials or artifact uploads. The weekly Security Scan still checks the
+full npm workspace inventory and separates complete and production verdicts.
 
 The shared `install-sh-smoke-body.yml` inherits its caller's token permissions;
 keep it free of workflow- or job-level permission overrides. Continuity calls

@@ -78,7 +78,9 @@ run_case() {
     return
   fi
   for needle in "$@"; do
-    if ! printf '%s' "${out}" | grep -qF -- "${needle}"; then
+    # An early grep -q match can close the pipe before printf finishes,
+    # turning a successful match into a failure under pipefail.
+    if [[ "${out}" != *"${needle}"* ]]; then
       echo "FAIL: ${desc} — output missing: ${needle}"
       printf '%s\n' "${out}" | sed 's/^/    /'
       failures=$((failures + 1))
