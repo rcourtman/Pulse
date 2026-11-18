@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "base_sha": "bcfe59a8dfca6aee44cb1992d4beedd39ba1a00b",
+  "verified_at": "2026-11-18T21:31:50Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapCatalogue.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapDiagram.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapExport.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapLayout.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapCatalogue.ts": "96d9b971489962c06efcce9b681c6317058406455f3787fe6052733d67408cf3",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapDiagram.ts": "ae6d9e431c299fd22789345afae8ef3055c5db6a36cdfe7823e5d0158347e25f",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapExport.ts": "4c75ca656895a2b2143c189e81a2c7e0c94fc933de5277ab379aaee84a4a3a9e",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapLayout.ts": "7753bacb93c0f114183f9603579ca93564166abb96c8eeaee64c0b823be9fd23",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapModel.ts": "14df4c44f844ccd4dcee97e36cc7f9d58c6c80b04733772eb4debd5086a071af"
+  },
+  "routes": [
+    "/map"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "final runtime bytes served by a Vite dev server from a copy of main plus this change, in the in-app browser, against a real Pulse 6.9.0-beta.3 instance monitoring a real homelab. The saved file was captured by intercepting the page's own download link and sending the bytes to a local receiver, so the PNG looked at is the one the page produces",
+    "before, saved from 1440x900 dark: 2960x2276 PNG; names cut with an ellipsis as on the page (tailscale-ro\u2026, influxdb-tel\u2026, RICHARD-M\u2026); no legend; hardware wrapped onto a row of its own",
+    "before, names hidden: 2960x2428 PNG; storage 12 tiles against 9 with names shown; three hardware tiles all reading 'Proxmox no\u2026'; AdGuard Ho\u2026, Cloudflare\u2026, Proxmox Ba\u2026; byparr labelled FlareSolverr",
+    "after, saved from 1440x900 dark: 3600x2166 PNG (1800 wide); every name whole on one or two lines except one long backup target, which still ends in an ellipsis on its second line; legend in the footer (Healthy, Needs attention, Critical, Not reporting, Off); storage, backups and hardware on one row",
+    "after, names hidden: same 3600x2166; storage 9 with '3 hosts' and '2 hosts'; 'Proxmox node 1', 'Proxmox Backup / Server', 'Cloudflare / Tunnel', 'iSponsorBlock / TV'; Byparr named as itself; no address or hostname in the page's drawing text",
+    "after, light theme, earlier in the same pass before the capital-letter break and the Byparr entry were added: 3600x2166, same layout on the white surface",
+    "after, compact density and from 375x812 (where the page picks icons alone): 2960x1220, unchanged apart from the legend",
+    "the page itself is unchanged: 1191x657 drawing at 1440x900 with main ending at 888 of 900, names still on one line (19 cut, each completed by its hover), no legend inside the drawing; at 375x812 main ends at 756 with the bottom navigation at 767",
+    "console: only the known 404 for the map use counter, which the released backend does not have",
+    "the pane was hidden, so frames were driven by taking screenshots. Not checked: Firefox, Safari, an estate large enough to exceed the canvas limit (the SVG fallback), a real click through the browser's download dialog"
+  ],
+  "interactions": [
+    "pressed Save image with names shown, with Hide names on, and with Compact chosen, at 1440x900 dark; and with names shown in light",
+    "reloaded at 375x812 and pressed Save image",
+    "pressed Hide names and read the drawing's text for Byparr, FlareSolverr, the storage count and any address or hostname"
+  ]
+}

@@ -645,8 +645,11 @@ export function anonymizeInfrastructureMapModel(
     }
     return name;
   };
+  // Pools that share a name share a stand-in. The map draws a cluster's
+  // `local` on every node as one tile, and it has to stay one tile with the
+  // names hidden, or the image shows a different estate from the page.
   const anonymizePools = (pools: MapPool[]): MapPool[] =>
-    pools.map((pool) => ({ ...pool, name: nameFor(pool.id, 'Pool') }));
+    pools.map((pool) => ({ ...pool, name: nameFor(`pool-name:${pool.name}`, 'Pool') }));
   const anonymizeItems = (items: MapItem[]): MapItem[] =>
     items.map(({ address: _address, ...item }) => ({
       ...item,

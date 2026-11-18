@@ -379,4 +379,36 @@ describe('anonymizeInfrastructureMapModel', () => {
       'Check 1',
     );
   });
+
+  it('gives pools that share a name one stand-in, so they stay one tile on the map', () => {
+    const local = (node: string): Resource =>
+      resource({
+        id: `local-${node}`,
+        type: 'storage',
+        name: 'local',
+        platformType: 'proxmox-pve',
+        parentId: node,
+      });
+    const anonymous = anonymizeInfrastructureMapModel(
+      buildInfrastructureMapModel([
+        ...estate(),
+        local('node-a'),
+        local('node-b'),
+        resource({
+          id: 'fast',
+          type: 'storage',
+          name: 'fast-nvme',
+          platformType: 'proxmox-pve',
+          parentId: 'node-a',
+        }),
+      ]),
+    );
+    const pools = hostsOf(anonymous.blocks).flatMap((host) => host.pools);
+    const standIn = (id: string) => pools.find((pool) => pool.id === id)?.name;
+    expect(standIn('local-node-a')).toMatch(/^Pool \d+$/);
+    expect(standIn('local-node-b')).toBe(standIn('local-node-a'));
+    expect(standIn('fast')).toMatch(/^Pool \d+$/);
+    expect(standIn('fast')).not.toBe(standIn('local-node-a'));
+    expect(JSON.stringify(pools)).not.toContain('fast-nvme');
+  });
 });

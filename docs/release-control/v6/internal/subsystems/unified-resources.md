@@ -3075,7 +3075,14 @@ space left under the toolbar, wider than that space when a wider layout is
 shorter, and scales it down to fit, so the page does not scroll to show it.
 When names would be scaled too small to read the page draws icons alone. Do
 not add anything to the map that can only be reached by scrolling it. The
-saved image is laid out at its own poster width and is not fitted.
+saved image is not fitted. It is seen without the page, so it carries what
+the page keeps beside the drawing: every name written out, on a second line
+when it needs one, because nobody can hover an image, and the key to the
+status dots, because the page's legend is not in it. It is laid out at a
+poster width of 1480 pixels, and at a wider one of a fixed few only when that
+comes out clearly shorter, which is when it keeps a layer from wrapping.
+Anything the page explains outside the drawing or on hover has to be drawn
+into the saved image as well.
 The map is drawn in the product's own style and must not grow one of its own.
 On the page every structural colour is a reference to a semantic token
 variable (`MAP_PAGE_PALETTES` in `infrastructureMapRender.ts`), a box is a
@@ -3132,7 +3139,10 @@ Endpoints Pulse only probes (a router, a site) are tiles in a Checks box.
 Hide names replaces every reported name, address and network name on the page
 and in the saved image, which is built in the browser. A tile the catalogue
 recognised then reads as the app's own name, which says what runs and nothing
-about the estate.
+about the estate. Hiding names changes labels and nothing else: pools that
+share a name share a stand-in, so they stay the one tile they were, and the
+image shows the same estate as the page. The catalogue names an app as
+itself and never as the app it replaces, because that label is published.
 A field the map needs belongs on the shared `Resource` type. The map holds no
 local cast of a resource, and none may be added.
 Proof is owned by `infrastructureMapModel.test.ts`,
@@ -4317,6 +4327,20 @@ application resource-provider or WebSocket lifecycle.
     (`TestStore_OpenBackfillsLegacyUnresolvedProxmoxPBSGuestRows`).
 
 ## Current State
+
+### The saved map image stands on its own (18 November 2026)
+
+Saving the image from a real estate showed four faults in a picture meant to
+be posted. Names were cut off as on the page, where a hover completes them:
+three hardware tiles all read "Proxmox no…". Nothing said what the status
+dots mean. With names hidden the storage box grew from 9 tiles to 12, because
+pools were merged by a name that hiding had made unique, and the bottom layer
+wrapped differently from the page. And Byparr was published as FlareSolverr.
+
+The image now writes names on two lines, carries the legend, keeps merged
+pools merged, goes wider than 1480 pixels (to 1640, 1800 or 1960) only when
+that makes it at least 8 percent shorter, and names Byparr as itself. The page is
+unchanged: one line per name, its own legend, fitted to the screen.
 
 ### The map says which tiles a collected value connects (18 November 2026)
 
