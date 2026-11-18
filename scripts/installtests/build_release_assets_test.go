@@ -4231,7 +4231,7 @@ func TestBackendAPIShardsKeepRequiredCheckExhaustive(t *testing.T) {
 	}
 
 	shards := workflowJobBlock(t, workflow, "backend-api")
-	indexes := regexp.MustCompile(`(?m)^        index: \[([0-9, ]+)\]$`).FindStringSubmatch(shards)
+	indexes := regexp.MustCompile(`(?m)^        index: \$\{\{ fromJSON\(needs\.changes\.outputs\.component_only == 'true' && '\[0\]' \|\| '\[([0-9, ]+)\]'\) \}\}$`).FindStringSubmatch(shards)
 	count := regexp.MustCompile(`(?m)^      API_SHARD_COUNT: ([0-9]+)$`).FindStringSubmatch(shards)
 	if len(indexes) != 2 || len(count) != 2 {
 		t.Fatal("internal/api shard job must declare its index matrix and API_SHARD_COUNT")
@@ -4254,7 +4254,7 @@ func TestBackendAPIShardsKeepRequiredCheckExhaustive(t *testing.T) {
 		// exactly one shard while keeping order-coupled neighbours together.
 		// The checked-in weights only choose where those slices are cut.
 		"go test -race -list . ./internal/api",
-		"bash .github/scripts/select-internal-api-shard.sh \\\n            .github/scripts/internal-api-test-seconds.txt \"$API_SHARD_COUNT\" \"$API_SHARD_INDEX\")",
+		"bash .github/scripts/select-internal-api-shard.sh \\\n              .github/scripts/internal-api-test-seconds.txt \"$API_SHARD_COUNT\" \"$API_SHARD_INDEX\")",
 		"resolved to an empty test list",
 		"go test -list found no tests in ./internal/api",
 		// A shard holding most tests is named by skipping every other
@@ -5770,7 +5770,7 @@ func TestCITestCompilationPreservesChecks(t *testing.T) {
 		"name: Backend tests (${{ matrix.shard }})",
 		"name: Backend tests (api)",
 		"shard: [rest-0, rest-1]",
-		"index: [0, 1, 2, 3, 4]",
+		"index: ${{ fromJSON(needs.changes.outputs.component_only == 'true' && '[0]' || '[0, 1, 2, 3, 4]') }}",
 		"go test -race -timeout 50m",
 		"name: Require frontend dependency audit",
 		"NPM_AUDIT_REQUIRE_RESULT: ${{ needs.changes.outputs.frontend_deps }}",

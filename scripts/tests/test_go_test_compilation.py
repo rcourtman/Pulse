@@ -207,7 +207,7 @@ func TestMustNotExecute(t *testing.T) { record(); t.Fatal("test must not execute
             # Compile-only success cannot replace these full race/vet runs.
             self.assertIn("go test -race -timeout 50m", section)
         self.assertIn("shard: [rest-0, rest-1]", job(source, "backend"))
-        self.assertIn("index: [0, 1, 2, 3, 4]", job(source, "backend-api"))
+        self.assertIn("index: ${{ fromJSON(needs.changes.outputs.component_only == 'true' && '[0]' || '[0, 1, 2, 3, 4]') }}", job(source, "backend-api"))
         self.assertIn("name: Backend tests (api)", job(source, "backend-api-verdict"))
         self.assertIn("if: always()", job(source, "backend-api-verdict"))
 
