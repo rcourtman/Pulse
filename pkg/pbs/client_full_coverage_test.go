@@ -593,7 +593,7 @@ func TestClient_ListBackupGroups(t *testing.T) {
 		}
 		json.NewEncoder(w).Encode(map[string]any{
 			"data": []BackupGroup{
-				{BackupID: "vm/100"},
+				{BackupType: "vm", BackupID: "100", BackupCount: 1, LastBackup: 12345},
 			},
 		})
 	})
@@ -603,7 +603,7 @@ func TestClient_ListBackupGroups(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListBackupGroups failed: %v", err)
 	}
-	if len(groups) != 1 || groups[0].BackupID != "vm/100" {
+	if len(groups) != 1 || groups[0].BackupID != "100" {
 		t.Errorf("Unexpected groups: %v", groups)
 	}
 }

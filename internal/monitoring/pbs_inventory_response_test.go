@@ -15,12 +15,19 @@ import (
 func TestPBSWholeInventoryResponseRetainsEvidence(t *testing.T) {
 	for _, kind := range []string{"vm", "ct"} {
 		for _, stage := range []string{"namespace", "groups", "snapshots"} {
-			for name, body := range map[string]string{
+			bodies := map[string]string{
 				"trailing value":   `{"data":[]} {"data":[]}`,
 				"error envelope":   `{"data":[],"errors":{"private":"fixture-only"}}`,
 				"overwritten data": `{"data":null,"data":[]}`,
 				"invalid utf8":     "{\"data\":[],\"metadata\":\"\xff\"}",
-			} {
+			}
+			if stage == "groups" {
+				row := fmt.Sprintf(`{"backup-type":%q,"backup-id":"101","last-backup":1794960000`, kind)
+				bodies["row missing count"] = `{"data":[` + row + `}]}`
+				bodies["row null count"] = `{"data":[` + row + `,"backup-count":null}]}`
+				bodies["row duplicate identity"] = `{"data":[` + row + `,"backup-count":1},` + row + `,"backup-count":0}]}`
+			}
+			for name, body := range bodies {
 				for _, warm := range []bool{false, true} {
 					t.Run(fmt.Sprintf("%s/%s/%s/warm=%t", kind, stage, name, warm), func(t *testing.T) {
 						f := newPBSNamespaceContinuityFixture(t, kind)
@@ -30,6 +37,7 @@ func TestPBSWholeInventoryResponseRetainsEvidence(t *testing.T) {
 						before, points := f.live(), f.points(t, "pbs-main")
 						key := pbsBackupGroupKey{datastore: "archive", namespace: "tenant", backupType: kind, backupID: "101"}
 						cacheAt := f.m.pbsBackupCacheTimeFor("pbs-main", key)
+						tenantReads := f.tenantReads.Load()
 						f.rootAt.Add(15 * 60)
 						f.tenantAt.Add(15 * 60)
 						for range 2 {
@@ -76,6 +84,9 @@ func TestPBSWholeInventoryResponseRetainsEvidence(t *testing.T) {
 								}
 							}
 						}
+						if stage == "groups" && f.tenantReads.Load() != tenantReads {
+							t.Error("unread group inventory triggered snapshot reads")
+						}
 						if f.failedReads.Load() != 2 {
 							t.Error("invalid response caused extra reads")
 						}
@@ -99,6 +110,31 @@ func TestPBSWholeInventoryResponseRetainsEvidence(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+func TestPBSExplicitZeroGroupCountConfirmsAbsence(t *testing.T) {
+	for _, kind := range []string{"vm", "ct"} {
+		t.Run(kind, func(t *testing.T) {
+			f := newPBSNamespaceContinuityFixture(t, kind)
+			f.collect(t, true, nil)
+			if len(f.live()) != 2 || len(f.points(t, "pbs-main")) != 2 {
+				t.Fatal("ordinary read did not establish both restore points")
+			}
+
+			cacheKey := pbsBackupGroupKey{datastore: "archive", namespace: "tenant", backupType: kind, backupID: "101"}
+			tenantReads := f.tenantReads.Load()
+			f.collectInventoryResponse(t, "groups",
+				fmt.Sprintf(`{"data":[{"backup-type":%q,"backup-id":"101","backup-count":0}]}`, kind))
+
+			rows, points := f.live(), f.points(t, "pbs-main")
+			if len(rows) != 1 || rows["100"].VMID != "100" || len(points) != 1 || points[0].SubjectResourceID != f.ids[0] {
+				t.Fatal("explicit zero did not remove only the absent group's evidence")
+			}
+			if !f.m.pbsBackupCacheTimeFor("pbs-main", cacheKey).IsZero() || f.tenantReads.Load() != tenantReads {
+				t.Fatal("explicit zero retained a reuse clock or triggered a snapshot read")
+			}
+		})
 	}
 }
 

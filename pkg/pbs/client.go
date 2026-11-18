@@ -1137,10 +1137,10 @@ type Namespace struct {
 	Parent string `json:"parent,omitempty"`
 }
 
-// BackupGroup represents a group of backups for a specific VM/CT
+// BackupGroup represents a group of backups for a specific PBS subject.
 type BackupGroup struct {
-	BackupType  string   `json:"backup-type"` // "vm" or "ct"
-	BackupID    string   `json:"backup-id"`   // VMID
+	BackupType  string   `json:"backup-type"` // e.g. "vm", "ct" or "host"
+	BackupID    string   `json:"backup-id"`   // Opaque within the backup type
 	LastBackup  int64    `json:"last-backup"` // Unix timestamp
 	BackupCount int      `json:"backup-count"`
 	Files       []string `json:"files,omitempty"`
@@ -1990,7 +1990,7 @@ func (c *Client) ListBackupGroups(ctx context.Context, datastore string, namespa
 	if err != nil {
 		return nil, err
 	}
-	groups, err := readBackupInventory[BackupGroup](resp)
+	groups, err := readBackupGroupInventory(resp)
 	if err != nil {
 		return nil, err
 	}

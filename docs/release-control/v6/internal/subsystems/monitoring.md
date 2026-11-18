@@ -10001,3 +10001,28 @@ text-only non-sentinel control, with saved configuration readback. VMware's
 tenant rebinding and policy-message tests retain zero sockets/requests and
 sanitized concise feedback. Comparable production-consumer browser pairs at
 desktop/phone and light/dark remain necessary; native tests alone are not pixels.
+
+### PBS group inventory distinguishes unread rows from an empty group
+
+The PBS `/admin/datastore/{store}/groups` response admits a namespace
+inventory only if every row has a distinct provider kind and opaque ID, and
+an explicit nonnegative integer `backup-count`. Missing, null or invalid
+counts, unidentified rows, duplicate group identities and ambiguous fields
+reject the whole response without returning a successful prefix. An explicit
+zero count for an identified group and a valid empty array still establish
+absence. Identity and optional provider metadata are not rewritten.
+
+A malformed group list follows the existing unread-namespace path: no
+snapshot reads for that response, no cache/point renewal, and no confirmed
+absence. Live history stays inspectable where previously accepted and
+durable history remains qualified; a readable sibling still advances.
+Complete, ordinary reads restore authority. PBS job lists, access decisions,
+poll budgets, retention limits and backup operations are unchanged.
+
+`TestClient_ListBackupGroupsRequiresIdentifiableRows` exercises the HTTP
+boundary and valid empty, zero and opaque-ID cases.
+`TestPBSWholeInventoryResponseRetainsEvidence` covers cold and warm VM/CT
+polls, scoped carry-forward, durable evidence and recovery.
+`TestPBSExplicitZeroGroupCountConfirmsAbsence` checks that zero reconciles only
+the identified absent group. Source-bound Backups browser proof consumes
+actual inventory/posture frames on desktop and narrow layouts.
