@@ -3101,23 +3101,40 @@ tunnel, VPN or reverse proxy is running.
 Logos are path data inlined from simple-icons (CC0) in
 `infrastructureMapAppIcons.ts`. Add one by regenerating that file from the
 package, not by adding a dependency or loading a remote image.
-A network is a vSphere port group, a subnet an interface reports with its
-prefix, or a range of addresses that more than one machine shares, and a range
-is labelled as a range. An address nothing else shares makes no network, and a
+A network is a Proxmox bridge and VLAN tag a guest's device is plugged into,
+a vSphere port group, a subnet an interface reports with its prefix, or a
+range of addresses that more than one machine shares, and a range is labelled
+as a range.
+A Proxmox guest is placed by the bridge and tag its configuration names
+(`vmbr0 · VLAN 30`), within its cluster or standalone node, because the same
+bridge name on two unrelated nodes is two networks. That placement stands for
+the guest's addresses the way a port group does, and it places a guest that
+reports no address. A bridge takes in a subnet or range only when more than
+half of the addresses on it fall there, so machines placed by address are on
+the same network; a bridge carrying several ranges, or none, is a network of
+its own, and is not folded away for having one member. A bridge counts what
+is plugged in, not addresses, and says which subnet it carries or whose
+bridge it is. The per-device firewall flag is carried on the resource and is
+not drawn, since it does not show that filtering is active.
+An address nothing else shares makes no network, and a
 host's own container bridges place nothing. A macvlan or ipvlan container
 network is the host's own network and hides no address. Networks are drawn as
 pills above the boxes and, when there is more than one, as a mark on each
 tile. The map makes no claim that two networks are isolated, because Pulse
-does not see firewall rules, switches or VLAN tags.
+does not see firewall rules, switches or routers, and reads a VLAN tag only
+from a Proxmox guest's configuration.
+At most six networks are named, each with a colour of its own. Past six, the
+VLANs of one bridge are named together (`vmbr0 · VLANs 20, 30`, or the
+cluster in place of the tags where two clusters share the name), a tile is
+marked only with the colour of a named network, so two unrelated networks
+never share a mark, and a tile's hover names its exact bridge and VLAN.
 Endpoints Pulse only probes (a router, a site) are tiles in a Checks box.
 Hide names replaces every reported name, address and network name on the page
 and in the saved image, which is built in the browser. A tile the catalogue
 recognised then reads as the app's own name, which says what runs and nothing
 about the estate.
-A field the map needs belongs on the shared `Resource` type.
-`dockerHostWire` in `infrastructureMapNetworks.ts` is the one local cast, for
-the Docker host interfaces and core count the wire already carries; remove it
-when the type lists them and add no second cast.
+A field the map needs belongs on the shared `Resource` type. The map holds no
+local cast of a resource, and none may be added.
 Proof is owned by `infrastructureMapModel.test.ts`,
 `infrastructureMapNetworks.test.ts`, `infrastructureMapServices.test.ts`,
 `infrastructureMapDiagram.test.ts` and `InfrastructureMapSurface.test.tsx` in

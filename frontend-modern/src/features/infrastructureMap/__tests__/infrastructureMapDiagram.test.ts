@@ -210,6 +210,65 @@ describe('layoutServiceDiagram', () => {
     expect(texts(scene)).toContain('10.0.30.x · 2 addresses');
   });
 
+  it('marks no tile with the colour of a network that has no pill', () => {
+    const pips = (scene: MapScene) =>
+      ofKind(scene, 'rect').filter((node) => node.w === 3 && node.h === 10);
+    // Two guests on each of several ranges: every range is a network.
+    const onRanges = (count: number) =>
+      Array.from({ length: count }, (_, index) => [
+        guest(`a-${index}`, { identity: { ips: [`10.0.${31 + index}.5`] } }),
+        guest(`b-${index}`, { identity: { ips: [`10.0.${31 + index}.6`] } }),
+      ]).flat();
+    const layout = (extra: Resource[]) =>
+      layoutServiceDiagram(
+        buildServiceDiagram(buildInfrastructureMapModel(estate(extra)), { maxTilesPerGroup: 80 }),
+        { width: 1400, density: 'names' },
+      );
+    // Six networks: the LAN and five ranges, each with a pill and a colour.
+    const named = layout(onRanges(5));
+    expect(texts(named).some((text) => /^\+\d+ more$/.test(text))).toBe(false);
+    // Eight networks: the two smallest get no pill, and their four tiles no mark.
+    const crowded = layout(onRanges(7));
+    expect(texts(crowded)).toContain('+2 more');
+    expect(pips(crowded)).toHaveLength(pips(named).length);
+    expect(new Set(pips(crowded).map((node) => node.fill))).toEqual(
+      new Set(['net0', 'net1', 'net2', 'net3', 'net4', 'net5']),
+    );
+  });
+
+  it('counts what is plugged into a Proxmox bridge, address or not', () => {
+    const onVlan = (name: string) =>
+      guest(name, {
+        proxmox: {
+          clusterName: 'homelab',
+          networkInterfaces: [{ name: 'eth0', addresses: [], bridge: 'vmbr0', vlan: 30 }],
+        },
+      });
+    const scene = sceneOf(estate([onVlan('frigate'), onVlan('esphome')]), 1400);
+    expect(texts(scene)).toContain('vmbr0 · VLAN 30 · 2 connected');
+
+    // Two unrelated nodes with the same bridge name are told apart, and a
+    // bridge that carries a known subnet names it.
+    const elsewhere = guest('nvr', {
+      proxmox: {
+        instance: 'shed',
+        networkInterfaces: [{ name: 'eth0', addresses: [], bridge: 'vmbr0', vlan: 30 }],
+      },
+    });
+    const onLan = guest('paperless', {
+      proxmox: {
+        clusterName: 'homelab',
+        networkInterfaces: [{ name: 'eth0', addresses: ['192.168.10.90'], bridge: 'vmbr0' }],
+      },
+    });
+    const drawn = texts(sceneOf(estate([onVlan('frigate'), elsewhere, onLan]), 1400));
+    expect(drawn).toContain('vmbr0 · VLAN 30 · homelab · 1 connected');
+    expect(drawn).toContain('vmbr0 · VLAN 30 · shed · 1 connected');
+    expect(drawn.some((text) => /^vmbr0 · 192\.168\.10\.0\/24 · \d+ connected$/.test(text))).toBe(
+      true,
+    );
+  });
+
   it('draws only the layers the estate has', () => {
     const bare = sceneOf(
       [
