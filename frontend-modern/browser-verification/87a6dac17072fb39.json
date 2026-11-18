@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "74dc352d448fa38b8bed322eea7d09798e36bdac",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/PermissionPolicyDetails.tsx",
+    "frontend-modern/src/components/Settings/UserAssignmentsDialog.tsx",
+    "frontend-modern/src/utils/rbacPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/PermissionPolicyDetails.tsx": "b6431d5d244bc95c964e4994f3ab522d0a05d32b0c9bd9066c5bc1019364ac12",
+    "frontend-modern/src/components/Settings/UserAssignmentsDialog.tsx": "24c6dfd330c8a5efe0a55b86ae6e3d39e32f8da8221bcdea9aa0479b425a6ff1",
+    "frontend-modern/src/utils/rbacPresentation.ts": "d28d3298f741bd6ddcf84ee8efa178deff3013c82f523105af0f2d9aa354305d"
+  },
+  "routes": [
+    "/settings/security-users (production app, synthetic same-origin scoped reads)",
+    "/settings/security-roles (production app, policy detail preservation)"
+  ],
+  "states": [
+    "Saved rules: allow, deny, conditional allow/deny, unknown effect, and unknown conditions.",
+    "Two namesake principals; exact selected user, stored role and unlisted role ID remain readable.",
+    "Unsaved checkbox change, unavailable saved read, and genuinely empty read after explicit retry.",
+    "Roles inventory and indexed rule editor preserve the exact saved effect and condition value."
+  ],
+  "interactions": [
+    "Keyboard open, toggle, cancel and retry on desktop; touch equivalents on narrow WebKit.",
+    "Saved evidence stays distinct from the draft; role, caveat, unlisted ID and Save/Cancel remain visible.",
+    "Exact session-bound principal reads, no write, token, external endpoint or policy evaluation."
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "verified_at": "2026-11-18T07:26:30Z",
+  "playwright": "1.56.1",
+  "evidence": "24 native-inspected screenshots / 12 matched pairs, browser check matrix and source/asset linkage retained with the exact candidate.",
+  "limits": "Synthetic offline fixture, not live access, tenant recovery, deployment or published release."
+}

@@ -12,6 +12,7 @@ import {
   getUserIdentityLabel,
   getUserIdentityProviderLabel,
   sameRoleIDs,
+  savedRuleQualifier,
 } from '@/utils/rbacPresentation';
 
 /** The saved principal stays readable even when its mutable claims match another user. */
@@ -219,28 +220,31 @@ export const UserAssignmentsDialog: Component<UserAssignmentsDialogProps> = (pro
                   }
                 >
                   {(permissions) => (
-                    <>
-                      <Show when={permissions().length === 0}>
+                    <Show
+                      when={permissions().length}
+                      fallback={
                         <p class="text-xs text-muted italic text-center py-2">
                           No permissions were returned for this user's saved roles.
                         </p>
-                      </Show>
-                      <div class="flex flex-wrap gap-2">
+                      }
+                    >
+                      <ul
+                        role="list"
+                        aria-label="Returned rules"
+                        class="grid gap-0.5 sm:grid-cols-2"
+                      >
                         <For each={permissions()}>
                           {(permission) => (
-                            <span class="inline-flex max-w-full flex-wrap items-center break-all rounded-md bg-surface px-2.5 py-1 text-xs font-semibold text-base-content border border-border shadow-xs">
-                              <span class="text-blue-600 dark:text-blue-400">
-                                {permission.action}
-                              </span>
-                              <span class="mx-1 text-slate-400">:</span>
-                              <span class="text-blue-600 dark:text-blue-400">
-                                {permission.resource}
-                              </span>
-                            </span>
+                            <li class="grid grid-cols-[2fr_3fr] gap-x-1 text-xs">
+                              <bdi class="break-all text-blue-600 dark:text-blue-400">
+                                {permission.action}:<span>{permission.resource}</span>
+                              </bdi>{' '}
+                              <span class="break-words">{savedRuleQualifier(permission)}</span>
+                            </li>
                           )}
                         </For>
-                      </div>
-                    </>
+                      </ul>
+                    </Show>
                   )}
                 </Show>
                 <p class="mt-4 text-xs text-muted">
