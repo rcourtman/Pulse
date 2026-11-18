@@ -8949,6 +8949,7 @@
       "contract": "docs/release-control/v6/internal/subsystems/unified-resources.md",
       "owned_prefixes": [
         "frontend-modern/src/features/actions/",
+        "frontend-modern/src/features/infrastructureMap/",
         "internal/unifiedresources/"
       ],
       "owned_files": [
@@ -9045,6 +9046,7 @@
         "frontend-modern/src/features/vmware/VsphereNetworksTable.tsx",
         "frontend-modern/src/hooks/useUnifiedResources.ts",
         "frontend-modern/src/pages/Actions.tsx",
+        "frontend-modern/src/pages/InfrastructureMap.tsx",
         "frontend-modern/src/routing/navigation.ts",
         "frontend-modern/src/routing/resourceLinks.ts",
         "frontend-modern/src/routing/routePreload.ts",
@@ -9366,6 +9368,23 @@
               "frontend-modern/src/routing/__tests__/routePreload.test.ts",
               "tests/integration/tests/81-actions-inbox.spec.ts",
               "tests/integration/tests/83-product-trust-accessibility.spec.ts"
+            ]
+          },
+          {
+            "id": "infrastructure-map",
+            "label": "infrastructure map model, network grouping and layout proof",
+            "match_prefixes": [
+              "frontend-modern/src/features/infrastructureMap/"
+            ],
+            "match_files": [
+              "frontend-modern/src/pages/InfrastructureMap.tsx"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/features/infrastructureMap/__tests__/infrastructureMapLayout.test.ts",
+              "frontend-modern/src/features/infrastructureMap/__tests__/infrastructureMapModel.test.ts",
+              "frontend-modern/src/features/infrastructureMap/__tests__/infrastructureMapNetworks.test.ts"
             ]
           },
           {

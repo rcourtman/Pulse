@@ -1934,6 +1934,8 @@ isolation and replacement of a failed outcome by a newly accepted success.
 142. `frontend-modern/src/features/vmware/VsphereNetworksTable.tsx`
 143. `frontend-modern/src/features/truenas/TrueNASPageSurface.tsx`
 144. `frontend-modern/src/features/vmware/VmwarePageSurface.tsx`
+145. `frontend-modern/src/features/infrastructureMap/`
+146. `frontend-modern/src/pages/InfrastructureMap.tsx`
 
 ## Shared Boundaries
 
@@ -2980,6 +2982,30 @@ current record carries a non-empty `planHash`; every mutation passes that exact
 displayed identity through the canonical resource-action client. Legacy or
 mixed-version records without it remain reviewable but require replanning and
 cannot create a browser mutation.
+
+The infrastructure map is owned at
+`frontend-modern/src/features/infrastructureMap/` with the `/map` route shell
+in `frontend-modern/src/pages/InfrastructureMap.tsx`. It is a read-only drawing
+of the resources `useResources()` returns and must stay one.
+Nesting comes from `parentId` and cluster frames from `clusterId`; the map
+places nothing by matching names. Health is `resource.health.verdict`, and raw
+status is read only when a resource carries no verdict, so a stopped guest is
+off, not failed.
+A network is a vSphere port group, a subnet an interface reports with its
+prefix, or a range of addresses that more than one machine shares, and a range
+is labelled as a range. An address nothing else shares makes no network, and a
+host's own container bridges place nothing. The page must keep saying what
+Pulse cannot see (firewall rules, switches, VLAN tags) and must not present two
+networks drawn apart as tested isolation.
+Hide names replaces every reported name, address and network name on the page
+and in the saved image, which is built in the browser.
+A field the map needs belongs on the shared `Resource` type.
+`dockerHostWire` in `infrastructureMapNetworks.ts` is the one local cast, for
+the Docker host interfaces and core count the wire already carries; remove it
+when the type lists them and add no second cast.
+Proof is owned by `infrastructureMapModel.test.ts`,
+`infrastructureMapNetworks.test.ts` and `infrastructureMapLayout.test.ts` in
+`frontend-modern/src/features/infrastructureMap/__tests__/`.
 
 1. Add new resource types and identity fields in `internal/unifiedresources/types.go`
    Agentless availability endpoints enter the model as
@@ -4158,6 +4184,21 @@ application resource-provider or WebSocket lifecycle.
     (`TestStore_OpenBackfillsLegacyUnresolvedProxmoxPBSGuestRows`).
 
 ## Current State
+
+### The infrastructure map has an owner (18 November 2026)
+
+The map at `/map` landed with no owning rule, so later changes to it met no
+contract and no proof requirement. This subsystem now owns
+`frontend-modern/src/features/infrastructureMap/` and
+`frontend-modern/src/pages/InfrastructureMap.tsx`. It fits here rather than in
+frontend-primitives because every mark on the map is a unified resource and
+the map breaks when the resource model changes, not when a shell primitive
+does. frontend-primitives stays a dependent through its
+`frontend-modern/src/features/` entry, and the shell entry points in
+`AppLayout.tsx` keep their existing owners. The `infrastructure-map` registry
+policy accepts the three colocated test files as proof. No test renders
+`InfrastructureMapSurface.tsx` yet, so a change to it must stage a change to
+one of those files.
 
 ### Update on a stopped container says it stays stopped (10 November 2026)
 
