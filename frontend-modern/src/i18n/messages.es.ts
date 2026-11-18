@@ -46,6 +46,8 @@ export const ES_MESSAGE_OVERRIDES = {
   'alerts.overview.group.hide': 'Ocultar',
   'alerts.overview.group.linkedSignal': '+{count} senal vinculada',
   'alerts.overview.group.linkedSignals': '+{count} senales vinculadas',
+  'alerts.overview.group.pmgGateway': 'Toda la pasarela',
+  'alerts.overview.group.pmgNode': 'Específico del nodo',
   'alerts.overview.group.related': '+{count} relacionadas',
   'alerts.overview.synthesis.title.supported': 'Causa de infraestructura respaldada',
   'alerts.overview.synthesis.title.observationSet': 'Conjunto de observaciones relacionadas',

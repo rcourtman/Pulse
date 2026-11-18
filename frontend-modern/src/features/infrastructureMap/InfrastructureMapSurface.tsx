@@ -168,13 +168,14 @@ export function InfrastructureMapSurface() {
     return current ? renderMapSceneBody(current, palette(), hrefForHit) : '';
   });
 
-  let svgRef: SVGSVGElement | undefined;
+  const [svgElement, setSvgElement] = createSignal<SVGSVGElement>();
   // The drawing is replaced whole on every refresh. Keep a keyboard user's
-  // place by handing focus back to the same resource afterwards.
+  // place by handing focus back to the same resource afterwards. Watch the
+  // element as well as the markup: the drawing can be ready before Show
+  // mounts the SVG on entry or when the first inventory arrives.
   createEffect(
-    on(body, (markup, _previousMarkup, previousHits: MapHit[] | undefined) => {
-      const svg = svgRef;
-      if (!svg) return hits();
+    on([body, svgElement], ([markup, svg], _previous, previousHits: MapHit[] | undefined) => {
+      if (!svg) return;
       const focused = svg.contains(document.activeElement)
         ? document.activeElement?.closest(`[${MAP_HIT_ATTRIBUTE}]`)
         : null;
@@ -200,7 +201,7 @@ export function InfrastructureMapSurface() {
     body();
     const current = scene();
     const shown = hover();
-    const layer = svgRef?.querySelector(`[${MAP_RINGS_ATTRIBUTE}]`);
+    const layer = svgElement()?.querySelector(`[${MAP_RINGS_ATTRIBUTE}]`);
     if (!layer) return;
     layer.innerHTML = current && shown ? renderMapLinkRings(current, shown.hit, palette()) : '';
   });
@@ -324,7 +325,10 @@ export function InfrastructureMapSurface() {
         >
           {(current) => (
             <svg
-              ref={svgRef}
+              ref={(element) => {
+                setSvgElement(element);
+                onCleanup(() => setSvgElement(undefined));
+              }}
               class="mx-auto block max-w-full select-none"
               width={Math.floor(current().scene.width * current().scale)}
               height={Math.floor(current().scene.height * current().scale)}

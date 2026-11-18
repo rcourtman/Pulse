@@ -1,4 +1,6 @@
+import { MemoryRouter, Route } from '@solidjs/router';
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -11,9 +13,15 @@ import { fitServiceDiagram } from '../infrastructureMapDiagram';
 import { buildMapExportSvg, downloadMapImage } from '../infrastructureMapExport';
 import { InfrastructureMapSurface } from '../InfrastructureMapSurface';
 
-const resourcesMock = vi.hoisted(() => ({ value: [] as Resource[] }));
+const resourcesMock = vi.hoisted(() => ({
+  value: [] as Resource[],
+  read: undefined as (() => Resource[]) | undefined,
+}));
 vi.mock('@/hooks/useResources', () => ({
-  useResources: () => ({ resources: () => resourcesMock.value, loading: () => false }),
+  useResources: () => ({
+    resources: () => resourcesMock.read?.() ?? resourcesMock.value,
+    loading: () => false,
+  }),
 }));
 vi.mock('@/contexts/appRuntime', () => ({ useDarkMode: () => () => false }));
 // jsdom lays nothing out, so the page would never get a width to draw at.
@@ -240,18 +248,12 @@ describe('InfrastructureMapSurface connections', () => {
     vi.clearAllMocks();
     resourcesMock.value = behindVpn();
   });
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    resourcesMock.read = undefined;
+  });
 
-  // The drawing is written into the page when it changes. With resources that
-  // never change, as here, nothing has changed since the page appeared, so
-  // the test changes it and changes it back.
-  const draw = () => {
-    const page = render(() => <InfrastructureMapSurface />);
-    const hideNames = screen.getByRole('button', { name: 'Hide names' });
-    fireEvent.click(hideNames);
-    fireEvent.click(hideNames);
-    return page;
-  };
+  const draw = () => render(() => <InfrastructureMapSurface />);
   const tile = (container: HTMLElement, name: string) => {
     const found = container.querySelector(`[aria-label^="${name},"]`);
     if (!found) throw new Error(`no tile for ${name}`);
@@ -265,6 +267,34 @@ describe('InfrastructureMapSurface connections', () => {
     const rect = element.tagName.toLowerCase() === 'rect' ? element : element.querySelector('rect');
     return ['x', 'y', 'width', 'height'].map((name) => rect?.getAttribute(name));
   };
+
+  it('draws an available estate on mount without changing a control', () => {
+    const { container } = draw();
+
+    expect(tile(container, 'qbittorrent')).toBeInTheDocument();
+    expect(tile(container, 'gluetun')).toBeInTheDocument();
+  });
+
+  it('draws the first snapshot and draws again when the SVG remounts', () => {
+    const [resources, setResources] = createSignal<Resource[]>([]);
+    resourcesMock.read = resources;
+    const { container } = render(() => (
+      <MemoryRouter>
+        <Route path="/" component={InfrastructureMapSurface} />
+      </MemoryRouter>
+    ));
+    expect(screen.queryByRole('group', { name: 'Infrastructure map' })).not.toBeInTheDocument();
+
+    setResources(behindVpn());
+    const first = screen.getByRole('group', { name: 'Infrastructure map' });
+    expect(tile(container, 'qbittorrent')).toBeInTheDocument();
+
+    setResources([]);
+    expect(first).not.toBeInTheDocument();
+    setResources(behindVpn());
+    expect(screen.getByRole('group', { name: 'Infrastructure map' })).not.toBe(first);
+    expect(tile(container, 'qbittorrent')).toBeInTheDocument();
+  });
 
   it('draws no ring until a tile is pointed at, then rings the tile it is joined to', async () => {
     const { container } = draw();
