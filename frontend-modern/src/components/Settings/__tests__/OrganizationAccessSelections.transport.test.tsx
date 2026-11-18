@@ -119,7 +119,7 @@ async function withdrawCapability(change: CapabilityWithdrawal) {
 function expectWithdrawnOwnership() {
   expect(screen.queryByRole('dialog')).toBeNull();
   expect(screen.queryAllByRole('combobox', { name: /^Role for / })).toHaveLength(0);
-  expect(screen.queryByRole('textbox', { name: 'Invite user ID' })).toBeNull();
+  expect(screen.queryByRole('textbox', { name: 'Member user ID' })).toBeNull();
   expect(document.body).not.toHaveTextContent('Synthetic capability read unavailable');
 }
 
@@ -132,13 +132,13 @@ function chooseOwnership(origin: 'row' | 'form', userId: string) {
   if (origin === 'row') {
     fireEvent.change(roleFor(userId), { target: { value: 'owner' } });
   } else {
-    fireEvent.input(screen.getByRole('textbox', { name: 'Invite user ID' }), {
+    fireEvent.input(screen.getByRole('textbox', { name: 'Member user ID' }), {
       target: { value: `  ${userId}  ` },
     });
-    fireEvent.change(screen.getByRole('combobox', { name: 'Invite role' }), {
+    fireEvent.change(screen.getByRole('combobox', { name: 'Member role' }), {
       target: { value: 'owner' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Invite' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Review transfer' }));
   }
 }
 function ownershipDialog() {
@@ -500,10 +500,10 @@ describe('ownership capability boundary through the rendered consent and real tr
         replacementAcknowledgement = response;
         return replacementReply.promise;
       };
-      fireEvent.input(screen.getByRole('textbox', { name: 'Invite user ID' }), {
+      fireEvent.input(screen.getByRole('textbox', { name: 'Member user ID' }), {
         target: { value: replacement },
       });
-      fireEvent.change(screen.getByRole('combobox', { name: 'Invite role' }), {
+      fireEvent.change(screen.getByRole('combobox', { name: 'Member role' }), {
         target: { value: 'editor' },
       });
       fireEvent.click(screen.getByRole('button', { name: 'Invite' }));
@@ -517,8 +517,8 @@ describe('ownership capability boundary through the rendered consent and real tr
       expect(screen.queryByRole('dialog')).toBeNull();
       expect(roleFor(people[1])).toHaveValue('owner');
       expect(roleFor(owner)).toHaveValue('admin');
-      expect(screen.getByRole('textbox', { name: 'Invite user ID' })).toHaveValue(replacement);
-      expect(screen.getByRole('combobox', { name: 'Invite role' })).toHaveValue('editor');
+      expect(screen.getByRole('textbox', { name: 'Member user ID' })).toHaveValue(replacement);
+      expect(screen.getByRole('combobox', { name: 'Member role' })).toHaveValue('editor');
       expect(screen.getByRole('button', { name: 'Saving...' })).toBeDisabled();
       expect(orgReads()).toHaveLength(2);
       expect(writes()).toHaveLength(2);
@@ -529,8 +529,8 @@ describe('ownership capability boundary through the rendered consent and real tr
       await waitFor(() => expect(orgReads()).toHaveLength(3));
       await expectSavedMembers();
       expect(within(pendingGroup(replacement)).getByText('editor')).toBeInTheDocument();
-      expect(screen.getByRole('textbox', { name: 'Invite user ID' })).toHaveValue('');
-      expect(screen.getByRole('combobox', { name: 'Invite role' })).toHaveValue('viewer');
+      expect(screen.getByRole('textbox', { name: 'Member user ID' })).toHaveValue('');
+      expect(screen.getByRole('combobox', { name: 'Member role' })).toHaveValue('viewer');
       expect(screen.getByRole('button', { name: 'Invite' })).toBeEnabled();
       expect(writes()).toHaveLength(2);
       expect(JSON.parse(String(writes()[1][1]?.body))).toEqual({
@@ -701,10 +701,10 @@ describe('organization access selections through rendered controls and real tran
   it('submits the trimmed invitation draft and selected role while preserving existing access', async () => {
     await openPanel();
     const userId = 'new/member?realm=lab#saved';
-    fireEvent.input(screen.getByRole('textbox', { name: 'Invite user ID' }), {
+    fireEvent.input(screen.getByRole('textbox', { name: 'Member user ID' }), {
       target: { value: `  ${userId}  ` },
     });
-    fireEvent.change(screen.getByRole('combobox', { name: 'Invite role' }), {
+    fireEvent.change(screen.getByRole('combobox', { name: 'Member role' }), {
       target: { value: 'editor' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Invite' }));
@@ -713,8 +713,8 @@ describe('organization access selections through rendered controls and real tran
     expect(members).toEqual(originalMembers);
     expect(pending.filter((invitation) => invitation.userId !== userId)).toEqual(originalPending);
     expect(within(pendingGroup(userId)).getByText('editor')).toBeInTheDocument();
-    expect(screen.getByRole('textbox', { name: 'Invite user ID' })).toHaveValue('');
-    expect(screen.getByRole('combobox', { name: 'Invite role' })).toHaveValue('viewer');
+    expect(screen.getByRole('textbox', { name: 'Member user ID' })).toHaveValue('');
+    expect(screen.getByRole('combobox', { name: 'Member role' })).toHaveValue('viewer');
   });
 
   it('revokes only the selected pending invitation and keeps the other recipients available', async () => {
@@ -790,8 +790,8 @@ describe('Organization invitation form submission', () => {
     'submits the labelled %s draft through the existing session-bound owner',
     async (role) => {
       await openPanel();
-      const input = screen.getByRole('textbox', { name: 'Invite user ID' }) as HTMLInputElement;
-      const select = screen.getByRole('combobox', { name: 'Invite role' }) as HTMLSelectElement;
+      const input = screen.getByRole('textbox', { name: 'Member user ID' }) as HTMLInputElement;
+      const select = screen.getByRole('combobox', { name: 'Member role' }) as HTMLSelectElement;
       expect(Array.from(input.labels ?? [], (label) => label.textContent?.trim())).toContain(
         'User ID',
       );
@@ -799,6 +799,9 @@ describe('Organization invitation form submission', () => {
         'Role',
       );
       const form = screen.getByRole('form', { name: 'Invite member' });
+      expect(input).toHaveAccessibleDescription(
+        /New users must accept.*Role changes for existing members take effect immediately/,
+      );
       const userId = 'sso/invited/operator?realm=north#saved';
       fireEvent.input(input, { target: { value: `  ${userId}  ` } });
       fireEvent.change(select, { target: { value: role } });
@@ -814,14 +817,57 @@ describe('Organization invitation form submission', () => {
       expect(members).toEqual(originalMembers);
       expect(pending.filter((invitation) => invitation.userId !== userId)).toEqual(originalPending);
       expect(within(pendingGroup(userId)).getByText(role)).toBeInTheDocument();
+      expect(notices.success).toHaveBeenCalledExactlyOnceWith(
+        `Sent ${userId} an invitation for the ${role} role.`,
+      );
     },
   );
+
+  it('names an immediate role edit for an exact saved member, without changing the write', async () => {
+    // Preserve exact matching (including case) and the current saved role;
+    // similar identities must not turn the form into a different action.
+    members = members.map((member) =>
+      member.userId === people[1] ? { ...member, role: 'admin' } : member,
+    );
+    await openPanel();
+    const input = screen.getByRole('textbox', { name: 'Member user ID' });
+    input.focus();
+    fireEvent.input(input, { target: { value: people[1].toUpperCase() } });
+    expect(screen.getByRole('form', { name: 'Invite member' })).toContainElement(input);
+    expect(writes()).toHaveLength(0);
+
+    fireEvent.input(input, { target: { value: `  ${people[1]}  ` } });
+    const form = screen.getByRole('form', { name: 'Update member role' });
+    const submit = within(form).getByRole('button', { name: 'Update role' });
+    expect(form).toContainElement(input);
+    expect(input).toHaveFocus();
+    expect(submit).toHaveAccessibleDescription(
+      /Last read: Admin.*Role changes take effect immediately, without an invitation/,
+    );
+    expect(roleFor(people[1])).toHaveValue('admin');
+    fireEvent.change(within(form).getByRole('combobox', { name: 'Member role' }), {
+      target: { value: 'editor' },
+    });
+    expect(writes()).toHaveLength(0);
+
+    fireEvent.submit(form);
+    await expectSavedReread();
+    expectWrite(`${orgPath}/members`, 'POST', { userId: people[1], role: 'editor' });
+    expect(notices.success).toHaveBeenCalledExactlyOnceWith(
+      `Updated ${people[1]} to the editor role.`,
+    );
+    expect(pending).toEqual(originalPending);
+    expect(roleFor(people[0])).toHaveValue('viewer');
+    expect(roleFor(people[1])).toHaveValue('editor');
+    expect(roleFor(people[2])).toHaveValue('viewer');
+    expect(screen.getByRole('form', { name: 'Invite member' })).toBeInTheDocument();
+  });
 
   it('does not repeat an in-flight submission from the form', async () => {
     await openPanel();
     const completion = deferredResponse(json({}));
     writeReply = () => completion.promise;
-    fireEvent.input(screen.getByRole('textbox', { name: 'Invite user ID' }), {
+    fireEvent.input(screen.getByRole('textbox', { name: 'Member user ID' }), {
       target: { value: 'second-invited-user' },
     });
     const form = screen.getByRole('form', { name: 'Invite member' });
@@ -837,18 +883,22 @@ describe('Organization invitation form submission', () => {
 
   it('retains ownership confirmation before a form submission can transfer access', async () => {
     await openPanel();
-    fireEvent.input(screen.getByRole('textbox', { name: 'Invite user ID' }), {
+    fireEvent.input(screen.getByRole('textbox', { name: 'Member user ID' }), {
       target: { value: people[1] },
     });
-    fireEvent.change(screen.getByRole('combobox', { name: 'Invite role' }), {
+    fireEvent.change(screen.getByRole('combobox', { name: 'Member role' }), {
       target: { value: 'owner' },
     });
-    fireEvent.submit(screen.getByRole('form', { name: 'Invite member' }));
+    const form = screen.getByRole('form', { name: 'Review ownership transfer' });
+    expect(
+      within(form).getByRole('button', { name: 'Review transfer' }),
+    ).toHaveAccessibleDescription(/Choose another existing member.*review the transfer/);
+    fireEvent.submit(form);
     expect(ownershipDialog().getByText(people[1])).toBeInTheDocument();
     expect(writes()).toHaveLength(0);
     fireEvent.click(ownershipDialog().getByRole('button', { name: 'Cancel' }));
-    expect(screen.getByRole('textbox', { name: 'Invite user ID' })).toHaveValue(people[1]);
-    expect(screen.getByRole('combobox', { name: 'Invite role' })).toHaveValue('owner');
+    expect(screen.getByRole('textbox', { name: 'Member user ID' })).toHaveValue(people[1]);
+    expect(screen.getByRole('combobox', { name: 'Member role' })).toHaveValue('owner');
     expect(writes()).toHaveLength(0);
   });
 });

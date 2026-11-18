@@ -70,6 +70,10 @@ export function useOrganizationAccessPanelState(props: OrganizationAccessPanelPr
   const [inviteUserID, setInviteUserID] = createSignal('');
   const [inviteRole, setInviteRole] = createSignal<OrganizationRole>('viewer');
   const [ownershipTransfer, setOwnershipTransfer] = createSignal<OwnershipTransfer | null>(null);
+  const inviteDraftMember = createMemo(() => {
+    const userId = inviteUserID().trim();
+    return userId ? members().find((member) => member.userId === userId) : undefined;
+  });
 
   const activeOrgId = () => normalizeOrgScope(getOrgID());
   const [selectedOrgID, setSelectedOrgID] = createSignal(activeOrgId());
@@ -343,7 +347,7 @@ export function useOrganizationAccessPanelState(props: OrganizationAccessPanelPr
     }
     if (role === 'owner') {
       if (props.currentUser !== currentOrg.ownerUserId) return;
-      const member = members().find((member) => member.userId === userId);
+      const member = inviteDraftMember();
       if (!member) {
         notificationStore.error(getOrganizationAccessOwnerTransferMemberRequiredMessage());
         return;
@@ -356,7 +360,9 @@ export function useOrganizationAccessPanelState(props: OrganizationAccessPanelPr
       (result) =>
         result.kind === 'invitation'
           ? getOrganizationAccessInvitationSentMessage(userId, result.invitation.role)
-          : getOrganizationAccessMemberAddedMessage(userId, role),
+          : currentOrg.id === DEFAULT_ORG_SCOPE
+            ? getOrganizationAccessMemberAddedMessage(userId, result.member.role)
+            : getOrganizationAccessRoleUpdatedMessage(userId, result.member.role),
       getOrganizationAddMemberErrorMessage,
       () => {
         if (inviteUserID() === draft && inviteRole() === role) {
@@ -449,6 +455,7 @@ export function useOrganizationAccessPanelState(props: OrganizationAccessPanelPr
     canManageCurrentOrg,
     canChangeAccess,
     declineInvitation,
+    inviteDraftMember,
     inviteMember,
     inviteRole,
     inviteUserID,

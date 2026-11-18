@@ -127,7 +127,7 @@ function expectBoundRequests() {
 function expectUnknownSnapshot() {
   expect(screen.queryByLabelText('Display Name')).not.toBeInTheDocument();
   expect(screen.queryByRole('combobox', { name: /^Role for / })).not.toBeInTheDocument();
-  expect(screen.queryByLabelText('Invite user ID')).not.toBeInTheDocument();
+  expect(screen.queryByLabelText('Member user ID')).not.toBeInTheDocument();
   expect(screen.queryByRole('heading', { name: 'Create Share' })).not.toBeInTheDocument();
   expect(screen.queryByText('Old VM')).not.toBeInTheDocument();
   expect(screen.queryByText('Current saved VM')).not.toBeInTheDocument();
@@ -372,7 +372,7 @@ describe('organization save conflict recovery through real controls and transpor
         if (panel === 'sharing') await screen.findByText('Current saved VM');
         else await screen.findByText(nextOwner);
         expect(screen.queryByRole('combobox', { name: /^Role for / })).not.toBeInTheDocument();
-        expect(screen.queryByLabelText('Invite user ID')).not.toBeInTheDocument();
+        expect(screen.queryByLabelText('Member user ID')).not.toBeInTheDocument();
         if (panel === 'overview') {
           expect(screen.getByLabelText('Display Name')).toHaveValue(winningName);
           expect(screen.getByLabelText('Display Name')).toBeDisabled();

@@ -56,13 +56,13 @@ const choose = async (origin: 'row' | 'form') => {
       target: { value: 'owner' },
     });
   else {
-    fireEvent.input(screen.getByRole('textbox', { name: 'Invite user ID' }), {
+    fireEvent.input(screen.getByRole('textbox', { name: 'Member user ID' }), {
       target: { value: 'member-b' },
     });
-    fireEvent.change(screen.getByRole('combobox', { name: 'Invite role' }), {
+    fireEvent.change(screen.getByRole('combobox', { name: 'Member role' }), {
       target: { value: 'owner' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Invite' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Review transfer' }));
   }
 };
 const dialog = () => screen.getByRole('dialog', { name: 'Transfer organization ownership' });
@@ -155,7 +155,7 @@ describe('ownership transfer through the real organization client', () => {
       });
       expect(screen.getByRole('combobox', { name: 'Role for owner-a' })).toHaveValue('admin');
       expect(
-        within(screen.getByRole('combobox', { name: 'Invite role' })).queryByRole('option', {
+        within(screen.getByRole('combobox', { name: 'Member role' })).queryByRole('option', {
           name: 'Owner',
         }),
       ).not.toBeInTheDocument();
@@ -172,7 +172,7 @@ describe('ownership transfer through the real organization client', () => {
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
       expect(screen.getByRole('combobox', { name: 'Role for member-b' })).toHaveValue('viewer');
       if (origin === 'form')
-        expect(screen.getByRole('textbox', { name: 'Invite user ID' })).toHaveValue('member-b');
+        expect(screen.getByRole('textbox', { name: 'Member user ID' })).toHaveValue('member-b');
       expect(writes()).toHaveLength(0);
       expect(mocks.success).not.toHaveBeenCalled();
     },
@@ -200,10 +200,10 @@ describe('ownership transfer through the real organization client', () => {
       expect(screen.getByRole('combobox', { name: 'Role for member-b' })).toHaveValue('owner');
       expect(writes()).toHaveLength(1);
       if (origin === 'form') {
-        expect(screen.getByRole('textbox', { name: 'Invite user ID' })).toHaveValue('member-b');
-        expect(screen.getByRole('combobox', { name: 'Invite role' })).toHaveValue('owner');
+        expect(screen.getByRole('textbox', { name: 'Member user ID' })).toHaveValue('member-b');
+        expect(screen.getByRole('combobox', { name: 'Member role' })).toHaveValue('owner');
         expect(screen.getByRole('option', { name: 'Owner (current owner only)' })).toBeDisabled();
-        expect(screen.getByRole('button', { name: 'Invite' })).toBeDisabled();
+        expect(screen.getByRole('button', { name: 'Review transfer' })).toBeDisabled();
       }
     },
   );
