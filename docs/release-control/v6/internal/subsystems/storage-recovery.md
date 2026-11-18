@@ -10042,3 +10042,11 @@ schedules deletion of metric history, availability history or generated
 reports; storage retention settings alone decide what is kept. Older
 activation files that still carry `downgrade_retention` load without acting on
 it.
+
+### Proxmox page passes node hardware visibility to View (18 November 2026)
+
+`ProxmoxPageSurface` passes the workloads state's node hardware visibility and
+setter to `WorkloadsFilter`, so the Proxmox guest table's View menu can hide
+the hardware strip on node rows. Only the Proxmox page offers it, because
+only Proxmox node rows render `NodeGroupHeader`. No storage or recovery read
+changes.

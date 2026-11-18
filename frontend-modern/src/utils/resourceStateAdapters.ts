@@ -1392,6 +1392,19 @@ const buildTemperature = (
   return undefined;
 };
 
+const mergeNodeNetworkInterfaces = (
+  agentInterfaces: HostNetworkInterface[] | undefined,
+  proxmoxInterfaces: HostNetworkInterface[],
+): HostNetworkInterface[] => {
+  const agent = agentInterfaces ?? [];
+  if (agent.length === 0) return proxmoxInterfaces;
+  const agentNames = new Set(agent.map((networkInterface) => networkInterface.name));
+  return [
+    ...agent,
+    ...proxmoxInterfaces.filter((networkInterface) => !agentNames.has(networkInterface.name)),
+  ];
+};
+
 export const nodeFromResource = (resource: Resource): Node | null => {
   if (resource.type !== 'agent') return null;
   const platform = resourcePlatformData(resource);
@@ -1449,10 +1462,10 @@ export const nodeFromResource = (resource: Resource): Node | null => {
     networkOut: resource.network?.txBytes,
     diskRead: resource.diskIO?.readRate,
     diskWrite: resource.diskIO?.writeRate,
-    networkInterfaces:
-      agentNetworkInterfaces && agentNetworkInterfaces.length > 0
-        ? agentNetworkInterfaces
-        : proxmoxNetworkInterfaces,
+    // The agent's entry wins for a port both report (it carries addresses and
+    // counters), but the agent lists only addressed interfaces, so a bridged
+    // physical port such as eno1 comes from Proxmox's inventory.
+    networkInterfaces: mergeNodeNetworkInterfaces(agentNetworkInterfaces, proxmoxNetworkInterfaces),
     uptime: resource.uptime ?? asNumber(proxmox?.uptime) ?? 0,
     loadAverage: asArray(proxmox?.loadAverage)
       .map((value) => asNumber(value))

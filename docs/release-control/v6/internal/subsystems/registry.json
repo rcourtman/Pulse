@@ -6586,6 +6586,7 @@
               "frontend-modern/src/components/shared/__tests__/HistoryChart.test.tsx",
               "frontend-modern/src/components/shared/__tests__/InlineDetailTableRow.test.tsx",
               "frontend-modern/src/components/shared/__tests__/MobileNavBar.test.tsx",
+              "frontend-modern/src/components/shared/__tests__/NodeGroupHeader.test.tsx",
               "frontend-modern/src/components/shared/__tests__/PulseDataGrid.test.tsx",
               "frontend-modern/src/components/shared/__tests__/SearchField.test.tsx",
               "frontend-modern/src/components/shared/__tests__/SearchInput.test.tsx",

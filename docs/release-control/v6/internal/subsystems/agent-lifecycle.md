@@ -12061,3 +12061,19 @@ check a plan history limit; `router.go` and `licensing_bridge.go` drop the tier
 lookup, and `report_schedules.go` no longer applies the downgrade purge. No
 agent token, installation, command or lifecycle authority changes: these reads
 keep their existing scopes.
+
+### Agents report physical ports and link speed (18 November 2026)
+
+`collectNetwork` in `internal/hostmetrics/collector.go` reads Linux sysfs
+(`/sys/class/net/<name>/device` and `speed`) for each interface. A port backed
+by a device reports its negotiated `speedMbps`; software interfaces (bridges,
+bonds, veth, tap, tunnels) never report a speed, because a veth's invented
+10000 would make a container claim a 10G link. A physical port with no address
+of its own, such as `eno1` under `vmbr0`, is now reported as inventory: name,
+MAC and speed, no addresses and no counters. Its traffic is already counted on
+the addressed bridge, and the server sums every reported counter into the
+host's network rate, so the rate stays the same on every server version.
+Other platforms have no sysfs and keep reporting addressed interfaces only.
+No agent token, installation, command or lifecycle authority changes.
+`collector_test.go` covers the bridge case, the summed rate, the addressed
+port speed and the sysfs reader.

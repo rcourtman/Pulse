@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "base_sha": "3033f85b47e0040e5b38f30a9f64e6f9a8d58b0d",
+  "verified_at": "2026-11-18T09:53:12Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/WorkloadPanel.tsx",
+    "frontend-modern/src/components/Workloads/WorkloadsFilter.tsx",
+    "frontend-modern/src/components/Workloads/WorkloadsSurface.tsx",
+    "frontend-modern/src/components/Workloads/WorkloadsTable.tsx",
+    "frontend-modern/src/components/Workloads/useWorkloadsControlsState.ts",
+    "frontend-modern/src/components/Workloads/useWorkloadsState.ts",
+    "frontend-modern/src/components/Workloads/workloadsFilterModel.ts",
+    "frontend-modern/src/components/shared/NodeGroupHeader.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/WorkloadPanel.tsx": "c2f4663a705525bee9cf37d391ed439e7113947d646accd4aba10f3ccb2d1509",
+    "frontend-modern/src/components/Workloads/WorkloadsFilter.tsx": "a53015cc8dfaf36826e1879c8866a75d765f2723cde6cc858c05522168abb71c",
+    "frontend-modern/src/components/Workloads/WorkloadsSurface.tsx": "659e93e31d618cff38860c97a1a4a88bb85215e3da5616d2e1256d6c50b7f62a",
+    "frontend-modern/src/components/Workloads/WorkloadsTable.tsx": "0ac2b89bc2850ee61f4f9b1d546195f3fbeddaa81618a86b6dcc6a44856a777f",
+    "frontend-modern/src/components/Workloads/useWorkloadsControlsState.ts": "e1ca69e6518342327949da5901a65b94e603d9389f87220459a72dc75d5528d7",
+    "frontend-modern/src/components/Workloads/useWorkloadsState.ts": "aba65e96c8819d2c570b5cb2438354f4981eb5772033fa827cad54fca85bde4d",
+    "frontend-modern/src/components/Workloads/workloadsFilterModel.ts": "5df2387cea773996e22cf9250fccb931fa3307ef001b16c2facc0efd42baecbf",
+    "frontend-modern/src/components/shared/NodeGroupHeader.tsx": "c2680838e15793d4ad40c65536fc32c56110b265085a01344a5b5b5068cfa984",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx": "7d6c0ff2372304ce9b3d087be784a8bb4312bf7a78fb1f204525a667a87aa4e9"
+  },
+  "routes": [
+    "/proxmox (Overview tab; Vite dev build of this tree proxied read-only to a real production Pulse with three PVE nodes: delly, delly2, minipc)"
+  ],
+  "viewports": [
+    {
+      "width": 1271,
+      "height": 732
+    },
+    {
+      "width": 760,
+      "height": 900
+    }
+  ],
+  "states": [
+    "Grouped guest table, node hardware shown: each node row carries its strip at 33px row height",
+    "Grouped guest table, node hardware hidden: no strip on any node row, row height unchanged",
+    "Flat (List) layout: View menu omits the Node hardware control",
+    "Narrow 760px: View menu (under Filters) omits the Node hardware control; row strips not rendered; no horizontal page scroll",
+    "Node drawer (expanded from the nodes table) shows the strip with rows hidden, and at 760px fits on one line"
+  ],
+  "interactions": [
+    "View > Node hardware > Hide removes every row strip and stores false",
+    "Reload with false stored keeps Hide selected and strips absent after switching back to Grouped",
+    "View > Node hardware > Show restores the strips",
+    "View > Layout > List hides the control; Grouped brings it back",
+    "Expand delly in the nodes table opens its drawer overview with the strip while row strips are hidden"
+  ],
+  "browser": "Claude desktop built-in browser pane (Chromium)",
+  "themes": [
+    "dark"
+  ]
+}

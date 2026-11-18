@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "base_sha": "d139b7fbc9d6b66fa82e457c9ea2090b593337b8",
+  "verified_at": "2026-11-18T10:02:21Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx",
+    "frontend-modern/src/components/shared/NodeHardwareStrip.tsx",
+    "frontend-modern/src/features/proxmox/nodeHardwareSummary.ts",
+    "frontend-modern/src/utils/resourceStateAdapters.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx": "1afc713fe98a9923182acd31909247cef66c6eaaa3614936af4989eb443a5068",
+    "frontend-modern/src/components/shared/NodeHardwareStrip.tsx": "ec7add72536b71034c82f71d1da7eaae9d212155c1b693598daca8c2f547678d",
+    "frontend-modern/src/features/proxmox/nodeHardwareSummary.ts": "58991f14903065fdb5e97d86225cd5c6994b243d039c6f3b53de7adbf08c1423",
+    "frontend-modern/src/utils/resourceStateAdapters.ts": "93e253391e383e4dfff7e90e5cb2b3f65affcaa6e500242048a8a97e6c60a1e8"
+  },
+  "routes": [
+    "/proxmox (Overview tab; Vite dev build of this content proxied read-only to a real production Pulse with three PVE nodes: delly, delly2, minipc)"
+  ],
+  "viewports": [
+    {
+      "width": 1271,
+      "height": 732
+    },
+    {
+      "width": 760,
+      "height": 900
+    }
+  ],
+  "states": [
+    "Node rows: strip shows CPU model and threads, installed memory, one glyph per physical port and fan count (delly i5-10600 x12 16 GB eno1 1 fan; delly2 2 fans; minipc N100 x4 two wired ports and Wi-Fi)",
+    "Linked agent reporting only vmbr0/tailscale0: the Proxmox-only physical port eno1 still shows",
+    "Node drawer overview (expanded from the nodes table): strip above the charts, CPU sentence gone from the facts line",
+    "Narrow 760px: row strips not rendered, drawer strip on one line, no horizontal page scroll",
+    "Row height stays 33px with the strip"
+  ],
+  "interactions": [
+    "Hover titles on CPU, memory, ports and fans pills read full model, usable memory, port names and RPM range",
+    "Expand delly in the nodes table to open its drawer overview",
+    "Resize from desktop to 760px and back"
+  ],
+  "browser": "Claude desktop built-in browser pane (Chromium)",
+  "themes": [
+    "dark"
+  ],
+  "note": "Follow-up receipt for the final content of these paths in the node hardware strip range"
+}

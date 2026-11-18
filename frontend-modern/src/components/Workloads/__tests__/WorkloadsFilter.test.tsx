@@ -242,6 +242,46 @@ describe('WorkloadsFilter', () => {
       expect(window.localStorage.getItem('platformEstateOverviewVisible')).toBeNull();
     });
 
+    it('lets the owning page hide node hardware on grouped node rows', () => {
+      const setNodeHardwareVisible = vi.fn();
+      const [grouping, setGrouping] = createSignal<'grouped' | 'flat'>('grouped');
+      render(() => (
+        <WorkloadsFilter
+          {...makeProps({
+            groupingMode: grouping,
+            nodeHardwareVisible: () => true,
+            setNodeHardwareVisible,
+          })}
+        />
+      ));
+
+      const dialog = within(openViewPreferences());
+      fireEvent.click(
+        within(dialog.getByRole('group', { name: 'Node hardware visibility' })).getByRole(
+          'button',
+          { name: 'Hide' },
+        ),
+      );
+      expect(setNodeHardwareVisible).toHaveBeenCalledWith(false);
+
+      // A flat list has no node rows, so there is nothing to hide.
+      setGrouping('flat');
+      expect(dialog.queryByRole('group', { name: 'Node hardware visibility' })).toBeNull();
+    });
+
+    it('omits the node hardware choice on phones, where node rows carry no strip', () => {
+      isMobileMock.mockReturnValue(true);
+      render(() => (
+        <WorkloadsFilter
+          {...makeProps({ nodeHardwareVisible: () => true, setNodeHardwareVisible: vi.fn() })}
+        />
+      ));
+      fireEvent.click(screen.getByRole('button', { name: 'Filters' }));
+      openViewPreferences();
+      expect(screen.queryByText('Layout')).toBeInTheDocument();
+      expect(screen.queryByRole('group', { name: 'Node hardware visibility' })).toBeNull();
+    });
+
     it('offers a guest/host memory percentage basis when the owning page enables it', () => {
       const setMemoryDisplayBasis = vi.fn();
       render(() => (
