@@ -37,6 +37,8 @@ export interface MapHit {
   detail?: string;
   /** What the thing's connections say about it, one sentence each. */
   links?: string[];
+  /** The tiles those connections join it to, by id. Only ones that are drawn. */
+  linked?: string[];
   /** A tile that stands for several things is not a resource and opens nothing. */
   navigable: boolean;
 }

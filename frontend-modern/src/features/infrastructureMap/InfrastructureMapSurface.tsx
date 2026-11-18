@@ -43,6 +43,8 @@ import {
 import {
   MAP_HIT_ATTRIBUTE,
   MAP_PAGE_PALETTES,
+  MAP_RINGS_ATTRIBUTE,
+  renderMapLinkRings,
   renderMapSceneBody,
 } from './infrastructureMapRender';
 import { buildServiceDiagram } from './infrastructureMapServices';
@@ -151,8 +153,6 @@ export function InfrastructureMapSurface() {
     () => fitted()?.density ?? densityChoice() ?? resolveDefaultMapDensity(liveModel()),
   );
   const scene = createMemo(() => fitted()?.scene ?? null);
-  // The kinds of link on the map, so the legend explains only lines it draws.
-  const linkKinds = createMemo(() => new Set(model().connections.links.map((link) => link.kind)));
   const hits = createMemo(() => {
     const out: MapHit[] = [];
     for (const node of scene()?.nodes ?? []) if (node.kind === 'hit') out.push(node.hit);
@@ -191,6 +191,19 @@ export function InfrastructureMapSurface() {
       return hits();
     }),
   );
+
+  // The map draws no line between two tiles. While one is pointed at or
+  // focused, the tiles its connections join it to are ringed, and its card
+  // says what each connection is. Declared after the effect above, so it
+  // runs once the drawing it adds to has been replaced.
+  createEffect(() => {
+    body();
+    const current = scene();
+    const shown = hover();
+    const layer = svgRef?.querySelector(`[${MAP_RINGS_ATTRIBUTE}]`);
+    if (!layer) return;
+    layer.innerHTML = current && shown ? renderMapLinkRings(current, shown.hit, palette()) : '';
+  });
 
   const hitFromEvent = (event: Event): { hit: MapHit; element: Element } | null => {
     const element = (event.target as Element | null)?.closest?.(`[${MAP_HIT_ATTRIBUTE}]`);
@@ -347,24 +360,6 @@ export function InfrastructureMapSurface() {
             />
             Off
           </li>
-          <Show when={linkKinds().has('route')}>
-            <li class="inline-flex items-center gap-1.5">
-              <span
-                class="inline-block w-4 shrink-0 border-t-2 border-blue-600 dark:border-blue-400"
-                aria-hidden="true"
-              />
-              Proxy route
-            </li>
-          </Show>
-          <Show when={linkKinds().has('network')}>
-            <li class="inline-flex items-center gap-1.5">
-              <span
-                class="inline-block w-4 shrink-0 border-t-2 border-current"
-                aria-hidden="true"
-              />
-              Shared network
-            </li>
-          </Show>
           <li class="ml-auto">
             Apps are recognised by their image or name. The Internet is drawn but not monitored.
           </li>

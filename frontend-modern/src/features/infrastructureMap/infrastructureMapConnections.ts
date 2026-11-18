@@ -22,11 +22,12 @@ export type MapLinkKind = 'network' | 'route';
 export interface MapLink {
   kind: MapLinkKind;
   /**
-   * Where the line starts, in the direction traffic takes: the container
-   * that uses another's network, or the proxy that routes to a container.
+   * Where the connection starts, in the direction traffic takes: the
+   * container that uses another's network, or the proxy that routes to a
+   * container.
    */
   fromId: string;
-  /** Where the arrow points. */
+  /** Where that traffic goes. */
   toId: string;
   /**
    * The hostnames a route answers at, from the routed container's own
@@ -95,7 +96,7 @@ const attachedNetworks = (container: Resource): string[] =>
 const isTraefik = (container: Resource): boolean =>
   imageRepository(container.docker?.image) === 'traefik';
 
-/** What a route's line says: its first hostname, and how many more it has. */
+/** What is written for a route: its first hostname, and how many more it has. */
 export const mapRouteLabel = (hosts: readonly string[]): string =>
   hosts.length === 0 ? '' : hosts.length === 1 ? hosts[0] : `${hosts[0]} +${hosts.length - 1}`;
 

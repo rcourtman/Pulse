@@ -3,7 +3,7 @@ import { KUBERNETES_ICON_PATH } from '@/components/icons/KubernetesIcon';
 import { PROXMOX_ICON_PATH } from '@/components/icons/ProxmoxIcon';
 import { TRUENAS_ICON_PATH } from '@/components/icons/TrueNASIcon';
 import { resolveMapAppLogo } from './infrastructureMapCatalogue';
-import type { MapGlyphKey, MapScene, MapTone, SceneNode } from './infrastructureMapLayout';
+import type { MapGlyphKey, MapHit, MapScene, MapTone, SceneNode } from './infrastructureMapLayout';
 import type { MapHealth } from './infrastructureMapModel';
 
 /**
@@ -221,6 +221,8 @@ const nodeToSvg = (node: SceneNode, palette: MapPalette): string => {
 };
 
 export const MAP_HIT_ATTRIBUTE = 'data-map-hit';
+/** The layer the page fills with rings while a tile is pointed at or focused. */
+export const MAP_RINGS_ATTRIBUTE = 'data-map-rings';
 
 // The hover and focus treatment of everything on the map that answers the
 // pointer. Kept as one literal so the stylesheet build can see the classes.
@@ -250,6 +252,25 @@ export function renderMapSceneBody(
         ? `<a href="${escapeXml(href)}" ${MAP_HIT_ATTRIBUTE}="${index}" aria-label="${label}"><rect ${rect}/></a>`
         : `<rect ${rect} ${MAP_HIT_ATTRIBUTE}="${index}" tabindex="0" role="img" aria-label="${label}"/>`;
     })
+    .concat(`<g ${MAP_RINGS_ATTRIBUTE}="" pointer-events="none"></g>`)
+    .join('');
+}
+
+/**
+ * A ring round every tile that a connection joins to the given one: the
+ * container whose network it uses, the proxy that routes it, or the other
+ * way about. The map draws no line for these, so nothing crosses a card. The
+ * rings are shown only while that one tile is pointed at or focused.
+ */
+export function renderMapLinkRings(scene: MapScene, of: MapHit, palette: MapPalette): string {
+  const linked = new Set(of.linked ?? []);
+  if (linked.size === 0) return '';
+  return scene.nodes
+    .map((node) =>
+      node.kind === 'hit' && linked.has(node.hit.id)
+        ? `<rect x="${n(node.x)}" y="${n(node.y)}" width="${n(node.w)}" height="${n(node.h)}" rx="${n(node.r)}" fill="none" stroke="${palette.accent}" stroke-width="1.5"/>`
+        : '',
+    )
     .join('');
 }
 

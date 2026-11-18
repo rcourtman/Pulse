@@ -201,3 +201,108 @@ describe('InfrastructureMapSurface fit to the window', () => {
     expect(watcher?.boxes).toEqual([]);
   });
 });
+
+// A Docker host with one container inside another's network, which is the
+// one connection between two tiles this estate states.
+const behindVpn = (): Resource[] => {
+  const hex = (seed: string): string =>
+    [...seed]
+      .map((char) => char.charCodeAt(0).toString(16).padStart(2, '0'))
+      .join('')
+      .padEnd(64, '0')
+      .slice(0, 64);
+  const box = (name: string, docker: NonNullable<Resource['docker']>): Resource =>
+    resource({
+      id: `c-${name}`,
+      type: 'app-container',
+      name,
+      platformType: 'docker',
+      parentId: 'tower',
+      status: 'running',
+      docker: {
+        hostSourceId: 'tower-daemon',
+        containerId: hex(name),
+        containerState: 'running',
+        image: `example/${name}:latest`,
+        ...docker,
+      },
+    });
+  return [
+    resource({ id: 'tower', type: 'docker-host', name: 'Tower', platformType: 'docker' }),
+    box('gluetun', { networkMode: 'bridge', networks: [{ name: 'bridge' }] }),
+    box('qbittorrent', { networkMode: `container:${hex('gluetun')}` }),
+    box('sonarr', { networkMode: 'bridge', networks: [{ name: 'bridge' }] }),
+  ];
+};
+
+describe('InfrastructureMapSurface connections', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resourcesMock.value = behindVpn();
+  });
+  afterEach(cleanup);
+
+  // The drawing is written into the page when it changes. With resources that
+  // never change, as here, nothing has changed since the page appeared, so
+  // the test changes it and changes it back.
+  const draw = () => {
+    const page = render(() => <InfrastructureMapSurface />);
+    const hideNames = screen.getByRole('button', { name: 'Hide names' });
+    fireEvent.click(hideNames);
+    fireEvent.click(hideNames);
+    return page;
+  };
+  const tile = (container: HTMLElement, name: string) => {
+    const found = container.querySelector(`[aria-label^="${name},"]`);
+    if (!found) throw new Error(`no tile for ${name}`);
+    return found;
+  };
+  const rings = (container: HTMLElement) => [
+    ...container.querySelectorAll('[data-map-rings] rect'),
+  ];
+  // The outline of a tile's target, which a ring round that tile repeats.
+  const place = (element: Element) => {
+    const rect = element.tagName.toLowerCase() === 'rect' ? element : element.querySelector('rect');
+    return ['x', 'y', 'width', 'height'].map((name) => rect?.getAttribute(name));
+  };
+
+  it('draws no ring until a tile is pointed at, then rings the tile it is joined to', async () => {
+    const { container } = draw();
+    expect(rings(container)).toHaveLength(0);
+
+    fireEvent.pointerOver(tile(container, 'qbittorrent'));
+
+    expect(rings(container)).toHaveLength(1);
+    expect(place(rings(container)[0])).toEqual(place(tile(container, 'gluetun')));
+    expect(await screen.findByText('Uses the network of gluetun')).toBeTruthy();
+
+    // A tile with no stated connection rings nothing.
+    fireEvent.pointerOver(tile(container, 'sonarr'));
+    expect(rings(container)).toHaveLength(0);
+
+    fireEvent.pointerOver(tile(container, 'gluetun'));
+    expect(place(rings(container)[0])).toEqual(place(tile(container, 'qbittorrent')));
+
+    fireEvent.pointerLeave(container.querySelector('svg[role="group"]')!);
+    expect(rings(container)).toHaveLength(0);
+  });
+
+  it('rings the same tile for a keyboard user, while the tile has focus', () => {
+    const { container } = draw();
+
+    fireEvent.focusIn(tile(container, 'qbittorrent'));
+    expect(rings(container)).toHaveLength(1);
+    expect(place(rings(container)[0])).toEqual(place(tile(container, 'gluetun')));
+
+    fireEvent.focusOut(tile(container, 'qbittorrent'));
+    expect(rings(container)).toHaveLength(0);
+  });
+
+  it('writes the connection under the tile and keeps lines out of the legend', () => {
+    const { container } = draw();
+
+    expect(container.querySelector('svg[role="group"]')?.textContent).toContain('via gluetun');
+    expect(screen.queryByText('Shared network')).toBeNull();
+    expect(screen.queryByText('Proxy route')).toBeNull();
+  });
+});

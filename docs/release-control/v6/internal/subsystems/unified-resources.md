@@ -4318,11 +4318,11 @@ application resource-provider or WebSocket lifecycle.
 
 ## Current State
 
-### The map draws the connections a collected value states (18 November 2026)
+### The map says which tiles a collected value connects (18 November 2026)
 
-The diagram had no line between two apps, because nothing Pulse collected
-named both ends of one. Three collected facts now do, and
-`infrastructureMapConnections.ts` reads those and nothing else:
+The diagram said nothing about how two apps are connected, because nothing
+Pulse collected named both ends of a connection. Three collected facts now
+do, and `infrastructureMapConnections.ts` reads those and nothing else:
 
 - `docker.networkMode` of `container:<id>`: the container uses the network of
   the container with that ID on the same Docker host.
@@ -4334,37 +4334,38 @@ named both ends of one. Three collected facts now do, and
 - `agent.defaultGateways` and `agent.dnsServers`: the address a machine's
   first default route names, and the addresses it resolves names at.
 
-A reference that matches nothing, or more than one thing, draws nothing. A
+A reference that matches nothing, or more than one thing, links nothing. A
 missing network list is never read as a shared network, and no connection is
 taken from a name, a port or a subnet.
 
-What the diagram draws from them:
+What the diagram does with them:
 
-- A link from a container to the one whose network it uses, in the neutral
-  tone, and from a proxy to each container it routes, in the accent the
-  Internet arrow uses. A link whose end is folded into a `+N` tile is not
-  drawn. A link with an end switched off is dashed.
-- Every link runs level or upright, never at a slant, and only where nothing
-  else is drawn: the clear strip above a row of tiles, the gap between two
-  columns, and the space between rows of boxes. No link passes through a tile
-  it does not join. Past the network pills a link goes between two of them,
-  or round the end of their row, and never behind one: behind a pill it would
-  read as joined to that network. The two kinds keep to separate lanes, and
-  links from one row of boxes to another leave it together.
-- The caption of a container that uses another's network names it, and the
-  caption of a routed container is where it answers. Both tiles of a link say
-  it in a sentence on hover.
+- It draws no line between two tiles. Lines between tiles were built and
+  taken out the same day: they read as part of the tree of layer connectors,
+  crossed cards they did not join, and failed the rule that the map is one
+  clean drawing read at a glance. The connectors between layers stay the only
+  lines on the map.
+- The caption of a container that uses another's network names it
+  (`via <name>`), and the caption of a routed container is where it answers.
+  Both tiles of a connection say it in a sentence on hover.
+- Each tile carries the ids of the tiles its connections join it to, and
+  only ones that are drawn: an end folded into a `+N` tile is left out. While
+  a tile is pointed at or has keyboard focus, the page rings those tiles, and
+  it rings nothing at any other time. Nothing else on the map is dimmed.
 - A default gateway that nothing monitored answers on is a dashed tile beside
   the ways in, named by its address, with the machines that use it on its
-  hover and no line to it. One that a monitored thing answers on is said on
-  that thing instead. A resolver is said only on something already drawn.
+  hover and no ring or line to them. One that a monitored thing answers on is
+  said on that thing instead. A resolver is said only on something already
+  drawn.
+- A saved image has no pointer, so it has no rings. The captions carry the
+  facts there.
 
 With names hidden, a route's hostnames and a gateway's address are dropped
-and the links stay.
+and the connections stay.
 
 `infrastructureMapConnections.test.ts` joins the `infrastructure-map` proof
 policy. The earlier statement that the diagram draws no connector between two
-apps now holds only where none of these facts is reported.
+apps holds again: a connection is written and ringed, never drawn as a line.
 
 ### The map fits the screen (18 November 2026)
 

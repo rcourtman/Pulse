@@ -668,7 +668,7 @@ export function anonymizeInfrastructureMapModel(
   return {
     ...model,
     // A route's hostnames and a gateway's address identify the estate. The
-    // lines and the counts stay: they are the shape of it, not its names.
+    // connections and the counts stay: they are the shape of it, not its names.
     connections: {
       links: model.connections.links.map((link) => ({ ...link, hosts: [] })),
       gateways: model.connections.gateways.map((gateway) => ({ ...gateway, address: '' })),

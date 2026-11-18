@@ -7,6 +7,7 @@ import { buildInfrastructureMapModel } from '../infrastructureMapModel';
 import {
   MAP_PAGE_PALETTES,
   MAP_PALETTES,
+  renderMapLinkRings,
   renderMapSceneBody,
   renderMapSceneToSvg,
 } from '../infrastructureMapRender';
@@ -359,7 +360,7 @@ describe('layoutServiceDiagram', () => {
     expect(drawn).toContain('switched off');
   });
 
-  describe('links between tiles', () => {
+  describe('connections between tiles', () => {
     const hex = (seed: string): string =>
       [...seed]
         .map((char) => char.charCodeAt(0).toString(16).padStart(2, '0'))
@@ -403,214 +404,107 @@ describe('layoutServiceDiagram', () => {
     ];
     const hitOf = (scene: MapScene, id: string) =>
       ofKind(scene, 'hit').find((node) => node.hit.id === id);
-    const inside = (point: [number, number], hit: { x: number; y: number; w: number; h: number }) =>
-      point[0] >= hit.x &&
-      point[0] <= hit.x + hit.w &&
-      point[1] >= hit.y &&
-      point[1] <= hit.y + hit.h;
-    // A link starts inside one tile and ends inside another. The connectors
-    // between layers start and end on the edges of boxes.
-    const linksOf = (scene: MapScene) => {
-      const tiles = ofKind(scene, 'hit');
-      return ofKind(scene, 'line').filter(
-        (node) =>
-          tiles.some((tile) => inside(node.points[0], tile)) &&
-          tiles.some((tile) => inside(node.points[node.points.length - 1], tile)),
-      );
-    };
+    // The connectors between layers are the only lines on the map. A stated
+    // connection between two tiles adds none.
+    const lineCount = (scene: MapScene) => ofKind(scene, 'line').length;
 
-    it('draws one arrow from a container to the one whose network it uses', () => {
+    it('draws no line between two tiles, and tells each end the other', () => {
+      const plain = dockerEstate().map((resource) =>
+        resource.id === 'c-qbittorrent'
+          ? { ...resource, docker: { ...resource.docker, networkMode: 'bridge' } }
+          : resource,
+      );
       const scene = sceneOf(dockerEstate(), 1400);
+      expect(lineCount(scene)).toBe(lineCount(sceneOf(plain, 1400)));
+      const from = hitOf(scene, 'c-qbittorrent');
+      const to = hitOf(scene, 'c-gluetun');
+      expect(from?.hit.linked).toEqual(['c-gluetun']);
+      expect(to?.hit.linked).toEqual(['c-qbittorrent']);
+      expect(from?.hit.links).toEqual(['Uses the network of gluetun']);
+      expect(to?.hit.links).toEqual(['Carries the network of 1 container']);
+      // What it uses is written under its name, where the host would be.
+      expect(texts(scene)).toContain('via gluetun');
+      expect(hitOf(scene, 'c-sonarr')?.hit.linked).toBeUndefined();
+    });
+
+    it('tells a proxy every app it routes, at any width, and adds no line for them', () => {
+      const routed = (name: string) =>
+        box(name, {
+          labels: { [`traefik.http.routers.${name}.rule`]: `Host(\`${name}.example.test\`)` },
+        });
+      const apps = ['jellyfin', 'grafana', 'nextcloud', 'gitea', 'vaultwarden', 'wiki'];
+      const busy = dockerEstate([
+        ...waysIn(),
+        box('traefik', { image: 'traefik:v3.1' }),
+        box('prowlarr', { networkMode: `container:${hex('gluetun')}`, networks: undefined }),
+        ...apps.map(routed),
+      ]);
+      const unrouted = busy.map((resource) =>
+        resource.docker?.labels || resource.docker?.networkMode?.startsWith('container:')
+          ? {
+              ...resource,
+              docker: { ...resource.docker, labels: undefined, networkMode: 'bridge' },
+            }
+          : resource,
+      );
+      for (const width of [340, 390, 700, 1024, 1440, 2200]) {
+        for (const density of ['names', 'marks'] as const) {
+          const scene = sceneOf(busy, width, density);
+          expect(lineCount(scene)).toBe(lineCount(sceneOf(unrouted, width, density)));
+          expect([...(hitOf(scene, 'c-traefik')?.hit.linked ?? [])].sort()).toEqual(
+            apps.map((name) => `c-${name}`).sort(),
+          );
+          for (const name of apps) {
+            expect(hitOf(scene, `c-${name}`)?.hit.linked).toEqual(['c-traefik']);
+          }
+          expect([...(hitOf(scene, 'c-gluetun')?.hit.linked ?? [])].sort()).toEqual([
+            'c-prowlarr',
+            'c-qbittorrent',
+          ]);
+          // Every tile a link names is one that is drawn.
+          const drawn = new Set(ofKind(scene, 'hit').map((node) => node.hit.id));
+          for (const node of ofKind(scene, 'hit')) {
+            for (const id of node.hit.linked ?? []) expect(drawn.has(id)).toBe(true);
+          }
+        }
+      }
+    });
+
+    it('rings the tiles joined to the one pointed at, and nothing else', () => {
+      const scene = sceneOf(dockerEstate(), 1400);
+      const palette = MAP_PAGE_PALETTES.dark;
       const from = hitOf(scene, 'c-qbittorrent');
       const to = hitOf(scene, 'c-gluetun');
       if (!from || !to) throw new Error('both tiles should be drawn');
-      const arrows = linksOf(scene).filter(
-        (node) => inside(node.points[0], from) && inside(node.points[node.points.length - 1], to),
-      );
-      expect(arrows).toHaveLength(1);
-      expect(arrows[0].arrow).toBe(true);
-      expect(arrows[0].dashed).toBeUndefined();
-      // A shared network is drawn in the neutral tone, a proxy route in the
-      // accent the arrow from the Internet uses.
-      expect(arrows[0].tone).toBe('muted');
-      expect(linksOf(scene)).toHaveLength(1);
-      // It is drawn over the cards and under the tiles, so an icon in its
-      // way covers it.
-      let lastCard = -1;
-      let firstTile = scene.nodes.length;
-      scene.nodes.forEach((node, index) => {
-        if (node.kind === 'rect' && node.fill === 'surface' && node.stroke === 'border') {
-          lastCard = index;
-        }
-        if (node.kind === 'app') firstTile = Math.min(firstTile, index);
-      });
-      const at = scene.nodes.indexOf(arrows[0]);
-      expect(at).toBeGreaterThan(lastCard);
-      expect(at).toBeLessThan(firstTile);
-      expect(from.hit.links).toEqual(['Uses the network of gluetun']);
-      expect(to.hit.links).toEqual(['Carries the network of 1 container']);
+      const rings = renderMapLinkRings(scene, from.hit, palette);
+      expect(rings.match(/<rect /g)).toHaveLength(1);
+      expect(rings).toContain(`x="${to.x}" y="${to.y}"`);
+      expect(rings).toContain(`stroke="${palette.accent}"`);
+      expect(rings).toContain('fill="none"');
+      expect(renderMapLinkRings(scene, to.hit, palette)).toContain(`x="${from.x}" y="${from.y}"`);
+      const alone = hitOf(scene, 'c-sonarr');
+      if (!alone) throw new Error('the tile should be drawn');
+      expect(renderMapLinkRings(scene, alone.hit, palette)).toBe('');
+      // The page has one empty layer for them, which the pointer passes through.
+      const body = renderMapSceneBody(scene, palette, () => '/x');
+      expect(body.match(/data-map-rings/g)).toHaveLength(1);
+      expect(body.endsWith('<g data-map-rings="" pointer-events="none"></g>')).toBe(true);
+      // A saved image has no pointer, so it has no rings: the captions say it.
+      const saved = renderMapSceneToSvg(scene, MAP_PALETTES.dark);
+      expect(saved).not.toContain('data-map-rings');
+      expect(saved).toContain('via gluetun');
     });
 
-    it('runs every line level or upright, never at a slant', () => {
-      const routed = (name: string) =>
-        box(name, {
-          networks: [{ name: 'bridge' }],
-          labels: { [`traefik.http.routers.${name}.rule`]: `Host(\`${name}.example.test\`)` },
-        });
-      const busy = dockerEstate([
-        ...waysIn(),
-        box('traefik', { image: 'traefik:v3.1', networks: [{ name: 'bridge' }] }),
-        box('prowlarr', { networkMode: `container:${hex('gluetun')}`, networks: undefined }),
-        ...['jellyfin', 'grafana', 'nextcloud', 'gitea', 'vaultwarden', 'wiki'].map(routed),
-      ]);
-      for (const width of [390, 900, 1400, 2200]) {
-        for (const density of ['names', 'marks'] as const) {
-          const scene = sceneOf(busy, width, density);
-          expect(linksOf(scene).length).toBeGreaterThanOrEqual(8);
-          for (const node of ofKind(scene, 'line')) {
-            for (let index = 1; index < node.points.length; index += 1) {
-              const [x1, y1] = node.points[index - 1];
-              const [x2, y2] = node.points[index];
-              expect(x1 === x2 || y1 === y2).toBe(true);
-            }
-          }
-        }
-      }
-    });
-
-    it('never runs a link through a tile it does not join', () => {
-      const routed = (name: string) =>
-        box(name, {
-          labels: { [`traefik.http.routers.${name}.rule`]: `Host(\`${name}.example.test\`)` },
-        });
-      const busy = dockerEstate([
-        ...waysIn(),
-        box('traefik', { image: 'traefik:v3.1' }),
-        box('prowlarr', { networkMode: `container:${hex('gluetun')}`, networks: undefined }),
-        box('byparr', { networkMode: `container:${hex('gluetun')}`, networks: undefined }),
-        ...['jellyfin', 'grafana', 'nextcloud', 'gitea', 'vaultwarden', 'wiki', 'radarr'].map(
-          routed,
-        ),
-        ...['bazarr', 'jdownloader', 'recyclarr', 'frigate', 'mqtt', 'ollama'].map((name) =>
-          box(name),
-        ),
-      ]);
-      // A line that passed behind another tile would read as joined to it.
-      // A tile is its icon, name and caption. The few pixels of padding
-      // under the caption are where the strip between two rows runs.
-      const crosses = (
-        [x1, y1]: [number, number],
-        [x2, y2]: [number, number],
-        tile: { x: number; y: number; w: number; h: number },
-      ): boolean =>
-        Math.max(x1, x2) > tile.x &&
-        Math.min(x1, x2) < tile.x + tile.w &&
-        Math.max(y1, y2) > tile.y &&
-        Math.min(y1, y2) < tile.y + tile.h - 3;
-      for (const width of [340, 390, 700, 1024, 1440, 2200]) {
-        for (const density of ['names', 'marks'] as const) {
-          const scene = sceneOf(busy, width, density);
-          const tiles = ofKind(scene, 'hit');
-          const drawn = linksOf(scene);
-          expect(drawn.length).toBeGreaterThanOrEqual(9);
-          for (const node of drawn) {
-            const ends = tiles.filter(
-              (tile) =>
-                inside(node.points[0], tile) || inside(node.points[node.points.length - 1], tile),
-            );
-            for (const tile of tiles) {
-              if (ends.includes(tile)) continue;
-              for (let index = 1; index < node.points.length; index += 1) {
-                expect(crosses(node.points[index - 1], node.points[index], tile)).toBe(false);
-              }
-            }
-          }
-        }
-      }
-    });
-
-    it('passes the network pills between two of them, never behind one', () => {
-      const routed = (name: string) =>
-        box(name, {
-          labels: { [`traefik.http.routers.${name}.rule`]: `Host(\`${name}.example.test\`)` },
-        });
-      // Four networks, so the pills take up most of the row the links cross.
-      const lans = ['10.0.10', '10.0.20', '10.0.30', '10.0.40'].flatMap((subnet, index) => [
-        guest(`lan${index}a`, { identity: { ips: [`${subnet}.5`] } }),
-        guest(`lan${index}b`, { identity: { ips: [`${subnet}.6`] } }),
-      ]);
-      const busy = dockerEstate([
-        ...waysIn(),
-        ...lans,
-        box('traefik', { image: 'traefik:v3.1' }),
-        box('tunnel', { networkMode: `container:${hex('traefik')}`, networks: undefined }),
-        ...['jellyfin', 'grafana', 'nextcloud', 'gitea', 'vaultwarden', 'wiki'].map(routed),
-      ]);
-      let crossings = 0;
-      for (const width of [340, 390, 700, 1024, 1440, 2200]) {
-        for (const density of ['names', 'marks'] as const) {
-          const scene = sceneOf(busy, width, density);
-          const pills = ofKind(scene, 'rect').filter((node) => node.h === 24 && node.r === 12);
-          expect(pills.length).toBeGreaterThanOrEqual(4);
-          const top = Math.min(...pills.map((pill) => pill.y));
-          const bottom = Math.max(...pills.map((pill) => pill.y + pill.h));
-          for (const node of linksOf(scene)) {
-            const ys = node.points.map(([, y]) => y);
-            if (Math.min(...ys) < top && Math.max(...ys) > bottom) crossings += 1;
-            for (let index = 1; index < node.points.length; index += 1) {
-              const [x1, y1] = node.points[index - 1];
-              const [x2, y2] = node.points[index];
-              expect(x1 === x2 || y1 === y2).toBe(true);
-              for (const pill of pills) {
-                const behind =
-                  Math.max(x1, x2) > pill.x &&
-                  Math.min(x1, x2) < pill.x + pill.w &&
-                  Math.max(y1, y2) > pill.y &&
-                  Math.min(y1, y2) < pill.y + pill.h;
-                expect(behind).toBe(false);
-              }
-            }
-            // No run doubles back on itself where the link steps aside.
-            for (let index = 2; index < node.points.length; index += 1) {
-              const [a, b, c] = [
-                node.points[index - 2],
-                node.points[index - 1],
-                node.points[index],
-              ];
-              const back = (b[0] - a[0]) * (c[0] - b[0]) < 0 || (b[1] - a[1]) * (c[1] - b[1]) < 0;
-              expect(back).toBe(false);
-            }
-          }
-        }
-      }
-      // The estate is only a test of this if links do cross the pills.
-      expect(crossings).toBeGreaterThanOrEqual(12);
-    });
-
-    it('takes every link from one row of boxes to another down the same way', () => {
-      // On a phone each box is a row of its own, so the two containers that
-      // use the VPN container's network are a row away from it.
-      const scene = sceneOf(
-        dockerEstate([
-          box('prowlarr', { networkMode: `container:${hex('gluetun')}`, networks: undefined }),
-        ]),
-        390,
-      );
-      const drawn = linksOf(scene);
-      expect(drawn).toHaveLength(2);
-      // Each leaves its own icon and arrives on the same one, and the long
-      // way between is one line: the last four corners are shared.
-      const tail = (node: (typeof drawn)[number]) => JSON.stringify(node.points.slice(-4));
-      expect(tail(drawn[0])).toBe(tail(drawn[1]));
-    });
-
-    it('draws no link for an estate that states none', () => {
+    it('links nothing for an estate that states none', () => {
       const scene = sceneOf(estate(), 1400);
-      expect(linksOf(scene)).toEqual([]);
-      expect(ofKind(scene, 'hit').every((node) => node.hit.links === undefined)).toBe(true);
+      expect(
+        ofKind(scene, 'hit').every(
+          (node) => node.hit.links === undefined && node.hit.linked === undefined,
+        ),
+      ).toBe(true);
     });
 
-    it('writes where a routed app answers under its name, not on the line', () => {
+    it('writes where a routed app answers under its name', () => {
       const scene = sceneOf(
         dockerEstate([
           box('traefik', { image: 'traefik:v3.1', networks: [{ name: 'bridge' }] }),
@@ -624,23 +518,7 @@ describe('layoutServiceDiagram', () => {
       expect(texts(scene).some((text) => text.startsWith('wiki.examp'))).toBe(true);
       expect(hitOf(scene, 'c-wiki')?.hit.links).toEqual(['Routed by traefik at wiki.example.test']);
       expect(hitOf(scene, 'c-traefik')?.hit.links).toEqual(['Routes 1 container']);
-      expect(linksOf(scene)).toHaveLength(2);
-      expect(
-        linksOf(scene)
-          .map((node) => node.tone)
-          .sort(),
-      ).toEqual(['accent', 'muted']);
-      // The two kinds never share a line: no stretch of one lies on the other.
-      const [first, second] = linksOf(scene);
-      const levels = (node: typeof first) =>
-        node.points.slice(1).flatMap(([x, y], index) => {
-          const [px, py] = node.points[index];
-          return py === y ? [`y${y}`] : px === x ? [`x${x}`] : [];
-        });
-      const taken = new Set(levels(first));
-      expect(levels(second).filter((level) => taken.has(level) && !level.startsWith('x'))).toEqual(
-        [],
-      );
+      expect(hitOf(scene, 'c-wiki')?.hit.linked).toEqual(['c-traefik']);
     });
 
     it('draws a gateway known only by address as a dashed tile that says who uses it', () => {
@@ -652,6 +530,8 @@ describe('layoutServiceDiagram', () => {
         navigable: false,
         links: ['Used by Tower'],
       });
+      // No tile is ringed for it: the machines that use it are named on its hover.
+      expect(gateway?.hit.linked).toBeUndefined();
       expect(texts(scene)).toContain('192.168.0.1');
       expect(texts(scene)).toContain('default gateway');
       expect(
@@ -671,18 +551,10 @@ describe('layoutServiceDiagram', () => {
       expect(texts(scene)).not.toContain('Internet');
     });
 
-    it('keeps links and gateways inside the drawing at any width', () => {
+    it('keeps the gateway inside the drawing at any width', () => {
       for (const width of [340, 390, 768, 1024, 1440, 2200]) {
         for (const density of ['names', 'marks'] as const) {
           const scene = sceneOf(dockerEstate(waysIn()), width, density);
-          for (const node of ofKind(scene, 'line')) {
-            for (const [x, y] of node.points) {
-              expect(x).toBeGreaterThanOrEqual(0);
-              expect(x).toBeLessThanOrEqual(scene.width);
-              expect(y).toBeGreaterThanOrEqual(0);
-              expect(y).toBeLessThanOrEqual(scene.height);
-            }
-          }
           for (const node of ofKind(scene, 'hit')) {
             expect(node.x).toBeGreaterThanOrEqual(0);
             expect(node.x + node.w).toBeLessThanOrEqual(scene.width);

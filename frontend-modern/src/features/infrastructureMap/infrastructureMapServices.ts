@@ -4,7 +4,7 @@ import {
   type MapAppRole,
   type MapCategoryId,
 } from './infrastructureMapCatalogue';
-import { mapRouteLabel, type MapLinkKind } from './infrastructureMapConnections';
+import { mapRouteLabel } from './infrastructureMapConnections';
 import type { MapGlyphKey } from './infrastructureMapLayout';
 import type {
   InfrastructureMapModel,
@@ -28,9 +28,11 @@ import {
  * VPN, a reverse proxy) is running, and a default gateway that machines name
  * in their own route tables and Pulse knows only by its address.
  *
- * A line between two tiles is a connection a collected value states: a
+ * A link between two tiles is a connection a collected value states: a
  * container that uses another container's network, or a reverse proxy and a
- * container it routes. Where both ends are not drawn there is no line.
+ * container it routes. No line is drawn for one. It is written under the
+ * tile and on its hover, and the layout tells each end the other. Where both
+ * ends are not drawn there is no link.
  */
 
 export interface DiagramTile {
@@ -57,13 +59,10 @@ export interface DiagramTile {
   navigable: boolean;
 }
 
-/** A line from one drawn tile to another. */
+/** A stated connection between two drawn tiles. No line is drawn for it. */
 export interface DiagramLink {
-  kind: MapLinkKind;
   fromId: string;
   toId: string;
-  /** One end is switched off, so nothing is passing along the line now. */
-  idle: boolean;
 }
 
 export interface DiagramGroup {
@@ -486,7 +485,7 @@ export function buildServiceDiagram(
   for (const link of model.connections.links) {
     const from = drawn.get(link.fromId);
     const to = drawn.get(link.toId);
-    // An end folded into a `+N` tile is not drawn, so neither is its line.
+    // An end folded into a `+N` tile is not drawn, so the link has no place.
     if (!from || !to) continue;
     if (link.kind === 'network') {
       say(from, `Uses the network of ${to.name}`);
@@ -505,12 +504,7 @@ export function buildServiceDiagram(
       if (link.hosts.length > 0) to.caption = mapRouteLabel(link.hosts);
       routedBy.set(from.id, (routedBy.get(from.id) ?? 0) + 1);
     }
-    links.push({
-      kind: link.kind,
-      fromId: link.fromId,
-      toId: link.toId,
-      idle: from.health === 'off' || to.health === 'off',
-    });
+    links.push({ fromId: link.fromId, toId: link.toId });
   }
   for (const [id, count] of carried) {
     const tile = drawn.get(id);

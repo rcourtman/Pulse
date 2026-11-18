@@ -503,8 +503,8 @@ describe('buildServiceDiagram', () => {
       const diagram = buildServiceDiagram(buildInfrastructureMapModel(unraid()));
 
       expect(diagram.links).toEqual([
-        { kind: 'network', fromId: 'c-prowlarr', toId: 'c-gluetun', idle: false },
-        { kind: 'network', fromId: 'c-qbittorrent', toId: 'c-gluetun', idle: false },
+        { fromId: 'c-prowlarr', toId: 'c-gluetun' },
+        { fromId: 'c-qbittorrent', toId: 'c-gluetun' },
       ]);
       const client = tileOf(diagram, 'c-qbittorrent');
       expect(client?.caption).toBe('via gluetun');
@@ -515,18 +515,7 @@ describe('buildServiceDiagram', () => {
       expect(tileOf(diagram, 'c-radarr')?.links).toBeUndefined();
     });
 
-    it('marks a link idle when one end is switched off', () => {
-      const resources = unraid().map((entry) =>
-        entry.id === 'c-qbittorrent'
-          ? { ...entry, status: 'stopped', docker: { ...entry.docker, containerState: 'exited' } }
-          : entry,
-      ) as Resource[];
-      const diagram = buildServiceDiagram(buildInfrastructureMapModel(resources));
-      expect(diagram.links.find((link) => link.fromId === 'c-qbittorrent')?.idle).toBe(true);
-      expect(diagram.links.find((link) => link.fromId === 'c-prowlarr')?.idle).toBe(false);
-    });
-
-    it('draws no line to a tile folded away', () => {
+    it('links nothing to a tile folded away', () => {
       const many = [
         dockerHost(),
         box('gluetun', { networkMode: 'bridge' }),
@@ -544,7 +533,7 @@ describe('buildServiceDiagram', () => {
       }
     });
 
-    it('links a reverse proxy to what it routes and writes the hostname on the line', () => {
+    it('links a reverse proxy to what it routes and writes the hostname under the app', () => {
       const diagram = buildServiceDiagram(
         buildInfrastructureMapModel([
           dockerHost(),
@@ -558,14 +547,7 @@ describe('buildServiceDiagram', () => {
         ]),
       );
 
-      expect(diagram.links).toEqual([
-        {
-          kind: 'route',
-          fromId: 'c-traefik',
-          toId: 'c-jellyfin',
-          idle: false,
-        },
-      ]);
+      expect(diagram.links).toEqual([{ fromId: 'c-traefik', toId: 'c-jellyfin' }]);
       // Where it answers is its caption, in place of the host it runs on.
       expect(tileOf(diagram, 'c-jellyfin')?.caption).toBe('media.example.test');
       expect(tileOf(diagram, 'c-jellyfin')?.links).toEqual([
@@ -649,7 +631,7 @@ describe('buildServiceDiagram', () => {
       expect(tileOf(diagram, 'tower')?.links).toBeUndefined();
     });
 
-    it('keeps the lines and drops hostnames and addresses when names are hidden', () => {
+    it('keeps the links and drops hostnames and addresses when names are hidden', () => {
       const model = anonymizeInfrastructureMapModel(
         buildInfrastructureMapModel([
           dockerHost({ defaultGateways: [{ address: '192.168.0.1' }] }),
@@ -668,9 +650,7 @@ describe('buildServiceDiagram', () => {
         ),
       ]);
 
-      expect(diagram.links).toEqual([
-        { kind: 'route', fromId: 'c-traefik', toId: 'c-wiki-internal', idle: false },
-      ]);
+      expect(diagram.links).toEqual([{ fromId: 'c-traefik', toId: 'c-wiki-internal' }]);
       expect(diagram.gateways.map((tile) => tile.name)).toEqual(['Gateway']);
       expect(written).toContain('Routed by Traefik');
       expect(written).not.toContain('example.test');
