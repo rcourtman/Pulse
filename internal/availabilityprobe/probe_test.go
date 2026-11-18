@@ -17,6 +17,62 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/tlsutil"
 )
 
+func TestDetailedResultUDPMatchesWholeDatagram(t *testing.T) {
+	// Use multibyte text at the byte limit, not the character limit.
+	maxReply := strings.Repeat("é", config.MaxAvailabilityUDPExpectedResponseBytes/2)
+	for _, tc := range []struct {
+		name, expected, reply string
+		mode                  config.AvailabilityUDPMode
+		want                  Outcome
+	}{
+		{"ordinary match", "PONG", "PONG", config.AvailabilityUDPResponseRequired, OutcomeReachable},
+		{"ordinary mismatch", "PONG", "PONG!", config.AvailabilityUDPResponseRequired, OutcomeUnreachable},
+		{"maximum match", maxReply, maxReply, config.AvailabilityUDPResponseRequired, OutcomeReachable},
+		{"longer reply", maxReply, maxReply + "!", config.AvailabilityUDPResponseRequired, OutcomeUnreachable},
+		{"longer reply in open or filtered mode", maxReply, maxReply + "!", config.AvailabilityUDPOpenOrFiltered, OutcomeUnreachable},
+		{"larger reply with truncation", maxReply, maxReply + strings.Repeat("!", 32), config.AvailabilityUDPResponseRequired, OutcomeUnreachable},
+		{"no expectation", "", maxReply, config.AvailabilityUDPResponseRequired, OutcomeReachable},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			responder, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer responder.Close()
+			if err := responder.SetDeadline(time.Now().Add(4 * time.Second)); err != nil {
+				t.Fatal(err)
+			}
+			served := make(chan error, 1)
+			go func() {
+				var request [32]byte
+				n, peer, err := responder.ReadFromUDP(request[:])
+				if err == nil && string(request[:n]) != "PING" {
+					err = errors.New("unexpected fixture request")
+				}
+				if err == nil {
+					_, err = responder.WriteToUDP([]byte(tc.reply), peer)
+				}
+				served <- err
+			}()
+			result, probeErr := DetailedResult(context.Background(), config.AvailabilityTarget{
+				Name: "Fixture UDP service", Address: "127.0.0.1", Port: responder.LocalAddr().(*net.UDPAddr).Port,
+				Protocol: config.AvailabilityProbeUDP, TimeoutMillis: 2000,
+				UDPMode: tc.mode, UDPRequest: "PING", UDPExpected: tc.expected,
+			})
+			if err := <-served; err != nil {
+				t.Fatalf("loopback fixture did not send its reply: %v", err)
+			}
+			if result.Outcome != tc.want || result.TransportOutcome != tc.want || (probeErr == nil) != (tc.want == OutcomeReachable) {
+				t.Fatalf("DetailedResult() = %+v, %v; want %s", result, probeErr, tc.want)
+			}
+			if len(tc.reply) <= config.MaxAvailabilityUDPExpectedResponseBytes+1 && tc.want == OutcomeUnreachable &&
+				probeErr.Error() != "UDP response did not match the expected payload" {
+				t.Fatalf("expected mismatch, not another probe failure: %v", probeErr)
+			}
+		})
+	}
+}
+
 // Moved verbatim from internal/monitoring/availability_poller_test.go when the
 // probe execution core was extracted into this package.
 func TestAvailabilityHTTPOutboundOptionsUsesSharedPeerCertificateCapture(t *testing.T) {
