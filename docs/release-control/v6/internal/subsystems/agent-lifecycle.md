@@ -125,6 +125,27 @@ It is read from the inspect the agent already makes, so it adds no request, no
 permission and no new report cadence. Enrolment, report admission, removal
 blocks, tombstones and identity aliases do not read it.
 
+### Host agents report the default gateway and DNS servers (18 November 2026)
+
+`internal/hostmetrics/routing.go` reads two facts the host states itself and
+`internal/hostagent/agent.go` sends them as `routing` on every host report:
+the IPv4 default routes that go through a gateway, from `/proc/net/route`,
+lowest metric first, each with its interface; and the nameserver addresses of
+`/etc/resolv.conf`, in the file's order. When resolv.conf holds only loopback
+addresses and `/run/systemd/resolve/resolv.conf` names servers, those are
+reported instead, because the systemd-resolved stub says nothing about where
+names are resolved. A host with its own resolver on loopback and no such file
+keeps the loopback address.
+
+The route table is Linux procfs, so no gateway is reported on other
+platforms; DNS servers are reported wherever resolv.conf exists. IPv6 default
+routes are not read. The block is omitted when the host states neither fact,
+so a server must read its absence as unknown. Each list is bounded at eight
+entries. The reads are two or three small local files per report: no command
+is run, no socket is opened, and no new permission or flag is needed.
+Enrolment, report admission, removal blocks, tombstones and identity aliases
+do not read the block.
+
 ### VMware destination refusals keep the admitted connection draft
 
 The existing connection editor treats an exact HTTP 403

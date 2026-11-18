@@ -655,6 +655,14 @@ export interface ResourceAgentMeta {
   loadAverage?: number[];
   memory?: Partial<Memory>;
   networkInterfaces?: HostNetworkInterface[];
+  /**
+   * The IPv4 default routes the host agent read from the host's own route
+   * table, lowest metric first. Missing when the agent did not report them,
+   * which is unknown and never "no gateway".
+   */
+  defaultGateways?: Array<{ address: string; interface?: string }>;
+  /** The resolver addresses the host is configured with. Missing when not reported. */
+  dnsServers?: string[];
   diskIO?: HostDiskIO[];
   diskIo?: HostDiskIO[];
   disks?: ResourceAgentDisk[];

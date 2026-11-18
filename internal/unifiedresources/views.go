@@ -1301,6 +1301,24 @@ func (v HostView) NetworkInterfaces() []NetworkInterface {
 	return cloneNetworkInterfaces(v.r.Agent.NetworkInterfaces)
 }
 
+// DefaultGateways returns the IPv4 default routes the host agent read from
+// the host, or nil when it reported none.
+func (v HostView) DefaultGateways() []NetworkGateway {
+	if v.r == nil || v.r.Agent == nil {
+		return nil
+	}
+	return append([]NetworkGateway(nil), v.r.Agent.DefaultGateways...)
+}
+
+// DNSServers returns the resolver addresses the host is configured with, or
+// nil when the host agent reported none.
+func (v HostView) DNSServers() []string {
+	if v.r == nil || v.r.Agent == nil {
+		return nil
+	}
+	return cloneStringSlice(v.r.Agent.DNSServers)
+}
+
 func (v HostView) Disks() []DiskInfo {
 	if v.r == nil || v.r.Agent == nil {
 		return nil

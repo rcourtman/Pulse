@@ -6230,6 +6230,24 @@ none, and must not infer a shared network from missing attachments or ports:
 an empty value means the agent did not say. No alert, status, metric or
 History coordinate reads the field.
 
+### Host default gateways and DNS servers are host-authored evidence (18 November 2026)
+
+Host report ingest keeps the agent's `routing` block through
+`hostRoutingFromReport` in `internal/monitoring/host_network_routing.go`, onto
+`models.Host.DefaultGateways` and `models.Host.DNSServers`. Every address must
+parse as an IP address and is stored in canonical form; the unspecified
+address, a duplicate, and anything past eight entries are dropped. A gateway's
+interface name is kept when it is at most 64 bytes with no space or control
+character, and dropped otherwise while the gateway stays. Nothing but
+addresses and an interface name can therefore arrive through these fields.
+
+A report without the block leaves both lists nil. Monitoring must not fill
+them from interface addresses, subnets or any other inference, and must not
+carry an earlier report's lists forward: the newest accepted report is the
+whole truth. The read-state round trip (`hostDefaultGatewaysFromReadStateView`
+in `internal/monitoring/monitor.go`) keeps both. No alert, status, metric or
+History coordinate reads either list.
+
 ### Local libvirt guests are bounded host-agent observations
 
 Authenticated Linux host reports may carry a read-only libvirt inventory for

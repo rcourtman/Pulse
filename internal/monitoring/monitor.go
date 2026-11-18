@@ -3973,6 +3973,8 @@ func hostFromReadStateView(view *unifiedresources.HostView) models.Host {
 		Disks:             hostDisksFromReadStateView(view.Disks()),
 		DiskIO:            hostDiskIOFromReadStateView(view.DiskIO()),
 		NetworkInterfaces: hostNetworkInterfacesFromReadStateView(view.NetworkInterfaces()),
+		DefaultGateways:   hostDefaultGatewaysFromReadStateView(view.DefaultGateways()),
+		DNSServers:        view.DNSServers(),
 		Sensors:           hostSensorsFromReadStateView(view.Sensors()),
 		RAID:              hostRAIDFromReadStateView(view.RAID()),
 		Unraid:            hostUnraidFromReadStateView(view.Unraid()),
@@ -4248,6 +4250,17 @@ func hostNetworkInterfacesFromReadStateView(interfaces []unifiedresources.Networ
 			TXBytes:   iface.TXBytes,
 			SpeedMbps: int64PtrCopy(iface.SpeedMbps),
 		})
+	}
+	return out
+}
+
+func hostDefaultGatewaysFromReadStateView(gateways []unifiedresources.NetworkGateway) []models.HostDefaultGateway {
+	if len(gateways) == 0 {
+		return nil
+	}
+	out := make([]models.HostDefaultGateway, 0, len(gateways))
+	for _, gateway := range gateways {
+		out = append(out, models.HostDefaultGateway{Address: gateway.Address, Interface: gateway.Interface})
 	}
 	return out
 }

@@ -847,6 +847,32 @@ type follows on `ResourceDockerMeta`.
 shape and the clone; `frontend-modern/src/types/__tests__/resource.test.ts`
 covers the type.
 
+### Agent facets carry the host's default gateways and DNS servers (18 November 2026)
+
+`AgentData` gains optional `defaultGateways` (a list of `NetworkGateway`:
+`address` and optional `interface`) and `dnsServers` (a list of addresses).
+`resourceFromHost` sets them from `models.Host.DefaultGateways` and
+`models.Host.DNSServers`, which hold what the host agent read from the host's
+own route table and resolver configuration. They are the only statement in the
+payload of where a machine sends traffic bound for other networks and where
+it resolves names.
+
+A missing list means the agent did not report that fact: an older agent, or a
+platform whose route table it cannot read. Consumers must not read it as "no
+gateway" or "no DNS", and must not infer either from interface addresses or a
+subnet. A gateway or resolver address may match a monitored resource's own
+address, and that match is the one way these lists name another resource; an
+address that matches none names something Pulse does not monitor.
+
+`cloneAgentData` copies both lists, and `HostView.DefaultGateways` and
+`HostView.DNSServers` return copies, so a previous-state round trip keeps
+them. Identity, status, metrics, relationships and History coordinates do not
+change. The frontend type follows on `ResourceAgentMeta`.
+`TestHostResourceCarriesDefaultGatewaysAndDNSServers` in
+`internal/unifiedresources/adapters_test.go` covers the adapter, the wire
+shape, the clone and the view;
+`frontend-modern/src/types/__tests__/resource.test.ts` covers the type.
+
 ### Independently known PBS remains available in Backups (13 October 2026)
 
 The resource-owned PBS table is outside backup-inventory loading/error gates.

@@ -11,6 +11,7 @@ import {
   getMemoryPercent,
   getDiskPercent,
   type ResourceChangeKind,
+  type ResourceAgentMeta,
   type ResourceAgentUnraidDisk,
   type ResourceDockerMeta,
   type ResourcePhysicalDiskMeta,
@@ -412,6 +413,23 @@ describe('Resource Helper Functions', () => {
       expect(shared.ports).toBeUndefined();
       // An agent that predates the field reports nothing, which is not "none".
       expect(older.networkMode).toBeUndefined();
+    });
+  });
+
+  describe('Host default gateway and DNS servers', () => {
+    it('lists what the host agent read from the host', () => {
+      const agent: ResourceAgentMeta = {
+        hostname: 'tower',
+        defaultGateways: [{ address: '192.168.0.1', interface: 'eth0' }],
+        dnsServers: ['192.168.0.53', '1.1.1.1'],
+      };
+      const older: ResourceAgentMeta = { hostname: 'mac-mini' };
+
+      expect(agent.defaultGateways?.[0]).toEqual({ address: '192.168.0.1', interface: 'eth0' });
+      expect(agent.dnsServers).toEqual(['192.168.0.53', '1.1.1.1']);
+      // Not reported is unknown, which is not the same as having none.
+      expect(older.defaultGateways).toBeUndefined();
+      expect(older.dnsServers).toBeUndefined();
     });
   });
 

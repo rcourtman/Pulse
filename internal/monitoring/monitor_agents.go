@@ -3495,6 +3495,8 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		})
 	}
 
+	defaultGateways, dnsServers := hostRoutingFromReport(report.Routing)
+
 	raid := make([]models.HostRAIDArray, 0, len(report.RAID))
 	for _, array := range report.RAID {
 		devices := make([]models.HostRAIDDevice, 0, len(array.Devices))
@@ -3646,6 +3648,8 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		ZFSPools:          hostZFSPools,
 		DiskIO:            diskIO,
 		NetworkInterfaces: network,
+		DefaultGateways:   defaultGateways,
+		DNSServers:        dnsServers,
 		Sensors: models.HostSensorSummary{
 			TemperatureCelsius: cloneStringFloatMap(report.Sensors.TemperatureCelsius),
 			FanRPM:             cloneStringFloatMap(report.Sensors.FanRPM),

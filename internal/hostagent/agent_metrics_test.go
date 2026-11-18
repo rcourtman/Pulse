@@ -116,6 +116,10 @@ func TestBuildReport(t *testing.T) {
 						Name: "eth0",
 					},
 				},
+				Routing: &agentshost.NetworkRouting{
+					DefaultGateways: []agentshost.NetworkGateway{{Address: "192.168.0.1", Interface: "eth0"}},
+					DNSServers:      []string{"192.168.0.53"},
+				},
 			}, nil
 		},
 	}
@@ -169,6 +173,14 @@ func TestBuildReport(t *testing.T) {
 		}
 		if report.Host.OSName != "debian" {
 			t.Errorf("Host.OSName = %q, want %q", report.Host.OSName, "debian")
+		}
+
+		// The host's gateway and resolvers travel with the report unchanged.
+		if report.Routing == nil ||
+			len(report.Routing.DefaultGateways) != 1 ||
+			report.Routing.DefaultGateways[0] != (agentshost.NetworkGateway{Address: "192.168.0.1", Interface: "eth0"}) ||
+			len(report.Routing.DNSServers) != 1 || report.Routing.DNSServers[0] != "192.168.0.53" {
+			t.Fatalf("Routing = %+v", report.Routing)
 		}
 
 		// Verify Metrics

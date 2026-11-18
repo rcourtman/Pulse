@@ -211,6 +211,8 @@ func resourceFromHost(host models.Host) (Resource, ResourceIdentity) {
 		Temperature:             models.HostSensorPrimaryCPUTemperatureCelsius(host.Sensors),
 		NetworkInterfaces:       convertInterfaces(host.NetworkInterfaces),
 		Disks:                   convertDisks(host.Disks),
+		DefaultGateways:         convertDefaultGateways(host.DefaultGateways),
+		DNSServers:              cloneStringSlice(host.DNSServers),
 		Memory:                  agentMemoryMetaFromModel(host.Memory),
 		CommandsEnabled:         host.CommandsEnabled,
 		OperationReceiptVersion: host.OperationReceiptVersion,
@@ -3956,6 +3958,24 @@ func labelsToTags(labels map[string]string) []string {
 	// deltas. uniqueStrings also serves ordered identity lists; do not sort it.
 	out = uniqueStrings(out)
 	slices.Sort(out)
+	return out
+}
+
+func convertDefaultGateways(gateways []models.HostDefaultGateway) []NetworkGateway {
+	if len(gateways) == 0 {
+		return nil
+	}
+	out := make([]NetworkGateway, 0, len(gateways))
+	for _, gateway := range gateways {
+		address := strings.TrimSpace(gateway.Address)
+		if address == "" {
+			continue
+		}
+		out = append(out, NetworkGateway{Address: address, Interface: strings.TrimSpace(gateway.Interface)})
+	}
+	if len(out) == 0 {
+		return nil
+	}
 	return out
 }
 

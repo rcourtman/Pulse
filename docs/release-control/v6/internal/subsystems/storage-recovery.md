@@ -110,6 +110,13 @@ by the app-container adapter. It is empty on every storage, backup and
 recovery resource and changes no storage or recovery projection, clone path or
 identity.
 
+### `AgentData` gains default gateways and DNS servers (18 November 2026)
+
+`internal/unifiedresources/types.go` gains `NetworkGateway`,
+`AgentData.DefaultGateways` and `AgentData.DNSServers`, set only by the host
+agent adapter. They are empty on every storage, backup and recovery resource
+and change no storage or recovery projection, clone path or identity.
+
 ### Unknown saved sessions retain bytes, not automatic authority
 
 After an unread or undecodable session inventory, the next session save retains

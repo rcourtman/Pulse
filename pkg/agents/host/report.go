@@ -44,12 +44,16 @@ func ParseReportSequenceID(value string) (streamID string, sequence uint64, ok b
 
 // Report represents the payload sent by the host module of pulse-agent.
 type Report struct {
-	Agent          AgentInfo            `json:"agent"`
-	Host           HostInfo             `json:"host"`
-	Metrics        Metrics              `json:"metrics"`
-	Disks          []Disk               `json:"disks,omitempty"`
-	DiskIO         []DiskIO             `json:"diskIO,omitempty"`
-	Network        []NetworkInterface   `json:"network,omitempty"`
+	Agent   AgentInfo          `json:"agent"`
+	Host    HostInfo           `json:"host"`
+	Metrics Metrics            `json:"metrics"`
+	Disks   []Disk             `json:"disks,omitempty"`
+	DiskIO  []DiskIO           `json:"diskIO,omitempty"`
+	Network []NetworkInterface `json:"network,omitempty"`
+	// Routing is the host's default gateways and DNS servers, as the host's own
+	// tables state them. Optional: older agents omit it, and so does an agent
+	// on a platform it cannot read them on.
+	Routing        *NetworkRouting      `json:"routing,omitempty"`
 	Sensors        Sensors              `json:"sensors,omitempty"`
 	RAID           []RAIDArray          `json:"raid,omitempty"`
 	Unraid         *UnraidStorage       `json:"unraid,omitempty"`
@@ -365,6 +369,39 @@ type NetworkInterface struct {
 	RXBytes   uint64   `json:"rxBytes,omitempty"`
 	TXBytes   uint64   `json:"txBytes,omitempty"`
 	SpeedMbps *int64   `json:"speedMbps,omitempty"`
+}
+
+// NetworkRouting is how a host reaches other networks and resolves names,
+// read from the host's own route table and resolver configuration. Nothing in
+// it is measured or inferred. An absent list means the agent could not read
+// that fact, not that the host has none.
+type NetworkRouting struct {
+	// DefaultGateways are the IPv4 default routes that go through a gateway,
+	// lowest metric first.
+	DefaultGateways []NetworkGateway `json:"defaultGateways,omitempty"`
+	// DNSServers are the resolver addresses the host is configured with, in
+	// its own order. Behind a systemd-resolved stub they are the servers the
+	// stub forwards to.
+	DNSServers []string `json:"dnsServers,omitempty"`
+}
+
+// NetworkGateway is one default route: the next hop and the interface the
+// route leaves by.
+type NetworkGateway struct {
+	Address   string `json:"address"`
+	Interface string `json:"interface,omitempty"`
+}
+
+// Clone returns a copy that shares no slice with the receiver. A nil receiver
+// clones to nil.
+func (r *NetworkRouting) Clone() *NetworkRouting {
+	if r == nil {
+		return nil
+	}
+	return &NetworkRouting{
+		DefaultGateways: append([]NetworkGateway(nil), r.DefaultGateways...),
+		DNSServers:      append([]string(nil), r.DNSServers...),
+	}
 }
 
 // Sensors captures optional sensor readings reported by the agent.
