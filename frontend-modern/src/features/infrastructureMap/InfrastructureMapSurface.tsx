@@ -21,6 +21,7 @@ import { FilterButtonGroup } from '@/components/shared/FilterButtonGroup';
 import { MetadataBadge } from '@/components/shared/MetadataBadge';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { StatusDot } from '@/components/shared/StatusDot';
+import { showPressedTooltip } from '@/components/shared/Tooltip';
 import { TooltipPortal } from '@/components/shared/TooltipPortal';
 import { buildInfrastructureWorkspacePath } from '@/components/Settings/infrastructureWorkspaceModel';
 import { useDarkMode } from '@/contexts/appRuntime';
@@ -46,6 +47,7 @@ import {
   MAP_RINGS_ATTRIBUTE,
   renderMapLinkRings,
   renderMapSceneBody,
+  renderMapTappedTile,
 } from './infrastructureMapRender';
 import { buildServiceDiagram } from './infrastructureMapServices';
 
@@ -71,6 +73,20 @@ const MIN_MAP_HEIGHT = 240;
 // Below this, names are too small to read and icons alone say more.
 const READABLE_SCALE = 0.62;
 
+/** What a tile's card says under its name: what it is, where, what it is connected to, how busy. */
+const hitLines = (hit: MapHit): string[] =>
+  [
+    hit.meta,
+    [hit.address, hit.detail ? `Published ${hit.detail}` : ''].filter(Boolean).join(' · '),
+    ...(hit.links ?? []),
+    [
+      hit.cpu !== undefined ? `CPU ${Math.round(hit.cpu)}%` : '',
+      hit.memory !== undefined ? `Memory ${Math.round(hit.memory)}%` : '',
+    ]
+      .filter(Boolean)
+      .join(' · '),
+  ].filter(Boolean);
+
 export function InfrastructureMapSurface() {
   const { resources, loading } = useResources();
   const darkMode = useDarkMode();
@@ -80,6 +96,8 @@ export function InfrastructureMapSurface() {
   const [namesHidden, setNamesHidden] = createSignal(false);
   const [exporting, setExporting] = createSignal(false);
   const [hover, setHover] = createSignal<{ hit: MapHit; x: number; y: number } | null>(null);
+  // The tile a tap on a touch screen is showing, by its id.
+  const [armed, setArmed] = createSignal<string | null>(null);
 
   // Counted once per browser session. Nothing on the map is sent.
   onMount(recordInfrastructureMapOpen);
@@ -203,7 +221,15 @@ export function InfrastructureMapSurface() {
     const shown = hover();
     const layer = svgElement()?.querySelector(`[${MAP_RINGS_ATTRIBUTE}]`);
     if (!layer) return;
-    layer.innerHTML = current && shown ? renderMapLinkRings(current, shown.hit, palette()) : '';
+    if (!current || !shown) {
+      layer.innerHTML = '';
+      return;
+    }
+    // A tapped tile is marked as well: no pointer rests on it to show which
+    // tile the card is about.
+    layer.innerHTML =
+      (armed() === null ? '' : renderMapTappedTile(current, shown.hit, palette())) +
+      renderMapLinkRings(current, shown.hit, palette());
   });
 
   const hitFromEvent = (event: Event): { hit: MapHit; element: Element } | null => {
@@ -212,14 +238,61 @@ export function InfrastructureMapSurface() {
     const hit = hits()[Number(element.getAttribute(MAP_HIT_ATTRIBUTE))];
     return hit ? { hit, element } : null;
   };
-  const showFor = (event: Event) => {
-    const found = hitFromEvent(event);
-    if (!found) {
-      setHover(null);
-      return;
-    }
+  const point = (found: { hit: MapHit; element: Element }) => {
     const box = found.element.getBoundingClientRect();
     setHover({ hit: found.hit, x: box.left + box.width / 2, y: box.top });
+  };
+  const isTouch = (event: Event): boolean => (event as PointerEvent).pointerType === 'touch';
+  const showFor = (event: Event) => {
+    // A finger is not a pointer that hovers. What it touched is said on the
+    // tap, below.
+    if (isTouch(event)) return;
+    const found = hitFromEvent(event);
+    if (found) point(found);
+    else setHover(null);
+  };
+
+  // A touch screen has no hover, and a tile is a link, so a tap would open
+  // the tile before anyone could read what it is. There the first tap says
+  // what the tile is and rings what it is connected to, as pointing does,
+  // and a second tap on the same tile opens it.
+  let pressedWith = '';
+  let armedAtPress: string | null = null;
+  const disarm = () => {
+    if (armed() === null) return;
+    setArmed(null);
+    setHover(null);
+  };
+  onMount(() => {
+    // The next press anywhere, or a scroll, ends what a tap showed. The
+    // press remembers the tile first, so a tap on it again can open it.
+    const press = (event: PointerEvent) => {
+      pressedWith = event.pointerType;
+      armedAtPress = armed();
+      disarm();
+    };
+    document.addEventListener('pointerdown', press, true);
+    window.addEventListener('scroll', disarm, true);
+    onCleanup(() => {
+      document.removeEventListener('pointerdown', press, true);
+      window.removeEventListener('scroll', disarm, true);
+    });
+  });
+  const handleTap = (event: MouseEvent) => {
+    if (pressedWith !== 'touch') return;
+    const found = hitFromEvent(event);
+    if (!found) return;
+    const opens = found.element.hasAttribute('href');
+    if (opens && armedAtPress === found.hit.id) return;
+    event.preventDefault();
+    point(found);
+    setArmed(found.hit.id);
+    showPressedTooltip(
+      [found.hit.name, ...hitLines(found.hit), opens ? 'Tap again to open' : '']
+        .filter(Boolean)
+        .join('\n'),
+      found.element,
+    );
   };
 
   const handleDownload = async () => {
@@ -327,7 +400,13 @@ export function InfrastructureMapSurface() {
             <svg
               ref={(element) => {
                 setSvgElement(element);
-                onCleanup(() => setSvgElement(undefined));
+                // In the capture phase, so it runs before the router's own
+                // click handler, which follows links.
+                element.addEventListener('click', handleTap, true);
+                onCleanup(() => {
+                  element.removeEventListener('click', handleTap, true);
+                  setSvgElement(undefined);
+                });
               }}
               class="mx-auto block max-w-full select-none"
               width={Math.floor(current().scene.width * current().scale)}
@@ -336,9 +415,13 @@ export function InfrastructureMapSurface() {
               role="group"
               aria-label="Infrastructure map"
               onPointerOver={showFor}
-              onPointerLeave={() => setHover(null)}
+              onPointerLeave={(event) => {
+                if (!isTouch(event)) setHover(null);
+              }}
               onFocusIn={showFor}
-              onFocusOut={() => setHover(null)}
+              onFocusOut={() => {
+                if (armed() === null) setHover(null);
+              }}
             />
           )}
         </Show>
@@ -370,37 +453,19 @@ export function InfrastructureMapSurface() {
         </ul>
       </Show>
 
-      <TooltipPortal when={hover() !== null} x={hover()?.x ?? 0} y={hover()?.y ?? 0}>
+      {/* A tap's card is the shared pressed tooltip, which a touch screen shows. */}
+      <TooltipPortal
+        when={hover() !== null && armed() === null}
+        x={hover()?.x ?? 0}
+        y={hover()?.y ?? 0}
+      >
         <Show when={hover()}>
           {(current) => (
             <div class="flex flex-col gap-0.5">
               <span class="text-[11px] font-semibold">{current().hit.name}</span>
-              <span class="text-muted">{current().hit.meta}</span>
-              <Show when={current().hit.address || current().hit.detail}>
-                <span class="text-muted">
-                  {[
-                    current().hit.address,
-                    current().hit.detail ? `Published ${current().hit.detail}` : '',
-                  ]
-                    .filter(Boolean)
-                    .join(' · ')}
-                </span>
-              </Show>
-              <For each={current().hit.links ?? []}>
-                {(sentence) => <span class="text-muted">{sentence}</span>}
+              <For each={hitLines(current().hit)}>
+                {(line) => <span class="text-muted">{line}</span>}
               </For>
-              <Show when={current().hit.cpu !== undefined || current().hit.memory !== undefined}>
-                <span class="text-muted">
-                  {[
-                    current().hit.cpu !== undefined ? `CPU ${Math.round(current().hit.cpu!)}%` : '',
-                    current().hit.memory !== undefined
-                      ? `Memory ${Math.round(current().hit.memory!)}%`
-                      : '',
-                  ]
-                    .filter(Boolean)
-                    .join(' · ')}
-                </span>
-              </Show>
             </div>
           )}
         </Show>

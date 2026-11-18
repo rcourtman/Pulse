@@ -7,6 +7,7 @@ import {
   recordInfrastructureMapExport,
   recordInfrastructureMapOpen,
 } from '@/api/infrastructureMapActivity';
+import { showPressedTooltip } from '@/components/shared/Tooltip';
 import type { Resource } from '@/types/resource';
 import { showError, showSuccess } from '@/utils/toast';
 import { fitServiceDiagram } from '../infrastructureMapDiagram';
@@ -33,6 +34,12 @@ vi.mock('@/api/infrastructureMapActivity', () => ({
   recordInfrastructureMapExport: vi.fn(),
 }));
 vi.mock('@/utils/toast', () => ({ showSuccess: vi.fn(), showError: vi.fn() }));
+// The shared tooltip a press shows on every device. Watched, so a test can
+// read what a tap said.
+vi.mock('@/components/shared/Tooltip', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/components/shared/Tooltip')>()),
+  showPressedTooltip: vi.fn(),
+}));
 // The real download draws to a canvas and saves a file. The SVG builder stays
 // real, so a test can read what the saved image would contain.
 vi.mock('../infrastructureMapExport', async (importOriginal) => ({
@@ -334,5 +341,95 @@ describe('InfrastructureMapSurface connections', () => {
     expect(container.querySelector('svg[role="group"]')?.textContent).toContain('via gluetun');
     expect(screen.queryByText('Shared network')).toBeNull();
     expect(screen.queryByText('Proxy route')).toBeNull();
+  });
+
+  // A press and the click a browser makes of it. jsdom has no PointerEvent,
+  // so the press carries its pointer type as a plain property.
+  const press = (element: Element, pointerType: string) => {
+    const event = new Event('pointerdown', { bubbles: true });
+    Object.defineProperty(event, 'pointerType', { value: pointerType });
+    element.dispatchEvent(event);
+  };
+  const tap = (element: Element, pointerType = 'touch'): MouseEvent => {
+    press(element, pointerType);
+    const click = new MouseEvent('click', { bubbles: true, cancelable: true });
+    element.dispatchEvent(click);
+    return click;
+  };
+  const said = () => vi.mocked(showPressedTooltip).mock.calls.map(([text]) => text);
+
+  it('answers a first tap on a touch screen with what the tile is, and does not open it', () => {
+    const { container } = draw();
+    const qbittorrent = tile(container, 'qbittorrent');
+    expect(qbittorrent.hasAttribute('href')).toBe(true);
+
+    const click = tap(qbittorrent);
+
+    // The link was not followed: the tap asked what this is.
+    expect(click.defaultPrevented).toBe(true);
+    expect(said()).toHaveLength(1);
+    const lines = said()[0].split('\n');
+    expect(lines[0]).toBe('qbittorrent');
+    expect(lines).toContain('Uses the network of gluetun');
+    expect(lines.at(-1)).toBe('Tap again to open');
+    expect(vi.mocked(showPressedTooltip).mock.calls[0][1]).toBe(qbittorrent);
+    // The tapped tile is marked, since no pointer rests on it, and what it
+    // is connected to is ringed, as pointing at it does.
+    expect(rings(container).map(place)).toEqual([
+      place(tile(container, 'qbittorrent')),
+      place(tile(container, 'gluetun')),
+    ]);
+    expect(rings(container)[0].getAttribute('fill')).not.toBe('none');
+    expect(rings(container)[1].getAttribute('fill')).toBe('none');
+  });
+
+  it('opens the tile on a second tap', () => {
+    const { container } = draw();
+    const qbittorrent = tile(container, 'qbittorrent');
+
+    tap(qbittorrent);
+    const second = tap(qbittorrent);
+
+    expect(second.defaultPrevented).toBe(false);
+    expect(said()).toHaveLength(1);
+    expect(rings(container)).toHaveLength(0);
+  });
+
+  it('ends what a tap showed at the next press elsewhere, and answers a tap on another tile', () => {
+    const { container } = draw();
+
+    tap(tile(container, 'qbittorrent'));
+    press(document.body, 'touch');
+    expect(rings(container)).toHaveLength(0);
+
+    // The tile tapped before is no longer armed: tapping it shows it again.
+    expect(tap(tile(container, 'qbittorrent')).defaultPrevented).toBe(true);
+    // A tap on a different tile shows that one, and does not open it.
+    const other = tap(tile(container, 'gluetun'));
+    expect(other.defaultPrevented).toBe(true);
+    expect(said().at(-1)?.split('\n')[0]).toBe('gluetun');
+    expect(rings(container).map(place)).toEqual([
+      place(tile(container, 'gluetun')),
+      place(tile(container, 'qbittorrent')),
+    ]);
+  });
+
+  it('ends what a tap showed when the page is scrolled', () => {
+    const { container } = draw();
+
+    tap(tile(container, 'qbittorrent'));
+    expect(rings(container)).toHaveLength(2);
+    window.dispatchEvent(new Event('scroll'));
+
+    expect(rings(container)).toHaveLength(0);
+  });
+
+  it('opens a tile at once for a mouse, which can hover to read it first', () => {
+    const { container } = draw();
+
+    const click = tap(tile(container, 'qbittorrent'), 'mouse');
+
+    expect(click.defaultPrevented).toBe(false);
+    expect(said()).toHaveLength(0);
   });
 });

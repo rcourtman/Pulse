@@ -280,6 +280,20 @@ export function renderMapLinkRings(scene: MapScene, of: MapHit, palette: MapPale
     .join('');
 }
 
+/**
+ * The tile a tap chose, shaded and outlined. A pointer shows which tile its
+ * card is about by resting on it. A finger has gone by the time the card is
+ * read, so the tile is marked instead.
+ */
+export function renderMapTappedTile(scene: MapScene, of: MapHit, palette: MapPalette): string {
+  const node = scene.nodes.find(
+    (candidate) => candidate.kind === 'hit' && candidate.hit.id === of.id,
+  );
+  return node?.kind === 'hit'
+    ? `<rect x="${n(node.x)}" y="${n(node.y)}" width="${n(node.w)}" height="${n(node.h)}" rx="${n(node.r)}" fill="${palette.muted}" fill-opacity="0.2" stroke="${palette.text}" stroke-width="1.5"/>`
+    : '';
+}
+
 /** A complete, self-contained SVG document for a scene. */
 export function renderMapSceneToSvg(scene: MapScene, palette: MapPalette): string {
   const body = scene.nodes.map((node) => nodeToSvg(node, palette)).join('');
