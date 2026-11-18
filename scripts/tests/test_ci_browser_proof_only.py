@@ -769,10 +769,14 @@ class WorkflowScopeTest(unittest.TestCase):
             job = job_block(e2e, name)
             self.assertIn("needs: scope", job)
             self.assertIn("if: needs.scope.outputs.proof_only != 'true'", job)
+        e2e_events = yaml.safe_load(e2e)[True]  # PyYAML reads the workflow key "on" as True.
+        build_pr = yaml.safe_load(BUILD.read_text())[True]["pull_request"]
+        self.assertEqual(set(build_pr), {"branches"})
+        self.assertTrue(set(e2e_events["pull_request"]["branches"]) <= set(build_pr["branches"]))
         for event in ("pull_request", "push"):
-            block = re.split(r"(?m)^  \S", e2e.split(f"  {event}:\n", 1)[1], maxsplit=1)[0]
-            for path in ("scripts/ci_browser_proof_only.py", "scripts/tests/test_ci_browser_proof_only.py"):
-                self.assertIn(f"'{path}'", block)
+            paths = e2e_events[event]["paths"]
+            self.assertIn("scripts/ci_browser_proof_only.py", paths)
+            self.assertEqual("scripts/tests/test_ci_browser_proof_only.py" in paths, event == "push")
         verdict = job_block(e2e, "e2e-verdict")
         self.assertIn("      - scope\n", verdict)
         self.assertIn("if: always()", verdict)
@@ -783,7 +787,12 @@ class WorkflowScopeTest(unittest.TestCase):
         classifier = next(step for step in classifier if step.get("id") == "filter")
         self.assertEqual(classifier["env"]["GOVERNANCE_TARGET_BRANCH"],
                          "${{ github.event_name == 'pull_request' && github.base_ref || github.ref_name }}")
-        self.assertIn("python3 scripts/tests/test_ci_browser_proof_only.py", job_block(build, "changes"))
+        changes = yaml.safe_load(job_block(build, "changes"))
+        self.assertNotIn("if", changes)
+        admission = next(step for step in changes["steps"]
+                         if step.get("name") == "Validate browser receipt-only CI admission")
+        self.assertEqual(admission, {"name": "Validate browser receipt-only CI admission",
+                                     "run": "python3 scripts/tests/test_ci_browser_proof_only.py"})
         self.assertNotIn("if:", job_block(build, "secret-scan"))
         governance = (ROOT / ".github/workflows/canonical-governance.yml").read_text()
         self.assertIn("--base", governance)

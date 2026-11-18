@@ -1035,7 +1035,12 @@ executes the workflow-order, complete-shard and actual fail-closed audit/verdict
 controls in `scripts/tests/test_frontend_workflow_order.py`, including execution
 of the actual pre-install Node test/check recipe so a stale workflow selector
 cannot escape this registered proof route. `TestFrontendDependencySecurityAuditsAreRequired`
-also binds the audit deadline and verdict to the build/audit producer.
+executes the portable workflow and audit-runner contract in
+`scripts/tests/test_frontend_dependency_audit.py`. Change frontend audit and
+unit-runner assertions there. Changes to installer test sources still admit
+the native platform matrix. The required changed-area job runs the browser
+admission tests on every pull request. Changing those tests alone does not
+start Core E2E. Changing the selector or a browser runtime input still does.
 Actual containing CI checkout/phase logs
 remain necessary before using the result as real-embed source proof; unrelated
 stub builds, workflow success, releases and installed recovery remain distinct.

@@ -5598,7 +5598,8 @@
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/security/__tests__/dependencySecurity.test.ts",
-              "scripts/installtests/build_release_assets_test.go"
+              "scripts/installtests/build_release_assets_test.go",
+              "scripts/tests/test_frontend_dependency_audit.py"
             ]
           },
           {
