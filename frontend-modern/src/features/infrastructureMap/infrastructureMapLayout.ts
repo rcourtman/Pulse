@@ -101,6 +101,11 @@ export interface MapLayoutOptions {
   density: MapDensity;
   /** Drawn above the map in an exported image; the page has its own toolbar. */
   header?: { title: string; facts: string[]; footer: string };
+  /**
+   * Lets a name take a second line. A saved image has no hover to read a
+   * cut-off name from; the page does, and has to fit one screen.
+   */
+  wrapNames?: boolean;
 }
 
 export interface MapCursor {
@@ -145,6 +150,47 @@ export const fitMapText = (
   return low > 0 ? `${text.slice(0, low).trimEnd()}…` : '';
 };
 
+/**
+ * A name on one line when it fits and on two when it does not, broken after
+ * a space, hyphen, underscore or dot, or where a capital starts a new word
+ * inside it (`iSponsorBlock` + `TV`), whichever falls in reach. A word with
+ * none of those is broken where the line runs out. What will not go on two
+ * lines ends in an ellipsis.
+ */
+export const wrapMapText = (
+  text: string,
+  maxWidth: number,
+  size: number,
+  weight: 400 | 500 | 600,
+): string[] => {
+  if (maxWidth <= 0) return [''];
+  if (textWidth(text, size, weight) <= maxWidth) return [text];
+  const breaksBefore = (index: number): boolean =>
+    /[\s\-_.]/.test(text[index - 1]) ||
+    (/[a-z0-9]/.test(text[index - 1]) && /[A-Z]/.test(text[index]));
+  // The longest opening that fits and ends at a break.
+  let cut = 0;
+  for (let index = 1; index < text.length; index += 1) {
+    if (!breaksBefore(index)) continue;
+    if (textWidth(text.slice(0, index).trimEnd(), size, weight) > maxWidth) break;
+    cut = index;
+  }
+  if (cut === 0) {
+    // One long word: as much of it as fits on the first line, leaving more
+    // than a letter or two for the second.
+    for (let index = 1; index < text.length; index += 1) {
+      if (textWidth(text.slice(0, index), size, weight) > maxWidth) break;
+      cut = index;
+    }
+    cut = Math.max(1, Math.min(cut, text.length - 3));
+  }
+  if (cut === 0) return [fitMapText(text, maxWidth, size, weight)];
+  return [
+    text.slice(0, cut).trimEnd(),
+    fitMapText(text.slice(cut).trimStart(), maxWidth, size, weight),
+  ];
+};
+
 const HEALTH_WORD: Record<MapHealth, string> = {
   ok: 'Healthy',
   attention: 'Needs attention',
@@ -164,6 +210,10 @@ export const mapHitMeta = (typeLabel: string, status: string, health: MapHealth)
 };
 
 type PosterHeader = MapLayoutOptions['header'];
+
+// The states a status dot can show, in the order the page's legend lists them.
+const POSTER_LEGEND: readonly MapHealth[] = ['ok', 'attention', 'critical', 'stale', 'off'];
+const POSTER_LEGEND_GAP = 18;
 
 export const drawPosterHeader = (
   out: MapCursor,
@@ -201,10 +251,11 @@ export const drawPosterFooter = (
   bottom: number,
 ): number => {
   if (!header) return bottom;
+  const baseline = bottom + 30;
   out.nodes.push({
     kind: 'text',
     x: width - margin,
-    y: bottom + 30,
+    y: baseline,
     text: header.footer,
     size: 11,
     weight: 400,
@@ -212,5 +263,28 @@ export const drawPosterFooter = (
     anchor: 'end',
     dim: true,
   });
-  return bottom + 30 + margin - 8;
+  // The page explains its dots in a legend under the map. A saved image is
+  // seen without the page, so it carries the same key.
+  const footerLeft = width - margin - textWidth(header.footer, 11, 400);
+  const legendWidth = POSTER_LEGEND.reduce(
+    (total, health) => total + 12 + textWidth(HEALTH_WORD[health], 11, 400) + POSTER_LEGEND_GAP,
+    -POSTER_LEGEND_GAP,
+  );
+  if (margin + legendWidth + POSTER_LEGEND_GAP <= footerLeft) {
+    let x = margin;
+    for (const health of POSTER_LEGEND) {
+      out.nodes.push({ kind: 'dot', x: x + 4, y: baseline - 4, r: 4, health });
+      out.nodes.push({
+        kind: 'text',
+        x: x + 12,
+        y: baseline,
+        text: HEALTH_WORD[health],
+        size: 11,
+        weight: 400,
+        fill: 'muted',
+      });
+      x += 12 + textWidth(HEALTH_WORD[health], 11, 400) + POSTER_LEGEND_GAP;
+    }
+  }
+  return baseline + margin - 8;
 };

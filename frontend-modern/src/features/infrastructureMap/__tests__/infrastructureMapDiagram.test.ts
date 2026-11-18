@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest';
 import type { Resource } from '@/types/resource';
 import { fitServiceDiagram, layoutServiceDiagram } from '../infrastructureMapDiagram';
 import { buildMapExportSvg } from '../infrastructureMapExport';
-import type { MapDensity, MapScene, SceneNode } from '../infrastructureMapLayout';
+import {
+  wrapMapText,
+  type MapDensity,
+  type MapScene,
+  type SceneNode,
+} from '../infrastructureMapLayout';
 import { buildInfrastructureMapModel } from '../infrastructureMapModel';
 import {
   MAP_PAGE_PALETTES,
@@ -89,6 +94,43 @@ const sceneOf = (resources: Resource[], width: number, density: MapDensity = 'na
 const ofKind = <K extends SceneNode['kind']>(scene: MapScene, kind: K) =>
   scene.nodes.filter((node): node is Extract<SceneNode, { kind: K }> => node.kind === kind);
 const texts = (scene: MapScene): string[] => ofKind(scene, 'text').map((node) => node.text);
+
+describe('wrapMapText', () => {
+  const wrap = (text: string) => wrapMapText(text, 98, 12, 500);
+
+  it('leaves a name that fits on one line', () => {
+    expect(wrap('jellyfin')).toEqual(['jellyfin']);
+  });
+
+  it('breaks after a separator, keeping the separator on the first line', () => {
+    expect(wrap('Proxmox Backup Server')).toEqual(['Proxmox', 'Backup Server']);
+    const [first, second] = wrap('paperless-ngx-archive');
+    expect(first.endsWith('-')).toBe(true);
+    expect(first + second).toBe('paperless-ngx-archive');
+  });
+
+  it('breaks where a capital starts a new word inside a name', () => {
+    expect(wrap('iSponsorBlockTV')).toEqual(['iSponsorBlock', 'TV']);
+  });
+
+  it('breaks inside a word only when it has no break in reach, and never leaves a stub', () => {
+    const [first, second] = wrap('averyveryverylongsinglewordname');
+    expect(first.length).toBeGreaterThan(8);
+    expect('averyveryverylongsinglewordname'.startsWith(first)).toBe(true);
+    expect(second).toBeTruthy();
+    // A word one letter too long for the line gives up three, not one.
+    const [head, tail] = wrap('mmmmmmmmmm');
+    expect(head + tail).toBe('mmmmmmmmmm');
+    expect(tail.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('ends in an ellipsis only when two lines are not enough', () => {
+    const lines = wrap('one-extremely-long-name-that-cannot-possibly-fit-on-two-lines-of-a-tile');
+    expect(lines).toHaveLength(2);
+    expect(lines[1].endsWith('…')).toBe(true);
+    expect(wrap('paperless-ngx-archive').join('')).not.toContain('…');
+  });
+});
 
 describe('layoutServiceDiagram', () => {
   it('draws a tile for everything that runs, under a box for each purpose', () => {
@@ -316,6 +358,70 @@ describe('layoutServiceDiagram', () => {
     expect(svg).toContain('Drawn by Pulse · 2026-11-18');
     expect(svg).toContain('HOME AUTOMATION');
     expect(svg).toContain('fill="#00A4DC"');
+  });
+
+  const poster = (resources: Resource[], density: MapDensity = 'names') =>
+    buildMapExportSvg(buildInfrastructureMapModel(resources), {
+      title: 'Infrastructure map',
+      density,
+      palette: MAP_PALETTES.dark,
+      now: new Date('2026-11-18T12:00:00Z'),
+    });
+
+  it('writes a long name out on two lines in the saved image, where the page cuts it short', () => {
+    const resources = estate([guest('tailscale-router'), guest('paperless-ngx-archive')]);
+    // The page keeps one line and leaves the rest to the hover.
+    const onPage = texts(sceneOf(resources, 1400));
+    expect(onPage).not.toContain('tailscale-router');
+    expect(onPage).not.toContain('paperless-ngx-archive');
+    expect(onPage.some((text) => text.startsWith('tailscale-') && text.endsWith('…'))).toBe(true);
+    // Nobody can hover a saved image. Its wider tile takes the first name
+    // whole and the second on two lines, and cuts neither.
+    const { svg } = poster(resources);
+    expect(svg).toMatch(/>tailscale-router<\/text>/);
+    const lines = [...svg.matchAll(/>(paperless-[^<]*)<\/text><text[^>]*>([^<]+)<\/text>/g)][0];
+    expect(lines?.[1].endsWith('-')).toBe(true);
+    expect(`${lines?.[1]}${lines?.[2]}`).toBe('paperless-ngx-archive');
+    expect(svg).not.toMatch(/>(tailscale|paperless)[^<]*…<\/text>/);
+    // A name that fits stays on one line.
+    expect(svg).toMatch(/>jellyfin<\/text>/);
+  });
+
+  it('gives the saved image the key to its status dots', () => {
+    const { svg } = poster(estate());
+    for (const word of ['Healthy', 'Needs attention', 'Critical', 'Not reporting', 'Off']) {
+      expect(svg).toContain(`>${word}</text>`);
+    }
+    // The page has its own legend under the drawing and draws none in it.
+    expect(texts(sceneOf(estate(), 1400))).not.toContain('Needs attention');
+  });
+
+  it('makes the saved image wider when that keeps its layers from wrapping', () => {
+    const pool = (index: number, backup = false): Resource =>
+      resource({
+        id: `${backup ? 'backup' : 'pool'}-${index}`,
+        type: 'storage',
+        name: `${backup ? 'offsite' : 'tank'}-${index}`,
+        platformType: 'proxmox-pve',
+        parentId: 'pve',
+        ...(backup ? { storage: { type: 'pbs' } } : {}),
+      });
+    const many = estate([
+      ...Array.from({ length: 12 }, (_, index) => pool(index)),
+      ...Array.from({ length: 10 }, (_, index) => pool(index, true)),
+    ]);
+    const model = buildInfrastructureMapModel(many);
+    const narrow = layoutServiceDiagram(buildServiceDiagram(model), {
+      width: 1480,
+      density: 'names',
+      header: { title: 'Infrastructure map', facts: [], footer: '' },
+      wrapNames: true,
+    });
+    const saved = poster(many);
+    expect(saved.width).toBeGreaterThan(1480);
+    expect(saved.height).toBeLessThan(narrow.height * 0.93);
+    // A small estate gains nothing from the width and keeps the narrow image.
+    expect(poster(estate()).width).toBe(1480);
   });
 
   it('draws with the theme’s own variables on the page and with literal colours in a file', () => {

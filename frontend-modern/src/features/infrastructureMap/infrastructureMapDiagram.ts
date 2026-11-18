@@ -4,6 +4,7 @@ import {
   drawPosterHeader,
   fitMapText,
   mapHitMeta,
+  wrapMapText,
   type MapCursor,
   type MapLayoutOptions,
   type MapNetworkTone,
@@ -40,10 +41,37 @@ interface Metrics {
   gap: number;
   pad: number;
   named: boolean;
+  /** How many lines a name may take. */
+  nameLines: 1 | 2;
 }
 
-const NAMED: Metrics = { tileW: 92, tileH: 72, icon: 32, gap: 4, pad: 8, named: true };
-const COMPACT: Metrics = { tileW: 40, tileH: 40, icon: 26, gap: 4, pad: 8, named: false };
+const NAME_LINE = 13;
+const NAMED: Metrics = {
+  tileW: 92,
+  tileH: 72,
+  icon: 32,
+  gap: 4,
+  pad: 8,
+  named: true,
+  nameLines: 1,
+};
+// The saved image: a little wider and one line of text taller, so a name is
+// written out where the page would cut it short and leave the rest to hover.
+const NAMED_WRAPPED: Metrics = {
+  ...NAMED,
+  tileW: 104,
+  tileH: NAMED.tileH + NAME_LINE,
+  nameLines: 2,
+};
+const COMPACT: Metrics = {
+  tileW: 40,
+  tileH: 40,
+  icon: 26,
+  gap: 4,
+  pad: 8,
+  named: false,
+  nameLines: 1,
+};
 
 const HEADER = 26;
 const CARD_RADIUS = 6;
@@ -173,22 +201,30 @@ const drawTile = (painter: Painter, tile: DiagramTile, x: number, y: number, das
     });
   }
   if (metrics.named) {
-    out.nodes.push({
-      kind: 'text',
-      x: cx,
-      y: y + 53,
-      text: fitMapText(real || dashed ? tile.name : tile.caption, metrics.tileW - 6, 12, 500),
-      size: 12,
-      weight: 500,
-      fill: off ? 'muted' : 'text',
-      anchor: 'middle',
-      ...(off ? { dim: true } : {}),
+    const name = real || dashed ? tile.name : tile.caption;
+    const nameLines =
+      metrics.nameLines === 2
+        ? wrapMapText(name, metrics.tileW - 6, 12, 500)
+        : [fitMapText(name, metrics.tileW - 6, 12, 500)];
+    nameLines.forEach((text, index) => {
+      out.nodes.push({
+        kind: 'text',
+        x: cx,
+        y: y + 53 + index * NAME_LINE,
+        text,
+        size: 12,
+        weight: 500,
+        fill: off ? 'muted' : 'text',
+        anchor: 'middle',
+        ...(off ? { dim: true } : {}),
+      });
     });
     if (real || dashed) {
       out.nodes.push({
         kind: 'text',
         x: cx,
-        y: y + 66,
+        // The caption follows the name's last line.
+        y: y + 66 + (nameLines.length - 1) * NAME_LINE,
         text: fitMapText(tile.caption, metrics.tileW - 6, 10, 400),
         size: 10,
         weight: 400,
@@ -477,7 +513,7 @@ const drawNetworks = (
 };
 
 export function layoutServiceDiagram(diagram: ServiceDiagram, options: MapLayoutOptions): MapScene {
-  const metrics = options.density === 'marks' ? COMPACT : NAMED;
+  const metrics = options.density === 'marks' ? COMPACT : options.wrapNames ? NAMED_WRAPPED : NAMED;
   const margin = options.header ? 28 : 0;
   const width = Math.max(MIN_WIDTH + margin * 2, Math.floor(options.width));
   const left = margin + GUTTER;

@@ -118,6 +118,17 @@ describe('resolveMapApp', () => {
     expect(resolveMapApp({ name: 'ps4-ctrl' })).toBeUndefined();
   });
 
+  it('names an app as itself and not as the one it replaces', () => {
+    // Byparr stands in for FlareSolverr. With names hidden the tile is
+    // labelled by its app, and the wrong app's name would be published.
+    expect(resolveMapApp({ name: 'byparr' })?.label).toBe('Byparr');
+    expect(resolveMapApp({ name: 'x', image: 'ghcr.io/thephaseless/byparr:latest' })?.label).toBe(
+      'Byparr',
+    );
+    expect(resolveMapApp({ name: 'flaresolverr' })?.label).toBe('FlareSolverr');
+    expect(resolveMapApp({ name: 'byparr' })?.category).toBe('media');
+  });
+
   it('only reads an everyday word as an app when nothing but filler follows it', () => {
     expect(resolveMapApp({ name: 'pulse' })?.label).toBe('Pulse');
     expect(resolveMapApp({ name: 'pulse-prod' })?.label).toBe('Pulse');

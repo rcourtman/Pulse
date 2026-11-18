@@ -1,5 +1,5 @@
 import { layoutServiceDiagram } from './infrastructureMapDiagram';
-import type { MapDensity } from './infrastructureMapLayout';
+import type { MapDensity, MapScene } from './infrastructureMapLayout';
 import { formatMapTotalLabel, type InfrastructureMapModel } from './infrastructureMapModel';
 import { MAP_PALETTES, renderMapSceneToSvg, type MapPalette } from './infrastructureMapRender';
 import { buildServiceDiagram, DIAGRAM_MAX_TILES_PER_GROUP } from './infrastructureMapServices';
@@ -10,8 +10,11 @@ import { buildServiceDiagram, DIAGRAM_MAX_TILES_PER_GROUP } from './infrastructu
  * file is built and saved locally.
  */
 
-// The diagram reads best wide: its boxes sit side by side in a row.
-const EXPORT_WIDTH = 1480;
+// The diagram reads best wide: its boxes sit side by side in a row. The image
+// is as wide as it takes to keep the layers from wrapping, within these.
+const EXPORT_WIDTHS = [1480, 1640, 1800, 1960] as const;
+// A wider image has to be this much shorter to be worth its width.
+const EXPORT_WIDER_GAIN = 0.92;
 const EXPORT_SCALE = 2;
 // Browsers refuse canvases past roughly 16k pixels a side; beyond that the
 // image is still saved, as the SVG it was drawn from.
@@ -54,17 +57,22 @@ export function buildMapExportSvg(
   const diagram = buildServiceDiagram(model, {
     maxTilesPerGroup: resolveDiagramTileLimit(options.density),
   });
-  const scene = layoutServiceDiagram(diagram, {
-    width: EXPORT_WIDTH,
-    density: options.density,
-    header: {
-      title: options.title,
-      facts: model.totals.map(
-        (total) => `${total.count.toLocaleString()} ${formatMapTotalLabel(total)}`,
-      ),
-      footer: `Drawn by Pulse · ${date}`,
-    },
-  });
+  const header = {
+    title: options.title,
+    facts: model.totals.map(
+      (total) => `${total.count.toLocaleString()} ${formatMapTotalLabel(total)}`,
+    ),
+    footer: `Drawn by Pulse · ${date}`,
+  };
+  // Nobody can hover a saved image, so every name is written out, on two
+  // lines when it needs them.
+  const layoutAt = (width: number): MapScene =>
+    layoutServiceDiagram(diagram, { width, density: options.density, header, wrapNames: true });
+  let scene = layoutAt(EXPORT_WIDTHS[0]);
+  for (const width of EXPORT_WIDTHS.slice(1)) {
+    const wider = layoutAt(width);
+    if (wider.height <= scene.height * EXPORT_WIDER_GAIN) scene = wider;
+  }
   return {
     svg: renderMapSceneToSvg(scene, options.palette),
     width: scene.width,
