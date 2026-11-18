@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -622,6 +623,28 @@ func TestPulseAPIGuidanceMissingNodeInputStopsBeforeCurl(t *testing.T) {
 	t.Fatal("node request recipe is missing")
 }
 
+// Only the stalled loopback fixture can use this clock. Validate the actual
+// curl invocation from the copied recipe before changing its transfer limit
+// from the documented 20 seconds to 5. Any additional option, including a
+// retry, must fail before real curl runs.
+const timedOutAPIPOSTFixture = `#!/usr/bin/env bash
+set -euo pipefail
+args=("$@")
+response_file=${args[16]-}
+expected=(--disable --fail-with-body --silent --show-error --globoff
+  --proto '=http' --noproxy 127.0.0.1 --connect-timeout 5 --max-time 20
+  --header "@$HOME/.config/pulse/api-header" --output "$response_file" --write-out '%{http_code}'
+  --header 'Content-Type: application/json' --request POST --data-binary @- "$PULSE_API_FIXTURE_URL")
+reject() { printf 'Unexpected copied API curl arguments.\n' >&2; exit 97; }
+[[ "$response_file" == "$HOME"/.config/pulse/api-response.?????? ]] || reject
+[[ "${#args[@]}" == "${#expected[@]}" ]] || reject
+for i in "${!expected[@]}"; do
+  [[ "${args[i]}" == "${expected[i]}" ]] || reject
+done
+args[12]=5 # Replace only the admitted --max-time value.
+exec "$PULSE_API_FIXTURE_CURL" "${args[@]}"
+`
+
 func TestPulseAPIGuidanceTimedOutPOSTIsNotRepeated(t *testing.T) {
 	t.Parallel()
 	_, helper, calls := pulseAPIReference(t)
@@ -634,51 +657,86 @@ func TestPulseAPIGuidanceTimedOutPOSTIsNotRepeated(t *testing.T) {
 	if execute == "" {
 		t.Fatal("execution request recipe is missing")
 	}
-	home, bin := t.TempDir(), t.TempDir()
-	dir := filepath.Join(home, ".config", "pulse")
-	if err := os.MkdirAll(dir, 0700); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "api-header"), []byte("X-API-Token: synthetic-timeout-secret\n"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	requests := make(chan struct{}, 4)
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = io.Copy(io.Discard, r.Body)
-		requests <- struct{}{}
-		w.Header().Set("Content-Length", "100")
-		_, _ = io.WriteString(w, "private-partial-response")
-		w.(http.Flusher).Flush()
-		<-r.Context().Done()
-	}))
-	defer server.Close()
-	if !strings.Contains(helper, "--connect-timeout 5 --max-time 20") {
-		t.Fatal("documented request deadlines are missing")
-	}
-	// Use the actual documented twenty-second limit, not a test-only shortened
-	// deadline. An execution endpoint can have acted even when this read fails.
-	helper = strings.Replace(helper, "http://127.0.0.1:7655", server.URL, 1)
-	// A deliberate preparation delay exceeds the old whole-shell comparison
-	// once added to the actual twenty-second request. It must not shorten curl's
-	// limit or be mistaken for request time.
-	result, err := observeGuidanceRecipe(t, "sleep 12\n"+helper+"\n"+execute, home, bin, guidanceRecipeLimits(20*time.Second))
+	realCurl, err := exec.LookPath("curl")
 	if err != nil {
-		t.Fatalf("timed-out POST observation failed: %v; %s", err, result.summary())
+		t.Fatal("curl is required for the copied API POST")
 	}
-	t.Log(result.summary())
-	output, exit := result.output, result.exit
-	if exit != 28 || result.request > 25*time.Second || result.curlStarts != 1 || result.curlEnds != 1 || len(requests) != 1 {
-		t.Fatal("POST did not stop at its request deadline or was retried")
-	}
-	if strings.Contains(output, "private-partial-response") || strings.Contains(output, "synthetic-timeout-secret") {
-		t.Fatal("timed-out POST disclosed a private body or credential")
-	}
-	responses, err := filepath.Glob(filepath.Join(dir, "api-response.??????"))
-	if err != nil || len(responses) != 1 {
-		t.Fatal("timed-out POST did not retain its response")
-	}
-	if data, err := os.ReadFile(responses[0]); err != nil || string(data) != "private-partial-response" {
-		t.Fatal("partial response was not retained for private reconciliation")
+
+	for _, tc := range []struct {
+		name, old, replacement string
+	}{
+		{name: "stalled_response"},
+		{"changed_connect_limit", "--connect-timeout 5", "--connect-timeout 4"},
+		{"changed_transfer_limit", "--max-time 20", "--max-time 30"},
+		{"added_retry", "--max-time 20", "--max-time 20 --retry 1"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			const token, partial = "synthetic-timeout-secret", "private-partial-response"
+			home, bin := t.TempDir(), t.TempDir()
+			dir := filepath.Join(home, ".config", "pulse")
+			if err := os.MkdirAll(dir, 0700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(dir, "api-header"), []byte("X-API-Token: "+token+"\n"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(bin, "curl"), []byte(timedOutAPIPOSTFixture), 0700); err != nil {
+				t.Fatal(err)
+			}
+			const endpoint = "/api/actions/act_.../execute"
+			var requests, invalid atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				requests.Add(1)
+				_, err := io.Copy(io.Discard, r.Body)
+				if err != nil || r.Method != http.MethodPost || r.URL.RequestURI() != endpoint ||
+					r.Header.Get("X-API-Token") != token || r.Header.Get("Content-Type") != "application/json" {
+					invalid.Add(1)
+				}
+				w.Header().Set("Content-Length", "100")
+				_, _ = io.WriteString(w, partial)
+				w.(http.Flusher).Flush()
+				<-r.Context().Done()
+			}))
+			defer server.Close()
+			recipe := strings.Replace(helper, "http://127.0.0.1:7655", server.URL, 1)
+			if tc.old != "" {
+				recipe = strings.Replace(recipe, tc.old, tc.replacement, 1)
+			}
+			// Delayed preparation is covered separately by the observer's
+			// phase-separation test, not by sleeping before each real request.
+			result, err := observeGuidanceRecipe(t, recipe+"\n"+execute, home, bin, guidanceRecipeLimits(5*time.Second),
+				"PULSE_API_FIXTURE_URL="+server.URL+endpoint, "PULSE_API_FIXTURE_CURL="+realCurl)
+			if err != nil || !result.terminal || !result.outputComplete || result.signal != "" ||
+				result.curlStarts != 1 || result.curlEnds != 1 {
+				t.Fatalf("copied POST did not reach a complete terminal observation: %v; %s", err, result.summary())
+			}
+			t.Log(result.summary())
+			if strings.Contains(result.output, partial) || strings.Contains(result.output, token) {
+				t.Fatal("POST disclosed a private body or credential")
+			}
+			if tc.old != "" {
+				if result.exit != 97 || requests.Load() != 0 || !strings.Contains(result.output, "Unexpected copied API curl arguments.") {
+					t.Fatal("fixture did not reject changed request arguments before sending")
+				}
+				return
+			}
+			if result.exit != 28 || requests.Load() != 1 || invalid.Load() != 0 {
+				t.Fatalf("real curl did not time out on exactly one copied POST: requests=%d invalid=%d; %s",
+					requests.Load(), invalid.Load(), result.summary())
+			}
+			responses, err := filepath.Glob(filepath.Join(dir, "api-response.??????"))
+			if err != nil || len(responses) != 1 || !strings.Contains(result.output, responses[0]) {
+				t.Fatal("timed-out POST did not report one retained response")
+			}
+			info, err := os.Stat(responses[0])
+			if err != nil || info.Mode().Perm() != 0600 {
+				t.Fatal("timed-out POST did not retain a private response")
+			}
+			if data, err := os.ReadFile(responses[0]); err != nil || string(data) != partial {
+				t.Fatal("partial response was not retained for private reconciliation")
+			}
+			t.Log("documented 5s connect and 20s request bounds admitted; real curl exit 28 on the 5s fixture clock, one POST and exact private partial bytes")
+		})
 	}
 }
 
