@@ -41,6 +41,8 @@ let releaseRead: (response: Response) => void;
 let userReads: number;
 let writeStatus: number;
 let writeResponse: Promise<Response> | undefined;
+let retryRead: Promise<Response> | undefined;
+const inventory = () => screen.getByRole('region', { name: 'User Access' });
 const writes = () =>
   fetchMock.mock.calls.filter(([, init]) => !['GET', 'HEAD'].includes(init?.method ?? 'GET'));
 
@@ -55,6 +57,7 @@ beforeEach(() => {
   userReads = 0;
   writeStatus = 204;
   writeResponse = undefined;
+  retryRead = undefined;
   const savedRead = new Promise<Response>((resolve) => {
     releaseRead = resolve;
   });
@@ -64,7 +67,9 @@ beforeEach(() => {
     const method = init.method ?? 'GET';
     if (method === 'GET' && path === '/api/admin/users') {
       userReads++;
-      return userReads === 2 ? savedRead : json(users);
+      if (userReads === 2) return savedRead;
+      if (userReads === 3 && retryRead) return retryRead;
+      return json(users);
     }
     if (method === 'GET' && path === '/api/admin/roles') return json(roles);
     if (method === 'GET' && path.endsWith('/permissions')) return json([]);
@@ -156,20 +161,38 @@ describe('User Access focus after a confirmed write and saved reread', () => {
     expectSingleBoundWrite();
   });
 
-  it('focuses a failed reread, then returns from Retry to the same saved user without another write', async () => {
-    await startSavedRead();
-    releaseRead(json({ error: 'Synthetic read failure' }, 503));
-    const notice = await screen.findByRole('alert');
-    await waitFor(() => expect(notice).toHaveFocus());
-    expect(screen.queryByRole('button', { name: manageName() })).not.toBeInTheDocument();
-    const retry = within(notice).getByRole('button', { name: 'Retry' });
-    retry.focus();
-    fireEvent.click(retry);
-    const replacement = await screen.findByRole('button', { name: manageName() });
-    await waitFor(() => expect(replacement).toHaveFocus());
-    expect(userReads).toBe(3);
-    expectSingleBoundWrite();
-  });
+  it.each(['stay in inventory', 'leave inventory'])(
+    'keeps Retry in the saved read journey when users %s',
+    async (action) => {
+      await startSavedRead();
+      releaseRead(json({ error: 'Synthetic read failure' }, 503));
+      const notice = await screen.findByRole('alert');
+      await waitFor(() => expect(notice).toHaveFocus());
+      expect(screen.queryByRole('button', { name: manageName() })).not.toBeInTheDocument();
+
+      let releaseRetry!: (response: Response) => void;
+      retryRead = new Promise((resolve) => {
+        releaseRetry = resolve;
+      });
+      const retry = within(notice).getByRole('button', { name: 'Retry' });
+      retry.focus();
+      fireEvent.click(retry);
+      expect(retry).not.toBeInTheDocument();
+      expect(inventory()).toHaveFocus();
+      expect(screen.getByRole('status', { name: 'Loading user access' })).toBeVisible();
+
+      const outside = screen.getByRole('button', { name: 'Outside task' });
+      if (action === 'leave inventory') outside.focus();
+      releaseRetry(json(users));
+      const replacement = await screen.findByRole('button', { name: manageName() });
+      if (action === 'leave inventory') {
+        await new Promise((resolve) => window.setTimeout(resolve, 20));
+        expect(outside).toHaveFocus();
+      } else await waitFor(() => expect(replacement).toHaveFocus());
+      expect(userReads).toBe(3);
+      expectSingleBoundWrite();
+    },
+  );
 
   it('uses search rather than a namesake when the saved principal is no longer listed', async () => {
     await startSavedRead();
@@ -252,14 +275,43 @@ describe('User Access focus after a confirmed write and saved reread', () => {
     expectSingleBoundWrite();
   });
 
-  it('leaves uncertainty recovery in charge rather than refocusing a previous user', async () => {
-    writeStatus = 503;
-    await openEditor();
-    const notice = await screen.findByRole('alert');
-    await waitFor(() => expect(notice).toHaveFocus());
-    expect(notice).toHaveTextContent('could not be confirmed');
-    expect(within(notice).getByRole('button', { name: 'Check saved access' })).toBeVisible();
-    expect(userReads).toBe(1);
-    expectSingleBoundWrite();
-  });
+  it.each([200, 503])(
+    'keeps the keyboard in the inventory through an unconfirmed write check returning %s',
+    async (status) => {
+      writeStatus = 503;
+      await openEditor();
+      const notice = await screen.findByRole('alert');
+      await waitFor(() => expect(notice).toHaveFocus());
+      expect(notice).toHaveTextContent('could not be confirmed');
+      expect(userReads).toBe(1);
+
+      const check = within(notice).getByRole('button', { name: 'Check saved access' });
+      check.focus();
+      fireEvent.click(check);
+      expect(check).not.toBeInTheDocument();
+      expect(inventory()).toHaveFocus();
+      expect(screen.getByRole('status', { name: 'Loading user access' })).toBeVisible();
+      expect(screen.getByRole('textbox', { name: 'Search users...' })).toBeDisabled();
+      expect(screen.queryByRole('button', { name: manageName() })).not.toBeInTheDocument();
+      releaseRead(json(status === 200 ? users : { error: 'Synthetic read failure' }, status));
+
+      await waitFor(() =>
+        expect(
+          screen.queryByRole('status', { name: 'Loading user access' }),
+        ).not.toBeInTheDocument(),
+      );
+      expect(inventory()).toHaveFocus();
+      if (status === 200) {
+        expect(screen.getByRole('button', { name: manageName() })).toBeEnabled();
+        expect(check).not.toBeInTheDocument();
+        expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+      } else {
+        expect(within(notice).getByRole('button', { name: 'Check saved access' })).toBeEnabled();
+        expect(screen.getByText('Failed to load user assignments')).toBeVisible();
+        expect(screen.queryByRole('button', { name: manageName() })).not.toBeInTheDocument();
+      }
+      expect(userReads).toBe(2);
+      expectSingleBoundWrite();
+    },
+  );
 });
