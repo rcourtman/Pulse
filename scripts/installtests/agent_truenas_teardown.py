@@ -75,12 +75,85 @@ def python_tool(path, *arguments):
     path.chmod(0o700)
 
 
-MODEL = r'''#!/usr/bin/python3
+# The full caller may read the same manager and process inventory many times.
+# Keep those fixture commands as real, inexpensive subprocesses under the
+# production timeout. Only the middleware model needs a Python/JSON process.
+OBSERVATION_MODEL = r'''#!/bin/sh
+set -eu
+record() { printf '%s\n' "$1" >> "$FIXTURE/events"; }
+case "${0##*/}" in
+    ps)
+        [ "$#" -eq 9 ] && [ "$1" = -ax ] &&
+            [ "$2" = -o ] && [ "$3" = pid= ] &&
+            [ "$4" = -o ] && [ "$5" = ppid= ] &&
+            [ "$6" = -o ] && [ "$7" = comm= ] &&
+            [ "$8" = -o ] && [ "$9" = args= ] || exit 1
+        record 'process:read'
+        case "$FIXTURE_FAULT" in
+            failed-process) exit 1 ;;
+            empty-process) exit 0 ;;
+        esac
+        IFS= read -r active < "$FIXTURE/unit-active"
+        printf '%s\n' '1 0 init /sbin/init'
+        if [ "$FIXTURE_FAULT" = duplicate-process ]; then printf '%s\n' '1 0 init /sbin/init'; fi
+        if [ "$active" = active ] || [ "$FIXTURE_FAULT" = orphan-agent ]; then
+            printf '%s\n' '100 1 pulse-agent /usr/local/bin/pulse-agent --token-file /synthetic/recovery-only'
+        fi
+        if [ "$FIXTURE_FAULT" = live-bootstrap ]; then
+            printf '101 1 bash /bin/bash %s/state/bootstrap-pulse-agent.sh\n' "$FIXTURE"
+        fi
+        if [ "$FIXTURE_FAULT" = diagnostic-process ]; then printf '%s\n' 'read unavailable' >&2; fi
+        ;;
+    systemctl)
+        [ "$#" -ge 1 ] || exit 1
+        if [ "$1" = daemon-reload ]; then
+            [ "$#" -eq 1 ] || exit 1
+            record 'unit:reload'
+            exit 0
+        fi
+        [ "$#" -ge 2 ] || exit 1
+        case "$2" in
+            pulse-agent.service|pulse-agent-helper.service|pulse-agent-helper.socket|pulse-agent-runner.service) ;;
+            *) exit 1 ;;
+        esac
+        case "$1" in
+            show)
+                [ "$#" -eq 3 ] && [ "$3" = --property=LoadState,ActiveState,UnitFileState ] || exit 1
+                record "unit:read:$2"
+                [ "$FIXTURE_FAULT" != failed-unit-read ] || exit 1
+                if [ "$2" = pulse-agent.service ] && [ -e "$FIXTURE/unit/pulse-agent.service" ]; then
+                    IFS= read -r active < "$FIXTURE/unit-active"
+                    IFS= read -r enabled < "$FIXTURE/unit-enabled"
+                    printf 'LoadState=loaded\nActiveState=%s\nUnitFileState=%s\n' "$active" "$enabled"
+                else
+                    printf 'LoadState=not-found\nActiveState=inactive\nUnitFileState=\n'
+                fi
+                ;;
+            stop)
+                [ "$#" -eq 2 ] || exit 1
+                record 'unit:stop'
+                [ "$FIXTURE_FAULT" != refused-stop ] || exit 1
+                if [ "$FIXTURE_FAULT" != ignored-stop ]; then printf 'inactive\n' > "$FIXTURE/unit-active"; fi
+                if [ "$FIXTURE_FAULT" = reactivated-task-on-stop ]; then : > "$FIXTURE/reactivated-on-stop"; fi
+                ;;
+            disable)
+                [ "$#" -eq 2 ] || exit 1
+                record 'unit:disable'
+                printf 'disabled\n' > "$FIXTURE/unit-enabled"
+                ;;
+            *) exit 1 ;;
+        esac
+        ;;
+    *) exit 1 ;;
+esac
+'''
+
+MIDDLEWARE_MODEL = r'''
 import json, os, pathlib, sys
 root = pathlib.Path(os.environ['FIXTURE'])
 path = root / 'model.json'
 v = json.loads(path.read_text())
-role, args = pathlib.Path(sys.argv[0]).name, sys.argv[1:]
+args = sys.argv[1:]
 fault = v['fault']
 def save():
     pending = root / 'model.pending'
@@ -88,41 +161,7 @@ def save():
 def event(s):
     with (root / 'events').open('a') as f: f.write(s + '\n')
 remote = (root / 'events').exists() and 'remote:remove' in (root / 'events').read_text()
-if role == 'ps':
-    assert args == ['-ax', '-o', 'pid=', '-o', 'ppid=', '-o', 'comm=', '-o', 'args='], args
-    event('process:read')
-    if fault == 'failed-process': sys.exit(1)
-    if fault == 'empty-process': sys.exit(0)
-    print('1 0 init /sbin/init')
-    if fault == 'duplicate-process': print('1 0 init /sbin/init')
-    if v['active'] == 'active' or fault == 'orphan-agent':
-        print('100 1 pulse-agent /usr/local/bin/pulse-agent --token-file /synthetic/recovery-only')
-    if fault == 'live-bootstrap': print('101 1 bash /bin/bash ' + str(root / 'state/bootstrap-pulse-agent.sh'))
-    if fault == 'diagnostic-process': print('read unavailable', file=sys.stderr)
-    sys.exit(0)
-if role == 'systemctl':
-    verb = args[0]
-    if verb == 'daemon-reload': event('unit:reload'); sys.exit(0)
-    assert len(args) >= 2, args
-    unit = args[1]
-    assert unit in ('pulse-agent.service', 'pulse-agent-helper.service', 'pulse-agent-helper.socket', 'pulse-agent-runner.service'), args
-    if verb == 'show':
-        assert args[2:] == ['--property=LoadState,ActiveState,UnitFileState'], args
-        event('unit:read:' + unit)
-        if fault == 'failed-unit-read': sys.exit(1)
-        present = unit == 'pulse-agent.service' and (root / 'unit/pulse-agent.service').exists()
-        if present:
-            print('LoadState=loaded\nActiveState=' + v['active'] + '\nUnitFileState=' + v['enabled'])
-        else: print('LoadState=not-found\nActiveState=inactive\nUnitFileState=')
-        sys.exit(0)
-    assert verb in ('stop', 'disable'), args
-    event('unit:' + verb)
-    if fault == 'refused-stop' and verb == 'stop': sys.exit(1)
-    if verb == 'stop' and fault != 'ignored-stop': v['active'] = 'inactive'
-    if verb == 'stop' and fault == 'reactivated-task-on-stop': v['tasks'][0]['enabled'] = True
-    if verb == 'disable': v['enabled'] = 'disabled'
-    save(); sys.exit(0)
-assert role == 'midclt' and args[0] == 'call', (role, args)
+assert len(args) >= 2 and args[0] == 'call', args
 verb = args[1]
 if verb == 'initshutdownscript.query':
     assert len(args) in (2, 3), args
@@ -131,6 +170,12 @@ if verb == 'initshutdownscript.query':
         save(); (root / 'timed-pid').write_text(str(os.getpid()))
         os.execl('/bin/sleep', 'sleep', '30')
     if fault == 'failed-query' or (fault == 'failed-after-remote-query' and remote): save(); sys.exit(1)
+    # Consume the synthetic stop-to-task transition before returning inventory,
+    # just as the manager previously applied it during the stop command.
+    reactivated = root / 'reactivated-on-stop'
+    if reactivated.exists():
+        v['tasks'][0]['enabled'] = True
+        reactivated.unlink()
     if fault == 'new-task-after-remote' and remote and not any(t['id'] == 3 for t in v['tasks']):
         v['tasks'].append(dict(v['tasks'][0], id=3, enabled=True))
     if fault == 'reactivated-task' and v['updates'] and v['tasks']: v['tasks'][0]['enabled'] = True
@@ -170,7 +215,7 @@ assert verb == 'initshutdownscript.delete' and len(args) == 3, args
 ident = int(args[2]); event('task:delete:' + str(ident)); v['deletes'] += 1
 if fault == 'refused-delete' or (fault == 'partial-delete' and ident == 2): save(); sys.exit(1)
 if fault != 'ignored-delete': v['tasks'] = [t for t in v['tasks'] if t['id'] != ident]
-if fault == 'unit-reactivation-on-delete': v['active'] = 'active'
+if fault == 'unit-reactivation-on-delete': (root / 'unit-active').write_text('active\n')
 save(); print('true')
 '''
 
@@ -183,10 +228,13 @@ class AgentTrueNASTeardown(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             tools = root / "tools"; tools.mkdir()
-            models = root / "models"; models.mkdir()
-            for name in ("midclt", "ps", "systemctl"):
-                model = models / name; model.write_text(MODEL)
-                python_tool(tools / name, str(model))
+            for name in ("ps", "systemctl"):
+                model = tools / name
+                model.write_text(OBSERVATION_MODEL)
+                model.chmod(0o700)
+            middleware = root / "middleware.py"
+            middleware.write_text(MIDDLEWARE_MODEL)
+            python_tool(tools / "midclt", str(middleware))
             # Production's inline validators are stdlib-only too. Keep every
             # real validation, but avoid a different PATH interpreter and its
             # ambient site hooks at each fresh inventory read. Missing-python
@@ -216,9 +264,10 @@ class AgentTrueNASTeardown(unittest.TestCase):
             if tasks == "duplicate": selected.append(dict(owned, id=2))
             if tasks == "disabled": selected[0]["enabled"] = False
             selected.append(foreign)
-            model = dict(fault=fault, tasks=selected, updates=0, deletes=0, queries=0,
-                         active="active", enabled="enabled")
+            model = dict(fault=fault, tasks=selected, updates=0, deletes=0, queries=0)
             (root / "model.json").write_text(json.dumps(model))
+            (root / "unit-active").write_text("active\n")
+            (root / "unit-enabled").write_text("enabled\n")
             before = self.snapshot(root)
 
             def redirect(source):
@@ -281,7 +330,8 @@ remove_safe_profile_state_dir() { rm -rf -- "$SAFE_PROFILE_STATE_DIR"; }
             selected = definitions(self.source)
             if flow == "process": entry = 'read_legacy_agent_removal_processes "$TRUENAS_BOOTSTRAP_SCRIPT"\n'
             executable = shell + "\n" + setup + "\n" + redirect(selected) + "\nmain() {\n" + redirect(entry) + "}\nmain\n"
-            env = dict(os.environ, FIXTURE=str(root), PATH=str(tools) + ":" + os.environ["PATH"])
+            env = dict(os.environ, FIXTURE=str(root), FIXTURE_FAULT=fault,
+                       PATH=str(tools) + ":" + os.environ["PATH"])
             result = subprocess.run(["bash", "-c", executable], env=env, capture_output=True, text=True, timeout=12)
             second = subprocess.run(["bash", "-c", executable], env=env, capture_output=True, text=True, timeout=12) if repeat else None
             events = (root / "events").read_text() if (root / "events").exists() else ""
@@ -418,8 +468,17 @@ remove_safe_profile_state_dir() { rm -rf -- "$SAFE_PROFILE_STATE_DIR"; }
         result = self.exercise()
         self.assertEqual(result[0].returncode, 0, result[0].stderr)
         events = result[2]
-        self.assertLess(events.index('task:delete:2'), events.index('state:remove'))
-        self.assertIn('task:query', events[events.index('task:delete:2') + 1:events.index('state:remove')])
+        last_task, first_erasure = events.index('task:delete:2'), events.index('state:remove')
+        self.assertLess(last_task, first_erasure)
+        final_reads = events[last_task + 1:first_erasure]
+        self.assertEqual(final_reads[:6], [
+            'unit:read:pulse-agent-runner.service',
+            'unit:read:pulse-agent-helper.socket',
+            'unit:read:pulse-agent-helper.service',
+            'unit:read:pulse-agent.service',
+            'process:read',
+            'task:query',
+        ])
         self.assertEqual([t['id'] for t in result[5]['tasks']], [99])
         self.assertTrue(result[5]['tasks'][0]['enabled'])
         self.assertNotIn('state/runtime.token', result[4])
