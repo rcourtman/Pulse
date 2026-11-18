@@ -180,6 +180,15 @@ class ServerReleaseSelectionTest(unittest.TestCase):
         self.assertEqual(result.stdout, "")
         self.assertIn("refusing to downgrade automatically", result.stderr)
 
+    def test_resolving_against_an_existing_version_refuses_invalid_order(self):
+        for target, installed in (("v7.0.0", "v6.09.0"), ("v7.0.9223372036854775808", "v6.9.0")):
+            with self.subTest(target=target, installed=installed):
+                result, calls = self.exercise([release(target)], selector="target", installed=installed)
+                self.assertEqual(result.returncode, 1, result.stderr)
+                self.assertEqual(result.stdout, "")
+                self.assertIn("Cannot compare the installed Pulse version", result.stderr)
+                self.assertFalse(any("/download/" in url for url in calls), calls)
+
     def test_refused_selection_has_specific_safe_recovery_guidance(self):
         result, _ = self.exercise([], selector="target", redirect="helm-chart-6.5.0")
         self.assertNotEqual(result.returncode, 0)
