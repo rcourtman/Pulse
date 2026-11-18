@@ -1522,3 +1522,80 @@ func TestDatastoreInventoryAcceptsCompleteScopeBeforeFiltering(t *testing.T) {
 		})
 	}
 }
+
+func TestClient_ListBackupGroupsRequiresIdentifiableRows(t *testing.T) {
+	vm := `{"backup-type":"vm","backup-id":"100","backup-count":1,"last-backup":1794960000}`
+	ct := `{"backup-type":"ct","backup-id":"100","backup-count":0}`
+	host := `{"backup-type":"host","backup-id":"Host-a.example","backup-count":1,"last-backup":1794960000,"files":["index.json.blob"],"owner":"fixture","future-field":123}`
+	for _, tc := range []struct {
+		name  string
+		items string
+		want  []string
+	}{
+		{name: "explicit empty array", want: []string{}},
+		{name: "explicit zero", items: ct, want: []string{"ct/100"}},
+		{name: "distinct native kinds and opaque host", items: vm + "," + ct + "," + host, want: []string{"vm/100", "ct/100", "host/Host-a.example"}},
+		{name: "missing count", items: `{"backup-type":"vm","backup-id":"100"}`},
+		{name: "null count", items: `{"backup-type":"vm","backup-id":"100","backup-count":null}`},
+		{name: "negative count", items: `{"backup-type":"vm","backup-id":"100","backup-count":-1}`},
+		{name: "string count", items: `{"backup-type":"vm","backup-id":"100","backup-count":"0"}`},
+		{name: "duplicate count", items: `{"backup-type":"vm","backup-id":"100","backup-count":1,"backup-count":0}`},
+		{name: "count alias", items: `{"backup-type":"vm","backup-id":"100","backup-count":1,"Backup-Count":0}`},
+		{name: "missing kind", items: `{"backup-id":"100","backup-count":0}`},
+		{name: "null identity", items: `{"backup-type":"vm","backup-id":null,"backup-count":0}`},
+		{name: "padded identity", items: `{"backup-type":"vm","backup-id":"100 ","backup-count":0}`},
+		{name: "duplicate identity field", items: `{"backup-type":"vm","backup-id":"100","backup-id":"private-fixture-marker","backup-count":0}`},
+		{name: "null row after valid row", items: vm + ",null"},
+		{name: "identical group repeated", items: vm + "," + vm},
+		{name: "conflicting group repeated", items: vm + `,{"backup-type":"vm","backup-id":"100","backup-count":0}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var reads atomic.Int32
+			client, server := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+				reads.Add(1)
+				if r.Method != http.MethodGet || r.URL.Path != "/api2/json/admin/datastore/archive/groups" || r.URL.Query().Get("ns") != "tenant/one" {
+					t.Errorf("request scope changed: %s %s", r.Method, r.URL)
+				}
+				_, _ = fmt.Fprintf(w, `{"data":[%s]}`, tc.items)
+			})
+			defer server.Close()
+			groups, err := client.ListBackupGroups(context.Background(), "archive", "tenant/one")
+			if reads.Load() != 1 {
+				t.Fatalf("group admission made %d requests", reads.Load())
+			}
+			if tc.want == nil {
+				if err == nil || groups != nil {
+					t.Fatal("unread inventory returned complete or partial groups")
+				}
+				if strings.Contains(err.Error(), "private-fixture-marker") {
+					t.Fatal("diagnostic included provider payload")
+				}
+				return
+			}
+			if err != nil || groups == nil {
+				t.Fatalf("valid inventory rejected: %v", err)
+			}
+			got := make([]string, 0, len(groups))
+			for _, group := range groups {
+				got = append(got, group.BackupType+"/"+group.BackupID)
+				switch group.BackupType {
+				case "vm":
+					if group.BackupCount != 1 || group.LastBackup != 1794960000 {
+						t.Error("valid group lost its count or time")
+					}
+				case "ct":
+					if group.BackupCount != 0 {
+						t.Error("explicit zero count changed")
+					}
+				case "host":
+					if group.Owner != "fixture" || !slices.Equal(group.Files, []string{"index.json.blob"}) {
+						t.Error("optional provider fields did not survive")
+					}
+				}
+			}
+			if !slices.Equal(got, tc.want) {
+				t.Errorf("group identities/order = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}

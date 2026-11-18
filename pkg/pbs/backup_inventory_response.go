@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -38,6 +39,61 @@ func readBackupInventoryBody(resp *http.Response) ([]byte, error) {
 }
 
 func decodeBackupInventory[T any](body []byte) ([]T, error) {
+	fields, err := decodeBackupInventoryObject(body, "data", "errors")
+	if err != nil {
+		return nil, err
+	}
+	if failure, present := fields["errors"]; present && !bytes.Equal(bytes.TrimSpace(failure), []byte("null")) {
+		return nil, errInvalidBackupInventoryResponse
+	}
+	data := bytes.TrimSpace(fields["data"])
+	if len(data) == 0 || data[0] != '[' {
+		return nil, errInvalidBackupInventoryResponse
+	}
+	var rows []T
+	if json.Unmarshal(data, &rows) != nil {
+		return nil, errInvalidBackupInventoryResponse
+	}
+	return rows, nil
+}
+
+// Neither an absent count nor an ambiguous row proves that a group is empty
+// or removed. Validate the complete namespace listing before the poller
+// reuses snapshots, issues new requests, or reconciles history.
+func readBackupGroupInventory(resp *http.Response) ([]BackupGroup, error) {
+	rows, err := readBackupInventory[json.RawMessage](resp)
+	if err != nil {
+		return nil, err
+	}
+	groups := []BackupGroup{}
+	type groupID struct{ kind, id string }
+	seen := make(map[groupID]struct{})
+	for i, row := range rows {
+		fields, err := decodeBackupInventoryObject(row, "backup-type", "backup-id", "backup-count", "last-backup", "files", "owner")
+		if err != nil {
+			return nil, fmt.Errorf("invalid PBS backup group inventory row %d", i)
+		}
+		count := bytes.TrimSpace(fields["backup-count"])
+		var group BackupGroup
+		if len(count) == 0 || bytes.Equal(count, []byte("null")) ||
+			json.Unmarshal(row, &group) != nil || group.BackupCount < 0 ||
+			group.BackupType == "" || strings.TrimSpace(group.BackupType) != group.BackupType ||
+			group.BackupID == "" || strings.TrimSpace(group.BackupID) != group.BackupID {
+			return nil, fmt.Errorf("invalid PBS backup group inventory row %d", i)
+		}
+		key := groupID{group.BackupType, group.BackupID}
+		if _, duplicate := seen[key]; duplicate {
+			return nil, fmt.Errorf("PBS backup group inventory row %d repeats a group", i)
+		}
+		seen[key] = struct{}{}
+		groups = append(groups, group)
+	}
+	return groups, nil
+}
+
+// Preserve unknown provider metadata while rejecting duplicate fields and
+// alternate spellings that encoding/json would map onto typed fields.
+func decodeBackupInventoryObject(body []byte, canonical ...string) (map[string]json.RawMessage, error) {
 	decoder := json.NewDecoder(bytes.NewReader(body))
 	start, err := decoder.Token()
 	if err != nil || start != json.Delim('{') {
@@ -53,10 +109,13 @@ func decodeBackupInventory[T any](body []byte) ([]T, error) {
 		if !ok {
 			return nil, errInvalidBackupInventoryResponse
 		}
-		if _, duplicate := fields[name]; duplicate ||
-			(name != "data" && strings.EqualFold(name, "data")) ||
-			(name != "errors" && strings.EqualFold(name, "errors")) {
+		if _, duplicate := fields[name]; duplicate {
 			return nil, errInvalidBackupInventoryResponse
+		}
+		for _, key := range canonical {
+			if name != key && strings.EqualFold(name, key) {
+				return nil, errInvalidBackupInventoryResponse
+			}
 		}
 		var value json.RawMessage
 		if decoder.Decode(&value) != nil {
@@ -71,16 +130,5 @@ func decodeBackupInventory[T any](body []byte) ([]T, error) {
 	if _, err := decoder.Token(); err != io.EOF {
 		return nil, errInvalidBackupInventoryResponse
 	}
-	if failure, present := fields["errors"]; present && !bytes.Equal(bytes.TrimSpace(failure), []byte("null")) {
-		return nil, errInvalidBackupInventoryResponse
-	}
-	data := bytes.TrimSpace(fields["data"])
-	if len(data) == 0 || data[0] != '[' {
-		return nil, errInvalidBackupInventoryResponse
-	}
-	var rows []T
-	if json.Unmarshal(data, &rows) != nil {
-		return nil, errInvalidBackupInventoryResponse
-	}
-	return rows, nil
+	return fields, nil
 }
