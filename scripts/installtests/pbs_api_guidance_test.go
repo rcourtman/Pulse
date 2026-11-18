@@ -357,12 +357,9 @@ func TestPBSAPIGuidanceCopiedRequestsKeepSecretsPrivate(t *testing.T) {
 					}
 					recipe = strings.Replace(recipe, "curl --disable ", `curl --disable --cacert "$HOME/ca.pem" `, 1)
 				}
-				if index == 0 && scenario == "wrong success status" {
-					// The old 25-second watchdog expired during this controlled
-					// preparation, before curl. Keep the real 60-second download
-					// limit and verify that HTTP 206 still cannot become an installer.
-					recipe = "sleep 26\n" + recipe
-				}
+				// TestGuidanceRecipeRunnerSeparatesPreparationFromCurl covers
+				// the late-preparation regression for this same observer. Here
+				// use real curl and judge the peer's response, not a fixture sleep.
 				output, exit := runPBSRecipe(t, recipe, home, bin, "PBS_ARGV="+capture, "PBS_CURL="+realCurl)
 				wantExit := 0
 				switch scenario {
@@ -402,8 +399,30 @@ func TestPBSAPIGuidanceCopiedRequestsKeepSecretsPrivate(t *testing.T) {
 				if err != nil || strings.Contains(string(argv), "synthetic-pbs-secret") || !strings.HasPrefix(string(argv), "--disable\x00") {
 					t.Fatal("curl arguments disclosed credentials or did not disable local configuration first")
 				}
+				args := strings.Split(strings.TrimSuffix(string(argv), "\x00"), "\x00")
+				maxTime := "60"
+				if index == 1 {
+					maxTime = "15"
+				}
+				for _, limit := range [][2]string{{"--connect-timeout", "5"}, {"--max-time", maxTime}} {
+					count := 0
+					for i, arg := range args {
+						if arg == limit[0] {
+							count++
+							if i+1 == len(args) || args[i+1] != limit[1] {
+								t.Fatalf("copied request did not pass the documented %s to curl", limit[0])
+							}
+						}
+					}
+					if count != 1 {
+						t.Fatalf("copied request must pass exactly one %s to curl; got %d", limit[0], count)
+					}
+				}
 				if !strings.Contains(output, "HTTP ") {
 					t.Fatal("request failed to expose its safe HTTP result")
+				}
+				if scenario == "wrong success status" && !strings.Contains(output, "HTTP 206\n") {
+					t.Fatal("partial-content response was not observed by the copied request")
 				}
 				if scenario == "untrusted HTTPS" {
 					if len(requests) != 0 {
