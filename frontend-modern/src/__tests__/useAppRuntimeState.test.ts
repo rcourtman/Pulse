@@ -78,7 +78,7 @@ describe('useAppRuntimeState', () => {
   let applyServerModeMock: ReturnType<typeof vi.fn>;
   let updateRuntimeDisplayFromResponseMock: ReturnType<typeof vi.fn>;
   let markSystemSettingsLoadedWithDefaultsMock: ReturnType<typeof vi.fn>;
-  let apiFetchJSONMock: ReturnType<typeof vi.fn>;
+  let apiFetchJSONMock: ReturnType<typeof vi.fn<(url: string) => Promise<unknown>>>;
   let websocketState: State;
   let websocketConnected: boolean;
   let websocketReconnecting: boolean;
