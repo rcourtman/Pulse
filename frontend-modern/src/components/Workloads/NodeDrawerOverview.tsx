@@ -23,6 +23,7 @@ import {
 } from '@/components/shared/DetailSectionTable';
 import type { Alert, Disk, HostGPUSensor, Node, Temperature } from '@/types/api';
 import {
+  buildCustomSensorRows,
   buildPowerRows,
   HOST_AGENT_STOPPED_REPORTING_REASON,
 } from '@/components/Infrastructure/resourceDetailMappers';
@@ -409,6 +410,26 @@ export function NodeDrawerOverview(props: NodeDrawerOverviewProps) {
       },
     ]);
 
+  const customMetricSections = () =>
+    compactDetailSections([
+      {
+        label: 'Custom Metrics',
+        rows: compactDetailRows(
+          buildCustomSensorRows(props.node.sensors).map((row) =>
+            makeDetailRow(
+              row.label,
+              props.node.sensorsStale
+                ? `${row.valueTitle} (last known: ${HOST_AGENT_STOPPED_REPORTING_REASON})`
+                : row.valueTitle,
+              // Status and collection errors matter on phones too, not only
+              // in the formatter's hover title. Keep the full identity inline.
+              { wrap: true, layout: 'stacked' },
+            ),
+          ),
+        ),
+      },
+    ]);
+
   const updateAccessGuidance = (
     <Show when={updateEvidence()?.helpContentId}>
       <div class="space-y-1 text-left text-[11px] font-normal text-muted">
@@ -635,6 +656,15 @@ export function NodeDrawerOverview(props: NodeDrawerOverviewProps) {
         contentClass="mt-2"
         sections={withoutDrawerExceptionRows([...overviewSections(), ...technicalSections()])}
       />
+
+      {/* Keep existing readings and controls in place. Custom readings are
+          visible without opening Details, just like the other Sensors. */}
+      <Show when={customMetricSections().length > 0}>
+        <TechnicalDetailsSection
+          dataTestId="node-drawer-custom-metrics"
+          sections={customMetricSections()}
+        />
+      </Show>
     </div>
   );
 }
