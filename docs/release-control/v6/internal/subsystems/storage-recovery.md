@@ -2501,6 +2501,13 @@ boundary. The security-privacy contract owns ledger retention, availability
 and the outbound schema23 projection. Measurement failure never authorizes a
 retry of an infrastructure action or changes its recorded result.
 
+### Infrastructure map use counting is adjacent metadata (18 November 2026)
+
+`POST /api/usage/infrastructure-map` in `internal/api/` records one closed map
+milestone as a local daily count in its own tally file. It opens no storage,
+backup or recovery read or write path and changes no projection. The
+security-privacy contract owns the tally and the schema v24 fields.
+
 ## Canonical Files
 
 1. `internal/recovery/index.go`

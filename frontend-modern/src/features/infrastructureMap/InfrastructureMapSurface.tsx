@@ -11,6 +11,10 @@ import {
 import DownloadIcon from 'lucide-solid/icons/download';
 import EyeOffIcon from 'lucide-solid/icons/eye-off';
 import MapIcon from 'lucide-solid/icons/map';
+import {
+  recordInfrastructureMapExport,
+  recordInfrastructureMapOpen,
+} from '@/api/infrastructureMapActivity';
 import { Button, ButtonLink } from '@/components/shared/Button';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { FilterButtonGroup } from '@/components/shared/FilterButtonGroup';
@@ -74,6 +78,9 @@ export function InfrastructureMapSurface() {
   const [namesHidden, setNamesHidden] = createSignal(false);
   const [exporting, setExporting] = createSignal(false);
   const [hover, setHover] = createSignal<{ hit: MapHit; x: number; y: number } | null>(null);
+
+  // Counted once per browser session. Nothing on the map is sent.
+  onMount(recordInfrastructureMapOpen);
 
   const resourceById = createMemo(
     () => new Map(resources().map((resource) => [resource.id, resource] as const)),
@@ -182,12 +189,15 @@ export function InfrastructureMapSurface() {
   const handleDownload = async () => {
     if (exporting()) return;
     setExporting(true);
+    // Whether names were hidden when Save was pressed, not once it has saved.
+    const saved = { namesHidden: namesHidden() };
     try {
       const format = await downloadMapImage(model(), {
         title: 'Infrastructure map',
         density: density(),
         palette: resolveMapPalette(palette(), darkMode()),
       });
+      recordInfrastructureMapExport(saved);
       showSuccess(
         'Map image saved',
         format === 'png'

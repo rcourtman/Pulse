@@ -8403,6 +8403,7 @@
         "internal/cloudcp/auth/magiclink_store.go",
         "internal/config/config.go",
         "internal/config/history_read_activity.go",
+        "internal/config/infrastructure_map_activity_tally.go",
         "internal/config/patrol_investigation_telemetry.go",
         "internal/config/reporting_activity.go",
         "internal/config/watcher.go",
@@ -8501,6 +8502,7 @@
               "docs/PRIVACY.md",
               "frontend-modern/public/docs/PRIVACY.md",
               "internal/config/history_read_activity.go",
+              "internal/config/infrastructure_map_activity_tally.go",
               "internal/config/patrol_investigation_telemetry.go",
               "internal/config/reporting_activity.go",
               "internal/telemetry/patrol_investigation_runs.go",
@@ -8520,9 +8522,12 @@
               "internal/api/reporting_activity_test.go",
               "internal/api/system_settings_telemetry_test.go",
               "internal/api/telemetry_history_reads_test.go",
+              "internal/api/telemetry_infrastructure_map_test.go",
               "internal/config/history_read_activity_test.go",
+              "internal/config/infrastructure_map_activity_tally_test.go",
               "internal/config/patrol_investigation_telemetry_test.go",
               "internal/config/reporting_activity_test.go",
+              "internal/telemetry/infrastructure_map_test.go",
               "internal/telemetry/patrol_investigation_runs_test.go",
               "internal/telemetry/service_health_test.go",
               "internal/telemetry/telemetry_test.go",
@@ -9386,7 +9391,8 @@
               "frontend-modern/src/features/infrastructureMap/__tests__/infrastructureMapDiagram.test.ts",
               "frontend-modern/src/features/infrastructureMap/__tests__/infrastructureMapModel.test.ts",
               "frontend-modern/src/features/infrastructureMap/__tests__/infrastructureMapNetworks.test.ts",
-              "frontend-modern/src/features/infrastructureMap/__tests__/infrastructureMapServices.test.ts"
+              "frontend-modern/src/features/infrastructureMap/__tests__/infrastructureMapServices.test.ts",
+              "frontend-modern/src/features/infrastructureMap/__tests__/InfrastructureMapSurface.test.tsx"
             ]
           },
           {
