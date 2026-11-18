@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "base_sha": "89ca6bd2eeae960a985e9c63132af9761deb242f",
+  "verified_at": "2026-11-18T10:52:51Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/types/api.ts",
+    "frontend-modern/src/types/resource.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/types/api.ts": "8880c845d4abbcc8f443f6a1169422cc609c55f1aa4a5eb2a0561870f77a79b6",
+    "frontend-modern/src/types/resource.ts": "0ea7caa98b00f36f017950ee3320ac8dec227c16243f038b5ef8997a634617ce"
+  },
+  "routes": [
+    "/proxmox/overview",
+    "/map"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "private mock backend on pulse-dev (demo mode, default mock estate: 50 Proxmox nodes, 929 guests) serving an embedded production build, reached through an SSH tunnel on localhost:7847 in the in-app browser. The frontend files in this commit are type declarations and their tests, which compile to no runtime bytes; the build also carried the map branch (since merged) and a not yet landed map change",
+    "GET /api/resources for the first 100 Proxmox guests: every interface carries a bridge (vmbr0 untagged 42, vmbr0 VLAN 20 26, VLAN 30 17, VLAN 40 13, vmbr1 untagged 17); firewall is true only on the VLAN 20 and 30 devices and absent elsewhere; vlan is absent when untagged; a container's eth0 has a bridge and no addresses",
+    "1440 dark theme: container artifact-cache-310, drawer, Details, Network lists eth0 with its MAC and nothing else, where a mock container had no Network section before; VM analytics-batch-262 lists eth0 with its two addresses, MAC and RX/TX as before",
+    "375 phone: the same container drawer; the Network row ends at 349px, the document scroll width is 375 and the row is not clipped",
+    "/map at 1440 on the same build loads with the mock guests grouped by bridge and VLAN",
+    "console: POST /api/usage/workload-history 403 (demo mode is read-only) and two 401s when the demo session expired mid-pass, before signing in again; nothing else"
+  ],
+  "interactions": [
+    "opened /proxmox/overview, clicked the artifact-cache-310 row to open its drawer, expanded Details and read the Network section, at 1440 and again at 375",
+    "clicked the analytics-batch-262 VM row, expanded Details and read its Network section",
+    "fetched /api/resources from the page and tallied bridge, vlan and firewall per interface"
+  ],
+  "limits": [
+    "light theme, Firefox and Safari were not checked",
+    "no real Proxmox poll in this pass: the config parsing, the five-minute read cadence, the failure backoff and the closed-budget path are covered by unit tests, and the netN wire format was read from a real PVE 9 host (virtio=<mac>,bridge=vmbr0,firewall=1)",
+    "the guest drawer does not show the bridge or VLAN yet; this commit only carries the data"
+  ]
+}

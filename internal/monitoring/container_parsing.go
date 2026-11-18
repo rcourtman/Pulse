@@ -18,6 +18,10 @@ type containerNetworkDetails struct {
 	Name      string
 	MAC       string
 	Addresses []string
+	// Where Proxmox plugs the device in. An empty Bridge means not known.
+	Bridge   string
+	VLAN     int
+	Firewall bool
 }
 
 // containerMountMetadata holds parsed mount point information from container config.
@@ -413,6 +417,12 @@ func parseContainerConfigNetworks(config map[string]interface{}) []containerNetw
 				detail.MAC = strings.ToUpper(value)
 			case "ip", "ip6", "ips", "ip6addr", "ip6prefix":
 				detail.Addresses = append(detail.Addresses, sanitizeGuestAddressStrings(value)...)
+			case "bridge":
+				detail.Bridge = value
+			case "tag":
+				detail.VLAN = parseProxmoxVLANTag(value)
+			case "firewall":
+				detail.Firewall = parseProxmoxFlag(value)
 			}
 		}
 
@@ -560,12 +570,24 @@ func mergeContainerNetworkInterface(target *[]models.GuestNetworkInterface, deta
 			combined := append((*target)[idx].Addresses, detail.Addresses...)
 			(*target)[idx].Addresses = dedupeStringsPreserveOrder(combined)
 		}
+		// Configuration is merged after the live status, and it is what the
+		// next start will use, so a placement it names wins.
+		if detail.Bridge != "" {
+			(*target)[idx].Bridge = detail.Bridge
+			(*target)[idx].VLAN = detail.VLAN
+			(*target)[idx].Firewall = detail.Firewall
+		}
 		return
 	}
 
 	newIface := models.GuestNetworkInterface{
 		Name: detail.Name,
 		MAC:  detail.MAC,
+	}
+	if detail.Bridge != "" {
+		newIface.Bridge = detail.Bridge
+		newIface.VLAN = detail.VLAN
+		newIface.Firewall = detail.Firewall
 	}
 	if len(detail.Addresses) > 0 {
 		newIface.Addresses = dedupeStringsPreserveOrder(detail.Addresses)

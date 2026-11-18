@@ -2073,6 +2073,12 @@ type NetworkInterface struct {
 	TXBytes   uint64   `json:"txBytes,omitempty"`
 	SpeedMbps *int64   `json:"speedMbps,omitempty"`
 	Status    string   `json:"status,omitempty"`
+	// Bridge, VLAN and Firewall are set only for a Proxmox guest device, from
+	// the guest's configuration. An empty Bridge means the placement is
+	// unknown; VLAN 0 is untagged.
+	Bridge   string `json:"bridge,omitempty"`
+	VLAN     int    `json:"vlan,omitempty"`
+	Firewall bool   `json:"firewall,omitempty"`
 }
 
 // DiskInfo describes disk usage.

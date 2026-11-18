@@ -96,6 +96,13 @@ storage, backup and recovery resource, and adds nothing to a storage or
 recovery projection, clone path or identity. Storage and recovery readers of
 `DockerData` need no change.
 
+### `NetworkInterface` gains Proxmox guest placement fields (18 November 2026)
+
+`internal/unifiedresources/types.go` gains `NetworkInterface.Bridge`, `VLAN`
+and `Firewall`, set only by the Proxmox VM and container adapters. They are
+empty on every storage, backup and recovery resource and change no storage or
+recovery projection, clone path or identity.
+
 ### Unknown saved sessions retain bytes, not automatic authority
 
 After an unread or undecodable session inventory, the next session save retains

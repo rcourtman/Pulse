@@ -1543,6 +1543,61 @@ func generateVM(nodeName string, instance string, vmid int, config MockConfig) m
 	return vm
 }
 
+// mockGuestNetwork is one network a demo guest's device is plugged into: a
+// Proxmox bridge, an optional VLAN tag, and the 10.<octet>.0.0/16 range the
+// demo estate uses on it.
+type mockGuestNetwork struct {
+	bridge   string
+	vlan     int
+	firewall bool
+	octet    int
+}
+
+var (
+	mockGuestNetworks = []mockGuestNetwork{
+		{bridge: "vmbr0", octet: 10},
+		{bridge: "vmbr0", vlan: 20, firewall: true, octet: 20},
+		{bridge: "vmbr0", vlan: 30, firewall: true, octet: 30},
+		{bridge: "vmbr0", vlan: 40, octet: 40},
+	}
+	// A guest's second device sits on the storage bridge.
+	mockGuestStorageNetwork = mockGuestNetwork{bridge: "vmbr1", octet: 99}
+)
+
+// pickMockGuestNetwork spreads guests over the estate's networks, weighted
+// toward the untagged LAN.
+func pickMockGuestNetwork(draw int) mockGuestNetwork {
+	switch draw % 10 {
+	case 0, 1, 2, 3:
+		return mockGuestNetworks[0]
+	case 4, 5, 6:
+		return mockGuestNetworks[1]
+	case 7, 8:
+		return mockGuestNetworks[2]
+	default:
+		return mockGuestNetworks[3]
+	}
+}
+
+func generateMockGuestMAC() string {
+	return fmt.Sprintf("BC:24:11:%02X:%02X:%02X", rand.Intn(256), rand.Intn(256), rand.Intn(256))
+}
+
+// generateContainerNetworkInfo gives a container the device its configuration
+// names. Like a DHCP container whose lease Pulse has not read, it has a
+// placement and no address.
+func generateContainerNetworkInfo() []models.GuestNetworkInterface {
+	network := pickMockGuestNetwork(rand.Intn(10))
+	return []models.GuestNetworkInterface{{
+		Name:      "eth0",
+		MAC:       generateMockGuestMAC(),
+		Addresses: []string{},
+		Bridge:    network.bridge,
+		VLAN:      network.vlan,
+		Firewall:  network.firewall,
+	}}
+}
+
 func generateGuestNetworkInfo() ([]string, []models.GuestNetworkInterface) {
 	ifaceCount := 1 + rand.Intn(2)
 	ipSet := make(map[string]struct{})
@@ -1555,8 +1610,11 @@ func generateGuestNetworkInfo() ([]string, []models.GuestNetworkInterface) {
 			name = fmt.Sprintf("ens%d", i+3)
 		}
 
-		mac := fmt.Sprintf("52:54:%02x:%02x:%02x:%02x",
-			rand.Intn(256), rand.Intn(256), rand.Intn(256), rand.Intn(256))
+		mac := generateMockGuestMAC()
+		network := mockGuestStorageNetwork
+		if i == 0 {
+			network = pickMockGuestNetwork(rand.Intn(10))
+		}
 
 		addrCount := 1 + rand.Intn(2)
 		addresses := make([]string, 0, addrCount)
@@ -1566,7 +1624,7 @@ func generateGuestNetworkInfo() ([]string, []models.GuestNetworkInterface) {
 			if rand.Float64() < 0.2 {
 				ip = fmt.Sprintf("fd00:%x:%x::%x", rand.Intn(1<<16), rand.Intn(1<<16), rand.Intn(1<<16))
 			} else {
-				ip = fmt.Sprintf("10.%d.%d.%d", rand.Intn(200)+1, rand.Intn(254), rand.Intn(254))
+				ip = fmt.Sprintf("10.%d.%d.%d", network.octet, rand.Intn(254), rand.Intn(253)+1)
 			}
 
 			if _, exists := ipSet[ip]; exists {
@@ -1586,6 +1644,9 @@ func generateGuestNetworkInfo() ([]string, []models.GuestNetworkInterface) {
 			Addresses: addresses,
 			RXBytes:   rxBytes,
 			TXBytes:   txBytes,
+			Bridge:    network.bridge,
+			VLAN:      network.vlan,
+			Firewall:  network.firewall,
 		})
 	}
 
@@ -5241,6 +5302,8 @@ func generateContainer(nodeName string, instance string, vmid int, config MockCo
 		ID:         ctID,
 		Tags:       generateTags(),
 		LastBackup: generateLastBackupTime(),
+		// Placement comes from configuration, so it is known while stopped.
+		NetworkInterfaces: generateContainerNetworkInfo(),
 	}
 	if status == "running" {
 		applyDiskUsage(&ct.Disk, SampleMetric("container", ctID, "disk", time.Now()))

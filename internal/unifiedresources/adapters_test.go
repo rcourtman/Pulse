@@ -2454,3 +2454,47 @@ func TestHostReportCadenceRemainsPerReporterAndUpdates(t *testing.T) {
 		}
 	}
 }
+
+func TestProxmoxGuestInterfacesCarryBridgeAndVLAN(t *testing.T) {
+	interfaces := []models.GuestNetworkInterface{
+		{Name: "ens18", MAC: "BC:24:11:00:00:01", Addresses: []string{"10.0.30.5"}, Bridge: " vmbr0 ", VLAN: 30, Firewall: true},
+		{Name: "net1", MAC: "BC:24:11:00:00:02", Addresses: []string{}, Bridge: "vmbr1"},
+		// A tag or firewall flag without a bridge names no network.
+		{Name: "eth9", Addresses: []string{"10.0.0.9"}, VLAN: 12, Firewall: true},
+		{Name: "eth8", Bridge: "vmbr0", VLAN: 5000},
+	}
+
+	vm, _ := resourceFromVM(models.VM{ID: "pve-node1-100", VMID: 100, Name: "vm", Node: "node1", Instance: "pve", Type: "qemu", NetworkInterfaces: interfaces})
+	ct, _ := resourceFromContainer(models.Container{ID: "pve-node1-200", VMID: 200, Name: "ct", Node: "node1", Instance: "pve", Type: "lxc", NetworkInterfaces: interfaces})
+
+	for name, resource := range map[string]Resource{"vm": vm, "container": ct} {
+		if resource.Proxmox == nil || len(resource.Proxmox.NetworkInterfaces) != 4 {
+			t.Fatalf("%s: interfaces = %+v", name, resource.Proxmox)
+		}
+		got := resource.Proxmox.NetworkInterfaces
+		if got[0].Bridge != "vmbr0" || got[0].VLAN != 30 || !got[0].Firewall {
+			t.Fatalf("%s: tagged interface = %+v", name, got[0])
+		}
+		if got[1].Bridge != "vmbr1" || got[1].VLAN != 0 || got[1].Firewall {
+			t.Fatalf("%s: untagged interface = %+v", name, got[1])
+		}
+		if got[2].Bridge != "" || got[2].VLAN != 0 || got[2].Firewall {
+			t.Fatalf("%s: an interface with no bridge must carry no placement: %+v", name, got[2])
+		}
+		if got[3].Bridge != "vmbr0" || got[3].VLAN != 0 {
+			t.Fatalf("%s: an out-of-range tag must be dropped: %+v", name, got[3])
+		}
+	}
+
+	payload, err := json.Marshal(vm.Proxmox.NetworkInterfaces[:3])
+	if err != nil {
+		t.Fatal(err)
+	}
+	wire := string(payload)
+	if !strings.Contains(wire, `"bridge":"vmbr0","vlan":30,"firewall":true`) {
+		t.Fatalf("wire payload lacks the placement fields: %s", wire)
+	}
+	if strings.Count(wire, `"vlan"`) != 1 || strings.Count(wire, `"firewall"`) != 1 || strings.Count(wire, `"bridge"`) != 2 {
+		t.Fatalf("empty placement fields must be omitted: %s", wire)
+	}
+}

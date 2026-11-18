@@ -219,6 +219,11 @@ export interface GuestNetworkInterface {
   addresses?: string[];
   rxBytes?: number;
   txBytes?: number;
+  // Where Proxmox plugs the device in, from the guest's configuration. No
+  // bridge means the placement is not known; no vlan means untagged.
+  bridge?: string;
+  vlan?: number;
+  firewall?: boolean;
 }
 
 export interface VM {
@@ -593,6 +598,12 @@ export interface HostNetworkInterface {
   rxBytes?: number;
   txBytes?: number;
   speedMbps?: number;
+  // Set only on a Proxmox guest's device: the bridge and VLAN tag it is
+  // plugged into and whether the Proxmox firewall filters it. No bridge means
+  // the placement is not known; no vlan means untagged.
+  bridge?: string;
+  vlan?: number;
+  firewall?: boolean;
 }
 
 export interface HostSensorSummary {

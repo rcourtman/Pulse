@@ -3427,6 +3427,12 @@ type GuestNetworkInterface struct {
 	Addresses []string `json:"addresses"`
 	RXBytes   int64    `json:"rxBytes,omitempty"`
 	TXBytes   int64    `json:"txBytes,omitempty"`
+	// Bridge, VLAN and Firewall are where Proxmox plugs the device in, read
+	// from the guest's own configuration rather than reported from inside it.
+	// An empty Bridge means the placement is unknown; VLAN 0 is untagged.
+	Bridge   string `json:"bridge,omitempty"`
+	VLAN     int    `json:"vlan,omitempty"`
+	Firewall bool   `json:"firewall,omitempty"`
 }
 
 func (i GuestNetworkInterface) NormalizeCollections() GuestNetworkInterface {

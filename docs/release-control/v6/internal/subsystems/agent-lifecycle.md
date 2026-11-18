@@ -104,6 +104,15 @@ saved port. Existing targets/History are neither deleted nor re-keyed, and
 neither creation consent nor reattachment rewrites a saved address or port.
 
 
+### Guest device placement leaves host-agent lifecycle alone (18 November 2026)
+
+`models.GuestNetworkInterface` gains `Bridge`, `VLAN` and `Firewall`, and
+`Monitor` gains `vmNICConfig`, a self-guarded cache of where each Proxmox VM's
+network devices are plugged in. Both concern Proxmox guest polling only. Host
+agent enrolment, report admission, removal blocks, tombstones and identity
+aliases read neither, and monitor construction needs no new initialisation
+because the cache is usable from its zero value.
+
 ### VMware destination refusals keep the admitted connection draft
 
 The existing connection editor treats an exact HTTP 403

@@ -2056,9 +2056,21 @@ func convertGuestInterfaces(in []models.GuestNetworkInterface) []NetworkInterfac
 			Addresses: uniqueStrings(iface.Addresses),
 			RXBytes:   uint64(max(0, iface.RXBytes)),
 			TXBytes:   uint64(max(0, iface.TXBytes)),
+			Bridge:    strings.TrimSpace(iface.Bridge),
+			VLAN:      guestInterfaceVLAN(iface),
+			Firewall:  iface.Firewall && strings.TrimSpace(iface.Bridge) != "",
 		})
 	}
 	return out
+}
+
+// guestInterfaceVLAN keeps a tag only where it names a network: on a known
+// bridge and inside the 802.1Q range.
+func guestInterfaceVLAN(iface models.GuestNetworkInterface) int {
+	if strings.TrimSpace(iface.Bridge) == "" || iface.VLAN < 1 || iface.VLAN > 4094 {
+		return 0
+	}
+	return iface.VLAN
 }
 
 func timePtr(t time.Time) *time.Time {

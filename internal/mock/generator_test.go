@@ -1814,3 +1814,42 @@ func TestGeneratePBSInstancesReportsJobResultsWithOneFailedSync(t *testing.T) {
 		t.Fatalf("failed jobs = %d, want exactly one", failed)
 	}
 }
+
+func TestMockGuestsArePluggedIntoBridgesAndVLANs(t *testing.T) {
+	bridges := map[string]int{}
+	vlans := map[int]int{}
+	for i := 0; i < 60; i++ {
+		vm := generateVM("pve1", "mock-cluster", 100+i, DefaultConfig)
+		if len(vm.NetworkInterfaces) == 0 {
+			t.Fatalf("vm %d has no network interfaces", vm.VMID)
+		}
+		for index, nic := range vm.NetworkInterfaces {
+			if nic.Bridge == "" {
+				t.Fatalf("vm %d interface %s has no bridge", vm.VMID, nic.Name)
+			}
+			if nic.VLAN < 0 || nic.VLAN > 4094 {
+				t.Fatalf("vm %d interface %s has VLAN %d", vm.VMID, nic.Name, nic.VLAN)
+			}
+			if index == 0 {
+				vlans[nic.VLAN]++
+			}
+			bridges[nic.Bridge]++
+		}
+
+		ct := generateContainer("pve1", "mock-cluster", 500+i, DefaultConfig)
+		if len(ct.NetworkInterfaces) != 1 || ct.NetworkInterfaces[0].Bridge == "" {
+			t.Fatalf("container %d interfaces = %+v", ct.VMID, ct.NetworkInterfaces)
+		}
+		if len(ct.NetworkInterfaces[0].Addresses) != 0 {
+			t.Fatalf("container %d should be placed without an address: %+v", ct.VMID, ct.NetworkInterfaces[0])
+		}
+		vlans[ct.NetworkInterfaces[0].VLAN]++
+	}
+	// The demo estate has an untagged LAN and at least two tagged VLANs.
+	if vlans[0] == 0 || len(vlans) < 3 {
+		t.Fatalf("VLAN spread = %v", vlans)
+	}
+	if bridges["vmbr0"] == 0 {
+		t.Fatalf("bridge spread = %v", bridges)
+	}
+}
