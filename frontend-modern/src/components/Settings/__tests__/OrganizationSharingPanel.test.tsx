@@ -618,7 +618,7 @@ describe('selected sharing snapshot', () => {
     expect(
       screen.queryByText('No incoming shares from other organizations.'),
     ).not.toBeInTheDocument();
-    const form = screen.getByRole('form', { name: 'Create Share' });
+    const form = await screen.findByRole('form', { name: 'Create Share' });
     const recipient = within(form).getByRole('combobox', { name: 'Target Organization' });
     expect(recipient).toBeDisabled();
     expect(recipient).toHaveValue('');
@@ -634,7 +634,7 @@ describe('selected sharing snapshot', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Reload sharing' }));
     await screen.findByText('No incoming shares from other organizations.');
     expect(screen.getByRole('button', { name: /^Remove share of / })).toBeEnabled();
-    expect(screen.getByRole('combobox', { name: 'Target Organization' })).toHaveValue('');
+    expect(await screen.findByRole('combobox', { name: 'Target Organization' })).toHaveValue('');
     expect(deleteShareMock).not.toHaveBeenCalled();
   });
 

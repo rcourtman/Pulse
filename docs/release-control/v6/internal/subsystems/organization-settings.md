@@ -458,6 +458,11 @@ directory before the form can submit. Other errors, stale readers,
 malformed bodies, failed selected-scope reads, policy and authority withdrawal
 keep their existing fail-closed behavior. Server authorization is unchanged.
 
+The create form's browser code is loaded only for a current owner or
+administrator who can manage shares. Its loading and failure states are local
+to the form, so neither suspends independently verified incoming or outgoing
+rows. The form uses the same snapshot and complete-read write gate when ready.
+
 The registered OrganizationSharingPanel and OrganizationSharingTransport tests
 cover individual and concurrent list failures, fresh scoped data versus a
 failed selected read, native controls, no mutation or CSRF preparation, and
