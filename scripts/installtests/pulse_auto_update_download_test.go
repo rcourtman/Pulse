@@ -160,16 +160,39 @@ echo 'refused incomplete writer or byte observation'
 	}
 }
 
+// This adapter is sourced by the stalled loopback case only. Match the actual
+// updater invocation before replacing just the wall-clock cost of the wait.
+// "command curl" still reaches the legacy-option shim and then real curl.
+const stalledUpdaterCurlFixture = `
+curl() {
+    local -a args=("$@")
+    local -a expected=(-q -fsSL --connect-timeout 5 --max-time 60 --proto '=https' --proto-redir '=https' "$PULSE_TEST_URL" -o -)
+    local i status=0
+    if [[ "${#args[@]}" != "${#expected[@]}" ]]; then
+        echo 'unexpected shipped updater curl arguments' >&2
+        return 97
+    fi
+    for i in "${!expected[@]}"; do
+        if [[ "${args[i]}" != "${expected[i]}" ]]; then
+            echo 'unexpected shipped updater curl arguments' >&2
+            return 97
+        fi
+    done
+    args[5]=5
+    command curl "${args[@]}" || status=$?
+    printf '%s\n' "$status" > "$PULSE_TEST_CURL_EXIT" || return 97
+    return "$status"
+}
+`
+
 // Actual curl/TLS/deadline behavior, without contacting a provider or running an
-// installer. The complete transaction/failure controls below remain separate.
+// installer. The complete transaction/failure controls remain separate.
 func TestAutoUpdateAssetTransport(t *testing.T) {
-	// Private peers, files and child environments do not need to serialise
-	// the real sixty-second curl deadline with independent agent controls.
 	t.Parallel()
 	if _, err := exec.LookPath("curl"); err != nil {
 		t.Fatal("curl is required for the updater transport controls")
 	}
-	var insecureRequests atomic.Int32
+	var insecureRequests, stalledRequests atomic.Int32
 	insecure := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		insecureRequests.Add(1)
 		_, _ = io.WriteString(w, "must not be downloaded")
@@ -182,6 +205,7 @@ func TestAutoUpdateAssetTransport(t *testing.T) {
 		case "/downgrade":
 			http.Redirect(w, r, insecure.URL, http.StatusFound)
 		case "/stalled":
+			stalledRequests.Add(1)
 			w.Header().Set("Content-Length", "100")
 			_, _ = io.WriteString(w, "partial bytes")
 			w.(http.Flusher).Flush()
@@ -220,12 +244,20 @@ func TestAutoUpdateAssetTransport(t *testing.T) {
 				t.Fatal(err)
 			}
 			asset := filepath.Join(dir, "asset")
-			ctx, cancel := context.WithTimeout(context.Background(), 80*time.Second)
+			curlResult := filepath.Join(dir, "curl-exit")
+			script := "source \"$PULSE_TEST_UPDATER\"\n"
+			deadline := 80 * time.Second
+			if tc.path == "/stalled" {
+				script += stalledUpdaterCurlFixture
+				deadline = 20 * time.Second
+			}
+			script += `download_update_asset "$PULSE_TEST_URL" "$PULSE_TEST_ASSET"`
+			ctx, cancel := context.WithTimeout(context.Background(), deadline)
 			defer cancel()
-			cmd := exec.CommandContext(ctx, "bash", "-c",
-				`source "$PULSE_TEST_UPDATER"; download_update_asset "$PULSE_TEST_URL" "$PULSE_TEST_ASSET"`)
+			cmd := exec.CommandContext(ctx, "bash", "-c", script)
+			cmd.WaitDelay = 2 * time.Second
 			cmd.Env = append(os.Environ(), "PULSE_TEST_UPDATER="+updater,
-				"PULSE_TEST_URL="+server.URL+tc.path, "PULSE_TEST_ASSET="+asset,
+				"PULSE_TEST_URL="+server.URL+tc.path, "PULSE_TEST_ASSET="+asset, "PULSE_TEST_CURL_EXIT="+curlResult,
 				"CURL_HOME="+dir, "HOME="+dir, "NO_PROXY=", "no_proxy=",
 				"HTTPS_PROXY=", "https_proxy=", "ALL_PROXY=", "all_proxy=", "SSL_CERT_FILE=")
 			cmd.Env = append(cmd.Env, legacyCurlCLIEnvironment(t, dir)...)
@@ -248,16 +280,20 @@ func TestAutoUpdateAssetTransport(t *testing.T) {
 			if ctx.Err() != nil || exit != tc.exit {
 				t.Fatalf("transport exit=%d want=%d context=%v: %s", exit, tc.exit, ctx.Err(), out)
 			}
-			bytes, readErr := os.ReadFile(asset)
-			if tc.exit == 0 && (readErr != nil || string(bytes) != "complete signed-asset fixture\n") {
-				t.Fatalf("successful transfer bytes: %v %q", readErr, bytes)
+			data, readErr := os.ReadFile(asset)
+			if tc.exit == 0 && (readErr != nil || string(data) != "complete signed-asset fixture\n") {
+				t.Fatalf("successful transfer bytes: %v %q", readErr, data)
 			}
 			if tc.path == "/stalled" {
-				if elapsed < 55*time.Second || elapsed > 75*time.Second || string(bytes) != "partial bytes" {
-					t.Fatalf("stalled transfer elapsed=%v bytes=%q read=%v", elapsed, bytes, readErr)
+				curlExit, resultErr := os.ReadFile(curlResult)
+				if resultErr != nil || string(curlExit) != "28\n" || stalledRequests.Load() != 1 ||
+					readErr != nil || string(data) != "partial bytes" {
+					t.Fatalf("stalled transfer elapsed=%v requests=%d bytes=%q read=%v curl_exit=%q result=%v",
+						elapsed, stalledRequests.Load(), data, readErr, curlExit, resultErr)
 				}
+				t.Log("one partial TLS response and curl exit 28; shipped 60s transfer bound checked before applying the 5s fixture clock")
 			}
-			t.Logf("curl exit=%d elapsed=%s asset_bytes=%d", exit, elapsed.Round(time.Millisecond), len(bytes))
+			t.Logf("updater exit=%d elapsed=%s asset_bytes=%d", exit, elapsed.Round(time.Millisecond), len(data))
 		})
 	}
 	if got := insecureRequests.Load(); got != 0 {
