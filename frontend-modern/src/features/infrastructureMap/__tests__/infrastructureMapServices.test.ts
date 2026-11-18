@@ -451,8 +451,243 @@ describe('buildServiceDiagram', () => {
     expect(diagram.hardware?.count).toBe(3);
   });
 
+  describe('connections', () => {
+    const hex = (seed: string): string =>
+      [...seed]
+        .map((char) => char.charCodeAt(0).toString(16).padStart(2, '0'))
+        .join('')
+        .padEnd(64, '0')
+        .slice(0, 64);
+    const dockerHost = (agent: NonNullable<Resource['agent']> = {}): Resource =>
+      resource({ id: 'tower', type: 'docker-host', name: 'Tower', platformType: 'docker', agent });
+    const box = (
+      name: string,
+      docker: NonNullable<Resource['docker']> = {},
+      extra: Partial<Resource> = {},
+    ): Resource =>
+      resource({
+        id: `c-${name}`,
+        type: 'app-container',
+        name,
+        platformType: 'docker',
+        parentId: 'tower',
+        status: 'running',
+        docker: {
+          hostSourceId: 'tower-daemon',
+          containerId: hex(name),
+          containerState: 'running',
+          image: `example/${name}:latest`,
+          networks: [{ name: 'bridge' }],
+          ...docker,
+        },
+        ...extra,
+      });
+    const behindVpn = (name: string): Resource =>
+      box(name, { networkMode: `container:${hex('gluetun')}`, networks: undefined });
+    const tileOf = (diagram: ReturnType<typeof buildServiceDiagram>, id: string) =>
+      [diagram.access, ...diagram.groups, diagram.backups, diagram.hardware]
+        .flatMap((group) => group?.tiles ?? [])
+        .find((tile) => tile.id === id);
+
+    // A real Unraid host: a download client and an indexer inside a VPN
+    // container's network, beside containers with networks of their own.
+    const unraid = (): Resource[] => [
+      dockerHost(),
+      box('gluetun', { networkMode: 'bridge' }),
+      behindVpn('qbittorrent'),
+      behindVpn('prowlarr'),
+      box('radarr', { networkMode: 'bridge' }),
+    ];
+
+    it('links a container to the one whose network it uses and says so on both', () => {
+      const diagram = buildServiceDiagram(buildInfrastructureMapModel(unraid()));
+
+      expect(diagram.links).toEqual([
+        { kind: 'network', fromId: 'c-prowlarr', toId: 'c-gluetun', idle: false },
+        { kind: 'network', fromId: 'c-qbittorrent', toId: 'c-gluetun', idle: false },
+      ]);
+      const client = tileOf(diagram, 'c-qbittorrent');
+      expect(client?.caption).toBe('via gluetun');
+      expect(client?.links).toEqual(['Uses the network of gluetun']);
+      expect(tileOf(diagram, 'c-gluetun')?.links).toEqual(['Carries the network of 2 containers']);
+      // A container with a network of its own keeps its host as caption.
+      expect(tileOf(diagram, 'c-radarr')?.caption).toBe('Tower');
+      expect(tileOf(diagram, 'c-radarr')?.links).toBeUndefined();
+    });
+
+    it('marks a link idle when one end is switched off', () => {
+      const resources = unraid().map((entry) =>
+        entry.id === 'c-qbittorrent'
+          ? { ...entry, status: 'stopped', docker: { ...entry.docker, containerState: 'exited' } }
+          : entry,
+      ) as Resource[];
+      const diagram = buildServiceDiagram(buildInfrastructureMapModel(resources));
+      expect(diagram.links.find((link) => link.fromId === 'c-qbittorrent')?.idle).toBe(true);
+      expect(diagram.links.find((link) => link.fromId === 'c-prowlarr')?.idle).toBe(false);
+    });
+
+    it('draws no line to a tile folded away', () => {
+      const many = [
+        dockerHost(),
+        box('gluetun', { networkMode: 'bridge' }),
+        ...Array.from({ length: 6 }, (_, index) => behindVpn(`zz-worker-${index}`)),
+      ];
+      const diagram = buildServiceDiagram(buildInfrastructureMapModel(many), {
+        maxTilesPerGroup: 3,
+      });
+      const drawn = new Set(diagram.groups.flatMap((group) => group.tiles.map((tile) => tile.id)));
+      expect(diagram.links.length).toBeGreaterThan(0);
+      expect(diagram.links.length).toBeLessThan(6);
+      for (const link of diagram.links) {
+        expect(drawn.has(link.fromId)).toBe(true);
+        expect(drawn.has(link.toId)).toBe(true);
+      }
+    });
+
+    it('links a reverse proxy to what it routes and writes the hostname on the line', () => {
+      const diagram = buildServiceDiagram(
+        buildInfrastructureMapModel([
+          dockerHost(),
+          box('traefik', { image: 'traefik:v3.1' }),
+          box('jellyfin', {
+            labels: {
+              'traefik.enable': 'true',
+              'traefik.http.routers.jellyfin.rule': 'Host(`media.example.test`)',
+            },
+          }),
+        ]),
+      );
+
+      expect(diagram.links).toEqual([
+        {
+          kind: 'route',
+          fromId: 'c-traefik',
+          toId: 'c-jellyfin',
+          idle: false,
+        },
+      ]);
+      // Where it answers is its caption, in place of the host it runs on.
+      expect(tileOf(diagram, 'c-jellyfin')?.caption).toBe('media.example.test');
+      expect(tileOf(diagram, 'c-jellyfin')?.links).toEqual([
+        'Routed by traefik at media.example.test',
+      ]);
+      expect(tileOf(diagram, 'c-traefik')?.links).toEqual(['Routes 1 container']);
+    });
+
+    it('draws a gateway nothing monitored answers on as a tile of its own', () => {
+      const diagram = buildServiceDiagram(
+        buildInfrastructureMapModel([
+          // What a real Unraid host reports: its router is its resolver too.
+          dockerHost({
+            defaultGateways: [{ address: '192.168.0.1', interface: 'eth0' }],
+            dnsServers: ['192.168.0.1', '1.1.1.1'],
+          }),
+          // A node whose resolver is elsewhere, as one on a tailnet is.
+          resource({
+            id: 'pve',
+            type: 'agent',
+            name: 'delly',
+            platformType: 'proxmox-pve',
+            agent: {
+              defaultGateways: [{ address: '192.168.0.1', interface: 'vmbr0' }],
+              dnsServers: ['100.100.100.100'],
+            },
+          }),
+          box('radarr'),
+        ]),
+      );
+
+      expect(diagram.gateways).toEqual([
+        {
+          id: 'gateway:0',
+          name: '192.168.0.1',
+          caption: 'default gateway',
+          typeLabel: 'Default gateway, not monitored',
+          status: '',
+          health: 'unknown',
+          platform: 'gateway',
+          links: ['Used by delly, Tower', 'Resolves names for Tower'],
+          navigable: false,
+        },
+      ]);
+    });
+
+    it('says it on the monitored thing when a gateway or resolver is one', () => {
+      const pve = resource({
+        id: 'pve',
+        type: 'agent',
+        name: 'delly',
+        platformType: 'proxmox-pve',
+        agent: {
+          networkInterfaces: [{ name: 'vmbr0', addresses: ['192.168.0.5/24'] }],
+          defaultGateways: [{ address: '192.168.0.1', interface: 'vmbr0' }],
+          dnsServers: ['192.168.0.53', '100.100.100.100'],
+        },
+      });
+      const diagram = buildServiceDiagram(
+        buildInfrastructureMapModel([
+          pve,
+          guest('opnsense', 'pve', { identity: { ips: ['192.168.0.1'] } }),
+          guest('adguard', 'pve', { identity: { ips: ['192.168.0.53'] } }),
+        ]),
+      );
+
+      expect(diagram.gateways).toEqual([]);
+      expect(tileOf(diagram, 'ct-opnsense')?.links).toEqual(['Default gateway of delly']);
+      expect(tileOf(diagram, 'ct-adguard')?.links).toEqual(['Resolves names for delly']);
+    });
+
+    it('draws nothing for a resolver that is not on the map', () => {
+      const diagram = buildServiceDiagram(
+        buildInfrastructureMapModel([
+          dockerHost({ dnsServers: ['100.100.100.100'] }),
+          box('radarr'),
+        ]),
+      );
+      expect(diagram.gateways).toEqual([]);
+      expect(diagram.links).toEqual([]);
+      expect(tileOf(diagram, 'tower')?.links).toBeUndefined();
+    });
+
+    it('keeps the lines and drops hostnames and addresses when names are hidden', () => {
+      const model = anonymizeInfrastructureMapModel(
+        buildInfrastructureMapModel([
+          dockerHost({ defaultGateways: [{ address: '192.168.0.1' }] }),
+          box('traefik', { image: 'traefik:v3.1' }),
+          box('wiki-internal', {
+            labels: { 'traefik.http.routers.wiki.rule': 'Host(`wiki.example.test`)' },
+          }),
+        ]),
+      );
+      const diagram = buildServiceDiagram(model);
+      // Ids are opaque in a real estate. What can leak is anything written.
+      const written = JSON.stringify([
+        diagram.gateways,
+        [diagram.access, ...diagram.groups, diagram.hardware].flatMap((group) =>
+          (group?.tiles ?? []).map((tile) => [tile.name, tile.caption, tile.links, tile.address]),
+        ),
+      ]);
+
+      expect(diagram.links).toEqual([
+        { kind: 'route', fromId: 'c-traefik', toId: 'c-wiki-internal', idle: false },
+      ]);
+      expect(diagram.gateways.map((tile) => tile.name)).toEqual(['Gateway']);
+      expect(written).toContain('Routed by Traefik');
+      expect(written).not.toContain('example.test');
+      expect(written).not.toContain('192.168.0.1');
+      expect(written).not.toContain('wiki-internal');
+      expect(written).not.toContain('Tower');
+    });
+  });
+
   it('is empty for an empty estate', () => {
     const diagram = diagramOf([]);
-    expect(diagram).toEqual({ networks: [], groups: [], serviceCount: 0 });
+    expect(diagram).toEqual({
+      gateways: [],
+      links: [],
+      networks: [],
+      groups: [],
+      serviceCount: 0,
+    });
   });
 });

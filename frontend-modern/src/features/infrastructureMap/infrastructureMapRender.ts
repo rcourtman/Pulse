@@ -128,6 +128,11 @@ export const MAP_GLYPHS: Record<MapGlyphKey, MapGlyph> = {
     d: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zM2 12h20M12 2c2.8 3 4.2 6.3 4.2 10s-1.4 7-4.2 10c-2.8-3-4.2-6.3-4.2-10S9.2 5 12 2z',
     mode: 'stroke',
   },
+  // A router: a box with two aerials and its status lights.
+  gateway: {
+    d: 'M4 13h16a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2zM7 13V6M17 13V6M6 16.5h.01M10 16.5h.01',
+    mode: 'stroke',
+  },
 };
 
 const escapeXml = (value: string): string =>

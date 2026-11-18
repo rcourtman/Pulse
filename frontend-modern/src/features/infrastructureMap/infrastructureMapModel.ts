@@ -7,6 +7,7 @@ import {
   type MapApp,
   type MapCategoryId,
 } from './infrastructureMapCatalogue';
+import { resolveMapConnections, type MapConnections } from './infrastructureMapConnections';
 import {
   resolveMapNetworks,
   type MapAttachment,
@@ -114,6 +115,8 @@ export interface InfrastructureMapModel {
   blocks: MapBlock[];
   /** Every network the estate's addresses fall into, largest first. */
   segments: MapSegment[];
+  /** The connections between things that a collected value states. */
+  connections: MapConnections;
   totals: MapTotal[];
   attentionCount: number;
   isEmpty: boolean;
@@ -518,7 +521,38 @@ export function buildInfrastructureMapModel(
     });
   }
 
-  return summarize(blocks, networks.segments);
+  return summarize(blocks, networks.segments, ownedConnections(resources, attachments));
+}
+
+// A gateway or resolver address that exactly one thing on the map answers on
+// is that thing. Held by none, or by several, it stays a bare address.
+function ownedConnections(
+  resources: readonly Resource[],
+  attachments: Attachments,
+): MapConnections {
+  const connections = resolveMapConnections(resources);
+  const owners = new Map<string, Set<string>>();
+  for (const [id, attached] of attachments) {
+    for (const { address } of attached) {
+      if (!address) continue;
+      const ids = owners.get(address) ?? new Set<string>();
+      ids.add(id);
+      owners.set(address, ids);
+    }
+  }
+  const own = <T extends { address: string }>(entry: T): T & { resourceId?: string } => {
+    const ids = owners.get(entry.address);
+    return ids?.size === 1 ? { ...entry, resourceId: [...ids][0] } : entry;
+  };
+  return {
+    links: connections.links,
+    gateways: connections.gateways.map(own),
+    // A router is often the resolver too. The same address is the same box.
+    resolvers: connections.resolvers.map(own).map((resolver) => {
+      const gateway = connections.gateways.findIndex((entry) => entry.address === resolver.address);
+      return gateway >= 0 ? { ...resolver, gateway } : resolver;
+    }),
+  };
 }
 
 const HEALTH_RANK: Record<MapHealth, number> = {
@@ -539,7 +573,11 @@ function worstHealth(values: readonly MapHealth[]): MapHealth {
 const blockHosts = (block: MapBlock): MapHost[] =>
   block.kind === 'group' ? block.group.hosts : [block.host];
 
-function summarize(blocks: MapBlock[], segments: MapSegment[]): InfrastructureMapModel {
+function summarize(
+  blocks: MapBlock[],
+  segments: MapSegment[],
+  connections: MapConnections,
+): InfrastructureMapModel {
   const counts = new Map<string, number>();
   const add = (key: string, by: number) => counts.set(key, (counts.get(key) ?? 0) + by);
   let attentionCount = 0;
@@ -580,7 +618,7 @@ function summarize(blocks: MapBlock[], segments: MapSegment[]): InfrastructureMa
     count: counts.get(key) ?? 0,
   })).filter((total) => total.count > 0);
 
-  return { blocks, segments, totals, attentionCount, isEmpty: blocks.length === 0 };
+  return { blocks, segments, connections, totals, attentionCount, isEmpty: blocks.length === 0 };
 }
 
 /**
@@ -629,6 +667,13 @@ export function anonymizeInfrastructureMapModel(
 
   return {
     ...model,
+    // A route's hostnames and a gateway's address identify the estate. The
+    // lines and the counts stay: they are the shape of it, not its names.
+    connections: {
+      links: model.connections.links.map((link) => ({ ...link, hosts: [] })),
+      gateways: model.connections.gateways.map((gateway) => ({ ...gateway, address: '' })),
+      resolvers: model.connections.resolvers.map((resolver) => ({ ...resolver, address: '' })),
+    },
     segments: model.segments.map((segment) => ({
       ...segment,
       label: segment.kind === 'other' ? segment.label : next('Network'),

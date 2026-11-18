@@ -151,6 +151,8 @@ export function InfrastructureMapSurface() {
     () => fitted()?.density ?? densityChoice() ?? resolveDefaultMapDensity(liveModel()),
   );
   const scene = createMemo(() => fitted()?.scene ?? null);
+  // The kinds of link on the map, so the legend explains only lines it draws.
+  const linkKinds = createMemo(() => new Set(model().connections.links.map((link) => link.kind)));
   const hits = createMemo(() => {
     const out: MapHit[] = [];
     for (const node of scene()?.nodes ?? []) if (node.kind === 'hit') out.push(node.hit);
@@ -345,6 +347,24 @@ export function InfrastructureMapSurface() {
             />
             Off
           </li>
+          <Show when={linkKinds().has('route')}>
+            <li class="inline-flex items-center gap-1.5">
+              <span
+                class="inline-block w-4 shrink-0 border-t-2 border-blue-600 dark:border-blue-400"
+                aria-hidden="true"
+              />
+              Proxy route
+            </li>
+          </Show>
+          <Show when={linkKinds().has('network')}>
+            <li class="inline-flex items-center gap-1.5">
+              <span
+                class="inline-block w-4 shrink-0 border-t-2 border-current"
+                aria-hidden="true"
+              />
+              Shared network
+            </li>
+          </Show>
           <li class="ml-auto">
             Apps are recognised by their image or name. The Internet is drawn but not monitored.
           </li>
@@ -367,6 +387,9 @@ export function InfrastructureMapSurface() {
                     .join(' · ')}
                 </span>
               </Show>
+              <For each={current().hit.links ?? []}>
+                {(sentence) => <span class="text-muted">{sentence}</span>}
+              </For>
               <Show when={current().hit.cpu !== undefined || current().hit.memory !== undefined}>
                 <span class="text-muted">
                   {[

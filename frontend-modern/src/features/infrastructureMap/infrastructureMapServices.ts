@@ -4,6 +4,7 @@ import {
   type MapAppRole,
   type MapCategoryId,
 } from './infrastructureMapCatalogue';
+import { mapRouteLabel, type MapLinkKind } from './infrastructureMapConnections';
 import type { MapGlyphKey } from './infrastructureMapLayout';
 import type {
   InfrastructureMapModel,
@@ -22,9 +23,14 @@ import {
  * The estate as a service diagram: what it runs, boxed by what each thing is
  * for, between how traffic gets in at the top and the storage and hardware
  * underneath. It is a second reading of the same map model, so it draws only
- * what Pulse monitors. The one drawn thing Pulse does not monitor is the
- * Internet itself, shown only when an app whose whole job is to reach it
- * (a tunnel, a VPN, a reverse proxy) is running.
+ * what Pulse monitors. Two drawn things are not monitored: the Internet
+ * itself, shown only when an app whose whole job is to reach it (a tunnel, a
+ * VPN, a reverse proxy) is running, and a default gateway that machines name
+ * in their own route tables and Pulse knows only by its address.
+ *
+ * A line between two tiles is a connection a collected value states: a
+ * container that uses another container's network, or a reverse proxy and a
+ * container it routes. Where both ends are not drawn there is no line.
  */
 
 export interface DiagramTile {
@@ -45,8 +51,19 @@ export interface DiagramTile {
   memory?: number;
   address?: string;
   detail?: string;
+  /** What the thing's connections say about it, one sentence each, for the hover. */
+  links?: string[];
   /** False for a tile that stands for several things and opens none. */
   navigable: boolean;
+}
+
+/** A line from one drawn tile to another. */
+export interface DiagramLink {
+  kind: MapLinkKind;
+  fromId: string;
+  toId: string;
+  /** One end is switched off, so nothing is passing along the line now. */
+  idle: boolean;
 }
 
 export interface DiagramGroup {
@@ -78,7 +95,10 @@ export const DIAGRAM_MAX_NETWORKS = 6;
 export interface ServiceDiagram {
   /** Set when something running exists to reach the Internet. */
   internet?: { label: string };
+  /** Default gateways no monitored thing answers on, known only by address. */
+  gateways: DiagramTile[];
   access?: DiagramGroup;
+  links: DiagramLink[];
   networks: DiagramNetwork[];
   groups: DiagramGroup[];
   storage?: DiagramGroup;
@@ -93,6 +113,8 @@ export interface ServiceDiagramOptions {
 }
 
 export const DIAGRAM_MAX_TILES_PER_GROUP = 24;
+/** The most gateway tiles drawn. An estate has one or two. */
+export const DIAGRAM_MAX_GATEWAYS = 3;
 
 const SERVICE_SECTION = /^(vms|lxcs|containers|ns:.*)$/;
 const ROLE_ORDER: readonly MapAppRole[] = [
@@ -120,6 +142,15 @@ const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'bas
 
 const plural = (count: number, one: string, many: string): string =>
   `${count.toLocaleString()} ${count === 1 ? one : many}`;
+
+// Up to three names, then how many more: enough to recognise a short list
+// and short enough for one line of a hover.
+const nameList = (names: string[]): string => {
+  const sorted = [...names].sort(collator.compare);
+  return sorted.length <= 3
+    ? sorted.join(', ')
+    : `${sorted.slice(0, 3).join(', ')} +${sorted.length - 3}`;
+};
 
 const hostsOf = (model: InfrastructureMapModel): MapHost[] =>
   model.blocks.flatMap((block) => (block.kind === 'group' ? block.group.hosts : [block.host]));
@@ -438,9 +469,101 @@ export function buildServiceDiagram(
   const access = group('access');
   const internetRoles = ROLE_ORDER.filter((role) => roles.has(role) && INTERNET_ROLES.has(role));
 
+  // Everything drawn as a tile of its own, by id, so a connection can find
+  // both of its ends and say something on each.
+  const drawn = new Map<string, DiagramTile>();
+  const boxes = [access, ...groups, { tiles: backupTiles }, { tiles: hardware }];
+  for (const entry of boxes) {
+    for (const tile of entry?.tiles ?? []) if (tile.navigable) drawn.set(tile.id, tile);
+  }
+  const say = (tile: DiagramTile, sentence: string) => {
+    tile.links = [...(tile.links ?? []), sentence];
+  };
+
+  const links: DiagramLink[] = [];
+  const carried = new Map<string, number>();
+  const routedBy = new Map<string, number>();
+  for (const link of model.connections.links) {
+    const from = drawn.get(link.fromId);
+    const to = drawn.get(link.toId);
+    // An end folded into a `+N` tile is not drawn, so neither is its line.
+    if (!from || !to) continue;
+    if (link.kind === 'network') {
+      say(from, `Uses the network of ${to.name}`);
+      // The container it reaches the world through says more than the host
+      // it runs on, which the hardware box already shows.
+      from.caption = `via ${to.name}`;
+      carried.set(to.id, (carried.get(to.id) ?? 0) + 1);
+    } else {
+      say(
+        to,
+        link.hosts.length > 0
+          ? `Routed by ${from.name} at ${link.hosts.join(', ')}`
+          : `Routed by ${from.name}`,
+      );
+      // Where it answers says more than the host it runs on.
+      if (link.hosts.length > 0) to.caption = mapRouteLabel(link.hosts);
+      routedBy.set(from.id, (routedBy.get(from.id) ?? 0) + 1);
+    }
+    links.push({
+      kind: link.kind,
+      fromId: link.fromId,
+      toId: link.toId,
+      idle: from.health === 'off' || to.health === 'off',
+    });
+  }
+  for (const [id, count] of carried) {
+    const tile = drawn.get(id);
+    if (tile) say(tile, `Carries the network of ${plural(count, 'container', 'containers')}`);
+  }
+  for (const [id, count] of routedBy) {
+    const tile = drawn.get(id);
+    if (tile) say(tile, `Routes ${plural(count, 'container', 'containers')}`);
+  }
+
+  const machineNames = (ids: string[]): string[] =>
+    ids.map((id) => drawn.get(id)?.name).filter((name): name is string => Boolean(name));
+  const gateways: DiagramTile[] = [];
+  const gatewayTiles = new Map<number, DiagramTile>();
+  model.connections.gateways.forEach((gateway, index) => {
+    const names = machineNames(gateway.machineIds);
+    // A gateway only machines that are not drawn point at says nothing here.
+    if (names.length === 0) return;
+    const owner = gateway.resourceId ? drawn.get(gateway.resourceId) : undefined;
+    if (owner) {
+      say(owner, `Default gateway of ${nameList(names)}`);
+      return;
+    }
+    const tile: DiagramTile = {
+      id: `gateway:${index}`,
+      name: gateway.address || 'Gateway',
+      caption: 'default gateway',
+      typeLabel: 'Default gateway, not monitored',
+      status: '',
+      health: 'unknown',
+      platform: 'gateway',
+      links: [`Used by ${nameList(names)}`],
+      navigable: false,
+    };
+    gateways.push(tile);
+    gatewayTiles.set(index, tile);
+  });
+  // A resolver is only said where it is already on the map: a monitored
+  // thing, or a gateway with the same address. An address nothing else
+  // names would be one more box of nothing.
+  for (const resolver of model.connections.resolvers) {
+    const owner =
+      (resolver.resourceId ? drawn.get(resolver.resourceId) : undefined) ??
+      (resolver.gateway === undefined ? undefined : gatewayTiles.get(resolver.gateway));
+    const names = machineNames(resolver.machineIds.filter((id) => id !== resolver.resourceId));
+    if (owner && names.length > 0) say(owner, `Resolves names for ${nameList(names)}`);
+  }
+
   return {
     ...(internetRoles.length > 0 ? { internet: { label: internetRoles.join(' · ') } } : {}),
+    gateways: gateways.slice(0, DIAGRAM_MAX_GATEWAYS),
     ...(access ? { access } : {}),
+    links,
     networks: plan.networks,
     groups,
     ...(storageTiles.length > 0 ? { storage: box('storage', 'Storage', storageTiles, max) } : {}),

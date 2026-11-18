@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "base_sha": "26934959410f4f2f2cf43884dacc63b0e345d09a",
+  "verified_at": "2026-11-18T17:42:01Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapSurface.tsx",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapConnections.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapDiagram.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapLayout.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapModel.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapRender.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapServices.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapSurface.tsx": "8baa9e74b8ab030d7ba94576c7d3ab59137995c867cd942409898af37b7bd408",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapConnections.ts": "bbab7866dbf2dd185cce91300baee480cc5f794e45b02a165346660b6e70378c",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapDiagram.ts": "bd42a2ed871939eb21931a3e3ceb5ae6690a04537470551234b1423214fe3eb2",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapLayout.ts": "29e6c196ec028c79282d18432d85fbf490f35a3df8aa6604af30e12619830745",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapModel.ts": "081faa1f3d0b0e979d0020f147752e32c616690214a1c2decacbc5a46f731c36",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapRender.ts": "4b1371e4ead422269cea670929c67e897aacc3a18f8762c2643d88e4b0b3d360",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapServices.ts": "31f44c8260d7b4aa43b34e64366ed2327e7a142b7a480bff2f7e4cfe03efacbc"
+  },
+  "routes": [
+    "/map, served by a Pulse binary built from this working tree and fed by a pulse-agent built from the same tree, reporting a real Docker daemon and a real Ubuntu 24.04 host.",
+    "/map from the same build over the real instance's API, read-only (every request that is not a GET refused), once as the instance reports today and once with the network modes and routes read by hand from its hosts overlaid."
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Rig: three containers inside a fourth's network (grey links, 'via' captions), one Traefik route (blue link, hostname as the caption), a second stack's stopped Traefik containers and their apps that draw no link, and a default gateway nothing monitors (dashed tile beside the ways in). Four network pills between the ways in and the apps. The estate is one Linux host, mapnet-rig, with 16 containers.",
+    "The fit rule, measured as the bottom edge of main#main against window.innerHeight, less the height of nav.fixed.bottom-0 on a phone. Rig: 888 against 900 at 1440x900 and 755 against 799 (844 less the 45px bar) at 390x844. The real estate (63 tiles) as it reports today: 888 against 900 at 1440x900 and 788 against 799 at 390x844. The same with the hand-read values overlaid: 888 against 900 and 788 against 799. The update banner was showing above the page on the rig.",
+    "Refit on the rig at 1440x900 with a 90px block inserted above the shell: the drawing went from 620px to 530px tall, the bottom edge stayed at 888, and it went back to 620px when the block was removed.",
+    "The route crosses the row of network pills between two pills at 1440 and round the end of the two rows of pills at 390. Before this was fixed in the same change it ran behind a pill.",
+    "Real instance as it reports today (released agents): no link, no gateway tile and no link swatch in the legend. With the hand-read values overlaid: three grey links to gluetun, one gateway tile, and only the 'Shared network' swatch.",
+    "Dark and light themes on the rig at 1440; Names and Compact."
+  ],
+  "interactions": [
+    "Hovered the routed container: the card says which proxy routes it and at which hostname. Hovered the gateway tile: not monitored, which machine uses it, and that it resolves names for it.",
+    "Turned on Hide names: no hostname, address or container name left in any drawn text or label; the links stayed.",
+    "Switched to Compact and back.",
+    "Saved the drawn SVG at each width and read every link segment: all level or upright."
+  ],
+  "limits": [
+    "The real instance draws the new connections only once its agents run a release that reports the fields. The overlay shows what it will draw; it is not the instance's own report.",
+    "Save image was not clicked (a download needs permission); the export shares the scene the page draws and is covered by unit tests.",
+    "Docker only. No Podman host was run.",
+    "The in-app browser pane was hidden, so each width was loaded fresh rather than resized in place."
+  ]
+}
