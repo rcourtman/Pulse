@@ -201,6 +201,48 @@ describe('resolveMapNetworks', () => {
     expect(attachments.has('bare')).toBe(false);
   });
 
+  it('keeps the LAN when a macvlan or ipvlan container network shares its subnet', () => {
+    for (const driver of ['macvlan', 'ipvlan']) {
+      const { segments, attachments } = resolveMapNetworks([
+        ...lab(),
+        resource({
+          id: `net-${driver}`,
+          type: 'docker-network',
+          name: 'eth0',
+          platformType: 'docker',
+          parentId: 'docker',
+          docker: { driver, subnets: [{ subnet: '192.168.10.0/24', gateway: '192.168.10.1' }] },
+        }),
+      ]);
+      expect(segments.find((segment) => segment.id === LAN)).toMatchObject({ memberCount: 3 });
+      expect(attachments.get('pve')).toEqual([{ segmentId: LAN, address: '192.168.10.11' }]);
+      expect(attachments.get('vm-lan')).toEqual([{ segmentId: LAN, address: '192.168.10.50' }]);
+    }
+  });
+
+  it('drops a bridge address that the identity list repeats without its interface', () => {
+    const { attachments } = resolveMapNetworks([
+      ...lab(),
+      resource({
+        id: 'ct-docker',
+        type: 'system-container',
+        name: 'paperless',
+        platformType: 'proxmox-pve',
+        parentId: 'pve',
+        status: 'running',
+        proxmox: {
+          networkInterfaces: [
+            { name: 'br-be5db79246da', addresses: ['172.18.0.1'] },
+            { name: 'podman0', addresses: ['10.88.0.1'] },
+            { name: 'eth0', addresses: ['192.168.10.76'] },
+          ],
+        },
+        identity: { ips: ['192.168.10.76', '172.18.0.1', '10.88.0.1'] },
+      }),
+    ]);
+    expect(attachments.get('ct-docker')).toEqual([{ segmentId: LAN, address: '192.168.10.76' }]);
+  });
+
   it('places a vSphere VM on the port group its adapter is plugged into', () => {
     const vm = resource({
       id: 'vsphere-vm',

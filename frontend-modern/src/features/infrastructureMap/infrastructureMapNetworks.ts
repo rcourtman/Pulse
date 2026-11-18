@@ -57,7 +57,13 @@ const ADDRESSED_TYPES = new Set<ResourceType>([
 // Interfaces every machine has to itself: loopback, and the bridges and
 // virtual pairs a container runtime or hypervisor creates locally.
 const HOST_LOCAL_INTERFACE =
-  /^(lo|docker\d*|br-[0-9a-f]{12}|veth.*|virbr\d*|cni.*|flannel.*|cali.*|kube-ipvs\d*)$/i;
+  /^(lo|docker\d*|podman\d*|br-[0-9a-f]{12}|veth.*|virbr\d*|cni.*|flannel.*|cali.*|kube-ipvs\d*)$/i;
+
+// macvlan and ipvlan put containers straight onto the network the host itself
+// is on, so their subnet is a real network and not a range private to one host.
+const LAN_DOCKER_DRIVERS = new Set(['macvlan', 'ipvlan']);
+
+const bareAddress = (raw: string): string => raw.trim().split('/')[0];
 
 const IPV4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})(?:\/(\d{1,2}))?$/;
 
@@ -113,6 +119,9 @@ export const dockerHostWire = (resource: Resource): DockerHostWireFields =>
 
 const interfaceAddresses = (resource: Resource): string[] => {
   const out: string[] = [];
+  // The identity list repeats every address without saying which interface
+  // holds it, so the ones seen on a host-local interface are dropped by value.
+  const hostLocal = new Set<string>();
   const lists = [
     resource.agent?.networkInterfaces,
     dockerHostWire(resource).networkInterfaces,
@@ -120,20 +129,24 @@ const interfaceAddresses = (resource: Resource): string[] => {
   ];
   for (const list of lists) {
     for (const nic of list ?? []) {
-      if (HOST_LOCAL_INTERFACE.test((nic.name ?? '').trim())) continue;
+      if (HOST_LOCAL_INTERFACE.test((nic.name ?? '').trim())) {
+        for (const address of nic.addresses ?? []) hostLocal.add(bareAddress(address));
+        continue;
+      }
       out.push(...(nic.addresses ?? []));
     }
   }
   out.push(...(resource.identity?.ips ?? []));
   out.push(...(resource.vmware?.guestIpAddresses ?? []));
   if (resource.type === 'network-endpoint') out.push(resource.availability?.address ?? '');
-  return out;
+  return out.filter((raw) => !hostLocal.has(bareAddress(raw)));
 };
 
 const dockerSubnets = (resources: readonly Resource[]): Subnet[] => {
   const out: Subnet[] = [];
   for (const resource of resources) {
     if (resource.type !== 'docker-network') continue;
+    if (LAN_DOCKER_DRIVERS.has((resource.docker?.driver ?? '').trim().toLowerCase())) continue;
     for (const entry of resource.docker?.subnets ?? []) {
       const parsed = parseMapAddress(entry.subnet);
       if (parsed?.prefix) out.push(subnetOf(parsed, parsed.prefix));
