@@ -76,7 +76,7 @@ describe('ProxmoxBackupJobsCard', () => {
     expect(items[0]).toHaveClass('border-dashed');
     expect(items[13]).toHaveAttribute('data-backup-jobs-day', 'observed');
     expect(items[13]).toHaveTextContent('3 ok, 1 failed');
-    expect(items[0]).toHaveTextContent('no backups (not fully observed)');
+    expect(items[0]).toHaveTextContent('no outcomes observed (not fully observed)');
   });
 
   it("names the pills' window, and only that window, in the header", () => {
@@ -112,6 +112,19 @@ describe('ProxmoxBackupJobsCard', () => {
       />
     ));
     expect(container.querySelector('[data-backup-jobs-pill]')).toHaveTextContent('0 ok');
+  });
+
+  it('does not infer zero jobs from an incomplete 24-hour window without observations', () => {
+    const { container } = render(() => (
+      <ProxmoxBackupJobsCard
+        jobs={payload({ last24h: { historyState: 'partial', counts: counts(), failures: [] } })}
+      />
+    ));
+    const summary = container.querySelector('[data-backup-jobs-last24h]');
+    expect(summary).toHaveTextContent('No outcomes observed');
+    expect(summary).toHaveTextContent('incomplete data');
+    expect(summary?.querySelector('[data-backup-jobs-pill]')).toBeNull();
+    expect(container.querySelector('[data-backup-jobs-day="observed"]')).toHaveTextContent('10 ok');
   });
 
   it('never presents unreadable history as counts', () => {

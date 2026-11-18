@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "base_sha": "a3374787c8607ad771a487bd1e41da57687c51c7",
+  "verified_at": "2026-11-18T03:15:59Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupJobsCard.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupJobs.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupJobsCard.tsx": "c7d9c6d73d4461eb2b53f66d61d3799843ebf1956e52e16fe0b2ce23ed020289",
+    "frontend-modern/src/features/proxmox/proxmoxBackupJobs.ts": "30868e218f7663b21fa6d80eafafe72ea0da4663176c763e63c3e0dc92365697"
+  },
+  "routes": [
+    "Proxmox → Backups → By date (production Backup inspection composition with synthetic read-only HTTP fixture)."
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900,
+      "theme": "light",
+      "engine": "chromium 141.0.7390.37"
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "theme": "dark",
+      "engine": "webkit 26.0"
+    }
+  ],
+  "states": [
+    "Readable day and counts, a genuinely observed zero, and a zero in an incompletely observed window.",
+    "Malformed first body, unreadable windows with a readable sibling, and server-declared unavailable calendar.",
+    "HTTP 503 and 403 during polling, initial service error, and failed read after an organization switch.",
+    "Retry pending, data recovered, and retry returned a confirmed empty history."
+  ],
+  "interactions": [
+    "Clicked/tapped production job bar, verified chosen date and exact independent restore row.",
+    "Activated the selected restore-point shortcut after history withdrawal without clearing the filter.",
+    "Exercised bounded Enter-key retry, focus on the recovered card, and focus on Backup inspection when the confirmed-empty card is removed."
+  ],
+  "limits": [
+    "Playwright 1.56.1; 438 checks, 22 matched pairs and six new retry frames. Synthetic local GET responses, not a real backup, restore, deployment or exposure measurement."
+  ]
+}

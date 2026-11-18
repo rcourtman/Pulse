@@ -1,10 +1,12 @@
-import { createMemo, createSignal, For, Show, type Component } from 'solid-js';
+import { createMemo, createSignal, For, onCleanup, Show, type Component } from 'solid-js';
 import { createNonSuspendingQuery } from '@/hooks/createNonSuspendingQuery';
 import { supportsHoverTooltips } from '@/components/shared/hoverCapability';
+import { InlineNotice } from '@/components/shared/InlineNotice';
 import { TableCard } from '@/components/shared/TableCard';
 import { TableCardHeader } from '@/components/shared/TableCardHeader';
 import { TooltipPortal } from '@/components/shared/TooltipPortal';
 import { getRecoveryPrettyDateLabel } from '@/utils/recoveryDatePresentation';
+import { getAPIReadAccessErrorMessage } from '@/utils/apiAccessError';
 import {
   backupJobsDayObserved,
   backupJobsHasHistory,
@@ -69,17 +71,19 @@ const OUTCOMES: readonly {
 
 const FAILED_NAMES = 8;
 
-const describe = (counts: BackupJobsCounts): string => {
-  const parts = OUTCOMES.filter(({ key }) => counts[key] > 0)
-    .reverse()
-    .map(({ key, label }) => `${counts[key]} ${label}`);
-  return parts.length > 0 ? parts.join(', ') : 'no backups';
+const dayEmptyLabel = (day: BackupJobsDay): string => {
+  if (day.historyState === 'unavailable') return 'Counts unavailable';
+  return backupJobsDayObserved(day) ? 'No backups' : 'No outcomes observed';
 };
 
 const dayTitle = (day: BackupJobsDay): string => {
   const date = getRecoveryPrettyDateLabel(day.date);
   const observed = backupJobsDayObserved(day) ? '' : ' (not fully observed)';
-  return `${date}: ${describe(day.counts)}${observed}`;
+  const counts = OUTCOMES.filter(({ key }) => day.counts[key] > 0)
+    .reverse()
+    .map(({ key, label }) => `${day.counts[key]} ${label}`)
+    .join(', ');
+  return `${date}: ${counts || dayEmptyLabel(day).toLowerCase()}${observed}`;
 };
 
 const failureNameList = (failures: readonly BackupJobsFailure[], outcome: string): string[] => [
@@ -110,13 +114,36 @@ export const ProxmoxBackupJobsCard: Component<{
   selectedDay?: string | null;
   onSelectDay?: BackupJobsDaySelection['onSelectDay'];
   onRevealRestorePoints?: BackupJobsDaySelection['onRevealRestorePoints'];
+  onRetry?: () => void;
+  retrying?: boolean;
+  accessMessage?: string | null;
 }> = (props) => {
+  let card: HTMLDivElement | undefined;
+  const retainRetryFocus = (button: HTMLButtonElement) => {
+    onCleanup(() => {
+      if (document.activeElement !== button) return;
+      // A confirmed empty result legitimately omits the jobs card. Keep the
+      // operator in the existing inspection rather than focusing a retired
+      // card or leaving focus on body. A departed surface is never revived.
+      const inspection = card?.closest<HTMLElement>(
+        '[role="region"][aria-label="Backup inspection"]',
+      );
+      queueMicrotask(() => {
+        if (document.activeElement !== document.body) return;
+        const target = card?.isConnected ? card : inspection;
+        if (target?.isConnected) {
+          target.focus({ preventScroll: true });
+        }
+      });
+    });
+  };
   const last = () => props.jobs.last24h;
   const maxTotal = () => Math.max(1, ...props.jobs.days.map((day) => backupJobsTotal(day.counts)));
   const pills = () => {
     const counts = last().counts;
     const shown = OUTCOMES.filter(({ key }) => counts[key] > 0);
-    return shown.length > 0 ? shown.reverse() : [OUTCOMES[OUTCOMES.length - 1]];
+    if (shown.length > 0) return shown.reverse();
+    return last().historyState === 'complete' ? [OUTCOMES[OUTCOMES.length - 1]] : [];
   };
   const namesFor = (outcome: string) => failureNames(last().failures, outcome);
   const chosenDay = createMemo(
@@ -154,9 +181,31 @@ export const ProxmoxBackupJobsCard: Component<{
   };
   const hideDay = () => setHover(null);
   const unavailable = () => props.jobs.historyState === 'unavailable';
+  const hasUnavailableCounts = () =>
+    unavailable() ||
+    last().historyState === 'unavailable' ||
+    props.jobs.days.some((day) => day.historyState === 'unavailable');
+  // The selected date is the operator's filter, not evidence from this
+  // history response. The table owns the independent restore-points jump.
+  const restorePointsButton = () => (
+    <button
+      type="button"
+      class="whitespace-nowrap font-medium text-blue-600 hover:underline dark:text-blue-300"
+      onClick={() => props.onRevealRestorePoints?.()}
+    >
+      View restore points
+    </button>
+  );
 
   return (
-    <TableCard class="flex h-full flex-col" data-backup-jobs={props.jobs.historyState}>
+    <TableCard
+      ref={card}
+      role="region"
+      aria-label="Backup jobs"
+      tabIndex={-1}
+      class="flex h-full flex-col focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
+      data-backup-jobs={props.jobs.historyState}
+    >
       <TableCardHeader
         title={<span class="whitespace-nowrap">Backup jobs</span>}
         actions={
@@ -168,29 +217,39 @@ export const ProxmoxBackupJobsCard: Component<{
               class="inline-flex flex-wrap items-center justify-end gap-1.5"
               data-backup-jobs-last24h
             >
-              {/* The window is named at every width; phones get the short form. */}
-              <span class="text-[10px] font-medium text-muted">
-                <span class="sm:hidden">24h</span>
-                <span class="hidden sm:inline">Last 24h</span>
-              </span>
-              <For each={pills()}>
-                {(outcome) => (
-                  <span
-                    class={`${PILL_BASE} ${outcome.pill}`}
-                    title={
-                      outcome.key === 'failed'
-                        ? namesFor('failed')
-                        : outcome.key === 'warning'
-                          ? namesFor('warning')
-                          : undefined
-                    }
-                    data-backup-jobs-pill={outcome.key}
-                  >
-                    {last().counts[outcome.key]} {outcome.label}
-                  </span>
-                )}
-              </For>
-              <Show when={last().historyState !== 'complete'}>
+              <Show
+                when={last().historyState !== 'unavailable'}
+                fallback={<span class="text-[11px] text-muted">Last 24h unavailable</span>}
+              >
+                {/* The window is named at every width; phones get the short form. */}
+                <span class="text-[10px] font-medium text-muted">
+                  <span class="sm:hidden">24h</span>
+                  <span class="hidden sm:inline">Last 24h</span>
+                </span>
+                <For
+                  each={pills()}
+                  fallback={<span class="text-[11px] text-muted">No outcomes observed</span>}
+                >
+                  {(outcome) => (
+                    <span
+                      class={`${PILL_BASE} ${outcome.pill}`}
+                      title={
+                        outcome.key === 'failed'
+                          ? namesFor('failed')
+                          : outcome.key === 'warning'
+                            ? namesFor('warning')
+                            : undefined
+                      }
+                      data-backup-jobs-pill={outcome.key}
+                    >
+                      {last().counts[outcome.key]} {outcome.label}
+                    </span>
+                  )}
+                </For>
+              </Show>
+              <Show
+                when={last().historyState !== 'complete' && last().historyState !== 'unavailable'}
+              >
                 <span
                   class="text-[10px] font-medium text-muted"
                   title="Pulse did not see the whole last 24 hours, so these counts may be low"
@@ -203,108 +262,140 @@ export const ProxmoxBackupJobsCard: Component<{
           </Show>
         }
       />
-      <div class="flex flex-1 flex-col px-3 pb-2 pt-3">
-        <ol
-          class="flex min-h-14 flex-1 items-end gap-1"
-          aria-label={`Backups per day, last ${props.jobs.days.length} days`}
-        >
-          <For each={props.jobs.days}>
-            {(day) => {
-              const total = () => backupJobsTotal(day.counts);
-              const observed = () => backupJobsDayObserved(day);
-              const chosen = () => props.selectedDay === day.date;
-              return (
-                <li
-                  class={`flex h-full min-w-0 flex-1 rounded-xs ${
-                    observed() ? '' : 'border border-dashed border-border'
-                  }`}
-                  data-backup-jobs-day={observed() ? 'observed' : day.historyState}
-                >
-                  <button
-                    type="button"
-                    class={`flex h-full w-full cursor-pointer flex-col-reverse rounded-xs focus-visible:outline-2 focus-visible:outline-blue-500 ${
-                      chosen()
-                        ? 'outline-2 outline-offset-1 outline-blue-500'
-                        : `hover:outline-1 hover:outline-border ${
-                            chosenDay() ? 'opacity-40 hover:opacity-100' : ''
-                          }`
+      <Show when={hasUnavailableCounts()}>
+        <InlineNotice layout="banner" tone="warning">
+          <p role="status">
+            {unavailable()
+              ? 'Backup job counts are unknown. Restore points and protection are shown separately.'
+              : 'Some backup job counts are unknown.'}
+            <Show when={props.accessMessage}> {props.accessMessage}</Show>
+          </p>
+          <div class="mt-2 flex flex-wrap items-center gap-2">
+            <Show when={props.onRetry}>
+              <button
+                ref={retainRetryFocus}
+                type="button"
+                class="min-h-10 rounded-md border border-current px-3 font-medium hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 aria-disabled:opacity-50"
+                aria-label="Retry backup jobs"
+                aria-disabled={props.retrying}
+                onClick={() => {
+                  if (!props.retrying) props.onRetry?.();
+                }}
+              >
+                {props.retrying ? 'Retrying…' : 'Retry backup jobs'}
+              </button>
+            </Show>
+            <Show when={props.selectedDay && !chosenDay() && props.onRevealRestorePoints}>
+              {restorePointsButton()}
+            </Show>
+          </div>
+        </InlineNotice>
+      </Show>
+      <Show when={props.jobs.days.length > 0}>
+        <div class="flex flex-1 flex-col px-3 pb-2 pt-3">
+          <ol
+            class="flex min-h-14 flex-1 items-end gap-1"
+            aria-label={`Backups per day, last ${props.jobs.days.length} days`}
+          >
+            <For each={props.jobs.days}>
+              {(day) => {
+                const total = () => backupJobsTotal(day.counts);
+                const observed = () => backupJobsDayObserved(day);
+                const chosen = () => props.selectedDay === day.date;
+                return (
+                  <li
+                    class={`flex h-full min-w-0 flex-1 rounded-xs ${
+                      observed() ? '' : 'border border-dashed border-border'
                     }`}
-                    aria-pressed={chosen()}
-                    onClick={() =>
-                      props.onSelectDay?.(day.date, {
-                        reveal: !failureNames(day.failures, 'failed') || supportsHoverTooltips(),
-                      })
-                    }
-                    onMouseEnter={(event) => showDay(event.currentTarget, day.date)}
-                    onMouseLeave={hideDay}
-                    onFocus={(event) => showDay(event.currentTarget, day.date)}
-                    onBlur={hideDay}
+                    data-backup-jobs-day={observed() ? 'observed' : day.historyState}
                   >
-                    <span class="sr-only">{dayTitle(day)}</span>
-                    <Show
-                      when={total() > 0}
-                      fallback={
-                        <Show when={observed()}>
-                          <span
-                            class="h-0.5 w-full rounded-xs bg-surface-hover"
-                            aria-hidden="true"
-                          />
-                        </Show>
+                    <button
+                      type="button"
+                      class={`flex h-full w-full cursor-pointer flex-col-reverse rounded-xs focus-visible:outline-2 focus-visible:outline-blue-500 ${
+                        chosen()
+                          ? 'outline-2 outline-offset-1 outline-blue-500'
+                          : `hover:outline-1 hover:outline-border ${
+                              chosenDay() ? 'opacity-40 hover:opacity-100' : ''
+                            }`
+                      }`}
+                      aria-pressed={chosen()}
+                      onClick={() =>
+                        props.onSelectDay?.(day.date, {
+                          reveal: !failureNames(day.failures, 'failed') || supportsHoverTooltips(),
+                        })
                       }
+                      onMouseEnter={(event) => showDay(event.currentTarget, day.date)}
+                      onMouseLeave={hideDay}
+                      onFocus={(event) => showDay(event.currentTarget, day.date)}
+                      onBlur={hideDay}
                     >
-                      <For each={[...OUTCOMES].reverse()}>
-                        {(outcome) => (
-                          <Show when={day.counts[outcome.key] > 0}>
+                      <span class="sr-only">{dayTitle(day)}</span>
+                      <Show
+                        when={total() > 0}
+                        fallback={
+                          <Show when={observed()}>
                             <span
-                              class={`w-full first:rounded-b-xs last:rounded-t-xs ${outcome.segment}`}
-                              style={{
-                                height: `max(2px, ${(day.counts[outcome.key] / maxTotal()) * 100}%)`,
-                              }}
+                              class="h-0.5 w-full rounded-xs bg-surface-hover"
                               aria-hidden="true"
                             />
                           </Show>
-                        )}
-                      </For>
-                    </Show>
-                  </button>
-                </li>
-              );
-            }}
-          </For>
-        </ol>
-        <div class="mt-1 flex justify-between text-[10px] text-muted" aria-hidden="true">
-          <span>{getRecoveryPrettyDateLabel(props.jobs.days[0]?.date ?? '')}</span>
-          <span>Today</span>
-        </div>
-        <Show when={chosenDay()}>
-          {(day) => (
-            <p class="mt-1 text-[11px] text-base-content" data-backup-jobs-chosen-day>
-              <Show when={chosenFailedNames().length > 0} fallback={dayTitle(day())}>
-                {getRecoveryPrettyDateLabel(day().date)}: {day().counts.failed} failed:{' '}
-                {shownFailedNames().join(', ')}
-                <Show when={!backupJobsDayObserved(day())}> (not fully observed)</Show>
-                <Show when={chosenFailedNames().length > shownFailedNames().length}>
-                  {' '}
-                  <button
-                    type="button"
-                    class="font-medium text-blue-600 hover:underline dark:text-blue-300"
-                    onClick={() => setNamesOpenedFor(day().date)}
-                  >
-                    and {chosenFailedNames().length - shownFailedNames().length} more
-                  </button>
-                </Show>{' '}
-                <button
-                  type="button"
-                  class="ml-1 whitespace-nowrap font-medium text-blue-600 hover:underline dark:text-blue-300"
-                  onClick={() => props.onRevealRestorePoints?.()}
+                        }
+                      >
+                        <For each={[...OUTCOMES].reverse()}>
+                          {(outcome) => (
+                            <Show when={day.counts[outcome.key] > 0}>
+                              <span
+                                class={`w-full first:rounded-b-xs last:rounded-t-xs ${outcome.segment}`}
+                                style={{
+                                  height: `max(2px, ${(day.counts[outcome.key] / maxTotal()) * 100}%)`,
+                                }}
+                                aria-hidden="true"
+                              />
+                            </Show>
+                          )}
+                        </For>
+                      </Show>
+                    </button>
+                  </li>
+                );
+              }}
+            </For>
+          </ol>
+          <div class="mt-1 flex justify-between text-[10px] text-muted" aria-hidden="true">
+            <span>{getRecoveryPrettyDateLabel(props.jobs.days[0]?.date ?? '')}</span>
+            <span>Today</span>
+          </div>
+          <Show when={chosenDay()}>
+            {(day) => (
+              <p class="mt-1 text-[11px] text-base-content" data-backup-jobs-chosen-day>
+                <Show when={chosenFailedNames().length > 0} fallback={dayTitle(day())}>
+                  {getRecoveryPrettyDateLabel(day().date)}: {day().counts.failed} failed:{' '}
+                  {shownFailedNames().join(', ')}
+                  <Show when={!backupJobsDayObserved(day())}> (not fully observed)</Show>
+                  <Show when={chosenFailedNames().length > shownFailedNames().length}>
+                    {' '}
+                    <button
+                      type="button"
+                      class="font-medium text-blue-600 hover:underline dark:text-blue-300"
+                      onClick={() => setNamesOpenedFor(day().date)}
+                    >
+                      and {chosenFailedNames().length - shownFailedNames().length} more
+                    </button>
+                  </Show>
+                </Show>
+                <Show
+                  when={
+                    props.onRevealRestorePoints &&
+                    (chosenFailedNames().length > 0 || day().historyState === 'unavailable')
+                  }
                 >
-                  View restore points
-                </button>
-              </Show>
-            </p>
-          )}
-        </Show>
-      </div>
+                  <span class="ml-1">{restorePointsButton()}</span>
+                </Show>
+              </p>
+            )}
+          </Show>
+        </div>
+      </Show>
       <TooltipPortal
         when={hoveredDay() !== null}
         x={hover()?.x ?? 0}
@@ -324,7 +415,7 @@ export const ProxmoxBackupJobsCard: Component<{
               </div>
               <Show
                 when={backupJobsTotal(day().counts) > 0}
-                fallback={<div class="mt-1.5 text-muted">No backups</div>}
+                fallback={<div class="mt-1.5 text-muted">{dayEmptyLabel(day())}</div>}
               >
                 <ul class="mt-1.5 space-y-1">
                   <For each={OUTCOMES.filter(({ key }) => day().counts[key] > 0).reverse()}>
@@ -368,16 +459,21 @@ export const ProxmoxBackupJobsSection: Component<BackupJobsDaySelection> = (prop
     initialValue: null as BackupJobsPayload | null,
     pollMs: BACKUP_JOBS_POLL_MS,
   });
-  // The last payload that was worth showing; a later failed read keeps the
-  // card as unavailable rather than making history disappear.
-  let lastShown: BackupJobsPayload | null = null;
+  // The query already retains ordinary same-context observations and clears
+  // them on organization/access withdrawal. A second component-local cache
+  // must not revive a payload after that owner has discarded it.
   const shown = createMemo((): BackupJobsPayload | null => {
-    if (query.error()) return lastShown ? backupJobsUnavailable(lastShown) : null;
+    if (query.error()) return backupJobsUnavailable(query.value());
     const jobs = query.value();
-    const visible = jobs && jobs.days.length > 0 && backupJobsHasHistory(jobs) ? jobs : null;
-    if (visible) lastShown = visible;
-    return visible;
+    return backupJobsHasHistory(jobs) ? jobs : null;
   });
+  const accessMessage = () => {
+    const error = query.error();
+    if (error && typeof error === 'object' && 'status' in error && error.status === 403) {
+      return 'Access denied. Check your monitoring permissions.';
+    }
+    return getAPIReadAccessErrorMessage(error);
+  };
   return (
     <Show when={shown()}>
       {(jobs) => (
@@ -386,6 +482,11 @@ export const ProxmoxBackupJobsSection: Component<BackupJobsDaySelection> = (prop
           selectedDay={props.selectedDay()}
           onSelectDay={props.onSelectDay}
           onRevealRestorePoints={props.onRevealRestorePoints}
+          onRetry={() => {
+            if (!query.loading()) void query.refetch();
+          }}
+          retrying={query.loading()}
+          accessMessage={accessMessage()}
         />
       )}
     </Show>
