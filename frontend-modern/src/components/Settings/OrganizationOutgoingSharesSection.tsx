@@ -119,7 +119,7 @@ export const OrganizationOutgoingSharesSection: Component<
                   onClick={() => {
                     void props.state.deleteShare(share);
                   }}
-                  disabled={props.state.saving()}
+                  disabled={props.state.saving() || props.state.sharingChangesPaused()}
                 >
                   <Trash2 class="w-3.5 h-3.5" />
                   Remove

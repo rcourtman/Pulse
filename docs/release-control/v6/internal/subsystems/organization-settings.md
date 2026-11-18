@@ -439,6 +439,31 @@ late completion after actual principal, organization, policy, entitlement or
 component withdrawal. `OrganizationOverviewPanel.test.tsx` also pins normalized
 request scopes through the pending rename and resulting saved read.
 
+### Sharing preserves verified selected data when a peer blocks enumeration
+
+The organization directory and the incoming-sharing scan can return the
+server's explicit HTTP 500 `list_failed` even when the selected organization
+is readable. If current-organization detail, membership and outgoing shares
+are all verified for the same selection, Sharing keeps the selected identity
+and outgoing rows. The recipient list and incoming rows are marked unavailable
+only when their own enumeration failed. No synthetic organization, share,
+target, or empty incoming inventory replaces an unread result.
+
+A verified owner or administrator continues to see the existing form and
+any saved row controls, but all sharing writes still require the complete
+snapshot, including remove, accept and decline. Reload sharing makes only
+read-only requests for the same selection. An explicit draft recipient is
+not replaced by another target and must still be present in the verified
+directory before the form can submit. Other errors, stale readers,
+malformed bodies, failed selected-scope reads, policy and authority withdrawal
+keep their existing fail-closed behavior. Server authorization is unchanged.
+
+The registered OrganizationSharingPanel and OrganizationSharingTransport tests
+cover individual and concurrent list failures, fresh scoped data versus a
+failed selected read, native controls, no mutation or CSRF preparation, and
+explicit recovery. Comparable desktop/narrow Settings browser proof uses
+the native saved-workspace fixture's response bodies, not live client recovery.
+
 ### Invitation decisions identify the exact organization
 
 Your Invitations shows each organization's display name **and** ID beside its

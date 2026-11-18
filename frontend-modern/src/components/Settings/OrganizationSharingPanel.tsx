@@ -141,7 +141,16 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
           }
         }}
       >
-        <SettingsPanel title="Organization Sharing" noPadding bodyClass="divide-y divide-border">
+        <SettingsPanel
+          title="Organization Sharing"
+          action={
+            state.sharingChangesPaused() ? (
+              <Button onClick={reloadSharing}>{ORGANIZATION_SHARING_RELOAD_LABEL}</Button>
+            ) : undefined
+          }
+          noPadding
+          bodyClass="divide-y divide-border"
+        >
           <Show when={!state.loading()} fallback={<OrganizationSharingLoadingState />}>
             <Show when={state.loadError()}>
               <div class="p-4 sm:p-6">
@@ -186,6 +195,13 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
                     </p>
                     <Show when={state.readOnly()}>
                       <p>This session is read-only. Sharing changes are disabled.</p>
+                    </Show>
+                    <Show when={state.sharingChangesPaused()}>
+                      <p role="status">
+                        {state.canManageCurrentOrg()
+                          ? 'Sharing changes are paused until the missing information loads.'
+                          : 'Some sharing information could not be loaded.'}
+                      </p>
                     </Show>
                   </div>
                   <OrganizationSharingCreateSection state={state} />

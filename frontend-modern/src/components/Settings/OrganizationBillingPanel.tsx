@@ -26,6 +26,7 @@ export const OrganizationBillingPanel: Component<OrganizationBillingPanelProps> 
     loadError,
     reloadBillingData,
     selectedOrgID,
+    organizationCountUnavailable,
   } = useOrganizationBillingPanelState(props);
   const warningTitleID = createUniqueId();
   let panel: HTMLDivElement | undefined;
@@ -90,6 +91,13 @@ export const OrganizationBillingPanel: Component<OrganizationBillingPanelProps> 
       >
         <CommercialBillingShell
           title="Billing & Usage"
+          action={
+            organizationCountUnavailable() ? (
+              <Button onClick={reloadBilling} class="w-full sm:w-auto">
+                Reload billing
+              </Button>
+            ) : undefined
+          }
           loading={loading()}
           loadingFallback={<OrganizationBillingLoadingState />}
         >

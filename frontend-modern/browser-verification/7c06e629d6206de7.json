@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "base_sha": "c13c7048ee8241fd4e7e8c7a2abb3629f501ca47",
+  "verified_at": "2026-11-18T22:07:49Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx",
+    "frontend-modern/src/components/Settings/OrganizationIncomingSharesSection.tsx",
+    "frontend-modern/src/components/Settings/OrganizationOutgoingSharesSection.tsx",
+    "frontend-modern/src/components/Settings/OrganizationSharingCreateSection.tsx",
+    "frontend-modern/src/components/Settings/OrganizationSharingPanel.tsx",
+    "frontend-modern/src/components/Settings/useOrganizationBillingPanelState.ts",
+    "frontend-modern/src/components/Settings/useOrganizationSharingPanelState.ts",
+    "frontend-modern/src/utils/commercialBillingModel.ts",
+    "frontend-modern/src/utils/orgUtils.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx": "85afa817dd73c597dd08ab6dc924aab218ada584dc1e12556388b81df413cc79",
+    "frontend-modern/src/components/Settings/OrganizationIncomingSharesSection.tsx": "765d4b0c985dbb1dc54091c1863efc95ab6580bfd2e30f9214a99ca646f2ac16",
+    "frontend-modern/src/components/Settings/OrganizationOutgoingSharesSection.tsx": "c877a00725959374f58db36328e4d5fa5490e6e423982ca2dd4157c362d04fd1",
+    "frontend-modern/src/components/Settings/OrganizationSharingCreateSection.tsx": "c816ce65677d8cb9a5bcf37ec3bc78d3149022018afe537a8107cec4aa60a84e",
+    "frontend-modern/src/components/Settings/OrganizationSharingPanel.tsx": "533e58266616f7558afef8e2fefdd590479742b8e31510ad7a00b0c01b58f061",
+    "frontend-modern/src/components/Settings/useOrganizationBillingPanelState.ts": "ff242fa6778aac5f0c1023fcfe95e047d2a53d6387e732e302c58fee3975b2e1",
+    "frontend-modern/src/components/Settings/useOrganizationSharingPanelState.ts": "875c280fa6580a45dbc9c40816283c582fe371cc469864342843dab3cc74e97e",
+    "frontend-modern/src/utils/commercialBillingModel.ts": "c32f128143f962e589f727d8fc37483ab82c201feea0858f2e417d3b66b599fd",
+    "frontend-modern/src/utils/orgUtils.ts": "d68a0dc5aa096525d30e0247349c2f723c6d8021e00516be8c7c0f3c9bf47f2a"
+  },
+  "routes": [
+    "/settings/organization/billing",
+    "/settings/organization/sharing"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Production Pulse Settings frontend with the same retained native fixture responses on both sides (synthetic plan and bootstrap). Playwright 1.56.1 Chromium 141 desktop and WebKit 26 narrow, light. Eight comparable viewport pairs and two additional narrow detail views inspected.",
+    "With the saved organization healthy and another workspace unreadable, Billing keeps the active plan, verified current members and usage; Organizations reads Unavailable. Sharing keeps the selected name, verified outgoing state and existing owner form with native disabled controls. Incoming is unavailable, not empty.",
+    "After read-only Reload and Retry, the same selection restores the complete counts and the real incoming result, and the unchosen recipient becomes available. The ordinary recovered screen preserves the previous controls and layout."
+  ],
+  "interactions": [
+    "Retained 134 checks across eight browser cases. Same selected ID in cookie, session storage and socket, no prod origin or writes. An incomplete sharing snapshot rejects form requestSubmit; recovery never replays a mutation.",
+    "After complete recovery, selecting an explicit recipient and resource enables Create Share; no submission is made. Existing server authorization and complete-snapshot write rules remain in effect."
+  ]
+}

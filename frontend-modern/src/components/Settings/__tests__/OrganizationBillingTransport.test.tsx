@@ -277,6 +277,32 @@ describe('organization billing through its real read transport', () => {
     expect(screen.getByText('2 / 17')).toBeInTheDocument();
   });
 
+  it('publishes only verified values and can reload the same scope after a directory list failure', async () => {
+    const pending = deferred<Response>();
+    reply = async (source, org) => {
+      if (source === 'organizations') return json({ code: 'list_failed' }, 500);
+      if (source === 'members') return pending.promise;
+      return json(dataFor(source, org));
+    };
+    mount();
+    await waitFor(() => expect(billingReads()).toHaveLength(3));
+    await settle();
+    expect(screen.getByLabelText('Loading organization billing')).toBeInTheDocument();
+    expect(screen.queryByText('Plan Tier')).not.toBeInTheDocument();
+    pending.resolve(json(dataFor('members', north)));
+    await screen.findByText(emailFor(north));
+    expect(screen.getByText('Organizations').parentElement).toHaveTextContent('Unavailable');
+    expect(screen.getByText('Members (Current Org)').parentElement).toHaveTextContent('3');
+    expect(screen.getByText('2 / 17')).toBeInTheDocument();
+    expectBoundReads();
+
+    reply = async (source, org) => json(dataFor(source, org));
+    fireEvent.click(screen.getByRole('button', { name: 'Reload billing' }));
+    await accepted();
+    expect(screen.getByText('Organizations').parentElement).toHaveTextContent('2');
+    expectBoundReads(north, billingReads().slice(3));
+  });
+
   it.each(sources)(
     'does not publish a partial snapshot while the %s body is still unread',
     async (held) => {
@@ -294,6 +320,23 @@ describe('organization billing through its real read transport', () => {
       expect(screen.queryByText(emailFor(north))).not.toBeInTheDocument();
       body.resolve(JSON.stringify(dataFor(held, north)));
       await accepted();
+      expectBoundReads();
+    },
+  );
+
+  it.each([
+    ['organizations', 500, 'unrelated_failure'],
+    ['organizations', 403, 'list_failed'],
+    ['license', 500, 'list_failed'],
+    ['members', 500, 'list_failed'],
+  ] as const)(
+    'does not use %s HTTP %d %s as the directory fallback',
+    async (failed, status, code) => {
+      reply = async (source, org) =>
+        source === failed ? json({ code }, status) : json(dataFor(source, org));
+      mount();
+      await screen.findByRole('alert');
+      expectUnknown();
       expectBoundReads();
     },
   );

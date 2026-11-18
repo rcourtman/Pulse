@@ -84,6 +84,7 @@ let incomingInventory: IncomingOrganizationShare[];
 let healthReply: () => Promise<Response>;
 let writeReply: (url: string, options: RequestInit) => Promise<Response>;
 let failedRead: string | undefined;
+let failedLists: string[];
 
 function apply(operation: Operation) {
   if (operation === 'create')
@@ -174,6 +175,7 @@ beforeEach(() => {
   outgoingInventory = [outgoing];
   incomingInventory = [incoming];
   failedRead = undefined;
+  failedLists = [];
   healthReply = async () => {
     document.cookie = `pulse_csrf=${csrfToken}; Path=/`;
     return json({});
@@ -185,6 +187,7 @@ beforeEach(() => {
     if (url === '/api/health' && method === 'GET') return healthReply();
     if (method !== 'GET') return writeReply(url, options);
     if (url === failedRead) return json({ error: 'synthetic-unavailable' }, 503);
+    if (failedLists.includes(url)) return json({ code: 'list_failed' }, 500);
     if (url === '/api/orgs') return json([north, south]);
     for (const organization of [north, south]) {
       const base = orgPath(organization.id);
@@ -341,25 +344,79 @@ describe('organization sharing through the real transport', () => {
     },
   );
 
-  it.each(readPaths(north.id))('rejects the whole sharing snapshot when %s fails', async (path) => {
-    failedRead = path;
-    const { state } = mount();
-    await waitFor(() => expect(state.loading()).toBe(false));
-    expect(state.loadError()).toBeTruthy();
-    expect(state.org()).toBeNull();
-    expect(state.outgoingShares()).toEqual([]);
-    expect(state.incomingShares()).toEqual([]);
-    expect(state.canManageCurrentOrg()).toBe(false);
-    expect(state.canCreateShare()).toBe(false);
-    expect(reads()).toHaveLength(5);
-    for (const [, options] of reads()) {
-      expectSessionRequest(options);
-      expect(options?.signal?.aborted).toBe(true);
-    }
-    for (const operation of operations) await confirm(state, operation);
-    expect(writes()).toHaveLength(0);
-    expect(getOrgID()).toBe(north.id);
-  });
+  it.each(readPaths(north.id))(
+    'rejects the whole sharing snapshot when %s returns an unrelated failure',
+    async (path) => {
+      failedRead = path;
+      const { state } = mount();
+      await waitFor(() => expect(state.loading()).toBe(false));
+      expect(state.loadError()).toBeTruthy();
+      expect(state.org()).toBeNull();
+      expect(state.outgoingShares()).toEqual([]);
+      expect(state.incomingShares()).toEqual([]);
+      expect(state.canManageCurrentOrg()).toBe(false);
+      expect(state.canCreateShare()).toBe(false);
+      expect(reads()).toHaveLength(5);
+      for (const [, options] of reads()) {
+        expectSessionRequest(options);
+        expect(options?.signal?.aborted).toBe(true);
+      }
+      for (const operation of operations) await confirm(state, operation);
+      expect(writes()).toHaveLength(0);
+      expect(getOrgID()).toBe(north.id);
+    },
+  );
+
+  it.each(['directory', 'incoming', 'both'] as const)(
+    'keeps the verified current selection but pauses every change when %s cannot enumerate',
+    async (failed) => {
+      const { state } = await prepared();
+      const directory = failed !== 'incoming';
+      const onlyIncoming = failed !== 'directory';
+      failedLists = [
+        ...(directory ? ['/api/orgs'] : []),
+        ...(onlyIncoming ? [`${orgPath(north.id)}/shares/incoming`] : []),
+      ];
+      await state.loadSharingData();
+      expect(state.org()?.id).toBe(north.id);
+      expect(state.canManageCurrentOrg()).toBe(true);
+      expect(state.sharingChangesPaused()).toBe(true);
+      expect(state.unavailableLists()).toEqual({ directory, incoming: onlyIncoming });
+      expect(state.outgoingShares()).toEqual(outgoingInventory);
+      expect(state.incomingShares()).toEqual(onlyIncoming ? [] : incomingInventory);
+      expect(state.canCreateShare()).toBe(false);
+      for (const operation of operations) await confirm(state, operation);
+      expect(writes()).toHaveLength(0);
+      expect(fetchMock.mock.calls.filter(([url]) => url === '/api/health')).toHaveLength(0);
+      expect(reads().map(([url]) => url)).toEqual([...readPaths(north.id), ...readPaths(north.id)]);
+      for (const [, options] of reads()) expectSessionRequest(options);
+
+      failedLists = [];
+      await state.loadSharingData();
+      await accepted(state);
+      expect(state.sharingChangesPaused()).toBe(false);
+      expect(state.targetOrgId()).toBe(draft.targetOrgId);
+      expect(state.canCreateShare()).toBe(true);
+      expect(writes()).toHaveLength(0);
+      expect(getOrgID()).toBe(north.id);
+    },
+  );
+
+  it.each([orgPath(north.id), `${orgPath(north.id)}/members`, `${orgPath(north.id)}/shares`])(
+    'does not mistake selected read %s for an aggregate or keep any old rows',
+    async (failed) => {
+      const { state } = await prepared();
+      failedLists = ['/api/orgs', failed];
+      await state.loadSharingData();
+      expect(state.loadError()).toBeTruthy();
+      expect(state.org()).toBeNull();
+      expect(state.outgoingShares()).toEqual([]);
+      expect(state.canManageCurrentOrg()).toBe(false);
+      for (const operation of operations) await confirm(state, operation);
+      expect(writes()).toHaveLength(0);
+      expect(getOrgID()).toBe(north.id);
+    },
+  );
 
   it.each(operations)(
     'ignores a late %s confirmation after selecting a different organization',

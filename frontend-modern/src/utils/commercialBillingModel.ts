@@ -36,7 +36,7 @@ export interface HostedCommercialModelInput {
   status?: Pick<LicenseStatus, 'email' | 'is_lifetime' | 'expires_at' | 'max_guests'> | null;
   tierLabel: string;
   licenseStatusLabel: string;
-  organizationCount: number;
+  organizationCount: number | undefined;
   memberCount: number;
   nodeUsage: number;
   guestUsage: number;
@@ -124,7 +124,7 @@ export const buildHostedCommercialPlanModel = (
     },
     {
       label: 'Organizations',
-      value: input.organizationCount,
+      value: input.organizationCount ?? 'Unavailable',
     },
     {
       label: 'Members (Current Org)',
