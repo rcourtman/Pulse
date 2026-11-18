@@ -10471,6 +10471,51 @@ func TestContract_APITokenDeleteRejectsScopeEscalation(t *testing.T) {
 	}
 }
 
+func TestContract_OrganizationDetailPreservesCurrentMembers(t *testing.T) {
+	enableSharedMultiOrgForTest(t)
+	t.Setenv("PULSE_DEV", "true")
+
+	dir := t.TempDir()
+	t.Setenv("PULSE_LEGACY_KEY_PATH", filepath.Join(dir, "unused-legacy-key"))
+	p := config.NewMultiTenantPersistence(dir)
+	created := time.Date(2026, 11, 1, 9, 0, 0, 0, time.UTC)
+	if err := p.SaveOrganization(&models.Organization{
+		ID:          "acme",
+		DisplayName: "Acme",
+		Status:      models.OrgStatusActive,
+		CreatedAt:   created,
+		OwnerUserID: "alice",
+		Members: []models.OrganizationMember{
+			{UserID: "alice", Role: models.OrgRoleViewer, AddedAt: created},
+			{UserID: " bob ", Role: " VIEWER ", AddedAt: created, AddedBy: "alice"},
+		},
+		PendingInvitations: []models.OrganizationInvitation{
+			{UserID: "carol", Role: models.OrgRoleEditor, InvitedAt: created, InvitedBy: "alice"},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	h := NewOrgHandlers(p, nil)
+	req := withUser(httptest.NewRequest(http.MethodGet, "/api/orgs/acme", nil), "bob")
+	req.SetPathValue("id", "acme")
+	rec := httptest.NewRecorder()
+	h.HandleGetOrg(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("get organization: %d %s", rec.Code, rec.Body.Bytes())
+	}
+	assertJSONSnapshot(t, rec.Body.Bytes(), `{
+		"id":"acme",
+		"displayName":"Acme",
+		"status":"active",
+		"createdAt":"2026-11-01T09:00:00Z",
+		"ownerUserId":"alice",
+		"members":[
+			{"userId":"alice","role":"owner","addedAt":"2026-11-01T09:00:00Z"},
+			{"userId":"bob","role":"viewer","addedAt":"2026-11-01T09:00:00Z","addedBy":"alice"}
+		]
+	}`)
+}
+
 func TestContract_OrganizationInvitationTransportJSONSnapshot(t *testing.T) {
 	t.Setenv("PULSE_DEV", "true")
 	defer SetMultiTenantEnabled(false)

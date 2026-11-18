@@ -923,6 +923,21 @@ target user is already an accepted member, and the access panel must surface
 both the current user's inbox and manager-visible pending invitations through
 the dedicated invitation section owner rather than binding membership as soon as
 an admin types a username.
+
+Organization list and detail preserve the authorized workspace and its
+normalized current members independently of invitation access. The Settings
+access panel uses the dedicated manager invitation read and the separate
+invitee inbox. If a list entry or detail includes `pendingInvitations`, the
+caller must qualify for the dedicated manager read for that same workspace:
+the owner or an admin for a named workspace, or an instance administrator for
+the managed default workspace. The key is absent for other readers, including
+organization-bound API tokens. The default detail's `canManageMembers`
+capability and the distinction between a pending invitation and a current
+membership are unchanged. A provider client's workspace directory is
+subscription-independent and never includes pending invitations. Eligible
+managers still read them through the gated detail or invitation route,
+without making workspace discovery depend on paid capability resolution.
+
 Incoming share visibility is part of that same boundary as well: a recipient
 must only see inbound shares whose requested `accessRole` is satisfied by the
 user's effective membership role in the target organization, using the shared

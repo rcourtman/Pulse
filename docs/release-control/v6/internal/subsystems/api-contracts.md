@@ -11668,6 +11668,19 @@ currently belongs to, and org-management endpoints must reflect member
 promotion or demotion immediately rather than continuing to authorize from
 stale owner/admin assumptions after the role change has already been
 persisted.
+
+`GET /api/orgs` and `GET /api/orgs/{id}` use a response projection separate
+from stored organization metadata. The ordinary workspace and normalized
+member fields are unchanged. The optional `pendingInvitations` field is
+reserved for the same signed-in managers as
+`GET /api/orgs/{id}/invitations`, evaluated per organization even within a
+single list. It is omitted, not an empty array, for other authorized readers
+and API tokens. The provider-client directory's subscription exception opens
+workspace discovery, not invitation metadata: this list never includes the
+field, and eligible managers retain their gated detail and invitation reads.
+The dedicated manager list and the invitee's inbox keep their separate access
+and response contracts.
+
 System settings API payloads now also carry an explicit v6 channel contract:
 `updateChannel` resolves to `stable` or `rc` with `stable` as the default, and
 `autoUpdateEnabled` must serialize as `false` whenever the effective channel is

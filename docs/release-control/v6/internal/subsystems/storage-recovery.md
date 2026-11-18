@@ -7041,6 +7041,10 @@ remains restricted to existing members, may not be satisfied by an unaccepted
 invitation record or a guessed account identifier, and must require a fresh
 browser session minted for the acting owner before the permanent ownership
 change is accepted.
+Organization list/detail keep the authorized workspace and current members
+available to recovery readers without returning pending invitations to
+readers outside that workspace's management sessions. An omitted invitation
+field does not establish an empty manager queue or a change to saved access.
 That shared `internal/api/` dependency now also assumes hosted tenant AI
 bootstrap and chat-runtime reads resolve through one effective hosted billing
 lease before storage- or recovery-adjacent runtime consumers inspect
