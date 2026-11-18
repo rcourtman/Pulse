@@ -43,6 +43,8 @@ import {
 import {
   MAP_HIT_ATTRIBUTE,
   MAP_PAGE_PALETTES,
+  MAP_RINGS_ATTRIBUTE,
+  renderMapLinkRings,
   renderMapSceneBody,
 } from './infrastructureMapRender';
 import { buildServiceDiagram } from './infrastructureMapServices';
@@ -189,6 +191,19 @@ export function InfrastructureMapSurface() {
       return hits();
     }),
   );
+
+  // The map draws no line between two tiles. While one is pointed at or
+  // focused, the tiles its connections join it to are ringed, and its card
+  // says what each connection is. Declared after the effect above, so it
+  // runs once the drawing it adds to has been replaced.
+  createEffect(() => {
+    body();
+    const current = scene();
+    const shown = hover();
+    const layer = svgRef?.querySelector(`[${MAP_RINGS_ATTRIBUTE}]`);
+    if (!layer) return;
+    layer.innerHTML = current && shown ? renderMapLinkRings(current, shown.hit, palette()) : '';
+  });
 
   const hitFromEvent = (event: Event): { hit: MapHit; element: Element } | null => {
     const element = (event.target as Element | null)?.closest?.(`[${MAP_HIT_ATTRIBUTE}]`);
@@ -367,6 +382,9 @@ export function InfrastructureMapSurface() {
                     .join(' · ')}
                 </span>
               </Show>
+              <For each={current().hit.links ?? []}>
+                {(sentence) => <span class="text-muted">{sentence}</span>}
+              </For>
               <Show when={current().hit.cpu !== undefined || current().hit.memory !== undefined}>
                 <span class="text-muted">
                   {[

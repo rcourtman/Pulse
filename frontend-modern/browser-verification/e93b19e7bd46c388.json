@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "base_sha": "9beae32295c7679f6cac207256b4b2eecae38aab",
+  "verified_at": "2026-11-18T18:11:58Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapSurface.tsx",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapConnections.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapDiagram.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapLayout.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapModel.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapRender.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapServices.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapSurface.tsx": "3d49dbe5e62c6b09215b09aea50e72179e20d0a886ee264642aec339d50cb28b",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapConnections.ts": "dbb443ad156e6424dbe0566ba64f574d7ff5105e7cdc36a01dd280c0d6cb90d3",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapDiagram.ts": "a9303edd74960a1a32086b7fc1e7b8e7eff61276fd12d97d9b004f3322eef7c0",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapLayout.ts": "3199668574997ac2423324bc8e9cd67bb2bc1969ca8a425c0f6fcafae4403c6e",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapModel.ts": "45b49611d09eecf3a323a5d8a4883c14c5e635fa1997a04193794f3c3f38e503",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapRender.ts": "dbdb76a8821820277a6d4fea986350fa5f3caa72c425f22b90123b87bf983726",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapServices.ts": "05906048dab8ee7f9767cb2cfa59676765fa02c988ddbe2589488e52cb74ea1d"
+  },
+  "routes": [
+    "/map, served by a Pulse binary built from this working tree and fed by a pulse-agent built from the same branch, reporting a real Docker daemon and a real Ubuntu 24.04 host.",
+    "/map from the same build over the real instance's API, read-only (every request that is not a GET refused), once as the instance reports today and once with the network modes and routes read by hand from its hosts overlaid."
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Rig estate: one Linux host, mapnet-rig, with 16 containers. Three run inside a fourth's network, one is routed by Traefik, a second stack's stopped Traefik containers route nothing, and the host's default gateway is not monitored.",
+    "Default drawing at 1440x900, dark and light: no line between two tiles. The only lines are the connectors between layers. The three containers read 'via mapnet-glu...' under their names, the routed one reads its hostname, and the gateway is a dashed tile beside the ways in. The legend has no entry for a line.",
+    "The fit rule, measured as the bottom edge of main#main against window.innerHeight, less the height of nav.fixed.bottom-0 on a phone. Rig: 888 against 900 at 1440x900 and 779 against 799 (844 less the 45px bar) at 390x844, with the update banner showing above the page. The real estate (63 tiles) as it reports today: 888 against 900 and 788 against 799. The same with the hand-read values overlaid: 888 against 900 and 788 against 799.",
+    "Refit on the rig at 1440x900 with a 90px block inserted above the shell: the drawing went from 620px to 530px tall, the bottom edge stayed at 888, and it went back to 620px when the block was removed.",
+    "Real instance as it reports today (released agents): no caption, ring or gateway tile from this change, which is right, because nothing there reports the fields yet. With the hand-read values overlaid: three 'via gluetun' captions and one gateway tile."
+  ],
+  "interactions": [
+    "Pointed at the container that carries the others' network: the three containers that use it were ringed and its card said 'Carries the network of 3 containers'. Pointed at the routed container: the proxy was ringed and the card named it and the hostname. Pointed at the proxy in the light theme: the routed container was ringed.",
+    "Pointed at a container with no stated connection, and at the gateway tile: nothing was ringed. The gateway's card named the machine that uses it. Moved the pointer off the map: no ring was left.",
+    "Keyboard: tabbed onto a container that uses another's network. The other was ringed while it had focus and its card showed. Tabbed on: the ring went.",
+    "Hide names with a tile pointed at: the rings stayed, and no hostname, address or container name was left in any drawn text, label or card.",
+    "Compact at 1440 and the default (icons only) at 390: pointing at the same tile ringed the same three.",
+    "On the real estate with the overlay: pointing at gluetun ringed byparr, prowlarr and qbittorrent."
+  ],
+  "limits": [
+    "The real instance shows the captions, rings and gateway only once its agents run a release that reports the fields. The overlay shows what it will draw; it is not the instance's own report.",
+    "At phone width the map draws icons only, so the captions are not written there, and in phone emulation the page showed no hover card (the rings did show). On a touch screen a tap opens the tile's page. A phone user reads the connection by switching to Names.",
+    "Save image was not clicked (a download needs permission). The export draws the same scene without the ring layer, which a unit test reads.",
+    "Docker only. No Podman host was run.",
+    "The in-app browser pane was hidden, so each width was loaded fresh, and a capture taken after a scripted focus was stale: the keyboard check was repeated with a real Tab key."
+  ]
+}

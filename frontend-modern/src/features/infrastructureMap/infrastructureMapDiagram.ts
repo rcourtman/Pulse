@@ -24,7 +24,9 @@ import {
  * Internet, the ways in, the networks, what runs (one box per purpose), then
  * storage and backups, then hardware. Connectors run between layers, never
  * between single tiles, so the picture stays readable at any size and every
- * line states something Pulse knows.
+ * line states something Pulse knows. A connection between two tiles is said
+ * under the tile and on its hover, and each tile carries which tiles it is
+ * joined to, so the page can mark them while one is pointed at.
  *
  * The boxes are drawn the way the rest of the product draws a section: a
  * bordered card with a small uppercase header strip and its count, in the
@@ -198,7 +200,9 @@ const drawTile = (painter: Painter, tile: DiagramTile, x: number, y: number, das
   }
   const tone = painter.toneFor(tile.segmentId);
   if (tone) out.nodes.push({ kind: 'rect', x: x + 4, y: y + 6, w: 3, h: 10, r: 1.5, fill: tone });
-  if (dashed) return;
+  // A dashed tile is a place, not a thing: only one with something to say
+  // about its connections can be pointed at.
+  if (dashed && !tile.links?.length) return;
   if (real) {
     // The status dot sits on the icon's corner, ringed in the card's colour,
     // the way a badge sits on an avatar.
@@ -221,13 +225,16 @@ const drawTile = (painter: Painter, tile: DiagramTile, x: number, y: number, das
         ? [mapHitMeta(tile.typeLabel, tile.status, tile.health), tile.caption]
             .filter(Boolean)
             .join(' · ')
-        : `${tile.name.replace('+', '')} ${tile.caption}`,
+        : dashed
+          ? tile.typeLabel
+          : `${tile.name.replace('+', '')} ${tile.caption}`,
       health: tile.health,
       cpu: tile.cpu,
       memory: tile.memory,
       address: tile.address,
       detail: tile.detail,
       navigable: real,
+      ...(tile.links?.length ? { links: tile.links } : {}),
     },
   });
 };
@@ -503,6 +510,24 @@ export function layoutServiceDiagram(diagram: ServiceDiagram, options: MapLayout
   /** Where the next layer's connector starts: the bottom of the layer above. */
   let source: { x: number; y: number } | null = null;
 
+  // A gateway that machines name in their route tables. No line is drawn to
+  // it: which machines use it is said on its hover, and a line from each
+  // would cross the whole map.
+  const gatewayPitch = metrics.tileW + metrics.gap;
+  const drawGateways = (tiles: DiagramTile[], x: number, top: number) => {
+    tiles.forEach((gateway, index) => {
+      drawTile(painter, gateway, x + index * gatewayPitch, top, true);
+    });
+  };
+  // As many gateways as a row of the given width holds, centred on the map.
+  const drawGatewayRow = (top: number) => {
+    const shown = diagram.gateways.slice(
+      0,
+      Math.max(1, Math.floor((inner + metrics.gap) / gatewayPitch)),
+    );
+    drawGateways(shown, mid - (shown.length * gatewayPitch - metrics.gap) / 2, top);
+  };
+
   if (diagram.access) {
     const sized = sizeGroup(diagram.access, metrics, inner);
     const boxX = mid - sized.w / 2;
@@ -518,22 +543,37 @@ export function layoutServiceDiagram(diagram: ServiceDiagram, options: MapLayout
     };
     const label = diagram.internet?.label ?? '';
     // The Internet sits beside the ways in when there is room, so the map
-    // spends its height on what runs.
+    // spends its height on what runs. Gateways take the other side.
     const reach = Math.max(72, labelWidth(label, 11) + 28);
     const beside = boxX - left >= metrics.tileW + reach;
-    if (diagram.internet && !beside) {
-      drawTile(painter, internet, mid - metrics.tileW / 2, y, true);
+    const internetAbove = diagram.internet !== undefined && !beside;
+    const roomRight = Math.floor(
+      (left + inner - (boxX + sized.w) - GROUP_GAP + metrics.gap) / gatewayPitch,
+    );
+    const gatewaysAbove = diagram.gateways.length > 0 && diagram.gateways.length > roomRight;
+    if (internetAbove || gatewaysAbove) {
       const tileBottom = y + metrics.tileH;
+      if (internetAbove) drawTile(painter, internet, mid - metrics.tileW / 2, y, true);
+      if (gatewaysAbove && internetAbove) {
+        // The Internet keeps the middle, over its arrow. Gateways follow it.
+        const x = mid + metrics.tileW / 2 + metrics.gap;
+        const room = Math.max(0, Math.floor((left + inner - x + metrics.gap) / gatewayPitch));
+        drawGateways(diagram.gateways.slice(0, room), x, y);
+      } else if (gatewaysAbove) {
+        drawGatewayRow(y);
+      }
       y = tileBottom + LAYER_GAP;
-      line(
-        lines,
-        [
-          [mid, tileBottom],
-          [mid, y],
-        ],
-        { arrow: true, dashed: true },
-      );
-      connectorLabel(labels, label, mid, (tileBottom + y) / 2);
+      if (internetAbove) {
+        line(
+          lines,
+          [
+            [mid, tileBottom],
+            [mid, y],
+          ],
+          { arrow: true, dashed: true },
+        );
+        connectorLabel(labels, label, mid, (tileBottom + y) / 2);
+      }
     }
     const box = drawGroup(painter, sized, boxX, y);
     if (diagram.internet && beside) {
@@ -550,8 +590,19 @@ export function layoutServiceDiagram(diagram: ServiceDiagram, options: MapLayout
       );
       connectorLabel(labels, label, tileX + metrics.tileW + reach / 2, lineY - 12);
     }
+    if (!gatewaysAbove) {
+      drawGateways(
+        diagram.gateways,
+        boxX + sized.w + GROUP_GAP,
+        box.y + box.h / 2 - metrics.tileH / 2,
+      );
+    }
     source = { x: mid, y: bottomOf(box) };
     y = bottomOf(box) + LAYER_GAP;
+  } else if (diagram.gateways.length > 0) {
+    // No ways in to sit beside: the gateways are the top of the map.
+    drawGatewayRow(y);
+    y += metrics.tileH + LAYER_GAP;
   }
 
   if (diagram.networks.length > 0) {
@@ -747,6 +798,24 @@ export function layoutServiceDiagram(diagram: ServiceDiagram, options: MapLayout
     y = lowerBottom + LAYER_GAP;
   } else if (placed.length > 0) {
     y = appsBottom + LAYER_GAP;
+  }
+
+  // No line is drawn for a link between two tiles. Each end is told the
+  // other, and only when both are drawn: an end folded into a `+N` tile has
+  // no place to point at.
+  const drawn = new Map(
+    out.hits.flatMap((node) => (node.kind === 'hit' ? [[node.hit.id, node.hit] as const] : [])),
+  );
+  for (const link of diagram.links) {
+    const from = drawn.get(link.fromId);
+    const to = drawn.get(link.toId);
+    if (!from || !to) continue;
+    for (const [end, other] of [
+      [from, to],
+      [to, from],
+    ] as const) {
+      if (!end.linked?.includes(other.id)) end.linked = [...(end.linked ?? []), other.id];
+    }
   }
 
   const height = drawPosterFooter(out, options.header, margin, width, Math.max(0, y - LAYER_GAP));

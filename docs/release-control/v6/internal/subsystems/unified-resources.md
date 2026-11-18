@@ -4318,6 +4318,55 @@ application resource-provider or WebSocket lifecycle.
 
 ## Current State
 
+### The map says which tiles a collected value connects (18 November 2026)
+
+The diagram said nothing about how two apps are connected, because nothing
+Pulse collected named both ends of a connection. Three collected facts now
+do, and `infrastructureMapConnections.ts` reads those and nothing else:
+
+- `docker.networkMode` of `container:<id>`: the container uses the network of
+  the container with that ID on the same Docker host.
+- Traefik router labels on a container: it is routed by the one running
+  Traefik container on the same Docker host that shares a Docker network with
+  it, at the hostnames its rules name. Traefik is known by the image it runs,
+  never by a name. A container inside another's network is reached where that
+  one is.
+- `agent.defaultGateways` and `agent.dnsServers`: the address a machine's
+  first default route names, and the addresses it resolves names at.
+
+A reference that matches nothing, or more than one thing, links nothing. A
+missing network list is never read as a shared network, and no connection is
+taken from a name, a port or a subnet.
+
+What the diagram does with them:
+
+- It draws no line between two tiles. Lines between tiles were built and
+  taken out the same day: they read as part of the tree of layer connectors,
+  crossed cards they did not join, and failed the rule that the map is one
+  clean drawing read at a glance. The connectors between layers stay the only
+  lines on the map.
+- The caption of a container that uses another's network names it
+  (`via <name>`), and the caption of a routed container is where it answers.
+  Both tiles of a connection say it in a sentence on hover.
+- Each tile carries the ids of the tiles its connections join it to, and
+  only ones that are drawn: an end folded into a `+N` tile is left out. While
+  a tile is pointed at or has keyboard focus, the page rings those tiles, and
+  it rings nothing at any other time. Nothing else on the map is dimmed.
+- A default gateway that nothing monitored answers on is a dashed tile beside
+  the ways in, named by its address, with the machines that use it on its
+  hover and no ring or line to them. One that a monitored thing answers on is
+  said on that thing instead. A resolver is said only on something already
+  drawn.
+- A saved image has no pointer, so it has no rings. The captions carry the
+  facts there.
+
+With names hidden, a route's hostnames and a gateway's address are dropped
+and the connections stay.
+
+`infrastructureMapConnections.test.ts` joins the `infrastructure-map` proof
+policy. The earlier statement that the diagram draws no connector between two
+apps holds again: a connection is written and ringed, never drawn as a line.
+
 ### The map fits the screen (18 November 2026)
 
 The diagram grew downward like any page, about one and a half screens on a

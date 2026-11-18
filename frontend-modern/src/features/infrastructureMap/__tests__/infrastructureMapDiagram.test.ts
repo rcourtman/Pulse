@@ -7,6 +7,7 @@ import { buildInfrastructureMapModel } from '../infrastructureMapModel';
 import {
   MAP_PAGE_PALETTES,
   MAP_PALETTES,
+  renderMapLinkRings,
   renderMapSceneBody,
   renderMapSceneToSvg,
 } from '../infrastructureMapRender';
@@ -357,6 +358,214 @@ describe('layoutServiceDiagram', () => {
     expect(at('OTHER')).toBe('2');
     expect(at('HARDWARE')).toBe('1');
     expect(drawn).toContain('switched off');
+  });
+
+  describe('connections between tiles', () => {
+    const hex = (seed: string): string =>
+      [...seed]
+        .map((char) => char.charCodeAt(0).toString(16).padStart(2, '0'))
+        .join('')
+        .padEnd(64, '0')
+        .slice(0, 64);
+    const box = (name: string, docker: NonNullable<Resource['docker']> = {}): Resource =>
+      resource({
+        id: `c-${name}`,
+        type: 'app-container',
+        name,
+        platformType: 'docker',
+        parentId: 'tower',
+        status: 'running',
+        docker: {
+          hostSourceId: 'tower-daemon',
+          containerId: hex(name),
+          containerState: 'running',
+          image: `example/${name}:latest`,
+          networks: [{ name: 'bridge' }],
+          ...docker,
+        },
+      });
+    const dockerEstate = (extra: Resource[] = []): Resource[] => [
+      resource({
+        id: 'tower',
+        type: 'docker-host',
+        name: 'Tower',
+        platformType: 'docker',
+        agent: { defaultGateways: [{ address: '192.168.0.1', interface: 'eth0' }] },
+      }),
+      box('gluetun', { networkMode: 'bridge' }),
+      box('qbittorrent', { networkMode: `container:${hex('gluetun')}`, networks: undefined }),
+      box('sonarr', { networkMode: 'bridge' }),
+      ...extra,
+    ];
+    // A second host with a tunnel on it, so the estate has a way in.
+    const waysIn = (): Resource[] => [
+      resource({ id: 'pve', type: 'agent', name: 'delly', platformType: 'proxmox-pve' }),
+      guest('cloudflared'),
+    ];
+    const hitOf = (scene: MapScene, id: string) =>
+      ofKind(scene, 'hit').find((node) => node.hit.id === id);
+    // The connectors between layers are the only lines on the map. A stated
+    // connection between two tiles adds none.
+    const lineCount = (scene: MapScene) => ofKind(scene, 'line').length;
+
+    it('draws no line between two tiles, and tells each end the other', () => {
+      const plain = dockerEstate().map((resource) =>
+        resource.id === 'c-qbittorrent'
+          ? { ...resource, docker: { ...resource.docker, networkMode: 'bridge' } }
+          : resource,
+      );
+      const scene = sceneOf(dockerEstate(), 1400);
+      expect(lineCount(scene)).toBe(lineCount(sceneOf(plain, 1400)));
+      const from = hitOf(scene, 'c-qbittorrent');
+      const to = hitOf(scene, 'c-gluetun');
+      expect(from?.hit.linked).toEqual(['c-gluetun']);
+      expect(to?.hit.linked).toEqual(['c-qbittorrent']);
+      expect(from?.hit.links).toEqual(['Uses the network of gluetun']);
+      expect(to?.hit.links).toEqual(['Carries the network of 1 container']);
+      // What it uses is written under its name, where the host would be.
+      expect(texts(scene)).toContain('via gluetun');
+      expect(hitOf(scene, 'c-sonarr')?.hit.linked).toBeUndefined();
+    });
+
+    it('tells a proxy every app it routes, at any width, and adds no line for them', () => {
+      const routed = (name: string) =>
+        box(name, {
+          labels: { [`traefik.http.routers.${name}.rule`]: `Host(\`${name}.example.test\`)` },
+        });
+      const apps = ['jellyfin', 'grafana', 'nextcloud', 'gitea', 'vaultwarden', 'wiki'];
+      const busy = dockerEstate([
+        ...waysIn(),
+        box('traefik', { image: 'traefik:v3.1' }),
+        box('prowlarr', { networkMode: `container:${hex('gluetun')}`, networks: undefined }),
+        ...apps.map(routed),
+      ]);
+      const unrouted = busy.map((resource) =>
+        resource.docker?.labels || resource.docker?.networkMode?.startsWith('container:')
+          ? {
+              ...resource,
+              docker: { ...resource.docker, labels: undefined, networkMode: 'bridge' },
+            }
+          : resource,
+      );
+      for (const width of [340, 390, 700, 1024, 1440, 2200]) {
+        for (const density of ['names', 'marks'] as const) {
+          const scene = sceneOf(busy, width, density);
+          expect(lineCount(scene)).toBe(lineCount(sceneOf(unrouted, width, density)));
+          expect([...(hitOf(scene, 'c-traefik')?.hit.linked ?? [])].sort()).toEqual(
+            apps.map((name) => `c-${name}`).sort(),
+          );
+          for (const name of apps) {
+            expect(hitOf(scene, `c-${name}`)?.hit.linked).toEqual(['c-traefik']);
+          }
+          expect([...(hitOf(scene, 'c-gluetun')?.hit.linked ?? [])].sort()).toEqual([
+            'c-prowlarr',
+            'c-qbittorrent',
+          ]);
+          // Every tile a link names is one that is drawn.
+          const drawn = new Set(ofKind(scene, 'hit').map((node) => node.hit.id));
+          for (const node of ofKind(scene, 'hit')) {
+            for (const id of node.hit.linked ?? []) expect(drawn.has(id)).toBe(true);
+          }
+        }
+      }
+    });
+
+    it('rings the tiles joined to the one pointed at, and nothing else', () => {
+      const scene = sceneOf(dockerEstate(), 1400);
+      const palette = MAP_PAGE_PALETTES.dark;
+      const from = hitOf(scene, 'c-qbittorrent');
+      const to = hitOf(scene, 'c-gluetun');
+      if (!from || !to) throw new Error('both tiles should be drawn');
+      const rings = renderMapLinkRings(scene, from.hit, palette);
+      expect(rings.match(/<rect /g)).toHaveLength(1);
+      expect(rings).toContain(`x="${to.x}" y="${to.y}"`);
+      expect(rings).toContain(`stroke="${palette.accent}"`);
+      expect(rings).toContain('fill="none"');
+      expect(renderMapLinkRings(scene, to.hit, palette)).toContain(`x="${from.x}" y="${from.y}"`);
+      const alone = hitOf(scene, 'c-sonarr');
+      if (!alone) throw new Error('the tile should be drawn');
+      expect(renderMapLinkRings(scene, alone.hit, palette)).toBe('');
+      // The page has one empty layer for them, which the pointer passes through.
+      const body = renderMapSceneBody(scene, palette, () => '/x');
+      expect(body.match(/data-map-rings/g)).toHaveLength(1);
+      expect(body.endsWith('<g data-map-rings="" pointer-events="none"></g>')).toBe(true);
+      // A saved image has no pointer, so it has no rings: the captions say it.
+      const saved = renderMapSceneToSvg(scene, MAP_PALETTES.dark);
+      expect(saved).not.toContain('data-map-rings');
+      expect(saved).toContain('via gluetun');
+    });
+
+    it('links nothing for an estate that states none', () => {
+      const scene = sceneOf(estate(), 1400);
+      expect(
+        ofKind(scene, 'hit').every(
+          (node) => node.hit.links === undefined && node.hit.linked === undefined,
+        ),
+      ).toBe(true);
+    });
+
+    it('writes where a routed app answers under its name', () => {
+      const scene = sceneOf(
+        dockerEstate([
+          box('traefik', { image: 'traefik:v3.1', networks: [{ name: 'bridge' }] }),
+          box('wiki', {
+            networks: [{ name: 'bridge' }],
+            labels: { 'traefik.http.routers.wiki.rule': 'Host(`wiki.example.test`)' },
+          }),
+        ]),
+        1400,
+      );
+      expect(texts(scene).some((text) => text.startsWith('wiki.examp'))).toBe(true);
+      expect(hitOf(scene, 'c-wiki')?.hit.links).toEqual(['Routed by traefik at wiki.example.test']);
+      expect(hitOf(scene, 'c-traefik')?.hit.links).toEqual(['Routes 1 container']);
+      expect(hitOf(scene, 'c-wiki')?.hit.linked).toEqual(['c-traefik']);
+    });
+
+    it('draws a gateway known only by address as a dashed tile that says who uses it', () => {
+      const scene = sceneOf(dockerEstate(waysIn()), 1400);
+      const gateway = ofKind(scene, 'hit').find((node) => node.hit.id === 'gateway:0');
+      expect(gateway?.hit).toMatchObject({
+        name: '192.168.0.1',
+        meta: 'Default gateway, not monitored',
+        navigable: false,
+        links: ['Used by Tower'],
+      });
+      // No tile is ringed for it: the machines that use it are named on its hover.
+      expect(gateway?.hit.linked).toBeUndefined();
+      expect(texts(scene)).toContain('192.168.0.1');
+      expect(texts(scene)).toContain('default gateway');
+      expect(
+        ofKind(scene, 'rect').some(
+          (node) => node.dashed && node.x === gateway?.x && node.y === gateway?.y,
+        ),
+      ).toBe(true);
+      // Nothing opens from it: Pulse does not monitor it.
+      expect(renderMapSceneBody(scene, MAP_PAGE_PALETTES.dark, () => '/x')).not.toContain(
+        'aria-label="192.168.0.1, Default gateway, not monitored"><rect',
+      );
+    });
+
+    it('still draws the gateway when the estate has no ways in', () => {
+      const scene = sceneOf(dockerEstate(), 1400);
+      expect(texts(scene)).toContain('192.168.0.1');
+      expect(texts(scene)).not.toContain('Internet');
+    });
+
+    it('keeps the gateway inside the drawing at any width', () => {
+      for (const width of [340, 390, 768, 1024, 1440, 2200]) {
+        for (const density of ['names', 'marks'] as const) {
+          const scene = sceneOf(dockerEstate(waysIn()), width, density);
+          for (const node of ofKind(scene, 'hit')) {
+            expect(node.x).toBeGreaterThanOrEqual(0);
+            expect(node.x + node.w).toBeLessThanOrEqual(scene.width);
+          }
+          // The gateway is on the map at every width, not only where there
+          // is room beside the ways in.
+          expect(hitOf(scene, 'gateway:0')).toBeDefined();
+          expect(hitOf(scene, 'c-qbittorrent')?.hit.links).toEqual(['Uses the network of gluetun']);
+        }
+      }
+    });
   });
 
   describe('fitServiceDiagram', () => {
