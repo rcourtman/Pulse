@@ -326,8 +326,18 @@ describe('layoutServiceDiagram', () => {
     const file = renderMapSceneToSvg(scene, MAP_PALETTES.dark);
     expect(file).not.toContain('var(');
     expect(file).toContain('fill="#1e293b" stroke="#334155"');
-    // An unknown app is its initials on the page's own background.
-    expect(file).toMatch(/fill="#0f172a" stroke="#334155"\/><text[^>]*>PC<\/text>/);
+  });
+
+  it('draws a thing with no logo as bright initials on a slate tile, in every theme', () => {
+    const scene = sceneOf(estate(), 1400);
+    const monogram = /fill="#475569" stroke="#64748b"\/><text[^>]*fill="#f8fafc"[^>]*>PC<\/text>/;
+    for (const palette of [MAP_PALETTES.dark, MAP_PALETTES.light]) {
+      expect(renderMapSceneToSvg(scene, palette)).toMatch(monogram);
+    }
+    // On the page too: the tile is a fixed colour like a brand's, not a theme variable.
+    for (const palette of [MAP_PAGE_PALETTES.dark, MAP_PAGE_PALETTES.light]) {
+      expect(renderMapSceneBody(scene, palette, () => null)).toMatch(monogram);
+    }
   });
 
   it('sets the Internet beside the ways in when there is room and above them when not', () => {
