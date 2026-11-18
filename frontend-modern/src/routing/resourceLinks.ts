@@ -93,6 +93,7 @@ export const buildAlertHistoryAlertPath = (alertId: string): string =>
 export const PATROL_PATH = '/patrol';
 export const PATROL_ATTENTION_QUERY_PARAM = 'attention';
 export const ACTIONS_PATH = '/actions';
+export const INFRASTRUCTURE_MAP_PATH = '/map';
 export const PATROL_CONTROL_ANCHOR = 'patrol-control';
 export const PATROL_CONTROL_STARTER_QUERY_PARAM = 'patrolControlStarter';
 export const PATROL_CONTROL_STARTER = 'patrol_control';

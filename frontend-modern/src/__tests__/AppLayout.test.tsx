@@ -716,3 +716,32 @@ describe('AppLayout Issue1650 kiosk scope containment', () => {
     expect(screen.getByRole('button', { name: 'Logout' })).not.toBeDisabled();
   });
 });
+
+describe('AppLayout map entry', () => {
+  afterEach(() => {
+    cleanup();
+    setKioskMode(false);
+    window.sessionStorage.clear();
+  });
+
+  it('offers the map beside the page, on the edge and in the header, not among the tabs', () => {
+    renderLayout([], '/settings/infrastructure');
+
+    const edge = screen.getByTestId('infrastructure-map-edge-tab');
+    expect(edge).toHaveAttribute('href', '/map');
+    expect(edge).toHaveAccessibleName('Map');
+    expect(edge).not.toHaveAttribute('aria-current');
+    expect(screen.getByTestId('infrastructure-map-header-button')).toHaveAttribute('href', '/map');
+
+    const tabs = screen.getByRole('navigation', { name: 'Primary navigation' });
+    expect(within(tabs).queryByRole('link', { name: 'Map' })).toBeNull();
+  });
+
+  it('hides the map entry with the rest of the navigation in kiosk mode', () => {
+    setKioskMode(true);
+    renderLayout([], '/settings/infrastructure');
+
+    expect(screen.queryByTestId('infrastructure-map-edge-tab')).toBeNull();
+    expect(screen.queryByTestId('infrastructure-map-header-button')).toBeNull();
+  });
+});

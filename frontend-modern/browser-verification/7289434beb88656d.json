@@ -1,0 +1,76 @@
+{
+  "version": 1,
+  "base_sha": "8f0fc88dd78ee370ada57b8a1452d7467931d554",
+  "verified_at": "2026-11-18T01:16:45Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/App.tsx",
+    "frontend-modern/src/AppLayout.tsx",
+    "frontend-modern/src/components/icons/DockerIcon.tsx",
+    "frontend-modern/src/components/icons/KubernetesIcon.tsx",
+    "frontend-modern/src/components/icons/ProxmoxIcon.tsx",
+    "frontend-modern/src/components/icons/TrueNASIcon.tsx",
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapEntry.tsx",
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapSurface.tsx",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapExport.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapLayout.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapModel.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapNetworks.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapRender.ts",
+    "frontend-modern/src/pages/InfrastructureMap.tsx",
+    "frontend-modern/src/routing/resourceLinks.ts",
+    "frontend-modern/src/routing/routePreload.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/App.tsx": "f9e28d53141013eeb3c02bab216e944e7937d501c4b569a1ce8884e0caefd107",
+    "frontend-modern/src/AppLayout.tsx": "3a430039afe51db36cb1c1abd01e92cadf5a6b4add31ba468c1552b9f442c1b0",
+    "frontend-modern/src/components/icons/DockerIcon.tsx": "b92c649938be9bf5abb6f4f7dc6d2b76c64c58c38afb0e6e1be739de2ced0a8c",
+    "frontend-modern/src/components/icons/KubernetesIcon.tsx": "92d67393b251eac84b4703b9225d623cf9b0164f7b5052e5ded734ef0ad3f103",
+    "frontend-modern/src/components/icons/ProxmoxIcon.tsx": "aa7197c168ffafa322d7dab34c57e36900416ba476b22fa8cb701516e45d35dd",
+    "frontend-modern/src/components/icons/TrueNASIcon.tsx": "8f30f31c35ffc87ac20fe710d779b4e03da5a510bcb7066f258f15fbf885b6ea",
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapEntry.tsx": "e248d8a44227178413714835059858c590e42f74bac4e052bbce4d18de1b7496",
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapSurface.tsx": "3a96bd4785140d4e80051f79cf4d8e4d97927d2c04721dfe12237497b018fb35",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapExport.ts": "acced4b5e17c6c7aae54569ed9022961a3dd3a78cbe0fcc0f6703d67f4fac209",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapLayout.ts": "f4bae4c2278c2d13c7ee5cdf01391b17024b33511bd4563a33edd9ae40d4f7a2",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapModel.ts": "7b1f949f9bd84664f774883198619bd136c135bb770206d817f44d168cba5196",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapNetworks.ts": "e0c19a323c7e94512850e2f45623014e9be0327d0f19dfe33729bb82d52c2554",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapRender.ts": "5c19cb66b1aa73430619b248b6a526971bb4f4c43e620e9ab863e2c9fd278503",
+    "frontend-modern/src/pages/InfrastructureMap.tsx": "69be392d20b84f8aec150ed1a717a75a4ffa74d73f8072b01fa2f8cb1677464d",
+    "frontend-modern/src/routing/resourceLinks.ts": "7310eea62527d7828d6feb1e79b6d418bd2e1b08582e31447d7ac61ceca6cd2c",
+    "frontend-modern/src/routing/routePreload.ts": "c13365f3bc7ceac80d1963e2cd4888efe7cf9e90f7d025c6a155d10b11370a7a"
+  },
+  "routes": [
+    "/map",
+    "/proxmox",
+    "/vmware/overview?resource=<vm id>"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "private mock backend on 127.0.0.1:7691 with a homelab-sized estate (3 Proxmox nodes, 2 vSphere clusters, 4 Docker hosts, 1 Kubernetes cluster, TrueNAS, PBS, PMG, 7 checks; 22 hosts, 33 VMs, 27 LXCs, 36 containers) served through the sidecar's Vite dev server in the in-app browser, final runtime bytes",
+    "Connections view, dark theme, 1440 and 1280: 15 network lines stacked above the cards with their names and member counts, every card tied in the gutter to the lines it or its guests are on with a dot where it joins, guest rows carrying a network colour bar and address, Docker hosts grouped by container network with subnet and published ports; no console errors on load",
+    "Hosts view at 1440 with the default 1,780-resource mock estate (compact marks chosen automatically) and with the homelab-sized estate (names): cluster frames, host cards, usage bars, storage rows, legend",
+    "light theme at 1280 with names hidden: network names read Network 1..14, hosts and guests read by type and number, no address anywhere in the drawing",
+    "375px phone: one column, no horizontal scroll (document scroll width 375), the header map button shown and the edge tab hidden; at 1280 and wider the edge tab is shown and the header button hidden",
+    "exported image built from the live estate in the page (1856x1569, title, totals, network lines, six columns of cards, Drawn by Pulse footer) and drawn over the page to inspect it; the download itself was not triggered",
+    "not checked in a browser: Firefox and Safari, a real estate with real addresses, an estate with no addresses at all (covered by unit tests only)"
+  ],
+  "interactions": [
+    "opened /map from the address bar; the browser tab title read Map and the edge tab was drawn selected",
+    "switched Connections/Hosts and Names/Compact with the toolbar buttons and read the drawing's height and link count after each (Connections names 2261px, compact 1547px with 175 links, Hosts 1211px with 190 links)",
+    "pressed Hide names and read the drawing text: no IPv4 address remained and aria-pressed was true; pressed again to restore",
+    "clicked the edge-api-01 guest row: the app navigated without a reload to /vmware/overview?resource=<its id> and that guest's drawer opened; read the hrefs of a Proxmox node (/proxmox/overview) and a container (/docker/overview?q=vaultwarden)"
+  ]
+}

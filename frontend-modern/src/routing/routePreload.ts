@@ -1,6 +1,7 @@
 import {
   ACTIONS_PATH,
   DOCKER_PATH,
+  INFRASTRUCTURE_MAP_PATH,
   KUBERNETES_PATH,
   PATROL_PATH,
   PROXMOX_PATH,
@@ -75,6 +76,11 @@ const ROUTE_PRELOADERS: readonly RoutePreloader[] = [
     id: 'patrol',
     matches: (route) => route === PATROL_PATH || route.startsWith(`${PATROL_PATH}/`),
     preload: () => import('@/pages/AIIntelligence').then(() => undefined),
+  },
+  {
+    id: 'map',
+    matches: (route) => route === INFRASTRUCTURE_MAP_PATH,
+    preload: () => import('@/pages/InfrastructureMap').then(() => undefined),
   },
   {
     id: 'settings',
