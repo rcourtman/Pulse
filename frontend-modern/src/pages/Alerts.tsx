@@ -112,11 +112,6 @@ export function Alerts(props: { securityStatus?: SecurityStatus | null }) {
       const success = await alertsActivation.activate();
       if (success) {
         notificationStore.success(getAlertActivationSuccess());
-        try {
-          await alertsActivation.refreshActiveAlerts();
-        } catch (error) {
-          logger.error('Failed to refresh alerts after activation', error);
-        }
       } else {
         notificationStore.error(getAlertActivationFailure());
       }
@@ -134,11 +129,6 @@ export function Alerts(props: { securityStatus?: SecurityStatus | null }) {
       const success = await alertsActivation.deactivate();
       if (success) {
         notificationStore.success(getAlertDeactivationSuccess());
-        try {
-          await alertsActivation.refreshActiveAlerts();
-        } catch (error) {
-          logger.error('Failed to refresh alerts after deactivation', error);
-        }
       } else {
         notificationStore.error(getAlertDeactivationFailure());
       }

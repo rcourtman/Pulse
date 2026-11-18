@@ -4,6 +4,7 @@ import {
   createMemo,
   createSignal,
   getOwner,
+  on,
   onCleanup,
   onMount,
   runWithOwner,
@@ -597,18 +598,14 @@ export const useAppRuntimeState = () => {
     void syncVersionInfoFromUpdateStore();
   });
 
-  let alertsInitialized = false;
-  createEffect(() => {
-    const ready = !isLoading() && !needsAuth();
-    if (ready && !alertsInitialized) {
-      alertsInitialized = true;
-      void alertsActivation.refreshConfig();
-      void alertsActivation.refreshActiveAlerts();
-    }
-    if (!ready) {
-      alertsInitialized = false;
-    }
-  });
+  const alertReaderReady = () => !isLoading() && !needsAuth();
+  // The first successful socket in a new workspace isn't a reconnect. Read
+  // its alert policy after the selection batch has retired the previous one.
+  createEffect(
+    on([alertReaderReady, activeOrgID], ([ready]) => {
+      if (ready) void alertsActivation.refreshConfig();
+    }),
+  );
 
   createEffect(() => {
     activeOrgID();
@@ -691,8 +688,7 @@ export const useAppRuntimeState = () => {
 
     const handleWebSocketReconnected = () => {
       logger.info('WebSocket reconnected, refreshing alert configuration');
-      void alertsActivation.refreshConfig();
-      void alertsActivation.refreshActiveAlerts();
+      if (alertReaderReady()) void alertsActivation.refreshConfig();
       // The estate can gain or lose a platform while the socket is down.
       void loadPlatformAdmission();
     };

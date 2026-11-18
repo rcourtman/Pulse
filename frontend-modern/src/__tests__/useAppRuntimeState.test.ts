@@ -73,6 +73,7 @@ describe('useAppRuntimeState', () => {
   let aiAvailabilitySetEnabledMock: ReturnType<typeof vi.fn>;
   let aiAvailabilityRefreshMock: ReturnType<typeof vi.fn>;
   let aiAvailabilityClearMock: ReturnType<typeof vi.fn>;
+  let refreshAlertConfigMock: ReturnType<typeof vi.fn>;
   let getSystemSettingsMock: ReturnType<typeof vi.fn>;
   let getRuntimeDisplayMock: ReturnType<typeof vi.fn>;
   let applyServerModeMock: ReturnType<typeof vi.fn>;
@@ -157,6 +158,7 @@ describe('useAppRuntimeState', () => {
     aiAvailabilitySetEnabledMock = vi.fn();
     aiAvailabilityRefreshMock = vi.fn().mockResolvedValue(undefined);
     aiAvailabilityClearMock = vi.fn();
+    refreshAlertConfigMock = vi.fn().mockResolvedValue(undefined);
     getSystemSettingsMock = vi.fn().mockResolvedValue({ theme: '' });
     getRuntimeDisplayMock = vi.fn().mockResolvedValue({ theme: '', fullWidthMode: false });
     applyServerModeMock = vi.fn();
@@ -254,8 +256,7 @@ describe('useAppRuntimeState', () => {
 
     vi.doMock('@/stores/alertsActivation', () => ({
       useAlertsActivation: () => ({
-        refreshConfig: vi.fn().mockResolvedValue(undefined),
-        refreshActiveAlerts: vi.fn().mockResolvedValue(undefined),
+        refreshConfig: refreshAlertConfigMock,
       }),
     }));
 
@@ -735,6 +736,7 @@ describe('useAppRuntimeState', () => {
     expect(hookState.activeOrgID()).toBe('acme');
     expect(setOrgIDMock).toHaveBeenCalledExactlyOnceWith('acme');
     expect(switchSocketMock).not.toHaveBeenCalled();
+    expect(refreshAlertConfigMock).toHaveBeenCalledOnce();
     expect(hookState.platformAdmission()).toBe(originalAdmission);
     dispose();
   });
@@ -796,8 +798,54 @@ describe('useAppRuntimeState', () => {
     expect(hookState.organizationListIssue()).toBeNull();
     expect(hookState.orgsLoading()).toBe(false);
     expect(switchSocketMock).toHaveBeenCalledTimes(1);
+    expect(refreshAlertConfigMock).toHaveBeenCalledTimes(2);
     dispose();
   });
+
+  it.each(['choice', 'membership'] as const)(
+    'reloads the alert policy after a %s switch without waiting for a reconnect',
+    async (reason) => {
+      isMultiTenantEnabledMock.mockReturnValue(true);
+      let selected = 'acme';
+      getOrgIDMock.mockImplementation(() => selected);
+      setOrgIDMock.mockImplementation((org: string) => (selected = org));
+      const acme = { id: 'acme', displayName: 'Acme' };
+      const other = { id: 'other', displayName: 'Other' };
+      orgsListMock.mockResolvedValue([acme, other]);
+      const boundary: string[] = [];
+      const { eventBus } = await import('@/stores/events');
+      vi.mocked(eventBus.emit).mockImplementation((event) => {
+        if (event === 'org_switched') boundary.push(`retire:${selected}`);
+      });
+      refreshAlertConfigMock.mockImplementation(async () => {
+        boundary.push(`read:${selected}`);
+      });
+
+      const { hookState, dispose } = mountHook();
+      await waitFor(() => expect(hookState.isLoading()).toBe(false));
+      expect(boundary).toEqual(['read:acme']);
+
+      if (reason === 'choice') {
+        hookState.handleOrgSwitch(other.id);
+      } else {
+        orgsListMock.mockResolvedValueOnce([other]);
+        const changed = vi
+          .mocked(eventBus.on)
+          .mock.calls.find(([event]) => event === 'organizations_changed')![1] as () => void;
+        changed();
+      }
+      await waitFor(() => expect(hookState.activeOrgID()).toBe(other.id));
+      expect(boundary).toEqual(['read:acme', 'retire:other', 'read:other']);
+      expect(hookState.connected()).toBe(false);
+
+      const reconnect = vi
+        .mocked(eventBus.on)
+        .mock.calls.find(([event]) => event === 'websocket_reconnected')![1] as () => void;
+      reconnect();
+      expect(boundary).toEqual(['read:acme', 'retire:other', 'read:other', 'read:other']);
+      dispose();
+    },
+  );
 
   it('opts into unbound default recovery then activates membership before acquiring the socket', async () => {
     isMultiTenantEnabledMock.mockReturnValue(true);
