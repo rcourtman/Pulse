@@ -676,8 +676,15 @@ one cancellation signal and the expected organization through the existing
 session-preferred API client, with automatic retries disabled. Only the current
 read generation may publish a matching organization and a complete member list;
 a late success, failure or completion cannot replace a newer selection or end
-its loading state. A failed read is an inline unavailable state, never an empty
-member list, and offers an explicit read-only reload.
+its loading state. Overview uses the normalized member array already returned
+in the authorized organization detail, so the name, member count, roles and
+existing rename gate ordinarily describe the same saved read. There is no
+parallel request for the same members. If detail omits the member field (the
+server omits an empty array), Overview requests the dedicated member list with
+the same org binding and cancellation signal before showing the panel. A
+malformed field or row is not an omitted list. A required read that fails is an
+inline unavailable state, never an empty member list, and offers an explicit
+read-only reload. The server routes and their authorization are unchanged.
 
 Renaming requires the current accepted snapshot, owner/admin authority and a
 non-read-only session. Dispatch binds the exact organization even across a CSRF
@@ -686,7 +693,10 @@ withdrawn or disposed completion cannot change data or notify a later selection.
 An unconfirmed write clears the editable snapshot and requires a saved read;
 reload does not repeat the rename. Successful writes notify the existing
 organization-change bus and refresh the saved snapshot. Normal-suite Overview,
-OrganizationReadLifetimes and organization-client tests cover those boundaries;
+OrganizationReadLifetimes and organization-client tests cover those boundaries.
+`OrganizationOverviewKeyboard.transport.test.tsx` also covers the single
+authorized request, malformed member rows, distinguishing omitted/unread from
+verified empty, and rejecting a fallback completion after a workspace switch;
 desktop/narrow browser proof exercises the actual panels and API client with
 safe HTTP fixtures, not an installed tenant or SSO recovery claim.
 

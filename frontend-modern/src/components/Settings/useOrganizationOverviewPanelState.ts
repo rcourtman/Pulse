@@ -23,6 +23,24 @@ interface OrganizationOverviewPanelProps {
   currentUser?: string;
 }
 
+const isMemberList = (value: unknown): value is OrganizationMember[] =>
+  Array.isArray(value) &&
+  value.every(
+    (member: unknown) =>
+      typeof member === 'object' &&
+      member !== null &&
+      'userId' in member &&
+      typeof member.userId === 'string' &&
+      member.userId.trim() !== '' &&
+      'role' in member &&
+      (member.role === 'owner' ||
+        member.role === 'admin' ||
+        member.role === 'editor' ||
+        member.role === 'viewer') &&
+      'addedAt' in member &&
+      typeof member.addedAt === 'string',
+  );
+
 export function useOrganizationOverviewPanelState(props: OrganizationOverviewPanelProps) {
   const [loading, setLoading] = createSignal(true);
   const [loadError, setLoadError] = createSignal<string | null>(null);
@@ -90,13 +108,19 @@ export function useOrganizationOverviewPanelState(props: OrganizationOverviewPan
     readController = controller;
     const options = { expectedOrgID: orgId, signal: controller.signal, retry: false as const };
     try {
-      const [orgData, memberData] = await Promise.all([
-        OrgsAPI.get(orgId, options),
-        OrgsAPI.listMembers(orgId, options),
-      ]);
+      const orgData = await OrgsAPI.get(orgId, options);
       if (!isCurrent()) return;
-      if (!orgData || orgData.id !== orgId || !Array.isArray(memberData)) {
-        throw new Error('Organization overview returned invalid data for the selection');
+      if (!orgData || orgData.id !== orgId) {
+        throw new Error('Organization overview returned a different selection');
+      }
+      // An embedded list is the same authorized snapshot as the other details.
+      // Omission is ambiguous (the server omits an empty list); only then use
+      // the dedicated read to distinguish a verified empty list from no data.
+      const memberData =
+        orgData.members === undefined ? await OrgsAPI.listMembers(orgId, options) : orgData.members;
+      if (!isCurrent()) return;
+      if (!isMemberList(memberData)) {
+        throw new Error('Organization overview returned an invalid member list');
       }
       batch(() => {
         setOrg(orgData);
