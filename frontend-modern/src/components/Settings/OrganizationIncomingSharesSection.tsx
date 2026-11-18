@@ -112,7 +112,7 @@ export const OrganizationIncomingSharesSection: Component<
                       onClick={() => {
                         void props.state.acceptIncomingShare(share);
                       }}
-                      disabled={props.state.saving()}
+                      disabled={props.state.saving() || props.state.sharingChangesPaused()}
                     >
                       Accept
                     </Button>
@@ -128,7 +128,7 @@ export const OrganizationIncomingSharesSection: Component<
                     onClick={() => {
                       void props.state.declineIncomingShare(share);
                     }}
-                    disabled={props.state.saving()}
+                    disabled={props.state.saving() || props.state.sharingChangesPaused()}
                   >
                     {share.status === 'pending' ? 'Decline' : 'Remove'}
                   </Button>
@@ -138,7 +138,11 @@ export const OrganizationIncomingSharesSection: Component<
           },
         ]}
         keyExtractor={(share) => share.id}
-        emptyState={getOrganizationIncomingSharesEmptyState()}
+        emptyState={
+          props.state.unavailableLists()?.incoming
+            ? 'Incoming shares could not be loaded.'
+            : getOrganizationIncomingSharesEmptyState()
+        }
         desktopMinWidth="100%"
       />
     </div>

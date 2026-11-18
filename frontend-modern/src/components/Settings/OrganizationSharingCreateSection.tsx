@@ -23,6 +23,8 @@ export const OrganizationSharingCreateSection: Component<OrganizationSharingCrea
   const targetOrgID = `${fieldID}-target-org`;
   const resourceTypeID = `${fieldID}-resource-type`;
   const resourceID = `${fieldID}-resource-id`;
+  const targetError = () =>
+    props.state.unavailableLists()?.directory ? '' : props.state.targetOrgError();
   // Keep names stable; expose changing validation as each control's description.
   // Describe only a current choice, not leftover draft fields after withdrawal.
   const selectedTarget = createMemo(() =>
@@ -52,7 +54,7 @@ export const OrganizationSharingCreateSection: Component<OrganizationSharingCrea
           class="p-4 sm:p-6"
         >
           <fieldset
-            disabled={props.state.saving()}
+            disabled={props.state.saving() || props.state.sharingChangesPaused()}
             class="rounded-md border border-border p-3 space-y-2 sm:p-4 sm:space-y-3"
           >
             <h4 class="text-sm font-semibold text-base-content">Create Share</h4>
@@ -62,12 +64,10 @@ export const OrganizationSharingCreateSection: Component<OrganizationSharingCrea
                 <FormSelect
                   id={targetOrgID}
                   label="Target Organization"
-                  aria-invalid={props.state.targetOrgError() ? true : undefined}
-                  aria-describedby={
-                    props.state.targetOrgError() ? `${targetOrgID}-error` : undefined
-                  }
+                  aria-invalid={targetError() ? true : undefined}
+                  aria-describedby={targetError() ? `${targetOrgID}-error` : undefined}
                   labelClass="text-xs font-medium uppercase tracking-wide text-muted"
-                  value={props.state.targetOrgId()}
+                  value={props.state.unavailableLists()?.directory ? '' : props.state.targetOrgId()}
                   onChange={(event) => props.state.updateTargetOrg(event.currentTarget.value)}
                   help={
                     selectedTarget() && (
@@ -89,9 +89,13 @@ export const OrganizationSharingCreateSection: Component<OrganizationSharingCrea
                     )
                   }
                   helpClass="text-xs [overflow-wrap:anywhere]"
-                  selectBaseClass={`w-full rounded-md border bg-surface px-3 py-2 text-sm text-base-content shadow-xs focus:border-blue-500 focus:outline-hidden focus:ring-2 focus:ring-blue-500 ${props.state.targetOrgError() ? 'border-red-400 dark:border-red-500' : 'border-border'}`}
+                  selectBaseClass={`w-full rounded-md border bg-surface px-3 py-2 text-sm text-base-content shadow-xs focus:border-blue-500 focus:outline-hidden focus:ring-2 focus:ring-blue-500 ${targetError() ? 'border-red-400 dark:border-red-500' : 'border-border'}`}
                 >
-                  <option value="">Select organization</option>
+                  <option value="">
+                    {props.state.unavailableLists()?.directory
+                      ? 'Organization list unavailable'
+                      : 'Select organization'}
+                  </option>
                   <For each={props.state.targetOrgOptions()}>
                     {(target) => (
                       <option value={target.id}>
@@ -100,9 +104,9 @@ export const OrganizationSharingCreateSection: Component<OrganizationSharingCrea
                     )}
                   </For>
                 </FormSelect>
-                <Show when={props.state.targetOrgError() !== ''}>
+                <Show when={targetError()}>
                   <p id={`${targetOrgID}-error`} class="text-xs text-red-600 dark:text-red-400">
-                    {props.state.targetOrgError()}
+                    {targetError()}
                   </p>
                 </Show>
               </div>
