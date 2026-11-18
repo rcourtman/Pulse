@@ -3666,20 +3666,34 @@ func TestAPIDeregistrationCurlWithoutToken(t *testing.T) {
 	}
 }
 
+// Fixture cases use the same checked-in installer for the life of this test
+// process. Share its immutable function text, not generated scripts or fixture
+// state: each case still builds its own harness and runs all its assertions.
+var installShellSource = sync.OnceValues(func() (string, error) {
+	content, err := os.ReadFile(filepath.Join("..", "install.sh"))
+	return string(content), err
+})
+
+var installShellFunctions sync.Map // map[string]string
+
 func extractInstallShellFunction(t *testing.T, name string) string {
 	t.Helper()
 
-	content, err := os.ReadFile(filepath.Join("..", "install.sh"))
+	if function, ok := installShellFunctions.Load(name); ok {
+		return function.(string)
+	}
+	content, err := installShellSource()
 	if err != nil {
 		t.Fatalf("read install.sh: %v", err)
 	}
 
 	pattern := regexp.MustCompile(`(?ms)^` + regexp.QuoteMeta(name) + `\(\) \{\n.*?^\}`)
-	match := pattern.Find(content)
-	if match == nil {
+	match := pattern.FindString(content)
+	if match == "" {
 		t.Fatalf("could not find %s in install.sh", name)
 	}
-	return string(match)
+	function, _ := installShellFunctions.LoadOrStore(name, match)
+	return function.(string)
 }
 
 func extractLifecycleTrustShellFunctions(t *testing.T) string {
