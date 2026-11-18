@@ -1,6 +1,8 @@
 package truenasmapper
 
 import (
+	"fmt"
+	"slices"
 	"testing"
 	"time"
 
@@ -226,25 +228,90 @@ func TestFromTrueNASSnapshot_UndatedReplicationIdentity(t *testing.T) {
 }
 
 func TestFromTrueNASSnapshot_Truncation(t *testing.T) {
+	older := time.Unix(1710000000, 0)
+	tied := older.Add(time.Hour)
+	newest := tied.Add(time.Hour)
 	snapshot := &truenas.FixtureSnapshot{
-		System: truenas.SystemInfo{Hostname: "truenas-main"},
+		System:           truenas.SystemInfo{Hostname: "truenas-main"},
+		ZFSSnapshots:     make([]truenas.ZFSSnapshot, 2240),
+		ReplicationTasks: make([]truenas.ReplicationTask, 220),
 	}
-
-	// Create 501 ZFS snapshots
-	snapshot.ZFSSnapshots = make([]truenas.ZFSSnapshot, 501)
 	for i := range snapshot.ZFSSnapshots {
+		createdAt := &older
+		switch i % 4 {
+		case 0:
+			createdAt = &tied
+		case 1:
+			createdAt = nil
+		}
+		// Names deliberately don't put equal-time rows in input order.
+		name := fmt.Sprintf("snap-%04d", (i*17)%len(snapshot.ZFSSnapshots))
 		snapshot.ZFSSnapshots[i] = truenas.ZFSSnapshot{
-			ID:       "snap",
-			Dataset:  "pool/data",
-			Name:     "snap",
-			FullName: "pool/data@snap",
+			Dataset:   "pool/data",
+			Name:      name,
+			FullName:  "pool/data@" + name,
+			CreatedAt: createdAt,
 		}
 	}
-
+	snapshot.ZFSSnapshots[len(snapshot.ZFSSnapshots)-1].CreatedAt = &newest
+	for i := range snapshot.ReplicationTasks {
+		snapshot.ReplicationTasks[i].Name = fmt.Sprintf("rep-%03d", len(snapshot.ReplicationTasks)-i)
+	}
+	inventory := slices.Clone(snapshot.ZFSSnapshots)
 	result := FromTrueNASSnapshot("conn-1", snapshot)
 
-	if len(result) != 500 {
-		t.Errorf("expected 500 points (maxTrueNASSnapshotsPerIngest), got %d", len(result))
+	if got := len(result); got != 700 {
+		t.Fatalf("expected 500 snapshot and 200 replication points, got %d total", got)
+	}
+	if cap(result) > 700 {
+		t.Errorf("point buffer capacity = %d, want at most the ingest limits", cap(result))
+	}
+	if !slices.Equal(snapshot.ZFSSnapshots, inventory) {
+		t.Fatal("mapper changed the provider's inventory")
+	}
+	for i, point := range result[:500] {
+		row := inventory[len(inventory)-1]
+		if i > 0 {
+			row = inventory[(i-1)*4]
+		}
+		if got := point.Details["fullName"]; point.Kind != recovery.KindSnapshot || got != row.FullName {
+			t.Fatalf("snapshot at rank %d = %v, want %s", i, got, row.FullName)
+		}
+	}
+	for i, point := range result[500:] {
+		want := fmt.Sprintf("rep-%03d", i+1)
+		if got := point.Details["taskName"]; point.Kind != recovery.KindBackup || got != want {
+			t.Fatalf("replication task at rank %d = %v, want %s", i, got, want)
+		}
+	}
+}
+
+func TestFromTrueNASSnapshot_UndatedOrder(t *testing.T) {
+	known := time.Unix(1710000000, 0)
+	var zero time.Time
+	snapshot := &truenas.FixtureSnapshot{ZFSSnapshots: []truenas.ZFSSnapshot{
+		{FullName: "tank/data@a", UsedBytes: ptrInt64(1)},
+		{FullName: "tank/data@z"},
+		{FullName: "tank/data@a", UsedBytes: ptrInt64(2)},
+		{FullName: "tank/data@zero", CreatedAt: &zero},
+		{FullName: "tank/data@known", CreatedAt: &known},
+	}}
+	result := FromTrueNASSnapshot("conn-1", snapshot)
+	want := []string{"tank/data@known", "tank/data@zero", "tank/data@z", "tank/data@a", "tank/data@a"}
+	if len(result) != len(want) {
+		t.Fatalf("mapped %d points, want %d", len(result), len(want))
+	}
+	for i, point := range result {
+		if got := point.Details["fullName"]; got != want[i] {
+			t.Errorf("snapshot at rank %d = %v, want %s", i, got, want[i])
+		}
+		if i > 0 && (point.CompletedAt != nil || point.Outcome != recovery.OutcomeUnknown) {
+			t.Errorf("snapshot at rank %d acquired time or success: %+v", i, point)
+		}
+	}
+	if result[3].SizeBytes == nil || *result[3].SizeBytes != 1 ||
+		result[4].SizeBytes == nil || *result[4].SizeBytes != 2 {
+		t.Error("equal undated rows lost their input order")
 	}
 }
 

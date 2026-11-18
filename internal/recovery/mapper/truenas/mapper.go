@@ -1,6 +1,7 @@
 package truenasmapper
 
 import (
+	"slices"
 	"sort"
 	"strings"
 
@@ -41,28 +42,32 @@ func FromTrueNASSnapshot(connectionID string, snapshot *truenas.FixtureSnapshot)
 
 	conn := strings.TrimSpace(connectionID)
 	host := strings.TrimSpace(snapshot.System.Hostname)
-	points := make([]recovery.RecoveryPoint, 0, len(snapshot.ZFSSnapshots)+len(snapshot.ReplicationTasks))
+	zfsSnaps := snapshot.ZFSSnapshots
+	snapshotCount := min(len(zfsSnaps), maxTrueNASSnapshotsPerIngest)
+	replicationCount := min(len(snapshot.ReplicationTasks), maxTrueNASReplicationsPerIngest)
+	points := make([]recovery.RecoveryPoint, 0, snapshotCount+replicationCount)
 
-	zfsSnaps := append([]truenas.ZFSSnapshot(nil), snapshot.ZFSSnapshots...)
-	sort.SliceStable(zfsSnaps, func(i, j int) bool {
-		a := zfsSnaps[i].CreatedAt
-		b := zfsSnaps[j].CreatedAt
+	// The provider still owns the full inventory. Rank positions rather than
+	// copying and moving every snapshot, most of which may never be mapped.
+	order := make([]int, len(zfsSnaps))
+	for i := range order {
+		order[i] = i
+	}
+	slices.SortStableFunc(order, func(i, j int) int {
+		a, b := zfsSnaps[i].CreatedAt, zfsSnaps[j].CreatedAt
 		if a == nil && b == nil {
-			return zfsSnaps[i].FullName > zfsSnaps[j].FullName
+			return strings.Compare(zfsSnaps[j].FullName, zfsSnaps[i].FullName)
 		}
 		if a == nil {
-			return false
+			return 1
 		}
 		if b == nil {
-			return true
+			return -1
 		}
-		return a.After(*b)
+		return b.Compare(*a)
 	})
-	if len(zfsSnaps) > maxTrueNASSnapshotsPerIngest {
-		zfsSnaps = zfsSnaps[:maxTrueNASSnapshotsPerIngest]
-	}
-
-	for _, s := range zfsSnaps {
+	for _, i := range order[:snapshotCount] {
+		s := zfsSnaps[i]
 		full := strings.TrimSpace(s.FullName)
 		if full == "" {
 			full = strings.TrimSpace(s.ID)
@@ -133,11 +138,7 @@ func FromTrueNASSnapshot(connectionID string, snapshot *truenas.FixtureSnapshot)
 		}
 		return a.After(*b)
 	})
-	if len(repTasks) > maxTrueNASReplicationsPerIngest {
-		repTasks = repTasks[:maxTrueNASReplicationsPerIngest]
-	}
-
-	for _, task := range repTasks {
+	for _, task := range repTasks[:replicationCount] {
 		taskID := strings.TrimSpace(task.ID)
 		taskName := strings.TrimSpace(task.Name)
 		if taskName == "" {
