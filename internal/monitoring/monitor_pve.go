@@ -184,6 +184,11 @@ func (m *Monitor) enrichContainerMetadata(ctx context.Context, client PVEClientI
 			if mac := strings.TrimSpace(cfg.HWAddr); mac != "" {
 				iface.MAC = mac
 			}
+			if bridge := strings.TrimSpace(cfg.Bridge); bridge != "" {
+				iface.Bridge = bridge
+				iface.VLAN = parseProxmoxVLANTag(cfg.Tag)
+				iface.Firewall = parseProxmoxFlag(cfg.Firewall)
+			}
 
 			addrCandidates := make([]string, 0, 4)
 			addrCandidates = append(addrCandidates, collectIPsFromInterface(cfg.IP)...)

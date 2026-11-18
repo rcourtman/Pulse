@@ -356,6 +356,44 @@ describe('Resource Helper Functions', () => {
     });
   });
 
+  describe('Proxmox guest device placement', () => {
+    it('lists bridge, VLAN and firewall on a guest interface', () => {
+      const proxmox: ResourceProxmoxMeta = {
+        vmid: 100,
+        networkInterfaces: [
+          {
+            name: 'ens18',
+            mac: 'BC:24:11:00:00:01',
+            addresses: ['10.30.4.7'],
+            bridge: 'vmbr0',
+            vlan: 30,
+            firewall: true,
+          },
+          // No guest agent: the configured device has a place and no address.
+          { name: 'net1', addresses: [], bridge: 'vmbr1' },
+        ],
+      };
+
+      expect(proxmox.networkInterfaces?.[0]).toMatchObject({
+        bridge: 'vmbr0',
+        vlan: 30,
+        firewall: true,
+      });
+      expect(proxmox.networkInterfaces?.[1].vlan).toBeUndefined();
+    });
+
+    it('lists the core count and interfaces a Docker host already sends', () => {
+      const docker: ResourceDockerMeta = {
+        hostname: 'docker-01',
+        cpus: 8,
+        networkInterfaces: [{ name: 'eth0', addresses: ['192.168.1.20/24'] }],
+      };
+
+      expect(docker.cpus).toBe(8);
+      expect(docker.networkInterfaces?.[0].addresses).toEqual(['192.168.1.20/24']);
+    });
+  });
+
   describe('ResourceDockerMeta', () => {
     it('accepts Docker host runtime and Swarm evidence in the canonical resource contract', () => {
       const docker: ResourceDockerMeta = {

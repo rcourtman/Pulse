@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiFetchJSON } from '@/utils/apiClient';
 import { ResourceAPI } from '@/api/resources';
+import type { GuestNetworkInterface, HostNetworkInterface } from '@/types/api';
 
 vi.mock('@/utils/apiClient', () => ({
   apiFetchJSON: vi.fn(),
@@ -212,5 +213,46 @@ describe('ResourceAPI', () => {
         cache: 'no-store',
       },
     );
+  });
+
+  it('carries a Proxmox guest device placement through the resource read unchanged', async () => {
+    // What the server sends for a VM with one tagged, firewalled device the
+    // guest reports and one untagged device it reports nothing for.
+    const tagged: HostNetworkInterface = {
+      name: 'ens18',
+      mac: 'BC:24:11:00:00:01',
+      addresses: ['10.30.4.7'],
+      bridge: 'vmbr0',
+      vlan: 30,
+      firewall: true,
+    };
+    const placedOnly: HostNetworkInterface = {
+      name: 'net1',
+      mac: 'BC:24:11:00:00:02',
+      addresses: [],
+      bridge: 'vmbr1',
+    };
+    vi.mocked(apiFetchJSON).mockResolvedValueOnce({
+      id: 'vm-100',
+      type: 'vm',
+      proxmox: { vmid: 100, networkInterfaces: [tagged, placedOnly] },
+    });
+
+    const resource = await ResourceAPI.getResource('vm-100');
+    expect(resource.proxmox?.networkInterfaces).toEqual([tagged, placedOnly]);
+    const [first, second] = resource.proxmox?.networkInterfaces ?? [];
+    expect([first.bridge, first.vlan, first.firewall]).toEqual(['vmbr0', 30, true]);
+    // Untagged and unfiltered are absent fields, not zero and false.
+    expect('vlan' in second).toBe(false);
+    expect('firewall' in second).toBe(false);
+
+    // The legacy guest row shape lists the same three fields.
+    const legacy: GuestNetworkInterface = {
+      name: 'eth0',
+      bridge: 'vmbr0',
+      vlan: 20,
+      firewall: false,
+    };
+    expect(legacy.vlan).toBe(20);
   });
 });

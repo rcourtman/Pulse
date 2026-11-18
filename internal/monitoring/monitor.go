@@ -1413,6 +1413,7 @@ type Monitor struct {
 	dockerCommandIndex         map[string]string
 	guestMetadataMu            sync.RWMutex
 	guestMetadataCache         map[string]guestMetadataCacheEntry
+	vmNICConfig                vmNICConfigCache // Where each VM's network devices are plugged in; guards itself.
 	guestMetadataLimiterMu     sync.Mutex
 	guestMetadataLimiter       map[string]time.Time
 	guestMetadataInFlight      map[string]*guestMetadataFetch // Guarded by guestMetadataLimiterMu; retained until fetch completion, even after invalidation.
@@ -4143,6 +4144,9 @@ func guestNetworkInterfacesFromReadStateView(interfaces []unifiedresources.Netwo
 			Addresses: append([]string(nil), iface.Addresses...),
 			RXBytes:   maxInt64(0, int64(iface.RXBytes)),
 			TXBytes:   maxInt64(0, int64(iface.TXBytes)),
+			Bridge:    iface.Bridge,
+			VLAN:      iface.VLAN,
+			Firewall:  iface.Firewall,
 		})
 	}
 	return out

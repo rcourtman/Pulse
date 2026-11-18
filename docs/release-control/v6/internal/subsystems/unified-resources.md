@@ -800,6 +800,31 @@ The row's existing Network tooltip uses semantic foreground/muted tokens for
 names, addresses, MACs, traffic and the address-only fallback. Fixed dark-palette
 text must not make the newly retained names unreadable on a light surface.
 
+### Proxmox guest interfaces carry bridge, VLAN and firewall (18 November 2026)
+
+`NetworkInterface` gains optional `bridge`, `vlan` and `firewall`. They are set
+only on a Proxmox VM or container interface, by `convertGuestInterfaces` from
+`models.GuestNetworkInterface`, and say where Proxmox plugs the device in
+according to the guest's configuration. An empty bridge means the placement is
+not known. `vlan` is omitted for an untagged device, and a tag or firewall flag
+without a bridge is dropped because it names no network. Host, Docker and node
+interfaces never set them.
+
+An interface may now exist with a placement and no address: a VM with no guest
+agent reports nothing, and its configured device appears under its key
+(`net0`). Consumers must not read interface presence as a guest report. The
+read-state view returns the three fields unchanged, so a previous-state round
+trip keeps them. Identity, status, metrics and History coordinates do not
+change, and `dockerHostSharesGuestAddress` is unaffected because an entry with
+no address offers none to share.
+
+The frontend types follow: `HostNetworkInterface` and `GuestNetworkInterface`
+list the three fields, and `ResourceDockerMeta` now lists `cpus` and
+`networkInterfaces`, which `DockerData` already sent.
+`TestProxmoxGuestInterfacesCarryBridgeAndVLAN` in
+`internal/unifiedresources/adapters_test.go` covers the adapter and the wire
+shape; `frontend-modern/src/types/__tests__/resource.test.ts` covers the types.
+
 ### Independently known PBS remains available in Backups (13 October 2026)
 
 The resource-owned PBS table is outside backup-inventory loading/error gates.

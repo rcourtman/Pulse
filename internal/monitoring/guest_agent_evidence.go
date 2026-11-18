@@ -28,7 +28,7 @@ func guestAgentEvidenceTime(prev *models.VM) time.Time {
 	if prev.AgentVersion != "" ||
 		prev.GuestAgentStatus == "available" ||
 		len(prev.IPAddresses) > 0 ||
-		len(prev.NetworkInterfaces) > 0 ||
+		len(guestReportedInterfaces(prev.NetworkInterfaces)) > 0 ||
 		prev.OSName != "" ||
 		prev.OSVersion != "" {
 		return prev.LastSeen

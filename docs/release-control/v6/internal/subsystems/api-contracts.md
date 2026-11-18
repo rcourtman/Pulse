@@ -13622,6 +13622,22 @@ facet on the wire. `internal/models/metrics_types_test.go`,
 `frontend-modern/src/utils/__tests__/resourceStateAdapters.test.ts` pin the
 wire shape and both client projections.
 
+### Proxmox guest interfaces may carry bridge, VLAN and firewall (18 November 2026)
+
+`proxmox.networkInterfaces` on a Proxmox VM or container resource, and
+`networkInterfaces` on the legacy VM and container state rows, may carry three
+optional fields per entry: `bridge` (string), `vlan` (integer 1-4094, omitted
+when untagged) and `firewall` (boolean, omitted when off). They come from the
+guest's Proxmox configuration. `vlan` and `firewall` appear only beside a
+`bridge`. An entry may have a bridge and an empty address list when the guest
+reports nothing from inside. Older servers omit all three, and clients must
+treat a missing bridge as an unknown placement rather than as no network.
+
+`frontend-modern/src/types/api.ts` lists the fields on `GuestNetworkInterface`
+and `HostNetworkInterface`; `frontend-modern/src/api/__tests__/resources.test.ts`
+holds a typed payload that carries them through the resource read unchanged.
+No route, permission, request or status code changes.
+
 ### API token creation and deletion commit durable state before reporting success
 
 `POST /api/security/tokens` returns a newly generated credential only after

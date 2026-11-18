@@ -559,6 +559,22 @@ activity cannot synthesize a completed timestamp. `GuestDrawer.test.tsx` and
 completion transitions through the actual drawer. This is ownership/presentation
 proof, not an allocation benchmark, native backup or fleet performance claim.
 
+### Proxmox device placement reads are bounded per guest (18 November 2026)
+
+Carrying a guest device's bridge and VLAN adds no request for containers or
+stopped VMs: both reuse a configuration read the poll already made. A running
+VM's configuration is read at most once per five minutes plus per-guest
+jitter, about 3% on top of its per-poll status read at a 10-second interval.
+First reads after a start are spread over one minute, failures back off two
+minutes, and the read sits inside the existing worker slot and sixty-second
+enrichment budget, sending nothing once that budget has closed. The reading
+cache holds one small entry per VM and drops entries nothing has asked about
+for thirty minutes.
+
+The mock generator assigns each guest a bridge and VLAN once, when the guest
+is created. The per-tick metric update does not touch them, so demo estates
+gain no per-guest work.
+
 ### Phone workload identity weights
 
 The existing phone guest projection allocates 38 percent to the name cell,
