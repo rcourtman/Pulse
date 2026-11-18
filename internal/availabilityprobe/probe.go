@@ -161,8 +161,10 @@ func probeUDP(ctx context.Context, target config.AvailabilityTarget) (Outcome, e
 		return OutcomeUnreachable, fmt.Errorf("UDP probe write failed: %w", err)
 	}
 
-	response := make([]byte, 4096)
-	n, err := conn.Read(response)
+	// Read one byte past the longest valid expectation. A datagram read can
+	// discard the unread suffix, so a full buffer must not equal an expectation.
+	var response [config.MaxAvailabilityUDPExpectedResponseBytes + 1]byte
+	n, err := conn.Read(response[:])
 	if err == nil {
 		if target.UDPExpected != "" && string(response[:n]) != target.UDPExpected {
 			return OutcomeUnreachable, fmt.Errorf("UDP response did not match the expected payload")

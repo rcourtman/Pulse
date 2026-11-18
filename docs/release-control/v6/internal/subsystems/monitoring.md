@@ -8655,7 +8655,13 @@ restore.
 
 Availability probing owns three outcomes: reachable, unreachable, and
 indeterminate. UDP response-required mode needs a request and treats timeout or
-mismatch as unreachable. Open-or-filtered mode may return indeterminate after
+mismatch as unreachable. A configured expected reply (at most 4096 bytes) is
+matched against the whole datagram, not a truncated matching prefix. The
+shared server and agent probe reads at least one byte beyond that limit;
+without an expectation, no byte comparison is required.
+`TestDetailedResultUDPMatchesWholeDatagram` covers the maximum-length match,
+longer replies, mismatches in both policies, and the no-expectation control.
+Open-or-filtered mode may return indeterminate after
 the full response deadline. Indeterminate clears accumulated failure count,
 projects warning evidence, and emits no availability incident; it never claims
 reachability. `internal/monitoring/availability_udp_test.go`,

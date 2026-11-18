@@ -19,6 +19,7 @@ const (
 	DefaultCertificateExpiryWarningDays        = 30
 	MaxAvailabilityHTTPBodyBytes               = 8192
 	MaxAvailabilityHTTPResponseBytes           = 65536
+	MaxAvailabilityUDPExpectedResponseBytes    = 4096
 	AvailabilityObservationLocationLocal       = "pulse:local"
 	AvailabilityObservationLocationAgentPrefix = "agent:"
 )
@@ -375,8 +376,8 @@ func (t AvailabilityTarget) Validate() error {
 		if len(t.UDPRequest) > 512 {
 			return fmt.Errorf("UDP request payload must be 512 bytes or less")
 		}
-		if len(t.UDPExpected) > 4096 {
-			return fmt.Errorf("UDP expected response must be 4096 bytes or less")
+		if len(t.UDPExpected) > MaxAvailabilityUDPExpectedResponseBytes {
+			return fmt.Errorf("UDP expected response must be %d bytes or less", MaxAvailabilityUDPExpectedResponseBytes)
 		}
 	} else if t.UDPMode != "" || t.UDPRequest != "" || t.UDPExpected != "" {
 		return fmt.Errorf("UDP settings may only be used with UDP availability targets")
