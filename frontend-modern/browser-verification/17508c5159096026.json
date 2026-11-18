@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "base_sha": "b9f76d6e3dcfc578744037919039bc28cdf6a6e2",
+  "verified_at": "2026-11-18T17:07:53Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/App.tsx",
+    "frontend-modern/src/AppLayout.tsx",
+    "frontend-modern/src/components/OrgSwitcher.tsx",
+    "frontend-modern/src/stores/websocket.ts",
+    "frontend-modern/src/useAppRuntimeState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/App.tsx": "8b2622b955701174e45843a8f503651521f8ba5a17c94934e276ad6b9fc03a7f",
+    "frontend-modern/src/AppLayout.tsx": "f82c4319f219c3cda93bd9d65a420227975804cf3927331ff266d9d46b3cca67",
+    "frontend-modern/src/components/OrgSwitcher.tsx": "038755c05a1fb90a11db35f0aa2b2d35e3dfb33a8e4e02702cd2521f2de0426e",
+    "frontend-modern/src/stores/websocket.ts": "4374180fd286a0d0ccbba210b883c859949e64fffa9b7e8ad113c58dd10e4a5d",
+    "frontend-modern/src/useAppRuntimeState.ts": "ccd67865c70fda885f186f03ec33bd17bd67225aeb9d597a18c5df176f349968"
+  },
+  "routes": [
+    "/standalone/machines"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Compiled application shell and Machines route against synthetic loopback HTTP and WebSocket fixtures. Playwright 1.56.1: Chromium 141.0.7390.37 at 1365×900/light and WebKit 26.0 at 390×844/dark.",
+    "Saved west with a 503: parent invents Default and renders its host; candidate says list unavailable, identifies client-west, keeps its host and provides Retry.",
+    "No saved selection: a successful empty list reads No organizations listed; malformed 200 reads Organization list unavailable. Neither persists a fabricated organization; the fixture serves its unchanged default routing for unbound sessions.",
+    "Checking and returned states preserve the selected workspace, controls and monitoring. Healthy focused West chooser is unchanged at both viewports.",
+    "For a deliberate East switch, matched delayed-data pairs retain the existing confirmation and dismissal. At the matched post-release observation the candidate renders East-only host without the West row; the parent remains empty under the East label. The candidate can still show the existing empty placeholder while the fixture withholds data.",
+    "Twenty completed journeys; 32 original frames were inspected (14 before/after pairs plus four candidate-only Retry frames). The first East switch pair includes different toast timing; the two controlled pairs at each width supply matched confirmation and post-release comparisons."
+  ],
+  "interactions": [
+    "Activated Retry with Enter, verified pending state prevents duplicate submits, and Tab reached the restored selector without a route reload or new West socket. A read after an unbound empty result uses the first authorized listed workspace returned by the fixture.",
+    "Selected client-east from the existing chooser with the same list. A new /ws handshake carries the East cookie and West telemetry is absent; the parent keeps only the original West connection. The supplemental run holds matching East REST/live data, captures the confirmation, dismisses it in both builds and releases data at the same checkpoint.",
+    "Both captures retain existing shell navigation and monitoring controls at their respective widths. No external requests or fixture writes, no assertion about real account grants, original estates or cross-tab behavior."
+  ]
+}

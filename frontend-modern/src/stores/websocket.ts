@@ -1959,8 +1959,10 @@ export function createWebSocketStore(url: string) {
       setReconnecting(true);
       connect();
     },
-    switchUrl: (nextUrl: string) => {
-      if (!nextUrl || nextUrl === wsUrl) {
+    switchUrl: (nextUrl: string, options?: { organizationChanged: true }) => {
+      // The organization is selected by the handshake cookie, not the URL.
+      // A real workspace switch must clear the old state even at the same URL.
+      if (!nextUrl || isDisposed || (nextUrl === wsUrl && !options?.organizationChanged)) {
         return;
       }
 

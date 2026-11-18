@@ -140,4 +140,58 @@ describe('OrgSwitcher', () => {
     expect(screen.getByText('east', { selector: 'bdi' })).toBeVisible();
     expect(onChange).not.toHaveBeenCalled();
   });
+
+  it('keeps a focus anchor across a read-only retry of unavailable choices', () => {
+    const [issue, setIssue] = createSignal<'unavailable' | null>('unavailable');
+    const [loading, setLoading] = createSignal(false);
+    const onChange = vi.fn();
+    const onRetry = vi.fn(() => setLoading(true));
+    render(() => (
+      <OrgSwitcher
+        orgs={[
+          { id: 'west', displayName: 'Operations' },
+          { id: 'east', displayName: 'Operations' },
+        ]}
+        selectedOrgId="west"
+        loading={loading()}
+        listIssue={issue()}
+        onChange={onChange}
+        onRetry={onRetry}
+      />
+    ));
+
+    const status = screen.getByRole('status');
+    expect(status).toHaveTextContent('Organization list unavailable');
+    expect(status).toHaveTextContent('Selected ID: west');
+    expect(screen.queryByRole('combobox')).toBeNull();
+    const retry = screen.getByRole('button', { name: 'Retry organization list' });
+    retry.focus();
+    fireEvent.click(retry);
+    const group = screen.getByRole('group', { name: 'Organization selection' });
+    expect(group).toHaveFocus();
+    expect(onRetry).toHaveBeenCalledOnce();
+    expect(retry).toBeDisabled();
+    expect(status).toHaveTextContent('Checking organizations…');
+    setIssue(null);
+    setLoading(false);
+    expect(group).toHaveFocus();
+    expect(screen.getByRole('combobox', { name: 'Organization' })).toHaveValue('west');
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('reports a verified empty list without claiming an unbound session selected Default', () => {
+    render(() => (
+      <OrgSwitcher
+        orgs={[]}
+        selectedOrgId=""
+        listIssue="empty"
+        onChange={() => {}}
+        onRetry={() => {}}
+      />
+    ));
+    expect(screen.getByRole('status')).toHaveTextContent('No organizations listed');
+    expect(screen.getByRole('status')).not.toHaveTextContent('Selected ID');
+    expect(screen.queryByText('Default')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Retry organization list' })).toBeEnabled();
+  });
 });

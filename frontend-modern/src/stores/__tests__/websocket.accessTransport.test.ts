@@ -16,6 +16,7 @@ vi.mock('@/utils/logger', () => ({
 }));
 
 const endpoint = '/api/alerts/active';
+const socketURL = 'ws://localhost/ws';
 const token = 'synthetic-monitoring-reader';
 const knownAlert: Alert = {
   id: 'agent:same-name-cpu',
@@ -169,7 +170,7 @@ beforeEach(async () => {
   const { createWebSocketStore } = await import('@/stores/websocket');
   store = createRoot((cleanup) => {
     dispose = cleanup;
-    return createWebSocketStore('ws://localhost/ws?org_id=north');
+    return createWebSocketStore(socketURL);
   });
   sockets[0].open();
 });
@@ -333,6 +334,34 @@ describe('monitoring access across the real HTTP client and socket store', () =>
     expectAlerts([knownAlert], 'ready');
     expectRequests(['north']);
     expectSavedAuthority();
+  });
+
+  it('retires outgoing snapshots and reads when a different organization uses the same socket URL', async () => {
+    const outgoing = sockets[0];
+    outgoing.snapshot([knownAlert]);
+    const reply = queuedResponse();
+    const read = refresh();
+    store.switchUrl(socketURL);
+    expect(sockets).toHaveLength(1);
+    expectAlerts([knownAlert], 'ready');
+
+    api.setOrgID('south');
+    store.switchUrl(socketURL, { organizationChanged: true });
+    expect(sockets).toHaveLength(2);
+    expect(sockets[1].url).toBe(outgoing.url);
+    expect(store.resourceSnapshotReceived()).toBe(false);
+    expectAlerts([], 'pending');
+    expect(outgoing.readyState).toBe(SyntheticSocket.CLOSED);
+
+    const incoming = { ...knownAlert, message: 'Current organization' };
+    sockets[1].open();
+    sockets[1].snapshot([incoming]);
+    outgoing.snapshot([knownAlert]);
+    reply.resolve(json([knownAlert]));
+    await expect(read).resolves.toBe(false);
+    expectRequests(['north']);
+    expectAlerts([incoming], 'ready');
+    expectSavedAuthority('south');
   });
 
   it('distinguishes an actual HTTP401 from membership403 and clears only saved authentication', async () => {
