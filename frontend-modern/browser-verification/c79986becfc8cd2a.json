@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "base_sha": "72243b8354051b5ecf1bde6b11ad953f64cca699",
+  "verified_at": "2026-11-18T20:01:38Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapRender.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapRender.ts": "d4085175c59aa264682debdefe54b76759b3f82049b2cf16f3bd56de291c406e"
+  },
+  "routes": [
+    "/map"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "final runtime bytes served by a Vite dev server from a copy of main plus this change, in the in-app browser, against a real Pulse 6.9.0-beta.3 instance monitoring a real homelab",
+    "1440x900 dark: 19 tiles with no logo are drawn as slate squares (#475569, edge #64748b) with initials in #f8fafc; before the change the same page had none and drew them on the page background with muted letters. Logo tiles are unchanged",
+    "1440x900 light, same bytes (the formatter changed nothing in the file): the slate tiles read on the white surface and the dimmed switched-off tiles stay lighter than running ones",
+    "375x812 dark, reloaded at that size: icons alone, the same 19 slate tiles, initials in #f8fafc",
+    "fit unchanged: main#main ends at 888 of 900 at 1440x900, and at 756 with the bottom navigation starting at 767 at 375x812",
+    "the folded '+7 switched off' tile takes the same slate tile, dimmed like any switched-off tile",
+    "console: only the known 404 for the map use counter, which the released backend does not have",
+    "the pane was hidden, so frames were driven by taking screenshots. Not checked: Firefox, Safari, the saved image file (the same renderer draws it; covered by the unit test on literal colours)"
+  ],
+  "interactions": [
+    "loaded /map before and after the change at 1440x900 and counted the slate tiles in the drawing (0, then 19)",
+    "sent the page's drawing to a local receiver before and after and compared the two rendered images side by side, dark and light",
+    "reloaded at 375x812 and read the first no-logo tile's fill, edge, letters and letter colour"
+  ]
+}

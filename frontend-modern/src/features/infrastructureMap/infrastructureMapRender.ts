@@ -147,17 +147,23 @@ const readsDarkOn = (hex: string): boolean => {
   return 0.2126 * channel(0) + 0.7152 * channel(2) + 0.0722 * channel(4) > 0.62;
 };
 
+// The tile of a thing with no logo: slate, the product's own colour, solid
+// like a logo's tile so its initials read as a mark and not as a gap. The
+// same in both themes, as brand colours are.
+const MONOGRAM_TILE = '#475569';
+const MONOGRAM_EDGE = '#64748b';
+const MONOGRAM_LETTERS = '#f8fafc';
+
 // A known app is its logo on its brand colour. Anything else is its initials
-// on the page's own background, so the logos are the only colour that is not
-// the product's.
+// on a slate tile, so the logos are the only colour that is not the product's.
 const appToSvg = (node: Extract<SceneNode, { kind: 'app' }>, palette: MapPalette): string => {
   const logo = resolveMapAppLogo(node.icon);
   const corner = n(node.size * 0.2);
-  const square = `<rect x="${n(node.x)}" y="${n(node.y)}" width="${n(node.size)}" height="${n(node.size)}" rx="${corner}" fill="${logo ? `#${logo.hex}` : palette.base}" stroke="${palette.border}"/>`;
+  const square = `<rect x="${n(node.x)}" y="${n(node.y)}" width="${n(node.size)}" height="${n(node.size)}" rx="${corner}" fill="${logo ? `#${logo.hex}` : MONOGRAM_TILE}" stroke="${logo ? palette.border : MONOGRAM_EDGE}"/>`;
   const inset = node.size * 0.21;
   const mark = logo
     ? `<path transform="translate(${n(node.x + inset)} ${n(node.y + inset)}) scale(${n((node.size - inset * 2) / 24)})" d="${logo.d}" fill="${readsDarkOn(logo.hex) ? '#0f172a' : '#ffffff'}"/>`
-    : `<text x="${n(node.x + node.size / 2)}" y="${n(node.y + node.size * 0.64)}" font-size="${n(node.size * 0.38)}" font-weight="600" text-anchor="middle" fill="${palette.muted}">${escapeXml(node.letters)}</text>`;
+    : `<text x="${n(node.x + node.size / 2)}" y="${n(node.y + node.size * 0.64)}" font-size="${n(node.size * 0.38)}" font-weight="600" text-anchor="middle" fill="${MONOGRAM_LETTERS}">${escapeXml(node.letters)}</text>`;
   return node.dim ? `<g opacity="0.45">${square}${mark}</g>` : square + mark;
 };
 
