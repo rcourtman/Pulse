@@ -3143,6 +3143,12 @@ about the estate. Hiding names changes labels and nothing else: pools that
 share a name share a stand-in, so they stay the one tile they were, and the
 image shows the same estate as the page. The catalogue names an app as
 itself and never as the app it replaces, because that label is published.
+Every tile can be read on a touch screen, where there is no hover and a tap
+on a tile is a tap on a link. The first tap shows the tile's card in the
+shared pressed tooltip, marks the tile and rings what it is connected to. A
+second tap on the same tile opens it, and the next press elsewhere or a
+scroll ends it. A mouse still opens a tile at once. What a tile says on hover
+comes from `hitLines`, which the tap shows too, so nothing is hover-only.
 A field the map needs belongs on the shared `Resource` type. The map holds no
 local cast of a resource, and none may be added.
 Proof is owned by `infrastructureMapModel.test.ts`,

@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "base_sha": "a0f0dd59f57c2131abd9364262a067a98ef895e2",
+  "verified_at": "2026-11-18T23:31:34Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapSurface.tsx",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapRender.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapSurface.tsx": "9d4843f9cdaaff951f4995eb54470c99d8db444e46525012b29de363004f7393",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapRender.ts": "b75174b154aa69e8260712702ce2ce18eab52f4cfe29aa21650f6b68dcdfb391"
+  },
+  "routes": [
+    "/map",
+    "/docker/overview?q=partner-vpn"
+  ],
+  "viewports": [
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 1440,
+      "height": 900
+    }
+  ],
+  "states": [
+    "final runtime bytes served by a Vite dev server from a clone of main plus this change on pulse-dev, driven by headless Chromium through Playwright, against a private Pulse on mock data shaped like the public demo. Real input was used: touch taps in a 390x844 context with hasTouch and isMobile, and a real mouse in a 1440x900 context",
+    "390x844, touch: matchMedia('(hover: hover) and (pointer: fine)') is false, so the hover card never renders there. Before any tap: no ring, no tooltip",
+    "390x844, first tap on partner-vpn: the address stayed /map; the pressed tooltip read 'partner-vpn / Tailscale \u00b7 Container \u00b7 Online \u00b7 VPN / Carries the network of 1 container / CPU 3% \u00b7 Memory 44% / Tap again to open'; the rings layer held two marks, the tapped tile's shaded outline and a ring on the container it carries. Seen in the screenshot: the tile outlined in the Ways in box and the ring on a tile in the Other box",
+    "390x844, tap on the page heading: the tooltip and both marks went",
+    "390x844, tap on jellyfin, which states no connection: its card with 'Tap again to open', the tile marked, no ring, address still /map",
+    "390x844, two taps on partner-vpn: the second was not stopped by the map and the router opened /docker/overview?q=partner-vpn (3 to 10 seconds, the dev server compiling that page on first use)",
+    "390x844: the map sat above the fixed navigation with the real 'New version available' banner showing",
+    "1440x900, mouse: hovering partner-vpn showed the hover card with the same four lines and no 'Tap again to open', one ring, no pressed tooltip; main ended at 888 of 900; one click opened /docker/overview?q=partner-vpn",
+    "no page error in either context",
+    "not checked: a real phone, Safari on iOS, Firefox, a pen, a device with both touch and a mouse, light theme (no colour is new except the tapped tile's outline, which uses the theme's text colour)"
+  ],
+  "interactions": [
+    "tapped a tile, tapped elsewhere, tapped the tile again, tapped a second tile, then tapped the first tile twice, with real touch input",
+    "hovered and clicked the same tile with a mouse at 1440x900"
+  ]
+}
