@@ -6217,6 +6217,19 @@ The mock estate plugs its guests into `vmbr0` untagged and VLANs 20, 30 and
 40, with a second device on `vmbr1`; `internal/mock/generator_test.go` checks
 the spread.
 
+### Docker container network mode is runtime-authored evidence (18 November 2026)
+
+Report ingest carries the agent's `networkMode` onto
+`models.DockerContainer.NetworkMode` through `dockerNetworkModeFromReport` in
+`internal/monitoring/docker_network_mode.go`. The value is trimmed and
+otherwise unchanged, because a network name is case-sensitive and a
+`container:<id>` reference only means something while it still matches a
+reported container ID. A value longer than 255 bytes or holding a control
+character is dropped. Monitoring must not invent a mode for a report that has
+none, and must not infer a shared network from missing attachments or ports:
+an empty value means the agent did not say. No alert, status, metric or
+History coordinate reads the field.
+
 ### Local libvirt guests are bounded host-agent observations
 
 Authenticated Linux host reports may carry a read-only libvirt inventory for

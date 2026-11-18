@@ -927,6 +927,13 @@ export interface ResourceDockerMeta {
     ipv4?: string;
     ipv6?: string;
   }>;
+  /**
+   * The runtime's network mode for a container: `bridge`, `host`, `none`, a
+   * network name, or `container:<id>` when it uses another container's
+   * network and so has no `networks` or `ports` of its own. Missing when the
+   * agent did not report it.
+   */
+  networkMode?: string;
   updateStatus?: {
     updateAvailable?: boolean;
     currentDigest?: string;

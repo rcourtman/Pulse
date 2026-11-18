@@ -113,6 +113,18 @@ agent enrolment, report admission, removal blocks, tombstones and identity
 aliases read neither, and monitor construction needs no new initialisation
 because the cache is usable from its zero value.
 
+### Docker agents report each container's network mode (18 November 2026)
+
+`internal/dockeragent/collect.go` reports the runtime's network mode for every
+inspected container as `networkMode`, exactly as the runtime wrote it:
+`bridge`, `host`, `none`, a network name, or `container:<id>` when the
+container uses another container's network namespace. The value is trimmed and
+nothing else. It is empty only when inspect returned no host config or the
+runtime wrote no mode, and absent from reports of agents older than the field.
+It is read from the inspect the agent already makes, so it adds no request, no
+permission and no new report cadence. Enrolment, report admission, removal
+blocks, tombstones and identity aliases do not read it.
+
 ### VMware destination refusals keep the admitted connection draft
 
 The existing connection editor treats an exact HTTP 403

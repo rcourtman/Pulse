@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "base_sha": "8c39cbbe12e28bdca5136af066732fd753e6516b",
+  "verified_at": "2026-11-18T13:15:47Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/types/api.ts",
+    "frontend-modern/src/types/resource.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/types/api.ts": "eced139459daf68daddbd8828c226537e9a5bcadb64ff03c10c19a6b3abc5134",
+    "frontend-modern/src/types/resource.ts": "98942041f0a944eeb69191e3ada1b1a216ef838efcd68c9ad467bd415091f4c4"
+  },
+  "routes": [
+    "/docker (Overview tab) and /map, served by a Pulse binary built from this working tree with its own frontend build embedded, fed by a pulse-agent built from the same tree reading a real Docker 29.8 daemon."
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Ten real containers on one Docker host. Two were made for the pass: one on the default bridge publishing a port, and one started with --network container:<the first>, the arrangement of a download client behind a VPN container.",
+    "GET /api/resources from the page: the second container carries docker.networkMode 'container:' plus the first one's full 64-character ID, with no networks and no ports. The first carries 'bridge'. Seven containers on a user-defined network carry its name.",
+    "The change adds two optional type fields and no rendering, so both pages draw as before: the containers table lists all ten rows, and the map draws both test containers as tiles."
+  ],
+  "interactions": [
+    "Expanded the row of the container that uses the other's network: the drawer opened with its Overview tab and history cards at both widths.",
+    "Opened /map at both widths: ten targets drawn, no horizontal overflow at 390.",
+    "Read the browser console on both pages at both widths: no errors."
+  ],
+  "limits": [
+    "Nothing draws the new field yet, so there is no visual difference to compare.",
+    "Light theme was not checked: no styling changes.",
+    "Docker only. Podman was not run."
+  ]
+}

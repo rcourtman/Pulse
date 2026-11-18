@@ -103,6 +103,13 @@ and `Firewall`, set only by the Proxmox VM and container adapters. They are
 empty on every storage, backup and recovery resource and change no storage or
 recovery projection, clone path or identity.
 
+### `DockerData` gains the container network mode (18 November 2026)
+
+`internal/unifiedresources/types.go` gains `DockerData.NetworkMode`, set only
+by the app-container adapter. It is empty on every storage, backup and
+recovery resource and changes no storage or recovery projection, clone path or
+identity.
+
 ### Unknown saved sessions retain bytes, not automatic authority
 
 After an unread or undecodable session inventory, the next session save retains

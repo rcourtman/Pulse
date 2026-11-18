@@ -2420,6 +2420,7 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 			RestartCount:       payload.RestartCount,
 			ExitCode:           payload.ExitCode,
 			RestartPolicy:      strings.ToLower(strings.TrimSpace(payload.RestartPolicy)),
+			NetworkMode:        dockerNetworkModeFromReport(payload.NetworkMode),
 			OOMKilled:          cloneReportBoolPtr(payload.OOMKilled),
 			CreatedAt:          payload.CreatedAt,
 			StartedAt:          payload.StartedAt,

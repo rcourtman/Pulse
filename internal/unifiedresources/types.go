@@ -1188,6 +1188,7 @@ type DockerData struct {
 	Ports                   []DockerPortMeta                 `json:"ports,omitempty"`
 	Labels                  map[string]string                `json:"labels,omitempty"`
 	Networks                []DockerNetworkMeta              `json:"networks,omitempty"`
+	NetworkMode             string                           `json:"networkMode,omitempty"` // The runtime's network mode as the agent reported it; container:<id> means the container uses that container's network. Empty when not reported.
 	Mounts                  []DockerMountMeta                `json:"mounts,omitempty"`
 	Filesystems             []filesystem.Observation         `json:"filesystems,omitempty"`
 	ComposeSourceRegistered bool                             `json:"composeSourceRegistered,omitempty"`

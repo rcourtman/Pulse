@@ -2505,6 +2505,7 @@ func resourceFromDockerContainer(ct models.DockerContainer, host models.DockerHo
 		CPUCapacityPercent:      models.DockerContainerCPUCapacityPercent(ct, host.CPUs),
 		CPUCapacityCores:        host.CPUs,
 		Labels:                  cloneLabelMap(ct.Labels),
+		NetworkMode:             strings.TrimSpace(ct.NetworkMode),
 		Runtime:                 runtime,
 		RuntimeVersion:          host.RuntimeVersion,
 		DockerVersion:           host.DockerVersion,

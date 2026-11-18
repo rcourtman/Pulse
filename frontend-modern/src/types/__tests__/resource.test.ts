@@ -394,6 +394,27 @@ describe('Resource Helper Functions', () => {
     });
   });
 
+  describe('Docker container network mode', () => {
+    it('lists the mode that names whose network a container uses', () => {
+      const vpnId = 'ab'.repeat(32);
+      // A download client behind a VPN container: no networks or ports of
+      // its own, only the mode.
+      const shared: ResourceDockerMeta = {
+        hostname: 'tower',
+        containerId: 'c-torrent',
+        containerState: 'running',
+        networkMode: `container:${vpnId}`,
+      };
+      const older: ResourceDockerMeta = { hostname: 'tower', containerId: 'c-old' };
+
+      expect(shared.networkMode).toBe(`container:${vpnId}`);
+      expect(shared.networks).toBeUndefined();
+      expect(shared.ports).toBeUndefined();
+      // An agent that predates the field reports nothing, which is not "none".
+      expect(older.networkMode).toBeUndefined();
+    });
+  });
+
   describe('ResourceDockerMeta', () => {
     it('accepts Docker host runtime and Swarm evidence in the canonical resource contract', () => {
       const docker: ResourceDockerMeta = {

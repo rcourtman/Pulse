@@ -825,6 +825,28 @@ list the three fields, and `ResourceDockerMeta` now lists `cpus` and
 `internal/unifiedresources/adapters_test.go` covers the adapter and the wire
 shape; `frontend-modern/src/types/__tests__/resource.test.ts` covers the types.
 
+### App containers carry the runtime's network mode (18 November 2026)
+
+`DockerData` gains optional `networkMode`, set only on an app-container
+resource by `resourceFromDockerContainer` from
+`models.DockerContainer.NetworkMode`. It is the runtime's own word for how the
+container is networked. `container:<id>` is the one form that names another
+resource: the container whose network namespace this one uses, by its full
+container ID on the same Docker host. Such a container has no `networks` and
+no `ports`, so before this field nothing in the payload said where its traffic
+went. An empty value means the agent did not report a mode. Consumers must not
+read it as `none`, and must not infer a shared network from an absent network
+list. A reference that matches no container on the same host names nothing,
+which is what a dependent left behind by a recreated container looks like.
+
+The field is a plain string, so `cloneDockerData` keeps it. Identity, status,
+metrics, relationships and History coordinates do not change. The frontend
+type follows on `ResourceDockerMeta`.
+`TestDockerContainerResourceCarriesNetworkMode` in
+`internal/unifiedresources/adapters_test.go` covers the adapter, the wire
+shape and the clone; `frontend-modern/src/types/__tests__/resource.test.ts`
+covers the type.
+
 ### Independently known PBS remains available in Backups (13 October 2026)
 
 The resource-owned PBS table is outside backup-inventory loading/error gates.

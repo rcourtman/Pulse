@@ -1347,6 +1347,7 @@ type DockerContainer struct {
 	Ports                   []DockerContainerPort            `json:"ports,omitempty"`
 	Labels                  map[string]string                `json:"labels,omitempty"`
 	Networks                []DockerContainerNetworkLink     `json:"networks,omitempty"`
+	NetworkMode             string                           `json:"networkMode,omitempty"` // The runtime's network mode as the agent reported it; container:<id> means it uses that container's network. Empty when not reported
 	NetworkRXBytes          uint64                           `json:"networkRxBytes,omitempty"`
 	NetworkTXBytes          uint64                           `json:"networkTxBytes,omitempty"`
 	NetInRate               float64                          `json:"netInRate,omitempty"`
