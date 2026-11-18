@@ -62,19 +62,47 @@ class SummaryTest(unittest.TestCase):
         self.assertIn("`main`", summary)
         self.assertIn("GHSA-p98j-92pf-mc4p", summary)
         self.assertIn("GHSA-q2hr-2g5m-vwhr", summary)
-        self.assertIn("npm audit fix --package-lock-only", summary)
         self.assertIn("dependencySecurity.test.ts", summary)
+        self.assertNotIn("npm audit fix", summary)
         annotations = [line for line in result.stdout.splitlines() if line.startswith("::error")]
         self.assertEqual(len(annotations), 1)
         self.assertIn("main", annotations[0])
-        self.assertIn("GHSA-p98j-92pf-mc4p, GHSA-q2hr-2g5m-vwhr", annotations[0])
-        self.assertIn("lockfile advisory floor bump", annotations[0])
-        self.assertIn("qualify the resulting graph", summary)
+        self.assertIn("GHSA-p98j-92pf-mc4p in dompurify; GHSA-q2hr-2g5m-vwhr in brace-expansion", annotations[0])
+        self.assertIn("Qualify a compatible lockfile repair", annotations[0])
+        self.assertIn("via minimatch", summary)
+        self.assertIn("qualify the smallest compatible lockfile repair", summary)
+        self.assertIn("do not force an update or downgrade below existing floors", summary)
         self.assertIn("land both on main", summary)
         self.assertIn("containing release", summary)
         self.assertIn("unchanged graphs only warn", summary)
         self.assertNotIn("block every pull request", summary)
         self.assertNotIn("blocks every PR and release", annotations[0])
+
+    def test_single_root_is_not_attributed_to_inheriting_tools(self) -> None:
+        # npm's isDirect describes the manifest edge, not the advisory's origin.
+        advis = "GHSA-fc5q-39xc-vjpf"
+        root = {"name": "picomatch", "isDirect": False, "severity": "high",
+                "via": [{"url": "https://github.com/advisories/" + advis}]}
+        helper = {"name": "tinyglobby", "severity": "high", "via": ["picomatch"]}
+        tool = {"name": "vite", "isDirect": True, "severity": "high", "via": ["tinyglobby"],
+                "fixAvailable": {"name": "vite", "version": "6.2.7", "isSemVerMajor": True}}
+        result, summary = self.run_summary("main", "failure", audit_log(tool, helper, root))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn(f"{advis} in picomatch. Other affected packages: 2", result.stdout)
+        for value in ["tinyglobby", "vite", "6.2.7"]:
+            self.assertNotIn(value, result.stdout)
+        self.assertIn("npm suggestion (unverified)", summary)
+        self.assertIn("| vite | high | via tinyglobby | vite 6.2.7 (major) |", summary)
+        self.assertIn("| tinyglobby | high | via picomatch |", summary)
+        self.assertIn(f"| picomatch | high | {advis} |", summary)
+
+    def test_bad_or_missing_origin_keeps_the_failure_actionable(self) -> None:
+        finding = {"name": "tool", "severity": "high", "via": {"url": FINDING["via"][0]["url"]}}
+        result, summary = self.run_summary("main", "failure", audit_log(finding))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("see job log (affected packages: tool)", result.stdout)
+        self.assertNotIn("GHSA-", result.stdout)
+        self.assertIn("| tool | high | see job log | none reported |", summary)
 
     def test_registry_text_is_escaped_and_kept_out_of_annotation(self) -> None:
         hostile = dict(FINDING, name="evil\n::warning::x", via=[{"title": "x | <script>", "url": "javascript:"}])
