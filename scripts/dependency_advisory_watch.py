@@ -22,9 +22,11 @@ PACKAGE_RE = re.compile(r"^(?:@[a-z0-9][a-z0-9._~-]*/)?[a-z0-9][a-z0-9._~-]*$")
 FINDING_PREFIX = "audit finding "
 UNREACHABLE_MARKER = "could not reach the advisory endpoint"
 FIX_STEPS = (
-    "Review the affected graph on main. In frontend-modern run "
-    "`npm audit fix --package-lock-only`, qualify the resulting graph, "
-    "then raise the matching floors in "
+    "Start with the packages that report the advisory itself; other rows may "
+    "inherit it through dependencies. Confirm patched versions and qualify the "
+    "smallest compatible lockfile repair in `frontend-modern`. npm's suggestions "
+    "are unverified: do not force an update or downgrade below existing floors. "
+    "Raise the matching floors in "
     "`frontend-modern/src/security/__tests__/dependencySecurity.test.ts` "
     "and land both on main. A source fix reaches users only in a containing release."
 )
@@ -45,9 +47,9 @@ def parse_findings(log: str) -> list[dict]:
     return findings
 
 
-def advisory_ids(finding: dict) -> list[str]:
+def advisory_ids(via: list) -> list[str]:
     found = set()
-    for item in finding.get("via") or []:
+    for item in via:
         if isinstance(item, dict):
             found.update(GHSA_RE.findall(str(item.get("url") or "")))
     return sorted(found)
@@ -82,38 +84,58 @@ def render(branch: str, outcome: str, log: str) -> tuple[str, str | None]:
             text = (f"The frontend dependency audit for {branch} failed without an advisory finding. "
                     "Read the job log: install or audit tooling broke before a verdict.")
         return header + text + "\n", text
-    rows = ["| Package | Severity | Advisories | Fix available |", "| --- | --- | --- | --- |"]
-    identifiers: set[str] = set()
-    packages = []
+    rows = ["| Package | Severity | Advisory or affected dependency | npm suggestion (unverified) |",
+            "| --- | --- | --- | --- |"]
+    origins: dict[str, set[str]] = {}
+    advisory_packages: set[str] = set()
+    packages: set[str] = set()
     for finding in findings:
         package = safe_package(finding.get("name"))
-        packages.append(package)
-        ids = advisory_ids(finding)
-        identifiers.update(ids)
+        packages.add(package)
+        via = finding.get("via")
+        if not isinstance(via, list):
+            via = []
+        ids = advisory_ids(via)
+        for identifier in ids:
+            origins.setdefault(identifier, set()).add(package)
+            advisory_packages.add(package)
+        affected_dependencies = sorted({
+            item for item in via if isinstance(item, str) and PACKAGE_RE.fullmatch(item)
+        })
+        titles = [str(item.get("title") or "") for item in via
+                  if isinstance(item, dict) and item.get("title")]
+        details = [", ".join(ids) or "; ".join(titles)]
+        if affected_dependencies:
+            details.append("via " + ", ".join(affected_dependencies))
         fix = finding.get("fixAvailable")
         if isinstance(fix, dict):
-            fix_text = f"{fix.get('name', '')} {fix.get('version', '')}".strip()
-            if fix.get("isSemVerMajor"):
+            fix_text = f"{fix.get('name', '')} {fix.get('version', '')}".strip() or "not reported"
+            if fix.get("isSemVerMajor") is True:
                 fix_text += " (major)"
         else:
-            fix_text = "yes" if fix is True else "no"
-        titles = [str(item.get("title") or "") for item in finding.get("via") or [] if isinstance(item, dict)]
+            fix_text = "available (version not reported)" if fix is True else "none reported"
         rows.append("| " + " | ".join((
             markdown_cell(package), markdown_cell(finding.get("severity")),
-            markdown_cell(", ".join(ids) or "; ".join(titles) or "via dependency"),
+            markdown_cell("; ".join(filter(None, details)) or "see job log"),
             markdown_cell(fix_text))) + " |")
-    advisories = ", ".join(sorted(identifiers)) or "see job log"
+    if origins:
+        advisories = "; ".join(
+            f"{identifier} in {', '.join(sorted(packages_for_id))}"
+            for identifier, packages_for_id in sorted(origins.items())
+        )
+        other_packages = len(packages - advisory_packages)
+        if other_packages:
+            advisories += f". Other affected packages: {other_packages} (see step summary)"
+    else:
+        advisories = f"see job log (affected packages: {', '.join(sorted(packages))})"
     body = (header
             + "The strict daily audit found dependency advisories on main. "
             + "Pull requests that change the graph must pass the required "
             + "*Audit complete frontend dependency graph* check; unchanged graphs only warn.\n\n"
             + "\n".join(rows)
             + "\n\n**Suggested fix.** " + FIX_STEPS + "\n")
-    annotation = (f"Frontend dependency advisory on {branch}: {advisories} in "
-                  f"{', '.join(sorted(set(packages)))}. The strict daily watch failed. "
-                  "Review and qualify a lockfile advisory floor bump on main: "
-                  "npm audit fix --package-lock-only in frontend-modern, "
-                  "then raise the floors in dependencySecurity.test.ts and land both on main.")
+    annotation = (f"Frontend dependency advisory on {branch}: {advisories}. The strict daily watch failed. "
+                  "Qualify a compatible lockfile repair and matching dependencySecurity.test.ts floors on main.")
     return body, annotation
 
 
