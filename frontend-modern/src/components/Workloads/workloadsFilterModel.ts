@@ -60,6 +60,8 @@ export interface WorkloadsFilterProps {
   inventoryStats?: () => WorkloadsInventoryStats;
   inventoryCountsVisible?: () => boolean;
   setInventoryCountsVisible?: (visible: boolean) => void;
+  nodeHardwareVisible?: () => boolean;
+  setNodeHardwareVisible?: (visible: boolean) => void;
   columnVisibility?: {
     availableColumns: ColumnDef[];
     isColumnHidden: (id: string) => boolean;
@@ -151,6 +153,8 @@ export const DEFAULT_WORKLOADS_SORT_DIRECTION = 'asc';
 export const DEFAULT_WORKLOADS_VIEW_MODE: ViewMode = 'all';
 export const DEFAULT_WORKLOADS_STATUS_MODE: WorkloadsStatusMode = 'all';
 export const DEFAULT_WORKLOADS_METRIC_DISPLAY_MODE: WorkloadsMetricDisplayMode = 'bars';
+export const WORKLOADS_NODE_HARDWARE_VISIBLE_STORAGE_KEY = 'workloadsNodeHardwareVisible';
+
 export const DEFAULT_WORKLOADS_METRIC_HOVER_MODE: WorkloadsMetricHoverMode = 'history';
 
 export const countActiveWorkloadsFilters = (

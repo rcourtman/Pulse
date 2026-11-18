@@ -91,6 +91,12 @@ describe('NodeGroupHeader', () => {
     expect(strip).not.toHaveTextContent('vmbr0');
   });
 
+  it('leaves the hardware strip out when the View menu hides it', () => {
+    render(() => <NodeGroupHeader node={makeNode()} showHardware={false} />);
+    expect(screen.getByText('pve1')).toBeInTheDocument();
+    expect(screen.queryByTestId('node-hardware-strip')).not.toBeInTheDocument();
+  });
+
   it('shows each port with its link speed and draws nothing for a node without hardware', () => {
     render(() => (
       <NodeHardwareStrip

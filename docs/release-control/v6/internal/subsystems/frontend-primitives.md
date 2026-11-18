@@ -11656,3 +11656,13 @@ the platform host table. `NodeDrawerOverview` shows the same strip above its
 charts and drops the CPU sentence from its facts line. Inventory is not a
 column: the strip has no sort or picker entry. `NodeGroupHeader.test.tsx`
 covers the strip on the header and its empty state.
+
+### Node hardware can be hidden from the View menu (18 November 2026)
+
+`WorkloadsFilter` shows a "Node hardware" Show/Hide control in View, under
+Layout, when the owning page passes `nodeHardwareVisible` and the table is
+grouped; a flat list has no node rows, so the control disappears.
+`NodeGroupHeader` takes `showHardware` (default shown) and the guest table
+passes the persisted choice through `WorkloadPanel`. The node drawer always
+shows the strip. `WorkloadsFilter.test.tsx` and `NodeGroupHeader.test.tsx`
+cover the control and the hidden header.

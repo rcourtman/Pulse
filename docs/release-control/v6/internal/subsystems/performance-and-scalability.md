@@ -4810,3 +4810,11 @@ Cleanup cadence, query paths and write paths are unchanged.
 network interfaces with the Proxmox list instead of replacing it: one name set
 from the agent list, one filter over the Proxmox list, per node per update. No
 extra request, subscription or render path is added.
+
+### Node hardware visibility is one persisted flag (18 November 2026)
+
+`useWorkloadsControlsState` keeps the View menu's node hardware choice in one
+persisted boolean (`workloadsNodeHardwareVisible`), threaded through
+`useWorkloadsState`, `WorkloadsSurface`, `WorkloadsTable` and `WorkloadPanel`
+to the node header rows. Hiding the strip only skips rendering it; no request,
+subscription or row windowing changes.

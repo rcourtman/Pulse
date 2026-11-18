@@ -16,6 +16,8 @@ interface NodeGroupHeaderProps {
   colspan?: number;
   leadingAction?: JSX.Element;
   renderAs?: 'tr' | 'div';
+  /** The View menu can hide the hardware strip; it shows by default. */
+  showHardware?: boolean;
   trClass?: string;
   trProps?: JSX.HTMLAttributes<HTMLTableRowElement> &
     Partial<Record<`data-${string}`, string | undefined>>;
@@ -73,7 +75,9 @@ export const NodeGroupHeader: Component<NodeGroupHeaderProps> = (props) => {
 
       {/* What the box is reads beside who it is; live host stats stay in
           the platform host table above. Wide rows only, so it never wraps. */}
-      <NodeHardwareStrip node={props.node} class="hidden border-l border-border pl-3 md:flex" />
+      <Show when={props.showHardware !== false}>
+        <NodeHardwareStrip node={props.node} class="hidden border-l border-border pl-3 md:flex" />
+      </Show>
     </div>
   );
 
