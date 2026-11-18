@@ -434,8 +434,11 @@ class CompiledGoControls(unittest.TestCase):
         cls.binary = cls.cwd / "controls.test"
         (cls.cwd / "go.mod").write_text("module native.runner.controls\n\ngo 1.24\n")
         (cls.cwd / "controls_test.go").write_text('''package controls
-import ("fmt"; "os"; "os/exec"; "strconv"; "testing"; "time")
+import ("flag"; "fmt"; "os"; "os/exec"; "strconv"; "testing"; "time")
 func TestPass(t *testing.T) { t.Run("child", func(t *testing.T) {}) }
+func TestInstallSHTrueNASScaleBootTasksRetireBeforeRecoveryErasure(t *testing.T) {
+    t.Logf("fixture admission: %s", flag.Lookup("test.parallel").Value.String())
+}
 func TestPassExtra(t *testing.T) { t.Fatal("selector must stay anchored") }
 func TestSkip(t *testing.T) { t.Skip("explicit platform skip") }
 func TestFail(t *testing.T) { t.Fatal("real failure") }
@@ -495,6 +498,13 @@ func Example_output() { fmt.Println("installer"); /* Output: installer */ }
         for name in ("TestPass", "TestSkip", "Example_output", "FuzzSeeds"):
             with self.subTest(name=name), contextlib.redirect_stdout(io.StringIO()):
                 runner.run_check(self.binary, name, cwd=self.cwd)
+
+    def test_truenas_removal_has_a_bounded_inner_parallel_budget(self):
+        output = io.StringIO()
+        name = "TestInstallSHTrueNASScaleBootTasksRetireBeforeRecoveryErasure"
+        with patch.dict(os.environ, {"GOMAXPROCS": "4"}):
+            runner.run_check(self.binary, name, cwd=self.cwd, output=output)
+        self.assertIn("fixture admission: 2", output.getvalue())
 
     def test_actual_command_retains_deadline_count_and_exact_selection(self):
         with patch.object(runner.subprocess, "Popen", wraps=subprocess.Popen) as popen, contextlib.redirect_stdout(io.StringIO()):
