@@ -338,8 +338,15 @@ describe('networks on the map model', () => {
 
   it('hides addresses and network names with the rest when names are hidden', () => {
     const anonymous = anonymizeInfrastructureMapModel(buildInfrastructureMapModel(lab()));
+    // What app a container is stays on purpose, in the app's own spelling.
     const text = JSON.stringify(anonymous, (key, value) =>
-      key === 'id' || key.endsWith('egmentIds') || key === 'key' ? undefined : value,
+      key === 'id' ||
+      key.endsWith('egmentIds') ||
+      key === 'key' ||
+      key === 'app' ||
+      key === 'category'
+        ? undefined
+        : value,
     );
     for (const secret of [
       '192.168.10',

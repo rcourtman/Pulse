@@ -2987,24 +2987,43 @@ The infrastructure map is owned at
 `frontend-modern/src/features/infrastructureMap/` with the `/map` route shell
 in `frontend-modern/src/pages/InfrastructureMap.tsx`. It is a read-only drawing
 of the resources `useResources()` returns and must stay one.
-Nesting comes from `parentId` and cluster frames from `clusterId`; the map
-places nothing by matching names. Health is `resource.health.verdict`, and raw
-status is read only when a resource carries no verdict, so a stopped guest is
-off, not failed.
+Nesting comes from `parentId` and cluster frames from `clusterId`. Which
+host, cluster or network a thing is drawn with never depends on its name.
+Health is `resource.health.verdict`, and raw status is read only when a
+resource carries no verdict, so a stopped guest is off, not failed.
+The default view is the service diagram (`infrastructureMapServices.ts`,
+`infrastructureMapDiagram.ts`): one tile per guest or container, boxed by
+purpose, between the ways in above and storage, backups and hardware below.
+`infrastructureMapCatalogue.ts` is the one place the map reads a name. It
+recognises a well-known app from the container image first and the name
+second, on whole words, and that decides only the tile's logo and its box. A
+thing the catalogue does not know is not guessed at: it is drawn with its
+initials in the last box, unless a tag its owner set names a purpose.
+Connectors run between layers, never between two tiles, and state only what
+the registry holds. The Internet tile is the single drawn thing Pulse does not
+monitor: it is dashed, labelled as not monitored, and drawn only while a
+tunnel, VPN or reverse proxy is running.
+Logos are path data inlined from simple-icons (CC0) in
+`infrastructureMapAppIcons.ts`. Add one by regenerating that file from the
+package, not by adding a dependency or loading a remote image.
 A network is a vSphere port group, a subnet an interface reports with its
 prefix, or a range of addresses that more than one machine shares, and a range
 is labelled as a range. An address nothing else shares makes no network, and a
-host's own container bridges place nothing. The page must keep saying what
+host's own container bridges place nothing. A macvlan or ipvlan container
+network is the host's own network and hides no address. The page must keep saying what
 Pulse cannot see (firewall rules, switches, VLAN tags) and must not present two
 networks drawn apart as tested isolation.
 Hide names replaces every reported name, address and network name on the page
-and in the saved image, which is built in the browser.
+and in the saved image, which is built in the browser. A tile the catalogue
+recognised then reads as the app's own name, which says what runs and nothing
+about the estate.
 A field the map needs belongs on the shared `Resource` type.
 `dockerHostWire` in `infrastructureMapNetworks.ts` is the one local cast, for
 the Docker host interfaces and core count the wire already carries; remove it
 when the type lists them and add no second cast.
 Proof is owned by `infrastructureMapModel.test.ts`,
-`infrastructureMapNetworks.test.ts` and `infrastructureMapLayout.test.ts` in
+`infrastructureMapNetworks.test.ts`, `infrastructureMapLayout.test.ts`,
+`infrastructureMapServices.test.ts` and `infrastructureMapDiagram.test.ts` in
 `frontend-modern/src/features/infrastructureMap/__tests__/`.
 
 1. Add new resource types and identity fields in `internal/unifiedresources/types.go`
@@ -4184,6 +4203,26 @@ application resource-provider or WebSocket lifecycle.
     (`TestStore_OpenBackfillsLegacyUnresolvedProxmoxPBSGuestRows`).
 
 ## Current State
+
+### The map's default view is a service diagram (18 November 2026)
+
+The map first drew networks as lines with machines hanging off them. On a
+real homelab with one flat LAN that came out as a single line, and the
+maintainer's reference for the feature was a service diagram: app tiles with
+logos, boxed by purpose, with the flow from the Internet down to the hardware.
+The default view is now that diagram. The network and host views stay as the
+second and third choices on the page.
+
+This changes one rule. The map used to place nothing by matching names. It
+still places nothing by name, but it now reads a name in one file, the app
+catalogue, to choose a logo and a box. The catalogue is kept by hand and holds
+about 160 apps. What the diagram does not draw is any connector between two
+apps: Pulse does not know which app talks to which, so it does not say.
+
+`infrastructureMapServices.test.ts` and `infrastructureMapDiagram.test.ts` join
+the `infrastructure-map` proof policy. No test renders
+`InfrastructureMapSurface.tsx` yet, so a change to it must still stage a change
+to one of the proof files.
 
 ### The infrastructure map has an owner (18 November 2026)
 

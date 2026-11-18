@@ -2,6 +2,12 @@ import type { Resource, ResourceType } from '@/types/resource';
 import { getDiskPercent, getMemoryPercent } from '@/types/resource';
 import { formatBytes } from '@/utils/format';
 import {
+  resolveMapApp,
+  resolveMapCategory,
+  type MapApp,
+  type MapCategoryId,
+} from './infrastructureMapCatalogue';
+import {
   dockerHostWire,
   resolveMapNetworks,
   type MapAttachment,
@@ -43,6 +49,10 @@ export interface MapItem {
   detail?: string;
   /** The networks the item is on, as ids into the model's segments. */
   segmentIds?: string[];
+  /** The well-known app this guest or container is, when the map knows it. */
+  app?: MapApp;
+  /** The group a guest or container is drawn in on the service diagram. */
+  category?: MapCategoryId;
 }
 
 export interface MapSection {
@@ -61,6 +71,8 @@ export interface MapPool {
   health: MapHealth;
   usedPercent?: number;
   sizeLabel?: string;
+  /** A place backups are written to, as opposed to one guests run from. */
+  backup?: boolean;
 }
 
 export interface MapHost {
@@ -306,6 +318,22 @@ const toItem = (resource: Resource, typeLabel: string, attachments: Attachments)
   };
 };
 
+// A guest or container is what the service diagram draws as one tile, so it
+// also carries the app it is and the group that puts it in.
+const toService = (resource: Resource, typeLabel: string, attachments: Attachments): MapItem => {
+  const app = resolveMapApp({ name: displayName(resource), image: resource.docker?.image });
+  return {
+    ...toItem(resource, typeLabel, attachments),
+    ...(app ? { app } : {}),
+    category: resolveMapCategory(app, resource.tags),
+  };
+};
+
+const isBackupTarget = (resource: Resource): boolean =>
+  resource.type === 'datastore' ||
+  resource.platformType === 'proxmox-pbs' ||
+  clean(resource.storage?.type).toLowerCase() === 'pbs';
+
 const toPool = (resource: Resource): MapPool => {
   const total = resource.disk?.total;
   return {
@@ -314,6 +342,7 @@ const toPool = (resource: Resource): MapPool => {
     health: resolveMapHealth(resource),
     usedPercent: finitePercent(getDiskPercent(resource)),
     sizeLabel: typeof total === 'number' && total > 0 ? formatBytes(total, 0) : undefined,
+    ...(isBackupTarget(resource) ? { backup: true } : {}),
   };
 };
 
@@ -367,27 +396,29 @@ const placeChild = (
 ): 'placed' | 'pool' | 'skipped' => {
   const platform = draft.host.platform;
   if (child.type === 'vm') {
-    sectionFor(draft, 'vms', 'VMs').items.push(toItem(child, 'VM', attachments));
+    sectionFor(draft, 'vms', 'VMs').items.push(toService(child, 'VM', attachments));
     return 'placed';
   }
   if (SYSTEM_CONTAINER_TYPES.has(child.type)) {
     const proxmox = platform === 'proxmox';
     sectionFor(draft, 'lxcs', proxmox ? 'LXCs' : 'System containers').items.push(
-      toItem(child, proxmox ? 'LXC' : 'System container', attachments),
+      toService(child, proxmox ? 'LXC' : 'System container', attachments),
     );
     return 'placed';
   }
   if (child.type === 'app-container') {
     const app = platform === 'truenas';
     sectionFor(draft, 'containers', app ? 'Apps' : 'Containers').items.push(
-      toItem(child, app ? 'App' : 'Container', attachments),
+      toService(child, app ? 'App' : 'Container', attachments),
     );
     if (platform === 'docker') draft.containers.push(child);
     return 'placed';
   }
   if (child.type === 'pod') {
     const namespace = clean(child.kubernetes?.namespace) || 'default';
-    sectionFor(draft, `ns:${namespace}`, namespace).items.push(toItem(child, 'Pod', attachments));
+    sectionFor(draft, `ns:${namespace}`, namespace).items.push(
+      toService(child, 'Pod', attachments),
+    );
     return 'placed';
   }
   if (child.type === 'k8s-node' || (child.type === 'agent' && platform === 'kubernetes')) {
@@ -780,7 +811,9 @@ export function anonymizeInfrastructureMapModel(
   const anonymizeItems = (items: MapItem[]): MapItem[] =>
     items.map(({ address: _address, ...item }) => ({
       ...item,
-      name: nameFor(item.id, item.typeLabel),
+      // A well-known app keeps its own name: it says what runs here and
+      // gives nothing away about the estate.
+      name: item.app ? item.app.label : nameFor(item.id, item.typeLabel),
     }));
   const anonymizeHost = ({ address: _address, ...host }: MapHost): MapHost => ({
     ...host,

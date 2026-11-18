@@ -326,9 +326,10 @@ describe('anonymizeInfrastructureMapModel', () => {
   it('replaces every reported name and keeps structure, health and facts', () => {
     const model = buildInfrastructureMapModel(estate());
     const anonymous = anonymizeInfrastructureMapModel(model);
-    // Ids and section keys are lookups; neither is ever drawn.
+    // Ids and section keys are lookups; neither is ever drawn. What app a
+    // thing is stays on purpose, so it is left out of the search for names.
     const text = JSON.stringify(anonymous, (key, value) =>
-      key === 'id' || key === 'key' ? undefined : value,
+      key === 'id' || key === 'key' || key === 'app' || key === 'category' ? undefined : value,
     );
     for (const name of [
       'homelab',
@@ -348,7 +349,32 @@ describe('anonymizeInfrastructureMapModel', () => {
 
     const node = hostsOf(anonymous.blocks)[0];
     expect(node.name).toBe('Proxmox node 1');
-    expect(node.sections[0].items.map((item) => item.name)).toEqual(['VM 1', 'VM 2']);
+    // A guest the catalogue knows is named for its app, in the app's own
+    // spelling. Anything else is numbered.
+    expect(node.sections[0].items.map((item) => item.name)).toEqual([
+      'Home Assistant',
+      'Nextcloud',
+    ]);
+    expect(
+      hostsOf(
+        anonymizeInfrastructureMapModel(
+          buildInfrastructureMapModel([
+            ...estate(),
+            resource({
+              id: 'vm-99',
+              type: 'vm',
+              name: 'accounts-box',
+              platformType: 'proxmox-pve',
+              parentId: 'node-solo',
+              status: 'running',
+            }),
+          ]),
+        ).blocks,
+      )
+        .flatMap((host) => host.sections)
+        .flatMap((section) => section.items)
+        .map((item) => item.name),
+    ).toContain('VM 1');
     expect(node.sections[0].items[1].health).toBe('attention');
     expect(hostsOf(anonymous.blocks)[1].subtitle).toBe('PVE 8.2.4 · 8 cores · 32 GB RAM');
     expect(anonymous.totals).toEqual(model.totals);

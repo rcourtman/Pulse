@@ -2,8 +2,9 @@ import { DOCKER_ICON_PATH } from '@/components/icons/DockerIcon';
 import { KUBERNETES_ICON_PATH } from '@/components/icons/KubernetesIcon';
 import { PROXMOX_ICON_PATH } from '@/components/icons/ProxmoxIcon';
 import { TRUENAS_ICON_PATH } from '@/components/icons/TrueNASIcon';
-import type { MapScene, MapTone, SceneNode } from './infrastructureMapLayout';
-import type { MapHealth, MapPlatform } from './infrastructureMapModel';
+import { resolveMapAppLogo } from './infrastructureMapCatalogue';
+import type { MapGlyphKey, MapScene, MapTone, SceneNode } from './infrastructureMapLayout';
+import type { MapHealth } from './infrastructureMapModel';
 
 /**
  * What the page and the exported image share: one palette, one glyph per
@@ -74,7 +75,7 @@ export interface MapGlyph {
 
 // Every glyph sits in a 24-unit box. Brand marks are the ones the platform
 // tabs use; the rest are plain outlines drawn for this map.
-export const MAP_GLYPHS: Record<MapPlatform, MapGlyph> = {
+export const MAP_GLYPHS: Record<MapGlyphKey, MapGlyph> = {
   proxmox: { d: PROXMOX_ICON_PATH, mode: 'fill' },
   docker: { d: DOCKER_ICON_PATH, mode: 'fill' },
   kubernetes: { d: KUBERNETES_ICON_PATH, mode: 'fill' },
@@ -100,6 +101,10 @@ export const MAP_GLYPHS: Record<MapPlatform, MapGlyph> = {
     mode: 'stroke',
   },
   checks: { d: 'M22 12h-4l-3 9L9 3l-3 9H2', mode: 'stroke' },
+  internet: {
+    d: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zM2 12h20M12 2c2.8 3 4.2 6.3 4.2 10s-1.4 7-4.2 10c-2.8-3-4.2-6.3-4.2-10S9.2 5 12 2z',
+    mode: 'stroke',
+  },
 };
 
 const escapeXml = (value: string): string =>
@@ -107,16 +112,67 @@ const escapeXml = (value: string): string =>
 
 const n = (value: number): string => String(Math.round(value * 100) / 100);
 
+// A logo is drawn in white on its brand colour, or in near-black when the
+// brand colour is too light for white to read on.
+const readsDarkOn = (hex: string): boolean => {
+  const channel = (start: number) => parseInt(hex.slice(start, start + 2), 16) / 255;
+  return 0.2126 * channel(0) + 0.7152 * channel(2) + 0.0722 * channel(4) > 0.62;
+};
+
+const appToSvg = (node: Extract<SceneNode, { kind: 'app' }>, palette: MapPalette): string => {
+  const logo = resolveMapAppLogo(node.icon);
+  const fill = logo ? `#${logo.hex}` : `hsl(${n(node.hue)} 42% 40%)`;
+  const ink = logo && readsDarkOn(logo.hex) ? '#0f172a' : '#ffffff';
+  const square = `<rect x="${n(node.x)}" y="${n(node.y)}" width="${n(node.size)}" height="${n(node.size)}" rx="${n(node.size * 0.24)}" fill="${fill}" stroke="${palette.border}"/>`;
+  const inset = node.size * 0.21;
+  const mark = logo
+    ? `<path transform="translate(${n(node.x + inset)} ${n(node.y + inset)}) scale(${n((node.size - inset * 2) / 24)})" d="${logo.d}" fill="${ink}"/>`
+    : `<text x="${n(node.x + node.size / 2)}" y="${n(node.y + node.size * 0.64)}" font-size="${n(node.size * 0.4)}" font-weight="600" text-anchor="middle" fill="${ink}">${escapeXml(node.letters)}</text>`;
+  return node.dim ? `<g opacity="0.45">${square}${mark}</g>` : square + mark;
+};
+
+const ARROW_LENGTH = 7;
+const ARROW_HALF_WIDTH = 3.5;
+
+const lineToSvg = (node: Extract<SceneNode, { kind: 'line' }>, palette: MapPalette): string => {
+  if (node.points.length < 2) return '';
+  const colour = palette[node.tone];
+  const d = node.points
+    .map(([x, y], index) => `${index === 0 ? 'M' : 'L'}${n(x)} ${n(y)}`)
+    .join('');
+  const path = `<path d="${d}" fill="none" stroke="${colour}" stroke-width="1.5" stroke-linejoin="round"${
+    node.dashed ? ' stroke-dasharray="5 4"' : ''
+  }/>`;
+  if (!node.arrow) return path;
+  const [tipX, tipY] = node.points[node.points.length - 1];
+  const [fromX, fromY] = node.points[node.points.length - 2];
+  const length = Math.hypot(tipX - fromX, tipY - fromY) || 1;
+  const ux = (tipX - fromX) / length;
+  const uy = (tipY - fromY) / length;
+  const baseX = tipX - ux * ARROW_LENGTH;
+  const baseY = tipY - uy * ARROW_LENGTH;
+  const head = `<path d="M${n(tipX)} ${n(tipY)}L${n(baseX - uy * ARROW_HALF_WIDTH)} ${n(baseY + ux * ARROW_HALF_WIDTH)}L${n(baseX + uy * ARROW_HALF_WIDTH)} ${n(baseY - ux * ARROW_HALF_WIDTH)}z" fill="${colour}"/>`;
+  return path + head;
+};
+
 const nodeToSvg = (node: SceneNode, palette: MapPalette): string => {
   switch (node.kind) {
     case 'rect':
       return `<rect x="${n(node.x)}" y="${n(node.y)}" width="${n(node.w)}" height="${n(node.h)}" rx="${n(node.r)}" fill="${palette[node.fill]}"${
         node.stroke ? ` stroke="${palette[node.stroke]}"` : ''
-      }/>`;
+      }${node.dashed ? ' stroke-dasharray="4 3"' : ''}/>`;
     case 'text':
       return `<text x="${n(node.x)}" y="${n(node.y)}" font-size="${n(node.size)}" font-weight="${node.weight}" fill="${palette[node.fill]}"${
-        node.anchor === 'end' ? ' text-anchor="end"' : ''
+        node.anchor === 'end'
+          ? ' text-anchor="end"'
+          : node.anchor === 'middle'
+            ? ' text-anchor="middle"'
+            : ''
       }${node.caps ? ' letter-spacing="0.6"' : ''}>${escapeXml(node.text)}</text>`;
+    case 'app':
+      return appToSvg(node, palette);
+    case 'line':
+      return lineToSvg(node, palette);
     case 'dot':
       return node.health === 'off'
         ? `<circle cx="${n(node.x)}" cy="${n(node.y)}" r="${n(node.r - 0.75)}" fill="none" stroke="${palette.off}" stroke-width="1.5"/>`

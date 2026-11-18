@@ -1,0 +1,63 @@
+{
+  "version": 1,
+  "base_sha": "573ecf159d4a56663dad83e7a7c4624bc27c647b",
+  "verified_at": "2026-11-18T10:09:43Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapSurface.tsx",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapAppIcons.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapCatalogue.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapDiagram.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapExport.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapLayout.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapModel.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapRender.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapServices.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapSurface.tsx": "2fdda43903fb8602694bde97e99f99c2678b8353ff0fc06074598e2a0e6a41ce",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapAppIcons.ts": "5af7b5e57b9d9c47d164c4318cb69c491c8aca77163b267ead5690f0a958b633",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapCatalogue.ts": "09745fa40ed9490a0feae3d25fa19d684bb0de39e681ca6fd67b8e55cb335b77",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapDiagram.ts": "805854c01859f9bd5fe0b65a9d41ace2784fd6d3f44aa887ac558955ff1c5c59",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapExport.ts": "fe936ec412c1f3d068d41b4b45740d10a0f6aec5e0757951f84e1c7453811bcb",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapLayout.ts": "1c77ec552d4e84c1e28e7c579fac0f2d90d922d439856d9f9dfd5f8a2dfa0585",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapModel.ts": "47aaea668af8c332380a67ef1d373b0d8a7a773e1c7d74cde87ee2f9e484a761",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapRender.ts": "1fe316ebd1a3b0dd5dd819be5f2e9372f14a01a3b2f8296ac73527e316862c89",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapServices.ts": "80e0675bb28b235d6df04c80fa242f8a90f9de31048a34508f654df12b082132"
+  },
+  "routes": [
+    "/map",
+    "/proxmox/overview?resource=<guest id>",
+    "/docker/overview?q=<container>"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 1271,
+      "height": 1164
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "final runtime bytes served by a Vite dev server from a copy of main plus this change, in the in-app browser, against two backends: a real Pulse 6.9.0-beta.3 instance monitoring a real homelab (5 hosts, 12 VMs, 28 LXCs, 9 containers, one flat LAN) and, before the last connector and fold-tile refinement, a private mock backend (22 hosts, 33 VMs, 27 LXCs, 36 containers, 18 pods, 13 networks)",
+    "real estate, 1440 dark, Services view (the default): Internet tile on a dashed line labelled tunnel and VPN, Ways in, one network bar with 34 addresses, eight purpose boxes in two rows fed by a bus above each row and a rail down the left edge, Storage and Backups under the labels disks and volumes and backups, Hardware under hosted on; 12 boxes, 62 links, 45 logo and glyph paths, no horizontal scroll, tab title Map",
+    "real estate, 375 light: one box per row, rails down both edges, document scroll width 375, header map button shown",
+    "real estate: Compact draws 42px tiles without names (892px tall against 1404); Hosts view still draws and its footnote reads as before",
+    "mock estate, 1440 dark and light: six network pills and a +7 more pill, a coloured mark on each tile for its network, Kubernetes pods and vSphere guests as tiles, the Other box folded at 24 tiles with a +36 more tile, logos for apps the catalogue recognised by container image",
+    "console: no error after the final reload on either backend beyond the mock binary's own 404 for an endpoint it predates",
+    "not checked in a browser: the Save image download (the exported document is covered by a unit test), kiosk mode, Firefox and Safari"
+  ],
+  "interactions": [
+    "opened /map: Services is selected by default and the view switch offers Services, Connections and Hosts",
+    "pressed Hide names on both estates: no IPv4 address, hostname or network name remained in the drawing or the link labels, the network read Network 1, and tiles the catalogue recognised kept the app's own name (Jellyfin, Grafana); pressed again to restore",
+    "switched Names to Compact and back, and Services to Hosts and back, reading the drawing's height and link count after each",
+    "hovered a tile: the tooltip gave the app, its kind, state, host and published port",
+    "clicked the jellyfin tile at desktop width on both estates: the app navigated without a reload to that resource's own page (/proxmox/overview?resource=<id> on the real estate, /docker/overview?q=jellyfin on the mock)"
+  ]
+}
