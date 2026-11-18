@@ -285,6 +285,7 @@ class AgentNASTeardown(unittest.TestCase):
                 for a, b in replacements.items(): text = text.replace(a, b)
                 return text
             values = dict(FIXTURE=root, EVENTS=root / "events", PLATFORM=platform, FAULT=fault,
+                          FIXTURE_TIMEOUT=shutil.which("timeout") or "",
                           STATE_DIR=root / "state", STATE_DIR_REMOVAL_AUTHORITY=(root / "state" if state == "selected" else root / "foreign"),
                           INSTALL_DIR=root / "bin", PRIVILEGED_HELPER_STATE_DIR=root / "helper",
                           SAFE_PROFILE_STATE_DIR=root / "profile", PRIVILEGE_SUDOERS_FILE=root / "absent-sudoers",
@@ -302,10 +303,32 @@ uname() { printf 'Linux\n'; }
 command() {
     case "$*" in
         '-v systemctl'|'-v rc-service'|'-v initctl') return 1 ;;
-        '-v timeout') [[ "$FAULT" != missing-timeout ]] || return 1 ;;
+        '-v timeout')
+            [[ "$FAULT" != missing-timeout && -x "$FIXTURE_TIMEOUT" ]] || return 1
+            printf '%s\n' "$FIXTURE_TIMEOUT"
+            return ;;
         '-v ps') [[ "$FAULT" != missing-ps ]] || return 1 ;;
     esac
     builtin command "$@"
+}
+# Preserve the actual timeout and child output seen by the production parser.
+# Record only fixed operation names and exits, separately from its input.
+timeout() {
+    local operation code=0
+    [[ -x "$FIXTURE_TIMEOUT" ]] || return 127
+    case "${4:-}" in
+        ps) operation=ps ;;
+        "$FIXTURE/tools/flash")
+            case "${5:-}" in
+                mount_flash_config) operation=flash-mount ;;
+                umount_flash_config) operation=flash-unmount ;;
+                *) return 97 ;;
+            esac ;;
+        *) "$FIXTURE_TIMEOUT" "$@"; return ;;
+    esac
+    "$FIXTURE_TIMEOUT" "$@" || code=$?
+    printf 'observation:%s:%s\n' "$operation" "$code" >> "$EVENTS" || return 97
+    return "$code"
 }
 truenas_scale_agent_removal_present() { return 1; }
 collector_credential_state_present() { [[ -e "$STATE_DIR/runtime.token" ]]; }
@@ -349,7 +372,11 @@ remove_safe_profile_state_dir() { rm -rf -- "$SAFE_PROFILE_STATE_DIR"; }
             executable = shell + "\n" + setup + "\n" + redirect(definitions(self.source)) + "\nmain() {\n" + redirect(entry) + "}\nmain\n"
             env = dict(os.environ, FIXTURE=str(root), PATH=str(tools) + ":" + os.environ["PATH"])
             result = subprocess.run(["bash", "-c", executable], env=env, capture_output=True, text=True, timeout=14)
-            second = subprocess.run(["bash", "-c", executable], env=env, capture_output=True, text=True, timeout=14) if repeat else None
+            second = None
+            if repeat:
+                with (root / "events").open("a") as events:
+                    events.write("removal:repeat\n")
+                second = subprocess.run(["bash", "-c", executable], env=env, capture_output=True, text=True, timeout=14)
             events = (root / "events").read_text().splitlines() if (root / "events").exists() else []
             after = self.snapshot(root)
             content = bootfile.read_bytes() if bootfile.is_file() and not bootfile.is_symlink() else None
@@ -384,6 +411,12 @@ remove_safe_profile_state_dir() { rm -rf -- "$SAFE_PROFILE_STATE_DIR"; }
                 with self.subTest(platform=platform, fault=fault):
                     result = self.exercise(platform, fault); events = self.retained(result)
                     self.assertEqual(result[6], result[7]); self.assertFalse(any(e.startswith('signal:') for e in events))
+                    # A successful command is not a usable inventory. Keep
+                    # malformed output separate from refusal/missing tools.
+                    code = {'failed-process': 2, 'empty-process': 0,
+                            'duplicate-process': 0, 'diagnostic-process': 0}.get(fault)
+                    self.assertEqual([e for e in events if e.startswith('observation:')],
+                                     [] if code is None else [f'observation:ps:{code}'])
 
     def test_unknown_relative_foreign_or_deferred_boot_owners_are_not_signalled(self):
         for platform, fault in (('Unraid', 'foreign-process'), ('QNAP', 'foreign-process'), ('Unraid', 'relative-wrapper'), ('QNAP', 'deferred-bootstrap')):
@@ -419,10 +452,14 @@ remove_safe_profile_state_dir() { rm -rf -- "$SAFE_PROFILE_STATE_DIR"; }
                     if fault == 'source-changed': self.assertTrue(any(b'echo concurrent-owner\n' in data for data in result[8].values()))
 
     def test_flash_mount_and_unmount_failures_are_not_local_only_permission(self):
-        for fault in ('mount-refusal', 'unmount-refusal', 'missing-flash'):
+        for fault, expected in (
+                ('mount-refusal', ['observation:flash-mount:1', 'observation:flash-unmount:0']),
+                ('unmount-refusal', ['observation:flash-mount:0', 'observation:flash-unmount:1']),
+                ('missing-flash', [])):
             with self.subTest(fault=fault):
                 events = self.retained(self.exercise('QNAP', fault)); self.assertFalse(any(e.startswith('signal:') for e in events))
                 if fault != 'missing-flash': self.assertIn('flash:umount_flash_config', events)
+                self.assertEqual([e for e in events if e.startswith('observation:flash-')], expected)
 
     def test_watchdog_stops_before_collector_and_ignored_or_refused_signals_retain_state(self):
         for platform in ('Unraid', 'QNAP'):
@@ -468,9 +505,18 @@ remove_safe_profile_state_dir() { rm -rf -- "$SAFE_PROFILE_STATE_DIR"; }
             for boot in ('absent', 'missing'):
                 with self.subTest(platform=platform, boot=boot):
                     r = self.exercise(platform, boot=boot, wrapper='missing', repeat=True)
-                    self.assertEqual(r[0].returncode, 0, r[0].stderr); self.assertEqual(r[1].returncode, 0, r[1].stderr)
-                    self.assertEqual(r[2].count('remote:remove'), 1); self.assertNotIn('unchecked:process-stop', r[2])
-                    self.assertGreater(r[2].count('process:read'), 4)
+                    boundary = r[2].index('removal:repeat')
+                    first, repeat = r[2][:boundary], r[2][boundary + 1:]
+                    for label, execution, events in (('initial', r[0], first), ('repeat', r[1], repeat)):
+                        observed = [e for e in events if e.startswith('observation:')]
+                        diagnostic = f'{label} removal: {observed}\n{execution.stderr}'
+                        self.assertEqual(execution.returncode, 0, diagnostic)
+                        # The first call alone has more than four reads. It
+                        # cannot supply the second call's quiescence evidence.
+                        self.assertGreater(observed.count('observation:ps:0'), 4, diagnostic)
+                        self.assertNotIn('unchecked:process-stop', events)
+                    self.assertEqual(first.count('remote:remove'), 1)
+                    self.assertNotIn('remote:remove', repeat)
 
     def test_process_observation_returns_roles_not_arguments_and_stops_timeout_child(self):
         r = self.exercise('Unraid', flow='process')
@@ -478,7 +524,10 @@ remove_safe_profile_state_dir() { rm -rf -- "$SAFE_PROFILE_STATE_DIR"; }
         self.assertIn('100 1 watchdog\n', r[0].stdout); self.assertIn('101 100 collector\n', r[0].stdout)
         self.assertNotIn('/synthetic/private-only', r[0].stdout); self.assertIn('200 1 other\n', r[0].stdout)
         self.assertIn('203 1 other\n', r[0].stdout)
-        r = self.exercise('QNAP', 'timeout-process'); self.retained(r); self.assertTrue(r[9])
+        r = self.exercise('QNAP', 'timeout-process')
+        self.assertEqual([e for e in self.retained(r) if e.startswith('observation:')],
+                         ['observation:ps:124'])
+        self.assertTrue(r[9])
 
     def test_private_model_uses_selected_isolated_interpreter(self):
         with tempfile.TemporaryDirectory(prefix='nas model ') as directory:
