@@ -15,6 +15,12 @@
 
 ## Purpose
 
+Docker project inventory reads each registered source at most once per report
+when a candidate image is present. Ordinary installations have no source
+files to read. Deployment history is requested on expansion or refresh,
+filters by runtime and project before the result limit, and indexes service
+and image observations once for the returned records.
+
 ### Workload chart keys stop at the guest connection (4 November 2026)
 
 `getWorkloadChartKeyCandidates` emits node-only keys only for a guest with no

@@ -21,6 +21,12 @@
 
 ## Purpose
 
+Local Compose updates retain the prior source beside the registered file.
+Their receipts and recovery instructions distinguish reverting a service
+image from recovering application data. Git proposals have their own review
+branch and commit. The action protocol declares manual recovery for both
+deployment owners.
+
 ### Ended reset requests do not spend saved recovery (17 November 2026)
 
 Public reset-admin cancellation observed before one-use validation returns fixed

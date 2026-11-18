@@ -102,6 +102,9 @@ export function useAlertsConfigurationSnapshotState(
   const [dockerPoweredOffSeverity, setDockerPoweredOffSeverity] = createSignal<
     'warning' | 'critical'
   >(defaultSnapshot.dockerPoweredOffSeverity);
+  const [dockerMutedContainerHosts, setDockerMutedContainerHosts] = createSignal(
+    defaultSnapshot.dockerMutedContainerHosts,
+  );
   const [dockerIgnoredPrefixes, setDockerIgnoredPrefixes] = createSignal<string[]>(
     defaultSnapshot.dockerIgnoredPrefixes,
   );
@@ -203,6 +206,7 @@ export function useAlertsConfigurationSnapshotState(
     setDockerDefaults({ ...snapshot.dockerDefaults });
     setDockerDisableConnectivity(snapshot.dockerDisableConnectivity);
     setDockerPoweredOffSeverity(snapshot.dockerPoweredOffSeverity);
+    setDockerMutedContainerHosts([...snapshot.dockerMutedContainerHosts]);
     setDockerIgnoredPrefixes([...snapshot.dockerIgnoredPrefixes]);
     setIgnoredGuestPrefixes([...snapshot.ignoredGuestPrefixes]);
     setGuestTagWhitelist([...snapshot.guestTagWhitelist]);
@@ -272,6 +276,7 @@ export function useAlertsConfigurationSnapshotState(
     dockerDefaults: { ...dockerDefaults() },
     dockerDisableConnectivity: dockerDisableConnectivity(),
     dockerPoweredOffSeverity: dockerPoweredOffSeverity(),
+    dockerMutedContainerHosts: [...dockerMutedContainerHosts()],
     dockerIgnoredPrefixes: [...dockerIgnoredPrefixes()],
     ignoredGuestPrefixes: [...ignoredGuestPrefixes()],
     guestTagWhitelist: [...guestTagWhitelist()],
@@ -409,6 +414,8 @@ export function useAlertsConfigurationSnapshotState(
     setDockerDisableConnectivity,
     dockerPoweredOffSeverity,
     setDockerPoweredOffSeverity,
+    dockerMutedContainerHosts,
+    setDockerMutedContainerHosts,
     dockerIgnoredPrefixes,
     setDockerIgnoredPrefixes,
     ignoredGuestPrefixes,

@@ -314,6 +314,11 @@ func (a *Agent) updateContainerWithProgress(ctx context.Context, containerID str
 		return result
 	}
 
+	if inspect.Config != nil && a.registeredComposeOwner(inspect.Config.Labels) {
+		result.Error = "Review the registered Compose service source before updating this container."
+		result.ReasonCode = agentexec.ActionRefusalTargetPreconditionFailed
+		return result
+	}
 	result.ContainerName = strings.TrimPrefix(inspect.Name, "/")
 	result.OldImageDigest = inspect.Image
 	wasRunning := inspect.State != nil && inspect.State.Running

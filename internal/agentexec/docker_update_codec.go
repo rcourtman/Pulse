@@ -2,13 +2,16 @@ package agentexec
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationreceipt"
+	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 )
 
 const (
 	DockerContainerUpdateOperationVersion = 1
+	DockerComposeUpdateOperationVersion   = 2
 	DockerContainerUpdateReceiptKind      = "pulse.docker_container_update_result"
 	DockerContainerUpdateReceiptVersion   = 1
 
@@ -19,6 +22,8 @@ const (
 	maxDockerContainerUpdateTimeoutSeconds     = 1800
 	defaultDockerContainerUpdateTimeoutSeconds = 900
 )
+
+var composeProposalCommit = regexp.MustCompile(`^(?:[a-f0-9]{40}|[a-f0-9]{64})$`)
 
 func DecodeDockerContainerUpdatePayload(data []byte) (DockerContainerUpdatePayload, error) {
 	var payload DockerContainerUpdatePayload
@@ -48,6 +53,9 @@ func BindDockerContainerUpdatePayload(payload *DockerContainerUpdatePayload) err
 	}
 	payload.Operation = DockerContainerOperationUpdate
 	payload.OperationVersion = DockerContainerUpdateOperationVersion
+	if payload.Compose != nil {
+		payload.OperationVersion = DockerComposeUpdateOperationVersion
+	}
 	digest, err := dockerContainerUpdateRequestDigest(*payload)
 	if err != nil {
 		return err
@@ -58,16 +66,17 @@ func BindDockerContainerUpdatePayload(payload *DockerContainerUpdatePayload) err
 
 func dockerContainerUpdateRequestDigest(payload DockerContainerUpdatePayload) (string, error) {
 	return operationreceipt.DigestCanonicalJSON(struct {
-		ActionID            string `json:"action_id"`
-		Operation           string `json:"operation"`
-		OperationVersion    int    `json:"operation_version"`
-		Runtime             string `json:"runtime"`
-		ContainerID         string `json:"container_id"`
-		ExpectedImageDigest string `json:"expected_image_digest"`
+		ActionID            string                           `json:"action_id"`
+		Operation           string                           `json:"operation"`
+		OperationVersion    int                              `json:"operation_version"`
+		Runtime             string                           `json:"runtime"`
+		ContainerID         string                           `json:"container_id"`
+		ExpectedImageDigest string                           `json:"expected_image_digest"`
+		Compose             *agentsdocker.ComposeImageChange `json:"compose,omitempty"`
 	}{
 		strings.TrimSpace(payload.ActionID), strings.TrimSpace(payload.Operation), payload.OperationVersion,
 		strings.ToLower(strings.TrimSpace(payload.Runtime)), strings.ToLower(strings.TrimSpace(payload.ContainerID)),
-		strings.ToLower(strings.TrimSpace(payload.ExpectedImageDigest)),
+		strings.ToLower(strings.TrimSpace(payload.ExpectedImageDigest)), payload.Compose,
 	})
 }
 
@@ -87,7 +96,7 @@ func ValidateDockerContainerUpdatePayload(payload *DockerContainerUpdatePayload)
 	if payload.Operation != DockerContainerOperationUpdate {
 		return fmt.Errorf("unsupported docker container update operation %q", payload.Operation)
 	}
-	if payload.OperationVersion != DockerContainerUpdateOperationVersion {
+	if !(payload.OperationVersion == DockerContainerUpdateOperationVersion && payload.Compose == nil || payload.OperationVersion == DockerComposeUpdateOperationVersion && payload.Compose.Valid() && payload.Runtime == "docker") {
 		return fmt.Errorf("unsupported docker container update operation version %d", payload.OperationVersion)
 	}
 	if payload.Runtime != "docker" && payload.Runtime != "podman" {
@@ -138,7 +147,7 @@ func ValidateDockerContainerUpdateResultPayload(result *DockerContainerUpdateRes
 	if result.Operation != DockerContainerOperationUpdate {
 		return fmt.Errorf("unsupported docker update result operation %q", result.Operation)
 	}
-	if result.OperationVersion != DockerContainerUpdateOperationVersion || !dockerContainerIDPattern.MatchString(result.ContainerID) || !hostUpdateInventoryHashPattern.MatchString(result.RequestDigest) {
+	if (result.OperationVersion != DockerContainerUpdateOperationVersion && result.OperationVersion != DockerComposeUpdateOperationVersion) || !dockerContainerIDPattern.MatchString(result.ContainerID) || !hostUpdateInventoryHashPattern.MatchString(result.RequestDigest) {
 		return fmt.Errorf("invalid docker update result binding")
 	}
 	if result.ExecutionPhase != DockerContainerPhasePreflight && result.ExecutionPhase != DockerContainerPhaseMutate && result.ExecutionPhase != DockerContainerPhaseVerify && result.ExecutionPhase != DockerContainerPhaseComplete {
@@ -171,8 +180,23 @@ func ValidateDockerContainerUpdateResultPayload(result *DockerContainerUpdateRes
 	if result.ReadbackRan && result.After.ObservedAt.IsZero() {
 		return fmt.Errorf("docker update readback requires an observation")
 	}
+	if result.OperationVersion == DockerContainerUpdateOperationVersion && (result.SourceStage != "" || result.ProposalCommit != "" || result.ProposalBranch != "") {
+		return fmt.Errorf("unexpected source result for container operation")
+	}
+	if result.OperationVersion == DockerComposeUpdateOperationVersion {
+		switch result.SourceStage {
+		case "", "source_review", "image_pull", "source_write", "service_recreate", "service_readback", "git_prepare", "git_publish", "git_proposed":
+		default:
+			return fmt.Errorf("invalid Compose update stage")
+		}
+		if result.ProposalBranch != "" || result.ProposalCommit != "" || result.SourceStage == "git_proposed" {
+			if result.SourceStage != "git_proposed" || result.ProposalBranch != "pulse/service-update/"+result.ActionID || !composeProposalCommit.MatchString(result.ProposalCommit) {
+				return fmt.Errorf("invalid Git proposal result")
+			}
+		}
+	}
 	if result.ExecutionPhase == DockerContainerPhaseComplete {
-		if result.Error != "" || !result.MutationCompleted || result.NewContainerID == "" {
+		if result.Error != "" || !result.MutationCompleted || (result.NewContainerID == "" && result.SourceStage != "git_proposed") {
 			return fmt.Errorf("complete docker update requires a replacement container and no error")
 		}
 	}
@@ -192,6 +216,18 @@ func ValidateDockerContainerUpdateResultForRequest(req DockerContainerUpdatePayl
 	}
 	if result.RequestID != req.RequestID || result.ActionID != req.ActionID || result.Operation != req.Operation || result.OperationVersion != req.OperationVersion || result.RequestDigest != req.RequestDigest {
 		return fmt.Errorf("docker update result identity mismatch")
+	}
+	if req.Compose != nil {
+		gitStage := strings.HasPrefix(result.SourceStage, "git_")
+		if (gitStage && req.Compose.Mode != "git") || (result.MutationCompleted && req.Compose.Mode == "git" && result.SourceStage != "git_proposed") || (result.MutationCompleted && req.Compose.Mode == "local" && result.SourceStage != "service_readback") || result.BackupCreated || result.RollbackAttempted {
+			return fmt.Errorf("result disagrees with the reviewed Compose operation")
+		}
+		if result.MutationCompleted && req.Compose.Mode == "local" {
+			_, want, _ := strings.Cut(req.Compose.AfterImage, "@")
+			if result.NewImageDigest != want {
+				return fmt.Errorf("replacement manifest differs from approved digest")
+			}
+		}
 	}
 	if result.ContainerID != req.ContainerID {
 		return fmt.Errorf("docker update result container mismatch")

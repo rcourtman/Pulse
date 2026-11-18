@@ -1241,7 +1241,7 @@ describe('ThresholdsTable V6 ID compatibility', () => {
     expect(screen.queryByTestId('resource-row-docker:gone/removed-redis')).not.toBeInTheDocument();
   });
 
-  it('offers only runtime connectivity, with honest scope and independent container/machine drafts', async () => {
+  it('saves child-container mute independently of runtime connectivity and machine thresholds', async () => {
     setPathname('/alerts/thresholds/containers');
     const runtime = (id: string) => ({
       id,
@@ -1249,6 +1249,7 @@ describe('ThresholdsTable V6 ID compatibility', () => {
       name: id,
       displayName: id,
       platformId: id,
+      docker: { hostSourceId: id },
       platformType: 'docker',
       sourceType: 'agent',
       status: 'online',
@@ -1278,11 +1279,14 @@ describe('ThresholdsTable V6 ID compatibility', () => {
     const [rawOverridesConfig, setRawOverridesConfig] = createSignal<any>({
       'machine-a': { cpu: 77 },
     });
+    const [muted, setMuted] = createSignal<string[]>([]);
     const setHasUnsavedChanges = vi.fn();
     render(() => (
       <ThresholdsTable
         {...(baseProps() as any)}
         containerRuntimes={[runtime('runtime-a'), runtime('runtime-b')]}
+        dockerMutedContainerHosts={muted}
+        setDockerMutedContainerHosts={setMuted}
         allResources={[container('runtime-a'), container('runtime-b')]}
         overrides={overrides}
         setOverrides={setOverrides}
@@ -1293,13 +1297,10 @@ describe('ThresholdsTable V6 ID compatibility', () => {
     ));
     expect(screen.queryByTestId('toggle-disabled-runtime-a')).not.toBeInTheDocument();
     expect(screen.queryByTestId('toggle-disabled-runtime-b')).not.toBeInTheDocument();
-    expect(
-      screen.getByText(/Offline Alerts only controls runtime-disconnection alerts/),
-    ).toHaveTextContent('not container or machine alerts');
-    expect(screen.getByText(/Newly added containers need their own setting/)).toHaveTextContent(
-      'no single-runtime mute',
-    );
     expect(setHasUnsavedChanges).not.toHaveBeenCalled();
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'runtime-a' }));
+    expect(muted()).toEqual(['runtime-a']);
+    expect(rawOverridesConfig()).toEqual({ 'machine-a': { cpu: 77 } });
     await fireEvent.click(screen.getByTestId('toggle-connectivity-runtime-a'));
     expect(rawOverridesConfig()).toEqual({
       'machine-a': { cpu: 77 },

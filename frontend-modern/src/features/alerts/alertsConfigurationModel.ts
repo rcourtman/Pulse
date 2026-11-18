@@ -86,6 +86,7 @@ export interface AlertsConfigurationSnapshot {
   dockerDefaults: typeof FACTORY_DOCKER_DEFAULTS;
   dockerDisableConnectivity: boolean;
   dockerPoweredOffSeverity: 'warning' | 'critical';
+  dockerMutedContainerHosts: string[];
   dockerIgnoredPrefixes: string[];
   ignoredGuestPrefixes: string[];
   guestTagWhitelist: string[];
@@ -290,6 +291,7 @@ export function createDefaultAlertsConfigurationSnapshot(): AlertsConfigurationS
     dockerDefaults: { ...FACTORY_DOCKER_DEFAULTS },
     dockerDisableConnectivity: FACTORY_DOCKER_STATE_DISABLE_CONNECTIVITY,
     dockerPoweredOffSeverity: FACTORY_DOCKER_STATE_SEVERITY,
+    dockerMutedContainerHosts: [],
     dockerIgnoredPrefixes: [],
     ignoredGuestPrefixes: [],
     guestTagWhitelist: [],
@@ -540,6 +542,9 @@ export function readAlertsConfigurationSnapshot(config: AlertConfig): AlertsConf
       config.dockerDefaults.statePoweredOffSeverity === 'critical' ? 'critical' : 'warning';
   }
 
+  snapshot.dockerMutedContainerHosts = Object.entries(config.dockerMutedContainerHosts ?? {})
+    .filter(([, muted]) => muted)
+    .map(([id]) => id);
   snapshot.dockerIgnoredPrefixes = [...(config.dockerIgnoredContainerPrefixes ?? [])];
   snapshot.ignoredGuestPrefixes = [...(config.ignoredGuestPrefixes ?? [])];
   snapshot.guestTagWhitelist = [...(config.guestTagWhitelist ?? [])];
@@ -900,6 +905,9 @@ export function buildAlertsConfigurationPayload({
         stateDisableConnectivity: snapshot.dockerDisableConnectivity,
         statePoweredOffSeverity: snapshot.dockerPoweredOffSeverity,
       },
+      dockerMutedContainerHosts: Object.fromEntries(
+        snapshot.dockerMutedContainerHosts.map((id) => [id, true]),
+      ),
       dockerIgnoredContainerPrefixes: normalizeStringList(snapshot.dockerIgnoredPrefixes),
       ignoredGuestPrefixes: normalizeStringList(snapshot.ignoredGuestPrefixes),
       guestTagWhitelist: normalizeStringList(snapshot.guestTagWhitelist),

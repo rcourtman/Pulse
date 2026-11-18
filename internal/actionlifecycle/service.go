@@ -748,6 +748,24 @@ func (s *Service) List(orgID string, view ActionListView, limit int) ([]unified.
 	return records, nil
 }
 
+// ComposeActions retains project history across service container replacement.
+func (s *Service) ComposeActions(orgID, runtime, project string, limit int) ([]unified.ActionAuditRecord, error) {
+	store, err := s.store(orgID)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.sweepExpiry(orgID, store); err != nil {
+		return nil, err
+	}
+	reader, ok := store.(interface {
+		GetComposeActions(string, string, int) ([]unified.ActionAuditRecord, error)
+	})
+	if !ok {
+		return nil, ErrStoreUnavailable
+	}
+	return reader.GetComposeActions(runtime, project, limit)
+}
+
 // DecisionQueue preserves the legacy oldest-first pending-approval projection
 // while sharing the canonical expiry sweep.
 func (s *Service) DecisionQueue(orgID string, limit int) ([]unified.ActionAuditRecord, error) {

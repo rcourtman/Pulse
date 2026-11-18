@@ -3,6 +3,7 @@ package alerts
 import (
 	"errors"
 	"fmt"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"strings"
 	"time"
 
@@ -120,6 +121,7 @@ func (m *Manager) updateConfigLocked(config AlertConfig) {
 		m.clearBackupAlertsLocked()
 	}
 
+	m.reconcileMutedDockerContainersNoLock()
 	m.applyGlobalOfflineSettingsLocked()
 
 	log.Info().
@@ -285,12 +287,14 @@ func (m *Manager) applyGlobalOfflineSettingsLocked() {
 		m.dockerRestartTracking = make(map[string]*dockerRestartRecord)
 		m.dockerUpdateFirstSeen = make(map[string]time.Time)
 		m.dockerUpdateFirstSeenByIdentity = make(map[string]time.Time)
+		clear(m.dockerUpdateIdentityOwner)
 		m.dockerUpdateLastObserved = make(map[string]time.Time)
 	}
 	if m.config.DockerDefaults.UpdateAlertDelayHours < 0 && !containersDisabled {
 		m.clearDockerContainerUpdateAlertsLocked()
 		m.dockerUpdateFirstSeen = make(map[string]time.Time)
 		m.dockerUpdateFirstSeenByIdentity = make(map[string]time.Time)
+		clear(m.dockerUpdateIdentityOwner)
 		m.dockerUpdateLastObserved = make(map[string]time.Time)
 	}
 	if servicesDisabled {
@@ -348,6 +352,65 @@ func dockerAlertResourcePath(alert *Alert) (host, child string, ok bool) {
 	}
 	host, child, _ = strings.Cut(path, "/")
 	return host, child, true
+}
+
+// Docker host and Swarm service alerts share the scheme with containers.
+func (m *Manager) dockerContainerResourceMutedNoLock(resourceID string) bool {
+	if len(m.config.DockerMutedContainerHosts) == 0 {
+		return false
+	}
+	hostID, child, ok := dockerAlertResourcePath(&Alert{ResourceID: resourceID})
+	return ok && child != "" && !strings.HasPrefix(child, "service/") && m.config.DockerMutedContainerHosts[hostID]
+}
+
+// A mute affects existing and future containers, including pending-only
+// confirmation windows. A subsequent unmute starts a new observation window.
+func (m *Manager) reconcileMutedDockerContainersNoLock() {
+	if len(m.config.DockerMutedContainerHosts) == 0 {
+		return
+	}
+	changed := false
+	for key, alert := range m.activeAlerts {
+		if alert == nil {
+			continue
+		}
+		muted := m.dockerContainerResourceMutedNoLock(alert.ResourceID)
+		if !muted {
+			hostID := alertMetadataString(alert, "hostId")
+			muted = m.config.DockerMutedContainerHosts[hostID] && isLegacyDockerHostContainerAlert(alert, models.DockerHost{ID: hostID})
+		}
+		if muted {
+			alert.Resolution = &AlertResolution{Reason: AlertResolutionContainerRuntimeMuted}
+			m.clearDockerContainerUpdateStateLocked(alert)
+			m.clearAlertNoLock(key)
+			changed = true
+		}
+	}
+	for _, resourceID := range m.core.PendingResourceIDs() {
+		if m.dockerContainerResourceMutedNoLock(resourceID) {
+			m.core.DropPendingForResource(resourceID)
+			changed = true
+		}
+	}
+	for id := range m.dockerRestartTracking {
+		if m.dockerContainerResourceMutedNoLock(id) {
+			delete(m.dockerRestartTracking, id)
+		}
+	}
+	for id := range m.dockerUpdateFirstSeen {
+		if m.dockerContainerResourceMutedNoLock(id) {
+			delete(m.dockerUpdateFirstSeen, id)
+			delete(m.dockerUpdateLastObserved, id)
+		}
+	}
+	for key, hostID := range m.dockerUpdateIdentityOwner {
+		if m.config.DockerMutedContainerHosts[hostID] {
+			m.forgetDockerUpdateIdentityNoLock(key)
+		}
+	}
+	if changed {
+		m.saveActiveAlertsAsync("Docker container alerts muted on runtime")
+	}
 }
 
 func isDockerContainerAlert(alert *Alert) bool {

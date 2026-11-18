@@ -171,6 +171,9 @@ func buildActionFixtures(resources []unifiedresources.Resource, now time.Time) [
 	failed = mustNormalizeMockActionFixture(failed)
 
 	fixtures := []ActionFixture{pending, approved, executing, completed, rejected, failed}
+	if api := demoComposeAPI(resources); api != nil {
+		fixtures = append(fixtures, demoComposeDeployment(*api, now))
+	}
 	sort.SliceStable(fixtures, func(i, j int) bool { return fixtures[i].Audit.UpdatedAt.After(fixtures[j].Audit.UpdatedAt) })
 	return fixtures
 }

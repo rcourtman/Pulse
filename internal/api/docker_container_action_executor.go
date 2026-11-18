@@ -106,7 +106,7 @@ func (e dockerContainerActionExecutor) BindActionDispatch(ctx context.Context, r
 		if err != nil {
 			return unified.ActionDispatchAttempt{}, err
 		}
-		req, err := dockerContainerUpdateRequest(attempt.ID, record.ID, runtime, resource)
+		req, err := dockerContainerUpdateRequest(attempt.ID, record.ID, runtime, resource, record.Request.Params)
 		if err != nil {
 			return unified.ActionDispatchAttempt{}, err
 		}
@@ -248,7 +248,7 @@ func (e dockerContainerActionExecutor) executeDockerContainerUpdate(ctx context.
 	if !ok {
 		return nil, fmt.Errorf("typed docker container update agent is unavailable")
 	}
-	req, err := dockerContainerUpdateRequest(attempt.ID, record.ID, runtime, resource)
+	req, err := dockerContainerUpdateRequest(attempt.ID, record.ID, runtime, resource, record.Request.Params)
 	if err != nil {
 		return nil, err
 	}
@@ -275,7 +275,7 @@ func (e dockerContainerActionExecutor) executeDockerContainerUpdate(ctx context.
 	return dockerContainerUpdateExecutionResult(record.Request.ResourceID, agentID, *result, independent, receivedAt)
 }
 
-func dockerContainerUpdateRequest(attemptID, actionID, runtime string, resource unified.Resource) (agentexec.DockerContainerUpdatePayload, error) {
+func dockerContainerUpdateRequest(attemptID, actionID, runtime string, resource unified.Resource, params map[string]any) (agentexec.DockerContainerUpdatePayload, error) {
 	expectedDigest := ""
 	if resource.Docker != nil && resource.Docker.UpdateStatus != nil {
 		expectedDigest = strings.ToLower(strings.TrimSpace(resource.Docker.UpdateStatus.CurrentDigest))
@@ -286,6 +286,15 @@ func dockerContainerUpdateRequest(attemptID, actionID, runtime string, resource 
 	req := agentexec.DockerContainerUpdatePayload{
 		RequestID: attemptID, ActionID: actionID, Runtime: runtime,
 		ContainerID: dockerContainerRef(resource), ExpectedImageDigest: expectedDigest,
+	}
+	change := resource.Docker.ComposeUpdate
+	hash, hasHash := params["sourceHash"].(string)
+	image, hasImage := params["afterImage"].(string)
+	if resource.Docker.ComposeSourceRegistered || change != nil || hasHash || hasImage {
+		if !change.Valid() || hash != change.SourceHash || image != change.AfterImage || params["composeRuntime"] != resource.Docker.HostSourceID || params["composeProject"] != change.Project || params["composeService"] != change.Service {
+			return req, fmt.Errorf("registered Compose source or image changed; review the service again")
+		}
+		req.Compose = change.Clone()
 	}
 	if err := agentexec.BindDockerContainerUpdatePayload(&req); err != nil {
 		return agentexec.DockerContainerUpdatePayload{}, err
@@ -432,7 +441,7 @@ func (e dockerContainerActionExecutor) CheckActionFeasible(ctx context.Context, 
 	requestID := uuid.NewString()
 	preflight := agentexec.ActionPreflightPayload{RequestID: requestID, ProtocolVersion: agentexec.ActionPreflightProtocolVersion}
 	if isDockerContainerUpdateOperation(req.CapabilityName) {
-		typed, bindErr := dockerContainerUpdateRequest(requestID, actionID, runtime, resource)
+		typed, bindErr := dockerContainerUpdateRequest(requestID, actionID, runtime, resource, req.Params)
 		if bindErr != nil {
 			return actionPreflightReadiness(req.CapabilityName, nil, bindErr)
 		}

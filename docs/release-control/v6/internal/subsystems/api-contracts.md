@@ -21,6 +21,14 @@
 
 ## Purpose
 
+A source-aware Docker update retains a typed receipt for a local mutation or
+Git proposal. The scoped `GET /api/actions?view=compose&runtime=…&project=…`
+read joins the reviewed target to current running-image inventory and fresh
+attached HTTP results. Execution, observed rollout and manual data recovery
+retain distinct meanings across a service container replacement.
+
+The Docker live-log read requires Docker management authority in the selected organization. Only the opted-in runtime’s authenticated report token can claim and complete the one-time request. A browser disconnect or deadline removes the request. Disclosure rechecks current authority and runtime ownership.
+
 ### Ended administrator recovery is refused before admission (17 November 2026)
 
 The public `POST /api/admin/rbac/reset-admin` handler checks request cancellation

@@ -43,6 +43,7 @@ type AgentInfo struct {
 	// FailureLogsEnabled reports the host's local --enable-failure-logs
 	// setting. It is a fact about the agent, set only on the host.
 	FailureLogsEnabled bool `json:"failureLogsEnabled,omitempty"`
+	LiveLogsEnabled    bool `json:"liveLogsEnabled,omitempty"`
 }
 
 // HostInfo contains metadata about the Docker host where the agent runs.
@@ -78,41 +79,43 @@ type HostSecurityInfo struct {
 
 // Container captures the runtime state for a Docker container at report time.
 type Container struct {
-	ID                  string                   `json:"id"`
-	Name                string                   `json:"name"`
-	Image               string                   `json:"image"`
-	ImageDigest         string                   `json:"imageDigest,omitempty"` // Current image digest for update detection
-	CreatedAt           time.Time                `json:"createdAt"`
-	State               string                   `json:"state"`
-	Status              string                   `json:"status"`
-	Health              string                   `json:"health,omitempty"`
-	HealthcheckTargets  []string                 `json:"healthcheckTargets,omitempty"`
-	HealthProbe         *ContainerHealthProbe    `json:"healthProbe,omitempty"` // Why the last health check failed; only while unhealthy
-	FailureLog          *ContainerFailureLog     `json:"failureLog,omitempty"`  // Last log lines of a failed container; only when the host opted in
-	CPUPercent          float64                  `json:"cpuPercent"`
-	MemoryUsageBytes    int64                    `json:"memoryUsageBytes"`
-	MemoryLimitBytes    int64                    `json:"memoryLimitBytes"`
-	MemoryPercent       float64                  `json:"memoryPercent"`
-	UptimeSeconds       int64                    `json:"uptimeSeconds"`
-	RestartCount        int                      `json:"restartCount"`
-	ExitCode            int                      `json:"exitCode"`
-	RestartPolicy       string                   `json:"restartPolicy,omitempty"` // Docker's policy name: no, on-failure, always, unless-stopped; empty when not reported
-	OOMKilled           *bool                    `json:"oomKilled,omitempty"`
-	StartedAt           *time.Time               `json:"startedAt,omitempty"`
-	FinishedAt          *time.Time               `json:"finishedAt,omitempty"`
-	Ports               []ContainerPort          `json:"ports,omitempty"`
-	Labels              map[string]string        `json:"labels,omitempty"`
-	Env                 []string                 `json:"env,omitempty"`
-	Networks            []ContainerNetwork       `json:"networks,omitempty"`
-	NetworkRXBytes      uint64                   `json:"networkRxBytes,omitempty"`
-	NetworkTXBytes      uint64                   `json:"networkTxBytes,omitempty"`
-	WritableLayerBytes  int64                    `json:"writableLayerBytes,omitempty"`
-	RootFilesystemBytes int64                    `json:"rootFilesystemBytes,omitempty"`
-	BlockIO             *ContainerBlockIO        `json:"blockIo,omitempty"`
-	Mounts              []ContainerMount         `json:"mounts,omitempty"`
-	Filesystems         []filesystem.Observation `json:"filesystems,omitempty"`
-	Podman              *PodmanContainer         `json:"podman,omitempty"`
-	UpdateStatus        *UpdateStatus            `json:"updateStatus,omitempty"` // Image update detection status
+	ID                      string                   `json:"id"`
+	Name                    string                   `json:"name"`
+	Image                   string                   `json:"image"`
+	ImageDigest             string                   `json:"imageDigest,omitempty"` // Current image digest for update detection
+	CreatedAt               time.Time                `json:"createdAt"`
+	State                   string                   `json:"state"`
+	Status                  string                   `json:"status"`
+	Health                  string                   `json:"health,omitempty"`
+	HealthcheckTargets      []string                 `json:"healthcheckTargets,omitempty"`
+	HealthProbe             *ContainerHealthProbe    `json:"healthProbe,omitempty"` // Why the last health check failed; only while unhealthy
+	FailureLog              *ContainerFailureLog     `json:"failureLog,omitempty"`  // Last log lines of a failed container; only when the host opted in
+	CPUPercent              float64                  `json:"cpuPercent"`
+	MemoryUsageBytes        int64                    `json:"memoryUsageBytes"`
+	MemoryLimitBytes        int64                    `json:"memoryLimitBytes"`
+	MemoryPercent           float64                  `json:"memoryPercent"`
+	UptimeSeconds           int64                    `json:"uptimeSeconds"`
+	RestartCount            int                      `json:"restartCount"`
+	ExitCode                int                      `json:"exitCode"`
+	RestartPolicy           string                   `json:"restartPolicy,omitempty"` // Docker's policy name: no, on-failure, always, unless-stopped; empty when not reported
+	OOMKilled               *bool                    `json:"oomKilled,omitempty"`
+	StartedAt               *time.Time               `json:"startedAt,omitempty"`
+	FinishedAt              *time.Time               `json:"finishedAt,omitempty"`
+	Ports                   []ContainerPort          `json:"ports,omitempty"`
+	Labels                  map[string]string        `json:"labels,omitempty"`
+	Env                     []string                 `json:"env,omitempty"`
+	Networks                []ContainerNetwork       `json:"networks,omitempty"`
+	NetworkRXBytes          uint64                   `json:"networkRxBytes,omitempty"`
+	NetworkTXBytes          uint64                   `json:"networkTxBytes,omitempty"`
+	WritableLayerBytes      int64                    `json:"writableLayerBytes,omitempty"`
+	RootFilesystemBytes     int64                    `json:"rootFilesystemBytes,omitempty"`
+	BlockIO                 *ContainerBlockIO        `json:"blockIo,omitempty"`
+	Mounts                  []ContainerMount         `json:"mounts,omitempty"`
+	Filesystems             []filesystem.Observation `json:"filesystems,omitempty"`
+	Podman                  *PodmanContainer         `json:"podman,omitempty"`
+	ComposeSourceRegistered bool                     `json:"composeSourceRegistered,omitempty"`
+	ComposeUpdate           *ComposeImageChange      `json:"composeUpdate,omitempty"`
+	UpdateStatus            *UpdateStatus            `json:"updateStatus,omitempty"` // Image update detection status
 }
 
 // ContainerPort tracks an exposed container port mapping.

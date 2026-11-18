@@ -1,5 +1,5 @@
 import { useLocation, useSearchParams } from '@solidjs/router';
-import { Show, createEffect, createMemo, createSignal } from 'solid-js';
+import { Show, lazy, createEffect, createMemo, createSignal } from 'solid-js';
 import BoxIcon from 'lucide-solid/icons/box';
 import { ButtonLink } from '@/components/shared/Button';
 import { getPlatformIcon } from '@/features/platformPage/platformIcon';
@@ -14,7 +14,6 @@ import {
   withPlatformStatusCounts,
 } from '@/features/platformPage/sharedPlatformPage';
 import { DockerAlertsTable } from './DockerAlertsTable';
-import { DockerApplications } from './DockerApplications';
 import { DockerConfigsTable } from './DockerConfigsTable';
 import { DockerContainersTable } from './DockerContainersTable';
 import { DockerHostsTable } from './DockerHostsTable';
@@ -81,6 +80,10 @@ const DOCKER_RESOURCE_QUERY_BY_TAB: Record<Exclude<DockerPageTabId, 'application
 
 const DockerIcon = getPlatformIcon('docker');
 const dockerIcon = () => <DockerIcon class="h-6 w-6 text-slate-400" />;
+
+const DockerApplications = lazy(() =>
+  import('./DockerApplications').then((module) => ({ default: module.DockerApplications })),
+);
 
 export function DockerPageSurface() {
   const location = useLocation();

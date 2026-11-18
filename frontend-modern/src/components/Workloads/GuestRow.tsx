@@ -1177,6 +1177,7 @@ export function GuestRow(props: GuestRowProps) {
               <Show when={workloadType() === 'app-container' && dockerHostId()}>
                 <UpdateButton
                   updateStatus={props.guest.updateStatus}
+                  composeUpdate={props.guest.composeUpdate}
                   agentId={dockerHostId()}
                   containerId={props.guest.containerId ?? ''}
                   containerName={props.guest.name}

@@ -2427,6 +2427,10 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 			NetworkRXBytes:     payload.NetworkRXBytes,
 			NetworkTXBytes:     payload.NetworkTXBytes,
 		}
+		container.ComposeSourceRegistered = payload.ComposeSourceRegistered || payload.ComposeUpdate != nil
+		if payload.ComposeUpdate.Valid() && payload.ComposeUpdate.Project == payload.Labels["com.docker.compose.project"] && payload.ComposeUpdate.Service == payload.Labels["com.docker.compose.service"] {
+			container.ComposeUpdate = payload.ComposeUpdate.Clone()
+		}
 		container.CPUCapacityPercent = models.DockerContainerCPUCapacityPercent(container, report.Host.TotalCPU)
 
 		// Copy update status if provided by agent
@@ -2676,6 +2680,7 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 		IdentityConflict:  identityConflict,
 	}
 	host.FailureLogsEnabled = report.Agent.FailureLogsEnabled
+	host.LiveLogsEnabled = report.Agent.LiveLogsEnabled
 	if !inventoryComplete && previousState.ID != "" {
 		preserveDockerInventorySnapshot(&host, previousState)
 	}

@@ -10425,44 +10425,6 @@
           "kind": "file"
         }
       ]
-    },
-    {
-      "id": "compose-application-operations",
-      "summary": "Operators diagnose failures and update Compose services across Pulse and an external deployment owner. Complete the incident and reviewed service-update journeys on Docker-only hosts and Docker runtimes in Proxmox guests.",
-      "owner": "project-owner",
-      "status": "planned",
-      "recorded_at": "2026-11-18",
-      "lane_ids": [
-        "L6",
-        "L8",
-        "L13",
-        "L14",
-        "L16",
-        "L20"
-      ],
-      "subsystem_ids": [
-        "agent-lifecycle",
-        "alerts",
-        "api-contracts",
-        "frontend-primitives",
-        "monitoring",
-        "notifications",
-        "security-privacy",
-        "unified-resources"
-      ],
-      "proposed_resolution": "lane-expansion",
-      "evidence": [
-        {
-          "repo": "pulse",
-          "path": "docs/DOCKER.md",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "internal/dockeragent/container_update_typed.go",
-          "kind": "file"
-        }
-      ]
     }
   ],
   "candidate_lanes": [
@@ -10611,40 +10573,6 @@
         "user-direction: 2026-09-05 prioritise dependable Patrol and Assistant outcomes as core Pulse Pro value",
         "qualification-contract: docs/qualification/PATROL_ASSISTANT_CUSTOMER_JOURNEY.md",
         "user-direction: 2026-09-05 assess the whole design, establish an executable plan and pursue its completion as an explicit goal"
-      ]
-    },
-    {
-      "id": "docker-application-operations",
-      "name": "Docker application diagnosis and service updates",
-      "summary": "Deliver monitor-only Docker onboarding through the first Compose application and endpoint check. Show project health, host and guest context, correlated failures and locally opted-in diagnostic logs. Scope container alert policy to a runtime while retaining machine alerts. Review one service image change against the registered local Compose file or Git repository, let its owner deploy, and verify the running image and application response. Preserve the distinction between image recovery and application data recovery. Exercise diagnosis and update on disposable standalone and guest-hosted deployments.",
-      "status": "proposed",
-      "recorded_at": "2026-11-18",
-      "target_id": "v6-product-lane-expansion",
-      "current_lane_ids": [
-        "L6",
-        "L8",
-        "L13",
-        "L14",
-        "L16",
-        "L20"
-      ],
-      "coverage_gap_ids": [
-        "compose-application-operations"
-      ],
-      "subsystem_ids": [
-        "agent-lifecycle",
-        "alerts",
-        "api-contracts",
-        "frontend-primitives",
-        "monitoring",
-        "notifications",
-        "security-privacy",
-        "unified-resources"
-      ],
-      "demand_evidence": [
-        "community-feedback: https://github.com/rcourtman/Pulse/issues/1177#issuecomment-3862724073",
-        "community-feedback: https://github.com/rcourtman/Pulse/issues/1891",
-        "community-feedback: https://github.com/rcourtman/Pulse/issues/2107"
       ]
     }
   ],

@@ -1,4 +1,5 @@
 import type { Resource } from '@/types/resource';
+import { hasFailedAttachedAvailabilityCheck } from '@/utils/availabilityProbePresentation';
 import { dockerComposeMembership, mapDockerContainerStatus } from './dockerPageModel';
 
 export interface DockerComposeApplication {
@@ -32,8 +33,25 @@ export function buildDockerComposeApplications(hosts: Resource[], containers: Re
 export function composeAttentionCount(app: DockerComposeApplication) {
   return app.containers.filter((container) => {
     const { variant } = mapDockerContainerStatus(container);
-    return variant === 'danger' || variant === 'warning' || (container.incidentCount ?? 0) > 0;
+    return (
+      variant === 'danger' ||
+      variant === 'warning' ||
+      (container.incidentCount ?? 0) > 0 ||
+      hasFailedAttachedAvailabilityCheck(container)
+    );
   }).length;
+}
+
+export function composeGuestLocation(host?: Resource) {
+  if (!host || (host.type !== 'vm' && host.type !== 'system-container')) return undefined;
+  if (host.platformType !== 'proxmox-pve' && !host.platformScopes?.includes('proxmox-pve'))
+    return undefined;
+  const subject = host.type === 'vm' ? 'Proxmox VM' : 'Proxmox LXC';
+  const guest = [subject, host.proxmox?.vmid, host.displayName || host.name]
+    .filter(Boolean)
+    .join(' ');
+  const node = host.proxmox?.nodeName || host.proxmox?.node || host.parentName;
+  return node ? `${guest} on ${node}` : guest;
 }
 
 export interface ComposeActivity {

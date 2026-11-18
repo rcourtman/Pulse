@@ -1,3 +1,4 @@
+import type { JSX } from 'solid-js';
 import { fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AgentLookupResponse } from '@/types/api';
@@ -31,6 +32,10 @@ const stateOverrides: Record<string, unknown> = {
   isGeneratingToken: () => false,
 };
 
+vi.mock('@solidjs/router', () => ({
+  A: (props: JSX.AnchorHTMLAttributes<HTMLAnchorElement>) => <a {...props} />,
+}));
+
 vi.mock('../useInfrastructureOperationsState', () => ({
   useInfrastructureOperationsContext: () =>
     new Proxy(stateOverrides, {
@@ -54,6 +59,31 @@ describe('InfrastructureInstallerSection', () => {
     expect(screen.getByText(/^Last seen/)).toBe(label);
     expect(label).toHaveTextContent('Last seen 2 hours ago');
     view.unmount();
+  });
+
+  it('opens Compose applications and standalone containers from a connected Docker install', () => {
+    const lookup = stateOverrides.lookupResult;
+    stateOverrides.lookupResult = () => ({
+      ...lookupResult,
+      agent: { ...lookupResult.agent, connected: true },
+    });
+    try {
+      const view = render(() => <InfrastructureInstallerSection focus="docker" />);
+      expect(screen.getByRole('link', { name: 'Open Compose applications' })).toHaveAttribute(
+        'href',
+        '/docker/applications',
+      );
+      expect(screen.getByRole('link', { name: 'Open Docker overview' })).toHaveAttribute(
+        'href',
+        '/docker/overview',
+      );
+      expect(
+        screen.getByText(/open Service checks to review its published ports/),
+      ).toBeInTheDocument();
+      view.unmount();
+    } finally {
+      stateOverrides.lookupResult = lookup;
+    }
   });
 
   // #1728: the only way to grant the command access container updates need sat

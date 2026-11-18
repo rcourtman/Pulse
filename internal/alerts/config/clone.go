@@ -21,6 +21,7 @@ func (c AlertConfig) Clone() AlertConfig {
 	clone.AgentDefaults = c.AgentDefaults.Clone()
 	clone.DiskFillByType = maps.Clone(c.DiskFillByType)
 	clone.DiskTempByType = maps.Clone(c.DiskTempByType)
+	clone.DockerMutedContainerHosts = maps.Clone(c.DockerMutedContainerHosts)
 	clone.DockerIgnoredContainerPrefixes = slices.Clone(c.DockerIgnoredContainerPrefixes)
 	clone.IgnoredGuestPrefixes = slices.Clone(c.IgnoredGuestPrefixes)
 	clone.GuestTagWhitelist = slices.Clone(c.GuestTagWhitelist)

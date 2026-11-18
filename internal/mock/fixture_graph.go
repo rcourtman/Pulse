@@ -41,6 +41,9 @@ func buildFixtureGraph(cfg MockConfig, now time.Time) FixtureGraph {
 	graph.AlertHistory = buildAlertHistory(graph.State.Nodes, graph.State.VMs, graph.State.Containers)
 	graph.AlertHistory, graph.AlertIncidents = buildAlertIncidentFixtures(graph.AlertHistory, now)
 	resources, _ := graph.UnifiedResourceSnapshot()
+	if api := demoComposeAPI(resources); api != nil {
+		graph.AvailabilityFixtures = append(graph.AvailabilityFixtures, demoComposeEndpoint(*api, now))
+	}
 	graph.ActionFixtures = buildActionFixtures(resources, now)
 	syncMetricFixtureRegistriesFromGraph(graph)
 	return graph

@@ -7,6 +7,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
+	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/agents/filesystem"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/tlsutil"
@@ -1167,29 +1168,31 @@ type DockerData struct {
 	IdentityConflict      *models.DockerHostIdentityConflict `json:"identityConflict,omitempty"`
 
 	// Container-specific fields (populated when Resource.Type == ResourceTypeAppContainer)
-	ComposeProject     string                      `json:"composeProject,omitempty"`
-	ComposeService     string                      `json:"composeService,omitempty"`
-	ContainerState     string                      `json:"containerState,omitempty"`
-	Health             string                      `json:"health,omitempty"`
-	HealthcheckTargets []string                    `json:"healthcheckTargets,omitempty"`
-	HealthProbe        *DockerHealthProbe          `json:"healthProbe,omitempty"`
-	FailureLog         *DockerFailureLog           `json:"failureLog,omitempty"`
-	RestartCount       int                         `json:"restartCount,omitempty"`
-	ExitCode           int                         `json:"exitCode,omitempty"`
-	OOMKilled          *bool                       `json:"oomKilled,omitempty"`
-	CPURawPercent      float64                     `json:"cpuRawPercent,omitempty"`
-	CPUCapacityPercent float64                     `json:"cpuCapacityPercent,omitempty"`
-	CPUCapacityCores   int                         `json:"cpuCapacityCores,omitempty"`
-	StartedAt          *time.Time                  `json:"startedAt,omitempty"`
-	FinishedAt         *time.Time                  `json:"finishedAt,omitempty"`
-	BlockIO            *DockerContainerBlockIOMeta `json:"blockIo,omitempty"`
-	Podman             *DockerPodmanContainerMeta  `json:"podman,omitempty"`
-	Ports              []DockerPortMeta            `json:"ports,omitempty"`
-	Labels             map[string]string           `json:"labels,omitempty"`
-	Networks           []DockerNetworkMeta         `json:"networks,omitempty"`
-	Mounts             []DockerMountMeta           `json:"mounts,omitempty"`
-	Filesystems        []filesystem.Observation    `json:"filesystems,omitempty"`
-	UpdateStatus       *DockerUpdateStatusMeta     `json:"updateStatus,omitempty"`
+	ComposeProject          string                           `json:"composeProject,omitempty"`
+	ComposeService          string                           `json:"composeService,omitempty"`
+	ContainerState          string                           `json:"containerState,omitempty"`
+	Health                  string                           `json:"health,omitempty"`
+	HealthcheckTargets      []string                         `json:"healthcheckTargets,omitempty"`
+	HealthProbe             *DockerHealthProbe               `json:"healthProbe,omitempty"`
+	FailureLog              *DockerFailureLog                `json:"failureLog,omitempty"`
+	RestartCount            int                              `json:"restartCount,omitempty"`
+	ExitCode                int                              `json:"exitCode,omitempty"`
+	OOMKilled               *bool                            `json:"oomKilled,omitempty"`
+	CPURawPercent           float64                          `json:"cpuRawPercent,omitempty"`
+	CPUCapacityPercent      float64                          `json:"cpuCapacityPercent,omitempty"`
+	CPUCapacityCores        int                              `json:"cpuCapacityCores,omitempty"`
+	StartedAt               *time.Time                       `json:"startedAt,omitempty"`
+	FinishedAt              *time.Time                       `json:"finishedAt,omitempty"`
+	BlockIO                 *DockerContainerBlockIOMeta      `json:"blockIo,omitempty"`
+	Podman                  *DockerPodmanContainerMeta       `json:"podman,omitempty"`
+	Ports                   []DockerPortMeta                 `json:"ports,omitempty"`
+	Labels                  map[string]string                `json:"labels,omitempty"`
+	Networks                []DockerNetworkMeta              `json:"networks,omitempty"`
+	Mounts                  []DockerMountMeta                `json:"mounts,omitempty"`
+	Filesystems             []filesystem.Observation         `json:"filesystems,omitempty"`
+	ComposeSourceRegistered bool                             `json:"composeSourceRegistered,omitempty"`
+	ComposeUpdate           *agentsdocker.ComposeImageChange `json:"composeUpdate,omitempty"`
+	UpdateStatus            *DockerUpdateStatusMeta          `json:"updateStatus,omitempty"`
 
 	// Service-specific fields (populated when Resource.Type == ResourceTypeDockerService)
 	ServiceID      string                   `json:"serviceId,omitempty"`
@@ -1278,6 +1281,7 @@ type DockerData struct {
 
 	// FailureLogsEnabled is the Docker agent's local failure-logs setting.
 	FailureLogsEnabled bool `json:"failureLogsEnabled,omitempty"`
+	LiveLogsEnabled    bool `json:"liveLogsEnabled,omitempty"`
 }
 
 // PBSData contains Proxmox Backup Server data.

@@ -771,6 +771,8 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 			DisableUpdateChecks:        cfg.DisableDockerUpdateChecks,
 			DisableRegistryCredentials: cfg.DisableRegistryCredentials,
 			CollectFailureLogs:         cfg.EnableFailureLogs,
+			AllowLiveLogs:              cfg.EnableLiveLogs,
+			ComposeSourcesFile:         cfg.ComposeSourcesFile,
 			Runtime:                    cfg.DockerRuntime,
 			LogLevel:                   cfg.LogLevel,
 			Logger:                     &logger,
@@ -1199,9 +1201,11 @@ type Config struct {
 
 	// Auto-update
 	DisableAutoUpdate          bool
-	DisableDockerUpdateChecks  bool   // Disable Docker image update detection
-	DisableRegistryCredentials bool   // Do not read host Docker credentials for registry update checks
-	EnableFailureLogs          bool   // Report the last log lines of a failed container (off by default; log text leaves the host)
+	DisableDockerUpdateChecks  bool // Disable Docker image update detection
+	DisableRegistryCredentials bool // Do not read host Docker credentials for registry update checks
+	EnableFailureLogs          bool // Report the last log lines of a failed container (off by default; log text leaves the host)
+	EnableLiveLogs             bool
+	ComposeSourcesFile         string
 	DockerRuntime              string // Force Docker / Podman runtime: docker, podman, or auto
 
 	// Security
@@ -1430,6 +1434,8 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 	disableDockerUpdateChecksFlag := fs.Bool("disable-docker-update-checks", utils.ParseBool(envDisableDockerUpdateChecks), "Disable Docker image update detection (avoids Docker Hub rate limits)")
 	disableRegistryCredentialsFlag := fs.Bool("disable-registry-credentials", utils.ParseBool(envDisableRegistryCredentials), "Do not read host Docker credentials (config.json / credential helpers) for registry update checks")
 	enableFailureLogsFlag := fs.Bool("enable-failure-logs", utils.ParseBool(envEnableFailureLogs), "Report the last log lines of a container that has failed, masked and bounded. Off by default: log text leaves this host. Only this flag or PULSE_ENABLE_FAILURE_LOGS turns it on; the server cannot")
+	composeSourcesFile := fs.String("docker-compose-sources", getenv("PULSE_DOCKER_COMPOSE_SOURCES"), "Path to the host-owned Compose project source registry")
+	enableLiveLogs := fs.Bool("enable-live-logs", utils.ParseBool(getenv("PULSE_ENABLE_LIVE_LOGS")), "Allow Pulse administrators to request a bounded masked log tail from a container on this host")
 	dockerRuntimeFlag := fs.String("docker-runtime", envDockerRuntime, "Docker / Podman runtime: auto, docker, or podman (default: auto)")
 	enableCommandsFlag := fs.Bool("enable-commands", utils.ParseBool(envEnableCommands), "Enable Pulse command execution for Patrol actions and Proxmox LXC Docker inventory (disabled by default)")
 	commandAuthorityFlag := fs.String("command-authority", envCommandAuthority, "Local command authority: monitoring-only, command-capable, or legacy")
@@ -1634,6 +1640,8 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 		DisableDockerUpdateChecks:  *disableDockerUpdateChecksFlag,
 		DisableRegistryCredentials: *disableRegistryCredentialsFlag,
 		EnableFailureLogs:          *enableFailureLogsFlag,
+		EnableLiveLogs:             *enableLiveLogs,
+		ComposeSourcesFile:         *composeSourcesFile,
 		DockerRuntime:              dockerRuntime,
 		EnableCommands:             enableCommands,
 		CommandAuthorityProfile:    commandAuthorityProfile,
@@ -1956,6 +1964,30 @@ func (b *lateBoundDockerUpdater) TypedContainerUpdatePreflight(ctx context.Conte
 		return agentexec.NewActionPreflightError(agentexec.ActionRefusalCapabilityUnavailable, fmt.Errorf("docker module is not running on this agent"))
 	}
 	return updater.TypedContainerUpdatePreflight(ctx, runtime, containerID, expectedImageDigest)
+}
+
+func (b *lateBoundDockerUpdater) composeUpdater() (hostagent.ComposeServiceUpdater, error) {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	updater, ok := b.updater.(hostagent.ComposeServiceUpdater)
+	if !ok {
+		return nil, agentexec.NewActionPreflightError(agentexec.ActionRefusalCapabilityUnavailable, fmt.Errorf("Compose updater unavailable"))
+	}
+	return updater, nil
+}
+func (b *lateBoundDockerUpdater) TypedComposeUpdatePreflight(ctx context.Context, payload agentexec.DockerContainerUpdatePayload) error {
+	updater, err := b.composeUpdater()
+	if err != nil {
+		return err
+	}
+	return updater.TypedComposeUpdatePreflight(ctx, payload)
+}
+func (b *lateBoundDockerUpdater) TypedComposeUpdate(ctx context.Context, payload agentexec.DockerContainerUpdatePayload) (agentexec.DockerContainerUpdateOutcome, error) {
+	updater, err := b.composeUpdater()
+	if err != nil {
+		return agentexec.DockerContainerUpdateOutcome{}, err
+	}
+	return updater.TypedComposeUpdate(ctx, payload)
 }
 
 func initDockerWithRetry(ctx context.Context, cfg dockeragent.Config, logger *zerolog.Logger) RunnableCloser {

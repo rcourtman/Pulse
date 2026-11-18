@@ -5,6 +5,8 @@ import (
 	"errors"
 	"strings"
 	"time"
+
+	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 )
 
 // MessageType identifies the type of WebSocket message
@@ -335,15 +337,16 @@ const (
 // recreates it from its inspected configuration. It never carries command
 // text, flags, a pull reference, or a user-controlled container name.
 type DockerContainerUpdatePayload struct {
-	RequestID           string `json:"request_id"`
-	ActionID            string `json:"action_id"`
-	Operation           string `json:"operation"`
-	OperationVersion    int    `json:"operation_version"`
-	RequestDigest       string `json:"request_digest"`
-	Runtime             string `json:"runtime"`
-	ContainerID         string `json:"container_id"`
-	ExpectedImageDigest string `json:"expected_image_digest"`
-	Timeout             int    `json:"timeout,omitempty"`
+	Compose             *agentsdocker.ComposeImageChange `json:"compose,omitempty"`
+	RequestID           string                           `json:"request_id"`
+	ActionID            string                           `json:"action_id"`
+	Operation           string                           `json:"operation"`
+	OperationVersion    int                              `json:"operation_version"`
+	RequestDigest       string                           `json:"request_digest"`
+	Runtime             string                           `json:"runtime"`
+	ContainerID         string                           `json:"container_id"`
+	ExpectedImageDigest string                           `json:"expected_image_digest"`
+	Timeout             int                              `json:"timeout,omitempty"`
 }
 
 // DockerContainerUpdateResultPayload reports an update outcome. ContainerID
@@ -351,6 +354,9 @@ type DockerContainerUpdatePayload struct {
 // NewContainerID carries the replacement identity and the compensation fields
 // say whether a backup existed and whether rollback was applied on failure.
 type DockerContainerUpdateResultPayload struct {
+	SourceStage       string                           `json:"source_stage,omitempty"`
+	ProposalCommit    string                           `json:"proposal_commit,omitempty"`
+	ProposalBranch    string                           `json:"proposal_branch,omitempty"`
 	RequestID         string                           `json:"request_id"`
 	ActionID          string                           `json:"action_id"`
 	Operation         string                           `json:"operation"`
@@ -379,17 +385,21 @@ type DockerContainerUpdateResultPayload struct {
 // module's update implementation and the typed command channel, so the host
 // command client does not import the Docker module directly.
 type DockerContainerUpdateOutcome struct {
-	Success           bool
-	ContainerName     string
-	OldContainerID    string
-	NewContainerID    string
-	OldImageDigest    string
-	NewImageDigest    string
-	BackupCreated     bool
-	BackupContainer   string
-	RollbackAttempted bool
-	RolledBack        bool
-	Error             string
+	SourceStage           string
+	ProposalCommit        string
+	ProposalBranch        string
+	SourceMutationStarted bool
+	Success               bool
+	ContainerName         string
+	OldContainerID        string
+	NewContainerID        string
+	OldImageDigest        string
+	NewImageDigest        string
+	BackupCreated         bool
+	BackupContainer       string
+	RollbackAttempted     bool
+	RolledBack            bool
+	Error                 string
 	// ReasonCode names the step that stopped a failed update before it
 	// changed the container. It is empty once mutation started.
 	ReasonCode string

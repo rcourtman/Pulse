@@ -472,3 +472,39 @@ func TestQueuedEscalationRejectsNewlySupportedInfrastructureSymptom(t *testing.T
 		t.Fatal("supported symptom retained a queued quiet-hours replay")
 	}
 }
+
+func TestComposeGroupsFailingContainersWithinExactRuntime(t *testing.T) {
+	m := newTestManager(t)
+	resources := map[string]unifiedresources.Resource{}
+	desired := map[string]*Alert{}
+	for _, id := range []string{"a", "b"} {
+		for _, name := range []string{"db", "web"} {
+			r := unifiedresources.Resource{ID: "app-container:" + id + ":" + name, Name: name, Type: unifiedresources.ResourceTypeAppContainer, Docker: &unifiedresources.DockerData{HostSourceID: id, ContainerID: name, ComposeProject: "photos"}}
+			resources[r.ID] = r
+			if id == "b" && name == "db" {
+				continue
+			}
+			key := DockerContainerResourceID(id, name, name)
+			desired[key] = &Alert{ID: key, Type: "docker-container-health", ResourceID: key, Level: AlertLevelWarning, StartTime: time.Now()}
+		}
+	}
+	endpointID := "availability:photos"
+	resources[endpointID] = unifiedresources.Resource{ID: endpointID, Type: unifiedresources.ResourceTypeNetworkEndpoint, Availability: &unifiedresources.AvailabilityData{CorrelationState: unifiedresources.AvailabilityCorrelationAttached}, Relationships: []unifiedresources.ResourceRelationship{{SourceID: endpointID, TargetID: "app-container:a:web", Type: unifiedresources.RelChecks, Active: true}}}
+	desired[endpointID] = &Alert{ID: endpointID, ResourceID: endpointID, Type: "resource-incident", Level: AlertLevelWarning, Metadata: map[string]interface{}{"incidentCode": "availability_unreachable"}}
+	m.applyInfrastructureIncidentSynthesisNoLock(resources, desired)
+	for _, name := range []string{"db", "web"} {
+		c := desired["docker:a/"+name].Correlation
+		if c == nil || c.Key != "compose:a/photos" || c.Inference != AlertCorrelationInferenceObservationSet || len(c.Observations) != 3 || isSupportedInfrastructureSymptom(desired["docker:a/"+name]) {
+			t.Fatalf("unexpected app correlation: %+v", c)
+		}
+	}
+	if desired["docker:b/web"].Correlation != nil {
+		t.Fatal("same project name crossed runtimes")
+	}
+	delete(desired, "docker:a/db")
+	delete(desired, endpointID)
+	m.applyInfrastructureIncidentSynthesisNoLock(resources, desired)
+	if desired["docker:a/web"].Correlation != nil {
+		t.Fatal("recovered member left a stale correlation")
+	}
+}

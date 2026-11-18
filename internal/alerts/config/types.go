@@ -404,6 +404,7 @@ type AlertConfig struct {
 	DiskFillByType                 map[string]HysteresisThreshold `json:"diskFillByType,omitempty"`
 	DiskTempByType                 map[string]HysteresisThreshold `json:"diskTempByType,omitempty"`
 	DockerDefaults                 DockerThresholdConfig          `json:"dockerDefaults"`
+	DockerMutedContainerHosts      map[string]bool                `json:"dockerMutedContainerHosts,omitempty"`
 	DockerIgnoredContainerPrefixes []string                       `json:"dockerIgnoredContainerPrefixes,omitempty"`
 	IgnoredGuestPrefixes           []string                       `json:"ignoredGuestPrefixes,omitempty"`
 	GuestTagWhitelist              []string                       `json:"guestTagWhitelist,omitempty"`

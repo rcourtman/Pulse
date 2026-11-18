@@ -12,6 +12,7 @@ import (
 type AlertResolutionReason string
 
 const (
+	AlertResolutionContainerRuntimeMuted AlertResolutionReason = "container_runtime_muted"
 	// AlertResolutionMovedToAgent means a Pulse agent linked to the alert's
 	// resource now owns the same metric, so the agent's own alert settings
 	// decide whether the condition is still alerted on.
@@ -44,6 +45,8 @@ func (r *AlertResolution) Outcome() string {
 		return ""
 	}
 	switch r.Reason {
+	case AlertResolutionContainerRuntimeMuted:
+		return "muted on this container runtime"
 	case AlertResolutionMovedToAgent:
 		successor := strings.TrimSpace(r.SuccessorName)
 		if successor == "" {
@@ -71,6 +74,8 @@ func (r *AlertResolution) Describe(subject string) string {
 		subject = "Alert"
 	}
 	switch r.Reason {
+	case AlertResolutionContainerRuntimeMuted:
+		return subject + " closed when container alerts were muted on this runtime."
 	case AlertResolutionMovedToAgent:
 		return fmt.Sprintf("%s %s. This is not a recovery: check the agent for the current reading.", subject, r.Outcome())
 	default:

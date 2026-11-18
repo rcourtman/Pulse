@@ -64,6 +64,44 @@ describe('ContainerUpdateBadge', () => {
     expect(screen.getByText('Check failed')).toBeInTheDocument();
   });
 
+  it('binds a service update review to its exact Compose source and proposed image', async () => {
+    const change = {
+      project: 'photos',
+      service: 'api',
+      mode: 'git' as const,
+      sourceHash: 'reviewed',
+      beforeImage: 'web:1',
+      afterImage: 'web:1@sha256:next',
+    };
+    vi.mocked(ResourceActionsAPI.planAction).mockRejectedValueOnce(new Error('review refused'));
+    render(() => (
+      <UpdateButton
+        resourceId="resource-1"
+        agentId="runtime-east"
+        containerId="web"
+        containerName="web"
+        composeUpdate={change}
+        updateStatus={{ updateAvailable: true, lastChecked: 0 }}
+      />
+    ));
+    fireEvent.click(await screen.findByRole('button', { name: /update/i }));
+    await waitFor(() =>
+      expect(ResourceActionsAPI.planAction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          resourceId: 'resource-1',
+          capabilityName: 'update',
+          params: {
+            composeRuntime: 'runtime-east',
+            composeProject: 'photos',
+            composeService: 'api',
+            sourceHash: 'reviewed',
+            afterImage: change.afterImage,
+          },
+        }),
+      ),
+    );
+  });
+
   it('renders the pinned badge instead of a failure for digest-pinned images', () => {
     render(() => (
       <ContainerUpdateBadge

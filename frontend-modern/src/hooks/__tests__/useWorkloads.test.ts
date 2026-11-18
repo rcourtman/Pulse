@@ -1326,6 +1326,14 @@ describe('useWorkloads', () => {
             hostname: 'homepage-docker.lab',
             runtime: 'docker',
             image: 'ghcr.io/blakeblackshear/frigate:stable',
+            composeUpdate: {
+              project: 'cameras',
+              service: 'frigate',
+              mode: 'local',
+              sourceHash: 'reviewed',
+              beforeImage: 'frigate:stable',
+              afterImage: 'frigate:stable@sha256:next',
+            },
           },
         },
         {
@@ -1388,6 +1396,12 @@ describe('useWorkloads', () => {
     expect(byName.get('frigate')?.platformScopes).toEqual(['proxmox-pve', 'docker']);
     expect(byName.get('frigate')?.dockerHostId).toBe('proxmox-lxc-docker:pve-a:node-a:141');
     expect(byName.get('frigate')?.dockerHostName).toBe('homepage-docker.lab');
+    expect(byName.get('frigate')?.composeUpdate).toMatchObject({
+      project: 'cameras',
+      service: 'frigate',
+      sourceHash: 'reviewed',
+    });
+    expect(byName.get('nextcloud')?.composeUpdate).toBeUndefined();
     expect(byName.get('crm-app-01')?.platformType).toBe('vmware-vsphere');
     expect(byName.get('crm-app-01')?.node).toBe('esxi-01');
     expect(byName.get('crm-app-01')?.instance).toBe('Compute-A');

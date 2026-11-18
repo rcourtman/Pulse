@@ -9,8 +9,9 @@ type Command struct {
 
 // ReportResponse captures the server response for a docker report submission.
 type ReportResponse struct {
-	Success  bool      `json:"success"`
-	Commands []Command `json:"commands,omitempty"`
+	Success  bool            `json:"success"`
+	Commands []Command       `json:"commands,omitempty"`
+	LogTail  *LogTailRequest `json:"logTail,omitempty"`
 }
 
 // CommandAck is sent by the agent to confirm the result of a control command.
@@ -40,3 +41,17 @@ const (
 	// CommandStatusFailed indicates the command failed.
 	CommandStatusFailed = "failed"
 )
+
+// LogTailRequest names an exact daemon container and an expiring request.
+// It is accepted only from the primary report destination on opted-in hosts.
+type LogTailRequest struct {
+	ID          string `json:"id"`
+	HostID      string `json:"hostId"`
+	ContainerID string `json:"containerId"`
+}
+type LogTailResult struct {
+	LogTailRequest
+	Lines       []string `json:"lines,omitempty"`
+	Truncated   bool     `json:"truncated,omitempty"`
+	Unavailable bool     `json:"unavailable,omitempty"`
+}

@@ -13,10 +13,13 @@ import {
   buildDockerComposeApplications,
   composeActivity,
   composeAttentionCount,
+  composeGuestLocation,
   type DockerComposeApplication,
 } from './dockerComposeApplication';
 import { useDockerHostIdentities } from './dockerHostIdentity';
 import { dockerComposeMembership } from './dockerPageModel';
+import { DockerComposeDeployments } from './DockerComposeDeployments';
+import { DockerLiveLogs } from './DockerLiveLogs';
 import { DockerPortChecksNotice } from './DockerPortChecksNotice';
 import { DockerContainersTable } from './DockerContainersTable';
 import { DockerHostsTable } from './DockerHostsTable';
@@ -86,6 +89,9 @@ function ApplicationDetail(props: { app: DockerComposeApplication; refresh: () =
           All applications
         </A>
         <h1 class="break-words text-xl font-semibold">{props.app.project}</h1>
+        <Show when={composeGuestLocation(props.app.host)}>
+          {(location) => <p class="mt-1 break-words text-sm text-muted">{location()}</p>}
+        </Show>
       </div>
       <Show when={hosts().length}>
         <DockerHostsTable
@@ -117,6 +123,12 @@ function ApplicationDetail(props: { app: DockerComposeApplication; refresh: () =
           </For>
         </ul>
       </section>
+      <DockerComposeDeployments runtime={props.app.hostId} project={props.app.project} />
+      <DockerLiveLogs
+        hostId={props.app.hostId}
+        enabled={props.app.host?.docker?.liveLogsEnabled === true}
+        containers={props.app.containers}
+      />
       <DockerContainersTable
         resources={props.app.containers}
         hosts={hosts()}

@@ -258,6 +258,11 @@ export interface ActionVerificationOutcome {
 }
 
 export interface ActionAuditRecord {
+  composeObservation?: {
+    image: 'waiting' | 'different' | 'matched' | 'not_running';
+    endpoint: 'waiting' | 'unconfigured' | 'failed' | 'passed';
+    observedAt?: string;
+  };
   id: string;
   createdAt: string;
   updatedAt: string;

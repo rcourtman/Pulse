@@ -159,6 +159,7 @@ type APIResource = {
     collectionMode?: string;
     hostSourceId?: string;
     updateStatus?: WorkloadGuest['updateStatus'];
+    composeUpdate?: WorkloadGuest['composeUpdate'];
   };
   kubernetes?: {
     clusterId?: string;
@@ -688,6 +689,7 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
       workloadType === 'app-container'
         ? (resource.docker?.runtime || '').trim() || undefined
         : undefined,
+    composeUpdate: resource.docker?.composeUpdate,
     updateStatus: resource.docker?.updateStatus as WorkloadGuest['updateStatus'] | undefined,
     actionReadiness: resource.actionReadiness,
     dockerHostId: dockerManagedAppContainer ? resource.docker?.hostSourceId : undefined,

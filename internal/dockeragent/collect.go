@@ -170,6 +170,7 @@ func (a *Agent) buildReport(ctx context.Context) (agentsdocker.Report, error) {
 			Modules:         a.helperOperationModuleStatuses(),
 
 			FailureLogsEnabled: a.cfg.CollectFailureLogs,
+			LiveLogsEnabled:    a.cfg.AllowLiveLogs && a.cfg.HelperInventory == nil,
 		},
 		Host: agentsdocker.HostInfo{
 			Hostname:         hostName,
@@ -299,6 +300,7 @@ func (a *Agent) collectContainers(ctx context.Context) ([]agentsdocker.Container
 		return nil, fmt.Errorf("failed to list containers: %w", annotateDockerConnectionError(err))
 	}
 
+	sources, sourceErr := loadComposeSources(a.cfg.ComposeSourcesFile)
 	containers := make([]agentsdocker.Container, 0, len(list))
 	active := make(map[string]struct{}, len(list))
 	activeImages := make(map[string]struct{}, len(list))
@@ -317,7 +319,8 @@ func (a *Agent) collectContainers(ctx context.Context) ([]agentsdocker.Container
 		active[summary.ID] = struct{}{}
 		activeImages[summary.ImageID] = struct{}{}
 
-		container, err := a.collectContainer(ctx, summary)
+		_, sourceRegistered := sources[summary.Labels["com.docker.compose.project"]]
+		container, err := a.collectContainerWithSource(ctx, summary, sourceRegistered)
 		if err != nil {
 			a.logger.Warn().Str("container", strings.Join(summary.Names, ",")).Err(err).Msg("failed to collect container stats")
 			continue
@@ -328,6 +331,7 @@ func (a *Agent) collectContainers(ctx context.Context) ([]agentsdocker.Container
 	a.failureLogs.prune(active)
 	a.pruneInactiveContainerInspectCache(active)
 	a.registryChecker.pruneLocalImages(activeImages)
+	a.projectComposeUpdates(ctx, containers, sources, sourceErr)
 	return containers, nil
 }
 
@@ -565,6 +569,9 @@ func (a *Agent) pruneStaleCPUSamples(active map[string]struct{}) {
 }
 
 func (a *Agent) collectContainer(ctx context.Context, summary containertypes.Summary) (agentsdocker.Container, error) {
+	return a.collectContainerWithSource(ctx, summary, false)
+}
+func (a *Agent) collectContainerWithSource(ctx context.Context, summary containertypes.Summary, sourceRegistered bool) (agentsdocker.Container, error) {
 	const perContainerTimeout = 15 * time.Second
 
 	containerCtx, cancel := context.WithTimeout(ctx, perContainerTimeout)
@@ -787,6 +794,13 @@ func (a *Agent) collectContainer(ctx context.Context, summary containertypes.Sum
 		}
 	}
 
+	// Once a registry tag moves, the daemon's list row can display only a
+	// local image ID. The container's inspect configuration still identifies
+	// the exact reference that its registered source deployed.
+	if sourceRegistered && inspect.Config != nil && inspect.Config.Image != "" {
+		container.Image = inspect.Config.Image
+	}
+
 	// Check for image updates if registry checker is enabled
 	if a.registryChecker != nil && a.registryChecker.Enabled() {
 		// Get the actual manifest digest (RepoDigest) from the image for accurate comparison.
@@ -811,6 +825,13 @@ func (a *Agent) collectContainer(ctx context.Context, summary containertypes.Sum
 			}
 		}
 
+		// A registered deployment retains its tag alongside the approved digest.
+		// Continue tracking that tag so later releases can be reviewed too.
+		if sourceRegistered {
+			if base, _, pinned := strings.Cut(imageToCheck, "@"); pinned && agentsdocker.ComposeHasImageTag(base) {
+				imageToCheck = base
+			}
+		}
 		// Additional safety: if imageToCheck is still a SHA, we can't check it
 		if strings.HasPrefix(imageToCheck, "sha256:") {
 			container.UpdateStatus = &agentsdocker.UpdateStatus{

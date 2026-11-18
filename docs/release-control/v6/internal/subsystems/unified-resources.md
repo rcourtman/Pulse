@@ -23,6 +23,14 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+Source-aware Docker update capabilities describe a local source edit or a Git
+proposal, including the current image and exact replacement. Approval is
+always explicit. Docker workload rows, app details and the container drawer
+carry the same reviewed source signature. Project deployment history follows
+runtime and service identity across container replacement.
+
+Docker runtime metadata includes the agent’s local live-log opt-in. The Compose application view requests the selected container from that runtime and discards log text when the selection or organization changes.
+
 ### Maintenance resolves connection and PBS datastore subjects (13 November 2026)
 
 Reference lookups accept the existing PVE/PBS connection subjects and PBS

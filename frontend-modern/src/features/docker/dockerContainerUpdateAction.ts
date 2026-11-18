@@ -16,6 +16,8 @@ const updateNotOfferedReason = (resource: Resource): string | undefined => {
   if (STALE_SOURCE_STATUSES.has(status)) {
     return `${dockerContainerRuntimeLabel(resource)} inventory for this host is ${status}.`;
   }
+  if (resource.docker?.composeSourceRegistered)
+    return 'The agent could not prepare a single-service change against the registered Compose source. Check the service state, source registration and image reference.';
   return 'Pulse does not currently offer an update action for this container.';
 };
 

@@ -95,7 +95,8 @@ type actionResourcePresentation struct {
 
 type actionAuditProjection struct {
 	unified.ActionAuditRecord
-	Resource *actionResourcePresentation `json:"resource,omitempty"`
+	ComposeObservation *composeDeploymentObservation `json:"composeObservation,omitempty"`
+	Resource           *actionResourcePresentation   `json:"resource,omitempty"`
 	// CapabilityAutoAuthorization is the read-time auto-authorization class of
 	// the planned capability. It only shapes review presentation (e.g. a
 	// single-confirmation control for low-risk capabilities); approval and
@@ -249,6 +250,43 @@ func (h *ResourceHandlers) HandleListActions(w http.ResponseWriter, r *http.Requ
 			return
 		}
 		limit = parsed
+	}
+	if view == "compose" {
+		runtime, project := r.URL.Query().Get("runtime"), r.URL.Query().Get("project")
+		if runtime == "" || project == "" || len(runtime) > 512 || len(project) > 128 {
+			writeJSONError(w, http.StatusBadRequest, "invalid_project", "An exact Docker runtime and Compose project are required")
+			return
+		}
+		var records []unified.ActionAuditRecord
+		var registry *unified.ResourceRegistry
+		if mock.IsMockEnabled() {
+			for _, fixture := range mock.ActionFixtures() {
+				a := fixture.Audit
+				if a.Request.CapabilityName == "update" && a.Request.Params["composeRuntime"] == runtime && a.Request.Params["composeProject"] == project && len(records) < limit {
+					records = append(records, a)
+				}
+			}
+			registry = mockActionResourceRegistry()
+		} else {
+			orgID := GetOrgID(r.Context())
+			var err error
+			records, err = h.ActionLifecycle().ComposeActions(orgID, runtime, project, limit)
+			if err != nil {
+				writeJSONError(w, http.StatusServiceUnavailable, "deployment_history_unavailable", "Deployment history unavailable")
+				return
+			}
+			if len(records) > 0 {
+				registry, _ = h.buildRegistry(orgID)
+			}
+		}
+		projected := projectActionAudits(records, registry)
+		observations := composeInventoryForProject(registry, runtime, project)
+		for i := range projected {
+			projected[i].ComposeObservation = observations.observe(projected[i].ActionAuditRecord, time.Now().UTC())
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(actionInboxResponse{View: view, Actions: projected, Count: len(projected), ReadOnly: mock.IsMockEnabled()})
+		return
 	}
 	if mock.IsMockEnabled() {
 		states := []unified.ActionState{unified.ActionStatePlanned, unified.ActionStatePending, unified.ActionStateApproved, unified.ActionStateExecuting}

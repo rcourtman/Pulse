@@ -345,3 +345,34 @@ func TestSQLiteCorrelatedDispatchCompletionSurvivesRestartWithoutReceiptOnlyStat
 		t.Fatalf("audit=%#v found=%v err=%v", storedAudit, found, err)
 	}
 }
+
+func TestComposeDeploymentHistoryScopesBeforeLimiting(t *testing.T) {
+	sql, err := NewSQLiteResourceStore(t.TempDir(), "default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sql.Close()
+	type composeStore interface {
+		ResourceStore
+		GetComposeActions(string, string, int) ([]ActionAuditRecord, error)
+	}
+	for name, store := range map[string]composeStore{"memory": NewMemoryStore(), "sqlite": sql} {
+		t.Run(name, func(t *testing.T) {
+			now := time.Now().UTC()
+			for i, subject := range []struct{ runtime, project string }{{"east", "photos"}, {"west", "photos"}, {"east", "other"}} {
+				record := atomicLifecycleTestRecord("compose-"+subject.runtime+"-"+subject.project, ActionStatePlanned)
+				record.Request.CapabilityName = "update"
+				record.Request.Params = map[string]any{"composeRuntime": subject.runtime, "composeProject": subject.project, "sourceHash": "reviewed"}
+				record.CreatedAt = now.Add(time.Duration(i) * time.Second)
+				record.UpdatedAt = record.CreatedAt
+				if _, _, err := store.CreateActionAudit(record, atomicLifecycleInitialEvents(record)); err != nil {
+					t.Fatal(err)
+				}
+			}
+			rows, err := store.GetComposeActions("east", "photos", 1)
+			if err != nil || len(rows) != 1 || rows[0].ID != "compose-east-photos" {
+				t.Fatalf("history %v, %v", rows, err)
+			}
+		})
+	}
+}

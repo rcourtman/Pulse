@@ -525,6 +525,15 @@ func (s *SQLiteResourceStore) ExpireActionAudits(now time.Time, limit int) ([]Ac
 }
 
 func (s *SQLiteResourceStore) GetActionAuditsByStates(states []ActionState, limit int) ([]ActionAuditRecord, error) {
+	return s.listScopedActions(states, limit, "", "")
+}
+func (s *SQLiteResourceStore) GetComposeActions(runtime, project string, limit int) ([]ActionAuditRecord, error) {
+	if runtime == "" || project == "" {
+		return nil, fmt.Errorf("runtime and project required")
+	}
+	return s.listScopedActions([]ActionState{ActionStatePlanned, ActionStatePending, ActionStateApproved, ActionStateExecuting, ActionStateCompleted, ActionStateFailed, ActionStateExpired, ActionStateRejected}, limit, runtime, project)
+}
+func (s *SQLiteResourceStore) listScopedActions(states []ActionState, limit int, runtime, project string) ([]ActionAuditRecord, error) {
 	if len(states) == 0 {
 		return []ActionAuditRecord{}, nil
 	}
@@ -540,8 +549,13 @@ func (s *SQLiteResourceStore) GetActionAuditsByStates(states []ActionState, limi
 		marks[i] = "?"
 		args = append(args, string(state))
 	}
+	scope := ""
+	if runtime != "" {
+		scope = ` AND json_valid(request_json) AND json_extract(request_json,'$.capabilityName')='update' AND json_extract(request_json,'$.params.composeRuntime')=? AND json_extract(request_json,'$.params.composeProject')=? AND json_extract(request_json,'$.params.sourceHash') IS NOT NULL`
+		args = append(args, runtime, project)
+	}
 	args = append(args, limit)
-	rows, err := s.db.Query(`SELECT id, action_id, request_id, created_at, updated_at, state, decision_revision, request_json, plan_json, approvals_json, result_json, verification_outcome_json, origin_json FROM action_audits WHERE state IN (`+strings.Join(marks, ",")+`) ORDER BY updated_at DESC, created_at DESC LIMIT ?`, args...)
+	rows, err := s.db.Query(`SELECT id, action_id, request_id, created_at, updated_at, state, decision_revision, request_json, plan_json, approvals_json, result_json, verification_outcome_json, origin_json FROM action_audits WHERE state IN (`+strings.Join(marks, ",")+`)`+scope+` ORDER BY updated_at DESC, created_at DESC LIMIT ?`, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -803,6 +817,15 @@ func (m *MemoryStore) ExpireActionAudits(now time.Time, limit int) ([]ActionAudi
 }
 
 func (m *MemoryStore) GetActionAuditsByStates(states []ActionState, limit int) ([]ActionAuditRecord, error) {
+	return m.listScopedActions(states, limit, "", "")
+}
+func (m *MemoryStore) GetComposeActions(runtime, project string, limit int) ([]ActionAuditRecord, error) {
+	if runtime == "" || project == "" {
+		return nil, fmt.Errorf("runtime and project required")
+	}
+	return m.listScopedActions([]ActionState{ActionStatePlanned, ActionStatePending, ActionStateApproved, ActionStateExecuting, ActionStateCompleted, ActionStateFailed, ActionStateExpired, ActionStateRejected}, limit, runtime, project)
+}
+func (m *MemoryStore) listScopedActions(states []ActionState, limit int, runtime, project string) ([]ActionAuditRecord, error) {
 	set := map[ActionState]bool{}
 	for _, s := range states {
 		set[s] = true
@@ -811,7 +834,11 @@ func (m *MemoryStore) GetActionAuditsByStates(states []ActionState, limit int) (
 	defer m.mu.RUnlock()
 	var out []ActionAuditRecord
 	for i := len(m.actionAudits) - 1; i >= 0; i-- {
-		if set[m.actionAudits[i].State] {
+		record := m.actionAudits[i]
+		if runtime != "" && (record.Request.CapabilityName != "update" || record.Request.Params["composeRuntime"] != runtime || record.Request.Params["composeProject"] != project || record.Request.Params["sourceHash"] == nil) {
+			continue
+		}
+		if set[record.State] {
 			out = append(out, cloneActionAuditRecordForRead(m.actionAudits[i]))
 			if limit > 0 && len(out) >= limit {
 				break

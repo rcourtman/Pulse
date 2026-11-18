@@ -249,6 +249,22 @@ The agent works this out on the host and sends only the reason. The check's
 output and its command never leave the host. An agent that does not yet report
 the reason shows "Failing" until it updates.
 
+## Follow a Compose container’s logs
+
+In **Docker → Applications**, select the runtime and Compose project, open
+**Live container logs**, choose a container and select **Follow logs**. An
+administrator can read the latest 30 lines again at each agent report. Closing
+the panel or choosing **Stop following** clears the displayed lines.
+
+To allow these reads, set `PULSE_ENABLE_LIVE_LOGS=true` in the Docker agent’s
+service environment and restart it. For a manually launched agent, use
+`--enable-live-logs`. This option works with monitoring-only installs that read
+the Docker daemon directly. The primary Pulse server receives the selected
+container’s tail only while a reader is waiting. The agent masks and limits log
+text before sending it. Masking can miss secrets. Enable this only where the
+operator may read application logs. The server keeps each result in memory
+until the waiting request finishes.
+
 ## The last log lines of a failed container
 
 Pulse can show the last lines a container logged before it failed, in the
@@ -737,6 +753,68 @@ To disable registry checks entirely, set `PULSE_DISABLE_DOCKER_UPDATE_CHECKS=tru
 You can also toggle **Hide update buttons** from the UI in **Settings → System → General** under **Docker / Podman updates**.
 
 ---
+
+## Reviewed Compose service updates
+
+Open **Docker → Applications**, select the project on its runtime, then use
+**Update** on a service container. The review names the project, service,
+deployment owner, current image and proposed immutable digest. An administrator
+approves the change through Pulse's normal action review. Monitoring and
+service checks work with command access turned off.
+
+To enable source updates, install the command-enabled agent directly on the
+Docker host. Set `PULSE_DOCKER_COMPOSE_SOURCES` (or
+`--docker-compose-sources`) to the absolute path of an operator-owned JSON file
+and restart the agent. For example:
+
+```json
+{
+  "projects": [
+    {"project": "photos", "mode": "local", "file": "/srv/photos/compose.yaml"},
+    {
+      "project": "catalog",
+      "mode": "git",
+      "repository": "/srv/deployments",
+      "remote": "origin",
+      "branch": "main",
+      "file": "apps/catalog/compose.yaml"
+    }
+  ]
+}
+```
+
+Give the registry, source directory, repository configuration and deployment
+environment the same access protections as the agent account. The agent uses
+container labels to identify a service. The registration supplies the only
+file or Git destination it can change. A service needs a literal registry
+image in the registered file. Builds, merged or extended definitions, and
+multi-file deployments stay with their deployment owner.
+
+- **Local Compose** requires Linux, a local Docker socket, Docker Compose v2
+  or later, and a single running service container. Deploy the original
+  service with the registered file and its parent as the project directory.
+  Pulse checks the deployed configuration hash, pulls the approved image,
+  changes that service's image, and invokes Compose for that service with
+  dependencies and builds disabled. Source review expires if the service,
+  file or current image changes.
+- **Git** requires a local checkout, a current remote-tracking branch, a
+  configured commit identity and permission to push a new review branch.
+  Pulse publishes `pulse/service-update/<action-id>` and records the branch
+  and commit in the action result. Review and merge it using your normal
+  Git workflow. Your deployment controller performs the rollout.
+- **Verify** under **Service deployments → Refresh observations**. Pulse
+  compares the running service's image inventory with the reviewed manifest
+  and shows the result of fresh linked HTTP checks. A published proposal, a
+  running replacement and a successful endpoint check are separate events.
+  If no HTTP check is attached, add one under **Service checks**.
+- **Recover** a local deployment by inspecting the registered file and its
+  adjacent `.pulse-before-<action-id>` copy. Review subsequent edits before
+  restoring the previous image and redeploying the service. After an
+  interrupted agent run, inspect the source, service and any
+  `.pulse-update-lock` directory before clearing a stale lock. For Git, close
+  an unmerged proposal or revert the merged change through the deployment
+  controller. Restore application data from its own backup when the update
+  changed stored data.
 
 ## ▶️ Container Lifecycle Actions
 

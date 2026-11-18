@@ -2,6 +2,7 @@ package mock
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -597,6 +598,7 @@ func applyDemoDockerScenario(state *models.StateSnapshot, now time.Time) {
 	// disconnected host with its containers shown as exited rather than running.
 	const offlineDockerIndex = 2
 	onlineOrdinal := 0
+	composePlaced := false
 	nativeIndex := -1
 	for i := range state.DockerHosts {
 		host := &state.DockerHosts[i]
@@ -632,7 +634,11 @@ func applyDemoDockerScenario(state *models.StateSnapshot, now time.Time) {
 			host.DisplayName = fmt.Sprintf("%s (%d)", hostProfile.DisplayName, round+1)
 		}
 		host.Status = "online"
+		host.Containers = slices.DeleteFunc(host.Containers, func(c models.DockerContainer) bool { return c.Labels["io.pulse.demo.compose"] == demoComposeProject })
 		host.Containers = applyDemoDockerContainerProfiles(host.Containers, hostProfile.Containers, now)
+		if !composePlaced {
+			composePlaced = applyDemoComposeProject(host, now)
+		}
 		ensureMockDockerNativeInventory(host, i, now)
 		flagged := 0
 		for _, container := range host.Containers {

@@ -1,5 +1,5 @@
 import type { DockerContainerUpdateStatus } from '@/types/api';
-import type { ResourceActionReadiness } from '@/types/resource';
+import type { ResourceActionReadiness, ResourceDockerMeta } from '@/types/resource';
 
 export interface ContainerUpdateBadgeProps {
   updateStatus?: DockerContainerUpdateStatus;
@@ -19,6 +19,7 @@ export interface UpdateButtonProps {
   // Unified resource id used to plan the audited update action. Without it
   // the button can only report that the update action is unavailable.
   resourceId?: string;
+  composeUpdate?: ResourceDockerMeta['composeUpdate'];
   // Server-evaluated readiness from the unified resource. When it carries an
   // unavailable 'update' entry the button renders disabled with the refusal
   // reason, instead of letting the click fail at POST /api/actions/plan.

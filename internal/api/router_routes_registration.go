@@ -125,6 +125,8 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 	}
 	r.mux.HandleFunc("/api/agents/agent/", RequireAuth(r.config, unifiedAgentManagementCore))
 	r.mux.HandleFunc("/api/agents/host/", wrapLegacyHostAlias("/api/agents/host/", RequireAuth(r.config, unifiedAgentManagementCore)))
+	r.mux.HandleFunc("/api/agents/docker/log-tail", RequireOrgAdmin(r.config, RequireScope(config.ScopeDockerManage, r.dockerAgentHandlers.HandleLogTail)))
+	r.mux.HandleFunc("/api/agents/docker/log-tail/result", RequireAuth(r.config, RequireScope(config.ScopeDockerReport, r.dockerAgentHandlers.HandleLogTailResult)))
 	r.mux.HandleFunc("/api/agents/docker/commands/", RequireOrgAdmin(r.config, RequireScope(config.ScopeDockerReport, r.dockerAgentHandlers.HandleCommandAck)))
 	r.mux.HandleFunc("/api/agents/docker/runtimes/", RequireOrgAdmin(r.config, RequireScope(config.ScopeDockerManage, r.dockerAgentHandlers.HandleDockerHostActions)))
 	r.mux.HandleFunc("/api/agents/docker/containers/update", RequireAdmin(r.config, RequireScope(config.ScopeDockerManage, r.dockerAgentHandlers.HandleContainerUpdate)))

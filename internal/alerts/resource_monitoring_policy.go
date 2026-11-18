@@ -23,7 +23,14 @@ func alertIntentSignalForRecord(alert *Alert) string {
 }
 
 func (m *Manager) operatorSuppressionForAlertNoLock(alert *Alert, now time.Time) (bool, string) {
-	if m == nil || alert == nil || m.operatorIntentResolver == nil {
+	if m == nil || alert == nil {
+		return false, ""
+	}
+	if m.dockerContainerResourceMutedNoLock(alert.ResourceID) ||
+		(alert.Resolution != nil && alert.Resolution.Reason == AlertResolutionContainerRuntimeMuted) {
+		return true, "docker_runtime_container_mute"
+	}
+	if m.operatorIntentResolver == nil {
 		return false, ""
 	}
 	resourceID := strings.TrimSpace(alert.ResourceID)

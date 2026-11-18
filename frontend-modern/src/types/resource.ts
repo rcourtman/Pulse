@@ -817,6 +817,17 @@ export interface DockerFailureLog {
 export interface ResourceDockerMeta {
   composeProject?: string;
   composeService?: string;
+  composeSourceRegistered?: boolean;
+  composeUpdate?: {
+    project: string;
+    service: string;
+    mode: 'local' | 'git';
+    sourceHash: string;
+    baseCommit?: string;
+    baseBranch?: string;
+    beforeImage: string;
+    afterImage: string;
+  };
   serviceId?: string;
   serviceName?: string;
   hostSourceId?: string;
@@ -874,6 +885,7 @@ export interface ResourceDockerMeta {
   containerState?: string;
   health?: string;
   healthProbe?: DockerHealthProbe;
+  liveLogsEnabled?: boolean;
   failureLog?: DockerFailureLog;
   restartCount?: number;
   exitCode?: number;

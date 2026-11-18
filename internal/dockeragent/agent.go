@@ -61,6 +61,8 @@ type Config struct {
 	// on this host: log text is content, and nothing the server sends can
 	// enable it.
 	CollectFailureLogs bool
+	AllowLiveLogs      bool // Local permission for on-demand, masked log reads.
+	ComposeSourcesFile string
 	// DisableRegistryCredentials keeps update checks from reading the host's
 	// Docker credential store (config.json auths and credential helpers), so
 	// private-registry checks fall back to anonymous-only behavior.
@@ -1445,6 +1447,9 @@ func (a *Agent) sendReportToTarget(ctx context.Context, target TargetConfig, pay
 		return nil
 	}
 
+	if reportResp.LogTail != nil && (target.Authoritative || target.Name == "") {
+		a.returnLogTail(ctx, target, *reportResp.LogTail)
+	}
 	for _, command := range reportResp.Commands {
 		err := a.handleCommand(ctx, target, command)
 		if err == nil {

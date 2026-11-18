@@ -20,6 +20,13 @@
 
 ## Purpose
 
+Docker-focused installer completion links to Compose applications and Docker
+overview after the connected agent reports. Runtime selection stays explicit
+when an agent can report more than one Docker host. Monitor-only onboarding
+reaches an application's first service check without command access. Action
+review wraps long image digests and Git references within the available width
+so operators can read the full proposed change on a phone.
+
 ### Updates distinguish publication from delivery
 
 The shared `updatesPresentation.ts` model owns preparing, ready, confirmed

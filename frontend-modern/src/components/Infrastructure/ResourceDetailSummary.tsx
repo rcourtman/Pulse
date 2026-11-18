@@ -129,6 +129,7 @@ const ContainerUpdateNextSteps: Component<{ resource: Resource }> = (props) => {
       <Show when={action()}>
         {(update) => (
           <UpdateButton
+            composeUpdate={props.resource.docker?.composeUpdate}
             agentId={update().agentId}
             containerId={update().containerId}
             containerName={update().containerName}
