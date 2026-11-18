@@ -31,6 +31,7 @@ ROOT = Path(__file__).resolve().parents[2]
 PACKAGE = "./scripts/installtests"
 PREFLIGHT = ("TestInstallSHNASBootOwnersQuiesceBeforeRecoveryErasure",)
 MAX_CHECKS = 2
+TRUENAS_SCALE_REMOVAL = "TestInstallSHTrueNASScaleBootTasksRetireBeforeRecoveryErasure"
 PROCESS_EXIT_GRACE_SECONDS = 5
 COMPILE_TIMEOUT_SECONDS = 10 * 60
 DISCOVERY_TIMEOUT_SECONDS = 30
@@ -110,6 +111,12 @@ def partition(output):
 def run_check(binary, name, *, cwd, timeout="10m", output=None):
     command = [str(binary), "-test.count=1", "-test.timeout=" + timeout,
                "-test.paniconexit0", "-test.v", "-test.run=^" + name + "$"]
+    if name == TRUENAS_SCALE_REMOVAL:
+        # Two native roots can overlap, and this root's controls each drive a
+        # separate subprocess-heavy removal fixture. Limit that inner fan-out
+        # so the full-caller checks have CPU headroom within their existing
+        # subprocess deadlines. The Go scheduler still executes every control.
+        command.append("-test.parallel=2")
     deadline = process_deadline(timeout)
     completed = False
     descendants = False
