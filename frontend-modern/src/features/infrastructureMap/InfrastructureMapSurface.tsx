@@ -99,14 +99,34 @@ export function InfrastructureMapSurface() {
   const measure = () => {
     const width = observed.width();
     if (!frameRef || !width) return;
-    const top = frameRef.getBoundingClientRect().top + window.scrollY;
+    // Where the map starts when nothing is scrolled. The app scrolls inside
+    // its own shell, not the document, so every box above is counted.
+    let top = frameRef.getBoundingClientRect().top;
+    for (let box = frameRef.parentElement; box; box = box.parentElement) top += box.scrollTop;
     const below = SPACE_BELOW + (window.innerWidth < NARROW_WINDOW ? SPACE_BELOW_NARROW : 0);
-    setSpace({ width, height: Math.max(MIN_MAP_HEIGHT, window.innerHeight - top - below) });
+    const height = Math.max(MIN_MAP_HEIGHT, Math.floor(window.innerHeight - top - below));
+    setSpace((was) => (was?.width === width && was.height === height ? was : { width, height }));
   };
   createEffect(on(observed.width, measure));
   onMount(() => {
     window.addEventListener('resize', measure);
     onCleanup(() => window.removeEventListener('resize', measure));
+    // A banner that appears or is dismissed above the page moves the map
+    // without changing its width or the window. Whatever takes room or gives
+    // it back resizes one of the boxes the map sits in, so each is watched.
+    if (!frameRef || typeof ResizeObserver === 'undefined') return;
+    let queued = 0;
+    // Measured on the next frame: redrawing inside the observer's own
+    // delivery makes the browser report a resize loop.
+    const observer = new ResizeObserver(() => {
+      cancelAnimationFrame(queued);
+      queued = requestAnimationFrame(measure);
+    });
+    for (let box = frameRef.parentElement; box; box = box.parentElement) observer.observe(box);
+    onCleanup(() => {
+      cancelAnimationFrame(queued);
+      observer.disconnect();
+    });
   });
 
   const fitted = createMemo(() => {

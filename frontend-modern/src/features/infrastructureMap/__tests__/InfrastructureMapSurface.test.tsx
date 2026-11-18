@@ -7,6 +7,7 @@ import {
 } from '@/api/infrastructureMapActivity';
 import type { Resource } from '@/types/resource';
 import { showError, showSuccess } from '@/utils/toast';
+import { fitServiceDiagram } from '../infrastructureMapDiagram';
 import { buildMapExportSvg, downloadMapImage } from '../infrastructureMapExport';
 import { InfrastructureMapSurface } from '../InfrastructureMapSurface';
 
@@ -30,6 +31,11 @@ vi.mock('../infrastructureMapExport', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../infrastructureMapExport')>()),
   downloadMapImage: vi.fn(),
 }));
+// The real fit, watched: a test reads the room the page offered the drawing.
+vi.mock('../infrastructureMapDiagram', async (importOriginal) => {
+  const real = await importOriginal<typeof import('../infrastructureMapDiagram')>();
+  return { ...real, fitServiceDiagram: vi.fn(real.fitServiceDiagram) };
+});
 
 const resource = (partial: Partial<Resource> & Pick<Resource, 'id' | 'type' | 'name'>): Resource =>
   ({
@@ -113,5 +119,85 @@ describe('InfrastructureMapSurface use counting', () => {
 
     await waitFor(() => expect(showError).toHaveBeenCalled());
     expect(recordInfrastructureMapExport).not.toHaveBeenCalled();
+  });
+});
+
+// jsdom has no ResizeObserver. This one records what is watched and lets a
+// test report a resize.
+class WatchedBoxes {
+  static all: WatchedBoxes[] = [];
+  boxes: Element[] = [];
+  constructor(private readonly report: () => void) {
+    WatchedBoxes.all.push(this);
+  }
+  observe(box: Element) {
+    this.boxes.push(box);
+  }
+  unobserve() {}
+  disconnect() {
+    this.boxes = [];
+  }
+  resize() {
+    this.report();
+  }
+}
+
+describe('InfrastructureMapSurface fit to the window', () => {
+  // What the page keeps free under the drawing on a wide window.
+  const BELOW = 60;
+  const roomOffered = () => vi.mocked(fitServiceDiagram).mock.calls.at(-1)?.[1];
+  const pageWatcher = () =>
+    WatchedBoxes.all.find((watcher) => watcher.boxes.includes(document.body));
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    WatchedBoxes.all = [];
+    vi.stubGlobal('ResizeObserver', WatchedBoxes);
+    resourcesMock.value = lab();
+  });
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  it('refits when a banner above the page takes room without changing its width', async () => {
+    render(() => <InfrastructureMapSurface />);
+    expect(roomOffered()).toEqual({ width: 1200, height: window.innerHeight - BELOW });
+
+    // An 82px banner appears above: the map now starts lower in the window.
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      top: 82,
+    } as DOMRect);
+    pageWatcher()?.resize();
+
+    await waitFor(() =>
+      expect(roomOffered()).toEqual({ width: 1200, height: window.innerHeight - 82 - BELOW }),
+    );
+  });
+
+  it('gives the room back when the banner is dismissed', async () => {
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      top: 82,
+    } as DOMRect);
+    render(() => <InfrastructureMapSurface />);
+    expect(roomOffered()).toEqual({ width: 1200, height: window.innerHeight - 82 - BELOW });
+
+    vi.mocked(HTMLElement.prototype.getBoundingClientRect).mockReturnValue({ top: 0 } as DOMRect);
+    pageWatcher()?.resize();
+
+    await waitFor(() =>
+      expect(roomOffered()).toEqual({ width: 1200, height: window.innerHeight - BELOW }),
+    );
+  });
+
+  it('stops watching when the page is left', () => {
+    const { unmount } = render(() => <InfrastructureMapSurface />);
+    const watcher = pageWatcher();
+    expect(watcher).toBeDefined();
+
+    unmount();
+
+    expect(watcher?.boxes).toEqual([]);
   });
 });
