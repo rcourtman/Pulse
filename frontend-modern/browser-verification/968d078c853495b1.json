@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "base_sha": "1ae4005bfa3021142dbcb98ddd2c6d3b91a5b09d",
+  "verified_at": "2026-11-17T17:30:05.164707Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx": "0969bac0345fe2e6f7ceb20717c98868d359d21414dde96fa47d723db24724a5"
+  },
+  "routes": [
+    "/proxmox (existing linked-node drawer; safe consuming fixture, not full App)"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Real ResourceAPI HTTP read, nodeFromResource adapter, complete NodeDrawer, shared controls, history and shipped CSS; no original-estate or collector execution claim",
+    "Chromium desktop light / phone dark and WebKit desktop dark / phone light; five custom readings, same-named per-container metrics, measured zero, warning/critical/error/unknown, per-metric stale and silent-agent last-known context",
+    "12 comparable pairs / 24 captures, all natively inspected; existing charts, sensor readings, facts and controls retain exact geometry; custom readings are appended outside the Details disclosure; empty or withdrawn readings leave no custom section"
+  ],
+  "interactions": [
+    "Real read-only resource snapshots refresh the open drawer through healthy, uncertain and withdrawn sensor states",
+    "Full labels and inline status/error remain readable without hover on phones; markup-looking and long mixed-direction names stay literal and wrap without page overflow",
+    "Existing Manage/Overview tabs and keyboard collapse remain usable; local proof requests are GET-only and keep the selected organization"
+  ]
+}
