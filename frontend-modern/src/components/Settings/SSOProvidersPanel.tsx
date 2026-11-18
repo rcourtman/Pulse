@@ -1,4 +1,12 @@
-import { Component, For, Show, createEffect, createUniqueId, onCleanup } from 'solid-js';
+import {
+  Component,
+  For,
+  ParentComponent,
+  Show,
+  createEffect,
+  createUniqueId,
+  onCleanup,
+} from 'solid-js';
 import { ActionIconButton, Button, CopyValueButton } from '@/components/shared/Button';
 import { InlineNotice } from '@/components/shared/InlineNotice';
 import { EmptyState } from '@/components/shared/EmptyState';
@@ -12,6 +20,7 @@ import Plus from 'lucide-solid/icons/plus';
 import Pencil from 'lucide-solid/icons/pencil';
 import Trash2 from 'lucide-solid/icons/trash-2';
 import Shield from 'lucide-solid/icons/shield';
+import ArrowDown from 'lucide-solid/icons/arrow-down';
 import CheckCircle from 'lucide-solid/icons/check-circle';
 import XCircle from 'lucide-solid/icons/x-circle';
 import Eye from 'lucide-solid/icons/eye';
@@ -110,7 +119,14 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
   const summaryIdPrefix = createUniqueId();
   const summaryId = (id: string) => `${summaryIdPrefix}-${encodeURIComponent(id)}`;
   const inventoryTitleId = `${summaryIdPrefix}-inventory-title`;
+  const testResultSummaryId = `${summaryIdPrefix}-test-summary`;
+  const testResultId = `${summaryIdPrefix}-test-result`;
+  const testResultTitleId = `${summaryIdPrefix}-test-result-title`;
+  const testResultLabel = () => (testResult()?.success ? 'Test passed' : 'Test failed');
   let inventoryRegion: HTMLDivElement | undefined;
+  let editorScroll: HTMLDivElement | undefined;
+  let testButton: HTMLButtonElement | undefined;
+  let testResultPanel: HTMLDivElement | undefined;
   let metadataPreviewButton: HTMLButtonElement | undefined;
   let recoveryNotice: HTMLDivElement | undefined;
   let recoveryFocusTimer: number | undefined;
@@ -127,6 +143,45 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
     }
   });
   onCleanup(() => window.clearTimeout(recoveryFocusTimer));
+
+  const focusEditorContent = (target: HTMLElement | undefined) => {
+    if (!target || !editorScroll) return;
+    const targetBox = target.getBoundingClientRect();
+    const scrollBox = editorScroll.getBoundingClientRect();
+    // Move only the form's scroll area, not the surrounding dialog viewport.
+    // The title/status and Save/Cancel must stay visible while reading details.
+    target.focus({ preventScroll: true });
+    if (targetBox.top < scrollBox.top || targetBox.bottom > scrollBox.bottom) {
+      editorScroll.scrollTop += targetBox.top - scrollBox.top - 12;
+    }
+  };
+
+  const EditorFields: ParentComponent = (editor) => (
+    <div ref={editorScroll} class="min-h-0 min-w-0 flex-1 overflow-y-auto">
+      <fieldset disabled={saving() || !!unconfirmedChange()} class="min-w-0 space-y-4 p-4 sm:p-6">
+        {editor.children}
+      </fieldset>
+    </div>
+  );
+
+  const ConnectionTestButton: Component<{ class?: string }> = (button) => (
+    <Button
+      ref={testButton}
+      type="button"
+      onClick={testConnection}
+      disabled={!canTest()}
+      // The state owner rejects repeat/overlapping activation. Keep the button
+      // focusable so waiting for the response doesn't reset keyboard position.
+      aria-disabled={testing() || loadingPreview() || undefined}
+      aria-describedby={testResult() ? testResultSummaryId : undefined}
+      variant="secondary"
+      size="mdCompact"
+      class={`whitespace-nowrap aria-disabled:cursor-not-allowed aria-disabled:opacity-50 ${button.class ?? ''}`}
+      title="Test connection to IdP"
+    >
+      {testing() ? 'Testing...' : 'Test'}
+    </Button>
+  );
 
   const checkSavedProviders = () => {
     // Starting the read releases an uncertain draft/confirmation and its inert
@@ -378,16 +433,28 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
           ariaLabel={`${editingProvider() ? 'Edit' : 'Add'} ${getSSOProviderTypeLabel(form.type)} provider`}
         >
           <form class="flex max-h-[calc(100dvh-2rem-2px)] min-h-0 flex-col" onSubmit={handleSave}>
-            <div class="shrink-0 border-b border-border bg-surface px-4 py-4 sm:px-6">
+            <div class="flex shrink-0 items-center justify-between gap-2 border-b border-border bg-surface px-4 py-4 sm:px-6">
               <h3 class="text-lg font-semibold text-base-content">
                 {getSSOProviderModalTitle(Boolean(editingProvider()), form.type)}
               </h3>
+              <Show when={testResult()}>
+                <Button
+                  type="button"
+                  variant={testResult()?.success ? 'successOutline' : 'dangerOutline'}
+                  size="xs"
+                  class="-my-2 shrink-0 gap-1.5"
+                  aria-label={`${testResultLabel()} — view result`}
+                  aria-controls={testResultId}
+                  disabled={saving() || !!unconfirmedChange()}
+                  onClick={() => focusEditorContent(testResultPanel)}
+                >
+                  <span id={testResultSummaryId}>{testResultLabel()}</span>
+                  <ArrowDown class="h-3.5 w-3.5" aria-hidden="true" />
+                </Button>
+              </Show>
             </div>
 
-            <fieldset
-              disabled={saving() || !!unconfirmedChange()}
-              class="min-w-0 min-h-0 flex-1 space-y-4 overflow-y-auto p-4 sm:p-6"
-            >
+            <EditorFields>
               {/* Common fields */}
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div class={formField}>
@@ -472,17 +539,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                           class={controlClass() + ' flex-1'}
                           required
                         />
-                        <Button
-                          type="button"
-                          onClick={testConnection}
-                          disabled={testing() || loadingPreview() || !canTest()}
-                          variant="secondary"
-                          size="mdCompact"
-                          class="whitespace-nowrap"
-                          title="Test connection to IdP"
-                        >
-                          {testing() ? 'Testing...' : 'Test'}
-                        </Button>
+                        <ConnectionTestButton />
                       </div>
                     </div>
                     <div class={formField}>
@@ -600,17 +657,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                         class={controlClass() + ' min-w-0 flex-1'}
                       />
                       <div class="flex gap-2">
-                        <Button
-                          type="button"
-                          onClick={testConnection}
-                          disabled={testing() || loadingPreview() || !canTest()}
-                          variant="secondary"
-                          size="mdCompact"
-                          class="flex-1 whitespace-nowrap sm:flex-none"
-                          title="Test connection to IdP"
-                        >
-                          {testing() ? 'Testing...' : 'Test'}
-                        </Button>
+                        <ConnectionTestButton class="flex-1 sm:flex-none" />
                         <Button
                           ref={metadataPreviewButton}
                           type="button"
@@ -730,8 +777,12 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
               {/* Test result display */}
               <Show when={testResult()}>
                 <div
-                  class={testResultPresentation()!.panelClass}
+                  id={testResultId}
+                  ref={testResultPanel}
+                  class={`${testResultPresentation()!.panelClass} focus:outline-hidden focus:ring-2 focus:ring-blue-500`}
                   role={testResult()?.success ? 'status' : 'alert'}
+                  tabindex={-1}
+                  aria-labelledby={testResultTitleId}
                 >
                   <div class="flex items-start gap-3">
                     {testResult()?.success ? (
@@ -740,7 +791,9 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                       <XCircle class={testResultPresentation()!.iconClass} />
                     )}
                     <div class="flex-1 min-w-0">
-                      <p class={testResultPresentation()!.titleClass}>{testResult()?.message}</p>
+                      <p id={testResultTitleId} class={testResultPresentation()!.titleClass}>
+                        {testResult()?.message}
+                      </p>
                       <Show when={testResult()?.error}>
                         <p class={testResultPresentation()!.errorClass}>{testResult()?.error}</p>
                       </Show>
@@ -785,9 +838,9 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                               testResult()!.details!.certificates!.length > 0
                             }
                           >
-                            <div class="col-span-2 mt-1">
+                            <div class="mt-1 min-w-0 sm:col-span-2">
                               <dt class="text-muted mb-1">Certificates:</dt>
-                              <dd class="space-y-1">
+                              <dd class="min-w-0 space-y-1 [overflow-wrap:anywhere]">
                                 <For each={testResult()?.details?.certificates}>
                                   {(cert) => {
                                     const certPresentation = getSSOCertificatePresentation(
@@ -818,7 +871,10 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                     </div>
                     <ActionIconButton
                       type="button"
-                      onClick={() => setTestResult(null)}
+                      onClick={() => {
+                        focusEditorContent(testButton);
+                        setTestResult(null);
+                      }}
                       label="Dismiss test result"
                       tone="muted"
                       size="sm"
@@ -903,7 +959,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                   </div>
                 </Show>
               </div>
-            </fieldset>
+            </EditorFields>
 
             {/* Keep feedback and recovery actions inside the active modal, clear of toasts. */}
             <div class="relative z-10 shrink-0 space-y-3 border-t border-border bg-surface p-4 sm:px-6">

@@ -243,14 +243,25 @@ describe('settings architecture guardrails', () => {
     );
   });
 
-  it('keeps the SSO editor header outside its independently scrolling fields', () => {
+  it('keeps the SSO editor header and footer outside its independently scrolling fields', () => {
     const editor = ssoProvidersPanelSource.slice(
       ssoProvidersPanelSource.indexOf('{/* Add/Edit Modal */}'),
       ssoProvidersPanelSource.indexOf('{/* Delete confirmation modal */}'),
     );
+    const fields = ssoProvidersPanelSource.slice(
+      ssoProvidersPanelSource.indexOf('const EditorFields:'),
+      ssoProvidersPanelSource.indexOf('const ConnectionTestButton:'),
+    );
+    const scrollClass = fields.match(/<div ref=\{editorScroll\} class="([^"]+)">/)?.[1];
+    expect(scrollClass?.split(/\s+/)).toEqual(
+      expect.arrayContaining(['min-h-0', 'flex-1', 'overflow-y-auto']),
+    );
+    expect(fields).toMatch(
+      /<div[^>]+>\s*<fieldset[\s\S]*?\{editor\.children\}[\s\S]*?<\/fieldset>\s*<\/div>/,
+    );
     expect(editor).toContain('min-h-0 flex-col');
-    expect(editor).toContain('shrink-0 border-b border-border bg-surface');
-    expect(editor).toContain('min-h-0 flex-1 space-y-4 overflow-y-auto');
+    expect(editor).toMatch(/shrink-0[^"]*border-b[^"]*"[\s\S]*?<\/div>\s*<EditorFields>/);
+    expect(editor).toMatch(/<\/EditorFields>[\s\S]*?shrink-0[^"]*border-t/);
     expect(editor).not.toContain('sticky');
   });
 
