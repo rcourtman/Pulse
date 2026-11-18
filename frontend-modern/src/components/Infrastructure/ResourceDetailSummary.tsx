@@ -22,6 +22,7 @@ import { getDockerImageRegistryLink } from '@/features/docker/dockerImageReferen
 import { getDockerContainerUpdateAction } from '@/features/docker/dockerContainerUpdateAction';
 import { getDockerImageOperationalPresentation } from '@/features/docker/dockerImagePresentation';
 import {
+  dockerComposeMembership,
   dockerContainerRestartAttentionLabel,
   dockerContainerRestartCountTitle,
 } from '@/features/docker/dockerPageModel';
@@ -73,16 +74,6 @@ const dockerContainerMeta = (resource: Resource): NonNullable<Resource['docker']
 };
 
 const trimmedDockerValue = (value: string | undefined): string => (value || '').trim();
-
-const composeLabelValue = (
-  labels: Record<string, string> | undefined,
-  suffix: 'project' | 'service',
-): string =>
-  (
-    labels?.[`com.docker.compose.${suffix}`] ||
-    labels?.[`io.podman.compose.${suffix}`] ||
-    ''
-  ).trim();
 
 const dockerTimestampMillis = (value: string | undefined): number | null => {
   const raw = trimmedDockerValue(value);
@@ -138,6 +129,7 @@ const ContainerUpdateNextSteps: Component<{ resource: Resource }> = (props) => {
       <Show when={action()}>
         {(update) => (
           <UpdateButton
+            composeUpdate={props.resource.docker?.composeUpdate}
             agentId={update().agentId}
             containerId={update().containerId}
             containerName={update().containerName}
@@ -177,10 +169,7 @@ const dockerSection = (
   const finishedAt = dockerTimestampMillis(docker.finishedAt);
   const podmanPodName = trimmedDockerValue(docker.podman?.podName);
   const podmanPodId = trimmedDockerValue(docker.podman?.podId);
-  const composeProject =
-    trimmedDockerValue(docker.podman?.composeProject) || composeLabelValue(labels, 'project');
-  const composeService =
-    trimmedDockerValue(docker.podman?.composeService) || composeLabelValue(labels, 'service');
+  const { project: composeProject, service: composeService } = dockerComposeMembership(docker);
   const autoUpdatePolicy = trimmedDockerValue(docker.podman?.autoUpdatePolicy);
   const userNamespace = trimmedDockerValue(docker.podman?.userNamespace);
   const blockReadBytes = dockerByteTotal(docker.blockIo?.readBytes);
@@ -691,11 +680,7 @@ export const getResourceDrawerFacts = (
   if (inventory) return inventory;
   const docker = dockerContainerMeta(resource);
   if (docker) {
-    const labels = docker.labels;
-    const project =
-      trimmedDockerValue(docker.podman?.composeProject) || composeLabelValue(labels, 'project');
-    const service =
-      trimmedDockerValue(docker.podman?.composeService) || composeLabelValue(labels, 'service');
+    const { project, service } = dockerComposeMembership(docker);
     return [
       trimmedDockerValue(docker.image),
       project && service ? `Compose ${project} / ${service}` : project ? `Compose ${project}` : '',

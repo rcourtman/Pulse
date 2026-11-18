@@ -372,6 +372,7 @@ func (m *Manager) ClearActiveAlerts() {
 	m.dockerRestartTracking = make(map[string]*dockerRestartRecord)
 	m.dockerUpdateFirstSeen = make(map[string]time.Time)
 	m.dockerUpdateFirstSeenByIdentity = make(map[string]time.Time)
+	clear(m.dockerUpdateIdentityOwner)
 	m.dockerUpdateLastObserved = make(map[string]time.Time)
 	m.smartCounterSnapshots = make(map[string]smartCounterSnapshot)
 	m.ackState = make(map[string]ackRecord)

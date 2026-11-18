@@ -15,6 +15,17 @@
 
 ## Purpose
 
+A runtime-scoped container mute uses the raw Docker host ID. Saving it closes
+open child detector occurrences with a policy reason and clears pending
+confirmations, restart counts and image-update delays. New containers inherit
+the mute until it is cleared. Machine, runtime connectivity, Swarm and
+independent endpoint detectors retain their own policies.
+
+Concurrent container failures and attached endpoint failures on the same raw
+runtime and Compose project can form one observation set. Existing topology
+correlations take precedence. Each detector retains its own lifecycle. An
+application membership observation cannot establish causal suppression.
+
 ### Containers set their own offline alert level (12 November 2026)
 
 The Containers table on Alert Thresholds shows the Offline Alerts control the

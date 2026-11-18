@@ -138,8 +138,18 @@ export function useContainerUpdateButtonState(props: UpdateButtonProps) {
         requestId: newUpdateRequestId(),
         resourceId,
         capabilityName: 'update',
-        params: {},
-        reason: `Update container ${props.containerName} to its latest image.`,
+        params: props.composeUpdate
+          ? {
+              composeRuntime: props.agentId,
+              composeProject: props.composeUpdate.project,
+              composeService: props.composeUpdate.service,
+              sourceHash: props.composeUpdate.sourceHash,
+              afterImage: props.composeUpdate.afterImage,
+            }
+          : {},
+        reason: props.composeUpdate
+          ? `Review the ${props.composeUpdate.mode === 'git' ? 'Git proposal' : 'local Compose change'} for ${props.composeUpdate.project}/${props.composeUpdate.service}.`
+          : `Update container ${props.containerName} to its latest image.`,
         requestedBy: 'ui:container-update',
       });
       if (!plan.allowed) {

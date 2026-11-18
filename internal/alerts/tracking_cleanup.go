@@ -92,7 +92,7 @@ func (m *Manager) cleanupStaleMaps() {
 			lastObserved = firstSeen
 		}
 		if now.Sub(lastObserved) > staleThreshold {
-			delete(m.dockerUpdateFirstSeenByIdentity, containerID)
+			m.forgetDockerUpdateIdentityNoLock(containerID)
 			delete(m.dockerUpdateLastObserved, containerID)
 			cleaned++
 		}

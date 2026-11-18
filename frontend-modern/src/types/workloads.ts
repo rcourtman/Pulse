@@ -1,6 +1,7 @@
 import type { VM, Container, DockerContainerUpdateStatus, HostRAIDArray } from './api';
 import type {
   ResourceActionReadiness,
+  ResourceDockerMeta,
   ResourceAvailabilityMeta,
   ResourceDiscoveryTarget,
   ResourceMetricsTarget,
@@ -78,6 +79,7 @@ export type WorkloadGuest = (VM | Container) & {
    */
   networkInterfacesFromAgent?: boolean;
   updateStatus?: DockerContainerUpdateStatus;
+  composeUpdate?: ResourceDockerMeta['composeUpdate'];
   // Server-evaluated capability refusals from the unified resource. The
   // update button reads this to disable itself with the refusal reason
   // (agent disconnected, agent too old, stale inventory) before the click.

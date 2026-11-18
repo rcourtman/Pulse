@@ -358,6 +358,7 @@ func cloneDockerData(in *DockerData) *DockerData {
 	out.Mounts = cloneDockerMountMetaSlice(in.Mounts)
 	out.Filesystems = filesystem.Clone(in.Filesystems)
 	out.UpdateStatus = cloneDockerUpdateStatusMeta(in.UpdateStatus)
+	out.ComposeUpdate = in.ComposeUpdate.Clone()
 	out.BlockIO = cloneDockerContainerBlockIOMeta(in.BlockIO)
 	out.Podman = cloneDockerPodmanContainerMeta(in.Podman)
 	out.RepoTags = cloneStringSlice(in.RepoTags)

@@ -734,6 +734,7 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
               >
                 {(updateAction) => (
                   <UpdateButton
+                    composeUpdate={resource.docker?.composeUpdate}
                     agentId={updateAction().agentId}
                     containerId={updateAction().containerId}
                     containerName={updateAction().containerName}

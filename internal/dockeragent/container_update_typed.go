@@ -39,6 +39,10 @@ func (a *Agent) TypedContainerUpdate(ctx context.Context, runtime, containerID, 
 // TypedContainerUpdatePreflight performs only the daemon reads needed to
 // prove that the exact planned container and image digest remain current.
 func (a *Agent) TypedContainerUpdatePreflight(ctx context.Context, runtime, containerID, expectedImageDigest string) error {
+	return a.preflightContainerImage(ctx, runtime, containerID, expectedImageDigest, false)
+}
+
+func (a *Agent) preflightContainerImage(ctx context.Context, runtime, containerID, expectedImageDigest string, compose bool) error {
 	if a == nil || a.docker == nil {
 		return agentexec.NewActionPreflightError(agentexec.ActionRefusalCapabilityUnavailable, fmt.Errorf("docker module is not connected to a container runtime"))
 	}
@@ -52,6 +56,9 @@ func (a *Agent) TypedContainerUpdatePreflight(ctx context.Context, runtime, cont
 	})
 	if err != nil {
 		return agentexec.NewActionPreflightError(agentexec.ActionRefusalTargetInspectionUnavailable, fmt.Errorf("container preflight inspect unavailable: %v", annotateDockerConnectionError(err)))
+	}
+	if !compose && inspect.Config != nil && a.registeredComposeOwner(inspect.Config.Labels) {
+		return agentexec.NewActionPreflightError(agentexec.ActionRefusalTargetPreconditionFailed, fmt.Errorf("review the registered Compose service source before updating this container"))
 	}
 	if expectedImageDigest != "" {
 		expectedImageDigest = strings.TrimSpace(expectedImageDigest)

@@ -81,6 +81,9 @@ func dockerContainerExecutionResult(resourceID, agentID string, req agentexec.Do
 }
 
 func dockerContainerUpdateExecutionResult(resourceID, agentID string, facts agentexec.DockerContainerUpdateResultPayload, independent *dockerContainerPostconditionObservation, receivedAt time.Time) (*unified.ExecutionResult, error) {
+	if facts.OperationVersion == agentexec.DockerComposeUpdateOperationVersion {
+		return composeExecutionResult(facts)
+	}
 	summary := dockerContainerUpdateFactSummary(facts)
 	execution := unified.ActionExecutionTruth{Status: unified.ActionExecutionNotRun, ReasonCode: actionPreflightReasonCode(facts.ReasonCode), Summary: dockerUpdateExecutionSummary(facts)}
 	if facts.MutationCompleted {

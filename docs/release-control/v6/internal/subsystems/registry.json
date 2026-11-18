@@ -1373,8 +1373,11 @@
         "internal/config/host_continuity.go",
         "internal/dockeragent/action_runtime.go",
         "internal/dockeragent/agent.go",
+        "internal/dockeragent/compose_deploy.go",
+        "internal/dockeragent/compose_source.go",
         "internal/dockeragent/container_update.go",
         "internal/dockeragent/container_update_typed.go",
+        "internal/dockeragent/live_log.go",
         "internal/dockeragent/self_update.go",
         "internal/hostmetrics/collector.go",
         "internal/kubernetesagent/agent.go",
@@ -1383,6 +1386,8 @@
         "internal/monitoring/monitor_agents.go",
         "internal/remoteconfig/client.go",
         "internal/securityutil/httpurl.go",
+        "pkg/agents/docker/command.go",
+        "pkg/agents/docker/compose.go",
         "pkg/agents/docker/report_limits.go",
         "pkg/agents/host/report.go",
         "pkg/securityutil/httpurl.go",
@@ -1670,9 +1675,11 @@
             "match_files": [
               "internal/agenttls/config.go",
               "internal/dockeragent/agent.go",
+              "internal/dockeragent/live_log.go",
               "internal/kubernetesagent/agent.go",
               "internal/remoteconfig/client.go",
               "internal/securityutil/httpurl.go",
+              "pkg/agents/docker/command.go",
               "pkg/agents/docker/report_limits.go",
               "pkg/securityutil/httpurl.go"
             ],
@@ -1683,6 +1690,7 @@
               "internal/agenttls/config_test.go",
               "internal/dockeragent/agent_internal_test.go",
               "internal/dockeragent/container_filesystems_test.go",
+              "internal/dockeragent/live_log_test.go",
               "internal/dockeragent/multi_target_test.go",
               "internal/dockeragent/report_size_test.go",
               "internal/kubernetesagent/agent_new_test.go",
@@ -1698,12 +1706,17 @@
             "label": "Docker container recreate, rollback, durable result, and live network-mode proof",
             "match_prefixes": [],
             "match_files": [
+              "internal/dockeragent/compose_deploy.go",
+              "internal/dockeragent/compose_source.go",
               "internal/dockeragent/container_update.go",
-              "internal/dockeragent/container_update_typed.go"
+              "internal/dockeragent/container_update_typed.go",
+              "pkg/agents/docker/compose.go"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
+              "internal/dockeragent/compose_deploy_test.go",
+              "internal/dockeragent/compose_source_test.go",
               "internal/dockeragent/container_update_contract_test.go",
               "internal/dockeragent/container_update_integration_test.go",
               "internal/dockeragent/container_update_test.go",
@@ -3536,6 +3549,32 @@
             "test_prefixes": [],
             "exact_files": [
               "internal/api/alerting/history_durability_test.go"
+            ]
+          },
+          {
+            "id": "docker-compose-deployment-observation",
+            "label": "scoped Compose rollout and HTTP observation proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/api/docker_compose_observation.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/api/docker_compose_observation_test.go"
+            ]
+          },
+          {
+            "id": "docker-live-log-read",
+            "label": "opt-in Docker live log scope and authority proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/api/docker_live_log.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/api/docker_live_log_test.go"
             ]
           },
           {
@@ -6637,6 +6676,7 @@
         "internal/mock/alert_history.go",
         "internal/mock/alert_incidents.go",
         "internal/mock/availability_fixtures.go",
+        "internal/mock/compose_application.go",
         "internal/mock/demo_scenarios.go",
         "internal/mock/fixture_graph.go",
         "internal/mock/generator.go",
@@ -7149,6 +7189,7 @@
               "internal/mock/alert_history.go",
               "internal/mock/alert_incidents.go",
               "internal/mock/availability_fixtures.go",
+              "internal/mock/compose_application.go",
               "internal/mock/demo_scenarios.go",
               "internal/mock/fixture_graph.go",
               "internal/mock/generator.go",
@@ -8924,6 +8965,7 @@
         "frontend-modern/src/components/Infrastructure/resourceDetailDrawerServiceModel.ts",
         "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerSupportDisclosure.tsx",
         "frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts",
+        "frontend-modern/src/components/Infrastructure/ResourceDetailSummary.tsx",
         "frontend-modern/src/components/Infrastructure/ResourceFacetSummary.tsx",
         "frontend-modern/src/components/Infrastructure/ResourceOperatorStateSection.tsx",
         "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts",
@@ -8932,14 +8974,19 @@
         "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts",
         "frontend-modern/src/components/Kubernetes/K8sNamespacesDrawer.tsx",
         "frontend-modern/src/features/docker/DockerAlertsTable.tsx",
+        "frontend-modern/src/features/docker/DockerApplications.tsx",
+        "frontend-modern/src/features/docker/dockerComposeApplication.ts",
+        "frontend-modern/src/features/docker/DockerComposeDeployments.tsx",
         "frontend-modern/src/features/docker/DockerConfigsTable.tsx",
         "frontend-modern/src/features/docker/dockerContainerLifecycleActions.ts",
         "frontend-modern/src/features/docker/DockerContainerLifecycleControls.tsx",
         "frontend-modern/src/features/docker/DockerContainersTable.tsx",
         "frontend-modern/src/features/docker/dockerContainerTableModel.ts",
+        "frontend-modern/src/features/docker/dockerContainerUpdateAction.ts",
         "frontend-modern/src/features/docker/DockerHostDrawerOverview.tsx",
         "frontend-modern/src/features/docker/DockerHostsTable.tsx",
         "frontend-modern/src/features/docker/DockerImagesTable.tsx",
+        "frontend-modern/src/features/docker/DockerLiveLogs.tsx",
         "frontend-modern/src/features/docker/DockerNativeTableShared.tsx",
         "frontend-modern/src/features/docker/DockerNetworksTable.tsx",
         "frontend-modern/src/features/docker/dockerPageModel.ts",
@@ -9145,6 +9192,7 @@
               "frontend-modern/src/components/Infrastructure/resourceDetailDrawerServiceModel.ts",
               "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerSupportDisclosure.tsx",
               "frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts",
+              "frontend-modern/src/components/Infrastructure/ResourceDetailSummary.tsx",
               "frontend-modern/src/components/Infrastructure/ResourceFacetSummary.tsx",
               "frontend-modern/src/components/Infrastructure/ResourceOperatorStateSection.tsx",
               "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts",
@@ -9153,14 +9201,19 @@
               "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts",
               "frontend-modern/src/components/Kubernetes/K8sNamespacesDrawer.tsx",
               "frontend-modern/src/features/docker/DockerAlertsTable.tsx",
+              "frontend-modern/src/features/docker/DockerApplications.tsx",
+              "frontend-modern/src/features/docker/dockerComposeApplication.ts",
+              "frontend-modern/src/features/docker/DockerComposeDeployments.tsx",
               "frontend-modern/src/features/docker/DockerConfigsTable.tsx",
               "frontend-modern/src/features/docker/dockerContainerLifecycleActions.ts",
               "frontend-modern/src/features/docker/DockerContainerLifecycleControls.tsx",
               "frontend-modern/src/features/docker/DockerContainersTable.tsx",
               "frontend-modern/src/features/docker/dockerContainerTableModel.ts",
+              "frontend-modern/src/features/docker/dockerContainerUpdateAction.ts",
               "frontend-modern/src/features/docker/DockerHostDrawerOverview.tsx",
               "frontend-modern/src/features/docker/DockerHostsTable.tsx",
               "frontend-modern/src/features/docker/DockerImagesTable.tsx",
+              "frontend-modern/src/features/docker/DockerLiveLogs.tsx",
               "frontend-modern/src/features/docker/DockerNativeTableShared.tsx",
               "frontend-modern/src/features/docker/DockerNetworksTable.tsx",
               "frontend-modern/src/features/docker/dockerPageModel.ts",
@@ -9241,7 +9294,9 @@
               "frontend-modern/src/features/docker/__tests__/DockerAlertsTable.test.tsx",
               "frontend-modern/src/features/docker/__tests__/dockerContainerLifecycleActions.test.ts",
               "frontend-modern/src/features/docker/__tests__/dockerContainerTableModel.test.ts",
+              "frontend-modern/src/features/docker/__tests__/dockerContainerUpdateAction.test.ts",
               "frontend-modern/src/features/docker/__tests__/DockerHostsTable.test.tsx",
+              "frontend-modern/src/features/docker/__tests__/DockerLiveLogs.test.tsx",
               "frontend-modern/src/features/docker/__tests__/DockerNativeTables.test.tsx",
               "frontend-modern/src/features/docker/__tests__/dockerPageModel.test.ts",
               "frontend-modern/src/features/docker/__tests__/DockerPageSurface.test.tsx",

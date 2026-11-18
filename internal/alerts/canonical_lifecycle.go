@@ -289,6 +289,9 @@ func (m *Manager) evaluateCanonicalLifecycleAlert(params canonicalLifecycleAlert
 		}
 	}()
 	defer m.mu.Unlock()
+	if m.dockerContainerResourceMutedNoLock(params.Spec.ResourceID) {
+		return alertspecs.EvaluationResult{}, false
+	}
 
 	// Recheck mutable policy while holding the same lock used for lifecycle
 	// state and dispatch. This closes the save-vs-dispatch race where policy
@@ -625,6 +628,9 @@ func (m *Manager) evaluateCanonicalStatefulAlert(params canonicalStatefulAlertPa
 		}
 	}()
 	defer m.mu.Unlock()
+	if m.dockerContainerResourceMutedNoLock(params.Spec.ResourceID) {
+		return alertspecs.EvaluationResult{}, false
+	}
 
 	storageKey := canonicalTrackingKeyForSpec(params.Spec, params.AlertID)
 	trackingKey := storageKey

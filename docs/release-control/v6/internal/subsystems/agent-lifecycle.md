@@ -17,6 +17,30 @@
 
 ## Purpose
 
+An agent client reading Compose history supplies both the runtime and project.
+An incomplete scope receives the shared invalid action-list view error before
+Pulse reads the action store or contacts a runtime.
+
+An operator can register local Compose files and Git deployment checkouts on
+the Docker agent. A version-two update binds the service, source revision and
+immutable image to the reviewed command. A registered source refuses the
+legacy container-recreation path. Local deployment checks effective Compose
+configuration and the one running replica, retains the previous source and
+recreates only the selected service. A Git proposal leaves the deployment
+branch under its existing controller.
+
+The direct Docker agent accepts a log-tail request from its primary reporting destination only when the host operator enables live logs. It inspects the exact container ID and masks and bounds the result before returning it.
+
+Local Compose installation opens the registered file's parent directory and
+uses filenames relative to that directory for the recovery link, replacement
+and cleanup. A repeated action preserves the earlier recovery copy and leaves
+the current source intact.
+
+The Docker installer links a connected agent to Compose applications and Docker
+overview. The operator chooses the observed runtime and project before reviewing
+its published ports. The lookup identifies an agent registration, which can
+report a different runtime ID or discover multiple Proxmox guests.
+
 ### Observer files retain one deliberate value per setting (17 November 2026)
 
 The existing private observer-file loader refuses repeated root or destination

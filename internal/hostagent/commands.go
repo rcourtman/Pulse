@@ -1124,7 +1124,17 @@ func (c *CommandClient) preflightDockerUpdate(ctx context.Context, payload agent
 	if c.dockerUpdater == nil {
 		return false, agentexec.ActionRefusalCapabilityUnavailable
 	}
-	if err := c.dockerUpdater.TypedContainerUpdatePreflight(ctx, payload.Runtime, payload.ContainerID, payload.ExpectedImageDigest); err != nil {
+	var err error
+	if payload.Compose != nil {
+		updater, ok := c.dockerUpdater.(ComposeServiceUpdater)
+		if !ok {
+			return false, agentexec.ActionRefusalCapabilityUnavailable
+		}
+		err = updater.TypedComposeUpdatePreflight(ctx, payload)
+	} else {
+		err = c.dockerUpdater.TypedContainerUpdatePreflight(ctx, payload.Runtime, payload.ContainerID, payload.ExpectedImageDigest)
+	}
+	if err != nil {
 		return false, agentexec.ActionPreflightReasonCode(err, agentexec.ActionRefusalTargetPreconditionFailed)
 	}
 	return true, ""

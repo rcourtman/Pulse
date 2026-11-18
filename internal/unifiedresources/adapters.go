@@ -1503,6 +1503,7 @@ func resourceFromDockerHost(host models.DockerHost) (Resource, ResourceIdentity)
 		Architecture:          host.Architecture,
 		AgentVersion:          host.AgentVersion,
 		FailureLogsEnabled:    host.FailureLogsEnabled,
+		LiveLogsEnabled:       host.LiveLogsEnabled,
 		CPUs:                  host.CPUs,
 		TotalMemoryBytes:      host.TotalMemoryBytes,
 		Memory:                agentMemoryMetaFromModel(host.Memory),
@@ -2470,31 +2471,33 @@ func resourceFromDockerContainer(ct models.DockerContainer, host models.DockerHo
 		}
 	}
 	docker := &DockerData{
-		HostSourceID:       host.ID,
-		AgentID:            strings.TrimSpace(host.AgentID),
-		ContainerID:        ct.ID,
-		Hostname:           host.Hostname,
-		TokenID:            strings.TrimSpace(host.TokenID),
-		Image:              ct.Image,
-		ImageID:            ct.ImageDigest,
-		UptimeSeconds:      ct.UptimeSeconds,
-		ContainerState:     ct.State,
-		Health:             ct.Health,
-		HealthcheckTargets: cloneStringSlice(ct.HealthcheckTargets),
-		HealthProbe:        cloneDockerHealthProbe(ct.HealthProbe),
-		FailureLog:         ct.FailureLog.Clone(),
-		RestartCount:       ct.RestartCount,
-		ExitCode:           ct.ExitCode,
-		OOMKilled:          cloneBoolPtr(ct.OOMKilled),
-		CPURawPercent:      ct.CPUPercent,
-		CPUCapacityPercent: models.DockerContainerCPUCapacityPercent(ct, host.CPUs),
-		CPUCapacityCores:   host.CPUs,
-		Labels:             cloneLabelMap(ct.Labels),
-		Runtime:            runtime,
-		RuntimeVersion:     host.RuntimeVersion,
-		DockerVersion:      host.DockerVersion,
-		CollectionMode:     host.CollectionMode,
-		Security:           cloneDockerHostSecurity(host.Security),
+		HostSourceID:            host.ID,
+		AgentID:                 strings.TrimSpace(host.AgentID),
+		ContainerID:             ct.ID,
+		Hostname:                host.Hostname,
+		TokenID:                 strings.TrimSpace(host.TokenID),
+		Image:                   ct.Image,
+		ImageID:                 ct.ImageDigest,
+		UptimeSeconds:           ct.UptimeSeconds,
+		ContainerState:          ct.State,
+		Health:                  ct.Health,
+		HealthcheckTargets:      cloneStringSlice(ct.HealthcheckTargets),
+		HealthProbe:             cloneDockerHealthProbe(ct.HealthProbe),
+		FailureLog:              ct.FailureLog.Clone(),
+		ComposeSourceRegistered: ct.ComposeSourceRegistered,
+		ComposeUpdate:           ct.ComposeUpdate.Clone(),
+		RestartCount:            ct.RestartCount,
+		ExitCode:                ct.ExitCode,
+		OOMKilled:               cloneBoolPtr(ct.OOMKilled),
+		CPURawPercent:           ct.CPUPercent,
+		CPUCapacityPercent:      models.DockerContainerCPUCapacityPercent(ct, host.CPUs),
+		CPUCapacityCores:        host.CPUs,
+		Labels:                  cloneLabelMap(ct.Labels),
+		Runtime:                 runtime,
+		RuntimeVersion:          host.RuntimeVersion,
+		DockerVersion:           host.DockerVersion,
+		CollectionMode:          host.CollectionMode,
+		Security:                cloneDockerHostSecurity(host.Security),
 	}
 	if !ct.CreatedAt.IsZero() {
 		docker.CreatedAt = ct.CreatedAt.UTC().Format(time.RFC3339)
@@ -2524,6 +2527,14 @@ func resourceFromDockerContainer(ct models.DockerContainer, host models.DockerHo
 			UserNamespace:    strings.TrimSpace(ct.Podman.UserNamespace),
 		}
 	}
+	// Project and service describe membership only. A reported Compose label
+	// does not grant access to a deployment file or authority to change it.
+	var podmanProject, podmanService string
+	if docker.Podman != nil {
+		podmanProject, podmanService = docker.Podman.ComposeProject, docker.Podman.ComposeService
+	}
+	docker.ComposeProject = firstNonEmpty(podmanProject, ct.Labels["com.docker.compose.project"], ct.Labels["io.podman.compose.project"])
+	docker.ComposeService = firstNonEmpty(podmanService, ct.Labels["com.docker.compose.service"], ct.Labels["io.podman.compose.service"])
 	if len(ct.Ports) > 0 {
 		docker.Ports = make([]DockerPortMeta, len(ct.Ports))
 		for i, p := range ct.Ports {
@@ -2619,7 +2630,27 @@ func dockerContainerLifecycleCapabilities(ct models.DockerContainer, host models
 		return nil
 	}
 	if ct.UpdateStatus != nil && ct.UpdateStatus.UpdateAvailable && strings.TrimSpace(ct.UpdateStatus.CurrentDigest) != "" {
-		capabilities = append(capabilities, dockerContainerUpdateCapability(runtime, running))
+		if ct.ComposeSourceRegistered && (!ct.ComposeUpdate.Valid() || runtime != "docker" || !running) {
+			return capabilities
+		}
+		capability := dockerContainerUpdateCapability(runtime, running)
+		if change := ct.ComposeUpdate; change.Valid() {
+			capability.SupportsRollback = false
+			capability.AutoAuthorization = AutoAuthorizeNever
+			owner := "the registered local Compose file"
+			if change.Mode == "git" {
+				owner = "a Git proposal against " + change.BaseBranch + " at " + change.BaseCommit
+			}
+			capability.Description = fmt.Sprintf("Change %s/%s from %s to %s through %s.", change.Project, change.Service, change.BeforeImage, change.AfterImage, owner)
+			capability.Params = []CapabilityParam{
+				{Name: "composeRuntime", Type: "string", Required: true, Enum: []string{host.ID}, Description: "Runtime that owns the project"},
+				{Name: "composeProject", Type: "string", Required: true, Enum: []string{change.Project}, Description: "Registered Compose project"},
+				{Name: "composeService", Type: "string", Required: true, Enum: []string{change.Service}, Description: "Service to update"},
+				{Name: "sourceHash", Type: "string", Required: true, Enum: []string{change.SourceHash}, Description: "Reviewed source revision"},
+				{Name: "afterImage", Type: "string", Required: true, Enum: []string{change.AfterImage}, Description: "Reviewed service image"},
+			}
+		}
+		capabilities = append(capabilities, capability)
 	}
 	return capabilities
 }

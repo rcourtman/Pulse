@@ -43,7 +43,7 @@ export const ActionDecisionPacket: Component<{
   });
 
   return (
-    <div class="space-y-4" data-testid="action-decision-packet">
+    <div class="space-y-4 wrap-anywhere" data-testid="action-decision-packet">
       <section
         aria-labelledby="action-intent-heading"
         class="rounded-lg border border-border bg-surface p-4"

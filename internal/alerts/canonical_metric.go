@@ -141,6 +141,9 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 		}
 	}()
 	defer m.mu.Unlock()
+	if m.dockerContainerResourceMutedNoLock(spec.ResourceID) {
+		return false
+	}
 
 	existingAlert, exists := m.getActiveAlertNoLock(storageKey)
 	if !exists {

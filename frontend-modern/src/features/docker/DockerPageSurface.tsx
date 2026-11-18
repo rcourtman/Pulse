@@ -1,5 +1,5 @@
 import { useLocation, useSearchParams } from '@solidjs/router';
-import { Show, createEffect, createMemo, createSignal } from 'solid-js';
+import { Show, lazy, createEffect, createMemo, createSignal } from 'solid-js';
 import BoxIcon from 'lucide-solid/icons/box';
 import { ButtonLink } from '@/components/shared/Button';
 import { getPlatformIcon } from '@/features/platformPage/platformIcon';
@@ -68,7 +68,7 @@ import { isPulseAgentPlatformResource } from '@/utils/agentResources';
 import type { Resource } from '@/types/resource';
 import { buildPlatformResourceSearchSuggestions } from '@/features/platformPage/platformSearchSuggestions';
 
-const DOCKER_RESOURCE_QUERY_BY_TAB: Record<DockerPageTabId, string> = {
+const DOCKER_RESOURCE_QUERY_BY_TAB: Record<Exclude<DockerPageTabId, 'applications'>, string> = {
   overview: 'type=agent,docker-host,vm,system-container,app-container&source=docker',
   images: 'type=agent,docker-host,vm,system-container,app-container,docker-image&source=docker',
   storage: 'type=agent,docker-host,vm,system-container,docker-volume&source=docker',
@@ -80,6 +80,10 @@ const DOCKER_RESOURCE_QUERY_BY_TAB: Record<DockerPageTabId, string> = {
 
 const DockerIcon = getPlatformIcon('docker');
 const dockerIcon = () => <DockerIcon class="h-6 w-6 text-slate-400" />;
+
+const DockerApplications = lazy(() =>
+  import('./DockerApplications').then((module) => ({ default: module.DockerApplications })),
+);
 
 export function DockerPageSurface() {
   const location = useLocation();
@@ -107,8 +111,8 @@ export function DockerPageSurface() {
     query: DOCKER_RESOURCE_QUERY_BY_TAB.overview,
     cacheKey: 'docker-overview',
     initialHydration: 'prefer-ws-then-rest',
-    enabled: () => shouldHydrateTab('overview'),
-    realtimeEnabled: () => shouldHydrateTab('overview'),
+    enabled: () => shouldHydrateTab('overview') || shouldHydrateTab('applications'),
+    realtimeEnabled: () => shouldHydrateTab('overview') || shouldHydrateTab('applications'),
   });
   const imageResources = useUnifiedResources({
     query: DOCKER_RESOURCE_QUERY_BY_TAB.images,
@@ -265,6 +269,13 @@ export function DockerPageSurface() {
                     onLifecycleActionSettled={refreshDockerResources}
                   />
                 </div>
+              </Show>
+              <Show when={activeTab() === 'applications'}>
+                <DockerApplications
+                  hosts={model().hosts}
+                  containers={model().containers}
+                  refresh={refreshDockerResources}
+                />
               </Show>
               <Show when={activeTab() === 'images'}>
                 <DockerImagesTable

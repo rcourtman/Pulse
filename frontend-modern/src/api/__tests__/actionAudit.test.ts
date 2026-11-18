@@ -112,6 +112,26 @@ describe('ActionAuditAPI', () => {
     apiFetchJSONMock.mockReset();
   });
 
+  it('reads deployment observations for the exact runtime, project and organization', async () => {
+    const signal = new AbortController().signal;
+    const observation: ActionAuditRecord['composeObservation'] = {
+      image: 'matched',
+      endpoint: 'failed',
+    };
+    apiFetchJSONMock.mockResolvedValueOnce({ actions: [{ composeObservation: observation }] });
+    const result = await ResourceActionsAPI.listComposeDeployments(
+      'east/01',
+      'photos',
+      'ops',
+      signal,
+    );
+    expect(result.actions[0].composeObservation).toEqual(observation);
+    expect(apiFetchJSONMock).toHaveBeenCalledWith(
+      '/api/actions?view=compose&runtime=east%2F01&project=photos&limit=20',
+      { cache: 'no-store', expectedOrgID: 'ops', signal },
+    );
+  });
+
   it('loads the canonical oldest-first pending action queue', async () => {
     const response = {
       actions: [

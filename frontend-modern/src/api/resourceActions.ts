@@ -1,6 +1,7 @@
 import { apiFetchJSON } from '@/utils/apiClient';
 import type {
   ActionAuditPlan,
+  ActionAuditRecord,
   ActionDetailResponse,
   ActionDecisionResponse,
   ActionExecutionResponse,
@@ -26,6 +27,20 @@ export class ResourceActionsAPI {
   static async listActions(view: ActionInboxView, limit = 100): Promise<ActionInboxResponse> {
     const params = new URLSearchParams({ view, limit: String(limit) });
     return apiFetchJSON<ActionInboxResponse>(`/api/actions?${params.toString()}`);
+  }
+
+  static async listComposeDeployments(
+    runtime: string,
+    project: string,
+    org: string,
+    signal: AbortSignal,
+  ) {
+    const query = new URLSearchParams({ view: 'compose', runtime, project, limit: '20' });
+    return apiFetchJSON<{ actions: ActionAuditRecord[] }>(`/api/actions?${query}`, {
+      cache: 'no-store',
+      expectedOrgID: org,
+      signal,
+    });
   }
 
   static async getAction(actionId: string): Promise<ActionDetailResponse> {

@@ -211,6 +211,8 @@ export function ThresholdsTab(props: ThresholdsTabProps) {
         dockerPoweredOffSeverity={props.dockerPoweredOffSeverity}
         setDockerPoweredOffSeverity={props.setDockerPoweredOffSeverity}
         setDockerDefaults={props.setDockerDefaults}
+        dockerMutedContainerHosts={props.dockerMutedContainerHosts}
+        setDockerMutedContainerHosts={props.setDockerMutedContainerHosts}
         dockerIgnoredPrefixes={props.dockerIgnoredPrefixes}
         setDockerIgnoredPrefixes={props.setDockerIgnoredPrefixes}
         ignoredGuestPrefixes={props.ignoredGuestPrefixes}

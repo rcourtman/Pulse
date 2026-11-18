@@ -22,6 +22,11 @@ type DockerContainerUpdater interface {
 	TypedContainerUpdate(ctx context.Context, runtime, containerID, expectedImageDigest string, progress func(string)) (agentexec.DockerContainerUpdateOutcome, error)
 }
 
+type ComposeServiceUpdater interface {
+	TypedComposeUpdatePreflight(context.Context, agentexec.DockerContainerUpdatePayload) error
+	TypedComposeUpdate(context.Context, agentexec.DockerContainerUpdatePayload) (agentexec.DockerContainerUpdateOutcome, error)
+}
+
 func (c *CommandClient) handleDockerContainerUpdate(ctx context.Context, conn *websocket.Conn, payload agentexec.DockerContainerUpdatePayload) {
 	identity := agentexec.DockerContainerUpdateOperationIdentity(c.agentID, payload)
 	record, admitted, err := c.admitOperation(identity)
@@ -88,7 +93,19 @@ func (c *CommandClient) runDockerContainerUpdate(ctx context.Context, payload ag
 	progress := func(step string) {
 		c.logger.Info().Str("request_id", payload.RequestID).Str("container_id", payload.ContainerID).Msg(strings.TrimSpace(step))
 	}
-	outcome, err := c.dockerUpdater.TypedContainerUpdate(ctx, payload.Runtime, payload.ContainerID, payload.ExpectedImageDigest, progress)
+	var outcome agentexec.DockerContainerUpdateOutcome
+	var err error
+	if payload.Compose != nil {
+		updater, ok := c.dockerUpdater.(ComposeServiceUpdater)
+		if !ok {
+			result.ReasonCode = agentexec.ActionRefusalCapabilityUnavailable
+			result.Error = "agent does not support registered Compose sources"
+			return result
+		}
+		outcome, err = updater.TypedComposeUpdate(ctx, payload)
+	} else {
+		outcome, err = c.dockerUpdater.TypedContainerUpdate(ctx, payload.Runtime, payload.ContainerID, payload.ExpectedImageDigest, progress)
+	}
 	if err != nil {
 		c.logger.Warn().Err(err).Str("request_id", payload.RequestID).Str("container_id", payload.ContainerID).Msg("Docker update refused before mutation")
 		result.ReasonCode = agentexec.ActionPreflightReasonCode(err, agentexec.ActionRefusalTargetPreconditionFailed)
@@ -105,12 +122,15 @@ func (c *CommandClient) runDockerContainerUpdate(ctx context.Context, payload ag
 	result.RolledBack = outcome.RolledBack
 	// The backup rename is the first mutating step the outcome can attest to;
 	// failures before it (inspect, pull, stop) leave the tree unmutated.
-	result.MutationStarted = outcome.BackupCreated || outcome.RollbackAttempted || outcome.Success
+	result.SourceStage = outcome.SourceStage
+	result.ProposalBranch = outcome.ProposalBranch
+	result.ProposalCommit = outcome.ProposalCommit
+	result.MutationStarted = outcome.SourceMutationStarted || outcome.BackupCreated || outcome.RollbackAttempted || outcome.Success
 	if result.MutationStarted {
 		result.ExecutionPhase = agentexec.DockerContainerPhaseMutate
 	}
 	result.NewContainerID = strings.ToLower(strings.TrimSpace(outcome.NewContainerID))
-	if !outcome.Success || result.NewContainerID == "" {
+	if !outcome.Success || (result.NewContainerID == "" && result.SourceStage != "git_proposed") {
 		result.Error = boundDockerUpdateError(outcome.Error)
 		if result.Error == "" {
 			result.Error = "container update did not complete"

@@ -1,9 +1,10 @@
 import type { Component } from 'solid-js';
 import { For, Show, createEffect, createMemo, createSignal } from 'solid-js';
-import { Button, CommandCopyButton } from '@/components/shared/Button';
+import { Button, ButtonLink, CommandCopyButton } from '@/components/shared/Button';
 import { FormSelect } from '@/components/shared/FormSelect';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { copyToClipboard } from '@/utils/clipboard';
+import { buildDockerPath } from '@/routing/resourceLinks';
 import { formatAbsoluteTime, formatRelativeTime } from '@/utils/format';
 import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import { notificationStore } from '@/stores/notifications';
@@ -825,6 +826,19 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                     getUnifiedAgentLookupStatusPresentation(agent().connected);
                   const isConnected = () => agent().connected;
 
+                  const connectionMessage = () => {
+                    const name = agent().displayName || agent().hostname;
+                    if (!isConnected()) {
+                      return `${name} has been found, but Pulse is not receiving a live check-in yet. Keep the installer running on that machine and check again.`;
+                    }
+                    if (focus() === 'docker') {
+                      return `${name} is reporting. Choose your runtime and project in Compose applications, then open Service checks to review its published ports. Standalone containers appear in Docker overview.`;
+                    }
+                    return state.lookupWasAutoDetected()
+                      ? `${name} started reporting and Pulse detected it automatically. Open Infrastructure to inspect this host and add more infrastructure.`
+                      : `${name} is reporting live telemetry to Pulse. Open Infrastructure to inspect this host and add more infrastructure.`;
+                  };
+
                   return (
                     <div
                       class={`space-y-3 rounded-md border px-3 py-3 text-xs ${
@@ -847,11 +861,7 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                                 : 'text-blue-800 dark:text-blue-200'
                             }`}
                           >
-                            {isConnected()
-                              ? state.lookupWasAutoDetected()
-                                ? `${agent().displayName || agent().hostname} started reporting and Pulse detected it automatically. Open Infrastructure to inspect this host and add more infrastructure.`
-                                : `${agent().displayName || agent().hostname} is reporting live telemetry to Pulse. Open Infrastructure to inspect this host and add more infrastructure.`
-                              : `${agent().displayName || agent().hostname} has been found, but Pulse is not receiving a live check-in yet. Keep the installer running on that machine and check again.`}
+                            {connectionMessage()}
                           </p>
                         </div>
                         <div class="flex items-center gap-2">
@@ -884,20 +894,42 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                       </div>
                       <Show when={isConnected()}>
                         <div class="flex flex-col gap-2 sm:flex-row">
-                          <Button
-                            variant="success"
-                            size="mdCompact"
-                            onClick={state.openInfrastructure}
+                          <Show
+                            when={focus() === 'docker'}
+                            fallback={
+                              <>
+                                <Button
+                                  variant="success"
+                                  size="mdCompact"
+                                  onClick={state.openInfrastructure}
+                                >
+                                  Open infrastructure
+                                </Button>
+                                <Button
+                                  variant="successOutline"
+                                  size="mdCompact"
+                                  onClick={state.openInfrastructureInventory}
+                                >
+                                  Open inventory
+                                </Button>
+                              </>
+                            }
                           >
-                            Open infrastructure
-                          </Button>
-                          <Button
-                            variant="successOutline"
-                            size="mdCompact"
-                            onClick={state.openInfrastructureInventory}
-                          >
-                            Open inventory
-                          </Button>
+                            <ButtonLink
+                              variant="success"
+                              size="mdCompact"
+                              href={buildDockerPath('applications')}
+                            >
+                              Open Compose applications
+                            </ButtonLink>
+                            <ButtonLink
+                              variant="successOutline"
+                              size="mdCompact"
+                              href={buildDockerPath('overview')}
+                            >
+                              Open Docker overview
+                            </ButtonLink>
+                          </Show>
                         </div>
                       </Show>
                     </div>

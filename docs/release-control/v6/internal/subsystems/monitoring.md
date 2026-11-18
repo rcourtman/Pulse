@@ -17,6 +17,25 @@
 
 ## Purpose
 
+The Docker demo adds the document-ingest API and worker to one existing runtime.
+Each service has a stable identity and its own image. Its worker's captured write failure accompanies
+a linked API readiness check returning HTTP 503 and a recorded Git proposal.
+The same source-owned resource and action projections serve the example.
+
+The November 2026 private Docker exercise closed the product work tracked by
+`compose-application-operations`. Two projects shared a runtime and a private
+registry. A browser-approved local update and an independently deployed Git
+proposal each replaced only the reviewed web service. Its peer kept the same
+container ID, the data volume retained its marker, and the HTTP response changed
+from v1 to v2. The Git action first showed the old digest and a pending check.
+After the operator deployed the exact proposed commit, Pulse showed the matching
+digest and a passing check. Desktop and mobile diagnosis also covered two
+identically named projects and an injected Proxmox VM parent. The final
+[browser receipt](../../../../../frontend-modern/browser-verification/e332809f7df71e74.json)
+records the exercised routes and controls.
+
+Docker hosts report their local live-log opt-in separately from failure capture. A runtime with conflicting identity cannot serve a live read.
+
 ### Snapshot memory state comes from the snapshot, not its guest kind (14 November 2026)
 
 The existing snapshot memory boolean is true only for a QEMU snapshot whose

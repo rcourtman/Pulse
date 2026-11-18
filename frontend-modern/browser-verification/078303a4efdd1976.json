@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "base_sha": "f3d1f6192113bf274d99c52ad13e0ffc55b32e27",
+  "verified_at": "2026-11-18T00:55:20Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/ResourceDetailSummary.tsx",
+    "frontend-modern/src/features/docker/DockerApplications.tsx",
+    "frontend-modern/src/features/docker/DockerPageSurface.tsx",
+    "frontend-modern/src/features/docker/DockerPortChecksNotice.tsx",
+    "frontend-modern/src/features/docker/dockerComposeApplication.ts",
+    "frontend-modern/src/features/docker/dockerPageModel.ts",
+    "frontend-modern/src/types/resource.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/ResourceDetailSummary.tsx": "f8d9f12b65160e47f0c146a77a844b6364106a5e5493fe91b73d3d77196954dc",
+    "frontend-modern/src/features/docker/DockerApplications.tsx": "426250b40a7875c54af523d1a750d80de113430b0ad6fd8c315c89b9c1e7ae90",
+    "frontend-modern/src/features/docker/DockerPageSurface.tsx": "da26c149b4799bb0a2019fe79e75a190d885dd34bb7fced57d928b32999ef873",
+    "frontend-modern/src/features/docker/DockerPortChecksNotice.tsx": "f9bde590daeec637e68be43d7881ea8bef5d7c9c13cf930b356d7b1ab89a2774",
+    "frontend-modern/src/features/docker/dockerComposeApplication.ts": "f23fbcc2187012c385b332f6b47559faafbd909f8313ea7685ea45a189c38963",
+    "frontend-modern/src/features/docker/dockerPageModel.ts": "c5dcf266bd1604d9202da2e865f4b30273bff82466e36c6de9c4977cd457bc3d",
+    "frontend-modern/src/types/resource.ts": "b2fc837e686aa52d6aeb803e0749b0c48a4c91d6324cbad0cc8d1c8c27db6c33"
+  },
+  "routes": [
+    "/docker/overview",
+    "/docker/applications",
+    "/docker/applications?runtime=nebula-1-mock&project=nebula1-stack",
+    "/docker/applications?runtime=east&project=paperless",
+    "/docker/applications?runtime=missing&project=absent"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 768,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 390,
+      "height": 900
+    }
+  ],
+  "states": [
+    "Private production build with mock runtime inventory, two Compose projects, no linked checks, containers and recent starts.",
+    "Injected standalone and VM resource inventories with two identically named Docker runtimes and projects, independent member containers, HTTP 503, restarting database and captured failure output.",
+    "Check submission conflict, successful retry, completed offer and missing project route."
+  ],
+  "interactions": [
+    "Keyboard navigation from Docker Overview to Applications and the first project at all three widths. Reloaded the deep link, followed All applications, navigated Back and opened a missing project.",
+    "Selected the east project, expanded its captured log, showed the suggested port, retried a simulated conflict and verified the submitted check targeted only the east runtime and its exact container.",
+    "Inspected screenshots of the list, project and expanded failure at desktop, intermediate and narrow widths."
+  ]
+}

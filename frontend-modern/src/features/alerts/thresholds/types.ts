@@ -208,6 +208,8 @@ export interface ThresholdsTableProps {
           updateAlertDelayHours: number;
         }),
   ) => void;
+  dockerMutedContainerHosts?: () => string[];
+  setDockerMutedContainerHosts?: (next: string[]) => void;
   dockerIgnoredPrefixes: () => string[];
   setDockerIgnoredPrefixes: (value: string[] | ((prev: string[]) => string[])) => void;
   ignoredGuestPrefixes: () => string[];

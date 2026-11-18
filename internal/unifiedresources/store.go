@@ -768,6 +768,11 @@ func (s *SQLiteResourceStore) migrateActionAuditsSchema() error {
 			return fmt.Errorf("add action_audits.decision_revision column: %w", err)
 		}
 	}
+	if _, err := s.db.Exec(`CREATE INDEX IF NOT EXISTS idx_action_audits_compose_project
+        ON action_audits(json_extract(request_json,'$.params.composeRuntime'),json_extract(request_json,'$.params.composeProject'),updated_at DESC,created_at DESC)
+        WHERE json_valid(request_json) AND json_extract(request_json,'$.capabilityName')='update' AND json_extract(request_json,'$.params.sourceHash') IS NOT NULL`); err != nil {
+		return fmt.Errorf("create Compose project action index: %w", err)
+	}
 	if _, err := s.db.Exec(`
 		CREATE INDEX IF NOT EXISTS idx_action_audits_origin_investigation_updated_v2
 		ON action_audits(json_extract(origin_json, '$.surface'), json_extract(origin_json, '$.investigationId'), updated_at DESC)

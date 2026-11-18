@@ -2,6 +2,7 @@ package alerts
 
 import (
 	"fmt"
+	"net/url"
 	"sort"
 	"strings"
 	"time"
@@ -179,6 +180,86 @@ func (m *Manager) applyInfrastructureIncidentSynthesisNoLock(
 				AffectedResourceIDs: append([]string(nil), affected...),
 				Observations:        cloneCorrelationObservations(observations),
 			}
+		}
+	}
+	groupComposeFailureObservations(resourcesByID, candidates)
+}
+
+// Runtime state and its linked HTTP check can describe one application outage.
+// Compose membership alone establishes no causal direction. Existing topology
+// correlations take precedence, and each detector retains its delivery policy.
+func groupComposeFailureObservations(resources map[string]unifiedresources.Resource, candidates map[string]*incidentSynthesisCandidate) {
+	if len(candidates) < 2 {
+		return
+	}
+	type application struct{ runtime, project string }
+	membership := make(map[string]application)
+	for _, r := range resources {
+		d := r.Docker
+		if r.Type != unifiedresources.ResourceTypeAppContainer || d == nil || d.HostSourceID == "" || d.ComposeProject == "" {
+			continue
+		}
+		app := application{d.HostSourceID, d.ComposeProject}
+		membership[r.ID] = app
+		if id := DockerContainerResourceID(d.HostSourceID, d.ContainerID, r.Name); id != "" {
+			membership[id] = app
+		}
+	}
+	groups := make(map[application][]string)
+	for key, c := range candidates {
+		if c.alert.Correlation != nil {
+			continue
+		}
+		id := c.alert.ResourceID
+		switch c.alert.Type {
+		case "docker-container-state", "docker-container-health", "docker-container-restart-loop", "docker-container-oom-kill":
+		case "resource-incident":
+			endpoint := c.resource.Availability
+			if alertMetadataString(c.alert, "incidentCode") != "availability_unreachable" || endpoint == nil || endpoint.CorrelationState != unifiedresources.AvailabilityCorrelationAttached {
+				continue
+			}
+			id = ""
+			for _, relationship := range c.resource.Relationships {
+				if !relationship.Active || relationship.Type != unifiedresources.RelChecks || relationship.SourceID != c.resource.ID {
+					continue
+				}
+				target := unifiedresources.CanonicalResourceID(relationship.TargetID)
+				if id != "" && target != id {
+					id = ""
+					break
+				}
+				id = target
+			}
+		default:
+			continue
+		}
+		if app, ok := membership[id]; ok {
+			groups[app] = append(groups[app], key)
+		}
+	}
+	for app, keys := range groups {
+		if len(keys) < 2 {
+			continue
+		}
+		sort.Slice(keys, func(i, j int) bool { return incidentCandidateLess(candidates[keys[i]], candidates[keys[j]]) })
+		primary := candidates[keys[0]]
+		observations, affected := incidentSynthesisEvidence(keys, candidates)
+		group := AlertCorrelation{
+			Kind:           AlertCorrelationKindInfrastructureIncident,
+			Key:            "compose:" + url.PathEscape(app.runtime) + "/" + url.PathEscape(app.project),
+			Inference:      AlertCorrelationInferenceObservationSet,
+			Reason:         fmt.Sprintf("%d active failure observations for Compose application %s on runtime %s.", len(keys), app.project, app.runtime),
+			PrimaryAlertID: effectiveAlertID(primary.alert, primary.storageKey), PrimaryResourceID: primary.alert.ResourceID,
+			AffectedResourceIDs: affected, Observations: observations,
+		}
+		for i, key := range keys {
+			c := candidates[key]
+			group.Role = AlertCorrelationRoleSupporting
+			if i == 0 {
+				group.Role = AlertCorrelationRolePrimary
+			}
+			group.FailureClass = c.failureClass
+			c.alert.Correlation = cloneAlertCorrelation(&group)
 		}
 	}
 }

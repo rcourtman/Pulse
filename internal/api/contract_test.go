@@ -26973,3 +26973,18 @@ func TestRecoveryTokenPersistenceHTTP(t *testing.T) {
 func TestContract_RecoveryUnreadStartupHTTP(t *testing.T) {
 	testRecoveryUnreadStartupHTTP(t)
 }
+
+func TestContract_ComposeActionListRequiresRuntimeAndProject(t *testing.T) {
+	handler := &ResourceHandlers{}
+	for _, query := range []string{"view=compose&project=demo", "view=compose&runtime=runtime-a"} {
+		rec := httptest.NewRecorder()
+		handler.HandleListActions(rec, httptest.NewRequest(http.MethodGet, "/api/actions?"+query, nil))
+		var envelope agentcapabilities.ErrorEnvelope
+		if err := json.Unmarshal(rec.Body.Bytes(), &envelope); err != nil {
+			t.Fatal(err)
+		}
+		if rec.Code != http.StatusBadRequest || envelope.Error != agentcapabilities.AgentErrCodeInvalidActionListView {
+			t.Fatalf("incomplete Compose scope %s returned %d, %s", query, rec.Code, envelope.Error)
+		}
+	}
+}

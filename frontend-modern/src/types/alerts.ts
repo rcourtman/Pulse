@@ -138,6 +138,7 @@ export interface AlertConfig {
   agentDefaults?: AlertThresholds;
   storageDefault: HysteresisThreshold;
   dockerDefaults?: DockerThresholdConfig;
+  dockerMutedContainerHosts?: Record<string, boolean>;
   dockerIgnoredContainerPrefixes?: string[];
   ignoredGuestPrefixes?: string[];
   guestTagWhitelist?: string[];

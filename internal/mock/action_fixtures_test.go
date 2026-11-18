@@ -14,8 +14,8 @@ func TestCurrentFixtureGraphCarriesActionInboxFixtures(t *testing.T) {
 	t.Cleanup(func() { _ = SetEnabled(previous) })
 
 	graph := CurrentFixtureGraph()
-	if len(graph.ActionFixtures) != 6 {
-		t.Fatalf("action fixture count = %d, want 6", len(graph.ActionFixtures))
+	if len(graph.ActionFixtures) != 7 {
+		t.Fatalf("action fixture count = %d, want 7", len(graph.ActionFixtures))
 	}
 	resources, _ := graph.UnifiedResourceSnapshot()
 	resourceIDs := make(map[string]struct{}, len(resources))
@@ -48,8 +48,12 @@ func TestCurrentFixtureGraphCarriesActionInboxFixtures(t *testing.T) {
 		unifiedresources.ActionStateRejected,
 		unifiedresources.ActionStateFailed,
 	} {
-		if states[state] != 1 {
-			t.Fatalf("state %q fixture count = %d, want 1", state, states[state])
+		expected := 1
+		if state == unifiedresources.ActionStateCompleted {
+			expected = 2
+		}
+		if states[state] != expected {
+			t.Fatalf("state %q fixture count = %d, want %d", state, states[state], expected)
 		}
 	}
 }

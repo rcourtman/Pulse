@@ -341,8 +341,9 @@ func (m *Manager) CheckDockerHost(host models.DockerHost) {
 func (m *Manager) evaluateDockerContainer(host models.DockerHost, container models.DockerContainer, resourceID string) {
 	m.mu.RLock()
 	disableAllContainers, _ := m.alertPolicyTypeSwitchesNoLock("app-container")
+	muted := m.config.DockerMutedContainerHosts[host.ID]
 	m.mu.RUnlock()
-	if disableAllContainers {
+	if disableAllContainers || muted {
 		return
 	}
 
@@ -1082,6 +1083,10 @@ func (m *Manager) checkDockerContainerRestartLoop(host models.DockerHost, contai
 	now := time.Now()
 
 	m.mu.Lock()
+	if m.config.DockerMutedContainerHosts[host.ID] {
+		m.mu.Unlock()
+		return
+	}
 
 	// NormalizeDockerDefaults owns the factory values; 0 here is the
 	// operator's Off, so either one set to 0 turns restart-loop alerts off.
@@ -1325,13 +1330,18 @@ func (m *Manager) clearDockerContainerMetricAlerts(resourceID string, metrics ..
 	}
 }
 
+func (m *Manager) forgetDockerUpdateIdentityNoLock(key string) {
+	delete(m.dockerUpdateFirstSeenByIdentity, key)
+	delete(m.dockerUpdateIdentityOwner, key)
+	delete(m.dockerUpdateLastObserved, key)
+}
+
 func (m *Manager) clearDockerContainerUpdateTracking(resourceID, trackingKey string) {
 	m.mu.Lock()
 	delete(m.dockerUpdateFirstSeen, resourceID)
 	delete(m.dockerUpdateLastObserved, resourceID)
 	if trackingKey != "" {
-		delete(m.dockerUpdateFirstSeenByIdentity, trackingKey)
-		delete(m.dockerUpdateLastObserved, trackingKey)
+		m.forgetDockerUpdateIdentityNoLock(trackingKey)
 	}
 	m.mu.Unlock()
 }
@@ -1378,8 +1388,7 @@ func (m *Manager) clearDockerContainerUpdateStateLocked(alert *Alert) {
 		delete(m.dockerUpdateLastObserved, alert.ResourceID)
 	}
 	if trackingKey := dockerUpdateTrackingKeyFromAlert(alert); trackingKey != "" {
-		delete(m.dockerUpdateFirstSeenByIdentity, trackingKey)
-		delete(m.dockerUpdateLastObserved, trackingKey)
+		m.forgetDockerUpdateIdentityNoLock(trackingKey)
 	}
 }
 
@@ -1510,6 +1519,10 @@ func (m *Manager) checkDockerContainerImageUpdate(host models.DockerHost, contai
 
 	// Update is available - track when we first saw it
 	m.mu.Lock()
+	if m.config.DockerMutedContainerHosts[host.ID] {
+		m.mu.Unlock()
+		return
+	}
 	firstSeen, exists := m.dockerUpdateFirstSeenByIdentity[updateTrackingKey]
 	if !exists {
 		firstSeen, exists = m.dockerUpdateFirstSeen[resourceID]
@@ -1538,6 +1551,7 @@ func (m *Manager) checkDockerContainerImageUpdate(host models.DockerHost, contai
 	}
 	m.dockerUpdateFirstSeen[resourceID] = firstSeen
 	m.dockerUpdateFirstSeenByIdentity[updateTrackingKey] = firstSeen
+	m.dockerUpdateIdentityOwner[updateTrackingKey] = host.ID
 	m.dockerUpdateLastObserved[resourceID] = time.Now()
 	m.dockerUpdateLastObserved[updateTrackingKey] = time.Now()
 	m.mu.Unlock()
@@ -1670,8 +1684,7 @@ func (m *Manager) cleanupDockerContainerAlertsWithTracking(host models.DockerHos
 				continue
 			}
 			if _, exists := seenUpdateTracking[trackingKey]; !exists {
-				delete(m.dockerUpdateFirstSeenByIdentity, trackingKey)
-				delete(m.dockerUpdateLastObserved, trackingKey)
+				m.forgetDockerUpdateIdentityNoLock(trackingKey)
 			}
 		}
 	}
@@ -1712,8 +1725,7 @@ func (m *Manager) clearDockerHostContainerAlerts(host models.DockerHost) {
 	}
 	for trackingKey := range m.dockerUpdateFirstSeenByIdentity {
 		if strings.HasPrefix(trackingKey, updateTrackingPrefix) {
-			delete(m.dockerUpdateFirstSeenByIdentity, trackingKey)
-			delete(m.dockerUpdateLastObserved, trackingKey)
+			m.forgetDockerUpdateIdentityNoLock(trackingKey)
 		}
 	}
 	m.mu.Unlock()

@@ -1,0 +1,98 @@
+{
+  "version": 1,
+  "base_sha": "4d9f661c9b7028ab63d77d084c36b20c60e74e70",
+  "verified_at": "2026-11-18T02:33:56Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/api/resourceActions.ts",
+    "frontend-modern/src/components/Alerts/ThresholdsTableDockerHostsSection.tsx",
+    "frontend-modern/src/components/Infrastructure/ResourceDetailSummary.tsx",
+    "frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx",
+    "frontend-modern/src/components/Workloads/GuestRow.tsx",
+    "frontend-modern/src/components/shared/containerUpdateBadgeModel.ts",
+    "frontend-modern/src/components/shared/useContainerUpdateButtonState.ts",
+    "frontend-modern/src/features/actions/ActionDecisionPacket.tsx",
+    "frontend-modern/src/features/alerts/AlertsConfigurationSurface.tsx",
+    "frontend-modern/src/features/alerts/alertsConfigurationModel.ts",
+    "frontend-modern/src/features/alerts/tabs/ThresholdsTab.tsx",
+    "frontend-modern/src/features/alerts/thresholds/types.ts",
+    "frontend-modern/src/features/alerts/useAlertsConfigurationSnapshotState.ts",
+    "frontend-modern/src/features/docker/DockerApplications.tsx",
+    "frontend-modern/src/features/docker/DockerComposeDeployments.tsx",
+    "frontend-modern/src/features/docker/DockerContainersTable.tsx",
+    "frontend-modern/src/features/docker/DockerLiveLogs.tsx",
+    "frontend-modern/src/features/docker/DockerPageSurface.tsx",
+    "frontend-modern/src/features/docker/dockerComposeApplication.ts",
+    "frontend-modern/src/features/docker/dockerContainerUpdateAction.ts",
+    "frontend-modern/src/hooks/useWorkloads.ts",
+    "frontend-modern/src/types/actionAudit.ts",
+    "frontend-modern/src/types/alerts.ts",
+    "frontend-modern/src/types/resource.ts",
+    "frontend-modern/src/types/workloads.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/api/resourceActions.ts": "03a158bd3e08530b76ded2a519b64e8fca7fd406a4b636a87fdef9aa4c88ae91",
+    "frontend-modern/src/components/Alerts/ThresholdsTableDockerHostsSection.tsx": "6801e9c1a830382507bedfeb1d10e2a5dea014576d707c9d656561135661fc19",
+    "frontend-modern/src/components/Infrastructure/ResourceDetailSummary.tsx": "b12f685a3c5d569392ec5034b1832183544624769b381e76943837cd0585a766",
+    "frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx": "66657c7cca09a4d555833f35913889635de1eb68afaece9e7122bb5d52c47b2b",
+    "frontend-modern/src/components/Workloads/GuestRow.tsx": "f37c91daaedfa5b78b37a3575078f2217bf64724334ed8f005677d8c4f51ae11",
+    "frontend-modern/src/components/shared/containerUpdateBadgeModel.ts": "9c3a1c7f341b03f0c37cbfed07340ec5727cdb635274038aa3d99f1b0b1e7584",
+    "frontend-modern/src/components/shared/useContainerUpdateButtonState.ts": "3a5d1585416cf29e18a7b8d8669807807ab387e6bc1f3591374e98243e1704df",
+    "frontend-modern/src/features/actions/ActionDecisionPacket.tsx": "abfd97ac224993265406321927730935ffc1a48147e3ff5a6fdf418b15b99728",
+    "frontend-modern/src/features/alerts/AlertsConfigurationSurface.tsx": "48f3bb9ee6ae745a5acefee79afc764c5d1741dce254996c24653ea58e66a633",
+    "frontend-modern/src/features/alerts/alertsConfigurationModel.ts": "0e4cb9ed6c05e36f90cff2e0293b9373244cd54297bd55e77e9e883085ddd6a6",
+    "frontend-modern/src/features/alerts/tabs/ThresholdsTab.tsx": "94e1ea67c3d86de43978f224b1ef36862d25a9fe02ab458bdb66bd319de5be52",
+    "frontend-modern/src/features/alerts/thresholds/types.ts": "d8f3e9edb8f594d33968c7e6e97634d20e88ddfec747ccd8d6aa2652df09738b",
+    "frontend-modern/src/features/alerts/useAlertsConfigurationSnapshotState.ts": "d84f619617261089f516e87b699227299469c0f7c3471f6d248f81d5f3f3895f",
+    "frontend-modern/src/features/docker/DockerApplications.tsx": "b494b61a590a89c415f771ad44667d4acb787b11964972afc7f237fdbaedba07",
+    "frontend-modern/src/features/docker/DockerComposeDeployments.tsx": "685f8de1b8c9973886bd71876f14a64ffe4a4cb82c9456b49b39cf2bd83c7c61",
+    "frontend-modern/src/features/docker/DockerContainersTable.tsx": "c13d1243d3d458306e41b76217c1eb85a429d43013dd85865121288a1cf0638f",
+    "frontend-modern/src/features/docker/DockerLiveLogs.tsx": "7df2a8aa607cbea2cfce29c950525cadd18ccfaae1337cf5f63f1b19d6dba065",
+    "frontend-modern/src/features/docker/DockerPageSurface.tsx": "1bb469b94afaa520adf97b80378d094f7eda4bcfb9439396a2e2be1fed2fd6a1",
+    "frontend-modern/src/features/docker/dockerComposeApplication.ts": "41c73541ca46ed5f6fba7e8e647e961ec209351119c006a4e16be49c48332afc",
+    "frontend-modern/src/features/docker/dockerContainerUpdateAction.ts": "9f069defa7b2282f6e2dec4c975f7620c618bc4975372d77e4483393161e8e76",
+    "frontend-modern/src/hooks/useWorkloads.ts": "35ceff3578a34cfe493164b022567a73b0fa63f3daa53b4511a0e5bf20549211",
+    "frontend-modern/src/types/actionAudit.ts": "c0022ab49ada7156ad0471c986a43f3f2af9cd9b8bfdb79ef70a6d27fbddff7e",
+    "frontend-modern/src/types/alerts.ts": "bb535906c2ff9bbc0c8c4be05c47fee769c25b3071d6cc16cc4981a30567c49c",
+    "frontend-modern/src/types/resource.ts": "9f99417794506106803f92d84887b9e4af7708bdd32ce0442f2a4a5e4fcd5404",
+    "frontend-modern/src/types/workloads.ts": "0b7febb1f11777204901893bc170a6864921a7812a4fa3bef7ca6617a66d6e73"
+  },
+  "routes": [
+    "/settings/infrastructure?add=docker",
+    "/docker/overview",
+    "/docker/applications",
+    "/docker/applications?runtime=66cd990e-2def-40c7-a9e4-c450a9e450de&project=pulse-compose-browser-approval",
+    "/docker/applications?runtime=66cd990e-2def-40c7-a9e4-c450a9e450de&project=pulse-git-catalog",
+    "/alerts/thresholds/docker",
+    "/actions/history?action=act_76726fe43ab8fa3c9d4cd563046472d7"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 990
+    },
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 900
+    }
+  ],
+  "states": [
+    "Connected monitor-only Docker agent, two registered Compose projects, an unchanged digest-pinned peer, a mutable tag with an available update, and a linked HTTP check per application.",
+    "Opt-in live logs on the command-capable private agent. Docker alert mute off, on after save and reload, then restored off.",
+    "The local approval replaced one service. Pulse observed the reviewed manifest and a fresh passing HTTP check after the replacement.",
+    "The Git approval published a one-line proposal. Pulse showed a different running digest before operator deployment and the matching digest and passing HTTP check afterward.",
+    "Demo service with captured worker failure, HTTP 503 and a matching image. Injected standalone and linked Proxmox VM resource inventories each included two same-name projects on different runtimes."
+  ],
+  "interactions": [
+    "Generated a monitoring-only installer token, dismissed its reveal, looked up the reporting host and followed Open Compose applications to its service check.",
+    "Followed and stopped live container logs. Selected the runtime in Docker alert thresholds, saved, reloaded, restored the previous selection and reloaded again.",
+    "Reviewed the local image change, approved it, ran it and opened Service deployments. Independently verified the replacement, source diff, unchanged peer, retained volume marker and v2 HTTP response.",
+    "Reviewed, approved and ran the Git proposal. Opened Service deployments before and after an independent review and rollout of its exact commit, and verified the peer, volume and HTTP response.",
+    "Navigated the demo by keyboard, expanded failure output and compared the digest with the HTTP result. At both widths, scoped a port check to one of two identically named projects, retried a conflict and inspected the resulting UI on standalone and linked guest fixtures.",
+    "At 390px, opened the completed Git action on the installed server with its runtime displayed as a Proxmox VM. Checked the live action, Docker digest, HTTP result and recovery instructions. After wrapping long content in the shared action plan, all nine fields fit inside its 316px content area and the complete digest remained visible. Rechecked both local and Git deployment observations on desktop."
+  ]
+}

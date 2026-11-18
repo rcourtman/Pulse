@@ -15,14 +15,18 @@ type routeClassification struct {
 }
 
 var infrastructureRouteCatalog = map[string]routeClassification{
-	"POST /api/actions/plan":               {MutationID: "action.api.plan"},
-	"POST /api/actions/{id}/refresh":       {MutationID: "action.api.refresh"},
-	"GET /api/actions/pending":             {},
-	"GET /api/actions":                     {},
-	"GET /api/actions/{id}":                {},
-	"POST /api/actions/{id}/decision":      {MutationID: "action.api.decision"},
-	"POST /api/actions/{id}/execute":       {MutationID: "action.api.execute"},
-	"POST /api/actions/{id}/force-fail":    {MutationID: "action.api.force-fail"},
+	"POST /api/actions/plan":            {MutationID: "action.api.plan"},
+	"POST /api/actions/{id}/refresh":    {MutationID: "action.api.refresh"},
+	"GET /api/actions/pending":          {},
+	"GET /api/actions":                  {},
+	"GET /api/actions/{id}":             {},
+	"POST /api/actions/{id}/decision":   {MutationID: "action.api.decision"},
+	"POST /api/actions/{id}/execute":    {MutationID: "action.api.execute"},
+	"POST /api/actions/{id}/force-fail": {MutationID: "action.api.force-fail"},
+	// These routes exchange a bounded log read and its reply. Neither can
+	// admit an infrastructure mutation or dispatch a container command.
+	"/api/agents/docker/log-tail":          {},
+	"/api/agents/docker/log-tail/result":   {},
 	"/api/agents/docker/report":            {},
 	"/api/agents/docker/commands/":         {},
 	"/api/agents/docker/runtimes/":         {MutationID: "docker.api.runtime-stop"},

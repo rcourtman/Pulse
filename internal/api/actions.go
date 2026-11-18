@@ -95,7 +95,8 @@ type actionResourcePresentation struct {
 
 type actionAuditProjection struct {
 	unified.ActionAuditRecord
-	Resource *actionResourcePresentation `json:"resource,omitempty"`
+	ComposeObservation *composeDeploymentObservation `json:"composeObservation,omitempty"`
+	Resource           *actionResourcePresentation   `json:"resource,omitempty"`
 	// CapabilityAutoAuthorization is the read-time auto-authorization class of
 	// the planned capability. It only shapes review presentation (e.g. a
 	// single-confirmation control for low-risk capabilities); approval and
@@ -250,12 +251,53 @@ func (h *ResourceHandlers) HandleListActions(w http.ResponseWriter, r *http.Requ
 		}
 		limit = parsed
 	}
+	if view == "compose" {
+		runtime, project := r.URL.Query().Get("runtime"), r.URL.Query().Get("project")
+		if runtime == "" || project == "" || len(runtime) > 512 || len(project) > 128 {
+			writeJSONError(w, http.StatusBadRequest, agentcapabilities.AgentErrCodeInvalidActionListView, "An exact Docker runtime and Compose project are required")
+			return
+		}
+		var records []unified.ActionAuditRecord
+		var registry *unified.ResourceRegistry
+		if mock.IsMockEnabled() {
+			for _, fixture := range mock.ActionFixtures() {
+				a := fixture.Audit
+				if a.Request.CapabilityName == "update" && a.Request.Params["composeRuntime"] == runtime && a.Request.Params["composeProject"] == project && len(records) < limit {
+					records = append(records, a)
+				}
+			}
+			registry = mockActionResourceRegistry()
+		} else {
+			orgID := GetOrgID(r.Context())
+			var err error
+			records, err = h.ActionLifecycle().ComposeActions(orgID, runtime, project, limit)
+			if err != nil {
+				writeActionLifecycleReadError(w, err, func() {
+					writeJSONError(w, http.StatusInternalServerError, agentcapabilities.AgentErrCodeActionListFailed, "Failed to query Compose deployments")
+				})
+				return
+			}
+			if len(records) > 0 {
+				registry, _ = h.buildRegistry(orgID)
+			}
+		}
+		projected := projectActionAudits(records, registry)
+		observations := composeInventoryForProject(registry, runtime, project)
+		for i := range projected {
+			projected[i].ComposeObservation = observations.observe(projected[i].ActionAuditRecord, time.Now().UTC())
+		}
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(actionInboxResponse{View: view, Actions: projected, Count: len(projected), ReadOnly: mock.IsMockEnabled()}); err != nil {
+			writeJSONError(w, http.StatusInternalServerError, agentcapabilities.AgentErrCodeActionListEncodeFailed, "Failed to encode actions")
+		}
+		return
+	}
 	if mock.IsMockEnabled() {
 		states := []unified.ActionState{unified.ActionStatePlanned, unified.ActionStatePending, unified.ActionStateApproved, unified.ActionStateExecuting}
 		if view == actionlifecycle.ActionListSettled {
 			states = []unified.ActionState{unified.ActionStateRejected, unified.ActionStateExpired, unified.ActionStateCompleted, unified.ActionStateFailed}
 		} else if view != actionlifecycle.ActionListPending {
-			writeJSONError(w, http.StatusBadRequest, agentcapabilities.AgentErrCodeInvalidActionListView, "Action list view must be pending or settled")
+			writeJSONError(w, http.StatusBadRequest, agentcapabilities.AgentErrCodeInvalidActionListView, "Action list view must be pending, settled, or compose")
 			return
 		}
 		actions := mockActionAuditsByState(limit, states...)
@@ -269,7 +311,7 @@ func (h *ResourceHandlers) HandleListActions(w http.ResponseWriter, r *http.Requ
 	actions, err := h.ActionLifecycle().List(GetOrgID(r.Context()), view, limit)
 	if err != nil {
 		if strings.Contains(err.Error(), "unsupported action list view") {
-			writeJSONError(w, http.StatusBadRequest, agentcapabilities.AgentErrCodeInvalidActionListView, "Action list view must be pending or settled")
+			writeJSONError(w, http.StatusBadRequest, agentcapabilities.AgentErrCodeInvalidActionListView, "Action list view must be pending, settled, or compose")
 			return
 		}
 		writeActionLifecycleReadError(w, err, func() {

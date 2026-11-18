@@ -24,7 +24,7 @@ func TestMockActionInboxAndDetailUseCanonicalResponses(t *testing.T) {
 		wantCount int
 	}{
 		{view: "pending", wantCount: 3},
-		{view: "settled", wantCount: 3},
+		{view: "settled", wantCount: 4},
 	} {
 		recorder := httptest.NewRecorder()
 		handler.HandleListActions(recorder, httptest.NewRequest(http.MethodGet, "/api/actions?view="+test.view, nil))

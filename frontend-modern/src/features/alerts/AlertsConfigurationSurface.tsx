@@ -182,6 +182,8 @@ export function AlertsConfigurationSurface(
           dockerPoweredOffSeverity={state.dockerPoweredOffSeverity}
           setDockerPoweredOffSeverity={state.setDockerPoweredOffSeverity}
           setDockerDefaults={state.setDockerDefaults}
+          dockerMutedContainerHosts={state.dockerMutedContainerHosts}
+          setDockerMutedContainerHosts={state.setDockerMutedContainerHosts}
           dockerIgnoredPrefixes={state.dockerIgnoredPrefixes}
           setDockerIgnoredPrefixes={state.setDockerIgnoredPrefixes}
           ignoredGuestPrefixes={state.ignoredGuestPrefixes}

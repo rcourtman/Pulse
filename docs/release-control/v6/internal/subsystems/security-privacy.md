@@ -18,6 +18,12 @@
 
 ## Purpose
 
+Live Docker log requests require local read consent, a caller with Docker
+management authority and the bound agent report identity. Raw paths, shell
+commands and remote URLs are absent from reviewed Compose action requests.
+Daemon membership, an operator-registered deployment source, an immutable
+image and the complete approval digest bind each source operation.
+
 ### API-token control follows live authority through its transaction (17 November 2026)
 
 An admitted token snapshot does not grant a later credential mutation. Token

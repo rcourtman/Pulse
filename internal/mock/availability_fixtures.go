@@ -349,6 +349,11 @@ func availabilityFixtureRecord(fixture AvailabilityFixture, now time.Time) (unif
 		PollIntervalSeconds: target.effectivePollIntervalSecs(),
 		TimeoutMillis:       target.effectiveTimeoutMillis(),
 	}
+	if target.ID == demoComposeCheck {
+		data.ApplicationStatusCode = 503
+		data.ApplicationOutcome = "failed"
+		data.TransportOutcome = "connected"
+	}
 	if target.ID == "mock-availability-docker-frontend-service" {
 		data.AggregateState = "degraded"
 		data.Disagreement = true

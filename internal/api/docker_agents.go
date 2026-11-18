@@ -20,6 +20,7 @@ import (
 
 // DockerAgentHandlers manages Docker / Podman module ingest from pulse-agent.
 type DockerAgentHandlers struct {
+	liveLogs dockerLiveLogRequests
 	baseAgentHandlers
 	config *config.Config
 }
@@ -153,6 +154,12 @@ func (h *DockerAgentHandlers) HandleReport(w http.ResponseWriter, r *http.Reques
 		"agentId":    host.ID,
 		"containers": len(host.Containers),
 		"lastSeen":   host.LastSeen,
+	}
+
+	if tokenRecord != nil && host.TokenID == tokenRecord.ID && host.LiveLogsEnabled && host.IdentityConflict == nil {
+		if offer := h.liveLogs.offer(GetOrgID(r.Context()), host, tokenRecord.ID); offer != nil {
+			response["logTail"] = offer
+		}
 	}
 
 	if payload, cmd := monitor.FetchDockerCommandForHost(host.ID); cmd != nil {
