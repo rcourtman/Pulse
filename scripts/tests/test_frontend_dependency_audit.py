@@ -30,6 +30,12 @@ class FrontendDependencyAuditTest(unittest.TestCase):
         self.assertEqual(verdict["if"], "${{ !cancelled() }}")
         self.assertEqual(verdict["env"]["COMPLETE_AUDIT_RESULT"], "${{ steps.audit-complete.outcome }}")
 
+    def test_unit_runner_uses_the_locked_graph(self):
+        jobs = yaml.safe_load((WORKFLOWS / "build-and-test.yml").read_text())["jobs"]
+        steps = {step["name"]: step for step in jobs["frontend-unit"]["steps"]}
+        self.assertEqual(steps["Install frontend dependencies"]["run"], "npm ci --no-audit")
+        self.assertTrue(steps["Frontend unit tests"]["run"].startswith("npm run test -- "))
+
     def test_scheduled_audit_requires_both_reports(self):
         jobs = yaml.safe_load((WORKFLOWS / "security-scan.yml").read_text())["jobs"]
         steps = {step["name"]: step for step in jobs["npm-audit"]["steps"]}
