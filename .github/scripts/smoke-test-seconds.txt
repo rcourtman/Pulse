@@ -1,22 +1,28 @@
-# Script smoke suite seconds in ordinary PR CI, 2026-10-26.
-# Complete successful run 40313223658 at a5659362bf4b7466d2f308444bdd21849aeceb4c;
-# jobs 121540828495 / 121540828581, measured between suite headers.
-# These are scheduling hints, never the suite inventory or deadlines.
-# The current discovered tree supplies every suite; stale hints cannot add one.
-# Suites below 15 seconds use their measured mean, as do new/unmeasured suites.
-# Refresh from complete passing shard logs if imbalance returns.
-DEFAULT_WEIGHT 1.881
-test_admin_docs.py 25.874
-test_agent_log_docs.py 16.473
-test_api_failure_index.py 15.110
-test_authentication_diagnostic_docs.py 21.495
-test_auto_update_service_state.py 28.879
-test_docker_troubleshooting_docs.py 15.349
-test_memory_troubleshooting_docs.py 43.941
-test_notification_troubleshooting_docs.py 24.617
-test_npm_audit_retry.py 30.170
-test_performance_troubleshooting_docs.py 248.554
-test_server_installer_stop.py 38.558
-test_troubleshooting_logs.py 59.703
-test_truenas_docs.py 27.603
-test_vm_disk_diagnostics.py 80.059
+# Script smoke suite seconds from complete passing main run 44375270690.
+# Pulse f173cf450e0db2dccb7edb368843f6cd1e2a8d10 (2026-11-18); jobs
+# 135055513173 / 135055513160. Measured from each suite header to the next
+# header (or the passing summary). These hints never determine coverage.
+# Suites below 15 seconds and unmeasured suites use the shorter-suite mean.
+# Refresh from both complete shard logs when measured imbalance returns.
+DEFAULT_WEIGHT 2.083
+test_agent_load.py 32.741
+test_agent_log_docs.py 16.353
+test_api_failure_index.py 16.496
+test_auto_update_service_state.py 57.890
+test_backend_build_cache.py 15.786
+test_backend_make_test.py 26.446
+test_docker_troubleshooting_docs.py 15.422
+test_memory_troubleshooting_docs.py 27.338
+test_notification_troubleshooting_docs.py 24.696
+test_npm_audit_retry.py 28.565
+test_performance_troubleshooting_docs.py 90.551
+test_public_docs_workflow.py 29.630
+test_release_backend_queue.py 16.485
+test_server_installer_stop.py 23.732
+test_server_service_deadlines.py 26.899
+test_server_service_discovery.py 20.462
+test_server_update_timer.py 21.063
+test_syft_download.py 18.155
+test_troubleshooting_logs.py 35.810
+test_truenas_docs.py 25.134
+test_vm_disk_diagnostics.py 22.340
