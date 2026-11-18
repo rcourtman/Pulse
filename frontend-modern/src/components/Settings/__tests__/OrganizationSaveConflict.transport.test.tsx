@@ -53,6 +53,7 @@ const reads = () =>
     ([url, options]) => (options?.method ?? 'GET') === 'GET' && String(url).startsWith('/api/org'),
   );
 let winning: boolean;
+let fixturePanel: Panel;
 let recovery: Recovery;
 let completion: ReturnType<typeof deferred<Response>>;
 let readGate: ReturnType<typeof deferred<void>> | undefined;
@@ -183,7 +184,9 @@ async function expectWinningSnapshot(panel: Panel) {
   if (panel === 'overview') {
     expect(await screen.findByLabelText('Display Name')).toHaveValue(winningName);
     expect(screen.queryByDisplayValue('Refused stale name')).not.toBeInTheDocument();
-    expect(screen.getByText(nextOwner)).toBeInTheDocument();
+    expectOverviewMemberRole(user, 'admin');
+    expectOverviewMemberRole(memberID, 'editor');
+    expectOverviewMemberRole(nextOwner, 'owner');
     expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
   } else if (panel === 'access') {
     expect(await screen.findByRole('combobox', { name: `Role for ${memberID}` })).toHaveValue(
@@ -204,6 +207,10 @@ async function expectWinningSnapshot(panel: Panel) {
     expect(screen.getByText('Unchanged sibling')).toBeInTheDocument();
     expect(shareRemoveButton()).toBeEnabled();
   }
+}
+function expectOverviewMemberRole(member: string, role: string) {
+  const row = screen.getByText(member).closest('tr')!;
+  expect(within(row).getByText(role)).toBeInTheDocument();
 }
 async function deliberatelyChangeCurrent(panel: Panel) {
   if (panel === 'overview') {
@@ -251,6 +258,7 @@ beforeEach(async () => {
   syncSessionPresentationPolicy(null);
   document.cookie = `pulse_csrf=${csrf}; Path=/`;
   winning = false;
+  fixturePanel = 'overview';
   recovery = 'manager';
   completion = deferred<Response>();
   readGate = undefined;
@@ -286,7 +294,14 @@ beforeEach(async () => {
         if (readGate) await readGate.promise;
         if (winning && recovery === 'denied')
           return json({ error: 'Forbidden', code: 'forbidden' }, 403);
-        if (path === orgPath) return json(organization());
+        if (path === orgPath) {
+          const detail = organization();
+          // An embedded array is already complete. Exercise a required list
+          // refusal only after the selected detail omits that array.
+          if (fixturePanel === 'overview' && winning && recovery === 'partial')
+            delete detail.members;
+          return json(detail);
+        }
         if (path === `${orgPath}/members`)
           return winning && recovery === 'partial'
             ? json({ error: 'Synthetic saved members unavailable' }, 503)
@@ -327,9 +342,11 @@ describe('organization save conflict recovery through real controls and transpor
   it.each(panels.flatMap((panel) => recoveries.map((next) => ({ panel, next }))))(
     'reloads the winning $next snapshot after a refused $panel change, without replay or restored grants',
     async ({ panel, next }) => {
+      fixturePanel = panel;
       recovery = next;
       await openAndSubmit(panel);
       const originalReads = reads().length;
+      if (panel === 'overview') expect(reads().map(([path]) => path)).toEqual([orgPath]);
       // Another operation won on the server. The refused request has not
       // changed this fixture and must never be merged into it by the client.
       winning = true;
@@ -375,6 +392,9 @@ describe('organization save conflict recovery through real controls and transpor
         expect(screen.queryByLabelText('Member user ID')).not.toBeInTheDocument();
         if (panel === 'overview') {
           expect(screen.getByLabelText('Display Name')).toHaveValue(winningName);
+          expectOverviewMemberRole(user, 'viewer');
+          expectOverviewMemberRole(memberID, 'editor');
+          expectOverviewMemberRole(nextOwner, 'owner');
           expect(screen.getByLabelText('Display Name')).toBeDisabled();
           expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
           fireEvent.click(screen.getByRole('button', { name: 'Save' }));
@@ -390,7 +410,7 @@ describe('organization save conflict recovery through real controls and transpor
       }
       const recoveryPaths =
         panel === 'overview'
-          ? [orgPath, `${orgPath}/members`]
+          ? [orgPath, ...(next === 'partial' ? [`${orgPath}/members`] : [])]
           : panel === 'sharing'
             ? [
                 orgPath,
@@ -409,12 +429,11 @@ describe('organization save conflict recovery through real controls and transpor
                 ];
       // Viewer recovery must not even request the manager-only pending list.
       // Exact paths also catch a repeated read or fallback to another tenant.
-      expect(
-        reads()
-          .slice(originalReads)
-          .map(([path]) => String(path))
-          .sort(),
-      ).toEqual(recoveryPaths.sort());
+      const actualPaths = reads()
+        .slice(originalReads)
+        .map(([path]) => String(path));
+      if (panel === 'overview') expect(actualPaths).toEqual(recoveryPaths);
+      else expect(actualPaths.sort()).toEqual(recoveryPaths.sort());
       expect(writes()).toHaveLength(1);
       expect(notices.success).not.toHaveBeenCalled();
       expectBoundRequests();
