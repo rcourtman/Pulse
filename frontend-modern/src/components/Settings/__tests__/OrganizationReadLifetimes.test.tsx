@@ -282,6 +282,7 @@ describe('overview read and rename lifetime', () => {
     a.resolve(org('org-a'));
     await settle();
     expect(signal.aborted).toBe(true);
+    expect(mocks.members).not.toHaveBeenCalled();
     expect(
       container.querySelector('[aria-label="Loading organization overview"]'),
     ).toBeInTheDocument();

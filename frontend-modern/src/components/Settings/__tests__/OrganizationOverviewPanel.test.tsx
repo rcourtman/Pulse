@@ -124,7 +124,7 @@ afterEach(() => {
 });
 
 describe('OrganizationOverviewPanel', () => {
-  it('keeps each full saved member ID paired with its own role and added date', async () => {
+  it('keeps each full ID, role and added date paired within one saved overview', async () => {
     const members = [
       {
         userId: 'oidc:operations-north:platform-owner@example.test',
@@ -147,7 +147,7 @@ describe('OrganizationOverviewPanel', () => {
         addedAt: '2026-10-07T10:00:00Z',
       },
     ];
-    listMembersMock.mockResolvedValue(members);
+    orgGetMock.mockResolvedValue({ ...baseOrg, members });
     renderPanel();
     const table = await screen.findByRole('table');
 
@@ -178,10 +178,11 @@ describe('OrganizationOverviewPanel', () => {
       ...member,
       role: member.role === 'viewer' ? 'editor' : member.role,
     }));
-    listMembersMock.mockResolvedValue(refreshed);
+    orgGetMock.mockResolvedValue({ ...baseOrg, members: refreshed });
     eventBusEmitMock('organizations_changed');
     await expectSavedMembership(refreshed);
-    expect(listMembersMock).toHaveBeenCalledTimes(2);
+    expect(orgGetMock).toHaveBeenCalledTimes(2);
+    expect(listMembersMock).not.toHaveBeenCalled();
     expect(updateOrgMock).not.toHaveBeenCalled();
   });
 

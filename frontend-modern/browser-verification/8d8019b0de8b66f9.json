@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "base_sha": "61bb11ca9a62ba964f786bfbcb23b78e167ba49c",
+  "verified_at": "2026-11-18T22:38:02Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/useOrganizationOverviewPanelState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/useOrganizationOverviewPanelState.ts": "08fae70c7af2401d8e143b9159393aafd145c38c073acaee33606fc8dfbc7c69"
+  },
+  "routes": [
+    "/settings/organization"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Production Settings route with offline synthetic authentication and selected organization responses; Playwright 1.56.1, Chromium 141.0.7390.37 desktop light and WebKit 26.0 phone dark.",
+    "Matching selected detail 200 contained the normalized two-member snapshot; when the duplicate list returned HTTP 500, the parent hid the overview. Candidate makes no duplicate list request and visibly retains the name, ID, creation date, member count, both identities with roles, and the existing owner edit control.",
+    "A selected detail HTTP 403 leaves the existing unavailable state and focused read-only reload available; no metadata, rows, false empty or rename controls. The omitted-field fixture still reads members and renders the same metadata and rows as before.",
+    "Both builds retain keyboard reload focus, desktop per-member dates, and phone identities with role distinctions; nine before/after pairs opened and inspected, including the phone membership after reload. Fixture proof, not installed or live tenant acceptance."
+  ],
+  "interactions": [
+    "Opened the selected organization route with identical fixture data, viewport and theme in both builds; compared no-scroll failure, denied, reloaded, and omitted-list states.",
+    "Focused Reload organization and pressed Enter after the selected-detail failure; read back the same selected organization, complete memberships and visible panel focus without any writes.",
+    "Scrolled the recovered narrow panel to Membership and checked both identities and roles at the same anchor. Compared request paths and verified unchanged selected workspace and zero mutations in all cases."
+  ]
+}
