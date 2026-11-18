@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "eda1fdb91e09287e8667b2f1a3d7b02db6e765e2",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/OrganizationAccessManagementSection.tsx",
+    "frontend-modern/src/components/Settings/useOrganizationAccessPanelState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/OrganizationAccessManagementSection.tsx": "587f2368bd65d625927c397a191ab668d22e386f45b4f63c3187e8bc5d42bb6c",
+    "frontend-modern/src/components/Settings/useOrganizationAccessPanelState.ts": "b92bf80729c5a73bb9acf316c26fa847d9d67ca6edc74e7fb9bb1d8f56498fac"
+  },
+  "routes": [
+    "/settings/organization/access (shipped App, Settings shell, Organization Access panel, API client and toast; synthetic offline APIs)"
+  ],
+  "states": [
+    "Default add, named new invitation, exact saved Admin selecting Editor, saved role readback and toast, Owner review draft and confirmation.",
+    "Matched fixture roles/identities, viewport, theme and user operation. The after matrix was executed on the final wording and source; baseline source did not change."
+  ],
+  "interactions": [
+    "Keyboard Enter on desktop and taps on mobile: unchanged scoped session/CSRF requests and saved responses for the direct add, pending invitation and existing role edit.",
+    "The exact draft retains input focus when switching actions. The namesake remains Viewer while the selected person becomes Editor.",
+    "No writes while selecting roles or opening/cancelling Owner review, and confirmation still shows both affected roles and the exact organization."
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "verified_at": "2026-11-18T06:15:45Z",
+  "playwright": "1.56.1",
+  "browsers": [
+    "141.0.7390.37",
+    "26.0"
+  ],
+  "assertions": 132,
+  "baseline_assertions": 132,
+  "evidence": "24 native-inspected captures, 12 matched pairs, BROWSER-MATRIX.json, and PIXELS.md retained with the exact candidate.",
+  "limits": "Synthetic offline fixture, not an installed estate or a published release. The actual confirmation transaction is tested by repository tests; browser review is cancelled before dispatch."
+}

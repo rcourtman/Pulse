@@ -180,7 +180,7 @@ describe('OrganizationAccessPanel', () => {
       renderPanel();
 
       const input = (await screen.findByRole('textbox', {
-        name: 'Invite user ID',
+        name: orgID === 'default' ? 'User ID to add' : 'Member user ID',
       })) as HTMLInputElement;
       const form = screen.getByRole('form', {
         name: orgID === 'default' ? 'Add member' : 'Invite member',
@@ -195,7 +195,7 @@ describe('OrganizationAccessPanel', () => {
       expect(inviteMemberMock).not.toHaveBeenCalled();
       expect(notificationErrorMock).not.toHaveBeenCalled();
       expect(listMembersMock).toHaveBeenCalledTimes(1);
-      expect(screen.getByRole('combobox', { name: 'Invite role' })).toHaveValue('viewer');
+      expect(screen.getByRole('combobox', { name: 'Member role' })).toHaveValue('viewer');
 
       fireEvent.input(input, { target: { value: '  new-user  ' } });
       expect(input.validity.valid).toBe(true);
@@ -481,7 +481,7 @@ describe('OrganizationAccessPanel', () => {
     expect(screen.getByRole('combobox', { name: 'Role for user-2' })).not.toHaveTextContent(
       'Owner',
     );
-    expect(screen.getByRole('combobox', { name: 'Invite role' })).not.toHaveTextContent('Owner');
+    expect(screen.getByRole('combobox', { name: 'Member role' })).not.toHaveTextContent('Owner');
     expectNoWrites();
   });
 
@@ -539,7 +539,7 @@ describe('OrganizationAccessPanel', () => {
       renderPanel();
 
       const input = await screen.findByRole('textbox', {
-        name: 'Invite user ID',
+        name: scope === 'default' ? 'User ID to add' : 'Member user ID',
       });
       expect(screen.getByText('user-2')).toBeInTheDocument();
       const binding = {
@@ -553,7 +553,7 @@ describe('OrganizationAccessPanel', () => {
       expect(listMyInvitationsMock).toHaveBeenCalledExactlyOnceWith(binding);
 
       const roles = screen.getByRole('combobox', {
-        name: 'Invite role',
+        name: 'Member role',
       }) as HTMLSelectElement;
       if (scope === 'default') {
         expect(Array.from(roles.options, (option) => option.value)).toEqual(['viewer']);
@@ -572,7 +572,9 @@ describe('OrganizationAccessPanel', () => {
         ),
       );
       await waitFor(() => expect(orgGetMock).toHaveBeenCalledTimes(2));
-      await screen.findByRole('textbox', { name: 'Invite user ID' });
+      await screen.findByRole('textbox', {
+        name: scope === 'default' ? 'User ID to add' : 'Member user ID',
+      });
       expect(loggerErrorMock).not.toHaveBeenCalled();
     },
   );
@@ -589,7 +591,7 @@ describe('OrganizationAccessPanel', () => {
       renderPanel();
 
       await screen.findByText('user-2');
-      expect(screen.queryByRole('textbox', { name: 'Invite user ID' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('textbox', { name: 'Member user ID' })).not.toBeInTheDocument();
       expect(screen.queryByRole('combobox', { name: 'Role for user-2' })).not.toBeInTheDocument();
       expect(
         screen.queryByRole('button', { name: /^Remove .* from organization$/ }),
@@ -617,7 +619,7 @@ describe('Organization Access keyboard recovery', () => {
       change.mockReturnValueOnce(request.promise);
       renderPanel();
       const input = await screen.findByRole('textbox', {
-        name: 'Invite user ID',
+        name: 'Member user ID',
       });
       fireEvent.input(input, { target: { value: 'new-user' } });
       if (operation === 'role') {
@@ -791,19 +793,19 @@ describe('Organization Access keyboard recovery', () => {
     async (origin) => {
       renderPanel();
       const input = await screen.findByRole('textbox', {
-        name: 'Invite user ID',
+        name: 'Member user ID',
       });
       fireEvent.input(input, { target: { value: 'new-user' } });
       const control = {
         'invite-user': input,
-        'invite-role': screen.getByRole('combobox', { name: 'Invite role' }),
+        'invite-role': screen.getByRole('combobox', { name: 'Member role' }),
         'invite-submit': screen.getByRole('button', { name: 'Invite' }),
       }[origin]!;
       control.focus();
       fireEvent.submit(screen.getByRole('form', { name: 'Invite member' }));
       await waitFor(() => expect(orgGetMock).toHaveBeenCalledTimes(2));
       const fresh = await screen.findByRole('textbox', {
-        name: 'Invite user ID',
+        name: 'Member user ID',
       });
       await waitFor(() =>
         expect(document.activeElement).toHaveAttribute('data-org-access-action', origin),
@@ -1077,7 +1079,7 @@ describe('Organization Access read admission', () => {
   it('preserves only the same-selection invitation draft through a failed refresh and reload', async () => {
     renderPanel();
     const input = await screen.findByRole('textbox', {
-      name: 'Invite user ID',
+      name: 'Member user ID',
     });
     fireEvent.input(input, { target: { value: 'unsent-user' } });
     orgGetMock.mockRejectedValueOnce(new Error('Unavailable'));
@@ -1085,7 +1087,7 @@ describe('Organization Access read admission', () => {
     await screen.findByRole('alert');
     expect(screen.queryByText('user-2')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Reload access' }));
-    expect(await screen.findByRole('textbox', { name: 'Invite user ID' })).toHaveValue(
+    expect(await screen.findByRole('textbox', { name: 'Member user ID' })).toHaveValue(
       'unsent-user',
     );
     expectNoWrites();
@@ -1508,7 +1510,10 @@ describe('Organization Access change safety', () => {
     state.setInviteUserID('first-user');
     const pending = state.inviteMember();
     state.setInviteUserID('next-user');
-    result.resolve({ kind: 'member' });
+    result.resolve({
+      kind: 'invitation',
+      invitation: { ...pendingInvitation, userId: 'first-user' },
+    });
     await pending;
     await ready(state);
     expect(state.inviteUserID()).toBe('next-user');
@@ -1620,7 +1625,7 @@ describe('Organization Access change safety', () => {
         name: 'Decline invitation to Inviting Organization (inviting-org)',
       }),
     ).toBeDisabled();
-    expect(screen.queryByRole('textbox', { name: 'Invite user ID' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: 'Member user ID' })).not.toBeInTheDocument();
     expect(
       screen.queryByText('Admin or owner role required to manage organization access.'),
     ).not.toBeInTheDocument();
@@ -1649,7 +1654,7 @@ describe('Organization Access lifetime', () => {
   it('invalidates an older identity and clears its draft even in the same organization', async () => {
     const [currentUser, setCurrentUser] = createSignal('user-1');
     render(() => <OrganizationAccessPanel currentUser={currentUser()} />);
-    fireEvent.input(await screen.findByRole('textbox', { name: 'Invite user ID' }), {
+    fireEvent.input(await screen.findByRole('textbox', { name: 'Member user ID' }), {
       target: { value: 'private-draft' },
     });
     const pending = deferred<typeof baseMembers>();
@@ -1658,7 +1663,7 @@ describe('Organization Access lifetime', () => {
     await waitFor(() => expect(listMembersMock).toHaveBeenCalledTimes(2));
     orgGetMock.mockResolvedValue({ ...baseOrg, ownerUserId: 'user-b' });
     setCurrentUser('user-b');
-    expect(await screen.findByRole('textbox', { name: 'Invite user ID' })).toHaveValue('');
+    expect(await screen.findByRole('textbox', { name: 'Member user ID' })).toHaveValue('');
     pending.reject(new Error('Old identity failed'));
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
@@ -1680,7 +1685,7 @@ describe('Organization Access lifetime', () => {
 });
 
 describe('Default organization member form', () => {
-  it('keeps the labelled viewer-only Add flow on native submission', async () => {
+  it('names the immediate viewer-only Add flow without implying an invitation', async () => {
     getOrgIDMock.mockReturnValue('default');
     orgGetMock.mockResolvedValue({
       ...baseOrg,
@@ -1693,10 +1698,12 @@ describe('Default organization member form', () => {
     });
     renderPanel();
     const form = await screen.findByRole('form', { name: 'Add member' });
-    const input = within(form).getByRole('textbox', {
-      name: 'Invite user ID',
-    }) as HTMLInputElement;
-    const role = within(form).getByRole('combobox', { name: 'Invite role' });
+    const input = within(form).getByRole('textbox', { name: 'User ID to add' }) as HTMLInputElement;
+    const role = within(form).getByRole('combobox', { name: 'Member role' });
+    expect(input).toHaveAccessibleDescription(
+      /Adding grants access immediately.*instance roles determine permissions/,
+    );
+    expect(form).toHaveAccessibleDescription(/Viewer is the organization role/);
     expect(Array.from(input.labels ?? [], (label) => label.textContent?.trim())).toContain(
       'User ID',
     );
@@ -1711,5 +1718,6 @@ describe('Default organization member form', () => {
       { userId: 'new-user', role: 'viewer' },
       expect.objectContaining({ expectedOrgID: 'default', retry: false }),
     );
+    expect(notificationSuccessMock).toHaveBeenCalledExactlyOnceWith('Added new-user as viewer.');
   });
 });
