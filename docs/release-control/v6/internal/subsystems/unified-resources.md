@@ -3022,6 +3022,12 @@ purpose, between the ways in above and storage, backups and hardware below.
 It has no second view. A drawing that re-lays what a platform page already
 lists (hosts with their guests, networks with their members) does not belong
 on it.
+The whole map is on screen at once. `fitServiceDiagram` lays it out for the
+space left under the toolbar, wider than that space when a wider layout is
+shorter, and scales it down to fit, so the page does not scroll to show it.
+When names would be scaled too small to read the page draws icons alone. Do
+not add anything to the map that can only be reached by scrolling it. The
+saved image is laid out at its own poster width and is not fitted.
 The map is drawn in the product's own style and must not grow one of its own.
 On the page every structural colour is a reference to a semantic token
 variable (`MAP_PAGE_PALETTES` in `infrastructureMapRender.ts`), a box is a
@@ -4246,6 +4252,16 @@ application resource-provider or WebSocket lifecycle.
     (`TestStore_OpenBackfillsLegacyUnresolvedProxmoxPBSGuestRows`).
 
 ## Current State
+
+### The map fits the screen (18 November 2026)
+
+The diagram grew downward like any page, about one and a half screens on a
+small homelab. The maintainer's rule is that a map read by scrolling does not
+work. The layers are flatter (the Internet beside the ways in, and storage,
+backups and hardware on one bottom row, boxes wider than tall) and the page
+fits the drawing to the window, switching to icons alone before names become
+unreadable. It stops shrinking at 30 percent, where a very large estate
+scrolls again.
 
 ### The map is the service diagram only, in the product's style (18 November 2026)
 

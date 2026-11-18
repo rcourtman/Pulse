@@ -45,8 +45,8 @@ const COMPACT: Metrics = { tileW: 40, tileH: 40, icon: 26, gap: 4, pad: 8, named
 const HEADER = 26;
 const CARD_RADIUS = 6;
 const GROUP_GAP = 16;
-const LAYER_GAP = 44;
-const ROW_GAP = 44;
+const LAYER_GAP = 32;
+const ROW_GAP = 32;
 const BUS_DROP = 18;
 const GUTTER = 16;
 const PILL_HEIGHT = 24;
@@ -54,6 +54,16 @@ const MAX_COLUMNS = 8;
 const MAX_NETWORKS = 6;
 const MIN_WIDTH = 300;
 const NETWORK_TONES: readonly MapNetworkTone[] = ['net0', 'net1', 'net2', 'net3', 'net4', 'net5'];
+const LOWER_LABEL: Record<string, string> = {
+  storage: 'disks and volumes',
+  backups: 'backups',
+  hardware: 'runs on',
+};
+// Fitting to a screen: how much wider than the screen the drawing may be laid
+// out before it is scaled down, in how many tries, and how small it may get.
+const FIT_MAX_STRETCH = 3;
+const FIT_STEPS = 24;
+const FIT_MIN_SCALE = 0.3;
 
 const labelWidth = (text: string, size: number): number =>
   estimateTextWidth(text, { fontPx: size });
@@ -93,13 +103,15 @@ const sizeGroup = (group: DiagramGroup, metrics: Metrics, maxWidth: number): Siz
   const count = group.tiles.length;
   const pitch = metrics.tileW + metrics.gap;
   const fit = Math.max(1, Math.floor((maxWidth - metrics.pad * 2 + metrics.gap) / pitch));
-  // A handful sits in one line. More than that makes a block a little wider
-  // than it is tall, and a large group spreads wider still so that a big
-  // estate does not turn into one long column of boxes.
-  const spread = metrics.named ? (count > 12 ? 1.8 : 1.25) : 2.4;
-  const wanted = count <= 5 ? count : Math.ceil(Math.sqrt(count * spread));
-  const columns = Math.max(1, Math.min(count, fit, MAX_COLUMNS * (metrics.named ? 1 : 2), wanted));
-  const rows = Math.ceil(count / columns);
+  // A handful sits in one line. More than that makes a block several times
+  // wider than it is tall, because the screen it has to fit on is wide and
+  // every extra row of tiles pushes the rest of the map down.
+  const wanted = count <= 5 ? count : Math.ceil(Math.sqrt(count * (metrics.named ? 3 : 4)));
+  const most = Math.max(1, Math.min(count, fit, MAX_COLUMNS * (metrics.named ? 1 : 2), wanted));
+  const rows = Math.ceil(count / most);
+  // The same number of rows with the tiles shared out evenly, so the last
+  // row is not left with one tile.
+  const columns = Math.ceil(count / rows);
   const tilesWidth = columns * pitch - metrics.gap;
   const { title, count: total } = headerText(group);
   const titleWidth = Math.min(maxWidth, labelWidth(title, 11) + labelWidth(total, 11) + 36);
@@ -482,8 +494,10 @@ export function layoutServiceDiagram(diagram: ServiceDiagram, options: MapLayout
   /** Where the next layer's connector starts: the bottom of the layer above. */
   let source: { x: number; y: number } | null = null;
 
-  if (diagram.internet) {
-    const tile: DiagramTile = {
+  if (diagram.access) {
+    const sized = sizeGroup(diagram.access, metrics, inner);
+    const boxX = mid - sized.w / 2;
+    const internet: DiagramTile = {
       id: 'internet',
       name: 'Internet',
       caption: 'not monitored',
@@ -493,24 +507,39 @@ export function layoutServiceDiagram(diagram: ServiceDiagram, options: MapLayout
       platform: 'internet',
       navigable: false,
     };
-    drawTile(painter, tile, mid - metrics.tileW / 2, y, true);
-    source = { x: mid, y: y + metrics.tileH };
-    y += metrics.tileH + LAYER_GAP;
-  }
-
-  if (diagram.access) {
-    const sized = sizeGroup(diagram.access, metrics, inner);
-    const box = drawGroup(painter, sized, mid - sized.w / 2, y);
-    if (source && diagram.internet) {
+    const label = diagram.internet?.label ?? '';
+    // The Internet sits beside the ways in when there is room, so the map
+    // spends its height on what runs.
+    const reach = Math.max(72, labelWidth(label, 11) + 28);
+    const beside = boxX - left >= metrics.tileW + reach;
+    if (diagram.internet && !beside) {
+      drawTile(painter, internet, mid - metrics.tileW / 2, y, true);
+      const tileBottom = y + metrics.tileH;
+      y = tileBottom + LAYER_GAP;
       line(
         lines,
         [
-          [source.x, source.y],
-          [mid, box.y],
+          [mid, tileBottom],
+          [mid, y],
         ],
         { arrow: true, dashed: true },
       );
-      connectorLabel(labels, diagram.internet.label, mid, (source.y + box.y) / 2);
+      connectorLabel(labels, label, mid, (tileBottom + y) / 2);
+    }
+    const box = drawGroup(painter, sized, boxX, y);
+    if (diagram.internet && beside) {
+      const tileX = boxX - reach - metrics.tileW;
+      const lineY = box.y + box.h / 2;
+      drawTile(painter, internet, tileX, lineY - metrics.tileH / 2, true);
+      line(
+        lines,
+        [
+          [tileX + metrics.tileW, lineY],
+          [boxX, lineY],
+        ],
+        { arrow: true, dashed: true },
+      );
+      connectorLabel(labels, label, tileX + metrics.tileW + reach / 2, lineY - 12);
     }
     source = { x: mid, y: bottomOf(box) };
     y = bottomOf(box) + LAYER_GAP;
@@ -612,8 +641,9 @@ export function layoutServiceDiagram(diagram: ServiceDiagram, options: MapLayout
   const appsBottom = placed.length > 0 ? rowTop - ROW_GAP : y - LAYER_GAP;
   y = placed.length > 0 ? appsBottom + LAYER_GAP + 14 : y;
 
-  // Storage and backups share a layer.
-  const lower = [diagram.storage, diagram.backups].filter(
+  // What everything sits on shares the bottom layer: storage, backups and
+  // hardware, each reached by a connector that says what it carries.
+  const lower = [diagram.storage, diagram.backups, diagram.hardware].filter(
     (group): group is DiagramGroup => group !== undefined,
   );
   let lowerBoxes: Box[] = [];
@@ -673,70 +703,41 @@ export function layoutServiceDiagram(diagram: ServiceDiagram, options: MapLayout
           ],
           { arrow: true },
         );
-        connectorLabel(
-          labels,
-          group.key === 'backups' ? 'backups' : 'disks and volumes',
-          centreX(box),
-          (collectY + box.y) / 2 + 3,
-        );
+        connectorLabel(labels, LOWER_LABEL[group.key], centreX(box), (collectY + box.y) / 2 + 3);
       });
+      // A bottom layer too wide for one row wraps. The boxes on its later
+      // rows are reached down the right edge, so none is left unconnected.
+      const wrapped = lowerBoxes.slice(targets.length);
+      if (wrapped.length > 0) {
+        const reach = Math.max(...wrapped.map((box) => box.y)) - BUS_DROP;
+        line(lines, [
+          [Math.max(...targets.map(centreX)), collectY],
+          [rightRail, collectY],
+          [rightRail, reach],
+        ]);
+        wrapped.forEach((box, index) => {
+          const busY = box.y - BUS_DROP;
+          line(
+            lines,
+            [
+              [rightRail, busY],
+              [centreX(box), busY],
+              [centreX(box), box.y],
+            ],
+            { arrow: true },
+          );
+          connectorLabel(
+            labels,
+            LOWER_LABEL[lower[targets.length + index].key],
+            centreX(box),
+            busY,
+          );
+        });
+      }
     }
-    source = { x: centreX(lowerBoxes[0]), y: bottomOf(lowerBoxes[0]) };
     y = lowerBottom + LAYER_GAP;
   } else if (placed.length > 0) {
-    source = null;
     y = appsBottom + LAYER_GAP;
-  }
-
-  if (diagram.hardware) {
-    const sized = sizeGroup(diagram.hardware, metrics, inner);
-    const box = drawGroup(painter, sized, mid - sized.w / 2, y);
-    if (source && lower.length > 0) {
-      const bendY = box.y - BUS_DROP;
-      const straight = Math.abs(source.x - mid) < 1;
-      const points: Array<[number, number]> = straight
-        ? [
-            [source.x, source.y],
-            [mid, box.y],
-          ]
-        : [
-            [source.x, source.y],
-            [source.x, bendY],
-            [mid, bendY],
-            [mid, box.y],
-          ];
-      line(lines, points, { arrow: true });
-      connectorLabel(
-        labels,
-        'hosted on',
-        (source.x + mid) / 2,
-        straight ? (source.y + box.y) / 2 : bendY,
-      );
-    } else if (placed.length > 0) {
-      // No storage to pass through: what runs sits straight on the hardware.
-      const collectY = appsBottom + BUS_DROP;
-      const boxes = placed[placed.length - 1];
-      for (const entry of boxes)
-        line(lines, [
-          [centreX(entry), bottomOf(entry)],
-          [centreX(entry), collectY],
-        ]);
-      const xs = [...boxes.map(centreX), mid];
-      line(lines, [
-        [Math.min(...xs), collectY],
-        [Math.max(...xs), collectY],
-      ]);
-      line(
-        lines,
-        [
-          [mid, collectY],
-          [mid, box.y],
-        ],
-        { arrow: true },
-      );
-      connectorLabel(labels, 'runs on', mid, (collectY + box.y) / 2 + 3);
-    }
-    y = bottomOf(box) + LAYER_GAP;
   }
 
   const height = drawPosterFooter(out, options.header, margin, width, Math.max(0, y - LAYER_GAP));
@@ -745,4 +746,35 @@ export function layoutServiceDiagram(diagram: ServiceDiagram, options: MapLayout
     height: Math.ceil(height),
     nodes: [...lines, ...out.nodes, ...labels, ...out.hits],
   };
+}
+
+export interface FittedDiagram {
+  scene: MapScene;
+  /** How much the scene is shrunk to be drawn, from 1 (not at all) down. */
+  scale: number;
+}
+
+/**
+ * The diagram laid out to be seen whole in the space given, with nothing
+ * below the fold. A map read by scrolling is not a map, so when the drawing
+ * is taller than the space it is laid out wider, which puts more boxes on a
+ * row and makes it shorter, and then scaled down to fit. Of the widths tried,
+ * the one that leaves the drawing largest wins.
+ */
+export function fitServiceDiagram(
+  diagram: ServiceDiagram,
+  space: { width: number; height: number },
+  density: MapLayoutOptions['density'],
+): FittedDiagram {
+  let best: FittedDiagram | null = null;
+  for (let step = 0; step <= FIT_STEPS; step += 1) {
+    const width = space.width * (1 + (step / FIT_STEPS) * (FIT_MAX_STRETCH - 1));
+    const scene = layoutServiceDiagram(diagram, { width, density });
+    const scale =
+      scene.height > 0 ? Math.min(1, space.width / scene.width, space.height / scene.height) : 1;
+    if (!best || scale > best.scale + 0.001) best = { scene, scale };
+    if (scale >= 1) break;
+  }
+  const fitted = best as FittedDiagram;
+  return { scene: fitted.scene, scale: Math.max(FIT_MIN_SCALE, fitted.scale) };
 }

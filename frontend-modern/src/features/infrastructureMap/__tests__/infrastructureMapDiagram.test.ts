@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Resource } from '@/types/resource';
-import { layoutServiceDiagram } from '../infrastructureMapDiagram';
+import { fitServiceDiagram, layoutServiceDiagram } from '../infrastructureMapDiagram';
 import { buildMapExportSvg } from '../infrastructureMapExport';
 import type { MapDensity, MapScene, SceneNode } from '../infrastructureMapLayout';
 import { buildInfrastructureMapModel } from '../infrastructureMapModel';
@@ -122,7 +122,7 @@ describe('layoutServiceDiagram', () => {
   it('joins the layers with arrows and says what each one carries', () => {
     const scene = sceneOf(estate(), 1400);
     const drawn = texts(scene);
-    for (const label of ['tunnel', 'disks and volumes', 'backups', 'hosted on']) {
+    for (const label of ['tunnel', 'disks and volumes', 'backups', 'runs on']) {
       expect(drawn).toContain(label);
     }
     const lines = ofKind(scene, 'line');
@@ -228,7 +228,7 @@ describe('layoutServiceDiagram', () => {
     const drawn = texts(bare);
     expect(drawn).toContain('MEDIA');
     expect(drawn).toContain('runs on');
-    for (const absent of ['Internet', 'WAYS IN', 'STORAGE', 'BACKUPS', 'hosted on']) {
+    for (const absent of ['Internet', 'WAYS IN', 'STORAGE', 'BACKUPS', 'disks and volumes']) {
       expect(drawn).not.toContain(absent);
     }
     expect(sceneOf([], 1200).nodes).toEqual([]);
@@ -270,6 +270,27 @@ describe('layoutServiceDiagram', () => {
     expect(file).toMatch(/fill="#0f172a" stroke="#334155"\/><text[^>]*>PC<\/text>/);
   });
 
+  it('sets the Internet beside the ways in when there is room and above them when not', () => {
+    const dashedTile = (scene: MapScene) =>
+      ofKind(scene, 'rect').find((node) => node.dashed && node.fill === 'none');
+    const card = (scene: MapScene) =>
+      ofKind(scene, 'rect').find((node) => node.fill === 'surface' && node.stroke === 'border');
+    const wide = sceneOf(estate(), 1400);
+    expect(dashedTile(wide)!.x + dashedTile(wide)!.w).toBeLessThan(card(wide)!.x);
+    expect(dashedTile(wide)!.y).toBeGreaterThanOrEqual(card(wide)!.y);
+    const phone = sceneOf(estate(), 375);
+    expect(dashedTile(phone)!.y + dashedTile(phone)!.h).toBeLessThan(card(phone)!.y);
+  });
+
+  it('puts storage, backups and hardware on one bottom row when they fit', () => {
+    const scene = sceneOf(estate(), 1400);
+    const drawn = ofKind(scene, 'text');
+    const yOf = (title: string) => drawn.find((node) => node.text === title)!.y;
+    expect(yOf('STORAGE')).toBe(yOf('BACKUPS'));
+    expect(yOf('BACKUPS')).toBe(yOf('HARDWARE'));
+    expect(yOf('HARDWARE')).toBeGreaterThan(yOf('MEDIA'));
+  });
+
   it('heads each box with how many things it holds, folded ones included', () => {
     const drawn = texts(sceneOf(estate(), 1400));
     const at = (title: string) => drawn[drawn.indexOf(title) + 1];
@@ -277,5 +298,50 @@ describe('layoutServiceDiagram', () => {
     expect(at('OTHER')).toBe('2');
     expect(at('HARDWARE')).toBe('1');
     expect(drawn).toContain('switched off');
+  });
+
+  describe('fitServiceDiagram', () => {
+    const diagram = buildServiceDiagram(buildInfrastructureMapModel(estate()));
+
+    it('draws at full size when the space holds the map', () => {
+      const { scene, scale } = fitServiceDiagram(diagram, { width: 1800, height: 1200 }, 'names');
+      expect(scale).toBe(1);
+      expect(scene.width).toBe(1800);
+      expect(scene.height).toBeLessThanOrEqual(1200);
+    });
+
+    it('shrinks the map so that all of it fits a space too short for it', () => {
+      for (const space of [
+        { width: 1322, height: 420 },
+        { width: 1000, height: 380 },
+        { width: 700, height: 500 },
+      ]) {
+        const { scene, scale } = fitServiceDiagram(diagram, space, 'names');
+        expect(scale, JSON.stringify(space)).toBeLessThan(1);
+        expect(scale).toBeGreaterThan(0.3);
+        expect(scene.width * scale).toBeLessThanOrEqual(space.width + 0.5);
+        expect(scene.height * scale).toBeLessThanOrEqual(space.height + 0.5);
+      }
+    });
+
+    it('lays the map out wider than the space when that leaves it drawn larger', () => {
+      const space = { width: 1000, height: 380 };
+      const { scene, scale } = fitServiceDiagram(diagram, space, 'names');
+      expect(scene.width).toBeGreaterThan(space.width);
+      // Laid out at the space's own width it would be taller and so smaller.
+      const plain = layoutServiceDiagram(diagram, { width: space.width, density: 'names' });
+      expect(scale).toBeGreaterThan(space.height / plain.height);
+    });
+
+    it('fits more of the map in when it draws icons only', () => {
+      const space = { width: 1000, height: 380 };
+      const named = fitServiceDiagram(diagram, space, 'names');
+      const compact = fitServiceDiagram(diagram, space, 'marks');
+      expect(compact.scale).toBeGreaterThan(named.scale);
+    });
+
+    it('stops shrinking at a floor, below which the page scrolls instead', () => {
+      expect(fitServiceDiagram(diagram, { width: 320, height: 60 }, 'names').scale).toBe(0.3);
+    });
   });
 });
