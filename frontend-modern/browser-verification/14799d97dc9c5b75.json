@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "db899e8c414aee5600b322c9155c33cc9b614662",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/AuditLogPanel.tsx",
+    "frontend-modern/src/components/Settings/useAuditLogPanelState.ts",
+    "frontend-modern/src/utils/auditLogPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/AuditLogPanel.tsx": "da4a4b1b4834cf0c694ffcad8a49e2e2a5b21a8d3025887c4d74e9886480f662",
+    "frontend-modern/src/components/Settings/useAuditLogPanelState.ts": "901b87807c45d1fe822c2e4eeecc525670b05e6ebb16e7c5d13acb9b083b1466",
+    "frontend-modern/src/utils/auditLogPresentation.ts": "a54da21016b82802cac364bf5559e1aaba0615be5846d98e2e404fa0c174ee92"
+  },
+  "routes": [
+    "/settings/security-audit (shipped AuditLogPanel, router, license store, apiClient, CSS; offline synthetic GETs)"
+  ],
+  "states": [
+    "27 matching log events: no local matches on page 1 after verifying two signatures; page 2 has one failed signature and one unsigned event.",
+    "Single page with no verification matches, confirmed empty log, and an empty server-filtered query while Verification is active.",
+    "Same viewport, theme, fixtures and scroll per pair, including the narrowed phone anchor where all pagination buttons are in view."
+  ],
+  "interactions": [
+    "Desktop keyboard activation and phone taps navigate to page 2, run Verify All on the selected page, and show the exact current page match.",
+    "Remove Verification retains the second page, failed result and Event filter without a read; Clear all from server-filtered empty makes one first-page request.",
+    "The range, signature counts and legend stay visible when the page has loaded events, including zero displayed matches. Controls remain available; no change to event/authority/signature semantics."
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "verified_at": "2026-11-18T04:08:08Z",
+  "playwright": "1.56.1",
+  "browsers": [
+    "141.0.7390.37",
+    "26.0"
+  ],
+  "assertions": 170,
+  "baseline_assertions": 154,
+  "evidence": "26 native-inspected original captures in 13 matched pairs, BROWSER-RESULT.json, BROWSER-BINDING.json and PIXELS.md retained with the lane outcome.",
+  "limits": "Synthetic settings-panel fixture, not the full settings shell or an installed/live investigation. Existing phone grid horizontal scroll remains."
+}

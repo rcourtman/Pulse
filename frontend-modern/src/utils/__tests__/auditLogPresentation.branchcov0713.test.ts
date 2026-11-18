@@ -251,38 +251,19 @@ describe('getAuditLogFeatureGateCopy (branch coverage)', () => {
 });
 
 describe('getAuditLogEmptyState (branch coverage)', () => {
-  it('returns the filtered description when at least one filter is active', () => {
-    expect(getAuditLogEmptyState(1)).toStrictEqual({
+  it('names the filters that apply to the server query', () => {
+    expect(getAuditLogEmptyState(true)).toStrictEqual({
       title: 'No audit events found',
-      description: 'No events match your current filters. Try adjusting or clearing them.',
+      description:
+        'No events match the Event, User or Outcome filters. Try adjusting or clearing them.',
     });
   });
 
-  it('returns the filtered description for a large filter count', () => {
-    expect(getAuditLogEmptyState(42).description).toBe(
-      'No events match your current filters. Try adjusting or clearing them.',
-    );
-  });
-
-  it('returns the unfiltered description when no filters are active (boundary zero)', () => {
-    expect(getAuditLogEmptyState(0)).toStrictEqual({
+  it('describes a confirmed empty log when no server filter is active', () => {
+    expect(getAuditLogEmptyState(false)).toStrictEqual({
       title: 'No audit events found',
       description: 'Audit logging is active, but no events have been recorded yet.',
     });
-  });
-
-  it('treats a negative count as no-filters (the > 0 guard is false)', () => {
-    // Documents the guard's strict inequality: negatives route to the unfiltered arm.
-    expect(getAuditLogEmptyState(-3).description).toBe(
-      'Audit logging is active, but no events have been recorded yet.',
-    );
-  });
-
-  it('shares the same title across both arms but diverges on the description', () => {
-    const filtered = getAuditLogEmptyState(2);
-    const unfiltered = getAuditLogEmptyState(0);
-    expect(filtered.title).toBe(unfiltered.title);
-    expect(filtered.description).not.toBe(unfiltered.description);
   });
 });
 

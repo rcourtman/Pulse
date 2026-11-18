@@ -10,7 +10,7 @@ import { loadRuntimeCapabilities } from '@/stores/license';
 import { syncSessionPresentationPolicy } from '@/stores/sessionPresentationPolicy';
 
 vi.mock('@/utils/logger', () => ({
-  logger: { error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
+  logger: { error: vi.fn(), warn: vi.fn(), debug: vi.fn(), info: vi.fn() },
 }));
 
 const orgID = 'estate/east';
@@ -20,7 +20,7 @@ const selectedID = 'login/selected?revision=2%';
 const completedNotice =
   'Signature verification completed. Verified 2, failed 0, errors 0, unavailable 0.';
 const requestLog: { url: string; init: RequestInit }[] = [];
-let read: () => Response | Promise<Response>;
+let read: (url: string) => Response | Promise<Response>;
 let verify: (url: string) => Response | Promise<Response>;
 
 const json = (body: unknown, status = 200, headers: Record<string, string> = {}) =>
@@ -125,6 +125,10 @@ const loaded = async (estate = 'East') => {
 const expectNoInventory = () => {
   expect(screen.queryByRole('table')).not.toBeInTheDocument();
   expect(screen.queryByText('No audit events found')).not.toBeInTheDocument();
+  expect(screen.queryByText('No events match Verification on this page')).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole('status', { name: 'Verification filter results' }),
+  ).not.toBeInTheDocument();
   expect(screen.queryByText('Verified: 2')).not.toBeInTheDocument();
   expect(screen.queryByText(completedNotice)).not.toBeInTheDocument();
 };
@@ -157,7 +161,7 @@ beforeEach(async () => {
       requestLog.push({ url, init });
       if (url === '/api/license/runtime-capabilities')
         return json({ capabilities: ['audit_logging'], limits: [] });
-      if (url.startsWith('/api/audit?')) return read();
+      if (url.startsWith('/api/audit?')) return read(url);
       if (url.startsWith('/api/audit/') && url.endsWith('/verify')) return verify(url);
       throw new Error(`Unexpected synthetic request: ${url}`);
     }),
@@ -174,6 +178,160 @@ afterEach(() => {
 });
 
 describe('Audit Log rendered controls through the real HTTP client', () => {
+  it('keeps an empty Verification result honest and finds a matching signature on the next page', async () => {
+    window.history.replaceState({}, '', '/settings/security-audit?event=login&verification=failed');
+    window.localStorage.setItem('pulse-audit-page-size', '25');
+    const firstPage = Array.from({ length: 25 }, (_, index) => ({
+      ...events()[0],
+      id: `first-page-${index}`,
+      signature: index === 0 ? 'synthetic-signature' : undefined,
+    }));
+    const laterPage = events('Later').map((event, index) => ({
+      ...event,
+      id: `later-page-${index}`,
+      signature: index === 0 ? 'synthetic-signature' : undefined,
+    }));
+    read = (url) =>
+      json({
+        events: url.includes('offset=25') ? laterPage : firstPage,
+        total: 27,
+        persistentLogging: true,
+      });
+    verify = () => json(verificationResult(false));
+    mount();
+
+    const result = () => screen.getByRole('status', { name: 'Verification filter results' });
+    expect(
+      await screen.findByRole('heading', { name: 'No events match Verification on this page' }),
+    ).toBeInTheDocument();
+    expect(result()).toHaveTextContent(
+      'Verification filters this page only: 0 of 25 events shown.',
+    );
+    expect(screen.getByText('Loaded 1-25 of 27 • Page 1 of 2')).toBeInTheDocument();
+    expect(screen.getByText('Unchecked: 1')).toBeInTheDocument();
+    expect(screen.getByText('Check another page or change the Verification filter.')).toBeVisible();
+    expect(screen.queryByText('No audit events found')).not.toBeInTheDocument();
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Verify All' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Clear all filters' })).toBeEnabled();
+    expectBoundRead(auditRequests()[0], '/api/audit?limit=25&offset=0&event=login');
+    expect(verificationRequests()).toHaveLength(0);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    expect(await screen.findByText('Loaded 26-27 of 27 • Page 2 of 2')).toBeVisible();
+    expect(result()).toHaveTextContent('Verification filters this page only: 0 of 2 events shown.');
+    expectBoundRead(auditRequests()[1], '/api/audit?limit=25&offset=25&event=login');
+    expect(verificationRequests()).toHaveLength(0);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Verify All' }));
+    expect(await screen.findByText('Later first sign-in')).toBeInTheDocument();
+    expect(row('Later first sign-in').getByText('Failed')).toBeInTheDocument();
+    expect(screen.queryByText('Later selected sign-in')).not.toBeInTheDocument();
+    expect(result()).toHaveTextContent('Verification filters this page only: 1 of 2 events shown.');
+    expect(screen.getByText('Failed: 1')).toBeInTheDocument();
+    expect(verificationRequests()).toHaveLength(1);
+    expectBoundRead(verificationRequests()[0], '/api/audit/later-page-0/verify');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Verification filter' }));
+    expect(await screen.findByText('Later selected sign-in')).toBeInTheDocument();
+    expect(screen.getByText('Showing 26-27 of 27 • Page 2 of 2')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('status', { name: 'Verification filter results' }),
+    ).not.toBeInTheDocument();
+    expect(window.location.search).toBe('?event=login');
+    // No delayed user-filter request should appear after the router change.
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    expect(auditRequests()).toHaveLength(3);
+  });
+
+  it('does not suggest turning to another page when all available events fit on one page', async () => {
+    window.history.replaceState({}, '', '/settings/security-audit?verification=failed');
+    mount();
+    expect(
+      await screen.findByRole('heading', { name: 'No events match Verification on this page' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('Change the Verification filter to see other events on this page.'),
+    ).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled();
+    expect(auditRequests()).toHaveLength(1);
+  });
+
+  it.each([
+    {
+      filters: 'verification=failed',
+      query: '',
+      description: 'Audit logging is active, but no events have been recorded yet.',
+    },
+    {
+      filters: 'event=startup&verification=failed',
+      query: '&event=startup',
+      description:
+        'No events match the Event, User or Outcome filters. Try adjusting or clearing them.',
+    },
+  ])(
+    'describes the confirmed log result with $filters instead of a local no-match',
+    async ({ filters, query, description }) => {
+      window.history.replaceState({}, '', `/settings/security-audit?${filters}`);
+      read = () => json({ events: [], total: 0, persistentLogging: true });
+      mount();
+      expect(await screen.findByRole('heading', { name: 'No audit events found' })).toBeVisible();
+      expect(screen.getByText(description)).toBeVisible();
+      expect(
+        screen.queryByRole('status', { name: 'Verification filter results' }),
+      ).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled();
+      expect(auditRequests()).toHaveLength(1);
+      expectBoundRead(auditRequests()[0], `/api/audit?limit=100&offset=0${query}`);
+    },
+  );
+
+  it('clears multiple log filters with one fresh query, not one request per filter', async () => {
+    window.history.replaceState(
+      {},
+      '',
+      '/settings/security-audit?event=startup&user=reviewer&success=failed&verification=failed',
+    );
+    read = (url) =>
+      url.includes('event=startup')
+        ? json({ events: [], total: 0, persistentLogging: true })
+        : json(inventory());
+    mount();
+    expect(await screen.findByRole('heading', { name: 'No audit events found' })).toBeVisible();
+    expectBoundRead(
+      auditRequests()[0],
+      '/api/audit?limit=100&offset=0&event=startup&user=reviewer&success=false',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Clear all filters' }));
+    await loaded();
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    expect(auditRequests()).toHaveLength(2);
+    expectBoundRead(auditRequests()[1], '/api/audit?limit=100&offset=0');
+    expect(verificationRequests()).toHaveLength(0);
+  });
+
+  it('withdraws the page and its verification counts while a read is pending or refused', async () => {
+    window.history.replaceState({}, '', '/settings/security-audit?verification=failed');
+    mount();
+    expect(await screen.findByText('Loaded 1-2 of 2 • Page 1 of 1')).toBeVisible();
+    expect(screen.getByText('Unchecked: 2')).toBeVisible();
+
+    const refresh = deferred<Response>();
+    read = () => refresh.promise;
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    expectNoInventory();
+    expect(screen.queryByText('Unchecked: 2')).not.toBeInTheDocument();
+    expect(screen.queryByText('Loaded 1-2 of 2 • Page 1 of 1')).not.toBeInTheDocument();
+    refresh.resolve(json({ error: 'access_denied' }, 403));
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Audit log access could not be confirmed.',
+    );
+    expectNoInventory();
+    expect(screen.queryByText('Unchecked: 2')).not.toBeInTheDocument();
+    expect(auditRequests()).toHaveLength(2);
+    expect(auditRequests().every(({ url }) => url === '/api/audit?limit=100&offset=0')).toBe(true);
+  });
+
   it('names same-user signature actions by their exact saved event ID', async () => {
     const rows = events();
     rows[1].timestamp = rows[0].timestamp;

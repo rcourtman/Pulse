@@ -1,14 +1,4 @@
-import {
-  batch,
-  createEffect,
-  createMemo,
-  createSignal,
-  on,
-  onCleanup,
-  onMount,
-  untrack,
-} from 'solid-js';
-import type { Accessor } from 'solid-js';
+import { batch, createEffect, createMemo, createSignal, on, onCleanup, onMount } from 'solid-js';
 import { unwrap } from 'solid-js/store';
 import { useLocation, useNavigate } from '@solidjs/router';
 import {
@@ -108,31 +98,31 @@ export const useAuditLogPanelState = (props: AuditLogPanelProps = {}) => {
     navigate(`${location.pathname}${query ? `?${query}` : ''}`, { replace: true });
   };
 
-  const eventFilter: Accessor<string> = () =>
-    parseEventFilter(new URLSearchParams(location.search).get('event'));
+  const searchParams = createMemo(() => new URLSearchParams(location.search));
+  const eventFilter = createMemo(() => parseEventFilter(searchParams().get('event')));
   const setEventFilter = (value: string): void => {
     updateSearchParam((params) => {
       if (parseEventFilter(value) === '') params.delete('event');
       else params.set('event', value);
     });
   };
-  const userFilter: Accessor<string> = () => new URLSearchParams(location.search).get('user') ?? '';
+  const userFilter = createMemo(() => searchParams().get('user') ?? '');
   const setUserFilter = (value: string): void => {
     updateSearchParam((params) => {
       if (value === '') params.delete('user');
       else params.set('user', value);
     });
   };
-  const successFilter: Accessor<string> = () =>
-    parseSuccessFilter(new URLSearchParams(location.search).get('success'));
+  const successFilter = createMemo(() => parseSuccessFilter(searchParams().get('success')));
   const setSuccessFilter = (value: string): void => {
     updateSearchParam((params) => {
       if (parseSuccessFilter(value) === 'all') params.delete('success');
       else params.set('success', value);
     });
   };
-  const verificationFilter: Accessor<string> = () =>
-    parseVerificationFilter(new URLSearchParams(location.search).get('verification'));
+  const verificationFilter = createMemo(() =>
+    parseVerificationFilter(searchParams().get('verification')),
+  );
   const setVerificationFilter = (value: string): void => {
     updateSearchParam((params) => {
       if (parseVerificationFilter(value) === 'all') params.delete('verification');
@@ -571,7 +561,8 @@ export const useAuditLogPanelState = (props: AuditLogPanelProps = {}) => {
     if (totalEvents() === 0) return 'Showing 0 of 0';
     const start = pageOffset() + 1;
     const end = Math.min(totalEvents(), pageOffset() + events().length);
-    return `Showing ${start}-${end} of ${totalEvents()}`;
+    const rangeLabel = verificationFilter() === 'all' ? 'Showing' : 'Loaded';
+    return `${rangeLabel} ${start}-${end} of ${totalEvents()}`;
   };
 
   const verificationSummary = createMemo(() => {
@@ -614,14 +605,12 @@ export const useAuditLogPanelState = (props: AuditLogPanelProps = {}) => {
     return summary;
   });
 
-  const activeFilterCount = () => {
-    let count = 0;
-    if (eventFilter()) count += 1;
-    if (userFilter()) count += 1;
-    if (successFilter() !== 'all') count += 1;
-    if (verificationFilter() !== 'all') count += 1;
-    return count;
-  };
+  const activeLogFilterCount = () =>
+    Number(Boolean(eventFilter())) +
+    Number(Boolean(userFilter())) +
+    Number(successFilter() !== 'all');
+  const hasLogFilters = () => activeLogFilterCount() > 0;
+  const activeFilterCount = () => activeLogFilterCount() + Number(verificationFilter() !== 'all');
 
   const activeFilterChips = createMemo<AuditFilterChip[]>(() => {
     const chips: AuditFilterChip[] = [];
@@ -794,51 +783,25 @@ export const useAuditLogPanelState = (props: AuditLogPanelProps = {}) => {
   );
   const unsubscribeOrg = eventBus.on('org_switched', resetReader);
 
-  // Live-apply: server-side filters (event, success) trigger a fresh fetch from
-  // the first page immediately on change. userFilter debounces to avoid one
-  // fetch per keystroke. verificationFilter is purely client-side; only
-  // touches the local filteredEvents memo.
-  let initialEventFilterApplied = false;
-  createEffect(() => {
-    const value = eventFilter();
-    if (!initialEventFilterApplied) {
-      initialEventFilterApplied = true;
-      void value;
-      return;
-    }
-    if (!accessAllowed()) return;
-    untrack(refetchFromFirstPage);
-  });
-
-  let initialSuccessFilterApplied = false;
-  createEffect(() => {
-    const value = successFilter();
-    if (!initialSuccessFilterApplied) {
-      initialSuccessFilterApplied = true;
-      void value;
-      return;
-    }
-    if (!accessAllowed()) return;
-    untrack(refetchFromFirstPage);
-  });
-
-  let initialUserFilterApplied = false;
-  createEffect(() => {
-    const value = userFilter();
-    if (!initialUserFilterApplied) {
-      initialUserFilterApplied = true;
-      void value;
-      return;
-    }
-    if (!accessAllowed()) return;
-    if (userFilterDebounceHandle !== null) {
-      window.clearTimeout(userFilterDebounceHandle);
-    }
-    userFilterDebounceHandle = window.setTimeout(() => {
+  // Follow normalized server filter values, not the raw URL. A Verification-only
+  // change must keep the loaded page and its results. Handle a combined change
+  // (such as Clear all filters) once, and only debounce user-only changes.
+  createEffect(
+    on([eventFilter, successFilter, userFilter], ([event, success], previous) => {
+      if (!previous) return; // The reader owns the initial read.
+      if (userFilterDebounceHandle !== null) window.clearTimeout(userFilterDebounceHandle);
       userFilterDebounceHandle = null;
-      refetchFromFirstPage();
-    }, USER_FILTER_DEBOUNCE_MS);
-  });
+      if (!accessAllowed()) return;
+      if (event !== previous[0] || success !== previous[1]) {
+        refetchFromFirstPage();
+      } else {
+        userFilterDebounceHandle = window.setTimeout(() => {
+          userFilterDebounceHandle = null;
+          refetchFromFirstPage();
+        }, USER_FILTER_DEBOUNCE_MS);
+      }
+    }),
+  );
 
   onCleanup(() => {
     disposed = true;
@@ -870,6 +833,7 @@ export const useAuditLogPanelState = (props: AuditLogPanelProps = {}) => {
     goToLastPage,
     goToNextPage,
     goToPreviousPage,
+    hasLogFilters,
     hasNextPage,
     hasResumeEvents,
     hasSignedEvents,
