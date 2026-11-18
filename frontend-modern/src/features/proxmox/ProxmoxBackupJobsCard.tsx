@@ -1,6 +1,7 @@
 import { createMemo, createSignal, For, onCleanup, Show, type Component } from 'solid-js';
 import { createNonSuspendingQuery } from '@/hooks/createNonSuspendingQuery';
 import { supportsHoverTooltips } from '@/components/shared/hoverCapability';
+import { InlineNotice } from '@/components/shared/InlineNotice';
 import { TableCard } from '@/components/shared/TableCard';
 import { TableCardHeader } from '@/components/shared/TableCardHeader';
 import { TooltipPortal } from '@/components/shared/TooltipPortal';
@@ -262,19 +263,19 @@ export const ProxmoxBackupJobsCard: Component<{
         }
       />
       <Show when={hasUnavailableCounts()}>
-        <div class="space-y-2 px-3 py-2 text-xs text-muted">
+        <InlineNotice layout="banner" tone="warning">
           <p role="status">
             {unavailable()
               ? 'Backup job counts are unknown. Restore points and protection are shown separately.'
               : 'Some backup job counts are unknown.'}
             <Show when={props.accessMessage}> {props.accessMessage}</Show>
           </p>
-          <div class="flex flex-wrap items-center gap-2">
+          <div class="mt-2 flex flex-wrap items-center gap-2">
             <Show when={props.onRetry}>
               <button
                 ref={retainRetryFocus}
                 type="button"
-                class="min-h-10 rounded-md border border-border px-3 font-medium text-base-content hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 aria-disabled:opacity-50"
+                class="min-h-10 rounded-md border border-current px-3 font-medium hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 aria-disabled:opacity-50"
                 aria-label="Retry backup jobs"
                 aria-disabled={props.retrying}
                 onClick={() => {
@@ -288,7 +289,7 @@ export const ProxmoxBackupJobsCard: Component<{
               {restorePointsButton()}
             </Show>
           </div>
-        </div>
+        </InlineNotice>
       </Show>
       <Show when={props.jobs.days.length > 0}>
         <div class="flex flex-1 flex-col px-3 pb-2 pt-3">

@@ -97,11 +97,13 @@ describe('Backup jobs unavailable reads through the consuming card', () => {
     fetchMock.mockImplementation(async () => reply({}, status));
     await mount();
     expect(card()).toHaveAttribute('data-backup-jobs', 'unavailable');
-    expect(card()).toHaveTextContent('Backup job counts are unknown');
+    const notice = within(card()!).getByRole('status');
+    expect(notice).toHaveTextContent('Backup job counts are unknown');
+    expect(within(notice).queryByRole('button')).toBeNull();
     expect(card()).not.toHaveTextContent(/no backups|0 ok|Invalid Date/i);
     expect(card()?.querySelector('[data-backup-jobs-pill]')).toBeNull();
     expect(screen.getByRole('button', { name: 'Retry backup jobs' })).toBeEnabled();
-    if (status === 403) expect(card()).toHaveTextContent('Access denied');
+    if (status === 403) expect(notice).toHaveTextContent('Access denied');
     expect(fetchMock).toHaveBeenCalledTimes(1);
     assertReadOnlyContext();
   });

@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "base_sha": "d92ba478eca17c18ec421fd82cfef47ac3a8b75b",
+  "verified_at": "2026-11-18T04:57:39Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupJobsCard.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupJobsCard.tsx": "9cc8aae33e4131f6bb00d18e76582c71c1e50d683dd19c55405ed474d78fc800"
+  },
+  "routes": [
+    "Proxmox → Backups → By date (production Backup inspection composition and HTTP reader with local synthetic responses)."
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900,
+      "theme": "light",
+      "engine": "chromium 141.0.7390.37"
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "theme": "dark",
+      "engine": "webkit 26.0"
+    }
+  ],
+  "states": [
+    "Healthy read with separately selected day and restore point; observed zero; incomplete zero.",
+    "Unreadable window beside a readable day, malformed first response, initial service failure.",
+    "Permission withdrawal during polling, retry pending, readable recovery and confirmed empty recovery."
+  ],
+  "interactions": [
+    "Selected an exact day by desktop click and phone tap; verified the filtered independent restore row.",
+    "Activated View restore points after permission withdrawal without clearing the selected date.",
+    "Exercised one bounded retry by keyboard and touch; verified desktop focus on the recovered card or the inspection after a confirmed empty result."
+  ],
+  "limits": [
+    "Playwright 1.56.1; 390 checks over 28 completed cases, 32 native-inspected captures in 14 pairs plus four retry/recovery frames.",
+    "Synthetic local GETs, not a backup, restore, original estate, deployment or release."
+  ]
+}
