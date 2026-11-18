@@ -1,4 +1,13 @@
-import { For, Show, createEffect, createMemo, createSignal, on } from 'solid-js';
+import {
+  For,
+  Show,
+  createEffect,
+  createMemo,
+  createSignal,
+  on,
+  onCleanup,
+  onMount,
+} from 'solid-js';
 import DownloadIcon from 'lucide-solid/icons/download';
 import EyeOffIcon from 'lucide-solid/icons/eye-off';
 import MapIcon from 'lucide-solid/icons/map';
@@ -16,7 +25,7 @@ import { useObservedElementWidth } from '@/hooks/useObservedElementWidth';
 import { useResources } from '@/hooks/useResources';
 import type { StatusIndicatorVariant } from '@/utils/status';
 import { showError, showSuccess } from '@/utils/toast';
-import { layoutServiceDiagram } from './infrastructureMapDiagram';
+import { fitServiceDiagram } from './infrastructureMapDiagram';
 import {
   downloadMapImage,
   resolveDiagramTileLimit,
@@ -47,6 +56,15 @@ const DENSITY_OPTIONS: Array<{ value: MapDensity; label: string; title: string }
   { value: 'marks', label: 'Compact', title: 'Draw each guest and container as its icon only' },
 ];
 
+// What the page keeps below the drawing: the legend and the panel's padding,
+// and on a narrow window the navigation bar fixed to its bottom edge.
+const SPACE_BELOW = 60;
+const SPACE_BELOW_NARROW = 84;
+const NARROW_WINDOW = 768;
+const MIN_MAP_HEIGHT = 240;
+// Below this, names are too small to read and icons alone say more.
+const READABLE_SCALE = 0.62;
+
 export function InfrastructureMapSurface() {
   const { resources, loading } = useResources();
   const darkMode = useDarkMode();
@@ -64,18 +82,48 @@ export function InfrastructureMapSurface() {
   const model = createMemo(() =>
     namesHidden() ? anonymizeInfrastructureMapModel(liveModel()) : liveModel(),
   );
-  const density = createMemo(() => densityChoice() ?? resolveDefaultMapDensity(liveModel()));
   // On the page every colour is a reference to the theme's own variable.
   const palette = createMemo(() => (darkMode() ? MAP_PAGE_PALETTES.dark : MAP_PAGE_PALETTES.light));
 
-  const scene = createMemo(() => {
+  // The map is fitted to what is left of the window under its toolbar, so
+  // all of it is on screen at once and nothing is read by scrolling.
+  let frameRef: HTMLDivElement | undefined;
+  const [space, setSpace] = createSignal<{ width: number; height: number } | null>(null);
+  const measure = () => {
     const width = observed.width();
-    if (!width || model().isEmpty) return null;
-    const diagram = buildServiceDiagram(model(), {
-      maxTilesPerGroup: resolveDiagramTileLimit(density()),
-    });
-    return layoutServiceDiagram(diagram, { width, density: density() });
+    if (!frameRef || !width) return;
+    const top = frameRef.getBoundingClientRect().top + window.scrollY;
+    const below = SPACE_BELOW + (window.innerWidth < NARROW_WINDOW ? SPACE_BELOW_NARROW : 0);
+    setSpace({ width, height: Math.max(MIN_MAP_HEIGHT, window.innerHeight - top - below) });
+  };
+  createEffect(on(observed.width, measure));
+  onMount(() => {
+    window.addEventListener('resize', measure);
+    onCleanup(() => window.removeEventListener('resize', measure));
   });
+
+  const fitted = createMemo(() => {
+    const room = space();
+    if (!room || model().isEmpty) return null;
+    const fit = (chosen: MapDensity) => ({
+      density: chosen,
+      ...fitServiceDiagram(
+        buildServiceDiagram(model(), { maxTilesPerGroup: resolveDiagramTileLimit(chosen) }),
+        room,
+        chosen,
+      ),
+    });
+    const chosen = densityChoice();
+    if (chosen) return fit(chosen);
+    const preferred = fit(resolveDefaultMapDensity(liveModel()));
+    if (preferred.density === 'marks' || preferred.scale >= READABLE_SCALE) return preferred;
+    const compact = fit('marks');
+    return compact.scale > preferred.scale ? compact : preferred;
+  });
+  const density = createMemo<MapDensity>(
+    () => fitted()?.density ?? densityChoice() ?? resolveDefaultMapDensity(liveModel()),
+  );
+  const scene = createMemo(() => fitted()?.scene ?? null);
   const hits = createMemo(() => {
     const out: MapHit[] = [];
     for (const node of scene()?.nodes ?? []) if (node.kind === 'hit') out.push(node.hit);
@@ -198,9 +246,15 @@ export function InfrastructureMapSurface() {
         </Show>
       </div>
 
-      <div ref={observed.setElement} class="min-w-0">
+      <div
+        ref={(element) => {
+          frameRef = element;
+          observed.setElement(element);
+        }}
+        class="min-w-0"
+      >
         <Show
-          when={scene()}
+          when={fitted()}
           fallback={
             <Show
               when={!loading() && liveModel().isEmpty}
@@ -226,10 +280,10 @@ export function InfrastructureMapSurface() {
           {(current) => (
             <svg
               ref={svgRef}
-              class="block max-w-full select-none"
-              width={current().width}
-              height={current().height}
-              viewBox={`0 0 ${current().width} ${current().height}`}
+              class="mx-auto block max-w-full select-none"
+              width={Math.floor(current().scene.width * current().scale)}
+              height={Math.floor(current().scene.height * current().scale)}
+              viewBox={`0 0 ${current().scene.width} ${current().scene.height}`}
               role="group"
               aria-label="Infrastructure map"
               onPointerOver={showFor}
