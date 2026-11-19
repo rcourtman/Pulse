@@ -151,6 +151,30 @@ export const fitMapText = (
 };
 
 /**
+ * A name cut to fit one line that keeps a number it ends in. With names
+ * hidden a tile reads `Container 121`, and the number is all that tells it
+ * from the next one, so the word gives way and the number stays.
+ */
+export const fitMapName = (
+  text: string,
+  maxWidth: number,
+  size: number,
+  weight: 400 | 500 | 600,
+): string => {
+  const fitted = fitMapText(text, maxWidth, size, weight);
+  if (fitted === text) return text;
+  const number = /\s\d+$/.exec(text)?.[0];
+  if (!number) return fitted;
+  const word = fitMapText(
+    text.slice(0, -number.length),
+    maxWidth - textWidth(number, size, weight),
+    size,
+    weight,
+  );
+  return word ? `${word}${number}` : fitted;
+};
+
+/**
  * A name on one line when it fits and on two when it does not, broken after
  * a space, hyphen, underscore or dot, or where a capital starts a new word
  * inside it (`iSponsorBlock` + `TV`), whichever falls in reach. A word with

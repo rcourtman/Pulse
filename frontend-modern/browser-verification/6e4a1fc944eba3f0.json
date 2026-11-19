@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "base_sha": "5d1aba3290c7a903b9e8da7c0f4f359b949a873e",
+  "verified_at": "2026-11-19T08:25:34Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapDiagram.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapLayout.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapDiagram.ts": "faed5dfd21bd89e78a1f07e11a688ab06f41c0e6fe50a0ac592ce73295b50363",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapLayout.ts": "939698f7f7b7d451f63127d8775f9591235af2d2769ea753d139280f387b0639",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapModel.ts": "b1a4fce01ccac03a2568a36ac9d1054e53cfc1f17ee23f0c2b8822fba09b3fec"
+  },
+  "routes": [
+    "/map"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "final runtime bytes served by a Vite dev server from a clone of main plus this change on pulse-dev, driven by headless Chromium through Playwright, against a private Pulse on mock data (3 Proxmox nodes, 7 vSphere hosts, 3 Docker hosts, 1 TrueNAS, 2 backup servers, 2 mail gateways, 1 plain machine, 2 vSphere clusters)",
+    "1440x900, Names mode, Hide names on: the Hardware box read Docker 1 to 3, Machine 1, Mail 1 and 2, Proxmox 1 to 3, TrueNAS 1 and vSphere 1 to 7, each whole; before this change a Proxmox node there read 'Proxmox no\u2026' with the number gone",
+    "1440x900, same state: the caption under shared storage read 'Proxmox clu\u2026 1', 'vSphere clus\u2026 1' and 'vSphere clus\u2026 2'; before this change both vSphere clusters read 'vSphere cluste\u2026'",
+    "1440x900, same state: no drawn text that ends in a number had lost it. The texts still cut were four app names the catalogue supplies (AdGuard Home, Paperless-ngx, Uptime Kuma, Vaultwarden), which are cut the same way with names shown and are read on hover; the rig's fallback font is wider than the product font",
+    "1440x900: main ended at 888 of 900 with the 'New version available' banner showing, so the map still fits one screen",
+    "390x844, touch, Hide names on: tiles are icons there, so no name is drawn; a tap on a Proxmox tile showed the card 'Proxmox 1 / Proxmox node \u00b7 Online \u00b7 8 services / CPU 24% \u00b7 Memory 70% / Tap again to open', and the address stayed /map. Main ended at 788 above the fixed navigation at 799",
+    "no page error in either context",
+    "not checked: light theme (no colour changes), Firefox, Safari, the product font on a real desktop"
+  ],
+  "interactions": [
+    "switched the map to Names, pressed Hide names and read every drawn text at 1440x900",
+    "pressed Hide names and tapped a machine tile with real touch input at 390x844"
+  ]
+}

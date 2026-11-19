@@ -346,7 +346,7 @@ describe('anonymizeInfrastructureMapModel', () => {
     }
 
     const node = hostsOf(anonymous.blocks)[0];
-    expect(node.name).toBe('Proxmox node 1');
+    expect(node.name).toBe('Proxmox 1');
     // A guest the catalogue knows is named for its app, in the app's own
     // spelling. Anything else is numbered.
     expect(node.sections[0].items.map((item) => item.name)).toEqual([
