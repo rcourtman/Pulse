@@ -27,7 +27,7 @@ func TestPMGCollectionMissingReadingsPreserveAlerts(t *testing.T) {
 			v := models.PMGInstance{ID: "gateway", Status: "online", ConnectionHealth: "healthy", Nodes: tc.nodes}
 			thresholds := PMGThresholdConfig{QueueTotalWarning: 1, DeferredQueueWarn: 1, HoldQueueWarn: 1, OldestMessageWarnMins: 1}
 			m.checkPMGQueueDepths(v, thresholds, exactPMGNodeQueueObservation)
-			m.checkPMGOldestMessage(v, thresholds)
+			m.checkPMGOldestMessage(v, thresholds, exactPMGNodeQueueObservation)
 			m.checkPMGQuarantineBacklog(v, thresholds)
 			m.mu.RLock()
 			defer m.mu.RUnlock()
@@ -49,7 +49,7 @@ func TestPMGCollectionObservedZeroRecoversOldest(t *testing.T) {
 	m.activeAlerts[key] = &Alert{ID: key, ResourceID: "gateway", Type: "message-age"}
 	m.mu.Unlock()
 	v := models.PMGInstance{ID: "gateway", Nodes: []models.PMGNodeStatus{{Name: "one", QueueStatus: &models.PMGQueueStatus{}}, {Name: "two", QueueStatus: &models.PMGQueueStatus{}}}}
-	m.checkPMGOldestMessage(v, PMGThresholdConfig{OldestMessageWarnMins: 1})
+	m.checkPMGOldestMessage(v, PMGThresholdConfig{OldestMessageWarnMins: 1}, exactPMGNodeQueueObservation)
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	if _, exists := testLookupActiveAlert(t, m, key); exists {

@@ -1459,7 +1459,7 @@ func TestCheckPMGOldestMessageAnnotatesCanonicalSpecMetadata(t *testing.T) {
 	m.checkPMGOldestMessage(pmg, PMGThresholdConfig{
 		OldestMessageWarnMins: 30,
 		OldestMessageCritMins: 60,
-	})
+	}, exactPMGNodeQueueObservation)
 
 	alert := activeAlert(t, m, "pmg-1-oldest-message")
 	if got := alert.Metadata["canonicalAlertKind"]; got != "severity-threshold" {
