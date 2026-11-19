@@ -60,13 +60,12 @@ answer different questions:
   covers the loaded inventory, not just the rows matching your list filters.
   For a row marked **Unknown size**, use the
   [individual size checks](#restore-point-sizes-and-unknown-values).
-- **Backup jobs** counts the Proxmox backup tasks Pulse has retained for
-  current workloads, including failed runs, and ignores the list filters. A
-  run's outcome is separate evidence from the restore points: a failed run
-  usually leaves none, and retention prunes older points from the list, so the
-  two need not agree for any day. Hover or focus a bar for that day's outcomes
-  and the guests that failed. Click it to list that day's restore points, and
-  click it again to go back.
+- **Backup jobs** counts retained Proxmox tasks for current workloads, even
+  failures. List filters don't change it. Failed jobs usually leave no point,
+  and retention prunes old ones, so daily totals can differ. Hover or focus a
+  bar for outcomes and failed guests. Click to show that day's restore points
+  and again to clear. Without a fresh update, **Running** can become
+  **Unknown**. Check the [guest's task record](#backup-task-results-and-backup-age).
 - Guest **snapshots** can contribute to completed-point totals. They are not
   independent backups and do not fill Coverage's **Last backup**. If a
   completed backup's date is unavailable or in the future, the latest backup
@@ -326,8 +325,8 @@ same owning installation and guest, not just a repeated name or VMID.
 **Duration** is a reported completed interval, not a live running timer or
 backup age. Read it separately from **Status** and **Error**:
 
-- **Not reported**: no end time was supplied. This alone does not establish
-  whether the task is still running, completed or failed.
+- **Not reported**: no end time for this guest. The whole job's end tells
+  you neither this guest's end time nor its result.
 - **Unknown**: an end time was supplied, but the timestamps or running status
   do not establish a completed duration. Examples include a missing or invalid
   start, a future time, an end at or before the start, or **Running** with a
@@ -337,11 +336,10 @@ backup age. Read it separately from **Status** and **Error**:
   zero. Equal start and end times are **Unknown**, not a measured zero;
   absent or invalid timing is never replaced with 0s.
 
-Compare the matching native task's existing start, end and status if available;
-do not fill a missing duration with the time since **Started** or another
-task's time. A displayed duration does not establish success, verification or
-guest safety. Older versions may not distinguish missing and invalid timing;
-use the existing native record if the labels differ.
+Compare this guest's start, end and status in the existing Proxmox task log.
+Do not guess the duration from **Started** or another task. Duration does not
+prove success, verification or guest safety. Older versions may not
+distinguish missing and invalid timing, so check the task log.
 
 Use the records already available. Do not run another backup, verification,
 restore or guest-agent probe, restart monitoring, clear History or change
