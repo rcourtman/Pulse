@@ -8044,16 +8044,11 @@ write_action_runner_config
 }
 
 func TestInstallSHActionRunnerRecoveredCollectorTrust(t *testing.T) {
-	// The real runner, TLS server and recovered state belong to this test;
+	// The runner copy, TLS server and recovered state belong to this test;
 	// only child environments change. Share Go's existing parallel budget.
 	t.Parallel()
 	root := t.TempDir()
-	runnerBinary := filepath.Join(root, "pulse-agent-runner")
-	build := exec.Command("go", "build", "-o", runnerBinary, "./cmd/pulse-agent-runner")
-	build.Dir = filepath.Dir(repoFile("go.mod"))
-	if output, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("build action runner: %v\n%s", err, output)
-	}
+	runnerBinary := buildPulseAgentRunnerLifecycleBinary(t, root)
 	const token = "fixture-runner-credential"
 	var requests atomic.Int32
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -8618,12 +8613,7 @@ provision_action_runner
 func TestInstallSHActionRunnerAtomicCancelUsesPrivateGoTransportAndRequires204(t *testing.T) {
 	const token = "runner-cancel-secret"
 	root := t.TempDir()
-	runnerBinary := filepath.Join(root, "pulse-agent-runner")
-	build := exec.Command("go", "build", "-o", runnerBinary, "./cmd/pulse-agent-runner")
-	build.Dir = filepath.Dir(repoFile("go.mod"))
-	if output, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("build action runner: %v\n%s", err, output)
-	}
+	runnerBinary := buildPulseAgentRunnerLifecycleBinary(t, root)
 	caSource := httptest.NewTLSServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
 	defer caSource.Close()
 	caFile := filepath.Join(root, "runner-ca.pem")
@@ -8705,12 +8695,7 @@ func TestInstallSHActionRunnerSelfRevokeUsesPrivateCredential(t *testing.T) {
 	defer server.Close()
 
 	root := t.TempDir()
-	runnerBinary := filepath.Join(root, "pulse-agent-runner")
-	build := exec.Command("go", "build", "-o", runnerBinary, "./cmd/pulse-agent-runner")
-	build.Dir = filepath.Dir(repoFile("go.mod"))
-	if output, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("build action runner: %v\n%s", err, output)
-	}
+	runnerBinary := buildPulseAgentRunnerLifecycleBinary(t, root)
 	envFile := filepath.Join(root, "runner.env")
 	tokenFile := filepath.Join(root, "token")
 	mustWrite(t, tokenFile, token+"\n")
