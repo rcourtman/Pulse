@@ -6,6 +6,8 @@ import { ChartsAPI, type AllMetricsHistoryResponse, type HistoryTimeRange } from
 import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSuspendingQuery';
 import { GuestDrawerHistory } from '../GuestDrawerHistory';
 import { HOST_METRICS_HISTORY_GROUPS } from '@/components/shared/hostMetricsHistoryModel';
+import { getResourceMetricsHistoryGroups } from '@/components/Infrastructure/resourceDetailDrawerMetricsHistoryModel';
+import type { Resource } from '@/types/resource';
 import {
   buildGuestDrawerHistoryBandPath,
   type GuestDrawerHistoryTarget,
@@ -491,6 +493,122 @@ describe('drawer History on a phone', () => {
     expect(groupIds()).toEqual(['utilization', 'disk-io']);
     expect(screen.getByTestId('history-phone-toggle')).toHaveTextContent('Show Network I/O');
   });
+
+  const diskTarget: GuestDrawerHistoryTarget = { resourceType: 'disk', resourceId: 'nas/a' };
+  // Use the same chart catalogue as the inline TrueNAS resource drawer.
+  const diskGroups = getResourceMetricsHistoryGroups({
+    type: 'physical_disk',
+    metricsTarget: diskTarget,
+  } as Resource);
+  const diskResponse = (
+    metrics: AllMetricsHistoryResponse['metrics'],
+    range = '24h',
+    target = diskTarget,
+  ): AllMetricsHistoryResponse => ({ ...response(metrics), ...target, range });
+  const temperature = { smart_temp: [point(0, 32), point(60_000, 38)] };
+  const io = { diskread: [point(0, 1024)] };
+  const toggle = () =>
+    screen.getByRole('button', { name: /^Show (Activity|Disk I\/O|fewer charts)/ });
+  const diskSlider = () => screen.getByRole('slider', { name: 'Inspect Temperature history' });
+
+  it('leads with recorded Temperature rather than an empty Activity chart, without losing the disclosure', async () => {
+    const fetch = vi
+      .spyOn(ChartsAPI, 'getMetricsHistory')
+      .mockResolvedValue(diskResponse({ ...temperature, ...io }));
+    render(() => <GuestDrawerHistory target={diskTarget} range="24h" groups={diskGroups} />);
+    await waitFor(() => expect(groupIds()).toEqual(['disk-thermal']));
+    expect(diskSlider()).toHaveAttribute('max', '1');
+    const button = toggle();
+    expect(button).toHaveTextContent('Show Activity, Disk I/O');
+    button.focus();
+    fireEvent.click(button);
+    expect(toggle()).toBe(button);
+    expect(button).toHaveFocus();
+    expect(button).toHaveAttribute('aria-expanded', 'true');
+    expect(groupIds()).toEqual(['disk-activity', 'disk-io', 'disk-thermal']);
+    expect(screen.getByRole('img', { name: 'Disk I/O history' })).toHaveAccessibleDescription(
+      /1 stored observation time.*Read 1[.]00 KB[/]s/,
+    );
+    expect(screen.getByText('No stored history in this range')).toBeInTheDocument();
+    fireEvent.click(button);
+    expect(button).toHaveFocus();
+    expect(button).toHaveAttribute('aria-expanded', 'false');
+    expect(groupIds()).toEqual(['disk-thermal']);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ['a measured zero', { ...temperature, disk: [point(0, 0)] }, {}],
+    ['a current zero', temperature, { currentMetrics: { disk: 0 } }],
+    [
+      'a deferred reading',
+      temperature,
+      { deferredMetrics: { disk: { message: 'Read deferred.' } } },
+    ],
+  ] satisfies [
+    string,
+    AllMetricsHistoryResponse['metrics'],
+    Pick<Parameters<typeof GuestDrawerHistory>[0], 'currentMetrics' | 'deferredMetrics'>,
+  ][])('keeps Activity visible with %s', async (_name, metrics, readings) => {
+    vi.spyOn(ChartsAPI, 'getMetricsHistory').mockResolvedValue(diskResponse(metrics));
+    render(() => (
+      <GuestDrawerHistory target={diskTarget} range="24h" groups={diskGroups} {...readings} />
+    ));
+    await waitFor(() => expect(diskSlider()).toBeInTheDocument());
+    expect(groupIds()).toEqual(['disk-activity']);
+    expect(toggle()).toHaveTextContent('Show Disk I/O, Temperature');
+  });
+
+  it('shows I/O when it alone has observations and does not hide a chart promoted by an alert', async () => {
+    vi.spyOn(ChartsAPI, 'getMetricsHistory').mockResolvedValue(diskResponse(io));
+    const [alerts, setAlerts] = createSignal<{ disk?: { severity: 'warning'; value: number } }>({});
+    render(() => (
+      <GuestDrawerHistory target={diskTarget} range="24h" groups={diskGroups} alerts={alerts()} />
+    ));
+    await waitFor(() => expect(groupIds()).toEqual(['disk-io']));
+    expect(toggle()).toHaveTextContent('Show Activity, Temperature');
+    setAlerts({ disk: { severity: 'warning', value: 99 } });
+    expect(groupIds()).toEqual(['disk-activity', 'disk-io']);
+    expect(screen.getByText('alert at 99.0%')).toBeInTheDocument();
+    setAlerts({});
+    expect(groupIds()).toEqual(['disk-activity', 'disk-io']);
+    expect(screen.queryByText('alert at 99.0%')).not.toBeInTheDocument();
+  });
+
+  it.each(['range', 'disk'] as const)(
+    'keeps a focused Temperature observation when measured Activity arrives, but resets for a different %s',
+    async (selection) => {
+      vi.useFakeTimers();
+      const nextTarget: GuestDrawerHistoryTarget = { ...diskTarget, resourceId: 'nas/b' };
+      const fetch = vi
+        .spyOn(ChartsAPI, 'getMetricsHistory')
+        .mockResolvedValueOnce(diskResponse(temperature))
+        .mockResolvedValueOnce(diskResponse({ ...temperature, disk: [point(0, 0)] }))
+        .mockResolvedValueOnce(
+          selection === 'range' ? diskResponse({}, '1h') : diskResponse({}, '24h', nextTarget),
+        );
+      const [range, setRange] = createSignal<HistoryTimeRange>('24h');
+      const [target, setTarget] = createSignal(diskTarget);
+      render(() => <GuestDrawerHistory target={target()} range={range()} groups={diskGroups} />);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(groupIds()).toEqual(['disk-thermal']);
+      const slider = diskSlider();
+      slider.focus();
+      choose(slider, 0);
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(groupIds()).toEqual(['disk-activity', 'disk-thermal']);
+      expect(slider).toHaveFocus();
+      expect(slider).toHaveValue('0');
+      expect(slider).toHaveAttribute('aria-valuetext', expect.stringContaining('Disk 32°C'));
+      if (selection === 'range') setRange('1h');
+      else setTarget(nextTarget);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(groupIds()).toEqual(['disk-activity']);
+      expect(screen.queryByRole('slider')).not.toBeInTheDocument();
+      expect(toggle()).toHaveTextContent('Show Disk I/O, Temperature');
+      expect(fetch).toHaveBeenCalledTimes(3);
+    },
+  );
 });
 
 describe('drawer History alert triggers', () => {

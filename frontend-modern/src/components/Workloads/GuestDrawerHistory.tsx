@@ -1090,16 +1090,74 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
 
   const metrics = createMemo(() => historyQuery.value().metrics ?? {});
   const groups = createMemo(() => props.groups ?? GUEST_DRAWER_HISTORY_GROUPS);
+  const sourceKey = () =>
+    `${props.target?.resourceType}:${props.target?.resourceId}:${props.range}`;
+  const normalizedGroups = createMemo(() =>
+    groups().map((group) => ({
+      id: group.id,
+      series: group.series.map(({ metric, unit }) => ({
+        points: normalizeGuestDrawerHistoryPoints(metrics()[metric], unit),
+      })),
+    })),
+  );
   const timeBounds = createMemo(() =>
     getGuestDrawerHistoryRangeBounds(
-      groups().flatMap((group) =>
-        group.series.map((series) => ({
-          points: normalizeGuestDrawerHistoryPoints(metrics()[series.metric], series.unit),
-        })),
-      ),
+      normalizedGroups().flatMap(({ series }) => series),
       historyQuery.value(),
     ),
   );
+  const groupsWithPoints = createMemo(
+    () =>
+      new Set(
+        normalizedGroups()
+          .filter(({ series }) => series.some(({ points }) => points.length > 0))
+          .map(({ id }) => id),
+      ),
+  );
+  const hasHistoryPoints = () => groupsWithPoints().size > 0;
+  const liveCurrentMetrics = () =>
+    props.liveReadingsAvailable !== false ? props.currentMetrics : undefined;
+
+  const inlineDiskActivity = () => {
+    const first = groups()[0];
+    return props.target?.resourceType === 'disk' && first?.id === 'disk-activity'
+      ? first
+      : undefined;
+  };
+  const diskActivityHasReading = createMemo(() => {
+    const activity = inlineDiskActivity();
+    return Boolean(
+      activity &&
+      (groupsWithPoints().has(activity.id) ||
+        activity.series.some(({ metric }) => {
+          const reading = getLiveReading(metric, liveCurrentMetrics(), props.deferredMetrics);
+          return reading.value !== undefined || reading.deferred !== undefined;
+        })),
+    );
+  });
+
+  // The inline disk drawer usually leads with Activity. If that chart has
+  // nothing to report, lead with recorded Temperature or I/O instead. Keep
+  // that chart open for this disk and range while it still has observations:
+  // a poll must not fold away the chart someone is inspecting.
+  const diskPhoneFallback = createMemo<{ key: string; id: string } | undefined>((previous) => {
+    if (!inlineDiskActivity()) return;
+    const reply = historyQuery.value();
+    if (
+      reply.resourceId !== props.target?.resourceId ||
+      reply.resourceType !== props.target?.resourceType ||
+      reply.range !== props.range
+    ) {
+      return;
+    }
+    const key = sourceKey();
+    const withPoints = groupsWithPoints();
+    if (previous?.key === key && withPoints.has(previous.id)) return previous;
+    if (diskActivityHasReading()) return;
+    const id = ['disk-thermal', 'disk-io'].find((id) => withPoints.has(id));
+    return id ? { key, id } : undefined;
+  });
+
   // A panel shown on a phone because of an alert stays shown after the alert
   // clears, so a reader mid-inspection does not lose the chart under them.
   const alertedGroupIds = new Set<string>();
@@ -1111,23 +1169,15 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
     }
     return new Set(alertedGroupIds);
   });
-  const groupHasAlert = (group: GuestDrawerHistoryGroupConfig) => alertedGroups().has(group.id);
-  const isPhoneCollapsed = (group: GuestDrawerHistoryGroupConfig, index: number) =>
-    !showAllOnPhone() && index > 0 && !groupHasAlert(group);
-  const phoneCollapsedGroups = createMemo(() =>
-    groups().filter((group, index) => index > 0 && !groupHasAlert(group)),
-  );
-  const hasHistoryPoints = createMemo(() =>
-    groups().some((group) =>
-      group.series.some(
-        (series) =>
-          normalizeGuestDrawerHistoryPoints(metrics()[series.metric], series.unit).length > 0,
-      ),
-    ),
-  );
-
-  const liveCurrentMetrics = () =>
-    props.liveReadingsAvailable !== false ? props.currentMetrics : undefined;
+  const phoneCollapsedGroups = createMemo(() => {
+    const fallback = diskPhoneFallback();
+    const foldActivity = fallback !== undefined && !diskActivityHasReading();
+    const alerted = alertedGroups();
+    return groups().filter(
+      (group, index) =>
+        (index > 0 || foldActivity) && group.id !== fallback?.id && !alerted.has(group.id),
+    );
+  });
   // A final 401/403 withdraws the whole History panel, readings included; an
   // outage or a locked range leaves the resource's own readings standing.
   const liveReadings = () => (
@@ -1220,10 +1270,10 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
             class={`grid gap-3 md:grid-cols-2 ${groups().length > 3 ? 'xl:grid-cols-4' : 'xl:grid-cols-3'}`}
           >
             <For each={groups()}>
-              {(group, index) => (
+              {(group) => (
                 <GuestDrawerHistoryGroupChart
                   alerts={props.alerts}
-                  hiddenOnPhone={isPhoneCollapsed(group, index())}
+                  hiddenOnPhone={!showAllOnPhone() && phoneCollapsedGroups().includes(group)}
                   group={group}
                   loading={historyQuery.loading() && !historyQuery.resolvedOnce()}
                   metrics={metrics()}
@@ -1231,13 +1281,15 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
                   deferredMetrics={props.deferredMetrics}
                   range={props.range}
                   source={historyQuery.value().source}
-                  sourceKey={`${props.target?.resourceType}:${props.target?.resourceId}:${props.range}`}
+                  sourceKey={sourceKey()}
                   timeBounds={timeBounds()}
                   touchInspection={touchInspection()}
                 />
               )}
             </For>
           </div>
+          {/* Keep collapse after the chart stack, in reach from the final
+              chart's inspector and in the same place in empty ranges. */}
           <PhoneChartsToggle
             hiddenLabels={phoneCollapsedGroups().map((group) => group.label)}
             expanded={showAllOnPhone()}
