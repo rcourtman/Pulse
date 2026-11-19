@@ -62,8 +62,34 @@ settlement/reopen and checks one attempt and one audit. An independent HTML-subs
 parser verifies literal content and link decoding; it is not the Telegram service.
 A real HTTP 400 control still dead-letters once, without splitting, replaying or
 fabricating acceptance. User-owned templates retain their own parse mode and text.
-This repairs built-in formatting, not arbitrary provider failures or Telegram's
-message-length limit, installed-provider acceptance or reporter recovery.
+This formatting repair did not establish installed-provider acceptance or
+reporter recovery.
+
+### Bound built-in Telegram messages before sending
+
+The built-in Telegram destination plans firing and recovery group sizes against
+the provider's 4,096-character post-entity-parsing limit, conservatively
+counting UTF-16 units and reserving space for the built-in heading and details.
+Small groups keep their existing formatting. Each occurrence stays in exactly
+one part, with the original destination, firing/recovery identity, retry budget
+and operational links. A singleton that cannot fit abbreviates its presentation
+before HTML/JSON escaping; its stored fields and dashboard pointer are not cut.
+
+The active queue partitions only unattempted pending rows, after quiet-hours
+and cancellation checks and before claim. It atomically retains all parts, with
+no audit, acceptance or spent attempt for partitioning. Each part settles only
+its own provider outcome. Attempted rows and existing dead letters are not
+automatically retried or repartitioned. Body overrides and destinations which
+derive their URL from the full group keep their existing routing and grouping;
+the transport does not reinterpret an arbitrary provider rejection as a size
+error. Local rate-slot exhaustion leaves normal built-in Telegram rows due
+after the current rate window, without spending an attempt; provider replies
+retain their existing classification, retry and settlement rules.
+
+`telegram_text_budget_test.go` exercises an independent receiver's parsed-text
+budget, occurrence links and attempts, oversize singleton abbreviation,
+recovery grouping, persistent reopening and the local-rate boundary. This is
+source validation, not a Telegram-server or reporter-host acceptance result.
 
 ### Request-owned HTTP transports release completed connections
 
