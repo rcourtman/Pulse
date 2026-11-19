@@ -183,7 +183,12 @@ billing, provider mutation or original administrator recovery is claimed.
 ### Organization billing reads are a selected snapshot, not fallback plan data
 
 The existing Billing & Usage panel waits for the current organization's
-session-bound reads. When the organization's plan and member list are verified
+session-bound reads. While any read is pending, it names the selected workspace
+and offers **Restart billing check**. This explicit action aborts and replaces the
+existing read set only for the current selection; it sends no writes and does
+not accept a partial or previous snapshot. Focus from a deliberate reload can
+continue to Restart while waiting and to the result when done, without stealing
+focus from other controls. When the organization's plan and member list are verified
 but directory enumeration returns the server's HTTP 500 `list_failed`,
 the panel keeps the plan, current member count, and usage visible and labels
 the Organizations total **Unavailable**. Reload billing rereads the same
@@ -202,7 +207,8 @@ Organization-change events refresh the saved snapshot; no purchase, entitlement,
 pricing, plan or hosted-mode authority changes. Normal-suite Billing panel and
 OrganizationReadLifetimes tests cover failed/obsolete reads, A/B/A races,
 withdrawal and disposal; OrganizationBillingTransport covers the exact
-directory failure, denial and explicit recovery. Desktop/narrow proof consumes actual source
+directory failure, denial, explicit recovery and late replies after a restart.
+Desktop/narrow proof consumes actual source
 through the real API client with safe fixtures; it is not installed billing or
 commercial delivery acceptance.
 

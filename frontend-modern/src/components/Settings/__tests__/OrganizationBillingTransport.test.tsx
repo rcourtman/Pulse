@@ -165,7 +165,8 @@ describe('organization billing through its real read transport', () => {
       retry.focus();
       fireEvent.click(retry);
       expect(retry).not.toBeInTheDocument();
-      expect(document.body).toHaveFocus();
+      const restart = screen.getByRole('button', { name: 'Restart billing check' });
+      await waitFor(() => expect(restart).toHaveFocus());
       pending.resolve(outcome === 'failed' ? json({}, 503) : json(licenseFor(north)));
       if (outcome === 'accepted') await accepted();
       const target =
@@ -323,6 +324,67 @@ describe('organization billing through its real read transport', () => {
       expectBoundReads();
     },
   );
+
+  it('restarts while the directory is held, discarding its late denial after a verified result', async () => {
+    const directory = deferred<Response>();
+    reply = async (source, org) =>
+      source === 'organizations' ? directory.promise : json(dataFor(source, org));
+    mount();
+    await waitFor(() => expect(billingReads()).toHaveLength(3));
+    await settle();
+    const restart = screen.getByRole('button', { name: 'Restart billing check' });
+    expect(restart).toHaveAccessibleDescription(`Checking billing and plan details for ${north}.`);
+    expect(screen.queryByText(emailFor(north))).not.toBeInTheDocument();
+    expect(screen.queryByText('Organizations')).not.toBeInTheDocument();
+    const retired = billingReads()[0][1]?.signal;
+
+    reply = async (source, org) => json(dataFor(source, org));
+    restart.focus();
+    fireEvent.click(restart);
+    await accepted();
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: 'Billing & Usage' })).toHaveFocus(),
+    );
+    expect(retired?.aborted).toBe(true);
+    expect(billingReads()).toHaveLength(6);
+    expectBoundReads(north, billingReads().slice(3));
+
+    // The first response can arrive in spite of cancellation. It must not
+    // clear the current reader's session or withdraw the new snapshot.
+    directory.resolve(json({ error: 'SYNTHETIC_PRIVATE_FAILURE' }, 401));
+    await settle();
+    expect(localStorage.getItem('just_logged_out')).toBeNull();
+    expect(getApiToken()).toBe(storedToken);
+    expect(screen.getByText(emailFor(north))).toBeInTheDocument();
+    expect(screen.getByText('Organizations').parentElement).toHaveTextContent('2');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(billingReads()).toHaveLength(6);
+  });
+
+  it('ignores a restart on the previous workspace before its switch event reaches the view', async () => {
+    const directory = deferred<Response>();
+    reply = async (source, org) =>
+      source === 'organizations' && org === north ? directory.promise : json(dataFor(source, org));
+    mount();
+    await waitFor(() => expect(billingReads()).toHaveLength(3));
+    const initial = billingReads()[0][1]?.signal;
+    const restart = screen.getByRole('button', { name: 'Restart billing check' });
+
+    setOrgID(south);
+    fireEvent.click(restart);
+    expect(billingReads()).toHaveLength(3);
+    expect(initial?.aborted).toBe(false);
+
+    eventBus.emit('org_switched', south);
+    await accepted(south);
+    directory.resolve(json(dataFor('organizations', north)));
+    await settle();
+    expect(initial?.aborted).toBe(true);
+    expect(billingReads()).toHaveLength(6);
+    expectBoundReads(south, billingReads().slice(3));
+    expect(screen.queryByText(emailFor(north))).not.toBeInTheDocument();
+    expect(document.body).toHaveFocus();
+  });
 
   it.each([
     ['organizations', 500, 'unrelated_failure'],

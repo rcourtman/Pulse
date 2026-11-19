@@ -124,6 +124,22 @@ describe('OrganizationBillingPanel', () => {
     expect(listMembersMock).toHaveBeenCalledTimes(2);
   });
 
+  it('names the workspace while checking and lets the reader replace a stalled read', async () => {
+    getStatusMock.mockImplementationOnce(() => new Promise(() => {}));
+    render(() => <OrganizationBillingPanel nodeUsage={5} guestUsage={2} />);
+    const restart = await screen.findByRole('button', { name: 'Restart billing check' });
+    expect(restart).toHaveAccessibleDescription('Checking billing and plan details for org-1.');
+    expect(screen.queryByText('Plan Tier')).not.toBeInTheDocument();
+    const firstSignal = getStatusMock.mock.calls[0][0].signal;
+
+    fireEvent.click(restart);
+
+    expect(firstSignal.aborted).toBe(true);
+    expect(await screen.findByText('owner@example.com')).toBeInTheDocument();
+    expect(getStatusMock).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole('button', { name: 'Restart billing check' })).not.toBeInTheDocument();
+  });
+
   it('keeps failed billing reads distinct from an empty or free plan', async () => {
     getStatusMock.mockRejectedValueOnce(new Error('private upstream detail'));
     render(() => <OrganizationBillingPanel nodeUsage={5} guestUsage={2} />);
