@@ -516,16 +516,18 @@ func (m *Monitor) buildVMFromClusterResource(
 	if memory.Used > memory.Total {
 		memory.Used = memory.Total
 	}
-	// Free above is total-used, i.e. available. When the guest reported its
-	// truly-free pages (meminfo), split the reclaimable cache back out.
-	var trulyFree uint64
+	// Free above is total-used, i.e. available. Split reclaimable cache only
+	// from the selected source; an outranked PVE sample cannot supply it.
+	linkedAgent := vmIDToHostAgent[guestID]
 	switch CanonicalMemorySource(state.memorySource) {
+	case "agent":
+		memory.Cache = min(max(0, linkedAgent.Memory.Cache), memory.Free)
+		memory.Free -= memory.Cache
 	case "available-field", "derived-free-buffers-cached", "derived-total-minus-used":
-		trulyFree = state.guestRaw.MemInfoFree
+		splitReclaimableMemory(&memory, state.guestRaw.MemInfoFree)
 	case "guest-agent-meminfo", "guest-agent-meminfo-derived":
-		trulyFree = state.guestRaw.GuestAgentMemFree
+		splitReclaimableMemory(&memory, state.guestRaw.GuestAgentMemFree)
 	}
-	splitReclaimableMemory(&memory, trulyFree)
 	if state.memorySource == "previous-snapshot" && prevSnapshot != nil && prevSnapshot.Memory.Observation.State != "" {
 		memory = prevSnapshot.Memory
 	}
@@ -546,7 +548,7 @@ func (m *Monitor) buildVMFromClusterResource(
 	memory.Observation = m.guestMemoryObservation(instanceName, "qemu", res.Node, res.VMID, memory, guestMemoryObservationContext{
 		source: state.memorySource, providerObservedAt: providerObservedAt,
 		deferred: state.guestAgentStatus == "deferred", previous: prevSnapshot,
-		linkedAgent: vmIDToHostAgent[guestID],
+		linkedAgent: linkedAgent,
 	}, sampleTime)
 
 	vm := models.VM{
