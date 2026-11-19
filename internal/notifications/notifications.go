@@ -3787,7 +3787,7 @@ func (n *NotificationManager) takeWebhookRateSlot(webhookURL string) time.Time {
 			Str("webhookURL", RedactWebhookURLSecrets(webhookURL)).
 			Int("sentCount", limit.sentCount).
 			Dur("window", WebhookRateLimitWindow).
-			Msg("webhook rate limit reached")
+			Msg("webhook rate limit exceeded")
 		return limit.lastSent.Add(WebhookRateLimitWindow)
 	}
 
