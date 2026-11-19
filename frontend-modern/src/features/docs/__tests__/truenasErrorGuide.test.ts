@@ -183,4 +183,26 @@ describe('shipped TrueNAS error diagnosis', () => {
       readFileSync(path.join(repoRoot, 'frontend-modern/public/docs/TRUENAS.md'), 'utf8'),
     );
   });
+
+  it('takes readers from the pool row to a read-only comparison of missing capacity', () => {
+    const article = renderGuide('TRUENAS');
+    const pool = [...article.querySelectorAll<HTMLTableRowElement>('tbody tr')].find(
+      (row) => row.querySelector('td')?.textContent === 'ZFS Pools',
+    );
+    const link = pool?.querySelector('a');
+    expect(link?.textContent).toBe('Total/used/free capacity');
+    expect(link?.getAttribute('href')).toBe('#pool-health-without-capacity');
+    expect(prose(pool!)).toContain('ONLINE/DEGRADED/FAULTED');
+
+    const section = sectionAt(article, link!.getAttribute('href')!);
+    const text = prose(section);
+    expect(text).toContain('Usage / Size (Usage on a phone)');
+    expect(text).toContain('The dash is not 0% used');
+    expect(text).toContain("same data pool in TrueNAS's own Storage view");
+    expect(text).toContain('The boot pool is read separately');
+    expect(text).toContain('Dataset figures can reflect quotas');
+    expect(text).toContain('Keep the connection and key unchanged');
+    expect(text).toContain('connection test, restart or wider permissions');
+    expect(section.querySelector('pre, form, input, button')).toBeNull();
+  });
 });

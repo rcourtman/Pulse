@@ -39,7 +39,7 @@ On your TrueNAS system:
 | System info (hostname, version, uptime) | TrueNAS → Overview | CPU, memory, health status |
 | Virtual machines | TrueNAS → VMs | State, CPU, memory, boot mode, devices, and security flags from the TrueNAS VM API |
 | Apps | TrueNAS → Apps | Native app state, image/version, ports, volumes, networks, and runtime container details |
-| ZFS Pools | TrueNAS → Storage | Total/used/free capacity, pool status (ONLINE/DEGRADED/FAULTED) |
+| ZFS Pools | TrueNAS → Storage | [Total/used/free capacity](#pool-health-without-capacity), pool status (ONLINE/DEGRADED/FAULTED) |
 | ZFS Datasets | TrueNAS → Storage | Used/available space, mount status, read-only flag |
 | Physical Disks | TrueNAS → Storage | Model, serial, size, transport type, rotational flag, temperature, and native SMART failure/counter evidence when TrueNAS reports it |
 | ZFS Snapshots | TrueNAS → Protection | Dataset, creation time, size, referenced data |
@@ -569,6 +569,24 @@ the failure or collecting a larger dump.
 
 ### Disabling TrueNAS integration
 Set `PULSE_ENABLE_TRUENAS=false` and restart Pulse. Existing connection data is preserved but polling stops.
+
+### Pool health without capacity
+
+In **TrueNAS → Storage**, an **ONLINE** pool can still show a dash under
+**Usage / Size** (**Usage** on a phone). Pulse has a health state, but no
+capacity reading. The dash is not 0% used. On CORE, Pulse can use the pool's
+own disk-group figures when its summary omits them.
+
+Check the **same data pool** in TrueNAS's own Storage view. Use those figures
+while Pulse shows a dash. The boot pool is read separately. Dataset figures
+can reflect quotas, and disk sizes do not account for the pool's layout.
+Neither can replace the data pool's space figures.
+
+Keep the connection and key unchanged. You do not need a manual API query,
+connection test, restart or wider permissions to compare these readings.
+If they disagree, report the running Pulse and TrueNAS versions and what
+both views showed for that one pool. Use an alias for its name and keep
+private paths and disk serials out of the report.
 
 ## See Also
 
