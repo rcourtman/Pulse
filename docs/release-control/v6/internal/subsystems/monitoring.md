@@ -6602,6 +6602,13 @@ Mock-mode availability targets must use that same provider vocabulary. The
 mock fixture graph may author ping/TCP/HTTP endpoint examples, but monitoring
 and API consumers must receive them through `SourceAvailability` supplemental
 records and probe-status projections, not through a mock-only monitoring type.
+The mock estate carries one check of each network-gear kind (`Edge router`,
+`Core switch`, `Office access point`), so the demo shows what an owner sees
+once their own gear is typed. The router answers on `mockEdgeRouterAddress`,
+the default gateway of the mock Proxmox nodes, which is how the map draws it
+in place of a gateway nothing monitors; a change to the nodes' subnet in
+`generator.go` has to move that address with it, and
+`TestDefaultAvailabilityFixturesIncludeTheNetworkGear` fails if it does not.
 Frontend monitoring consumers should treat those supplemental records as
 day-to-day availability evidence. Settings owns saved target management, while
 the frontend-primitives-owned Standalone surface may read the same

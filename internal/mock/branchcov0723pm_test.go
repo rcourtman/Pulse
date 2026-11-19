@@ -76,7 +76,10 @@ func TestBranchcov0723pm_AvailabilityFixtures(t *testing.T) {
 
 		seenIDs := make(map[string]int, len(fixtures))
 		sawAvailable, sawUnavailable := false, false
-		validKinds := map[string]bool{"machine": true, "service": true, "device": true}
+		validKinds := map[string]bool{
+			"machine": true, "service": true, "device": true,
+			"router": true, "switch": true, "access_point": true,
+		}
 		validProtocols := map[string]bool{"icmp": true, "tcp": true, "http": true, "https": true}
 
 		for i, f := range fixtures {

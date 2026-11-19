@@ -384,6 +384,54 @@ func TestBuildFixtureStateReportsNetworkModeAndHostRoutes(t *testing.T) {
 	}
 }
 
+// The demo estate has the network gear an owner would check: a router, a
+// switch and an access point, each typed as what it is. The router answers on
+// the address the Proxmox nodes route through, so the map draws it in place of
+// a gateway nothing monitors.
+func TestDefaultAvailabilityFixturesIncludeTheNetworkGear(t *testing.T) {
+	kinds := make(map[string]AvailabilityTargetFixture)
+	for _, fixture := range defaultAvailabilityFixtures(time.Now()) {
+		switch fixture.Target.TargetKind {
+		case mockAvailabilityTargetRouter, mockAvailabilityTargetSwitch, mockAvailabilityTargetAccessPoint:
+			if other, taken := kinds[fixture.Target.TargetKind]; taken {
+				t.Fatalf("two %s checks, %s and %s", fixture.Target.TargetKind, other.Name, fixture.Target.Name)
+			}
+			if !fixture.Available || !fixture.Target.Enabled {
+				t.Fatalf("%s is not an enabled, reachable check: %+v", fixture.Target.Name, fixture)
+			}
+			kinds[fixture.Target.TargetKind] = fixture.Target
+		}
+	}
+	for _, kind := range []string{mockAvailabilityTargetRouter, mockAvailabilityTargetSwitch, mockAvailabilityTargetAccessPoint} {
+		if _, ok := kinds[kind]; !ok {
+			t.Fatalf("no %s check in the mock estate", kind)
+		}
+	}
+
+	router := kinds[mockAvailabilityTargetRouter]
+	data := buildFixtureState(DefaultConfig)
+	routed := 0
+	for _, host := range data.Hosts {
+		addresses := make(map[string]bool)
+		for _, nic := range host.NetworkInterfaces {
+			for _, address := range nic.Addresses {
+				addresses[strings.Split(address, "/")[0]] = true
+			}
+		}
+		for _, fixture := range kinds {
+			if addresses[fixture.Address] {
+				t.Fatalf("%s shares the address %s with host %s", fixture.Name, fixture.Address, host.Hostname)
+			}
+		}
+		if len(host.DefaultGateways) > 0 && host.DefaultGateways[0].Address == router.Address {
+			routed++
+		}
+	}
+	if routed == 0 {
+		t.Fatalf("no mock host routes through %s, the address of %s", router.Address, router.Name)
+	}
+}
+
 // The nodes of one Kubernetes cluster are on one subnet, so their agents name
 // one gateway. A different router per node is a shape no cluster has.
 func TestBuildFixtureStatePutsAClustersNodesBehindOneGateway(t *testing.T) {
