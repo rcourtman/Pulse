@@ -229,6 +229,46 @@ const postureExplanation = (row: WorkloadCoverageRow): string => {
 const TASK_ORDER_NOTICE =
   'Task start times do not establish which task ran last. Possible latest tasks are listed below without a time order.';
 
+function CompactCoverageJob(props: { task?: CoverageTask }) {
+  const reported = () => props.task?.label.trim() || 'Unknown';
+  const label = () => {
+    if (!props.task) return 'Order unclear';
+    switch (reported()) {
+      case 'Failed':
+      case 'OK':
+        return reported();
+      case 'Running':
+        return 'In flight';
+      default:
+        return reported().toLowerCase() === 'unknown' ? 'State unclear' : 'Other';
+    }
+  };
+  const tone = () => {
+    switch (taskWordVariant(reported())) {
+      case 'danger':
+        return 'text-red-700 dark:text-red-300';
+      case 'success':
+        return 'text-emerald-700 dark:text-emerald-300';
+      default:
+        return 'text-amber-800 dark:text-amber-300';
+    }
+  };
+  // The existing narrow Job column fits short words on two lines without
+  // borrowing from the adjacent workload name or independent backup age.
+  return (
+    <span
+      class={`block text-center text-[10px] font-medium leading-tight tracking-tight whitespace-normal ${tone()}`}
+      title={props.task ? `Latest task: ${reported()}` : TASK_ORDER_NOTICE}
+    >
+      <span class="sr-only">
+        Latest task: {reported()}
+        {!props.task ? `. ${TASK_ORDER_NOTICE}` : ''}
+      </span>
+      <span aria-hidden="true">{label()}</span>
+    </span>
+  );
+}
+
 // Keep the assessment's clocks independent of the currently visible artifacts.
 // Use explicit UTC instants, not relative ages which could imply a fresh read
 // or turn the evaluation time into a backup completion time.
@@ -941,57 +981,47 @@ export function ProxmoxCoverageTable(props: {
                         </TableCell>
                         <Show when={columnVisible('task')}>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                            class={`${
+                              layoutMode() === 'compact'
+                                ? 'px-0 py-1'
+                                : getPlatformTableCellClassForKind('text')
+                            } text-base-content`}
                           >
                             <Show
-                              when={row.latestTask}
+                              when={layoutMode() !== 'compact'}
                               fallback={
                                 <Show
-                                  when={!row.taskCandidates?.length}
-                                  fallback={
-                                    <div
-                                      class="flex items-center justify-center gap-2 sm:justify-start"
-                                      title={TASK_ORDER_NOTICE}
-                                    >
-                                      <StatusDot size="sm" variant="warning" ariaHidden />
-                                      <span
-                                        class={
-                                          layoutMode() === 'compact'
-                                            ? 'sr-only'
-                                            : 'text-amber-600 dark:text-amber-300'
-                                        }
-                                      >
-                                        <span class="sr-only">Latest task: </span>Unknown
-                                      </span>
-                                    </div>
-                                  }
+                                  when={row.latestTask || row.taskCandidates?.length}
+                                  fallback={<span class="block text-center text-muted">—</span>}
                                 >
+                                  <CompactCoverageJob task={row.latestTask} />
+                                </Show>
+                              }
+                            >
+                              <Show
+                                when={row.latestTask}
+                                fallback={
                                   <Show
-                                    when={layoutMode() !== 'compact'}
-                                    fallback={<span class="block text-center text-muted">—</span>}
+                                    when={!row.taskCandidates?.length}
+                                    fallback={
+                                      <div
+                                        class="flex items-center justify-center gap-2 sm:justify-start"
+                                        title={TASK_ORDER_NOTICE}
+                                      >
+                                        <StatusDot size="sm" variant="warning" ariaHidden />
+                                        <span class="text-amber-600 dark:text-amber-300">
+                                          <span class="sr-only">Latest task: </span>Unknown
+                                        </span>
+                                      </div>
+                                    }
                                   >
                                     <span class="text-muted" title="No recent task">
                                       {COVERAGE_EMPTY_LABEL}
                                     </span>
                                   </Show>
-                                </Show>
-                              }
-                            >
-                              {(task) => (
-                                <Show
-                                  when={layoutMode() !== 'compact'}
-                                  fallback={
-                                    <div class="flex justify-center">
-                                      <StatusDot
-                                        size="sm"
-                                        variant={taskWordVariant(task().label)}
-                                        title={`Latest task: ${task().label}`}
-                                        ariaHidden
-                                      />
-                                      <span class="sr-only">Latest task: {task().label}</span>
-                                    </div>
-                                  }
-                                >
+                                }
+                              >
+                                {(task) => (
                                   <div class="flex items-center gap-2">
                                     <StatusDot
                                       size="sm"
@@ -1007,8 +1037,8 @@ export function ProxmoxCoverageTable(props: {
                                       {task().label}
                                     </span>
                                   </div>
-                                </Show>
-                              )}
+                                )}
+                              </Show>
                             </Show>
                           </TableCell>
                         </Show>
