@@ -435,6 +435,11 @@ describe('OrganizationAccessPanel', () => {
     renderPanel();
 
     expect(screen.getByLabelText('Loading organization access')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Restart access check' }),
+    ).toHaveAccessibleDescription(
+      'Checking saved members and invitations for org-a. Restarting does not repeat a change.',
+    );
     expect(screen.queryByText('Invite Member', { selector: 'h4' })).not.toBeInTheDocument();
 
     orgDeferred.resolve(baseOrg);
@@ -445,6 +450,7 @@ describe('OrganizationAccessPanel', () => {
     expect(heading).toBeVisible();
     expect(screen.getByRole('heading', { name: 'Invite Member' })).toBe(heading);
     expect(screen.queryByLabelText('Loading organization access')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Restart access check' })).not.toBeInTheDocument();
   });
 
   it('reviews an ownership change without displaying it as saved, and can cancel', async () => {
@@ -1079,6 +1085,7 @@ describe('Organization Access read admission', () => {
     expect(oldSignal.aborted).toBe(false);
     const reload = within(warning).getByRole('button', { name: 'Reload access' });
     expect(reload).toBeEnabled();
+    expect(screen.queryByRole('button', { name: 'Restart access check' })).not.toBeInTheDocument();
 
     listMembersMock.mockResolvedValueOnce([{ ...baseMembers[1], userId: 'fresh-member' }]);
     fireEvent.click(reload);

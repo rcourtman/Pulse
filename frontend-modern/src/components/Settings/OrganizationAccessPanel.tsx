@@ -42,8 +42,10 @@ export const OrganizationAccessPanel: Component<OrganizationAccessPanelProps> = 
     );
   };
   const warningTitleID = createUniqueId();
+  const checkingID = createUniqueId();
   let panel: HTMLDivElement | undefined;
   let warning: HTMLDivElement | undefined;
+  let restartButton: HTMLButtonElement | undefined;
   let summary: HTMLParagraphElement | undefined;
   let lastFocused:
     | {
@@ -84,8 +86,8 @@ export const OrganizationAccessPanel: Component<OrganizationAccessPanelProps> = 
     if (!enabled || reloadIntent?.orgID !== orgID || reloadIntent.user !== user) {
       reloadIntent = undefined;
     }
-    if (!enabled || (loading && !error)) return;
-    if (!error && !org) return;
+    const checking = loading && !error;
+    if (!enabled || (checking ? !reloadIntent : !error && !org)) return;
 
     focusTimer = window.setTimeout(() => {
       if (
@@ -99,7 +101,9 @@ export const OrganizationAccessPanel: Component<OrganizationAccessPanelProps> = 
       )
         return;
       const explicitReload = !!reloadIntent;
-      reloadIntent = undefined;
+      // An explicit reload can itself stall. Give its replacement control
+      // focus while waiting but keep the intent for the eventual result.
+      if (!checking) reloadIntent = undefined;
       // Disabling a pending control can blur it before its failed response.
       // Only recover lost panel focus, never a deliberate move elsewhere.
       const lostPanelFocus =
@@ -121,7 +125,13 @@ export const OrganizationAccessPanel: Component<OrganizationAccessPanelProps> = 
         const replacement = lastFocused?.targets
           .map((id) => candidates.find((control) => control.dataset.orgAccessTarget === id))
           .find(Boolean);
-        const target = error ? warning : explicitReload ? summary : (replacement ?? summary);
+        const target = error
+          ? warning
+          : checking
+            ? restartButton
+            : explicitReload
+              ? summary
+              : (replacement ?? summary);
         target?.focus();
       }
     }, 0);
@@ -190,7 +200,26 @@ export const OrganizationAccessPanel: Component<OrganizationAccessPanelProps> = 
               </Card>
             )}
           </Show>
-          <Show when={!state.loading()} fallback={<OrganizationAccessLoadingState />}>
+          <Show when={state.loading() && !warningMessage()}>
+            <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+              <p id={checkingID} class="min-w-0 max-w-full break-words text-sm text-muted">
+                Checking saved members and invitations for {state.selectedOrgID()}. Restarting does
+                not repeat a change.
+              </p>
+              <Button
+                ref={restartButton}
+                aria-describedby={checkingID}
+                onClick={reloadAccess}
+                class="min-h-11 w-full sm:min-h-0 sm:w-auto"
+              >
+                Restart access check
+              </Button>
+            </div>
+          </Show>
+          <Show
+            when={!state.loading()}
+            fallback={<OrganizationAccessLoadingState showFormPlaceholder={!!warningMessage()} />}
+          >
             <Show when={!state.loadError() && state.org()}>
               {(currentOrg) => (
                 <>
