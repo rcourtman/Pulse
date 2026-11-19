@@ -32,17 +32,9 @@ func TestAgentInstalledRemovalSavedTransport(t *testing.T) {
 	// The binary, TLS peers and saved state are private; service/process
 	// operations below are doubles, not the host's live inventory. Admit this
 	// whole ordered scenario set through Go's existing parallel budget before
-	// starting its unchanged build and transport deadlines.
+	// requesting its own executable copy and starting the transport checks.
 	t.Parallel()
-	buildDir := t.TempDir()
-	binary := filepath.Join(buildDir, "pulse-agent")
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
-	defer cancel()
-	build := exec.CommandContext(ctx, "go", "build", "-o", binary, "./cmd/pulse-agent")
-	build.Dir = repoFile()
-	if out, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("build real installed CLI: %v\n%s", err, out)
-	}
+	binary := buildPulseAgentLifecycleBinary(t)
 	if err := os.Chmod(binary, 0755); err != nil {
 		t.Fatal(err)
 	}

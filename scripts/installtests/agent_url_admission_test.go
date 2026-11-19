@@ -20,15 +20,7 @@ func TestAgentInstallerURLAdmission(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Unix installer")
 	}
-	buildDir := t.TempDir()
-	binary := filepath.Join(buildDir, "pulse-agent")
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
-	defer cancel()
-	build := exec.CommandContext(ctx, "go", "build", "-o", binary, "./cmd/pulse-agent")
-	build.Dir = repoFile()
-	if out, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("build real staged agent: %v\n%s", err, out)
-	}
+	binary := buildPulseAgentLifecycleBinary(t)
 	binaryBytes, err := os.ReadFile(binary)
 	if err != nil {
 		t.Fatal(err)

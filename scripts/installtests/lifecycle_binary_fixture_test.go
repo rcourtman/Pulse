@@ -2,6 +2,7 @@ package installtests
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -10,17 +11,21 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 // Only the build is shared, and only within this test process. Each caller
 // receives its own executable, so replacing or removing it cannot affect
-// another lifecycle test. Keep the real source build and its failures: the Go
-// build cache alone still links the same agent once for every caller.
+// another lifecycle test. Keep the real source build, the URL/removal tests'
+// three-minute build deadline and any compiler failure. The Go build cache
+// alone still links the same agent once for every caller.
 var lifecycleAgentFixture = newLifecycleBinaryFixture(func(binary string) error {
-	build := exec.Command("go", "build", "-o", binary, "./cmd/pulse-agent")
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+	build := exec.CommandContext(ctx, "go", "build", "-o", binary, "./cmd/pulse-agent")
 	build.Dir = repoFile()
 	if output, err := build.CombinedOutput(); err != nil {
-		return fmt.Errorf("build pulse-agent lifecycle binary: %w\n%s", err, output)
+		return fmt.Errorf("build pulse-agent lifecycle binary: %w\n%s", errors.Join(err, ctx.Err()), output)
 	}
 	return nil
 })
