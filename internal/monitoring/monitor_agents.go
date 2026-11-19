@@ -2434,8 +2434,12 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 		}
 		container.CPUCapacityPercent = models.DockerContainerCPUCapacityPercent(container, report.Host.TotalCPU)
 
-		// Copy update status if provided by agent
-		if payload.UpdateStatus != nil {
+		// Older agents can still report a digest mismatch for the
+		// Supervisor's local alias. Don't project that as an update or offer
+		// an action based on it while those agents are rolling forward.
+		supervisorAlias := runtime == "docker" && !container.ComposeSourceRegistered &&
+			agentsdocker.UsesHomeAssistantSupervisorAlias(payload.Name, payload.Image, payload.Labels)
+		if payload.UpdateStatus != nil && !supervisorAlias {
 			container.UpdateStatus = &models.DockerContainerUpdateStatus{
 				UpdateAvailable: payload.UpdateStatus.UpdateAvailable,
 				CurrentDigest:   payload.UpdateStatus.CurrentDigest,

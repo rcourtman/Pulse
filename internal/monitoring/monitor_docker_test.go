@@ -19,6 +19,60 @@ import (
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 )
 
+func TestApplyDockerReportSkipsHomeAssistantSupervisorUpdateFromOlderAgent(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+	m := newTestMonitor(t)
+	now := time.Now().UTC()
+	status := &agentsdocker.UpdateStatus{UpdateAvailable: true, CurrentDigest: "sha256:installed", LatestDigest: "sha256:remote", LastChecked: now}
+	const alias = "ghcr.io/home-assistant/amd64-hassio-supervisor:latest"
+	report := agentsdocker.Report{
+		Agent:     agentsdocker.AgentInfo{ID: "home-lab", IntervalSeconds: 30},
+		Host:      agentsdocker.HostInfo{Hostname: "home-lab", Runtime: "docker"},
+		Timestamp: now,
+		Containers: []agentsdocker.Container{
+			{ID: "supervisor", Name: "hassio_supervisor", State: "running", Health: "healthy", Image: alias, UpdateStatus: status},
+			{ID: "normal", Name: "nginx", State: "running", Image: "nginx:latest", UpdateStatus: status},
+			{ID: "preview", Name: "supervisor-preview", State: "running", Image: alias, UpdateStatus: status},
+		},
+	}
+	host, err := m.ApplyDockerReport(report, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(host.Containers) != 3 {
+		t.Fatalf("container inventory changed: %d", len(host.Containers))
+	}
+	if c := host.Containers[0]; c.Name != "hassio_supervisor" || c.State != "running" || c.Health != "healthy" ||
+		c.Image != alias || c.UpdateStatus != nil {
+		t.Fatalf("wrong projection for managed Supervisor: %+v", c)
+	}
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(models.StateSnapshot{DockerHosts: []models.DockerHost{host}, LastUpdate: now})
+	for _, res := range registry.ListByType(unifiedresources.ResourceTypeAgent) {
+		if res.Docker == nil || res.Docker.UpdatesAvailableCount != 2 || res.Docker.UpdatesLastCheckedAt == nil ||
+			!res.Docker.UpdatesLastCheckedAt.Equal(now) {
+			t.Fatalf("wrong host update rollup: %+v", res.Docker)
+		}
+	}
+	if len(registry.ListByType(unifiedresources.ResourceTypeAgent)) != 1 {
+		t.Fatal("missing host resource")
+	}
+	if resources := registry.ListByType(unifiedresources.ResourceTypeAppContainer); len(resources) != 3 {
+		t.Fatalf("wrong container resources: %d", len(resources))
+	} else {
+		for _, res := range resources {
+			managed := res.Name == "hassio_supervisor"
+			updateOffered := false
+			for _, capability := range res.Capabilities {
+				updateOffered = updateOffered || capability.Name == "update"
+			}
+			if updateOffered == managed || (res.Docker.UpdateStatus == nil) != managed {
+				t.Fatalf("%s: update action = %v, status = %+v", res.Name, updateOffered, res.Docker.UpdateStatus)
+			}
+		}
+	}
+}
+
 func TestApplyDockerReportSerializesConcurrentCompleteAndIncompleteReports(t *testing.T) {
 	monitor := newTestMonitor(t)
 	now := time.Now().UTC()

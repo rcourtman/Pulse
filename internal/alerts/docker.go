@@ -10,6 +10,7 @@ import (
 	alertspecs "github.com/rcourtman/pulse-go-rewrite/internal/alerts/specs"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 	"github.com/rs/zerolog/log"
 )
 
@@ -1467,8 +1468,13 @@ func (m *Manager) checkDockerContainerImageUpdate(host models.DockerHost, contai
 	delayHours := m.config.DockerDefaults.UpdateAlertDelayHours
 	m.mu.RUnlock()
 
-	// Negative value means disabled
-	if delayHours < 0 {
+	// The Supervisor alias is not monitored for registry updates. Retire
+	// an occurrence (and its pending age) created on older code, not just
+	// stop asserting it. A missing or failed check for an eligible image
+	// below is still unknown and does not clear its alert.
+	supervisorAlias := host.Runtime == "docker" && !container.ComposeSourceRegistered &&
+		agentsdocker.UsesHomeAssistantSupervisorAlias(container.Name, container.Image, container.Labels)
+	if delayHours < 0 || supervisorAlias {
 		m.clearAlert(canonicalAlertID)
 		m.clearDockerContainerUpdateTracking(resourceID, updateTrackingKey)
 		return

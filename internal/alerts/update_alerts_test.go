@@ -20,6 +20,43 @@ func hasAlertWithPrefix(alerts []Alert, prefix string) bool {
 	return false
 }
 
+func TestDockerSupervisorAliasClearsOnlyItsOldImageUpdateAlert(t *testing.T) {
+	m := NewManagerWithDataDir(t.TempDir())
+	t.Cleanup(m.Stop)
+	host := models.DockerHost{ID: "home-lab", Runtime: "docker"}
+	managed := models.DockerContainer{
+		ID: "supervisor", Name: "hassio_supervisor", Image: "ghcr.io/home-assistant/amd64-hassio-supervisor:latest", State: "running",
+	}
+	peer := models.DockerContainer{ID: "peer", Name: "nginx", Image: "nginx:latest", State: "running"}
+	host.Containers = []models.DockerContainer{managed, peer}
+	first := time.Now().Add(-48 * time.Hour)
+	ref := DockerContainerResourceID(host.ID, managed.ID, managed.Name)
+	peerRef := DockerContainerResourceID(host.ID, peer.ID, peer.Name)
+	_, _, key := seedDockerUpdateAlert(t, m, host, managed, ref, first)
+	_, _, peerKey := seedDockerUpdateAlert(t, m, host, peer, peerRef, first)
+
+	for range 2 {
+		m.CheckDockerHost(host)
+	}
+	var activeImageUpdates []string
+	for _, alert := range m.GetActiveAlerts() {
+		if alert.Type == "docker-container-update" {
+			activeImageUpdates = append(activeImageUpdates, alert.ResourceID)
+		}
+	}
+	if len(activeImageUpdates) != 1 || activeImageUpdates[0] != peerRef {
+		t.Fatalf("active image updates = %v, want only %s", activeImageUpdates, peerRef)
+	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if !m.dockerUpdateFirstSeen[ref].IsZero() || !m.dockerUpdateFirstSeenByIdentity[key].IsZero() {
+		t.Fatal("retired alias kept its pending update age")
+	}
+	if !m.dockerUpdateFirstSeen[peerRef].Equal(first) || !m.dockerUpdateFirstSeenByIdentity[peerKey].Equal(first) {
+		t.Fatal("unknown peer check lost its pending update age")
+	}
+}
+
 func TestCheckDockerContainerImageUpdate(t *testing.T) {
 	// Create a manager for testing
 	m := NewManager()
