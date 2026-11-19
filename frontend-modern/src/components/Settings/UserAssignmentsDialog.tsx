@@ -1,5 +1,6 @@
 import { Component, createMemo, createUniqueId, For, Show } from 'solid-js';
 import { Dialog } from '@/components/shared/Dialog';
+import { Button } from '@/components/shared/Button';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { InlineNotice } from '@/components/shared/InlineNotice';
 import type { Permission, Role, UserRoleAssignment } from '@/types/rbac';
@@ -72,19 +73,30 @@ interface UserAssignmentsDialogProps {
   userPermissions: Permission[] | null;
   onClose: () => void;
   onSave: () => void;
-  onRetryPermissions: () => void;
+  onReloadPermissions: (restart: boolean) => void;
   onToggleRole: (roleId: string) => void;
 }
 
 export const UserAssignmentsDialog: Component<UserAssignmentsDialogProps> = (props) => {
   const permissionsTitleID = createUniqueId();
   let savedPermissions: HTMLDivElement | undefined;
-  const retrySavedPermissions = () => {
-    // The retry control withdraws during a read. Keep keyboard review at its
-    // stable result region, without refocusing after a later response.
+  const reloadSavedPermissions = () => {
+    // Both controls withdraw as the read changes state. Keep keyboard review
+    // at the stable result region, without refocusing when a response arrives.
     savedPermissions?.focus();
-    props.onRetryPermissions();
+    props.onReloadPermissions(props.loadingPermissions);
   };
+  const permissionsReadButton = () => (
+    <Button
+      variant="ghost"
+      size="xs"
+      onClick={reloadSavedPermissions}
+      disabled={props.saving}
+      class="shrink-0 underline underline-offset-2"
+    >
+      {props.loadingPermissions ? 'Restart saved permissions' : 'Retry saved permissions'}
+    </Button>
+  );
   const unlistedRoleIds = createMemo(() =>
     props.formRoleIds.filter((id) => !props.roles.some((role) => role.id === id)),
   );
@@ -179,16 +191,17 @@ export const UserAssignmentsDialog: Component<UserAssignmentsDialogProps> = (pro
             </div>
 
             <div class="space-y-4 pt-4 border-t border-border-subtle">
-              <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
                 <h4
                   id={permissionsTitleID}
-                  class="text-sm font-semibold text-base-content flex items-center gap-2"
+                  class="mr-auto text-sm font-semibold text-base-content flex items-center gap-2"
                 >
                   <BadgeCheck class="w-4 h-4 text-blue-500" />
                   Saved permissions
                 </h4>
                 <Show when={props.loadingPermissions}>
                   <LoadingSpinner size="md" tone="info" label="Loading saved permissions" />
+                  {permissionsReadButton()}
                 </Show>
               </div>
               <div
@@ -203,14 +216,7 @@ export const UserAssignmentsDialog: Component<UserAssignmentsDialogProps> = (pro
                   {(message) => (
                     <InlineNotice tone="warning" role="alert" aria-live="polite">
                       {message()}
-                      <button
-                        type="button"
-                        onClick={retrySavedPermissions}
-                        disabled={props.saving}
-                        class="mt-1 flex min-h-11 min-w-11 max-w-full items-center rounded-sm text-left text-xs font-semibold underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-0"
-                      >
-                        Retry saved permissions
-                      </button>
+                      {permissionsReadButton()}
                     </InlineNotice>
                   )}
                 </Show>

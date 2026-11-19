@@ -687,15 +687,17 @@ describe('RBAC paywall settings panels', () => {
     expect(deleteUserMock).not.toHaveBeenCalled();
   });
 
-  it('retries only the saved-permissions read and preserves unsaved role selections', async () => {
+  it('retries or restarts only saved permissions without changing unsaved roles', async () => {
     const pending = deferred<{ action: string; resource: string }[]>();
+    const replacement = deferred<{ action: string; resource: string }[]>();
     getRolesMock.mockResolvedValue([
       { id: 'admin', name: 'Admin', description: 'Full access', permissions: [] },
       { id: 'viewer', name: 'Viewer', description: 'Read only', permissions: [] },
     ]);
     getUserPermissionsMock
       .mockRejectedValueOnce(new Error('feature not included in license: private detail'))
-      .mockReturnValueOnce(pending.promise);
+      .mockReturnValueOnce(pending.promise)
+      .mockReturnValueOnce(replacement.promise);
     render(() => <UserAssignmentsPanel />);
     fireEvent.click(await screen.findByRole('button', { name: 'Manage access for alice' }));
     const dialog = await screen.findByRole('dialog', { name: 'Manage access: alice' });
@@ -711,6 +713,12 @@ describe('RBAC paywall settings panels', () => {
       within(dialog).queryByRole('button', { name: 'Retry saved permissions' }),
     ).not.toBeInTheDocument();
     expect(getUserPermissionsMock).toHaveBeenCalledTimes(2);
+    const retiredSignal = getUserPermissionsMock.mock.calls[1][1].signal;
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Restart saved permissions' }));
+    expect(getUserPermissionsMock).toHaveBeenCalledTimes(3);
+    expect(retiredSignal.aborted).toBe(true);
+    expect(getRolesMock).toHaveBeenCalledTimes(1);
+    expect(getUsersMock).toHaveBeenCalledTimes(1);
     expect(getUserPermissionsMock).toHaveBeenLastCalledWith(
       'alice',
       expect.objectContaining({
@@ -719,8 +727,11 @@ describe('RBAC paywall settings panels', () => {
         signal: expect.any(AbortSignal),
       }),
     );
-    pending.resolve([{ action: 'read', resource: 'alerts' }]);
+    replacement.resolve([{ action: 'read', resource: 'alerts' }]);
     expect(await within(dialog).findByText('alerts')).toBeInTheDocument();
+    pending.reject(new Error('late superseded result'));
+    await pending.promise.catch(() => undefined);
+    expect(within(dialog).getByText('alerts')).toBeInTheDocument();
     expect(within(dialog).queryByRole('alert')).not.toBeInTheDocument();
     expect(within(dialog).getByRole('checkbox', { name: /Admin/ })).not.toBeChecked();
     expect(within(dialog).getByRole('checkbox', { name: /Viewer/ })).toBeChecked();

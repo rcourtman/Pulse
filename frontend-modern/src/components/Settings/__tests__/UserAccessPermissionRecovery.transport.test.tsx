@@ -31,10 +31,20 @@ const user: UserRoleAssignment = {
   providerId: 'lab',
   roleIds: [roles[0].id, 'saved/unlisted:constraint'],
 };
-const permissionsPath = `/api/admin/users/${encodeURIComponent(user.username)}/permissions`;
+const principalPath = `/api/admin/users/${encodeURIComponent(user.username)}`;
+const permissionsPath = `${principalPath}/permissions`;
 const fetchMock = vi.fn<typeof fetch>();
 const json = (value: unknown, status = 200) =>
   new Response(JSON.stringify(value), { status, headers: { 'Content-Type': 'application/json' } });
+const deferredResponse = () => {
+  let resolve!: (response: Response) => void;
+  const promise = new Promise<Response>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+};
+let permissionsReply: (attempt: number) => Response | Promise<Response>;
+let mutationReply: Promise<Response> | undefined;
 let release: (response: Response) => void;
 const permissionReads = () => fetchMock.mock.calls.filter(([url]) => url === permissionsPath);
 const writes = () =>
@@ -47,19 +57,21 @@ beforeEach(() => {
   setApiToken('synthetic-only-permission-recovery-auth');
   vi.stubEnv('MODE', 'production');
   document.cookie = 'pulse_csrf=synthetic-only-permission-recovery-csrf; Path=/';
-  const pending = new Promise<Response>((resolve) => {
-    release = resolve;
-  });
+  const pending = deferredResponse();
+  release = pending.resolve;
+  permissionsReply = (attempt) =>
+    attempt === 1 ? json({ error: 'synthetic read failure' }, 503) : pending.promise;
+  mutationReply = undefined;
   fetchMock.mockReset();
   fetchMock.mockImplementation(async (input, init = {}) => {
     const path = String(input);
     const method = init.method ?? 'GET';
     if (method === 'GET' && path === '/api/admin/users') return json([user]);
     if (method === 'GET' && path === '/api/admin/roles') return json(roles);
-    if (method === 'GET' && path === permissionsPath) {
-      if (permissionReads().length === 1) return json({ error: 'synthetic read failure' }, 503);
-      return pending;
-    }
+    if (method === 'GET' && path === permissionsPath)
+      return permissionsReply(permissionReads().length);
+    if (method === 'PUT' && path === `${principalPath}/roles` && mutationReply)
+      return mutationReply;
     throw new Error(`Unexpected synthetic permission-recovery request: ${method} ${path}`);
   });
   vi.stubGlobal('fetch', fetchMock);
@@ -74,7 +86,7 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-async function openFailedRead() {
+async function openEditor() {
   const [reader, setReader] = createSignal({ user: 'access-maintainer', allowed: true });
   const view = render(() => (
     <>
@@ -88,8 +100,14 @@ async function openFailedRead() {
   trigger.focus();
   fireEvent.click(trigger);
   const dialog = within(await screen.findByRole('dialog'));
+  return { dialog, trigger, setReader, view };
+}
+
+async function openFailedRead() {
+  const view = await openEditor();
+  const { dialog } = view;
   const retry = await dialog.findByRole('button', { name: 'Retry saved permissions' });
-  return { dialog, retry, trigger, setReader, view };
+  return { ...view, retry };
 }
 
 async function startRetry() {
@@ -114,7 +132,111 @@ function expectReadOnlyBoundRequests() {
   }
 }
 
-describe('Saved-permissions retry keyboard recovery through real transport', () => {
+describe('Saved-permissions recovery through real transport', () => {
+  it('replaces the stalled GET for the same saved principal without replacing the draft', async () => {
+    const original = deferredResponse();
+    const replacement = deferredResponse();
+    permissionsReply = (attempt) => (attempt === 1 ? original.promise : replacement.promise);
+    const { dialog } = await openEditor();
+    const region = dialog.getByRole('region', { name: 'Saved permissions' });
+    const operator = dialog.getByRole('checkbox', { name: /Operator \(Role ID:/ });
+    fireEvent.click(operator);
+    const restart = dialog.getByRole('button', { name: 'Restart saved permissions' });
+    expect(region).not.toContainElement(restart);
+    expect(permissionReads()).toHaveLength(1);
+    restart.focus();
+    fireEvent.click(restart);
+    await waitFor(() => expect(permissionReads()).toHaveLength(2));
+    expect(permissionReads()[0][1]?.signal?.aborted).toBe(true);
+    expect(permissionReads()[1][1]?.signal?.aborted).toBe(false);
+    expect(region).toHaveFocus();
+
+    original.resolve(json([{ action: 'read', resource: 'superseded/reading' }]));
+    await new Promise((done) => setTimeout(done, 0));
+    expect(region).toHaveAttribute('aria-busy', 'true');
+    expect(dialog.queryByText('superseded/reading')).not.toBeInTheDocument();
+    expect(dialog.queryByText(/No permissions were returned/)).not.toBeInTheDocument();
+    replacement.resolve(json([{ action: 'read', resource: 'current/reading' }]));
+    await within(region).findByText('current/reading');
+    expect(region).toHaveAttribute('aria-busy', 'false');
+    expect(region).toHaveFocus();
+    expect(restart).not.toBeInTheDocument();
+    expect(operator).toBeChecked();
+    expect(dialog.getByText('saved/unlisted:constraint')).toBeVisible();
+    expect(dialog.getByRole('button', { name: 'Save Changes' })).toBeEnabled();
+    expect(fetchMock).toHaveBeenCalledTimes(4); // two inventory GETs, two permissions GETs
+    expectReadOnlyBoundRequests();
+  });
+
+  it('keeps a failed replacement unknown and ignores the late result of the superseded retry', async () => {
+    const replacement = deferredResponse();
+    const retryReply = deferredResponse();
+    permissionsReply = (attempt) => {
+      if (attempt === 1) return json({}, 503);
+      return attempt === 2 ? retryReply.promise : replacement.promise;
+    };
+    const { dialog } = await startRetry();
+    const region = dialog.getByRole('region', { name: 'Saved permissions' });
+    fireEvent.click(dialog.getByRole('button', { name: 'Restart saved permissions' }));
+    expect(permissionReads()).toHaveLength(3);
+    expect(permissionReads()[1][1]?.signal?.aborted).toBe(true);
+    replacement.resolve(json([{ action: 'read' }]));
+    const retry = await dialog.findByRole('button', { name: 'Retry saved permissions' });
+    expect(retry).toBeEnabled();
+    expect(region).toHaveFocus();
+    retryReply.resolve(json([]));
+    await new Promise((done) => setTimeout(done, 0));
+    expect(within(region).getByRole('alert')).toHaveTextContent('Access is unknown.');
+    expect(dialog.queryByText(/No permissions were returned/)).not.toBeInTheDocument();
+    expect(dialog.queryByRole('button', { name: 'Restart saved permissions' })).toBeNull();
+    expect(permissionReads()).toHaveLength(3);
+    expectReadOnlyBoundRequests();
+  });
+
+  it('retires both reads when the existing editor is withdrawn on an organization change', async () => {
+    const original = deferredResponse();
+    const replacement = deferredResponse();
+    permissionsReply = (attempt) => (attempt === 1 ? original.promise : replacement.promise);
+    const { dialog } = await openEditor();
+    fireEvent.click(dialog.getByRole('button', { name: 'Restart saved permissions' }));
+    expect(permissionReads()).toHaveLength(2);
+    setOrgID('estate/south');
+    eventBus.emit('org_switched', 'estate/south');
+    expect(permissionReads().every(([, init]) => init?.signal?.aborted)).toBe(true);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    original.resolve(json({ error: 'superseded read' }, 503));
+    replacement.resolve(json([{ action: 'read', resource: 'withdrawn/reading' }]));
+    await new Promise((done) => setTimeout(done, 0));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.queryByText('withdrawn/reading')).not.toBeInTheDocument();
+    expect(permissionReads()).toHaveLength(2);
+    expect(writes()).toHaveLength(0);
+  });
+
+  it('does not restart a read behind a submitted role change', async () => {
+    const pendingRead = deferredResponse();
+    const pendingWrite = deferredResponse();
+    permissionsReply = () => pendingRead.promise;
+    mutationReply = pendingWrite.promise;
+    const { dialog } = await openEditor();
+    fireEvent.click(dialog.getByRole('checkbox', { name: /Operator \(Role ID:/ }));
+    fireEvent.click(dialog.getByRole('button', { name: 'Save Changes' }));
+    const restart = dialog.getByRole('button', { name: 'Restart saved permissions' });
+    expect(restart).toBeDisabled();
+    restart.click();
+    expect(permissionReads()).toHaveLength(1);
+    expect(writes()).toHaveLength(1);
+    expect(JSON.parse(String(writes()[0][1]?.body))).toEqual({
+      roleIds: [...user.roleIds, roles[1].id],
+    });
+    pendingWrite.resolve(json({}, 409));
+    await dialog.findByText('Failed to update user roles');
+    expect(restart).toBeEnabled();
+    pendingRead.resolve(json([]));
+    expect(await dialog.findByText(/No permissions were returned/)).toBeVisible();
+    expect(writes()).toHaveLength(1);
+  });
+
   it.each([
     { outcome: 'saved grants', reply: [{ action: 'read', resource: 'saved/selected:nodes' }] },
     { outcome: 'confirmed empty', reply: [] },
