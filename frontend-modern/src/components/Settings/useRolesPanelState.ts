@@ -11,6 +11,7 @@ import {
   getRolesLoadErrorMessage,
   getRolesRequiredFieldsMessage,
   getRolesSaveErrorMessage,
+  isCompleteRoleEditorInventory,
 } from '@/utils/rbacPresentation';
 import { useRBACFeatureGateState } from './useRBACFeatureGateState';
 
@@ -111,34 +112,7 @@ export function useRolesPanelState(props: RolesPanelProps = {}) {
     try {
       const data = await RBACAPI.getRoles(requestOptions(controller));
       if (!isCurrentRead()) return;
-      const ids = new Set<string>();
-      if (
-        !Array.isArray(data) ||
-        data.some((role) => {
-          if (
-            !role ||
-            typeof role.id !== 'string' ||
-            !role.id.trim() ||
-            ids.has(role.id) ||
-            typeof role.name !== 'string' ||
-            typeof role.description !== 'string' ||
-            (role.isBuiltIn !== undefined && typeof role.isBuiltIn !== 'boolean') ||
-            !Array.isArray(role.permissions) ||
-            role.permissions.some(
-              (permission) =>
-                !permission ||
-                typeof permission.action !== 'string' ||
-                !permission.action.trim() ||
-                typeof permission.resource !== 'string' ||
-                !permission.resource.trim(),
-            )
-          )
-            return true;
-          ids.add(role.id);
-          return false;
-        })
-      )
-        throw new Error('Invalid role inventory');
+      if (!isCompleteRoleEditorInventory(data)) throw new Error('Invalid role inventory');
       batch(() => {
         setRoles(data);
         setInventoryLoaded(true);

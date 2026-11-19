@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "base_sha": "d28efed964cecd0db34bb62fdca0c344b5d79efa",
+  "result": "passed",
+  "verified_at": "2026-11-19T04:04:24Z",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/UserAssignmentsDialog.tsx",
+    "frontend-modern/src/components/Settings/UserAssignmentsPanel.tsx",
+    "frontend-modern/src/components/Settings/useUserAssignmentsPanelState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/UserAssignmentsDialog.tsx": "aa973fbc6b52774d51e56eff081057fa6ada0aef44b92c7bddd5de27821ba371",
+    "frontend-modern/src/components/Settings/UserAssignmentsPanel.tsx": "3fb322596806d072f8673b18b60260356146801b15e7243bafa69bed80bedf0c",
+    "frontend-modern/src/components/Settings/useUserAssignmentsPanelState.ts": "42e88f448536c136b9e2d0dfa41f2b801756bd501d1cd09a838347e4c2f8b844"
+  },
+  "routes": [
+    "/settings/security-users"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Actual built Settings route and isolated HTTP fixtures. Playwright 1.56.1, Chromium 141 desktop light and touch WebKit 26 phone dark, 102 checks, six matched pairs inspected.",
+    "Same selected account and role draft: read failure stays unknown, pending read offers Restart saved permissions beside the spinner, and valid readback retains Allow and Conditional Deny. Exact role IDs, saved context and editor controls remain visible."
+  ],
+  "interactions": [
+    "Activate Retry on a failed read and hold it. Tab to Restart and press Enter on desktop, tap on phone. The previous GET closes before reply and only one identical, same-organization read replaces it. No writes or catalogue reload.",
+    "Both actions focus the stable results region. Deliberately move focus to Cancel while the request is held and verify read completion leaves it there. The draft, retained role ID and Cancel/Save/Close stay available."
+  ]
+}

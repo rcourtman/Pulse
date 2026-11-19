@@ -351,7 +351,7 @@ export const UserAssignmentsPanel: Component<UserAssignmentsPanelProps> = (props
         userPermissions={state.userPermissions()}
         onClose={state.closeModal}
         onSave={() => void saveOrReload()}
-        onRetryPermissions={() => void state.loadUserPermissions()}
+        onReloadPermissions={state.loadUserPermissions}
         onToggleRole={state.toggleRole}
       />
 

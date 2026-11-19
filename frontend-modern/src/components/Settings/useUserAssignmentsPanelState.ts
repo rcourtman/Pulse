@@ -187,13 +187,21 @@ export function useUserAssignmentsPanelState(props: UserAssignmentsPanelProps = 
     );
   });
 
-  const loadUserPermissions = async () => {
+  const loadUserPermissions = async (restart = false) => {
     const user = editingUser();
-    if (!user || !showModal() || !canEdit() || !isCurrentUser(user) || permissionsController)
+    const previousRead = permissionsController;
+    if (
+      !user ||
+      !showModal() ||
+      !canEdit() ||
+      !isCurrentUser(user) ||
+      (restart ? !previousRead : previousRead)
+    )
       return;
     const reader = context;
     const controller = new AbortController();
     permissionsController = controller;
+    previousRead?.abort();
     const isCurrentRead = () =>
       contextIsCurrent() &&
       reader === context &&
