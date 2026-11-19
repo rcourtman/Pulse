@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "base_sha": "7cf2ec1e6fb4e9158365b2630d424e23915e16ce",
+  "verified_at": "2026-11-19T05:28:02Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/useRolesPanelState.ts",
+    "frontend-modern/src/utils/rbacPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/useRolesPanelState.ts": "bcc2d2dcc2f61aa094734b169c6dbbfc4a63d2541331d87a2590fe2550a731ac",
+    "frontend-modern/src/utils/rbacPresentation.ts": "acdbefa2c8e3ba4a13f561178fc296ea75be99ebba54da553f400085d6a794f3"
+  },
+  "routes": [
+    "/settings/security-users",
+    "/settings/security-roles"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Built Pulse App and read-only synthetic HTTP fixtures; 113 assertions, ten before/after pairs inspected. Playwright 1.56.1 with desktop Chromium 141 light and phone WebKit 26 dark.",
+    "User Access: a failed saved-permissions read stays unknown, a stalled retry offers Restart next to the spinner, and valid results show Allow and Conditional Deny separately. The exact selected account, checked roles, retained role ID, Cancel, Save and Close all remain present.",
+    "Roles: a missing rule target remains unread with New Role disabled; a valid reread restores names, exact IDs, complete saved rules, built-in read-only state and edit/delete controls. All four Roles pairs have identical capture bytes."
+  ],
+  "interactions": [
+    "Keyboard Retry, Shift+Tab then Enter on Restart, and phone taps issue one exact same-organization permission GET after aborting the previous read. No catalogue reload, authentication reset or write. Keeping focus at Cancel during completion does not lose the draft.",
+    "Keyboard or phone Retry restores the Roles inventory from the same organization. Attempting New Role with an already listed normalized ID receives the existing correction message and sends no write."
+  ]
+}

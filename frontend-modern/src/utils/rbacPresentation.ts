@@ -101,11 +101,50 @@ export function getUserAssignmentsLoadErrorMessage(): string {
   return 'Failed to load user assignments';
 }
 
+function hasCompleteRoleInventory(roles: unknown[], requireRules: boolean): boolean {
+  const ids = new Set<string>();
+  return roles.every((entry) => {
+    const role = entry as {
+      id?: unknown;
+      name?: unknown;
+      description?: unknown;
+      isBuiltIn?: unknown;
+      permissions?: unknown;
+    } | null;
+    if (
+      !role ||
+      typeof role.id !== 'string' ||
+      !role.id.trim() ||
+      ids.has(role.id) ||
+      typeof role.name !== 'string' ||
+      typeof role.description !== 'string' ||
+      (requireRules &&
+        ((role.isBuiltIn !== undefined && typeof role.isBuiltIn !== 'boolean') ||
+          !Array.isArray(role.permissions) ||
+          role.permissions.some(
+            (permission) =>
+              !permission ||
+              typeof permission.action !== 'string' ||
+              !permission.action.trim() ||
+              typeof permission.resource !== 'string' ||
+              !permission.resource.trim(),
+          )))
+    )
+      return false;
+    ids.add(role.id);
+    return true;
+  });
+}
+
+/** The Roles editor consumes built-in status and rule targets as well as identity. */
+export function isCompleteRoleEditorInventory(roles: unknown): boolean {
+  return Array.isArray(roles) && hasCompleteRoleInventory(roles, true);
+}
+
 /** Require both lists before presenting saved User Access or opening its editor. */
 export function isCompleteUserAccessInventory(users: unknown, roles: unknown): boolean {
   if (!Array.isArray(users) || !Array.isArray(roles)) return false;
   const usernames = new Set<string>();
-  const roleIds = new Set<string>();
   return (
     users.every((user) => {
       if (
@@ -120,19 +159,8 @@ export function isCompleteUserAccessInventory(users: unknown, roles: unknown): b
       usernames.add(user.username);
       return true;
     }) &&
-    roles.every((role) => {
-      if (
-        !role ||
-        typeof role.id !== 'string' ||
-        !role.id.trim() ||
-        roleIds.has(role.id) ||
-        typeof role.name !== 'string' ||
-        typeof role.description !== 'string'
-      )
-        return false;
-      roleIds.add(role.id);
-      return true;
-    })
+    // Assignment choices identify roles; the separate permissions read describes access.
+    hasCompleteRoleInventory(roles, false)
   );
 }
 

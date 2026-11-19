@@ -15,7 +15,62 @@ import {
   getUserIdentityDisplayName,
   getUserIdentityLabel,
   getUserIdentityProviderLabel,
+  isCompleteRoleEditorInventory,
+  isCompleteUserAccessInventory,
 } from '@/utils/rbacPresentation';
+
+describe('saved role inventory validation', () => {
+  const identity = Object.freeze({ id: 'scope/Reader ', name: 'Fleet reader', description: '' });
+  const complete = Object.freeze({
+    ...identity,
+    permissions: [{ action: 'future:inspect', resource: 'scope/nodes', effect: 'unknown' }],
+  });
+  const users = [{ username: 'fixture-reader', roleIds: [identity.id, 'saved/unlisted'] }];
+
+  it.each([
+    { name: 'missing list', roles: null },
+    { name: 'non-list response', roles: {} },
+    { name: 'missing role', roles: [null] },
+    { name: 'blank ID', roles: [{ ...complete, id: ' ' }] },
+    { name: 'non-string ID', roles: [{ ...complete, id: 42 }] },
+    { name: 'non-string name', roles: [{ ...complete, name: null }] },
+    { name: 'missing description', roles: [{ ...complete, description: undefined }] },
+    { name: 'duplicate exact ID', roles: [complete, { ...complete, name: 'Renamed' }] },
+  ])('rejects $name in both consumers', ({ roles }) => {
+    expect(isCompleteRoleEditorInventory(roles)).toBe(false);
+    expect(isCompleteUserAccessInventory(users, roles)).toBe(false);
+  });
+
+  it.each([
+    { name: 'identity only', role: identity },
+    { name: 'non-boolean built-in status', role: { ...complete, isBuiltIn: 'true' } },
+    { name: 'non-array rules', role: { ...complete, permissions: {} } },
+    { name: 'missing rule', role: { ...complete, permissions: [null] } },
+    { name: 'blank action', role: { ...complete, permissions: [{ action: ' ', resource: 'x' }] } },
+    { name: 'missing resource', role: { ...complete, permissions: [{ action: 'read' }] } },
+  ])('requires rules for Roles, but not assignment choices: $name', ({ role }) => {
+    expect(isCompleteRoleEditorInventory([role])).toBe(false);
+    expect(isCompleteUserAccessInventory(users, [role])).toBe(true);
+  });
+
+  it('accepts empty inventories and keeps distinct opaque IDs, built-ins and uncatalogued targets', () => {
+    const roles = Object.freeze([
+      complete,
+      { ...identity, id: 'scope/Reader', isBuiltIn: true, permissions: [] },
+      { ...identity, id: 'scope/reader ', isBuiltIn: false, permissions: [] },
+    ]);
+    expect(isCompleteRoleEditorInventory(roles)).toBe(true);
+    expect(isCompleteUserAccessInventory(users, roles)).toBe(true);
+    expect(isCompleteRoleEditorInventory([])).toBe(true);
+    expect(isCompleteUserAccessInventory([], [])).toBe(true);
+    expect(isCompleteUserAccessInventory([users[0], users[0]], roles)).toBe(false);
+    expect(roles.map((role) => role.id)).toEqual([
+      'scope/Reader ',
+      'scope/Reader',
+      'scope/reader ',
+    ]);
+  });
+});
 
 describe('rbacPresentation', () => {
   it.each([
