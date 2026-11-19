@@ -689,6 +689,20 @@ sample times remain independent; zero is observed and null is absent.
 The canonical physical-disk writer preserves native instants, rejects invalid,
 future or timeless readings, deduplicates rebuilds and keeps existing mock,
 native-writer and metric-target gates. Rehydrated scalars cannot mint samples.
+The same CORE request can supply one earlier, differing native frame when a
+disk's tail advances into a new two-minute window. Retain the same-time read
+and write together when both were observed; no synthetic rate fills an absent
+direction. Select a frame after the previous inventory sighting and require a
+unique hardware serial at the same device name on that connection.
+Only the first graph for that device can supply an earlier frame, even if
+it is a compatibility graph that can produce a live rate but no earlier
+sample. A later duplicate with matching tails does not establish authority.
+The REST catalogue binder drops duplicates; the live parser and earlier-frame
+selector also agree on the first graph if they receive unbound replies.
+Reject retired/unmatched generations and non-advancing replay before writing.
+A flat or unproven window keeps only its existing live tail. The writer
+batches these rates; History uses the existing raw and rolled tiers, and
+live rates and host totals are unchanged.
 
 `TestCOREPerDiskRatesKeepPartialNativeSamples` and
 `TestCOREPerDiskRatesRejectInvalidAndPreserveScope` in `core_reporting_test.go`
@@ -696,9 +710,17 @@ cover partial/duplicate/unscoped/stale/zero/null/identity and clone boundaries.
 `TestCOREPhysicalDiskReportingPipeline` in `physical_disk_roundtrip_test.go`
 crosses pinned TLS REST, snapshot, poller, registry, resolver, writer and local/
 persistent drawer reads for both boot names and complete/partial/idle cycles.
-`TestTrueNASDiskRateWriterAdmission` rejects invalid observations. Desktop and
-narrow browser proof must use actual produced disk History in the existing
-drawer. These controls do not establish the reported boot-only host cause,
+`TestTrueNASDiskRateWriterAdmission` rejects invalid observations.
+`TestCOREHistorySelectsOneDifferentNativePointAfterPreviousInventory` and
+`TestCOREDiskHistoryReplayAndGenerationFence` cover ownership, rate and write
+bounds. `TestCOREHistoryKeepsFirstGraphAuthority` verifies the real REST-to-store
+path keeps the compatibility tail and does not store the later duplicate.
+`TestCOREHistoryWindowKeepsFirstCompatibilityGraph` checks the selector itself
+with both raw replies present and a legitimate paired sibling.
+`TestCOREHistoryKeepsIntraPollIOAndDayCoverage` checks distinct stored curves
+and existing minute-tier coverage through the authenticated drawer reader.
+Desktop and narrow browser proof must use actual produced disk History in the
+existing drawer. These controls do not establish the reported boot-only host cause,
 native missing ARC, operation/busy counters or original appliance recovery.
 
 

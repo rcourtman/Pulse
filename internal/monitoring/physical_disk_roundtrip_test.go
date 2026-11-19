@@ -1107,7 +1107,7 @@ func TestTrueNASPlaceholderDiskSerialsStayPerApplianceAndShareOneHistoryKey(t *t
 		unifiedresources.SourceTrueNAS: records,
 	})
 	monitor := &Monitor{resourceStore: resourceStore, metricsStore: store}
-	monitor.syncUnifiedPhysicalDiskMetrics(resourceStore)
+	monitor.syncUnifiedPhysicalDiskMetrics(resourceStore, nil)
 
 	disks := 0
 	keys := make(map[string]string, diskCount)
@@ -2077,8 +2077,8 @@ func TestCOREPhysicalDiskReportingPipeline(t *testing.T) {
 					t.Fatal("production poll lost inventory")
 				}
 				resourceStore.PopulateSnapshotAndSupplemental(models.StateSnapshot{}, map[unifiedresources.DataSource][]unifiedresources.IngestRecord{unifiedresources.SourceTrueNAS: records})
-				monitor.syncUnifiedPhysicalDiskMetrics(resourceStore)
-				monitor.syncUnifiedPhysicalDiskMetrics(resourceStore)
+				monitor.syncUnifiedPhysicalDiskMetrics(resourceStore, nil)
+				monitor.syncUnifiedPhysicalDiskMetrics(resourceStore, nil)
 				diskCount := 0
 				for _, resource := range resourceStore.GetAll() {
 					if resource.Type == unifiedresources.ResourceTypeAgent {
@@ -2182,7 +2182,7 @@ func TestTrueNASDiskRateWriterAdmission(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			r := unifiedresources.Resource{Metrics: &unifiedresources.ResourceMetrics{DiskRead: &unifiedresources.MetricValue{Value: tc.value, ObservedAt: tc.at, Source: tc.source, Unit: tc.unit}}}
-			monitor.writeTrueNASDiskRates(r, tc.name, now)
+			persistent.WriteBatchSync(monitor.collectTrueNASDiskRates(nil, r, tc.name, now, truenas.COREHistoryDisk{}))
 			points, err := persistent.Query("disk", tc.name, "diskread", now.Add(-time.Hour), now.Add(time.Hour), 0)
 			if err != nil || len(points) > 0 {
 				t.Fatalf("invalid sample persisted: %+v %v", points, err)
@@ -2192,5 +2192,122 @@ func TestTrueNASDiskRateWriterAdmission(t *testing.T) {
 	encoded, _ := json.Marshal(unifiedresources.MetricValue{Value: 1, ObservedAt: now, Source: unifiedresources.SourceTrueNAS})
 	if strings.Contains(string(encoded), "ObservedAt") || strings.Contains(string(encoded), "observedAt") {
 		t.Fatal("internal timestamp changed the wire shape")
+	}
+}
+
+func TestCOREDiskHistoryReplayAndGenerationFence(t *testing.T) {
+	boundary := time.Now().UTC().Truncate(2 * time.Minute).Add(-4 * time.Minute)
+	now := boundary.Add(2*time.Minute + 15*time.Second)
+	first, tail, earlier := boundary.Add(-time.Minute), boundary.Add(10*time.Second), boundary.Add(time.Second)
+	monitor := &Monitor{metricsHistory: NewMetricsHistory(100, time.Hour)}
+	const target = "test-physical-serial"
+	metric := func(at time.Time, value float64) *unifiedresources.MetricValue {
+		return &unifiedresources.MetricValue{ObservedAt: at, Value: value, Source: unifiedresources.SourceTrueNAS, Unit: "bytes/s"}
+	}
+	resource := unifiedresources.Resource{
+		Metrics:      &unifiedresources.ResourceMetrics{DiskRead: metric(first, 10)},
+		SourceStatus: map[unifiedresources.DataSource]unifiedresources.SourceStatus{unifiedresources.SourceTrueNAS: {LastSeen: now}},
+	}
+	if n := len(monitor.collectTrueNASDiskRates(nil, resource, target, now, truenas.COREHistoryDisk{})); n != 1 {
+		t.Fatalf("first tail: %d writes", n)
+	}
+	resource.Metrics.DiskRead = metric(tail, 10)
+	observation := truenas.COREHistoryDisk{
+		TargetID: target, InventoryAt: now,
+		Read: truenas.COREHistoryDirection{
+			Tail:    truenas.TimeSeriesPoint{Timestamp: tail, Value: 10},
+			Earlier: truenas.TimeSeriesPoint{Timestamp: earlier, Value: 0},
+		},
+	}
+	writes := monitor.collectTrueNASDiskRates(nil, resource, target, now, observation)
+	if len(writes) != 2 || writes[0].Value != 0 || !writes[0].Timestamp.Equal(observation.Read.Earlier.Timestamp) || writes[1].Value != 10 {
+		t.Fatalf("wanted genuine lull and tail, got %+v", writes)
+	}
+	for i := 0; i < 6; i++ {
+		if n := len(monitor.collectTrueNASDiskRates(nil, resource, target, now, observation)); n != 0 {
+			t.Errorf("replay %d admitted %d writes", i, n)
+		}
+	}
+	// Same-second corrections retain the updated scalar but do not backfill.
+	resource.Metrics.DiskRead = metric(tail, 12)
+	if got := monitor.collectTrueNASDiskRates(nil, resource, target, now, observation); len(got) != 1 || got[0].Value != 12 {
+		t.Errorf("scalar correction was lost or repeated the earlier point: %+v", got)
+	}
+	// More than one poll in a two-minute tail window still keeps its live
+	// tails, but it must not make the dense raw history grow another point.
+	inWindow := observation
+	inWindow.Read.Tail.Timestamp = boundary.Add(50 * time.Second)
+	inWindow.Read.Earlier.Timestamp = boundary.Add(30 * time.Second)
+	resource.Metrics.DiskRead = metric(inWindow.Read.Tail.Timestamp, 10)
+	if got := monitor.collectTrueNASDiskRates(nil, resource, target, now, inWindow); len(got) != 1 || !got[0].Timestamp.Equal(inWindow.Read.Tail.Timestamp) {
+		t.Errorf("same history window did not keep only the tail: %+v", got)
+	}
+	resource.Metrics.DiskRead = metric(now, 10)
+	for name, change := range map[string]func(*truenas.COREHistoryDisk){
+		"stale inventory":    func(v *truenas.COREHistoryDisk) { v.InventoryAt = v.InventoryAt.Add(-time.Minute) },
+		"wrong target":       func(v *truenas.COREHistoryDisk) { v.TargetID = "different-disk" },
+		"wrong live instant": func(v *truenas.COREHistoryDisk) { v.Read.Tail.Timestamp = now.Add(-time.Second) },
+		"wrong live value":   func(v *truenas.COREHistoryDisk) { v.Read.Tail.Value = 11 },
+		"overlap":            func(v *truenas.COREHistoryDisk) { v.Read.Earlier.Timestamp = tail },
+	} {
+		t.Run(name, func(t *testing.T) {
+			m := &Monitor{}
+			previous := resource
+			previous.Metrics = &unifiedresources.ResourceMetrics{DiskRead: metric(tail, 12)}
+			m.collectTrueNASDiskRates(nil, previous, target, now, truenas.COREHistoryDisk{})
+			v := observation
+			v.Read.Tail.Timestamp = now
+			v.Read.Earlier.Timestamp = now.Add(-5 * time.Second)
+			change(&v)
+			if got := m.collectTrueNASDiskRates(nil, resource, target, now, v); len(got) != 1 || !got[0].Timestamp.Equal(now) {
+				t.Errorf("unproven preceding point got through: %+v", got)
+			}
+		})
+	}
+	positive := &Monitor{}
+	previous := resource
+	previous.Metrics = &unifiedresources.ResourceMetrics{DiskRead: metric(tail, 10)}
+	positive.collectTrueNASDiskRates(nil, previous, target, now, truenas.COREHistoryDisk{})
+	fresh := observation
+	fresh.Read.Tail.Timestamp = now
+	fresh.Read.Earlier.Timestamp = now.Add(-5 * time.Second)
+	if got := positive.collectTrueNASDiskRates(nil, resource, target, now, fresh); len(got) != 2 {
+		t.Errorf("a new window could not add its first observation: %+v", got)
+	}
+	series := monitor.metricsHistory.GetDiskMetrics(target, "diskread", time.Hour)
+	if len(series) != 4 || series[1].Value != 0 || series[2].Value != 12 || series[3].Value != 10 {
+		t.Fatalf("memory History diverged from admitted observations: %+v", series)
+	}
+}
+
+func TestCOREDiskHistoryKeepsNativeFrameTogether(t *testing.T) {
+	boundary := time.Now().UTC().Truncate(2 * time.Minute).Add(-2 * time.Minute)
+	m := &Monitor{}
+	const target = "paired-physical-serial"
+	makeResource := func(read, write time.Time) unifiedresources.Resource {
+		return unifiedresources.Resource{
+			SourceStatus: map[unifiedresources.DataSource]unifiedresources.SourceStatus{
+				unifiedresources.SourceTrueNAS: {LastSeen: boundary},
+			},
+			Metrics: &unifiedresources.ResourceMetrics{
+				DiskRead:  &unifiedresources.MetricValue{Source: unifiedresources.SourceTrueNAS, Unit: "bytes/s", ObservedAt: read, Value: 10},
+				DiskWrite: &unifiedresources.MetricValue{Source: unifiedresources.SourceTrueNAS, Unit: "bytes/s", ObservedAt: write, Value: 10},
+			},
+		}
+	}
+	// Read crosses a two-minute boundary but write doesn't. The optional
+	// reading must not arrive with an artificial one-direction gap.
+	now := boundary.Add(time.Minute)
+	m.collectTrueNASDiskRates(nil, makeResource(boundary.Add(-time.Minute), boundary), target, now, truenas.COREHistoryDisk{})
+	tail, earlier := boundary.Add(20*time.Second), boundary.Add(10*time.Second)
+	frame := truenas.COREHistoryDirection{
+		Tail:    truenas.TimeSeriesPoint{Timestamp: tail, Value: 10},
+		Earlier: truenas.TimeSeriesPoint{Timestamp: earlier, Value: 60},
+	}
+	got := m.collectTrueNASDiskRates(nil, makeResource(tail, tail), target, now, truenas.COREHistoryDisk{
+		TargetID: target, InventoryAt: boundary, Read: frame, Write: frame,
+	})
+	if len(got) != 2 || !got[0].Timestamp.Equal(tail) || !got[1].Timestamp.Equal(tail) {
+		t.Fatalf("the writer split a native read/write frame: %+v", got)
 	}
 }

@@ -158,11 +158,12 @@ func (f *FixtureFetcher) Fetch(context.Context) (*FixtureSnapshot, error) {
 
 // Provider converts TrueNAS snapshot data into unified resources.
 type Provider struct {
-	fetcher      Fetcher
-	connectionID string
-	lastSnapshot *FixtureSnapshot
-	mu           sync.Mutex
-	now          func() time.Time
+	fetcher         Fetcher
+	connectionID    string
+	lastSnapshot    *FixtureSnapshot
+	coreDiskHistory []COREHistoryDisk
+	mu              sync.Mutex
+	now             func() time.Time
 }
 
 // NewLiveProvider returns a provider backed by any fetcher implementation.
@@ -220,6 +221,8 @@ func (p *Provider) Refresh(ctx context.Context) error {
 
 	p.mu.Lock()
 	enrichAppStatsFromPreviousSnapshot(snapshot, p.lastSnapshot)
+	p.coreDiskHistory = coreHistoryObservations(p.connectionID, p.lastSnapshot, snapshot)
+	snapshot.System.coreDiskRateWindow = nil // do not carry the native window into inventory or registry rebuilds
 	p.lastSnapshot = copyFixtureSnapshot(snapshot)
 	p.mu.Unlock()
 	return nil

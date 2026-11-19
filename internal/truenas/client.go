@@ -313,7 +313,12 @@ func (c *Client) getSystemTelemetryREST(ctx context.Context) (*SystemInfo, error
 	if err != nil {
 		return nil, err
 	}
-	history := parseSystemMetricHistory(liveReportingResponses(response, end))
+	var diskWindow map[string]coreDiskRateCells
+	version := c.TransportStatus().ApplianceVersion
+	if supportsLegacyREST(version) && !strings.Contains(strings.ToUpper(version), "SCALE") {
+		diskWindow = make(map[string]coreDiskRateCells)
+	}
+	history := parseSystemMetricHistory(liveReportingResponsesWithDiskWindow(response, end, diskWindow))
 	system := systemInfoFromMetricHistory(history)
 	memory, _ := c.getCORE13RealtimeMemory(ctx)
 	if memory != nil {
@@ -331,6 +336,7 @@ func (c *Client) getSystemTelemetryREST(ctx context.Context) (*SystemInfo, error
 	if system == nil {
 		return nil, errNoSystemTelemetry
 	}
+	system.coreDiskRateWindow = diskWindow
 	return system, nil
 }
 
@@ -2242,6 +2248,7 @@ func mergeSystemTelemetry(system *SystemInfo, telemetry *SystemInfo) {
 	system.DiskWriteRate = telemetry.DiskWriteRate
 	system.DiskReadRates = cloneDeviceRates(telemetry.DiskReadRates)
 	system.DiskWriteRates = cloneDeviceRates(telemetry.DiskWriteRates)
+	system.coreDiskRateWindow = telemetry.coreDiskRateWindow
 	if len(telemetry.TemperatureCelsius) > 0 {
 		system.TemperatureCelsius = cloneTemperatureMap(telemetry.TemperatureCelsius)
 	}
@@ -3446,13 +3453,13 @@ func parseSystemMetricHistory(responses []trueNASReportingGetDataResponse) *Syst
 	}
 	seen := make(map[string]bool)
 	for _, response := range responses {
-		name := strings.ToLower(strings.TrimSpace(response.Name))
+		name := response.graphName()
 		switch name {
 		case "cpu", "memory", "arcsize", "cputemp", "interface", "disk":
 		default:
 			continue
 		}
-		identifier := readStringAny(map[string]any{"identifier": response.Identifier}, "identifier")
+		identifier := response.graphIdentifier()
 		key := name + "\x00" + identifier
 		if seen[key] {
 			continue
@@ -3513,10 +3520,10 @@ func parseSystemMetricHistory(responses []trueNASReportingGetDataResponse) *Syst
 					io["netout"][key] = appendTimeSeriesPoint(io["netout"][key], timestamp, value)
 				}
 			case "disk":
-				if value, ok := pickReportingValue(values, "read", "read_bytes", "diskread", "bytes_read", "disk_octets_read"); ok && value >= 0 {
+				if value, ok := reportingDiskRead(values); ok {
 					io["diskread"][key] = appendTimeSeriesPoint(io["diskread"][key], timestamp, value)
 				}
-				if value, ok := pickReportingValue(values, "write", "write_bytes", "diskwrite", "bytes_written", "disk_octets_write"); ok && value >= 0 {
+				if value, ok := reportingDiskWrite(values); ok {
 					io["diskwrite"][key] = appendTimeSeriesPoint(io["diskwrite"][key], timestamp, value)
 				}
 			}

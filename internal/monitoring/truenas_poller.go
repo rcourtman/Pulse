@@ -1006,6 +1006,32 @@ func (p *TrueNASPoller) SupplementalRecords(_ *Monitor, orgID string) []unifiedr
 	return p.GetCurrentRecordsForOrg(orgID)
 }
 
+// coreDiskRateHistory is an in-memory supplement to the canonical inventory.
+// Read only the active providers for this org. The writer also matches the
+// published inventory generation and the exact selected native tail, since
+// a provider can have refreshed before its new records reach the registry.
+func (p *TrueNASPoller) coreDiskRateHistory(orgID string) map[string]truenas.COREHistoryDisk {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	var byTarget map[string]truenas.COREHistoryDisk
+	for _, provider := range p.providersByOrg[orgID] {
+		if provider == nil {
+			continue
+		}
+		for _, disk := range provider.COREHistoryDisks() {
+			if byTarget == nil {
+				byTarget = make(map[string]truenas.COREHistoryDisk)
+			}
+			if _, ambiguous := byTarget[disk.TargetID]; ambiguous {
+				byTarget[disk.TargetID] = truenas.COREHistoryDisk{}
+				continue
+			}
+			byTarget[disk.TargetID] = disk
+		}
+	}
+	return byTarget
+}
+
 // PhysicalDiskTemperatureHistory exposes native TrueNAS disk temperature
 // history through the canonical monitoring chart boundary.
 func (p *TrueNASPoller) PhysicalDiskTemperatureHistory(_ *Monitor, orgID string, duration time.Duration) map[string][]MetricPoint {

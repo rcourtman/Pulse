@@ -1011,6 +1011,8 @@ pixels. This establishes inspection safety, not native guest or backup recovery.
 Native per-disk read/write rates reach existing disk chart History under the
 canonical disk target and original sample instant. They never populate cumulative
 `PhysicalDisk.IO`, operation totals, busy percentage or backup/protection evidence.
+A differing earlier CORE sample can survive alongside the current tail for an
+independently identified disk; existing rolled day coverage remains readable.
 A partial catalogue preserves individual samples without implying complete host
 I/O. The physical-disk roundtrip pipeline checks both boot names and persisted
 readback. Device/pool identity and recovery operations remain unchanged; browser

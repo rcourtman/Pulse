@@ -1390,7 +1390,7 @@ func TestSyncUnifiedPhysicalDiskMetricsRecordsTrueNASDiskHistory(t *testing.T) {
 		metricsStore:  store,
 	}
 
-	monitor.syncUnifiedPhysicalDiskMetrics(resourceStore)
+	monitor.syncUnifiedPhysicalDiskMetrics(resourceStore, nil)
 
 	var diskResourceID string
 	for _, resource := range resourceStore.GetAll() {
@@ -1460,7 +1460,7 @@ func TestSyncUnifiedStorageAndDiskMetricsSkipMockOwnedTrueNASHistoryWhenMockEnab
 	}
 
 	monitor.syncUnifiedStorageMetrics(resourceStore)
-	monitor.syncUnifiedPhysicalDiskMetrics(resourceStore)
+	monitor.syncUnifiedPhysicalDiskMetrics(resourceStore, nil)
 
 	if got := len(monitor.GetStorageMetrics(mock.TrueNASPoolMetricID("truenas-main", "tank"), time.Hour)["usage"]); got != 0 {
 		t.Fatalf("expected mock-owned TrueNAS storage history to be skipped, got %d usage points", got)

@@ -7693,8 +7693,8 @@ func TestSyncUnifiedPhysicalDiskMetricsUsesSourceObservationTimeAcrossRegistryRe
 
 	// Read-side registry rebuilds must not invent a fresh sample for the same
 	// source observation (the write amplification in #1966).
-	monitor.syncUnifiedPhysicalDiskMetrics(resourceStore)
-	monitor.syncUnifiedPhysicalDiskMetrics(resourceStore)
+	monitor.syncUnifiedPhysicalDiskMetrics(resourceStore, nil)
+	monitor.syncUnifiedPhysicalDiskMetrics(resourceStore, nil)
 
 	inMemory := monitor.GetDiskMetrics(target.ResourceID, "smart_temp", time.Hour)
 	if len(inMemory) != 1 {

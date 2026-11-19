@@ -685,7 +685,8 @@ authority is added.
 ### API-backed disk rates preserve native-writer authority
 
 The physical-disk sync excludes Agent/Proxmox native writers and mock-owned
-records before writing TrueNAS per-device rates. A rate is not a kernel counter,
+records before writing TrueNAS per-device rates, including the bounded earlier
+observation from a matching CORE poll. A rate is not a kernel counter,
 agent report or continuity signal. Existing target resolution stays authoritative.
 The physical-disk roundtrip pipeline covers the API rate route and its adjacent
 native-writer regressions remain required. No enrolment, removal, lease, host

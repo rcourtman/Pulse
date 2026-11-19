@@ -32,6 +32,7 @@ import (
 	recoverymanager "github.com/rcourtman/pulse-go-rewrite/internal/recovery/manager"
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/system"
+	"github.com/rcourtman/pulse-go-rewrite/internal/truenas"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
@@ -5984,7 +5985,7 @@ func (m *Monitor) updateResourceStoreForReadWithin(state models.StateSnapshot, s
 	// captured store, even if a replacement is now wiring or publishing.
 	recordSupplementalResourceChanges(store, binding.providers.changes(m))
 	if m.resourceWiringGeneration.Load() == binding.generation {
-		m.syncPublishedResourceStore(store, scope, mark)
+		m.syncPublishedResourceStore(store, scope, mark, binding.providers)
 	}
 }
 
@@ -5992,10 +5993,10 @@ func (m *Monitor) updateResourceStoreForReadWithin(state models.StateSnapshot, s
 // a refresh just published under scope. A rebuild from an ended mock-mode
 // epoch that overlapped the refresh may have replaced that registry with the
 // mode the monitor left, so the alert sync runs only if none did.
-func (m *Monitor) syncPublishedResourceStore(store ResourceStoreInterface, scope mockModeScope, mark uint64) {
+func (m *Monitor) syncPublishedResourceStore(store ResourceStoreInterface, scope mockModeScope, mark uint64, providers supplementalProviderSet) {
 	store = newResourceSnapshotStore(store)
 	resources := store.GetAll()
-	m.syncAllUnifiedMetrics(store)
+	m.syncAllUnifiedMetrics(store, providers)
 	if scope.undisturbedSince(mark) {
 		m.syncUnifiedResourceAlertsToState(resources, scope)
 	}
@@ -6104,7 +6105,7 @@ func (m *Monitor) updateResourceStore(state models.StateSnapshot, scope mockMode
 	// drained remain history even if a subsequent rewire replaces the binding.
 	recordSupplementalResourceChanges(store, binding.providers.changes(m))
 	if m.resourceWiringGeneration.Load() == generation {
-		m.syncPublishedResourceStore(store, scope, mark)
+		m.syncPublishedResourceStore(store, scope, mark, binding.providers)
 	}
 }
 
@@ -6346,9 +6347,9 @@ func (m *Monitor) dedupeUnifiedMetricWrites(writes []metrics.WriteMetric) []metr
 // boundary, not the series written, their values or their observation times.
 // The syncs run serially and each previously waited for its own commit, so a
 // rebuild that carried new data for several resource types opened one SQLite
-// transaction per type; batching collapses that to one (#1966). The physical
-// disk sync keeps its own transaction because its SMART path writes directly.
-func (m *Monitor) syncAllUnifiedMetrics(store ResourceStoreInterface) {
+// transaction per type; batching collapses that to one (#1966). Physical
+// disk SMART keeps its own writer; the native CORE rates are batched.
+func (m *Monitor) syncAllUnifiedMetrics(store ResourceStoreInterface, providers supplementalProviderSet) {
 	if m == nil {
 		return
 	}
@@ -6358,7 +6359,6 @@ func (m *Monitor) syncAllUnifiedMetrics(store ResourceStoreInterface) {
 		m.syncUnifiedAgentMetrics(store)
 		m.syncUnifiedVMMetrics(store)
 		m.syncUnifiedStorageMetrics(store)
-		m.syncUnifiedPhysicalDiskMetrics(store)
 		m.syncUnifiedAppContainerMetrics(store)
 		return
 	}
@@ -6368,7 +6368,11 @@ func (m *Monitor) syncAllUnifiedMetrics(store ResourceStoreInterface) {
 	m.syncUnifiedVMMetrics(store, sink)
 	m.syncUnifiedStorageMetrics(store, sink)
 	m.syncUnifiedAppContainerMetrics(store, sink)
-	m.syncUnifiedPhysicalDiskMetrics(store)
+	var diskHistory map[string]truenas.COREHistoryDisk
+	if provider, ok := providers.manual[unifiedresources.SourceTrueNAS].(*TrueNASPoller); ok && provider != nil {
+		diskHistory = provider.coreDiskRateHistory(providers.orgID)
+	}
+	m.syncUnifiedPhysicalDiskMetrics(store, diskHistory)
 	if len(batch) > 0 {
 		m.metricsStore.WriteBatchBounded(batch)
 	}
@@ -6762,7 +6766,7 @@ func unifiedResourceObservedAt(resource unifiedresources.Resource, fallback time
 	return unifiedMetricObservedAt(resource, nil, fallback)
 }
 
-func (m *Monitor) syncUnifiedPhysicalDiskMetrics(store ResourceStoreInterface) {
+func (m *Monitor) syncUnifiedPhysicalDiskMetrics(store ResourceStoreInterface, history map[string]truenas.COREHistoryDisk) {
 	if store == nil || m.metricsStore == nil {
 		return
 	}
@@ -6774,6 +6778,7 @@ func (m *Monitor) syncUnifiedPhysicalDiskMetrics(store ResourceStoreInterface) {
 
 	now := time.Now()
 	seenTargets := make(map[string]struct{})
+	var rateWrites []metrics.WriteMetric
 	for _, resource := range store.GetAll() {
 		if resource.Type != unifiedresources.ResourceTypePhysicalDisk || resource.PhysicalDisk == nil {
 			continue
@@ -6841,7 +6846,10 @@ func (m *Monitor) syncUnifiedPhysicalDiskMetrics(store ResourceStoreInterface) {
 		// re-issuing the same snapshot maps to one sample instead of a fresh
 		// wall-clock row (#1966).
 		m.writeSMARTMetrics(disk, unifiedResourceObservedAt(resource, now))
-		m.writeTrueNASDiskRates(resource, targetID, now)
+		rateWrites = m.collectTrueNASDiskRates(rateWrites, resource, targetID, now, history[targetID])
+	}
+	if len(rateWrites) > 0 {
+		m.metricsStore.WriteBatchBounded(rateWrites)
 	}
 }
 
