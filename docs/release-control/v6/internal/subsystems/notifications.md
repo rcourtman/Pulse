@@ -78,7 +78,10 @@ before HTML/JSON escaping; its stored fields and dashboard pointer are not cut.
 The active queue partitions only unattempted pending rows, after quiet-hours
 and cancellation checks and before claim. It atomically retains all parts, with
 no audit, acceptance or spent attempt for partitioning. Each part settles only
-its own provider outcome. Attempted rows and existing dead letters are not
+its own provider outcome. If cancellation removes the leader of an unattempted
+part, sizing can run again; any new child gets a fresh ID without modifying a
+retained sibling or its audit evidence, and split recovery work does not rejoin
+an open grouping window. Attempted rows and existing dead letters are not
 automatically retried or repartitioned. Body overrides and destinations which
 derive their URL from the full group keep their existing routing and grouping;
 the transport does not reinterpret an arbitrary provider rejection as a size
@@ -90,6 +93,10 @@ retain their existing classification, retry and settlement rules.
 budget, occurrence links and attempts, oversize singleton abbreviation,
 recovery grouping, persistent reopening and the local-rate boundary. This is
 source validation, not a Telegram-server or reporter-host acceptance result.
+`telegram_queue_replan_test.go` checks that reopening the lead occurrence during
+a local rate hold delivers only the surviving recoveries, with their own
+pointers, attempts, operational links and receipts, leaving a settled sibling
+untouched.
 
 ### Request-owned HTTP transports release completed connections
 
