@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "base_sha": "5d1aba3290c7a903b9e8da7c0f4f359b949a873e",
+  "verified_at": "2026-11-19T13:24:47Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/AppLayout.tsx",
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapEntry.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/AppLayout.tsx": "2e9e19ad7753510e316b41eef1213c1683a0c967f5801580c0ab9e639d9a554d",
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapEntry.tsx": "414e5f9cdd32180c26eb8961f4b48b9088b2788a5970343db170ce603e1591b4"
+  },
+  "routes": [
+    "/settings/infrastructure",
+    "/map",
+    "/settings",
+    "/proxmox/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 1024,
+      "height": 768
+    },
+    {
+      "width": 640,
+      "height": 800
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Compiled focused production bundle of exact AppLayout.tsx, InfrastructureMapEntry.tsx, and index.css bytes inspected in Playwright headless Chrome with zero console or page errors and screenshots reviewed in light and dark themes",
+    "Desktop 1440x900 light and dark off /map: single labeled Map button at top-left (x=39, w=77, h=36), Pulse brand lockup centered within 1px of header center, header-controls flush right, zero infrastructure-map-edge-tab elements, zero overlap or horizontal overflow",
+    "Desktop 1440x900 light and dark on /map: Map button carries aria-current=page and active blue border/fill contrast, persists after full page reload, and clears when navigating away to Settings",
+    "Intermediate 1280x800, 1024x768, and 640x800 viewports: Map stays top-left, brand stays centered, controls stay right-aligned with zero overlap and scrollWidth === innerWidth",
+    "Mobile 375x812 light and dark: Map button stays top-left (x=4, w=69, h=36) with visible Map label beside centered Pulse Preview lockup and right controls (scrollWidth === 375, zero overlap)",
+    "Kiosk mode hides the Map button and brand lockup cleanly; exiting kiosk mode restores the Map button",
+    "Not checked in a browser: Firefox and Safari, full un-scoped app bundle, custom brand logo wider than default lockup"
+  ],
+  "interactions": [
+    "Focused and hovered the top-left Map button and verified 2px solid focus outline with zero layout shift",
+    "Clicked the Map button from /settings/infrastructure to navigate client-side (no page reload) to /map and verified active styling and aria-current=page",
+    "Reloaded /map and confirmed aria-current=page and active styling persisted",
+    "Toggled dark mode and clicked Settings in Primary navigation to confirm aria-current cleared and inactive dark styling restored",
+    "Clicked Enter kiosk mode to verify the Map button hid, then pressed Escape to exit kiosk mode and verify it reappeared",
+    "Tapped the Map button at 375x812 to navigate to /map and verified active styling in both light and dark themes"
+  ]
+}

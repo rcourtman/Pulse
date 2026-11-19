@@ -67,10 +67,7 @@ import { runtimeBranding } from '@/stores/systemSettings';
 import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
 import type { AppConnectionStatus, OrganizationListIssue } from '@/useAppRuntimeState';
 import { buildInfrastructureWorkspacePath } from '@/components/Settings/infrastructureWorkspaceModel';
-import {
-  InfrastructureMapEdgeTab,
-  InfrastructureMapHeaderButton,
-} from '@/features/infrastructureMap/InfrastructureMapEntry';
+import { InfrastructureMapHeaderButton } from '@/features/infrastructureMap/InfrastructureMapEntry';
 
 const ROOT_PROXMOX_PATH = buildProxmoxPath();
 const ROOT_DOCKER_PATH = buildDockerPath();
@@ -748,6 +745,9 @@ export function AppLayout(props: AppLayoutProps) {
         }}
       >
         <Show when={!kioskMode()}>
+          <div class="flex items-center sm:col-start-1 sm:col-end-2 sm:justify-self-start">
+            <InfrastructureMapHeaderButton />
+          </div>
           <div class="flex items-center gap-1.5 sm:col-start-2 sm:col-end-3 sm:flex-initial sm:justify-self-center sm:gap-2">
             <div
               class={`pulse-brand-lockup flex items-center gap-1.5 sm:gap-2 ${!customBrandLogo() && brandMotionActive() ? 'animate-pulse-brand' : ''}`}
@@ -779,9 +779,6 @@ export function AppLayout(props: AppLayoutProps) {
         <div
           class={`header-controls flex max-w-full flex-wrap items-center gap-1 sm:flex-nowrap sm:gap-2 ${kioskMode() ? '' : 'justify-end sm:col-start-3 sm:col-end-4 sm:w-auto sm:justify-end sm:justify-self-end'}`}
         >
-          <Show when={!kioskMode()}>
-            <InfrastructureMapHeaderButton />
-          </Show>
           <Show when={props.hasAuth() && !props.needsAuth()}>
             <div class="flex items-center gap-1 sm:gap-2">
               <Show when={props.showOrgSwitcher()}>
@@ -853,10 +850,6 @@ export function AppLayout(props: AppLayoutProps) {
           <ConnectionStatusBadge connectionStatus={props.connectionStatus} class="shrink-0" />
         </div>
       </div>
-
-      <Show when={!kioskMode()}>
-        <InfrastructureMapEdgeTab />
-      </Show>
 
       <Show when={!kioskMode()}>
         <nav
