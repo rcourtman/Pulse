@@ -38,25 +38,24 @@ def source_tests(output: str) -> list[str]:
     return names
 
 
-def select(names: list[str], index: int, weights: Path | None = None) -> list[str]:
-    if index not in (0, 1) or len(names) < 2:
-        raise ValueError("two nonempty slices and an index of 0 or 1 are required")
+def select(names: list[str], index: int, weights: Path | None = None, count: int = 2) -> list[str]:
+    if count not in (2, 3) or not 0 <= index < count or len(names) < count:
+        raise ValueError("invalid source size, slice count or index")
     if weights is None:
-        return names[len(names) * index // 2:len(names) * (index + 1) // 2]
+        return names[len(names) * index // count:len(names) * (index + 1) // count]
     # The same selector already keeps API tests in contiguous source order.
     # Ignore ambient overrides: both workers must use the committed weights
     # and the same default for new, renamed or unmeasured source tests.
     env = {key: value for key, value in os.environ.items() if key != "DEFAULT_WEIGHT"}
-    result = subprocess.run(["bash", str(SELECTOR), str(weights), "2", str(index)],
-                            input="\n".join(names) + "\n", capture_output=True,
-                            text=True, env=env, check=True)
-    selected = result.stdout.splitlines()
-    # Fail before test execution on a broken selector, never fall back to an
-    # apparently successful partial selection. The source list is authority.
-    if (not selected or len(selected) >= len(names) or
-            selected != (names[:len(selected)] if index == 0 else names[-len(selected):])):
-        raise ValueError("weighted selection is not a nonempty contiguous source slice")
-    return selected
+    pieces = []
+    for part in range(count):
+        result = subprocess.run(["bash", str(SELECTOR), str(weights), str(count), str(part)],
+                                input="\n".join(names) + "\n", capture_output=True,
+                                text=True, env=env, check=True)
+        pieces.append(result.stdout.splitlines())
+    if not all(pieces) or [name for piece in pieces for name in piece] != names:
+        raise ValueError("weighted slices do not cover source order exactly once")
+    return pieces[index]
 
 
 def test_filter(names: list[str], selected: list[str]) -> list[str]:
@@ -74,7 +73,8 @@ def test_filter(names: list[str], selected: list[str]) -> list[str]:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--package", choices=PACKAGES, required=True)
-    parser.add_argument("--index", type=int, choices=(0, 1), required=True)
+    parser.add_argument("--index", type=int, required=True)
+    parser.add_argument("--count", type=int, choices=(2, 3), default=2)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
@@ -97,7 +97,7 @@ def main() -> int:
     try:
         names = source_tests(listing.stdout)
         weights = WEIGHTS[args.package]
-        selected = select(names, args.index, weights)
+        selected = select(names, args.index, weights, args.count)
         filters = test_filter(names, selected)
     except (OSError, ValueError, subprocess.CalledProcessError) as error:
         print(f"Backend slice selection failed: {error}", file=sys.stderr)
@@ -110,7 +110,7 @@ def main() -> int:
     selection.write_text("\n".join(selected) + "\n")
     command = ["go", "test", "-race", "-count=1", "-timeout", "50m", "-json",
                *filters, package]
-    print(f"{args.package} slice {args.index}/2: {len(selected)} of {len(names)} roots "
+    print(f"{args.package} slice {args.index}/{args.count}: {len(selected)} of {len(names)} roots "
           f"({selected[0]} .. {selected[-1]})", flush=True)
     with subprocess.Popen(command, cwd=ROOT, env=environment, stdout=subprocess.PIPE,
                           stderr=subprocess.STDOUT) as process:
@@ -119,7 +119,7 @@ def main() -> int:
              str(selection), MODULE + args.package], stdin=process.stdout, cwd=ROOT)
         process.stdout.close()
         test_exit = process.wait()
-    receipt = {"package": MODULE + args.package, "index": args.index, "count": 2,
+    receipt = {"package": MODULE + args.package, "index": args.index, "count": args.count,
                "listed_roots": len(names), "selected_roots": len(selected),
                "weights": str(weights.relative_to(ROOT)),
                "test_exit": test_exit, "recorder_exit": recorded.returncode}

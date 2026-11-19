@@ -1870,9 +1870,13 @@ shard. The required check name
 shard succeeded. `Backend tests (rest-0)` and `Backend tests (rest-1)`
 keep their original names, compile dependencies and two-worker matrix. Within
 each worker the ordinary source-listed packages exclude exactly `internal/api`,
-`internal/monitoring` and `scripts/installtests`. API coverage remains in its
-unchanged five shards. Each worker runs the other two slow packages as contiguous
-source-listed halves through `scripts/release_control/run_go_package_slice.py`.
+`internal/monitoring` and `scripts/installtests`. Full PRs to main use four
+API partitions and three rest partitions across the seven workers. The fifth
+worker in the API matrix runs rest-2, so its result is required by the
+protected API verdict. Other full runs use five API and two rest partitions.
+Each rest worker runs one contiguous source-listed partition of each slow
+package through `scripts/release_control/run_go_package_slice.py`. The worker
+verifies that the partitions rebuild the original test list in order.
 `run_go_rest_shard.py` schedules both slices first and ordinary packages in the
 same measured order on one four-slot queue. A completed slice releases its slot
 to the ordinary package tail, rather than reserving two idle slots. Each ordinary
@@ -9604,8 +9608,8 @@ the shared hosted runners. Pull requests to `main` partition the full stable
 browser inventory across four runners so fewer jobs repeat browser setup.
 Playwright uses the expanded matrix size as its shard count. Branch pushes,
 release PRs and manual runs use eight browser partitions. Non-PR runs also
-exercise the probation tier. Full-suite PRs can run all five API shards
-concurrently.
+exercise the probation tier. The five slots in the API matrix can run
+concurrently on full-suite PRs, including the rest-2 worker on PRs to main.
 
 The API aggregate also requires successful classification and every expanded
 shard. It reports runtime success only for code=true; code=false explicitly
