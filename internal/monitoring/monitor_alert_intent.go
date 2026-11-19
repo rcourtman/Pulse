@@ -241,7 +241,13 @@ func (m *Monitor) resolveBackupIntentContext(_ string, instance, node string, vm
 			continue
 		}
 		status := strings.ToLower(strings.TrimSpace(task.Status))
-		if !task.EndTime.IsZero() || status == "ok" || status == "stopped" || status == "error" || status == "warning" {
+		// An ended parent may have left an unknown guest result without
+		// a guest end time. Missing timing is not evidence of a writer.
+		switch status {
+		case "ok", "stopped", "error", "warning", "unknown":
+			continue
+		}
+		if !task.EndTime.IsZero() {
 			continue
 		}
 		return alerts.BackupIntentContext{

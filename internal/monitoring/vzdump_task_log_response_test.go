@@ -149,7 +149,11 @@ func TestVzdumpTaskLogMalformedReadRetainsAcceptedEvidence(t *testing.T) {
 						assertVzdumpGuestResults(t, guests, "unknown")
 						for _, guest := range guests {
 							require.Equal(t, observed, guest.ObservedAt)
-							require.False(t, guest.EndTime.IsZero())
+							if guest.VMID == 101 {
+								require.False(t, guest.EndTime.IsZero(), "measured finish remains visible")
+							} else {
+								require.True(t, guest.EndTime.IsZero(), "no guest end measured")
+							}
 						}
 					} else {
 						assertVzdumpGuestResults(t, guests, "OK")
