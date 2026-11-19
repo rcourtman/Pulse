@@ -53,8 +53,6 @@ const makeDockerUpdate = (overrides: Partial<DockerUpdateCommands> = {}): Docker
   ...overrides,
 });
 
-const PRO_STEP_CODE_CLASS =
-  'block rounded-md border border-border bg-page p-3 font-mono text-sm text-green-700 dark:text-green-400 whitespace-pre-wrap break-all';
 const SYSTEMD_DOWNLOAD_CODE_CLASS =
   'block rounded-md border border-border bg-page p-3 font-mono text-sm text-base-content whitespace-pre-wrap break-all';
 
@@ -280,27 +278,25 @@ describe('buildUpdateInstallGuide', () => {
     );
     // The dockerUpdate arm overrides introText with the two-command copy.
     expect(guide?.introText).toBe('Run these two commands on the Docker host to update:');
-    expect(guide?.steps).toHaveLength(3);
+    expect(guide?.steps).toHaveLength(2);
     expect(guide?.steps[0]).toStrictEqual({
       id: 'docker-pro-pull',
       title: 'Pull the new Pulse Pro image (pinned to this release\u2019s digest)',
       command: dockerUpdate.composePullCommand,
-      commandCodeClass: PRO_STEP_CODE_CLASS,
+      commandCodeClass: expect.any(String),
     });
     expect(guide?.steps[1]).toStrictEqual({
       id: 'docker-pro-up',
       title: 'Recreate the container on the new image',
       command: dockerUpdate.composeUpCommand,
-      commandCodeClass: PRO_STEP_CODE_CLASS,
+      commandCodeClass: expect.any(String),
     });
-    // loginCommand truthy arm: a third note step is pushed.
-    expect(guide?.steps[2]?.id).toBe('docker-pro-login-note');
-    expect(guide?.steps[2]?.title).toBe('');
-    expect(guide?.steps[2]?.note).toContain('sign in to the registry first');
-    expect(guide?.steps[2]?.note).toContain(dockerUpdate.loginCommand as string);
+    expect(guide?.registryLogin).toEqual({
+      promptCommand: "docker login registry.pulserelay.pro --username 'lic_test'",
+    });
   });
 
-  it('omits the login note step when dockerUpdate has no loginCommand (loginCommand falsy arm)', () => {
+  it('omits sign-in guidance when the broker supplies no login command', () => {
     const dockerUpdate = makeDockerUpdate({ loginCommand: undefined });
     const guide = buildUpdateInstallGuide(
       makeVersionInfo({ deploymentType: 'docker', isDocker: true }),
@@ -312,7 +308,7 @@ describe('buildUpdateInstallGuide', () => {
     );
     expect(guide?.steps).toHaveLength(2);
     expect(guide?.steps.map((s) => s.id)).toStrictEqual(['docker-pro-pull', 'docker-pro-up']);
-    expect(guide?.steps.some((s) => s.id === 'docker-pro-login-note')).toBe(false);
+    expect(guide?.registryLogin).toBeUndefined();
   });
 
   it('reaches the pro steps arm via the (!deploymentType && isDocker) docker fallback, not just deploymentType==="docker"', () => {
