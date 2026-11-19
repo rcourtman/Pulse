@@ -11,6 +11,7 @@ import {
   scrollToDocFragment,
   stripLeadingTitle,
 } from '@/features/docs/docMarkdown';
+import { isFeatureGuideAvailable } from '@/utils/featureReleases';
 
 const DOCS_INDEX_PATH = 'README';
 
@@ -71,7 +72,21 @@ export default function Docs() {
   let article: HTMLElement | undefined;
 
   const docPath = createMemo(() => normalizeDocPath(params.docPath ?? '') || DOCS_INDEX_PATH);
-  const [document, { refetch }] = createResource(docPath, fetchDoc);
+  // The guide of a feature this build does not show is not part of what it
+  // ships. Asked again when the answer changes, as it does for a feature in
+  // preview once the build has said what it is.
+  const request = createMemo(
+    () => ({ docPath: docPath(), available: isFeatureGuideAvailable(docPath()) }),
+    undefined,
+    {
+      equals: (a, b) => a.docPath === b.docPath && a.available === b.available,
+    },
+  );
+  const [document, { refetch }] = createResource(request, (asked) =>
+    asked.available
+      ? fetchDoc(asked.docPath)
+      : Promise.reject(new DocLoadError('missing', asked.docPath)),
+  );
 
   // Keep a failed guide's retry control mounted while that same read is in
   // flight, but never present its error as a different guide loads.

@@ -5,7 +5,7 @@ import { isAgentlessAvailabilityResource } from '@/features/standalone/standalon
 import { useLocation, useNavigate } from '@solidjs/router';
 import { INFRASTRUCTURE_MAP_PATH } from '@/routing/resourceLinks';
 import { getAvailabilityTargetAddLabel, isNetworkGearKind } from '@/utils/availabilityTargetKinds';
-import { isInfrastructureMapAvailable } from '@/utils/infrastructureMapRelease';
+import { isFeatureAvailable } from '@/utils/featureReleases';
 import Plus from 'lucide-solid/icons/plus';
 import RotateCw from 'lucide-solid/icons/rotate-cw';
 import Activity from 'lucide-solid/icons/activity';
@@ -106,6 +106,7 @@ export const AvailabilitySettingsPanel: Component = () => {
     if (
       current?.mode === 'add' &&
       current.prefill.from === 'map' &&
+      isFeatureAvailable('infrastructureMap') &&
       // Only while this page is still the one they are on: a save that lands
       // after they have gone elsewhere must not pull them back.
       location.pathname.replace(/\/+$/, '') === buildAvailabilitySettingsPath()
@@ -210,7 +211,7 @@ export const AvailabilitySettingsPanel: Component = () => {
     if (
       current?.mode === 'add' &&
       isNetworkGearKind(current.initialTargetKind) &&
-      isInfrastructureMapAvailable()
+      isFeatureAvailable('infrastructureMap')
     ) {
       return 'Pulse cannot see network gear by itself. A check gives it a live status and draws it on the map as the device it is.';
     }

@@ -389,7 +389,7 @@ describe('App architecture', () => {
       '<Route path={STANDALONE_PATH} component={StandalonePage} />',
       '<Route path={`${STANDALONE_PATH}/*`} component={StandalonePage} />',
       '<Route path={`${ROOT_PATROL_PATH}/*`} component={AIIntelligencePage} />',
-      '<Route path={INFRASTRUCTURE_MAP_PATH} component={InfrastructureMapPage} />',
+      '<Route path={INFRASTRUCTURE_MAP_PATH} component={InfrastructureMapRoute} />',
     ]) {
       expect(appSource).toContain(route);
     }

@@ -71,7 +71,7 @@ import {
 import type { Resource } from '@/types/resource';
 import type { SecurityStatusSettingsCapabilities } from '@/types/config';
 import { AppBootstrapStatus } from '@/components/AppBootstrapStatus';
-import { isInfrastructureMapAvailable } from '@/utils/infrastructureMapRelease';
+import { featureReleaseRoute } from '@/components/FeatureRelease';
 
 function isPublicRoutePath(pathname: string): boolean {
   // Public routes must be viewable without authentication.
@@ -111,6 +111,12 @@ const AIIntelligencePage = lazy(() =>
 );
 const InfrastructureMapPage = lazy(() => import('./pages/InfrastructureMap'));
 const NotFoundPage = lazy(() => import('./pages/NotFound'));
+// The map is not in every build yet: where it is off, its address is an unknown one.
+const InfrastructureMapRoute = featureReleaseRoute(
+  'infrastructureMap',
+  InfrastructureMapPage,
+  NotFoundPage,
+);
 const DocsPage = lazy(() => import('./pages/Docs'));
 const PricingHandoffPage = lazy(() => import('./pages/PricingHandoff'));
 const SetupCompletionPreviewPage = lazy(() =>
@@ -614,10 +620,8 @@ function App() {
       <Route path={STANDALONE_PATH} component={StandalonePage} />
       <Route path={`${STANDALONE_PATH}/*`} component={StandalonePage} />
 
-      {/* Held back from release builds until its completeness review is signed off. */}
-      {isInfrastructureMapAvailable() && (
-        <Route path={INFRASTRUCTURE_MAP_PATH} component={InfrastructureMapPage} />
-      )}
+      {/* Not in every build yet: utils/featureReleases says which builds show it. */}
+      <Route path={INFRASTRUCTURE_MAP_PATH} component={InfrastructureMapRoute} />
 
       <Route path="/alerts/*" component={AlertsRoute} />
       <Route path="/actions/*" component={ActionsPage} />

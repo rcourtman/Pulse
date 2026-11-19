@@ -1,0 +1,7 @@
+{
+  "infrastructureMap": {
+    "name": "Map",
+    "stage": "build",
+    "guides": ["MAP.md"]
+  }
+}

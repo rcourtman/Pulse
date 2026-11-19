@@ -19,6 +19,7 @@ import { Button, ButtonLink } from '@/components/shared/Button';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { FilterButtonGroup } from '@/components/shared/FilterButtonGroup';
 import { MetadataBadge } from '@/components/shared/MetadataBadge';
+import { FeaturePreviewTag } from '@/components/FeatureRelease';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { showPressedTooltip } from '@/components/shared/Tooltip';
@@ -348,7 +349,11 @@ export function InfrastructureMapSurface() {
     <div class="flex flex-col gap-3" data-testid="infrastructure-map">
       <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
         {/* AppLayout already titles the tab for this route with the brand name. */}
-        <PageHeader title="Map" updateDocumentTitle={false} />
+        <PageHeader
+          title="Map"
+          titleMeta={<FeaturePreviewTag feature="infrastructureMap" />}
+          updateDocumentTitle={false}
+        />
         <Show when={liveModel().attentionCount > 0}>
           <MetadataBadge tone="warning" size="sm" shape="pill">
             {liveModel().attentionCount.toLocaleString()} need attention
