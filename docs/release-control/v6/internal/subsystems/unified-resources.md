@@ -4420,6 +4420,24 @@ What the diagram does with them:
   `network-endpoint` to `buildAvailabilityCheckPath`, the Availability checks
   table with that row's detail open, so the map, an alert and any other link
   to a check land on the check and not on the list it is in.
+- The map is held back from release builds until its completeness review is
+  signed off (19 November 2026). Richard: "before this reaches users, we need
+  to be absolutely certain that it is done in a way which is complete." It was
+  built in two days and has had no beta. `isInfrastructureMapAvailable`
+  (`frontend-modern/src/utils/infrastructureMapRelease.ts`) is true in a
+  development build and false in a release build while
+  `INFRASTRUCTURE_MAP_RELEASED` is false. Where it is false the `/map` route
+  is not registered, the header has no map button, the availability form
+  makes no offer about how the map draws a check, and the shipped guides do
+  not link or mention the map: the docs index and the availability and API
+  references say nothing of it, and `docs/MAP.md` stays unlinked. The check
+  types themselves are released; they are types whether or not a map draws
+  them. Releasing the map is one deliberate change: set the constant to
+  `true` in a commit that says the review passed, restore the guide links,
+  and let it reach a beta before any candidate. The review covers every
+  theme, real browsers and a phone, real estates of different shapes, empty
+  and error states, accessibility, a large estate, an end-to-end spec and
+  guides that match what ships.
 - How a thing gets onto the map is not something the map can show, so the
   page says it in one line beside the legend, "Apps are recognised by name,
   checks are drawn by their type", and links the shipped guide `docs/MAP.md`

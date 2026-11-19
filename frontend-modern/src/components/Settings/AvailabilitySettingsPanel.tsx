@@ -5,6 +5,7 @@ import { isAgentlessAvailabilityResource } from '@/features/standalone/standalon
 import { useLocation, useNavigate } from '@solidjs/router';
 import { INFRASTRUCTURE_MAP_PATH } from '@/routing/resourceLinks';
 import { getAvailabilityTargetAddLabel, isNetworkGearKind } from '@/utils/availabilityTargetKinds';
+import { isInfrastructureMapAvailable } from '@/utils/infrastructureMapRelease';
 import Plus from 'lucide-solid/icons/plus';
 import RotateCw from 'lucide-solid/icons/rotate-cw';
 import Activity from 'lucide-solid/icons/activity';
@@ -206,7 +207,11 @@ export const AvailabilitySettingsPanel: Component = () => {
     if (current?.mode === 'add' && current.initialTargetKind === 'machine') {
       return 'Use reachability checks for servers, desktops, laptops, and other computers that do not run Pulse Agent.';
     }
-    if (current?.mode === 'add' && isNetworkGearKind(current.initialTargetKind)) {
+    if (
+      current?.mode === 'add' &&
+      isNetworkGearKind(current.initialTargetKind) &&
+      isInfrastructureMapAvailable()
+    ) {
       return 'Pulse cannot see network gear by itself. A check gives it a live status and draws it on the map as the device it is.';
     }
     return 'Use ICMP ping, TCP port, or HTTP checks for devices and services that cannot run Pulse Agent.';

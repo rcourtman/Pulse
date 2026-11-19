@@ -29,6 +29,7 @@ import {
   type AvailabilityTargetPresetID,
 } from '../availabilityTargetPresets';
 import { useResources } from '@/hooks/useResources';
+import { isInfrastructureMapAvailable } from '@/utils/infrastructureMapRelease';
 import {
   AVAILABILITY_TARGET_KINDS,
   getAvailabilityTargetAddLabel,
@@ -466,6 +467,8 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
   // reads, so a name must not change it behind their back. Nothing is offered
   // once the type says what the thing is.
   const suggestedKind = createMemo(() => {
+    // The offer is about how the map draws the check, so it waits for the map.
+    if (!isInfrastructureMapAvailable()) return undefined;
     const current = form().targetKind;
     if (current !== 'service' && current !== 'device') return undefined;
     return getAvailabilityTargetKindInfo(
