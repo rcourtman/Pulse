@@ -232,6 +232,59 @@ func TestFromPVEBackupTasksWarningExitStatus(t *testing.T) {
 	}
 }
 
+func TestFromPVEBackupTasksWithEvidenceUsesGuestObservationForRunning(t *testing.T) {
+	ingested := time.Date(2026, 11, 19, 12, 0, 0, 0, time.UTC)
+	started := ingested.Add(-time.Hour)
+	task := models.BackupTask{
+		ID: "job-vm103", Instance: "site", Node: "pve1", VMID: 103,
+		Status: "running", StartTime: started,
+	}
+	for _, tt := range []struct {
+		name      string
+		status    string
+		started   time.Time
+		completed time.Time
+		observed  time.Time
+		expires   time.Time
+	}{
+		{name: "carried", observed: ingested.Add(-6 * time.Minute), expires: ingested.Add(-time.Minute)},
+		{name: "fresh reread", observed: ingested, expires: ingested.Add(5 * time.Minute)},
+		{name: "future provider start", started: ingested.Add(10 * time.Minute), observed: ingested, expires: ingested.Add(10 * time.Minute)},
+		{name: "legacy without observation"},
+		{name: "terminal failure", status: "error", completed: ingested.Add(-time.Minute), observed: ingested.Add(-6 * time.Minute)},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			row := task
+			row.ObservedAt = tt.observed
+			row.EndTime = tt.completed
+			if tt.status != "" {
+				row.Status = tt.status
+			}
+			if !tt.started.IsZero() {
+				row.StartTime = tt.started
+			}
+			points, err := FromPVEBackupTasksWithEvidence([]models.BackupTask{row}, nil, ingested)
+			if err != nil || len(points) != 1 || points[0].Evidence == nil {
+				t.Fatalf("expected an evidenced point: %v, %v", points, err)
+			}
+			evidence := points[0].Evidence
+			if err := evidence.Validate(); err != nil {
+				t.Fatal(err)
+			}
+			if !evidence.IngestedAt.Equal(ingested) {
+				t.Fatalf("ingestion time changed: got %s, want %s", evidence.IngestedAt, ingested)
+			}
+			if tt.expires.IsZero() {
+				if evidence.ValidUntil != nil {
+					t.Fatalf("unexpected expiry: %s", evidence.ValidUntil)
+				}
+			} else if evidence.ValidUntil == nil || !evidence.ValidUntil.Equal(tt.expires) {
+				t.Fatalf("expiry = %v, want %s", evidence.ValidUntil, tt.expires)
+			}
+		})
+	}
+}
+
 func TestFromPVEBackupTasks_Empty(t *testing.T) {
 	result := FromPVEBackupTasks(nil, nil)
 	if result != nil {

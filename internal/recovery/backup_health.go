@@ -9,6 +9,10 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery/model"
 )
 
+// BackupTaskRunningMaxAge is how long a PVE task reading supports Running
+// in a backup health rollup. Retaining the row does not renew that evidence.
+const BackupTaskRunningMaxAge = 5 * time.Minute
+
 // BuildBackupHealth summarizes execution evidence for an authoritative current
 // workload roster. It never promotes restore artifacts into execution outcomes,
 // guesses across ambiguous source identities, or treats absence as success.
@@ -142,7 +146,7 @@ func BuildBackupHealth(workloads []model.BackupHealthWorkload, points []Recovery
 			// An unresolved task from an old poll is not evidence that it is
 			// still running at the report cutoff.
 			outcome = OutcomeUnknown
-			if point.Outcome == OutcomeRunning && point.Evidence != nil && !point.Evidence.IngestedAt.Before(to.Add(-5*time.Minute)) {
+			if backupTaskRunningAt(point, to) {
 				outcome = OutcomeRunning
 			}
 			if at.Before(from) {
@@ -211,6 +215,18 @@ func recoveryDetailInt(point RecoveryPoint, key string) int {
 		return int(value)
 	}
 	return 0
+}
+
+func backupTaskRunningAt(point RecoveryPoint, cutoff time.Time) bool {
+	if point.Outcome != OutcomeRunning || point.Evidence == nil {
+		return false
+	}
+	if validUntil := point.Evidence.ValidUntil; validUntil != nil {
+		return !cutoff.After(*validUntil)
+	}
+	// Older task rows (and callers without an observation clock) have no
+	// explicit expiry. Preserve their existing ingestion-time cutoff.
+	return !point.Evidence.IngestedAt.Before(cutoff.Add(-BackupTaskRunningMaxAge))
 }
 
 func backupHistoryState(coverage model.BackupHistoryCoverage, instance string, from, to time.Time) (string, string) {

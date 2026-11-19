@@ -15,6 +15,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 	recoverymanager "github.com/rcourtman/pulse-go-rewrite/internal/recovery/manager"
+	"github.com/rcourtman/pulse-go-rewrite/internal/recovery/model"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -150,15 +151,28 @@ func TestVzdumpTaskLogShorterReadRetainsAcceptedEvidence(t *testing.T) {
 	require.Equal(t, "running", accepted[103].Status)
 	checkHistory(false, recovery.OutcomeRunning)
 
-	running := poll(1)
-	assert.Equal(t, accepted, running, "shorter prefix must not erase rows or renew their observations")
 	observed := accepted[103].ObservedAt
-	intent, active := m.resolveBackupIntentContext("", f.job.Instance, f.job.Node, 103, observed.Add(backupIntentEvidenceMaxAge))
-	assert.True(t, active, "the original observed writer remains visible until the ordinary age limit")
-	assert.Equal(t, observed, intent.ObservedAt)
-	_, active = m.resolveBackupIntentContext("", f.job.Instance, f.job.Node, 103, observed.Add(backupIntentEvidenceMaxAge+time.Nanosecond))
-	assert.False(t, active, "a shorter read must not extend intent")
-	checkHistory(false, recovery.OutcomeRunning)
+	cutoff := observed.Add(5 * time.Minute)
+	workload := []model.BackupHealthWorkload{{ID: "fixture-writer", Instance: f.job.Instance, VMID: 103}}
+	for i := 0; i < 2; i++ {
+		running := poll(1)
+		assert.Equal(t, accepted, running, "shorter prefix must not erase rows or renew their observations")
+		checkHistory(false, recovery.OutcomeRunning)
+
+		points, _, err := store.ListPoints(ctx, recovery.ListPointsOptions{Kind: recovery.KindOther})
+		require.NoError(t, err)
+		at := recovery.BuildBackupHealth(workload, points, model.BackupHistoryCoverage{}, f.job.StartTime, cutoff, time.UTC)
+		assert.Equal(t, 1, at.Counts.Running, "the original observation still counts at the cutoff")
+		expired := recovery.BuildBackupHealth(workload, points, model.BackupHistoryCoverage{}, f.job.StartTime, cutoff.Add(time.Nanosecond), time.UTC)
+		assert.Equal(t, model.BackupOutcomeCounts{Unknown: 1}, expired.Counts, "re-ingesting a carried guest must not renew Running")
+		assert.Equal(t, expired.Counts, expired.Days[0].Counts)
+
+		intent, active := m.resolveBackupIntentContext("", f.job.Instance, f.job.Node, 103, cutoff)
+		assert.True(t, active, "the original observed writer remains visible until the ordinary age limit")
+		assert.Equal(t, observed, intent.ObservedAt)
+		_, active = m.resolveBackupIntentContext("", f.job.Instance, f.job.Node, 103, cutoff.Add(time.Nanosecond))
+		assert.False(t, active, "a shorter read must not extend intent")
+	}
 
 	ended := poll(2)
 	assert.Len(t, ended, 3)
@@ -169,7 +183,7 @@ func TestVzdumpTaskLogShorterReadRetainsAcceptedEvidence(t *testing.T) {
 	assert.True(t, ended[102].EndTime.IsZero(), "a failure line without timing cannot borrow the parent end")
 	assert.True(t, ended[103].EndTime.IsZero(), "an unknown guest result can't borrow the parent end")
 	assert.Equal(t, observed, ended[103].ObservedAt)
-	_, active = m.resolveBackupIntentContext("", f.job.Instance, f.job.Node, 103, observed.Add(time.Second))
+	_, active := m.resolveBackupIntentContext("", f.job.Instance, f.job.Node, 103, observed.Add(time.Second))
 	assert.False(t, active, "ended parent withdraws running intent even without a new guest result")
 	checkHistory(false, recovery.OutcomeUnknown)
 
@@ -185,7 +199,7 @@ func TestVzdumpTaskLogShorterReadRetainsAcceptedEvidence(t *testing.T) {
 	cached := poll(4)
 	assert.Equal(t, recovered[103].ID, cached[103].ID)
 	assert.Equal(t, "OK", cached[103].Status)
-	assert.EqualValues(t, 4, f.reads.Load(), "only the full terminal log finalizes; the next poll uses its cache")
+	assert.EqualValues(t, 5, f.reads.Load(), "only the full terminal log finalizes; the next poll uses its cache")
 }
 
 func TestVzdumpTaskLogShortPrefixIsUsableWithoutPreviousObservation(t *testing.T) {
