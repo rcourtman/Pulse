@@ -26,7 +26,7 @@ let completion: ReturnType<typeof deferred<Response>>;
 let savedName: string;
 let readGate: ReturnType<typeof deferred<void>> | undefined;
 let failRead: boolean;
-let detailResponse: ((id: string) => Response) | undefined;
+let detailResponse: ((id: string) => Response | Promise<Response>) | undefined;
 let memberResponse: (() => Response | Promise<Response>) | undefined;
 const requests: { url: string; method: string; options: RequestInit }[] = [];
 const writes = () => requests.filter((request) => request.method === 'PUT');
@@ -113,6 +113,8 @@ const rename = async () => {
   return view;
 };
 const settleFocus = () => new Promise((resolve) => window.setTimeout(resolve, 15));
+const results = () => screen.getByRole('group', { name: 'Saved organization details' });
+const restartButton = () => screen.getByRole('button', { name: 'Restart details check' });
 
 describe('Organization Overview selected membership snapshot', () => {
   it('shows the saved name, member count and roles from one authorized detail request', async () => {
@@ -278,7 +280,7 @@ describe('Organization Overview native submission and keyboard continuation', ()
       reload.focus();
       fireEvent.click(reload);
       expect(inventory).toHaveFocus();
-      expect(inventory).toHaveAttribute('aria-busy', 'true');
+      expect(results()).toHaveAttribute('aria-busy', 'true');
       expect(inventory).toHaveAttribute('tabindex', '-1');
       expect(reload.isConnected).toBe(false);
       expect(reads()).toHaveLength(2);
@@ -291,7 +293,7 @@ describe('Organization Overview native submission and keyboard continuation', ()
           ),
         );
         expect(inventory).toHaveFocus();
-        expect(inventory).toHaveAttribute('aria-busy', 'false');
+        expect(results()).toHaveAttribute('aria-busy', 'false');
         failRead = false;
         // Simulate Safari's pointer activation, which need not focus a button.
         document.body.focus();
@@ -301,7 +303,7 @@ describe('Organization Overview native submission and keyboard continuation', ()
       await settleFocus();
       expect(inventory).toHaveFocus();
       expect(screen.getByRole('region', { name: 'Organization details' })).toBe(inventory);
-      expect(inventory).toHaveAttribute('aria-busy', 'false');
+      expect(results()).toHaveAttribute('aria-busy', 'false');
       expect(input).toHaveValue(savedName);
       expect(writes()).toHaveLength(1);
       expect(reads()).toHaveLength(failedRecovery ? 3 : 2);
@@ -360,14 +362,13 @@ describe('Organization Overview native submission and keyboard continuation', ()
       failRead = failedRead;
       readGate = deferred<void>();
       render(() => <OrganizationOverviewPanel currentUser={owner} />);
-      const inventory = screen.getByRole('region', { name: 'Organization details' });
-      expect(inventory).toHaveAttribute('aria-busy', 'true');
+      expect(results()).toHaveAttribute('aria-busy', 'true');
       expect(document.activeElement).toBe(document.body);
       readGate.resolve();
       if (failedRead) await screen.findByRole('alert');
       else await screen.findByRole('textbox', { name: 'Display Name' });
       await settleFocus();
-      expect(inventory).toHaveAttribute('aria-busy', 'false');
+      expect(results()).toHaveAttribute('aria-busy', 'false');
       expect(document.activeElement).toBe(document.body);
       expect(writes()).toHaveLength(0);
     },
@@ -392,7 +393,7 @@ describe('Organization Overview native submission and keyboard continuation', ()
       if (failedRead) await screen.findByRole('alert');
       else await screen.findByRole('textbox', { name: 'Display Name' });
       await settleFocus();
-      expect(inventory).toHaveAttribute('aria-busy', 'false');
+      expect(results()).toHaveAttribute('aria-busy', 'false');
       expect(document.activeElement).toBe(document.body);
       expect(writes()).toHaveLength(1);
     },
@@ -459,8 +460,147 @@ describe('Organization Overview native submission and keyboard continuation', ()
     const inventory = screen.getByRole('region', { name: 'Organization details' });
     await settleFocus();
     expect(inventory).toHaveFocus();
-    expect(inventory).toHaveAttribute('aria-busy', 'false');
+    expect(results()).toHaveAttribute('aria-busy', 'false');
     expect(screen.getByText('Operations East', { exact: true })).toBeInTheDocument();
+    expect(writes()).toHaveLength(0);
+  });
+});
+
+describe('Organization Overview stalled read recovery', () => {
+  it.each(['details', 'members'])(
+    'replaces a stalled %s read without exposing incomplete or obsolete data',
+    async (stage) => {
+      const abandoned = deferred<Response>();
+      const replacement = deferred<Response>();
+      const secondRead = stage === 'members';
+      detailResponse = secondRead
+        ? (id) => response({ ...organization(id), members: undefined })
+        : () => abandoned.promise;
+      if (secondRead) memberResponse = () => abandoned.promise;
+      render(() => <OrganizationOverviewPanel currentUser={owner} />);
+
+      const pending = secondRead ? memberReads : reads;
+      await waitFor(() => expect(pending()).toHaveLength(1));
+      const oldSignal = pending()[0]?.options.signal;
+      expect(oldSignal).toBe(reads()[0]?.options.signal);
+      expect(oldSignal?.aborted).toBe(false);
+      const restart = restartButton();
+      expect(restart).toHaveAccessibleDescription(
+        'Checking saved details for operations/east. Restarting does not repeat a name change.',
+      );
+      expect(results()).not.toContainElement(restart);
+      expect(screen.queryByRole('table')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('Display Name')).not.toBeInTheDocument();
+
+      if (secondRead) {
+        detailResponse = (id) =>
+          response({ ...organization(id), displayName: 'Current East', members: undefined });
+        memberResponse = () => replacement.promise;
+      } else detailResponse = () => replacement.promise;
+      fireEvent.click(restart);
+      expect(restart).toHaveFocus();
+      expect(oldSignal?.aborted).toBe(true);
+      await waitFor(() => expect(pending()).toHaveLength(2));
+      const current = pending()[1]!;
+      expect(current.options.signal).toBe(reads()[1]?.options.signal);
+      expect(current.options.signal).not.toBe(oldSignal);
+      expect(current.options.signal?.aborted).toBe(false);
+      expect(new Headers(current.options.headers).get('X-Pulse-Org-ID')).toBe(orgID);
+      abandoned.resolve(response(secondRead ? organization().members : organization()));
+      await settleFocus();
+      expect(results()).toHaveAttribute('aria-busy', 'true');
+      expect(screen.queryByLabelText('Display Name')).not.toBeInTheDocument();
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+
+      const members = organization().members.slice(0, 1);
+      replacement.resolve(
+        response(
+          secondRead ? members : { ...organization(), displayName: 'Current East', members },
+        ),
+      );
+      const name = await screen.findByRole('textbox', { name: 'Display Name' });
+      expect(name).toHaveValue('Current East');
+      await waitFor(() => expect(name).toHaveFocus());
+      expect(screen.getByText('Members', { exact: true }).nextElementSibling).toHaveTextContent(
+        /^1$/,
+      );
+      expect(screen.queryByText('operations/east-viewer')).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: 'Restart details check' }),
+      ).not.toBeInTheDocument();
+      expect(reads()).toHaveLength(2);
+      expect(memberReads()).toHaveLength(secondRead ? 2 : 0);
+      expect(writes()).toHaveLength(0);
+    },
+  );
+
+  it('restarts an unconfirmed name change readback, not the rename', async () => {
+    await rename();
+    completion.resolve(response({}, 503));
+    expect(await screen.findByRole('alert')).toHaveTextContent('could not be confirmed');
+    const stalled = deferred<void>();
+    readGate = stalled;
+    fireEvent.click(screen.getByRole('button', { name: 'Reload organization' }));
+    const oldSignal = reads()[1]?.options.signal;
+    readGate = undefined;
+    failRead = true;
+    fireEvent.click(restartButton());
+    expect(oldSignal?.aborted).toBe(true);
+    const warning = await screen.findByRole('alert');
+    expect(warning).toHaveTextContent('Unable to load organization details.');
+    await waitFor(() => expect(warning).toHaveFocus());
+    failRead = false;
+    stalled.resolve();
+    await settleFocus();
+    expect(warning).toHaveFocus();
+    expect(screen.queryByLabelText('Display Name')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reload organization' }));
+    expect(await screen.findByLabelText('Display Name')).toHaveValue('Operations East');
+    expect(reads()).toHaveLength(4);
+    expect(writes()).toHaveLength(1);
+  });
+
+  it('does not accept a click from the old workspace before the switch notification', async () => {
+    const stalled = deferred<void>();
+    readGate = stalled;
+    render(() => <OrganizationOverviewPanel currentUser={owner} />);
+    const old = restartButton();
+    const oldSignal = reads()[0]?.options.signal;
+    setOrgID('operations/west');
+    fireEvent.click(old);
+    expect(reads()).toHaveLength(1);
+    expect(oldSignal?.aborted).toBe(false);
+    expect(old).not.toHaveFocus();
+    eventBus.emit('org_switched');
+    expect(oldSignal?.aborted).toBe(true);
+    expect(
+      await screen.findByRole('button', { name: 'Restart details check' }),
+    ).toHaveAccessibleDescription(/operations\/west/);
+    stalled.resolve();
+    expect(await screen.findByLabelText('Display Name')).toHaveValue('Operations West');
+    expect(requests.filter(({ url }) => url === '/api/orgs/operations%2Fwest')).toHaveLength(1);
+    expect(writes()).toHaveLength(0);
+  });
+
+  it('keeps deliberate outside focus even after a restarted check completes', async () => {
+    const stalled = deferred<void>();
+    readGate = stalled;
+    render(() => (
+      <>
+        <button type="button">Outside overview</button>
+        <OrganizationOverviewPanel currentUser={owner} />
+      </>
+    ));
+    fireEvent.click(restartButton());
+    const outside = screen.getByRole('button', { name: 'Outside overview' });
+    outside.focus();
+    outside.blur();
+    stalled.resolve();
+    expect(await screen.findByLabelText('Display Name')).toHaveValue('Operations East');
+    await settleFocus();
+    expect(document.activeElement).toBe(document.body);
+    expect(reads()).toHaveLength(2);
     expect(writes()).toHaveLength(0);
   });
 });

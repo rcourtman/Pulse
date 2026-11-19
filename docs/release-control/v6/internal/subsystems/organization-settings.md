@@ -420,11 +420,14 @@ When a focused Overview control is removed by a saved read or uncertain
 completion, focus continues to the named inline warning or the refreshed name
 input (the existing saved-name summary for a nonmanager). An explicit Reload
 instead focuses the stable, named Organization details region before its button
-is replaced. The region reports loading with `aria-busy`, stays out of the Tab
-order and retains focus through either saved details or another read failure.
-Tab then reaches the returned name input or Reload action. Pointer activation
-does not have to focus the button first. Leaving the region retires manual
-continuation: a late result never schedules a focus jump, even if the outside
+is replaced. The region stays out of the Tab order and retains focus through
+either saved details or another read failure. While reading, only the saved
+results group is `aria-busy`; Tab can reach **Restart details check** outside
+that group. After the result arrives, Tab reaches the returned name input or
+Reload action. Focus on the restart control continues to the current warning,
+editable name or saved-name summary when the control disappears. Pointer
+activation does not have to focus the button first. Leaving the region retires
+manual continuation: a late result never schedules a focus jump, even if the outside
 control subsequently blurs. Initial/background failures do not take focus from
 elsewhere. A principal, organization, surface, capability or read-only round trip
 retires
@@ -757,7 +760,12 @@ server omits an empty array), Overview requests the dedicated member list with
 the same org binding and cancellation signal before showing the panel. A
 malformed field or row is not an omitted list. A required read that fails is an
 inline unavailable state, never an empty member list, and offers an explicit
-read-only reload. The server routes and their authorization are unchanged.
+read-only reload. If either read stalls, **Restart details check** names the
+selected organization and replaces the entire current read with fresh GETs
+under the same scope. The prior request is canceled; a late success or failure
+cannot finish the replacement or show stale details. A switch, hidden surface
+or pending name change cannot be turned into a restart by clicking an old
+control. The server routes and their authorization are unchanged.
 
 Renaming requires the current accepted snapshot, owner/admin authority and a
 non-read-only session. Dispatch binds the exact organization even across a CSRF
@@ -769,8 +777,10 @@ organization-change bus and refresh the saved snapshot. Normal-suite Overview,
 OrganizationReadLifetimes and organization-client tests cover those boundaries.
 `OrganizationOverviewKeyboard.transport.test.tsx` also covers the single
 authorized request, malformed member rows, distinguishing omitted/unread from
-verified empty, and rejecting a fallback completion after a workspace switch;
-desktop/narrow browser proof exercises the actual panels and API client with
+verified empty, and rejecting a fallback completion after a workspace switch.
+It also exercises restarting either read, obsolete completions and controls,
+and readback after an unconfirmed rename without sending another write.
+Desktop/narrow browser proof exercises the actual panels and API client with
 safe HTTP fixtures, not an installed tenant or SSO recovery claim.
 
 

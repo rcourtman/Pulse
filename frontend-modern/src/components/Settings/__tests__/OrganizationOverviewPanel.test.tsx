@@ -209,6 +209,35 @@ describe('OrganizationOverviewPanel', () => {
     expect(listMembersMock).toHaveBeenCalledWith('org-a', options);
   });
 
+  it('lets a viewer restart the check without granting edit access or reviving a late error', async () => {
+    const previous = deferred<typeof baseOrg>();
+    orgGetMock.mockReturnValueOnce(previous.promise);
+    orgGetMock.mockResolvedValueOnce({ ...baseOrg, members: baseMembers });
+    render(() => <OrganizationOverviewPanel currentUser="user-2" />);
+
+    const restart = screen.getByRole('button', { name: 'Restart details check' });
+    restart.focus();
+    fireEvent.click(restart);
+    expect(orgGetMock.mock.calls[0][1].signal.aborted).toBe(true);
+    expect(orgGetMock).toHaveBeenNthCalledWith(2, 'org-a', {
+      expectedOrgID: 'org-a',
+      signal: expect.any(AbortSignal),
+      retry: false,
+    });
+    const name = await screen.findByText(baseOrg.displayName, { exact: true });
+    await waitFor(() => expect(name).toHaveFocus());
+    previous.reject(new Error('Obsolete request failed'));
+    await previous.promise.catch(() => undefined);
+
+    expect(name).toHaveFocus();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Display Name')).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    expect(listMembersMock).not.toHaveBeenCalled();
+    expect(updateOrgMock).not.toHaveBeenCalled();
+    expect(loggerErrorMock).not.toHaveBeenCalled();
+  });
+
   it.each([
     { raw: undefined, scope: 'default' },
     { raw: null, scope: 'default' },

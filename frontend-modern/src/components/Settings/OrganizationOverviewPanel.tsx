@@ -25,6 +25,7 @@ export const OrganizationOverviewPanel: Component<OrganizationOverviewPanelProps
   const showOrganizationSurface = () =>
     isMultiTenantEnabled() && !presentationPolicyHidesOrganizationSurfaces();
   const warningTitleID = createUniqueId();
+  const checkingID = createUniqueId();
   let panel: HTMLDivElement | undefined;
   let warning: HTMLDivElement | undefined;
   let lastFocused: { element: HTMLElement; orgID: string; user: string | undefined } | undefined;
@@ -98,7 +99,6 @@ export const OrganizationOverviewPanel: Component<OrganizationOverviewPanelProps
         ref={panel}
         role="region"
         aria-label="Organization details"
-        aria-busy={state.loading()}
         tabIndex={-1}
         class="space-y-6 focus:outline-2 focus:-outline-offset-2 focus:outline-blue-500"
         onFocusIn={(event) => {
@@ -119,38 +119,66 @@ export const OrganizationOverviewPanel: Component<OrganizationOverviewPanelProps
           }
         }}
       >
-        <SettingsPanel title="Organization Overview" noPadding bodyClass="divide-y divide-border">
-          <Show when={!state.loading()} fallback={<OrganizationOverviewLoadingState />}>
-            <Show when={state.loadError()}>
-              <div class="p-4 sm:p-6">
-                <Card tone="warning" padding="md">
-                  <div
-                    ref={warning}
-                    role="alert"
-                    aria-labelledby={warningTitleID}
-                    tabIndex={-1}
-                    class="space-y-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                  >
-                    <p id={warningTitleID} class="font-semibold">
-                      Organization details unavailable
-                    </p>
-                    <p>{state.loadError()}</p>
-                    <p class="break-words">
-                      Reload checks saved details for {state.selectedOrgID()}. It does not repeat a
-                      name change.
-                    </p>
-                    <Button onClick={reloadOrganization} class="w-full sm:w-auto">
-                      Reload organization
-                    </Button>
-                  </div>
-                </Card>
-              </div>
-            </Show>
-            <Show when={!state.loadError() && state.org()}>
-              <OrganizationOverviewDetailsSection state={state} />
-              <OrganizationOverviewMembersSection state={state} />
-            </Show>
+        <SettingsPanel title="Organization Overview" noPadding>
+          <Show when={state.loading()}>
+            <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 pt-4 sm:px-6 sm:pt-6">
+              <p id={checkingID} class="min-w-0 max-w-full text-sm text-muted">
+                Checking saved details for{' '}
+                <bdi class="font-medium text-base-content [overflow-wrap:anywhere]">
+                  {`${state.selectedOrgID()}.`}
+                </bdi>{' '}
+                Restarting does not repeat a name change.
+              </p>
+              <Button
+                aria-describedby={checkingID}
+                onClick={(event) => {
+                  // Pointer activation in Safari may not focus the control itself.
+                  if (state.restartOrganizationRead()) event.currentTarget.focus();
+                }}
+                class="min-h-11 w-full sm:min-h-0 sm:w-auto"
+              >
+                Restart details check
+              </Button>
+            </div>
           </Show>
+          <div
+            role="group"
+            aria-label="Saved organization details"
+            aria-busy={state.loading()}
+            class="divide-y divide-border"
+          >
+            <Show when={!state.loading()} fallback={<OrganizationOverviewLoadingState />}>
+              <Show when={state.loadError()}>
+                <div class="p-4 sm:p-6">
+                  <Card tone="warning" padding="md">
+                    <div
+                      ref={warning}
+                      role="alert"
+                      aria-labelledby={warningTitleID}
+                      tabIndex={-1}
+                      class="space-y-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                    >
+                      <p id={warningTitleID} class="font-semibold">
+                        Organization details unavailable
+                      </p>
+                      <p>{state.loadError()}</p>
+                      <p class="break-words">
+                        Reload checks saved details for {state.selectedOrgID()}. It does not repeat
+                        a name change.
+                      </p>
+                      <Button onClick={reloadOrganization} class="w-full sm:w-auto">
+                        Reload organization
+                      </Button>
+                    </div>
+                  </Card>
+                </div>
+              </Show>
+              <Show when={!state.loadError() && state.org()}>
+                <OrganizationOverviewDetailsSection state={state} />
+                <OrganizationOverviewMembersSection state={state} />
+              </Show>
+            </Show>
+          </div>
         </SettingsPanel>
       </div>
     </Show>

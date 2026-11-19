@@ -193,7 +193,14 @@ export function useOrganizationOverviewPanelState(props: OrganizationOverviewPan
   };
 
   const reloadOrganization = () => {
-    if (!loading() && !saving()) void loadOrganization();
+    if (!loading() && !saving() && selectionIsCurrent()) void loadOrganization();
+  };
+  const restartOrganizationRead = () => {
+    // A click can arrive before the switch event replaces the old control.
+    // Only the current reader's pending GETs are replaceable, never a rename.
+    if (!loading() || !readController || !selectionIsCurrent() || saving()) return false;
+    void loadOrganization();
+    return true;
   };
   const unsubscribeOrg = eventBus.on('org_switched', () => void loadOrganization());
   const unsubscribeChanged = eventBus.on('organizations_changed', () => void loadOrganization());
@@ -215,6 +222,7 @@ export function useOrganizationOverviewPanelState(props: OrganizationOverviewPan
     loading,
     loadError,
     reloadOrganization,
+    restartOrganizationRead,
     selectedOrgID,
     members,
     org,

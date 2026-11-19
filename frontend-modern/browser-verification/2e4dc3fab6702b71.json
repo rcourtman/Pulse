@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "base_sha": "0b7bcfdfe59c67ed6eab17ae52ef3a708332d9f0",
+  "verified_at": "2026-11-19T13:05:09Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/OrganizationOverviewPanel.tsx",
+    "frontend-modern/src/components/Settings/useOrganizationOverviewPanelState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/OrganizationOverviewPanel.tsx": "50a44dd12ab04c0d5471ff9202bcec604bd3c2617d636f63e8d2e102ca652e67",
+    "frontend-modern/src/components/Settings/useOrganizationOverviewPanelState.ts": "ddba2fad2be8d4f876d07c0de3137171a53e2f866f8ef64dd989a1e8d23f1b07"
+  },
+  "routes": [
+    "/settings/organization"
+  ],
+  "viewports": [
+    {
+      "width": 1536,
+      "height": 960
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Production App before/after 97d6d3111c1a8522074136ebb07c090c3e4835e0 with the same synthetic workspace, date, anchor and theme. Desktop Chromium light and narrow WebKit dark; Playwright 1.56.1.",
+    "Both the saved-detail and member-list pending states now name the current workspace and offer Restart details check outside the busy results. The baseline has placeholders and no in-panel recovery. The phone action is 44 CSS px high.",
+    "A current failed membership read remains unavailable rather than showing zero or an editable name. The existing warning and Reload action keep their layout. Recovered organization identity, member count, display-name controls and membership rows remain visible at the same anchors.",
+    "Sixteen screenshots inspected in eight comparable pairs."
+  ],
+  "interactions": [
+    "Native Tab and Enter on desktop and touch on the narrow viewport replace each held same-workspace GET and cancel the old response. No page load, mutation or extra member request with an embedded list.",
+    "Focus stays on the restart control during the replacement, then moves to the current warning on failure. The existing Reload returns the verified name and roles. The consuming route passed 136 assertions across four journeys."
+  ]
+}
