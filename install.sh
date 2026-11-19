@@ -2826,13 +2826,35 @@ PY
     print_success "Registered ${register_node_name} with Pulse automatically"
 }
 
-# Compare two version strings
-# Returns: 0 if equal, 1 if first > second, 2 if first < second
+# Tag shape is enough for discovery, not for an automatic update decision.
+is_orderable_pulse_release_tag() {
+    local LC_ALL=C
+    local tag="${1:-}" part
+    local decimal='(0|[1-9][0-9]{0,18})'
+    [[ "${tag#v}" =~ ^${decimal}[.]${decimal}[.]${decimal}(-(beta|rc)[.]${decimal})?$ ]] || return 1
+
+    # Check all three core components and the optional preview revision
+    # before any arithmetic. The C-locale check on 19-digit strings avoids
+    # Bash's signed integer wraparound; the grammar rules out octal.
+    for part in "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}" "${BASH_REMATCH[3]}" "${BASH_REMATCH[6]:-}"; do
+        if [[ ${#part} -eq 19 && "$part" > 9223372036854775807 ]]; then
+            return 1
+        fi
+    done
+    return 0
+}
+
+# 0 = equal, 1 = first is newer, 2 = first is older, 3 = cannot order.
 compare_versions() {
-    local v1="${1#v}"  # Remove 'v' prefix
-    local v2="${2#v}"
-    
-    # Strip any pre-release suffix (e.g., -rc.1, -beta, etc.)
+    local LC_ALL=C
+    local v1="${1:-}" v2="${2:-}"
+    if ! is_orderable_pulse_release_tag "$v1" || ! is_orderable_pulse_release_tag "$v2"; then
+        return 3
+    fi
+    v1=${v1#v}
+    v2=${v2#v}
+
+    # Separate the core versions and any preview suffixes.
     local base_v1="${v1%%-*}"
     local base_v2="${v2%%-*}"
     local suffix_v1="${v1#*-}"
@@ -2843,13 +2865,15 @@ compare_versions() {
     [[ "$suffix_v2" == "$v2" ]] && suffix_v2=""
     
     # Split base versions into parts
-    IFS='.' read -ra V1_PARTS <<< "$base_v1"
-    IFS='.' read -ra V2_PARTS <<< "$base_v2"
+    local -a v1_parts v2_parts
+    IFS='.' read -ra v1_parts <<< "$base_v1"
+    IFS='.' read -ra v2_parts <<< "$base_v2"
     
     # Compare major.minor.patch
+    local i p1 p2
     for i in 0 1 2; do
-        local p1="${V1_PARTS[$i]:-0}"
-        local p2="${V2_PARTS[$i]:-0}"
+        p1="${v1_parts[$i]}"
+        p2="${v2_parts[$i]}"
         if [[ "$p1" -gt "$p2" ]]; then
             return 1
         elif [[ "$p1" -lt "$p2" ]]; then
@@ -2858,24 +2882,23 @@ compare_versions() {
     done
     
     # Base versions are equal, now compare suffixes
-    # No suffix (stable) > rc suffix
+    # Stable follows either preview stage.
     if [[ -z "$suffix_v1" ]] && [[ -n "$suffix_v2" ]]; then
-        return 1  # v1 (stable) > v2 (rc)
+        return 1
     elif [[ -n "$suffix_v1" ]] && [[ -z "$suffix_v2" ]]; then
-        return 2  # v1 (rc) < v2 (stable)
+        return 2
     elif [[ -n "$suffix_v1" ]] && [[ -n "$suffix_v2" ]]; then
-        # Published preview revisions are numeric: rc.10 follows rc.9, not
-        # vice versa. Keep the existing lexical fallback for other suffixes.
-        if [[ "$suffix_v1" =~ ^(beta|rc)[.][0-9]+$ && "$suffix_v2" =~ ^(beta|rc)[.][0-9]+$ && "${suffix_v1%.*}" == "${suffix_v2%.*}" ]]; then
+        # Published preview revisions are numeric: rc.10 follows rc.9.
+        if [[ "${suffix_v1%.*}" == "${suffix_v2%.*}" ]]; then
             local revision_v1="${suffix_v1##*.}" revision_v2="${suffix_v2##*.}"
-            if (( 10#$revision_v1 > 10#$revision_v2 )); then
+            if [[ "$revision_v1" -gt "$revision_v2" ]]; then
                 return 1
-            elif (( 10#$revision_v1 < 10#$revision_v2 )); then
+            elif [[ "$revision_v1" -lt "$revision_v2" ]]; then
                 return 2
             fi
             return 0
         fi
-        # Both have suffixes, compare them lexicographically
+        # For the same core version, rc follows beta regardless of revision.
         if [[ "$suffix_v1" > "$suffix_v2" ]]; then
             return 1
         elif [[ "$suffix_v1" < "$suffix_v2" ]]; then
@@ -3086,9 +3109,22 @@ check_existing_installation() {
         esac
     fi
 
-    # Try to get version if binary exists
+    # Automatic selection needs a successfully observed release identity.
+    # A failed reader can still print a version, and build metadata can
+    # contain version-shaped text unrelated to the installed executable.
     if [[ -n "$BINARY_PATH" ]]; then
-        CURRENT_VERSION=$("$BINARY_PATH" --version 2>/dev/null | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9\.]+)?' | head -1 || echo "unknown")
+        local version_output="" version_line="" reported_version=""
+        CURRENT_VERSION="unknown"
+        if version_output=$(timeout -k 1 5 "$BINARY_PATH" --version 2>/dev/null); then
+            version_line=${version_output%%$'\n'*}
+            case "$version_line" in
+                "Pulse Pro "*) reported_version=${version_line#Pulse Pro } ;;
+                "Pulse "*) reported_version=${version_line#Pulse } ;;
+            esac
+            if is_orderable_pulse_release_tag "$reported_version"; then
+                CURRENT_VERSION="$reported_version"
+            fi
+        fi
     fi
     
     if [[ "$service_running" == true ]]; then
@@ -3663,11 +3699,18 @@ resolve_target_release() {
     if [[ -n "${CURRENT_VERSION:-}" && "$CURRENT_VERSION" != "unknown" ]]; then
         local resolve_cmp=0
         compare_versions "$LATEST_RELEASE" "$CURRENT_VERSION" || resolve_cmp=$?
-        if [[ "$resolve_cmp" -eq 2 ]]; then
-            print_error "Resolved release $LATEST_RELEASE is older than the installed $CURRENT_VERSION; refusing to downgrade automatically"
-            print_info "To downgrade on purpose, run: bash install.sh --version $LATEST_RELEASE"
-            exit 1
-        fi
+        case "$resolve_cmp" in
+            0|1) ;;
+            2)
+                print_error "Resolved release $LATEST_RELEASE is older than the installed $CURRENT_VERSION; refusing to downgrade automatically"
+                print_info "To downgrade on purpose, run: bash install.sh --version $LATEST_RELEASE"
+                exit 1
+                ;;
+            *)
+                print_error "Cannot compare the installed Pulse version with the selected release; no automatic download was started. Verify the release tag or deliberately choose an exact version with --version."
+                exit 1
+                ;;
+        esac
     fi
 
     print_info "Latest version: $LATEST_RELEASE"
@@ -5839,20 +5882,27 @@ main() {
                 print_error "Cannot determine a published Pulse server release for the $requested_channel channel. Existing installation is unchanged; check connectivity and jq, or deliberately choose an exact version with --version."
                 return 1
             fi
-            if [[ -n "$CURRENT_VERSION" && "$CURRENT_VERSION" != unknown ]]; then
-                local automatic_compare=0
-                compare_versions "$automatic_release" "$CURRENT_VERSION" || automatic_compare=$?
-                case "$automatic_compare" in
-                    0)
-                        print_info "$CURRENT_VERSION is already the selected $requested_channel release. Existing installation is unchanged."
-                        return 0
-                        ;;
-                    2)
-                        print_error "Selected release $automatic_release is older than $CURRENT_VERSION; refusing to downgrade automatically. Existing installation is unchanged; use --version only for a deliberate rollback."
-                        return 1
-                        ;;
-                esac
+            if ! is_pulse_release_tag "$CURRENT_VERSION"; then
+                print_error "Cannot determine the installed Pulse version. Existing installation is unchanged; verify the installed binary or deliberately choose the intended exact --version for recovery."
+                return 1
             fi
+            local automatic_compare=0
+            compare_versions "$automatic_release" "$CURRENT_VERSION" || automatic_compare=$?
+            case "$automatic_compare" in
+                0)
+                    print_info "$CURRENT_VERSION is already the selected $requested_channel release. Existing installation is unchanged."
+                    return 0
+                    ;;
+                1) ;; # A known newer version may proceed.
+                2)
+                    print_error "Selected release $automatic_release is older than $CURRENT_VERSION; refusing to downgrade automatically. Existing installation is unchanged; use --version only for a deliberate rollback."
+                    return 1
+                    ;;
+                *)
+                    print_error "Cannot compare the installed Pulse version with the selected $requested_channel release. Existing installation is unchanged; verify the release tag or deliberately choose an exact version with --version."
+                    return 1
+                    ;;
+            esac
             if [[ -z "$choice" ]]; then
                 print_error "No update option matches the selected release. Existing installation is unchanged."
                 return 1

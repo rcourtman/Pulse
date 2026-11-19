@@ -15,6 +15,9 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 INSTALLER = Path(os.environ.get("PULSE_INSTALLER_UNDER_TEST", ROOT / "install.sh"))
+SIGNED_MAX = 2**63 - 1
+SIGNED_OVERFLOW = SIGNED_MAX + 1
+WORD_WRAP = 2**64
 
 
 def release(tag, *, draft=False, prerelease=False):
@@ -25,7 +28,6 @@ HARNESS = r'''
 source "$INSTALLER"
 FORCE_VERSION="$PIN"
 FORCE_CHANNEL="$CHANNEL"
-CURRENT_VERSION="$INSTALLED"
 IN_CONTAINER=true
 IN_DOCKER="$DOCKER"
 print_header() { :; }
@@ -35,10 +37,26 @@ print_error() { printf '%s\n' "$*" >&2; }
 check_root() { :; }
 detect_os() { :; }
 check_docker_environment() { :; }
-check_existing_installation() { return 0; }
 check_proxmox_host() { return 1; }
 create_lxc_container() { exit 96; }
-timeout() { shift; "$@"; }
+systemctl() {
+    [[ "$*" == 'show pulse --property=ActiveState --value' ]] || return 97
+    printf 'active\n'
+}
+timeout() {
+    if [[ "$1" == -k ]]; then
+        if [[ "$4" == "$INSTALL_DIR/bin/pulse" ]]; then
+            # Exercise the real deadline on our disposable --version reader.
+            command timeout "$@"
+            return
+        fi
+        [[ "$4" == systemctl ]] || return 97
+        shift 3
+    else
+        shift
+    fi
+    "$@"
+}
 curl() {
     local url="${@: -1}"
     printf '%s\n' "$url" >> "$FIXTURE/transport"
@@ -67,8 +85,10 @@ safe_read() {
 offer_existing_auto_updates() { echo CONSENT_PROMPT >> "$FIXTURE/mutations"; }
 detect_service_name() { echo pulse; }
 run_upgrade_readiness_preflight() { echo PREFLIGHT >> "$FIXTURE/mutations"; }
+preflight_systemd_service_installation() { echo UNIT_PREFLIGHT >> "$FIXTURE/mutations"; }
 backup_existing() { echo BACKUP >> "$FIXTURE/mutations"; }
 create_user() { echo USER >> "$FIXTURE/mutations"; }
+install_dependencies() { echo PACKAGES >> "$FIXTURE/mutations"; exit 96; }
 download_pulse() {
     printf 'DOWNLOAD=%s CHANNEL=%s\n' "${LATEST_RELEASE:-unpinned}" "${UPDATE_CHANNEL:-}" >> "$FIXTURE/mutations"
     exit 0
@@ -81,7 +101,8 @@ main
 class ServerUpdateMenuTest(unittest.TestCase):
     def exercise(self, releases, installed="v6.5.0", channel="stable", *,
                  choice="eof", docker=False, configured="stable", api_exit=0,
-                 redirect="", no_jq=False, pinned="", compact=False):
+                 redirect="", no_jq=False, pinned="", compact=False,
+                 version_exit=0, version_delay=0):
         payload = (releases if isinstance(releases, str) else
                    json.dumps(releases, indent=None if compact else 2))
         with tempfile.TemporaryDirectory() as temporary:
@@ -89,9 +110,23 @@ class ServerUpdateMenuTest(unittest.TestCase):
             config = fixture / "config"
             config.mkdir()
             (config / "system.json").write_text(json.dumps({"updateChannel": configured}))
+            install = fixture / "install"
+            (install / "bin").mkdir(parents=True)
+            if installed is not None:
+                binary = install / "bin" / "pulse"
+                binary.write_text(
+                    '#!/bin/sh\n'
+                    '[ "$#" = 1 ] && [ "$1" = --version ] || exit 97\n'
+                    'printf "Pulse %s\\nBuilt: fixture\\n" "$INSTALLED"\n'
+                    'if [ "$VERSION_DELAY" -ne 0 ]; then sleep "$VERSION_DELAY"; fi\n'
+                    'exit "$VERSION_EXIT"\n'
+                )
+                binary.chmod(0o755)
             env = {**os.environ, "INSTALLER": str(INSTALLER), "FIXTURE": str(fixture),
-                   "PULSE_CONFIG_DIR": str(config), "RELEASES_JSON": payload,
-                   "INSTALLED": installed, "CHANNEL": channel, "MENU_CHOICE": choice,
+                   "PULSE_CONFIG_DIR": str(config), "PULSE_INSTALL_DIR": str(install),
+                   "PULSE_SERVICE_NAME": "pulse", "RELEASES_JSON": payload,
+                   "INSTALLED": installed or "", "VERSION_EXIT": str(version_exit),
+                   "VERSION_DELAY": str(version_delay), "CHANNEL": channel, "MENU_CHOICE": choice,
                    "DOCKER": str(docker).lower(), "API_EXIT": str(api_exit),
                    "REDIRECT_TAG": redirect, "NO_JQ": str(no_jq).lower(), "PIN": pinned}
             result = subprocess.run(["bash", "-c", HARNESS], env=env,
@@ -149,7 +184,7 @@ class ServerUpdateMenuTest(unittest.TestCase):
 
     def test_preview_channel_can_follow_stable_without_losing_channel_intent(self):
         data = [release("v6.6.0"), release("v6.6.0-rc.1", prerelease=True)]
-        r, mutations, _ = self.exercise(data, channel="rc")
+        r, mutations, _ = self.exercise(data, installed="v6.6.0-rc.1", channel="rc")
         self.assert_download(r, mutations, "v6.6.0", "rc")
 
     def test_configured_channel_and_explicit_override_are_respected(self):
@@ -184,6 +219,113 @@ class ServerUpdateMenuTest(unittest.TestCase):
         r, mutations, _ = self.exercise(data, "v6.6.0-rc.1", choice="1")
         self.assert_download(r, mutations, "v6.5.0", "stable")
 
+    def test_unobserved_version_refuses_both_automatic_entry_paths(self):
+        data = [release("v6.6.0"), release("v6.7.0-rc.1", prerelease=True)]
+        for installed in (None, "", "dev", "v6.5.0-dev", "dev\nBuilt: v6.5.0"):
+            for channel, docker in (("stable", False), ("rc", True)):
+                with self.subTest(installed=installed, channel=channel, docker=docker):
+                    r, mutations, _ = self.exercise(data, installed, channel, docker=docker)
+                    self.assert_unchanged(r, mutations, refused=True)
+                    self.assertIn("Cannot determine the installed Pulse version", r.stderr)
+                    self.assertIn("Existing installation is unchanged", r.stderr)
+                    self.assertIn("--version", r.stderr)
+
+    def test_failed_version_probe_does_not_admit_its_stdout(self):
+        r, mutations, _ = self.exercise([release("v6.6.0")], version_exit=23)
+        self.assert_unchanged(r, mutations, refused=True)
+        self.assertIn("Cannot determine the installed Pulse version", r.stderr)
+
+    def test_version_reader_deadline_does_not_admit_partial_stdout(self):
+        # The reader prints a valid version, but cannot exit before the
+        # installer's five-second limit. Even on the old code the delay is
+        # finite and shorter than this harness's command-level fail-stop.
+        r, mutations, _ = self.exercise([release("v6.6.0")], version_delay=8)
+        self.assert_unchanged(r, mutations, refused=True)
+        self.assertIn("Cannot determine the installed Pulse version", r.stderr)
+
+    def test_unknown_version_preserves_explicit_repair_routes(self):
+        r, mutations, transport = self.exercise([], installed=None, pinned="v6.6.0")
+        self.assert_download(r, mutations, "v6.6.0", "")
+        self.assertEqual(transport, [])
+        r, mutations, _ = self.exercise([release("v6.6.0")], "dev", choice="1")
+        self.assert_download(r, mutations, "v6.6.0", "stable")
+
+    def test_noncanonical_installed_components_stop_automatic_selection(self):
+        for installed, target, docker in (
+            ("v06.9.0", "v6.8.1", False),
+            ("v6.09.0", "v6.8.1", False),
+            ("v6.9.01", "v6.9.2", True),
+            ("v6.9.0-beta.09", "v6.9.0-beta.10", False),
+            ("v6.9.0-rc.01", "v6.9.0-rc.2", True),
+        ):
+            with self.subTest(installed=installed, target=target, docker=docker):
+                preview = "-" in target
+                r, mutations, _ = self.exercise([release(target, prerelease=preview)], installed,
+                                                "rc" if preview else "stable", docker=docker)
+                self.assert_unchanged(r, mutations, refused=True)
+                self.assertIn("Cannot determine the installed Pulse version", r.stderr)
+                self.assertNotIn("value too great for base", r.stderr)
+
+    def test_out_of_range_installed_components_stop_automatic_selection(self):
+        for installed, target, docker in (
+            (f"v{WORD_WRAP}.9.0", "v6.8.1", True),
+            (f"v6.{WORD_WRAP}.0", "v6.8.1", False),
+            (f"v6.9.{SIGNED_OVERFLOW}", "v7.0.0", True),
+            (f"v6.9.0-beta.{SIGNED_OVERFLOW}", "v6.9.0-beta.1", True),
+            (f"v6.9.0-rc.{WORD_WRAP}", "v6.9.0-rc.1", False),
+        ):
+            with self.subTest(installed=installed, target=target, docker=docker):
+                preview = "-" in target
+                r, mutations, _ = self.exercise([release(target, prerelease=preview)], installed,
+                                                "rc" if preview else "stable", docker=docker)
+                self.assert_unchanged(r, mutations, refused=True)
+                self.assertIn("Cannot determine the installed Pulse version", r.stderr)
+
+    def test_unorderable_selected_version_stops_before_any_update(self):
+        for target, installed, docker in (
+            ("v7.0.09", "v6.9.0", False),
+            (f"v{SIGNED_OVERFLOW}.0.0", "v6.9.0", True),
+            (f"v6.{WORD_WRAP + 1}.0", "v6.0.0", False),
+            (f"v7.0.{SIGNED_OVERFLOW}", "v6.9.0", True),
+            (f"v6.9.0-beta.{WORD_WRAP + 1}", "v6.9.0-beta.0", False),
+            (f"v6.9.0-rc.{SIGNED_OVERFLOW}", "v6.9.0-beta.1", True),
+            ("v6.9.0-rc.01", "v6.9.0-beta.1", False),
+        ):
+            with self.subTest(target=target, installed=installed, docker=docker):
+                preview = "-" in target
+                data = [release(target, prerelease=preview), release("v6.9.1")]
+                r, mutations, _ = self.exercise(data, installed, "rc" if preview else "stable",
+                                                docker=docker)
+                self.assert_unchanged(r, mutations, refused=True)
+                self.assertIn("Cannot compare the installed Pulse version", r.stderr)
+
+    def test_decimal_comparison_at_signed_maximum_remains_exact(self):
+        for newest, previous, channel in (
+            (f"v{SIGNED_MAX}.0.0", f"v{SIGNED_MAX - 1}.0.0", "stable"),
+            (f"v6.9.0-rc.{SIGNED_MAX}", f"v6.9.0-rc.{SIGNED_MAX - 1}", "rc"),
+        ):
+            with self.subTest(newest=newest, previous=previous):
+                r, mutations, _ = self.exercise([release(newest, prerelease=channel == "rc")],
+                                                previous, channel)
+                self.assert_download(r, mutations, newest, channel)
+                r, mutations, _ = self.exercise([release(previous, prerelease=channel == "rc")],
+                                                newest, channel)
+                self.assert_unchanged(r, mutations, refused=True)
+                self.assertIn("refusing to downgrade automatically", r.stderr)
+
+    def test_unorderable_installed_identity_keeps_deliberate_recovery(self):
+        version = "v6.8.1"
+        r, mutations, transport = self.exercise([], installed="v6.09.0", pinned=version)
+        self.assert_download(r, mutations, version, "")
+        self.assertEqual(transport, [])
+        self.assertEqual(r.stderr, "")
+        r, mutations, _ = self.exercise([release(version)], "v6.09.0", choice="1")
+        self.assert_download(r, mutations, version, "stable")
+        self.assertEqual(r.stderr, "")
+        r, mutations, _ = self.exercise([release(version)], "v6.09.0", choice="2")
+        self.assert_unchanged(r, mutations, refused=True)
+        self.assertIn("Cannot reinstall an unknown current server version", r.stderr)
+
     def test_equivalent_version_spelling_is_an_automatic_noop(self):
         r, mutations, _ = self.exercise([release("6.5.0")])
         self.assert_unchanged(r, mutations)
@@ -203,7 +345,8 @@ class ServerUpdateMenuTest(unittest.TestCase):
         r, mutations, _ = self.exercise(data, "v6.6.0-beta.99", "rc")
         self.assert_download(r, mutations, "v6.6.0-rc.1", "rc")
         for target, installed in (("v6.6.0-rc.9", "v6.6.0-rc.10"),
-                                  ("v6.6.0-beta.99", "v6.6.0-rc.1")):
+                                  ("v6.6.0-beta.99", "v6.6.0-rc.1"),
+                                  ("v6.6.0-rc.1", "v6.6.0")):
             data = [release(target, prerelease=True), release("v6.5.0")]
             r, mutations, _ = self.exercise(data, installed, "rc")
             self.assert_unchanged(r, mutations, refused=True)
