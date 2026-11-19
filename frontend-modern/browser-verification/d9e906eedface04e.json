@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "base_sha": "313bca48f54ac0edb772e42f04846d0d96954444",
+  "verified_at": "2026-11-19T10:23:16Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapCatalogue.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapLayout.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapModel.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapRender.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapServices.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapCatalogue.ts": "3c3c2822c4d54aec632f06aa2ddf637ac2b08be10dc5dd23d5af681de2d5e721",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapLayout.ts": "149548c1c8419c97cb8e1a5f616d16db2004da990abb48f983c5929456d7c71c",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapModel.ts": "655310069bef7f7011d24b281b1b3c20bd42d62cb34adea4f64fd72160d7c53e",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapRender.ts": "6181bbd009c20181d904b627d083630cd39c1cc20221b7472aae5cad487a1e58",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapServices.ts": "bcf2918d70671d54ba83cb4c06ba38ffdf00a7a1e686669f89b6197a15ba8cff"
+  },
+  "routes": [
+    "/map"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "final runtime bytes served by a Vite dev server from a clone of main plus this change on pulse-dev, driven by headless Chromium through Playwright, against a private Pulse with no mock data: one real host agent, and four real availability checks made through the API (Gateway on the machine's own default gateway, Core switch, AP living room and Status page on loopback addresses)",
+    "1440x900: the Ways in box held three tiles, 'AP living room' captioned 'access point' under a radio-wave glyph, 'Core switch' captioned 'switch' under a box-with-ports glyph, and 'Gateway' captioned 'router' under the router glyph, each with a green dot. Seen in the screenshot",
+    "1440x900: the Checks box held only 'Status page', and no tile said 'not monitored'. Gateway was named for nothing a router is called; it was drawn as one because it probes the agent's default gateway",
+    "1440x900, hover on Gateway: 'Check \u00b7 Online \u00b7 router', its address, 'Default gateway of mapdemo-host' and 'Resolves names for mapdemo-host'. The tile links to the availability checks page as any check does",
+    "1440x900, Hide names: the Ways in box read 'AP 1', 'Router 1' and 'Switch 1' with the same captions and glyphs, and the Checks box 'Check 1'",
+    "390x844, touch: the same three tiles in Ways in, one row, above Checks and Hardware. A tap on Core switch showed 'Core switch / Check \u00b7 Online \u00b7 switch / Tap again to open'. The map ended at 788 above the fixed navigation at 799",
+    "no page error in either context",
+    "not checked: light theme (the glyphs use the same stroke tone as the others), Firefox, Safari, a real phone, a real switch or access point (the two were loopback addresses with those names)"
+  ],
+  "interactions": [
+    "opened the map, hovered the Gateway tile and pressed Hide names at 1440x900",
+    "tapped the Core switch tile with real touch input at 390x844"
+  ]
+}

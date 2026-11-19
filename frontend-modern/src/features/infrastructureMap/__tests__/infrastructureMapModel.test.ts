@@ -167,7 +167,7 @@ const estate = (): Resource[] => [
   resource({
     id: 'check-1',
     type: 'network-endpoint',
-    name: 'Router',
+    name: 'opnsense-edge',
     status: 'offline',
   }),
   resource({ id: 'mini', type: 'agent', name: 'mini-pc', platformType: 'agent' }),
@@ -272,7 +272,9 @@ describe('buildInfrastructureMapModel', () => {
     const checks = hostNamed(buildInfrastructureMapModel(estate()).blocks, 'Availability checks');
     expect(checks.isResource).toBe(false);
     expect(checks.health).toBe('critical');
-    expect(checks.sections[0].items.map((item) => item.name)).toEqual(['Router']);
+    expect(checks.sections[0].items.map((item) => item.name)).toEqual(['opnsense-edge']);
+    // Its name says what it is on, which is what the diagram draws it as.
+    expect(checks.sections[0].items[0].device).toBe('router');
   });
 
   it('counts what it drew and what needs attention', () => {
@@ -339,7 +341,7 @@ describe('anonymizeInfrastructureMapModel', () => {
       'traefik-abc',
       'tank',
       'nas-nfs',
-      'Router',
+      'opnsense',
       'mini-pc',
     ]) {
       expect(text).not.toContain(name);
@@ -375,9 +377,11 @@ describe('anonymizeInfrastructureMapModel', () => {
     ).toContain('VM 1');
     expect(node.sections[0].items[1].health).toBe('attention');
     expect(anonymous.totals).toEqual(model.totals);
-    expect(hostNamed(anonymous.blocks, 'Availability checks').sections[0].items[0].name).toBe(
-      'Check 1',
-    );
+    // A check on network gear keeps what it is on and loses what it was called.
+    expect(hostNamed(anonymous.blocks, 'Availability checks').sections[0].items[0]).toMatchObject({
+      name: 'Router 1',
+      device: 'router',
+    });
   });
 
   it('gives pools that share a name one stand-in, so they stay one tile on the map', () => {

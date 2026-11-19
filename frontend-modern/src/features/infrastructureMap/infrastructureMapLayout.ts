@@ -24,7 +24,7 @@ export type MapTone =
 export type MapDensity = 'names' | 'marks';
 
 /** Everything the map has an outline glyph for: each platform, the Internet and a gateway. */
-export type MapGlyphKey = MapPlatform | 'internet' | 'gateway';
+export type MapGlyphKey = MapPlatform | 'internet' | 'gateway' | 'switch' | 'access-point';
 
 export interface MapHit {
   id: string;
