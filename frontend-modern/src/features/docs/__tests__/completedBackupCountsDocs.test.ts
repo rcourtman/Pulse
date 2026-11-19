@@ -54,10 +54,9 @@ describe('completed backup count guidance', () => {
     expect(copy).toContain(
       'covers the loaded inventory, not just the rows matching your list filters',
     );
-    expect(copy).toContain(
-      'Backup jobs counts the Proxmox backup tasks Pulse has retained for current workloads, including failed runs, and ignores the list filters',
-    );
-    expect(copy).toContain('so the two need not agree for any day');
+    expect(copy).toContain('Backup jobs counts retained Proxmox tasks for current workloads');
+    expect(copy).toContain("List filters don't change it");
+    expect(copy).toContain('so daily totals can differ');
     expect(copy).toContain(
       'The list follows the By date search, Node, Backup location, Type and Source filters, including Verified or Unverified',
     );
@@ -70,6 +69,16 @@ describe('completed backup count guidance', () => {
       'None of these display controls changes collection, permissions, retention or protection policy',
     );
     expect(copy).toContain('Older versions may use different labels');
+  });
+
+  it('points an expired Running reading to the existing guest evidence', () => {
+    expect(text()).toContain('Without a fresh update, Running can become Unknown');
+    const fragment = '#backup-task-results-and-backup-age';
+    const link = section().querySelector(`a[href="${fragment}"]`);
+    expect(link?.textContent).toBe("guest's task record");
+    expect(guide('RECOVERY').querySelector(fragment)?.textContent).toBe(
+      'Backup task results and backup age',
+    );
   });
 
   it('keeps incomplete entries out of completed totals even with size and verification evidence', () => {

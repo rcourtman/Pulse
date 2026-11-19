@@ -96,7 +96,7 @@ describe('backup task evidence guidance', () => {
       name: 'unreported end',
       input: { endTime: undefined },
       label: 'Not reported',
-      explanation: 'no end time was supplied',
+      explanation: 'no end time for this guest',
     },
     {
       name: 'missing start with a reported end',
@@ -158,14 +158,14 @@ describe('backup task evidence guidance', () => {
     for (const distinction of [
       'not a live running timer or backup age',
       'Read it separately from Status and Error',
-      'This alone does not establish whether the task is still running, completed or failed',
+      "The whole job's end tells you neither this guest's end time nor its result",
       'Unknown timing does not turn an OK status into a failure or clear a reported error',
       'Equal start and end times are Unknown, not a measured zero',
       'absent or invalid timing is never replaced with 0s',
-      "do not fill a missing duration with the time since Started or another task's time",
-      'A displayed duration does not establish success, verification or guest safety',
+      "Compare this guest's start, end and status in the existing Proxmox task log",
+      'Do not guess the duration from Started or another task',
+      'Duration does not prove success, verification or guest safety',
       'Older versions may not distinguish missing and invalid timing',
-      'use the existing native record if the labels differ',
     ]) {
       expect(text).toContain(distinction);
     }
