@@ -23,6 +23,7 @@ const RESOURCE_FOCUS_PARAMS: ReadonlySet<string> = new Set([
   DOCKER_QUERY_PARAMS.query,
   KUBERNETES_QUERY_PARAMS.query,
   STANDALONE_QUERY_PARAMS.query,
+  STANDALONE_QUERY_PARAMS.check,
 ]);
 
 /**

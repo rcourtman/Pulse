@@ -1,0 +1,71 @@
+{
+  "version": 1,
+  "base_sha": "97d6d3111c1a8522074136ebb07c090c3e4835e0",
+  "verified_at": "2026-11-19T11:57:19Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/api/availabilityTargets.ts",
+    "frontend-modern/src/components/Settings/AvailabilitySettingsPanel.tsx",
+    "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/AvailabilityTargetSlot.tsx",
+    "frontend-modern/src/components/Settings/availabilitySettingsModel.ts",
+    "frontend-modern/src/features/alerts/AlertOverviewAlertCard.tsx",
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapSurface.tsx",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapCatalogue.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapModel.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapServices.ts",
+    "frontend-modern/src/features/platformNavigation/resourcePagePath.ts",
+    "frontend-modern/src/features/platformPage/RecordOwnerLink.tsx",
+    "frontend-modern/src/features/standalone/AvailabilityChecksTable.tsx",
+    "frontend-modern/src/features/standalone/StandalonePageSurface.tsx",
+    "frontend-modern/src/routing/resourceLinks.ts",
+    "frontend-modern/src/utils/availabilityTargetKinds.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/api/availabilityTargets.ts": "36c57d5b45b033915c632b6af07ddda96fd78000d49147c6dd07109387c364c9",
+    "frontend-modern/src/components/Settings/AvailabilitySettingsPanel.tsx": "71747f55cc0a6c2f44bb795ac8087b14ae34b9b64bfa2460ffb2e4c3d769d909",
+    "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/AvailabilityTargetSlot.tsx": "9a0ab3e132058fe9452df2f30c0ce139b33ee49be251a0f9542c17797febd163",
+    "frontend-modern/src/components/Settings/availabilitySettingsModel.ts": "054165bf8364deac86ccbe96b519a61a4da057731e1d94c435bd7550dd2be4d1",
+    "frontend-modern/src/features/alerts/AlertOverviewAlertCard.tsx": "88118a3634a7f56f0c4cece152e81fbeb3c273663e83d7888308c438572c8702",
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapSurface.tsx": "738889c582d78ad1afd83ab097dfc63382fbda6eeb5c67b5bddd0db5ffdb5a2d",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapCatalogue.ts": "96d9b971489962c06efcce9b681c6317058406455f3787fe6052733d67408cf3",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapModel.ts": "4b32bdc67323a4e87d3cc3a1f2de643bb912f99f035efdde360463a7f0c01bdf",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapServices.ts": "32f0692c4b42ab7a9c9e2cad453133acc9dd80f8b93792d67034fe88fad9b513",
+    "frontend-modern/src/features/platformNavigation/resourcePagePath.ts": "96d3f4d208c49a3481835da155679772f27c5d21210bade208acfd46af343c16",
+    "frontend-modern/src/features/platformPage/RecordOwnerLink.tsx": "c5113c6b3b1ce8a6be2385ab55fa26afe090b0b14a590edd7385f395848e1e9e",
+    "frontend-modern/src/features/standalone/AvailabilityChecksTable.tsx": "82294cd11483d4fec7e191f0b0b5b845a664d72551adba076cf7b61f1a5c8036",
+    "frontend-modern/src/features/standalone/StandalonePageSurface.tsx": "fc4ed4f70eb99d4dab9c6a2c83e885a7f38db809880a9a78224faeb0be6505af",
+    "frontend-modern/src/routing/resourceLinks.ts": "ab97fb3c0c3d418ab11831b12d984046c7ecd8e3153042d220634e8c6ffcb929",
+    "frontend-modern/src/utils/availabilityTargetKinds.ts": "4110d55a28087b9b634803098bba0127daaf5219e34acfe2e235dcf370ef05d4"
+  },
+  "routes": [
+    "/map",
+    "/settings/monitoring/availability?add=target",
+    "/standalone/availability?view=table&check=<id>"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "final runtime bytes served by a Vite dev server from a clone of main plus this change on pulse-dev, driven by headless Chromium through Playwright, against a private Pulse built from the same clone with no mock data: one real host agent, and checks made through the API on loopback addresses (access_point, machine, service, device). The API refused a check of an unknown type with 400",
+    "1440x900, /map before: 'Living room' (access_point) was in Ways in beside the dashed 'not monitored' gateway. 'old-nas' (machine), 'Printer' (device) and 'Router admin page' (service) were in Checks: a machine check is not drawn as hardware, and a name alone moves nothing",
+    "1440x900: the gateway tile's link carried targetKind=router and from=map. It opened 'Add router check' with Target type router, Name 'Gateway' and no suggestion. Pressing 'Add router check' returned to /map",
+    "1440x900, the add form as a service check: Target type listed Website or service, Machine or server, Router or firewall, Switch, Access point, Other device. Typing the name 'Garage switch' showed 'This looks like your switch. The map draws it as one when its type says so.' with the type still service. 'Use Switch' set the type to switch, removed the offer and reworded the save button to 'Add switch check'. Saving closed the dialog on the settings page",
+    "1440x900, /map after: Ways in held 'Garage switch' (switch), 'Gateway' (router) and 'Living room' (access point), each with its glyph; Checks and Hardware were unchanged; no tile said 'not monitored'. The footer read 'Apps are recognised by name, checks are drawn by their type. How the map works'. The map ended at 744 of 900",
+    "1440x900: clicking the 'Garage switch' tile opened /standalone/availability?view=table&check=<its id> with six rows and exactly one detail open, 'Collapse details for Garage switch'",
+    "390x844, touch: the same three tiles in Ways in, the same three in Checks, the map ending at 788 above the fixed navigation at 799",
+    "no page error in either context",
+    "not checked: light theme, Firefox, Safari, a real phone, a remote probe agent older than the new types (covered by a server test of the payload it is sent), an availability alert's link in a browser (covered by a component test), a table long enough to window its rows"
+  ],
+  "interactions": [
+    "clicked the unmonitored gateway tile, saved the router check and was returned to the map",
+    "typed a name into the add form, took the offered type and saved the check",
+    "clicked a check's tile on the map and read which detail the checks table opened"
+  ]
+}

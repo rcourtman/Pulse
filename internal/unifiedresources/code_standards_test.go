@@ -686,9 +686,12 @@ func TestResourceAPIReportMergeExcludesRegistryLinkFolds(t *testing.T) {
 func TestAgentlessAvailabilityTargetKindStaysCanonical(t *testing.T) {
 	requiredSnippets := map[string][]string{
 		filepath.Join("..", "config", "availability.go"): {
-			"AvailabilityTargetMachine AvailabilityTargetKind = \"machine\"",
-			"AvailabilityTargetService AvailabilityTargetKind = \"service\"",
-			"AvailabilityTargetDevice  AvailabilityTargetKind = \"device\"",
+			"AvailabilityTargetMachine     AvailabilityTargetKind = \"machine\"",
+			"AvailabilityTargetService     AvailabilityTargetKind = \"service\"",
+			"AvailabilityTargetDevice      AvailabilityTargetKind = \"device\"",
+			"AvailabilityTargetRouter      AvailabilityTargetKind = \"router\"",
+			"AvailabilityTargetSwitch      AvailabilityTargetKind = \"switch\"",
+			"AvailabilityTargetAccessPoint AvailabilityTargetKind = \"access_point\"",
 			"TargetKind       AvailabilityTargetKind    `json:\"targetKind,omitempty\"`",
 			"target.TargetKind = AvailabilityTargetKind(strings.ToLower(strings.TrimSpace(string(target.TargetKind))))",
 			"LinkedResourceID string                    `json:\"linkedResourceId,omitempty\"`",
@@ -712,7 +715,8 @@ func TestAgentlessAvailabilityTargetKindStaysCanonical(t *testing.T) {
 			"LastSuccess            *time.Time                         `json:\"lastSuccess,omitempty\"`",
 		},
 		filepath.Join("..", "..", "frontend-modern", "src", "api", "availabilityTargets.ts"): {
-			"export type AvailabilityTargetKind = 'machine' | 'service' | 'device';",
+			"export type AvailabilityTargetKind =",
+			"'service' | 'machine' | 'router' | 'switch' | 'access_point' | 'device';",
 			"targetKind?: AvailabilityTargetKind;",
 		},
 		// standalonePageModel.ts no longer references targetKind: commit

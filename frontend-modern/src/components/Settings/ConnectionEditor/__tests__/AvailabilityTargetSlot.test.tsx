@@ -122,7 +122,7 @@ describe('AvailabilityTargetSlot', () => {
   it('starts from the name and address a link filled in, as a ping check to save', async () => {
     render(() => (
       <AvailabilityTargetSlot
-        initialTargetKind="device"
+        initialTargetKind="router"
         initialName="Gateway"
         initialAddress="192.168.0.1"
         onCancel={vi.fn()}
@@ -131,8 +131,10 @@ describe('AvailabilityTargetSlot', () => {
     ));
 
     expect(screen.getByLabelText('Name')).toHaveValue('Gateway');
-    expect(screen.getByLabelText('Target type')).toHaveValue('device');
+    expect(screen.getByLabelText('Target type')).toHaveValue('router');
     expect(screen.getByDisplayValue('192.168.0.1')).toBeInTheDocument();
+    // Its type already says what it is, so nothing is offered.
+    expect(screen.queryByTestId('availability-kind-suggestion')).toBeNull();
 
     // Nothing is saved until the owner says so.
     expect(mockedCreate).not.toHaveBeenCalled();
@@ -141,13 +143,70 @@ describe('AvailabilityTargetSlot', () => {
       expect(mockedCreate).toHaveBeenCalledWith(
         expect.objectContaining({
           name: 'Gateway',
-          targetKind: 'device',
+          targetKind: 'router',
           address: '192.168.0.1',
           protocol: 'icmp',
           enabled: true,
         }),
       ),
     );
+  });
+
+  it('offers every kind of thing a check can be on, in one list', () => {
+    render(() => <AvailabilityTargetSlot onCancel={vi.fn()} onSaved={vi.fn()} />);
+
+    const options = [...screen.getByLabelText('Target type').querySelectorAll('option')];
+    expect(options.map((option) => [option.value, option.textContent])).toEqual([
+      ['service', 'Website or service'],
+      ['machine', 'Machine or server'],
+      ['router', 'Router or firewall'],
+      ['switch', 'Switch'],
+      ['access_point', 'Access point'],
+      ['device', 'Other device'],
+    ]);
+  });
+
+  it('offers network gear when the name says so, and changes nothing until asked', async () => {
+    render(() => <AvailabilityTargetSlot onCancel={vi.fn()} onSaved={vi.fn()} />);
+    expect(screen.queryByTestId('availability-kind-suggestion')).toBeNull();
+
+    fireEvent.input(screen.getByLabelText('Name'), { target: { value: 'Core switch' } });
+
+    // Offered, and the type is still what it was.
+    expect(screen.getByTestId('availability-kind-suggestion')).toHaveTextContent(
+      'This looks like your switch.',
+    );
+    expect(screen.getByLabelText('Target type')).toHaveValue('service');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Use Switch' }));
+    expect(screen.getByLabelText('Target type')).toHaveValue('switch');
+    // Said once the type says it, the offer goes.
+    expect(screen.queryByTestId('availability-kind-suggestion')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Add switch check' })).toBeInTheDocument();
+  });
+
+  it('offers a router for a check on a monitored machine’s default gateway', () => {
+    resourceMocks.resources = [
+      {
+        id: 'host-1',
+        type: 'agent',
+        name: 'tower',
+        agent: { defaultGateways: [{ address: '192.168.0.1' }] },
+      } as never,
+    ];
+    render(() => (
+      <AvailabilityTargetSlot
+        initialName="Fritz"
+        initialAddress="192.168.0.1"
+        onCancel={vi.fn()}
+        onSaved={vi.fn()}
+      />
+    ));
+
+    expect(screen.getByTestId('availability-kind-suggestion')).toHaveTextContent(
+      'This looks like your router.',
+    );
+    expect(screen.getByRole('button', { name: 'Use Router or firewall' })).toBeInTheDocument();
   });
 
   it('starts machine add routes as machine reachability checks', async () => {

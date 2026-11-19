@@ -1,5 +1,9 @@
 import type { AvailabilityTarget, AvailabilityTargetKind } from '@/api/availabilityTargets';
 import type { Resource } from '@/types/resource';
+import {
+  getAvailabilityTargetKindInfo,
+  normalizeAvailabilityTargetKind,
+} from '@/utils/availabilityTargetKinds';
 import { getStandaloneResourceStatusIndicator } from '@/features/standalone/standalonePageModel';
 import {
   PROBE_AGENT_STALE_LABEL,
@@ -14,23 +18,13 @@ export const AVAILABILITY_ADD_TARGET_VALUE = 'target';
 export const AVAILABILITY_TARGET_KIND_QUERY_PARAM = 'targetKind';
 export const AVAILABILITY_TARGET_NAME_QUERY_PARAM = 'name';
 export const AVAILABILITY_TARGET_ADDRESS_QUERY_PARAM = 'address';
+export const AVAILABILITY_TARGET_FROM_QUERY_PARAM = 'from';
 
 export function buildAvailabilitySettingsPath(): string {
   return AVAILABILITY_SETTINGS_PATH;
 }
 
-const AVAILABILITY_TARGET_KIND_VALUES: readonly AvailabilityTargetKind[] = [
-  'machine',
-  'service',
-  'device',
-];
-
-export function normalizeAvailabilityTargetKind(
-  value: string | null | undefined,
-): AvailabilityTargetKind | undefined {
-  const normalized = value?.trim().toLowerCase();
-  return AVAILABILITY_TARGET_KIND_VALUES.find((kind) => kind === normalized);
-}
+export { normalizeAvailabilityTargetKind };
 
 /**
  * What a link can fill in on the add-check form, for a thing another page
@@ -40,6 +34,12 @@ export function normalizeAvailabilityTargetKind(
 export interface AvailabilityTargetAddPrefill {
   name?: string;
   address?: string;
+  /**
+   * The page that sent the owner here, when closing the form should take them
+   * back to it. Only the map does, and only by this name: no address is read
+   * from the link.
+   */
+  from?: 'map';
 }
 
 // As long as a hostname can be. A longer value is not an address.
@@ -58,6 +58,7 @@ export function buildAvailabilityTargetAddPath(
   if (name) params.set(AVAILABILITY_TARGET_NAME_QUERY_PARAM, name);
   const address = prefill.address?.trim();
   if (address) params.set(AVAILABILITY_TARGET_ADDRESS_QUERY_PARAM, address);
+  if (prefill.from === 'map') params.set(AVAILABILITY_TARGET_FROM_QUERY_PARAM, 'map');
   return `${AVAILABILITY_SETTINGS_PATH}?${params.toString()}`;
 }
 
@@ -71,7 +72,12 @@ export function getAvailabilityTargetAddPrefill(
     params.get(key)?.trim().slice(0, AVAILABILITY_PREFILL_MAX_LENGTH) || undefined;
   const name = read(AVAILABILITY_TARGET_NAME_QUERY_PARAM);
   const address = read(AVAILABILITY_TARGET_ADDRESS_QUERY_PARAM);
-  return { ...(name ? { name } : {}), ...(address ? { address } : {}) };
+  const fromMap = params.get(AVAILABILITY_TARGET_FROM_QUERY_PARAM)?.trim() === 'map';
+  return {
+    ...(name ? { name } : {}),
+    ...(address ? { address } : {}),
+    ...(fromMap ? { from: 'map' as const } : {}),
+  };
 }
 
 export function shouldOpenAvailabilityTargetAddDialog(pathname: string, search: string): boolean {
@@ -112,17 +118,9 @@ export function getAvailabilityTargetMethodLabel(target: AvailabilityTarget): st
 }
 
 export function getAvailabilityTargetKindLabel(target: AvailabilityTarget): string {
-  switch (target.targetKind) {
-    case 'machine':
-      return 'Machine';
-    case 'device':
-      return 'Device';
-    case 'service':
-    case undefined:
-      return 'Service';
-    default:
-      return 'Endpoint';
-  }
+  // A check saved before kinds existed is a service, as the server defaults it.
+  if (target.targetKind === undefined) return 'Service';
+  return getAvailabilityTargetKindInfo(target.targetKind)?.short ?? 'Endpoint';
 }
 
 export function getAvailabilityTargetAddressLabel(target: AvailabilityTarget): string {

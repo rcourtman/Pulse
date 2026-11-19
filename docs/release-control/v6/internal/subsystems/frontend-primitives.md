@@ -8376,7 +8376,13 @@ and `address` on the add route, built by `buildAvailabilityTargetAddPath` and
 read by `getAvailabilityTargetAddPrefill`. They start the form's Name and
 Address fields and save nothing; each is trimmed, cut at a hostname's length
 and ignored off the add route. The map's unmonitored gateway tile is the first
-such link, with `targetKind=device`.
+such link, with `targetKind=router` and `from=map`. `from` names the page that
+sent the owner, and `map` is the only value read: closing or saving the dialog
+then returns to the map. No address or path is taken from the link. The
+dialog's title and its save button are worded from the kind by
+`getAvailabilityTargetAddLabel`, and the form's Target type list is
+`AVAILABILITY_TARGET_KINDS`, so a kind added there appears in the form, the
+settings list and the map together.
 Former nested aliases such as `/settings/infrastructure/install`,
 `/settings/infrastructure/platforms/proxmox/pbs`,
 `/settings/infrastructure/api/pve`, and `/settings/workloads/docker` must fail

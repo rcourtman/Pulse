@@ -6,7 +6,6 @@ import {
   resolveMapApp,
   resolveMapAppLogo,
   resolveMapCategory,
-  resolveMapDeviceRole,
 } from '../infrastructureMapCatalogue';
 import {
   anonymizeInfrastructureMapModel,
@@ -434,56 +433,49 @@ describe('buildServiceDiagram', () => {
     expect(drawn).not.toMatch(/delly|minipc|Tower|rstack|ps4|authentik|192\.168/);
   });
 
-  it('knows network gear from what its owner called the check', () => {
-    for (const name of ['Router', 'OPNsense', 'pfsense-fw', 'FRITZ!Box 7590', 'UDM Pro']) {
-      expect(resolveMapDeviceRole(name)).toBe('router');
-    }
-    for (const name of ['Core switch', 'switch-24-rack', 'USW_Switch_8']) {
-      expect(resolveMapDeviceRole(name)).toBe('switch');
-    }
-    for (const name of ['AP living room', 'ap-garage', 'Wi-Fi upstairs', 'Access Point 2']) {
-      expect(resolveMapDeviceRole(name)).toBe('access-point');
-    }
-    // A wireless router is the router. A word inside another word is not it.
-    expect(resolveMapDeviceRole('Router AP')).toBe('router');
-    for (const name of ['Status page', 'API gateway', 'Nintendo Switch', 'apt-cache', 'Grafana']) {
-      expect(resolveMapDeviceRole(name)).toBeUndefined();
-    }
-  });
-
   it('draws a check on network gear as that gear, with the ways in', () => {
-    const check = (id: string, name: string, address: string): Resource =>
+    const check = (id: string, name: string, address: string, targetKind: string): Resource =>
       resource({
         id,
         type: 'network-endpoint',
         name,
         platformType: 'availability',
-        availability: { address },
+        availability: { address, targetKind },
       } as Parameters<typeof resource>[0]);
     const resources = [
       ...homelab(),
-      check('check-switch', 'Core switch', '192.168.10.2'),
-      check('check-ap', 'AP living room', '192.168.10.3'),
-      check('check-fw', 'OPNsense', '192.168.10.1'),
-      check('check-site', 'Status page', 'status.example.test'),
+      // Named for nothing a switch is called: the type its owner chose decides.
+      check('check-switch', 'usw-24-rack', '192.168.10.2', 'switch'),
+      check('check-ap', 'Living room', '192.168.10.3', 'access_point'),
+      check('check-fw', 'Edge', '192.168.10.1', 'router'),
+      check('check-nas', 'old-nas', '192.168.10.9', 'machine'),
+      // And a name alone decides nothing.
+      check('check-site', 'Router admin page', '192.168.10.80', 'service'),
+      check('check-ups', 'Rack UPS', '192.168.10.81', 'device'),
     ];
     const diagram = diagramOf(resources);
 
     const gear = (diagram.access?.tiles ?? []).filter((tile) => tile.id.startsWith('check-'));
     expect(gear.map((tile) => [tile.name, tile.caption, tile.platform])).toEqual([
-      ['AP living room', 'access point', 'access-point'],
-      ['Core switch', 'switch', 'switch'],
-      ['OPNsense', 'router', 'gateway'],
+      ['Edge', 'router', 'gateway'],
+      ['Living room', 'access point', 'access-point'],
+      ['usw-24-rack', 'switch', 'switch'],
     ]);
     // Each opens its check, and keeps its address for the hover.
     expect(gear.every((tile) => tile.navigable && tile.typeLabel === 'Check')).toBe(true);
     expect(gear.map((tile) => tile.address)).toEqual([
+      '192.168.10.1',
       '192.168.10.3',
       '192.168.10.2',
-      '192.168.10.1',
     ]);
-    // A check on anything else stays a check.
-    expect(names(diagram.groups.find((group) => group.key === 'checks'))).toEqual(['Status page']);
+    // A check on anything else stays a check, whatever it is called. That
+    // includes a machine: only a Pulse agent makes a machine.
+    expect(names(diagram.groups.find((group) => group.key === 'checks'))).toEqual([
+      'old-nas',
+      'Rack UPS',
+      'Router admin page',
+    ]);
+    expect(diagram.hardware?.tiles.some((tile) => tile.id === 'check-nas')).toBe(false);
 
     // With names hidden it is the same gear in the same box.
     const hidden = buildServiceDiagram(
@@ -498,7 +490,11 @@ describe('buildServiceDiagram', () => {
       ['Router 1', 'router'],
       ['Switch 1', 'switch'],
     ]);
-    expect(names(hidden.groups.find((group) => group.key === 'checks'))).toEqual(['Check 1']);
+    expect(names(hidden.groups.find((group) => group.key === 'checks'))).toEqual([
+      'Check 1',
+      'Check 2',
+      'Check 3',
+    ]);
   });
 
   it('counts what each box holds and gives probed endpoints a box of their own', () => {
@@ -690,14 +686,14 @@ describe('buildServiceDiagram', () => {
             id: 'check-router',
             type: 'network-endpoint',
             name: 'Gateway',
-            availability: { address: '192.168.0.1' },
+            // What the map's own link to the form sets.
+            availability: { address: '192.168.0.1', targetKind: 'router' },
           } as Parameters<typeof resource>[0]),
         ]),
       );
 
-      // Monitored now, so nothing says it is not. A check on a machine's
-      // default gateway is on the router whatever it is called, so it is
-      // drawn as one, where the dashed tile was.
+      // Monitored now, so nothing says it is not, and typed as a router, so
+      // it is drawn as one where the dashed tile was.
       expect(diagram.gateways).toEqual([]);
       expect(diagram.access?.tiles.map((tile) => tile.id)).toEqual(['check-router']);
       expect(tileOf(diagram, 'check-router')).toMatchObject({

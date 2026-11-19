@@ -5,7 +5,9 @@ const AVAILABILITY_TARGETS_PATH = '/api/availability-targets';
 
 export type AvailabilityProbeProtocol = 'icmp' | 'tcp' | 'udp' | 'http' | 'https';
 export type AvailabilityUDPMode = 'response_required' | 'open_or_filtered';
-export type AvailabilityTargetKind = 'machine' | 'service' | 'device';
+/** What a check is on. `@/utils/availabilityTargetKinds` says what each one means. */
+export type AvailabilityTargetKind =
+  'service' | 'machine' | 'router' | 'switch' | 'access_point' | 'device';
 export type AvailabilityHTTPMethod = 'HEAD' | 'GET' | 'POST';
 export type AvailabilityHTTPAuthType = 'none' | 'basic' | 'bearer';
 

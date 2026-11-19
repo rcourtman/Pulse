@@ -1,10 +1,13 @@
 import {
+  getAvailabilityTargetKindInfo,
+  isNetworkGearKind,
+  type AvailabilityNetworkGearKind,
+} from '@/utils/availabilityTargetKinds';
+import {
   MAP_CATEGORY_LABEL,
   MAP_CATEGORY_ORDER,
-  MAP_DEVICE_ROLE_LABEL,
   type MapAppRole,
   type MapCategoryId,
-  type MapDeviceRole,
 } from './infrastructureMapCatalogue';
 import { mapRouteLabel } from './infrastructureMapConnections';
 import type { MapGlyphKey } from './infrastructureMapLayout';
@@ -295,22 +298,22 @@ const serviceTile = (item: MapItem, host: MapHost, plan: NetworkPlan): DiagramTi
   navigable: true,
 });
 
-const DEVICE_GLYPH: Record<MapDeviceRole, MapGlyphKey> = {
+const GEAR_GLYPH: Record<AvailabilityNetworkGearKind, MapGlyphKey> = {
   router: 'gateway',
   switch: 'switch',
-  'access-point': 'access-point',
+  access_point: 'access-point',
 };
 
 // A check on a router, a switch or an access point. It is drawn as the
 // device and says which, where a plain check says its address.
-const deviceTile = (item: MapItem, device: MapDeviceRole): DiagramTile => ({
+const gearTile = (item: MapItem, kind: AvailabilityNetworkGearKind): DiagramTile => ({
   id: item.id,
   name: item.name,
-  caption: MAP_DEVICE_ROLE_LABEL[device].toLowerCase(),
+  caption: getAvailabilityTargetKindInfo(kind)?.noun ?? kind,
   typeLabel: item.typeLabel,
   status: item.status,
   health: item.health,
-  platform: DEVICE_GLYPH[device],
+  platform: GEAR_GLYPH[kind],
   address: item.address,
   navigable: true,
 });
@@ -426,16 +429,18 @@ export function buildServiceDiagram(
       }
     }
     serviceCount += services;
-    // What Pulse probes from outside (a router, a site) is not a service on
+    // What Pulse probes from outside (a site, a printer) is not a service on
     // any host here, so each check is a tile in a box of its own. Network
     // gear is the exception: it is how traffic gets in and around, so it
-    // sits with the ways in, where an unmonitored gateway is drawn too.
+    // sits with the ways in, where an unmonitored gateway is drawn too. A
+    // machine check stays a check here as it does everywhere: only a Pulse
+    // agent makes a machine.
     if (host.platform === 'checks' && !host.isResource) {
       for (const section of host.sections) {
         for (const item of section.items) {
-          if (item.device) {
+          if (isNetworkGearKind(item.checkKind)) {
             const list = byCategory.get('access') ?? [];
-            list.push(deviceTile(item, item.device));
+            list.push(gearTile(item, item.checkKind));
             byCategory.set('access', list);
             continue;
           }

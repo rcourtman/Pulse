@@ -29,6 +29,12 @@ import {
   type AvailabilityTargetPresetID,
 } from '../availabilityTargetPresets';
 import { useResources } from '@/hooks/useResources';
+import {
+  AVAILABILITY_TARGET_KINDS,
+  getAvailabilityTargetAddLabel,
+  getAvailabilityTargetKindInfo,
+  suggestAvailabilityTargetKind,
+} from '@/utils/availabilityTargetKinds';
 import { getSourcePlatformLabel } from '@/utils/sourcePlatforms';
 import { getPreferredInfrastructureDisplayName } from '@/utils/resourceIdentity';
 import { getResourceTypeLabel } from '@/utils/resourceTypePresentation';
@@ -434,29 +440,42 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
     selectedPresetConfig()?.addressPlaceholder ??
     (form().protocol === 'http' || form().protocol === 'https'
       ? `${form().protocol}://service.local/status`
-      : form().targetKind === 'machine'
-        ? 'server.local'
-        : form().targetKind === 'service'
-          ? 'service.local'
-          : 'device.local');
+      : (getAvailabilityTargetKindInfo(form().targetKind)?.addressPlaceholder ?? 'device.local'));
 
   const portPlaceholder = () =>
     selectedPresetConfig()?.portPlaceholder ??
     (form().protocol === 'http' || form().protocol === 'https' ? 'Optional' : '1883');
 
   const namePlaceholder = () =>
-    form().targetKind === 'machine'
-      ? 'mac-mini'
-      : form().targetKind === 'service'
-        ? 'mqtt-broker'
-        : 'energy-monitor';
+    getAvailabilityTargetKindInfo(form().targetKind)?.namePlaceholder ?? 'energy-monitor';
 
-  const addButtonLabel = () =>
-    form().targetKind === 'machine'
-      ? 'Add machine check'
-      : form().targetKind === 'service' || form().targetKind === 'device'
-        ? 'Add service/device check'
-        : 'Add target';
+  const addButtonLabel = () => getAvailabilityTargetAddLabel(form().targetKind);
+
+  // What machines Pulse monitors use as their default gateway: a check on one
+  // of those addresses is a check on the router.
+  const gatewayAddresses = createMemo(() => {
+    const addresses = new Set<string>();
+    for (const resource of resources()) {
+      for (const gateway of resource.agent?.defaultGateways ?? []) {
+        if (gateway.address) addresses.add(gateway.address);
+      }
+    }
+    return addresses;
+  });
+  // Offered, never applied: the owner's choice of type is what every page
+  // reads, so a name must not change it behind their back. Nothing is offered
+  // once the type says what the thing is.
+  const suggestedKind = createMemo(() => {
+    const current = form().targetKind;
+    if (current !== 'service' && current !== 'device') return undefined;
+    return getAvailabilityTargetKindInfo(
+      suggestAvailabilityTargetKind({
+        name: form().name,
+        address: form().address,
+        gatewayAddresses: gatewayAddresses(),
+      }),
+    );
+  });
 
   const handlePresetChange = (presetId: AvailabilityTargetPresetID) => {
     setSelectedPreset(presetId);
@@ -565,9 +584,9 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
             updateForm({ targetKind: event.currentTarget.value as AvailabilityTargetKind })
           }
         >
-          <option value="machine">Machine or server</option>
-          <option value="service">Service endpoint</option>
-          <option value="device">Device or controller</option>
+          <For each={AVAILABILITY_TARGET_KINDS}>
+            {(kind) => <option value={kind.value}>{kind.label}</option>}
+          </For>
         </FormSelect>
         <label class={formField}>
           <span class={formLabel}>Name</span>
@@ -578,6 +597,25 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
             placeholder={namePlaceholder()}
           />
         </label>
+        <Show when={suggestedKind()}>
+          {(kind) => (
+            <p
+              class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted sm:col-span-2"
+              data-testid="availability-kind-suggestion"
+            >
+              <span>
+                This looks like your {kind().noun}. The map draws it as one when its type says so.
+              </span>
+              <Button
+                variant="outline"
+                size="settingsAction"
+                onClick={() => updateForm({ targetKind: kind().value })}
+              >
+                Use {kind().label}
+              </Button>
+            </p>
+          )}
+        </Show>
         <FormSelect
           label="Probe"
           value={form().protocol}

@@ -448,6 +448,33 @@ func TestGetHostAgentConfigIncludesOnlyOwnAssignedTargets(t *testing.T) {
 	}
 }
 
+func TestAvailabilityProbeAgentPayloadSendsGearAsDevice(t *testing.T) {
+	// An agent built before these kinds existed refuses them before probing.
+	for kind, want := range map[config.AvailabilityTargetKind]config.AvailabilityTargetKind{
+		config.AvailabilityTargetRouter:      config.AvailabilityTargetDevice,
+		config.AvailabilityTargetSwitch:      config.AvailabilityTargetDevice,
+		config.AvailabilityTargetAccessPoint: config.AvailabilityTargetDevice,
+		config.AvailabilityTargetDevice:      config.AvailabilityTargetDevice,
+		config.AvailabilityTargetMachine:     config.AvailabilityTargetMachine,
+		config.AvailabilityTargetService:     config.AvailabilityTargetService,
+	} {
+		target := config.NewAvailabilityTarget()
+		target.Name = "thing"
+		target.Address = "192.168.0.1"
+		target.TargetKind = kind
+		payload := availabilityProbeAgentTargetPayload(target)
+		if got := payload["targetKind"]; got != string(want) {
+			t.Fatalf("payload kind for %q = %v, want %q", kind, got, want)
+		}
+		// What the agent is sent passes the validator every agent has.
+		sent := target
+		sent.TargetKind = want
+		if err := sent.Validate(); err != nil {
+			t.Fatalf("Validate() of the kind sent for %q = %v", kind, err)
+		}
+	}
+}
+
 func TestGetHostAgentConfigPayloadCarriesProbeParameters(t *testing.T) {
 	monitor := newProbeAgentTestMonitor(t, config.AvailabilityTarget{
 		ID:               "udp-check",

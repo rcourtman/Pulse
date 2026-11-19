@@ -46,6 +46,7 @@ import {
   STANDALONE_DEFAULT_TAB,
   STANDALONE_PATH,
   STANDALONE_QUERY_PARAMS,
+  buildAvailabilityCheckPath,
   TRUENAS_PATH,
   VMWARE_PATH,
   buildPatrolControlPath,
@@ -189,7 +190,16 @@ describe('resource link routing contract', () => {
   it('builds canonical Machines, container runtime, Kubernetes, TrueNAS, and vSphere tab paths', () => {
     expect(STANDALONE_PATH).toBe('/standalone');
     expect(STANDALONE_DEFAULT_TAB).toBe('machines');
-    expect(STANDALONE_QUERY_PARAMS).toEqual({ query: 'q', status: 'status', view: 'view' });
+    expect(STANDALONE_QUERY_PARAMS).toEqual({
+      query: 'q',
+      status: 'status',
+      view: 'view',
+      check: 'check',
+    });
+    // One check's detail, on the table that holds it.
+    expect(buildAvailabilityCheckPath('availability:router 1')).toBe(
+      '/standalone/availability?view=table&check=availability%3Arouter+1',
+    );
     expect(buildStandalonePath()).toBe('/standalone/machines');
     expect(buildStandalonePath('')).toBe('/standalone');
 

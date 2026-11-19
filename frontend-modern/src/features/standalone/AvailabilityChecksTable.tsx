@@ -2,6 +2,7 @@ import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import { A } from '@solidjs/router';
 import {
   Show,
+  createEffect,
   createMemo,
   createResource,
   onCleanup,
@@ -117,6 +118,8 @@ export const AvailabilityChecksTable: Component<{
   probeAgentOptions?: readonly ProbeAgentOption[];
   view?: AvailabilityChecksView;
   onViewChange?: (view: AvailabilityChecksView) => void;
+  /** A check a link asked for by id: its detail opens once it has loaded. */
+  focusCheckId?: string;
   externalSearch?: () => string;
   onExternalSearchChange?: (value: string) => void;
   externalStatus?: () => PlatformResourceStatusFilter;
@@ -146,9 +149,15 @@ export const AvailabilityChecksTable: Component<{
     }
     tableState.resetFilters();
   };
-  const orderedChecks = createMemo(() =>
-    sortStandaloneResourcesByAttention(tableState.filtered(), now()),
-  );
+  const orderedChecks = createMemo(() => {
+    const sorted = sortStandaloneResourcesByAttention(tableState.filtered(), now());
+    // A check a link asked for leads the table, so its row is on screen and
+    // inside the window of rows that are drawn at all.
+    const asked = props.focusCheckId;
+    const index = asked ? sorted.findIndex((resource) => resource.id === asked) : -1;
+    if (index <= 0) return sorted;
+    return [sorted[index], ...sorted.slice(0, index), ...sorted.slice(index + 1)];
+  });
   const historyTargetIDs = createMemo(() =>
     props.resources
       .map((resource) => availabilityFor(resource)?.targetId)
@@ -184,6 +193,33 @@ export const AvailabilityChecksTable: Component<{
   );
   const drawer = createPlatformResourceDetailState({ idPrefix: 'availability-check-detail' });
   const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.resources);
+  // A link from the map or an alert names one check. Open it once, when it
+  // has arrived, and leave the owner free to close it afterwards.
+  let focusedCheckId = '';
+  createEffect(() => {
+    const id = props.focusCheckId;
+    if (!id) {
+      // The link is gone from the address, so the same one can be followed again.
+      focusedCheckId = '';
+      return;
+    }
+    if (id === focusedCheckId) return;
+    // Only a check among the rows shown has a detail to open. One a filter
+    // hides waits here until the filter lets it through.
+    const check = orderedChecks().find((resource) => resource.id === id);
+    if (!check) return;
+    focusedCheckId = id;
+    drawer.open(check);
+    // It leads the table, so the top of the table is where it is. A page
+    // that was already scrolled is brought back there, where its row is
+    // among the ones drawn.
+    queueMicrotask(() => {
+      document
+        .querySelector('[data-availability-check-row]')
+        ?.closest('table')
+        ?.scrollIntoView?.({ block: 'start' });
+    });
+  });
 
   return (
     <Show

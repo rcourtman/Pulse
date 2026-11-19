@@ -169,6 +169,7 @@ const estate = (): Resource[] => [
     type: 'network-endpoint',
     name: 'opnsense-edge',
     status: 'offline',
+    availability: { targetKind: 'router' },
   }),
   resource({ id: 'mini', type: 'agent', name: 'mini-pc', platformType: 'agent' }),
 ];
@@ -273,8 +274,8 @@ describe('buildInfrastructureMapModel', () => {
     expect(checks.isResource).toBe(false);
     expect(checks.health).toBe('critical');
     expect(checks.sections[0].items.map((item) => item.name)).toEqual(['opnsense-edge']);
-    // Its name says what it is on, which is what the diagram draws it as.
-    expect(checks.sections[0].items[0].device).toBe('router');
+    // Its owner typed it a router, which is what the diagram draws it as.
+    expect(checks.sections[0].items[0].checkKind).toBe('router');
   });
 
   it('counts what it drew and what needs attention', () => {
@@ -380,7 +381,7 @@ describe('anonymizeInfrastructureMapModel', () => {
     // A check on network gear keeps what it is on and loses what it was called.
     expect(hostNamed(anonymous.blocks, 'Availability checks').sections[0].items[0]).toMatchObject({
       name: 'Router 1',
-      device: 'router',
+      checkKind: 'router',
     });
   });
 

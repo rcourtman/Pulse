@@ -4188,6 +4188,11 @@ Render-heavy alert overview ownership now routes through
 and `frontend-modern/src/features/alerts/AlertOverviewAlertCard.tsx` instead
 of rebuilding stats-card, active-alert, and timeline-card presentation inline
 inside `frontend-modern/src/features/alerts/OverviewTab.tsx`.
+An availability alert names one check, so its card links to that check:
+`AlertOverviewAlertCard.tsx` sends a `network-endpoint` alert with a resource
+id to `buildAvailabilityCheckPath`, the Availability checks table with that
+row's detail open. Before 2026-11-19 it fell through the platform rules and
+landed on Proxmox.
 `AlertOverviewAlertCard.tsx` also owns the compact delivery-status placement,
 while `deliveryDiagnosisPresentation.ts` owns the reason-to-copy and tone
 mapping. Acknowledged cards keep their canonical badge and omit that redundant

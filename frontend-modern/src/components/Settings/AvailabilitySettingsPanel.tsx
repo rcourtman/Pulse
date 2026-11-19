@@ -3,6 +3,8 @@ import { Show, createEffect, createMemo, createSignal, onMount, type Component }
 import type { Resource } from '@/types/resource';
 import { isAgentlessAvailabilityResource } from '@/features/standalone/standalonePageModel';
 import { useLocation, useNavigate } from '@solidjs/router';
+import { INFRASTRUCTURE_MAP_PATH } from '@/routing/resourceLinks';
+import { getAvailabilityTargetAddLabel, isNetworkGearKind } from '@/utils/availabilityTargetKinds';
 import Plus from 'lucide-solid/icons/plus';
 import RotateCw from 'lucide-solid/icons/rotate-cw';
 import Activity from 'lucide-solid/icons/activity';
@@ -95,8 +97,21 @@ export const AvailabilitySettingsPanel: Component = () => {
   };
 
   const closeDialog = (replace = false) => {
+    const current = dialog();
     setDialog(null);
     setDeleteConfirmingId(null);
+    // The map sent the owner here to add one thing. Saved or not, that is
+    // where they were, and where what they added is drawn.
+    if (
+      current?.mode === 'add' &&
+      current.prefill.from === 'map' &&
+      // Only while this page is still the one they are on: a save that lands
+      // after they have gone elsewhere must not pull them back.
+      location.pathname.replace(/\/+$/, '') === buildAvailabilitySettingsPath()
+    ) {
+      navigate(INFRASTRUCTURE_MAP_PATH, { replace: true });
+      return;
+    }
     if (location.pathname === buildAvailabilitySettingsPath() && location.search) {
       navigate(buildAvailabilitySettingsPath(), { replace, scroll: false });
     }
@@ -180,16 +195,7 @@ export const AvailabilitySettingsPanel: Component = () => {
   const dialogTitle = createMemo(() => {
     const current = dialog();
     if (current?.mode === 'edit') return `Manage ${current.target.name}`;
-    if (current?.mode === 'add' && current.initialTargetKind === 'machine') {
-      return 'Add machine check';
-    }
-    if (
-      current?.mode === 'add' &&
-      (current.initialTargetKind === 'service' || current.initialTargetKind === 'device')
-    ) {
-      return 'Add service/device check';
-    }
-    return 'Add availability check';
+    return getAvailabilityTargetAddLabel(current?.initialTargetKind);
   });
 
   const dialogDescription = createMemo(() => {
@@ -199,6 +205,9 @@ export const AvailabilitySettingsPanel: Component = () => {
     }
     if (current?.mode === 'add' && current.initialTargetKind === 'machine') {
       return 'Use reachability checks for servers, desktops, laptops, and other computers that do not run Pulse Agent.';
+    }
+    if (current?.mode === 'add' && isNetworkGearKind(current.initialTargetKind)) {
+      return 'Pulse cannot see network gear by itself. A check gives it a live status and draws it on the map as the device it is.';
     }
     return 'Use ICMP ping, TCP port, or HTTP checks for devices and services that cannot run Pulse Agent.';
   });

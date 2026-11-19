@@ -98,11 +98,30 @@ const (
 
 type AvailabilityTargetKind string
 
+// What a check is on. The kind is the owner's statement of what the thing
+// is, and every surface that shows a check reads it: the settings form, the
+// lists and the map, which draws network gear as gear with the ways in.
+// Nothing infers it from a name. A machine kind is wording only: it never
+// makes an agentless target a Machines row.
 const (
-	AvailabilityTargetMachine AvailabilityTargetKind = "machine"
-	AvailabilityTargetService AvailabilityTargetKind = "service"
-	AvailabilityTargetDevice  AvailabilityTargetKind = "device"
+	AvailabilityTargetMachine     AvailabilityTargetKind = "machine"
+	AvailabilityTargetService     AvailabilityTargetKind = "service"
+	AvailabilityTargetDevice      AvailabilityTargetKind = "device"
+	AvailabilityTargetRouter      AvailabilityTargetKind = "router"
+	AvailabilityTargetSwitch      AvailabilityTargetKind = "switch"
+	AvailabilityTargetAccessPoint AvailabilityTargetKind = "access_point"
 )
+
+// IsNetworkGear reports whether the kind is a router, a switch or an access
+// point: the things a network is made of, as opposed to things on it.
+func (k AvailabilityTargetKind) IsNetworkGear() bool {
+	switch k {
+	case AvailabilityTargetRouter, AvailabilityTargetSwitch, AvailabilityTargetAccessPoint:
+		return true
+	default:
+		return false
+	}
+}
 
 // AvailabilityTarget represents an agentless endpoint monitored through a
 // lightweight availability probe.
@@ -342,7 +361,8 @@ func (t AvailabilityTarget) Validate() error {
 		return fmt.Errorf("availability target address is required")
 	}
 	switch t.TargetKind {
-	case AvailabilityTargetMachine, AvailabilityTargetService, AvailabilityTargetDevice:
+	case AvailabilityTargetMachine, AvailabilityTargetService, AvailabilityTargetDevice,
+		AvailabilityTargetRouter, AvailabilityTargetSwitch, AvailabilityTargetAccessPoint:
 	default:
 		return fmt.Errorf("unsupported availability target kind %q", t.TargetKind)
 	}
