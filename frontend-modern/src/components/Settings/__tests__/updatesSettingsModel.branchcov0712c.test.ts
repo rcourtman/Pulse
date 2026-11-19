@@ -51,9 +51,6 @@ const makeDockerUpdate = (overrides: Partial<DockerUpdateCommands> = {}): Docker
   ...overrides,
 });
 
-const PRO_STEP_CODE_CLASS =
-  'block rounded-md border border-border bg-page p-3 font-mono text-sm text-green-700 dark:text-green-400 whitespace-pre-wrap break-all';
-
 // ---- buildUpdateInstallGuide (complementary branch-coverage) ----------------
 
 describe('buildUpdateInstallGuide — optional-chain short-circuit on nullish updateInfo', () => {
@@ -123,7 +120,7 @@ describe('buildUpdateInstallGuide — isProRuntime / dockerUpdate precedence', (
       id: 'docker-pro-pull',
       title: 'Pull the new Pulse Pro image (pinned to this release\u2019s digest)',
       command: dockerUpdate.composePullCommand,
-      commandCodeClass: PRO_STEP_CODE_CLASS,
+      commandCodeClass: expect.any(String),
     });
     expect(guide?.steps[1]?.id).toBe('docker-pro-up');
     expect(guide?.steps.some((s) => s.id === 'docker-pro-unavailable')).toBe(false);
@@ -276,12 +273,8 @@ describe('buildUpdateInstallGuide — template-literal and malformed-input edges
   });
 });
 
-describe('buildUpdateInstallGuide — buildProDockerUpdateSteps loginCommand falsy variants', () => {
-  // The sibling test covers loginCommand undefined (falsy). An empty-string
-  // loginCommand is also falsy but a distinct runtime value, and a non-empty
-  // loginCommand is truthy. These pin both falsy variants' concrete outputs.
-
-  it('omits the login note when loginCommand is an empty string (falsy empty-string arm)', () => {
+describe('buildUpdateInstallGuide — broker sign-in guidance', () => {
+  it('omits the login note when the broker returns an empty string', () => {
     const dockerUpdate = makeDockerUpdate({ loginCommand: '' });
     const guide = buildUpdateInstallGuide(
       makeVersionInfo({ deploymentType: 'docker', isDocker: true }),
@@ -293,12 +286,17 @@ describe('buildUpdateInstallGuide — buildProDockerUpdateSteps loginCommand fal
     );
     expect(guide?.steps).toHaveLength(2);
     expect(guide?.steps.map((s) => s.id)).toStrictEqual(['docker-pro-pull', 'docker-pro-up']);
+    expect(guide?.registryLogin).toBeUndefined();
   });
 
-  it('includes the login note with the exact interpolated command when loginCommand is a non-empty custom string', () => {
-    const customLogin =
-      'echo hunter2 | docker login registry.example.invalid -u ops --password-stdin';
-    const dockerUpdate = makeDockerUpdate({ loginCommand: customLogin });
+  it.each([
+    'See the broker for sign-in',
+    "docker login 'other.example.invalid' --username 'pulse-pro'",
+    "docker login 'registry.pulserelay.pro' --username 'pulse-pro'\n",
+    "docker login 'registry.pulserelay.pro' --username '-unexpected'",
+    "docker login 'registry.pulserelay.pro' --username 'ppk_" + "live_fixture'",
+  ])('does not offer a prompt command for nonmatching broker guidance (%s)', (loginCommand) => {
+    const dockerUpdate = makeDockerUpdate({ loginCommand });
     const guide = buildUpdateInstallGuide(
       makeVersionInfo({ deploymentType: 'docker', isDocker: true }),
       makeUpdateInfo({ dockerUpdate }),
@@ -307,10 +305,7 @@ describe('buildUpdateInstallGuide — buildProDockerUpdateSteps loginCommand fal
       'curl',
       false,
     );
-    expect(guide?.steps).toHaveLength(3);
-    expect(guide?.steps[2]?.id).toBe('docker-pro-login-note');
-    expect(guide?.steps[2]?.note).toBe(
-      `If the pull is denied, sign in to the registry first (replace <activation-key> with the key from Settings \u2192 License): ${customLogin}`,
-    );
+    expect(guide?.steps).toHaveLength(2);
+    expect(guide?.registryLogin).toEqual({ promptCommand: null });
   });
 });

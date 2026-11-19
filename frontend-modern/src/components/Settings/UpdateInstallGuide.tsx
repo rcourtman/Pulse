@@ -11,6 +11,7 @@ import type {
   VersionInfo,
 } from '@/api/updates';
 import { CopyCommandBlock } from '@/components/Settings/CopyCommandBlock';
+import { ExternalTextLink } from '@/components/shared/ExternalTextLink';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import {
   buildIdleDockerComposeCommand,
@@ -292,6 +293,37 @@ export const UpdateInstallGuide: Component<UpdateInstallGuideProps> = (props) =>
             <For each={guide()!.steps}>
               {(step, index) => <InstallStep step={step} index={index() + 1} />}
             </For>
+            <Show when={guide()!.registryLogin}>
+              {(login) => (
+                <p class="text-xs text-green-700 dark:text-green-300 sm:ml-8">
+                  If the pull is denied,{' '}
+                  <Show
+                    when={login().promptCommand}
+                    fallback={
+                      <>
+                        see{' '}
+                        <ExternalTextLink
+                          href="https://pulserelay.pro/download.html"
+                          variant="inlineInherit"
+                        >
+                          Private Release Access
+                        </ExternalTextLink>{' '}
+                        for sign-in, then retry the pull. Keep your activation key out of shell
+                        commands.
+                      </>
+                    }
+                  >
+                    {(command) => (
+                      <>
+                        run <code class="[overflow-wrap:anywhere]">{command()}</code> on the Docker
+                        host. Enter the activation key from Settings → License only at Docker’s
+                        hidden Password prompt, then retry the pull. Docker may store the key.
+                      </>
+                    )}
+                  </Show>
+                </p>
+              )}
+            </Show>
           </div>
 
           <Show when={props.updateInfo?.releaseNotes}>

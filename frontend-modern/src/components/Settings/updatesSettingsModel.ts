@@ -23,6 +23,7 @@ export interface UpdateInstallGuide {
   headerSummary: string;
   introText: string;
   steps: UpdateInstallStep[];
+  registryLogin?: { promptCommand: string | null };
 }
 
 export function getUpdateChannelCardOptions(
@@ -63,31 +64,52 @@ export function buildIdleDockerUpdateCommand(): string {
 export const IDLE_DOCKER_PRO_NOTICE =
   'This container runs the Pulse Pro image, so it updates with digest-pinned commands from your license server, not the public rcourtman/pulse image. When a new release is available, the exact commands appear here.';
 
+const proDockerCommandClass =
+  'block rounded-md border border-border bg-page p-2 pr-14 font-mono text-xs text-green-700 dark:text-green-400 whitespace-pre-wrap break-all sm:p-3 sm:pr-14 sm:text-sm';
+
+// Reconstruct only the non-secret arguments from the two known broker forms.
+// Never redisplay an unrecognised line or carry a password into the command.
+const legacyLogin =
+  /^printf '%s' '<activation-key>' \| docker login ([a-z0-9.:-]+) -u '([a-z0-9_.@-]+)' --password-stdin$/i;
+const promptLogin = /^docker login ('?)([a-z0-9.:-]+)\1 (?:-u|--username) '([a-z0-9_.@-]+)'$/i;
+const registryHost =
+  /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*(?::[0-9]{1,5})?$/i;
+
+function brokerPasswordPrompt({ image, loginCommand }: DockerUpdateCommands): string | null {
+  if (typeof loginCommand !== 'string' || typeof image !== 'string') return null;
+  const legacy = legacyLogin.exec(loginCommand);
+  const current = legacy ? null : promptLogin.exec(loginCommand);
+  const match = legacy ?? current;
+  if (!match || match[0] !== loginCommand) return null;
+  const [registry, username] = match.slice(legacy ? 1 : 2);
+  if (
+    registry.length > 253 ||
+    !registryHost.test(registry) ||
+    !image.startsWith(`${registry}/`) ||
+    username.length > 128 ||
+    username.startsWith('-') ||
+    username.toLowerCase().includes('ppk_live_')
+  ) {
+    return null;
+  }
+  return `docker login ${registry} --username '${username}'`;
+}
+
 function buildProDockerUpdateSteps(dockerUpdate: DockerUpdateCommands): UpdateInstallStep[] {
-  const steps: UpdateInstallStep[] = [
+  return [
     {
       id: 'docker-pro-pull',
       title: 'Pull the new Pulse Pro image (pinned to this release’s digest)',
       command: dockerUpdate.composePullCommand,
-      commandCodeClass:
-        'block rounded-md border border-border bg-page p-3 font-mono text-sm text-green-700 dark:text-green-400 whitespace-pre-wrap break-all',
+      commandCodeClass: proDockerCommandClass,
     },
     {
       id: 'docker-pro-up',
       title: 'Recreate the container on the new image',
       command: dockerUpdate.composeUpCommand,
-      commandCodeClass:
-        'block rounded-md border border-border bg-page p-3 font-mono text-sm text-green-700 dark:text-green-400 whitespace-pre-wrap break-all',
+      commandCodeClass: proDockerCommandClass,
     },
   ];
-  if (dockerUpdate.loginCommand) {
-    steps.push({
-      id: 'docker-pro-login-note',
-      title: '',
-      note: `If the pull is denied, sign in to the registry first (replace <activation-key> with the key from Settings → License): ${dockerUpdate.loginCommand}`,
-    });
-  }
-  return steps;
 }
 
 export function buildUpdateInstallGuide(
@@ -145,6 +167,9 @@ export function buildUpdateInstallGuide(
         headerSummary: `Version ${updateInfo?.latestVersion} is ready to install`,
         introText: 'Run these two commands on the Docker host to update:',
         steps: buildProDockerUpdateSteps(updateInfo.dockerUpdate),
+        ...(updateInfo.dockerUpdate.loginCommand
+          ? { registryLogin: { promptCommand: brokerPasswordPrompt(updateInfo.dockerUpdate) } }
+          : {}),
       };
     }
     if (isProRuntime) {

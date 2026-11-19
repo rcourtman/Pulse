@@ -200,11 +200,14 @@ describe('UpdateInstallGuide', () => {
     isMajorUpgrade: false,
   };
 
-  it('shows the broker digest-pinned commands for a Pro docker install, never the community image', () => {
+  function renderPaidDockerGuide(loginCommand?: string) {
     render(() => (
       <UpdateInstallGuide
         versionInfo={dockerVersionInfo}
-        updateInfo={{ ...availableDockerUpdateInfo, dockerUpdate }}
+        updateInfo={{
+          ...availableDockerUpdateInfo,
+          dockerUpdate: { ...dockerUpdate, loginCommand },
+        }}
         updatePlan={dockerUpdatePlan}
         isInstalling={false}
         dockerImageTag="v6.0.5"
@@ -213,10 +216,42 @@ describe('UpdateInstallGuide', () => {
         onInstallUpdate={vi.fn()}
       />
     ));
+  }
 
-    expect(screen.getByText(`PULSE_IMAGE='${pinnedRef}' docker compose pull`)).toBeInTheDocument();
-    expect(screen.getByText(`PULSE_IMAGE='${pinnedRef}' docker compose up -d`)).toBeInTheDocument();
-    expect(screen.queryByText(/docker pull rcourtman\/pulse/)).not.toBeInTheDocument();
+  it.each([
+    ['legacy', dockerUpdate.loginCommand, 'lic_test'],
+    ['current', "docker login 'registry.pulserelay.pro' --username 'pulse-pro'", 'pulse-pro'],
+  ])(
+    'keeps both digest pins and shows only hidden-prompt sign-in for %s guidance',
+    (_, input, username) => {
+      renderPaidDockerGuide(input);
+
+      expect(screen.getByText(dockerUpdate.composePullCommand)).toBeInTheDocument();
+      expect(screen.getByText(dockerUpdate.composeUpCommand)).toBeInTheDocument();
+      expect(screen.queryByText(/docker pull rcourtman\/pulse/)).not.toBeInTheDocument();
+      const login = screen.getByText(
+        `docker login registry.pulserelay.pro --username '${username}'`,
+      );
+      expect(login.closest('p')).toHaveTextContent(/only at Docker’s hidden Password prompt/);
+      expect(screen.queryByText(/<activation-key>|--password-stdin/)).not.toBeInTheDocument();
+      expect(screen.getAllByRole('button', { name: 'Copy to clipboard' })).toHaveLength(2);
+    },
+  );
+
+  it('links to Private Release Access rather than showing unknown broker login text', () => {
+    const unrecognised = 'Unexpected broker sign-in guidance';
+    renderPaidDockerGuide(unrecognised);
+    expect(screen.queryByText(unrecognised)).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Private Release Access' })).toHaveAttribute(
+      'href',
+      'https://pulserelay.pro/download.html',
+    );
+  });
+
+  it('does not invent a login action when guidance was not supplied', () => {
+    renderPaidDockerGuide();
+    expect(screen.queryByText(/If the pull is denied/)).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Copy to clipboard' })).toHaveLength(2);
   });
 
   it('withholds community commands on a Pro docker install even without broker commands', () => {
