@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "base_sha": "7cf21acbcafbd8bc95d95c168fdac9c556875b26",
+  "verified_at": "2026-11-19T11:05:26Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/AuditLogPanel.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/AuditLogPanel.tsx": "1abf68c6b4bcf7045c665b1e9ef825a89f3aab6ce55721f2669a239d52123b21"
+  },
+  "routes": [
+    "/settings/security-audit"
+  ],
+  "viewports": [
+    {
+      "width": 1536,
+      "height": 960
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Compiled Settings and real HTTP client, synthetic session and workspace, unchanged event fixtures. Before and after Playwright 1.56.1 (integration lock) with Chromium 141.0.7390.37 desktop/light and WebKit 26.0 phone/dark.",
+    "20 native-inspected captures in 10 comparable pairs: initial pending and accepted, filtered page two pending, access refusal, and explicit Refresh recovery. Matched top scroll anchor, neutral hover/focus and theme; no page overflow.",
+    "Pending data and signature results stay withdrawn; current access refusal is not an empty log. Accepted results restore the same filters, range and controls."
+  ],
+  "interactions": [
+    "Restart load replaces the exact selected query via the existing scoped GET. Keyboard focus stays on the same toolbar button as it returns to Refresh. Separate WebKit run exercised touch taps.",
+    "Each run checked pending requests, results and read scopes. In the candidate desktop and phone cases all four retired requests closed without a reply; each new attempt produced one response for the same workspace and query. No write or signature auto-verification was observed in the fixture with auto-verification disabled.",
+    "A current 403 leaves no rows, totals or filters. An explicit Refresh after restored access returns rows 26 and 27 for the same User filter on page two."
+  ]
+}

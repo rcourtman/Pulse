@@ -167,12 +167,13 @@ export default function AuditLogPanel(props: AuditLogPanelProps) {
       action={
         <div class="flex w-full flex-wrap items-center gap-2 sm:w-auto">
           <button
+            type="button"
             onClick={refresh}
-            disabled={loading() || !accessAllowed()}
+            disabled={!accessAllowed()}
             class={AUDIT_REFRESH_BUTTON_CLASS}
           >
-            <RefreshCw class={`w-4 h-4 ${loading() ? 'animate-spin' : ''}`} />
-            Refresh
+            <RefreshCw aria-hidden="true" class="w-4 h-4" />
+            {loading() && accessAllowed() ? 'Restart load' : 'Refresh'}
           </button>
           <button
             onClick={verifyAll}
@@ -351,9 +352,9 @@ export default function AuditLogPanel(props: AuditLogPanelProps) {
       </Show>
 
       <Show when={loading()}>
-        <div class="flex items-center justify-center py-12">
-          <RefreshCw class="w-8 h-8 text-blue-500 animate-spin" />
-          <span class="sr-only">{getAuditLogLoadingState().text}</span>
+        <div role="status" class="flex flex-col items-center gap-2 py-12 text-sm text-muted">
+          <RefreshCw aria-hidden="true" class="w-8 h-8 text-blue-500 motion-safe:animate-spin" />
+          <span>{getAuditLogLoadingState().text}</span>
         </div>
       </Show>
 
