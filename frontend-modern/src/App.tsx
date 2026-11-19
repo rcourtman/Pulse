@@ -71,6 +71,7 @@ import {
 import type { Resource } from '@/types/resource';
 import type { SecurityStatusSettingsCapabilities } from '@/types/config';
 import { AppBootstrapStatus } from '@/components/AppBootstrapStatus';
+import { isInfrastructureMapAvailable } from '@/utils/infrastructureMapRelease';
 
 function isPublicRoutePath(pathname: string): boolean {
   // Public routes must be viewable without authentication.
@@ -613,7 +614,10 @@ function App() {
       <Route path={STANDALONE_PATH} component={StandalonePage} />
       <Route path={`${STANDALONE_PATH}/*`} component={StandalonePage} />
 
-      <Route path={INFRASTRUCTURE_MAP_PATH} component={InfrastructureMapPage} />
+      {/* Held back from release builds until its completeness review is signed off. */}
+      {isInfrastructureMapAvailable() && (
+        <Route path={INFRASTRUCTURE_MAP_PATH} component={InfrastructureMapPage} />
+      )}
 
       <Route path="/alerts/*" component={AlertsRoute} />
       <Route path="/actions/*" component={ActionsPage} />

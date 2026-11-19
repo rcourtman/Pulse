@@ -68,6 +68,7 @@ import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentat
 import type { AppConnectionStatus, OrganizationListIssue } from '@/useAppRuntimeState';
 import { buildInfrastructureWorkspacePath } from '@/components/Settings/infrastructureWorkspaceModel';
 import { InfrastructureMapHeaderButton } from '@/features/infrastructureMap/InfrastructureMapEntry';
+import { isInfrastructureMapAvailable } from '@/utils/infrastructureMapRelease';
 
 const ROOT_PROXMOX_PATH = buildProxmoxPath();
 const ROOT_DOCKER_PATH = buildDockerPath();
@@ -746,7 +747,10 @@ export function AppLayout(props: AppLayoutProps) {
       >
         <Show when={!kioskMode()}>
           <div class="flex items-center sm:col-start-1 sm:col-end-2 sm:justify-self-start">
-            <InfrastructureMapHeaderButton />
+            {/* The slot stays, so the brand mark does not move when the map arrives. */}
+            <Show when={isInfrastructureMapAvailable()}>
+              <InfrastructureMapHeaderButton />
+            </Show>
           </div>
           <div class="flex items-center gap-1.5 sm:col-start-2 sm:col-end-3 sm:flex-initial sm:justify-self-center sm:gap-2">
             <div

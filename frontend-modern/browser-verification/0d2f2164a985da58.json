@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "base_sha": "49193540d10d9943ca3b64ec08eb7c60d0e923d6",
+  "verified_at": "2026-11-19T14:12:23Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/App.tsx",
+    "frontend-modern/src/AppLayout.tsx",
+    "frontend-modern/src/components/Settings/AvailabilitySettingsPanel.tsx",
+    "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/AvailabilityTargetSlot.tsx",
+    "frontend-modern/src/utils/infrastructureMapRelease.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/App.tsx": "d0c95b971562cc657dae77be487679d34ac539e678eba41c2057b22258953bc5",
+    "frontend-modern/src/AppLayout.tsx": "c42da2618397268382bee172d8d87f161ecba85047a663b1046332d934c2b4b1",
+    "frontend-modern/src/components/Settings/AvailabilitySettingsPanel.tsx": "bc8398bee0a4e967e0f52f426fd9ce53af3dee76803cc5bdc3db59d01330b175",
+    "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/AvailabilityTargetSlot.tsx": "091dfd707e73529ee2c7bccf907feffdb92da3fc6b432b269ac1efd9a63ca4a3",
+    "frontend-modern/src/utils/infrastructureMapRelease.ts": "909eab43c870f7ca9f0a92b6f559b9756852a6fcbb83f4358fb1d6bd87368693"
+  },
+  "routes": [
+    "/proxmox/overview",
+    "/map",
+    "/settings/monitoring/availability?add=target",
+    "/docs/README",
+    "/docs/AVAILABILITY"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "two builds of the final bytes from one clone of main plus this change on pulse-dev, driven by headless Chromium through Playwright against a private Pulse on mock data: a production build made the way a release makes it and served by the Pulse server itself, and the same source served by a Vite dev server",
+    "production build, 1440x900: the header had no map button and the page no link to /map. /map rendered 'Page Not Found: No route matched /map' with a link back to the workspace",
+    "production build, 1440x900, the add-check form: Target type still listed all six types. Typing the name 'Core switch' produced no offer, and the dialog did not contain the word map. 'Add router check' opened with no mention of the map",
+    "production build, 1440x900: the docs index had no link to the map guide and the availability guide none",
+    "production build, 390x844, touch: no map button in the header, no link to /map, and /map rendered 'Page Not Found'",
+    "development build, 1440x900: the header had the map button, /map drew 190 tiles under the heading Map, the add-check form offered a type for 'Core switch', and the router dialog said how the map draws it",
+    "the shipped README, AVAILABILITY, API and CONFIGURATION guides contain no whole word 'map' (checked on the files, not in the browser). MAP.md is still shipped and is linked from nowhere",
+    "no page error in any context",
+    "not checked: light theme, Firefox, Safari, a real phone. The map's own code is still in the production bundle as a chunk no route loads"
+  ],
+  "interactions": [
+    "opened /map directly and typed a name into the add-check form in the production build, with a mouse at 1440x900 and by address at 390x844",
+    "did the same in the development build at 1440x900"
+  ]
+}
