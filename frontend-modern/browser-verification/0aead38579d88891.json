@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "base_sha": "ab12afa17da22804ad5cf3e520e78aef430295c3",
+  "verified_at": "2026-11-19T11:38:28Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/NoOrganizationAccess.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/NoOrganizationAccess.tsx": "ca8cf261defda4957c77c130596a5bae7e054aa094b2ef53c1773627cb130c87"
+  },
+  "routes": [
+    "/settings/organization (signed-in bootstrap, then the existing settings route when admitted)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900,
+      "browser": "Chromium 141.0.7390.37",
+      "theme": "light"
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "browser": "WebKit 26.0",
+      "theme": "dark"
+    }
+  ],
+  "states": [
+    "Two current namesake invitations with different IDs and roles before decision.",
+    "Pending decision; all decision controls are disabled.",
+    "Unconfirmed acceptance after an interrupted acknowledgement; the observed list is identified and disabled.",
+    "Unconfirmed decline with a reported service failure; the observed list is identified and disabled.",
+    "Rechecked membership opens the accepted organization as viewer; refreshed invitations retain only current rows.",
+    "Phone touch: a declined request that did not apply leaves both invitations available after the explicit check."
+  ],
+  "interactions": [
+    "Activate the exact invitation’s Accept or Decline via Enter; check session/CSRF dispatch and that no new decision follows the explicit check.",
+    "From the anchored invitation region, Tab past stale controls to Check again; activate it to run normal session bootstrap.",
+    "On a touch viewport, tap Decline and Check again; verify fresh readback instead of inferring the failed decision applied."
+  ]
+}
