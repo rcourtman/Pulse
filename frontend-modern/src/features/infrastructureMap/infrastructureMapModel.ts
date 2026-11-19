@@ -1,13 +1,13 @@
 import type { Resource, ResourceType } from '@/types/resource';
 import { getDiskPercent, getMemoryPercent } from '@/types/resource';
 import { formatBytes } from '@/utils/format';
+import type { AvailabilityTargetKind } from '@/api/availabilityTargets';
+import { normalizeAvailabilityTargetKind } from '@/utils/availabilityTargetKinds';
 import {
   resolveMapApp,
   resolveMapCategory,
-  resolveMapDeviceRole,
   type MapApp,
   type MapCategoryId,
-  type MapDeviceRole,
 } from './infrastructureMapCatalogue';
 import { resolveMapConnections, type MapConnections } from './infrastructureMapConnections';
 import {
@@ -55,8 +55,12 @@ export interface MapItem {
   app?: MapApp;
   /** The group a guest or container is drawn in on the service diagram. */
   category?: MapCategoryId;
-  /** The network gear a check is on, when its name or its address says so. */
-  device?: MapDeviceRole;
+  /**
+   * What an availability check is on, as its owner typed it. The map reads
+   * the kind and never works one out: a router, switch or access point is
+   * drawn as that device, and every other kind as a check.
+   */
+  checkKind?: AvailabilityTargetKind;
 }
 
 export interface MapSection {
@@ -177,11 +181,11 @@ const SYSTEM_CONTAINER_LABEL = 'System container';
 const itemStandIn = (typeLabel: string): string =>
   typeLabel === SYSTEM_CONTAINER_LABEL ? 'Container' : typeLabel;
 
-/** And for network gear, which stays the gear it is with its name hidden. */
-const DEVICE_STAND_IN: Record<MapDeviceRole, string> = {
+/** And for a check, which stays what it is on with its name hidden. */
+const CHECK_STAND_IN: Partial<Record<AvailabilityTargetKind, string>> = {
   router: 'Router',
   switch: 'Switch',
-  'access-point': 'AP',
+  access_point: 'AP',
 };
 
 const GROUP_TYPE_LABEL: Partial<Record<MapPlatform, string>> = {
@@ -429,8 +433,11 @@ export function buildInfrastructureMapModel(
   for (const resource of resources) {
     if (drafts.has(resource.id)) continue;
     if (resource.type === 'network-endpoint') {
-      const device = resolveMapDeviceRole(displayName(resource));
-      checks.push({ ...toItem(resource, 'Check', attachments), ...(device ? { device } : {}) });
+      const checkKind = normalizeAvailabilityTargetKind(resource.availability?.targetKind);
+      checks.push({
+        ...toItem(resource, 'Check', attachments),
+        ...(checkKind ? { checkKind } : {}),
+      });
       continue;
     }
     const draft = owningDraft(resource);
@@ -539,13 +546,6 @@ export function buildInfrastructureMapModel(
       },
     });
   }
-  const connections = ownedConnections(resources, attachments);
-  // A check that probes a machine's default gateway is on the router,
-  // whatever its owner called it.
-  const gatewayOwners = new Set(connections.gateways.map((gateway) => gateway.resourceId));
-  for (const check of checks) {
-    if (!check.device && gatewayOwners.has(check.id)) check.device = 'router';
-  }
   if (checks.length > 0) {
     checks.sort(byName);
     blocks.push({
@@ -565,7 +565,7 @@ export function buildInfrastructureMapModel(
     });
   }
 
-  return summarize(blocks, networks.segments, connections);
+  return summarize(blocks, networks.segments, ownedConnections(resources, attachments));
 }
 
 // A gateway or resolver address that exactly one thing on the map answers on
@@ -703,7 +703,7 @@ export function anonymizeInfrastructureMapModel(
         ? item.app.label
         : nameFor(
             item.id,
-            item.device ? DEVICE_STAND_IN[item.device] : itemStandIn(item.typeLabel),
+            (item.checkKind && CHECK_STAND_IN[item.checkKind]) || itemStandIn(item.typeLabel),
           ),
     }));
   const anonymizeHost = ({ address: _address, ...host }: MapHost): MapHost => ({

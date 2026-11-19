@@ -43,7 +43,11 @@ const availabilityResource = (overrides: Partial<Resource> = {}): Resource =>
     ...overrides,
   }) as Resource;
 
-const renderTable = (resources: Resource[], probeAgentOptions?: ProbeAgentOption[]) =>
+const renderTable = (
+  resources: Resource[],
+  probeAgentOptions?: ProbeAgentOption[],
+  focusCheckId?: string,
+) =>
   render(() => (
     <Router>
       <Route
@@ -55,6 +59,7 @@ const renderTable = (resources: Resource[], probeAgentOptions?: ProbeAgentOption
             emptyTitle="No checks"
             emptyDescription="Add checks"
             probeAgentOptions={probeAgentOptions}
+            focusCheckId={focusCheckId}
           />
         )}
       />
@@ -129,6 +134,25 @@ describe('AvailabilityChecksTable', () => {
         '[data-inline-platform-resource-detail-for="availability:mock-availability-mqtt-meter"]',
       ),
     ).not.toBeNull();
+  });
+
+  it('opens the detail of the check a link asked for, and no other', () => {
+    const asked = availabilityResource();
+    const other = availabilityResource({ id: 'availability:other', name: 'Other check' });
+    const { container } = renderTable([other, asked], undefined, asked.id);
+
+    const open = [...container.querySelectorAll('[data-inline-platform-resource-detail-for]')];
+    expect(
+      open.map((node) => node.getAttribute('data-inline-platform-resource-detail-for')),
+    ).toEqual([asked.id]);
+    // The owner can close it: the link opens it once and does not hold it open.
+    fireEvent.click(screen.getByRole('button', { name: `Collapse details for ${asked.name}` }));
+    expect(container.querySelector('[data-inline-platform-resource-detail-for]')).toBeNull();
+  });
+
+  it('opens nothing for a link that names no check on the page', () => {
+    const { container } = renderTable([availabilityResource()], undefined, 'availability:gone');
+    expect(container.querySelector('[data-inline-platform-resource-detail-for]')).toBeNull();
   });
 
   it('places failing checks before healthy checks by default', () => {

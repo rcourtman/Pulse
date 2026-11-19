@@ -984,8 +984,8 @@ Supported protocols:
 | `udp` | A request/response UDP service, or an open-or-filtered observation | `address`, `port`, UDP result policy |
 | `http` / `https` | Web UI or health endpoint availability | `address`, optional `port`, optional `path` |
 
-Saved targets include `name`, `targetKind` (`machine`, `service`, or
-`device`), `address`, `protocol`, `enabled`, polling interval, timeout,
+Saved targets include `name`, `targetKind` (`service`, `machine`, `router`,
+`switch`, `access_point`, or `device`), `address`, `protocol`, `enabled`, polling interval, timeout,
 failure threshold, and an optional `linkedResourceId`. UDP targets select
 `response_required` (send up to 512 UTF-8 bytes and require a response) or
 `open_or_filtered` (silence is indeterminate, not proof of reachability); an

@@ -4392,33 +4392,39 @@ What the diagram does with them:
   said on that thing instead. A resolver is said only on something already
   drawn.
 - The dashed gateway tile is a link, because "not monitored" has one thing to
-  do about it: it opens the availability add dialog as a device ping check
-  named `Gateway` with the gateway's address filled in, and nothing is saved
-  until the owner saves it. Its hover says "Click to add a check" and a touch
-  tap says "Tap again to add a check", since every other tile opens the thing
-  it shows. Once a check probes that address the check is the monitored thing
-  that answers on it, so the dashed tile is gone and the check's tile says
-  whose gateway it is. With names hidden the address is not on the page and
-  the tile is no link.
-- A check on a router, a switch or an access point is drawn as that device
-  in the Ways in box, with its own glyph and the device as its caption, and
-  not in the Checks box. The map knows the device two ways and no other: the
-  check probes an address that is a machine's default gateway, which makes it
-  a router whatever it is called; or its name says so (`resolveMapDeviceRole`,
-  whole words only, so `apt-cache` is no access point). `gateway` is not such
-  a word, because an API gateway is checked too. The role decides the glyph,
-  the caption and the box and nothing else: the tile still opens the check,
-  and a name that says none of these stays a plain check. With names hidden
-  the tile keeps its device and its box and reads `Router 1`, `Switch 1` or
-  `AP 1`. No setting stores the role; an owner changes it by renaming the
-  check.
+  do about it: it opens the availability add dialog as a router check named
+  `Gateway` with the gateway's address filled in, and nothing is saved until
+  the owner saves it. The link says it came from the map, and closing or
+  saving that dialog returns there, where the new tile is. Its hover says
+  "Click to add a check" and a touch tap says "Tap again to add a check",
+  since every other tile opens the thing it shows. Once a check probes that
+  address the check is the monitored thing that answers on it, so the dashed
+  tile is gone and the check's tile says whose gateway it is. With names
+  hidden the address is not on the page and the tile is no link.
+- A check is drawn by its stored kind and by nothing else. The kind is the
+  owner's statement of what the check is on, set in the availability form,
+  and `frontend-modern/src/utils/availabilityTargetKinds.ts` is the one
+  definition every surface reads: the form's list, the settings label and the
+  map. A `router`, `switch` or `access_point` check is drawn as that device in
+  the Ways in box, with its own glyph and the device as its caption. Every
+  other kind, `machine` included, is a tile in the Checks box: only a Pulse
+  agent makes a machine, on the map as on the Machines table. The map does not
+  read a check's name or compare its address to a gateway to decide what it
+  is; that guess was built on 2026-11-19 and removed the same day, because it
+  made the map disagree with the form. The same reading now lives in the form
+  as `suggestAvailabilityTargetKind`, which offers a kind beside the Target
+  type field and changes nothing until the owner takes it. With names hidden
+  a gear tile keeps its device and its box and reads `Router 1`, `Switch 1`
+  or `AP 1`.
+- A check's tile opens that check: `buildResourcePagePath` sends every
+  `network-endpoint` to `buildAvailabilityCheckPath`, the Availability checks
+  table with that row's detail open, so the map, an alert and any other link
+  to a check land on the check and not on the list it is in.
 - How a thing gets onto the map is not something the map can show, so the
-  page says it in one line beside the legend, "Apps and network gear are
-  recognised by name", and links the shipped guide `docs/MAP.md` (`MAP_DOC_URL`).
-  The guide is where the words an owner can use are listed, so a word added to
-  `resolveMapDeviceRole` is added to its table in the same change. The line
-  stays that short: the legend's height is a fixed allowance in the fit to
-  one screen. `FRITZ!Box` is read as the one word its owner means.
+  page says it in one line beside the legend, "Apps are recognised by name,
+  checks are drawn by their type", and links the shipped guide `docs/MAP.md`
+  (`MAP_DOC_URL`). The line stays that short: the legend's height is a fixed
+  allowance in the fit to one screen.
 - A saved image has no pointer, so it has no rings. The captions carry the
   facts there.
 

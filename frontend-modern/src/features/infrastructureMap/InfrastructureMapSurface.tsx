@@ -82,7 +82,13 @@ const UNMONITORED_CHECK_NAME = 'Gateway';
 const hitLines = (hit: MapHit): string[] =>
   [
     hit.meta,
-    [hit.address, hit.detail ? `Published ${hit.detail}` : ''].filter(Boolean).join(' · '),
+    [
+      // A plain check's caption is its address, so the line above has said it.
+      hit.address && !hit.meta.includes(hit.address) ? hit.address : '',
+      hit.detail ? `Published ${hit.detail}` : '',
+    ]
+      .filter(Boolean)
+      .join(' · '),
     ...(hit.links ?? []),
     [
       hit.cpu !== undefined ? `CPU ${Math.round(hit.cpu)}%` : '',
@@ -186,9 +192,10 @@ export function InfrastructureMapSurface() {
     // A thing nothing monitors has no page. Its tile leads to the form that
     // adds a check for it, which is the one thing there is to do about it.
     if (hit?.checkAddress) {
-      return buildAvailabilityTargetAddPath('device', {
+      return buildAvailabilityTargetAddPath('router', {
         name: UNMONITORED_CHECK_NAME,
         address: hit.checkAddress,
+        from: 'map',
       });
     }
     const resource = hit ? resourceById().get(hit.id) : undefined;
@@ -466,7 +473,7 @@ export function InfrastructureMapSurface() {
           </li>
           {/* How a thing gets onto the map is not something the map can show. */}
           <li class="ml-auto">
-            Apps and network gear are recognised by name.{' '}
+            Apps are recognised by name, checks are drawn by their type.{' '}
             <a href={MAP_DOC_URL} class="underline underline-offset-2 hover:text-base-content">
               How the map works
             </a>

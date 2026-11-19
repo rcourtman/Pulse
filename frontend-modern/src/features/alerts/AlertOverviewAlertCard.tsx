@@ -52,6 +52,7 @@ import {
   buildDockerPath,
   buildKubernetesPath,
   buildProxmoxPath,
+  buildAvailabilityCheckPath,
   buildStandalonePath,
   buildTrueNASPath,
   buildVmwarePath,
@@ -256,9 +257,13 @@ export function AlertOverviewAlertCard(props: AlertOverviewAlertCardProps) {
   const resourceLink = (): string => {
     const storageLink = storagePoolLink();
     if (storageLink) return storageLink;
-    const page = platformLink();
     const metadata = props.alert.metadata;
     const resourceType = metadata?.resourceType;
+    // An availability alert is about one check, and its page opens that
+    // check. Left to the platform rules below it landed on Proxmox.
+    const checkId = props.alert.resourceId?.trim();
+    if (resourceType === 'network-endpoint' && checkId) return buildAvailabilityCheckPath(checkId);
+    const page = platformLink();
     // A per-filesystem alert names `<guest>-disk-<key>` and an orphaned backup
     // names `backup-subject:...`; neither is a resource the registry can open.
     // A filesystem alert that carries its guest's id opens that guest.

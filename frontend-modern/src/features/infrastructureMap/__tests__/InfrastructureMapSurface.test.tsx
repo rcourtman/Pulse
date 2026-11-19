@@ -338,7 +338,9 @@ describe('InfrastructureMapSurface connections', () => {
   it('says how a thing gets onto the map, and links the guide that explains it', () => {
     draw();
 
-    expect(screen.getByText(/Apps and network gear are recognised by name\./)).toBeTruthy();
+    expect(
+      screen.getByText(/Apps are recognised by name, checks are drawn by their type\./),
+    ).toBeTruthy();
     const guide = screen.getByRole('link', { name: 'How the map works' });
     expect(guide.getAttribute('href')).toBe('/docs/MAP');
   });
@@ -434,7 +436,7 @@ describe('InfrastructureMapSurface connections', () => {
 
   describe('a gateway nothing monitors', () => {
     const ADD_CHECK =
-      '/settings/monitoring/availability?add=target&targetKind=device&name=Gateway&address=192.168.0.1';
+      '/settings/monitoring/availability?add=target&targetKind=router&name=Gateway&address=192.168.0.1&from=map';
     beforeEach(() => {
       resourcesMock.value = [
         resource({

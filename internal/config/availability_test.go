@@ -190,6 +190,41 @@ func TestAvailabilityTargetValidateAcceptsPingAlias(t *testing.T) {
 	}
 }
 
+func TestAvailabilityTargetValidateAcceptsEveryTargetKind(t *testing.T) {
+	gear := map[AvailabilityTargetKind]bool{
+		AvailabilityTargetRouter:      true,
+		AvailabilityTargetSwitch:      true,
+		AvailabilityTargetAccessPoint: true,
+	}
+	for _, kind := range []AvailabilityTargetKind{
+		AvailabilityTargetMachine,
+		AvailabilityTargetService,
+		AvailabilityTargetDevice,
+		AvailabilityTargetRouter,
+		AvailabilityTargetSwitch,
+		AvailabilityTargetAccessPoint,
+	} {
+		target := NewAvailabilityTarget()
+		target.Name = "thing"
+		target.Address = "192.168.0.1"
+		target.TargetKind = kind
+		if err := target.Validate(); err != nil {
+			t.Fatalf("Validate() with kind %q = %v, want nil", kind, err)
+		}
+		if got := kind.IsNetworkGear(); got != gear[kind] {
+			t.Fatalf("%q.IsNetworkGear() = %v, want %v", kind, got, gear[kind])
+		}
+	}
+
+	// A kind arrives from the API in any case and is stored in one.
+	spelled := NewAvailabilityTarget()
+	spelled.Address = "192.168.0.3"
+	spelled.TargetKind = AvailabilityTargetKind(" Access_Point ")
+	if got := NormalizeAvailabilityTarget(spelled).TargetKind; got != AvailabilityTargetAccessPoint {
+		t.Fatalf("normalized kind = %q, want %q", got, AvailabilityTargetAccessPoint)
+	}
+}
+
 func TestAvailabilityTargetValidateRejectsUnsupportedTargetKind(t *testing.T) {
 	target := NormalizeAvailabilityTarget(AvailabilityTarget{
 		TargetKind: AvailabilityTargetKind("database"),

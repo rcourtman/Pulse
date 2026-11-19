@@ -278,6 +278,21 @@ describe('AvailabilitySettingsPanel', () => {
     expect(prefilled).toHaveAttribute('data-initial-name', 'Gateway');
     expect(prefilled).toHaveAttribute('data-initial-address', '192.168.0.1');
 
+    // The map's link: a router, and closing the form goes back to the map.
+    cleanup();
+    navigateSpy.mockClear();
+    routeState.search = '?add=target&targetKind=router&name=Gateway&address=192.168.0.1&from=map';
+    render(() => <AvailabilitySettingsPanel />);
+    await waitFor(() => expect(screen.getByTestId('availability-target-slot')).toBeInTheDocument());
+    expect(screen.getByRole('heading', { name: 'Add router check' })).toBeInTheDocument();
+    expect(screen.getByText(/draws it on the map as the device it is/)).toBeInTheDocument();
+    expect(screen.getByTestId('availability-target-slot')).toHaveAttribute(
+      'data-initial-target-kind',
+      'router',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Mock save' }));
+    expect(navigateSpy).toHaveBeenLastCalledWith('/map', { replace: true });
+
     cleanup();
     routeState.search = '?add=target&targetKind=machine';
     render(() => <AvailabilitySettingsPanel />);

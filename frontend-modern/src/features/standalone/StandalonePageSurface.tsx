@@ -186,6 +186,10 @@ export function StandalonePageSurface() {
       model().availabilityChecks.length,
     ),
   );
+  const focusedCheckId = createMemo(() => {
+    const value = searchParams[STANDALONE_QUERY_PARAMS.check];
+    return (Array.isArray(value) ? value[0] : value)?.trim() || undefined;
+  });
   const setAvailabilityView = (view: AvailabilityChecksView) => {
     setSearchParams({ [STANDALONE_QUERY_PARAMS.view]: view }, { replace: true });
   };
@@ -287,6 +291,7 @@ export function StandalonePageSurface() {
                 probeAgentOptions={buildProbeAgentOptions(model().machines)}
                 view={availabilityView()}
                 onViewChange={setAvailabilityView}
+                focusCheckId={focusedCheckId()}
                 externalSearch={machineSearchFilter}
                 onExternalSearchChange={setMachineSearchFilter}
                 externalStatus={machineStatusFilter}

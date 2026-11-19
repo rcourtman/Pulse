@@ -3968,8 +3968,12 @@ a new API state machine, queue contract, or verification-accounting field.
    `internal/api/platform_mock_connections.go`,
    `frontend-modern/src/api/availabilityTargets.ts`, and the unified-resource
    availability payload together. The bounded `targetKind` vocabulary is
-   `machine`, `service`, and `device`; missing legacy values default to
-   `service`. Browser add-dialog routes may carry a `targetKind` query value
+   `service`, `machine`, `router`, `switch`, `access_point`, and `device`;
+   missing legacy values default to `service`. The three network-gear kinds
+   were added on 2026-11-19 so the owner states what a check is on and the
+   map draws it as that; `AvailabilityTargetKind.IsNetworkGear` names them,
+   and `frontend-modern/src/utils/availabilityTargetKinds.ts` is the browser's
+   one definition of the vocabulary. Browser add-dialog routes may carry a `targetKind` query value
    to preselect that bounded kind, but the persisted contract remains the
    `AvailabilityTarget.targetKind` payload. Browser consumers must not place
    availability targets into Standalone Machines from that classification;

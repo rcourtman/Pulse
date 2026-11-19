@@ -2095,7 +2095,7 @@ the API for automation.
 Target payload fields:
 
 - `name` - Display name.
-- `targetKind` - `machine`, `service`, or `device`; defaults to `service`.
+- `targetKind` - what the check is on: `service`, `machine`, `router`, `switch`, `access_point`, or `device`; defaults to `service`. The map draws a router, switch or access point as that device.
 - `address` - Hostname, IP address, or URL.
 - `protocol` - `icmp`, `tcp`, `udp`, `http`, or `https`. The input alias `ping` is accepted and is stored/returned as canonical `icmp`.
 - `port` - Required for `tcp`/`udp`, optional for `http`/`https`, and omitted for `icmp`.

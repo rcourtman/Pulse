@@ -26,8 +26,9 @@ policies, or [check DNS answers](#check-that-dns-answers-correctly).
 ## Add a local check
 
 1. Open **Settings → Monitoring → Availability checks** and add a target.
-2. Give it a name, choose its protocol, and enter the address and any required
-   port or path. The Pulse server must be able to resolve and reach that address.
+2. Choose its **Target type**, give it a name, choose its protocol, and enter
+   the address and any required port or path. The Pulse server must be able to
+   resolve and reach that address.
 3. Review the polling interval, timeout and failure threshold. A missed check
    is evaluated under those settings, not a promise of an immediate alert.
 4. Save the enabled target and inspect its observations. Use **This Pulse
@@ -38,8 +39,24 @@ policies, or [check DNS answers](#check-that-dns-answers-correctly).
 Keep credentials and private target addresses out of public screenshots and
 support reports. Use a service you own or are authorised to monitor.
 
-A check on a router, switch or access point is also drawn on the map as that
-device. See [Add your router, switch or access point](MAP.md#add-your-router-switch-or-access-point).
+The target type says what the check is on, and every page reads it:
+
+| Target type | Use it for | On the map |
+| --- | --- | --- |
+| Website or service | A site, an API, a port | **Checks** |
+| Machine or server | A computer without a Pulse agent | **Checks** |
+| Router or firewall, Switch, Access point | Network gear | **Ways in**, as that device |
+| Other device | A printer, a UPS, a sensor | **Checks** |
+
+A machine check does not add the computer to **Machines**; that takes a Pulse
+agent.
+
+The router, switch and access point types need a Pulse server that knows
+them. Before downgrading to an older release, set those checks to **Other
+device**: an older server cannot run a check of a type it does not know, and
+reports it unreachable.
+
+See [Add your router, switch or access point](MAP.md#add-your-router-switch-or-access-point).
 
 ## Check from another network with Pro
 

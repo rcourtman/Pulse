@@ -88,6 +88,25 @@ describe('availabilitySettingsModel', () => {
       address: 'fe80::1',
     });
 
+    // The map says it sent the owner, by name. No address is read from a link.
+    const fromMap = buildAvailabilityTargetAddPath('router', {
+      name: 'Gateway',
+      address: '192.168.0.1',
+      from: 'map',
+    });
+    expect(fromMap).toBe(
+      '/settings/monitoring/availability?add=target&targetKind=router&name=Gateway&address=192.168.0.1&from=map',
+    );
+    expect(getAvailabilityTargetAddPrefill(pathname, `?${fromMap.split('?')[1]}`)).toEqual({
+      name: 'Gateway',
+      address: '192.168.0.1',
+      from: 'map',
+    });
+    expect(
+      getAvailabilityTargetAddPrefill(pathname, '?add=target&from=/evil').from,
+    ).toBeUndefined();
+    expect(getAvailabilityTargetAddKind(pathname, `?${fromMap.split('?')[1]}`)).toBe('router');
+
     // Nothing to fill in leaves the path as it was, and reads back as nothing.
     expect(buildAvailabilityTargetAddPath('device', { name: ' ', address: '' })).toBe(
       '/settings/monitoring/availability?add=target&targetKind=device',

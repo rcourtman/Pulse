@@ -4,6 +4,7 @@ import {
   buildDockerPath,
   buildKubernetesPath,
   buildProxmoxPath,
+  buildAvailabilityCheckPath,
   buildStandalonePath,
   buildStorageRouteSearch,
   buildTrueNASPath,
@@ -239,7 +240,9 @@ export function buildResourcePagePath(subject: ResourcePageSubject): string | nu
   const isNetwork = NETWORK_TYPES.has(type) || NETWORK_TYPES.has(hintType);
 
   // Availability checks are endpoints Pulse probes, listed beside Machines.
-  if (type === 'network-endpoint') return buildStandalonePath('availability');
+  if (type === 'network-endpoint') {
+    return id ? buildAvailabilityCheckPath(id) : buildStandalonePath('availability');
+  }
 
   switch (platform) {
     case 'proxmox':

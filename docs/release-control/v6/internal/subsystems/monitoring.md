@@ -6588,9 +6588,14 @@ never encode that state as a confirmed failure or a healthy observation. The reg
 binding the source envelope to the check resource and cloning a separately
 bound envelope for any matched-resource facet projection after correlation.
 Availability target kind is monitoring-owned runtime metadata, not a frontend
-guess. Saved targets carry the bounded `targetKind` values `machine`, `service`,
-and `device`; monitoring must preserve that value in probe status, supplemental
-resource availability data, and availability tags. Missing legacy target kinds
+guess. Saved targets carry the bounded `targetKind` values `service`, `machine`,
+`router`, `switch`, `access_point`, and `device`; monitoring must preserve that value in probe status, supplemental
+resource availability data, and availability tags. The one place the saved
+kind is not sent as it is saved is a remote probe agent's assignment:
+`availabilityProbeAgentTargetKind` sends `device` for the three network-gear
+kinds, because an agent validates the kind before it probes and one built
+before those kinds existed would refuse them and report the check unreachable
+without probing. The agent does nothing else with the kind. Missing legacy target kinds
 default to `service`, and monitoring must not promote a ping, TCP, or HTTP probe
 to a machine solely from address shape, protocol, name, or successful reachability.
 Mock-mode availability targets must use that same provider vocabulary. The

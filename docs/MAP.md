@@ -14,7 +14,7 @@ the map button in the header.
 | **Ways in** | Reverse proxies, VPNs, DNS, and your router, switches and access points |
 | Network pills | Each network, with how many things are on it |
 | Boxes such as **Media**, **Monitoring**, **Databases** | Guests and containers, grouped by what they are for |
-| **Checks** | Availability checks on things that are not network gear |
+| **Checks** | Availability checks on websites, services, machines without an agent and other devices |
 | **Storage**, **Backups**, **Hardware** | Pools, backup targets and the machines everything runs on |
 
 Each tile has a status dot: healthy, needs attention, critical, not reporting
@@ -41,26 +41,28 @@ box without renaming it.
 ## Add your router, switch or access point
 
 Pulse cannot see network gear by itself. An
-[availability check](AVAILABILITY.md) puts it on the map.
+[availability check](AVAILABILITY.md) puts it on the map, and the check's
+**Target type** says what it is.
 
 **Your router.** A gateway nothing monitors is drawn as a dashed tile that
-says "not monitored". Click it. The check form opens with the address filled
-in; save it, and the tile becomes your router with a live status.
+says "not monitored". Click it. The check form opens as a router with the
+address filled in; save it, and you are back on the map with the tile as your
+router and a live status.
 
-**A switch or access point.** Add a check for its address in **Settings →
-Monitoring → Availability checks**, and put what it is in the name:
+**Anything else.** Add a check in **Settings → Monitoring → Availability
+checks** and choose its type:
 
-| To draw | Use one of these words in the check's name |
+| Target type | Where the map draws it |
 | --- | --- |
-| A router | `router`, `firewall`, `modem`, `OPNsense`, `pfSense`, `MikroTik`, `OpenWrt`, `FritzBox`, `UDM`, `USG` |
-| A switch | `switch` |
-| An access point | `AP`, `WiFi`, `WLAN`, `access point` |
+| Router or firewall, Switch, Access point | In **Ways in**, as that device |
+| Website or service, Machine or server, Other device | In **Checks** |
 
-"Core switch" and "AP living room" both work. The word must stand on its own:
-"apt-cache" is not an access point. A check named for nothing in the table
-stays in **Checks**, unless it probes a machine's default gateway, which
-makes it a router whatever it is called. To change how a check is drawn,
-rename it.
+The type decides, not the name. When a check's name says what it is ("Core
+switch"), or its address is exactly a monitored machine's default gateway,
+the form offers the matching type; nothing changes until you choose it. To
+move a check on the map, change its type.
+
+Click a check's tile to open that check.
 
 ## Connections
 

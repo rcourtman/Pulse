@@ -382,6 +382,18 @@ func (m *Monitor) availabilityProbeTargetsForAgent(hostID string) []map[string]i
 	return assigned
 }
 
+// availabilityProbeAgentTargetKind is the kind an agent is told. An agent
+// validates the kind before it probes and does nothing else with it, and an
+// agent older than the router, switch and access-point kinds rejects them and
+// reports the check unreachable without sending a packet. Those three are
+// devices to it; the saved kind stays on the server, where every reader is.
+func availabilityProbeAgentTargetKind(kind config.AvailabilityTargetKind) config.AvailabilityTargetKind {
+	if kind.IsNetworkGear() {
+		return config.AvailabilityTargetDevice
+	}
+	return kind
+}
+
 // availabilityProbeAgentTargetPayload carries only what the agent needs to run
 // the check. Failure accounting and resource linkage stay server-side.
 func availabilityProbeAgentTargetPayload(target config.AvailabilityTarget) map[string]interface{} {
@@ -389,7 +401,7 @@ func availabilityProbeAgentTargetPayload(target config.AvailabilityTarget) map[s
 		"id":                  target.ID,
 		"configRevision":      target.ConfigRevision,
 		"name":                target.DisplayName(),
-		"targetKind":          string(target.TargetKind),
+		"targetKind":          string(availabilityProbeAgentTargetKind(target.TargetKind)),
 		"address":             target.Address,
 		"protocol":            string(target.Protocol),
 		"enabled":             target.Enabled,
