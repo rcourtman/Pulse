@@ -285,10 +285,24 @@ jobs:
                 > "${path}"
             fi
           done
+          # Collection can fail before the frontier validator runs. A missing
+          # or interrupted collector receipt must not hide activation evidence
+          # or be recorded as an empty, successful inventory.
+          inventory_receipt() {
+            local receipt
+            if [ -s "$1" ] &&
+               receipt="$(jq -ces 'select(length == 1) | .[0] | select(.check == "github_inventory_collection")' "$1" 2>/dev/null)"; then
+              printf '%s\n' "${receipt}"
+            else
+              printf '%s\n' '{"status":"not_observed","attempts":[]}'
+            fi
+          }
           jq -n \
             --slurpfile release_diagnostic release-continuity-evidence/release-diagnostic.json \
             --slurpfile frontier_diagnostic release-continuity-evidence/frontier-diagnostic.json \
             --slurpfile activation_diagnostic release-continuity-evidence/activation-diagnostic.json \
+            --argjson stable_refs_collection "$(inventory_receipt release-continuity-evidence/stable-refs-collection.json)" \
+            --argjson releases_collection "$(inventory_receipt release-continuity-evidence/releases-collection.json)" \
             --arg schema_version "1" \
             --arg checked_at "${checked_at}" \
             --arg repository "${REPOSITORY}" \
@@ -344,6 +358,10 @@ jobs:
               diagnostics: {
                 release_identity: $release_diagnostic[0],
                 stable_publication_frontier: $frontier_diagnostic[0],
+                github_inventory_collection: {
+                  stable_refs: $stable_refs_collection,
+                  releases: $releases_collection
+                },
                 activation_binding: $activation_diagnostic[0]
               },
               checks: {

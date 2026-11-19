@@ -26,12 +26,13 @@ sys.modules[SPEC.name] = collector
 SPEC.loader.exec_module(collector)
 
 ENDPOINT = "repos/rcourtman/Pulse/releases?per_page=100"
+REFS_ENDPOINT = "repos/rcourtman/Pulse/git/matching-refs/tags/v?per_page=100"
 CANCEL = b"stream error: stream ID 1; CANCEL; received from peer\n"
 COMPLETE = b'[[{"id":1}],[{"id":2}]]\n'
 
 
 class InventoryCollectionTest(unittest.TestCase):
-    def collect(self, responses, existing=None):
+    def collect(self, responses, existing=None, endpoint=ENDPOINT):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             output = root / "inventory.json"
@@ -47,7 +48,7 @@ class InventoryCollectionTest(unittest.TestCase):
                 stdout.write(body)
                 return subprocess.CompletedProcess(command, code, stderr=error)
 
-            args = argparse.Namespace(endpoint=ENDPOINT, output=output, diagnostic=diagnostic)
+            args = argparse.Namespace(endpoint=endpoint, output=output, diagnostic=diagnostic)
             with patch.object(collector.subprocess, "run", side_effect=read), \
                     patch.object(collector.time, "sleep") as sleep, \
                     redirect_stderr(io.StringIO()) as console:
@@ -115,6 +116,45 @@ class InventoryCollectionTest(unittest.TestCase):
         self.assertIsNone(output)
         self.assertEqual(receipt["attempts"][-1]["result"], "gh_failed")
         self.assertEqual(len(calls), 2)
+
+    def test_reports_only_a_fixed_inventory_name_and_cli_http_status_without_retrying(self):
+        for endpoint, label in [(ENDPOINT, "release"), (REFS_ENDPOINT, "tag reference")]:
+            for status in [401, 403, 429, 502]:
+                with self.subTest(endpoint=endpoint, status=status):
+                    error = f"gh: PRIVATE_FIXTURE (HTTP {status})\n".encode()
+                    result, receipt, output, calls, sleeps, console = self.collect([
+                        (1, b"{discarded", error),
+                    ], endpoint=endpoint)
+                    self.assertEqual(result, 1)
+                    self.assertIsNone(output)
+                    self.assertEqual(len(calls), 1)
+                    self.assertEqual(sleeps, [])
+                    attempt, = receipt["attempts"]
+                    self.assertEqual(attempt["result"], "gh_failed")
+                    self.assertEqual(attempt["reported_http_status"], status)
+                    self.assertIn(f"GitHub {label} inventory unavailable", console)
+                    self.assertIn(f"HTTP {status} reported by gh", console)
+                    self.assertNotIn("PRIVATE_FIXTURE", console + json.dumps(receipt))
+                    self.assertNotIn("discarded", console + json.dumps(receipt))
+
+    def test_mixed_or_non_http_exit_reports_no_http_status(self):
+        denied = b"gh: PRIVATE_FIXTURE (HTTP 403)\n"
+        for code, error in [
+            (1, denied + CANCEL),
+            (1, b"warning: earlier failure\n" + denied),
+            (1, b"private diagnostic contains (HTTP 403)"),
+            (1, b"gh: line\x1b[31m (HTTP 403)"),
+            (0, denied),
+            (-15, denied),
+        ]:
+            with self.subTest(code=code, error=error):
+                result, receipt, output, calls, sleeps, console = self.collect([(code, COMPLETE, error)])
+                self.assertEqual(result, 1)
+                self.assertIsNone(output)
+                self.assertEqual(len(calls), 1)
+                self.assertEqual(sleeps, [])
+                self.assertIsNone(receipt["attempts"][0]["reported_http_status"])
+                self.assertNotIn("HTTP 403", console)
 
     def test_refusals_unknown_errors_signals_and_mixed_diagnostics_never_repeat(self):
         cases = [
@@ -225,6 +265,63 @@ class InventoryCollectionTest(unittest.TestCase):
         for name in ["packet", "assets", "containers", "aliases", "helm"]:
             check = next(s for s in job["steps"] if s.get("id") == name)
             self.assertIn("steps.frontier.outcome == 'success'", check["if"])
+
+    def record_workflow_evidence(self, collections):
+        workflow = yaml.safe_load((ROOT / ".github/workflows/security-scan.yml").read_text())
+        step = next(
+            step for step in workflow["jobs"]["release-continuity"]["steps"]
+            if step["name"] == "Record continuity evidence"
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            evidence = root / "release-continuity-evidence"
+            evidence.mkdir()
+            activation = {"check": "release_activation_binding", "status": "success"}
+            (evidence / "activation-diagnostic.json").write_text(json.dumps(activation))
+            for name, data in collections.items():
+                (evidence / f"{name}-collection.json").write_text(data)
+            summary = root / "summary"
+            result = subprocess.run(
+                ["bash", "-c", step["run"]], cwd=root, text=True, capture_output=True,
+                env={
+                    **os.environ,
+                    **dict.fromkeys(step["env"], ""),
+                    "RUN_ID": "42",
+                    "RUN_ATTEMPT": "1",
+                    "TRIGGER_SCHEDULE": "17 */6 * * *",
+                    "FRONTIER_RESULT": "failure",
+                    "ACTIVATION_RESULT": "success",
+                    "GITHUB_STEP_SUMMARY": str(summary),
+                },
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            report = (evidence / "continuity-evidence.json").read_text()
+            self.assertEqual(summary.read_text(), report)
+            return json.loads(report)
+
+    def test_reports_collector_failure_separately_from_policy_and_activation(self):
+        _, refs, _, _, _, _ = self.collect([(0, COMPLETE, b"")], endpoint=REFS_ENDPOINT)
+        _, releases, _, _, _, _ = self.collect([(1, b"[", b"gh: service error (HTTP 502)\n")])
+        report = self.record_workflow_evidence({
+            "stable-refs": json.dumps(refs),
+            "releases": json.dumps(releases),
+        })
+        self.assertEqual(report["checks"]["stable_publication_frontier"], "failure")
+        self.assertEqual(report["diagnostics"]["stable_publication_frontier"]["status"], "not_run")
+        self.assertEqual(report["diagnostics"]["activation_binding"]["status"], "success")
+        self.assertEqual(report["diagnostics"]["github_inventory_collection"], {
+            "stable_refs": refs,
+            "releases": releases,
+        })
+
+    def test_missing_or_truncated_receipts_do_not_hide_the_independent_activation_result(self):
+        report = self.record_workflow_evidence({"stable-refs": '{"status": "collected"'})
+        missing = {"status": "not_observed", "attempts": []}
+        self.assertEqual(report["diagnostics"]["github_inventory_collection"], {
+            "stable_refs": missing,
+            "releases": missing,
+        })
+        self.assertEqual(report["diagnostics"]["activation_binding"]["status"], "success")
 
 
 if __name__ == "__main__":
