@@ -88,7 +88,7 @@ func GetWebhookTemplates() []WebhookTemplate {
 			}`,
 			ResolvedPayloadTemplate: `{
 				"chat_id": "{{.ChatID | jsonString}}",
-				"text": "<b>Resolved: {{.ResourceName | html | jsonString}}</b>\n\n{{.Message | html | jsonString}}\n\n<b>Details:</b>\n• Resource: {{.ResourceName | html | jsonString}}\n• Node: {{.Node | html | jsonString}}\n• Type: {{.Type | title | html | jsonString}}\n• Duration: {{.Duration | html | jsonString}}\n• Resolved At: {{.ResolvedAt | html | jsonString}}",
+				"text": "<b>Resolved: {{.ResourceName | html | jsonString}}</b>\n\n{{.Message | html | jsonString}}\n\n<b>Details:</b>\n• Resource: {{.ResourceName | html | jsonString}}\n• Node: {{.Node | html | jsonString}}\n• Type: {{.Type | title | html | jsonString}}\n• Duration: {{.Duration | html | jsonString}}\n• Resolved At: {{.ResolvedAt | html | jsonString}}{{if .AlertURL}}\n\n<a href=\"{{.AlertURL | html | jsonString}}\">View in Pulse</a>{{end}}",
 				"parse_mode": "HTML",
 				"disable_web_page_preview": true
 			}`,

@@ -46,14 +46,19 @@ inbox receipt.
 ### Telegram treats alert values as literal text
 
 The built-in Telegram firing and resolved templates use Telegram's HTML mode.
-Only fixed headings and the existing Pulse link are markup. Every dynamic text
+Only fixed headings and the Pulse link are markup. Every dynamic text
 value and the link attribute pass through Go's existing `html` template escaper
 before `jsonString`; chat routing remains JSON-only. Underscores, asterisks,
 brackets, backticks, angle brackets, ampersands and quotes in messages or names
 cannot become Telegram formatting. Grouped messages keep every member's details,
 and headings, metric units, preview policy and link targets are preserved.
-Without a configured public or full instance URL, the existing dashboard pointer
-remains plain text rather than an invalid empty HTML link.
+Without a configured public or full instance URL, the firing dashboard pointer
+remains plain text rather than an invalid empty HTML link. The resolved stock
+body links to the singleton's Alert History or the grouped page (or the Patrol
+destination where applicable) only when there is an absolute HTTP(S) Pulse
+base with no user info, query or fragment. Otherwise its link-free body is
+unchanged; it does not fall back to the monitored instance. URL routing and
+custom templates keep their existing input and preview policy is unchanged.
 
 `telegram_literal_text_test.go` exercises the built-in renderer, single/grouped
 firing and recovery sends, enhanced sends and the Test button through real local

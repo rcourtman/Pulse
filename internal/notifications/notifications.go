@@ -3594,7 +3594,8 @@ func (n *NotificationManager) sendResolvedWebhook(webhook WebhookConfig, alertLi
 	data.NotRecovered = resolvedAlertsIncludeNotRecovered(alertList)
 	data.AlertCount = len(alertList)
 	data.Alerts = alertList
-	data.AlertURL = firstNonEmpty(alertsPageURL(n.publicURL, alertList, true), data.Instance)
+	pulseAlertURL := alertsPageURL(n.publicURL, alertList, true)
+	data.AlertURL = firstNonEmpty(pulseAlertURL, data.Instance)
 	if len(alertList) > 1 {
 		names := make([]string, 0, len(alertList))
 		for _, a := range alertList {
@@ -3609,6 +3610,16 @@ func (n *NotificationManager) sendResolvedWebhook(webhook WebhookConfig, alertLi
 	webhook, data, err = n.prepareWebhookDeliveryContext(webhook, data)
 	if err != nil {
 		return fmt.Errorf("prepare resolved webhook context: %w", err)
+	}
+	if usesBuiltInTelegramBody(webhook) {
+		// Link only to the Pulse base, never a monitored instance. Keep
+		// the existing template data for recipient selection and custom bodies.
+		data.AlertURL = ""
+		base, parseErr := url.Parse(n.publicURL)
+		if parseErr == nil && (base.Scheme == "http" || base.Scheme == "https") && base.Hostname() != "" &&
+			base.User == nil && base.RawQuery == "" && !base.ForceQuery && !strings.Contains(n.publicURL, "#") {
+			data.AlertURL = pulseAlertURL
+		}
 	}
 
 	jsonData, err := n.renderWebhookPayloadJSON(webhook, data, webhookRenderModeResolved, func() ([]byte, error) {
