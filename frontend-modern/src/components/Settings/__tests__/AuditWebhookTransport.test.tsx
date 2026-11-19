@@ -474,11 +474,32 @@ describe('Audit Webhook rendered controls through the real HTTP client', () => {
     fireEvent.keyDown(input(), { key: 'Enter' });
     expect(writes()).toHaveLength(1);
 
+    const oldCheck = pendingBody();
+    readReply = () => oldCheck.response;
+    fireEvent.click(checkSaved());
+    await waitFor(() => expect(oldCheck.response.bodyUsed).toBe(true));
+    const region = screen.getByRole('region', { name: 'Audit webhook configuration' });
+    expect(region).toHaveFocus();
+    const pendingCheck = screen.getByRole('button', { name: 'Restart check' });
+    const savedList = screen.getByRole('group', { name: 'Saved audit webhook destinations' });
+    expect(savedList).toHaveAttribute('aria-busy', 'true');
+    expect(savedList).not.toContainElement(pendingCheck);
+    expect(warning).toHaveTextContent('Showing the last read.');
+
     const check = deferred<Response>();
     readReply = () => check.promise;
-    fireEvent.click(checkSaved());
-    await screen.findByText('Checking saved destinations…');
-    expect(screen.getByRole('region', { name: 'Audit webhook configuration' })).toHaveFocus();
+    fireEvent.click(pendingCheck);
+    expect(region).toHaveFocus();
+    expect(reads()).toHaveLength(3);
+    expect(reads()[1].init.signal?.aborted).toBe(true);
+    expect(reads()[2].init.signal?.aborted).toBe(false);
+    oldCheck.finish({ urls: [addedURL] });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(warning).toHaveTextContent(ambiguous);
+    expect(screen.getByTitle(selectedURL)).toBeInTheDocument();
+    expect(screen.queryByTitle(addedURL)).not.toBeInTheDocument();
+    expect(input()).toHaveValue(otherURL);
+    expect(savedList).toHaveAttribute('aria-busy', 'true');
     expect(screen.getByRole('button', { name: 'Add Endpoint' })).toBeDisabled();
     input().focus();
     check.resolve(json({ urls: [firstURL, null] }));
@@ -495,7 +516,7 @@ describe('Audit Webhook rendered controls through the real HTTP client', () => {
     expect(input()).toHaveValue(otherURL);
     expect(screen.queryByText(ambiguous)).not.toBeInTheDocument();
     expect(screen.queryByText(success)).not.toBeInTheDocument();
-    expect(reads()).toHaveLength(3);
+    expect(reads()).toHaveLength(4);
     for (const request of reads()) expectWire(request, 'GET');
 
     writeReply = acceptWrite;
@@ -751,6 +772,9 @@ describe('Audit Webhook rendered controls through the real HTTP client', () => {
 describe('Audit Webhook read-recovery keyboard position', () => {
   const region = () => screen.getByRole('region', { name: 'Audit webhook configuration' });
   const retry = () => screen.getByRole('button', { name: 'Retry loading' });
+  const restart = () => screen.getByRole('button', { name: 'Restart loading' });
+  const noPendingRead = () =>
+    expect(screen.queryByRole('button', { name: 'Restart loading' })).not.toBeInTheDocument();
   const failedRead = () => json({ error: 'Synthetic unavailable' }, 503);
   const startRecovery = async (canManage = true) => {
     readReply = failedRead;
@@ -763,11 +787,71 @@ describe('Audit Webhook read-recovery keyboard position', () => {
     retry().focus();
     fireEvent.click(retry());
     expect(region()).toHaveFocus();
-    expect(region()).toHaveAttribute('aria-busy', 'true');
+    expect(restart()).toBeEnabled();
     expect(screen.queryByRole('button', { name: 'Retry loading' })).not.toBeInTheDocument();
     await waitFor(() => expect(reads()).toHaveLength(2));
     return { view, response };
   };
+
+  it('replaces a stalled initial read for a read-only reader, even when the old body completes', async () => {
+    const oldRead = pendingBody();
+    readReply = () => oldRead.response;
+    mount({ canManage: false });
+    await waitFor(() => expect(oldRead.response.bodyUsed).toBe(true));
+    const restartButton = restart();
+    expect(restartButton.closest('[aria-busy="true"]')).toBeNull();
+    const current = deferred<Response>();
+    readReply = () => current.promise;
+    restartButton.focus();
+    fireEvent.click(restartButton);
+    expect(region()).toHaveFocus();
+    expect(reads()).toHaveLength(2);
+    expect(reads()[0].init.signal?.aborted).toBe(true);
+    oldRead.finish({ urls: [] });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(restartButton).toBeEnabled();
+    expect(screen.queryByText(empty)).not.toBeInTheDocument();
+
+    // A successful result while Restart is focused keeps keyboard position.
+    restartButton.focus();
+    current.resolve(json({ urls: inventory }));
+    await loaded();
+    noPendingRead();
+    expect(region()).toHaveFocus();
+    expect(input()).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: `Remove webhook endpoint ${firstURL}` }),
+    ).toBeDisabled();
+    expect(writes()).toHaveLength(0);
+    expect(healthReads()).toHaveLength(0);
+    for (const request of reads()) expectWire(request, 'GET');
+    expectAuthRetained();
+  });
+
+  it('does not use Restart to start a new read after silent organization drift', async () => {
+    const oldRead = deferred<Response>();
+    readReply = () => oldRead.promise;
+    mount();
+    await waitFor(() => expect(reads()).toHaveLength(1));
+    add();
+    setOrgID('estate/west');
+    fireEvent.click(restart());
+    await screen.findByText(readError);
+    expect(reads()).toHaveLength(1);
+    expect(reads()[0].init.signal?.aborted).toBe(true);
+    expect(input()).toHaveValue('');
+    expect(writes()).toHaveLength(0);
+    expectAuthRetained('estate/west');
+
+    readReply = () => json({ urls: [otherURL] });
+    fireEvent.click(retry());
+    await loaded([otherURL]);
+    expect(reads()).toHaveLength(2);
+    expectWire(reads()[1], 'GET', 'estate/west');
+    oldRead.resolve(json({ urls: [firstURL] }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(screen.queryByTitle(firstURL)).not.toBeInTheDocument();
+  });
 
   it.each([
     ['loaded', true],
@@ -783,7 +867,7 @@ describe('Audit Webhook read-recovery keyboard position', () => {
       response.resolve(
         result === 'failed' ? failedRead() : json({ urls: result === 'empty' ? [] : inventory }),
       );
-      await waitFor(() => expect(region()).toHaveAttribute('aria-busy', 'false'));
+      await waitFor(noPendingRead);
       expect(region()).toHaveFocus();
       if (result === 'failed') {
         expect(retry()).toBeEnabled();
@@ -827,7 +911,7 @@ describe('Audit Webhook read-recovery keyboard position', () => {
       try {
         outside.focus();
         response.resolve(result === 'failed' ? failedRead() : json({ urls: inventory }));
-        await waitFor(() => expect(region()).toHaveAttribute('aria-busy', 'false'));
+        await waitFor(noPendingRead);
         await new Promise((resolve) => setTimeout(resolve, 20));
         expect(outside).toHaveFocus();
         expect(writes()).toHaveLength(0);

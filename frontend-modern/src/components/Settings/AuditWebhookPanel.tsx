@@ -1,4 +1,4 @@
-import { For, Show, type Component } from 'solid-js';
+import { For, Show, onCleanup, type Component } from 'solid-js';
 import Shield from 'lucide-solid/icons/shield';
 import Globe from 'lucide-solid/icons/globe';
 import Plus from 'lucide-solid/icons/plus';
@@ -73,6 +73,7 @@ export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
     newUrl,
     openRemoveWebhook,
     pendingRemoval,
+    restartWebhooksRead,
     saving,
     setNewUrl,
     successNotice,
@@ -94,6 +95,36 @@ export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
     // background synchronously. Keep focus local before any response arrives.
     void fetchWebhooks();
     configurationPanelRef?.focus({ preventScroll: true });
+  };
+  const restartConfigurationRead = () => {
+    configurationPanelRef?.focus({ preventScroll: true });
+    void restartWebhooksRead();
+  };
+  const ReadRecoveryButton: Component<{ savedCheck?: boolean }> = (buttonProps) => {
+    let button: HTMLButtonElement | undefined;
+    onCleanup(() => {
+      // A result may arrive before a focused reader activates Restart.
+      if (document.activeElement === button && canRead() && configurationPanelRef?.isConnected)
+        configurationPanelRef.focus({ preventScroll: true });
+    });
+    return (
+      <Button
+        ref={button}
+        variant="outline"
+        size="sm"
+        class="min-h-11 min-w-0 px-2 whitespace-normal sm:min-h-0 sm:shrink-0 sm:px-3"
+        onClick={() => {
+          if (!buttonProps.savedCheck || loading()) restartConfigurationRead();
+          else checkSavedDestinations();
+        }}
+      >
+        {buttonProps.savedCheck
+          ? loading()
+            ? 'Restart check'
+            : AUDIT_WEBHOOK_CHECK_SAVED_LABEL
+          : 'Restart loading'}
+      </Button>
+    );
   };
   const removalReturnTarget = () => {
     // A lost reply keeps the confirmation local but not actionable. On
@@ -151,7 +182,6 @@ export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
             title="Audit Webhooks"
             role="region"
             aria-label="Audit webhook configuration"
-            aria-busy={loading()}
             tabIndex={-1}
             class="focus:outline-2 focus:-outline-offset-2 focus:outline-blue-500 dark:focus:outline-blue-400"
             noPadding
@@ -200,16 +230,22 @@ export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
                   </div>
                 </Card>
               </Show>
-              <Show
-                when={!loading() || hasLoadedConfiguration()}
-                fallback={<p class="text-sm text-muted">{getAuditWebhookLoadingState().text}</p>}
-              >
-                <Show when={loading() && !unconfirmedChange()}>
+              <Show when={loading() && !unconfirmedChange()}>
+                <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
                   <p class="text-sm text-muted" role="status">
                     {getAuditWebhookLoadingState().text}
                   </p>
-                </Show>
-                <div ref={endpointListRef} class="space-y-2 sm:space-y-3">
+                  <ReadRecoveryButton />
+                </div>
+              </Show>
+              <Show when={hasLoadedConfiguration()}>
+                <div
+                  ref={endpointListRef}
+                  role="group"
+                  aria-label="Saved audit webhook destinations"
+                  aria-busy={loading()}
+                  class="space-y-2 sm:space-y-3"
+                >
                   <For each={webhookUrls()}>
                     {(url) => (
                       <div class={AUDIT_WEBHOOK_ENDPOINT_CARD_CLASS}>
@@ -242,14 +278,7 @@ export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
                     )}
                   </For>
 
-                  <Show
-                    when={
-                      hasLoadedConfiguration() &&
-                      !loading() &&
-                      !loadError() &&
-                      webhookUrls().length === 0
-                    }
-                  >
+                  <Show when={!loading() && !loadError() && webhookUrls().length === 0}>
                     <EmptyState
                       variant="panel"
                       icon={<Globe class="h-5 w-5" />}
@@ -285,15 +314,7 @@ export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
                   Add Endpoint
                 </button>
                 <Show when={unconfirmedChange() && !pendingRemoval()}>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    class="min-h-11 min-w-0 px-2 whitespace-normal sm:min-h-0 sm:shrink-0 sm:px-3"
-                    disabled={loading()}
-                    onClick={checkSavedDestinations}
-                  >
-                    {loading() ? 'Checking saved destinations…' : AUDIT_WEBHOOK_CHECK_SAVED_LABEL}
-                  </Button>
+                  <ReadRecoveryButton savedCheck />
                 </Show>
               </div>
             </div>

@@ -107,13 +107,18 @@ export const useAuditWebhookPanelState = (props: AuditWebhookPanelProps) => {
     return false;
   };
 
-  const fetchWebhooks = async () => {
+  const loadWebhooks = async (restart = false) => {
     if (disposed) return;
-    ensureCurrentContext();
-    if (!canRead() || !isAuditLoggingEnabled() || readController || saveController) return;
+    // A stale Restart belongs to the old reader. Withdraw it instead of
+    // turning it into a fresh check in a different organization.
+    if (!ensureCurrentContext() && restart) return;
+    if (!canRead() || !isAuditLoggingEnabled() || saveController) return;
+    const previousRead = readController;
+    if (restart ? !previousRead : previousRead) return;
     const reader = context();
     const controller = new AbortController();
     readController = controller;
+    previousRead?.abort();
     const isCurrent = () =>
       contextIsCurrent() && reader === context() && readController === controller;
     batch(() => {
@@ -155,6 +160,8 @@ export const useAuditWebhookPanelState = (props: AuditWebhookPanelProps) => {
       }
     }
   };
+  const fetchWebhooks = () => loadWebhooks();
+  const restartWebhooksRead = () => loadWebhooks(true);
 
   const saveWebhooks = async (urls: string[]) => {
     if (!ensureCurrentContext() || !canEdit()) return false;
@@ -296,6 +303,7 @@ export const useAuditWebhookPanelState = (props: AuditWebhookPanelProps) => {
     newUrl,
     openRemoveWebhook,
     pendingRemoval,
+    restartWebhooksRead,
     saving,
     setNewUrl: updateNewUrl,
     showUpgradePrompts,
