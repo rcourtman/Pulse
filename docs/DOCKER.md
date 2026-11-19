@@ -209,10 +209,10 @@ is not a blanket mute for everything on that machine.
   keeping the machine monitored. Global or platform-wide Off controls also
   affect more than one runtime; do not use them for that narrower job.
 
-There is no single inherited runtime-and-containers Off control here. For an
-on-demand lab, the existing alternative is to disable each unwanted container's
-alerts separately and, if wanted, the runtime's Offline Alerts. This does not
-automatically cover containers added later; review their own settings too.
+There is no single switch for both a runtime and its containers. If your
+version does not have the [container group mute](#mute-all-containers-on-one-runtime),
+turn off alerts for each unwanted container separately and, if wanted, turn off
+**Runtime Offline Alerts**. Review the settings of containers added later.
 Keep wanted machine and other-runtime alerts enabled.
 
 Use existing alert details to distinguish the runtime, container and machine;
@@ -222,6 +222,19 @@ queue cancellation or proof of recovery. For those messages, use
 [ordinary notification checks](TROUBLESHOOTING.md#test-succeeds-but-real-alerts-are-missing).
 Patrol findings are separate from threshold alerts; see
 [metric Off and Patrol](FAQ.md#can-i-disable-alerts-for-specific-metrics).
+
+### Mute all containers on one runtime
+
+In **Alerts → Thresholds → Docker → Container Runtimes**, look for
+**Mute current and future containers**. Tick the intended runtime, select
+**Save Changes**, then reopen the settings and check that the same runtime
+is still ticked. This covers containers already there and ones added later.
+Other runtimes, machine alerts, Swarm services and endpoint checks keep their
+own settings. Monitoring continues.
+
+Use **Runtime Offline Alerts** separately if you also want to stop that
+runtime's disconnection alerts. To resume the container rules, untick the
+runtime and save. Containers you set to **Off** individually stay off.
 
 ### A finished job is not an offline container
 
