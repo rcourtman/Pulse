@@ -955,6 +955,22 @@ explicit mixed results, retries and cache finalisation through the real poller,
 state JSON and recovery mapper. These are offline log fixtures, not native backup
 execution, archive availability, guest thaw or filesystem-liveness proof.
 
+### Accepted backup jobs survive a later log deadline
+
+Once the current Proxmox connection accepts a task list and any guest log
+results, a later log exhausting the provider-read budget must not lose that
+evidence from Backup jobs and Backup health reports. The local history write
+gets up to 20 seconds from write admission when the existing deadline leaves
+less; a later existing deadline is unchanged. Neither provider scheduling nor
+the connection/runtime publication fence is extended. The observed outcomes
+and collection metadata use the same existing history write; an unread log
+does not supply a guest verdict or complete attribution. Execution evidence
+does not establish recoverable archives or refresh protection dates.
+
+`TestBackupHistoryRetainsAcceptedResultsAfterLogDeadline` exercises the live
+and durable results, late log rejection, the next empty provider inventory,
+connection replacement, and runtime cancellation.
+
 ### Native TrueNAS SCALE CPU uses the reported aggregate
 
 `reporting.realtime` may place its aggregate at `fields.cpu.cpu.usage`,

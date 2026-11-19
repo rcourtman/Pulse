@@ -282,3 +282,126 @@ func TestVzdumpGuestResultPollRetriesUnknownUntilExplicitResult(t *testing.T) {
 		t.Log("VZDUMP_RESULT_PRODUCER=" + string(data))
 	}
 }
+
+type backupHistoryDeadlineClient struct {
+	historyPVEClient
+	readLog func(context.Context, string) ([]proxmox.TaskLogLine, error)
+}
+
+func (c *backupHistoryDeadlineClient) GetTaskLog(ctx context.Context, _, upid string) ([]proxmox.TaskLogLine, error) {
+	return c.readLog(ctx, upid)
+}
+
+func TestBackupHistoryRetainsAcceptedResultsAfterLogDeadline(t *testing.T) {
+	const instance, node = "fixture-site", "pve"
+	const first, later = "fixture-observed-job", "fixture-unread-job"
+
+	for _, phase := range []string{"log-deadline", "runtime-cancelled", "connection-replaced"} {
+		t.Run(phase, func(t *testing.T) {
+			parent, stop := context.WithCancel(context.Background())
+			defer stop()
+			start := time.Now().UTC().Truncate(time.Second).Add(-time.Hour)
+			listed := []proxmox.Task{
+				{UPID: first, Node: node, Type: "vzdump", Status: "job errors", StartTime: start.Unix(), EndTime: start.Add(5 * time.Minute).Unix()},
+				{UPID: later, Node: node, Type: "vzdump", Status: "OK", StartTime: start.Add(time.Minute).Unix(), EndTime: start.Add(6 * time.Minute).Unix()},
+			}
+			c := &backupHistoryDeadlineClient{historyPVEClient: historyPVEClient{history: proxmox.BackupTaskHistory{
+				Tasks: listed, Nodes: []proxmox.BackupTaskHistoryNode{{Node: node, Complete: true}},
+			}}}
+			manager := recoverymanager.New(config.NewMultiTenantPersistence(t.TempDir()))
+			store, err := manager.StoreForOrg("default")
+			require.NoError(t, err)
+			defer store.Close()
+			m := &Monitor{
+				state: models.NewState(), recoveryManager: manager,
+				pveClients: map[string]PVEClientInterface{instance: c}, runtimeCtx: parent,
+			}
+			peer := models.BackupTask{ID: "peer-task", Instance: "peer-site", VMID: 101, Status: "OK"}
+			m.state.UpdateBackupTasksForInstance(peer.Instance, []models.BackupTask{peer})
+			var reads []string
+			c.readLog = func(ctx context.Context, upid string) ([]proxmox.TaskLogLine, error) {
+				reads = append(reads, upid)
+				if upid == first {
+					return testLogLines(
+						"INFO: Starting Backup of VM 101 (qemu)",
+						"ERROR: Backup of VM 101 failed - fixture archive unavailable",
+						"INFO: Starting Backup of VM 102 (qemu)",
+						"INFO: Finished Backup of VM 102 (00:01:00)",
+						"TASK ERROR: job errors",
+					), nil
+				}
+				require.Equal(t, later, upid)
+				switch phase {
+				case "log-deadline":
+					<-ctx.Done()
+					require.ErrorIs(t, ctx.Err(), context.DeadlineExceeded)
+				case "runtime-cancelled":
+					stop()
+					require.ErrorIs(t, ctx.Err(), context.Canceled)
+				case "connection-replaced":
+					m.replacePVEClient(instance, &backupHistoryDeadlineClient{})
+					require.ErrorIs(t, ctx.Err(), context.Canceled)
+				}
+				// A provider can return a decoded result after cancellation.
+				// That is not an accepted guest observation.
+				return testLogLines(
+					"INFO: Starting Backup of VM 103 (qemu)",
+					"INFO: Finished Backup of VM 103 (00:01:00)",
+					"TASK OK",
+				), nil
+			}
+
+			owner := m.beginPVEBackupPoll(instance, c, time.Time{}, time.Now())
+			require.NotNil(t, owner)
+			poll := context.WithValue(owner.ctx, pveBackupPollContextKey{}, owner)
+			budget := time.Minute
+			if phase == "log-deadline" {
+				budget = 2 * time.Second
+			}
+			m.pollPVEBackupsAndSnapshots(poll, instance, c, nil, nil, budget)
+			m.finishPVEBackupPoll(instance, owner)
+			require.Equal(t, []string{first, later}, reads)
+
+			query := context.Background()
+			from, to := start.Add(-time.Minute), time.Now().UTC()
+			points, coverage, err := store.BackupHealthHistory(query, from, to)
+			require.NoError(t, err)
+			if phase != "log-deadline" {
+				require.Equal(t, []models.BackupTask{peer}, m.state.GetBackupTasks())
+				require.Empty(t, points)
+				require.Empty(t, coverage.Sources)
+				return
+			}
+
+			live := make(map[string]models.BackupTask)
+			for _, task := range m.state.GetBackupTasks() {
+				live[task.ID] = task
+			}
+			require.Len(t, live, 5)
+			require.Equal(t, peer, live[peer.ID])
+			require.Equal(t, "error", live[instance+"-"+first+"-vm101"].Status)
+			require.Equal(t, "OK", live[instance+"-"+first+"-vm102"].Status)
+			require.Len(t, points, 4, "accepted live results must also reach durable history")
+			require.Len(t, coverage.Sources, 1, "the source observation belongs with the accepted task evidence")
+
+			outcomes := make(map[string]recovery.RecoveryPoint)
+			for _, point := range points {
+				require.Equal(t, recovery.KindOther, point.Kind, "job outcomes are not restore artifacts")
+				outcomes[point.ID] = point
+			}
+			id := "pve-task:" + instance + "-"
+			require.Equal(t, recovery.OutcomeFailed, outcomes[id+first+"-vm101"].Outcome)
+			require.Equal(t, recovery.OutcomeSuccess, outcomes[id+first+"-vm102"].Outcome)
+			require.Equal(t, true, outcomes[id+first].Details["guestTaskDetailsComplete"])
+			require.Equal(t, false, outcomes[id+later].Details["guestTaskDetailsComplete"])
+			require.NotContains(t, outcomes, id+later+"-vm103")
+
+			c.history.Tasks = nil
+			m.pollBackupTasks(query, instance, c)
+			require.Equal(t, []models.BackupTask{peer}, m.state.GetBackupTasks(), "the next accepted empty inventory only removes live rows")
+			retained, _, err := store.BackupHealthHistory(query, from, time.Now().UTC())
+			require.NoError(t, err)
+			require.ElementsMatch(t, points, retained)
+		})
+	}
+}

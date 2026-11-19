@@ -166,6 +166,26 @@ func (m *Monitor) persistBackupTaskHistory(ctx context.Context, points []recover
 	}
 }
 
+// After publication admission, give already accepted task evidence time to
+// reach history even when a later log uses up the provider-read budget. Keep
+// the original deadline if it leaves more time, but don't extend any provider
+// read or let the write outlive the connection/runtime that owns the poll.
+func (m *Monitor) persistAcceptedBackupTaskHistory(readCtx context.Context, points []recovery.RecoveryPoint, observation model.BackupHistoryCollection) {
+	owner, _ := readCtx.Value(pveBackupPollContextKey{}).(*pveBackupPoll)
+	if owner == nil {
+		m.persistBackupTaskHistory(readCtx, points, observation)
+		return
+	}
+	const historyWriteGrace = 20 * time.Second
+	deadline, _ := readCtx.Deadline()
+	if minimum := time.Now().Add(historyWriteGrace); deadline.Before(minimum) {
+		deadline = minimum
+	}
+	writeCtx, cancel := context.WithDeadline(owner.ctx, deadline)
+	defer cancel()
+	m.persistBackupTaskHistory(writeCtx, points, observation)
+}
+
 func (m *Monitor) qualifyBackupGuestTaskDetails(instance string, jobs []models.BackupTask, upids map[string]string, points []recovery.RecoveryPoint) {
 	complete := make(map[string]bool, len(jobs))
 	m.mu.RLock()
