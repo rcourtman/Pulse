@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "base_sha": "fe60112dae9e51db3f6c0c334f7744167912e16b",
+  "verified_at": "2026-11-19T16:08:50Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/standalone/AvailabilityChecksTable.tsx",
+    "frontend-modern/src/features/standalone/AvailabilityFleetView.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/standalone/AvailabilityChecksTable.tsx": "907b95bf71c2fcc9e11366cfe424e69fe792b87b0a3393161c51349727637311",
+    "frontend-modern/src/features/standalone/AvailabilityFleetView.tsx": "897010182d7e27710b78d79a332e181a1b069a9a5d6b4d7439ac22562f742842"
+  },
+  "routes": [
+    "/standalone/availability?view=fleet",
+    "/standalone/availability"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Production Machines Availability view, 50 synthetic results including complete and partial 24h history",
+    "Open inline drawer with same-ID latency refresh, focused drawer removal and focused collapsed tile removal",
+    "Filtered-empty and inventory-empty views, and automatic Fleet-to-table transition at 20 to 19 checks"
+  ],
+  "interactions": [
+    "Keyboard Enter and Tab, narrow WebKit touch and normal Collapse to the opener",
+    "Live omission moves focus to a surviving neighbour without opening it; keyboard can then open it",
+    "Reappearance does not reopen the omitted check; deliberate search focus is not stolen",
+    "When Fleet is replaced, focus lands on the existing search or Add service/device check link",
+    "Same search parameters, healthy sibling evidence and 24h History request contract; 12 desktop/phone pairs visually inspected"
+  ]
+}
