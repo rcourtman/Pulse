@@ -1,0 +1,73 @@
+{
+  "version": 1,
+  "base_sha": "a23a7237182737f7fb5551fec8ee126344f22f53",
+  "verified_at": "2026-11-19T23:03:33Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapSurface.tsx",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapDiagram.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapLayout.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapSurface.tsx": "de5f7164751bedb7976be9241354636b5d0ccccbc41e867748644adbf0569558",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapDiagram.ts": "82b24cb043607054a261c7b2d9560a9adc8bbafa610e0017d788eaed742f56da",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapLayout.ts": "cd36432d228f86b87ca9c07410cead33bacd77f9cb7910caaee96e2e896f8cae"
+  },
+  "routes": [
+    "/map",
+    "/proxmox/overview",
+    "/alerts/overview"
+  ],
+  "viewports": [
+    {
+      "width": 320,
+      "height": 568
+    },
+    {
+      "width": 360,
+      "height": 780
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 430,
+      "height": 932
+    },
+    {
+      "width": 600,
+      "height": 700
+    },
+    {
+      "width": 767,
+      "height": 1000
+    },
+    {
+      "width": 768,
+      "height": 1024
+    },
+    {
+      "width": 1440,
+      "height": 900
+    }
+  ],
+  "states": [
+    "the final bytes as a production bundle embedded in a Pulse server on pulse-dev with mock data (about 190 tiles), in pages marked as a development build so that the held map is drawn, driven by Playwright in Chromium 151 and WebKit 26.0. The nine files the rig was built from were compared with the committed ones by hash. The rig was built on this commit's parent",
+    "phone widths 320, 360, 390, 430 and 767, both engines, touch: the map opened with Compact pressed, drawn at scale 1 with every tile 40px wide and text 11px or more, every tile inside the window, no two tiles overlapping, and no sideways scroll. It ran 6.1, 4.1, 3.5, 3 and 2.2 screens long. Before this change the 390 case was one screen with 13px tiles and 4px text",
+    "Names on a phone, both engines: tiles 104px wide with names on two lines and text 11px or more, inside the window with none overlapping, 7.9 screens long at 390",
+    "the foot of the page on a phone: scrolled to the end, the legend's last line ended 6px or more above the navigation bar at every phone width. Before the padding added here it ended 2px under it, as the Alerts page's last card does",
+    "the unmonitored gateways, Names at 390 in WebKit, read in a screenshot at full size: all three are drawn on a row of their own with the Internet tile on the row under it, over its arrow. Before this change Names at 390 drew one of the three",
+    "touch at 390, both engines, dark and light: a tile below the first screen was scrolled to and tapped; the first tap showed 'Tap again to open' and stayed on /map, the second opened that tile's own address",
+    "a 600 by 700 desktop window with a mouse, both engines, where the page now scrolls: thirty to forty presses of Tab took focus to a tile below the first screen and its card sat on that tile; after the page was scrolled a further 90px the card had moved with the tile. With the tile scrolled right off the screen its card was gone, and it was back on the tile when the tile returned. A pointer resting on a tile showed its card, and a wheel scroll ended it with no card left where the tile had been. Read in a WebKit screenshot too. In one earlier WebKit run the card was late to reach its tile after rapid tabbing and was in place at the next read",
+    "768 and 1440 wide, both engines: unchanged. The map is still fitted to one screen (scale 0.58 and 0.74)",
+    "the end-to-end spec against the same build, by the suite's own Playwright: 22 passed over two repeats of the desktop and Android projects, and the phone test passed on the iPhone WebKit project. The phone test now also checks that no box, text, line or icon is drawn past either side of the drawing and that the legend ends above the navigation bar at the foot of the scroll",
+    "not seen in a browser, held by unit tests only: a network label too long for the row (the mock estate has none), a fold of a thousand tiles or more, and a name with an emoji at the point a line breaks",
+    "not checked: Firefox, real Safari and a real phone; a rotation from portrait to landscape on a device (the change-over at 768 is covered by a unit test that resizes the window)"
+  ],
+  "interactions": [
+    "opened /map at each width, tapped Names, scrolled the page to its foot, and at 390 tapped a tile twice",
+    "at 600 wide pressed Tab down the page, scrolled it, rested the pointer on a tile and turned the wheel",
+    "ran the end-to-end spec, whose phone test taps a tile twice after checking the layout"
+  ]
+}

@@ -102,7 +102,12 @@ const labelWidth = (text: string, size: number): number =>
 // Two letters that stand for a name with no logo: the initials of its first
 // two words, or its first two letters when it is one word.
 const lettersOf = (name: string): string => {
-  if (name.startsWith('+')) return name.slice(0, 4);
+  if (name.startsWith('+')) {
+    // `+1047` does not fit an icon, and its first four characters are a
+    // different number.
+    const folded = /^\+\d+$/.test(name) ? Number(name.slice(1)) : 0;
+    return folded >= 1000 ? `+${Math.floor(folded / 1000)}k` : name.slice(0, 4);
+  }
   const parts = name.split(/[^A-Za-z0-9]+/).filter(Boolean);
   if (parts.length === 0) return '?';
   if (parts.length === 1) return parts[0].slice(0, 2).replace(/^./, (first) => first.toUpperCase());
@@ -452,7 +457,9 @@ const drawNetworks = (
   const shown = networks.slice(0, DIAGRAM_MAX_NETWORKS);
   const hidden = networks.length - shown.length;
   const pills = shown.map((network) => {
-    const text = fitMapText(networkText(network), width - 44, 12, 400);
+    // Cut by the measure the pill is sized with, so a long label ends in an
+    // ellipsis inside the row and never makes a pill wider than the drawing.
+    const text = fitMapText(networkText(network), width - 36, 12, 600);
     return { text, tone: toneOf(network), w: labelWidth(text, 12) + 36 };
   });
   if (hidden > 0) {
@@ -557,13 +564,18 @@ export function layoutServiceDiagram(diagram: ServiceDiagram, options: MapLayout
       drawTile(painter, gateway, x + index * gatewayPitch, top, true);
     });
   };
-  // As many gateways as a row of the given width holds, centred on the map.
-  const drawGatewayRow = (top: number) => {
-    const shown = diagram.gateways.slice(
-      0,
-      Math.max(1, Math.floor((inner + metrics.gap) / gatewayPitch)),
-    );
-    drawGateways(shown, mid - (shown.length * gatewayPitch - metrics.gap) / 2, top);
+  // Every gateway, centred on the map: as many to a row as the width holds, on
+  // as many rows as that takes. None is left out because a narrow window has
+  // room for one. Returns where the last row ends.
+  const drawGatewayRows = (top: number): number => {
+    const perRow = Math.max(1, Math.floor((inner + metrics.gap) / gatewayPitch));
+    let rowTop = top;
+    for (let start = 0; start < diagram.gateways.length; start += perRow) {
+      const shown = diagram.gateways.slice(start, start + perRow);
+      drawGateways(shown, mid - (shown.length * gatewayPitch - metrics.gap) / 2, rowTop);
+      rowTop += metrics.tileH + metrics.gap;
+    }
+    return rowTop - metrics.gap;
   };
 
   if (diagram.access) {
@@ -590,15 +602,24 @@ export function layoutServiceDiagram(diagram: ServiceDiagram, options: MapLayout
     );
     const gatewaysAbove = diagram.gateways.length > 0 && diagram.gateways.length > roomRight;
     if (internetAbove || gatewaysAbove) {
-      const tileBottom = y + metrics.tileH;
-      if (internetAbove) drawTile(painter, internet, mid - metrics.tileW / 2, y, true);
-      if (gatewaysAbove && internetAbove) {
-        // The Internet keeps the middle, over its arrow. Gateways follow it.
+      // Where the last row drawn above the box ends.
+      let tileBottom = y;
+      if (gatewaysAbove) {
         const x = mid + metrics.tileW / 2 + metrics.gap;
         const room = Math.max(0, Math.floor((left + inner - x + metrics.gap) / gatewayPitch));
-        drawGateways(diagram.gateways.slice(0, room), x, y);
-      } else if (gatewaysAbove) {
-        drawGatewayRow(y);
+        if (internetAbove && diagram.gateways.length <= room) {
+          // The Internet keeps the middle, over its arrow. Gateways follow it.
+          drawGateways(diagram.gateways, x, y);
+        } else {
+          // More than fit beside the Internet, or no Internet to sit beside:
+          // they take rows of their own, and the Internet the row under them.
+          tileBottom = drawGatewayRows(y);
+          if (internetAbove) y = tileBottom + metrics.gap;
+        }
+      }
+      if (internetAbove) {
+        drawTile(painter, internet, mid - metrics.tileW / 2, y, true);
+        tileBottom = y + metrics.tileH;
       }
       y = tileBottom + LAYER_GAP;
       if (internetAbove) {
@@ -639,8 +660,7 @@ export function layoutServiceDiagram(diagram: ServiceDiagram, options: MapLayout
     y = bottomOf(box) + LAYER_GAP;
   } else if (diagram.gateways.length > 0) {
     // No ways in to sit beside: the gateways are the top of the map.
-    drawGatewayRow(y);
-    y += metrics.tileH + LAYER_GAP;
+    y = drawGatewayRows(y) + LAYER_GAP;
   }
 
   if (diagram.networks.length > 0) {
@@ -893,4 +913,25 @@ export function fitServiceDiagram(
   }
   const fitted = best as FittedDiagram;
   return { scene: fitted.scene, scale: Math.max(FIT_MIN_SCALE, fitted.scale) };
+}
+
+/**
+ * The diagram for a phone: laid out at the width given, at full size, and left
+ * to run as long as it needs. A phone cannot hold the whole map on one screen
+ * at a size that can be read or tapped, and every page on a phone scrolls.
+ * Names are written out on two lines, as in the saved image, because there is
+ * no pointer to hover a cut name with. Only a window too narrow for the
+ * narrowest layout is scaled down.
+ */
+export function flowServiceDiagram(
+  diagram: ServiceDiagram,
+  width: number,
+  density: MapLayoutOptions['density'],
+): FittedDiagram {
+  const scene = layoutServiceDiagram(diagram, {
+    width,
+    density,
+    wrapNames: density === 'names',
+  });
+  return { scene, scale: scene.width > 0 ? Math.min(1, width / scene.width) : 1 };
 }

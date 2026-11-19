@@ -180,8 +180,9 @@ export const fitMapName = (
  * A name on one line when it fits and on two when it does not, broken after
  * a space, hyphen, underscore or dot, or where a capital starts a new word
  * inside it (`iSponsorBlock` + `TV`), whichever falls in reach. A word with
- * none of those is broken where the line runs out. What will not go on two
- * lines ends in an ellipsis.
+ * none of those is broken where the line runs out, and so is a name whose
+ * break comes too early to leave a second line that fits (`VM` + a long
+ * word). What will not go on two lines ends in an ellipsis.
  */
 export const wrapMapText = (
   text: string,
@@ -194,6 +195,9 @@ export const wrapMapText = (
   const breaksBefore = (index: number): boolean =>
     /[\s\-_.]/.test(text[index - 1]) ||
     (/[a-z0-9]/.test(text[index - 1]) && /[A-Z]/.test(text[index]));
+  // An emoji is two code units, and a line must not end between them.
+  const splitsCharacter = (index: number): boolean =>
+    /[\uD800-\uDBFF]/.test(text[index - 1]) && /[\uDC00-\uDFFF]/.test(text[index]);
   // The longest opening that fits and ends at a break.
   let cut = 0;
   for (let index = 1; index < text.length; index += 1) {
@@ -205,12 +209,25 @@ export const wrapMapText = (
     // One long word: as much of it as fits on the first line, leaving more
     // than a letter or two for the second.
     for (let index = 1; index < text.length; index += 1) {
+      if (splitsCharacter(index)) continue;
       if (textWidth(text.slice(0, index), size, weight) > maxWidth) break;
       cut = index;
     }
     cut = Math.max(1, Math.min(cut, text.length - 3));
+    if (splitsCharacter(cut)) cut -= 1;
   }
   if (cut === 0) return [fitMapText(text, maxWidth, size, weight)];
+  if (textWidth(text.slice(cut).trimStart(), size, weight) > maxWidth) {
+    // The break left more than a line. Filling the first line instead shows
+    // the whole name when that is all it takes.
+    let filled = cut;
+    for (let index = cut + 1; index < text.length; index += 1) {
+      if (splitsCharacter(index)) continue;
+      if (textWidth(text.slice(0, index).trimEnd(), size, weight) > maxWidth) break;
+      filled = index;
+    }
+    if (textWidth(text.slice(filled).trimStart(), size, weight) <= maxWidth) cut = filled;
+  }
   return [
     text.slice(0, cut).trimEnd(),
     fitMapText(text.slice(cut).trimStart(), maxWidth, size, weight),
