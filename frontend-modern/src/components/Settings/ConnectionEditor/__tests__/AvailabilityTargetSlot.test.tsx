@@ -119,6 +119,37 @@ describe('AvailabilityTargetSlot', () => {
     expect(onSaved).toHaveBeenCalledTimes(1);
   });
 
+  it('starts from the name and address a link filled in, as a ping check to save', async () => {
+    render(() => (
+      <AvailabilityTargetSlot
+        initialTargetKind="device"
+        initialName="Gateway"
+        initialAddress="192.168.0.1"
+        onCancel={vi.fn()}
+        onSaved={vi.fn()}
+      />
+    ));
+
+    expect(screen.getByLabelText('Name')).toHaveValue('Gateway');
+    expect(screen.getByLabelText('Target type')).toHaveValue('device');
+    expect(screen.getByDisplayValue('192.168.0.1')).toBeInTheDocument();
+
+    // Nothing is saved until the owner says so.
+    expect(mockedCreate).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: /^Add .*check$/ }));
+    await waitFor(() =>
+      expect(mockedCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'Gateway',
+          targetKind: 'device',
+          address: '192.168.0.1',
+          protocol: 'icmp',
+          enabled: true,
+        }),
+      ),
+    );
+  });
+
   it('starts machine add routes as machine reachability checks', async () => {
     const onSaved = vi.fn();
     render(() => (

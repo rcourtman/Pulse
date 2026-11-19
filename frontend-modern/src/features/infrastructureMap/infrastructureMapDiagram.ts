@@ -272,6 +272,7 @@ const drawTile = (painter: Painter, tile: DiagramTile, x: number, y: number, das
       detail: tile.detail,
       navigable: real,
       ...(tile.links?.length ? { links: tile.links } : {}),
+      ...(tile.checkAddress ? { checkAddress: tile.checkAddress } : {}),
     },
   });
 };

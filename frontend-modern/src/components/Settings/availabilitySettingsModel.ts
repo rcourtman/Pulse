@@ -12,6 +12,8 @@ export const AVAILABILITY_SETTINGS_PATH = '/settings/monitoring/availability';
 export const AVAILABILITY_ADD_QUERY_PARAM = 'add';
 export const AVAILABILITY_ADD_TARGET_VALUE = 'target';
 export const AVAILABILITY_TARGET_KIND_QUERY_PARAM = 'targetKind';
+export const AVAILABILITY_TARGET_NAME_QUERY_PARAM = 'name';
+export const AVAILABILITY_TARGET_ADDRESS_QUERY_PARAM = 'address';
 
 export function buildAvailabilitySettingsPath(): string {
   return AVAILABILITY_SETTINGS_PATH;
@@ -30,13 +32,46 @@ export function normalizeAvailabilityTargetKind(
   return AVAILABILITY_TARGET_KIND_VALUES.find((kind) => kind === normalized);
 }
 
-export function buildAvailabilityTargetAddPath(targetKind?: AvailabilityTargetKind): string {
+/**
+ * What a link can fill in on the add-check form, for a thing another page
+ * already knows about, such as a gateway the map draws. It only saves typing:
+ * the owner still reads the form and saves it.
+ */
+export interface AvailabilityTargetAddPrefill {
+  name?: string;
+  address?: string;
+}
+
+// As long as a hostname can be. A longer value is not an address.
+const AVAILABILITY_PREFILL_MAX_LENGTH = 253;
+
+export function buildAvailabilityTargetAddPath(
+  targetKind?: AvailabilityTargetKind,
+  prefill: AvailabilityTargetAddPrefill = {},
+): string {
   const params = new URLSearchParams();
   params.set(AVAILABILITY_ADD_QUERY_PARAM, AVAILABILITY_ADD_TARGET_VALUE);
   if (targetKind) {
     params.set(AVAILABILITY_TARGET_KIND_QUERY_PARAM, targetKind);
   }
+  const name = prefill.name?.trim();
+  if (name) params.set(AVAILABILITY_TARGET_NAME_QUERY_PARAM, name);
+  const address = prefill.address?.trim();
+  if (address) params.set(AVAILABILITY_TARGET_ADDRESS_QUERY_PARAM, address);
   return `${AVAILABILITY_SETTINGS_PATH}?${params.toString()}`;
+}
+
+export function getAvailabilityTargetAddPrefill(
+  pathname: string,
+  search: string,
+): AvailabilityTargetAddPrefill {
+  if (!shouldOpenAvailabilityTargetAddDialog(pathname, search)) return {};
+  const params = new URLSearchParams(search);
+  const read = (key: string): string | undefined =>
+    params.get(key)?.trim().slice(0, AVAILABILITY_PREFILL_MAX_LENGTH) || undefined;
+  const name = read(AVAILABILITY_TARGET_NAME_QUERY_PARAM);
+  const address = read(AVAILABILITY_TARGET_ADDRESS_QUERY_PARAM);
+  return { ...(name ? { name } : {}), ...(address ? { address } : {}) };
 }
 
 export function shouldOpenAvailabilityTargetAddDialog(pathname: string, search: string): boolean {

@@ -57,6 +57,11 @@ export interface DiagramTile {
   links?: string[];
   /** False for a tile that stands for several things and opens none. */
   navigable: boolean;
+  /**
+   * The address of a thing the map draws and nothing monitors. Its tile opens
+   * the form that adds a check for it, with the address filled in.
+   */
+  checkAddress?: string;
 }
 
 /** A stated connection between two drawn tiles. No line is drawn for it. */
@@ -538,6 +543,9 @@ export function buildServiceDiagram(
       platform: 'gateway',
       links: [`Used by ${nameList(names)}`],
       navigable: false,
+      // With names hidden the address is gone, and so is the link that
+      // would carry it.
+      ...(gateway.address ? { checkAddress: gateway.address } : {}),
     };
     gateways.push(tile);
     gatewayTiles.set(index, tile);

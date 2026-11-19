@@ -601,8 +601,34 @@ describe('buildServiceDiagram', () => {
           platform: 'gateway',
           links: ['Used by delly, Tower', 'Resolves names for Tower'],
           navigable: false,
+          // What its tile fills in on the form that adds a check for it.
+          checkAddress: '192.168.0.1',
         },
       ]);
+    });
+
+    it('lets a check on the gateway take the place of the unmonitored tile', () => {
+      const diagram = buildServiceDiagram(
+        buildInfrastructureMapModel([
+          resource({
+            id: 'pve',
+            type: 'agent',
+            name: 'delly',
+            platformType: 'proxmox-pve',
+            agent: { defaultGateways: [{ address: '192.168.0.1', interface: 'vmbr0' }] },
+          }),
+          resource({
+            id: 'check-router',
+            type: 'network-endpoint',
+            name: 'Gateway',
+            availability: { address: '192.168.0.1' },
+          } as Parameters<typeof resource>[0]),
+        ]),
+      );
+
+      // Monitored now, so nothing says it is not.
+      expect(diagram.gateways).toEqual([]);
+      expect(tileOf(diagram, 'check-router')?.links).toEqual(['Default gateway of delly']);
     });
 
     it('says it on the monitored thing when a gateway or resolver is one', () => {

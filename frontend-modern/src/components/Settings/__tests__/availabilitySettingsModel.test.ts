@@ -3,6 +3,7 @@ import {
   buildAvailabilitySettingsPath,
   buildAvailabilityTargetAddPath,
   getAvailabilityTargetAddKind,
+  getAvailabilityTargetAddPrefill,
   getAvailabilityTargetAddressLabel,
   getAvailabilityTargetKindLabel,
   getAvailabilityTargetMethodLabel,
@@ -66,6 +67,38 @@ describe('availabilitySettingsModel', () => {
     ).toBe(false);
     expect(normalizeAvailabilityTargetKind('Machine')).toBe('machine');
     expect(normalizeAvailabilityTargetKind('vm')).toBe(undefined);
+  });
+
+  it('lets a link fill in the name and address of the check it asks for', () => {
+    const path = buildAvailabilityTargetAddPath('device', {
+      name: ' Gateway ',
+      address: '192.168.0.1',
+    });
+    expect(path).toBe(
+      '/settings/monitoring/availability?add=target&targetKind=device&name=Gateway&address=192.168.0.1',
+    );
+    const [pathname, search] = path.split('?');
+    expect(getAvailabilityTargetAddPrefill(pathname, `?${search}`)).toEqual({
+      name: 'Gateway',
+      address: '192.168.0.1',
+    });
+    // An IPv6 address survives the round trip.
+    const v6 = buildAvailabilityTargetAddPath('device', { address: 'fe80::1' });
+    expect(getAvailabilityTargetAddPrefill(pathname, `?${v6.split('?')[1]}`)).toEqual({
+      address: 'fe80::1',
+    });
+
+    // Nothing to fill in leaves the path as it was, and reads back as nothing.
+    expect(buildAvailabilityTargetAddPath('device', { name: ' ', address: '' })).toBe(
+      '/settings/monitoring/availability?add=target&targetKind=device',
+    );
+    expect(getAvailabilityTargetAddPrefill(pathname, '?add=target')).toEqual({});
+    // Only the add route is read, and a value longer than a hostname is cut.
+    expect(getAvailabilityTargetAddPrefill('/settings/infrastructure', `?${search}`)).toEqual({});
+    expect(getAvailabilityTargetAddPrefill(pathname, '?address=192.168.0.1')).toEqual({});
+    expect(
+      getAvailabilityTargetAddPrefill(pathname, `?add=target&address=${'a'.repeat(400)}`).address,
+    ).toHaveLength(253);
   });
 
   it('formats endpoint methods and addresses without infrastructure copy', () => {

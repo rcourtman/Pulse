@@ -424,6 +424,58 @@ describe('InfrastructureMapSurface connections', () => {
     expect(rings(container)).toHaveLength(0);
   });
 
+  describe('a gateway nothing monitors', () => {
+    const ADD_CHECK =
+      '/settings/monitoring/availability?add=target&targetKind=device&name=Gateway&address=192.168.0.1';
+    beforeEach(() => {
+      resourcesMock.value = [
+        resource({
+          id: 'tower',
+          type: 'docker-host',
+          name: 'Tower',
+          platformType: 'docker',
+          agent: { defaultGateways: [{ address: '192.168.0.1', interface: 'eth0' }] },
+        }),
+        ...behindVpn().slice(1),
+      ];
+    });
+
+    it('opens the form that adds a check for it, with its address filled in', () => {
+      const { container } = draw();
+      const gateway = tile(container, '192.168.0.1');
+
+      expect(gateway.getAttribute('href')).toBe(ADD_CHECK);
+      expect(gateway.getAttribute('aria-label')).toBe(
+        '192.168.0.1, Default gateway, not monitored, add a check',
+      );
+      // A mouse follows the link at once, as on any tile.
+      expect(tap(gateway, 'mouse').defaultPrevented).toBe(false);
+    });
+
+    it('says on a touch screen what a second tap will do', () => {
+      const { container } = draw();
+      const gateway = tile(container, '192.168.0.1');
+
+      expect(tap(gateway).defaultPrevented).toBe(true);
+      expect(said()[0].split('\n')).toEqual([
+        '192.168.0.1',
+        'Default gateway, not monitored',
+        'Used by Tower',
+        'Tap again to add a check',
+      ]);
+      expect(tap(tile(container, '192.168.0.1')).defaultPrevented).toBe(false);
+    });
+
+    it('is no link while names are hidden, when its address is not on the page', () => {
+      const { container } = draw();
+      fireEvent.click(screen.getByRole('button', { name: 'Hide names' }));
+
+      const gateway = tile(container, 'Gateway');
+      expect(gateway.hasAttribute('href')).toBe(false);
+      expect(container.innerHTML).not.toContain('192.168.0.1');
+    });
+  });
+
   it('opens a tile at once for a mouse, which can hover to read it first', () => {
     const { container } = draw();
 
