@@ -2592,12 +2592,19 @@ func (n *NotificationManager) dispatchNotificationJobAsync(job notificationDeliv
 		if !n.IsEnabled() {
 			return
 		}
-		if err := n.deliverNotificationJob(job); err != nil {
-			n.logNotificationJobError(job, err, failureMessage)
-			return
+		batches := [][]*alerts.Alert{job.Alerts}
+		if job.WebhookConfig != nil && sizesTelegramDeliveries(*job.WebhookConfig) && len(job.Alerts) > 1 {
+			batches = telegramAlertBatches(job.Alerts, job.Event)
 		}
-		if err := n.recordSuccessfulDelivery(job, time.Now()); err != nil {
-			n.logNotificationJobError(job, err, "failed to retain successful notification delivery")
+		for _, batch := range batches {
+			job.Alerts = batch
+			if err := n.deliverNotificationJob(job); err != nil {
+				n.logNotificationJobError(job, err, failureMessage)
+				continue
+			}
+			if err := n.recordSuccessfulDelivery(job, time.Now()); err != nil {
+				n.logNotificationJobError(job, err, "failed to retain successful notification delivery")
+			}
 		}
 	})
 }
@@ -3384,7 +3391,13 @@ func (n *NotificationManager) renderWebhookPayloadJSON(webhook WebhookConfig, da
 	}
 
 	if templateStr, ok := webhookServiceTemplate(webhook, mode); ok {
-		jsonData, err := n.generatePayloadFromTemplateWithService(templateStr, data, webhook.Service)
+		var jsonData []byte
+		var err error
+		if webhook.Service == "telegram" {
+			jsonData, err = n.renderBuiltInTelegram(templateStr, data, mode)
+		} else {
+			jsonData, err = n.generatePayloadFromTemplateWithService(templateStr, data, webhook.Service)
+		}
 		if err != nil {
 			return nil, fmt.Errorf("generate webhook payload for service %s: %w", webhook.Service, err)
 		}
@@ -3452,6 +3465,17 @@ func withNtfyAlertHeaders(webhook WebhookConfig, alertList []*alerts.Alert) Webh
 }
 
 // sendGroupedWebhook sends a grouped webhook notification
+func groupedWebhookAlertLine(alert *alerts.Alert) string {
+	label := alert.ResourceName
+	if alert.Node != "" {
+		label += " on " + alert.Node
+	}
+	if alert.Message != "" {
+		return fmt.Sprintf("• %s: %s", label, alert.Message)
+	}
+	return fmt.Sprintf("• %s: %.1f%%", label, alert.Value)
+}
+
 func (n *NotificationManager) sendGroupedWebhook(webhook WebhookConfig, alertList []*alerts.Alert) error {
 	if len(alertList) == 0 {
 		return fmt.Errorf("no alerts to send")
@@ -3469,15 +3493,7 @@ func (n *NotificationManager) sendGroupedWebhook(webhook WebhookConfig, alertLis
 			if alertList[i] == nil {
 				continue
 			}
-			alertLabel := alertList[i].ResourceName
-			if alertList[i].Node != "" {
-				alertLabel += " on " + alertList[i].Node
-			}
-			if alertList[i].Message != "" {
-				otherAlerts = append(otherAlerts, fmt.Sprintf("• %s: %s", alertLabel, alertList[i].Message))
-			} else {
-				otherAlerts = append(otherAlerts, fmt.Sprintf("• %s: %.1f%%", alertLabel, alertList[i].Value))
-			}
+			otherAlerts = append(otherAlerts, groupedWebhookAlertLine(alertList[i]))
 		}
 		if len(otherAlerts) > 0 {
 			if webhook.Service == "discord" {
@@ -3735,6 +3751,12 @@ func (n *NotificationManager) sendResolvedWebhookNtfy(webhook WebhookConfig, ale
 
 // checkWebhookRateLimit checks if a webhook can be sent based on rate limits
 func (n *NotificationManager) checkWebhookRateLimit(webhookURL string) bool {
+	return n.takeWebhookRateSlot(webhookURL).IsZero()
+}
+
+// takeWebhookRateSlot reports the reset time when no slot was available.
+// A zero time means one slot was consumed.
+func (n *NotificationManager) takeWebhookRateSlot(webhookURL string) time.Time {
 	n.webhookRateMu.Lock()
 	defer n.webhookRateMu.Unlock()
 
@@ -3748,7 +3770,7 @@ func (n *NotificationManager) checkWebhookRateLimit(webhookURL string) bool {
 			lastSent:  now,
 			sentCount: 1,
 		}
-		return true
+		return time.Time{}
 	}
 
 	// Check if we're still in the rate limit window
@@ -3756,7 +3778,7 @@ func (n *NotificationManager) checkWebhookRateLimit(webhookURL string) bool {
 		// Window expired, reset counter
 		limit.lastSent = now
 		limit.sentCount = 1
-		return true
+		return time.Time{}
 	}
 
 	// Still in window, check if we've exceeded the limit
@@ -3765,13 +3787,13 @@ func (n *NotificationManager) checkWebhookRateLimit(webhookURL string) bool {
 			Str("webhookURL", RedactWebhookURLSecrets(webhookURL)).
 			Int("sentCount", limit.sentCount).
 			Dur("window", WebhookRateLimitWindow).
-			Msg("webhook rate limit exceeded, dropping request")
-		return false
+			Msg("webhook rate limit reached")
+		return limit.lastSent.Add(WebhookRateLimitWindow)
 	}
 
 	// Increment counter and allow
 	limit.sentCount++
-	return true
+	return time.Time{}
 }
 
 func (n *NotificationManager) cleanupWebhookRateLimitsLocked(now time.Time) {
@@ -3895,7 +3917,10 @@ func (n *NotificationManager) sendWebhookRequest(webhook WebhookConfig, jsonData
 	}
 
 	// Check rate limit before sending
-	if !n.checkWebhookRateLimit(webhook.URL) {
+	if retryAt := n.takeWebhookRateSlot(webhook.URL); !retryAt.IsZero() {
+		if usesBuiltInTelegramBody(webhook) {
+			return &telegramRateHold{retryAt: retryAt}
+		}
 		log.Warn().
 			Str("webhook", webhook.Name).
 			Str("url", RedactWebhookURLSecrets(webhook.URL)).
