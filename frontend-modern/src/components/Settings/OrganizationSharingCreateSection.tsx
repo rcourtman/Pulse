@@ -6,15 +6,27 @@ import {
   ORGANIZATION_SHARE_ROLE_OPTIONS,
   type ShareAccessRole,
 } from '@/utils/organizationRolePresentation';
-import { getShareOrganizationLabel } from '@/utils/organizationSettingsPresentation';
-import type {
-  ResourceOption,
-  useOrganizationSharingPanelState,
-} from './useOrganizationSharingPanelState';
+import {
+  getOrganizationShareResourceOptionLabel,
+  getOrganizationSharingTargetPlaceholder,
+  getShareOrganizationLabel,
+  ORGANIZATION_SHARING_MANUAL_ENTRY_HIDDEN_MESSAGE,
+  ORGANIZATION_SHARING_QUICK_PICK_GUIDANCE,
+  ORGANIZATION_SHARING_QUICK_PICK_UNAVAILABLE_MESSAGE,
+} from '@/utils/organizationSettingsPresentation';
+import type { useOrganizationSharingPanelState } from './useOrganizationSharingPanelState';
 
 interface OrganizationSharingCreateSectionProps {
   state: ReturnType<typeof useOrganizationSharingPanelState>;
 }
+
+const controlClass =
+  'w-full rounded-md border bg-surface px-3 py-2 text-sm text-base-content shadow-xs focus:border-blue-500 focus:outline-hidden focus:ring-2 focus:ring-blue-500';
+const defaultControlClass = `${controlClass} border-border`;
+const invalidControlClass = `${controlClass} border-red-400 dark:border-red-500`;
+const quickPickControlClass = `${controlClass} border-blue-300 dark:border-blue-700`;
+const validatedControlClass = (error: string) =>
+  error ? invalidControlClass : defaultControlClass;
 
 const OrganizationSharingCreateSection: Component<OrganizationSharingCreateSectionProps> = (
   props,
@@ -30,17 +42,7 @@ const OrganizationSharingCreateSection: Component<OrganizationSharingCreateSecti
   const selectedTarget = createMemo(() =>
     props.state.targetOrgOptions().find((target) => target.id === props.state.targetOrgId()),
   );
-  const selectedResource = createMemo(() =>
-    props.state
-      .unifiedResourceOptions()
-      .find((resource) => `${resource.type}::${resource.id}` === props.state.selectedQuickPick()),
-  );
-  const resourceOptionLabel = (resource: ResourceOption) => {
-    const identity = `${resource.type}:${resource.id}`;
-    return resource.name && resource.name !== resource.id
-      ? `${resource.name} (${identity})`
-      : identity;
-  };
+  const selectedResource = () => props.state.selectedResource();
 
   return (
     <form
@@ -87,12 +89,10 @@ const OrganizationSharingCreateSection: Component<OrganizationSharingCreateSecti
                 )
               }
               helpClass="text-xs [overflow-wrap:anywhere]"
-              selectBaseClass={`w-full rounded-md border bg-surface px-3 py-2 text-sm text-base-content shadow-xs focus:border-blue-500 focus:outline-hidden focus:ring-2 focus:ring-blue-500 ${targetError() ? 'border-red-400 dark:border-red-500' : 'border-border'}`}
+              selectBaseClass={validatedControlClass(targetError())}
             >
               <option value="">
-                {props.state.unavailableLists()?.directory
-                  ? 'Organization list unavailable'
-                  : 'Select organization'}
+                {getOrganizationSharingTargetPlaceholder(props.state.unavailableLists()?.directory)}
               </option>
               <For each={props.state.targetOrgOptions()}>
                 {(target) => (
@@ -117,7 +117,7 @@ const OrganizationSharingCreateSection: Component<OrganizationSharingCreateSecti
             onChange={(event) =>
               props.state.setAccessRole(event.currentTarget.value as ShareAccessRole)
             }
-            selectBaseClass="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-base-content shadow-xs focus:border-blue-500 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+            selectBaseClass={defaultControlClass}
           >
             <For each={ORGANIZATION_SHARE_ROLE_OPTIONS}>
               {(option) => <option value={option.value}>{option.label}</option>}
@@ -152,20 +152,20 @@ const OrganizationSharingCreateSection: Component<OrganizationSharingCreateSecti
                 )
               }
               helpClass="text-xs text-blue-700 dark:text-blue-300 [overflow-wrap:anywhere]"
-              selectBaseClass="w-full rounded-md border border-blue-300 bg-surface px-3 py-2 text-sm text-base-content shadow-xs focus:border-blue-500 focus:outline-hidden focus:ring-2 focus:ring-blue-500 dark:border-blue-700"
+              selectBaseClass={quickPickControlClass}
             >
               <option value="">Select resource</option>
               <For each={props.state.unifiedResourceOptions()}>
                 {(resource) => (
                   <option value={`${resource.type}::${resource.id}`}>
-                    {resourceOptionLabel(resource)}
+                    {getOrganizationShareResourceOptionLabel(resource)}
                   </option>
                 )}
               </For>
             </FormSelect>
             <div class="flex items-center justify-between gap-2">
               <p class="min-w-0 flex-1 text-xs text-blue-700 dark:text-blue-300">
-                Choose a discovered resource, or switch to manual entry.
+                {ORGANIZATION_SHARING_QUICK_PICK_GUIDANCE}
               </p>
               <Button
                 type="button"
@@ -182,8 +182,7 @@ const OrganizationSharingCreateSection: Component<OrganizationSharingCreateSecti
 
         <Show when={props.state.quickPickUnavailable()}>
           <p role="status" class="text-sm text-amber-700 dark:text-amber-300">
-            The selected resource is no longer available. Choose another resource or enter it
-            manually.
+            {ORGANIZATION_SHARING_QUICK_PICK_UNAVAILABLE_MESSAGE}
           </p>
         </Show>
         <Show
@@ -191,7 +190,7 @@ const OrganizationSharingCreateSection: Component<OrganizationSharingCreateSecti
             props.state.unifiedResourceOptions().length === 0 || props.state.manualEntryExpanded()
           }
           fallback={
-            <p class="text-xs text-muted">Manual entry is hidden while quick pick is active.</p>
+            <p class="text-xs text-muted">{ORGANIZATION_SHARING_MANUAL_ENTRY_HIDDEN_MESSAGE}</p>
           }
         >
           <div class="grid gap-3 lg:grid-cols-3">
@@ -212,7 +211,7 @@ const OrganizationSharingCreateSection: Component<OrganizationSharingCreateSecti
                 value={props.state.resourceType()}
                 onInput={(event) => props.state.updateResourceType(event.currentTarget.value)}
                 placeholder={CANONICAL_RESOURCE_TYPES.join(' | ')}
-                class={`w-full rounded-md border bg-surface px-3 py-2 text-sm text-base-content shadow-xs focus:border-blue-500 focus:outline-hidden focus:ring-2 focus:ring-blue-500 ${props.state.resourceTypeError() ? 'border-red-400 dark:border-red-500' : 'border-border'}`}
+                class={validatedControlClass(props.state.resourceTypeError())}
               />
               <Show when={props.state.resourceTypeError() !== ''}>
                 <p id={`${resourceTypeID}-error`} class="text-xs text-red-600 dark:text-red-400">
@@ -236,7 +235,7 @@ const OrganizationSharingCreateSection: Component<OrganizationSharingCreateSecti
                 value={props.state.resourceId()}
                 onInput={(event) => props.state.updateResourceId(event.currentTarget.value)}
                 placeholder="resource identifier"
-                class={`w-full rounded-md border bg-surface px-3 py-2 text-sm text-base-content shadow-xs focus:border-blue-500 focus:outline-hidden focus:ring-2 focus:ring-blue-500 ${props.state.resourceIdError() ? 'border-red-400 dark:border-red-500' : 'border-border'}`}
+                class={validatedControlClass(props.state.resourceIdError())}
               />
               <Show when={props.state.resourceIdError() !== ''}>
                 <p id={`${resourceID}-error`} class="text-xs text-red-600 dark:text-red-400">
@@ -254,7 +253,7 @@ const OrganizationSharingCreateSection: Component<OrganizationSharingCreateSecti
                 value={props.state.resourceName()}
                 onInput={(event) => props.state.updateResourceName(event.currentTarget.value)}
                 placeholder="optional display name"
-                class="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-base-content shadow-xs focus:border-blue-500 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                class={defaultControlClass}
               />
             </label>
           </div>

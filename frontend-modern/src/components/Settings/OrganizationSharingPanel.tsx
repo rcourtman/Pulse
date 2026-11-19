@@ -1,20 +1,14 @@
-import {
-  Component,
-  ErrorBoundary,
-  Show,
-  Suspense,
-  createEffect,
-  createUniqueId,
-  lazy,
-  onCleanup,
-} from 'solid-js';
+import { Component, Show, createEffect, createUniqueId, onCleanup } from 'solid-js';
 import { Button } from '@/components/shared/Button';
 import { Card } from '@/components/shared/Card';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { isMultiTenantEnabled } from '@/stores/license';
 import { presentationPolicyHidesOrganizationSurfaces } from '@/stores/sessionPresentationPolicy';
 import {
+  getOrganizationSharingPartialReadMessage,
   getOrganizationSharingReloadMessage,
+  ORGANIZATION_SHARING_MANAGER_REQUIRED_MESSAGE,
+  ORGANIZATION_SHARING_READ_ONLY_MESSAGE,
   ORGANIZATION_SHARING_RELOAD_LABEL,
   ORGANIZATION_SHARING_UNAVAILABLE_TITLE,
   ORGANIZATION_SETTINGS_UNAVAILABLE_CLASS,
@@ -22,10 +16,9 @@ import {
 } from '@/utils/organizationSettingsPresentation';
 import { OrganizationIncomingSharesSection } from './OrganizationIncomingSharesSection';
 import { OrganizationOutgoingSharesSection } from './OrganizationOutgoingSharesSection';
+import OrganizationSharingCreateSection from './OrganizationSharingCreateSection';
 import { OrganizationSharingLoadingState } from './OrganizationSharingLoadingState';
 import { useOrganizationSharingPanelState } from './useOrganizationSharingPanelState';
-
-const OrganizationSharingCreateSection = lazy(() => import('./OrganizationSharingCreateSection'));
 
 export interface OrganizationSharingPanelProps {
   currentUser?: string;
@@ -204,13 +197,11 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
                       ({currentOrg().id})
                     </p>
                     <Show when={state.readOnly()}>
-                      <p>This session is read-only. Sharing changes are disabled.</p>
+                      <p>{ORGANIZATION_SHARING_READ_ONLY_MESSAGE}</p>
                     </Show>
                     <Show when={state.sharingChangesPaused()}>
                       <p role="status">
-                        {state.canManageCurrentOrg()
-                          ? 'Sharing changes are paused until the missing information loads.'
-                          : 'Some sharing information could not be loaded.'}
+                        {getOrganizationSharingPartialReadMessage(state.canManageCurrentOrg())}
                       </p>
                     </Show>
                   </div>
@@ -220,29 +211,13 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
                       <Show when={!state.readOnly()}>
                         <div class="p-4 sm:p-6">
                           <div class="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-900/25 dark:text-amber-300">
-                            Admin or owner role required to create or remove organization shares.
+                            {ORGANIZATION_SHARING_MANAGER_REQUIRED_MESSAGE}
                           </div>
                         </div>
                       </Show>
                     }
                   >
-                    <ErrorBoundary
-                      fallback={
-                        <p role="alert" class="p-4 sm:p-6 text-sm text-muted">
-                          Share creation controls could not be loaded. Reload the page to try again.
-                        </p>
-                      }
-                    >
-                      <Suspense
-                        fallback={
-                          <p role="status" class="p-4 sm:p-6 text-sm text-muted">
-                            Loading share creation controls...
-                          </p>
-                        }
-                      >
-                        <OrganizationSharingCreateSection state={state} />
-                      </Suspense>
-                    </ErrorBoundary>
+                    <OrganizationSharingCreateSection state={state} />
                   </Show>
                   <OrganizationOutgoingSharesSection state={state} />
                   <OrganizationIncomingSharesSection state={state} />

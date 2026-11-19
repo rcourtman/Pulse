@@ -614,11 +614,13 @@ describe('selected sharing snapshot', () => {
 
     await screen.findByText('Incoming shares could not be loaded.');
     expect(screen.getByText(baseOrg.displayName)).toBeInTheDocument();
-    expect(screen.getByText(outgoing.resourceName)).toBeInTheDocument();
+    const savedRow = () => within(screen.getByRole('row', { name: /Alpha shared workload/ }));
+    expect(savedRow().getByText('org-b', { exact: true })).toBeVisible();
+    expect(savedRow().queryByText('Organization B', { exact: true })).not.toBeInTheDocument();
     expect(
       screen.queryByText('No incoming shares from other organizations.'),
     ).not.toBeInTheDocument();
-    const form = await screen.findByRole('form', { name: 'Create Share' });
+    const form = screen.getByRole('form', { name: 'Create Share' });
     const recipient = within(form).getByRole('combobox', { name: 'Target Organization' });
     expect(recipient).toBeDisabled();
     expect(recipient).toHaveValue('');
@@ -627,13 +629,21 @@ describe('selected sharing snapshot', () => {
     ).toBeInTheDocument();
     expect(within(form).getByRole('combobox', { name: 'Access Role' })).toBeDisabled();
     expect(within(form).getByRole('button', { name: 'Create Share' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: /^Remove share of / })).toBeDisabled();
+    expect(
+      savedRow().getByRole('button', { name: 'Remove share of vm:vm-alpha to org-b' }),
+    ).toBeDisabled();
     fireEvent.submit(form);
     expect(createShareMock).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole('button', { name: 'Reload sharing' }));
     await screen.findByText('No incoming shares from other organizations.');
-    expect(screen.getByRole('button', { name: /^Remove share of / })).toBeEnabled();
+    expect(savedRow().getByText('org-b', { exact: true })).toBeVisible();
+    expect(savedRow().getByText('Organization B', { exact: true })).toBeVisible();
+    expect(
+      savedRow().getByRole('button', {
+        name: 'Remove share of vm:vm-alpha to Organization B (org-b)',
+      }),
+    ).toBeEnabled();
     expect(await screen.findByRole('combobox', { name: 'Target Organization' })).toHaveValue('');
     expect(deleteShareMock).not.toHaveBeenCalled();
   });

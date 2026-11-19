@@ -10,8 +10,8 @@ import { normalizeOrganizationShareRole } from '@/utils/organizationRolePresenta
 import { formatOrgDate } from '@/utils/orgUtils';
 import {
   getOrganizationIncomingSharesEmptyState,
+  getOrganizationShareActionLabel,
   getOrganizationShareStatusDescription,
-  getShareOrganizationLabel,
 } from '@/utils/organizationSettingsPresentation';
 import type { useOrganizationSharingPanelState } from './useOrganizationSharingPanelState';
 
@@ -108,7 +108,13 @@ export const OrganizationIncomingSharesSection: Component<
                       size="xs"
                       data-org-sharing-action="accept-incoming"
                       data-org-sharing-target={share.id}
-                      aria-label={`Accept share of ${share.resourceType}:${share.resourceId} from ${getShareOrganizationLabel(share.sourceOrgId, share.sourceOrgName)}`}
+                      aria-label={getOrganizationShareActionLabel(
+                        'Accept',
+                        share,
+                        'from',
+                        share.sourceOrgId,
+                        share.sourceOrgName,
+                      )}
                       onClick={() => {
                         void props.state.acceptIncomingShare(share);
                       }}
@@ -124,7 +130,13 @@ export const OrganizationIncomingSharesSection: Component<
                       share.status === 'pending' ? 'decline-incoming' : 'remove-incoming'
                     }
                     data-org-sharing-target={share.id}
-                    aria-label={`${share.status === 'pending' ? 'Decline' : 'Remove'} share of ${share.resourceType}:${share.resourceId} from ${getShareOrganizationLabel(share.sourceOrgId, share.sourceOrgName)}`}
+                    aria-label={getOrganizationShareActionLabel(
+                      share.status === 'pending' ? 'Decline' : 'Remove',
+                      share,
+                      'from',
+                      share.sourceOrgId,
+                      share.sourceOrgName,
+                    )}
                     onClick={() => {
                       void props.state.declineIncomingShare(share);
                     }}
@@ -138,11 +150,9 @@ export const OrganizationIncomingSharesSection: Component<
           },
         ]}
         keyExtractor={(share) => share.id}
-        emptyState={
-          props.state.unavailableLists()?.incoming
-            ? 'Incoming shares could not be loaded.'
-            : getOrganizationIncomingSharesEmptyState()
-        }
+        emptyState={getOrganizationIncomingSharesEmptyState(
+          props.state.unavailableLists()?.incoming,
+        )}
         desktopMinWidth="100%"
       />
     </div>

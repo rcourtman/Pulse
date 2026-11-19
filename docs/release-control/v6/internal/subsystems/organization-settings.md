@@ -458,10 +458,12 @@ directory before the form can submit. Other errors, stale readers,
 malformed bodies, failed selected-scope reads, policy and authority withdrawal
 keep their existing fail-closed behavior. Server authorization is unchanged.
 
-The create form's browser code is loaded only for a current owner or
-administrator who can manage shares. Its loading and failure states are local
-to the form, so neither suspends independently verified incoming or outgoing
-rows. The form uses the same snapshot and complete-read write gate when ready.
+The Sharing panel includes the create form in its own route asset, rather than
+requiring a separate browser module after the selected workspace loads. Only an
+eligible current owner or administrator sees the form. It appears with the
+verified rows and uses the same complete-read write gate. Unread directory
+names do not replace the outgoing row's verified target ID, including in its
+action's accessible name; the name rejoins the same ID after a complete read.
 
 The registered OrganizationSharingPanel and OrganizationSharingTransport tests
 cover individual and concurrent list failures, fresh scoped data versus a

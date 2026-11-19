@@ -10,8 +10,8 @@ import { normalizeOrganizationShareRole } from '@/utils/organizationRolePresenta
 import { formatOrgDate } from '@/utils/orgUtils';
 import {
   getOrganizationOutgoingSharesEmptyState,
+  getOrganizationShareActionLabel,
   getOrganizationShareStatusDescription,
-  getShareOrganizationLabel,
 } from '@/utils/organizationSettingsPresentation';
 import Trash2 from 'lucide-solid/icons/trash-2';
 import type { useOrganizationSharingPanelState } from './useOrganizationSharingPanelState';
@@ -115,7 +115,13 @@ export const OrganizationOutgoingSharesSection: Component<
                   class="gap-1"
                   data-org-sharing-action="remove-outgoing"
                   data-org-sharing-target={share.id}
-                  aria-label={`Remove share of ${share.resourceType}:${share.resourceId} to ${getShareOrganizationLabel(share.targetOrgId, props.state.orgNameById().get(share.targetOrgId))}`}
+                  aria-label={getOrganizationShareActionLabel(
+                    'Remove',
+                    share,
+                    'to',
+                    share.targetOrgId,
+                    props.state.orgNameById().get(share.targetOrgId),
+                  )}
                   onClick={() => {
                     void props.state.deleteShare(share);
                   }}

@@ -31,12 +31,14 @@ import {
   getOrganizationIncomingShareDeclineConfirmMessage,
   getOrganizationIncomingShareDeclineErrorMessage,
   getOrganizationIncomingShareDeclineSuccessMessage,
+  getOrganizationOutgoingShareRemoveConfirmMessage,
   getOrganizationShareCreateErrorMessage,
   getOrganizationShareCreateSuccessMessage,
   getOrganizationShareDeleteErrorMessage,
   getOrganizationShareDeleteSuccessMessage,
   getOrganizationShareInvalidResourceMessage,
   getOrganizationShareResourceIdRequiredMessage,
+  getOrganizationShareResourceLabel,
   getOrganizationShareTargetOrgDifferentMessage,
   getOrganizationShareTargetOrgRequiredMessage,
   getOrganizationSettingsLoadErrorMessage,
@@ -157,17 +159,6 @@ export function useOrganizationSharingPanelState(props: OrganizationSharingPanel
     }
     return map;
   });
-
-  const getShareLabel = (share: {
-    resourceId: string;
-    resourceName?: string;
-    resourceType: string;
-  }): string => {
-    const resourceName = share.resourceName?.trim();
-    if (resourceName) return resourceName;
-    if (share.resourceId.trim() !== '') return share.resourceId;
-    return `${share.resourceType}:${share.resourceId}`;
-  };
 
   createEffect(() => {
     if (unifiedResourceOptions().length === 0 && !selectedQuickPick()) setManualEntryExpanded(true);
@@ -449,7 +440,7 @@ export function useOrganizationSharingPanelState(props: OrganizationSharingPanel
   const deleteShare = async (share: OrganizationShare) => {
     const currentOrg = org();
     if (!currentOrg || !canChangeSharing() || !isCurrentOutgoing(share)) return;
-    if (!confirm(`Remove share for ${share.resourceType}:${share.resourceId}?`)) return;
+    if (!confirm(getOrganizationOutgoingShareRemoveConfirmMessage(share))) return;
     if (org() !== currentOrg || !isCurrentOutgoing(share) || !canChangeSharing()) return;
     await changeSharing(
       (options) => OrgsAPI.deleteShare(currentOrg.id, share.id, options),
@@ -470,7 +461,7 @@ export function useOrganizationSharingPanelState(props: OrganizationSharingPanel
       return;
     await changeSharing(
       (options) => OrgsAPI.acceptIncomingShare(currentOrg.id, share.id, options),
-      getOrganizationIncomingShareAcceptSuccessMessage(getShareLabel(share)),
+      getOrganizationIncomingShareAcceptSuccessMessage(getOrganizationShareResourceLabel(share)),
       getOrganizationIncomingShareAcceptErrorMessage,
     );
   };
@@ -484,7 +475,7 @@ export function useOrganizationSharingPanelState(props: OrganizationSharingPanel
       share.targetOrgId !== currentOrg.id
     )
       return;
-    const shareLabel = getShareLabel(share);
+    const shareLabel = getOrganizationShareResourceLabel(share);
     if (!confirm(getOrganizationIncomingShareDeclineConfirmMessage(shareLabel, share.status)))
       return;
     if (org() !== currentOrg || !isCurrentIncoming(share) || !canChangeSharing()) return;
@@ -535,6 +526,7 @@ export function useOrganizationSharingPanelState(props: OrganizationSharingPanel
     resourceTypeError,
     saving,
     selectedQuickPick,
+    selectedResource,
     quickPickUnavailable: () => !!selectedQuickPick() && !selectedResource(),
     setAccessRole,
     targetOrgError,
