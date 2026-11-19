@@ -707,17 +707,24 @@ func TestEnsureSettingsWriteScopeWithValidScope(t *testing.T) {
 	}
 }
 
+func newSettingsWriteScopeSessionRequest(t *testing.T, username string) *http.Request {
+	t.Helper()
+	InitSessionStore(t.TempDir())
+	t.Cleanup(resetSessionStoreForTests)
+
+	const sessionToken = "settings-write-session"
+	GetSessionStore().CreateSession(sessionToken, time.Hour, "agent", "127.0.0.1", username)
+	req := httptest.NewRequest(http.MethodPost, "/api/security/test", nil)
+	req.AddCookie(&http.Cookie{Name: "pulse_session", Value: sessionToken})
+	return req
+}
+
 func TestEnsureSettingsWriteScopeRejectsNonAdminSession(t *testing.T) {
 	cfg := &config.Config{
 		AuthUser: "admin",
 	}
 
-	sessionToken := "settings-write-member-" + time.Now().Format("150405.000000000")
-	GetSessionStore().CreateSession(sessionToken, time.Hour, "agent", "127.0.0.1", "member")
-
-	req := httptest.NewRequest(http.MethodPost, "/api/security/test", nil)
-	req.AddCookie(&http.Cookie{Name: "pulse_session", Value: sessionToken})
-
+	req := newSettingsWriteScopeSessionRequest(t, "member")
 	rr := httptest.NewRecorder()
 	result := ensureSettingsWriteScope(cfg, rr, req)
 
@@ -737,12 +744,7 @@ func TestEnsureSettingsWriteScopeAllowsConfiguredAdminSession(t *testing.T) {
 		AuthUser: "admin",
 	}
 
-	sessionToken := "settings-write-admin-" + time.Now().Format("150405.000000001")
-	GetSessionStore().CreateSession(sessionToken, time.Hour, "agent", "127.0.0.1", "admin")
-
-	req := httptest.NewRequest(http.MethodPost, "/api/security/test", nil)
-	req.AddCookie(&http.Cookie{Name: "pulse_session", Value: sessionToken})
-
+	req := newSettingsWriteScopeSessionRequest(t, "admin")
 	rr := httptest.NewRecorder()
 	result := ensureSettingsWriteScope(cfg, rr, req)
 
@@ -761,11 +763,7 @@ func TestSettingsWriteScopeSplitsInstanceAndOrgManagerSession(t *testing.T) {
 		AuthUser: "platform-admin",
 	}
 
-	sessionToken := "settings-write-owner-" + time.Now().Format("150405.000000002")
-	GetSessionStore().CreateSession(sessionToken, time.Hour, "agent", "127.0.0.1", "legacy-owner")
-
-	req := httptest.NewRequest(http.MethodPost, "/api/security/test", nil)
-	req.AddCookie(&http.Cookie{Name: "pulse_session", Value: sessionToken})
+	req := newSettingsWriteScopeSessionRequest(t, "legacy-owner")
 	req = req.WithContext(context.WithValue(req.Context(), OrgContextKey, &models.Organization{
 		ID:          "org-a",
 		DisplayName: "Org A",
