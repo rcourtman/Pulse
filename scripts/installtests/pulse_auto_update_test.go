@@ -950,6 +950,87 @@ echo "AFTER_CALLER"
 	}
 }
 
+const autoUpdateTransactionInstaller = `set -euo pipefail
+printf 'executed\n' > "$FIXTURE_DIR/installer-executed"
+printf 'false\n' > "$FIXTURE_DIR/active"
+[[ "$FAULT" != stop ]] || printf 'true\n' > "$FIXTURE_DIR/active"
+mkdir -p "$PULSE_INSTALL_DIR/bin"
+new_version=v6.5.0
+[[ "$OUTCOME" != mismatch ]] || new_version=v6.4.6
+printf '#!/usr/bin/env bash\nprintf "Pulse %s\\n"\n' "$new_version" > "$PULSE_INSTALL_DIR/bin/pulse"
+chmod 700 "$PULSE_INSTALL_DIR/bin/pulse"
+if [[ -f "$PULSE_INSTALL_DIR/pulse" ]]; then printf 'changed legacy binary\n' > "$PULSE_INSTALL_DIR/pulse"; fi
+printf '%s\n' "$new_version" > "$PULSE_INSTALL_DIR/VERSION"
+chmod 600 "$PULSE_INSTALL_DIR/VERSION"
+# Keep the target VERSION sidecar even when the signed installer leaves an
+# unusable executable. The real post-install probe must trigger full rollback.
+case "$OUTCOME" in
+ probe_failure) printf '#!/bin/bash\necho "Pulse v6.5.0"; exit 1\n' > "$PULSE_INSTALL_DIR/bin/pulse" ;;
+ probe_empty) printf '#!/bin/bash\nexit 0\n' > "$PULSE_INSTALL_DIR/bin/pulse" ;;
+ probe_unknown) printf '#!/bin/bash\necho "Other v6.5.0 private-detail"\n' > "$PULSE_INSTALL_DIR/bin/pulse" ;;
+ probe_pro) printf '#!/bin/bash\necho "Pulse Pro v6.5.0"\n' > "$PULSE_INSTALL_DIR/bin/pulse" ;;
+ probe_nonexec) chmod 600 "$PULSE_INSTALL_DIR/bin/pulse" ;;
+ probe_missing) rm "$PULSE_INSTALL_DIR/bin/pulse" ;;
+ probe_later_line) printf '#!/bin/bash\nprintf "Other\\nPulse v6.5.0\\n"\n' > "$PULSE_INSTALL_DIR/bin/pulse" ;;
+ probe_trailing) printf '#!/bin/bash\necho "Pulse v6.5.0-other!"\n' > "$PULSE_INSTALL_DIR/bin/pulse" ;;
+ probe_details) printf '#!/bin/bash\nprintf "Pulse v6.5.0\\nBuilt: yesterday\\n"\n' > "$PULSE_INSTALL_DIR/bin/pulse" ;;
+ probe_unprefixed) printf '#!/bin/bash\necho "Pulse 6.5.0"\n' > "$PULSE_INSTALL_DIR/bin/pulse" ;;
+esac
+if [[ "$OUTCOME" == symlink ]]; then
+ rm "$PULSE_INSTALL_DIR/bin/pulse"
+ ln -s "$FIXTURE_DIR/victim" "$PULSE_INSTALL_DIR/bin/pulse"
+fi
+if [[ "$OUTCOME" == directory ]]; then
+ rm "$PULSE_INSTALL_DIR/bin/pulse"
+ mkdir "$PULSE_INSTALL_DIR/bin/pulse"
+ printf 'unexpected directory\n' > "$PULSE_INSTALL_DIR/bin/pulse/keep"
+fi
+if [[ "$OUTCOME" == fifo ]]; then
+ rm "$PULSE_INSTALL_DIR/bin/pulse"
+ mkfifo "$PULSE_INSTALL_DIR/bin/pulse"
+fi
+case "$OUTCOME" in failure|symlink|directory|fifo) exit 23 ;; esac
+exit 0
+`
+
+// Only the signed download is shared. Each test gets its own copy to mutate
+// and still runs the real installer and signature verifier through curl's
+// fixture transport. The signing key never leaves this setup's private path.
+type signedAutoUpdateTransactionFixture struct {
+	publicKey string
+	signature []byte
+}
+
+func signAutoUpdateTransactionFixture(t *testing.T, sshKeygen string) signedAutoUpdateTransactionFixture {
+	t.Helper()
+	dir := t.TempDir()
+	key := filepath.Join(dir, "fixture-key")
+	installer := filepath.Join(dir, "installer")
+	if err := os.WriteFile(installer, []byte(autoUpdateTransactionInstaller), 0600); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if out, err := exec.CommandContext(ctx, sshKeygen, "-q", "-t", "ed25519", "-N", "", "-f", key).CombinedOutput(); err != nil {
+		t.Fatalf("generate transaction fixture signer: %v\n%s", err, out)
+	}
+	if out, err := exec.CommandContext(ctx, sshKeygen, "-Y", "sign", "-f", key, "-n", "pulse-install", installer).CombinedOutput(); err != nil {
+		t.Fatalf("sign transaction fixture: %v\n%s", err, out)
+	}
+	publicKey, err := os.ReadFile(key + ".pub")
+	if err != nil {
+		t.Fatal(err)
+	}
+	signature, err := os.ReadFile(installer + ".sig")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(signature) == 0 || len(strings.TrimSpace(string(publicKey))) == 0 {
+		t.Fatal("empty transaction fixture signature or public key")
+	}
+	return signedAutoUpdateTransactionFixture{publicKey: strings.TrimRight(string(publicKey), "\n"), signature: signature}
+}
+
 // Exercise the complete sourced updater in its real conditional-call context.
 // Only downloads and systemd are replaced; file copies, comparisons, renames,
 // executable version reads and SSH signature verification are real and local.
@@ -958,9 +1039,13 @@ func TestAutoUpdateBackupTransaction(t *testing.T) {
 	// command doubles. Keep its scenarios ordered within one parallel worker;
 	// no real process inventory or service manager is shared with other tests.
 	t.Parallel()
-	if _, err := exec.LookPath("ssh-keygen"); err != nil {
+	sshKeygen, err := exec.LookPath("ssh-keygen")
+	if err != nil {
 		t.Skip("ssh-keygen unavailable for signed offline installer fixture")
 	}
+	// The installer is identical across the matrix. Sign it once rather than
+	// starting ssh-keygen twice for every independent rollback scenario.
+	fixture := signAutoUpdateTransactionFixture(t, sshKeygen)
 	type scenario struct {
 		name, fault, outcome, layout            string
 		noVersion, retained, success, preflight bool
@@ -1008,24 +1093,24 @@ func TestAutoUpdateBackupTransaction(t *testing.T) {
 		{name: "successful_update", success: true},
 	}
 	t.Run("new_service_failure", func(t *testing.T) {
-		runAutoUpdateTransactionScenario(t, "", "service_failure", "", "true", false, false, false, false)
+		runAutoUpdateTransactionScenario(t, fixture, "", "service_failure", "", "true", false, false, false, false)
 	})
 	for _, tc := range cases {
 		for _, active := range []string{"true", "false"} {
 			t.Run(tc.name+"/prior_active_"+active, func(t *testing.T) {
-				runAutoUpdateTransactionScenario(t, tc.fault, tc.outcome, tc.layout, active, tc.noVersion, tc.preflight, tc.retained, tc.success)
+				runAutoUpdateTransactionScenario(t, fixture, tc.fault, tc.outcome, tc.layout, active, tc.noVersion, tc.preflight, tc.retained, tc.success)
 			})
 		}
 	}
 	t.Run("restored_service_start_failure", func(t *testing.T) {
-		runAutoUpdateTransactionScenario(t, "restart", "failure", "", "true", false, false, true, false)
+		runAutoUpdateTransactionScenario(t, fixture, "restart", "failure", "", "true", false, false, true, false)
 	})
 	t.Run("restored_service_liveness_failure", func(t *testing.T) {
-		runAutoUpdateTransactionScenario(t, "restart_liveness", "failure", "", "true", false, false, true, false)
+		runAutoUpdateTransactionScenario(t, fixture, "restart_liveness", "failure", "", "true", false, false, true, false)
 	})
 }
 
-func runAutoUpdateTransactionScenario(t *testing.T, fault, outcome, layout, active string, noVersion, preflight, retained, success bool) {
+func runAutoUpdateTransactionScenario(t *testing.T, fixture signedAutoUpdateTransactionFixture, fault, outcome, layout, active string, noVersion, preflight, retained, success bool) {
 	t.Helper()
 	if fault == "xattrs" {
 		if _, err := exec.LookPath("python3"); err != nil {
@@ -1037,6 +1122,17 @@ func runAutoUpdateTransactionScenario(t *testing.T, fault, outcome, layout, acti
 		t.Fatal(err)
 	}
 	dir := t.TempDir()
+	download := autoUpdateTransactionInstaller
+	if fault == "invalid_signature" {
+		// Keep the original signature so rejection proves real verification.
+		download += "tampered\n"
+	}
+	if err := os.WriteFile(filepath.Join(dir, "installer"), []byte(download), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "installer.sig"), fixture.signature, 0600); err != nil {
+		t.Fatal(err)
+	}
 	script := `
 set -euo pipefail
 source "$UPDATER_UNDER_TEST"
@@ -1087,54 +1183,7 @@ METADATA
 fi
 printf '%s\n' "$PRIOR_ACTIVE" > "$FIXTURE_DIR/active"
 export FIXTURE_DIR OUTCOME FAULT
-cat > "$FIXTURE_DIR/installer" <<'INSTALLER'
-set -euo pipefail
-printf 'executed\n' > "$FIXTURE_DIR/installer-executed"
-printf 'false\n' > "$FIXTURE_DIR/active"
-[[ "$FAULT" != stop ]] || printf 'true\n' > "$FIXTURE_DIR/active"
-mkdir -p "$PULSE_INSTALL_DIR/bin"
-new_version=v6.5.0
-[[ "$OUTCOME" != mismatch ]] || new_version=v6.4.6
-printf '#!/usr/bin/env bash\nprintf "Pulse %s\\n"\n' "$new_version" > "$PULSE_INSTALL_DIR/bin/pulse"
-chmod 700 "$PULSE_INSTALL_DIR/bin/pulse"
-if [[ -f "$PULSE_INSTALL_DIR/pulse" ]]; then printf 'changed legacy binary\n' > "$PULSE_INSTALL_DIR/pulse"; fi
-printf '%s\n' "$new_version" > "$PULSE_INSTALL_DIR/VERSION"
-chmod 600 "$PULSE_INSTALL_DIR/VERSION"
-# Keep the target VERSION sidecar even when the signed installer leaves an
-# unusable executable. The real post-install probe must trigger full rollback.
-case "$OUTCOME" in
- probe_failure) printf '#!/bin/bash\necho "Pulse v6.5.0"; exit 1\n' > "$PULSE_INSTALL_DIR/bin/pulse" ;;
- probe_empty) printf '#!/bin/bash\nexit 0\n' > "$PULSE_INSTALL_DIR/bin/pulse" ;;
- probe_unknown) printf '#!/bin/bash\necho "Other v6.5.0 private-detail"\n' > "$PULSE_INSTALL_DIR/bin/pulse" ;;
- probe_pro) printf '#!/bin/bash\necho "Pulse Pro v6.5.0"\n' > "$PULSE_INSTALL_DIR/bin/pulse" ;;
- probe_nonexec) chmod 600 "$PULSE_INSTALL_DIR/bin/pulse" ;;
- probe_missing) rm "$PULSE_INSTALL_DIR/bin/pulse" ;;
- probe_later_line) printf '#!/bin/bash\nprintf "Other\\nPulse v6.5.0\\n"\n' > "$PULSE_INSTALL_DIR/bin/pulse" ;;
- probe_trailing) printf '#!/bin/bash\necho "Pulse v6.5.0-other!"\n' > "$PULSE_INSTALL_DIR/bin/pulse" ;;
- probe_details) printf '#!/bin/bash\nprintf "Pulse v6.5.0\\nBuilt: yesterday\\n"\n' > "$PULSE_INSTALL_DIR/bin/pulse" ;;
- probe_unprefixed) printf '#!/bin/bash\necho "Pulse 6.5.0"\n' > "$PULSE_INSTALL_DIR/bin/pulse" ;;
-esac
-if [[ "$OUTCOME" == symlink ]]; then
- rm "$PULSE_INSTALL_DIR/bin/pulse"
- ln -s "$FIXTURE_DIR/victim" "$PULSE_INSTALL_DIR/bin/pulse"
-fi
-if [[ "$OUTCOME" == directory ]]; then
- rm "$PULSE_INSTALL_DIR/bin/pulse"
- mkdir "$PULSE_INSTALL_DIR/bin/pulse"
- printf 'unexpected directory\n' > "$PULSE_INSTALL_DIR/bin/pulse/keep"
-fi
-if [[ "$OUTCOME" == fifo ]]; then
- rm "$PULSE_INSTALL_DIR/bin/pulse"
- mkfifo "$PULSE_INSTALL_DIR/bin/pulse"
-fi
-case "$OUTCOME" in failure|symlink|directory|fifo) exit 23 ;; esac
-exit 0
-INSTALLER
-command ssh-keygen -q -t ed25519 -N '' -f "$FIXTURE_DIR/fixture-key"
-PINNED_RELEASE_SSH_PUBLIC_KEY=$(cat "$FIXTURE_DIR/fixture-key.pub")
-command ssh-keygen -Y sign -f "$FIXTURE_DIR/fixture-key" -n pulse-install "$FIXTURE_DIR/installer" >/dev/null 2>&1
-[[ -s "$FIXTURE_DIR/installer.sig" ]]
-[[ "$FAULT" != invalid_signature ]] || printf 'tampered\n' >> "$FIXTURE_DIR/installer"
+PINNED_RELEASE_SSH_PUBLIC_KEY=$FIXTURE_SIGNER_PUBLIC_KEY
 log() { printf '[%s] %s\n' "$1" "${*:2}"; }
 detect_service_name() { printf 'pulse\n'; }
 ` + autoUpdateFixtureClock + `
@@ -1296,7 +1345,7 @@ printf 'TRANSACTION_ASSERTIONS_PASSED\n'
 		want = "success"
 	}
 	cmd.Env = append(os.Environ(), "UPDATER_UNDER_TEST="+updater, "FIXTURE_DIR="+dir,
-		"FAULT="+fault, "OUTCOME="+outcome, "LAYOUT="+layout, "PRIOR_ACTIVE="+active,
+		"FIXTURE_SIGNER_PUBLIC_KEY="+fixture.publicKey, "FAULT="+fault, "OUTCOME="+outcome, "LAYOUT="+layout, "PRIOR_ACTIVE="+active,
 		"NO_VERSION="+boolString(noVersion), "PREFLIGHT="+boolString(preflight),
 		"RETAINED="+boolString(retained), "EXPECTED_RESULT="+want)
 	out, err := cmd.CombinedOutput()
