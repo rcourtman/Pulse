@@ -9300,6 +9300,11 @@ must stay the canonical API-backed platform boundary for listing, creating,
 updating, deleting, and testing TrueNAS integrations, and `PUT` updates must
 preserve masked secrets (`********`) instead of clearing stored API keys or
 passwords when operators edit non-secret fields from the settings surface.
+The three TrueNAS collection switches are independent: a create or update that
+sends all three as false reads back all three as false without disabling the
+connection. A create with scope omitted keeps the all-on default; an update
+keeps each omitted switch. The persisted scope provenance is never a request
+or response field.
 Draft validation must stay on `POST /api/truenas/connections/test`, while
 re-testing one saved connection must route through
 `POST /api/truenas/connections/{id}/test` so the server reuses stored secret

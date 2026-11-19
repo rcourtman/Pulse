@@ -781,12 +781,35 @@ func (c *ConfigPersistence) loadAPITokenSnapshot(allowMissing bool) ([]APITokenR
 
 // SaveTrueNASConfig persists TrueNAS instance configuration to encrypted storage.
 func (c *ConfigPersistence) SaveTrueNASConfig(instances []TrueNASInstance) error {
-	return saveJSON(c, c.trueNASFile, instances, true)
+	var stored []storedTrueNASInstance
+	if instances != nil {
+		stored = make([]storedTrueNASInstance, len(instances))
+		for i, instance := range instances {
+			stored[i] = storedTrueNASInstance{TrueNASInstance: instance, ScopeConfigured: true}
+		}
+	}
+	return saveJSON(c, c.trueNASFile, stored, true)
 }
 
 // LoadTrueNASConfig loads TrueNAS instance configuration from encrypted storage.
 func (c *ConfigPersistence) LoadTrueNASConfig() ([]TrueNASInstance, error) {
-	return loadSlice[TrueNASInstance](c, c.trueNASFile, true)
+	stored, err := loadSlice[storedTrueNASInstance](c, c.trueNASFile, true)
+	if err != nil || stored == nil {
+		return nil, err
+	}
+	instances := make([]TrueNASInstance, len(stored))
+	for i, record := range stored {
+		instance := record.TrueNASInstance
+		// Old saves could write all three fields as false without a choice
+		// being made. Apply the legacy default only at this storage boundary.
+		if !record.ScopeConfigured && !instance.MonitorDatasets && !instance.MonitorPools && !instance.MonitorReplication {
+			instance.MonitorDatasets = true
+			instance.MonitorPools = true
+			instance.MonitorReplication = true
+		}
+		instances[i] = instance
+	}
+	return instances, nil
 }
 
 // SaveVMwareConfig persists VMware vCenter instance configuration to encrypted
