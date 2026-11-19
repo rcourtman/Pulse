@@ -12,6 +12,7 @@ import {
   getOrganizationBillingLicenseStatusLabel,
 } from '@/utils/licensePresentation';
 import { getOrganizationSettingsLoadErrorMessage } from '@/utils/organizationSettingsPresentation';
+import { readOrganizationAggregate } from '@/utils/orgUtils';
 import {
   buildHostedCommercialPlanModel,
   buildHostedCommercialUsageModel,
@@ -33,7 +34,7 @@ export function useOrganizationBillingPanelState(props: OrganizationBillingPanel
   const [loading, setLoading] = createSignal(true);
   const [loadError, setLoadError] = createSignal<string | null>(null);
   const [status, setStatus] = createSignal<LicenseStatus | null>(null);
-  const [orgCount, setOrgCount] = createSignal(0);
+  const [orgCount, setOrgCount] = createSignal<number>();
   const [memberCount, setMemberCount] = createSignal(0);
 
   const activeOrgID = () => normalizeOrgScope(getOrgID());
@@ -87,7 +88,7 @@ export function useOrganizationBillingPanelState(props: OrganizationBillingPanel
     batch(() => {
       setSelectedOrgID(orgId);
       setStatus(null);
-      setOrgCount(0);
+      setOrgCount(undefined);
       setMemberCount(0);
       setLoadError(null);
       setLoading(isBillingAvailable());
@@ -105,7 +106,7 @@ export function useOrganizationBillingPanelState(props: OrganizationBillingPanel
     try {
       const [licenseStatus, orgs, members] = await Promise.all([
         LicenseAPI.getStatus(options),
-        OrgsAPI.list(options),
+        readOrganizationAggregate(OrgsAPI.list(options)),
         OrgsAPI.listMembers(orgId, options),
       ]);
       if (!isCurrent()) return;
@@ -113,14 +114,14 @@ export function useOrganizationBillingPanelState(props: OrganizationBillingPanel
         !licenseStatus ||
         typeof licenseStatus.valid !== 'boolean' ||
         typeof licenseStatus.tier !== 'string' ||
-        !Array.isArray(orgs) ||
+        (orgs !== undefined && !Array.isArray(orgs)) ||
         !Array.isArray(members)
       ) {
         throw new Error('Organization billing returned invalid data');
       }
       batch(() => {
         setStatus(licenseStatus);
-        setOrgCount(orgs.length);
+        setOrgCount(orgs?.length);
         setMemberCount(members.length);
       });
     } catch (error) {
@@ -129,7 +130,7 @@ export function useOrganizationBillingPanelState(props: OrganizationBillingPanel
       setLoadError(getOrganizationSettingsLoadErrorMessage('', 'billing'));
     } finally {
       if (!disposed && request === generation) {
-        // Stop sibling reads too when just one Promise.all member failed.
+        // Stop sibling reads after a fatal failure.
         controller.abort();
         readController = undefined;
         setLoading(false);
@@ -155,6 +156,7 @@ export function useOrganizationBillingPanelState(props: OrganizationBillingPanel
   return {
     commercialPlanModel,
     commercialUsageModel,
+    organizationCountUnavailable: () => status() !== null && orgCount() === undefined,
     isBillingAvailable,
     loading,
     loadError,

@@ -439,6 +439,36 @@ late completion after actual principal, organization, policy, entitlement or
 component withdrawal. `OrganizationOverviewPanel.test.tsx` also pins normalized
 request scopes through the pending rename and resulting saved read.
 
+### Sharing preserves verified selected data when a peer blocks enumeration
+
+The organization directory and the incoming-sharing scan can return the
+server's explicit HTTP 500 `list_failed` even when the selected organization
+is readable. If current-organization detail, membership and outgoing shares
+are all verified for the same selection, Sharing keeps the selected identity
+and outgoing rows. The recipient list and incoming rows are marked unavailable
+only when their own enumeration failed. No synthetic organization, share,
+target, or empty incoming inventory replaces an unread result.
+
+A verified owner or administrator continues to see the existing form and
+any saved row controls, but all sharing writes still require the complete
+snapshot, including remove, accept and decline. Reload sharing makes only
+read-only requests for the same selection. An explicit draft recipient is
+not replaced by another target and must still be present in the verified
+directory before the form can submit. Other errors, stale readers,
+malformed bodies, failed selected-scope reads, policy and authority withdrawal
+keep their existing fail-closed behavior. Server authorization is unchanged.
+
+The create form's browser code is loaded only for a current owner or
+administrator who can manage shares. Its loading and failure states are local
+to the form, so neither suspends independently verified incoming or outgoing
+rows. The form uses the same snapshot and complete-read write gate when ready.
+
+The registered OrganizationSharingPanel and OrganizationSharingTransport tests
+cover individual and concurrent list failures, fresh scoped data versus a
+failed selected read, native controls, no mutation or CSRF preparation, and
+explicit recovery. Comparable desktop/narrow Settings browser proof uses
+the native saved-workspace fixture's response bodies, not live client recovery.
+
 ### Invitation decisions identify the exact organization
 
 Your Invitations shows each organization's display name **and** ID beside its
@@ -651,8 +681,15 @@ one cancellation signal and the expected organization through the existing
 session-preferred API client, with automatic retries disabled. Only the current
 read generation may publish a matching organization and a complete member list;
 a late success, failure or completion cannot replace a newer selection or end
-its loading state. A failed read is an inline unavailable state, never an empty
-member list, and offers an explicit read-only reload.
+its loading state. Overview uses the normalized member array already returned
+in the authorized organization detail, so the name, member count, roles and
+existing rename gate ordinarily describe the same saved read. There is no
+parallel request for the same members. If detail omits the member field (the
+server omits an empty array), Overview requests the dedicated member list with
+the same org binding and cancellation signal before showing the panel. A
+malformed field or row is not an omitted list. A required read that fails is an
+inline unavailable state, never an empty member list, and offers an explicit
+read-only reload. The server routes and their authorization are unchanged.
 
 Renaming requires the current accepted snapshot, owner/admin authority and a
 non-read-only session. Dispatch binds the exact organization even across a CSRF
@@ -661,7 +698,10 @@ withdrawn or disposed completion cannot change data or notify a later selection.
 An unconfirmed write clears the editable snapshot and requires a saved read;
 reload does not repeat the rename. Successful writes notify the existing
 organization-change bus and refresh the saved snapshot. Normal-suite Overview,
-OrganizationReadLifetimes and organization-client tests cover those boundaries;
+OrganizationReadLifetimes and organization-client tests cover those boundaries.
+`OrganizationOverviewKeyboard.transport.test.tsx` also covers the single
+authorized request, malformed member rows, distinguishing omitted/unread from
+verified empty, and rejecting a fallback completion after a workspace switch;
 desktop/narrow browser proof exercises the actual panels and API client with
 safe HTTP fixtures, not an installed tenant or SSO recovery claim.
 

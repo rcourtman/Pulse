@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "base_sha": "107411a34665a133511a457976605fbbc440c477",
+  "verified_at": "2026-11-18T23:21:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/OrganizationSharingCreateSection.tsx",
+    "frontend-modern/src/components/Settings/OrganizationSharingPanel.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/OrganizationSharingCreateSection.tsx": "6ae4bc8b4248932400684b7cf6a933b91f02ae75e1852a6e27a4ee37c2484be6",
+    "frontend-modern/src/components/Settings/OrganizationSharingPanel.tsx": "7fb7cb3e23049bfc580f540b8874512e09d020e109a909778b6744b7bbfaeb7f"
+  },
+  "routes": [
+    "/settings/organization/sharing"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Production Pulse App in Playwright 1.56.1, Chromium 141 desktop and touch WebKit 26 narrow, light. Eight inspected before/after pairs; separate form pending on both widths and desktop form-module failure.",
+    "With the same healthy selection and unread directory/incoming scan, verified selected identity and outgoing row stay visible. Incoming is unavailable, not empty; all writes are disabled. Fixture uses retained producer detail/member/directory statuses with explicitly synthetic share rows.",
+    "After same-selection reload, the complete owner and viewer screens preserve fields, role notice, identity, row roles, status and control positions at the same anchors. Viewers do not request the manager form module."
+  ],
+  "interactions": [
+    "Delayed the module deliberately and retained visible rows. Interrupted just the form module and verified a local warning, without removing verified incoming/outgoing rows.",
+    "Read-only reload and retry kept the saved workspace. Forced submit under an incomplete snapshot dispatched no write; deliberate target and resource became enabled only after complete recovery, without submitting."
+  ]
+}

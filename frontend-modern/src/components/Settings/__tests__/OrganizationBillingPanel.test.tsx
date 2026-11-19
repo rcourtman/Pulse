@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, waitFor } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 
 import { OrganizationBillingPanel } from '../OrganizationBillingPanel';
 
@@ -135,6 +135,29 @@ describe('OrganizationBillingPanel', () => {
     expect(screen.queryByText('Not configured')).not.toBeInTheDocument();
     expect(screen.queryByText('private upstream detail')).not.toBeInTheDocument();
     expect(errorMock).not.toHaveBeenCalled();
+  });
+
+  it('keeps the current plan, member count and usage visible when the list cannot enumerate a peer', async () => {
+    listOrgsMock.mockRejectedValueOnce(
+      Object.assign(new Error('unread directory'), { status: 500, code: 'list_failed' }),
+    );
+    render(() => <OrganizationBillingPanel nodeUsage={5} guestUsage={2} />);
+
+    await screen.findByText('Cloud');
+    expect(screen.getByText('Organizations').parentElement).toHaveTextContent('Unavailable');
+    expect(screen.getByText('Members (Current Org)').parentElement).toHaveTextContent('3');
+    expect(screen.getByText('2 / 5')).toBeInTheDocument();
+    expect(screen.getByText('5 / Not metered')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reload billing' }));
+    await waitFor(() =>
+      expect(screen.getByText('Organizations').parentElement).toHaveTextContent('2'),
+    );
+    expect(screen.queryByRole('button', { name: 'Reload billing' })).not.toBeInTheDocument();
+    expect(listMembersMock).toHaveBeenLastCalledWith(
+      'org-1',
+      expect.objectContaining({ expectedOrgID: 'org-1', retry: false }),
+    );
   });
 
   it('stays unavailable in demo mode without loading organization billing data', () => {

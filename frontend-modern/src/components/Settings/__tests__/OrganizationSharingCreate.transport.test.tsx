@@ -603,6 +603,7 @@ describe('rendered Create Share controls through the real transport', () => {
             .some((row) => within(row).queryByText(`vm:${selectedResourceID}`)),
         ).toBe(false);
       }
+      await screen.findByRole('heading', { name: 'Create Share' });
       expect(targetInput()).toHaveAccessibleDescription(`${target.displayName} · ID: ${target.id}`);
       expect(resourceInput()).toHaveAccessibleDescription(
         `Resource: Namesake workload · vm:${selectedResourceID}`,
@@ -739,6 +740,7 @@ describe('Create Share through real capability withdrawal', () => {
       await waitFor(() => expect(inventoryReads()).toHaveLength(10));
       await screen.findByRole('heading', { name: 'Outgoing Shares' });
       expectSavedGrant('quick pick', 'editor');
+      await screen.findByRole('heading', { name: 'Create Share' });
       fillForm('manual entry', 'admin');
       fireEvent.input(screen.getByLabelText('Resource ID'), {
         target: { value: 'current::draft/independent' },

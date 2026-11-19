@@ -46,6 +46,12 @@ const peer: Alert = {
   startTime: '2026-11-18T12:01:00Z',
 };
 
+// BuildFrontendState's compact models.Alert retains metadata, not the REST
+// top-level field. Whole-snapshot updates can supersede REST-shaped rows.
+function connectedShape({ canonicalSpecId, ...alert }: Alert): Alert {
+  return { ...alert, metadata: { ...alert.metadata, canonicalSpecID: canonicalSpecId } };
+}
+
 function renderOverview(...alerts: Alert[]) {
   const index = (rows: Alert[]) => Object.fromEntries(rows.map((alert) => [alert.id, alert]));
   const [activeAlerts, setActiveAlerts] = createSignal(index(alerts));
@@ -69,6 +75,22 @@ function renderOverview(...alerts: Alert[]) {
 describe('OverviewTab PMG message age', () => {
   afterEach(cleanup);
 
+  function expectPair(lead: Alert, companion: Alert, companionLabel: string) {
+    const leadCard = screen.getByText(lead.message).closest('[id^="alert-"]')!;
+    const secondaryCard = screen
+      .getByText(companion.message)
+      .closest<HTMLElement>('[id^="alert-"]')!;
+    expect(leadCard.id).toBe(`alert-${lead.id}`);
+    expect(secondaryCard.id).toBe(`alert-${companion.id}`);
+    expect(
+      leadCard.compareDocumentPosition(secondaryCard) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(within(secondaryCard).getByText(companionLabel)).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Acknowledge' })).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: 'Acknowledge all (2)' })).toHaveLength(2);
+    expect(screen.queryByRole('button', { name: '+1 related' })).not.toBeInTheDocument();
+  }
+
   it.each([
     { lead: peer, companion: gateway, label: 'Gateway-wide' },
     {
@@ -78,14 +100,39 @@ describe('OverviewTab PMG message age', () => {
     },
   ])('keeps both scope readings when $lead.canonicalSpecId leads', ({ lead, companion, label }) => {
     renderOverview(lead, companion);
+    expectPair(lead, companion, label);
+  });
 
-    expect(screen.getByText(lead.message).closest('[id^="alert-"]')?.id).toBe(`alert-${lead.id}`);
-    const secondaryCard = screen.getByText(companion.message).closest('[id^="alert-"]')!;
-    expect(secondaryCard.id).toBe(`alert-${companion.id}`);
-    expect(within(secondaryCard as HTMLElement).getByText(label)).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: 'Acknowledge' })).toHaveLength(2);
-    expect(screen.getAllByRole('button', { name: 'Acknowledge all (2)' })).toHaveLength(2);
-    expect(screen.queryByRole('button', { name: '+1 related' })).not.toBeInTheDocument();
+  it('shows both readings in a cold connected snapshot, with the later peer still leading', () => {
+    renderOverview(connectedShape(gateway), connectedShape(peer));
+    expectPair(peer, gateway, 'Gateway-wide');
+  });
+
+  it('keeps both readings when connected updates replace REST rows', () => {
+    const page = renderOverview(gateway, peer);
+    expectPair(peer, gateway, 'Gateway-wide');
+
+    page.replace(connectedShape(gateway), connectedShape(peer));
+    expectPair(peer, gateway, 'Gateway-wide');
+  });
+
+  it('takes the REST identifier when present, even if metadata disagrees', () => {
+    renderOverview(
+      { ...gateway, metadata: { ...gateway.metadata, canonicalSpecID: peer.canonicalSpecId } },
+      { ...peer, metadata: { ...peer.metadata, canonicalSpecID: gateway.canonicalSpecId } },
+    );
+    expectPair(peer, gateway, 'Gateway-wide');
+  });
+
+  it('does not infer an identifier from the message, display name, or malformed metadata', () => {
+    renderOverview(
+      { ...connectedShape(gateway), metadata: { ...gateway.metadata, canonicalSpecID: {} } },
+      connectedShape(peer),
+    );
+    expect(screen.getByText(peer.message)).toBeInTheDocument();
+    expect(screen.queryByText(gateway.message)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '+1 related' }));
+    expect(screen.getByText(gateway.message)).toBeInTheDocument();
   });
 
   it('does not surface acknowledged or closed incidents excluded by the current view', () => {
