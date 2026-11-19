@@ -234,6 +234,66 @@ describe('AvailabilityFleetView', () => {
     expect(tile).toHaveFocus();
   });
 
+  it('moves keyboard focus from withdrawn details or tiles to the nearest surviving tile', async () => {
+    const original = [resource(1), resource(2), resource(3), resource(4)];
+    const [resources, setResources] = createSignal(original);
+    render(() => (
+      <AvailabilityFleetView
+        resources={resources()}
+        historyByTarget={new Map()}
+        historyLoading={false}
+      />
+    ));
+
+    const tile = (index: number) =>
+      screen.getByRole('button', { name: `Open details for Service ${index}` });
+    fireEvent.click(tile(2));
+    screen.getByRole('button', { name: 'Close' }).focus();
+    // Service 3 also left. Service 1 was closer than Service 4 in the old order.
+    setResources([original[0], original[3]]);
+    await Promise.resolve();
+    expect(tile(1)).toHaveFocus();
+    expect(screen.queryByTestId('availability-fleet-detail')).not.toBeInTheDocument();
+
+    setResources(original);
+    expect(tile(2)).toHaveAttribute('aria-expanded', 'false');
+    expect(tile(1)).toHaveFocus();
+    setResources(original.slice(1));
+    await Promise.resolve();
+    expect(tile(2)).toHaveFocus();
+    expect(tile(2)).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('does not recover focus when another control owns it or takes it before recovery', async () => {
+    const original = [resource(1), resource(2)];
+    const [resources, setResources] = createSignal(original);
+    render(() => (
+      <>
+        <button type="button">Outside fleet</button>
+        <AvailabilityFleetView
+          resources={resources()}
+          historyByTarget={new Map()}
+          historyLoading={false}
+        />
+      </>
+    ));
+    const outside = screen.getByRole('button', { name: 'Outside fleet' });
+    const firstTile = () => screen.getByRole('button', { name: 'Open details for Service 1' });
+    fireEvent.click(firstTile());
+    outside.focus();
+    setResources(original.slice(1));
+    await Promise.resolve();
+    expect(outside).toHaveFocus();
+
+    setResources(original);
+    firstTile().focus();
+    setResources(original.slice(1));
+    outside.focus();
+    outside.blur();
+    await Promise.resolve();
+    expect(document.body).toHaveFocus();
+  });
+
   it('keeps an open drawer mounted when a live snapshot replaces the resources', () => {
     const [resources, setResources] = createSignal([resource(1), resource(2)]);
     render(() => (
@@ -247,6 +307,8 @@ describe('AvailabilityFleetView', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open details for Service 2' }));
     expect(drawerMounts.count).toBe(1);
     const drawer = screen.getByTestId('resource-detail-drawer');
+    const close = screen.getByRole('button', { name: 'Close' });
+    close.focus();
 
     // New objects for the same checks, as the websocket store delivers them.
     setResources([resource(1), { ...resource(2), status: 'offline' } as Resource]);
@@ -254,6 +316,7 @@ describe('AvailabilityFleetView', () => {
     expect(screen.getByTestId('resource-detail-drawer')).toBe(drawer);
     expect(drawerMounts.count).toBe(1);
     expect(drawer).toHaveAttribute('data-resource-status', 'offline');
+    expect(close).toHaveFocus();
   });
 
   it('keeps current health visible when history is unavailable', () => {

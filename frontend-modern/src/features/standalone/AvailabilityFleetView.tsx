@@ -6,6 +6,7 @@ import {
   createEffect,
   createMemo,
   createSignal,
+  onCleanup,
   type Component,
 } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
@@ -28,6 +29,43 @@ import { getProbeSourceChipLabel, type ProbeAgentOption } from '@/utils/availabi
 import { getStandaloneResourceStatusIndicator } from './standalonePageModel';
 
 const AVAILABILITY_FLEET_DETAIL_ID = 'availability-fleet-detail';
+const FLEET_TILE = '[data-availability-fleet-tile]';
+
+function recoverWithdrawnTileFocus(
+  tile: HTMLButtonElement,
+  detail: HTMLDivElement | undefined,
+  getFallback: () => HTMLElement | undefined,
+) {
+  const doc = tile.ownerDocument;
+  const focused = doc.activeElement;
+  const grid = tile.parentElement;
+  if (!grid || !focused || (!tile.contains(focused) && !detail?.contains(focused))) return;
+
+  const tiles = Array.from(grid.querySelectorAll<HTMLButtonElement>(FLEET_TILE));
+  const index = tiles.indexOf(tile);
+  const nearestTile = () => {
+    if (!grid.isConnected) return undefined;
+    // Use the order the operator was navigating, not the new sort order.
+    for (let offset = 1; offset < tiles.length; offset++) {
+      const next = tiles[index + offset];
+      if (next && grid.contains(next)) return next;
+      const previous = tiles[index - offset];
+      if (previous && grid.contains(previous)) return previous;
+    }
+    return grid.querySelector<HTMLButtonElement>(FLEET_TILE) ?? undefined;
+  };
+  let focusMoved = false;
+  const noteFocus = () => (focusMoved = true);
+  doc.addEventListener('focusin', noteFocus, true);
+  queueMicrotask(() => {
+    doc.removeEventListener('focusin', noteFocus, true);
+    // Wait for both the old tile and any replacement empty state to settle.
+    // An intervening focus choice still wins if it was subsequently blurred.
+    if (focusMoved || focused.isConnected || doc.activeElement !== doc.body) return;
+    const target = nearestTile() ?? getFallback();
+    if (target?.isConnected) target.focus();
+  });
+}
 
 type AvailabilityFleetHistoryState = 'reachable' | 'unreachable' | 'indeterminate' | 'unknown';
 
@@ -237,6 +275,7 @@ export const AvailabilityFleetView: Component<{
   historyError?: string;
   probeAgentOptions?: readonly ProbeAgentOption[];
   onRetryHistory?: () => void;
+  getFocusFallback?: () => HTMLElement | undefined;
 }> = (props) => {
   const now = useRelativeTimeNow();
   // Live snapshots replace resource objects. Reconciled by id, each tile (and
@@ -261,13 +300,11 @@ export const AvailabilityFleetView: Component<{
     setSelectedResourceId((current) => (current === resourceId ? undefined : resourceId));
   // Closing from the drawer's header removes the focused control, so focus
   // returns to the tile that opened it, as a table drawer returns it to its row.
-  const closeResource = (resourceId: string) => {
+  const closeResource = (tile: HTMLButtonElement) => {
     setSelectedResourceId(undefined);
-    queueMicrotask(() =>
-      Array.from(document.querySelectorAll<HTMLButtonElement>('[data-availability-fleet-tile]'))
-        .find((tile) => tile.dataset.availabilityFleetTile === resourceId)
-        ?.focus({ preventScroll: true }),
-    );
+    queueMicrotask(() => {
+      if (tile.isConnected) tile.focus({ preventScroll: true });
+    });
   };
 
   return (
@@ -310,6 +347,13 @@ export const AvailabilityFleetView: Component<{
       >
         <For each={fleet}>
           {(resource) => {
+            let tile!: HTMLButtonElement;
+            let detail: HTMLDivElement | undefined;
+            // The keyed tile is still attached during disposal, even when the
+            // Fleet view itself gives way to an empty state or the table.
+            onCleanup(() => {
+              if (tile) recoverWithdrawnTileFocus(tile, detail, () => props.getFocusFallback?.());
+            });
             const availability = () => availabilityFor(resource);
             const probe = () => getAvailabilityProbePresentation(resource, new Date(now()));
             const indicator = () => getStandaloneResourceStatusIndicator(resource, now());
@@ -344,6 +388,7 @@ export const AvailabilityFleetView: Component<{
             return (
               <>
                 <button
+                  ref={tile}
                   type="button"
                   class="group min-w-0 rounded-md border bg-surface p-3 text-left shadow-xs transition hover:border-blue-400/60 hover:bg-surface-hover focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
                   classList={{
@@ -421,6 +466,7 @@ export const AvailabilityFleetView: Component<{
                   id, so switching tiles resets the drawer's tabs. */}
                 <Show when={isSelected()}>
                   <div
+                    ref={detail}
                     id={AVAILABILITY_FLEET_DETAIL_ID}
                     data-testid="availability-fleet-detail"
                     class="col-span-full rounded-sm border border-border bg-surface px-2 py-3 sm:px-4 sm:py-4"
@@ -430,7 +476,7 @@ export const AvailabilityFleetView: Component<{
                       statusIndicator={indicator()}
                       presentation="table-row"
                       resolveResourceLabel={resolveResourceLabel}
-                      onClose={() => closeResource(resource.id)}
+                      onClose={() => closeResource(tile)}
                     />
                   </div>
                 </Show>

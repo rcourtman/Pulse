@@ -1,5 +1,6 @@
 import { Route, Router } from '@solidjs/router';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Resource } from '@/types/resource';
 import type { ProbeAgentOption } from '@/utils/availabilityProbeAgents';
@@ -79,6 +80,56 @@ describe('AvailabilityChecksTable', () => {
     expect(resolveAvailabilityChecksView('fleet', 1)).toBe('fleet');
     expect(resolveAvailabilityChecksView(['fleet'], 1)).toBe('fleet');
   });
+
+  it.each(['filtered', 'empty'] as const)(
+    'moves focus to the existing control when a live snapshot leaves the fleet %s',
+    async (state) => {
+      const check = availabilityResource();
+      const other = availabilityResource({
+        id: 'availability:other',
+        name: 'Other check',
+        displayName: 'Other check',
+        platformId: 'other',
+        availability: { ...check.availability!, targetId: 'other', address: 'other.example.test' },
+      });
+      const [resources, setResources] = createSignal(
+        state === 'filtered' ? [check, other] : [check],
+      );
+      render(() => (
+        <Router>
+          <Route
+            path="/"
+            component={() => (
+              <AvailabilityChecksTable
+                resources={resources()}
+                view="fleet"
+                externalSearch={state === 'filtered' ? () => 'MQTT' : undefined}
+                emptyIcon={<span />}
+                emptyTitle="No checks"
+                emptyDescription="Add checks"
+              />
+            )}
+          />
+        </Router>
+      ));
+      const search = screen.getByRole('textbox', { name: 'Search availability checks' });
+      fireEvent.click(screen.getByRole('button', { name: 'Open details for MQTT power meter' }));
+      screen.getByRole('button', { name: 'Collapse MQTT power meter details' }).focus();
+
+      setResources(state === 'filtered' ? [other] : []);
+      await Promise.resolve();
+      expect(screen.queryByTestId('availability-fleet-detail')).not.toBeInTheDocument();
+      if (state === 'filtered') {
+        expect(screen.getByText('No checks match current filters')).toBeInTheDocument();
+        expect(search).toHaveValue('MQTT');
+        expect(search).toHaveFocus();
+      } else {
+        expect(screen.getByRole('link', { name: 'Add service/device check' })).toHaveFocus();
+      }
+      setResources([check, other]);
+      expect(screen.queryByTestId('availability-fleet-detail')).not.toBeInTheDocument();
+    },
+  );
 
   it('renders agentless check status from unified network endpoint resources', () => {
     vi.spyOn(Date, 'now').mockReturnValue(1_700_000_600_000);

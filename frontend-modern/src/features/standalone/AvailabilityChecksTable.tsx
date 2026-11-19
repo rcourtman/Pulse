@@ -101,6 +101,7 @@ const formatFailures = (
 };
 
 const AVAILABILITY_HISTORY_REFRESH_MS = 5 * 60 * 1000;
+const AVAILABILITY_SEARCH_LABEL = 'Search availability checks';
 
 const UPTIME_TONE_CLASS = {
   default: 'text-base-content',
@@ -127,6 +128,18 @@ export const AvailabilityChecksTable: Component<{
   onResetFilters?: () => void;
 }> = (props) => {
   const now = useRelativeTimeNow();
+  let checks: HTMLDivElement | undefined;
+  let addCheck: HTMLAnchorElement | undefined;
+  const getFleetFocusFallback = () => {
+    if (addCheck?.isConnected) return addCheck;
+    if (checks?.isConnected) {
+      return (
+        checks.querySelector<HTMLInputElement>(
+          `input[aria-label="${AVAILABILITY_SEARCH_LABEL}"]`,
+        ) ?? undefined
+      );
+    }
+  };
   const tableState = createPlatformTableFilterState({
     resources: () => props.resources,
     initialStatus: 'all' as PlatformResourceStatusFilter,
@@ -230,7 +243,11 @@ export const AvailabilityChecksTable: Component<{
           title={props.emptyTitle}
           description={props.emptyDescription}
           actions={
-            <A href={buildAvailabilityTargetAddPath('service')} class={settingsLinkClass}>
+            <A
+              ref={addCheck}
+              href={buildAvailabilityTargetAddPath('service')}
+              class={settingsLinkClass}
+            >
               <PlusIcon class="h-3.5 w-3.5" />
               Add service/device check
             </A>
@@ -238,11 +255,11 @@ export const AvailabilityChecksTable: Component<{
         />
       }
     >
-      <div class="space-y-3">
+      <div ref={checks} class="space-y-3">
         <PlatformTableToolbar
           search={tableState.search}
           onSearchChange={tableState.setSearch}
-          searchPlaceholder="Search availability checks"
+          searchPlaceholder={AVAILABILITY_SEARCH_LABEL}
           searchSuggestions={tableState.searchSuggestions}
           status={tableState.status()}
           onStatusChange={tableState.setStatus}
@@ -293,6 +310,7 @@ export const AvailabilityChecksTable: Component<{
                 historyError={history()?.error}
                 probeAgentOptions={props.probeAgentOptions}
                 onRetryHistory={() => void historyActions.refetch()}
+                getFocusFallback={getFleetFocusFallback}
               />
             }
           >
