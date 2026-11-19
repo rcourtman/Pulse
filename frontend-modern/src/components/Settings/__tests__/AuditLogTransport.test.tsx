@@ -192,8 +192,9 @@ describe('Audit Log rendered controls through the real HTTP client', () => {
     mount();
     await loaded();
 
-    expect(row().getByText(`Failed · ${actor}`)).toBeInTheDocument();
-    const timestamp = row().getByText(new Date(second.timestamp).toLocaleString(), {
+    const eventCell = within(row().getByRole('cell', { name: /^login\b/ }));
+    expect(eventCell.getByText(`Failed · ${actor}`)).toBeInTheDocument();
+    const timestamp = eventCell.getByText(new Date(second.timestamp).toLocaleString(), {
       selector: 'time',
     });
     expect(timestamp).toHaveAttribute('datetime', second.timestamp);
@@ -202,7 +203,13 @@ describe('Audit Log rendered controls through the real HTTP client', () => {
         name: `Verify signature: login by ${actor} at ${timestamp.textContent} (Event ID: ${second.id})`,
       }),
     ).toBeEnabled();
-    expect(row('East first sign-in').getByText('Success · Unknown user')).toBeInTheDocument();
+    const firstEventCell = within(
+      row('East first sign-in').getByRole('cell', { name: /^login\b/ }),
+    );
+    expect(firstEventCell.getByText('Success · Unknown user')).toBeInTheDocument();
+    expect(
+      firstEventCell.getByText(new Date(first.timestamp).toLocaleString(), { selector: 'time' }),
+    ).toHaveAttribute('datetime', first.timestamp);
   });
 
   it('restarts the initial load without changing its query or losing keyboard focus', async () => {

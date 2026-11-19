@@ -126,8 +126,7 @@ describe('settings architecture guardrails', () => {
     expectHiddenColumn(auditLogPanelSource, 'timestamp');
     expectHiddenColumn(auditLogPanelSource, 'user');
 
-    expect(auditLogPanelSource).toContain('text-[11px] text-muted sm:hidden');
-    expect(auditLogPanelSource).toContain("event.user || 'Unknown user'");
+    // AuditLogTransport exercises the phone summary in the rendered Event cell.
     expect(userAssignmentsPanelSource).toContain(
       '<span class="hidden sm:inline">Manage Access</span>',
     );
