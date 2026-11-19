@@ -424,7 +424,71 @@ test.describe("Infrastructure map", () => {
     await asDevelopmentBuild(page);
     await openMap(page);
 
+    // A phone gets the map at full size in one column, not shrunk to one
+    // screen: icons alone to begin with, every tile big enough to tap, and
+    // nothing wider than the window.
+    await expect(
+      page
+        .getByRole("group", { name: "Map detail" })
+        .getByRole("button", { name: "Compact" }),
+    ).toHaveAttribute("aria-pressed", "true");
+    const drawn = await page.evaluate((selector) => {
+      const svg = document.querySelector(selector)!;
+      const box = svg.getBoundingClientRect();
+      const tiles = [...svg.querySelectorAll("a[data-map-hit] rect")].map(
+        (rect) => rect.getBoundingClientRect().width,
+      );
+      return {
+        smallestTile: Math.min(...tiles),
+        width: box.width,
+        height: box.height,
+        window: { width: window.innerWidth, height: window.innerHeight },
+        sideways:
+          document.documentElement.scrollWidth > window.innerWidth,
+        outside: [
+          ...svg.querySelectorAll("rect, text, circle, path, line, image"),
+        ]
+          .map((node) => node.getBoundingClientRect())
+          .filter(
+            (at) =>
+              (at.width > 0 || at.height > 0) &&
+              (at.left < box.left - 1 || at.right > box.right + 1),
+          )
+          .map((at) => `${Math.round(at.left)}..${Math.round(at.right)}`),
+      };
+    }, MAP);
+    expect(drawn.smallestTile).toBeGreaterThanOrEqual(36);
+    expect(drawn.width).toBeLessThanOrEqual(drawn.window.width);
+    expect(drawn.height).toBeGreaterThan(drawn.window.height);
+    expect(drawn.sideways).toBe(false);
+    // Nothing is drawn past either side of the drawing, where it would be
+    // cut off, and the page's last line ends above the navigation bar.
+    expect(drawn.outside).toEqual([]);
+    const foot = await page.evaluate(() => {
+      // The app scrolls inside its shell, not the window.
+      for (const scroller of [
+        document.querySelector(".app-scroll-shell"),
+        document.scrollingElement,
+      ]) {
+        if (scroller) scroller.scrollTop = scroller.scrollHeight;
+      }
+      const legend = document
+        .querySelector('[aria-label="Legend"]')!
+        .getBoundingClientRect();
+      const bar = Number.parseFloat(
+        getComputedStyle(document.documentElement).getPropertyValue(
+          "--pulse-mobile-nav-height",
+        ),
+      );
+      return {
+        legendBottom: legend.bottom,
+        barTop: window.innerHeight - (Number.isFinite(bar) ? bar : 0),
+      };
+    });
+    expect(foot.legendBottom).toBeLessThanOrEqual(foot.barTop);
+
     const { name, tile: guest, href } = await pinGuest(page);
+    await guest.scrollIntoViewIfNeeded();
     await guest.tap();
     await expect(page.getByText("Tap again to open")).toBeVisible();
     await expect(page.getByText(name).first()).toBeVisible();

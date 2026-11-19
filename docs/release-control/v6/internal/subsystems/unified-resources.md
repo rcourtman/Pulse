@@ -4477,6 +4477,31 @@ What the diagram does with them:
   `getFeatureGuideAvailability` and waits, as for any guide loading, until
   the build has said what it is, so it never says a guide is not shipped
   and then shows it.
+- On a phone the map is not fitted to one screen. Below 768px wide
+  (`PHONE_WINDOW`) the page calls `flowServiceDiagram`, which lays the
+  diagram out at the page's own width at full size and lets it run, and the
+  page scrolls as every Pulse page does on a phone. Richard's rule that the
+  whole map is on one screen stands at 768px and wider, where
+  `fitServiceDiagram` still fits it. The reason is measured: fitted to one
+  390px screen, a 190-tile estate's tiles are 13px and its text 4px, and at
+  full size they are 40px and 11px over about three and a half screens.
+  There the map opens with icons alone whatever the estate's size, because
+  that is the shortest page and a tap reads a tile, and Names writes every
+  name out on two lines as the saved image does, because a phone has no
+  pointer to hover a cut name with. The layout is scaled down only on a
+  window narrower than its narrowest form. The gateways nothing monitors
+  that the diagram carries (up to `DIAGRAM_MAX_GATEWAYS`, three) are all
+  drawn at every width (`drawGatewayRows`): where they do not fit beside
+  the Internet tile they take rows of their own above it. Before this the
+  ones that did not fit one row were left out without a word, which a
+  phone with names on did to two of three. A network pill is cut by the
+  measure it is sized with, so none is wider than the drawing, and a name
+  that fits on two lines is written on two (`wrapMapText`). On a page that
+  scrolls, the card for a tile with keyboard focus follows the tile and a
+  pointer's card ends. The saved image follows the detail on screen, so a
+  phone saves icons until Names is chosen. No pinch-to-zoom canvas
+  and no separate phone page: one drawing, one layout engine. Design, options and
+  renders are in the map's demand-ledger entry (19 November 2026).
 - The map's completeness review of 19 November 2026 fixed four things the
   page now holds to. The room it leaves under the drawing is measured, not
   guessed from the window's width: it reads the height the bottom navigation

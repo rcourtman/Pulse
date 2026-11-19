@@ -38,7 +38,7 @@ import {
 import { MAP_DOC_URL } from '@/utils/docsLinks';
 import type { StatusIndicatorVariant } from '@/utils/status';
 import { showError, showSuccess } from '@/utils/toast';
-import { fitServiceDiagram } from './infrastructureMapDiagram';
+import { fitServiceDiagram, flowServiceDiagram } from './infrastructureMapDiagram';
 import {
   downloadMapImage,
   resolveDiagramTileLimit,
@@ -80,6 +80,10 @@ const LEGEND_LINE = 16;
 // The bar publishes its own height, and 0 where it is not shown.
 const NAV_HEIGHT_VARIABLE = '--pulse-mobile-nav-height';
 const MIN_MAP_HEIGHT = 240;
+// Narrower than this is a phone. There the map is drawn at full size in one
+// column and the page scrolls, as every page on a phone does: fitted to one
+// screen, a large estate's tiles are 13px and its text 4px.
+const PHONE_WINDOW = 768;
 // Below this, names are too small to read and icons alone say more.
 const READABLE_SCALE = 0.62;
 
@@ -142,7 +146,11 @@ export function InfrastructureMapSurface() {
   // all of it is on screen at once and nothing is read by scrolling.
   let frameRef: HTMLDivElement | undefined;
   let legendRef: HTMLUListElement | undefined;
-  const [space, setSpace] = createSignal<{ width: number; height: number } | null>(null);
+  const [space, setSpace] = createSignal<{
+    width: number;
+    height: number;
+    phone: boolean;
+  } | null>(null);
   const measure = () => {
     const width = observed.width();
     if (!frameRef || !width) return;
@@ -157,7 +165,12 @@ export function InfrastructureMapSurface() {
     const legendWrap = Math.max(0, (legendRef?.offsetHeight ?? 0) - LEGEND_LINE);
     const below = SPACE_BELOW + navigation + legendWrap;
     const height = Math.max(MIN_MAP_HEIGHT, Math.floor(window.innerHeight - top - below));
-    setSpace((was) => (was?.width === width && was.height === height ? was : { width, height }));
+    const phone = window.innerWidth < PHONE_WINDOW;
+    setSpace((was) =>
+      was?.width === width && was.height === height && was.phone === phone
+        ? was
+        : { width, height, phone },
+    );
   };
   createEffect(on(observed.width, measure));
   onMount(() => {
@@ -195,16 +208,22 @@ export function InfrastructureMapSurface() {
   const fitted = createMemo(() => {
     const room = space();
     if (!room || model().isEmpty) return null;
-    const fit = (chosen: MapDensity) => ({
-      density: chosen,
-      ...fitServiceDiagram(
-        buildServiceDiagram(model(), { maxTilesPerGroup: resolveDiagramTileLimit(chosen) }),
-        room,
-        chosen,
-      ),
-    });
+    const fit = (chosen: MapDensity) => {
+      const diagram = buildServiceDiagram(model(), {
+        maxTilesPerGroup: resolveDiagramTileLimit(chosen),
+      });
+      return {
+        density: chosen,
+        ...(room.phone
+          ? flowServiceDiagram(diagram, room.width, chosen)
+          : fitServiceDiagram(diagram, { width: room.width, height: room.height }, chosen)),
+      };
+    };
     const chosen = densityChoice();
     if (chosen) return fit(chosen);
+    // On a phone the map scrolls, and icons alone make the shortest page. A
+    // tap reads a tile. Names are there to be chosen.
+    if (room.phone) return fit('marks');
     const preferred = fit(resolveDefaultMapDensity(liveModel()));
     if (preferred.density === 'marks' || preferred.scale >= READABLE_SCALE) return preferred;
     const compact = fit('marks');
@@ -326,11 +345,38 @@ export function InfrastructureMapSurface() {
       armedAtPress = armed();
       disarm();
     };
+    // A card is placed where its tile was. On a page that scrolls, the tile
+    // moves: a card for the tile with keyboard focus goes with it, leaves
+    // while the tile is off the screen and comes back with it, and one for a
+    // tile a pointer was resting on ends until the pointer moves. A scroll
+    // of something that does not hold the map, a menu's list, moves no tile.
+    let scrolledAway: string | null = null;
+    const scrolled = (event: Event) => {
+      disarm();
+      const within = event.target;
+      if (within instanceof Element && frameRef && !within.contains(frameRef)) return;
+      const shown = hover();
+      const focused = document.activeElement?.closest?.(`[${MAP_HIT_ATTRIBUTE}]`);
+      const held = focused ? hits()[Number(focused.getAttribute(MAP_HIT_ATTRIBUTE))] : undefined;
+      if (!focused || !held || (shown ? shown.hit.id !== held.id : scrolledAway !== held.id)) {
+        scrolledAway = null;
+        if (shown) setHover(null);
+        return;
+      }
+      const box = focused.getBoundingClientRect();
+      if (box.bottom < 0 || box.top > window.innerHeight) {
+        scrolledAway = held.id;
+        setHover(null);
+      } else {
+        scrolledAway = null;
+        point({ hit: held, element: focused });
+      }
+    };
     document.addEventListener('pointerdown', press, true);
-    window.addEventListener('scroll', disarm, true);
+    window.addEventListener('scroll', scrolled, true);
     onCleanup(() => {
       document.removeEventListener('pointerdown', press, true);
-      window.removeEventListener('scroll', disarm, true);
+      window.removeEventListener('scroll', scrolled, true);
     });
   });
   const handleTap = (event: MouseEvent) => {
@@ -380,7 +426,9 @@ export function InfrastructureMapSurface() {
   };
 
   return (
-    <div class="flex flex-col gap-3" data-testid="infrastructure-map">
+    // On a phone the page scrolls, and its last line would end under the
+    // navigation bar by the few pixels the shell leaves every page short.
+    <div class="flex flex-col gap-3 pb-2 md:pb-0" data-testid="infrastructure-map">
       <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
         {/* AppLayout already titles the tab for this route with the brand name. */}
         <PageHeader

@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { Resource } from '@/types/resource';
-import { fitServiceDiagram, layoutServiceDiagram } from '../infrastructureMapDiagram';
+import {
+  fitServiceDiagram,
+  flowServiceDiagram,
+  layoutServiceDiagram,
+} from '../infrastructureMapDiagram';
 import { buildMapExportSvg } from '../infrastructureMapExport';
 import {
   fitMapName,
@@ -115,6 +119,28 @@ describe('wrapMapText', () => {
 
   it('breaks where a capital starts a new word inside a name', () => {
     expect(wrap('iSponsorBlockTV')).toEqual(['iSponsorBlock', 'TV']);
+  });
+
+  it('fills the first line when an early break would cut a name two lines can hold', () => {
+    const lines = wrap('VM abcdefghijklmnopqrst');
+    expect(lines).toHaveLength(2);
+    expect(lines.join('')).toBe('VM abcdefghijklmnopqrst');
+    // A name two lines cannot hold keeps its break at the word.
+    const [first, second] = wrap(`VM ${'abcdefghij'.repeat(6)}`);
+    expect(first).toBe('VM');
+    expect(second.endsWith('…')).toBe(true);
+  });
+
+  it('never ends a line between the two halves of an emoji', () => {
+    const whole = (line: string) =>
+      !/[\uD800-\uDBFF]$/.test(line) && !/^[\uDC00-\uDFFF]/.test(line);
+    for (const name of ['VM mmmmm😀abcdef', 'mmmmmmmmm😀mmmmm', '😀😀😀😀😀😀😀😀😀😀😀😀']) {
+      for (let width = 20; width <= 120; width += 1) {
+        for (const line of wrapMapText(name, width, 12, 500)) {
+          expect(whole(line), `${name} at ${width}: ${JSON.stringify(line)}`).toBe(true);
+        }
+      }
+    }
   });
 
   it('breaks inside a word only when it has no break in reach, and never leaves a stub', () => {
@@ -746,6 +772,111 @@ describe('layoutServiceDiagram', () => {
       expect(withheld).not.toContain('add a check');
     });
 
+    it('draws every gateway nothing monitors, on as many rows as a narrow window needs', () => {
+      // Three machines, each behind its own router: the most the map draws.
+      const routed = (extra: Resource[] = []): Resource[] => [
+        ...[1, 2, 3].map((n) =>
+          resource({
+            id: `host-${n}`,
+            type: 'docker-host',
+            name: `Host ${n}`,
+            platformType: 'docker',
+            agent: { defaultGateways: [{ address: `192.168.${n}.1`, interface: 'eth0' }] },
+          }),
+        ),
+        ...extra,
+      ];
+      const gatewaysOf = (scene: MapScene) =>
+        ofKind(scene, 'hit').filter((node) => node.hit.checkAddress !== undefined);
+      for (const estateOf of [routed, () => routed(waysIn())]) {
+        for (const width of [320, 374, 768, 1440]) {
+          for (const density of ['names', 'marks'] as const) {
+            const scene = sceneOf(estateOf(), width, density);
+            const where = `${width} ${density}`;
+            const gateways = gatewaysOf(scene);
+            expect(gateways.map((node) => node.hit.checkAddress).sort(), where).toEqual([
+              '192.168.1.1',
+              '192.168.2.1',
+              '192.168.3.1',
+            ]);
+            // Inside the drawing, and no tile on top of another.
+            const hits = ofKind(scene, 'hit');
+            for (const node of gateways) {
+              expect(node.x, where).toBeGreaterThanOrEqual(0);
+              expect(node.x + node.w, where).toBeLessThanOrEqual(scene.width);
+              for (const other of hits) {
+                if (other === node) continue;
+                const apart =
+                  node.x + node.w <= other.x ||
+                  other.x + other.w <= node.x ||
+                  node.y + node.h <= other.y ||
+                  other.y + other.h <= node.y;
+                expect(apart, `${where} ${node.hit.name} over ${other.hit.name}`).toBe(true);
+              }
+            }
+          }
+        }
+      }
+    });
+
+    it('gives the gateways a second row on a narrow phone with names on, clear of the Internet', () => {
+      const routed: Resource[] = [
+        ...[1, 2, 3].map((n) =>
+          resource({
+            id: `host-${n}`,
+            type: 'docker-host',
+            name: `Host ${n}`,
+            platformType: 'docker',
+            agent: { defaultGateways: [{ address: `192.168.${n}.1`, interface: 'eth0' }] },
+          }),
+        ),
+        ...waysIn(),
+      ];
+      const diagram = buildServiceDiagram(buildInfrastructureMapModel(routed));
+      const rowsAt = (width: number) => {
+        const { scene, scale } = flowServiceDiagram(diagram, width, 'names');
+        expect(scale, `${width}`).toBe(1);
+        const hits = ofKind(scene, 'hit');
+        const gateways = hits.filter((node) => node.hit.checkAddress !== undefined);
+        expect(gateways, `${width}`).toHaveLength(3);
+        for (const node of gateways) {
+          expect(node.x, `${width}`).toBeGreaterThanOrEqual(0);
+          expect(node.x + node.w, `${width}`).toBeLessThanOrEqual(scene.width);
+          for (const other of hits) {
+            if (other === node) continue;
+            const apart =
+              node.x + node.w <= other.x ||
+              other.x + other.w <= node.x ||
+              node.y + node.h <= other.y ||
+              other.y + other.h <= node.y;
+            expect(apart, `${width} ${node.hit.name} over ${other.hit.name}`).toBe(true);
+          }
+        }
+        // The Internet tile is no link, so it is found by its label: it and
+        // its tile sit under the last gateway row, not among the gateways.
+        const internet = ofKind(scene, 'text').find((node) => node.text === 'Internet');
+        expect(internet, `${width}`).toBeDefined();
+        const lastRow = Math.max(...gateways.map((node) => node.y + node.h));
+        // Its tile is the smallest box drawn round the label.
+        const [tile] = ofKind(scene, 'rect')
+          .filter(
+            (node) =>
+              node.x <= internet!.x &&
+              internet!.x <= node.x + node.w &&
+              node.y <= internet!.y &&
+              internet!.y <= node.y + node.h,
+          )
+          .sort((a, b) => a.w * a.h - b.w * b.h);
+        expect(tile, `${width}`).toBeDefined();
+        expect(tile.h, `${width}`).toBeLessThan(120);
+        expect(tile.y, `${width}`).toBeGreaterThanOrEqual(lastRow);
+        return new Set(gateways.map((node) => node.y)).size;
+      };
+      // 320 holds two wrapped-name tiles a row, 374 holds three.
+      expect(rowsAt(320)).toBe(2);
+      expect(rowsAt(374)).toBe(1);
+    });
+
     it('still draws the gateway when the estate has no ways in', () => {
       const scene = sceneOf(dockerEstate(), 1400);
       expect(texts(scene)).toContain('192.168.0.1');
@@ -811,6 +942,120 @@ describe('layoutServiceDiagram', () => {
 
     it('stops shrinking at a floor, below which the page scrolls instead', () => {
       expect(fitServiceDiagram(diagram, { width: 320, height: 60 }, 'names').scale).toBe(0.3);
+    });
+  });
+
+  describe('flowServiceDiagram, the map on a phone', () => {
+    const diagram = buildServiceDiagram(buildInfrastructureMapModel(estate()));
+    // The width a 390px phone leaves the drawing.
+    const PHONE = 374;
+    const tileWidths = (scene: ReturnType<typeof layoutServiceDiagram>) =>
+      ofKind(scene, 'hit').map((node) => node.w);
+
+    it("draws at full size at the phone's own width, however long that makes it", () => {
+      for (const density of ['marks', 'names'] as const) {
+        const { scene, scale } = flowServiceDiagram(diagram, PHONE, density);
+        expect(scale, density).toBe(1);
+        expect(scene.width, density).toBe(PHONE);
+        // Fitted to one screen the same map is shrunk to a third.
+        const fitted = fitServiceDiagram(diagram, { width: PHONE, height: 414 }, density);
+        expect(fitted.scale, density).toBeLessThan(0.7);
+        expect(scene.height, density).toBeGreaterThan(414);
+      }
+    });
+
+    it('keeps every tile big enough to tap and inside the width', () => {
+      const { scene } = flowServiceDiagram(diagram, PHONE, 'marks');
+      const hits = ofKind(scene, 'hit');
+      expect(hits.length).toBeGreaterThan(5);
+      expect(Math.min(...tileWidths(scene))).toBeGreaterThanOrEqual(40);
+      for (const node of hits) {
+        expect(node.x).toBeGreaterThanOrEqual(0);
+        expect(node.x + node.w).toBeLessThanOrEqual(PHONE);
+      }
+    });
+
+    it('writes names out on two lines, since a phone cannot hover a cut one', () => {
+      const flowed = flowServiceDiagram(diagram, PHONE, 'names').scene;
+      const plain = layoutServiceDiagram(diagram, { width: PHONE, density: 'names' });
+      const wrapped = layoutServiceDiagram(diagram, {
+        width: PHONE,
+        density: 'names',
+        wrapNames: true,
+      });
+      expect(Math.max(...tileWidths(flowed))).toBe(Math.max(...tileWidths(wrapped)));
+      expect(Math.max(...tileWidths(flowed))).toBeGreaterThan(Math.max(...tileWidths(plain)));
+    });
+
+    it('cuts a network label that is wider than the phone, and keeps its pill inside', () => {
+      const long = `vmbr${'1'.repeat(60)}`;
+      const onLong = (name: string) =>
+        guest(name, {
+          proxmox: {
+            clusterName: 'homelab',
+            networkInterfaces: [{ name: 'eth0', addresses: [], bridge: long, vlan: 30 }],
+          },
+        });
+      const wide = buildServiceDiagram(
+        buildInfrastructureMapModel(estate([onLong('frigate'), onLong('esphome')])),
+      );
+      for (const width of [320, PHONE]) {
+        for (const density of ['marks', 'names'] as const) {
+          const { scene, scale } = flowServiceDiagram(wide, width, density);
+          const where = `${width} ${density}`;
+          expect(scale, where).toBe(1);
+          expect(
+            texts(scene).some((text) => text.startsWith('vmbr1111') && text.endsWith('…')),
+            where,
+          ).toBe(true);
+          for (const node of ofKind(scene, 'rect')) {
+            expect(node.x, where).toBeGreaterThanOrEqual(0);
+            expect(node.x + node.w, where).toBeLessThanOrEqual(scene.width);
+          }
+          // A pill is the one box 24 tall with round ends, and none is
+          // wider than the row the pills share, the drawing less its gutters.
+          const pills = ofKind(scene, 'rect').filter((node) => node.h === 24 && node.r === 12);
+          expect(pills.length, where).toBeGreaterThan(0);
+          for (const pill of pills) {
+            expect(pill.w, where).toBeLessThanOrEqual(scene.width - 32);
+          }
+        }
+      }
+    });
+
+    it('says a fold of a thousand or more as thousands, not as its first digits', () => {
+      const many = Array.from({ length: 1300 }, (_, index) => guest(`svc-${index}`));
+      const { scene } = flowServiceDiagram(
+        buildServiceDiagram(buildInfrastructureMapModel(estate(many))),
+        PHONE,
+        'marks',
+      );
+      const folds = ofKind(scene, 'app')
+        .map((node) => node.letters)
+        .filter((letters) => letters.startsWith('+'));
+      expect(folds).toContain('+1k');
+      expect(folds.some((letters) => /^\+\d{3}$/.test(letters))).toBe(false);
+    });
+
+    it('reads no count into a name that only starts with a plus sign', () => {
+      const letters = (name: string) =>
+        ofKind(
+          flowServiceDiagram(
+            buildServiceDiagram(buildInfrastructureMapModel(estate([guest(name)]))),
+            PHONE,
+            'marks',
+          ).scene,
+          'app',
+        ).map((node) => node.letters);
+      expect(letters('+1e3')).toContain('+1e3');
+      expect(letters('+Infinity')).toContain('+Inf');
+    });
+
+    it('scales down only when the window is narrower than the narrowest layout', () => {
+      const { scene, scale } = flowServiceDiagram(diagram, 240, 'marks');
+      expect(scene.width).toBeGreaterThan(240);
+      expect(scale).toBeLessThan(1);
+      expect(scene.width * scale).toBeLessThanOrEqual(240.5);
     });
   });
 });

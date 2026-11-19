@@ -28,8 +28,11 @@ matches the dot on its network's pill.
 The map fits the window. When there is too much to name, it switches to
 icons alone; **Names** and **Compact** choose for yourself. A box with more
 than it can draw ends in a **+N more** tile, and **Compact** draws more of
-them. On a phone with **Names** on, or on a very large estate, the map runs
-past the screen and scrolls.
+them. On a very large estate the map can run past the screen and scroll.
+
+On a phone the map is drawn at full size in one column and the page
+scrolls, so every tile is big enough to tap and every label to read. It
+opens with icons alone; **Names** writes every name out.
 
 ## How Pulse recognises an app
 
@@ -87,6 +90,9 @@ agent, so keep agents on the same release as the server.
 to replace every name, address and network name with a stand-in such as
 "Proxmox 2" or "Container 14". Recognised apps keep the app's own name, which
 says what you run and nothing about where.
+
+The picture has the detail the page has. A phone opens with icons alone, so
+choose **Names** first there for a picture with names in it.
 
 The picture is made in your browser. It is not sent to Pulse.
 

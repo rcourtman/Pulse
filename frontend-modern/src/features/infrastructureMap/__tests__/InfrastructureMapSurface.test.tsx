@@ -12,7 +12,7 @@ import { syncSessionSettingsCapabilities } from '@/stores/sessionSettingsCapabil
 import type { SecurityStatusSettingsCapabilities } from '@/types/config';
 import type { Resource } from '@/types/resource';
 import { showError, showSuccess } from '@/utils/toast';
-import { fitServiceDiagram } from '../infrastructureMapDiagram';
+import { fitServiceDiagram, flowServiceDiagram } from '../infrastructureMapDiagram';
 import { buildMapExportSvg, downloadMapImage } from '../infrastructureMapExport';
 import { InfrastructureMapSurface } from '../InfrastructureMapSurface';
 
@@ -38,6 +38,18 @@ vi.mock('@/api/infrastructureMapActivity', () => ({
   recordInfrastructureMapExport: vi.fn(),
 }));
 vi.mock('@/utils/toast', () => ({ showSuccess: vi.fn(), showError: vi.fn() }));
+// The card a pointed-at or focused tile shows. Watched, so a test can read
+// whether it is up and where. What it says is drawn in place, with none of
+// the real card's positioning.
+const card = vi.hoisted(() => ({
+  read: (): { when: boolean; x: number; y: number } => ({ when: false, x: 0, y: 0 }),
+}));
+vi.mock('@/components/shared/TooltipPortal', () => ({
+  TooltipPortal: (props: { when: boolean; x: number; y: number; children: unknown }) => {
+    card.read = () => ({ when: props.when, x: props.x, y: props.y });
+    return () => (props.when ? props.children : null);
+  },
+}));
 // The shared tooltip a press shows on every device. Watched, so a test can
 // read what a tap said.
 vi.mock('@/components/shared/Tooltip', async (importOriginal) => ({
@@ -53,7 +65,11 @@ vi.mock('../infrastructureMapExport', async (importOriginal) => ({
 // The real fit, watched: a test reads the room the page offered the drawing.
 vi.mock('../infrastructureMapDiagram', async (importOriginal) => {
   const real = await importOriginal<typeof import('../infrastructureMapDiagram')>();
-  return { ...real, fitServiceDiagram: vi.fn(real.fitServiceDiagram) };
+  return {
+    ...real,
+    fitServiceDiagram: vi.fn(real.fitServiceDiagram),
+    flowServiceDiagram: vi.fn(real.flowServiceDiagram),
+  };
 });
 
 const resource = (partial: Partial<Resource> & Pick<Resource, 'id' | 'type' | 'name'>): Resource =>
@@ -483,6 +499,51 @@ describe('InfrastructureMapSurface connections', () => {
     expect(rings(container)).toHaveLength(0);
   });
 
+  it("ends a pointer's card when the page scrolls, and keeps the card of the tile with focus", () => {
+    const { container } = draw();
+
+    // A pointer was resting on a tile: the tile has moved from under the card.
+    fireEvent.pointerOver(tile(container, 'qbittorrent'));
+    expect(rings(container)).toHaveLength(1);
+    window.dispatchEvent(new Event('scroll'));
+    expect(rings(container)).toHaveLength(0);
+
+    expect(card.read().when).toBe(false);
+
+    // The keyboard brought a tile into view: the scroll is how it got there,
+    // and the card goes where the tile went.
+    const focused = tile(container, 'qbittorrent');
+    const active = vi.spyOn(document, 'activeElement', 'get').mockReturnValue(focused);
+    const at = (top: number) =>
+      ({ left: 100, right: 140, width: 40, top, bottom: top + 40, height: 40 }) as DOMRect;
+    const where = vi.spyOn(focused, 'getBoundingClientRect').mockReturnValue(at(300));
+    fireEvent.focusIn(focused);
+    expect(card.read()).toEqual({ when: true, x: 120, y: 300 });
+    where.mockReturnValue(at(210));
+    window.dispatchEvent(new Event('scroll'));
+    expect(card.read()).toEqual({ when: true, x: 120, y: 210 });
+    expect(rings(container)).toHaveLength(1);
+
+    // A scroll of something that does not hold the map moves no tile.
+    const menu = document.createElement('div');
+    document.body.append(menu);
+    where.mockReturnValue(at(-500));
+    menu.dispatchEvent(new Event('scroll'));
+    expect(card.read()).toEqual({ when: true, x: 120, y: 210 });
+    menu.remove();
+
+    // Scrolled off the screen the tile has no card, and gets it back when
+    // it returns.
+    where.mockReturnValue(at(-90));
+    window.dispatchEvent(new Event('scroll'));
+    expect(card.read().when).toBe(false);
+    expect(rings(container)).toHaveLength(0);
+    where.mockReturnValue(at(40));
+    window.dispatchEvent(new Event('scroll'));
+    expect(card.read()).toEqual({ when: true, x: 120, y: 40 });
+    active.mockRestore();
+  });
+
   describe('a gateway nothing monitors', () => {
     const ADD_CHECK =
       '/settings/monitoring/availability?add=target&targetKind=router&name=Gateway&address=192.168.0.1&from=map';
@@ -637,5 +698,77 @@ describe('InfrastructureMapSurface with nothing to draw', () => {
     expect(screen.getByText('Nothing to draw yet')).toBeInTheDocument();
     expect(screen.getByText(/Ask a Pulse administrator to add one\./)).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Add a system' })).not.toBeInTheDocument();
+  });
+});
+
+describe('InfrastructureMapSurface on a phone', () => {
+  const asWindow = (width: number) => vi.stubGlobal('innerWidth', width);
+  const lastFlow = () => vi.mocked(flowServiceDiagram).mock.calls.at(-1);
+  const pressed = () =>
+    screen
+      .getByRole('group', { name: 'Map detail' })
+      .querySelector('[aria-pressed="true"]')
+      ?.getAttribute('aria-label');
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resourcesMock.read = undefined;
+    resourcesMock.value = lab();
+  });
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  it('draws the map at full size and lets the page scroll, instead of fitting it to the screen', () => {
+    asWindow(390);
+    render(() => <InfrastructureMapSurface />);
+
+    expect(fitServiceDiagram).not.toHaveBeenCalled();
+    // At the width the page has, with no height to fit to.
+    expect(lastFlow()?.[1]).toBe(1200);
+    const svg = screen.getByRole('group', { name: 'Infrastructure map' });
+    expect(svg.getAttribute('viewBox')).toBe(`0 0 1200 ${svg.getAttribute('height')}`);
+  });
+
+  it('opens with icons alone on any estate, and writes names when asked', () => {
+    asWindow(390);
+    render(() => <InfrastructureMapSurface />);
+
+    // This two-thing estate opens with names on a desktop.
+    expect(pressed()).toBe('Compact');
+    expect(lastFlow()?.[2]).toBe('marks');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Names' }));
+    expect(pressed()).toBe('Names');
+    expect(lastFlow()?.[2]).toBe('names');
+  });
+
+  it('keeps fitting the map to one screen on a tablet and a desktop', () => {
+    for (const width of [768, 1440]) {
+      vi.clearAllMocks();
+      asWindow(width);
+      const view = render(() => <InfrastructureMapSurface />);
+
+      expect(flowServiceDiagram, String(width)).not.toHaveBeenCalled();
+      expect(fitServiceDiagram, String(width)).toHaveBeenCalled();
+      expect(pressed(), String(width)).toBe('Names');
+      view.unmount();
+    }
+  });
+
+  it('changes over when the window is made narrow or wide again', async () => {
+    asWindow(1440);
+    render(() => <InfrastructureMapSurface />);
+    expect(flowServiceDiagram).not.toHaveBeenCalled();
+
+    asWindow(390);
+    window.dispatchEvent(new Event('resize'));
+    await waitFor(() => expect(flowServiceDiagram).toHaveBeenCalled());
+
+    vi.mocked(fitServiceDiagram).mockClear();
+    asWindow(1440);
+    window.dispatchEvent(new Event('resize'));
+    await waitFor(() => expect(fitServiceDiagram).toHaveBeenCalled());
   });
 });
