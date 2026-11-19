@@ -251,9 +251,10 @@ export function renderMapSceneBody(
       if (node.kind !== 'hit') return nodeToSvg(node, palette);
       const index = hitIndex;
       hitIndex += 1;
-      const label = escapeXml(`${node.hit.name}, ${node.hit.meta}`);
+      const adds = Boolean(node.hit.checkAddress);
+      const label = escapeXml(`${node.hit.name}, ${node.hit.meta}${adds ? ', add a check' : ''}`);
       const rect = `x="${n(node.x)}" y="${n(node.y)}" width="${n(node.w)}" height="${n(node.h)}" rx="${n(node.r)}" class="${HIT_CLASS}"`;
-      const href = node.hit.navigable ? hrefFor(index) : null;
+      const href = node.hit.navigable || adds ? hrefFor(index) : null;
       return href
         ? `<a href="${escapeXml(href)}" ${MAP_HIT_ATTRIBUTE}="${index}" aria-label="${label}"><rect ${rect}/></a>`
         : `<rect ${rect} ${MAP_HIT_ATTRIBUTE}="${index}" tabindex="0" role="img" aria-label="${label}"/>`;

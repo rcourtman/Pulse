@@ -25,6 +25,7 @@ import {
   buildAvailabilitySettingsPath,
   buildAvailabilityTargetAddPath,
   getAvailabilityTargetAddKind,
+  getAvailabilityTargetAddPrefill,
   getAvailabilityTargetAddressLabel,
   getAvailabilityTargetKindLabel,
   getAvailabilityTargetMethodLabel,
@@ -33,11 +34,16 @@ import {
   getAvailabilityTargetStatusLabel,
   getAvailabilityTargetStatusTitle,
   getAvailabilityTargetsSummary,
+  type AvailabilityTargetAddPrefill,
   shouldOpenAvailabilityTargetAddDialog,
 } from './availabilitySettingsModel';
 
 type AvailabilityDialogState =
-  | { mode: 'add'; initialTargetKind?: AvailabilityTargetKind }
+  | {
+      mode: 'add';
+      initialTargetKind?: AvailabilityTargetKind;
+      prefill: AvailabilityTargetAddPrefill;
+    }
   | { mode: 'edit'; target: AvailabilityTarget }
   | null;
 
@@ -156,6 +162,7 @@ export const AvailabilitySettingsPanel: Component = () => {
       setDialog({
         mode: 'add',
         initialTargetKind: getAvailabilityTargetAddKind(location.pathname, location.search),
+        prefill: getAvailabilityTargetAddPrefill(location.pathname, location.search),
       });
       return;
     }
@@ -401,6 +408,8 @@ export const AvailabilitySettingsPanel: Component = () => {
                     initialTargetKind={
                       current.mode === 'add' ? current.initialTargetKind : undefined
                     }
+                    initialName={current.mode === 'add' ? current.prefill.name : undefined}
+                    initialAddress={current.mode === 'add' ? current.prefill.address : undefined}
                     onCancel={() => closeDialog(true)}
                     onSaved={handleSaved}
                     onToggleEnabled={

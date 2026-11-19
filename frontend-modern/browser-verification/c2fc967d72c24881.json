@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "base_sha": "d1bf4870109b7b54af9d6a7192eda4a4be8e031c",
+  "verified_at": "2026-11-19T09:12:11Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/AvailabilitySettingsPanel.tsx",
+    "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/AvailabilityTargetSlot.tsx",
+    "frontend-modern/src/components/Settings/availabilitySettingsModel.ts",
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapSurface.tsx",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapDiagram.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapLayout.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapRender.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapServices.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/AvailabilitySettingsPanel.tsx": "83f848cd5892e67968108d509d31880f2f38fc760fb73860669e9377697b1769",
+    "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/AvailabilityTargetSlot.tsx": "a10b0d20899b451e6d90034ee5d1f44f3e02194e56fe9d1a9e714bd9b3cd3c5b",
+    "frontend-modern/src/components/Settings/availabilitySettingsModel.ts": "a789e6bdeff01396270de125fa6eae99d04d510ce43940fcfeca3f998ebcd523",
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapSurface.tsx": "8129c0643eed3725440006f30e0021edc799e8d4782d19a076aef9352e5e505d",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapDiagram.ts": "adf22ffa2f10d4c79d2bf4a00213df531a0ae07259731d88a3e745f9b21aadb0",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapLayout.ts": "1b9a48faccd2f4e349c9cc4a54780d9d482ec9bd33b2a7abc15f16dba07a82d7",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapRender.ts": "c0aa30d4f1423065eb5f9daaf2d68c36907effa26de95aa27830490787766661",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapServices.ts": "62925247fb6faf9c56ffb1c221f7a1e3a9eee349d638dcddce81667c6c85f384"
+  },
+  "routes": [
+    "/map",
+    "/settings/monitoring/availability?add=target&targetKind=device"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "final runtime bytes served by a Vite dev server from a clone of main plus this change on pulse-dev, driven by headless Chromium through Playwright. Two backends built from the same clone: a private Pulse on mock data, and a private Pulse with no mock data and one real host agent reporting pulse-dev's own default gateway",
+    "mock data, 1440x900, mouse: both unmonitored gateway tiles were links whose accessible name ended ', add a check' and whose address was the add route with targetKind=device, name=Gateway and the gateway's address. Hovering one showed its card ending 'Click to add a check'",
+    "mock data, 1440x900: one click opened 'Add service/device check' with Target type 'Device or controller', Name 'Gateway', Probe 'ICMP ping' and the gateway's address in Address, seen in the screenshot. Mock mode refuses to save a check ('Cannot modify connections in mock mode'), which is why the save was checked on the real backend",
+    "mock data, 390x844, touch: the first tap on a gateway tile stayed on /map and its pressed tooltip ended 'Tap again to add a check'; the second tap opened the same dialog",
+    "real agent, 1440x900: the map drew one dashed gateway tile, 'Default gateway, not monitored', used by the agent's machine. Clicking it opened the dialog with Name 'Gateway', Target type device and Probe icmp. Pressing 'Add service/device check' closed the dialog with no error and left the address at /settings/monitoring/availability",
+    "real agent, back on /map 8 seconds later: no tile said 'not monitored'. A check tile read 'Gateway, Check \u00b7 Online' with the gateway's address, and its hover card said 'Default gateway of mapdemo-host' and 'Resolves names for mapdemo-host'. The map ended above the bottom of the window",
+    "no page error in any context",
+    "not checked: light theme (no colour changes), Firefox, Safari, a signed-in user without settings access (the tile links as the Availability checks table's own 'add' link does), a real phone"
+  ],
+  "interactions": [
+    "hovered and clicked an unmonitored gateway tile with a mouse at 1440x900, on mock data and on a real agent's data",
+    "saved the prefilled check on the real backend and reopened the map",
+    "tapped a gateway tile twice with real touch input at 390x844"
+  ]
+}

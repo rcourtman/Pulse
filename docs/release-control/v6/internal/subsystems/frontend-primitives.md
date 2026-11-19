@@ -8371,6 +8371,12 @@ availability checks entry points for services and devices must add
 bounded target kind already selected. That target kind only scopes the
 availability form copy and payload; it must not make agentless reachability
 targets eligible for the Machines table.
+A link from a page that already knows the thing to check may also carry `name`
+and `address` on the add route, built by `buildAvailabilityTargetAddPath` and
+read by `getAvailabilityTargetAddPrefill`. They start the form's Name and
+Address fields and save nothing; each is trimmed, cut at a hostname's length
+and ignored off the add route. The map's unmonitored gateway tile is the first
+such link, with `targetKind=device`.
 Former nested aliases such as `/settings/infrastructure/install`,
 `/settings/infrastructure/platforms/proxmox/pbs`,
 `/settings/infrastructure/api/pve`, and `/settings/workloads/docker` must fail

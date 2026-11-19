@@ -41,6 +41,8 @@ export interface MapHit {
   linked?: string[];
   /** A tile that stands for several things is not a resource and opens nothing. */
   navigable: boolean;
+  /** Set on a thing nothing monitors: its tile opens a new check for this address. */
+  checkAddress?: string;
 }
 
 export type SceneNode =

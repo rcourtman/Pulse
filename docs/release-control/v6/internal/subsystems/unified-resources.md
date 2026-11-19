@@ -4390,6 +4390,15 @@ What the diagram does with them:
   hover and no ring or line to them. One that a monitored thing answers on is
   said on that thing instead. A resolver is said only on something already
   drawn.
+- The dashed gateway tile is a link, because "not monitored" has one thing to
+  do about it: it opens the availability add dialog as a device ping check
+  named `Gateway` with the gateway's address filled in, and nothing is saved
+  until the owner saves it. Its hover says "Click to add a check" and a touch
+  tap says "Tap again to add a check", since every other tile opens the thing
+  it shows. Once a check probes that address the check is the monitored thing
+  that answers on it, so the dashed tile is gone and the check's tile says
+  whose gateway it is. With names hidden the address is not on the page and
+  the tile is no link.
 - A saved image has no pointer, so it has no rings. The captions carry the
   facts there.
 

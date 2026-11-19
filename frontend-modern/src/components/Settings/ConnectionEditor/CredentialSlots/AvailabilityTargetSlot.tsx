@@ -97,6 +97,9 @@ export interface AvailabilityTargetSlotProps {
   onCancel: () => void;
   onSaved: () => void;
   initialTargetKind?: AvailabilityTargetKind;
+  /** A name and address a link filled in. They start the form and are edited like any other. */
+  initialName?: string;
+  initialAddress?: string;
   onToggleEnabled?: () => void;
   togglePending?: boolean;
   connectionEnabled?: boolean;
@@ -108,11 +111,12 @@ export interface AvailabilityTargetSlotProps {
 
 const newAvailabilityForm = (
   initialTargetKind: AvailabilityTargetKind = 'service',
+  prefill: { name?: string; address?: string } = {},
 ): AvailabilityForm => ({
   id: '',
-  name: '',
+  name: prefill.name ?? '',
   targetKind: initialTargetKind,
-  address: '',
+  address: prefill.address ?? '',
   protocol: 'icmp',
   port: '',
   path: '',
@@ -338,7 +342,10 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
   });
 
   const [form, setForm] = createSignal<AvailabilityForm>(
-    newAvailabilityForm(props.initialTargetKind),
+    newAvailabilityForm(props.initialTargetKind, {
+      name: props.initialName,
+      address: props.initialAddress,
+    }),
   );
   const [selectedPreset, setSelectedPreset] = createSignal<AvailabilityTargetPresetID>(
     initialPresetForTargetKind(props.initialTargetKind),

@@ -23,6 +23,7 @@ import { PageHeader } from '@/components/shared/PageHeader';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { showPressedTooltip } from '@/components/shared/Tooltip';
 import { TooltipPortal } from '@/components/shared/TooltipPortal';
+import { buildAvailabilityTargetAddPath } from '@/components/Settings/availabilitySettingsModel';
 import { buildInfrastructureWorkspacePath } from '@/components/Settings/infrastructureWorkspaceModel';
 import { useDarkMode } from '@/contexts/appRuntime';
 import { buildResourcePagePath } from '@/features/platformNavigation/resourcePagePath';
@@ -72,6 +73,9 @@ const NARROW_WINDOW = 768;
 const MIN_MAP_HEIGHT = 240;
 // Below this, names are too small to read and icons alone say more.
 const READABLE_SCALE = 0.62;
+
+// The name a new check for the gateway starts with. The owner can change it.
+const UNMONITORED_CHECK_NAME = 'Gateway';
 
 /** What a tile's card says under its name: what it is, where, what it is connected to, how busy. */
 const hitLines = (hit: MapHit): string[] =>
@@ -178,6 +182,14 @@ export function InfrastructureMapSurface() {
   });
   const hrefForHit = (index: number): string | null => {
     const hit = hits()[index];
+    // A thing nothing monitors has no page. Its tile leads to the form that
+    // adds a check for it, which is the one thing there is to do about it.
+    if (hit?.checkAddress) {
+      return buildAvailabilityTargetAddPath('device', {
+        name: UNMONITORED_CHECK_NAME,
+        address: hit.checkAddress,
+      });
+    }
     const resource = hit ? resourceById().get(hit.id) : undefined;
     return resource ? buildResourcePagePath({ id: resource.id, resource }) : null;
   };
@@ -288,7 +300,11 @@ export function InfrastructureMapSurface() {
     point(found);
     setArmed(found.hit.id);
     showPressedTooltip(
-      [found.hit.name, ...hitLines(found.hit), opens ? 'Tap again to open' : '']
+      [
+        found.hit.name,
+        ...hitLines(found.hit),
+        !opens ? '' : found.hit.checkAddress ? 'Tap again to add a check' : 'Tap again to open',
+      ]
         .filter(Boolean)
         .join('\n'),
       found.element,
@@ -466,6 +482,10 @@ export function InfrastructureMapSurface() {
               <For each={hitLines(current().hit)}>
                 {(line) => <span class="text-muted">{line}</span>}
               </For>
+              {/* Every other tile opens the thing it shows. This one does not. */}
+              <Show when={current().hit.checkAddress}>
+                <span class="text-muted">Click to add a check</span>
+              </Show>
             </div>
           )}
         </Show>

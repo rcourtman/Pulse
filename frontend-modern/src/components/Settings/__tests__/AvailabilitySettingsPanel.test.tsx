@@ -43,12 +43,16 @@ vi.mock('../ConnectionEditor/CredentialSlots/AvailabilityTargetSlot', () => ({
   AvailabilityTargetSlot: (props: {
     editingTargetId?: string | null;
     initialTargetKind?: string;
+    initialName?: string;
+    initialAddress?: string;
     onSaved: () => void;
   }) => (
     <div
       data-testid="availability-target-slot"
       data-editing-target-id={props.editingTargetId ?? ''}
       data-initial-target-kind={props.initialTargetKind ?? ''}
+      data-initial-name={props.initialName ?? ''}
+      data-initial-address={props.initialAddress ?? ''}
     >
       availability target slot
       <button type="button" onClick={props.onSaved}>
@@ -259,6 +263,20 @@ describe('AvailabilitySettingsPanel', () => {
       'data-initial-target-kind',
       'service',
     );
+
+    // A link from another page can name the thing to check.
+    expect(screen.getByTestId('availability-target-slot')).toHaveAttribute(
+      'data-initial-address',
+      '',
+    );
+    cleanup();
+    routeState.search = '?add=target&targetKind=device&name=Gateway&address=192.168.0.1';
+    render(() => <AvailabilitySettingsPanel />);
+    await waitFor(() => expect(screen.getByTestId('availability-target-slot')).toBeInTheDocument());
+    const prefilled = screen.getByTestId('availability-target-slot');
+    expect(prefilled).toHaveAttribute('data-initial-target-kind', 'device');
+    expect(prefilled).toHaveAttribute('data-initial-name', 'Gateway');
+    expect(prefilled).toHaveAttribute('data-initial-address', '192.168.0.1');
 
     cleanup();
     routeState.search = '?add=target&targetKind=machine';
