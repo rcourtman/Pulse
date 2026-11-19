@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "base_sha": "7cf21acbcafbd8bc95d95c168fdac9c556875b26",
+  "verified_at": "2026-11-19T11:02:11Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapSurface.tsx",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapCatalogue.ts",
+    "frontend-modern/src/utils/docsLinks.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapSurface.tsx": "b46a59dd54dae5ad98f033dd06bc71e029b954ee57bebab0649e1989ce09f282",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapCatalogue.ts": "8d5c3c1996e077bd82fc80fd78739d995ff1de1c487a160c6f98d37f5fbcad2a",
+    "frontend-modern/src/utils/docsLinks.ts": "9ea659058e58f317be54a5e13bf124b8b35f61db12c07a031a34264b850d2083"
+  },
+  "routes": [
+    "/map",
+    "/docs/MAP",
+    "/docs/AVAILABILITY",
+    "/docs/README"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "final runtime bytes and the shipped docs served by a Vite dev server from a clone of main plus this change on pulse-dev, driven by headless Chromium through Playwright, against a private Pulse on mock data",
+    "1440x900, /map: the line beside the legend read 'Apps and network gear are recognised by name. How the map works', on one line 16px high, and the map ended at 888 of 900",
+    "1440x900: clicking 'How the map works' opened /docs/MAP, headed 'See everything on one map', with its six sections and two tables rendered as tables and no raw Markdown. Seen in the screenshot, including the table of words for a router, a switch and an access point",
+    "1440x900, /docs/AVAILABILITY: the link 'Add your router, switch or access point' led to /docs/MAP#add-your-router-switch-or-access-point with that heading on screen. /docs/README listed 'See everything on one map' linking /docs/MAP",
+    "390x844, touch, /map: the same line wrapped to two lines under the legend, with the link underlined. The map ended at 756 above the fixed navigation at 799; before this change the longer line left it at 788",
+    "390x844: tapping the link opened /docs/MAP with the same six sections and no sideways scroll",
+    "no page error in either context",
+    "not checked: light theme, Firefox, Safari, a real phone, the localised start pages (they do not list this guide)"
+  ],
+  "interactions": [
+    "clicked the guide link on the map, then the cross link from the availability guide, with a mouse at 1440x900",
+    "tapped the guide link on the map with real touch input at 390x844"
+  ]
+}

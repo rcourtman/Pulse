@@ -435,7 +435,7 @@ describe('buildServiceDiagram', () => {
   });
 
   it('knows network gear from what its owner called the check', () => {
-    for (const name of ['Router', 'OPNsense', 'pfsense-fw', 'Fritz!Box modem', 'UDM Pro']) {
+    for (const name of ['Router', 'OPNsense', 'pfsense-fw', 'FRITZ!Box 7590', 'UDM Pro']) {
       expect(resolveMapDeviceRole(name)).toBe('router');
     }
     for (const name of ['Core switch', 'switch-24-rack', 'USW_Switch_8']) {

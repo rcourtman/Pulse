@@ -29,6 +29,7 @@ import { useDarkMode } from '@/contexts/appRuntime';
 import { buildResourcePagePath } from '@/features/platformNavigation/resourcePagePath';
 import { useObservedElementWidth } from '@/hooks/useObservedElementWidth';
 import { useResources } from '@/hooks/useResources';
+import { MAP_DOC_URL } from '@/utils/docsLinks';
 import type { StatusIndicatorVariant } from '@/utils/status';
 import { showError, showSuccess } from '@/utils/toast';
 import { fitServiceDiagram } from './infrastructureMapDiagram';
@@ -463,8 +464,12 @@ export function InfrastructureMapSurface() {
             />
             Off
           </li>
+          {/* How a thing gets onto the map is not something the map can show. */}
           <li class="ml-auto">
-            Apps are recognised by their image or name. The Internet is drawn but not monitored.
+            Apps and network gear are recognised by name.{' '}
+            <a href={MAP_DOC_URL} class="underline underline-offset-2 hover:text-base-content">
+              How the map works
+            </a>
           </li>
         </ul>
       </Show>
