@@ -2213,13 +2213,16 @@ func trueNASInstanceForServer(t *testing.T, id string, rawURL string, enabled bo
 	}
 
 	return config.TrueNASInstance{
-		ID:       id,
-		Name:     "connection-" + id,
-		Host:     parsed.Hostname(),
-		Port:     port,
-		APIKey:   "test-api-key",
-		UseHTTPS: strings.EqualFold(parsed.Scheme, "https"),
-		Enabled:  enabled,
+		ID:                 id,
+		Name:               "connection-" + id,
+		Host:               parsed.Hostname(),
+		Port:               port,
+		APIKey:             "test-api-key",
+		UseHTTPS:           strings.EqualFold(parsed.Scheme, "https"),
+		Enabled:            enabled,
+		MonitorDatasets:    true,
+		MonitorPools:       true,
+		MonitorReplication: true,
 	}
 }
 

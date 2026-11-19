@@ -69,14 +69,17 @@ func mockTrueNASConnectionResponses() []trueNASConnectionResponse {
 	fixture := mock.DefaultTrueNASConnectionFixture()
 
 	instance := config.TrueNASInstance{
-		ID:               fixture.ID,
-		Name:             fixture.Name,
-		Host:             fixture.Host,
-		Port:             fixture.Port,
-		APIKey:           fixture.APIKey,
-		UseHTTPS:         fixture.UseHTTPS,
-		Enabled:          fixture.Enabled,
-		PollIntervalSecs: fixture.PollIntervalSeconds,
+		ID:                 fixture.ID,
+		Name:               fixture.Name,
+		Host:               fixture.Host,
+		Port:               fixture.Port,
+		APIKey:             fixture.APIKey,
+		UseHTTPS:           fixture.UseHTTPS,
+		Enabled:            fixture.Enabled,
+		PollIntervalSecs:   fixture.PollIntervalSeconds,
+		MonitorDatasets:    true,
+		MonitorPools:       true,
+		MonitorReplication: true,
 	}
 	instance.ApplyDefaults()
 

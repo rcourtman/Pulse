@@ -465,6 +465,9 @@ func TestTrueNASHandlers_HandleList_ReturnsMockConnectionsInMockMode(t *testing.
 	if listed[0].Host != "truenas-main" {
 		t.Fatalf("expected mock TrueNAS host truenas-main, got %q", listed[0].Host)
 	}
+	if !listed[0].MonitorDatasets || !listed[0].MonitorPools || !listed[0].MonitorReplication {
+		t.Fatal("mock TrueNAS connection must retain its explicit all-on scope")
+	}
 	if listed[0].Poll == nil || listed[0].Poll.LastSuccessAt == nil {
 		t.Fatalf("expected mock poll summary, got %+v", listed[0].Poll)
 	}
@@ -1543,15 +1546,18 @@ func trueNASInstanceFromRawURL(t *testing.T, id string, rawURL string, enabled b
 	}
 
 	return config.TrueNASInstance{
-		ID:               id,
-		Name:             "connection-" + id,
-		Host:             parsed.Hostname(),
-		Port:             port,
-		APIKey:           "test-api-key",
-		Username:         "pulse-readonly",
-		UseHTTPS:         strings.EqualFold(parsed.Scheme, "https"),
-		Enabled:          enabled,
-		PollIntervalSecs: 60,
+		ID:                 id,
+		Name:               "connection-" + id,
+		Host:               parsed.Hostname(),
+		Port:               port,
+		APIKey:             "test-api-key",
+		Username:           "pulse-readonly",
+		UseHTTPS:           strings.EqualFold(parsed.Scheme, "https"),
+		Enabled:            enabled,
+		PollIntervalSecs:   60,
+		MonitorDatasets:    true,
+		MonitorPools:       true,
+		MonitorReplication: true,
 	}
 }
 

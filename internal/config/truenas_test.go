@@ -36,18 +36,17 @@ func TestTrueNASEffectivePollIntervalAndApplyDefaults(t *testing.T) {
 
 	instance.ApplyDefaults()
 	require.Equal(t, 60, instance.PollIntervalSecs)
-	// Legacy all-false Monitor* state migrates to all-true.
-	require.True(t, instance.MonitorDatasets)
-	require.True(t, instance.MonitorPools)
-	require.True(t, instance.MonitorReplication)
+	// An all-off choice is not evidence that scope was never configured.
+	require.False(t, instance.MonitorDatasets)
+	require.False(t, instance.MonitorPools)
+	require.False(t, instance.MonitorReplication)
 
 	instance.PollIntervalSecs = 120
 	require.Equal(t, 120, instance.EffectivePollIntervalSecs())
 }
 
 func TestTrueNASApplyDefaultsPreservesExplicitScope(t *testing.T) {
-	// User who has deliberately disabled a single surface keeps at least
-	// one other enabled, so the migration must not clobber their choice.
+	// Normalization must not clobber configured collection scope.
 	instance := TrueNASInstance{MonitorDatasets: true, MonitorPools: false, MonitorReplication: false}
 	instance.ApplyDefaults()
 	require.True(t, instance.MonitorDatasets)

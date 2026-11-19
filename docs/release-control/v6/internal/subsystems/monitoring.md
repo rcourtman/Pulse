@@ -5404,6 +5404,18 @@ service-history reads plus denial/recovery without fabricated samples.
     collection scope gates those reads: `MonitorDatasets` off skips datasets
     and ZFS snapshots, `MonitorPools` off skips pools and the boot pool, and
     `MonitorReplication` off skips replication tasks, with no request sent.
+    Saving all three off is valid; a connection still collects system and
+    disk inventory and native alerts. An add without the scope settings
+    defaults to all on, and an edit that omits them preserves the saved
+    values. The encrypted store marks saved choices as
+    `collectionScopeConfigured`, so historical unmarked zero tuples keep
+    their legacy all-on behavior even if an older save wrote explicit
+    false fields. This marker is not part of the settings API. Versions
+    predating the marker still treat all-off as all-on.
+    `TestTrueNASCollectionScopePollsWhatTheEditorSaves` joins the settings
+    API, encrypted storage and pinned JSON-RPC polling, checking both
+    snapshot methods and retained ordinary monitoring before save, after
+    warm/cold all-off and on restoring Datasets alone.
     The poller rebuilds the provider when a scope flag changes, and the
     provider parents a child of an uncollected pool or dataset to its nearest
     collected ancestor. Replication tasks
