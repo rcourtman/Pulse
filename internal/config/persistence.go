@@ -389,6 +389,21 @@ func (c *ConfigPersistence) GetConfigDir() string {
 	return c.configDir
 }
 
+// readOrganizationFile checks the resolved target before ReadFile: a
+// misplaced pipe could wait for a writer while holding the organization
+// lock. Stat follows links, keeping existing regular-file restores readable.
+// This checks file type, not the availability of the underlying filesystem.
+func (c *ConfigPersistence) readOrganizationFile() ([]byte, error) {
+	info, err := c.fs.Stat(c.orgFile)
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("organization metadata is not a regular file: %s", c.orgFile)
+	}
+	return c.fs.ReadFile(c.orgFile)
+}
+
 // LoadOrganization loads the organization metadata from org.json.
 func (c *ConfigPersistence) LoadOrganization() (*models.Organization, error) {
 	unlock := lockOrganizationFile(c.orgFile)
@@ -396,7 +411,7 @@ func (c *ConfigPersistence) LoadOrganization() (*models.Organization, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	data, err := c.fs.ReadFile(c.orgFile)
+	data, err := c.readOrganizationFile()
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, err
@@ -431,7 +446,7 @@ func (c *ConfigPersistence) saveOrganization(org *models.Organization) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	current, err := c.fs.ReadFile(c.orgFile)
+	current, err := c.readOrganizationFile()
 	switch {
 	case err == nil:
 		if org.PersistenceVersion != organizationVersion(c.orgFile, current) {
