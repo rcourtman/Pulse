@@ -67,7 +67,11 @@ import {
   getActionableAgentIdFromResource,
   getAgentFirstReportStatusIndicator,
 } from '@/utils/agentResources';
-import { getUnifiedResourceAlertStyles } from '@/utils/alerts';
+import { getAlertsForResource, getUnifiedResourceAlertStyles } from '@/utils/alerts';
+import {
+  formatAlertSeverityLabel,
+  getAlertSeverityTextClass,
+} from '@/utils/alertSeverityPresentation';
 import { formatBytes, formatSpeed, formatObservedSpeed, normalizeDiskArray } from '@/utils/format';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import { useAlertsActivation } from '@/stores/alertsActivation';
@@ -125,6 +129,15 @@ import { getStandaloneResourceStatusIndicator } from './standalonePageModel';
 type MetricFallbackReason = {
   label: string;
   title: string;
+};
+
+const compactUnraidArrayAlert = (message: string): string => {
+  // Shorten only the single-reason message. A raw slot count can differ from
+  // the alert evaluator's assigned-disk count.
+  const missing = /^Unraid array reports ([1-9]\d*) missing disk\(s\)$/.exec(message);
+  if (!missing) return message;
+  const count = missing[1];
+  return `${count} missing disk${count === '1' ? '' : 's'}`;
 };
 
 const hasPositiveTemperature = (celsius: number | undefined): celsius is number =>
@@ -1684,6 +1697,22 @@ export const AgentsMachinesTable: Component<{
                         alertsActivation.detectionEnabled(),
                       ),
                     );
+                    const arrayAlert = createMemo(() => {
+                      const agentId = asTrimmedString(machine.agent?.agentId);
+                      if (
+                        !agentId ||
+                        !machine.agent?.unraid ||
+                        (machine.sourceType !== 'agent' && machine.sourceType !== 'hybrid')
+                      )
+                        return undefined;
+                      // CheckHost uses this child key, never the machine name,
+                      // a cache-pool ID, or the registry ID used for History.
+                      return getAlertsForResource(
+                        [`agent:${agentId}/storage:unraid-array`],
+                        activeAlerts,
+                        alertsActivation.detectionEnabled(),
+                      ).find((alert) => alert.type === 'storage-topology' && !alert.acknowledged);
+                    });
                     const machineAlertBg = () => {
                       const s = machineAlertStyles();
                       if (!s.hasUnacknowledgedAlert) return '';
@@ -1742,6 +1771,19 @@ export const AgentsMachinesTable: Component<{
                                 </Show>
                               </div>
                             </div>
+                            <Show when={!isExpanded() && arrayAlert()}>
+                              {(alert) => (
+                                <span
+                                  class={`block whitespace-normal wrap-break-word text-[10px] font-semibold leading-tight ${getAlertSeverityTextClass(alert().level)}`}
+                                  data-unraid-array-alert
+                                >
+                                  {formatAlertSeverityLabel(alert().level)} ·{' '}
+                                  {compactUnraidArrayAlert(
+                                    alert().message.trim() || 'Unraid array alert',
+                                  )}
+                                </span>
+                              )}
+                            </Show>
                           </TableCell>
                           <Show when={columnVisibility.isColumnVisible('system')}>
                             <TableCell

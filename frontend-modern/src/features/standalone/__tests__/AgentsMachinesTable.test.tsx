@@ -488,6 +488,63 @@ describe('AgentsMachinesTable', () => {
     expect(row('nas')).not.toHaveClass('bg-red-50');
   });
 
+  it('explains an open Unraid array assessment only on its owning machine', () => {
+    const machine = (id: string, agentId: string, sourceType: Resource['sourceType'] = 'agent') =>
+      resource({
+        id,
+        name: 'Tower',
+        sourceType,
+        agent: { agentId, unraid: { arrayState: 'STARTED' } },
+      });
+    const assessment: Alert = {
+      id: 'array-assessment',
+      type: 'storage-topology',
+      level: 'critical',
+      resourceId: 'agent:host-tower/storage:unraid-array',
+      resourceName: 'Tower - Unraid Array',
+      node: 'tower',
+      instance: 'unraid',
+      message: 'Unraid array reports 1 missing disk(s)',
+      value: 0,
+      threshold: 0,
+      startTime: '2026-11-19T16:17:51Z',
+      acknowledged: false,
+      metadata: { numMissing: 0 },
+    };
+    render(() => (
+      <AgentsMachinesTable
+        resources={[
+          machine('owner', 'host-tower'),
+          machine('namesake', 'foreign-host'),
+          machine('api', 'host-tower', 'api'),
+        ]}
+        emptyIcon={emptyIcon}
+        emptyTitle="No machines"
+        emptyDescription="Install Pulse Agent."
+      />
+    ));
+    const rows = (id: string) =>
+      within(document.querySelector<HTMLElement>(`[data-agents-machine-row="${id}"]`)!);
+    const copy = 'Critical · 1 missing disk';
+    expect(screen.queryByText(copy)).toBeNull();
+
+    setActiveAlerts({ assessment: { ...assessment } });
+    expect(rows('owner').getByText(copy)).toBeVisible();
+    expect(rows('namesake').queryByText(copy)).toBeNull();
+    expect(rows('api').queryByText(copy)).toBeNull();
+    setActiveAlerts('assessment', 'acknowledged', true);
+    expect(screen.queryByText(copy)).toBeNull();
+    setActiveAlerts('assessment', {
+      acknowledged: false,
+      resourceId: 'agent:host-tower/storage:cache',
+    });
+    expect(screen.queryByText(copy)).toBeNull();
+    setActiveAlerts({ assessment: { ...assessment } });
+    expect(rows('owner').getByText(copy)).toBeVisible();
+    setActiveAlerts(reconcile({}));
+    expect(screen.queryByText(copy)).toBeNull();
+  });
+
   it('keeps the column picker inside the shared View preferences disclosure', async () => {
     render(() => (
       <AgentsMachinesTable
