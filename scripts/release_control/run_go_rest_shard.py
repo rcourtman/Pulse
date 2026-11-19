@@ -79,8 +79,13 @@ def ordinary_execution(name: str, command: list[str], env: dict,
     existing slot; it admits no additional parallel binary or cached verdict.
     """
     output.mkdir(parents=True, exist_ok=True)
+    # Discovery needs the race build (including race-tagged roots), but it
+    # does not execute the tests. Don't spend the race runtime's default
+    # one-second exit delay for every listing. Keep every other race option
+    # and leave the runtime command's environment untouched.
+    listing_env = {**env, "GORACE": (env.get("GORACE", "") + " atexit_sleep_ms=0").strip()}
     listing = subprocess.run(["go", "test", "-race", "-json=false", "-list", ".", name],
-                             cwd=ROOT, env=env, capture_output=True, text=True)
+                             cwd=ROOT, env=listing_env, capture_output=True, text=True)
     if listing.returncode:
         sys.stdout.write(listing.stdout)
         sys.stderr.write(listing.stderr)

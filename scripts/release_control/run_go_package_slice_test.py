@@ -131,6 +131,9 @@ with Path(os.environ['CALLS']).open('a') as f: f.write(json.dumps(args)+'\\n')
 if os.environ.get('ENV_CALLS'):
     with Path(os.environ['ENV_CALLS']).open('a') as f:
         f.write(json.dumps(os.environ.get('GOFLAGS', ''))+'\\n')
+if os.environ.get('RACE_ENV_CALLS'):
+    with Path(os.environ['RACE_ENV_CALLS']).open('a') as f:
+        f.write(json.dumps(os.environ.get('GORACE'))+'\\n')
 if args[0] == 'list':
     print('\\n'.join('github.com/rcourtman/pulse-go-rewrite/'+n for n in
           ['internal/api','internal/monitoring','scripts/installtests']+
@@ -318,6 +321,40 @@ class WorkflowTest(unittest.TestCase):
                     self.assertEqual(index['missing_selected_tests']['names'], ['TestLast'])
                 if mode == 'skip':
                     self.assertEqual(index['skipped_top_level_tests']['observed_count'], 5)
+
+    def test_ordinary_race_exit_delay_is_only_removed_from_test_discovery(self):
+        fixture = ExecutedRunnerTest()
+        fixture.setUp()
+        self.addCleanup(fixture.doCleanups)
+        spec = importlib.util.spec_from_file_location('ordinary_race_discovery', SHARD)
+        shard = importlib.util.module_from_spec(spec); spec.loader.exec_module(shard)
+        command = ['bash', '-euo', 'pipefail', '-c', shard.ORDINARY_COMMAND]
+        name = runner.MODULE + 'internal/ordinary'
+        calls = fixture.root / 'calls'
+        race_options = fixture.root / 'race-options'
+        for inherited in (None, 'halt_on_error=1 atexit_sleep_ms=500'):
+            with self.subTest(inherited=inherited), patch.dict(os.environ, {
+                    'PATH': str(fixture.root) + ':' + os.environ['PATH'],
+                    'CALLS': str(calls), 'RACE_ENV_CALLS': str(race_options),
+                    'GOFLAGS': '-mod=readonly'}), contextlib.redirect_stdout(io.StringIO()):
+                if inherited is None:
+                    os.environ.pop('GORACE', None)
+                else:
+                    os.environ['GORACE'] = inherited
+                calls.write_text('')
+                race_options.write_text('')
+                result = shard.run_task((name, command), fixture.root / 'output')
+                self.assertEqual((result['listing_exit'], result['exit'], result['coverage_exit']),
+                                 (0, 0, 0))
+                self.assertEqual(result['listed_roots'], 5)
+                self.assertEqual(list(map(json.loads, calls.read_text().splitlines())), [
+                    ['test', '-race', '-json=false', '-list', '.', name],
+                    ['test', '-race', '-timeout', '50m', name],
+                ])
+                self.assertEqual(list(map(json.loads, race_options.read_text().splitlines())), [
+                    ((inherited or '') + ' atexit_sleep_ms=0').strip(), inherited,
+                ])
+                self.assertEqual(os.environ.get('GORACE'), inherited)
 
     def test_only_a_complete_empty_package_stream_matches_a_zero_root_listing(self):
         spec = importlib.util.spec_from_file_location('ordinary_empty', SHARD)
