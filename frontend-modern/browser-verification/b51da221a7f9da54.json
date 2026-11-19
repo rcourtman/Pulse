@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "base_sha": "ed58762887f67a37b4505876eada5c7f062739fe",
+  "verified_at": "2026-11-19T14:06:40Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Login.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Login.tsx": "807eda7603bd862bcf51738f70054f1d31cde3188228c91b76f76f5059e4cb7d"
+  },
+  "routes": [
+    "/login"
+  ],
+  "viewports": [
+    {
+      "width": 1366,
+      "height": 860
+    },
+    {
+      "width": 390,
+      "height": 740
+    }
+  ],
+  "states": [
+    "Actual App and shared styles served in offline preview with loopback JSON responses. Desktop Chromium 141 light and 390x740 WebKit 26 dark, Playwright 1.56.1.",
+    "Paired pending and rejected views: baseline moved focus to body; candidate keeps visible focus on submit and shows a readable, visibly unavailable pending action.",
+    "Native inspection of all eight images: exact same form geometry, retained username and remembered choice, rejection text and attempts, sign-in help and no horizontal overflow.",
+    "SSO-only chooser still hides the password form and offers help. No live authentication or installed recovery was tested."
+  ],
+  "interactions": [
+    "Enter on focused submit, extra Enter and Space during held response, one form POST only. Pending role=status reports progress and clears without navigation.",
+    "Same synthetic 401 response clears the rejected password and preserves the username, attempt count and retry. Focus remains on submit; the next Tab reaches Can’t sign in?.",
+    "Explicit Enter from the password field after refusal sends one fresh POST, repeated activation while held is ignored, and response never takes focus away from help."
+  ]
+}

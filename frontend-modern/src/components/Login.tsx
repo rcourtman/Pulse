@@ -8,6 +8,7 @@ import {
   onCleanup,
   lazy,
   Suspense,
+  untrack,
 } from 'solid-js';
 import { logger } from '@/utils/logger';
 import { PulseBrandMark } from '@/components/Brand/PulseBrandMark';
@@ -226,8 +227,8 @@ export const Login: Component<LoginProps> = (props) => {
 
   const handleSubmit = async (e: Event) => {
     e.preventDefault();
+    if (loading()) return;
     setError('');
-    setLoading(true);
 
     // Read values directly from the form DOM to handle password manager and
     // browser form-state restores that do not trigger Solid input/change events.
@@ -243,7 +244,6 @@ export const Login: Component<LoginProps> = (props) => {
     // Validate that we have credentials before attempting login
     if (!usernameValue || !passwordValue) {
       setError('Please enter both username and password');
-      setLoading(false);
       return;
     }
 
@@ -255,6 +255,8 @@ export const Login: Component<LoginProps> = (props) => {
     passwordValue: string,
     rememberLogin: boolean,
   ) => {
+    // Demo startup depends on discovery, not on the request it starts.
+    if (untrack(loading)) return;
     setLoading(true);
     try {
       // Use the new login endpoint for better feedback
@@ -743,16 +745,23 @@ const LoginForm: Component<{
             <div>
               <button
                 type="submit"
-                disabled={loading()}
-                class="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                aria-disabled={loading()}
+                onClick={(event) => {
+                  // Keep focus, but skip native validation on a busy activation.
+                  if (loading()) event.preventDefault();
+                }}
+                class="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 aria-disabled:bg-surface-hover aria-disabled:hover:bg-surface-hover aria-disabled:text-base-content aria-disabled:cursor-wait transition-colors"
               >
                 <Show when={loading()}>
-                  <LoadingSpinner size="button" tone="inverse" class="-ml-1 mr-3" />
+                  <LoadingSpinner size="button" class="-ml-1 mr-3" />
                 </Show>
                 <Show when={loading()} fallback="Sign in to Pulse">
                   Authenticating...
                 </Show>
               </button>
+              <span role="status" class="sr-only">
+                {loading() ? 'Sign-in in progress.' : ''}
+              </span>
             </div>
           </Show>
           <div class="border-t border-border pt-4 text-center">
