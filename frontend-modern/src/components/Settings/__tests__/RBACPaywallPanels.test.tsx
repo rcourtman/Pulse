@@ -634,6 +634,28 @@ describe('RBAC paywall settings panels', () => {
     expect(screen.queryByRole('heading', { name: /No (matching )?users/ })).not.toBeInTheDocument();
   });
 
+  it('withdraws a pending User Access restart on loss of management capability', async () => {
+    const pending = deferred<unknown[]>();
+    getRolesMock.mockReturnValueOnce(pending.promise);
+    const [canManage, setCanManage] = createSignal(true);
+    render(() => <UserAssignmentsPanel canManage={canManage()} />);
+    const restart = await screen.findByRole('button', { name: 'Restart loading' });
+    const { signal } = getRolesMock.mock.calls[0][0];
+
+    setCanManage(false);
+    await screen.findByText('User access is unavailable for this session.');
+    expect(restart).not.toBeInTheDocument();
+    expect(signal.aborted).toBe(true);
+    fireEvent.click(restart);
+    pending.resolve([]);
+    await pending.promise;
+    expect(screen.queryByRole('button', { name: /Manage access for/ })).not.toBeInTheDocument();
+    expect(getUsersMock).toHaveBeenCalledTimes(1);
+    expect(getRolesMock).toHaveBeenCalledTimes(1);
+    expect(updateUserRolesMock).not.toHaveBeenCalled();
+    expect(deleteUserMock).not.toHaveBeenCalled();
+  });
+
   it('clears the previous user permissions during a new read and reports failure as unknown', async () => {
     const pending = deferred<{ action: string; resource: string }[]>();
     getUsersMock.mockResolvedValue([

@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "base_sha": "a9d15ca9396a797bbf5302750bc5c22c5f9ca302",
+  "result": "passed",
+  "verified_at": "2026-11-19T02:45:14Z",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/UserAssignmentsPanel.tsx",
+    "frontend-modern/src/components/Settings/useUserAssignmentsPanelState.ts",
+    "frontend-modern/src/utils/rbacPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/UserAssignmentsPanel.tsx": "95761990ad36badae503b326097a4c3dbb712cbf141ed8d8f26fa79bcef946a3",
+    "frontend-modern/src/components/Settings/useUserAssignmentsPanelState.ts": "59ebe57522c9c1fe002dff558d250fbcd866277865edd94d8b52070d9ff69e7c",
+    "frontend-modern/src/utils/rbacPresentation.ts": "7c15232336735d55defe11194f6d400bf38b80665a4dccf45c93da8af6708f86"
+  },
+  "routes": [
+    "/settings/security-users"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "App with isolated HTTP fixtures, Playwright 1.56.1, desktop Chromium 141 (light) and touch WebKit 26 (dark). 110 assertions and 32 inspected captures in sixteen pairs.",
+    "A successful user read with a held role catalogue used to render only a spinner. The label and Restart loading are visible in the new pending panel; no rows or write controls appear without both valid lists.",
+    "An unconfirmed save warning survives a restarted check and denial. Valid readback restores both exact principals, role IDs and controls. Search, genuine empty guidance and the exact-principal removal confirmation retain their content."
+  ],
+  "interactions": [
+    "Restart via Enter on desktop and tap on phone. The old pending response is canceled and one same-organization GET pair replaces it. Focus stays in User Access; a late result cannot change the replacement.",
+    "Induce one synthetic unconfirmed save per check scenario, restart only the reads, and recover using Check saved access. Search stays local; open and cancel removal without a write."
+  ]
+}

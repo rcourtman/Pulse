@@ -9,6 +9,7 @@ import {
   getUserAssignmentsLoadErrorMessage,
   getUserAssignmentsUpdateErrorMessage,
   getUserIdentityLabel,
+  isCompleteUserAccessInventory,
   sameRoleIDs,
 } from '@/utils/rbacPresentation';
 import { useRBACFeatureGateState } from './useRBACFeatureGateState';
@@ -92,13 +93,16 @@ export function useUserAssignmentsPanelState(props: UserAssignmentsPanelProps = 
     if (!saving()) clearEditor();
   };
 
-  const loadData = async () => {
-    if (!contextIsCurrent() || !accessAllowed() || readController || mutationController) return;
+  const loadData = async (restart = false) => {
+    if (!contextIsCurrent() || !accessAllowed() || mutationController) return;
+    const previousRead = readController;
+    if (restart ? !previousRead : previousRead) return;
     const reader = context;
     const controller = new AbortController();
     const isCurrentRead = () =>
       contextIsCurrent() && reader === context && readController === controller;
     readController = controller;
+    previousRead?.abort();
     batch(() => {
       clearEditor();
       setUserPendingDeletion(null);
@@ -114,39 +118,8 @@ export function useUserAssignmentsPanelState(props: UserAssignmentsPanelProps = 
         RBACAPI.getRoles(requestOptions(controller)),
       ]);
       if (!isCurrentRead()) return;
-      const users = new Set<string>();
-      const roleIds = new Set<string>();
       // A failed or malformed read is unknown, not an empty account directory.
-      if (
-        !Array.isArray(usersData) ||
-        !Array.isArray(rolesData) ||
-        usersData.some((user) => {
-          if (
-            !user ||
-            typeof user.username !== 'string' ||
-            !user.username.trim() ||
-            users.has(user.username) ||
-            !Array.isArray(user.roleIds) ||
-            user.roleIds.some((id) => typeof id !== 'string' || !id.trim())
-          )
-            return true;
-          users.add(user.username);
-          return false;
-        }) ||
-        rolesData.some((role) => {
-          if (
-            !role ||
-            typeof role.id !== 'string' ||
-            !role.id.trim() ||
-            roleIds.has(role.id) ||
-            typeof role.name !== 'string' ||
-            typeof role.description !== 'string'
-          )
-            return true;
-          roleIds.add(role.id);
-          return false;
-        })
-      )
+      if (!isCompleteUserAccessInventory(usersData, rolesData))
         throw new Error('Invalid user access inventory');
       batch(() => {
         setAssignments(usersData);
@@ -376,6 +349,7 @@ export function useUserAssignmentsPanelState(props: UserAssignmentsPanelProps = 
     openManageAccess,
     openDeleteUser,
     permissionsError,
+    restartRead: () => loadData(true),
     roles,
     saving,
     searchQuery,

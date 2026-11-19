@@ -101,6 +101,41 @@ export function getUserAssignmentsLoadErrorMessage(): string {
   return 'Failed to load user assignments';
 }
 
+/** Require both lists before presenting saved User Access or opening its editor. */
+export function isCompleteUserAccessInventory(users: unknown, roles: unknown): boolean {
+  if (!Array.isArray(users) || !Array.isArray(roles)) return false;
+  const usernames = new Set<string>();
+  const roleIds = new Set<string>();
+  return (
+    users.every((user) => {
+      if (
+        !user ||
+        typeof user.username !== 'string' ||
+        !user.username.trim() ||
+        usernames.has(user.username) ||
+        !Array.isArray(user.roleIds) ||
+        user.roleIds.some((id: unknown) => typeof id !== 'string' || !id.trim())
+      )
+        return false;
+      usernames.add(user.username);
+      return true;
+    }) &&
+    roles.every((role) => {
+      if (
+        !role ||
+        typeof role.id !== 'string' ||
+        !role.id.trim() ||
+        roleIds.has(role.id) ||
+        typeof role.name !== 'string' ||
+        typeof role.description !== 'string'
+      )
+        return false;
+      roleIds.add(role.id);
+      return true;
+    })
+  );
+}
+
 export function getUserAssignmentsUpdateErrorMessage(): string {
   return 'Failed to update user roles';
 }

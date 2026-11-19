@@ -45,6 +45,12 @@ export const UserAssignmentsPanel: Component<UserAssignmentsPanelProps> = (props
   );
   onCleanup(() => window.clearTimeout(focusTimer));
 
+  const restartRead = () => {
+    window.clearTimeout(focusTimer);
+    panel?.focus({ preventScroll: true });
+    void state.restartRead();
+  };
+
   const saveOrReload = async (reload = false) => {
     const reader = state.readerKey();
     const username = reload
@@ -151,8 +157,20 @@ export const UserAssignmentsPanel: Component<UserAssignmentsPanelProps> = (props
         </Show>
 
         <Show when={state.loading()}>
-          <div class="flex items-center justify-center py-8">
-            <LoadingSpinner size="xl" tone="info" label="Loading user access" />
+          <div class="flex flex-col items-center gap-3 px-4 py-8">
+            <div
+              class="flex items-center gap-2 text-sm text-muted"
+              role="status"
+              aria-label="Loading user access"
+            >
+              <LoadingSpinner size="md" tone="info" />
+              Loading user access…
+            </div>
+            <Show when={state.accessAllowed()}>
+              <Button size="mdCompact" class="min-h-11 sm:min-h-9" onClick={restartRead}>
+                Restart loading
+              </Button>
+            </Show>
           </div>
         </Show>
 
