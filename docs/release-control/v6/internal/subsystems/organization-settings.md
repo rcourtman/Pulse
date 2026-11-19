@@ -183,6 +183,14 @@ The existing Reload access action is available even if a sibling read is
 still pending; it retires that attempt and reads only in the current session
 and selection.
 
+If a saved-access check has not returned a response or a warning yet,
+Organization Access shows the selected organization and offers Restart access
+check. This includes stalls during the explicit check after an unconfirmed
+change. Restarting retires the waiting read and repeats only the same scoped
+GETs. Pending reads do not publish members, invitations or an empty state.
+Only the accepted snapshot can restore ordinary actions; it does not confirm
+the earlier write.
+
 Unfinished or incomplete reads cannot authorize any access change. Existing
 mutation controls remain visible but disabled for otherwise eligible readers,
 and state handlers require a complete read before starting a write. Retrying
@@ -211,10 +219,12 @@ focus. A deliberate focus move elsewhere wins over a pending write or reread.
 
 An uncertain change still focuses the existing unavailable warning when the
 focused control disappears. The next Tab reaches the explicit read-only Reload
-access/sharing action. An explicit Access reload focuses the accepted summary or
-the new warning, never repeats the write. These recovery targets are programmatically
-focusable, not additional Tab stops. Organization/user round trips, read-only
-withdrawal, hidden surfaces and disposal retire stale focus intent.
+access/sharing action. An explicit Access reload offers focus on the Restart
+access check control while waiting, and on the accepted summary or warning
+when done, without moving focus back from elsewhere. The summary and warning
+are programmatically focusable, not additional Tab stops. Organization/user
+round trips, read-only withdrawal, hidden surfaces and disposal retire stale
+focus intent.
 
 An explicit Sharing reload focuses its stable **Organization sharing** region
 before the button is replaced. The region exposes loading through `aria-busy`,

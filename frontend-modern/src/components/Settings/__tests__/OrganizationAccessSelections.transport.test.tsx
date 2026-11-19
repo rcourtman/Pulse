@@ -90,6 +90,7 @@ let capabilityReply: () => Promise<Response>;
 let healthReply: () => Promise<Response>;
 let pendingReadStatus: number;
 let personalReadStatus: number;
+let heldRead: { path: string; response: Promise<Response> } | undefined;
 let writeReply: (response: Response) => Promise<Response>;
 let releases: (() => void)[];
 let capabilityLoads: Promise<void>[];
@@ -262,6 +263,7 @@ beforeEach(async () => {
   healthReply = async () => json({});
   pendingReadStatus = 200;
   personalReadStatus = 200;
+  heldRead = undefined;
   writeReply = async (response) => response;
   notices.success.mockReset();
   notices.error.mockReset();
@@ -272,6 +274,11 @@ beforeEach(async () => {
     const path = String(input);
     const method = init.method ?? 'GET';
     if (method === 'GET') {
+      if (heldRead?.path === path) {
+        const { response } = heldRead;
+        heldRead = undefined;
+        return response;
+      }
       if (path === capabilityPath) return capabilityReply();
       if (path === '/api/health') return healthReply();
       if (path === orgPath) return json({ id: orgID, displayName, ownerUserId: ownerID, members });
@@ -771,9 +778,12 @@ describe('organization access selections through rendered controls and real tran
     },
   );
 
-  it('recovers an applied removal with a lost reply using Reload access, never another write', async () => {
+  it('restarts a stalled read after an applied removal with an unconfirmed reply, never another write', async () => {
     await openPanel();
     const selected = people[1];
+    fireEvent.input(screen.getByRole('textbox', { name: 'Member user ID' }), {
+      target: { value: 'unsent-member' },
+    });
     nextWriteStatus = 502;
     fireEvent.click(screen.getByRole('button', { name: `Remove ${selected} from organization` }));
     const warning = await screen.findByRole('alert');
@@ -784,13 +794,67 @@ describe('organization access selections through rendered controls and real tran
     expect(screen.queryAllByRole('combobox', { name: /^Role for / })).toHaveLength(0);
     expect(screen.queryByRole('button', { name: 'Invite' })).toBeNull();
     expectWrite(`${orgPath}/members/${encodeURIComponent(selected)}`, 'DELETE');
-    fireEvent.click(within(warning).getByRole('button', { name: 'Reload access' }));
-    await expectSavedReread();
+    const memberPath = `${orgPath}/members`;
+    const stale = deferredResponse(json(originalMembers));
+    heldRead = { path: memberPath, response: stale.promise };
+    const reload = within(warning).getByRole('button', { name: 'Reload access' });
+    reload.focus();
+    fireEvent.click(reload);
+    await waitFor(() => expect(heldRead).toBeUndefined());
+    const oldSignal = fetchMock.mock.calls
+      .filter(([url, init]) => url === memberPath && !init?.method)
+      .at(-1)?.[1]?.signal;
+    expect(oldSignal?.aborted).toBe(false);
+    const restart = screen.getByRole('button', { name: 'Restart access check' });
+    await waitFor(() => expect(restart).toHaveFocus());
+    expect(screen.queryByLabelText(`Role for ${selected}`)).not.toBeInTheDocument();
+    expect(screen.queryByText('No organization members found.')).not.toBeInTheDocument();
     expect(writes()).toHaveLength(1);
+
+    fireEvent.click(restart);
+    expect(oldSignal?.aborted).toBe(true);
+    await expectSavedMembers();
+    await waitFor(() => expect(screen.getByText(/Access for/)).toHaveFocus());
+    stale.resolve(json(originalMembers));
+    await settle();
+    expect(orgReads()).toHaveLength(3);
+    expect(writes()).toHaveLength(1);
+    expect(notices.success).not.toHaveBeenCalled();
+    expect(screen.getByRole('textbox', { name: 'Member user ID' })).toHaveValue('unsent-member');
     expect(members).toEqual(originalMembers.filter((member) => member.userId !== selected));
     expect(screen.queryByRole('combobox', { name: `Role for ${selected}` })).toBeNull();
     for (const sibling of people.filter((person) => person !== selected))
       expect(roleFor(sibling)).toHaveValue('viewer');
+    expectBoundRequests();
+  });
+});
+
+describe('Restarting a pending organization access read', () => {
+  it.each([
+    ['details', orgPath],
+    ['members', `${orgPath}/members`],
+    ['pending invitations', `${orgPath}/invitations`],
+    ['personal invitations', '/api/org-invitations'],
+  ])('retires the first stalled %s response without changing access', async (_label, path) => {
+    const obsolete = deferredResponse(json({ error: 'Obsolete fixture' }, 403));
+    heldRead = { path, response: obsolete.promise };
+    render(() => <OrganizationAccessPanel currentUser={owner} />);
+    await waitFor(() => expect(heldRead).toBeUndefined());
+    const oldSignal = fetchMock.mock.calls.find(([url]) => url === path)?.[1]?.signal;
+    expect(oldSignal?.aborted).toBe(false);
+    expect(screen.queryByText('No organization members found.')).not.toBeInTheDocument();
+    expect(screen.queryByRole('form', { name: 'Invite member' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Restart access check' }));
+    expect(oldSignal?.aborted).toBe(true);
+    await expectSavedMembers();
+    obsolete.resolve(json({ error: 'Obsolete fixture' }, 403));
+    await settle();
+    expect(orgReads()).toHaveLength(2);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Restart access check' })).not.toBeInTheDocument();
+    expect(pendingGroup(pending[0].userId)).toBeVisible();
+    expect(personalGroup(personal[0])).toBeVisible();
+    expect(writes()).toHaveLength(0);
     expectBoundRequests();
   });
 });

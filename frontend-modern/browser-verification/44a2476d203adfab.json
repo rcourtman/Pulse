@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "base_sha": "ebe117414e2d69d5220b2a21e819c87b6dca8496",
+  "verified_at": "2026-11-19T10:00:24Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/OrganizationAccessLoadingState.tsx",
+    "frontend-modern/src/components/Settings/OrganizationAccessPanel.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/OrganizationAccessLoadingState.tsx": "f34cb4106c675978d8930ceef11156c924cfe322821f42c8b6ded15b68c6a1e9",
+    "frontend-modern/src/components/Settings/OrganizationAccessPanel.tsx": "9020cc618ff376a9edc35552e43ca3e8aad4f201e744780427f62bea6b6465d9"
+  },
+  "routes": [
+    "/settings/organization/access"
+  ],
+  "viewports": [
+    {
+      "width": 1536,
+      "height": 960
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Compared assigned main and final source in the production-built Settings route with an isolated loopback fixture: desktop Chromium light and phone-size WebKit dark (Playwright 1.56.1).",
+    "Initial invitation GET remains pending. Old page shows skeletons only. New page names the checked organization, exposes Restart and keeps the version footer visible. Neither shows partial/empty access or write controls.",
+    "Fixture accepts one member removal but returns HTTP 502. The existing warning is unchanged. Reload starts a held roster GET; only the revised page lets readers restart in place.",
+    "The fresh scoped reads show the saved roster and both invitation lists; the selected member remains absent in the removal case and the prior unsent invitation draft survives. No write replay or live server/IdP verification.",
+    "Twenty before/after captures reviewed at the same fixture, viewport, theme and panel anchor. Shell, warning, version footer while waiting and saved controls stay visible at their compared anchors."
+  ],
+  "interactions": [
+    "Keyboard activation in Chromium and actual tap emulation in WebKit. The restart issues a new read before the first reply, and focus reaches the accepted organization summary.",
+    "The loopback fixture counted one bound DELETE in each independent removal case, zero in the initial journeys, and no mutation attributable to Reload or Restart. The retired read connection closed without a reply."
+  ]
+}
