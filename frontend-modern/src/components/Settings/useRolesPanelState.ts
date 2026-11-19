@@ -6,7 +6,8 @@ import { eventBus } from '@/stores/events';
 import type { Permission, Role } from '@/types/rbac';
 import { createDefaultRBACPermission } from '@/utils/rbacPermissions';
 import {
-  getRoleIdentityLabel,
+  getRoleChangeSuccessMessage,
+  getRoleChangeUnconfirmedMessage,
   getRolesDeleteErrorMessage,
   getRolesLoadErrorMessage,
   getRolesRequiredFieldsMessage,
@@ -223,7 +224,7 @@ export function useRolesPanelState(props: RolesPanelProps = {}) {
       batch(() => {
         clearEditor();
         setRolePendingDeletion(null);
-        setSuccessNotice(`Role ${getRoleIdentityLabel(role)} ${remove ? 'deleted' : 'saved'}`);
+        setSuccessNotice(getRoleChangeSuccessMessage(role, remove));
       });
       saved = true;
     } catch (error) {
@@ -239,9 +240,7 @@ export function useRolesPanelState(props: RolesPanelProps = {}) {
           setRolePendingDeletion(null);
           setRoles([]);
           setInventoryLoaded(false);
-          setUnconfirmedChange(
-            `The ${remove ? 'deletion' : 'save'} of role ${getRoleIdentityLabel(role)} could not be confirmed. It may already have been applied. Check saved roles and review their permissions before making another change.`,
-          );
+          setUnconfirmedChange(getRoleChangeUnconfirmedMessage(role, remove));
         });
       }
     } finally {
