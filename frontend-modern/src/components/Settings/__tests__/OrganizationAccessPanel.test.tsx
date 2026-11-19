@@ -1063,6 +1063,35 @@ const writes = () => [
 const expectNoWrites = () => writes().forEach((write) => expect(write).not.toHaveBeenCalled());
 
 describe('Organization Access read admission', () => {
+  it('allows a read-only reload when invitations fail before a sibling read settles', async () => {
+    const oldMembers = deferred<typeof baseMembers>();
+    listMembersMock.mockReturnValueOnce(oldMembers.promise);
+    listPendingInvitationsMock.mockRejectedValueOnce(
+      Object.assign(new Error('Temporary invitation failure'), { status: 503 }),
+    );
+    renderPanel();
+    const warning = await screen.findByRole('alert', {
+      name: 'Organization invitations incomplete',
+    });
+    expect(warning).toHaveTextContent('Pending Invitations');
+    expect(screen.queryByText('user-2')).not.toBeInTheDocument();
+    const oldSignal = listMembersMock.mock.calls[0][1].signal;
+    expect(oldSignal.aborted).toBe(false);
+    const reload = within(warning).getByRole('button', { name: 'Reload access' });
+    expect(reload).toBeEnabled();
+
+    listMembersMock.mockResolvedValueOnce([{ ...baseMembers[1], userId: 'fresh-member' }]);
+    fireEvent.click(reload);
+    expect(oldSignal.aborted).toBe(true);
+    expect(await screen.findByText('fresh-member')).toBeInTheDocument();
+    oldMembers.resolve(baseMembers);
+    await waitFor(() => expect(screen.getByText(/Access for/)).toHaveFocus());
+    expect(screen.queryByText('user-2')).not.toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(orgGetMock).toHaveBeenCalledTimes(2);
+    expectNoWrites();
+  });
+
   it('keeps first-read failure distinct from accepted empty membership, and retries only reads', async () => {
     orgGetMock.mockRejectedValueOnce(new Error('Unavailable'));
     renderPanel();
@@ -1130,6 +1159,25 @@ describe('Organization Access read admission', () => {
       expect(loggerErrorMock).not.toHaveBeenCalled();
     },
   );
+
+  it('does not surface a temporary invitation error from a retired workspace read', async () => {
+    const oldInvitations = deferred<unknown[]>();
+    listPendingInvitationsMock.mockReturnValueOnce(oldInvitations.promise);
+    const { state } = renderState();
+    await waitFor(() => expect(listPendingInvitationsMock).toHaveBeenCalledTimes(1));
+    const oldSignal = listPendingInvitationsMock.mock.calls[0][1].signal;
+    getOrgIDMock.mockReturnValue('org-b');
+    orgGetMock.mockResolvedValueOnce({ ...baseOrg, id: 'org-b' });
+    eventBusEmitMock('org_switched');
+    await ready(state);
+    expect(oldSignal.aborted).toBe(true);
+
+    oldInvitations.reject(Object.assign(new Error('Obsolete failure'), { status: 503 }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(state.org()?.id).toBe('org-b');
+    expect(state.invitationReadIssue()).toBeNull();
+    expect(state.canChangeAccess()).toBe(true);
+  });
 
   it('rejects a different organization returned by the server without reading its members', async () => {
     orgGetMock.mockResolvedValueOnce({ ...baseOrg, id: 'different-org' });
@@ -1211,6 +1259,19 @@ describe('Organization Access change safety', () => {
     await state.acceptInvitation('inviting-org');
     await state.declineInvitation('inviting-org');
   };
+
+  it('rejects every mutation handler even on current rows if invitations are incomplete', async () => {
+    listMyInvitationsMock.mockRejectedValueOnce(
+      Object.assign(new Error('Temporary invitation failure'), { status: 503 }),
+    );
+    const { state } = renderState();
+    await ready(state);
+    expect(state.invitationReadIssue()).toBe('personal');
+    expect(state.canManageCurrentOrg()).toBe(true);
+    await exerciseAllChanges(state, state.members()[1]);
+    expectNoWrites();
+    expect(confirm).not.toHaveBeenCalled();
+  });
 
   it.each(['pending', 'failed', 'switched without event', 'read-only', 'disabled'])(
     'rejects every retained mutation handler when %s',

@@ -93,6 +93,7 @@ export const OrganizationAccessManagementSection: Component<
                     aria-label={isDefaultOrg(currentOrg()) ? 'User ID to add' : 'Member user ID'}
                     aria-describedby={effectID}
                     value={props.state.inviteUserID()}
+                    disabled={!!props.state.invitationReadIssue()}
                     onInput={(event) => props.state.setInviteUserID(event.currentTarget.value)}
                     placeholder="username"
                     class="w-full rounded-md border px-3 py-2 text-sm shadow-xs focus:border-blue-500 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
@@ -106,6 +107,7 @@ export const OrganizationAccessManagementSection: Component<
                   labelClass="text-xs"
                   fieldBaseClass="min-w-0 space-y-1"
                   value={props.state.inviteRole()}
+                  disabled={!!props.state.invitationReadIssue()}
                   onChange={(event) =>
                     props.state.setInviteRole(event.currentTarget.value as OrganizationRole)
                   }
@@ -143,7 +145,7 @@ export const OrganizationAccessManagementSection: Component<
                   size="settingsAction"
                   class="w-full sm:w-auto"
                   disabled={
-                    props.state.saving() ||
+                    !props.state.canChangeAccess() ||
                     (props.state.inviteRole() === 'owner' &&
                       currentOrg().ownerUserId !== props.currentUser)
                   }

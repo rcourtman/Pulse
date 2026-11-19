@@ -59,7 +59,7 @@ export const OrganizationAccessMembersSection: Component<OrganizationAccessMembe
                       void props.state.updateRole(member, nextRole);
                     }}
                     disabled={
-                      props.state.saving() ||
+                      !props.state.canChangeAccess() ||
                       (isOwner() && props.currentUser !== currentOrg().ownerUserId)
                     }
                     selectBaseClass="min-h-11 w-full rounded-md border border-border bg-surface px-2 py-1 text-xs text-base-content shadow-xs focus:border-blue-500 focus:outline-hidden focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-0 sm:w-auto"
@@ -113,7 +113,7 @@ export const OrganizationAccessMembersSection: Component<OrganizationAccessMembe
                     onClick={() => {
                       void props.state.removeMember(member);
                     }}
-                    disabled={props.state.saving()}
+                    disabled={!props.state.canChangeAccess()}
                   >
                     <Trash2 class="w-3.5 h-3.5" />
                     Remove

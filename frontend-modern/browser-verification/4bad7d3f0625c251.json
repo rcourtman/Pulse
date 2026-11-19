@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "base_sha": "538d1c81e15c283530b1ac136ca123cae5e13aca",
+  "verified_at": "2026-11-19T01:34:08Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/OrganizationAccessManagementSection.tsx",
+    "frontend-modern/src/components/Settings/OrganizationAccessMembersSection.tsx",
+    "frontend-modern/src/components/Settings/OrganizationAccessPanel.tsx",
+    "frontend-modern/src/components/Settings/useOrganizationAccessPanelState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/OrganizationAccessManagementSection.tsx": "2c4717fe07f4e7b3d0405870b7abfa30843286b2d046c0a30ca9fac09c8df29e",
+    "frontend-modern/src/components/Settings/OrganizationAccessMembersSection.tsx": "fd5b8d031b3ba58eae967ed1597d404274ce891015a907e990f046398955df23",
+    "frontend-modern/src/components/Settings/OrganizationAccessPanel.tsx": "03cd4d8aa8052d2e7f8dfa5ad9dce32e25f6edd6200c3843127b8a07528c986b",
+    "frontend-modern/src/components/Settings/useOrganizationAccessPanelState.ts": "32f20924190f72a3041ac1f1ad362fe3db069dc72bb01d8ef520ea0186e6044f"
+  },
+  "routes": [
+    "/settings/organization/access"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Production App in Playwright 1.56.1, Chromium 141 at 1365 × 900 and touch WebKit 26 at 390 × 844. 36 inspected captures in 18 paired light/dark comparisons.",
+    "Temporary Pending Invitations 503 or Your Invitations 503: main hides saved rows. The candidate identifies the unavailable read and keeps the verified workspace, enrolled member roles and any unaffected invitation list. Actions remain visibly disabled.",
+    "Both invitation reads fail with 502 and 504: the warning names both lists while enrolled members remain available. A 403 still hides the panel data. Denied, healthy viewer and recovered owner captures match at the same first-view anchor."
+  ],
+  "interactions": [
+    "Press Enter on Reload access in Chromium and tap it in WebKit. Each explicit reload performs the four same-session selected-workspace reads once, returns visible focus to the summary and restores controls only after a complete read.",
+    "Verify saved member roles, invitation parties and disabled controls in the real panel. A synthetic submit while incomplete did not prepare CSRF or send mutations. No off-fixture traffic."
+  ]
+}

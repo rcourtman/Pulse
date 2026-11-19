@@ -171,6 +171,33 @@ Comparable actual-App desktop/phone light/dark browser fixtures bind the display
 and exact one-write/saved-readback behavior. This is selection clarity, not live
 authorization, original-client recovery or release availability.
 
+### Readable organization access during an invitation outage
+
+After verification of the selected organization and its enrolled members,
+Organization Access can still show those saved rows when either invitation
+read returns HTTP 429, 500, 502, 503 or 504. Any other successfully read
+invitation list keeps its exact targets, roles and dates. The warning names
+the unread list without treating it as empty or exposing upstream error text.
+The existing Reload access action is available even if a sibling read is
+still pending; it retires that attempt and reads only in the current session
+and selection.
+
+Unfinished or incomplete reads cannot authorize any access change. Existing
+mutation controls remain visible but disabled for otherwise eligible readers,
+and state handlers require a complete read before starting a write. Retrying
+does not prepare or send a mutation. Failed organization or member reads,
+malformed list payloads and other invitation errors, including authority or
+entitlement loss, still do not publish a partial snapshot. Manager-only
+invitation reads and visibility, viewer access, read-only policy and
+in-flight write recovery keep their existing boundaries.
+
+`OrganizationAccessPanel.test.tsx` and
+`OrganizationAccessSelections.transport.test.tsx` exercise the same-selection
+read recovery, obsolete reads, withheld actions, status handling and the real
+session-preferred API transport. The existing Access route is exercised at
+desktop and phone widths with comparable isolated fixtures. This is not live
+authorization, installed recovery or release availability.
+
 ### Keyboard continuation through saved access rereads
 
 Organization Access and Sharing restore lost panel focus only within the same
