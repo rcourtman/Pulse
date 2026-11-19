@@ -205,4 +205,34 @@ describe('shipped TrueNAS error diagnosis', () => {
     expect(text).toContain('connection test, restart or wider permissions');
     expect(section.querySelector('pre, form, input, button')).toBeNull();
   });
+
+  it('takes snapshot readers to the per-connection scope and the older-build limit', () => {
+    const article = renderGuide('TRUENAS');
+    const link = article.querySelector<HTMLAnchorElement>(
+      'table a[href="/docs/TRUENAS#collection-scope-and-snapshot-polling"]',
+    );
+    expect(link).not.toBeNull();
+    expect(link).toHaveAttribute('data-doc-link');
+    expect(prose(link!.closest('tr')!)).toContain(
+      'ZFS Snapshots TrueNAS → Protection Dataset, creation time, size, referenced data',
+    );
+
+    const scope = sectionAt(article, new URL(link!.href).hash);
+    const text = prose(scope);
+    expect(text).toContain('untick Datasets and select Update connection');
+    expect(text).toContain('Leave Datasets on if you need fresh snapshot records');
+    expect(text).toContain('system information, disks and native alerts');
+    expect(text).toContain('They do not delete snapshots or stop TrueNAS replication');
+    expect(text).toContain('v6.8.0 still polls snapshots with Datasets off');
+    expect(text).toContain('v6.9.0-beta.3 can skip them, but leave Pools or Replication on');
+    expect(text).toContain('turns the optional reads back on');
+    expect(scope.querySelector('pre, form, input, button')).toBeNull();
+    const ordinaryPoll = scope.querySelector<HTMLAnchorElement>(
+      'a[href="/docs/TRUENAS#stale-truenas-data"]',
+    );
+    expect(ordinaryPoll?.textContent).toBe('ordinary poll');
+    expect(article.querySelector(new URL(ordinaryPoll!.href).hash)?.textContent).toBe(
+      'Stale TrueNAS data',
+    );
+  });
 });

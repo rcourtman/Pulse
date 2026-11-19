@@ -42,7 +42,7 @@ On your TrueNAS system:
 | ZFS Pools | TrueNAS → Storage | [Total/used/free capacity](#pool-health-without-capacity), pool status (ONLINE/DEGRADED/FAULTED) |
 | ZFS Datasets | TrueNAS → Storage | Used/available space, mount status, read-only flag |
 | Physical Disks | TrueNAS → Storage | Model, serial, size, transport type, rotational flag, temperature, and native SMART failure/counter evidence when TrueNAS reports it |
-| ZFS Snapshots | TrueNAS → Protection | Dataset, creation time, size, referenced data |
+| [ZFS Snapshots](TRUENAS.md#collection-scope-and-snapshot-polling) | TrueNAS → Protection | Dataset, creation time, size, referenced data |
 | Replication Tasks | TrueNAS → Protection | Source/target datasets, direction, last run status |
 | TrueNAS Alerts | Alerts | Native TrueNAS alert messages and severity levels |
 
@@ -595,3 +595,29 @@ private paths and disk serials out of the report.
 - [Configuration Guide](CONFIGURATION.md#truenas) — environment variables and setup
 - [ZFS Monitoring](ZFS_MONITORING.md) — Proxmox-native ZFS pool monitoring
 - [Recovery data](RECOVERY.md) — the snapshot and replication data shown under **TrueNAS → Protection**
+
+## Collection scope and snapshot polling
+
+To stop snapshot polling for one appliance, open **Settings → Infrastructure**
+and choose **Manage** for that TrueNAS connection. Under **Collection scope**,
+untick **Datasets** and select **Update connection**. This stops new dataset
+and snapshot reads together. Leave **Datasets** on if you need fresh snapshot
+records in **TrueNAS → Protection**.
+
+- **Pools** controls reads for data pools and the boot pool.
+- **Replication** controls reads for replication tasks and their state.
+
+In this version of Pulse, you can turn all three off without pausing the
+connection. Pulse still reads system information, disks and native alerts.
+The options only affect what Pulse reads. They do not delete snapshots or
+stop TrueNAS replication.
+
+**Older releases:** v6.8.0 still polls snapshots with **Datasets** off.
+v6.9.0-beta.3 can skip them, but leave **Pools** or **Replication** on
+in that beta. It treats all three off as an older saved connection and
+turns the optional reads back on.
+
+Use the next completed [ordinary poll](TRUENAS.md#stale-truenas-data) to
+check that the inventory you still collect is fresh. A connection test does
+not check collection scope, and older **Protection** entries do not show
+whether Pulse still reads snapshots.
