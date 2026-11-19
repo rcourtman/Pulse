@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "base_sha": "918e7f075cc10dda87b69313d1b0217a8b2253b7",
+  "verified_at": "2026-11-19T13:42:55.987921Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/AuditWebhookPanel.tsx",
+    "frontend-modern/src/components/Settings/useAuditWebhookPanelState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/AuditWebhookPanel.tsx": "266cc0178c202b232e944389da6f954fe8a5216d6859d5773320619eced99dfa",
+    "frontend-modern/src/components/Settings/useAuditWebhookPanelState.ts": "46b41559d066c4d8e7d32125f06c1f4b1e847acb80ed5857cd7c61234e2c878a"
+  },
+  "routes": [
+    "/settings/security-webhooks"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 960
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Production App and Settings registry using the real Audit Webhooks client against local synthetic responses in the same selected organization.",
+    "Playwright 1.56.1: Chromium 141.0.7390.37 desktop light and WebKit 26.0 narrow dark. Ten comparable before/after pairs opened and inspected.",
+    "Held initial read and recovered read-only list; held, malformed and recovered check after an unconfirmed removal. The pending restart preserves both URLs, draft, warning, signpost and guidance at the same phone anchor."
+  ],
+  "interactions": [
+    "291 passed browser assertions. Tab/Enter and touch each replace one held initial read and one held check with same-scope GETs; the retired requests close without a response.",
+    "Only a valid current read releases the existing write lock. No replay, added access or navigation; malformed data retains the last-read warning and draft. Local keyboard focus survives the restart and a result arriving while Restart is focused.",
+    "The synthetic removal was applied once with an uncertain reply; the restored list shows current data without announcing a mutation success. This does not verify delivery to a receiver."
+  ]
+}
