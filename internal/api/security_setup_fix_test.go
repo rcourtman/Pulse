@@ -28,6 +28,41 @@ func findCookie(cookies []*http.Cookie, name string) *http.Cookie {
 	return matched
 }
 
+func prepareQuickSetupFixture(t *testing.T, dataDir string) {
+	t.Helper()
+	// These bare routers bypass startup. Exercise credential and session
+	// persistence without using an installed key or probing a service manager.
+	t.Setenv("PULSE_LEGACY_KEY_PATH", filepath.Join(dataDir, "absent-legacy-key"))
+	t.Setenv("INVOCATION_ID", "")
+	t.Setenv("PULSE_DOCKER", "true")
+	InitPersistentAuthStores(dataDir)
+	resetSessionTracking()
+	t.Cleanup(func() {
+		resetSessionStoreForTests()
+		resetCSRFStoreForTests()
+		resetSessionTracking()
+	})
+}
+
+func requireQuickSetupSession(t *testing.T, rec *httptest.ResponseRecorder, wantUser string) {
+	t.Helper()
+	cookies := rec.Result().Cookies()
+	session := findCookie(cookies, sessionCookieName(false))
+	if session == nil || strings.TrimSpace(session.Value) == "" {
+		t.Fatal("expected quick setup to issue a session cookie")
+	}
+	if !ValidateSession(session.Value) {
+		t.Fatal("expected the issued session to validate")
+	}
+	if got := GetSessionUsername(session.Value); got != wantUser {
+		t.Fatalf("session username=%q, want %q", got, wantUser)
+	}
+	csrf := findCookie(cookies, CookieNameCSRF)
+	if csrf == nil || !validateCSRFToken(session.Value, csrf.Value) {
+		t.Fatal("expected quick setup to issue a CSRF cookie bound to the session")
+	}
+}
+
 func TestQuickSecuritySetupRejectsUnauthenticatedForce(t *testing.T) {
 	t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "")
 	resetTrustedProxyConfig()
@@ -414,6 +449,7 @@ func TestQuickSecuritySetupAllowsRecoveryTokenRotation(t *testing.T) {
 	resetRecoveryStore()
 
 	dataDir := t.TempDir()
+	prepareQuickSetupFixture(t, dataDir)
 
 	hashed, err := internalauth.HashPassword("OldPassword!1")
 	if err != nil {
@@ -435,6 +471,7 @@ func TestQuickSecuritySetupAllowsRecoveryTokenRotation(t *testing.T) {
 	}
 
 	InitRecoveryTokenStore(cfg.DataPath)
+	t.Cleanup(resetRecoveryStore)
 	token, err := GetRecoveryTokenStore().GenerateRecoveryToken(5*time.Minute, "127.0.0.1")
 	if err != nil {
 		t.Fatalf("generate recovery token: %v", err)
@@ -465,6 +502,10 @@ func TestQuickSecuritySetupAllowsRecoveryTokenRotation(t *testing.T) {
 	if len(cfg.APITokens) != 1 {
 		t.Fatalf("expected one API token, got %d", len(cfg.APITokens))
 	}
+	if GetRecoveryTokenStore().IsRecoveryTokenValidConstantTime(token, "127.0.0.1") {
+		t.Fatal("expected the recovery token to be consumed by setup")
+	}
+	requireQuickSetupSession(t, rr, "rotated")
 }
 
 func TestQuickSecuritySetupRequiresSettingsScopeForTokens(t *testing.T) {
@@ -666,17 +707,30 @@ func TestEnsureSettingsWriteScopeWithValidScope(t *testing.T) {
 	}
 }
 
+func newSettingsWriteScopeSessionRequest(t *testing.T, username string) *http.Request {
+	t.Helper()
+	InitSessionStore(t.TempDir())
+	t.Cleanup(resetSessionStoreForTests)
+
+	// The username lookup also tracks sessions in memory, independently of
+	// the store's data path. Give each test a distinct token and untrack it.
+	sessionToken := generateSessionToken()
+	if sessionToken == "" {
+		t.Fatal("could not generate fixture session token")
+	}
+	t.Cleanup(func() { UntrackUserSession(username, sessionToken) })
+	GetSessionStore().CreateSession(sessionToken, time.Hour, "agent", "127.0.0.1", username)
+	req := httptest.NewRequest(http.MethodPost, "/api/security/test", nil)
+	req.AddCookie(&http.Cookie{Name: "pulse_session", Value: sessionToken})
+	return req
+}
+
 func TestEnsureSettingsWriteScopeRejectsNonAdminSession(t *testing.T) {
 	cfg := &config.Config{
 		AuthUser: "admin",
 	}
 
-	sessionToken := "settings-write-member-" + time.Now().Format("150405.000000000")
-	GetSessionStore().CreateSession(sessionToken, time.Hour, "agent", "127.0.0.1", "member")
-
-	req := httptest.NewRequest(http.MethodPost, "/api/security/test", nil)
-	req.AddCookie(&http.Cookie{Name: "pulse_session", Value: sessionToken})
-
+	req := newSettingsWriteScopeSessionRequest(t, "member")
 	rr := httptest.NewRecorder()
 	result := ensureSettingsWriteScope(cfg, rr, req)
 
@@ -696,12 +750,7 @@ func TestEnsureSettingsWriteScopeAllowsConfiguredAdminSession(t *testing.T) {
 		AuthUser: "admin",
 	}
 
-	sessionToken := "settings-write-admin-" + time.Now().Format("150405.000000001")
-	GetSessionStore().CreateSession(sessionToken, time.Hour, "agent", "127.0.0.1", "admin")
-
-	req := httptest.NewRequest(http.MethodPost, "/api/security/test", nil)
-	req.AddCookie(&http.Cookie{Name: "pulse_session", Value: sessionToken})
-
+	req := newSettingsWriteScopeSessionRequest(t, "admin")
 	rr := httptest.NewRecorder()
 	result := ensureSettingsWriteScope(cfg, rr, req)
 
@@ -720,11 +769,7 @@ func TestSettingsWriteScopeSplitsInstanceAndOrgManagerSession(t *testing.T) {
 		AuthUser: "platform-admin",
 	}
 
-	sessionToken := "settings-write-owner-" + time.Now().Format("150405.000000002")
-	GetSessionStore().CreateSession(sessionToken, time.Hour, "agent", "127.0.0.1", "legacy-owner")
-
-	req := httptest.NewRequest(http.MethodPost, "/api/security/test", nil)
-	req.AddCookie(&http.Cookie{Name: "pulse_session", Value: sessionToken})
+	req := newSettingsWriteScopeSessionRequest(t, "legacy-owner")
 	req = req.WithContext(context.WithValue(req.Context(), OrgContextKey, &models.Organization{
 		ID:          "org-a",
 		DisplayName: "Org A",
