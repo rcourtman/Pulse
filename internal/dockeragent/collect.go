@@ -802,8 +802,19 @@ func (a *Agent) collectContainerWithSource(ctx context.Context, summary containe
 		container.Image = inspect.Config.Image
 	}
 
-	// Check for image updates if registry checker is enabled
-	if a.registryChecker != nil && a.registryChecker.Enabled() {
+	// The container config has the registry reference Docker used to start
+	// the container. If it only names a local image ID, fall back to the
+	// human-readable reference from the summary.
+	imageToCheck := container.Image
+	if inspect.Config != nil && inspect.Config.Image != "" && !strings.HasPrefix(inspect.Config.Image, "sha256:") {
+		imageToCheck = inspect.Config.Image
+	}
+
+	if a.runtime == RuntimeDocker && !sourceRegistered && agentsdocker.UsesHomeAssistantSupervisorAlias(container.Name, imageToCheck, labels) {
+		// Retain the alias when the summary only shows an image ID so the
+		// server can also recognize it. A skipped check is not "up to date".
+		container.Image = imageToCheck
+	} else if a.registryChecker != nil && a.registryChecker.Enabled() {
 		// Get the actual manifest digest (RepoDigest) from the image for accurate comparison.
 		// The ImageID is a local content-addressable ID that differs from the registry manifest digest.
 		// We also get the architecture details to correctly resolve manifest lists from the registry.
@@ -812,18 +823,6 @@ func (a *Agent) collectContainerWithSource(ctx context.Context, summary containe
 		digestForComparison := ""
 		if len(currentDigests) > 0 {
 			digestForComparison = currentDigests[0]
-		}
-
-		var imageToCheck string
-		// Always prefer the image name from inspect config as it's the authoritative source
-		// and avoids issues with short IDs or digests in summary.
-		// HOWEVER, if the config image IS a digest (starts with sha256:), fall back to container.Image
-		// which usually contains the human-readable tag/name.
-		imageToCheck = container.Image
-		if inspect.Config != nil && inspect.Config.Image != "" {
-			if !strings.HasPrefix(inspect.Config.Image, "sha256:") {
-				imageToCheck = inspect.Config.Image
-			}
 		}
 
 		// A registered deployment retains its tag alongside the approved digest.

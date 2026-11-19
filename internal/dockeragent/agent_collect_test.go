@@ -19,8 +19,92 @@ import (
 	systemtypes "github.com/moby/moby/api/types/system"
 	volumetypes "github.com/moby/moby/api/types/volume"
 	dockerclient "github.com/moby/moby/client"
+	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 	"github.com/rs/zerolog"
 )
+
+func TestCollectContainerHomeAssistantSupervisorUpdateAlias(t *testing.T) {
+	const amd64 = "ghcr.io/home-assistant/amd64-hassio-supervisor"
+	const aarch64 = "ghcr.io/home-assistant/aarch64-hassio-supervisor"
+	const supervisor = "/hassio_supervisor"
+	current := "sha256:" + strings.Repeat("c", 64)
+	latest := "sha256:" + strings.Repeat("d", 64)
+	for _, tc := range []struct {
+		name, containerName, ref string
+		runtime                  RuntimeKind
+		labels                   map[string]string
+		skip                     bool
+	}{
+		{name: "local tag selected by Supervisor", containerName: supervisor, ref: amd64 + ":latest", skip: true},
+		{name: "implicit latest on aarch64", containerName: supervisor, ref: aarch64, skip: true},
+		{name: "explicit tag", containerName: supervisor, ref: amd64 + ":2026.11.0"},
+		{name: "different name", containerName: "/supervisor-preview", ref: amd64 + ":latest"},
+		{name: "different registry", containerName: supervisor, ref: "registry.example/home-assistant/amd64-hassio-supervisor:latest"},
+		{name: "different repository", containerName: supervisor, ref: amd64 + "-test:latest"},
+		{name: "unrelated HA sibling", containerName: "/homeassistant", ref: "ghcr.io/home-assistant/generic-x86-64-homeassistant:latest"},
+		{name: "Compose deployment", containerName: supervisor, ref: amd64 + ":latest", labels: map[string]string{"com.docker.compose.project": "home-lab"}},
+		{name: "Podman deployment", containerName: supervisor, ref: amd64 + ":latest", runtime: RuntimePodman},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			runtime := tc.runtime
+			if runtime == "" {
+				runtime = RuntimeDocker
+			}
+			var imageInspects, manifestRequests int
+			checker := NewRegistryChecker(zerolog.Nop())
+			checker.httpClient = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				if strings.HasSuffix(req.URL.Path, "/token") {
+					return newStringResponse(http.StatusOK, nil, `{"token":"fixture"}`), nil
+				}
+				manifestRequests++
+				return newStringResponse(http.StatusOK, map[string]string{"Docker-Content-Digest": latest}, ""), nil
+			})}
+			inspect := baseInspect()
+			inspect.Config.Image = tc.ref
+			a := &Agent{logger: zerolog.Nop(), runtime: runtime, registryChecker: checker, docker: &fakeDockerClient{
+				containerInspectWithRawFn: func(context.Context, string, bool) (containertypes.InspectResponse, []byte, error) {
+					return inspect, nil, nil
+				},
+				containerStatsOneShotFn: func(context.Context, string) (dockerStatsResponseReader, error) {
+					return statsReader(t, containertypes.StatsResponse{}), nil
+				},
+				imageInspectWithRawFn: func(context.Context, string) (imagetypes.InspectResponse, []byte, error) {
+					imageInspects++
+					repo, _, _ := strings.Cut(tc.ref, ":")
+					return imagetypes.InspectResponse{
+						RepoDigests: []string{repo + "@" + current},
+						RepoTags:    []string{repo + ":2026.11.0", repo + ":latest"},
+					}, nil, nil
+				},
+			}}
+			// The list may show an image ID instead of the configured tag.
+			imageID := "sha256:" + strings.Repeat("a", 64)
+			c, err := a.collectContainer(context.Background(), containertypes.Summary{
+				ID: strings.Repeat("b", 64), Names: []string{tc.containerName}, Labels: tc.labels, Image: imageID, ImageID: imageID, State: "running",
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if c.Name != strings.TrimPrefix(tc.containerName, "/") || c.State != "running" || c.ImageDigest != imageID {
+				t.Fatalf("container monitoring lost identity or state: %+v", c)
+			}
+			summary := summarizeManualUpdateCheck(agentsdocker.Report{Containers: []agentsdocker.Container{c}})
+			if tc.skip {
+				if c.Image != tc.ref || c.UpdateStatus != nil || imageInspects != 0 || manifestRequests != 0 {
+					t.Fatalf("managed alias: image=%q status=%+v image inspects=%d manifest requests=%d", c.Image, c.UpdateStatus, imageInspects, manifestRequests)
+				}
+				if summary != "Container update check completed: 0 checked, 0 updates available, 1 skipped" {
+					t.Fatalf("manual check claimed a comparison: %s", summary)
+				}
+				return
+			}
+			if status := c.UpdateStatus; status == nil || !status.UpdateAvailable || status.CurrentDigest != current || status.LatestDigest != latest ||
+				imageInspects != 1 || manifestRequests != 1 {
+				t.Fatalf("normal comparison changed: status=%+v image inspects=%d manifest requests=%d", status, imageInspects, manifestRequests)
+			}
+		})
+	}
+}
 
 func TestBuildHostSecurityInfoAuthorizationPlugins(t *testing.T) {
 	security := buildHostSecurityInfo(systemtypes.Info{
