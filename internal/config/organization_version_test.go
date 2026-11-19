@@ -173,6 +173,96 @@ func TestOrganizationSnapshotMissingOrUnknownStateIsNotReplacementAuthority(t *t
 	}
 }
 
+type organizationReadWitness struct {
+	FileSystem
+	path  string
+	reads int
+}
+
+func (fs *organizationReadWitness) ReadFile(path string) ([]byte, error) {
+	if path == fs.path {
+		fs.reads++
+		// Do not let a regression in the file-type check open the fixture.
+		return nil, errors.New("unexpected read of nonregular organization metadata")
+	}
+	return fs.FileSystem.ReadFile(path)
+}
+
+func TestOrganizationSnapshotNonregularTargetDoesNotReachReadOrPublish(t *testing.T) {
+	for _, linked := range []bool{false, true} {
+		t.Run(map[bool]string{false: "directory", true: "linked directory"}[linked], func(t *testing.T) {
+			p := NewConfigPersistence(t.TempDir())
+			org := &models.Organization{ID: "default", DisplayName: "Original", OwnerUserID: "owner",
+				Members: []models.OrganizationMember{{UserID: "retained-member", Role: models.OrgRoleViewer}}}
+			require.NoError(t, p.SaveOrganization(org))
+			originalVersion := org.PersistenceVersion
+
+			backup := filepath.Join(p.configDir, "known-good.json")
+			require.NoError(t, os.Rename(p.orgFile, backup))
+			if linked {
+				directory := t.TempDir()
+				if err := os.Symlink(directory, p.orgFile); err != nil {
+					t.Skipf("fixture needs file symlinks: %v", err)
+				}
+			} else {
+				require.NoError(t, os.Mkdir(p.orgFile, 0700))
+			}
+			before, err := os.Lstat(p.orgFile)
+			require.NoError(t, err)
+
+			fs := &organizationReadWitness{FileSystem: p.fs, path: p.orgFile}
+			p.fs = fs
+			got, err := p.LoadOrganization()
+			require.ErrorContains(t, err, "not a regular file")
+			require.Nil(t, got)
+			org.DisplayName = "must not publish"
+			require.ErrorContains(t, p.SaveOrganization(org), "not a regular file")
+			require.ErrorContains(t, p.SaveOrganization(&models.Organization{ID: org.ID}), "not a regular file")
+			require.Equal(t, originalVersion, org.PersistenceVersion)
+			require.Zero(t, fs.reads)
+			after, err := os.Lstat(p.orgFile)
+			require.NoError(t, err)
+			require.True(t, os.SameFile(before, after))
+
+			p.fs = fs.FileSystem
+			require.NoError(t, os.Remove(p.orgFile))
+			require.NoError(t, os.Rename(backup, p.orgFile))
+			restored, err := p.LoadOrganization()
+			require.NoError(t, err)
+			require.Equal(t, "Original", restored.DisplayName)
+			require.Equal(t, org.Members, restored.Members)
+			require.Equal(t, originalVersion, restored.PersistenceVersion)
+			restored.DisplayName = "Reviewed rename"
+			require.NoError(t, p.SaveOrganization(restored))
+		})
+	}
+}
+
+func TestOrganizationSnapshotRegularFileLinkCompatibility(t *testing.T) {
+	p := NewConfigPersistence(t.TempDir())
+	org := &models.Organization{ID: "default", DisplayName: "Original"}
+	require.NoError(t, p.SaveOrganization(org))
+	target := filepath.Join(p.configDir, "linked-org.json")
+	require.NoError(t, os.Rename(p.orgFile, target))
+	raw, err := os.ReadFile(target)
+	require.NoError(t, err)
+	if err := os.Symlink(target, p.orgFile); err != nil {
+		t.Skipf("fixture needs file symlinks: %v", err)
+	}
+
+	loaded, err := p.LoadOrganization()
+	require.NoError(t, err)
+	require.Equal(t, org, loaded)
+	loaded.DisplayName = "Reviewed rename"
+	require.NoError(t, p.SaveOrganization(loaded))
+	fresh, err := p.LoadOrganization()
+	require.NoError(t, err)
+	require.Equal(t, loaded, fresh)
+	stillTarget, err := os.ReadFile(target)
+	require.NoError(t, err)
+	require.Equal(t, raw, stillTarget, "atomic save must not alter the link destination")
+}
+
 func TestOrganizationSnapshotAtomicFailureRetainsSourceAndVersion(t *testing.T) {
 	for _, fault := range []string{"create", "chmod", "write", "short write", "close", "rename"} {
 		t.Run(fault, func(t *testing.T) {

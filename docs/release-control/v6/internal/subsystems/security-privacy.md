@@ -5510,6 +5510,16 @@ honours inheritance and deny precedence, or a proxy user admitted with the
 admin role, bound to that username) and explicit members of its strictly
 loaded `org.json`. Live WebSocket, SSE and agent-event reads re-check the
 policy every 10 seconds. API-token bindings are unchanged.
+
+Organization metadata reads and pre-save snapshot comparisons reject a
+persisted non-regular `org.json` target before reading, so an invalid restore
+such as a named pipe does not park the organization lock. An unread target
+is neither a fresh organization nor permission to replace the stored
+authority. Regular files (including resolved regular-file links), genuine
+absence, saved-version comparison and atomic publication keep their existing
+behavior. The organization snapshot tests cover refusal before read, file
+and version preservation, restoration, and regular-file link compatibility.
+
 Websocket `actionReadinessCatalog` entries omit a refusal's `detail`, which can name a
 host's enrollment token ID, agent ID and hostname, so that text stays on the REST and
 error surfaces that already carried it. The catalog is per-tenant state like the rows
