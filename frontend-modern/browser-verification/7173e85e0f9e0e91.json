@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "base_sha": "ec0f26f8153acddb3fb8c68189ad0f4ae19bcbe9",
+  "verified_at": "2026-11-19T09:07:15.568668Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/AuditWebhookPanel.tsx",
+    "frontend-modern/src/components/Settings/useAuditWebhookPanelState.ts",
+    "frontend-modern/src/utils/auditWebhookPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/AuditWebhookPanel.tsx": "418b782e35313322e3dd4a216df4c916ebb1b0f4f1f7952376ac37cbc7e05de8",
+    "frontend-modern/src/components/Settings/useAuditWebhookPanelState.ts": "98f7eb517ae8e8012f4fc53ac32dacf1939fc5474c8206a35f65ac5ccc554158",
+    "frontend-modern/src/utils/auditWebhookPresentation.ts": "c4620b46325cb733182fbd6317f84027c00dc1e19e03f813b529764678aa6c67"
+  },
+  "routes": [
+    "/settings/security-webhooks"
+  ],
+  "viewports": [
+    {
+      "width": 1536,
+      "height": 960
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Production App and Settings with the real client/state consuming a local synthetic audit-webhook server; not installed recipient delivery.",
+    "Playwright 1.56.1: Chromium 141.0.7390.37 desktop light and WebKit 26.0 phone dark. Native inspection of 32 captures: 10 comparable pairs and 12 new recovery-state frames.",
+    "Equal pre-submit forms and removal dialog; applied Add and Remove with a lost confirmation; closed confirmation; pending, malformed and valid current saved read."
+  ],
+  "interactions": [
+    "Eight App journeys, 95 passing browser assertions. Focused desktop Enter/Tab and phone tap keep the named target and draft, pause both writes and offer an explicit same-scope GET, not a replay.",
+    "Only the valid read shows the new current list and admits new writes; the malformed response keeps the last-read warning, draft, disabled writes and deliberately relocated focus.",
+    "At the same phone anchor the recovery action shares the existing action row; both prior URLs, input, notification signpost and security guidance remain visible in the immediate reply and dismissed states."
+  ]
+}

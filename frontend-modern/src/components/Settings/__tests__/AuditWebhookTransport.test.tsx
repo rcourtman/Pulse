@@ -27,6 +27,8 @@ const addedURL = 'https://audit.example.test/events?receiver=third';
 const otherURL = 'https://other.example.test/events';
 const readError = 'Audit webhook configuration could not be loaded.';
 const saveError = 'Failed to save webhook configuration';
+const ambiguous = 'Webhook change not confirmed.';
+const checkSaved = () => screen.getByRole('button', { name: 'Check saved destinations' });
 const empty = 'No audit webhooks configured yet.';
 const success = 'Audit webhooks updated';
 const requests: { url: string; init: RequestInit }[] = [];
@@ -441,6 +443,143 @@ describe('Audit Webhook rendered controls through the real HTTP client', () => {
       expect(screen.queryByText(success)).not.toBeInTheDocument();
     },
   );
+
+  it('holds a full-list save after a lost reply until a valid saved read, preserving a newer draft', async () => {
+    primeCSRF();
+    const save = deferred<Response>();
+    writeReply = (init) => {
+      acceptWrite(init);
+      return save.promise;
+    };
+    mount();
+    await loaded();
+    add();
+    await waitFor(() => expect(writes()).toHaveLength(1));
+    add(otherURL);
+    save.resolve(json({ error: 'synthetic private error' }, 502));
+    const warning = await screen.findByRole('alert');
+    expect(warning).toHaveTextContent(ambiguous);
+    expect(warning).not.toHaveTextContent('synthetic private error');
+    expect(screen.queryByText(success)).not.toBeInTheDocument();
+    expect(screen.queryByTitle(addedURL)).not.toBeInTheDocument();
+    expect(screen.getByTitle(selectedURL)).toBeInTheDocument();
+    expect(input()).toHaveValue(otherURL);
+
+    await loadRuntimeCapabilities(true);
+    expect(reads()).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Add Endpoint' })).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: `Remove webhook endpoint ${firstURL}` }),
+    ).toBeDisabled();
+    fireEvent.keyDown(input(), { key: 'Enter' });
+    expect(writes()).toHaveLength(1);
+
+    const check = deferred<Response>();
+    readReply = () => check.promise;
+    fireEvent.click(checkSaved());
+    await screen.findByText('Checking saved destinations…');
+    expect(screen.getByRole('region', { name: 'Audit webhook configuration' })).toHaveFocus();
+    expect(screen.getByRole('button', { name: 'Add Endpoint' })).toBeDisabled();
+    input().focus();
+    check.resolve(json({ urls: [firstURL, null] }));
+    await screen.findByText(/Check failed/);
+    expect(input()).toHaveFocus();
+    expect(screen.getByTitle(selectedURL)).toBeInTheDocument();
+    expect(screen.queryByText(empty)).not.toBeInTheDocument();
+    fireEvent.keyDown(input(), { key: 'Enter' });
+    expect(writes()).toHaveLength(1);
+
+    readReply = () => json({ urls: inventory });
+    fireEvent.click(checkSaved());
+    await loaded([firstURL, selectedURL, addedURL]);
+    expect(input()).toHaveValue(otherURL);
+    expect(screen.queryByText(ambiguous)).not.toBeInTheDocument();
+    expect(screen.queryByText(success)).not.toBeInTheDocument();
+    expect(reads()).toHaveLength(3);
+    for (const request of reads()) expectWire(request, 'GET');
+
+    writeReply = acceptWrite;
+    fireEvent.keyDown(input(), { key: 'Enter' });
+    await screen.findByTitle(otherURL);
+    expect(writes()).toHaveLength(2);
+    expectWire(writes()[1], 'POST');
+    expect(JSON.parse(String(writes()[1].init.body))).toEqual({
+      urls: [firstURL, selectedURL, addedURL, otherURL],
+    });
+    expectAuthRetained();
+  });
+
+  it.each(['check', 'cancel'])(
+    'keeps the exact removal target and supports %s after an ambiguous removal without replay',
+    async (action) => {
+      primeCSRF();
+      inventory = [selectedURL];
+      writeReply = (init) => {
+        acceptWrite(init);
+        throw new TypeError('Synthetic response lost');
+      };
+      mount();
+      await loaded([selectedURL]);
+      fireEvent.input(input(), { target: { value: addedURL } });
+      const dialog = openRemove();
+      const remove = within(dialog).getByRole('button', { name: 'Remove webhook' });
+      remove.focus();
+      confirmRemove();
+      expect(await within(dialog).findByRole('alert')).toHaveTextContent(ambiguous);
+      expect(within(dialog).getByText(selectedURL, { exact: true })).toBeInTheDocument();
+      expect(remove).toHaveFocus();
+      expect(remove).toHaveAttribute('aria-disabled', 'true');
+      confirmRemove();
+      expect(writes()).toHaveLength(1);
+      expect(reads()).toHaveLength(1);
+      expect(screen.queryByText(empty)).not.toBeInTheDocument();
+
+      if (action === 'cancel') {
+        fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+        expect(reads()).toHaveLength(1);
+        expect(screen.getByRole('region', { name: 'Audit webhook configuration' })).toHaveFocus();
+        expect(screen.getByRole('button', { name: 'Add Endpoint' })).toBeDisabled();
+      }
+      fireEvent.click(checkSaved());
+      await screen.findByText(empty);
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(screen.getByRole('region', { name: 'Audit webhook configuration' })).toHaveFocus();
+      expect(screen.queryByTitle(selectedURL)).not.toBeInTheDocument();
+      expect(screen.queryByText(success)).not.toBeInTheDocument();
+      expect(input()).toHaveValue(addedURL);
+      expect(reads()).toHaveLength(2);
+      expectWire(reads()[1], 'GET');
+      expect(writes()).toHaveLength(1);
+      expectAuthRetained();
+    },
+  );
+
+  it('does not publish a late saved check from an old organization over the new reader', async () => {
+    primeCSRF();
+    writeReply = () => json({}, 503);
+    mount();
+    await loaded();
+    add();
+    await screen.findByText(ambiguous);
+    const oldCheck = deferred<Response>();
+    readReply = () => oldCheck.promise;
+    fireEvent.click(checkSaved());
+    await waitFor(() => expect(reads()).toHaveLength(2));
+    readReply = () => json({ urls: [otherURL] });
+    setOrgID('estate/west');
+    eventBus.emit('org_switched', 'estate/west');
+    await loaded([otherURL]);
+    expect(reads()[1].init.signal?.aborted).toBe(true);
+    expectWire(reads()[2], 'GET', 'estate/west');
+    oldCheck.resolve(json({ urls: [addedURL] }));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    await waitFor(() => expect(screen.queryByTitle(addedURL)).not.toBeInTheDocument());
+    expect(screen.getByTitle(otherURL)).toBeInTheDocument();
+    expect(screen.queryByText(ambiguous)).not.toBeInTheDocument();
+    expect(input()).toHaveValue('');
+    expect(writes()).toHaveLength(1);
+  });
 
   it.each([
     'organization',

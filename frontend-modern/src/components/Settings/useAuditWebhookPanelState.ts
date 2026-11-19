@@ -27,6 +27,7 @@ export const useAuditWebhookPanelState = (props: AuditWebhookPanelProps) => {
   const [actionError, setActionError] = createSignal<string | null>(null);
   const [successNotice, setSuccessNotice] = createSignal<string | null>(null);
   const [hasLoadedConfiguration, setHasLoadedConfiguration] = createSignal(false);
+  const [unconfirmedChange, setUnconfirmedChange] = createSignal(false);
   const [pendingRemoval, setPendingRemoval] = createSignal<string | null>(null);
   const currentOrg = () => getOrgID() || 'default';
   const canRead = () => props.canRead !== false;
@@ -73,6 +74,7 @@ export const useAuditWebhookPanelState = (props: AuditWebhookPanelProps) => {
     hasLoadedConfiguration() &&
     !loading() &&
     !loadError() &&
+    !unconfirmedChange() &&
     !saving();
 
   const resetContext = () => {
@@ -84,6 +86,7 @@ export const useAuditWebhookPanelState = (props: AuditWebhookPanelProps) => {
       setContext(snapshot());
       setWebhookUrls([]);
       setHasLoadedConfiguration(false);
+      setUnconfirmedChange(false);
       setNewUrl('');
       setPendingRemoval(null);
       setActionError(null);
@@ -139,6 +142,7 @@ export const useAuditWebhookPanelState = (props: AuditWebhookPanelProps) => {
       batch(() => {
         setWebhookUrls(data.urls ?? []);
         setHasLoadedConfiguration(true);
+        setUnconfirmedChange(false);
       });
     } catch {
       if (isCurrent()) setLoadError(true);
@@ -178,8 +182,18 @@ export const useAuditWebhookPanelState = (props: AuditWebhookPanelProps) => {
         setSuccessNotice(getAuditWebhookSaveSuccessMessage());
       });
       return true;
-    } catch {
-      if (isCurrent()) setActionError(getAuditWebhookSaveErrorMessage());
+    } catch (error) {
+      if (!isCurrent()) return false;
+      const status = (error as { status?: number } | null)?.status;
+      // The handler validates the whole list before saving. A known admission
+      // or validation refusal is different from losing the save's result.
+      if (status === 400 || status === 401 || status === 403 || status === 429) {
+        setActionError(getAuditWebhookSaveErrorMessage());
+      } else {
+        // Add and Remove both replace the whole list. Do not offer another
+        // write based on the old list until the current reader checks it.
+        setUnconfirmedChange(true);
+      }
       return false;
     } finally {
       if (isCurrent()) {
@@ -256,8 +270,8 @@ export const useAuditWebhookPanelState = (props: AuditWebhookPanelProps) => {
   );
   const unsubscribeOrg = eventBus.on('org_switched', () => {
     if (!contextIsCurrent()) resetContext();
-    // A same-reader refresh retains accepted destinations/draft on failure.
-    void fetchWebhooks();
+    // An incidental refresh doesn't stand in for an explicit saved check.
+    if (!unconfirmedChange()) void fetchWebhooks();
   });
   onCleanup(() => {
     disposed = true;
@@ -277,6 +291,7 @@ export const useAuditWebhookPanelState = (props: AuditWebhookPanelProps) => {
     isAuditLoggingEnabled,
     loading,
     loadError,
+    unconfirmedChange: () => contextIsCurrent() && unconfirmedChange(),
     hasLoadedConfiguration,
     newUrl,
     openRemoveWebhook,
