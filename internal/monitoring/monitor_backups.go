@@ -2895,7 +2895,7 @@ func (m *Monitor) pollBackupTasks(ctx context.Context, instanceName string, clie
 		return
 	}
 	m.qualifyBackupGuestTaskDetails(instanceName, jobTasks, jobUPIDs, points)
-	m.persistBackupTaskHistory(ctx, points, collection)
+	m.persistAcceptedBackupTaskHistory(ctx, points, collection)
 }
 
 // vzdumpJobTaskCacheEntry caches the per-guest results and accepted prefix
