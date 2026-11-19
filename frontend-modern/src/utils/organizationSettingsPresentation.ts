@@ -44,7 +44,13 @@ export const ORGANIZATION_SHARING_MANUAL_ENTRY_HIDDEN_MESSAGE =
 
 type ShareResourceKey = Pick<OrganizationShare, 'resourceType' | 'resourceId'>;
 
-export function getOrganizationSharingPartialReadMessage(canManage: boolean): string {
+export function getOrganizationSharingPartialReadMessage(
+  canManage: boolean,
+  outgoingUnavailable?: boolean,
+): string {
+  if (outgoingUnavailable) {
+    return 'Sharing changes are paused. Reload checks saved shares without repeating a change.';
+  }
   return canManage
     ? 'Sharing changes are paused until the missing information loads.'
     : 'Some sharing information could not be loaded.';
@@ -228,8 +234,8 @@ export function getOrganizationRemoveMemberErrorMessage(message?: string): strin
   return message || 'Unable to remove the member.';
 }
 
-export function getOrganizationOutgoingSharesEmptyState(): string {
-  return 'No outgoing shares configured.';
+export function getOrganizationOutgoingSharesEmptyState(unavailable?: boolean): string {
+  return unavailable ? 'Outgoing shares could not be loaded.' : 'No outgoing shares configured.';
 }
 
 export function getOrganizationIncomingSharesEmptyState(unavailable?: boolean): string {

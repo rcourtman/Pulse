@@ -201,7 +201,10 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
                     </Show>
                     <Show when={state.sharingChangesPaused()}>
                       <p role="status">
-                        {getOrganizationSharingPartialReadMessage(state.canManageCurrentOrg())}
+                        {getOrganizationSharingPartialReadMessage(
+                          state.canManageCurrentOrg(),
+                          state.unavailableLists()?.outgoing,
+                        )}
                       </p>
                     </Show>
                   </div>
@@ -217,7 +220,9 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
                       </Show>
                     }
                   >
-                    <OrganizationSharingCreateSection state={state} />
+                    <Show when={!state.unavailableLists()?.outgoing}>
+                      <OrganizationSharingCreateSection state={state} />
+                    </Show>
                   </Show>
                   <OrganizationOutgoingSharesSection state={state} />
                   <OrganizationIncomingSharesSection state={state} />

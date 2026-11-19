@@ -138,6 +138,7 @@ const sharingReads = () =>
   );
 let outgoing: OrganizationShare[];
 let incoming: IncomingOrganizationShare[];
+let outgoingUnavailable: boolean;
 let directory: { id: string; displayName: string }[];
 let completion: ReturnType<typeof deferred<Response>>;
 let memberIsViewer: boolean;
@@ -291,6 +292,7 @@ beforeEach(async () => {
   document.cookie = `pulse_csrf=${csrfToken}; Path=/`;
   outgoing = outgoingRows();
   incoming = incomingRows();
+  outgoingUnavailable = false;
   directory = ['first', 'second', 'third'].map((id) => ({
     id: `peer/${id}`,
     displayName: 'Namesake organization',
@@ -332,7 +334,11 @@ beforeEach(async () => {
       return json([{ id: orgID, displayName: 'East operations' }, ...directory]);
     if (url === `${base}/members`)
       return json([{ userId: owner, role: memberIsViewer ? 'viewer' : 'owner', addedAt: '' }]);
-    if (url === `${base}/shares`) return json(outgoing);
+    if (url === `${base}/shares`) {
+      return outgoingUnavailable
+        ? json({ code: 'org_load_failed', error: 'Synthetic upstream detail' }, 500)
+        : json(outgoing);
+    }
     if (url === `${base}/shares/incoming`) return json(incoming);
     throw new Error(`Unexpected synthetic request: ${options.method ?? 'GET'} ${url}`);
   });
@@ -356,6 +362,56 @@ afterEach(async () => {
 });
 
 describe('rendered namesake sharing rows through the real transport', () => {
+  it('shows fresh incoming decisions and pauses changes when the outgoing read fails', async () => {
+    await renderPanel('accept incoming');
+    const pending = incoming[1];
+    const accepted = {
+      ...incoming[2],
+      status: 'accepted' as const,
+      acceptedAt: '2026-11-07T10:00:00Z',
+      acceptedBy: owner,
+    };
+    incoming = [pending, accepted];
+    outgoingUnavailable = true;
+    eventBus.emit('organizations_changed');
+    const reloadSharing = await screen.findByRole('button', { name: 'Reload sharing' });
+
+    expect(
+      screen.getByText('East operations', { selector: '[data-sharing-organization]' }),
+    ).toBeVisible();
+    expect(screen.getByText('Outgoing shares could not be loaded.')).toBeVisible();
+    expect(screen.queryByText('No outgoing shares configured.')).not.toBeInTheDocument();
+    expect(screen.queryByText('Synthetic upstream detail')).not.toBeInTheDocument();
+    for (const share of [...outgoing, incomingRows()[0]]) {
+      expect(screen.queryByText(`vm:${share.resourceId}`)).not.toBeInTheDocument();
+    }
+    expect(rowFor(pending)).toHaveTextContent('Pending approval');
+    expect(rowFor(pending)).toHaveTextContent(pending.sourceOrgId);
+    expect(rowFor(accepted)).toHaveTextContent('Accepted');
+    expect(screen.queryByRole('form', { name: 'Create Share' })).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Reload checks saved shares without repeating a change.',
+    );
+    expect(rowAction('accept incoming', pending)).toBeDisabled();
+    expect(rowAction('decline incoming', pending)).toBeDisabled();
+    expect(rowAction('remove accepted incoming', accepted)).toBeDisabled();
+    expect(writes()).toHaveLength(0);
+    expect(reads('/api/health')).toHaveLength(0);
+    expect(sharingReads()).toHaveLength(10);
+
+    outgoingUnavailable = false;
+    fireEvent.click(reloadSharing);
+    await screen.findByText(`vm:${outgoing[0].resourceId}`);
+    expect(screen.queryByText('Outgoing shares could not be loaded.')).not.toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'Target Organization' })).toBeEnabled();
+    expect(rowAction('accept incoming', pending)).toBeEnabled();
+    expect(rowAction('remove accepted incoming', accepted)).toBeEnabled();
+    expect(sharingReads()).toHaveLength(15);
+    expect(writes()).toHaveLength(0);
+    expect(reads('/api/health')).toHaveLength(0);
+    expectBoundRequests();
+  });
+
   it('keeps organization-specific action names with namesake rows after a renamed, reordered read', async () => {
     await renderPanel('accept incoming');
     const expectIdentities = () => {

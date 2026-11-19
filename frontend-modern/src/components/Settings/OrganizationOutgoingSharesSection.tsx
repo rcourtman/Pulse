@@ -135,7 +135,9 @@ export const OrganizationOutgoingSharesSection: Component<
           },
         ]}
         keyExtractor={(share) => share.id}
-        emptyState={getOrganizationOutgoingSharesEmptyState()}
+        emptyState={getOrganizationOutgoingSharesEmptyState(
+          props.state.unavailableLists()?.outgoing,
+        )}
         desktopMinWidth="100%"
       />
     </div>
