@@ -1241,6 +1241,26 @@ Paired directory/role reads are aborted when their combined read settles so a
 failed sibling does not leave an unowned pending request. The registered
 reader-lifetime/paywall tests and actual App browser witness cover this bound.
 
+While User Access is reading, an admitted reader can use **Restart loading**
+without leaving the panel. It aborts both parts of the old inventory read and
+starts one replacement pair in the same authenticated organization. Ordinary
+overlapping reads still coalesce. A late result from a replaced request cannot
+finish loading, publish rows or clear the warning for an unconfirmed write.
+Only a complete valid current pair shows inventory or enables changes; no
+role edit or removal is replayed. The existing inventory shape checks live
+in the shared RBAC presentation module; a saved role ID need not be present
+in the catalogue for the assignment to be readable. The control is not
+available before the RBAC gate admits the reader. An explicit restart focuses
+the stable User Access region before the control disappears, without moving
+focus on response.
+
+`UserAccessInventoryRestart.transport.test.tsx` covers a stalled role read,
+replacement/withdrawal, failed read and an unconfirmed write.
+`RBACPaywallPanels.test.tsx` verifies capability withdrawal removes the
+restart and aborts the pending pair. Desktop and phone browser proof
+exercises the actual User Access route, scoped API reads and the existing
+recovery and edit controls with synthetic data.
+
 ### Unconfirmed user changes require a saved-access check
 
 A lost response, server failure or unreadable success after updating a user's
