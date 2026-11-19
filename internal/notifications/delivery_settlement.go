@@ -539,6 +539,15 @@ func (q *NotificationQueue) deferSettlement(row *QueuedNotification, claimed boo
 }
 
 func (q *NotificationQueue) deferWithReason(row *QueuedNotification, claimed bool, message string, previousAttempt ...*time.Time) error {
+	return q.deferWithReasonUntil(row, claimed, message, time.Now().Add(30*time.Second), previousAttempt...)
+}
+
+func (q *NotificationQueue) deferTelegramRateHold(row *QueuedNotification, reset time.Time, previousAttempt *time.Time) error {
+	// SQLite timestamps use seconds; the limiter does not reset at equality.
+	return q.deferWithReasonUntil(row, true, telegramRateHoldMessage, reset.Truncate(time.Second).Add(time.Second), previousAttempt)
+}
+
+func (q *NotificationQueue) deferWithReasonUntil(row *QueuedNotification, claimed bool, message string, retryAt time.Time, previousAttempt ...*time.Time) error {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	state := operationaltrust.NotificationQueued
@@ -572,7 +581,7 @@ func (q *NotificationQueue) deferWithReason(row *QueuedNotification, claimed boo
 	if err != nil {
 		return err
 	}
-	_, err = q.db.Exec(`UPDATE notification_queue SET status='pending',attempts=MAX(0,attempts-?),last_attempt=CASE WHEN ? THEN ? ELSE last_attempt END,last_error=?,next_retry_at=?,completed_at=NULL,operational_links=? WHERE id=? AND (status IN ('pending','sending') OR (? AND status IN ('cancelled','failed','dlq')))`, decrement, decrement, previousSeconds, message, time.Now().Add(30*time.Second).Unix(), string(encoded), row.ID, row.ProviderAcceptedAt != nil)
+	_, err = q.db.Exec(`UPDATE notification_queue SET status='pending',attempts=MAX(0,attempts-?),last_attempt=CASE WHEN ? THEN ? ELSE last_attempt END,last_error=?,next_retry_at=?,completed_at=NULL,operational_links=?,method=CASE WHEN ? AND method LIKE 'resolved-group%' THEN 'telegram-sized' ELSE method END WHERE id=? AND (status IN ('pending','sending') OR (? AND status IN ('cancelled','failed','dlq')))`, decrement, decrement, previousSeconds, message, retryAt.Unix(), string(encoded), message == telegramRateHoldMessage, row.ID, row.ProviderAcceptedAt != nil)
 	if err != nil {
 		return fmt.Errorf("defer notification settlement: %w", err)
 	}

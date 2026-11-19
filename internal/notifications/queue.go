@@ -1129,6 +1129,12 @@ func (nq *NotificationQueue) claimPendingForDelivery(notif *QueuedNotification) 
 		return false, err
 	}
 	notif.ProviderAcceptedAt = ack
+	if ack == nil {
+		ready, err := nq.prepareTelegramBatchLocked(notif, now)
+		if err != nil || !ready {
+			return false, err
+		}
+	}
 	var links []operationaltrust.NotificationLink
 	if ack != nil {
 		links, _, err = nq.acceptedLinksLocked(notif.ID)
@@ -2067,6 +2073,16 @@ func (nq *NotificationQueue) processNotification(notif *QueuedNotification) {
 	}
 
 	err = processor(notif)
+	var telegramWait *telegramRateHold
+	if errors.As(err, &telegramWait) {
+		// No HTTP attempt was made. Keep the row and its remaining attempt
+		// budget until the local sender can admit another request.
+		if deferErr := nq.deferTelegramRateHold(notif, telegramWait.retryAt, previousAttempt); deferErr != nil {
+			log.Error().Err(deferErr).Str("id", notif.ID).Msg("Failed to retain Telegram rate hold")
+		}
+		healthChanged = true
+		return
+	}
 	if errors.Is(err, errNotificationSettlementPending) {
 		if settleErr := nq.deferSettlement(notif, true, previousAttempt); settleErr != nil {
 			log.Error().Err(settleErr).Str("id", notif.ID).Msg("Failed to retain pending notification settlement")
