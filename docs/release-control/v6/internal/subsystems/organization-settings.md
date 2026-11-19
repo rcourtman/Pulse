@@ -71,7 +71,8 @@ release availability.
 ### Pending User Access controls reflect the submitted draft
 
 While the existing role update is pending, each role checkbox, Close, Cancel
-and Retry saved permissions is natively disabled, as Save Changes already is.
+and the saved-permissions Retry and Restart controls are natively disabled, as
+Save Changes already is.
 The visible selections must remain the exact submitted draft: a native checkbox
 click cannot show an unsent change while the state owner refuses edits. Role
 names, exact IDs, descriptions, saved permissions and retained unlisted IDs stay
@@ -766,13 +767,20 @@ and loss of the existing RBAC capability invalidate the pending read too.
 Pending or failed reads never retain another user's permission badges or
 claim that the selected user has no access. A persistent, fixed-text failure
 notice offers an explicit read-only retry that preserves unsaved role selections
-and permits at most one current read. It never retries a role update or removal.
+and permits at most one current read. A stalled read can be restarted for the
+same open principal and organization: the replacement retires and aborts its
+predecessor, and a late success or failure cannot change the replacement's
+result or loading state. Restart stays outside the busy result region; both
+controls move focus to that region on activation without moving it again on
+completion. Neither reloads the role choices or retries a role update or removal.
 
 The saved-permissions section is not a simulation of unsaved role choices.
 Only an accepted empty response describes empty saved permissions; it does not
 predict access after save. Normal-suite `RBACPaywallPanels.test.tsx` covers
 cross-user and same-user reopen races, loading and failure, explicit retry,
 draft preservation, accepted empty results and unchanged exact-principal writes.
+`UserAccessPermissionRecovery.transport.test.tsx` covers the stalled read and
+its restart, including late results, organization withdrawal and save interlocks.
 Desktop and narrow browser proof exercises the real User Access route and API
 client with safe HTTP fixtures. Backend authorization and the existing RBAC
 gate remain the authority; a successful read grants no write capability.
@@ -858,6 +866,11 @@ create, review, and approve cross-organization shares.
 ## Shared Boundaries
 
 Organisation overview, access and sharing use the authenticated currentUsername for owner/member comparisons, including local sessions scoped to a non-default organisation. They must not infer the current principal from the privileged configured-administrator field when currentUsername is present. Existing owner/admin membership checks and server-side enforcement remain authoritative.
+
+The User Access editor owns the selected principal's saved-permissions read
+independently of the role draft and the directory. An explicit restart replaces
+only that read within the current organization and editor. Its response is
+descriptive, not admission for a role update.
 
 1. `frontend-modern/src/api/orgs.ts` shared with `api-contracts`: the organization frontend client is both an organization settings control surface and a canonical API payload contract boundary.
 2. `frontend-modern/src/api/rbac.ts` shared with `api-contracts`: the RBAC frontend client is both an organization settings control surface and a canonical API payload contract boundary.
