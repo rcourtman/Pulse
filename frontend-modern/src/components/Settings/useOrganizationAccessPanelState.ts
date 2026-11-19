@@ -9,6 +9,7 @@ import {
   type OrganizationRole,
   type UserOrganizationInvitation,
 } from '@/api/orgs';
+import { apiErrorStatus } from '@/api/responseUtils';
 import { eventBus } from '@/stores/events';
 import { isMultiTenantEnabled } from '@/stores/license';
 import { notificationStore } from '@/stores/notifications';
@@ -54,6 +55,8 @@ interface OrganizationAccessPanelProps {
   currentUser?: string;
 }
 
+type InvitationList = 'pending' | 'personal';
+
 // Instance administrators manage the default organization's members without
 // belonging to it, so the server reports that capability directly.
 const canManageMembers = (org: Organization | null, currentUser?: string): boolean =>
@@ -62,6 +65,9 @@ const canManageMembers = (org: Organization | null, currentUser?: string): boole
 export function useOrganizationAccessPanelState(props: OrganizationAccessPanelProps) {
   const [loading, setLoading] = createSignal(true);
   const [loadError, setLoadError] = createSignal<string | null>(null);
+  const [invitationReadIssue, setInvitationReadIssue] = createSignal<
+    InvitationList | 'both' | null
+  >(null);
   const [saving, setSaving] = createSignal(false);
   const [org, setOrg] = createSignal<Organization | null>(null);
   const [members, setMembers] = createSignal<OrganizationMember[]>([]);
@@ -101,6 +107,7 @@ export function useOrganizationAccessPanelState(props: OrganizationAccessPanelPr
     hasCurrentAccess() &&
     !!props.currentUser &&
     !presentationPolicyIsReadOnly() &&
+    !invitationReadIssue() &&
     !saving() &&
     !ownershipTransfer();
 
@@ -113,6 +120,7 @@ export function useOrganizationAccessPanelState(props: OrganizationAccessPanelPr
     setMembers([]);
     setPendingInvitations([]);
     setMyInvitations([]);
+    setInvitationReadIssue(null);
   };
 
   const invalidateRequests = () => {
@@ -156,6 +164,25 @@ export function useOrganizationAccessPanelState(props: OrganizationAccessPanelPr
       signal: controller.signal,
       retry: false,
     };
+    const readInvitations = async <T>(list: InvitationList, promise: Promise<T[]>) => {
+      let rows: T[];
+      try {
+        rows = await promise;
+      } catch (error) {
+        const status = apiErrorStatus(error);
+        // Only explicit temporary read failures can preserve already verified
+        // access. A denial, unsupported route or malformed response stays a
+        // whole-panel failure, and no partial view can authorize a write.
+        if (status === null || ![429, 500, 502, 503, 504].includes(status)) throw error;
+        // Offer a read-only retry even if another read has not settled yet.
+        if (isCurrent() && !controller.signal.aborted) {
+          setInvitationReadIssue((previous) => (previous ? 'both' : list));
+        }
+        return null;
+      }
+      if (!Array.isArray(rows)) throw new Error('Organization access returned invalid lists');
+      return rows;
+    };
     try {
       const orgData = await OrgsAPI.get(orgId, options);
       if (!isCurrent()) return;
@@ -165,28 +192,29 @@ export function useOrganizationAccessPanelState(props: OrganizationAccessPanelPr
       const manageable = canManageMembers(orgData, user);
       const [memberData, invitationData, myInvitationData] = await Promise.all([
         OrgsAPI.listMembers(orgId, options),
-        manageable ? OrgsAPI.listPendingInvitations(orgId, options) : Promise.resolve([]),
-        OrgsAPI.listMyInvitations(options),
+        manageable
+          ? readInvitations('pending', OrgsAPI.listPendingInvitations(orgId, options))
+          : [],
+        readInvitations('personal', OrgsAPI.listMyInvitations(options)),
       ]);
       if (!isCurrent()) return;
-      if (
-        !Array.isArray(memberData) ||
-        !Array.isArray(invitationData) ||
-        !Array.isArray(myInvitationData)
-      ) {
+      if (!Array.isArray(memberData)) {
         throw new Error('Organization access returned invalid lists');
       }
       batch(() => {
         setOrg(orgData);
         setMembers(memberData);
-        setPendingInvitations(invitationData);
-        setMyInvitations(myInvitationData);
+        setPendingInvitations(invitationData ?? []);
+        setMyInvitations(myInvitationData ?? []);
       });
     } catch (error) {
       if (!isCurrent()) return;
       logger.error('Failed to load organization access data', error);
       const message = error instanceof Error ? error.message : '';
-      setLoadError(getOrganizationSettingsLoadErrorMessage(message, 'access'));
+      batch(() => {
+        setInvitationReadIssue(null);
+        setLoadError(getOrganizationSettingsLoadErrorMessage(message, 'access'));
+      });
     } finally {
       if (!disposed && request === generation) {
         // Also cancel sibling reads when only one Promise.all member failed.
@@ -459,6 +487,7 @@ export function useOrganizationAccessPanelState(props: OrganizationAccessPanelPr
     inviteMember,
     inviteRole,
     inviteUserID,
+    invitationReadIssue,
     loading,
     loadError,
     loadOrganizationAccess,

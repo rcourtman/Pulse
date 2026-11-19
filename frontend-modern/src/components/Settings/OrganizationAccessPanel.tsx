@@ -22,10 +22,25 @@ export interface OrganizationAccessPanelProps {
   currentUser?: string;
 }
 
+const unreadInvitationLists = {
+  pending: 'Pending Invitations',
+  personal: 'Your Invitations',
+  both: 'Pending Invitations and Your Invitations',
+};
+
 export const OrganizationAccessPanel: Component<OrganizationAccessPanelProps> = (props) => {
   const state = useOrganizationAccessPanelState(props);
   const showOrganizationSurface = () =>
     isMultiTenantEnabled() && !presentationPolicyHidesOrganizationSurfaces();
+  const warningMessage = () => {
+    const issue = state.invitationReadIssue();
+    return (
+      state.loadError() ??
+      (issue
+        ? `${unreadInvitationLists[issue]} couldn’t be loaded. Access changes stay paused until the lists load.`
+        : null)
+    );
+  };
   const warningTitleID = createUniqueId();
   let panel: HTMLDivElement | undefined;
   let warning: HTMLDivElement | undefined;
@@ -64,27 +79,27 @@ export const OrganizationAccessPanel: Component<OrganizationAccessPanelProps> = 
     }
     focusContext = context;
     const loading = state.loading();
-    const error = state.loadError();
+    const error = warningMessage();
     const org = state.org();
     if (!enabled || reloadIntent?.orgID !== orgID || reloadIntent.user !== user) {
       reloadIntent = undefined;
     }
-    if (!enabled || loading) return;
-    const explicitReload = !!reloadIntent;
-    reloadIntent = undefined;
+    if (!enabled || (loading && !error)) return;
     if (!error && !org) return;
 
     focusTimer = window.setTimeout(() => {
       if (
         !panel?.isConnected ||
         !showOrganizationSurface() ||
-        state.loading() ||
+        state.loading() !== loading ||
         state.selectedOrgID() !== orgID ||
         props.currentUser !== user ||
-        state.loadError() !== error ||
+        warningMessage() !== error ||
         state.org() !== org
       )
         return;
+      const explicitReload = !!reloadIntent;
+      reloadIntent = undefined;
       // Disabling a pending control can blur it before its failed response.
       // Only recover lost panel focus, never a deliberate move elsewhere.
       const lostPanelFocus =
@@ -151,8 +166,8 @@ export const OrganizationAccessPanel: Component<OrganizationAccessPanelProps> = 
         }}
       >
         <SettingsPanel title="Organization Access" bodyClass="space-y-5">
-          <Show when={!state.loading()} fallback={<OrganizationAccessLoadingState />}>
-            <Show when={state.loadError()}>
+          <Show when={warningMessage()}>
+            {(message) => (
               <Card tone="warning" padding="md">
                 <div
                   ref={warning}
@@ -162,20 +177,20 @@ export const OrganizationAccessPanel: Component<OrganizationAccessPanelProps> = 
                   class="space-y-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                 >
                   <p id={warningTitleID} class="font-semibold">
-                    {ORGANIZATION_ACCESS_UNAVAILABLE_TITLE}
+                    {state.loadError()
+                      ? ORGANIZATION_ACCESS_UNAVAILABLE_TITLE
+                      : 'Organization invitations incomplete'}
                   </p>
-                  <p>{state.loadError()}</p>
+                  <p>{message()}</p>
                   <p>{getOrganizationAccessReloadMessage(state.selectedOrgID())}</p>
-                  <Button
-                    onClick={reloadAccess}
-                    disabled={state.loading() || state.saving()}
-                    class="w-full sm:w-auto"
-                  >
+                  <Button onClick={reloadAccess} disabled={state.saving()} class="w-full sm:w-auto">
                     {ORGANIZATION_ACCESS_RELOAD_LABEL}
                   </Button>
                 </div>
               </Card>
-            </Show>
+            )}
+          </Show>
+          <Show when={!state.loading()} fallback={<OrganizationAccessLoadingState />}>
             <Show when={!state.loadError() && state.org()}>
               {(currentOrg) => (
                 <>

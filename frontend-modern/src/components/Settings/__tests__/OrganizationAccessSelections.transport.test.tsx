@@ -88,6 +88,8 @@ let ownershipReplyUserID: string | undefined;
 let unexpected: string[];
 let capabilityReply: () => Promise<Response>;
 let healthReply: () => Promise<Response>;
+let pendingReadStatus: number;
+let personalReadStatus: number;
 let writeReply: (response: Response) => Promise<Response>;
 let releases: (() => void)[];
 let capabilityLoads: Promise<void>[];
@@ -258,6 +260,8 @@ beforeEach(async () => {
   capabilityLoads = [];
   capabilityReply = async () => json(capabilityBody(true));
   healthReply = async () => json({});
+  pendingReadStatus = 200;
+  personalReadStatus = 200;
   writeReply = async (response) => response;
   notices.success.mockReset();
   notices.error.mockReset();
@@ -274,8 +278,14 @@ beforeEach(async () => {
       // Deliberately return a different order from the fixture's identity list.
       if (path === `${orgPath}/members`)
         return json([...members.slice(-1), ...members.slice(0, -1)]);
-      if (path === `${orgPath}/invitations`) return json(pending);
-      if (path === '/api/org-invitations') return json(personal);
+      if (path === `${orgPath}/invitations`)
+        return pendingReadStatus === 200
+          ? json(pending)
+          : json({ error: 'Fixture invitation list failure' }, pendingReadStatus);
+      if (path === '/api/org-invitations')
+        return personalReadStatus === 200
+          ? json(personal)
+          : json({ error: 'Fixture personal inbox failure' }, personalReadStatus);
     } else {
       // Derive all saved fixture changes from the actual path/body, never the
       // identity the test intended. A lost reply may still have applied a write.
@@ -783,6 +793,96 @@ describe('organization access selections through rendered controls and real tran
       expect(roleFor(sibling)).toHaveValue('viewer');
     expectBoundRequests();
   });
+});
+
+describe('Incomplete organization invitations', () => {
+  it.each([
+    { pendingStatus: 503, personalStatus: 200, unread: 'Pending Invitations' },
+    { pendingStatus: 200, personalStatus: 429, unread: 'Your Invitations' },
+    { pendingStatus: 502, personalStatus: 504, unread: 'Pending Invitations and Your Invitations' },
+  ])(
+    'keeps verified rows when $unread cannot load and requires a read-only reload',
+    async ({ pendingStatus, personalStatus, unread }) => {
+      pendingReadStatus = pendingStatus;
+      personalReadStatus = personalStatus;
+      render(() => <OrganizationAccessPanel currentUser={owner} />);
+
+      const warning = await screen.findByRole('alert', {
+        name: 'Organization invitations incomplete',
+      });
+      await expectSavedMembers();
+      expect(warning).toHaveTextContent(`${unread} couldn’t be loaded.`);
+      expect(warning).not.toHaveTextContent('Fixture invitation'); // Do not surface upstream text.
+      const inviteForm = screen.getByRole('form', { name: 'Invite member' });
+      expect(screen.getByRole('textbox', { name: 'Member user ID' })).toBeDisabled();
+      expect(screen.getByRole('combobox', { name: 'Member role' })).toBeDisabled();
+      expect(within(inviteForm).getByRole('button', { name: 'Invite' })).toBeDisabled();
+      for (const member of members) {
+        expect(roleFor(member.userId)).toBeDisabled();
+        if (member.userId !== owner) {
+          expect(
+            screen.getByRole('button', { name: `Remove ${member.userId} from organization` }),
+          ).toBeDisabled();
+        }
+      }
+      if (pendingStatus === 200) {
+        for (const invitation of pending)
+          expect(within(pendingGroup(invitation.userId)).getByRole('button')).toBeDisabled();
+      } else {
+        expect(screen.queryByRole('heading', { name: 'Pending Invitations' })).toBeNull();
+      }
+      if (personalStatus === 200) {
+        for (const invitation of personal)
+          for (const action of within(personalGroup(invitation)).getAllByRole('button'))
+            expect(action).toBeDisabled();
+      } else {
+        expect(screen.queryByRole('heading', { name: 'Your Invitations' })).toBeNull();
+      }
+
+      // DOM submit is not an alternate path to an access change.
+      fireEvent.submit(inviteForm);
+      const readPaths = [
+        orgPath,
+        `${orgPath}/members`,
+        `${orgPath}/invitations`,
+        '/api/org-invitations',
+      ];
+      const readCounts = () =>
+        readPaths.map((path) => fetchMock.mock.calls.filter(([url]) => url === path).length);
+      expect(readCounts()).toEqual([1, 1, 1, 1]);
+      expect(writes()).toHaveLength(0);
+      pendingReadStatus = 200;
+      personalReadStatus = 200;
+      fireEvent.click(within(warning).getByRole('button', { name: 'Reload access' }));
+      await expectSavedReread();
+      expect(screen.queryByRole('alert')).toBeNull();
+      expect(pendingGroup(pending[0].userId)).toBeVisible();
+      expect(personalGroup(personal[0])).toBeVisible();
+      expect(screen.getByRole('button', { name: 'Invite' })).toBeEnabled();
+      expect(roleFor(members[1].userId)).toBeEnabled();
+      expect(readCounts()).toEqual([2, 2, 2, 2]);
+      expectBoundRequests();
+      expect(writes()).toHaveLength(0);
+    },
+  );
+
+  it.each([402, 403, 404, 501])(
+    'does not present a partial read after a %s invitation response despite the other reads',
+    async (status) => {
+      pendingReadStatus = status;
+      personalReadStatus = 503;
+      render(() => <OrganizationAccessPanel currentUser={owner} />);
+      await screen.findByRole('alert', { name: 'Organization access unavailable' });
+      expect(
+        screen.queryByRole('alert', { name: 'Organization invitations incomplete' }),
+      ).toBeNull();
+      expect(screen.queryByText(people[0], { exact: true })).toBeNull();
+      expect(screen.queryByText('No organization members found.')).toBeNull();
+      expect(screen.queryByRole('form', { name: 'Invite member' })).toBeNull();
+      expectBoundRequests();
+      expect(writes()).toHaveLength(0);
+    },
+  );
 });
 
 describe('Organization invitation form submission', () => {
