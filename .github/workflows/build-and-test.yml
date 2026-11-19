@@ -1301,6 +1301,9 @@ jobs:
     timeout-minutes: 35
     strategy:
       fail-fast: false
+      # Keep post-merge advisory work from taking three shared runners at
+      # once. Keep every shard and the full width for PR comparisons.
+      max-parallel: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 1 || 3 }}
       matrix:
         shard: [0, 1, 2]
     env:

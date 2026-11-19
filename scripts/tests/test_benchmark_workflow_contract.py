@@ -27,6 +27,10 @@ class BenchmarkWorkflowContractTest(unittest.TestCase):
         self.assertEqual(collector["if"], "needs.changes.outputs.code == 'true' && needs.changes.outputs.component_only != 'true'")
         self.assertEqual(collector["strategy"]["matrix"], {"shard": [0, 1, 2]})
         self.assertIs(collector["strategy"]["fail-fast"], False)
+        self.assertEqual(
+            collector["strategy"]["max-parallel"],
+            "${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 1 || 3 }}",
+        )
         self.assertFalse(collector.get("continue-on-error", False))
         self.assertEqual(collector["env"]["PULSE_BENCH_SHARD"], "${{ matrix.shard }}")
         steps = {step["name"]: step for step in collector["steps"]}
@@ -85,6 +89,19 @@ class BenchmarkWorkflowContractTest(unittest.TestCase):
             with self.subTest(index=index):
                 workflow = deepcopy(self.workflow)
                 mutate(workflow)
+                with self.assertRaises(AssertionError):
+                    self.assert_contract(workflow)
+
+    def test_runner_limit_does_not_serialize_prs_or_other_refs(self) -> None:
+        for limit in (
+            1,
+            3,
+            "${{ github.event_name == 'push' && 1 || 3 }}",
+            "${{ github.ref == 'refs/heads/main' && 1 || 3 }}",
+        ):
+            with self.subTest(limit=limit):
+                workflow = deepcopy(self.workflow)
+                workflow["jobs"]["benchmarks"]["strategy"]["max-parallel"] = limit
                 with self.assertRaises(AssertionError):
                     self.assert_contract(workflow)
 
