@@ -160,7 +160,7 @@ func (m *Manager) checkPMG(pmg models.PMGInstance, observe pmgQueueObservationFu
 	// Check queue depths across all nodes
 	m.checkPMGQueueDepths(pmg, pmgDefaults, observe)
 	// Check oldest message age across all nodes
-	m.checkPMGOldestMessage(pmg, pmgDefaults)
+	m.checkPMGOldestMessage(pmg, pmgDefaults, observe)
 	// Check quarantine backlog and growth
 	m.checkPMGQuarantineBacklog(pmg, pmgDefaults)
 	// Check spam/virus rate anomalies
@@ -212,20 +212,6 @@ func (m *Manager) checkPMGOffline(pmg models.PMGInstance) {
 // clearPMGOfflineAlert removes offline alert when PMG comes back online
 func (m *Manager) clearPMGOfflineAlert(pmg models.PMGInstance) {
 	m.clearResourceOfflineAlert(pmg.ID, pmg.Name, pmg.Host, "PMG", offlineRecoveryConfirmationsDefault)
-}
-
-// pmgQueuesComplete reports whether every discovered node answered the
-// queue reads. Count checks additionally require the relevant counts.
-func pmgQueuesComplete(pmg models.PMGInstance) bool {
-	if len(pmg.Nodes) == 0 {
-		return false
-	}
-	for _, node := range pmg.Nodes {
-		if node.QueueStatus == nil {
-			return false
-		}
-	}
-	return true
 }
 
 // A partial non-negative queue reading is a lower bound. It can establish the
@@ -405,33 +391,50 @@ func (m *Manager) checkPMGQueueDepth(pmg models.PMGInstance, warningThreshold, c
 }
 
 // checkPMGOldestMessage checks oldest queued message age and creates alerts
-func (m *Manager) checkPMGOldestMessage(pmg models.PMGInstance, defaults PMGThresholdConfig) {
-	if defaults.OldestMessageWarnMins <= 0 && defaults.OldestMessageCritMins <= 0 {
+func (m *Manager) checkPMGOldestMessage(pmg models.PMGInstance, defaults PMGThresholdConfig, observe pmgQueueObservationFunc) {
+	warn, crit := defaults.OldestMessageWarnMins, defaults.OldestMessageCritMins
+	if warn <= 0 && crit <= 0 {
 		return
 	}
 
-	// Find the oldest message age across all nodes
+	// Both ends of the gateway's age range are maxima, not sums. A
+	// projected queue object can still lack a bound on delivery age.
 	var oldestAge int64 // in seconds
+	var maxAgeMinutes int64
+	queuesComplete, ageBounded := len(pmg.Nodes) > 0, true
 	for _, node := range pmg.Nodes {
-		if node.QueueStatus != nil && node.QueueStatus.OldestAge > oldestAge {
-			oldestAge = node.QueueStatus.OldestAge
+		queue := node.QueueStatus
+		if queue == nil || queue.OldestAge < 0 {
+			queuesComplete = false
+			continue
 		}
+		obs := observe(node)
+		oldestAge = max(oldestAge, queue.OldestAge)
+		maxAgeMinutes = max(maxAgeMinutes, obs.AgeUpperMinutes)
+		ageBounded = ageBounded && obs.AgeBounded && obs.AgeUpperMinutes >= queue.OldestAge/60
 	}
 
-	if !pmgQueueMetricEvaluable(pmgQueuesComplete(pmg), int(oldestAge/60), defaults.OldestMessageWarnMins, defaults.OldestMessageCritMins) {
+	oldestMinutes := oldestAge / 60
+	if !pmgQueueMetricEvaluable(queuesComplete, int(oldestMinutes), warn, crit) {
 		return
 	}
-
-	if oldestAge == 0 {
-		// No messages in queue, clear any existing alert
-		alertID := fmt.Sprintf("%s-oldest-message", pmg.ID)
-		m.clearAlert(buildCanonicalStateID(pmg.ID, alertID))
+	ageBounded = ageBounded && queuesComplete
+	couldBeCritical := crit > 0 && (!ageBounded || maxAgeMinutes >= int64(crit))
+	// A lower bound below the thresholds is not a recovery sample unless
+	// every discovered node is bounded and the upper bound is also below.
+	if (warn <= 0 || oldestMinutes < int64(warn)) && (crit <= 0 || oldestMinutes < int64(crit)) &&
+		(!ageBounded || (warn > 0 && maxAgeMinutes >= int64(warn)) || couldBeCritical) {
 		return
 	}
 
 	alertID := fmt.Sprintf("%s-oldest-message", pmg.ID)
-	oldestMinutes := oldestAge / 60
-	spec, err := buildCanonicalSeverityThresholdSpec(alertID, pmg.ID, pmg.Name, unifiedresources.ResourceTypePMG, "message-age", float64(defaults.OldestMessageWarnMins), float64(defaults.OldestMessageCritMins), false)
+	if oldestAge == 0 {
+		// At this point even the oldest possible message is below threshold.
+		m.clearAlert(buildCanonicalStateID(pmg.ID, alertID))
+		return
+	}
+
+	spec, err := buildCanonicalSeverityThresholdSpec(alertID, pmg.ID, pmg.Name, unifiedresources.ResourceTypePMG, "message-age", float64(warn), float64(crit), false)
 	if err != nil {
 		log.Warn().
 			Err(err).
@@ -451,14 +454,17 @@ func (m *Manager) checkPMGOldestMessage(pmg models.PMGInstance, defaults PMGThre
 				Observed:  float64(oldestMinutes),
 			},
 		},
-		AlertID:      alertID,
-		AlertType:    "message-age",
-		ResourceID:   pmg.ID,
-		ResourceName: pmg.Name,
-		Node:         pmg.Host,
-		Instance:     pmg.Name,
+		// Keep an existing Critical unchanged on a Warning lower bound
+		// that could still be Critical, without suppressing proven breaches.
+		SeverityIsLowerBound: couldBeCritical,
+		AlertID:              alertID,
+		AlertType:            "message-age",
+		ResourceID:           pmg.ID,
+		ResourceName:         pmg.Name,
+		Node:                 pmg.Host,
+		Instance:             pmg.Name,
 		MessageBuilder: func(result alertspecs.EvaluationResult) (string, float64, float64) {
-			threshold := thresholdForCanonicalSeverity(result.State.Severity, float64(defaults.OldestMessageWarnMins), float64(defaults.OldestMessageCritMins))
+			threshold := thresholdForCanonicalSeverity(result.State.Severity, float64(warn), float64(crit))
 			return fmt.Sprintf("PMG %s has messages queued for %d minutes (threshold: %d minutes)", pmg.Name, oldestMinutes, int64(threshold)), float64(oldestMinutes), threshold
 		},
 		DispatchAsync: true,
@@ -472,7 +478,7 @@ func (m *Manager) checkPMGOldestMessage(pmg models.PMGInstance, defaults PMGThre
 		log.Warn().
 			Str("pmg", pmg.Name).
 			Int64("oldest_minutes", oldestMinutes).
-			Int64("threshold", int64(thresholdForCanonicalSeverity(result.State.Severity, float64(defaults.OldestMessageWarnMins), float64(defaults.OldestMessageCritMins)))).
+			Int64("threshold", int64(thresholdForCanonicalSeverity(result.State.Severity, float64(warn), float64(crit)))).
 			Str("level", string(level)).
 			Msg("PMG oldest message age alert triggered")
 	}

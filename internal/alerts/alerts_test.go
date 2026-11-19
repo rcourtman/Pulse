@@ -11291,7 +11291,7 @@ func TestCheckPMGOldestMessage(t *testing.T) {
 		}
 
 		defaults := PMGThresholdConfig{} // No thresholds
-		m.checkPMGOldestMessage(pmg, defaults)
+		m.checkPMGOldestMessage(pmg, defaults, exactPMGNodeQueueObservation)
 
 		m.mu.RLock()
 		_, exists := testLookupActiveAlert(t, m, oldestMessageState)
@@ -11322,7 +11322,7 @@ func TestCheckPMGOldestMessage(t *testing.T) {
 			OldestMessageWarnMins: 30,
 			OldestMessageCritMins: 60,
 		}
-		m.checkPMGOldestMessage(pmg, defaults)
+		m.checkPMGOldestMessage(pmg, defaults, exactPMGNodeQueueObservation)
 
 		m.mu.RLock()
 		_, exists := testLookupActiveAlert(t, m, oldestMessageState)
@@ -11350,7 +11350,7 @@ func TestCheckPMGOldestMessage(t *testing.T) {
 			OldestMessageWarnMins: 30,
 			OldestMessageCritMins: 60,
 		}
-		m.checkPMGOldestMessage(pmg, defaults)
+		m.checkPMGOldestMessage(pmg, defaults, exactPMGNodeQueueObservation)
 
 		m.mu.RLock()
 		alert := testRequireActiveAlert(t, m, oldestMessageState)
@@ -11386,7 +11386,7 @@ func TestCheckPMGOldestMessage(t *testing.T) {
 			OldestMessageWarnMins: 30,
 			OldestMessageCritMins: 60,
 		}
-		m.checkPMGOldestMessage(pmg, defaults)
+		m.checkPMGOldestMessage(pmg, defaults, exactPMGNodeQueueObservation)
 
 		m.mu.RLock()
 		alert := testRequireActiveAlert(t, m, oldestMessageState)
@@ -11423,7 +11423,7 @@ func TestCheckPMGOldestMessage(t *testing.T) {
 			OldestMessageWarnMins: 30,
 			OldestMessageCritMins: 60,
 		}
-		m.checkPMGOldestMessage(pmg, defaults)
+		m.checkPMGOldestMessage(pmg, defaults, exactPMGNodeQueueObservation)
 
 		m.mu.RLock()
 		_, exists := testLookupActiveAlert(t, m, oldestMessageState)
@@ -11452,7 +11452,7 @@ func TestCheckPMGOldestMessage(t *testing.T) {
 			OldestMessageWarnMins: 30,
 			OldestMessageCritMins: 60,
 		}
-		m.checkPMGOldestMessage(pmg, defaults)
+		m.checkPMGOldestMessage(pmg, defaults, exactPMGNodeQueueObservation)
 
 		m.mu.RLock()
 		alert := testRequireActiveAlert(t, m, oldestMessageState)
@@ -11492,7 +11492,7 @@ func TestCheckPMGOldestMessage(t *testing.T) {
 			OldestMessageWarnMins: 30,
 			OldestMessageCritMins: 60,
 		}
-		m.checkPMGOldestMessage(pmg, defaults)
+		m.checkPMGOldestMessage(pmg, defaults, exactPMGNodeQueueObservation)
 
 		m.mu.RLock()
 		alert := testRequireActiveAlert(t, m, oldestMessageState)
@@ -11529,7 +11529,7 @@ func TestCheckPMGOldestMessage(t *testing.T) {
 			OldestMessageWarnMins: 30,
 		}
 		// Should not panic and should use the valid node's data
-		m.checkPMGOldestMessage(pmg, defaults)
+		m.checkPMGOldestMessage(pmg, defaults, exactPMGNodeQueueObservation)
 
 		m.mu.RLock()
 		alert := testRequireActiveAlert(t, m, "pmg1-oldest-message")
@@ -12972,7 +12972,7 @@ func TestCleanupAlertsForNodes(t *testing.T) {
 		}, PMGThresholdConfig{
 			OldestMessageWarnMins: 30,
 			OldestMessageCritMins: 60,
-		})
+		}, exactPMGNodeQueueObservation)
 
 		m.CleanupAlertsForNodes(map[string]bool{"pve1": true})
 		time.Sleep(50 * time.Millisecond)

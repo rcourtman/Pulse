@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"reflect"
 	"slices"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -57,7 +58,7 @@ func pmgNodeQueueScenarios() []pmgNodeQueueScenario {
 			{name: "drained", resolvedAge: true},
 		}},
 		// The existing 60% node scale turns a five-minute setting into
-		// three minutes. Only the node's incident uses the age bound.
+		// three minutes. A 0–4m observation can only clear the gateway.
 		{name: "three-minute", warning: 5, phases: []pmgNodeQueuePhase{
 			{name: "seed", deferred: 1, hold: 1, deferredBucket: "10m", wantAgeSeconds: 300,
 				wantAge: alerts.AlertLevelWarning, wantAggregate: alerts.AlertLevelWarning},
@@ -72,9 +73,11 @@ func pmgNodeQueueScenarios() []pmgNodeQueueScenario {
 			{name: "critical", active: 43, deferred: 24, hold: 8, deferredBucket: "160m", wantAgeSeconds: 4800,
 				wantAge: alerts.AlertLevelCritical, wantAggregate: alerts.AlertLevelCritical, wantCounts: allCounts},
 			{name: "could-still-be-critical", active: 43, deferred: 24, hold: 8, deferredBucket: "80m", wantAgeSeconds: 2400,
-				wantAge: alerts.AlertLevelCritical, keepAge: true, wantAggregate: alerts.AlertLevelWarning, wantCounts: allCounts},
+				wantAge: alerts.AlertLevelCritical, keepAge: true, wantAggregate: alerts.AlertLevelCritical, wantCounts: allCounts},
+			// 20–39m is fully above the scaled node warning (18m),
+			// but still straddles the gateway warning (30m).
 			{name: "confirmed-warning", active: 43, deferred: 24, hold: 8, deferredBucket: "40m", wantAgeSeconds: 1200,
-				wantAge: alerts.AlertLevelWarning, wantCounts: allCounts},
+				wantAge: alerts.AlertLevelWarning, wantAggregate: alerts.AlertLevelCritical, wantCounts: allCounts},
 		}},
 	}
 	for _, queue := range []string{"deferred", "hold"} {
@@ -112,8 +115,21 @@ func pmgNodeQueueScenarios() []pmgNodeQueueScenario {
 // endpoint is the only input that changes between polls in a scenario.
 func newPMGNodeQueuePoller(t *testing.T, warning int) (*alerts.Manager, func(pmgNodeQueuePhase) (*models.PMGQueueStatus, int32)) {
 	t.Helper()
+	manager, poll := newPMGQueuePoller(t, warning, "relay")
+	return manager, func(input pmgNodeQueuePhase) (*models.PMGQueueStatus, int32) {
+		nodes, reads := poll(input)
+		return nodes[0].QueueStatus, reads
+	}
+}
+
+func newPMGQueuePoller(t *testing.T, warning int, names ...string) (*alerts.Manager, func(...pmgNodeQueuePhase) ([]models.PMGNodeStatus, int32)) {
+	t.Helper()
 	t.Setenv("PULSE_DATA_DIR", t.TempDir())
-	var phase atomic.Pointer[pmgNodeQueuePhase]
+	cluster := make([]map[string]string, 0, len(names))
+	for _, name := range names {
+		cluster = append(cluster, map[string]string{"name": name, "type": "master"})
+	}
+	var phase atomic.Pointer[map[string]pmgNodeQueuePhase]
 	var qshape atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -125,13 +141,24 @@ func newPMGNodeQueuePoller(t *testing.T, warning int) (*alerts.Manager, func(pmg
 		switch r.URL.Path {
 		case "/api2/json/version":
 			fmt.Fprint(w, `{"data":{"version":"9.0-fixture"}}`)
+			return
 		case "/api2/json/config/cluster/status":
-			fmt.Fprint(w, `{"data":[{"name":"relay","type":"master"}]}`)
-		case "/api2/json/nodes/relay/backup":
+			_ = json.NewEncoder(w).Encode(map[string]any{"data": cluster})
+			return
+		}
+		path := strings.TrimPrefix(r.URL.Path, "/api2/json/nodes/")
+		name, endpoint, _ := strings.Cut(path, "/")
+		s, ok := (*phase.Load())[name]
+		if !ok {
+			t.Errorf("unexpected fixture path %s", r.URL.Path)
+			http.NotFound(w, r)
+			return
+		}
+		switch endpoint {
+		case "backup":
 			fmt.Fprint(w, `{"data":[]}`)
-		case "/api2/json/nodes/relay/postfix/qshape":
+		case "postfix/qshape":
 			qshape.Add(1)
-			s := phase.Load()
 			n, bucket := 0, "5m"
 			queue := r.URL.Query().Get("queue")
 			switch queue {
@@ -186,16 +213,23 @@ func newPMGNodeQueuePoller(t *testing.T, warning int) (*alerts.Manager, func(pmg
 	}
 	m.alertManager.UpdateConfig(cfg)
 	logger := zerolog.New(io.Discard)
-	return m.alertManager, func(input pmgNodeQueuePhase) (*models.PMGQueueStatus, int32) {
+	return m.alertManager, func(input ...pmgNodeQueuePhase) ([]models.PMGNodeStatus, int32) {
 		t.Helper()
-		phase.Store(&input)
+		if len(input) != len(names) {
+			t.Fatalf("fixture received %d observations for %d nodes", len(input), len(names))
+		}
+		samples := make(map[string]pmgNodeQueuePhase, len(names))
+		for i, name := range names {
+			samples[name] = input[i]
+		}
+		phase.Store(&samples)
 		before := qshape.Load()
 		m.pollPMGInstance(logger.WithContext(context.Background()), "gateway", client)
 		instances := m.state.GetSnapshot().PMGInstances
-		if len(instances) != 1 || len(instances[0].Nodes) != 1 || instances[0].Status != "online" {
+		if len(instances) != 1 || len(instances[0].Nodes) != len(names) || instances[0].Status != "online" {
 			t.Fatalf("unexpected PMG publication: %+v", instances)
 		}
-		return instances[0].Nodes[0].QueueStatus, qshape.Load() - before
+		return instances[0].Nodes, qshape.Load() - before
 	}
 }
 
