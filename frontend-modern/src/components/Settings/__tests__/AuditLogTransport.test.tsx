@@ -178,6 +178,33 @@ afterEach(() => {
 });
 
 describe('Audit Log rendered controls through the real HTTP client', () => {
+  it('keeps the outcome, complete actor and separate timestamp on the matching event', async () => {
+    const [first, second] = events();
+    const actor = 'operations-reviewer+night-shift@example.test';
+    read = () =>
+      json({
+        ...inventory(),
+        events: [
+          { ...first, user: '', success: true },
+          { ...second, user: actor, success: false },
+        ],
+      });
+    mount();
+    await loaded();
+
+    expect(row().getByText(`Failed · ${actor}`)).toBeInTheDocument();
+    const timestamp = row().getByText(new Date(second.timestamp).toLocaleString(), {
+      selector: 'time',
+    });
+    expect(timestamp).toHaveAttribute('datetime', second.timestamp);
+    expect(
+      row().getByRole('button', {
+        name: `Verify signature: login by ${actor} at ${timestamp.textContent} (Event ID: ${second.id})`,
+      }),
+    ).toBeEnabled();
+    expect(row('East first sign-in').getByText('Success · Unknown user')).toBeInTheDocument();
+  });
+
   it('restarts the initial load without changing its query or losing keyboard focus', async () => {
     window.history.replaceState({}, '', '/settings/security-audit?event=login&success=success');
     const abandoned = deferred<Response>();
