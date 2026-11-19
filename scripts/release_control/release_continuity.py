@@ -792,6 +792,7 @@ def inventory_endpoint(value: str) -> str:
 
 def collect_inventory(args: argparse.Namespace) -> int:
     """Publish complete pagination only; retry one exact peer CANCEL, not refusals."""
+    inventory = "release" if args.endpoint.endswith("/releases?per_page=100") else "tag reference"
     diagnostic: dict[str, Any] = {
         "schema_version": 1,
         "check": "github_inventory_collection",
@@ -803,10 +804,17 @@ def collect_inventory(args: argparse.Namespace) -> int:
     def retain() -> None:
         args.diagnostic.write_text(json.dumps(diagnostic, indent=2) + "\n", encoding="utf-8")
 
+    def unavailable(reason: str, code: int | None = None, http_status: int | None = None) -> int:
+        retain()
+        detail = f"; exit {code}" if code is not None else ""
+        if http_status is not None:
+            detail += f"; HTTP {http_status} reported by gh"
+        print(f"GitHub {inventory} inventory unavailable: {reason}{detail}.", file=sys.stderr)
+        return 1
+
     if args.output.exists():
         diagnostic["reason"] = "output_already_exists"
-        retain()
-        return 1
+        return unavailable("output_already_exists")
 
     command = [
         "gh", "api", "--method", "GET", "--paginate", "--slurp",
@@ -824,10 +832,19 @@ def collect_inventory(args: argparse.Namespace) -> int:
                     result = subprocess.run(command, stdout=response, stderr=subprocess.PIPE, check=False)
                 except OSError:
                     diagnostic["reason"] = "gh_unavailable"
-                    retain()
-                    return 1
+                    return unavailable("gh_unavailable")
                 response.seek(0)
                 payload = response.read()
+            # gh api can render a failed HTTP response as one printable line.
+            # Retain just its numeric status, never the response message. This
+            # is diagnostic evidence, not a condition for retry or admission.
+            stderr_line = result.stderr.strip()
+            http_error = (
+                re.fullmatch(rb"gh: [ -~]+ \(HTTP ([45][0-9]{2})\)", stderr_line)
+                if result.returncode == 1
+                else None
+            )
+            http_status = int(http_error[1]) if http_error else None
             attempt = {
                 "number": number,
                 "exit_code": result.returncode,
@@ -835,10 +852,11 @@ def collect_inventory(args: argparse.Namespace) -> int:
                 "payload_sha256": hashlib.sha256(payload).hexdigest(),
                 "stderr_bytes": len(result.stderr),
                 "stderr_sha256": hashlib.sha256(result.stderr).hexdigest(),
+                "reported_http_status": http_status,
                 "result": "gh_failed",
             }
             diagnostic["attempts"].append(attempt)
-            if result.returncode == 0 and result.stderr.strip():
+            if result.returncode == 0 and stderr_line:
                 attempt["result"] = "unexpected_diagnostic"
             elif result.returncode == 0:
                 try:
@@ -861,17 +879,18 @@ def collect_inventory(args: argparse.Namespace) -> int:
             # rate limit, signal, mixed error or unknown failure cannot retry.
             elif result.returncode == 1 and re.fullmatch(
                 rb"stream error: stream ID [0-9]+; CANCEL; received from peer",
-                result.stderr.strip(),
+                stderr_line,
             ):
                 attempt["result"] = "http2_peer_cancel"
                 retain()
                 if number == 1:
-                    print("GitHub inventory peer cancellation; repeating the identical read once.", file=sys.stderr)
+                    print(
+                        f"GitHub {inventory} inventory peer cancellation; repeating the identical read once.",
+                        file=sys.stderr,
+                    )
                     time.sleep(2)
                     continue
-            retain()
-            print(f"GitHub inventory unavailable: {attempt['result']}; exit {result.returncode}.", file=sys.stderr)
-            return 1
+            return unavailable(attempt["result"], result.returncode, http_status)
     return 1
 
 
