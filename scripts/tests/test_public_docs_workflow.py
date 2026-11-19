@@ -79,18 +79,30 @@ def verdict_command(source: str) -> str:
     return textwrap.dedent(body.split(marker, 1)[1]).strip()
 
 
-def workflow_fixture_environment(root: Path, calls: Path) -> dict[str, str]:
-    # These exit adapters and the real selector need only the standard library.
-    # Use this suite's interpreter without repeating site/package startup for
-    # every suite in every single-failure control. Real safety suites still run
-    # separately through the unchanged production runner and environment.
+def workflow_fixture_environment(root: Path, calls: Path, failing: str = "") -> dict[str, str]:
+    # The real selector and sequencer still run in Python. For the generated
+    # Python suite paths only, the interpreter double records the actual
+    # invocation and exits like the synthetic suite, without a Python startup
+    # for each suite in each single-failure control. Real recipes do not use it.
     tools = root / "tools"
     tools.mkdir()
     python = tools / "python3"
     python.write_text(
-        f'#!/bin/sh\nexec {shlex.quote(sys.executable)} -I -S "$@"\n', encoding="utf-8")
+        '#!/bin/sh\n'
+        'if [ "$#" -eq 1 ] && [ "${1%/*}" = "$FIXTURE_SUITE_DIR" ] && [ -f "$1" ]; then\n'
+        '    case "${1##*/}" in\n'
+        '        test_*.py)\n'
+        '            suite=${1##*/}\n'
+        '            printf "%s\\n" "$suite" >> "$CALLS" || exit 90\n'
+        '            [ "$suite" != "$FIXTURE_FAIL_SUITE" ]\n'
+        '            exit $?\n'
+        '            ;;\n'
+        '    esac\n'
+        'fi\n'
+        f'exec {shlex.quote(sys.executable)} -I -S "$@"\n', encoding="utf-8")
     python.chmod(0o700)
-    return dict(os.environ, PATH=f"{tools}{os.pathsep}{os.environ['PATH']}", CALLS=str(calls))
+    return dict(os.environ, PATH=f"{tools}{os.pathsep}{os.environ['PATH']}", CALLS=str(calls),
+                FIXTURE_SUITE_DIR=str(root / "scripts/tests"), FIXTURE_FAIL_SUITE=failing)
 
 
 class PublicDocsWorkflowTest(unittest.TestCase):
@@ -173,6 +185,24 @@ class PublicDocsWorkflowTest(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertEqual(result.stdout.splitlines(), [sys.executable, "1 1"])
 
+    def test_python_exit_double_applies_only_to_generated_suite_invocations(self):
+        with tempfile.TemporaryDirectory(prefix="docs adapter ") as temporary:
+            root = Path(temporary)
+            calls = root / "calls"
+            name = "test_fixture_docs.py"
+            env = workflow_fixture_environment(root, calls, failing=name)
+            suite = root / "scripts/tests" / name
+            suite.parent.mkdir(parents=True)
+            suite.write_text("raise SystemExit(92)\n", encoding="utf-8")
+            outside = root / name
+            outside.write_text("raise SystemExit(93)\n", encoding="utf-8")
+            missing = suite.with_name("test_missing_docs.py")
+            for args, expected in (([suite], 1), ([outside], 93), ([suite, "extra"], 92), ([missing], 2)):
+                with self.subTest(args=args):
+                    result = subprocess.run(["python3", *args], env=env, capture_output=True, timeout=5)
+                    self.assertEqual(result.returncode, expected, result.stdout + result.stderr)
+            self.assertEqual(calls.read_text().splitlines(), [name])
+
     def run_adapters(self, shard: int, failing: str = ""):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -187,18 +217,19 @@ class PublicDocsWorkflowTest(unittest.TestCase):
             hints.parent.mkdir(parents=True)
             shutil.copyfile(ROOT / ".github/scripts/docs-test-seconds.txt", hints)
             for name in documentation_suites():
-                status = 1 if name == failing else 0
+                suite = tests / name
                 if name.endswith(".sh"):
-                    code = f'#!/bin/bash\nprintf "%s\\n" {shlex.quote(name)} >> "$CALLS"\nexit {status}\n'
+                    status = int(name == failing)
+                    suite.write_text(f'#!/bin/bash\nprintf "%s\\n" {shlex.quote(name)} >> "$CALLS" || exit 90\n'
+                                     f'exit {status}\n', encoding="utf-8")
+                    suite.chmod(0o700)
                 else:
-                    code = ("import os\n"
-                            f"with open(os.environ['CALLS'], 'a', encoding='utf-8') as log: log.write({name!r} + '\\n')\n"
-                            f"raise SystemExit({status})\n")
-                (tests / name).write_text(code, encoding="utf-8")
-                (tests / name).chmod(0o700)
+                    # Discovery sees a real file. Bypassing the interpreter
+                    # contract must fail rather than silently log a pass.
+                    suite.write_text("raise SystemExit(92)\n", encoding="utf-8")
             calls = root / "calls"
             result = subprocess.run(["bash", "-e", "-o", "pipefail", "-c", safety_command(self.source, shard)],
-                                    cwd=root, env=workflow_fixture_environment(root, calls),
+                                    cwd=root, env=workflow_fixture_environment(root, calls, failing),
                                     text=True, capture_output=True, timeout=15)
             return result, calls.read_text().splitlines() if calls.exists() else []
 
@@ -229,6 +260,7 @@ class PublicDocsWorkflowTest(unittest.TestCase):
                     self.assertEqual(calls, names)
                     self.assertIn(f"Summary: {len(calls)-1}/{len(calls)} passed", result.stdout)
                     self.assertIn("Failures: 1", result.stdout)
+                    self.assertIn(f"  scripts/tests/{failing} (exit 1)\n", result.stdout)
                     seen.append(failing)
         self.assertEqual(sorted(seen), documentation_suites())
         self.assertEqual(len(seen), len(set(seen)))
