@@ -8,6 +8,8 @@ import {
   recordInfrastructureMapOpen,
 } from '@/api/infrastructureMapActivity';
 import { showPressedTooltip } from '@/components/shared/Tooltip';
+import { syncSessionSettingsCapabilities } from '@/stores/sessionSettingsCapabilities';
+import type { SecurityStatusSettingsCapabilities } from '@/types/config';
 import type { Resource } from '@/types/resource';
 import { showError, showSuccess } from '@/utils/toast';
 import { fitServiceDiagram } from '../infrastructureMapDiagram';
@@ -25,6 +27,8 @@ vi.mock('@/hooks/useResources', () => ({
   }),
 }));
 vi.mock('@/contexts/appRuntime', () => ({ useDarkMode: () => () => false }));
+const kiosk = vi.hoisted(() => ({ on: false }));
+vi.mock('@/hooks/useKioskMode', () => ({ useKioskMode: () => () => kiosk.on }));
 // jsdom lays nothing out, so the page would never get a width to draw at.
 vi.mock('@/hooks/useObservedElementWidth', () => ({
   useObservedElementWidth: () => ({ setElement: () => undefined, width: () => 1200 }),
@@ -84,6 +88,14 @@ const lab = (): Resource[] => [
 ];
 
 const saveImage = () => fireEvent.click(screen.getByRole('button', { name: 'Save image' }));
+
+// A signed-in session, by what Settings would open for it.
+const signedInWith = (granted: Partial<SecurityStatusSettingsCapabilities>) =>
+  syncSessionSettingsCapabilities({
+    requiresAuth: true,
+    settingsCapabilities: granted as SecurityStatusSettingsCapabilities,
+  });
+const administrator = () => signedInWith({ availabilityRead: true, infrastructureRead: true });
 
 describe('InfrastructureMapSurface use counting', () => {
   beforeEach(() => {
@@ -203,6 +215,43 @@ describe('InfrastructureMapSurface fit to the window', () => {
 
     await waitFor(() =>
       expect(roomOffered()).toEqual({ width: 1200, height: window.innerHeight - BELOW }),
+    );
+  });
+
+  it('leaves room for the navigation bar a window that is not wide keeps at its foot', () => {
+    // The bar publishes its height. It is shown up to 1279px wide, not only on a phone.
+    document.documentElement.style.setProperty('--pulse-mobile-nav-height', '45px');
+    try {
+      render(() => <InfrastructureMapSurface />);
+      expect(roomOffered()).toEqual({ width: 1200, height: window.innerHeight - BELOW - 45 });
+    } finally {
+      document.documentElement.style.removeProperty('--pulse-mobile-nav-height');
+    }
+  });
+
+  it('refits when the bar changes height and nothing else does', async () => {
+    render(() => <InfrastructureMapSurface />);
+    expect(roomOffered()).toEqual({ width: 1200, height: window.innerHeight - BELOW });
+
+    document.documentElement.style.setProperty('--pulse-mobile-nav-height', '85px');
+    try {
+      await waitFor(() =>
+        expect(roomOffered()).toEqual({ width: 1200, height: window.innerHeight - BELOW - 85 }),
+      );
+    } finally {
+      document.documentElement.style.removeProperty('--pulse-mobile-nav-height');
+    }
+  });
+
+  it('leaves room for the lines a wrapped legend adds', async () => {
+    render(() => <InfrastructureMapSurface />);
+    const legend = screen.getByRole('list', { name: 'Legend' });
+    // Three lines of 16px text with two 4px gaps.
+    Object.defineProperty(legend, 'offsetHeight', { configurable: true, value: 56 });
+    WatchedBoxes.all.find((watcher) => watcher.boxes.includes(legend))?.resize();
+
+    await waitFor(() =>
+      expect(roomOffered()).toEqual({ width: 1200, height: window.innerHeight - BELOW - 40 }),
     );
   });
 
@@ -476,6 +525,44 @@ describe('InfrastructureMapSurface connections', () => {
       expect(tap(tile(container, '192.168.0.1')).defaultPrevented).toBe(false);
     });
 
+    it('offers no check to a session Settings would turn away from the form', () => {
+      signedInWith({ availabilityRead: false, infrastructureRead: false });
+      try {
+        const { container } = draw();
+        const gateway = tile(container, '192.168.0.1');
+
+        expect(gateway.hasAttribute('href')).toBe(false);
+        expect(gateway.getAttribute('aria-label')).toBe(
+          '192.168.0.1, Default gateway, not monitored',
+        );
+        // A tap still says what the tile is, and promises nothing.
+        expect(tap(gateway).defaultPrevented).toBe(true);
+        expect(said()[0].split('\n')).toEqual([
+          '192.168.0.1',
+          'Default gateway, not monitored',
+          'Used by Tower',
+        ]);
+      } finally {
+        administrator();
+      }
+    });
+
+    it('offers no check in kiosk mode, where the shell turns Settings away', () => {
+      administrator();
+      kiosk.on = true;
+      try {
+        const { container } = draw();
+        const gateway = tile(container, '192.168.0.1');
+
+        expect(gateway.hasAttribute('href')).toBe(false);
+        expect(gateway.getAttribute('aria-label')).toBe(
+          '192.168.0.1, Default gateway, not monitored',
+        );
+      } finally {
+        kiosk.on = false;
+      }
+    });
+
     it('is no link while names are hidden, when its address is not on the page', () => {
       const { container } = draw();
       fireEvent.click(screen.getByRole('button', { name: 'Hide names' }));
@@ -493,5 +580,62 @@ describe('InfrastructureMapSurface connections', () => {
 
     expect(click.defaultPrevented).toBe(false);
     expect(said()).toHaveLength(0);
+  });
+});
+
+describe('InfrastructureMapSurface with nothing to draw', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resourcesMock.read = undefined;
+    resourcesMock.value = [];
+  });
+  afterEach(() => {
+    cleanup();
+    administrator();
+  });
+
+  it('offers the way to add a system to a session that can use it', () => {
+    administrator();
+    render(() => (
+      <MemoryRouter>
+        <Route path="/" component={InfrastructureMapSurface} />
+      </MemoryRouter>
+    ));
+
+    expect(screen.getByText('Nothing to draw yet')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Add a system' })).toHaveAttribute(
+      'href',
+      '/settings/infrastructure',
+    );
+  });
+
+  it('offers no way to add a system in kiosk mode', () => {
+    administrator();
+    kiosk.on = true;
+    try {
+      render(() => (
+        <MemoryRouter>
+          <Route path="/" component={InfrastructureMapSurface} />
+        </MemoryRouter>
+      ));
+
+      expect(screen.getByText('Nothing to draw yet')).toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: 'Add a system' })).not.toBeInTheDocument();
+    } finally {
+      kiosk.on = false;
+    }
+  });
+
+  it('sends a session that cannot add one to an administrator instead', () => {
+    signedInWith({ availabilityRead: false, infrastructureRead: false });
+    render(() => (
+      <MemoryRouter>
+        <Route path="/" component={InfrastructureMapSurface} />
+      </MemoryRouter>
+    ));
+
+    expect(screen.getByText('Nothing to draw yet')).toBeInTheDocument();
+    expect(screen.getByText(/Ask a Pulse administrator to add one\./)).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Add a system' })).not.toBeInTheDocument();
   });
 });

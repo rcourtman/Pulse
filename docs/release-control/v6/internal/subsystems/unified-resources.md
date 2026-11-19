@@ -4458,6 +4458,29 @@ What the diagram does with them:
   real browsers and a phone, real estates of different shapes, empty and
   error states, accessibility, a large estate, an end-to-end spec and guides
   that match what ships.
+- The map's completeness review of 19 November 2026 fixed four things the
+  page now holds to. The room it leaves under the drawing is measured, not
+  guessed from the window's width: it reads the height the bottom navigation
+  bar publishes in `--pulse-mobile-nav-height` (the bar is shown below 1280px,
+  not only on a phone) and adds the lines a wrapped legend takes, so the
+  legend is never under the bar. A tile that is a link takes keyboard focus
+  on the link, so its ring is styled through the link (`group` on the `<a>`,
+  `group-focus-visible` on the rect) with a stroke that keeps its width at
+  any scale. Safari draws no focus of its own there. The page offers no
+  Settings destination the session cannot open: the unmonitored gateway is
+  a link to the add-check form, and says "add a check", only where
+  `sessionCanReadAvailabilitySettings` holds (it mirrors the
+  `availabilityRead` gate on that Settings page), and the empty map offers
+  "Add a system" only where `sessionCanReadInfrastructureSettings` holds.
+  Neither is offered in kiosk mode, where the shell turns Settings away. A
+  tile's rect has no stroke at rest, because even a transparent stroke takes
+  the pointer a pixel past the tile's edge. Known and left: the capability
+  store is not refreshed on a workspace switch, and a session with
+  `settings:read` but not `settings:write` is shown an add form it cannot
+  save, as Settings itself shows it.
+  When Names and Compact both reach the smallest size the map is drawn at,
+  Compact wins the tie. The tile a full box ends in opens nothing, so its
+  card says the one thing there is to do: "Compact draws more of them".
 - How a thing gets onto the map is not something the map can show, so the
   page says it in one line beside the legend, "Apps are recognised by name,
   checks are drawn by their type", and links the shipped guide `docs/MAP.md`

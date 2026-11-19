@@ -673,6 +673,14 @@ describe('layoutServiceDiagram', () => {
       // The page has one empty layer for them, which the pointer passes through.
       const body = renderMapSceneBody(scene, palette, () => '/x');
       expect(body.match(/data-map-rings/g)).toHaveLength(1);
+      // A link takes the keyboard focus itself, so the ring on its rect is
+      // styled through the link. Safari draws no focus of its own here.
+      const link = body.match(/<a [^>]*>\s*<rect [^>]*>/)?.[0] ?? '';
+      expect(link).toContain('class="group outline-none"');
+      expect(link).toContain('group-focus-visible:stroke-blue-500');
+      expect(link).toContain('[vector-effect:non-scaling-stroke]');
+      // No stroke at rest, which would take the pointer past the tile's edge.
+      expect(link).not.toContain('stroke-transparent');
       expect(body.endsWith('<g data-map-rings="" pointer-events="none"></g>')).toBe(true);
       // A saved image has no pointer, so it has no rings: the captions say it.
       const saved = renderMapSceneToSvg(scene, MAP_PALETTES.dark);
@@ -724,10 +732,18 @@ describe('layoutServiceDiagram', () => {
           (node) => node.dashed && node.x === gateway?.x && node.y === gateway?.y,
         ),
       ).toBe(true);
-      // Nothing opens from it: Pulse does not monitor it.
-      expect(renderMapSceneBody(scene, MAP_PAGE_PALETTES.dark, () => '/x')).not.toContain(
-        'aria-label="192.168.0.1, Default gateway, not monitored"><rect',
+      // It has no page of its own. Where the page gives it the form that adds a
+      // check it is a link and says so. Where the page gives it nothing it is a
+      // plain tile and promises nothing.
+      const offered = renderMapSceneBody(scene, MAP_PAGE_PALETTES.dark, () => '/x');
+      expect(offered).toMatch(
+        /<a href="\/x"[^>]*aria-label="192\.168\.0\.1, Default gateway, not monitored, add a check">/,
       );
+      const withheld = renderMapSceneBody(scene, MAP_PAGE_PALETTES.dark, () => null);
+      expect(withheld).toMatch(
+        /<rect [^>]*role="img" aria-label="192\.168\.0\.1, Default gateway, not monitored"\/>/,
+      );
+      expect(withheld).not.toContain('add a check');
     });
 
     it('still draws the gateway when the estate has no ways in', () => {

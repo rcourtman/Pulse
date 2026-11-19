@@ -242,8 +242,14 @@ export const MAP_RINGS_ATTRIBUTE = 'data-map-rings';
 
 // The hover and focus treatment of everything on the map that answers the
 // pointer. Kept as one literal so the stylesheet build can see the classes.
+// A tile that is a link takes the focus on the link, so its rect is styled
+// through the link (`group`). The ring keeps its width however small the map
+// is drawn. Without it Safari shows a keyboard user no focus at all. There is
+// no stroke at rest: even a transparent one takes the pointer, a pixel past
+// the tile's edge, and neighbours are little more than a pixel apart.
 const HIT_CLASS =
-  'cursor-pointer fill-transparent stroke-transparent outline-none transition-colors hover:fill-slate-400/15 focus-visible:fill-slate-400/15 focus-visible:stroke-blue-500';
+  'cursor-pointer fill-transparent stroke-2 [vector-effect:non-scaling-stroke] outline-none transition-colors hover:fill-slate-400/15 focus-visible:fill-slate-400/15 focus-visible:stroke-blue-500 group-focus-visible:fill-slate-400/15 group-focus-visible:stroke-blue-500';
+const LINK_CLASS = 'group outline-none';
 
 /**
  * The inside of the on-page map: the drawn marks, then one target per
@@ -261,12 +267,13 @@ export function renderMapSceneBody(
       if (node.kind !== 'hit') return nodeToSvg(node, palette);
       const index = hitIndex;
       hitIndex += 1;
-      const adds = Boolean(node.hit.checkAddress);
+      const href = node.hit.navigable || node.hit.checkAddress ? hrefFor(index) : null;
+      // Said only where the tile does lead to the form that adds one.
+      const adds = Boolean(node.hit.checkAddress) && href !== null;
       const label = escapeXml(`${node.hit.name}, ${node.hit.meta}${adds ? ', add a check' : ''}`);
       const rect = `x="${n(node.x)}" y="${n(node.y)}" width="${n(node.w)}" height="${n(node.h)}" rx="${n(node.r)}" class="${HIT_CLASS}"`;
-      const href = node.hit.navigable || adds ? hrefFor(index) : null;
       return href
-        ? `<a href="${escapeXml(href)}" ${MAP_HIT_ATTRIBUTE}="${index}" aria-label="${label}"><rect ${rect}/></a>`
+        ? `<a href="${escapeXml(href)}" class="${LINK_CLASS}" ${MAP_HIT_ATTRIBUTE}="${index}" aria-label="${label}"><rect ${rect}/></a>`
         : `<rect ${rect} ${MAP_HIT_ATTRIBUTE}="${index}" tabindex="0" role="img" aria-label="${label}"/>`;
     })
     .concat(`<g ${MAP_RINGS_ATTRIBUTE}="" pointer-events="none"></g>`)

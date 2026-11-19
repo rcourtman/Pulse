@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  sessionCanReadAvailabilitySettings,
   sessionCanReadInfrastructureSettings,
   sessionCanRunPatrol,
   sessionSettingsCapabilities,
@@ -90,6 +91,34 @@ describe('sessionSettingsCapabilities', () => {
     });
 
     expect(sessionCanReadInfrastructureSettings()).toBe(false);
+  });
+
+  it('offers the availability settings only where Settings would open them', () => {
+    // Resolved with nothing granted, on an install that signs people in.
+    expect(sessionCanReadAvailabilitySettings()).toBe(false);
+
+    syncSessionSettingsCapabilities({
+      requiresAuth: true,
+      settingsCapabilities: capabilities({ availabilityRead: true }),
+    });
+    expect(sessionCanReadAvailabilitySettings()).toBe(true);
+
+    syncSessionSettingsCapabilities({
+      requiresAuth: true,
+      settingsCapabilities: capabilities({ availabilityRead: false, infrastructureRead: true }),
+    });
+    expect(sessionCanReadAvailabilitySettings()).toBe(false);
+
+    // A status with no capabilities grants nothing, as in Settings itself.
+    syncSessionSettingsCapabilities({ requiresAuth: false, settingsCapabilities: undefined });
+    expect(sessionCanReadAvailabilitySettings()).toBe(false);
+  });
+
+  it('keeps the availability settings on offer until the session resolves', async () => {
+    vi.resetModules();
+    const fresh = await import('@/stores/sessionSettingsCapabilities');
+
+    expect(fresh.sessionCanReadAvailabilitySettings()).toBe(true);
   });
 
   it('offers a Patrol run only where the run route accepts the session', () => {
