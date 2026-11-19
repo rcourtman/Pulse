@@ -251,6 +251,29 @@ func (m *Monitor) tryGuestAgentMemAvailable(
 	return memTotal, agentAvailable, source, true, false
 }
 
+// selectLinkedVMMemory uses the exact in-guest sample rather than applying its
+// usage to the provider's configured capacity. Freshness and precedence are
+// decided by the caller; this selector never requests another measurement.
+func selectLinkedVMMemory(guestName, node string, vmid int, memory models.Memory, configuredTotal uint64, guestRaw *VMMemoryRaw) (total, used uint64, ok bool) {
+	if !memory.HasKnownUsage() || memory.Total <= 0 ||
+		(configuredTotal != 0 && uint64(memory.Total) > configuredTotal) {
+		return 0, 0, false
+	}
+	total, used = uint64(memory.Total), uint64(memory.Used)
+	if guestRaw != nil {
+		guestRaw.HostAgentTotal = total
+		guestRaw.HostAgentUsed = used
+	}
+	log.Debug().
+		Str("vm", guestName).
+		Str("node", node).
+		Int("vmid", vmid).
+		Uint64("total", total).
+		Uint64("used", used).
+		Msg("QEMU memory: using linked Pulse host agent memory (excludes reclaimable cache)")
+	return total, used, true
+}
+
 // Return shared guest-command deferral even when independent memory is usable.
 func (m *Monitor) resolveGuestStatusMemory(
 	ctx context.Context,
@@ -287,42 +310,6 @@ func (m *Monitor) resolveGuestStatusMemory(
 		memTotal = status.MaxMem
 	}
 
-	memAvailable := uint64(0)
-	hasMemAvailable := false
-	derivedTotalMinusUsedAvailable := uint64(0)
-	derivedTotalMinusUsedTotal := uint64(0)
-	selectedUsed := uint64(0)
-	hasSelectedUsed := false
-	selectLinkedAgentMemory := func(requireCurrent bool) {
-		agentHost, ok := vmIDToHostAgent[guestID]
-		if !ok ||
-			!agentHost.Memory.HasKnownUsage() ||
-			agentHost.Memory.Total <= 0 ||
-			(memTotal != 0 && uint64(agentHost.Memory.Total) > memTotal) ||
-			(requireCurrent && agentHost.Memory.Observation.State == "last-known") {
-			return
-		}
-		memTotal = uint64(agentHost.Memory.Total)
-		memAvailable = uint64(agentHost.Memory.Total - agentHost.Memory.Used)
-		hasMemAvailable = true
-		selectedUsed = uint64(agentHost.Memory.Used)
-		hasSelectedUsed = true
-		memorySource = "agent"
-		if guestRaw != nil {
-			guestRaw.HostAgentTotal = uint64(agentHost.Memory.Total)
-			guestRaw.HostAgentUsed = uint64(agentHost.Memory.Used)
-		}
-		log.Debug().
-			Str("vm", guestName).
-			Str("node", node).
-			Int("vmid", vmid).
-			Uint64("total", memTotal).
-			Uint64("available", memAvailable).
-			Int64("agentTotal", agentHost.Memory.Total).
-			Int64("agentUsed", agentHost.Memory.Used).
-			Msg("QEMU memory: using linked Pulse host agent memory (excludes page cache)")
-	}
-
 	// A current linked agent outranks every Proxmox-side reading. It is as
 	// cache-aware as /proc/meminfo and also counts the ZFS ARC as reclaimable,
 	// which the kernel's MemAvailable does not: a TrueNAS or other ZFS guest
@@ -330,12 +317,20 @@ func (m *Monitor) resolveGuestStatusMemory(
 	// Taking it first also keeps the /proc/meminfo file-read off the guest's
 	// shared agent channel, where a command in flight when a freeze starts can
 	// break the thaw (#2439). A last-known sample ranks below the read.
-	selectLinkedAgentMemory(true)
+	agentMemory := vmIDToHostAgent[guestID].Memory
+	if agentMemory.Observation.State != "last-known" {
+		if total, used, ok := selectLinkedVMMemory(guestName, node, vmid, agentMemory, memTotal, guestRaw); ok {
+			// Diagnostics keep the status sample the agent outranked.
+			deriveGuestMemInfoAvailable(status.MemInfo, guestRaw)
+			return total, used, "agent", false
+		}
+	}
 
-	if status.MemInfo != nil && hasSelectedUsed {
-		// Diagnostics keep the status sample the agent outranked.
-		deriveGuestMemInfoAvailable(status.MemInfo, guestRaw)
-	} else if status.MemInfo != nil {
+	memAvailable := uint64(0)
+	hasMemAvailable := false
+	derivedTotalMinusUsedAvailable := uint64(0)
+	derivedTotalMinusUsedTotal := uint64(0)
+	if status.MemInfo != nil {
 		memInfoTotal := memTotal
 		if status.MemInfo.Total > 0 {
 			memInfoTotal = status.MemInfo.Total
@@ -378,7 +373,7 @@ func (m *Monitor) resolveGuestStatusMemory(
 	// only in node RRD, so a guest RRD lookup can never yield memory evidence
 	// (#1634).
 
-	if !hasMemAvailable && !hasSelectedUsed && status.Lock == "" && status.Agent.IsAvailable() && !triedGuestAgentMemAvailable {
+	if !hasMemAvailable && status.Lock == "" && status.Agent.IsAvailable() && !triedGuestAgentMemAvailable {
 		agentTotal, agentAvailable, agentSource, ok, deferred := m.tryGuestAgentMemAvailable(ctx, client, instanceName, guestName, node, vmid, memTotal, guestRaw)
 		guestReadDeferred = guestReadDeferred || deferred
 		if ok {
@@ -389,7 +384,7 @@ func (m *Monitor) resolveGuestStatusMemory(
 		}
 	}
 
-	if !hasMemAvailable && !hasSelectedUsed && derivedTotalMinusUsedAvailable > 0 {
+	if !hasMemAvailable && derivedTotalMinusUsedAvailable > 0 {
 		memTotal = derivedTotalMinusUsedTotal
 		memAvailable = derivedTotalMinusUsedAvailable
 		hasMemAvailable = true
@@ -404,14 +399,14 @@ func (m *Monitor) resolveGuestStatusMemory(
 			Msg("QEMU memory: deriving guest available from total-used gap after preferred fallbacks")
 	}
 
-	if !hasMemAvailable && !hasSelectedUsed {
-		selectLinkedAgentMemory(false)
+	if !hasMemAvailable && agentMemory.Observation.State == "last-known" {
+		if total, used, ok := selectLinkedVMMemory(guestName, node, vmid, agentMemory, memTotal, guestRaw); ok {
+			return total, used, "agent", guestReadDeferred
+		}
 	}
 
 	memUsed := uint64(0)
 	switch {
-	case hasSelectedUsed:
-		memUsed = selectedUsed
 	case hasMemAvailable:
 		memUsed = memTotal - memAvailable
 	default:

@@ -322,6 +322,20 @@ func (m *Monitor) buildVMFromClusterResource(
 				Msg("Could not get VM status, using cluster/resources disk data")
 		}
 
+		if state.detailedStatus == nil && state.memTotal > 0 {
+			// Status/current and the linked Pulse report are independent.
+			// Without status, the listing supplies the capacity check but
+			// cannot renew agent evidence or make an old sample current.
+			agentMemory := vmIDToHostAgent[guestID].Memory
+			observation := agentMemory.Observation
+			if observation.State == "current" && observation.Source == "agent" &&
+				!observation.ObservedAt.IsZero() && !observation.ObservedAt.After(prePollTime) {
+				if total, used, ok := selectLinkedVMMemory(res.Name, res.Node, res.VMID, agentMemory, state.memTotal, &state.guestRaw); ok {
+					state.memTotal, state.memUsed, state.memorySource = total, used, "agent"
+				}
+			}
+		}
+
 		if state.detailedStatus != nil && state.detailedStatus.Lock != "" {
 			res.Lock = state.detailedStatus.Lock
 		}
