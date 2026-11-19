@@ -97,7 +97,7 @@ jobs:
         with:
           persist-credentials: false
 
-      # Fail before installs, Docker builds or the eight-shard fan-out.
+      # Fail before installs, Docker builds or browser shard fan-out.
       - name: Check shipped docs before dependency work
         run: python3 scripts/check_docs_mirror.py
 
@@ -161,7 +161,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # Fail before installs, Docker builds or the eight-shard fan-out.
+      # Fail before installs, Docker builds or browser shard fan-out.
       - name: Check shipped docs before dependency work
         run: python3 scripts/check_docs_mirror.py
 
@@ -293,7 +293,7 @@ jobs:
           if-no-files-found: error
 
   e2e:
-    name: Playwright Core E2E (shard ${{ matrix.shard }}/8)
+    name: Playwright Core E2E (shard ${{ matrix.shard }}/${{ strategy.job-total }})
     needs: [tier-selection, test-images]
     runs-on: ubuntu-24.04
     timeout-minutes: 60
@@ -302,7 +302,10 @@ jobs:
       # Leave hosted runners available for open PRs during post-merge validation.
       max-parallel: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 4 || 8 }}
       matrix:
-        shard: [1, 2, 3, 4, 5, 6, 7, 8]
+        # Each runner installs both browsers and starts its own containers.
+        # Main-bound PRs run only the stable tier, so share that setup across
+        # more tests. Branch and release proofs keep their eight partitions.
+        shard: ${{ fromJSON(github.event_name == 'pull_request' && github.base_ref == 'main' && '[1, 2, 3, 4]' || '[1, 2, 3, 4, 5, 6, 7, 8]') }}
 
     env:
       PULSE_E2E_SEED_IMAGE: pulse-e2e-seed:test
@@ -434,7 +437,7 @@ jobs:
           PULSE_E2E_REQUIRE_DEFAULT_MOCK_READY: "true"
           PULSE_E2E_TIER: "stable"
           PULSE_MULTI_TENANT_ENABLED: "true"
-        run: npm test -- --shard=${{ matrix.shard }}/8
+        run: npm test -- --shard=${{ matrix.shard }}/${{ strategy.job-total }}
 
       # Playwright's report artifacts preserve the full forensic record, but
       # artifact bodies and job logs require an authenticated GitHub session.
@@ -472,7 +475,7 @@ jobs:
       # environment never came up and every probation spec would fail on it.
       # Pull requests skip it. It cannot gate a PR, and the promotion rule in
       # e2e-tiering.mjs counts only main runs, so on a PR it only held each
-      # of the eight shard runners for about eight more minutes.
+      # shard runner for about eight more minutes.
       - name: Run probation-tier E2E suite (non-gating)
         id: probation
         if: ${{ !cancelled() && github.event_name != 'pull_request' && steps.stable.conclusion != 'skipped' }}
@@ -495,7 +498,7 @@ jobs:
           PULSE_E2E_RESULTS_DIR: test-results-probation
           PULSE_MULTI_TENANT_ENABLED: "true"
         run: >-
-          npm test -- --shard=${{ matrix.shard }}/8 --pass-with-no-tests
+          npm test -- --shard=${{ matrix.shard }}/${{ strategy.job-total }} --pass-with-no-tests
           --max-failures=5 --global-timeout=600000
 
       - name: Report probation-tier outcome
@@ -555,7 +558,7 @@ jobs:
         with:
           persist-credentials: false
 
-      # Fail before installs, Docker builds or the eight-shard fan-out.
+      # Fail before installs, Docker builds or browser shard fan-out.
       - name: Check shipped docs before dependency work
         run: python3 scripts/check_docs_mirror.py
 
