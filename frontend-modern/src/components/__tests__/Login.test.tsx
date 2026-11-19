@@ -258,6 +258,34 @@ describe('Login', () => {
     expect(mockOnLogin).not.toHaveBeenCalled();
   });
 
+  it('does not restart demo sign-in when pending settles and the tab marker cannot be saved', async () => {
+    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementationOnce(() => {
+      throw new Error('storage unavailable');
+    });
+    const securityStatus = {
+      hasAuthentication: true,
+      presentationPolicy: { demoMode: true },
+    };
+    mockFetch.mockResolvedValueOnce(
+      new Response(JSON.stringify({ success: false, message: 'Invalid username or password' }), {
+        status: 401,
+      }),
+    );
+
+    try {
+      render(() => <Login onLogin={vi.fn()} securityStatus={securityStatus as any} />);
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('Invalid username or password');
+      expect(screen.getByRole('button', { name: 'Sign in to Pulse' })).toHaveAttribute(
+        'aria-disabled',
+        'false',
+      );
+      expect(mockFetch.mock.calls.filter(([url]) => url === '/api/login')).toHaveLength(1);
+    } finally {
+      setItem.mockRestore();
+    }
+  });
+
   it('does not sign in to the demo twice in one browser tab', async () => {
     window.sessionStorage.setItem(SESSION_STORAGE_KEYS.DEMO_AUTO_LOGIN, 'attempted');
     const mockOnLogin = vi.fn();
@@ -393,6 +421,61 @@ describe('Login', () => {
     expect(mockLocalStorage.removeItem).toHaveBeenCalledWith(
       STORAGE_KEYS.REMEMBERED_LOGIN_USERNAME,
     );
+  });
+
+  it('keeps the focused submit in place and ignores extra activations until a refusal settles', async () => {
+    const onLogin = vi.fn();
+    const securityStatus = { hasAuthentication: true, hideLocalLogin: false };
+    let finish!: (response: Response) => void;
+    mockFetch.mockReturnValueOnce(
+      new Promise<Response>((resolve) => {
+        finish = resolve;
+      }),
+    );
+    render(() => <Login onLogin={onLogin} securityStatus={securityStatus as any} />);
+    const submit = screen.getByRole<HTMLButtonElement>('button', { name: 'Sign in to Pulse' });
+    const form = submit.form!;
+    const username = screen.getByLabelText('Username');
+    const password = screen.getByLabelText('Password');
+    fireEvent.input(username, { target: { value: 'fixture-operator' } });
+    fireEvent.input(password, { target: { value: 'synthetic-input' } });
+    fireEvent.click(screen.getByLabelText('Remember me'));
+    submit.focus();
+    fireEvent.click(submit);
+
+    expect(submit).toHaveFocus();
+    expect(submit).not.toBeDisabled(); // Native disabled would drop browser focus.
+    expect(submit).toHaveAttribute('aria-disabled', 'true');
+    const status = screen.getByRole('status');
+    expect(status).toHaveTextContent('Sign-in in progress.');
+    fireEvent.click(submit);
+    fireEvent.submit(form);
+    await waitFor(() =>
+      expect(mockFetch.mock.calls.filter(([url]) => url === '/api/login')).toHaveLength(1),
+    );
+
+    finish(
+      new Response(
+        JSON.stringify({ success: false, message: 'Invalid username or password.', remaining: 2 }),
+        { status: 401 },
+      ),
+    );
+    expect(await screen.findByRole('alert')).toHaveTextContent('2 attempts remaining');
+    expect(submit).toHaveFocus();
+    expect(submit).toHaveAttribute('aria-disabled', 'false');
+    expect(screen.getByRole('status')).toBe(status);
+    expect(status.textContent).toBe('');
+    expect(username).toHaveValue('fixture-operator');
+    expect(password).toHaveValue('');
+    expect(onLogin).not.toHaveBeenCalled();
+
+    mockFetch.mockResolvedValueOnce(
+      new Response(JSON.stringify({ success: true }), { status: 200 }),
+    );
+    fireEvent.input(password, { target: { value: 'corrected-fixture-input' } });
+    fireEvent.submit(form);
+    await waitFor(() => expect(onLogin).toHaveBeenCalledOnce());
+    expect(mockFetch.mock.calls.filter(([url]) => url === '/api/login')).toHaveLength(2);
   });
 
   describe('authentication discovery recovery', () => {
