@@ -78,6 +78,9 @@ jobs:
     outputs:
       code: ${{ steps.filter.outputs.code }}
       component_only: ${{ steps.component.outputs.only }}
+      # Both matrices use one allocation. An unavailable output keeps the
+      # complete two-rest/five-API layout in both consumers.
+      rest_shards: ${{ github.event_name == 'pull_request' && github.base_ref == 'main' && steps.filter.outputs.code == 'true' && steps.component.outputs.only != 'true' && '3' || '2' }}
       frontend_deps: ${{ steps.filter.outputs.frontend_deps }}
       go_compile: ${{ steps.filter.outputs.go_compile }}
       triage_helper: ${{ steps.filter.outputs.triage_helper }}
@@ -821,6 +824,7 @@ jobs:
       - name: Go unit tests (shard ${{ matrix.shard }})
         if: needs.changes.outputs.code == 'true'
         env:
+          REST_SHARDS: ${{ needs.changes.outputs.rest_shards }}
           COMPONENT_ONLY: ${{ needs.changes.outputs.component_only }}
           PULSE_DATA_DIR: /tmp/pulse-test-data
           # Share four package slots; a finished slice releases its slot to
@@ -851,6 +855,11 @@ jobs:
           # These controls travel with main's copied patch controls too; no
           # test-name allowlist or unrelated stable source is required.
           python3 scripts/release_control/run_go_package_slice_test.py
+          if [[ "${REST_SHARDS:-2}" == 3 ]]; then
+            exec python3 scripts/release_control/run_go_rest_shard.py --count 3 --from-source \
+              --ordinary-command 'go test -race -timeout 50m $pkgs' \
+              --index "$index" --output "$RUNNER_TEMP/backend-slices"
+          fi
           pkgs=$(go list ./... | grep -v '/internal/api$' \
             | grep -vE '/(internal/monitoring|scripts/installtests)$' \
             | python3 .github/scripts/select-go-package-shard.py \
@@ -879,7 +888,7 @@ jobs:
   # time, and the `Backend tests (api)` job below keeps the required check
   # name by passing only when every shard passed.
   backend-api:
-    name: Backend tests (api-${{ matrix.index }})
+    name: Backend tests (${{ needs.changes.outputs.rest_shards == '3' && matrix.index == 4 && 'rest-2' || format('api-{0}', matrix.index) }})
     needs: [changes, test-compile]
     # Expand the unchanged required checks even when compilation fails. A
     # skipped dependency must not turn a broken source into a green check.
@@ -893,7 +902,8 @@ jobs:
       # Leave hosted runners available for open PRs during post-merge validation.
       max-parallel: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 3 || 5 }}
       matrix:
-        # The full suite uses five shards. One worker owns the component contract.
+        # Full PRs to main use four API workers and a third rest worker.
+        # Other full runs use five API workers. Component PRs use one.
         index: ${{ fromJSON(needs.changes.outputs.component_only == 'true' && '[0]' || '[0, 1, 2, 3, 4]') }}
     env:
       API_SHARD_COUNT: 5
@@ -958,11 +968,22 @@ jobs:
         # that forces every API shard to rebuild its heaviest package.
         run: bash scripts/ensure_test_assets.sh
 
+      - name: Go unit tests (shard rest-2)
+        if: needs.changes.outputs.rest_shards == '3' && matrix.index == 4
+        env:
+          PULSE_DATA_DIR: /tmp/pulse-test-data
+          GOMAXPROCS: '2'
+        run: |
+          python3 scripts/release_control/run_go_rest_shard.py --count 3 --from-source \
+            --ordinary-command 'go test -race -timeout 50m $pkgs' \
+            --index 2 --output "$RUNNER_TEMP/backend-slices"
+
       - name: Go unit tests (internal/api shard ${{ matrix.index }})
-        if: needs.changes.outputs.code == 'true'
+        if: needs.changes.outputs.code == 'true' && !(needs.changes.outputs.rest_shards == '3' && matrix.index == 4)
         env:
           PULSE_DATA_DIR: /tmp/pulse-test-data
           API_SHARD_INDEX: ${{ matrix.index }}
+          REST_SHARDS: ${{ needs.changes.outputs.rest_shards }}
           COMPONENT_ONLY: ${{ needs.changes.outputs.component_only }}
         # The test list is computed from the checked-out commit at run time,
         # so every shard sees the same list and a test added later lands in
@@ -988,6 +1009,9 @@ jobs:
         # plain go test, and pipefail keeps a go test failure fatal.
         run: |
           set -euo pipefail
+          if [[ "${REST_SHARDS:-2}" == 3 ]]; then
+            API_SHARD_COUNT=4
+          fi
           listing=$(go test -race -list . ./internal/api)
           tests=$(printf '%s\n' "$listing" | grep -E '^(Test|Fuzz|Example)[^[:space:]]*$' || true)
           if [ -z "$tests" ]; then
@@ -1045,8 +1069,17 @@ jobs:
             | python3 .github/scripts/record-internal-api-test-seconds.py "$timings/api-${API_SHARD_INDEX}.txt" \
                 "$timings/api-${API_SHARD_INDEX}.selected" "$package"
 
+      - name: Retain third rest partition coverage
+        if: always() && needs.changes.outputs.rest_shards == '3' && matrix.index == 4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: backend-slices-rest-2
+          path: ${{ runner.temp }}/backend-slices/
+          if-no-files-found: warn
+          retention-days: 7
+
       - name: Upload internal/api test timings
-        if: always() && needs.changes.outputs.code == 'true'
+        if: always() && needs.changes.outputs.code == 'true' && !(needs.changes.outputs.rest_shards == '3' && matrix.index == 4)
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: internal-api-test-seconds-${{ matrix.index }}
@@ -1076,7 +1109,7 @@ jobs:
             exit 1
           fi
           if [ "$API_SHARDS_RESULT" != success ]; then
-            echo "::error::internal/api shards did not all pass (result: ${API_SHARDS_RESULT})"
+            echo "::error::A worker in the backend API matrix failed to pass (result: ${API_SHARDS_RESULT})"
             exit 1
           fi
           case "$CODE_CHANGED" in

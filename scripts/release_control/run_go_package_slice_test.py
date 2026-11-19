@@ -549,6 +549,7 @@ class WorkflowTest(unittest.TestCase):
                 calls = root / 'calls'
                 calls.write_text('')
                 env = {**os.environ, 'PATH': str(root)+':'+os.environ['PATH'],
+                       'REST_SHARDS':'2', 'COMPONENT_ONLY':'false',
                        'CALLS':str(calls), 'RUNNER_TEMP':str(root / f'output{index}'), **options}
                 result = subprocess.run(['bash', '-c', command.replace('${{ matrix.shard }}', f'rest-{shard}')],
                                         cwd=root, env=env, capture_output=True, text=True, timeout=20)
@@ -573,6 +574,49 @@ class WorkflowTest(unittest.TestCase):
                     self.assertEqual(receipt['slots'], 4)
                     self.assertEqual([task['package'] for task in receipt['tasks']], sliced + ordinary)
                     self.assertEqual(all(task['exit']==0 for task in receipt['tasks']), not options)
+
+        # Run the actual three PR worker recipes. The last partition lives in
+        # the API matrix, so exercise its shell and propagate a failure there.
+        jobs = yaml.safe_load(WORKFLOW.read_text())['jobs']
+        extra = next(step for step in jobs['backend-api']['steps']
+                     if step['name'] == 'Go unit tests (shard rest-2)')
+        api = next(step for step in jobs['backend-api']['steps']
+                   if step['name'].startswith('Go unit tests (internal/api'))
+        self.assertEqual(extra['if'], "needs.changes.outputs.rest_shards == '3' && matrix.index == 4")
+        self.assertEqual(api['if'], "needs.changes.outputs.code == 'true' && !(" + extra['if'] + ")")
+        self.assertEqual(jobs['changes']['outputs']['rest_shards'],
+                         "${{ github.event_name == 'pull_request' && github.base_ref == 'main' && "
+                         "steps.filter.outputs.code == 'true' && steps.component.outputs.only != 'true' "
+                         "&& '3' || '2' }}")
+        self.assertEqual(jobs['backend-api-verdict']['needs'], ['changes', 'backend-api'])
+        self.assertFalse(jobs['backend-api']['strategy']['fail-fast'])
+        all_ordinary = []
+        selected = {package: [] for package in runner.PACKAGES}
+        for part in range(3):
+            recipe = command.replace('${{ matrix.shard }}', f'rest-{part}') if part < 2 else extra['run']
+            output = root / f'pr-{part}'
+            env = {**os.environ, 'PATH': str(root) + ':' + os.environ['PATH'],
+                   'CALLS': str(root / 'calls'), 'RUNNER_TEMP': str(output),
+                   'REST_SHARDS': '3', 'COMPONENT_ONLY': 'false'}
+            result = subprocess.run(['bash', '-eu', '-o', 'pipefail', '-c', recipe],
+                                    cwd=root, env=env, capture_output=True, text=True, timeout=20)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            artifacts = output / 'backend-slices'
+            receipt = json.loads((artifacts / 'ordinary-packages.json').read_text())
+            self.assertTrue(receipt['collection_complete'])
+            all_ordinary.extend(name for name in receipt['planned_packages'] if name not in selected)
+            for package, roots in selected.items():
+                directory = artifacts / package.split('/')[-1]
+                observation = json.loads((directory / 'receipt.json').read_text())
+                self.assertEqual((observation['index'], observation['count']), (part, 3))
+                roots.extend((directory / 'selected.tests').read_text().splitlines())
+                if part == 2:
+                    self.assertEqual(roots, (directory / 'listed.tests').read_text().splitlines())
+        self.assertCountEqual(all_ordinary, names)
+        failed = subprocess.run(['bash', '-eu', '-o', 'pipefail', '-c', extra['run']],
+                                cwd=root, env={**env, 'ORDINARY_EXIT': '9'},
+                                capture_output=True, text=True, timeout=20)
+        self.assertNotEqual(failed.returncode, 0, failed.stdout + failed.stderr)
 
     def test_real_process_queue_reuses_finished_slice_slots_and_drains_all_tasks(self):
         fixture = ExecutedRunnerTest()

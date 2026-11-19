@@ -119,7 +119,7 @@ def ordinary_execution(name: str, command: list[str], env: dict,
             "coverage_exit": coverage_exit, "listed_roots": len(names)}
 
 
-def ordinary_packages(index: int) -> list[str]:
+def ordinary_packages(index: int, count: int = 2) -> list[str]:
     listing = subprocess.run(["go", "list", "./..."], cwd=ROOT,
                              capture_output=True, text=True, check=True)
     packages = listing.stdout.splitlines()
@@ -130,7 +130,7 @@ def ordinary_packages(index: int) -> list[str]:
     ordinary = [name for name in packages if name not in required]
     selection = subprocess.run(
         [sys.executable, str(ROOT / ".github/scripts/select-go-package-shard.py"),
-         str(ROOT / ".github/scripts/go-package-test-seconds.txt"), "2", str(index)],
+         str(ROOT / ".github/scripts/go-package-test-seconds.txt"), str(count), str(index)],
         cwd=ROOT, input="\n".join(ordinary) + "\n",
         capture_output=True, text=True, check=True)
     selected = selection.stdout.splitlines()
@@ -141,9 +141,9 @@ def ordinary_packages(index: int) -> list[str]:
 
 
 def tasks(packages: list[str], index: int, output: Path,
-          ordinary_command: str) -> list[tuple[str, list[str]]]:
+          ordinary_command: str, count: int = 2) -> list[tuple[str, list[str]]]:
     sliced = [(name, [sys.executable, str(ROOT / "scripts/release_control/run_go_package_slice.py"),
-                      "--package", name, "--index", str(index),
+                      "--package", name, "--index", str(index), "--count", str(count),
                       "--output", str(output / name.rsplit("/", 1)[-1])])
               for name in SLICED]
     # One package per lease. -p=1 bounds its compiler as well as its binary;
@@ -221,7 +221,10 @@ def retain_results(output: Path, index: int, planned: list[str], results: dict,
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--index", type=int, choices=(0, 1), required=True)
+    parser.add_argument("--index", type=int, required=True)
+    parser.add_argument("--count", type=int, choices=(2, 3), default=2)
+    parser.add_argument("--from-source", action="store_true",
+                        help="Use the checked-out Go package inventory directly.")
     parser.add_argument("--output", type=Path, required=True)
     # Only the existing fixed Go recipe is supported, not arbitrary shell
     # input. Keeping it in the workflow also preserves stable-shipped source
@@ -229,8 +232,10 @@ def main() -> int:
     parser.add_argument("--ordinary-command", choices=(ORDINARY_COMMAND,), required=True)
     args = parser.parse_args()
     try:
-        packages = ordinary_packages(args.index)
-        if sys.stdin.read().splitlines() != packages:
+        if not 0 <= args.index < args.count:
+            raise ValueError("index outside backend partition count")
+        packages = ordinary_packages(args.index, args.count)
+        if not args.from_source and sys.stdin.read().splitlines() != packages:
             raise ValueError("supplied package order differs from the complete source selection")
     except (OSError, ValueError, subprocess.CalledProcessError) as error:
         print(f"Backend package admission failed: {error}", file=sys.stderr)
@@ -241,7 +246,7 @@ def main() -> int:
     args.output.mkdir(parents=True, exist_ok=True)
     print("Ordinary packages in this shard:\n" + "\n".join(packages), flush=True)
     start = time.monotonic()
-    admitted = tasks(packages, args.index, args.output, args.ordinary_command)
+    admitted = tasks(packages, args.index, args.output, args.ordinary_command, args.count)
     planned = [name for name, _ in admitted]
     observed = {}
     retain_results(args.output, args.index, planned, observed, start)
