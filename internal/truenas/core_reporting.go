@@ -104,18 +104,54 @@ func reportingRow(response trueNASReportingGetDataResponse, index int) (time.Tim
 // query window even if a coarse/malformed step allows older buckets. Preserve
 // row indices.
 func liveReportingResponses(responses []trueNASReportingGetDataResponse, end int64) []trueNASReportingGetDataResponse {
+	return liveReportingResponsesWithDiskWindow(responses, end, nil)
+}
+
+func (r trueNASReportingGetDataResponse) graphName() string {
+	return strings.ToLower(strings.TrimSpace(r.Name))
+}
+
+func (r trueNASReportingGetDataResponse) graphIdentifier() string {
+	return readStringAny(map[string]any{"identifier": r.Identifier}, "identifier")
+}
+
+// Collect CORE disk observations during the existing row decode. They do not
+// change the freshness filter for the live disk rates or aligned host totals.
+func liveReportingResponsesWithDiskWindow(responses []trueNASReportingGetDataResponse, end int64, window map[string]coreDiskRateCells) []trueNASReportingGetDataResponse {
 	live := append([]trueNASReportingGetDataResponse(nil), responses...)
+	var claimedDisks map[string]struct{}
+	if window != nil {
+		claimedDisks = make(map[string]struct{})
+	}
 	for i, response := range live {
+		var device string
+		if claimedDisks != nil && response.graphName() == "disk" {
+			identifier := response.graphIdentifier()
+			if _, seen := claimedDisks[identifier]; identifier != "" && !seen {
+				// The live parser keeps the first graph for this identity. Claim
+				// it before testing Step, so no later graph can supply a frame
+				// for a compatibility reply even when its tail happens to match.
+				claimedDisks[identifier] = struct{}{}
+				device = identifier
+			}
+		}
 		if response.Step <= 0 {
 			continue // timestamped legacy/modern compatibility payload
 		}
+		var cells coreDiskRateCells
 		live[i].Data = append([]any(nil), response.Data...)
 		for index := range response.Data {
-			timestamp, _, ok := reportingRow(response, index)
+			timestamp, values, ok := reportingRow(response, index)
 			gap := end - timestamp.Unix()
+			if device != "" && ok && gap >= 0 && gap <= legacyRESTTelemetryWindowSeconds {
+				cells.add(end, timestamp, values)
+			}
 			if !ok || timestamp.Unix() > end || gap > legacyRESTTelemetryWindowSeconds || (gap > response.Step && gap-response.Step > response.Step) {
 				live[i].Data[index] = nil
 			}
+		}
+		if device != "" {
+			window[device] = cells
 		}
 	}
 	return live

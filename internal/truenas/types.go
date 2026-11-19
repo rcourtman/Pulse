@@ -42,6 +42,7 @@ type SystemInfo struct {
 	// They are not cumulative counters and must never populate PhysicalDisk.IO.
 	DiskReadRates      map[string]TimeSeriesPoint
 	DiskWriteRates     map[string]TimeSeriesPoint
+	coreDiskRateWindow map[string]coreDiskRateCells
 	TemperatureCelsius map[string]float64
 	IntervalSeconds    int
 	CollectedAt        time.Time
