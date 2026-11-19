@@ -41,6 +41,19 @@ interface SSOProvidersPanelProps {
   currentUser?: string;
 }
 
+const createInventoryCheck = () => {
+  let complete!: () => void;
+  const completion = new Promise<void>((resolve) => {
+    complete = resolve;
+  });
+  return { completion, complete };
+};
+
+type ProviderInventoryRead = {
+  controller: AbortController;
+  check: ReturnType<typeof createInventoryCheck>;
+};
+
 export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
   const [providers, setProviders] = createSignal<SSOProvider[]>([]);
   const [loading, setLoading] = createSignal(true);
@@ -75,7 +88,7 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
   let disposed = false;
   let contextVersion = 0;
   let editorVersion = 0;
-  let readController: AbortController | undefined;
+  let inventoryRead: ProviderInventoryRead | undefined;
   let detailController: AbortController | undefined;
   let testController: AbortController | undefined;
   let previewController: AbortController | undefined;
@@ -155,23 +168,11 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
     ),
   );
 
-  const loadProviders = async () => {
-    if (!contextIsCurrent() || readController || (unconfirmedChange() && mutating())) return;
-    // Only an explicit inventory check releases an uncertain write's draft.
-    // Reading never resubmits it, and a failed read must keep writes blocked.
-    if (unconfirmedChange()) {
-      clearEditor();
-      setDeleteConfirmValue(null);
-    }
-    const version = contextVersion;
-    const controller = new AbortController();
+  const readProviderInventory = async (read: ProviderInventoryRead, version: number) => {
+    const { controller, check } = read;
     const isCurrent = () =>
-      contextIsCurrent() && version === contextVersion && readController === controller;
-    readController = controller;
-    setLoading(true);
-    setLoadError(false);
-    setProvidersLoaded(false);
-    setProviders([]);
+      contextIsCurrent() && version === contextVersion && inventoryRead === read;
+    if (!isCurrent()) return;
     try {
       const response = await apiFetch('/api/security/sso/providers', requestOptions(controller));
       if (!isCurrent()) return;
@@ -208,17 +209,58 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
       logger.error('[SSOProvidersPanel] Failed to load providers.');
     } finally {
       if (isCurrent()) {
-        readController = undefined;
+        inventoryRead = undefined;
         setLoading(false);
+        check.complete();
       }
     }
   };
 
+  const loadProviders = (replacePendingRead = false) => {
+    const previous = inventoryRead;
+    if (
+      !contextIsCurrent() ||
+      (previous && !replacePendingRead) ||
+      (mutating() && (unconfirmedChange() || (replacePendingRead && !previous)))
+    )
+      return;
+    const version = contextVersion;
+    const read: ProviderInventoryRead = {
+      controller: new AbortController(),
+      // An acknowledged write waits for the current saved read to finish,
+      // not for the displaced request or its response body to settle.
+      check: previous?.check ?? createInventoryCheck(),
+    };
+    inventoryRead = read;
+    previous?.controller.abort();
+    batch(() => {
+      // Only the first explicit check releases an uncertain write's draft.
+      // Restarting the read never resubmits it or clears its warning.
+      if (unconfirmedChange() && !previous) {
+        clearEditor();
+        setDeleteConfirmValue(null);
+      }
+      setLoading(true);
+      setLoadError(false);
+      setProvidersLoaded(false);
+      setProviders([]);
+    });
+    void readProviderInventory(read, version);
+    return read.check.completion;
+  };
+
+  const cancelProviderRead = () => {
+    const read = inventoryRead;
+    inventoryRead = undefined;
+    read?.controller.abort();
+    read?.check.complete();
+  };
+
   const resetContext = () => {
     contextVersion += 1;
-    readController?.abort();
+    cancelProviderRead();
     mutationController?.abort();
-    readController = mutationController = undefined;
+    mutationController = undefined;
     batch(() => {
       setSelectedOrg(currentOrg());
       setSelectedUser(authenticatedUser());
@@ -239,7 +281,7 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
   onCleanup(() => {
     disposed = true;
     contextVersion += 1;
-    readController?.abort();
+    cancelProviderRead();
     mutationController?.abort();
     clearEditor();
     setProviders([]);

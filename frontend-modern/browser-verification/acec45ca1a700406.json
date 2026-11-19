@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "5d1aba3290c7a903b9e8da7c0f4f359b949a873e",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx",
+    "frontend-modern/src/components/Settings/useSSOProvidersState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx": "b75d08f3910f64df8246eb11167960d976e666234a585a731d77ae3e1cc61291",
+    "frontend-modern/src/components/Settings/useSSOProvidersState.ts": "dddb1543ad8b6efb998f85c941508c47dc85db599bb5f75001fd59953e3e72c3"
+  },
+  "routes": [
+    "Production App and Settings route /settings/security-sso with the real SSO state owner, dialogs and HTTP client against an isolated synthetic server."
+  ],
+  "states": [
+    "Desktop Chromium 141.0.7390.37 at 1536×960 light and phone WebKit 26.0 at 390×844 dark; Playwright 1.56.1.",
+    "Read-only initial inventory, acknowledged toggle awaiting saved read, applied but unconfirmed deletion, malformed duplicate-provider inventory, and complete saved readbacks.",
+    "All 32 PNGs in 16 before/after pairs inspected with native view_image. The warning, provider identity and exact visible OIDC/SAML endpoint and management controls retain their context."
+  ],
+  "interactions": [
+    "Native Tab/Enter and touch restart the pending GET, close the displaced held request, keep the current organization and prevent writes until current inventory is accepted.",
+    "The original change is not replayed. Confirmed writes refresh parent status only after current readback; unknown writes keep their warning through malformed inventory. Deliberate focus departure is preserved.",
+    "12 route runs, 145 assertions. Fixture HTTP, not native identity-provider sign-in or installed recovery."
+  ],
+  "viewports": [
+    {
+      "width": 1536,
+      "height": 960
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "verified_at": "2026-11-19T08:30:14.685844Z"
+}

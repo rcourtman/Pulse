@@ -143,8 +143,8 @@ def assert_provider_inventory_check(case, panel):
     # Follow the visible recovery control, not an obsolete inline spelling.
     # This is source consistency only; transport/browser tests prove execution.
     notice = panel.split("const InventoryCheckNotice:", 1)[1].split("\n  return (", 1)[0]
-    case.assertIn("'Check saved providers'", notice)
-    if "onClick={() => void loadProviders()}" in notice:
+    case.assertRegex(notice, r">\s*Check saved providers\s*</Button>")
+    if "onClick={() => void loadProviders(true)}" in notice:
         return
     handlers = re.findall(r"onClick=\{(\w+)\}", notice)
     case.assertEqual(len(handlers), 1)
@@ -154,7 +154,7 @@ def assert_provider_inventory_check(case, panel):
     )
     case.assertIsNotNone(callback)
     body = re.sub(r"//[^\n]*", "", callback.group(1))
-    calls = re.findall(r"\b(\w+)\s*\(", body)
+    calls = [call for call in re.findall(r"\b(\w+)\s*\(", body) if call != "if"]
     case.assertEqual(calls.count("loadProviders"), 1)
     case.assertLessEqual(set(calls), {"loadProviders", "clearTimeout", "focus"})
 
@@ -299,8 +299,8 @@ class OIDCSessionDocsTest(unittest.TestCase):
         panel = (ROOT / "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx").read_text()
         assert_provider_inventory_check(self, panel)
         self.assertIn("retry: false", state)
-        inventory = state.split("const loadProviders = async () => {", 1)[1].split("const resetContext", 1)[0]
-        self.assertIn("if (unconfirmedChange()) {\n      clearEditor();", inventory)
+        inventory = state.split("const readProviderInventory = async", 1)[1].split("const cancelProviderRead", 1)[0]
+        self.assertRegex(inventory, r"if \(unconfirmedChange\(\) && !previous\) \{\s+clearEditor\(\);")
         self.assertIn("apiFetch('/api/security/sso/providers', requestOptions(controller))", inventory)
         self.assertIn("!Array.isArray(data.providers)", inventory)
         self.assertLess(inventory.index("!Array.isArray(data.providers)"), inventory.index("setUnconfirmedChange(null)"))
@@ -312,15 +312,18 @@ class OIDCSessionDocsTest(unittest.TestCase):
 
     def test_provider_check_accepts_inline_read_and_rejects_write_or_duplicate_read(self):
         panel = (ROOT / "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx").read_text()
+        check_control = "onClick={checkSavedProviders}\n        >\n          Check saved providers"
         assert_provider_inventory_check(
-            self, panel.replace("onClick={checkSavedProviders}", "onClick={() => void loadProviders()}", 1),
+            self, panel.replace(check_control, check_control.replace(
+                "{checkSavedProviders}", "{() => void loadProviders(true)}",
+            ), 1),
         )
         for before, after in (
-            ("onClick={checkSavedProviders}", "onClick={handleSave}"),
-            ("void loadProviders();", "void handleSave();"),
-            ("void loadProviders();", "void loadProviders();\n    handleDelete('saved');"),
-            ("void loadProviders();", "void loadProviders();\n    apiFetch('/api/security/sso/providers', { method: 'POST' });"),
-            ("void loadProviders();", "void loadProviders();\n    void loadProviders();"),
+            (check_control, check_control.replace("{checkSavedProviders}", "{handleSave}")),
+            ("const read = loadProviders(true);", "const read = handleSave();"),
+            ("const read = loadProviders(true);", "const read = loadProviders(true);\n    handleDelete('saved');"),
+            ("const read = loadProviders(true);", "const read = loadProviders(true);\n    apiFetch('/api/security/sso/providers', { method: 'POST' });"),
+            ("const read = loadProviders(true);", "const read = loadProviders(true);\n    void loadProviders(true);"),
         ):
             with self.subTest(regression=after):
                 self.assertIn(before, panel)

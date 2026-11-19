@@ -184,12 +184,33 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
   );
 
   const checkSavedProviders = () => {
-    // Starting the read releases an uncertain draft/confirmation and its inert
-    // background. Keep its continuation in the surviving inventory immediately
-    // after that release. No later response may reclaim focus.
-    void loadProviders();
+    // Starting or replacing the read may remove its control or release a modal.
+    // Keep focus in the inventory; the response must not reclaim it later.
+    const read = loadProviders(true);
+    if (!read) return;
     window.clearTimeout(recoveryFocusTimer);
     inventoryRegion?.focus({ preventScroll: true });
+  };
+
+  const RestartProviderCheck: Component = () => {
+    let button: HTMLButtonElement | undefined;
+    onCleanup(() => {
+      // If the read settles while the user is still on Restart, its removal
+      // should not send them back to the document body.
+      if (document.activeElement === button) inventoryRegion?.focus({ preventScroll: true });
+    });
+    return (
+      <Button
+        ref={button}
+        type="button"
+        variant="outline"
+        size="sm"
+        class="min-h-11 sm:min-h-0"
+        onClick={checkSavedProviders}
+      >
+        Restart provider check
+      </Button>
+    );
   };
 
   const InventoryCheckNotice: Component<{ lastRead?: boolean }> = (notice) => (
@@ -200,16 +221,18 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
           Providers below are from the last successful read. Their current settings are unknown.
         </p>
       </Show>
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        class="min-h-11 underline underline-offset-2 sm:min-h-0"
-        disabled={loading() || mutating()}
-        onClick={checkSavedProviders}
-      >
-        {loading() ? 'Checking saved providers…' : 'Check saved providers'}
-      </Button>
+      <Show when={!loading()}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          class="min-h-11 underline underline-offset-2 sm:min-h-0"
+          disabled={mutating()}
+          onClick={checkSavedProviders}
+        >
+          Check saved providers
+        </Button>
+      </Show>
     </InlineNotice>
   );
 
@@ -265,9 +288,12 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
           <InventoryCheckNotice lastRead />
         </Show>
         <Show when={loading()}>
-          <div class="flex items-center gap-3 text-sm text-muted">
-            <LoadingSpinner size="md" tone="current" />
-            {getSSOProvidersLoadingState().text}
+          <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <p class="flex items-center gap-3 text-sm text-muted">
+              <LoadingSpinner size="md" tone="current" />
+              {getSSOProvidersLoadingState().text}
+            </p>
+            <RestartProviderCheck />
           </div>
         </Show>
 
