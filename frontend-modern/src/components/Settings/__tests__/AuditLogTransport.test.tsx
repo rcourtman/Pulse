@@ -178,6 +178,117 @@ afterEach(() => {
 });
 
 describe('Audit Log rendered controls through the real HTTP client', () => {
+  it('restarts the initial load without changing its query or losing keyboard focus', async () => {
+    window.history.replaceState({}, '', '/settings/security-audit?event=login&success=success');
+    const abandoned = deferred<Response>();
+    const replacement = deferred<Response>();
+    read = () => (auditRequests().length === 1 ? abandoned.promise : replacement.promise);
+    mount();
+
+    const action = await screen.findByRole('button', { name: 'Restart load' });
+    expect(action).toBeEnabled();
+    expect(screen.getByRole('status')).toHaveTextContent('Loading audit events…');
+    expectNoInventory();
+    expect(screen.getByRole('button', { name: 'Verify All' })).toBeDisabled();
+    action.focus();
+    fireEvent.click(action);
+    await waitFor(() => expect(auditRequests()).toHaveLength(2));
+    const [oldRead, newRead] = auditRequests();
+    for (const request of [oldRead, newRead])
+      expectBoundRead(request, '/api/audit?limit=100&offset=0&event=login&success=true');
+    expect(oldRead.init.signal?.aborted).toBe(true);
+    expect(newRead.init.signal?.aborted).toBe(false);
+    expect(action).toHaveFocus();
+
+    // This transport double deliberately completes even after abort.
+    abandoned.resolve(json({ error: 'unauthorized' }, 401));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(getApiToken()).toBe(token);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expectNoInventory();
+    expect(screen.getByRole('status')).toHaveTextContent('Loading audit events…');
+
+    replacement.resolve(json(inventory('Current')));
+    await loaded('Current');
+    expect(screen.getByRole('button', { name: 'Refresh' })).toBe(action);
+    expect(action).toHaveFocus();
+    expect(screen.queryByText('Loading audit events…')).not.toBeInTheDocument();
+    expect(auditRequests()).toHaveLength(2);
+    expect(verificationRequests()).toHaveLength(0);
+  });
+
+  it('restarts the same filtered page and still withdraws its data for a current refusal', async () => {
+    const search = '?event=login&user=same-reader&success=success&verification=needs';
+    window.history.replaceState({}, '', '/settings/security-audit' + search);
+    window.localStorage.setItem('pulse-audit-page-size', '25');
+    const abandoned = pendingBody();
+    const replacement = deferred<Response>();
+    read = (url) =>
+      url.includes('offset=0')
+        ? json({ ...inventory(), total: 27 })
+        : auditRequests().length === 2
+          ? abandoned.response
+          : auditRequests().length === 3
+            ? replacement.promise
+            : json({ ...inventory('Current'), total: 27 });
+    mount();
+    await loaded();
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    await waitFor(() => expect(abandoned.response.bodyUsed).toBe(true));
+
+    const action = screen.getByRole('button', { name: 'Restart load' });
+    action.focus();
+    fireEvent.click(action);
+    await waitFor(() => expect(auditRequests()).toHaveLength(3));
+    expect(auditRequests()[1].init.signal?.aborted).toBe(true);
+    abandoned.finish({ ...inventory('Obsolete'), total: 27 });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expectNoInventory();
+    expect(screen.queryByText('Obsolete selected sign-in')).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('Loading audit events…');
+
+    replacement.resolve(json({ code: 'access_denied' }, 403));
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Audit log access could not be confirmed.',
+    );
+    expectNoInventory();
+    expect(screen.queryByRole('group', { name: 'Audit log filters' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Refresh' })).toBe(action);
+    expect(action).toHaveFocus();
+
+    fireEvent.click(action);
+    await loaded('Current');
+    expect(screen.getByText('Loaded 26-27 of 27 • Page 2 of 2')).toBeVisible();
+    expect(window.location.search).toBe(search);
+    expect(auditRequests()).toHaveLength(4);
+    for (const request of auditRequests().slice(1))
+      expectBoundRead(
+        request,
+        '/api/audit?limit=25&offset=25&event=login&user=same-reader&success=true',
+      );
+    expect(verificationRequests()).toHaveLength(0);
+  });
+
+  it('restarts an edited query without letting the pending debounce send it again', async () => {
+    mount();
+    await loaded();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      fireEvent.input(screen.getByPlaceholderText('Filter by user...'), {
+        target: { value: 'same' },
+      });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(auditRequests()).toHaveLength(1);
+      fireEvent.click(screen.getByRole('button', { name: 'Restart load' }));
+      await vi.advanceTimersByTimeAsync(350);
+      expect(auditRequests()).toHaveLength(2);
+      expectBoundRead(auditRequests()[1], '/api/audit?limit=100&offset=0&user=same');
+      expect(screen.getByRole('button', { name: 'Refresh' })).toBeEnabled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('keeps an empty Verification result honest and finds a matching signature on the next page', async () => {
     window.history.replaceState({}, '', '/settings/security-audit?event=login&verification=failed');
     window.localStorage.setItem('pulse-audit-page-size', '25');
@@ -497,6 +608,10 @@ describe('Audit Log rendered controls through the real HTTP client', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Legend' })).not.toBeInTheDocument();
     expectNoInventory();
+    const refresh = screen.getByRole('button', { name: 'Refresh' });
+    expect(refresh).toBeDisabled();
+    fireEvent.click(refresh);
+    expect(auditRequests()).toHaveLength(1);
     expect(verificationRequests()).toHaveLength(0);
   });
 
