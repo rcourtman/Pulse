@@ -466,6 +466,8 @@ export const resolveMapDeviceRole = (name: string): MapDeviceRole | undefined =>
   const words = name
     .toLowerCase()
     .replace(/wi-fi/g, 'wifi')
+    // FRITZ!Box is one word to its owner.
+    .replace(/!/g, '')
     .replace(/access[\s_-]*points?/g, 'accesspoint')
     .split(/[^a-z0-9]+/)
     .filter(Boolean);

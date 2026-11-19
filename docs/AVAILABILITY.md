@@ -38,6 +38,9 @@ policies, or [check DNS answers](#check-that-dns-answers-correctly).
 Keep credentials and private target addresses out of public screenshots and
 support reports. Use a service you own or are authorised to monitor.
 
+A check on a router, switch or access point is also drawn on the map as that
+device. See [Add your router, switch or access point](MAP.md#add-your-router-switch-or-access-point).
+
 ## Check from another network with Pro
 
 In the check editor's **Observation locations**, select a connected Pulse agent

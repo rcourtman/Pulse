@@ -335,6 +335,14 @@ describe('InfrastructureMapSurface connections', () => {
     expect(rings(container)).toHaveLength(0);
   });
 
+  it('says how a thing gets onto the map, and links the guide that explains it', () => {
+    draw();
+
+    expect(screen.getByText(/Apps and network gear are recognised by name\./)).toBeTruthy();
+    const guide = screen.getByRole('link', { name: 'How the map works' });
+    expect(guide.getAttribute('href')).toBe('/docs/MAP');
+  });
+
   it('writes the connection under the tile and keeps lines out of the legend', () => {
     const { container } = draw();
 

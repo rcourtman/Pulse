@@ -4412,6 +4412,13 @@ What the diagram does with them:
   the tile keeps its device and its box and reads `Router 1`, `Switch 1` or
   `AP 1`. No setting stores the role; an owner changes it by renaming the
   check.
+- How a thing gets onto the map is not something the map can show, so the
+  page says it in one line beside the legend, "Apps and network gear are
+  recognised by name", and links the shipped guide `docs/MAP.md` (`MAP_DOC_URL`).
+  The guide is where the words an owner can use are listed, so a word added to
+  `resolveMapDeviceRole` is added to its table in the same change. The line
+  stays that short: the legend's height is a fixed allowance in the fit to
+  one screen. `FRITZ!Box` is read as the one word its owner means.
 - A saved image has no pointer, so it has no rings. The captions carry the
   facts there.
 

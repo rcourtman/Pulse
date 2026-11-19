@@ -63,6 +63,8 @@ integration against their own vCenter before production use.
   acknowledgement, snooze, recovery, and an independent watchdog for Pulse.
 - [Check websites, services and devices](AVAILABILITY.md): local checks,
   Pro remote observation locations, and what each check can establish.
+- [See everything on one map](MAP.md): what the map draws, how apps are
+  recognised, and how to add your router, switch or access point.
 - [Metrics history](METRICS_HISTORY.md)
 - [Recovery data](RECOVERY.md)
 - [Webhooks](WEBHOOKS.md)
