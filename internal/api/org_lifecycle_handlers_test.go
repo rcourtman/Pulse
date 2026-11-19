@@ -622,10 +622,19 @@ func newLifecycleJSONFixture(t *testing.T) lifecycleJSONFixture {
 	dir := t.TempDir()
 	persistence := config.NewMultiTenantPersistence(dir)
 	before := make(map[string][]byte)
+	created := time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC)
 	for _, id := range []string{"selected", "peer"} {
+		owner := id + "-owner"
 		require.NoError(t, persistence.SaveOrganization(&models.Organization{
 			ID: id, DisplayName: "Saved " + id, Status: models.OrgStatusActive,
-			OwnerUserID: id + "-owner", RetentionDays: 90,
+			OwnerUserID: owner, CreatedAt: created, RetentionDays: 90,
+			Members: []models.OrganizationMember{
+				{UserID: owner, Role: models.OrgRoleOwner, AddedAt: created},
+				{UserID: id + "-member", Role: models.OrgRoleViewer, AddedAt: created, AddedBy: owner},
+			},
+			PendingInvitations: []models.OrganizationInvitation{
+				{UserID: id + "-invitee", Role: models.OrgRoleViewer, InvitedAt: created, InvitedBy: owner},
+			},
 		}))
 		path := filepath.Join(dir, "orgs", id, "org.json")
 		raw, err := os.ReadFile(path)
@@ -645,6 +654,17 @@ func (f lifecycleJSONFixture) assertSaved(t *testing.T, includeSelected bool) {
 		require.NoError(t, err)
 		require.Equal(t, string(want), string(got), "saved organization changed: %s", path)
 	}
+}
+
+func requireOrgLifecycleResponse(t *testing.T, body []byte, saved *models.Organization) {
+	t.Helper()
+	raw, err := json.Marshal(saved)
+	require.NoError(t, err)
+	var want, got map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(raw, &want))
+	require.NoError(t, json.Unmarshal(body, &got))
+	delete(want, "pendingInvitations")
+	require.Equal(t, want, got)
 }
 
 func (f lifecycleJSONFixture) serve(t *testing.T, operation string, body io.Reader) *httptest.ResponseRecorder {
@@ -756,13 +776,11 @@ func TestOrgLifecycleJSONPreservesSupportedOptions(t *testing.T) {
 					f := newLifecycleJSONFixture(t)
 					w := f.serve(t, operation, strings.NewReader(tc.body))
 					require.Equal(t, http.StatusOK, w.Code, "%s", w.Body.String())
-					var response models.Organization
-					require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
 					persisted, err := f.persistence.LoadOrganization("selected")
 					require.NoError(t, err)
-					persisted.PersistenceVersion = "" // Internal save guard is not a response field.
-					require.Equal(t, response, *persisted)
+					requireOrgLifecycleResponse(t, w.Body.Bytes(), persisted)
 					require.Equal(t, "selected-owner", persisted.OwnerUserID)
+					require.Len(t, persisted.PendingInvitations, 1)
 					if operation == "suspend" {
 						require.Equal(t, models.OrgStatusSuspended, persisted.Status)
 						require.Equal(t, tc.reason, persisted.SuspendReason)
@@ -782,8 +800,13 @@ func TestOrgLifecycleJSONPreservesSupportedOptions(t *testing.T) {
 
 func TestOrgLifecycleJSONNativeHTTP(t *testing.T) {
 	f := newLifecycleJSONFixture(t)
+	original, err := f.persistence.LoadOrganizationStrict("selected")
+	require.NoError(t, err)
+	require.Len(t, original.PendingInvitations, 1)
+	original.PersistenceVersion = ""
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/admin/orgs/{id}/suspend", f.handlers.HandleSuspendOrg)
+	mux.HandleFunc("POST /api/admin/orgs/{id}/unsuspend", f.handlers.HandleUnsuspendOrg)
 	mux.HandleFunc("POST /api/admin/orgs/{id}/soft-delete", f.handlers.HandleSoftDeleteOrg)
 	server := httptest.NewServer(mux)
 	t.Cleanup(server.Close)
@@ -800,29 +823,44 @@ func TestOrgLifecycleJSONNativeHTTP(t *testing.T) {
 	}
 	// Rejection leaves the same saved org usable for a deliberate lifecycle
 	// change, not a new org or a replay of the malformed request.
-	for _, tc := range []struct{ operation, body string }{
-		{"suspend", `{"reason":"deliberate"}`},
-		{"soft-delete", `{"retention_days":90}`},
+	for _, tc := range []struct {
+		operation string
+		body      io.Reader
+	}{
+		{"suspend", strings.NewReader(`{"reason":"deliberate"}`)},
+		{"unsuspend", nil},
+		{"soft-delete", strings.NewReader(`{"retention_days":45}`)},
 	} {
-		response, err := client.Post(server.URL+"/api/admin/orgs/selected/"+tc.operation, "application/json", strings.NewReader(tc.body))
-		require.NoError(t, err)
-		var saved models.Organization
-		err = json.NewDecoder(response.Body).Decode(&saved)
-		require.NoError(t, response.Body.Close())
-		require.NoError(t, err)
-		require.Equal(t, http.StatusOK, response.StatusCode)
-		if tc.operation == "suspend" {
-			require.Equal(t, models.OrgStatusSuspended, saved.Status)
-			require.Equal(t, "deliberate", saved.SuspendReason)
-		} else {
-			require.Equal(t, models.OrgStatusPendingDeletion, saved.Status)
-			require.Equal(t, 90, saved.RetentionDays)
-		}
-		persisted, err := f.persistence.LoadOrganization("selected")
-		require.NoError(t, err)
-		persisted.PersistenceVersion = ""
-		require.Equal(t, saved, *persisted)
-		f.assertSaved(t, false)
+		t.Run(tc.operation, func(t *testing.T) {
+			response, err := client.Post(server.URL+"/api/admin/orgs/selected/"+tc.operation, "application/json", tc.body)
+			require.NoError(t, err)
+			body, err := io.ReadAll(response.Body)
+			require.NoError(t, response.Body.Close())
+			require.NoError(t, err)
+			require.Equal(t, http.StatusOK, response.StatusCode)
+			persisted, err := f.persistence.LoadOrganizationStrict("selected")
+			require.NoError(t, err)
+			requireOrgLifecycleResponse(t, body, persisted)
+
+			// Nothing outside the deliberate transition should change in the
+			// stored record, including the invitation omitted from the reply.
+			want := *original
+			switch tc.operation {
+			case "suspend":
+				want.Status = models.OrgStatusSuspended
+				want.SuspendReason = "deliberate"
+				require.NotNil(t, persisted.SuspendedAt)
+				want.SuspendedAt = persisted.SuspendedAt
+			case "soft-delete":
+				want.Status = models.OrgStatusPendingDeletion
+				want.RetentionDays = 45
+				require.NotNil(t, persisted.DeletionRequestedAt)
+				want.DeletionRequestedAt = persisted.DeletionRequestedAt
+			}
+			persisted.PersistenceVersion = ""
+			require.Equal(t, want, *persisted)
+			f.assertSaved(t, false)
+		})
 	}
 }
 

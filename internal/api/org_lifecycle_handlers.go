@@ -98,7 +98,7 @@ func (h *OrgLifecycleHandlers) HandleSuspendOrg(w http.ResponseWriter, r *http.R
 		hosted.ParseLifecycleMetricStatus(string(oldStatus)),
 		hosted.ParseLifecycleMetricStatus(string(org.Status)),
 	)
-	writeJSON(w, http.StatusOK, org)
+	writeOrgLifecycleResponse(w, org)
 }
 
 func (h *OrgLifecycleHandlers) HandleUnsuspendOrg(w http.ResponseWriter, r *http.Request) {
@@ -142,7 +142,7 @@ func (h *OrgLifecycleHandlers) HandleUnsuspendOrg(w http.ResponseWriter, r *http
 		hosted.ParseLifecycleMetricStatus(string(oldStatus)),
 		hosted.ParseLifecycleMetricStatus(string(org.Status)),
 	)
-	writeJSON(w, http.StatusOK, org)
+	writeOrgLifecycleResponse(w, org)
 }
 
 func (h *OrgLifecycleHandlers) HandleSoftDeleteOrg(w http.ResponseWriter, r *http.Request) {
@@ -207,7 +207,15 @@ func (h *OrgLifecycleHandlers) HandleSoftDeleteOrg(w http.ResponseWriter, r *htt
 		hosted.ParseLifecycleMetricStatus(string(oldStatus)),
 		hosted.ParseLifecycleMetricStatus(string(org.Status)),
 	)
-	writeJSON(w, http.StatusOK, org)
+	writeOrgLifecycleResponse(w, org)
+}
+
+func writeOrgLifecycleResponse(w http.ResponseWriter, org *models.Organization) {
+	// A lifecycle result is not an invitation read. Preserve the saved record
+	// and the rest of the response; managers read invitations separately.
+	response := *org
+	response.PendingInvitations = nil
+	writeJSON(w, http.StatusOK, response)
 }
 
 func decodeOptionalLifecycleRequest(w http.ResponseWriter, r *http.Request, out any) error {

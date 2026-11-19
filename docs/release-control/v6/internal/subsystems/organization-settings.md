@@ -33,7 +33,7 @@ returns the existing generic 400 invalid_request without persisting selected or
 peer organization changes or echoing supplied values. Method/hosted/persistence,
 default-organization and lookup checks retain their ordering. Unsuspend has no
 parameter body and is unchanged, as are authentication, authorization, conflict
-checks, successful response fields and the 30-day deletion default.
+checks and the 30-day deletion default.
 
 Registered org_lifecycle_handlers_test.go exercises real selected/peer saved
 metadata, damaged/duplicate/oversized/read-failed bodies, supported defaults and
@@ -42,6 +42,13 @@ changes to the same organization. This is input-safety proof, not live hosted
 client recovery or release availability; no public frontend consumer calls these
 parameter-bearing lifecycle routes.
 
+Hosted lifecycle actions are not invitation reads. The suspend, unsuspend and
+soft-delete success replies omit pending invitations for every caller while
+retaining the workspace identity, enrolled members and resulting lifecycle
+state. Authorized managers still use the dedicated invitation read, and
+invitees still use their inbox. The native lifecycle test checks that the
+selected workspace retains its saved invitations and that peer state does not
+change.
 
 ### Sharing drafts support native form submission
 
