@@ -158,7 +158,7 @@ const COVERAGE_WEIGHTS: Record<
   Partial<Record<CoverageColumnId, number>>
 > = {
   // Posture keeps its whole compact reason word, the age cell holds the
-  // suffix-free compact age, and the job dot takes what a "Job" header needs.
+  // suffix-free compact age, and the job takes short words on up to two lines.
   compact: { workload: 46, posture: 22, latest: 18, task: 14 },
   // Above the phone projection the identity columns (workload, node) take the
   // slack that the short type badge, target id, and age cells cannot use, so
@@ -197,7 +197,7 @@ export const getCoverageColumns = (
 // names often share a long prefix ("checkout-web-110"), so cutting their ends
 // hides what tells them apart. The cells beside it hold short, fixed content,
 // measured at 320px: a reason word with its dot ("No backup" is the longest),
-// an "Unknown" age, the job dot under "Job". When the table knows its width
+// an "Unknown" age, and short job labels. When the table knows its width
 // they take exactly that and the name takes the rest, instead of a fixed share
 // that wastes room at 360px and up. A 302px table still leaves the other cells
 // whole.

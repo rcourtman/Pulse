@@ -66,6 +66,12 @@ const value = (section: HTMLElement, label: string) =>
   within(section).getByText(label, { exact: true, selector: 'td' }).closest('tr')!
     .lastElementChild!;
 
+function expectPhoneJob(row: Element, text: string) {
+  const cell = row.lastElementChild as HTMLElement;
+  const label = within(cell).getByText(text, { exact: true });
+  expect(label.closest('.sr-only')).toBeNull();
+}
+
 beforeEach(() => {
   vi.resetAllMocks();
   vi.useFakeTimers({ now: BACKUP_IDENTITY_NOW, toFake: ['Date', 'setInterval', 'clearInterval'] });
@@ -193,6 +199,7 @@ describe('latest backup task evidence through the inventory consumer', () => {
     });
     toggle.focus();
     const summary = toggle.closest('tr');
+    expectPhoneJob(summary!, 'Failed');
     tasks = [
       identityTask({
         id: 'task-recovered',
@@ -205,6 +212,7 @@ describe('latest backup task evidence through the inventory consumer', () => {
       expect(value(taskSection(panel), 'Task ID')).toHaveTextContent('task-recovered'),
     );
     expect(value(taskSection(panel), 'Status')).toHaveTextContent('OK');
+    expectPhoneJob(summary!, 'OK');
     expect(value(taskSection(panel), 'Duration')).toHaveTextContent('1m 5s');
     expect(
       within(taskSection(panel)).queryByText('Error', { exact: true, selector: 'td' }),
@@ -227,6 +235,25 @@ describe('latest backup task evidence through the inventory consumer', () => {
     expect(revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail'))).toBe(panel);
     expect(document.activeElement).toBe(toggle);
     expect(api.fetch).toHaveBeenCalledTimes(6);
+  });
+
+  it.each([
+    ['running', 'In flight', 'Running'],
+    ['unknown', 'State unclear', 'unknown'],
+    ['interrupted', 'Other', 'interrupted'],
+  ])('labels the compact job result for %s without guessing', async (status, visible, reported) => {
+    tasks = [identityTask({ status, endTime: undefined })];
+    mount();
+    await open();
+    const summary = screen
+      .getByRole('button', { name: /Collapse details for same-name .* east$/ })
+      .closest('tr')!;
+    expectPhoneJob(summary, visible);
+    expect(summary.lastElementChild).toHaveTextContent(`Latest task: ${reported}`);
+    const west = screen
+      .getByRole('button', { name: /Expand details for same-name .* west$/ })
+      .closest('tr')!;
+    expectPhoneJob(west, '—');
   });
 });
 
@@ -277,6 +304,7 @@ describe('uncertain task chronology through the inventory consumer', () => {
         .closest('tr')!;
       expect(summary).toHaveTextContent('Latest task: Unknown');
       expect(summary).not.toHaveTextContent('OK');
+      if (width === 330) expectPhoneJob(summary, 'Order unclear');
       expect(panel).toHaveTextContent('dated-ok');
       expect(panel).toHaveTextContent('Restore points');
       expect(screen.getByRole('button', { name: '2 status unknown' })).toBeInTheDocument();
