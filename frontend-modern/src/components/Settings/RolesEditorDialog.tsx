@@ -231,7 +231,7 @@ export const RolesEditorDialog: Component<RolesEditorDialogProps> = (props) => (
             </div>
           </fieldset>
           <Show when={props.actionError}>
-            <InlineNotice tone="danger" role="alert" aria-live="polite">
+            <InlineNotice tone="danger" role="alert" aria-live="polite" class="wrap-anywhere">
               {props.actionError}
             </InlineNotice>
           </Show>
