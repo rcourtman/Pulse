@@ -66,6 +66,7 @@ export function useOrganizationSharingPanelState(props: OrganizationSharingPanel
   const [incomingShares, setIncomingShares] = createSignal<IncomingOrganizationShare[]>([]);
   const [unavailableLists, setUnavailableLists] = createSignal<{
     directory: boolean;
+    outgoing: boolean;
     incoming: boolean;
   }>();
   const [targetOrgId, setTargetOrgId] = createSignal('');
@@ -222,13 +223,14 @@ export function useOrganizationSharingPanelState(props: OrganizationSharingPanel
       retry: false,
     };
     try {
-      // Publish only current, verified data. A failed aggregate can leave the
+      // Publish only current, verified data. An unread list can leave the
       // selected scope readable, but not authorize a write or imply zero rows.
       const [orgData, memberData, allOrgs, outgoing, incoming] = await Promise.all([
         OrgsAPI.get(orgId, options),
         OrgsAPI.listMembers(orgId, options),
         readOrganizationAggregate(OrgsAPI.list(options)),
-        OrgsAPI.listShares(orgId, options),
+        // The outgoing endpoint loads the selected organization independently.
+        readOrganizationAggregate(OrgsAPI.listShares(orgId, options), 'org_load_failed'),
         readOrganizationAggregate(OrgsAPI.listIncomingShares(orgId, options)),
       ]);
       if (!isCurrent()) return;
@@ -237,7 +239,7 @@ export function useOrganizationSharingPanelState(props: OrganizationSharingPanel
         orgData.id !== orgId ||
         !Array.isArray(memberData) ||
         (allOrgs !== undefined && !Array.isArray(allOrgs)) ||
-        !Array.isArray(outgoing) ||
+        (outgoing !== undefined && !Array.isArray(outgoing)) ||
         (incoming !== undefined &&
           (!Array.isArray(incoming) || incoming.some((share) => share.targetOrgId !== orgId)))
       ) {
@@ -246,10 +248,14 @@ export function useOrganizationSharingPanelState(props: OrganizationSharingPanel
       batch(() => {
         setOrg({ ...orgData, members: memberData });
         setOrgs(allOrgs ?? []);
-        setOutgoingShares(outgoing);
+        setOutgoingShares(outgoing ?? []);
         setIncomingShares(incoming ?? []);
-        if (!allOrgs || !incoming) {
-          setUnavailableLists({ directory: !allOrgs, incoming: !incoming });
+        if (!allOrgs || !outgoing || !incoming) {
+          setUnavailableLists({
+            directory: !allOrgs,
+            outgoing: !outgoing,
+            incoming: !incoming,
+          });
         }
         // An unread directory neither verifies nor withdraws an explicit draft
         // recipient. Recheck it when a complete directory is read.

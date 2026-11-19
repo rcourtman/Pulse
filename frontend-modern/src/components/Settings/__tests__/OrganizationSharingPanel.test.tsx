@@ -872,21 +872,32 @@ describe('sharing read admission and recovery', () => {
     },
   );
 
-  it.each(['wrong organization', 'missing shares', 'foreign incoming target'])(
-    'does not admit %s as a valid empty snapshot',
-    async (problem) => {
-      if (problem === 'wrong organization') orgGetMock.mockResolvedValue(targetOrg);
-      if (problem === 'missing shares') listSharesMock.mockResolvedValue(null);
-      if (problem === 'foreign incoming target')
-        listIncomingSharesMock.mockResolvedValue([{ ...incoming, targetOrgId: 'org-foreign' }]);
-      const { state } = renderState();
-      await waitFor(() => expect(state.loadError()).toBeTruthy());
-      expect(state.org()).toBeNull();
-      expect(state.canManageCurrentOrg()).toBe(false);
-      await state.createShare();
-      expect(createShareMock).not.toHaveBeenCalled();
-    },
-  );
+  it.each([
+    'wrong organization',
+    'missing shares',
+    'foreign incoming target',
+    'foreign incoming target with unread outgoing',
+  ])('does not admit %s as a valid empty snapshot', async (problem) => {
+    if (problem === 'wrong organization') orgGetMock.mockResolvedValue(targetOrg);
+    if (problem === 'missing shares') listSharesMock.mockResolvedValue(null);
+    if (problem.startsWith('foreign incoming target')) {
+      listIncomingSharesMock.mockResolvedValue([{ ...incoming, targetOrgId: 'org-foreign' }]);
+    }
+    if (problem === 'foreign incoming target with unread outgoing') {
+      listSharesMock.mockRejectedValue(
+        Object.assign(new Error('Failed to load organization'), {
+          status: 500,
+          code: 'org_load_failed',
+        }),
+      );
+    }
+    const { state } = renderState();
+    await waitFor(() => expect(state.loadError()).toBeTruthy());
+    expect(state.org()).toBeNull();
+    expect(state.canManageCurrentOrg()).toBe(false);
+    await state.createShare();
+    expect(createShareMock).not.toHaveBeenCalled();
+  });
 
   it('binds every read to the selected scope and invalidates all siblings after a partial failure', async () => {
     listSharesMock.mockRejectedValue(new Error('403'));

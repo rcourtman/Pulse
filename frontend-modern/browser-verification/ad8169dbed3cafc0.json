@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "base_sha": "eb1ccfb2bf27ca475a060318ed209861bd76dcd5",
+  "verified_at": "2026-11-19T05:03:44Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/OrganizationOutgoingSharesSection.tsx",
+    "frontend-modern/src/components/Settings/OrganizationSharingPanel.tsx",
+    "frontend-modern/src/components/Settings/useOrganizationSharingPanelState.ts",
+    "frontend-modern/src/utils/orgUtils.ts",
+    "frontend-modern/src/utils/organizationSettingsPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/OrganizationOutgoingSharesSection.tsx": "20369805a3f5137af50b3b058f700538a8e255628c3aaeeed76f920405e8521e",
+    "frontend-modern/src/components/Settings/OrganizationSharingPanel.tsx": "8a07a0e6d4267f0999e4d49977deffa61db7217bc38efe0dfd3788cfab31b15f",
+    "frontend-modern/src/components/Settings/useOrganizationSharingPanelState.ts": "61f05648103376cfdb8984811bfc98bb554309d8cf9763907ff61d39b1578a1c",
+    "frontend-modern/src/utils/orgUtils.ts": "6f621e1390b79411e87e8d2f2a54f965f679062000f8c9a6136478e2cf2e390a",
+    "frontend-modern/src/utils/organizationSettingsPresentation.ts": "ea6ea1347876c385f32d43570b0af0c48478468b07affc881403b50907727a76"
+  },
+  "routes": [
+    "/settings/organization/sharing"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Production Pulse App previews in Playwright 1.56.1, Chromium 141 light desktop and WebKit 26 dark touch phone. 78 browser assertions and eight inspected before/after pairs.",
+    "Outgoing GET returns the endpoint's 500 org_load_failed while selected detail, member, directory and incoming reads succeed. The candidate keeps the scoped identity and both differently authorized incoming decisions, marks the outgoing list unread, and pauses every sharing action. The unavailable creation form no longer displaces those rows.",
+    "HTTP 403 on the outgoing GET still takes the whole-panel unavailable path on both builds. No stale or unsolicited rows or writes. A successful complete reload restores the original form and rows in both builds."
+  ],
+  "interactions": [
+    "Enter on desktop and tap on touch Reload sharing; exactly one session-preferred bound GET per endpoint in each reload, stable region focus during recovery, and zero writes. An attempted activation while paused did not prepare or send a change.",
+    "Comparable top and details anchors used the actual application scroller. Synthetic local fixtures only; no deployed estate or release verification."
+  ]
+}

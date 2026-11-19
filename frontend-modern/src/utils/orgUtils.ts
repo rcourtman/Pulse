@@ -20,17 +20,19 @@ export const canManageOrg = (org: Organization | null, currentUser?: string): bo
   return role === 'admin' || role === 'owner';
 };
 
-// The directory and the incoming-share scan can fail to enumerate a peer even
-// when the selected organization is healthy. Only the server's explicit list
-// failure is a readable-but-incomplete snapshot, not denial or malformed JSON.
-export function readOrganizationAggregate<T>(request: Promise<T>): Promise<T | undefined> {
+// Only the endpoint's explicit failure to read this part of the aggregate is
+// an incomplete snapshot. Denied requests and malformed responses still fail.
+export function readOrganizationAggregate<T>(
+  request: Promise<T>,
+  unavailableCode: 'list_failed' | 'org_load_failed' = 'list_failed',
+): Promise<T | undefined> {
   return request.catch((error: unknown) => {
     if (
       error instanceof Error &&
       'status' in error &&
       error.status === 500 &&
       'code' in error &&
-      error.code === 'list_failed'
+      error.code === unavailableCode
     ) {
       return undefined;
     }

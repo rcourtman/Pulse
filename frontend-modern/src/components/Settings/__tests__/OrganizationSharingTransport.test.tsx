@@ -85,6 +85,7 @@ let healthReply: () => Promise<Response>;
 let writeReply: (url: string, options: RequestInit) => Promise<Response>;
 let failedRead: string | undefined;
 let failedLists: string[];
+let outgoingStatus: number | undefined;
 
 function apply(operation: Operation) {
   if (operation === 'create')
@@ -176,6 +177,7 @@ beforeEach(() => {
   incomingInventory = [incoming];
   failedRead = undefined;
   failedLists = [];
+  outgoingStatus = undefined;
   healthReply = async () => {
     document.cookie = `pulse_csrf=${csrfToken}; Path=/`;
     return json({});
@@ -188,6 +190,13 @@ beforeEach(() => {
     if (method !== 'GET') return writeReply(url, options);
     if (url === failedRead) return json({ error: 'synthetic-unavailable' }, 503);
     if (failedLists.includes(url)) return json({ code: 'list_failed' }, 500);
+    if (outgoingStatus !== undefined && url === `${orgPath(north.id)}/shares`) {
+      return outgoingStatus === 204
+        ? new Response(null, { status: outgoingStatus })
+        : json({ code: 'org_load_failed' }, outgoingStatus);
+    }
+    if (outgoingStatus === 401 && new Headers(options.headers).get('X-Pulse-Org-ID') === 'default')
+      return json({ code: 'access_denied' }, 403);
     if (url === '/api/orgs') return json([north, south]);
     for (const organization of [north, south]) {
       const base = orgPath(organization.id);
@@ -367,23 +376,30 @@ describe('organization sharing through the real transport', () => {
     },
   );
 
-  it.each(['directory', 'incoming', 'both'] as const)(
-    'keeps the verified current selection but pauses every change when %s cannot enumerate',
-    async (failed) => {
+  it.each([
+    { directory: true, outgoing: false, incoming: false },
+    { directory: false, outgoing: false, incoming: true },
+    { directory: true, outgoing: false, incoming: true },
+    { directory: false, outgoing: true, incoming: false },
+    { directory: true, outgoing: true, incoming: false },
+    { directory: false, outgoing: true, incoming: true },
+    { directory: true, outgoing: true, incoming: true },
+  ])(
+    'keeps only verified lists with unavailable directory=$directory, outgoing=$outgoing, incoming=$incoming',
+    async (unavailable) => {
       const { state } = await prepared();
-      const directory = failed !== 'incoming';
-      const onlyIncoming = failed !== 'directory';
       failedLists = [
-        ...(directory ? ['/api/orgs'] : []),
-        ...(onlyIncoming ? [`${orgPath(north.id)}/shares/incoming`] : []),
+        ...(unavailable.directory ? ['/api/orgs'] : []),
+        ...(unavailable.incoming ? [`${orgPath(north.id)}/shares/incoming`] : []),
       ];
+      outgoingStatus = unavailable.outgoing ? 500 : undefined;
       await state.loadSharingData();
       expect(state.org()?.id).toBe(north.id);
       expect(state.canManageCurrentOrg()).toBe(true);
       expect(state.sharingChangesPaused()).toBe(true);
-      expect(state.unavailableLists()).toEqual({ directory, incoming: onlyIncoming });
-      expect(state.outgoingShares()).toEqual(outgoingInventory);
-      expect(state.incomingShares()).toEqual(onlyIncoming ? [] : incomingInventory);
+      expect(state.unavailableLists()).toEqual(unavailable);
+      expect(state.outgoingShares()).toEqual(unavailable.outgoing ? [] : outgoingInventory);
+      expect(state.incomingShares()).toEqual(unavailable.incoming ? [] : incomingInventory);
       expect(state.canCreateShare()).toBe(false);
       for (const operation of operations) await confirm(state, operation);
       expect(writes()).toHaveLength(0);
@@ -392,13 +408,40 @@ describe('organization sharing through the real transport', () => {
       for (const [, options] of reads()) expectSessionRequest(options);
 
       failedLists = [];
+      outgoingStatus = undefined;
       await state.loadSharingData();
       await accepted(state);
       expect(state.sharingChangesPaused()).toBe(false);
       expect(state.targetOrgId()).toBe(draft.targetOrgId);
+      expect(state.resourceType()).toBe(draft.resourceType);
+      expect(state.resourceId()).toBe(draft.resourceId);
+      expect(state.resourceName()).toBe(draft.resourceName);
       expect(state.canCreateShare()).toBe(true);
       expect(writes()).toHaveLength(0);
       expect(getOrgID()).toBe(north.id);
+    },
+  );
+
+  it.each([204, 401, 402, 403, 404])(
+    'does not preserve selected rows after an outgoing HTTP %s without a verified list',
+    async (status) => {
+      outgoingStatus = status;
+      const { state } = mount();
+      await waitFor(() => expect(state.loading()).toBe(false));
+      expect(state.loadError()).toBeTruthy();
+      expect(state.org()).toBeNull();
+      expect(state.incomingShares()).toEqual([]);
+      expect(state.canManageCurrentOrg()).toBe(false);
+      for (const operation of operations) await confirm(state, operation);
+      expect(writes()).toHaveLength(0);
+      expect(fetchMock.mock.calls.filter(([url]) => url === '/api/health')).toHaveLength(0);
+      // The existing 401 path clears the selection. It must not reissue
+      // access against north; only a separately bound default read can start.
+      const ids = status === 401 ? [north.id, 'default'] : [north.id];
+      const expected = ids.flatMap((id) => readPaths(id).map((path) => ({ id, path })));
+      expect(reads().map(([url]) => url)).toEqual(expected.map(({ path }) => path));
+      for (const [index, [, options]] of reads().entries())
+        expectSessionRequest(options, expected[index].id);
     },
   );
 

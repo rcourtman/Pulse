@@ -473,24 +473,31 @@ late completion after actual principal, organization, policy, entitlement or
 component withdrawal. `OrganizationOverviewPanel.test.tsx` also pins normalized
 request scopes through the pending rename and resulting saved read.
 
-### Sharing preserves verified selected data when a peer blocks enumeration
+### Sharing preserves verified selected data when a list is unread
 
 The organization directory and the incoming-sharing scan can return the
 server's explicit HTTP 500 `list_failed` even when the selected organization
-is readable. If current-organization detail, membership and outgoing shares
-are all verified for the same selection, Sharing keeps the selected identity
-and outgoing rows. The recipient list and incoming rows are marked unavailable
-only when their own enumeration failed. No synthetic organization, share,
-target, or empty incoming inventory replaces an unread result.
+is readable. The outgoing list loads the selected organization independently
+and can return HTTP 500 `org_load_failed` even when the sibling reads succeed.
+When current-organization detail and membership are verified for the same
+selection, these specific list failures leave the selected identity and the
+other verified lists visible. Each unread list is marked unavailable, not
+empty. Only data from the current request is shown; previously read rows do
+not stand in for an unread result.
 
-A verified owner or administrator continues to see the existing form and
-any saved row controls, but all sharing writes still require the complete
-snapshot, including remove, accept and decline. Reload sharing makes only
-read-only requests for the same selection. An explicit draft recipient is
-not replaced by another target and must still be present in the verified
-directory before the form can submit. Other errors, stale readers,
-malformed bodies, failed selected-scope reads, policy and authority withdrawal
-keep their existing fail-closed behavior. Server authorization is unchanged.
+A verified owner or administrator continues to see saved row controls, but
+all sharing writes still require the complete snapshot, including remove,
+accept and decline. When outgoing shares cannot be read, the unavailable
+creation form does not push incoming decisions further down the page. Its
+same-reader draft remains, and the form returns with a complete outgoing read
+(disabled if another list remains unread). Reload sharing makes only read-only
+requests for the same selection and explicitly says it does not repeat a
+change. A draft recipient is not replaced by another target and must still
+be present in the verified directory before the form can submit. Other
+errors, stale readers, malformed bodies, different organization or incoming
+target, and failed detail or member reads do not publish a partial snapshot.
+Policy and authority withdrawal keep their existing behavior. Server
+authorization is unchanged.
 
 The Sharing panel includes the create form in its own route asset, rather than
 requiring a separate browser module after the selected workspace loads. Only an
@@ -499,11 +506,11 @@ verified rows and uses the same complete-read write gate. Unread directory
 names do not replace the outgoing row's verified target ID, including in its
 action's accessible name; the name rejoins the same ID after a complete read.
 
-The registered OrganizationSharingPanel and OrganizationSharingTransport tests
-cover individual and concurrent list failures, fresh scoped data versus a
-failed selected read, native controls, no mutation or CSRF preparation, and
-explicit recovery. Comparable desktop/narrow Settings browser proof uses
-the native saved-workspace fixture's response bodies, not live client recovery.
+The OrganizationSharingPanel, OrganizationSharingTransport and
+OrganizationSharingRows transport tests cover individual and concurrent list
+failures, fresh scoped data versus a failed selected read, native controls, no
+mutation or CSRF preparation, and explicit recovery. Desktop and narrow
+Settings browser proof uses safe response fixtures, not live client recovery.
 
 ### Invitation decisions identify the exact organization
 
