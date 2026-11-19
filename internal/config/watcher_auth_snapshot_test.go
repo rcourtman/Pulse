@@ -5,13 +5,13 @@ import (
 	"path/filepath"
 	"runtime"
 	"sync"
-	"sync/atomic"
 	"testing"
 )
 
 // The watcher mutex serializes reloads, not API setup, password changes or
 // token mutations. Those writers share config.Mu with the reload transaction.
 func TestConfigWatcher_ReloadConfigConcurrentAuthorityWriter(t *testing.T) {
+	const tokenID = "synthetic-watcher-token"
 	passwordHash, err := hashPasswordFn("synthetic-watcher-password")
 	if err != nil {
 		t.Fatal(err)
@@ -23,56 +23,60 @@ func TestConfigWatcher_ReloadConfigConcurrentAuthorityWriter(t *testing.T) {
 	cfg := &Config{AuthUser: "initial-admin", AuthPass: passwordHash}
 	watcher := &ConfigWatcher{config: cfg, envPath: envPath}
 	stop := make(chan struct{})
-	started := make(chan struct{})
+	firstWrite := make(chan struct{})
+	secondWrite := make(chan struct{})
 	done := make(chan struct{})
-	var writes atomic.Int64
 	go func() {
 		defer close(done)
-		for {
+		for i := 0; ; i++ {
 			select {
 			case <-stop:
 				return
 			default:
 			}
 			Mu.Lock()
-			cfg.AuthUser = "api-admin"
-			cfg.AuthPass = passwordHash
-			cfg.APITokens = []APITokenRecord{{ID: "synthetic-watcher-token"}}
-			if writes.Load()%2 == 1 {
+			if i%2 == 0 {
+				cfg.AuthUser = "api-admin"
+				cfg.AuthPass = passwordHash
+				cfg.APITokens = []APITokenRecord{{ID: tokenID}}
+			} else {
 				cfg.AuthUser = "other-api-admin"
 				cfg.AuthPass = ""
 				cfg.APITokens = nil
 			}
 			Mu.Unlock()
-			if writes.Add(1) == 1 {
-				close(started)
+			switch i {
+			case 0:
+				close(firstWrite)
+			case 1:
+				close(secondWrite)
 			}
 			runtime.Gosched()
 		}
 	}()
 	stopWriter := sync.OnceFunc(func() { close(stop); <-done })
 	t.Cleanup(stopWriter)
-	<-started
-	for range 64 {
+	<-firstWrite
+	// Don't order both updates before the first reload: the second update
+	// must remain concurrent with it for the race detector. Wait for the
+	// writer's progress before continuing, rather than assuming it ran again.
+	watcher.reloadConfig()
+	<-secondWrite
+	for range 63 {
 		watcher.reloadConfig()
 	}
 	stopWriter()
-	if writes.Load() < 2 {
-		t.Fatal("the concurrent configuration writer did not run repeatedly")
-	}
 
-	// With the independent writer stopped, an ordinary reload still applies
-	// the complete credential pair without replacing the saved token inventory.
-	Mu.RLock()
-	tokenCount := cfg.APITokenCount()
-	Mu.RUnlock()
+	// Once the writer has joined, check the ordinary reload against a known
+	// different pair and non-empty inventory, regardless of who wrote last.
+	cfg.AuthUser = "api-admin"
+	cfg.AuthPass = ""
+	cfg.APITokens = []APITokenRecord{{ID: tokenID}}
 	watcher.reloadConfig()
-	Mu.RLock()
-	defer Mu.RUnlock()
 	if cfg.AuthUser != "file-admin" || cfg.AuthPass != passwordHash {
 		t.Error("final reload did not apply the file's credential pair")
 	}
-	if cfg.APITokenCount() != tokenCount {
+	if len(cfg.APITokens) != 1 || cfg.APITokens[0].ID != tokenID {
 		t.Error("credential reload replaced the token inventory")
 	}
 }
