@@ -1049,7 +1049,7 @@ stub builds, workflow success, releases and installed recovery remain distinct.
 
 The secret-free Core E2E workflow builds its existing `e2e_runtime` server and
 mock GitHub images once after tier validation. It also pulls the unchanged,
-committed Alpine seed pin once. The eight stable shards and non-mock agent
+committed Alpine seed pin once. The stable browser shards and non-mock agent
 registration job load the same short-retention, current-run artifact by its
 producer's immutable artifact ID; they do not select another run, image cache,
 registry, credential or rebuild fallback. Local compose keeps its pinned seed
@@ -1060,8 +1060,8 @@ exact checkout/run/attempt, committed seed pin, three fixed image IDs, archive
 size and archive digest. After load it verifies Linux amd64, the producer's
 image IDs and source revision labels on both built images. A missing, changed,
 foreign or failed bundle stops the job. Failed production stops fan-out and
-fails the final verdict; all eight stable shards and agent registration must
-still pass. Browser acquisition and test deadlines, probation rules, registry
+fails the final verdict. Every stable shard and agent registration must pass.
+Browser acquisition and test deadlines, probation rules, registry
 pins and production/release paths are unchanged. Provider refusals stay terminal:
 there is no login, alternate registry or pull retry.
 
@@ -1588,7 +1588,7 @@ Build and Test checks every shipped Markdown mirror immediately after the
 `changes` job's checkout, before classification can admit frontend, backend,
 script/build or benchmark work. Core E2E does the same before dependency setup
 in tier selection and both independent provisioning jobs; a failing tier check
-does not admit the eight browser shards. Existing check names, secret scanning,
+does not admit the browser shards. Existing check names, secret scanning,
 Public docs validation, test coverage and failure verdicts remain unchanged.
 
 The check is blocking and unconditional, including dispatches. It uses the
@@ -9600,8 +9600,12 @@ compilation; their existing audit rules remain unchanged.
 Post-merge pushes to `main` run at most three of the five API shards and four
 of the eight Core E2E browser shards concurrently. GitHub schedules the
 remaining shards as slots free up. This limits competition with open PRs on
-the shared hosted runners. Pull requests, release branches and manual runs
-can use the full matrix width. Each verdict still requires its full inventory.
+the shared hosted runners. Pull requests to `main` partition the full stable
+browser inventory across four runners so fewer jobs repeat browser setup.
+Playwright uses the expanded matrix size as its shard count. Branch pushes,
+release PRs and manual runs use eight browser partitions. Non-PR runs also
+exercise the probation tier. Full-suite PRs can run all five API shards
+concurrently.
 
 The API aggregate also requires successful classification and every expanded
 shard. It reports runtime success only for code=true; code=false explicitly

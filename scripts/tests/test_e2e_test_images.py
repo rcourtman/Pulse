@@ -282,6 +282,21 @@ class E2EImageBundleTest(unittest.TestCase):
 
 
 class E2EImageWorkflowTest(unittest.TestCase):
+    def test_browser_commands_partition_the_entire_selected_matrix(self):
+        consumer = job_block(WORKFLOW.read_text(), "e2e")
+        selector = re.search(
+            r"shard: \$\{\{ fromJSON\(github.event_name == 'pull_request' && "
+            r"github.base_ref == 'main' && '([^']+)' \|\| '([^']+)'\) \}\}",
+            consumer,
+        )
+        self.assertIsNotNone(selector)
+        for indices, width in zip(selector.groups(), (4, 8)):
+            self.assertEqual(json.loads(indices), list(range(1, width + 1)))
+        partition = "${{ matrix.shard }}/${{ strategy.job-total }}"
+        self.assertIn(f"name: Playwright Core E2E (shard {partition})", consumer)
+        self.assertEqual(re.findall(r"npm test -- --shard=(.+?)(?: --|$)", consumer, re.MULTILINE),
+                         [partition, partition])
+
     def test_browser_fixture_budgets_are_explicit_bounded_and_dev_only(self):
         source = IMAGES.COMPOSE.read_text().split("\n  pulse-test:\n", 1)[1]
         source = source.split("\nvolumes:\n", 1)[0]
@@ -401,7 +416,6 @@ class E2EImageWorkflowTest(unittest.TestCase):
                 self.assertNotIn("pulse-e2e-images", step)
                 self.assertNotIn("docker", step.lower())
         self.assertIn("timeout-minutes: 60", job_block(workflow, "e2e"))
-        self.assertIn("shard: [1, 2, 3, 4, 5, 6, 7, 8]", job_block(workflow, "e2e"))
         consumer = job_block(workflow, "e2e")
         geometry_start = consumer.index("- name: Validate native settings scroll geometry\n")
         geometry_end = consumer.index("\n      - name:", geometry_start)
