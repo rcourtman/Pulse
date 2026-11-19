@@ -952,7 +952,7 @@ func TestCorrelatedGuestMemoryNextPoll(t *testing.T) {
 					Metrics: &unifiedresources.ResourceMetrics{Memory: &unifiedresources.MetricValue{Total: &total, Used: &used, Percent: 100, Source: unifiedresources.SourceProxmox}}},
 				{ID: "agent-test", Type: unifiedresources.ResourceTypeAgent, Name: "firewall-agent", Status: unifiedresources.ResourceStatus(tc.status), LastSeen: now.Add(-tc.age),
 					Sources: []unifiedresources.DataSource{unifiedresources.SourceAgent},
-					Agent:   &unifiedresources.AgentData{AgentID: "agent-test", Stale: tc.status == "offline", Memory: &unifiedresources.AgentMemoryMeta{Total: 8000, Used: 2800, Free: 5200, UsageUnavailable: tc.unavailable}}},
+					Agent:   &unifiedresources.AgentData{AgentID: "agent-test", Stale: tc.status == "offline", Memory: &unifiedresources.AgentMemoryMeta{Total: 8000, Used: 2800, Cache: 4200, Free: 1000, UsageUnavailable: tc.unavailable}}},
 			}
 			registry.IngestResources(resources)
 			if len(registry.VMs()) != 1 || len(registry.Hosts()) != 0 {
@@ -1000,6 +1000,13 @@ func TestCorrelatedGuestMemoryNextPoll(t *testing.T) {
 				&correlatedMemoryClient{}, guestID, prev.hostAgentsByVMID, nil)
 			if !ok || vm.Memory.Used != int64(tc.want) || vm.Memory.Usage != float64(tc.want)/80 || buildSource != source || buildRaw.HostAgentUsed != raw.HostAgentUsed {
 				t.Fatalf("builder disagrees with resolver: %+v source=%s raw=%+v", vm.Memory, buildSource, buildRaw)
+			}
+			if source == "agent" {
+				if vm.Memory.Cache != 4200 || vm.Memory.Free != 1000 || !vm.Memory.Observation.ObservedAt.Equal(now) {
+					t.Fatalf("VM lost the current agent partition or its time: %+v", vm.Memory)
+				}
+			} else if vm.Memory.Cache != 0 {
+				t.Fatalf("provider fallback borrowed agent cache: %+v", vm.Memory)
 			}
 			projection := unifiedresources.NewRegistry(nil)
 			projection.IngestSnapshot(models.StateSnapshot{VMs: []models.VM{vm}})
@@ -1102,12 +1109,12 @@ func TestAutomaticGuestMemoryLinkNextPoll(t *testing.T) {
 	}}
 	registry := unifiedresources.NewRegistry(nil)
 	registry.IngestSnapshot(snapshot)
-	mon := &Monitor{state: models.NewState(), resourceStore: unifiedresources.NewMonitorAdapter(registry)}
+	mon := &Monitor{state: models.NewState(), rateTracker: NewRateTracker(), resourceStore: unifiedresources.NewMonitorAdapter(registry)}
 	node, linkedVM, ct := mon.findLinkedProxmoxEntityWithHints("firewall.example.test", "", nil)
 	if node != "" || linkedVM != guestID || ct != "" {
 		t.Fatalf("automatic link = %q/%q/%q", node, linkedVM, ct)
 	}
-	snapshot.Hosts = []models.Host{{ID: "guest-agent", Hostname: "firewall.example.test", LinkedVMID: linkedVM, Status: "online", LastSeen: now, Memory: models.Memory{Total: 8000, Used: 2800, Free: 5200, Usage: 35}}}
+	snapshot.Hosts = []models.Host{{ID: "guest-agent", Hostname: "firewall.example.test", LinkedVMID: linkedVM, Status: "online", LastSeen: now, Memory: models.Memory{Total: 8000, Used: 2800, Cache: 4200, Free: 1000, Usage: 35}}}
 	// Reconstruct using source snapshots, without a manual link store.
 	registry = unifiedresources.NewRegistry(nil)
 	registry.IngestSnapshot(snapshot)
@@ -1126,6 +1133,19 @@ func TestAutomaticGuestMemoryLinkNextPoll(t *testing.T) {
 		_, used, source, _ := mon.resolveGuestStatusMemory(context.Background(), &stubPVEClient{}, tc.instance, "firewall", "node1", 111, tc.id, &proxmox.VMStatus{MaxMem: 8000, Mem: 8100}, prev.hostAgentsByVMID, 8000, "", &VMMemoryRaw{})
 		if used != tc.used || source != tc.source {
 			t.Fatalf("%s used=%d source=%s", tc.instance, used, source)
+		}
+		vm, _, builtSource, _, _, ok := mon.buildVMFromClusterResource(context.Background(), tc.instance,
+			proxmox.ClusterResource{Type: "qemu", Status: "running", Node: "node1", VMID: 111, Name: "firewall", MaxMem: 8000, Mem: 8100},
+			&correlatedMemoryClient{}, tc.id, prev.hostAgentsByVMID, nil)
+		if !ok || vm.Memory.Used != int64(tc.used) || builtSource != tc.source {
+			t.Fatalf("%s VM selected %+v via %s", tc.instance, vm.Memory, builtSource)
+		}
+		if tc.source == "agent" {
+			if vm.Memory.Cache != 4200 || vm.Memory.Free != 1000 || !vm.Memory.Observation.ObservedAt.Equal(now) {
+				t.Fatalf("automatic link flattened the agent partition or changed its time: %+v", vm.Memory)
+			}
+		} else if vm.Memory.Cache != 0 {
+			t.Fatalf("%s borrowed another instance's cache: %+v", tc.instance, vm.Memory)
 		}
 	}
 	// A matching name in another instance must prevent automatic selection.

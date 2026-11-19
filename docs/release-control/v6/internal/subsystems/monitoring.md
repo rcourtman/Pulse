@@ -6810,10 +6810,11 @@ counters without requiring a parallel SMART row. Monitoring may normalize legacy
 statuses and filter empty slots, but it must not collapse assigned Unraid
 array/cache members back to generic host disks or discard native fields before
 unified resources builds storage and physical-disk resources.
-Host-agent memory ingest carries the reclaimable page-cache split. The host
-agent reports `cacheBytes` (gopsutil Available minus Free, with the ZFS ARC
-adjustment recomputing free so used + cache + free still covers the total),
-and `internal/monitoring/monitor_agents.go` maps it into
+Host-agent memory ingest carries the reclaimable cache split. The host agent
+reports `cacheBytes` (gopsutil Available minus Free plus the measured ZFS ARC
+reclassified from Used). ARC is cache, not free memory. An absent ARC reading
+does not produce an adjustment. `internal/monitoring/monitor_agents.go` maps
+the cache field into
 `models.Memory.Cache`, clamping inconsistent or older-agent reports so
 used + cache never exceeds total. Mock fixtures author the same split for
 generic hosts and node-linked host agents, and any mock drift updater must
@@ -7896,7 +7897,13 @@ status meminfo and guest-agent `/proc/meminfo`: the agent subtracts the ZFS
 ARC, which the kernel's `MemAvailable` counts as used, so a TrueNAS guest is
 not reported at 91% when it is 14% used (#4340), and the file-read stays off
 the guest's shared agent channel (#2439). Status meminfo and the read both
-rank above a last-known agent sample.
+rank above a last-known agent sample. Both automatic and operator links
+carry the agent's own observation and reclaimable split when that reading is
+selected. Do not recreate an agent reading from a merged host metric or split
+it using the outranked status sample. The existing VM identity, capacity and
+guest command guards still apply. `TestAutomaticGuestMemoryLinkNextPoll` and
+`TestCorrelatedGuestMemoryNextPoll` verify the split, original time and
+independent provider fallback.
 Guest-agent fallback
 caches must key on `(instance, node, vmid)` instead of raw `node/vmid`, so
 separate Proxmox instances cannot leak stale or foreign memory evidence into

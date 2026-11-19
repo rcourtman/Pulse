@@ -2437,6 +2437,29 @@ func TestView_VMViewUsesProviderNeutralVirtualMachineFallback(t *testing.T) {
 	}
 }
 
+func TestHostViewAgentMemoryKeepsSourceSample(t *testing.T) {
+	seen := time.Now().UTC().Add(-time.Second)
+	used, total := int64(14), int64(16)
+	r := &Resource{
+		Status: StatusOnline,
+		Agent:  &AgentData{Memory: &AgentMemoryMeta{Total: 16, Used: 2, Cache: 12, Free: 2}},
+		SourceStatus: map[DataSource]SourceStatus{
+			SourceAgent: {Status: "online", LastSeen: seen},
+		},
+		Metrics: &ResourceMetrics{Memory: &MetricValue{Total: &total, Used: &used, Percent: 87.5, Source: SourceTrueNAS}},
+	}
+	v := NewHostView(r)
+	got, ok := v.AgentMemory()
+	if !ok || got.Total != 16 || got.Used != 2 || got.Cache != 12 || got.Free != 2 || got.Usage != 12.5 ||
+		got.Observation.State != "current" || got.Observation.Source != "agent" || !got.Observation.ObservedAt.Equal(seen) {
+		t.Fatalf("agent sample = %+v, known=%t", got, ok)
+	}
+	r.SourceStatus[SourceAgent] = SourceStatus{Status: "offline", LastSeen: seen}
+	if _, ok := v.AgentMemory(); ok {
+		t.Fatal("the online host row revived the offline agent sample")
+	}
+}
+
 func TestVMViewLinkedAgentMemory(t *testing.T) {
 	for _, tc := range []struct {
 		name        string

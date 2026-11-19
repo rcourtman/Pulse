@@ -1332,6 +1332,12 @@ func (v HostView) CurrentAgentDisks() ([]DiskInfo, time.Time, bool) {
 	return linkedAgentDisksFromResource(v.r)
 }
 
+// AgentMemory reads the agent's own observation, not the merged host metric.
+// An automatically linked agent can remain a separate host row.
+func (v HostView) AgentMemory() (models.Memory, bool) {
+	return linkedAgentMemoryFromResource(v.r)
+}
+
 func (v HostView) LinkedNodeID() string {
 	if v.r == nil || v.r.Agent == nil {
 		return ""
