@@ -88,7 +88,7 @@ func TestTelegramTemplatesKeepDynamicFieldsLiteral(t *testing.T) {
 	require.True(t, ok)
 	for mode, source := range map[string]string{"firing": template.PayloadTemplate, "resolved": template.ResolvedPayloadTemplate} {
 		for _, field := range []string{"Message", "ResourceName", "Node", "Type", "Duration", "ResolvedAt", "AlertURL"} {
-			if mode == "firing" && field == "ResolvedAt" || mode == "resolved" && field == "AlertURL" {
+			if mode == "firing" && field == "ResolvedAt" {
 				continue
 			}
 			t.Run(mode+"/"+field, func(t *testing.T) {
@@ -126,12 +126,11 @@ func TestTelegramTemplatesKeepDynamicFieldsLiteral(t *testing.T) {
 				content, err := parseTelegramLiteralContent(payload)
 				require.NoError(t, err)
 				require.Equal(t, 2, content.bold, "only the fixed heading and Details may be markup")
+				require.Equal(t, []string{data.AlertURL}, content.links, "HTML attribute decoding must preserve the exact Pulse link")
 				if mode == "firing" {
-					require.Equal(t, []string{data.AlertURL}, content.links, "HTML attribute decoding must preserve the exact Pulse link")
 					require.Contains(t, content.text, "Pulse Alert: Warning\n\n")
 					require.Contains(t, content.text, "• Value: 91.2%\n• Threshold: 80%")
 				} else {
-					require.Empty(t, content.links)
 					require.Contains(t, content.text, "Resolved: "+data.ResourceName+"\n\n")
 				}
 				if field != "AlertURL" {
@@ -194,6 +193,12 @@ func TestTelegramDeliveryPathsKeepReportedTextLiteral(t *testing.T) {
 			content, err := parseTelegramLiteralContent(payload)
 			require.NoError(t, err)
 			require.Equal(t, 2, content.bold)
+			switch path {
+			case "resolved":
+				require.Equal(t, []string{"https://pulse.example.test/alerts/history?alert=pve-connection"}, content.links)
+			case "grouped-resolved":
+				require.Equal(t, []string{"https://pulse.example.test/alerts/history"}, content.links)
+			}
 			if path != "test-button" {
 				require.Contains(t, content.text, batch[0].ResourceName)
 			}
@@ -327,5 +332,74 @@ func TestTelegramFiringWithoutPublicURLKeepsDashboardPointer(t *testing.T) {
 				require.Equal(t, []string{instance}, content.links)
 			}
 		})
+	}
+}
+
+func TestTelegramResolvedLinkLeavesRoutingAndOverridesAlone(t *testing.T) {
+	const instanceURL = "https://pve.example.test:8006"
+	for _, tc := range []struct{ name, base, template string }{
+		{name: "instance only"},
+		{name: "host without scheme", base: "pulse.example.test"},
+		{name: "userinfo", base: "https://fixture-user@pulse.example.test"},
+		{name: "base with query", base: "https://pulse.example.test/?source=fixture"},
+		{name: "custom body", template: `{"chat_id":"{{.ChatID | jsonString}}","text":"{{.AlertURL | jsonString}}"}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			endpoint, captured := newWebhookCaptureServer(t)
+			m := NewNotificationManagerWithDeferredQueue(tc.base, t.TempDir())
+			t.Cleanup(m.Stop)
+			require.NoError(t, m.UpdateAllowedPrivateCIDRs("127.0.0.1/32"))
+			hook := WebhookConfig{Service: "telegram", Enabled: true, Template: tc.template,
+				URL: endpoint + "/sendMessage?chat_id={{if .AlertURL}}-1001234{{else}}-1005678{{end}}"}
+			alert := telegramReportedAlerts()[0]
+			alert.Instance = instanceURL
+			require.NoError(t, m.sendResolvedWebhook(hook, []*alerts.Alert{alert}, time.Now()))
+			requests := captured()
+			require.Len(t, requests, 1)
+			var payload telegramLiteralPayload
+			require.NoError(t, json.Unmarshal(requests[0].body, &payload))
+			require.Equal(t, "-1001234", payload.ChatID, "the existing URL template still gets its original input")
+			if tc.template != "" {
+				require.Equal(t, instanceURL, payload.Text, "the owner template still gets the full instance fallback")
+				return
+			}
+			require.True(t, payload.DisablePreview)
+			content, err := parseTelegramLiteralContent(payload)
+			require.NoError(t, err)
+			require.Empty(t, content.links)
+			require.Contains(t, content.text, "Resolved: "+alert.ResourceName)
+		})
+	}
+}
+
+func TestTelegramResolvedLinkUsesOneBaseSnapshot(t *testing.T) {
+	const initial = "https://pulse.example.test/path"
+	endpoint, captured := newWebhookCaptureServer(t)
+	m := NewNotificationManagerWithDeferredQueue(initial, t.TempDir())
+	t.Cleanup(m.Stop)
+	require.NoError(t, m.UpdateAllowedPrivateCIDRs("127.0.0.1/32"))
+	m.SetTenantIdentityResolver(func() (string, string) {
+		// An edit can land during enrichment. The current recovery must
+		// not validate one URL and render another, or mix URL fields.
+		m.SetPublicURL("https://fixture-user@pulse.example.test")
+		return "fixture", "Fixture"
+	})
+	hook := WebhookConfig{Service: "telegram", Enabled: true, URL: endpoint + "/sendMessage?chat_id=-1001234"}
+	alert := telegramReportedAlerts()[0]
+	for range 2 {
+		require.NoError(t, m.sendResolvedWebhook(hook, []*alerts.Alert{alert}, time.Now()))
+	}
+	requests := captured()
+	require.Len(t, requests, 2)
+	for i, request := range requests {
+		var payload telegramLiteralPayload
+		require.NoError(t, json.Unmarshal(request.body, &payload))
+		content, err := parseTelegramLiteralContent(payload)
+		require.NoError(t, err)
+		if i == 0 {
+			require.Equal(t, []string{initial + "/alerts/history?alert=pve-connection"}, content.links)
+		} else {
+			require.Empty(t, content.links)
+		}
 	}
 }

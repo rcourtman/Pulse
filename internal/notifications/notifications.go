@@ -2592,12 +2592,19 @@ func (n *NotificationManager) dispatchNotificationJobAsync(job notificationDeliv
 		if !n.IsEnabled() {
 			return
 		}
-		if err := n.deliverNotificationJob(job); err != nil {
-			n.logNotificationJobError(job, err, failureMessage)
-			return
+		batches := [][]*alerts.Alert{job.Alerts}
+		if job.WebhookConfig != nil && sizesTelegramDeliveries(*job.WebhookConfig) && len(job.Alerts) > 1 {
+			batches = telegramAlertBatches(job.Alerts, job.Event)
 		}
-		if err := n.recordSuccessfulDelivery(job, time.Now()); err != nil {
-			n.logNotificationJobError(job, err, "failed to retain successful notification delivery")
+		for _, batch := range batches {
+			job.Alerts = batch
+			if err := n.deliverNotificationJob(job); err != nil {
+				n.logNotificationJobError(job, err, failureMessage)
+				continue
+			}
+			if err := n.recordSuccessfulDelivery(job, time.Now()); err != nil {
+				n.logNotificationJobError(job, err, "failed to retain successful notification delivery")
+			}
 		}
 	})
 }
@@ -3384,7 +3391,13 @@ func (n *NotificationManager) renderWebhookPayloadJSON(webhook WebhookConfig, da
 	}
 
 	if templateStr, ok := webhookServiceTemplate(webhook, mode); ok {
-		jsonData, err := n.generatePayloadFromTemplateWithService(templateStr, data, webhook.Service)
+		var jsonData []byte
+		var err error
+		if webhook.Service == "telegram" {
+			jsonData, err = n.renderBuiltInTelegram(templateStr, data, mode)
+		} else {
+			jsonData, err = n.generatePayloadFromTemplateWithService(templateStr, data, webhook.Service)
+		}
 		if err != nil {
 			return nil, fmt.Errorf("generate webhook payload for service %s: %w", webhook.Service, err)
 		}
@@ -3452,6 +3465,17 @@ func withNtfyAlertHeaders(webhook WebhookConfig, alertList []*alerts.Alert) Webh
 }
 
 // sendGroupedWebhook sends a grouped webhook notification
+func groupedWebhookAlertLine(alert *alerts.Alert) string {
+	label := alert.ResourceName
+	if alert.Node != "" {
+		label += " on " + alert.Node
+	}
+	if alert.Message != "" {
+		return fmt.Sprintf("• %s: %s", label, alert.Message)
+	}
+	return fmt.Sprintf("• %s: %.1f%%", label, alert.Value)
+}
+
 func (n *NotificationManager) sendGroupedWebhook(webhook WebhookConfig, alertList []*alerts.Alert) error {
 	if len(alertList) == 0 {
 		return fmt.Errorf("no alerts to send")
@@ -3469,15 +3493,7 @@ func (n *NotificationManager) sendGroupedWebhook(webhook WebhookConfig, alertLis
 			if alertList[i] == nil {
 				continue
 			}
-			alertLabel := alertList[i].ResourceName
-			if alertList[i].Node != "" {
-				alertLabel += " on " + alertList[i].Node
-			}
-			if alertList[i].Message != "" {
-				otherAlerts = append(otherAlerts, fmt.Sprintf("• %s: %s", alertLabel, alertList[i].Message))
-			} else {
-				otherAlerts = append(otherAlerts, fmt.Sprintf("• %s: %.1f%%", alertLabel, alertList[i].Value))
-			}
+			otherAlerts = append(otherAlerts, groupedWebhookAlertLine(alertList[i]))
 		}
 		if len(otherAlerts) > 0 {
 			if webhook.Service == "discord" {
@@ -3562,7 +3578,8 @@ func (n *NotificationManager) sendResolvedWebhook(webhook WebhookConfig, alertLi
 
 	// Prepare template data using the same pipeline as the firing path
 	customFields := convertWebhookCustomFields(webhook.CustomFields)
-	data := n.prepareWebhookData(alert, customFields)
+	pulseBase := n.GetPublicURL()
+	data := n.prepareWebhookDataAtPublicURL(alert, customFields, pulseBase)
 
 	// Carry the configured mention into the resolved payload too, matching the
 	// firing/grouped paths so a configured @everyone/@channel is not dropped on
@@ -3578,7 +3595,8 @@ func (n *NotificationManager) sendResolvedWebhook(webhook WebhookConfig, alertLi
 	data.NotRecovered = resolvedAlertsIncludeNotRecovered(alertList)
 	data.AlertCount = len(alertList)
 	data.Alerts = alertList
-	data.AlertURL = firstNonEmpty(alertsPageURL(n.publicURL, alertList, true), data.Instance)
+	pulseAlertURL := alertsPageURL(pulseBase, alertList, true)
+	data.AlertURL = firstNonEmpty(pulseAlertURL, data.Instance)
 	if len(alertList) > 1 {
 		names := make([]string, 0, len(alertList))
 		for _, a := range alertList {
@@ -3594,6 +3612,16 @@ func (n *NotificationManager) sendResolvedWebhook(webhook WebhookConfig, alertLi
 	if err != nil {
 		return fmt.Errorf("prepare resolved webhook context: %w", err)
 	}
+	if usesBuiltInTelegramBody(webhook) {
+		// Link only to the Pulse base, never a monitored instance. Keep
+		// the existing template data for recipient selection and custom bodies.
+		data.AlertURL = ""
+		base, parseErr := url.Parse(pulseBase)
+		if parseErr == nil && (base.Scheme == "http" || base.Scheme == "https") && base.Hostname() != "" &&
+			base.User == nil && base.RawQuery == "" && !base.ForceQuery && !strings.Contains(pulseBase, "#") {
+			data.AlertURL = pulseAlertURL
+		}
+	}
 
 	jsonData, err := n.renderWebhookPayloadJSON(webhook, data, webhookRenderModeResolved, func() ([]byte, error) {
 		payload := map[string]interface{}{
@@ -3605,15 +3633,15 @@ func (n *NotificationManager) sendResolvedWebhook(webhook WebhookConfig, alertLi
 			"source":        "pulse-monitoring",
 		}
 
-		if n.publicURL != "" {
-			payload["dashboard"] = n.publicURL
+		if pulseBase != "" {
+			payload["dashboard"] = pulseBase
 		}
 
 		if len(alertList) == 1 {
 			payload["alertIdentifier"] = alert.ID
 		}
-		if link := alertsPageURL(n.publicURL, alertList, true); link != "" {
-			payload["alertUrl"] = link
+		if pulseAlertURL != "" {
+			payload["alertUrl"] = pulseAlertURL
 		}
 		return json.Marshal(payload)
 	})
@@ -3735,6 +3763,12 @@ func (n *NotificationManager) sendResolvedWebhookNtfy(webhook WebhookConfig, ale
 
 // checkWebhookRateLimit checks if a webhook can be sent based on rate limits
 func (n *NotificationManager) checkWebhookRateLimit(webhookURL string) bool {
+	return n.takeWebhookRateSlot(webhookURL).IsZero()
+}
+
+// takeWebhookRateSlot reports the reset time when no slot was available.
+// A zero time means one slot was consumed.
+func (n *NotificationManager) takeWebhookRateSlot(webhookURL string) time.Time {
 	n.webhookRateMu.Lock()
 	defer n.webhookRateMu.Unlock()
 
@@ -3748,7 +3782,7 @@ func (n *NotificationManager) checkWebhookRateLimit(webhookURL string) bool {
 			lastSent:  now,
 			sentCount: 1,
 		}
-		return true
+		return time.Time{}
 	}
 
 	// Check if we're still in the rate limit window
@@ -3756,7 +3790,7 @@ func (n *NotificationManager) checkWebhookRateLimit(webhookURL string) bool {
 		// Window expired, reset counter
 		limit.lastSent = now
 		limit.sentCount = 1
-		return true
+		return time.Time{}
 	}
 
 	// Still in window, check if we've exceeded the limit
@@ -3765,13 +3799,13 @@ func (n *NotificationManager) checkWebhookRateLimit(webhookURL string) bool {
 			Str("webhookURL", RedactWebhookURLSecrets(webhookURL)).
 			Int("sentCount", limit.sentCount).
 			Dur("window", WebhookRateLimitWindow).
-			Msg("webhook rate limit exceeded, dropping request")
-		return false
+			Msg("webhook rate limit exceeded")
+		return limit.lastSent.Add(WebhookRateLimitWindow)
 	}
 
 	// Increment counter and allow
 	limit.sentCount++
-	return true
+	return time.Time{}
 }
 
 func (n *NotificationManager) cleanupWebhookRateLimitsLocked(now time.Time) {
@@ -3895,7 +3929,10 @@ func (n *NotificationManager) sendWebhookRequest(webhook WebhookConfig, jsonData
 	}
 
 	// Check rate limit before sending
-	if !n.checkWebhookRateLimit(webhook.URL) {
+	if retryAt := n.takeWebhookRateSlot(webhook.URL); !retryAt.IsZero() {
+		if usesBuiltInTelegramBody(webhook) {
+			return &telegramRateHold{retryAt: retryAt}
+		}
 		log.Warn().
 			Str("webhook", webhook.Name).
 			Str("url", RedactWebhookURLSecrets(webhook.URL)).
@@ -4013,14 +4050,18 @@ func webhookEventID(alertID, event string) string {
 
 // prepareWebhookData prepares data for template rendering
 func (n *NotificationManager) prepareWebhookData(alert *alerts.Alert, customFields map[string]interface{}) WebhookPayloadData {
+	return n.prepareWebhookDataAtPublicURL(alert, customFields, n.GetPublicURL())
+}
+
+func (n *NotificationManager) prepareWebhookDataAtPublicURL(alert *alerts.Alert, customFields map[string]interface{}, publicURL string) WebhookPayloadData {
 	duration := time.Since(alert.StartTime)
 
 	// Construct full Pulse URL if publicURL is configured
 	// The Instance field should contain the full URL to the Pulse dashboard
 	instance := ""
-	if n.publicURL != "" {
+	if publicURL != "" {
 		// Remove trailing slash from publicURL if present
-		instance = strings.TrimRight(n.publicURL, "/")
+		instance = strings.TrimRight(publicURL, "/")
 	} else if alert.Instance != "" && (strings.HasPrefix(alert.Instance, "http://") || strings.HasPrefix(alert.Instance, "https://")) {
 		// If publicURL is not set but alert.Instance contains a full URL, use it
 		instance = alert.Instance
@@ -4069,7 +4110,7 @@ func (n *NotificationManager) prepareWebhookData(alert *alerts.Alert, customFiel
 		Node:               alert.Node,
 		NodeDisplayName:    alertNodeDisplay(alert),
 		Instance:           instance,
-		AlertURL:           firstNonEmpty(alertLinkURL(n.publicURL, alert), instance),
+		AlertURL:           firstNonEmpty(alertLinkURL(publicURL, alert), instance),
 		Message:            alert.Message,
 		Value:              roundedValue,
 		Threshold:          roundedThreshold,
