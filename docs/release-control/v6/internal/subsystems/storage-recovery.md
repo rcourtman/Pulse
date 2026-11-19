@@ -52,10 +52,13 @@ documents/junk, overflow and read errors are rejected rather than selecting a
 reason or retention period from a prefix. A wrapped read error is not the
 decoder's exact empty-input sentinel. Rejection preserves selected and peer
 `org.json` bytes. Existing positive retention options, the 30-day default,
-authority/gate ordering, save-version conflicts and unsuspend behavior remain.
+authority/gate ordering, save-version conflicts and the unsuspend transition
+remain. Successful lifecycle replies omit pending invitations from a copy after
+the save; the selected organization retains them, and peer bytes are unchanged.
 The registered `internal/api/org_lifecycle_handlers_test.go` exercises real
 persistence, damaged/valid/default inputs and native HTTP continuation with the
-same saved organization. This does not claim live hosted recovery or restore
+same saved organization across suspension, unsuspension and soft deletion.
+This does not claim live hosted recovery or restore
 previously lost state.
 
 ### Docker-port creation preserves saved checks on stale review

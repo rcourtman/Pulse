@@ -82,10 +82,12 @@ before changing saved organization lifecycle. Omitted or whitespace-only bodies
 keep default options, but competing known controls, non-object roots, trailing
 data, over-limit input and failed reads cannot become a lifecycle decision.
 Only the decoder's exact empty-input EOF sentinel permits defaults. Existing
-route authority, method/hosted/default-org gates, successful fields and the
-parameterless unsuspend operation do not change. The registered
+route authority, method/hosted/default-org gates and parameterless unsuspend
+operation do not change. Successful lifecycle replies omit pending invitations
+without changing the save, lifecycle result or agent enrollment. The registered
 `internal/api/org_lifecycle_handlers_test.go` proves rejection against real
-selected/peer saved metadata and native HTTP, plus valid/default operations.
+selected/peer saved metadata and native HTTP, plus valid/default operations
+and exact suspend, unsuspend and soft-delete reply projection without state loss.
 This is source input safety, not original-client or installed recovery.
 
 ### Docker-port creation does not change established-check reattachment
