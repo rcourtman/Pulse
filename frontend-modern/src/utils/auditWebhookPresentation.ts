@@ -98,3 +98,6 @@ export function getAuditWebhookSaveSuccessMessage(): string {
 export function getAuditWebhookSaveErrorMessage(): string {
   return 'Failed to save webhook configuration';
 }
+
+export const AUDIT_WEBHOOK_UNCONFIRMED_MESSAGE = 'Webhook change not confirmed.';
+export const AUDIT_WEBHOOK_CHECK_SAVED_LABEL = 'Check saved destinations';

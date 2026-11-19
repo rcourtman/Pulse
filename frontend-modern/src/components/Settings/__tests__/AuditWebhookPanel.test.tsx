@@ -331,7 +331,7 @@ describe('audit webhook read admission', () => {
 describe('audit webhook entry recovery', () => {
   it('preserves a refused entry and old destinations, then clears only after a successful retry', async () => {
     const input = await openPanel();
-    apiFetchJSON.mockRejectedValueOnce(new Error('save refused')).mockResolvedValueOnce({});
+    apiFetchJSON.mockRejectedValueOnce({ status: 400 }).mockResolvedValueOnce({});
     fireEvent.input(input, { target: { value: `  ${addedUrl}  ` } });
     fireEvent.keyDown(input, { key: 'Enter' });
     await screen.findByRole('alert');
@@ -383,7 +383,7 @@ describe('audit webhook entry recovery', () => {
     expect(writeCalls()).toHaveLength(0);
     expect(screen.getByText(existingUrl)).toBeInTheDocument();
 
-    apiFetchJSON.mockRejectedValueOnce(new Error('save refused')).mockResolvedValueOnce({});
+    apiFetchJSON.mockRejectedValueOnce({ status: 403 }).mockResolvedValueOnce({});
     fireEvent.click(screen.getByRole('button', { name: /^Remove webhook endpoint / }));
     fireEvent.click(screen.getByRole('button', { name: 'Remove webhook' }));
     await screen.findByRole('alert');

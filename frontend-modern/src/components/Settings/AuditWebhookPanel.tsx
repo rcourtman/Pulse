@@ -9,14 +9,17 @@ import { Button } from '@/components/shared/Button';
 import { Dialog } from '@/components/shared/Dialog';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { FeatureGateSection } from '@/components/shared/FeatureGateSection';
+import { InlineNotice } from '@/components/shared/InlineNotice';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { formControl } from '@/components/shared/Form';
 import {
+  AUDIT_WEBHOOK_CHECK_SAVED_LABEL,
   AUDIT_WEBHOOK_ENDPOINT_CARD_CLASS,
   AUDIT_WEBHOOK_ENDPOINT_ICON_CLASS,
   AUDIT_WEBHOOK_READONLY_NOTICE_CLASS,
   AUDIT_WEBHOOK_SECURITY_NOTE_BODY,
   AUDIT_WEBHOOK_SECURITY_NOTE_TITLE,
+  AUDIT_WEBHOOK_UNCONFIRMED_MESSAGE,
   getAuditWebhookEmptyStateCopy,
   getAuditWebhookFeatureGateCopy,
   getAuditWebhookLoadingState,
@@ -65,6 +68,7 @@ export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
     isAuditLoggingEnabled,
     loading,
     loadError,
+    unconfirmedChange,
     hasLoadedConfiguration,
     newUrl,
     openRemoveWebhook,
@@ -85,7 +89,16 @@ export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
     configurationPanelRef?.focus({ preventScroll: true });
     void fetchWebhooks();
   };
+  const checkSavedDestinations = () => {
+    // A check started in the dialog closes it and releases the inert
+    // background synchronously. Keep focus local before any response arrives.
+    void fetchWebhooks();
+    configurationPanelRef?.focus({ preventScroll: true });
+  };
   const removalReturnTarget = () => {
+    // A lost reply keeps the confirmation local but not actionable. On
+    // dismissal or readback, continue from the surviving configuration region.
+    if (unconfirmedChange()) return configurationPanelRef;
     // A withdrawn reader must not move focus into a different saved context.
     if (!canEdit()) return;
     if (removalTrigger?.isConnected && !removalTrigger.disabled) return removalTrigger;
@@ -144,7 +157,10 @@ export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
             noPadding
             bodyClass="divide-y divide-border"
           >
-            <div class="space-y-4 p-3 sm:space-y-6 sm:p-6">
+            <div
+              class="p-3 sm:space-y-6 sm:p-6"
+              classList={{ 'space-y-2': unconfirmedChange(), 'space-y-4': !unconfirmedChange() }}
+            >
               <Show when={!canManage()}>
                 <div class={AUDIT_WEBHOOK_READONLY_NOTICE_CLASS}>
                   Audit webhook configuration is read-only for this account.
@@ -167,7 +183,13 @@ export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
                   {actionError()}
                 </p>
               </Show>
-              <Show when={loadError()}>
+              <Show when={unconfirmedChange() && !pendingRemoval()}>
+                <p role="alert" class="text-sm text-amber-800 dark:text-amber-200">
+                  <strong>{AUDIT_WEBHOOK_UNCONFIRMED_MESSAGE}</strong>{' '}
+                  {loadError() ? 'Check failed. Last read shown.' : 'Showing the last read.'}
+                </p>
+              </Show>
+              <Show when={loadError() && !unconfirmedChange()}>
                 <Card tone="warning" padding="md">
                   <div role="alert" class="space-y-2 text-sm">
                     <p class="font-medium">{readErrorCopy().title}</p>
@@ -182,7 +204,7 @@ export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
                 when={!loading() || hasLoadedConfiguration()}
                 fallback={<p class="text-sm text-muted">{getAuditWebhookLoadingState().text}</p>}
               >
-                <Show when={loading()}>
+                <Show when={loading() && !unconfirmedChange()}>
                   <p class="text-sm text-muted" role="status">
                     {getAuditWebhookLoadingState().text}
                   </p>
@@ -236,13 +258,19 @@ export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
                   </Show>
                 </div>
               </Show>
-              <div class="flex flex-col gap-3 pt-4 border-t border-border sm:flex-row">
+              <div
+                class="border-t border-border pt-4 sm:flex sm:flex-row sm:gap-3"
+                classList={{
+                  'grid grid-cols-2 gap-2': unconfirmedChange(),
+                  'flex flex-col gap-3': !unconfirmedChange(),
+                }}
+              >
                 <input
                   ref={newUrlInputRef}
                   type="text"
                   aria-label="Audit webhook URL"
                   placeholder="https://your-api.com/webhook"
-                  class={`${formControl} w-full min-w-0 flex-1`}
+                  class={`${formControl} col-span-2 w-full min-w-0 flex-1`}
                   value={newUrl()}
                   onInput={(e) => setNewUrl(e.currentTarget.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleAddWebhook()}
@@ -251,11 +279,22 @@ export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
                 <button
                   onClick={handleAddWebhook}
                   disabled={!canEdit() || saving() || !newUrl().trim()}
-                  class="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-md flex items-center justify-center gap-2 transition-colors sm:shrink-0"
+                  class="flex items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 sm:shrink-0"
                 >
                   <Plus size={18} />
                   Add Endpoint
                 </button>
+                <Show when={unconfirmedChange() && !pendingRemoval()}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    class="min-h-11 min-w-0 px-2 whitespace-normal sm:min-h-0 sm:shrink-0 sm:px-3"
+                    disabled={loading()}
+                    onClick={checkSavedDestinations}
+                  >
+                    {loading() ? 'Checking saved destinations…' : AUDIT_WEBHOOK_CHECK_SAVED_LABEL}
+                  </Button>
+                </Show>
               </div>
             </div>
           </SettingsPanel>
@@ -302,6 +341,18 @@ export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
                       {actionError()}
                     </p>
                   </Show>
+                  <Show when={unconfirmedChange()}>
+                    <InlineNotice
+                      class="mb-4"
+                      actionLabel={AUDIT_WEBHOOK_CHECK_SAVED_LABEL}
+                      actionOnClick={checkSavedDestinations}
+                    >
+                      <p role="alert">
+                        <strong>{AUDIT_WEBHOOK_UNCONFIRMED_MESSAGE}</strong> Check what’s saved
+                        before removing a destination again.
+                      </p>
+                    </InlineNotice>
+                  </Show>
                   <div class="flex justify-end gap-3">
                     <button
                       type="button"
@@ -313,9 +364,9 @@ export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
                     </button>
                     <button
                       type="button"
-                      disabled={!canEdit() || saving()}
+                      aria-disabled={!canEdit()}
                       onClick={() => void handleRemoveWebhook()}
-                      class="px-4 py-2 text-sm font-medium bg-red-600 text-white rounded-md hover:bg-red-700"
+                      class="px-4 py-2 text-sm font-medium bg-red-600 text-white rounded-md hover:bg-red-700 aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
                     >
                       Remove webhook
                     </button>
