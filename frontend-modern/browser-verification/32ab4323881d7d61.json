@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "base_sha": "5ca849a21d660daf6d13a281ec37b1131e24ff29",
+  "verified_at": "2026-11-19T19:24:52Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/UpdateInstallGuide.tsx",
+    "frontend-modern/src/components/Settings/updatesSettingsModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/UpdateInstallGuide.tsx": "e3d8b2f7c9adde89b13f6cedc87c35752cf1e6ccc7fc87a9e18f3016760b3daf",
+    "frontend-modern/src/components/Settings/updatesSettingsModel.ts": "a1c6bd62cf521bec9340ea44d6a29edde1a7a7f6aebe8b0bd727456b4099ecc2"
+  },
+  "routes": [
+    "/settings/system-updates"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Settings Updates consuming synthetic read-only paid Docker update API: known legacy and current registry guidance, unrecognised response and absent optional guidance",
+    "Same fixture data on exact baseline and candidate, light desktop and dark narrow phone, release notes collapsed and expanded",
+    "Matching registry-and-username login with hidden Docker Password prompt; no Settings key retrieval claim, password flags or returned unknown text",
+    "Fallback Private Release Access link for unknown guidance, no login block for omitted guidance; full empty History preserved"
+  ],
+  "interactions": [
+    "Activate Check Now and both copy controls by keyboard or touch; exact same digest-pinned Compose pull and up clipboard values",
+    "Open multiline release notes; same desktop anchor shows complete empty History, Stable/Preview choices and automatic control",
+    "Inspect matched phone guide anchor with both pins and full note below fixed header, plus page-end expanded-notes anchor with full empty History",
+    "Focus the fallback link without navigating; no automatic apply, Community fallback, external requests or writes; 24 paired captures inspected natively"
+  ]
+}
