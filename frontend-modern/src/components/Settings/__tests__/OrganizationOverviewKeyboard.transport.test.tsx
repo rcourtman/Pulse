@@ -1,6 +1,6 @@
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { OrganizationOverviewPanel } from '../OrganizationOverviewPanel';
 import { clearApiToken, setOrgID } from '@/utils/apiClient';
 import { eventBus } from '@/stores/events';
@@ -26,17 +26,24 @@ let completion: ReturnType<typeof deferred<Response>>;
 let savedName: string;
 let readGate: ReturnType<typeof deferred<void>> | undefined;
 let failRead: boolean;
+let detailResponse: ((id: string) => Response) | undefined;
+let memberResponse: (() => Response | Promise<Response>) | undefined;
 const requests: { url: string; method: string; options: RequestInit }[] = [];
 const writes = () => requests.filter((request) => request.method === 'PUT');
 const reads = () =>
   requests.filter(
     (request) => request.method === 'GET' && request.url === '/api/orgs/operations%2Feast',
   );
+const memberReads = () => requests.filter((request) => request.url.endsWith('/members'));
 const organization = (id = orgID) => ({
   id,
   displayName: id === orgID ? savedName : 'Operations West',
   ownerUserId: owner,
   createdAt: '2026-10-01T10:00:00Z',
+  members: [
+    { userId: owner, role: 'owner', addedAt: '2026-10-01T10:00:00Z' },
+    { userId: `${id}-viewer`, role: 'viewer', addedAt: '2026-10-02T10:00:00Z' },
+  ],
 });
 const policy = (readOnly = false) =>
   syncSessionPresentationPolicy({
@@ -48,6 +55,8 @@ beforeEach(async () => {
   completion = deferred<Response>();
   readGate = undefined;
   failRead = false;
+  detailResponse = undefined;
+  memberResponse = undefined;
   requests.length = 0;
   clearApiToken();
   setOrgID(orgID);
@@ -62,10 +71,10 @@ beforeEach(async () => {
         return response({ capabilities: ['multi_tenant'], limits: [] });
       if (method === 'PUT') return completion.promise;
       if (readGate) await readGate.promise;
-      if (url.endsWith('/members'))
-        return response([{ userId: owner, role: 'owner', addedAt: '' }]);
+      if (url.endsWith('/members')) return memberResponse?.() ?? response(organization().members);
       if (failRead) return response({ error: 'Synthetic read unavailable' }, 503);
-      return response(organization(decodeURIComponent(url.split('/').at(-1)!)));
+      const id = decodeURIComponent(url.split('/').at(-1)!);
+      return detailResponse?.(id) ?? response(organization(id));
     }),
   );
   await loadRuntimeCapabilities(true);
@@ -104,6 +113,95 @@ const rename = async () => {
   return view;
 };
 const settleFocus = () => new Promise((resolve) => window.setTimeout(resolve, 15));
+
+describe('Organization Overview selected membership snapshot', () => {
+  it('shows the saved name, member count and roles from one authorized detail request', async () => {
+    memberResponse = () => response({ code: 'org_load_failed' }, 500);
+    const { input } = await open();
+    const table = screen.getByRole('table');
+    expect(within(table).getByRole('row', { name: /owner@example\.test.*owner/i })).toBeVisible();
+    expect(
+      within(table).getByRole('row', { name: /operations\/east-viewer.*viewer/i }),
+    ).toBeVisible();
+    expect(screen.getByText('Members', { exact: true }).nextElementSibling).toHaveTextContent(
+      /^2$/,
+    );
+    expect(input).toBeEnabled();
+    expect(reads()).toHaveLength(1);
+    expect(memberReads()).toHaveLength(0);
+    expect(writes()).toHaveLength(0);
+  });
+
+  it.each([
+    { members: null },
+    { members: {} },
+    { members: [null] },
+    { members: [{ userId: 'viewer', role: 'owner', addedAt: null }] },
+    { members: [{ userId: 'viewer', role: 'unknown', addedAt: '' }] },
+  ])(
+    'withdraws the complete panel for present malformed membership $members',
+    async ({ members }) => {
+      detailResponse = (id) => response({ ...organization(id), members });
+      render(() => <OrganizationOverviewPanel currentUser={owner} />);
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'Unable to load organization details.',
+      );
+      expect(screen.queryByRole('table')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('Display Name')).not.toBeInTheDocument();
+      expect(screen.queryByText('No members found.')).not.toBeInTheDocument();
+      expect(memberReads()).toHaveLength(0);
+      expect(writes()).toHaveLength(0);
+    },
+  );
+
+  it('verifies an omitted count with the bound list, keeping unread distinct from empty', async () => {
+    setOrgID('default');
+    detailResponse = (id) => response({ id, displayName: 'Default organization' });
+    memberResponse = () => response({ code: 'org_load_failed' }, 500);
+    render(() => <OrganizationOverviewPanel currentUser={owner} />);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Unable to load organization');
+    expect(screen.queryByText('No members found.')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Display Name')).not.toBeInTheDocument();
+    expect(memberReads()).toHaveLength(1);
+    const request = memberReads()[0]!;
+    expect(request.url).toBe('/api/orgs/default/members');
+    expect(new Headers(request.options.headers).get('X-Pulse-Org-ID')).toBe('default');
+    expect(request.options.signal).toBe(
+      requests.find((read) => read.url === '/api/orgs/default')?.options.signal,
+    );
+    memberResponse = () => response([]);
+    fireEvent.click(screen.getByRole('button', { name: 'Reload organization' }));
+    expect(await screen.findByText('No members found.')).toBeVisible();
+    expect(screen.getByText('Members', { exact: true }).nextElementSibling).toHaveTextContent(
+      /^0$/,
+    );
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    expect(memberReads()).toHaveLength(2);
+    expect(writes()).toHaveLength(0);
+  });
+
+  it('discards a late list for an omitted selection after switching workspaces', async () => {
+    const previousMembers = deferred<Response>();
+    detailResponse = (id) =>
+      response(id === orgID ? { ...organization(id), members: undefined } : organization(id));
+    memberResponse = () => previousMembers.promise;
+    render(() => <OrganizationOverviewPanel currentUser={owner} />);
+    await waitFor(() => expect(memberReads()).toHaveLength(1));
+    const oldSignal = memberReads()[0]!.options.signal;
+    expect(oldSignal).toBe(reads()[0]!.options.signal);
+    setOrgID('operations/west');
+    eventBus.emit('org_switched');
+    expect(oldSignal?.aborted).toBe(true);
+    expect(await screen.findByLabelText('Display Name')).toHaveValue('Operations West');
+    previousMembers.resolve(response(organization().members));
+    await settleFocus();
+    expect(screen.getByText('operations/west-viewer')).toBeVisible();
+    expect(screen.queryByText('operations/east-viewer')).not.toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(memberReads()).toHaveLength(1);
+    expect(writes()).toHaveLength(0);
+  });
+});
 
 describe('Organization Overview native submission and keyboard continuation', () => {
   it('submits the named form once with trimmed text and exact org/CSRF, retaining pending controls', async () => {

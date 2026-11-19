@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "base_sha": "3a2a2e5bc68dffbd756f7617b25cca4e0163db1d",
+  "result": "passed",
+  "verified_at": "2026-11-19T00:48:14Z",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/OrganizationIncomingSharesSection.tsx",
+    "frontend-modern/src/components/Settings/OrganizationOutgoingSharesSection.tsx",
+    "frontend-modern/src/components/Settings/OrganizationSharingCreateSection.tsx",
+    "frontend-modern/src/components/Settings/OrganizationSharingPanel.tsx",
+    "frontend-modern/src/components/Settings/useOrganizationSharingPanelState.ts",
+    "frontend-modern/src/utils/organizationSettingsPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/OrganizationIncomingSharesSection.tsx": "04c20b0d8f2732e8ab5d8f0510cd13c97fb7f8701ba6b96ddebbae46c0f7109a",
+    "frontend-modern/src/components/Settings/OrganizationOutgoingSharesSection.tsx": "a78953d576329bcf0c7cc8a51f361e8cb91a8a890778e47a36b75874327c21dd",
+    "frontend-modern/src/components/Settings/OrganizationSharingCreateSection.tsx": "d14e1fc03c3f575bfbe8d653b1e725b96ec19aa00fe192d1836656efcb4bb5ce",
+    "frontend-modern/src/components/Settings/OrganizationSharingPanel.tsx": "3024a7df7a84e91845ec5e4de38e14f3d9d1c71c9847912606a60cd907f47dd6",
+    "frontend-modern/src/components/Settings/useOrganizationSharingPanelState.ts": "094a88ec9b1e95bc870e8cd70013f478f4f33c20099919917ebe3428acd6abfd",
+    "frontend-modern/src/utils/organizationSettingsPresentation.ts": "9fd40fb8441d6646460c15e5a8fd0bc075ef6fdb14317c77d7d0a22aa7604720"
+  },
+  "routes": [
+    "/settings/organization/sharing"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Production App in Playwright 1.56.1, desktop Chromium 141 and touch WebKit 26, light; 20 inspected captures / ten matches at the same selected workspace and anchors.",
+    "Serve selected reads successfully and fail only the returned separate create-form asset with HTTP 503. Earlier source keeps both rows but loses Create Share; the new source renders the form with the rows and makes no such request.",
+    "Peer directory and incoming enumeration unread: current main suppresses the panel; the candidate preserves the verified selected identity and outgoing row, explicitly marks incoming unread and shows disabled creation/actions. After a complete reread, manager and viewer screenshots match the corresponding main states."
+  ],
+  "interactions": [
+    "Use the actual Reload sharing control via Enter on desktop and tap on phone. All five panel reads remain bound to the same selected workspace; no automatic writes or CSRF preparation, including a forced submit in the incomplete state.",
+    "The owner needs an explicit recipient and a complete resource identity before Create Share is enabled; no share is submitted. Both saved share rows keep exact resource/party keys, role and status; the viewer has no manager controls."
+  ]
+}

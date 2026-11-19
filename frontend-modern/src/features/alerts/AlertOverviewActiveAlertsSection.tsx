@@ -27,9 +27,11 @@ function pmgMessageAgeScope(alert: Alert): 'gateway' | 'node' | undefined {
     return undefined;
   }
   // The PMG evaluator uses the gateway resource for both readings. The
-  // canonical spec, not the alert text or the node display name, names scope.
-  if (alert.canonicalSpecId === `${alert.resourceId}-oldest-message`) return 'gateway';
-  if (alert.node && alert.canonicalSpecId === `${alert.resourceId}-${alert.node}-oldest-message`) {
+  // canonical spec names scope. REST sends it at the top level; connected
+  // state retains the same identifier in metadata.
+  const specId = alert.canonicalSpecId ?? alert.metadata.canonicalSpecID;
+  if (specId === `${alert.resourceId}-oldest-message`) return 'gateway';
+  if (alert.node && specId === `${alert.resourceId}-${alert.node}-oldest-message`) {
     return 'node';
   }
   return undefined;

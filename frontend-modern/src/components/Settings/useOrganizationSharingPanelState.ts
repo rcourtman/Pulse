@@ -31,18 +31,20 @@ import {
   getOrganizationIncomingShareDeclineConfirmMessage,
   getOrganizationIncomingShareDeclineErrorMessage,
   getOrganizationIncomingShareDeclineSuccessMessage,
+  getOrganizationOutgoingShareRemoveConfirmMessage,
   getOrganizationShareCreateErrorMessage,
   getOrganizationShareCreateSuccessMessage,
   getOrganizationShareDeleteErrorMessage,
   getOrganizationShareDeleteSuccessMessage,
   getOrganizationShareInvalidResourceMessage,
   getOrganizationShareResourceIdRequiredMessage,
+  getOrganizationShareResourceLabel,
   getOrganizationShareTargetOrgDifferentMessage,
   getOrganizationShareTargetOrgRequiredMessage,
   getOrganizationSettingsLoadErrorMessage,
   ORGANIZATION_SHARING_UNCONFIRMED_CHANGE_MESSAGE,
 } from '@/utils/organizationSettingsPresentation';
-import { canManageOrg } from '@/utils/orgUtils';
+import { canManageOrg, readOrganizationAggregate } from '@/utils/orgUtils';
 
 interface OrganizationSharingPanelProps {
   currentUser?: string;
@@ -62,6 +64,10 @@ export function useOrganizationSharingPanelState(props: OrganizationSharingPanel
   const [orgs, setOrgs] = createSignal<Organization[]>([]);
   const [outgoingShares, setOutgoingShares] = createSignal<OrganizationShare[]>([]);
   const [incomingShares, setIncomingShares] = createSignal<IncomingOrganizationShare[]>([]);
+  const [unavailableLists, setUnavailableLists] = createSignal<{
+    directory: boolean;
+    incoming: boolean;
+  }>();
   const [targetOrgId, setTargetOrgId] = createSignal('');
   const [resourceType, setResourceType] = createSignal('');
   const [resourceId, setResourceId] = createSignal('');
@@ -98,7 +104,9 @@ export function useOrganizationSharingPanelState(props: OrganizationSharingPanel
       !presentationPolicyIsReadOnly() &&
       canManageOrg(org(), props.currentUser),
   );
-  const canChangeSharing = () => hasCurrentSharing() && canManageCurrentOrg() && !saving();
+  const sharingChangesPaused = () => unavailableLists() !== undefined;
+  const canChangeSharing = () =>
+    hasCurrentSharing() && canManageCurrentOrg() && !sharingChangesPaused() && !saving();
   const { resources } = useResources();
 
   const targetOrgOptions = createMemo(() =>
@@ -152,17 +160,6 @@ export function useOrganizationSharingPanelState(props: OrganizationSharingPanel
     return map;
   });
 
-  const getShareLabel = (share: {
-    resourceId: string;
-    resourceName?: string;
-    resourceType: string;
-  }): string => {
-    const resourceName = share.resourceName?.trim();
-    if (resourceName) return resourceName;
-    if (share.resourceId.trim() !== '') return share.resourceId;
-    return `${share.resourceType}:${share.resourceId}`;
-  };
-
   createEffect(() => {
     if (unifiedResourceOptions().length === 0 && !selectedQuickPick()) setManualEntryExpanded(true);
   });
@@ -172,6 +169,7 @@ export function useOrganizationSharingPanelState(props: OrganizationSharingPanel
     setOrgs([]);
     setOutgoingShares([]);
     setIncomingShares([]);
+    setUnavailableLists(undefined);
   };
   const clearDraft = () => {
     targetOrgNeedsReselection = false;
@@ -224,32 +222,38 @@ export function useOrganizationSharingPanelState(props: OrganizationSharingPanel
       retry: false,
     };
     try {
-      // Publish one accepted snapshot, never a new org with old share rows (or
-      // a partial read presented as an empty share list).
+      // Publish only current, verified data. A failed aggregate can leave the
+      // selected scope readable, but not authorize a write or imply zero rows.
       const [orgData, memberData, allOrgs, outgoing, incoming] = await Promise.all([
         OrgsAPI.get(orgId, options),
         OrgsAPI.listMembers(orgId, options),
-        OrgsAPI.list(options),
+        readOrganizationAggregate(OrgsAPI.list(options)),
         OrgsAPI.listShares(orgId, options),
-        OrgsAPI.listIncomingShares(orgId, options),
+        readOrganizationAggregate(OrgsAPI.listIncomingShares(orgId, options)),
       ]);
       if (!isCurrent()) return;
       if (
         !orgData ||
         orgData.id !== orgId ||
         !Array.isArray(memberData) ||
-        !Array.isArray(allOrgs) ||
+        (allOrgs !== undefined && !Array.isArray(allOrgs)) ||
         !Array.isArray(outgoing) ||
-        !Array.isArray(incoming) ||
-        incoming.some((share) => share.targetOrgId !== orgId)
+        (incoming !== undefined &&
+          (!Array.isArray(incoming) || incoming.some((share) => share.targetOrgId !== orgId)))
       ) {
         throw new Error('Organization sharing returned an invalid selection');
       }
       batch(() => {
         setOrg({ ...orgData, members: memberData });
-        setOrgs(allOrgs);
+        setOrgs(allOrgs ?? []);
         setOutgoingShares(outgoing);
-        setIncomingShares(incoming);
+        setIncomingShares(incoming ?? []);
+        if (!allOrgs || !incoming) {
+          setUnavailableLists({ directory: !allOrgs, incoming: !incoming });
+        }
+        // An unread directory neither verifies nor withdraws an explicit draft
+        // recipient. Recheck it when a complete directory is read.
+        if (!allOrgs) return;
         const draftTarget = targetOrgId().trim();
         // If a previously chosen destination disappeared, require a new choice
         // rather than retaining an invisible value or choosing a different org.
@@ -436,7 +440,7 @@ export function useOrganizationSharingPanelState(props: OrganizationSharingPanel
   const deleteShare = async (share: OrganizationShare) => {
     const currentOrg = org();
     if (!currentOrg || !canChangeSharing() || !isCurrentOutgoing(share)) return;
-    if (!confirm(`Remove share for ${share.resourceType}:${share.resourceId}?`)) return;
+    if (!confirm(getOrganizationOutgoingShareRemoveConfirmMessage(share))) return;
     if (org() !== currentOrg || !isCurrentOutgoing(share) || !canChangeSharing()) return;
     await changeSharing(
       (options) => OrgsAPI.deleteShare(currentOrg.id, share.id, options),
@@ -457,7 +461,7 @@ export function useOrganizationSharingPanelState(props: OrganizationSharingPanel
       return;
     await changeSharing(
       (options) => OrgsAPI.acceptIncomingShare(currentOrg.id, share.id, options),
-      getOrganizationIncomingShareAcceptSuccessMessage(getShareLabel(share)),
+      getOrganizationIncomingShareAcceptSuccessMessage(getOrganizationShareResourceLabel(share)),
       getOrganizationIncomingShareAcceptErrorMessage,
     );
   };
@@ -471,7 +475,7 @@ export function useOrganizationSharingPanelState(props: OrganizationSharingPanel
       share.targetOrgId !== currentOrg.id
     )
       return;
-    const shareLabel = getShareLabel(share);
+    const shareLabel = getOrganizationShareResourceLabel(share);
     if (!confirm(getOrganizationIncomingShareDeclineConfirmMessage(shareLabel, share.status)))
       return;
     if (org() !== currentOrg || !isCurrentIncoming(share) || !canChangeSharing()) return;
@@ -522,6 +526,7 @@ export function useOrganizationSharingPanelState(props: OrganizationSharingPanel
     resourceTypeError,
     saving,
     selectedQuickPick,
+    selectedResource,
     quickPickUnavailable: () => !!selectedQuickPick() && !selectedResource(),
     setAccessRole,
     targetOrgError,
@@ -529,6 +534,8 @@ export function useOrganizationSharingPanelState(props: OrganizationSharingPanel
     targetOrgOptions,
     toggleManualEntry,
     unifiedResourceOptions,
+    unavailableLists,
+    sharingChangesPaused,
     updateResourceId,
     updateResourceName,
     updateResourceType,

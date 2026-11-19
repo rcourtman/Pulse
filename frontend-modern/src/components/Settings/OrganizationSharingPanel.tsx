@@ -5,7 +5,10 @@ import SettingsPanel from '@/components/shared/SettingsPanel';
 import { isMultiTenantEnabled } from '@/stores/license';
 import { presentationPolicyHidesOrganizationSurfaces } from '@/stores/sessionPresentationPolicy';
 import {
+  getOrganizationSharingPartialReadMessage,
   getOrganizationSharingReloadMessage,
+  ORGANIZATION_SHARING_MANAGER_REQUIRED_MESSAGE,
+  ORGANIZATION_SHARING_READ_ONLY_MESSAGE,
   ORGANIZATION_SHARING_RELOAD_LABEL,
   ORGANIZATION_SHARING_UNAVAILABLE_TITLE,
   ORGANIZATION_SETTINGS_UNAVAILABLE_CLASS,
@@ -13,7 +16,7 @@ import {
 } from '@/utils/organizationSettingsPresentation';
 import { OrganizationIncomingSharesSection } from './OrganizationIncomingSharesSection';
 import { OrganizationOutgoingSharesSection } from './OrganizationOutgoingSharesSection';
-import { OrganizationSharingCreateSection } from './OrganizationSharingCreateSection';
+import OrganizationSharingCreateSection from './OrganizationSharingCreateSection';
 import { OrganizationSharingLoadingState } from './OrganizationSharingLoadingState';
 import { useOrganizationSharingPanelState } from './useOrganizationSharingPanelState';
 
@@ -141,7 +144,16 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
           }
         }}
       >
-        <SettingsPanel title="Organization Sharing" noPadding bodyClass="divide-y divide-border">
+        <SettingsPanel
+          title="Organization Sharing"
+          action={
+            state.sharingChangesPaused() ? (
+              <Button onClick={reloadSharing}>{ORGANIZATION_SHARING_RELOAD_LABEL}</Button>
+            ) : undefined
+          }
+          noPadding
+          bodyClass="divide-y divide-border"
+        >
           <Show when={!state.loading()} fallback={<OrganizationSharingLoadingState />}>
             <Show when={state.loadError()}>
               <div class="p-4 sm:p-6">
@@ -185,10 +197,28 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
                       ({currentOrg().id})
                     </p>
                     <Show when={state.readOnly()}>
-                      <p>This session is read-only. Sharing changes are disabled.</p>
+                      <p>{ORGANIZATION_SHARING_READ_ONLY_MESSAGE}</p>
+                    </Show>
+                    <Show when={state.sharingChangesPaused()}>
+                      <p role="status">
+                        {getOrganizationSharingPartialReadMessage(state.canManageCurrentOrg())}
+                      </p>
                     </Show>
                   </div>
-                  <OrganizationSharingCreateSection state={state} />
+                  <Show
+                    when={state.canManageCurrentOrg()}
+                    fallback={
+                      <Show when={!state.readOnly()}>
+                        <div class="p-4 sm:p-6">
+                          <div class="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-900/25 dark:text-amber-300">
+                            {ORGANIZATION_SHARING_MANAGER_REQUIRED_MESSAGE}
+                          </div>
+                        </div>
+                      </Show>
+                    }
+                  >
+                    <OrganizationSharingCreateSection state={state} />
+                  </Show>
                   <OrganizationOutgoingSharesSection state={state} />
                   <OrganizationIncomingSharesSection state={state} />
                 </>

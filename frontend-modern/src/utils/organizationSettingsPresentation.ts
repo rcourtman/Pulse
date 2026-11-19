@@ -1,4 +1,4 @@
-import type { OrganizationRole, OrganizationShareStatus } from '@/api/orgs';
+import type { OrganizationRole, OrganizationShare, OrganizationShareStatus } from '@/api/orgs';
 import { formatOrgDate } from '@/utils/orgUtils';
 
 export const ORGANIZATION_SETTINGS_UNAVAILABLE_MESSAGE =
@@ -31,6 +31,62 @@ export const ORGANIZATION_SHARING_UNCONFIRMED_CHANGE_MESSAGE =
   'The last sharing change could not be confirmed. Reload saved sharing before making another change.';
 export const ORGANIZATION_SHARING_RELOAD_LABEL = 'Reload sharing';
 export const ORGANIZATION_SHARING_UNAVAILABLE_TITLE = 'Organization sharing unavailable';
+export const ORGANIZATION_SHARING_READ_ONLY_MESSAGE =
+  'This session is read-only. Sharing changes are disabled.';
+export const ORGANIZATION_SHARING_MANAGER_REQUIRED_MESSAGE =
+  'Admin or owner role required to create or remove organization shares.';
+export const ORGANIZATION_SHARING_QUICK_PICK_UNAVAILABLE_MESSAGE =
+  'The selected resource is no longer available. Choose another resource or enter it manually.';
+export const ORGANIZATION_SHARING_QUICK_PICK_GUIDANCE =
+  'Choose a discovered resource, or switch to manual entry.';
+export const ORGANIZATION_SHARING_MANUAL_ENTRY_HIDDEN_MESSAGE =
+  'Manual entry is hidden while quick pick is active.';
+
+type ShareResourceKey = Pick<OrganizationShare, 'resourceType' | 'resourceId'>;
+
+export function getOrganizationSharingPartialReadMessage(canManage: boolean): string {
+  return canManage
+    ? 'Sharing changes are paused until the missing information loads.'
+    : 'Some sharing information could not be loaded.';
+}
+
+export function getOrganizationSharingTargetPlaceholder(directoryUnavailable?: boolean): string {
+  return directoryUnavailable ? 'Organization list unavailable' : 'Select organization';
+}
+
+export function getOrganizationShareActionLabel(
+  action: 'Accept' | 'Decline' | 'Remove',
+  share: ShareResourceKey,
+  direction: 'from' | 'to',
+  orgID: string,
+  orgName?: string,
+): string {
+  return `${action} share of ${share.resourceType}:${share.resourceId} ${direction} ${getShareOrganizationLabel(orgID, orgName)}`;
+}
+
+export function getOrganizationOutgoingShareRemoveConfirmMessage(share: ShareResourceKey): string {
+  return `Remove share for ${share.resourceType}:${share.resourceId}?`;
+}
+
+export function getOrganizationShareResourceLabel(
+  share: ShareResourceKey & Pick<OrganizationShare, 'resourceName'>,
+): string {
+  const resourceName = share.resourceName?.trim();
+  if (resourceName) return resourceName;
+  if (share.resourceId.trim() !== '') return share.resourceId;
+  return `${share.resourceType}:${share.resourceId}`;
+}
+
+export function getOrganizationShareResourceOptionLabel(resource: {
+  type: string;
+  id: string;
+  name: string;
+}): string {
+  const identity = `${resource.type}:${resource.id}`;
+  return resource.name && resource.name !== resource.id
+    ? `${resource.name} (${identity})`
+    : identity;
+}
 export function getOrganizationSharingReloadMessage(orgId: string): string {
   return `Reload checks saved incoming and outgoing shares for ${orgId}. It does not repeat a sharing change.`;
 }
@@ -176,8 +232,10 @@ export function getOrganizationOutgoingSharesEmptyState(): string {
   return 'No outgoing shares configured.';
 }
 
-export function getOrganizationIncomingSharesEmptyState(): string {
-  return 'No incoming shares from other organizations.';
+export function getOrganizationIncomingSharesEmptyState(unavailable?: boolean): string {
+  return unavailable
+    ? 'Incoming shares could not be loaded.'
+    : 'No incoming shares from other organizations.';
 }
 
 export function getOrganizationShareTargetOrgRequiredMessage(): string {

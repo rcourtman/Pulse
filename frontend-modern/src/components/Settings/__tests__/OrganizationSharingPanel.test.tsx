@@ -605,6 +605,49 @@ describe('OrganizationSharingPanel', () => {
 });
 
 describe('selected sharing snapshot', () => {
+  it('keeps verified identity and outgoing rows visible without enabling a write from an incomplete list', async () => {
+    const unread = Object.assign(new Error('unread peer'), { status: 500, code: 'list_failed' });
+    listOrgsMock.mockRejectedValueOnce(unread);
+    listIncomingSharesMock.mockRejectedValueOnce(unread);
+    listSharesMock.mockResolvedValue([outgoing]);
+    renderPanel();
+
+    await screen.findByText('Incoming shares could not be loaded.');
+    expect(screen.getByText(baseOrg.displayName)).toBeInTheDocument();
+    const savedRow = () => within(screen.getByRole('row', { name: /Alpha shared workload/ }));
+    expect(savedRow().getByText('org-b', { exact: true })).toBeVisible();
+    expect(savedRow().queryByText('Organization B', { exact: true })).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('No incoming shares from other organizations.'),
+    ).not.toBeInTheDocument();
+    const form = screen.getByRole('form', { name: 'Create Share' });
+    const recipient = within(form).getByRole('combobox', { name: 'Target Organization' });
+    expect(recipient).toBeDisabled();
+    expect(recipient).toHaveValue('');
+    expect(
+      within(recipient).getByRole('option', { name: 'Organization list unavailable' }),
+    ).toBeInTheDocument();
+    expect(within(form).getByRole('combobox', { name: 'Access Role' })).toBeDisabled();
+    expect(within(form).getByRole('button', { name: 'Create Share' })).toBeDisabled();
+    expect(
+      savedRow().getByRole('button', { name: 'Remove share of vm:vm-alpha to org-b' }),
+    ).toBeDisabled();
+    fireEvent.submit(form);
+    expect(createShareMock).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reload sharing' }));
+    await screen.findByText('No incoming shares from other organizations.');
+    expect(savedRow().getByText('org-b', { exact: true })).toBeVisible();
+    expect(savedRow().getByText('Organization B', { exact: true })).toBeVisible();
+    expect(
+      savedRow().getByRole('button', {
+        name: 'Remove share of vm:vm-alpha to Organization B (org-b)',
+      }),
+    ).toBeEnabled();
+    expect(await screen.findByRole('combobox', { name: 'Target Organization' })).toHaveValue('');
+    expect(deleteShareMock).not.toHaveBeenCalled();
+  });
+
   it('does not expose previous-org shares or controls after a failed switch', async () => {
     listSharesMock.mockResolvedValue([
       {

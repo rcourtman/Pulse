@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "base_sha": "d62573ce6d19cc712a9c4f7cb1a39b1c74fa1008",
+  "verified_at": "2026-11-18T23:21:04Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/alerts/AlertOverviewActiveAlertsSection.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/alerts/AlertOverviewActiveAlertsSection.tsx": "f2651c417e20e07df3475354189d4395b0e6df7fead971d2073001b15067defb"
+  },
+  "routes": [
+    "/alerts/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Production Pulse App, Chromium 141 desktop and touch WebKit 26 narrow, light, same top anchors and fixed clock: six inspected before/after pairs.",
+    "Native PMG REST Warning rows through the HTTP recovery route show both scopes as before. The same rows projected to the model.Alert shape enter through initialState and rawData; the peer stays first, and the gateway age, 15-minute threshold and controls are now visible without a disclosure. The peer threshold remains 9 minutes."
+  ],
+  "interactions": [
+    "Verified both independent card controls and Warning counts; expanded the baseline related row and toggled the candidate gateway More controls. Observed actual rawData replacement via the intervening peer-only fixture, then both current rows; no mutation.",
+    "The compact frame is an exact source-derived projection of retained native alert records, not a captured server WebSocket frame or installed-appliance result."
+  ]
+}
