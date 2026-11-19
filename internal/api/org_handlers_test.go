@@ -431,6 +431,228 @@ func TestOrgHandlersTokenListAllowedButWriteForbidden(t *testing.T) {
 	}
 }
 
+func TestOrgHandlersOrganizationReadsLimitPendingInvitationsToManagers(t *testing.T) {
+	enableSharedMultiOrgForTest(t)
+	installTestRBACManager(t)
+	t.Setenv("PULSE_DEV", "true")
+
+	dir := t.TempDir()
+	t.Setenv("PULSE_LEGACY_KEY_PATH", filepath.Join(dir, "unused-legacy-key"))
+	p := config.NewMultiTenantPersistence(dir)
+	for _, org := range []models.Organization{
+		{ID: "acme", DisplayName: "Acme", OwnerUserID: "alice", Members: []models.OrganizationMember{
+			{UserID: "bob", Role: " ADMIN "},
+			{UserID: "editor", Role: models.OrgRoleEditor},
+			{UserID: "viewer", Role: models.OrgRoleViewer},
+		}},
+		{ID: "other", DisplayName: "Other", OwnerUserID: "other-owner", Members: []models.OrganizationMember{
+			{UserID: "bob", Role: models.OrgRoleViewer},
+		}},
+		{ID: "default", DisplayName: "Default", OwnerUserID: "legacy-owner", Members: []models.OrganizationMember{
+			{UserID: "legacy-owner", Role: models.OrgRoleOwner},
+		}},
+	} {
+		if org.ID == "default" {
+			saved, err := p.LoadOrganization(org.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			org.PersistenceVersion = saved.PersistenceVersion
+		}
+		org.PendingInvitations = []models.OrganizationInvitation{{
+			UserID: " invited-" + org.ID + " ", Role: " EDITOR ",
+			InvitedAt: time.Date(2026, 11, 1, 9, 0, 0, 0, time.UTC), InvitedBy: org.OwnerUserID,
+		}}
+		if err := p.SaveOrganization(&org); err != nil {
+			t.Fatal(err)
+		}
+	}
+	h := NewOrgHandlers(p, nil)
+	h.SetAccessPolicy(newOrgAccessChecker(&config.Config{AuthUser: orgAccessTestAdmin}, p, false))
+
+	for _, tc := range []struct {
+		name, user string
+		token      *config.APITokenRecord
+		visible    map[string]bool // org ID -> may also read pending invitations
+	}{
+		{name: "owner", user: "alice", visible: map[string]bool{"acme": true}},
+		{name: "admin in only one workspace", user: "bob", visible: map[string]bool{"acme": true, "other": false}},
+		{name: "editor", user: "editor", visible: map[string]bool{"acme": false}},
+		{name: "viewer", user: "viewer", visible: map[string]bool{"acme": false}},
+		{name: "default legacy owner is not instance admin", user: "legacy-owner", visible: map[string]bool{"default": false}},
+		{name: "instance admin", user: orgAccessTestAdmin, visible: map[string]bool{"default": true}},
+		{name: "bound token even in owner context", user: "alice", token: &config.APITokenRecord{OrgID: "acme"}, visible: map[string]bool{"acme": false}},
+		{name: "multi-org token", user: "token:fixture", token: &config.APITokenRecord{OrgIDs: []string{"acme", "default"}}, visible: map[string]bool{"acme": false, "default": false}},
+		{name: "invitee is not yet a member", user: "invited-acme"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			get := func(path, orgID string, handler http.HandlerFunc, status int) []byte {
+				t.Helper()
+				req := withUser(httptest.NewRequest(http.MethodGet, path, nil), tc.user)
+				req.SetPathValue("id", orgID)
+				attachAPITokenRecord(req, tc.token)
+				rec := httptest.NewRecorder()
+				handler(rec, req)
+				if rec.Code != status {
+					t.Fatalf("%s: status %d, want %d: %s", path, rec.Code, status, rec.Body.Bytes())
+				}
+				return rec.Body.Bytes()
+			}
+			check := func(orgID string, body map[string]json.RawMessage, detail bool) {
+				t.Helper()
+				wantPending := tc.visible[orgID]
+				pending, hasPending := body["pendingInvitations"]
+				if hasPending != wantPending {
+					t.Errorf("%s detail=%t: pendingInvitations present = %t, want %t", orgID, detail, hasPending, wantPending)
+				}
+				if hasPending && wantPending {
+					var invitations []models.OrganizationInvitation
+					if err := json.Unmarshal(pending, &invitations); err != nil || len(invitations) != 1 ||
+						invitations[0].UserID != "invited-"+orgID || invitations[0].Role != models.OrgRoleEditor {
+						t.Fatalf("pending invitations for %s are not normalized: %s (%v)", orgID, pending, err)
+					}
+				}
+				capability, hasCapability := body["canManageMembers"]
+				if wantCapability := detail && orgID == "default" && wantPending; hasCapability != wantCapability ||
+					hasCapability && string(capability) != "true" {
+					t.Errorf("%s detail=%t: canManageMembers = %s, want present and true = %t", orgID, detail, capability, wantCapability)
+				}
+			}
+
+			listJSON := get("/api/orgs", "", h.HandleListOrgs, http.StatusOK)
+			var listed []map[string]json.RawMessage
+			if err := json.Unmarshal(listJSON, &listed); err != nil || listed == nil || len(listed) != len(tc.visible) {
+				t.Fatalf("unexpected list: %s (%v)", listJSON, err)
+			}
+			seen := make(map[string]bool)
+			for _, row := range listed {
+				var orgID string
+				if err := json.Unmarshal(row["id"], &orgID); err != nil {
+					t.Fatal(err)
+				}
+				if _, visible := tc.visible[orgID]; !visible || seen[orgID] {
+					t.Fatalf("unexpected list entry for %q", orgID)
+				}
+				seen[orgID] = true
+				check(orgID, row, false)
+			}
+			for _, orgID := range []string{"acme", "other", "default"} {
+				path := "/api/orgs/" + orgID
+				if wantPending, visible := tc.visible[orgID]; visible {
+					detail := get(path, orgID, h.HandleGetOrg, http.StatusOK)
+					var row map[string]json.RawMessage
+					if err := json.Unmarshal(detail, &row); err != nil {
+						t.Fatal(err)
+					}
+					check(orgID, row, true)
+					if wantPending {
+						managerList := get(path+"/invitations", orgID, h.HandleListInvitations, http.StatusOK)
+						assertJSONSnapshot(t, managerList, string(row["pendingInvitations"]))
+					} else {
+						get(path+"/invitations", orgID, h.HandleListInvitations, http.StatusForbidden)
+					}
+				} else {
+					get(path, orgID, h.HandleGetOrg, http.StatusForbidden)
+				}
+			}
+		})
+	}
+}
+
+type orgDirectoryLicenseProbe struct {
+	lookups int
+}
+
+func (p *orgDirectoryLicenseProbe) Service(context.Context) *licenseService {
+	p.lookups++
+	return newLicenseService()
+}
+
+func TestOrgHandlersProviderDirectoryKeepsInvitationGate(t *testing.T) {
+	t.Setenv(pkglicensing.ProviderHostedRuntimeEnvVar, "true")
+	t.Setenv("PULSE_TENANT_ID", "t-client")
+	dir := t.TempDir()
+	t.Setenv("PULSE_LEGACY_KEY_PATH", filepath.Join(dir, "unused-legacy-key"))
+	p := config.NewMultiTenantPersistence(dir)
+	if err := p.SaveOrganization(&models.Organization{
+		ID: "t-client", DisplayName: "Client", OwnerUserID: "alice",
+		PendingInvitations: []models.OrganizationInvitation{{UserID: "bob", Role: models.OrgRoleViewer}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	h := NewOrgHandlers(p, nil)
+	h.SetHostedMode(true)
+	call := func(path string, handler http.HandlerFunc) *httptest.ResponseRecorder {
+		t.Helper()
+		req := withUser(httptest.NewRequest(http.MethodGet, path, nil), "alice")
+		req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "t-client"))
+		req.SetPathValue("id", "t-client")
+		rec := httptest.NewRecorder()
+		handler(rec, req)
+		return rec
+	}
+	for _, tc := range []struct {
+		state  pkglicensing.SubscriptionState
+		status int
+	}{
+		{state: pkglicensing.SubStateExpired, status: http.StatusPaymentRequired},
+		{state: pkglicensing.SubStateActive, status: http.StatusOK},
+	} {
+		t.Run(string(tc.state), func(t *testing.T) {
+			probe := &orgDirectoryLicenseProbe{}
+			SetLicenseServiceProvider(probe)
+			t.Cleanup(func() { SetLicenseServiceProvider(nil) })
+			rec := call("/api/orgs", h.HandleListOrgs)
+			if probe.lookups != 0 {
+				t.Fatalf("workspace directory performed %d paid capability lookups", probe.lookups)
+			}
+			var listed []struct {
+				ID                 string                      `json:"id"`
+				DisplayName        string                      `json:"displayName"`
+				Members            []models.OrganizationMember `json:"members"`
+				PendingInvitations json.RawMessage             `json:"pendingInvitations"`
+			}
+			if err := json.Unmarshal(rec.Body.Bytes(), &listed); rec.Code != http.StatusOK || err != nil {
+				t.Fatalf("workspace directory: %d %s (%v)", rec.Code, rec.Body.Bytes(), err)
+			}
+			found := false
+			for _, row := range listed {
+				if row.ID != "t-client" {
+					continue
+				}
+				found = true
+				if row.DisplayName != "Client" || len(row.Members) != 1 || row.Members[0].UserID != "alice" ||
+					row.Members[0].Role != models.OrgRoleOwner {
+					t.Fatalf("workspace identity or current member changed: %#v", row)
+				}
+				if row.PendingInvitations != nil {
+					t.Fatalf("workspace directory returned management data without using the gate: %s", row.PendingInvitations)
+				}
+			}
+			if !found {
+				t.Fatal("provider client could not see its workspace")
+			}
+			setupHostedLicenseProvider(t, tc.state, nil)
+			if rec := call("/api/orgs/t-client/invitations", h.HandleListInvitations); rec.Code != tc.status {
+				t.Fatalf("invitation list: %d, want %d", rec.Code, tc.status)
+			}
+			rec = call("/api/orgs/t-client", h.HandleGetOrg)
+			if rec.Code != tc.status {
+				t.Fatalf("workspace detail: %d, want %d", rec.Code, tc.status)
+			}
+			if tc.status == http.StatusOK {
+				var detail map[string]json.RawMessage
+				if err := json.Unmarshal(rec.Body.Bytes(), &detail); err != nil {
+					t.Fatal(err)
+				}
+				if detail["pendingInvitations"] == nil {
+					t.Fatal("gated manager detail lost pending invitations")
+				}
+			}
+		})
+	}
+}
+
 func TestOrgHandlersMultiTenantGate(t *testing.T) {
 	persistence := config.NewMultiTenantPersistence(t.TempDir())
 	h := NewOrgHandlers(persistence, nil)

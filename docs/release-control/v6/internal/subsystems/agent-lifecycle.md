@@ -7116,6 +7116,10 @@ member-shaped owner target, and they may not complete owner transfer through a
 stale ambient browser cookie. The acting owner must re-enter through a fresh
 browser session on the shared auth boundary before lifecycle-adjacent surfaces
 can permanently reassign org ownership.
+When a lifecycle entry surface reads the organization list or detail to
+resolve its workspace, current members still describe accepted access.
+Pending invitation details in those reads are reserved for that workspace's
+signed-in managers; an install or integration token cannot read them.
 That same shared `internal/api/` dependency also assumes telemetry
 transparency remains explicitly system-settings-owned. When lifecycle-adjacent
 setup or router work touches shared `internal/api/` files, telemetry preview

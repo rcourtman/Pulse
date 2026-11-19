@@ -140,12 +140,42 @@ func (h *OrgHandlers) SetAccessPolicy(policy *DefaultAuthorizationChecker) {
 	h.accessPolicy = policy
 }
 
-// organizationResponse adds the caller's capabilities that the client cannot
-// derive from membership. Instance administrators manage the default
-// organization's members without being members themselves.
+// organizationResponse is the list/detail wire projection, not the saved
+// organization. Pending invitations have a narrower audience than membership.
 type organizationResponse struct {
-	*models.Organization
-	CanManageMembers bool `json:"canManageMembers,omitempty"`
+	ID                  string                          `json:"id"`
+	DisplayName         string                          `json:"displayName"`
+	Status              models.OrgStatus                `json:"status,omitempty"`
+	CreatedAt           time.Time                       `json:"createdAt"`
+	OwnerUserID         string                          `json:"ownerUserId,omitempty"`
+	OwnerEmail          string                          `json:"ownerEmail,omitempty"`
+	Members             []models.OrganizationMember     `json:"members,omitempty"`
+	PendingInvitations  []models.OrganizationInvitation `json:"pendingInvitations,omitempty"`
+	SharedResources     []models.OrganizationShare      `json:"sharedResources,omitempty"`
+	SuspendedAt         *time.Time                      `json:"suspendedAt,omitempty"`
+	SuspendReason       string                          `json:"suspendReason,omitempty"`
+	DeletionRequestedAt *time.Time                      `json:"deletionRequestedAt,omitempty"`
+	RetentionDays       int                             `json:"retentionDays,omitempty"`
+	EncryptionKeyID     string                          `json:"encryptionKeyId,omitempty"`
+	CanManageMembers    bool                            `json:"canManageMembers,omitempty"`
+}
+
+func projectOrganization(org *models.Organization) organizationResponse {
+	return organizationResponse{
+		ID:                  org.ID,
+		DisplayName:         org.DisplayName,
+		Status:              org.Status,
+		CreatedAt:           org.CreatedAt,
+		OwnerUserID:         org.OwnerUserID,
+		OwnerEmail:          org.OwnerEmail,
+		Members:             org.Members,
+		SharedResources:     org.SharedResources,
+		SuspendedAt:         org.SuspendedAt,
+		SuspendReason:       org.SuspendReason,
+		DeletionRequestedAt: org.DeletionRequestedAt,
+		RetentionDays:       org.RetentionDays,
+		EncryptionKeyID:     org.EncryptionKeyID,
+	}
 }
 
 type createOrganizationRequest struct {
@@ -214,14 +244,22 @@ func (h *OrgHandlers) HandleListOrgs(w http.ResponseWriter, r *http.Request) {
 
 	username := auth.GetUser(r.Context())
 	token := getAPITokenRecordFromRequest(r)
-	filtered := make([]*models.Organization, 0, len(orgs))
+	filtered := make([]organizationResponse, 0, len(orgs))
 	for _, org := range orgs {
 		if org == nil {
 			continue
 		}
 		normalizeOrganization(org)
 		if h.canAccessOrg(r, username, token, org) {
-			filtered = append(filtered, org)
+			response := projectOrganization(org)
+			// The provider-client directory does not check the subscription;
+			// keep that discovery path independent of paid management. Its
+			// managers use the gated detail or invitation read instead.
+			if !providerWorkspaceOpen && len(org.PendingInvitations) > 0 &&
+				h.isOrganizationInvitationManager(r, username, token, org) {
+				response.PendingInvitations = org.PendingInvitations
+			}
+			filtered = append(filtered, response)
 		}
 	}
 
@@ -381,9 +419,13 @@ func (h *OrgHandlers) HandleGetOrg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response := organizationResponse{Organization: org}
-	if org.ID == "default" && token == nil {
-		response.CanManageMembers = h.canManageDefaultOrgMembers(r, username)
+	response := projectOrganization(org)
+	// Only detail advertises the default workspace's out-of-membership
+	// instance-admin capability, even when there are no invitations.
+	if (org.ID == "default" || len(org.PendingInvitations) > 0) &&
+		h.isOrganizationInvitationManager(r, username, token, org) {
+		response.PendingInvitations = org.PendingInvitations
+		response.CanManageMembers = org.ID == "default"
 	}
 	writeJSON(w, http.StatusOK, response)
 }
@@ -760,15 +802,11 @@ func (h *OrgHandlers) HandleListInvitations(w http.ResponseWriter, r *http.Reque
 
 	username := auth.GetUser(r.Context())
 	token := getAPITokenRecordFromRequest(r)
-	if token != nil || strings.HasPrefix(username, "token:") {
+	if organizationTokenAuthenticated(username, token) {
 		writeErrorResponse(w, http.StatusForbidden, "session_required", "Session-based user authentication is required", nil)
 		return
 	}
-	canManage := org.CanUserIDManage(username)
-	if org.ID == "default" {
-		canManage = h.canManageDefaultOrgMembers(r, username)
-	}
-	if !canManage {
+	if !h.canManageOrganizationInvitations(r, username, org) {
 		writeErrorResponse(w, http.StatusForbidden, "access_denied", "Admin role required for this organization", nil)
 		return
 	}
@@ -1460,6 +1498,24 @@ func (h *OrgHandlers) canManageDefaultOrgMembers(r *http.Request, username strin
 		return false
 	}
 	return h.accessPolicy.instanceAdmin(r.Context(), username)
+}
+
+func organizationTokenAuthenticated(username string, token *config.APITokenRecord) bool {
+	return token != nil || strings.HasPrefix(username, "token:")
+}
+
+func (h *OrgHandlers) isOrganizationInvitationManager(r *http.Request, username string, token *config.APITokenRecord, org *models.Organization) bool {
+	return !organizationTokenAuthenticated(username, token) && h.canManageOrganizationInvitations(r, username, org)
+}
+
+// canManageOrganizationInvitations applies the invitation-list role rule
+// after session admission. The default workspace uses instance administration,
+// not a role stored in its member list.
+func (h *OrgHandlers) canManageOrganizationInvitations(r *http.Request, username string, org *models.Organization) bool {
+	if org.ID == "default" {
+		return h.canManageDefaultOrgMembers(r, username)
+	}
+	return org.CanUserIDManage(username)
 }
 
 func organizationRoleForUser(org *models.Organization, username string) models.OrganizationRole {
