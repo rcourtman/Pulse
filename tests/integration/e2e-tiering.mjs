@@ -65,6 +65,10 @@ export const PROBATION_SPECS = [
   '**/68-infrastructure-onboarding.spec.ts',
   '**/68-platform-pages-shell.spec.ts',
   '**/70-self-hosted-manual-activation-success.spec.ts',
+  // New (2026-11-19): the first spec for a feature that is not in every build.
+  // It runs its journeys in a development build it makes for itself, and has
+  // not yet run on main. It earns stable under the promotion rule.
+  '**/71-infrastructure-map.spec.ts',
   '**/75-agent-integrations-surface-contract.spec.ts',
   '**/77-msp-isolation.spec.ts',
   '**/78-monitor-first-patrol-workbench.spec.ts',

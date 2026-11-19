@@ -11,7 +11,7 @@ import {
   scrollToDocFragment,
   stripLeadingTitle,
 } from '@/features/docs/docMarkdown';
-import { isFeatureGuideAvailable } from '@/utils/featureReleases';
+import { getFeatureGuideAvailability } from '@/utils/featureReleases';
 
 const DOCS_INDEX_PATH = 'README';
 
@@ -73,13 +73,20 @@ export default function Docs() {
 
   const docPath = createMemo(() => normalizeDocPath(params.docPath ?? '') || DOCS_INDEX_PATH);
   // The guide of a feature this build does not show is not part of what it
-  // ships. Asked again when the answer changes, as it does for a feature in
-  // preview once the build has said what it is.
+  // ships. Until the build has said what it is, nothing is asked for and
+  // nothing is claimed: the page waits, as it does for any guide loading.
   const request = createMemo(
-    () => ({ docPath: docPath(), available: isFeatureGuideAvailable(docPath()) }),
+    () => {
+      const availability = getFeatureGuideAvailability(docPath());
+      return availability === 'pending'
+        ? null
+        : { docPath: docPath(), available: availability === 'on' };
+    },
     undefined,
     {
-      equals: (a, b) => a.docPath === b.docPath && a.available === b.available,
+      equals: (a, b) =>
+        a === b ||
+        (a !== null && b !== null && a.docPath === b.docPath && a.available === b.available),
     },
   );
   const [document, { refetch }] = createResource(request, (asked) =>
@@ -87,6 +94,7 @@ export default function Docs() {
       ? fetchDoc(asked.docPath)
       : Promise.reject(new DocLoadError('missing', asked.docPath)),
   );
+  const waiting = () => request() === null || document.loading;
 
   // Keep a failed guide's retry control mounted while that same read is in
   // flight, but never present its error as a different guide loads.
@@ -167,7 +175,7 @@ export default function Docs() {
       </Show>
 
       <Show
-        when={!document.loading || loadError()}
+        when={!waiting() || loadError()}
         fallback={
           <p role="status" class="text-sm text-muted">
             Loading documentation&hellip;

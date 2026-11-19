@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "base_sha": "7c2febc1ea2a7b780c908b2b62322a80ccdf9359",
+  "verified_at": "2026-11-19T19:13:46Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/FeatureRelease.tsx",
+    "frontend-modern/src/pages/Docs.tsx",
+    "frontend-modern/src/utils/featureReleases.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/FeatureRelease.tsx": "e4b8e9b0cdcb51cd38ee8f965f4458def4755bf7dd987693f50c0ec569599af1",
+    "frontend-modern/src/pages/Docs.tsx": "8a83264e787142cc3ae3d695a74870f53c084c30b0a65e69adb9ad42a24de1ae",
+    "frontend-modern/src/utils/featureReleases.ts": "bf021b69e4751c3ccf93818c03eebf14449bc1dceb7e530ad6954c5eb2c92f72"
+  },
+  "routes": [
+    "/proxmox/overview",
+    "/map",
+    "/docs/MAP",
+    "/docs/README",
+    "/settings/monitoring/availability?add=target&from=map"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "width": 1024,
+      "height": 768
+    },
+    {
+      "width": 393,
+      "height": 851
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "the final bytes as a production bundle built the way a release builds it, embedded in a Pulse server on pulse-dev with mock data, driven by headless Chromium. The server was run two ways: reporting a release (4.26.0, stable, isDevelopment false), and run from its source checkout so that it reports isDevelopment true",
+    "server reporting a release, 1440x900 and 390x844 touch: no map button in the header, /map rendered 'Page Not Found' with that as the tab title, no InfrastructureMap chunk was requested, and /docs/MAP answered that the document is not part of the shipped set",
+    "server run from source (isDevelopment true, footer '(Development)'), 1440x900 and 390x844 touch: the same. No map button, /map 'Page Not Found', no map chunk requested, /docs/MAP not shipped. A server saying it is a development build shows nothing of a held feature",
+    "the new end-to-end spec, tests/integration/tests/71-infrastructure-map.spec.ts, run by the suite's own Playwright with the suite's own sign-in against the release-reporting server, three repeats of the desktop project and the phone project (Pixel 5): every run passed, none flaky. Its first test saw the map hidden in the build as served. Its journeys ran in pages whose /api/version reply carried featureReleaseTestBuild: true",
+    "what the journeys exercised in a marked page: the header button to /map, more than 20 labelled tiles, the legend above the window's foot, at 1024x768 the legend above the navigation bar, Names then Hide names leaving no address in any text or label, a hover card naming the tile, a click landing on exactly that tile's own address, the gateway tile opening the router check form with its address and Cancel returning to /map, Tab from Save image focusing a tile with a ring of rgb(59, 130, 246), Enter going where the focused tile points, Save image downloading a real PNG named pulse-map-<date>.png, the guide link opening /docs/MAP, and on the phone project the first tap showing 'Tap again to open' without leaving /map and the second landing on that tile's address",
+    "no page error in any context",
+    "not checked: the spec has not run in CI against the docker test image; Firefox, real Safari and a real phone; a published beta or candidate. The docs page's waiting state (it says 'Loading documentation' until the build has said what it is, where before it said the guide was not shipped and then showed it) and the route's waiting state are covered by unit tests, because the version reply arrives within milliseconds on this rig"
+  ],
+  "interactions": [
+    "opened /map and /docs/MAP directly on each server at 1440x900 and 390x844",
+    "ran the end-to-end spec, which clicks the header button, toggles Names and Hide names, hovers and clicks tiles, opens and cancels the gateway's check form, tabs into the map and presses Enter, saves the image and, on the phone project, taps a tile twice"
+  ]
+}
