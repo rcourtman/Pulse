@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "base_sha": "bd2199e16723834acee22ac4dc348e3f3bc11637",
+  "verified_at": "2026-11-19T23:05:04Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "8f0477aa8c34a708429a0d9b69ce96df0cf61bbd6b0aa12a0f51cd3c546efd8f",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts": "e278bb49e83bb349e2a56c5c1e24b422e4fd20a6b9dfc556c0eb9ce0d85a79c8"
+  },
+  "routes": [
+    "/proxmox/backups/coverage"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 360,
+      "height": 844
+    },
+    {
+      "width": 320,
+      "height": 720
+    }
+  ],
+  "states": [
+    "Real Proxmox Backup Coverage at 1440x900 light Chromium 141.0.7390.37, 360x844 dark touch WebKit 26.0, and 320x720 light touch WebKit 26.0 with Playwright 1.56.1. Inspected nine same-fixture, same-state and same-scroll before/after pairs; all three desktop pairs were unchanged.",
+    "Phone rows name Failed, In flight, OK, Order unclear, Other and State unclear; the no-task dash remains. A Protected workload retains its 12h independent backup age beside Failed. Unknown job order stays separate from the Unknown backup age.",
+    "The compact labels fit the existing Job column. Workload names, row geometry, backup ages, sort affordances and the same row disclosures remain visible. The open failure still shows its error, newest verified PBS point and separate earlier PVE file."
+  ],
+  "interactions": [
+    "Opened and closed the same workload disclosures with Enter on desktop and taps on phones. Revealed More details on the unordered row; both possible jobs remained inspectable.",
+    "On the next normal fixture inventory poll the unordered row showed the newly observed OK without inventing a dated backup. The row disclosure kept focus and the same panel stayed open. Opening the details did not request additional inventory."
+  ]
+}
