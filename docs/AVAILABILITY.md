@@ -20,8 +20,8 @@ successful HTTP response does not prove every business operation succeeds.
 | Does this web endpoint respond with an acceptable status? | HTTP or HTTPS | Pick a useful health path rather than assuming a landing page proves application health. |
 | Is this HTTPS certificate valid and approaching expiry? | HTTPS | Certificate checks are enabled by default, with a 30-day warning unless overridden or disabled. |
 
-See [protocols and target settings](CONFIGURATION.md)
-for the supported fields and UDP policies.
+See [protocols and target settings](CONFIGURATION.md) for fields and UDP
+policies, or [check DNS answers](#check-that-dns-answers-correctly).
 
 ## Add a local check
 
@@ -71,3 +71,25 @@ to place it outside the relevant failure boundary and verify actual recipient
 delivery in an authorised test environment. A healthy heartbeat indicates
 monitoring-loop progress, not successful delivery of every alert or external
 availability of every service.
+
+## Check that DNS answers correctly
+
+A TCP check on port 53 checks the listener, not name resolution. UDP checks
+send literal UTF-8, without decoding hex or escapes, and can match a reply
+byte for byte. With no expected response, any reply counts. Pulse does not
+parse DNS response codes or verify record values.
+
+If you have a private health endpoint that can run this check, let it test DNS
+and let Pulse monitor its result:
+
+1. Have the endpoint query the intended resolver for a known record and check
+   the expected answer on each request. Return `200` only for a correct answer
+   and `503` for a timeout, DNS error or wrong answer.
+2. Point an HTTP or HTTPS availability check directly at that health path,
+   not at the DNS server's admin page. Set **Request method** to **GET** and
+   set both **Accepted status from** and **Accepted status to** to `200`. A
+   `503` fails the application check even though the HTTP endpoint answered.
+
+The DNS query runs from the health endpoint's network location, not from Pulse.
+Choose the endpoint's location to match the DNS path you want to check. No Pulse
+agent is required on the DNS server.
