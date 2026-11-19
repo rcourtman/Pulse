@@ -316,8 +316,8 @@ export const UpdateInstallGuide: Component<UpdateInstallGuideProps> = (props) =>
                     {(command) => (
                       <>
                         run <code class="[overflow-wrap:anywhere]">{command()}</code> on the Docker
-                        host. Enter the activation key from Settings → License only at Docker’s
-                        hidden Password prompt, then retry the pull. Docker may store the key.
+                        host. Enter your activation key only at Docker’s hidden Password prompt,
+                        then retry the pull. Docker may store the key.
                       </>
                     )}
                   </Show>
