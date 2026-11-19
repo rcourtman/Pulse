@@ -3578,7 +3578,8 @@ func (n *NotificationManager) sendResolvedWebhook(webhook WebhookConfig, alertLi
 
 	// Prepare template data using the same pipeline as the firing path
 	customFields := convertWebhookCustomFields(webhook.CustomFields)
-	data := n.prepareWebhookData(alert, customFields)
+	pulseBase := n.GetPublicURL()
+	data := n.prepareWebhookDataAtPublicURL(alert, customFields, pulseBase)
 
 	// Carry the configured mention into the resolved payload too, matching the
 	// firing/grouped paths so a configured @everyone/@channel is not dropped on
@@ -3594,7 +3595,7 @@ func (n *NotificationManager) sendResolvedWebhook(webhook WebhookConfig, alertLi
 	data.NotRecovered = resolvedAlertsIncludeNotRecovered(alertList)
 	data.AlertCount = len(alertList)
 	data.Alerts = alertList
-	pulseAlertURL := alertsPageURL(n.publicURL, alertList, true)
+	pulseAlertURL := alertsPageURL(pulseBase, alertList, true)
 	data.AlertURL = firstNonEmpty(pulseAlertURL, data.Instance)
 	if len(alertList) > 1 {
 		names := make([]string, 0, len(alertList))
@@ -3615,9 +3616,9 @@ func (n *NotificationManager) sendResolvedWebhook(webhook WebhookConfig, alertLi
 		// Link only to the Pulse base, never a monitored instance. Keep
 		// the existing template data for recipient selection and custom bodies.
 		data.AlertURL = ""
-		base, parseErr := url.Parse(n.publicURL)
+		base, parseErr := url.Parse(pulseBase)
 		if parseErr == nil && (base.Scheme == "http" || base.Scheme == "https") && base.Hostname() != "" &&
-			base.User == nil && base.RawQuery == "" && !base.ForceQuery && !strings.Contains(n.publicURL, "#") {
+			base.User == nil && base.RawQuery == "" && !base.ForceQuery && !strings.Contains(pulseBase, "#") {
 			data.AlertURL = pulseAlertURL
 		}
 	}
@@ -3632,15 +3633,15 @@ func (n *NotificationManager) sendResolvedWebhook(webhook WebhookConfig, alertLi
 			"source":        "pulse-monitoring",
 		}
 
-		if n.publicURL != "" {
-			payload["dashboard"] = n.publicURL
+		if pulseBase != "" {
+			payload["dashboard"] = pulseBase
 		}
 
 		if len(alertList) == 1 {
 			payload["alertIdentifier"] = alert.ID
 		}
-		if link := alertsPageURL(n.publicURL, alertList, true); link != "" {
-			payload["alertUrl"] = link
+		if pulseAlertURL != "" {
+			payload["alertUrl"] = pulseAlertURL
 		}
 		return json.Marshal(payload)
 	})
@@ -4049,14 +4050,18 @@ func webhookEventID(alertID, event string) string {
 
 // prepareWebhookData prepares data for template rendering
 func (n *NotificationManager) prepareWebhookData(alert *alerts.Alert, customFields map[string]interface{}) WebhookPayloadData {
+	return n.prepareWebhookDataAtPublicURL(alert, customFields, n.GetPublicURL())
+}
+
+func (n *NotificationManager) prepareWebhookDataAtPublicURL(alert *alerts.Alert, customFields map[string]interface{}, publicURL string) WebhookPayloadData {
 	duration := time.Since(alert.StartTime)
 
 	// Construct full Pulse URL if publicURL is configured
 	// The Instance field should contain the full URL to the Pulse dashboard
 	instance := ""
-	if n.publicURL != "" {
+	if publicURL != "" {
 		// Remove trailing slash from publicURL if present
-		instance = strings.TrimRight(n.publicURL, "/")
+		instance = strings.TrimRight(publicURL, "/")
 	} else if alert.Instance != "" && (strings.HasPrefix(alert.Instance, "http://") || strings.HasPrefix(alert.Instance, "https://")) {
 		// If publicURL is not set but alert.Instance contains a full URL, use it
 		instance = alert.Instance
@@ -4105,7 +4110,7 @@ func (n *NotificationManager) prepareWebhookData(alert *alerts.Alert, customFiel
 		Node:               alert.Node,
 		NodeDisplayName:    alertNodeDisplay(alert),
 		Instance:           instance,
-		AlertURL:           firstNonEmpty(alertLinkURL(n.publicURL, alert), instance),
+		AlertURL:           firstNonEmpty(alertLinkURL(publicURL, alert), instance),
 		Message:            alert.Message,
 		Value:              roundedValue,
 		Threshold:          roundedThreshold,

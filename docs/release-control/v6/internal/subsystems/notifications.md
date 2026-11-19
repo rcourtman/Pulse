@@ -59,6 +59,8 @@ destination where applicable) only when there is an absolute HTTP(S) Pulse
 base with no user info, query or fragment. Otherwise its link-free body is
 unchanged; it does not fall back to the monitored instance. URL routing and
 custom templates keep their existing input and preview policy is unchanged.
+Recovery rendering, link validation and routing inputs share a single snapshot
+of the Pulse base; a concurrent settings update only applies to a later send.
 
 `telegram_literal_text_test.go` exercises the built-in renderer, single/grouped
 firing and recovery sends, enhanced sends and the Test button through real local

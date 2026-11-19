@@ -371,3 +371,35 @@ func TestTelegramResolvedLinkLeavesRoutingAndOverridesAlone(t *testing.T) {
 		})
 	}
 }
+
+func TestTelegramResolvedLinkUsesOneBaseSnapshot(t *testing.T) {
+	const initial = "https://pulse.example.test/path"
+	endpoint, captured := newWebhookCaptureServer(t)
+	m := NewNotificationManagerWithDeferredQueue(initial, t.TempDir())
+	t.Cleanup(m.Stop)
+	require.NoError(t, m.UpdateAllowedPrivateCIDRs("127.0.0.1/32"))
+	m.SetTenantIdentityResolver(func() (string, string) {
+		// An edit can land during enrichment. The current recovery must
+		// not validate one URL and render another, or mix URL fields.
+		m.SetPublicURL("https://fixture-user@pulse.example.test")
+		return "fixture", "Fixture"
+	})
+	hook := WebhookConfig{Service: "telegram", Enabled: true, URL: endpoint + "/sendMessage?chat_id=-1001234"}
+	alert := telegramReportedAlerts()[0]
+	for range 2 {
+		require.NoError(t, m.sendResolvedWebhook(hook, []*alerts.Alert{alert}, time.Now()))
+	}
+	requests := captured()
+	require.Len(t, requests, 2)
+	for i, request := range requests {
+		var payload telegramLiteralPayload
+		require.NoError(t, json.Unmarshal(request.body, &payload))
+		content, err := parseTelegramLiteralContent(payload)
+		require.NoError(t, err)
+		if i == 0 {
+			require.Equal(t, []string{initial + "/alerts/history?alert=pve-connection"}, content.links)
+		} else {
+			require.Empty(t, content.links)
+		}
+	}
+}
