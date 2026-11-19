@@ -299,6 +299,8 @@ jobs:
     timeout-minutes: 60
     strategy:
       fail-fast: false
+      # Leave hosted runners available for open PRs during post-merge validation.
+      max-parallel: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 4 || 8 }}
       matrix:
         shard: [1, 2, 3, 4, 5, 6, 7, 8]
 

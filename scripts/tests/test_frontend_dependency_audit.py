@@ -7,12 +7,13 @@ import yaml
 
 
 ROOT = Path(__file__).resolve().parents[2]
-WORKFLOWS = ROOT / ".github/workflows"
+BUILD = ROOT / ".github/workflows/build-and-test.yml"
+SECURITY = ROOT / ".github/workflows/security-scan.yml"
 
 
 class FrontendDependencyAuditTest(unittest.TestCase):
     def test_pull_request_audits_the_locked_frontend_graph(self):
-        jobs = yaml.safe_load((WORKFLOWS / "build-and-test.yml").read_text())["jobs"]
+        jobs = yaml.safe_load(BUILD.read_text())["jobs"]
         self.assertEqual(jobs["changes"]["outputs"]["frontend_deps"],
                          "${{ steps.filter.outputs.frontend_deps }}")
         producer = jobs["frontend-build"]
@@ -31,13 +32,13 @@ class FrontendDependencyAuditTest(unittest.TestCase):
         self.assertEqual(verdict["env"]["COMPLETE_AUDIT_RESULT"], "${{ steps.audit-complete.outcome }}")
 
     def test_unit_runner_uses_the_locked_graph(self):
-        jobs = yaml.safe_load((WORKFLOWS / "build-and-test.yml").read_text())["jobs"]
+        jobs = yaml.safe_load(BUILD.read_text())["jobs"]
         steps = {step["name"]: step for step in jobs["frontend-unit"]["steps"]}
         self.assertEqual(steps["Install frontend dependencies"]["run"], "npm ci --no-audit")
         self.assertTrue(steps["Frontend unit tests"]["run"].startswith("npm run test -- "))
 
     def test_scheduled_audit_requires_both_reports(self):
-        jobs = yaml.safe_load((WORKFLOWS / "security-scan.yml").read_text())["jobs"]
+        jobs = yaml.safe_load(SECURITY.read_text())["jobs"]
         steps = {step["name"]: step for step in jobs["npm-audit"]["steps"]}
         production = steps["Audit production dependencies"]
         self.assertEqual(production["id"], "audit-production")
