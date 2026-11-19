@@ -625,3 +625,52 @@ func TestCOREHistoryPrefersOneNativeFrameAndKeepsGenuineAbsence(t *testing.T) {
 		t.Fatalf("a genuinely absent rate must not be invented: %+v / %+v", read, write)
 	}
 }
+
+// The REST catalogue binder already removes duplicate replies. Exercise the
+// live parser and the History selection directly so that guard cannot mask a
+// disagreement about which of two raw graphs owns an observation.
+func TestCOREHistoryWindowKeepsFirstCompatibilityGraph(t *testing.T) {
+	tailAt := time.Unix(1710000050, 0).UTC()
+	earlierAt := tailAt.Add(-10 * time.Second)
+	legend := []string{"disk_octets_read", "disk_octets_write"}
+	first := trueNASReportingGetDataResponse{
+		Name: " DISK ", Identifier: " ada0 ", Legend: legend,
+		Data: []any{[]any{float64(tailAt.Unix()), 12., 7.}},
+	}
+	later := trueNASReportingGetDataResponse{
+		Name: "disk", Identifier: "ada0", Legend: legend,
+		Start: earlierAt.Unix(), End: tailAt.Unix(), Step: 10,
+		Data: []any{[]any{80., 0.}, []any{12., 7.}},
+	}
+	sibling := later
+	sibling.Identifier = "ada1"
+	sibling.Data = []any{[]any{53., 0.}, []any{12., 7.}}
+	window := make(map[string]coreDiskRateCells)
+	live := parseSystemMetricHistory(liveReportingResponsesWithDiskWindow(
+		[]trueNASReportingGetDataResponse{first, later, sibling}, tailAt.Unix(), window,
+	))
+	if live == nil || len(live.DiskReadRates["ada0"]) != 1 || len(live.DiskWriteRates["ada0"]) != 1 {
+		t.Fatalf("live parser did not keep only the compatibility graph: %+v", live)
+	}
+	assertCOREPoint(t, live.DiskReadRates["ada0"], 0, tailAt.Unix(), 12)
+	assertCOREPoint(t, live.DiskWriteRates["ada0"], 0, tailAt.Unix(), 7)
+	system := systemInfoFromMetricHistory(live)
+	system.MachineID = "fixture-core"
+	system.coreDiskRateWindow = window
+	disks := []Disk{{Name: "ada0", Serial: "hardware-a"}, {Name: "ada1", Serial: "hardware-b"}}
+	previous := &FixtureSnapshot{CollectedAt: tailAt.Add(-time.Minute), System: SystemInfo{MachineID: system.MachineID}, Disks: disks}
+	current := &FixtureSnapshot{CollectedAt: tailAt.Add(time.Second), System: *system, Disks: disks}
+
+	history := coreHistoryObservations("fixture-connection", previous, current)
+	for _, observation := range history {
+		if observation.TargetID == "hardware-a" {
+			t.Fatalf("later duplicate supplied a History frame for the compatibility graph: %+v", observation)
+		}
+	}
+	if len(history) != 1 || history[0].TargetID != "hardware-b" ||
+		!history[0].Read.Earlier.Timestamp.Equal(earlierAt) ||
+		!history[0].Write.Earlier.Timestamp.Equal(earlierAt) ||
+		history[0].Read.Earlier.Value != 53 || history[0].Write.Earlier.Value != 0 {
+		t.Fatalf("legitimate sibling lost its paired read and observed zero write: %+v", history)
+	}
+}

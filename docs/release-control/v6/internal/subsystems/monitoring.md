@@ -697,6 +697,8 @@ unique hardware serial at the same device name on that connection.
 Only the first graph for that device can supply an earlier frame, even if
 it is a compatibility graph that can produce a live rate but no earlier
 sample. A later duplicate with matching tails does not establish authority.
+The REST catalogue binder drops duplicates; the live parser and earlier-frame
+selector also agree on the first graph if they receive unbound replies.
 Reject retired/unmatched generations and non-advancing replay before writing.
 A flat or unproven window keeps only its existing live tail. The writer
 batches these rates; History uses the existing raw and rolled tiers, and
@@ -711,8 +713,10 @@ persistent drawer reads for both boot names and complete/partial/idle cycles.
 `TestTrueNASDiskRateWriterAdmission` rejects invalid observations.
 `TestCOREHistorySelectsOneDifferentNativePointAfterPreviousInventory` and
 `TestCOREDiskHistoryReplayAndGenerationFence` cover ownership, rate and write
-bounds. `TestCOREHistoryKeepsFirstGraphAuthority` verifies the compatibility
-tail stays live and no duplicate's earlier point is stored.
+bounds. `TestCOREHistoryKeepsFirstGraphAuthority` verifies the real REST-to-store
+path keeps the compatibility tail and does not store the later duplicate.
+`TestCOREHistoryWindowKeepsFirstCompatibilityGraph` checks the selector itself
+with both raw replies present and a legitimate paired sibling.
 `TestCOREHistoryKeepsIntraPollIOAndDayCoverage` checks distinct stored curves
 and existing minute-tier coverage through the authenticated drawer reader.
 Desktop and narrow browser proof must use actual produced disk History in the
