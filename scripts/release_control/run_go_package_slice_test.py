@@ -34,6 +34,17 @@ def job(name):
                      WORKFLOW.read_text(), re.M | re.S)[1]
 
 
+def ordinary_fixture_orders(root):
+    names = [runner.MODULE + f"internal/{i}" for i in range(12)]
+    selector = root / ".github/scripts/select-go-package-shard.py"
+    weights = root / ".github/scripts/go-package-test-seconds.txt"
+    orders = [subprocess.run(
+        [sys.executable, str(selector), str(weights), "2", str(index)],
+        input="\n".join(names) + "\n", capture_output=True, text=True, check=True,
+    ).stdout.splitlines() for index in (0, 1)]
+    return names, orders
+
+
 class SliceTest(unittest.TestCase):
     def test_measured_boundary_balances_estimates_without_changing_source_coverage(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -491,15 +502,18 @@ class WorkflowTest(unittest.TestCase):
         body = step.split('        run: |\n', 1)[1].split('\n      - name:', 1)[0]
         command = '\n'.join(line[10:] for line in body.splitlines()
                             if line.startswith('          ') or not line.strip())
-        for index, options in enumerate(({}, {'ORDINARY_EXIT':'9'}, {'MODE':'failed-root'},
-                                         {'LISTING_EXIT':'7'}, {'CONTROL_EXIT':'5'},
-                                         {'INVENTORY_EXIT':'8'})):
-            with self.subTest(options=options):
+        names, orders = ordinary_fixture_orders(root)
+        self.assertTrue(all(orders))
+        self.assertCountEqual(orders[0] + orders[1], names)
+        cases = ((0, {}), (1, {}), (0, {'ORDINARY_EXIT':'9'}), (0, {'MODE':'failed-root'}),
+                 (0, {'LISTING_EXIT':'7'}), (0, {'CONTROL_EXIT':'5'}), (0, {'INVENTORY_EXIT':'8'}))
+        for index, (shard, options) in enumerate(cases):
+            with self.subTest(shard=shard, options=options):
                 calls = root / 'calls'
                 calls.write_text('')
                 env = {**os.environ, 'PATH': str(root)+':'+os.environ['PATH'],
                        'CALLS':str(calls), 'RUNNER_TEMP':str(root / f'output{index}'), **options}
-                result = subprocess.run(['bash', '-c', command.replace('${{ matrix.shard }}', 'rest-0')],
+                result = subprocess.run(['bash', '-c', command.replace('${{ matrix.shard }}', f'rest-{shard}')],
                                         cwd=root, env=env, capture_output=True, text=True, timeout=20)
                 self.assertEqual(result.returncode == 0, not options, result.stdout+result.stderr)
                 observed = [json.loads(line) for line in calls.read_text().splitlines()]
@@ -509,16 +523,18 @@ class WorkflowTest(unittest.TestCase):
                     # Partial output from a failed discovery admits no task.
                     self.assertEqual(observed, [['list', './...']])
                 else:
-                    # Both slices and all six ordinary packages independently
-                    # list their expected roots, including on listing failure.
-                    self.assertEqual(sum('-list' in call for call in observed), 8)
-                    self.assertEqual(sum('-json' not in call and '-list' not in call
-                                         and call[0]=='test' for call in observed),
-                                     0 if 'LISTING_EXIT' in options else 6)
+                    ordinary = orders[shard]
+                    sliced = ['internal/monitoring', 'scripts/installtests']
+                    # Scheduling changes partition sizes, not the need to
+                    # independently list and execute every selected package.
+                    self.assertCountEqual([call[-1] for call in observed if '-list' in call],
+                                          ['./' + name for name in sliced] + ordinary)
+                    self.assertCountEqual([call[-1] for call in observed if call[0] == 'test'
+                                           and '-json' not in call and '-list' not in call],
+                                          [] if 'LISTING_EXIT' in options else ordinary)
                     receipt = json.loads((root / f'output{index}/backend-slices/ordinary-packages.json').read_text())
                     self.assertEqual(receipt['slots'], 4)
-                    self.assertEqual(len(receipt['tasks']), 8)
-                    self.assertEqual(len({task['package'] for task in receipt['tasks']}), 8)
+                    self.assertEqual([task['package'] for task in receipt['tasks']], sliced + ordinary)
                     self.assertEqual(all(task['exit']==0 for task in receipt['tasks']), not options)
 
     def test_real_process_queue_reuses_finished_slice_slots_and_drains_all_tasks(self):
@@ -529,18 +545,18 @@ class WorkflowTest(unittest.TestCase):
         output = fixture.root / 'output'
         env = {**os.environ, 'PATH': str(fixture.root)+':'+os.environ['PATH'],
                'CALLS':str(fixture.root / 'calls'), 'EVENTS':str(events), 'GOMAXPROCS':'2'}
+        names, orders = ordinary_fixture_orders(ROOT)
         all_ordinary = []
-        for index in (0, 1):
-            names = sorted(runner.MODULE+'internal/'+str(i) for i in range(12))
+        for index, ordinary in enumerate(orders):
             result = subprocess.run(['python3', str(SHARD), '--index', str(index),
                                      '--ordinary-command','go test -race -timeout 50m $pkgs',
                                      '--output',str(output / str(index))],
-                                    input='\n'.join(names[index::2])+'\n',
+                                    input='\n'.join(ordinary)+'\n',
                                     cwd=ROOT, env=env, capture_output=True, text=True, timeout=20)
             self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
             receipt = json.loads((output / str(index) / 'ordinary-packages.json').read_text())
             all_ordinary += [task['package'] for task in receipt['tasks'][2:]]
-        self.assertEqual(sorted(all_ordinary), sorted(runner.MODULE+'internal/'+str(i) for i in range(12)))
+        self.assertCountEqual(all_ordinary, names)
         calls = [json.loads(line) for line in (fixture.root / 'calls').read_text().splitlines()]
         for call in calls:
             if call[0]=='test' and '-list' not in call and '-json' not in call:
@@ -559,7 +575,7 @@ class WorkflowTest(unittest.TestCase):
         self.assertLessEqual(peak,4)
         self.assertGreaterEqual(ordinary_peak,3, 'finished slices did not release their slots')
 
-        for supplied in ('', '\n'.join(names), '\n'.join(reversed(names[::2]))):
+        for supplied in ('', '\n'.join(names), '\n'.join(reversed(orders[0])), '\n'.join(orders[1])):
             result = subprocess.run(['python3', str(SHARD), '--index','0',
                                      '--ordinary-command','go test -race -timeout 50m $pkgs',
                                      '--output',str(output / 'rejected')],

@@ -85,6 +85,48 @@ class PackageShardsTest(unittest.TestCase):
         assigned = selector.assign(packages, {}, Decimal("0.1"), 2)
         self.assertEqual(assigned, {"example/a": 0, "example/b": 1, "example/c": 0, "example/d": 1})
 
+    def test_rest_balances_ordinary_and_already_assigned_work_together(self):
+        packages = "example/b\nexample/c\nexample/a\nexample/d\n"
+        weights = "DEFAULT_WEIGHT 10\nexample/a 100\nexample/b 80\nexample/c 60\n"
+        fixed = weights + "REST_SHARD_FIXED_SECONDS 0 100\n"
+        # Treating the rest queues as equally empty leaves a combined tail
+        # of 240. Counting rest-1's fixed work leaves totals of 180 and 170.
+        source_order = []
+        for index, expected in enumerate((["example/a", "example/b"], ["example/c", "example/d"])):
+            result = self.cli(packages, fixed, index=index)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout.splitlines(), expected)
+            source_order.extend(result.stdout.splitlines())
+        self.assertCountEqual(source_order, packages.splitlines())
+        self.assertNotEqual(self.cli(packages, weights, index=1).stdout,
+                            self.cli(packages, fixed, index=1).stdout)
+
+    def test_rest_estimate_does_not_empty_a_shard_or_change_one_shard_release_order(self):
+        packages = "example/a\nexample/z\n"
+        weights = "DEFAULT_WEIGHT 1\nexample/z 10\n"
+        fixed = weights + "REST_SHARD_FIXED_SECONDS 0 86400\n"
+        self.assertEqual(self.cli(packages, fixed, index=0).stdout, "example/z\n")
+        self.assertEqual(self.cli(packages, fixed, index=1).stdout, "example/a\n")
+        without_reservation = self.cli(packages, weights, count=1)
+        with_reservation = self.cli(packages, fixed, count=1)
+        self.assertEqual(with_reservation.returncode, 0, with_reservation.stderr)
+        self.assertEqual(with_reservation.stdout, without_reservation.stdout)
+        self.assertEqual(with_reservation.stdout, "example/z\nexample/a\n")
+
+    def test_invalid_fixed_slice_estimates_fail_before_any_assignment(self):
+        for row in (
+            "REST_SHARD_FIXED_SECONDS 0", "REST_SHARD_FIXED_SECONDS 0 5 4",
+            "REST_SHARD_FIXED_SECONDS nope 0", "REST_SHARD_FIXED_SECONDS 0 -1",
+            "REST_SHARD_FIXED_SECONDS 0 NaN", "REST_SHARD_FIXED_SECONDS Infinity 0",
+            "REST_SHARD_FIXED_SECONDS 0 86401",
+            "REST_SHARD_FIXED_SECONDS 0 300\nREST_SHARD_FIXED_SECONDS 0 1",
+        ):
+            with self.subTest(row=row):
+                result = self.cli("example/a\nexample/b\n", row + "\n")
+                self.assertEqual(result.returncode, 2)
+                self.assertEqual(result.stdout, "")
+                self.assertIn("package shard selection failed:", result.stderr)
+
     def test_invalid_weights_fail_before_printing_any_package(self):
         for weights in ("example/a", "example/a nope", "example/a NaN", "example/a Infinity", "example/a -1", "example/a 0", "example/a 1e99999999", "example/a 1\nexample/a 2", "DEFAULT_WEIGHT 1\nDEFAULT_WEIGHT 2", "-option 1"):
             with self.subTest(weights=weights):
@@ -107,7 +149,7 @@ class PackageShardsTest(unittest.TestCase):
         self.assertEqual(result.stdout, "")
 
     def test_committed_weights_are_valid_and_positive(self):
-        weights, default = selector.read_weights(ROOT / ".github/scripts/go-package-test-seconds.txt")
+        weights, default, _ = selector.read_weights(ROOT / ".github/scripts/go-package-test-seconds.txt")
         self.assertGreater(default, 0)
         self.assertGreater(len(weights), 0)
         self.assertTrue(all(value > 0 for value in weights.values()))
@@ -117,7 +159,7 @@ class PackageShardsTest(unittest.TestCase):
         # the shared backend queue still executes their complete binaries.
         # A partial refresh must not turn known long packages into unmeasured
         # default-cost work. Do not freeze their historical numeric estimates.
-        weights, default = selector.read_weights(ROOT / ".github/scripts/go-package-test-seconds.txt")
+        weights, default, _ = selector.read_weights(ROOT / ".github/scripts/go-package-test-seconds.txt")
         for package in ("internal/monitoring", "scripts/installtests"):
             with self.subTest(package=package):
                 self.assertGreater(weights["github.com/rcourtman/pulse-go-rewrite/" + package], default)

@@ -6,6 +6,11 @@
 # the mean of the medians below 20 seconds. The release queue runs monitoring
 # and installtests whole, so keep their separate whole-package estimates.
 DEFAULT_WEIGHT 4.916
+# The two CI rest workers each start a fixed monitoring and installer slice before
+# this ordinary queue. Before the workload estimate, their combined task-time
+# offsets (rest-1 minus rest-0) were 290s and 275s in 44450687537 and 44520279000.
+# Rounded to 300 task-seconds. This is scheduling, not a hosted time claim.
+REST_SHARD_FIXED_SECONDS 0 300
 github.com/rcourtman/pulse-go-rewrite/cmd/pulse-agent 203.709
 github.com/rcourtman/pulse-go-rewrite/internal/agentidentity 32.225
 github.com/rcourtman/pulse-go-rewrite/internal/agentupdate 77.294
