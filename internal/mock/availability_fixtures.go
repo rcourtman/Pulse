@@ -19,9 +19,18 @@ const (
 	mockAvailabilityProbeHTTP  = "http"
 	mockAvailabilityProbeHTTPS = "https"
 
-	mockAvailabilityTargetMachine = "machine"
-	mockAvailabilityTargetService = "service"
-	mockAvailabilityTargetDevice  = "device"
+	mockAvailabilityTargetMachine     = "machine"
+	mockAvailabilityTargetService     = "service"
+	mockAvailabilityTargetDevice      = "device"
+	mockAvailabilityTargetRouter      = "router"
+	mockAvailabilityTargetSwitch      = "switch"
+	mockAvailabilityTargetAccessPoint = "access_point"
+
+	// mockEdgeRouterAddress is the default gateway of the mock Proxmox
+	// nodes, which sit at 192.168.10.20 and up. A router check on it is the
+	// thing those nodes route through, so the map draws the router where it
+	// would otherwise draw a gateway nothing monitors.
+	mockEdgeRouterAddress = "192.168.10.1"
 
 	mockAvailabilityDefaultPollIntervalSecs = 60
 	mockAvailabilityDefaultTimeoutMillis    = 2000
@@ -273,6 +282,59 @@ func defaultAvailabilityFixtures(now time.Time) []AvailabilityFixture {
 			LastSuccess:         base.Add(-9 * time.Minute),
 			ConsecutiveFailures: 3,
 			LastError:           "icmp probe timed out",
+		},
+		// The network itself: gear no agent runs on and no API reaches, which
+		// an owner types as what it is so the map can draw it.
+		{
+			Target: normalizeAvailabilityTargetFixture(AvailabilityTargetFixture{
+				ID:               "mock-availability-edge-router",
+				Name:             "Edge router",
+				TargetKind:       mockAvailabilityTargetRouter,
+				Address:          mockEdgeRouterAddress,
+				Protocol:         mockAvailabilityProbeICMP,
+				Enabled:          true,
+				PollIntervalSecs: 30,
+				TimeoutMillis:    1000,
+				FailureThreshold: 2,
+			}),
+			Available:     true,
+			LastChecked:   base.Add(-7 * time.Second),
+			LastSuccess:   base.Add(-7 * time.Second),
+			LatencyMillis: 1,
+		},
+		{
+			Target: normalizeAvailabilityTargetFixture(AvailabilityTargetFixture{
+				ID:               "mock-availability-core-switch",
+				Name:             "Core switch",
+				TargetKind:       mockAvailabilityTargetSwitch,
+				Address:          "192.168.10.2",
+				Protocol:         mockAvailabilityProbeICMP,
+				Enabled:          true,
+				PollIntervalSecs: 30,
+				TimeoutMillis:    1000,
+				FailureThreshold: 2,
+			}),
+			Available:     true,
+			LastChecked:   base.Add(-9 * time.Second),
+			LastSuccess:   base.Add(-9 * time.Second),
+			LatencyMillis: 1,
+		},
+		{
+			Target: normalizeAvailabilityTargetFixture(AvailabilityTargetFixture{
+				ID:               "mock-availability-office-ap",
+				Name:             "Office access point",
+				TargetKind:       mockAvailabilityTargetAccessPoint,
+				Address:          "192.168.10.3",
+				Protocol:         mockAvailabilityProbeICMP,
+				Enabled:          true,
+				PollIntervalSecs: 60,
+				TimeoutMillis:    1000,
+				FailureThreshold: 2,
+			}),
+			Available:     true,
+			LastChecked:   base.Add(-12 * time.Second),
+			LastSuccess:   base.Add(-12 * time.Second),
+			LatencyMillis: 4,
 		},
 	}
 }
