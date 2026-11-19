@@ -148,6 +148,31 @@ const HOST_TYPE_LABEL: Record<MapPlatform, string> = {
   checks: 'Checks',
 };
 
+/**
+ * What a machine is called with its name hidden: this word and a number.
+ * Shorter than the type label, because a tile cuts a name that does not fit
+ * it and the number is all that tells two machines apart. The tile's logo
+ * and its card still say what the machine is.
+ */
+const HOST_STAND_IN: Record<MapPlatform, string> = {
+  proxmox: 'Proxmox',
+  vmware: 'vSphere',
+  kubernetes: 'Cluster',
+  docker: 'Docker',
+  truenas: 'TrueNAS',
+  backup: 'Backup',
+  mail: 'Mail',
+  machine: 'Machine',
+  storage: 'Storage',
+  checks: 'Checks',
+};
+
+const SYSTEM_CONTAINER_LABEL = 'System container';
+
+/** The same for a guest or container: its type, or a shorter word for it. */
+const itemStandIn = (typeLabel: string): string =>
+  typeLabel === SYSTEM_CONTAINER_LABEL ? 'Container' : typeLabel;
+
 const GROUP_TYPE_LABEL: Partial<Record<MapPlatform, string>> = {
   proxmox: 'Proxmox cluster',
   vmware: 'vSphere cluster',
@@ -308,7 +333,7 @@ const placeChild = (
   if (SYSTEM_CONTAINER_TYPES.has(child.type)) {
     const proxmox = platform === 'proxmox';
     sectionFor(draft, 'lxcs', proxmox ? 'LXCs' : 'System containers').items.push(
-      toService(child, proxmox ? 'LXC' : 'System container', attachments),
+      toService(child, proxmox ? 'LXC' : SYSTEM_CONTAINER_LABEL, attachments),
     );
     return 'placed';
   }
@@ -655,11 +680,11 @@ export function anonymizeInfrastructureMapModel(
       ...item,
       // A well-known app keeps its own name: it says what runs here and
       // gives nothing away about the estate.
-      name: item.app ? item.app.label : nameFor(item.id, item.typeLabel),
+      name: item.app ? item.app.label : nameFor(item.id, itemStandIn(item.typeLabel)),
     }));
   const anonymizeHost = ({ address: _address, ...host }: MapHost): MapHost => ({
     ...host,
-    name: host.isResource ? nameFor(host.id, host.typeLabel) : host.name,
+    name: host.isResource ? nameFor(host.id, HOST_STAND_IN[host.platform]) : host.name,
     pools: anonymizePools(host.pools),
     sections: host.sections.map((section) => ({
       ...section,

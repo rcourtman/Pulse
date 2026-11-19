@@ -419,12 +419,12 @@ describe('buildServiceDiagram', () => {
     const model = anonymizeInfrastructureMapModel(buildInfrastructureMapModel(homelab()));
     const diagram = buildServiceDiagram(model);
     expect(names(diagram.groups[0])).toEqual(['Jellyfin', 'LXC 4']);
-    expect(diagram.groups[0].tiles[0].caption).toBe('Proxmox node 1');
+    expect(diagram.groups[0].tiles[0].caption).toBe('Proxmox 1');
     expect(names(diagram.groups[1])).toEqual(['Redis']);
     expect(diagram.hardware?.tiles.map((tile) => tile.name)).toEqual([
-      'Docker host 1',
-      'Proxmox node 1',
-      'Proxmox node 2',
+      'Docker 1',
+      'Proxmox 1',
+      'Proxmox 2',
     ]);
     // Ids are lookups and are never drawn.
     const drawn = JSON.stringify(diagram, (key, value) =>

@@ -2,6 +2,7 @@ import { estimateTextWidth } from '@/utils/format';
 import {
   drawPosterFooter,
   drawPosterHeader,
+  fitMapName,
   fitMapText,
   mapHitMeta,
   wrapMapText,
@@ -205,7 +206,7 @@ const drawTile = (painter: Painter, tile: DiagramTile, x: number, y: number, das
     const nameLines =
       metrics.nameLines === 2
         ? wrapMapText(name, metrics.tileW - 6, 12, 500)
-        : [fitMapText(name, metrics.tileW - 6, 12, 500)];
+        : [fitMapName(name, metrics.tileW - 6, 12, 500)];
     nameLines.forEach((text, index) => {
       out.nodes.push({
         kind: 'text',
@@ -225,7 +226,7 @@ const drawTile = (painter: Painter, tile: DiagramTile, x: number, y: number, das
         x: cx,
         // The caption follows the name's last line.
         y: y + 66 + (nameLines.length - 1) * NAME_LINE,
-        text: fitMapText(tile.caption, metrics.tileW - 6, 10, 400),
+        text: fitMapName(tile.caption, metrics.tileW - 6, 10, 400),
         size: 10,
         weight: 400,
         fill: 'muted',

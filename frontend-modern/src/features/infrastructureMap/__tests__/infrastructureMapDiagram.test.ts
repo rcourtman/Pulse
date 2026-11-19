@@ -3,12 +3,16 @@ import type { Resource } from '@/types/resource';
 import { fitServiceDiagram, layoutServiceDiagram } from '../infrastructureMapDiagram';
 import { buildMapExportSvg } from '../infrastructureMapExport';
 import {
+  fitMapName,
   wrapMapText,
   type MapDensity,
   type MapScene,
   type SceneNode,
 } from '../infrastructureMapLayout';
-import { buildInfrastructureMapModel } from '../infrastructureMapModel';
+import {
+  anonymizeInfrastructureMapModel,
+  buildInfrastructureMapModel,
+} from '../infrastructureMapModel';
 import {
   MAP_PAGE_PALETTES,
   MAP_PALETTES,
@@ -129,6 +133,29 @@ describe('wrapMapText', () => {
     expect(lines).toHaveLength(2);
     expect(lines[1].endsWith('…')).toBe(true);
     expect(wrap('paperless-ngx-archive').join('')).not.toContain('…');
+  });
+});
+
+describe('fitMapName', () => {
+  // The room for a name on a tile of the page.
+  const fit = (text: string) => fitMapName(text, 86, 12, 500);
+
+  it('leaves a name that fits as it is', () => {
+    expect(fit('Proxmox 12')).toBe('Proxmox 12');
+    expect(fit('jellyfin')).toBe('jellyfin');
+  });
+
+  it('cuts the word and keeps the number a name ends in', () => {
+    expect(fit('Container 121')).toMatch(/^Cont\w*… 121$/);
+    expect(fit('Container 122')).not.toBe(fit('Container 121'));
+    // The caption under a tile, which names the machine or cluster it is on.
+    expect(fitMapName('Proxmox cluster 12', 86, 10, 400)).toMatch(/^Proxmox \w*… 12$/);
+  });
+
+  it('cuts a name with no number at its end as before', () => {
+    const cut = fit('paperless-ngx-archive');
+    expect(cut.startsWith('paperless-')).toBe(true);
+    expect(cut.endsWith('…')).toBe(true);
   });
 });
 
@@ -385,6 +412,48 @@ describe('layoutServiceDiagram', () => {
     expect(svg).not.toMatch(/>(tailscale|paperless)[^<]*…<\/text>/);
     // A name that fits stays on one line.
     expect(svg).toMatch(/>jellyfin<\/text>/);
+  });
+
+  it('writes every hidden name out whole on the page, number included', () => {
+    const machine = (
+      id: string,
+      type: Resource['type'],
+      platformType: Resource['platformType'] = 'generic',
+    ): Resource => resource({ id, type, name: `secret-${id}`, platformType });
+    const resources = [
+      // Enough Proxmox nodes for the numbers to reach two digits.
+      ...Array.from({ length: 12 }, (_, index) => machine(`pve-${index}`, 'agent', 'proxmox-pve')),
+      machine('esx', 'agent', 'vmware-vsphere'),
+      machine('nas', 'agent', 'truenas'),
+      machine('box', 'agent'),
+      machine('dock', 'docker-host'),
+      machine('k8s', 'k8s-cluster'),
+      machine('pbs', 'pbs'),
+      machine('pmg', 'pmg'),
+      resource({ id: 'jail', type: 'jail', name: 'secret-jail', parentId: 'nas' }),
+    ];
+    const hidden = anonymizeInfrastructureMapModel(buildInfrastructureMapModel(resources));
+    const onPage = texts(
+      layoutServiceDiagram(buildServiceDiagram(hidden), { width: 1400, density: 'names' }),
+    );
+    for (const name of [
+      'Proxmox 1',
+      'Proxmox 12',
+      'vSphere 1',
+      'TrueNAS 1',
+      'Machine 1',
+      'Docker 1',
+      'Cluster 1',
+      'Backup 1',
+      'Mail 1',
+      'Container 1',
+    ]) {
+      expect(onPage).toContain(name);
+    }
+    // A cut stand-in carries an ellipsis, before its number or in place of it.
+    const standIn = /^(Proxmox|vSphere|TrueNAS|Machine|Docker|Cluster|Backup|Mail|Container)\b/;
+    expect(onPage.filter((text) => standIn.test(text) && text.includes('…'))).toEqual([]);
+    expect(onPage.join(' ')).not.toContain('secret-');
   });
 
   it('gives the saved image the key to its status dots', () => {

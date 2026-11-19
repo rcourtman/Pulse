@@ -3141,7 +3141,10 @@ and in the saved image, which is built in the browser. A tile the catalogue
 recognised then reads as the app's own name, which says what runs and nothing
 about the estate. Hiding names changes labels and nothing else: pools that
 share a name share a stand-in, so they stay the one tile they were, and the
-image shows the same estate as the page. The catalogue names an app as
+image shows the same estate as the page. A stand-in is a short word and a
+number (`Proxmox 2`, `Container 14`), chosen to fit a tile, and a name or
+caption that ends in a number keeps the number when it is cut, because the
+number is all that tells two stand-ins apart. The catalogue names an app as
 itself and never as the app it replaces, because that label is published.
 Every tile can be read on a touch screen, where there is no hover and a tap
 on a tile is a tap on a link. The first tap shows the tile's card in the
