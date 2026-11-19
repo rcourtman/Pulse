@@ -9597,6 +9597,12 @@ triage-only changes still expand those named checks and accept the deliberately
 skipped compiler. Frontend and independent secret-scan work do not wait for
 compilation; their existing audit rules remain unchanged.
 
+Post-merge pushes to `main` run at most three of the five API shards and four
+of the eight Core E2E browser shards concurrently. GitHub schedules the
+remaining shards as slots free up. This limits competition with open PRs on
+the shared hosted runners. Pull requests, release branches and manual runs
+can use the full matrix width. Each verdict still requires its full inventory.
+
 The API aggregate also requires successful classification and every expanded
 shard. It reports runtime success only for code=true; code=false explicitly
 reports that no API tests ran because runtime checks are inapplicable. An

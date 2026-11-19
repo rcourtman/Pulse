@@ -890,6 +890,8 @@ jobs:
     timeout-minutes: 45
     strategy:
       fail-fast: false
+      # Leave hosted runners available for open PRs during post-merge validation.
+      max-parallel: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 3 || 5 }}
       matrix:
         # The full suite uses five shards. One worker owns the component contract.
         index: ${{ fromJSON(needs.changes.outputs.component_only == 'true' && '[0]' || '[0, 1, 2, 3, 4]') }}
