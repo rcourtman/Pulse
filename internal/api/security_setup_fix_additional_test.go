@@ -468,6 +468,7 @@ func TestQuickSecuritySetupAcceptsSetupTokenInBody(t *testing.T) {
 	resetTrustedProxyConfig()
 
 	dataDir := t.TempDir()
+	prepareQuickSetupFixture(t, dataDir)
 	cfg := &config.Config{
 		DataPath:   dataDir,
 		ConfigPath: dataDir,
@@ -512,6 +513,15 @@ func TestQuickSecuritySetupAcceptsSetupTokenInBody(t *testing.T) {
 	if got := cfg.APITokens[0].Metadata[apiTokenMetadataOwnerUserID]; got != "bootstrap" {
 		t.Fatalf("setup token owner_user_id=%q, want bootstrap", got)
 	}
+	persisted, err := router.persistence.LoadAPITokens()
+	if err != nil {
+		t.Fatalf("reload setup API token: %v", err)
+	}
+	if len(persisted) != 1 || persisted[0].ID != cfg.APITokens[0].ID ||
+		persisted[0].Hash != cfg.APITokens[0].Hash || persisted[0].Metadata[apiTokenMetadataOwnerUserID] != "bootstrap" {
+		t.Fatal("expected the setup API token and its owner to be persisted")
+	}
+	requireQuickSetupSession(t, rec, "bootstrap")
 }
 
 func TestQuickSecuritySetupRotatesWithBasicAuth(t *testing.T) {
@@ -519,6 +529,7 @@ func TestQuickSecuritySetupRotatesWithBasicAuth(t *testing.T) {
 	resetTrustedProxyConfig()
 
 	dataDir := t.TempDir()
+	prepareQuickSetupFixture(t, dataDir)
 	hashed, err := internalauth.HashPassword("OldPassword!1")
 	if err != nil {
 		t.Fatalf("hash password: %v", err)
@@ -563,17 +574,7 @@ func TestQuickSecuritySetupRotatesWithBasicAuth(t *testing.T) {
 		t.Fatalf("rotated token owner_user_id=%q, want newadmin", got)
 	}
 
-	cookies := rec.Result().Cookies()
-	sessionCookie := findCookie(cookies, sessionCookieName(false))
-	if sessionCookie == nil || strings.TrimSpace(sessionCookie.Value) == "" {
-		t.Fatalf("expected credential rotation to refresh the session cookie")
-	}
-	if !ValidateSession(sessionCookie.Value) {
-		t.Fatalf("expected refreshed session to validate")
-	}
-	if got := GetSessionUsername(sessionCookie.Value); got != "newadmin" {
-		t.Fatalf("session username=%q, want %q", got, "newadmin")
-	}
+	requireQuickSetupSession(t, rec, "newadmin")
 }
 
 func TestQuickSecuritySetupRestoresTokensWhenPersistenceFails(t *testing.T) {

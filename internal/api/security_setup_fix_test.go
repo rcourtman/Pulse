@@ -28,6 +28,41 @@ func findCookie(cookies []*http.Cookie, name string) *http.Cookie {
 	return matched
 }
 
+func prepareQuickSetupFixture(t *testing.T, dataDir string) {
+	t.Helper()
+	// These bare routers bypass startup. Exercise credential and session
+	// persistence without using an installed key or probing a service manager.
+	t.Setenv("PULSE_LEGACY_KEY_PATH", filepath.Join(dataDir, "absent-legacy-key"))
+	t.Setenv("INVOCATION_ID", "")
+	t.Setenv("PULSE_DOCKER", "true")
+	InitPersistentAuthStores(dataDir)
+	resetSessionTracking()
+	t.Cleanup(func() {
+		resetSessionStoreForTests()
+		resetCSRFStoreForTests()
+		resetSessionTracking()
+	})
+}
+
+func requireQuickSetupSession(t *testing.T, rec *httptest.ResponseRecorder, wantUser string) {
+	t.Helper()
+	cookies := rec.Result().Cookies()
+	session := findCookie(cookies, sessionCookieName(false))
+	if session == nil || strings.TrimSpace(session.Value) == "" {
+		t.Fatal("expected quick setup to issue a session cookie")
+	}
+	if !ValidateSession(session.Value) {
+		t.Fatal("expected the issued session to validate")
+	}
+	if got := GetSessionUsername(session.Value); got != wantUser {
+		t.Fatalf("session username=%q, want %q", got, wantUser)
+	}
+	csrf := findCookie(cookies, CookieNameCSRF)
+	if csrf == nil || !validateCSRFToken(session.Value, csrf.Value) {
+		t.Fatal("expected quick setup to issue a CSRF cookie bound to the session")
+	}
+}
+
 func TestQuickSecuritySetupRejectsUnauthenticatedForce(t *testing.T) {
 	t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "")
 	resetTrustedProxyConfig()
@@ -414,6 +449,7 @@ func TestQuickSecuritySetupAllowsRecoveryTokenRotation(t *testing.T) {
 	resetRecoveryStore()
 
 	dataDir := t.TempDir()
+	prepareQuickSetupFixture(t, dataDir)
 
 	hashed, err := internalauth.HashPassword("OldPassword!1")
 	if err != nil {
@@ -435,6 +471,7 @@ func TestQuickSecuritySetupAllowsRecoveryTokenRotation(t *testing.T) {
 	}
 
 	InitRecoveryTokenStore(cfg.DataPath)
+	t.Cleanup(resetRecoveryStore)
 	token, err := GetRecoveryTokenStore().GenerateRecoveryToken(5*time.Minute, "127.0.0.1")
 	if err != nil {
 		t.Fatalf("generate recovery token: %v", err)
@@ -465,6 +502,10 @@ func TestQuickSecuritySetupAllowsRecoveryTokenRotation(t *testing.T) {
 	if len(cfg.APITokens) != 1 {
 		t.Fatalf("expected one API token, got %d", len(cfg.APITokens))
 	}
+	if GetRecoveryTokenStore().IsRecoveryTokenValidConstantTime(token, "127.0.0.1") {
+		t.Fatal("expected the recovery token to be consumed by setup")
+	}
+	requireQuickSetupSession(t, rr, "rotated")
 }
 
 func TestQuickSecuritySetupRequiresSettingsScopeForTokens(t *testing.T) {
