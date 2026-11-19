@@ -708,6 +708,20 @@ create/update/delete recovery. Browser proof
 exercises actual App/Settings/Role consumers at desktop and narrow widths using
 safe synthetic HTTP producers; it is not installed administrator or IdP recovery.
 
+New Role checks the normalized draft ID against the exact IDs in this reader's
+accepted inventory, including built-in roles. A collision keeps the inventory and
+draft intact, names the normalized Role ID and focuses the existing inline editor
+error. No request or CSRF preparation starts; changing the draft
+ID clears that local error. Distinct saved IDs are not case-folded together.
+Editing remains a separate action for the selected saved role. This check does
+not establish server-side uniqueness or cover another writer after the read.
+`RolesSubmission.transport.test.tsx` verifies custom and built-in collisions,
+exact-case identity, correction and unchanged explicit update through the real
+request client. `RBACPaywallPanels.test.tsx` verifies that the error and draft
+retire on reader change. Matched desktop and phone browser proof covers the
+form and its transport using a synthetic inventory; no permission evaluation
+changes.
+
 
 ### Overview reads and name changes belong to the selected organization
 

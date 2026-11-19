@@ -180,6 +180,39 @@ describe('RBAC paywall settings panels', () => {
     expect(screen.getByRole('button', { name: 'New Role' })).not.toBeDisabled();
   });
 
+  it('does not carry a rejected role ID or draft to a different reader', async () => {
+    const [reader, setReader] = createSignal('first-reader');
+    render(() => <RolesPanel currentUser={reader()} canManage />);
+    await screen.findByText('Admin');
+    fireEvent.click(screen.getByRole('button', { name: 'New Role' }));
+    const dialog = within(screen.getByRole('dialog', { name: 'New role' }));
+    fireEvent.input(dialog.getByLabelText('Role ID'), { target: { value: ' Admin ' } });
+    const name = dialog.getByLabelText('Role Name') as HTMLInputElement;
+    fireEvent.input(name, { target: { value: 'Draft for first reader' } });
+    fireEvent.submit(name.form!);
+    expect(dialog.getByRole('alert')).toHaveTextContent('Role ID already exists: admin');
+
+    getRolesMock.mockResolvedValueOnce([
+      {
+        id: 'peer',
+        name: 'Peer role',
+        description: '',
+        permissions: [{ action: 'read', resource: 'nodes' }],
+      },
+    ]);
+    setReader('second-reader');
+    await screen.findByText('Peer role');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Role ID already exists/)).not.toBeInTheDocument();
+    expect(screen.queryByText('Admin')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'New Role' }));
+    const fresh = within(screen.getByRole('dialog', { name: 'New role' }));
+    expect(fresh.getByLabelText('Role ID')).toHaveValue('');
+    expect(fresh.getByLabelText('Role Name')).toHaveValue('');
+    expect(fresh.queryByRole('alert')).not.toBeInTheDocument();
+    expect(getRolesMock).toHaveBeenCalledTimes(2);
+  });
+
   it('keeps complete saved grants in each role-list projection, including read-only roles', async () => {
     const permissions = [
       { action: '*', resource: '*' },

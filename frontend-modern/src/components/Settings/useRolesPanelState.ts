@@ -14,6 +14,8 @@ import {
 } from '@/utils/rbacPresentation';
 import { useRBACFeatureGateState } from './useRBACFeatureGateState';
 
+const ROLE_ID_COLLISION = 'Role ID already exists: ';
+
 export interface RolesPanelProps {
   currentUser?: string;
   canManage?: boolean;
@@ -283,6 +285,13 @@ export function useRolesPanelState(props: RolesPanelProps = {}) {
       setActionError(getRolesRequiredFieldsMessage());
       return;
     }
+    // New Role must not replace a role this reader already knows. Compare the
+    // exact normalized ID we would send, not its display name or case-folded
+    // inventory IDs. This does not replace a server-side create-only check.
+    if (!existing && roles().some((role) => role.id === id)) {
+      setActionError(`${ROLE_ID_COLLISION}${id}. Choose a different ID.`);
+      return;
+    }
     await mutateRole(
       {
         // This form edits only the fields below. Keep saved inheritance,
@@ -296,6 +305,10 @@ export function useRolesPanelState(props: RolesPanelProps = {}) {
       },
       false,
     );
+  };
+  const updateFormId = (value: string) => {
+    setFormId(value);
+    if (actionError()?.startsWith(ROLE_ID_COLLISION)) setActionError(null);
   };
   const addPermission = () => {
     if (canEdit() && showModal())
@@ -341,7 +354,7 @@ export function useRolesPanelState(props: RolesPanelProps = {}) {
     roles,
     saving,
     setFormDescription,
-    setFormId,
+    setFormId: updateFormId,
     setFormName,
     showModal,
     successNotice,

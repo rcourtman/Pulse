@@ -170,6 +170,58 @@ describe('native role-editor submission through its existing guarded action', ()
     expect(saved.slice(0, 2)).toEqual(originals);
   });
 
+  it.each([
+    { entered: '  Fleet   Reader ', existingId: 'fleet-reader', isBuiltIn: false },
+    { entered: 'Viewer', existingId: 'viewer', isBuiltIn: true },
+  ])('does not send a create for the saved ID $existingId', async (example) => {
+    const original = { ...selected, id: example.existingId, isBuiltIn: example.isBuiltIn };
+    saved = [original];
+    render(() => <RolesPanel currentUser="synthetic-maintainer" canManage />);
+    const dialog = await openCreate();
+    const editor = within(dialog);
+    const id = editor.getByLabelText('Role ID');
+    fireEvent.input(id, { target: { value: example.entered } });
+    fireEvent.input(editor.getByLabelText('Role Name'), { target: { value: 'New policy' } });
+    fireEvent.input(editor.getByLabelText('Description'), {
+      target: { value: 'Draft description' },
+    });
+    submit(dialog);
+    const error = editor.getByRole('alert');
+    expect(error).toHaveTextContent(`Role ID already exists: ${example.existingId}`);
+    expect(id).toHaveValue(example.entered);
+    expect(editor.getByLabelText('Description')).toHaveValue('Draft description');
+    expect(writes()).toHaveLength(0);
+    expect(reads()).toHaveLength(1);
+    expect(saved).toEqual([original]);
+
+    fireEvent.input(id, { target: { value: 'New Policy' } });
+    expect(editor.queryByRole('alert')).toBeNull();
+    submit(dialog);
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expectBoundWrite();
+    expect(writes()[0][1]?.method).toBe('POST');
+    expect(JSON.parse(String(writes()[0][1]?.body))).toMatchObject({
+      id: 'new-policy',
+      description: 'Draft description',
+    });
+    expect(saved[0]).toEqual(original);
+  });
+
+  it('does not case-fold a saved identity when testing for a collision', async () => {
+    const original = { ...selected, id: 'Ops' };
+    saved = [original];
+    render(() => <RolesPanel currentUser="synthetic-maintainer" canManage />);
+    const dialog = await openCreate();
+    const editor = within(dialog);
+    fireEvent.input(editor.getByLabelText('Role ID'), { target: { value: '  OPS ' } });
+    fireEvent.input(editor.getByLabelText('Role Name'), { target: { value: 'Night ops' } });
+    submit(dialog);
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expectBoundWrite();
+    expect(writes()[0][1]?.method).toBe('POST');
+    expect(saved.map((role) => role.id)).toEqual(['Ops', 'ops']);
+  });
+
   it('shares blank-name and missing-ID validation rather than dispatching an incomplete form', async () => {
     render(() => <RolesPanel currentUser="synthetic-maintainer" canManage />);
     const dialog = await openCreate();

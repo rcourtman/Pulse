@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "base_sha": "f7fd01c009fc620f94855b3d7c02e994ceb8e1a0",
+  "verified_at": "2026-11-19T03:23:28Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/RolesEditorDialog.tsx",
+    "frontend-modern/src/components/Settings/useRolesPanelState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/RolesEditorDialog.tsx": "45a6344a659292a3e5cc2933eb0dacef81ef97395106a590cd87b507503d2909",
+    "frontend-modern/src/components/Settings/useRolesPanelState.ts": "53199f0078b5be59fcc8e4850ee8511e99b40e54856f3735bb64fa84b30513b8"
+  },
+  "routes": [
+    "/settings/security-roles"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Production App preview in Playwright 1.56.1: Chromium 141 (desktop light) and touch WebKit 26 (phone dark); 50 assertions and eight inspected captures in four comparable pairs.",
+    "New Role with a normalized 64-character ID already in the current inventory: baseline sends a POST and shows the fixture rejection. Candidate keeps the draft, focuses the local correction, wraps the full conflicting ID and dispatches no write.",
+    "After correcting the ID, both builds retain the original saved role, its allow and conditional deny, the read-only built-in, and the new role. Exit and creation controls remain available."
+  ],
+  "interactions": [
+    "Press Enter from the draft field on desktop and tap Create Role on the phone. The collision leaves the same fields and Cancel/Create visible and does not replay or refresh.",
+    "Correct the ID and create once, then explicitly edit the existing role. Both operations preserve the existing workspace/CSRF binding and the explicit update retains its saved ID, rules and priority.",
+    "All data and responses were synthetic; no backend uniqueness, live RBAC operations or deployment was exercised."
+  ]
+}
