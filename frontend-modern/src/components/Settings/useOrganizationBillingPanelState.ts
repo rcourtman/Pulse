@@ -140,7 +140,10 @@ export function useOrganizationBillingPanelState(props: OrganizationBillingPanel
   };
 
   const reloadBillingData = () => {
-    if (!loading()) void loadBillingData();
+    // Ignore a click on the old selection if its switch event has yet to run.
+    if (!selectionIsCurrent()) return false;
+    void loadBillingData();
+    return true;
   };
   const unsubscribeOrg = eventBus.on('org_switched', () => void loadBillingData());
   const unsubscribeChanged = eventBus.on('organizations_changed', () => void loadBillingData());

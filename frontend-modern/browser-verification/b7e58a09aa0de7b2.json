@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "base_sha": "313bca48f54ac0edb772e42f04846d0d96954444",
+  "verified_at": "2026-11-19T10:31:29Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/OrganizationBillingLoadingState.tsx",
+    "frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx",
+    "frontend-modern/src/components/Settings/useOrganizationBillingPanelState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/OrganizationBillingLoadingState.tsx": "82713163d864367673e2efaf658e4e71895ee792b370e4128dac0724edf98c83",
+    "frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx": "986f418ad9602895f629252f44595b070a123ea8de1e72888f9c54f2e5e3d337",
+    "frontend-modern/src/components/Settings/useOrganizationBillingPanelState.ts": "2b357a020b3c9a2c9284eb2976a997f26c214b1268569260f50ceef69fb8c4b1"
+  },
+  "routes": [
+    "/settings/organization/billing"
+  ],
+  "viewports": [
+    {
+      "width": 1536,
+      "height": 960
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Production-built Pulse App with isolated loopback responses, compared with assigned main at the same desktop Chromium light and phone WebKit dark anchors (Playwright 1.56.1).",
+    "During the initial check and a later explicit reload, plan and membership replies arrived while the directory remained pending. Baseline shows placeholders; revised view names the workspace and offers a visible Restart billing check without rendering partial plan data.",
+    "The same current denial still hides the snapshot. The existing list_failed degradation retains accepted plan, member count and usage, with Organizations unavailable and Reload billing still reachable. A complete response restores the verified organization and member counts.",
+    "Twelve before/after screenshot pairs inspected. Phone touch target is 44 CSS px high at 390×844, the workspace wraps within the panel, and the normal settled fields and controls keep their positions."
+  ],
+  "interactions": [
+    "Keyboard activation on desktop and touch in WebKit. Explicit reload moves lost focus to Restart while waiting. Focus stays on the surviving Reload action after a degraded result and continues to Billing & Usage on complete recovery.",
+    "Restart replaced the held request before it replied. In all four after journeys the retired directory request closed without a reply. Eight journeys, 84 checks, no unexpected scope changes, no mutations and no page errors."
+  ]
+}
