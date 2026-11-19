@@ -4423,21 +4423,41 @@ What the diagram does with them:
 - The map is held back from release builds until its completeness review is
   signed off (19 November 2026). Richard: "before this reaches users, we need
   to be absolutely certain that it is done in a way which is complete." It was
-  built in two days and has had no beta. `isInfrastructureMapAvailable`
-  (`frontend-modern/src/utils/infrastructureMapRelease.ts`) is true in a
-  development build and false in a release build while
-  `INFRASTRUCTURE_MAP_RELEASED` is false. Where it is false the `/map` route
-  is not registered, the header has no map button, the availability form
-  makes no offer about how the map draws a check, and the shipped guides do
-  not link or mention the map: the docs index and the availability and API
-  references say nothing of it, and `docs/MAP.md` stays unlinked. The check
-  types themselves are released; they are types whether or not a map draws
-  them. Releasing the map is one deliberate change: set the constant to
-  `true` in a commit that says the review passed, restore the guide links,
-  and let it reach a beta before any candidate. The review covers every
-  theme, real browsers and a phone, real estates of different shapes, empty
-  and error states, accessibility, a large estate, an end-to-end spec and
-  guides that match what ships.
+  built in two days and has had no beta. The map is the first entry,
+  `infrastructureMap`, in the feature release list
+  (`frontend-modern/src/utils/featureReleases.json`, read through
+  `featureReleases.ts`), at stage `build`. A feature has one of three
+  stages: `build` shows it in development builds only, `preview` also in
+  Preview builds (a beta or release candidate, which the server reports as
+  version channel `rc`) with the Preview tag beside its page title, and
+  `released` in every build. A stable build never shows a feature in
+  preview. There is no setting, no per-user toggle and no server switch.
+  Where `isFeatureAvailable('infrastructureMap')` is false the `/map`
+  address answers like any unknown one and the map's code is not loaded
+  (`featureReleaseRoute`), the browser tab does not say Map, the header has
+  no map button, the availability form makes no offer about how the map
+  draws a check and does not send its owner to `/map` when an add started
+  with `from=map` is closed, and the shipped guides do not link or mention
+  the map: the docs index and the availability and API references say
+  nothing of it, `docs/MAP.md` stays unlinked, and the docs page answers
+  `/docs/MAP` as a guide this installation does not ship
+  (`isFeatureGuideAvailable`). Two things remain by design: the raw file
+  `/docs/MAP.md` is still in the bundle, linked from nowhere, and the
+  privacy guide still lists the map's three telemetry counters, because a
+  field in the payload is disclosed whether or not its feature is shown. A
+  feature in preview draws nothing until the build has said what it is; if
+  that takes more than ten seconds its address answers as unknown, and if
+  the version cannot be read at all it stays off until the page is
+  reloaded. The check types themselves are released; they are types whether
+  or not a map draws them. Only Richard moves a feature to `preview` or `released`. The change
+  is the `stage` line plus an `approval` line that says who said so and
+  when; `npm run lint:feature-releases` refuses a stage past `build`
+  without one, and refuses a link to a feature's guide from any shipped
+  guide or release note until the feature is released. A new feature gets
+  its entry in its first pull request. The map's review covers every theme,
+  real browsers and a phone, real estates of different shapes, empty and
+  error states, accessibility, a large estate, an end-to-end spec and guides
+  that match what ships.
 - How a thing gets onto the map is not something the map can show, so the
   page says it in one line beside the legend, "Apps are recognised by name,
   checks are drawn by their type", and links the shipped guide `docs/MAP.md`

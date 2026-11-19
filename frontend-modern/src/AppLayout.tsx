@@ -68,7 +68,8 @@ import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentat
 import type { AppConnectionStatus, OrganizationListIssue } from '@/useAppRuntimeState';
 import { buildInfrastructureWorkspacePath } from '@/components/Settings/infrastructureWorkspaceModel';
 import { InfrastructureMapHeaderButton } from '@/features/infrastructureMap/InfrastructureMapEntry';
-import { isInfrastructureMapAvailable } from '@/utils/infrastructureMapRelease';
+import { PreviewTag } from '@/components/FeatureRelease';
+import { isFeatureAvailable } from '@/utils/featureReleases';
 
 const ROOT_PROXMOX_PATH = buildProxmoxPath();
 const ROOT_DOCKER_PATH = buildDockerPath();
@@ -299,7 +300,9 @@ export function AppLayout(props: AppLayoutProps) {
     const active = getActiveTabForPath(location.pathname);
     if (!active) {
       // The map is reached from the window edge, not from a tab.
-      const onMap = location.pathname.replace(/\/+$/, '') === INFRASTRUCTURE_MAP_PATH;
+      const onMap =
+        isFeatureAvailable('infrastructureMap') &&
+        location.pathname.replace(/\/+$/, '') === INFRASTRUCTURE_MAP_PATH;
       document.title = onMap ? `Map · ${browserBrandName()}` : browserBrandName();
       return;
     }
@@ -748,7 +751,7 @@ export function AppLayout(props: AppLayoutProps) {
         <Show when={!kioskMode()}>
           <div class="flex items-center sm:col-start-1 sm:col-end-2 sm:justify-self-start">
             {/* The slot stays, so the brand mark does not move when the map arrives. */}
-            <Show when={isInfrastructureMapAvailable()}>
+            <Show when={isFeatureAvailable('infrastructureMap')}>
               <InfrastructureMapHeaderButton />
             </Show>
           </div>
@@ -773,9 +776,7 @@ export function AppLayout(props: AppLayoutProps) {
                 </span>
               </Show>
               <Show when={props.versionInfo()?.channel === 'rc'}>
-                <span class="text-xs px-1.5 py-0.5 bg-orange-700 text-white rounded-sm font-bold">
-                  Preview
-                </span>
+                <PreviewTag />
               </Show>
             </div>
           </div>

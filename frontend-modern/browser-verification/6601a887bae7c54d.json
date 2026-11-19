@@ -1,0 +1,64 @@
+{
+  "version": 1,
+  "base_sha": "e8c3f16fbeff370dd1c18c229ebe51a296a366a2",
+  "verified_at": "2026-11-19T15:29:50Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/App.tsx",
+    "frontend-modern/src/AppLayout.tsx",
+    "frontend-modern/src/components/FeatureRelease.tsx",
+    "frontend-modern/src/components/Settings/AvailabilitySettingsPanel.tsx",
+    "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/AvailabilityTargetSlot.tsx",
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapSurface.tsx",
+    "frontend-modern/src/pages/Docs.tsx",
+    "frontend-modern/src/utils/featureReleases.ts",
+    "frontend-modern/src/utils/infrastructureMapRelease.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/App.tsx": "c5c0ef2f40e8ed3ede22de82fb897c3a0aa9f1306e6cc2cd17e9af5b7c09fcf4",
+    "frontend-modern/src/AppLayout.tsx": "8a73e226feac88f8ff327420113a724d2a479aafcd5d962a24790e8875faac6f",
+    "frontend-modern/src/components/FeatureRelease.tsx": "8abc9203c96fbdab378eda7b1b00d212335aaaf2f1748fe8e05f27894acdf53d",
+    "frontend-modern/src/components/Settings/AvailabilitySettingsPanel.tsx": "bb651b708e1f045dd3a5a33978ae4954fbf4840e4fe0287c4dcc95a3413288c8",
+    "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/AvailabilityTargetSlot.tsx": "aa7d74d517135cfd72f3cc6139d1dfb2500b703039f4dc94c2288b7fef1552b3",
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapSurface.tsx": "1ce91ab7a9eb059293e582e3a592578778d201b6c5207cc56f885e67a03b175f",
+    "frontend-modern/src/pages/Docs.tsx": "87d46ab629dfebd9ce318042b24f4aff714fb908687b9bb2842bf44cccc865e6",
+    "frontend-modern/src/utils/featureReleases.ts": "d1f2d11cef15b4e645c65fb54063949d27730c77cafb6c980085841c724ee370",
+    "frontend-modern/src/utils/infrastructureMapRelease.ts": "deleted"
+  },
+  "routes": [
+    "/proxmox/overview",
+    "/map",
+    "/settings/monitoring/availability?add=target",
+    "/settings/monitoring/availability?add=target&from=map",
+    "/docs/README",
+    "/docs/MAP",
+    "/docs/AVAILABILITY"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "three builds from one clone of main plus this change on pulse-dev, driven by headless Chromium through Playwright against a private Pulse on mock data: a production build of the final bytes served by the Pulse server itself, the same source served by a Vite dev server, and a second production build made for this check only with the map's stage flipped from build to preview and thrown away afterwards (the list was restored and its hash compared). The kind of build was set by rewriting the channel in the /api/version reply to stable or rc; the mock server itself reports stable",
+    "final bytes, stable build, 1440x900 and 390x844 touch: no map button in the header, no link to /map, /map rendered 'Page Not Found', the tab title was 'Page Not Found', and no InfrastructureMap chunk was requested",
+    "final bytes, Preview build (channel rc), 1440x900 and 390x844 touch: the header carried its Preview mark and the map was still absent in every way above, because its stage is build",
+    "final bytes, stable and Preview builds, 1440x900: the add-check form listed six types and made no offer for the name 'Core switch'; a form opened with from=map and cancelled stayed on the availability settings page; the docs index had no link to the map guide; /docs/MAP answered 'That document is not part of this installation's shipped documentation set' without requesting the file, while /docs/AVAILABILITY opened",
+    "final bytes, development build, 1440x900: the header had the map button, /map drew 198 tiles under the heading Map with no Preview tag beside it, the form made its offer, a cancelled from=map form returned to /map, and /docs/MAP opened the guide",
+    "stage flipped to preview, Preview build, 1440x900 and 390x844 touch: the header had the map button, /map drew 198 tiles, and an orange Preview tag sat to the right of the heading Map on its line and inside the viewport, with the title 'New in Preview builds. It can change before it is released.'; /docs/MAP opened the guide",
+    "stage flipped to preview, stable build, 1440x900 and 390x844 touch: no map button, /map rendered 'Page Not Found', no map chunk was requested, and /docs/MAP was not part of the shipped set",
+    "stage flipped to preview, version reply held for five seconds: /map drew neither the map nor 'Page Not Found' while waiting, then drew the map with its Preview tag",
+    "stage flipped to preview, version request refused: /map rendered 'Page Not Found' and the header had no map button",
+    "screenshots of the tagged map at both sizes, the not-found page and the refused guide were read at full size; no page error in any context; no page scrolled sideways",
+    "not checked: light theme, Firefox, Safari, a real phone, a real published beta or candidate (the channel was rewritten in the reply instead). The raw file /docs/MAP.md is still served, linked from nowhere. The ten-second limit on the waiting state is covered by a unit test, not in the browser"
+  ],
+  "interactions": [
+    "opened /map and /docs/MAP directly in each build kind, at 1440x900 with a mouse and at 390x844 with touch emulation",
+    "typed a name into the add-check form, and opened the form with from=map and pressed Cancel, in the stable, Preview and development builds"
+  ]
+}
