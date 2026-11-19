@@ -122,9 +122,12 @@ func TestVzdumpCachedGuestReadFailureDoesNotRenewRunningIntent(t *testing.T) {
 				assertVzdumpGuestResults(t, guests(), "unknown")
 				for _, task := range guests() {
 					require.Equal(t, observed, task.ObservedAt)
-					require.False(t, task.EndTime.IsZero(), "ended parent must not leave an apparently active guest")
+					if task.VMID == 101 {
+						require.False(t, task.EndTime.IsZero(), "keep a measured finish")
+					} else {
+						require.True(t, task.EndTime.IsZero(), "an ended parent cannot supply a visible guest duration")
+					}
 					if task.VMID == 103 {
-						require.True(t, task.EndTime.Equal(job.EndTime), "compare the provider instant, not time.Location identity")
 						require.Equal(t, "backup job ended without an observed guest result", task.Error)
 					}
 					_, active = m.resolveBackupIntentContext("", "site", job.Node, task.VMID, observed)

@@ -430,11 +430,39 @@ func FromPVEBackupTasksWithEvidence(
 	guestInfoByKey map[string]GuestInfo,
 	ingestedAt time.Time,
 ) ([]recovery.RecoveryPoint, error) {
-	return withRecoveryPointEvidence(
+	points, err := withRecoveryPointEvidence(
 		FromPVEBackupTasks(tasks, guestInfoByKey),
 		"pve-backup-task-inventory",
 		ingestedAt,
 	)
+	if err != nil {
+		return nil, err
+	}
+	// A retained log row can be ingested again without a new observation of
+	// its guest. Carry the actual task observation's expiry separately from
+	// ingestion and from the provider's start/end timestamps.
+	runningObservations := make(map[string]time.Time)
+	for _, task := range tasks {
+		if task.VMID > 0 && task.EndTime.IsZero() && !task.ObservedAt.IsZero() && outcomeFromTaskStatus(task.Status) == recovery.OutcomeRunning {
+			runningObservations["pve-task:"+strings.TrimSpace(task.ID)] = task.ObservedAt
+		}
+	}
+	for i := range points {
+		point := &points[i]
+		if point.Outcome != recovery.OutcomeRunning || point.CompletedAt != nil || point.Evidence == nil {
+			continue
+		}
+		if observedAt, ok := runningObservations[point.ID]; ok {
+			expires := observedAt.Add(recovery.BackupTaskRunningMaxAge).UTC()
+			if expires.Before(point.Evidence.ObservedAt) {
+				// A provider start ahead of Pulse's clock cannot extend
+				// validity. The rollup only considers start < cutoff.
+				expires = point.Evidence.ObservedAt
+			}
+			point.Evidence.ValidUntil = &expires
+		}
+	}
+	return points, nil
 }
 
 func FromPVEGuestSnapshotsWithEvidence(

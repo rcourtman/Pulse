@@ -2857,6 +2857,12 @@ func (m *Monitor) pollBackupTasks(ctx context.Context, instanceName string, clie
 	for _, guest := range guestTasks {
 		parentID := strings.TrimSuffix(guest.ID, fmt.Sprintf("-vm%d", guest.VMID))
 		if liveJobIDs[parentID] {
+			// The parent end bounds attribution in durable job reports,
+			// but doesn't measure the guest duration shown in Coverage.
+			if guest.EndTimeFromParent {
+				guest.EndTime = time.Time{}
+				guest.EndTimeFromParent = false
+			}
 			liveTasks = append(liveTasks, guest)
 		}
 	}
@@ -2892,12 +2898,13 @@ func (m *Monitor) pollBackupTasks(ctx context.Context, instanceName string, clie
 	m.persistBackupTaskHistory(ctx, points, collection)
 }
 
-// vzdumpJobTaskCacheEntry caches the per-guest tasks synthesized from one
-// vzdump job run's log so finished jobs are fetched at most once.
+// vzdumpJobTaskCacheEntry caches the per-guest results and accepted prefix
+// length of one vzdump job log. Complete final logs need no further fetch.
 type vzdumpJobTaskCacheEntry struct {
 	tasks           []models.BackupTask
 	final           bool
 	historyComplete bool
+	lineCount       int
 	lastAttempt     time.Time // scheduling metadata, not an accepted log observation
 }
 
@@ -3000,6 +3007,20 @@ func (m *Monitor) synthesizeVzdumpJobGuestTasks(ctx context.Context, instanceNam
 			continue
 		}
 
+		// Every request starts at line one for the same job. A shorter
+		// nonempty prefix cannot replace known guest results or qualify a
+		// finished log, even if it carries a terminal marker. A valid empty
+		// response still clears the cache under the existing empty-read rule.
+		if cached && len(logLines) > 0 && len(logLines) < entry.lineCount {
+			log.Debug().
+				Str("instance", instanceName).
+				Int("lines", len(logLines)).
+				Int("previousLines", entry.lineCount).
+				Msg("shorter vzdump task log; keeping prior guest evidence")
+			byJob[index] = cachedVzdumpGuestTasks(entry.tasks, jobTask)
+			continue
+		}
+
 		unlock, current = m.beginPVEBackupPublication(ctx, instanceName)
 		if !current {
 			if cached {
@@ -3017,6 +3038,7 @@ func (m *Monitor) synthesizeVzdumpJobGuestTasks(ctx context.Context, instanceNam
 			tasks:           guestTasks,
 			final:           historyComplete,
 			historyComplete: historyComplete,
+			lineCount:       len(logLines),
 			lastAttempt:     now,
 		}
 		m.mu.Unlock()
@@ -3121,6 +3143,7 @@ func cachedVzdumpGuestTasks(tasks []models.BackupTask, job models.BackupTask) []
 		}
 		if out[i].EndTime.IsZero() {
 			out[i].EndTime = job.EndTime
+			out[i].EndTimeFromParent = true
 		}
 	}
 	return out
@@ -3239,6 +3262,7 @@ func parseVzdumpJobLog(jobTask models.BackupTask, upid string, logLines []proxmo
 	tasks := make([]models.BackupTask, 0, len(order))
 	for _, vmid := range order {
 		sec := sections[vmid]
+		endFromParent := jobFinished && sec.end.IsZero()
 		if jobFinished {
 			if sec.status == "running" {
 				// The parent ended, but the returned log may be truncated or
@@ -3254,15 +3278,16 @@ func parseVzdumpJobLog(jobTask models.BackupTask, upid string, logLines []proxmo
 		}
 
 		tasks = append(tasks, models.BackupTask{
-			ID:        fmt.Sprintf("%s-%s-vm%d", jobTask.Instance, upid, vmid),
-			Node:      jobTask.Node,
-			Instance:  jobTask.Instance,
-			Type:      jobTask.Type,
-			VMID:      vmid,
-			Status:    sec.status,
-			Error:     sec.errMsg,
-			StartTime: sec.start,
-			EndTime:   sec.end,
+			ID:                fmt.Sprintf("%s-%s-vm%d", jobTask.Instance, upid, vmid),
+			Node:              jobTask.Node,
+			Instance:          jobTask.Instance,
+			Type:              jobTask.Type,
+			VMID:              vmid,
+			Status:            sec.status,
+			Error:             sec.errMsg,
+			StartTime:         sec.start,
+			EndTime:           sec.end,
+			EndTimeFromParent: endFromParent,
 		})
 	}
 

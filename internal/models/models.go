@@ -3612,6 +3612,9 @@ type BackupTask struct {
 	ObservedAt time.Time `json:"observedAt,omitempty"`
 	Size       int64     `json:"size,omitempty"`
 	Error      string    `json:"error,omitempty"`
+	// Synthetic guest tasks may use the whole job's end for report
+	// attribution. It is not a measured end for the guest.
+	EndTimeFromParent bool `json:"-"`
 }
 
 // StorageBackup represents a backup file in storage
