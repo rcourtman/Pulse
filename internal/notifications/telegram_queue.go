@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 )
@@ -77,7 +78,10 @@ func (q *NotificationQueue) persistTelegramBatchesLocked(row *QueuedNotification
 	ids := make([]string, len(batches))
 	ids[0] = row.ID
 	for i := 1; i < len(ids); i++ {
-		ids[i] = fmt.Sprintf("%s:telegram:%d", row.ID, i)
+		// A part held before its first attempt can lose its leader and need
+		// another partition. Positions from a prior split still belong to
+		// retained siblings and their audit/settlement records.
+		ids[i] = "telegram-" + uuid.NewString()
 	}
 	links, err := telegramBatchLinks(row.Links, batches, ids)
 	if err != nil {

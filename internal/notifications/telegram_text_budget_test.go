@@ -2,7 +2,6 @@ package notifications
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"strings"
 	"sync"
@@ -170,8 +169,12 @@ func TestTelegramPartsKeepRateHoldAndProviderRejectionIndependent(t *testing.T) 
 		return err == nil && held == 2
 	}, 10*time.Second, 5*time.Millisecond)
 	require.Len(t, received(), 1)
-	for i := 1; i < len(batch); i++ {
-		row := loadQuietReplay(t, q, fmt.Sprintf("%s:telegram:%d", original.ID, i))
+	require.Equal(t, QueueStatusSent, loadQuietReplay(t, q, original.ID).Status)
+	var heldIDs []string
+	for _, row := range quietReplayRows(t, q) {
+		if row.ID == original.ID {
+			continue
+		}
 		require.Equal(t, QueueStatusPending, row.Status)
 		require.Zero(t, row.Attempts)
 		require.Nil(t, row.LastAttempt)
@@ -179,11 +182,14 @@ func TestTelegramPartsKeepRateHoldAndProviderRejectionIndependent(t *testing.T) 
 		require.True(t, row.NextRetryAt.After(time.Now().Add(30*time.Second)))
 		require.Equal(t, original.Config, row.Config)
 		require.Equal(t, original.ReceiptEpoch, row.ReceiptEpoch)
+		require.Len(t, row.Alerts, 1)
 		require.Len(t, row.Links, 1)
 		require.Equal(t, row.ID, row.Links[0].NotificationID)
-		require.Equal(t, batch[i].OperationalRecord.ID, row.Links[0].OperationalRecordID)
+		require.Equal(t, row.Alerts[0].OperationalRecord.ID, row.Links[0].OperationalRecordID)
 		require.Equal(t, original.Links[0].DestinationID, row.Links[0].DestinationID)
+		heldIDs = append(heldIDs, row.Alerts[0].ID)
 	}
+	require.ElementsMatch(t, []string{batch[1].ID, batch[2].ID}, heldIDs)
 	var audits int
 	require.NoError(t, q.db.QueryRow("SELECT count(*) FROM notification_audit").Scan(&audits))
 	require.Equal(t, 1, audits, "local gating is not a provider attempt")
@@ -325,7 +331,8 @@ func TestTelegramQueuePartitionFailureLeavesOriginalUnattempted(t *testing.T) {
 	row := &QueuedNotification{Type: "webhook", Alerts: batch, Config: raw, MaxAttempts: 3}
 	require.NoError(t, q.Enqueue(row))
 	_, err = q.db.Exec(`CREATE TRIGGER abort_fixture BEFORE INSERT ON notification_queue
-		WHEN NEW.id LIKE '%:telegram:2' BEGIN SELECT RAISE(ABORT,'fixture partition refused'); END;`)
+		WHEN (SELECT count(*) FROM notification_queue) = 2
+		BEGIN SELECT RAISE(ABORT,'fixture partition refused'); END;`)
 	require.NoError(t, err)
 	pending, err := q.GetPending(10)
 	require.NoError(t, err)
