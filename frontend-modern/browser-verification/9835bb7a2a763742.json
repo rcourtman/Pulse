@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "base_sha": "d8d9247a8ec3aef59661117a815947fc688c8f6a",
+  "result": "passed",
+  "verified_at": "2026-11-19T16:39:43Z",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/RolesPanel.tsx",
+    "frontend-modern/src/components/Settings/useRolesPanelState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/RolesPanel.tsx": "7b2389158dbfe3d979ecf35b782b07deb98849c04aea069c419fd029dcad31fb",
+    "frontend-modern/src/components/Settings/useRolesPanelState.ts": "ebe8643d9b0b2c986e5909bf4b7003f5b7663b5f7516782f3fc9fe2bf9738559"
+  },
+  "routes": [
+    "/settings/security-roles"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Actual Pulse App and Settings registry with synthetic HTTP, Playwright 1.56.1, desktop Chromium 141 (light) and touch WebKit 26 (dark). 106 baseline and 150 candidate assertions; ten paired captures inspected.",
+    "The initial and unconfirmed-delete pending reads now show Loading roles and Restart role check alongside the unchanged disabled New Role and, when present, the complete outcome warning.",
+    "A failed replacement leaves the read error and explicit Check saved roles. Successful current readback restores both same-name saved roles with separate IDs and actions, the conditional deny, and the built-in read-only role at the same anchors."
+  ],
+  "interactions": [
+    "Tab and Enter activate restart in Chromium; touch activates the 44px button in WebKit. Only the displaced inventory GET is cancelled, and one new GET stays in the same selected workspace. A naturally settling read keeps focus in the Roles region if its disappearing restart had focus.",
+    "Exercise one deliberate unconfirmed deletion through its actual confirmation, restart the pending saved-role check without a second write, then recover with a fresh accepted role list."
+  ]
+}

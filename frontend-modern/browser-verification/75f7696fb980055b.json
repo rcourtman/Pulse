@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "base_sha": "3722c3716467756698d505a3d8d94289280401d3",
+  "result": "passed",
+  "verified_at": "2026-11-19T18:10:57Z",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/OrganizationIncomingSharesSection.tsx",
+    "frontend-modern/src/components/Settings/OrganizationOutgoingSharesSection.tsx",
+    "frontend-modern/src/components/Settings/RolesPanel.tsx",
+    "frontend-modern/src/components/Settings/organizationSharingCells.tsx",
+    "frontend-modern/src/components/Settings/useRolesPanelState.ts",
+    "frontend-modern/src/utils/rbacPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/OrganizationIncomingSharesSection.tsx": "18f2f6cc872ec50a92943d38f555a7b97935bb19bf605b5545ef21cdf6b48d21",
+    "frontend-modern/src/components/Settings/OrganizationOutgoingSharesSection.tsx": "e06a5dddcb84f9557ac8d64282aad40f3f6588f19480b193f6ada91daa923e14",
+    "frontend-modern/src/components/Settings/RolesPanel.tsx": "7b2389158dbfe3d979ecf35b782b07deb98849c04aea069c419fd029dcad31fb",
+    "frontend-modern/src/components/Settings/organizationSharingCells.tsx": "2d06e936b69c2d969fd518aa277746d127a2c013a5d327d99a9717bce863270f",
+    "frontend-modern/src/components/Settings/useRolesPanelState.ts": "9440d37bc222312e70705f14a4155199fc20d12740ba1c66284ffbd9e0fff6cb",
+    "frontend-modern/src/utils/rbacPresentation.ts": "3966862201da2646c90056624f6f141c9c0db050f4d545dbb0f0161fecfd8a93"
+  },
+  "routes": [
+    "/settings/security-roles",
+    "/settings/organization/sharing"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Actual App and Settings with synthetic HTTP in Playwright 1.56.1, Chromium 141 desktop light and WebKit 26 phone dark, compared to current main. Opened 22 matched pairs.",
+    "Roles initial pending and unconfirmed deletion pending now show Loading roles and Restart role check without replacing New Role or the complete outcome warning. Recovered, failed and confirmed views retain role IDs, actions, effects, conditions and existing messages.",
+    "Sharing full and partial reads retain both directions of identifiers, mobile and desktop access badges, status reasons, desktop dates, and the original action states. The unknown outgoing list remains explicit beside its healthy incoming peer."
+  ],
+  "interactions": [
+    "Tab/Enter and touch restart only the current saved-role GET; displaced requests are cancelled and do not publish. A failed replacement keeps the uncertain-write interlock; only a current complete read restores editing.",
+    "Made one deliberate unconfirmed deletion and retried only its readback; after a current complete read a separate deliberate deletion produced the original confirmation.",
+    "Read-only Reload sharing restores current rows and enables the existing actions only after a complete response; no share mutation. Verified fully visible enabled and disabled incoming actions at 320px in the matched lower-row captures."
+  ]
+}
