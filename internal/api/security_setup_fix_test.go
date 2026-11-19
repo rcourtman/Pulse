@@ -712,7 +712,13 @@ func newSettingsWriteScopeSessionRequest(t *testing.T, username string) *http.Re
 	InitSessionStore(t.TempDir())
 	t.Cleanup(resetSessionStoreForTests)
 
-	const sessionToken = "settings-write-session"
+	// The username lookup also tracks sessions in memory, independently of
+	// the store's data path. Give each test a distinct token and untrack it.
+	sessionToken := generateSessionToken()
+	if sessionToken == "" {
+		t.Fatal("could not generate fixture session token")
+	}
+	t.Cleanup(func() { UntrackUserSession(username, sessionToken) })
 	GetSessionStore().CreateSession(sessionToken, time.Hour, "agent", "127.0.0.1", username)
 	req := httptest.NewRequest(http.MethodPost, "/api/security/test", nil)
 	req.AddCookie(&http.Cookie{Name: "pulse_session", Value: sessionToken})
