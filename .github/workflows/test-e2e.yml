@@ -21,7 +21,6 @@ on:
       - 'scripts/collect_e2e_container_logs.py'
       - 'scripts/tests/test_e2e_container_logs.py'
       - 'scripts/ci_browser_proof_only.py'
-      - 'scripts/tests/test_ci_browser_proof_only.py'
   push:
     branches:
       - main

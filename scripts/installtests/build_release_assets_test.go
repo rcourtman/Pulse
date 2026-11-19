@@ -4599,97 +4599,11 @@ func TestFrontendCINativeUpdaterKeepsSecretFreeRequiredVerification(t *testing.T
 }
 
 func TestFrontendDependencySecurityAuditsAreRequired(t *testing.T) {
-	workflowPath := repoFile(".github", "workflows", "build-and-test.yml")
-	assertFileContainsAll(t, workflowPath,
-		`run: npm ci --no-audit`,
-		`- name: Audit complete frontend dependency graph`,
-		`npm-audit-retry.sh" all`,
-		// The runner may retry an unreachable advisory endpoint, but only a
-		// change that leaves the dependency graph untouched may proceed
-		// without a fresh result.
-		`NPM_AUDIT_REQUIRE_RESULT: ${{ needs.changes.outputs.frontend_deps }}`,
-		`frontend_deps: ${{ steps.filter.outputs.frontend_deps }}`,
-		`continue-on-error: true`,
-		`- name: Require frontend dependency audit`,
-		`if: ${{ !cancelled() }}`,
-		`COMPLETE_AUDIT_RESULT: ${{ steps.audit-complete.outcome }}`,
-	)
-	// The production-only audit reports a subset of the complete audit's
-	// advisories and cannot gate anything the complete audit did not already
-	// fail on, so it is off the per-pull-request path. It must still run
-	// somewhere: the scheduled scan owns the dev-versus-production split.
-	assertFileContainsAll(t, repoFile(".github", "workflows", "security-scan.yml"),
-		`- name: Audit production dependencies`,
-		`npm-audit-retry.sh" production --package-lock-only`,
-		`- name: Require dependency audits`,
-		`COMPLETE_AUDIT_RESULT: ${{ steps.audit-complete.outcome }}`,
-		`PRODUCTION_AUDIT_RESULT: ${{ steps.audit-production.outcome }}`,
-	)
-	// The gate itself must stay strict. An unreachable endpoint may be
-	// retried, but no severity threshold may be introduced that lets a real
-	// advisory through. Any positive package, severity or total evidence is
-	// a finding, even when the summary is missing or contradictory, and it
-	// fails every change that moves the dependency graph. Only an explicit
-	// NPM_AUDIT_REQUIRE_RESULT=false, a graph identical to its base, may turn
-	// a finding the base already has into a warning.
-	runnerPath := repoFile("scripts", "npm-audit-retry.sh")
-	runner, err := os.ReadFile(runnerPath)
-	if err != nil {
-		t.Fatalf("read %s: %v", runnerPath, err)
-	}
-	if strings.Contains(string(runner), "--audit-level") {
-		t.Fatalf("%s must not weaken the audit with a severity threshold", runnerPath)
-	}
-	assertFileContainsAll(t, runnerPath,
-		`NPM_AUDIT_REQUIRE_RESULT:-true`,
-		`AUDIT_ARGS=(audit --json "$@")`,
-		`AUDIT_ARGS+=(--omit=dev)`,
-		`if type(value) is int and value >= 0:`,
-		`has_findings = isinstance(findings, dict) and bool(findings)`,
-		`if has_findings or any(count > 0 for count in counts.values()):`,
-		`print("vulnerable")`,
-		`isinstance(report, dict) and not report.get("error")`,
-		`len(counts) == len(count_names) and all(count == 0 for count in counts.values())`,
-		`and ("vulnerabilities" not in report or isinstance(findings, dict))`,
-		`if [ "${REQUIRE_RESULT}" = "false" ]; then`,
-	)
-	// Retrying must be bounded by wall clock, not by attempt count alone.
-	// npm's own fetch-timeout defaults to five minutes and it retries
-	// internally, so three unbounded attempts once ran for 10m56s and
-	// cancelled the Frontend job with every test already passing.
-	assertFileContainsAll(t, runnerPath,
-		`NPM_AUDIT_MAX_SECONDS`,
-		`NPM_AUDIT_ATTEMPT_TIMEOUT`,
-		`export npm_config_fetch_retries=0`,
-		`DEADLINE=`,
-	)
-	// The job budget has to stay above the audit budget by a wide margin, or
-	// a stalled endpoint reappears as a cancelled job rather than a warning.
-	workflow, err := os.ReadFile(workflowPath)
-	if err != nil {
-		t.Fatalf("read %s: %v", workflowPath, err)
-	}
-	frontendJob := workflowJobBlock(t, string(workflow), "frontend-build")
-	for _, needle := range []string{
-		`- name: Check Solid serialization dependency edges`,
-		`- name: Install frontend dependencies`,
-		`- name: Audit complete frontend dependency graph`,
-		`NPM_AUDIT_REQUIRE_RESULT: ${{ needs.changes.outputs.frontend_deps }}`,
-		`- name: Require frontend dependency audit`,
-		`COMPLETE_AUDIT_RESULT: ${{ steps.audit-complete.outcome }}`,
-	} {
-		if !strings.Contains(frontendJob, needle) {
-			t.Fatalf("frontend build/audit producer missing %s", needle)
-		}
-	}
-	// Moving units alongside the build still uses the locked graph. The
-	// producer owns the mandatory audit for both jobs.
-	unitJob := workflowJobBlock(t, string(workflow), "frontend-unit")
-	if !strings.Contains(unitJob, "run: npm ci --no-audit") || !strings.Contains(unitJob, "npm run test --") {
-		t.Fatal("the independent unit suite must use the locked frontend dependencies")
-	}
-	if !strings.Contains(frontendJob, "timeout-minutes: 30") {
-		t.Fatal("frontend build/audit producer must keep a bounded timeout above the audit budget")
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_frontend_dependency_audit.py"), "-v")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("frontend dependency audit contracts: %v\n%s", err, out)
 	}
 }
 
