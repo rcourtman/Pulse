@@ -47,12 +47,12 @@ const counts = (success = 0, failed = 0) => ({
   running: 0,
   unknown: 0,
 });
-const failure = (name: string) => ({
+const failure = (name: string, outcome = 'failed') => ({
   workloadId: `synthetic-${name}`,
   workloadName: name,
   instance: 'east',
   at: new Date(2026, 9, 2, 10).toISOString(),
-  outcome: 'failed',
+  outcome,
 });
 const json = (data: unknown) =>
   new Response(JSON.stringify(data), { headers: { 'Content-Type': 'application/json' } });
@@ -263,6 +263,49 @@ describe('Backup jobs through the real restore-point inspection', () => {
       expect(scrollIntoView.mock.contexts.at(-1)).toBe(restorePoints);
       expect(dayParam()).toBe('2026-10-02');
       expect(chosenDay()).toHaveTextContent('database, mail');
+      expect(fetchMock).toHaveBeenCalledTimes(4);
+      expectReadOnlyContext();
+    },
+  );
+
+  it.each([
+    { device: 'touch', hover: false, automaticReveals: 0 },
+    { device: 'pointer', hover: true, automaticReveals: 1 },
+  ])(
+    'identifies warning workloads and keeps the same dated restore points on $device',
+    async ({ hover, automaticReveals }) => {
+      pointer.hover = hover;
+      jobs.days[1] = {
+        ...jobs.days[1],
+        historyState: 'partial',
+        counts: { ...counts(17), warning: 2 },
+        failures: [failure('mail relay', 'warning'), failure('build cache', 'warning')],
+      };
+      const { restorePoints } = await mount();
+      const warningDay = day(/Oct 3: 17 ok, 2 warnings/);
+
+      await fireEvent.click(warningDay);
+      await settle();
+      expect(dayParam()).toBe('2026-10-03');
+      expect(warningDay).toHaveAttribute('aria-pressed', 'true');
+      expect(scrollIntoView).toHaveBeenCalledTimes(automaticReveals);
+      expect(chosenDay()).toHaveTextContent('17 ok, 2 warnings (not fully observed)');
+      expect(chosenDay()).toHaveTextContent('Warnings: mail relay, build cache');
+      expect(rowIDs()).toEqual([expect.stringContaining('Identifier: archive-before-midnight')]);
+      expect(pills()).toEqual(['83 ok', '2 failed']);
+
+      await fireEvent.click(within(card()).getByRole('button', { name: 'View restore points' }));
+      await settle();
+      expect(scrollIntoView).toHaveBeenCalledTimes(automaticReveals + 1);
+      expect(scrollIntoView.mock.contexts.at(-1)).toBe(restorePoints);
+      expect(dayParam()).toBe('2026-10-03');
+
+      await fireEvent.click(warningDay);
+      await settle();
+      expect(dayParam()).toBeNull();
+      expect(rows()).toHaveLength(2);
+      expect(chosenDay()).toBeNull();
+      expect(scrollIntoView).toHaveBeenCalledTimes(automaticReveals + 1);
       expect(fetchMock).toHaveBeenCalledTimes(4);
       expectReadOnlyContext();
     },

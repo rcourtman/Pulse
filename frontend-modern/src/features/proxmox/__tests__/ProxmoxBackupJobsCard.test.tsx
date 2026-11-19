@@ -191,7 +191,10 @@ describe('ProxmoxBackupJobsCard', () => {
   it('reports a clicked day, marks it, and says who failed without needing hover', async () => {
     const onSelectDay = vi.fn();
     const jobs = payload({
-      days: days({ 2: { counts: counts(9, 2), failures: [failure('web'), failure('db')] } }),
+      days: days({
+        2: { counts: counts(9, 2), failures: [failure('web'), failure('db')] },
+        3: { counts: { ...counts(6), warning: 1 }, failures: [failure(' ', 'warning')] },
+      }),
     });
     const { container } = render(() => (
       <ProxmoxBackupJobsCard jobs={jobs} selectedDay="2026-10-21" onSelectDay={onSelectDay} />
@@ -220,28 +223,60 @@ describe('ProxmoxBackupJobsCard', () => {
       expect(onSelectDay).toHaveBeenLastCalledWith('2026-10-24', { reveal: true });
       await fireEvent.click(bars[2]);
       expect(onSelectDay).toHaveBeenLastCalledWith('2026-10-21', { reveal: false });
+      // An unnamed warning has no extra detail to inspect before the jump.
+      await fireEvent.click(bars[3]);
+      expect(onSelectDay).toHaveBeenLastCalledWith('2026-10-22', { reveal: true });
     } finally {
       hoverCapable.value = true;
     }
   });
 
-  it('opens the rest of the names and offers the list from a failed day', async () => {
+  it('keeps failure and warning names separate and lets each list expand without losing focus', async () => {
     const onRevealRestorePoints = vi.fn();
-    const names = Array.from({ length: 10 }, (_, i) => failure(`guest-${i}`));
+    const names = Array.from({ length: 10 }, (_, i) => failure(`failed-guest-${i}`));
+    const warnings = Array.from({ length: 10 }, (_, i) => failure(`warning-guest-${i}`, 'warning'));
     const { container } = render(() => (
       <ProxmoxBackupJobsCard
-        jobs={payload({ days: days({ 2: { counts: counts(0, 10), failures: names } }) })}
+        jobs={payload({
+          days: days({
+            2: {
+              historyState: 'partial',
+              counts: { ...counts(0, 10), warning: 10 },
+              failures: [...names, ...warnings],
+            },
+          }),
+        })}
         selectedDay="2026-10-21"
         onRevealRestorePoints={onRevealRestorePoints}
       />
     ));
     const line = container.querySelector('[data-backup-jobs-chosen-day]')!;
-    expect(line).toHaveTextContent('10 failed: guest-0');
-    expect(line).not.toHaveTextContent('guest-9');
+    expect(line).toHaveTextContent('10 failed: failed-guest-0');
+    expect(line).toHaveTextContent('(not fully observed)');
+    expect(line).toHaveTextContent('10 warnings: warning-guest-0');
+    expect(line).not.toHaveTextContent('failed-guest-9');
+    expect(line).not.toHaveTextContent('warning-guest-9');
 
-    await fireEvent.click(screen.getByRole('button', { name: 'and 2 more' }));
-    expect(line).toHaveTextContent('guest-9');
-    expect(screen.queryByRole('button', { name: /more$/ })).toBeNull();
+    const warningDisclosure = screen.getByRole('button', {
+      name: 'and 2 more workloads with warnings',
+    });
+    warningDisclosure.focus();
+    await fireEvent.click(warningDisclosure);
+    expect(warningDisclosure).toHaveFocus();
+    expect(warningDisclosure).toHaveAttribute('aria-expanded', 'true');
+    expect(line).toHaveTextContent('warning-guest-9');
+    expect(line).not.toHaveTextContent('failed-guest-9');
+
+    await fireEvent.click(
+      screen.getByRole('button', { name: 'and 2 more workloads with failures' }),
+    );
+    expect(line).toHaveTextContent('failed-guest-9');
+    expect(line).toHaveTextContent('warning-guest-9');
+
+    await fireEvent.click(warningDisclosure);
+    expect(warningDisclosure).toHaveAttribute('aria-expanded', 'false');
+    expect(line).not.toHaveTextContent('warning-guest-9');
+    expect(line).toHaveTextContent('failed-guest-9');
 
     await fireEvent.click(screen.getByRole('button', { name: 'View restore points' }));
     expect(onRevealRestorePoints).toHaveBeenCalledOnce();

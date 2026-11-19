@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "base_sha": "3ea0c9f675e9e9fdd5f245ca50d5e666e63f5d97",
+  "verified_at": "2026-11-19T22:02:22Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupJobsCard.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupJobsCard.tsx": "2680059f889455c3957320e23cc3f47cf437069c4d6491b7f2f19ad6eaae2d1f"
+  },
+  "routes": [
+    "/proxmox/backups/date"
+  ],
+  "viewports": [
+    {
+      "width": 1480,
+      "height": 900
+    },
+    {
+      "width": 360,
+      "height": 844
+    },
+    {
+      "width": 320,
+      "height": 720
+    }
+  ],
+  "states": [
+    "Compared the exact parent and changed source in Chromium 141.0.7390.37 light desktop and WebKit 26.0 dark touch at 360 and 320 px (Playwright 1.56.1). Inspected nine before/after pairs and the expanded-warning candidate frame; all three initial frames and the compact healthy selection are byte-identical.",
+    "The selected warning-only day retains the count, the partial-observation label and the day outline. The phone now keeps the named warnings and View restore points together rather than scrolling straight to inventory.",
+    "The compact mixed day keeps the separately named failure, uncertainty and restore-point action beside the warning count and names. The full warning list wraps without horizontal overflow or placing the restore-point action behind the dock.",
+    "All 14 bars, the separate last-24-hour totals, existing hover and unknown Backup health remain. The same three inventory rows are visible after the 360 px restore-point jump. Additional warning text moves downstream rows down without hiding them behind a new control."
+  ],
+  "interactions": [
+    "Selected the warning-only bar using keyboard on desktop and touch on phone. The desktop retained the original jump and hover detail; touch kept the chart and let the operator explicitly jump to the same date and rows.",
+    "Tapped the mixed and ordinary days on the compact phone. Opened and closed the new warning-name disclosure and hit-tested the existing restore-point action in both states. An ordinary day still uses the original automatic reveal.",
+    "The actual Backup Jobs, recovery-posture and PVE/PBS inventory clients used the same synthetic reads in each comparison. No new backup reads on selection or reveal, no page exceptions or non-fixture access."
+  ]
+}
