@@ -142,6 +142,7 @@ const renderLayout = (
       <Route path="/alerts" component={LayoutRoute} />
       <Route path="/actions" component={LayoutRoute} />
       <Route path="/patrol" component={LayoutRoute} />
+      <Route path="/map" component={LayoutRoute} />
     </Router>
   ));
 };
@@ -726,17 +727,38 @@ describe('AppLayout map entry', () => {
     window.sessionStorage.clear();
   });
 
-  it('offers the map beside the page, on the edge and in the header, not among the tabs', () => {
+  it('offers one labeled map button in the top-left header slot, not on the edge or among the tabs', () => {
     renderLayout([], '/settings/infrastructure');
 
-    const edge = screen.getByTestId('infrastructure-map-edge-tab');
-    expect(edge).toHaveAttribute('href', '/map');
-    expect(edge).toHaveAccessibleName('Map');
-    expect(edge).not.toHaveAttribute('aria-current');
-    expect(screen.getByTestId('infrastructure-map-header-button')).toHaveAttribute('href', '/map');
+    expect(screen.queryByTestId('infrastructure-map-edge-tab')).toBeNull();
+
+    const button = screen.getByTestId('infrastructure-map-header-button');
+    expect(button).toHaveAttribute('href', '/map');
+    expect(button).toHaveAccessibleName('Map');
+    expect(button).toHaveTextContent('Map');
+    expect(button).not.toHaveAttribute('aria-current');
+    expect(button.closest('.header-controls')).toBeNull();
+
+    const brand = screen.getByTestId('pulse-brand-lockup');
+    expect(Boolean(button.compareDocumentPosition(brand) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(
+      true,
+    );
 
     const tabs = screen.getByRole('navigation', { name: 'Primary navigation' });
     expect(within(tabs).queryByRole('link', { name: 'Map' })).toBeNull();
+  });
+
+  it('marks the header map button as the current page when on /map and preloads on hover/focus', () => {
+    preloadRouteModuleMock.mockReset();
+    preloadRouteModuleMock.mockResolvedValue(undefined);
+    renderLayout([], '/map');
+
+    const button = screen.getByTestId('infrastructure-map-header-button');
+    expect(button).toHaveAttribute('aria-current', 'page');
+
+    fireEvent.mouseEnter(button);
+    fireEvent.focus(button);
+    expect(preloadRouteModuleMock).toHaveBeenCalledWith('/map');
   });
 
   it('hides the map entry with the rest of the navigation in kiosk mode', () => {
