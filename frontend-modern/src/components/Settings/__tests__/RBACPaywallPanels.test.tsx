@@ -22,6 +22,7 @@ const deleteRoleMock = vi.fn();
 const notificationSuccessMock = vi.fn();
 const notificationErrorMock = vi.fn();
 const loggerErrorMock = vi.fn();
+let runtimeReady = () => true;
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -36,7 +37,7 @@ function deferred<T>() {
 vi.mock('@/stores/license', () => ({
   hasFeature: (...args: unknown[]) => hasFeatureMock(...args),
   loadRuntimeCapabilities: (...args: unknown[]) => loadLicenseStatusMock(...args),
-  runtimeCapabilitiesLoaded: () => true,
+  runtimeCapabilitiesLoaded: () => runtimeReady(),
 }));
 
 vi.mock('@/stores/licenseCommercial', () => ({
@@ -86,6 +87,7 @@ vi.mock('@/utils/logger', () => ({
 
 describe('RBAC paywall settings panels', () => {
   beforeEach(() => {
+    runtimeReady = () => true;
     hasFeatureMock.mockReset();
     loadLicenseStatusMock.mockReset();
     loadCommercialPostureMock.mockReset();
@@ -178,6 +180,30 @@ describe('RBAC paywall settings panels', () => {
     expect(screen.queryByText('Custom Roles (Pro)')).not.toBeInTheDocument();
     expect(getRolesMock).toHaveBeenCalled();
     expect(screen.getByRole('button', { name: 'New Role' })).not.toBeDisabled();
+  });
+
+  it('offers the role restart only after entitlement admits an active read', async () => {
+    const [ready, setReady] = createSignal(false);
+    runtimeReady = ready;
+    const pending = deferred<[]>();
+    getRolesMock.mockReturnValueOnce(pending.promise);
+    render(() => <RolesPanel canManage />);
+
+    expect(screen.getByText('Loading roles…')).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Restart role check' })).toBeNull();
+    expect(getRolesMock).not.toHaveBeenCalled();
+    setReady(true);
+    expect(await screen.findByRole('button', { name: 'Restart role check' })).toBeEnabled();
+    const original = getRolesMock.mock.calls[0][0].signal;
+
+    setReady(false);
+    expect(original.aborted).toBe(true);
+    expect(screen.queryByRole('button', { name: 'Restart role check' })).toBeNull();
+    pending.resolve([]);
+    await pending.promise;
+    expect(screen.queryByText('No roles available.')).toBeNull();
+    expect(screen.getByRole('button', { name: 'New Role' })).toBeDisabled();
+    expect(getRolesMock).toHaveBeenCalledTimes(1);
   });
 
   it('does not carry a rejected role ID or draft to a different reader', async () => {

@@ -135,6 +135,25 @@ async function checkAfterUnknownWrite(operation: 'save' | 'delete') {
   return { pending, inventory };
 }
 
+async function restartPending(replacement: ReturnType<typeof deferred>, count: number) {
+  const oldSignal = reads().at(-1)?.[1]?.signal;
+  readReply = () => replacement.promise;
+  const restart = screen.getByRole('button', { name: 'Restart role check' });
+  restart.focus();
+  fireEvent.click(restart);
+  const inventory = screen.getByRole('region', { name: 'Roles inventory' });
+  expect(inventory).toHaveFocus();
+  expect(inventory).toHaveAttribute('aria-busy', 'true');
+  await waitFor(() => expect(reads()).toHaveLength(count));
+  expect(oldSignal).toBeInstanceOf(AbortSignal);
+  expect(oldSignal?.aborted).toBe(true);
+  expect(reads().at(-1)?.[1]).toMatchObject({
+    headers: { 'X-Pulse-Org-ID': 'estate/north' },
+    signal: expect.objectContaining({ aborted: false }),
+  });
+  return inventory;
+}
+
 describe('keyboard-safe saved Roles recovery through the consuming transport', () => {
   it('does not autofocus the inventory during automatic initial loading', async () => {
     const pending = deferred();
@@ -148,6 +167,91 @@ describe('keyboard-safe saved Roles recovery through the consuming transport', (
     expect(reads()).toHaveLength(1);
     expect(writes()).toHaveLength(0);
   });
+
+  it.each([200, 503])(
+    'replaces a stalled inventory and ignores an obsolete %s response',
+    async (status) => {
+      const pending = deferred();
+      readReply = () => pending.promise;
+      mount();
+      await waitFor(() => expect(reads()).toHaveLength(1));
+      expect(screen.getByText('Loading roles…')).toBeVisible();
+      const replacement = deferred();
+      const inventory = await restartPending(replacement, 2);
+
+      pending.resolve(json(status === 200 ? [{ ...roles[0], name: 'Obsolete role' }] : {}, status));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(inventory).toHaveAttribute('aria-busy', 'true');
+      expect(screen.queryByText('Obsolete role')).not.toBeInTheDocument();
+      expect(screen.queryByText('Failed to load roles')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'New Role' })).toBeDisabled();
+
+      const outside = screen.getByRole('button', { name: 'Outside task' });
+      outside.focus();
+      replacement.resolve(json(roles));
+      await screen.findByText(roles[1].id, { exact: true });
+      expect(screen.getByRole('button', { name: 'New Role' })).toBeEnabled();
+      expect(screen.queryByRole('button', { name: 'Restart role check' })).toBeNull();
+      expect(outside).toHaveFocus();
+      expect(writes()).toHaveLength(0);
+    },
+  );
+
+  it('retains local focus when a naturally settling read removes its focused restart', async () => {
+    const pending = deferred();
+    readReply = () => pending.promise;
+    mount();
+    screen.getByRole('button', { name: 'Restart role check' }).focus();
+    pending.resolve(json(roles));
+    await screen.findByText(roles[1].id, { exact: true });
+    expect(screen.getByRole('region', { name: 'Roles inventory' })).toHaveFocus();
+    expect(reads()).toHaveLength(1);
+    expect(writes()).toHaveLength(0);
+  });
+
+  it('retires the replacement on access withdrawal', async () => {
+    const pending = deferred();
+    readReply = () => pending.promise;
+    const { setAllowed } = mount();
+    await waitFor(() => expect(reads()).toHaveLength(1));
+    const replacement = deferred();
+    await restartPending(replacement, 2);
+    setAllowed(false);
+    expect(reads()[1][1]?.signal?.aborted).toBe(true);
+    expect(screen.queryByRole('button', { name: 'Restart role check' })).toBeNull();
+    pending.resolve(json(roles));
+    replacement.resolve(json(roles));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(screen.getByText('Roles are unavailable for this session.')).toBeVisible();
+    expect(screen.queryByText(roles[0].id, { exact: true })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'New Role' })).toBeDisabled();
+    expect(writes()).toHaveLength(0);
+  });
+
+  it.each(['save', 'delete'] as const)(
+    'keeps an uncertain %s withdrawn when a restarted read fails',
+    async (operation) => {
+      const { pending } = await checkAfterUnknownWrite(operation);
+      const replacement = deferred();
+      const inventory = await restartPending(replacement, 3);
+      pending.resolve(json(roles));
+      replacement.resolve(json({ error: 'Synthetic private upstream detail' }, 503));
+      const check = await screen.findByRole('button', { name: 'Check saved roles' });
+      expect(screen.getByText(/It may already have been applied/)).toBeVisible();
+      expect(screen.getByText('Failed to load roles', { exact: true })).toBeVisible();
+      expect(screen.queryByText(roles[1].id, { exact: true })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'New Role' })).toBeDisabled();
+      expect(inventory).toHaveFocus();
+
+      readReply = async () => json(roles);
+      fireEvent.click(check);
+      await screen.findByText(roles[1].id, { exact: true });
+      expect(screen.queryByText(/It may already have been applied/)).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'New Role' })).toBeEnabled();
+      expect(reads()).toHaveLength(4);
+      expect(writes()).toHaveLength(1);
+    },
+  );
 
   it.each([200, 503])(
     'keeps the same local focus target after a retry returns %s',

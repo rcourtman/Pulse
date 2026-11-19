@@ -729,6 +729,16 @@ create/update/delete recovery. Browser proof
 exercises actual App/Settings/Role consumers at desktop and narrow widths using
 safe synthetic HTTP producers; it is not installed administrator or IdP recovery.
 
+While the Roles inventory GET is pending, **Restart role check** is available
+to the admitted reader. It replaces only that read in the same context.
+The old request is cancelled and cannot publish data, clear an unconfirmed
+change or settle the replacement. Only a complete current read enables
+edits; the restart never resubmits a save or deletion. The loading row
+keeps a visible status, and restart keeps focus at the Roles inventory.
+A settling read moves focus there only if its disappearing restart button
+still has focus. `RolesRecoveryFocus.transport.test.tsx` checks replacement,
+failed and obsolete responses, write counts and keyboard recovery.
+
 New Role checks the normalized draft ID against the exact IDs in this reader's
 accepted inventory, including built-in roles. A collision keeps the inventory and
 draft intact, names the normalized Role ID and focuses the existing inline editor
