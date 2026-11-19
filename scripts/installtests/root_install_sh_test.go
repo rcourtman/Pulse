@@ -3120,7 +3120,10 @@ func TestRootInstallStartupRequiresActiveReadback(t *testing.T) {
 // Real timeout and elapsed-clock controls use only an ordinary-user fake
 // manager and its pipe-holding child, never systemd or an installed workload.
 func TestRootInstallServiceDeadlines(t *testing.T) {
-	runPythonFixtureControls(t, repoFile("scripts", "tests", "test_server_service_deadlines.py"), "ServiceDeadlines", []string{
+	// Each control owns a separate state directory, manager process group and
+	// readiness pipe. Overlap their real waits within Go's existing -parallel
+	// budget without shortening service deadlines or sharing a fixture clock.
+	runParallelPythonFixtureControls(t, repoFile("scripts", "tests", "test_server_service_deadlines.py"), "ServiceDeadlines", []string{
 		"test_startup_budget_includes_slow_manager_reads",
 		"test_active_response_after_budget_cannot_pass",
 		"test_startup_kills_term_ignoring_manager_and_child",
