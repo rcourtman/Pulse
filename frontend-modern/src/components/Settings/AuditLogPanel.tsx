@@ -38,6 +38,9 @@ import {
 } from '@/components/Settings/useAuditLogPanelState';
 import { InlineNotice } from '@/components/shared/InlineNotice';
 
+const AUDIT_PAGE_BUTTON_CLASS =
+  'min-h-11 sm:min-h-10 px-1 sm:px-3 py-2.5 text-sm font-medium text-base-content bg-surface border border-border rounded-md hover:bg-surface-hover disabled:opacity-50';
+
 export default function AuditLogPanel(props: AuditLogPanelProps) {
   const { isMobile } = useBreakpoint();
   const {
@@ -163,7 +166,7 @@ export default function AuditLogPanel(props: AuditLogPanelProps) {
     <SettingsPanel
       title="Audit Log"
       noPadding
-      bodyClass="space-y-6 p-4 sm:p-6"
+      bodyClass="space-y-3 p-2.5 max-sm:pb-(--pulse-mobile-nav-height) sm:space-y-6 sm:p-6"
       action={
         <div class="flex w-full flex-wrap items-center gap-2 sm:w-auto">
           <button
@@ -363,7 +366,7 @@ export default function AuditLogPanel(props: AuditLogPanelProps) {
           class="flex flex-wrap items-center gap-x-3 text-xs text-muted"
           classList={{
             'gap-y-0 sm:gap-y-3': hasPageVerificationFilter(),
-            'gap-y-3': !hasPageVerificationFilter(),
+            'gap-y-1 sm:gap-y-3': !hasPageVerificationFilter(),
           }}
         >
           <span>Total: {totalEvents()}</span>
@@ -400,8 +403,9 @@ export default function AuditLogPanel(props: AuditLogPanelProps) {
       </Show>
 
       <Show when={!loading() && isPersistent() && filteredEvents().length > 0}>
-        <div class="mt-4">
+        <div class="sm:mt-4">
           <PulseDataGrid
+            class="max-sm:[&_th]:px-2 max-sm:[&_td]:px-2 max-sm:[&_td]:py-1.5"
             data={filteredEvents()}
             columns={[
               {
@@ -434,9 +438,11 @@ export default function AuditLogPanel(props: AuditLogPanelProps) {
                     >
                       {event.event}
                     </span>
-                    <div class="mt-1 truncate text-[11px] text-muted sm:hidden">
-                      {event.success ? 'Success' : 'Failed'} · {event.user || 'Unknown user'} ·{' '}
-                      {formatTimestamp(event.timestamp)}
+                    <div class="mt-0.5 whitespace-normal wrap-anywhere text-[11px] leading-tight text-muted sm:hidden">
+                      {event.success ? 'Success' : 'Failed'} · {event.user || 'Unknown user'}
+                      <time class="block" dateTime={event.timestamp}>
+                        {formatTimestamp(event.timestamp)}
+                      </time>
                     </div>
                   </div>
                 ),
@@ -477,7 +483,7 @@ export default function AuditLogPanel(props: AuditLogPanelProps) {
                   const badge = getAuditVerificationBadgePresentation(state);
 
                   return (
-                    <div class="flex items-center gap-2">
+                    <div class="flex flex-wrap items-center gap-x-2 gap-y-1 sm:flex-nowrap">
                       <Show
                         when={isVerifying}
                         fallback={
@@ -495,7 +501,7 @@ export default function AuditLogPanel(props: AuditLogPanelProps) {
                         aria-label={`Verify signature: ${event.event} by ${event.user || 'Unknown user'} at ${formatTimestamp(event.timestamp)} (Event ID: ${event.id})`}
                         onClick={() => void verifyEvent(event)}
                         disabled={isVerifying}
-                        class={AUDIT_VERIFY_ROW_BUTTON_CLASS}
+                        class={`${AUDIT_VERIFY_ROW_BUTTON_CLASS} max-sm:min-w-11 max-sm:justify-center max-sm:px-1.5`}
                       >
                         Verify
                       </button>
@@ -573,32 +579,32 @@ export default function AuditLogPanel(props: AuditLogPanelProps) {
               Go
             </button>
           </div>
-          <div class="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:justify-end">
+          <div class="grid grid-cols-4 gap-1.5 sm:flex sm:flex-wrap sm:items-center sm:justify-end sm:gap-2">
             <button
               onClick={goToFirstPage}
               disabled={pageNumber() === 1}
-              class="min-h-10 sm:min-h-10 px-3 py-2.5 text-sm font-medium text-base-content bg-surface border border-border rounded-md hover:bg-surface-hover disabled:opacity-50"
+              class={AUDIT_PAGE_BUTTON_CLASS}
             >
               First
             </button>
             <button
               onClick={goToPreviousPage}
               disabled={pageNumber() === 1}
-              class="min-h-10 sm:min-h-10 px-3 py-2.5 text-sm font-medium text-base-content bg-surface border border-border rounded-md hover:bg-surface-hover disabled:opacity-50"
+              class={AUDIT_PAGE_BUTTON_CLASS}
             >
               Previous
             </button>
             <button
               onClick={goToNextPage}
               disabled={!hasNextPage()}
-              class="min-h-10 sm:min-h-10 px-3 py-2.5 text-sm font-medium text-base-content bg-surface border border-border rounded-md hover:bg-surface-hover disabled:opacity-50"
+              class={AUDIT_PAGE_BUTTON_CLASS}
             >
               Next
             </button>
             <button
               onClick={goToLastPage}
               disabled={!hasNextPage()}
-              class="min-h-10 sm:min-h-10 px-3 py-2.5 text-sm font-medium text-base-content bg-surface border border-border rounded-md hover:bg-surface-hover disabled:opacity-50"
+              class={AUDIT_PAGE_BUTTON_CLASS}
             >
               Last
             </button>

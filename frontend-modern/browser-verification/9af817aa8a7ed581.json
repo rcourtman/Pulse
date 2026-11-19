@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "base_sha": "821ac137ba19179f1684887c809fd2ee130ee0a9",
+  "verified_at": "2026-11-19T19:05:52Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/AuditLogPanel.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/AuditLogPanel.tsx": "386503213b2ddc897848498da83763bcba8739dc89bf7b4358e1696b293311d5"
+  },
+  "routes": [
+    "/settings/security-audit"
+  ],
+  "viewports": [
+    {
+      "width": 1660,
+      "height": 900
+    },
+    {
+      "width": 360,
+      "height": 844
+    },
+    {
+      "width": 320,
+      "height": 720
+    }
+  ],
+  "states": [
+    "Exact baseline and candidate served the same Audit Log route and synthetic API replies using Playwright 1.56.1; Chromium 141.0.7390.37 on desktop (light) and WebKit 26.0 on 360 and 320 px touch viewports (dark).",
+    "Native inspection of 17 matched pairs: initial read and busy-read failure; page two at top and at bottom before verification, during verification and after completion; an additional 320 px table-heading anchor. The six desktop pairs are pixel-identical.",
+    "Mobile page two fits the actor, timestamp and same-row Verify without table overflow; all four rows remain legible, including the two long same-prefix actors and the unsigned/unknown-actor cases. At 360 px bottom, Reset preferences, page jump and all four pager buttons are unobstructed in each verification state.",
+    "At 320 px bottom Reset is above the viewport in both versions, and available when scrolled up; the matched table-heading anchor shows Reset, all four rows and the pager together on the candidate. Existing toolbar and filter controls remain visible in their original states."
+  ],
+  "interactions": [
+    "Kept the initial pending read with Restart load available, delivered the first audit page, and used Next by keyboard or touch to request limit 25, offset 25. The four-row result and the displayed range agreed.",
+    "Used Enter or touch to Verify only the selected signed event; the sibling remained Not checked and the unsigned rows offered no Verify. Checked pending and verified row states and the 44 px phone Verify target.",
+    "Reset preferences by keyboard and by 360 px touch; the defaults and first page returned. Refresh then surfaced the synthetic busy-read message without showing stale rows. No non-fixture requests or writes."
+  ]
+}
