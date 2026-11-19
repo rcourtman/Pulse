@@ -24,11 +24,24 @@ interface UserIdentityPresentation {
   providerId?: string;
 }
 
-export function getRoleIdentityLabel(role: { id: string; name: string }): string {
+interface RoleIdentityPresentation {
+  id: string;
+  name: string;
+}
+
+export function getRoleIdentityLabel(role: RoleIdentityPresentation): string {
   // Names are mutable and need not be unique. Never normalize the saved key.
   return role.name.trim() && role.name !== role.id
     ? `${role.name} (Role ID: ${role.id})`
     : `Role ID: ${role.id}`;
+}
+
+export function getRoleChangeSuccessMessage(role: RoleIdentityPresentation, deleting: boolean) {
+  return `Role ${getRoleIdentityLabel(role)} ${deleting ? 'deleted' : 'saved'}`;
+}
+
+export function getRoleChangeUnconfirmedMessage(role: RoleIdentityPresentation, deleting: boolean) {
+  return `The ${deleting ? 'deletion' : 'save'} of role ${getRoleIdentityLabel(role)} could not be confirmed. It may already have been applied. Check saved roles and review their permissions before making another change.`;
 }
 
 export function getUserIdentityDisplayName(user: UserIdentityPresentation): string {

@@ -65,6 +65,28 @@ export const RolesPanel: Component<RolesPanelProps> = (props) => {
     void state.loadRoles();
   };
 
+  const RestartRoleCheck: Component = () => {
+    let button: HTMLButtonElement | undefined;
+    const focusInventory = () => inventoryRoot?.focus({ preventScroll: true });
+    onCleanup(() => {
+      if (document.activeElement === button) focusInventory();
+    });
+    return (
+      <Button
+        ref={button}
+        variant="outline"
+        size="sm"
+        class="min-h-11 sm:min-h-0"
+        onClick={() => {
+          focusInventory();
+          void state.restartRead();
+        }}
+      >
+        Restart role check
+      </Button>
+    );
+  };
+
   const saveRole = async () => {
     const editor = document.activeElement?.closest('[role="dialog"]');
     await state.handleSaveRole();
@@ -147,8 +169,14 @@ export const RolesPanel: Component<RolesPanelProps> = (props) => {
         </Show>
 
         <Show when={state.loading()}>
-          <div class="flex items-center justify-center py-8">
-            <LoadingSpinner size="xl" tone="info" label="Loading roles" />
+          <div class="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 px-3 py-8">
+            <p role="status" class="flex items-center gap-2 text-sm text-muted">
+              <LoadingSpinner size="md" tone="info" />
+              Loading roles…
+            </p>
+            <Show when={state.accessAllowed()}>
+              <RestartRoleCheck />
+            </Show>
           </div>
         </Show>
 

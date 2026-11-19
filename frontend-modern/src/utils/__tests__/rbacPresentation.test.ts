@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   sameRoleIDs,
+  getRoleChangeSuccessMessage,
+  getRoleChangeUnconfirmedMessage,
   getRoleIdentityLabel,
   getRBACFeatureGateCopy,
   getRolesDeleteErrorMessage,
@@ -108,6 +110,20 @@ describe('rbacPresentation', () => {
     expect(getRoleIdentityLabel({ id: 'ops', name: '  ' })).toBe('Role ID: ops');
     expect(getRoleIdentityLabel({ id: 'actual/key', name: 'Viewer (policy/admin)' })).toBe(
       'Viewer (policy/admin) (Role ID: actual/key)',
+    );
+  });
+
+  it.each([
+    { deleting: false, operation: 'save', completed: 'saved', id: 'policy/north:read' },
+    { deleting: true, operation: 'deletion', completed: 'deleted', id: 'policy/south:read' },
+  ])('keeps the saved ID and recovery advice in $operation outcomes', (test) => {
+    const role = { name: 'Fleet auditor', id: test.id };
+    const identity = `Fleet auditor (Role ID: ${test.id})`;
+    expect(getRoleChangeSuccessMessage(role, test.deleting)).toBe(
+      `Role ${identity} ${test.completed}`,
+    );
+    expect(getRoleChangeUnconfirmedMessage(role, test.deleting)).toBe(
+      `The ${test.operation} of role ${identity} could not be confirmed. It may already have been applied. Check saved roles and review their permissions before making another change.`,
     );
   });
 

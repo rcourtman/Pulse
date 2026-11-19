@@ -6,7 +6,8 @@ import { eventBus } from '@/stores/events';
 import type { Permission, Role } from '@/types/rbac';
 import { createDefaultRBACPermission } from '@/utils/rbacPermissions';
 import {
-  getRoleIdentityLabel,
+  getRoleChangeSuccessMessage,
+  getRoleChangeUnconfirmedMessage,
   getRolesDeleteErrorMessage,
   getRolesLoadErrorMessage,
   getRolesRequiredFieldsMessage,
@@ -94,11 +95,20 @@ export function useRolesPanelState(props: RolesPanelProps = {}) {
     setActionError(null);
   };
 
-  const loadRoles = async () => {
-    if (!contextIsCurrent() || !accessAllowed() || readController || mutationController) return;
+  const loadRoles = async (replacePending = false) => {
+    const previous = readController;
+    if (
+      !contextIsCurrent() ||
+      !accessAllowed() ||
+      mutationController ||
+      Boolean(previous) !== replacePending
+    )
+      return;
     const reader = context();
     const controller = new AbortController();
+    // Own the replacement before cancelling; the old read must not settle it.
     readController = controller;
+    previous?.abort();
     const isCurrentRead = () =>
       contextIsCurrent() && reader === context() && readController === controller;
     batch(() => {
@@ -214,7 +224,7 @@ export function useRolesPanelState(props: RolesPanelProps = {}) {
       batch(() => {
         clearEditor();
         setRolePendingDeletion(null);
-        setSuccessNotice(`Role ${getRoleIdentityLabel(role)} ${remove ? 'deleted' : 'saved'}`);
+        setSuccessNotice(getRoleChangeSuccessMessage(role, remove));
       });
       saved = true;
     } catch (error) {
@@ -230,9 +240,7 @@ export function useRolesPanelState(props: RolesPanelProps = {}) {
           setRolePendingDeletion(null);
           setRoles([]);
           setInventoryLoaded(false);
-          setUnconfirmedChange(
-            `The ${remove ? 'deletion' : 'save'} of role ${getRoleIdentityLabel(role)} could not be confirmed. It may already have been applied. Check saved roles and review their permissions before making another change.`,
-          );
+          setUnconfirmedChange(getRoleChangeUnconfirmedMessage(role, remove));
         });
       }
     } finally {
@@ -324,6 +332,7 @@ export function useRolesPanelState(props: RolesPanelProps = {}) {
     openDeleteRole,
     openEditRole,
     removePermission,
+    restartRead: () => loadRoles(true),
     rolePendingDeletion,
     roles,
     saving,

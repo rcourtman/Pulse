@@ -2506,13 +2506,10 @@
           "path": "src/components/Settings/OrganizationAccessMembersSection.tsx"
         },
         {
-          "path": "src/components/Settings/OrganizationIncomingSharesSection.tsx"
-        },
-        {
-          "path": "src/components/Settings/OrganizationOutgoingSharesSection.tsx"
-        },
-        {
           "path": "src/components/Settings/OrganizationOverviewMembersSection.tsx"
+        },
+        {
+          "path": "src/components/Settings/organizationSharingCells.tsx"
         }
       ],
       "forbiddenPatterns": [
@@ -2535,6 +2532,10 @@
         {
           "path": "src/components/Settings/OrganizationOverviewMembersSection.tsx",
           "patterns": ["roleBadgeClass"]
+        },
+        {
+          "path": "src/components/Settings/organizationSharingCells.tsx",
+          "patterns": ["roleBadgeClass"]
         }
       ],
       "proof": [
@@ -2553,10 +2554,7 @@
       },
       "requiredConsumers": [
         {
-          "path": "src/components/Settings/OrganizationIncomingSharesSection.tsx"
-        },
-        {
-          "path": "src/components/Settings/OrganizationOutgoingSharesSection.tsx"
+          "path": "src/components/Settings/organizationSharingCells.tsx"
         }
       ],
       "forbiddenPatterns": [
@@ -2566,6 +2564,10 @@
         },
         {
           "path": "src/components/Settings/OrganizationOutgoingSharesSection.tsx",
+          "patterns": ["statusBadgeClass"]
+        },
+        {
+          "path": "src/components/Settings/organizationSharingCells.tsx",
           "patterns": ["statusBadgeClass"]
         }
       ],
