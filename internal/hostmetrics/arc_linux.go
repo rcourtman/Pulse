@@ -19,7 +19,11 @@ const arcstatsPath = "/proc/spl/kstat/zfs/arcstats"
 //
 // Returns 0, nil if the file doesn't exist (no ZFS installed).
 func readARCSize() (uint64, error) {
-	f, err := os.Open(arcstatsPath)
+	return readARCStats(arcstatsPath)
+}
+
+func readARCStats(path string) (uint64, error) {
+	f, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return 0, nil

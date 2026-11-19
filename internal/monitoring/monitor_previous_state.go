@@ -211,6 +211,10 @@ func previousHostFromView(host *unifiedresources.HostView) models.Host {
 	if status, ok := host.SourceStatus(unifiedresources.SourceAgent); ok {
 		observedAt = status.LastSeen
 	}
+	memory, hasMemory := host.AgentMemory()
+	if !hasMemory {
+		memory = models.Memory{}
+	}
 	return models.Host{
 		ID:                host.ID(),
 		Hostname:          host.Hostname(),
@@ -219,11 +223,7 @@ func previousHostFromView(host *unifiedresources.HostView) models.Host {
 		LinkedContainerID: host.LinkedContainerID(),
 		LastSeen:          observedAt,
 		Disks:             guestDisksFromReadStateView(disks),
-		Memory: models.Memory{
-			Used:  host.MemoryUsed(),
-			Total: host.MemoryTotal(),
-			Usage: host.MemoryPercent() / 100,
-		},
+		Memory:            memory,
 	}
 }
 

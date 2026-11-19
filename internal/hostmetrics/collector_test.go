@@ -343,8 +343,9 @@ func TestCollectDisksExplicitExcludeWinsOverInclude(t *testing.T) {
 }
 
 func TestCollectSplitsReclaimableCache(t *testing.T) {
-	origVirtualMemory := virtualMemory
-	t.Cleanup(func() { virtualMemory = origVirtualMemory })
+	origVirtualMemory, origARC := virtualMemory, readZFSARCSize
+	t.Cleanup(func() { virtualMemory, readZFSARCSize = origVirtualMemory, origARC })
+	readZFSARCSize = func() (uint64, error) { return 0, nil }
 
 	const gib = uint64(1024 * 1024 * 1024)
 	virtualMemory = func(ctx context.Context) (*gomem.VirtualMemoryStat, error) {
@@ -379,8 +380,9 @@ func TestCollectSplitsReclaimableCache(t *testing.T) {
 }
 
 func TestCollectDerivesMemoryPressureFromAvailableMemory(t *testing.T) {
-	origVirtualMemory := virtualMemory
-	t.Cleanup(func() { virtualMemory = origVirtualMemory })
+	origVirtualMemory, origARC := virtualMemory, readZFSARCSize
+	t.Cleanup(func() { virtualMemory, readZFSARCSize = origVirtualMemory, origARC })
+	readZFSARCSize = func() (uint64, error) { return 0, nil }
 
 	const gib = uint64(1024 * 1024 * 1024)
 	virtualMemory = func(ctx context.Context) (*gomem.VirtualMemoryStat, error) {
@@ -415,6 +417,37 @@ func TestCollectDerivesMemoryPressureFromAvailableMemory(t *testing.T) {
 	sum := snapshot.Memory.UsedBytes + snapshot.Memory.CacheBytes + snapshot.Memory.FreeBytes
 	if got, want := sum, snapshot.Memory.TotalBytes; got != want {
 		t.Fatalf("used+cache+free = %d, want total %d", got, want)
+	}
+}
+
+func TestCollectMovesARCFromUsedToCacheWithoutChangingFree(t *testing.T) {
+	origVirtualMemory, origARC := virtualMemory, readZFSARCSize
+	t.Cleanup(func() { virtualMemory, readZFSARCSize = origVirtualMemory, origARC })
+	const gib = 1 << 30
+	virtualMemory = func(context.Context) (*gomem.VirtualMemoryStat, error) {
+		return &gomem.VirtualMemoryStat{Total: 16 * gib, Available: 2 * gib, Free: gib, Used: 14 * gib}, nil
+	}
+	for _, tc := range []struct {
+		name string
+		arc  uint64
+		used int64
+	}{
+		{name: "ordinary ARC", arc: 12 * gib, used: 2 * gib},
+		{name: "ARC cannot reclassify more than used", arc: 20 * gib},
+		{name: "unobserved ARC is not invented", used: 14 * gib},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			readZFSARCSize = func() (uint64, error) { return tc.arc, nil }
+			snapshot, err := Collect(context.Background(), nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			memory := snapshot.Memory
+			if memory.TotalBytes != 16*gib || memory.UsedBytes != tc.used || memory.CacheBytes != 15*gib-tc.used || memory.FreeBytes != gib ||
+				memory.Usage != float64(tc.used)/(16*gib)*100 {
+				t.Fatalf("wrong usage/cache/free partition: %+v", memory)
+			}
+		})
 	}
 }
 

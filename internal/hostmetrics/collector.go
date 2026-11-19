@@ -249,22 +249,15 @@ func (c *Collector) CollectWithDiskFilters(ctx context.Context, diskExclude, dis
 
 	// ZFS ARC memory is reclaimable under pressure but is counted as "used" by
 	// both FreeBSD (wired memory) and Linux (not in MemAvailable, openzfs/zfs#10255).
-	// Subtract it from Used to reflect actual memory pressure. Refs: #1264/#1051
-	if arcSize, err := readZFSARCSize(); err == nil && arcSize > 0 {
-		if arcSize < usedBytes {
-			usedBytes -= arcSize
-		} else {
-			usedBytes = 0
-		}
+	// Move it from Used to Cache, not Free. Refs: #1264/#1051/#4340.
+	if arcSize, err := readZFSARCSize(); err == nil && arcSize > 0 && usedBytes <= memStats.Total {
+		available := memStats.Total - usedBytes
+		cacheBytes = min(cacheBytes, available)
+		freeBytes = available - cacheBytes
+		arc := min(arcSize, usedBytes)
+		usedBytes -= arc
+		cacheBytes += arc
 		usedPercent = memoryUsagePercent(usedBytes, memStats.Total)
-		// Recompute free so used + cache + free still covers the total after
-		// the ARC pages move out of used.
-		if memStats.Total >= usedBytes+cacheBytes {
-			freeBytes = memStats.Total - usedBytes - cacheBytes
-		} else if memStats.Total >= usedBytes {
-			cacheBytes = memStats.Total - usedBytes
-			freeBytes = 0
-		}
 	}
 
 	swapUsed := int64(0)

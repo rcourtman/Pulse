@@ -6242,6 +6242,16 @@ command admission, update, or fleet-lifecycle authority is touched, and the
 extension-point expectations on the system-settings boundary are otherwise
 unchanged.
 
+### Host memory accounts for ZFS ARC as reclaimable cache
+
+When the agent reads the ZFS ARC size, it moves those bytes from used to
+`cacheBytes`, not free, without counting more ARC than the used sample contains.
+When the ARC counter is missing, the existing memory reading is reported
+without an ARC adjustment. The report shape, service permissions and capture
+cadence do not change. `TestReadARCStats` exercises the Linux parser with
+observed, missing and invalid input; `TestCollectMovesARCFromUsedToCacheWithoutChangingFree`
+checks the report's byte accounting and the missing-ARC case.
+
 ### Monitor housekeeping prunes only live memory-evidence caches
 
 The shared monitor housekeeping pass in `internal/monitoring/monitor_agents.go`
