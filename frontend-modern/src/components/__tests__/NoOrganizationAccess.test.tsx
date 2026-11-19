@@ -223,52 +223,92 @@ describe('no-organization invitation recovery', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
-  it.each(['HTTP failure', 'lost response'] as const)(
-    'retains the invitation after an unconfirmed accept (%s), with no success reload or automatic replay',
-    async (failure) => {
-      fetchMock.mockResolvedValueOnce(jsonResponse(invitations));
+  it.each([
+    ['Accept', 'HTTP failure'],
+    ['Accept', 'lost response'],
+    ['Decline', 'HTTP failure'],
+    ['Decline', 'lost response'],
+  ] as const)(
+    'checks access instead of repeating an unconfirmed %s (%s)',
+    async (action, failure) => {
+      const accept = action === 'Accept';
+      const sameNames = invitations.map((invitation) => ({
+        ...invitation,
+        orgDisplayName: 'Operations',
+      }));
+      const target = sameNames[accept ? 0 : 1];
+      fetchMock.mockResolvedValueOnce(jsonResponse(sameNames));
       if (failure === 'HTTP failure') {
         fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'synthetic private detail' }, 500));
       } else {
         fetchMock.mockRejectedValueOnce(new Error('synthetic private detail'));
       }
-      const { onReload } = renderRecovery();
-      await screen.findByText('East estate');
+      const { onReload, onSignOut } = renderRecovery();
+      const decision = await screen.findByRole('button', {
+        name: `${action} invitation to Operations (${target.orgId})`,
+      });
 
-      fireEvent.click(row('East estate').getByRole('button', { name: /^Accept invitation to / }));
+      decision.focus();
+      fireEvent.click(decision);
       expect(await screen.findByRole('alert')).toHaveTextContent(
-        'Could not accept the invitation.',
+        `Pulse could not confirm your decision to ${action.toLowerCase()} the invitation to Operations (${target.orgId}).`,
       );
-      expect(screen.getByText('East estate')).toBeVisible();
+      expect(screen.getByRole('main')).toHaveAccessibleName('Check organization access');
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'The list below is from before your decision.',
+      );
+      expect(screen.getByRole('region', { name: 'Organization invitations' })).toHaveFocus();
+      expect(screen.queryByText(/Ask a Pulse administrator/)).toBeNull();
       expect(screen.queryByText(/synthetic private detail/)).toBeNull();
-      expect(
-        row('East estate').getByRole('button', { name: /^Accept invitation to / }),
-      ).toBeEnabled();
+      for (const invitation of sameNames) {
+        const group = screen.getByRole('group', {
+          name: `Invitation to Operations (${invitation.orgId})`,
+        });
+        expect(within(group).getByText(invitation.orgId)).toBeVisible();
+        expect(within(group).getByText(invitation.role)).toBeVisible();
+        for (const button of within(group).getAllByRole('button')) {
+          expect(button).toBeDisabled();
+          fireEvent.click(button);
+        }
+      }
       expect(fetchMock).toHaveBeenCalledTimes(2);
+      expectRequest(
+        1,
+        `/api/org-invitations/${encodeURIComponent(target.orgId)}${accept ? '/accept' : ''}`,
+        accept ? 'POST' : 'DELETE',
+      );
       expect(onReload).not.toHaveBeenCalled();
+      expect(screen.getByRole('button', { name: 'Sign out' })).toBeEnabled();
+      const recovery = screen.getByRole('button', { name: 'Check again' });
+      expect(recovery).toBeEnabled();
+      fireEvent.click(recovery);
+      expect(onReload).toHaveBeenCalledOnce();
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(onSignOut).not.toHaveBeenCalled();
+      expect(getOrgID()).toBe('unusable-organization');
+      expect(getApiToken()).toBe('synthetic-independent-token');
     },
   );
 
-  it('retries an unconfirmed accept only on another explicit click and clears the old error', async () => {
-    const retry = deferred<Response>();
+  it('does not take focus back from Sign out on a late unconfirmed decision', async () => {
+    const decision = deferred<Response>();
     fetchMock
       .mockResolvedValueOnce(jsonResponse(invitations))
-      .mockResolvedValueOnce(jsonResponse({ error: 'unavailable' }, 500))
-      .mockReturnValueOnce(retry.promise);
+      .mockReturnValueOnce(decision.promise);
     const { onReload } = renderRecovery();
     await screen.findByText('East estate');
 
-    fireEvent.click(row('East estate').getByRole('button', { name: /^Accept invitation to / }));
-    await screen.findByRole('alert');
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    fireEvent.click(row('East estate').getByRole('button', { name: /^Accept invitation to / }));
-    expect(screen.queryByRole('alert')).toBeNull();
-    expect(fetchMock).toHaveBeenCalledTimes(3);
-    expectRequest(2, '/api/org-invitations/client%2Feast/accept', 'POST');
-    expect(onReload).not.toHaveBeenCalled();
+    const accept = row('East estate').getByRole('button', { name: /^Accept invitation to / });
+    accept.focus();
+    fireEvent.click(accept);
+    const exit = screen.getByRole('button', { name: 'Sign out' });
+    exit.focus();
 
-    retry.resolve(jsonResponse({ kind: 'member' }));
-    await waitFor(() => expect(onReload).toHaveBeenCalledOnce());
+    decision.reject(new Error('Response not received'));
+    await screen.findByRole('alert');
+    expect(exit).toHaveFocus();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(onReload).not.toHaveBeenCalled();
   });
 
   it('declines only the chosen invitation and waits for a fresh list without reloading the app', async () => {
@@ -301,25 +341,6 @@ describe('no-organization invitation recovery', () => {
     ).toBeEnabled();
     expect(onReload).not.toHaveBeenCalled();
     expect(fetchMock).toHaveBeenCalledTimes(3);
-  });
-
-  it('keeps a failed decline distinct from success without replaying, refetching or exposing raw errors', async () => {
-    fetchMock
-      .mockResolvedValueOnce(jsonResponse(invitations))
-      .mockResolvedValueOnce(jsonResponse({ error: 'synthetic private detail' }, 500));
-    const { onReload } = renderRecovery();
-    await screen.findByText('West estate');
-
-    fireEvent.click(row('West estate').getByRole('button', { name: /^Decline invitation to / }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('Could not decline the invitation.');
-    expect(screen.getByText('West estate')).toBeVisible();
-    expect(screen.queryByText(/synthetic private detail/)).toBeNull();
-    expect(
-      row('West estate').getByRole('button', { name: /^Decline invitation to / }),
-    ).toBeEnabled();
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    expectRequest(1, '/api/org-invitations/client%2Fwest', 'DELETE');
-    expect(onReload).not.toHaveBeenCalled();
   });
 
   it('keeps explicit check-again and sign-out exits separate from invitation changes', async () => {
@@ -452,7 +473,7 @@ describe('no-organization invitation recovery', () => {
 
     fireEvent.click(row('West estate').getByRole('button', { name: /^Decline invitation to / }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Could not check your invitations.');
-    expect(screen.queryByText('Could not decline the invitation.')).toBeNull();
+    expect(screen.getByRole('main')).toHaveAccessibleName('No organization access yet');
     expect(
       screen.queryByText('Ask a Pulse administrator to add you to an organization.'),
     ).toBeNull();

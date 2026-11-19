@@ -8,7 +8,7 @@ import { normalizeRole } from '@/utils/orgUtils';
 
 interface NoOrganizationAccessProps {
   onSignOut: () => void | Promise<void>;
-  /** Reloads the app after an invitation is accepted. */
+  /** Rechecks the session's organization access. */
   onReload?: () => void;
 }
 
@@ -34,8 +34,12 @@ export const NoOrganizationAccess: Component<NoOrganizationAccessProps> = (props
       return { kind: 'unavailable', invitations: [] };
     }
   });
-  const [busyOrgID, setBusyOrgID] = createSignal<string | null>(null);
-  const [actionError, setActionError] = createSignal<string | null>(null);
+  const [responding, setResponding] = createSignal(false);
+  const [unconfirmedDecision, setUnconfirmedDecision] = createSignal<{
+    action: 'accept' | 'decline';
+    organization: string;
+  }>();
+  const decisionsDisabled = () => responding() || unconfirmedDecision() !== undefined;
   let invitationRegion: HTMLElement | undefined;
 
   const retryInvitations = () => {
@@ -47,25 +51,36 @@ export const NoOrganizationAccess: Component<NoOrganizationAccessProps> = (props
 
   const reload = () => (props.onReload ? props.onReload() : window.location.reload());
 
-  const respond = async (orgId: string, accept: boolean) => {
-    if (busyOrgID()) return;
-    setBusyOrgID(orgId);
-    setActionError(null);
+  const respond = async (invitation: UserOrganizationInvitation, action: 'accept' | 'decline') => {
+    if (decisionsDisabled()) return;
+    // A disabled row button can drop keyboard focus. Move it only when it is
+    // still inside this region, never from a recovery or sign-out control.
+    if (invitationRegion?.contains(document.activeElement)) {
+      invitationRegion.focus({ preventScroll: true });
+    }
+    setResponding(true);
     try {
-      if (accept) {
-        await OrgsAPI.acceptMyInvitation(orgId);
+      if (action === 'accept') {
+        await OrgsAPI.acceptMyInvitation(invitation.orgId);
         reload();
         return;
       }
-      await OrgsAPI.declineMyInvitation(orgId);
+      await OrgsAPI.declineMyInvitation(invitation.orgId);
       await refetch();
     } catch (error) {
       logger.warn('Failed to answer organization invitation', error);
-      setActionError(
-        accept ? 'Could not accept the invitation.' : 'Could not decline the invitation.',
-      );
+      // The reply can fail after Pulse saved the decision. An inbox read
+      // alone cannot tell whether an acceptance granted access; Check again
+      // re-enters the existing bootstrap path instead of resending the write.
+      setUnconfirmedDecision({
+        action,
+        organization: getOrganizationInvitationPresentation(
+          invitation.orgId,
+          invitation.orgDisplayName,
+        ).organization,
+      });
     } finally {
-      setBusyOrgID(null);
+      setResponding(false);
     }
   };
 
@@ -76,10 +91,12 @@ export const NoOrganizationAccess: Component<NoOrganizationAccessProps> = (props
     >
       <div class="w-full max-w-md rounded-md border border-border bg-surface p-6 shadow-xs sm:p-8">
         <h1 id="no-organization-access-title" class="text-lg font-semibold tracking-tight">
-          No organization access yet
+          {unconfirmedDecision() ? 'Check organization access' : 'No organization access yet'}
         </h1>
         <p class="mt-2 text-sm leading-6 text-muted">
-          You are signed in, but you are not a member of an organization on this Pulse server.
+          {unconfirmedDecision()
+            ? 'You are signed in. Your organization access may have changed.'
+            : 'You are signed in, but you are not a member of an organization on this Pulse server.'}
         </p>
 
         <section
@@ -89,6 +106,19 @@ export const NoOrganizationAccess: Component<NoOrganizationAccessProps> = (props
           tabIndex={-1}
           class="rounded-md focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
         >
+          <Show when={unconfirmedDecision()} keyed>
+            {(decision) => (
+              <p
+                class="mt-4 text-sm leading-6 text-amber-700 [overflow-wrap:anywhere] dark:text-amber-300"
+                role="alert"
+              >
+                Pulse could not confirm your decision to {decision.action} the invitation to{' '}
+                <bdi>{decision.organization}</bdi>. Choose <strong>Check again</strong> to check
+                access and invitations without resending your decision. The list below is from
+                before your decision.
+              </p>
+            )}
+          </Show>
           <Show
             when={!invitationRead.loading}
             fallback={
@@ -152,8 +182,8 @@ export const NoOrganizationAccess: Component<NoOrganizationAccessProps> = (props
                                 variant="primary"
                                 size="sm"
                                 aria-label={presentation().acceptLabel}
-                                disabled={busyOrgID() !== null}
-                                onClick={() => void respond(invitation.orgId, true)}
+                                disabled={decisionsDisabled()}
+                                onClick={() => void respond(invitation, 'accept')}
                               >
                                 Accept
                               </Button>
@@ -161,8 +191,8 @@ export const NoOrganizationAccess: Component<NoOrganizationAccessProps> = (props
                                 variant="secondary"
                                 size="sm"
                                 aria-label={presentation().declineLabel}
-                                disabled={busyOrgID() !== null}
-                                onClick={() => void respond(invitation.orgId, false)}
+                                disabled={decisionsDisabled()}
+                                onClick={() => void respond(invitation, 'decline')}
                               >
                                 Decline
                               </Button>
@@ -178,16 +208,12 @@ export const NoOrganizationAccess: Component<NoOrganizationAccessProps> = (props
           </Show>
         </section>
 
-        <Show when={actionError()}>
-          {(message) => (
-            <p class="mt-3 text-sm text-red-600 dark:text-red-400" role="alert">
-              {message()}
-            </p>
-          )}
-        </Show>
-
         <div class="mt-5 flex flex-wrap gap-2 border-t border-border pt-5">
-          <Button variant="secondary" size="md" onClick={reload}>
+          <Button
+            variant={unconfirmedDecision() ? 'primary' : 'secondary'}
+            size="md"
+            onClick={reload}
+          >
             Check again
           </Button>
           <Button variant="ghost" size="md" onClick={() => void props.onSignOut()}>
