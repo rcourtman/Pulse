@@ -575,6 +575,86 @@ describe('drawer History on a phone', () => {
     expect(screen.queryByText('alert at 99.0%')).not.toBeInTheDocument();
   });
 
+  it('labels device temperature separately from stored I/O through inspection and disclosure', async () => {
+    const fetch = vi.spyOn(ChartsAPI, 'getMetricsHistory').mockResolvedValue({
+      ...diskResponse({ ...temperature, ...io }),
+      source: undefined,
+      metricSources: { smart_temp: 'native', diskread: 'store' },
+    });
+    render(() => <GuestDrawerHistory target={diskTarget} range="24h" groups={diskGroups} />);
+    expect(await screen.findByTestId('history-source-notice')).toHaveTextContent(
+      'Temperature history comes from the device.',
+    );
+    expect(groupIds()).toEqual(['disk-thermal']);
+    const chart = screen.getByRole('img', { name: 'Temperature history' });
+    expect(chart).toHaveAccessibleDescription(/2 device observation times/);
+    const thermalTime = within(chart.closest('section')!).getByTestId('guest-history-hover-time');
+    expect(thermalTime).toHaveTextContent('Latest from device');
+    const button = toggle();
+    fireEvent.click(button);
+    const ioChart = screen.getByRole('img', { name: 'Disk I/O history' });
+    expect(ioChart).toHaveAccessibleDescription(/1 stored observation time/);
+    expect(
+      within(ioChart.closest('section')!).getByTestId('guest-history-hover-time'),
+    ).toHaveTextContent('Latest stored');
+    diskSlider().focus();
+    choose(diskSlider(), 0);
+    expect(thermalTime).toHaveAccessibleName(/^Device observation:/);
+    expect(diskSlider()).toHaveAttribute('aria-valuetext', expect.stringContaining('Disk 32°C'));
+    expect(button).toHaveTextContent('Show fewer charts');
+    fireEvent.click(button);
+    expect(groupIds()).toEqual(['disk-thermal']);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it.each<{
+    name: string;
+    metrics: AllMetricsHistoryResponse['metrics'];
+    metricSources: NonNullable<AllMetricsHistoryResponse['metricSources']>;
+    notice: string;
+  }>([
+    {
+      name: 'memory Temperature beside stored I/O',
+      metrics: { ...temperature, ...io },
+      metricSources: { smart_temp: 'memory', diskread: 'store' },
+      notice: 'This view includes readings from memory.',
+    },
+    {
+      name: 'memory Temperature selected over sparse stored Temperature',
+      metrics: temperature,
+      metricSources: { smart_temp: 'memory' },
+      notice: 'This view includes readings from memory.',
+    },
+    {
+      name: 'device Temperature beside memory I/O',
+      metrics: { ...temperature, ...io },
+      metricSources: { smart_temp: 'native', diskread: 'memory' },
+      notice: 'Temperature from the device; some readings from memory.',
+    },
+  ])('names the displayed origin without a persistence claim: $name', async (state) => {
+    vi.spyOn(ChartsAPI, 'getMetricsHistory').mockResolvedValue({
+      ...diskResponse(state.metrics),
+      source: undefined,
+      metricSources: state.metricSources,
+    });
+    render(() => <GuestDrawerHistory target={diskTarget} range="24h" groups={diskGroups} />);
+    expect((await screen.findByTestId('history-source-notice')).textContent).toBe(state.notice);
+  });
+
+  it('keeps the memory-only notice and does not describe memory observations as stored', async () => {
+    vi.spyOn(ChartsAPI, 'getMetricsHistory').mockResolvedValue({
+      ...diskResponse(temperature),
+      source: 'memory',
+    });
+    render(() => <GuestDrawerHistory target={diskTarget} range="24h" groups={diskGroups} />);
+    expect(await screen.findByTestId('history-source-notice')).toHaveTextContent(
+      'Recent readings only. The history store has none for this range yet.',
+    );
+    expect(screen.getByRole('img', { name: 'Temperature history' })).toHaveAccessibleDescription(
+      /2 recorded observation times/,
+    );
+  });
+
   it.each(['range', 'disk'] as const)(
     'keeps a focused Temperature observation when measured Activity arrives, but resets for a different %s',
     async (selection) => {
