@@ -7,7 +7,6 @@ The optional real inventory uses systemctl --root, never the host unit manager.
 """
 
 import io
-import json
 import os
 from pathlib import Path
 import shutil
@@ -28,60 +27,68 @@ QUERY = ["list-unit-files", "--no-legend", "--no-pager", "--full", "--",
 # What systemctl prints when the listing itself fails, as opposed to matching nothing.
 FAILED_LISTING = "Failed to get unit file list: No such file or directory\n"
 
-SYSTEMCTL = r'''#!/usr/bin/env python3
-import json, os, sys, time
-from pathlib import Path
-f = Path(os.environ["FIXTURE"])
-args = sys.argv[1:]
-with (f / "calls").open("a") as stream:
-    stream.write(json.dumps(args) + "\n")
-if args[0] == "list-unit-files":
-    mode = os.environ["MODE"]
-    if mode == "real":
-        os.execv(os.environ["REAL_SYSTEMCTL"],
-                 [os.environ["REAL_SYSTEMCTL"], "--root=" + str(f / "root")] + args)
-    if mode == "first-error-then-absent":
-        if len((f / "calls").read_text().splitlines()) == 1:
-            os.write(2, b"Failed to get unit file list: Input/output error\n")
-        sys.exit(1)
-    if mode == "hang":
-        time.sleep(30)
-    if mode == "large":
-        # An early grep match followed by more than a pipe buffer makes the
-        # parent's short read fail deterministically, not just emit a warning.
-        os.write(1, b"pulse-backend.service enabled enabled\n")
-        if "--" not in args:
-            try:
-                for i in range(512):
-                    os.write(1, b"unrelated.service disabled enabled\n" * 128)
-            except BrokenPipeError:
-                (f / "broken-pipe").write_text("producer failed after early close\n")
-                os.write(2, b"Failed to print table: Broken pipe\n")
-                os._exit(1)
-        sys.exit(0)
-    os.write(1, os.environ["ROWS"].encode())
-    if os.environ.get("ERR"):
-        os.write(2, os.environ["ERR"].encode())
-    sys.exit(int(os.environ["QUERY_EXIT"]))
-if args[0] in ("show", "is-active"):
-    if os.environ["STATE_MODE"] == "hang":
-        time.sleep(30)
-    state = "inactive" if (f / "stopped").exists() else os.environ["ACTIVE_STATE"]
-    code = int(os.environ["STATE_EXIT"])
-if args[0] == "show":
-    if "--value" in args:
-        print(state)
-    else:
-        print("LoadState=loaded\nActiveState=" + state)
-    sys.exit(code)
-if args[0] == "is-active":
-    sys.exit(code or (0 if state in ("active", "reloading", "refreshing") else 3))
-if args[0] == "stop":
-    (f / "stopped").write_text(args[1])
-    sys.exit(0)
-if args[0] == "daemon-reload":
-    sys.exit(0)
-sys.exit(97)
+# Each fixture owns a private, serial manager trace. The portable shell
+# avoids starting another Python interpreter for every manager observation.
+# A count and NUL delimiters preserve each argument, even empty ones.
+SYSTEMCTL = r'''#!/bin/sh
+set -eu
+printf '%s\0' "$#" "$@" >> "$FIXTURE/calls"
+case "$1" in
+    list-unit-files)
+        case "$MODE" in
+            real) exec "$REAL_SYSTEMCTL" "--root=$FIXTURE/root" "$@" ;;
+            first-error-then-absent)
+                if [ ! -e "$FIXTURE/listing-failed" ]; then
+                    : > "$FIXTURE/listing-failed"
+                    printf '%s\n' 'Failed to get unit file list: Input/output error' >&2
+                fi
+                exit 1 ;;
+            hang) exec sleep 30 ;;
+            large)
+                # An unscoped inventory must fail after an early read closes
+                # the pipe, not accidentally pass the short-read control.
+                printf '%s\n' 'pulse-backend.service enabled enabled'
+                for arg do
+                    [ "$arg" != -- ] || exit 0
+                done
+                block='unrelated.service disabled enabled
+'
+                while [ "${#block}" -lt 4096 ]; do block=$block$block; done
+                trap '' PIPE
+                i=0
+                while [ "$i" -lt 512 ]; do
+                    if ! printf '%s' "$block" 2>/dev/null; then
+                        : > "$FIXTURE/broken-pipe"
+                        printf '%s\n' 'Failed to print table: Broken pipe' >&2
+                        exit 1
+                    fi
+                    i=$((i + 1))
+                done
+                exit 0 ;;
+        esac
+        printf '%s' "$ROWS"
+        printf '%s' "$ERR" >&2
+        exit "$QUERY_EXIT" ;;
+    show|is-active)
+        [ "$STATE_MODE" != hang ] || exec sleep 30
+        state=$ACTIVE_STATE
+        [ ! -e "$FIXTURE/stopped" ] || state=inactive
+        if [ "$1" = show ]; then
+            for arg do
+                if [ "$arg" = --value ]; then
+                    printf '%s\n' "$state"
+                    exit "$STATE_EXIT"
+                fi
+            done
+            printf 'LoadState=loaded\nActiveState=%s\n' "$state"
+            exit "$STATE_EXIT"
+        fi
+        [ "$STATE_EXIT" = 0 ] || exit "$STATE_EXIT"
+        case "$state" in active|reloading|refreshing) exit 0 ;; *) exit 3 ;; esac ;;
+    stop) printf '%s' "$2" > "$FIXTURE/stopped" ;;
+    daemon-reload) : ;;
+    *) exit 97 ;;
+esac
 '''
 
 HARNESS = r'''
@@ -204,6 +211,26 @@ exit "$status"
 '''
 
 
+def read_manager_calls(path):
+    if not path.exists():
+        return []
+    fields = path.read_bytes().split(b"\0")
+    if fields.pop() != b"" or not fields:
+        raise AssertionError("incomplete manager call trace")
+    calls = []
+    index = 0
+    while index < len(fields):
+        count = fields[index]
+        if not count.isdigit():
+            raise AssertionError("invalid manager call argument count")
+        end = index + 1 + int(count)
+        if end <= index + 1 or end > len(fields):
+            raise AssertionError("incomplete manager call arguments")
+        calls.append([os.fsdecode(arg) for arg in fields[index + 1:end]])
+        index = end
+    return calls
+
+
 class ServiceDiscovery(unittest.TestCase):
     def run_fixture(self, *, rows="", mode="rows", query_exit=0, flow="query", explicit=None,
                     producer="installer", err="", units_present=True, active_state="active",
@@ -274,8 +301,7 @@ class ServiceDiscovery(unittest.TestCase):
             self.assertEqual(saved_state.read_bytes(), b"private synthetic saved state\n")
             self.assertEqual(saved_state.stat().st_mode & 0o777, 0o600)
             return dict(result=result, seconds=time.monotonic() - start_time,
-                        calls=[json.loads(line) for line in (f / "calls").read_text().splitlines()]
-                        if (f / "calls").exists() else [],
+                        calls=read_manager_calls(f / "calls"),
                         mutations=(f / "mutations").read_text() if (f / "mutations").exists() else "",
                         binary=(f / "install/bin/pulse").read_bytes()
                         if (f / "install/bin/pulse").exists() else None, old=old, new=new,
