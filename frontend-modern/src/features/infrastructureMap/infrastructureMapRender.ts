@@ -133,6 +133,16 @@ export const MAP_GLYPHS: Record<MapGlyphKey, MapGlyph> = {
     d: 'M4 13h16a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2zM7 13V6M17 13V6M6 16.5h.01M10 16.5h.01',
     mode: 'stroke',
   },
+  // A switch: a low box with a row of ports.
+  switch: {
+    d: 'M3 8h18a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1zM6 12h.01M10 12h.01M14 12h.01M18 12h.01',
+    mode: 'stroke',
+  },
+  // An access point: the radio waves over it.
+  'access-point': {
+    d: 'M12 20h.01M2 8.82a15 15 0 0 1 20 0M5 12.86a10 10 0 0 1 14 0M8.5 16.43a5 5 0 0 1 7 0',
+    mode: 'stroke',
+  },
 };
 
 const escapeXml = (value: string): string =>

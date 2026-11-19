@@ -1,8 +1,10 @@
 import {
   MAP_CATEGORY_LABEL,
   MAP_CATEGORY_ORDER,
+  MAP_DEVICE_ROLE_LABEL,
   type MapAppRole,
   type MapCategoryId,
+  type MapDeviceRole,
 } from './infrastructureMapCatalogue';
 import { mapRouteLabel } from './infrastructureMapConnections';
 import type { MapGlyphKey } from './infrastructureMapLayout';
@@ -293,6 +295,26 @@ const serviceTile = (item: MapItem, host: MapHost, plan: NetworkPlan): DiagramTi
   navigable: true,
 });
 
+const DEVICE_GLYPH: Record<MapDeviceRole, MapGlyphKey> = {
+  router: 'gateway',
+  switch: 'switch',
+  'access-point': 'access-point',
+};
+
+// A check on a router, a switch or an access point. It is drawn as the
+// device and says which, where a plain check says its address.
+const deviceTile = (item: MapItem, device: MapDeviceRole): DiagramTile => ({
+  id: item.id,
+  name: item.name,
+  caption: MAP_DEVICE_ROLE_LABEL[device].toLowerCase(),
+  typeLabel: item.typeLabel,
+  status: item.status,
+  health: item.health,
+  platform: DEVICE_GLYPH[device],
+  address: item.address,
+  navigable: true,
+});
+
 const foldTile = (key: string, name: string, caption: string): DiagramTile => ({
   id: key,
   name,
@@ -405,10 +427,18 @@ export function buildServiceDiagram(
     }
     serviceCount += services;
     // What Pulse probes from outside (a router, a site) is not a service on
-    // any host here, so each check is a tile in a box of its own.
+    // any host here, so each check is a tile in a box of its own. Network
+    // gear is the exception: it is how traffic gets in and around, so it
+    // sits with the ways in, where an unmonitored gateway is drawn too.
     if (host.platform === 'checks' && !host.isResource) {
       for (const section of host.sections) {
         for (const item of section.items) {
+          if (item.device) {
+            const list = byCategory.get('access') ?? [];
+            list.push(deviceTile(item, item.device));
+            byCategory.set('access', list);
+            continue;
+          }
           checks.push({
             id: item.id,
             name: item.name,

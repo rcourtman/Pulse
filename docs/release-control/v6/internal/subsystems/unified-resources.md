@@ -3135,7 +3135,8 @@ VLANs of one bridge are named together (`vmbr0 · VLANs 20, 30`, or the
 cluster in place of the tags where two clusters share the name), a tile is
 marked only with the colour of a named network, so two unrelated networks
 never share a mark, and a tile's hover names its exact bridge and VLAN.
-Endpoints Pulse only probes (a router, a site) are tiles in a Checks box.
+Endpoints Pulse only probes (a site, a printer) are tiles in a Checks box,
+except a check on network gear, which is drawn as the gear with the ways in.
 Hide names replaces every reported name, address and network name on the page
 and in the saved image, which is built in the browser. A tile the catalogue
 recognised then reads as the app's own name, which says what runs and nothing
@@ -4399,6 +4400,18 @@ What the diagram does with them:
   that answers on it, so the dashed tile is gone and the check's tile says
   whose gateway it is. With names hidden the address is not on the page and
   the tile is no link.
+- A check on a router, a switch or an access point is drawn as that device
+  in the Ways in box, with its own glyph and the device as its caption, and
+  not in the Checks box. The map knows the device two ways and no other: the
+  check probes an address that is a machine's default gateway, which makes it
+  a router whatever it is called; or its name says so (`resolveMapDeviceRole`,
+  whole words only, so `apt-cache` is no access point). `gateway` is not such
+  a word, because an API gateway is checked too. The role decides the glyph,
+  the caption and the box and nothing else: the tile still opens the check,
+  and a name that says none of these stays a plain check. With names hidden
+  the tile keeps its device and its box and reads `Router 1`, `Switch 1` or
+  `AP 1`. No setting stores the role; an owner changes it by renaming the
+  check.
 - A saved image has no pointer, so it has no rings. The captions carry the
   facts there.
 
