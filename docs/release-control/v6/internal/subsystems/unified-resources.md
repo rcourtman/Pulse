@@ -4427,7 +4427,10 @@ What the diagram does with them:
   `infrastructureMap`, in the feature release list
   (`frontend-modern/src/utils/featureReleases.json`, read through
   `featureReleases.ts`), at stage `build`. A feature has one of three
-  stages: `build` shows it in development builds only, `preview` also in
+  stages: `build` shows it in development builds only (the development
+  bundle; no server can make a production bundle one, and the server's own
+  `isDevelopment` is deliberately not read, because an install made from
+  unreleased source with the installer reports it too), `preview` also in
   Preview builds (a beta or release candidate, which the server reports as
   version channel `rc`) with the Preview tag beside its page title, and
   `released` in every build. A stable build never shows a feature in
@@ -4445,7 +4448,8 @@ What the diagram does with them:
   `/docs/MAP.md` is still in the bundle, linked from nowhere, and the
   privacy guide still lists the map's three telemetry counters, because a
   field in the payload is disclosed whether or not its feature is shown. A
-  feature in preview draws nothing until the build has said what it is; if
+  feature that is not released draws nothing in a production bundle until
+  the build has said what it is; if
   that takes more than ten seconds its address answers as unknown, and if
   the version cannot be read at all it stays off until the page is
   reloaded. The check types themselves are released; they are types whether
@@ -4458,6 +4462,21 @@ What the diagram does with them:
   real browsers and a phone, real estates of different shapes, empty and
   error states, accessibility, a large estate, an end-to-end spec and guides
   that match what ships.
+- The map has an end-to-end spec, `tests/integration/tests/71-infrastructure-map.spec.ts`.
+  The suite drives a production bundle on a server that reports a release
+  version, so a feature that is not released does not exist there. The spec
+  reads the map's stage from the feature release list and holds at every
+  stage: the build under test, as it would ship, shows the map only if the
+  list says it is released (otherwise `/map` is an unknown address, the
+  header has no map button and `/docs/MAP` is not shipped), and the map's own
+  journeys run in a development build the spec makes for its own page by
+  adding `featureReleaseTestBuild: true` to that page's `/api/version`
+  reply (`FEATURE_RELEASE_TEST_BUILD_FIELD`). No Pulse server sends that
+  field, so every other spec, and every real install, still sees what
+  ships. A new feature's spec follows the same shape. The docs page asks
+  `getFeatureGuideAvailability` and waits, as for any guide loading, until
+  the build has said what it is, so it never says a guide is not shipped
+  and then shows it.
 - The map's completeness review of 19 November 2026 fixed four things the
   page now holds to. The room it leaves under the drawing is measured, not
   guessed from the window's width: it reads the height the bottom navigation

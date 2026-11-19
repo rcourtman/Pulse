@@ -12,8 +12,11 @@ import {
 
 const releaseBuild = { development: false, preview: false };
 const previewBuild = { development: false, preview: true };
+// The server has said it is no development build, and not yet which channel.
 const unknownBuild = { development: false, preview: undefined };
 const developmentBuild = { development: true, preview: undefined };
+// The server has said nothing yet.
+const unansweredBuild = { development: undefined, preview: undefined };
 
 describe('feature release stages', () => {
   afterEach(() => {
@@ -35,6 +38,17 @@ describe('feature release stages', () => {
 
   it('waits for the build to say what it is before showing a preview feature', () => {
     expect(resolveFeatureAvailability('preview', unknownBuild)).toBe('pending');
+    expect(resolveFeatureAvailability('preview', unansweredBuild)).toBe('pending');
+  });
+
+  it('waits for the build to say whether it is a development build', () => {
+    // A production bundle shows a feature at build only where the version reply
+    // makes it a development build, which only the end-to-end suite's mark does.
+    expect(resolveFeatureAvailability('build', unansweredBuild)).toBe('pending');
+    expect(resolveFeatureAvailability('build', { development: true, preview: false })).toBe('on');
+    // A development build of a pre-release still shows it. A published one does not.
+    expect(resolveFeatureAvailability('build', { development: true, preview: true })).toBe('on');
+    expect(resolveFeatureAvailability('build', { development: false, preview: true })).toBe('off');
   });
 
   it('shows a released feature in every build', () => {
@@ -62,8 +76,9 @@ describe('feature release stages', () => {
     expect(getFeatureAvailability('infrastructureMap')).toBe('on');
     expect(isFeatureAvailable('infrastructureMap')).toBe(true);
 
+    // A production bundle shows nothing until the server has said what it is.
     vi.stubEnv('DEV', false);
-    expect(getFeatureAvailability('infrastructureMap')).toBe('off');
+    expect(getFeatureAvailability('infrastructureMap')).toBe('pending');
     expect(isFeatureAvailable('infrastructureMap')).toBe(false);
   });
 

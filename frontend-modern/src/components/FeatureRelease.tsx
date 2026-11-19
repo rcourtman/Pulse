@@ -28,8 +28,8 @@ export function FeaturePreviewTag(props: { feature: FeatureId }) {
 /**
  * A route for a feature that is not yet in every build. Where the feature is
  * off the address behaves like any unknown one, and the feature's own code is
- * never loaded. Nothing is drawn while a preview feature waits for the build
- * to say what it is; if the build has not said after ten seconds the address
+ * never loaded. Nothing is drawn while the feature waits for the build to say
+ * what it is; if the build has not said after ten seconds the address
  * answers as unknown, and the feature still appears if the answer comes later.
  */
 export const FEATURE_PENDING_LIMIT_MS = 10_000;

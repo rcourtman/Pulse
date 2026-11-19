@@ -1,9 +1,9 @@
-import { createRoot, createSignal } from 'solid-js';
+import { createMemo, createRoot, createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // A feature in preview, read from the build the server reports. The list has
 // no feature at this stage yet, so the stage is set here and nowhere else.
-const [version, setVersion] = createSignal<{ channel?: string } | null>(null);
+const [version, setVersion] = createSignal<Record<string, unknown> | null>(null);
 const [lastError, setLastError] = createSignal<string | null>(null);
 
 vi.mock('../featureReleases.json', () => ({
@@ -45,6 +45,20 @@ describe('a feature in preview', () => {
     expect(getFeatureAvailability('infrastructureMap')).toBe('off');
   });
 
+  it('follows the channel alone on a server that says it is a development build', () => {
+    setVersion({ channel: 'stable', isDevelopment: true });
+    expect(getFeatureAvailability('infrastructureMap')).toBe('off');
+    setVersion({ isDevelopment: true });
+    expect(getFeatureAvailability('infrastructureMap')).toBe('off');
+    setVersion({ channel: 'rc', isDevelopment: true });
+    expect(getFeatureAvailability('infrastructureMap')).toBe('on');
+  });
+
+  it('is on in a page the end-to-end suite has marked, whatever the channel', () => {
+    setVersion({ channel: 'stable', featureReleaseTestBuild: true });
+    expect(getFeatureAvailability('infrastructureMap')).toBe('on');
+  });
+
   it('waits while the version is unknown and stays off if it cannot be read', () => {
     expect(getFeatureAvailability('infrastructureMap')).toBe('pending');
     expect(isFeatureAvailable('infrastructureMap')).toBe(false);
@@ -52,14 +66,13 @@ describe('a feature in preview', () => {
     expect(getFeatureAvailability('infrastructureMap')).toBe('off');
   });
 
-  it('turns on when the version arrives', () => {
+  it('turns on for anything already on the page when the version arrives', () => {
     createRoot((dispose) => {
-      const [seen, setSeen] = createSignal<boolean[]>([]);
-      const read = () => isFeatureAvailable('infrastructureMap');
-      setSeen([read()]);
+      // A memo is recomputed only if it tracked what changed.
+      const available = createMemo(() => isFeatureAvailable('infrastructureMap'));
+      expect(available()).toBe(false);
       setVersion({ channel: 'rc' });
-      setSeen([...seen(), read()]);
-      expect(seen()).toEqual([false, true]);
+      expect(available()).toBe(true);
       dispose();
     });
   });
