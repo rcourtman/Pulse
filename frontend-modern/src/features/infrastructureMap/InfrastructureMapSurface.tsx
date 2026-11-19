@@ -27,9 +27,14 @@ import { TooltipPortal } from '@/components/shared/TooltipPortal';
 import { buildAvailabilityTargetAddPath } from '@/components/Settings/availabilitySettingsModel';
 import { buildInfrastructureWorkspacePath } from '@/components/Settings/infrastructureWorkspaceModel';
 import { useDarkMode } from '@/contexts/appRuntime';
+import { useKioskMode } from '@/hooks/useKioskMode';
 import { buildResourcePagePath } from '@/features/platformNavigation/resourcePagePath';
 import { useObservedElementWidth } from '@/hooks/useObservedElementWidth';
 import { useResources } from '@/hooks/useResources';
+import {
+  sessionCanReadAvailabilitySettings,
+  sessionCanReadInfrastructureSettings,
+} from '@/stores/sessionSettingsCapabilities';
 import { MAP_DOC_URL } from '@/utils/docsLinks';
 import type { StatusIndicatorVariant } from '@/utils/status';
 import { showError, showSuccess } from '@/utils/toast';
@@ -67,11 +72,13 @@ const DENSITY_OPTIONS: Array<{ value: MapDensity; label: string; title: string }
   { value: 'marks', label: 'Compact', title: 'Draw each guest and container as its icon only' },
 ];
 
-// What the page keeps below the drawing: the legend and the panel's padding,
-// and on a narrow window the navigation bar fixed to its bottom edge.
+// What the page keeps below the drawing: the panel's padding and one line of
+// legend. The navigation bar fixed to the bottom of a window that is not
+// wide, and any further lines the legend wraps to, are measured.
 const SPACE_BELOW = 60;
-const SPACE_BELOW_NARROW = 84;
-const NARROW_WINDOW = 768;
+const LEGEND_LINE = 16;
+// The bar publishes its own height, and 0 where it is not shown.
+const NAV_HEIGHT_VARIABLE = '--pulse-mobile-nav-height';
 const MIN_MAP_HEIGHT = 240;
 // Below this, names are too small to read and icons alone say more.
 const READABLE_SCALE = 0.62;
@@ -80,9 +87,11 @@ const READABLE_SCALE = 0.62;
 const UNMONITORED_CHECK_NAME = 'Gateway';
 
 /** What a tile's card says under its name: what it is, where, what it is connected to, how busy. */
-const hitLines = (hit: MapHit): string[] =>
+const hitLines = (hit: MapHit, density?: MapDensity): string[] =>
   [
     hit.meta,
+    // The tile a full box ends in opens nothing. Say the one thing there is to do.
+    hit.id.endsWith(':more') && density === 'names' ? 'Compact draws more of them' : '',
     [
       // A plain check's caption is its address, so the line above has said it.
       hit.address && !hit.meta.includes(hit.address) ? hit.address : '',
@@ -102,7 +111,12 @@ const hitLines = (hit: MapHit): string[] =>
 export function InfrastructureMapSurface() {
   const { resources, loading } = useResources();
   const darkMode = useDarkMode();
+  const kioskMode = useKioskMode();
   const observed = useObservedElementWidth();
+  // The page offers no Settings destination this session cannot open, and
+  // none at all in kiosk mode, where the shell turns Settings away.
+  const canAddCheck = () => !kioskMode() && sessionCanReadAvailabilitySettings();
+  const canAddSystem = () => !kioskMode() && sessionCanReadInfrastructureSettings();
 
   const [densityChoice, setDensityChoice] = createSignal<MapDensity | null>(null);
   const [namesHidden, setNamesHidden] = createSignal(false);
@@ -127,6 +141,7 @@ export function InfrastructureMapSurface() {
   // The map is fitted to what is left of the window under its toolbar, so
   // all of it is on screen at once and nothing is read by scrolling.
   let frameRef: HTMLDivElement | undefined;
+  let legendRef: HTMLUListElement | undefined;
   const [space, setSpace] = createSignal<{ width: number; height: number } | null>(null);
   const measure = () => {
     const width = observed.width();
@@ -135,7 +150,12 @@ export function InfrastructureMapSurface() {
     // its own shell, not the document, so every box above is counted.
     let top = frameRef.getBoundingClientRect().top;
     for (let box = frameRef.parentElement; box; box = box.parentElement) top += box.scrollTop;
-    const below = SPACE_BELOW + (window.innerWidth < NARROW_WINDOW ? SPACE_BELOW_NARROW : 0);
+    const navigation =
+      Number.parseFloat(
+        getComputedStyle(document.documentElement).getPropertyValue(NAV_HEIGHT_VARIABLE),
+      ) || 0;
+    const legendWrap = Math.max(0, (legendRef?.offsetHeight ?? 0) - LEGEND_LINE);
+    const below = SPACE_BELOW + navigation + legendWrap;
     const height = Math.max(MIN_MAP_HEIGHT, Math.floor(window.innerHeight - top - below));
     setSpace((was) => (was?.width === width && was.height === height ? was : { width, height }));
   };
@@ -155,9 +175,20 @@ export function InfrastructureMapSurface() {
       queued = requestAnimationFrame(measure);
     });
     for (let box = frameRef.parentElement; box; box = box.parentElement) observer.observe(box);
+    // The navigation bar publishes its height on the document element. A
+    // change there alone, with every box the same size, is watched too.
+    const published = new MutationObserver(() => {
+      cancelAnimationFrame(queued);
+      queued = requestAnimationFrame(measure);
+    });
+    published.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['style'],
+    });
     onCleanup(() => {
       cancelAnimationFrame(queued);
       observer.disconnect();
+      published.disconnect();
     });
   });
 
@@ -177,7 +208,9 @@ export function InfrastructureMapSurface() {
     const preferred = fit(resolveDefaultMapDensity(liveModel()));
     if (preferred.density === 'marks' || preferred.scale >= READABLE_SCALE) return preferred;
     const compact = fit('marks');
-    return compact.scale > preferred.scale ? compact : preferred;
+    // On a very narrow window both reach the smallest size the map is drawn
+    // at. Icons alone are then the shorter map, so they win a tie.
+    return compact.scale >= preferred.scale ? compact : preferred;
   });
   const density = createMemo<MapDensity>(
     () => fitted()?.density ?? densityChoice() ?? resolveDefaultMapDensity(liveModel()),
@@ -193,6 +226,7 @@ export function InfrastructureMapSurface() {
     // A thing nothing monitors has no page. Its tile leads to the form that
     // adds a check for it, which is the one thing there is to do about it.
     if (hit?.checkAddress) {
+      if (!canAddCheck()) return null;
       return buildAvailabilityTargetAddPath('router', {
         name: UNMONITORED_CHECK_NAME,
         address: hit.checkAddress,
@@ -311,7 +345,7 @@ export function InfrastructureMapSurface() {
     showPressedTooltip(
       [
         found.hit.name,
-        ...hitLines(found.hit),
+        ...hitLines(found.hit, density()),
         !opens ? '' : found.hit.checkAddress ? 'Tap again to add a check' : 'Tap again to open',
       ]
         .filter(Boolean)
@@ -411,15 +445,21 @@ export function InfrastructureMapSurface() {
               <EmptyState
                 icon={<MapIcon class="h-6 w-6" aria-hidden="true" />}
                 title="Nothing to draw yet"
-                description="The map draws itself from the systems Pulse monitors. Add one and it appears here."
+                description={
+                  canAddSystem()
+                    ? 'The map draws itself from the systems Pulse monitors. Add one and it appears here.'
+                    : 'The map draws itself from the systems Pulse monitors. None has been added yet. Ask a Pulse administrator to add one.'
+                }
                 actions={
-                  <ButtonLink
-                    href={buildInfrastructureWorkspacePath()}
-                    variant="secondary"
-                    size="sm"
-                  >
-                    Add a system
-                  </ButtonLink>
+                  <Show when={canAddSystem()}>
+                    <ButtonLink
+                      href={buildInfrastructureWorkspacePath()}
+                      variant="secondary"
+                      size="sm"
+                    >
+                      Add a system
+                    </ButtonLink>
+                  </Show>
                 }
               />
             </Show>
@@ -458,6 +498,18 @@ export function InfrastructureMapSurface() {
 
       <Show when={scene()}>
         <ul
+          ref={(element) => {
+            legendRef = element;
+            // The legend arrives after the first drawing, and wraps to more
+            // lines as the window narrows. Either way the map gets less room.
+            if (typeof ResizeObserver === 'undefined') return;
+            const observer = new ResizeObserver(() => requestAnimationFrame(measure));
+            observer.observe(element);
+            onCleanup(() => {
+              observer.disconnect();
+              legendRef = undefined;
+            });
+          }}
           class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted"
           aria-label="Legend"
         >
@@ -496,11 +548,11 @@ export function InfrastructureMapSurface() {
           {(current) => (
             <div class="flex flex-col gap-0.5">
               <span class="text-[11px] font-semibold">{current().hit.name}</span>
-              <For each={hitLines(current().hit)}>
+              <For each={hitLines(current().hit, density())}>
                 {(line) => <span class="text-muted">{line}</span>}
               </For>
               {/* Every other tile opens the thing it shows. This one does not. */}
-              <Show when={current().hit.checkAddress}>
+              <Show when={current().hit.checkAddress && canAddCheck()}>
                 <span class="text-muted">Click to add a check</span>
               </Show>
             </div>

@@ -43,6 +43,21 @@ export function sessionCanReadInfrastructureSettings(): boolean {
 }
 
 /**
+ * Mirrors the Settings nav gate for Availability checks (`requiredCapability:
+ * 'availabilityRead'` in settingsNavCatalog), so a surface that sends someone to
+ * the form that adds a check never offers it to a session Settings would turn
+ * away. Settings mounts the panel only on an explicit grant
+ * (`canMountSettingsPanel`), so a resolved session without one is refused here
+ * too. An unresolved session keeps the link, like the Infrastructure gate.
+ */
+export function sessionCanReadAvailabilitySettings(): boolean {
+  if (!sessionSettingsCapabilitiesResolved()) {
+    return true;
+  }
+  return sessionSettingsCapabilities()?.availabilityRead === true;
+}
+
+/**
  * Mirrors the instance administration gate on /api/settings/relay. A provider
  * opening a client workspace is that organization's owner, who manages its alert
  * destinations but not the instance's relay, so the destinations page must not

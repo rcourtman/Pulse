@@ -17,15 +17,19 @@ Open it with the map button at the top left of the header.
 | **Storage**, **Backups**, **Hardware** | Pools, backup targets and the machines everything runs on |
 
 Each tile has a status dot: healthy, needs attention, critical, not reporting
-or off.
+or off. When there is more than one network, a coloured mark beside a tile
+matches the dot on its network's pill.
 
 - **Hover** a tile to read what it is, its address and what it is connected
   to. Tiles it is connected to are ringed.
 - **Click** a tile to open it.
 - **On a touch screen**, the first tap reads the tile and the second opens it.
 
-The map always fits the window. When there is too much to name, it switches
-to icons alone; **Names** and **Compact** choose for yourself.
+The map fits the window. When there is too much to name, it switches to
+icons alone; **Names** and **Compact** choose for yourself. A box with more
+than it can draw ends in a **+N more** tile, and **Compact** draws more of
+them. On a phone with **Names** on, or on a very large estate, the map runs
+past the screen and scrolls.
 
 ## How Pulse recognises an app
 

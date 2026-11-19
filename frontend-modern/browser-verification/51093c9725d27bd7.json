@@ -1,0 +1,63 @@
+{
+  "version": 1,
+  "base_sha": "f312e34a44e298c5aaa4fd71909b53aaa12ab812",
+  "verified_at": "2026-11-19T18:09:10Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapSurface.tsx",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapRender.ts",
+    "frontend-modern/src/stores/sessionSettingsCapabilities.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapSurface.tsx": "25faa67e65bd6b5dbfcba9b87067834a9a236b2f5d082eba0ba6c89b20f7ba40",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapRender.ts": "337dc92549fc2acadd41afb1657b29cb46c0e098e2e0a00da53eb62fa20699fd",
+    "frontend-modern/src/stores/sessionSettingsCapabilities.ts": "4c2cd7b9bd1e93bbda20c2786919d90a5bc558519265bc3298517b8ec75b0202"
+  },
+  "routes": [
+    "/map",
+    "/docs/MAP",
+    "/settings/monitoring/availability?add=target&from=map"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 1279,
+      "height": 800
+    },
+    {
+      "width": 1024,
+      "height": 768
+    },
+    {
+      "width": 768,
+      "height": 1024
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 320,
+      "height": 568
+    }
+  ],
+  "states": [
+    "the final bytes on a private Pulse on pulse-dev with mock data, served by a Vite dev server (the map is held back from production builds), driven by Playwright in Chromium 151 and WebKit 26.0. The files the dev server served were compared with the committed ones by hash",
+    "legend against the bottom navigation bar, both engines: at 1440x900 no bar and the legend 32px above the window's foot; at 1279x800, 1024x768, 768x1024 and 390x844 the legend's bottom edge was 32 to 42px above the bar's top edge, where before this change it was 27 to 45px under it at 1024 and 768. At 320x568 the page's own chrome leaves less than the map's smallest height, so the page scrolls; the map there now opens in Compact (243x400) where it opened in Names (250x838)",
+    "keyboard focus, both engines, dark and light: Tab from Save image lands on the first tile, a link; its rect computed stroke rgb(59, 130, 246), 2px, non-scaling, and the link's own outline is none. Screenshots of the ring in WebKit dark and light were read at full size; before this change WebKit drew nothing there",
+    "no stroke at rest: a link tile's rect computed stroke none before and after hover, and the hover fill still applied",
+    "administrator: the unmonitored gateway tile is a link to the add-check form, labelled '..., add a check', with 'Click to add a check' in its card",
+    "signed-in user without admin rights (proxy sign-in with role gating, role not the admin role), both engines, 1440x900 and 390x844 touch: all three gateway tiles are plain rects labelled '..., Default gateway, not monitored', none of the 193 tiles says 'add a check', the card has no such line, and a click or two taps stays on /map. Before this change the click landed on /settings/system-general",
+    "kiosk mode, administrator, both engines: after Enter kiosk mode the gateway tile changed from a link to a plain rect with no 'add a check'",
+    "the fold tile's card by pointer and by focus: '+43 | 43 more | Compact draws more of them' with Names, '+19 | 19 more' with Compact",
+    "the guide at /docs/MAP in the dev build carried the new sentences about the coloured mark, the +N more tile and scrolling, and no longer said the map always fits",
+    "no page error in any context",
+    "not checked in a browser: the empty map's wording for a user without admin rights and in kiosk mode (unit tests only), the bar changing height with nothing else changing (unit test only), Firefox, real Safari, a real phone"
+  ],
+  "interactions": [
+    "pressed Tab from the toolbar into the map and read the focused tile's computed style; hovered tiles; clicked and tapped the gateway tile as an administrator and as a user without admin rights; entered kiosk mode with the header button; switched Names and Compact"
+  ]
+}
