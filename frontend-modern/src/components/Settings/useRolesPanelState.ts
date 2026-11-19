@@ -94,11 +94,20 @@ export function useRolesPanelState(props: RolesPanelProps = {}) {
     setActionError(null);
   };
 
-  const loadRoles = async () => {
-    if (!contextIsCurrent() || !accessAllowed() || readController || mutationController) return;
+  const loadRoles = async (replacePending = false) => {
+    const previous = readController;
+    if (
+      !contextIsCurrent() ||
+      !accessAllowed() ||
+      mutationController ||
+      Boolean(previous) !== replacePending
+    )
+      return;
     const reader = context();
     const controller = new AbortController();
+    // Own the replacement before cancelling; the old read must not settle it.
     readController = controller;
+    previous?.abort();
     const isCurrentRead = () =>
       contextIsCurrent() && reader === context() && readController === controller;
     batch(() => {
@@ -324,6 +333,7 @@ export function useRolesPanelState(props: RolesPanelProps = {}) {
     openDeleteRole,
     openEditRole,
     removePermission,
+    restartRead: () => loadRoles(true),
     rolePendingDeletion,
     roles,
     saving,
