@@ -1109,10 +1109,10 @@ Set `--health-addr=""` or `PULSE_HEALTH_ADDR=off` to disable the health/metrics 
 
 ### Copied agent command fails before installation
 
-The copied Unix command prepares a download and, for installation, runs a
-`--preflight-only` check before entering a private token prompt. Passing
-preflight is **not installation** or accepted reporting. Read the original
-error to identify which step stopped; do not run the command again to find out.
+A copied Unix install command runs `--preflight-only` before the private
+token prompt. Passing preflight is **not installation** or accepted reporting.
+Read the original error without rerunning. For a post-download URL error, see
+[URL and executable checks](#agent-url-and-executable-checks).
 
 - **`stty: command not found`, followed by a terminal-required message:** the
   command's environment cannot run the tool used to prepare the private prompt.
@@ -1838,3 +1838,29 @@ If reporting a continuing mismatch, retain the running server version, source,
 original time, relevant missing privilege or redacted error and the differing
 native/Pulse observations. Keep token secrets, full ACL listings and private
 infrastructure details out of public reports; follow [Getting Help](TROUBLESHOOTING.md#-getting-help).
+
+### Agent URL and executable checks
+
+**Pulse URL reachable** and **Agent binary available** are preflight results.
+That check does not download or run the agent. **Binary checksum verified**
+comes later. It checks the download, not whether the binary can start or
+accept the Pulse URL.
+
+Use [HTTPS on Pulse](CONFIGURATION.md#-https--tls) or an HTTPS reverse proxy
+for a new install. Choose an address the monitored host can reach and a
+certificate it trusts. If the UI copies a different address, set
+`PULSE_AGENT_CONNECT_URL` on the Pulse server and copy a fresh command. This
+changes new commands, not the addresses saved by existing agents.
+
+The Unix installer only accepts plain HTTP for local or private server
+addresses. `--insecure` skips TLS certificate verification. It does not
+change the HTTP address check.
+
+- **`Could not run the downloaded agent`:** check whether the installer's
+  temporary filesystem permits execution and whether the binary matches the
+  monitored host's OS and CPU. The message does not identify the cause.
+  Leave mount restrictions in place.
+- **`Could not validate the Pulse URL`:** the installer could not confirm
+  that the agent accepts the address. Older installers also use this message
+  when the downloaded agent cannot start. The message alone does not tell you
+  whether HTTP caused the failure.

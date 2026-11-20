@@ -69,6 +69,7 @@ describe('Unified Agent private-file setup help', () => {
 
 describe('Stopped agent-command help', () => {
   const failureId = 'copied-agent-command-fails-before-installation';
+  const urlChecksId = 'agent-url-and-executable-checks';
   const faq = readFileSync(path.join(frontendRoot, '../docs/FAQ.md'), 'utf8');
   const troubleshooting = readFileSync(
     path.join(frontendRoot, '../docs/TROUBLESHOOTING.md'),
@@ -122,6 +123,36 @@ describe('Stopped agent-command help', () => {
     const installer = readFileSync(path.join(frontendRoot, '../scripts/install.sh'), 'utf8');
     expect(installer).toContain('--safe-profile-inspect is a standalone read-only action');
     expect(installer).toContain('Safe-profile migration is unsupported on this platform');
+  });
+
+  it('routes a successful download preflight to distinct executable and URL checks', () => {
+    const stopped = docSection(source, 'UNIFIED_AGENT', failureId);
+    expect(stopped.querySelector(`a[href="#${urlChecksId}"]`)).not.toBeNull();
+
+    const checks = docSection(source, 'UNIFIED_AGENT', urlChecksId);
+    const text = normalizedText(checks);
+    expect(text).toContain('That check does not download or run the agent');
+    expect(text).toContain('not whether the binary can start or accept the Pulse URL');
+    expect(text).toContain('Older installers also use this message');
+    expect(text).toContain('Leave mount restrictions in place');
+
+    const messages = [...checks.querySelectorAll('li strong code')].map((code) => code.textContent);
+    expect(messages).toEqual([
+      'Could not run the downloaded agent',
+      'Could not validate the Pulse URL',
+    ]);
+  });
+
+  it('links to trusted HTTPS and distinguishes a new install command from retargeting', () => {
+    const checks = docSection(source, 'UNIFIED_AGENT', urlChecksId);
+    expect(
+      checks.querySelector('a[data-doc-link][href="/docs/CONFIGURATION#-https--tls"]'),
+    ).not.toBeNull();
+    const text = normalizedText(checks);
+    expect(text).toContain('does not change the HTTP address check');
+    expect(text).toContain('PULSE_AGENT_CONNECT_URL');
+    expect(text).toContain('not the addresses saved by existing agents');
+    expect(checks.querySelector('pre')).toBeNull();
   });
 
   it('links to existing private preparation and recovery without another executable recipe', () => {
