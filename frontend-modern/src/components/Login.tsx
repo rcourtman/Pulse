@@ -19,6 +19,7 @@ import { TROUBLESHOOTING_DOC_URL } from '@/utils/docsLinks';
 import Globe from 'lucide-solid/icons/globe';
 import Key from 'lucide-solid/icons/key';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
+import { readSSOReturnError, SSOReturnError } from '@/components/SSOReturnError';
 
 const SetupWizard = lazy(() => import('./SetupWizard').then((m) => ({ default: m.SetupWizard })));
 
@@ -167,43 +168,6 @@ export const Login: Component<LoginProps> = (props) => {
     authStatus()?.presentationPolicy?.demoMode === true ||
     authStatus()?.sessionCapabilities?.demoMode === true;
 
-  const resolveSSOError = (reason?: string | null) => {
-    switch (reason) {
-      case 'email_restricted':
-        return 'Your account email is not permitted to access Pulse.';
-      case 'domain_restricted':
-        return 'Your email domain is not allowed for Pulse access.';
-      case 'group_restricted':
-        return 'Your account is not part of an authorized group to use Pulse.';
-      case 'invalid_state':
-        return 'The sign-in attempt expired. Please try again.';
-      case 'exchange_failed':
-        return 'We could not complete the sign-in request. Please try again shortly.';
-      case 'session_failed':
-        return 'Login succeeded but we could not create a session. Try again.';
-      case 'invalid_id_token':
-        return 'ID token verification failed. The server log records the exact reason for this login attempt.';
-      case 'issuer_mismatch':
-        return 'The token was issued by a different issuer than the one configured. The server log shows the expected and received issuer values for this login attempt.';
-      case 'audience_mismatch':
-        return 'The token was issued for a different client ID than the one configured in Pulse. Check the client ID against your provider application.';
-      case 'token_expired':
-        return 'The identity provider returned an already-expired token. Check that the clocks on Pulse and the provider are in sync.';
-      case 'invalid_signature_alg':
-        return "The identity provider is issuing HS256 tokens. Configure it to sign ID tokens with RS256 (see your IdP's OIDC settings).";
-      case 'invalid_nonce':
-        return 'Security validation failed (nonce mismatch). Please try again.';
-      case 'saml_validation_failed':
-        return 'SAML assertion validation failed. Please try again or contact an administrator.';
-      case 'provider_not_found':
-        return 'SSO provider not found or not configured.';
-      case 'provider_not_initialized':
-        return 'SSO provider is not properly configured. Contact your administrator.';
-      default:
-        return 'Single sign-on failed. Please try again or contact an administrator.';
-    }
-  };
-
   onMount(async () => {
     const rememberedUsername = readRememberedUsername();
     if (rememberedUsername) {
@@ -213,24 +177,15 @@ export const Login: Component<LoginProps> = (props) => {
 
     const params = new URLSearchParams(window.location.search);
 
-    // Handle OIDC callback
+    // Retain the return message without using it to select sign-in options.
     const oidcStatus = params.get('oidc');
-    if (oidcStatus === 'error') {
-      const reason = params.get('oidc_error');
-      setOidcError(resolveSSOError(reason));
-      setError('');
-    } else if (oidcStatus === 'success') {
-      setOidcMessage('Signed in successfully. Loading Pulse…');
+    const samlStatus = params.get('saml');
+    const returnError = readSSOReturnError(params);
+    if (returnError) {
+      setOidcError(returnError);
       setError('');
     }
-
-    // Handle SAML callback
-    const samlStatus = params.get('saml');
-    if (samlStatus === 'error') {
-      const reason = params.get('saml_error');
-      setOidcError(resolveSSOError(reason));
-      setError('');
-    } else if (samlStatus === 'success') {
+    if (oidcStatus === 'success' || samlStatus === 'success') {
       setOidcMessage('Signed in successfully. Loading Pulse…');
       setError('');
     }
@@ -414,6 +369,7 @@ export const Login: Component<LoginProps> = (props) => {
                       : 'Checking which sign-in options Pulse offers.'
                     : 'Pulse could not read its authentication status. This does not mean authentication is unconfigured.'}
               </p>
+              <SSOReturnError message={oidcError()} duringCheck />
               <Show when={authReadFailed() || authRestart() !== 'hidden'}>
                 <Show when={authReadFailed()}>
                   <p class="mt-3 text-sm leading-6 text-muted">
@@ -640,14 +596,7 @@ const LoginForm: Component<{
                   </button>
                 )}
               </For>
-              <Show when={oidcError()}>
-                <div
-                  role="alert"
-                  class="rounded-md bg-red-50 dark:bg-red-900/25 border border-red-200 dark:border-red-800 px-3 py-2 text-sm text-red-600 dark:text-red-300"
-                >
-                  {oidcError()}
-                </div>
-              </Show>
+              <SSOReturnError message={oidcError()} />
               <Show when={hasSSOProviders && oidcMessage()}>
                 <div class="rounded-md bg-green-50 dark:bg-green-900/25 border border-green-200 dark:border-green-700 px-3 py-2 text-sm text-green-600 dark:text-green-300">
                   {oidcMessage()}

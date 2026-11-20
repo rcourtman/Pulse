@@ -2,6 +2,7 @@ import { Show, createResource, createSignal, onCleanup, onMount, type Component 
 import { Button } from '@/components/shared/Button';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { NoOrganizationAccess } from '@/components/NoOrganizationAccess';
+import { SSOReturnError } from '@/components/SSOReturnError';
 import {
   probeNoOrganizationAccess,
   signOutWithoutOrganization,
@@ -13,6 +14,7 @@ interface AppBootstrapStatusProps {
   failed?: boolean;
   onRetry?: () => void;
   slowDelayMs?: number;
+  ssoReturnError?: string;
 }
 
 export const AppBootstrapStatus: Component<AppBootstrapStatusProps> = (props) => {
@@ -80,6 +82,7 @@ export const AppBootstrapStatus: Component<AppBootstrapStatusProps> = (props) =>
               Pulse could not check your session. Your saved sign-in details have not been cleared.
             </Show>
           </p>
+          <SSOReturnError message={props.ssoReturnError} duringCheck />
           <Show when={props.failed || isSlow()}>
             <div class="mt-5 border-t border-border pt-5">
               <p class="mb-4 text-sm leading-6 text-muted">
