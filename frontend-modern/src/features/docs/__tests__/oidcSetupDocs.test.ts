@@ -83,6 +83,30 @@ describe('OIDC setup without losing access', () => {
     expect(guide.querySelector('[id="-quick-start"]')).not.toBeNull();
   });
 
+  it('routes a client rejection after saving to a readback without inviting another write', () => {
+    const guide = article('OIDC');
+    const heading = [...guide.querySelectorAll('h3')].find((item) =>
+      text(item).startsWith('invalid_client after saving'),
+    )!;
+    const reason = heading.nextElementSibling!;
+    const action = reason.nextElementSibling!;
+    expect(reason.querySelector('code')).toHaveTextContent('invalid_client');
+    expect(text(reason)).toContain("rejected Pulse's client authentication");
+    expect(text(reason)).toContain('does not prove Pulse lost the secret');
+    expect(text(reason)).toContain('Compare the saved Client ID');
+    expect(text(action)).toContain('Keep your working administrator session open');
+    expect(text(action)).toContain('Do not repeat the save, rotate the secret or sign out');
+    const readback = action.querySelector('a[href="#a-provider-change-could-not-be-confirmed"]')!;
+    expect(readback).toHaveTextContent('check the saved provider');
+    const destination = guide.querySelector('#a-provider-change-could-not-be-confirmed')!;
+    expect(text(destination.nextElementSibling!.nextElementSibling!)).toContain(
+      'Check saved providers',
+    );
+    expect(destination.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+  });
+
   it('links all setup decisions to real focused documentation headings', () => {
     const guide = article('OIDC');
     for (const [name, fragment] of [
