@@ -1831,13 +1831,6 @@ describe('ProLicensePanel', () => {
   it('offers one-click in-place Pro runtime switch and shows progress when a Pro license runs on community runtime', async () => {
     mockEntitlements = {
       capabilities: ['update_alerts', 'sso', 'ai_patrol'],
-      blocked_capabilities: [
-        {
-          feature: 'ai_autofix',
-          reason: 'paid_runtime_required',
-          action_url: 'https://pulserelay.pro/download.html',
-        },
-      ],
       limits: [],
       subscription_state: 'active',
       upgrade_reasons: [],
