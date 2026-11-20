@@ -86,7 +86,8 @@ LOG_FILE="/var/log/${AGENT_NAME}.log"
 
 # TrueNAS SCALE configuration (immutable root filesystem)
 TRUENAS=false
-TRUENAS_STATE_DIR="/data/pulse-agent"
+TRUENAS_DEFAULT_STATE_DIR="/data/pulse-agent"
+TRUENAS_STATE_DIR="$TRUENAS_DEFAULT_STATE_DIR"
 TRUENAS_LOG_DIR="$TRUENAS_STATE_DIR/logs"
 TRUENAS_LOG_FILE=""    # Set during TrueNAS detection
 TRUENAS_BOOTSTRAP_SCRIPT="$TRUENAS_STATE_DIR/bootstrap-pulse-agent.sh"
@@ -6879,6 +6880,44 @@ validate_staged_agent_url() {
     fail "The downloaded agent did not complete its Pulse URL check. This does not tell us whether the address is allowed. Check that the downloaded agent matches this Pulse server version and supports URL validation. $unchanged" "$EXIT_PREFLIGHT_FAILED"
 }
 
+# SCALE can keep downloads on a noexec scratch filesystem and run Pulse from
+# its default persistent directory. Use that already supported destination,
+# not a new execution directory or a fallback after a validator has refused.
+prepare_truenas_scale_url_validator() {
+    [[ "$OS" == "linux" && "$TRUENAS" == "true" &&
+       "$SAFE_PROFILE_ACTION" != "apply" && "$INSTALL_DIR" == "$TRUENAS_DEFAULT_STATE_DIR" &&
+       ! -x "$TMP_BIN" ]] || return 0
+    # Only the SCALE service branch uses this path. Do not apply the noexec
+    # handling to another platform picked ahead of it by the installer.
+    if [[ ( -d /usr/syno && -f /etc/VERSION ) || -f /etc/unraid-version ||
+          -f /sbin/getcfg || -f /etc/config/qpkg.conf ]]; then
+        return 0
+    fi
+
+    # Rename/copy into only the fixed, trusted storage directory. A symlink
+    # or directory writable by another user is not authority to execute there.
+    if ! truenas_scale_staging_directory_is_private "${INSTALL_DIR%/*}" ||
+       [[ -L "$INSTALL_DIR" ]] ||
+       ! mkdir -p "$INSTALL_DIR" ||
+       ! truenas_scale_staging_directory_is_private "$INSTALL_DIR" ||
+       ! stage_agent_binary_for_install; then
+        fail "Could not safely stage the downloaded agent in the default TrueNAS installation directory. The installed service and saved credentials have not been changed." "$EXIT_PREFLIGHT_FAILED"
+    fi
+    # The transfer may have crossed filesystems. Execute only the exact bytes
+    # whose checksum and, for a signed installer, signature already passed.
+    if [[ "$(installer_file_sha256 "$STAGED_AGENT_BIN")" != "$EXPECTED_SHA" ]]; then
+        fail "The staged TrueNAS agent does not match the verified download. The installed service and saved credentials have not been changed." "$EXIT_CHECKSUM_FAILED"
+    fi
+    VERSION_PROBE_BINARY="$STAGED_AGENT_BIN"
+}
+
+truenas_scale_staging_directory_is_private() {
+    local directory="$1" mode
+    [[ -d "$directory" && ! -L "$directory" && -O "$directory" ]] || return 1
+    mode=$(portable_path_mode "$directory") || return 1
+    [[ "$mode" =~ ^[0-7]{3,4}$ ]] && (( (8#$mode & 0022) == 0 ))
+}
+
 if [[ -z "$PULSE_URL" ]]; then
     fail "Missing required argument: --url (or --pulse-url)" "$EXIT_MISSING_ARGS"
 fi
@@ -7535,7 +7574,10 @@ if [[ "$ACTION_RUNNER_ENABLED" == "true" ]]; then
 fi
 
 chmod 0755 "$TMP_BIN"
-validate_staged_agent_url "$TMP_BIN"
+STAGED_AGENT_BIN=""
+VERSION_PROBE_BINARY="$TMP_BIN"
+prepare_truenas_scale_url_validator
+validate_staged_agent_url "$VERSION_PROBE_BINARY"
 if [[ "$SAFE_PROFILE_ACTION" == "apply" ]]; then
     # The irreversible server-side reduction must run only through the staged
     # binary whose checksum/signature have just been verified. The installed
@@ -7550,9 +7592,6 @@ if [[ "$SAFE_PROFILE_ACTION" == "apply" ]]; then
     COLLECTOR_LIFECYCLE_BINARY_PATH="$SAFE_PROFILE_STAGED_COLLECTOR"
     reduce_safe_profile_collector_authority ||
         fail "Safe-profile migration could not durably remove command and cross-host management authority from the existing collector credential; no privilege change was retained" "$EXIT_AUTH_REJECTED"
-fi
-VERSION_PROBE_BINARY="$TMP_BIN"
-if [[ "$SAFE_PROFILE_ACTION" == "apply" ]]; then
     VERSION_PROBE_BINARY="$SAFE_PROFILE_STAGED_COLLECTOR"
 fi
 NEW_VERSION=$("$VERSION_PROBE_BINARY" --version 2>/dev/null | head -1 || echo "unknown")
@@ -7581,7 +7620,7 @@ fi
 # Safe-profile migration already prepared its verified collector above and
 # retains its separate snapshot, authority-reduction and rollback transaction.
 if [[ "$SAFE_PROFILE_ACTION" != "apply" ]]; then
-    if ! stage_agent_binary_for_install; then
+    if [[ -z "${STAGED_AGENT_BIN:-}" ]] && ! stage_agent_binary_for_install; then
         fail "Could not stage the verified agent on the installation filesystem. The existing agent has not been stopped or replaced; saved state is retained." "$EXIT_GENERAL"
     fi
     if [[ "$PRIVILEGED_HELPER_ENABLED" == "true" ]] && ! stage_privileged_helper_for_install; then

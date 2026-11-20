@@ -128,12 +128,13 @@ func TestAgentURLAdmissionPrecedesInstallMutation(t *testing.T) {
 		t.Fatal("missing staged trust boundary")
 	}
 	text = text[start:]
-	gate := strings.Index(text, `validate_staged_agent_url "$TMP_BIN"`)
+	staging := strings.Index(text, "prepare_truenas_scale_url_validator")
+	gate := strings.Index(text, `validate_staged_agent_url "$VERSION_PROBE_BINARY"`)
 	trust := strings.Index(text, `verify_download_signature "$TMP_BIN"`)
-	if gate < 0 || trust < 0 || trust >= gate {
-		t.Fatal("URL admission must execute the verified staged agent")
+	if trust < 0 || staging <= trust || gate <= staging {
+		t.Fatal("verification must precede runtime path selection and URL admission")
 	}
-	for _, mutation := range []string{"safe_profile_begin_transaction", "reduce_safe_profile_collector_authority", "stage_agent_binary_for_install", "stop_existing_agent_service", `systemctl stop "${AGENT_NAME}"`, `mv "$STAGED_AGENT_BIN" "${INSTALL_DIR}/${BINARY_NAME}"`} {
+	for _, mutation := range []string{"safe_profile_begin_transaction", "reduce_safe_profile_collector_authority", "stop_existing_agent_service", `systemctl stop "${AGENT_NAME}"`, `mv "$STAGED_AGENT_BIN" "${INSTALL_DIR}/${BINARY_NAME}"`} {
 		if index := strings.Index(text, mutation); index < 0 || index <= gate {
 			t.Errorf("URL admission must precede %s", mutation)
 		}
