@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "base_sha": "efe24eb5d7eabecc14bad97f9e51571b9bc94f0a",
+  "verified_at": "2026-11-20T20:41:55Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/OrganizationOverviewDetailsSection.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/OrganizationOverviewDetailsSection.tsx": "51c2c5d9469fe994b30bc654fd44e7e85be1afd54fc555e074cfd09bfc43903c"
+  },
+  "routes": [
+    "/settings/organization"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900,
+      "browser": "Chromium 141.0.7390.37",
+      "theme": "light",
+      "input": "keyboard"
+    },
+    {
+      "width": 320,
+      "height": 800,
+      "browser": "WebKit 26.0",
+      "theme": "dark",
+      "input": "touch"
+    },
+    {
+      "width": 360,
+      "height": 800,
+      "browser": "WebKit 26.0",
+      "theme": "light",
+      "input": "touch"
+    }
+  ],
+  "states": [
+    "An owner reads a long saved name with no spaces, before and after renaming it, at desktop and 320 px",
+    "A viewer reads the same long saved name at 360 px with disabled rename controls",
+    "An ordinary short name at 320 px keeps its one-line layout"
+  ],
+  "interactions": [
+    "Use the real Organization Overview route with synthetic organization reads. Confirm the visible name, ID, creation date and member count; check name and ID text fit their cards without widening the settings panel.",
+    "Tab from Display Name to Save and press Enter on desktop; tap to edit and save on phone. Check the draft never replaces the saved summary before Save, one rename is followed by a saved-detail read, and the two membership rows remain.",
+    "Read the summary as a viewer with rename disabled and no writes. Inspect six matched baseline/candidate image pairs; Playwright 1.56.1 passed 75 baseline and 80 candidate assertions."
+  ]
+}
