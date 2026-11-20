@@ -31,7 +31,11 @@ describe('dashboard readiness guidance', () => {
     expect(stalled().querySelector('a[href="/docs/API#system-health"]')).not.toBeNull();
     const health = section('API', 'System Health');
     expect(health.querySelector('#system-health')?.tagName).toBe('H3');
-    expect(health.querySelector(`a[href="/docs/TROUBLESHOOTING#${anchor}"]`)).not.toBeNull();
+    const guideLink = health.querySelector(`a[href="/docs/TROUBLESHOOTING#${anchor}"]`);
+    expect(guideLink?.textContent).toBe('stalled-dashboard guidance');
+    expect(guideLink!.compareDocumentPosition(health.querySelector('pre')!)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
   });
 
   it('separates public liveness and dependency presence from usable dashboard delivery', () => {
@@ -39,16 +43,15 @@ describe('dashboard readiness guidance', () => {
     const copy = text(health);
     expect(copy).toMatch(/GET \/api\/health.*HEAD/);
     expect(copy).toMatch(/Public.*200.*503/);
-    expect(copy).toMatch(/Liveness is not end-to-end readiness/);
+    expect(copy).toMatch(/Liveness is not readiness/);
     expect(copy).toMatch(
-      /do not establish.*authentication.*polling.*dashboard state.*notification/,
+      /container health badge.*does not prove login.*polling.*dashboard updates.*notification/,
     );
-    expect(copy).toMatch(/websocket: true is not proof.*initial state/);
-    expect(copy).toMatch(/upgrade or welcome message is not that proof/);
-    expect(copy).toMatch(/container health badge.*inherits these limits/);
+    expect(copy).toMatch(/websocket: true.*upgrade or a welcome message.*not prove initial state/);
     const example = JSON.parse(health.querySelector('pre code')!.textContent!);
     expect(example.dependencies).toEqual({ monitor: true, scheduler: true, websocket: true });
     expect(example.status).toBe('healthy');
+    expect(example).not.toHaveProperty('websocketStateStalled');
   });
 
   it('keeps connection, authentication, initial state and advancing readings distinct', () => {

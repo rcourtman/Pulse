@@ -28,6 +28,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/crewjam/saml"
@@ -27032,4 +27033,153 @@ func TestContract_ComposeActionListRequiresRuntimeAndProject(t *testing.T) {
 			t.Fatalf("incomplete Compose scope %s returned %d, %s", query, rec.Code, envelope.Error)
 		}
 	}
+}
+
+type healthWitnessUpgrade struct {
+	*httptest.ResponseRecorder
+	conn   net.Conn
+	reader *bufio.Reader
+}
+
+func (w healthWitnessUpgrade) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	return w.conn, bufio.NewReadWriter(w.reader, bufio.NewWriter(w.conn)), nil
+}
+
+func TestContract_HealthObservesWebSocketStateStallWithoutChangingLiveness(t *testing.T) {
+	t.Setenv("PULSE_MULTI_TENANT_ENABLED", os.Getenv("PULSE_MULTI_TENANT_ENABLED"))
+	t.Setenv("PULSE_DEV_ALLOW_CONTAINER_SSH", "false")
+	previousMulti := IsMultiTenantEnabled()
+	SetMultiTenantEnabled(false)
+	defer SetMultiTenantEnabled(previousMulti)
+
+	// A real WebSocket upgrade, framing, hub and handler with a controlled
+	// snapshot builder. net.Pipe lets the test exercise the production
+	// 30-second boundary with a deterministic clock, without a real sleep.
+	synctest.Test(t, func(t *testing.T) {
+		entered, release := make(chan struct{}), make(chan struct{})
+		var releaseOnce sync.Once
+		finishBuild := func() { releaseOnce.Do(func() { close(release) }) }
+		var builds atomic.Int32
+		hub := pulsews.NewHub(func(string) interface{} {
+			if builds.Add(1) == 1 {
+				close(entered)
+				<-release
+			}
+			return models.EmptyStateFrontend()
+		})
+		go hub.Run()
+		defer hub.Stop()
+		// Close the pipes and let the hub consume the read-pump unregister
+		// before shutting down its loop.
+		defer synctest.Wait()
+		defer finishBuild()
+
+		mon := &monitoring.Monitor{}
+		router := &Router{monitor: mon, wsHub: hub}
+		health := func(phase string, r *Router, wantStall bool) {
+			t.Helper()
+			rec := httptest.NewRecorder()
+			r.handleHealth(rec, httptest.NewRequest(http.MethodGet, "/api/health", nil))
+			var response struct {
+				Status       string          `json:"status"`
+				Dependencies map[string]bool `json:"dependencies"`
+				Stalled      json.RawMessage `json:"websocketStateStalled"`
+			}
+			if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+				t.Fatalf("%s: health JSON: %v", phase, err)
+			}
+			if rec.Code != http.StatusOK || response.Status != "healthy" ||
+				len(response.Dependencies) != 3 || !response.Dependencies["monitor"] ||
+				!response.Dependencies["scheduler"] || !response.Dependencies["websocket"] {
+				t.Errorf("%s: liveness changed: HTTP %d, status %q, dependencies %v",
+					phase, rec.Code, response.Status, response.Dependencies)
+			}
+			cache := rec.Header().Get("Cache-Control")
+			if cache != "no-store" {
+				t.Errorf("%s: the health response must not be cached; got Cache-Control %q", phase, cache)
+			}
+			if (wantStall && string(response.Stalled) != "true") || (!wantStall && response.Stalled != nil) {
+				t.Errorf("%s: stall field = %q; want true/present=%t", phase, response.Stalled, wantStall)
+			}
+			// This test's state, server and clock are synthetic; retain the exact
+			// response for the matching API Help/browser check.
+			t.Logf("health-wire %s %d cache=%q builds=%d %s",
+				phase, rec.Code, cache, builds.Load(), strings.TrimSpace(rec.Body.String()))
+		}
+		health("idle", router, false)
+		if builds.Load() != 0 {
+			t.Fatal("health request started a state build")
+		}
+
+		clientConn, serverConn := net.Pipe()
+		defer clientConn.Close()
+		defer serverConn.Close()
+		go func() {
+			reader := bufio.NewReader(serverConn)
+			req, err := http.ReadRequest(reader)
+			if err != nil {
+				serverConn.Close()
+				return
+			}
+			req.RemoteAddr = "127.0.0.1:42101"
+			hub.HandleWebSocket(healthWitnessUpgrade{httptest.NewRecorder(), serverConn, reader}, req)
+		}()
+		dialer := websocket.Dialer{
+			HandshakeTimeout: time.Second,
+			NetDialContext: func(context.Context, string, string) (net.Conn, error) {
+				return clientConn, nil
+			},
+		}
+		conn, _, err := dialer.Dial("ws://localhost/ws?org_id=default", http.Header{"Origin": {"http://localhost"}})
+		if err != nil {
+			t.Fatalf("upgrade: %v", err)
+		}
+		defer conn.Close()
+		readFrame := func(want string) map[string]any {
+			t.Helper()
+			if err := conn.SetReadDeadline(time.Now().Add(3 * time.Second)); err != nil {
+				t.Fatal(err)
+			}
+			for {
+				var frame struct {
+					Type string         `json:"type"`
+					Data map[string]any `json:"data"`
+				}
+				if err := conn.ReadJSON(&frame); err != nil {
+					t.Fatalf("waiting for %q: %v", want, err)
+				}
+				if frame.Type == want {
+					return frame.Data
+				}
+			}
+		}
+		readFrame("welcome")
+		select {
+		case <-entered:
+		case <-time.After(2 * time.Second):
+			t.Fatal("initial-state build did not enter the getter")
+		}
+
+		hub.BroadcastCurrentState()
+		time.Sleep(30*time.Second - time.Nanosecond)
+		health("slow", router, false)
+		time.Sleep(time.Nanosecond)
+		health("stalled", router, true)
+		health("hosted", &Router{monitor: mon, wsHub: hub, hostedMode: true}, false)
+		SetMultiTenantEnabled(true)
+		health("multi-workspace", router, false)
+		SetMultiTenantEnabled(false)
+		health("standalone-again", router, true)
+		if got := builds.Load(); got != 1 {
+			t.Errorf("health reads or an invalidation started %d builds while the one slot was held", got)
+		}
+
+		finishBuild()
+		state := readFrame("initialState")
+		if resources, ok := state["resources"].([]any); !ok || len(resources) != 0 {
+			t.Errorf("initial state did not resume with the fixture's normal empty resources: %v", state)
+		}
+		synctest.Wait()
+		health("recovered", router, false)
+	})
 }

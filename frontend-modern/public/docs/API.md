@@ -262,8 +262,9 @@ reports, accept tokens bound to that organization with the listed scope.
 ### System Health
 `GET /api/health` (also accepts `HEAD`)
 
-Public server liveness response: `200` for the handler's healthy condition,
-`503` for its unhealthy condition. A GET response can include:
+Public server liveness: `200` when healthy, `503` otherwise. Dashboard stuck
+or stale? See the [stalled-dashboard guidance](TROUBLESHOOTING.md#health-is-green-but-the-dashboard-is-stalled).
+Example GET response:
 
 ```json
 {
@@ -279,18 +280,15 @@ Public server liveness response: `200` for the handler's healthy condition,
 }
 ```
 
-**Liveness is not end-to-end readiness.** A `200`, `"status": "healthy"`, or
-true dependency flags do not establish successful authentication, current
-polling, delivery of dashboard state over `/ws`, or notification delivery.
-In particular, `websocket: true` is not proof that a browser received its
-initial state; a successful WebSocket upgrade or welcome message is not that
-proof either. A container health badge based only on this endpoint inherits
-these limits.
+**Liveness is not readiness.** Green health, including a container health
+badge based on this check, does not prove login, current polling, dashboard
+updates or notification delivery. `websocket: true`, an upgrade or a welcome
+message do not prove initial state arrived.
 
-If health is green while the dashboard is stuck or stale, use the
-[stalled-dashboard guidance](TROUBLESHOOTING.md#health-is-green-but-the-dashboard-is-stalled).
-Do not add repeated state requests or an automatic restart loop to turn this
-limited check into a readiness test; preserve the original failure evidence.
+On standalone servers, `websocketStateStalled: true` means a state build held
+the shared WebSocket slot for at least 30 seconds. It clears when the slot is
+released. Hosted and multi-workspace modes omit it. An absent flag does not
+prove readiness. Preserve evidence; do not repeat state requests or auto-restart.
 
 ### System State
 `GET /api/state`

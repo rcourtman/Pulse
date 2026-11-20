@@ -4307,6 +4307,10 @@ recovery scope, or a storage/recovery-owned secret source.
     for presentation, while storage and recovery must continue to treat
     `AgentData.platform` as the normalized runtime platform.
 30. Keep agentless availability endpoints neutral on the shared unified-resource and API contracts. When `internal/api/availability_handlers.go`, `internal/api/connections_handlers.go`, `internal/api/platform_mock_connections.go`, or `frontend-modern/src/hooks/useUnifiedResources.ts` surface `network-endpoint` availability resources, storage and recovery may consume their liveness as infrastructure context only; they must not reinterpret ping/TCP/HTTP endpoints as storage providers, backup targets, recovery repositories, or protected-workload evidence.
+    An optional `websocketStateStalled` warning on public `/api/health` means
+    dashboard state work is overdue, not that protected or stored data is
+    missing. Neither this warning nor its disappearance establishes backup
+    inventory freshness, a failed restore, or authorization to retry one.
     The same neutrality applies when one or more canonical
     `availabilityChecks` facets attach to a storage-related resource. The
     additive plural facet, its compatibility `availability` summary, evidence
