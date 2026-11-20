@@ -125,6 +125,32 @@ describe('Login', () => {
       'href',
       '/docs/TROUBLESHOOTING',
     );
+    expect(screen.queryByRole('heading', { name: 'No sign-in options on this page' })).toBeNull();
+  });
+
+  it('explains a discovered hidden form without guessing a provider or offering setup', async () => {
+    mockFetch.mockResolvedValueOnce(
+      new Response(JSON.stringify({ hasAuthentication: true, hideLocalLogin: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    const onLogin = vi.fn();
+    render(() => <Login onLogin={onLogin} />);
+
+    expect(
+      await screen.findByRole('heading', { name: 'No sign-in options on this page' }),
+    ).toBeVisible();
+    expect(screen.getByText(/Ask your Pulse administrator how to sign in/)).toBeVisible();
+    expect(screen.queryByPlaceholderText('Username')).toBeNull();
+    expect(screen.queryByRole('button')).toBeNull();
+    expect(screen.getByRole('link', { name: 'Can’t sign in?' })).toHaveAttribute(
+      'href',
+      '/docs/TROUBLESHOOTING',
+    );
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(mockFetch.mock.calls[0][0]).toBe('/api/security/status');
+    expect(onLogin).not.toHaveBeenCalled();
   });
 
   it('shows local login form when show_local=true is in URL even if hideLocalLogin is true', async () => {
@@ -184,14 +210,14 @@ describe('Login', () => {
     expect(mockFetch).not.toHaveBeenCalledWith('/api/security/status');
   });
 
-  it('shows demo credentials when the visitor has signed out of the demo', async () => {
+  it.each([false, true])('shows demo credentials after sign-out (hidden=%s)', async (hidden) => {
     // A sign-out marks the tab so the page does not sign the visitor straight
     // back in; the printed credentials are the way back.
     window.sessionStorage.setItem(SESSION_STORAGE_KEYS.DEMO_AUTO_LOGIN, 'suppressed');
     const mockOnLogin = vi.fn();
     const securityStatus = {
       hasAuthentication: true,
-      hideLocalLogin: false,
+      hideLocalLogin: hidden,
       sessionCapabilities: { demoMode: true },
     };
 
@@ -201,11 +227,17 @@ describe('Login', () => {
 
     expect(await screen.findByText('Demo Mode')).toBeInTheDocument();
     expect(screen.getAllByText('demo')).toHaveLength(2);
+    expect(screen.queryByText('Signing you in to the demo…')).toBeNull();
+    if (hidden) {
+      expect(screen.getByRole('status')).toBeEmptyDOMElement();
+      expect(screen.getByText(/The local sign-in form is hidden/)).toBeVisible();
+      expect(screen.queryByPlaceholderText('Username')).toBeNull();
+    }
     expect(mockFetch).not.toHaveBeenCalledWith('/api/login', expect.anything());
     expect(mockOnLogin).not.toHaveBeenCalled();
   });
 
-  it('signs the visitor in with the demo credentials when the runtime is in demo mode', async () => {
+  it.each([false, true])('signs in to the demo (hidden=%s)', async (hidden) => {
     const mockOnLogin = vi.fn();
     mockFetch.mockResolvedValueOnce(
       new Response(JSON.stringify({ success: true }), {
@@ -215,7 +247,7 @@ describe('Login', () => {
     );
     const securityStatus = {
       hasAuthentication: true,
-      hideLocalLogin: false,
+      hideLocalLogin: hidden,
       presentationPolicy: { demoMode: true },
     };
 
@@ -256,6 +288,48 @@ describe('Login', () => {
     expect(screen.getAllByText('demo')).toHaveLength(2);
     expect(screen.getByRole('button', { name: /sign in to pulse/i })).toBeEnabled();
     expect(mockOnLogin).not.toHaveBeenCalled();
+  });
+
+  it('keeps hidden-form demo progress and refusal in one live region without exposing the reply', async () => {
+    let finish!: (response: Response) => void;
+    mockFetch.mockReturnValueOnce(
+      new Promise<Response>((resolve) => {
+        finish = resolve;
+      }),
+    );
+    const onLogin = vi.fn();
+    const securityStatus = {
+      hasAuthentication: true,
+      hideLocalLogin: true,
+      presentationPolicy: { demoMode: true },
+    };
+    render(() => <Login onLogin={onLogin} securityStatus={securityStatus as any} />);
+    const status = screen.getByRole('status');
+    const help = screen.getByRole('link', { name: 'Can’t sign in?' });
+    help.focus();
+
+    expect(screen.getByText('Demo Mode')).toBeVisible();
+    expect(status).toHaveTextContent('Signing you in to the demo…');
+    expect(screen.queryByRole('heading', { name: 'No sign-in options on this page' })).toBeNull();
+    expect(screen.queryByText(/^demo$/)).toBeNull();
+
+    finish(
+      new Response(JSON.stringify({ success: false, message: 'Synthetic provider detail' }), {
+        status: 401,
+      }),
+    );
+
+    await waitFor(() =>
+      expect(status).toHaveTextContent('Automatic demo sign-in didn’t complete.'),
+    );
+    expect(screen.getByRole('status')).toBe(status);
+    expect(screen.getByText(/The local sign-in form is hidden/)).toBeVisible();
+    expect(screen.getAllByText('demo')).toHaveLength(2);
+    expect(screen.queryByText('Synthetic provider detail')).toBeNull();
+    expect(screen.queryByPlaceholderText('Username')).toBeNull();
+    expect(help).toHaveFocus();
+    expect(mockFetch.mock.calls.filter(([url]) => url === '/api/login')).toHaveLength(1);
+    expect(onLogin).not.toHaveBeenCalled();
   });
 
   it('does not restart demo sign-in when pending settles and the tab marker cannot be saved', async () => {
