@@ -55,10 +55,12 @@ def assert_login_restriction_setup(case, guide, callback):
         "An empty group list skips only that check",
         "any domain and email restrictions still apply",
         "does not grant instance administrator privileges by itself",
-        "removing the local administrator",
+        "[Check admin access in a separate browser session](#-quick-start)",
+        "keep your independent administrator login even after SSO works",
     ):
         case.assertIn(boundary, setup)
     case.assertNotIn("allows every IdP user to sign in", setup)
+    case.assertNotIn("removing the local administrator", setup)
     # Keep the explanation next to setup, bound to the actual independent
     # callback gates. This is source consistency, not an IdP login proof.
     gates = callback.split("// Apply access restrictions from SSO provider config", 1)[1].split(
@@ -254,7 +256,11 @@ class OIDCSessionDocsTest(unittest.TestCase):
         callback = (ROOT / "internal/api/oidc_handlers.go").read_text()
         mutations = (
             ("guide", "every non-empty list must match", "any non-empty list can match"),
-            ("guide", "An empty group list skips\n> only that check", "An empty group list allows every IdP user to sign in"),
+            ("guide", "An empty group list skips only that check",
+             "An empty group list allows every IdP user to sign in"),
+            ("guide", "even after SSO works.", "until SSO works."),
+            ("guide", "even after SSO works.",
+             "even after SSO works. Before relying on SSO-only access or removing the local administrator, check your role."),
             ("callback", "if len(provider.AllowedDomains) > 0 && !matchesDomain(email, provider.AllowedDomains)",
              "else if len(provider.AllowedDomains) > 0 && !matchesDomain(email, provider.AllowedDomains)"),
             ("callback", '"email_restricted"', '"another_error"'),

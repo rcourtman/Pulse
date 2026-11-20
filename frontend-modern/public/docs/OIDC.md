@@ -66,16 +66,15 @@ sign-ins, not to the separate local password login.
 
 ### Access Control
 At sign-in, every non-empty list must match. Entries within one list are alternatives:
-- **Allowed Groups**: Match a group in the configured claim. The IdP must supply it; a `groups` scope is not universally supported.
+- **Allowed Groups**: Match a group in the configured claim. The IdP must supply it; a `groups` scope is not universally supported. An empty group list skips only that check, and any domain and email restrictions still apply.
 - **Allowed Domains**: Match the email domain (e.g., `example.com`).
 - **Allowed Emails**: Match an email address. This does not bypass the other lists.
 
-> **Administrator access:** Allowlists limit who can sign in. They do not
-> grant administrator access. If an administrator will use SSO, map a
-> trusted IdP group to the built-in `admin` role in **Group Role Mappings**.
-> The user must also match every non-empty allowlist. [Check admin access
-> in a separate browser session](#-quick-start) and keep your independent
-> administrator login even after SSO works.
+> **Administrator access:** Passing the sign-in rules does not grant instance
+> administrator privileges by itself. For SSO administrators, map a trusted
+> IdP group to the built-in `admin` role in **Group Role Mappings**.
+> [Check admin access in a separate browser session](#-quick-start) and keep
+> your independent administrator login even after SSO works.
 
 ### Group-to-Role Mapping
 

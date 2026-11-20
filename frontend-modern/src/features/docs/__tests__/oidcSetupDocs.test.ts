@@ -65,10 +65,15 @@ describe('OIDC setup without losing access', () => {
   it('keeps an independent admin login when explaining OIDC administrator access', () => {
     const guide = article('OIDC');
     const access = guide.querySelector('#access-control')!;
-    const note = access.nextElementSibling!.nextElementSibling!.nextElementSibling!;
+    const intro = access.nextElementSibling!;
+    const lists = intro.nextElementSibling!;
+    const note = lists.nextElementSibling!;
+    expect(text(intro)).toContain('every non-empty list must match');
+    expect(text(lists.firstElementChild!)).toContain(
+      'An empty group list skips only that check, and any domain and email restrictions still apply',
+    );
     expect(note.tagName).toBe('BLOCKQUOTE');
-    expect(text(note)).toContain('They do not grant administrator access');
-    expect(text(note)).toContain('match every non-empty allowlist');
+    expect(text(note)).toContain('Passing the sign-in rules does not grant instance administrator');
     expect(note.querySelector('code')).toHaveTextContent('admin');
     expect(text(note)).toContain('Group Role Mappings');
     expect(text(note)).toContain('keep your independent administrator login even after SSO works');
