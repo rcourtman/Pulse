@@ -8,6 +8,56 @@ import (
 	"time"
 )
 
+// Each table can be the only one with a predecessor row, including on a
+// store that previously recorded a batch with no operator data at all.
+func TestSQLiteSuccessionChecksEachRekeyTarget(t *testing.T) {
+	for _, tc := range []struct {
+		name, seed, check string
+	}{
+		{"operator state", `INSERT INTO resource_operator_state (canonical_id, set_at) VALUES ('old', CURRENT_TIMESTAMP)`,
+			`SELECT COUNT(*) FROM resource_operator_state WHERE canonical_id = 'new'`},
+		{"audit", `INSERT INTO action_audits
+			(id, action_id, canonical_id, request_id, created_at, updated_at, state, request_json, plan_json)
+			VALUES ('a', 'a', 'old', 'req', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'pending', '{}', '{}')`,
+			`SELECT COUNT(*) FROM action_audits WHERE canonical_id = 'new'`},
+		{"link", `INSERT INTO resource_links (resource_a, resource_b, primary_id) VALUES ('old', 'peer', 'old')`,
+			`SELECT COUNT(*) FROM resource_links WHERE resource_a = 'new' AND primary_id = 'new'`},
+		{"exclusion", `INSERT INTO resource_exclusions (resource_a, resource_b) VALUES ('old', 'peer')`,
+			`SELECT COUNT(*) FROM resource_exclusions WHERE resource_a = 'new'`},
+		{"pin", `INSERT INTO resource_identities (canonical_id, resource_type) VALUES ('old', 'host')`,
+			`SELECT NOT EXISTS(SELECT 1 FROM resource_identities WHERE canonical_id = 'old')`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			store, err := NewSQLiteResourceStore(t.TempDir(), "default")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer store.Close()
+			if err := store.ApplyCanonicalIDSuccessions([]CanonicalIDSuccession{
+				{"first", "middle"}, {"middle", "last"}, {"first", "ignored"},
+			}); err != nil {
+				t.Fatal(err)
+			}
+			var recorded int
+			if err := store.db.QueryRow(`SELECT COUNT(*) FROM canonical_id_successions
+				WHERE (old_canonical_id = 'first' AND new_canonical_id = 'middle')
+				   OR (old_canonical_id = 'middle' AND new_canonical_id = 'last')`).Scan(&recorded); err != nil || recorded != 2 {
+				t.Fatalf("empty-store succession history: count=%d err=%v", recorded, err)
+			}
+			if _, err := store.db.Exec(tc.seed); err != nil {
+				t.Fatal(err)
+			}
+			if err := store.ApplyCanonicalIDSuccessions([]CanonicalIDSuccession{{"old", "new"}}); err != nil {
+				t.Fatal(err)
+			}
+			var result int
+			if err := store.db.QueryRow(tc.check).Scan(&result); err != nil || result != 1 {
+				t.Fatalf("re-key with only %s populated: result=%d err=%v", tc.name, result, err)
+			}
+		})
+	}
+}
+
 // ApplyCanonicalIDSuccessions must re-key operator state and action-audit
 // history rows to the successor canonical ID, drop the superseded identity
 // pin row, and never clobber rows already present under the successor.
