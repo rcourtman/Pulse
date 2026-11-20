@@ -4352,6 +4352,54 @@ pools merged, goes wider than 1480 pixels (to 1640, 1800 or 1960) only when
 that makes it at least 8 percent shorter, and names Byparr as itself. The page is
 unchanged: one line per name, its own legend, fitted to the screen.
 
+### The map joins machines, storage and guests (20 November 2026)
+
+On a real 64-tile estate a machine said only "23 services", eight backup
+targets all said the cluster's name, three containers sharing one VPN
+container's network sat in a different box from it, and nothing showed that
+two media servers read the same array. `buildServiceDiagram` now joins what
+Pulse already holds:
+
+- A machine is linked to every guest or container it runs and every pool on
+  it or set up on it. Its hover counts what it runs by box, most first
+  (`Media 5 · Monitoring 4`), and pointing at it rings them. Its caption is
+  unchanged.
+- A Proxmox storage shared across a cluster carries the nodes it is set up
+  on (`storage.nodes`, resolved to the cluster's own hosts by Proxmox node
+  name or name, never across clusters, and not at all when two hosts answer
+  to the name) as `MapPool.hostIds`. A pool tile's caption names the one
+  host, or counts them, in place of the cluster. A backup target says
+  `Backup storage of <hosts>`, and each host says `Backs up to <targets>`.
+  A backup server's own datastores say neither: others write there.
+- A storage pool's `storage.topConsumers` join it to those guests
+  (`Data on <pool>`). A backup target's consumers are the guests it holds
+  backups of, so they are not read.
+- A guest's `proxmox.disks` entries that come from outside it are
+  `MapItem.mounts`, by bytes only: a Proxmox bind mount (`mpN` from a host
+  path) or a network share (an NFS, SMB, sshfs, 9p, virtiofs, Ceph or
+  Gluster filesystem, or a `host:/path` or `//host/share` device). Anything
+  else is the guest's own disk, which a clone has a copy of. Each mount is on
+  a drawn storage pool when the totals and the used bytes are both within
+  0.05% of the larger total, at least 1% is used, and exactly one pool fits;
+  the guest says `Mounts <pool>` and the pool `Used by <guests>`. Guests
+  whose mounts match each other and no pool say `Shares a filesystem with
+  <guests>`, and up to six of them are joined pair by pair. A backup target
+  that matches one storage pool the same way says `Stored on <pool>`. This
+  is the one place the map matches by measurement: two readings of one share
+  differ by a few hundred kilobytes in total and by what was written between
+  polls in use, while two different filesystems with data on them almost
+  never come within 0.05% on both. A replica on identical disks with the
+  same data is the case it cannot tell apart.
+- A container whose network other containers use is drawn in the box most of
+  them are in, unless it is in the ways in or backups. The containers using
+  its network in that box follow it, running ones behind a running one and
+  switched-off ones at the back with the rest. A machine's counts follow the
+  move.
+
+All of these are links like the stated connections below: no line, a
+sentence on hover, rings on both ends, and nothing for an end folded into a
+`+N` tile. Hidden names hide them with the tiles' own names.
+
 ### The map says which tiles a collected value connects (18 November 2026)
 
 The diagram said nothing about how two apps are connected, because nothing

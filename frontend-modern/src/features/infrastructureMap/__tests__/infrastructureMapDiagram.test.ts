@@ -784,6 +784,18 @@ describe('layoutServiceDiagram', () => {
     // The connectors between layers are the only lines on the map. A stated
     // connection between two tiles adds none.
     const lineCount = (scene: MapScene) => ofKind(scene, 'line').length;
+    // The lines that start or end on one of these tiles: none ever should.
+    const linesAt = (scene: MapScene, ids: string[]) => {
+      const tiles = ofKind(scene, 'hit').filter((node) => ids.includes(node.hit.id));
+      expect(tiles).toHaveLength(ids.length);
+      return ofKind(scene, 'line').filter((line) =>
+        [line.points[0], line.points[line.points.length - 1]].some(([x, y]) =>
+          tiles.some(
+            (tile) => x >= tile.x && x <= tile.x + tile.w && y >= tile.y && y <= tile.y + tile.h,
+          ),
+        ),
+      );
+    };
 
     it('draws no line between two tiles, and tells each end the other', () => {
       const plain = dockerEstate().map((resource) =>
@@ -792,16 +804,20 @@ describe('layoutServiceDiagram', () => {
           : resource,
       );
       const scene = sceneOf(dockerEstate(), 1400);
-      expect(lineCount(scene)).toBe(lineCount(sceneOf(plain, 1400)));
+      // Gluetun moves into the box of what it carries, which can take a box
+      // and its connector away, never add one.
+      expect(lineCount(scene)).toBeLessThanOrEqual(lineCount(sceneOf(plain, 1400)));
+      expect(linesAt(scene, ['c-gluetun', 'c-qbittorrent', 'c-sonarr', 'tower'])).toEqual([]);
       const from = hitOf(scene, 'c-qbittorrent');
       const to = hitOf(scene, 'c-gluetun');
-      expect(from?.hit.linked).toEqual(['c-gluetun']);
-      expect(to?.hit.linked).toEqual(['c-qbittorrent']);
+      // Each is joined to the machine it runs on, too.
+      expect(from?.hit.linked).toEqual(['tower', 'c-gluetun']);
+      expect(to?.hit.linked).toEqual(['tower', 'c-qbittorrent']);
       expect(from?.hit.links).toEqual(['Uses the network of gluetun']);
       expect(to?.hit.links).toEqual(['Carries the network of 1 container']);
       // What it uses is written under its name, where the host would be.
       expect(texts(scene)).toContain('via gluetun');
-      expect(hitOf(scene, 'c-sonarr')?.hit.linked).toBeUndefined();
+      expect(hitOf(scene, 'c-sonarr')?.hit.linked).toEqual(['tower']);
     });
 
     it('tells a proxy every app it routes, at any width, and adds no line for them', () => {
@@ -827,16 +843,28 @@ describe('layoutServiceDiagram', () => {
       for (const width of [340, 390, 700, 1024, 1440, 2200]) {
         for (const density of ['names', 'marks'] as const) {
           const scene = sceneOf(busy, width, density);
-          expect(lineCount(scene)).toBe(lineCount(sceneOf(unrouted, width, density)));
+          expect(lineCount(scene)).toBeLessThanOrEqual(
+            lineCount(sceneOf(unrouted, width, density)),
+          );
+          expect(
+            linesAt(scene, [
+              'c-traefik',
+              'c-gluetun',
+              'c-prowlarr',
+              'tower',
+              ...apps.map((name) => `c-${name}`),
+            ]),
+          ).toEqual([]);
           expect([...(hitOf(scene, 'c-traefik')?.hit.linked ?? [])].sort()).toEqual(
-            apps.map((name) => `c-${name}`).sort(),
+            [...apps.map((name) => `c-${name}`), 'tower'].sort(),
           );
           for (const name of apps) {
-            expect(hitOf(scene, `c-${name}`)?.hit.linked).toEqual(['c-traefik']);
+            expect(hitOf(scene, `c-${name}`)?.hit.linked).toEqual(['tower', 'c-traefik']);
           }
           expect([...(hitOf(scene, 'c-gluetun')?.hit.linked ?? [])].sort()).toEqual([
             'c-prowlarr',
             'c-qbittorrent',
+            'tower',
           ]);
           // Every tile a link names is one that is drawn.
           const drawn = new Set(ofKind(scene, 'hit').map((node) => node.hit.id));
@@ -853,15 +881,22 @@ describe('layoutServiceDiagram', () => {
       const from = hitOf(scene, 'c-qbittorrent');
       const to = hitOf(scene, 'c-gluetun');
       if (!from || !to) throw new Error('both tiles should be drawn');
+      const machine = hitOf(scene, 'tower');
+      if (!machine) throw new Error('the machine should be drawn');
       const rings = renderMapLinkRings(scene, from.hit, palette);
-      expect(rings.match(/<rect /g)).toHaveLength(1);
+      expect(rings.match(/<rect /g)).toHaveLength(2);
       expect(rings).toContain(`x="${to.x}" y="${to.y}"`);
+      expect(rings).toContain(`x="${machine.x}" y="${machine.y}"`);
       expect(rings).toContain(`stroke="${palette.accent}"`);
       expect(rings).toContain('fill="none"');
       expect(renderMapLinkRings(scene, to.hit, palette)).toContain(`x="${from.x}" y="${from.y}"`);
+      // A container with no connection of its own rings only its machine.
       const alone = hitOf(scene, 'c-sonarr');
       if (!alone) throw new Error('the tile should be drawn');
-      expect(renderMapLinkRings(scene, alone.hit, palette)).toBe('');
+      const lone = renderMapLinkRings(scene, alone.hit, palette);
+      expect(lone.match(/<rect /g)).toHaveLength(1);
+      expect(lone).toContain(`x="${machine.x}" y="${machine.y}"`);
+      expect(renderMapLinkRings(scene, to.hit, palette)).not.toBe('');
       // The page has one empty layer for them, which the pointer passes through.
       const body = renderMapSceneBody(scene, palette, () => '/x');
       expect(body.match(/data-map-rings/g)).toHaveLength(1);
@@ -880,13 +915,24 @@ describe('layoutServiceDiagram', () => {
       expect(saved).toContain('via gluetun');
     });
 
-    it('links nothing for an estate that states none', () => {
+    it('links only a machine to what is on it, for an estate that states nothing else', () => {
       const scene = sceneOf(estate(), 1400);
-      expect(
-        ofKind(scene, 'hit').every(
-          (node) => node.hit.links === undefined && node.hit.linked === undefined,
-        ),
-      ).toBe(true);
+      for (const node of ofKind(scene, 'hit')) {
+        if (node.hit.id === 'pve') {
+          expect(node.hit.links).toEqual([
+            'Media 3 · Ways in 2 · Home automation 2 · Other 2 · Apps 1 · Monitoring 1 · Databases 1 · Development 1',
+            'Backs up to pbs-delly',
+          ]);
+          continue;
+        }
+        if (node.hit.id === 'pbs-store') {
+          expect(node.hit.links).toEqual(['Backup storage of delly']);
+        } else {
+          expect(node.hit.links).toBeUndefined();
+        }
+        // A folded tile stands for several things and is joined to nothing.
+        expect(node.hit.linked).toEqual(node.hit.navigable ? ['pve'] : undefined);
+      }
     });
 
     it('writes where a routed app answers under its name', () => {
@@ -903,7 +949,7 @@ describe('layoutServiceDiagram', () => {
       expect(texts(scene).some((text) => text.startsWith('wiki.examp'))).toBe(true);
       expect(hitOf(scene, 'c-wiki')?.hit.links).toEqual(['Routed by traefik at wiki.example.test']);
       expect(hitOf(scene, 'c-traefik')?.hit.links).toEqual(['Routes 1 container']);
-      expect(hitOf(scene, 'c-wiki')?.hit.linked).toEqual(['c-traefik']);
+      expect(hitOf(scene, 'c-wiki')?.hit.linked).toEqual(['tower', 'c-traefik']);
     });
 
     it('draws a gateway known only by address as a dashed tile that says who uses it', () => {

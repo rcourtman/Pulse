@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "base_sha": "e12872b5c181afc345f4458b775755398bbfa4be",
+  "verified_at": "2026-11-20T16:41:08Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapModel.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapServices.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapModel.ts": "55064a81c91df2116050d06dcb44fbf04cd38556a0f84334be891bf9f2a526ac",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapServices.ts": "efbcf2407a00d7782391627aaf653f2f473cf6ec3276dcc2e65d4528d39ca4ed"
+  },
+  "routes": [
+    "/map"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "the change in a Vite development build on pulse-dev proxied read-only to the maintainer's own Pulse server (64 tiles, five machines, a Proxmox cluster with six PBS storages, Docker on Unraid with three containers on a VPN container's network), at 1440 by 900 and at phone width",
+    "Gluetun drawn in Media followed by byparr, prowlarr and qBittorrent; Network tools left holding iVentoy only",
+    "backup targets captioned with their nodes (minipc, 2 hosts, delly2, delly) in place of the cluster name; pbs-delly's card says 'Backup storage of delly, minipc' and 'Stored on pbs_1tb_nvme'",
+    "pointing at each tile rings exactly what it is joined to: delly 24, minipc 17, Tower 14, jellyfin 2 (minipc and Tower Array), Tower Array 3 (Tower, bazarr, jellyfin), delly-nvme 4 (delly, frigate, iventoy, jdownloader), pbs_1tb_nvme 5 (Tower and four targets), the PBS container 1; cards read 'Mounts Tower Array', 'Used by bazarr, jellyfin', 'Data on delly-nvme', 'Holds pbs-delly, pbs-delly2, pbs-minipc +1', and delly's 'Other 9 \u00b7 Home automation 5 \u00b7 Monitoring 5 \u00b7 Ways in 3 \u00b7 Media 1 \u00b7 AI 1 \u00b7 Network tools 1' with 'Backs up to pbs-delly, pbs-energy-offsite, pbs-minipc'",
+    "the final bytes as a production bundle embedded in a Pulse server on pulse-dev with mock data, files compared with the committed ones by hash: the whole map spec and the whole accessibility spec on the desktop, Android and iPhone projects, 35 passed and 13 skipped by design, none failed",
+    "the phone tap test with its separate scroll removed: 30 of 30 on main's build and 18 of 18 taps on this build; two further runs on this build failed reading the suite's sign-in file while two workers wrote it, which only happens with repeated runs",
+    "not checked: Firefox, real Safari, a real phone, a screen reader"
+  ],
+  "interactions": [
+    "opened /map on a real estate and pointed at machines, storage, backup targets and guests",
+    "ran the map and accessibility end-to-end specs"
+  ]
+}

@@ -61,6 +61,17 @@ export interface MapItem {
    * drawn as that device, and every other kind as a check.
    */
   checkKind?: AvailabilityTargetKind;
+  /**
+   * The filesystems a guest mounts from outside itself, by size only: a
+   * share or a directory of its host, never a disk of its own.
+   */
+  mounts?: MapMount[];
+}
+
+/** A filesystem as the guest that mounts it reports it, in bytes. */
+export interface MapMount {
+  total: number;
+  used: number;
 }
 
 export interface MapSection {
@@ -77,6 +88,12 @@ export interface MapPool {
   sizeLabel?: string;
   /** A place backups are written to, as opposed to one guests run from. */
   backup?: boolean;
+  totalBytes?: number;
+  usedBytes?: number;
+  /** The hosts storage shared across a cluster is set up on, as host ids. */
+  hostIds?: string[];
+  /** The guests the platform reports with a disk on this pool. */
+  consumerIds?: string[];
 }
 
 export interface MapHost {
@@ -284,14 +301,51 @@ const toItem = (resource: Resource, typeLabel: string, attachments: Attachments)
   };
 };
 
+const NETWORK_FILESYSTEMS = new Set([
+  'nfs',
+  'nfs4',
+  'cifs',
+  'smb3',
+  'smbfs',
+  'fuse.sshfs',
+  '9p',
+  'virtiofs',
+  'ceph',
+  'fuse.glusterfs',
+]);
+
+// What a guest mounts from outside itself, and nothing else: a host folder
+// Proxmox binds into a container (`mp0` from `/mnt/media`), or a network
+// share. Anything else a guest reports is a disk of its own, which a clone
+// of the same guest has a copy of, so it is never read as shared.
+const isOutsideMount = (device: string, filesystem: string): boolean =>
+  (/^mp\d+$/.test(filesystem) && device.startsWith('/') && !device.startsWith('/dev/')) ||
+  NETWORK_FILESYSTEMS.has(filesystem) ||
+  /^[^/\\\s:]{2,}:\//.test(device) ||
+  device.startsWith('//');
+
+const mountsOf = (resource: Resource): MapMount[] => {
+  const mounts: MapMount[] = [];
+  for (const disk of resource.proxmox?.disks ?? []) {
+    const { total, used } = disk;
+    if (clean(disk.mountpoint) === '/') continue;
+    if (!isOutsideMount(clean(disk.device), clean(disk.filesystem).toLowerCase())) continue;
+    if (typeof total !== 'number' || typeof used !== 'number' || !(total > 0) || used < 0) continue;
+    mounts.push({ total, used });
+  }
+  return mounts;
+};
+
 // A guest or container is what the service diagram draws as one tile, so it
 // also carries the app it is and the group that puts it in.
 const toService = (resource: Resource, typeLabel: string, attachments: Attachments): MapItem => {
   const app = resolveMapApp({ name: displayName(resource), image: resource.docker?.image });
+  const mounts = mountsOf(resource);
   return {
     ...toItem(resource, typeLabel, attachments),
     ...(app ? { app } : {}),
     category: resolveMapCategory(app, resource.tags),
+    ...(mounts.length > 0 ? { mounts } : {}),
   };
 };
 
@@ -302,6 +356,10 @@ const isBackupTarget = (resource: Resource): boolean =>
 
 const toPool = (resource: Resource): MapPool => {
   const total = resource.disk?.total;
+  const used = resource.disk?.used;
+  const consumerIds = (resource.storage?.topConsumers ?? [])
+    .map((consumer) => clean(consumer.resourceId))
+    .filter(Boolean);
   return {
     id: resource.id,
     name: displayName(resource),
@@ -309,6 +367,10 @@ const toPool = (resource: Resource): MapPool => {
     usedPercent: finitePercent(getDiskPercent(resource)),
     sizeLabel: typeof total === 'number' && total > 0 ? formatBytes(total, 0) : undefined,
     ...(isBackupTarget(resource) ? { backup: true } : {}),
+    ...(typeof total === 'number' && total > 0 && typeof used === 'number' && used >= 0
+      ? { totalBytes: total, usedBytes: used }
+      : {}),
+    ...(consumerIds.length > 0 ? { consumerIds } : {}),
   };
 };
 
@@ -498,12 +560,39 @@ export function buildInfrastructureMapModel(
     let target: MapGroup | undefined;
     if (resource.platformType === 'proxmox-pve') {
       target = groups.get(`proxmox:${clean(resource.proxmox?.instance)}`);
+      // Proxmox names the nodes the storage is set up on, by node name. A
+      // name two of the cluster's hosts answer to points at neither.
+      const byName = new Map<string, MapHost | null>();
+      for (const host of target?.hosts ?? []) {
+        const own = drafts.get(host.id)?.resource;
+        const names = new Set(
+          [host.name, own?.name, own?.proxmox?.nodeName]
+            .map((name) => clean(name).toLowerCase())
+            .filter(Boolean),
+        );
+        for (const name of names) {
+          const known = byName.get(name);
+          byName.set(name, known === undefined || known === host ? host : null);
+        }
+      }
+      const hostIds = [
+        ...new Set(
+          (resource.storage?.nodes ?? [])
+            .map((node) => byName.get(clean(node).toLowerCase())?.id)
+            .filter((id): id is string => Boolean(id)),
+        ),
+      ];
+      if (hostIds.length > 0) pool.hostIds = hostIds;
     } else if (resource.platformType === 'vmware-vsphere') {
       const mounted = (resource.storage?.nodes ?? []).map((node) =>
         vmwareHostsByName.get(clean(node).toLowerCase()),
       );
       const owners = new Set(mounted.map((host) => (host ? hostGroup.get(host.id) : undefined)));
       if (mounted.length > 0 && owners.size === 1) target = [...owners][0];
+      const hostIds = [
+        ...new Set(mounted.map((host) => host?.id).filter((id): id is string => Boolean(id))),
+      ];
+      if (target && hostIds.length > 0) pool.hostIds = hostIds;
     }
     if (target) target.pools.push(pool);
     else unplacedPools.push(pool);
