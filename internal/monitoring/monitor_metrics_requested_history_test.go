@@ -2,6 +2,7 @@ package monitoring
 
 import (
 	"context"
+	"slices"
 	"testing"
 	"time"
 
@@ -12,6 +13,7 @@ type targetedChartHistoryFixture struct {
 	stubGuestMetricHistoryProvider
 	reads, bulkReads int
 	id, org, kind    string
+	metrics          []string
 }
 
 func (s *targetedChartHistoryFixture) GuestMetricHistory(*Monitor, string, string, time.Duration) map[string]map[string][]MetricPoint {
@@ -19,9 +21,10 @@ func (s *targetedChartHistoryFixture) GuestMetricHistory(*Monitor, string, strin
 	return nil
 }
 
-func (s *targetedChartHistoryFixture) GuestMetricHistoryForResource(_ context.Context, _ *Monitor, org, kind, id string, _ time.Duration) map[string][]MetricPoint {
+func (s *targetedChartHistoryFixture) GuestMetricHistoryForResource(_ context.Context, _ *Monitor, org, kind, id string, _ time.Duration, metricTypes ...string) map[string][]MetricPoint {
 	s.reads++
 	s.id, s.org, s.kind = id, org, kind
+	s.metrics = slices.Clone(metricTypes)
 	return s.stubGuestMetricHistoryProvider.GuestMetricHistory(nil, org, kind, time.Hour)[id]
 }
 
@@ -44,7 +47,8 @@ func TestGuestChartRequestedCoverageIsPerSeries(t *testing.T) {
 			if len(result["diskread"]) != 2 || len(result["diskwrite"]) != 2 || result["diskread"][1].Value != 0 || len(result["cpu"]) != 0 || provider.reads != 1 || provider.bulkReads != 0 {
 				t.Fatalf("covered CPU hid requested IO or target escaped: %+v reads %d/%d", result, provider.reads, provider.bulkReads)
 			}
-			if provider.id != "host-target" || provider.org != "org-targeted" || provider.kind != "agent" {
+			if provider.id != "host-target" || provider.org != "org-targeted" || provider.kind != "agent" ||
+				!slices.Equal(provider.metrics, []string{"diskread", "diskwrite"}) {
 				t.Fatalf("target binding changed: %+v", provider)
 			}
 			writeRawMetricBatch(t, monitor.metricsStore, "agent", "host-target", "diskread", points)

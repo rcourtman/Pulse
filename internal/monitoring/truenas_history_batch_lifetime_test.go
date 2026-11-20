@@ -16,7 +16,7 @@ type batchLifetimeHistoryFetcher struct {
 	value  float64
 }
 
-func (f *batchLifetimeHistoryFetcher) SystemMetricHistory(ctx context.Context, _ time.Duration) (*truenas.SystemMetricHistory, error) {
+func (f *batchLifetimeHistoryFetcher) SystemMetricHistory(ctx context.Context, _ time.Duration, _ ...string) (*truenas.SystemMetricHistory, error) {
 	if f.onRead != nil {
 		f.onRead(ctx)
 	}

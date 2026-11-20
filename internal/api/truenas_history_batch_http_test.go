@@ -25,7 +25,7 @@ type batchHTTPHistoryFetcher struct {
 	reads  atomic.Int32
 }
 
-func (f *batchHTTPHistoryFetcher) SystemMetricHistory(context.Context, time.Duration) (*truenas.SystemMetricHistory, error) {
+func (f *batchHTTPHistoryFetcher) SystemMetricHistory(context.Context, time.Duration, ...string) (*truenas.SystemMetricHistory, error) {
 	f.reads.Add(1)
 	if f.onRead != nil {
 		f.onRead()

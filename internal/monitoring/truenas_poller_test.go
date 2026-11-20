@@ -601,7 +601,7 @@ func (s *controllableTrueNASHistoryFetcher) DiskTemperatureHistory(_ context.Con
 	return result, nil
 }
 
-func (s *controllableTrueNASHistoryFetcher) SystemMetricHistory(context.Context, time.Duration) (*truenas.SystemMetricHistory, error) {
+func (s *controllableTrueNASHistoryFetcher) SystemMetricHistory(context.Context, time.Duration, ...string) (*truenas.SystemMetricHistory, error) {
 	if s == nil || s.systemHistory == nil {
 		return nil, nil
 	}

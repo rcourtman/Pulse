@@ -74,9 +74,10 @@ type MonitorGuestMetricHistoryProvider interface {
 }
 
 // MonitorTargetedGuestMetricHistoryProvider avoids querying other appliances
-// when a single resource needs a source-native chart fallback.
+// when a single resource needs a source-native chart fallback. The optional
+// metric list lets the provider avoid retrieving unrelated series.
 type MonitorTargetedGuestMetricHistoryProvider interface {
-	GuestMetricHistoryForResource(ctx context.Context, m *Monitor, orgID, resourceType, resourceID string, duration time.Duration) map[string][]MetricPoint
+	GuestMetricHistoryForResource(ctx context.Context, m *Monitor, orgID, resourceType, resourceID string, duration time.Duration, metricTypes ...string) map[string][]MetricPoint
 }
 
 // GetGuestMetrics returns historical metrics for a guest
@@ -145,7 +146,7 @@ func (m *Monitor) GetGuestMetricsForChartWithContext(ctx context.Context, inMemo
 	if len(requestedMetricTypes) > 0 && hasSufficientChartMapCoverageForMetrics(best, duration, requestedMetricTypes) {
 		return best
 	}
-	if nativeHistory := m.nativeGuestMetricHistory(ctx, sqlResourceType, duration, sqlResourceID); len(nativeHistory) > 0 {
+	if nativeHistory := m.nativeGuestMetricHistory(ctx, sqlResourceType, duration, requestedMetricTypes, sqlResourceID); len(nativeHistory) > 0 {
 		if nativeMetrics, ok := nativeHistory[sqlResourceID]; ok {
 			best = mergeGuestMetricHistory(best, filterChartMetricMap(nativeMetrics, requestedMetricTypes), duration)
 		}
@@ -665,7 +666,7 @@ func (m *Monitor) GetGuestMetricsForChartBatch(
 			}
 		}
 	}
-	nativeResults := m.nativeGuestMetricHistory(context.Background(), sqlResourceType, duration)
+	nativeResults := m.nativeGuestMetricHistory(context.Background(), sqlResourceType, duration, nil)
 
 	// Phase 3: Merge fallback data per metric type.
 	// result[id] is already owned (set from filterChartMetricMap output above);
@@ -833,7 +834,7 @@ func (m *Monitor) GetStorageMetricsForChartBatch(
 	return result
 }
 
-func (m *Monitor) nativeGuestMetricHistory(ctx context.Context, resourceType string, duration time.Duration, resourceIDs ...string) map[string]map[string][]MetricPoint {
+func (m *Monitor) nativeGuestMetricHistory(ctx context.Context, resourceType string, duration time.Duration, metricTypes []string, resourceIDs ...string) map[string]map[string][]MetricPoint {
 	providers := m.supplementalProviderSnapshot()
 	if len(providers) == 0 {
 		return nil
@@ -853,7 +854,7 @@ func (m *Monitor) nativeGuestMetricHistory(ctx context.Context, resourceType str
 		}
 		if targeted, ok := provider.(MonitorTargetedGuestMetricHistoryProvider); ok && len(resourceIDs) == 1 {
 			id := resourceIDs[0]
-			metricMap := targeted.GuestMetricHistoryForResource(ctx, m, orgID, resourceType, id, duration)
+			metricMap := targeted.GuestMetricHistoryForResource(ctx, m, orgID, resourceType, id, duration, metricTypes...)
 			if len(metricMap) > 0 {
 				history[id] = mergeGuestMetricHistory(history[id], metricMap, duration)
 			}

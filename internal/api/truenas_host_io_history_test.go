@@ -26,11 +26,14 @@ import (
 // Live disjoint disk samples survive individually but cannot form a host sum.
 // History phases independently control whether a complete native sum exists.
 type hostIORESTFixture struct {
-	server *httptest.Server
-	phase  atomic.Int32
-	reads  atomic.Int32
-	end    atomic.Int64
-	hold   atomic.Pointer[hostIORESTHold]
+	server            *httptest.Server
+	phase             atomic.Int32
+	reads             atomic.Int32
+	catalogueReads    atomic.Int32
+	unrelatedGraphs   atomic.Int32
+	rejectTemperature atomic.Bool
+	end               atomic.Int64
+	hold              atomic.Pointer[hostIORESTHold]
 }
 
 type hostIORESTHold struct {
@@ -53,10 +56,14 @@ func newHostIORESTFixture(t *testing.T) *hostIORESTFixture {
 		case "/api/v2.0/pool/dataset", "/api/v2.0/alert/list":
 			fmt.Fprint(w, `[]`)
 		case "/api/v2.0/reporting/graphs":
-			if f.phase.Load() == 2 {
-				fmt.Fprint(w, `[{"name":"disk","identifiers":["da0","da1","da2"]}]`)
-			} else {
-				fmt.Fprint(w, `[{"name":"disk","identifiers":["da0","da1"]}]`)
+			f.catalogueReads.Add(1)
+			switch f.phase.Load() {
+			case 2:
+				fmt.Fprint(w, `[{"name":"disk","identifiers":["da0","da1","da2"]},{"name":"interface","identifiers":["igb0"]}]`)
+			case 5:
+				fmt.Fprint(w, `[{"name":"interface","identifiers":["igb0"]}]`)
+			default:
+				fmt.Fprint(w, `[{"name":"disk","identifiers":["da0","da1"]},{"name":"interface","identifiers":["igb0"]}]`)
 			}
 		case "/api/v2.0/reporting/get_data":
 			f.reads.Add(1)
@@ -73,6 +80,28 @@ func newHostIORESTFixture(t *testing.T) *hostIORESTFixture {
 				close(hold.dispatched)
 				<-r.Context().Done()
 				close(hold.cancelled)
+				return
+			}
+			rejectTemperature := false
+			for _, graph := range request.Graphs {
+				if graph.Name != "disk" {
+					f.unrelatedGraphs.Add(1)
+				}
+				if graph.Name == "cputemp" && f.rejectTemperature.Load() {
+					rejectTemperature = true
+				}
+			}
+			if f.rejectTemperature.Load() {
+				// Controlled cost per exchange for the browser comparison. The
+				// regression asserts call counts, not a wall-clock threshold.
+				select {
+				case <-r.Context().Done():
+					return
+				case <-time.After(180 * time.Millisecond):
+				}
+			}
+			if rejectTemperature {
+				http.Error(w, "optional graph unavailable", 422)
 				return
 			}
 			var responses []map[string]any
@@ -354,6 +383,66 @@ func TestTrueNASHostIOHistoryWithPartialStore(t *testing.T) {
 	if rec.Code != 200 || json.Unmarshal(rec.Body.Bytes(), &single) != nil || len(single.Points) != 4 || f.reads.Load()-before != 1 || other.reads.Load() != 0 {
 		t.Fatalf("single host I/O hidden by covered CPU: status %d points %d reads %d/%d", rec.Code, len(single.Points), f.reads.Load()-before, other.reads.Load())
 	}
+
+	// A loaded CPU/network chart must not be held up by asking CORE to
+	// reconstruct unrelated graphs while supplementing a missing disk series.
+	// Use several stored samples so the real History consumer can draw curves.
+	ref := now.Truncate(5 * time.Minute)
+	var additional []metrics.WriteMetric
+	for i := 1; i <= 4; i++ {
+		at := ref.Add(-time.Duration(i) * 10 * time.Minute)
+		for metric, value := range map[string]float64{"cpu": float64(4 + 7*i), "netin": float64(1000 * i), "netout": float64(750 * i)} {
+			additional = append(additional, metrics.WriteMetric{ResourceType: "agent", ResourceID: "host-io-target", MetricType: metric, Value: value, Timestamp: at, Tier: metrics.TierRaw})
+		}
+	}
+	store.WriteBatchSync(additional)
+	for _, test := range []struct {
+		name   string
+		phase  int32
+		posts  int32
+		points int
+	}{
+		{"optional-graph-aligned", 1, 1, 4},
+		{"optional-graph-missing-member", 2, 1, 0},
+		{"no-disk-in-catalogue", 5, 0, 0},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			f.phase.Store(test.phase)
+			f.rejectTemperature.Store(true)
+			defer f.rejectTemperature.Store(false)
+			f.catalogueReads.Store(0)
+			f.unrelatedGraphs.Store(0)
+			before := f.reads.Load()
+			started := time.Now()
+			rec := request(token, "org-host-io", "agent", "host-io-target", "")
+			elapsed := time.Since(started)
+			posts := f.reads.Load() - before
+			t.Logf("HOST_IO_TIMED %s %d %d %d %s", test.name, elapsed.Milliseconds(), posts, f.unrelatedGraphs.Load(), rec.Body.String())
+			var result struct {
+				Metrics map[string][]hostIOHistoryPoint
+			}
+			if rec.Code != 200 || json.Unmarshal(rec.Body.Bytes(), &result) != nil {
+				t.Fatalf("scoped host history %d %s", rec.Code, rec.Body.String())
+			}
+			if len(result.Metrics["cpu"]) != 5 || len(result.Metrics["netin"]) != 4 || len(result.Metrics["netout"]) != 4 ||
+				len(result.Metrics["diskread"]) != test.points || len(result.Metrics["diskwrite"]) != test.points {
+				t.Errorf("missing disk member or retained charts were misrepresented: %+v", result.Metrics)
+			}
+			for _, metric := range []string{"cpu", "netin", "netout"} {
+				for i, point := range result.Metrics[metric][:min(4, len(result.Metrics[metric]))] {
+					level := 4 - i
+					expected := map[string]float64{"cpu": float64(4 + 7*level), "netin": float64(1000 * level), "netout": float64(750 * level)}
+					if point.Value != expected[metric] {
+						t.Errorf("stored %s sample %d changed: %+v", metric, i, point)
+					}
+				}
+			}
+			if f.catalogueReads.Load() != 1 || posts != test.posts || f.unrelatedGraphs.Load() != 0 || other.reads.Load() != 0 {
+				t.Errorf("disk-only supplement used unrelated work: catalogues=%d selected/sibling POSTs=%d/%d unrelated graphs=%d", f.catalogueReads.Load(), posts, other.reads.Load(), f.unrelatedGraphs.Load())
+			}
+		})
+	}
+	f.phase.Store(1)
 	// Existing stored directions are not replaced by a larger native series.
 	ioTime := now.Add(-20 * time.Second)
 	store.WriteBatchSync([]metrics.WriteMetric{{ResourceType: "agent", ResourceID: "host-io-target", MetricType: "diskread", Value: 777, Timestamp: ioTime, Tier: metrics.TierRaw}})

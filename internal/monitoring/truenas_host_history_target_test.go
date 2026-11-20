@@ -22,14 +22,14 @@ func (f *targetedTrueNASHistoryFetcher) TransportStatus() truenas.TransportStatu
 	return truenas.TransportStatus{Mode: f.mode}
 }
 
-func (f *targetedTrueNASHistoryFetcher) SystemMetricHistory(ctx context.Context, duration time.Duration) (*truenas.SystemMetricHistory, error) {
+func (f *targetedTrueNASHistoryFetcher) SystemMetricHistory(ctx context.Context, duration time.Duration, metricTypes ...string) (*truenas.SystemMetricHistory, error) {
 	f.reads.Add(1)
 	f.deadline, _ = ctx.Deadline()
 	if f.entered != nil {
 		close(f.entered)
 		<-f.release
 	}
-	return f.controllableTrueNASHistoryFetcher.SystemMetricHistory(ctx, duration)
+	return f.controllableTrueNASHistoryFetcher.SystemMetricHistory(ctx, duration, metricTypes...)
 }
 
 func TestTrueNASHostHistoryTargetAndLifetime(t *testing.T) {

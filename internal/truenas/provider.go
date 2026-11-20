@@ -71,7 +71,7 @@ type physicalDiskHistoryFetcher interface {
 }
 
 type systemMetricHistoryFetcher interface {
-	SystemMetricHistory(ctx context.Context, duration time.Duration) (*SystemMetricHistory, error)
+	SystemMetricHistory(ctx context.Context, duration time.Duration, metricTypes ...string) (*SystemMetricHistory, error)
 }
 
 type transportStatusFetcher interface {
@@ -127,11 +127,11 @@ func (f *APIFetcher) DiskTemperatureHistory(ctx context.Context, identifiers []s
 	return f.Client.GetDiskTemperatureHistory(ctx, identifiers, duration)
 }
 
-func (f *APIFetcher) SystemMetricHistory(ctx context.Context, duration time.Duration) (*SystemMetricHistory, error) {
+func (f *APIFetcher) SystemMetricHistory(ctx context.Context, duration time.Duration, metricTypes ...string) (*SystemMetricHistory, error) {
 	if f == nil || f.Client == nil {
 		return nil, fmt.Errorf("truenas api fetcher client is nil")
 	}
-	return f.Client.GetSystemMetricHistory(ctx, duration)
+	return f.Client.GetSystemMetricHistory(ctx, duration, metricTypes...)
 }
 
 // TransportStatus returns the underlying client's non-secret connection-local
@@ -343,7 +343,7 @@ func (p *Provider) SystemMetricResourceID() string {
 
 // SystemMetricHistory returns canonical host-chart metrics for the TrueNAS
 // appliance keyed by the shared agent metrics resource ID.
-func (p *Provider) SystemMetricHistory(ctx context.Context, duration time.Duration) (string, map[string][]TimeSeriesPoint, error) {
+func (p *Provider) SystemMetricHistory(ctx context.Context, duration time.Duration, metricTypes ...string) (string, map[string][]TimeSeriesPoint, error) {
 	if p == nil {
 		return "", nil, fmt.Errorf("truenas provider is nil")
 	}
@@ -361,7 +361,7 @@ func (p *Provider) SystemMetricHistory(ctx context.Context, duration time.Durati
 		return "", nil, fmt.Errorf("truenas provider snapshot is missing system metric resource id")
 	}
 
-	nativeHistory, err := historyFetcher.SystemMetricHistory(ctx, duration)
+	nativeHistory, err := historyFetcher.SystemMetricHistory(ctx, duration, metricTypes...)
 	if err != nil {
 		return "", nil, err
 	}

@@ -14,6 +14,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -309,7 +310,7 @@ func (c *Client) getSystemTelemetryREST(ctx context.Context) (*SystemInfo, error
 	if start <= 0 {
 		start = end
 	}
-	response, err := c.getLegacySystemReportingData(ctx, reportingRangeQuery(start, end))
+	response, err := c.getLegacySystemReportingData(ctx, reportingRangeQuery(start, end), "")
 	if err != nil {
 		return nil, err
 	}
@@ -485,10 +486,18 @@ func legacyRESTReportingGraphs() []map[string]any {
 // graph-validation/server errors, never authentication, rate-limit, endpoint,
 // transport or cancellation failures. Bind the catalogue-selected graph set once
 // for both the batch and split; the requested query window remains unchanged.
-func (c *Client) getLegacySystemReportingData(ctx context.Context, query map[string]any) ([]trueNASReportingGetDataResponse, error) {
+// A non-empty graphName selects one family, retaining every catalogue member
+// in it so an omitted member cannot turn into a smaller host total.
+func (c *Client) getLegacySystemReportingData(ctx context.Context, query map[string]any, graphName string) ([]trueNASReportingGetDataResponse, error) {
 	graphs, err := c.legacyReportingGraphs(ctx)
 	if err != nil {
 		return nil, err
+	}
+	if graphName != "" {
+		graphs = slices.DeleteFunc(graphs, func(graph map[string]any) bool { return graph["name"] != graphName })
+		if len(graphs) == 0 {
+			return nil, nil
+		}
 	}
 	response, err := c.getReportingDataREST(ctx, graphs, query)
 	if err == nil {
@@ -546,13 +555,22 @@ func (c *Client) getReportingDataREST(ctx context.Context, graphs []map[string]a
 
 // GetSystemMetricHistory retrieves historical system metrics from the native
 // TrueNAS reporting API for the canonical host-chart fallback path.
-func (c *Client) GetSystemMetricHistory(ctx context.Context, duration time.Duration) (*SystemMetricHistory, error) {
+func (c *Client) GetSystemMetricHistory(ctx context.Context, duration time.Duration, metricTypes ...string) (*SystemMetricHistory, error) {
 	legacy, err := c.useLegacyREST(ctx)
 	if err != nil {
 		return nil, err
 	}
 	if legacy {
-		return c.getSystemMetricHistoryREST(ctx, duration)
+		var graphName string
+		// A stored CPU or network series can coexist with missing host I/O.
+		// Do not fetch or retry any of those unrelated graphs for a disk-only
+		// supplement. Both directions still use the same native disk rows.
+		if len(metricTypes) != 0 && !slices.ContainsFunc(metricTypes, func(metric string) bool {
+			return metric != "diskread" && metric != "diskwrite"
+		}) {
+			graphName = "disk"
+		}
+		return c.getSystemMetricHistoryREST(ctx, duration, graphName)
 	}
 
 	var history *SystemMetricHistory
@@ -566,7 +584,7 @@ func (c *Client) GetSystemMetricHistory(ctx context.Context, duration time.Durat
 
 // getSystemMetricHistoryREST serves the host-chart history from the legacy REST
 // reporting API, mirroring the JSON-RPC query for CORE appliances.
-func (c *Client) getSystemMetricHistoryREST(ctx context.Context, duration time.Duration) (*SystemMetricHistory, error) {
+func (c *Client) getSystemMetricHistoryREST(ctx context.Context, duration time.Duration, graphName string) (*SystemMetricHistory, error) {
 	if duration <= 0 {
 		duration = 24 * time.Hour
 	}
@@ -575,7 +593,7 @@ func (c *Client) getSystemMetricHistoryREST(ctx context.Context, duration time.D
 	if start <= 0 {
 		start = end
 	}
-	response, err := c.getLegacySystemReportingData(ctx, reportingRangeQuery(start, end))
+	response, err := c.getLegacySystemReportingData(ctx, reportingRangeQuery(start, end), graphName)
 	if err != nil {
 		return nil, err
 	}
