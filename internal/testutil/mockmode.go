@@ -14,18 +14,32 @@ var mockModeTestMu sync.Mutex
 // test and keeps the legacy env flag aligned for code paths that still read it.
 func SetMockMode(t *testing.T, enabled bool) {
 	t.Helper()
+	setMockMode(t, enabled, nil)
+}
 
+// SetMockModeWithConfig uses an isolated estate for the lifetime of a test.
+func SetMockModeWithConfig(t *testing.T, enabled bool, cfg mock.MockConfig) {
+	t.Helper()
+	setMockMode(t, enabled, &cfg)
+}
+
+func setMockMode(t *testing.T, enabled bool, cfg *mock.MockConfig) {
+	t.Helper()
 	mockModeTestMu.Lock()
+	t.Cleanup(mockModeTestMu.Unlock)
 	previous := mock.IsMockEnabled()
 	t.Setenv("PULSE_MOCK_MODE", strconv.FormatBool(enabled))
-	if err := mock.SetEnabled(enabled); err != nil {
-		mockModeTestMu.Unlock()
-		t.Fatalf("set mock mode: %v", err)
+	if cfg != nil {
+		original := mock.GetConfig()
+		t.Cleanup(func() { mock.SetMockConfig(original) })
+		mock.SetMockConfig(*cfg)
 	}
 	t.Cleanup(func() {
 		if err := mock.SetEnabled(previous); err != nil {
-			t.Fatalf("restore mock mode: %v", err)
+			t.Errorf("restore mock mode: %v", err)
 		}
-		mockModeTestMu.Unlock()
 	})
+	if err := mock.SetEnabled(enabled); err != nil {
+		t.Fatalf("set mock mode: %v", err)
+	}
 }

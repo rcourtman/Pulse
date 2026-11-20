@@ -86,23 +86,52 @@ func (s *SQLiteResourceStore) ApplyCanonicalIDSuccessions(successions []Canonica
 		}
 	}()
 
+	// The transaction closes both statements. A first inventory can declare
+	// thousands of IDs with the same two writes.
+	record, err := tx.Prepare(`INSERT OR IGNORE INTO canonical_id_successions
+		(old_canonical_id, new_canonical_id) VALUES (?, ?)`)
+	if err != nil {
+		return fmt.Errorf("prepare canonical ID succession: %w", err)
+	}
+	deletePin, err := tx.Prepare(`DELETE FROM resource_identities WHERE canonical_id = ?`)
+	if err != nil {
+		return fmt.Errorf("prepare superseded pin deletion: %w", err)
+	}
 	applied := make([]CanonicalIDSuccession, 0, len(pending))
 	var carried []carriedLock
 	var groups []savedGroup
 	var rekeys []rekeyedID
-	for _, succession := range pending {
+	var hasOperatorRows bool
+	for i, succession := range pending {
 		oldID := succession.OldCanonicalID
 		newID := succession.NewCanonicalID
-		result, err := tx.Exec(
-			`INSERT OR IGNORE INTO canonical_id_successions (old_canonical_id, new_canonical_id) VALUES (?, ?)`,
-			oldID, newID,
-		)
+		result, err := record.Exec(oldID, newID)
 		if err != nil {
 			return fmt.Errorf("record canonical ID succession %q -> %q: %w", oldID, newID, err)
 		}
+		if i == 0 {
+			// The first insert acquired the write transaction. If all re-key
+			// operator tables are empty, no writer can add a row during this
+			// batch, and there is no donor lock to carry.
+			err := tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM resource_operator_state)
+				OR EXISTS(SELECT 1 FROM action_audits)
+				OR EXISTS(SELECT 1 FROM resource_links)
+				OR EXISTS(SELECT 1 FROM resource_exclusions)`).Scan(&hasOperatorRows)
+			if err != nil {
+				return fmt.Errorf("check for canonical rows to re-key: %w", err)
+			}
+		}
+		applied = append(applied, succession)
 		if inserted, err := result.RowsAffected(); err == nil && inserted == 0 {
 			// Recorded by an earlier boot; the re-key already ran.
-			applied = append(applied, succession)
+			continue
+		}
+		// Identity pins may exist on a fleet with no operator state yet.
+		// The recorded succession keeps change history under this ID readable.
+		if _, err := deletePin.Exec(oldID); err != nil {
+			return fmt.Errorf("delete superseded identity pin %q: %w", oldID, err)
+		}
+		if !hasOperatorRows {
 			continue
 		}
 		carriedAt := time.Now().UTC()
@@ -138,14 +167,8 @@ func (s *SQLiteResourceStore) ApplyCanonicalIDSuccessions(successions []Canonica
 				return fmt.Errorf("re-key canonical rows %q -> %q: %w", oldID, newID, err)
 			}
 		}
-		// The successor's era record keeps the old era's journal rows
-		// readable; the superseded pin row itself is stale bucket noise.
-		if _, err := tx.Exec(`DELETE FROM resource_identities WHERE canonical_id = ?`, oldID); err != nil {
-			return fmt.Errorf("delete superseded identity pin %q: %w", oldID, err)
-		}
 		groups = append(groups, savedGroup{index: len(rekeys), members: groupAfterRekey(members, oldID, newID)})
 		rekeys = append(rekeys, rekeyedID{oldID: oldID, newID: newID})
-		applied = append(applied, succession)
 	}
 
 	// Whether a successor took its predecessor's whole row or kept its own, it

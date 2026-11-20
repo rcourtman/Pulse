@@ -26,6 +26,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 	recoverymanager "github.com/rcourtman/pulse-go-rewrite/internal/recovery/manager"
 	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
+	"github.com/rcourtman/pulse-go-rewrite/internal/testutil"
 	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 	internalws "github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
@@ -127,42 +128,42 @@ func newIntegrationServer(t *testing.T) *integrationServer {
 func newIntegrationServerWithConfig(t *testing.T, customize func(*config.Config)) *integrationServer {
 	t.Helper()
 
-	tmpDir := t.TempDir()
-	cfg := &config.Config{
-		ConfigPath:     tmpDir,
-		DataPath:       tmpDir,
-		DemoMode:       false,
-		AllowedOrigins: "*",
-		EnvOverrides:   make(map[string]bool),
+	// Route, auth and transport tests need a real populated monitor, but their
+	// assertions do not depend on the number of guests in the public demo.
+	estate := mock.MockConfig{
+		NodeCount: 2, VMsPerNode: 2, LXCsPerNode: 2,
+		DockerHostCount: 1, DockerContainersPerHost: 2, GenericHostCount: 1,
+		K8sClusterCount: 1, K8sNodesPerCluster: 2, K8sPodsPerCluster: 3, K8sDeploymentsPerCluster: 2,
+		RandomMetrics: true, StoppedPercent: mock.DefaultConfig.StoppedPercent,
+		UpdateInterval: mock.DefaultConfig.UpdateInterval,
 	}
+	testutil.SetMockModeWithConfig(t, true, estate)
+	return newIntegrationServerWithRuntimeMode(t, true, customize)
+}
 
-	return newIntegrationServerWithRuntimeMode(t, cfg, true, customize)
+func newFleetIntegrationServer(t *testing.T) *integrationServer {
+	t.Helper()
+	setMockModeForTest(t, true)
+	return newIntegrationServerWithRuntimeMode(t, true, nil)
 }
 
 func newIntegrationServerWithoutMock(t *testing.T, customize func(*config.Config)) *integrationServer {
 	t.Helper()
-
-	tmpDir := t.TempDir()
-	cfg := &config.Config{
-		ConfigPath:     tmpDir,
-		DataPath:       tmpDir,
-		DemoMode:       false,
-		AllowedOrigins: "*",
-		EnvOverrides:   make(map[string]bool),
-	}
-
-	return newIntegrationServerWithRuntimeMode(t, cfg, false, customize)
+	setMockModeForTest(t, false)
+	return newIntegrationServerWithRuntimeMode(t, false, customize)
 }
 
 func newIntegrationServerWithRuntimeMode(
 	t *testing.T,
-	cfg *config.Config,
 	mockMode bool,
 	customize func(*config.Config),
 ) *integrationServer {
 	t.Helper()
-
-	setMockModeForTest(t, mockMode)
+	tmpDir := t.TempDir()
+	cfg := &config.Config{
+		ConfigPath: tmpDir, DataPath: tmpDir, AllowedOrigins: "*",
+		EnvOverrides: make(map[string]bool),
+	}
 
 	if customize != nil {
 		customize(cfg)
@@ -912,7 +913,7 @@ func TestAlertAcknowledge_AllowsPrintableAlertIDs(t *testing.T) {
 }
 
 func TestStateEndpointReturnsMockData(t *testing.T) {
-	srv := newIntegrationServer(t)
+	srv := newFleetIntegrationServer(t)
 
 	res, err := http.Get(srv.server.URL + "/api/state")
 	if err != nil {
@@ -951,7 +952,7 @@ func TestStateEndpointReturnsMockData(t *testing.T) {
 }
 
 func TestRecoveryRollupsEndpointReturnsMockData(t *testing.T) {
-	srv := newIntegrationServer(t)
+	srv := newFleetIntegrationServer(t)
 
 	// The endpoint caps limit at 500 per page and the default mock estate
 	// produces more rollups than one page holds, so walk every page.
@@ -1148,7 +1149,7 @@ func TestServerInfoEndpointReportsDevelopment(t *testing.T) {
 }
 
 func TestRecoveryPointsEndpointReturnsMockData(t *testing.T) {
-	srv := newIntegrationServer(t)
+	srv := newFleetIntegrationServer(t)
 
 	getPoints := func(t *testing.T, query string) struct {
 		Data []struct {
@@ -1276,7 +1277,7 @@ func TestHealthEndpointHeadAllowed(t *testing.T) {
 }
 
 func TestConfigNodesUsesMockTopology(t *testing.T) {
-	srv := newIntegrationServer(t)
+	srv := newFleetIntegrationServer(t)
 
 	res, err := http.Get(srv.server.URL + "/api/config/nodes")
 	if err != nil {
@@ -1299,7 +1300,7 @@ func TestConfigNodesUsesMockTopology(t *testing.T) {
 }
 
 func TestMockModeToggleEndpoint(t *testing.T) {
-	srv := newIntegrationServer(t)
+	srv := newFleetIntegrationServer(t)
 
 	if !mock.IsMockEnabled() {
 		t.Fatalf("mock mode should be enabled at start of test")
