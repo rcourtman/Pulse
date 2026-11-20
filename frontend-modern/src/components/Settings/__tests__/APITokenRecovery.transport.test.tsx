@@ -596,7 +596,7 @@ describe('API token inventory keyboard recovery', () => {
 describe('restarting a pending API token inventory check', () => {
   const label = 'Restart check of token inventory';
   const region = () => screen.getByRole('region', { name: 'API token inventory' });
-  const generate = () => screen.getByRole('button', { name: 'Generate', exact: true });
+  const generate = () => screen.getByRole('button', { name: 'Generate' });
   const savedToken = () => screen.findByRole('article', { name: /^API token Saved collector / });
   const pressRestart = () => {
     const button = screen.getByRole('button', { name: label });
