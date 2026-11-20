@@ -329,12 +329,12 @@ describe.each<Layout>(['desktop row', 'compact card'])(
       const cancelled = originals[2];
       const selected = originals[1];
       fireEvent.click(controlsFor(layout, cancelled).getByRole('button', { name: /^Revoke / }));
-      const cancelledDialog = within(
-        await screen.findByRole('dialog', { name: /^Revoke API token / }),
+      const cancelledDialog = await screen.findByRole('dialog', { name: /^Revoke API token / });
+      expect(cancelledDialog).toHaveAccessibleDescription(
+        'Revocation is permanent. Agents, scripts, and integrations using it need a replacement token to authenticate.',
       );
-      expect(cancelledDialog.getByText(/agents, scripts, or integrations/)).toBeInTheDocument();
       expect(writes()).toHaveLength(0);
-      fireEvent.click(cancelledDialog.getByRole('button', { name: 'Cancel' }));
+      fireEvent.click(within(cancelledDialog).getByRole('button', { name: 'Cancel' }));
       expect(saved).toEqual(originals);
       fireEvent.click(controlsFor(layout, selected).getByRole('button', { name: /^Revoke / }));
       const confirmation = within(

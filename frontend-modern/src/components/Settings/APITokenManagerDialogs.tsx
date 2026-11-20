@@ -1,4 +1,4 @@
-import { Component, For, Show, type Accessor } from 'solid-js';
+import { Component, For, Show, createUniqueId, type Accessor } from 'solid-js';
 import { Dialog } from '@/components/shared/Dialog';
 import { InlineNotice } from '@/components/shared/InlineNotice';
 import type { APIScopeOption } from '@/constants/apiScopes';
@@ -37,7 +37,7 @@ export const APITokenManagerDialogs: Component<APITokenManagerDialogsProps> = (p
         ariaLabel={`Edit API token scopes for ${getAPITokenIdentityLabel(props.tokenToEdit()!)}`}
       >
         <div
-          class={`min-h-0 w-full overflow-y-auto px-6 ${props.scopeError ? 'space-y-2 py-3 sm:space-y-3 sm:py-4' : 'space-y-5 py-6'}`}
+          class={`min-h-0 w-full overflow-y-auto px-4 sm:px-6 ${props.scopeError ? 'space-y-2 py-2 sm:space-y-3 sm:py-4' : 'space-y-3 py-3 sm:space-y-5 sm:py-6'}`}
         >
           <div>
             <h3 class="text-lg font-semibold text-base-content">
@@ -46,16 +46,16 @@ export const APITokenManagerDialogs: Component<APITokenManagerDialogsProps> = (p
                 {getAPITokenHint(props.tokenToEdit())}
               </span>
             </h3>
-            <p class="mt-1 text-sm text-muted">
-              Changes to{' '}
-              <span class="font-medium text-base-content">
+            <p class="mt-1 text-sm leading-tight text-muted wrap-anywhere sm:leading-normal">
+              <bdi class="block font-medium text-base-content">
                 {props.tokenToEdit()!.name || props.tokenToEdit()!.id}
-              </span>{' '}
-              take effect on its next request. The token value and expiry do not change.
+              </bdi>
+              Scope changes take effect on the token's next request. The value and expiry do not
+              change.
             </p>
           </div>
 
-          <label class="flex cursor-pointer items-start gap-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm dark:border-amber-700 dark:bg-amber-900/25">
+          <label class="flex cursor-pointer items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-2 text-sm sm:gap-3 sm:p-3 dark:border-amber-700 dark:bg-amber-900/25">
             <input
               type="checkbox"
               checked={props.editScopes().includes('*')}
@@ -83,7 +83,7 @@ export const APITokenManagerDialogs: Component<APITokenManagerDialogsProps> = (p
                   <div class="grid gap-2 sm:grid-cols-2">
                     <For each={options}>
                       {(option) => (
-                        <label class="flex cursor-pointer items-start gap-3 rounded-md border border-border p-3 text-sm transition hover:bg-surface-hover">
+                        <label class="flex cursor-pointer items-start gap-2 rounded-md border border-border p-2 text-sm transition hover:bg-surface-hover sm:gap-3 sm:p-3">
                           <input
                             type="checkbox"
                             checked={props.editScopes().includes(option.value)}
@@ -103,7 +103,9 @@ export const APITokenManagerDialogs: Component<APITokenManagerDialogsProps> = (p
               )}
             </For>
           </div>
+        </div>
 
+        <div class="shrink-0 space-y-1.5 border-t border-border px-4 py-2 sm:space-y-2 sm:px-6 sm:pt-4 sm:pb-6">
           <Show when={props.editScopes().length === 0}>
             <p class="text-sm text-red-600 dark:text-red-300">
               Select at least one scope before saving.
@@ -111,12 +113,17 @@ export const APITokenManagerDialogs: Component<APITokenManagerDialogsProps> = (p
           </Show>
 
           <Show when={props.scopeError}>
-            <InlineNotice tone="danger" role="alert">
+            <InlineNotice
+              tone="danger"
+              role="alert"
+              tabIndex={0}
+              class="max-h-[25dvh] overflow-y-auto wrap-anywhere focus-visible:outline-2 focus-visible:-outline-offset-2"
+            >
               {props.scopeError}
             </InlineNotice>
           </Show>
 
-          <div class="flex justify-end gap-3 border-t border-border pt-4">
+          <div class="flex flex-wrap justify-end gap-3">
             <button
               type="button"
               onClick={props.onCloseScopeEditor}
@@ -203,49 +210,63 @@ export const APITokenManagerDialogs: Component<APITokenManagerDialogsProps> = (p
       </Dialog>
     </Show>
 
-    <Show when={props.tokenToRevoke()}>
-      <Dialog
-        isOpen={true}
-        onClose={props.onCancelRevoke}
-        panelClass="max-w-md"
-        ariaLabel={`Revoke API token for ${getAPITokenIdentityLabel(props.tokenToRevoke()!)}`}
-      >
-        <div class="w-full p-6">
-          <h3 class="text-lg font-semibold text-base-content mb-2">
-            Revoke API token?{' '}
-            <span class="ml-2 break-all font-mono text-xs font-normal text-muted">
-              {getAPITokenHint(props.tokenToRevoke())}
-            </span>
-          </h3>
-          <p class="text-sm text-muted mb-4">
-            This permanently revokes{' '}
-            <span class="font-medium text-base-content">
-              {props.tokenToRevoke()!.name || props.tokenToRevoke()!.id}
-            </span>
-            . Any agents, scripts, or integrations using it will stop authenticating until you issue
-            and configure a replacement token.
-          </p>
-          <div class="flex justify-end gap-3">
-            <button
-              type="button"
-              onClick={props.onCancelRevoke}
-              class="px-4 py-2 text-sm font-medium text-base-content border border-border rounded-md hover:bg-surface-hover"
+    <Show keyed when={props.tokenToRevoke()}>
+      {(token) => {
+        const warningId = createUniqueId();
+        return (
+          <Dialog
+            isOpen={true}
+            onClose={props.onCancelRevoke}
+            panelClass="max-w-md"
+            ariaLabel={`Revoke API token for ${getAPITokenIdentityLabel(token)}`}
+            ariaDescribedBy={warningId}
+          >
+            <div
+              role="region"
+              aria-label="Token and revocation details"
+              tabIndex={0}
+              class="min-h-0 w-full overflow-y-auto px-4 pt-3 focus-visible:outline-2 focus-visible:-outline-offset-2 sm:px-6 sm:pt-6"
             >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                const token = props.tokenToRevoke();
-                if (token) props.onRevoke(token);
-              }}
-              class="px-4 py-2 text-sm font-medium bg-red-600 text-white rounded-md hover:bg-red-700"
-            >
-              Revoke token
-            </button>
-          </div>
-        </div>
-      </Dialog>
+              <h3 class="text-lg leading-tight font-semibold text-base-content">
+                Revoke API token?{' '}
+                <span class="ml-2 break-all font-mono text-xs font-normal text-muted">
+                  {getAPITokenHint(token)}
+                </span>
+              </h3>
+              <bdi class="mt-1 block text-sm leading-tight font-medium text-base-content wrap-anywhere">
+                {token.name || token.id}
+              </bdi>
+              <p
+                id={warningId}
+                class="mt-1 text-sm leading-tight text-muted sm:mt-2 sm:leading-normal"
+              >
+                Revocation is permanent. Agents, scripts, and integrations using it need a
+                replacement token to authenticate.
+              </p>
+            </div>
+            <div class="flex shrink-0 flex-wrap justify-end gap-3 px-4 pt-2 pb-3 sm:px-6 sm:pt-4 sm:pb-6">
+              <button
+                type="button"
+                onClick={props.onCancelRevoke}
+                class="px-4 py-2 text-sm font-medium text-base-content border border-border rounded-md hover:bg-surface-hover"
+                autofocus
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const current = props.tokenToRevoke();
+                  if (current) props.onRevoke(current);
+                }}
+                class="px-4 py-2 text-sm font-medium bg-red-600 text-white rounded-md hover:bg-red-700"
+              >
+                Revoke token
+              </button>
+            </div>
+          </Dialog>
+        );
+      }}
     </Show>
   </>
 );
