@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "base_sha": "663a797481c32fc0efcb87ba1dc75385cdd1ea0e",
+  "verified_at": "2026-11-20T00:16:29Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/APITokenManager.tsx",
+    "frontend-modern/src/components/Settings/useAPITokenManagerState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/APITokenManager.tsx": "9fd7e3a201dd305ae2e32a7f4d6ec851010e33fcd0001afed8179cc166814a45",
+    "frontend-modern/src/components/Settings/useAPITokenManagerState.ts": "6a7be8b7bf84801b545ecbb0d512a23ad1c5bfbce6c1449562e5f696520c6da6"
+  },
+  "routes": [
+    "/settings/security/api"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 360,
+      "height": 844
+    },
+    {
+      "width": 320,
+      "height": 720
+    }
+  ],
+  "states": [
+    "Actual Settings API Access with synthetic inventory and the same fixtures, drafts and scroll anchors before and after: 1440x900 light Chromium 141.0.7390.37, 360x844 dark and 320x720 light touch WebKit 26.0 (Playwright 1.56.1). Inspected fourteen matched pairs.",
+    "Pending counts remain Loading and the Restart check fits in the existing row. Name, Generate, scope selection and Custom scopes retain their positions; at 320px the status text wraps to two visible lines. The saved token cards and controls are unchanged.",
+    "Read-only pending inventory remains recoverable with Generate and saved-row writes disabled. Unconfirmed create keeps its saved-outcome guidance on failure and cannot be submitted twice."
+  ],
+  "interactions": [
+    "Restarted a deliberately pending token GET using Enter on desktop and taps on both phone widths. The superseded GET cancelled; exactly one replacement GET settled the inventory without submitting or repeating a credential change.",
+    "A failed replacement after an unconfirmed create keeps Generate blocked until complete readback. The named draft, selected Custom scope and open disclosure survive.",
+    "When the focused Restart disappears, desktop focus returns to the inventory. Deliberate input focus is never taken by completion."
+  ]
+}
