@@ -36,7 +36,7 @@ On your TrueNAS system:
 
 | Data | Pulse page / tab | Details |
 |---|---|---|
-| System info (hostname, version, uptime) | TrueNAS → Overview | CPU, memory, health status |
+| System info (hostname, version, uptime) | TrueNAS → Overview | CPU, [memory and ARC cache](#memory-usage-and-arc-cache), health status |
 | Virtual machines | TrueNAS → VMs | State, CPU, memory, boot mode, devices, and security flags from the TrueNAS VM API |
 | Apps | TrueNAS → Apps | Native app state, image/version, ports, volumes, networks, and runtime container details |
 | ZFS Pools | TrueNAS → Storage | [Total/used/free capacity](#pool-health-without-capacity), pool status (ONLINE/DEGRADED/FAULTED) |
@@ -468,8 +468,11 @@ network capture is needed just to describe it.
 
 #### Memory usage and ARC cache
 
-In **TrueNAS → Overview**, the memory bar's percentage alone does not explain
-its composition. On desktop, hover over the bar to read its breakdown:
+In Pulse, open **TrueNAS → Overview** and find your appliance in **Systems**.
+Click or tap its **Memory** bar (**Mem** on a narrow screen). With a keyboard,
+tab to the bar labelled **Memory composition for** your appliance, then press
+Enter. **Close** returns you to the bar. You can also hover over the bar with
+a mouse to see the breakdown:
 
 - **Used** excludes separately supplied reclaimable ARC cache.
 - **Reclaimable cache** is shown when a separate cache value is available.
@@ -477,11 +480,14 @@ its composition. On desktop, hover over the bar to read its breakdown:
 - **Free** is the remaining space after Used and the supplied cache, not an
   additional allocation.
 
-An absent cache row does not establish that ARC is zero. CORE's native
-**Active**, **Inactive**, **Wired**, **Laundry** and **Free** categories are
-not each an ARC measurement. If your installed build does not expose the
-breakdown with your keyboard or touch input, or supplies only a percentage,
-use TrueNAS's own **Reporting** view instead; do not infer a missing value.
+If the TrueNAS API supplies this breakdown, you don't need a Pulse agent to
+see it. The appliance's memory reading is separate from the reading for its VM
+on the Proxmox page.
+
+A percentage alone doesn't give you the breakdown. If the bar is unavailable or
+**Reclaimable cache** is missing, use **Reporting** in TrueNAS itself. A missing
+cache row does not mean ARC is zero. CORE's **Active**, **Inactive**, **Wired**,
+**Laundry** and **Free** categories are not individual ARC measurements.
 
 Check **History** separately from the current Overview and Storage readings.
 A recovered current value does not establish that its historical series is

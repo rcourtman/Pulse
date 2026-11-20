@@ -184,6 +184,29 @@ describe('shipped TrueNAS error diagnosis', () => {
     );
   });
 
+  it('links from system inventory to the existing touch and keyboard memory breakdown', () => {
+    const article = renderGuide('TRUENAS');
+    const link = article.querySelector<HTMLAnchorElement>(
+      'table a[href="#memory-usage-and-arc-cache"]',
+    );
+    expect(link?.textContent).toBe('memory and ARC cache');
+    expect(prose(link!.closest('tr')!)).toContain('System info');
+    const anchor = link!.getAttribute('href')!;
+    expect(article.querySelector(anchor)?.textContent).toBe('Memory usage and ARC cache');
+
+    const section = sectionAt(article, anchor);
+    const text = prose(section);
+    expect(text).toContain('TrueNAS → Overview');
+    expect(text).toContain('Click or tap its Memory bar (Mem on a narrow screen)');
+    expect(text).toContain('Memory composition for your appliance, then press Enter');
+    expect(text).toContain('Close returns you to the bar');
+    expect(text).toContain("you don't need a Pulse agent");
+    expect(text).toContain('separate from the reading for its VM on the Proxmox page');
+    expect(text).toContain('use Reporting in TrueNAS itself');
+    expect(text).toContain('A missing cache row does not mean ARC is zero');
+    expect(section.querySelector('pre, form, input, button')).toBeNull();
+  });
+
   it('takes readers from the pool row to a read-only comparison of missing capacity', () => {
     const article = renderGuide('TRUENAS');
     const pool = [...article.querySelectorAll<HTMLTableRowElement>('tbody tr')].find(
