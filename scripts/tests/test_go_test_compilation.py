@@ -171,7 +171,9 @@ func TestMustNotExecute(t *testing.T) { record(); t.Fatal("test must not execute
         # Frontend work does not wait for the Go-only gate.
         self.assertIn("needs: changes", job(source, "frontend-build"))
         self.assertIn("needs: changes", job(source, "frontend-unit"))
-        self.assertIn("needs: [changes, frontend-build, frontend-checks, frontend-unit]", job(source, "frontend"))
+        self.assertIn("needs: changes\n", job(source, "triage-helper"))
+        self.assertIn("needs: [changes, frontend-build, frontend-checks, frontend-unit, triage-helper]",
+                      job(source, "frontend"))
 
     def test_required_checks_admit_only_explicit_consistent_results(self):
         source = WORKFLOW.read_text()
