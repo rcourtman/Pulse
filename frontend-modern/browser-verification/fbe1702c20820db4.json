@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "base_sha": "1bf7be29811cbb40eddbd105d671971276743940",
+  "verified_at": "2026-11-20T09:39:32Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Login.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Login.tsx": "405c92eeac595ce065d1fd9cbcc18b1c818f3cee4c869d7a165193f502c5fc9d"
+  },
+  "routes": [
+    "/login",
+    "/docs/TROUBLESHOOTING"
+  ],
+  "viewports": [
+    {
+      "width": 1366,
+      "height": 820
+    },
+    {
+      "width": 320,
+      "height": 700
+    }
+  ],
+  "states": [
+    "Real Pulse App at /login with local fixture replies to the existing security-status, health and demo login requests; Playwright 1.56.1, desktop Chromium 141 light and narrow WebKit 26 dark.",
+    "Matched native pixel review: the empty sign-in card now explains the hidden local form and unlisted SSO choices without obscuring keyboard-focusable Help.",
+    "Pending Demo Mode and SSO-only views are unchanged in both pairs. After a demo refusal, the banner names the incomplete attempt and qualifies the already visible manual instructions. After reload it gives only the qualified instructions.",
+    "Ten desktop and narrow before/after pairs, no horizontal overflow. Ordinary local fields remain available when offered; no real IdP, installed sign-in or release exercised."
+  ],
+  "interactions": [
+    "198 baseline and 208 candidate browser assertions. Tab and Enter reach the Troubleshooting route from the empty chooser.",
+    "A held demo POST renders the existing progress. Its synthetic 401 replaces progress in the same live region without showing raw reply text or stealing focus from Help. Reload in the same tab does not submit again.",
+    "Tab and Enter activate the advertised local SSO fixture URL. No local password form or credential POST is added when it is hidden."
+  ]
+}

@@ -518,23 +518,25 @@ const LoginForm: Component<{
               </div>
               <div class="flex-1">
                 <div class="font-semibold text-sm text-base-content">Demo Mode</div>
-                <Show
-                  when={demoAutoLogin()}
-                  fallback={
-                    <div class="text-sm text-muted">
-                      Login with{' '}
-                      <code class="bg-blue-100 dark:bg-blue-900/25 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded-sm font-mono text-xs">
-                        demo
-                      </code>{' '}
-                      /{' '}
-                      <code class="bg-blue-100 dark:bg-blue-900/25 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded-sm font-mono text-xs">
-                        demo
-                      </code>
-                    </div>
-                  }
-                >
-                  <div class="text-sm text-muted" role="status">
-                    Signing you in to the demo…
+                <div class="text-sm text-muted" role="status">
+                  {demoAutoLogin()
+                    ? 'Signing you in to the demo…'
+                    : !showLocalLogin && error()
+                      ? 'Automatic demo sign-in didn’t complete.'
+                      : ''}
+                </div>
+                <Show when={!demoAutoLogin()}>
+                  <div class="text-sm text-muted">
+                    {showLocalLogin
+                      ? 'Login with'
+                      : 'The local sign-in form is hidden. If your administrator offers local sign-in, use'}{' '}
+                    <code class="bg-blue-100 dark:bg-blue-900/25 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded-sm font-mono text-xs">
+                      demo
+                    </code>{' '}
+                    /{' '}
+                    <code class="bg-blue-100 dark:bg-blue-900/25 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded-sm font-mono text-xs">
+                      demo
+                    </code>
                   </div>
                 </Show>
               </div>
@@ -563,6 +565,15 @@ const LoginForm: Component<{
           class="mt-8 space-y-6 bg-surface rounded-md p-8 shadow-xs border border-border animate-slide-up"
           onSubmit={handleSubmit}
         >
+          <Show when={!showLocalLogin && ssoProviders.length === 0 && !demoModeEnabled}>
+            <div class="space-y-2 text-sm">
+              <h3 class="font-semibold text-base-content">No sign-in options on this page</h3>
+              <p class="text-muted">
+                The local sign-in form is hidden and Pulse didn’t list a single sign-on provider.
+                Ask your Pulse administrator how to sign in.
+              </p>
+            </div>
+          </Show>
           {/* Multi-Provider SSO Section */}
           <Show when={ssoProviders.length > 0}>
             <div class="space-y-3">
