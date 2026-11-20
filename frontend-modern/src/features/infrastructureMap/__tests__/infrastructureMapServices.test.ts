@@ -428,7 +428,7 @@ describe('buildServiceDiagram', () => {
     ]);
     // Ids are lookups and are never drawn.
     const drawn = JSON.stringify(diagram, (key, value) =>
-      key === 'id' || key === 'segmentId' ? undefined : value,
+      ['id', 'segmentId', 'fromId', 'toId'].includes(key) ? undefined : value,
     );
     expect(drawn).not.toMatch(/delly|minipc|Tower|rstack|ps4|authentik|192\.168/);
   });
@@ -560,6 +560,9 @@ describe('buildServiceDiagram', () => {
       });
     const behindVpn = (name: string): Resource =>
       box(name, { networkMode: `container:${hex('gluetun')}`, networks: undefined });
+    // The links between services, without each one's link to its machine.
+    const between = (diagram: ReturnType<typeof buildServiceDiagram>) =>
+      diagram.links.filter((link) => link.fromId !== 'tower');
     const tileOf = (diagram: ReturnType<typeof buildServiceDiagram>, id: string) =>
       [diagram.access, ...diagram.groups, diagram.backups, diagram.hardware]
         .flatMap((group) => group?.tiles ?? [])
@@ -578,7 +581,7 @@ describe('buildServiceDiagram', () => {
     it('links a container to the one whose network it uses and says so on both', () => {
       const diagram = buildServiceDiagram(buildInfrastructureMapModel(unraid()));
 
-      expect(diagram.links).toEqual([
+      expect(between(diagram)).toEqual([
         { fromId: 'c-prowlarr', toId: 'c-gluetun' },
         { fromId: 'c-qbittorrent', toId: 'c-gluetun' },
       ]);
@@ -600,9 +603,13 @@ describe('buildServiceDiagram', () => {
       const diagram = buildServiceDiagram(buildInfrastructureMapModel(many), {
         maxTilesPerGroup: 3,
       });
-      const drawn = new Set(diagram.groups.flatMap((group) => group.tiles.map((tile) => tile.id)));
-      expect(diagram.links.length).toBeGreaterThan(0);
-      expect(diagram.links.length).toBeLessThan(6);
+      const drawn = new Set(
+        [...diagram.groups, diagram.hardware].flatMap((group) =>
+          (group?.tiles ?? []).map((tile) => tile.id),
+        ),
+      );
+      expect(between(diagram).length).toBeGreaterThan(0);
+      expect(between(diagram).length).toBeLessThan(6);
       for (const link of diagram.links) {
         expect(drawn.has(link.fromId)).toBe(true);
         expect(drawn.has(link.toId)).toBe(true);
@@ -623,7 +630,7 @@ describe('buildServiceDiagram', () => {
         ]),
       );
 
-      expect(diagram.links).toEqual([{ fromId: 'c-traefik', toId: 'c-jellyfin' }]);
+      expect(between(diagram)).toEqual([{ fromId: 'c-traefik', toId: 'c-jellyfin' }]);
       // Where it answers is its caption, in place of the host it runs on.
       expect(tileOf(diagram, 'c-jellyfin')?.caption).toBe('media.example.test');
       expect(tileOf(diagram, 'c-jellyfin')?.links).toEqual([
@@ -737,8 +744,8 @@ describe('buildServiceDiagram', () => {
         ]),
       );
       expect(diagram.gateways).toEqual([]);
-      expect(diagram.links).toEqual([]);
-      expect(tileOf(diagram, 'tower')?.links).toBeUndefined();
+      expect(between(diagram)).toEqual([]);
+      expect(tileOf(diagram, 'tower')?.links).toEqual(['Media 1']);
     });
 
     it('keeps the links and drops hostnames and addresses when names are hidden', () => {
@@ -760,13 +767,374 @@ describe('buildServiceDiagram', () => {
         ),
       ]);
 
-      expect(diagram.links).toEqual([{ fromId: 'c-traefik', toId: 'c-wiki-internal' }]);
+      expect(between(diagram)).toEqual([{ fromId: 'c-traefik', toId: 'c-wiki-internal' }]);
       expect(diagram.gateways.map((tile) => tile.name)).toEqual(['Gateway']);
       expect(written).toContain('Routed by Traefik');
       expect(written).not.toContain('example.test');
       expect(written).not.toContain('192.168.0.1');
       expect(written).not.toContain('wiki-internal');
       expect(written).not.toContain('Tower');
+    });
+  });
+
+  describe('what each thing is joined to', () => {
+    const tiles = (diagram: ReturnType<typeof buildServiceDiagram>) =>
+      [
+        diagram.access,
+        ...diagram.groups,
+        diagram.storage,
+        diagram.backups,
+        diagram.hardware,
+      ].flatMap((group) => group?.tiles ?? []);
+    const tileOf = (diagram: ReturnType<typeof buildServiceDiagram>, id: string) =>
+      tiles(diagram).find((tile) => tile.id === id);
+    const joined = (diagram: ReturnType<typeof buildServiceDiagram>, id: string) =>
+      diagram.links
+        .flatMap((link) =>
+          link.fromId === id ? [link.toId] : link.toId === id ? [link.fromId] : [],
+        )
+        .sort();
+    const TB = 1_000_000_000_000;
+    // A guest that mounts a filesystem from outside itself, as Proxmox
+    // reports one: the host path it is bound from, at a mount point.
+    const mounting = (
+      name: string,
+      parentId: string,
+      disks: Array<{
+        total: number;
+        used: number;
+        device?: string;
+        mountpoint?: string;
+        filesystem?: string;
+      }>,
+    ): Resource =>
+      guest(name, parentId, {
+        proxmox: {
+          disks: [
+            { mountpoint: '/', device: 'local-zfs:subvol-1-disk-0', total: 8e9, used: 2e9 },
+            ...disks.map((disk, index) => ({
+              mountpoint: disk.mountpoint ?? `/mnt/share${index}`,
+              device: disk.device ?? `/mnt/${name}-${index}`,
+              filesystem: disk.filesystem ?? `mp${index}`,
+              total: disk.total,
+              used: disk.used,
+            })),
+          ],
+        },
+      });
+    const pool = (id: string, name: string, parentId: string, total: number, used: number) =>
+      resource({
+        id,
+        type: 'storage',
+        name,
+        platformType: 'proxmox-pve',
+        parentId,
+        disk: { current: (used / total) * 100, total, used },
+      });
+
+    it('joins a machine to what runs on it and says what kind of things those are', () => {
+      const diagram = diagramOf(homelab());
+      expect(tileOf(diagram, 'pve')?.links?.[0]).toBe('Other 3 · Media 1 · AI 1');
+      expect(tileOf(diagram, 'pve2')?.links?.[0]).toBe('Ways in 2 · Media 1');
+      expect(joined(diagram, 'pve')).toEqual(
+        ['ct-jellyfin', 'ct-ollama', 'ct-ps4-ctrl', 'pbs-store', 'zfs-a'].sort(),
+      );
+      // A thing folded into a `+N` tile is not drawn, so nothing points at it.
+      expect(joined(diagram, 'ct-old-lab')).toEqual([]);
+      expect(joined(diagram, 'ct-jellyfin')).toEqual(['pve']);
+      // The pool on both hosts is joined to both.
+      expect(joined(diagram, 'zfs-a')).toEqual(['pve', 'pve2']);
+    });
+
+    it('names the hosts a cluster backs up from, in place of the cluster', () => {
+      const node = (id: string, name: string, nodeName = name) =>
+        resource({
+          id,
+          type: 'agent',
+          name,
+          platformType: 'proxmox-pve',
+          clusterId: 'homelab',
+          proxmox: { isClusterMember: true, nodeName },
+        });
+      const target = (id: string, name: string, nodes?: string[]) =>
+        resource({
+          id,
+          type: 'storage',
+          name,
+          platformType: 'proxmox-pve',
+          proxmox: { instance: 'homelab' },
+          storage: { type: 'pbs', content: 'backup', shared: true, ...(nodes ? { nodes } : {}) },
+        });
+      const diagram = diagramOf([
+        node('n1', 'delly'),
+        // Shown under a name of its own; Proxmox names it by its node name.
+        node('n2', 'Media box', 'minipc'),
+        guest('jellyfin', 'n1'),
+        target('t1', 'pbs-delly', ['delly', 'minipc']),
+        target('t2', 'pbs-offsite', ['delly']),
+        target('t3', 'pbs-anywhere'),
+        // A node Proxmox names that Pulse does not draw is left out.
+        target('t4', 'pbs-old', ['retired']),
+      ]);
+      expect(
+        diagram.backups?.tiles.map((tile) => [tile.name, tile.caption, tile.links ?? []]),
+      ).toEqual([
+        ['pbs-anywhere', 'homelab', []],
+        ['pbs-delly', '2 hosts', ['Backup storage of delly, Media box']],
+        ['pbs-offsite', 'delly', ['Backup storage of delly']],
+        ['pbs-old', 'homelab', []],
+      ]);
+      expect(tileOf(diagram, 'n1')?.links).toContain('Backs up to pbs-delly, pbs-offsite');
+      expect(tileOf(diagram, 'n2')?.links).toContain('Backs up to pbs-delly');
+      expect(joined(diagram, 't1')).toEqual(['n1', 'n2']);
+      expect(joined(diagram, 't3')).toEqual([]);
+    });
+
+    it('draws a container that carries others with them, and them after it', () => {
+      const hex = (seed: string): string =>
+        [...seed]
+          .map((char) => char.charCodeAt(0).toString(16).padStart(2, '0'))
+          .join('')
+          .padEnd(64, '0')
+          .slice(0, 64);
+      const container = (name: string, networkMode = 'bridge'): Resource =>
+        resource({
+          id: `c-${name}`,
+          type: 'app-container',
+          name,
+          platformType: 'docker',
+          parentId: 'tower',
+          status: 'running',
+          docker: {
+            hostSourceId: 'tower-daemon',
+            containerId: hex(name),
+            containerState: 'running',
+            image: `example/${name}:latest`,
+            networkMode,
+            ...(networkMode === 'bridge' ? { networks: [{ name: 'bridge' }] } : {}),
+          },
+        });
+      const vpn = `container:${hex('gluetun')}`;
+      const unraid = [
+        resource({ id: 'tower', type: 'docker-host', name: 'Tower', platformType: 'docker' }),
+        container('gluetun'),
+        container('iventoy'),
+        container('jellyfin'),
+        container('qbittorrent', vpn),
+        container('prowlarr', vpn),
+        container('radarr'),
+      ];
+      const diagram = diagramOf(unraid);
+      // Gluetun is a network tool, but here it is there for two media apps.
+      expect(names(diagram.groups.find((group) => group.key === 'media'))).toEqual([
+        'gluetun',
+        'prowlarr',
+        'qbittorrent',
+        'jellyfin',
+        'radarr',
+      ]);
+      expect(names(diagram.groups.find((group) => group.key === 'network'))).toEqual(['iventoy']);
+      // The machine counts it in the box it is drawn in.
+      expect(tileOf(diagram, 'tower')?.links?.[0]).toBe('Media 5 · Network tools 1');
+
+      // One that uses it from another box stays there; one switched off
+      // keeps its place at the back, where a full box folds things away.
+      const mixed = diagramOf([
+        ...unraid,
+        container('homeassistant', vpn),
+        { ...container('sabnzbd', vpn), status: 'stopped' } as Resource,
+      ]);
+      expect(names(mixed.groups.find((group) => group.key === 'media'))).toEqual([
+        'gluetun',
+        'prowlarr',
+        'qbittorrent',
+        'jellyfin',
+        'radarr',
+        'sabnzbd',
+      ]);
+      expect(names(mixed.groups.find((group) => group.key === 'home'))).toEqual(['homeassistant']);
+
+      // It stays in its own box while as much of what it carries is there.
+      const split = diagramOf([
+        ...unraid.slice(0, 2),
+        container('iventoy', vpn),
+        container('jellyfin', vpn),
+      ]);
+      expect(names(split.groups.find((group) => group.key === 'network'))).toContain('gluetun');
+    });
+
+    it('joins a guest to the pool its mount is on, by size and how full it is', () => {
+      const diagram = diagramOf([
+        ...homelab(),
+        pool('array', 'Tower Array', 'pve2', 30 * TB, 23 * TB),
+        pool('nvme', 'delly-nvme', 'pve', 1 * TB, 0.6 * TB),
+        // Read by the guest a moment apart from the host: a few bytes off.
+        mounting('bazarr', 'pve', [{ total: 30 * TB - 204_800, used: 23 * TB + 524_288 }]),
+        mounting('sabnzbd', 'pve2', [
+          { total: 30 * TB, used: 23 * TB },
+          { total: 30 * TB, used: 23 * TB, mountpoint: '/tv' },
+        ]),
+        mounting('frigate', 'pve', [{ total: 1 * TB, used: 0.6 * TB + 12_500_000 }]),
+      ]);
+      expect(tileOf(diagram, 'ct-bazarr')?.links).toEqual(['Mounts Tower Array']);
+      expect(tileOf(diagram, 'ct-sabnzbd')?.links).toEqual(['Mounts Tower Array']);
+      expect(tileOf(diagram, 'array')?.links).toEqual(['Used by bazarr, sabnzbd']);
+      expect(tileOf(diagram, 'nvme')?.links).toEqual(['Used by frigate']);
+      expect(joined(diagram, 'array')).toEqual(['ct-bazarr', 'ct-sabnzbd', 'pve2']);
+      expect(joined(diagram, 'ct-frigate')).toEqual(['nvme', 'pve']);
+    });
+
+    it('matches no mount it cannot tell apart, and joins guests that share one nothing holds', () => {
+      const diagram = diagramOf([
+        ...homelab(),
+        pool('a', 'disk-a', 'pve', 2 * TB, 1 * TB),
+        pool('b', 'disk-b', 'pve2', 2 * TB, 1 * TB),
+        pool('empty', 'fresh', 'pve', 4 * TB, 0.001 * TB),
+        // Two pools look the same: the mount is on one of them, not both.
+        mounting('either', 'pve', [{ total: 2 * TB, used: 1 * TB }]),
+        // Nearly empty filesystems of one size are not one filesystem.
+        mounting('blank', 'pve', [{ total: 4 * TB, used: 0.001 * TB }]),
+        // Somewhat fuller is a different filesystem.
+        mounting('fuller', 'pve', [{ total: 2 * TB, used: 1.01 * TB }]),
+        // A disk of the guest's own is never shared.
+        mounting('own', 'pve', [{ total: 2 * TB, used: 1 * TB, device: '/dev/sdb1' }]),
+        mounting('volume', 'pve', [{ total: 2 * TB, used: 1 * TB, device: 'tank:vm-9-disk-1' }]),
+        // Two clones of one Windows template report the same disk, which is
+        // a copy each, as the guest agent names it.
+        mounting('clone-a', 'pve', [
+          { total: 3 * TB, used: 1 * TB, device: '\\\\.\\PhysicalDrive2', filesystem: 'ntfs' },
+        ]),
+        mounting('clone-b', 'pve2', [
+          { total: 3 * TB, used: 1 * TB, device: '\\\\.\\PhysicalDrive2', filesystem: 'ntfs' },
+        ]),
+        mounting('clone-c', 'pve2', [
+          { total: 3 * TB, used: 1 * TB, device: 'scsi-1', filesystem: 'ext4' },
+        ]),
+        // Two guests share a share from somewhere Pulse does not watch.
+        mounting('nfs-a', 'pve', [{ total: 9 * TB, used: 5 * TB, device: 'nas:/export/media' }]),
+        mounting('nfs-b', 'pve2', [{ total: 9 * TB, used: 5 * TB, device: 'nas:/export/media' }]),
+      ]);
+      for (const id of [
+        'ct-either',
+        'ct-blank',
+        'ct-fuller',
+        'ct-own',
+        'ct-volume',
+        'ct-clone-a',
+        'ct-clone-b',
+      ]) {
+        expect(tileOf(diagram, id)?.links).toBeUndefined();
+      }
+      expect(tileOf(diagram, 'ct-nfs-a')?.links).toEqual(['Shares a filesystem with nfs-b']);
+      expect(tileOf(diagram, 'ct-nfs-b')?.links).toEqual(['Shares a filesystem with nfs-a']);
+      expect(joined(diagram, 'ct-nfs-a')).toEqual(['ct-nfs-b', 'pve']);
+      expect(tileOf(diagram, 'ct-clone-c')?.links).toBeUndefined();
+    });
+
+    it('matches each mount on its own', () => {
+      const diagram = diagramOf([
+        ...homelab(),
+        pool('array', 'array', 'pve2', 30 * TB, 23 * TB),
+        pool('nvme', 'nvme', 'pve', 1 * TB, 0.6 * TB),
+        mounting('both', 'pve', [
+          { total: 30 * TB, used: 23 * TB },
+          { total: 1 * TB, used: 0.6 * TB },
+          { total: 30 * TB, used: 23 * TB, mountpoint: '/again' },
+        ]),
+      ]);
+      expect(tileOf(diagram, 'ct-both')?.links).toEqual(['Mounts array', 'Mounts nvme']);
+      expect(joined(diagram, 'ct-both')).toEqual(['array', 'nvme', 'pve']);
+    });
+
+    it('says a share many guests mount on each, and joins only a few pair by pair', () => {
+      const share = { total: 9 * TB, used: 5 * TB, device: 'nas:/export/media' };
+      const many = Array.from({ length: 8 }, (_, index) =>
+        mounting(`reader-${index}`, 'pve', [share]),
+      );
+      const diagram = diagramOf([...homelab(), ...many], 40);
+      expect(tileOf(diagram, 'ct-reader-0')?.links).toEqual([
+        'Shares a filesystem with reader-1, reader-2, reader-3 +4',
+      ]);
+      expect(joined(diagram, 'ct-reader-0')).toEqual(['pve']);
+    });
+
+    it('joins a guest to a pool its disk is on, as the platform reports it', () => {
+      const diagram = diagramOf([
+        ...homelab().map((entry) =>
+          entry.id === 'zfs-a'
+            ? ({
+                ...entry,
+                storage: {
+                  topConsumers: [
+                    {
+                      resourceId: 'ct-jellyfin',
+                      resourceType: 'system-container',
+                      name: 'jellyfin',
+                    },
+                  ],
+                },
+              } as Resource)
+            : entry,
+        ),
+      ]);
+      expect(tileOf(diagram, 'ct-jellyfin')?.links).toEqual(['Data on local-zfs']);
+      expect(tileOf(diagram, 'zfs-a')?.links).toEqual(['Used by jellyfin']);
+    });
+
+    it('reads a backup server as where others write, not where it backs up to', () => {
+      const diagram = diagramOf([
+        resource({ id: 'pbs', type: 'pbs', name: 'pbs', platformType: 'proxmox-pbs' }),
+        resource({
+          id: 'store',
+          type: 'datastore',
+          name: 'repo',
+          platformType: 'proxmox-pbs',
+          parentId: 'pbs',
+          // A backup target's consumers are the guests it holds backups of.
+          storage: {
+            topConsumers: [{ resourceId: 'ct-ps4-ctrl', resourceType: 'vm', name: 'ps4-ctrl' }],
+          },
+        }),
+        ...homelab(),
+      ]);
+      expect(tileOf(diagram, 'store')?.links).toBeUndefined();
+      expect(tileOf(diagram, 'pbs')?.links).toBeUndefined();
+      expect(tileOf(diagram, 'ct-ps4-ctrl')?.links).toBeUndefined();
+      // It is still on the server, and rings it.
+      expect(joined(diagram, 'store')).toEqual(['pbs']);
+    });
+
+    it('says which pool a backup target is kept on', () => {
+      const diagram = diagramOf([
+        resource({ id: 'tower', type: 'agent', name: 'Tower', platformType: 'agent' }),
+        resource({
+          id: 'nvme',
+          type: 'storage',
+          name: 'pbs_1tb_nvme',
+          parentId: 'tower',
+          disk: { current: 66, total: 965_562_335_232, used: 634_121_179_136 },
+        }),
+        resource({
+          id: 'pve',
+          type: 'agent',
+          name: 'delly',
+          platformType: 'proxmox-pve',
+        }),
+        resource({
+          id: 'target',
+          type: 'storage',
+          name: 'pbs-delly',
+          platformType: 'proxmox-pve',
+          parentId: 'pve',
+          storage: { type: 'pbs' },
+          disk: { current: 66, total: 965_478_449_152, used: 634_040_352_768 },
+        }),
+      ]);
+      expect(tileOf(diagram, 'target')?.links).toEqual([
+        'Backup storage of delly',
+        'Stored on pbs_1tb_nvme',
+      ]);
+      expect(tileOf(diagram, 'nvme')?.links).toEqual(['Holds pbs-delly']);
     });
   });
 

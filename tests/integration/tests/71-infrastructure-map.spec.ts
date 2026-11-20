@@ -522,7 +522,9 @@ test.describe("Infrastructure map", () => {
     expect(foot.legendBottom).toBeLessThanOrEqual(foot.barTop);
 
     const { name, tile: guest, href } = await pinGuest(page);
-    await guest.scrollIntoViewIfNeeded();
+    // A tap scrolls the tile into view itself, and finds it again if the
+    // live estate redraws the map in between. Scrolling first held on to
+    // the node it found, and failed when a redraw replaced it.
     await guest.tap();
     await expect(page.getByText("Tap again to open")).toBeVisible();
     await expect(page.getByText(name).first()).toBeVisible();

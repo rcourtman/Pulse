@@ -80,13 +80,28 @@ The map draws no lines between tiles. A connection is written under the tile
 and shown on hover:
 
 - a container that uses another container's network, such as a download
-  client behind a VPN container, reads "via" that container;
+  client behind a VPN container, reads "via" that container, and they are
+  drawn side by side in the box most of them belong in;
 - a container routed by Traefik shows the hostname it answers on;
 - a machine's default gateway and DNS server are named on the tile that
-  answers at that address.
+  answers at that address;
+- a machine's hover counts what it runs by kind, such as "Media 5 ·
+  Monitoring 4", and rings every one of them and its storage;
+- a backup target names the hosts it is set up on, and each host names the
+  targets it backs up to;
+- a guest is joined to the pool its data is on, and to the pool a share or
+  folder it mounts is on, such as a media server that mounts a NAS array.
 
 Gateways, DNS servers and shared container networks come from the Pulse
 agent, so keep agents on the same release as the server.
+
+A mount has no name that says where it comes from, so Pulse matches it by
+size: it is joined to a pool only when they are the same size and as full,
+to within a twentieth of a percent, and only one pool fits. Two copies of
+the same data on identical disks look the same to it. When guests mount the
+same filesystem and no pool Pulse monitors holds it, each says which others
+share it. A backup target found the same way on a monitored pool says it
+is stored there.
 
 ## Share a picture
 

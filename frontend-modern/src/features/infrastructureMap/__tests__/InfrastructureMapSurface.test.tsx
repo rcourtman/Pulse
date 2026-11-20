@@ -334,6 +334,8 @@ describe('InfrastructureMapSurface connections', () => {
   const rings = (container: HTMLElement) => [
     ...container.querySelectorAll('[data-map-rings] rect'),
   ];
+  // Where the rings are, in a fixed order.
+  const ringed = (container: HTMLElement) => rings(container).map(place).sort();
   // The outline of a tile's target, which a ring round that tile repeats.
   const place = (element: Element) => {
     const rect = element.tagName.toLowerCase() === 'rect' ? element : element.querySelector('rect');
@@ -374,16 +376,18 @@ describe('InfrastructureMapSurface connections', () => {
 
     fireEvent.pointerOver(tile(container, 'qbittorrent'));
 
-    expect(rings(container)).toHaveLength(1);
-    expect(place(rings(container)[0])).toEqual(place(tile(container, 'gluetun')));
+    // What it uses, and the machine it runs on.
+    expect(ringed(container)).toEqual(
+      [place(tile(container, 'gluetun')), place(tile(container, 'Tower'))].sort(),
+    );
     expect(await screen.findByText('Uses the network of gluetun')).toBeTruthy();
 
-    // A tile with no stated connection rings nothing.
+    // A tile with no stated connection rings only its machine.
     fireEvent.pointerOver(tile(container, 'sonarr'));
-    expect(rings(container)).toHaveLength(0);
+    expect(ringed(container)).toEqual([place(tile(container, 'Tower'))]);
 
     fireEvent.pointerOver(tile(container, 'gluetun'));
-    expect(place(rings(container)[0])).toEqual(place(tile(container, 'qbittorrent')));
+    expect(ringed(container)).toContainEqual(place(tile(container, 'qbittorrent')));
 
     fireEvent.pointerLeave(container.querySelector('svg[role="group"]')!);
     expect(rings(container)).toHaveLength(0);
@@ -393,8 +397,9 @@ describe('InfrastructureMapSurface connections', () => {
     const { container } = draw();
 
     fireEvent.focusIn(tile(container, 'qbittorrent'));
-    expect(rings(container)).toHaveLength(1);
-    expect(place(rings(container)[0])).toEqual(place(tile(container, 'gluetun')));
+    expect(ringed(container)).toEqual(
+      [place(tile(container, 'gluetun')), place(tile(container, 'Tower'))].sort(),
+    );
 
     fireEvent.focusOut(tile(container, 'qbittorrent'));
     expect(rings(container)).toHaveLength(0);
@@ -596,10 +601,10 @@ describe('InfrastructureMapSurface connections', () => {
     expect(vi.mocked(showPressedTooltip).mock.calls[0][1]).toBe(qbittorrent);
     // The tapped tile is marked, since no pointer rests on it, and what it
     // is connected to is ringed, as pointing at it does.
-    expect(rings(container).map(place)).toEqual([
-      place(tile(container, 'qbittorrent')),
-      place(tile(container, 'gluetun')),
-    ]);
+    expect(place(rings(container)[0])).toEqual(place(tile(container, 'qbittorrent')));
+    expect(rings(container).slice(1).map(place).sort()).toEqual(
+      [place(tile(container, 'gluetun')), place(tile(container, 'Tower'))].sort(),
+    );
     expect(rings(container)[0].getAttribute('fill')).not.toBe('none');
     expect(rings(container)[1].getAttribute('fill')).toBe('none');
   });
@@ -629,17 +634,17 @@ describe('InfrastructureMapSurface connections', () => {
     const other = tap(tile(container, 'gluetun'));
     expect(other.defaultPrevented).toBe(true);
     expect(said().at(-1)?.split('\n')[0]).toBe('gluetun');
-    expect(rings(container).map(place)).toEqual([
-      place(tile(container, 'gluetun')),
+    expect(place(rings(container)[0])).toEqual(place(tile(container, 'gluetun')));
+    expect(rings(container).slice(1).map(place)).toContainEqual(
       place(tile(container, 'qbittorrent')),
-    ]);
+    );
   });
 
   it('ends what a tap showed when the page is scrolled', () => {
     const { container } = draw();
 
     tap(tile(container, 'qbittorrent'));
-    expect(rings(container)).toHaveLength(2);
+    expect(rings(container)).toHaveLength(3);
     window.dispatchEvent(new Event('scroll'));
 
     expect(rings(container)).toHaveLength(0);
@@ -650,7 +655,7 @@ describe('InfrastructureMapSurface connections', () => {
 
     // A pointer was resting on a tile: the tile has moved from under the card.
     fireEvent.pointerOver(tile(container, 'qbittorrent'));
-    expect(rings(container)).toHaveLength(1);
+    expect(rings(container)).toHaveLength(2);
     window.dispatchEvent(new Event('scroll'));
     expect(rings(container)).toHaveLength(0);
 
@@ -668,7 +673,7 @@ describe('InfrastructureMapSurface connections', () => {
     where.mockReturnValue(at(210));
     window.dispatchEvent(new Event('scroll'));
     expect(card.read()).toEqual({ when: true, x: 120, y: 210 });
-    expect(rings(container)).toHaveLength(1);
+    expect(rings(container)).toHaveLength(2);
 
     // A scroll of something that does not hold the map moves no tile.
     const menu = document.createElement('div');

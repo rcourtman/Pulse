@@ -16,6 +16,7 @@ import type {
   MapHealth,
   MapHost,
   MapItem,
+  MapMount,
   MapPool,
 } from './infrastructureMapModel';
 import {
@@ -34,10 +35,15 @@ import {
  * in their own route tables and Pulse knows only by its address.
  *
  * A link between two tiles is a connection a collected value states: a
- * container that uses another container's network, or a reverse proxy and a
- * container it routes. No line is drawn for one. It is written under the
- * tile and on its hover, and the layout tells each end the other. Where both
- * ends are not drawn there is no link.
+ * container that uses another container's network, a reverse proxy and a
+ * container it routes, a machine and what runs on it, a host and the storage
+ * set up on it, or a guest and the pool its disk or a mount is on. No line is
+ * drawn for one. It is written under the tile or on its hover, and the layout
+ * tells each end the other. Where both ends are not drawn there is no link.
+ *
+ * A mount and a pool are one filesystem only when they are the same size and
+ * as full to within a twentieth of a percent, which two separate filesystems
+ * with anything on them almost never are. Nothing else on the diagram is matched.
  */
 
 export interface DiagramTile {
@@ -353,40 +359,152 @@ const box = (
   tiles: capTiles(key, tiles, max),
 });
 
+interface PoolEntry {
+  pool: MapPool;
+  /** What the pool belongs to when no host is named: its cluster. */
+  owner: string;
+  /** The hosts the pool is on or set up on. */
+  hostIds: readonly string[];
+}
+
+/** A drawn pool tile and every pool it stands for. */
+interface PoolTile {
+  tile: DiagramTile;
+  pools: MapPool[];
+  hostIds: Set<string>;
+}
+
 const poolTiles = (
-  pools: Array<{ pool: MapPool; owner: string }>,
+  pools: PoolEntry[],
   platform: MapGlyphKey,
-): DiagramTile[] => {
+  hostName: (id: string) => string | undefined,
+): PoolTile[] => {
   // The same pool name on several hosts is one tile: a cluster's `local` is
   // three disks, and three identical tiles would say less than one.
-  const byName = new Map<string, { pool: MapPool; owners: Set<string>; health: MapHealth }>();
-  for (const { pool, owner } of pools) {
+  const byName = new Map<
+    string,
+    {
+      pool: MapPool;
+      pools: MapPool[];
+      owners: Set<string>;
+      hostIds: Set<string>;
+      health: MapHealth;
+    }
+  >();
+  for (const { pool, owner, hostIds } of pools) {
+    // Hosts Pulse draws say more than the cluster they are in.
+    const named = hostIds.map(hostName).filter((name): name is string => Boolean(name));
+    const owners = named.length > 0 ? named : owner ? [owner] : [];
     const entry = byName.get(pool.name);
     if (entry) {
-      if (owner) entry.owners.add(owner);
+      for (const name of owners) entry.owners.add(name);
+      for (const id of hostIds) entry.hostIds.add(id);
+      entry.pools.push(pool);
       entry.health = worst(entry.health, pool.health);
     } else {
-      byName.set(pool.name, { pool, owners: new Set(owner ? [owner] : []), health: pool.health });
+      byName.set(pool.name, {
+        pool,
+        pools: [pool],
+        owners: new Set(owners),
+        hostIds: new Set(hostIds),
+        health: pool.health,
+      });
     }
   }
   return [...byName.values()]
-    .map(({ pool, owners, health }): DiagramTile => {
+    .map(({ pool, pools: members, owners, hostIds, health }): PoolTile => {
       const caption =
         owners.size > 1 ? plural(owners.size, 'host', 'hosts') : ([...owners][0] ?? 'Shared');
       return {
-        id: pool.id,
-        name: pool.name,
-        caption,
-        typeLabel: [pool.backup ? 'Backup target' : 'Storage', pool.sizeLabel]
-          .filter(Boolean)
-          .join(' · '),
-        status: pool.usedPercent === undefined ? '' : `${Math.round(pool.usedPercent)}% used`,
-        health,
-        platform,
-        navigable: true,
+        tile: {
+          id: pool.id,
+          name: pool.name,
+          caption,
+          typeLabel: [pool.backup ? 'Backup target' : 'Storage', pool.sizeLabel]
+            .filter(Boolean)
+            .join(' · '),
+          status: pool.usedPercent === undefined ? '' : `${Math.round(pool.usedPercent)}% used`,
+          health,
+          platform,
+          navigable: true,
+        },
+        pools: members,
+        hostIds,
       };
     })
-    .sort((a, b) => collator.compare(a.name, b.name));
+    .sort((a, b) => collator.compare(a.tile.name, b.tile.name));
+};
+
+/**
+ * How close two readings of one filesystem have to be. A share is read by
+ * the guest that mounts it and by the machine that holds it, at different
+ * moments and with different rounding, so the bytes never match exactly; a
+ * filesystem being written to moves between two polls too. Two different
+ * filesystems the same size are told apart by what is on them, so a nearly
+ * empty one is never matched.
+ */
+const SAME_FILESYSTEM_TOLERANCE = 0.0005;
+const SAME_FILESYSTEM_MIN_USED = 0.01;
+
+/** The most guests sharing an unknown filesystem that are joined pair by pair. */
+const SHARED_MOUNT_MAX_JOINED = 6;
+
+const isSameFilesystem = (a: MapMount, b: MapMount): boolean => {
+  const size = Math.max(a.total, b.total);
+  if (!(size > 0)) return false;
+  if (Math.abs(a.total - b.total) > size * SAME_FILESYSTEM_TOLERANCE) return false;
+  if (Math.min(a.used, b.used) < size * SAME_FILESYSTEM_MIN_USED) return false;
+  return Math.abs(a.used - b.used) <= size * SAME_FILESYSTEM_TOLERANCE;
+};
+
+const poolBytes = (pool: MapPool): MapMount | undefined =>
+  pool.totalBytes === undefined || pool.usedBytes === undefined
+    ? undefined
+    : { total: pool.totalBytes, used: pool.usedBytes };
+
+// The one drawn pool a filesystem is on, or none when two could be.
+const poolHolding = (mounts: readonly MapMount[], candidates: readonly PoolTile[]) => {
+  const matches = candidates.filter(({ pools }) =>
+    pools.some((pool) => {
+      const bytes = poolBytes(pool);
+      return bytes !== undefined && mounts.some((mount) => isSameFilesystem(mount, bytes));
+    }),
+  );
+  return matches.length === 1 ? matches[0] : undefined;
+};
+
+// A container that carries other containers' networks is drawn first, then
+// those containers, so the ones that share a network sit together in a box.
+const withNetworkRuns = (
+  tiles: DiagramTile[],
+  providerOf: ReadonlyMap<string, string>,
+): DiagramTile[] => {
+  const here = new Set(tiles.map((tile) => tile.id));
+  const placed = new Set<string>();
+  const ordered: DiagramTile[] = [];
+  // Running things stay ahead of switched-off ones, which are the ones a
+  // full box folds away: a switched-off container keeps its place at the
+  // back, beside nothing, and a running one never follows a switched-off one.
+  const off = (tile: DiagramTile) => tile.health === 'off';
+  const byId = new Map(tiles.map((tile) => [tile.id, tile]));
+  const follows = (user: DiagramTile, provider: DiagramTile | undefined) =>
+    provider !== undefined && here.has(provider.id) && off(user) === off(provider);
+  for (const tile of tiles) {
+    if (placed.has(tile.id)) continue;
+    if (follows(tile, byId.get(providerOf.get(tile.id) ?? ''))) continue;
+    ordered.push(tile);
+    placed.add(tile.id);
+    for (const user of tiles) {
+      if (providerOf.get(user.id) === tile.id && follows(user, tile) && !placed.has(user.id)) {
+        ordered.push(user);
+        placed.add(user.id);
+      }
+    }
+  }
+  // A container whose provider is in the box but never placed (a loop of
+  // two) still has to be drawn.
+  for (const tile of tiles) if (!placed.has(tile.id)) ordered.push(tile);
+  return ordered;
 };
 
 export function buildServiceDiagram(
@@ -396,26 +514,36 @@ export function buildServiceDiagram(
   const max = Math.max(2, options.maxTilesPerGroup ?? DIAGRAM_MAX_TILES_PER_GROUP);
   const byCategory = new Map<MapCategoryId, DiagramTile[]>();
   const roles = new Set<MapAppRole>();
-  const pools: Array<{ pool: MapPool; owner: string }> = [];
+  const pools: PoolEntry[] = [];
   const hardware: DiagramTile[] = [];
   const backupServers: DiagramTile[] = [];
   const checks: DiagramTile[] = [];
+  // What each machine runs, by tile id and by how many of each kind.
+  const runsOn = new Map<string, Array<{ id: string; category: MapCategoryId }>>();
+  const mountsOf = new Map<string, MapMount[]>();
   let serviceCount = 0;
   let foldedOff = 0;
   const plan = planNetworks(model);
+  const hostNames = new Map<string, string>();
+  for (const host of hostsOf(model)) if (host.isResource) hostNames.set(host.id, host.name);
+  const hostName = (id: string) => hostNames.get(id);
 
   for (const block of model.blocks) {
     if (block.kind === 'group') {
-      for (const pool of block.group.pools) pools.push({ pool, owner: block.group.name });
+      for (const pool of block.group.pools) {
+        pools.push({ pool, owner: block.group.name, hostIds: pool.hostIds ?? [] });
+      }
     }
   }
   for (const host of hostsOf(model)) {
     let services = 0;
+    const runs: Array<{ id: string; category: MapCategoryId }> = [];
     for (const section of host.sections) {
       if (!SERVICE_SECTION.test(section.key)) continue;
       for (const item of section.items) {
         services += 1;
         const category = item.category ?? 'other';
+        runs.push({ id: item.id, category });
         // Something switched off that the catalogue cannot name says nothing
         // on a diagram of what the estate does, so those fold into one tile.
         if (category === 'other' && !item.app && item.health === 'off') {
@@ -426,8 +554,10 @@ export function buildServiceDiagram(
         const list = byCategory.get(category) ?? [];
         list.push(serviceTile(item, host, plan));
         byCategory.set(category, list);
+        if (item.mounts?.length) mountsOf.set(item.id, item.mounts);
       }
     }
+    if (host.isResource && services > 0) runsOn.set(host.id, runs);
     serviceCount += services;
     // What Pulse probes from outside (a site, a printer) is not a service on
     // any host here, so each check is a tile in a box of its own. Network
@@ -458,7 +588,13 @@ export function buildServiceDiagram(
         }
       }
     }
-    for (const pool of host.pools) pools.push({ pool, owner: host.isResource ? host.name : '' });
+    for (const pool of host.pools) {
+      pools.push({
+        pool,
+        owner: host.isResource ? host.name : '',
+        hostIds: host.isResource ? [host.id] : (pool.hostIds ?? []),
+      });
+    }
     if (!host.isResource) continue;
     const tile: DiagramTile = {
       id: host.id,
@@ -477,8 +613,48 @@ export function buildServiceDiagram(
     (host.platform === 'backup' ? backupServers : hardware).push(tile);
   }
 
+  // A container that carries other containers' networks is there for them,
+  // so it is drawn in the box most of them are in, and they follow it.
+  const categoryOf = new Map<string, MapCategoryId>();
+  for (const [category, tiles] of byCategory) {
+    for (const tile of tiles) categoryOf.set(tile.id, category);
+  }
+  const providerOf = new Map<string, string>();
+  const usersOf = new Map<string, string[]>();
+  for (const link of model.connections.links) {
+    if (link.kind !== 'network' || !categoryOf.has(link.fromId) || !categoryOf.has(link.toId)) {
+      continue;
+    }
+    providerOf.set(link.fromId, link.toId);
+    usersOf.set(link.toId, [...(usersOf.get(link.toId) ?? []), link.fromId]);
+  }
+  // The ways in and the backups are what a thing is, not what it serves.
+  const fixed = (category: MapCategoryId) => category === 'access' || category === 'backup';
+  for (const [provider, users] of usersOf) {
+    const own = categoryOf.get(provider);
+    if (!own || fixed(own)) continue;
+    const counts = new Map<MapCategoryId, number>();
+    for (const user of users) {
+      const category = categoryOf.get(user);
+      if (category && !fixed(category)) counts.set(category, (counts.get(category) ?? 0) + 1);
+    }
+    const most = Math.max(0, ...counts.values());
+    if (most === 0 || counts.get(own) === most) continue;
+    const to = MAP_CATEGORY_ORDER.find((category) => counts.get(category) === most);
+    const from = byCategory.get(own);
+    const index = from?.findIndex((tile) => tile.id === provider) ?? -1;
+    if (!to || !from || index < 0) continue;
+    const [tile] = from.splice(index, 1);
+    if (from.length === 0) byCategory.delete(own);
+    byCategory.set(to, [...(byCategory.get(to) ?? []), tile]);
+    categoryOf.set(provider, to);
+  }
+
   const group = (category: MapCategoryId): DiagramGroup | undefined => {
-    const tiles = [...(byCategory.get(category) ?? [])].sort(byRunningThenName);
+    const tiles = withNetworkRuns(
+      [...(byCategory.get(category) ?? [])].sort(byRunningThenName),
+      providerOf,
+    );
     const folded = category === 'other' ? foldedOff : 0;
     if (folded > 0) tiles.push(foldTile('other:off', `+${folded}`, 'switched off'));
     if (tiles.length === 0) return undefined;
@@ -493,17 +669,21 @@ export function buildServiceDiagram(
   }
   if (checks.length > 0) groups.push(box('checks', 'Checks', checks, max));
 
-  const storageTiles = poolTiles(
+  const storagePools = poolTiles(
     pools.filter(({ pool }) => !pool.backup),
     'storage',
+    hostName,
   );
+  const backupPools = poolTiles(
+    pools.filter(({ pool }) => pool.backup),
+    'backup',
+    hostName,
+  );
+  const storageTiles = storagePools.map(({ tile }) => tile);
   const backupTiles = [
     ...backupServers,
     ...(group('backup')?.tiles ?? []),
-    ...poolTiles(
-      pools.filter(({ pool }) => pool.backup),
-      'backup',
-    ),
+    ...backupPools.map(({ tile }) => tile),
   ];
   const access = group('access');
   const internetRoles = ROLE_ORDER.filter((role) => roles.has(role) && INTERNET_ROLES.has(role));
@@ -511,7 +691,20 @@ export function buildServiceDiagram(
   // Everything drawn as a tile of its own, by id, so a connection can find
   // both of its ends and say something on each.
   const drawn = new Map<string, DiagramTile>();
-  const boxes = [access, ...groups, { tiles: backupTiles }, { tiles: hardware }];
+  const storageBox =
+    storageTiles.length > 0 ? box('storage', 'Storage', storageTiles, max) : undefined;
+  const backupBox =
+    backupTiles.length > 0 ? box('backups', 'Backups', backupTiles, max) : undefined;
+  const hardwareBox =
+    hardware.length > 0
+      ? box(
+          'hardware',
+          'Hardware',
+          hardware.sort((a, b) => collator.compare(a.name, b.name)),
+          max,
+        )
+      : undefined;
+  const boxes = [access, ...groups, storageBox, backupBox, hardwareBox];
   for (const entry of boxes) {
     for (const tile of entry?.tiles ?? []) if (tile.navigable) drawn.set(tile.id, tile);
   }
@@ -520,6 +713,136 @@ export function buildServiceDiagram(
   };
 
   const links: DiagramLink[] = [];
+  const tie = (fromId: string, toId: string) => {
+    if (drawn.has(fromId) && drawn.has(toId)) links.push({ fromId, toId });
+  };
+
+  // A machine is linked to what runs on it and the storage it has, and
+  // says what kind of things it runs, most first, counted in the boxes they
+  // are drawn in.
+  for (const [hostId, runs] of runsOn) {
+    const tile = drawn.get(hostId);
+    if (!tile) continue;
+    const kinds = new Map<MapCategoryId, number>();
+    for (const { id, category } of runs) {
+      const drawnIn = categoryOf.get(id) ?? category;
+      kinds.set(drawnIn, (kinds.get(drawnIn) ?? 0) + 1);
+    }
+    say(
+      tile,
+      [...kinds]
+        .sort(
+          ([a, countA], [b, countB]) =>
+            countB - countA || MAP_CATEGORY_ORDER.indexOf(a) - MAP_CATEGORY_ORDER.indexOf(b),
+        )
+        .map(([category, count]) => `${MAP_CATEGORY_LABEL[category]} ${count.toLocaleString()}`)
+        .join(' · '),
+    );
+    for (const { id } of runs) tie(hostId, id);
+  }
+  const drawnPools = (list: PoolTile[]) => list.filter(({ tile }) => drawn.has(tile.id));
+  for (const { tile, hostIds } of [...drawnPools(storagePools), ...drawnPools(backupPools)]) {
+    for (const hostId of hostIds) tie(hostId, tile.id);
+  }
+  // Backup storage on a host that runs things is where that host writes
+  // its backups. A backup server's own datastores are where others write,
+  // which the server cannot say.
+  const backupsOf = new Map<string, string[]>();
+  for (const { tile, hostIds } of drawnPools(backupPools)) {
+    const writers = [...hostIds].filter((id) => {
+      const host = drawn.get(id);
+      return host !== undefined && host.platform !== 'backup';
+    });
+    if (writers.length === 0) continue;
+    say(tile, `Backup storage of ${nameList(writers.map((id) => drawn.get(id)?.name ?? ''))}`);
+    for (const id of writers) backupsOf.set(id, [...(backupsOf.get(id) ?? []), tile.name]);
+  }
+  for (const [hostId, targets] of backupsOf) {
+    const tile = drawn.get(hostId);
+    if (tile) say(tile, `Backs up to ${nameList(targets)}`);
+  }
+
+  // Where a guest keeps its data: a disk the platform reports on a pool, or
+  // a filesystem it mounts that is the same size and as full as one drawn.
+  const usedBy = new Map<string, string[]>();
+  const uses = (guest: DiagramTile, pool: DiagramTile, sentence: string) => {
+    say(guest, sentence);
+    tie(guest.id, pool.id);
+    usedBy.set(pool.id, [...(usedBy.get(pool.id) ?? []), guest.name]);
+  };
+  // A backup target's consumers are the guests it holds backups of, which
+  // is not where they keep their data, so only storage pools count here.
+  const placedOn = new Set<string>();
+  for (const { tile: pool, pools: members } of drawnPools(storagePools)) {
+    const consumers = new Set(members.flatMap((member) => member.consumerIds ?? []));
+    for (const id of consumers) {
+      const guest = drawn.get(id);
+      if (!guest || placedOn.has(`${id}>${pool.id}`)) continue;
+      placedOn.add(`${id}>${pool.id}`);
+      uses(guest, pool, `Data on ${pool.name}`);
+    }
+  }
+  // Each mount is matched on its own: two folders from two pools are two
+  // joins, and a mount no pool holds is left for the next step.
+  const unplaced: Array<[DiagramTile, MapMount[]]> = [];
+  for (const [id, mounts] of mountsOf) {
+    const guest = drawn.get(id);
+    if (!guest) continue;
+    const loose: MapMount[] = [];
+    for (const mount of mounts) {
+      const holder = poolHolding([mount], drawnPools(storagePools));
+      if (!holder) {
+        loose.push(mount);
+        continue;
+      }
+      if (placedOn.has(`${id}>${holder.tile.id}`)) continue;
+      placedOn.add(`${id}>${holder.tile.id}`);
+      uses(guest, holder.tile, `Mounts ${holder.tile.name}`);
+    }
+    if (loose.length > 0) unplaced.push([guest, loose]);
+  }
+  for (const [poolId, names] of usedBy) {
+    const pool = drawn.get(poolId);
+    if (pool) say(pool, `Used by ${nameList(names)}`);
+  }
+  // Guests that mount one filesystem nothing drawn holds say so to each
+  // other: the map cannot name where it is, only that they share it. A few
+  // are joined pair by pair; past that every guest would ring every other.
+  const sharing: Array<Array<[DiagramTile, MapMount[]]>> = [];
+  for (const entry of unplaced) {
+    const [, mounts] = entry;
+    const set = sharing.find((members) =>
+      members.some(([, theirs]) =>
+        mounts.some((mount) => theirs.some((their) => isSameFilesystem(mount, their))),
+      ),
+    );
+    if (set) set.push(entry);
+    else sharing.push([entry]);
+  }
+  for (const members of sharing) {
+    if (members.length < 2) continue;
+    for (const [guest] of members) {
+      const others = members.filter(([other]) => other.id !== guest.id).map(([other]) => other);
+      say(guest, `Shares a filesystem with ${nameList(others.map((other) => other.name))}`);
+      if (members.length > SHARED_MOUNT_MAX_JOINED) continue;
+      for (const other of others) if (guest.id < other.id) tie(guest.id, other.id);
+    }
+  }
+  // A backup target that is the same size and as full as a drawn pool is
+  // kept on it: a backup server's datastore on a disk Pulse watches.
+  const keptOn = new Map<string, string[]>();
+  for (const { tile, pools: members } of drawnPools(backupPools)) {
+    const bytes = members.map(poolBytes).filter((value): value is MapMount => Boolean(value));
+    const holder = bytes.length > 0 ? poolHolding(bytes, drawnPools(storagePools)) : undefined;
+    if (!holder) continue;
+    say(tile, `Stored on ${holder.tile.name}`);
+    tie(tile.id, holder.tile.id);
+    keptOn.set(holder.tile.id, [...(keptOn.get(holder.tile.id) ?? []), tile.name]);
+  }
+  for (const [poolId, names] of keptOn) {
+    const pool = drawn.get(poolId);
+    if (pool) say(pool, `Holds ${nameList(names)}`);
+  }
   const carried = new Map<string, number>();
   const routedBy = new Map<string, number>();
   for (const link of model.connections.links) {
@@ -603,18 +926,9 @@ export function buildServiceDiagram(
     links,
     networks: plan.networks,
     groups,
-    ...(storageTiles.length > 0 ? { storage: box('storage', 'Storage', storageTiles, max) } : {}),
-    ...(backupTiles.length > 0 ? { backups: box('backups', 'Backups', backupTiles, max) } : {}),
-    ...(hardware.length > 0
-      ? {
-          hardware: box(
-            'hardware',
-            'Hardware',
-            hardware.sort((a, b) => collator.compare(a.name, b.name)),
-            max,
-          ),
-        }
-      : {}),
+    ...(storageBox ? { storage: storageBox } : {}),
+    ...(backupBox ? { backups: backupBox } : {}),
+    ...(hardwareBox ? { hardware: hardwareBox } : {}),
     serviceCount,
   };
 }
