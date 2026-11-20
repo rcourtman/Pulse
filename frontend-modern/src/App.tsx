@@ -523,45 +523,58 @@ function App() {
                           so they are for sessions that can actually reach those
                           surfaces. Kiosk hides them; a scope-limited token has
                           no business seeing them even outside kiosk (#1650). */}
-                      <Show when={!kioskMode() && hasSettingsAccess()}>
-                        <SecurityWarning />
-                        <DemoBanner />
-                        <CommercialMigrationBanner />
-                        <UpdateBanner />
-                        <WhatsNewCard />
-                        <GitHubStarBanner />
-                        <Show when={canReadUpdateStatus()}>
-                          <GlobalUpdateProgressWatcher />
+                      {/* The app is exactly a window tall: the banners, then the
+                          content area, which takes what is left and scrolls on
+                          its own. The banners used to sit above a content area
+                          that was a window tall by itself, so a banner pushed
+                          the app past the foot of the window by its own height.
+                          The window then scrolled as well as the page, and
+                          whatever took focus near the foot of the page came to
+                          rest below the window or behind the navigation bar.
+                          The content area keeps most of the window whatever a
+                          banner unfolds to; past that the window scrolls, as it
+                          used to. */}
+                      <div class="flex h-screen flex-col">
+                        <Show when={!kioskMode() && hasSettingsAccess()}>
+                          <SecurityWarning />
+                          <DemoBanner />
+                          <CommercialMigrationBanner />
+                          <UpdateBanner />
+                          <WhatsNewCard />
+                          <GitHubStarBanner />
+                          <Show when={canReadUpdateStatus()}>
+                            <GlobalUpdateProgressWatcher />
+                          </Show>
                         </Show>
-                      </Show>
-                      {/* Main layout container: the content area scrolls independently */}
-                      <div class="flex h-screen overflow-hidden">
-                        <div
-                          ref={setAppScrollShellRef}
-                          class={`app-scroll-shell isolate flex-1 min-w-0 overflow-y-scroll text-base-content font-sans py-1 sm:py-6 transition-all duration-300`}
-                        >
-                          <AppLayout
-                            connectionStatus={runtime.connectionStatus}
-                            lastUpdateText={runtime.lastUpdateText}
-                            versionInfo={runtime.versionInfo}
-                            hasAuth={runtime.hasAuth}
-                            needsAuth={runtime.needsAuth}
-                            proxyAuthInfo={runtime.proxyAuthInfo}
-                            handleLogout={runtime.handleLogout}
-                            isLoggingOut={runtime.isLoggingOut}
-                            state={runtime.state}
-                            platformVisibility={platformNavigationVisibility}
-                            tokenScopes={() => runtime.securityStatus()?.tokenScopes}
-                            organizations={runtime.organizations}
-                            activeOrgID={runtime.activeOrgID}
-                            orgsLoading={runtime.orgsLoading}
-                            organizationListIssue={runtime.organizationListIssue}
-                            onRetryOrganizationList={runtime.retryOrganizationList}
-                            showOrgSwitcher={runtime.showOrgSwitcher}
-                            onSwitchOrg={runtime.handleOrgSwitch}
+                        {/* Main layout container: the content area scrolls independently */}
+                        <div class="flex min-h-[60vh] flex-1 overflow-hidden">
+                          <div
+                            ref={setAppScrollShellRef}
+                            class={`app-scroll-shell isolate flex-1 min-w-0 overflow-y-scroll text-base-content font-sans py-1 sm:py-6 transition-all duration-300`}
                           >
-                            <RouteErrorBoundary>{props.children}</RouteErrorBoundary>
-                          </AppLayout>
+                            <AppLayout
+                              connectionStatus={runtime.connectionStatus}
+                              lastUpdateText={runtime.lastUpdateText}
+                              versionInfo={runtime.versionInfo}
+                              hasAuth={runtime.hasAuth}
+                              needsAuth={runtime.needsAuth}
+                              proxyAuthInfo={runtime.proxyAuthInfo}
+                              handleLogout={runtime.handleLogout}
+                              isLoggingOut={runtime.isLoggingOut}
+                              state={runtime.state}
+                              platformVisibility={platformNavigationVisibility}
+                              tokenScopes={() => runtime.securityStatus()?.tokenScopes}
+                              organizations={runtime.organizations}
+                              activeOrgID={runtime.activeOrgID}
+                              orgsLoading={runtime.orgsLoading}
+                              organizationListIssue={runtime.organizationListIssue}
+                              onRetryOrganizationList={runtime.retryOrganizationList}
+                              showOrgSwitcher={runtime.showOrgSwitcher}
+                              onSwitchOrg={runtime.handleOrgSwitch}
+                            >
+                              <RouteErrorBoundary>{props.children}</RouteErrorBoundary>
+                            </AppLayout>
+                          </div>
                         </div>
                       </div>
                       <Show when={shortcutsOpen()}>

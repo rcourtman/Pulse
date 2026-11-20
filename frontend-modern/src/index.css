@@ -673,6 +673,23 @@
 
   .app-scroll-shell {
     scrollbar-gutter: stable;
+    /* What is absolutely positioned inside this scroll area, with no
+       positioned ancestor of its own, is placed against it and scrolls with
+       it. Left to the window, a label for screen readers (`sr-only`) far down
+       a page was laid out that far down the window instead, and the window
+       itself had that much to scroll: 388px on the Backups page. */
+    position: relative;
+  }
+
+  /* The navigation bar fixed to the foot of a window that is not wide lies
+     over the end of the scroll area. Left unsaid, the browser brings whatever
+     takes focus or is scrolled into view to rest at the area's own bottom
+     edge, behind the bar: a control reached with Tab could be wholly out of
+     sight. The bar publishes its height, 0 where it is hidden. Only where the
+     bar is mounted: without it (kiosk mode) the height falls back to the
+     pre-measurement value above, which is not 0. */
+  .app-scroll-shell:has(nav[aria-label='Mobile navigation']) {
+    scroll-padding-bottom: var(--pulse-mobile-nav-height, 0px);
   }
 
   .view-options-grid {

@@ -9919,6 +9919,49 @@ bar that is neither dimmed nor click-blocked, while reserving slightly less is
 covered by the opaque bar. The star banner follows the published height at
 every viewport with a small gap above the bar, without a breakpoint override.
 
+The page's own scroll area reads it as well. `.app-scroll-shell` reaches the
+foot of the window and the bar lies over its last 45px or so, so
+`frontend-modern/src/index.css` gives it
+`scroll-padding-bottom: var(--pulse-mobile-nav-height, 0px)`. Without that a
+browser brings whatever takes focus, or is scrolled into view, to rest at the
+scroll area's bottom edge, which is behind the bar: measured on 20 November
+2026 at 600px wide, sixty presses of Tab down the Proxmox page left three or
+four controls wholly hidden in Chromium and in WebKit, and none with the
+rule. It is the scroll area that is told, once, and no page or component adds
+its own scroll correction for the bar. The rule applies only while the bar is
+mounted inside the scroll area (`:has(nav[aria-label='Mobile navigation'])`):
+in kiosk mode there is no bar, and the property then falls back to the
+stylesheet's pre-measurement value, which is not 0.
+
+That rule only holds while the app is exactly a window tall, so
+`frontend-modern/src/App.tsx` lays the global banners (security warning, demo,
+commercial migration, update) and the content area out as one column of
+`h-screen`, with the content area taking what the banners leave
+(`flex-1 min-h-[60vh]`). Before 20 November 2026 the banners sat above a
+content area that was a window tall by itself, so a banner pushed the app
+past the foot of the window by its own height (41px for the update banner,
+73px where it wraps on a phone). The window then scrolled as well as the
+page, the last of every page lay below the window until it did, and a
+focused control came to rest behind the bar whatever the scroll area had
+been told. The content area keeps at least 60% of the window so that a
+banner unfolded to its full detail cannot squeeze the app away; past that
+the window scrolls, as it used to. Do not put a banner, or anything else in
+normal flow, outside that column.
+
+The scroll area is also the containing block for what is positioned inside it
+(`position: relative` on `.app-scroll-shell`). An absolutely positioned
+element with no positioned ancestor of its own, which is what every `sr-only`
+label is, used to be placed against the window: it did not scroll with the
+page, and one far down a long page gave the window that much of its own to
+scroll, 388px on the Backups page at 1024px wide and 46px at 1440px. Across 21
+routes at 390, 1024 and 1440px wide the rule moved nothing but those labels.
+A page does not need its own `relative` wrapper to keep such a label in.
+
+The proofs are two tests in
+`tests/integration/tests/83-product-trust-accessibility.spec.ts`, because only
+a real layout scrolls: "comes to rest above the bottom navigation bar" (WCAG
+2.2, Focus Not Obscured) and "the window itself has nothing to scroll".
+
 Proofs live in `frontend-modern/src/components/shared/__tests__/MobileNavBar.test.tsx`,
 `frontend-modern/src/components/__tests__/GitHubStarBanner.test.tsx`, and
 `frontend-modern/src/__tests__/App.architecture.test.ts`, which fails if any
