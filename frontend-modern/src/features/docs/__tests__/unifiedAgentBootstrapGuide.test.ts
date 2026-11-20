@@ -134,13 +134,53 @@ describe('Stopped agent-command help', () => {
     expect(text).toContain('That check does not download or run the agent');
     expect(text).toContain('not whether the binary can start or accept the Pulse URL');
     expect(text).toContain('Older installers also use this message');
-    expect(text).toContain('Leave mount restrictions in place');
-
-    const messages = [...checks.querySelectorAll('li strong code')].map((code) => code.textContent);
-    expect(messages).toEqual([
-      'Could not run the downloaded agent',
-      'Could not validate the Pulse URL',
+    const diagnostics = [...checks.querySelectorAll<HTMLLIElement>(':scope > ul > li')];
+    expect(normalizedText(diagnostics[0])).toContain('Leave mount restrictions in place');
+    expect(
+      diagnostics.map((item) => [
+        item.querySelector('strong code')?.textContent,
+        normalizedText(item),
+      ]),
+    ).toEqual([
+      [
+        'Could not run the downloaded agent',
+        expect.stringContaining('the installer could not start the file for this check'),
+      ],
+      ['Could not validate the Pulse URL', expect.stringContaining('could not confirm')],
+      [
+        'The downloaded agent rejected the Pulse URL',
+        expect.stringContaining('not a certificate or sign-in test'),
+      ],
+      [
+        'The downloaded agent did not complete its Pulse URL check',
+        expect.stringContaining('no address verdict'),
+      ],
     ]);
+  });
+
+  it('explains both execution checks without inferring which path failed', () => {
+    const checks = docSection(source, 'UNIFIED_AGENT', urlChecksId);
+    const stages = normalizedText(checks.querySelector('ul + p')!);
+    expect(stages).toContain('The first check normally runs from the temporary download directory');
+    expect(stages).toContain('run the agent directly from the installation directory');
+    expect(stages).toContain('the installer can check it again there before replacing the service');
+    expect(stages).toContain('does not tell you which path was checked or why it failed');
+
+    const mount = [...checks.querySelectorAll('p code')].find(
+      (code) => code.textContent === 'findmnt --uniq -n -o VFS-OPTIONS --target /tmp',
+    );
+    expect(mount).toBeDefined();
+    const instructions = normalizedText(mount!.closest('p')!);
+    expect(instructions).toContain('without starting another install');
+    expect(instructions).toContain('if the installer used a different TMPDIR');
+    expect(instructions).toContain(
+      'For the later check, use the installation directory as the target',
+    );
+    expect(instructions).toContain('inspect both mounts');
+    expect(instructions).toContain('does not prove that the binary can start');
+    const qnap = 'installer-fails-with-not-enough-free-disk-space';
+    expect(checks.querySelector(`a[href="#${qnap}"]`)).not.toBeNull();
+    docSection(source, 'UNIFIED_AGENT', qnap);
   });
 
   it('links to trusted HTTPS and distinguishes a new install command from retargeting', () => {
