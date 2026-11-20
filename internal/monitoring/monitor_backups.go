@@ -2912,54 +2912,40 @@ func (m *Monitor) synthesizeVzdumpJobGuestTasks(ctx context.Context, instanceNam
 	}
 
 	now := time.Now().UTC()
-	fetchJobs := m.selectVzdumpJobLogReads(instanceName, jobTasks, jobUPIDs)
-	order := make([]int, len(jobTasks))
-	for i := range order {
-		order[i] = i
-	}
-	// Execute selected reads in scheduling order as well: an early slow read
-	// can exhaust the shared context before the request-count cap is reached.
-	sort.SliceStable(order, func(i, j int) bool {
-		left := fetchJobs[instanceName+"|"+jobUPIDs[jobTasks[order[i]].ID]]
-		right := fetchJobs[instanceName+"|"+jobUPIDs[jobTasks[order[j]].ID]]
-		return left > 0 && (right == 0 || left < right)
-	})
+	selected := m.selectVzdumpJobLogReads(instanceName, jobTasks, jobUPIDs)
 	byJob := make([][]models.BackupTask, len(jobTasks))
-	fetches := 0
 
-	for _, index := range order {
+	readJob := func(index int, selected bool) {
 		jobTask := jobTasks[index]
 		upid := jobUPIDs[jobTask.ID]
-		key := instanceName + "|" + upid
 		m.mu.RLock()
-		entry, cached := m.vzdumpJobTaskCache[key]
+		entry, cached := m.vzdumpJobTaskCache[instanceName+"|"+upid]
 		m.mu.RUnlock()
 
 		if cached && entry.final {
 			byJob[index] = refreshObservedAt(entry.tasks, now)
-			continue
+			return
 		}
 
-		if fetchJobs[key] == 0 || fetches >= maxVzdumpJobLogFetchesPerPoll || ctx.Err() != nil {
+		if !selected || ctx.Err() != nil {
 			// Serve a stale non-final entry if we have one; the next cycle
 			// will catch up. The current parent can end a cached running
 			// guest, but cannot supply its missing verdict or a fresh log read.
 			if cached {
 				byJob[index] = cachedVzdumpGuestTasks(entry.tasks, jobTask)
 			}
-			continue
+			return
 		}
 		unlock, current := m.beginPVEBackupPublication(ctx, instanceName)
 		if !current {
 			if cached {
 				byJob[index] = cachedVzdumpGuestTasks(entry.tasks, jobTask)
 			}
-			continue
+			return
 		}
-		fetches++
-		delete(fetchJobs, key) // duplicate provider rows cannot spend the same turn twice
 		// A failed or incomplete read still spent the allowance. Keep attempt
 		// order separate from accepted observations so failure never freshens evidence.
+		key := instanceName + "|" + upid
 		m.mu.Lock()
 		if m.vzdumpJobTaskCache == nil {
 			m.vzdumpJobTaskCache = make(map[string]vzdumpJobTaskCacheEntry)
@@ -2983,7 +2969,7 @@ func (m *Monitor) synthesizeVzdumpJobGuestTasks(ctx context.Context, instanceNam
 			if cached {
 				byJob[index] = cachedVzdumpGuestTasks(entry.tasks, jobTask)
 			}
-			continue
+			return
 		}
 
 		// Every request starts at line one for the same job. A shorter
@@ -2997,7 +2983,7 @@ func (m *Monitor) synthesizeVzdumpJobGuestTasks(ctx context.Context, instanceNam
 				Int("previousLines", entry.lineCount).
 				Msg("shorter vzdump task log; keeping prior guest evidence")
 			byJob[index] = cachedVzdumpGuestTasks(entry.tasks, jobTask)
-			continue
+			return
 		}
 
 		unlock, current = m.beginPVEBackupPublication(ctx, instanceName)
@@ -3005,7 +2991,7 @@ func (m *Monitor) synthesizeVzdumpJobGuestTasks(ctx context.Context, instanceNam
 			if cached {
 				byJob[index] = cachedVzdumpGuestTasks(entry.tasks, jobTask)
 			}
-			continue
+			return
 		}
 		guestTasks := refreshObservedAt(parseVzdumpJobLog(jobTask, upid, logLines), now)
 		historyComplete := backupGuestLogComplete(jobTask, logLines, guestTasks)
@@ -3025,6 +3011,19 @@ func (m *Monitor) synthesizeVzdumpJobGuestTasks(ctx context.Context, instanceNam
 		unlock()
 	}
 
+	// Execute only the bounded selection in priority order. Unselected jobs
+	// can contribute cached evidence without being sorted or spending a turn.
+	scheduled := make(map[int]bool, len(selected))
+	for _, index := range selected {
+		scheduled[index] = true
+		readJob(index, true)
+	}
+	for index := range jobTasks {
+		if !scheduled[index] {
+			readJob(index, false)
+		}
+	}
+
 	var synthesized []models.BackupTask
 	for _, tasks := range byJob {
 		synthesized = append(synthesized, tasks...)
@@ -3039,67 +3038,72 @@ func (m *Monitor) synthesizeVzdumpJobGuestTasks(ctx context.Context, instanceNam
 // order. The queue not served by the last actual request gets the first turn,
 // so either queue can progress even when one read exhausts the shared context.
 // Only actual calls advance scheduling, not selection or cancellation.
-func (m *Monitor) selectVzdumpJobLogReads(instance string, jobs []models.BackupTask, upids map[string]string) map[string]int {
-	type pendingRead struct {
-		key     string
-		attempt time.Time
-		running bool
-	}
-	pending := make([]pendingRead, 0, len(jobs))
+func (m *Monitor) selectVzdumpJobLogReads(instance string, jobs []models.BackupTask, upids map[string]string) []int {
+	live := make([]vzdumpJobLogRead, 0, maxVzdumpJobLogFetchesPerPoll)
+	ended := make([]vzdumpJobLogRead, 0, maxVzdumpJobLogFetchesPerPoll)
 	seen := make(map[string]bool, len(jobs))
 	m.mu.RLock()
 	historyFirst := m.vzdumpJobLogHistoryFirst[instance]
-	for _, job := range jobs {
-		key := instance + "|" + upids[job.ID]
-		if seen[key] || m.vzdumpJobTaskCache[key].final {
+	for index, job := range jobs {
+		upid := upids[job.ID]
+		entry := m.vzdumpJobTaskCache[instance+"|"+upid]
+		if seen[upid] || entry.final {
 			continue
 		}
-		seen[key] = true
-		pending = append(pending, pendingRead{key: key, attempt: m.vzdumpJobTaskCache[key].lastAttempt, running: job.EndTime.IsZero()})
+		seen[upid] = true
+		read := vzdumpJobLogRead{index: index, attempt: entry.lastAttempt}
+		if job.EndTime.IsZero() {
+			live = offerVzdumpJobLogRead(live, read)
+		} else {
+			ended = offerVzdumpJobLogRead(ended, read)
+		}
 	}
 	m.mu.RUnlock()
-	sort.SliceStable(pending, func(i, j int) bool {
-		return pending[i].attempt.Before(pending[j].attempt)
-	})
-	// Positive ranks bind both admission and execution order; zero is unselected.
-	selected := make(map[string]int, min(len(pending), maxVzdumpJobLogFetchesPerPoll))
-	for _, read := range pending {
-		if read.running && len(selected) < maxVzdumpJobLogFetchesPerPoll-1 {
-			selected[read.key] = len(selected) + 1
-		}
+
+	liveCount := len(live)
+	if len(ended) > 0 {
+		liveCount = min(liveCount, maxVzdumpJobLogFetchesPerPoll-1)
 	}
-	for _, read := range pending {
-		if !read.running && len(selected) < maxVzdumpJobLogFetchesPerPoll {
-			selected[read.key] = len(selected) + 1
-		}
-	}
-	for _, read := range pending {
-		if len(selected) >= maxVzdumpJobLogFetchesPerPoll {
-			break
-		}
-		if selected[read.key] == 0 {
-			selected[read.key] = len(selected) + 1
-		}
-	}
+	ended = ended[:min(len(ended), maxVzdumpJobLogFetchesPerPoll-liveCount)]
+	selected := make([]int, 0, liveCount+len(ended))
 	// Admission reserves live capacity and an ended turn; execution must share
 	// the context too. Move only the oldest selected ended read ahead of live
 	// work when the last actual request was live. If either queue exhausts the
 	// context, the other starts next poll, rather than waiting behind an entire
 	// slow backlog. The shared time budget can still defer admitted live reads.
-	if historyFirst {
-		for _, read := range pending {
-			if rank := selected[read.key]; !read.running && rank > 0 {
-				for key, priority := range selected {
-					if priority < rank {
-						selected[key] = priority + 1
-					}
-				}
-				selected[read.key] = 1
-				break
-			}
-		}
+	if historyFirst && len(ended) != 0 {
+		selected = append(selected, ended[0].index)
+		ended = ended[1:]
+	}
+	for _, read := range live[:liveCount] {
+		selected = append(selected, read.index)
+	}
+	for _, read := range ended {
+		selected = append(selected, read.index)
 	}
 	return selected
+}
+
+type vzdumpJobLogRead struct {
+	index   int
+	attempt time.Time
+}
+
+// No poll can read more than the allowance from either queue. Keep only its
+// oldest candidates; insert after equal attempts to keep provider order.
+func offerVzdumpJobLogRead(queue []vzdumpJobLogRead, read vzdumpJobLogRead) []vzdumpJobLogRead {
+	if len(queue) == cap(queue) && !read.attempt.Before(queue[len(queue)-1].attempt) {
+		return queue
+	}
+	at := sort.Search(len(queue), func(i int) bool {
+		return read.attempt.Before(queue[i].attempt)
+	})
+	if len(queue) < cap(queue) {
+		queue = append(queue, vzdumpJobLogRead{})
+	}
+	copy(queue[at+1:], queue[at:])
+	queue[at] = read
+	return queue
 }
 
 // Retain the last successful log observation when a non-final log is unread or

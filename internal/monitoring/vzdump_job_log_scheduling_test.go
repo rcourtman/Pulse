@@ -3,6 +3,7 @@ package monitoring
 import (
 	"context"
 	"fmt"
+	"sort"
 	"sync"
 	"testing"
 	"time"
@@ -392,7 +393,7 @@ func TestVzdumpJobLogSchedulingQueueCursorOnlyTracksActualScopedReads(t *testing
 	require.True(t, m.vzdumpJobLogHistoryFirst["site"])
 	// Repeated selection and a cancelled poll cannot spend the ended turn.
 	for i := 0; i < 2; i++ {
-		require.Equal(t, 1, m.selectVzdumpJobLogReads("site", jobs, upids)["site|"+upids[jobs[0].ID]])
+		require.Equal(t, []int{0, 1}, m.selectVzdumpJobLogReads("site", jobs, upids))
 	}
 	m.synthesizeVzdumpJobGuestTasks(ctx, "site", client, jobs, upids)
 	require.Len(t, client.requests, 1)
@@ -408,4 +409,96 @@ func TestVzdumpJobLogSchedulingQueueCursorOnlyTracksActualScopedReads(t *testing
 	for key := range m.vzdumpJobTaskCache {
 		require.NotContains(t, key, "site|")
 	}
+}
+
+func TestVzdumpJobLogSchedulingBoundedSelectionMatchesFullSort(t *testing.T) {
+	const instance = "site"
+	limit := maxVzdumpJobLogFetchesPerPoll
+	for _, tc := range []struct {
+		live, ended int
+	}{
+		{0, 0}, {0, 3 * limit}, {3 * limit, 0}, {3, 3 * limit}, {3 * limit, 1}, {3 * limit, 4 * limit},
+	} {
+		t.Run(fmt.Sprintf("%d-live-%d-ended", tc.live, tc.ended), func(t *testing.T) {
+			jobs, upids := scheduledVzdumpJobs(tc.live+tc.ended, instance)
+			cache := make(map[string]vzdumpJobTaskCacheEntry, len(jobs))
+			pending := make([]int, 0, len(jobs))
+			for i := range jobs {
+				if i < tc.live {
+					jobs[i].EndTime = time.Time{}
+				}
+				var attempted time.Time
+				// Provider order is unrelated to attempt age. Include equal and
+				// never-attempted candidates on both sides of the cutoff.
+				if i%3 != 0 {
+					attempted = jobs[i].StartTime.Add(time.Duration((i*17)%23) * time.Second)
+				}
+				upid := upids[jobs[i].ID]
+				cache[instance+"|"+upid] = vzdumpJobTaskCacheEntry{lastAttempt: attempted, final: i%13 == 12}
+				cache["peer|"+upid] = vzdumpJobTaskCacheEntry{final: true}
+				if !cache[instance+"|"+upid].final {
+					pending = append(pending, i)
+				}
+			}
+			if len(jobs) > 1 {
+				jobs = append(jobs, jobs[0], jobs[1])
+			}
+
+			// Reference the old full-list policy, including provider-order
+			// ties, the ended reservation and unused capacity going to live.
+			sort.SliceStable(pending, func(i, j int) bool {
+				return cache[instance+"|"+upids[jobs[pending[i]].ID]].lastAttempt.Before(
+					cache[instance+"|"+upids[jobs[pending[j]].ID]].lastAttempt)
+			})
+			var live, ended []int
+			for _, i := range pending {
+				if jobs[i].EndTime.IsZero() {
+					live = append(live, i)
+				} else {
+					ended = append(ended, i)
+				}
+			}
+			if len(ended) > 0 && len(live) >= limit {
+				live = live[:limit-1]
+			}
+			live = live[:min(len(live), limit)]
+			ended = ended[:min(len(ended), limit-len(live))]
+
+			for _, historyFirst := range []bool{false, true} {
+				want := make([]int, 0, limit)
+				rest := ended
+				if historyFirst && len(ended) > 0 {
+					want = append(want, ended[0])
+					rest = ended[1:]
+				}
+				want = append(want, live...)
+				want = append(want, rest...)
+				m := &Monitor{
+					vzdumpJobTaskCache:       cache,
+					vzdumpJobLogHistoryFirst: map[string]bool{instance: historyFirst},
+				}
+				require.Equal(t, want, m.selectVzdumpJobLogReads(instance, jobs, upids), "history first: %t", historyFirst)
+			}
+		})
+	}
+}
+
+func TestVzdumpJobLogSchedulingKeepsProviderOrderForResults(t *testing.T) {
+	jobs, upids := scheduledVzdumpJobs(2, "site")
+	jobs[1].EndTime = time.Time{}
+	jobs = append(jobs, jobs[0])
+	ended, live := upids[jobs[0].ID], upids[jobs[1].ID]
+	client := &scheduledVzdumpClient{
+		read: func(upid string) ([]proxmox.TaskLogLine, error) {
+			if upid == live {
+				return testLogLines("INFO: Starting Backup of VM 502 (qemu)"), nil
+			}
+			return testLogLines("INFO: Starting Backup of VM 501 (qemu)", "INFO: Finished Backup of VM 501 (00:00:30)", "TASK OK"), nil
+		},
+	}
+	tasks := (&Monitor{}).synthesizeVzdumpJobGuestTasks(context.Background(), "site", client, jobs, upids)
+	require.Equal(t, []string{live, ended}, client.requests, "live reads first; a duplicate spends no provider turn")
+	require.Len(t, tasks, 3)
+	require.Equal(t, []int{501, 502, 501}, []int{tasks[0].VMID, tasks[1].VMID, tasks[2].VMID})
+	require.Equal(t, []string{"OK", "running", "OK"}, []string{tasks[0].Status, tasks[1].Status, tasks[2].Status})
 }
