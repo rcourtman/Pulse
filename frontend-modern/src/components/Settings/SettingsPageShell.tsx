@@ -40,6 +40,36 @@ export const SettingsPageShell: Component<SettingsPageShellProps> = (props) => {
       ? isInfrastructureSettingsTab(props.activeTab())
       : props.activeTab() === itemId;
 
+  let mobileHeader: HTMLDivElement | undefined;
+  const revealFocusedControl = ({ target }: FocusEvent) => {
+    const header = mobileHeader;
+    if (!header?.offsetHeight || !(target instanceof HTMLElement)) return;
+    if (!target.matches(':focus-visible')) return;
+    const scroll = header.closest<HTMLElement>('.app-scroll-shell');
+    if (!scroll) return;
+
+    // The browser may do no scrolling when a focused control is within the
+    // scroll area but behind the sticky header. Allow its own focus scrolling
+    // first, then move only enough to reveal the control and its outline.
+    requestAnimationFrame(() => {
+      if (!header.isConnected || document.activeElement !== target) return;
+      const overlay = header.getBoundingClientRect();
+      const control = target.getBoundingClientRect();
+      const left = Math.max(overlay.left, control.left);
+      const right = Math.min(overlay.right, control.right);
+      const top = Math.max(overlay.top, control.top);
+      const bottom = Math.min(overlay.bottom, control.bottom);
+      if (right <= left || bottom <= top) return;
+      const hit = document.elementFromPoint((left + right) / 2, (top + bottom) / 2);
+      if (header.contains(hit)) {
+        scroll.scrollBy({
+          top: Math.floor(control.top - overlay.bottom) - 4,
+          behavior: 'instant',
+        });
+      }
+    });
+  };
+
   return (
     <div data-settings-shell class="min-w-0 max-w-full space-y-0 lg:space-y-6">
       <div class="hidden lg:block">
@@ -263,7 +293,10 @@ export const SettingsPageShell: Component<SettingsPageShellProps> = (props) => {
           class={`min-w-0 flex-1 overflow-visible lg:overflow-hidden ${props.isMobileMenuOpen() ? 'hidden lg:block' : 'block'}`}
         >
           <Show when={props.flatTabs().length > 0}>
-            <div class="sticky top-0 z-40 flex min-h-12 items-center border-b border-border-subtle bg-surface/95 px-2 backdrop-blur-sm lg:hidden">
+            <div
+              ref={mobileHeader}
+              class="sticky top-0 z-40 flex min-h-12 items-center border-b border-border-subtle bg-surface/95 px-2 backdrop-blur-sm lg:hidden"
+            >
               <button
                 type="button"
                 onClick={() => {
@@ -297,6 +330,7 @@ export const SettingsPageShell: Component<SettingsPageShellProps> = (props) => {
 
           <div
             data-settings-content-body
+            on:focusin={revealFocusedControl}
             class={`min-w-0 ${infrastructureWorkspaceActive() ? 'p-0 sm:p-4 lg:p-5' : 'py-3 sm:p-6 lg:p-8'}`}
           >
             {props.children}

@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "base_sha": "5e6ea8dc97a078c13da9ee141d011b3a6e4f46db",
+  "verified_at": "2026-11-20T04:08:23Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/SettingsPageShell.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/SettingsPageShell.tsx": "edbd9677c89105a9e3d01cef93eb0039b42a1a0a81fe0d5b6cc7985c376430a7"
+  },
+  "routes": [
+    "/settings/security-audit"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 360,
+      "height": 844
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Offline real Settings shell, synthetic persistent Audit Log with 18 signed example events and nondefault preference limit 13. Same data, starting scroll position, route and light/dark theme in each comparison.",
+    "WebKit 26.0 at 360px and Chromium 141 at 390px: Shift+Tab focused Reset preferences under the 52px sticky header on the parent. The candidate scrolled 51–52px to reveal the full button and focus outline below the same header, with focus still on Reset. Same counts, rows and Verify controls.",
+    "Chromium 141 at 1440px: no sticky compact header and no change in focus or scroll geometry.",
+    "Six matching screenshots opened and inspected. Desktop and both narrow views: Space reset limit 13 to 50 and the original read-only verification path returned 18 fixture results."
+  ],
+  "interactions": [
+    "From a matched scrolled Audit Log position, give Legend focus without scrolling and use Shift+Tab to return to Reset preferences; check focus, outline, viewport and hit test.",
+    "Press Space on the focused Reset preferences and verify the changed browser preference and retained signature rows."
+  ]
+}
