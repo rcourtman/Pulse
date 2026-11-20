@@ -120,7 +120,10 @@ class DeploymentUpdateDocsTest(unittest.TestCase):
                        "ordinary monitoring and alert delivery",
                        "check the current state before retrying",
                        "reverting an image restores data",
-                       "keep it on the private image or archive"):
+                       "are Community builds, even with a matching version and valid signature",
+                       "Keep your current Pro runtime until the matching private image or signed Linux archive "
+                       "is available from [Pulse Pro downloads](https://pulserelay.pro/download.html)",
+                       "A public build removes the private runtime hooks"):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, install)
 
