@@ -16,7 +16,6 @@ import tempfile
 import time
 from typing import Any, Iterable
 
-
 CONVERGENCE_PATH = ".github/workflows/release-convergence.yml"
 CREATE_RELEASE_PATH = ".github/workflows/create-release.yml"
 DISPLAY_TITLE = re.compile(r"^Release convergence (v[^\s]+) source ([1-9][0-9]*)$")
@@ -47,6 +46,7 @@ TERMINAL_FAILURES = {
     "startup_failure",
     "timed_out",
 }
+RETRYABLE_API_READS = frozenset({"http-502", "http-503", "http-504", "peer-cancel"})
 
 
 class ReconciliationError(ValueError):
@@ -207,19 +207,23 @@ def api_read_subject(endpoint: str) -> str:
     return "GitHub API read"
 
 
-def retryable_read_failure(returncode: int, stderr: str) -> bool:
-    if returncode <= 0:
-        # A successful response or locally signalled gh is not a retry request.
-        return False
-    if re.search(r"\bHTTP (502|503|504)\b", stderr) is not None:
-        return True
-    # GitHub can cancel its HTTP/2 stream before an inventory GET completes.
-    # Match only this whole transport diagnostic, never local cancellation,
-    # another stream error, or a refusal that happens to quote these words.
-    return re.fullmatch(
+def classify_api_read_failure(exit_code: int, diagnostic: str) -> str:
+    """Classify only a complete native gh API failure, not text citing one."""
+    if exit_code != 1:
+        return "unknown"
+    line = diagnostic.removesuffix("\n").removesuffix("\r")
+    bare = re.fullmatch(r"gh: HTTP ([45][0-9]{2})", line)
+    if bare:
+        return f"http-{bare[1]}"
+    message = re.fullmatch(r"gh: ([ -~]+) \(HTTP ([45][0-9]{2})\)", line)
+    if message and not re.search(r"\bHTTP [45][0-9]{2}\b", message[1]):
+        return f"http-{message[2]}"
+    if re.fullmatch(
         r"(?:gh: )?stream error: stream ID [1-9][0-9]*; CANCEL; received from peer",
-        stderr.strip(),
-    ) is not None
+        line,
+    ):
+        return "peer-cancel"
+    return "unknown"
 
 
 class GitHub:
@@ -259,12 +263,11 @@ class GitHub:
                 text=True,
                 env=env,
             )
-            if (
-                result.returncode == 0
-                or not retry_read
-                or attempt == 2
-                or not retryable_read_failure(result.returncode, result.stderr or "")
-            ):
+            failure = (
+                classify_api_read_failure(result.returncode, result.stderr or "")
+                if retry_read and result.returncode else None
+            )
+            if attempt == 2 or failure not in RETRYABLE_API_READS:
                 break
             print(
                 f"Transient GitHub API read failure; retry {attempt + 1}/2.",
@@ -275,7 +278,7 @@ class GitHub:
             detail = result.stderr.strip().splitlines() if output else []
             suffix = f": {detail[-1]}" if detail else ""
             operation = read_subject or " ".join(arguments[:3])
-            if "HTTP 404" in result.stderr:
+            if failure == "http-404":
                 raise GitHubNotFound(
                     f"GitHub object was not found ({operation}){suffix}"
                 )
@@ -824,4 +827,9 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    if len(sys.argv) == 3 and sys.argv[1] == "--classify-gh-api-failure":
+        # The successor workflow shares the same grammar. This form only
+        # reads stderr on stdin; it cannot reach discovery or a provider write.
+        print(classify_api_read_failure(int(sys.argv[2]), sys.stdin.read()))
+    else:
+        raise SystemExit(main())

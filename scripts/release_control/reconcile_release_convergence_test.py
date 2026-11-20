@@ -68,9 +68,9 @@ class TransientReadTests(unittest.TestCase):
 
     def test_api_retries_transient_errors_with_bounded_backoff(self):
         github = subject.GitHub("rcourtman/Pulse", "gh")
-        for status in (502, 503, 504):
-            with self.subTest(status=status):
-                failure = self.result(1, stderr=f"gh: unavailable (HTTP {status})")
+        for diagnostic in ("gh: HTTP 502\n", "gh: unavailable (HTTP 503)", "gh: Gateway Timeout (HTTP 504)"):
+            with self.subTest(diagnostic=diagnostic):
+                failure = self.result(1, stderr=diagnostic)
                 with patch.object(subject.subprocess, "run", side_effect=[failure, failure, self.result()]) as command, patch("time.sleep") as sleep:
                     self.assertEqual({}, github.api("repos/example"))
                 self.assertEqual(3, command.call_count)
@@ -86,20 +86,43 @@ class TransientReadTests(unittest.TestCase):
 
     def test_nontransient_errors_are_not_retried(self):
         github = subject.GitHub("rcourtman/Pulse", "gh")
-        for detail in ("HTTP 401", "HTTP 403", "HTTP 404", "HTTP 429", "terminal escape sequences refused"):
+        details = (
+            "gh: Unauthorized (HTTP 401)",
+            "gh: Forbidden (HTTP 403)",
+            "gh: Not Found (HTTP 404)",
+            "gh: Rate limit exceeded (HTTP 429)",
+            "terminal escape sequences refused",
+        )
+        for detail in details:
             with self.subTest(detail=detail):
                 with patch.object(subject.subprocess, "run", return_value=self.result(1, stderr=detail)) as command, patch("time.sleep") as sleep:
-                    error = subject.GitHubNotFound if detail == "HTTP 404" else subject.ReconciliationError
-                    with self.assertRaises(error):
+                    with self.assertRaises(subject.ReconciliationError) as raised:
                         github.api("repos/example")
+                    self.assertEqual(detail.endswith("(HTTP 404)"), isinstance(raised.exception, subject.GitHubNotFound))
                 self.assertEqual(1, command.call_count)
+                sleep.assert_not_called()
+
+    def test_mixed_http_diagnostics_are_not_retried(self):
+        github = subject.GitHub("rcourtman/Pulse", "gh")
+        for code, diagnostic in (
+            (1, "gh: Refused; prior read returned HTTP 502 (HTTP 403)"),
+            (1, "gh: Refused (HTTP 403)\ngh: Gateway Timeout (HTTP 504)"),
+            (2, "gh: Service Unavailable (HTTP 503)"),
+            (-15, "gh: Bad Gateway (HTTP 502)"),
+        ):
+            with self.subTest(code=code, diagnostic=diagnostic):
+                failure = self.result(code, stdout='[{"id": 99}]', stderr=diagnostic)
+                with patch.object(subject.subprocess, "run", return_value=failure) as command, patch("time.sleep") as sleep:
+                    with self.assertRaises(subject.ReconciliationError):
+                        github.pages("repos/rcourtman/Pulse/releases")
+                command.assert_called_once()
                 sleep.assert_not_called()
 
     def test_mutations_are_not_retried(self):
         github = subject.GitHub("rcourtman/Pulse", "gh")
         for payload in (None, {"ref": "main"}):
             with self.subTest(payload=payload):
-                with patch.object(subject.subprocess, "run", return_value=self.result(1, stderr="HTTP 504")) as command, patch("time.sleep") as sleep:
+                with patch.object(subject.subprocess, "run", return_value=self.result(1, stderr="gh: Gateway Timeout (HTTP 504)")) as command, patch("time.sleep") as sleep:
                     with self.assertRaises(subject.ReconciliationError):
                         github.post("repos/example/actions/dispatches", payload)
                 self.assertEqual(1, command.call_count)
@@ -230,7 +253,7 @@ class FailedReadIdentityTests(unittest.TestCase):
         endpoint = "repos/rcourtman/Pulse/actions/runs/37395942598"
         for status in (401, 403, 404):
             with self.subTest(status=status):
-                result = subprocess.CompletedProcess([], 1, stdout="", stderr=f"HTTP {status}")
+                result = subprocess.CompletedProcess([], 1, stdout="", stderr=f"gh: Read failed (HTTP {status})")
                 with patch.object(subject.subprocess, "run", return_value=result) as command, patch("time.sleep") as sleep:
                     with self.assertRaises(subject.ReconciliationError) as failure:
                         github.api(endpoint)
@@ -244,7 +267,7 @@ class FailedReadIdentityTests(unittest.TestCase):
     def test_paginated_failure_omits_read_filters(self):
         github = subject.GitHub("rcourtman/Pulse", "gh")
         resource = "repos/rcourtman/Pulse/actions/workflows/release-convergence.yml/runs"
-        result = subprocess.CompletedProcess([], 1, stdout="partial", stderr="HTTP 403")
+        result = subprocess.CompletedProcess([], 1, stdout="partial", stderr="gh: Forbidden (HTTP 403)")
         with patch.object(subject.subprocess, "run", return_value=result) as command, patch("time.sleep") as sleep:
             with self.assertRaises(subject.ReconciliationError) as failure:
                 github.pages(resource + "?event=workflow_dispatch&private_filter=fixture-only")
@@ -268,7 +291,7 @@ class FailedReadIdentityTests(unittest.TestCase):
         github = subject.GitHub("rcourtman/Pulse", "gh")
         results = [
             subprocess.CompletedProcess([], 0, stdout='{"default_branch": "main"}', stderr=""),
-            subprocess.CompletedProcess([], 1, stdout="", stderr="HTTP 404"),
+            subprocess.CompletedProcess([], 1, stdout="", stderr="gh: Not Found (HTTP 404)"),
         ]
         with patch.object(subject.subprocess, "run", side_effect=results) as command, patch("time.sleep") as sleep:
             with self.assertRaisesRegex(subject.GitHubNotFound, "GET repos/rcourtman/Pulse/actions/workflows/release-convergence.yml"):
@@ -793,6 +816,45 @@ class CredentialContainmentTests(unittest.TestCase):
 
 
 class ReconciliationTests(unittest.TestCase):
+    def test_only_definite_absence_allows_either_owner_recovery_path(self):
+        for diagnostic, code, absent in (
+            ("gh: Not Found (HTTP 404)\n", 1, True),
+            ("gh: HTTP 404\n", 1, True),
+            ("gh: Service Unavailable (HTTP 503); HTTP 404 mentioned", 1, False),
+            ("gh: Refused, not HTTP 404 (HTTP 403)", 1, False),
+            ("gh: Refused (HTTP 403)\ngh: Not Found (HTTP 404)", 1, False),
+            ("gh: Not Found (HTTP 404)", 2, False),
+            ("gh: Not Found (HTTP 404)", 4, False),
+            ("gh: Not Found (HTTP 404)", -15, False),
+        ):
+            for committed in (False, True):
+                with self.subTest(diagnostic=diagnostic, code=code, committed=committed):
+                    github = FakeGitHub(committed=committed)
+                    transport = subject.GitHub(github.repository, "gh")
+                    endpoint = (
+                        f"repos/{github.repository}/actions/runs/{github.owner_run_id}"
+                        if committed
+                        else f"repos/{github.repository}/releases/tags/v6.5.0-rc.1"
+                    )
+                    original = github.api
+                    github.api = lambda path: transport.api(path) if path == endpoint else original(path)
+                    result = subprocess.CompletedProcess([], code, stdout="", stderr=diagnostic)
+                    with patch.object(subject.subprocess, "run", return_value=result) as command, \
+                            contextlib.redirect_stdout(io.StringIO()):
+                        if absent:
+                            subject.reconcile(github, github.run_id, 5)
+                        else:
+                            with self.assertRaises(subject.ReconciliationError):
+                                subject.reconcile(github, github.run_id, 5)
+                    command.assert_called_once()
+                    self.assertEqual(endpoint, command.call_args.args[0][-1])
+                    expected = (
+                        f"repos/{github.repository}/actions/workflows/release-convergence.yml/dispatches"
+                        if committed
+                        else f"repos/{github.repository}/actions/runs/{github.run_id}/rerun"
+                    )
+                    self.assertEqual([expected] if absent else [], [url for url, _ in github.posts])
+
     def test_recovery_receipts_require_successful_submission(self):
         cases = [
             ({}, "Dispatched fresh convergence controls"),
