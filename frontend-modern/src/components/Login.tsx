@@ -499,7 +499,7 @@ const LoginForm: Component<{
   return (
     <div
       class="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8"
-      classList={{ 'max-sm:pt-6': compactReturn() }}
+      classList={{ 'max-sm:pt-6': compactReturn(), 'max-sm:py-6': hasSSOProviders }}
     >
       <div class="max-w-md w-full space-y-8">
         {/* Demo Credentials Banner */}
@@ -579,26 +579,28 @@ const LoginForm: Component<{
                 {(provider) => (
                   <button
                     type="button"
-                    class={`w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-md border border-blue-500 text-blue-600 hover:bg-blue-50 transition dark:border-blue-400 dark:text-blue-200 dark:hover:bg-blue-900/25 ${oidcLoading() ? 'opacity-75 cursor-wait' : ''}`}
+                    class={`w-full min-h-11 inline-flex items-center justify-center px-2 py-2.5 rounded-md border border-blue-500 text-blue-600 hover:bg-blue-50 transition sm:px-4 sm:py-3 dark:border-blue-400 dark:text-blue-200 dark:hover:bg-blue-900/25 ${oidcLoading() ? 'opacity-75 cursor-wait' : ''}`}
                     disabled={oidcLoading()}
                     onClick={() => {
                       window.location.href = provider.loginUrl;
                     }}
                   >
-                    <span class="inline-flex items-center gap-2">
+                    <span class="inline-flex min-w-0 items-center gap-2">
                       <Show
                         when={provider.iconUrl}
                         fallback={
                           provider.type === 'saml' ? (
-                            <Key class="w-5 h-5" />
+                            <Key class="size-5 shrink-0" aria-hidden="true" />
                           ) : (
-                            <Globe class="w-5 h-5" />
+                            <Globe class="size-5 shrink-0" aria-hidden="true" />
                           )
                         }
                       >
-                        <img src={provider.iconUrl} alt="" class="w-5 h-5" />
+                        <img src={provider.iconUrl} alt="" class="size-5 shrink-0" />
                       </Show>
-                      Continue with {provider.displayName || provider.name}
+                      <span class="min-w-0 wrap-anywhere">
+                        Continue with {provider.displayName || provider.name}
+                      </span>
                     </span>
                   </button>
                 )}

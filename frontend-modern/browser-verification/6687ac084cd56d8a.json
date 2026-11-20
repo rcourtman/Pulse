@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "base_sha": "c9087715986e726a997e3724100d46dc5ce1b552",
+  "verified_at": "2026-11-20T14:17:50Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Login.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Login.tsx": "b5f9fb1ffa26e8a2eb0cd5ae254cf595367e13de30cf5da93e43a11fe8bd4f91"
+  },
+  "routes": [
+    "/login",
+    "/docs/TROUBLESHOOTING"
+  ],
+  "viewports": [
+    {
+      "width": 1366,
+      "height": 820
+    },
+    {
+      "width": 320,
+      "height": 568
+    }
+  ],
+  "states": [
+    "Real production frontend with offline sign-in discovery. Playwright 1.56.1, Chromium 141 light at desktop and touch-emulated WebKit 26 dark at 320 by 568.",
+    "Ten matched before/after pairs, all inspected natively: long unbroken OIDC display name and SAML fallback name with shared prefix, spaced display name plus local form, short choices, and expired SAML return with options still listed.",
+    "At 320 CSS px the baseline scroll width was 357 px and both long names ran off the side. Candidate scroll width is 320 px; both complete names, intact marks and help fit without horizontal scroll.",
+    "The existing SAML expiry message remains visible beside the listed choices. The whole Help target is now in its first phone viewport. Local fields, the submit action and password focus remain in their existing flow. The desktop short-choice and expired-return controls are unchanged."
+  ],
+  "interactions": [
+    "149 baseline and 175 candidate browser assertions. On desktop Tab and Enter select each advertised provider; on emulated touch, tapping each button reaches the corresponding offline destination once. Provider names and destinations are unchanged.",
+    "The local form keeps its existing availability and draft while tabbing or tapping from username to password. Help opens the actual Troubleshooting guide in each fixture. No real IdP, credential submission or session creation."
+  ]
+}
