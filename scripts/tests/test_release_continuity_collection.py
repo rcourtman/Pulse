@@ -243,6 +243,25 @@ class InventoryCollectionTest(unittest.TestCase):
                 self.assertEqual(receipt["attempts"][0]["exit_code"], code)
                 self.assertNotIn(error.decode().strip(), console + json.dumps(receipt))
 
+    def test_competing_status_on_the_same_line_never_authorizes_a_repeat(self):
+        for terminal in (502, 504):
+            for earlier in (401, 403, 429, 503):
+                with self.subTest(earlier=earlier, terminal=terminal):
+                    error = f"gh: upstream reported HTTP {earlier} (HTTP {terminal})\n".encode()
+                    result, receipt, output, calls, sleeps, console = self.collect([
+                        (1, COMPLETE, error),
+                        (0, COMPLETE, b""),
+                    ])
+                    self.assertEqual(result, 1)
+                    self.assertEqual(receipt["status"], "unavailable")
+                    self.assertIsNone(output)
+                    self.assertEqual(len(calls), 1)
+                    self.assertEqual(sleeps, [])
+                    attempt, = receipt["attempts"]
+                    self.assertEqual(attempt["stderr_sha256"], hashlib.sha256(error).hexdigest())
+                    self.assertIsNone(attempt["reported_http_status"])
+                    self.assertNotIn("upstream reported", console + json.dumps(receipt))
+
     def test_successful_exit_with_incomplete_or_wrong_shape_json_never_repeats(self):
         for payload in [b"", b"[[", b"{}", b"[]", b"[{}]", b"[[1]]", b"[[true]]", b"\xff"]:
             with self.subTest(payload=payload):

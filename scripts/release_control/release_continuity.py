@@ -839,11 +839,17 @@ def collect_inventory(args: argparse.Namespace) -> int:
             # Retain just its numeric status, never the response message.
             stderr_line = result.stderr.strip()
             http_error = (
-                re.fullmatch(rb"gh: [ -~]+ \(HTTP ([45][0-9]{2})\)", stderr_line)
+                re.fullmatch(rb"gh: ([ -~]+) \(HTTP ([45][0-9]{2})\)", stderr_line)
                 if result.returncode == 1
                 else None
             )
-            http_status = int(http_error[1]) if http_error else None
+            # An error body can report another status on that same line. Do
+            # not let the final status turn an ambiguous read into a retry.
+            http_status = (
+                int(http_error[2])
+                if http_error and not re.search(rb"\bHTTP [45][0-9]{2}\b", http_error[1])
+                else None
+            )
             attempt = {
                 "number": number,
                 "exit_code": result.returncode,
