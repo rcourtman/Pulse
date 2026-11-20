@@ -321,6 +321,7 @@ func TestPVEStorageRunningArchiveOrigin(t *testing.T) {
 					f.client.at = now.Add(-10 * time.Minute)
 				}
 				f.m.state.UpdateBackupTasksForInstance(task.Instance, tasks)
+				f.m.recordPVEArchiveWriters(task.Instance, nil, tasks, nil)
 				f.m.pollStorageBackupsWithNodes(context.Background(), "cluster", client, f.nodes, f.online)
 				f.wait(t)
 				rows := f.m.state.GetSnapshot().PVEBackups.StorageBackups
@@ -360,6 +361,7 @@ func TestPVEStorageRunningArchiveOriginLifecycle(t *testing.T) {
 					task.Status, task.EndTime = "OK", now
 				}
 				f.m.state.UpdateBackupTasksForInstance("cluster", []models.BackupTask{task})
+				f.m.recordPVEArchiveWriters("cluster", nil, []models.BackupTask{task}, nil)
 				f.m.pollStorageBackupsWithNodes(context.Background(), "cluster", client, f.nodes, f.online)
 				f.wait(t)
 				snap, points, postures := f.m.state.GetSnapshot(), f.points(t), f.postures(t)

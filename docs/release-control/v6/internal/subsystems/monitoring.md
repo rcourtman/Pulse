@@ -764,6 +764,38 @@ and narrow production Backups and workload-badge proof. No guest, backup,
 restore or database/schema operation is introduced. This is source correlation
 correctness, not incident recovery or a claim that an old task proves completion.
 
+### Archive writers are independent of the live task window
+
+Build the archive writer summary from all accepted native tasks and scheduled
+guest log results in the existing bounded reads. The 200 native tasks per node
+remain a display limit, not a limit on partial-output detection. An incomplete
+node listing retains the last observed writer. While a listed parent still
+runs, retain each known writer if its guest is absent from the current log
+results. This includes a successful empty result, a result for another guest,
+and an unread/deferred log. Accepting an empty log can still clear live guest
+details; retaining the writer neither expands that window nor renews execution
+evidence. A result for the exact guest replaces its writer state, and a listed
+ended parent no longer preserves missing writers. Authoritative absence,
+explicit access denial, node removal and connection withdrawal also discard
+the corresponding evidence.
+
+A different task's OK, even with a single newly listed nonempty file inside its
+interval, does not identify that task's output. A plausible file stays
+incomplete while a known writer could own it. A typed archive on another
+node's independent local disk still protects the same guest on its own
+inventory evidence, as does a file preceding the writer's skew window.
+Shared/unknown origin keeps the existing conservative matching. There is no
+new storage, log or task fetch, display expansion or restore verification.
+
+`TestPVEArchiveWritersOutsideDisplayWindow` exercises direct and scheduled
+writers, a failed second page, an unrelated sole file beside a native OK,
+returning empty, unread, unchanged and different-guest logs, an explicit
+guest finish while its parent still runs, and ordinary parent completion.
+It checks exact live IDs and provider calls, inventory, guest dates and
+persisted protection, and supports the Coverage and By date consumer
+comparison. `TestPVEArchiveWriterWithdrawal` pins carried evidence and
+authoritative withdrawal across connections.
+
 ### Retained local archives do not change kind when a VMID is reused
 
 A PVE VM archive cannot advance the backup date or protect a live LXC using
