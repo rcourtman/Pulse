@@ -1856,11 +1856,34 @@ The Unix installer only accepts plain HTTP for local or private server
 addresses. `--insecure` skips TLS certificate verification. It does not
 change the HTTP address check.
 
-- **`Could not run the downloaded agent`:** check whether the installer's
-  temporary filesystem permits execution and whether the binary matches the
-  monitored host's OS and CPU. The message does not identify the cause.
-  Leave mount restrictions in place.
+- **`Could not run the downloaded agent`:** the installer could not start
+  the file for this check. See the mount check below. Make sure the download
+  matches the host's OS and CPU. Leave mount restrictions in place.
 - **`Could not validate the Pulse URL`:** the installer could not confirm
   that the agent accepts the address. Older installers also use this message
   when the downloaded agent cannot start. The message alone does not tell you
   whether HTTP caused the failure.
+- **`The downloaded agent rejected the Pulse URL`:** the agent did run and
+  rejected the address. For HTTP, check that the address is local or private
+  from that host. If it is a hostname, check where it resolves. For HTTPS,
+  check the hostname and port, with no credentials, query string or fragment
+  in the URL. This is an address check, not a certificate or sign-in test.
+- **`The downloaded agent did not complete its Pulse URL check`:** no address
+  verdict. Keep the original error and check that the installer and download
+  match the Pulse server version shown in the output, before changing the
+  address or its trust settings.
+
+The first check normally runs from the temporary download directory. On
+installations that run the agent directly from the installation directory,
+the installer can check it again there before replacing the service. The
+error alone does not tell you which path was checked or why it failed.
+
+On Linux, `findmnt --uniq -n -o VFS-OPTIONS --target /tmp` reads the default
+temporary download mount without starting another install. Use the actual
+download directory if the installer used a different `TMPDIR`. For QNAP's
+staging default, see
+[Installer fails with not enough free disk space](#installer-fails-with-not-enough-free-disk-space).
+For the later check, use the installation directory as the target. If both
+checks apply and you cannot tell which one failed, inspect both mounts.
+`noexec` means files cannot run from that mount. Its absence does not prove
+that the binary can start.
