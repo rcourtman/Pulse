@@ -8,22 +8,25 @@ describe('HTTPS setup in Help', () => {
   it('renders a systemd drop-in rather than shell assignments', () => {
     const help = article('CONFIGURATION');
     const systemd = help.querySelector('#https-on-systemd');
-    const code = systemd?.nextElementSibling?.nextElementSibling?.nextElementSibling;
+    const code = systemd?.nextElementSibling?.nextElementSibling;
     expect(code?.tagName).toBe('PRE');
     expect(code?.textContent?.trim().split('\n')).toEqual([
       '[Service]',
-      'Environment="HTTPS_ENABLED=true"',
-      'Environment="TLS_CERT_FILE=/etc/pulse/cert.pem"',
-      'Environment="TLS_KEY_FILE=/etc/pulse/key.pem"',
+      'Environment=HTTPS_ENABLED=true \\',
+      '  "TLS_CERT_FILE=/etc/pulse/cert.pem" \\',
+      '  "TLS_KEY_FILE=/etc/pulse/key.pem"',
     ]);
     expect(help.querySelector('a[href="#https-on-systemd"]')?.textContent).toBe('systemd');
     expect(help.querySelector('a[href="#https-in-docker"]')?.textContent).toBe('Docker');
+    expect(help.querySelector('a[href="#redirect-http-to-https"]')?.textContent).toBe(
+      'HTTP redirect',
+    );
   });
 
   it('leads from the verified HTTPS check to the private-file agent setup', () => {
     const help = article('CONFIGURATION');
     const check = [...help.querySelectorAll('pre')].find((block) =>
-      block.textContent?.includes('https://pulse.example.com:7655/api/health'),
+      block.textContent?.includes('https://pulse.example:7655/api/health'),
     );
     expect(check?.textContent?.trim()).toMatch(/^curl --disable /);
     expect(check?.textContent).toContain('--cacert /path/to/trusted-cert.pem');
