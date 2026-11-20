@@ -69,6 +69,7 @@ DOC_SUITES = frozenset({
     b"scripts/tests/test_running_version_help_docs.py",
     b"scripts/tests/test_scheduler_polling_docs.py",
     b"scripts/tests/test_security_docs.py",
+    b"scripts/tests/test_server_https_docs.py",
     b"scripts/tests/test_server_update_containment_docs.py",
     b"scripts/tests/test_setup_access_docs.py",
     b"scripts/tests/test_signed_installer_docs.py",

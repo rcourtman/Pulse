@@ -214,8 +214,8 @@ class GitClassifierTest(unittest.TestCase):
         self.git("commit", "-q", "-m", "Fixture tree change")
         return self.git("rev-parse", "HEAD")
 
-    def classify(self, base, head, branch="main"):
-        values = {"github.event_name": "pull_request", "github.event.pull_request.base.sha": base,
+    def classify(self, base, head, branch="main", event="pull_request"):
+        values = {"github.event_name": event, "github.event.pull_request.base.sha": base,
                   "github.event.before": base, "github.sha": head}
         script = re.sub(r"\$\{\{\s*(.*?)\s*\}\}", lambda m: values[m[1]],
                         classifier_script(BUILD.read_text()))
@@ -244,6 +244,24 @@ class GitClassifierTest(unittest.TestCase):
         deleted = self.commit()
         self.assertEqual(self.classify(edited, deleted)["code"], "false")
         self.assertEqual(self.classify(deleted, deleted)["code"], "true")
+
+    def test_https_recipe_and_mirrored_guides_use_public_docs_on_main(self):
+        for path in ("docs/CONFIGURATION.md", "frontend-modern/public/docs/CONFIGURATION.md",
+                     "scripts/tests/test_server_https_docs.py"):
+            self.write(path, "# HTTPS guide or recipe fixture\n")
+        documented = self.commit()
+        for event in ("pull_request", "push"):
+            with self.subTest(event=event):
+                self.assertEqual(self.classify(self.base, documented, event=event), {
+                    "code": "false", "go_compile": "false", "frontend_deps": "false",
+                    "triage_helper": "false",
+                })
+        self.assertEqual(self.classify(self.base, documented, branch="release/v6.4")["code"],
+                         "true")
+
+        self.write("install.sh", "# Changed installer\n")
+        mixed = self.commit()
+        self.assertEqual(self.classify(self.base, mixed)["code"], "true")
 
     def test_mixed_source_or_dependency_and_entire_range_keep_runtime(self):
         for path, field in (("internal/api/fixture.go", "go_compile"),
