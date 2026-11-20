@@ -510,16 +510,23 @@ plaintext consent nor `--insecure` authorises a configuration that its rendered
 service would reject. HTTPS and existing local/private HTTP policy remain
 unchanged. An unsupported or unexecutable staged validator fails closed with
 preflight exit 14 and a state-preservation explanation; it never falls back to
-an older `--self-test`, which does not establish URL admissibility. Temporary
-staging may be cleaned up; the installed service and saved credentials stay
-intact. The reachability-only `--preflight-only` path still performs metadata
-checks, not executable validation.
+an older `--self-test`, which does not establish URL admissibility. A shell
+execution failure (126 or 127) points to the staging filesystem and binary,
+not HTTPS. Other failures offer scheme-appropriate guidance without asserting
+a cause or printing the URL, staged path or child output. Plain HTTP advice
+keeps the local/private address and DNS rules distinct from TLS verification.
+Temporary staging may be cleaned up; the installed service and saved
+credentials stay intact. The reachability-only `--preflight-only` path
+still performs metadata checks, not executable validation, and says so on
+success.
 
-`TestRunValidateURLIsReadOnly`, `TestAgentInstallerURLAdmission` and
+`TestRunValidateURLIsReadOnly`, `TestAgentInstallerURLAdmission`,
+`TestAgentURLAdmissionRefusesUnsupportedOrUnexecutableValidator` and
 `TestAgentURLAdmissionPrecedesInstallMutation` cover production URL policy,
-actual built CLI/installer admission, inherited consent, file/mode preservation
-and trust-before-validation-before-mutation order. These are confined source
-fixtures, not original-host recovery or native service acceptance.
+actual built CLI/installer admission, inherited consent, text/JSON advice,
+file/mode preservation and trust-before-validation-before-mutation order.
+These are confined source fixtures, not original-host recovery or native
+service acceptance.
 
 ### Unix installer startup failure is not successful completion
 

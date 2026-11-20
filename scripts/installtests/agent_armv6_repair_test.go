@@ -171,7 +171,7 @@ func TestAgentInstallerSavedStateRepairVerifiedReplacement(t *testing.T) {
  pkill(){ printf 'stop-process\n' >> "$STATE_DIR/effects"; }
  sleep(){ :; }
  ` + extractLifecycleTrustShellFunctions(t) + "\n" + extractTokenRecoveryShellFunctions(t) + "\n"
-	for _, name := range []string{"read_connection_state_value", "recover_connection_state", "final_response_header_value", "installer_file_sha256", "has_pinned_installer_signature_key", "decode_base64_to_file", "verify_download_signature", "validate_staged_agent_url", "stage_agent_binary_for_install"} {
+	for _, name := range []string{"read_connection_state_value", "recover_connection_state", "final_response_header_value", "installer_file_sha256", "has_pinned_installer_signature_key", "decode_base64_to_file", "verify_download_signature", "pulse_url_uses_plain_http", "validate_staged_agent_url", "stage_agent_binary_for_install"} {
 		script += extractInstallShellFunction(t, name) + "\n"
 	}
 	script += `recover_connection_state "$STATE_DIR/connection.env"

@@ -45,6 +45,7 @@ func testAgentInstallerStaging(t *testing.T, helper, relocated bool) {
 	functions := extractInstallShellFunction(t, "cleanup") + "\n" +
 		extractInstallShellFunction(t, "stage_agent_binary_for_install") + "\n" +
 		extractInstallShellFunction(t, "stage_privileged_helper_for_install") + "\n" +
+		extractInstallShellFunction(t, "pulse_url_uses_plain_http") + "\n" +
 		extractInstallShellFunction(t, "validate_staged_agent_url") + "\n" +
 		extractInstallShellFunction(t, "fail") + "\n" +
 		extractInstallShellFunction(t, "json_event") + "\n"

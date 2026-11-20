@@ -26,18 +26,22 @@ func TestAgentInstallerURLAdmission(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Logf("actual staged agent sha256=%x bytes=%d", sha256.Sum256(binaryBytes), len(binaryBytes))
-	functions := extractInstallShellFunction(t, "fail") + "\n" + extractInstallShellFunction(t, "json_event") + "\n" + extractInstallShellFunction(t, "validate_staged_agent_url")
+	var functions strings.Builder
+	for _, name := range []string{"log_info", "redact_token", "pulse_url_uses_plain_http", "auto_enable_insecure_for_plain_http_url", "fail", "json_event", "validate_staged_agent_url"} {
+		functions.WriteString(extractInstallShellFunction(t, name) + "\n")
+	}
 	for _, tc := range []struct {
-		name, url string
-		wantExit  int
+		name, url, wantHint string
+		wantExit            int
 	}{
-		{"https", "https://pulse.example.invalid", 0},
-		{"private", "http://192.168.1.20:7655", 0},
-		{"loopback", "http://127.0.0.1:7655", 0},
-		{"local-hostname", "http://pulse:7655", 0},
-		{"public-http-despite-insecure-and-env-consent", "http://203.0.113.10", 14},
-		{"unresolved-http", "http://pulse.example.invalid", 14},
-		{"missing-url", "", 14},
+		{"https", "https://pulse.example.invalid", "", 0},
+		{"private", "http://192.168.1.20:7655", "", 0},
+		{"loopback", "http://127.0.0.1:7655", "", 0},
+		{"local-hostname", "HTTP://pulse:7655", "", 0},
+		{"public-http-despite-insecure-and-env-consent", "http://203.0.113.10", "Plain HTTP requires a local or private address.", 14},
+		{"unresolved-http", "http://pulse.example.invalid", "check that it resolves only to local or private addresses on this host", 14},
+		{"invalid-https", "https://pulse.example.invalid/#rejected-fragment", "Check the configured HTTPS address", 14},
+		{"missing-url", "", "Check the configured HTTPS address", 14},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := t.TempDir()
@@ -51,12 +55,16 @@ func TestAgentInstallerURLAdmission(t *testing.T) {
 OUTPUT_FORMAT=json
 NON_INTERACTIVE=true
 EXIT_PREFLIGHT_FAILED=14
-INSECURE=true
+INSECURE=false
+PULSE_TOKEN=""
+TOKEN_FILE_PATH=""
 PULSE_URL=%q
 %s
+auto_enable_insecure_for_plain_http_url
+printf 'INSECURE=%%s\n' "$INSECURE"
 validate_staged_agent_url %q
 printf 'ADMITTED\n'
-`, tc.url, functions, binary)
+`, tc.url, functions.String(), binary)
 			runCtx, stop := context.WithTimeout(context.Background(), 15*time.Second)
 			defer stop()
 			cmd := exec.CommandContext(runCtx, "bash", "-c", script)
@@ -76,6 +84,19 @@ printf 'ADMITTED\n'
 			}
 			if tc.wantExit != 0 && (!strings.Contains(text, `"exitCode":14`) || !strings.Contains(text, "saved credentials have not been changed")) {
 				t.Fatalf("missing truthful failure: %s", text)
+			}
+			if !strings.Contains(text, tc.wantHint) || strings.Contains(text, "rejected-fragment") || strings.Contains(text, "does not permit HTTP") {
+				t.Fatalf("ambiguous or unredacted URL admission result: %s", text)
+			}
+			if strings.HasPrefix(strings.ToLower(tc.url), "http://") {
+				if !strings.Contains(text, "INSECURE=true") || !strings.Contains(text, "still requires a local or private address for HTTP") {
+					t.Fatalf("plain HTTP notice confused insecure mode with URL admission: %s", text)
+				}
+				if tc.wantExit != 0 && !strings.Contains(text, "--insecure skips TLS verification; it does not change the HTTP address check") {
+					t.Fatalf("missing HTTP-specific correction: %s", text)
+				}
+			} else if !strings.Contains(text, "INSECURE=false") || strings.Contains(text, "Plain HTTP requires") {
+				t.Fatalf("non-HTTP admission acquired a plaintext notice or setting: %s", text)
 			}
 			for name, value := range preserved {
 				path := filepath.Join(dir, name)
