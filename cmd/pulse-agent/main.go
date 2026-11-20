@@ -288,6 +288,13 @@ func typedActionLauncherExit(args []string) (int, bool) {
 	return 0, false
 }
 
+// Reserve EX_DATAERR for a URL rejected by --validate-url. The Unix installer
+// consumes this status without reading stderr; parse and startup errors still
+// exit 1. Keep in sync with validate_staged_agent_url in scripts/install.sh.
+const validateURLRejectedExitCode = 65
+
+var errValidateURLRejected = errors.New("invalid pulse URL")
+
 func main() {
 	if code, launcher := typedActionLauncherExit(os.Args); launcher {
 		os.Exit(code)
@@ -310,6 +317,9 @@ func main() {
 			os.Exit(0)
 		}
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		if errors.Is(err, errValidateURLRejected) {
+			os.Exit(validateURLRejectedExitCode)
+		}
 		os.Exit(1)
 	}
 }
@@ -330,6 +340,9 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 	// service's runtime transport flags. --validate-url checks the actual policy.
 	if !cfg.SelfTest || cfg.ValidateURLOnly {
 		if _, err := agenttarget.NormalizePulseURL(cfg.PulseURL, true, cfg.AllowPlaintextHTTP); err != nil {
+			if cfg.ValidateURLOnly {
+				return fmt.Errorf("%w: %v", errValidateURLRejected, err)
+			}
 			return fmt.Errorf("invalid pulse URL: %w", err)
 		}
 	}

@@ -6867,12 +6867,16 @@ validate_staged_agent_url() {
     if [[ "$status" -eq 126 || "$status" -eq 127 ]]; then
         fail "Could not run the downloaded agent to check the Pulse URL. Check that the staging filesystem allows execution and that the binary matches this host. $unchanged" "$EXIT_PREFLIGHT_FAILED"
     fi
-    # Other exits do not establish whether URL policy or validator support failed.
-    # Keep child output and URL details out of both text and JSON diagnostics.
-    if pulse_url_uses_plain_http "$PULSE_URL"; then
-        fail "Could not validate the Pulse URL with the downloaded agent. Plain HTTP requires a local or private address. If you used a hostname, check that it resolves only to local or private addresses on this host. For a non-local server, use its configured HTTPS address. --insecure skips TLS verification; it does not change the HTTP address check. Check that the downloaded agent supports URL validation. $unchanged" "$EXIT_PREFLIGHT_FAILED"
+    # 65 is reserved for rejection by the collector's --validate-url policy.
+    # Never classify from child output or expose it in either output format.
+    if [[ "$status" -eq 65 ]]; then
+        if pulse_url_uses_plain_http "$PULSE_URL"; then
+            fail "The downloaded agent rejected the Pulse URL. Plain HTTP requires a local or private address. If you used a hostname, check that it resolves only to local or private addresses on this host. For a non-local server, use its configured HTTPS address. --insecure skips TLS verification; it does not change the HTTP address check. $unchanged" "$EXIT_PREFLIGHT_FAILED"
+        fi
+        fail "The downloaded agent rejected the Pulse URL. Check the configured HTTPS address and remove any credentials, query string or fragment from the URL. $unchanged" "$EXIT_PREFLIGHT_FAILED"
     fi
-    fail "Could not validate the Pulse URL with the downloaded agent. Check the configured HTTPS address and that the downloaded agent supports URL validation. $unchanged" "$EXIT_PREFLIGHT_FAILED"
+    # Older validators and other failures may exit without a policy verdict.
+    fail "The downloaded agent did not complete its Pulse URL check. This does not tell us whether the address is allowed. Check that the downloaded agent matches this Pulse server version and supports URL validation. $unchanged" "$EXIT_PREFLIGHT_FAILED"
 }
 
 if [[ -z "$PULSE_URL" ]]; then
@@ -7298,7 +7302,7 @@ if [[ "$PREFLIGHT_ONLY" == "true" ]]; then
 
     # Output summary
     if [[ "$PREFLIGHT_EXIT" -eq 0 ]]; then
-        preflight_limit="The agent binary has not been downloaded or run."
+        preflight_limit="The agent binary has not been downloaded or run. Its URL policy has not been checked."
         if [[ "$OUTPUT_FORMAT" == "json" ]]; then
             printf '{"phase":"preflight_complete","code":"ok","message":"Preflight checks passed. %s","exitCode":0,"data":{"arch":"%s-%s","agent_status":"%s"}}\n' \
                 "$preflight_limit" "$PF_OS" "$PF_ARCH" "$AGENT_STATUS"

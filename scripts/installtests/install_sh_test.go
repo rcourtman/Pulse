@@ -35,7 +35,8 @@ func TestAgentURLAdmissionRefusesUnsupportedOrUnexecutableValidator(t *testing.T
 		name, url, body, wantHint string
 		mode                      os.FileMode
 	}{
-		{"unsupported", "https://pulse.example.invalid", "#!/bin/sh\nprintf 'untrusted-output-canary\\n' >&2\nexit 1\n", "downloaded agent supports URL validation", 0700},
+		{"unsupported", "https://pulse.example.invalid", "#!/bin/sh\nprintf 'untrusted-output-canary\\n' >&2\nexit 1\n", "matches this Pulse server version and supports URL validation", 0700},
+		{"older-http-ambiguous", "http://203.0.113.10", "#!/bin/sh\nprintf 'invalid pulse URL: untrusted-output-canary\\n' >&2\nexit 1\n", "does not tell us whether the address is allowed", 0700},
 		{"cannot-execute", "http://192.168.1.20:7655", "#!/bin/sh\nexit 0\n", "staging filesystem allows execution", 0600},
 		{"missing-loader", "https://pulse.example.invalid", "#!/nonexistent-pulse-test-interpreter\nexit 0\n", "staging filesystem allows execution", 0700},
 	} {
@@ -81,8 +82,8 @@ EXIT_PREFLIGHT_FAILED=14
 				if !strings.Contains(message, tc.wantHint) || !strings.Contains(message, "saved credentials have not been changed") || strings.Contains(message, "untrusted-output-canary") || strings.Contains(message, tc.url) || strings.Contains(message, path) {
 					t.Fatalf("failure advice missing or disclosed validator inputs: %s", message)
 				}
-				if tc.name != "unsupported" && (strings.Contains(message, "HTTPS") || strings.Contains(message, "Plain HTTP")) {
-					t.Fatalf("non-execution wrongly diagnosed as URL policy: %s", message)
+				if strings.Contains(message, "rejected the Pulse URL") || strings.Contains(message, "Plain HTTP") {
+					t.Fatalf("unsupported or unexecutable validator wrongly diagnosed as a URL refusal: %s", message)
 				}
 			})
 		}
@@ -842,6 +843,9 @@ func TestInstallSHPreflightChecksAgentDownloadArtifact(t *testing.T) {
 	got := string(out)
 	if !strings.Contains(got, `"code":"agent_download_available"`) {
 		t.Fatalf("preflight did not report agent download availability:\n%s", got)
+	}
+	if !strings.Contains(got, "Its URL policy has not been checked.") {
+		t.Fatalf("preflight did not distinguish metadata from agent policy:\n%s", got)
 	}
 	if requestedDownloadPath != "/download/pulse-agent" {
 		t.Fatalf("download path = %q, want /download/pulse-agent", requestedDownloadPath)
