@@ -249,8 +249,8 @@ describe('App architecture', () => {
 
   it('keeps first-load connection progress understandable and retryable', () => {
     expect(appSource).toContain('(!runtime.bootstrapFailed() || isPublicRoute())');
-    expect(appSource).toContain(
-      'fallback={<AppBootstrapStatus failed={runtime.bootstrapFailed()} />}',
+    expect(appSource).toMatch(
+      /fallback=\{\s*<AppBootstrapStatus\s+failed=\{runtime\.bootstrapFailed\(\)\}/,
     );
     expect(appSource).not.toContain('<div class="text-muted">Loading...</div>');
   });

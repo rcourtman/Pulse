@@ -1,6 +1,8 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { APP_BOOTSTRAP_SLOW_DELAY_MS, AppBootstrapStatus } from '@/components/AppBootstrapStatus';
+import { readSSOReturnError } from '@/components/SSOReturnError';
 
 const orgsApi = vi.hoisted(() => ({
   listMyInvitations: vi.fn(),
@@ -112,6 +114,30 @@ describe('AppBootstrapStatus', () => {
       'Checking your session and preparing the workspace.',
     );
     expect(screen.queryByRole('button', { name: 'Retry connection' })).toBeNull();
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('keeps the returned reason separate from a pending or failed session check', async () => {
+    const [failed, setFailed] = createSignal(false);
+    const onRetry = vi.fn();
+    const message = readSSOReturnError(new URLSearchParams('saml=error&saml_error=invalid_state'));
+    render(() => (
+      <AppBootstrapStatus failed={failed()} onRetry={onRetry} ssoReturnError={message} />
+    ));
+
+    const alert = screen.getByRole('alert');
+    expect(alert).toHaveTextContent('Last single sign-on attempt');
+    expect(alert).toHaveTextContent('The sign-in attempt expired. Please try again.');
+    expect(screen.getByRole('status')).toHaveTextContent('Checking your session');
+    expect(client.apiFetch).not.toHaveBeenCalled();
+
+    setFailed(true);
+    expect(screen.getByRole('alert')).toBe(alert);
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Your saved sign-in details have not been cleared.',
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Retry connection' }));
+    expect(onRetry).toHaveBeenCalledOnce();
   });
 
   it('keeps waiting while making a slow bootstrap understandable and retryable', async () => {

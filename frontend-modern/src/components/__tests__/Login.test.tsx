@@ -219,6 +219,89 @@ describe('Login', () => {
       ).toBeVisible();
       expect(onLogin).not.toHaveBeenCalled();
     });
+
+    it.each([
+      ['oidc', 'group_restricted', 'Your account is not part of an authorized group to use Pulse.'],
+      [
+        'saml',
+        'fixture-private-detail',
+        'Single sign-on failed. Please try again or contact an administrator.',
+      ],
+    ])(
+      'keeps a returned %s error visible while options are unknown and after retry',
+      async (protocol, code, message) => {
+        const url = new URLSearchParams({
+          [protocol]: 'error',
+          [`${protocol}_error`]: code,
+          view: 'fixture',
+        });
+        window.history.pushState(null, '', `/login?${url}`);
+        let finish!: (response: Response) => void;
+        let recover!: (response: Response) => void;
+        mockFetch
+          .mockReturnValueOnce(
+            new Promise<Response>((resolve) => {
+              finish = resolve;
+            }),
+          )
+          .mockReturnValueOnce(
+            new Promise<Response>((resolve) => {
+              recover = resolve;
+            }),
+          );
+        const onLogin = vi.fn();
+        render(() => <Login onLogin={onLogin} />);
+
+        const alert = screen.getByRole('alert');
+        const expectUnknownOptions = () => {
+          expect(screen.getByRole('alert')).toBe(alert);
+          expect(alert).toHaveTextContent('Last single sign-on attempt');
+          expect(alert).toHaveTextContent(message);
+          expect(alert).not.toHaveTextContent(code);
+          expect(
+            screen.queryByRole('heading', { name: 'No sign-in options on this page' }),
+          ).toBeNull();
+          expect(screen.queryByRole('button', { name: 'Sign in to Pulse' })).toBeNull();
+          expect(screen.queryByRole('main', { name: 'Pulse Setup Wizard' })).toBeNull();
+        };
+        expectUnknownOptions();
+        expect(screen.getByRole('status')).toHaveTextContent('Checking which sign-in options');
+        finish(new Response('fixture-private-detail', { status: 503 }));
+
+        const retry = await screen.findByRole('button', { name: 'Retry sign-in check' });
+        expectUnknownOptions();
+        expect(screen.getByRole('status')).toHaveTextContent(
+          'does not mean authentication is unconfigured',
+        );
+        retry.focus();
+        fireEvent.click(retry);
+        expect(retry).toHaveFocus();
+        expect(retry).toHaveAttribute('aria-disabled', 'true');
+        expectUnknownOptions();
+
+        recover(
+          new Response(JSON.stringify({ hasAuthentication: true, hideLocalLogin: true }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }),
+        );
+        expect(
+          await screen.findByRole('heading', { name: 'No sign-in options on this page' }),
+        ).toBeVisible();
+        expect(screen.getByRole('alert')).toHaveTextContent(message);
+        expect(screen.getByRole('alert')).not.toHaveTextContent('Last single sign-on attempt');
+        expect(window.history.replaceState).toHaveBeenCalledWith(
+          {},
+          document.title,
+          '/login?view=fixture',
+        );
+        expect(mockFetch.mock.calls.map(([request]) => request)).toEqual([
+          '/api/security/status',
+          '/api/security/status',
+        ]);
+        expect(onLogin).not.toHaveBeenCalled();
+      },
+    );
   });
 
   it('shows local login form when show_local=true is in URL even if hideLocalLogin is true', async () => {
