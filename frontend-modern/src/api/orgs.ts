@@ -129,7 +129,11 @@ export const OrgsAPI = {
       ...options,
     }),
 
-  listMyInvitations: (options?: OrganizationAccessRequestOptions) =>
+  listMyInvitations: (
+    options?: Pick<OrganizationAccessRequestOptions, 'signal' | 'retry'> & {
+      expectedOrgID?: string;
+    },
+  ) =>
     apiFetchJSON<UserOrganizationInvitation[]>('/api/org-invitations', {
       preferSessionAuth: true,
       skipOrgContext: true,

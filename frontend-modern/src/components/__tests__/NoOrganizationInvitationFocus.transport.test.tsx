@@ -124,6 +124,60 @@ describe('personal invitation read keyboard recovery', () => {
     expect(fetchMock).toHaveBeenCalledOnce();
   });
 
+  it('restarts a stalled check with one current personal GET and ignores the old result', async () => {
+    const oldRead = deferred();
+    const restartedRead = deferred();
+    fetchMock.mockReturnValueOnce(oldRead.promise).mockReturnValueOnce(restartedRead.promise);
+    const exits = mount();
+
+    const restart = await screen.findByRole('button', { name: 'Restart invitation check' });
+    restart.focus();
+    fireEvent.click(restart);
+    const region = screen.getByRole('region', { name: 'Organization invitations' });
+    expect(region).toHaveFocus();
+    expect(region).toHaveAttribute('aria-busy', 'true');
+    expect(screen.queryByText(/Ask a Pulse administrator/)).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Accept invitation to / })).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const [[, old], [, current]] = fetchMock.mock.calls;
+    expect(old?.signal?.aborted).toBe(true);
+    expect(current?.signal?.aborted).toBe(false);
+    for (const [url, options] of fetchMock.mock.calls) {
+      expect(url).toBe('/api/org-invitations');
+      expect(options?.method ?? 'GET').toBe('GET');
+      expect(options?.credentials).toBe('include');
+      expect(options?.headers).toMatchObject({ 'X-Pulse-Org-ID': 'default' });
+      expect(options?.headers).not.toHaveProperty('X-API-Token');
+    }
+
+    const exit = screen.getByRole('button', { name: 'Sign out' });
+    exit.focus();
+    restartedRead.resolve(json(invitations));
+    await waitForOutcome('saved invitations');
+    expect(region).toHaveAttribute('aria-busy', 'false');
+    expect(screen.queryByRole('button', { name: 'Restart invitation check' })).toBeNull();
+
+    // A fulfilled response may already be queued when the client aborts it.
+    oldRead.resolve(json([]));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(screen.queryByText(/Ask a Pulse administrator/)).toBeNull();
+    await waitForOutcome('saved invitations');
+    expect(exit).toHaveFocus();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(exits.onReload).not.toHaveBeenCalled();
+    expect(exits.onSignOut).not.toHaveBeenCalled();
+  });
+
+  it('cancels the current personal read when the recovery screen closes', () => {
+    const read = deferred();
+    fetchMock.mockReturnValueOnce(read.promise);
+    mount();
+    expect(fetchMock.mock.calls[0][1]?.signal?.aborted).toBe(false);
+    cleanup();
+    expect(fetchMock.mock.calls[0][1]?.signal?.aborted).toBe(true);
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
   it('reuses the stable region on another explicit read without starting a mutation', async () => {
     const read = deferred();
     fetchMock
