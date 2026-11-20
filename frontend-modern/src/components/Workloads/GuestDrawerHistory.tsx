@@ -1120,7 +1120,7 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
     const hasMemory = Object.values(metricSources).includes('memory');
     if (metricSources.smart_temp === 'native') {
       return hasMemory
-        ? 'Temperature from the device; some readings from memory.'
+        ? 'Temperature from the device. Some readings from memory.'
         : 'Temperature history comes from the device.';
     }
     return hasMemory ? 'This view includes readings from memory.' : undefined;

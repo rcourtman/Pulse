@@ -629,7 +629,7 @@ describe('drawer History on a phone', () => {
       name: 'device Temperature beside memory I/O',
       metrics: { ...temperature, ...io },
       metricSources: { smart_temp: 'native', diskread: 'memory' },
-      notice: 'Temperature from the device; some readings from memory.',
+      notice: 'Temperature from the device. Some readings from memory.',
     },
   ])('names the displayed origin without a persistence claim: $name', async (state) => {
     vi.spyOn(ChartsAPI, 'getMetricsHistory').mockResolvedValue({
