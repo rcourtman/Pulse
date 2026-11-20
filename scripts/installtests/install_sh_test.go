@@ -31,27 +31,60 @@ func TestAgentURLAdmissionRefusesUnsupportedOrUnexecutableValidator(t *testing.T
 	if runtime.GOOS == "windows" {
 		t.Skip("Unix installer")
 	}
-	for _, executable := range []bool{true, false} {
-		dir := t.TempDir()
-		path := filepath.Join(dir, "staged-agent")
-		mode := os.FileMode(0600)
-		if executable {
-			mode = 0700
-		}
-		// Old binaries reject an unknown flag; noexec staging cannot run it.
-		if err := os.WriteFile(path, []byte("#!/bin/sh\nexit 2\n"), mode); err != nil {
-			t.Fatal(err)
-		}
-		script := `set -euo pipefail
-OUTPUT_FORMAT=json
+	for _, tc := range []struct {
+		name, url, body, wantHint string
+		mode                      os.FileMode
+	}{
+		{"unsupported", "https://pulse.example.invalid", "#!/bin/sh\nprintf 'untrusted-output-canary\\n' >&2\nexit 1\n", "downloaded agent supports URL validation", 0700},
+		{"cannot-execute", "http://192.168.1.20:7655", "#!/bin/sh\nexit 0\n", "staging filesystem allows execution", 0600},
+		{"missing-loader", "https://pulse.example.invalid", "#!/nonexistent-pulse-test-interpreter\nexit 0\n", "staging filesystem allows execution", 0700},
+	} {
+		for _, format := range []string{"text", "json"} {
+			t.Run(tc.name+"/"+format, func(t *testing.T) {
+				path := filepath.Join(t.TempDir(), "staged-agent")
+				if err := os.WriteFile(path, []byte(tc.body), tc.mode); err != nil {
+					t.Fatal(err)
+				}
+				script := `set -euo pipefail
+OUTPUT_FORMAT="$1"
+PULSE_URL="$2"
 NON_INTERACTIVE=true
+PULSE_TOKEN=""
+TOKEN_FILE_PATH=""
 EXIT_PREFLIGHT_FAILED=14
-PULSE_URL=https://pulse.example.invalid
-` + extractInstallShellFunction(t, "fail") + "\n" + extractInstallShellFunction(t, "json_event") + "\n" + extractInstallShellFunction(t, "validate_staged_agent_url") + "\nvalidate_staged_agent_url " + strconv.Quote(path) + "\nprintf 'UNEXPECTED-ADMITTED\\n'\n"
-		output, err := exec.Command("bash", "-c", script).CombinedOutput()
-		var failure *exec.ExitError
-		if !errors.As(err, &failure) || failure.ExitCode() != 14 || strings.Contains(string(output), "UNEXPECTED-ADMITTED") || !strings.Contains(string(output), `"exitCode":14`) {
-			t.Fatalf("unknown/unexecutable validator was not refused: %v\n%s", err, output)
+`
+				for _, name := range []string{"log_error", "redact_token", "pulse_url_uses_plain_http", "fail", "json_event", "validate_staged_agent_url"} {
+					script += extractInstallShellFunction(t, name) + "\n"
+				}
+				script += "validate_staged_agent_url \"$3\"\nprintf 'UNEXPECTED-ADMITTED\\n'\n"
+				output, err := exec.Command("bash", "-c", script, "url-admission", format, tc.url, path).CombinedOutput()
+				text := strings.TrimSpace(string(output))
+				var failure *exec.ExitError
+				if !errors.As(err, &failure) || failure.ExitCode() != 14 || strings.Contains(text, "UNEXPECTED-ADMITTED") {
+					t.Fatalf("unknown/unexecutable validator was not refused: %v\n%s", err, output)
+				}
+				message := text
+				if format == "json" {
+					var event struct {
+						Phase    string `json:"phase"`
+						Code     string `json:"code"`
+						Message  string `json:"message"`
+						ExitCode int    `json:"exitCode"`
+					}
+					if err := json.Unmarshal([]byte(text), &event); err != nil || event.Phase != "error" || event.Code != "install_failed" || event.ExitCode != 14 {
+						t.Fatalf("unexpected JSON failure event: %v, %s", err, text)
+					}
+					message = event.Message
+				} else if !strings.HasPrefix(text, "[ERROR] ") {
+					t.Fatalf("missing terminal error: %s", text)
+				}
+				if !strings.Contains(message, tc.wantHint) || !strings.Contains(message, "saved credentials have not been changed") || strings.Contains(message, "untrusted-output-canary") || strings.Contains(message, tc.url) || strings.Contains(message, path) {
+					t.Fatalf("failure advice missing or disclosed validator inputs: %s", message)
+				}
+				if tc.name != "unsupported" && (strings.Contains(message, "HTTPS") || strings.Contains(message, "Plain HTTP")) {
+					t.Fatalf("non-execution wrongly diagnosed as URL policy: %s", message)
+				}
+			})
 		}
 	}
 }

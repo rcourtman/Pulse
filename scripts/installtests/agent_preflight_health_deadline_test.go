@@ -253,6 +253,7 @@ func TestAgentInstallerPreflightHealthDeadline(t *testing.T) {
 			var events []struct {
 				Phase    string `json:"phase"`
 				Code     string `json:"code"`
+				Message  string `json:"message"`
 				ExitCode int    `json:"exitCode"`
 			}
 			for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
@@ -263,6 +264,7 @@ func TestAgentInstallerPreflightHealthDeadline(t *testing.T) {
 				var event struct {
 					Phase    string `json:"phase"`
 					Code     string `json:"code"`
+					Message  string `json:"message"`
 					ExitCode int    `json:"exitCode"`
 				}
 				if err := json.Unmarshal([]byte(line), &event); err != nil {
@@ -295,6 +297,9 @@ func TestAgentInstallerPreflightHealthDeadline(t *testing.T) {
 			last := events[len(events)-1]
 			if last.Phase != "preflight_complete" || last.Code != wantComplete || last.ExitCode != wantExit {
 				t.Fatalf("wrong final preflight result: %s", out)
+			}
+			if wantExit == 0 && !strings.Contains(last.Message, "The agent binary has not been downloaded or run.") {
+				t.Fatalf("metadata-only preflight did not explain its limit: %s", out)
 			}
 			mu.Lock()
 			gotRequests := strings.Join(requests, ", ")

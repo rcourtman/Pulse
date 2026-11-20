@@ -4996,7 +4996,7 @@ auto_enable_insecure_for_plain_http_url() {
         return 0
     fi
     INSECURE="true"
-    log_info "Plain HTTP Pulse URL detected; enabling insecure mode for installer downloads and persisted agent update checks."
+    log_info "Plain HTTP Pulse URL detected. Insecure download and update checks are enabled, but the agent still requires a local or private address for HTTP."
 }
 
 verify_pinned_server_certificate() {
@@ -6855,10 +6855,24 @@ fi
 # not --self-test (older agents return before their URL policy is checked).
 validate_staged_agent_url() {
     local staged_binary="$1"
-    if ! "$staged_binary" --validate-url --url "$PULSE_URL" --allow-plaintext-http=false >/dev/null 2>&1; then
-        fail "Could not validate the Pulse URL with the downloaded agent. Use the exact HTTPS server address; --insecure does not permit HTTP. Check DNS and that the downloaded agent can run. The installed service and saved credentials have not been changed." "$EXIT_PREFLIGHT_FAILED"
+    local status
+    if "$staged_binary" --validate-url --url "$PULSE_URL" --allow-plaintext-http=false >/dev/null 2>&1; then
+        json_event "preflight" "agent_url_validated" "Downloaded agent accepted the Pulse URL"
+        return 0
+    else
+        status=$?
     fi
-    json_event "preflight" "agent_url_validated" "Downloaded agent accepted the Pulse URL"
+
+    local unchanged="The installed service and saved credentials have not been changed."
+    if [[ "$status" -eq 126 || "$status" -eq 127 ]]; then
+        fail "Could not run the downloaded agent to check the Pulse URL. Check that the staging filesystem allows execution and that the binary matches this host. $unchanged" "$EXIT_PREFLIGHT_FAILED"
+    fi
+    # Other exits do not establish whether URL policy or validator support failed.
+    # Keep child output and URL details out of both text and JSON diagnostics.
+    if pulse_url_uses_plain_http "$PULSE_URL"; then
+        fail "Could not validate the Pulse URL with the downloaded agent. Plain HTTP requires a local or private address. If you used a hostname, check that it resolves only to local or private addresses on this host. For a non-local server, use its configured HTTPS address. --insecure skips TLS verification; it does not change the HTTP address check. Check that the downloaded agent supports URL validation. $unchanged" "$EXIT_PREFLIGHT_FAILED"
+    fi
+    fail "Could not validate the Pulse URL with the downloaded agent. Check the configured HTTPS address and that the downloaded agent supports URL validation. $unchanged" "$EXIT_PREFLIGHT_FAILED"
 }
 
 if [[ -z "$PULSE_URL" ]]; then
@@ -7284,11 +7298,12 @@ if [[ "$PREFLIGHT_ONLY" == "true" ]]; then
 
     # Output summary
     if [[ "$PREFLIGHT_EXIT" -eq 0 ]]; then
+        preflight_limit="The agent binary has not been downloaded or run."
         if [[ "$OUTPUT_FORMAT" == "json" ]]; then
-            printf '{"phase":"preflight_complete","code":"ok","message":"Preflight checks passed","exitCode":0,"data":{"arch":"%s-%s","agent_status":"%s"}}\n' \
-                "$PF_OS" "$PF_ARCH" "$AGENT_STATUS"
+            printf '{"phase":"preflight_complete","code":"ok","message":"Preflight checks passed. %s","exitCode":0,"data":{"arch":"%s-%s","agent_status":"%s"}}\n' \
+                "$preflight_limit" "$PF_OS" "$PF_ARCH" "$AGENT_STATUS"
         else
-            log_info "Preflight checks passed (arch: ${PF_ARCH_PARAM}, agent: ${AGENT_STATUS})"
+            log_info "Preflight checks passed (arch: ${PF_ARCH_PARAM}, agent: ${AGENT_STATUS}). $preflight_limit"
         fi
     else
         if [[ "$OUTPUT_FORMAT" == "json" ]]; then
