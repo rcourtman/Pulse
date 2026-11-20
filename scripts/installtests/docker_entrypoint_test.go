@@ -161,6 +161,95 @@ chown_tree_if_owner_mismatch pulse:pulse "$uid" "$gid" "$root"
 	}
 }
 
+func TestDockerEntrypointWarnsWhenDataDirIsEphemeral(t *testing.T) {
+	repoRoot := repoRoot(t)
+	entrypointPath := filepath.Join(repoRoot, "docker-entrypoint.sh")
+
+	entrypoint, err := os.ReadFile(entrypointPath)
+	if err != nil {
+		t.Fatalf("read docker-entrypoint.sh: %v", err)
+	}
+
+	const marker = "# Only adjust permissions if running as root"
+	prefix, _, found := strings.Cut(string(entrypoint), marker)
+	if !found {
+		t.Fatalf("docker-entrypoint.sh missing marker %q", marker)
+	}
+
+	dataDir := filepath.Join(t.TempDir(), "data")
+	nestedDir := filepath.Join(dataDir, "nested")
+	if err := os.MkdirAll(nestedDir, 0o755); err != nil {
+		t.Fatalf("mkdir nested data dir: %v", err)
+	}
+
+	unmountedMountInfo := filepath.Join(t.TempDir(), "mountinfo-ephemeral")
+	if err := os.WriteFile(unmountedMountInfo, []byte("25 1 0:23 / / rw,relatime - overlay overlay rw\n26 25 0:4 / /proc rw,nosuid,nodev,noexec,relatime - proc proc rw\n"), 0o644); err != nil {
+		t.Fatalf("write unmounted mountinfo: %v", err)
+	}
+
+	mountedMountInfo := filepath.Join(t.TempDir(), "mountinfo-persistent")
+	if err := os.WriteFile(mountedMountInfo, []byte("25 1 0:23 / / rw,relatime - overlay overlay rw\n27 25 8:1 /var/lib/docker/volumes/pulse-data/_data "+dataDir+" rw,relatime - ext4 /dev/sda1 rw\n"), 0o644); err != nil {
+		t.Fatalf("write mounted mountinfo: %v", err)
+	}
+
+	cases := []struct {
+		name          string
+		target        string
+		mountinfo     string
+		suppressValue string
+		wantWarning   bool
+	}{
+		{
+			name:        "warns when data dir is not a mount point",
+			target:      dataDir,
+			mountinfo:   unmountedMountInfo,
+			wantWarning: true,
+		},
+		{
+			name:        "silent when data dir is mounted",
+			target:      dataDir,
+			mountinfo:   mountedMountInfo,
+			wantWarning: false,
+		},
+		{
+			name:        "silent when nested under mounted data dir",
+			target:      nestedDir,
+			mountinfo:   mountedMountInfo,
+			wantWarning: false,
+		},
+		{
+			name:          "silent when warning explicitly suppressed",
+			target:        dataDir,
+			mountinfo:     unmountedMountInfo,
+			suppressValue: "true",
+			wantWarning:   false,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			shell := prefix + `
+set -eu
+export PULSE_SUPPRESS_EPHEMERAL_DATA_WARNING="` + tc.suppressValue + `"
+warn_if_ephemeral_data_dir "` + tc.target + `" "` + tc.mountinfo + `"
+`
+			cmd := exec.Command("sh", "-c", shell)
+			out, err := cmd.CombinedOutput()
+			if err != nil {
+				t.Fatalf("run warn_if_ephemeral_data_dir: %v\n%s", err, out)
+			}
+			got := string(out)
+			if tc.wantWarning {
+				if !strings.Contains(got, "WARNING:") || !strings.Contains(got, "-v pulse-data:/data") {
+					t.Fatalf("expected ephemeral data dir warning, got: %q", got)
+				}
+			} else if strings.TrimSpace(got) != "" {
+				t.Fatalf("expected no warning, got: %q", got)
+			}
+		})
+	}
+}
+
 func repoRoot(t *testing.T) string {
 	t.Helper()
 

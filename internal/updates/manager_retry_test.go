@@ -5,6 +5,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -88,6 +90,108 @@ func TestManagerDownloadFileDoesNotRetryNonRetryableStatus(t *testing.T) {
 	}
 	if got := atomic.LoadInt32(&hits); got != 1 {
 		t.Fatalf("request count = %d, want 1", got)
+	}
+}
+
+func TestManagerDownloadFileRetriesMidStreamDisconnect(t *testing.T) {
+	setRetrySettingsForTest(t, 3, time.Millisecond, 5*time.Millisecond)
+
+	const payload = "complete-release-archive-payload"
+	var hits int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempt := atomic.AddInt32(&hits, 1)
+		if attempt == 1 {
+			hj, ok := w.(http.Hijacker)
+			if !ok {
+				t.Error("response writer does not support hijacking")
+				return
+			}
+			conn, rw, err := hj.Hijack()
+			if err != nil {
+				t.Errorf("hijack failed: %v", err)
+				return
+			}
+			_, _ = fmt.Fprintf(rw, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\n\r\ncomplete-", len(payload))
+			_ = rw.Flush()
+			_ = conn.Close()
+			return
+		}
+		w.Header().Set("Content-Length", fmt.Sprintf("%d", len(payload)))
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(payload))
+	}))
+	defer server.Close()
+
+	manager := &Manager{}
+	dest := filepath.Join(t.TempDir(), "download.tar.gz")
+	n, err := manager.downloadFile(context.Background(), server.URL, dest)
+	if err != nil {
+		t.Fatalf("downloadFile error: %v", err)
+	}
+	if n != int64(len(payload)) {
+		t.Fatalf("downloaded bytes = %d, want %d", n, len(payload))
+	}
+	if got := atomic.LoadInt32(&hits); got != 2 {
+		t.Fatalf("request count = %d, want 2", got)
+	}
+	gotBytes, err := os.ReadFile(dest)
+	if err != nil {
+		t.Fatalf("read downloaded file: %v", err)
+	}
+	if string(gotBytes) != payload {
+		t.Fatalf("file content = %q, want %q", string(gotBytes), payload)
+	}
+}
+
+func TestManagerDownloadFileRemovesPartialFileWhenStreamRetriesExhausted(t *testing.T) {
+	setRetrySettingsForTest(t, 2, time.Millisecond, 5*time.Millisecond)
+
+	var hits int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&hits, 1)
+		hj, ok := w.(http.Hijacker)
+		if !ok {
+			t.Error("response writer does not support hijacking")
+			return
+		}
+		conn, rw, err := hj.Hijack()
+		if err != nil {
+			t.Errorf("hijack failed: %v", err)
+			return
+		}
+		_, _ = rw.WriteString("HTTP/1.1 200 OK\r\nContent-Length: 100\r\n\r\npartial")
+		_ = rw.Flush()
+		_ = conn.Close()
+	}))
+	defer server.Close()
+
+	manager := &Manager{}
+	dest := filepath.Join(t.TempDir(), "download.tar.gz")
+	_, err := manager.downloadFile(context.Background(), server.URL, dest)
+	if err == nil {
+		t.Fatal("expected download error after truncated retries")
+	}
+	if !errors.Is(err, io.ErrUnexpectedEOF) {
+		t.Fatalf("expected unexpected EOF error, got: %v", err)
+	}
+	if got := atomic.LoadInt32(&hits); got != 2 {
+		t.Fatalf("request count = %d, want 2", got)
+	}
+	if _, statErr := os.Stat(dest); !os.IsNotExist(statErr) {
+		t.Fatalf("expected partial destination file to be removed, stat err: %v", statErr)
+	}
+}
+
+func TestIsRetryableDownloadErrorRespectsCallerContext(t *testing.T) {
+	activeCtx := context.Background()
+	if !isRetryableDownloadError(activeCtx, fmt.Errorf("client timeout: %w", context.DeadlineExceeded)) {
+		t.Fatal("expected per-attempt client timeout to be retryable when caller context is active")
+	}
+
+	canceledCtx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if isRetryableDownloadError(canceledCtx, fmt.Errorf("client timeout: %w", context.DeadlineExceeded)) {
+		t.Fatal("expected canceled caller context not to retry")
 	}
 }
 
