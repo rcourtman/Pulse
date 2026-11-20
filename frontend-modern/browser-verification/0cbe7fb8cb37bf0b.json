@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "base_sha": "80edfaeb90dfc59bd419a60e347070e3025ffb43",
+  "verified_at": "2026-11-20T00:46:41Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx": "3818258f9c0113ee84189130bd681612d71c830c9cc623630be7ee30b9db8137"
+  },
+  "routes": [
+    "/truenas/storage?kind=disks \u2014 production TrueNAS Storage table, disk sdb Overview in an offline fixture shell"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 360,
+      "height": 844
+    }
+  ],
+  "states": [
+    "The only change to the previously reviewed drawer is the sentence break separating device Temperature and readings from memory.",
+    "Matched synthetic API replies for device-only, stored and device, ring over stored, genuine memory-only, stored-only, and empty History retain the selected readings and source meanings."
+  ],
+  "interactions": [
+    "Opened and closed the production disk drawer by desktop keyboard and narrow touch, comparing the assigned main, pre-punctuation control, and corrected view at the same selected reading.",
+    "Scrubbed the 31\u00b0C selection and both ends of the two independent 93-position I/O series. Expanded and collapsed charts on the phone without another History query. Inspected all 25 matched screenshots."
+  ]
+}
