@@ -90,10 +90,12 @@ const ready = async () => {
 };
 const deferredRead = () => {
   let resolve!: (response: Response) => void;
-  const promise = new Promise<Response>((finish) => {
+  let reject!: (reason: unknown) => void;
+  const promise = new Promise<Response>((finish, fail) => {
     resolve = finish;
+    reject = fail;
   });
-  return { promise, resolve };
+  return { promise, resolve, reject };
 };
 type Operation = 'create' | 'scope' | 'rename' | 'revoke';
 const confirm = async (operation: Operation, card: HTMLElement) => {
@@ -589,4 +591,158 @@ describe('API token inventory keyboard recovery', () => {
       expect(reveal()).toBeNull();
     },
   );
+});
+
+describe('restarting a pending API token inventory check', () => {
+  const label = 'Restart check of token inventory';
+  const region = () => screen.getByRole('region', { name: 'API token inventory' });
+  const generate = () => screen.getByRole('button', { name: 'Generate' });
+  const savedToken = () => screen.findByRole('article', { name: /^API token Saved collector / });
+  const pressRestart = () => {
+    const button = screen.getByRole('button', { name: label });
+    button.focus();
+    fireEvent.click(button);
+  };
+  const customScopes = () => screen.getByText('Custom scopes').closest('details')!;
+  const customMonitoring = () =>
+    within(customScopes()).getByRole('button', { name: 'Monitoring & alerts (read)' });
+  const settleOldEmptyInventory = async (read: ReturnType<typeof deferredRead>) => {
+    const response = json({ tokens: [] });
+    const parsed = vi.spyOn(response, 'text');
+    read.resolve(response); // intentionally let the mock ignore abort
+    await waitFor(() => expect(parsed).toHaveBeenCalledOnce());
+    await parsed.mock.results[0].value;
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    expect(region()).toHaveAttribute('aria-busy', 'true');
+    expect(screen.queryByText(/No tokens yet/)).not.toBeInTheDocument();
+    expectNoRevocations();
+  };
+
+  it.each([true, false])(
+    'only admits the latest check, including in a read-only panel (can manage: %s)',
+    async (canManage) => {
+      const first = deferredRead();
+      const second = deferredRead();
+      const latest = deferredRead();
+      fetchMock
+        .mockReturnValueOnce(first.promise)
+        .mockReturnValueOnce(second.promise)
+        .mockReturnValueOnce(latest.promise);
+      render(() => <APITokenManager currentUser="synthetic-user" canManage={canManage} />);
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+      const name = screen.getByLabelText('Token name');
+      if (canManage) {
+        fireEvent.input(name, { target: { value: 'Nightly archive check' } });
+        customScopes().open = true;
+        fireEvent.click(customMonitoring());
+      }
+      pressRestart();
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+      pressRestart();
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+      expect(fetchMock.mock.calls.map(([, init]) => init?.signal?.aborted)).toEqual([
+        true,
+        true,
+        false,
+      ]);
+      second.reject(new DOMException('Aborted', 'AbortError'));
+      await settleOldEmptyInventory(first);
+      expect(notificationStore.error).not.toHaveBeenCalled();
+
+      if (canManage) name.focus(); // deliberately move on before completion
+      latest.resolve(json({ tokens: [original] }));
+      const row = await savedToken();
+      expect(region()).toHaveAttribute('aria-busy', 'false');
+      expect(screen.queryByRole('button', { name: label })).not.toBeInTheDocument();
+      if (canManage) {
+        expect(name).toHaveFocus();
+        expect(name).toHaveValue('Nightly archive check');
+        expect(customScopes()).toHaveAttribute('open');
+        expect(customMonitoring()).toHaveAttribute('aria-pressed', 'true');
+      } else {
+        expect(region()).toHaveFocus();
+        expect(generate()).toBeDisabled();
+        expect(within(row).getByRole('button', { name: /^Revoke / })).toBeDisabled();
+      }
+      expect(requests()).toEqual(Array.from({ length: 3 }, () => ['GET', '/api/security/tokens']));
+      for (const [, init] of fetchMock.mock.calls)
+        expect(init?.headers).toMatchObject({ 'X-Pulse-Org-ID': 'org-a' });
+      expectNoRevocations();
+      expect(onChanged).not.toHaveBeenCalled();
+      expect(reveal()).toBeNull();
+    },
+  );
+
+  it('keeps an unconfirmed create blocked until a replacement check actually succeeds', async () => {
+    const retired = deferredRead();
+    const failing = deferredRead();
+    const refreshed = deferredRead();
+    fetchMock
+      .mockResolvedValueOnce(json({ tokens: [original] }))
+      .mockResolvedValueOnce(json({}, 503))
+      .mockReturnValueOnce(retired.promise)
+      .mockReturnValueOnce(failing.promise)
+      .mockReturnValueOnce(refreshed.promise);
+    await ready();
+    fireEvent.click(generate());
+    const check = () => screen.getByRole('button', { name: 'Check token inventory' });
+    fireEvent.click(await screen.findByRole('button', { name: 'Check token inventory' }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    pressRestart();
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4));
+    expect(fetchMock.mock.calls[2][1]?.signal?.aborted).toBe(true);
+    await settleOldEmptyInventory(retired);
+    expect(generate()).toBeDisabled();
+
+    failing.resolve(json({}, 503));
+    await screen.findByRole('button', { name: 'Check token inventory' });
+    expect(region()).toHaveFocus();
+    expect(generate()).toBeDisabled();
+    expectUnknown();
+    fireEvent.click(check());
+    refreshed.resolve(json({ tokens: [original, created] }));
+    await screen.findByRole('article', { name: /^API token Unsent draft / });
+    expect(generate()).not.toBeDisabled();
+    expect(screen.getByLabelText('Token name')).toHaveValue('Unsent draft');
+    expect(requests()).toEqual(
+      ['GET', 'POST', 'GET', 'GET', 'GET'].map((method) => [method, '/api/security/tokens']),
+    );
+    expectNoRevocations();
+    expect(onChanged).not.toHaveBeenCalled();
+    expect(reveal()).toBeNull();
+  });
+
+  it('does not offer a restart while a create owns the request, then resumes the read once', async () => {
+    const initial = deferredRead();
+    const write = deferredRead();
+    const resumed = deferredRead();
+    fetchMock
+      .mockReturnValueOnce(initial.promise)
+      .mockReturnValueOnce(write.promise)
+      .mockReturnValueOnce(resumed.promise);
+    render(() => (
+      <APITokenManager currentUser="synthetic-user" canManage onTokensChanged={onChanged} />
+    ));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole('button', { name: label })).toBeEnabled();
+    fireEvent.input(screen.getByLabelText('Token name'), { target: { value: 'Unsent draft' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Kiosk / Monitoring' }));
+    fireEvent.click(generate());
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(fetchMock.mock.calls[0][1]?.signal?.aborted).toBe(true);
+    expect(fetchMock.mock.calls[1][1]?.signal?.aborted).toBe(false);
+    expect(screen.queryByRole('button', { name: label })).not.toBeInTheDocument();
+
+    write.resolve(json({ token: 'synthetic-only-issued-value', record: created }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    expect(screen.getByRole('button', { name: label })).toBeEnabled();
+    resumed.resolve(json({ tokens: [original, created] }));
+    await screen.findByRole('article', { name: /^API token Unsent draft / });
+    expect(reveal()).not.toBeNull();
+    expect(onChanged).toHaveBeenCalledOnce();
+    expect(requests()).toEqual(
+      ['GET', 'POST', 'GET'].map((method) => [method, '/api/security/tokens']),
+    );
+    expectNoRevocations();
+  });
 });

@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "3ed397a4ff2f1178372b2c927a45231a8eaadd5b",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx": "be35c1e8028a5cfc6925be5019159d3ed8cc7f5de34730f6cc709370b4b38345"
+  },
+  "routes": [
+    "Production Settings /settings/security-sso; Edit SAML Provider with real app, state and HTTP client using only synthetic local API responses."
+  ],
+  "states": [
+    "Baseline d55b33d17fb1f5e35e61bb9af2deb85e2a360e8d and candidate parent used the same fixtures, font/clock, theme, viewport and editor scroll anchor.",
+    "Playwright 1.56.1, Chromium 141.0.7390.37 at 1440x900 light and touch WebKit 26.0 at 360x844 dark. All 20 matched captures (10 pairs) opened and inspected using the native image tool.",
+    "Inventory and both providers' endpoint/copy and management actions are unchanged. Idle, pending and failed editor boxes match; a visible focus ring stays on the same Preview action as it goes from Loading to an actionable retry. Error and Save/Cancel remain visible. Parsed entity, SSO URL, certificate and XML stay visible in the result dialog."
+  ],
+  "interactions": [
+    "Desktop Tab from the metadata field through Test to Preview, Enter starts one request; repeating Enter and Space while pending sends none. Baseline focus drops to the body and must be re-navigated; candidate Space retries directly after failure.",
+    "On the narrow touch viewport a repeated pending tap sends no extra request. Each run sends only two explicit metadata-preview POSTs with the same safe payload and no save, test, toggle or deletion. The existing bounded error and the draft survive; successful preview close returns focus to Preview.",
+    "318 browser assertions plus 10 paired request/layout/inventory checks. Fixture proof, not an installed IdP fetch, save or sign-in."
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 360,
+      "height": 844
+    }
+  ],
+  "verified_at": "2026-11-20T00:52:07.799441Z"
+}

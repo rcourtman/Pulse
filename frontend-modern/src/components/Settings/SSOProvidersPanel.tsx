@@ -688,12 +688,13 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                           ref={metadataPreviewButton}
                           type="button"
                           onClick={fetchMetadataPreview}
-                          disabled={
-                            loadingPreview() || testing() || !form.samlIdpMetadataUrl.trim()
-                          }
+                          disabled={testing() || !form.samlIdpMetadataUrl.trim()}
+                          // The state owner rejects repeats while loading. Keep focus on the
+                          // action so keyboard users can retry in place if the preview fails.
+                          aria-disabled={loadingPreview() || undefined}
                           variant="secondary"
                           size="mdCompact"
-                          class="flex-1 gap-1 whitespace-nowrap sm:flex-none"
+                          class="flex-1 gap-1 whitespace-nowrap aria-disabled:cursor-not-allowed aria-disabled:text-muted sm:flex-none"
                           title="Preview IdP metadata XML"
                         >
                           <Eye class="w-4 h-4" />
