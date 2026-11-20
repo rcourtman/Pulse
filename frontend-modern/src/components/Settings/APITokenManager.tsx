@@ -1,5 +1,6 @@
 import { Component, For, Show, createEffect, createSignal, lazy, on, onCleanup } from 'solid-js';
 import { Card } from '@/components/shared/Card';
+import { Button } from '@/components/shared/Button';
 import { ExternalTextLink } from '@/components/shared/ExternalTextLink';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
@@ -79,6 +80,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
     loading,
     loadError,
     loadTokens,
+    restartInventoryCheck,
     tokensLoaded,
     unconfirmedChange,
     nameInput,
@@ -131,6 +133,26 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
     window.clearTimeout(focusTimer);
     inventoryRoot?.focus();
     void loadTokens();
+  };
+
+  const RestartCheckButton: Component = () => {
+    let button: HTMLButtonElement | undefined;
+    onCleanup(() => {
+      // Restore focus only if the loading row takes the user's current control away.
+      if (document.activeElement === button) inventoryRoot?.focus({ preventScroll: true });
+    });
+    return (
+      <Button
+        ref={button}
+        variant="outline"
+        size="sm"
+        class="min-h-11 shrink-0 sm:min-h-0"
+        aria-label="Restart check of token inventory"
+        onClick={() => void restartInventoryCheck()}
+      >
+        Restart check
+      </Button>
+    );
   };
 
   const effectiveScopes = (token: APITokenRecord) =>
@@ -551,13 +573,20 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
 
       <Show when={loading()}>
         <Card
-          padding="md"
-          class="flex items-center gap-2"
-          role="status"
-          aria-label="Loading token inventory"
+          padding="none"
+          class="flex min-h-[2.875rem] items-center justify-between gap-2 px-3 sm:min-h-[3.375rem] sm:px-4"
         >
-          <LoadingSpinner size="md" tone="info" />
-          <span class="text-sm text-muted">Loading token inventory…</span>
+          <div
+            class="flex min-w-0 items-center gap-2"
+            role="status"
+            aria-label="Loading token inventory"
+          >
+            <LoadingSpinner size="md" tone="info" />
+            <span class="text-sm text-muted">Loading token inventory…</span>
+          </div>
+          <Show when={!isMutating()}>
+            <RestartCheckButton />
+          </Show>
         </Card>
       </Show>
 

@@ -281,11 +281,14 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
     if (routeFocusTimer) window.clearTimeout(routeFocusTimer);
   });
 
-  const loadTokens = async () => {
-    if (!contextIsCurrent() || readController || mutationController) return;
+  const loadTokens = async (replacePending = false) => {
+    const previous = readController;
+    if (!contextIsCurrent() || mutationController || Boolean(previous) !== replacePending) return;
     const controller = new AbortController();
     const version = contextVersion();
+    // Only the replacement owns the result, even if the retired request ignores abort.
     readController = controller;
+    previous?.abort();
     const isCurrent = () =>
       readController === controller && version === contextVersion() && contextIsCurrent();
     setLoading(true);
@@ -734,6 +737,7 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
     loading,
     loadError,
     loadTokens,
+    restartInventoryCheck: () => loadTokens(true),
     tokensLoaded,
     unconfirmedChange,
     nameInput,
