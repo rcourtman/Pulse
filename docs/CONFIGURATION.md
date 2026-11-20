@@ -1178,15 +1178,53 @@ switching protocol or observation location is not proof that ICMP recovered.
 
 ## 🔒 HTTPS / TLS
 
-Enable HTTPS by providing certificate files via environment variables.
+Enable HTTPS with a certificate and its matching private key. With direct HTTPS,
+use `https://` on the existing `FRONTEND_PORT` (normally `7655`). Pulse does
+not open port `443` automatically. If existing agents must keep their HTTP
+address, use an [HTTPS reverse proxy](REVERSE_PROXY.md) for the new address
+instead of switching their listener to HTTPS.
+
+[systemd setup](#https-with-systemd) · [Docker setup](#https-with-docker)
+
+### HTTPS with systemd
+
+For the standard `pulse.service`, run `sudo systemctl edit pulse.service`
+and put these lines in the editable portion of the drop-in. Use your actual
+service name and certificate paths if they differ.
+
+```ini
+[Service]
+Environment="HTTPS_ENABLED=true"
+Environment="TLS_CERT_FILE=/etc/pulse/cert.pem"
+Environment="TLS_KEY_FILE=/etc/pulse/key.pem"
+```
+
+Bare assignments under `[Service]` are ignored. If the unit's
+`EnvironmentFile=` already sets these variables (normally in
+`/etc/pulse/.env`), update those values instead: systemd gives them precedence.
+The service must be able to read both files. For the standard `pulse` user
+and group, keep the key owned by `root:pulse` with mode `0640` and its parent
+directories accessible to the service. On a custom unit, grant read access
+only to its service identity. Do not make the private key world-readable.
+
+Restart the server service in a maintenance window; monitoring and alerts are
+unavailable during the restart. From the client or new agent host, use a name
+that matches the certificate's Subject Alternative Name and the actual port.
+For a private CA or self-signed certificate, use a separately verified copy of
+the public CA certificate or self-signed certificate, never the private key:
 
 ```bash
-# Systemd
-HTTPS_ENABLED=true
-TLS_CERT_FILE=/etc/pulse/cert.pem
-TLS_KEY_FILE=/etc/pulse/key.pem
+curl --disable --fail --cacert /path/to/trusted-cert.pem \
+  https://pulse.example.net:7655/api/health
+```
 
-# Docker
+A successful check verifies that client can reach the HTTPS health endpoint,
+not that an agent is enrolled. For the installer and agent connection, see
+[private-file agent installation](UNIFIED_AGENT.md#private-file-installation-linux-macos-and-nas).
+
+### HTTPS with Docker
+
+```bash
 docker run --init -e HTTPS_ENABLED=true \
   -v /path/to/certs:/certs \
   -e TLS_CERT_FILE=/certs/cert.pem \
