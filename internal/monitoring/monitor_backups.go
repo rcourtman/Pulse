@@ -2855,7 +2855,7 @@ func (m *Monitor) pollBackupTasks(ctx context.Context, instanceName string, clie
 	guestTasks := m.synthesizeVzdumpJobGuestTasks(ctx, instanceName, client, jobTasks, jobUPIDs)
 	backupTasks = append(backupTasks, guestTasks...)
 	for _, guest := range guestTasks {
-		parentID := strings.TrimSuffix(guest.ID, fmt.Sprintf("-vm%d", guest.VMID))
+		parentID := vzdumpParentTaskID(guest)
 		if liveJobIDs[parentID] {
 			// The parent end bounds attribution in durable job reports,
 			// but doesn't measure the guest duration shown in Coverage.
@@ -2876,8 +2876,11 @@ func (m *Monitor) pollBackupTasks(ctx context.Context, instanceName string, clie
 	}
 	defer unlock()
 
-	// Update state with new backup tasks for this instance
-	m.state.UpdateBackupTasksForInstance(instanceName, m.retainUnreadBackupTasks(instanceName, history.Nodes, liveTasks))
+	// Reconcile the log cache with the same accepted inventory as live state.
+	// An unread node can carry a visible parent, but not widen the history window.
+	published := m.retainUnreadBackupTasks(instanceName, history.Nodes, liveTasks, jobUPIDs)
+	m.pruneVzdumpJobTaskCache(instanceName, jobUPIDs, published[len(liveTasks):])
+	m.state.UpdateBackupTasksForInstance(instanceName, published)
 
 	// Retain execution history before qualifying collection coverage. Task rows
 	// are not reconciled against the provider's shrinking inventory window.
@@ -2922,15 +2925,10 @@ const maxVzdumpJobLogFetchesPerPoll = 25
 // as the job progresses.
 func (m *Monitor) synthesizeVzdumpJobGuestTasks(ctx context.Context, instanceName string, client PVEClientInterface, jobTasks []models.BackupTask, jobUPIDs map[string]string) []models.BackupTask {
 	if len(jobTasks) == 0 {
-		if unlock, current := m.beginPVEBackupPublication(ctx, instanceName); current {
-			m.pruneVzdumpJobTaskCache(instanceName, nil)
-			unlock()
-		}
 		return nil
 	}
 
 	now := time.Now().UTC()
-	seen := make(map[string]struct{}, len(jobTasks))
 	fetchJobs := m.selectVzdumpJobLogReads(instanceName, jobTasks, jobUPIDs)
 	order := make([]int, len(jobTasks))
 	for i := range order {
@@ -2950,8 +2948,6 @@ func (m *Monitor) synthesizeVzdumpJobGuestTasks(ctx context.Context, instanceNam
 		jobTask := jobTasks[index]
 		upid := jobUPIDs[jobTask.ID]
 		key := instanceName + "|" + upid
-		seen[key] = struct{}{}
-
 		m.mu.RLock()
 		entry, cached := m.vzdumpJobTaskCache[key]
 		m.mu.RUnlock()
@@ -3046,10 +3042,6 @@ func (m *Monitor) synthesizeVzdumpJobGuestTasks(ctx context.Context, instanceNam
 		unlock()
 	}
 
-	if unlock, current := m.beginPVEBackupPublication(ctx, instanceName); current {
-		m.pruneVzdumpJobTaskCache(instanceName, seen)
-		unlock()
-	}
 	var synthesized []models.BackupTask
 	for _, tasks := range byJob {
 		synthesized = append(synthesized, tasks...)
@@ -3149,23 +3141,40 @@ func cachedVzdumpGuestTasks(tasks []models.BackupTask, job models.BackupTask) []
 	return out
 }
 
-// pruneVzdumpJobTaskCache drops cached job entries for this instance whose
-// UPIDs are no longer present in the task list (fell out of the window).
-func (m *Monitor) pruneVzdumpJobTaskCache(instanceName string, seen map[string]struct{}) {
+func vzdumpParentTaskID(task models.BackupTask) string {
+	return strings.TrimSuffix(task.ID, fmt.Sprintf("-vm%d", task.VMID))
+}
+
+// Keep listed jobs and only those absent parents carried in the bounded live
+// window. A partial list cannot erase their accepted logs, while an empty
+// authoritative list, removal or denied read cannot seed a later fallback.
+// Called under the same publication fence as live backup-task state.
+func (m *Monitor) pruneVzdumpJobTaskCache(instanceName string, listed map[string]string, carried []models.BackupTask) {
+	var retained map[string]bool
+	for _, task := range carried {
+		if task.Type == "vzdump" && task.VMID == 0 {
+			if retained == nil {
+				retained = make(map[string]bool)
+			}
+			retained[task.ID] = true
+		}
+	}
 	prefix := instanceName + "|"
 	m.mu.Lock()
-	if len(seen) == 0 {
+	defer m.mu.Unlock()
+	if len(listed) == 0 && len(retained) == 0 {
 		delete(m.vzdumpJobLogHistoryFirst, instanceName)
 	}
 	for key := range m.vzdumpJobTaskCache {
-		if !strings.HasPrefix(key, prefix) {
+		upid, local := strings.CutPrefix(key, prefix)
+		if !local {
 			continue
 		}
-		if _, ok := seen[key]; !ok {
+		id := instanceName + "-" + upid
+		if _, observed := listed[id]; !observed && !retained[id] {
 			delete(m.vzdumpJobTaskCache, key)
 		}
 	}
-	m.mu.Unlock()
 }
 
 func refreshObservedAt(tasks []models.BackupTask, now time.Time) []models.BackupTask {

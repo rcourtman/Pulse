@@ -107,7 +107,7 @@ func (m *Monitor) readBackupTaskHistory(ctx context.Context, instance string, cl
 // accepted pages win by exact ID; retained rows never re-enter durable ingestion
 // or acquire a new ObservedAt. A valid empty read, removed node or explicit
 // access denial withdraws its old live rows instead of resurrecting them.
-func (m *Monitor) retainUnreadBackupTasks(instance string, nodes []proxmox.BackupTaskHistoryNode, tasks []models.BackupTask) []models.BackupTask {
+func (m *Monitor) retainUnreadBackupTasks(instance string, nodes []proxmox.BackupTaskHistoryNode, tasks []models.BackupTask, listedJobs map[string]string) []models.BackupTask {
 	unread := make(map[string]bool)
 	for _, node := range nodes {
 		if node.Reason == "collection_failed" || node.Reason == "node_offline" {
@@ -138,11 +138,24 @@ func (m *Monitor) retainUnreadBackupTasks(instance string, nodes []proxmox.Backu
 		limits[node] = max(200, limits[node], counts[node])
 	}
 	for _, task := range previous {
-		if task.Instance == instance && unread[task.Node] && !seen[task.ID] && counts[task.Node] < limits[task.Node] {
-			tasks = append(tasks, task)
-			seen[task.ID] = true
-			counts[task.Node]++
+		if task.Instance != instance || !unread[task.Node] || seen[task.ID] || counts[task.Node] >= limits[task.Node] {
+			continue
 		}
+		// A listed parent uses this poll's log result or its own log-cache
+		// fallback. Inventory carry-forward must not undo an explicit empty
+		// log by reintroducing old children of that already accepted job.
+		if len(listedJobs) != 0 && task.Type == "vzdump" {
+			id := task.ID
+			if task.VMID > 0 {
+				id = vzdumpParentTaskID(task)
+			}
+			if _, listed := listedJobs[id]; listed {
+				continue
+			}
+		}
+		tasks = append(tasks, task)
+		seen[task.ID] = true
+		counts[task.Node]++
 	}
 	return tasks
 }

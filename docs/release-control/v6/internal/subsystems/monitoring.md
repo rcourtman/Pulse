@@ -972,6 +972,19 @@ complete immutable logs retain their existing final-cache behaviour.
 connection isolation, mixed results, durable history, request/cancellation
 bounds and ordinary complete-read recovery.
 
+An unread or offline node can carry a previously visible job parent and its
+accepted log cache through the same bounded live window. This neither re-reads
+the log nor renews its observation or adds history coverage. When the task list
+returns ahead of the log, the known guest results remain visible and the
+returned parent end still withdraws running intent without supplying a result.
+A job that leaves the window on a successful read, removed node or denied
+inventory does not carry its cache. If a parent is listed in an accepted page
+of a partial read, its log result or log-cache fallback owns its guest rows;
+old live rows cannot undo an accepted empty log.
+`TestBackupHistoryGuestLogsSurviveUnreadInventory` and
+`TestBackupHistoryGuestLogFallbackRespectsWithdrawal` cover the independent
+inventory/log recovery, observation times, positive removal and sibling scope.
+
 `TestVzdumpGuestResult*` covers ended/running jobs, truncated/gapped/capped logs,
 explicit mixed results, retries and cache finalisation through the real poller,
 state JSON and recovery mapper. These are offline log fixtures, not native backup
