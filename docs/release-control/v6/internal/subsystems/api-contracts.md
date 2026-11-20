@@ -15003,3 +15003,17 @@ Notification runtime tests independently exercise real queue/provider evidence.
 Host and unified network interfaces gain an optional boolean `linkUp`
 (`omitempty`), set only from a host agent for a physical port. Absent means
 unknown, not down; existing fields and their meaning are unchanged.
+
+### Actionable node connection-test diagnostics (20 November 2026)
+
+Node connection-test failures routed through `sanitizeErrorMessage` (`create_client`
+and `connection` operations in `internal/api/configapi/config_handlers.go`) map
+recognized transport, TLS, DNS, protocol, authentication (HTTP 401), and
+permission (HTTP 403) failures to closed, static operator guidance without
+echoing raw error text, hostnames, IPs, certificate details, or credentials.
+Unrecognized errors keep their existing generic fallback strings.
+
+`TestSanitizeErrorMessage` in `internal/api/configapi/config_handlers_sanitize_test.go`
+and `TestBranchcov0723pmPlatformConnection_ProbeError` in
+`internal/api/configapi/branchcov0723pm_test.go` verify every classified
+category and redaction boundary.

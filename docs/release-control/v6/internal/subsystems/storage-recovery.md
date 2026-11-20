@@ -10094,3 +10094,10 @@ it.
 `internal/unifiedresources/types.go` and `useUnifiedResources.ts` gain an
 optional `linkUp` on network interfaces. No storage or recovery read, model or
 surface uses it. The Proxmox node drawer displays the reported state.
+
+### Node connection-test diagnostics boundary (20 November 2026)
+
+`sanitizeErrorMessage` in `internal/api/configapi/config_handlers.go` maps node
+connection-test failures to closed, static operator guidance without echoing raw
+errors or secrets. No storage, backup, or recovery persistence or read path
+changes.
