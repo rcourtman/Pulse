@@ -108,6 +108,7 @@ SOURCE_BRANCH="main"
 CURRENT_INSTALL_CTID=""
 INSTALL_CONTAINER_CREATED=false
 BUILD_FROM_SOURCE_MARKER="$INSTALL_DIR/BUILD_FROM_SOURCE"
+CURRENT_BINARY_EDITION=absent
 DETECTED_CTID=""
 UPDATE_MIN_TEMP_FREE_BYTES=$((900 * 1024 * 1024))
 UPDATE_MIN_INSTALL_FREE_BYTES=$((256 * 1024 * 1024))
@@ -3067,17 +3068,18 @@ run_upgrade_readiness_preflight() {
 
 check_existing_installation() {
     CURRENT_VERSION=""  # Make it global so we can use it later
-    CURRENT_BINARY_IS_PRO=false
+    CURRENT_BINARY_EDITION=unknown
     local BINARY_PATH=""
     local detected_service="$SERVICE_NAME"
     local service_available=false
     local service_running=false
     local active_state=""
 
-    # Check for the binary in expected locations
-    if [[ -f "$INSTALL_DIR/bin/pulse" ]]; then
+    # Only fall back when the primary path is absent. A broken primary
+    # executable must not acquire the edition of a stale legacy file.
+    if [[ -e "$INSTALL_DIR/bin/pulse" || -L "$INSTALL_DIR/bin/pulse" ]]; then
         BINARY_PATH="$INSTALL_DIR/bin/pulse"
-    elif [[ -f "$INSTALL_DIR/pulse" ]]; then
+    elif [[ -e "$INSTALL_DIR/pulse" || -L "$INSTALL_DIR/pulse" ]]; then
         BINARY_PATH="$INSTALL_DIR/pulse"
     fi
 
@@ -3110,20 +3112,26 @@ check_existing_installation() {
         esac
     fi
 
-    # Automatic selection needs a successfully observed release identity.
-    # A failed reader can still print a version, and build metadata can
-    # contain version-shaped text unrelated to the installed executable.
+    # Edition and version ordering are separate. Source builds can report
+    # "Pulse dev" and still be Community. Neither metadata nor stdout from
+    # a failed probe establishes the edition.
     if [[ -n "$BINARY_PATH" ]]; then
         local version_output="" version_line="" reported_version=""
         CURRENT_VERSION="unknown"
-        if version_output=$(timeout -k 1 5 "$BINARY_PATH" --version 2>/dev/null); then
+        if [[ -f "$BINARY_PATH" && -x "$BINARY_PATH" ]] &&
+           version_output=$(timeout -k 1 5 "$BINARY_PATH" --version 2>/dev/null); then
             version_line=${version_output%%$'\n'*}
             case "$version_line" in
                 "Pulse Pro "*)
-                    CURRENT_BINARY_IS_PRO=true
+                    CURRENT_BINARY_EDITION=pro
                     reported_version=${version_line#Pulse Pro }
                     ;;
-                "Pulse "*) reported_version=${version_line#Pulse } ;;
+                "Pulse "*)
+                    reported_version=${version_line#Pulse }
+                    if [[ "$reported_version" == dev || "$reported_version" =~ ^v?[0-9]+[.][0-9]+[.][0-9]+(-[A-Za-z0-9.]+)?$ ]]; then
+                        CURRENT_BINARY_EDITION=community
+                    fi
+                    ;;
             esac
             if is_orderable_pulse_release_tag "$reported_version"; then
                 CURRENT_VERSION="$reported_version"
@@ -3146,8 +3154,13 @@ check_existing_installation() {
         fi
         return 0
     else
+        CURRENT_BINARY_EDITION=absent
         return 1
     fi
+}
+
+installed_edition_requires_pro_archive() {
+    [[ "$CURRENT_BINARY_EDITION" == pro || "$CURRENT_BINARY_EDITION" == unknown ]]
 }
 
 install_dependencies() {
@@ -3877,17 +3890,24 @@ install_pulse_archive() {
         rm -rf "$binary_stage" "$temp_extract"
         return 1
     fi
-    if [[ "${CURRENT_BINARY_IS_PRO:-false}" == true ]]; then
+    if installed_edition_requires_pro_archive; then
         # A signed archive and its filename do not identify the edition. Use
         # the staged executable's own first line, as for the installed binary.
         version_output=${version_output%%$'\n'*}
         if [[ "$version_output" != 'Pulse Pro '* ]]; then
-            print_error "The signed archive does not contain Pulse Pro; the installed service has not been stopped"
+            print_error "The signed archive does not contain Pulse Pro. A Community archive requires a verified Community installation or a fresh install; the existing service has not been stopped."
             rm -rf "$binary_stage" "$temp_extract"
             return 1
         fi
+        installed_version=${version_output#Pulse Pro }
+        if [[ "$installed_version" != v* ]] || ! is_orderable_pulse_release_tag "$installed_version"; then
+            print_error "Cannot verify the staged Pulse Pro version; Pulse has not been stopped"
+            rm -rf "$binary_stage" "$temp_extract"
+            return 1
+        fi
+    else
+        installed_version=$(printf '%s\n' "$version_output" | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9\.]+)?' | head -1 || true)
     fi
-    installed_version=$(printf '%s\n' "$version_output" | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9\.]+)?' | head -1 || true)
     if [[ -z "$installed_version" || ( -n "$expected_release" && "$installed_version" != "$expected_release" ) ]]; then
         print_error "Staged Pulse version ${installed_version:-unknown} does not match ${expected_release:-a release version}; Pulse has not been stopped"
         rm -rf "$binary_stage" "$temp_extract"
@@ -5742,10 +5762,15 @@ main() {
         return "$existing_install_status"
     fi
     if [[ "$existing_install_status" -eq 0 ]]; then
-        if [[ "${CURRENT_BINARY_IS_PRO:-false}" == true ]]; then
+        if installed_edition_requires_pro_archive; then
             if [[ -z "$ARCHIVE_OVERRIDE" ]]; then
-                print_error "Refusing to use a public build for an installed Pulse Pro runtime. Existing installation is unchanged."
-                print_info "Use the in-app updater, or follow the matching signed-archive instructions on https://pulserelay.pro/download.html (install.sh --archive)."
+                if [[ "$CURRENT_BINARY_EDITION" == pro ]]; then
+                    print_error "Refusing to use a public build for an installed Pulse Pro runtime. Existing installation is unchanged."
+                    print_info "Use the in-app updater, or follow the matching signed-archive instructions on https://pulserelay.pro/download.html (install.sh --archive)."
+                else
+                    print_error "Cannot verify the installed Pulse edition; refusing a public build. Existing installation is unchanged."
+                    print_info "Verify the existing executable's edition before retrying a public update. For a known Pro installation, use the in-app updater if available or a matching signed Pro archive (install.sh --archive)."
+                fi
                 return 1
             fi
             if [[ -z "$FORCE_VERSION" ]]; then

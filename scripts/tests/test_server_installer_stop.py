@@ -197,6 +197,7 @@ check_proxmox_host() { return 1; }
 detect_service_name() { echo pulse-custom; }
 detect_pulse_architecture() { echo amd64; }
 validate_pulse_binary_architecture() { return 0; }
+install_dependencies() { echo PACKAGES >> "$FIXTURE/calls"; }
 ensure_update_disk_headroom() { return 0; }
 run_upgrade_readiness_preflight() { return 0; }
 backup_existing() { echo BACKUP >> "$FIXTURE/calls"; }
@@ -437,16 +438,32 @@ class ServerInstallerStopTest(unittest.TestCase):
         # admission. The version responders stand in for the two compiled
         # editions, but tar, SSH signature verification and replacement are real.
         cases = (
-            # name, installed, staged, path, version, expected refusal
-            ("pro_default", "Pulse Pro", "Pulse", "public", "", "Use the in-app updater"),
-            ("pro_public_pin", "Pulse Pro", "Pulse", "public", "v6.6.0", "Use the in-app updater"),
-            ("pro_public_source", "Pulse Pro", "Pulse", "source", "", "Use the in-app updater"),
-            ("pro_wrong_edition", "Pulse Pro", "Pulse", "local", "v6.6.0", "does not contain Pulse Pro"),
-            ("pro_private_auto_version", "Pulse Pro", "Pulse Pro", "local", "", ""),
-            ("pro_private_bad_signature", "Pulse Pro", "Pulse Pro", "local", "", "Cryptographic signature"),
-            ("pro_private_wrong_version", "Pulse Pro", "Pulse Pro", "local", "v6.6.1", "does not match"),
-            ("community_public_update", "Pulse", "Pulse", "public", "", ""),
-            ("community_private_archive", "Pulse", "Pulse Pro", "local", "v6.6.0", ""),
+            # name, installed reader, staged reply, path, version, expected refusal
+            ("pro_default", "pro", "Pulse v6.6.0", "public", "", "Use the in-app updater"),
+            ("pro_public_pin", "pro", "Pulse v6.6.0", "public", "v6.6.0", "Use the in-app updater"),
+            ("pro_public_source", "pro", "Pulse v6.6.0", "source", "", "Use the in-app updater"),
+            ("pro_wrong_edition", "pro", "Pulse v6.6.0", "local", "v6.6.0", "does not contain Pulse Pro"),
+            ("pro_private_auto_version", "pro", "Pulse Pro v6.6.0", "local", "", ""),
+            ("pro_private_bad_signature", "pro", "Pulse Pro v6.6.0", "local", "", "Cryptographic signature"),
+            ("pro_private_wrong_version", "pro", "Pulse Pro v6.6.0", "local", "v6.6.1", "does not match"),
+            ("community_public_update", "community", "Pulse v6.6.0", "public", "", ""),
+            ("community_private_archive", "community", "Pulse Pro v6.6.0", "local", "v6.6.0", ""),
+            ("legacy_community_update", "legacy", "Pulse v6.6.0", "public", "", ""),
+            ("fresh_community_archive", "absent", "Pulse v6.6.0", "local", "v6.6.0", ""),
+            ("unreadable_public_source", "failed", "Pulse v6.6.0", "source", "",
+             "Cannot verify the installed Pulse edition"),
+            ("broken_primary_with_legacy", "broken_link", "Pulse v6.6.0", "public", "v6.6.0",
+             "Cannot verify the installed Pulse edition"),
+            ("nonexecutable_primary_with_legacy", "nonexecutable", "Pulse v6.6.0", "public", "v6.6.0",
+             "Cannot verify the installed Pulse edition"),
+            ("unreadable_public_archive", "failed", "Pulse v6.6.0", "local", "v6.6.0",
+             "does not contain Pulse Pro"),
+            ("unreadable_malformed_pro_line", "failed", "Pulse Pro ambiguous v6.6.0", "local", "v6.6.0",
+             "Cannot verify the staged Pulse Pro version"),
+            ("unreadable_wrong_pro_version", "failed", "Pulse Pro v6.5.9", "local", "v6.6.0", "does not match"),
+            ("unreadable_signed_pro_recovery", "failed", "Pulse Pro v6.6.0", "local", "", ""),
+            ("unreadable_invalid_pro_signature", "failed", "Pulse Pro v6.6.0", "local", "",
+             "Cryptographic signature"),
         )
         for name, installed, staged, flow, version, refusal in cases:
             with self.subTest(name=name), tempfile.TemporaryDirectory() as directory:
@@ -456,12 +473,26 @@ class ServerInstallerStopTest(unittest.TestCase):
                 service_stub.chmod(0o700)
                 binary = root / "install/bin/pulse"
                 binary.parent.mkdir(parents=True)
-                old_bytes = f"#!/bin/sh\nprintf '%s\\n' '{installed} v6.5.0'\n".encode()
-                new_bytes = f"#!/bin/sh\nprintf '%s\\n' '{staged} v6.6.0'\n".encode()
-                binary.write_bytes(old_bytes)
-                binary.chmod(0o755)
+                legacy = binary.parent.parent / "pulse"
+                community = b"#!/bin/sh\nprintf '%s\\n' 'Pulse v6.5.0'\n"
+                pro = b"#!/bin/sh\nprintf '%s\\n' 'Pulse Pro v6.5.0'\n"
+                old_bytes = community
+                if installed == "pro":
+                    old_bytes = pro
+                elif installed == "failed":
+                    old_bytes = pro + b"exit 23\n"
+                new_bytes = f"#!/bin/sh\nprintf '%s\\n' '{staged}'\n".encode()
+                if installed in ("legacy", "broken_link", "nonexecutable"):
+                    legacy.write_bytes(community)
+                    legacy.chmod(0o755)
+                if installed == "broken_link":
+                    binary.symlink_to(root / "missing-primary")
+                elif installed not in ("legacy", "absent"):
+                    binary.write_bytes(old_bytes)
+                    binary.chmod(0o644 if installed == "nonexecutable" else 0o755)
                 version_file = binary.parent.parent / "VERSION"
-                version_file.write_text("v6.5.0\n")
+                if installed != "absent":
+                    version_file.write_text("v6.5.0\n")
                 state = root / "config/system.json"
                 state.parent.mkdir()
                 state.write_text('{"updateChannel":"stable","fixture":"preserve"}\n')
@@ -482,29 +513,35 @@ class ServerInstallerStopTest(unittest.TestCase):
                                 "-n", "pulse-install", str(archive)],
                                check=True, capture_output=True, timeout=5)
                 (root / (archive.name + ".sig")).rename(root / (archive.name + ".sshsig"))
-                if name == "pro_private_bad_signature":
+                if refusal == "Cryptographic signature":
                     (root / (archive.name + ".sshsig")).write_text("invalid\n")
                 env = {"PATH": str(root) + ":" + os.environ["PATH"], "HOME": directory,
                        "FIXTURE": directory, "INSTALLER": str(INSTALLER),
                        "FLOW": flow, "TARGET_VERSION": version, "ARCHIVE": str(archive),
-                       "CASE": "active", "FAULT": ""}
+                       "CASE": "inactive" if installed == "absent" else "active", "FAULT": ""}
                 result = subprocess.run(["bash", "-c", MANUAL_EDITION_UPDATE], env=env,
                                         capture_output=True, text=True, timeout=15)
                 calls = (root / "calls").read_text()
                 observed = result.stdout + result.stderr + calls
                 self.assertIn("show pulse-custom", calls, observed)
                 self.assertNotIn("UNEXPECTED_NETWORK", calls, observed)
+                self.assertEqual(installed == "absent", "PACKAGES" in calls, observed)
                 if refusal:
                     self.assertNotEqual(0, result.returncode, observed)
                     self.assertIn(refusal, observed)
                     self.assertNotRegex(calls, r"(?m)^(stop|start|PUBLIC_LOOKUP|PUBLIC_ARCHIVE|SOURCE_BUILD)\b")
                     if flow != "local":
                         self.assertNotIn("BACKUP", calls)
-                    self.assertEqual(old_bytes, binary.read_bytes())
+                    if installed == "broken_link":
+                        self.assertEqual(root / "missing-primary", binary.readlink())
+                    else:
+                        self.assertEqual(old_bytes, binary.read_bytes())
+                        self.assertEqual(0o644 if installed == "nonexecutable" else 0o755,
+                                         binary.stat().st_mode & 0o777)
                     self.assertEqual("v6.5.0\n", version_file.read_text())
                 else:
                     self.assertEqual(0, result.returncode, observed)
-                    self.assertEqual(1, calls.count("stop pulse-custom"), observed)
+                    self.assertEqual(int(installed != "absent"), calls.count("stop pulse-custom"), observed)
                     self.assertEqual(1, calls.count("start pulse-custom"), observed)
                     self.assertEqual(new_bytes, binary.read_bytes())
                     self.assertEqual("v6.6.0\n", version_file.read_text())
@@ -512,6 +549,8 @@ class ServerInstallerStopTest(unittest.TestCase):
                     if flow == "local":
                         self.assertNotIn("PUBLIC_LOOKUP", calls, observed)
                 self.assertEqual('{"updateChannel":"stable","fixture":"preserve"}\n', state.read_text())
+                if installed in ("legacy", "broken_link", "nonexecutable"):
+                    self.assertEqual(community, legacy.read_bytes())
                 self.assertTrue(archive.is_file())
                 self.assertEqual([], list(binary.parent.glob(".pulse-stage-*")))
                 self.assertEqual([], list(binary.parent.parent.glob(".pulse-extract-*")))
