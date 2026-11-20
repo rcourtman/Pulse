@@ -111,9 +111,13 @@ describe('shipped Proxmox permission diagnosis', () => {
     expect(setup).toContain('pveum aclmod / -user pulse-monitor@pve -role PVEAuditor');
     expect(setup).toContain('pveum aclmod / -token "$PULSE_TOKEN_ID" -role PVEAuditor');
     for (const name of ['TROUBLESHOOTING', 'VM_DISK_MONITORING', 'AGENT_SECURITY']) {
-      expect(readFileSync(path.join(repoRoot, 'docs', `${name}.md`))).toEqual(
-        readFileSync(path.join(repoRoot, 'frontend-modern/public/docs', `${name}.md`)),
+      const canonical = readFileSync(path.join(repoRoot, 'docs', `${name}.md`));
+      const shipped = readFileSync(
+        path.join(repoRoot, 'frontend-modern/public/docs', `${name}.md`),
       );
+      // These are byte mirrors, not arbitrary iterables. Avoid a JS deep
+      // match for every byte of the complete guides on constrained runners.
+      expect(shipped.equals(canonical), `${name}.md must match its canonical guide`).toBe(true);
     }
   });
 
