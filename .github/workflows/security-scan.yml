@@ -87,9 +87,9 @@ jobs:
         run: |
           set -euo pipefail
           evidence=release-continuity-evidence
-          # A peer-cancelled stream is not an orphaned release. Collect each
-          # complete inventory atomically, retaining both attempts if that
-          # exact transport failure needs one repeat. Access refusals stop.
+          # Failed inventory reads prove no orphaned release. Collect each
+          # complete inventory atomically. Repeat once on exact peer CANCEL or
+          # release-list HTTP 502, retaining both attempts. Access refusals stop.
           python3 scripts/release_control/release_continuity.py collect \
             --endpoint "repos/${REPOSITORY}/git/matching-refs/tags/v?per_page=100" \
             --output "${evidence}/stable-refs.json" \
