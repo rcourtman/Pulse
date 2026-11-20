@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -29,6 +30,12 @@ type hostIORESTFixture struct {
 	phase  atomic.Int32
 	reads  atomic.Int32
 	end    atomic.Int64
+	hold   atomic.Pointer[hostIORESTHold]
+}
+
+type hostIORESTHold struct {
+	dispatched chan struct{}
+	cancelled  chan struct{}
 }
 
 func newHostIORESTFixture(t *testing.T) *hostIORESTFixture {
@@ -62,6 +69,12 @@ func newHostIORESTFixture(t *testing.T) *hostIORESTFixture {
 				return
 			}
 			f.end.Store(request.Query.End)
+			if hold := f.hold.Swap(nil); hold != nil {
+				close(hold.dispatched)
+				<-r.Context().Done()
+				close(hold.cancelled)
+				return
+			}
 			var responses []map[string]any
 			for _, graph := range request.Graphs {
 				start, step := request.Query.End-3540, int64(1160)
@@ -272,6 +285,67 @@ func TestTrueNASHostIOHistoryWithPartialStore(t *testing.T) {
 			t.Logf("HOST_IO_BROWSER %s %s", test.name, rec.Body.String())
 		})
 	}
+	t.Run("CORE-disconnect-after-dispatch", func(t *testing.T) {
+		f.phase.Store(1)
+		before := f.reads.Load()
+		hold := &hostIORESTHold{dispatched: make(chan struct{}), cancelled: make(chan struct{})}
+		f.hold.Store(hold)
+		server := httptest.NewServer(router.Handler())
+		defer server.Close()
+		path := "/api/metrics-store/history?resourceType=agent&resourceId=host-io-target&range=1h&maxPoints=240"
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, server.URL+path, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("X-API-Token", token)
+		req.Header.Set("X-Pulse-Org-ID", "org-host-io")
+		done := make(chan error, 1)
+		go func() {
+			response, err := server.Client().Do(req)
+			if response != nil {
+				_ = response.Body.Close()
+			}
+			done <- err
+		}()
+		select {
+		case <-hold.dispatched:
+		case <-time.After(3 * time.Second):
+			t.Fatal("selected CORE reporting POST never dispatched")
+		}
+		left := time.Now()
+		cancel()
+		select {
+		case <-hold.cancelled:
+			t.Logf("CORE reporting POST stopped %s after disconnect", time.Since(left))
+		case <-time.After(3 * time.Second):
+			t.Fatal("abandoned CORE reporting POST kept running")
+		}
+		if err := <-done; !errors.Is(err, context.Canceled) {
+			t.Fatalf("expected caller cancellation, got %v", err)
+		}
+		rec := request(token, "org-host-io", "agent", "host-io-target", "")
+		var result struct {
+			Metrics map[string][]hostIOHistoryPoint
+		}
+		if rec.Code != 200 || json.Unmarshal(rec.Body.Bytes(), &result) != nil ||
+			len(result.Metrics["diskread"]) != 4 || len(result.Metrics["diskwrite"]) != 4 ||
+			f.reads.Load()-before != 2 || other.reads.Load() != 0 {
+			t.Fatalf("fresh scoped read lost aligned history: status %d selected/sibling POSTs %d/%d: %s", rec.Code, f.reads.Load()-before, other.reads.Load(), rec.Body)
+		}
+		if got := result.Metrics["cpu"]; len(got) != 1 || got[0] != storedCPU[0] {
+			t.Fatalf("fresh CORE read changed the independent stored CPU series: %+v", got)
+		}
+		for i := range result.Metrics["diskread"] {
+			r, w := result.Metrics["diskread"][i], result.Metrics["diskwrite"][i]
+			at := (f.end.Load() - 3540 + int64(i)*1160)
+			at = (at/15*15 + 7) * 1000
+			if r != (hostIOHistoryPoint{at, 1100, 1100, 1100}) || w != (hostIOHistoryPoint{at, 2200, 2200, 2200}) {
+				t.Fatalf("fresh aligned CORE point %d changed: read %+v write %+v", i, r, w)
+			}
+		}
+	})
 	// Single-series reads must qualify that series, not a covered CPU sibling.
 	f.phase.Store(1)
 	before := f.reads.Load()

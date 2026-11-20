@@ -1,6 +1,7 @@
 package monitoring
 
 import (
+	"context"
 	"sort"
 	"strings"
 	"sync"
@@ -75,7 +76,7 @@ type MonitorGuestMetricHistoryProvider interface {
 // MonitorTargetedGuestMetricHistoryProvider avoids querying other appliances
 // when a single resource needs a source-native chart fallback.
 type MonitorTargetedGuestMetricHistoryProvider interface {
-	GuestMetricHistoryForResource(m *Monitor, orgID, resourceType, resourceID string, duration time.Duration) map[string][]MetricPoint
+	GuestMetricHistoryForResource(ctx context.Context, m *Monitor, orgID, resourceType, resourceID string, duration time.Duration) map[string][]MetricPoint
 }
 
 // GetGuestMetrics returns historical metrics for a guest
@@ -113,6 +114,12 @@ func (m *Monitor) GetGuestMetrics(guestID string, duration time.Duration) map[st
 // sqlResourceType/sqlResourceID are the type/id used in the SQLite store
 // (e.g. "dockerContainer"/"abc123").
 func (m *Monitor) GetGuestMetricsForChart(inMemoryKey, sqlResourceType, sqlResourceID string, duration time.Duration, metricTypes ...string) map[string][]MetricPoint {
+	return m.GetGuestMetricsForChartWithContext(context.Background(), inMemoryKey, sqlResourceType, sqlResourceID, duration, metricTypes...)
+}
+
+// GetGuestMetricsForChartWithContext lets a targeted native fallback stop
+// abandoned work when its transport permits it. Local reads are unchanged.
+func (m *Monitor) GetGuestMetricsForChartWithContext(ctx context.Context, inMemoryKey, sqlResourceType, sqlResourceID string, duration time.Duration, metricTypes ...string) map[string][]MetricPoint {
 	requestedMetricTypes := normalizeChartMetricTypes(metricTypes)
 	if mock.IsMockEnabled() {
 		return filterChartMetricMap(m.mockGuestMetricsForChart(inMemoryKey, sqlResourceType, sqlResourceID, duration, m.GetGuestMetrics(inMemoryKey, duration)), requestedMetricTypes)
@@ -138,7 +145,7 @@ func (m *Monitor) GetGuestMetricsForChart(inMemoryKey, sqlResourceType, sqlResou
 	if len(requestedMetricTypes) > 0 && hasSufficientChartMapCoverageForMetrics(best, duration, requestedMetricTypes) {
 		return best
 	}
-	if nativeHistory := m.nativeGuestMetricHistory(sqlResourceType, duration, sqlResourceID); len(nativeHistory) > 0 {
+	if nativeHistory := m.nativeGuestMetricHistory(ctx, sqlResourceType, duration, sqlResourceID); len(nativeHistory) > 0 {
 		if nativeMetrics, ok := nativeHistory[sqlResourceID]; ok {
 			best = mergeGuestMetricHistory(best, filterChartMetricMap(nativeMetrics, requestedMetricTypes), duration)
 		}
@@ -658,7 +665,7 @@ func (m *Monitor) GetGuestMetricsForChartBatch(
 			}
 		}
 	}
-	nativeResults := m.nativeGuestMetricHistory(sqlResourceType, duration)
+	nativeResults := m.nativeGuestMetricHistory(context.Background(), sqlResourceType, duration)
 
 	// Phase 3: Merge fallback data per metric type.
 	// result[id] is already owned (set from filterChartMetricMap output above);
@@ -826,7 +833,7 @@ func (m *Monitor) GetStorageMetricsForChartBatch(
 	return result
 }
 
-func (m *Monitor) nativeGuestMetricHistory(resourceType string, duration time.Duration, resourceIDs ...string) map[string]map[string][]MetricPoint {
+func (m *Monitor) nativeGuestMetricHistory(ctx context.Context, resourceType string, duration time.Duration, resourceIDs ...string) map[string]map[string][]MetricPoint {
 	providers := m.supplementalProviderSnapshot()
 	if len(providers) == 0 {
 		return nil
@@ -841,9 +848,12 @@ func (m *Monitor) nativeGuestMetricHistory(resourceType string, duration time.Du
 
 	history := make(map[string]map[string][]MetricPoint)
 	for _, provider := range providers {
+		if ctx.Err() != nil {
+			return nil
+		}
 		if targeted, ok := provider.(MonitorTargetedGuestMetricHistoryProvider); ok && len(resourceIDs) == 1 {
 			id := resourceIDs[0]
-			metricMap := targeted.GuestMetricHistoryForResource(m, orgID, resourceType, id, duration)
+			metricMap := targeted.GuestMetricHistoryForResource(ctx, m, orgID, resourceType, id, duration)
 			if len(metricMap) > 0 {
 				history[id] = mergeGuestMetricHistory(history[id], metricMap, duration)
 			}

@@ -6865,8 +6865,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			inMemoryKey = fmt.Sprintf("dockerHost:%s", resourceID)
 			sqlResourceType = "dockerHost"
 		case "agent":
-			inMemoryKey = fmt.Sprintf("agent:%s", resourceID)
-			sqlResourceType = "agent"
+			return monitor.GetGuestMetricsForChartWithContext(req.Context(), fmt.Sprintf("agent:%s", resourceID), "agent", resourceID, duration, metricTypes...), true
 		case "app-container":
 			inMemoryKey = fmt.Sprintf("docker:%s", resourceID)
 			sqlResourceType = "dockerContainer"

@@ -1105,20 +1105,20 @@ func (p *TrueNASPoller) PhysicalDiskTemperatureHistory(_ *Monitor, orgID string,
 // GuestMetricHistory exposes native TrueNAS host history through the canonical
 // guest-chart boundary when local Pulse history is shallow.
 func (p *TrueNASPoller) GuestMetricHistory(_ *Monitor, orgID string, resourceType string, duration time.Duration) map[string]map[string][]MetricPoint {
-	return p.guestMetricHistory(orgID, resourceType, "", duration)
+	return p.guestMetricHistory(context.Background(), orgID, resourceType, "", duration)
 }
 
 // GuestMetricHistoryForResource selects the exact tenant-local host before any
 // native read. A missing host must not turn a drawer request into a fleet scan.
-func (p *TrueNASPoller) GuestMetricHistoryForResource(_ *Monitor, orgID, resourceType, resourceID string, duration time.Duration) map[string][]MetricPoint {
+func (p *TrueNASPoller) GuestMetricHistoryForResource(caller context.Context, _ *Monitor, orgID, resourceType, resourceID string, duration time.Duration) map[string][]MetricPoint {
 	resourceID = strings.TrimSpace(resourceID)
 	if resourceID == "" {
 		return nil
 	}
-	return p.guestMetricHistory(orgID, resourceType, resourceID, duration)[resourceID]
+	return p.guestMetricHistory(caller, orgID, resourceType, resourceID, duration)[resourceID]
 }
 
-func (p *TrueNASPoller) guestMetricHistory(orgID, resourceType, selectedID string, duration time.Duration) map[string]map[string][]MetricPoint {
+func (p *TrueNASPoller) guestMetricHistory(caller context.Context, orgID, resourceType, selectedID string, duration time.Duration) map[string]map[string][]MetricPoint {
 	if p == nil || !truenas.IsFeatureEnabled() || strings.TrimSpace(resourceType) != "agent" {
 		return nil
 	}
@@ -1135,14 +1135,32 @@ func (p *TrueNASPoller) guestMetricHistory(orgID, resourceType, selectedID strin
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTrueNASHistoryReadTimeout)
 	defer cancel()
+	deadline, _ := ctx.Deadline()
 
 	history := make(map[string]map[string][]MetricPoint)
 	owners := make(map[string]trueNASPollerProviderEntry)
 	for _, entry := range entries {
+		if caller.Err() != nil {
+			return nil
+		}
 		if selectedID != "" && entry.provider.SystemMetricResourceID() != selectedID {
 			continue
 		}
-		resourceID, nativeHistory, err := entry.provider.SystemMetricHistory(ctx, duration)
+		readCtx := ctx
+		var cancelRead context.CancelFunc
+		// Only a confirmed, immutable REST transport owns a cancellable
+		// per-request exchange. Cancelling in-flight RPC I/O would invalidate
+		// the WebSocket that regular polling shares, so it keeps the old cap.
+		if selectedID != "" && entry.provider.TransportStatus().Mode == truenas.TransportLegacyREST {
+			readCtx, cancelRead = context.WithDeadline(caller, deadline)
+		}
+		resourceID, nativeHistory, err := entry.provider.SystemMetricHistory(readCtx, duration)
+		if cancelRead != nil {
+			cancelRead()
+			if caller.Err() != nil {
+				return nil // An abandoned REST read is not a provider failure.
+			}
+		}
 		if err != nil {
 			log.Warn().
 				Str("component", "truenas_poller").
@@ -1153,6 +1171,9 @@ func (p *TrueNASPoller) guestMetricHistory(orgID, resourceType, selectedID strin
 				Err(err).
 				Msg("TrueNAS poller failed to read native guest history")
 			continue
+		}
+		if caller.Err() != nil {
+			return nil
 		}
 		resourceID = strings.TrimSpace(resourceID)
 		if resourceID == "" || len(nativeHistory) == 0 || (selectedID != "" && resourceID != selectedID) {

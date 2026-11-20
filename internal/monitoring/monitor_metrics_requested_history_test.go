@@ -1,6 +1,7 @@
 package monitoring
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -18,7 +19,7 @@ func (s *targetedChartHistoryFixture) GuestMetricHistory(*Monitor, string, strin
 	return nil
 }
 
-func (s *targetedChartHistoryFixture) GuestMetricHistoryForResource(_ *Monitor, org, kind, id string, _ time.Duration) map[string][]MetricPoint {
+func (s *targetedChartHistoryFixture) GuestMetricHistoryForResource(_ context.Context, _ *Monitor, org, kind, id string, _ time.Duration) map[string][]MetricPoint {
 	s.reads++
 	s.id, s.org, s.kind = id, org, kind
 	return s.stubGuestMetricHistoryProvider.GuestMetricHistory(nil, org, kind, time.Hour)[id]
