@@ -493,9 +493,14 @@ const LoginForm: Component<{
     showLocalLogin,
     ssoProviders,
   } = props;
+  const hasSSOProviders = ssoProviders.length > 0;
+  const compactReturn = () => showLocalLogin && !hasSSOProviders && Boolean(oidcError());
 
   return (
-    <div class="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+    <div
+      class="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8"
+      classList={{ 'max-sm:pt-6': compactReturn() }}
+    >
       <div class="max-w-md w-full space-y-8">
         {/* Demo Credentials Banner */}
         <Show when={demoModeEnabled}>
@@ -545,9 +550,11 @@ const LoginForm: Component<{
         </Show>
 
         <div class="animate-fade-in">
-          <div class="flex justify-center mb-8">
+          <div class="flex justify-center mb-8" classList={{ 'max-sm:mb-3': compactReturn() }}>
             <div class="relative group">
-              <PulseBrandMark class="relative w-24 h-24" />
+              <PulseBrandMark
+                class={`relative w-24 h-24${compactReturn() ? ' max-sm:size-14' : ''}`}
+              />
             </div>
           </div>
 
@@ -565,17 +572,8 @@ const LoginForm: Component<{
           class="mt-8 space-y-6 bg-surface rounded-md p-8 shadow-xs border border-border animate-slide-up"
           onSubmit={handleSubmit}
         >
-          <Show when={!showLocalLogin && ssoProviders.length === 0 && !demoModeEnabled}>
-            <div class="space-y-2 text-sm">
-              <h3 class="font-semibold text-base-content">No sign-in options on this page</h3>
-              <p class="text-muted">
-                The local sign-in form is hidden and Pulse didn’t list a single sign-on provider.
-                Ask your Pulse administrator how to sign in.
-              </p>
-            </div>
-          </Show>
-          {/* Multi-Provider SSO Section */}
-          <Show when={ssoProviders.length > 0}>
+          {/* Return errors describe the attempt even when no providers are now listed. */}
+          <Show when={hasSSOProviders || oidcError()}>
             <div class="space-y-3">
               <For each={ssoProviders}>
                 {(provider) => (
@@ -606,16 +604,19 @@ const LoginForm: Component<{
                 )}
               </For>
               <Show when={oidcError()}>
-                <div class="rounded-md bg-red-50 dark:bg-red-900/25 border border-red-200 dark:border-red-800 px-3 py-2 text-sm text-red-600 dark:text-red-300">
+                <div
+                  role="alert"
+                  class="rounded-md bg-red-50 dark:bg-red-900/25 border border-red-200 dark:border-red-800 px-3 py-2 text-sm text-red-600 dark:text-red-300"
+                >
                   {oidcError()}
                 </div>
               </Show>
-              <Show when={oidcMessage()}>
+              <Show when={hasSSOProviders && oidcMessage()}>
                 <div class="rounded-md bg-green-50 dark:bg-green-900/25 border border-green-200 dark:border-green-700 px-3 py-2 text-sm text-green-600 dark:text-green-300">
                   {oidcMessage()}
                 </div>
               </Show>
-              <Show when={showLocalLogin}>
+              <Show when={hasSSOProviders && showLocalLogin}>
                 <div class="flex items-center gap-3 pt-2">
                   <span class="flex-1 h-px bg-surface-hover" />
                   <span class="text-xs uppercase tracking-wide text-muted">or</span>
@@ -625,6 +626,15 @@ const LoginForm: Component<{
                   Use your admin credentials to sign in below.
                 </p>
               </Show>
+            </div>
+          </Show>
+          <Show when={!showLocalLogin && !hasSSOProviders && !demoModeEnabled}>
+            <div class="space-y-2 text-sm">
+              <h3 class="font-semibold text-base-content">No sign-in options on this page</h3>
+              <p class="text-muted">
+                The local sign-in form is hidden and Pulse didn’t list a single sign-on provider.
+                Ask your Pulse administrator how to sign in.
+              </p>
             </div>
           </Show>
           <Show when={showLocalLogin}>

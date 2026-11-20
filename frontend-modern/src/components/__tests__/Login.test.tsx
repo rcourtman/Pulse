@@ -153,6 +153,74 @@ describe('Login', () => {
     expect(onLogin).not.toHaveBeenCalled();
   });
 
+  describe('single sign-on return without listed providers', () => {
+    afterEach(() => window.history.pushState(null, '', '/'));
+
+    it.each([
+      ['oidc', 'provider_not_found', 'SSO provider not found or not configured.', true],
+      ['saml', 'invalid_state', 'The sign-in attempt expired. Please try again.', false],
+      [
+        'oidc',
+        'unrecognized callback detail',
+        'Single sign-on failed. Please try again or contact an administrator.',
+        true,
+      ],
+    ])(
+      'shows the %s error (%s) and preserves the available options',
+      async (protocol, code, message, hideLocalLogin) => {
+        const params = new URLSearchParams({ [protocol]: 'error', [`${protocol}_error`]: code });
+        window.history.pushState(null, '', `/?${params}`);
+        const onLogin = vi.fn();
+        render(() => (
+          <Login
+            onLogin={onLogin}
+            securityStatus={{
+              hasAuthentication: true,
+              requiresAuth: true,
+              hideLocalLogin,
+              ssoProviders: [],
+            }}
+          />
+        ));
+
+        expect(await screen.findByRole('alert')).toHaveTextContent(message);
+        expect(screen.queryByText(code, { exact: false })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /continue with/i })).not.toBeInTheDocument();
+        const localSubmit = screen.queryByRole('button', { name: 'Sign in to Pulse' });
+        const noOptions = screen.queryByRole('heading', {
+          name: 'No sign-in options on this page',
+        });
+        if (hideLocalLogin) {
+          expect(localSubmit).not.toBeInTheDocument();
+          expect(noOptions).toBeVisible();
+        } else {
+          expect(localSubmit).toBeVisible();
+          expect(noOptions).not.toBeInTheDocument();
+        }
+        expect(screen.getByRole('link', { name: 'Can’t sign in?' })).toBeVisible();
+        expect(mockFetch).not.toHaveBeenCalled();
+        expect(onLogin).not.toHaveBeenCalled();
+      },
+    );
+
+    it('does not report a successful sign-in on an unauthenticated page with no providers', () => {
+      window.history.pushState(null, '', '/?oidc=success');
+      const onLogin = vi.fn();
+      render(() => (
+        <Login
+          onLogin={onLogin}
+          securityStatus={{ hasAuthentication: true, requiresAuth: true, hideLocalLogin: true }}
+        />
+      ));
+
+      expect(screen.queryByText(/signed in successfully/i)).not.toBeInTheDocument();
+      expect(
+        screen.getByRole('heading', { name: 'No sign-in options on this page' }),
+      ).toBeVisible();
+      expect(onLogin).not.toHaveBeenCalled();
+    });
+  });
+
   it('shows local login form when show_local=true is in URL even if hideLocalLogin is true', async () => {
     // Set up URL with show_local=true
     const originalLocation = window.location;
