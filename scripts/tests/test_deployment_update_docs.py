@@ -103,6 +103,26 @@ class DeploymentUpdateDocsTest(unittest.TestCase):
         self.assertIn("`sudo /bin/update`", install)
         self.assertIn("helper is absent or its owner is unknown", install)
 
+    def test_manual_linux_update_keeps_community_and_pro_routes_separate(self):
+        manual = guide("INSTALL").split("#### Manual Update\n", 1)[1].split(
+            "\n### Pulse Agent updates", 1)[0]
+        platform = "| **Systemd / Proxmox LXC** |"
+        rows = [line for line in manual.splitlines() if line.startswith(platform)]
+        self.assertEqual(len(rows), 1)
+        self.assertLess(manual.index("MIGRATION.md#full-state-recovery"), manual.index(rows[0]))
+        procedure = rows[0].removeprefix(platform).strip().removesuffix("|").strip()
+        community, separator, pro = procedure.partition("**Pro:**")
+        self.assertEqual(community.strip(), "**Community:** `sudo /bin/update` (Pulse-owned helper only).")
+        self.assertTrue(separator, "Manual Linux updates need an explicit Pro route")
+        self.assertIn("matching signed Linux archive", pro)
+        self.assertIn("[Pulse Pro downloads](https://pulserelay.pro/download.html)", pro)
+        self.assertEqual(manual.count("`sudo /bin/update`"), 1)
+        self.assertIn(
+            "For an exact Community target, use `/bin/update --version vX.Y.Z` only when the "
+            "Pulse server installer installed that helper.",
+            " ".join(manual.split()),
+        )
+
     def test_install_update_preserves_storage_edition_and_failure_evidence(self):
         install = " ".join(guide("INSTALL").split("#### Manual Update\n", 1)[1].split(
             "\n### Pulse Agent updates", 1)[0].split())
