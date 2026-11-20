@@ -1178,15 +1178,40 @@ switching protocol or observation location is not proof that ICMP recovered.
 
 ## 🔒 HTTPS / TLS
 
-Enable HTTPS by providing certificate files via environment variables.
+Use direct HTTPS with [systemd](#https-on-systemd) or [Docker](#https-in-docker),
+or terminate HTTPS at a [reverse proxy](REVERSE_PROXY.md). Direct HTTPS changes
+the protocol on `FRONTEND_PORT` (default `7655`), not the port. If existing
+agents use HTTP on that listener, they will not switch to HTTPS automatically.
+Use a proxy if those agents need to keep their current address.
+
+### HTTPS on systemd
+
+Put the certificate (including any intermediate certificates) and its matching
+key where the Pulse service can read them. The standard service runs as
+`pulse`. A `root:root` key with mode `0600` is not readable by that user.
+A root-owned key with group `pulse` and mode `0640` keeps access restricted.
+
+Save your existing settings before editing. Run `sudo systemctl edit pulse`
+and put this in the drop-in, using your certificate and key paths:
+
+```ini
+[Service]
+Environment="HTTPS_ENABLED=true"
+Environment="TLS_CERT_FILE=/etc/pulse/cert.pem"
+Environment="TLS_KEY_FILE=/etc/pulse/key.pem"
+```
+
+Systemd ignores bare assignments under `[Service]`. If Pulse does not receive
+both file paths, it can still start in HTTP mode.
+If the service's `EnvironmentFile=` already sets these variables, edit them
+there instead. That file takes precedence over `Environment=`.
+Restart Pulse with `sudo systemctl restart pulse` during a maintenance window.
+If the service does not come back, restore just the settings you changed
+before restarting it again.
+
+### HTTPS in Docker
 
 ```bash
-# Systemd
-HTTPS_ENABLED=true
-TLS_CERT_FILE=/etc/pulse/cert.pem
-TLS_KEY_FILE=/etc/pulse/key.pem
-
-# Docker
 docker run --init -e HTTPS_ENABLED=true \
   -v /path/to/certs:/certs \
   -e TLS_CERT_FILE=/certs/cert.pem \
@@ -1196,6 +1221,30 @@ docker run --init -e HTTPS_ENABLED=true \
 To redirect plain-HTTP requests to HTTPS, set `HTTP_REDIRECT_PORT` to a port other than `FRONTEND_PORT` (for example `80`). Pulse listens on that port on the same bind address as the web UI and answers requests with a `301` redirect to the same host on the HTTPS `FRONTEND_PORT`. The redirect listener starts only when `HTTPS_ENABLED=true` and both `TLS_CERT_FILE` and `TLS_KEY_FILE` are set; otherwise the value has no effect. A non-numeric or out-of-range value is ignored silently, which leaves the redirect disabled.
 
 > **Important (Docker with HTTPS)**: Always use `--init` (or `init: true` in docker-compose) when enabling HTTPS. The Alpine-based healthcheck uses busybox `wget`, which spawns `ssl_client` subprocesses. Without an init process to reap them, these become zombie processes over time.
+
+### Verify HTTPS before installing an agent
+
+Use an address listed in the certificate's Subject Alternative Name. Include
+the configured port in the URL unless it is the standard HTTPS port, `443`.
+For a private CA, trust its public certificate on the clients. For a self-signed
+server certificate, use an independently verified copy of that public
+certificate where the client supports direct trust. Never copy the server's
+private key to an agent.
+
+From the machine that needs to connect, check the HTTPS address without a token.
+Omit `--cacert` if the client already trusts the certificate:
+
+```bash
+curl --disable --fail --silent --show-error --max-time 10 \
+  --cacert /path/to/trusted-cert.pem \
+  https://pulse.example.com:7655/api/health
+```
+
+If the machine does not trust the certificate by default, use the same verified
+public certificate for both the script download and the agent install. See
+[Private-file installation](UNIFIED_AGENT.md#private-file-installation-linux-macos-and-nas)
+for the two `--cacert` steps. Do not bypass certificate checks to get an
+installer to run.
 
 ---
 
