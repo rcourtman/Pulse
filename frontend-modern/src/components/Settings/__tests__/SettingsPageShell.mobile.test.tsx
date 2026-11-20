@@ -1,6 +1,6 @@
 import { createSignal } from 'solid-js';
 import { cleanup, render, screen, waitFor } from '@solidjs/testing-library';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SettingsPageShell } from '../SettingsPageShell';
 import type { SettingsNavGroup, SettingsTab } from '../settingsNavigationModel';
 
@@ -12,7 +12,10 @@ const tabs: SettingsNavGroup['items'] = [
 ];
 
 describe('SettingsPageShell mobile navigation', () => {
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
 
   it('updates the compact active-page label after client-side navigation', async () => {
     const [activeTab, setActiveTab] = createSignal<SettingsTab>('infrastructure-systems');
@@ -113,6 +116,73 @@ describe('SettingsPageShell mobile navigation', () => {
     expect(content?.lastElementChild).toHaveClass('min-w-0');
     expect(content?.lastElementChild).toHaveClass('py-3', 'sm:p-6', 'lg:p-8');
     expect(content?.lastElementChild).not.toHaveClass('p-4');
+  });
+
+  it('reveals a focused control behind the compact header without moving focus', async () => {
+    const [mobileMenuOpen, setMobileMenuOpen] = createSignal(false);
+    const [sidebarCollapsed, setSidebarCollapsed] = createSignal(false);
+    const [searchQuery, setSearchQuery] = createSignal('');
+    const scrollBy = vi.fn();
+    render(() => (
+      <div
+        class="app-scroll-shell"
+        ref={(el) => Object.defineProperty(el, 'scrollBy', { value: scrollBy })}
+      >
+        <SettingsPageShell
+          headerMeta={() => ({ title: 'Settings', description: 'Manage Pulse configuration.' })}
+          hasUnsavedChanges={() => false}
+          activeTabSaveBehavior={() => undefined}
+          saveSettings={() => undefined}
+          discardChanges={() => undefined}
+          isMobileMenuOpen={mobileMenuOpen}
+          setIsMobileMenuOpen={setMobileMenuOpen}
+          sidebarCollapsed={sidebarCollapsed}
+          setSidebarCollapsed={setSidebarCollapsed}
+          searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
+          filteredTabGroups={() => []}
+          flatTabs={() => tabs}
+          activeTab={() => 'api'}
+          setActiveTab={() => undefined}
+          isPro={() => false}
+        >
+          <button type="button">Covered control</button>
+          <button type="button">Visible control</button>
+        </SettingsPageShell>
+      </div>
+    ));
+
+    const header = screen.getByRole('heading', { name: 'API Access' }).parentElement!;
+    const covered = screen.getByRole('button', { name: 'Covered control' });
+    const visible = screen.getByRole('button', { name: 'Visible control' });
+    vi.spyOn(header, 'offsetHeight', 'get').mockReturnValue(52);
+    vi.spyOn(header, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 360, 52));
+    vi.spyOn(covered, 'getBoundingClientRect').mockReturnValue(new DOMRect(8, 5, 344, 40));
+    vi.spyOn(visible, 'getBoundingClientRect').mockReturnValue(new DOMRect(8, 80, 344, 40));
+    const hitTest = Object.getOwnPropertyDescriptor(document, 'elementFromPoint');
+    Object.defineProperty(document, 'elementFromPoint', {
+      configurable: true,
+      value: () => header,
+    });
+    try {
+      covered.focus();
+      await waitFor(() =>
+        expect(scrollBy).toHaveBeenCalledExactlyOnceWith({ top: -51, behavior: 'instant' }),
+      );
+      expect(covered).toHaveFocus();
+
+      scrollBy.mockClear();
+      // Do not scroll for a focus that has moved on before the next frame.
+      visible.focus();
+      covered.focus();
+      visible.focus();
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      expect(scrollBy).not.toHaveBeenCalled();
+      expect(visible).toHaveFocus();
+    } finally {
+      if (hitTest) Object.defineProperty(document, 'elementFromPoint', hitTest);
+      else Reflect.deleteProperty(document, 'elementFromPoint');
+    }
   });
 
   it('expands a collapsed desktop sidebar before opening the phone settings index', async () => {
