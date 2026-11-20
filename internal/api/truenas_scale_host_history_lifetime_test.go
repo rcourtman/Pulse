@@ -68,7 +68,7 @@ func TestTrueNASScaleHostHistoryDisconnectPreservesPollingSession(t *testing.T) 
 				result = true
 			case "system.info":
 				polls.Add(1)
-				result = map[string]any{"hostname": "synthetic-scale", "version": "TrueNAS-SCALE-25.04.2", "cores": 4, "physmem": 4 << 30}
+				result = map[string]any{"hostname": "synthetic-scale", "version": "TrueNAS-SCALE-25.04.2", "cores": 4, "physmem": uint64(4) << 30}
 			case "reporting.get_data":
 				var graphs []struct{ Name string }
 				if len(req.Params) != 2 || json.Unmarshal(req.Params[0], &graphs) != nil || len(graphs) == 0 {
