@@ -2612,6 +2612,11 @@ security-privacy contract owns the tally and the schema v24 fields.
 
 ## Shared Boundaries
 
+The connected-infrastructure view retains real agent identities across a server
+restart using the canonical read view, without advancing their last sighting.
+A native TrueNAS connection's shared host metrics shape is not a registration
+and does not supply an agent target for lifecycle or profile controls.
+
 The shared public OIDC login POST admits one optional JSON document within
 16 KiB before contacting an IdP or allocating pending login state. Invalid
 input cannot replace a live OIDC service or discard another login. The GET

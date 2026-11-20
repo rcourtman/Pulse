@@ -32,13 +32,43 @@ type connectedInfrastructureGroup struct {
 }
 
 func buildConnectedInfrastructure(
+	observations []unifiedresources.Resource,
 	resources []unifiedresources.Resource,
 	snapshot models.StateSnapshot,
 ) []models.ConnectedInfrastructureItemFrontend {
 	groups := make(map[string]*connectedInfrastructureGroup)
 	resolver := unifiedresources.ResolveTopLevelSystems(resources)
 
+	var knownAgentIDs map[string]struct{}
 	for _, resource := range resources {
+		if resource.TrueNAS != nil && resource.Agent != nil {
+			// The native TrueNAS adapter fills AgentData for display and
+			// historical metrics. Presentation coalescing may infer an
+			// agent source from that payload. Neither is a host report:
+			// never make the provider identity an agent control or profile
+			// target without evidence in the underlying read view.
+			if knownAgentIDs == nil {
+				knownAgentIDs = make(map[string]struct{})
+				// Read the same captured rows as the presentation pass,
+				// before any inferred sources or a newer live generation.
+				// This includes remembered agents awaiting a fresh report.
+				for i := range observations {
+					r := &observations[i]
+					if r.Agent == nil {
+						continue
+					}
+					host := unifiedresources.NewHostView(r)
+					if id := strings.TrimSpace(host.AgentID()); id != "" && host.IntegrationSource() == "" {
+						knownAgentIDs[id] = struct{}{}
+					}
+				}
+			}
+			if _, reported := knownAgentIDs[strings.TrimSpace(resource.Agent.AgentID)]; !reported {
+				// This is a copy for the reporting projection only. Keep
+				// the original provider resource, metrics and identity.
+				resource.Agent = nil
+			}
+		}
 		appendConnectedInfrastructureSurfaces(groups, resource, resolver)
 	}
 
