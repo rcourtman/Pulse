@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "base_sha": "8a2430dc739e3a31820abbfb4c01b4d2e187bde9",
+  "verified_at": "2026-11-20T13:34:18Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Login.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Login.tsx": "df6e33dab4d57744d93193b63653b193fdf1b051f11e5ba8c6af71e3fd198a3f"
+  },
+  "routes": [
+    "/",
+    "/login",
+    "/docs/TROUBLESHOOTING"
+  ],
+  "viewports": [
+    {
+      "width": 1366,
+      "height": 820
+    },
+    {
+      "width": 320,
+      "height": 700
+    },
+    {
+      "width": 320,
+      "height": 568
+    }
+  ],
+  "states": [
+    "Actual production-mode Pulse frontend, with an offline redirect and the existing public discovery response. Playwright 1.56.1, Chromium 141 in desktop light and touch-emulated WebKit 26 in narrow dark.",
+    "Fifteen matched, natively inspected before/after pairs. A returned provider-not-found or expired SAML attempt remains visible when discovery lists no providers. Unknown return codes show existing generic feedback, never raw text.",
+    "No-provider notices, help, and existing local or provider options remain distinct. Ordinary hidden login and the two listed-provider buttons and existing error are pixel-identical controls.",
+    "The compact narrow error layout uses less branding space so the entire permitted local sign-in button stays visible in the 320 by 568 first view."
+  ],
+  "interactions": [
+    "259 baseline and 267 candidate assertions. Keyboard and touch activate the advertised OIDC button into a controlled return, and open the actual Troubleshooting guide from the no-options page.",
+    "Preserved local form sequence and focus on desktop; touch edits the local username and reaches password without losing the draft. No credential submit, sign-in grant, setup, automatic repeat, or external identity provider.",
+    "Only the recognized callback parameters are consumed; an unrelated query parameter remains in the SAML case. The returned failures are exposed with the alert role."
+  ]
+}
