@@ -512,15 +512,20 @@ unchanged. An unsupported or unexecutable staged validator fails closed with
 preflight exit 14 and a state-preservation explanation; it never falls back to
 an older `--self-test`, which does not establish URL admissibility. A shell
 execution failure (126 or 127) points to the staging filesystem and binary,
-not HTTPS. Other failures offer scheme-appropriate guidance without asserting
-a cause or printing the URL, staged path or child output. Plain HTTP advice
-keeps the local/private address and DNS rules distinct from TLS verification.
+not HTTPS. The collector reserves exit 65 for a rejected URL in
+`--validate-url` mode; parse and ordinary startup errors still exit 1. The
+installer uses that status for definite URL advice, and treats an older
+validator's exit 1 or any other unclassified failure as inconclusive. Text and
+JSON diagnostics never forward the child output, staged path or rejected URL.
+Plain HTTP advice keeps the local/private address and DNS rules distinct from
+TLS verification.
 Temporary staging may be cleaned up; the installed service and saved
 credentials stay intact. The reachability-only `--preflight-only` path
-still performs metadata checks, not executable validation, and says so on
-success.
+still performs metadata checks and states that the binary was not run and
+its URL policy was not checked.
 
 `TestRunValidateURLIsReadOnly`, `TestAgentInstallerURLAdmission`,
+`TestValidateURLRejectionDoesNotClassifyOtherCLIErrors`,
 `TestAgentURLAdmissionRefusesUnsupportedOrUnexecutableValidator` and
 `TestAgentURLAdmissionPrecedesInstallMutation` cover production URL policy,
 actual built CLI/installer admission, inherited consent, text/JSON advice,

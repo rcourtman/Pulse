@@ -58,6 +58,30 @@ func TestLoadConfigURLAdmissionDoesNotReadToken(t *testing.T) {
 	}
 }
 
+func TestValidateURLRejectionDoesNotClassifyOtherCLIErrors(t *testing.T) {
+	t.Cleanup(func() { securityutil.SetOperatorPlaintextHTTPConsent(false) })
+	for _, tc := range []struct {
+		name, mode, option string
+		rejected           bool
+	}{
+		{"validator refused", "--validate-url=true", "--url", true},
+		{"ordinary startup refused", "--validate-url=false", "--url", false},
+		{"flags did not parse", "--validate-url=true", "--not-a-pulse-flag", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := run(context.Background(), []string{
+				"--state-dir", t.TempDir(), tc.mode, tc.option, "ftp://pulse.example.invalid",
+			}, func(string) string { return "" })
+			if err == nil || errors.Is(err, errValidateURLRejected) != tc.rejected {
+				t.Fatalf("run() error = %v; want rejected status: %t", err, tc.rejected)
+			}
+			if strings.Contains(err.Error(), "pulse.example.invalid") {
+				t.Fatal("CLI error exposed the rejected address")
+			}
+		})
+	}
+}
+
 func TestEnableCommandsHelpUsesPatrolRemediationCopy(t *testing.T) {
 	source, err := os.ReadFile("main.go")
 	if err != nil {

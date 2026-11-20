@@ -298,7 +298,7 @@ func TestAgentInstallerPreflightHealthDeadline(t *testing.T) {
 			if last.Phase != "preflight_complete" || last.Code != wantComplete || last.ExitCode != wantExit {
 				t.Fatalf("wrong final preflight result: %s", out)
 			}
-			if wantExit == 0 && !strings.Contains(last.Message, "The agent binary has not been downloaded or run.") {
+			if wantExit == 0 && !strings.Contains(last.Message, "The agent binary has not been downloaded or run. Its URL policy has not been checked.") {
 				t.Fatalf("metadata-only preflight did not explain its limit: %s", out)
 			}
 			mu.Lock()

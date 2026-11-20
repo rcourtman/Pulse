@@ -85,6 +85,9 @@ printf 'ADMITTED\n'
 			if tc.wantExit != 0 && (!strings.Contains(text, `"exitCode":14`) || !strings.Contains(text, "saved credentials have not been changed")) {
 				t.Fatalf("missing truthful failure: %s", text)
 			}
+			if strings.Contains(text, "The downloaded agent rejected the Pulse URL.") != (tc.wantExit != 0) {
+				t.Fatalf("the installer did not distinguish a confirmed URL refusal: %s", text)
+			}
 			if !strings.Contains(text, tc.wantHint) || strings.Contains(text, "rejected-fragment") || strings.Contains(text, "does not permit HTTP") {
 				t.Fatalf("ambiguous or unredacted URL admission result: %s", text)
 			}
