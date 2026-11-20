@@ -183,6 +183,15 @@ The existing Reload access action is available even if a sibling read is
 still pending; it retires that attempt and reads only in the current session
 and selection.
 
+The accepted Organization Access summary describes invitation lists that were
+read successfully and found empty. An unavailable list is not empty; the
+other list can still show its saved rows or its own empty result. The
+manager-only result has the same visibility as Pending Invitations. After the
+last invitation is revoked or declined, the saved reread, not the mutation
+reply or the disappearance of a row, supplies the result. The compact
+summary uses the gap below the selected identity, leaving saved access
+controls in view. Reads, mutation gates and focus targets are unchanged.
+
 If a saved-access check has not returned a response or a warning yet,
 Organization Access shows the selected organization and offers Restart access
 check. This includes stalls during the explicit check after an unconfirmed
