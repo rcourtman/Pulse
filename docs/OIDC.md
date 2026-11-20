@@ -70,12 +70,12 @@ At sign-in, every non-empty list must match. Entries within one list are alterna
 - **Allowed Domains**: Match the email domain (e.g., `example.com`).
 - **Allowed Emails**: Match an email address. This does not bypass the other lists.
 
-> **Administrator requirement**: SSO authentication does not grant instance
-> administrator privileges by itself. Before relying on SSO-only access or
-> removing the local administrator, map a trusted IdP group to the built-in
-> `admin` role and include it in **Allowed Groups**. An empty group list skips
-> only that check; any domain and email restrictions still apply. These lists
-> do not grant administrator privileges.
+> **Administrator access:** Allowlists limit who can sign in. They do not
+> grant administrator access. If an administrator will use SSO, map a
+> trusted IdP group to the built-in `admin` role in **Group Role Mappings**.
+> The user must also match every non-empty allowlist. [Check admin access
+> in a separate browser session](#-quick-start) and keep your independent
+> administrator login even after SSO works.
 
 ### Group-to-Role Mapping
 

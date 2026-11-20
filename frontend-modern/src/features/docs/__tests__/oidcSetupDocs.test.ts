@@ -62,6 +62,22 @@ describe('OIDC setup without losing access', () => {
     expect(warning.querySelector('pre, form, input, button')).toBeNull();
   });
 
+  it('keeps an independent admin login when explaining OIDC administrator access', () => {
+    const guide = article('OIDC');
+    const access = guide.querySelector('#access-control')!;
+    const note = access.nextElementSibling!.nextElementSibling!.nextElementSibling!;
+    expect(note.tagName).toBe('BLOCKQUOTE');
+    expect(text(note)).toContain('They do not grant administrator access');
+    expect(text(note)).toContain('match every non-empty allowlist');
+    expect(note.querySelector('code')).toHaveTextContent('admin');
+    expect(text(note)).toContain('Group Role Mappings');
+    expect(text(note)).toContain('keep your independent administrator login even after SSO works');
+    expect(text(note)).not.toContain('removing the local administrator');
+    const link = note.querySelector('a[href="#-quick-start"]')!;
+    expect(link).toHaveTextContent('Check admin access in a separate browser session');
+    expect(guide.querySelector('[id="-quick-start"]')).not.toBeNull();
+  });
+
   it('links all setup decisions to real focused documentation headings', () => {
     const guide = article('OIDC');
     for (const [name, fragment] of [
