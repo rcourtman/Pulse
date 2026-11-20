@@ -680,6 +680,10 @@ func TestHandleStopCommand(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("systemd stop-command behavior is not available on Windows")
 	}
+	cleanupDir := t.TempDir()
+	swap(t, &unraidStartupScriptPath, filepath.Join(cleanupDir, "startup.sh"))
+	swap(t, &agentLogPath, filepath.Join(cleanupDir, "agent.log"))
+
 	t.Run("disable error sends failure ack", func(t *testing.T) {
 		writeSystemctl(t, "echo 'access denied' >&2\nexit 1")
 
@@ -741,71 +745,86 @@ func TestHandleStopCommand(t *testing.T) {
 				false: server.Client(),
 			},
 		}
-		t.Cleanup(func() { _ = agent.Close() })
-
-		if err := agent.handleStopCommand(context.Background(), TargetConfig{URL: server.URL, Token: "token"}, agentsdocker.Command{ID: "cmd"}); !errors.Is(err, ErrStopRequested) {
-			t.Fatalf("expected ErrStopRequested, got %v", err)
-		}
-	})
-
-	t.Run("completion ack error", func(t *testing.T) {
-		prev := os.Getenv("PATH")
-		_ = os.Setenv("PATH", "")
 		t.Cleanup(func() {
-			_ = os.Setenv("PATH", prev)
+			_ = agent.Close()
+			agent.asyncWG.Wait()
 		})
 
-		agent := &Agent{
-			logger: zerolog.Nop(),
-			hostID: "host1",
-			httpClients: map[bool]*http.Client{
-				false: {Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
-					return nil, errors.New("send failed")
-				})},
-			},
-		}
-		t.Cleanup(func() { _ = agent.Close() })
-
-		if err := agent.handleStopCommand(context.Background(), TargetConfig{URL: "http://example", Token: "token"}, agentsdocker.Command{ID: "cmd"}); err == nil {
-			t.Fatal("expected error")
-		}
-	})
-
-	t.Run("stop service goroutine executes", func(t *testing.T) {
-		marker := filepath.Join(t.TempDir(), "called")
-		writeSystemctl(t, "if [ \"$1\" = \"disable\" ]; then exit 0; fi\nif [ \"$1\" = \"stop\" ]; then : > "+marker+"; exit 2; fi\nexit 0")
-
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusOK)
-		}))
-		defer server.Close()
-
-		agent := &Agent{
-			logger: zerolog.Nop(),
-			hostID: "host1",
-			httpClients: map[bool]*http.Client{
-				false: server.Client(),
-			},
-			newTimerFn: immediateTimer,
-		}
-		// Close joins the stop-service goroutine before the fake systemctl is cleaned up
-		t.Cleanup(func() { _ = agent.Close() })
-
 		if err := agent.handleStopCommand(context.Background(), TargetConfig{URL: server.URL, Token: "token"}, agentsdocker.Command{ID: "cmd"}); !errors.Is(err, ErrStopRequested) {
 			t.Fatalf("expected ErrStopRequested, got %v", err)
 		}
-
-		deadline := time.Now().Add(200 * time.Millisecond)
-		for {
-			if _, err := os.Stat(marker); err == nil {
-				break
-			}
-			if time.Now().After(deadline) {
-				t.Fatal("expected stopSystemdService to be invoked")
-			}
-			time.Sleep(5 * time.Millisecond)
-		}
 	})
+
+	for _, tc := range []struct {
+		name      string
+		ackStatus int
+		wantTrace string
+	}{
+		{"stop service after completion ack", http.StatusNoContent, "disable pulse-agent\ncompletion ack\nstop pulse-agent\n"},
+		{"do not stop service after rejected ack", http.StatusServiceUnavailable, "disable pulse-agent\ncompletion ack\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tracePath := filepath.Join(t.TempDir(), "stop-trace")
+			t.Setenv("PULSE_TEST_STOP_TRACE", tracePath)
+			writeSystemctl(t, `
+printf '%s\n' "$*" >> "$PULSE_TEST_STOP_TRACE" || exit 1
+if [ "$1" = disable ]; then exit 0; fi
+exit 2`)
+
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				var ack agentsdocker.CommandAck
+				if r.Method != http.MethodPost || r.URL.Path != "/api/agents/docker/commands/cmd/ack" ||
+					json.NewDecoder(r.Body).Decode(&ack) != nil || ack.Status != agentsdocker.CommandStatusCompleted {
+					http.Error(w, "expected completion acknowledgement", http.StatusBadRequest)
+					return
+				}
+				trace, err := os.OpenFile(tracePath, os.O_APPEND|os.O_WRONLY, 0600)
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
+				_, writeErr := trace.WriteString("completion ack\n")
+				if err := errors.Join(writeErr, trace.Close()); err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
+				w.WriteHeader(tc.ackStatus)
+			}))
+			t.Cleanup(server.Close)
+
+			agent := &Agent{
+				logger: zerolog.Nop(),
+				hostID: "host1",
+				httpClients: map[bool]*http.Client{
+					false: server.Client(),
+				},
+				newTimerFn: immediateTimer,
+			}
+			t.Cleanup(func() {
+				_ = agent.Close()
+				agent.asyncWG.Wait()
+			})
+
+			err := agent.handleStopCommand(context.Background(), TargetConfig{URL: server.URL, Token: "token"}, agentsdocker.Command{ID: "cmd"})
+			// Wait for the attempt to finish with the fake systemctl still in PATH.
+			// Close cancels the task; it is not a completion signal for this assertion.
+			agent.asyncWG.Wait()
+			if tc.ackStatus == http.StatusNoContent {
+				if !errors.Is(err, ErrStopRequested) {
+					t.Fatalf("expected ErrStopRequested, got %v", err)
+				}
+			} else if err == nil || !strings.Contains(err.Error(), "503 Service Unavailable") {
+				t.Fatalf("expected rejected completion acknowledgement, got %v", err)
+			}
+			trace, err := os.ReadFile(tracePath)
+			if err != nil {
+				t.Fatalf("read stop trace: %v", err)
+			}
+			if string(trace) != tc.wantTrace {
+				t.Fatalf("stop trace = %q, want %q", trace, tc.wantTrace)
+			}
+		})
+	}
 }
 
 func TestDisableSelf(t *testing.T) {
