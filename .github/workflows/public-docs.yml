@@ -74,6 +74,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 2
 
       - name: Require every documentation recipe shard
         env:
@@ -95,3 +96,40 @@ jobs:
 
       - name: Check documentation safety workflow contract
         run: python3 scripts/tests/test_public_docs_workflow.py
+
+      # A byte-identical guide can still break a rendered Help assertion.
+      # Build and Test skips its unit job for Markdown-only diffs. Exercise the
+      # existing Help suites here without a bundle build or dependency audit.
+      - name: Detect in-app Help changes
+        id: help
+        env:
+          BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]] &&
+             git diff --quiet --no-ext-diff --no-renames "$BASE_SHA" HEAD -- \
+               ':(glob)docs/*.md' frontend-modern/public/docs \
+               ARCHITECTURE.md CONTRIBUTING.md SECURITY.md TERMS.md \
+               .github/workflows/public-docs.yml; then
+            echo "required=false" >> "$GITHUB_OUTPUT"
+          else
+            # A missing or unreachable comparison base is not a clean diff.
+            echo "required=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Node.js for Help assertions
+        if: steps.help.outputs.required != 'false'
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend-modern/package-lock.json
+
+      - name: Install locked Help test dependencies
+        if: steps.help.outputs.required != 'false'
+        working-directory: frontend-modern
+        run: npm ci --no-audit --no-fund
+
+      - name: Check in-app Help content and links
+        if: steps.help.outputs.required != 'false'
+        working-directory: frontend-modern
+        run: npm run test -- src/features/docs/__tests__ src/utils/__tests__/docsLinks.test.ts
