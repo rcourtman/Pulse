@@ -176,6 +176,49 @@ main
 '''
 
 
+MANUAL_EDITION_UPDATE = r'''
+source "$INSTALLER"
+INSTALL_DIR="$FIXTURE/install"
+CONFIG_DIR="$FIXTURE/config"
+BUILD_FROM_SOURCE_MARKER="$INSTALL_DIR/BUILD_FROM_SOURCE"
+BINARY_LINK_PATH="$FIXTURE/pulse"
+PINNED_RELEASE_SSH_PUBLIC_KEY=$(cat "$FIXTURE/key.pub")
+FORCE_VERSION="$TARGET_VERSION"
+[[ "$FLOW" != source ]] || BUILD_FROM_SOURCE=true
+[[ "$FLOW" != local ]] || ARCHIVE_OVERRIDE="$ARCHIVE"
+for fn in print_header check_root detect_os check_docker_environment \
+    offer_existing_auto_updates preflight_systemd_service_installation create_user \
+    install_additional_agent_binaries deploy_agent_scripts chown_install_dir_for_pulse \
+    restore_selinux_contexts setup_directories setup_update_command \
+    ensure_systemd_service_installed install_systemd_service create_marker_file print_completion; do
+  eval "$fn() { :; }"
+done
+check_proxmox_host() { return 1; }
+detect_service_name() { echo pulse-custom; }
+detect_pulse_architecture() { echo amd64; }
+validate_pulse_binary_architecture() { return 0; }
+ensure_update_disk_headroom() { return 0; }
+run_upgrade_readiness_preflight() { return 0; }
+backup_existing() { echo BACKUP >> "$FIXTURE/calls"; }
+start_pulse() { systemctl start pulse-custom; }
+chown() { :; }
+update_timer_exists() { return 1; }
+safe_read() { return 1; }
+build_from_source() { echo SOURCE_BUILD >> "$FIXTURE/calls"; return 1; }
+curl() { echo UNEXPECTED_NETWORK >> "$FIXTURE/calls"; return 1; }
+resolve_latest_release_tag_for_channel() {
+  echo PUBLIC_LOOKUP >> "$FIXTURE/calls"
+  echo v6.6.0
+}
+download_release_archive() {
+  echo PUBLIC_ARCHIVE >> "$FIXTURE/calls"
+  cp "$ARCHIVE" "$3"
+  cp "$ARCHIVE.sshsig" "$3.sshsig"
+}
+main
+'''
+
+
 class ServerInstallerStopTest(unittest.TestCase):
     def exercise(self, script, flow, case, fault=""):
         with tempfile.TemporaryDirectory() as temporary:
@@ -388,6 +431,90 @@ class ServerInstallerStopTest(unittest.TestCase):
                 self.assertEqual(observation["result"].returncode, 42, observation["result"].stderr)
                 self.assertEqual(observation["files"], observation["originals"])
                 self.assertNotRegex(observation["calls"], r"(?m)^stop\b")
+
+    def test_manual_update_preserves_the_installed_pro_edition(self):
+        # Follow the actual installer from installed identity through archive
+        # admission. The version responders stand in for the two compiled
+        # editions, but tar, SSH signature verification and replacement are real.
+        cases = (
+            # name, installed, staged, path, version, expected refusal
+            ("pro_default", "Pulse Pro", "Pulse", "public", "", "Use the in-app updater"),
+            ("pro_public_pin", "Pulse Pro", "Pulse", "public", "v6.6.0", "Use the in-app updater"),
+            ("pro_public_source", "Pulse Pro", "Pulse", "source", "", "Use the in-app updater"),
+            ("pro_wrong_edition", "Pulse Pro", "Pulse", "local", "v6.6.0", "does not contain Pulse Pro"),
+            ("pro_private_auto_version", "Pulse Pro", "Pulse Pro", "local", "", ""),
+            ("pro_private_bad_signature", "Pulse Pro", "Pulse Pro", "local", "", "Cryptographic signature"),
+            ("pro_private_wrong_version", "Pulse Pro", "Pulse Pro", "local", "v6.6.1", "does not match"),
+            ("community_public_update", "Pulse", "Pulse", "public", "", ""),
+            ("community_private_archive", "Pulse", "Pulse Pro", "local", "v6.6.0", ""),
+        )
+        for name, installed, staged, flow, version, refusal in cases:
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                service_stub = root / "systemctl"
+                service_stub.write_text(SYSTEMCTL)
+                service_stub.chmod(0o700)
+                binary = root / "install/bin/pulse"
+                binary.parent.mkdir(parents=True)
+                old_bytes = f"#!/bin/sh\nprintf '%s\\n' '{installed} v6.5.0'\n".encode()
+                new_bytes = f"#!/bin/sh\nprintf '%s\\n' '{staged} v6.6.0'\n".encode()
+                binary.write_bytes(old_bytes)
+                binary.chmod(0o755)
+                version_file = binary.parent.parent / "VERSION"
+                version_file.write_text("v6.5.0\n")
+                state = root / "config/system.json"
+                state.parent.mkdir()
+                state.write_text('{"updateChannel":"stable","fixture":"preserve"}\n')
+                candidate = root / "candidate"
+                candidate.write_bytes(new_bytes)
+                candidate.chmod(0o755)
+                candidate_version = root / "candidate-version"
+                candidate_version.write_text("v6.6.0\n")
+                # A Pro-shaped name is not evidence of the binary's edition.
+                archive = root / "pulse-pro-v6.6.0-linux-amd64.tar.gz"
+                with tarfile.open(archive, "w:gz") as payload:
+                    payload.add(candidate, arcname="bin/pulse")
+                    payload.add(candidate_version, arcname="VERSION")
+                key = root / "key"
+                subprocess.run(["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", str(key)],
+                               check=True, capture_output=True, timeout=5)
+                subprocess.run(["ssh-keygen", "-q", "-Y", "sign", "-f", str(key),
+                                "-n", "pulse-install", str(archive)],
+                               check=True, capture_output=True, timeout=5)
+                (root / (archive.name + ".sig")).rename(root / (archive.name + ".sshsig"))
+                if name == "pro_private_bad_signature":
+                    (root / (archive.name + ".sshsig")).write_text("invalid\n")
+                env = {"PATH": str(root) + ":" + os.environ["PATH"], "HOME": directory,
+                       "FIXTURE": directory, "INSTALLER": str(INSTALLER),
+                       "FLOW": flow, "TARGET_VERSION": version, "ARCHIVE": str(archive),
+                       "CASE": "active", "FAULT": ""}
+                result = subprocess.run(["bash", "-c", MANUAL_EDITION_UPDATE], env=env,
+                                        capture_output=True, text=True, timeout=15)
+                calls = (root / "calls").read_text()
+                observed = result.stdout + result.stderr + calls
+                self.assertIn("show pulse-custom", calls, observed)
+                self.assertNotIn("UNEXPECTED_NETWORK", calls, observed)
+                if refusal:
+                    self.assertNotEqual(0, result.returncode, observed)
+                    self.assertIn(refusal, observed)
+                    self.assertNotRegex(calls, r"(?m)^(stop|start|PUBLIC_LOOKUP|PUBLIC_ARCHIVE|SOURCE_BUILD)\b")
+                    if flow != "local":
+                        self.assertNotIn("BACKUP", calls)
+                    self.assertEqual(old_bytes, binary.read_bytes())
+                    self.assertEqual("v6.5.0\n", version_file.read_text())
+                else:
+                    self.assertEqual(0, result.returncode, observed)
+                    self.assertEqual(1, calls.count("stop pulse-custom"), observed)
+                    self.assertEqual(1, calls.count("start pulse-custom"), observed)
+                    self.assertEqual(new_bytes, binary.read_bytes())
+                    self.assertEqual("v6.6.0\n", version_file.read_text())
+                    self.assertEqual(flow == "public", "PUBLIC_ARCHIVE" in calls, observed)
+                    if flow == "local":
+                        self.assertNotIn("PUBLIC_LOOKUP", calls, observed)
+                self.assertEqual('{"updateChannel":"stable","fixture":"preserve"}\n', state.read_text())
+                self.assertTrue(archive.is_file())
+                self.assertEqual([], list(binary.parent.glob(".pulse-stage-*")))
+                self.assertEqual([], list(binary.parent.parent.glob(".pulse-extract-*")))
 
 
 class InstallerStopSchedulingTest(unittest.TestCase):
