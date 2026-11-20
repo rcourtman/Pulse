@@ -53,7 +53,8 @@ describe('shipped Docker alert scope guidance', () => {
     expect(rows[1]).toContain('Other containers and the machine keep their own rules');
     expect(rows[1]).toContain('Offline Alerts leaves its other checks enabled');
     expect(rows[2]).toContain('also suppresses wanted machine alerts');
-    expect(prose(section)).toContain('does not automatically cover containers added later');
+    expect(prose(section)).toContain('Review the settings of containers added later.');
+    expect(prose(section)).toContain('This covers containers already there and ones added later.');
     // This explanation must not require an unsafe command or a new diagnostics run.
     expect(section.querySelector('pre, form, input, button')).toBeNull();
     expect(prose(section)).toContain(

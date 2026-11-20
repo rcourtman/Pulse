@@ -71,28 +71,20 @@ const WIRELESS_INTERFACE = /^(?:wl|wlan|wifi)/i;
 export interface NodeHardwarePort {
   name: string;
   wireless: boolean;
-  /** The agent reports no link (no cable, or a dead partner): drawn dimmed. */
-  noLink: boolean;
-  /** "10G", "2.5G", "100M" when the agent reports a link speed. */
+  linkUp?: boolean;
   speedLabel?: string;
-  title: string;
 }
 
 export interface NodeHardwareModel {
   cpu?: { name: string; threads?: number; title: string };
   memory?: { label: string; title: string };
   ports: NodeHardwarePort[];
-  fans?: { label: string; title: string };
+  fans?: { count: number; title: string };
 }
 
-const shortLinkSpeed = (mbps: number): string =>
-  mbps >= 1000
-    ? `${Number.isInteger(mbps / 1000) ? mbps / 1000 : (mbps / 1000).toFixed(1)}G`
-    : `${mbps}M`;
-
 /**
- * What the node is, for the icon strip on its group row and drawer: the CPU it
- * runs, the memory installed, each physical port and its fans.
+ * The hardware reported for the node drawer: CPU, installed memory, physical
+ * ports and fans.
  */
 export const nodeHardwareModel = (node: Node | null | undefined): NodeHardwareModel => {
   if (!node) return { ports: [] };
@@ -124,19 +116,14 @@ export const nodeHardwareModel = (node: Node | null | undefined): NodeHardwareMo
   }
 
   model.ports = physicalNetworkInterfaces(node.networkInterfaces).map((port) => {
-    // Only the agent knows link state; a port Proxmox alone lists stays
-    // undimmed rather than guessed down.
-    const noLink = port.linkUp === false;
-    const speed =
-      !noLink && positive(port.speedMbps ?? undefined) ? (port.speedMbps as number) : undefined;
-    const wireless = WIRELESS_INTERFACE.test(port.name);
-    const detail = noLink ? ', no link' : speed ? `, ${formatLinkSpeed(speed)}` : '';
+    const name = cleanText(port.name);
+    // A disconnected port can still carry the driver's last negotiated speed.
+    const speed = port.linkUp !== false && positive(port.speedMbps) ? port.speedMbps : undefined;
     return {
-      name: port.name,
-      wireless,
-      noLink,
-      speedLabel: speed ? shortLinkSpeed(speed) : undefined,
-      title: `${port.name}${wireless ? ' (Wi-Fi)' : ''}${detail}`,
+      name,
+      wireless: WIRELESS_INTERFACE.test(name),
+      linkUp: port.linkUp,
+      speedLabel: speed === undefined ? undefined : formatLinkSpeed(speed),
     };
   });
 
@@ -146,10 +133,9 @@ export const nodeHardwareModel = (node: Node | null | undefined): NodeHardwareMo
     const high = Math.round(Math.max(...fans));
     const range =
       low === high ? low.toLocaleString() : `${low.toLocaleString()}–${high.toLocaleString()}`;
-    // The count is what the machine has; RPM is a live reading, so it stays
-    // on hover rather than changing the strip every poll.
+    // Keep the fan inventory stable as RPM readings change.
     const count = fans.length === 1 ? '1 fan' : `${fans.length} fans`;
-    model.fans = { label: count, title: `${count} at ${range} RPM` };
+    model.fans = { count: fans.length, title: `${count} at ${range} RPM` };
   }
 
   return model;

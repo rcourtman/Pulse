@@ -1,0 +1,67 @@
+{
+  "version": 1,
+  "base_sha": "d55b33d17fb1f5e35e61bb9af2deb85e2a360e8d",
+  "verified_at": "2026-11-20T00:57:29Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx",
+    "frontend-modern/src/components/Workloads/WorkloadPanel.tsx",
+    "frontend-modern/src/components/Workloads/WorkloadsFilter.tsx",
+    "frontend-modern/src/components/Workloads/WorkloadsSurface.tsx",
+    "frontend-modern/src/components/Workloads/WorkloadsTable.tsx",
+    "frontend-modern/src/components/Workloads/useWorkloadsControlsState.ts",
+    "frontend-modern/src/components/Workloads/useWorkloadsState.ts",
+    "frontend-modern/src/components/Workloads/workloadsFilterModel.ts",
+    "frontend-modern/src/components/shared/NodeGroupHeader.tsx",
+    "frontend-modern/src/components/shared/NodeHardwareStrip.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx",
+    "frontend-modern/src/features/proxmox/nodeHardwareSummary.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx": "191dbf498f222ec53444a6e6309a9ebbf42b283513101791941e5d2a6d3cb35e",
+    "frontend-modern/src/components/Workloads/WorkloadPanel.tsx": "b471805bd3f7b10e0d067d13e26ed1cba4d5eea6257e74cdf55dbeed8276c402",
+    "frontend-modern/src/components/Workloads/WorkloadsFilter.tsx": "0d81265e207264a848b490c5a3b0c7ee49607aff2c49397c45a6504c2af48cac",
+    "frontend-modern/src/components/Workloads/WorkloadsSurface.tsx": "c333d8f2ad4e79c8a3a15071da2bba2750aabd7d94f668af96508fa7a8828968",
+    "frontend-modern/src/components/Workloads/WorkloadsTable.tsx": "e085a4a0c768c95c08f4fcb29b08f3d7d3d9b2e84e4c5837d27218ebde3bb575",
+    "frontend-modern/src/components/Workloads/useWorkloadsControlsState.ts": "0daedd457745a5f74bad7f5e951f7c6a4bcac845ece3d2de59c1704b037d1534",
+    "frontend-modern/src/components/Workloads/useWorkloadsState.ts": "7b3a3e963dd70eb0bbb97e993d3de9bcdb042f677ff3e621dce8f098968819e0",
+    "frontend-modern/src/components/Workloads/workloadsFilterModel.ts": "d4459cb62cdb893d5598ed6a66c3bc9eb92c9d357d3822b93e9ac0ca573e728e",
+    "frontend-modern/src/components/shared/NodeGroupHeader.tsx": "e435c1e6ab04b85a022459cf19a67645bc8339f15ef986ffcb5b42ba27ce667f",
+    "frontend-modern/src/components/shared/NodeHardwareStrip.tsx": "deleted",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx": "4d216eb4484e77934c673df4445564df1a6492e6313409503cb17d6789a3b58d",
+    "frontend-modern/src/features/proxmox/nodeHardwareSummary.ts": "ad7aeb77a41c1585c8c0da3e378a9d1abd2afde7cffc455495193a6898834497"
+  },
+  "routes": [
+    "/proxmox (Overview and node drawer, production frontend build with a private mock estate)"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 820,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Grouped and List guest layouts omit the hardware strip, including with the old Show preference stored",
+    "The View disclosure offers Layout and omits Node hardware. On phones the View control is reached through Filters",
+    "Node drawer shows CPU, installed RAM, reported fans and physical ports below the charts while Details is closed",
+    "Port names and states are visible for connected, disconnected, unknown and Wi-Fi ports, including a missing speed and an older report with speed only",
+    "A disconnected port omits its retained speed. Readings from a stopped agent say Last known. A node without hardware reports omits the inventory section",
+    "Light and dark screenshots show wrapping and no horizontal overflow at the checked widths"
+  ],
+  "interactions": [
+    "Open View with the keyboard, toggle List and Grouped, dismiss with Escape and verify focus returns",
+    "Click outside the inline View disclosure, toggle it closed and reload with the old hardware preference present",
+    "Expand the node drawer with Enter and read each physical port without hover",
+    "Open and close Details with Space, check the virtual interface address remains available, then collapse the node drawer"
+  ],
+  "browser": "Playwright Chromium",
+  "themes": ["light", "dark"]
+}

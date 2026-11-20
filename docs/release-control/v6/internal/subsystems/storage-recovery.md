@@ -10080,16 +10080,8 @@ reports; storage retention settings alone decide what is kept. Older
 activation files that still carry `downgrade_retention` load without acting on
 it.
 
-### Proxmox page passes node hardware visibility to View (18 November 2026)
-
-`ProxmoxPageSurface` passes the workloads state's node hardware visibility and
-setter to `WorkloadsFilter`, so the Proxmox guest table's View menu can hide
-the hardware strip on node rows. Only the Proxmox page offers it, because
-only Proxmox node rows render `NodeGroupHeader`. No storage or recovery read
-changes.
-
 ### Network interface link state passes through unified types (18 November 2026)
 
 `internal/unifiedresources/types.go` and `useUnifiedResources.ts` gain an
 optional `linkUp` on network interfaces. No storage or recovery read, model or
-surface uses it; the shared types only carry it to the node hardware strip.
+surface uses it. The Proxmox node drawer displays the reported state.

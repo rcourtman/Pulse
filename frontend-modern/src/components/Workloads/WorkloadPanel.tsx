@@ -50,7 +50,6 @@ type WorkloadPanelProps = Pick<
   | 'workloadIOEmphasis'
   | 'workloadMetricDisplayMode'
   | 'workloadMetricHoverMode'
-  | 'workloadNodeHardwareVisible'
   | 'workloadMemoryDisplayBasis'
   | 'workloadMetricHistory'
   | 'workloadTableLayoutMode'
@@ -130,7 +129,6 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
                     node={node()!}
                     renderAs="tr"
                     colspan={props.totalColumns()}
-                    showHardware={props.workloadNodeHardwareVisible()}
                     trClass="select-none duration-150 [&>td>div]:flex-nowrap"
                     trProps={{ 'data-summary-group-id': groupKey }}
                   />

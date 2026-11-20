@@ -49,7 +49,6 @@ type WorkloadsTableProps = Pick<
   | 'workloadIOEmphasis'
   | 'workloadMetricDisplayMode'
   | 'workloadMetricHoverMode'
-  | 'workloadNodeHardwareVisible'
   | 'workloadMemoryDisplayBasis'
   | 'workloadMetricHistory'
   | 'workloadTableLayoutMode'
@@ -151,7 +150,6 @@ export function WorkloadsTable(props: WorkloadsTableProps) {
             workloadIOEmphasis={props.workloadIOEmphasis}
             workloadMetricDisplayMode={props.workloadMetricDisplayMode}
             workloadMetricHoverMode={props.workloadMetricHoverMode}
-            workloadNodeHardwareVisible={props.workloadNodeHardwareVisible}
             workloadMemoryDisplayBasis={props.workloadMemoryDisplayBasis}
             workloadMetricHistory={props.workloadMetricHistory}
             workloadTableLayoutMode={props.workloadTableLayoutMode}
