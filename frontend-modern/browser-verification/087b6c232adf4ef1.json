@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "base_sha": "16ce9f67110d802e51e7d9b00ff23ec9f9635b5a",
+  "verified_at": "2026-11-20T15:20:18Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Login.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Login.tsx": "7e4e2c68f41fdc2d84978d658601465081ff9f1c2f6cacac1731a8607cdb978e"
+  },
+  "routes": [
+    "/login"
+  ],
+  "viewports": [
+    {
+      "width": 1366,
+      "height": 820
+    },
+    {
+      "width": 320,
+      "height": 568
+    }
+  ],
+  "states": [
+    "Production frontend on a loopback fixture. Playwright 1.56.1; Chromium 141 desktop/light and touch-emulated WebKit 26 phone/dark.",
+    "Fourteen matched before/after pairs inspected natively: first check, slow first check, recovered SSO with the original return error, failed check, fresh retry, slow retry, and completion from a focused Help link.",
+    "The baseline spinner never offered recovery and the pending retry stayed disabled. After 10 seconds the same check can be restarted or left waiting; Help and both 44 px recovery targets remain in view at 320 px. Failed discovery stays unknown and does not select local sign-in or setup."
+  ],
+  "interactions": [
+    "208 baseline and 252 candidate assertions. Tab/Enter or touch restarted an actual held GET; the server observed cancellation and one replacement, without a document reload or a sign-in write. Fresh retries do not duplicate, and time alone does not send another request.",
+    "Focus stays on a pending retry, transfers to the access region if that control is removed, and follows the existing troubleshooting link when the user has tabbed to Help. A passive current result still shows its advertised SSO option and return error and navigates to the same fixture provider."
+  ]
+}

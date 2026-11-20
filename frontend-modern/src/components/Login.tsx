@@ -1,4 +1,5 @@
 import {
+  batch,
   Component,
   createEffect,
   createSignal,
@@ -20,6 +21,8 @@ import Key from 'lucide-solid/icons/key';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 
 const SetupWizard = lazy(() => import('./SetupWizard').then((m) => ({ default: m.SetupWizard })));
+
+export const SIGN_IN_CHECK_SLOW_DELAY_MS = 10_000;
 
 interface LoginProps {
   onLogin: () => void;
@@ -83,49 +86,75 @@ export const Login: Component<LoginProps> = (props) => {
   const [authStatus, setAuthStatus] = createSignal<SecurityStatus | null>(initialStatus);
   const [loadingAuth, setLoadingAuth] = createSignal(!initialStatus);
   const [authReadFailed, setAuthReadFailed] = createSignal(false);
-  let authController: AbortController | undefined;
+  const [authRestart, setAuthRestart] = createSignal<'hidden' | 'waiting' | 'ready'>('hidden');
+  let authRead: { controller: AbortController; slowTimer: number } | undefined;
   let active = true;
   let accessEntry: HTMLDivElement | undefined;
   let authReadNotice: HTMLDivElement | undefined;
+  let authReadHelp: HTMLAnchorElement | undefined;
+  let loginHelp: HTMLAnchorElement | undefined;
+
+  const retireAuthRead = () => {
+    const previous = authRead;
+    if (!previous) return;
+    authRead = undefined;
+    window.clearTimeout(previous.slowTimer);
+    previous.controller.abort();
+  };
 
   onCleanup(() => {
     active = false;
-    authController?.abort();
+    retireAuthRead();
   });
 
   const readAuthStatus = async () => {
-    if (!active || authController) return;
-    const returnFocus = authReadNotice?.contains(document.activeElement);
+    if (!active || (authRead && authRestart() !== 'ready')) return;
+    if (authRead) {
+      // Keep the focused control mounted, but make it single-flight again.
+      setAuthRestart('waiting');
+      retireAuthRead();
+    }
     const controller = new AbortController();
-    authController = controller;
+    const read = {
+      controller,
+      slowTimer: window.setTimeout(() => {
+        if (authRead === read) setAuthRestart('ready');
+      }, SIGN_IN_CHECK_SLOW_DELAY_MS),
+    };
+    authRead = read;
     setLoadingAuth(true);
-    let accepted = false;
+    let result: SecurityStatus | null = null;
     try {
       const data = await apiFetchJSON<unknown>('/api/security/status', {
         signal: controller.signal,
         retry: false,
       });
-      if (!active) return;
-      if (!hasAuthDiscovery(data)) throw new Error('Authentication discovery is incomplete');
-      setAuthStatus(data);
-      setAuthReadFailed(false);
-      accepted = true;
+      if (hasAuthDiscovery(data)) result = data;
     } catch {
-      if (!active) return;
       // Never expose proxy content, raw response errors or guessed auth state.
-      setAuthReadFailed(true);
-    } finally {
-      if (active) {
-        authController = undefined;
-        setLoadingAuth(false);
-        if (accepted && returnFocus) {
-          queueMicrotask(() => {
-            // Recovery removes Retry. Hand off its focus, not focus the user
-            // moved elsewhere while waiting, and never after unmount.
-            if (active && document.activeElement === document.body) accessEntry?.focus();
-          });
-        }
-      }
+    }
+
+    // Aborting cannot retract a reply that has already been delivered.
+    if (authRead !== read) return;
+    window.clearTimeout(read.slowTimer);
+    authRead = undefined;
+    const focused = document.activeElement;
+    const returnFocus = result && authReadNotice?.contains(focused);
+    const wasReadingHelp = focused === authReadHelp;
+    batch(() => {
+      setAuthStatus(result);
+      setAuthReadFailed(result === null);
+      setLoadingAuth(false);
+      setAuthRestart('hidden');
+    });
+    if (returnFocus) {
+      queueMicrotask(() => {
+        // Discovery removes the notice. Return owned focus without stealing it
+        // from a user who already moved on, and keep Help selected if it exists.
+        if (!active || document.activeElement !== document.body) return;
+        const target = wasReadingHelp && loginHelp?.isConnected ? loginHelp : accessEntry;
+        target?.focus();
+      });
     }
   };
   const [oidcLoading] = createSignal(false);
@@ -361,95 +390,100 @@ export const Login: Component<LoginProps> = (props) => {
   return (
     <div ref={accessEntry} role="region" aria-label="Pulse access" tabIndex={-1}>
       <Show
-        when={!loadingAuth() || authReadFailed()}
+        when={!loadingAuth() && !authReadFailed()}
         fallback={
-          <div class="min-h-screen flex items-center justify-center">
-            <div class="text-center">
-              <LoadingSpinner size="lg" tone="info" label="Checking authentication" class="mb-4" />
-              <p class="text-muted">Checking authentication...</p>
-            </div>
-          </div>
-        }
-      >
-        <Show
-          when={!authReadFailed()}
-          fallback={
-            <div class="min-h-screen flex items-center justify-center px-4 py-8 text-base-content">
-              <div
-                ref={authReadNotice}
-                class="w-full max-w-md rounded-md border border-border bg-surface p-6 shadow-xs sm:p-8"
-              >
-                <h1 class="text-lg font-semibold">Could not check sign-in options</h1>
-                <p role="status" aria-live="polite" class="mt-3 text-sm leading-6 text-muted">
-                  {loadingAuth()
-                    ? 'Checking authentication again…'
+          <div class="min-h-screen flex items-center justify-center px-4 py-8 text-base-content">
+            <div
+              ref={authReadNotice}
+              class="w-full max-w-md rounded-md border border-border bg-surface p-6 shadow-xs sm:p-8"
+            >
+              <h1 class="flex items-center gap-2 text-lg font-semibold">
+                <Show when={!authReadFailed()}>
+                  <LoadingSpinner size="button" tone="info" />
+                </Show>
+                {authReadFailed()
+                  ? 'Could not check sign-in options'
+                  : 'Checking authentication...'}
+              </h1>
+              <p role="status" aria-atomic="true" class="mt-3 text-sm leading-6 text-muted">
+                {authRestart() === 'ready'
+                  ? 'The sign-in check is taking longer than expected. You can keep waiting or restart it.'
+                  : loadingAuth()
+                    ? authReadFailed() || authRestart() === 'waiting'
+                      ? 'Checking authentication again…'
+                      : 'Checking which sign-in options Pulse offers.'
                     : 'Pulse could not read its authentication status. This does not mean authentication is unconfigured.'}
-                </p>
-                <p class="mt-3 text-sm leading-6 text-muted">
-                  Retry the check before changing authentication settings. This check does not
-                  change your settings or start setup.
-                </p>
+              </p>
+              <Show when={authReadFailed() || authRestart() !== 'hidden'}>
+                <Show when={authReadFailed()}>
+                  <p class="mt-3 text-sm leading-6 text-muted">
+                    Retry the check before changing authentication settings. This check does not
+                    change your settings or start setup.
+                  </p>
+                </Show>
                 <button
                   type="button"
-                  aria-disabled={loadingAuth()}
+                  aria-disabled={loadingAuth() && authRestart() !== 'ready'}
                   onClick={() => void readAuthStatus()}
                   class="mt-5 min-h-11 w-full rounded-md bg-blue-600 px-4 py-3 text-sm font-medium text-white hover:bg-blue-700 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 aria-disabled:opacity-50"
                 >
-                  Retry sign-in check
+                  {authRestart() === 'hidden' ? 'Retry sign-in check' : 'Restart sign-in check'}
                 </button>
                 <a
+                  ref={authReadHelp}
                   href={TROUBLESHOOTING_DOC_URL}
                   class="mt-3 inline-flex min-h-11 items-center rounded-sm px-1 text-sm font-medium text-blue-700 hover:underline focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:text-blue-300"
                 >
                   Can’t sign in?
                 </a>
-              </div>
+              </Show>
             </div>
+          </div>
+        }
+      >
+        <Show
+          when={showFirstRunSetup()}
+          fallback={
+            <LoginForm
+              {...{
+                username,
+                setUsername,
+                password,
+                setPassword,
+                rememberMe,
+                setRememberMe,
+                error,
+                loading,
+                handleSubmit,
+                oidcLoading,
+                oidcError,
+                oidcMessage,
+                demoModeEnabled: demoModeEnabled(),
+                demoAutoLogin,
+                showLocalLogin: shouldShowLocalLogin(),
+                ssoProviders: ssoProviders(),
+              }}
+              helpRef={(element) => (loginHelp = element)}
+            />
           }
         >
-          <Show
-            when={showFirstRunSetup()}
+          <Suspense
             fallback={
-              <LoginForm
-                {...{
-                  username,
-                  setUsername,
-                  password,
-                  setPassword,
-                  rememberMe,
-                  setRememberMe,
-                  error,
-                  loading,
-                  handleSubmit,
-                  oidcLoading,
-                  oidcError,
-                  oidcMessage,
-                  demoModeEnabled: demoModeEnabled(),
-                  demoAutoLogin,
-                  showLocalLogin: shouldShowLocalLogin(),
-                  ssoProviders: ssoProviders(),
-                }}
-              />
+              <div class="min-h-screen flex items-center justify-center">
+                <div class="text-center">
+                  <LoadingSpinner size="lg" tone="info" label="Loading setup" class="mb-4" />
+                  <p class="text-muted">Loading setup...</p>
+                </div>
+              </div>
             }
           >
-            <Suspense
-              fallback={
-                <div class="min-h-screen flex items-center justify-center">
-                  <div class="text-center">
-                    <LoadingSpinner size="lg" tone="info" label="Loading setup" class="mb-4" />
-                    <p class="text-muted">Loading setup...</p>
-                  </div>
-                </div>
-              }
-            >
-              <SetupWizard
-                onComplete={(nextPath) => {
-                  const target = nextPath || window.location.pathname;
-                  window.location.assign(target);
-                }}
-              />
-            </Suspense>
-          </Show>
+            <SetupWizard
+              onComplete={(nextPath) => {
+                const target = nextPath || window.location.pathname;
+                window.location.assign(target);
+              }}
+            />
+          </Suspense>
         </Show>
       </Show>
     </div>
@@ -474,6 +508,7 @@ const LoginForm: Component<{
   demoAutoLogin: () => boolean;
   showLocalLogin: boolean;
   ssoProviders: SSOProviderInfo[];
+  helpRef: (element: HTMLAnchorElement) => void;
 }> = (props) => {
   const {
     username,
@@ -789,6 +824,7 @@ const LoginForm: Component<{
           </Show>
           <div class="border-t border-border pt-4 text-center">
             <a
+              ref={props.helpRef}
               href={TROUBLESHOOTING_DOC_URL}
               class="inline-flex min-h-10 items-center rounded-sm px-1 text-xs font-medium text-blue-700 underline-offset-2 transition-colors hover:underline focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500/60 dark:text-blue-300 sm:min-h-9"
             >
