@@ -1184,7 +1184,8 @@ not open port `443` automatically. If existing agents must keep their HTTP
 address, use an [HTTPS reverse proxy](REVERSE_PROXY.md) for the new address
 instead of switching their listener to HTTPS.
 
-[systemd setup](#https-with-systemd) · [Docker setup](#https-with-docker)
+[systemd setup](#https-with-systemd) · [Docker setup](#https-with-docker) ·
+[HTTP redirects](#optional-http-redirects)
 
 ### HTTPS with systemd
 
@@ -1214,7 +1215,8 @@ For a private CA or self-signed certificate, use a separately verified copy of
 the public CA certificate or self-signed certificate, never the private key:
 
 ```bash
-curl --disable --fail --cacert /path/to/trusted-cert.pem \
+curl --disable --fail \
+  --cacert /path/to/trusted-cert.pem \
   https://pulse.example.net:7655/api/health
 ```
 
@@ -1231,9 +1233,11 @@ docker run --init -e HTTPS_ENABLED=true \
   -e TLS_KEY_FILE=/certs/key.pem ...
 ```
 
-To redirect plain-HTTP requests to HTTPS, set `HTTP_REDIRECT_PORT` to a port other than `FRONTEND_PORT` (for example `80`). Pulse listens on that port on the same bind address as the web UI and answers requests with a `301` redirect to the same host on the HTTPS `FRONTEND_PORT`. The redirect listener starts only when `HTTPS_ENABLED=true` and both `TLS_CERT_FILE` and `TLS_KEY_FILE` are set; otherwise the value has no effect. A non-numeric or out-of-range value is ignored silently, which leaves the redirect disabled.
-
 > **Important (Docker with HTTPS)**: Always use `--init` (or `init: true` in docker-compose) when enabling HTTPS. The Alpine-based healthcheck uses busybox `wget`, which spawns `ssl_client` subprocesses. Without an init process to reap them, these become zombie processes over time.
+
+### Optional HTTP redirects
+
+To redirect plain-HTTP requests to HTTPS, set `HTTP_REDIRECT_PORT` to a port other than `FRONTEND_PORT` (for example `80`). Pulse listens on that port on the same bind address as the web UI and answers requests with a `301` redirect to the same host on the HTTPS `FRONTEND_PORT`. The redirect listener starts only when `HTTPS_ENABLED=true` and both `TLS_CERT_FILE` and `TLS_KEY_FILE` are set; otherwise the value has no effect. A non-numeric or out-of-range value is ignored silently, which leaves the redirect disabled.
 
 ---
 
