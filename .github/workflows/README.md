@@ -161,8 +161,10 @@ container. It installs the older release with its signature-verified
 `install.sh --version`, seeds real settings through the API, upgrades with the
 installed `/bin/update --version <to>` helper and rolls back with the documented
 `/bin/update --version <from>`, checking version, health, unit state, settings
-and data-dir survival after each step. It is read-only, uploads nothing and gates
-nothing; results are in the job log and step summary. Run
+and data-dir survival after each step. It verifies that the same `pulse.service`
+start is running the installed executable before and after the runtime reads.
+It is read-only, uploads nothing and gates nothing; results are in the job log
+and step summary. Run
 `scripts/release_lifecycle_rehearsal.sh --from <tag> --to <tag>` to reproduce
 it locally (`PULSE_REHEARSAL_ENGINE=podman` on hosts without Docker).
 

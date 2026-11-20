@@ -351,6 +351,112 @@ class HarnessContractTest(unittest.TestCase):
                 self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
 
 
+class RunningExecutableReadbackTest(unittest.TestCase):
+    def check_runtime(self, *, matching: bool = True, unavailable: bool = False,
+                      after_pid: int = 123, after_started: int = 100) -> subprocess.CompletedProcess:
+        source = HARNESS_PATH.read_text(encoding="utf-8")
+        names = ("read_pulse_runtime_identity", "assert_runtime")
+        functions = "\n".join(
+            f"{name}() {{" + source.split(f"{name}() {{", 1)[1].split("\n}\n", 1)[0] + "\n}"
+            for name in names if f"{name}() {{" in source
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            installed = root / "installed"
+            installed.write_bytes(b"same release fixture bytes")
+            running = root / "running"
+            if not unavailable:
+                if matching:
+                    os.link(installed, running)
+                else:
+                    running.write_bytes(installed.read_bytes())
+            program = textwrap.dedent(r'''
+                set -euo pipefail
+                API=http://unused.test
+                HOSTED_BROWSER=false
+                BASELINE_FAILED_UNITS=""
+                CURRENT_FAILURE=""
+                note_failure() { printf '%s\n' "$*" >&2; CURRENT_FAILURE=failed; }
+                log() { printf '%s\n' "$*"; }
+                cexec() {
+                    local program="$1"; shift
+                    case "$program" in
+                        '/opt/pulse/bin/pulse --version '*) printf 'v6.8.0\n' ;;
+                        *) env "$@" bash -c "$program" ;;
+                    esac
+                }
+                systemctl() {
+                    case "$1" in
+                        is-active) printf 'active\n' ;;
+                        is-enabled) printf 'enabled\n' ;;
+                        list-units) ;;
+                        show)
+                            case "$*" in
+                                *Environment*) printf 'PULSE_TELEMETRY=false\n'; return ;;
+                                *pulse-update.service) printf '0\n'; return ;;
+                            esac
+                            if [[ -f "$FIXTURE/version-read" ]]; then
+                                printf 'MainPID=%s\nExecMainStartTimestampMonotonic=%s\n' "$AFTER_PID" "$AFTER_STARTED"
+                            else
+                                printf 'MainPID=123\nExecMainStartTimestampMonotonic=100\n'
+                            fi
+                            printf 'ActiveState=active\n'
+                            ;;
+                        *) return 97 ;;
+                    esac
+                }
+                stat() {
+                    case "${!#}" in
+                        /opt/pulse/bin/pulse) command stat -Lc '%d:%i' -- "$FIXTURE/installed" ;;
+                        /proc/123/exe|/proc/124/exe) command stat -Lc '%d:%i' -- "$FIXTURE/running" ;;
+                        *) return 97 ;;
+                    esac
+                }
+                curl() {
+                    case "${!#}" in
+                        */api/health) printf '{"status":"healthy"}\n' ;;
+                        */api/version)
+                            : > "$FIXTURE/version-read"
+                            printf '{"version":"6.8.0"}\n'
+                            ;;
+                        *) return 97 ;;
+                    esac
+                }
+                export -f systemctl stat curl
+            ''')
+            return subprocess.run(
+                ["bash", "-c", program + functions + '\nassert_runtime v6.8.0\n'
+                 'printf "%s / %s\n" "$PHASE_VERSION" "$PHASE_HEALTH"\n'
+                 'printf "%s\n" "$PHASE_UNITS"\n'
+                 '[[ -z "$CURRENT_FAILURE" ]]\n'],
+                capture_output=True, text=True, timeout=15,
+                env={"PATH": os.environ["PATH"], "LC_ALL": "C", "FIXTURE": str(root), "AFTER_PID": str(after_pid),
+                     "AFTER_STARTED": str(after_started)},
+            )
+
+    def test_same_running_and_installed_file_passes(self) -> None:
+        result = self.check_runtime()
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertIn("6.8.0 / healthy", result.stdout)
+        self.assertIn("active/enabled, executable verified", result.stdout)
+
+    def test_matching_versions_do_not_hide_missing_or_detached_executables(self) -> None:
+        for overrides in ({"matching": False}, {"unavailable": True}, {"after_pid": 0}):
+            with self.subTest(**overrides):
+                result = self.check_runtime(**overrides)
+                self.assertEqual(1, result.returncode, result.stdout + result.stderr)
+                self.assertIn("running executable could not be bound", result.stderr)
+                self.assertIn("6.8.0 / healthy", result.stdout)
+                self.assertIn("active/enabled, executable unverified", result.stdout)
+
+    def test_restarted_unit_invalidates_the_version_readback(self) -> None:
+        for overrides in ({"after_pid": 124}, {"after_started": 200}):
+            with self.subTest(**overrides):
+                result = self.check_runtime(**overrides)
+                self.assertEqual(1, result.returncode, result.stdout + result.stderr)
+                self.assertIn("pulse.service changed during runtime readback", result.stderr)
+
+
 class HostedWorkflowCommandFilesTest(unittest.TestCase):
     def test_bound_pair_uses_the_reviewed_collision_safe_output_writer(self) -> None:
         source = (REPO_ROOT / '.github/workflows/qualify-browser-update-release.yml').read_text()

@@ -401,6 +401,28 @@ reset_phase_cells() {
     PHASE_VERSION="-"; PHASE_HEALTH="-"; PHASE_SETTINGS="-"; PHASE_DATADIR="-"; PHASE_UNITS="-"
 }
 
+# Observe the actual service executable, not just a file that could be serving.
+# Return a comparable identity without running the executable from procfs.
+read_pulse_runtime_identity() {
+    cexec '
+        set -euo pipefail
+        unit=$(systemctl show --no-pager -p ActiveState -p MainPID -p ExecMainStartTimestampMonotonic pulse.service)
+        active="" pid="" started=""
+        while IFS="=" read -r field value; do
+            case "$field" in
+                ActiveState) active="$value" ;;
+                MainPID) pid="$value" ;;
+                ExecMainStartTimestampMonotonic) started="$value" ;;
+            esac
+        done <<< "$unit"
+        [[ "$active" == active && "$pid" =~ ^[1-9][0-9]*$ && "$started" =~ ^[1-9][0-9]*$ ]] || exit 1
+        installed=$(stat -Lc "%d:%i" -- /opt/pulse/bin/pulse)
+        running=$(stat -Lc "%d:%i" -- "/proc/$pid/exe")
+        [[ "$installed" == "$running" ]] || exit 1
+        printf "%s %s %s\n" "$pid" "$started" "$running"
+    '
+}
+
 # Identity, health and systemd state for the expected release.
 assert_runtime() {
     local expected_tag="$1"
@@ -412,6 +434,9 @@ assert_runtime() {
         [[ "$active" == "active" ]] && break
         sleep 2
     done
+
+    local runtime_before runtime_after executable_status="unverified"
+    runtime_before=$(read_pulse_runtime_identity 2>/dev/null) || runtime_before=""
 
     local health_body health_status
     health_body=$(cexec 'curl -fsS --retry 30 --retry-delay 2 --retry-connrefused --retry-all-errors "$API/api/health"' "API=${API}" 2>/dev/null || true)
@@ -444,12 +469,21 @@ assert_runtime() {
         [[ "$observed_digest" == "$expected_digest" ]] || note_failure "Installed binary differs from the verified published archive"
     fi
 
+    runtime_after=$(read_pulse_runtime_identity 2>/dev/null) || runtime_after=""
+    if [[ -z "$runtime_before" || -z "$runtime_after" ]]; then
+        note_failure "pulse.service running executable could not be bound to /opt/pulse/bin/pulse"
+    elif [[ "$runtime_before" != "$runtime_after" ]]; then
+        note_failure "pulse.service changed during runtime readback; the version and health observations are not bound to one start"
+    else
+        executable_status="verified"
+    fi
+
     local enabled failed_now new_failed
     enabled=$(cexec 'systemctl is-enabled pulse' 2>/dev/null || true)
     failed_now=$(cexec 'systemctl list-units --state=failed --no-legend --plain | awk "{print \$1}" | sort' 2>/dev/null || true)
     new_failed=$(comm -13 <(printf '%s\n' "$BASELINE_FAILED_UNITS" | sed '/^$/d') \
                           <(printf '%s\n' "$failed_now" | sed '/^$/d') | tr '\n' ' ')
-    PHASE_UNITS="pulse ${active:-unknown}/${enabled:-unknown}"
+    PHASE_UNITS="pulse ${active:-unknown}/${enabled:-unknown}, executable ${executable_status}"
     if [[ "$active" != "active" ]]; then
         note_failure "pulse.service is '${active:-unknown}', expected active"
     fi

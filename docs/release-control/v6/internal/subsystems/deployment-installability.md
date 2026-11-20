@@ -9356,7 +9356,12 @@ digest-pinned `jrei/systemd-debian:12` container as the install smoke.
    the server-installer identity checks.
 2. Assert `/api/version` and `/opt/pulse/bin/pulse --version` both report
    FROM, `/api/health` reports `healthy`, and `pulse.service` is active and
-   enabled with no newly failed unit.
+   enabled with no newly failed unit. Before and after the health, version
+   and (for the hosted browser path) archive digest reads, require an active
+   `pulse.service` with the same main PID and start timestamp. Its
+   `/proc/<MainPID>/exe` must resolve to the installed file's device and inode
+   at both observations. A missing or changed identity fails the phase even
+   when the version and health still agree.
 3. Seed state through the real API. First-run security setup uses the
    bootstrap token from `pulse bootstrap-token`, then a disabled webhook with
    a secret header and a PVE node with fake token credentials are created. The
@@ -9402,8 +9407,10 @@ or altered seeded field fails `--check-snapshot`, and a deleted file or a
 rewritten secret store fails `--compare-datadir`), the harness contract (the real updater
 invocation without bypass flags, the signed installer, the shared image digest,
 and per-phase identity, settings and data-dir checks) and the workflow trust
-shape. Discovery tests execute the actual workflow resolution shell and CLI
-against a synthetic `gh`, proving recovered complete-page pair outputs and
+shape. The runtime fixture exercises the actual phase check with a matching
+executable, detached or inaccessible files, a missing PID, and a restart during
+the version read. Discovery tests execute the actual workflow resolution shell
+and CLI against a synthetic `gh`, proving recovered complete-page pair outputs and
 no outputs on refusal or malformed data. Process controls cover exhaustion,
 mixed errors, signals, deadlines and unchanged GET identity; these are not
 installed-recovery or live-provider acceptance. A local podman run (amd64 emulation) of `v6.4.1 -> v6.4.5 -> v6.4.1`
