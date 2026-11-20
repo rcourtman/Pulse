@@ -1110,15 +1110,15 @@ func (p *TrueNASPoller) GuestMetricHistory(_ *Monitor, orgID string, resourceTyp
 
 // GuestMetricHistoryForResource selects the exact tenant-local host before any
 // native read. A missing host must not turn a drawer request into a fleet scan.
-func (p *TrueNASPoller) GuestMetricHistoryForResource(caller context.Context, _ *Monitor, orgID, resourceType, resourceID string, duration time.Duration) map[string][]MetricPoint {
+func (p *TrueNASPoller) GuestMetricHistoryForResource(caller context.Context, _ *Monitor, orgID, resourceType, resourceID string, duration time.Duration, metricTypes ...string) map[string][]MetricPoint {
 	resourceID = strings.TrimSpace(resourceID)
 	if resourceID == "" {
 		return nil
 	}
-	return p.guestMetricHistory(caller, orgID, resourceType, resourceID, duration)[resourceID]
+	return p.guestMetricHistory(caller, orgID, resourceType, resourceID, duration, metricTypes...)[resourceID]
 }
 
-func (p *TrueNASPoller) guestMetricHistory(caller context.Context, orgID, resourceType, selectedID string, duration time.Duration) map[string]map[string][]MetricPoint {
+func (p *TrueNASPoller) guestMetricHistory(caller context.Context, orgID, resourceType, selectedID string, duration time.Duration, metricTypes ...string) map[string]map[string][]MetricPoint {
 	if p == nil || !truenas.IsFeatureEnabled() || strings.TrimSpace(resourceType) != "agent" {
 		return nil
 	}
@@ -1154,7 +1154,7 @@ func (p *TrueNASPoller) guestMetricHistory(caller context.Context, orgID, resour
 		if selectedID != "" && entry.provider.TransportStatus().Mode == truenas.TransportLegacyREST {
 			readCtx, cancelRead = context.WithDeadline(caller, deadline)
 		}
-		resourceID, nativeHistory, err := entry.provider.SystemMetricHistory(readCtx, duration)
+		resourceID, nativeHistory, err := entry.provider.SystemMetricHistory(readCtx, duration, metricTypes...)
 		if cancelRead != nil {
 			cancelRead()
 			if caller.Err() != nil {

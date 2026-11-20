@@ -3333,7 +3333,8 @@ reading the catalogue or posting a reporting query. Reporting I/O values remain 
 step supplies time, not a second rate division; `overlap` is not extra traffic.
 
 Legacy REST reads `/reporting/graphs` once per live/History collection and sends
-its disk/interface identifiers, omitting identifiers on global CPU, memory,
+its disk/interface identifiers (only disk identifiers for a disk-only History
+supplement), omitting identifiers on global CPU, memory,
 ARC and CPU-temperature graphs. Only missing/method-unsupported catalogue
 endpoints retain the older unscoped compatibility request. All other catalogue
 failures remain failures; no authentication, TLS, rate-limit, transport, decode
@@ -3344,6 +3345,11 @@ selected graph. Responses are bound to the selection: an omitted device stays
 absent. Device rates sum once per identifier only at simultaneous observed
 buckets of every selected member, never by carrying a stale member forward or
 assuming a missing member was idle. Other graphs remain independently usable.
+
+`TestTrueNASHostIOHistoryWithPartialStore` checks the authenticated chart
+producer with stored CPU/network, aligned and missing disk members, a rejected
+unrelated graph and an empty disk catalogue; it also checks the scoped request
+counts and retained readings.
 
 Native CPU temperature maps into the existing canonical host temperature and
 `temperature` History key, using the same package-versus-core outlier safeguard
@@ -4973,6 +4979,14 @@ cleanup so readers cannot retain orphaned runtime or alert projections.
 63b. `internal/config/guest_metadata.go`
 
 ## Shared Boundaries
+
+A targeted host History fallback passes the requested metric types through
+the monitor to the selected TrueNAS provider. When only Disk I/O is needed,
+legacy REST requests every disk graph in that catalogue and no unrelated
+graphs, or makes no reporting POST if the catalogue explicitly has no disks.
+This preserves the existing unscoped compatibility, missing-member handling
+and coincident-time totals. The full History fallback, live poll and modern
+JSON-RPC keep their established graph sets and lifetimes.
 
 A native TrueNAS record carries an agent-shaped identity for host facts and
 History. The connected-infrastructure projection must not use it as an agent

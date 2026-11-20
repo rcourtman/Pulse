@@ -1299,7 +1299,8 @@ func TestGetSystemMetricHistoryUsesReportingRPC(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	client := mustClientForServer(t, server.URL, ClientConfig{APIKey: "api-key"})
-	history, err := client.GetSystemMetricHistory(context.Background(), 4*time.Hour)
+	// A disk-only hint on REST must not alter SCALE's RPC graph request.
+	history, err := client.GetSystemMetricHistory(context.Background(), 4*time.Hour, "diskread", "diskwrite")
 	if err != nil {
 		t.Fatalf("GetSystemMetricHistory() error = %v", err)
 	}

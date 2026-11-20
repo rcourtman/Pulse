@@ -115,7 +115,7 @@ func (s *controllableStubFetcher) DiskTemperatureHistory(_ context.Context, iden
 	return result, nil
 }
 
-func (s *controllableStubFetcher) SystemMetricHistory(context.Context, time.Duration) (*SystemMetricHistory, error) {
+func (s *controllableStubFetcher) SystemMetricHistory(context.Context, time.Duration, ...string) (*SystemMetricHistory, error) {
 	if s == nil || s.systemHistory == nil {
 		return nil, nil
 	}

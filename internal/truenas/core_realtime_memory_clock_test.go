@@ -12,7 +12,7 @@ func TestCORE13MemoryFixtureUsesRequestedReportingEnd(t *testing.T) {
 	// relying on a sleep or a lucky wall-clock second rollover. A second query
 	// also prevents a fixture from reusing the first request's timestamp.
 	for _, end := range []int64{1789000060, 1789000120} {
-		responses, err := client.getLegacySystemReportingData(context.Background(), reportingRangeQuery(end-60, end))
+		responses, err := client.getLegacySystemReportingData(context.Background(), reportingRangeQuery(end-60, end), "")
 		if err != nil {
 			t.Fatal(err)
 		}
