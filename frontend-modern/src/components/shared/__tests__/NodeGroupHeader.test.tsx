@@ -2,7 +2,6 @@ import { render, screen } from '@solidjs/testing-library';
 import { describe, expect, it } from 'vitest';
 
 import { NodeGroupHeader } from '@/components/shared/NodeGroupHeader';
-import { NodeHardwareStrip } from '@/components/shared/NodeHardwareStrip';
 import type { Node } from '@/types/api';
 
 const makeNode = (overrides: Partial<Node> = {}): Node => ({
@@ -64,7 +63,7 @@ describe('NodeGroupHeader', () => {
     expect(screen.queryByText('2h')).not.toBeInTheDocument();
   });
 
-  it('shows what the node is as a hardware strip beside its identity', () => {
+  it('keeps hardware inventory off the grouped workload header', () => {
     render(() => (
       <NodeGroupHeader
         node={makeNode({
@@ -83,63 +82,8 @@ describe('NodeGroupHeader', () => {
       />
     ));
 
-    const strip = screen.getByTestId('node-hardware-strip');
-    expect(strip).toHaveTextContent('Intel Core i5-10600');
-    expect(strip).toHaveTextContent('×12');
-    expect(strip).toHaveTextContent('16 GB');
-    expect(strip).toHaveTextContent('eno1');
-    expect(strip).not.toHaveTextContent('vmbr0');
-  });
-
-  it('dims a port its agent reports without a link', () => {
-    render(() => (
-      <NodeHardwareStrip
-        node={makeNode({
-          networkInterfaces: [
-            { name: 'enp3s0', addresses: [], speedMbps: 1000, linkUp: true },
-            { name: 'enp1s0', addresses: [], linkUp: false },
-          ],
-        })}
-      />
-    ));
-    const strip = screen.getByTestId('node-hardware-strip');
-    const down = strip.querySelectorAll('[data-port-link="down"]');
-    expect(down).toHaveLength(1);
-    expect(down[0]).toHaveClass('opacity-40');
-    expect(strip).toHaveTextContent('Network ports: enp3s0, 1 Gb/s, enp1s0, no link');
-  });
-
-  it('leaves the hardware strip out when the View menu hides it', () => {
-    render(() => <NodeGroupHeader node={makeNode()} showHardware={false} />);
     expect(screen.getByText('pve1')).toBeInTheDocument();
-    expect(screen.queryByTestId('node-hardware-strip')).not.toBeInTheDocument();
-  });
-
-  it('shows each port with its link speed and draws nothing for a node without hardware', () => {
-    render(() => (
-      <NodeHardwareStrip
-        node={makeNode({
-          networkInterfaces: [
-            { name: 'enp1s0', addresses: [], speedMbps: 2500 },
-            { name: 'wlp2s0', addresses: [] },
-          ],
-        })}
-      />
-    ));
-    const strip = screen.getByTestId('node-hardware-strip');
-    expect(strip).toHaveTextContent('2.5G');
-    expect(strip).toHaveTextContent('Network ports: enp1s0, 2.5 Gb/s, wlp2s0 (Wi-Fi)');
-    expect(strip.querySelectorAll('[data-port-link="down"]')).toHaveLength(0);
-
-    const { container } = render(() => (
-      <NodeHardwareStrip
-        node={makeNode({
-          cpuInfo: { model: 'Unknown', cores: 0, sockets: 0, mhz: '0' },
-          memory: { total: 0, used: 0, free: 0, usage: 0 },
-          networkInterfaces: [],
-        })}
-      />
-    ));
-    expect(container.innerHTML).toBe('');
+    expect(screen.getByText('homelab')).toBeInTheDocument();
+    expect(screen.queryByText(/i5-10600|16 GB|eno1/)).not.toBeInTheDocument();
   });
 });

@@ -611,8 +611,6 @@ function ProxmoxOverview(props: ProxmoxOverviewProps) {
               inventoryStats={workloadsState.inventoryStats}
               inventoryCountsVisible={props.inventoryCountsVisible}
               setInventoryCountsVisible={props.setInventoryCountsVisible}
-              nodeHardwareVisible={workloadsState.workloadNodeHardwareVisible}
-              setNodeHardwareVisible={workloadsState.setWorkloadNodeHardwareVisible}
               columnVisibility={workloadsState.workloadsFilterColumnVisibility()}
               containerRuntimeFilter={workloadsState.containerRuntimeFilterConfig()}
               hostFilter={workloadsState.hostFilterConfig()}

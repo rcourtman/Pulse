@@ -173,7 +173,6 @@ export function WorkloadsSurface(props: WorkloadsSurfaceProps) {
             workloadIOEmphasis={state.workloadIOEmphasis}
             workloadMetricDisplayMode={state.workloadMetricDisplayMode}
             workloadMetricHoverMode={state.workloadMetricHoverMode}
-            workloadNodeHardwareVisible={state.workloadNodeHardwareVisible}
             workloadMemoryDisplayBasis={state.workloadMemoryDisplayBasis}
             workloadMetricHistory={state.workloadMetricHistory}
             workloadTableLayoutMode={state.workloadTableLayoutMode}

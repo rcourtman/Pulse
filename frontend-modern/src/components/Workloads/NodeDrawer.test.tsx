@@ -182,11 +182,12 @@ describe('NodeDrawer', () => {
     expect(technical.getAllByText('Platform').length).toBeGreaterThan(0);
     expect(technical.getByText('Hardware')).toBeInTheDocument();
     expect(technical.getByText('Telemetry')).toBeInTheDocument();
-    expect(technical.getByText('Network')).toBeInTheDocument();
-    expect(technical.getByText('eno1')).toBeInTheDocument();
-    expect(technical.getByText('vmbr0')).toBeInTheDocument();
-    expect(technical.getByText('192.168.10.21/24 / fd42:7065:6c73::21/64')).toBeInTheDocument();
-    // The hardware strip above the charts names the CPU as well as Details.
+    const inventory = within(technical.getByTestId('node-drawer-hardware'));
+    expect(inventory.getByText('eno1')).toBeVisible();
+    const network = within(technical.getByText('Network').closest('tbody')!);
+    expect(network.getByText('eno1')).toBeInTheDocument();
+    expect(network.getByText('vmbr0')).toBeInTheDocument();
+    expect(network.getByText('192.168.10.21/24 / fd42:7065:6c73::21/64')).toBeInTheDocument();
     expect(technical.getAllByText('Ryzen').length).toBeGreaterThan(0);
     expect(technical.getByText('6.8.0')).toBeInTheDocument();
     expect(technical.getByText('8')).toBeInTheDocument();

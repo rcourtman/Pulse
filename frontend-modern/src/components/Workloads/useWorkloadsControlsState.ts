@@ -23,7 +23,6 @@ import {
   DEFAULT_WORKLOADS_METRIC_DISPLAY_MODE,
   DEFAULT_WORKLOADS_METRIC_HOVER_MODE,
   DEFAULT_WORKLOADS_STATUS_MODE,
-  WORKLOADS_NODE_HARDWARE_VISIBLE_STORAGE_KEY,
   type WorkloadsGroupingMode,
   type WorkloadsMetricDisplayMode,
   type WorkloadsMetricHoverMode,
@@ -238,14 +237,6 @@ export function useWorkloadsControlsState(options: WorkloadsControlsStateOptions
     }
     setInternalMetricHoverMode(value);
   };
-
-  // The hardware strip on node rows is inventory some operators want gone
-  // from a dense table; the drawer keeps showing it either way.
-  const [workloadNodeHardwareVisible, setWorkloadNodeHardwareVisible] = usePersistentSignal(
-    WORKLOADS_NODE_HARDWARE_VISIBLE_STORAGE_KEY,
-    true,
-    { deserialize: (raw) => raw !== 'false' },
-  );
 
   const [internalMetricHistoryRange, setInternalMetricHistoryRange] =
     usePersistentSignal<WorkloadTableMetricHistoryRange>(
@@ -594,7 +585,6 @@ export function useWorkloadsControlsState(options: WorkloadsControlsStateOptions
     workloadMetricHistoryRange,
     workloadMetricDisplayMode,
     workloadMetricHoverMode,
-    workloadNodeHardwareVisible,
     workloadTableVisibleColumnIds,
     workloadTableVisibleColumns,
     workloadTableLayoutMode,
@@ -611,6 +601,5 @@ export function useWorkloadsControlsState(options: WorkloadsControlsStateOptions
     setWorkloadMetricHistoryRange,
     setWorkloadMetricDisplayMode,
     setWorkloadMetricHoverMode,
-    setWorkloadNodeHardwareVisible,
   } as const;
 }

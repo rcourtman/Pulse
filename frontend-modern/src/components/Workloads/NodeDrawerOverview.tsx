@@ -35,7 +35,7 @@ import { getMemoryObservationPresentation } from '@/utils/memoryObservation';
 import { getProxmoxUpdateEvidencePresentation } from '@/utils/proxmoxUpdateEvidence';
 import { formatTemperature, getTemperatureTextClass } from '@/utils/temperature';
 
-import { NodeHardwareStrip } from '@/components/shared/NodeHardwareStrip';
+import { nodeHardwareModel } from '@/features/proxmox/nodeHardwareSummary';
 
 import { buildDrawerDiskListItems } from './DrawerDiskListCard';
 import {
@@ -328,6 +328,55 @@ export function NodeDrawerOverview(props: NodeDrawerOverviewProps) {
       : []),
   ];
 
+  const hardwareInventorySections = createMemo(() => {
+    const { cpu, memory, fans, ports } = nodeHardwareModel(props.node);
+    return compactDetailSections([
+      {
+        label: 'Hardware inventory',
+        rows: compactDetailRows([
+          cpu
+            ? makeDetailRow(
+                'CPU',
+                cpu.threads ? `${cpu.name} · ${cpu.threads} threads` : cpu.name,
+                {
+                  title: cpu.title,
+                  wrap: true,
+                },
+              )
+            : null,
+          memory
+            ? makeDetailRow('Installed RAM', memory.label, { title: memory.title, wrap: true })
+            : null,
+          fans
+            ? makeDetailRow('Fans reported', String(fans.count), { title: fans.title, wrap: true })
+            : null,
+        ]),
+      },
+      {
+        label: 'Physical network ports',
+        rows: compactDetailRows(
+          ports.map((port) => {
+            const label = port.wireless ? `${port.name} (Wi-Fi)` : port.name;
+            const state =
+              port.linkUp === undefined
+                ? 'Link status unknown'
+                : port.linkUp
+                  ? 'Link up'
+                  : 'No link';
+            const speed =
+              port.linkUp === false ? undefined : (port.speedLabel ?? 'Speed unavailable');
+            const freshness =
+              props.node.sensorsStale && (port.linkUp !== undefined || port.speedLabel)
+                ? 'Last known'
+                : undefined;
+            const value = [freshness, state, speed].filter(Boolean).join(' · ');
+            return makeDetailRow(label, value, { wrap: true });
+          }),
+        ),
+      },
+    ]);
+  });
+
   const storageRows = (): NodeOverviewRow[] => [
     { label: 'Root total', value: formatBytes(props.node.disk?.total || 0) },
     { label: 'Root free', value: formatBytes(props.node.disk?.free || 0) },
@@ -607,10 +656,6 @@ export function NodeDrawerOverview(props: NodeDrawerOverviewProps) {
 
       <DrawerExceptionList testId="node-drawer-exceptions" rows={exceptionRows()} />
 
-      {/* What the box is, always visible; the facts line below the charts
-          leaves the CPU to it. */}
-      <NodeHardwareStrip node={props.node} class="flex-wrap gap-y-1" />
-
       <Show when={props.historyTarget}>
         <Show when={liveReadingsWithheld()}>
           {(message) => (
@@ -648,6 +693,13 @@ export function NodeDrawerOverview(props: NodeDrawerOverviewProps) {
             {(fact) => <span class="max-w-full whitespace-normal wrap-anywhere">{fact}</span>}
           </For>
         </div>
+      </Show>
+
+      <Show when={hardwareInventorySections().length > 0}>
+        <TechnicalDetailsSection
+          dataTestId="node-drawer-hardware"
+          sections={hardwareInventorySections()}
+        />
       </Show>
 
       <TechnicalDetailsDisclosure

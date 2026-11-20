@@ -11664,34 +11664,13 @@ empty or short answer keeps the existing empty and partial states.
 `historyChartModel` drops the locked text alternative. Component tests cover
 the 90-day read and the drawer's range change.
 
-### Node hardware strip on node identity rows (18 November 2026)
+### Proxmox hardware inventory in the node drawer (20 November 2026)
 
-`frontend-modern/src/components/shared/NodeHardwareStrip.tsx` renders what a
-Proxmox node is as neutral pills: CPU model and thread count, installed memory,
-one glyph per physical port (Wi-Fi drawn as Wi-Fi, link speed when reported)
-and a fan count, with exact figures in hover titles. The model lives in
-`frontend-modern/src/features/proxmox/nodeHardwareSummary.ts`. `NodeGroupHeader`
-places it beside the cluster and Agent badges from `md` widths up, on the same
-single line, so the identity row keeps its height and live host stats stay in
-the platform host table. `NodeDrawerOverview` shows the same strip above its
-charts and drops the CPU sentence from its facts line. Inventory is not a
-column: the strip has no sort or picker entry. `NodeGroupHeader.test.tsx`
-covers the strip on the header and its empty state.
-
-### Node hardware can be hidden from the View menu (18 November 2026)
-
-`WorkloadsFilter` shows a "Node hardware" Show/Hide control in View, under
-Layout, when the owning page passes `nodeHardwareVisible` and the table is
-grouped; a flat list has no node rows, so the control disappears.
-`NodeGroupHeader` takes `showHardware` (default shown) and the guest table
-passes the persisted choice through `WorkloadPanel`. The node drawer always
-shows the strip. `WorkloadsFilter.test.tsx` and `NodeGroupHeader.test.tsx`
-cover the control and the hidden header.
-
-### Hardware strip dims ports with no link (18 November 2026)
-
-`nodeHardwareModel` marks a port `noLink` only when its agent reports
-`linkUp: false`; `NodeHardwareStrip` draws that port at 40% opacity, drops any
-stale speed and says "no link" in the hover title and screen-reader text. A
-port with unknown link state (Proxmox-only, older agents) draws as before.
-`nodeHardwareSummary.test.ts` and `NodeGroupHeader.test.tsx` cover it.
+`NodeGroupHeader` presents node identity and health. `NodeDrawerOverview`
+uses `nodeHardwareModel` for labelled CPU, installed RAM, fan and physical
+port rows below the monitoring charts. Port names, link state and reported
+speeds are visible without hover. Older agents and Proxmox-only ports can
+have an unknown link state. A confirmed no-link report suppresses any
+retained speed. When the agent stops reporting, known port readings are
+labelled as last known. The drawer's Details disclosure retains the complete
+interface and address inventory, including virtual interfaces.

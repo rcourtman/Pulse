@@ -345,32 +345,6 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
             />
           </div>
 
-          {/* Node rows carry the strip from md widths up only, so a phone has
-              nothing for this choice to change. */}
-          <Show
-            when={
-              !isMobile() &&
-              props.groupingMode() === 'grouped' &&
-              props.nodeHardwareVisible &&
-              props.setNodeHardwareVisible
-            }
-          >
-            <div>
-              <div class="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
-                Node hardware
-              </div>
-              <FilterSegmentedControl
-                aria-label="Node hardware visibility"
-                value={props.nodeHardwareVisible!() ? 'shown' : 'hidden'}
-                onChange={(value) => props.setNodeHardwareVisible!(value === 'shown')}
-                options={[
-                  { value: 'shown', label: 'Show' },
-                  { value: 'hidden', label: 'Hide' },
-                ]}
-              />
-            </div>
-          </Show>
-
           <Show when={props.metricDisplayMode && props.setMetricDisplayMode}>
             <div>
               <div class="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
