@@ -319,6 +319,14 @@ recreate the incident. Preserve existing configuration, credentials and logs;
 [report the evidence already available](#-getting-help). A later recovery does
 not explain the earlier failure, and this guidance is not a runtime fix.
 
+**Already have a health response?** In a saved `GET /api/health` response from
+the same server during the failure, look for `websocketStateStalled: true`.
+Share only that flag and when you saw it, not the full response. On standalone
+Pulse, it means one dashboard state build held the WebSocket slot for at least
+30 seconds. The flag clears when the slot is released. Hosted and
+multi-workspace servers omit it. A missing flag does not prove the dashboard
+was ready.
+
 ### Proxmox or PBS rejects an HTTP to HTTPS redirect
 
 The error **infrastructure redirects must stay on the same origin** means a

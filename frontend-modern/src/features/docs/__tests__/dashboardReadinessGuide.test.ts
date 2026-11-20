@@ -87,6 +87,28 @@ describe('dashboard readiness guidance', () => {
     expect(read('frontend-modern/public/docs/REVERSE_PROXY.md')).toBe(guide('REVERSE_PROXY'));
   });
 
+  it('explains what to share from an existing stall observation without treating absence as readiness', () => {
+    const rendered = stalled();
+    const evidence = [...rendered.querySelectorAll('p')].find((paragraph) =>
+      paragraph.textContent?.includes('Already have a health response?'),
+    );
+    expect(evidence).toBeDefined();
+    expect(text(evidence!)).toMatch(
+      /saved GET \/api\/health response from the same server during the failure/,
+    );
+    expect([...evidence!.querySelectorAll('code')].map((node) => node.textContent)).toEqual([
+      'GET /api/health',
+      'websocketStateStalled: true',
+    ]);
+    expect(text(evidence!)).toMatch(/only that flag and when you saw it, not the full response/);
+    expect(text(evidence!)).toMatch(
+      /standalone Pulse.*at least 30 seconds.*clears when the slot is released/,
+    );
+    expect(text(evidence!)).toMatch(
+      /Hosted and multi-workspace servers omit it.*missing flag does not prove the dashboard was ready/,
+    );
+  });
+
   it('uses existing evidence without extra probes, reset advice or credential-bearing exports', () => {
     const rendered = stalled();
     const copy = text(rendered);
