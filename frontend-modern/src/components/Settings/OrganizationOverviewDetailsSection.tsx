@@ -21,7 +21,7 @@ export const OrganizationOverviewDetailsSection: Component<
             <p
               data-org-overview-name
               tabIndex={-1}
-              class="mt-1 text-sm font-medium text-base-content focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              class="mt-1 text-sm font-medium text-base-content [overflow-wrap:anywhere] focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
             >
               {currentOrg().displayName || currentOrg().id}
             </p>
