@@ -426,18 +426,17 @@ an updater snapshot alone is not a complete data backup. See
 |----------|---------|
 | **Docker / Compose** | Follow [Docker server updates](DOCKER.md#-updates) from the original deployment, selecting the exact image and updating only the Pulse service. |
 | **Kubernetes** | Follow [Helm update precautions](DEPLOYMENT_MODELS.md#kubernetes-helm) for the existing release, namespace, saved values and PVC; retain the chosen chart version and image edition. |
-| **Systemd / Proxmox LXC with the Pulse-owned helper** | `sudo /bin/update` |
+| **Systemd / Proxmox LXC** | **Community:** `sudo /bin/update` (Pulse-owned helper only). **Pro:** follow the matching signed Linux archive instructions at [Pulse Pro downloads](https://pulserelay.pro/download.html). |
 
-Use `/bin/update --version vX.Y.Z` for an exact target only when the helper was
-installed by the Pulse server installer. On Proxmox community-scripts
+For an exact Community target, use `/bin/update --version vX.Y.Z` only when the
+Pulse server installer installed that helper. On Proxmox community-scripts
 containers, `/bin/update` can belong to a different updater that ignores
-`--version`. If the helper is absent or its owner is unknown, stop before
-executing it. For a public Community server, review the
-[signed server-installer flow](#2-bare-metal--systemd) with `PULSE_VERSION` set
-to the exact target tag, first confirming the existing service and data/config
-paths; do not apply its default paths over a custom deployment or replace a
-private Pro runtime with a public build. Work inside the existing Pulse LXC,
-not on the Proxmox host. The same ownership check applies to rollback. After
+`--version`. If the helper is absent or its owner is unknown, do not run it.
+A Community server can use the [signed server-installer flow](#2-bare-metal--systemd)
+with `PULSE_VERSION` set to the exact target tag. Confirm the existing service
+and data/config paths first. Do not apply its default paths over a custom
+deployment or replace a private Pro runtime with a public build. Work inside the
+existing Pulse LXC, not on the Proxmox host. The same ownership check applies to rollback. After
 the service restarts, verify the installed version with `GET /api/version`.
 
 If a helper selects `helm-chart-*` instead of a Pulse server release, follow
@@ -461,10 +460,11 @@ and ordinary monitoring and alert delivery. If the update fails or its result
 is uncertain, check the current state before retrying; follow
 [Rollback](#rollback) without assuming that reverting an image restores data.
 
-The public image and commands above install the Community runtime. If the
-instance uses the private Pro runtime, keep it on the private image or archive
-shown by <https://pulserelay.pro/download.html>; replacing it with a public
-GitHub asset or `rcourtman/pulse` image removes the private runtime hooks.
+Public GitHub server archives and `rcourtman/pulse` are Community builds, even
+with a matching version and valid signature. Keep your current Pro runtime
+until the matching private image or signed Linux archive is available from
+[Pulse Pro downloads](https://pulserelay.pro/download.html). A public build
+removes the private runtime hooks.
 
 ### Pulse Agent updates
 
