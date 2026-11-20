@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   fireEvent,
   render as solidRender,
@@ -141,6 +141,194 @@ const baseResource = (overrides: Partial<Resource>): Resource => ({
   lastSeen: Date.now(),
   platformData: { sources: ['agent'] },
   ...overrides,
+});
+
+describe('TrueNAS system drawer history timing', () => {
+  const start = Date.parse('2026-11-18T12:00:00Z');
+  const end = start + 86_400_000;
+  const host = baseResource({
+    id: 'fixture-core-host',
+    platformType: 'truenas',
+    sourceType: 'api',
+    platformData: { sources: ['truenas'] },
+    lastSeen: end,
+  });
+  const reply = (
+    value: number,
+    range = '24h',
+    resourceId = host.id,
+  ): AllMetricsHistoryResponse => ({
+    resourceType: 'agent',
+    resourceId,
+    range,
+    start,
+    end,
+    source: 'store',
+    metrics: {
+      cpu: [{ timestamp: end - 10_000, value, min: value, max: value }],
+    },
+  });
+  const deferred = () => {
+    let resolve!: (response: AllMetricsHistoryResponse) => void;
+    const promise = new Promise<AllMetricsHistoryResponse>((done) => {
+      resolve = done;
+    });
+    return { promise, resolve };
+  };
+  const status = () => screen.getByRole('status', { name: 'History refresh status' });
+  const chart = () => screen.getByTestId('resource-metrics-history');
+  const loading = () => within(chart()).queryAllByText('Loading history', { exact: true });
+  const retry = () => screen.getByRole('button', { name: 'Retry history' });
+
+  beforeEach(() => {
+    resetCreateNonSuspendingQueryCacheForTest();
+    vi.useFakeTimers();
+    vi.setSystemTime(end);
+  });
+
+  afterEach(() => {
+    resetCreateNonSuspendingQueryCacheForTest();
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+  });
+
+  it.each([false, true])(
+    'allows a 65-second first read (explicit target: %s)',
+    async (explicit) => {
+      const first = deferred();
+      const read = vi
+        .spyOn(ChartsAPI, 'getMetricsHistory')
+        .mockReturnValueOnce(first.promise)
+        .mockResolvedValue(reply(40));
+      const resource = explicit
+        ? { ...host, metricsTarget: { resourceType: 'agent' as const, resourceId: host.id } }
+        : host;
+      const view = render(() => (
+        <ResourceDetailDrawer resource={resource} presentation="table-row" />
+      ));
+      try {
+        expect(loading().length).toBeGreaterThan(0);
+        await vi.advanceTimersByTimeAsync(65_000);
+        expect(read).toHaveBeenCalledTimes(1);
+        expect(read.mock.calls[0][0]).toMatchObject({
+          resourceId: host.id,
+          resourceType: 'agent',
+          range: '24h',
+          maxPoints: 240,
+        });
+        expect(read.mock.calls[0][0].signal?.aborted).toBe(false);
+        first.resolve(reply(19));
+        await vi.advanceTimersByTimeAsync(0);
+        expect(chart()).toHaveTextContent('19.0%');
+        expect(loading()).toHaveLength(0);
+        await vi.advanceTimersByTimeAsync(29_999);
+        expect(read).toHaveBeenCalledTimes(1);
+        await vi.advanceTimersByTimeAsync(1);
+        expect(read).toHaveBeenCalledTimes(2);
+        expect(chart()).toHaveTextContent('40.0%');
+      } finally {
+        view.unmount();
+      }
+    },
+  );
+
+  it('stops a stalled first read at 150 seconds and ignores it after Retry history', async () => {
+    const first = deferred();
+    const recovered = deferred();
+    const read = vi
+      .spyOn(ChartsAPI, 'getMetricsHistory')
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(recovered.promise);
+    const view = render(() => <ResourceDetailDrawer resource={host} presentation="table-row" />);
+    try {
+      await vi.advanceTimersByTimeAsync(149_999);
+      expect(read).toHaveBeenCalledTimes(1);
+      expect(status()).toBeEmptyDOMElement();
+      expect(loading().length).toBeGreaterThan(0);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(read.mock.calls[0][0].signal?.aborted).toBe(true);
+      expect(status()).toHaveTextContent('Failed to load history data');
+      expect(loading()).toHaveLength(0);
+      fireEvent.click(retry());
+      expect(retry()).toHaveAttribute('aria-disabled', 'true');
+      expect(read).toHaveBeenCalledTimes(2);
+      await vi.advanceTimersByTimeAsync(35_000);
+      expect(read).toHaveBeenCalledTimes(2);
+      recovered.resolve(reply(25));
+      await vi.advanceTimersByTimeAsync(0);
+      first.resolve(reply(99));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(chart()).toHaveTextContent('25.0%');
+      expect(chart()).not.toHaveTextContent('99.0%');
+      expect(status()).toBeEmptyDOMElement();
+      expect(screen.queryByRole('button', { name: 'Retry history' })).not.toBeInTheDocument();
+    } finally {
+      view.unmount();
+    }
+  });
+
+  it('keeps stored points through a stalled refresh and recovers on the next idle poll', async () => {
+    const staleRead = deferred();
+    const read = vi
+      .spyOn(ChartsAPI, 'getMetricsHistory')
+      .mockResolvedValueOnce(reply(19))
+      .mockReturnValueOnce(staleRead.promise)
+      .mockResolvedValue(reply(20));
+    const view = render(() => <ResourceDetailDrawer resource={host} presentation="table-row" />);
+    try {
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(read).toHaveBeenCalledTimes(2);
+      expect(chart()).toHaveTextContent('19.0%');
+      await vi.advanceTimersByTimeAsync(150_000);
+      expect(read).toHaveBeenCalledTimes(2);
+      expect(read.mock.calls[1][0].signal?.aborted).toBe(true);
+      expect(status()).toHaveTextContent(
+        'History refresh failed. Showing previously loaded history.',
+      );
+      expect(chart()).toHaveTextContent('19.0%');
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(read).toHaveBeenCalledTimes(3);
+      expect(status()).toBeEmptyDOMElement();
+      expect(chart()).toHaveTextContent('20.0%');
+    } finally {
+      view.unmount();
+    }
+  });
+
+  it('aborts the old range and target immediately and cancels the final read when hidden', async () => {
+    const reads = [deferred(), deferred(), deferred()];
+    const read = vi
+      .spyOn(ChartsAPI, 'getMetricsHistory')
+      .mockReturnValueOnce(reads[0].promise)
+      .mockReturnValueOnce(reads[1].promise)
+      .mockReturnValueOnce(reads[2].promise);
+    const [resource, setResource] = createSignal(host);
+    const view = render(() => (
+      <ResourceDetailDrawer resource={resource()} presentation="table-row" />
+    ));
+    try {
+      await vi.advanceTimersByTimeAsync(10_000);
+      fireEvent.change(screen.getByLabelText('History range'), { target: { value: '7d' } });
+      expect(read).toHaveBeenCalledTimes(2);
+      expect(read.mock.calls[0][0].signal?.aborted).toBe(true);
+      expect(read.mock.calls[1][0]).toMatchObject({ resourceId: host.id, range: '7d' });
+      setResource({ ...host, id: 'other-fixture-core-host' });
+      expect(read).toHaveBeenCalledTimes(3);
+      expect(read.mock.calls[1][0].signal?.aborted).toBe(true);
+      expect(read.mock.calls[2][0]).toMatchObject({ resourceId: 'other-fixture-core-host' });
+      reads[0].resolve(reply(97));
+      reads[1].resolve(reply(98, '7d'));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(chart()).not.toHaveTextContent(/9[78]\.0%/);
+      expect(loading().length).toBeGreaterThan(0);
+      fireEvent.click(screen.getByRole('tab', { name: 'Manage' }));
+      expect(read.mock.calls[2][0].signal?.aborted).toBe(true);
+      await vi.advanceTimersByTimeAsync(180_000);
+      expect(read).toHaveBeenCalledTimes(3);
+    } finally {
+      view.unmount();
+    }
+  });
 });
 
 describe('ResourceDetailDrawer change history section', () => {

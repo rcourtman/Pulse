@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "base_sha": "90bc9464805c5ae0a7600729240ed12190f03420",
+  "verified_at": "2026-11-20T01:35:31Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/resourceDetailDrawerMetricsHistoryModel.ts",
+    "frontend-modern/src/components/Workloads/guestDrawerHistoryQuery.ts",
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/resourceDetailDrawerMetricsHistoryModel.ts": "5b9cc35fd5e3f3f6513f959a359128b80922b085339147a615ea05f0655060af",
+    "frontend-modern/src/components/Workloads/guestDrawerHistoryQuery.ts": "06adbc0cf688f65edf886e3593d66d67d271eb7b8bdaac0960810cf571c833a4",
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts": "652dde5676a736569d71b08f1b44f60e71cfba246e5b077f5f2eabb224375d65"
+  },
+  "routes": [
+    "/truenas/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Offline fixture renders the actual TrueNAS Systems table and inline History drawer on base and candidate. Inspected eight matched pairs: light desktop Chromium 141.0.7390.37 and dark touch WebKit 26.0, Playwright 1.56.1.",
+    "Prompt partial reply plots CPU, memory, network and temperature on one GET. After 65 simulated seconds the same delayed first reply now plots without a replacement GET; the base still says Loading history. Disk I/O still says no stored history.",
+    "At 151 simulated seconds a stalled cold read shows the History failure, range picker, Retry history and labeled latest current readings instead of indefinite loading. Prompt and recovered presentation and the phone disclosure remain intact."
+  ],
+  "interactions": [
+    "Opened the real system row by Enter on desktop and by tapping its name on the phone. Kept the same 24-hour range, fixture data and source coordinates. Checked actual GET counts and cancellations.",
+    "After the next automatic recovery read was pending, retried by keyboard and touch. Only the explicit replacement reply settled; the existing desktop focus handoff and the phone show/hide charts control worked. No extra requests on disclosure, no writes, and no page errors.",
+    "Transport and clock were synthetic; this neither tests an installed TrueNAS system nor supplies its missing host I/O."
+  ]
+}
