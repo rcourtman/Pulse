@@ -1101,7 +1101,7 @@ describe('Organization Access read admission', () => {
         expect(
           screen.getByRole('alert', { name: 'Organization invitations incomplete' }),
         ).toBeVisible();
-        expect(screen.getByRole('button', { name: 'Invite', exact: true })).toBeDisabled();
+        expect(screen.getByRole('button', { name: /^Invite$/ })).toBeDisabled();
       }
       expectNoWrites();
     },
