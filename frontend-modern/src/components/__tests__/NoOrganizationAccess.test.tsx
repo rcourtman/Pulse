@@ -209,6 +209,7 @@ describe('no-organization invitation recovery', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expectRequest(1, '/api/org-invitations/client%2Feast/accept', 'POST');
     expect(onReload).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: 'Restart invitation check' })).toBeNull();
     for (const button of screen.getAllByRole('button', {
       name: /^(Accept|Decline) invitation to /,
     })) {
@@ -260,6 +261,7 @@ describe('no-organization invitation recovery', () => {
       expect(screen.getByRole('region', { name: 'Organization invitations' })).toHaveFocus();
       expect(screen.queryByText(/Ask a Pulse administrator/)).toBeNull();
       expect(screen.queryByText(/synthetic private detail/)).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Restart invitation check' })).toBeNull();
       for (const invitation of sameNames) {
         const group = screen.getByRole('group', {
           name: `Invitation to Operations (${invitation.orgId})`,
@@ -341,6 +343,39 @@ describe('no-organization invitation recovery', () => {
     ).toBeEnabled();
     expect(onReload).not.toHaveBeenCalled();
     expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('replaces a stalled read after a confirmed decline without waiting for or repeating the decision', async () => {
+    const oldRead = deferred<Response>();
+    const nextRead = deferred<Response>();
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(invitations))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockReturnValueOnce(oldRead.promise)
+      .mockReturnValueOnce(nextRead.promise);
+    const exits = renderRecovery();
+    await screen.findByText('West estate');
+
+    fireEvent.click(row('West estate').getByRole('button', { name: /^Decline invitation to / }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Restart invitation check' }));
+    expectRequest(1, '/api/org-invitations/client%2Fwest', 'DELETE');
+    expectRequest(2, '/api/org-invitations', 'GET');
+    expectRequest(3, '/api/org-invitations', 'GET');
+    expect(fetchMock.mock.calls[2][1]?.signal?.aborted).toBe(true);
+    expect(screen.queryByRole('button', { name: /^Accept invitation to / })).toBeNull();
+    expect(screen.queryByText(/Ask a Pulse administrator/)).toBeNull();
+
+    nextRead.resolve(jsonResponse([invitations[0]]));
+    expect(await screen.findByText('East estate')).toBeVisible();
+    expect(
+      row('East estate').getByRole('button', { name: /^Accept invitation to / }),
+    ).toBeEnabled();
+
+    oldRead.resolve(jsonResponse(invitations));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(screen.queryByText('West estate')).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(exits.onReload).not.toHaveBeenCalled();
   });
 
   it('keeps explicit check-again and sign-out exits separate from invitation changes', async () => {

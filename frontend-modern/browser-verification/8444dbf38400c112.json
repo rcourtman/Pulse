@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "2b5a55efce100842d6bc2db413f5d38b1b764c8f",
+  "verified_at": "2026-11-20T11:35:06Z",
+  "changed_paths": [
+    "frontend-modern/src/api/orgs.ts",
+    "frontend-modern/src/components/NoOrganizationAccess.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/api/orgs.ts": "d7f5dad4a11e0c3d454396a715112497bc7bb79d23947750a2b6c2dea8260af5",
+    "frontend-modern/src/components/NoOrganizationAccess.tsx": "d61b37a72039f944e45c075986726072e92264f03c69d258c60ba01391de10c8"
+  },
+  "routes": [
+    "/settings/organization (actual production-built Pulse bootstrap and invitation recovery with offline HTTP fixtures)"
+  ],
+  "viewports": [
+    {
+      "width": 1366,
+      "height": 820,
+      "browser": "Chromium 141.0.7390.37",
+      "theme": "light"
+    },
+    {
+      "width": 320,
+      "height": 700,
+      "browser": "WebKit 26.0",
+      "theme": "dark"
+    }
+  ],
+  "states": [
+    "Initial pending inbox and pending fresh list after a confirmed decline.",
+    "Two current same-named invitations with distinct IDs and roles; one fresh remaining invitation after the confirmed decline.",
+    "Unconfirmed acceptance keeps the previously seen row and disabled actions. Existing Check again re-enters bootstrap to obtain a newly confirmed empty list."
+  ],
+  "interactions": [
+    "Enter on desktop and tap on 320 px WebKit replace one held session GET with a new GET and cancel its predecessor. No new document, session bootstrap request or decision is made by restarting.",
+    "Keyboard focus stays in the invitation region, Tab reaches Restart, Check again and Sign out, and the result does not take focus back from Sign out. The 44 px restart target and both exits stay in view at 320 px.",
+    "Playwright 1.56.1: 197 baseline and 269 candidate assertions passed; ten matched pairs were opened natively. Loaded and unconfirmed pairs are byte-identical."
+  ]
+}

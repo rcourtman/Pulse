@@ -1,4 +1,4 @@
-import { For, Show, createResource, createSignal, type Component } from 'solid-js';
+import { For, Show, createResource, createSignal, onCleanup, type Component } from 'solid-js';
 import { OrgsAPI, type UserOrganizationInvitation } from '@/api/orgs';
 import { Button } from '@/components/shared/Button';
 import { OrganizationRoleBadge } from '@/components/shared/OrganizationBadges';
@@ -22,17 +22,29 @@ type InvitationReadResult =
  * reloads the app into that organization.
  */
 export const NoOrganizationAccess: Component<NoOrganizationAccessProps> = (props) => {
+  let disposed = false;
+  let invitationReadController: AbortController | undefined;
   const [invitationRead, { refetch }] = createResource<InvitationReadResult>(async () => {
+    invitationReadController?.abort();
+    const controller = new AbortController();
+    invitationReadController = controller;
     try {
-      const list = await OrgsAPI.listMyInvitations();
+      // This inbox belongs to the signed-in user, not an active organization.
+      const list = await OrgsAPI.listMyInvitations({ signal: controller.signal, retry: false });
       if (!Array.isArray(list)) throw new Error('Invalid organization invitation list');
       return { kind: 'loaded', invitations: list };
     } catch (error) {
-      logger.warn('Failed to load organization invitations', error);
+      if (!controller.signal.aborted) logger.warn('Failed to load organization invitations', error);
       // A failed read says nothing about whether an invitation exists. Keep
       // that separate from an accepted empty list, including after a decline.
       return { kind: 'unavailable', invitations: [] };
+    } finally {
+      if (invitationReadController === controller) invitationReadController = undefined;
     }
+  });
+  onCleanup(() => {
+    disposed = true;
+    invitationReadController?.abort();
   });
   const [responding, setResponding] = createSignal(false);
   const [unconfirmedDecision, setUnconfirmedDecision] = createSignal<{
@@ -43,8 +55,9 @@ export const NoOrganizationAccess: Component<NoOrganizationAccessProps> = (props
   let invitationRegion: HTMLElement | undefined;
 
   const retryInvitations = () => {
-    // Retry removes its own button while reading. Keep the keyboard in the
-    // invitation region now; a late result must not take focus back.
+    if (disposed || decisionsDisabled()) return;
+    // The retry and restart controls can disappear as the read settles. Move
+    // focus before that happens, never back from an exit on a late result.
     invitationRegion?.focus();
     void refetch();
   };
@@ -52,7 +65,7 @@ export const NoOrganizationAccess: Component<NoOrganizationAccessProps> = (props
   const reload = () => (props.onReload ? props.onReload() : window.location.reload());
 
   const respond = async (invitation: UserOrganizationInvitation, action: 'accept' | 'decline') => {
-    if (decisionsDisabled()) return;
+    if (disposed || invitationRead.loading || decisionsDisabled()) return;
     // A disabled row button can drop keyboard focus. Move it only when it is
     // still inside this region, never from a recovery or sign-out control.
     if (invitationRegion?.contains(document.activeElement)) {
@@ -62,12 +75,14 @@ export const NoOrganizationAccess: Component<NoOrganizationAccessProps> = (props
     try {
       if (action === 'accept') {
         await OrgsAPI.acceptMyInvitation(invitation.orgId);
-        reload();
+        if (!disposed) reload();
         return;
       }
       await OrgsAPI.declineMyInvitation(invitation.orgId);
-      await refetch();
+      // The decision is complete. Its readback can be replaced independently.
+      if (!disposed) void refetch();
     } catch (error) {
+      if (disposed) return;
       logger.warn('Failed to answer organization invitation', error);
       // The reply can fail after Pulse saved the decision. An inbox read
       // alone cannot tell whether an acceptance granted access; Check again
@@ -122,9 +137,19 @@ export const NoOrganizationAccess: Component<NoOrganizationAccessProps> = (props
           <Show
             when={!invitationRead.loading}
             fallback={
-              <p class="mt-4 text-sm leading-6 text-muted" role="status">
-                Checking invitations…
-              </p>
+              <div class="mt-4">
+                <p class="text-sm leading-6 text-muted" role="status">
+                  Checking invitations…
+                </p>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  class="mt-2 min-h-11 sm:min-h-0"
+                  onClick={retryInvitations}
+                >
+                  Restart invitation check
+                </Button>
+              </div>
             }
           >
             <Show
