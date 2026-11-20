@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "base_sha": "f7c8a6113a59edf8ab22a33d72d644c8101514f0",
+  "verified_at": "2026-11-20T10:48:28Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapSurface.tsx",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapDiagram.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapLayout.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapSurface.tsx": "4c3d9c322a95a2d71f28b11b383293fe14da060afa9f603219cf64ad41d9b5b6",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapDiagram.ts": "ce2a8cd5bff95cc25bf02471e6f6a9ecde6ef0b19379f09befb4676793969b52",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapLayout.ts": "80e403e524e19e7d2ae2a5b370d48762d3b50fba0b50782506f1819846a2c4c8"
+  },
+  "routes": [
+    "/map"
+  ],
+  "viewports": [
+    {
+      "width": 1024,
+      "height": 768
+    },
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 1920,
+      "height": 1080
+    },
+    {
+      "width": 600,
+      "height": 700
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "the final bytes as a production bundle embedded in a Pulse server on pulse-dev with mock data, in pages marked as a development build so that the held map is drawn, driven by Playwright in Chromium 151 and WebKit 26.0. The files the rig was built from were compared with the committed ones by hash. The rig was built eight commits before this commit's parent; none of those eight touches any of these files",
+    "Names on a 78-tile mock estate, both engines: at 1920 by 1080 the map chose two-line names on 104px tiles, 11 labels cut where the one-line layout cut 68, drawn at 0.85 where it was 0.92, all of it on one screen. At 1440 by 900, 1280 by 800 and 1024 by 768 it kept the one-line layout and its 68 cut labels, because whole names there would cost more than a tenth of the size or take the map below 0.62",
+    "Names on a 157-tile mock estate in Chromium: at 1920 by 1080 and at 1280 by 800 it chose 108px tiles at the same scale as before (0.69 and 0.45), 103 labels cut where there were 190; at 1440 by 900 and 1024 by 768 it kept the one-line layout",
+    "Names on a 124-tile mock estate in Chromium, measured on the build before the last corrections to how layouts are ranked: at 1920 by 1080 124px tiles at 0.67 where it was 0.74, 37 labels cut where there were 131",
+    "every case above was on one screen: the legend ended above the foot of the window and the window had nothing to scroll",
+    "read in a screenshot at full size, 78 tiles at 1920 by 1080: names whole on two lines (checkout-web-01, customer-portal-2, both gateway addresses), and three long check names broken at a word and cut ('Frontend' over 'Swarm servi\u2026') where the build before broke inside the word ('Frontend Swa' over 'rm service')",
+    "the phone layout re-read on this build in WebKit at 320, 360, 390, 430 and 767 wide: unchanged (scale 1, 40px tiles, nothing overlapping or off the side), and 768 and 1440 wide still one screen in Compact",
+    "the arrow keys re-read on this build in Chromium at 1440 and 600 wide: Tab in with ring, card and hint; 160 presses with 114 and 123 moves and nothing wrong after any",
+    "the whole map end-to-end spec and the whole accessibility end-to-end spec against the same build on the desktop, Android and iPhone projects: 21 of 21 in the accessibility spec. In the map spec every test passed except the phone tap test on the iPhone project once; it then passed 14 times in a row on both phone projects, and the reason for the one failure was not captured",
+    "not checked: Firefox, real Safari and a real phone; a real estate (the numbers are from mock estates, whose names are longer than most)"
+  ],
+  "interactions": [
+    "opened /map at each desktop size on three sizes of estate and pressed Names",
+    "ran the map and accessibility end-to-end specs"
+  ]
+}

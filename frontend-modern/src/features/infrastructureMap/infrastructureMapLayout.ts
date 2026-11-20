@@ -108,6 +108,12 @@ export interface MapLayoutOptions {
    * cut-off name from; the page does, and has to fit one screen.
    */
   wrapNames?: boolean;
+  /**
+   * How wide a named tile is, when wider than the usual. The page uses it
+   * where a screen leaves the map width to spare, so that a name which one
+   * line of the usual tile would cut is written whole.
+   */
+  nameWidth?: number;
 }
 
 export interface MapCursor {
@@ -286,11 +292,34 @@ export const wrapMapText = (
   if (cut === 0) return [fitMapText(text, maxWidth, size, weight)];
   if (textWidth(text.slice(cut).trimStart(), size, weight) > maxWidth) {
     // The break left more than a line. Filling the first line instead shows
-    // the whole name when that is all it takes.
+    // the whole name when that is all it takes, by breaking inside a word
+    // that is long enough to stand it: four letters or more each side, so
+    // `observabi` + `lity` but never `Swa` + `rm` or `ing` + `est`.
+    const wordEnds = (index: number): number => {
+      let end = index;
+      while (
+        end < text.length &&
+        !/[\s\-_.]/.test(text[end]) &&
+        (end === index || !breaksBefore(end))
+      ) {
+        end += 1;
+      }
+      return end;
+    };
+    const wordStarts = (index: number): number => {
+      let begin = index;
+      while (begin > 0 && !breaksBefore(begin)) begin -= 1;
+      return begin;
+    };
     let filled = cut;
     for (let index = cut + 1; index < text.length; index += 1) {
       if (splitsCharacter(index)) continue;
       if (textWidth(text.slice(0, index).trimEnd(), size, weight) > maxWidth) break;
+      // A break just before a hyphen or a dot is between words, not in one.
+      const insideWord = !breaksBefore(index) && !/[\s\-_.]/.test(text[index]);
+      if (insideWord && (index - wordStarts(index) < 4 || wordEnds(index) - index < 4)) {
+        continue;
+      }
       filled = index;
     }
     if (textWidth(text.slice(filled).trimStart(), size, weight) <= maxWidth) cut = filled;

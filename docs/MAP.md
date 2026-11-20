@@ -27,8 +27,10 @@ matches the dot on its network's pill.
   tiles. Enter opens the tile, and Tab again leaves the map.
 - **On a touch screen**, the first tap reads the tile and the second opens it.
 
-The map fits the window. When there is too much to name, it switches to
-icons alone; **Names** and **Compact** choose for yourself. A box with more
+The map fits the window. A long name is written out, on a wider tile or
+on two lines, wherever that leaves the map nearly as large; where it would
+not, the name is cut short, and hovering the tile reads it whole. When there is too much to name, the
+map switches to icons alone; **Names** and **Compact** choose for yourself. A box with more
 than it can draw ends in a **+N more** tile, and **Compact** draws more of
 them. On a very large estate the map can run past the screen and scroll.
 

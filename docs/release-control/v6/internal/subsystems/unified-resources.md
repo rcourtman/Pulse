@@ -4502,6 +4502,33 @@ What the diagram does with them:
   phone saves icons until Names is chosen. No pinch-to-zoom canvas
   and no separate phone page: one drawing, one layout engine. Design, options and
   renders are in the map's demand-ledger entry (19 November 2026).
+- On the page a name too long for one line of the usual 92px tile is
+  written out, at a cost of up to a tenth of the map's size. Before 20
+  November 2026 the page always cut names to that one line and left the
+  rest to hover, and on a desktop that cut most names on most maps: 68 of
+  78 labels on a 78-tile estate at 1920 by 1080, gateway addresses among
+  them (`192.168.5…`). A first version allowed names more room only where
+  it cost the map no size, in deference to "the largest drawing wins", and
+  measured on that estate it changed nothing at any window size. The
+  purpose of that rule is a map that can be read on one screen, and a map
+  of cut names is not read, so names now outrank the last tenth of the
+  size: `fitServiceDiagram` fits the one-line layout first and, when any
+  label on it is cut, tries wider tiles (`MapLayoutOptions.nameWidth`:
+  108, 124, 140) and then the two-line tile of the saved image and a phone
+  (`NAME_ROOM`), and keeps the layout that cuts the fewest names, and then
+  the fewest other labels, among those drawn at nine tenths of the one-line
+  size or more (`NAME_ROOM_COST`). A name is counted cut wherever its
+  ellipsis falls, because one cut short keeps the number it ends in. Only
+  cut names start the search; a caption too long for any tile does not. On that estate it is 68 cut labels to 8 for 8% of
+  the size. Two limits hold: the map is never taken below
+  `MAP_READABLE_SCALE`, under which the page stops choosing names at all,
+  and a map already below it, or at the smallest it is drawn, gives up
+  nothing. It is still one screen. Each alternative is tried at the layout
+  width the one-line fit settled on and `NAME_ROOM_REACH` steps wider, not
+  across every width again, because the fit runs on every refresh. A map
+  whose labels all fit is laid out once, as before. Two-line names break
+  inside a word only where four letters or more are left each side
+  (`wrapMapText`): `observabi` and `lity`, never `Swa` and `rm`.
 - The map is one stop for the Tab key, and the arrow keys move between its
   tiles. Before 20 November 2026 every tile was a tab stop, 193 on the demo
   estate, which the map's completeness review left open: a keyboard user

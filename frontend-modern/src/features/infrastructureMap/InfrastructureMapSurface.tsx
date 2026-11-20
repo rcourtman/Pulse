@@ -38,7 +38,11 @@ import {
 import { MAP_DOC_URL } from '@/utils/docsLinks';
 import type { StatusIndicatorVariant } from '@/utils/status';
 import { showError, showSuccess } from '@/utils/toast';
-import { fitServiceDiagram, flowServiceDiagram } from './infrastructureMapDiagram';
+import {
+  fitServiceDiagram,
+  flowServiceDiagram,
+  MAP_READABLE_SCALE,
+} from './infrastructureMapDiagram';
 import {
   downloadMapImage,
   resolveDiagramTileLimit,
@@ -90,8 +94,6 @@ const MIN_MAP_HEIGHT = 240;
 // column and the page scrolls, as every page on a phone does: fitted to one
 // screen, a large estate's tiles are 13px and its text 4px.
 const PHONE_WINDOW = 768;
-// Below this, names are too small to read and icons alone say more.
-const READABLE_SCALE = 0.62;
 
 // The name a new check for the gateway starts with. The owner can change it.
 const UNMONITORED_CHECK_NAME = 'Gateway';
@@ -236,7 +238,7 @@ export function InfrastructureMapSurface() {
     // tap reads a tile. Names are there to be chosen.
     if (room.phone) return fit('marks');
     const preferred = fit(resolveDefaultMapDensity(liveModel()));
-    if (preferred.density === 'marks' || preferred.scale >= READABLE_SCALE) return preferred;
+    if (preferred.density === 'marks' || preferred.scale >= MAP_READABLE_SCALE) return preferred;
     const compact = fit('marks');
     // On a very narrow window both reach the smallest size the map is drawn
     // at. Icons alone are then the shorter map, so they win a tie.

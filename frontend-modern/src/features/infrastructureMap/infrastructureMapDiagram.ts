@@ -56,8 +56,10 @@ const NAMED: Metrics = {
   named: true,
   nameLines: 1,
 };
-// The saved image: a little wider and one line of text taller, so a name is
-// written out where the page would cut it short and leave the rest to hover.
+// A little wider and one line of text taller, so a name is written out where
+// one line would cut it short and leave the rest to hover: the saved image,
+// a phone, and the page where the map has the height for it
+// (`fitServiceDiagram`, which tries wider one-line tiles first).
 const NAMED_WRAPPED: Metrics = {
   ...NAMED,
   tileW: 104,
@@ -95,6 +97,8 @@ const LOWER_LABEL: Record<string, string> = {
 const FIT_MAX_STRETCH = 3;
 const FIT_STEPS = 24;
 const FIT_MIN_SCALE = 0.3;
+/** Below this, names are too small to read and icons alone say more. */
+export const MAP_READABLE_SCALE = 0.62;
 
 const labelWidth = (text: string, size: number): number =>
   estimateTextWidth(text, { fontPx: size });
@@ -522,7 +526,11 @@ const drawNetworks = (
 };
 
 export function layoutServiceDiagram(diagram: ServiceDiagram, options: MapLayoutOptions): MapScene {
-  const metrics = options.density === 'marks' ? COMPACT : options.wrapNames ? NAMED_WRAPPED : NAMED;
+  const named = options.wrapNames ? NAMED_WRAPPED : NAMED;
+  const metrics =
+    options.density === 'marks'
+      ? COMPACT
+      : { ...named, tileW: Math.max(named.tileW, Math.round(options.nameWidth ?? 0)) };
   const margin = options.header ? 28 : 0;
   const width = Math.max(MIN_WIDTH + margin * 2, Math.floor(options.width));
   const left = margin + GUTTER;
@@ -896,24 +904,111 @@ export interface FittedDiagram {
  * is taller than the space it is laid out wider, which puts more boxes on a
  * row and makes it shorter, and then scaled down to fit. Of the widths tried,
  * the one that leaves the drawing largest wins.
+ *
+ * Names are written on one line of a 92px tile and cut where they are too
+ * long, the rest left to hover. That was the whole rule, and on a desktop it
+ * cut most names on most maps: 68 of 78 labels on a 78-tile estate at 1920 by
+ * 1080. A map of names nobody can read is not doing its job, so when any
+ * label is cut, wider tiles and then two-line names are tried as well, and
+ * the layout that cuts the fewest labels is kept. Names may cost the drawing
+ * up to a tenth of its size for that (`NAME_ROOM_COST`), and never take it
+ * below the size at which names are worth drawing at all
+ * (`MAP_READABLE_SCALE`). It is still one screen, and still nearly as large
+ * as it can be.
  */
 export function fitServiceDiagram(
   diagram: ServiceDiagram,
   space: { width: number; height: number },
   density: MapLayoutOptions['density'],
 ): FittedDiagram {
-  let best: FittedDiagram | null = null;
-  for (let step = 0; step <= FIT_STEPS; step += 1) {
-    const width = space.width * (1 + (step / FIT_STEPS) * (FIT_MAX_STRETCH - 1));
-    const scene = layoutServiceDiagram(diagram, { width, density });
+  const widthAt = (step: number): number =>
+    space.width * (1 + (step / FIT_STEPS) * (FIT_MAX_STRETCH - 1));
+  const drawnAt = (step: number, names: NameRoom): FittedDiagram => {
+    const scene = layoutServiceDiagram(diagram, { width: widthAt(step), density, ...names });
     const scale =
       scene.height > 0 ? Math.min(1, space.width / scene.width, space.height / scene.height) : 1;
-    if (!best || scale > best.scale + 0.001) best = { scene, scale };
-    if (scale >= 1) break;
+    return { scene, scale };
+  };
+
+  let plain: FittedDiagram | null = null;
+  let plainStep = 0;
+  for (let step = 0; step <= FIT_STEPS; step += 1) {
+    const tried = drawnAt(step, {});
+    if (!plain || tried.scale > plain.scale + 0.001) {
+      plain = tried;
+      plainStep = step;
+    }
+    if (tried.scale >= 1) break;
   }
-  const fitted = best as FittedDiagram;
-  return { scene: fitted.scene, scale: Math.max(FIT_MIN_SCALE, fitted.scale) };
+  let best = plain as FittedDiagram;
+  let fewest = cutLabels(best.scene);
+  // Only cut names start the search: a caption or a pill too long for any
+  // tile would otherwise run it on every refresh for nothing. A map already
+  // at the smallest it is drawn runs past the screen as it is.
+  if (density === 'names' && fewest.names > 0 && best.scale >= FIT_MIN_SCALE) {
+    // The smallest the drawing may get for its names: a tenth off, but not
+    // across the line below which the page stops choosing names. A map
+    // already below that line gives up nothing.
+    const smallest = Math.max(
+      FIT_MIN_SCALE,
+      best.scale >= MAP_READABLE_SCALE
+        ? Math.max(best.scale * (1 - NAME_ROOM_COST), MAP_READABLE_SCALE)
+        : best.scale - 0.001,
+    );
+    // Each way of giving names more room is tried where the one-line layout
+    // settled and a few steps wider, not across every width again: a wider
+    // tile needs a wider layout to keep its rows, and that is all the search
+    // it needs. Fitting runs on every refresh, so it has to stay cheap.
+    const last = Math.min(FIT_STEPS, plainStep + NAME_ROOM_REACH);
+    for (const names of NAME_ROOM) {
+      if (fewest.names === 0) break;
+      let largest: FittedDiagram | null = null;
+      for (let step = plainStep; step <= last; step += 1) {
+        const tried = drawnAt(step, names);
+        if (tried.scale >= smallest && (!largest || tried.scale > largest.scale + 0.001)) {
+          largest = tried;
+        }
+      }
+      if (!largest) continue;
+      // Names first, then everything else that is cut.
+      const cut = cutLabels(largest.scene);
+      if (cut.names < fewest.names || (cut.names === fewest.names && cut.others < fewest.others)) {
+        best = largest;
+        fewest = cut;
+      }
+    }
+  }
+  return { scene: best.scene, scale: Math.max(FIT_MIN_SCALE, best.scale) };
 }
+
+type NameRoom = Pick<MapLayoutOptions, 'nameWidth' | 'wrapNames'>;
+// The ways a named tile is given more room for its name, in the order they
+// are tried: wider first, because width is what a desktop map has spare, then
+// a second line. A later one replaces an earlier only by cutting fewer labels.
+const NAME_ROOM: readonly NameRoom[] = [
+  { nameWidth: 108 },
+  { nameWidth: 124 },
+  { nameWidth: 140 },
+  { wrapNames: true },
+  { wrapNames: true, nameWidth: 124 },
+];
+// How many layout widths past the one-line layout's own each of them is tried at.
+const NAME_ROOM_REACH = 4;
+// How much of its size the drawing may give up to write names out.
+const NAME_ROOM_COST = 0.1;
+
+// How many names on the drawing are cut short, and how many other labels. A
+// name is the 12px medium line under a tile; cut short, it may keep the
+// number it ends in (`paperle… 12`), so the ellipsis is looked for anywhere.
+const cutLabels = (scene: MapScene): { names: number; others: number } => {
+  const cut = { names: 0, others: 0 };
+  for (const node of scene.nodes) {
+    if (node.kind !== 'text' || !node.text.includes('…')) continue;
+    if (node.size === 12 && node.weight === 500) cut.names += 1;
+    else cut.others += 1;
+  }
+  return cut;
+};
 
 /**
  * The diagram for a phone: laid out at the width given, at full size, and left

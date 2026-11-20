@@ -132,6 +132,46 @@ describe('wrapMapText', () => {
     expect(second.endsWith('…')).toBe(true);
   });
 
+  it('breaks inside a word only where that leaves enough of it each side to read', () => {
+    // Every name, at every width a tile gives it: where both lines together
+    // are the whole name and the break falls inside a word, at least four
+    // letters of that word are on each line. `Frontend Swa` over `rm service`
+    // and `Document ing` over `est readiness` were what it did before.
+    const names = [
+      'Frontend Swarm service',
+      'Document ingest readiness',
+      'Workshop door controller',
+      'ops-observability-01',
+      'VM abcdefghijklmnopqrst',
+      'Solar inverter web panel',
+    ];
+    const inWord = (character: string | undefined) => /[A-Za-z0-9]/.test(character ?? '');
+    let inside = 0;
+    for (const name of names) {
+      for (let width = 60; width <= 140; width += 1) {
+        const lines = wrapMapText(name, width, 12, 500);
+        if (lines.length !== 2 || lines[1].endsWith('…')) continue;
+        const at = lines[0].length;
+        // Only a break with a letter on both sides is inside a word.
+        if (lines[0] + lines[1] !== name) continue;
+        if (!inWord(name[at - 1]) || !inWord(name[at])) continue;
+        if (/[a-z0-9]/.test(name[at - 1]) && /[A-Z]/.test(name[at])) continue;
+        inside += 1;
+        const before = /[A-Za-z0-9]+$/.exec(lines[0])?.[0] ?? '';
+        const after = /^[A-Za-z0-9]+/.exec(lines[1])?.[0] ?? '';
+        const where = `${name} at ${width}: ${JSON.stringify(lines)}`;
+        expect(before.length, where).toBeGreaterThanOrEqual(4);
+        expect(after.length, where).toBeGreaterThanOrEqual(4);
+      }
+    }
+    // The long words do still break inside, so the check above saw something.
+    expect(inside).toBeGreaterThan(0);
+    // And the whole name is still shown where a long word allows it, or a
+    // break just before a hyphen does.
+    expect(wrap('ops-observability-01').join('')).toBe('ops-observability-01');
+    expect(wrap('Frontend-Node-Workshop').join('')).toBe('Frontend-Node-Workshop');
+  });
+
   it('never ends a line between the two halves of an emoji', () => {
     const whole = (line: string) =>
       !/[\uD800-\uDBFF]$/.test(line) && !/^[\uDC00-\uDFFF]/.test(line);
@@ -1068,6 +1108,232 @@ describe('layoutServiceDiagram', () => {
 
     it('stops shrinking at a floor, below which the page scrolls instead', () => {
       expect(fitServiceDiagram(diagram, { width: 320, height: 60 }, 'names').scale).toBe(0.3);
+    });
+
+    describe('names too long for one line of the usual tile', () => {
+      const LONG = ['paperless-ngx-archive', 'home-assistant-core', 'uptime-kuma-status-page'];
+      const longNamed = buildServiceDiagram(
+        buildInfrastructureMapModel(estate(LONG.map((name) => guest(name)))),
+      );
+      // Sixty of them in one box: a map with no room to give.
+      const crowded = buildServiceDiagram(
+        buildInfrastructureMapModel(
+          estate(Array.from({ length: 60 }, (_, index) => guest(`${LONG[index % 3]}-${index}`))),
+        ),
+        { maxTilesPerGroup: 80 },
+      );
+      const cut = (scene: MapScene) => texts(scene).filter((text) => text.endsWith('…'));
+      const tileOf = (scene: MapScene) => {
+        const [first] = ofKind(scene, 'hit');
+        return { w: first.w, h: first.h };
+      };
+      const USUAL = { w: 92, h: 72 };
+      // The fit as it was before names were given room: one line, the usual
+      // tile, the widest drawing of the widths tried.
+      const oneLineFit = (
+        of: ReturnType<typeof buildServiceDiagram>,
+        space: { width: number; height: number },
+      ) => {
+        let best: { scene: MapScene; scale: number } | null = null;
+        for (let step = 0; step <= 24; step += 1) {
+          const scene = layoutServiceDiagram(of, {
+            width: space.width * (1 + (step / 24) * 2),
+            density: 'names',
+          });
+          const scale = Math.min(1, space.width / scene.width, space.height / scene.height);
+          if (!best || scale > best.scale + 0.001) best = { scene, scale };
+          if (scale >= 1) break;
+        }
+        return { scene: best!.scene, scale: Math.max(0.3, best!.scale) };
+      };
+
+      it('are written whole where the screen has the room, and the map is drawn no smaller', () => {
+        const space = { width: 1800, height: 1400 };
+        const before = oneLineFit(longNamed, space);
+        expect(tileOf(before.scene)).toEqual(USUAL);
+        expect(cut(before.scene).length).toBeGreaterThan(0);
+
+        const after = fitServiceDiagram(longNamed, space, 'names');
+        expect(after.scale).toBe(before.scale);
+        expect(cut(after.scene)).toEqual([]);
+        const tile = tileOf(after.scene);
+        expect(tile.w > USUAL.w || tile.h > USUAL.h).toBe(true);
+        expect(texts(after.scene).join(' ')).toContain('archive');
+      });
+
+      it('take the width a short screen leaves, at no cost, where that is enough', () => {
+        // Two long names that a wider tile holds on one line.
+        const wide = buildServiceDiagram(
+          buildInfrastructureMapModel(
+            estate([guest('home-assistant-core'), guest('paperless-ngx-web')]),
+          ),
+        );
+        const full = layoutServiceDiagram(wide, { width: 2400, density: 'names' });
+        const space = { width: 2400, height: full.height };
+        const before = oneLineFit(wide, space);
+        expect(before.scale).toBe(1);
+        expect(cut(before.scene).length).toBeGreaterThan(0);
+
+        const after = fitServiceDiagram(wide, space, 'names');
+        expect(after.scale).toBe(1);
+        expect(tileOf(after.scene).h).toBe(USUAL.h);
+        expect(tileOf(after.scene).w).toBeGreaterThan(USUAL.w);
+        expect(cut(after.scene)).toEqual([]);
+      });
+
+      it('cost the map a tenth of its size at most, and never any of it off the screen', () => {
+        for (const of of [longNamed, crowded]) {
+          for (const space of [
+            { width: 1800, height: 1400 },
+            { width: 1776, height: 800 },
+            { width: 1322, height: 620 },
+            { width: 1000, height: 380 },
+            { width: 700, height: 500 },
+          ]) {
+            const where = JSON.stringify(space);
+            const before = oneLineFit(of, space);
+            const after = fitServiceDiagram(of, space, 'names');
+            expect(after.scale, where).toBeGreaterThanOrEqual(before.scale * 0.9 - 0.001);
+            expect(cut(after.scene).length, where).toBeLessThanOrEqual(cut(before.scene).length);
+            if (after.scale > 0.3) {
+              expect(after.scene.width * after.scale, where).toBeLessThanOrEqual(space.width + 0.5);
+              expect(after.scene.height * after.scale, where).toBeLessThanOrEqual(
+                space.height + 0.5,
+              );
+            }
+          }
+        }
+      });
+
+      // The names on a drawing that are cut short: the 12px medium line.
+      const cutNames = (scene: MapScene) =>
+        ofKind(scene, 'text')
+          .filter((node) => node.size === 12 && node.weight === 500 && node.text.includes('…'))
+          .map((node) => node.text);
+
+      it('give up some of the size for whole names where only a second line will do', () => {
+        // Too long for the widest tile on one line, and a space the one-line
+        // layout fills exactly: a second line makes the map taller.
+        const twoLiners = buildServiceDiagram(
+          buildInfrastructureMapModel([
+            resource({ id: 'pve', type: 'agent', name: 'delly', platformType: 'proxmox-pve' }),
+            guest('home-assistant-core-eu'),
+            guest('paperless-ngx-archive-eu'),
+            guest('jellyfin'),
+          ]),
+        );
+        const full = layoutServiceDiagram(twoLiners, { width: 2400, density: 'names' });
+        const space = { width: 2400, height: full.height };
+        const before = oneLineFit(twoLiners, space);
+        expect(before.scale).toBe(1);
+        expect(cutNames(before.scene).length).toBe(2);
+
+        const after = fitServiceDiagram(twoLiners, space, 'names');
+        expect(cutNames(after.scene)).toEqual([]);
+        expect(after.scale).toBeLessThan(1);
+        expect(after.scale).toBeGreaterThanOrEqual(0.9);
+        expect(after.scene.height * after.scale).toBeLessThanOrEqual(space.height + 0.5);
+      });
+
+      it('never take a readable map below the size at which the page stops choosing names', () => {
+        for (const of of [longNamed, crowded]) {
+          for (const width of [1200, 1776]) {
+            for (let height = 300; height <= 700; height += 50) {
+              const space = { width, height };
+              const before = oneLineFit(of, space);
+              const after = fitServiceDiagram(of, space, 'names');
+              const where = JSON.stringify(space);
+              if (before.scale >= 0.62) {
+                expect(after.scale, where).toBeGreaterThanOrEqual(0.62);
+                expect(after.scale, where).toBeGreaterThanOrEqual(before.scale * 0.9);
+              } else {
+                // Already too small for names to be the point: nothing is given up.
+                expect(after.scale, where).toBeGreaterThanOrEqual(before.scale - 0.001);
+              }
+            }
+          }
+        }
+      });
+
+      it('count a name cut short that kept its number', () => {
+        const numbered = buildServiceDiagram(
+          buildInfrastructureMapModel([
+            resource({ id: 'pve', type: 'agent', name: 'delly', platformType: 'proxmox-pve' }),
+            guest('paperless-ngx-archive 123'),
+          ]),
+        );
+        const space = { width: 1250, height: 800 };
+        expect(cutNames(oneLineFit(numbered, space).scene)).toHaveLength(1);
+        const after = fitServiceDiagram(numbered, space, 'names');
+        expect(cutNames(after.scene)).toEqual([]);
+        expect(texts(after.scene).join(' ')).toContain('123');
+      });
+
+      it('put whole names before whole captions', () => {
+        // The widest one-line tile keeps the long caption whole and cuts the
+        // long name; two lines keep the name.
+        const captioned = buildServiceDiagram(
+          buildInfrastructureMapModel([
+            resource({
+              id: 'pve',
+              type: 'agent',
+              name: 'stats-primary.example.com',
+              platformType: 'proxmox-pve',
+            }),
+            guest('production-database-service'),
+            guest('jellyfin'),
+            guest('sonarr'),
+          ]),
+        );
+        const after = fitServiceDiagram(captioned, { width: 1250, height: 800 }, 'names');
+        expect(cutNames(after.scene)).toEqual([]);
+      });
+
+      it('leave a map alone whose only cut labels are not names', () => {
+        const captionOnly = buildServiceDiagram(
+          buildInfrastructureMapModel([
+            resource({
+              id: 'pve',
+              type: 'agent',
+              name: 'status.production.authentication-and-database-workers.example.com',
+              platformType: 'proxmox-pve',
+            }),
+            ...['jellyfin', 'sonarr', 'radarr'].map((name) => guest(name)),
+          ]),
+        );
+        const space = { width: 1200, height: 800 };
+        const before = oneLineFit(captionOnly, space);
+        if (cutNames(before.scene).length === 0) {
+          const after = fitServiceDiagram(captionOnly, space, 'names');
+          expect(tileOf(after.scene)).toEqual(USUAL);
+        }
+      });
+
+      it('stay as they were on a map already at the smallest it is drawn', () => {
+        const { scene, scale } = fitServiceDiagram(longNamed, { width: 320, height: 60 }, 'names');
+        expect(scale).toBe(0.3);
+        expect(tileOf(scene)).toEqual(USUAL);
+      });
+
+      it('leave a map whose labels all fit as it was, however much room there is', () => {
+        const space = { width: 1800, height: 1400 };
+        const shortNamed = buildServiceDiagram(
+          buildInfrastructureMapModel([
+            resource({ id: 'pve', type: 'agent', name: 'delly', platformType: 'proxmox-pve' }),
+            ...['jellyfin', 'sonarr', 'radarr', 'grafana', 'gitea'].map((name) => guest(name)),
+          ]),
+        );
+        const before = oneLineFit(shortNamed, space);
+        expect(cut(before.scene)).toEqual([]);
+        const after = fitServiceDiagram(shortNamed, space, 'names');
+        expect(tileOf(after.scene)).toEqual(USUAL);
+        expect(after.scene.height).toBe(before.scene.height);
+      });
+
+      it('change nothing where the map draws icons alone', () => {
+        const { scene } = fitServiceDiagram(longNamed, { width: 1800, height: 1400 }, 'marks');
+        expect(tileOf(scene)).toEqual({ w: 40, h: 40 });
+      });
     });
   });
 
