@@ -348,6 +348,91 @@ describe('SSO provider read and editor ownership', () => {
     expect(writes()).toHaveLength(1);
   });
 
+  it.each([
+    {
+      mode: 'manual URL only',
+      saved: null,
+      result: {
+        success: true,
+        message:
+          'Only the SAML SSO URL format was checked. Certificates and sign-in have not been tested.',
+      },
+      summary: 'URL format OK',
+      title: 'Check the IdP SSO URL format only',
+    },
+    {
+      mode: 'manual URL rejected',
+      saved: null,
+      ssoUrl: 'not-a-url',
+      result: { success: false, message: 'Invalid SSO URL format', error: 'invalid_url' },
+      summary: 'Test failed',
+      title: 'Check the IdP SSO URL format only',
+    },
+    {
+      mode: 'metadata URL alongside a manual URL',
+      saved: { idpMetadataUrl: 'https://idp.example.test/metadata' },
+      result: { success: true, message: 'SAML metadata includes an IdP identity and an SSO URL.' },
+      summary: 'Test passed',
+      title: 'Test connection to IdP',
+    },
+    {
+      mode: 'saved metadata XML alongside a manual URL',
+      saved: { idpMetadataXml: '<EntityDescriptor />', idpMetadataUrl: '  ' },
+      result: { success: true, message: 'SAML metadata includes an IdP identity and an SSO URL.' },
+      summary: 'Test passed',
+      title: 'Test connection to IdP',
+    },
+  ])('summarizes the observed SAML test for $mode', async (scenario) => {
+    const { saved, result, summary, title } = scenario;
+    const samlProvider = {
+      id: 'fixture',
+      name: 'Fixture',
+      type: 'saml',
+      enabled: true,
+      priority: 0,
+    };
+    const base = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation((url: string, options?: RequestInit) => {
+      if (url.endsWith('/test')) return json(result);
+      if (url.endsWith('/fixture')) return json({ ...samlProvider, saml: saved });
+      if (saved && url === '/api/security/sso/providers')
+        return json({ providers: [samlProvider] });
+      return base(url, options);
+    });
+    render(() => <SSOProvidersPanel />);
+    const opener = await screen.findByRole('button', {
+      name: saved ? /^Edit provider / : 'Add SAML',
+    });
+    await waitFor(() => expect(opener).toBeEnabled());
+    fireEvent.click(opener);
+    const dialog = within(
+      await screen.findByRole('dialog', { name: `${saved ? 'Edit' : 'Add'} SAML provider` }),
+    );
+    const ssoUrl = scenario.ssoUrl ?? 'https://idp.example.test/sso';
+    fireEvent.input(dialog.getByLabelText('IdP SSO URL'), { target: { value: ssoUrl } });
+    const testButton = dialog.getByRole('button', { name: 'Test' });
+    expect(testButton).toHaveAttribute('title', title);
+    fireEvent.click(testButton);
+
+    const details = await dialog.findByRole(result.success ? 'status' : 'alert');
+    expect(details).toHaveTextContent(result.message);
+    expect(testButton).toHaveAccessibleDescription(summary);
+    expect(dialog.getByRole('button', { name: `${summary} — view result` })).toHaveAttribute(
+      'aria-controls',
+      details.id,
+    );
+    expect(dialog.getByLabelText('IdP Certificate (PEM)')).toBeEnabled();
+    expect(writes()).toHaveLength(1);
+    expect(JSON.parse(writes()[0][1].body)).toEqual({
+      type: 'saml',
+      saml: {
+        idpSsoUrl: ssoUrl,
+        idpMetadataUrl: saved?.idpMetadataUrl?.trim() || undefined,
+        idpMetadataXml: saved && 'idpMetadataXml' in saved ? saved.idpMetadataXml : undefined,
+      },
+    });
+  });
+
   it('shows the SAML failure without reclaiming focus from draft fields', async () => {
     const pending = deferred();
     const base = fetchMock.getMockImplementation()!;
