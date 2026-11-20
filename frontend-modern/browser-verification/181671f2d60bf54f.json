@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "base_sha": "f36e4f95dab84286c8441200e8a45c8af125a3f3",
+  "verified_at": "2026-11-20T02:27:26Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/App.tsx",
+    "frontend-modern/src/index.css"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/App.tsx": "61743ad66079c04431bc7458e62a41c83e0d3fc70588e5a91cf56d7d36061c86",
+    "frontend-modern/src/index.css": "d3a6c27fa68e122668a04ecbdaf7d484d20acc774e48550a64b4a2430de210ab"
+  },
+  "routes": [
+    "/proxmox/overview",
+    "/proxmox/backups",
+    "/alerts/overview",
+    "/docker/overview",
+    "/vmware/overview",
+    "/settings/infrastructure",
+    "/settings/system-general",
+    "/patrol",
+    "/map"
+  ],
+  "viewports": [
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 600,
+      "height": 700
+    },
+    {
+      "width": 1024,
+      "height": 700
+    },
+    {
+      "width": 1440,
+      "height": 900
+    }
+  ],
+  "states": [
+    "the final App.tsx and index.css as a production bundle embedded in a Pulse server on pulse-dev with mock data, driven by Playwright in Chromium 151 and WebKit 26.0, with the update banner showing throughout. The source files the rig was built from were compared with the committed ones by hash. The rig was built one commit before this commit's parent; that commit (a TrueNAS History read) touches none of these files",
+    "Tab pressed seventy times down the Proxmox, Alerts, Docker and Settings pages at 390, 600 and 1024 wide: no control came to rest under the bottom navigation bar in Chromium on any page or width. In WebKit none did except one of 65 on the Proxmox page at 1024 wide, 11px under the bar's top edge. On builds without the changes the same walk left up to 15 controls per page under the bar, by up to 45px",
+    "1440 wide, where there is no bar: the scroll area's padding computes to 0px and nothing changed",
+    "the banner folded, at all four widths in both engines: the window had nothing to scroll and the scroll area ended at the window's foot (73..844 at 390 wide, 41..900 at 1440). Before, the window scrolled by the banner's height, 41px, or 73px at 390 wide",
+    "the banner unfolded to its full detail (523 to 685px tall): the content area kept 60% of the window and the window scrolled by the rest, 163 to 347px. Before, it scrolled by the whole banner. Read in a screenshot at 1440 wide",
+    "the banner dismissed: the scroll area filled the window exactly, with nothing to scroll in the window",
+    "21 routes at 390, 1024 and 1440 wide in Chromium, and at 1024 in WebKit: the window had nothing to scroll on any of them. Before the containing-block rule the Backups page gave the window 388px at 1024 wide and 46px at 1440, the vSphere page 145px and the Proxmox page 20px",
+    "what the containing-block rule moves, read by switching it off in the page and comparing every positioned element's place: on 21 routes at three widths, and on the Proxmox page with a row's detail open and with its Filters and View menus open at 390 and 1440 wide, in both engines, only labels for screen readers moved. Nothing a user sees did",
+    "a compact phone's Docker table measured with the scroll rules on and off: the same width, 292px",
+    "the two new tests in the accessibility end-to-end spec against the same build, by the suite's own Playwright on the desktop, Android and iPhone projects: 12 passed over two repeats. Written first in the mobile spec, each failed there against a build without its change (the focus test by up to 45px, the window test by 20px on the Proxmox page at 1024 wide)",
+    "the mobile end-to-end spec, unchanged by this commit, on the Android and iPhone projects against the build with the layout change: two of its tests failed or skipped on this rig in ways that depend on how fast rows load here (the dense-tables test on a different route each run, and the same way on the earlier build that had only the scroll rule); both pass on main in CI at this commit's base",
+    "screenshots read at full size: the Proxmox page with the banner at 390 wide, and the banner unfolded at 1440",
+    "not checked: Firefox, real Safari and a real phone; the security warning, demo and commercial migration banners, which were not on screen in the mock estate and sit in the same column as the update banner; kiosk mode"
+  ],
+  "interactions": [
+    "pressed Tab down four pages at four widths; folded, unfolded and dismissed the update banner; opened a row's detail and the Filters and View menus",
+    "ran the accessibility end-to-end spec, whose new tests give focus to controls down a long page and read the window's scroll on three pages at two widths"
+  ]
+}

@@ -299,6 +299,172 @@ test("populated platform tables expose one named disclosure control per resource
   }
 });
 
+// The banner for a new version is the commonest thing above the content
+// area, and it arrives when the update check answers, after the shell. A
+// test of how the app fits the window has to see the page with it showing.
+// Where the build under test offers no update there is no banner to wait for.
+const waitForBannerIfAny = async (
+  page: import("@playwright/test").Page,
+): Promise<void> => {
+  // The app's own question, asked again: the answer may already be in.
+  const offered = await page.request
+    .get("/api/updates/check")
+    .then(async (response) => {
+      if (!response.ok()) return false;
+      const body = (await response.json().catch(() => null)) as {
+        available?: boolean;
+      } | null;
+      return body?.available === true;
+    })
+    .catch(() => false);
+  if (!offered) return;
+  await expect(page.locator(".update-banner").first()).toBeVisible({
+    timeout: 20_000,
+  });
+};
+
+test("a control that takes focus comes to rest above the bottom navigation bar", async ({
+  page,
+}) => {
+  // WCAG 2.2, 2.4.11 Focus Not Obscured: what has the focus is not hidden by
+  // something the page itself put on top of it.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/proxmox/overview", { waitUntil: "domcontentloaded" });
+  await expect(page.locator("#root")).toBeVisible();
+  await expect(
+    page.getByRole("navigation", { name: "Mobile navigation" }),
+  ).toBeVisible();
+  // A banner above the content, such as the one for a new version, is part
+  // of the app's one window of height. It used to push the app past the
+  // foot of the window, and the window then scrolled as well as the page.
+  // Give it time to arrive, so that this reads the page with it showing
+  // where the build under test has one.
+  await waitForBannerIfAny(page);
+  const fit = await page.evaluate(() => ({
+    windowScroll:
+      document.documentElement.scrollHeight -
+      document.documentElement.clientHeight,
+    shellBelowWindow:
+      document.querySelector(".app-scroll-shell")!.getBoundingClientRect()
+        .bottom - window.innerHeight,
+  }));
+  expect(
+    fit.windowScroll,
+    "The app should be exactly a window tall, banners included",
+  ).toBeLessThanOrEqual(1);
+  expect(fit.shellBelowWindow).toBeLessThanOrEqual(1);
+  // The page has to be long enough to scroll before this means anything.
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() => {
+          const shell = document.querySelector(".app-scroll-shell");
+          return shell ? shell.scrollHeight - shell.clientHeight : 0;
+        }),
+      { timeout: 30_000 },
+    )
+    .toBeGreaterThan(200);
+
+  // The page scrolls inside the app, and the bar is fixed over the foot of
+  // that scroll area. Give focus to controls down the page, as Tab would,
+  // and see where the browser brings each to rest.
+  const result = await page.evaluate(async () => {
+    const shell = document.querySelector(".app-scroll-shell")!;
+    const bar = document
+      .querySelector('nav[aria-label="Mobile navigation"]')!
+      .getBoundingClientRect();
+    const controls = Array.from(
+      shell.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), [tabindex="0"]',
+      ),
+    ).filter((control) => {
+      // The bar's own buttons are in the bar.
+      if (control.closest('nav[aria-label="Mobile navigation"]')) return false;
+      const box = control.getBoundingClientRect();
+      return box.width > 0 && box.height > 0 && box.height < 120;
+    });
+    const step = Math.max(1, Math.floor(controls.length / 30));
+    const under: string[] = [];
+    const unrevealed: string[] = [];
+    let checked = 0;
+    let scrolled = 0;
+    for (let index = 0; index < controls.length; index += step) {
+      const control = controls[index];
+      const before = shell.scrollTop;
+      control.focus();
+      if (document.activeElement !== control) continue;
+      await new Promise((resolve) => setTimeout(resolve, 120));
+      checked += 1;
+      if (shell.scrollTop !== before) scrolled += 1;
+      const box = control.getBoundingClientRect();
+      const name = `${control.tagName.toLowerCase()} "${(control.textContent ?? "").trim().slice(0, 24)}"`;
+      // A control the browser did not bring into the window at all is not
+      // this rule's. WebKit stops short on the odd long jump made from
+      // script, so one or two are allowed and no more.
+      if (box.top >= window.innerHeight) {
+        unrevealed.push(name);
+      } else if (box.bottom > bar.top + 1) {
+        under.push(`${name} ${Math.round(box.bottom - bar.top)}px under`);
+      }
+    }
+    return { checked, scrolled, under, unrevealed };
+  });
+
+  expect(result.checked).toBeGreaterThan(10);
+  expect(
+    result.scrolled,
+    "Giving focus down the page should have scrolled it",
+  ).toBeGreaterThan(2);
+  expect(result.under).toEqual([]);
+  expect(result.unrevealed.length, result.unrevealed.join(", ")).toBeLessThanOrEqual(2);
+});
+
+test("the window itself has nothing to scroll, whatever the page holds", async ({
+  page,
+}) => {
+  // The page scrolls inside the app. A banner above the content, or a
+  // label for screen readers far down a page and placed against the window
+  // instead of the page, used to give the window its own distance to
+  // scroll, where a key the page did not take found a blank screen.
+  for (const viewport of [
+    { width: 390, height: 844 },
+    { width: 1024, height: 700 },
+  ]) {
+    await page.setViewportSize(viewport);
+    for (const route of [
+      "/proxmox/overview",
+      "/proxmox/backups",
+      "/vmware/overview",
+    ]) {
+      await page.goto(route, { waitUntil: "domcontentloaded" });
+      await expect(page.locator(".app-scroll-shell")).toBeVisible();
+      await waitForBannerIfAny(page);
+      // Rows arrive after the shell does, and the labels that used to
+      // escape the page come with them.
+      await page
+        .waitForFunction(
+          () =>
+            document.querySelectorAll(".app-scroll-shell table tbody tr")
+              .length > 0,
+          undefined,
+          { timeout: 20_000 },
+        )
+        .catch(() => undefined);
+      await page.waitForTimeout(500);
+      const windowScroll = await page.evaluate(
+        () =>
+          document.documentElement.scrollHeight -
+          document.documentElement.clientHeight,
+      );
+      expect(
+        windowScroll,
+        `${route} at ${viewport.width}px wide`,
+      ).toBeLessThanOrEqual(1);
+    }
+  }
+});
+
 test("the logged-out entry surface has no automatically detectable WCAG A/AA violations", async ({
   browser,
 }, testInfo) => {
