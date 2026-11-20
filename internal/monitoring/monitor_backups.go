@@ -3177,10 +3177,16 @@ func refreshObservedAt(tasks []models.BackupTask, now time.Time) []models.Backup
 }
 
 // vzdump job logs mark each guest's section with these lines.
+const (
+	vzdumpLogGuestStartPrefix  = "INFO: Starting Backup of VM "
+	vzdumpLogGuestFinishPrefix = "INFO: Finished Backup of VM "
+	vzdumpLogGuestFailPrefix   = "ERROR: Backup of VM "
+)
+
 var (
-	vzdumpLogGuestStartRe  = regexp.MustCompile(`^INFO: Starting Backup of VM (\d+)`)
-	vzdumpLogGuestFinishRe = regexp.MustCompile(`^INFO: Finished Backup of VM (\d+) \((\d+):(\d{2}):(\d{2})\)$`)
-	vzdumpLogGuestFailRe   = regexp.MustCompile(`^ERROR: Backup of VM (\d+) failed -\s*(.*)$`)
+	vzdumpLogGuestStartRe  = regexp.MustCompile("^" + vzdumpLogGuestStartPrefix + `(\d+)`)
+	vzdumpLogGuestFinishRe = regexp.MustCompile("^" + vzdumpLogGuestFinishPrefix + `(\d+) \((\d+):(\d{2}):(\d{2})\)$`)
+	vzdumpLogGuestFailRe   = regexp.MustCompile("^" + vzdumpLogGuestFailPrefix + `(\d+) failed -\s*(.*)$`)
 )
 
 // parseVzdumpJobLog turns a multi-guest vzdump job run into synthetic
@@ -3213,20 +3219,33 @@ func parseVzdumpJobLog(jobTask models.BackupTask, upid string, logLines []proxmo
 
 	for _, line := range logLines {
 		text := strings.TrimSpace(line.Text)
-		if match := vzdumpLogGuestStartRe.FindStringSubmatch(text); match != nil {
-			vmid, err := strconv.Atoi(match[1])
-			if err != nil || vmid <= 0 {
-				continue
-			}
-			sec := ensureSection(vmid)
+		// Long logs can contain thousands of progress lines. Only lines that
+		// could affect a guest verdict need the existing grammar checks.
+		var pattern *regexp.Regexp
+		switch {
+		case strings.HasPrefix(text, vzdumpLogGuestStartPrefix):
+			pattern = vzdumpLogGuestStartRe
+		case strings.HasPrefix(text, vzdumpLogGuestFinishPrefix):
+			pattern = vzdumpLogGuestFinishRe
+		case strings.HasPrefix(text, vzdumpLogGuestFailPrefix):
+			pattern = vzdumpLogGuestFailRe
+		default:
+			continue
+		}
+		match := pattern.FindStringSubmatch(text)
+		if match == nil {
+			continue
+		}
+		vmid, err := strconv.Atoi(match[1])
+		if err != nil || vmid <= 0 {
+			continue
+		}
+		sec := ensureSection(vmid)
+		switch pattern {
+		case vzdumpLogGuestStartRe:
 			sec.start = cursor
 			sec.status = "running"
-		} else if match := vzdumpLogGuestFinishRe.FindStringSubmatch(text); match != nil {
-			vmid, err := strconv.Atoi(match[1])
-			if err != nil || vmid <= 0 {
-				continue
-			}
-			sec := ensureSection(vmid)
+		case vzdumpLogGuestFinishRe:
 			if sec.status == "running" {
 				sec.status = "OK"
 			}
@@ -3236,12 +3255,7 @@ func parseVzdumpJobLog(jobTask models.BackupTask, upid string, logLines []proxmo
 			duration := time.Duration(hours)*time.Hour + time.Duration(minutes)*time.Minute + time.Duration(seconds)*time.Second
 			sec.end = sec.start.Add(duration)
 			cursor = sec.end
-		} else if match := vzdumpLogGuestFailRe.FindStringSubmatch(text); match != nil {
-			vmid, err := strconv.Atoi(match[1])
-			if err != nil || vmid <= 0 {
-				continue
-			}
-			sec := ensureSection(vmid)
+		case vzdumpLogGuestFailRe:
 			sec.status = "error"
 			sec.errMsg = strings.TrimSpace(match[2])
 			if sec.errMsg == "" {
