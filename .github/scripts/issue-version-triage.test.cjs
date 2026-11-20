@@ -50,12 +50,13 @@ for (const [name, summary, evidence] of [
       "Notification delivery: Test versus ordinary alerts",
       "Pulse CPU, memory or disk writes: comparable measurements",
       "Saved access or plans: failed read versus unconfirmed change",
+      "Single sign-on: setup check versus a new sign-in",
       "VM or LXC memory: guest versus hypervisor readings",
     ].sort());
     for (const [id, titles] of [
       ["upgrade_context", ["Failed upgrade:"]],
       [summary, ["Several hosts or clusters:"]],
-      [evidence, ["Notification delivery:", "Pulse CPU, memory or disk writes:", "Saved access or plans:", "VM or LXC memory:"]],
+      [evidence, ["Notification delivery:", "Pulse CPU, memory or disk writes:", "Saved access or plans:", "Single sign-on:", "VM or LXC memory:"]],
     ]) {
       const guidance = fieldGuidance(form, id);
       for (const title of titles) assert.ok(guidance.includes(`<summary>${title}`), `${id}: ${title}`);
@@ -68,6 +69,21 @@ for (const [name, summary, evidence] of [
     const attachment = blocks.find(block => block.includes(`    id: ${evidence}\n`));
     assert.match(attachment, /Review files and screenshots locally/);
     assert.doesNotMatch(attachment, /<details|For notification reports|For CPU, memory or disk-write reports/);
+  });
+
+  test(`sign-in evidence distinguishes the failed step without requiring another attempt: ${name}`, () => {
+    const form = fs.readFileSync(path.resolve(__dirname, "../ISSUE_TEMPLATE", name), "utf8");
+    const guidance = fieldGuidance(form, evidence);
+    const sso = guidance.match(/<summary>Single sign-on:[^<]*<\/summary>([\s\S]*?)<\/details>/)?.[1];
+    assert.ok(sso, "missing sign-in guidance beside the evidence field");
+    assert.match(sso, /saving the provider.*Test.*signing in at the provider.*returning to Pulse.*expected access after sign-in/);
+    assert.match(sso, /passing \*\*Test\*\* or a session that was already open does not show that a new sign-in works/);
+    assert.match(sso, /role mapping.*saved without changing anything/);
+    assert.match(sso, /client secret field blank or entered a value, but never include the value/);
+    assert.match(sso, /redacted error if known.*cookies, tokens, full return URLs and SAML responses private/);
+    assert.match(sso, /Keep any working administrator session open/);
+    assert.match(sso, /write "unknown"/);
+    assert.match(sso, /Do not sign out, save again, run \*\*Test\*\* or repeat the sign-in/);
   });
 }
 

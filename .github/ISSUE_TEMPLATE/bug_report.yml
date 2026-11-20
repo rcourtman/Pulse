@@ -204,6 +204,17 @@ body:
 
         </details>
 
+        <details>
+        <summary>Single sign-on: setup check versus a new sign-in</summary>
+
+        Name the provider software (for example, Authentik with OIDC), not your private address. Say which step failed: saving the provider, its **Test** button, signing in at the provider, returning to Pulse, or getting the expected access after sign-in. A passing **Test** or a session that was already open does not show that a new sign-in works.
+
+        If it broke after editing the provider, say what changed (for example, a role mapping) or whether you saved without changing anything. For OIDC, say whether you left the client secret field blank or entered a value, but never include the value. Give the original time and redacted error if known. Keep cookies, tokens, full return URLs and SAML responses private.
+
+        Keep any working administrator session open. Use what you already saw or write "unknown". Do not sign out, save again, run **Test** or repeat the sign-in just to file this report.
+
+        </details>
+
   - type: textarea
     id: logs
     attributes:
