@@ -62,6 +62,49 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+describe('SSO sign-in restrictions and role mapping guidance', () => {
+  it.each([
+    { type: 'oidc', groups: [] },
+    { type: 'saml', groups: ['Fleet Operators', 'Service Reviewers'] },
+  ] as const)('describes each $type filter even when one is blank', async ({ type, groups }) => {
+    const provider = { ...saml, type };
+    setup([provider], {
+      ...provider,
+      allowedGroups: groups,
+      allowedDomains: ['example.test'],
+      allowedEmails: ['operator@example.test'],
+      groupRoleMappings: { 'Fleet Operators': 'operator' },
+    });
+    render(() => <SSOProvidersPanel />);
+
+    const dialog = await edit(type.toUpperCase());
+    expect(dialog.queryByRole('textbox', { name: 'Allowed Groups' })).toBeNull();
+    fireEvent.click(
+      dialog.getByRole('button', { name: 'Show access restrictions & role mapping' }),
+    );
+    const rule =
+      'Sign-in must match one entry in each list you fill in. A blank list skips only that check.';
+    const allowedGroups = dialog.getByRole('textbox', { name: 'Allowed Groups' });
+    const allowedDomains = dialog.getByRole('textbox', { name: 'Allowed Domains' });
+    const allowedEmails = dialog.getByRole('textbox', { name: 'Allowed Emails' });
+    expect(allowedGroups).toHaveValue(groups.join(', '));
+    expect(allowedDomains).toHaveValue('example.test');
+    expect(allowedEmails).toHaveValue('operator@example.test');
+    expect(allowedGroups).toHaveAccessibleDescription(
+      `${rule} Separate with commas or new lines. Group names may contain spaces.`,
+    );
+    expect(allowedDomains).toHaveAccessibleDescription(`${rule} Email domains (without @)`);
+    expect(allowedEmails).toHaveAccessibleDescription(rule);
+    expect(
+      dialog.getByRole('textbox', { name: 'Group Role Mappings' }),
+    ).toHaveAccessibleDescription(
+      'Assigns roles after sign-in checks. Use group=roleId, separated by commas or new lines. Group names may contain spaces.',
+    );
+    expect(dialog.queryByText(/Empty allows all/)).toBeNull();
+    readOnlyRequests();
+  });
+});
+
 describe('SSO editor registration authority', () => {
   it.each([metadata, 'https://pulse.lan:8443/api/saml/setup/metadata?view=full'])(
     'displays and copies the detail metadata URL exactly: %s',
