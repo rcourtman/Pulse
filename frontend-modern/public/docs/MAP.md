@@ -23,6 +23,8 @@ matches the dot on its network's pill.
 - **Hover** a tile to read what it is, its address and what it is connected
   to. Tiles it is connected to are ringed.
 - **Click** a tile to open it.
+- **With a keyboard**, Tab reaches the map and the arrow keys move between
+  tiles. Enter opens the tile, and Tab again leaves the map.
 - **On a touch screen**, the first tap reads the tile and the second opens it.
 
 The map fits the window. When there is too much to name, it switches to

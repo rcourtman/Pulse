@@ -4502,6 +4502,36 @@ What the diagram does with them:
   phone saves icons until Names is chosen. No pinch-to-zoom canvas
   and no separate phone page: one drawing, one layout engine. Design, options and
   renders are in the map's demand-ledger entry (19 November 2026).
+- The map is one stop for the Tab key, and the arrow keys move between its
+  tiles. Before 20 November 2026 every tile was a tab stop, 193 on the demo
+  estate, which the map's completeness review left open: a keyboard user
+  pressed Tab 193 times to get past it. The stop is the tile that last had
+  focus, or the first drawn, kept by resource across a redraw
+  (`setTabStop` in `InfrastructureMapSurface.tsx`). When the resource with
+  the focus is gone after a redraw, the focus and the stop go to the tile
+  now in its place, so a live update never drops a keyboard user off the
+  map to the top of the page. The renderer is unchanged: it still marks
+  every tile focusable, so the roving stop is the page's and no saved or
+  embedded drawing depends on it. An arrow goes to the nearest tile in
+  line that way on the drawing (`nextMapHitIndex` in
+  `infrastructureMapLayout.ts`, worked out from the scene, not the DOM).
+  Up and down with none in line, it is the nearest off to the side; left
+  and right with no more in the row, the row carries on into the next or
+  previous one, so a row's end is no dead end; Home and End are the first and last
+  tile. A unit test walks every drawn tile of a real layout with the four
+  arrows alone, at phone and desktop widths in both densities. A key that moves nowhere is left to the page. A tile reached with
+  the keyboard says "Arrow keys move between tiles" in its card until an
+  arrow (not Home or End) has been used once, because Tab no longer walks the tiles and
+  nothing else on the page would say so. The same sentence for screen
+  readers is an `sr-only` paragraph the drawing is described by. It was
+  this paragraph, a map's length down the page, that showed the app shell
+  was no containing block and let such a label give the window its own
+  scroll; the shell holds them now (frontend-primitives, "The mobile
+  navigation bar publishes its own height"), and the map adds no wrapper
+  of its own for it. A tile the arrows reach below 1280px wide stops above
+  the bottom navigation bar by the shell's `scroll-padding-bottom`, not by
+  anything the map does. Do not give tiles back their own tab stops, and
+  do not move the roving stop into the renderer.
 - The map's completeness review of 19 November 2026 fixed four things the
   page now holds to. The room it leaves under the drawing is measured, not
   guessed from the window's width: it reads the height the bottom navigation

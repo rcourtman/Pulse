@@ -371,13 +371,40 @@ test.describe("Infrastructure map", () => {
         }),
       )
       .toBe(FOCUS_RING);
-    await expect(page.locator('[data-tooltip-portal="true"]')).toBeVisible();
+    const card = page.locator('[data-tooltip-portal="true"]');
+    await expect(card).toBeVisible();
+    // Tab no longer walks the tiles, so the card says what does.
+    await expect(card).toContainText("Arrow keys move between tiles");
+
+    // The map is one stop: the next Tab is past it, and Shift+Tab comes back
+    // to the same tile.
+    const first = await focused.getAttribute("aria-label");
+    await page.keyboard.press("Tab");
+    await expect(focused).toHaveCount(0);
+    await page.keyboard.press("Shift+Tab");
+    await expect(focused).toHaveAttribute("aria-label", first ?? "");
+
+    // An arrow moves to another tile, whose card it then is, and the map
+    // stops saying so once that has been done.
+    await page.keyboard.press("ArrowRight");
+    await expect(focused).not.toHaveAttribute("aria-label", first ?? "");
+    await expect(card).toBeVisible();
+    await expect(card).not.toContainText("Arrow keys move between tiles");
+    await page.keyboard.press("End");
+    const last = await focused.getAttribute("aria-label");
+    expect(last).not.toBe(first);
+    await page.keyboard.press("Home");
+    await expect(focused).toHaveAttribute("aria-label", first ?? "");
+    await page.keyboard.press("Tab");
+    await expect(focused).toHaveCount(0);
+    await page.keyboard.press("Shift+Tab");
+    await expect(focused).toHaveAttribute("aria-label", first ?? "");
 
     // Walk on to a tile that is a link, and open it: Enter goes where that
     // tile points.
     for (let step = 0; step < 6; step += 1) {
       if ((await focused.getAttribute("href")) !== null) break;
-      await page.keyboard.press("Tab");
+      await page.keyboard.press("ArrowRight");
     }
     const target = (await focused.getAttribute("href")) ?? "";
     expect(target).toMatch(/^\//);
@@ -445,6 +472,9 @@ test.describe("Infrastructure map", () => {
         window: { width: window.innerWidth, height: window.innerHeight },
         sideways:
           document.documentElement.scrollWidth > window.innerWidth,
+        windowScroll:
+          document.documentElement.scrollHeight -
+          document.documentElement.clientHeight,
         outside: [
           ...svg.querySelectorAll("rect, text, circle, path, line, image"),
         ]
@@ -461,6 +491,10 @@ test.describe("Infrastructure map", () => {
     expect(drawn.width).toBeLessThanOrEqual(drawn.window.width);
     expect(drawn.height).toBeGreaterThan(drawn.window.height);
     expect(drawn.sideways).toBe(false);
+    // The page scrolls inside the app, and the window itself has nothing to
+    // scroll: a key the map leaves to the browser must not find a blank
+    // screen below the page.
+    expect(drawn.windowScroll).toBeLessThanOrEqual(1);
     // Nothing is drawn past either side of the drawing, where it would be
     // cut off, and the page's last line ends above the navigation bar.
     expect(drawn.outside).toEqual([]);
